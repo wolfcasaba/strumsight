@@ -32,6 +32,18 @@ Median (not mean) resists the spike itself inflating the threshold.
 broadband click that reads as a false onset — synthesized notes need a ~10 ms
 release ramp (real strings never stop instantaneously).
 
+**⚠ MEASURED (2026-07-05, randomized property gate):** two more guards are
+required on top of the threshold:
+- **Release hysteresis:** a new onset is only eligible after flux < thr for
+  **≥3 consecutive frames** (~17 ms) — one strum = one continuous flux
+  plateau; without it a slow rake (≥12 ms/string) splits into two onsets.
+- **Attack-relative gate:** candidate flux must be **≥15% of a decaying
+  recent-peak tracker** (decay 0.985/frame, halves in ~270 ms) — ring-out
+  beating spikes (~5–10) otherwise sneak over the median threshold in the
+  tail, 60+ ms after the strum.
+Both found by the RANDOMIZED property tests, not the deterministic suite —
+keep the randomized CI gate.
+
 **Peak picking:** onset at n when `flux'[n] > thr[n]`, `flux'[n]` is a local
 max over ±2 frames, and **≥ 60 ms since the previous onset** (a strum's string
 hits span ~10–40 ms and must count as ONE onset; 16th notes at 180 BPM are

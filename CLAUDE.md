@@ -72,3 +72,18 @@ music-theory/
 ```
 
 Use the `flutter-*` agents + `verify-before-done` / `session-learning` skills.
+
+## HORIZON conventions (adopted 2026-07-05 — arXiv 2606.28279)
+
+- **Git-notes experience buffer:** after every round/feature commit:
+  `git notes add -m "round=<n> verdict=pass|fail tests=<n> lesson=<slug>"` —
+  rejected attempts logged too. Notes do NOT push by default:
+  `git push origin 'refs/notes/*'` alongside the branch push.
+- **Randomized property gate (anti-reward-hacking):** `test/property/` reads
+  `PROPERTY_SEED` env — absent → seed 42 (deterministic dev loop); CI runs an
+  extra HARD step with `PROPERTY_SEED=${{ github.run_id }}`. Thresholds are
+  %-based (non-flaky). New DSP behaviour ⇒ add a randomized property, not only
+  fixed fixtures. The FINAL acceptance predicate is the user's real-guitar
+  APK test — synthetic green is never "done".
+- **DSP tuning:** any retuned parameter goes into `docs/rag/chunks/` (source
+  of truth) in the same commit.

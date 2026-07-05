@@ -81,6 +81,21 @@ class StrumAnalyzer {
   int _lastOnsetFrame = -1 << 30;
   int _pendingOnsetFrame = -1;
   bool _hasPrev = false;
+  // Release hysteresis: one strum = one continuous flux plateau. A new onset
+  // is only eligible after the flux dipped below the threshold for ≥3
+  // consecutive frames (~17 ms) — longer than the widest per-string gap of a
+  // slow strum (~14 ms), so even a lazy rake stays ONE onset, while real
+  // inter-strum pauses (≥100 ms) release easily.
+  bool _released = true;
+  int _belowThrStreak = 0;
+  static const _releaseFrames = 3;
+  // Attack-relative gate: a candidate must reach ≥15% of the recent flux
+  // peak (decaying tracker) — ring-out beating spikes (~5–10) cannot compete
+  // with a real attack (~20–270), yet a soft strum after a loud one still
+  // passes once the tracker decays (halves in ~270 ms).
+  double _fluxPeak = 0;
+  static const _peakDecay = 0.985; // per frame
+  static const _peakRatio = 0.15;
 
   /// RMS of the most recent frame (level meter).
   double lastRms = 0;
@@ -140,17 +155,29 @@ class StrumAnalyzer {
     // Silence gate: no onsets from the noise floor.
     final gated = lastRms < DspConfig.silenceRms;
 
-    // Peak picking with 2-frame confirmation lag (chunk 005): frame n-2 is an
-    // onset if it exceeded the adaptive threshold and is a ±2-frame local max.
-    StrumEvent? event;
+    // Threshold + release tracking run EVERY frame (also while pending or
+    // gated) so the hysteresis state stays truthful.
+    final thr = _fluxDelta + _fluxLambda * _median(_fluxWindow);
     debugLastFlux = f.flux;
-    if (!gated && _history.length >= 5 && _pendingOnsetFrame < 0) {
+    debugLastThreshold = thr;
+    if (f.flux < thr) {
+      _belowThrStreak++;
+      if (_belowThrStreak >= _releaseFrames) _released = true;
+    } else {
+      _belowThrStreak = 0;
+    }
+    _fluxPeak = math.max(f.flux, _peakDecay * _fluxPeak);
+
+    // Peak picking with 2-frame confirmation lag (chunk 005): frame n-2 is an
+    // onset if it exceeded the adaptive threshold, is a ±2-frame local max,
+    // and the detector has RELEASED since the previous onset.
+    StrumEvent? event;
+    if (!gated && _history.length >= 5 && _pendingOnsetFrame < 0 && _released) {
       final h = _history.toList();
       final n = h.length;
       final cand = h[n - 3].flux;
-      final thr = _fluxDelta + _fluxLambda * _median(_fluxWindow);
-      debugLastThreshold = thr;
       final isMax = cand > thr &&
+          cand >= _peakRatio * _fluxPeak &&
           cand >= h[n - 5].flux &&
           cand >= h[n - 4].flux &&
           cand >= h[n - 2].flux &&
@@ -160,6 +187,8 @@ class StrumAnalyzer {
       if (isMax && msSinceLast >= _minOnsetGapMs) {
         _lastOnsetFrame = candFrame;
         _pendingOnsetFrame = candFrame;
+        _released = false;
+        _belowThrStreak = 0;
       }
     }
 

@@ -22,6 +22,13 @@ jobs:
         continue-on-error: true
       - run: flutter test
         continue-on-error: true
+      # Randomized property gate (anti-reward-hacking, HORIZON pattern):
+      # a fresh seed every run so code can't be tuned to fixed fixtures.
+      # Hard gate — no continue-on-error.
+      - name: Property gate (randomized seed)
+        run: flutter test test/property
+        env:
+          PROPERTY_SEED: ${{ github.run_id }}
       # StrumSight is fully offline — no --dart-define needed. Release signs
       # with the debug keystore (android/app/build.gradle.kts) so the APK is
       # sideloadable without a keystore secret.

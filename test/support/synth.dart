@@ -62,10 +62,18 @@ Float64List chordSignal(
   List<double> freqs, {
   double seconds = 1.0,
   int sampleRate = 44100,
+  double amp = 0.2,
+  double decayPerSecond = 1.5,
 }) =>
     mixNotes([
       for (final f in freqs)
-        harmonicNote(freq: f, seconds: seconds, sampleRate: sampleRate),
+        harmonicNote(
+          freq: f,
+          seconds: seconds,
+          sampleRate: sampleRate,
+          amp: amp,
+          decayPerSecond: decayPerSecond,
+        ),
     ]);
 
 /// Common chord voicings (Hz, standard tuning region).
