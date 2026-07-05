@@ -9,15 +9,25 @@ sources:
 
 # Chromagram
 
-Map each FFT magnitude bin to a pitch class and accumulate:
+**⚠ MEASURED (2026-07-05, synthesized triads): naive per-bin → pitch-class
+mapping FAILS for guitar.** Below ~250 Hz a semitone (<8 Hz) is narrower than
+a 4096-window bin (~10.8 Hz @44.1k): Hann-leakage bins land in NEIGHBOURING
+pitch classes (spurious C#/F from a C-E-G triad) and low fundamentals collapse
+to a single bin. Fix that works: **spectral PEAK picking + parabolic
+interpolation** (sub-bin frequency precision) — implemented in
+`chroma_extractor.dart`, verified: C-E-G triad → top-3 chroma = {C,E,G}.
+
+Per frame:
 
 1. Consider only **60–1600 Hz** (B1..G6): below = rumble/thump, above = mostly
    harmonics that blur the chroma.
-2. Bin k → frequency `f = k*sr/n` → MIDI `m = 69 + 12*log2(f/440)` →
-   pitch class `pc = round(m) mod 12`, **only if |m - round(m)| ≤ 0.35**
-   (skip energy that falls between semitones — inharmonic noise).
-3. `chroma[pc] += magnitude²` (energy, not magnitude — emphasizes strong
-   partials over noise floor).
+2. Magnitudes for bins 0..n/2 (fftea `realFft` returns FULL length n — upper
+   half is the conjugate mirror; use only the first half). Find **local
+   maxima** above `0.002 × maxMag`.
+3. Parabolic interpolation over (k−1, k, k+1) → fractional bin → true
+   frequency `f` → MIDI `m = 69 + 12*log2(f/440)` → pitch class
+   `pc = round(m) mod 12`, **only if |m − round(m)| ≤ 0.35**.
+4. `chroma[pc] += peakMagnitude²` (energy — emphasizes strong partials).
 4. **Octave weighting:** weight bins by `1/octave` above C4 to soften the
    harmonic series pull toward the dominant (simple alternative to full HPS;
    good enough for clean guitar per adamstark's approach).
