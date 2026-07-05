@@ -4,8 +4,10 @@ import '../../../core/theme/app_colors.dart';
 import '../model/strum.dart';
 
 /// A down/up strum arrow whose meaning is carried by BOTH colour (the
-/// confidence ramp) AND shape (filled head at high confidence, open chevron
-/// below) — so it stays legible for colour-blind users.
+/// confidence ramp) AND shape — so it stays legible for colour-blind users:
+///   • high  → filled arrowhead
+///   • mid   → solid open chevron
+///   • low   → open chevron + a hollow "unsure" dot at the tip
 class StrumArrow extends StatelessWidget {
   const StrumArrow({
     super.key,
@@ -19,7 +21,7 @@ class StrumArrow extends StatelessWidget {
 
   final StrumDirection direction;
 
-  /// 0..1 — drives colour and filled/outline shape.
+  /// 0..1 — drives colour and the filled/chevron/hollow shape.
   final double confidence;
 
   /// Arrow width in logical pixels; height is 1.2× this.
@@ -34,8 +36,8 @@ class StrumArrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = AppColors.confidence(confidence);
-    final filled = confidence >= 0.75;
+    final color = AppColors.confidence(confidence, Theme.of(context).brightness);
+    final tier = AppColors.confidenceTier(confidence);
     final stroke = strokeWidth ?? (size * 0.11);
 
     Widget paint = CustomPaint(
@@ -43,7 +45,7 @@ class StrumArrow extends StatelessWidget {
       painter: _StrumArrowPainter(
         direction: direction,
         color: color,
-        filled: filled,
+        tier: tier,
         stroke: stroke,
       ),
     );
@@ -71,13 +73,15 @@ class _StrumArrowPainter extends CustomPainter {
   _StrumArrowPainter({
     required this.direction,
     required this.color,
-    required this.filled,
+    required this.tier,
     required this.stroke,
   });
 
   final StrumDirection direction;
   final Color color;
-  final bool filled;
+
+  /// 0 = low, 1 = mid, 2 = high.
+  final int tier;
   final double stroke;
 
   @override
@@ -106,7 +110,8 @@ class _StrumArrowPainter extends CustomPainter {
     final left = Offset(cx - hw, baseY);
     final right = Offset(cx + hw, baseY);
 
-    if (filled) {
+    if (tier == 2) {
+      // High: filled arrowhead.
       final head = Path()
         ..moveTo(tip.dx, tip.dy)
         ..lineTo(left.dx, left.dy)
@@ -114,6 +119,7 @@ class _StrumArrowPainter extends CustomPainter {
         ..close();
       canvas.drawPath(head, Paint()..color = color..style = PaintingStyle.fill);
     } else {
+      // Mid & low: open chevron.
       final chevron = Paint()
         ..color = color
         ..strokeWidth = stroke
@@ -127,6 +133,18 @@ class _StrumArrowPainter extends CustomPainter {
           ..lineTo(right.dx, right.dy),
         chevron,
       );
+      if (tier == 0) {
+        // Low: an "unsure" hollow dot just past the tip.
+        final dotY = down ? tip.dy - hh * 0.28 : tip.dy + hh * 0.28;
+        canvas.drawCircle(
+          Offset(cx, dotY),
+          stroke * 0.9,
+          Paint()
+            ..color = color
+            ..strokeWidth = stroke * 0.6
+            ..style = PaintingStyle.stroke,
+        );
+      }
     }
   }
 
@@ -134,6 +152,6 @@ class _StrumArrowPainter extends CustomPainter {
   bool shouldRepaint(_StrumArrowPainter old) =>
       old.direction != direction ||
       old.color != color ||
-      old.filled != filled ||
+      old.tier != tier ||
       old.stroke != stroke;
 }

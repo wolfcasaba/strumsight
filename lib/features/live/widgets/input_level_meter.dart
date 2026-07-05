@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// A tiny 5-bar microphone input-level meter (0..1).
 class InputLevelMeter extends StatelessWidget {
@@ -22,7 +23,7 @@ class InputLevelMeter extends StatelessWidget {
     final palette = context.palette;
     final clamped = level.clamp(0.0, 1.0);
     return Semantics(
-      label: 'Input level',
+      label: AppLocalizations.of(context).liveInputLevel,
       value: '${(clamped * 100).round()}%',
       child: Row(
         mainAxisSize: MainAxisSize.min,

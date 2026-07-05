@@ -53,11 +53,11 @@ class TunerScreen extends ConsumerWidget {
                     duration: const Duration(milliseconds: 150),
                     child: Text(
                       l10n.tunerInTune.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         letterSpacing: 2,
-                        color: AppColors.confidenceHigh,
+                        color: AppColors.successOn(Theme.of(context).brightness),
                       ),
                     ),
                   ),

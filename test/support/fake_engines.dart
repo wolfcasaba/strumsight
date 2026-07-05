@@ -8,14 +8,21 @@ import 'package:music_theory/features/live/model/live_frame.dart';
 class FakeStrumEngine implements StrumEngine {
   final _controller = StreamController<LiveFrame>.broadcast();
 
+  int startCalls = 0;
+  int stopCalls = 0;
+
   @override
   Stream<LiveFrame> get frames => _controller.stream;
 
   @override
-  Future<void> start() async {}
+  Future<void> start() async {
+    startCalls++;
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stopCalls++;
+  }
 
   @override
   Future<void> dispose() async {

@@ -50,5 +50,12 @@ void main() {
     await tester.tap(find.text('Pause'));
     await tester.pumpAndSettle();
     expect(find.text('Resume'), findsOneWidget);
+    // Pause must actually stop detection, not just freeze the display.
+    expect(engine.stopCalls, greaterThan(0));
+
+    await tester.tap(find.text('Resume'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pause'), findsOneWidget);
+    expect(engine.startCalls, greaterThan(0));
   });
 }

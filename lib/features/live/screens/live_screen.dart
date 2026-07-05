@@ -42,9 +42,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   void _togglePause() {
+    final engine = ref.read(strumEngineProvider);
     setState(() {
       _paused = !_paused;
-      _frozen = _paused ? ref.read(liveFrameProvider).asData?.value : null;
+      if (_paused) {
+        // Actually stop detection (timer, and the real mic/DSP), not just the
+        // display — a battery/privacy concern once the FFI engine is wired.
+        _frozen = ref.read(liveFrameProvider).asData?.value;
+        engine.stop();
+      } else {
+        _frozen = null;
+        engine.start();
+      }
     });
   }
 
@@ -52,7 +61,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final live = ref.watch(liveFrameProvider).asData?.value ?? LiveFrame.empty;
-    final frame = _paused ? (_frozen ?? live) : live;
+    // While paused the engine is stopped, so reflect "not listening" honestly.
+    final frame =
+        _paused ? (_frozen ?? live).copyWith(listening: false) : live;
     final latest = frame.latestStrum;
 
     return SafeArea(

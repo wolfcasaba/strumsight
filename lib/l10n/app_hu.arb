@@ -1,9 +1,8 @@
 {
   "@@locale": "hu",
-  "appTitle": "StrumSight",
-  "welcome": "Lásd, mit ütsz.",
   "liveListening": "Hallgatás",
   "liveNext": "Következő",
+  "liveInputLevel": "Bemeneti szint",
   "strumDown": "Le",
   "strumUp": "Fel",
   "livePause": "Szünet",
@@ -29,7 +28,5 @@
   "settingsVersion": "Verzió: {version}",
   "themeLight": "Világos",
   "themeDark": "Sötét",
-  "themeSystem": "Rendszer",
-  "actionSave": "Mentés",
-  "actionCancel": "Mégse"
+  "themeSystem": "Rendszer"
 }

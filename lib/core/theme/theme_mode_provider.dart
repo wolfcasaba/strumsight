@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ThemeModeController extends Notifier<ThemeMode> {
   static const _key = 'theme_mode';
   SharedPreferences? _prefs;
+  bool _userSet = false;
 
   @override
   ThemeMode build() {
@@ -31,14 +32,20 @@ class ThemeModeController extends Notifier<ThemeMode> {
   }
 
   Future<void> _load() async {
-    _prefs = await SharedPreferences.getInstance();
-    final name = _prefs!.getString(_key);
-    if (name != null) {
-      state = ThemeMode.values.byName(name);
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      final name = _prefs!.getString(_key);
+      // Don't clobber a mode the user set before prefs finished loading.
+      if (name != null && !_userSet) {
+        state = ThemeMode.values.byName(name);
+      }
+    } catch (_) {
+      // Prefs unavailable → keep the dark-first default.
     }
   }
 
   Future<void> setMode(ThemeMode mode) async {
+    _userSet = true;
     state = mode;
     _prefs ??= await SharedPreferences.getInstance();
     await _prefs!.setString(_key, mode.name);

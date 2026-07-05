@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../../../l10n/app_localizations.dart';
 import '../model/strum.dart';
 import 'strum_arrow.dart';
 
@@ -15,15 +16,21 @@ class BeatCounter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
         for (var i = 0; i < bar.length; i++)
-          Expanded(child: _slot(bar[i], i == activeIndex, palette)),
+          Expanded(child: _slot(bar[i], i == activeIndex, palette, l10n)),
       ],
     );
   }
 
-  Widget _slot(BeatSlot slot, bool active, AppPalette palette) {
+  Widget _slot(
+    BeatSlot slot,
+    bool active,
+    AppPalette palette,
+    AppLocalizations l10n,
+  ) {
     final s = slot.strum;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -37,6 +44,8 @@ class BeatCounter extends StatelessWidget {
                     direction: s.direction,
                     confidence: s.confidence,
                     size: 13,
+                    semanticLabel:
+                        '${slot.label} · ${s.isDown ? l10n.strumDown : l10n.strumUp}',
                   ),
                 ),
         ),

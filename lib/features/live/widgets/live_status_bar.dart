@@ -17,6 +17,7 @@ class LiveStatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final l10n = AppLocalizations.of(context);
+    final success = AppColors.successOn(Theme.of(context).brightness);
     final labelStyle = TextStyle(
       fontFamily: 'Poppins',
       fontSize: 11,
@@ -28,19 +29,28 @@ class LiveStatusBar extends StatelessWidget {
     return Row(
       children: [
         if (frame.listening) ...[
-          _Dot(color: AppColors.confidenceHigh),
+          _Dot(color: success),
           const SizedBox(width: 6),
-          Text(
-            l10n.liveListening.toUpperCase(),
-            style: labelStyle.copyWith(color: AppColors.confidenceHigh),
+          Flexible(
+            child: Text(
+              l10n.liveListening.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: labelStyle.copyWith(color: success),
+            ),
           ),
         ],
         const Spacer(),
         InputLevelMeter(level: frame.inputLevel),
         const Spacer(),
-        Text(
-          '${frame.bpm.round()} BPM · A=${frame.tuningHz.round()}',
-          style: labelStyle,
+        Flexible(
+          child: Text(
+            '${frame.bpm.round()} BPM · A=${frame.tuningHz.round()}',
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: labelStyle,
+          ),
         ),
       ],
     );

@@ -45,6 +45,28 @@ class LiveFrame {
   /// Confidence of the latest strum, or 0 if none.
   double get confidence => latestStrum?.confidence ?? 0;
 
+  /// Copy with selected fields overridden (used to reflect the paused state).
+  /// Note: nullable fields can only be kept, not cleared, which is all the UI
+  /// needs here.
+  LiveFrame copyWith({
+    List<BeatSlot>? bar,
+    double? bpm,
+    double? inputLevel,
+    double? tuningHz,
+    bool? listening,
+  }) {
+    return LiveFrame(
+      current: current,
+      next: next,
+      latestStrum: latestStrum,
+      bar: bar ?? this.bar,
+      bpm: bpm ?? this.bpm,
+      inputLevel: inputLevel ?? this.inputLevel,
+      tuningHz: tuningHz ?? this.tuningHz,
+      listening: listening ?? this.listening,
+    );
+  }
+
   /// A neutral idle frame (nothing detected yet).
   static const empty = LiveFrame(
     current: null,

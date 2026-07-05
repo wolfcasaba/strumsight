@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class LocaleNotifier extends Notifier<Locale?> {
   static const _key = 'app_locale';
   SharedPreferences? _prefs;
+  bool _userSet = false;
 
   @override
   Locale? build() {
@@ -15,13 +16,19 @@ class LocaleNotifier extends Notifier<Locale?> {
   }
 
   Future<void> _load() async {
-    _prefs = await SharedPreferences.getInstance();
-    final code = _prefs!.getString(_key);
-    if (code != null && code.isNotEmpty) state = Locale(code);
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      final code = _prefs!.getString(_key);
+      // Don't clobber a locale the user set before prefs finished loading.
+      if (code != null && code.isNotEmpty && !_userSet) state = Locale(code);
+    } catch (_) {
+      // Prefs unavailable → follow the system locale.
+    }
   }
 
   /// Set the locale (null = follow the system) and persist it.
   Future<void> set(Locale? locale) async {
+    _userSet = true;
     state = locale;
     _prefs ??= await SharedPreferences.getInstance();
     if (locale == null) {

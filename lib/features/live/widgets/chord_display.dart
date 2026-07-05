@@ -20,21 +20,20 @@ class ChordDisplay extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: 20,
-          child: next == null
-              ? null
-              : Text(
-                  '${l10n.liveNext.toUpperCase()} · ${next!.label}',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    letterSpacing: 2,
-                    color: palette.muted,
-                  ),
-                ),
-        ),
+        if (next != null)
+          Text(
+            '${l10n.liveNext.toUpperCase()} · ${next!.label}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              letterSpacing: 2,
+              color: palette.muted,
+            ),
+          )
+        else
+          const SizedBox(height: 20),
         const SizedBox(height: 6),
         FittedBox(
           fit: BoxFit.scaleDown,

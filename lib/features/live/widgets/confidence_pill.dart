@@ -17,7 +17,7 @@ class ConfidencePill extends StatelessWidget {
     if (s == null) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context);
-    final color = AppColors.confidence(s.confidence);
+    final color = AppColors.confidence(s.confidence, Theme.of(context).brightness);
     final dir = s.isDown ? l10n.strumDown : l10n.strumUp;
     final pct = (s.confidence * 100).round();
 

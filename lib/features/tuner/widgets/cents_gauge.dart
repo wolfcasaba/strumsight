@@ -28,7 +28,9 @@ class CentsGauge extends StatelessWidget {
       child: CustomPaint(
         painter: _GaugePainter(
           cents: cents.clamp(-50.0, 50.0).toDouble(),
-          marker: inTune ? AppColors.confidenceHigh : AppColors.primary,
+          marker: inTune
+              ? AppColors.successOn(Theme.of(context).brightness)
+              : AppColors.primary,
           track: palette.track,
           tick: palette.muted,
         ),
@@ -92,5 +94,8 @@ class _GaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GaugePainter old) =>
-      old.cents != cents || old.marker != marker || old.track != track;
+      old.cents != cents ||
+      old.marker != marker ||
+      old.track != track ||
+      old.tick != tick;
 }
