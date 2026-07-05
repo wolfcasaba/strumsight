@@ -18,13 +18,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze lib/
         continue-on-error: true
       - run: flutter test
         continue-on-error: true
-      - run: flutter build apk --release --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+      # StrumSight is fully offline — no --dart-define needed. Release signs
+      # with the debug keystore (android/app/build.gradle.kts) so the APK is
+      # sideloadable without a keystore secret.
+      - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: recipewiser-apk
+          name: strumsight-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
