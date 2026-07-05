@@ -3,6 +3,8 @@
   "liveListening": "Hallgatás",
   "liveNext": "Következő",
   "liveInputLevel": "Bemeneti szint",
+  "micPermissionBody": "A StrumSightnak mikrofon kell, hogy hallja a gitárodat. A hang nem hagyja el a készüléket.",
+  "micPermissionAction": "Beállítások megnyitása",
   "strumDown": "Le",
   "strumUp": "Fel",
   "livePause": "Szünet",

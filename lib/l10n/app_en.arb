@@ -3,6 +3,8 @@
   "liveListening": "Listening",
   "liveNext": "Next",
   "liveInputLevel": "Input level",
+  "micPermissionBody": "StrumSight needs the microphone to hear your guitar. Audio never leaves the device.",
+  "micPermissionAction": "Open settings",
   "strumDown": "Down",
   "strumUp": "Up",
   "livePause": "Pause",

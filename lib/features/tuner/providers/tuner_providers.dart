@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../engine/mock_tuner_engine.dart';
+import '../engine/real_tuner_engine.dart';
 import '../engine/tuner_engine.dart';
 import '../model/tuner_reading.dart';
 
-/// The active tuner engine. v1 = mock; swap to the FFI pitch detector later.
+/// The active tuner engine — the REAL microphone+YIN engine.
+/// (MockTunerEngine remains test infrastructure; tests override this.)
 final tunerEngineProvider = Provider<TunerEngine>((ref) {
-  final engine = MockTunerEngine();
+  final engine = RealTunerEngine();
   ref.onDispose(engine.dispose);
   return engine;
 });

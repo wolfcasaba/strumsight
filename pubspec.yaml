@@ -18,9 +18,11 @@ dependencies:
     sdk: flutter
   intl: ^0.20.2
 
+  audio_streamer: ^4.3.0        # mic → PCM stream (real engine — RAG chunk 001)
   cupertino_icons: ^1.0.8
   fftea: ^1.5.0                 # pure-Dart FFT/STFT (DSP core — see docs/rag)
   flutter_riverpod: ^3.3.2      # state (hand-written providers, no codegen)
+  permission_handler: ^12.0.0   # RECORD_AUDIO runtime permission
   go_router: ^17.3.0            # navigation shell
   flutter_animate: ^4.5.2       # glanceable micro-animations
   wakelock_plus: ^1.6.1         # keep the screen awake during a Live session
