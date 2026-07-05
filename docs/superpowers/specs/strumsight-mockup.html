@@ -1,0 +1,294 @@
+<title>StrumSight — UX mockup</title>
+<style>
+  :root{
+    /* page chrome tokens (theme-aware) */
+    --bg:#EDE9E1; --surface:#F6F3EC; --line:#D8D2C6;
+    --ink:#1C1A17; --muted:#6A645B; --faint:#938C80;
+    --copper:#B26A2E; --copper-soft:#c98a4d;
+    --studio:#141213;
+    --radius:20px;
+    /* app-screen tokens — the product is dark by design (fixed) */
+    --a-ground:#111013; --a-surface:#191719; --a-elev:#22201F;
+    --a-line:#2E2A28; --a-ink:#E9E5DE; --a-muted:#948D82; --a-faint:#5E574F;
+    --a-copper:#D98A46;
+    --c-high:#3ED598; --c-mid:#F2B33D; --c-low:#6E7480;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#131215; --surface:#1B191C; --line:#2C2930; --ink:#E9E5DE; --muted:#9A938B; --faint:#645d55; --copper:#D98A46; --copper-soft:#e0a066; }
+  }
+  :root[data-theme="light"]{ --bg:#EDE9E1; --surface:#F6F3EC; --line:#D8D2C6; --ink:#1C1A17; --muted:#6A645B; --faint:#938C80; --copper:#B26A2E; --copper-soft:#c98a4d; }
+  :root[data-theme="dark"]{ --bg:#131215; --surface:#1B191C; --line:#2C2930; --ink:#E9E5DE; --muted:#9A938B; --faint:#645d55; --copper:#D98A46; --copper-soft:#e0a066; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:clamp(24px,5vw,64px) clamp(18px,4vw,40px)}
+
+  /* header */
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--copper);margin:0 0 14px}
+  .wordmark{display:flex;align-items:center;gap:12px;font-weight:800;font-size:clamp(30px,6vw,46px);letter-spacing:-.02em;margin:0}
+  .glyph{display:inline-grid;place-items:center;width:1.15em;height:1.15em;border:2px solid var(--copper);border-radius:9px;color:var(--copper);font-size:.62em;font-family:var(--mono);line-height:1}
+  .thesis{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:52ch;text-wrap:balance;margin:16px 0 0}
+  .thesis b{color:var(--ink);font-weight:600}
+
+  /* device stage */
+  .stage{margin:clamp(32px,6vw,60px) 0;padding:clamp(22px,4vw,44px);border-radius:26px;
+    background:radial-gradient(120% 90% at 50% -10%,#26221f 0%,var(--studio) 62%);
+    display:flex;gap:clamp(20px,4vw,46px);justify-content:center;flex-wrap:wrap;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+  .cap{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#8f8880;text-align:center;margin:14px 0 0}
+  .cap b{color:var(--a-copper)}
+
+  /* phone */
+  .device{width:300px;max-width:86vw}
+  .phone{position:relative;background:var(--a-ground);border-radius:38px;padding:12px;
+    border:1px solid #34302d;box-shadow:0 30px 60px -20px rgba(0,0,0,.7),0 0 0 8px #0b0a0b}
+  .screen{background:var(--a-ground);border-radius:28px;overflow:hidden;aspect-ratio:9/19.5;
+    display:flex;flex-direction:column;color:var(--a-ink)}
+  .notch{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:96px;height:22px;background:#0b0a0b;border-radius:12px;z-index:5}
+
+  /* app status bar */
+  .sbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;font-family:var(--mono);font-size:10px;color:var(--a-muted)}
+  .live-dot{display:inline-flex;align-items:center;gap:6px;color:var(--c-high)}
+  .live-dot i{width:7px;height:7px;border-radius:50%;background:var(--c-high);box-shadow:0 0 8px var(--c-high);animation:pulse 1.8s ease-in-out infinite}
+  .lvl{display:inline-flex;gap:2px;align-items:flex-end;height:11px}
+  .lvl span{width:2px;background:var(--a-copper);border-radius:1px}
+  .lvl span:nth-child(1){height:40%}.lvl span:nth-child(2){height:75%}.lvl span:nth-child(3){height:55%}.lvl span:nth-child(4){height:100%}.lvl span:nth-child(5){height:30%}
+
+  /* live hero */
+  .live-main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 16px}
+  .next{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--a-faint);text-transform:uppercase}
+  .next b{color:var(--a-muted)}
+  .chord{font-size:118px;font-weight:800;letter-spacing:-.04em;line-height:.9;
+    background:linear-gradient(180deg,#fff,#d8d2c8);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .arrow-hero{margin:4px 0 2px;filter:drop-shadow(0 0 14px rgba(62,213,152,.55))}
+  .confpill{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--c-high);
+    border:1px solid rgba(62,213,152,.4);background:rgba(62,213,152,.08);padding:3px 10px;border-radius:999px}
+
+  /* beat counter */
+  .beats{display:grid;grid-template-columns:repeat(8,1fr);gap:0;padding:16px 14px 6px;border-top:1px solid var(--a-line)}
+  .beat{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .beat .n{font-family:var(--mono);font-size:11px;color:var(--a-faint)}
+  .beat.strong .n{color:var(--a-ink)}
+  .beat .mk{height:20px;display:grid;place-items:center}
+
+  /* bottom action bar */
+  .abar{display:flex;align-items:center;justify-content:space-around;padding:10px 12px 6px}
+  .act{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--a-muted);font-family:var(--mono);letter-spacing:.04em}
+  .act .ic{width:26px;height:26px;display:grid;place-items:center;color:var(--a-muted)}
+  .rec{width:58px;height:58px;border-radius:50%;background:var(--a-copper);display:grid;place-items:center;
+    box-shadow:0 0 0 5px rgba(217,138,70,.16);color:#1a1206;margin-top:-14px}
+  .rec b{width:16px;height:16px;border-radius:4px;background:#1a1206;display:block}
+
+  /* nav */
+  .nav{display:flex;border-top:1px solid var(--a-line)}
+  .nav a{flex:1;text-align:center;padding:9px 0 12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--a-faint);text-decoration:none}
+  .nav a.on{color:var(--a-copper)}
+  .nav a .d{display:block;font-size:15px;margin-bottom:2px;line-height:1}
+
+  /* ---- analyze screen ---- */
+  .az-head{padding:14px 16px 10px}
+  .az-file{font-family:var(--mono);font-size:12px;color:var(--a-ink);display:flex;align-items:center;gap:7px}
+  .az-file .tag{color:var(--a-copper)}
+  .wave{height:34px;margin-top:10px;display:flex;align-items:center;gap:2px}
+  .wave span{flex:1;background:var(--a-line);border-radius:1px}
+  .wave span.on{background:var(--a-copper)}
+  .az-time{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--a-muted);margin-top:8px}
+
+  .track{flex:1;overflow:hidden;position:relative;padding:6px 0;border-top:1px solid var(--a-line)}
+  .playhead{position:absolute;top:0;bottom:0;left:38%;width:2px;background:var(--c-high);box-shadow:0 0 10px var(--c-high);z-index:3}
+  .playhead::before{content:"";position:absolute;top:0;left:-4px;width:10px;height:10px;border-radius:50%;background:var(--c-high)}
+  .cells{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px}
+  .cell{background:var(--a-surface);border:1px solid var(--a-line);border-radius:12px;padding:10px 6px;text-align:center}
+  .cell.active{border-color:var(--a-copper);background:rgba(217,138,70,.08)}
+  .cell .cc{font-size:24px;font-weight:800;letter-spacing:-.03em}
+  .cell .grid2{display:flex;justify-content:center;gap:7px;margin-top:8px}
+  .cell .bt{font-family:var(--mono);font-size:9px;color:var(--a-faint);margin-top:8px;letter-spacing:.08em}
+
+  .transport{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--a-line);gap:8px}
+  .tbtn{font-family:var(--mono);font-size:10px;color:var(--a-muted);border:1px solid var(--a-line);border-radius:8px;padding:6px 8px;white-space:nowrap}
+  .tbtn.pri{color:#1a1206;background:var(--a-copper);border-color:var(--a-copper)}
+  .tbtn.on{color:var(--c-high);border-color:rgba(62,213,152,.4)}
+
+  /* design language strip */
+  .lang{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:8px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+  .card h3{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 16px;font-weight:600}
+  .sw{display:flex;align-items:center;gap:11px;margin:10px 0;font-size:13px}
+  .sw i{width:26px;height:26px;border-radius:7px;border:1px solid rgba(0,0,0,.15);flex:none}
+  .sw code{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:auto}
+  .legend{display:flex;flex-direction:column;gap:14px}
+  .lrow{display:flex;align-items:center;gap:14px;font-size:13.5px;color:var(--muted)}
+  .lrow b{color:var(--ink);font-weight:600}
+  .lrow .sym{width:34px;height:34px;flex:none;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);border-radius:9px}
+  .ia{display:flex;flex-direction:column;gap:12px}
+  .ia .step{display:flex;gap:12px;align-items:baseline;font-size:14px}
+  .ia .step .k{font-family:var(--mono);font-size:11px;color:var(--copper);flex:none;width:74px}
+  .ia .step b{color:var(--ink)}
+  .foot{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--faint);font-family:var(--mono);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">UX Concept · v1 — Live-first</p>
+  <h1 class="wordmark"><span class="glyph">↓↑</span>StrumSight</h1>
+  <p class="thesis"><b>Lásd, mit ütsz.</b> Offline, valós idejű akkord- és <b>leütés-irány</b> felismerés a telefonon — az egyetlen app, ami a ↓/↑ leütést első osztályú kimenetként mutatja, miközben mindkét kezed a gitáron van.</p>
+
+  <div class="stage">
+    <!-- LIVE (hero) -->
+    <div class="device">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="sbar">
+            <span class="live-dot"><i></i>LISTENING</span>
+            <span class="lvl"><span></span><span></span><span></span><span></span><span></span></span>
+            <span>96 BPM · A=440</span>
+          </div>
+          <div class="live-main">
+            <div class="next">NEXT · <b>G</b></div>
+            <div class="chord">C</div>
+            <div class="arrow-hero">
+              <svg width="80" height="96" viewBox="0 0 80 96" aria-label="downstroke" role="img">
+                <line x1="40" y1="6" x2="40" y2="74" stroke="#3ED598" stroke-width="9" stroke-linecap="round"/>
+                <path d="M16 60 L40 90 L64 60" fill="none" stroke="#3ED598" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="confpill">DOWN · 94%</span>
+          </div>
+          <div class="beats">
+            <div class="beat strong"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#E9E5DE" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#E9E5DE" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">1</span></div>
+            <div class="beat"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#948D82" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">&amp;</span></div>
+            <div class="beat strong"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#E9E5DE" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#E9E5DE" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">2</span></div>
+            <div class="beat"><span class="mk"></span><span class="n">&amp;</span></div>
+            <div class="beat strong"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#E9E5DE" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#E9E5DE" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">3</span></div>
+            <div class="beat"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#948D82" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">&amp;</span></div>
+            <div class="beat strong"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#F2B33D" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#F2B33D" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">4</span></div>
+            <div class="beat"><span class="mk">
+              <svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#948D82" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </span><span class="n">&amp;</span></div>
+          </div>
+          <div class="abar">
+            <div class="act"><span class="ic">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7v10M16 7v10M4 10v4M20 10v4"/></svg>
+            </span>TUNER</div>
+            <div class="rec" title="Record session"><b></b></div>
+            <div class="act"><span class="ic">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+            </span>FREEZE</div>
+          </div>
+          <div class="nav">
+            <a class="on" href="#"><span class="d">🎤</span>Live</a>
+            <a href="#"><span class="d">🎬</span>Analyze</a>
+            <a href="#"><span class="d">📚</span>Library</a>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>Live tükör</b> — a hero. Glanceable ~1 m-ről.</p>
+    </div>
+
+    <!-- ANALYZE -->
+    <div class="device">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="sbar"><span>ANALYZE</span><span>offline · on-device</span></div>
+          <div class="az-head">
+            <div class="az-file"><span class="tag">▸</span> riff_idea_03.m4a</div>
+            <div class="wave">
+              <span style="height:30%"></span><span style="height:60%"></span><span class="on" style="height:90%"></span><span style="height:50%"></span><span style="height:75%"></span><span class="on" style="height:100%"></span><span style="height:40%"></span><span style="height:65%"></span><span style="height:85%"></span><span style="height:45%"></span><span class="on" style="height:70%"></span><span style="height:55%"></span><span style="height:35%"></span><span style="height:80%"></span><span style="height:50%"></span><span style="height:25%"></span>
+            </div>
+            <div class="az-time"><span>0:12</span><span>0:48</span></div>
+          </div>
+          <div class="track">
+            <div class="playhead"></div>
+            <div class="cells">
+              <div class="cell"><div class="cc">C</div><div class="grid2">
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#948D82" stroke-width="2.4"/></svg>
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#948D82" stroke-width="2.4"/></svg>
+              </div><div class="bt">1 &amp; 2</div></div>
+              <div class="cell active"><div class="cc">G</div><div class="grid2">
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#3ED598" stroke-width="2.6"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#3ED598" stroke-width="2.6"/></svg>
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#3ED598" stroke-width="2.6"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#3ED598" stroke-width="2.6"/></svg>
+              </div><div class="bt">3 &amp; 4</div></div>
+              <div class="cell"><div class="cc">Am</div><div class="grid2">
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#948D82" stroke-width="2.4"/></svg>
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="#948D82" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="#948D82" stroke-width="2.4"/></svg>
+              </div><div class="bt">1 &amp; 2</div></div>
+              <div class="cell"><div class="cc">F</div><div class="grid2">
+                <svg width="10" height="16" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="#F2B33D" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="#F2B33D" stroke-width="2.4"/></svg>
+              </div><div class="bt">3 · 4</div></div>
+            </div>
+          </div>
+          <div class="transport">
+            <span class="tbtn">⏮</span>
+            <span class="tbtn pri">▶ 0:12</span>
+            <span class="tbtn on">A–B loop</span>
+            <span class="tbtn">0.75×</span>
+            <span class="tbtn">Capo +2</span>
+          </div>
+          <div class="nav">
+            <a href="#"><span class="d">🎤</span>Live</a>
+            <a class="on" href="#"><span class="d">🎬</span>Analyze</a>
+            <a href="#"><span class="d">📚</span>Library</a>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>Analyze</b> — felvétel/MP4 → idővonal <span style="color:#6E7480">(v2)</span></p>
+    </div>
+  </div>
+
+  <!-- design language -->
+  <div class="lang">
+    <div class="card">
+      <h3>Palette</h3>
+      <div class="sw"><i style="background:#111013"></i> Ground <code>#111013</code></div>
+      <div class="sw"><i style="background:#E9E5DE"></i> Ink (off-white) <code>#E9E5DE</code></div>
+      <div class="sw"><i style="background:#D98A46"></i> Copper (brand) <code>#D98A46</code></div>
+      <div class="sw"><i style="background:#3ED598"></i> Confidence · high <code>#3ED598</code></div>
+      <div class="sw"><i style="background:#F2B33D"></i> Confidence · mid <code>#F2B33D</code></div>
+      <div class="sw"><i style="background:#6E7480"></i> Confidence · low <code>#6E7480</code></div>
+    </div>
+
+    <div class="card">
+      <h3>Strum notáció</h3>
+      <div class="legend">
+        <div class="lrow"><span class="sym"><svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="1" x2="6" y2="12" stroke="currentColor" stroke-width="2.4"/><path d="M2 9 L6 15 L10 9" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></span><span><b>Leütés (down)</b> — a föld felé</span></div>
+        <div class="lrow"><span class="sym"><svg width="12" height="18" viewBox="0 0 12 18"><line x1="6" y1="17" x2="6" y2="6" stroke="currentColor" stroke-width="2.4"/><path d="M2 9 L6 3 L10 9" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></span><span><b>Felütés (up)</b> — az ég felé</span></div>
+        <div class="lrow"><span class="sym" style="font-family:var(--mono);font-weight:700;color:var(--copper)">&gt;</span><span><b>Hangsúly</b> — accentelt leütés</span></div>
+        <div class="lrow"><span class="sym" style="font-family:var(--mono);font-weight:700;color:var(--copper)">x</span><span><b>Tompított</b> — mute stroke</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>IA · navigáció</h3>
+      <div class="ia">
+        <div class="step"><span class="k">🎤 Live</span><span><b>Alap-képernyő.</b> Akkord + ↓↑ + confidence + ütem-számláló.</span></div>
+        <div class="step"><span class="k">🎬 Analyze</span><span>Felvétel/MP4 → idővonal, loop, lassítás. <b>v2</b></span></div>
+        <div class="step"><span class="k">📚 Library</span><span>Mentett sessionök, 100% offline. <b>v2</b></span></div>
+        <div class="step"><span class="k">⚙️ Settings</span><span>Confidence-küszöb, capo, hangolás.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>StrumSight · UX concept</span>
+    <span>Dark-first · 44pt targets · offline · on-device C++ DSP</span>
+  </div>
+</div>
