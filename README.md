@@ -8,11 +8,11 @@ chord-detection app leaves out.
 - **Strum direction as the headline** — down/up per beat, with a confidence ramp.
 - **Android-first** (iOS later; needs a Mac to build).
 
-> **Status:** v1 infrastructure + UI, driven by a **mock detection engine**. The real detector
-> (a C++ DSP core — aubio onset + CQT-chroma chord match + sub-band direction — over Dart FFI)
-> drops in behind the existing `StrumEngine` interface with **zero UI changes**. See the
-> [design spec](docs/superpowers/specs/2026-07-05-strumsight-design.md) and the
-> [Phase 1 validation plan](docs/superpowers/plans/2026-07-05-strumsight-phase1-validation.md).
+> **Status (v0.2.0):** REAL on-device detection in **pure Dart** — microphone → DSP isolate →
+> chroma/chord + whitened-spectral-flux onsets + sub-band strum direction + YIN tuner. The DSP
+> follows the sourced parameters in the [RAG knowledge base](docs/rag/README.md) and is fully
+> unit-tested on synthesized guitar signals. A C++/FFI port remains the optimization path only
+> if on-device profiling demands it.
 
 ---
 
@@ -20,25 +20,25 @@ chord-detection app leaves out.
 
 | Surface | State |
 |--------|-------|
-| 🎤 **Live** mirror — huge current chord, next ghosted, big ↓/↑ arrow, confidence pill, rolling `1 & 2 & 3 & 4` beat counter, listening/level/BPM status | ✅ built (mock engine) |
-| 🎛️ **Tuner** — note + cents gauge + in-tune indicator | ✅ built (mock engine) |
+| 🎤 **Live** mirror — huge current chord, big ↓/↑ arrow, confidence pill, rolling `1 & 2 & 3 & 4` beat counter, listening/level/BPM status | ✅ **real detection** (mic) |
+| 🎛️ **Tuner** — note + cents gauge + in-tune indicator | ✅ **real YIN pitch** (mic) |
 | ⚙️ **Settings** — theme (persisted), language (en/hu), confidence threshold (persisted), version | ✅ built |
 | 🎬 **Analyze** (recording → timeline) · 📚 **Library** (saved sessions) | 🔜 v2 (placeholders) |
 
 ## Architecture
 
 ```
-Live screen ─ watches ─▶ liveFrameProvider (StreamProvider)
-                              │
-                              ▼
-                        StrumEngine  (abstract interface)
-                        ├── MockStrumEngine   ← v1: deterministic frames
-                        └── FfiStrumEngine     ← later: C++ DSP core (mic / MediaCodec → PCM)
+mic (audio_streamer) ──▶ DSP ISOLATE                         ┌─ Live screen
+  PCM chunks             LivePipeline                        │   watches
+                         ├─ fast  1024/256 : whitened flux ─ onsets → sub-band ↓/↑
+                         ├─ slow 4096/1024 : peak-picked chroma → 24-template chord
+                         └─ tempo (median IOI) + bar slots → LiveFrame ~15 Hz ──▶ UI
 ```
 
-The UI only ever talks to `StrumEngine` / `TunerEngine`. Swapping the mock for the FFI engine is a
-one-line change in `lib/features/*/providers/`. Everything is unit- and widget-tested against the
-mock, so the whole app is verifiable today.
+The UI only talks to the `StrumEngine`/`TunerEngine` interfaces. `RealStrumEngine` runs the whole
+pipeline off the UI isolate; `stop()` releases the microphone. The mocks remain as deterministic
+test infrastructure. Every DSP stage is unit-tested on synthesized guitar signals (staggered-string
+strums, harmonic-rich triads), and every parameter is documented + sourced in `docs/rag/`.
 
 **Design language:** dark-first Material 3, warm-neutral palette + **copper** brand accent, a
 **separate semantic confidence ramp** (high `#3ED598` / mid `#F2B33D` / low `#6E7480`) that is
