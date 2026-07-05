@@ -25,6 +25,12 @@ Float64List harmonicNote({
       out[i] += a * env * math.sin(w * i);
     }
   }
+  // 10 ms cosine release so the note doesn't END with a click — a hard
+  // cutoff is a broadband transient that reads as a (false) onset.
+  final ramp = math.min((0.010 * sampleRate).round(), n);
+  for (var i = 0; i < ramp; i++) {
+    out[n - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / ramp);
+  }
   return out;
 }
 
@@ -73,4 +79,49 @@ Iterable<Float64List> frames(Float64List signal, int window, int hop) sync* {
   for (var start = 0; start + window <= signal.length; start += hop) {
     yield signal.sublist(start, start + window);
   }
+}
+
+/// Open-string fundamentals E2..E4 (low → high) — strum test voicing.
+const openStrings = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+
+/// A single strum: strings staggered by [staggerMs] each. Down-strum hits the
+/// LOW strings first ([lowFirst] = true); up-strum the high strings first.
+Float64List strumSignal({
+  required bool lowFirst,
+  double staggerMs = 8,
+  double seconds = 0.8,
+  int sampleRate = 44100,
+  double leadSilenceSeconds = 0.1,
+}) {
+  final lead = (leadSilenceSeconds * sampleRate).round();
+  final stagger = (staggerMs / 1000 * sampleRate).round();
+  final order = lowFirst ? openStrings : openStrings.reversed.toList();
+  final notes = [
+    for (final f in order)
+      harmonicNote(freq: f, seconds: seconds, sampleRate: sampleRate, amp: 0.12),
+  ];
+  final offsets = [for (var i = 0; i < notes.length; i++) lead + i * stagger];
+  return mixNotes(notes, startOffsets: offsets);
+}
+
+/// [count] identical strums, [gapSeconds] apart (onset-to-onset).
+Float64List strumPattern({
+  required List<bool> lowFirstPerStrum,
+  double gapSeconds = 0.5,
+  int sampleRate = 44100,
+}) {
+  final one = (gapSeconds * sampleRate).round();
+  final parts = <Float64List>[];
+  final offsets = <int>[];
+  for (var i = 0; i < lowFirstPerStrum.length; i++) {
+    parts.add(strumSignal(
+      lowFirst: lowFirstPerStrum[i],
+      sampleRate: sampleRate,
+      seconds: gapSeconds * 0.9,
+      leadSilenceSeconds: 0,
+    ));
+    offsets.add((i * one) + (0.1 * sampleRate).round());
+  }
+  final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();
+  return mixNotes(parts, startOffsets: offsets, length: total);
 }

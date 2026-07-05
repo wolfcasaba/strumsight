@@ -10,15 +10,27 @@ sources:
 
 # Onset detection
 
-**Feature — spectral flux** on the fast pipeline (1024/256, chunk 002):
+**⚠ MEASURED (2026-07-05, synthesized strums): raw spectral flux FAILS on
+sustained polyphony.** Inter-string beating during ring-out floods the flux
+baseline (log-flux ~5–7 vs attack ~7.5) and re-strums never cross a
+median-scaled threshold. Also: a λ-multiplier on LOG-compressed flux is
+mathematically wrong (multiplying a log = exponentiating the raw value).
 
-`flux[n] = Σ_k max(0, |X_k(n)| − |X_k(n−1)|)` (half-wave rectified — only
-energy INCREASES). Log-compress: `flux' = log(1 + 10*flux)` to tame dynamics.
+**Fix that works — adaptive whitening (Stowell & Plumbley) + LINEAR flux:**
+each bin is normalised by its recent peak `P_k = max(m_k, r·P_k)` with
+**r = 0.995** per 5.8 ms frame (floor 1e-4); flux is computed on the whitened
+magnitudes, NO log compression:
 
-**Adaptive threshold (median-based, causal):**
-`thr[n] = δ + λ * median(flux'[n−M .. n])` with **M ≈ 20 frames (~115 ms)**,
-start at **δ = 0.05, λ = 1.4**; tune on real strums. Median (not mean) resists
-the spike itself inflating the threshold.
+`flux[n] = Σ_k max(0, w_k(n) − w_k(n−1))`, `w_k = m_k / max(P_k, floor)`
+
+**Adaptive threshold (median-based, causal, linear):**
+`thr[n] = δ + λ * median(flux[n−M .. n])` with **M = 20 frames (~115 ms)**,
+**δ = 1.0, λ = 2.0** (measured: ring-out whitened flux ~1–4, attacks ~20–270).
+Median (not mean) resists the spike itself inflating the threshold.
+
+**Synth-test gotcha:** a test signal that ends in a hard cutoff produces a
+broadband click that reads as a false onset — synthesized notes need a ~10 ms
+release ramp (real strings never stop instantaneously).
 
 **Peak picking:** onset at n when `flux'[n] > thr[n]`, `flux'[n]` is a local
 max over ±2 frames, and **≥ 60 ms since the previous onset** (a strum's string
