@@ -37,7 +37,7 @@ music-theory/
 │   ├── features/<feature>/    # (empty) — one folder per feature; screens/providers/repositories/models
 │   └── l10n/                  # app_en.arb, app_hu.arb (generated app_localizations*.dart are gitignored)
 ├── .claude/
-│   ├── agents/                # music-theory-{reviewer,debugger,test-writer,performance,analyze-fixer,devil-advocate}
+│   ├── agents/                # flutter-{reviewer,debugger,test-writer,performance,analyze-fixer,devil-advocate} (generic pro Flutter engineering)
 │   └── skills/                # learning systems + dev skills (session-learning, self-reflect, TDD, verify-before-done, ...)
 ├── tools/flutter-rag.mjs      # semantic code search over the Dart tree
 ├── .github/workflows/         # build-apk.yml (CI → APK artifact)
@@ -71,4 +71,4 @@ music-theory/
 ~/flutter/bin/flutter test             # separate call — all green
 ```
 
-Use the `music-theory-*` agents + `verify-before-done` / `session-learning` skills as on recipewiser-mobile.
+Use the `flutter-*` agents + `verify-before-done` / `session-learning` skills.
