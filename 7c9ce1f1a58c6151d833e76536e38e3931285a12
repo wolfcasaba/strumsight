@@ -1,0 +1,1 @@
+round=7 verdict=pass tests=28 lesson=REJECTED-first-attempt:naive-bin-to-pitchclass-mapping-fails-below-250Hz(semitone<binwidth);fix=spectral-peak-picking+parabolic-interp
