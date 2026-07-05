@@ -1,50 +1,43 @@
 import 'package:flutter/material.dart';
 
-/// Music Theory brand colors (PLACEHOLDER — refine when branding decided) — single source of truth.
-/// Mirrors the web app: primary #ED068A, secondary #FE734C.
+/// StrumSight brand + semantic colours — single source of truth.
+///
+/// The brand accent is a warm guitar-bronze **copper**. The **confidence
+/// ramp** (high/mid/low) is a SEPARATE semantic scale — never the accent — and
+/// is always reinforced by arrow shape (filled vs outline) so meaning never
+/// depends on colour alone (colour-blind safe).
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFFED068A); // brand pink
-  static const Color secondary = Color(0xFFFE734C); // brand orange
-  static const Color primaryDark = Color(0xFF690F3E); // plum (fat macro / hover)
-  static const Color ink = Color(0xFF1A1A1A);
-  static const Color muted = Color(0xFF6B7280);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceMuted = Color(0xFFF6F6F8);
+  // --- Brand (copper / guitar bronze) ---
+  static const Color primary = Color(0xFFD98A46); // copper — brand accent
+  static const Color secondary = Color(0xFFE0A44A); // warm amber highlight
+  static const Color primaryDark = Color(0xFFB26A2E);
 
-  // --- Semantic / status tokens (replace raw hex scattered across the app) ---
+  // --- Confidence ramp (semantic — kept distinct from the brand accent) ---
+  static const Color confidenceHigh = Color(0xFF3ED598); // teal-green
+  static const Color confidenceMid = Color(0xFFF2B33D); // amber
+  static const Color confidenceLow = Color(0xFF6E7480); // grey (unsure ≠ error)
 
-  /// Destructive actions & error states (delete, danger toggles).
-  static const Color danger = Color(0xFFE5484D);
+  /// Neutral ink used for strum marks on the beat grid.
+  static const Color strumInk = Color(0xFFE9E5DE);
 
-  /// A brighter alert red, used for low-coverage micronutrient bars.
-  static const Color warning = Color(0xFFEF4444);
+  // --- Generic semantics ---
+  static const Color danger = Color(0xFFE5533C);
+  static const Color success = Color(0xFF3ED598);
 
-  /// Positive amounts & downward weight trends (credits, weight-down).
-  static const Color success = Color(0xFF2BB673);
-
-  /// Review / rating stars.
-  static const Color star = Color(0xFFFFB400);
-
-  /// Progress-ring track (matches the web ring-track token).
-  static const Color ringTrack = Color(0xFFF3F4F6);
-
-  // --- Category accent palette (cookbooks / charts) ---
-
-  /// Accent blue — cookbook covers, micronutrient bars.
-  static const Color accentBlue = Color(0xFF3B82F6);
-
-  /// Accent purple — cookbook covers, micronutrient bars.
-  static const Color accentPurple = Color(0xFF8B5CF6);
-
-  /// Accent amber — cookbook covers, micronutrient bars.
-  static const Color accentAmber = Color(0xFFF59E0B);
-
-  /// Primary brand gradient (top-left → bottom-right).
+  /// Primary brand gradient (copper → amber); use sparingly on brand surfaces.
   static const LinearGradient brandGradient = LinearGradient(
     colors: [primary, secondary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Confidence colour for a 0..1 score. Thresholds mirror the Settings
+  /// confidence gate (≥0.75 high, ≥0.45 mid, else low).
+  static Color confidence(double score) {
+    if (score >= 0.75) return confidenceHigh;
+    if (score >= 0.45) return confidenceMid;
+    return confidenceLow;
+  }
 }

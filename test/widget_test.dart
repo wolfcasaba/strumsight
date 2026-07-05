@@ -6,9 +6,9 @@ import 'package:music_theory/main.dart';
 
 void main() {
   testWidgets('App boots and shows the title', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: MusicTheoryApp()));
+    await tester.pumpWidget(const ProviderScope(child: StrumSightApp()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Music Theory'), findsWidgets);
+    expect(find.text('StrumSight'), findsWidgets);
   });
 }

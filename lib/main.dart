@@ -1,33 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/i18n/locale_provider.dart';
-import 'core/supabase/supabase_config.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
 import 'l10n/app_localizations.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Connect to the backend only when a key is supplied via --dart-define.
-  // Otherwise the app runs in "mock mode" (no backend calls) — how design
-  // previews / screenshots run before a backend is wired.
-  if (SupabaseConfig.isConfigured) {
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      // ignore: deprecated_member_use
-      anonKey: SupabaseConfig.anonKey,
-    );
-  }
-
-  runApp(const ProviderScope(child: MusicTheoryApp()));
+void main() {
+  // StrumSight is fully offline / on-device — no backend init, no network.
+  runApp(const ProviderScope(child: StrumSightApp()));
 }
 
-class MusicTheoryApp extends ConsumerWidget {
-  const MusicTheoryApp({super.key});
+class StrumSightApp extends ConsumerWidget {
+  const StrumSightApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,7 +21,7 @@ class MusicTheoryApp extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
 
     return MaterialApp(
-      title: 'Music Theory',
+      title: 'StrumSight',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
@@ -53,8 +39,8 @@ class MusicTheoryApp extends ConsumerWidget {
   }
 }
 
-/// Temporary landing screen. Real feature screens land under `lib/features/`
-/// once the music-theory app is specified.
+/// Temporary landing screen — replaced by the go_router bottom-nav shell
+/// (Live / Analyze / Library / Settings) in Round 4.
 class _HomePlaceholder extends StatelessWidget {
   const _HomePlaceholder();
 

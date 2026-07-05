@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// App theme mode (light / dark / system), toggleable at runtime from Settings.
-/// Initial value can be forced for previews via the `?theme=` query param.
+/// StrumSight is dark-first, so dark is the default; a `?theme=` query param
+/// can force a mode for web previews/screenshots.
 class ThemeModeController extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
     switch (Uri.base.queryParameters['theme']) {
-      case 'dark':
-        return ThemeMode.dark;
+      case 'light':
+        return ThemeMode.light;
       case 'system':
         return ThemeMode.system;
-      case 'light':
+      case 'dark':
       default:
-        return ThemeMode.light;
+        return ThemeMode.dark;
     }
   }
 

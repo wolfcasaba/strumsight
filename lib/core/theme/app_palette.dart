@@ -34,22 +34,24 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Hairline borders / dividers.
   final Color border;
 
+  // StrumSight is dark-first (a performance/stage surface), but light is fully
+  // supported. Neutrals are warm-biased toward the copper accent, not pure grey.
   static const light = AppPalette(
-    bg: Color(0xFFF6F6F8),
-    surface: Colors.white,
-    ink: Color(0xFF1A1A1A),
-    muted: Color(0xFF6B7280),
-    track: Color(0xFFEFEFF4),
-    border: Color(0xFFE6E6EC),
+    bg: Color(0xFFF3F0E9),
+    surface: Color(0xFFFFFFFF),
+    ink: Color(0xFF1C1A17),
+    muted: Color(0xFF6A645B),
+    track: Color(0xFFEDE8DF),
+    border: Color(0xFFD8D2C6),
   );
 
   static const dark = AppPalette(
-    bg: Color(0xFF101015),
-    surface: Color(0xFF1B1B22),
-    ink: Color(0xFFF3F3F7),
-    muted: Color(0xFF9AA0AC),
-    track: Color(0xFF2A2A33),
-    border: Color(0xFF2E2E38),
+    bg: Color(0xFF111013),
+    surface: Color(0xFF191719),
+    ink: Color(0xFFE9E5DE),
+    muted: Color(0xFF948D82),
+    track: Color(0xFF22201F),
+    border: Color(0xFF2E2A28),
   );
 
   @override

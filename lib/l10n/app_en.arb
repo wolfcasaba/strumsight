@@ -1,7 +1,7 @@
 {
   "@@locale": "en",
-  "appTitle": "Music Theory",
-  "welcome": "Welcome",
+  "appTitle": "StrumSight",
+  "welcome": "See what you strum.",
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
   "settingsAppearance": "Appearance",
