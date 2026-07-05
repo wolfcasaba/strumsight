@@ -1,0 +1,75 @@
+name: music_theory
+description: "Music Theory — mobile learning app"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+# Full plugin set inherited from recipewiser-mobile so the whole Flutter
+# infrastructure (state, routing, backend, charts, media, i18n) is ready
+# from day one. Prune any plugin the music-theory app ends up not needing.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+
+  cupertino_icons: ^1.0.8
+  supabase_flutter: ^2.15.0
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.3.0
+  dio: ^5.9.2
+  fl_chart: ^1.2.0
+  google_fonts: ^8.1.0
+  flutter_animate: ^4.5.2
+  lucide_icons_flutter: ^3.1.14+2
+  wakelock_plus: ^1.6.1
+  mobile_scanner: ^7.2.0
+  speech_to_text: ^7.4.0
+  image_picker: ^1.1.2
+  webview_flutter: ^4.14.0
+  cached_network_image: ^3.4.1
+  share_plus: ^13.1.0
+  url_launcher: ^6.3.2
+  package_info_plus: ^10.1.0
+  shared_preferences: ^2.3.2
+  health: ^13.0.0
+  audioplayers: ^6.8.0
+  flutter_tts: ^4.2.5
+
+# `health` pins device_info_plus to the win32 ^5 line, while the rest of our
+# plugins are on win32 ^6. Force device_info_plus to its 13.x (win32 ^6) line
+# so ONE win32 major spans the tree — required for `flutter test` to
+# host-compile the Windows plugin code.
+dependency_overrides:
+  device_info_plus: ^13.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  # Generate localizations (AppLocalizations) from lib/l10n/*.arb (see l10n.yaml).
+  generate: true
+  uses-material-design: true
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Poppins-ExtraBold.ttf
+          weight: 800
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat.ttf

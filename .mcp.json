@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "dart": {
+      "command": "/home/ubuntu/flutter/bin/dart",
+      "args": [
+        "mcp-server",
+        "--flutter-sdk",
+        "/home/ubuntu/flutter"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "viking": {
+      "command": "node",
+      "args": [
+        "/home/ubuntu/Recipewiser/dev-tools/viking-bridge/index.mjs"
+      ],
+      "env": {
+        "OPENVIKING_ENDPOINT": "http://127.0.0.1:1933",
+        "OPENVIKING_AGENT": "claude-code",
+        "OPENVIKING_ACCOUNT": "default",
+        "OPENVIKING_USER": "default",
+        "OPENVIKING_ROOT": "/music-theory"
+      }
+    }
+  }
+}

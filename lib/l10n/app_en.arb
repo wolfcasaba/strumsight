@@ -1,0 +1,13 @@
+{
+  "@@locale": "en",
+  "appTitle": "Music Theory",
+  "welcome": "Welcome",
+  "settingsTitle": "Settings",
+  "settingsLanguage": "Language",
+  "settingsAppearance": "Appearance",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "themeSystem": "System",
+  "actionSave": "Save",
+  "actionCancel": "Cancel"
+}

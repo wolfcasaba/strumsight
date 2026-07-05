@@ -1,0 +1,13 @@
+{
+  "@@locale": "hu",
+  "appTitle": "Music Theory",
+  "welcome": "Üdvözlünk",
+  "settingsTitle": "Beállítások",
+  "settingsLanguage": "Nyelv",
+  "settingsAppearance": "Megjelenés",
+  "themeLight": "Világos",
+  "themeDark": "Sötét",
+  "themeSystem": "Rendszer",
+  "actionSave": "Mentés",
+  "actionCancel": "Mégse"
+}
