@@ -1,0 +1,16 @@
+# StrumSight account backend — FastAPI + SQLite + JWT.
+# Detection stays 100% on-device; this backend is the OPTIONAL account layer
+# (login + cloud settings sync). Pin majors to keep the autonomous dev loop green.
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.35
+SQLAlchemy>=2.0,<2.1
+pydantic>=2.7,<3
+pydantic-settings>=2.3,<3
+email-validator>=2.1,<3
+PyJWT>=2.8,<3
+bcrypt>=4.1,<5
+python-multipart>=0.0.9,<0.1
+
+# dev / test
+pytest>=8,<9
+httpx>=0.27,<0.29
