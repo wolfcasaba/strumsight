@@ -1,0 +1,1 @@
+round=14 verdict=pass tests=14backend lesson=bcrypt-direct-avoids-passlib-4x-breakage;72byte-cap;model_fields_set-distinguishes-null-vs-omitted-in-partial-PUT;StaticPool-inmemory-sqlite-for-isolated-tests
