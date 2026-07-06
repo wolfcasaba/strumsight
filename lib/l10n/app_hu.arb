@@ -5,6 +5,8 @@
   "liveInputLevel": "Bemeneti szint",
   "micPermissionBody": "A StrumSightnak mikrofon kell, hogy hallja a gitárodat. A hang nem hagyja el a készüléket.",
   "micPermissionAction": "Beállítások megnyitása",
+  "micErrorBody": "Nem sikerült elindítani a mikrofont. Lehet, hogy egy másik app használja. Koppints az Újra gombra.",
+  "micErrorAction": "Újra",
   "strumDown": "Le",
   "strumUp": "Fel",
   "livePause": "Szünet",

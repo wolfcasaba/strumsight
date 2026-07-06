@@ -30,4 +30,7 @@ class FakeStrumEngine implements StrumEngine {
   }
 
   void emit(LiveFrame frame) => _controller.add(frame);
+
+  /// Simulate the mic failing to start (busy / platform error).
+  void emitError(Object error) => _controller.addError(error);
 }

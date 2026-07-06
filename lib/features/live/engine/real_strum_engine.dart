@@ -37,32 +37,40 @@ class RealStrumEngine implements StrumEngine {
     }
     _running = true;
 
-    // Mic first — the actual sample rate is only known once capture runs.
-    final actualRate = await _mic.start((chunk) {
-      final port = _toDsp;
-      if (port != null) {
-        port.send(chunk);
-      } else if (_pendingChunks.length < 64) {
-        _pendingChunks.add(chunk); // buffer during isolate spin-up
-      }
-    });
-
-    _fromDsp = ReceivePort();
-    _isolate = await Isolate.spawn(
-      _dspEntry,
-      _DspInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate),
-    );
-    _fromDsp!.listen((message) {
-      if (message is SendPort) {
-        _toDsp = message;
-        for (final c in _pendingChunks) {
-          _toDsp!.send(c);
+    try {
+      // Mic first — the actual sample rate is only known once capture runs.
+      final actualRate = await _mic.start((chunk) {
+        final port = _toDsp;
+        if (port != null) {
+          port.send(chunk);
+        } else if (_pendingChunks.length < 64) {
+          _pendingChunks.add(chunk); // buffer during isolate spin-up
         }
-        _pendingChunks.clear();
-      } else if (message is LiveFrame) {
-        _controller?.add(message);
-      }
-    });
+      });
+
+      _fromDsp = ReceivePort();
+      _isolate = await Isolate.spawn(
+        _dspEntry,
+        _DspInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate),
+      );
+      _fromDsp!.listen((message) {
+        if (message is SendPort) {
+          _toDsp = message;
+          for (final c in _pendingChunks) {
+            _toDsp!.send(c);
+          }
+          _pendingChunks.clear();
+        } else if (message is LiveFrame) {
+          _controller?.add(message);
+        }
+      });
+    } catch (e, st) {
+      // Mic unavailable (busy, revoked mid-capture, platform channel error):
+      // surface it on the stream so the Live screen shows an honest error —
+      // never a silent no-op. Leave the engine stopped so Resume can retry.
+      await stop();
+      _controller?.addError(e, st);
+    }
   }
 
   @override

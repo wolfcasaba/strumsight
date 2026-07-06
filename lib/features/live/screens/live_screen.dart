@@ -61,13 +61,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final live = ref.watch(liveFrameProvider).asData?.value ?? LiveFrame.empty;
+    final liveAsync = ref.watch(liveFrameProvider);
+    final live = liveAsync.asData?.value ?? LiveFrame.empty;
     // While paused the engine is stopped, so reflect "not listening" honestly.
     final frame =
         _paused ? (_frozen ?? live).copyWith(listening: false) : live;
     final latest = frame.latestStrum;
 
     final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
+    // The mic failed to start (busy / platform error) — surface it, never a
+    // silent no-op. Not shown while paused (the engine is intentionally off).
+    final micError = liveAsync.hasError && !_paused;
 
     return SafeArea(
       child: Padding(
@@ -76,6 +80,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             children: [
               LiveStatusBar(frame: frame),
               if (!micGranted) const _MicPermissionBanner(),
+              if (micGranted && micError)
+                _MicErrorBanner(
+                  onRetry: () => ref.invalidate(liveFrameProvider),
+                ),
               Expanded(
                 child: Center(
                   child: Column(
@@ -173,6 +181,51 @@ class _MicPermissionBanner extends StatelessWidget {
           TextButton(
             onPressed: openAppSettings,
             child: Text(l10n.micPermissionAction),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the microphone could not be started (in use by another app,
+/// revoked mid-capture, platform channel error). Offers a Retry.
+class _MicErrorBanner extends StatelessWidget {
+  const _MicErrorBanner({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              l10n.micErrorBody,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12.5,
+                height: 1.35,
+                color: palette.ink,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onRetry,
+            child: Text(l10n.micErrorAction),
           ),
         ],
       ),

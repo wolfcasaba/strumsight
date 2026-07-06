@@ -3,9 +3,11 @@
 **Standalone Flutter mobile app.** Separate project — NOT part of RecipeWiser / recipewiser-mobile,
 though it reuses their Flutter infrastructure, plugin set, dev-agents and learning systems.
 
-> ⏳ **App not yet specified.** The feature set arrives later. Until then this repo is
-> infrastructure-only: a booting app with theme + i18n + (optional) backend wiring and a
-> placeholder home screen. Do NOT invent features before the spec.
+> 📌 **READ [`HANDOFF.md`](HANDOFF.md) FIRST every session** — it is the always-current snapshot of
+> what's done / what's next, and MUST be updated after every development round.
+
+> ✅ **App is specified & building:** **StrumSight** — offline on-device guitar chord + strum-direction
+> detector. See `HANDOFF.md` for live status, `docs/` for spec/plan, `docs/rag/chunks/` for DSP truth.
 
 ---
 

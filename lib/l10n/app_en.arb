@@ -5,6 +5,8 @@
   "liveInputLevel": "Input level",
   "micPermissionBody": "StrumSight needs the microphone to hear your guitar. Audio never leaves the device.",
   "micPermissionAction": "Open settings",
+  "micErrorBody": "Couldn't start the microphone. It may be in use by another app. Tap Retry.",
+  "micErrorAction": "Retry",
   "strumDown": "Down",
   "strumUp": "Up",
   "livePause": "Pause",

@@ -58,4 +58,25 @@ void main() {
     expect(find.text('Pause'), findsOneWidget);
     expect(engine.startCalls, greaterThan(0));
   });
+
+  testWidgets('A mic start failure surfaces an error banner with Retry',
+      (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: const StrumSightApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The mic could not be started — never a silent no-op.
+    engine.emitError(Exception('mic busy'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('microphone'), findsOneWidget);
+  });
 }
