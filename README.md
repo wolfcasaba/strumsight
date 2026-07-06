@@ -4,8 +4,11 @@
 strum direction (↓ down / ↑ up)** in real time while you play guitar — the one output every other
 chord-detection app leaves out.
 
-- **100% offline / on-device** — no backend, no network at runtime, no data leaves the phone.
+- **On-device detection** — the mic → DSP pipeline runs entirely on the phone; **no audio ever
+  leaves the device**, and the app is fully usable offline.
 - **Strum direction as the headline** — down/up per beat, with a confidence ramp.
+- **Optional account** — an opt-in login (FastAPI backend, `backend/`) syncs your *settings* across
+  devices. It's purely additive: logged out, everything still works and nothing hits the network.
 - **Android-first** (iOS later; needs a Mac to build).
 
 > **Status (v0.2.0):** REAL on-device detection in **pure Dart** — microphone → DSP isolate →
@@ -23,6 +26,7 @@ chord-detection app leaves out.
 | 🎤 **Live** mirror — huge current chord, big ↓/↑ arrow, confidence pill, rolling `1 & 2 & 3 & 4` beat counter, listening/level/BPM status | ✅ **real detection** (mic) |
 | 🎛️ **Tuner** — note + cents gauge + in-tune indicator | ✅ **real YIN pitch** (mic) |
 | ⚙️ **Settings** — theme (persisted), language (en/hu), confidence threshold (persisted), version | ✅ built |
+| 🔐 **Account** (optional) — email/password login, settings synced to the cloud (`backend/`) | ✅ opt-in |
 | 🎬 **Analyze** (recording → timeline) · 📚 **Library** (saved sessions) | 🔜 v2 (placeholders) |
 
 ## Architecture

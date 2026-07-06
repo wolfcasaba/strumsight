@@ -52,8 +52,12 @@ music-theory/
 
 - **State:** Riverpod 3 hand-written providers (`Notifier` / `AsyncNotifier` / `Provider`). NO codegen.
 - **Data:** repository-provider pattern. Preview/in-memory repos back the logged-out / mock-mode path.
-- **Backend:** `supabase_flutter`. Currently NO backend is configured — a **separate** one will be
-  chosen with the spec (do not reuse RecipeWiser's project). Keys come via `--dart-define`, never committed.
+- **Backend:** an **optional** account layer — a **FastAPI + SQLite + JWT** service in `backend/`
+  (chosen round 14; Supabase was NOT used). It handles login + cloud settings sync only; **detection
+  stays 100% on-device** and the app is fully usable logged out. Flutter talks to it via Dio (base
+  URL from `--dart-define=STRUMSIGHT_API_URL`, default `http://10.0.2.2:8000`); JWT lives in
+  `flutter_secure_storage`. Backend run/test: `backend/README.md`. See `lib/features/auth/` +
+  `lib/features/settings/providers/settings_sync.dart`.
 - **i18n:** every user-facing string goes through ARB → `AppLocalizations`. Code/comments in English.
 - **Brand tokens** in `core/theme/` are **placeholders** copied from RecipeWiser — replace once
   the music-theory branding is decided.
@@ -61,10 +65,13 @@ music-theory/
 ## Critical build gotchas (learned the hard way on recipewiser-mobile)
 
 - **Run `flutter analyze` and `flutter test` as SEPARATE calls — never chain `analyze && test`** (OOM on this box).
-- `health` forces the `device_info_plus` win32 major; `dependency_overrides` pins `device_info_plus: ^13`
-  to keep ONE win32 major across the tree (required for `flutter test` host-compile). Don't remove without testing.
+- **Keep ONE win32 major across the tree** (required for `flutter test` host-compile). This is why
+  `flutter_secure_storage` is pinned to **v10** (win32 ^6, matching `wakelock_plus`) — v9 pulls win32 ^5
+  and fails version-solve. Check win32 when adding any plugin.
 - `lucide_icons_flutter` icon names fail only at compile — verify names.
-- Backend writes to a wrong table/column get swallowed by `try/catch` → silent no-op. Verify persistence.
+- **Cloud writes swallowed by `try/catch` → silent no-op / lost edit.** Settings sync must mark state
+  synced ONLY after the server confirms, and retry failed pushes (round 17). Verify persistence + offline path.
+- Riverpod 3.3.2: `AsyncValue` exposes **`.value` (nullable), not `.valueOrNull`**.
 
 ## Verify gate (before "done")
 
