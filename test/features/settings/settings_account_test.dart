@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/auth/data/auth_repository.dart';
 import 'package:music_theory/features/auth/data/token_store.dart';
 import 'package:music_theory/features/live/providers/live_providers.dart';
+import 'package:music_theory/features/settings/data/settings_repository.dart';
 import 'package:music_theory/main.dart';
 
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
+import '../../support/fake_settings.dart';
 
 /// Boot the app with fake auth and open the Settings tab. [token] non-null =>
 /// a session is restored via the fake repository (logged in).
@@ -19,6 +21,8 @@ Future<void> _openSettings(WidgetTester tester, {String? token}) async {
         strumEngineProvider.overrideWithValue(engine),
         tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
+        // Keep settings-sync off the real network when a session restores.
+        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       ],
       child: const StrumSightApp(),
     ),

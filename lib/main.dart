@@ -6,6 +6,7 @@ import 'app/router.dart';
 import 'core/i18n/locale_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'features/settings/providers/settings_sync.dart';
 import 'l10n/app_localizations.dart';
 
 void main() {
@@ -21,6 +22,9 @@ class StrumSightApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
+    // Instantiate the settings-sync listener for the app's lifetime (inert
+    // while logged out; pulls on sign-in, pushes local changes when signed in).
+    ref.watch(settingsSyncProvider);
 
     return MaterialApp.router(
       title: 'StrumSight',
