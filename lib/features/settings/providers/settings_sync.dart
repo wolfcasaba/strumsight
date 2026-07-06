@@ -7,6 +7,7 @@ import '../../../core/theme/theme_mode_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../data/settings_repository.dart';
 import 'confidence_threshold_provider.dart';
+import 'tuning_reference_provider.dart';
 
 /// Debounce for coalescing local settings changes before pushing them.
 /// Overridden to [Duration.zero] in tests.
@@ -28,9 +29,8 @@ final settingsSyncRetryProvider = Provider<Duration>(
 /// - **Any local change while signed in** ⇒ push it (debounced), with a bounded
 ///   retry so an offline edit is never silently dropped.
 ///
-/// Logged out, this is inert — the app works fully offline. `tuning_a4` is part
-/// of the backend profile but has no local UI yet, so it is intentionally NOT
-/// synced here (pulled value is ignored; never pushed).
+/// Logged out, this is inert — the app works fully offline. Synced fields:
+/// theme, locale, confidence threshold, and tuning reference A4.
 class SettingsSync {
   SettingsSync(this._ref) {
     // Drive sync from explicit auth events so register (adopt local) is
@@ -53,6 +53,7 @@ class SettingsSync {
     _ref.listen(themeModeProvider, (_, _) => _onLocalChange());
     _ref.listen(localeProvider, (_, _) => _onLocalChange());
     _ref.listen(confidenceThresholdProvider, (_, _) => _onLocalChange());
+    _ref.listen(tuningReferenceProvider, (_, _) => _onLocalChange());
   }
 
   final Ref _ref;
@@ -72,7 +73,8 @@ class SettingsSync {
     final theme = _ref.read(themeModeProvider).name;
     final locale = _ref.read(localeProvider)?.languageCode ?? '';
     final threshold = _ref.read(confidenceThresholdProvider);
-    return '$theme|$locale|$threshold';
+    final a4 = _ref.read(tuningReferenceProvider);
+    return '$theme|$locale|$threshold|$a4';
   }
 
   Map<String, dynamic> _currentPatch() {
@@ -80,6 +82,7 @@ class SettingsSync {
       'theme_mode': _ref.read(themeModeProvider).name,
       'locale': _ref.read(localeProvider)?.languageCode,
       'confidence_threshold': _ref.read(confidenceThresholdProvider),
+      'tuning_a4': _ref.read(tuningReferenceProvider),
     };
   }
 
@@ -89,12 +92,13 @@ class SettingsSync {
       _applyingPull = true;
       _syncedSignature =
           '${remote.themeMode.name}|${remote.locale?.languageCode ?? ''}'
-          '|${remote.confidenceThreshold}';
+          '|${remote.confidenceThreshold}|${remote.tuningA4}';
       _ref.read(themeModeProvider.notifier).setMode(remote.themeMode);
       _ref.read(localeProvider.notifier).set(remote.locale);
       _ref
           .read(confidenceThresholdProvider.notifier)
           .set(remote.confidenceThreshold);
+      _ref.read(tuningReferenceProvider.notifier).set(remote.tuningA4);
       // Let the resulting change-listeners flush while still suppressed.
       await Future<void>.delayed(Duration.zero);
     } catch (_) {

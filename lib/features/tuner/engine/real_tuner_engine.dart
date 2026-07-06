@@ -24,7 +24,7 @@ class RealTunerEngine implements TunerEngine {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({int a4 = 440}) async {
     if (_running) return;
     _controller ??= StreamController<TunerReading>.broadcast();
 
@@ -46,7 +46,7 @@ class RealTunerEngine implements TunerEngine {
     _fromDsp = ReceivePort();
     _isolate = await Isolate.spawn(
       _tunerEntry,
-      _TunerInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate),
+      _TunerInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate, a4: a4),
     );
     _fromDsp!.listen((message) {
       if (message is SendPort) {
@@ -82,14 +82,19 @@ class RealTunerEngine implements TunerEngine {
 }
 
 class _TunerInit {
-  const _TunerInit({required this.sendPort, required this.sampleRate});
+  const _TunerInit({
+    required this.sendPort,
+    required this.sampleRate,
+    required this.a4,
+  });
 
   final SendPort sendPort;
   final int sampleRate;
+  final int a4;
 }
 
 void _tunerEntry(_TunerInit init) {
-  final analyzer = TunerAnalyzer(sampleRate: init.sampleRate);
+  final analyzer = TunerAnalyzer(sampleRate: init.sampleRate, a4: init.a4);
   final framer =
       SlidingFramer(window: analyzer.bufferSize, hop: analyzer.bufferSize ~/ 2);
   final inbox = ReceivePort();

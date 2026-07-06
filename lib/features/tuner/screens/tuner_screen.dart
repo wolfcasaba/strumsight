@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/tuner_reading.dart';
 import '../providers/tuner_providers.dart';
 import '../widgets/cents_gauge.dart';
@@ -18,10 +19,14 @@ class TunerScreen extends ConsumerWidget {
     final palette = context.palette;
     final reading = ref.watch(tunerReadingProvider).asData?.value ??
         TunerReading.silent;
+    final a4 = ref.watch(tuningReferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.tunerTitle)),
-      body: Center(
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
         child: reading.hasSignal
             ? Column(
                 mainAxisSize: MainAxisSize.min,
@@ -67,6 +72,24 @@ class TunerScreen extends ConsumerWidget {
                 l10n.tunerListening,
                 style: TextStyle(color: palette.muted, fontSize: 16),
               ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16, top: 8),
+              child: Text(
+                l10n.tunerReference(a4),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                  color: palette.muted,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

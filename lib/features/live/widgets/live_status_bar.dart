@@ -9,9 +9,12 @@ import 'input_level_meter.dart';
 /// The slim status strip at the top of the Live screen: a listening indicator,
 /// the input-level meter, and the detected tempo + tuning reference.
 class LiveStatusBar extends StatelessWidget {
-  const LiveStatusBar({super.key, required this.frame});
+  const LiveStatusBar({super.key, required this.frame, this.a4 = 440});
 
   final LiveFrame frame;
+
+  /// Concert-pitch reference A4 to display (the user's setting), Hz.
+  final int a4;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +48,7 @@ class LiveStatusBar extends StatelessWidget {
         const Spacer(),
         Flexible(
           child: Text(
-            '${frame.bpm.round()} BPM · A=${frame.tuningHz.round()}',
+            '${frame.bpm.round()} BPM · A=$a4',
             textAlign: TextAlign.end,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

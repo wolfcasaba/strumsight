@@ -7,10 +7,16 @@ import 'yin_pitch_detector.dart';
 /// PCM buffer → [TunerReading]: silence gate + YIN + note/cents mapping +
 /// median-of-3 stabilisation (RAG chunk 008). Pure and streaming.
 class TunerAnalyzer {
-  TunerAnalyzer({required this.sampleRate, this.silenceRms = 0.008})
-      : _yin = YinPitchDetector(sampleRate: sampleRate);
+  TunerAnalyzer({
+    required this.sampleRate,
+    this.a4 = 440,
+    this.silenceRms = 0.008,
+  }) : _yin = YinPitchDetector(sampleRate: sampleRate);
 
   final int sampleRate;
+
+  /// Concert-pitch reference A4 in Hz — shifts the note/cents mapping.
+  final int a4;
   final double silenceRms;
   final YinPitchDetector _yin;
 
@@ -43,7 +49,7 @@ class TunerAnalyzer {
     final sorted = [..._recent]..sort();
     final stable = sorted[sorted.length ~/ 2];
 
-    final mapped = noteForFrequency(stable);
+    final mapped = noteForFrequency(stable, a4: a4.toDouble());
     return TunerReading(
       note: mapped.note,
       cents: mapped.cents,

@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/live_frame.dart';
 import '../model/strum.dart';
 import '../providers/live_providers.dart';
@@ -81,7 +82,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
             children: [
-              LiveStatusBar(frame: frame),
+              LiveStatusBar(frame: frame, a4: ref.watch(tuningReferenceProvider)),
               if (!micGranted) const _MicPermissionBanner(),
               if (micGranted && micError)
                 _MicErrorBanner(

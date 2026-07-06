@@ -61,4 +61,28 @@ void main() {
     final reading = analyzer.process(Float64List(analyzer.bufferSize));
     expect(reading.hasSignal, isFalse);
   });
+
+  test('noteForFrequency respects a custom A4 reference (432 Hz)', () {
+    // 432 Hz is a perfectly in-tune A when A4 = 432…
+    final r432 = noteForFrequency(432, a4: 432);
+    expect(r432.note, 'A');
+    expect(r432.cents.abs(), lessThan(1));
+    // …but ~-31.8 cents flat against the 440 standard.
+    final r440 = noteForFrequency(432);
+    expect(r440.cents, closeTo(-31.8, 1.5));
+  });
+
+  test('TunerAnalyzer applies its A4 to the note/cents mapping', () {
+    final a440 = TunerAnalyzer(sampleRate: sr);
+    final a432 = TunerAnalyzer(sampleRate: sr, a4: 432);
+    final tone = harmonicNote(freq: 432, seconds: 0.4, amp: 0.3);
+    final buf = tone.sublist(0, a440.bufferSize);
+
+    final r432 = a432.process(buf);
+    final r440 = a440.process(buf);
+
+    expect(r432.note, 'A');
+    expect(r432.inTune, isTrue); // in tune at A4 = 432
+    expect(r440.inTune, isFalse); // but flat at A4 = 440
+  });
 }

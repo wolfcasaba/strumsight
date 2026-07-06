@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-06** (round 18).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-06** (round 19).
 
 ---
 
@@ -36,7 +36,8 @@ touches the network. Payments are out of scope.
 | **Account backend** (FastAPI + SQLite + JWT): register/login/me, GET/PUT settings | ✅ round 14, 14 pytest green | `backend/` |
 | **Flutter auth** — optional login/register, secure token, Account UI in Settings | ✅ round 15 | `lib/features/auth/` |
 | **Settings cloud sync** — pull on login, push on change, register adopts local | ✅ rounds 16–17 | `lib/features/settings/providers/settings_sync.dart` |
-| **Tests** | ✅ **65 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + pytest) | `test/`, `backend/tests/` |
+| **Tuning reference A4** (400–480 Hz) — Settings stepper, drives tuner note/cents, shown on Live+Tuner, synced | ✅ round 19 | `lib/features/settings/providers/tuning_reference_provider.dart` |
+| **Tests** | ✅ **68 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + pytest) | `test/`, `backend/tests/` |
 | **CI → APK** | ✅ (Flutter only; backend has no CI yet) | `.github/workflows/build-apk.yml` |
 | **HORIZON**: git-notes experience buffer + randomized property gate | ✅ adopted round 12 | see notes below |
 
@@ -64,8 +65,6 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   start-errors now surface (round 13). But "does it detect a real guitar" is **NOT verified on
   hardware** — this is the user's real-guitar APK acceptance test. If it still seems dead, the new
   Retry banner + error will now say *why* (permission vs mic-busy vs platform error).
-- **`tuning_a4` sync** — the backend/model has it, but there is NO local A4 setting/UI yet, so it is
-  intentionally NOT synced (see `settings_sync.dart`). Wire a tuner-calibration UI + local provider first.
 - **Backend hardening for prod** — SQLite→Postgres, Alembic migrations, real `STRUMSIGHT_SECRET_KEY`,
   lock CORS origins, rate-limit auth, add backend CI. Currently dev-grade (documented in `backend/README.md`).
 - **Password reset / email verification / refresh tokens** — not implemented (14-day JWT, no refresh).
@@ -80,7 +79,8 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 18 | (this) | 65+14 | docs + CORS polish (bearer → allow_credentials=False so "*" stays valid); handoff/README/CLAUDE updated for the account layer |
+| 19 | (this) | 68+14 | tuning_a4 fully wired: local Notifier (persist/clamp 400–480) → tuner engine `start(a4:)` through the isolate → noteForFrequency; Settings stepper; Live/Tuner display; synced (pull/push/signature). Watching a4 in tunerReadingProvider restarts the engine with the new reference |
+| 18 | `3dfce22` | 65+14 | docs + CORS polish (bearer → allow_credentials=False so "*" stays valid); handoff/README/CLAUDE updated for the account layer |
 | 17 | — | 65 | devil-advocate caught register-clobber (C1) + offline silent-lost-write (H1), both green in mocks. Fix = typed AuthEvent (login pull vs register push) + signature-only-after-confirm + explicit _applyingPull guard; resume must invalidate provider to clear AsyncError |
 | 16 | — | 63 | settings sync echo-guard via value-signature (listeners fire async); SharedPreferences.setMockInitialValues needed for notifier-setter tests; override settingsRepo in widget tests that restore a session |
 | 15 | — | 59 | secure_storage v10 keeps win32 ^6 (ONE major); Riverpod 3.3.2 AsyncValue uses `.value` (nullable) not `.valueOrNull`; `Override` type not nameable in test build; INTERNET perm needed for release APK |

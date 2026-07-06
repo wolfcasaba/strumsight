@@ -10,6 +10,7 @@ import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/confidence_threshold_provider.dart';
+import '../providers/tuning_reference_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -115,6 +116,10 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
+          _SectionHeader(l10n.settingsTuningReference),
+          const _TuningReferenceStepper(),
+          const SizedBox(height: 28),
+
           _SectionHeader(l10n.settingsAbout),
           FutureBuilder<String>(
             future: _appVersion(),
@@ -197,6 +202,66 @@ class _AccountSection extends ConsumerWidget {
           onPressed: () => context.push('/login'),
           icon: const Icon(Icons.login, size: 18, color: AppColors.primary),
           label: Text(l10n.accountSignIn),
+        ),
+      ],
+    );
+  }
+}
+
+/// A4 concert-pitch stepper (400–480 Hz). Standard is 440; the value drives
+/// the tuner's note/cents mapping and syncs to the account when signed in.
+class _TuningReferenceStepper extends ConsumerWidget {
+  const _TuningReferenceStepper();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final a4 = ref.watch(tuningReferenceProvider);
+    final notifier = ref.read(tuningReferenceProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton.outlined(
+              onPressed: a4 > TuningReferenceNotifier.minHz
+                  ? () => notifier.set(a4 - 1)
+                  : null,
+              icon: const Icon(Icons.remove),
+              tooltip: '−1 Hz',
+            ),
+            Expanded(
+              child: Text(
+                'A = $a4 Hz',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: palette.ink,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            IconButton.outlined(
+              onPressed: a4 < TuningReferenceNotifier.maxHz
+                  ? () => notifier.set(a4 + 1)
+                  : null,
+              icon: const Icon(Icons.add),
+              tooltip: '+1 Hz',
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.settingsTuningHint,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: palette.muted,
+          ),
         ),
       ],
     );

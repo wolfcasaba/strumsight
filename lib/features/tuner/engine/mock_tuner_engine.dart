@@ -25,7 +25,8 @@ class MockTunerEngine implements TunerEngine {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({int a4 = 440}) async {
+    // The mock emits fixed reference frequencies, so a4 is not applied here.
     _controller ??= StreamController<TunerReading>.broadcast();
     _timer?.cancel();
     _tick = 0;

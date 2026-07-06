@@ -22,12 +22,20 @@
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
   "tunerListening": "Play a string…",
+  "tunerReference": "Reference A = {hz} Hz",
+  "@tunerReference": {
+    "placeholders": {
+      "hz": { "type": "int" }
+    }
+  },
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
   "settingsSystemLanguage": "System default",
   "settingsAppearance": "Appearance",
   "settingsConfidenceThreshold": "Confidence threshold",
   "settingsConfidenceHint": "Strums below this are shown as unsure.",
+  "settingsTuningReference": "Tuning reference",
+  "settingsTuningHint": "Concert-pitch A4 used by the tuner. Standard is 440 Hz.",
   "settingsAbout": "About",
   "settingsVersion": "Version {version}",
   "@settingsVersion": {

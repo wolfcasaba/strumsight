@@ -9,6 +9,7 @@ import 'package:music_theory/features/auth/providers/auth_providers.dart';
 import 'package:music_theory/features/settings/data/settings_repository.dart';
 import 'package:music_theory/features/settings/providers/confidence_threshold_provider.dart';
 import 'package:music_theory/features/settings/providers/settings_sync.dart';
+import 'package:music_theory/features/settings/providers/tuning_reference_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_auth.dart';
@@ -62,6 +63,7 @@ void main() {
       themeMode: ThemeMode.light,
       locale: const Locale('hu'),
       confidenceThreshold: 0.7,
+      tuningA4: 432,
     );
     // A stored token => the session restores => sign-in transition => pull.
     final container =
@@ -74,6 +76,7 @@ void main() {
     expect(container.read(themeModeProvider), ThemeMode.light);
     expect(container.read(localeProvider), const Locale('hu'));
     expect(container.read(confidenceThresholdProvider), 0.7);
+    expect(container.read(tuningReferenceProvider), 432);
   });
 
   test('applying a pulled profile does not echo back as a push', () async {
@@ -101,6 +104,20 @@ void main() {
 
     expect(settings.updates, isNotEmpty);
     expect(settings.updates.last['confidence_threshold'], 0.8);
+  });
+
+  test('pushes a tuning-reference change to the backend', () async {
+    final settings = FakeSettingsRepository();
+    final container =
+        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    container.read(settingsSyncProvider);
+    await container.read(authControllerProvider.future);
+    await _settle(); // initial pull
+
+    await container.read(tuningReferenceProvider.notifier).set(442);
+    await _settle();
+
+    expect(settings.updates.last['tuning_a4'], 442);
   });
 
   test('register pushes local settings up (does not clobber them with defaults)',
