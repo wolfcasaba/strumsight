@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- StrumSight listens to the guitar in real time (fully on-device). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- OPTIONAL account layer only (login + settings sync). Detection never
+         uses the network; the app is fully usable offline / logged out. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="StrumSight"
         android:name="${applicationName}"

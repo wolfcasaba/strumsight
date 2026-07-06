@@ -37,5 +37,29 @@
   },
   "themeLight": "Light",
   "themeDark": "Dark",
-  "themeSystem": "System"
+  "themeSystem": "System",
+  "settingsAccount": "Account",
+  "accountSyncHint": "Sign in to sync your settings across devices. Detection always stays on your phone.",
+  "accountSignedInAs": "Signed in as {email}",
+  "@accountSignedInAs": {
+    "placeholders": {
+      "email": { "type": "String" }
+    }
+  },
+  "accountSignIn": "Sign in",
+  "accountSignOut": "Sign out",
+  "authSignInTitle": "Welcome back",
+  "authSignUpTitle": "Create your account",
+  "authEmail": "Email",
+  "authPassword": "Password",
+  "authSignInAction": "Sign in",
+  "authSignUpAction": "Create account",
+  "authToggleToSignUp": "New here? Create an account",
+  "authToggleToSignIn": "Have an account? Sign in",
+  "authEmailInvalid": "Enter a valid email address",
+  "authPasswordTooShort": "Password must be at least 8 characters",
+  "authErrorInvalidCredentials": "Incorrect email or password",
+  "authErrorEmailTaken": "That email is already registered",
+  "authErrorNetwork": "Can't reach the server. Check your connection.",
+  "authErrorUnknown": "Something went wrong. Please try again."
 }

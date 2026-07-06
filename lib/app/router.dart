@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/analyze/screens/analyze_placeholder_screen.dart';
+import '../features/auth/screens/login_screen.dart';
 import '../features/library/screens/library_placeholder_screen.dart';
 import '../features/live/screens/live_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
@@ -34,6 +35,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/tuner', builder: (_, _) => const TunerScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
     ],
   );
 });

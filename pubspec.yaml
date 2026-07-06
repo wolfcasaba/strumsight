@@ -30,6 +30,12 @@ dependencies:
   shared_preferences: ^2.3.2    # persist settings (theme, language, threshold)
   package_info_plus: ^10.1.0    # app version on the Settings screen
 
+  # OPTIONAL account layer (login + cloud settings sync). Detection stays
+  # 100% offline; the app is fully usable logged-out. See backend/.
+  dio: ^5.7.0                   # HTTP client for the account API
+  flutter_secure_storage: ^10.3.1 # store the JWT (Keystore/Keychain); v10 keeps
+                                  # win32 ^6 — ONE win32 major across the tree
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/i18n/locale_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../providers/confidence_threshold_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -32,6 +35,10 @@ class SettingsScreen extends ConsumerWidget {
               color: palette.ink,
             ),
           ),
+          const SizedBox(height: 28),
+
+          _SectionHeader(l10n.settingsAccount),
+          const _AccountSection(),
           const SizedBox(height: 28),
 
           _SectionHeader(l10n.settingsAppearance),
@@ -127,6 +134,71 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Optional account: sign in to sync settings across devices. The app is fully
+/// usable logged out — detection never needs the network.
+class _AccountSection extends ConsumerWidget {
+  const _AccountSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final auth = ref.watch(authControllerProvider);
+    final user = auth.value;
+
+    if (auth.isLoading && !auth.hasValue) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (user != null) {
+      return Row(
+        children: [
+          const Icon(Icons.account_circle_outlined, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              l10n.accountSignedInAs(user.email),
+              style: TextStyle(fontFamily: 'Poppins', color: palette.ink),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton(
+            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+            child: Text(l10n.accountSignOut),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.accountSyncHint,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: palette.muted,
+          ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => context.push('/login'),
+          icon: const Icon(Icons.login, size: 18, color: AppColors.primary),
+          label: Text(l10n.accountSignIn),
+        ),
+      ],
     );
   }
 }
