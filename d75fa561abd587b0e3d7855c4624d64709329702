@@ -1,0 +1,1 @@
+round=19 verdict=pass tests=68 lesson=a4-threaded-through-isolate-via-init(not-mutable-live);watching-a4-in-streamprovider-restarts-engine-cleanly;closes-H3-tuning-now-fully-synced;mock-engine-ignores-a4-fixed-freqs
