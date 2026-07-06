@@ -14,23 +14,40 @@ final settingsSyncDebounceProvider = Provider<Duration>(
   (_) => const Duration(milliseconds: 600),
 );
 
-/// Keeps the local settings and the signed-in user's cloud profile in sync.
+/// Backoff before retrying a push that failed (offline). Overridden in tests.
+final settingsSyncRetryProvider = Provider<Duration>(
+  (_) => const Duration(seconds: 10),
+);
+
+/// Keeps local settings and the signed-in user's cloud profile in sync.
 ///
-/// - **On sign-in:** pull the cloud profile and apply it locally (the account
-///   is the source of truth for a logged-in session).
-/// - **On any local change while signed in:** push it (debounced).
+/// - **Login / session restore** ⇒ pull the cloud profile and apply it locally
+///   (the account is the source of truth for an existing session).
+/// - **Register** ⇒ push the current LOCAL settings up as the new profile, so a
+///   user who customised the app offline doesn't lose those on signup.
+/// - **Any local change while signed in** ⇒ push it (debounced), with a bounded
+///   retry so an offline edit is never silently dropped.
 ///
-/// Logged out, this is inert — the app keeps working fully offline. All network
-/// calls are best-effort: if the server is unreachable, local settings stand
-/// and the next change re-syncs.
+/// Logged out, this is inert — the app works fully offline. `tuning_a4` is part
+/// of the backend profile but has no local UI yet, so it is intentionally NOT
+/// synced here (pulled value is ignored; never pushed).
 class SettingsSync {
   SettingsSync(this._ref) {
-    // React to sign-in / sign-out.
-    _ref.listen(authControllerProvider, (prev, next) {
-      final wasSignedIn = prev?.value != null;
-      final isSignedIn = next.value != null;
-      if (!wasSignedIn && isSignedIn) _pull();
-    }, fireImmediately: true);
+    // Drive sync from explicit auth events so register (adopt local) is
+    // distinguished from login/restore (adopt remote).
+    _ref.listen(authEventProvider, (_, next) {
+      switch (next) {
+        case AuthEvent.loggedIn:
+          _pull();
+        case AuthEvent.registered:
+          _pushAll();
+        case null:
+          break;
+      }
+    });
+
+    // Ensure a stored session restores at launch (triggers the event above).
+    _ref.listen(authControllerProvider, (_, _) {}, fireImmediately: true);
 
     // Push local edits (guarded so a pull's own writes don't echo back).
     _ref.listen(themeModeProvider, (_, _) => _onLocalChange());
@@ -41,8 +58,12 @@ class SettingsSync {
   final Ref _ref;
   Timer? _debounce;
 
-  /// Signature of the values last known to match the server — used to suppress
-  /// the echo when a pull applies remote values locally.
+  /// True while a pull is applying remote values locally — suppresses the
+  /// resulting change notifications so they don't bounce straight back.
+  bool _applyingPull = false;
+
+  /// Signature of the values last confirmed on the server (secondary echo
+  /// guard, and what a successful push records).
   String? _syncedSignature;
 
   bool get _signedIn => _ref.read(authControllerProvider).value != null;
@@ -54,11 +75,18 @@ class SettingsSync {
     return '$theme|$locale|$threshold';
   }
 
+  Map<String, dynamic> _currentPatch() {
+    return {
+      'theme_mode': _ref.read(themeModeProvider).name,
+      'locale': _ref.read(localeProvider)?.languageCode,
+      'confidence_threshold': _ref.read(confidenceThresholdProvider),
+    };
+  }
+
   Future<void> _pull() async {
     try {
       final remote = await _ref.read(settingsRepositoryProvider).fetch();
-      // Mark these values as "already synced" BEFORE applying them, so the
-      // resulting local-change notifications are recognised as an echo.
+      _applyingPull = true;
       _syncedSignature =
           '${remote.themeMode.name}|${remote.locale?.languageCode ?? ''}'
           '|${remote.confidenceThreshold}';
@@ -67,13 +95,23 @@ class SettingsSync {
       _ref
           .read(confidenceThresholdProvider.notifier)
           .set(remote.confidenceThreshold);
+      // Let the resulting change-listeners flush while still suppressed.
+      await Future<void>.delayed(Duration.zero);
     } catch (_) {
-      // Offline / server down — keep local settings; next change re-syncs.
+      // Offline / server down — keep local settings; a later change re-syncs.
+    } finally {
+      _applyingPull = false;
     }
   }
 
-  void _onLocalChange() {
+  /// Push current local settings up (used on register — local wins).
+  Future<void> _pushAll() async {
     if (!_signedIn) return;
+    await _sendPatch(_currentPatch(), _currentSignature());
+  }
+
+  void _onLocalChange() {
+    if (!_signedIn || _applyingPull) return;
     if (_currentSignature() == _syncedSignature) return; // echo of a pull
     _debounce?.cancel();
     _debounce = Timer(_ref.read(settingsSyncDebounceProvider), _push);
@@ -81,18 +119,19 @@ class SettingsSync {
 
   Future<void> _push() async {
     if (!_signedIn) return;
-    final theme = _ref.read(themeModeProvider);
-    final locale = _ref.read(localeProvider);
-    final threshold = _ref.read(confidenceThresholdProvider);
-    _syncedSignature = _currentSignature();
+    await _sendPatch(_currentPatch(), _currentSignature());
+  }
+
+  Future<void> _sendPatch(Map<String, dynamic> patch, String signature) async {
     try {
-      await _ref.read(settingsRepositoryProvider).update({
-        'theme_mode': theme.name,
-        'locale': locale?.languageCode,
-        'confidence_threshold': threshold,
-      });
+      await _ref.read(settingsRepositoryProvider).update(patch);
+      // Only mark synced AFTER the server confirms — otherwise an offline edit
+      // would be falsely recorded as synced and silently lost.
+      _syncedSignature = signature;
     } catch (_) {
-      // Offline — the next local change will retry the push.
+      // Offline — retry with a bounded backoff so the edit isn't dropped.
+      _debounce?.cancel();
+      _debounce = Timer(_ref.read(settingsSyncRetryProvider), _push);
     }
   }
 }

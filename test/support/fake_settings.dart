@@ -19,6 +19,10 @@ class FakeSettingsRepository implements SettingsRepository {
   int fetchCalls = 0;
   final List<Map<String, dynamic>> updates = [];
 
+  /// Make the next N `update` calls throw (simulate offline). Each throwing
+  /// attempt is still recorded in [updates] so tests can count retries.
+  int failNextUpdates = 0;
+
   RemoteSettings get _current => RemoteSettings(
         themeMode: themeMode,
         locale: locale,
@@ -35,6 +39,10 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<RemoteSettings> update(Map<String, dynamic> patch) async {
     updates.add(patch);
+    if (failNextUpdates > 0) {
+      failNextUpdates--;
+      throw Exception('offline');
+    }
     if (patch.containsKey('theme_mode')) {
       themeMode = RemoteSettings.fromJson({'theme_mode': patch['theme_mode']})
           .themeMode;

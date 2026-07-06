@@ -69,7 +69,10 @@ class RealStrumEngine implements StrumEngine {
       // surface it on the stream so the Live screen shows an honest error —
       // never a silent no-op. Leave the engine stopped so Resume can retry.
       await stop();
-      _controller?.addError(e, st);
+      final controller = _controller;
+      if (controller != null && !controller.isClosed) {
+        controller.addError(e, st);
+      }
     }
   }
 

@@ -23,8 +23,9 @@ ProviderContainer _container({
       tokenStoreProvider.overrideWithValue(tokens),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
       settingsRepositoryProvider.overrideWithValue(settings),
-      // No debounce in tests.
+      // No debounce / fast retry in tests.
       settingsSyncDebounceProvider.overrideWithValue(Duration.zero),
+      settingsSyncRetryProvider.overrideWithValue(Duration.zero),
     ],
   );
   addTearDown(container.dispose);
@@ -100,5 +101,45 @@ void main() {
 
     expect(settings.updates, isNotEmpty);
     expect(settings.updates.last['confidence_threshold'], 0.8);
+  });
+
+  test('register pushes local settings up (does not clobber them with defaults)',
+      () async {
+    final settings = FakeSettingsRepository(); // remote = defaults
+    final container = _container(tokens: FakeTokenStore(), settings: settings);
+    container.read(settingsSyncProvider);
+    await container.read(authControllerProvider.future);
+
+    // The user customised settings offline BEFORE creating an account.
+    await container.read(themeModeProvider.notifier).setMode(ThemeMode.light);
+    await _settle();
+    expect(settings.updates, isEmpty); // nothing pushed while logged out
+
+    await container
+        .read(authControllerProvider.notifier)
+        .register('new@strumsight.app', 'sixstrings');
+    await _settle();
+
+    // Signup adopts the local settings as the cloud profile — not the reverse.
+    expect(settings.updates, isNotEmpty);
+    expect(settings.updates.last['theme_mode'], 'light');
+    expect(container.read(themeModeProvider), ThemeMode.light); // unchanged
+  });
+
+  test('an offline push is retried, not silently dropped', () async {
+    final settings = FakeSettingsRepository();
+    final container =
+        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    container.read(settingsSyncProvider);
+    await container.read(authControllerProvider.future);
+    await _settle(); // initial pull
+
+    settings.failNextUpdates = 1; // first push fails (offline)
+    await container.read(confidenceThresholdProvider.notifier).set(0.8);
+    await _settle();
+
+    // The failed attempt was retried (>=2 recorded) and eventually applied.
+    expect(settings.updates.length, greaterThanOrEqualTo(2));
+    expect(settings.confidenceThreshold, 0.8);
   });
 }

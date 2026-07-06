@@ -53,7 +53,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         engine.stop();
       } else {
         _frozen = null;
-        engine.start();
+        // Invalidate (not just start()) so a prior mic AsyncError is cleared
+        // and the engine restarts through the provider's own lifecycle —
+        // otherwise a stale error banner lingers until the next frame.
+        ref.invalidate(liveFrameProvider);
       }
     });
   }
