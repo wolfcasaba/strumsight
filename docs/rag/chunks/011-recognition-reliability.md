@@ -67,8 +67,16 @@ Do NOT gate on loudness — speech/noise is loud too. Gate on **periodicity
 - **Tonalness gate**: a diffuse chroma (speech/noise) must not fake a chord.
   *Adopted round 23 (top-3 pitch-class energy ≥ 0.7) + matcher no longer
   bootstraps a chord on one frame.*
-- **Deep chroma / CNN-on-CQT (madmom)**: learned pitch-class activations, very
-  robust. ML infra — out of scope for pure-Dart v1.
+- **Chord DICTIONARY + Viterbi (Chordino-class)** — the concrete next port,
+  spec'd in **chunk 012**: bass+treble split chroma (24-dim) → chord-profile
+  similarity → HMM/Viterbi (+ no-chord state). This — not more note-templates —
+  is what makes 7ths/inversions reliable (round 26 proved templates can't).
+- **Deep chroma / CNN-on-CQT (madmom), transformer (BTC)**: learned pitch-class
+  activations, SOTA robustness. **Feasible on-device** — competitor **Chord AI**
+  (`com.chordai`) ships an **offline CNN**; TFLite ≈1–13 ms / 2.56 s input,
+  quantizes ~9× smaller. Needs a labelled trainset + Mac-free export → deferred
+  behind the pure-DSP port (chunk 012). **No rival detects strum direction —
+  StrumSight's ↓/↑ moat.**
 
 ## Onset / strum techniques
 
@@ -95,7 +103,9 @@ Do NOT gate on loudness — speech/noise is loud too. Gate on **periodicity
    step; needs the user's guitar (clarity 0.85, tonalness 0.7, ±30 cents,
    16384 window ≈370 ms chord latency).
 4. **Chord dictionary (profiles + HMM/Viterbi)** on top of NNLS — 7ths,
-   inversions, smoother chord track.
+   inversions, smoother chord track. **Full spec: chunk 012.** This is the
+   biggest correctness win available in pure Dart, and the right answer to the
+   round-26 extended-vocab failure.
 5. **Mains-hum + per-octave noise pre-filter**; **SuperFlux onset** (log-freq
    max filter).
 6. **On-device ML (SPICE/CREPE TFLite)** — only if pure-DSP tuning plateaus;
