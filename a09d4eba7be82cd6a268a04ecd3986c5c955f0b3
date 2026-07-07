@@ -1,0 +1,1 @@
+round=22 verdict=pass tests=78 lesson=gate-not-yet-working-features-off(better-than-visible-broken-login);wrap-compile-time-bool.fromEnvironment-in-provider-so-widget-tests-can-toggle;login-needs-hosted-backend-deferred-by-user
