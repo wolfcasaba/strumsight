@@ -27,7 +27,9 @@ touches the network. Payments are out of scope.
 | **Live** screen — big chord, ↓/↑ arrow, confidence pill, `1 & 2 & 3 & 4` beat counter, status bar | ✅ REAL mic detection | `lib/features/live/` |
 | **Tuner** — note + cents gauge + in-tune indicator | ✅ REAL YIN pitch (mic) | `lib/features/tuner/` |
 | **Settings** — theme (persisted), lang en/hu, confidence threshold (persisted), version | ✅ built | `lib/features/settings/` |
-| **DSP pipeline** — whitened spectral-flux onsets, peak-picked chroma → 24-template chord, sub-band strum ↓/↑, median-IOI tempo | ✅ pure Dart, runs in isolate | `lib/features/live/engine/dsp/` |
+| **DSP pipeline** — whitened spectral-flux onsets, **NNLS/Chordino-class chroma** → 24-template chord, sub-band strum ↓/↑, median-IOI tempo | ✅ pure Dart, runs in isolate | `lib/features/live/engine/dsp/` |
+| **Voice/noise rejection** — tuner clarity+stability+range gates; chord tonalness gate | ✅ round 23 | `dsp/tuner_analyzer.dart`, `dsp/chroma…` |
+| **NNLS chord engine** — STFT→log-freq→NNLS transcription→chroma (overtone suppression) | ✅ round 25 | `lib/features/live/engine/dsp/nnls_chroma.dart` |
 | **YIN pitch detector** (CMNDF, threshold 0.12) | ✅ pure Dart | `lib/features/tuner/engine/dsp/` |
 | **Mic capture** | ✅ `audio_streamer` → PCM chunks | `lib/core/audio/mic_capture.dart` |
 | **Design system** — dark M3, copper accent, semantic confidence ramp (shape+colour) | ✅ | `lib/core/theme/` |
@@ -87,7 +89,9 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 23 | (this) | 84+14 | DSP voice/noise rejection (user: "reacts to speech more than guitar"). Researched McLeod/YIN/pYIN: real tuners gate on CLARITY + pitch STABILITY, not just level. Tuner: +clarity(0.85)+range(70–1320)+4-frame ±30-cent stability+RMS 0.014 → gliding pitch never locks. Live: chroma tonalness (top-3 energy, gate 0.7) + matcher no longer bootstraps a chord on 1 frame → noise doesn't fake a chord. RAG 003/008 updated; 2 randomized properties added |
+| 25 | (this) | 88+14 | Chordino-class chord engine: NnlsChroma (STFT 16384 → log-freq 3 bins/semitone → NNLS transcription vs harmonic dict shape 0.7, multiplicative updates → chroma) wired into LivePipeline, replacing peak-chroma on the chord path. Overtone suppression verified (220Hz note → A only; 3rd/5th partials <½ peak). Property + pipeline + analyze all green across seeds. ~370ms chord latency (long window needed for low-E resolution) — tune on device |
+| 24 | `17e1bb6` | 84+14 | researched prod recognition → RAG 011; naive greedy harmonic-subtraction fights triad templates (reverted); real NNLS needs full transcription |
+| 23 | `e32aff9` | 84+14 | DSP voice/noise rejection (user: "reacts to speech more than guitar"). Researched McLeod/YIN/pYIN: real tuners gate on CLARITY + pitch STABILITY, not just level. Tuner: +clarity(0.85)+range(70–1320)+4-frame ±30-cent stability+RMS 0.014 → gliding pitch never locks. Live: chroma tonalness (top-3 energy, gate 0.7) + matcher no longer bootstraps a chord on 1 frame → noise doesn't fake a chord. RAG 003/008 updated; 2 randomized properties added |
 | 22 | `a09d4eb` | 78+14 | Analyze+Library shipped (were "coming soon"); account UI gated behind ApiConfig.accountEnabled (provider-wrapped so tests can toggle a compile-time flag); login deferred — needs hosted backend, ARM64 box can't build APK so CI + git-credential release (see apk-delivery). build-22 = features; build-23 = login hidden |
 | 21 | — | 77 | Library persists via shared_preferences JSON array; extracted shared TimelineView |
 | 20 | — | 74 | Analyze reuses LivePipeline in batch; compute() keeps FFT-heavy analysis off UI isolate; AnalyzeResult JSON for Library |

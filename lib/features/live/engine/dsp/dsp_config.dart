@@ -11,6 +11,11 @@ class DspConfig {
   static const int chromaWindow = 4096;
   static const int chromaHop = 1024;
 
+  // NNLS chord path (chunk 011). A long window is needed so a semitone is
+  // resolvable at low E (~4.8 Hz apart); chords are slow so the latency is ok.
+  static const int nnlsWindow = 16384; // ~0.37 s @44.1 kHz
+  static const int nnlsHop = 4096; // update ~every 93 ms
+
   // Fast pipeline — onset/direction (chunk 002).
   static const int onsetWindow = 1024;
   static const int onsetHop = 256;

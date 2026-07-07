@@ -13,8 +13,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/chroma_extractor.dart';
 import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
+import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
 import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
@@ -59,12 +59,15 @@ void main() {
         decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
       );
 
-      final extractor = ChromaExtractor(sampleRate: sr);
+      final extractor = NnlsChroma(sampleRate: sr, window: DspConfig.nnlsWindow);
       final matcher = ChordMatcher();
       ChordMatch? match;
       for (final frame
-          in frames(signal, DspConfig.chromaWindow, DspConfig.chromaHop)) {
-        match = matcher.process(extractor.process(frame));
+          in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+        final ch = extractor.process(frame);
+        final tonal =
+            ch != null && extractor.lastTonalness >= DspConfig.chordMinTonalness;
+        match = matcher.process(tonal ? ch : null);
       }
       if (match?.chord.label == expected) {
         correct++;
@@ -169,12 +172,12 @@ void main() {
   test('property: white noise does not fake a chord (20 trials)', () {
     var chordShown = 0;
     for (var t = 0; t < 20; t++) {
-      final ex = ChromaExtractor(sampleRate: sr);
+      final ex = NnlsChroma(sampleRate: sr, window: DspConfig.nnlsWindow);
       final matcher = ChordMatcher();
       ChordMatch? m;
       final amp = 0.1 + rng.nextDouble() * 0.3;
-      for (var w = 0; w < 10; w++) {
-        final frame = Float64List(DspConfig.chromaWindow);
+      for (var w = 0; w < 8; w++) {
+        final frame = Float64List(DspConfig.nnlsWindow);
         for (var i = 0; i < frame.length; i++) {
           frame[i] = (rng.nextDouble() * 2 - 1) * amp;
         }

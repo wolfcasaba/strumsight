@@ -43,16 +43,27 @@ Do NOT gate on loudness — speech/noise is loud too. Gate on **periodicity
   the right resolution where a semitone is < 1 FFT bin. Standard front-end for
   chroma. *We approximate it with spectral peak-picking + parabolic interp
   (chunk 003) — a lighter workaround; a real CQT is the principled upgrade.*
-- **NNLS-Chroma / Chordino**: approximate note transcription with **non-negative
-  least squares** against a dictionary of notes whose harmonics decay
-  geometrically (spectral shape 0.7), to **suppress overtones** before folding
-  to chroma; + spectral whitening (running mean/std); + chord DICTIONARY
-  profiles + HMM/Viterbi. **GOTCHA we hit (round 24 attempt):** naive greedy
-  harmonic subtraction *fights* our 24-triad-template matcher — for guitar
-  triads the 3rd harmonic lands on the fifth and the 5th harmonic on the major
-  third, so partials REINFORCE the correct template. Subtracting them broke the
-  G(G-B-G voicing → D-from-harmonic) match. Real NNLS works only WITH harmonic
-  chord profiles, not bare triad templates. *Reverted; needs the full pipeline.*
+- **NNLS-Chroma / Chordino** — ✅ **IMPLEMENTED (round 25)**, `nnls_chroma.dart`,
+  wired into `LivePipeline` for the chord path. STFT (window **16384** ≈0.37 s so
+  a semitone resolves at low E) → **log-frequency spectrum** (3 bins/semitone,
+  linear interp at bin centres) → **NNLS approximate transcription** against a
+  **harmonic dictionary** (harmonic h at +12·log2(h) semitones, magnitude
+  `0.7^(h-1)`, 12 harmonics, unit columns) solved by **non-negative
+  multiplicative updates** `x ← x·(Dᵀs)/(DᵀDx+ε)`, 20 iters, DᵀD precomputed →
+  fold activations to 12-bin chroma. This EXPLAINS each note's overtones, so a
+  bass fundamental's partials don't leak into other pitch classes (verified: a
+  220 Hz note with harmonics maps to A alone, its 3rd/5th partials — E/C# — stay
+  <½ the peak). The cleaned chroma feeds the existing 24-triad matcher + the
+  tonalness gate. Runs in the DSP isolate at nnlsHop=4096 (~11 fps) — cheap.
+  - **GOTCHA (round 24, superseded):** a *naive greedy* harmonic SUBTRACTION on
+    the old peak-chroma fought the triad templates (3rd harmonic = fifth, 5th =
+    major third, so partials reinforce the template). Full NNLS transcription
+    (round 25) fixes this properly — it re-synthesises fundamentals, so complete
+    triads recover all three tones; incomplete synth voicings (G-B-G, F-C-F) may
+    show a weak spurious 3rd class but the two real tones dominate.
+  - **Still TODO:** per-frame tuning estimation, spectral whitening, and a chord
+    DICTIONARY (chord profiles + HMM/Viterbi) for 7ths/inversions. ChromaExtractor
+    (peak-pick) is retained as a lighter component but no longer on the chord path.
 - **Tonalness gate**: a diffuse chroma (speech/noise) must not fake a chord.
   *Adopted round 23 (top-3 pitch-class energy ≥ 0.7) + matcher no longer
   bootstraps a chord on one frame.*
@@ -78,11 +89,14 @@ Do NOT gate on loudness — speech/noise is loud too. Gate on **periodicity
 
 1. ✅ **Done (round 23):** clarity + stability gates (tuner), tonalness gate
    (chord), no single-frame chord bootstrap. Directly fixes "reacts to speech".
-2. **Tune round-23 thresholds on real device** (clarity 0.85, tonalness 0.7,
-   ±30 cents) — the actual next step; needs the user's guitar.
-3. **Mains-hum + per-octave noise pre-filter** (cheap, low-risk).
-4. **Proper CQT chroma + NNLS + chord profiles** (Chordino-class) — the real
-   accuracy jump for chords, but a sizeable rework.
-5. **SuperFlux onset** (log-frequency max filter).
+2. ✅ **Done (round 25):** CQT-ish log-freq + **NNLS chroma** (Chordino-class
+   overtone suppression) on the chord path — the accuracy jump for chords.
+3. **Tune round-23/25 thresholds + latency on real device** — the actual next
+   step; needs the user's guitar (clarity 0.85, tonalness 0.7, ±30 cents,
+   16384 window ≈370 ms chord latency).
+4. **Chord dictionary (profiles + HMM/Viterbi)** on top of NNLS — 7ths,
+   inversions, smoother chord track.
+5. **Mains-hum + per-octave noise pre-filter**; **SuperFlux onset** (log-freq
+   max filter).
 6. **On-device ML (SPICE/CREPE TFLite)** — only if pure-DSP tuning plateaus;
    trades the offline/pure-Dart purity for SOTA noise robustness.

@@ -2,8 +2,8 @@ import '../../model/chord.dart';
 import '../../model/live_frame.dart';
 import '../../model/strum.dart';
 import 'chord_matcher.dart';
-import 'chroma_extractor.dart';
 import 'dsp_config.dart';
+import 'nnls_chroma.dart';
 import 'sliding_framer.dart';
 import 'strum_analyzer.dart';
 import 'tempo_tracker.dart';
@@ -15,11 +15,11 @@ import 'tempo_tracker.dart';
 /// directly with synthesized PCM (RAG chunk 010).
 class LivePipeline {
   LivePipeline({required this.sampleRate})
-      : _chroma = ChromaExtractor(sampleRate: sampleRate),
+      : _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
         _strums = StrumAnalyzer(sampleRate: sampleRate),
         _chordFramer = SlidingFramer(
-          window: DspConfig.chromaWindow,
-          hop: DspConfig.chromaHop,
+          window: DspConfig.nnlsWindow,
+          hop: DspConfig.nnlsHop,
         ),
         _onsetFramer = SlidingFramer(
           window: DspConfig.onsetWindow,
@@ -29,7 +29,7 @@ class LivePipeline {
 
   final int sampleRate;
 
-  final ChromaExtractor _chroma;
+  final NnlsChroma _chroma;
   final ChordMatcher _chordMatcher = ChordMatcher();
   final StrumAnalyzer _strums;
   final TempoTracker _tempo = TempoTracker();
