@@ -63,7 +63,6 @@ class ChromaExtractor {
     }
 
     final spectrum = _fft.realFft(_windowed);
-    _raw.fillRange(0, 12, 0);
 
     // Spectral-PEAK accumulation (chunk 003). Naive per-bin mapping fails
     // below ~250 Hz where a semitone (< 8 Hz) is narrower than a bin
@@ -78,6 +77,7 @@ class ChromaExtractor {
     }
     if (maxMag <= 0) return null;
     final peakFloor = maxMag * 0.002;
+    _raw.fillRange(0, 12, 0);
 
     for (var k = 2; k < nBins - 1; k++) {
       final m = _mags[k];
@@ -94,9 +94,12 @@ class ChromaExtractor {
       final nearest = midi.round();
       if ((midi - nearest).abs() > DspConfig.semitoneTolerance) continue;
 
+      // For guitar triads the 3rd/5th harmonics land ON the fifth/third (chord
+      // tones), so harmonics REINFORCE the template — hence a light octave
+      // weighting to tame the highest partials, NOT full NNLS suppression
+      // (which fights the triad templates; proper NNLS needs chord profiles).
       var energy = m * m;
       if (nearest >= 60) {
-        // C4=60; halve weight per octave above to tame harmonics.
         energy /= 1 << ((nearest - 60) ~/ 12 + 1);
       }
       _raw[nearest % 12] += energy;
