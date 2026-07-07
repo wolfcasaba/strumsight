@@ -2,9 +2,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/engine/mock_strum_engine.dart';
 import 'package:music_theory/features/live/providers/live_providers.dart';
+import 'package:music_theory/features/settings/providers/capo_provider.dart';
 import 'package:music_theory/main.dart';
 
 import '../../support/fake_engines.dart';
+
+/// A capo notifier fixed at [_v] (skips the async prefs load) for widget tests.
+class _FixedCapo extends CapoNotifier {
+  _FixedCapo(this._v);
+  final int _v;
+  @override
+  int build() => _v;
+}
 
 void main() {
   testWidgets('Live renders the current chord and confidence from a frame',
@@ -29,6 +38,31 @@ void main() {
     expect(find.textContaining('DOWN'), findsOneWidget);
     // The Tuner action button is present on the Live screen.
     expect(find.text('Tuner'), findsWidgets);
+  });
+
+  testWidgets('a capo transposes the shown chord shape and shows a badge',
+      (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          strumEngineProvider.overrideWithValue(engine),
+          capoProvider.overrideWith(() => _FixedCapo(2)),
+        ],
+        child: const StrumSightApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Detector hears C (concert pitch); with capo 2 the fretted shape is A#.
+    engine.emit(MockStrumEngine(bpm: 96).frameAt(const Duration(milliseconds: 300)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('A#'), findsOneWidget); // C shown as the fretted shape
+    expect(find.text('C'), findsNothing);
+    expect(find.textContaining('Capo 2'), findsOneWidget); // honest badge
   });
 
   testWidgets('Pause freezes the display and toggles the action label',

@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../settings/providers/capo_provider.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/live_frame.dart';
 import '../model/strum.dart';
@@ -71,6 +72,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final frame =
         _paused ? (_frozen ?? live).copyWith(listening: false) : live;
     final latest = frame.latestStrum;
+    // Capo: the detector hears concert pitch; show the fretted shape (−capo).
+    final capo = ref.watch(capoProvider);
 
     final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
     // The mic failed to start (busy / platform error) — surface it, never a
@@ -82,7 +85,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
             children: [
-              LiveStatusBar(frame: frame, a4: ref.watch(tuningReferenceProvider)),
+              LiveStatusBar(
+                frame: frame,
+                a4: ref.watch(tuningReferenceProvider),
+                capo: capo,
+              ),
               if (!micGranted) const _MicPermissionBanner(),
               if (micGranted && micError)
                 _MicErrorBanner(
@@ -93,7 +100,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ChordDisplay(current: frame.current, next: frame.next),
+                      ChordDisplay(
+                        current: frame.current?.transposed(-capo),
+                        next: frame.next?.transposed(-capo),
+                      ),
                       const SizedBox(height: 20),
                       SizedBox(
                         height: 116,

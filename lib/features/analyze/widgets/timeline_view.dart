@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../live/model/chord.dart';
 import '../../live/widgets/strum_arrow.dart';
 import '../model/analyze_result.dart';
 
@@ -9,9 +10,14 @@ import '../model/analyze_result.dart';
 /// segments (each with its time range and the strum arrows within it). Shared
 /// by the Analyze result screen and the Library session detail.
 class TimelineView extends StatelessWidget {
-  const TimelineView({super.key, required this.result});
+  const TimelineView({super.key, required this.result, this.capo = 0});
 
   final AnalyzeResult result;
+
+  /// Capo fret (0 = none) — transposes displayed chord shapes (−capo), the
+  /// same view-time shift as the Live screen. The stored result is concert
+  /// pitch, so changing the capo re-labels a saved session correctly.
+  final int capo;
 
   static String fmtTime(double seconds) {
     final s = seconds.floor();
@@ -50,8 +56,11 @@ class TimelineView extends StatelessWidget {
               : ListView.separated(
                   itemCount: result.chords.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) =>
-                      _ChordRow(chord: result.chords[i], strums: result.strums),
+                  itemBuilder: (context, i) => _ChordRow(
+                    chord: result.chords[i],
+                    strums: result.strums,
+                    capo: capo,
+                  ),
                 ),
         ),
       ],
@@ -60,10 +69,11 @@ class TimelineView extends StatelessWidget {
 }
 
 class _ChordRow extends StatelessWidget {
-  const _ChordRow({required this.chord, required this.strums});
+  const _ChordRow({required this.chord, required this.strums, this.capo = 0});
 
   final TimelineChord chord;
   final List<TimelineStrum> strums;
+  final int capo;
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +94,7 @@ class _ChordRow extends StatelessWidget {
           SizedBox(
             width: 56,
             child: Text(
-              chord.label,
+              Chord.transposeLabel(chord.label, -capo),
               style: TextStyle(
                 fontFamily: 'Montserrat',
                 fontWeight: FontWeight.w800,

@@ -9,6 +9,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/model/analyzed_session.dart';
 import '../../library/providers/library_providers.dart';
+import '../../settings/providers/capo_provider.dart';
 import '../model/analyze_result.dart';
 import '../providers/analyze_providers.dart';
 import '../widgets/timeline_view.dart';
@@ -186,7 +187,7 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ),
           );
         }
-        return TimelineView(result: result);
+        return TimelineView(result: result, capo: ref.watch(capoProvider));
     }
   }
 

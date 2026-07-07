@@ -9,6 +9,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
 import '../providers/tuning_reference_provider.dart';
 
@@ -120,6 +121,10 @@ class SettingsScreen extends ConsumerWidget {
 
           _SectionHeader(l10n.settingsTuningReference),
           const _TuningReferenceStepper(),
+          const SizedBox(height: 28),
+
+          _SectionHeader(l10n.settingsCapo),
+          const _CapoStepper(),
           const SizedBox(height: 28),
 
           _SectionHeader(l10n.settingsAbout),
@@ -259,6 +264,65 @@ class _TuningReferenceStepper extends ConsumerWidget {
         const SizedBox(height: 6),
         Text(
           l10n.settingsTuningHint,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: palette.muted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Capo fret stepper (0–11). 0 = no capo; a higher fret transposes the shown
+/// chord SHAPE down by that many semitones. Local-only (a capo is a physical,
+/// per-guitar state), so unlike A4 it is not synced.
+class _CapoStepper extends ConsumerWidget {
+  const _CapoStepper();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final capo = ref.watch(capoProvider);
+    final notifier = ref.read(capoProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton.outlined(
+              onPressed:
+                  capo > CapoNotifier.minFret ? () => notifier.set(capo - 1) : null,
+              icon: const Icon(Icons.remove),
+              tooltip: '−1',
+            ),
+            Expanded(
+              child: Text(
+                capo == 0 ? l10n.settingsCapoOff : l10n.settingsCapoFret(capo),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: palette.ink,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            IconButton.outlined(
+              onPressed:
+                  capo < CapoNotifier.maxFret ? () => notifier.set(capo + 1) : null,
+              icon: const Icon(Icons.add),
+              tooltip: '+1',
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.settingsCapoHint,
           style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: 13,

@@ -52,6 +52,21 @@
   "settingsConfidenceHint": "Strums below this are shown as unsure.",
   "settingsTuningReference": "Tuning reference",
   "settingsTuningHint": "Concert-pitch A4 used by the tuner. Standard is 440 Hz.",
+  "settingsCapo": "Capo",
+  "settingsCapoOff": "No capo",
+  "settingsCapoFret": "Fret {fret}",
+  "@settingsCapoFret": {
+    "placeholders": {
+      "fret": { "type": "int" }
+    }
+  },
+  "settingsCapoHint": "Shows the chord shape you fret, not the sounding pitch. Detection stays at concert pitch.",
+  "liveCapo": "Capo {fret}",
+  "@liveCapo": {
+    "placeholders": {
+      "fret": { "type": "int" }
+    }
+  },
   "settingsAbout": "About",
   "settingsVersion": "Version {version}",
   "@settingsVersion": {

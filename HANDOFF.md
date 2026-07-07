@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-07** (round 22).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-07** (round 26).
 
 ---
 
@@ -42,7 +42,8 @@ touches the network. Payments are out of scope.
 | **Analyze** — record a clip → chord + strum-direction **timeline** (batch DSP off-isolate) | ✅ round 20 | `lib/features/analyze/` |
 | **Library** — save / list / reopen analyzed sessions (offline) | ✅ round 21 | `lib/features/library/` |
 | **Account UI gating** — Sign-in hidden by default until a backend is hosted | ✅ round 22 | `ApiConfig.accountEnabled` |
-| **Tests** | ✅ **78 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + analyze/library + pytest) | `test/`, `backend/tests/` |
+| **Capo / transpose** — Settings stepper (0–11), shows the fretted SHAPE (detected − capo) on Live + Analyze + Library, "Capo N" badge | ✅ round 26 (local-only, view-time) | `lib/features/settings/providers/capo_provider.dart`, `Chord.transposeLabel/Summary` |
+| **Tests** | ✅ **107 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + analyze/library + capo/transpose + pytest) | `test/`, `backend/tests/` |
 | **CI → APK** | ✅ (Flutter only; backend has no CI yet) | `.github/workflows/build-apk.yml` |
 | **HORIZON**: git-notes experience buffer + randomized property gate | ✅ adopted round 12 | see notes below |
 
@@ -83,13 +84,20 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 - **iOS build** — needs a Mac. Android-first for now.
 - **FINAL acceptance is the user's real-guitar APK test** — synthetic-green is never "done" (HORIZON).
   The optional C++/FFI port is an optimization path *only if on-device profiling demands it*.
+- **Extended chord vocabulary (7ths / sus / power)** — attempted round 26, **reverted**. Bolting
+  7th/sus/power templates onto the note-NNLS→triad-template matcher is unreliable: NNLS overtone
+  suppression *removes the added tone* when it coincides with a chord tone's harmonic (measured:
+  Em7's 7th D = G's 3rd harmonic → ~0; Fsus4's 5th C = F's 3rd harmonic → gone), and power chords
+  steal weak-third triads. Reconfirms round 24 — reliable 7ths need **chord-profile NNLS** (Chordino),
+  not note-NNLS + templates. Deferred until a real-guitar test can validate a chord-profile front-end.
 - Optional later: TFLite strum-direction model.
 
 ## 4. Round history (from git notes — `git log --show-notes`)
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 25 | (this) | 88+14 | Chordino-class chord engine: NnlsChroma (STFT 16384 → log-freq 3 bins/semitone → NNLS transcription vs harmonic dict shape 0.7, multiplicative updates → chroma) wired into LivePipeline, replacing peak-chroma on the chord path. Overtone suppression verified (220Hz note → A only; 3rd/5th partials <½ peak). Property + pipeline + analyze all green across seeds. ~370ms chord latency (long window needed for low-E resolution) — tune on device |
+| 26 | (this) | 107+14 | Capo/transpose shipped (Settings stepper 0–11 → `Chord.transposeLabel/Summary`, view-time shift on Live+Analyze+Library, "Capo N" badge; local-only — a capo is physical per-guitar state, deliberately not synced). Devil-advocate caught a title leak: saved-session summary showed concert pitch while the timeline body transposed → added `transposeSummary` on the detail AppBar + library list. **REJECTED first**: extended chord vocab (7ths/sus/power) — NNLS suppresses the added tone when it = a chord-tone's harmonic (measured); needs chord-profile NNLS, not templates (reconfirms r24) |
+| 25 | `9bf0b6b` | 88+14 | Chordino-class chord engine: NnlsChroma (STFT 16384 → log-freq 3 bins/semitone → NNLS transcription vs harmonic dict shape 0.7, multiplicative updates → chroma) wired into LivePipeline, replacing peak-chroma on the chord path. Overtone suppression verified (220Hz note → A only; 3rd/5th partials <½ peak). Property + pipeline + analyze all green across seeds. ~370ms chord latency (long window needed for low-E resolution) — tune on device |
 | 24 | `17e1bb6` | 84+14 | researched prod recognition → RAG 011; naive greedy harmonic-subtraction fights triad templates (reverted); real NNLS needs full transcription |
 | 23 | `e32aff9` | 84+14 | DSP voice/noise rejection (user: "reacts to speech more than guitar"). Researched McLeod/YIN/pYIN: real tuners gate on CLARITY + pitch STABILITY, not just level. Tuner: +clarity(0.85)+range(70–1320)+4-frame ±30-cent stability+RMS 0.014 → gliding pitch never locks. Live: chroma tonalness (top-3 energy, gate 0.7) + matcher no longer bootstraps a chord on 1 frame → noise doesn't fake a chord. RAG 003/008 updated; 2 randomized properties added |
 | 22 | `a09d4eb` | 78+14 | Analyze+Library shipped (were "coming soon"); account UI gated behind ApiConfig.accountEnabled (provider-wrapped so tests can toggle a compile-time flag); login deferred — needs hosted backend, ARM64 box can't build APK so CI + git-credential release (see apk-delivery). build-22 = features; build-23 = login hidden |

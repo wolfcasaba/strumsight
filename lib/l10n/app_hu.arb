@@ -41,6 +41,21 @@
   "settingsConfidenceHint": "Az ez alatti leütéseket bizonytalanként jelöljük.",
   "settingsTuningReference": "Hangolási referencia",
   "settingsTuningHint": "A hangoló által használt A4 kamarahang. A szabvány 440 Hz.",
+  "settingsCapo": "Kapodaszter",
+  "settingsCapoOff": "Nincs kapo",
+  "settingsCapoFret": "{fret}. bund",
+  "@settingsCapoFret": {
+    "placeholders": {
+      "fret": { "type": "int" }
+    }
+  },
+  "settingsCapoHint": "A fogott akkordalakot mutatja, nem a megszólaló hangot. A felismerés kamarahangon marad.",
+  "liveCapo": "Kapo {fret}",
+  "@liveCapo": {
+    "placeholders": {
+      "fret": { "type": "int" }
+    }
+  },
   "settingsAbout": "Névjegy",
   "settingsVersion": "Verzió: {version}",
   "themeLight": "Világos",

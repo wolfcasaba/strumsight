@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../live/model/chord.dart';
+import '../../settings/providers/capo_provider.dart';
 import '../model/analyzed_session.dart';
 import '../providers/library_providers.dart';
 
@@ -17,6 +19,7 @@ class LibraryScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
     final async = ref.watch(libraryProvider);
+    final capo = ref.watch(capoProvider);
 
     return SafeArea(
       child: Padding(
@@ -49,6 +52,7 @@ class LibraryScreen extends ConsumerWidget {
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) => _SessionCard(
                           session: sessions[i],
+                          capo: capo,
                           onDelete: () => ref
                               .read(libraryProvider.notifier)
                               .delete(sessions[i].id),
@@ -96,10 +100,15 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.session, required this.onDelete});
+  const _SessionCard({
+    required this.session,
+    required this.onDelete,
+    this.capo = 0,
+  });
 
   final AnalyzedSession session;
   final VoidCallback onDelete;
+  final int capo;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +150,7 @@ class _SessionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      session.title,
+                      Chord.transposeSummary(session.title, -capo),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
