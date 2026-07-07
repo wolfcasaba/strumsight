@@ -7,9 +7,13 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../live/widgets/strum_arrow.dart';
+import '../../library/model/analyzed_session.dart';
+import '../../library/providers/library_providers.dart';
 import '../model/analyze_result.dart';
 import '../providers/analyze_providers.dart';
+import '../widgets/timeline_view.dart';
+
+// (chord/strum timeline rendering lives in widgets/timeline_view.dart)
 
 /// Record a clip → get a timeline of its chords and strum directions.
 class AnalyzeScreen extends ConsumerStatefulWidget {
@@ -21,11 +25,30 @@ class AnalyzeScreen extends ConsumerStatefulWidget {
 
 class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
   Timer? _ticker;
+  bool _saved = false;
 
   @override
   void dispose() {
     _ticker?.cancel();
     super.dispose();
+  }
+
+  Future<void> _save(AnalyzeResult result) async {
+    final l10n = AppLocalizations.of(context);
+    final now = DateTime.now();
+    final summary = result.chordSummary;
+    final session = AnalyzedSession(
+      id: now.microsecondsSinceEpoch.toString(),
+      createdAt: now,
+      title: summary.isNotEmpty ? summary : l10n.analyzeNewRecording,
+      result: result,
+    );
+    await ref.read(libraryProvider.notifier).add(session);
+    if (!mounted) return;
+    setState(() => _saved = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.analyzeSaved)),
+    );
   }
 
   void _syncTicker(AnalyzePhase phase) {
@@ -163,7 +186,7 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ),
           );
         }
-        return _Timeline(result: result);
+        return TimelineView(result: result);
     }
   }
 
@@ -180,7 +203,10 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
           label: l10n.analyzeRecord,
           icon: Icons.fiber_manual_record,
           color: AppColors.primary,
-          onTap: controller.startRecording,
+          onTap: () {
+            _saved = false;
+            controller.startRecording();
+          },
         );
       case AnalyzePhase.recording:
         return _BigButton(
@@ -192,11 +218,37 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
       case AnalyzePhase.analyzing:
         return const SizedBox(height: 52);
       case AnalyzePhase.done:
-        return _BigButton(
-          label: l10n.analyzeNewRecording,
-          icon: Icons.refresh,
-          color: AppColors.primary,
-          onTap: controller.reset,
+        final result = state.result ?? AnalyzeResult.empty;
+        final canSave =
+            !_saved && (result.chords.isNotEmpty || result.strums.isNotEmpty);
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: canSave ? () => _save(result) : null,
+                icon: Icon(
+                  _saved ? Icons.check : Icons.bookmark_add_outlined,
+                  size: 18,
+                ),
+                label: Text(_saved ? l10n.analyzeSaved : l10n.analyzeSave),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _BigButton(
+                label: l10n.analyzeNewRecording,
+                icon: Icons.refresh,
+                color: AppColors.primary,
+                onTap: () {
+                  setState(() => _saved = false);
+                  controller.reset();
+                },
+              ),
+            ),
+          ],
         );
     }
   }
@@ -206,152 +258,6 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     final m = s ~/ 60;
     final rem = s % 60;
     return '${m.toString().padLeft(1, '0')}:${rem.toString().padLeft(2, '0')}';
-  }
-}
-
-class _Timeline extends StatelessWidget {
-  const _Timeline({required this.result});
-
-  final AnalyzeResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final palette = context.palette;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Summary chips.
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _Chip(text: _AnalyzeScreenState._fmt(result.durationSec)),
-            if (result.bpm > 0) _Chip(text: '${result.bpm.round()} BPM'),
-            _Chip(text: l10n.analyzeStrumsSummary(result.downCount, result.upCount)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: result.chords.isEmpty
-              ? Center(
-                  child: Text(
-                    l10n.analyzeStrumsSummary(
-                        result.downCount, result.upCount),
-                    style: TextStyle(color: palette.muted),
-                  ),
-                )
-              : ListView.separated(
-                  itemCount: result.chords.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) =>
-                      _ChordRow(chord: result.chords[i], strums: result.strums),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChordRow extends StatelessWidget {
-  const _ChordRow({required this.chord, required this.strums});
-
-  final TimelineChord chord;
-  final List<TimelineStrum> strums;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final inSegment = strums
-        .where((s) => s.timeSec >= chord.startSec && s.timeSec < chord.endSec)
-        .toList();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.border),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(
-              chord.label,
-              style: TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w800,
-                fontSize: 24,
-                color: palette.ink,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_AnalyzeScreenState._fmt(chord.startSec)} – '
-                  '${_AnalyzeScreenState._fmt(chord.endSec)}',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: palette.muted,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                if (inSegment.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      for (final s in inSegment)
-                        StrumArrow(
-                          direction: s.direction,
-                          confidence: s.confidence,
-                          size: 16,
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: palette.border),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-          color: palette.ink,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
-    );
   }
 }
 

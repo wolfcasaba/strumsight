@@ -33,7 +33,8 @@
       "up": { "type": "int" }
     }
   },
-  "libraryIntro": "Your saved sessions will appear here.",
+  "libraryIntro": "Record something in Analyze and save it — your sessions will appear here.",
+  "libraryDeleted": "Deleted",
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
   "tunerListening": "Play a string…",
