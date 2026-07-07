@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/analyze/screens/analyze_placeholder_screen.dart';
+import '../features/analyze/screens/analyze_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/library/screens/library_placeholder_screen.dart';
 import '../features/live/screens/live_screen.dart';
@@ -22,7 +22,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/live', builder: (_, _) => const LiveScreen()),
           GoRoute(
             path: '/analyze',
-            builder: (_, _) => const AnalyzePlaceholderScreen(),
+            builder: (_, _) => const AnalyzeScreen(),
           ),
           GoRoute(
             path: '/library',

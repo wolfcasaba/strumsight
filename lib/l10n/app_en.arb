@@ -17,7 +17,22 @@
   "navLibrary": "Library",
   "navSettings": "Settings",
   "comingSoonV2": "Coming in v2",
-  "analyzeIntro": "Record or import a clip to see its chords and strum directions on a timeline.",
+  "analyzeIntro": "Tap record and play a few bars — you'll get a timeline of the chords and strum directions.",
+  "analyzeRecord": "Record",
+  "analyzeStop": "Stop",
+  "analyzeRecordingHint": "Playing — StrumSight is listening…",
+  "analyzeAnalyzing": "Analysing…",
+  "analyzeNewRecording": "New recording",
+  "analyzeNoChords": "No chords detected. Try again, a bit closer to the mic.",
+  "analyzeSave": "Save",
+  "analyzeSaved": "Saved to Library",
+  "analyzeStrumsSummary": "{down} down · {up} up",
+  "@analyzeStrumsSummary": {
+    "placeholders": {
+      "down": { "type": "int" },
+      "up": { "type": "int" }
+    }
+  },
   "libraryIntro": "Your saved sessions will appear here.",
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
