@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/auth/data/auth_repository.dart';
 import 'package:music_theory/features/auth/data/token_store.dart';
+import 'package:music_theory/features/auth/providers/auth_providers.dart';
 import 'package:music_theory/features/live/providers/live_providers.dart';
 import 'package:music_theory/features/settings/data/settings_repository.dart';
 import 'package:music_theory/main.dart';
@@ -10,9 +11,13 @@ import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
 
-/// Boot the app with fake auth and open the Settings tab. [token] non-null =>
-/// a session is restored via the fake repository (logged in).
-Future<void> _openSettings(WidgetTester tester, {String? token}) async {
+/// Boot the app and open the Settings tab. [token] non-null => a session is
+/// restored (logged in). [accountEnabled] gates the account layer UI.
+Future<void> _openSettings(
+  WidgetTester tester, {
+  String? token,
+  bool accountEnabled = true,
+}) async {
   final engine = FakeStrumEngine();
   addTearDown(engine.dispose);
   await tester.pumpWidget(
@@ -23,6 +28,7 @@ Future<void> _openSettings(WidgetTester tester, {String? token}) async {
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
         // Keep settings-sync off the real network when a session restores.
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        accountEnabledProvider.overrideWithValue(accountEnabled),
       ],
       child: const StrumSightApp(),
     ),
@@ -33,7 +39,18 @@ Future<void> _openSettings(WidgetTester tester, {String? token}) async {
 }
 
 void main() {
-  testWidgets('Account section shows Sign in when logged out', (tester) async {
+  testWidgets('Account section is hidden while the account layer is disabled',
+      (tester) async {
+    await _openSettings(tester, accountEnabled: false);
+
+    expect(find.text('Sign in'), findsNothing);
+    // The rest of Settings still renders (section headers are upper-cased).
+    expect(find.text('APPEARANCE'), findsOneWidget);
+    expect(find.text('ACCOUNT'), findsNothing);
+  });
+
+  testWidgets('Account section shows Sign in when logged out (enabled)',
+      (tester) async {
     await _openSettings(tester);
 
     expect(find.text('Sign in'), findsOneWidget);

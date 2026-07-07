@@ -38,9 +38,11 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
-          _SectionHeader(l10n.settingsAccount),
-          const _AccountSection(),
-          const SizedBox(height: 28),
+          if (ref.watch(accountEnabledProvider)) ...[
+            _SectionHeader(l10n.settingsAccount),
+            const _AccountSection(),
+            const SizedBox(height: 28),
+          ],
 
           _SectionHeader(l10n.settingsAppearance),
           SegmentedButton<ThemeMode>(

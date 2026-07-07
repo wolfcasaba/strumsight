@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-06** (round 19).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-07** (round 22).
 
 ---
 
@@ -37,7 +37,10 @@ touches the network. Payments are out of scope.
 | **Flutter auth** — optional login/register, secure token, Account UI in Settings | ✅ round 15 | `lib/features/auth/` |
 | **Settings cloud sync** — pull on login, push on change, register adopts local | ✅ rounds 16–17 | `lib/features/settings/providers/settings_sync.dart` |
 | **Tuning reference A4** (400–480 Hz) — Settings stepper, drives tuner note/cents, shown on Live+Tuner, synced | ✅ round 19 | `lib/features/settings/providers/tuning_reference_provider.dart` |
-| **Tests** | ✅ **68 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + pytest) | `test/`, `backend/tests/` |
+| **Analyze** — record a clip → chord + strum-direction **timeline** (batch DSP off-isolate) | ✅ round 20 | `lib/features/analyze/` |
+| **Library** — save / list / reopen analyzed sessions (offline) | ✅ round 21 | `lib/features/library/` |
+| **Account UI gating** — Sign-in hidden by default until a backend is hosted | ✅ round 22 | `ApiConfig.accountEnabled` |
+| **Tests** | ✅ **78 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + analyze/library + pytest) | `test/`, `backend/tests/` |
 | **CI → APK** | ✅ (Flutter only; backend has no CI yet) | `.github/workflows/build-apk.yml` |
 | **HORIZON**: git-notes experience buffer + randomized property gate | ✅ adopted round 12 | see notes below |
 
@@ -61,10 +64,15 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 ## 3. What's NOT done — NEXT 🔜
 
+- **⚠️ Login / account backend is NOT hosted** — `ApiConfig.baseUrl` defaults to `10.0.2.2:8000`
+  (Android **emulator** only). On a real phone login can't reach it, so the account UI is **gated OFF**
+  (`ApiConfig.accountEnabled=false`, round 22). To enable: deploy `backend/` to a public host, then
+  build with `--dart-define=STRUMSIGHT_ACCOUNT=true --dart-define=STRUMSIGHT_API_URL=https://…`.
+  User chose to defer login (2026-07-07); app is fully usable logged out. Local ARM64 box CANNOT
+  build the APK — use CI (see [[apk-delivery]]).
 - **⚠️ Live mic on a real device** — the mic→DSP→UI wiring is audited & correct in code, and mic
   start-errors now surface (round 13). But "does it detect a real guitar" is **NOT verified on
-  hardware** — this is the user's real-guitar APK acceptance test. If it still seems dead, the new
-  Retry banner + error will now say *why* (permission vs mic-busy vs platform error).
+  hardware** — the user's real-guitar APK acceptance test. If it seems dead, the Retry banner says why.
 - **Backend hardening for prod** — SQLite→Postgres, Alembic migrations, real `STRUMSIGHT_SECRET_KEY`,
   lock CORS origins, rate-limit auth, add backend CI. Currently dev-grade (documented in `backend/README.md`).
 - **Password reset / email verification / refresh tokens** — not implemented (14-day JWT, no refresh).
@@ -79,7 +87,10 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 19 | (this) | 68+14 | tuning_a4 fully wired: local Notifier (persist/clamp 400–480) → tuner engine `start(a4:)` through the isolate → noteForFrequency; Settings stepper; Live/Tuner display; synced (pull/push/signature). Watching a4 in tunerReadingProvider restarts the engine with the new reference |
+| 22 | (this) | 78+14 | Analyze+Library shipped (were "coming soon"); account UI gated behind ApiConfig.accountEnabled (provider-wrapped so tests can toggle a compile-time flag); login deferred — needs hosted backend, ARM64 box can't build APK so CI + git-credential release (see apk-delivery). build-22 = features; build-23 = login hidden |
+| 21 | — | 77 | Library persists via shared_preferences JSON array; extracted shared TimelineView |
+| 20 | — | 74 | Analyze reuses LivePipeline in batch; compute() keeps FFT-heavy analysis off UI isolate; AnalyzeResult JSON for Library |
+| 19 | — | 68+14 | tuning_a4 fully wired: local Notifier (persist/clamp 400–480) → tuner engine `start(a4:)` through the isolate → noteForFrequency; Settings stepper; Live/Tuner display; synced (pull/push/signature). Watching a4 in tunerReadingProvider restarts the engine with the new reference |
 | 18 | `3dfce22` | 65+14 | docs + CORS polish (bearer → allow_credentials=False so "*" stays valid); handoff/README/CLAUDE updated for the account layer |
 | 17 | — | 65 | devil-advocate caught register-clobber (C1) + offline silent-lost-write (H1), both green in mocks. Fix = typed AuthEvent (login pull vs register push) + signature-only-after-confirm + explicit _applyingPull guard; resume must invalidate provider to clear AsyncError |
 | 16 | — | 63 | settings sync echo-guard via value-signature (listeners fire async); SharedPreferences.setMockInitialValues needed for notifier-setter tests; override settingsRepo in widget tests that restore a session |

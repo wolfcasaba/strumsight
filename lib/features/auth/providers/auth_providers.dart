@@ -1,8 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_config.dart';
 import '../data/auth_repository.dart';
 import '../data/token_store.dart';
 import '../model/auth_user.dart';
+
+/// Whether the account layer (login + sync UI) is shown. Defaults to the
+/// compile-time [ApiConfig.accountEnabled]; overridable in tests.
+final accountEnabledProvider = Provider<bool>((_) => ApiConfig.accountEnabled);
 
 /// How a session began — lets the settings-sync layer tell a fresh signup
 /// (adopt this device's local settings as the new cloud profile) apart from a

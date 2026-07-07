@@ -13,4 +13,15 @@ class ApiConfig {
     'STRUMSIGHT_API_URL',
     defaultValue: 'http://10.0.2.2:8000',
   );
+
+  /// Whether the optional account layer (login + settings sync) is available.
+  /// OFF by default — there is no hosted backend yet, and a Sign-in button that
+  /// always fails is worse than none. Turn on once the backend is deployed:
+  ///   flutter build apk \
+  ///     --dart-define=STRUMSIGHT_ACCOUNT=true \
+  ///     --dart-define=STRUMSIGHT_API_URL=https://your-host.example
+  static const bool accountEnabled = bool.fromEnvironment(
+    'STRUMSIGHT_ACCOUNT',
+    defaultValue: false,
+  );
 }
