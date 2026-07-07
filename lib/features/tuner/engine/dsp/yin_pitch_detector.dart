@@ -29,6 +29,12 @@ class YinPitchDetector {
   late final Float64List _d;
   late final Float64List _cmndf;
 
+  /// Clarity (periodicity) of the LAST [detect] call, 0..1 — the McLeod-style
+  /// tone-likeness measure `1 − CMNDF[τ]`. A cleanly plucked string is ~0.95+;
+  /// voiced speech and noise are lower. 0 when no pitch was found. Callers gate
+  /// on this to reject voice/noise (the primary voiced/unvoiced discriminator).
+  double clarity = 0;
+
   /// Estimated f0 in Hz, or null when no confident pitch is present.
   double? detect(Float64List buffer) {
     assert(buffer.length >= bufferSize);
@@ -64,7 +70,12 @@ class YinPitchDetector {
         break;
       }
     }
-    if (tau < 0) return null;
+    if (tau < 0) {
+      clarity = 0;
+      return null;
+    }
+    // Tone-likeness of the chosen dip (1 = perfectly periodic).
+    clarity = (1 - _cmndf[tau]).clamp(0.0, 1.0);
 
     // 4) Parabolic interpolation around the minimum.
     var tauF = tau.toDouble();

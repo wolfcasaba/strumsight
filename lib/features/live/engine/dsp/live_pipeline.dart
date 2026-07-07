@@ -75,9 +75,13 @@ class LivePipeline {
       }
     }
 
-    // Slow path: chroma → chord.
+    // Slow path: chroma → chord. Gate on tonalness so a diffuse frame (speech,
+    // noise) is treated as silence and can't fake a chord (RAG chunk 003).
     for (final frame in _chordFramer.add(chunk)) {
-      _lastChord = _chordMatcher.process(_chroma.process(frame));
+      final chroma = _chroma.process(frame);
+      final tonal =
+          chroma != null && _chroma.lastTonalness >= DspConfig.chordMinTonalness;
+      _lastChord = _chordMatcher.process(tonal ? chroma : null);
     }
 
     // Sample-clock emission (~15 Hz).

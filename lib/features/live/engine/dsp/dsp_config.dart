@@ -25,6 +25,12 @@ class DspConfig {
   static const int chordHysteresisFrames = 3;
   static const double chordInstantSwitchConfidence = 0.8;
 
+  /// Minimum chroma tonalness (chunk 003) for a frame to update the chord.
+  /// Below this the frame is diffuse (speech/noise) and is treated as silence
+  /// so it can't fake a chord. MEASURED (synth): a clean triad ≈ 0.99, white
+  /// noise ≈ 0.55 — 0.7 separates them with margin. May need real-device tuning.
+  static const double chordMinTonalness = 0.7;
+
   // Silence gate (chunk 010).
   static const double silenceRms = 0.008;
 }

@@ -39,6 +39,11 @@ class ChromaExtractor {
   /// Frame RMS of the last processed frame (drives the level meter + gate).
   double lastRms = 0;
 
+  /// Tonalness of the last chroma, 0.25 (diffuse — speech/noise) … 1.0 (a clean
+  /// triad): energy concentration in the top-3 pitch classes of the unit chroma.
+  /// The chord path gates on this so diffuse frames don't fake a chord.
+  double lastTonalness = 0;
+
   /// Process one frame of exactly [window] samples (-1..1). Returns the
   /// smoothed unit-norm chroma, or null when the frame is below the silence
   /// gate (never normalise noise — chunk 003).
@@ -114,6 +119,14 @@ class ChromaExtractor {
     }
     _hasSmoothed = true;
     sNorm = math.sqrt(sNorm);
-    return [for (final v in _smoothed) v / sNorm];
+    final result = [for (final v in _smoothed) v / sNorm];
+
+    // Tonalness = summed energy of the 3 strongest pitch classes (the unit
+    // vector's squared entries sum to 1). A clean triad concentrates ~0.85+;
+    // diffuse speech/noise spreads to ~0.3–0.45.
+    final sq = [for (final v in result) v * v]..sort();
+    lastTonalness = sq[11] + sq[10] + sq[9];
+
+    return result;
   }
 }

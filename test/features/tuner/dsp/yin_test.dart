@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
 import 'package:music_theory/features/tuner/engine/dsp/yin_pitch_detector.dart';
+import 'package:music_theory/features/tuner/model/tuner_reading.dart';
 
 import '../../../support/synth.dart';
 
@@ -15,6 +16,19 @@ Float64List sine(double freq, {int n = 4096, double amp = 0.4}) {
     out[i] = amp * math.sin(2 * math.pi * freq * i / sr);
   }
   return out;
+}
+
+/// Feed a sustained signal through the analyzer frame-by-frame (like the real
+/// engine) and return the last locked reading. The stability gate needs several
+/// consistent frames before it shows a note.
+TunerReading readSustained(TunerAnalyzer a, Float64List signal) {
+  var last = TunerReading.silent;
+  final hop = a.bufferSize ~/ 2;
+  for (var s = 0; s + a.bufferSize <= signal.length; s += hop) {
+    final r = a.process(Float64List.sublistView(signal, s, s + a.bufferSize));
+    if (r.hasSignal) last = r;
+  }
+  return last;
 }
 
 void main() {
@@ -48,8 +62,8 @@ void main() {
 
   test('TunerAnalyzer: in-tune A2 string reads A within ±3 cents', () {
     final analyzer = TunerAnalyzer(sampleRate: sr);
-    final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
-    final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
+    final note = harmonicNote(freq: 110, seconds: 0.6, amp: 0.3);
+    final reading = readSustained(analyzer, note);
     expect(reading.hasSignal, isTrue);
     expect(reading.note, 'A');
     expect(reading.cents.abs(), lessThan(3));
@@ -60,6 +74,30 @@ void main() {
     final analyzer = TunerAnalyzer(sampleRate: sr);
     final reading = analyzer.process(Float64List(analyzer.bufferSize));
     expect(reading.hasSignal, isFalse);
+  });
+
+  test('TunerAnalyzer: a single clear frame does NOT lock (needs stability)',
+      () {
+    final analyzer = TunerAnalyzer(sampleRate: sr);
+    final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
+    // One frame is not enough evidence — a real note is held for many frames,
+    // a transient/glide is not.
+    final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
+    expect(reading.hasSignal, isFalse);
+  });
+
+  test('TunerAnalyzer: a gliding pitch (voice-like) never locks', () {
+    final analyzer = TunerAnalyzer(sampleRate: sr);
+    // A continuous ~1 octave/sec sweep 150→300 Hz — well within range and
+    // periodic, but never stable, so the stability gate keeps it silent.
+    final n = (0.7 * sr).round();
+    final sweep = Float64List(n);
+    for (var i = 0; i < n; i++) {
+      final t = i / sr;
+      final f = 150 * math.pow(2, t).toDouble(); // exponential glide
+      sweep[i] = 0.3 * math.sin(2 * math.pi * f * t);
+    }
+    expect(readSustained(analyzer, sweep).hasSignal, isFalse);
   });
 
   test('noteForFrequency respects a custom A4 reference (432 Hz)', () {
@@ -75,11 +113,10 @@ void main() {
   test('TunerAnalyzer applies its A4 to the note/cents mapping', () {
     final a440 = TunerAnalyzer(sampleRate: sr);
     final a432 = TunerAnalyzer(sampleRate: sr, a4: 432);
-    final tone = harmonicNote(freq: 432, seconds: 0.4, amp: 0.3);
-    final buf = tone.sublist(0, a440.bufferSize);
+    final tone = harmonicNote(freq: 432, seconds: 0.6, amp: 0.3);
 
-    final r432 = a432.process(buf);
-    final r440 = a440.process(buf);
+    final r432 = readSustained(a432, tone);
+    final r440 = readSustained(a440, tone);
 
     expect(r432.note, 'A');
     expect(r432.inTune, isTrue); // in tune at A4 = 432

@@ -35,3 +35,22 @@ screen). Hop = 2048.
 
 **Stability:** median of the last 3 readings before display; drop frames whose
 RMS is below the silence gate.
+
+## Voice / noise rejection (round 23 — see McLeod "clarity", YIN aperiodicity)
+
+The bare RMS gate lets voiced speech (which is periodic, in the guitar range)
+read as a note. Real tuners gate on **clarity + stability**, not just level.
+`TunerAnalyzer` now applies four gates before showing a note; fail any → silent:
+
+1. **Level** — `rms ≥ 0.014` (raised from the shared 0.008 silence floor).
+2. **Clarity** — YIN now exposes `clarity = 1 − d'(τ)` (tone-likeness, McLeod's
+   measure). Require `clarity ≥ 0.85`. A cleanly plucked string is ~0.95+;
+   consonants/noise are lower.
+3. **Range** — `70 ≤ f0 ≤ 1320 Hz` (guitar E2…E6).
+4. **Stability** — keep the last **4** accepted f0; only lock when they all sit
+   within **±30 cents** of their median (≈185 ms of agreement). Speech glides
+   constantly → never stable → rejected; a held string locks. The reported
+   pitch is that median (jitter-free). Any failing frame clears the window.
+
+MEASURED (property gate, 20 random trials/seed): held in-range tones lock ≥17,
+gliding (speech-like) pitches lock ≤2.

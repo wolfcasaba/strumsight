@@ -87,7 +87,8 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 22 | (this) | 78+14 | Analyze+Library shipped (were "coming soon"); account UI gated behind ApiConfig.accountEnabled (provider-wrapped so tests can toggle a compile-time flag); login deferred — needs hosted backend, ARM64 box can't build APK so CI + git-credential release (see apk-delivery). build-22 = features; build-23 = login hidden |
+| 23 | (this) | 84+14 | DSP voice/noise rejection (user: "reacts to speech more than guitar"). Researched McLeod/YIN/pYIN: real tuners gate on CLARITY + pitch STABILITY, not just level. Tuner: +clarity(0.85)+range(70–1320)+4-frame ±30-cent stability+RMS 0.014 → gliding pitch never locks. Live: chroma tonalness (top-3 energy, gate 0.7) + matcher no longer bootstraps a chord on 1 frame → noise doesn't fake a chord. RAG 003/008 updated; 2 randomized properties added |
+| 22 | `a09d4eb` | 78+14 | Analyze+Library shipped (were "coming soon"); account UI gated behind ApiConfig.accountEnabled (provider-wrapped so tests can toggle a compile-time flag); login deferred — needs hosted backend, ARM64 box can't build APK so CI + git-credential release (see apk-delivery). build-22 = features; build-23 = login hidden |
 | 21 | — | 77 | Library persists via shared_preferences JSON array; extracted shared TimelineView |
 | 20 | — | 74 | Analyze reuses LivePipeline in batch; compute() keeps FFT-heavy analysis off UI isolate; AnalyzeResult JSON for Library |
 | 19 | — | 68+14 | tuning_a4 fully wired: local Notifier (persist/clamp 400–480) → tuner engine `start(a4:)` through the isolate → noteForFrequency; Settings stepper; Live/Tuner display; synced (pull/push/signature). Watching a4 in tunerReadingProvider restarts the engine with the new reference |

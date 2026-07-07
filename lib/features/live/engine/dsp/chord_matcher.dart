@@ -117,9 +117,13 @@ class ChordMatcher {
       }
     }
 
-    _reported ??= label;
-    if (_reportedConfidence == 0) _reportedConfidence = confidence;
-    return ChordMatch(Chord(_reported!), _reportedConfidence);
+    // No bootstrap on a single frame: a chord is only reported once it wins
+    // the hysteresis streak or an instant-switch above. A lone tonal frame
+    // (e.g. a stray noise frame that slipped past the tonalness gate) produces
+    // a random label that never accumulates a streak, so it shows nothing.
+    return _reported == null
+        ? null
+        : ChordMatch(Chord(_reported!), _reportedConfidence);
   }
 
   /// Reset all hysteresis state (new session).

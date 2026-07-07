@@ -9,6 +9,7 @@
 // Thresholds are percentage-based to keep the gate meaningful but not flaky.
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
@@ -16,6 +17,7 @@ import 'package:music_theory/features/live/engine/dsp/chroma_extractor.dart';
 import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
 import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
 import 'package:music_theory/features/live/model/strum.dart';
+import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
 
 import '../support/synth.dart';
 
@@ -117,5 +119,73 @@ void main() {
     expect(directionCorrect / math.max(1, directionChecked),
         greaterThanOrEqualTo(0.85),
         reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
+  // Voice/noise rejection (round 23): the tuner must lock a STABLE, in-range
+  // tone but reject a gliding pitch (the way speech behaves).
+  test('property: stable tones lock, gliding pitches do not (20 trials)', () {
+    bool tunerLocks(Float64List signal) {
+      final a = TunerAnalyzer(sampleRate: sr);
+      final hop = a.bufferSize ~/ 2;
+      for (var s = 0; s + a.bufferSize <= signal.length; s += hop) {
+        if (a
+            .process(Float64List.sublistView(signal, s, s + a.bufferSize))
+            .hasSignal) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    var stableLocked = 0;
+    var glideLocked = 0;
+    for (var t = 0; t < 20; t++) {
+      final midi = 40 + rng.nextInt(24); // E2..D#4, all in guitar range
+      final stable = harmonicNote(
+        freq: _midiToFreq(midi),
+        seconds: 0.7,
+        amp: 0.15 + rng.nextDouble() * 0.2,
+      );
+      if (tunerLocks(stable)) stableLocked++;
+
+      // A continuous glide (voice-like): starts in range, sweeps ~1 octave/s.
+      final start = 120 + rng.nextDouble() * 120;
+      final rate = 1.0 + rng.nextDouble() * 1.5;
+      final n = (0.7 * sr).round();
+      final glide = Float64List(n);
+      for (var i = 0; i < n; i++) {
+        final tt = i / sr;
+        final ff = start * math.pow(2, rate * tt).toDouble();
+        glide[i] = 0.28 * math.sin(2 * math.pi * ff * tt);
+      }
+      if (tunerLocks(glide)) glideLocked++;
+    }
+    expect(stableLocked, greaterThanOrEqualTo(17),
+        reason: 'seed=$seed: a held in-range tone must lock');
+    expect(glideLocked, lessThanOrEqualTo(2),
+        reason: 'seed=$seed: a gliding pitch (speech-like) must be rejected');
+  });
+
+  test('property: white noise does not fake a chord (20 trials)', () {
+    var chordShown = 0;
+    for (var t = 0; t < 20; t++) {
+      final ex = ChromaExtractor(sampleRate: sr);
+      final matcher = ChordMatcher();
+      ChordMatch? m;
+      final amp = 0.1 + rng.nextDouble() * 0.3;
+      for (var w = 0; w < 10; w++) {
+        final frame = Float64List(DspConfig.chromaWindow);
+        for (var i = 0; i < frame.length; i++) {
+          frame[i] = (rng.nextDouble() * 2 - 1) * amp;
+        }
+        final chroma = ex.process(frame);
+        final tonal = chroma != null &&
+            ex.lastTonalness >= DspConfig.chordMinTonalness;
+        m = matcher.process(tonal ? chroma : null);
+      }
+      if (m != null) chordShown++;
+    }
+    expect(chordShown, lessThanOrEqualTo(2),
+        reason: 'seed=$seed: diffuse noise must not accumulate a chord');
   });
 }
