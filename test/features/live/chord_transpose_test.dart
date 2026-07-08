@@ -18,6 +18,11 @@ void main() {
     test('keeps the quality suffix', () {
       expect(Chord.transposeLabel('Am', -2), 'Gm');
       expect(Chord.transposeLabel('F#m', -2), 'Em');
+      // Extended-chord labels from the chunk-012 engine transpose too (capo).
+      expect(Chord.transposeLabel('G7', -2), 'F7');
+      expect(Chord.transposeLabel('Cmaj7', 2), 'Dmaj7');
+      expect(Chord.transposeLabel('Dm7', -2), 'Cm7');
+      expect(Chord.transposeLabel('Asus4', 3), 'Csus4');
     });
 
     test('wraps around the octave', () {

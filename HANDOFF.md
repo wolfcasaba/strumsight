@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-07** (round 27).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-08** (round 28).
 
 ---
 
@@ -19,6 +19,7 @@ touches the network. Payments are out of scope.
 - Repo: `/home/ubuntu/music-theory` (standalone; reuses recipewiser-mobile infra, NOT part of it).
 - Spec: `docs/` (`c7b1a4e` spec, `b593ca4` plan). DSP source-of-truth: `docs/rag/chunks/`.
 - Version: **v0.2.0** — REAL on-device detection in pure Dart; optional account layer added.
+  Round 28 upgraded the chord path to a Chordino-class **dictionary + Viterbi** engine (extended chords).
 
 ## 2. Current status — DONE ✅
 
@@ -27,9 +28,10 @@ touches the network. Payments are out of scope.
 | **Live** screen — big chord, ↓/↑ arrow, confidence pill, `1 & 2 & 3 & 4` beat counter, status bar | ✅ REAL mic detection | `lib/features/live/` |
 | **Tuner** — note + cents gauge + in-tune indicator | ✅ REAL YIN pitch (mic) | `lib/features/tuner/` |
 | **Settings** — theme (persisted), lang en/hu, confidence threshold (persisted), version | ✅ built | `lib/features/settings/` |
-| **DSP pipeline** — whitened spectral-flux onsets, **NNLS/Chordino-class chroma** → 24-template chord, sub-band strum ↓/↑, median-IOI tempo | ✅ pure Dart, runs in isolate | `lib/features/live/engine/dsp/` |
+| **DSP pipeline** — whitened spectral-flux onsets, **NNLS bass+treble chroma → chord-dictionary + Viterbi** chord, sub-band strum ↓/↑, median-IOI tempo | ✅ pure Dart, runs in isolate | `lib/features/live/engine/dsp/` |
 | **Voice/noise rejection** — tuner clarity+stability+range gates; chord tonalness gate | ✅ round 23 | `dsp/tuner_analyzer.dart`, `dsp/chroma…` |
-| **NNLS chord engine** — STFT→log-freq→NNLS transcription→chroma (overtone suppression) | ✅ round 25 | `lib/features/live/engine/dsp/nnls_chroma.dart` |
+| **NNLS chord engine** — STFT→log-freq→NNLS transcription→chroma (overtone suppression) + **bass+treble 24-dim split** | ✅ round 25, split round 28 | `lib/features/live/engine/dsp/nnls_chroma.dart` |
+| **Chord DICTIONARY + Viterbi** — 24-dim chord profiles (maj/min/7/maj7/m7/sus4 + N.C.) → online self-transition Viterbi; **extended chords (7ths), inversions via bass, N.C. state**; replaces templates + hysteresis. Fixes the round-26 7th failure (G7/A7/B7 detected; plain triads stay triads) | ✅ **round 28** | `dsp/chord_dictionary.dart`, `dsp/viterbi_chord_decoder.dart` |
 | **YIN pitch detector** (CMNDF, threshold 0.12) | ✅ pure Dart | `lib/features/tuner/engine/dsp/` |
 | **Mic capture** | ✅ `audio_streamer` → PCM chunks | `lib/core/audio/mic_capture.dart` |
 | **Design system** — dark M3, copper accent, semantic confidence ramp (shape+colour) | ✅ | `lib/core/theme/` |
@@ -43,7 +45,7 @@ touches the network. Payments are out of scope.
 | **Library** — save / list / reopen analyzed sessions (offline) | ✅ round 21 | `lib/features/library/` |
 | **Account UI gating** — Sign-in hidden by default until a backend is hosted | ✅ round 22 | `ApiConfig.accountEnabled` |
 | **Capo / transpose** — Settings stepper (0–11), shows the fretted SHAPE (detected − capo) on Live + Analyze + Library, "Capo N" badge | ✅ round 26 (local-only, view-time) | `lib/features/settings/providers/capo_provider.dart`, `Chord.transposeLabel/Summary` |
-| **Tests** | ✅ **107 Flutter + 14 backend green** (widget + DSP unit + randomized property + auth/sync + analyze/library + capo/transpose + pytest) | `test/`, `backend/tests/` |
+| **Tests** | ✅ **129 Flutter + 14 backend green** (widget + DSP unit + chord-dictionary + Viterbi + extended-chord + randomized property (9-seed verified) + auth/sync + analyze/library + capo/transpose + pytest) | `test/`, `backend/tests/` |
 | **CI → APK** | ✅ (Flutter only; backend has no CI yet) | `.github/workflows/build-apk.yml` |
 | **HORIZON**: git-notes experience buffer + randomized property gate | ✅ adopted round 12 | see notes below |
 
@@ -84,26 +86,33 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 - **iOS build** — needs a Mac. Android-first for now.
 - **FINAL acceptance is the user's real-guitar APK test** — synthetic-green is never "done" (HORIZON).
   The optional C++/FFI port is an optimization path *only if on-device profiling demands it*.
-- **⭐ NEXT BUILD — chord DICTIONARY + Viterbi engine (spec: `docs/rag/chunks/012`).** Researched
-  round 27 (how Chordify / Chord AI / Chordino / madmom do it). The concrete, pure-Dart, testable
-  port that fixes the round-26 extended-chord failure: **bass+treble split chroma (24-dim) → chord-
-  profile similarity → HMM/Viterbi (+ no-chord state)**, replacing note-templates + hand-tuned
-  hysteresis. Gets common open 7ths + inversions + a principled smooth chord track. Also carry over
-  **spectral whitening (pre-NNLS)** and **per-frame tuning estimation**. ML (CQT→CNN/transformer,
-  TFLite) is proven on-device (Chord AI ships an offline CNN) but deferred — needs a trainset + Mac-
-  free export. **Strum ↓/↑ direction remains our unique moat — no competitor does it.**
-- **Extended chord vocabulary (7ths / sus / power)** — attempted round 26, **reverted**. Bolting
-  7th/sus/power templates onto the note-NNLS→triad-template matcher is unreliable: NNLS overtone
-  suppression *removes the added tone* when it coincides with a chord tone's harmonic (measured:
-  Em7's 7th D = G's 3rd harmonic → ~0; Fsus4's 5th C = F's 3rd harmonic → gone), and power chords
-  steal weak-third triads. The fix is the dictionary+Viterbi engine above (chunk 012), not templates.
+- **✅ DONE round 28 — chord DICTIONARY + Viterbi engine (spec: `docs/rag/chunks/012`).** Built the
+  pure-Dart, testable port: **bass+treble split chroma (24-dim) → chord-profile similarity → online
+  Viterbi (+ no-chord state)**, replacing note-templates + hand-tuned hysteresis. Extended chords
+  (7/maj7/m7/sus4), inversions via the bass chroma, and a principled smooth track. The round-26
+  7th failure is fixed (G7/A7/B7 detected; plain triads stay triads). See "AS BUILT" params in
+  chunk 012. **Strum ↓/↑ direction remains our unique moat — no competitor does it.**
+- **⭐ NEXT — carry over the two remaining chunk-012 stages: spectral whitening (pre-NNLS, exp ≈1.0)
+  and per-frame tuning estimation.** Both were deferred in round 28 because they only bite on REAL
+  coloured/detuned audio — synth is perfectly in-tune, so there's nothing to validate here. Best done
+  alongside the user's real-guitar APK test. Also open: **full-sequence (batch) Viterbi with backtrace
+  for Analyze** (today Analyze streams the online decoder), and **growing the chord vocabulary** (add,
+  dim, aug, slash/inversions) once the base is validated on a real guitar.
+- **Extended chord vocabulary** — the round-26 revert is now SUPERSEDED: 7ths work via the dictionary
+  engine (round 28). Known honest limit (measured, in chunk 012): a dom7 whose m7 coincides with the
+  root's own 7th harmonic (roots ≥ C3) still collapses to the triad — correct when the tone isn't
+  audible; hearing every voicing is the ML-era goal. Power-5/sus2 remain OUT of the vocabulary (they
+  steal weak-third triads); revisit with real-guitar data.
+- Optional later: ML path (CQT→CNN/transformer, TFLite) — proven on-device (Chord AI ships an offline
+  CNN) but deferred; needs a labelled trainset + Mac-free export, breaks pure-Dart offline design.
 - Optional later: TFLite strum-direction model.
 
 ## 4. Round history (from git notes — `git log --show-notes`)
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 27 | (this) | 107+14 | Research (docs): studied how production apps do chord recognition (Chordify/Chord AI/Chordino/madmom/BTC) + used Viking/Hermes bridge. Verified answer to round-26 = **chord DICTIONARY + Viterbi** (not templates): bass+treble chroma → chord-profile similarity → HMM/Viterbi + no-chord state. Wrote implementation spec → RAG **chunk 012**; refined 011 w/ competitor+TFLite feasibility intel. Chord AI ships an offline on-device CNN (ML path proven but deferred). Strum ↓/↑ confirmed a unique moat. Lessons pushed to Hermes shared brain |
+| 28 | (this) | 129+14 | **Built the chunk-012 chord DICTIONARY + Viterbi engine** (the round-27 spec), fixing the round-26 7th failure end-to-end. NnlsChroma now emits a **bass+treble 24-dim** chroma; `ChordDictionary` scores whole-chord profiles (maj/min/7/maj7/m7/sus4 + N.C., 73 states); `ViterbiChordDecoder` is an online self-transition-bonus decoder replacing templates+hysteresis. **4 discoveries while building** (all in chunk 012 "AS BUILT"): (1) treble chroma must fold the FULL range — a high treble floor dropped guitar's low root/third and read G7 as Dm; (2) power-5/sus2 STEAL weak-third triads → pulled from vocab (reconfirms r26); (3) a MAJOR third's 3rd-harmonic fakes a maj7 (a MINOR third's a m7) → needs a **per-quality Occam bias** (7=0.02, maj7/m7=0.055, dom7 needs less or real A7/B7 collapse); (4) honest limit measured — dom7 detected for roots E2–B2 but m7 = root's own 7th harmonic for roots ≥C3 → collapses (correct if inaudible). 9-seed randomized property gate. Whitening + tuning-est deferred (only bite on real audio) |
+| 27 | (prev) | 107+14 | Research (docs): studied how production apps do chord recognition (Chordify/Chord AI/Chordino/madmom/BTC) + used Viking/Hermes bridge. Verified answer to round-26 = **chord DICTIONARY + Viterbi** (not templates): bass+treble chroma → chord-profile similarity → HMM/Viterbi + no-chord state. Wrote implementation spec → RAG **chunk 012**; refined 011 w/ competitor+TFLite feasibility intel. Chord AI ships an offline on-device CNN (ML path proven but deferred). Strum ↓/↑ confirmed a unique moat. Lessons pushed to Hermes shared brain |
 | 26 | `c4f6376` | 107+14 | Capo/transpose shipped (Settings stepper 0–11 → `Chord.transposeLabel/Summary`, view-time shift on Live+Analyze+Library, "Capo N" badge; local-only — a capo is physical per-guitar state, deliberately not synced). Devil-advocate caught a title leak: saved-session summary showed concert pitch while the timeline body transposed → added `transposeSummary` on the detail AppBar + library list. **REJECTED first**: extended chord vocab (7ths/sus/power) — NNLS suppresses the added tone when it = a chord-tone's harmonic (measured); needs chord-profile NNLS, not templates (reconfirms r24) |
 | 25 | `9bf0b6b` | 88+14 | Chordino-class chord engine: NnlsChroma (STFT 16384 → log-freq 3 bins/semitone → NNLS transcription vs harmonic dict shape 0.7, multiplicative updates → chroma) wired into LivePipeline, replacing peak-chroma on the chord path. Overtone suppression verified (220Hz note → A only; 3rd/5th partials <½ peak). Property + pipeline + analyze all green across seeds. ~370ms chord latency (long window needed for low-E resolution) — tune on device |
 | 24 | `17e1bb6` | 84+14 | researched prod recognition → RAG 011; naive greedy harmonic-subtraction fights triad templates (reverted); real NNLS needs full transcription |

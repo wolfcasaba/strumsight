@@ -22,6 +22,8 @@ class NnlsChroma {
     this.spectralShape = 0.7,
     this.nnlsIterations = 20,
     this.silenceRms = 0.008,
+    this.bassMaxMidi = 52, // E3 — bass/root register upper edge
+    this.trebleMinMidi = 40, // E2 — treble spans the FULL range (see below)
   })  : _fft = FFT(window),
         _hann = Float64List(window),
         _windowed = Float64List(window),
@@ -52,6 +54,17 @@ class NnlsChroma {
   final int nnlsIterations;
   final double silenceRms;
 
+  /// Register split for the bass+treble chroma (RAG chunk 012). The **treble**
+  /// chroma folds the whole harmony (activations at/above [trebleMinMidi],
+  /// defaulting to the full note range) — the chord tones that decide quality.
+  /// The **bass** chroma folds only the low sub-register (at/below
+  /// [bassMaxMidi]) to surface the root/bass note, which disambiguates
+  /// inversions, slash chords and quality. Guitar chords voice low (roots
+  /// E2–D3), so a high treble floor would drop the root and third out of the
+  /// harmony — hence treble spans everything and bass is the isolating cut.
+  final int bassMaxMidi;
+  final int trebleMinMidi;
+
   final int nNotes;
   late final int _nBins;
 
@@ -75,6 +88,14 @@ class NnlsChroma {
   /// Tonalness of the last chroma (top-3 pitch-class energy of the unit
   /// vector): ~1.0 for a clean chord, low for a diffuse/noisy frame.
   double lastTonalness = 0;
+
+  /// Bass-register chroma (12, L2-normalised) of the last processed frame —
+  /// the root/bass note. Zeros on a silent frame. See [bassMaxMidi] (chunk 012).
+  final Float64List lastBassChroma = Float64List(12);
+
+  /// Treble-register chroma (12, L2-normalised) of the last processed frame —
+  /// the harmony. Zeros on a silent frame. See [trebleMinMidi] (chunk 012).
+  final Float64List lastTrebleChroma = Float64List(12);
 
   void _buildDictionary() {
     _dict = List.generate(nNotes, (_) => Float64List(_nBins));
@@ -177,11 +198,25 @@ class NnlsChroma {
       }
     }
 
-    // 3) Fold note activations to 12 pitch classes; L2-normalise.
+    // 3) Fold note activations to 12 pitch classes; L2-normalise. Fold the
+    //    bass and treble registers SEPARATELY too (chunk 012): the bass chroma
+    //    carries the root, the treble chroma the harmony.
     final chroma = List<double>.filled(12, 0);
-    for (var n = 0; n < nNotes; n++) {
-      chroma[(minMidi + n) % 12] += _activation[n];
+    for (var i = 0; i < 12; i++) {
+      lastBassChroma[i] = 0;
+      lastTrebleChroma[i] = 0;
     }
+    for (var n = 0; n < nNotes; n++) {
+      final midi = minMidi + n;
+      final pc = midi % 12;
+      final a = _activation[n];
+      chroma[pc] += a;
+      if (midi <= bassMaxMidi) lastBassChroma[pc] += a;
+      if (midi >= trebleMinMidi) lastTrebleChroma[pc] += a;
+    }
+    _l2Normalise(lastBassChroma);
+    _l2Normalise(lastTrebleChroma);
+
     var norm = 0.0;
     for (final v in chroma) {
       norm += v * v;
@@ -196,6 +231,18 @@ class NnlsChroma {
     lastTonalness = sq[11] + sq[10] + sq[9];
 
     return chroma;
+  }
+
+  static void _l2Normalise(Float64List v) {
+    var norm = 0.0;
+    for (final x in v) {
+      norm += x * x;
+    }
+    norm = math.sqrt(norm);
+    if (norm <= 0) return;
+    for (var i = 0; i < v.length; i++) {
+      v[i] /= norm;
+    }
   }
 
   static double _mag(List<dynamic> spec, int k) {

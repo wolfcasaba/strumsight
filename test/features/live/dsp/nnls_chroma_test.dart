@@ -53,4 +53,24 @@ void main() {
       ..sort((a, b) => chroma![b].compareTo(chroma[a]));
     expect(ranked.take(3).toSet(), {9, 0, 4}); // A C E
   });
+
+  test('bass+treble split (chunk 012): treble carries the harmony, bass the '
+      'root, and both are zero on silence', () {
+    final nc = NnlsChroma(sampleRate: 44100);
+    // Silence leaves both split chromas at zero.
+    nc.process(Float64List(nc.window));
+    expect(nc.lastBassChroma.every((v) => v == 0), isTrue);
+    expect(nc.lastTrebleChroma.every((v) => v == 0), isTrue);
+
+    // C major (C3 E3 G3): the treble register spans all three chord tones.
+    final chord = chordSignal(cMajorFreqs, seconds: 0.5, amp: 0.2);
+    nc.process(Float64List.sublistView(chord, 0, nc.window));
+    final trebleRank = List.generate(12, (i) => i)
+      ..sort((a, b) => nc.lastTrebleChroma[b].compareTo(nc.lastTrebleChroma[a]));
+    expect(trebleRank.take(3).toSet(), {0, 4, 7}); // C E G
+    // The bass register carries the root C (lowest note = C3) prominently.
+    final bassRank = List.generate(12, (i) => i)
+      ..sort((a, b) => nc.lastBassChroma[b].compareTo(nc.lastBassChroma[a]));
+    expect(bassRank.take(2), contains(0)); // C among the two loudest bass PCs
+  });
 }

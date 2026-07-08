@@ -1,12 +1,16 @@
+import 'dart:typed_data';
+
 import '../../model/chord.dart';
 import '../../model/live_frame.dart';
 import '../../model/strum.dart';
+import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
 import 'sliding_framer.dart';
 import 'strum_analyzer.dart';
 import 'tempo_tracker.dart';
+import 'viterbi_chord_decoder.dart';
 
 /// The REAL detection pipeline: PCM chunks in → [LiveFrame]s out (~15 Hz).
 ///
@@ -30,8 +34,17 @@ class LivePipeline {
   final int sampleRate;
 
   final NnlsChroma _chroma;
-  final ChordMatcher _chordMatcher = ChordMatcher();
+  final ViterbiChordDecoder _chordDecoder = ViterbiChordDecoder(
+    selfBonus: DspConfig.chordSelfTransitionBonus,
+    dictionary: ChordDictionary(
+      bassWeight: DspConfig.chordBassWeight,
+      trebleWeight: DspConfig.chordTrebleWeight,
+      noChordScore: DspConfig.chordNoChordScore,
+    ),
+  );
   final StrumAnalyzer _strums;
+
+  static final Float64List _silentChroma = Float64List(12);
   final TempoTracker _tempo = TempoTracker();
   final SlidingFramer _chordFramer;
   final SlidingFramer _onsetFramer;
@@ -75,13 +88,19 @@ class LivePipeline {
       }
     }
 
-    // Slow path: chroma → chord. Gate on tonalness so a diffuse frame (speech,
-    // noise) is treated as silence and can't fake a chord (RAG chunk 003).
+    // Slow path: chroma → chord. The NNLS transcription yields a bass+treble
+    // (24-dim) chroma; the Viterbi decoder scores it against the chord-profile
+    // dictionary and smooths the path (RAG chunk 012). Gate on tonalness so a
+    // diffuse frame (speech, noise) is fed as silence and resolves to no-chord
+    // rather than faking one (RAG chunk 003).
     for (final frame in _chordFramer.add(chunk)) {
       final chroma = _chroma.process(frame);
       final tonal =
           chroma != null && _chroma.lastTonalness >= DspConfig.chordMinTonalness;
-      _lastChord = _chordMatcher.process(tonal ? chroma : null);
+      _lastChord = tonal
+          ? _chordDecoder.process(
+              _chroma.lastBassChroma, _chroma.lastTrebleChroma)
+          : _chordDecoder.process(_silentChroma, _silentChroma);
     }
 
     // Sample-clock emission (~15 Hz).
@@ -146,7 +165,7 @@ class LivePipeline {
   void reset() {
     _chordFramer.reset();
     _onsetFramer.reset();
-    _chordMatcher.reset();
+    _chordDecoder.reset();
     _tempo.reset();
     _lastChord = null;
     _latestStrum = null;

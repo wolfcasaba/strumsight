@@ -12,6 +12,17 @@ sources:
 
 # The next chord engine: chord DICTIONARY + Viterbi
 
+> **STATUS: IMPLEMENTED (round 28).** Shipped in `lib/features/live/engine/dsp/`:
+> `nnls_chroma.dart` (now also emits a bass+treble 24-dim chroma),
+> `chord_dictionary.dart` (profiles + scorer), `viterbi_chord_decoder.dart`
+> (online decoder), wired into `live_pipeline.dart` — replacing the template
+> matcher + hand-tuned hysteresis on the chord path. The round-26 7th failure is
+> fixed end-to-end (G7/A7/B7 detected from synthesized guitar audio; plain triads
+> stay triads). Tuned values + what was learned building it are in the
+> **"Params — AS BUILT"** section at the bottom. The template matcher is kept
+> only as a test reference. NOT yet built: spectral whitening (pre-NNLS) and
+> per-frame tuning estimation — still open follow-ups (see end).
+
 **Why this chunk exists.** Round 26 tried to add 7th/sus/power chords by bolting
 extra **note templates** onto the triad matcher. It failed and was reverted:
 with note-templates a 7th is a *superset* of its triad (Cmaj7 ⊇ C) so it always
@@ -103,3 +114,63 @@ set + a Mac-free train/export path, and breaks the pure-Dart offline design.
 **Decision:** do the Chordino-class port first (deterministic, testable, fixes
 the real gap); revisit ML only after the user's real-guitar test says DSP has
 plateaued. **No competitor detects strum DIRECTION (↓/↑) — that stays our moat.**
+
+## Params — AS BUILT (round 28, tuned on synthesized guitar audio)
+
+Mirror of `DspConfig` + `ChordDictionary`/`ViterbiChordDecoder` defaults. These
+were tuned against synth signals + a 9-seed randomized property gate; **expect a
+real-guitar retune** (that is the final acceptance).
+
+- **Register split (`NnlsChroma`)**: `trebleMinMidi = 40` (E2) — the treble
+  chroma folds the **whole** note range, i.e. the full harmony; `bassMaxMidi =
+  52` (E3) — the bass chroma folds only the low sub-register for the root.
+  *Learned the hard way:* a HIGH treble floor (first tried C3) drops a guitar
+  chord's low root+third out of the harmony (guitar voices in E2–D3), so a G7
+  read as **Dm** (treble saw only D+F). Treble = full range fixed it. Bass still
+  isolates the root because it's the *lowest* register, not because treble is high.
+- **Chord dictionary (`chord_dictionary.dart`)**: vocabulary = **maj, min, 7,
+  maj7, m7, sus4 + N.C.** = 73 states. **Power-5 and sus2 were tried and pulled**:
+  a `[root,fifth]` profile has no third to contradict, so it *steals* any triad
+  whose third is quiet (exactly round-26's "power chords steal weak-third triads");
+  sus2 collides with a neighbour's fifth. Add back only with real-guitar data.
+  - Treble profile weights: root 1.0, third 1.0 (0.9 on 7ths), fifth 0.6–0.7,
+    seventh 0.9. Bass profile: root 1.0 + fifth 0.3, L2-normalised.
+  - `bassWeight 0.35 / trebleWeight 0.65` blended cosine.
+  - **No-chord floor `noChordScore = 0.55`** (our realisation of the "no-chord
+    boost"): a real chord's blended cosine must clear this or the frame is N.C.
+  - **Per-quality Occam bias** (the key discovery): a small similarity handicap
+    on 4-note profiles so an extension must be *clearly* present, not win by the
+    phantom 7th a third's own 3rd-harmonic leaves behind (a MAJOR third's 3rd
+    harmonic = a major 7th above the root; a MINOR third's = a minor 7th). A
+    single global penalty can't win — it must be **per quality**: `7 → 0.02`,
+    `maj7 → 0.055`, `m7 → 0.055`, triads → 0. Reason: dom7's minor-7th has no
+    strong phantom source, so it needs almost none, but maj7/m7 do; too much on
+    dom7 and real A7/B7 collapse to the triad. Global scale = `extensionPenalty`.
+- **Viterbi decoder (`viterbi_chord_decoder.dart`)**: online token-passing with
+  a **self-transition bonus `selfBonus = 0.22`** (in similarity units) — the ONE
+  knob that replaced round-4's three hysteresis constants. A rival must beat the
+  incumbent's per-frame similarity by more than this **and persist** to flip;
+  scores renormalised each frame (subtract max) to stay bounded. This cures the
+  maj↔maj7 blip for free. Trade-off observed: the maj7 Occam bias shrinks the
+  real-maj7 margin, so switching *into* a sustained maj7 is deliberate (~1 s),
+  not instant — acceptable (stability > speed), tune on device.
+- **Honest limit, re-confirmed by measurement:** a low-voiced dom7 is detected
+  for roots **E2–B2** (the m7 fundamental dominates the root's faint 7th
+  harmonic), but for roots **≥ C3 the m7 coincides with the root's own 7th
+  harmonic** (C7's B♭ = C's 7th harmonic, D7's C = D's, …) and NNLS suppresses
+  it → collapses to the bare triad. That is *correct* if the tone isn't audible;
+  hearing weak upper extensions everywhere remains the ML-era goal. The
+  randomized dom7 property is therefore gated on the E2–B2 band only.
+
+## Still open (NOT built in round 28)
+- **Spectral whitening pre-NNLS** (exponent ≈1.0) — capability not added yet;
+  best validated on real coloured recordings, not synth (in-tune synth barely
+  moves). Add with real-device audio.
+- **Tuning estimation** (global/local offset → shift the chroma mapping; make
+  the A4 setting a prior) — deferred for the same reason: synth is perfectly in
+  tune, so there is nothing to estimate here; needs real drifting-guitar audio.
+- **Full-sequence (batch) Viterbi with backtrace** for Analyze — today Analyze
+  streams the *online* decoder (consistent, good); a global backtrace would
+  squeeze a little more quality out of a recorded clip.
+- Grow the vocabulary (6, 9, add, dim, aug, inversions/slash) once the base is
+  validated on a real guitar.

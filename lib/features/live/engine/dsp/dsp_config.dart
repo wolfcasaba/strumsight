@@ -26,9 +26,20 @@ class DspConfig {
   static const double semitoneTolerance = 0.35;
   static const double chromaEmaAlpha = 0.25;
 
-  // Chord matching (chunk 004).
+  // Chord matching (chunk 004) — legacy template matcher (still used by the
+  // chroma_chord + property tests as a reference).
   static const int chordHysteresisFrames = 3;
   static const double chordInstantSwitchConfidence = 0.8;
+
+  // Chord dictionary + Viterbi decoder (chunk 012) — the live chord path.
+  // The self-transition bonus IS the switch threshold (replaces the three
+  // hand-tuned hysteresis constants): a rival chord must beat the incumbent's
+  // per-frame similarity by more than this and persist to take over. Bass vs
+  // treble cosine weighting and the no-chord floor round out the model.
+  static const double chordSelfTransitionBonus = 0.22;
+  static const double chordBassWeight = 0.35;
+  static const double chordTrebleWeight = 0.65;
+  static const double chordNoChordScore = 0.55;
 
   /// Minimum chroma tonalness (chunk 003) for a frame to update the chord.
   /// Below this the frame is diffuse (speech/noise) and is treated as silence

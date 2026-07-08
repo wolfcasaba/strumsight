@@ -12,10 +12,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
 import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
 import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
 import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
 import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
 
@@ -27,6 +29,26 @@ const _pitchClasses = [
 ];
 
 double _midiToFreq(int midi) => 440 * math.pow(2, (midi - 69) / 12).toDouble();
+
+/// Run a signal through the full chunk-012 chord chain (NNLS bass/treble →
+/// dictionary → online Viterbi) and return the last stable label, or null.
+String? _decodeChord(Float64List signal) {
+  final nc = NnlsChroma(sampleRate: sr, window: DspConfig.nnlsWindow);
+  final decoder = ViterbiChordDecoder(
+    selfBonus: DspConfig.chordSelfTransitionBonus,
+    dictionary: ChordDictionary(),
+  );
+  ChordMatch? m;
+  for (final frame in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+    final ch = nc.process(frame);
+    final tonal =
+        ch != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
+    m = tonal
+        ? decoder.process(nc.lastBassChroma, nc.lastTrebleChroma)
+        : decoder.process(Float64List(12), Float64List(12));
+  }
+  return m?.chord.label;
+}
 
 void main() {
   final seed =
@@ -77,6 +99,84 @@ void main() {
     }
     expect(correct, greaterThanOrEqualTo(18),
         reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
+  // chunk 012 — the dictionary+Viterbi engine must nail plain triads (root AND
+  // quality) WITHOUT inventing a phantom 7th/sus extension.
+  test('property: dictionary engine recognises random triads, no phantom '
+      'extension (≥85% of 20)', () {
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final rootMidi = 40 + rng.nextInt(13); // E2..E3
+      final minor = rng.nextBool();
+      // Same guitar-realistic voicing as the template property above.
+      final thirdOffset = (minor ? 3 : 4) + (rootMidi < 45 ? 12 : 0);
+      final freqs = [
+        _midiToFreq(rootMidi),
+        _midiToFreq(rootMidi + thirdOffset),
+        _midiToFreq(rootMidi + 7),
+      ];
+      final expected = _pitchClasses[rootMidi % 12] + (minor ? 'm' : '');
+      final signal = chordSignal(
+        freqs,
+        seconds: 1.0,
+        amp: 0.1 + rng.nextDouble() * 0.25,
+        decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
+      );
+      final got = _decodeChord(signal);
+      if (got == expected) {
+        correct++;
+      } else {
+        failures.add('trial=$t expected=$expected got=$got');
+      }
+    }
+    expect(correct, greaterThanOrEqualTo(17),
+        reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
+  // chunk 012 — the headline round-26 fix: a low-voiced dominant 7 (7th just
+  // above the fifth, as fingered in an open E7/A7/B7 shape) is heard as a 7
+  // chord, not collapsed to the bare triad. Roots are drawn from the guitar's
+  // real low-root band E2..B2, where the played m7 dominates the root's faint
+  // 7th harmonic. (For roots at/above C3 the m7 coincides with the root's own
+  // 7th harmonic and NNLS suppresses it — chunk 012's documented honest limit,
+  // an ML-era goal, deliberately outside this gate.)
+  test('property: low-voiced dominant 7ths (E2..B2) read as 7 chords (15)', () {
+    var rootCorrect = 0;
+    var seventhExact = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 15; t++) {
+      final rootMidi = 40 + rng.nextInt(8); // E2..B2 — the robust band
+      final root = _pitchClasses[rootMidi % 12];
+      final freqs = [
+        _midiToFreq(rootMidi), // root
+        _midiToFreq(rootMidi + 4 + (rootMidi < 45 ? 12 : 0)), // major 3rd
+        _midiToFreq(rootMidi + 7), // 5th
+        _midiToFreq(rootMidi + 10), // minor 7th, just above the 5th
+      ];
+      final signal = chordSignal(
+        freqs,
+        seconds: 1.2,
+        amp: 0.1 + rng.nextDouble() * 0.2,
+        decayPerSecond: 1.0 + rng.nextDouble() * 1.2,
+      );
+      final got = _decodeChord(signal) ?? '';
+      final gotRoot = got.isEmpty
+          ? ''
+          : got.substring(0, got.length > 1 && got[1] == '#' ? 2 : 1);
+      if (gotRoot == root) rootCorrect++;
+      if (got == '${root}7') {
+        seventhExact++;
+      } else {
+        failures.add('trial=$t expected=${root}7 got=$got');
+      }
+    }
+    expect(rootCorrect, greaterThanOrEqualTo(14),
+        reason: 'seed=$seed: the root must be right; ${failures.join('; ')}');
+    expect(seventhExact, greaterThanOrEqualTo(12),
+        reason: 'seed=$seed: low-voiced dom7s should read as 7; '
+            '${failures.join('; ')}');
   });
 
   test('property: random strums — one onset, correct direction (20 trials)',
