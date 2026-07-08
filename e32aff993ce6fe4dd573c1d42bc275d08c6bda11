@@ -1,0 +1,1 @@
+round=23 verdict=pass tests=84 lesson=voice-rejection=clarity+stability-gates(not-just-RMS);YIN-clarity=1-CMNDF;tuner-4frame-30cent-stability-kills-speech-glide;chroma-top3-tonalness-0.7-gate;matcher-no-single-frame-bootstrap;research-McLeod-pYIN
