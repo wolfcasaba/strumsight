@@ -105,6 +105,15 @@ fast-to-ship, low-risk v1 of the "Strum Cam" video idea).
 4. **Referral via deferred deep links** (Branch) — closes and *measures* the
    share→install loop; the one hosted dependency. Target K ≈ 0.3–0.7.
 
+**Activation (round 31, ✅ built).** A viral install only counts once it becomes
+an *active* user, so first-run matters. `lib/features/onboarding/`: a 3-page,
+skippable flow (moat-first: chord in real time → ↓/↑ direction → daily streak)
+that primes the mic permission before dropping into Live — Simply Guitar's
+"a few taps then play" lesson. Gated by a persisted `onboarding_seen_v1` flag
+loaded in `main()` before the first frame and injected into the router
+`redirect` (no flicker for returning users; default "seen=true" so tests/other
+contexts skip it). This amplifies every acquisition lever above.
+
 ## Honesty flags (from the research)
 - Evidence-backed: streak retention numbers; Wrapped's 9:16+watermark+share →
   measurable installs; challenge CPI reduction; K 0.3–0.7 realistic.

@@ -7,17 +7,28 @@ import '../features/library/model/analyzed_session.dart';
 import '../features/library/screens/library_screen.dart';
 import '../features/library/screens/session_detail_screen.dart';
 import '../features/live/screens/live_screen.dart';
+import '../features/onboarding/onboarding_provider.dart';
+import '../features/onboarding/screens/onboarding_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../features/streak/screens/streak_screen.dart';
 import '../features/tuner/screens/tuner_screen.dart';
 import 'home_shell.dart';
 
 /// App router: a bottom-nav [ShellRoute] over the four tabs, plus the Tuner as
-/// a full-screen route pushed from Live.
+/// a full-screen route pushed from Live. A first-run [redirect] gates everything
+/// behind `/welcome` until onboarding is completed.
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/live',
+    redirect: (context, state) {
+      final seen = ref.read(onboardingSeenProvider);
+      final atWelcome = state.uri.path == '/welcome';
+      if (!seen && !atWelcome) return '/welcome';
+      if (seen && atWelcome) return '/live';
+      return null;
+    },
     routes: [
+      GoRoute(path: '/welcome', builder: (_, _) => const OnboardingScreen()),
       ShellRoute(
         builder: (context, state, child) =>
             HomeShell(location: state.uri.path, child: child),

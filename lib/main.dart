@@ -6,12 +6,25 @@ import 'app/router.dart';
 import 'core/i18n/locale_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'features/onboarding/onboarding_provider.dart';
 import 'features/settings/providers/settings_sync.dart';
 import 'l10n/app_localizations.dart';
 
-void main() {
+Future<void> main() async {
   // StrumSight is fully offline / on-device — no backend init, no network.
-  runApp(const ProviderScope(child: StrumSightApp()));
+  WidgetsFlutterBinding.ensureInitialized();
+  // Load the first-run flag before the first frame so the router can gate on it
+  // synchronously (no onboarding flicker for returning users).
+  final onboardingSeen = await OnboardingController.load();
+  runApp(
+    ProviderScope(
+      overrides: [
+        onboardingSeenProvider
+            .overrideWith(() => OnboardingController(onboardingSeen)),
+      ],
+      child: const StrumSightApp(),
+    ),
+  );
 }
 
 class StrumSightApp extends ConsumerWidget {
