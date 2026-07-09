@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../settings/providers/left_handed_provider.dart';
 import '../chord_shape.dart';
 
 /// A compact open-position chord diagram: 6 strings × 4 frets, with ○/× markers
 /// above the nut and dots on the fretted positions. Draws nothing (a shrink) for
-/// a chord we have no shape for. RAG chunk 014.
-class ChordDiagram extends StatelessWidget {
+/// a chord we have no shape for. Mirrors when left-handed. RAG chunk 014.
+class ChordDiagram extends ConsumerWidget {
   const ChordDiagram({
     super.key,
     required this.label,
@@ -22,13 +24,14 @@ class ChordDiagram extends StatelessWidget {
   final bool showLabel;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final shape = ChordShapes.forLabel(label);
     if (shape == null) return const SizedBox.shrink();
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final mirror = ref.watch(leftHandedProvider);
     final grid = CustomPaint(
       size: Size(size, size * 1.05),
-      painter: _ChordPainter(shape, onSurface),
+      painter: _ChordPainter(shape, onSurface, mirror),
     );
     if (!showLabel) return grid;
     return Column(
@@ -48,12 +51,18 @@ class ChordDiagram extends StatelessWidget {
 }
 
 class _ChordPainter extends CustomPainter {
-  _ChordPainter(this.shape, this.ink);
+  _ChordPainter(this.shape, this.ink, this.mirror);
 
   final ChordShape shape;
   final Color ink;
 
+  /// Left-handed: draw high-E on the left (reverse the string order).
+  final bool mirror;
+
   static const _frets = 4;
+
+  /// Horizontal slot for string index [s] (0 = low-E), honouring [mirror].
+  double _slot(int s) => mirror ? (5 - s).toDouble() : s.toDouble();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -84,10 +93,10 @@ class _ChordPainter extends CustomPainter {
           Offset(left, y), Offset(left + gridW, y), f == 0 ? nut : line);
     }
 
-    // Markers + dots per string (low-E on the left → high-E on the right).
+    // Markers + dots per string (mirrored for left-handed).
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (var s = 0; s < strings; s++) {
-      final x = left + s * colGap;
+      final x = left + _slot(s) * colGap;
       final fret = shape.frets[s];
       if (fret <= 0) {
         // ○ (open) or × (muted) above the nut.
@@ -106,5 +115,7 @@ class _ChordPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChordPainter old) =>
-      old.shape.label != shape.label || old.ink != ink;
+      old.shape.label != shape.label ||
+      old.ink != ink ||
+      old.mirror != mirror;
 }

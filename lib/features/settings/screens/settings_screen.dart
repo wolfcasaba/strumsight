@@ -11,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
+import '../providers/left_handed_provider.dart';
 import '../providers/tuning_reference_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -125,6 +126,16 @@ class SettingsScreen extends ConsumerWidget {
 
           _SectionHeader(l10n.settingsCapo),
           const _CapoStepper(),
+          const SizedBox(height: 28),
+
+          _SectionHeader(l10n.settingsPlaying),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.settingsLeftHanded),
+            subtitle: Text(l10n.settingsLeftHandedHint),
+            value: ref.watch(leftHandedProvider),
+            onChanged: (v) => ref.read(leftHandedProvider.notifier).set(v),
+          ),
           const SizedBox(height: 28),
 
           _SectionHeader(l10n.settingsAbout),

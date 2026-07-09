@@ -1,8 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/chords/chord_shape.dart';
 import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
+import 'package:music_theory/features/settings/providers/left_handed_provider.dart';
+
+Future<void> pumpDiagram(WidgetTester tester, String label,
+        {bool leftHanded = false}) =>
+    tester.pumpWidget(ProviderScope(
+      overrides: [
+        if (leftHanded)
+          leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(body: Center(child: ChordDiagram(label: label))),
+      ),
+    ));
+
+class _FixedLeftHanded extends LeftHandedController {
+  @override
+  bool build() => true;
+}
 
 void main() {
   group('ChordShapes', () {
@@ -29,19 +48,21 @@ void main() {
   group('ChordDiagram', () {
     testWidgets('renders the label + a painted grid for a known chord',
         (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: Center(child: ChordDiagram(label: 'Am'))),
-      ));
+      await pumpDiagram(tester, 'Am');
       expect(find.text('Am'), findsOneWidget);
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
     testWidgets('draws nothing for a chord we have no shape for',
         (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: Center(child: ChordDiagram(label: 'Zz9'))),
-      ));
+      await pumpDiagram(tester, 'Zz9');
       expect(find.text('Zz9'), findsNothing);
+    });
+
+    testWidgets('renders in left-handed mode without error', (tester) async {
+      await pumpDiagram(tester, 'C', leftHanded: true);
+      expect(find.text('C'), findsOneWidget);
+      expect(find.byType(CustomPaint), findsWidgets);
     });
   });
 }

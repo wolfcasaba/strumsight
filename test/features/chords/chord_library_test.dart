@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/chords/chord_shape.dart';
 import 'package:music_theory/features/chords/screens/chord_library_screen.dart';
@@ -14,10 +15,12 @@ void main() {
 
   testWidgets('the library groups shapes by type and renders diagrams',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: ChordLibraryScreen(),
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ChordLibraryScreen(),
+      ),
     ));
     await tester.pump();
 
