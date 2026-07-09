@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../analyze/model/analyze_result.dart';
 import '../../learn/model/lesson.dart';
 import '../../live/model/strum.dart';
 
@@ -50,6 +51,33 @@ class Song {
         chords: chords,
         pattern: pattern,
       );
+
+  /// A synthetic [AnalyzeResult] for this song so it can flow through the whole
+  /// share pipeline (Strum Card + Strum Reel) exactly like a recorded clip —
+  /// the chords + ↓/↑ pattern become a shareable, moat-showcasing post.
+  AnalyzeResult toAnalyzeResult() {
+    const beatsPerBar = 4;
+    final spb = bpm > 0 ? 60.0 / bpm : 0.5;
+    final strums = [
+      for (final e in toLesson().events)
+        TimelineStrum(
+            direction: e.direction, timeSec: e.beat * spb, confidence: 1),
+    ];
+    final timeline = [
+      for (var bar = 0; bar < chords.length; bar++)
+        TimelineChord(
+          label: chords[bar],
+          startSec: bar * beatsPerBar * spb,
+          endSec: (bar + 1) * beatsPerBar * spb,
+        ),
+    ];
+    return AnalyzeResult(
+      durationSec: chords.length * beatsPerBar * spb,
+      bpm: bpm.toDouble(),
+      chords: timeline,
+      strums: strums,
+    );
+  }
 
   static String _slot(StrumDirection? d) => switch (d) {
         StrumDirection.down => 'd',

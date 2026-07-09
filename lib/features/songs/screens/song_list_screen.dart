@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/screens/learn_screen.dart';
+import '../../share/screens/share_preview_screen.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
 import 'song_builder_screen.dart';
@@ -23,6 +24,13 @@ class SongListScreen extends ConsumerWidget {
   void _play(BuildContext context, Song song) {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => LearnScreen(lesson: song.toLesson()),
+    ));
+  }
+
+  void _share(BuildContext context, Song song) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) =>
+          SharePreviewScreen(result: song.toAnalyzeResult(), title: song.name),
     ));
   }
 
@@ -66,6 +74,11 @@ class SongListScreen extends ConsumerWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.ios_share),
+                            tooltip: l10n.shareCardButton,
+                            onPressed: () => _share(context, song),
+                          ),
                           IconButton(
                             icon: const Icon(Icons.edit_outlined),
                             tooltip: l10n.songEditTitle,

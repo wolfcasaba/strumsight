@@ -3,12 +3,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/chords/chord_shape.dart';
 import 'package:music_theory/features/live/model/strum.dart';
+import 'package:music_theory/features/share/widgets/strum_card.dart';
+import 'package:music_theory/features/songs/model/song.dart';
+import 'package:music_theory/features/songs/providers/songs_provider.dart';
 import 'package:music_theory/features/songs/screens/song_list_screen.dart';
 import 'package:music_theory/features/songs/widgets/strum_pattern_editor.dart';
 import 'package:music_theory/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _app(Widget home) => ProviderScope(
+/// A songbook seeded with fixed songs, not touching disk.
+class _SeededSongs extends SongsController {
+  _SeededSongs(this._seed);
+  final List<Song> _seed;
+  @override
+  List<Song> build() => _seed;
+}
+
+Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
+      overrides: [
+        if (seed != null) songsProvider.overrideWith(() => _SeededSongs(seed)),
+      ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -69,6 +83,27 @@ void main() {
     // Pop in C = C G Am F → each added as a removable InputChip.
     expect(find.widgetWithText(InputChip, 'Am'), findsOneWidget);
     expect(find.widgetWithText(InputChip, 'F'), findsOneWidget);
+  });
+
+  testWidgets('sharing a song opens the Strum Card preview', (tester) async {
+    const song = Song(
+      id: 's1',
+      name: 'My Song',
+      chords: ['C', 'G', 'Am', 'F'],
+      pattern: [
+        StrumDirection.down, null, StrumDirection.down, StrumDirection.up, //
+        null, StrumDirection.up, StrumDirection.down, null,
+      ],
+      bpm: 100,
+    );
+    await tester.pumpWidget(_app(const SongListScreen(), seed: [song]));
+    await tester.pump();
+    expect(find.text('My Song'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.ios_share));
+    await tester.pumpAndSettle();
+    // The share pipeline (Strum Card) is reused verbatim for a song.
+    expect(find.byType(StrumCard), findsOneWidget);
   });
 
   testWidgets('pattern editor cycles a rest slot to a down-strum on tap',
