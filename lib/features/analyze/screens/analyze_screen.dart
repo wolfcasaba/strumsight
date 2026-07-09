@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../library/model/analyzed_session.dart';
 import '../../library/providers/library_providers.dart';
 import '../../settings/providers/capo_provider.dart';
+import '../../share/screens/share_preview_screen.dart';
 import '../model/analyze_result.dart';
 import '../providers/analyze_providers.dart';
 import '../widgets/timeline_view.dart';
@@ -220,10 +221,29 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
         return const SizedBox(height: 52);
       case AnalyzePhase.done:
         final result = state.result ?? AnalyzeResult.empty;
-        final canSave =
-            !_saved && (result.chords.isNotEmpty || result.strums.isNotEmpty);
+        final hasContent =
+            result.chords.isNotEmpty || result.strums.isNotEmpty;
+        final canSave = !_saved && hasContent;
         return Row(
           children: [
+            IconButton.filledTonal(
+              onPressed: hasContent
+                  ? () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SharePreviewScreen(
+                            result: result,
+                            capo: ref.read(capoProvider),
+                          ),
+                        ),
+                      )
+                  : null,
+              icon: const Icon(Icons.ios_share),
+              tooltip: l10n.actionShare,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(52),
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: canSave ? () => _save(result) : null,

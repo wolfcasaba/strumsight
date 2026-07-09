@@ -79,5 +79,9 @@
   "authErrorInvalidCredentials": "Hibás email vagy jelszó",
   "authErrorEmailTaken": "Ez az email már regisztrálva van",
   "authErrorNetwork": "Nem érhető el a szerver. Ellenőrizd a kapcsolatot.",
-  "authErrorUnknown": "Hiba történt. Kérlek próbáld újra."
+  "authErrorUnknown": "Hiba történt. Kérlek próbáld újra.",
+  "actionShare": "Megosztás",
+  "shareTitle": "Megosztás",
+  "shareCardButton": "Kártya megosztása",
+  "shareTextButton": "Megosztás szövegként"
 }

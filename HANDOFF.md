@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-08** (round 28).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-09** (round 29).
 
 ---
 
@@ -20,6 +20,7 @@ touches the network. Payments are out of scope.
 - Spec: `docs/` (`c7b1a4e` spec, `b593ca4` plan). DSP source-of-truth: `docs/rag/chunks/`.
 - Version: **v0.2.0** — REAL on-device detection in pure Dart; optional account layer added.
   Round 28 upgraded the chord path to a Chordino-class **dictionary + Viterbi** engine (extended chords).
+  Round 29 added the first **growth feature**: a shareable 9:16 "Strum Card" (research chunk 013).
 
 ## 2. Current status — DONE ✅
 
@@ -45,7 +46,8 @@ touches the network. Payments are out of scope.
 | **Library** — save / list / reopen analyzed sessions (offline) | ✅ round 21 | `lib/features/library/` |
 | **Account UI gating** — Sign-in hidden by default until a backend is hosted | ✅ round 22 | `ApiConfig.accountEnabled` |
 | **Capo / transpose** — Settings stepper (0–11), shows the fretted SHAPE (detected − capo) on Live + Analyze + Library, "Capo N" badge | ✅ round 26 (local-only, view-time) | `lib/features/settings/providers/capo_provider.dart`, `Chord.transposeLabel/Summary` |
-| **Tests** | ✅ **129 Flutter + 14 backend green** (widget + DSP unit + chord-dictionary + Viterbi + extended-chord + randomized property (9-seed verified) + auth/sync + analyze/library + capo/transpose + pytest) | `test/`, `backend/tests/` |
+| **Share / viral "Strum Card"** — 9:16 branded card (chords + the ↓/↑ **strum pattern** hero + BPM/down/up/length + wordmark) → OS share sheet w/ caption + `#StrumSightChallenge` + install link; text-only fallback. Entry: Analyze done + Library detail. **Growth: the moat as shareable content** (research chunk 013) | ✅ **round 29** | `lib/features/share/` |
+| **Tests** | ✅ **142 Flutter + 14 backend green** (widget + DSP unit + chord-dictionary + Viterbi + extended-chord + randomized property (9-seed verified) + auth/sync + analyze/library + capo/transpose + share-card + pytest) | `test/`, `backend/tests/` |
 | **CI → APK** | ✅ (Flutter only; backend has no CI yet) | `.github/workflows/build-apk.yml` |
 | **HORIZON**: git-notes experience buffer + randomized property gate | ✅ adopted round 12 | see notes below |
 
@@ -106,12 +108,24 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 - Optional later: ML path (CQT→CNN/transformer, TFLite) — proven on-device (Chord AI ships an offline
   CNN) but deferred; needs a labelled trainset + Mac-free export, breaks pure-Dart offline design.
 - Optional later: TFLite strum-direction model.
+- **⭐ GROWTH TRACK (research: `docs/rag/chunks/013`) — make the moat go viral.** Round 29 shipped the
+  static shareable **Strum Card** (the fast-to-ship v1). Ranked next, evidence-backed:
+  1. **"Strum Cam" video/animated card** — a 9:16 clip with the ↓/↑ arrows + chords animating in sync
+     with the audio (the ultimate moat-as-content; heavier — frame capture + a maintained encoder like
+     `ffmpeg_kit_flutter_new`/`widget_record_video`; note `ffmpeg_kit_flutter` was discontinued Apr-2025).
+  2. **Streak + daily strum-pattern challenge** (streak-freeze, Friday nudge) — best-evidenced retention
+     loop (Duolingo: 55% next-day return; streak-freeze +48%); makes viral installs compound not leak.
+  3. **`#StrumSightChallenge` UGC feed** — hashtag already seeded in every share caption; grow in-app.
+  4. **Referral via deferred deep links** (Branch `flutter_branch_sdk`) — closes + *measures* the
+     share→install loop; the one hosted dependency. Honest target K ≈ 0.3–0.7 (CAC reduction, not K>1).
+  - When published, swap `ShareContent.installUrl` (currently the GitHub Release) for the store/landing URL.
 
 ## 4. Round history (from git notes — `git log --show-notes`)
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 28 | (this) | 129+14 | **Built the chunk-012 chord DICTIONARY + Viterbi engine** (the round-27 spec), fixing the round-26 7th failure end-to-end. NnlsChroma now emits a **bass+treble 24-dim** chroma; `ChordDictionary` scores whole-chord profiles (maj/min/7/maj7/m7/sus4 + N.C., 73 states); `ViterbiChordDecoder` is an online self-transition-bonus decoder replacing templates+hysteresis. **4 discoveries while building** (all in chunk 012 "AS BUILT"): (1) treble chroma must fold the FULL range — a high treble floor dropped guitar's low root/third and read G7 as Dm; (2) power-5/sus2 STEAL weak-third triads → pulled from vocab (reconfirms r26); (3) a MAJOR third's 3rd-harmonic fakes a maj7 (a MINOR third's a m7) → needs a **per-quality Occam bias** (7=0.02, maj7/m7=0.055, dom7 needs less or real A7/B7 collapse); (4) honest limit measured — dom7 detected for roots E2–B2 but m7 = root's own 7th harmonic for roots ≥C3 → collapses (correct if inaudible). 9-seed randomized property gate. Whitening + tuning-est deferred (only bite on real audio) |
+| 29 | (this) | 142+14 | **First GROWTH feature — shareable "Strum Card" (make the moat viral).** Researched how music apps grow (Spotify Wrapped 9:16 results-card → 21% install spike; GuitarTuna free-utility wedge; Yousician/Simply streaks; UG UGC; K-factor 0.3–0.7 realistic, K>1 hype) → RAG **chunk 013**. Built `lib/features/share/`: a 9:16 brand card whose **hero is the ↓/↑ strum pattern** (the one thing no competitor shows) + chords + BPM/down/up stats + wordmark; `RepaintBoundary`→PNG→`share_plus` share sheet with a caption (`#StrumSightChallenge` + install link) + text-only fallback. Entry on Analyze + Library detail. Added `share_plus` (win32 stayed ^6). 14 tests. Deliberately the STATIC card first (research rank #2 = fast/low-risk v1 of a "Strum Cam" video). Next growth: video card, streaks, referral deep links |
+| 28 | `54d3be5` | 129+14 | **Built the chunk-012 chord DICTIONARY + Viterbi engine** (the round-27 spec), fixing the round-26 7th failure end-to-end. NnlsChroma now emits a **bass+treble 24-dim** chroma; `ChordDictionary` scores whole-chord profiles (maj/min/7/maj7/m7/sus4 + N.C., 73 states); `ViterbiChordDecoder` is an online self-transition-bonus decoder replacing templates+hysteresis. **4 discoveries while building** (all in chunk 012 "AS BUILT"): (1) treble chroma must fold the FULL range — a high treble floor dropped guitar's low root/third and read G7 as Dm; (2) power-5/sus2 STEAL weak-third triads → pulled from vocab (reconfirms r26); (3) a MAJOR third's 3rd-harmonic fakes a maj7 (a MINOR third's a m7) → needs a **per-quality Occam bias** (7=0.02, maj7/m7=0.055, dom7 needs less or real A7/B7 collapse); (4) honest limit measured — dom7 detected for roots E2–B2 but m7 = root's own 7th harmonic for roots ≥C3 → collapses (correct if inaudible). 9-seed randomized property gate. Whitening + tuning-est deferred (only bite on real audio) |
 | 27 | (prev) | 107+14 | Research (docs): studied how production apps do chord recognition (Chordify/Chord AI/Chordino/madmom/BTC) + used Viking/Hermes bridge. Verified answer to round-26 = **chord DICTIONARY + Viterbi** (not templates): bass+treble chroma → chord-profile similarity → HMM/Viterbi + no-chord state. Wrote implementation spec → RAG **chunk 012**; refined 011 w/ competitor+TFLite feasibility intel. Chord AI ships an offline on-device CNN (ML path proven but deferred). Strum ↓/↑ confirmed a unique moat. Lessons pushed to Hermes shared brain |
 | 26 | `c4f6376` | 107+14 | Capo/transpose shipped (Settings stepper 0–11 → `Chord.transposeLabel/Summary`, view-time shift on Live+Analyze+Library, "Capo N" badge; local-only — a capo is physical per-guitar state, deliberately not synced). Devil-advocate caught a title leak: saved-session summary showed concert pitch while the timeline body transposed → added `transposeSummary` on the detail AppBar + library list. **REJECTED first**: extended chord vocab (7ths/sus/power) — NNLS suppresses the added tone when it = a chord-tone's harmonic (measured); needs chord-profile NNLS, not templates (reconfirms r24) |
 | 25 | `9bf0b6b` | 88+14 | Chordino-class chord engine: NnlsChroma (STFT 16384 → log-freq 3 bins/semitone → NNLS transcription vs harmonic dict shape 0.7, multiplicative updates → chroma) wired into LivePipeline, replacing peak-chroma on the chord path. Overtone suppression verified (220Hz note → A only; 3rd/5th partials <½ peak). Property + pipeline + analyze all green across seeds. ~370ms chord latency (long window needed for low-E resolution) — tune on device |

@@ -100,5 +100,9 @@
   "authErrorInvalidCredentials": "Incorrect email or password",
   "authErrorEmailTaken": "That email is already registered",
   "authErrorNetwork": "Can't reach the server. Check your connection.",
-  "authErrorUnknown": "Something went wrong. Please try again."
+  "authErrorUnknown": "Something went wrong. Please try again.",
+  "actionShare": "Share",
+  "shareTitle": "Share",
+  "shareCardButton": "Share card",
+  "shareTextButton": "Share as text"
 }
