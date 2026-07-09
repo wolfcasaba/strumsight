@@ -90,7 +90,17 @@ included. A mute toggle sits in the app bar. All playback is **fire-and-forget**
 absent) so a click can't stall the lesson clock. Playback itself is on-device-only
 to verify (like mic scoring); the WAV + scheduling are the unit-tested surface.
 
+## Import a recording as a lesson (round 37 — ✅ built)
+`Lessons.fromAnalyze(AnalyzeResult, name:)` turns a saved clip into a play-along:
+each detected strum → a beat-timed `LessonEvent` (`beat = (t − t0)/secPerBeat`,
+tempo = the clip's detected BPM) on the chord that was sounding then; the length
+extends to the bar containing the last stroke. `Lesson` gained a
+`Lesson.fromEvents` constructor (and now stores `totalBeats` + derives
+`chordSequence` from events) so it can hold irregular, imported events. Entry: a
+"Practice as a lesson" 🎓 action on the **Library** session detail. Unlimited
+content — practise any riff you recorded.
+
 ## Roadmap
-1. Import a saved Analyze clip as a lesson. Gate hits on the **chord** too (not
-   just direction) once the ~370 ms chord lag is handled.
+1. Gate hits on the **chord** too (not just direction) once the ~370 ms chord lag
+   is handled; import from the Analyze screen too (not only Library).
 2. A backing track / count-in voice; persist the metronome mute preference.

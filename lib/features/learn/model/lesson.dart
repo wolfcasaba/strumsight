@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
+import '../../analyze/model/analyze_result.dart';
 import '../../live/model/strum.dart';
 import '../../streak/daily_challenge.dart';
 
@@ -33,15 +36,28 @@ enum Difficulty { beginner, intermediate, advanced }
 /// The strum pattern is 8 eighth-note slots per 4/4 bar; a null slot is a rest.
 @immutable
 class Lesson {
+  /// Build from a chord-per-bar progression + a repeating 8-slot strum pattern.
   Lesson({
     required this.id,
     required this.name,
     required this.bpm,
-    required this.chords,
-    required this.pattern,
+    required List<String> chords,
+    required List<StrumDirection?> pattern,
     this.difficulty = Difficulty.beginner,
     this.beatsPerBar = 4,
-  }) : events = _expand(chords, pattern, beatsPerBar);
+  })  : events = _expand(chords, pattern, beatsPerBar),
+        totalBeats = chords.length * beatsPerBar.toDouble();
+
+  /// Build directly from a timed event list (e.g. an imported Analyze clip).
+  const Lesson.fromEvents({
+    required this.id,
+    required this.name,
+    required this.bpm,
+    required this.events,
+    required this.totalBeats,
+    this.difficulty = Difficulty.beginner,
+    this.beatsPerBar = 4,
+  });
 
   final String id;
   final String name;
@@ -49,19 +65,11 @@ class Lesson {
   final Difficulty difficulty;
   final int beatsPerBar;
 
-  /// One chord per bar (cycled if the lesson runs longer than the list).
-  final List<String> chords;
-
-  /// 8 eighth-note slots per bar; down / up / null (rest).
-  final List<StrumDirection?> pattern;
-
   /// The flattened, beat-timed strokes.
   final List<LessonEvent> events;
 
-  int get bars => chords.length;
-
   /// Total length in beats (a trailing bar of ring-out is NOT included).
-  double get totalBeats => bars * beatsPerBar.toDouble();
+  final double totalBeats;
 
   static List<LessonEvent> _expand(
     List<String> chords,
@@ -86,8 +94,10 @@ class Lesson {
   /// The distinct chords in play order (for a header / "chords used" line).
   List<String> get chordSequence {
     final seen = <String>[];
-    for (final c in chords) {
-      if (c.isNotEmpty && (seen.isEmpty || seen.last != c)) seen.add(c);
+    for (final e in events) {
+      if (e.chord.isNotEmpty && (seen.isEmpty || seen.last != e.chord)) {
+        seen.add(e.chord);
+      }
     }
     return seen;
   }
@@ -187,6 +197,44 @@ class Lessons {
   /// Lessons of a given tier, in curriculum order.
   static List<Lesson> byDifficulty(Difficulty d) =>
       all.where((l) => l.difficulty == d).toList();
+
+  /// Turn a recorded [AnalyzeResult] into a play-along lesson — practise a riff
+  /// you (or a song) just played. Each detected strum becomes a timed event on
+  /// the chord that was sounding then; the tempo is the clip's detected BPM.
+  static Lesson fromAnalyze(AnalyzeResult result, {required String name}) {
+    final bpm = result.bpm > 0 ? result.bpm : 90.0;
+    final secPerBeat = 60.0 / bpm;
+    final strums = [...result.strums]
+      ..sort((a, b) => a.timeSec.compareTo(b.timeSec));
+    final t0 = strums.isEmpty ? 0.0 : strums.first.timeSec;
+    final events = <LessonEvent>[
+      for (final s in strums)
+        LessonEvent(
+          beat: (s.timeSec - t0) / secPerBeat,
+          chord: _chordAt(result.chords, s.timeSec),
+          direction: s.direction,
+        ),
+    ];
+    final lastBeat = events.isEmpty ? 0.0 : events.last.beat;
+    // Extend to the end of the bar that CONTAINS the last event (so it fits),
+    // minimum one bar.
+    final bars = math.max(1, (lastBeat / 4).floor() + 1);
+    return Lesson.fromEvents(
+      id: 'analyze-import',
+      name: name,
+      bpm: bpm,
+      events: events,
+      totalBeats: bars * 4.0,
+      difficulty: Difficulty.intermediate,
+    );
+  }
+
+  static String _chordAt(List<TimelineChord> chords, double t) {
+    for (final c in chords) {
+      if (t >= c.startSec && t < c.endSec) return c.label;
+    }
+    return '';
+  }
 
   /// Turn today's [DailyChallenge] into a one-bar, strum-only play-along so the
   /// streak challenge is *playable*, not just shown (ties chunk 013 together).
