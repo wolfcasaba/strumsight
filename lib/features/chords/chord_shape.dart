@@ -46,6 +46,16 @@ class ChordShapes {
     // Suspended.
     'Asus4': [-1, 0, 2, 2, 3, 0],
     'Dsus4': [-1, -1, 0, 2, 3, 3],
+    'Dsus2': [-1, -1, 0, 2, 3, 0],
+    'Esus4': [0, 2, 2, 2, 0, 0],
+    'A7sus4': [-1, 0, 2, 0, 3, 0],
+    // Barre + a few more common shapes (all within the first 4 frets).
+    'B': [-1, 2, 4, 4, 4, 2],
+    'Bm': [-1, 2, 4, 4, 3, 2],
+    'Bb': [-1, 1, 3, 3, 3, 1],
+    'F#m': [2, 4, 4, 2, 2, 2],
+    'Cadd9': [-1, 3, 2, 0, 3, 0],
+    'G/B': [-1, 2, 0, 0, 3, 3],
   };
 
   static ChordShape? forLabel(String label) {

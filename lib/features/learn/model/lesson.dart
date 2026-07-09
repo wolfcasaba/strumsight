@@ -162,6 +162,16 @@ class Lessons {
         pattern: const [_d, null, _d, _u, _d, _u, _d, _u],
       );
 
+  /// Introduces a barre chord (Bm) in a common minor-key progression.
+  static Lesson get barreGroove => Lesson(
+        id: 'barre-groove',
+        name: 'Barre Groove',
+        bpm: 92,
+        difficulty: Difficulty.intermediate,
+        chords: const ['Bm', 'G', 'D', 'A'],
+        pattern: const [_d, null, _d, _u, null, _u, _d, _u],
+      );
+
   // ---- Advanced ----
 
   /// Off-beat up-strokes — a reggae-style skank.
@@ -190,6 +200,7 @@ class Lessons {
         eighthDrive,
         downUpGroove,
         folkPattern,
+        barreGroove,
         reggaeSkank,
         funkChop,
       ];
