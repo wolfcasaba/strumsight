@@ -87,8 +87,19 @@ fast-to-ship, low-risk v1 of the "Strum Cam" video idea).
 1. **"Strum Cam" video/animated card** — a 9:16 clip with the ↓/↑ arrows +
    chords animating in sync with the audio. The ultimate moat-as-content, but
    heavier (frame capture + a maintained encoder). Static card ships its value now.
-2. **Streak + daily strum-pattern challenge** (with streak-freeze, Friday nudge)
-   — the best-evidenced retention loop; makes viral installs compound.
+2. **Streak + daily strum-pattern challenge** — ✅ **BUILT round 30**
+   (`lib/features/streak/`). Pure `StreakLogic` (loss-aversion: +1/day, a banked
+   **streak-freeze** covers a 1-day gap, reset otherwise; a freeze awarded every
+   7 days, capped 3) + `StreakData` (persisted via shared_preferences, local-only
+   like the capo). `DailyChallenge.forDay(epochDay)` = a deterministic strum
+   pattern (on-beats down, off-beats mostly up) so every device shows the same
+   pattern per date with no server. Surfaced as a 🔥 badge in the Live header →
+   `/streak` screen (current/longest/freezes, an at-risk/broken/done nudge, and
+   today's challenge). Practice is credited when Live detects a real strum or an
+   Analyze completes with content. Injectable clock (`epochDayOf(DateTime)`)
+   keeps the maths pure/testable. 18 tests. TODO: a Friday-aware local
+   notification nudge (needs a notifications plugin) and reframing the streak as
+   skill-progress (Simply's more durable motivator).
 3. **`#StrumSightChallenge` UGC prompt** — already seeded in the caption; grow
    into an in-app challenge feed.
 4. **Referral via deferred deep links** (Branch) — closes and *measures* the

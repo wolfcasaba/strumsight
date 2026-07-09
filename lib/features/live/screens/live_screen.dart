@@ -17,6 +17,8 @@ import '../widgets/chord_display.dart';
 import '../widgets/confidence_pill.dart';
 import '../widgets/live_status_bar.dart';
 import '../widgets/strum_arrow.dart';
+import '../../streak/providers/streak_provider.dart';
+import '../../streak/widgets/streak_badge.dart';
 
 /// The Live "mirror": the hero screen. Big current chord + strum arrow +
 /// confidence + rolling beat counter, glanceable while both hands play.
@@ -30,6 +32,7 @@ class LiveScreen extends ConsumerStatefulWidget {
 class _LiveScreenState extends ConsumerState<LiveScreen> {
   bool _paused = false;
   LiveFrame? _frozen;
+  bool _practiceRecorded = false; // one streak credit per Live visit
 
   @override
   void initState() {
@@ -66,6 +69,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Real playing detected → credit today's practice streak (once per visit;
+    // the record call is itself idempotent per calendar day). RAG chunk 013.
+    ref.listen(liveFrameProvider, (_, next) {
+      final f = next.asData?.value;
+      if (!_practiceRecorded && f != null && f.latestStrum != null) {
+        _practiceRecorded = true;
+        ref.read(streakProvider.notifier).recordPracticeToday();
+      }
+    });
     final liveAsync = ref.watch(liveFrameProvider);
     final live = liveAsync.asData?.value ?? LiveFrame.empty;
     // While paused the engine is stopped, so reflect "not listening" honestly.
@@ -85,10 +97,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
             children: [
-              LiveStatusBar(
-                frame: frame,
-                a4: ref.watch(tuningReferenceProvider),
-                capo: capo,
+              Row(
+                children: [
+                  Expanded(
+                    child: LiveStatusBar(
+                      frame: frame,
+                      a4: ref.watch(tuningReferenceProvider),
+                      capo: capo,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const StreakBadge(),
+                ],
               ),
               if (!micGranted) const _MicPermissionBanner(),
               if (micGranted && micError)

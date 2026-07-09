@@ -83,5 +83,17 @@
   "actionShare": "Megosztás",
   "shareTitle": "Megosztás",
   "shareCardButton": "Kártya megosztása",
-  "shareTextButton": "Megosztás szövegként"
+  "shareTextButton": "Megosztás szövegként",
+  "streakTitle": "Gyakorlási sorozat",
+  "streakTooltip": "A gyakorlási sorozatod",
+  "streakDays": "{count, plural, =0{Még nincs sorozat} =1{1 napos sorozat} other{{count} napos sorozat}}",
+  "@streakDays": { "placeholders": { "count": { "type": "int" } } },
+  "streakLongest": "Leghosszabb",
+  "streakFreezes": "Fagyasztások",
+  "streakDoneToday": "Ma gyakoroltál ✓ — holnap találkozunk!",
+  "streakAtRisk": "Játssz ma, hogy megtartsd a sorozatod 🔥",
+  "streakBroken": "Egy fagyasztás megmenti a sorozatod, amikor legközelebb játszol",
+  "streakStart": "Játssz egy kicsit ma, és indíts egy sorozatot",
+  "challengeTitle": "Mai kihívás",
+  "challengeTryInLive": "Próbáld ki a Live-ban"
 }

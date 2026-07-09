@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../streak/providers/streak_provider.dart';
 import '../engine/clip_analyzer.dart';
 import '../engine/clip_recorder.dart';
 import '../model/analyze_result.dart';
@@ -53,6 +54,10 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
     final result = await compute(_runAnalysis, (pcm, sr));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
+    // A completed analysis with real content counts as practice (chunk 013).
+    if (result.chords.isNotEmpty || result.strums.isNotEmpty) {
+      ref.read(streakProvider.notifier).recordPracticeToday();
+    }
   }
 
   void reset() => state = AnalyzeState.initial;
