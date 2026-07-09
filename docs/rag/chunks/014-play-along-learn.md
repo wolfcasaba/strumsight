@@ -79,9 +79,18 @@ moat + install link + `#StrumSightChallenge`). Reachable from the end-of-lesson
 summary dialog — wires Learn into the chunk-013 viral loop (a brag card =
 motivation + reach).
 
+## Metronome (round 36 — ✅ built)
+`audio/metronome.dart`: the click is **synthesised in pure Dart** (a short
+decaying-sine → a valid 16-bit PCM WAV via `buildClickWav`, unit-tested) so there
+is NO bundled asset; playback goes through the existing `audioplayers`.
+`LessonTiming.beatsCrossed(prev, next)` (pure) tells the player which integer
+beats were crossed each frame — click on each (accent on bar downbeats), count-in
+included. A mute toggle sits in the app bar. All playback is **fire-and-forget**
+(`.ignore()`, never `await` a platform round-trip — it hangs where the channel is
+absent) so a click can't stall the lesson clock. Playback itself is on-device-only
+to verify (like mic scoring); the WAV + scheduling are the unit-tested surface.
+
 ## Roadmap
 1. Import a saved Analyze clip as a lesson. Gate hits on the **chord** too (not
    just direction) once the ~370 ms chord lag is handled.
-2. Audio: a metronome click + optional backing so it's playable without only
-   reading the highway (existing `audioplayers` dep; needs a click asset or a
-   synthesized tick — audio latency is on-device-only to verify).
+2. A backing track / count-in voice; persist the metronome mute preference.

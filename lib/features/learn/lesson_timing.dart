@@ -42,6 +42,22 @@ class LessonTiming {
   ) =>
       playheadBeat >= totalBeats + beatsPerBar;
 
+  /// Integer beats crossed as the playhead moves from [prev] to [next]
+  /// (exclusive of prev, inclusive of next) — drives the metronome click,
+  /// including the negative count-in beats. Empty if none were crossed.
+  static List<int> beatsCrossed(double prev, double next) {
+    if (next <= prev) return const [];
+    final out = <int>[];
+    // First integer strictly greater than prev.
+    var b = prev.floor() + 1;
+    if (b <= prev) b++; // guard the exact-integer prev case
+    while (b <= next) {
+      out.add(b);
+      b++;
+    }
+    return out;
+  }
+
   /// The events whose position is currently within the visible lane, so the
   /// widget only lays out what's on screen.
   static List<LessonEvent> visibleEvents(

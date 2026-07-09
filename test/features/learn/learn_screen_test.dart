@@ -47,4 +47,15 @@ void main() {
     await tester.pump();
     expect(find.text('Play'), findsOneWidget);
   });
+
+  testWidgets('the metronome can be muted from the app bar', (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await _pump(tester, engine);
+
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.volume_up));
+    await tester.pump();
+    expect(find.byIcon(Icons.volume_off), findsOneWidget);
+  });
 }

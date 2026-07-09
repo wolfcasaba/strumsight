@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../live/providers/live_providers.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../providers/lesson_progress_provider.dart';
+import '../audio/metronome.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
@@ -31,9 +32,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   static const int _countInBeats = 4;
 
   late final Ticker _ticker;
+  final Metronome _metronome = Metronome();
   double _elapsedSec = 0;
   double _accumSec = 0;
+  double _prevPlayhead = 0;
   bool _playing = false;
+  bool _muted = false;
 
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
@@ -50,6 +54,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void dispose() {
     _frameSub?.close();
     _ticker.dispose();
+    _metronome.dispose();
     super.dispose();
   }
 
@@ -62,8 +67,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _scorer?.advance(_elapsedSec);
       _score = _scorer?.snapshot();
     });
+    // Click the metronome on every beat crossed since the last frame (accent on
+    // bar downbeats); count-in beats click too.
+    final now = _playhead;
+    if (!_muted) {
+      for (final beat in LessonTiming.beatsCrossed(_prevPlayhead, now)) {
+        _metronome.tick(accent: beat % widget.lesson.beatsPerBar == 0);
+      }
+    }
+    _prevPlayhead = now;
     if (LessonTiming.isFinished(
-        _playhead, widget.lesson.totalBeats, widget.lesson.beatsPerBar)) {
+        now, widget.lesson.totalBeats, widget.lesson.beatsPerBar)) {
       _finish();
     }
   }
@@ -84,6 +98,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _scorer ??= LessonScorer(widget.lesson, countInBeats: _countInBeats);
     // Listen to the real mic/DSP stream only while playing (starts the engine).
     _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    _prevPlayhead = _playhead; // don't re-click beats already passed
     setState(() => _playing = true);
     _ticker.start();
   }
@@ -100,6 +115,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _lastSeq = 0;
     _scorer = LessonScorer(widget.lesson, countInBeats: _countInBeats);
     _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    _prevPlayhead = -_countInBeats.toDouble();
     setState(() {
       _accumSec = 0;
       _elapsedSec = 0;
@@ -191,6 +207,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       appBar: AppBar(
         title: Text(lesson.name),
         actions: [
+          IconButton(
+            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+            tooltip: l10n.learnMetronome,
+            onPressed: () => setState(() => _muted = !_muted),
+          ),
           IconButton(
             icon: const Icon(Icons.replay),
             tooltip: l10n.learnRestart,
