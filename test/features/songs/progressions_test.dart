@@ -37,6 +37,18 @@ void main() {
     expect(chords.toSet().every(d.diatonic.contains), isTrue);
   });
 
+  test('A and E keys resolve their barre-bearing progressions', () {
+    final a = SongKey.all.firstWhere((k) => k.name == 'A');
+    final e = SongKey.all.firstWhere((k) => k.name == 'E');
+    final pop = ProgressionTemplate.all.firstWhere((p) => p.name == 'Pop');
+    expect(pop.chordsFor(a), ['A', 'E', 'F#m', 'D']);
+    expect(pop.chordsFor(e), ['E', 'B', 'C#m', 'A']);
+  });
+
+  test('there are five supported keys', () {
+    expect(SongKey.all.map((k) => k.name), ['C', 'G', 'D', 'A', 'E']);
+  });
+
   test('every template degree is a valid 1..6 index', () {
     for (final p in ProgressionTemplate.all) {
       expect(p.degrees.every((deg) => deg >= 1 && deg <= 6), isTrue,

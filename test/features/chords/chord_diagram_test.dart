@@ -43,6 +43,14 @@ void main() {
       final missing = used.where((c) => !ChordShapes.has(c)).toList();
       expect(missing, isEmpty, reason: 'no diagram for: $missing');
     });
+
+    test('baseFret is 0 at the nut and shifts for high barre shapes', () {
+      expect(ChordShapes.forLabel('C')!.baseFret, 0); // open
+      expect(ChordShapes.forLabel('Bm')!.baseFret, 0); // max fret 4 → nut window
+      // Movable barres past fret 4 slide the window down.
+      expect(ChordShapes.forLabel('C#m')!.baseFret, 3); // [x,4,6,6,5,4] → 4fr
+      expect(ChordShapes.forLabel('G#m')!.baseFret, 3); // [4,6,6,4,4,4] → 4fr
+    });
   });
 
   group('ChordDiagram', () {
@@ -63,6 +71,18 @@ void main() {
       await pumpDiagram(tester, 'C', leftHanded: true);
       expect(find.text('C'), findsOneWidget);
       expect(find.byType(CustomPaint), findsWidgets);
+    });
+
+    testWidgets('a movable barre shows its base-fret position label',
+        (tester) async {
+      await pumpDiagram(tester, 'C#m');
+      expect(find.text('C#m'), findsOneWidget);
+      expect(find.text('4fr'), findsOneWidget); // window starts at fret 4
+    });
+
+    testWidgets('an open chord shows no fret-position label', (tester) async {
+      await pumpDiagram(tester, 'C');
+      expect(find.textContaining('fr'), findsNothing);
     });
   });
 }

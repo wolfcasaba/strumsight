@@ -29,10 +29,30 @@ class ChordDiagram extends ConsumerWidget {
     if (shape == null) return const SizedBox.shrink();
     final onSurface = Theme.of(context).colorScheme.onSurface;
     final mirror = ref.watch(leftHandedProvider);
-    final grid = CustomPaint(
+    final baseFret = shape.baseFret;
+    Widget grid = CustomPaint(
       size: Size(size, size * 1.05),
-      painter: _ChordPainter(shape, onSurface, mirror),
+      painter: _ChordPainter(shape, onSurface, mirror, baseFret),
     );
+    // A movable/barre shape shows its window's starting fret (e.g. "4fr").
+    if (baseFret > 0) {
+      grid = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          grid,
+          Positioned(
+            top: size * 0.18,
+            left: mirror ? null : -2,
+            right: mirror ? -2 : null,
+            child: Text('${baseFret + 1}fr',
+                style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: onSurface.withValues(alpha: 0.7))),
+          ),
+        ],
+      );
+    }
     if (!showLabel) return grid;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -51,13 +71,16 @@ class ChordDiagram extends ConsumerWidget {
 }
 
 class _ChordPainter extends CustomPainter {
-  _ChordPainter(this.shape, this.ink, this.mirror);
+  _ChordPainter(this.shape, this.ink, this.mirror, this.baseFret);
 
   final ChordShape shape;
   final Color ink;
 
   /// Left-handed: draw high-E on the left (reverse the string order).
   final bool mirror;
+
+  /// First fret of the window (0 = at the nut). >0 for a movable/barre shape.
+  final int baseFret;
 
   static const _frets = 4;
 
@@ -89,8 +112,10 @@ class _ChordPainter extends CustomPainter {
     }
     for (var f = 0; f <= _frets; f++) {
       final y = topPad + f * rowGap;
-      canvas.drawLine(
-          Offset(left, y), Offset(left + gridW, y), f == 0 ? nut : line);
+      // The thick nut only exists at the top of an OPEN-position window; a
+      // shifted (base-fret) window has an ordinary fret line there.
+      canvas.drawLine(Offset(left, y), Offset(left + gridW, y),
+          (f == 0 && baseFret == 0) ? nut : line);
     }
 
     // Markers + dots per string (mirrored for left-handed).
@@ -107,7 +132,8 @@ class _ChordPainter extends CustomPainter {
           ..layout();
         tp.paint(canvas, Offset(x - tp.width / 2, 0));
       } else {
-        final y = topPad + (fret - 0.5) * rowGap;
+        // Position within the (possibly shifted) window.
+        final y = topPad + (fret - baseFret - 0.5) * rowGap;
         canvas.drawCircle(Offset(x, y), colGap * 0.28, dot);
       }
     }
@@ -117,5 +143,6 @@ class _ChordPainter extends CustomPainter {
   bool shouldRepaint(covariant _ChordPainter old) =>
       old.shape.label != shape.label ||
       old.ink != ink ||
-      old.mirror != mirror;
+      old.mirror != mirror ||
+      old.baseFret != baseFret;
 }

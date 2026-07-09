@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 /// out of our open-chord vocabulary, so it's omitted.)
 ///
 /// Chord labels are spelled to match `ChordShapes` exactly (a test asserts every
-/// one has a fingering) — deliberately only keys whose diatonic triads are all
-/// playable open shapes: C, G, D.
+/// one has a fingering). Keys C, G, D use open shapes; A and E bring in movable
+/// minor barres (C#m/G#m) that the diagram renders via its base-fret window.
 @immutable
 class SongKey {
   const SongKey(this.name, this.diatonic);
@@ -21,6 +21,8 @@ class SongKey {
     SongKey('C', ['C', 'Dm', 'Em', 'F', 'G', 'Am']),
     SongKey('G', ['G', 'Am', 'Bm', 'C', 'D', 'Em']),
     SongKey('D', ['D', 'Em', 'F#m', 'G', 'A', 'Bm']),
+    SongKey('A', ['A', 'Bm', 'C#m', 'D', 'E', 'F#m']),
+    SongKey('E', ['E', 'F#m', 'G#m', 'A', 'B', 'C#m']),
   ];
 }
 

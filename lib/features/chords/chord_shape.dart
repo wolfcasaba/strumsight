@@ -11,6 +11,15 @@ class ChordShape {
   final List<int> frets;
 
   int get maxFret => frets.where((f) => f > 0).fold(0, (a, b) => a > b ? a : b);
+
+  int get _minFret =>
+      frets.where((f) => f > 0).fold(0, (a, b) => a == 0 || b < a ? b : a);
+
+  /// The first fret of the 4-fret diagram window. Open chords (max fret ≤ 4)
+  /// sit at the nut → 0. A movable/barre shape reaching past fret 4 slides the
+  /// window down to start just below its lowest fretted note (standard
+  /// chord-chart "Nfr" convention), so it renders in the same 4-fret box.
+  int get baseFret => maxFret > 4 ? _minFret - 1 : 0;
 }
 
 /// The common open chords a beginner meets — covers every chord used by the
@@ -56,6 +65,10 @@ class ChordShapes {
     'F#m': [2, 4, 4, 2, 2, 2],
     'Cadd9': [-1, 3, 2, 0, 3, 0],
     'G/B': [-1, 2, 0, 0, 3, 3],
+    // Movable minor barres past the 4th fret (Am-shape / Em-shape) — render via
+    // the diagram's base-fret window. Unlock the A- and E-major songwriter keys.
+    'C#m': [-1, 4, 6, 6, 5, 4],
+    'G#m': [4, 6, 6, 4, 4, 4],
   };
 
   static ChordShape? forLabel(String label) {
