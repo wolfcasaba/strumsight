@@ -12,7 +12,7 @@ class HomeShell extends StatelessWidget {
   final Widget child;
   final String location;
 
-  static const _tabs = ['/live', '/analyze', '/library', '/settings'];
+  static const _tabs = ['/live', '/analyze', '/learn', '/library', '/settings'];
 
   int get _index {
     final i = _tabs.indexWhere((t) => location.startsWith(t));
@@ -37,6 +37,11 @@ class HomeShell extends StatelessWidget {
             icon: const Icon(Icons.multitrack_audio_outlined),
             selectedIcon: const Icon(Icons.multitrack_audio),
             label: l10n.navAnalyze,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.school_outlined),
+            selectedIcon: const Icon(Icons.school),
+            label: l10n.navLearn,
           ),
           NavigationDestination(
             icon: const Icon(Icons.library_music_outlined),

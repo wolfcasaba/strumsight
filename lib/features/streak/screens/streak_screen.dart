@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../learn/model/lesson.dart';
+import '../../learn/screens/learn_screen.dart';
 import '../../live/model/strum.dart';
 import '../daily_challenge.dart';
 import '../providers/streak_provider.dart';
@@ -79,12 +81,23 @@ class StreakScreen extends ConsumerWidget {
             _ChallengeCard(challenge: challenge),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => context.go('/live'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LearnScreen(
+                    lesson: Lessons.fromDailyChallenge(challenge),
+                  ),
+                ),
+              ),
               icon: const Icon(Icons.play_arrow, size: 20),
-              label: Text(l10n.challengeTryInLive),
+              label: Text(l10n.challengePlayAlong),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
               ),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => context.go('/live'),
+              child: Text(l10n.challengeTryInLive),
             ),
           ],
         ),

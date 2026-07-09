@@ -95,6 +95,7 @@
   "streakBroken": "Egy fagyasztás megmenti a sorozatod, amikor legközelebb játszol",
   "streakStart": "Játssz egy kicsit ma, és indíts egy sorozatot",
   "challengeTitle": "Mai kihívás",
+  "challengePlayAlong": "Játssz vele",
   "challengeTryInLive": "Próbáld ki a Live-ban",
   "onboardSkip": "Kihagyás",
   "onboardNext": "Tovább",
@@ -104,5 +105,14 @@
   "onboardTitle2": "Le ↓ és Fel ↑",
   "onboardBody2": "Az egyetlen app, amely mutatja a leütés irányát. Oszd meg a mintádat és hívd ki a barátaidat.",
   "onboardTitle3": "Építs napi sorozatot",
-  "onboardBody3": "Játssz egy kicsit minden nap, tartsd a 🔥 sorozatod és teljesítsd a mai leütés-kihívást. Kész? Kapcsold be a mikrofont."
+  "onboardBody3": "Játssz egy kicsit minden nap, tartsd a 🔥 sorozatod és teljesítsd a mai leütés-kihívást. Kész? Kapcsold be a mikrofont.",
+  "navLearn": "Tanulás",
+  "learnTitle": "Tanulás",
+  "learnTodaysChallenge": "Mai kihívás",
+  "learnLessons": "Leckék",
+  "learnStrokes": "leütés",
+  "learnChords": "Akkordok",
+  "learnPlay": "Lejátszás",
+  "learnPause": "Szünet",
+  "learnRestart": "Újra"
 }

@@ -38,6 +38,7 @@ void main() {
         .length;
     expect(arrows, challenge.pattern.length);
 
-    expect(find.text('Try it in Live'), findsOneWidget);
+    // The challenge's primary CTA opens the play-along lesson (round 32).
+    expect(find.text('Play along'), findsOneWidget);
   });
 }

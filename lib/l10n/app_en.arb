@@ -116,6 +116,7 @@
   "streakBroken": "A freeze will save your streak next time you play",
   "streakStart": "Play a little today to start a streak",
   "challengeTitle": "Today's challenge",
+  "challengePlayAlong": "Play along",
   "challengeTryInLive": "Try it in Live",
   "onboardSkip": "Skip",
   "onboardNext": "Next",
@@ -125,5 +126,14 @@
   "onboardTitle2": "Down ↓ and Up ↑",
   "onboardBody2": "The only app that shows your strum direction. Share your pattern and challenge your friends.",
   "onboardTitle3": "Build a daily streak",
-  "onboardBody3": "Play a little every day to keep your 🔥 streak and beat today's strum challenge. Ready? Turn on the mic."
+  "onboardBody3": "Play a little every day to keep your 🔥 streak and beat today's strum challenge. Ready? Turn on the mic.",
+  "navLearn": "Learn",
+  "learnTitle": "Learn",
+  "learnTodaysChallenge": "Today's challenge",
+  "learnLessons": "Lessons",
+  "learnStrokes": "strokes",
+  "learnChords": "Chords",
+  "learnPlay": "Play",
+  "learnPause": "Pause",
+  "learnRestart": "Restart"
 }
