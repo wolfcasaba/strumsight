@@ -6,7 +6,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/widgets/chord_diagram.dart';
 import '../../live/providers/live_providers.dart';
+import '../../progress/model/practice_entry.dart';
+import '../../progress/providers/practice_log_provider.dart';
 import '../../streak/providers/streak_provider.dart';
+import '../../streak/streak_logic.dart';
 import '../providers/lesson_progress_provider.dart';
 import '../audio/chord_audio.dart';
 import '../audio/metronome.dart';
@@ -161,6 +164,16 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       ref
           .read(lessonProgressProvider.notifier)
           .record(widget.lesson.id, snap!.accuracy);
+      // Log for the Progress dashboard — Learn is the only source that scores
+      // strum DIRECTION, so it carries the moat metric.
+      ref.read(practiceLogProvider.notifier).record(PracticeEntry(
+            day: StreakLogic.epochDayOf(DateTime.now()),
+            source: PracticeSource.learn,
+            seconds: _elapsedSec.round(),
+            strokes: snap.total,
+            chords: widget.lesson.chordSequence.toSet().length,
+            directionAccuracy: snap.accuracy,
+          ));
     }
     if (mounted && snap != null) _showSummary(snap);
   }

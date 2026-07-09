@@ -30,7 +30,16 @@ class StreakScreen extends ConsumerWidget {
     final broken = StreakLogic.isBroken(streak, today);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.streakTitle)),
+      appBar: AppBar(
+        title: Text(l10n.streakTitle),
+        actions: [
+          IconButton(
+            tooltip: l10n.progressOpen,
+            icon: const Icon(Icons.insights_outlined),
+            onPressed: () => context.go('/progress'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),

@@ -40,6 +40,20 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              leading: const Icon(Icons.insights_outlined,
+                  color: AppColors.primary),
+              title: Text(l10n.progressTitle),
+              subtitle: Text(l10n.progressTotalPractice),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/progress'),
+            ),
+          ),
+          const SizedBox(height: 28),
+
           if (ref.watch(accountEnabledProvider)) ...[
             _SectionHeader(l10n.settingsAccount),
             const _AccountSection(),

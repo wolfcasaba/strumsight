@@ -18,7 +18,10 @@ import '../widgets/chord_display.dart';
 import '../widgets/confidence_pill.dart';
 import '../widgets/live_status_bar.dart';
 import '../widgets/strum_arrow.dart';
+import '../../progress/model/practice_entry.dart';
+import '../../progress/providers/practice_log_provider.dart';
 import '../../streak/providers/streak_provider.dart';
+import '../../streak/streak_logic.dart';
 import '../../streak/widgets/streak_badge.dart';
 
 /// The Live "mirror": the hero screen. Big current chord + strum arrow +
@@ -35,6 +38,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   LiveFrame? _frozen;
   bool _practiceRecorded = false; // one streak credit per Live visit
 
+  // Progress-log session tracking (real listening time + distinct strums).
+  DateTime? _sessionStart;
+  int _lastStrumSeq = 0;
+  int _strokeCount = 0;
+  // Captured in build so dispose never has to touch `ref` (unsafe post-unmount).
+  PracticeLogController? _log;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +55,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   void dispose() {
     WakelockPlus.disable().catchError((_) {});
+    // Log the finished Live session for the Progress dashboard (only if the user
+    // actually played). Uses the captured notifier — safe after unmount.
+    if (_sessionStart != null && _strokeCount > 0) {
+      _log?.record(PracticeEntry(
+        day: StreakLogic.epochDayOf(DateTime.now()),
+        source: PracticeSource.live,
+        seconds: DateTime.now().difference(_sessionStart!).inSeconds,
+        strokes: _strokeCount,
+      ));
+    }
     super.dispose();
   }
 
@@ -70,13 +90,22 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    _log = ref.read(practiceLogProvider.notifier);
     // Real playing detected → credit today's practice streak (once per visit;
     // the record call is itself idempotent per calendar day). RAG chunk 013.
     ref.listen(liveFrameProvider, (_, next) {
       final f = next.asData?.value;
-      if (!_practiceRecorded && f != null && f.latestStrum != null) {
-        _practiceRecorded = true;
-        ref.read(streakProvider.notifier).recordPracticeToday();
+      if (f != null && f.latestStrum != null) {
+        _sessionStart ??= DateTime.now();
+        // strumSeq bumps per NEW strum → count distinct strokes this session.
+        if (f.strumSeq != _lastStrumSeq && f.strumSeq > 0) {
+          _lastStrumSeq = f.strumSeq;
+          _strokeCount++;
+        }
+        if (!_practiceRecorded) {
+          _practiceRecorded = true;
+          ref.read(streakProvider.notifier).recordPracticeToday();
+        }
       }
     });
     final liveAsync = ref.watch(liveFrameProvider);
