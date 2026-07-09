@@ -120,6 +120,15 @@ A 50% / 75% / 100% speed selector on the player scales the effective tempo
 tempo-dependent playhead maths stays clean. Slow-down practice is the classic
 learning lever.
 
+## Chord diagrams (round 41 — ✅ built)
+`lib/features/chords/`: `ChordShapes` (a data table of ~21 open-position shapes,
+low-E→high-E frets; −1 muted / 0 open) + `ChordDiagram` (a `CustomPaint` mini
+fretboard with ○/× markers and dots). The player shows the **currently-fretted**
+chord's diagram under the highway (`_activeChord()` = last event chord ≤ playhead).
+Covers every chord the built-in lessons use (asserted by a test). Layout gotcha:
+the diagram's own Column overflowed its reserved box in the 600px test viewport →
+tightened both (highway 140, diagram size 66, size×1.05) to fit.
+
 ## Roadmap
-1. **Chord diagrams** — show the fretting for each chord (essential for beginners).
+1. Chord diagrams on the **Live** screen (careful with the tight layout).
 2. A backing track / count-in voice; the animated "Strum Cam" video share (growth #1).

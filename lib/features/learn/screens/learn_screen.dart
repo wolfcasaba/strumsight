@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../chords/widgets/chord_diagram.dart';
 import '../../live/providers/live_providers.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -212,6 +213,22 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _toggle() => _playing ? _pause() : _play();
 
+  /// The chord to fret right now: the most recent event chord at/before the
+  /// playhead (falling back to the first chord before the lesson starts).
+  String _activeChord() {
+    var chord = '';
+    for (final e in widget.lesson.events) {
+      if (e.chord.isEmpty) continue;
+      if (e.beat <= _playhead + 0.25) {
+        chord = e.chord;
+      } else {
+        if (chord.isEmpty) chord = e.chord; // pre-roll: show the first chord
+        break;
+      }
+    }
+    return chord;
+  }
+
   void _setSpeed(double s) {
     if (s == _speed) return;
     _speed = s;
@@ -263,16 +280,24 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  LessonHighway(lesson: lesson, playheadBeat: _playhead),
+                  LessonHighway(
+                      lesson: lesson, playheadBeat: _playhead, height: 140),
                   if (countIn != null) CountInOverlay(number: countIn),
                   if (countIn == null && score?.lastResult != null)
                     _FeedbackFlash(result: score!.lastResult!),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              // How to fret the current chord (a beginner can't play what they
+              // can't finger). Reserves height so the layout doesn't jump.
+              SizedBox(
+                height: 94,
+                child: Center(child: ChordDiagram(label: _activeChord(), size: 66)),
+              ),
+              const SizedBox(height: 6),
               Text('${_bpm.round()} BPM',
                   style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

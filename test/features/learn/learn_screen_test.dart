@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/learn/screens/learn_screen.dart';
 import 'package:music_theory/features/live/providers/live_providers.dart';
@@ -32,6 +33,8 @@ void main() {
     // Paused: Play control + lesson header (chords/BPM), no score HUD yet.
     expect(find.text('Play'), findsOneWidget);
     expect(find.textContaining('Chords'), findsOneWidget);
+    // The current chord's fretting diagram is shown (First Strums starts on Em).
+    expect(find.byType(ChordDiagram), findsOneWidget);
 
     await tester.tap(find.text('Play'));
     await tester.pump(); // _playing = true; engine.start()
