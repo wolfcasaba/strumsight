@@ -108,7 +108,11 @@ lag-tolerant, **secondary** metric that NEVER gates the reliable direction hit.
 `ScoreSnapshot` gains `chordHits/chordTotal/chordAccuracy`; the summary shows
 `Chords: N%` when the lesson has chords. `LearnScreen` feeds it `frame.current`.
 
+## Polish (round 39 — ✅ built)
+"Practice as a lesson" now also sits on the **Analyze** done view (import a riff
+you just recorded without saving first); the metronome mute preference is
+**persisted** (`metronomeMutedProvider`, local).
+
 ## Roadmap
-1. Import from the Analyze screen too (not only Library); a "chords" star line in
-   the library tile.
-2. A backing track / count-in voice; persist the metronome mute preference.
+1. A backing track / count-in voice; a "chords %" line on the library tile.
+2. The animated "Strum Cam" video share (chunk 013 growth #1).

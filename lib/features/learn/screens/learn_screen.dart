@@ -8,6 +8,7 @@ import '../../live/providers/live_providers.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../providers/lesson_progress_provider.dart';
 import '../audio/metronome.dart';
+import '../providers/metronome_pref_provider.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
@@ -37,7 +38,6 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   double _accumSec = 0;
   double _prevPlayhead = 0;
   bool _playing = false;
-  bool _muted = false;
 
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
@@ -70,7 +70,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // Click the metronome on every beat crossed since the last frame (accent on
     // bar downbeats); count-in beats click too.
     final now = _playhead;
-    if (!_muted) {
+    if (!ref.read(metronomeMutedProvider)) {
       for (final beat in LessonTiming.beatsCrossed(_prevPlayhead, now)) {
         _metronome.tick(accent: beat % widget.lesson.beatsPerBar == 0);
       }
@@ -217,9 +217,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
         title: Text(lesson.name),
         actions: [
           IconButton(
-            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+            icon: Icon(ref.watch(metronomeMutedProvider)
+                ? Icons.volume_off
+                : Icons.volume_up),
             tooltip: l10n.learnMetronome,
-            onPressed: () => setState(() => _muted = !_muted),
+            onPressed: () => ref.read(metronomeMutedProvider.notifier).toggle(),
           ),
           IconButton(
             icon: const Icon(Icons.replay),

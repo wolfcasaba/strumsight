@@ -9,6 +9,8 @@ import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/model/analyzed_session.dart';
 import '../../library/providers/library_providers.dart';
+import '../../learn/model/lesson.dart';
+import '../../learn/screens/learn_screen.dart';
 import '../../settings/providers/capo_provider.dart';
 import '../../share/screens/share_preview_screen.dart';
 import '../model/analyze_result.dart';
@@ -239,6 +241,24 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
                   : null,
               icon: const Icon(Icons.ios_share),
               tooltip: l10n.actionShare,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(52),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              onPressed: result.strums.isNotEmpty
+                  ? () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => LearnScreen(
+                            lesson: Lessons.fromAnalyze(result,
+                                name: l10n.analyzeMyRecording),
+                          ),
+                        ),
+                      )
+                  : null,
+              icon: const Icon(Icons.school_outlined),
+              tooltip: l10n.learnPracticeThis,
               style: IconButton.styleFrom(
                 minimumSize: const Size.square(52),
               ),
