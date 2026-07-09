@@ -4,6 +4,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../analyze/model/analyze_result.dart';
 import '../share_service.dart';
 import '../widgets/strum_card.dart';
+import 'strum_reel_screen.dart';
 
 /// Previews the shareable Strum Card and hands it to the OS share sheet — the
 /// share → install loop entry point (docs/rag/chunks/013). The card is wrapped
@@ -105,11 +106,24 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Builder(
-                    builder: (btnCtx) => TextButton(
-                      onPressed: () => _shareText(btnCtx),
-                      child: Text(l10n.shareTextButton),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.movie_creation_outlined, size: 18),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => StrumReelScreen(
+                                result: widget.result, capo: widget.capo),
+                          ),
+                        ),
+                        label: Text(l10n.reelButton),
+                      ),
+                      TextButton(
+                        onPressed: () => _shareText(context),
+                        child: Text(l10n.shareTextButton),
+                      ),
+                    ],
                   ),
                 ],
               ),
