@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../live/providers/live_providers.dart';
 import '../../streak/providers/streak_provider.dart';
+import '../providers/lesson_progress_provider.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
@@ -113,9 +114,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _scorer?.finalize();
     final snap = _scorer?.snapshot();
     setState(() => _score = snap);
-    // Playing a lesson counts as practice.
+    // Playing a lesson counts as practice, and its score updates the library.
     if ((snap?.total ?? 0) > 0) {
       ref.read(streakProvider.notifier).recordPracticeToday();
+      ref
+          .read(lessonProgressProvider.notifier)
+          .record(widget.lesson.id, snap!.accuracy);
     }
     if (mounted && snap != null) _showSummary(snap);
   }

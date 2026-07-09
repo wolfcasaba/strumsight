@@ -23,6 +23,9 @@ class LessonEvent {
   bool get isDown => direction == StrumDirection.down;
 }
 
+/// Skill tier of a lesson (drives grouping + progression in the library).
+enum Difficulty { beginner, intermediate, advanced }
+
 /// A play-along lesson: a chord progression (one chord per bar) played with a
 /// repeating strum pattern, at a fixed tempo. Expanded to a flat, timed
 /// [events] list that the highway animation scrolls toward the strike line.
@@ -36,12 +39,14 @@ class Lesson {
     required this.bpm,
     required this.chords,
     required this.pattern,
+    this.difficulty = Difficulty.beginner,
     this.beatsPerBar = 4,
   }) : events = _expand(chords, pattern, beatsPerBar);
 
   final String id;
   final String name;
   final double bpm;
+  final Difficulty difficulty;
   final int beatsPerBar;
 
   /// One chord per bar (cycled if the lesson runs longer than the list).
@@ -96,6 +101,8 @@ const _u = StrumDirection.up;
 class Lessons {
   Lessons._();
 
+  // ---- Beginner ----
+
   /// All-downstrokes on the beat — the absolute beginner's first strum.
   static Lesson get firstStrums => Lesson(
         id: 'first-strums',
@@ -105,16 +112,81 @@ class Lessons {
         pattern: const [_d, null, _d, null, _d, null, _d, null],
       );
 
+  /// Practising a clean chord change on every downstroke.
+  static Lesson get twoChordChange => Lesson(
+        id: 'two-chord-change',
+        name: 'Two-Chord Change',
+        bpm: 74,
+        chords: const ['Am', 'C', 'Am', 'C'],
+        pattern: const [_d, null, _d, null, _d, null, _d, null],
+      );
+
+  /// Eighth-note down-strokes — steady and driving.
+  static Lesson get eighthDrive => Lesson(
+        id: 'eighth-drive',
+        name: 'Eighth-Note Drive',
+        bpm: 80,
+        chords: const ['G', 'G', 'D', 'D'],
+        pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
+      );
+
+  // ---- Intermediate ----
+
   /// The ubiquitous D-DU-UDU pop/folk pattern over a I–V–vi–IV progression.
   static Lesson get downUpGroove => Lesson(
         id: 'down-up-groove',
         name: 'Down-Up Groove',
         bpm: 90,
+        difficulty: Difficulty.intermediate,
         chords: const ['C', 'G', 'Am', 'F'],
         pattern: const [_d, null, _d, _u, null, _u, _d, _u],
       );
 
-  static List<Lesson> get all => [firstStrums, downUpGroove];
+  /// A folk pattern with a syncopated push.
+  static Lesson get folkPattern => Lesson(
+        id: 'folk-pattern',
+        name: 'Folk Fingers',
+        bpm: 96,
+        difficulty: Difficulty.intermediate,
+        chords: const ['G', 'Em', 'C', 'D'],
+        pattern: const [_d, null, _d, _u, _d, _u, _d, _u],
+      );
+
+  // ---- Advanced ----
+
+  /// Off-beat up-strokes — a reggae-style skank.
+  static Lesson get reggaeSkank => Lesson(
+        id: 'reggae-skank',
+        name: 'Reggae Skank',
+        bpm: 100,
+        difficulty: Difficulty.advanced,
+        chords: const ['Am', 'Dm', 'Am', 'E'],
+        pattern: const [null, _u, null, _u, null, _u, null, _u],
+      );
+
+  /// Busy sixteenth-ish funk with alternating strokes.
+  static Lesson get funkChop => Lesson(
+        id: 'funk-chop',
+        name: 'Funk Chop',
+        bpm: 104,
+        difficulty: Difficulty.advanced,
+        chords: const ['Em', 'Em', 'A', 'A'],
+        pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
+      );
+
+  static List<Lesson> get all => [
+        firstStrums,
+        twoChordChange,
+        eighthDrive,
+        downUpGroove,
+        folkPattern,
+        reggaeSkank,
+        funkChop,
+      ];
+
+  /// Lessons of a given tier, in curriculum order.
+  static List<Lesson> byDifficulty(Difficulty d) =>
+      all.where((l) => l.difficulty == d).toList();
 
   /// Turn today's [DailyChallenge] into a one-bar, strum-only play-along so the
   /// streak challenge is *playable*, not just shown (ties chunk 013 together).

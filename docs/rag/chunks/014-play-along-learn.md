@@ -62,9 +62,17 @@ practice (feeds the streak) and shows a score summary.
   verifiable on-device (the real-guitar acceptance test); the scorer itself is
   exhaustively unit-tested.
 
+## Curriculum (round 34 — ✅ built)
+7 built-in lessons across **Beginner / Intermediate / Advanced** tiers
+(`Lessons.byDifficulty`). `LessonProgressController` persists per-lesson **best
+accuracy** (`lesson_progress_v1`, local like the streak); `LessonProgress.stars`
+maps it to 0–3 stars (≥90/80/70%). The `LearnScreen` records the run's accuracy
+on finish. The list groups by tier, shows stars, and **gates progression** —
+a lesson unlocks once the previous in its tier is passed (`isUnlocked`).
+
 ## Roadmap
-1. Lesson library + progression/difficulty; import a saved Analyze clip as a
-   lesson. Gate hits on the **chord** too (not just direction) once lag is handled.
+1. Import a saved Analyze clip as a lesson. Gate hits on the **chord** too (not
+   just direction) once the ~370 ms chord lag is handled.
 3. Audio: a metronome click + optional backing so it's playable without reading
    only (uses the existing `audioplayers` dep).
 4. Share a completed-lesson score card (feeds chunk 013's share loop).

@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/daily_challenge.dart';
 import '../../streak/streak_logic.dart';
+import '../providers/lesson_progress_provider.dart';
 import '../model/lesson.dart';
 import 'learn_screen.dart';
 
-/// The "learn" home: today's challenge as a playable lesson + the built-in
-/// starter lessons. Tapping opens the play-along [LearnScreen].
-class LessonListScreen extends StatelessWidget {
+/// The "learn" home: today's challenge as a playable lesson, then the built-in
+/// curriculum grouped by difficulty, each tier gated by progress (pass a lesson
+/// to unlock the next). Stars reflect your best accuracy (RAG chunk 014).
+class LessonListScreen extends ConsumerWidget {
   const LessonListScreen({super.key, this.now});
 
-  /// Injectable clock for tests.
   final DateTime? now;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final daily = Lessons.fromDailyChallenge(DailyChallenge.forDay(today));
@@ -27,20 +29,35 @@ class LessonListScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            _sectionLabel(l10n.learnTodaysChallenge),
-            _LessonTile(lesson: daily, highlight: true),
-            const SizedBox(height: 20),
-            _sectionLabel(l10n.learnLessons),
-            for (final lesson in Lessons.all)
-              _LessonTile(lesson: lesson),
+            _label(l10n.learnTodaysChallenge),
+            _LessonTile(lesson: daily, unlocked: true, stars: 0),
+            for (final tier in Difficulty.values) ...[
+              const SizedBox(height: 18),
+              _label(_tierName(l10n, tier)),
+              for (final lesson in Lessons.byDifficulty(tier))
+                _LessonTile(
+                  lesson: lesson,
+                  unlocked: ref
+                      .watch(lessonProgressProvider.notifier)
+                      .isUnlocked(lesson),
+                  stars: ref.watch(lessonProgressProvider.notifier)
+                      .stars(lesson.id),
+                ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 8),
+  static String _tierName(AppLocalizations l10n, Difficulty d) => switch (d) {
+        Difficulty.beginner => l10n.learnBeginner,
+        Difficulty.intermediate => l10n.learnIntermediate,
+        Difficulty.advanced => l10n.learnAdvanced,
+      };
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
         child: Text(
           text.toUpperCase(),
           style: const TextStyle(
@@ -54,10 +71,15 @@ class LessonListScreen extends StatelessWidget {
 }
 
 class _LessonTile extends StatelessWidget {
-  const _LessonTile({required this.lesson, this.highlight = false});
+  const _LessonTile({
+    required this.lesson,
+    required this.unlocked,
+    required this.stars,
+  });
 
   final Lesson lesson;
-  final bool highlight;
+  final bool unlocked;
+  final int stars;
 
   @override
   Widget build(BuildContext context) {
@@ -70,28 +92,48 @@ class _LessonTile extends StatelessWidget {
     ].join(' · ');
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: highlight
-            ? const BorderSide(color: AppColors.primary, width: 1.5)
-            : BorderSide.none,
-      ),
       child: ListTile(
+        enabled: unlocked,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: CircleAvatar(
-          backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-          child: const Icon(Icons.play_arrow, color: AppColors.primary),
+          backgroundColor: (unlocked ? AppColors.primary : AppColors.confidenceLow)
+              .withValues(alpha: 0.15),
+          child: Icon(unlocked ? Icons.play_arrow : Icons.lock,
+              color: unlocked ? AppColors.primary : AppColors.confidenceLow),
         ),
         title: Text(lesson.name,
             style: const TextStyle(
                 fontWeight: FontWeight.w700, fontFamily: 'Montserrat')),
         subtitle: Text(subtitle),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => LearnScreen(lesson: lesson),
-          ),
-        ),
+        trailing: unlocked && stars > 0 ? _Stars(stars: stars) : null,
+        onTap: unlocked
+            ? () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LearnScreen(lesson: lesson),
+                  ),
+                )
+            : () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.learnLocked)),
+                ),
       ),
     );
   }
+}
+
+class _Stars extends StatelessWidget {
+  const _Stars({required this.stars});
+  final int stars;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < 3; i++)
+            Icon(
+              i < stars ? Icons.star : Icons.star_border,
+              size: 18,
+              color: AppColors.secondary,
+            ),
+        ],
+      );
 }
