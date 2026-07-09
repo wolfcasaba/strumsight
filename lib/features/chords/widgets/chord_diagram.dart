@@ -7,16 +7,30 @@ import '../chord_shape.dart';
 /// above the nut and dots on the fretted positions. Draws nothing (a shrink) for
 /// a chord we have no shape for. RAG chunk 014.
 class ChordDiagram extends StatelessWidget {
-  const ChordDiagram({super.key, required this.label, this.size = 96});
+  const ChordDiagram({
+    super.key,
+    required this.label,
+    this.size = 96,
+    this.showLabel = true,
+  });
 
   final String label;
   final double size;
+
+  /// Show the chord name above the grid. Off where the name is already shown
+  /// prominently elsewhere (e.g. the Live screen's huge chord).
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
     final shape = ChordShapes.forLabel(label);
     if (shape == null) return const SizedBox.shrink();
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final grid = CustomPaint(
+      size: Size(size, size * 1.05),
+      painter: _ChordPainter(shape, onSurface),
+    );
+    if (!showLabel) return grid;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -27,10 +41,7 @@ class ChordDiagram extends StatelessWidget {
                 fontSize: 13,
                 height: 1.1)),
         const SizedBox(height: 2),
-        CustomPaint(
-          size: Size(size, size * 1.05),
-          painter: _ChordPainter(shape, onSurface),
-        ),
+        grid,
       ],
     );
   }

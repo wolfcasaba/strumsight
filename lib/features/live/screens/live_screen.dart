@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../chords/widgets/chord_diagram.dart';
 import '../../settings/providers/capo_provider.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/live_frame.dart';
@@ -95,7 +96,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        child: Column(
+        child: Stack(
+          children: [
+            Column(
             children: [
               Row(
                 children: [
@@ -160,6 +163,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               ),
             ],
           ),
+            // The current chord's fretting, as a small non-intrusive overlay
+            // (top-left) so it never disturbs the tight hero layout.
+            if (!_paused && frame.current != null)
+              Positioned(
+                top: 40,
+                left: 0,
+                child: ChordDiagram(
+                  label: frame.current!.transposed(-capo).label,
+                  size: 60,
+                  showLabel: false,
+                ),
+              ),
+          ],
+        ),
         ),
       );
   }

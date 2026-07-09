@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
 import 'package:music_theory/features/live/engine/mock_strum_engine.dart';
 import 'package:music_theory/features/live/providers/live_providers.dart';
 import 'package:music_theory/features/settings/providers/capo_provider.dart';
@@ -36,6 +37,8 @@ void main() {
     expect(find.text('C'), findsOneWidget); // the huge current chord
     expect(find.textContaining('90%'), findsOneWidget); // confidence pill
     expect(find.textContaining('DOWN'), findsOneWidget);
+    // The current chord's fretting is shown as a diagram overlay (C has a shape).
+    expect(find.byType(ChordDiagram), findsOneWidget);
     // The Tuner action button is present on the Live screen.
     expect(find.text('Tuner'), findsWidgets);
   });

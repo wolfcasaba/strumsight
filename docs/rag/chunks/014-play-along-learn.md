@@ -129,6 +129,12 @@ Covers every chord the built-in lessons use (asserted by a test). Layout gotcha:
 the diagram's own Column overflowed its reserved box in the 600px test viewport →
 tightened both (highway 140, diagram size 66, size×1.05) to fit.
 
+## Chord diagrams on Live (round 42 — ✅ built)
+The detected chord's fretting now shows on the **Live** screen too, as a small
+top-left **overlay** (`Positioned` in a `Stack`, `showLabel:false` so it doesn't
+duplicate the huge chord letter) — deliberately an overlay, not a column child,
+because the Live hero layout is height-tight (adding it inline overflowed by 72px).
+
 ## Roadmap
-1. Chord diagrams on the **Live** screen (careful with the tight layout).
-2. A backing track / count-in voice; the animated "Strum Cam" video share (growth #1).
+1. A backing track / count-in voice; the animated "Strum Cam" video share (growth #1).
+2. Left-handed mirror mode; more chord shapes (barre chords).
