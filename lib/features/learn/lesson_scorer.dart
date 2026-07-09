@@ -14,6 +14,8 @@ class ScoreSnapshot {
     required this.maxCombo,
     required this.total,
     required this.lastResult,
+    this.chordHits = 0,
+    this.chordTotal = 0,
   });
 
   final int hits;
@@ -24,11 +26,19 @@ class ScoreSnapshot {
   final int total;
   final HitResult? lastResult;
 
+  /// Chord-correctness (secondary): events (with a chord) where the right chord
+  /// was sounding around the stroke. Lag-tolerant, never gates the strum hit.
+  final int chordHits;
+  final int chordTotal;
+
   int get resolved => hits + wrong + missed;
   bool get finished => resolved >= total;
 
   /// Fraction of events struck with the correct direction in time.
   double get accuracy => total == 0 ? 0 : hits / total;
+
+  bool get hasChords => chordTotal > 0;
+  double get chordAccuracy => chordTotal == 0 ? 0 : chordHits / chordTotal;
 }
 
 /// Pure scorer for a play-along run: matches the player's detected strums
@@ -43,9 +53,12 @@ class LessonScorer {
     this.windowSec = 0.28,
   }) : _secPerBeat = 60.0 / lesson.bpm {
     for (final e in lesson.events) {
-      _events.add(_Timed(e, (countInBeats + e.beat) * _secPerBeat));
+      final t = (countInBeats + e.beat) * _secPerBeat;
+      _events.add(_Timed(e, t));
+      if (e.chord.isNotEmpty) _chordSlots.add(_ChordSlot(e.chord, t));
     }
     total = _events.length;
+    chordTotal = _chordSlots.length;
   }
 
   /// Timing tolerance for a strum to count for an event (±).
@@ -54,6 +67,12 @@ class LessonScorer {
   final double _secPerBeat;
 
   final List<_Timed> _events = [];
+  final List<_ChordSlot> _chordSlots = [];
+  final List<_Obs> _chordObs = []; // detected-chord change-points
+
+  /// How far AFTER a stroke we still credit its chord (chord detection lags the
+  /// strum onset by ~1 analysis window).
+  static const double _chordLagSec = 0.37;
 
   int total = 0;
   int hits = 0;
@@ -62,6 +81,10 @@ class LessonScorer {
   int combo = 0;
   int maxCombo = 0;
   HitResult? lastResult;
+
+  int chordTotal = 0;
+  int chordHits = 0;
+  int chordMiss = 0;
 
   /// Pass mark (share of events hit correctly).
   static const double passThreshold = 0.7;
@@ -79,7 +102,49 @@ class LessonScorer {
         maxCombo: maxCombo,
         total: total,
         lastResult: lastResult,
+        chordHits: chordHits,
+        chordTotal: chordTotal,
       );
+
+  /// Record the currently detected chord [label] ('' = none) at [elapsedSec].
+  /// Only change-points are kept; used to grade chord-correctness leniently.
+  void observeChord(String label, double elapsedSec) {
+    if (_chordObs.isEmpty || _chordObs.last.label != label) {
+      _chordObs.add(_Obs(elapsedSec, label));
+    }
+  }
+
+  /// The detected chord active at time [t] (the last change-point at or before
+  /// t), or '' if none observed yet.
+  String _chordAt(double t) {
+    var label = '';
+    for (final o in _chordObs) {
+      if (o.time <= t) {
+        label = o.label;
+      } else {
+        break;
+      }
+    }
+    return label;
+  }
+
+  /// Evaluate any chord slot whose lag window has fully passed [elapsedSec].
+  void _evalChords(double elapsedSec) {
+    for (final s in _chordSlots) {
+      if (s.evaluated) continue;
+      if (s.time + _chordLagSec + windowSec >= elapsedSec) continue;
+      s.evaluated = true;
+      // Correct if the target chord was sounding at the stroke, or shortly
+      // after (allowing for chord-detection lag).
+      final ok = _chordAt(s.time) == s.chord ||
+          _chordAt(s.time + _chordLagSec) == s.chord;
+      if (ok) {
+        chordHits++;
+      } else {
+        chordMiss++;
+      }
+    }
+  }
 
   /// The absolute elapsed time (seconds from lesson start, count-in included)
   /// at which [event] should be struck — handy for UI hit flashes.
@@ -115,7 +180,7 @@ class LessonScorer {
   }
 
   /// Advance the clock to [elapsedSec]; any open event whose window has fully
-  /// passed is a miss.
+  /// passed is a miss, and any chord slot past its lag window is graded.
   void advance(double elapsedSec) {
     for (final t in _events) {
       if (t.matched) continue;
@@ -126,9 +191,10 @@ class LessonScorer {
         lastResult = HitResult.missed;
       }
     }
+    _evalChords(elapsedSec);
   }
 
-  /// Resolve any still-open events as misses (call at lesson end).
+  /// Resolve any still-open events as misses + grade all chords (lesson end).
   void finalize() {
     for (final t in _events) {
       if (!t.matched) {
@@ -136,7 +202,21 @@ class LessonScorer {
         missed++;
       }
     }
+    _evalChords(double.infinity);
   }
+}
+
+class _ChordSlot {
+  _ChordSlot(this.chord, this.time);
+  final String chord;
+  final double time;
+  bool evaluated = false;
+}
+
+class _Obs {
+  _Obs(this.time, this.label);
+  final double time;
+  final String label;
 }
 
 class _Timed {

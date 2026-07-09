@@ -76,6 +76,61 @@ void main() {
     expect(s.passed, isFalse);
   });
 
+  // A 60 BPM lesson with a chord change: down@beat0 on C, down@beat4 on G.
+  // Count-in 4 → chord slots at 4.0 s (C) and 8.0 s (G).
+  Lesson chordLesson() => Lesson(
+        id: 'c',
+        name: 'c',
+        bpm: 60,
+        chords: const ['C', 'G'],
+        pattern: const [_d, null, null, null, null, null, null, null],
+      );
+
+  group('chord grading (secondary, lenient)', () {
+    test('counts chord slots and grades correct chords as hits', () {
+      final s = LessonScorer(chordLesson());
+      expect(s.chordTotal, 2);
+      s.observeChord('C', 3.9); // C sounding at the first stroke
+      s.observeChord('G', 7.9); // G by the second
+      s.finalize();
+      expect(s.chordHits, 2);
+      expect(s.chordMiss, 0);
+      expect(s.snapshot().chordAccuracy, 1.0);
+    });
+
+    test('tolerates chord-detection lag (chord arrives just after the stroke)',
+        () {
+      final s = LessonScorer(chordLesson());
+      s.observeChord('C', 4.3); // ~0.3 s late — still within the lag window
+      s.observeChord('G', 8.3);
+      s.finalize();
+      expect(s.chordHits, 2);
+    });
+
+    test('wrong chords are missed and never touch the strum score', () {
+      final s = LessonScorer(chordLesson());
+      s.registerStrum(_d, 4.0); // a correct strum hit…
+      s.observeChord('D', 3.9); // …but the wrong chord throughout
+      s.observeChord('A', 7.9);
+      s.finalize();
+      expect(s.hits, 1); // strum hit stands
+      expect(s.chordHits, 0);
+      expect(s.snapshot().chordAccuracy, 0.0);
+    });
+
+    test('a strum-only lesson reports no chords', () {
+      final s = LessonScorer(Lesson(
+        id: 'so',
+        name: 'so',
+        bpm: 60,
+        chords: const [''],
+        pattern: const [_d, _u, null, null, null, null, null, null],
+      ));
+      expect(s.chordTotal, 0);
+      expect(s.snapshot().hasChords, isFalse);
+    });
+  });
+
   test('the nearest open event is chosen when two are in range', () {
     // Two downs a hair apart; a strum between them should take the closer one.
     final lesson = Lesson(

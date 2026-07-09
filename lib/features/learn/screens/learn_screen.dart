@@ -91,6 +91,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _scorer!.registerStrum(frame.latestStrum.direction, _elapsedSec);
       setState(() => _score = _scorer!.snapshot());
     }
+    // Track the detected chord for the (lenient, secondary) chord grade.
+    final chord = frame.current?.label;
+    _scorer!.observeChord(chord is String ? chord : '', _elapsedSec);
   }
 
   void _play() {
@@ -158,6 +161,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                     fontSize: 48,
                     color: AppColors.primary)),
             Text(l10n.learnScoreLine(snap.hits, snap.total, snap.maxCombo)),
+            if (snap.hasChords)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                    '${l10n.learnChords}: ${(snap.chordAccuracy * 100).round()}%'),
+              ),
           ],
         ),
         actions: [

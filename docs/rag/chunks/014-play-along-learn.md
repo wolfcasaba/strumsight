@@ -100,7 +100,15 @@ extends to the bar containing the last stroke. `Lesson` gained a
 "Practice as a lesson" 🎓 action on the **Library** session detail. Unlimited
 content — practise any riff you recorded.
 
+## Chord-aware scoring (round 38 — ✅ built)
+`LessonScorer.observeChord(label, t)` records detected-chord change-points; each
+chord-bearing event is graded (in `advance`/`finalize`) as correct if the target
+chord was sounding **at** the stroke OR ~`_chordLagSec` (0.37 s) after — a
+lag-tolerant, **secondary** metric that NEVER gates the reliable direction hit.
+`ScoreSnapshot` gains `chordHits/chordTotal/chordAccuracy`; the summary shows
+`Chords: N%` when the lesson has chords. `LearnScreen` feeds it `frame.current`.
+
 ## Roadmap
-1. Gate hits on the **chord** too (not just direction) once the ~370 ms chord lag
-   is handled; import from the Analyze screen too (not only Library).
+1. Import from the Analyze screen too (not only Library); a "chords" star line in
+   the library tile.
 2. A backing track / count-in voice; persist the metronome mute preference.
