@@ -62,6 +62,18 @@ void main() {
     expect(find.byIcon(Icons.volume_off), findsOneWidget);
   });
 
+  testWidgets('jam mode can be toggled from the app bar', (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await _pump(tester, engine);
+
+    // The jam (backing) toggle is present and toggling it doesn't throw.
+    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.music_note));
+    await tester.pump();
+    expect(find.byIcon(Icons.music_note), findsOneWidget);
+  });
+
   testWidgets('practice-speed control scales the tempo', (tester) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);

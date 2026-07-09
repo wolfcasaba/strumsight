@@ -8,6 +8,7 @@ import '../../chords/widgets/chord_diagram.dart';
 import '../../live/providers/live_providers.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../providers/lesson_progress_provider.dart';
+import '../audio/chord_audio.dart';
 import '../audio/metronome.dart';
 import '../providers/metronome_pref_provider.dart';
 import '../lesson_scorer.dart';
@@ -35,10 +36,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   late final Ticker _ticker;
   final Metronome _metronome = Metronome();
+  final Backing _backing = Backing();
   double _elapsedSec = 0;
   double _accumSec = 0;
   double _prevPlayhead = 0;
   bool _playing = false;
+  bool _jam = false; // jam mode: chord backing, scoring off (avoids mic conflict)
   double _speed = 1.0; // practice-tempo multiplier
 
   static const _speeds = [0.5, 0.75, 1.0];
@@ -62,6 +65,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _frameSub?.close();
     _ticker.dispose();
     _metronome.dispose();
+    _backing.dispose();
     super.dispose();
   }
 
@@ -74,13 +78,14 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _scorer?.advance(_elapsedSec);
       _score = _scorer?.snapshot();
     });
-    // Click the metronome on every beat crossed since the last frame (accent on
-    // bar downbeats); count-in beats click too.
+    // On every beat crossed since the last frame: click the metronome (accent on
+    // downbeats), and in jam mode play the chord backing on each bar downbeat.
     final now = _playhead;
-    if (!ref.read(metronomeMutedProvider)) {
-      for (final beat in LessonTiming.beatsCrossed(_prevPlayhead, now)) {
-        _metronome.tick(accent: beat % widget.lesson.beatsPerBar == 0);
-      }
+    final muted = ref.read(metronomeMutedProvider);
+    for (final beat in LessonTiming.beatsCrossed(_prevPlayhead, now)) {
+      final downbeat = beat % widget.lesson.beatsPerBar == 0;
+      if (!muted) _metronome.tick(accent: downbeat);
+      if (_jam && downbeat && beat >= 0) _backing.playChord(_activeChord());
     }
     _prevPlayhead = now;
     if (LessonTiming.isFinished(
@@ -105,10 +110,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _play() {
     if (_playing) return;
-    _scorer ??=
-        LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
-    // Listen to the real mic/DSP stream only while playing (starts the engine).
-    _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    // Jam mode plays a chord backing and turns scoring OFF, so the mic never
+    // hears (and grades) the app's own accompaniment.
+    if (!_jam) {
+      _scorer ??=
+          LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
+      _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    }
     _prevPlayhead = _playhead; // don't re-click beats already passed
     setState(() => _playing = true);
     _ticker.start();
@@ -124,9 +132,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _restart() {
     _ticker.stop();
     _lastSeq = 0;
-    _scorer =
-        LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
-    _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    if (_jam) {
+      _scorer = null;
+    } else {
+      _scorer =
+          LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
+      _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
+    }
     _prevPlayhead = -_countInBeats.toDouble();
     setState(() {
       _accumSec = 0;
@@ -252,6 +264,15 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       appBar: AppBar(
         title: Text(lesson.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.music_note),
+            color: _jam ? AppColors.primary : null,
+            tooltip: l10n.learnJam,
+            onPressed: () {
+              setState(() => _jam = !_jam);
+              if (_playing) _restart();
+            },
+          ),
           IconButton(
             icon: Icon(ref.watch(metronomeMutedProvider)
                 ? Icons.volume_off

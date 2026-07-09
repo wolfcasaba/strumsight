@@ -144,6 +144,7 @@
   "learnPause": "Pause",
   "learnRestart": "Restart",
   "learnMetronome": "Metronome",
+  "learnJam": "Jam mode (backing chords, no scoring)",
   "learnSpeed": "Speed",
   "learnPracticeThis": "Practice as a lesson",
   "analyzeMyRecording": "My recording",
