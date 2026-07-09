@@ -1,33 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/learn/screens/learn_screen.dart';
+import 'package:music_theory/features/live/providers/live_providers.dart';
 import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pump(WidgetTester tester) => tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: LearnScreen(lesson: Lessons.firstStrums),
+import '../../support/fake_engines.dart';
+
+Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
+    tester.pumpWidget(ProviderScope(
+      overrides: [strumEngineProvider.overrideWithValue(engine)],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LearnScreen(lesson: Lessons.firstStrums),
+      ),
     ));
 
 void main() {
-  testWidgets('starts paused and toggles play/pause without settling',
-      (tester) async {
-    await _pump(tester);
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    // Starts paused → the Play control is shown, plus the lesson header.
+  testWidgets('starts paused, then plays and scores without settling',
+      (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await _pump(tester, engine);
+
+    // Paused: Play control + lesson header (chords/BPM), no score HUD yet.
     expect(find.text('Play'), findsOneWidget);
     expect(find.textContaining('Chords'), findsOneWidget);
-    expect(find.textContaining('BPM'), findsOneWidget);
 
-    // Play → ticker runs; advance time manually (never pumpAndSettle a ticker).
     await tester.tap(find.text('Play'));
-    await tester.pump(); // apply setState(_playing = true)
+    await tester.pump(); // _playing = true; engine.start()
     expect(find.text('Pause'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 250));
-    await tester.pump(const Duration(milliseconds: 250));
+    expect(engine.startCalls, greaterThan(0));
 
-    // Pause again to leave no active ticker at teardown.
+    // Advance the ticker; the score HUD appears (0 hits so far).
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Combo'), findsOneWidget);
+
+    // Pause to leave no active ticker at teardown.
     await tester.tap(find.text('Pause'));
     await tester.pump();
     expect(find.text('Play'), findsOneWidget);

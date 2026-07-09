@@ -114,5 +114,17 @@
   "learnChords": "Akkordok",
   "learnPlay": "Lejátszás",
   "learnPause": "Szünet",
-  "learnRestart": "Újra"
+  "learnRestart": "Újra",
+  "learnAccuracy": "Pontosság",
+  "learnCombo": "Kombó",
+  "learnHits": "Találat",
+  "learnHit": "Szép! ↓↑",
+  "learnWrongWay": "Rossz irány!",
+  "learnMiss": "Kihagyva",
+  "learnPassed": "Teljesítve! 🎉",
+  "learnKeepGoing": "Így tovább!",
+  "learnDone": "Kész",
+  "learnPlayAgain": "Újra",
+  "learnScoreLine": "{hits}/{total} találat · legjobb kombó {combo}",
+  "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } }
 }

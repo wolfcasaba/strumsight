@@ -16,6 +16,7 @@ class LiveFrame {
     required this.inputLevel,
     required this.tuningHz,
     required this.listening,
+    this.strumSeq = 0,
   });
 
   /// Currently sounding chord (null before the first detection).
@@ -42,6 +43,11 @@ class LiveFrame {
   /// Whether the engine is actively listening.
   final bool listening;
 
+  /// Monotonically increasing id, bumped once per NEWLY detected strum. Lets a
+  /// consumer (e.g. the play-along scorer) detect discrete strums even when two
+  /// consecutive strokes share a direction — [latestStrum] alone can't.
+  final int strumSeq;
+
   /// Confidence of the latest strum, or 0 if none.
   double get confidence => latestStrum?.confidence ?? 0;
 
@@ -64,6 +70,7 @@ class LiveFrame {
       inputLevel: inputLevel ?? this.inputLevel,
       tuningHz: tuningHz ?? this.tuningHz,
       listening: listening ?? this.listening,
+      strumSeq: strumSeq,
     );
   }
 

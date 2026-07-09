@@ -135,5 +135,17 @@
   "learnChords": "Chords",
   "learnPlay": "Play",
   "learnPause": "Pause",
-  "learnRestart": "Restart"
+  "learnRestart": "Restart",
+  "learnAccuracy": "Accuracy",
+  "learnCombo": "Combo",
+  "learnHits": "Hits",
+  "learnHit": "Nice! ↓↑",
+  "learnWrongWay": "Wrong way!",
+  "learnMiss": "Miss",
+  "learnPassed": "Passed! 🎉",
+  "learnKeepGoing": "Keep going!",
+  "learnDone": "Done",
+  "learnPlayAgain": "Play again",
+  "learnScoreLine": "{hits}/{total} hits · best combo {combo}",
+  "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } }
 }

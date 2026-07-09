@@ -56,6 +56,7 @@ class LivePipeline {
   ChordMatch? _lastChord;
   Strum? _latestStrum;
   double _latestStrumTime = -1;
+  int _strumSeq = 0;
   final List<BeatSlot> _bar = _emptyBar();
   int _lastSlot = -1;
   double _barStartSec = -1;
@@ -84,6 +85,7 @@ class LivePipeline {
           confidence: event.confidence,
         );
         _latestStrumTime = event.timeSec;
+        _strumSeq++; // a discrete new strum (for the play-along scorer)
         _placeInBar(event);
       }
     }
@@ -155,6 +157,7 @@ class LivePipeline {
       inputLevel: level,
       tuningHz: 440,
       listening: true,
+      strumSeq: _strumSeq,
     );
   }
 
@@ -169,6 +172,7 @@ class LivePipeline {
     _tempo.reset();
     _lastChord = null;
     _latestStrum = null;
+    _strumSeq = 0;
     _clearBar();
     _lastSlot = -1;
     _barStartSec = -1;

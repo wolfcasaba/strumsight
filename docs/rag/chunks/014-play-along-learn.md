@@ -44,15 +44,27 @@ LessonListScreen (built-ins + today's challenge)   lib/features/learn/screens/le
 (C–G–Am–F, the D-DU-UDU pop pattern, 90 BPM). Add a real library + difficulty
 tiers once scoring lands.
 
+## Live scoring (round 33 — ✅ built)
+`lesson_scorer.dart`: a PURE `LessonScorer` matches detected strums (direction +
+elapsed time) to the nearest open `LessonEvent` within `windowSec` (±0.28 s) →
+**hit / wrong-direction / missed**, with combo, max-combo and accuracy; `passed`
+at ≥70%. `LearnScreen` (now `ConsumerStatefulWidget`) subscribes to
+`liveFrameProvider` **only while playing** (`ref.listenManual`, closed on
+pause/dispose — starts the mic just for the run), scores each **discrete** strum,
+shows a live accuracy/combo HUD + a hit/miss flash, and on finish records
+practice (feeds the streak) and shows a score summary.
+- **Discrete-strum detection:** `latestStrum` lingers ~2 s and repeats can share
+  a direction, so `LiveFrame` gained a **`strumSeq`** counter (bumped once per new
+  strum in `LivePipeline`); the scorer fires on `strumSeq` changes, not on
+  `latestStrum` identity. `strumSeq` defaults to 0 (non-breaking).
+- Scored on **direction + timing** (the moat). Chord-correctness is NOT gated yet
+  (chord detection lags ~370 ms) — a refinement. The mic→score path is only
+  verifiable on-device (the real-guitar acceptance test); the scorer itself is
+  exhaustively unit-tested.
+
 ## Roadmap
-1. **⭐ Live scoring (round 33)** — run the real DSP while a lesson plays and
-   score each event: right **chord** AND right **strum direction** within a
-   timing window → hit/miss, a run accuracy %, and combo. This is the unique
-   payoff (scoring *direction* is something no competitor does) and it feeds the
-   streak (a passed lesson = practice). Reuse `LivePipeline`; compare its
-   detected chord/`StrumDirection` to the nearest `LessonEvent` by time.
-2. Lesson library + progression/difficulty; import a saved Analyze clip as a
-   lesson.
+1. Lesson library + progression/difficulty; import a saved Analyze clip as a
+   lesson. Gate hits on the **chord** too (not just direction) once lag is handled.
 3. Audio: a metronome click + optional backing so it's playable without reading
    only (uses the existing `audioplayers` dep).
 4. Share a completed-lesson score card (feeds chunk 013's share loop).
