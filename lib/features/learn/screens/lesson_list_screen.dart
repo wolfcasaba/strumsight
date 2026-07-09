@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -24,7 +25,16 @@ class LessonListScreen extends ConsumerWidget {
     final daily = Lessons.fromDailyChallenge(DailyChallenge.forDay(today));
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.learnTitle)),
+      appBar: AppBar(
+        title: Text(l10n.learnTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.grid_view),
+            tooltip: l10n.chordLibraryTitle,
+            onPressed: () => context.push('/chords'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),

@@ -135,6 +135,12 @@ top-left **overlay** (`Positioned` in a `Stack`, `showLabel:false` so it doesn't
 duplicate the huge chord letter) — deliberately an overlay, not a column child,
 because the Live hero layout is height-tight (adding it inline overflowed by 72px).
 
+## Chord library (round 43 — ✅ built)
+`ChordLibraryScreen` (`/chords`, opened from the Learn app-bar grid icon): a
+browsable dictionary of every `ChordShapes` fingering, grouped Major / Minor /
+Sevenths / Suspended (`ChordShapes.allLabels` + a suffix classifier). A reference
+tool for learners; reuses `ChordDiagram`.
+
 ## Roadmap
 1. A backing track / count-in voice; the animated "Strum Cam" video share (growth #1).
-2. Left-handed mirror mode; more chord shapes (barre chords).
+2. Left-handed mirror mode; more chord shapes (barre chords); a search box on the library.

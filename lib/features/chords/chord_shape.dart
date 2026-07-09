@@ -54,4 +54,7 @@ class ChordShapes {
   }
 
   static bool has(String label) => _map.containsKey(label);
+
+  /// All chord labels we have a diagram for, in insertion order.
+  static List<String> get allLabels => _map.keys.toList();
 }
