@@ -127,6 +127,7 @@
   "settingsLeftHanded": "Balkezes",
   "settingsLeftHandedHint": "Akkord-diagramok tükrözése balkezes gitárhoz",
   "chordLibraryTitle": "Akkord-tár",
+  "chordLibrarySearch": "Akkord keresése…",
   "chordGroupMajor": "Dúr",
   "chordGroupMinor": "Moll",
   "chordGroupSeventh": "Szeptimek",

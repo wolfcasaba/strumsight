@@ -140,6 +140,15 @@ class Lessons {
         pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
       );
 
+  /// The I–vi–IV–V "50s" doo-wop progression.
+  static Lesson get fiftiesDooWop => Lesson(
+        id: 'fifties-doo-wop',
+        name: 'Fifties Doo-Wop',
+        bpm: 82,
+        chords: const ['C', 'Am', 'F', 'G'],
+        pattern: const [_d, null, _d, null, _d, null, _d, null],
+      );
+
   // ---- Intermediate ----
 
   /// The ubiquitous D-DU-UDU pop/folk pattern over a I–V–vi–IV progression.
@@ -172,6 +181,26 @@ class Lessons {
         pattern: const [_d, null, _d, _u, null, _u, _d, _u],
       );
 
+  /// An anthemic G–D–Em–C with the classic down-up feel.
+  static Lesson get anthemDrive => Lesson(
+        id: 'anthem-drive',
+        name: 'Anthem Drive',
+        bpm: 98,
+        difficulty: Difficulty.intermediate,
+        chords: const ['G', 'D', 'Em', 'C'],
+        pattern: const [_d, null, _d, _u, null, _u, _d, _u],
+      );
+
+  /// A minor "rising" progression with a steady down-up arpeggio feel.
+  static Lesson get risingMinor => Lesson(
+        id: 'rising-minor',
+        name: 'Rising Minor',
+        bpm: 86,
+        difficulty: Difficulty.intermediate,
+        chords: const ['Am', 'C', 'D', 'F'],
+        pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
+      );
+
   // ---- Advanced ----
 
   /// Off-beat up-strokes — a reggae-style skank.
@@ -194,15 +223,29 @@ class Lessons {
         pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
       );
 
+  /// A dominant-7 blues shuffle over A7–D7.
+  static Lesson get bluesShuffle => Lesson(
+        id: 'blues-shuffle',
+        name: 'Blues Shuffle',
+        bpm: 100,
+        difficulty: Difficulty.advanced,
+        chords: const ['A7', 'A7', 'D7', 'A7'],
+        pattern: const [_d, null, _d, _u, _d, null, _d, _u],
+      );
+
   static List<Lesson> get all => [
         firstStrums,
         twoChordChange,
         eighthDrive,
+        fiftiesDooWop,
         downUpGroove,
         folkPattern,
         barreGroove,
+        anthemDrive,
+        risingMinor,
         reggaeSkank,
         funkChop,
+        bluesShuffle,
       ];
 
   /// Lessons of a given tier, in curriculum order.

@@ -27,9 +27,24 @@ void main() {
     expect(find.text('MAJOR'), findsOneWidget);
     expect(find.text('MINOR'), findsOneWidget);
     expect(find.byType(ChordDiagram), findsWidgets);
+  });
 
-    // Lower sections render once scrolled to.
-    await tester.scrollUntilVisible(find.text('SUSPENDED'), 250);
+  testWidgets('the search box filters the catalogue', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ChordLibraryScreen(),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'sus');
+    await tester.pump();
+
+    // Only the Suspended group survives the filter.
     expect(find.text('SUSPENDED'), findsOneWidget);
+    expect(find.text('MAJOR'), findsNothing);
+    expect(find.text('MINOR'), findsNothing);
   });
 }

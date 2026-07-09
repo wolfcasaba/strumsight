@@ -63,7 +63,7 @@ practice (feeds the streak) and shows a score summary.
   exhaustively unit-tested.
 
 ## Curriculum (round 34 — ✅ built)
-8 built-in lessons across **Beginner / Intermediate / Advanced** tiers (incl. a barre-chord lesson, round 44)
+12 built-in lessons across **Beginner / Intermediate / Advanced** tiers (incl. a barre-chord lesson, round 44)
 (`Lessons.byDifficulty`). `LessonProgressController` persists per-lesson **best
 accuracy** (`lesson_progress_v1`, local like the streak); `LessonProgress.stars`
 maps it to 0–3 stars (≥90/80/70%). The `LearnScreen` records the run's accuracy
