@@ -11,6 +11,7 @@ import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
 import '../widgets/lesson_highway.dart';
+import 'lesson_score_preview_screen.dart';
 
 /// The play-along player: a [Lesson]'s chord + ↓/↑ strokes scroll toward the
 /// strike line in tempo (with a count-in), and — once playing — the real mic/DSP
@@ -147,6 +148,22 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(l10n.learnDone),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LessonScorePreviewScreen(
+                  lesson: widget.lesson,
+                  accuracy: snap.accuracy,
+                  maxCombo: snap.maxCombo,
+                  hits: snap.hits,
+                  total: snap.total,
+                ),
+              ));
+            },
+            icon: const Icon(Icons.ios_share, size: 18),
+            label: Text(l10n.actionShare),
           ),
           FilledButton(
             onPressed: () {

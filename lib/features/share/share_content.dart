@@ -66,6 +66,31 @@ class ShareContent {
     return 'strumsight-card-$n.png';
   }
 
+  /// Caption for a completed-lesson brag card (Learn → share). Leads with the
+  /// score + stars, keeps the moat + install link + UGC hashtag.
+  static String lessonCaption({
+    required String lessonName,
+    required double accuracy,
+    required int stars,
+    required int maxCombo,
+  }) {
+    final pct = (accuracy * 100).round();
+    final starStr = '⭐' * stars + '☆' * (3 - stars);
+    final buf = StringBuffer()
+      ..writeln('🎸 $lessonName — $pct% $starStr')
+      ..writeln('Best combo: $maxCombo · scored on my DOWN ↓ / UP ↑ strums.')
+      ..writeln()
+      ..writeln('Learn guitar with StrumSight — the only app that grades your '
+          'strum direction. 🎯')
+      ..writeln('Get it: $installUrl')
+      ..write(hashtags);
+    return buf.toString();
+  }
+
+  /// Share-file name for a lesson score card.
+  static String lessonFileName(String lessonId) =>
+      'strumsight-score-$lessonId.png';
+
   /// Helper for the card's arrow row: the strum directions in order, capped.
   static List<StrumDirection> strumDirections(AnalyzeResult result,
           {int max = 16}) =>

@@ -39,19 +39,39 @@ class ShareService {
     required AnalyzeResult result,
     int capo = 0,
     Rect? sharePositionOrigin,
+  }) =>
+      shareImage(
+        boundaryKey: boundaryKey,
+        caption: ShareContent.caption(result, capo: capo),
+        fileName: ShareContent.fileName(result),
+        fallbackText: ShareContent.caption(result, capo: capo),
+        sharePositionOrigin: sharePositionOrigin,
+      );
+
+  /// Generic: capture any [RepaintBoundary] to PNG and share it with [caption].
+  /// Falls back to a text-only share (of [fallbackText] ?? [caption]) if the
+  /// boundary can't be captured, rather than failing silently.
+  Future<void> shareImage({
+    required GlobalKey boundaryKey,
+    required String caption,
+    required String fileName,
+    String? fallbackText,
+    Rect? sharePositionOrigin,
   }) async {
     final png = await capturePng(boundaryKey);
-    final caption = ShareContent.caption(result, capo: capo);
     if (png == null) {
-      // Fall back to a text-only share rather than failing silently.
-      await shareText(result, capo: capo, sharePositionOrigin: sharePositionOrigin);
+      await SharePlus.instance.share(ShareParams(
+        text: fallbackText ?? caption,
+        subject: 'StrumSight',
+        sharePositionOrigin: sharePositionOrigin,
+      ));
       return;
     }
-    final file = await _writeTemp(png, ShareContent.fileName(result));
+    final file = await _writeTemp(png, fileName);
     await SharePlus.instance.share(ShareParams(
       files: [XFile(file.path, mimeType: 'image/png')],
       text: caption,
-      subject: 'My StrumSight practice',
+      subject: 'StrumSight',
       sharePositionOrigin: sharePositionOrigin,
     ));
   }

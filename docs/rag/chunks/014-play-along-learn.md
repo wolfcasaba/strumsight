@@ -70,9 +70,18 @@ maps it to 0–3 stars (≥90/80/70%). The `LearnScreen` records the run's accur
 on finish. The list groups by tier, shows stars, and **gates progression** —
 a lesson unlocks once the previous in its tier is passed (`isUnlocked`).
 
+## Score-card share (round 35 — ✅ built)
+A completed lesson can be shared as a 9:16 **lesson score card**
+(`LessonScoreCard` + `LessonScorePreviewScreen`), reusing the round-29 share
+pipeline via a new generic `ShareService.shareImage(boundaryKey, caption,
+fileName)`. Caption = `ShareContent.lessonCaption` (score + stars + best combo +
+moat + install link + `#StrumSightChallenge`). Reachable from the end-of-lesson
+summary dialog — wires Learn into the chunk-013 viral loop (a brag card =
+motivation + reach).
+
 ## Roadmap
 1. Import a saved Analyze clip as a lesson. Gate hits on the **chord** too (not
    just direction) once the ~370 ms chord lag is handled.
-3. Audio: a metronome click + optional backing so it's playable without reading
-   only (uses the existing `audioplayers` dep).
-4. Share a completed-lesson score card (feeds chunk 013's share loop).
+2. Audio: a metronome click + optional backing so it's playable without only
+   reading the highway (existing `audioplayers` dep; needs a click asset or a
+   synthesized tick — audio latency is on-device-only to verify).
