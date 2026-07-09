@@ -58,4 +58,15 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.volume_off), findsOneWidget);
   });
+
+  testWidgets('practice-speed control scales the tempo', (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await _pump(tester, engine); // First Strums = 70 BPM
+
+    expect(find.text('70 BPM'), findsOneWidget);
+    await tester.tap(find.text('50%'));
+    await tester.pump();
+    expect(find.text('35 BPM'), findsOneWidget); // 70 × 0.5
+  });
 }

@@ -131,6 +131,16 @@ void main() {
     });
   });
 
+  test('a slower practice tempo scales the event times', () {
+    // _lesson() is 60 BPM; override to 30 BPM → 2 s/beat, so down@beat0 lands at
+    // (4 + 0)·2 = 8.0 s instead of 4.0 s.
+    final s = LessonScorer(_lesson(), bpm: 30);
+    s.registerStrum(_d, 4.0); // the original-tempo time → now just an extra
+    expect(s.hits, 0);
+    s.registerStrum(_d, 8.0); // the slowed-down time → hit
+    expect(s.hits, 1);
+  });
+
   test('the nearest open event is chosen when two are in range', () {
     // Two downs a hair apart; a strum between them should take the closer one.
     final lesson = Lesson(

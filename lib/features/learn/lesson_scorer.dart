@@ -51,7 +51,8 @@ class LessonScorer {
     Lesson lesson, {
     this.countInBeats = 4,
     this.windowSec = 0.28,
-  }) : _secPerBeat = 60.0 / lesson.bpm {
+    double? bpm,
+  }) : _secPerBeat = 60.0 / (bpm ?? lesson.bpm) {
     for (final e in lesson.events) {
       final t = (countInBeats + e.beat) * _secPerBeat;
       _events.add(_Timed(e, t));

@@ -113,6 +113,13 @@ lag-tolerant, **secondary** metric that NEVER gates the reliable direction hit.
 you just recorded without saving first); the metronome mute preference is
 **persisted** (`metronomeMutedProvider`, local).
 
+## Practice speed (round 40 — ✅ built)
+A 50% / 75% / 100% speed selector on the player scales the effective tempo
+(`_bpm = lesson.bpm × speed`); the playhead, metronome and scorer all use it
+(`LessonScorer` gained a `bpm:` override). Changing speed restarts the run so the
+tempo-dependent playhead maths stays clean. Slow-down practice is the classic
+learning lever.
+
 ## Roadmap
-1. A backing track / count-in voice; a "chords %" line on the library tile.
-2. The animated "Strum Cam" video share (chunk 013 growth #1).
+1. **Chord diagrams** — show the fretting for each chord (essential for beginners).
+2. A backing track / count-in voice; the animated "Strum Cam" video share (growth #1).

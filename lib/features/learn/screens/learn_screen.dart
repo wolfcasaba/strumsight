@@ -38,6 +38,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   double _accumSec = 0;
   double _prevPlayhead = 0;
   bool _playing = false;
+  double _speed = 1.0; // practice-tempo multiplier
+
+  static const _speeds = [0.5, 0.75, 1.0];
+
+  /// Effective tempo after the practice-speed multiplier.
+  double get _bpm => widget.lesson.bpm * _speed;
 
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
@@ -59,7 +65,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   }
 
   double get _playhead =>
-      LessonTiming.playhead(_elapsedSec, widget.lesson.bpm, _countInBeats);
+      LessonTiming.playhead(_elapsedSec, _bpm, _countInBeats);
 
   void _onTick(Duration elapsed) {
     setState(() {
@@ -98,7 +104,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _play() {
     if (_playing) return;
-    _scorer ??= LessonScorer(widget.lesson, countInBeats: _countInBeats);
+    _scorer ??=
+        LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
     // Listen to the real mic/DSP stream only while playing (starts the engine).
     _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     _prevPlayhead = _playhead; // don't re-click beats already passed
@@ -116,7 +123,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _restart() {
     _ticker.stop();
     _lastSeq = 0;
-    _scorer = LessonScorer(widget.lesson, countInBeats: _countInBeats);
+    _scorer =
+        LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
     _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     _prevPlayhead = -_countInBeats.toDouble();
     setState(() {
@@ -204,6 +212,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _toggle() => _playing ? _pause() : _play();
 
+  void _setSpeed(double s) {
+    if (s == _speed) return;
+    _speed = s;
+    // Restart so the new tempo applies cleanly (playhead maths depends on it).
+    if (_playing || (_score != null)) {
+      _restart();
+    } else {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -251,8 +270,24 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                 ],
               ),
               const SizedBox(height: 8),
-              Text('${lesson.bpm.round()} BPM',
+              Text('${_bpm.round()} BPM',
                   style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('${l10n.learnSpeed}  ',
+                      style: Theme.of(context).textTheme.bodySmall),
+                  for (final s in _speeds) ...[
+                    ChoiceChip(
+                      label: Text('${(s * 100).round()}%'),
+                      selected: _speed == s,
+                      onSelected: (_) => _setSpeed(s),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                ],
+              ),
               const Spacer(),
               FilledButton.icon(
                 onPressed: _toggle,
