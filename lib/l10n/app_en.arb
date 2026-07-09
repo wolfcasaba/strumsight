@@ -188,5 +188,21 @@
   "progressMinutes": "{count}m",
   "@progressMinutes": { "placeholders": { "count": { "type": "int" } } },
   "progressHoursMinutes": "{hours}h {minutes}m",
-  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } }
+  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
+  "songsTitle": "My songs",
+  "songsEmpty": "Build your own song — pick chords, design a ↓/↑ strum pattern, then play it. It scores just like a lesson.",
+  "songNew": "New song",
+  "songNewTitle": "New song",
+  "songEditTitle": "Edit song",
+  "songName": "Song name",
+  "songProgression": "Chord progression",
+  "songProgressionHint": "Add chords below — one per bar, in play order.",
+  "songAddChord": "Add a chord",
+  "songStrumPattern": "Strum pattern",
+  "songStrumPatternHint": "Tap each slot to cycle rest → ↓ down → ↑ up.",
+  "songTempo": "Tempo",
+  "songBpm": "{count} BPM",
+  "@songBpm": { "placeholders": { "count": { "type": "int" } } },
+  "songSave": "Save",
+  "songDelete": "Delete"
 }

@@ -167,5 +167,21 @@
   "progressMinutes": "{count} p",
   "@progressMinutes": { "placeholders": { "count": { "type": "int" } } },
   "progressHoursMinutes": "{hours} ó {minutes} p",
-  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } }
+  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
+  "songsTitle": "Dalaim",
+  "songsEmpty": "Építsd meg a saját dalod — válassz akkordokat, tervezz ↓/↑ pengetésmintát, majd játszd le. Pontoz, mint egy lecke.",
+  "songNew": "Új dal",
+  "songNewTitle": "Új dal",
+  "songEditTitle": "Dal szerkesztése",
+  "songName": "Dal neve",
+  "songProgression": "Akkordmenet",
+  "songProgressionHint": "Adj hozzá akkordokat lent — ütemenként egyet, lejátszási sorrendben.",
+  "songAddChord": "Akkord hozzáadása",
+  "songStrumPattern": "Pengetésminta",
+  "songStrumPatternHint": "Koppints a mezőkre: szünet → ↓ le → ↑ fel.",
+  "songTempo": "Tempó",
+  "songBpm": "{count} BPM",
+  "@songBpm": { "placeholders": { "count": { "type": "int" } } },
+  "songSave": "Mentés",
+  "songDelete": "Törlés"
 }

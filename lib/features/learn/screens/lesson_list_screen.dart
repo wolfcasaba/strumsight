@@ -29,6 +29,11 @@ class LessonListScreen extends ConsumerWidget {
         title: Text(l10n.learnTitle),
         actions: [
           IconButton(
+            icon: const Icon(Icons.library_music_outlined),
+            tooltip: l10n.songsTitle,
+            onPressed: () => context.push('/songs'),
+          ),
+          IconButton(
             icon: const Icon(Icons.grid_view),
             tooltip: l10n.chordLibraryTitle,
             onPressed: () => context.push('/chords'),
