@@ -7,6 +7,7 @@ import '../../chords/chord_shape.dart';
 import '../../live/model/strum.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
+import '../widgets/progression_picker.dart';
 import '../widgets/strum_pattern_editor.dart';
 
 /// Create or edit a user song: name → chord progression → ↓/↑ strum pattern →
@@ -54,6 +55,13 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
       _chords.isNotEmpty &&
       _pattern.any((d) => d != null);
 
+  Future<void> _suggest() async {
+    final chords = await showProgressionPicker(context);
+    if (chords != null && chords.isNotEmpty) {
+      setState(() => _chords = [..._chords, ...chords]);
+    }
+  }
+
   Future<void> _save() async {
     final ctrl = ref.read(songsProvider.notifier);
     if (widget.existing != null) {
@@ -98,7 +106,16 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             ),
             const SizedBox(height: 26),
 
-            _Label(l10n.songProgression),
+            Row(
+              children: [
+                Expanded(child: _Label(l10n.songProgression)),
+                TextButton.icon(
+                  onPressed: _suggest,
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: Text(l10n.songSuggest),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             if (_chords.isEmpty)
               Text(l10n.songProgressionHint,

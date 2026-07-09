@@ -53,6 +53,24 @@ void main() {
     expect(find.text('Test Song'), findsOneWidget);
   });
 
+  testWidgets('suggest-a-progression fills the chord list', (tester) async {
+    await tester.pumpWidget(_app(const SongListScreen()));
+    await tester.pump();
+    await tester.tap(find.text('New song'));
+    await tester.pumpAndSettle();
+
+    // Open the suggestion sheet and pick the Pop progression (default key C).
+    await tester.tap(find.text('Suggest'));
+    await tester.pumpAndSettle();
+    expect(find.text('Suggest a progression'), findsOneWidget);
+    await tester.tap(find.textContaining('Pop'));
+    await tester.pumpAndSettle();
+
+    // Pop in C = C G Am F → each added as a removable InputChip.
+    expect(find.widgetWithText(InputChip, 'Am'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'F'), findsOneWidget);
+  });
+
   testWidgets('pattern editor cycles a rest slot to a down-strum on tap',
       (tester) async {
     List<StrumDirection?>? emitted;

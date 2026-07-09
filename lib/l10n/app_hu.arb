@@ -183,5 +183,8 @@
   "songBpm": "{count} BPM",
   "@songBpm": { "placeholders": { "count": { "type": "int" } } },
   "songSave": "Mentés",
-  "songDelete": "Törlés"
+  "songDelete": "Törlés",
+  "songSuggest": "Javaslat",
+  "songSuggestTitle": "Menet javaslása",
+  "songKeyLabel": "Hangnem"
 }

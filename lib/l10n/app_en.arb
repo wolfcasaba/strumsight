@@ -204,5 +204,8 @@
   "songBpm": "{count} BPM",
   "@songBpm": { "placeholders": { "count": { "type": "int" } } },
   "songSave": "Save",
-  "songDelete": "Delete"
+  "songDelete": "Delete",
+  "songSuggest": "Suggest",
+  "songSuggestTitle": "Suggest a progression",
+  "songKeyLabel": "Key"
 }
