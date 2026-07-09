@@ -207,5 +207,19 @@
   "songDelete": "Delete",
   "songSuggest": "Suggest",
   "songSuggestTitle": "Suggest a progression",
-  "songKeyLabel": "Key"
+  "songKeyLabel": "Key",
+  "commonCancel": "Cancel",
+  "setlistsTitle": "Setlists",
+  "setlistsEmpty": "Group your songs into a practice set and play them back-to-back.",
+  "setlistNew": "New setlist",
+  "setlistName": "Setlist name",
+  "setlistSongCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
+  "@setlistSongCount": { "placeholders": { "count": { "type": "int" } } },
+  "setlistAddSong": "Add song",
+  "setlistPlayAll": "Play set",
+  "setlistEmptyDetail": "Add songs to this set with the + button.",
+  "setlistNoSongsYet": "Create a song first, then add it here.",
+  "setlistRename": "Rename",
+  "setlistDelete": "Delete setlist",
+  "setlistRemoveSong": "Remove from set"
 }

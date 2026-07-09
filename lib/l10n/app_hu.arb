@@ -186,5 +186,19 @@
   "songDelete": "Törlés",
   "songSuggest": "Javaslat",
   "songSuggestTitle": "Menet javaslása",
-  "songKeyLabel": "Hangnem"
+  "songKeyLabel": "Hangnem",
+  "commonCancel": "Mégse",
+  "setlistsTitle": "Szettlisták",
+  "setlistsEmpty": "Csoportosítsd a dalaidat egy gyakorló-szettbe, és játszd le őket egymás után.",
+  "setlistNew": "Új szettlista",
+  "setlistName": "Szettlista neve",
+  "setlistSongCount": "{count, plural, =0{Nincs dal} =1{1 dal} other{{count} dal}}",
+  "@setlistSongCount": { "placeholders": { "count": { "type": "int" } } },
+  "setlistAddSong": "Dal hozzáadása",
+  "setlistPlayAll": "Szett lejátszása",
+  "setlistEmptyDetail": "Adj dalokat a szetthez a + gombbal.",
+  "setlistNoSongsYet": "Előbb hozz létre egy dalt, majd add hozzá itt.",
+  "setlistRename": "Átnevezés",
+  "setlistDelete": "Szettlista törlése",
+  "setlistRemoveSong": "Eltávolítás a szettből"
 }

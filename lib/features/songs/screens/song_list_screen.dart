@@ -7,6 +7,7 @@ import '../../learn/screens/learn_screen.dart';
 import '../../share/screens/share_preview_screen.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
+import 'setlist_list_screen.dart';
 import 'song_builder_screen.dart';
 
 /// The user's songbook: create your own chord-progression songs and play them
@@ -40,7 +41,19 @@ class SongListScreen extends ConsumerWidget {
     final songs = ref.watch(songsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.songsTitle)),
+      appBar: AppBar(
+        title: Text(l10n.songsTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.queue_music),
+            tooltip: l10n.setlistsTitle,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                  builder: (_) => const SetlistListScreen()),
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openBuilder(context),
         backgroundColor: AppColors.primary,
