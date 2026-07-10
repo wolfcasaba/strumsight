@@ -9,6 +9,7 @@ import '../features/library/screens/session_detail_screen.dart';
 import '../features/chords/screens/chord_library_screen.dart';
 import '../features/learn/screens/lesson_list_screen.dart';
 import '../features/live/screens/live_screen.dart';
+import '../features/metronome/screens/metronome_screen.dart';
 import '../features/onboarding/onboarding_provider.dart';
 import '../features/onboarding/screens/onboarding_screen.dart';
 import '../features/progress/screens/progress_screen.dart';
@@ -58,6 +59,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/tuner', builder: (_, _) => const TunerScreen()),
+      GoRoute(
+          path: '/metronome', builder: (_, _) => const MetronomeScreen()),
       GoRoute(path: '/streak', builder: (_, _) => const StreakScreen()),
       GoRoute(path: '/progress', builder: (_, _) => const ProgressScreen()),
       GoRoute(path: '/songs', builder: (_, _) => const SongListScreen()),

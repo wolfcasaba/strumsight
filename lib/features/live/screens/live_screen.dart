@@ -188,6 +188,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               _ActionBar(
                 paused: _paused,
                 onTuner: () => context.push('/tuner'),
+                onMetronome: () => context.push('/metronome'),
                 onPauseToggle: _togglePause,
               ),
             ],
@@ -317,11 +318,13 @@ class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.paused,
     required this.onTuner,
+    required this.onMetronome,
     required this.onPauseToggle,
   });
 
   final bool paused;
   final VoidCallback onTuner;
+  final VoidCallback onMetronome;
   final VoidCallback onPauseToggle;
 
   @override
@@ -342,6 +345,11 @@ class _ActionBar extends StatelessWidget {
             label: paused ? l10n.liveResume : l10n.livePause,
             onTap: onPauseToggle,
             primary: true,
+          ),
+          _ActionButton(
+            icon: Icons.av_timer,
+            label: l10n.metronomeTitle,
+            onTap: onMetronome,
           ),
         ],
       ),

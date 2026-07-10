@@ -221,5 +221,10 @@
   "setlistNoSongsYet": "Create a song first, then add it here.",
   "setlistRename": "Rename",
   "setlistDelete": "Delete setlist",
-  "setlistRemoveSong": "Remove from set"
+  "setlistRemoveSong": "Remove from set",
+  "metronomeTitle": "Metronome",
+  "metronomeBpm": "BPM",
+  "metronomeTap": "Tap tempo",
+  "metronomeStart": "Start",
+  "metronomeStop": "Stop"
 }

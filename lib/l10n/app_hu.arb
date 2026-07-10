@@ -200,5 +200,10 @@
   "setlistNoSongsYet": "Előbb hozz létre egy dalt, majd add hozzá itt.",
   "setlistRename": "Átnevezés",
   "setlistDelete": "Szettlista törlése",
-  "setlistRemoveSong": "Eltávolítás a szettből"
+  "setlistRemoveSong": "Eltávolítás a szettből",
+  "metronomeTitle": "Metronóm",
+  "metronomeBpm": "BPM",
+  "metronomeTap": "Tap tempó",
+  "metronomeStart": "Indítás",
+  "metronomeStop": "Leállítás"
 }
