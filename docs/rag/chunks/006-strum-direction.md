@@ -47,10 +47,20 @@ accuracy across seeds (measured spread ≈0.77–0.86).
 strum bleeds into the ~70 ms classify window. Attack-anchoring / hard window
 caps were tried and REGRESSED the common tempos (the cue needs the full attack
 window), so the extreme case is left to the confidence tier rather than faked.
-A better fix is band re-design (round 60): the current high band (≥1000 Hz)
-misses treble-string FUNDAMENTALS (B3 247 / E4 330 Hz sit in the 200–1000 Hz
-gap), so an up-strum's leading edge is partly invisible — the main lever left
-for lifting up-strum accuracy without ML.
+
+**⚠ ROUND 60 — band-redesign hypothesis REFUTED (measured, don't repeat).**
+Intuition said the high band (≥1000 Hz) misses treble-string FUNDAMENTALS
+(B3 247 / E4 330 Hz sit in the 200–1000 Hz gap) so up-strums are under-served.
+A sweep of 8 band configs (240 overlapping-strum trials each, fixed seed) proved
+the opposite: the **current (bass ≤200, treble ≥1000, no cap) is the BEST at
+87.9%**; every treble-fundamental widening scored WORSE (77–82%). Reason: a
+treble band reaching down to ~240 Hz is polluted by the BASS strings' upper
+harmonics (E2's 3rd ≈ 246, A2's 2nd ≈ 220), which arrive *with* the bass strings
+on a DOWN-strum → the treble band rises early on down-strums too, blurring the
+cue. The ≥1000 Hz band works precisely because bass harmonics are weak up there
+and pick brightness genuinely distinguishes. **Conclusion: the audio-only
+heuristic is at ~88% aggregate — near the trained-CRNN ceiling. Further gains
+need the ML path (chunk 015), not band tuning.** Keep the current bands.
 
 **Expectations to encode in tests + UI:** up-strum accuracy WILL trail
 down-strum (fewer strings, softer attack, treble-led is noisier). This is why
