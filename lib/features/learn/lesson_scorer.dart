@@ -4,6 +4,12 @@ import 'model/lesson.dart';
 /// How a single lesson event resolved.
 enum HitResult { hit, wrongDirection, missed }
 
+/// Timing quality of a correct-direction hit (game-feel / juice, chunk 016b).
+/// Rhythm-game convention: a tight window is PERFECT, a looser one GOOD, and
+/// anything still inside the hit window but off-centre is EARLY (struck before
+/// the beat) or LATE (after). Only meaningful when [HitResult.hit].
+enum Timing { perfect, good, early, late }
+
 /// Immutable snapshot of a scoring run (for the UI + tests).
 class ScoreSnapshot {
   const ScoreSnapshot({
@@ -14,6 +20,10 @@ class ScoreSnapshot {
     required this.maxCombo,
     required this.total,
     required this.lastResult,
+    this.score = 0,
+    this.multiplier = 1,
+    this.perfect = 0,
+    this.lastTiming,
     this.chordHits = 0,
     this.chordTotal = 0,
   });
@@ -25,6 +35,19 @@ class ScoreSnapshot {
   final int maxCombo;
   final int total;
   final HitResult? lastResult;
+
+  /// Running points (perfect/good/off-beat hits × the combo multiplier).
+  final int score;
+
+  /// Current combo multiplier (×1/×2/×3/×4) — the reward chain.
+  final int multiplier;
+
+  /// How many hits landed in the tight PERFECT window (for the summary/brag).
+  final int perfect;
+
+  /// Timing quality of the most recent hit (null if the last event wasn't a
+  /// correct-direction hit).
+  final Timing? lastTiming;
 
   /// Chord-correctness (secondary): events (with a chord) where the right chord
   /// was sounding around the stroke. Lag-tolerant, never gates the strum hit.
@@ -51,6 +74,8 @@ class LessonScorer {
     Lesson lesson, {
     this.countInBeats = 4,
     this.windowSec = 0.28,
+    this.perfectWindowSec = 0.05,
+    this.goodWindowSec = 0.12,
     double? bpm,
   }) : _secPerBeat = 60.0 / (bpm ?? lesson.bpm) {
     for (final e in lesson.events) {
@@ -64,6 +89,10 @@ class LessonScorer {
 
   /// Timing tolerance for a strum to count for an event (±).
   final double windowSec;
+
+  /// Tight window (±) for a PERFECT hit; the next tier is GOOD.
+  final double perfectWindowSec;
+  final double goodWindowSec;
   final int countInBeats;
   final double _secPerBeat;
 
@@ -82,6 +111,24 @@ class LessonScorer {
   int combo = 0;
   int maxCombo = 0;
   HitResult? lastResult;
+
+  int score = 0;
+  int perfectHits = 0;
+  Timing? lastTiming;
+
+  /// Base points per hit by timing tier (before the combo multiplier).
+  static const _pointsPerfect = 100;
+  static const _pointsGood = 70;
+  static const _pointsOffBeat = 40;
+
+  /// Combo multiplier (the reward chain): ×1 → ×2 (5) → ×3 (10) → ×4 (20).
+  int get multiplier => combo >= 20
+      ? 4
+      : combo >= 10
+          ? 3
+          : combo >= 5
+              ? 2
+              : 1;
 
   int chordTotal = 0;
   int chordHits = 0;
@@ -103,9 +150,22 @@ class LessonScorer {
         maxCombo: maxCombo,
         total: total,
         lastResult: lastResult,
+        score: score,
+        multiplier: multiplier,
+        perfect: perfectHits,
+        lastTiming: lastTiming,
         chordHits: chordHits,
         chordTotal: chordTotal,
       );
+
+  /// Timing tier for a hit landed [offsetSec] from the target (signed:
+  /// negative = early, positive = late).
+  Timing _timingFor(double offsetSec) {
+    final mag = offsetSec.abs();
+    if (mag <= perfectWindowSec) return Timing.perfect;
+    if (mag <= goodWindowSec) return Timing.good;
+    return offsetSec < 0 ? Timing.early : Timing.late;
+  }
 
   /// Record the currently detected chord [label] ('' = none) at [elapsedSec].
   /// Only change-points are kept; used to grade chord-correctness leniently.
@@ -154,8 +214,10 @@ class LessonScorer {
 
   /// Register a detected strum at [elapsedSec]; matches it to the nearest
   /// still-open event within [windowSec]. A strum with no event in range is an
-  /// extra (ignored — we don't punish enthusiasm here).
-  void registerStrum(StrumDirection dir, double elapsedSec) {
+  /// extra (ignored — we don't punish enthusiasm here). Returns how it
+  /// resolved ([HitResult.hit]/[HitResult.wrongDirection]) or null if it
+  /// matched no open event (so the caller doesn't fire a stale-verdict haptic).
+  HitResult? registerStrum(StrumDirection dir, double elapsedSec) {
     _Timed? best;
     var bestDelta = windowSec + 1e9;
     for (final t in _events) {
@@ -166,17 +228,30 @@ class LessonScorer {
         bestDelta = d;
       }
     }
-    if (best == null) return; // extra strum, no open event nearby
+    if (best == null) return null; // extra strum, no open event nearby
     best.matched = true;
     if (dir == best.event.direction) {
       hits++;
       combo++;
       if (combo > maxCombo) maxCombo = combo;
       lastResult = HitResult.hit;
+      // Timing tier + points × the (now-updated) combo multiplier.
+      final timing = _timingFor(elapsedSec - best.time);
+      lastTiming = timing;
+      if (timing == Timing.perfect) perfectHits++;
+      final base = switch (timing) {
+        Timing.perfect => _pointsPerfect,
+        Timing.good => _pointsGood,
+        Timing.early || Timing.late => _pointsOffBeat,
+      };
+      score += base * multiplier;
+      return HitResult.hit;
     } else {
       wrong++;
       combo = 0;
       lastResult = HitResult.wrongDirection;
+      lastTiming = null;
+      return HitResult.wrongDirection;
     }
   }
 
@@ -190,6 +265,7 @@ class LessonScorer {
         missed++;
         combo = 0;
         lastResult = HitResult.missed;
+        lastTiming = null;
       }
     }
     _evalChords(elapsedSec);

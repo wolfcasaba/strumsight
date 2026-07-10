@@ -59,6 +59,14 @@ void main() {
     expect(s.hits, 0);
   });
 
+  test('registerStrum returns how it resolved (null when it matched nothing)',
+      () {
+    final s = LessonScorer(_lesson());
+    expect(s.registerStrum(_d, 10.0), isNull); // no event nearby
+    expect(s.registerStrum(_d, 4.0), HitResult.hit);
+    expect(s.registerStrum(_d, 4.5), HitResult.wrongDirection); // event is up
+  });
+
   test('finalize turns the remaining open events into misses', () {
     final s = LessonScorer(_lesson());
     s.registerStrum(_d, 4.0); // 1 hit
@@ -128,6 +136,78 @@ void main() {
       ));
       expect(s.chordTotal, 0);
       expect(s.snapshot().hasChords, isFalse);
+    });
+  });
+
+  // Game-feel (round 61): timing tiers + points + combo multiplier (chunk 016b).
+  // A full down-strum bar (8 slots) over two chords → 16 events at 60 BPM,
+  // 0.5 s apart, first at 4.0 s (after the 4-beat count-in).
+  Lesson downLesson() => Lesson(
+        id: 'dn',
+        name: 'dn',
+        bpm: 60,
+        chords: const ['C', 'G'],
+        pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
+      );
+
+  group('game-feel: timing, points, multiplier', () {
+    test('a dead-on hit is PERFECT and scores the base 100', () {
+      final s = LessonScorer(downLesson());
+      s.registerStrum(_d, 4.0);
+      expect(s.lastTiming, Timing.perfect);
+      expect(s.perfectHits, 1);
+      expect(s.score, 100);
+      expect(s.snapshot().lastTiming, Timing.perfect);
+    });
+
+    test('a hit inside the good window is GOOD (70)', () {
+      final s = LessonScorer(downLesson());
+      s.registerStrum(_d, 4.0 + 0.09); // >0.05, ≤0.12
+      expect(s.lastTiming, Timing.good);
+      expect(s.score, 70);
+    });
+
+    test('an in-window off-beat hit is EARLY or LATE by sign', () {
+      final early = LessonScorer(downLesson())..registerStrum(_d, 4.0 - 0.2);
+      expect(early.lastTiming, Timing.early);
+      expect(early.score, 40);
+      final late = LessonScorer(downLesson())..registerStrum(_d, 4.0 + 0.2);
+      expect(late.lastTiming, Timing.late);
+    });
+
+    test('combo builds a multiplier that scales points', () {
+      final s = LessonScorer(downLesson());
+      for (var i = 0; i < 5; i++) {
+        s.registerStrum(_d, 4.0 + i * 0.5); // 5 perfect hits in a row
+      }
+      expect(s.combo, 5);
+      expect(s.multiplier, 2);
+      // 4 hits at ×1 (100 each) + the 5th at ×2 (200) = 600.
+      expect(s.score, 600);
+    });
+
+    test('a miss resets the multiplier and clears the timing', () {
+      final s = LessonScorer(downLesson());
+      for (var i = 0; i < 5; i++) {
+        s.registerStrum(_d, 4.0 + i * 0.5);
+      }
+      expect(s.multiplier, 2);
+      s.advance(6.5 + 0.28 + 0.01); // let the 6th event (6.5 s) pass unhit
+      expect(s.combo, 0);
+      expect(s.multiplier, 1);
+      expect(s.lastTiming, isNull);
+      expect(s.lastResult, HitResult.missed);
+    });
+
+    test('wrong direction clears the timing and breaks the multiplier', () {
+      final s = LessonScorer(downLesson());
+      for (var i = 0; i < 5; i++) {
+        s.registerStrum(_d, 4.0 + i * 0.5);
+      }
+      s.registerStrum(_u, 6.5); // the event is a down-stroke → wrong
+      expect(s.lastResult, HitResult.wrongDirection);
+      expect(s.lastTiming, isNull);
+      expect(s.combo, 0);
     });
   });
 

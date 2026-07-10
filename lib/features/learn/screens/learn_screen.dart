@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -103,8 +104,14 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // A new discrete strum → score it against the nearest lesson event.
     if (frame.strumSeq > _lastSeq && frame.latestStrum != null) {
       _lastSeq = frame.strumSeq as int;
-      _scorer!.registerStrum(frame.latestStrum.direction, _elapsedSec);
-      setState(() => _score = _scorer!.snapshot());
+      // Only buzz when the strum actually resolved an event — a stray strum
+      // with no event in range returns null and must NOT re-fire the previous
+      // verdict's haptic.
+      final result =
+          _scorer!.registerStrum(frame.latestStrum.direction, _elapsedSec);
+      final snap = _scorer!.snapshot();
+      if (result != null) _fireHaptic(result, snap.lastTiming);
+      setState(() => _score = snap);
     }
     // Track the detected chord for the (lenient, secondary) chord grade.
     final chord = frame.current?.label;
@@ -194,6 +201,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                     fontWeight: FontWeight.w900,
                     fontSize: 48,
                     color: AppColors.primary)),
+            if (snap.score > 0)
+              Text('${snap.score} ${l10n.learnScore}'
+                  '${snap.perfect > 0 ? ' · ${snap.perfect} ${l10n.learnPerfect}' : ''}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, color: AppColors.primary)),
             Text(l10n.learnScoreLine(snap.hits, snap.total, snap.maxCombo)),
             if (snap.hasChords)
               Padding(
@@ -237,6 +249,26 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   }
 
   void _toggle() => _playing ? _pause() : _play();
+
+  /// Tactile confirmation aligned to the strum (chunk 016b juice): a firmer tap
+  /// for a PERFECT hit, a light one for any other hit, a gentle selection tick
+  /// for a wrong direction. Misses stay silent — failure should feel SAFE, not
+  /// punished (Duolingo principle). Haptics are best-effort/no-op on desktop.
+  void _fireHaptic(HitResult? result, Timing? timing) {
+    switch (result) {
+      case HitResult.hit:
+        if (timing == Timing.perfect) {
+          HapticFeedback.mediumImpact();
+        } else {
+          HapticFeedback.lightImpact();
+        }
+      case HitResult.wrongDirection:
+        HapticFeedback.selectionClick();
+      case HitResult.missed:
+      case null:
+        break;
+    }
+  }
 
   /// The chord to fret right now: the most recent event chord at/before the
   /// playhead (falling back to the first chord before the lesson starts).
@@ -318,7 +350,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                       lesson: lesson, playheadBeat: _playhead, height: 140),
                   if (countIn != null) CountInOverlay(number: countIn),
                   if (countIn == null && score?.lastResult != null)
-                    _FeedbackFlash(result: score!.lastResult!),
+                    _FeedbackFlash(
+                        result: score!.lastResult!, timing: score.lastTiming),
                 ],
               ),
               const SizedBox(height: 6),
@@ -372,12 +405,16 @@ class _ScoreHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Combo shows its live multiplier (the reward chain) once it kicks in.
+    final combo = score.multiplier > 1
+        ? '${score.combo} ×${score.multiplier}'
+        : '${score.combo}';
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
+        _stat('${score.score}', l10n.learnScore),
+        _stat(combo, l10n.learnCombo),
         _stat('${(score.accuracy * 100).round()}%', l10n.learnAccuracy),
-        _stat('${score.combo}', l10n.learnCombo),
-        _stat('${score.hits}/${score.total}', l10n.learnHits),
       ],
     );
   }
@@ -397,14 +434,23 @@ class _ScoreHud extends StatelessWidget {
 }
 
 class _FeedbackFlash extends StatelessWidget {
-  const _FeedbackFlash({required this.result});
+  const _FeedbackFlash({required this.result, this.timing});
   final HitResult result;
+  final Timing? timing;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Hits carry a timing verdict (PERFECT/GOOD/EARLY/LATE); wrong/miss stay
+    // gentle (safe-failure). Early/late add an arrow hint at which side.
     final (text, color) = switch (result) {
-      HitResult.hit => (l10n.learnHit, AppColors.confidenceHigh),
+      HitResult.hit => switch (timing) {
+          Timing.perfect => (l10n.learnPerfect, AppColors.confidenceHigh),
+          Timing.good => (l10n.learnGood, AppColors.confidenceHigh),
+          Timing.early => ('${l10n.learnEarly} ⟵', AppColors.confidenceMid),
+          Timing.late => ('⟶ ${l10n.learnLate}', AppColors.confidenceMid),
+          null => (l10n.learnHit, AppColors.confidenceHigh),
+        },
       HitResult.wrongDirection => (l10n.learnWrongWay, AppColors.confidenceMid),
       HitResult.missed => (l10n.learnMiss, AppColors.confidenceLow),
     };
