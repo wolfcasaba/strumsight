@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
 import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
 import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
 import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
@@ -207,6 +208,55 @@ void main() {
       } else {
         failures.add('trial=$t cut=${cutHz.round()}Hz '
             'atten=${atten.toStringAsFixed(2)} expected=$expected got=$got');
+      }
+    }
+    expect(correct, greaterThanOrEqualTo(16),
+        reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
+  // chunk 012 / round 71 — the BATCH Viterbi path (Analyze): a random chord
+  // sequence at a random per-chord duration must come back as exactly that
+  // sequence — no transient junk segments, no wrong final label (both
+  // measured failures of the online decoder on fast changes).
+  test('property: random chord sequences batch-decode to the exact sequence '
+      '(≥16 of 20)', () {
+    const analyzer = ClipAnalyzer();
+    // Distinct-sounding open-position triads (real root-third-fifth voicings).
+    const pool = {
+      'C': cMajorFreqs,
+      'G': gMajorFreqs,
+      'Am': aMinorFreqs,
+      'F': fMajorFreqs,
+    };
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final names = pool.keys.toList();
+      final seq = <String>[];
+      final len = 3 + rng.nextInt(2); // 3..4 chords
+      String? prev;
+      for (var i = 0; i < len; i++) {
+        String pick;
+        do {
+          pick = names[rng.nextInt(names.length)];
+        } while (pick == prev); // consecutive chords must differ
+        seq.add(pick);
+        prev = pick;
+      }
+      final secsPer = 0.7 + rng.nextDouble() * 0.5; // 0.7..1.2 s per chord
+      final pcm = <double>[
+        for (final name in seq)
+          ...chordSignal(pool[name]!, seconds: secsPer,
+              amp: 0.12 + rng.nextDouble() * 0.15),
+      ];
+      final got = [
+        for (final c in analyzer.analyze(pcm, 44100).chords) c.label
+      ];
+      if (got.join(' ') == seq.join(' ')) {
+        correct++;
+      } else {
+        failures.add('trial=$t secs=${secsPer.toStringAsFixed(2)} '
+            'expected=${seq.join('·')} got=${got.join('·')}');
       }
     }
     expect(correct, greaterThanOrEqualTo(16),
