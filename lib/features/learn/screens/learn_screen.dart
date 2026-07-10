@@ -63,6 +63,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
   final List<HitBurst> _bursts = []; // strike-line spark bursts (juice)
+  int _prevMultiplier = 1; // to detect a combo-multiplier milestone
   static const double _highwayHeight = 140;
   static const double _strikeX = 68; // must match LessonHighway.strikeX default
   int _lastSeq = 0;
@@ -126,7 +127,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       // line — the visible celebration that turns "a diagram" into "a game".
       if (result == HitResult.hit) {
         _emitBurst(frame.latestStrum.direction as StrumDirection, snap.lastTiming);
+        // Crossing a combo-multiplier tier (×2/×3/×4) fires a bigger, longer
+        // golden fountain — the reward-chain milestone (chunk 016b P1).
+        if (snap.multiplier > _prevMultiplier) _emitMilestone();
       }
+      _prevMultiplier = snap.multiplier;
       setState(() => _score = snap);
     }
     // Track the detected chord for the (lenient, secondary) chord grade.
@@ -175,6 +180,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       // burst would re-fire as a phantom spark when the replay clock climbs
       // back to its start time.
       _bursts.clear();
+      _prevMultiplier = 1;
       _playing = true;
     });
     _ticker.start();
@@ -291,6 +297,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           ? AppColors.primary
           : AppColors.confidenceHigh,
       strength: strength,
+    ));
+  }
+
+  /// A bigger, longer golden burst when the combo multiplier steps up.
+  void _emitMilestone() {
+    _bursts.add(HitBurst(
+      startSec: _elapsedSec,
+      color: AppColors.primary,
+      strength: 1.4,
+      count: 26,
+      lifeSec: 0.6,
     ));
   }
 
@@ -478,9 +495,10 @@ class _ScoreHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Combo shows its live multiplier (the reward chain) once it kicks in.
+    // Combo shows its live multiplier (the reward chain) once it kicks in — a
+    // 🔥 signals "you're on a hot streak".
     final combo = score.multiplier > 1
-        ? '${score.combo} ×${score.multiplier}'
+        ? '🔥 ${score.combo} ×${score.multiplier}'
         : '${score.combo}';
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
