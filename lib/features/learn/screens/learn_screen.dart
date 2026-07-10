@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/widgets/chord_diagram.dart';
+import '../../live/model/strum.dart';
 import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
@@ -18,6 +19,7 @@ import '../providers/metronome_pref_provider.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
+import '../widgets/hit_burst.dart';
 import '../widgets/lesson_highway.dart';
 import 'lesson_score_preview_screen.dart';
 
@@ -55,6 +57,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
+  final List<HitBurst> _bursts = []; // strike-line spark bursts (juice)
+  static const double _highwayHeight = 140;
+  static const double _strikeX = 68; // must match LessonHighway.strikeX default
   int _lastSeq = 0;
   ProviderSubscription<AsyncValue<dynamic>>? _frameSub;
 
@@ -81,6 +86,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _elapsedSec = _accumSec + elapsed.inMicroseconds / 1e6;
       _scorer?.advance(_elapsedSec);
       _score = _scorer?.snapshot();
+      _bursts.removeWhere((b) => b.isDone(_elapsedSec)); // prune faded sparks
     });
     // On every beat crossed since the last frame: click the metronome (accent on
     // downbeats), and in jam mode play the chord backing on each bar downbeat.
@@ -111,6 +117,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           _scorer!.registerStrum(frame.latestStrum.direction, _elapsedSec);
       final snap = _scorer!.snapshot();
       if (result != null) _fireHaptic(result, snap.lastTiming);
+      // A clean hit throws a spark burst in the stroke's colour at the strike
+      // line — the visible celebration that turns "a diagram" into "a game".
+      if (result == HitResult.hit) {
+        _emitBurst(frame.latestStrum.direction as StrumDirection, snap.lastTiming);
+      }
       setState(() => _score = snap);
     }
     // Track the detected chord for the (lenient, secondary) chord grade.
@@ -154,6 +165,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _accumSec = 0;
       _elapsedSec = 0;
       _score = null;
+      // Clear leftover sparks — the clock resets to 0 while bursts from the
+      // finished run still carry startSec far in the "future", so an un-cleared
+      // burst would re-fire as a phantom spark when the replay clock climbs
+      // back to its start time.
+      _bursts.clear();
       _playing = true;
     });
     _ticker.start();
@@ -249,6 +265,24 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   }
 
   void _toggle() => _playing ? _pause() : _play();
+
+  /// Fire a spark burst at the strike line in the stroke's colour (copper =
+  /// down, green = up), sized by timing quality (PERFECT bursts biggest).
+  void _emitBurst(StrumDirection dir, Timing? timing) {
+    final strength = switch (timing) {
+      Timing.perfect => 1.0,
+      Timing.good => 0.72,
+      Timing.early || Timing.late => 0.45,
+      null => 0.6,
+    };
+    _bursts.add(HitBurst(
+      startSec: _elapsedSec,
+      color: dir == StrumDirection.down
+          ? AppColors.primary
+          : AppColors.confidenceHigh,
+      strength: strength,
+    ));
+  }
 
   /// Tactile confirmation aligned to the strum (chunk 016b juice): a firmer tap
   /// for a PERFECT hit, a light one for any other hit, a gentle selection tick
@@ -347,7 +381,27 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                 alignment: Alignment.center,
                 children: [
                   LessonHighway(
-                      lesson: lesson, playheadBeat: _playhead, height: 140),
+                      lesson: lesson,
+                      playheadBeat: _playhead,
+                      height: _highwayHeight,
+                      strikeX: _strikeX),
+                  // Spark bursts drawn on their own layer so they don't
+                  // repaint the lane; centred on the strike line.
+                  if (_bursts.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            painter: HitBurstPainter(
+                              bursts: _bursts,
+                              nowSec: _elapsedSec,
+                              center: const Offset(
+                                  _strikeX, _highwayHeight / 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (countIn != null) CountInOverlay(number: countIn),
                   if (countIn == null && score?.lastResult != null)
                     _FeedbackFlash(
