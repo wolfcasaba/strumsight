@@ -24,6 +24,7 @@ class ScoreSnapshot {
     this.multiplier = 1,
     this.perfect = 0,
     this.lastTiming,
+    this.expectedDirection,
     this.chordHits = 0,
     this.chordTotal = 0,
   });
@@ -48,6 +49,9 @@ class ScoreSnapshot {
   /// Timing quality of the most recent hit (null if the last event wasn't a
   /// correct-direction hit).
   final Timing? lastTiming;
+
+  /// On a wrong-direction verdict: the direction the event WANTED (016b P6).
+  final StrumDirection? expectedDirection;
 
   /// Chord-correctness (secondary): events (with a chord) where the right chord
   /// was sounding around the stroke. Lag-tolerant, never gates the strum hit.
@@ -124,6 +128,11 @@ class LessonScorer {
   int perfectHits = 0;
   Timing? lastTiming;
 
+  /// On a wrong-direction hit: the direction the event WANTED (016b P6 —
+  /// the badge tells the player which way the stroke should have gone).
+  /// Null on any other verdict so the coaching never goes stale.
+  StrumDirection? lastExpectedDirection;
+
   /// Base points per hit by timing tier (before the combo multiplier).
   static const _pointsPerfect = 100;
   static const _pointsGood = 70;
@@ -162,6 +171,7 @@ class LessonScorer {
         multiplier: multiplier,
         perfect: perfectHits,
         lastTiming: lastTiming,
+        expectedDirection: lastExpectedDirection,
         chordHits: chordHits,
         chordTotal: chordTotal,
       );
@@ -250,6 +260,7 @@ class LessonScorer {
       final timing = _timingFor(playedSec - best.time);
       lastTiming = timing;
       if (timing == Timing.perfect) perfectHits++;
+      lastExpectedDirection = null;
       final base = switch (timing) {
         Timing.perfect => _pointsPerfect,
         Timing.good => _pointsGood,
@@ -262,6 +273,7 @@ class LessonScorer {
       combo = 0;
       lastResult = HitResult.wrongDirection;
       lastTiming = null;
+      lastExpectedDirection = best.event.direction;
       return HitResult.wrongDirection;
     }
   }
@@ -280,6 +292,7 @@ class LessonScorer {
         combo = 0;
         lastResult = HitResult.missed;
         lastTiming = null;
+        lastExpectedDirection = null;
       }
     }
     _evalChords(playedSec);

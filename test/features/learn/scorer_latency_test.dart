@@ -54,4 +54,25 @@ void main() {
     s.registerStrum(_d, 4.31);
     expect(s.hits, 1);
   });
+
+  test('a wrong-direction hit exposes the EXPECTED direction (016b P6 '
+      'coaching vocabulary)', () {
+    final s = LessonScorer(_lesson());
+    s.registerStrum(_u, 4.0); // the beat-0 event wants a DOWN stroke
+    expect(s.lastResult, HitResult.wrongDirection);
+    expect(s.lastExpectedDirection, _d,
+        reason: 'the UI badge must say which way the stroke SHOULD have gone');
+    // A correct hit clears it (no stale coaching on the next verdict).
+    s.registerStrum(_u, 4.5);
+    expect(s.lastResult, HitResult.hit);
+    expect(s.lastExpectedDirection, isNull);
+  });
+
+  test('the snapshot carries the expected direction to the UI', () {
+    final s = LessonScorer(_lesson());
+    s.registerStrum(_u, 4.0);
+    expect(s.snapshot().expectedDirection, _d);
+    s.registerStrum(_u, 4.5);
+    expect(s.snapshot().expectedDirection, isNull);
+  });
 }

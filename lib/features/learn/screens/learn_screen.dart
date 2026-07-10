@@ -459,7 +459,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                   if (countIn != null) CountInOverlay(number: countIn),
                   if (countIn == null && score?.lastResult != null)
                     _FeedbackFlash(
-                        result: score!.lastResult!, timing: score.lastTiming),
+                        result: score!.lastResult!,
+                        timing: score.lastTiming,
+                        expectedDirection: score.expectedDirection),
                 ],
               ),
               const SizedBox(height: 6),
@@ -543,9 +545,11 @@ class _ScoreHud extends StatelessWidget {
 }
 
 class _FeedbackFlash extends StatelessWidget {
-  const _FeedbackFlash({required this.result, this.timing});
+  const _FeedbackFlash(
+      {required this.result, this.timing, this.expectedDirection});
   final HitResult result;
   final Timing? timing;
+  final StrumDirection? expectedDirection;
 
   @override
   Widget build(BuildContext context) {
@@ -560,7 +564,15 @@ class _FeedbackFlash extends StatelessWidget {
           Timing.late => ('⟶ ${l10n.learnLate}', AppColors.confidenceMid),
           null => (l10n.learnHit, AppColors.confidenceHigh),
         },
-      HitResult.wrongDirection => (l10n.learnWrongWay, AppColors.confidenceMid),
+      // The badge coaches: which way the stroke SHOULD have gone (016b P6).
+      HitResult.wrongDirection => (
+          switch (expectedDirection) {
+            StrumDirection.down => '${l10n.learnWrongWay} ↓',
+            StrumDirection.up => '${l10n.learnWrongWay} ↑',
+            null => l10n.learnWrongWay,
+          },
+          AppColors.confidenceMid
+        ),
       HitResult.missed => (l10n.learnMiss, AppColors.confidenceLow),
     };
     return Align(
