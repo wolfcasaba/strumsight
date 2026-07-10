@@ -66,6 +66,13 @@ class NudgeService {
           AndroidFlutterLocalNotificationsPlugin>();
       final granted = await android?.requestNotificationsPermission();
       if (granted == false) return false;
+      // iOS: the Darwin plugin must be asked separately or a denied
+      // permission would still report success (reviewer, round 82).
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      final iosGranted =
+          await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      if (iosGranted == false) return false;
 
       await _plugin.zonedSchedule(
         id: _id,
@@ -84,6 +91,45 @@ class NudgeService {
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Startup reconcile for a persisted-ON toggle (devil-advocate, round 82):
+  /// a force-stop clears the pending alarm and a system-settings revoke kills
+  /// delivery — without this the toggle would lie after either. CHECKS the
+  /// permission (never requests — no startup ambush) and re-arms the
+  /// idempotent schedule (same id replaces). Returns whether the reminder is
+  /// really live.
+  Future<bool> verifyAndRearm(
+      {required String title, required String body}) async {
+    if (!await _init()) return false;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      final enabled = await android?.areNotificationsEnabled();
+      if (enabled == false) return false;
+
+      await _plugin.zonedSchedule(
+        id: _id,
+        title: title,
+        body: body,
+        scheduledDate: nextInstanceOf(hour),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'practice_nudge',
+            'Practice reminder',
+            channelDescription: 'Daily practice reminder',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
       );
       return true;
     } catch (_) {

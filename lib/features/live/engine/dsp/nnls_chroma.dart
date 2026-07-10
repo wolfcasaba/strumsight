@@ -206,8 +206,8 @@ class NnlsChroma {
         im += w * math.sin(theta);
       }
       if (re != 0 || im != 0) {
-        var frac = math.atan2(im, re) / (2 * math.pi); // −0.5..0.5 semitone
-        if (frac > 0.5) frac -= 1;
+        // atan2 already lands in (−0.5, 0.5] semitone — no wrap needed.
+        final frac = math.atan2(im, re) / (2 * math.pi);
         _tuningInit
             ? lastTuningSemitones = lastTuningSemitones +
                 tuningSmoothing * (frac - lastTuningSemitones)

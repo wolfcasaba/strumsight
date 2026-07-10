@@ -29,6 +29,24 @@ class NudgeEnabledNotifier extends Notifier<bool> {
     }
   }
 
+  /// Startup reconcile (round 82): if the persisted state says ON, verify the
+  /// notification can really fire (permission may have been revoked in system
+  /// settings; a force-stop clears the alarm) and re-arm it idempotently.
+  /// Flips the toggle OFF — honestly — when the platform says no. No-op when
+  /// the reminder is off. Never ASKS for permission (no startup ambush).
+  Future<void> reconcile(
+      {required String title, required String body}) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    final persisted = _prefs!.getBool(_key) ?? false;
+    if (!persisted) return;
+    final live = await NudgeService.instance
+        .verifyAndRearm(title: title, body: body);
+    if (!live && !_userSet) {
+      state = false;
+      await _prefs!.setBool(_key, false);
+    }
+  }
+
   /// Turn the reminder on/off. [title]/[body] are the localised notification
   /// texts (resolved by the caller, which has a BuildContext). Returns the
   /// EFFECTIVE state.

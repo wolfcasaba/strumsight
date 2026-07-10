@@ -54,6 +54,10 @@ class _LatencyCalibrationScreenState
     super.dispose();
   }
 
+  // NOTE (reviewer, round 82): the click fires on the first FRAME after the
+  // ideal beat boundary, so up to ~1 frame (~16 ms) of ticker quantisation is
+  // baked into the measured offset. Inherent to a frame-driven stimulus;
+  // small vs the 100+ ms audio latencies being calibrated.
   void _onTick(Duration elapsed) {
     _elapsedSec = elapsed.inMicroseconds / 1e6;
     final beat = (_elapsedSec / _beatPeriodSec).floor();
@@ -107,6 +111,7 @@ class _LatencyCalibrationScreenState
     } else {
       await ref.read(inputLatencyProvider.notifier).set(ms);
     }
+    if (!mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(l10n.calibrationSaved)));
   }
 

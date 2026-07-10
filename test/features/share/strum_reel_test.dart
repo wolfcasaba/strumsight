@@ -78,6 +78,34 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('pause/resume continues from where it stopped (no beat-0 jump)',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(result: _result),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900)); // mid-loop
+
+    await tester.tap(find.byType(LessonHighway)); // pause
+    await tester.pump();
+    final paused =
+        tester.widget<LessonHighway>(find.byType(LessonHighway)).playheadBeat;
+    expect(paused, greaterThan(1.0)); // 0.9 s @100 BPM = 1.5 beats
+
+    await tester.tap(find.byType(LessonHighway)); // resume
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final resumed =
+        tester.widget<LessonHighway>(find.byType(LessonHighway)).playheadBeat;
+    expect(resumed, greaterThanOrEqualTo(paused),
+        reason: 'resume must continue, not restart the ticker at beat 0');
+
+    await tester.tap(find.byType(LessonHighway)); // pause for teardown
+    await tester.pump();
+  });
+
   test('downbeat punch-in kicks on the bar and decays (016b P7)', () {
     final onBeat = StrumReelScreen.punchScale(0);
     final offBeat = StrumReelScreen.punchScale(2.0);

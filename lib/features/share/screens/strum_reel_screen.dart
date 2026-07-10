@@ -52,6 +52,10 @@ class _StrumReelScreenState extends State<StrumReelScreen>
   late final Ticker _ticker;
   late final Lesson _lesson;
   double _elapsed = 0;
+  // Ticker elapsed restarts at zero on each start() — accumulate across
+  // pauses so resume CONTINUES instead of jumping back to beat 0
+  // (reviewer, round 82; same pattern as learn_screen's _accumSec).
+  double _accumSec = 0;
   bool _playing = true;
 
   @override
@@ -59,7 +63,7 @@ class _StrumReelScreenState extends State<StrumReelScreen>
     super.initState();
     _lesson = Lessons.fromAnalyze(widget.result, name: 'reel');
     _ticker = createTicker((d) {
-      setState(() => _elapsed = d.inMicroseconds / 1e6);
+      setState(() => _elapsed = _accumSec + d.inMicroseconds / 1e6);
     })
       ..start();
   }
@@ -79,7 +83,12 @@ class _StrumReelScreenState extends State<StrumReelScreen>
 
   void _toggle() {
     setState(() => _playing = !_playing);
-    _playing ? _ticker.start() : _ticker.stop();
+    if (_playing) {
+      _ticker.start();
+    } else {
+      _accumSec = _elapsed;
+      _ticker.stop();
+    }
   }
 
   @override
