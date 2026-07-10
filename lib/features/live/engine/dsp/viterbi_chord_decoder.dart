@@ -78,21 +78,96 @@ class ViterbiChordDecoder {
       _delta[s] -= best;
     }
 
-    if (bestIdx == _noChord) return null;
+    return _matchFor(bestIdx, sim);
+  }
 
-    // Confidence from THIS frame's evidence (not the accumulated trellis):
-    // the reported chord's similarity, sharpened by its margin over the best
-    // competing real chord — same shape the template matcher used, so the UI's
-    // confidence thresholds keep their meaning.
-    final winSim = sim[bestIdx];
-    var second = 0.0;
+  /// Full-sequence Viterbi with backtrace (batch — Analyze, chunk 012's last
+  /// stage). Takes per-frame bass+treble chroma pairs (pass zero vectors for
+  /// silent/gated frames) and returns the globally optimal per-frame chord
+  /// path (null = no-chord). Unlike the online [process], evidence AFTER a
+  /// frame can veto a transient detour: a 0.1 s blip chord costs two switch
+  /// penalties on the global path and loses to staying put — measured, this
+  /// removes the junk segments the online path leaves on fast chord changes.
+  List<ChordMatch?> decodeBatch(
+      List<Float64List> bass, List<Float64List> treble) {
+    assert(bass.length == treble.length);
+    final t = bass.length;
+    if (t == 0) return const [];
+    final n = dictionary.length;
+
+    final sims = List<Float64List>.generate(
+        t, (i) => dictionary.score(bass[i], treble[i]));
+
+    // Forward pass. With a uniform switch model the predecessor of a switch
+    // is the globally best previous state — one shared backpointer per frame
+    // plus a per-state "stayed" bit is the whole trellis.
+    final delta = Float64List(n);
+    final stayed = List<Uint8List>.generate(t, (_) => Uint8List(n));
+    final switchFrom = Int32List(t);
+    for (var s = 0; s < n; s++) {
+      delta[s] = sims[0][s];
+    }
+    for (var i = 1; i < t; i++) {
+      var bestPrev = delta[0];
+      var bestPrevIdx = 0;
+      for (var s = 1; s < n; s++) {
+        if (delta[s] > bestPrev) {
+          bestPrev = delta[s];
+          bestPrevIdx = s;
+        }
+      }
+      switchFrom[i] = bestPrevIdx;
+      final st = stayed[i];
+      final sim = sims[i];
+      var maxDelta = double.negativeInfinity;
+      for (var s = 0; s < n; s++) {
+        final stay = delta[s] + selfBonus;
+        if (stay >= bestPrev) {
+          st[s] = 1; // ties favour staying (stability)
+          delta[s] = sim[s] + stay;
+        } else {
+          delta[s] = sim[s] + bestPrev;
+        }
+        if (delta[s] > maxDelta) maxDelta = delta[s];
+      }
+      for (var s = 0; s < n; s++) {
+        delta[s] -= maxDelta; // keep the trellis bounded on long clips
+      }
+    }
+
+    // Backtrace from the best final state.
+    var cur = 0;
+    var best = delta[0];
     for (var s = 1; s < n; s++) {
-      if (s != bestIdx && sim[s] > second) second = sim[s];
+      if (delta[s] > best) {
+        best = delta[s];
+        cur = s;
+      }
+    }
+    final path = Int32List(t);
+    path[t - 1] = cur;
+    for (var i = t - 1; i > 0; i--) {
+      cur = stayed[i][cur] == 1 ? cur : switchFrom[i];
+      path[i - 1] = cur;
+    }
+
+    return [for (var i = 0; i < t; i++) _matchFor(path[i], sims[i])];
+  }
+
+  /// Confidence from a single frame's evidence (not the accumulated trellis):
+  /// the reported chord's similarity, sharpened by its margin over the best
+  /// competing real chord — same shape the template matcher used, so the UI's
+  /// confidence thresholds keep their meaning.
+  ChordMatch? _matchFor(int idx, Float64List sim) {
+    if (idx == _noChord) return null;
+    final winSim = sim[idx];
+    var second = 0.0;
+    for (var s = 1; s < sim.length; s++) {
+      if (s != idx && sim[s] > second) second = sim[s];
     }
     final margin = winSim <= 0 ? 0.0 : (winSim - second) / winSim;
     final confidence = (winSim * (0.5 + 2 * margin)).clamp(0.0, 1.0);
-
-    return ChordMatch(Chord(dictionary.profiles[bestIdx].label), confidence);
+    return ChordMatch(Chord(dictionary.profiles[idx].label), confidence);
   }
 
   /// Reset the trellis (new session).

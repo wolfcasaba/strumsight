@@ -216,9 +216,24 @@ Implementation (`NnlsChroma`, flag `spectralWhitening = true`):
   (random shelf 250–350 Hz, ×0.1–0.3, random triads, ≥16/20) — green across
   seeds 42, 7, 123, 2026, 31337.
 
-## Still open (NOT built in rounds 28/69/70)
-- **Full-sequence (batch) Viterbi with backtrace** for Analyze — today Analyze
-  streams the *online* decoder (consistent, good); a global backtrace would
-  squeeze a little more quality out of a recorded clip.
+## Batch Viterbi — AS BUILT (round 71). The chunk-012 pipeline is COMPLETE.
+
+`ViterbiChordDecoder.decodeBatch(bass[], treble[])` — full-sequence Viterbi
+with backtrace, used by Analyze (`ClipAnalyzer._chordPass`, a second pass over
+the clip: NNLS chroma per hop → batch decode → merge into segments, boundaries
+stamped at window centres; strums/tempo keep streaming through LivePipeline).
+- Same transition model as online (uniform switch ⇒ one shared backpointer per
+  frame + a per-state "stayed" bit is the whole trellis; O(T·N) time, ties
+  favour staying). Per-frame renormalisation keeps long clips bounded.
+- Measured win: a fast C·G·Am·F clip (0.8 s each) gave **7 segments** online —
+  0.1 s transients (Am7, Fsus4) and a WRONG final label (Csus4) — vs the
+  clean **4** from the global path (evidence after a frame vetoes detours).
+- No-chord frames sustain the open segment when merging (timeline = spans).
+- **Fixture lesson:** the old `fMajorFreqs` test voicing was F–C–F — a
+  THIRDLESS power chord mislabelled F major; with no third, F vs Csus4 is
+  genuinely undecidable (and power-5 is deliberately out of vocab). Synth
+  chord fixtures must be real root-third-fifth triads.
+
+## Still open (NOT built in rounds 28/69–71)
 - Grow the vocabulary (6, 9, add, dim, aug, inversions/slash) once the base is
   validated on a real guitar.

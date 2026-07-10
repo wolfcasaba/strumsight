@@ -110,7 +110,11 @@ Float64List chordSignal(
 const cMajorFreqs = [130.81, 164.81, 196.00]; // C3 E3 G3
 const gMajorFreqs = [98.00, 123.47, 196.00]; // G2 B2 G3
 const aMinorFreqs = [110.00, 130.81, 164.81]; // A2 C3 E3
-const fMajorFreqs = [87.31, 130.81, 174.61]; // F2 C3 F3 (F power-ish + third)
+// F2 A2 C3 — a real root-third-fifth triad. (The old [F2 C3 F3] value was a
+// THIRDLESS power chord mislabelled as F major; with no third in the signal,
+// F vs Csus4 is genuinely undecidable and power-5 is deliberately out of the
+// chord vocabulary — chunk 012.)
+const fMajorFreqs = [87.31, 110.00, 130.81];
 
 /// Slice [signal] into consecutive frames of [window] advancing by [hop].
 Iterable<Float64List> frames(Float64List signal, int window, int hop) sync* {
