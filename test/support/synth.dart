@@ -112,6 +112,36 @@ Float64List strumSignal({
   return mixNotes(notes, startOffsets: offsets);
 }
 
+/// Repeated strums [gapSeconds] apart that each RING for [ringSeconds], so
+/// consecutive strums OVERLAP — the previous strum is still sounding when the
+/// next lands. This is the ring-out condition that corrupts absolute sub-band
+/// direction cues (fixed in round 59 by onset-relative baseline subtraction).
+Float64List overlappingStrums({
+  required List<bool> lowFirstPerStrum,
+  double gapSeconds = 0.25,
+  double ringSeconds = 0.5,
+  double staggerMs = 8,
+  int sampleRate = 44100,
+  double leadSilenceSeconds = 0.1,
+}) {
+  final gap = (gapSeconds * sampleRate).round();
+  final lead = (leadSilenceSeconds * sampleRate).round();
+  final parts = <Float64List>[];
+  final offsets = <int>[];
+  for (var i = 0; i < lowFirstPerStrum.length; i++) {
+    parts.add(strumSignal(
+      lowFirst: lowFirstPerStrum[i],
+      staggerMs: staggerMs,
+      seconds: ringSeconds,
+      sampleRate: sampleRate,
+      leadSilenceSeconds: 0,
+    ));
+    offsets.add(lead + i * gap);
+  }
+  final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();
+  return mixNotes(parts, startOffsets: offsets, length: total);
+}
+
 /// [count] identical strums, [gapSeconds] apart (onset-to-onset).
 Float64List strumPattern({
   required List<bool> lowFirstPerStrum,

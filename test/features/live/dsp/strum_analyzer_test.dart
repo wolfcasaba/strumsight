@@ -45,6 +45,29 @@ void main() {
     expect(events.single.confidence, greaterThan(0.45));
   });
 
+  test('fast overlapping strums keep correct direction (ring-out isolation)',
+      () {
+    // 8th notes at 120 BPM (250 ms apart) each ringing 0.5 s → every strum
+    // lands while the previous is still sounding. Before round 59 the absolute
+    // sub-band cue read the ring-out and the direction call collapsed; the
+    // onset-relative baseline must isolate each strum's own attack.
+    final dirs = [true, false, true, false, true, false];
+    final events = analyze(overlappingStrums(
+      lowFirstPerStrum: dirs,
+      gapSeconds: 0.25,
+      ringSeconds: 0.5,
+    ));
+    expect(events.length, greaterThanOrEqualTo(6),
+        reason: 'all six overlapping strums must still register as onsets');
+    var correct = 0;
+    for (var i = 0; i < dirs.length && i < events.length; i++) {
+      final want = dirs[i] ? StrumDirection.down : StrumDirection.up;
+      if (events[i].direction == want) correct++;
+    }
+    expect(correct, greaterThanOrEqualTo(5),
+        reason: 'baseline subtraction must isolate each strum from ring-out');
+  });
+
   test('alternating pattern detects all four strums in order', () {
     final events = analyze(strumPattern(
       lowFirstPerStrum: [true, false, true, false],

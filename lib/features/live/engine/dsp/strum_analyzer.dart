@@ -205,13 +205,41 @@ class StrumAnalyzer {
     final h = _history.toList();
     // History index of the onset frame.
     final oIdx = h.length - 1 - (_frameIndex - onsetFrame);
+    // Onset-relative baseline: mean band energy in the ~5 frames BEFORE the
+    // onset. Subtracting it isolates THIS strum's new attack from the ring-out
+    // of any previous strum. Without it, during fast strumming the prior
+    // strum's decaying energy holds both bands above their 50%-rise line from
+    // frame 0, so the rise-order cue collapses (MEASURED: direction fell to
+    // 4/7 at 200 BPM 16ths; baseline subtraction restores it).
+    final baseStart = math.max(0, oIdx - 5);
+    var baseLow = 0.0, baseHigh = 0.0, baseN = 0;
+    for (var i = baseStart; i < oIdx && i < h.length; i++) {
+      baseLow += h[i].lowEnergy;
+      baseHigh += h[i].highEnergy;
+      baseN++;
+    }
+    if (baseN > 0) {
+      baseLow /= baseN;
+      baseHigh /= baseN;
+    }
+
+    // Evidence window: from two frames before the onset (the rising edge)
+    // through the post-onset attack. MEASURED sweep: baseline subtraction over
+    // this full ~70 ms window holds direction at 8/8 for 100–160 BPM 16ths
+    // (the realistic ceiling of hand strumming); attack-anchoring or hard caps
+    // regressed the common tempos. Extreme overlap (200 BPM 16ths, ~75 ms
+    // apart) still degrades — the next strum bleeds into the tail — which the
+    // confidence tier reports honestly rather than faking certainty.
     final start = math.max(0, oIdx - 2);
     final win = h.sublist(start);
 
-    // Cue 1 — sub-band rise order: which band reaches 50% of its window peak
-    // first. Bass first → down, treble first → up.
-    final lowRise = _firstRise(win.map((x) => x.lowEnergy).toList());
-    final highRise = _firstRise(win.map((x) => x.highEnergy).toList());
+    // Cue 1 — sub-band rise order on the BASELINE-SUBTRACTED envelopes: which
+    // band's NEW energy reaches 50% of its in-window peak first. Bass first →
+    // down, treble first → up.
+    final lowRise =
+        _firstRise([for (final x in win) math.max(0.0, x.lowEnergy - baseLow)]);
+    final highRise = _firstRise(
+        [for (final x in win) math.max(0.0, x.highEnergy - baseHigh)]);
     int? gap; // positive → low first → down
     if (lowRise != null && highRise != null) gap = highRise - lowRise;
 

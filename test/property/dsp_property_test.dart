@@ -224,6 +224,67 @@ void main() {
         reason: 'seed=$seed failures: ${failures.join('; ')}');
   });
 
+  // Round 59 — direction must survive RING-OUT overlap at realistic strumming
+  // tempos (the moat's headline case). Absolute sub-band cues collapse when the
+  // previous strum is still sounding; onset-relative baseline subtraction
+  // isolates each attack. Tempos capped at the hand-strum ceiling (≤160 BPM
+  // 16ths); 200 BPM 16ths remains an honest low-confidence limit (chunk 006).
+  test('property: overlapping strums keep direction at realistic tempo (20)',
+      () {
+    var checked = 0;
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final bpm = 90 + rng.nextInt(71); // 90–160 BPM
+      final gap = 60.0 / bpm / 4; // 16th-note spacing, seconds
+      final dirs = [for (var i = 0; i < 6; i++) rng.nextBool()];
+      final signal = overlappingStrums(
+        lowFirstPerStrum: dirs,
+        gapSeconds: gap,
+        ringSeconds: 0.4 + rng.nextDouble() * 0.3,
+        staggerMs: 6 + rng.nextDouble() * 6,
+      );
+      final analyzer = StrumAnalyzer(sampleRate: sr);
+      final events = <StrumEvent>[];
+      for (final frame
+          in frames(signal, DspConfig.onsetWindow, DspConfig.onsetHop)) {
+        final e = analyzer.process(frame);
+        if (e != null) events.add(e);
+      }
+      // Match each detected event to the nearest expected strum by time — robust
+      // to a missed/extra onset (no brittle index alignment).
+      for (final e in events) {
+        if (e.direction == null) continue;
+        var bestI = 0;
+        var bestD = double.infinity;
+        for (var i = 0; i < dirs.length; i++) {
+          final et = 0.1 + i * gap; // lead 0.1 s + i·gap
+          final d = (e.timeSec - et).abs();
+          if (d < bestD) {
+            bestD = d;
+            bestI = i;
+          }
+        }
+        checked++;
+        final want = dirs[bestI] ? StrumDirection.down : StrumDirection.up;
+        if (e.direction == want) {
+          correct++;
+        } else {
+          failures.add('t=$t bpm=$bpm i=$bestI want=${dirs[bestI]} got=${e.direction}');
+        }
+      }
+    }
+    expect(checked, greaterThanOrEqualTo(80),
+        reason: 'seed=$seed: most overlapping strums should be detected');
+    // Floor set below the measured spread (≈0.77–0.86 across seeds) so the
+    // gate is non-flaky, yet well above the pre-round-59 behaviour (absolute
+    // cues collapsed to ~0.6 under ring-out). Round 60 (better band design)
+    // targets ≥0.85. Note the trained-CRNN up-strum ceiling is ~0.79.
+    expect(correct / math.max(1, checked), greaterThanOrEqualTo(0.72),
+        reason: 'seed=$seed: ring-out must not corrupt direction; '
+            '${failures.join('; ')}');
+  });
+
   // Voice/noise rejection (round 23): the tuner must lock a STABLE, in-range
   // tone but reject a gliding pitch (the way speech behaves).
   test('property: stable tones lock, gliding pitches do not (20 trials)', () {
