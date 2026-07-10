@@ -173,6 +173,46 @@ void main() {
         reason: 'seed=$seed failures: ${failures.join('; ')}');
   });
 
+  // chunk 012 / round 70 — SPECTRAL WHITENING: a phone mic's low-shelf bass
+  // roll-off must not let a chord's harmonics outvote its fundamentals
+  // (measured pre-whitening failure: thin-mic C major read as Em).
+  test('property: thin-mic (random bass roll-off) random triads still '
+      'recognised (≥80% of 20)', () {
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final rootMidi = 40 + rng.nextInt(13); // E2..E3
+      final minor = rng.nextBool();
+      final cutHz = 250 + rng.nextDouble() * 100; // 250..350 Hz shelf
+      final atten = 0.1 + rng.nextDouble() * 0.2; // ×0.1..0.3 below the shelf
+      final thirdOffset = (minor ? 3 : 4) + (rootMidi < 45 ? 12 : 0);
+      final freqs = [
+        _midiToFreq(rootMidi),
+        _midiToFreq(rootMidi + thirdOffset),
+        _midiToFreq(rootMidi + 7),
+      ];
+      final expected = _pitchClasses[rootMidi % 12] + (minor ? 'm' : '');
+      final signal = mixNotes([
+        for (final f in freqs)
+          colouredNote(
+            freq: f,
+            seconds: 1.0,
+            gain: (h, hf) => (0.15 / h) * (hf < cutHz ? atten : 1.0),
+            decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
+          ),
+      ]);
+      final got = _decodeChord(signal);
+      if (got == expected) {
+        correct++;
+      } else {
+        failures.add('trial=$t cut=${cutHz.round()}Hz '
+            'atten=${atten.toStringAsFixed(2)} expected=$expected got=$got');
+      }
+    }
+    expect(correct, greaterThanOrEqualTo(16),
+        reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
   // chunk 012 — the headline round-26 fix: a low-voiced dominant 7 (7th just
   // above the fifth, as fingered in an open E7/A7/B7 shape) is heard as a 7
   // chord, not collapsed to the bare triad. Roots are drawn from the guitar's

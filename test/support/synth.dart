@@ -34,6 +34,36 @@ Float64List harmonicNote({
   return out;
 }
 
+/// A note with an arbitrary per-harmonic gain — timbre/EQ colouration for
+/// whitening tests (round 70): phone mics roll off bass, bodies resonate.
+/// [gain] receives the harmonic index (1-based) and its frequency in Hz.
+Float64List colouredNote({
+  required double freq,
+  required double seconds,
+  required double Function(int h, double f) gain,
+  int sampleRate = 44100,
+  int harmonics = 8,
+  double decayPerSecond = 1.5,
+}) {
+  final n = (seconds * sampleRate).round();
+  final out = Float64List(n);
+  for (var h = 1; h <= harmonics; h++) {
+    final f = freq * h;
+    if (f > sampleRate / 2) break;
+    final a = gain(h, f);
+    final w = 2 * math.pi * f / sampleRate;
+    for (var i = 0; i < n; i++) {
+      final env = math.exp(-decayPerSecond * i / sampleRate);
+      out[i] += a * env * math.sin(w * i);
+    }
+  }
+  final ramp = math.min((0.010 * sampleRate).round(), n);
+  for (var i = 0; i < ramp; i++) {
+    out[n - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / ramp);
+  }
+  return out;
+}
+
 /// Mix several notes, optionally staggering each start (used for strums: a
 /// down-strum = low strings first, up-strum = high strings first).
 Float64List mixNotes(

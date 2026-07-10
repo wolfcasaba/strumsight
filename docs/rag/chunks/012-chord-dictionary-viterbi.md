@@ -194,10 +194,29 @@ Implementation (`NnlsChroma`, flag `tuningEstimation = true`):
   self-corrects, which also makes non-440 references converge to correct
   nearest-semitone names.
 
-## Still open (NOT built in rounds 28/69)
-- **Spectral whitening pre-NNLS** (exponent ≈1.0) — capability not added yet;
-  best validated on real coloured recordings — BUT round 69's lesson applies:
-  colour the synth (filter/EQ its spectrum) and it becomes testable here too.
+## Spectral whitening — AS BUILT (round 70)
+
+Applied round 69's lesson ("make the synth adversarial") — a colouration probe
+found the real failure mode: most timbres (flat, bright, body resonances) were
+already handled by NNLS, but a **phone-mic low-shelf roll-off** (fundamentals
+×0.15 below 300 Hz) read a C major as **Em** — the notes' own harmonics
+outvoted the attenuated fundamentals.
+
+Implementation (`NnlsChroma`, flag `spectralWhitening = true`):
+- After sampling (and tuning resample), each log-freq bin is divided by the
+  **RMS of its ±`whiteningHalfWindow` (18-bin = half-octave) neighbourhood**
+  raised to `whiteningExponent`, with an RMS floor of `1e-4·maxS` so true
+  silence isn't amplified into structure. O(bins) via prefix sums.
+- **Exponent 0.7, NOT Chordino's ≈1.0**: full whitening (w=1.0) erodes the
+  ROOT's natural dominance and regressed the 12-bin-chroma property gate
+  (Em→G, E→G#m — third/fifth outvoting the root). w=0.7 fixes the thin-mic
+  case with zero regression. (Same "partial beats full" shape as
+  `spectralShape 0.7`.)
+- Gates: deterministic thin-mic/resonance chord tests + a randomized property
+  (random shelf 250–350 Hz, ×0.1–0.3, random triads, ≥16/20) — green across
+  seeds 42, 7, 123, 2026, 31337.
+
+## Still open (NOT built in rounds 28/69/70)
 - **Full-sequence (batch) Viterbi with backtrace** for Analyze — today Analyze
   streams the *online* decoder (consistent, good); a global backtrace would
   squeeze a little more quality out of a recorded clip.

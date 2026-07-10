@@ -26,6 +26,9 @@ class NnlsChroma {
     this.trebleMinMidi = 40, // E2 — treble spans the FULL range (see below)
     this.tuningEstimation = true,
     this.tuningSmoothing = 0.2,
+    this.spectralWhitening = true,
+    this.whiteningExponent = 0.7,
+    this.whiteningHalfWindow = 18, // ±half octave at 3 bins/semitone
   })  : _fft = FFT(window),
         _hann = Float64List(window),
         _windowed = Float64List(window),
@@ -64,6 +67,16 @@ class NnlsChroma {
   /// at the shifted frequencies so note centres line up again.
   final bool tuningEstimation;
   final double tuningSmoothing;
+
+  /// Spectral whitening (chunk 012, Chordino stage): divide each log-freq bin
+  /// by the RMS of its ±[whiteningHalfWindow]-bin neighbourhood raised to
+  /// [whiteningExponent], flattening the spectral envelope BEFORE NNLS.
+  /// Measured round-70 failure it fixes: a phone mic's low-shelf roll-off
+  /// (fundamentals ×0.15 below 300 Hz) read a C major as Em — the notes were
+  /// outvoted by their own harmonics' register.
+  final bool spectralWhitening;
+  final double whiteningExponent;
+  final int whiteningHalfWindow;
 
   /// Register split for the bass+treble chroma (RAG chunk 012). The **treble**
   /// chroma folds the whole harmony (activations at/above [trebleMinMidi],
@@ -209,6 +222,10 @@ class NnlsChroma {
       }
     }
 
+    // 1c) Spectral whitening (chunk 012): flatten the envelope so timbre/EQ
+    //     (phone-mic bass roll-off, body resonances) can't outvote the notes.
+    if (spectralWhitening) _whiten(maxS);
+
     // 2) NNLS: min ‖D·x − s‖², x ≥ 0, via non-negative multiplicative updates
     //    x ← x · (Dᵀs) / (DᵀD·x + ε). Warm, cheap, converges to the NNLS fit.
     for (var n = 0; n < nNotes; n++) {
@@ -268,6 +285,24 @@ class NnlsChroma {
     lastTonalness = sq[11] + sq[10] + sq[9];
 
     return chroma;
+  }
+
+  /// Whiten [_s] in place: each bin ÷ RMS(±[whiteningHalfWindow] neighbours)
+  /// ^[whiteningExponent]. The RMS floor (relative to [maxS]) keeps true
+  /// silence from being amplified into structure.
+  void _whiten(double maxS) {
+    final prefix = Float64List(_nBins + 1);
+    for (var j = 0; j < _nBins; j++) {
+      prefix[j + 1] = prefix[j] + _s[j] * _s[j];
+    }
+    final floor = 1e-4 * maxS;
+    for (var j = 0; j < _nBins; j++) {
+      final lo = math.max(0, j - whiteningHalfWindow);
+      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
+      var rms = math.sqrt((prefix[hi + 1] - prefix[lo]) / (hi - lo + 1));
+      if (rms < floor) rms = floor;
+      _s[j] = _s[j] / math.pow(rms, whiteningExponent);
+    }
   }
 
   /// Sample the STFT magnitude at each log-freq bin centre × [tuningFactor]
