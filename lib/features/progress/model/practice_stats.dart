@@ -42,6 +42,12 @@ class PracticeStats {
   int sessionsFrom(PracticeSource source) =>
       entries.where((e) => e.source == source).length;
 
+  /// Total practice seconds recorded on [day] (an epoch day). Drives the daily
+  /// goal ring.
+  int secondsForDay(int day) => entries
+      .where((e) => e.day == day)
+      .fold(0, (sum, e) => sum + (e.seconds < 0 ? 0 : e.seconds));
+
   /// Average strum-direction accuracy across scored runs (0..1), or null if none
   /// scored yet. THE headline "better than competitors" metric.
   double? get averageDirectionAccuracy {

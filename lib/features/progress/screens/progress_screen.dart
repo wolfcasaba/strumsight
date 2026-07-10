@@ -7,6 +7,7 @@ import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../model/practice_entry.dart';
 import '../model/practice_stats.dart';
+import '../providers/daily_goal_provider.dart';
 import '../providers/practice_log_provider.dart';
 import '../widgets/weekly_bars.dart';
 
@@ -63,6 +64,13 @@ class ProgressScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 22),
+                  _DailyGoalCard(
+                    todaySeconds: stats.secondsForDay(today),
+                    goalMinutes: ref.watch(dailyGoalProvider),
+                    l10n: l10n,
+                    onEdit: () => _editGoal(context, ref, l10n),
+                  ),
                   const SizedBox(height: 26),
                   _SectionLabel(l10n.progressThisWeek),
                   const SizedBox(height: 12),
@@ -105,6 +113,47 @@ class _TotalHero extends StatelessWidget {
   }
 }
 
+/// Pick a new daily goal from a preset sheet.
+Future<void> _editGoal(
+    BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+  final current = ref.read(dailyGoalProvider);
+  final picked = await showModalBottomSheet<int>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.progressSetGoal,
+                style: const TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final m in DailyGoalController.presets)
+                  ChoiceChip(
+                    label: Text(l10n.progressGoalOption(m)),
+                    selected: m == current,
+                    onSelected: (_) => Navigator.of(context).pop(m),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (picked != null) {
+    await ref.read(dailyGoalProvider.notifier).setGoal(picked);
+  }
+}
+
 /// Compact practice-time label: "1h 20m" / "20m" / "45s" via localized keys.
 String formatPractice(int seconds, AppLocalizations l10n) {
   if (seconds < 60) return l10n.progressSeconds(seconds);
@@ -113,6 +162,100 @@ String formatPractice(int seconds, AppLocalizations l10n) {
   final m = totalMin % 60;
   if (h > 0) return l10n.progressHoursMinutes(h, m);
   return l10n.progressMinutes(m);
+}
+
+class _DailyGoalCard extends StatelessWidget {
+  const _DailyGoalCard({
+    required this.todaySeconds,
+    required this.goalMinutes,
+    required this.l10n,
+    required this.onEdit,
+  });
+
+  final int todaySeconds;
+  final int goalMinutes;
+  final AppLocalizations l10n;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final goalSeconds = goalMinutes * 60;
+    final todayMin = todaySeconds ~/ 60;
+    final progress =
+        goalSeconds <= 0 ? 0.0 : (todaySeconds / goalSeconds).clamp(0.0, 1.0);
+    final met = todaySeconds >= goalSeconds;
+    final remaining = ((goalSeconds - todaySeconds) / 60).ceil();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: (met ? AppColors.confidenceHigh : AppColors.primary)
+                .withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 5,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation(
+                        met ? AppColors.confidenceHigh : AppColors.primary),
+                  ),
+                ),
+                Icon(met ? Icons.check : Icons.bolt,
+                    size: 20,
+                    color: met ? AppColors.confidenceHigh : AppColors.primary),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.progressDailyGoal,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15)),
+                const SizedBox(height: 2),
+                Text(l10n.progressGoalProgress(todayMin, goalMinutes),
+                    style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 2),
+                Text(
+                  met
+                      ? l10n.progressGoalMet
+                      : l10n.progressGoalRemaining(remaining),
+                  style: TextStyle(
+                    color: met ? AppColors.confidenceHigh : AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: l10n.progressSetGoal,
+            onPressed: onEdit,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StrumAccuracyCard extends StatelessWidget {

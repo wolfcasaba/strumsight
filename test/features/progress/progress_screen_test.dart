@@ -72,9 +72,14 @@ void main() {
 
     // Total practice = 270s = 4m.
     expect(find.text('4m'), findsOneWidget);
+    // Daily goal card (default 10 min; today has 180s = 3 min → not met).
+    expect(find.text('Daily goal'), findsOneWidget);
+    expect(find.textContaining('3 of 10 min'), findsOneWidget);
     // Weekly chart is rendered (7 days).
     expect(find.byType(WeeklyBars), findsOneWidget);
-    // The moat metric with its scored value.
+    // The moat metric with its scored value (below the fold → scroll to it).
+    await tester.scrollUntilVisible(find.text('Strum-direction accuracy'), 120,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('Strum-direction accuracy'), findsOneWidget);
     expect(find.text('80%'), findsWidgets);
     // Source breakdown (below the fold in a 600px viewport) lists all three
@@ -84,6 +89,21 @@ void main() {
     expect(find.text('Live'), findsOneWidget);
     expect(find.text('Learn'), findsOneWidget);
     expect(find.text('Analyze'), findsOneWidget);
+  });
+
+  testWidgets('daily goal shows "reached" once today crosses the target',
+      (tester) async {
+    await tester.pumpWidget(_host(now, seed: [
+      PracticeEntry(
+        day: today,
+        source: PracticeSource.learn,
+        seconds: 700, // > default 10-min goal
+        strokes: 40,
+        directionAccuracy: 0.9,
+      ),
+    ]));
+    await tester.pump();
+    expect(find.text('Goal reached today 🎉'), findsOneWidget);
   });
 
   testWidgets('with practice but no scored run, prompts to score in Learn',
@@ -97,6 +117,8 @@ void main() {
       ),
     ]));
     await tester.pump();
+    await tester.scrollUntilVisible(find.textContaining('Pass a lesson'), 120,
+        scrollable: find.byType(Scrollable).first);
     expect(find.textContaining('Pass a lesson'), findsOneWidget);
   });
 }

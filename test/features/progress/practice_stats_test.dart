@@ -55,6 +55,18 @@ void main() {
     expect(stats.bestDirectionAccuracy, 0.8);
   });
 
+  test('secondsForDay sums only that day, clamping negatives', () {
+    final stats = PracticeStats([
+      entry(day: 100, seconds: 120),
+      entry(day: 100, seconds: 60),
+      entry(day: 100, seconds: -10),
+      entry(day: 101, seconds: 999),
+    ]);
+    expect(stats.secondsForDay(100), 180);
+    expect(stats.secondsForDay(101), 999);
+    expect(stats.secondsForDay(42), 0);
+  });
+
   test('sessionsFrom counts per source', () {
     final stats = PracticeStats([
       entry(day: 1, source: PracticeSource.live),
