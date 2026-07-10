@@ -8,6 +8,7 @@ import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../live/providers/live_providers.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
+import '../model/guitar_strings.dart';
 import '../model/tuner_reading.dart';
 import '../providers/tuner_providers.dart';
 import '../widgets/cents_gauge.dart';
@@ -95,6 +96,17 @@ class TunerScreen extends ConsumerWidget {
               ),
             ),
           ),
+          // Which string is being tuned (round 84): the six standard-tuning
+          // chips; the nearest one lights copper, green once in tune.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _StringChips(
+              active: reading.hasSignal
+                  ? GuitarStrings.nearest(reading.frequencyHz, a4: a4)
+                  : null,
+              inTune: reading.inTune,
+            ),
+          ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16, top: 8),
@@ -112,6 +124,74 @@ class TunerScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+/// The E-A-D-G-B-E row. Shape + colour encode state (never hue alone):
+/// the active chip is filled and enlarged, in-tune adds a check.
+class _StringChips extends StatelessWidget {
+  const _StringChips({required this.active, required this.inTune});
+
+  final GuitarString? active;
+  final bool inTune;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (final s in GuitarStrings.standard)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              padding: EdgeInsets.symmetric(
+                  horizontal: identical(s, active) ? 14 : 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: identical(s, active)
+                    ? (inTune
+                        ? AppColors.successOn(Theme.of(context).brightness)
+                            .withValues(alpha: 0.18)
+                        : AppColors.primary.withValues(alpha: 0.2))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: identical(s, active)
+                      ? (inTune
+                          ? AppColors.successOn(Theme.of(context).brightness)
+                          : AppColors.primary)
+                      : palette.muted.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    s.label,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: identical(s, active)
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      fontSize: 13,
+                      color: identical(s, active) ? palette.ink : palette.muted,
+                    ),
+                  ),
+                  if (identical(s, active) && inTune) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.check_rounded,
+                        size: 14,
+                        color:
+                            AppColors.successOn(Theme.of(context).brightness)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
