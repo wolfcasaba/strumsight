@@ -85,12 +85,12 @@ class LessonScoreCard extends StatelessWidget {
                       color: _ink)),
               const SizedBox(height: 20),
               Text('${(accuracy * 100).round()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: 'Montserrat',
                       fontWeight: FontWeight.w900,
                       fontSize: 72,
                       height: 1,
-                      color: AppColors.confidenceHigh)),
+                      color: AppColors.confidence(accuracy))),
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

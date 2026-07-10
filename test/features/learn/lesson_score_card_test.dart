@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/core/theme/app_colors.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/learn/screens/lesson_score_preview_screen.dart';
 import 'package:music_theory/features/learn/widgets/lesson_score_card.dart';
@@ -59,6 +60,43 @@ void main() {
     expect(find.text('12/15'), findsOneWidget);
     expect(find.text('9'), findsOneWidget);
     expect(find.byIcon(Icons.star), findsNWidgets(2)); // 2 filled stars
+  });
+
+  testWidgets('score % colour follows the confidence ramp, not always green',
+      (tester) async {
+    Color scoreColor(WidgetTester t) => t
+        .widget<Text>(find.textContaining('%').first)
+        .style!
+        .color!;
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: LessonScoreCard(
+          lessonName: 'L',
+          accuracy: 0.0,
+          stars: 0,
+          maxCombo: 0,
+          hits: 0,
+          total: 16,
+        ),
+      ),
+    ));
+    expect(scoreColor(tester), AppColors.confidence(0.0),
+        reason: 'a failing score must not render in the success green');
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: LessonScoreCard(
+          lessonName: 'L',
+          accuracy: 0.9,
+          stars: 3,
+          maxCombo: 9,
+          hits: 14,
+          total: 16,
+        ),
+      ),
+    ));
+    expect(scoreColor(tester), AppColors.confidence(0.9));
   });
 
   testWidgets('preview shares the score card image on tap', (tester) async {
