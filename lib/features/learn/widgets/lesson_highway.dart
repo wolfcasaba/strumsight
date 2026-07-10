@@ -48,22 +48,28 @@ class LessonHighway extends StatelessWidget {
             aheadBeats: beatsVisibleAhead + 1,
             behindBeats: 1.5,
           );
-          return ClipRect(
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(16),
             child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.black.withValues(alpha: 0.18),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0E0E12),
               ),
               child: Stack(
                 children: [
-                  // The strike line (where "now" is).
-                  Positioned(
-                    left: strikeX,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 3,
-                      color: AppColors.primary.withValues(alpha: 0.85),
+                  // Painted lane: perspective depth gradient + flowing beat grid
+                  // + a glowing strike line. One cheap CustomPaint on its own
+                  // layer, behind the cards (chunk 016b P5).
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        painter: HighwayBackgroundPainter(
+                          playheadBeat: playheadBeat,
+                          pxPerBeat: pxPerBeat,
+                          strikeX: strikeX,
+                          beatsVisibleAhead: beatsVisibleAhead,
+                          beatsPerBar: lesson.beatsPerBar,
+                        ),
+                      ),
                     ),
                   ),
                   for (final e in visible)
@@ -73,6 +79,7 @@ class LessonHighway extends StatelessWidget {
                             e.beat, playheadBeat, pxPerBeat, strikeX) -
                           _EventCard.width / 2,
                       proximity: _proximity(e.beat, playheadBeat),
+                      depth: _depth(e.beat, playheadBeat, beatsVisibleAhead),
                       height: height,
                     ),
                 ],
@@ -87,6 +94,85 @@ class LessonHighway extends StatelessWidget {
   /// 0 far from the strike line → 1 right on it (within half a beat).
   static double _proximity(double eventBeat, double playheadBeat) =>
       (1 - (eventBeat - playheadBeat).abs() / 0.5).clamp(0.0, 1.0);
+
+  /// Perspective depth: 1.0 at/near the strike line, shrinking to ~0.5 at the
+  /// far (future) edge so the lane reads with read-ahead depth.
+  static double _depth(
+      double eventBeat, double playheadBeat, double aheadBeats) {
+    final ahead = (eventBeat - playheadBeat).clamp(0.0, aheadBeats);
+    return 1.0 - (ahead / aheadBeats) * 0.5;
+  }
+}
+
+/// The lane behind the cards: a flowing beat grid (downbeats accented) that
+/// fades with distance for depth, plus a glowing strike line drawn as a radial
+/// halo (no blur pass — cheap). One CustomPaint on its own RepaintBoundary
+/// (chunk 016b P5). Repaints only when the playhead/geometry changes.
+class HighwayBackgroundPainter extends CustomPainter {
+  HighwayBackgroundPainter({
+    required this.playheadBeat,
+    required this.pxPerBeat,
+    required this.strikeX,
+    required this.beatsVisibleAhead,
+    required this.beatsPerBar,
+  });
+
+  final double playheadBeat;
+  final double pxPerBeat;
+  final double strikeX;
+  final double beatsVisibleAhead;
+  final int beatsPerBar;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = size.height;
+    final line = Paint()..strokeWidth = 1;
+
+    // Flowing beat grid — one vertical line per beat, fading with distance.
+    final firstBeat = playheadBeat.floorToDouble() - 1;
+    final lastBeat = playheadBeat + beatsVisibleAhead + 1;
+    for (var b = firstBeat; b <= lastBeat; b += 1) {
+      final x = strikeX + (b - playheadBeat) * pxPerBeat;
+      if (x < -2 || x > size.width + 2) continue;
+      final near =
+          1 - ((b - playheadBeat).abs() / (beatsVisibleAhead + 1)).clamp(0.0, 1.0);
+      final isDownbeat = (b % beatsPerBar).abs() < 1e-6;
+      line
+        ..strokeWidth = isDownbeat ? 2 : 1
+        ..color = (isDownbeat ? AppColors.primary : Colors.white).withValues(
+            alpha: (isDownbeat ? 0.20 : 0.08) * (0.3 + 0.7 * near));
+      canvas.drawLine(Offset(x, 0), Offset(x, h), line);
+    }
+
+    // Glowing strike line: radial halo + bright core.
+    final cy = h / 2;
+    final r = h * 0.62;
+    canvas.drawRect(
+      Rect.fromLTWH(strikeX - r, 0, r * 2, h),
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.34),
+            AppColors.primary.withValues(alpha: 0.0),
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(strikeX, cy), radius: r)),
+    );
+    canvas.drawLine(
+      Offset(strikeX, 0),
+      Offset(strikeX, h),
+      Paint()
+        ..strokeWidth = 3
+        ..color = AppColors.primary.withValues(alpha: 0.9),
+    );
+  }
+
+  @override
+  bool shouldRepaint(HighwayBackgroundPainter old) =>
+      old.playheadBeat != playheadBeat ||
+      old.pxPerBeat != pxPerBeat ||
+      old.strikeX != strikeX ||
+      old.beatsVisibleAhead != beatsVisibleAhead ||
+      old.beatsPerBar != beatsPerBar;
 }
 
 class _EventCard extends StatelessWidget {
@@ -94,6 +180,7 @@ class _EventCard extends StatelessWidget {
     required this.event,
     required this.left,
     required this.proximity,
+    required this.depth,
     required this.height,
   });
 
@@ -102,12 +189,15 @@ class _EventCard extends StatelessWidget {
   final LessonEvent event;
   final double left;
   final double proximity;
+
+  /// Perspective depth (1 near the strike line → ~0.5 far); scales + dims.
+  final double depth;
   final double height;
 
   @override
   Widget build(BuildContext context) {
     final color = event.isDown ? AppColors.primary : AppColors.confidenceHigh;
-    final scale = 1.0 + 0.28 * proximity;
+    final scale = depth * (1.0 + 0.28 * proximity);
     return Positioned(
       left: left,
       top: 0,
@@ -115,7 +205,9 @@ class _EventCard extends StatelessWidget {
       child: SizedBox(
         width: width,
         child: Center(
-          child: Transform.scale(
+          child: Opacity(
+            opacity: (0.55 + 0.45 * depth).clamp(0.0, 1.0),
+            child: Transform.scale(
             scale: scale,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -158,6 +250,7 @@ class _EventCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

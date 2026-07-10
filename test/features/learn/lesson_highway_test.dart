@@ -38,4 +38,17 @@ void main() {
     await _pump(tester, Lessons.downUpGroove, 1.5);
     expect(find.byIcon(Icons.arrow_upward), findsWidgets);
   });
+
+  test('background painter repaints only when the playhead/geometry changes',
+      () {
+    HighwayBackgroundPainter p(double playhead) => HighwayBackgroundPainter(
+          playheadBeat: playhead,
+          pxPerBeat: 40,
+          strikeX: 68,
+          beatsVisibleAhead: 4,
+          beatsPerBar: 4,
+        );
+    expect(p(1).shouldRepaint(p(1)), isFalse);
+    expect(p(1).shouldRepaint(p(1.5)), isTrue);
+  });
 }
