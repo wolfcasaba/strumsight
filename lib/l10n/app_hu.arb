@@ -124,6 +124,7 @@
   "learnRestart": "Újra",
   "learnMetronome": "Metronóm",
   "learnJam": "Jam mód (kísérő akkordok, pontozás nélkül)",
+  "learnEasyMode": "Könnyű mód (csak ütemre eső leütések)",
   "learnSpeed": "Sebesség",
   "learnPracticeThis": "Gyakorlás leckeként",
   "analyzeMyRecording": "A felvételem",

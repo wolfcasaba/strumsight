@@ -145,6 +145,7 @@
   "learnRestart": "Restart",
   "learnMetronome": "Metronome",
   "learnJam": "Jam mode (backing chords, no scoring)",
+  "learnEasyMode": "Easy mode (on-beat down-strokes only)",
   "learnSpeed": "Speed",
   "learnPracticeThis": "Practice as a lesson",
   "analyzeMyRecording": "My recording",

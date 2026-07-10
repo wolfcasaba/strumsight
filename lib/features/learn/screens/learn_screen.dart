@@ -48,12 +48,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   double _prevPlayhead = 0;
   bool _playing = false;
   bool _jam = false; // jam mode: chord backing, scoring off (avoids mic conflict)
+  bool _easy = false; // beginner cut: on-beat down-strokes only
   double _speed = 1.0; // practice-tempo multiplier
 
   static const _speeds = [0.5, 0.75, 1.0];
 
+  /// The lesson actually being played — simplified to on-beat down-strokes in
+  /// Easy mode. Same id/tempo/length, so timing + scoring stay consistent.
+  Lesson get _lesson => _easy ? widget.lesson.simplified : widget.lesson;
+
   /// Effective tempo after the practice-speed multiplier.
-  double get _bpm => widget.lesson.bpm * _speed;
+  double get _bpm => _lesson.bpm * _speed;
 
   LessonScorer? _scorer;
   ScoreSnapshot? _score;
@@ -93,13 +98,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     final now = _playhead;
     final muted = ref.read(metronomeMutedProvider);
     for (final beat in LessonTiming.beatsCrossed(_prevPlayhead, now)) {
-      final downbeat = beat % widget.lesson.beatsPerBar == 0;
+      final downbeat = beat % _lesson.beatsPerBar == 0;
       if (!muted) _metronome.tick(accent: downbeat);
       if (_jam && downbeat && beat >= 0) _backing.playChord(_activeChord());
     }
     _prevPlayhead = now;
     if (LessonTiming.isFinished(
-        now, widget.lesson.totalBeats, widget.lesson.beatsPerBar)) {
+        now, _lesson.totalBeats, _lesson.beatsPerBar)) {
       _finish();
     }
   }
@@ -135,7 +140,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // hears (and grades) the app's own accompaniment.
     if (!_jam) {
       _scorer ??=
-          LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
+          LessonScorer(_lesson, countInBeats: _countInBeats, bpm: _bpm);
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = _playhead; // don't re-click beats already passed
@@ -157,7 +162,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _scorer = null;
     } else {
       _scorer =
-          LessonScorer(widget.lesson, countInBeats: _countInBeats, bpm: _bpm);
+          LessonScorer(_lesson, countInBeats: _countInBeats, bpm: _bpm);
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = -_countInBeats.toDouble();
@@ -184,16 +189,21 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // Playing a lesson counts as practice, and its score updates the library.
     if ((snap?.total ?? 0) > 0) {
       ref.read(streakProvider.notifier).recordPracticeToday();
-      ref
-          .read(lessonProgressProvider.notifier)
-          .record(widget.lesson.id, snap!.accuracy);
+      // Easy mode still counts as PRACTICE (streak + Progress), but does NOT
+      // update the lesson's best-score/stars — those must reflect the FULL
+      // lesson, not the simplified cut.
+      if (!_easy) {
+        ref
+            .read(lessonProgressProvider.notifier)
+            .record(widget.lesson.id, snap!.accuracy);
+      }
       // Log for the Progress dashboard — Learn is the only source that scores
       // strum DIRECTION, so it carries the moat metric.
       ref.read(practiceLogProvider.notifier).record(PracticeEntry(
             day: StreakLogic.epochDayOf(DateTime.now()),
             source: PracticeSource.learn,
             seconds: _elapsedSec.round(),
-            strokes: snap.total,
+            strokes: snap!.total,
             chords: widget.lesson.chordSequence.toSet().length,
             directionAccuracy: snap.accuracy,
           ));
@@ -308,7 +318,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// playhead (falling back to the first chord before the lesson starts).
   String _activeChord() {
     var chord = '';
-    for (final e in widget.lesson.events) {
+    for (final e in _lesson.events) {
       if (e.chord.isEmpty) continue;
       if (e.beat <= _playhead + 0.25) {
         chord = e.chord;
@@ -334,7 +344,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final lesson = widget.lesson;
+    final lesson = _lesson;
     final countIn = LessonTiming.countInNumber(_playhead, _countInBeats);
     final chordsUsed = lesson.chordSequence.join(' · ');
     final score = _score;
@@ -343,6 +353,15 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       appBar: AppBar(
         title: Text(lesson.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.school_outlined),
+            color: _easy ? AppColors.primary : null,
+            tooltip: l10n.learnEasyMode,
+            onPressed: () {
+              setState(() => _easy = !_easy);
+              if (_playing || _score != null) _restart();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.music_note),
             color: _jam ? AppColors.primary : null,

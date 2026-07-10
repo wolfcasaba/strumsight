@@ -4,6 +4,35 @@ import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/streak/daily_challenge.dart';
 
 void main() {
+  group('simplified (beginner dynamic-difficulty cut)', () {
+    test('keeps only on-beat down-strokes', () {
+      // downUpGroove = D _ D U _ U D U → downs at slots 0,2,6 (beats 0,1,3),
+      // ups at off-beats. Simplified should keep the 3 on-beat downs per bar.
+      final s = Lessons.downUpGroove.simplified;
+      expect(s.events.every((e) => e.direction == StrumDirection.down), isTrue);
+      expect(s.events.every((e) => e.beat % 1.0 == 0), isTrue);
+      expect(s.events.length, lessThan(Lessons.downUpGroove.events.length));
+      // Same tempo/length/identity so it still scores + records the same lesson.
+      expect(s.bpm, Lessons.downUpGroove.bpm);
+      expect(s.totalBeats, Lessons.downUpGroove.totalBeats);
+      expect(s.id, Lessons.downUpGroove.id);
+    });
+
+    test('an all-on-beat-downs lesson is returned unchanged', () {
+      // firstStrums is already downs on beats 0..3 → nothing to simplify.
+      final l = Lessons.firstStrums;
+      expect(identical(l.simplified, l), isTrue);
+    });
+
+    test('a purely off-beat pattern falls back to the full lesson (never empty)',
+        () {
+      // reggaeSkank = all up-strokes on off-beats → no on-beat downs.
+      final l = Lessons.reggaeSkank;
+      expect(identical(l.simplified, l), isTrue);
+      expect(l.simplified.events, isNotEmpty);
+    });
+  });
+
   test('a lesson expands its pattern into beat-timed, chord-tagged events', () {
     final lesson = Lessons.firstStrums; // Em Em G G, downs on beats 0,1,2,3
     // 4 downstrokes per bar? pattern = D _ D _ D _ D _ → slots 0,2,4,6 → beats

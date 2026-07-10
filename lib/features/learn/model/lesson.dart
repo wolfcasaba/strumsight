@@ -91,6 +91,26 @@ class Lesson {
     return out;
   }
 
+  /// A beginner-friendly cut of this lesson: **down-strokes on the beat only**,
+  /// so a learner nails the chord changes first, before adding up-strokes and
+  /// off-beats (chunk 016b P4 "dynamic difficulty"). Falls back to the full
+  /// lesson if it has no on-beat down-strokes (e.g. a purely off-beat reggae
+  /// skank), so it can never yield an unplayable empty lesson.
+  Lesson get simplified {
+    final kept =
+        events.where((e) => e.isDown && e.beat % 1.0 == 0).toList();
+    if (kept.isEmpty || kept.length == events.length) return this;
+    return Lesson.fromEvents(
+      id: id,
+      name: name,
+      bpm: bpm,
+      events: kept,
+      totalBeats: totalBeats,
+      difficulty: difficulty,
+      beatsPerBar: beatsPerBar,
+    );
+  }
+
   /// The distinct chords in play order (for a header / "chords used" line).
   List<String> get chordSequence {
     final seen = <String>[];

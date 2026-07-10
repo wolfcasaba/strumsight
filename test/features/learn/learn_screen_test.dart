@@ -74,6 +74,26 @@ void main() {
     expect(find.byIcon(Icons.music_note), findsOneWidget);
   });
 
+  testWidgets('easy mode can be toggled from the app bar', (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [strumEngineProvider.overrideWithValue(engine)],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LearnScreen(lesson: Lessons.downUpGroove), // simplifies
+      ),
+    ));
+
+    expect(find.byIcon(Icons.school_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.school_outlined));
+    await tester.pump();
+    // Toggling doesn't throw and keeps the tempo (simplify preserves BPM).
+    expect(find.byIcon(Icons.school_outlined), findsOneWidget);
+    expect(find.text('90 BPM'), findsOneWidget);
+  });
+
   testWidgets('practice-speed control scales the tempo', (tester) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
