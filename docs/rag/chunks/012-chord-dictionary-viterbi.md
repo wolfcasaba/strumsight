@@ -162,13 +162,42 @@ real-guitar retune** (that is the final acceptance).
   hearing weak upper extensions everywhere remains the ML-era goal. The
   randomized dom7 property is therefore gated on the E2–B2 band only.
 
-## Still open (NOT built in round 28)
+## Tuning estimation — AS BUILT (round 69)
+
+The "deferred: synth is perfectly in tune" reasoning was WRONG — synth can be
+*deliberately* detuned, and doing so exposed two real defects:
+
+1. **A hidden +1/3-semitone dictionary bias.** `_buildDictionary` placed each
+   note's centre at bin `n·bps + bps~/2`, but on the `_binFreq` grid
+   (`midi = minMidi + j/bps`) the note's exact frequency sits at bin `n·bps`.
+   The whole dictionary was systematically 1 bin (33 cents) SHARP. Measured
+   symptom: a 35-cent-FLAT C major decoded as **B** (everything slid a
+   semitone down) while +35 cents passed. Fixed: `base = n·bps`. All previous
+   gates stayed green — the bias had been absorbed by tuned thresholds.
+2. **No tuning compensation at all.** Real guitars sit 10–40 cents off.
+
+Implementation (`NnlsChroma`, flag `tuningEstimation = true`):
+- Sample the log-freq spectrum on the nominal grid, then estimate the frame's
+  sub-semitone offset as the **energy-weighted circular mean** of the 3
+  within-semitone bin phases (`θ_j = 2π·(j mod 3)/3`, weights `s_j²`;
+  `atan2 → frac ∈ −0.5..0.5` semitone).
+- **EMA-smooth** across frames: `tuningSmoothing = 0.2` (first tonal frame
+  initialises directly). Exposed as `lastTuningSemitones` (positive = sharp).
+- If `|offset| > 0.02` semitone, **resample** the log-freq spectrum at
+  `binFreq · 2^(offset/12)` so the detuned partials land back on note
+  centres; NNLS and everything downstream is unchanged. Cost: one extra
+  interpolation pass over 441 bins per chord frame (FFT dominates).
+- Gates: deterministic ±35/−30-cent chord tests + a randomized property
+  (uniform ±40-cent detune, random maj/min triads, ≥16/20) — green across
+  seeds 42, 7, 123, 2026, 31337.
+- The A4 *setting* remains the tuner's reference only; the chord path now
+  self-corrects, which also makes non-440 references converge to correct
+  nearest-semitone names.
+
+## Still open (NOT built in rounds 28/69)
 - **Spectral whitening pre-NNLS** (exponent ≈1.0) — capability not added yet;
-  best validated on real coloured recordings, not synth (in-tune synth barely
-  moves). Add with real-device audio.
-- **Tuning estimation** (global/local offset → shift the chroma mapping; make
-  the A4 setting a prior) — deferred for the same reason: synth is perfectly in
-  tune, so there is nothing to estimate here; needs real drifting-guitar audio.
+  best validated on real coloured recordings — BUT round 69's lesson applies:
+  colour the synth (filter/EQ its spectrum) and it becomes testable here too.
 - **Full-sequence (batch) Viterbi with backtrace** for Analyze — today Analyze
   streams the *online* decoder (consistent, good); a global backtrace would
   squeeze a little more quality out of a recorded clip.

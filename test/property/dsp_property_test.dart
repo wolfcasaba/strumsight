@@ -135,6 +135,44 @@ void main() {
         reason: 'seed=$seed failures: ${failures.join('; ')}');
   });
 
+  // chunk 012 / round 69 — per-frame TUNING ESTIMATION: real guitars sit
+  // 10–40 cents off concert pitch. A uniformly detuned triad must still be
+  // named correctly (before round 69 a 35-cent-flat C major decoded as B —
+  // the whole naming slid a semitone).
+  test('property: detuned (±40 cents) random triads still recognised '
+      '(≥80% of 20)', () {
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final rootMidi = 40 + rng.nextInt(13); // E2..E3
+      final minor = rng.nextBool();
+      final cents = -40 + rng.nextDouble() * 80; // uniform −40..+40
+      final thirdOffset = (minor ? 3 : 4) + (rootMidi < 45 ? 12 : 0);
+      final factor = math.pow(2, cents / 1200).toDouble();
+      final freqs = [
+        _midiToFreq(rootMidi) * factor,
+        _midiToFreq(rootMidi + thirdOffset) * factor,
+        _midiToFreq(rootMidi + 7) * factor,
+      ];
+      final expected = _pitchClasses[rootMidi % 12] + (minor ? 'm' : '');
+      final signal = chordSignal(
+        freqs,
+        seconds: 1.0,
+        amp: 0.1 + rng.nextDouble() * 0.25,
+        decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
+      );
+      final got = _decodeChord(signal);
+      if (got == expected) {
+        correct++;
+      } else {
+        failures.add('trial=$t cents=${cents.toStringAsFixed(1)} '
+            'expected=$expected got=$got');
+      }
+    }
+    expect(correct, greaterThanOrEqualTo(16),
+        reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
   // chunk 012 — the headline round-26 fix: a low-voiced dominant 7 (7th just
   // above the fifth, as fingered in an open E7/A7/B7 shape) is heard as a 7
   // chord, not collapsed to the bare triad. Roots are drawn from the guitar's

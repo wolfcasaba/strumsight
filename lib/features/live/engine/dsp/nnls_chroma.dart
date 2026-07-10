@@ -24,6 +24,8 @@ class NnlsChroma {
     this.silenceRms = 0.008,
     this.bassMaxMidi = 52, // E3 — bass/root register upper edge
     this.trebleMinMidi = 40, // E2 — treble spans the FULL range (see below)
+    this.tuningEstimation = true,
+    this.tuningSmoothing = 0.2,
   })  : _fft = FFT(window),
         _hann = Float64List(window),
         _windowed = Float64List(window),
@@ -53,6 +55,15 @@ class NnlsChroma {
   final double spectralShape;
   final int nnlsIterations;
   final double silenceRms;
+
+  /// Per-frame tuning estimation (chunk 012, Chordino stage): real guitars sit
+  /// 10–40 cents off concert pitch, which — measured, round 69 — mis-names a
+  /// 35-cent-flat C major as B. When enabled, each frame's sub-semitone offset
+  /// is estimated from the log-freq spectrum (circular mean of the 3-bin
+  /// phase), EMA-smoothed by [tuningSmoothing], and the spectrum is resampled
+  /// at the shifted frequencies so note centres line up again.
+  final bool tuningEstimation;
+  final double tuningSmoothing;
 
   /// Register split for the bass+treble chroma (RAG chunk 012). The **treble**
   /// chroma folds the whole harmony (activations at/above [trebleMinMidi],
@@ -89,6 +100,11 @@ class NnlsChroma {
   /// vector): ~1.0 for a clean chord, low for a diffuse/noisy frame.
   double lastTonalness = 0;
 
+  /// Smoothed tuning offset of the input in semitones (−0.5..0.5); 0 when
+  /// in tune or when [tuningEstimation] is off. Positive = instrument sharp.
+  double lastTuningSemitones = 0;
+  bool _tuningInit = false;
+
   /// Bass-register chroma (12, L2-normalised) of the last processed frame —
   /// the root/bass note. Zeros on a silent frame. See [bassMaxMidi] (chunk 012).
   final Float64List lastBassChroma = Float64List(12);
@@ -101,7 +117,11 @@ class NnlsChroma {
     _dict = List.generate(nNotes, (_) => Float64List(_nBins));
     for (var n = 0; n < nNotes; n++) {
       final col = _dict[n];
-      final base = n * binsPerSemitone + binsPerSemitone ~/ 2; // note centre bin
+      // Note centre bin. On the [_binFreq] grid `midi = minMidi + j/bps`, so
+      // note n's exact frequency sits at bin n·bps — NOT n·bps + bps~/2, which
+      // silently biased the whole dictionary +1/3 semitone SHARP (measured in
+      // round 69: a 35-cent-flat C major decoded as B while +35 cents passed).
+      final base = n * binsPerSemitone;
       for (var h = 1; h <= harmonics; h++) {
         // Harmonic h sits log2(h) octaves above → +12·log2(h) semitones.
         final offsetBins =
@@ -155,22 +175,39 @@ class NnlsChroma {
     // 1) STFT magnitude → log-frequency spectrum (linear interp at bin centres).
     final spec = _fft.realFft(_windowed);
     final nFft = window ~/ 2;
-    var maxS = 0.0;
-    for (var j = 0; j < _nBins; j++) {
-      final kc = _binFreq[j] * window / sampleRate; // fractional FFT bin
-      final k0 = kc.floor();
-      double mag;
-      if (k0 < 1 || k0 + 1 >= nFft) {
-        mag = 0;
-      } else {
-        final m0 = _mag(spec, k0), m1 = _mag(spec, k0 + 1);
-        final t = kc - k0;
-        mag = m0 * (1 - t) + m1 * t;
-      }
-      _s[j] = mag;
-      if (mag > maxS) maxS = mag;
-    }
+    var maxS = _sampleLogFreq(spec, nFft, 1.0);
     if (maxS <= 0) return null;
+
+    // 1b) Tuning estimation (chunk 012): the sub-semitone offset of the input
+    //     is the circular mean of energy over the 3 within-semitone bin
+    //     phases. EMA-smooth it across frames, then RESAMPLE the spectrum at
+    //     the shifted frequencies so a detuned instrument's partials land on
+    //     the note-centre bins again. Skipped for near-zero offsets — the
+    //     nominal grid is already right.
+    if (tuningEstimation) {
+      var re = 0.0, im = 0.0;
+      for (var j = 0; j < _nBins; j++) {
+        final theta = 2 * math.pi * (j % binsPerSemitone) / binsPerSemitone;
+        final w = _s[j] * _s[j]; // energy-weight the peaks
+        re += w * math.cos(theta);
+        im += w * math.sin(theta);
+      }
+      if (re != 0 || im != 0) {
+        var frac = math.atan2(im, re) / (2 * math.pi); // −0.5..0.5 semitone
+        if (frac > 0.5) frac -= 1;
+        _tuningInit
+            ? lastTuningSemitones = lastTuningSemitones +
+                tuningSmoothing * (frac - lastTuningSemitones)
+            : lastTuningSemitones = frac;
+        _tuningInit = true;
+      }
+      if (lastTuningSemitones.abs() > 0.02) {
+        final factor =
+            math.pow(2, lastTuningSemitones / 12).toDouble();
+        maxS = _sampleLogFreq(spec, nFft, factor);
+        if (maxS <= 0) return null;
+      }
+    }
 
     // 2) NNLS: min ‖D·x − s‖², x ≥ 0, via non-negative multiplicative updates
     //    x ← x · (Dᵀs) / (DᵀD·x + ε). Warm, cheap, converges to the NNLS fit.
@@ -231,6 +268,28 @@ class NnlsChroma {
     lastTonalness = sq[11] + sq[10] + sq[9];
 
     return chroma;
+  }
+
+  /// Sample the STFT magnitude at each log-freq bin centre × [tuningFactor]
+  /// (linear interp between FFT bins) into [_s]; returns the max magnitude.
+  double _sampleLogFreq(List<dynamic> spec, int nFft, double tuningFactor) {
+    var maxS = 0.0;
+    for (var j = 0; j < _nBins; j++) {
+      final kc =
+          _binFreq[j] * tuningFactor * window / sampleRate; // fractional bin
+      final k0 = kc.floor();
+      double mag;
+      if (k0 < 1 || k0 + 1 >= nFft) {
+        mag = 0;
+      } else {
+        final m0 = _mag(spec, k0), m1 = _mag(spec, k0 + 1);
+        final t = kc - k0;
+        mag = m0 * (1 - t) + m1 * t;
+      }
+      _s[j] = mag;
+      if (mag > maxS) maxS = mag;
+    }
+    return maxS;
   }
 
   static void _l2Normalise(Float64List v) {
