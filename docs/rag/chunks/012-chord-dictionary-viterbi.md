@@ -234,6 +234,21 @@ stamped at window centres; strums/tempo keep streaming through LivePipeline).
   genuinely undecidable (and power-5 is deliberately out of vocab). Synth
   chord fixtures must be real root-third-fifth triads.
 
-## Still open (NOT built in rounds 28/69–71)
-- Grow the vocabulary (6, 9, add, dim, aug, inversions/slash) once the base is
-  validated on a real guitar.
+## Vocabulary growth — dim/aug AS BUILT (round 78)
+
+Added `dim [0,3,6]` and `aug [0,4,8]` (vocab now 8 qualities × 12 roots + N.C.
+= **97 states**). The round-28 worry was stealing: they differ from m/maj only
+in the FIFTH — the lightest, most-omitted tone. Design that made it safe:
+- The altered fifth carries **0.9 weight** in the dim/aug profiles (it IS the
+  distinguishing evidence; the normal 0.7 fifth weight would under-use it).
+- A small **0.02 rarity bias** keeps ambiguous frames on the common triads.
+- Measured pre-add misreadings: Bdim→Dm (shared D+F), Caug→E (shared E+G#).
+- **Aug is pitch-class symmetric** (Caug=Eaug=G#aug): only the BASS register
+  disambiguates the root; the randomized gate accepts any enharmonic root.
+- Gates: deterministic Bdim/Caug + no-steal (Am/C stay themselves) + a
+  randomized dim/aug property (≥16/20) + ALL prior gates unchanged — green
+  across seeds 42/7/123/2026/31337 (+555/999 for the pre-add suite).
+
+## Still open (NOT built in rounds 28/69–78)
+- Grow the vocabulary further (6, 9, add9, inversions/slash) once the base is
+  validated on a real guitar. Power-5/sus2 stay OUT (round-26/28 stealing).

@@ -36,14 +36,16 @@ const c = 0, e = 4, g = 7, b = 11, a = 9, d = 2, f = 5;
 void main() {
   final dict = ChordDictionary();
 
-  test('vocabulary: N.C. first, and the six qualities × 12 roots present', () {
+  test('vocabulary: N.C. first, and the eight qualities × 12 roots present',
+      () {
     expect(dict.profiles.first.label, 'N.C.');
     expect(dict.profiles.first.isNoChord, isTrue);
     final labels = dict.profiles.map((p) => p.label).toSet();
-    expect(labels, containsAll(['C', 'Am', 'G7', 'Cmaj7', 'Dm7', 'Asus4']));
+    expect(labels,
+        containsAll(['C', 'Am', 'G7', 'Cmaj7', 'Dm7', 'Asus4', 'Bdim', 'Caug']));
     // Power-5 and sus2 are deliberately excluded (they steal weak-third triads).
     expect(labels.any((l) => l.endsWith('5') || l.contains('sus2')), isFalse);
-    expect(dict.length, 1 + 6 * 12); // 73
+    expect(dict.length, 1 + 8 * 12); // 97 (dim/aug added round 78)
   });
 
   test('a plain C major triad is C — NOT Cmaj7 (the round-26 superset fix)', () {

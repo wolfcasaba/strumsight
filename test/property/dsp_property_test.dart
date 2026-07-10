@@ -263,6 +263,45 @@ void main() {
         reason: 'seed=$seed failures: ${failures.join('; ')}');
   });
 
+  // chunk 012 / round 78 — dim/aug vocabulary growth. dim differs from minor
+  // (and aug from major) only in the FIFTH, so this gate + the untouched
+  // maj/min gates above are the no-stealing proof. Aug is pitch-class
+  // symmetric (Caug = Eaug = G#aug) — any enharmonic root is accepted; the
+  // bass usually disambiguates but the property must not be flaky on it.
+  test('property: random dim/aug triads recognised (≥16 of 20)', () {
+    var correct = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final rootMidi = 40 + rng.nextInt(13); // E2..E3
+      final aug = rng.nextBool();
+      final freqs = [
+        _midiToFreq(rootMidi),
+        _midiToFreq(rootMidi + (aug ? 4 : 3)),
+        _midiToFreq(rootMidi + (aug ? 8 : 6)),
+      ];
+      final signal = chordSignal(
+        freqs,
+        seconds: 1.0,
+        amp: 0.1 + rng.nextDouble() * 0.25,
+        decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
+      );
+      final got = _decodeChord(signal);
+      final Set<String> accepted = aug
+          ? {
+              for (final o in [0, 4, 8])
+                '${_pitchClasses[(rootMidi + o) % 12]}aug'
+            }
+          : {'${_pitchClasses[rootMidi % 12]}dim'};
+      if (got != null && accepted.contains(got)) {
+        correct++;
+      } else {
+        failures.add('trial=$t expected-one-of=$accepted got=$got');
+      }
+    }
+    expect(correct, greaterThanOrEqualTo(16),
+        reason: 'seed=$seed failures: ${failures.join('; ')}');
+  });
+
   // chunk 012 — the headline round-26 fix: a low-voiced dominant 7 (7th just
   // above the fifth, as fingered in an open E7/A7/B7 shape) is heard as a 7
   // chord, not collapsed to the bare triad. Roots are drawn from the guitar's

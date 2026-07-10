@@ -119,6 +119,13 @@ class ChordDictionary {
     ['maj7', [0, 4, 7, 11], [1.0, 0.9, 0.6, 0.9], 0.055], // major 7
     ['m7', [0, 3, 7, 10], [1.0, 0.9, 0.6, 0.9], 0.055], // minor 7
     ['sus4', [0, 5, 7], [1.0, 1.0, 0.7], 0.0], // suspended 4
+    // dim/aug (round 78): they differ from m/maj only in the FIFTH — the
+    // lightest chord tone — so the altered fifth carries FULL weight here
+    // (it IS the distinguishing evidence) and a small rarity bias keeps
+    // ambiguous frames on the common triads. Gated by the multi-seed
+    // property suite (no stealing measured).
+    ['dim', [0, 3, 6], [1.0, 1.0, 0.9], 0.02], // diminished
+    ['aug', [0, 4, 8], [1.0, 1.0, 0.9], 0.02], // augmented
   ];
 
   late final List<ChordProfile> _profiles;
