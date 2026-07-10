@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/tuner/model/in_tune_lock.dart';
 import 'package:music_theory/features/tuner/model/tuner_reading.dart';
 import 'package:music_theory/features/tuner/providers/tuner_providers.dart';
 import 'package:music_theory/features/tuner/screens/tuner_screen.dart';
@@ -49,5 +50,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('holding the pitch in tune locks in — the note pulses green',
+      (tester) async {
+    final engine = FakeTunerEngine();
+    addTearDown(engine.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [tunerEngineProvider.overrideWithValue(engine)],
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: TunerScreen(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // One in-tune reading is NOT a lock…
+    engine.emit(const TunerReading(note: 'A', cents: 0, frequencyHz: 110));
+    await tester.pumpAndSettle();
+    var scale = tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
+    expect(scale, 1.0);
+
+    // …holding it for the required consecutive readings is. The cents
+    // wobble slightly (still in tune) — identical const readings would
+    // canonicalise to one instance and Riverpod would not notify.
+    for (var i = 1; i < InTuneLock.holdReadings; i++) {
+      engine.emit(
+          TunerReading(note: 'A', cents: i * 0.1, frequencyHz: 110));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    scale = tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
+    expect(scale, greaterThan(1.0),
+        reason: 'the locked note pulses to celebrate the hold');
   });
 }

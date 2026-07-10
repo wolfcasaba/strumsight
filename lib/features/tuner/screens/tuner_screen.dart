@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -9,16 +10,37 @@ import '../../../l10n/app_localizations.dart';
 import '../../live/providers/live_providers.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/guitar_strings.dart';
+import '../model/in_tune_lock.dart';
 import '../model/tuner_reading.dart';
 import '../providers/tuner_providers.dart';
 import '../widgets/cents_gauge.dart';
 
 /// A simple chromatic tuner, pushed full-screen from the Live screen.
-class TunerScreen extends ConsumerWidget {
+class TunerScreen extends ConsumerStatefulWidget {
   const TunerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TunerScreen> createState() => _TunerScreenState();
+}
+
+class _TunerScreenState extends ConsumerState<TunerScreen> {
+  /// HOLDING the pitch is the achievement (round 85): after ~6 consecutive
+  /// in-tune readings the lock engages once — a firm haptic + a scale pulse
+  /// on the note. Re-arms when the pitch drifts or the string changes.
+  final InTuneLock _lock = InTuneLock();
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(tunerReadingProvider, (_, next) {
+      final r = next.asData?.value;
+      if (r == null) return;
+      final justLocked =
+          _lock.feed(inTune: r.inTune, note: r.hasSignal ? r.note : '');
+      if (justLocked) {
+        HapticFeedback.mediumImpact();
+        setState(() {}); // reflect the locked state in the pulse
+      }
+    });
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
     final readingAsync = ref.watch(tunerReadingProvider);
@@ -53,14 +75,22 @@ class TunerScreen extends ConsumerWidget {
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    reading.note,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 96,
-                      height: 1,
-                      color: palette.ink,
+                  AnimatedScale(
+                    scale: _lock.isLocked ? 1.08 : 1.0,
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutBack,
+                    child: Text(
+                      reading.note,
+                      style: TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 96,
+                        height: 1,
+                        color: _lock.isLocked
+                            ? AppColors.successOn(
+                                Theme.of(context).brightness)
+                            : palette.ink,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
