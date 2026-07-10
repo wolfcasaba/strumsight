@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/mic_error_banner.dart';
+import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../live/providers/live_providers.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/tuner_reading.dart';
 import '../providers/tuner_providers.dart';
@@ -17,14 +20,32 @@ class TunerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
-    final reading = ref.watch(tunerReadingProvider).asData?.value ??
-        TunerReading.silent;
+    final readingAsync = ref.watch(tunerReadingProvider);
+    final reading = readingAsync.asData?.value ?? TunerReading.silent;
     final a4 = ref.watch(tuningReferenceProvider);
+    final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.tunerTitle)),
       body: Column(
         children: [
+          // Mic problems must never be a silent idle (parity with Live,
+          // round 13): denied permission gets the settings deep-link banner;
+          // a start failure (busy / platform error) gets Retry. The error
+          // banner stays up through a Retry until the restarted engine
+          // produces a reading (AsyncData clears hasError) or fails again.
+          if (!micGranted)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: MicPermissionBanner(),
+            ),
+          if (micGranted && readingAsync.hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: MicErrorBanner(
+                onRetry: () => ref.invalidate(tunerReadingProvider),
+              ),
+            ),
           Expanded(
             child: Center(
         child: reading.hasSignal

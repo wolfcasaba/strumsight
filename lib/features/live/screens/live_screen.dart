@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/mic_error_banner.dart';
+import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/widgets/chord_diagram.dart';
 import '../../settings/providers/capo_provider.dart';
@@ -142,9 +143,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   const StreakBadge(),
                 ],
               ),
-              if (!micGranted) const _MicPermissionBanner(),
+              if (!micGranted) const MicPermissionBanner(),
               if (micGranted && micError)
-                _MicErrorBanner(
+                MicErrorBanner(
                   onRetry: () => ref.invalidate(liveFrameProvider),
                 ),
               Expanded(
@@ -223,94 +224,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   String _arrowLabel(AppLocalizations l10n, Strum s) {
     final dir = s.isDown ? l10n.strumDown : l10n.strumUp;
     return '$dir ${(s.confidence * 100).round()}%';
-  }
-}
-
-/// Shown when mic permission is denied — the one thing the app cannot work
-/// without. Never a silent no-op.
-class _MicPermissionBanner extends StatelessWidget {
-  const _MicPermissionBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final palette = context.palette;
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.mic_off_outlined, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              l10n.micPermissionBody,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12.5,
-                height: 1.35,
-                color: palette.ink,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: openAppSettings,
-            child: Text(l10n.micPermissionAction),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Shown when the microphone could not be started (in use by another app,
-/// revoked mid-capture, platform channel error). Offers a Retry.
-class _MicErrorBanner extends StatelessWidget {
-  const _MicErrorBanner({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final palette = context.palette;
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              l10n.micErrorBody,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12.5,
-                height: 1.35,
-                color: palette.ink,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: onRetry,
-            child: Text(l10n.micErrorAction),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -34,31 +34,44 @@ class RealTunerEngine implements TunerEngine {
     }
     _running = true;
 
-    final actualRate = await _mic.start((chunk) {
-      final port = _toDsp;
-      if (port != null) {
-        port.send(chunk);
-      } else if (_pendingChunks.length < 64) {
-        _pendingChunks.add(chunk);
-      }
-    });
-
-    _fromDsp = ReceivePort();
-    _isolate = await Isolate.spawn(
-      _tunerEntry,
-      _TunerInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate, a4: a4),
-    );
-    _fromDsp!.listen((message) {
-      if (message is SendPort) {
-        _toDsp = message;
-        for (final c in _pendingChunks) {
-          _toDsp!.send(c);
+    try {
+      final actualRate = await _mic.start((chunk) {
+        final port = _toDsp;
+        if (port != null) {
+          port.send(chunk);
+        } else if (_pendingChunks.length < 64) {
+          _pendingChunks.add(chunk);
         }
-        _pendingChunks.clear();
-      } else if (message is TunerReading) {
-        _controller?.add(message);
+      });
+
+      _fromDsp = ReceivePort();
+      _isolate = await Isolate.spawn(
+        _tunerEntry,
+        _TunerInit(
+            sendPort: _fromDsp!.sendPort, sampleRate: actualRate, a4: a4),
+      );
+      _fromDsp!.listen((message) {
+        if (message is SendPort) {
+          _toDsp = message;
+          for (final c in _pendingChunks) {
+            _toDsp!.send(c);
+          }
+          _pendingChunks.clear();
+        } else if (message is TunerReading) {
+          _controller?.add(message);
+        }
+      });
+    } catch (e, st) {
+      // Mic unavailable (busy, revoked mid-capture, platform channel error):
+      // surface it on the stream so the Tuner screen shows an honest error —
+      // never a silent idle. Leave the engine stopped so Retry can restart.
+      // Mirrors RealStrumEngine (round 13).
+      await stop();
+      final controller = _controller;
+      if (controller != null && !controller.isClosed) {
+        controller.addError(e, st);
       }
-    });
+    }
   }
 
   @override
