@@ -77,7 +77,9 @@ void main() {
     await tester.tap(find.text('Suggest'));
     await tester.pumpAndSettle();
     expect(find.text('Suggest a progression'), findsOneWidget);
-    await tester.tap(find.textContaining('Pop'));
+    // Tap the Pop tile via its unique roman-numeral subtitle (a "Pop" strum
+    // preset chip also exists in the builder underneath the sheet).
+    await tester.tap(find.text('I–V–vi–IV'));
     await tester.pumpAndSettle();
 
     // Pop in C = C G Am F → each added as a removable InputChip.
@@ -104,6 +106,26 @@ void main() {
     await tester.pumpAndSettle();
     // The share pipeline (Strum Card) is reused verbatim for a song.
     expect(find.byType(StrumCard), findsOneWidget);
+  });
+
+  testWidgets('a strum-pattern preset fills the editor', (tester) async {
+    await tester.pumpWidget(_app(const SongListScreen()));
+    await tester.pump();
+    await tester.tap(find.text('New song'));
+    await tester.pumpAndSettle();
+
+    // The preset row + editor are below the fold — scroll them into view.
+    final eighths = find.widgetWithText(ActionChip, 'Eighths');
+    await tester.scrollUntilVisible(eighths, 120,
+        scrollable: find.byType(Scrollable).first);
+
+    // Default builder pattern is "Down" → no up-strokes yet.
+    expect(find.byIcon(Icons.arrow_upward), findsNothing);
+
+    // Apply the "Eighths" preset → 4 up-strokes appear in the editor.
+    await tester.tap(eighths);
+    await tester.pump();
+    expect(find.byIcon(Icons.arrow_upward), findsNWidgets(4));
   });
 
   testWidgets('pattern editor cycles a rest slot to a down-strum on tap',

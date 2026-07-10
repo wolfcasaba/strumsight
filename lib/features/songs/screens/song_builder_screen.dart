@@ -7,6 +7,7 @@ import '../../chords/chord_shape.dart';
 import '../../live/model/strum.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
+import '../theory/strum_patterns.dart';
 import '../widgets/progression_picker.dart';
 import '../widgets/strum_pattern_editor.dart';
 
@@ -153,6 +154,18 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             const SizedBox(height: 4),
             Text(l10n.songStrumPatternHint,
                 style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (final preset in StrumPatternPreset.all)
+                  ActionChip(
+                    label: Text(preset.name),
+                    onPressed: () =>
+                        setState(() => _pattern = [...preset.pattern]),
+                  ),
+              ],
+            ),
             const SizedBox(height: 12),
             StrumPatternEditor(
               pattern: _pattern,
