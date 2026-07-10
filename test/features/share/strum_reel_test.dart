@@ -4,7 +4,18 @@ import 'package:music_theory/features/analyze/model/analyze_result.dart';
 import 'package:music_theory/features/learn/widgets/lesson_highway.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/share/screens/strum_reel_screen.dart';
+import 'package:music_theory/features/share/share_service.dart';
 import 'package:music_theory/l10n/app_localizations.dart';
+
+class _FakeShareService extends ShareService {
+  const _FakeShareService(this.log);
+  final List<String> log;
+
+  @override
+  Future<void> shareText(AnalyzeResult result,
+          {int capo = 0, Rect? sharePositionOrigin}) async =>
+      log.add('text-share capo=$capo strums=${result.strums.length}');
+}
 
 final _result = AnalyzeResult(
   durationSec: 4,
@@ -45,6 +56,64 @@ void main() {
 
     // Tap to pause so no active ticker survives to teardown.
     await tester.tap(find.byType(LessonHighway));
+    await tester.pump();
+  });
+
+  testWidgets('one-tap share sends the caption from the reel (016b P7)',
+      (tester) async {
+    final log = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(
+          result: _result, capo: 2, shareService: _FakeShareService(log)),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.ios_share));
+    await tester.pump();
+    expect(log, ['text-share capo=2 strums=6']);
+
+    await tester.tap(find.byType(LessonHighway)); // pause ticker
+    await tester.pump();
+  });
+
+  test('downbeat punch-in kicks on the bar and decays (016b P7)', () {
+    final onBeat = StrumReelScreen.punchScale(0);
+    final offBeat = StrumReelScreen.punchScale(2.0);
+    expect(onBeat, greaterThan(1.03));
+    expect(offBeat, closeTo(1.0, 0.005));
+    // Kicks again on the next bar.
+    expect(StrumReelScreen.punchScale(4.0), closeTo(onBeat, 1e-9));
+  });
+
+  test('the end-card fades in over the loop tail only', () {
+    expect(StrumReelScreen.endCardOpacity(0, 16), 0);
+    expect(StrumReelScreen.endCardOpacity(10, 16), 0);
+    expect(StrumReelScreen.endCardOpacity(14.5, 16), 0);
+    expect(StrumReelScreen.endCardOpacity(15.25, 16), closeTo(1.0, 1e-9));
+    // Short clips skip the end-card (nothing to brand over).
+    expect(StrumReelScreen.endCardOpacity(2.9, 3), 0);
+  });
+
+  testWidgets('the end-card appears near the loop end', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(result: _result),
+    ));
+    await tester.pump();
+    // Hidden at the start: the wordmark appears only once (the header).
+    expect(find.text('StrumSight'), findsOneWidget);
+
+    // _result: 6 strums @0.5 s, 100 BPM → the lesson loops over its bars;
+    // drive close to the loop end: totalBeats of the derived lesson is 8
+    // (2 bars), loop period = 8 beats @100 BPM = 4.8 s → 4.5 s is in the tail.
+    await tester.pump(const Duration(milliseconds: 4500));
+    expect(find.text('StrumSight'), findsNWidgets(2),
+        reason: 'the branded end-card is visible in the loop tail');
+
+    await tester.tap(find.byType(LessonHighway)); // pause ticker
     await tester.pump();
   });
 }

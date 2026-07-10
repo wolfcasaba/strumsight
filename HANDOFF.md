@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-10** (round 76).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-10** (round 77).
 
 > 🧭 **Strategy (2026-07-10 research):** a 4-agent Hermes sweep produced the plan to beat Yousician —
 > RAG chunks **015** (strum-direction ML), **016** (pitch/chord SOTA + priors), **016b** (animation/

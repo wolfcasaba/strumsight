@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -7,6 +9,7 @@ import '../../analyze/model/analyze_result.dart';
 import '../../learn/model/lesson.dart';
 import '../../learn/widgets/lesson_highway.dart';
 import '../share_content.dart';
+import '../share_service.dart';
 
 /// A full-screen, looping, branded **replay** of a recording — chord + ↓/↑ arrows
 /// flowing in tempo — made to be **screen-recorded** and shared (the "moat as
@@ -14,10 +17,31 @@ import '../share_content.dart';
 /// it's buildable + testable now; a true MP4 export is a later option needing a
 /// maintained video encoder.
 class StrumReelScreen extends StatefulWidget {
-  const StrumReelScreen({super.key, required this.result, this.capo = 0});
+  const StrumReelScreen({
+    super.key,
+    required this.result,
+    this.capo = 0,
+    this.shareService = const ShareService(),
+  });
 
   final AnalyzeResult result;
   final int capo;
+  final ShareService shareService;
+
+  /// Downbeat "punch-in" (chunk 016b P7): a subtle scale kick on each bar
+  /// downbeat, decaying over ~half a beat. Pure — testable and deterministic.
+  static double punchScale(double playheadBeat) {
+    final phase = playheadBeat % 4; // beats into the bar
+    return 1 + 0.05 * math.exp(-5 * phase);
+  }
+
+  /// Branded end-card opacity (chunk 016b P7): fades in over the loop's last
+  /// 1.5 beats so every screen-recorded pass ends on the brand + install cue.
+  static double endCardOpacity(double playheadBeat, double totalBeats) {
+    if (totalBeats <= 3) return 0; // too short for an end-card
+    final t = playheadBeat - (totalBeats - 1.5);
+    return (t / 0.75).clamp(0.0, 1.0);
+  }
 
   @override
   State<StrumReelScreen> createState() => _StrumReelScreenState();
@@ -91,10 +115,21 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                             fontSize: 16,
                             color: Color(0xFFE9E5DE))),
                   ]),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFFE9E5DE)),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  Row(children: [
+                    // 1-tap share (chunk 016b P7): the caption + install link
+                    // without leaving the reel.
+                    IconButton(
+                      icon: const Icon(Icons.ios_share,
+                          color: Color(0xFFE9E5DE)),
+                      tooltip: l10n.shareTextButton,
+                      onPressed: () => widget.shareService
+                          .shareText(widget.result, capo: widget.capo),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Color(0xFFE9E5DE)),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ]),
                 ],
               ),
               const Spacer(),
@@ -111,10 +146,63 @@ class _StrumReelScreenState extends State<StrumReelScreen>
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: _toggle,
-                child: LessonHighway(
-                  lesson: _lesson,
-                  playheadBeat: _playhead,
-                  height: 190,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: StrumReelScreen.punchScale(_playhead),
+                      child: LessonHighway(
+                        lesson: _lesson,
+                        playheadBeat: _playhead,
+                        height: 190,
+                      ),
+                    ),
+                    // Branded end-card: every recorded loop ends on the brand.
+                    // Only in the tree while visible (also keeps the base
+                    // finders unique in tests).
+                    if (StrumReelScreen.endCardOpacity(
+                            _playhead, _lesson.totalBeats.toDouble()) >
+                        0)
+                      IgnorePointer(
+                      child: Opacity(
+                        opacity: StrumReelScreen.endCardOpacity(
+                            _playhead, _lesson.totalBeats.toDouble()),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 22, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE6111013),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.55)),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('↓↑',
+                                  style: TextStyle(
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primary)),
+                              const Text('StrumSight',
+                                  style: TextStyle(
+                                      fontFamily: 'Montserrat',
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 20,
+                                      color: Color(0xFFE9E5DE))),
+                              const SizedBox(height: 4),
+                              Text('#StrumSightChallenge',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: const Color(0xFFE9E5DE)
+                                          .withValues(alpha: 0.8))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 20),
