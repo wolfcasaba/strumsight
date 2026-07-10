@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/providers/input_latency_provider.dart';
+import '../../settings/providers/visual_latency_provider.dart';
 import '../audio/metronome.dart';
 import '../calibration/latency_calibrator.dart';
 
@@ -33,6 +34,7 @@ class _LatencyCalibrationScreenState
       LatencyCalibrator(beatPeriodSec: _beatPeriodSec);
   late final Ticker _ticker;
 
+  bool _visualMode = false;
   bool _running = false;
   double _elapsedSec = 0;
   int _lastBeat = -1;
@@ -57,7 +59,7 @@ class _LatencyCalibrationScreenState
     final beat = (_elapsedSec / _beatPeriodSec).floor();
     if (beat != _lastBeat) {
       _lastBeat = beat;
-      _metronome.tick(accent: false);
+      if (!_visualMode) _metronome.tick(accent: false);
       setState(() => _pulse = true);
     } else if (_pulse && _elapsedSec - _lastBeat * _beatPeriodSec > 0.12) {
       setState(() => _pulse = false);
@@ -99,9 +101,12 @@ class _LatencyCalibrationScreenState
     if (offset == null) return;
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    await ref
-        .read(inputLatencyProvider.notifier)
-        .set((offset * 1000).round());
+    final ms = (offset * 1000).round();
+    if (_visualMode) {
+      await ref.read(visualLatencyProvider.notifier).set(ms);
+    } else {
+      await ref.read(inputLatencyProvider.notifier).set(ms);
+    }
     messenger.showSnackBar(SnackBar(content: Text(l10n.calibrationSaved)));
   }
 
@@ -109,7 +114,8 @@ class _LatencyCalibrationScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final savedMs = ref.watch(inputLatencyProvider);
+    final savedMs = ref.watch(
+        _visualMode ? visualLatencyProvider : inputLatencyProvider);
     final done = !_running &&
         _calibrator.sampleCount >= LatencyCalibrationScreen.tapsNeeded;
     final offset = _calibrator.offsetSec;
@@ -121,7 +127,24 @@ class _LatencyCalibrationScreenState
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: Column(
             children: [
-              Text(l10n.calibrationIntro,
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                      value: false, label: Text(l10n.calibrationModeAudio)),
+                  ButtonSegment(
+                      value: true, label: Text(l10n.calibrationModeVisual)),
+                ],
+                selected: {_visualMode},
+                onSelectionChanged: _running
+                    ? null
+                    : (s) => setState(() => _visualMode = s.first),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                  _visualMode
+                      ? l10n.calibrationIntroVisual
+                      : l10n.calibrationIntro,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium),
               const SizedBox(height: 6),

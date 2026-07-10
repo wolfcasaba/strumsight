@@ -50,6 +50,9 @@
     }
   },
   "calibrationUnstable": "Taps were inconsistent — try again for a reliable result.",
+  "calibrationModeAudio": "Audio",
+  "calibrationModeVisual": "Visual",
+  "calibrationIntroVisual": "Tap the button on every FLASH of the dot — 8 taps measure this device's display delay so the highway lines up with what you hear.",
   "calibrationTap": "TAP",
   "calibrationStart": "Start",
   "calibrationRetry": "Try again",

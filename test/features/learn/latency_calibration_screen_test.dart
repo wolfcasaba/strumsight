@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/learn/screens/latency_calibration_screen.dart';
 import 'package:music_theory/features/settings/providers/input_latency_provider.dart';
+import 'package:music_theory/features/settings/providers/visual_latency_provider.dart';
 import 'package:music_theory/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,5 +57,29 @@ void main() {
     await tester.tap(find.text('TAP'));
     await tester.pump();
     expect(find.text('1 / 8'), findsOneWidget);
+  });
+
+  testWidgets('Visual mode saves to the VISUAL latency provider',
+      (tester) async {
+    await tester.pumpWidget(_app());
+    await tester.tap(find.text('Visual'));
+    await tester.pump();
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+
+    for (var k = 1; k <= 8; k++) {
+      await tester.pump(const Duration(milliseconds: 600));
+      if (k == 1) await tester.pump(const Duration(milliseconds: 40));
+      await tester.tap(find.text('TAP'));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final ctx = tester.element(find.byType(LatencyCalibrationScreen));
+    final container = ProviderScope.containerOf(ctx);
+    expect(container.read(visualLatencyProvider), 40);
+    expect(container.read(inputLatencyProvider), 0,
+        reason: 'visual mode must not touch the audio offset');
   });
 }

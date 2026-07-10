@@ -11,6 +11,7 @@ import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
 import '../../settings/providers/input_latency_provider.dart';
+import '../../settings/providers/visual_latency_provider.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -87,6 +88,18 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   double get _playhead =>
       LessonTiming.playhead(_elapsedSec, _bpm, _countInBeats);
+
+  /// Playhead used for DRAWING the highway: shifted by the calibrated
+  /// audio↔display skew (tap-vs-click − tap-vs-flash) so a card crosses the
+  /// strike line exactly when its beat is HEARD (chunk 016b P3). If audio
+  /// lags the display (skew > 0, e.g. Bluetooth), the visuals are drawn that
+  /// much later. Scoring/metronome keep the true playhead.
+  double get _drawnPlayhead {
+    final skewSec = (ref.read(inputLatencyProvider) -
+            ref.read(visualLatencyProvider)) /
+        1000.0;
+    return _playhead - skewSec * (_bpm / 60.0);
+  }
 
   void _onTick(Duration elapsed) {
     setState(() {
@@ -423,7 +436,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                 children: [
                   LessonHighway(
                       lesson: lesson,
-                      playheadBeat: _playhead,
+                      playheadBeat: _drawnPlayhead,
                       height: _highwayHeight,
                       strikeX: _strikeX),
                   // Spark bursts drawn on their own layer so they don't

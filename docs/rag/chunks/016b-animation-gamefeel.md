@@ -84,10 +84,14 @@ audio is usually the largest on Android. Approach:
   calibration": 100 BPM click + 8 silent taps → median offset (MAD stability
   gate ±40 ms, botched taps >250 ms discarded) → persisted ms (local-only,
   `inputLatencyProvider`) → `LessonScorer.inputLatencySec` corrects every
-  mic-fed timestamp (strums, chord obs, miss clock). NOT yet done: the
-  48 kHz low-latency audio path + pre-scheduled beat audio + separate VISUAL
-  offset for the highway (audio-input offset covers the scoring fairness
-  first). True end-to-end latency numbers need the real-guitar APK test.
+  mic-fed timestamp (strums, chord obs, miss clock).
+  **Round 74 added the VISUAL half:** the calibration screen gained a Visual
+  mode (tap on the FLASH, no click) → `visualLatencyProvider`; the Learn
+  highway draws with `playhead − (audioMs − visualMs)/1000 · bps` so a card
+  crosses the strike line when the beat is HEARD (Bluetooth-style audio lag
+  ⇒ visuals drawn later). Scoring/metronome keep the true playhead. NOT yet
+  done: the 48 kHz low-latency audio path + pre-scheduled beat audio. True
+  end-to-end latency numbers need the real-guitar APK test.
 - **P4** Progressive strum density (Dynamic Difficulty). *medium.*
 - **P5** Vanishing-point perspective + radial-shader glow (screenshot/reel-worthy). *medium.*
 - **P6** Signed timing + wrong-direction feedback vocabulary. *low–medium.*

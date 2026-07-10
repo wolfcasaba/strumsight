@@ -44,6 +44,9 @@
     }
   },
   "calibrationUnstable": "A koppintások szórtak — próbáld újra a megbízható eredményhez.",
+  "calibrationModeAudio": "Hang",
+  "calibrationModeVisual": "Kép",
+  "calibrationIntroVisual": "Koppints a gombra a pont minden FELVILLANÁSÁRA — 8 koppintás megméri a kijelző késleltetését, hogy a pálya pontosan együtt mozogjon azzal, amit hallasz.",
   "calibrationTap": "KOPP",
   "calibrationStart": "Indítás",
   "calibrationRetry": "Újra",
