@@ -36,29 +36,34 @@ class Setlist {
     ];
   }
 
-  /// Concatenate [songs] into ONE continuous, scorable [Lesson]: each song's
-  /// beat-timed events are shifted by the running bar offset and appended, so
-  /// the whole set plays back-to-back through the normal Learn pipeline. A
-  /// single tempo is used (the first song's) — a fixed-tempo run is the usual
-  /// practice model and keeps the beat→time maths unambiguous.
+  /// Concatenate [songs] into ONE continuous, scorable [Lesson] that plays
+  /// back-to-back through the normal Learn pipeline. The combined lesson has a
+  /// single playback tempo (the first song's), but **each song keeps its own
+  /// tempo**: a song's beats are time-warped by `refBpm / songBpm` so that, at
+  /// the reference tempo, every song's events land at their true real-time
+  /// positions. (A slower song's segment therefore spans more reference beats,
+  /// a faster song's fewer.) The running offset accumulates each warped length.
   Lesson combine(List<Song> songs) {
+    final refBpm = songs.isEmpty ? 90.0 : songs.first.bpm.toDouble();
     final events = <LessonEvent>[];
     var beatOffset = 0.0;
     for (final song in songs) {
       final lesson = song.toLesson();
+      // Warp this song's beats to the reference tempo (1.0 for the first song).
+      final warp = song.bpm <= 0 ? 1.0 : refBpm / song.bpm;
       for (final e in lesson.events) {
         events.add(LessonEvent(
-          beat: e.beat + beatOffset,
+          beat: e.beat * warp + beatOffset,
           chord: e.chord,
           direction: e.direction,
         ));
       }
-      beatOffset += lesson.totalBeats;
+      beatOffset += lesson.totalBeats * warp;
     }
     return Lesson.fromEvents(
       id: 'setlist_$id',
       name: name,
-      bpm: songs.isEmpty ? 90 : songs.first.bpm.toDouble(),
+      bpm: refBpm,
       events: events,
       totalBeats: beatOffset,
     );

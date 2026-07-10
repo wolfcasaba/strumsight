@@ -19,18 +19,32 @@ void main() {
   });
 
   test('combine concatenates events with a running beat offset', () {
+    // Same-tempo songs → pure concatenation (no warp).
+    const b100 =
+        Song(id: 'b', name: 'B', chords: ['Am'], pattern: downbeats, bpm: 100);
     const set = Setlist(id: 's', name: 'My Set', songIds: ['a', 'b']);
-    final lesson = set.combine([songA, songB]);
+    final lesson = set.combine([songA, b100]);
     // A = 2 bars, B = 1 bar → 3 bars × 4 struck slots = 12 events, 12 beats.
     expect(lesson.events.length, 12);
     expect(lesson.totalBeats, 12);
     // Chords span both songs in order.
     expect(lesson.chordSequence, ['C', 'G', 'Am']);
-    // Single tempo = the first song's.
     expect(lesson.bpm, 100);
     // B's first event is offset past A's 8 beats.
     expect(lesson.events[8].beat, greaterThanOrEqualTo(8));
     expect(lesson.id, 'setlist_s');
+  });
+
+  test('combine keeps each song at its OWN tempo via a beat warp', () {
+    // songB is 120 BPM vs the reference 100 → its beats compress to 100/120.
+    const set = Setlist(id: 's', name: 'Set', songIds: ['a', 'b']);
+    final lesson = set.combine([songA, songB]); // ref = 100 (first song)
+    expect(lesson.bpm, 100);
+    // A (100 BPM) is unwarped: 8 beats. B (120) warps by 100/120 → 4×0.8333.
+    expect(lesson.totalBeats, closeTo(8 + 4 * (100 / 120), 1e-6));
+    // B's first stroke sits exactly at the A offset (8), the next 100/120 later.
+    expect(lesson.events[8].beat, closeTo(8, 1e-6));
+    expect(lesson.events[9].beat, closeTo(8 + (100 / 120), 1e-6));
   });
 
   test('combine of an empty set is a harmless empty lesson', () {
