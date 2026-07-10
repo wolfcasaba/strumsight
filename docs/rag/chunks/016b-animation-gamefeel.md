@@ -80,6 +80,14 @@ audio is usually the largest on Android. Approach:
 - **P1** Combo/multiplier + safe-failure + section-end celebration. *medium.*
 - **P2** Highway → one `CustomPainter` + `RepaintBoundary` + single controller (unblocks P0 particles + 120 fps). *medium–high.*
 - **P3** Latency calibration + pre-scheduled beat + low-latency 48 kHz engine. *medium — without it juice mis-lands on Android.*
+  **PARTIAL round 72:** the calibration flow shipped — Settings → "Timing
+  calibration": 100 BPM click + 8 silent taps → median offset (MAD stability
+  gate ±40 ms, botched taps >250 ms discarded) → persisted ms (local-only,
+  `inputLatencyProvider`) → `LessonScorer.inputLatencySec` corrects every
+  mic-fed timestamp (strums, chord obs, miss clock). NOT yet done: the
+  48 kHz low-latency audio path + pre-scheduled beat audio + separate VISUAL
+  offset for the highway (audio-input offset covers the scoring fairness
+  first). True end-to-end latency numbers need the real-guitar APK test.
 - **P4** Progressive strum density (Dynamic Difficulty). *medium.*
 - **P5** Vanishing-point perspective + radial-shader glow (screenshot/reel-worthy). *medium.*
 - **P6** Signed timing + wrong-direction feedback vocabulary. *low–medium.*

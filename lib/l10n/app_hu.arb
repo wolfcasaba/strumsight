@@ -29,6 +29,26 @@
   "analyzeStrumsSummary": "{down} le · {up} fel",
   "libraryIntro": "Vegyél fel valamit az Elemzésben és mentsd el — a munkameneteid itt jelennek meg.",
   "libraryDeleted": "Törölve",
+  "calibrationTitle": "Időzítés-kalibráció",
+  "calibrationIntro": "Koppints a gombra minden kattanásra — 8 koppintás megméri a készülék hangkésleltetését, hogy a leckék igazságosan pontozzák az időzítésed.",
+  "calibrationCurrent": "Jelenlegi eltolás: {ms} ms",
+  "@calibrationCurrent": {
+    "placeholders": {
+      "ms": { "type": "String" }
+    }
+  },
+  "calibrationResult": "A késleltetésed: {ms} ms",
+  "@calibrationResult": {
+    "placeholders": {
+      "ms": { "type": "String" }
+    }
+  },
+  "calibrationUnstable": "A koppintások szórtak — próbáld újra a megbízható eredményhez.",
+  "calibrationTap": "KOPP",
+  "calibrationStart": "Indítás",
+  "calibrationRetry": "Újra",
+  "calibrationSave": "Mentés",
+  "calibrationSaved": "Kalibráció elmentve",
   "tunerTitle": "Hangoló",
   "tunerInTune": "Tiszta",
   "tunerListening": "Pendíts meg egy húrt…",

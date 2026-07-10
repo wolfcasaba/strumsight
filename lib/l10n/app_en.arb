@@ -35,6 +35,26 @@
   },
   "libraryIntro": "Record something in Analyze and save it — your sessions will appear here.",
   "libraryDeleted": "Deleted",
+  "calibrationTitle": "Timing calibration",
+  "calibrationIntro": "Tap the button on every click — 8 taps measure this device's audio delay so lessons grade your timing fairly.",
+  "calibrationCurrent": "Current offset: {ms} ms",
+  "@calibrationCurrent": {
+    "placeholders": {
+      "ms": { "type": "String" }
+    }
+  },
+  "calibrationResult": "Your delay: {ms} ms",
+  "@calibrationResult": {
+    "placeholders": {
+      "ms": { "type": "String" }
+    }
+  },
+  "calibrationUnstable": "Taps were inconsistent — try again for a reliable result.",
+  "calibrationTap": "TAP",
+  "calibrationStart": "Start",
+  "calibrationRetry": "Try again",
+  "calibrationSave": "Save",
+  "calibrationSaved": "Calibration saved",
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
   "tunerListening": "Play a string…",

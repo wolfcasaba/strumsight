@@ -10,6 +10,7 @@ import '../../live/model/strum.dart';
 import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
+import '../../settings/providers/input_latency_provider.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -144,8 +145,10 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // Jam mode plays a chord backing and turns scoring OFF, so the mic never
     // hears (and grades) the app's own accompaniment.
     if (!_jam) {
-      _scorer ??=
-          LessonScorer(_lesson, countInBeats: _countInBeats, bpm: _bpm);
+      _scorer ??= LessonScorer(_lesson,
+          countInBeats: _countInBeats,
+          bpm: _bpm,
+          inputLatencySec: ref.read(inputLatencyProvider) / 1000);
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = _playhead; // don't re-click beats already passed
@@ -166,8 +169,10 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     if (_jam) {
       _scorer = null;
     } else {
-      _scorer =
-          LessonScorer(_lesson, countInBeats: _countInBeats, bpm: _bpm);
+      _scorer = LessonScorer(_lesson,
+          countInBeats: _countInBeats,
+          bpm: _bpm,
+          inputLatencySec: ref.read(inputLatencyProvider) / 1000);
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = -_countInBeats.toDouble();

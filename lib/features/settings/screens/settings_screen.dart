@@ -11,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
+import '../providers/input_latency_provider.dart';
 import '../providers/left_handed_provider.dart';
 import '../providers/tuning_reference_provider.dart';
 
@@ -149,6 +150,15 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: Text(l10n.settingsLeftHandedHint),
             value: ref.watch(leftHandedProvider),
             onChanged: (v) => ref.read(leftHandedProvider.notifier).set(v),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.timer_outlined),
+            title: Text(l10n.calibrationTitle),
+            subtitle:
+                Text(l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/calibrate'),
           ),
           const SizedBox(height: 28),
 

@@ -76,6 +76,7 @@ class LessonScorer {
     this.windowSec = 0.28,
     this.perfectWindowSec = 0.05,
     this.goodWindowSec = 0.12,
+    this.inputLatencySec = 0,
     double? bpm,
   }) : _secPerBeat = 60.0 / (bpm ?? lesson.bpm) {
     for (final e in lesson.events) {
@@ -89,6 +90,13 @@ class LessonScorer {
 
   /// Timing tolerance for a strum to count for an event (±).
   final double windowSec;
+
+  /// Calibrated mic→detection latency (chunk 016b P3): a strum DETECTED at
+  /// `t` was PLAYED at `t − inputLatencySec`. Every mic-fed timestamp
+  /// (strums, chord observations, the miss-closing clock) is corrected by
+  /// this before matching, so an on-beat player is graded on-beat regardless
+  /// of the device's audio path. From the Settings tap-test; 0 = uncalibrated.
+  final double inputLatencySec;
 
   /// Tight window (±) for a PERFECT hit; the next tier is GOOD.
   final double perfectWindowSec;
@@ -170,8 +178,9 @@ class LessonScorer {
   /// Record the currently detected chord [label] ('' = none) at [elapsedSec].
   /// Only change-points are kept; used to grade chord-correctness leniently.
   void observeChord(String label, double elapsedSec) {
+    final t = elapsedSec - inputLatencySec;
     if (_chordObs.isEmpty || _chordObs.last.label != label) {
-      _chordObs.add(_Obs(elapsedSec, label));
+      _chordObs.add(_Obs(t, label));
     }
   }
 
@@ -218,11 +227,13 @@ class LessonScorer {
   /// resolved ([HitResult.hit]/[HitResult.wrongDirection]) or null if it
   /// matched no open event (so the caller doesn't fire a stale-verdict haptic).
   HitResult? registerStrum(StrumDirection dir, double elapsedSec) {
+    // Correct the detection timestamp back to when the strum was PLAYED.
+    final playedSec = elapsedSec - inputLatencySec;
     _Timed? best;
     var bestDelta = windowSec + 1e9;
     for (final t in _events) {
       if (t.matched) continue;
-      final d = (t.time - elapsedSec).abs();
+      final d = (t.time - playedSec).abs();
       if (d <= windowSec && d < bestDelta) {
         best = t;
         bestDelta = d;
@@ -236,7 +247,7 @@ class LessonScorer {
       if (combo > maxCombo) maxCombo = combo;
       lastResult = HitResult.hit;
       // Timing tier + points × the (now-updated) combo multiplier.
-      final timing = _timingFor(elapsedSec - best.time);
+      final timing = _timingFor(playedSec - best.time);
       lastTiming = timing;
       if (timing == Timing.perfect) perfectHits++;
       final base = switch (timing) {
@@ -257,10 +268,13 @@ class LessonScorer {
 
   /// Advance the clock to [elapsedSec]; any open event whose window has fully
   /// passed is a miss, and any chord slot past its lag window is graded.
+  /// Judged on the CORRECTED clock — an on-beat strum arrives via the mic up
+  /// to [inputLatencySec] late, so its event must stay open that much longer.
   void advance(double elapsedSec) {
+    final playedSec = elapsedSec - inputLatencySec;
     for (final t in _events) {
       if (t.matched) continue;
-      if (t.time + windowSec < elapsedSec) {
+      if (t.time + windowSec < playedSec) {
         t.matched = true;
         missed++;
         combo = 0;
@@ -268,7 +282,7 @@ class LessonScorer {
         lastTiming = null;
       }
     }
-    _evalChords(elapsedSec);
+    _evalChords(playedSec);
   }
 
   /// Resolve any still-open events as misses + grade all chords (lesson end).
