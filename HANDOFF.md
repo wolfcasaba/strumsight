@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-10** (round 85).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-10** (round 87).
 
 > 🧭 **Strategy (2026-07-10 research):** a 4-agent Hermes sweep produced the plan to beat Yousician —
 > RAG chunks **015** (strum-direction ML), **016** (pitch/chord SOTA + priors), **016b** (animation/
@@ -111,6 +111,16 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 ## 3. What's NOT done — NEXT 🔜
 
+- **🔴 WAITING ON THE USER (round 87 consolidation)** — everything below is blocked on these four:
+  1. **Real-guitar APK test** with build-81+ (tag pushed; artifact on CI run 29117048445): detuned
+     chords, calibration flow feel (incl. the input-vs-output latency semantics — if PERFECTs feel
+     off, split the calibration), the 19:00 nudge firing, reel screen-recording.
+  2. **Publish the release** — the gh PAT lacks Contents:write for the releases API; publish from
+     the phone session (its auth created build-64/66) or update the PAT.
+  3. **PAT + Workflows:R+W** — the CI hard-gate change (red suite ⇒ no green APK) sits uncommitted
+     in the working tree until the token can push workflow files.
+  4. **Hermes research** — the 6-thread quality-bar assignment sits in the user's Telegram chat
+     (the bridge writes AS Hermes, so no agent processes it); forward it or give a proper target.
 - **⚠️ Login / account backend is NOT hosted** — `ApiConfig.baseUrl` defaults to `10.0.2.2:8000`
   (Android **emulator** only). On a real phone login can't reach it, so the account UI is **gated OFF**
   (`ApiConfig.accountEnabled=false`, round 22). To enable: deploy `backend/` to a public host, then
@@ -123,9 +133,8 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 - **Backend hardening for prod** — SQLite→Postgres, Alembic migrations, real `STRUMSIGHT_SECRET_KEY`,
   lock CORS origins, rate-limit auth, add backend CI. Currently dev-grade (documented in `backend/README.md`).
 - **Password reset / email verification / refresh tokens** — not implemented (14-day JWT, no refresh).
-- **Analyze** (recording → timeline) — placeholder only (`lib/features/analyze/`). → v2.
-- **Library** (offline saved sessions) — placeholder only (`lib/features/library/`). → v2.
-- **iOS build** — needs a Mac. Android-first for now.
+- **iOS build** — needs a Mac. Android-first for now. (STALE bullets removed round 87: Analyze and
+  Library shipped in rounds 20–21 and are long in the DONE table; Analyze got batch Viterbi in r71.)
 - **FINAL acceptance is the user's real-guitar APK test** — synthetic-green is never "done" (HORIZON).
   The optional C++/FFI port is an optimization path *only if on-device profiling demands it*.
 - **✅ DONE round 28 — chord DICTIONARY + Viterbi engine (spec: `docs/rag/chunks/012`).** Built the
@@ -180,7 +189,9 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 85 | (this) | 382+14 | **In-tune lock — the "string locked in" celebration (TDD).** One in-tune reading is noise; HOLDING it is the achievement: after 6 consecutive in-tune readings of the same note (`InTuneLock` — pure, count-based so frame-rate-independent and deterministic) the lock engages ONCE → firm haptic + the big note pulses green (`AnimatedScale` 1.08, easeOutBack). Re-arms on drift or string change (so each of the 6 strings gets its own moment). Test gotcha: identical `const TunerReading`s canonicalise to ONE instance → Riverpod's updateShouldNotify sees no change and the listener never fires — the widget test must emit slightly-varying readings (real mic readings always differ; identity equality means runtime is unaffected). 4 tests. |
+| 87 | (this) | 382+14 | **HANDOFF hygiene (docs-only).** Removed the stale "Analyze/Library placeholder → v2" NEXT bullets (they shipped in rounds 20–21; Analyze even got batch Viterbi in r71) and consolidated the four blocking USER ACTIONS into one 🔴 block at the top of §3 (APK test, release publish, PAT workflow scope, Hermes forward). Round 86 (no commit): the tuner batch rig-verified — the six chips render clean over the reference row; CI green through r85. |
+| 86 | — | 382+14 | Rig-verification round (tuner chips; no code). |
+| 85 | (prev) | 382+14 | **In-tune lock — the "string locked in" celebration (TDD).** One in-tune reading is noise; HOLDING it is the achievement: after 6 consecutive in-tune readings of the same note (`InTuneLock` — pure, count-based so frame-rate-independent and deterministic) the lock engages ONCE → firm haptic + the big note pulses green (`AnimatedScale` 1.08, easeOutBack). Re-arms on drift or string change (so each of the 6 strings gets its own moment). Test gotcha: identical `const TunerReading`s canonicalise to ONE instance → Riverpod's updateShouldNotify sees no change and the listener never fires — the widget test must emit slightly-varying readings (real mic readings always differ; identity equality means runtime is unaffected). 4 tests. |
 | 84 | (prev) | 378+14 | **Tuner string chips — GuitarTuna-class UX (TDD).** The six standard-tuning chips (E2 A2 D3 G3 B3 E4) under the gauge; the string nearest the sounding pitch lights copper (fill + enlarge + weight — shape + colour, never hue alone), turns green with a ✓ once in tune. Pure `GuitarStrings.nearest` maps by LOG distance (pitch is geometric — the boundary is the geometric mean), scales with the A4 reference, and refuses to claim far-out-of-range pitches (>5 semitones — voice/whistle lights nothing: honest over eager). 8 tests. Round 83 (no commit): memory maintenance (build-state updated to r82; the adversarial-synth-testing lesson persisted for reuse). |
 | 83 | — | 370+14 | Memory-maintenance round (no code). |
 | 82 | (prev) | 370+14 | **Adversarial review round — two agents over the whole 69–81 sprint (~1070 lines).** flutter-reviewer: **0 BUG-severity findings**; batch-Viterbi backtrace, NNLS edge cases, latency sign conventions, provider races all explicitly verified CLEAN. devil-advocate: 3 of 4 "done" claims HOLD with evidence; the 4th (nudge toggle honesty) broke on force-stop/permission-revoke. FIXED: (1) startup **reconcile** — HomeShell one-shot post-frame verify+re-arm; persisted-ON flips honestly OFF when the platform says no (checks, never requests — no ambush); (2) **iOS enable() truthfulness** — Darwin permissions asked separately; (3) **reel pause→resume continuity** (Ticker elapsed restarts at 0 → _accumSec, TDD'd); (4) mounted-guard + dead-branch cleanup + frame-quantisation NOTE in calibration. DOCUMENTED (not code): the tap-test measures input+OUTPUT latency but the scorer applies it input-only → possible over-correction by the output component — **added to the real-guitar APK checklist** (if PERFECTs feel too easy/hard, split the calibration). 3 new tests. |
