@@ -1,0 +1,6 @@
+# Generated ML artifacts — never commit data or models.
+__pycache__/
+*.npz
+*.tflite
+recordings/
+dataset/

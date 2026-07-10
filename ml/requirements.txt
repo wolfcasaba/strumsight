@@ -1,0 +1,4 @@
+# Data pipeline (features.py, prepare_dataset.py, test_pipeline.py): NumPy only.
+numpy>=1.26
+# Model training + TFLite export (train.py) — run in CI/Colab, not on ARM64 dev.
+tensorflow>=2.16   ; platform_machine == "x86_64"
