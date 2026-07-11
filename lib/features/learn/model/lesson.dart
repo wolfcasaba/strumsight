@@ -272,6 +272,17 @@ class Lessons {
   static List<Lesson> byDifficulty(Difficulty d) =>
       all.where((l) => l.difficulty == d).toList();
 
+  /// The curriculum successor of [id], or null for the last lesson and for
+  /// one-off lessons (daily challenges, Analyze imports) that live outside
+  /// the curriculum (round 92 — the finish→next retention loop).
+  static Lesson? nextAfter(String id) {
+    final lessons = all;
+    for (var i = 0; i < lessons.length - 1; i++) {
+      if (lessons[i].id == id) return lessons[i + 1];
+    }
+    return null;
+  }
+
   /// Turn a recorded [AnalyzeResult] into a play-along lesson — practise a riff
   /// you (or a song) just played. Each detected strum becomes a timed event on
   /// the chord that was sounding then; the tempo is the clip's detected BPM.

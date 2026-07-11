@@ -224,6 +224,7 @@
   "learnKeepGoing": "Keep going!",
   "learnDone": "Done",
   "learnPlayAgain": "Play again",
+  "learnNextLesson": "Next lesson",
   "learnScoreLine": "{hits}/{total} hits · best combo {combo}",
   "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } },
   "progressTitle": "Progress",

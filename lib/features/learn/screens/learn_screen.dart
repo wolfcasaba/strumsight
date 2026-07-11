@@ -238,6 +238,10 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _showSummary(ScoreSnapshot snap) {
     final l10n = AppLocalizations.of(context);
     final passed = _scorer?.passed ?? false;
+    // The finish→next retention loop (round 92): a pass offers the curriculum
+    // successor; a fail keeps the focus on "Play again". One-off lessons
+    // (daily challenge, Analyze imports) have no successor.
+    final next = passed ? Lessons.nextAfter(widget.lesson.id) : null;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -286,13 +290,32 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
             icon: const Icon(Icons.ios_share, size: 18),
             label: Text(l10n.actionShare),
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _restart();
-            },
-            child: Text(l10n.learnPlayAgain),
-          ),
+          if (next == null)
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _restart();
+              },
+              child: Text(l10n.learnPlayAgain),
+            )
+          else ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _restart();
+              },
+              child: Text(l10n.learnPlayAgain),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+                  builder: (_) => LearnScreen(lesson: next),
+                ));
+              },
+              child: Text(l10n.learnNextLesson),
+            ),
+          ],
         ],
       ),
     );
