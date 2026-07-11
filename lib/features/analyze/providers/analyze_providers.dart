@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -67,6 +69,15 @@ class AnalyzeController extends Notifier<AnalyzeState> {
             chords: result.chords.map((c) => c.label).toSet().length,
           ));
     }
+  }
+
+  /// Leaving the screen mid-recording: release the MIC and discard the take
+  /// (round 102). The controller outlives the screen so finished results
+  /// survive tab switches — but a hot mic must not.
+  void cancelRecording() {
+    if (state.phase != AnalyzePhase.recording) return;
+    unawaited(_recorder.stop());
+    state = AnalyzeState.initial;
   }
 
   void reset() => state = AnalyzeState.initial;

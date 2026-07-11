@@ -31,9 +31,22 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
   Timer? _ticker;
   bool _saved = false;
 
+  /// Captured in build — `ref` is unsafe inside dispose (Riverpod rule).
+  AnalyzeController? _controller;
+  AnalyzePhase _lastPhase = AnalyzePhase.idle;
+
   @override
   void dispose() {
     _ticker?.cancel();
+    // The shell disposes this screen on tab switch, but the controller (a
+    // non-autoDispose provider — finished results survive tab switches)
+    // would keep the RECORDER running invisibly. Release the mic (round 102).
+    // Deferred (provider state must not change while the tree is finalizing)
+    // and scheduled ONLY when a take was live, so no stray timer otherwise.
+    final controller = _controller;
+    if (controller != null && _lastPhase == AnalyzePhase.recording) {
+      Future(controller.cancelRecording);
+    }
     super.dispose();
   }
 
@@ -74,6 +87,8 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     final palette = context.palette;
     final state = ref.watch(analyzeControllerProvider);
     final controller = ref.read(analyzeControllerProvider.notifier);
+    _controller = controller; // for dispose, where ref is unsafe
+    _lastPhase = state.phase;
     _syncTicker(state.phase);
 
     return SafeArea(
