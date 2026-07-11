@@ -40,7 +40,9 @@ class LearnScreen extends ConsumerStatefulWidget {
 
 class _LearnScreenState extends ConsumerState<LearnScreen>
     with SingleTickerProviderStateMixin {
-  static const int _countInBeats = 4;
+  /// One full bar of the lesson's own metre (round 111): a 3/4 waltz counts
+  /// in 1-2-3 — a fixed "1-2-3-4" would misalign the player's inner clock.
+  int get _countInBeats => _lesson.beatsPerBar;
 
   late final Ticker _ticker;
   final Metronome _metronome = Metronome();
