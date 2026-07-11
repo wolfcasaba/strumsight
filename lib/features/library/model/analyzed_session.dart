@@ -17,6 +17,14 @@ class AnalyzedSession {
   final String title;
   final AnalyzeResult result;
 
+  /// The same session under a new name (round 106 — rename).
+  AnalyzedSession withTitle(String newTitle) => AnalyzedSession(
+        id: id,
+        createdAt: createdAt,
+        title: newTitle,
+        result: result,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'createdAt': createdAt.toIso8601String(),

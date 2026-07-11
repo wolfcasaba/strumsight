@@ -26,6 +26,19 @@ class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
     state = AsyncData(next);
     await _repo.save(next);
   }
+
+  /// Rename a saved session (round 106). Blank names are ignored — a title
+  /// must never become empty.
+  Future<void> rename(String id, String title) async {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return;
+    final current = state.value ?? const [];
+    final next = [
+      for (final s in current) s.id == id ? s.withTitle(trimmed) : s,
+    ];
+    state = AsyncData(next);
+    await _repo.save(next);
+  }
 }
 
 final libraryProvider =

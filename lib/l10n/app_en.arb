@@ -34,6 +34,8 @@
   },
   "libraryIntro": "Record something in Analyze and save it — your sessions will appear here.",
   "libraryDeleted": "Deleted",
+  "libraryRename": "Rename",
+  "libraryRenameTitle": "Rename recording",
   "calibrationTitle": "Timing calibration",
   "calibrationIntro": "Tap the button on every click — 8 taps measure this device's audio delay so lessons grade your timing fairly.",
   "calibrationCurrent": "Current offset: {ms} ms",

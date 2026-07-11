@@ -28,6 +28,8 @@
   "analyzeStrumsSummary": "{down} le · {up} fel",
   "libraryIntro": "Vegyél fel valamit az Elemzésben és mentsd el — a munkameneteid itt jelennek meg.",
   "libraryDeleted": "Törölve",
+  "libraryRename": "Átnevezés",
+  "libraryRenameTitle": "Felvétel átnevezése",
   "calibrationTitle": "Időzítés-kalibráció",
   "calibrationIntro": "Koppints a gombra minden kattanásra — 8 koppintás megméri a készülék hangkésleltetését, hogy a leckék igazságosan pontozzák az időzítésed.",
   "calibrationCurrent": "Jelenlegi eltolás: {ms} ms",
