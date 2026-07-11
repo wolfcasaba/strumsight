@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-11** (round 111).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-11** (round 112).
 
 > 🧭 **Strategy (2026-07-10 research):** a 4-agent Hermes sweep produced the plan to beat Yousician —
 > RAG chunks **015** (strum-direction ML), **016** (pitch/chord SOTA + priors), **016b** (animation/
@@ -156,8 +156,16 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 - **✅ DONE round 72 — latency calibration (chunk 016b P3, the scoring-fairness half):** Settings →
   tap-test → persisted offset → `LessonScorer.inputLatencySec` corrects all mic-fed timestamps.
   Still open from P3: 48 kHz low-latency audio path, pre-scheduled beat audio, separate VISUAL offset.
-- **⭐ NEXT** — Hermes quality-bar research reply (6 agents) → polish backlog; or grow the chord
-  vocabulary (add/dim/aug/slash) — best after the real-guitar APK validation.
+- **⭐ NEXT (post-sprint state, round 112)** — the OFFLINE backlog is effectively drained after
+  rounds 88–111 (see §4): tuner parity trio, retention loops, a11y, overflow guards at 3 sizes,
+  metre-aware count-in, 15-lesson curriculum, favourites, rename, tap-tempo ×2, mic-hygiene
+  everywhere, 2 adversarial reviews with all findings closed. What remains needs INPUT:
+  1. **User's real-guitar APK test** → unlocks device-tuning rounds (DSP thresholds on real audio,
+     P2 CustomPainter profiling, latency-semantics split, 48 kHz + pre-scheduled beat audio —
+     all blind-tuning risks without a device).
+  2. **Hermes research reply** → unlocks the competitive-polish backlog.
+  3. **Release/token actions** → unlocks publish + CI hard-gate.
+  Vocabulary growth (add9/6/slash) explicitly waits for real-guitar validation (round-78 decision).
 - **Extended chord vocabulary** — the round-26 revert is now SUPERSEDED: 7ths work via the dictionary
   engine (round 28). Known honest limit (measured, in chunk 012): a dom7 whose m7 coincides with the
   root's own 7th harmonic (roots ≥ C3) still collapses to the triad — correct when the tone isn't
@@ -189,7 +197,8 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 111 | (this) | 475+14 | **Count-in follows the metre (TDD) — the waltz surfaced it.** `_countInBeats` was a fixed 4: counting "1-2-3-4" into a 3/4 lesson is musically wrong and misaligns the player's inner clock with the downbeat. Now one full bar of the lesson's own metre (`_lesson.beatsPerBar` — 4/4 lessons unchanged). The highway's bar grid already used beatsPerBar (r64); only the count-in lagged. RED pinned the bug precisely: at 3.2 beats the old code still showed "4" while the new one is already playing. 1 test; 475 green. |
+| 112 | (this) | 475+14 | **§3 NEXT refreshed to the post-sprint truth (docs-only).** After 24 chained rounds today the offline backlog is DRAINED — the honest state: every remaining high-value item needs input (real-guitar APK feedback → device-tuning rounds; Hermes reply → polish backlog; token/release actions → publish + CI gate). The loop drops to a slower maintenance heartbeat per [[rounds-no-long-waits]]'s blocked-on-user exception; ANY landing input resumes full tempo instantly. |
+| 111 | `391fd8c` | 475+14 | **Count-in follows the metre (TDD) — the waltz surfaced it.** `_countInBeats` was a fixed 4: counting "1-2-3-4" into a 3/4 lesson is musically wrong and misaligns the player's inner clock with the downbeat. Now one full bar of the lesson's own metre (`_lesson.beatsPerBar` — 4/4 lessons unchanged). The highway's bar grid already used beatsPerBar (r64); only the count-in lagged. RED pinned the bug precisely: at 3.2 beats the old code still showed "4" while the new one is already playing. 1 test; 475 green. |
 | 110 | `31fbe3e` | 474+14 | **Curriculum growth — 15 lessons, incl. the app's first 3/4 (TDD).** One per tier: *Two-Finger Frame* (beginner — Em7↔Cmaj7, near-zero left-hand work so the right hand owns the beat), **Waltz Time** (intermediate — 3/4, bass-down on ONE + up-strums on two/three; the `beatsPerBar` param finally gets real curriculum use: 6-slot pattern, 3-beat bars, tests pin bar-2 at beat 3.0 and a down-bass opening every bar), *Push & Pull* (advanced — everything after the downbeat lands on "and"s). The existing diagram-coverage guard auto-verified every new chord has a shape; curriculum unlock order extends per-tier. 3 tests; 474 green. |
 | 109 | `09557fd` | 471+14 | **Rig sweep for r106/r108 (no code).** r108 favourites verified LIVE: long-press on the C diagram → FAVORITES group appears on top with the pinned copy, C stays in MAJOR. **New rig technique:** synthetic JS pointer events (even full pointerdown→650ms→pointerup) are IGNORED by Flutter web's gesture arena — a long-press needs TRUSTED input: `browser_run_code_unsafe` with `page.mouse.down() → waitForTimeout(800) → up()` at the semantics-node rect. r106 rename: web seeding of `flutter.library_sessions` via localStorage did NOT hydrate the library (empty state persisted) — abandoned; the r106 widget test already drives the real dialog→provider→AppBar flow end-to-end, so rig adds nothing there. |
 | 108 | `5c181c9` | 471+14 | **Favourite chords (TDD).** Long-press a diagram in the chord library to pin it into a FAVORITES group at the top (persisted `Set<String>`, local-only like all habit state; the pin is a COPY — the chord stays in its own theory group). Respects the search filter; tap still plays (r90). Tile builder extracted so both sections share one InkWell (tap=play, long-press=toggle). New `chordGroupFavorites` key en+hu. 2 tests; 471 green. |
