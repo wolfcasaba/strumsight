@@ -137,6 +137,7 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Color(0xFFE9E5DE)),
+                      tooltip: l10n.commonClose,
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ]),

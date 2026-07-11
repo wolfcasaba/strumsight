@@ -65,6 +65,10 @@
   "nudgeBody": "A few minutes of strumming keeps the streak going.",
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
+  "tunerPinned": "pinned target",
+  "tunerStringSemantic": "String {name}{state}. Tap to pin as the tuning target.",
+  "@tunerStringSemantic": { "placeholders": { "name": { "type": "String" }, "state": { "type": "String" } } },
+  "commonClose": "Close",
   "tunerListening": "Play a string…",
   "tunerReference": "Reference A = {hz} Hz",
   "@tunerReference": {

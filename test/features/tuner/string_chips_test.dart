@@ -52,6 +52,38 @@ void main() {
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
+  testWidgets('each string chip is a screen-reader button; the in-tune one '
+      'announces its state (round 126 a11y)', (tester) async {
+    final handle = tester.ensureSemantics();
+    final engine = FakeTunerEngine();
+    addTearDown(engine.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [tunerEngineProvider.overrideWithValue(engine)],
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: TunerScreen(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // With no signal, a chip speaks just its name + purpose (the bare "E2"
+    // Text is excluded from semantics).
+    expect(
+        find.bySemanticsLabel(
+            'String E2. Tap to pin as the tuning target.'),
+        findsOneWidget);
+
+    // A perfectly tuned open A → the A2 chip announces "in tune".
+    engine.emit(const TunerReading(note: 'A', cents: 0, frequencyHz: 110));
+    await tester.pumpAndSettle();
+    expect(
+        find.bySemanticsLabel(
+            'String A2, In tune. Tap to pin as the tuning target.'),
+        findsOneWidget);
+    handle.dispose();
+  });
+
   testWidgets('holding the pitch in tune locks in — the note pulses green',
       (tester) async {
     final engine = FakeTunerEngine();

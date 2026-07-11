@@ -271,9 +271,18 @@ class _StringChips extends StatelessWidget {
   final bool inTune;
   final ValueChanged<GuitarString> onTap;
 
+  /// The state suffix a screen reader appends to the string name (round 126):
+  /// the ✓/📌 glyphs are decorative, so their meaning has to be spoken.
+  String _stateSuffix(AppLocalizations l10n, GuitarString s) {
+    if (identical(s, active) && inTune) return ', ${l10n.tunerInTune}';
+    if (identical(s, pinned)) return ', ${l10n.tunerPinned}';
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final l10n = AppLocalizations.of(context);
     // scaleDown: six chips are wider than a 320-wide screen.
     return FittedBox(
       fit: BoxFit.scaleDown,
@@ -283,10 +292,15 @@ class _StringChips extends StatelessWidget {
           for (final s in strings)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => onTap(s),
-                child: AnimatedContainer(
+              child: Semantics(
+                button: true,
+                selected: identical(s, active),
+                label: l10n.tunerStringSemantic(s.label, _stateSuffix(l10n, s)),
+                excludeSemantics: true,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () => onTap(s),
+                  child: AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   padding: EdgeInsets.symmetric(
                     horizontal: identical(s, active) ? 14 : 10,
@@ -349,6 +363,7 @@ class _StringChips extends StatelessWidget {
                       ],
                     ],
                   ),
+                ),
                 ),
               ),
             ),
