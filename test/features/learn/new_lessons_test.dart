@@ -31,4 +31,23 @@ void main() {
     expect(Lessons.nextAfter('blues-shuffle')!.id, 'push-and-pull');
     expect(Lessons.nextAfter('push-and-pull'), isNull);
   });
+
+  test('Easy mode keeps the waltz in 3/4 — no silent 4/4 fallback', () {
+    // Round 115 (r114 devil-advocate coverage gap): `simplified` must thread
+    // beatsPerBar through, or the count-in/bar-grid/metronome of an Easy
+    // waltz would all snap back to common time.
+    final easy = Lessons.waltzTime.simplified;
+    expect(easy.beatsPerBar, 3);
+    expect(easy.totalBeats, Lessons.waltzTime.totalBeats);
+    expect(easy.events, isNotEmpty);
+    for (final e in easy.events) {
+      expect(e.isDown, isTrue);
+      expect(e.beat % 1.0, 0.0, reason: 'Easy keeps on-beat strokes only');
+    }
+    // Every bar still opens with its bass downstroke at bar*3.
+    for (var bar = 0; bar < 4; bar++) {
+      expect(easy.events.any((e) => e.beat == bar * 3.0), isTrue,
+          reason: 'bar $bar must keep its downbeat in 3/4');
+    }
+  });
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 import 'wav.dart';
 
@@ -91,6 +92,12 @@ class Backing {
 
   /// Current number of cached pads (test surface for the bound).
   int get cacheSize => _cache.length;
+
+  /// Cached keys oldest→newest (test surface — proves a HIT refreshes
+  /// recency, round 115; iteration order of the LinkedHashMap IS the LRU
+  /// order because `_play` re-inserts on hit).
+  @visibleForTesting
+  List<String> get debugCacheKeys => List.unmodifiable(_cache.keys);
 
   Future<void> playChord(String label) async {
     final freqs = ChordAudio.frequencies(label);

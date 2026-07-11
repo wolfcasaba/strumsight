@@ -46,4 +46,25 @@ void main() {
     }
     expect(backing.cacheSize, Backing.maxCachedPads);
   });
+
+  test('a cache HIT refreshes recency — the re-touched pad survives eviction',
+      () async {
+    // Round 115 — the r100 devil-advocate flagged this as untested: the LRU
+    // was proven bounded but not that a hit genuinely moves an entry to the
+    // recent end (a broken re-insert would silently evict hot pads).
+    final backing = Backing();
+    addTearDown(() {
+      unawaited(backing.dispose());
+    });
+    for (var i = 0; i < Backing.maxCachedPads; i++) {
+      await backing.playTone(100.0 + i); // fill to the cap, 100 is oldest
+    }
+    await backing.playTone(100.0); // HIT the oldest → must become newest
+    await backing.playTone(999.0); // one insert past the cap → one eviction
+    expect(backing.cacheSize, Backing.maxCachedPads);
+    expect(backing.debugCacheKeys, contains('tone:100.00'),
+        reason: 'the re-touched pad must survive');
+    expect(backing.debugCacheKeys, isNot(contains('tone:101.00')),
+        reason: 'the true LRU (101) is the one evicted');
+  });
 }

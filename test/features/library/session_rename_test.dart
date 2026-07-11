@@ -42,6 +42,19 @@ void main() {
     expect(reloaded.single.title, 'Campfire riff');
   });
 
+  test('renaming a session deleted meanwhile is a harmless no-op', () async {
+    // Round 115 (r114 devil-advocate coverage gap): the detail screen can
+    // still hold a session another surface just deleted.
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final lib = container.read(libraryProvider.notifier);
+    await container.read(libraryProvider.future);
+    await lib.add(_session('a', 'C · G'));
+    await lib.delete('a');
+    await lib.rename('a', 'Campfire riff'); // must not crash or resurrect
+    expect(container.read(libraryProvider).value, isEmpty);
+  });
+
   test('an empty or whitespace name is ignored', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

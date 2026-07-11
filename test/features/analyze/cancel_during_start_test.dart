@@ -116,6 +116,30 @@ void main() {
     expect(recorder.stopCalls, 1, reason: 'only the aborted take was stopped');
   });
 
+  test('cancelRecording leaves a genuinely FINISHED analysis alone', () async {
+    // Round 115: the r102 "leaves a finished result alone" test was partly
+    // vacuous — it cancelled a fresh idle controller, never a real
+    // done-with-result state (r114 devil-advocate NOTE). Build the real one.
+    final (container, controller, recorder) = rig();
+    addTearDown(container.dispose);
+    controller.screenAttached();
+
+    final pending = controller.startRecording();
+    recorder.startGate.complete(MicStart.ok);
+    await pending;
+    await controller.stopAndAnalyze(); // silence in → empty-but-real result
+
+    final done = container.read(analyzeControllerProvider);
+    expect(done.phase, AnalyzePhase.done);
+    expect(done.result, isNotNull);
+
+    controller.cancelRecording();
+    final after = container.read(analyzeControllerProvider);
+    expect(after.phase, AnalyzePhase.done,
+        reason: 'a finished analysis must survive a late deferred cancel');
+    expect(identical(after.result, done.result), isTrue);
+  });
+
   test('cancelRecording firing during the stop-flush of stopAndAnalyze '
       'is a no-op (no double stop, no state clobber)', () async {
     final (container, controller, recorder) = rig();
