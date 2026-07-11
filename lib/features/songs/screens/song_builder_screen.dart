@@ -29,6 +29,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   late List<String> _chords;
   late List<StrumDirection?> _pattern;
   late int _bpm;
+  late int _beatsPerBar;
   // Clamped to the slider's range so a tapped tempo is always representable.
   final TapTempo _tapTempo = TapTempo(minBpm: 50, maxBpm: 180);
 
@@ -46,6 +47,21 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
     _chords = [...?e?.chords];
     _pattern = e != null ? [...e.pattern] : [..._defaultPattern];
     _bpm = e?.bpm ?? 90;
+    _beatsPerBar = e?.beatsPerBar ?? 4;
+  }
+
+  /// Switch metre, resizing the pattern to one bar of the new one (round
+  /// 116): the kept prefix preserves the user's work; extra slots are rests.
+  void _setMeter(int beatsPerBar) {
+    if (beatsPerBar == _beatsPerBar) return;
+    final slots = beatsPerBar * 2;
+    setState(() {
+      _beatsPerBar = beatsPerBar;
+      _pattern = [
+        for (var i = 0; i < slots; i++)
+          i < _pattern.length ? _pattern[i] : null,
+      ];
+    });
   }
 
   @override
@@ -74,6 +90,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
         chords: _chords,
         pattern: _pattern,
         bpm: _bpm,
+        beatsPerBar: _beatsPerBar,
       ));
     } else {
       await ctrl.add(
@@ -81,6 +98,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
         chords: _chords,
         pattern: _pattern,
         bpm: _bpm,
+        beatsPerBar: _beatsPerBar,
       );
     }
     if (mounted) Navigator.of(context).pop();
@@ -153,7 +171,25 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             ),
             const SizedBox(height: 28),
 
-            _Label(l10n.songStrumPattern),
+            Row(
+              children: [
+                Expanded(child: _Label(l10n.songStrumPattern)),
+                // Time-signature notation is universal — deliberately not
+                // localized (like chord labels).
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 4, label: Text('4/4')),
+                    ButtonSegment(value: 3, label: Text('3/4')),
+                  ],
+                  selected: {_beatsPerBar},
+                  onSelectionChanged: (s) => _setMeter(s.first),
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(l10n.songStrumPatternHint,
                 style: Theme.of(context).textTheme.bodySmall),
@@ -161,7 +197,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             Wrap(
               spacing: 6,
               children: [
-                for (final preset in StrumPatternPreset.all)
+                for (final preset in StrumPatternPreset.forMeter(_beatsPerBar))
                   ActionChip(
                     label: Text(preset.name),
                     onPressed: () =>

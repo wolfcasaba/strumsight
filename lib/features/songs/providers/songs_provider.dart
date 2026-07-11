@@ -44,6 +44,7 @@ class SongsController extends Notifier<List<Song>> {
     required List<String> chords,
     required List<StrumDirection?> pattern,
     required int bpm,
+    int beatsPerBar = 4,
   }) async {
     final song = Song(
       id: _newId(),
@@ -51,6 +52,7 @@ class SongsController extends Notifier<List<Song>> {
       chords: chords,
       pattern: pattern,
       bpm: bpm,
+      beatsPerBar: beatsPerBar,
     );
     _dirty = true;
     state = [song, ...state];

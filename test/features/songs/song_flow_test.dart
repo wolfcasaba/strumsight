@@ -67,6 +67,43 @@ void main() {
     expect(find.text('Test Song'), findsOneWidget);
   });
 
+  testWidgets('the metre toggle switches the builder to a 6-slot 3/4 bar '
+      'and the saved song keeps it', (tester) async {
+    // Round 116 — author a waltz, not just play the curriculum's.
+    await tester.pumpWidget(_app(const SongListScreen()));
+    await tester.pump();
+    await tester.tap(find.text('New song'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Waltz Draft');
+    await tester.pump();
+    final label = ChordShapes.allLabels.first;
+    final chip = find.widgetWithText(ActionChip, label).first;
+    await tester.scrollUntilVisible(chip, 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(chip);
+    await tester.pump();
+
+    // Switch to 3/4 — the editor drops to 6 slots (no beat "4" label).
+    final meter = find.text('3/4');
+    await tester.scrollUntilVisible(meter, 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(meter);
+    await tester.pump();
+    expect(find.text('4'), findsNothing,
+        reason: 'a 3/4 bar has no fourth beat label');
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(SongListScreen)));
+    final song = container.read(songsProvider).single;
+    expect(song.beatsPerBar, 3);
+    expect(song.pattern.length, 6);
+    expect(song.pattern.any((d) => d != null), isTrue,
+        reason: 'the metre switch must keep the song playable');
+  });
+
   testWidgets('suggest-a-progression fills the chord list', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();

@@ -4,7 +4,7 @@ import '../../analyze/model/analyze_result.dart';
 import '../../learn/model/lesson.dart';
 import '../../live/model/strum.dart';
 
-/// A user-created song: a chord-per-bar progression + a repeating 8-slot strum
+/// A user-created song: a chord-per-bar progression + a repeating strum
 /// pattern (the ↓/↑ hand — our moat, now author-able) + a tempo. Persisted
 /// locally; playable/scorable by turning it into a [Lesson] via [toLesson].
 @immutable
@@ -15,6 +15,7 @@ class Song {
     required this.chords,
     required this.pattern,
     required this.bpm,
+    this.beatsPerBar = 4,
   });
 
   final String id;
@@ -23,16 +24,21 @@ class Song {
   /// One chord label per bar, in play order.
   final List<String> chords;
 
-  /// An 8-slot (eighth-note) strum pattern; `null` = a rest on that slot.
+  /// An eighth-note strum pattern spanning ONE bar ([beatsPerBar] × 2 slots —
+  /// 8 in 4/4, 6 in 3/4); `null` = a rest on that slot.
   final List<StrumDirection?> pattern;
 
   final int bpm;
+
+  /// The song's metre (round 116 — the builder can author a 3/4 waltz).
+  final int beatsPerBar;
 
   Song copyWith({
     String? name,
     List<String>? chords,
     List<StrumDirection?>? pattern,
     int? bpm,
+    int? beatsPerBar,
   }) =>
       Song(
         id: id,
@@ -40,6 +46,7 @@ class Song {
         chords: chords ?? this.chords,
         pattern: pattern ?? this.pattern,
         bpm: bpm ?? this.bpm,
+        beatsPerBar: beatsPerBar ?? this.beatsPerBar,
       );
 
   /// A playable/scorable lesson (Learn engine + live scoring feed the streak +
@@ -50,13 +57,13 @@ class Song {
         bpm: bpm.toDouble(),
         chords: chords,
         pattern: pattern,
+        beatsPerBar: beatsPerBar,
       );
 
   /// A synthetic [AnalyzeResult] for this song so it can flow through the whole
   /// share pipeline (Strum Card + Strum Reel) exactly like a recorded clip —
   /// the chords + ↓/↑ pattern become a shareable, moat-showcasing post.
   AnalyzeResult toAnalyzeResult() {
-    const beatsPerBar = 4;
     final spb = bpm > 0 ? 60.0 / bpm : 0.5;
     final strums = [
       for (final e in toLesson().events)
@@ -97,6 +104,7 @@ class Song {
         'chords': chords,
         'pat': pattern.map(_slot).join(),
         'bpm': bpm,
+        'bpb': beatsPerBar,
       };
 
   factory Song.fromJson(Map<String, dynamic> j) => Song(
@@ -106,6 +114,8 @@ class Song {
         pattern:
             (j['pat'] as String).split('').map(Song._unslot).toList(),
         bpm: (j['bpm'] as num).toInt(),
+        // Records saved before round 116 are all 4/4.
+        beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
       );
 
   @override
@@ -115,9 +125,10 @@ class Song {
       other.name == name &&
       listEquals(other.chords, chords) &&
       listEquals(other.pattern, pattern) &&
-      other.bpm == bpm;
+      other.bpm == bpm &&
+      other.beatsPerBar == beatsPerBar;
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, Object.hashAll(chords), Object.hashAll(pattern), bpm);
+  int get hashCode => Object.hash(id, name, Object.hashAll(chords),
+      Object.hashAll(pattern), bpm, beatsPerBar);
 }

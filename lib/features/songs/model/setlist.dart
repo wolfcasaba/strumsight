@@ -66,6 +66,10 @@ class Setlist {
       bpm: refBpm,
       events: events,
       totalBeats: beatOffset,
+      // Count-in + bar grid follow the OPENING song's metre (round 116).
+      // Honest limit: a later song in a different metre keeps its true event
+      // times, but the drawn grid/metronome accents stay in the opener's.
+      beatsPerBar: songs.isEmpty ? 4 : songs.first.beatsPerBar,
     );
   }
 

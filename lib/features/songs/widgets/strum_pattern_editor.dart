@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../live/model/strum.dart';
 
-/// An 8-slot (eighth-note) strum-pattern editor. Tapping a slot cycles it
-/// rest → down → up → rest, so the user authors the ↓/↑ hand directly — the
-/// one thing our engine uniquely scores. Down = copper, up = green (the app's
-/// consistent strum semantics).
+/// A one-bar (eighth-note) strum-pattern editor — 8 slots in 4/4, 6 in 3/4.
+/// Tapping a slot cycles it rest → down → up → rest, so the user authors the
+/// ↓/↑ hand directly — the one thing our engine uniquely scores. Down =
+/// copper, up = green (the app's consistent strum semantics).
 class StrumPatternEditor extends StatelessWidget {
   const StrumPatternEditor({
     super.key,
@@ -14,7 +14,7 @@ class StrumPatternEditor extends StatelessWidget {
     required this.onChanged,
   });
 
-  /// Exactly 8 slots; `null` = rest.
+  /// One bar of slots (beatsPerBar × 2); `null` = rest.
   final List<StrumDirection?> pattern;
   final ValueChanged<List<StrumDirection?>> onChanged;
 
@@ -24,8 +24,8 @@ class StrumPatternEditor extends StatelessWidget {
         StrumDirection.up => null,
       };
 
-  // "1 & 2 & 3 & 4 &" — downbeats on even slots.
-  static const _labels = ['1', '&', '2', '&', '3', '&', '4', '&'];
+  /// "1 & 2 & …" up to the bar's own beat count (round 116 — 3/4 support).
+  static String _label(int slot) => slot.isEven ? '${slot ~/ 2 + 1}' : '&';
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +37,7 @@ class StrumPatternEditor extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: _Slot(
                 dir: pattern[i],
-                label: i < _labels.length ? _labels[i] : '',
+                label: _label(i),
                 onTap: () {
                   final next = [...pattern];
                   next[i] = _next(pattern[i]);
