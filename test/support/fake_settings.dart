@@ -23,6 +23,10 @@ class FakeSettingsRepository implements SettingsRepository {
   /// attempt is still recorded in [updates] so tests can count retries.
   int failNextUpdates = 0;
 
+  /// If set, every `update` throws this instead (simulate a PERMANENT server
+  /// rejection, e.g. an expired token 401 or a 422). Each attempt is recorded.
+  Object? alwaysFailWith;
+
   RemoteSettings get _current => RemoteSettings(
         themeMode: themeMode,
         locale: locale,
@@ -39,6 +43,9 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<RemoteSettings> update(Map<String, dynamic> patch) async {
     updates.add(patch);
+    if (alwaysFailWith != null) {
+      throw alwaysFailWith!;
+    }
     if (failNextUpdates > 0) {
       failNextUpdates--;
       throw Exception('offline');

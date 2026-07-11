@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -157,6 +158,53 @@ void main() {
 
     // The failed attempt was retried (>=2 recorded) and eventually applied.
     expect(settings.updates.length, greaterThanOrEqualTo(2));
+    expect(settings.confidenceThreshold, 0.8);
+  });
+
+  test('a PERMANENT rejection (401/422) is NOT retried — no infinite loop',
+      () async {
+    // Round 123: _sendPatch retried on ANY error with a 10s timer. An expired
+    // 14-day JWT (401) or a validation 422 can never succeed, so that spun a
+    // forever loop draining battery + hammering the server. A permanent 4xx
+    // must be given up on (until the next genuine local change / re-login).
+    final settings = FakeSettingsRepository();
+    final container =
+        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    container.read(settingsSyncProvider);
+    await container.read(authControllerProvider.future);
+    await _settle(); // initial pull
+
+    settings.alwaysFailWith = DioException(
+      requestOptions: RequestOptions(path: '/settings'),
+      response: Response(
+        requestOptions: RequestOptions(path: '/settings'),
+        statusCode: 401,
+      ),
+      type: DioExceptionType.badResponse,
+    );
+    await container.read(confidenceThresholdProvider.notifier).set(0.8);
+    // Give any (buggy) retry timers several windows to fire.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(settings.updates.length, 1,
+        reason: 'a permanent 4xx must be attempted exactly once, not retried');
+  });
+
+  test('a transient 5xx IS retried (server hiccup, not client error)',
+      () async {
+    final settings = FakeSettingsRepository();
+    final container =
+        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    container.read(settingsSyncProvider);
+    await container.read(authControllerProvider.future);
+    await _settle();
+
+    // Fail the first attempt with a 503, then let it succeed.
+    settings.failNextUpdates = 1;
+    await container.read(confidenceThresholdProvider.notifier).set(0.8);
+    await _settle();
+    expect(settings.updates.length, greaterThanOrEqualTo(2),
+        reason: 'a generic/transient failure stays retryable');
     expect(settings.confidenceThreshold, 0.8);
   });
 }

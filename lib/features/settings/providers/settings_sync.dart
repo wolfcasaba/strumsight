@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/i18n/locale_provider.dart';
@@ -132,11 +133,27 @@ class SettingsSync {
       // Only mark synced AFTER the server confirms — otherwise an offline edit
       // would be falsely recorded as synced and silently lost.
       _syncedSignature = signature;
-    } catch (_) {
-      // Offline — retry with a bounded backoff so the edit isn't dropped.
-      _debounce?.cancel();
-      _debounce = Timer(_ref.read(settingsSyncRetryProvider), _push);
+    } catch (error) {
+      // A PERMANENT rejection (expired token, bad input) can never succeed on
+      // retry — retrying it spins a forever timer that drains battery and
+      // hammers the server. Give up; the next genuine local change (or a
+      // re-login → pull) re-syncs. Only TRANSIENT failures (offline, 5xx) are
+      // retried so an edit made offline is never silently dropped (round 123).
+      if (_isRetryable(error)) {
+        _debounce?.cancel();
+        _debounce = Timer(_ref.read(settingsSyncRetryProvider), _push);
+      }
     }
+  }
+
+  /// A failure worth retrying: a network error, or a server-side 5xx / 408 /
+  /// 429. A 4xx (except those) is a permanent client error — don't loop on it.
+  static bool _isRetryable(Object error) {
+    if (error is! DioException) return true; // unknown → assume transient
+    final status = error.response?.statusCode;
+    if (status == null) return true; // no response = network layer → transient
+    if (status == 408 || status == 429) return true; // timeout / rate-limited
+    return status >= 500; // 5xx transient; other 4xx permanent
   }
 }
 
