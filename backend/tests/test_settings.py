@@ -64,6 +64,20 @@ def test_validation_rejects_out_of_range(client, auth_headers):
     )
 
 
+def test_explicit_null_on_nonnullable_fields_is_422_not_500(client, auth_headers):
+    # Round 122 — the "omit vs null" contract is only valid for `locale`.
+    # An explicit null on a NOT-NULL column used to reach the ORM and 500
+    # (IntegrityError / response-validation failure); it must be a clean 422.
+    for field in ("theme_mode", "confidence_threshold", "tuning_a4"):
+        resp = client.put("/settings", headers=auth_headers, json={field: None})
+        assert resp.status_code == 422, f"{field}: {resp.status_code}"
+    # A rejected update must not have mutated anything.
+    data = client.get("/settings", headers=auth_headers).json()
+    assert data["theme_mode"] == "system"
+    assert data["confidence_threshold"] == 0.45
+    assert data["tuning_a4"] == 440
+
+
 def test_settings_require_auth(client):
     assert client.get("/settings").status_code == 403
     assert client.put("/settings", json={"theme_mode": "dark"}).status_code == 403
