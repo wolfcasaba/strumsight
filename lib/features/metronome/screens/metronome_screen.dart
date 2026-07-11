@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/audio/metronome.dart';
+import '../beat_clock.dart';
 import '../tap_tempo.dart';
 
 /// A standalone metronome tool: set a tempo (slider, ±, or tap-tempo), pick a
@@ -24,12 +25,16 @@ class _MetronomeScreenState extends State<MetronomeScreen>
 
   final Metronome _metronome = Metronome();
   final TapTempo _tapTempo = TapTempo(minBpm: _minBpm, maxBpm: _maxBpm);
+
+  /// Phase-preserving clock: a mid-play tempo change keeps the beat position
+  /// continuous instead of rescaling all elapsed time (round 98).
+  final BeatClock _clock = BeatClock(bpm: 100);
   late final Ticker _ticker;
 
   int _bpm = 100;
   int _beatsPerBar = 4;
   bool _playing = false;
-  Duration _start = Duration.zero;
+  double _lastSecs = 0;
   int _lastBeat = -1;
   int _currentBeat = 0; // index within the bar, for the visual pulse
 
@@ -47,8 +52,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   }
 
   void _onTick(Duration elapsed) {
-    final secs = (elapsed - _start).inMicroseconds / 1e6;
-    final beat = (secs * _bpm / 60).floor();
+    _lastSecs = elapsed.inMicroseconds / 1e6;
+    final beat = _clock.beatsAt(_lastSecs).floor();
     if (beat != _lastBeat) {
       _lastBeat = beat;
       final inBar = beat % _beatsPerBar;
@@ -65,7 +70,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
         // Ticker elapsed restarts at zero on each start(), so count from 0.
         _lastBeat = -1;
         _currentBeat = 0;
-        _start = Duration.zero;
+        _lastSecs = 0;
+        _clock.reset();
         _ticker
           ..stop()
           ..start();
@@ -75,7 +81,12 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     });
   }
 
-  void _setBpm(int v) => setState(() => _bpm = v.clamp(_minBpm, _maxBpm));
+  void _setBpm(int v) {
+    final clamped = v.clamp(_minBpm, _maxBpm);
+    // Anchor the phase at "now" so a mid-play change never jumps the beat.
+    _clock.setBpm(clamped, atSecs: _playing ? _lastSecs : 0);
+    setState(() => _bpm = clamped);
+  }
 
   void _onTap() {
     final bpm = _tapTempo.tap(DateTime.now());
