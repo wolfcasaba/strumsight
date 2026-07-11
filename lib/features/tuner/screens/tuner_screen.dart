@@ -13,6 +13,7 @@ import '../model/guitar_strings.dart';
 import '../model/in_tune_lock.dart';
 import '../model/tuner_reading.dart';
 import '../model/tuning.dart';
+import '../providers/pinned_string_provider.dart';
 import '../providers/tuner_providers.dart';
 import '../providers/tuner_tuning_provider.dart';
 import '../widgets/cents_gauge.dart';
@@ -36,12 +37,30 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     ref.listen(tunerReadingProvider, (_, next) {
       final r = next.asData?.value;
       if (r == null) return;
-      final justLocked =
-          _lock.feed(inTune: r.inTune, note: r.hasSignal ? r.note : '');
+      // The lock celebrates what the USER sees: in manual mode that is the
+      // pinned target, not the chromatic nearest note (round 91).
+      final pin = ref.read(pinnedStringProvider);
+      final inTune = pin == null
+          ? r.inTune
+          : r.hasSignal &&
+                GuitarStrings.centsTo(
+                      pin,
+                      r.frequencyHz,
+                      a4: ref.read(tuningReferenceProvider),
+                    ).abs() <=
+                    TunerReading.inTuneCents;
+      final justLocked = _lock.feed(
+        inTune: inTune,
+        note: r.hasSignal ? (pin?.label ?? r.note) : '',
+      );
       if (justLocked) {
         HapticFeedback.mediumImpact();
         setState(() {}); // reflect the locked state in the pulse
       }
+    });
+    // A pin must not outlive its tuning (E2 isn't a drop-D target).
+    ref.listen(tunerTuningProvider, (_, next) {
+      ref.read(pinnedStringProvider.notifier).reconcile(next.strings);
     });
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
@@ -50,12 +69,21 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     final a4 = ref.watch(tuningReferenceProvider);
     final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
     final tuning = ref.watch(tunerTuningProvider);
+    final pinned = ref.watch(pinnedStringProvider);
+    // Manual mode reads against the pinned target; auto stays chromatic.
+    final displayCents = pinned != null && reading.hasSignal
+        ? GuitarStrings.centsTo(pinned, reading.frequencyHz, a4: a4)
+        : reading.cents;
+    final displayInTune = pinned == null
+        ? reading.inTune
+        : reading.hasSignal && displayCents.abs() <= TunerReading.inTuneCents;
+    final displayNote = pinned?.label ?? reading.note;
     String tuningName(Tuning t) => switch (t.id) {
-          'dropD' => l10n.tunerTuningDropD,
-          'halfStepDown' => l10n.tunerTuningHalfStepDown,
-          'dadgad' => l10n.tunerTuningDadgad,
-          _ => l10n.tunerTuningStandard,
-        };
+      'dropD' => l10n.tunerTuningDropD,
+      'halfStepDown' => l10n.tunerTuningHalfStepDown,
+      'dadgad' => l10n.tunerTuningDadgad,
+      _ => l10n.tunerTuningStandard,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -65,8 +93,7 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
           // follow the selection, so a drop-D player tunes to D2, not E2.
           PopupMenuButton<Tuning>(
             tooltip: l10n.tunerTuningLabel,
-            onSelected: (t) =>
-                ref.read(tunerTuningProvider.notifier).set(t),
+            onSelected: (t) => ref.read(tunerTuningProvider.notifier).set(t),
             itemBuilder: (context) => [
               for (final t in Tunings.all)
                 CheckedPopupMenuItem(
@@ -80,11 +107,14 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(tuningName(tuning),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    tuningName(tuning),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const Icon(Icons.arrow_drop_down, size: 20),
                 ],
               ),
@@ -113,59 +143,62 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
             ),
           Expanded(
             child: Center(
-        child: reading.hasSignal
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedScale(
-                    scale: _lock.isLocked ? 1.08 : 1.0,
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOutBack,
-                    child: Text(
-                      reading.note,
-                      style: TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 96,
-                        height: 1,
-                        color: _lock.isLocked
-                            ? AppColors.successOn(
-                                Theme.of(context).brightness)
-                            : palette.ink,
-                      ),
+              child: reading.hasSignal
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedScale(
+                          scale: _lock.isLocked ? 1.08 : 1.0,
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOutBack,
+                          child: Text(
+                            displayNote,
+                            style: TextStyle(
+                              fontFamily: 'Montserrat',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 96,
+                              height: 1,
+                              color: _lock.isLocked
+                                  ? AppColors.successOn(
+                                      Theme.of(context).brightness,
+                                    )
+                                  : palette.ink,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${reading.frequencyHz.toStringAsFixed(1)} Hz',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: palette.muted,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        CentsGauge(cents: displayCents, inTune: displayInTune),
+                        const SizedBox(height: 12),
+                        AnimatedOpacity(
+                          opacity: displayInTune ? 1 : 0,
+                          duration: const Duration(milliseconds: 150),
+                          child: Text(
+                            l10n.tunerInTune.toUpperCase(),
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 2,
+                              color: AppColors.successOn(
+                                Theme.of(context).brightness,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      l10n.tunerListening,
+                      style: TextStyle(color: palette.muted, fontSize: 16),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${reading.frequencyHz.toStringAsFixed(1)} Hz',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: palette.muted,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  CentsGauge(cents: reading.cents, inTune: reading.inTune),
-                  const SizedBox(height: 12),
-                  AnimatedOpacity(
-                    opacity: reading.inTune ? 1 : 0,
-                    duration: const Duration(milliseconds: 150),
-                    child: Text(
-                      l10n.tunerInTune.toUpperCase(),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 2,
-                        color: AppColors.successOn(Theme.of(context).brightness),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : Text(
-                l10n.tunerListening,
-                style: TextStyle(color: palette.muted, fontSize: 16),
-              ),
             ),
           ),
           // Which string is being tuned (round 84): the selected tuning's
@@ -174,11 +207,18 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
             padding: const EdgeInsets.only(bottom: 4),
             child: _StringChips(
               strings: tuning.strings,
-              active: reading.hasSignal
-                  ? GuitarStrings.nearest(reading.frequencyHz,
-                      a4: a4, strings: tuning.strings)
-                  : null,
-              inTune: reading.inTune,
+              active:
+                  pinned ??
+                  (reading.hasSignal
+                      ? GuitarStrings.nearest(
+                          reading.frequencyHz,
+                          a4: a4,
+                          strings: tuning.strings,
+                        )
+                      : null),
+              pinned: pinned,
+              inTune: displayInTune,
+              onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
             ),
           ),
           SafeArea(
@@ -202,16 +242,23 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
   }
 }
 
-
 /// The string row of the selected tuning. Shape + colour encode state (never
-/// hue alone): the active chip is filled and enlarged, in-tune adds a check.
+/// hue alone): the active chip is filled and enlarged, in-tune adds a check,
+/// a manually pinned chip adds a pin glyph. Tapping toggles the pin.
 class _StringChips extends StatelessWidget {
-  const _StringChips(
-      {required this.strings, required this.active, required this.inTune});
+  const _StringChips({
+    required this.strings,
+    required this.active,
+    required this.pinned,
+    required this.inTune,
+    required this.onTap,
+  });
 
   final List<GuitarString> strings;
   final GuitarString? active;
+  final GuitarString? pinned;
   final bool inTune;
+  final ValueChanged<GuitarString> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -222,48 +269,72 @@ class _StringChips extends StatelessWidget {
         for (final s in strings)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: EdgeInsets.symmetric(
-                  horizontal: identical(s, active) ? 14 : 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: identical(s, active)
-                    ? (inTune
-                        ? AppColors.successOn(Theme.of(context).brightness)
-                            .withValues(alpha: 0.18)
-                        : AppColors.primary.withValues(alpha: 0.2))
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => onTap(s),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                padding: EdgeInsets.symmetric(
+                  horizontal: identical(s, active) ? 14 : 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
                   color: identical(s, active)
                       ? (inTune
-                          ? AppColors.successOn(Theme.of(context).brightness)
-                          : AppColors.primary)
-                      : palette.muted.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    s.label,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: identical(s, active)
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      fontSize: 13,
-                      color: identical(s, active) ? palette.ink : palette.muted,
-                    ),
+                            ? AppColors.successOn(
+                                Theme.of(context).brightness,
+                              ).withValues(alpha: 0.18)
+                            : AppColors.primary.withValues(alpha: 0.2))
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: identical(s, active)
+                        ? (inTune
+                              ? AppColors.successOn(
+                                  Theme.of(context).brightness,
+                                )
+                              : AppColors.primary)
+                        : palette.muted.withValues(alpha: 0.4),
                   ),
-                  if (identical(s, active) && inTune) ...[
-                    const SizedBox(width: 4),
-                    Icon(Icons.check_rounded,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (identical(s, pinned)) ...[
+                      Icon(
+                        Icons.push_pin,
+                        size: 12,
+                        color: identical(s, active)
+                            ? palette.ink
+                            : palette.muted,
+                      ),
+                      const SizedBox(width: 3),
+                    ],
+                    Text(
+                      s.label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: identical(s, active)
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        fontSize: 13,
+                        color: identical(s, active)
+                            ? palette.ink
+                            : palette.muted,
+                      ),
+                    ),
+                    if (identical(s, active) && inTune) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.check_rounded,
                         size: 14,
-                        color:
-                            AppColors.successOn(Theme.of(context).brightness)),
+                        color: AppColors.successOn(
+                          Theme.of(context).brightness,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

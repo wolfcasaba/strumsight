@@ -21,8 +21,11 @@ class TunerReading {
 
   bool get hasSignal => note.isNotEmpty;
 
-  /// Within ±5 cents is considered in tune.
-  bool get inTune => hasSignal && cents.abs() <= 5;
+  /// The in-tune tolerance, shared with manual (pinned-string) mode.
+  static const double inTuneCents = 5;
+
+  /// Within ±[inTuneCents] is considered in tune.
+  bool get inTune => hasSignal && cents.abs() <= inTuneCents;
 
   static const silent = TunerReading(note: '', cents: 0, frequencyHz: 0);
 }

@@ -53,4 +53,10 @@ class GuitarStrings {
     }
     return bestDist <= maxSemitoneDistance ? best : null;
   }
+
+  /// Signed cents of [freqHz] against a SPECIFIC string (round 91 — manual
+  /// mode): negative = flat, positive = sharp. Unlike the chromatic reading
+  /// this stays anchored to the target even a whole semitone away.
+  static double centsTo(GuitarString s, double freqHz, {int a4 = 440}) =>
+      1200 * (math.log(freqHz / s.frequencyHz(a4)) / math.ln2);
 }
