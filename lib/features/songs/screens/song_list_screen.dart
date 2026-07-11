@@ -80,7 +80,10 @@ class SongListScreen extends ConsumerWidget {
                       title: Text(song.name,
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text(
-                        '${song.chords.join(' · ')}\n${l10n.songBpm(song.bpm)}',
+                        // Time-signature notation is universal (round 116
+                        // decision) — only the non-default metre is shown.
+                        '${song.chords.join(' · ')}\n${l10n.songBpm(song.bpm)}'
+                        '${song.beatsPerBar == 3 ? ' · 3/4' : ''}',
                       ),
                       isThreeLine: true,
                       onTap: () => _play(context, song),

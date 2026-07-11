@@ -184,6 +184,18 @@ class Lessons {
         pattern: const [_d, null, _d, null, _d, null, _d, null],
       );
 
+  /// The gentlest possible 3/4 (round 121): downs on 1-2-3 over two easy
+  /// shapes — feel the waltz bar before the intermediate oom-pah-pah adds
+  /// up-strokes. Ends the beginner tier so the metre is met early.
+  static Lesson get firstWaltz => Lesson(
+        id: 'first-waltz',
+        name: 'First Waltz',
+        bpm: 76,
+        beatsPerBar: 3,
+        chords: const ['Em', 'C', 'Em', 'C'],
+        pattern: const [_d, null, _d, null, _d, null],
+      );
+
   // ---- Intermediate ----
 
   /// The ubiquitous D-DU-UDU pop/folk pattern over a I–V–vi–IV progression.
@@ -297,6 +309,7 @@ class Lessons {
         eighthDrive,
         fiftiesDooWop,
         twoFingerFrame,
+        firstWaltz,
         downUpGroove,
         folkPattern,
         barreGroove,

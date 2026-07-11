@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/songs/model/setlist.dart';
 import 'package:music_theory/features/songs/model/song.dart';
+import 'package:music_theory/features/songs/providers/songs_provider.dart';
+import 'package:music_theory/features/songs/screens/song_list_screen.dart';
 import 'package:music_theory/features/songs/theory/strum_patterns.dart';
 import 'package:music_theory/features/songs/widgets/strum_pattern_editor.dart';
 import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 116 — 3/4 songs in the Song Builder. The app has TAUGHT waltz time
 /// since r110/111 (curriculum, count-in, bar grid), but users could not
@@ -22,6 +26,26 @@ Song _waltzSong({int bpm = 60}) => Song(
       beatsPerBar: 3,
       bpm: bpm,
     );
+
+class _SeededSongs extends SongsController {
+  _SeededSongs(this._seed);
+  final List<Song> _seed;
+  @override
+  List<Song> build() => _seed;
+}
+
+Future<void> pumpSongList(WidgetTester tester, List<Song> seed) async {
+  SharedPreferences.setMockInitialValues({});
+  await tester.pumpWidget(ProviderScope(
+    overrides: [songsProvider.overrideWith(() => _SeededSongs(seed))],
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const SongListScreen(),
+    ),
+  ));
+  await tester.pump();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +101,26 @@ void main() {
       for (final p in StrumPatternPreset.all) {
         expect(p.pattern.length, 8, reason: '${p.name} must fill a 4/4 bar');
       }
+    });
+  });
+
+  group('song list shows the metre', () {
+    testWidgets('a 3/4 song row carries a 3/4 badge, a 4/4 row does not',
+        (tester) async {
+      // Imports deferred to keep this file model-focused: the list screen
+      // and provider come from the flow-test's seeding pattern.
+      await pumpSongList(tester, [
+        _waltzSong(),
+        Song(
+          id: 'c1',
+          name: 'Common Time',
+          chords: const ['C'],
+          pattern: const [_d, _x, _d, _x, _d, _x, _d, _x],
+          bpm: 90,
+        ),
+      ]);
+      expect(find.textContaining('3/4'), findsOneWidget,
+          reason: 'only the waltz row shows the metre');
     });
   });
 

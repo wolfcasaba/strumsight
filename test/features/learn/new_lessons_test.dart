@@ -32,6 +32,21 @@ void main() {
     expect(Lessons.nextAfter('push-and-pull'), isNull);
   });
 
+  test('First Waltz — a BEGINNER 3/4 lesson exists before the intermediate '
+      'one (round 121)', () {
+    final byId = {for (final l in Lessons.all) l.id: l};
+    final fw = byId['first-waltz']!;
+    expect(fw.difficulty, Difficulty.beginner);
+    expect(fw.beatsPerBar, 3);
+    for (final e in fw.events) {
+      expect(e.isDown, isTrue, reason: 'a first waltz is downs-only');
+      expect(e.beat % 1.0, 0.0);
+    }
+    // It slots into the unlock chain at the end of the beginner tier.
+    expect(Lessons.nextAfter('two-finger-frame')!.id, 'first-waltz');
+    expect(Lessons.nextAfter('first-waltz')!.id, 'down-up-groove');
+  });
+
   test('Easy mode keeps the waltz in 3/4 — no silent 4/4 fallback', () {
     // Round 115 (r114 devil-advocate coverage gap): `simplified` must thread
     // beatsPerBar through, or the count-in/bar-grid/metronome of an Easy
