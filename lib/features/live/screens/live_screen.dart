@@ -150,31 +150,36 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 ),
               Expanded(
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ChordDisplay(
-                        current: frame.current?.transposed(-capo),
-                        next: frame.next?.transposed(-capo),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        height: 116,
-                        child: Center(
-                          child: latest == null
-                              ? null
-                              : StrumArrow(
-                                  direction: latest.direction,
-                                  confidence: latest.confidence,
-                                  size: 84,
-                                  glow: true,
-                                  semanticLabel: _arrowLabel(l10n, latest),
-                                ),
+                  // scaleDown: the hero group is taller than the space left
+                  // on a landscape phone — scale it instead of overflowing.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ChordDisplay(
+                          current: frame.current?.transposed(-capo),
+                          next: frame.next?.transposed(-capo),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      ConfidencePill(strum: latest),
-                    ],
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          height: 116,
+                          child: Center(
+                            child: latest == null
+                                ? null
+                                : StrumArrow(
+                                    direction: latest.direction,
+                                    confidence: latest.confidence,
+                                    size: 84,
+                                    glow: true,
+                                    semanticLabel: _arrowLabel(l10n, latest),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ConfidencePill(strum: latest),
+                      ],
+                    ),
                   ),
                 ),
               ),

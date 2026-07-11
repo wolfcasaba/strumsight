@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/chords/screens/chord_library_screen.dart';
+import 'package:music_theory/features/onboarding/screens/onboarding_screen.dart';
+import 'package:music_theory/features/songs/screens/song_builder_screen.dart';
+import 'package:music_theory/features/streak/screens/streak_screen.dart';
+import 'package:music_theory/main.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/learn/screens/learn_screen.dart';
 import 'package:music_theory/features/learn/screens/lesson_list_screen.dart';
@@ -115,6 +120,64 @@ void main() {
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: ProgressScreen(),
+            ),
+          ));
+        });
+      });
+
+      testWidgets('full app tab walk (Live→Analyze→Learn→Library→Settings)',
+          (tester) async {
+        PackageInfo.setMockInitialValues(
+          appName: 'StrumSight',
+          packageName: 'test',
+          version: '0.0.0',
+          buildNumber: '1',
+          buildSignature: '',
+        );
+        final engine = FakeStrumEngine();
+        addTearDown(engine.dispose);
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(ProviderScope(
+            overrides: [strumEngineProvider.overrideWithValue(engine)],
+            child: const StrumSightApp(),
+          ));
+          await tester.pumpAndSettle();
+          for (final tab in ['Analyze', 'Learn', 'Library', 'Settings']) {
+            await tester.tap(find.text(tab), warnIfMissed: false);
+            await tester.pumpAndSettle();
+          }
+        });
+      });
+
+      testWidgets('Onboarding', (tester) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: OnboardingScreen(),
+          ));
+        });
+      });
+
+      testWidgets('Streak', (tester) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(ProviderScope(
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: StreakScreen(now: DateTime(2026, 7, 11)),
+            ),
+          ));
+        });
+      });
+
+      testWidgets('Song builder', (tester) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(ProviderScope(
+            child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: SongBuilderScreen(),
             ),
           ));
         });
