@@ -274,82 +274,86 @@ class _StringChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final s in strings)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => onTap(s),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                padding: EdgeInsets.symmetric(
-                  horizontal: identical(s, active) ? 14 : 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: identical(s, active)
-                      ? (inTune
-                            ? AppColors.successOn(
-                                Theme.of(context).brightness,
-                              ).withValues(alpha: 0.18)
-                            : AppColors.primary.withValues(alpha: 0.2))
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
+    // scaleDown: six chips are wider than a 320-wide screen.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final s in strings)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => onTap(s),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: identical(s, active) ? 14 : 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
                     color: identical(s, active)
                         ? (inTune
                               ? AppColors.successOn(
                                   Theme.of(context).brightness,
-                                )
-                              : AppColors.primary)
-                        : palette.muted.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (identical(s, pinned)) ...[
-                      Icon(
-                        Icons.push_pin,
-                        size: 12,
-                        color: identical(s, active)
-                            ? palette.ink
-                            : palette.muted,
-                      ),
-                      const SizedBox(width: 3),
-                    ],
-                    Text(
-                      s.label,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: identical(s, active)
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        fontSize: 13,
-                        color: identical(s, active)
-                            ? palette.ink
-                            : palette.muted,
-                      ),
+                                ).withValues(alpha: 0.18)
+                              : AppColors.primary.withValues(alpha: 0.2))
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: identical(s, active)
+                          ? (inTune
+                                ? AppColors.successOn(
+                                    Theme.of(context).brightness,
+                                  )
+                                : AppColors.primary)
+                          : palette.muted.withValues(alpha: 0.4),
                     ),
-                    if (identical(s, active) && inTune) ...[
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.check_rounded,
-                        size: 14,
-                        color: AppColors.successOn(
-                          Theme.of(context).brightness,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (identical(s, pinned)) ...[
+                        Icon(
+                          Icons.push_pin,
+                          size: 12,
+                          color: identical(s, active)
+                              ? palette.ink
+                              : palette.muted,
+                        ),
+                        const SizedBox(width: 3),
+                      ],
+                      Text(
+                        s.label,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: identical(s, active)
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          fontSize: 13,
+                          color: identical(s, active)
+                              ? palette.ink
+                              : palette.muted,
                         ),
                       ),
+                      if (identical(s, active) && inTune) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: AppColors.successOn(
+                            Theme.of(context).brightness,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

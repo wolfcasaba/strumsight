@@ -49,7 +49,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   double _accumSec = 0;
   double _prevPlayhead = 0;
   bool _playing = false;
-  bool _jam = false; // jam mode: chord backing, scoring off (avoids mic conflict)
+  bool _jam =
+      false; // jam mode: chord backing, scoring off (avoids mic conflict)
   bool _easy = false; // beginner cut: on-beat down-strokes only
   double _speed = 1.0; // practice-tempo multiplier
 
@@ -95,8 +96,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// lags the display (skew > 0, e.g. Bluetooth), the visuals are drawn that
   /// much later. Scoring/metronome keep the true playhead.
   double get _drawnPlayhead {
-    final skewSec = (ref.read(inputLatencyProvider) -
-            ref.read(visualLatencyProvider)) /
+    final skewSec =
+        (ref.read(inputLatencyProvider) - ref.read(visualLatencyProvider)) /
         1000.0;
     return _playhead - skewSec * (_bpm / 60.0);
   }
@@ -118,8 +119,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       if (_jam && downbeat && beat >= 0) _backing.playChord(_activeChord());
     }
     _prevPlayhead = now;
-    if (LessonTiming.isFinished(
-        now, _lesson.totalBeats, _lesson.beatsPerBar)) {
+    if (LessonTiming.isFinished(now, _lesson.totalBeats, _lesson.beatsPerBar)) {
       _finish();
     }
   }
@@ -133,14 +133,19 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       // Only buzz when the strum actually resolved an event — a stray strum
       // with no event in range returns null and must NOT re-fire the previous
       // verdict's haptic.
-      final result =
-          _scorer!.registerStrum(frame.latestStrum.direction, _elapsedSec);
+      final result = _scorer!.registerStrum(
+        frame.latestStrum.direction,
+        _elapsedSec,
+      );
       final snap = _scorer!.snapshot();
       if (result != null) _fireHaptic(result, snap.lastTiming);
       // A clean hit throws a spark burst in the stroke's colour at the strike
       // line — the visible celebration that turns "a diagram" into "a game".
       if (result == HitResult.hit) {
-        _emitBurst(frame.latestStrum.direction as StrumDirection, snap.lastTiming);
+        _emitBurst(
+          frame.latestStrum.direction as StrumDirection,
+          snap.lastTiming,
+        );
         // Crossing a combo-multiplier tier (×2/×3/×4) fires a bigger, longer
         // golden fountain — the reward-chain milestone (chunk 016b P1).
         if (snap.multiplier > _prevMultiplier) _emitMilestone();
@@ -158,10 +163,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // Jam mode plays a chord backing and turns scoring OFF, so the mic never
     // hears (and grades) the app's own accompaniment.
     if (!_jam) {
-      _scorer ??= LessonScorer(_lesson,
-          countInBeats: _countInBeats,
-          bpm: _bpm,
-          inputLatencySec: ref.read(inputLatencyProvider) / 1000);
+      _scorer ??= LessonScorer(
+        _lesson,
+        countInBeats: _countInBeats,
+        bpm: _bpm,
+        inputLatencySec: ref.read(inputLatencyProvider) / 1000,
+      );
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = _playhead; // don't re-click beats already passed
@@ -182,10 +189,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     if (_jam) {
       _scorer = null;
     } else {
-      _scorer = LessonScorer(_lesson,
-          countInBeats: _countInBeats,
-          bpm: _bpm,
-          inputLatencySec: ref.read(inputLatencyProvider) / 1000);
+      _scorer = LessonScorer(
+        _lesson,
+        countInBeats: _countInBeats,
+        bpm: _bpm,
+        inputLatencySec: ref.read(inputLatencyProvider) / 1000,
+      );
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = -_countInBeats.toDouble();
@@ -223,14 +232,18 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       }
       // Log for the Progress dashboard — Learn is the only source that scores
       // strum DIRECTION, so it carries the moat metric.
-      ref.read(practiceLogProvider.notifier).record(PracticeEntry(
-            day: StreakLogic.epochDayOf(DateTime.now()),
-            source: PracticeSource.learn,
-            seconds: _elapsedSec.round(),
-            strokes: snap!.total,
-            chords: widget.lesson.chordSequence.toSet().length,
-            directionAccuracy: snap.accuracy,
-          ));
+      ref
+          .read(practiceLogProvider.notifier)
+          .record(
+            PracticeEntry(
+              day: StreakLogic.epochDayOf(DateTime.now()),
+              source: PracticeSource.learn,
+              seconds: _elapsedSec.round(),
+              strokes: snap!.total,
+              chords: widget.lesson.chordSequence.toSet().length,
+              directionAccuracy: snap.accuracy,
+            ),
+          );
     }
     if (mounted && snap != null) _showSummary(snap);
   }
@@ -249,23 +262,31 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${(snap.accuracy * 100).round()}%',
-                style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w900,
-                    fontSize: 48,
-                    color: AppColors.primary)),
+            Text(
+              '${(snap.accuracy * 100).round()}%',
+              style: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w900,
+                fontSize: 48,
+                color: AppColors.primary,
+              ),
+            ),
             if (snap.score > 0)
-              Text('${snap.score} ${l10n.learnScore}'
-                  '${snap.perfect > 0 ? ' · ${snap.perfect} ${l10n.learnPerfect}' : ''}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, color: AppColors.primary)),
+              Text(
+                '${snap.score} ${l10n.learnScore}'
+                '${snap.perfect > 0 ? ' · ${snap.perfect} ${l10n.learnPerfect}' : ''}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
             Text(l10n.learnScoreLine(snap.hits, snap.total, snap.maxCombo)),
             if (snap.hasChords)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                    '${l10n.learnChords}: ${(snap.chordAccuracy * 100).round()}%'),
+                  '${l10n.learnChords}: ${(snap.chordAccuracy * 100).round()}%',
+                ),
               ),
           ],
         ),
@@ -277,15 +298,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           TextButton.icon(
             onPressed: () {
               Navigator.of(ctx).pop();
-              Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => LessonScorePreviewScreen(
-                  lesson: widget.lesson,
-                  accuracy: snap.accuracy,
-                  maxCombo: snap.maxCombo,
-                  hits: snap.hits,
-                  total: snap.total,
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LessonScorePreviewScreen(
+                    lesson: widget.lesson,
+                    accuracy: snap.accuracy,
+                    maxCombo: snap.maxCombo,
+                    hits: snap.hits,
+                    total: snap.total,
+                  ),
                 ),
-              ));
+              );
             },
             icon: const Icon(Icons.ios_share, size: 18),
             label: Text(l10n.actionShare),
@@ -309,9 +332,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
             FilledButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
-                  builder: (_) => LearnScreen(lesson: next),
-                ));
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LearnScreen(lesson: next),
+                  ),
+                );
               },
               child: Text(l10n.learnNextLesson),
             ),
@@ -332,24 +357,28 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       Timing.early || Timing.late => 0.45,
       null => 0.6,
     };
-    _bursts.add(HitBurst(
-      startSec: _elapsedSec,
-      color: dir == StrumDirection.down
-          ? AppColors.primary
-          : AppColors.confidenceHigh,
-      strength: strength,
-    ));
+    _bursts.add(
+      HitBurst(
+        startSec: _elapsedSec,
+        color: dir == StrumDirection.down
+            ? AppColors.primary
+            : AppColors.confidenceHigh,
+        strength: strength,
+      ),
+    );
   }
 
   /// A bigger, longer golden burst when the combo multiplier steps up.
   void _emitMilestone() {
-    _bursts.add(HitBurst(
-      startSec: _elapsedSec,
-      color: AppColors.primary,
-      strength: 1.4,
-      count: 26,
-      lifeSec: 0.6,
-    ));
+    _bursts.add(
+      HitBurst(
+        startSec: _elapsedSec,
+        color: AppColors.primary,
+        strength: 1.4,
+        count: 26,
+        lifeSec: 0.6,
+      ),
+    );
   }
 
   /// Tactile confirmation aligned to the strum (chunk 016b juice): a firmer tap
@@ -430,9 +459,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
             },
           ),
           IconButton(
-            icon: Icon(ref.watch(metronomeMutedProvider)
-                ? Icons.volume_off
-                : Icons.volume_up),
+            icon: Icon(
+              ref.watch(metronomeMutedProvider)
+                  ? Icons.volume_off
+                  : Icons.volume_up,
+            ),
             tooltip: l10n.learnMetronome,
             onPressed: () => ref.read(metronomeMutedProvider.notifier).toggle(),
           ),
@@ -446,84 +477,116 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child: Column(
-            children: [
-              if (score != null)
-                _ScoreHud(score: score)
-              else if (chordsUsed.isNotEmpty)
-                Text('${l10n.learnChords}: $chordsUsed',
-                    style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  LessonHighway(
-                      lesson: lesson,
-                      playheadBeat: _drawnPlayhead,
-                      height: _highwayHeight,
-                      strikeX: _strikeX),
-                  // Spark bursts drawn on their own layer so they don't
-                  // repaint the lane; centred on the strike line.
-                  if (_bursts.isNotEmpty)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            painter: HitBurstPainter(
-                              bursts: _bursts,
-                              nowSec: _elapsedSec,
-                              center: const Offset(
-                                  _strikeX, _highwayHeight / 2),
-                            ),
+          // Scroll only when the fixed content is taller than the viewport
+          // (landscape phones); Spacers keep working when there is room.
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      if (score != null)
+                        _ScoreHud(score: score)
+                      else if (chordsUsed.isNotEmpty)
+                        Text(
+                          '${l10n.learnChords}: $chordsUsed',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      const Spacer(),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          LessonHighway(
+                            lesson: lesson,
+                            playheadBeat: _drawnPlayhead,
+                            height: _highwayHeight,
+                            strikeX: _strikeX,
                           ),
+                          // Spark bursts drawn on their own layer so they don't
+                          // repaint the lane; centred on the strike line.
+                          if (_bursts.isNotEmpty)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: RepaintBoundary(
+                                  child: CustomPaint(
+                                    painter: HitBurstPainter(
+                                      bursts: _bursts,
+                                      nowSec: _elapsedSec,
+                                      center: const Offset(
+                                        _strikeX,
+                                        _highwayHeight / 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (countIn != null) CountInOverlay(number: countIn),
+                          if (countIn == null && score?.lastResult != null)
+                            _FeedbackFlash(
+                              result: score!.lastResult!,
+                              timing: score.lastTiming,
+                              expectedDirection: score.expectedDirection,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // How to fret the current chord (a beginner can't play what they
+                      // can't finger). Reserves height so the layout doesn't jump.
+                      SizedBox(
+                        height: 94,
+                        child: Center(
+                          child: ChordDiagram(label: _activeChord(), size: 66),
                         ),
                       ),
-                    ),
-                  if (countIn != null) CountInOverlay(number: countIn),
-                  if (countIn == null && score?.lastResult != null)
-                    _FeedbackFlash(
-                        result: score!.lastResult!,
-                        timing: score.lastTiming,
-                        expectedDirection: score.expectedDirection),
-                ],
-              ),
-              const SizedBox(height: 6),
-              // How to fret the current chord (a beginner can't play what they
-              // can't finger). Reserves height so the layout doesn't jump.
-              SizedBox(
-                height: 94,
-                child: Center(child: ChordDiagram(label: _activeChord(), size: 66)),
-              ),
-              const SizedBox(height: 6),
-              Text('${_bpm.round()} BPM',
-                  style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('${l10n.learnSpeed}  ',
-                      style: Theme.of(context).textTheme.bodySmall),
-                  for (final s in _speeds) ...[
-                    ChoiceChip(
-                      label: Text('${(s * 100).round()}%'),
-                      selected: _speed == s,
-                      onSelected: (_) => _setSpeed(s),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                ],
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _toggle,
-                icon: Icon(_playing ? Icons.pause : Icons.play_arrow, size: 24),
-                label: Text(_playing ? l10n.learnPause : l10n.learnPlay),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  backgroundColor: AppColors.primary,
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_bpm.round()} BPM',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      // scaleDown: the chip row is wider than a 320-wide screen.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${l10n.learnSpeed}  ',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            for (final s in _speeds) ...[
+                              ChoiceChip(
+                                label: Text('${(s * 100).round()}%'),
+                                selected: _speed == s,
+                                onSelected: (_) => _setSpeed(s),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      FilledButton.icon(
+                        onPressed: _toggle,
+                        icon: Icon(
+                          _playing ? Icons.pause : Icons.play_arrow,
+                          size: 24,
+                        ),
+                        label: Text(
+                          _playing ? l10n.learnPause : l10n.learnPlay,
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(56),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -554,22 +617,27 @@ class _ScoreHud extends StatelessWidget {
   }
 
   Widget _stat(String value, String label) => Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  color: AppColors.primary)),
-          Text(label,
-              style: const TextStyle(fontSize: 10, letterSpacing: 0.5)),
-        ],
-      );
+    children: [
+      Text(
+        value,
+        style: const TextStyle(
+          fontFamily: 'Montserrat',
+          fontWeight: FontWeight.w800,
+          fontSize: 20,
+          color: AppColors.primary,
+        ),
+      ),
+      Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 0.5)),
+    ],
+  );
 }
 
 class _FeedbackFlash extends StatelessWidget {
-  const _FeedbackFlash(
-      {required this.result, this.timing, this.expectedDirection});
+  const _FeedbackFlash({
+    required this.result,
+    this.timing,
+    this.expectedDirection,
+  });
   final HitResult result;
   final Timing? timing;
   final StrumDirection? expectedDirection;
@@ -581,30 +649,35 @@ class _FeedbackFlash extends StatelessWidget {
     // gentle (safe-failure). Early/late add an arrow hint at which side.
     final (text, color) = switch (result) {
       HitResult.hit => switch (timing) {
-          Timing.perfect => (l10n.learnPerfect, AppColors.confidenceHigh),
-          Timing.good => (l10n.learnGood, AppColors.confidenceHigh),
-          Timing.early => ('${l10n.learnEarly} ⟵', AppColors.confidenceMid),
-          Timing.late => ('⟶ ${l10n.learnLate}', AppColors.confidenceMid),
-          null => (l10n.learnHit, AppColors.confidenceHigh),
-        },
+        Timing.perfect => (l10n.learnPerfect, AppColors.confidenceHigh),
+        Timing.good => (l10n.learnGood, AppColors.confidenceHigh),
+        Timing.early => ('${l10n.learnEarly} ⟵', AppColors.confidenceMid),
+        Timing.late => ('⟶ ${l10n.learnLate}', AppColors.confidenceMid),
+        null => (l10n.learnHit, AppColors.confidenceHigh),
+      },
       // The badge coaches: which way the stroke SHOULD have gone (016b P6).
       HitResult.wrongDirection => (
-          switch (expectedDirection) {
-            StrumDirection.down => '${l10n.learnWrongWay} ↓',
-            StrumDirection.up => '${l10n.learnWrongWay} ↑',
-            null => l10n.learnWrongWay,
-          },
-          AppColors.confidenceMid
-        ),
+        switch (expectedDirection) {
+          StrumDirection.down => '${l10n.learnWrongWay} ↓',
+          StrumDirection.up => '${l10n.learnWrongWay} ↑',
+          null => l10n.learnWrongWay,
+        },
+        AppColors.confidenceMid,
+      ),
       HitResult.missed => (l10n.learnMiss, AppColors.confidenceLow),
     };
     return Align(
       alignment: Alignment.topCenter,
       child: Padding(
         padding: const EdgeInsets.only(top: 6),
-        child: Text(text,
-            style: TextStyle(
-                fontWeight: FontWeight.w800, fontSize: 16, color: color)),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            color: color,
+          ),
+        ),
       ),
     );
   }
