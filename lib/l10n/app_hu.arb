@@ -65,6 +65,7 @@
   "tunerTuningDropD": "Drop D",
   "tunerTuningHalfStepDown": "Fél hanggal lejjebb",
   "tunerTuningDadgad": "DADGAD",
+  "tunerPlayReference": "Referenciahang lejátszása",
   "tunerCentsSharp": "{cents} centtel magas",
   "tunerCentsFlat": "{cents} centtel mély",
   "chordDiagramSemantics": "{chord} akkordábra, fogás: {fingering}",

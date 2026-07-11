@@ -76,6 +76,7 @@
   "tunerTuningDropD": "Drop D",
   "tunerTuningHalfStepDown": "Half-step down",
   "tunerTuningDadgad": "DADGAD",
+  "tunerPlayReference": "Play reference tone",
   "tunerCentsSharp": "{cents} cents sharp",
   "@tunerCentsSharp": {
     "placeholders": {

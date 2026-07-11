@@ -87,7 +87,19 @@ class Backing {
   Future<void> playChord(String label) async {
     final freqs = ChordAudio.frequencies(label);
     if (freqs == null) return;
-    final wav = _cache.putIfAbsent(label, () => ChordAudio.padWav(freqs));
+    _play(label, () => ChordAudio.padWav(freqs));
+  }
+
+  /// A single reference tone (round 94 — tune by ear against the pinned
+  /// string). Longer than a chord pad so the ear has time to compare.
+  Future<void> playTone(double freqHz) async {
+    if (freqHz <= 0) return;
+    _play('tone:${freqHz.toStringAsFixed(2)}',
+        () => ChordAudio.padWav([freqHz], ms: 1500, amp: 0.3));
+  }
+
+  void _play(String cacheKey, Uint8List Function() build) {
+    final wav = _cache.putIfAbsent(cacheKey, build);
     try {
       _player.stop().ignore();
       _player.play(BytesSource(wav)).ignore();

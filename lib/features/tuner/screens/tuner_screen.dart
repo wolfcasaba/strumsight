@@ -7,6 +7,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../learn/providers/backing_provider.dart';
 import '../../live/providers/live_providers.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/guitar_strings.dart';
@@ -221,6 +222,16 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
               onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
             ),
           ),
+          // Tune by EAR (round 94): with a target pinned, sound its reference
+          // tone. Works with zero mic signal — that's the point.
+          if (pinned != null)
+            IconButton(
+              tooltip: l10n.tunerPlayReference,
+              icon: const Icon(Icons.volume_up),
+              color: AppColors.primary,
+              onPressed: () =>
+                  ref.read(backingProvider).playTone(pinned.frequencyHz(a4)),
+            ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16, top: 8),
