@@ -169,6 +169,16 @@ class Lessons {
         pattern: const [_d, null, _d, null, _d, null, _d, null],
       );
 
+  /// Two one-finger-apart shapes (Em7 ↔ Cmaj7) — chord CHANGES with almost
+  /// no left-hand work, so the right hand can focus on the beat.
+  static Lesson get twoFingerFrame => Lesson(
+        id: 'two-finger-frame',
+        name: 'Two-Finger Frame',
+        bpm: 72,
+        chords: const ['Em7', 'Cmaj7', 'Em7', 'Cmaj7'],
+        pattern: const [_d, null, _d, null, _d, null, _d, null],
+      );
+
   // ---- Intermediate ----
 
   /// The ubiquitous D-DU-UDU pop/folk pattern over a I–V–vi–IV progression.
@@ -221,6 +231,18 @@ class Lessons {
         pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
       );
 
+  /// The app's first 3/4 lesson: bass on ONE, light strums on two and three
+  /// (oom-pah-pah). Waltz time is where 4/4 habits go to be found out.
+  static Lesson get waltzTime => Lesson(
+        id: 'waltz-time',
+        name: 'Waltz Time',
+        bpm: 84,
+        difficulty: Difficulty.intermediate,
+        beatsPerBar: 3,
+        chords: const ['C', 'F', 'C', 'G'],
+        pattern: const [_d, null, _u, null, _u, null],
+      );
+
   // ---- Advanced ----
 
   /// Off-beat up-strokes — a reggae-style skank.
@@ -253,19 +275,33 @@ class Lessons {
         pattern: const [_d, null, _d, _u, _d, null, _d, _u],
       );
 
+  /// Syncopation drill: after the downbeat, everything lands on the "and"s —
+  /// the strumming hand must keep moving through the silent downstrokes.
+  static Lesson get pushAndPull => Lesson(
+        id: 'push-and-pull',
+        name: 'Push & Pull',
+        bpm: 96,
+        difficulty: Difficulty.advanced,
+        chords: const ['Am', 'G', 'F', 'E'],
+        pattern: const [_d, null, null, _u, null, _u, null, _u],
+      );
+
   static List<Lesson> get all => [
         firstStrums,
         twoChordChange,
         eighthDrive,
         fiftiesDooWop,
+        twoFingerFrame,
         downUpGroove,
         folkPattern,
         barreGroove,
         anthemDrive,
         risingMinor,
+        waltzTime,
         reggaeSkank,
         funkChop,
         bluesShuffle,
+        pushAndPull,
       ];
 
   /// Lessons of a given tier, in curriculum order.
