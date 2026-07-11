@@ -207,6 +207,7 @@
   "settingsLeftHandedHint": "Mirror chord diagrams for a left-handed guitar",
   "chordLibraryTitle": "Chord library",
   "chordLibrarySearch": "Search chords…",
+  "chordGroupFavorites": "Favorites",
   "chordGroupMajor": "Major",
   "chordGroupMinor": "Minor",
   "chordGroupSeventh": "Sevenths",

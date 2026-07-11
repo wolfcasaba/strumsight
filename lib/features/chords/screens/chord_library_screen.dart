@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/providers/backing_provider.dart';
 import '../chord_shape.dart';
+import '../providers/favorite_chords_provider.dart';
 import '../widgets/chord_diagram.dart';
 
 /// A browsable chord dictionary: every fingering we know, grouped by type, with
@@ -22,10 +23,31 @@ class ChordLibraryScreen extends ConsumerStatefulWidget {
 class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
   String _query = '';
 
+  /// One tappable diagram tile: tap plays (round 90), long-press pins into
+  /// the Favorites group (round 108).
+  Widget _tile(String label) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => ref.read(backingProvider).playChord(label),
+        onLongPress: () =>
+            ref.read(favoriteChordsProvider.notifier).toggle(label),
+        child: SizedBox(
+          width: 96,
+          child: ChordDiagram(label: label, size: 76),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final groups = _grouped(_query);
+    final q = _query.toLowerCase();
+    final favorites = ref.watch(favoriteChordsProvider);
+    final favList = [
+      for (final label in ChordShapes.allLabels)
+        if (favorites.contains(label) &&
+            (q.isEmpty || label.toLowerCase().contains(q)))
+          label,
+    ];
     return Scaffold(
       appBar: AppBar(title: Text(l10n.chordLibraryTitle)),
       body: SafeArea(
@@ -44,6 +66,25 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
                 onChanged: (v) => setState(() => _query = v.trim()),
               ),
             ),
+            if (favList.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 12, 6, 8),
+                child: Text(
+                  l10n.chordGroupFavorites.toUpperCase(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 12,
+                children: [for (final label in favList) _tile(label)],
+              ),
+            ],
             for (final entry in groups.entries) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(6, 12, 6, 8),
@@ -60,18 +101,7 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
               Wrap(
                 spacing: 8,
                 runSpacing: 12,
-                children: [
-                  for (final label in entry.value)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () =>
-                          ref.read(backingProvider).playChord(label),
-                      child: SizedBox(
-                        width: 96,
-                        child: ChordDiagram(label: label, size: 76),
-                      ),
-                    ),
-                ],
+                children: [for (final label in entry.value) _tile(label)],
               ),
             ],
           ],
