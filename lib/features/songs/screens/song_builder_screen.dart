@@ -7,6 +7,7 @@ import '../../chords/chord_shape.dart';
 import '../../live/model/strum.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
+import '../../metronome/tap_tempo.dart';
 import '../theory/strum_patterns.dart';
 import '../widgets/progression_picker.dart';
 import '../widgets/strum_pattern_editor.dart';
@@ -28,6 +29,8 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   late List<String> _chords;
   late List<StrumDirection?> _pattern;
   late int _bpm;
+  // Clamped to the slider's range so a tapped tempo is always representable.
+  final TapTempo _tapTempo = TapTempo(minBpm: 50, maxBpm: 180);
 
   // A gentle default so a brand-new song is instantly playable: downs on beats.
   static const _defaultPattern = <StrumDirection?>[
@@ -176,6 +179,16 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             _Label(l10n.songTempo),
             Row(
               children: [
+                // Tap the tempo of the track you're writing along to
+                // (round 103, same tool as the metronome's).
+                IconButton.filledTonal(
+                  tooltip: l10n.metronomeTap,
+                  icon: const Icon(Icons.touch_app_outlined),
+                  onPressed: () {
+                    final bpm = _tapTempo.tap(DateTime.now());
+                    if (bpm != null) setState(() => _bpm = bpm);
+                  },
+                ),
                 Expanded(
                   child: Slider(
                     value: _bpm.toDouble(),
