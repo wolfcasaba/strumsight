@@ -343,15 +343,18 @@ class Lessons {
     ];
     final lastBeat = events.isEmpty ? 0.0 : events.last.beat;
     // Extend to the end of the bar that CONTAINS the last event (so it fits),
-    // minimum one bar.
-    final bars = math.max(1, (lastBeat / 4).floor() + 1);
+    // minimum one bar. Bars follow the RESULT's metre (round 118): a synthetic
+    // result from a 3/4 song keeps its waltz bars; recorded clips stay 4/4.
+    final bpb = result.beatsPerBar;
+    final bars = math.max(1, (lastBeat / bpb).floor() + 1);
     return Lesson.fromEvents(
       id: 'analyze-import',
       name: name,
       bpm: bpm,
       events: events,
-      totalBeats: bars * 4.0,
+      totalBeats: bars * bpb.toDouble(),
       difficulty: Difficulty.intermediate,
+      beatsPerBar: bpb,
     );
   }
 

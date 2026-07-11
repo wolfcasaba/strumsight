@@ -30,8 +30,9 @@ class StrumReelScreen extends StatefulWidget {
 
   /// Downbeat "punch-in" (chunk 016b P7): a subtle scale kick on each bar
   /// downbeat, decaying over ~half a beat. Pure — testable and deterministic.
-  static double punchScale(double playheadBeat) {
-    final phase = playheadBeat % 4; // beats into the bar
+  /// Kicks on the LESSON's own bar (round 118 — a waltz punches every 3).
+  static double punchScale(double playheadBeat, {int beatsPerBar = 4}) {
+    final phase = playheadBeat % beatsPerBar; // beats into the bar
     return 1 + 0.05 * math.exp(-5 * phase);
   }
 
@@ -159,7 +160,8 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                   alignment: Alignment.center,
                   children: [
                     Transform.scale(
-                      scale: StrumReelScreen.punchScale(_playhead),
+                      scale: StrumReelScreen.punchScale(_playhead,
+                          beatsPerBar: _lesson.beatsPerBar),
                       child: LessonHighway(
                         lesson: _lesson,
                         playheadBeat: _playhead,

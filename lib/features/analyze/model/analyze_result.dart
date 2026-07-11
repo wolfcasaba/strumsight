@@ -64,12 +64,18 @@ class AnalyzeResult {
     required this.bpm,
     required this.chords,
     required this.strums,
+    this.beatsPerBar = 4,
   });
 
   final double durationSec;
   final double bpm;
   final List<TimelineChord> chords;
   final List<TimelineStrum> strums;
+
+  /// The clip's metre. Recorded clips can't detect one and stay 4/4; a
+  /// synthetic result from a user SONG carries the song's own (round 118 —
+  /// a shared waltz's reel looped in 4/4).
+  final int beatsPerBar;
 
   int get downCount => strums.where((s) => s.isDown).length;
   int get upCount => strums.length - downCount;
@@ -91,6 +97,7 @@ class AnalyzeResult {
         'bpm': bpm,
         'chords': chords.map((c) => c.toJson()).toList(),
         'strums': strums.map((s) => s.toJson()).toList(),
+        'bpb': beatsPerBar,
       };
 
   factory AnalyzeResult.fromJson(Map<String, dynamic> j) => AnalyzeResult(
@@ -102,5 +109,7 @@ class AnalyzeResult {
         strums: (j['strums'] as List)
             .map((e) => TimelineStrum.fromJson(e as Map<String, dynamic>))
             .toList(),
+        // Records saved before round 118 are all 4/4.
+        beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
       );
 }

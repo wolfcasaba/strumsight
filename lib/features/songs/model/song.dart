@@ -83,6 +83,7 @@ class Song {
       bpm: bpm.toDouble(),
       chords: timeline,
       strums: strums,
+      beatsPerBar: beatsPerBar,
     );
   }
 
