@@ -24,9 +24,10 @@ void main() {
     await _pump(tester);
     await tester.pump();
 
-    // The Beginner tier header + its first (unlocked) lesson are on screen…
+    // The Beginner tier header + its first (unlocked) lesson are on screen —
+    // named twice since round 93: on the Continue card AND its own tile.
     expect(find.text('BEGINNER'), findsOneWidget);
-    expect(find.text('First Strums'), findsOneWidget);
+    expect(find.text('First Strums'), findsNWidgets(2));
     // …and later lessons are locked.
     expect(find.byIcon(Icons.lock), findsWidgets);
 
@@ -56,9 +57,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The second beginner lesson is now unlocked → its name is tappable and it
-    // shows stars from the (passed) first lesson somewhere in the list.
-    expect(find.text(tier[1].name), findsOneWidget);
+    // The second beginner lesson is now unlocked → it is the Continue card's
+    // target (round 93) plus its own tile, and stars from the passed first
+    // lesson show somewhere in the list.
+    expect(find.text(tier[1].name), findsNWidgets(2));
     expect(find.byIcon(Icons.star), findsWidgets); // first lesson earned stars
   });
 }

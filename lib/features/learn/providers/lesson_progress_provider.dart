@@ -59,6 +59,16 @@ class LessonProgressController extends Notifier<Map<String, double>> {
     return isPassed(tier[i - 1].id);
   }
 
+  /// Where the player should pick up: the first unlocked, not-yet-passed
+  /// lesson in curriculum order, or null when everything is passed
+  /// (round 93 — the Learn home's "Continue" card).
+  Lesson? recommendedNext() {
+    for (final l in Lessons.all) {
+      if (!isPassed(l.id) && isUnlocked(l)) return l;
+    }
+    return null;
+  }
+
   Future<void> _persist() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();

@@ -23,6 +23,11 @@ class LessonListScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final daily = Lessons.fromDailyChallenge(DailyChallenge.forDay(today));
+    // Watch the STATE (not just the notifier) so a pass recorded behind a
+    // pushed route re-renders the unlock states and the Continue card.
+    ref.watch(lessonProgressProvider);
+    final progress = ref.watch(lessonProgressProvider.notifier);
+    final continueLesson = progress.recommendedNext();
 
     return Scaffold(
       appBar: AppBar(
@@ -44,6 +49,12 @@ class LessonListScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
+            // Where to pick up (round 93): the first unlocked, not-yet-passed
+            // lesson, one tap away. Hidden once the whole curriculum is passed.
+            if (continueLesson != null) ...[
+              _ContinueCard(lesson: continueLesson),
+              const SizedBox(height: 18),
+            ],
             _label(l10n.learnTodaysChallenge),
             _LessonTile(lesson: daily, unlocked: true, stars: 0),
             for (final tier in Difficulty.values) ...[
@@ -52,11 +63,8 @@ class LessonListScreen extends ConsumerWidget {
               for (final lesson in Lessons.byDifficulty(tier))
                 _LessonTile(
                   lesson: lesson,
-                  unlocked: ref
-                      .watch(lessonProgressProvider.notifier)
-                      .isUnlocked(lesson),
-                  stars: ref.watch(lessonProgressProvider.notifier)
-                      .stars(lesson.id),
+                  unlocked: progress.isUnlocked(lesson),
+                  stars: progress.stars(lesson.id),
                 ),
             ],
           ],
@@ -83,6 +91,57 @@ class LessonListScreen extends ConsumerWidget {
           ),
         ),
       );
+}
+
+/// The hero "pick up where you left off" card — filled with the brand colour
+/// so it reads as THE action on the screen.
+class _ContinueCard extends StatelessWidget {
+  const _ContinueCard({required this.lesson});
+
+  final Lesson lesson;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      color: AppColors.primary.withValues(alpha: 0.14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+      ),
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.primary,
+          child: Icon(Icons.play_arrow, color: Colors.white),
+        ),
+        title: Text(
+          l10n.learnContinue,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 1.2,
+            color: AppColors.primary,
+          ),
+        ),
+        subtitle: Text(
+          lesson.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Montserrat',
+            fontSize: 16,
+          ),
+        ),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => LearnScreen(lesson: lesson),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _LessonTile extends StatelessWidget {

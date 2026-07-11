@@ -187,6 +187,7 @@
   "learnKeepGoing": "Így tovább!",
   "learnDone": "Kész",
   "learnNextLesson": "Következő lecke",
+  "learnContinue": "Folytatás",
   "learnPlayAgain": "Újra",
   "learnScoreLine": "{hits}/{total} találat · legjobb kombó {combo}",
   "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } },
