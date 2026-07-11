@@ -8,6 +8,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.routers.auth import login_limiter, register_limiter
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """The throttles are process-global; without a reset, the register calls
+    the fixtures make would bleed across tests (round 120)."""
+    login_limiter.reset()
+    register_limiter.reset()
+    yield
 
 
 @pytest.fixture

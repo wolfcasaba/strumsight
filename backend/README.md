@@ -53,6 +53,15 @@ pytest                                   # in-memory SQLite, isolated per test
   convenience. **Production should use Alembic migrations** and a real Postgres.
 - **Secrets** come from env (`STRUMSIGHT_*`). The default `secret_key` is
   insecure and for local dev only — override it in production.
+- **Prod boot guards (round 120):** set `STRUMSIGHT_ENV=prod` on any public
+  deploy — the app then REFUSES to boot with the dev `secret_key` or a
+  wildcard CORS origin (`STRUMSIGHT_CORS_ORIGINS=["https://your.app"]`).
+  A misconfigured deploy fails at startup, never serves traffic.
+- **Auth throttling (round 120):** per-IP sliding-window rate limits on
+  `/auth/login` (10/min) and `/auth/register` (5/min) → `429` +
+  `Retry-After`. In-memory by design (single-instance service); swap the
+  storage if it ever scales out. The attempt is counted BEFORE the
+  credential check, so a 429 never confirms a password guess.
 - One-to-one `User` ⇄ `UserSettings`; a default profile is created at
   registration so `/settings` never 404s.
 

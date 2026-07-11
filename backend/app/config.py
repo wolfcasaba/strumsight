@@ -16,6 +16,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # "dev" boots with zero setup; "prod" refuses to boot on insecure
+    # defaults (round 120) — set STRUMSIGHT_ENV=prod on any public deploy.
+    env: str = "dev"
+
     # SECURITY: override in production. A fixed dev key keeps tokens stable
     # across reloads during local development.
     secret_key: str = "dev-insecure-change-me-in-production"

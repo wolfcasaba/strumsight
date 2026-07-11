@@ -8,14 +8,33 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
-from .config import get_settings
+from .config import Settings, get_settings
 from .database import Base, engine
 from .routers import auth, settings as settings_router
 
-settings = get_settings()
+_DEV_SECRET = Settings.model_fields["secret_key"].default
 
 
-def create_app() -> FastAPI:
+def _guard_prod(settings: Settings) -> None:
+    """A misconfigured prod deploy must fail the BOOT, not serve traffic
+    (round 120)."""
+    if settings.env != "prod":
+        return
+    if settings.secret_key == _DEV_SECRET:
+        raise RuntimeError(
+            "STRUMSIGHT_ENV=prod requires a real secret key — "
+            "set STRUMSIGHT_SECRET_KEY."
+        )
+    if "*" in settings.cors_origins:
+        raise RuntimeError(
+            "STRUMSIGHT_ENV=prod requires explicit CORS origins — "
+            "set STRUMSIGHT_CORS_ORIGINS (wildcard refused)."
+        )
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    _guard_prod(settings)
     # Dev convenience: create tables on boot. Production should use migrations
     # (Alembic) instead — see backend/README.md.
     Base.metadata.create_all(bind=engine)
