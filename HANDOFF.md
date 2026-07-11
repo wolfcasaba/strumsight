@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-11** (round 112).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-11** (round 113).
 
 > 🧭 **Strategy (2026-07-10 research):** a 4-agent Hermes sweep produced the plan to beat Yousician —
 > RAG chunks **015** (strum-direction ML), **016** (pitch/chord SOTA + priors), **016b** (animation/
@@ -115,10 +115,15 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   1. **Real-guitar APK test** with build-81+ (tag pushed; artifact on CI run 29117048445): detuned
      chords, calibration flow feel (incl. the input-vs-output latency semantics — if PERFECTs feel
      off, split the calibration), the 19:00 nudge firing, reel screen-recording.
-  2. **Publish the release** — the gh PAT lacks Contents:write for the releases API; publish from
-     the phone session (its auth created build-64/66) or update the PAT.
+  2. ~~**Publish the release**~~ — ✅ UNBLOCKED 2026-07-11: user supplied a fine-grained PAT with
+     **Contents: Read and write** and **build-112** was published (round 112 APK, 60 MB) →
+     https://github.com/wolfcasaba/strumsight/releases/download/build-112/app-release.apk .
+     NOTE: the *session's* default gh token still lacks Contents:write — future rounds must be
+     handed a write-scoped token to publish. See [[apk-delivery]].
   3. **PAT + Workflows:R+W** — the CI hard-gate change (red suite ⇒ no green APK) sits uncommitted
-     in the working tree until the token can push workflow files.
+     in the working tree until the token can push workflow files. Retried 2026-07-11 15:26 after
+     the release-PAT appeared → the *git-push* token still refuses workflow files ("without
+     `workflow` scope"); commit reverted (soft), change kept in tree.
   4. **Hermes research** — the 6-thread quality-bar assignment sits in the user's Telegram chat
      (the bridge writes AS Hermes, so no agent processes it); forward it or give a proper target.
 - **⚠️ Login / account backend is NOT hosted** — `ApiConfig.baseUrl` defaults to `10.0.2.2:8000`
@@ -197,7 +202,8 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
-| 112 | (this) | 475+14 | **§3 NEXT refreshed to the post-sprint truth (docs-only).** After 24 chained rounds today the offline backlog is DRAINED — the honest state: every remaining high-value item needs input (real-guitar APK feedback → device-tuning rounds; Hermes reply → polish backlog; token/release actions → publish + CI gate). The loop drops to a slower maintenance heartbeat per [[rounds-no-long-waits]]'s blocked-on-user exception; ANY landing input resumes full tempo instantly. |
+| 113 | (this) | 475+14 | **Release published — user action #2 CLOSED (docs-only).** The phone session, handed a write-scoped PAT by the user, published the **build-112 release** (APK attached, marked Latest) — so `ShareContent.installUrl` (`releases/latest`) now lands on the newest build with zero code change. Workflow hard-gate push retried on the news → still refused (`workflow` scope is a *separate* grant from Contents:write); commit soft-reverted, change stays in tree. Cross-session lesson: the phone session edits the SAME working tree — inspect unexpected dirty files before assuming corruption, and fold good edits into the round commit instead of clobbering. |
+| 112 | 95aedfd | 475+14 | **§3 NEXT refreshed to the post-sprint truth (docs-only).** After 24 chained rounds today the offline backlog is DRAINED — the honest state: every remaining high-value item needs input (real-guitar APK feedback → device-tuning rounds; Hermes reply → polish backlog; token/release actions → publish + CI gate). The loop drops to a slower maintenance heartbeat per [[rounds-no-long-waits]]'s blocked-on-user exception; ANY landing input resumes full tempo instantly. |
 | 111 | `391fd8c` | 475+14 | **Count-in follows the metre (TDD) — the waltz surfaced it.** `_countInBeats` was a fixed 4: counting "1-2-3-4" into a 3/4 lesson is musically wrong and misaligns the player's inner clock with the downbeat. Now one full bar of the lesson's own metre (`_lesson.beatsPerBar` — 4/4 lessons unchanged). The highway's bar grid already used beatsPerBar (r64); only the count-in lagged. RED pinned the bug precisely: at 3.2 beats the old code still showed "4" while the new one is already playing. 1 test; 475 green. |
 | 110 | `31fbe3e` | 474+14 | **Curriculum growth — 15 lessons, incl. the app's first 3/4 (TDD).** One per tier: *Two-Finger Frame* (beginner — Em7↔Cmaj7, near-zero left-hand work so the right hand owns the beat), **Waltz Time** (intermediate — 3/4, bass-down on ONE + up-strums on two/three; the `beatsPerBar` param finally gets real curriculum use: 6-slot pattern, 3-beat bars, tests pin bar-2 at beat 3.0 and a down-bass opening every bar), *Push & Pull* (advanced — everything after the downbeat lands on "and"s). The existing diagram-coverage guard auto-verified every new chord has a shape; curriculum unlock order extends per-tier. 3 tests; 474 green. |
 | 109 | `09557fd` | 471+14 | **Rig sweep for r106/r108 (no code).** r108 favourites verified LIVE: long-press on the C diagram → FAVORITES group appears on top with the pinned copy, C stays in MAJOR. **New rig technique:** synthetic JS pointer events (even full pointerdown→650ms→pointerup) are IGNORED by Flutter web's gesture arena — a long-press needs TRUSTED input: `browser_run_code_unsafe` with `page.mouse.down() → waitForTimeout(800) → up()` at the semantics-node rect. r106 rename: web seeding of `flutter.library_sessions` via localStorage did NOT hydrate the library (empty state persisted) — abandoned; the r106 widget test already drives the real dialog→provider→AppBar flow end-to-end, so rig adds nothing there. |
