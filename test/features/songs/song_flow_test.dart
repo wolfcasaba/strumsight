@@ -169,6 +169,8 @@ void main() {
       (tester) async {
     List<StrumDirection?>? emitted;
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: StrumPatternEditor(
           pattern: List<StrumDirection?>.filled(8, null),

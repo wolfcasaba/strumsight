@@ -144,5 +144,31 @@ void main() {
           reason: 'a 3/4 bar has no fourth beat');
       expect(find.text('&'), findsNWidgets(3));
     });
+
+    testWidgets('each slot is a screen-reader button announcing beat + state '
+        '(round 125 a11y)', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: StrumPatternEditor(
+            pattern: const [_d, _x, _u, _x, _u, _x],
+            onChanged: (_) {},
+          ),
+        ),
+      ));
+
+      // Downbeat 1 = down-strum; the off-beat after 1 = a rest; beat 2 = up.
+      expect(find.bySemanticsLabel('Beat 1, Down. Tap to change.'),
+          findsOneWidget);
+      expect(find.bySemanticsLabel('Beat 1 and, Rest. Tap to change.'),
+          findsOneWidget);
+      expect(find.bySemanticsLabel('Beat 2, Up. Tap to change.'),
+          findsOneWidget);
+      // The raw "&" glyph must NOT leak into the a11y tree (excludeSemantics).
+      expect(find.bySemanticsLabel('&'), findsNothing);
+      handle.dispose();
+    });
   });
 }
