@@ -7,10 +7,16 @@ enum MicStart { ok, denied, failed }
 /// Records the microphone into an in-memory PCM buffer for offline analysis.
 /// Reuses the same [MicCapture] the Live/Tuner engines use.
 class ClipRecorder {
+  /// [ensurePermission] is injectable for tests; defaults to the real check.
+  ClipRecorder({Future<bool> Function()? ensurePermission})
+      : _ensurePermission = ensurePermission ?? MicCapture.ensurePermission;
+
+  final Future<bool> Function() _ensurePermission;
   final MicCapture _mic = MicCapture();
   final List<double> _buffer = [];
   int _sampleRate = 44100;
   bool _recording = false;
+  Future<MicStart>? _inFlight;
 
   int get sampleRate => _sampleRate;
   int get sampleCount => _buffer.length;
@@ -22,10 +28,17 @@ class ClipRecorder {
   /// Begin recording. A start FAILURE (busy mic / platform error) surfaces
   /// as [MicStart.failed] instead of throwing out of the button handler —
   /// and must never leave [_recording] stuck true (round 99, parity with the
-  /// Live round-13 / Tuner round-68 fixes).
-  Future<MicStart> start() async {
-    if (_recording) return MicStart.ok;
-    if (!await MicCapture.ensurePermission()) return MicStart.denied;
+  /// Live round-13 / Tuner round-68 fixes). SINGLE-FLIGHT: a second call
+  /// while a start is awaiting joins the in-flight attempt instead of
+  /// running a second mic start that would orphan the first subscription
+  /// (round 101, review NOTE).
+  Future<MicStart> start() {
+    if (_recording) return Future.value(MicStart.ok);
+    return _inFlight ??= _doStart().whenComplete(() => _inFlight = null);
+  }
+
+  Future<MicStart> _doStart() async {
+    if (!await _ensurePermission()) return MicStart.denied;
     _buffer.clear();
     try {
       _sampleRate = await _mic.start((chunk) {

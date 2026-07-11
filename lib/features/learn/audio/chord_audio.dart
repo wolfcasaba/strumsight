@@ -81,8 +81,16 @@ class ChordAudio {
 /// Plays chord pads for jam-mode backing. Fire-and-forget (a no-op where the
 /// platform channel is absent, e.g. tests); caches synthesised pads per chord.
 class Backing {
+  /// Cache bound: beyond this the least-recently-used pad is evicted
+  /// (round 101 — every distinct A4 × tone used to add a ~130 KB WAV
+  /// forever).
+  static const int maxCachedPads = 24;
+
   final AudioPlayer _player = AudioPlayer();
   final Map<String, Uint8List> _cache = {};
+
+  /// Current number of cached pads (test surface for the bound).
+  int get cacheSize => _cache.length;
 
   Future<void> playChord(String label) async {
     final freqs = ChordAudio.frequencies(label);
@@ -99,7 +107,10 @@ class Backing {
   }
 
   void _play(String cacheKey, Uint8List Function() build) {
-    final wav = _cache.putIfAbsent(cacheKey, build);
+    // LRU: re-insert on hit so the map's iteration order is recency.
+    final wav = _cache.remove(cacheKey) ?? build();
+    _cache[cacheKey] = wav;
+    if (_cache.length > maxCachedPads) _cache.remove(_cache.keys.first);
     try {
       _player.stop().ignore();
       _player.play(BytesSource(wav)).ignore();
