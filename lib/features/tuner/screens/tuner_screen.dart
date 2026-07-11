@@ -12,7 +12,9 @@ import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/guitar_strings.dart';
 import '../model/in_tune_lock.dart';
 import '../model/tuner_reading.dart';
+import '../model/tuning.dart';
 import '../providers/tuner_providers.dart';
+import '../providers/tuner_tuning_provider.dart';
 import '../widgets/cents_gauge.dart';
 
 /// A simple chromatic tuner, pushed full-screen from the Live screen.
@@ -47,9 +49,49 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     final reading = readingAsync.asData?.value ?? TunerReading.silent;
     final a4 = ref.watch(tuningReferenceProvider);
     final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
+    final tuning = ref.watch(tunerTuningProvider);
+    String tuningName(Tuning t) => switch (t.id) {
+          'dropD' => l10n.tunerTuningDropD,
+          'halfStepDown' => l10n.tunerTuningHalfStepDown,
+          'dadgad' => l10n.tunerTuningDadgad,
+          _ => l10n.tunerTuningStandard,
+        };
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.tunerTitle)),
+      appBar: AppBar(
+        title: Text(l10n.tunerTitle),
+        actions: [
+          // Alternate tunings (round 89): the chips + nearest-string mapping
+          // follow the selection, so a drop-D player tunes to D2, not E2.
+          PopupMenuButton<Tuning>(
+            tooltip: l10n.tunerTuningLabel,
+            onSelected: (t) =>
+                ref.read(tunerTuningProvider.notifier).set(t),
+            itemBuilder: (context) => [
+              for (final t in Tunings.all)
+                CheckedPopupMenuItem(
+                  value: t,
+                  checked: identical(t, tuning),
+                  child: Text(tuningName(t)),
+                ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(tuningName(tuning),
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  const Icon(Icons.arrow_drop_down, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // Mic problems must never be a silent idle (parity with Live,
@@ -126,13 +168,15 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
               ),
             ),
           ),
-          // Which string is being tuned (round 84): the six standard-tuning
+          // Which string is being tuned (round 84): the selected tuning's
           // chips; the nearest one lights copper, green once in tune.
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: _StringChips(
+              strings: tuning.strings,
               active: reading.hasSignal
-                  ? GuitarStrings.nearest(reading.frequencyHz, a4: a4)
+                  ? GuitarStrings.nearest(reading.frequencyHz,
+                      a4: a4, strings: tuning.strings)
                   : null,
               inTune: reading.inTune,
             ),
@@ -159,11 +203,13 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
 }
 
 
-/// The E-A-D-G-B-E row. Shape + colour encode state (never hue alone):
-/// the active chip is filled and enlarged, in-tune adds a check.
+/// The string row of the selected tuning. Shape + colour encode state (never
+/// hue alone): the active chip is filled and enlarged, in-tune adds a check.
 class _StringChips extends StatelessWidget {
-  const _StringChips({required this.active, required this.inTune});
+  const _StringChips(
+      {required this.strings, required this.active, required this.inTune});
 
+  final List<GuitarString> strings;
   final GuitarString? active;
   final bool inTune;
 
@@ -173,7 +219,7 @@ class _StringChips extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (final s in GuitarStrings.standard)
+        for (final s in strings)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: AnimatedContainer(

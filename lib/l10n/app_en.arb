@@ -71,6 +71,11 @@
       "hz": { "type": "int" }
     }
   },
+  "tunerTuningLabel": "Tuning",
+  "tunerTuningStandard": "Standard",
+  "tunerTuningDropD": "Drop D",
+  "tunerTuningHalfStepDown": "Half-step down",
+  "tunerTuningDadgad": "DADGAD",
   "tunerCentsSharp": "{cents} cents sharp",
   "@tunerCentsSharp": {
     "placeholders": {
