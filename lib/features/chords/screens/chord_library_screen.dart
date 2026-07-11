@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../learn/providers/backing_provider.dart';
 import '../chord_shape.dart';
 import '../widgets/chord_diagram.dart';
 
 /// A browsable chord dictionary: every fingering we know, grouped by type, with
 /// a search box. A handy reference tool for learners (RAG chunk 014).
-class ChordLibraryScreen extends StatefulWidget {
+/// Tapping a chord PLAYS it (round 90) — the reference teaches sound, not
+/// just shape.
+class ChordLibraryScreen extends ConsumerStatefulWidget {
   const ChordLibraryScreen({super.key});
 
   @override
-  State<ChordLibraryScreen> createState() => _ChordLibraryScreenState();
+  ConsumerState<ChordLibraryScreen> createState() =>
+      _ChordLibraryScreenState();
 }
 
-class _ChordLibraryScreenState extends State<ChordLibraryScreen> {
+class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
   String _query = '';
 
   @override
@@ -57,9 +62,14 @@ class _ChordLibraryScreenState extends State<ChordLibraryScreen> {
                 runSpacing: 12,
                 children: [
                   for (final label in entry.value)
-                    SizedBox(
-                      width: 96,
-                      child: ChordDiagram(label: label, size: 76),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () =>
+                          ref.read(backingProvider).playChord(label),
+                      child: SizedBox(
+                        width: 96,
+                        child: ChordDiagram(label: label, size: 76),
+                      ),
                     ),
                 ],
               ),

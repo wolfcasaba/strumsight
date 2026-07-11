@@ -26,6 +26,17 @@ void main() {
       expect(ChordAudio.frequencies('Zz9'), isNull);
       expect(ChordAudio.frequencies(''), isNull);
     });
+
+    test('7sus4 keeps the suspended fourth, not a major third (round 90)',
+        () {
+      // A7sus4 is in the library; before round 90 it fell back to a plain
+      // major triad. The 2nd tone must be the FOURTH (5 semitones up).
+      final f = ChordAudio.frequencies('A7sus4')!;
+      expect(f.length, 4);
+      final root = f[0];
+      expect(f[1] / root, closeTo(1.3348, 0.002)); // 2^(5/12)
+      expect(f[3] / root, closeTo(1.7818, 0.002)); // 2^(10/12), the b7
+    });
   });
 
   test('padWav produces a well-formed, non-silent WAV', () {
