@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// A horizontal −50..+50 cents gauge with a moving marker. Turns green when
 /// the note is in tune.
@@ -22,17 +23,29 @@ class CentsGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return SizedBox(
-      width: width,
-      height: height,
-      child: CustomPaint(
-        painter: _GaugePainter(
-          cents: cents.clamp(-50.0, 50.0).toDouble(),
-          marker: inTune
-              ? AppColors.successOn(Theme.of(context).brightness)
-              : AppColors.primary,
-          track: palette.track,
-          tick: palette.muted,
+    // The painter is invisible to a screen reader — speak the same fact the
+    // triangle shows: how far off and which way (round 88).
+    final l10n = AppLocalizations.of(context);
+    final rounded = cents.abs().round();
+    final label = inTune
+        ? l10n.tunerInTune
+        : (cents >= 0
+            ? l10n.tunerCentsSharp(rounded)
+            : l10n.tunerCentsFlat(rounded));
+    return Semantics(
+      label: label,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: CustomPaint(
+          painter: _GaugePainter(
+            cents: cents.clamp(-50.0, 50.0).toDouble(),
+            marker: inTune
+                ? AppColors.successOn(Theme.of(context).brightness)
+                : AppColors.primary,
+            track: palette.track,
+            tick: palette.muted,
+          ),
         ),
       ),
     );

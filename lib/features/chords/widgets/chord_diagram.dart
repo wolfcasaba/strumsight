@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../settings/providers/left_handed_provider.dart';
 import '../chord_shape.dart';
 
@@ -53,19 +54,33 @@ class ChordDiagram extends ConsumerWidget {
         ],
       );
     }
-    if (!showLabel) return grid;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                height: 1.1)),
-        const SizedBox(height: 2),
-        grid,
-      ],
+    final content = showLabel
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontFamily: 'Montserrat',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      height: 1.1)),
+              const SizedBox(height: 2),
+              grid,
+            ],
+          )
+        : grid;
+    // Painter-only content is invisible to a screen reader — speak the
+    // fingering in tab notation, always low-E → high-E even when the drawing
+    // is mirrored for left-handed players (round 88).
+    final fingering =
+        shape.frets.map((f) => f < 0 ? 'x' : '$f').join(' ');
+    return Semantics(
+      label: AppLocalizations.of(context).chordDiagramSemantics(
+        label,
+        fingering,
+      ),
+      excludeSemantics: true,
+      child: content,
     );
   }
 }

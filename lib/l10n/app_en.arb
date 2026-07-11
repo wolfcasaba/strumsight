@@ -71,6 +71,25 @@
       "hz": { "type": "int" }
     }
   },
+  "tunerCentsSharp": "{cents} cents sharp",
+  "@tunerCentsSharp": {
+    "placeholders": {
+      "cents": { "type": "int" }
+    }
+  },
+  "tunerCentsFlat": "{cents} cents flat",
+  "@tunerCentsFlat": {
+    "placeholders": {
+      "cents": { "type": "int" }
+    }
+  },
+  "chordDiagramSemantics": "{chord} chord diagram, fingering: {fingering}",
+  "@chordDiagramSemantics": {
+    "placeholders": {
+      "chord": { "type": "String" },
+      "fingering": { "type": "String" }
+    }
+  },
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
   "settingsSystemLanguage": "System default",

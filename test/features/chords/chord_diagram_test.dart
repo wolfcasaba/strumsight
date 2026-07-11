@@ -5,6 +5,7 @@ import 'package:music_theory/features/chords/chord_shape.dart';
 import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/settings/providers/left_handed_provider.dart';
+import 'package:music_theory/l10n/app_localizations.dart';
 
 Future<void> pumpDiagram(WidgetTester tester, String label,
         {bool leftHanded = false}) =>
@@ -14,6 +15,8 @@ Future<void> pumpDiagram(WidgetTester tester, String label,
           leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
       ],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(body: Center(child: ChordDiagram(label: label))),
       ),
     ));
