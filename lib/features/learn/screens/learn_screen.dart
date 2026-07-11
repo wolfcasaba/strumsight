@@ -161,7 +161,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _play() {
     if (_playing) return;
     // Jam mode plays a chord backing and turns scoring OFF, so the mic never
-    // hears (and grades) the app's own accompaniment.
+    // hears (and grades) the app's own accompaniment. Closing the frame
+    // subscription actually releases the mic (autoDispose) — round 100.
+    if (_jam) {
+      _frameSub?.close();
+      _frameSub = null;
+    }
     if (!_jam) {
       _scorer ??= LessonScorer(
         _lesson,
@@ -188,6 +193,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _lastSeq = 0;
     if (_jam) {
       _scorer = null;
+      // Release the mic — jam must not idle behind the backing (round 100).
+      _frameSub?.close();
+      _frameSub = null;
     } else {
       _scorer = LessonScorer(
         _lesson,
@@ -253,8 +261,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     final passed = _scorer?.passed ?? false;
     // The finish→next retention loop (round 92): a pass offers the curriculum
     // successor; a fail keeps the focus on "Play again". One-off lessons
-    // (daily challenge, Analyze imports) have no successor.
-    final next = passed ? Lessons.nextAfter(widget.lesson.id) : null;
+    // (daily challenge, Analyze imports) have no successor. Easy-mode passes
+    // don't advance the curriculum (they don't record progress either —
+    // round 100 review), so they get no CTA.
+    final next =
+        passed && !_easy ? Lessons.nextAfter(widget.lesson.id) : null;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(

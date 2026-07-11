@@ -39,6 +39,7 @@ void main() {
 
   final sizes = <String, Size>{
     'small portrait (320×568)': const Size(320, 568),
+    'normal portrait (412×915)': const Size(412, 915),
     'landscape (915×412)': const Size(915, 412),
   };
 

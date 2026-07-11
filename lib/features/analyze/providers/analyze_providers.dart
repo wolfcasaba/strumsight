@@ -18,8 +18,8 @@ class AnalyzeState {
   final AnalyzePhase phase;
   final AnalyzeResult? result;
 
-  AnalyzeState copyWith({AnalyzePhase? phase, AnalyzeResult? result}) =>
-      AnalyzeState(phase: phase ?? this.phase, result: result ?? this.result);
+  // No copyWith on purpose: it could never CLEAR `result`, silently carrying
+  // a stale run forward — every transition constructs its state explicitly.
 
   static const initial = AnalyzeState();
 }
