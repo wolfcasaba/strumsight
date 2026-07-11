@@ -9,7 +9,7 @@ import '../engine/clip_analyzer.dart';
 import '../engine/clip_recorder.dart';
 import '../model/analyze_result.dart';
 
-enum AnalyzePhase { idle, recording, analyzing, done, micDenied }
+enum AnalyzePhase { idle, recording, analyzing, done, micDenied, micError }
 
 @immutable
 class AnalyzeState {
@@ -41,12 +41,11 @@ class AnalyzeController extends Notifier<AnalyzeState> {
 
   Future<void> startRecording() async {
     if (state.phase == AnalyzePhase.recording) return;
-    final ok = await _recorder.start();
-    if (!ok) {
-      state = const AnalyzeState(phase: AnalyzePhase.micDenied);
-      return;
-    }
-    state = const AnalyzeState(phase: AnalyzePhase.recording);
+    state = switch (await _recorder.start()) {
+      MicStart.ok => const AnalyzeState(phase: AnalyzePhase.recording),
+      MicStart.denied => const AnalyzeState(phase: AnalyzePhase.micDenied),
+      MicStart.failed => const AnalyzeState(phase: AnalyzePhase.micError),
+    };
   }
 
   Future<void> stopAndAnalyze() async {

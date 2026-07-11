@@ -165,6 +165,29 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ],
           ),
         );
+      case AnalyzePhase.micError:
+        // A busy mic is NOT a permission problem: no settings deep-link,
+        // just the failure copy — Retry lives in the big control below
+        // (parity with Live r13 / Tuner r68).
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.mic_off_outlined, size: 56, color: palette.muted),
+              const SizedBox(height: 16),
+              Text(
+                l10n.micErrorBody,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  height: 1.45,
+                  color: palette.muted,
+                ),
+              ),
+            ],
+          ),
+        );
       case AnalyzePhase.analyzing:
         return Center(
           child: Column(
@@ -206,6 +229,16 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
         return _BigButton(
           label: l10n.analyzeRecord,
           icon: Icons.fiber_manual_record,
+          color: AppColors.primary,
+          onTap: () {
+            _saved = false;
+            controller.startRecording();
+          },
+        );
+      case AnalyzePhase.micError:
+        return _BigButton(
+          label: l10n.micErrorAction,
+          icon: Icons.refresh,
           color: AppColors.primary,
           onTap: () {
             _saved = false;
