@@ -76,6 +76,11 @@ class Lesson {
     List<StrumDirection?> pattern,
     int beatsPerBar,
   ) {
+    // Two slots per beat (8ths): a mismatched pattern would silently spill
+    // its tail into the NEXT bar, overlapping the following chord (round 114).
+    assert(pattern.length == beatsPerBar * 2,
+        'pattern has ${pattern.length} slots but $beatsPerBar beats/bar '
+        'needs ${beatsPerBar * 2}');
     final out = <LessonEvent>[];
     for (var bar = 0; bar < chords.length; bar++) {
       for (var slot = 0; slot < pattern.length; slot++) {

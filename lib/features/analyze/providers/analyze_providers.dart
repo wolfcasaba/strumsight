@@ -33,7 +33,17 @@ AnalyzeResult _runAnalysis((List<double>, int) args) =>
 
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
-  final ClipRecorder _recorder = ClipRecorder();
+  /// [recorder] is injectable for tests; defaults to the real one.
+  AnalyzeController({ClipRecorder? recorder})
+      : _recorder = recorder ?? ClipRecorder();
+
+  final ClipRecorder _recorder;
+
+  /// Whether the Analyze screen is on stage. The round-102 dispose-time
+  /// cancel only covered a take already in the `recording` phase; a tab
+  /// switch DURING the mic-start handshake slipped past it and the landing
+  /// start went live behind another tab (round 114 — hot-mic leak).
+  bool _screenAttached = false;
 
   @override
   AnalyzeState build() => AnalyzeState.initial;
@@ -41,9 +51,32 @@ class AnalyzeController extends Notifier<AnalyzeState> {
   /// The recorder, exposed so the UI can poll elapsed time while recording.
   ClipRecorder get recorder => _recorder;
 
+  /// Called from the screen's initState.
+  void screenAttached() => _screenAttached = true;
+
+  /// Called synchronously from the screen's dispose — touches no provider
+  /// state itself; the recording cancel is deferred (the tree is finalizing)
+  /// and an in-flight start is aborted by [startRecording] when it lands.
+  void screenDetached() {
+    _screenAttached = false;
+    if (state.phase == AnalyzePhase.recording) {
+      Future(cancelRecording);
+    }
+  }
+
   Future<void> startRecording() async {
     if (state.phase == AnalyzePhase.recording) return;
-    state = switch (await _recorder.start()) {
+    final started = await _recorder.start();
+    if (!_screenAttached) {
+      // The screen left during the mic handshake — release the take instead
+      // of recording invisibly behind another tab (round 114).
+      if (started == MicStart.ok) {
+        unawaited(_recorder.stop());
+        state = AnalyzeState.initial;
+      }
+      return;
+    }
+    state = switch (started) {
       MicStart.ok => const AnalyzeState(phase: AnalyzePhase.recording),
       MicStart.denied => const AnalyzeState(phase: AnalyzePhase.micDenied),
       MicStart.failed => const AnalyzeState(phase: AnalyzePhase.micError),
@@ -52,9 +85,12 @@ class AnalyzeController extends Notifier<AnalyzeState> {
 
   Future<void> stopAndAnalyze() async {
     if (state.phase != AnalyzePhase.recording) return;
+    // Leave `recording` BEFORE the stop-flush await: a deferred
+    // cancelRecording firing in that window would double-stop the mic and
+    // reset the state under the analysis (round 114, review R2).
+    state = const AnalyzeState(phase: AnalyzePhase.analyzing);
     final pcm = await _recorder.stop();
     final sr = _recorder.sampleRate;
-    state = const AnalyzeState(phase: AnalyzePhase.analyzing);
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
     final result = await compute(_runAnalysis, (pcm, sr));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
@@ -85,3 +121,5 @@ class AnalyzeController extends Notifier<AnalyzeState> {
 
 final analyzeControllerProvider =
     NotifierProvider<AnalyzeController, AnalyzeState>(AnalyzeController.new);
+// NOTE: `AnalyzeController.new` still works — the constructor's only
+// parameter is optional; tests inject a fake recorder via overrideWith.

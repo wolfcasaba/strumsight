@@ -11,6 +11,52 @@ import '../../share/screens/share_preview_screen.dart';
 import '../model/analyzed_session.dart';
 import '../providers/library_providers.dart';
 
+/// Owns the text controller so it is disposed with the dialog — the previous
+/// per-call `TextEditingController` was never disposed (round 114, review N1).
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.libraryRenameTitle),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (v) => Navigator.of(context).pop(v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(l10n.songSave),
+        ),
+      ],
+    );
+  }
+}
+
 /// Full-screen view of a saved session's chord + strum timeline.
 class SessionDetailScreen extends ConsumerWidget {
   const SessionDetailScreen({super.key, required this.session});
@@ -19,29 +65,9 @@ class SessionDetailScreen extends ConsumerWidget {
 
   Future<void> _rename(
       BuildContext context, WidgetRef ref, AnalyzedSession live) async {
-    final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(text: live.title);
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.libraryRenameTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: Text(l10n.songSave),
-          ),
-        ],
-      ),
+      builder: (_) => _RenameDialog(initial: live.title),
     );
     if (name != null) {
       await ref.read(libraryProvider.notifier).rename(live.id, name);
@@ -60,7 +86,12 @@ class SessionDetailScreen extends ConsumerWidget {
         session;
     return Scaffold(
       appBar: AppBar(
-        title: Text(Chord.transposeSummary(live.title, -capo)),
+        // A user-chosen name renders verbatim; only auto chord-summary titles
+        // go through the capo transposer (round 114 — "Campfire riff" at capo
+        // 2 rendered as "A#ampfire riff").
+        title: Text(live.customTitle
+            ? live.title
+            : Chord.transposeSummary(live.title, -capo)),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),

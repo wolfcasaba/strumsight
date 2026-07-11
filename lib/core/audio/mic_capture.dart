@@ -32,7 +32,11 @@ class MicCapture {
 
   /// Stop streaming and release the microphone.
   Future<void> stop() async {
-    await _sub?.cancel();
-    _sub = null;
+    // Only null the field if it still points at the subscription WE are
+    // cancelling — a start() racing this await may already have installed a
+    // new one, and blindly nulling would orphan it live (round 114).
+    final sub = _sub;
+    await sub?.cancel();
+    if (identical(_sub, sub)) _sub = null;
   }
 }

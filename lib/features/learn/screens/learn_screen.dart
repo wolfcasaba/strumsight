@@ -60,7 +60,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   /// The lesson actually being played — simplified to on-beat down-strokes in
   /// Easy mode. Same id/tempo/length, so timing + scoring stay consistent.
-  Lesson get _lesson => _easy ? widget.lesson.simplified : widget.lesson;
+  /// Cached: `_lesson` is read on every ticker frame, and `simplified`
+  /// rebuilds its event list on each call (round 114).
+  Lesson? _simplifiedCache;
+  Lesson get _lesson => _easy
+      ? (_simplifiedCache ??= widget.lesson.simplified)
+      : widget.lesson;
 
   /// Effective tempo after the practice-speed multiplier.
   double get _bpm => _lesson.bpm * _speed;

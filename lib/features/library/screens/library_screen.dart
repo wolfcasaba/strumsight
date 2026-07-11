@@ -150,7 +150,11 @@ class _SessionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      Chord.transposeSummary(session.title, -capo),
+                      // Personal names render verbatim; only auto chord
+                      // summaries are capo-transposed (round 114).
+                      session.customTitle
+                          ? session.title
+                          : Chord.transposeSummary(session.title, -capo),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
