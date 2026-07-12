@@ -241,6 +241,8 @@
   "progressSessions": "Sessions",
   "progressStreak": "Day streak",
   "progressThisWeek": "This week (minutes)",
+  "progressBarSemantic": "{weekday}: {count} minutes practised",
+  "@progressBarSemantic": { "placeholders": { "weekday": { "type": "String" }, "count": { "type": "int" } } },
   "progressBySource": "Where you practise",
   "progressStrumAccuracyTitle": "Strum-direction accuracy",
   "progressStrumAccuracyHint": "The one thing no other app scores — your ↓/↑ hand.",

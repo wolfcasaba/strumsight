@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../model/practice_stats.dart';
 
 /// A dependency-light weekly practice bar chart (hand-drawn, so it can't overflow
@@ -72,9 +73,15 @@ class _Bar extends StatelessWidget {
             ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.25)
             : AppColors.primary.withValues(alpha: 0.45);
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
+    // A screen reader would otherwise hear disconnected "12" / "M" fragments
+    // with no unit or day (round 127); speak the whole bar as one fact.
+    return Semantics(
+      label: AppLocalizations.of(context)
+          .progressBarSemantic(_weekdayFull(day.day, localeName), minutes),
+      excludeSemantics: true,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
         Text(
           minutes > 0 ? '$minutes' : '',
           style: TextStyle(
@@ -92,28 +99,38 @@ class _Bar extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          _weekdayLetter(day.day, localeName),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-            color: isToday
-                ? AppColors.primary
-                : Theme.of(context).textTheme.bodySmall?.color,
+          const SizedBox(height: 6),
+          Text(
+            _weekdayLetter(day.day, localeName),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+              color: isToday
+                  ? AppColors.primary
+                  : Theme.of(context).textTheme.bodySmall?.color,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  /// Calendar-correct localized single-letter weekday for an epoch day, derived
-  /// purely from the integer (epoch day 0 = 1970-01-01 = Thursday) so no timezone
-  /// reconstruction can shift the label. 2024-01-01 is a Monday anchor.
-  static String _weekdayLetter(int epochDay, String localeName) {
+  /// The reference [DateTime] whose weekday matches [epochDay]. Derived purely
+  /// from the integer (epoch day 0 = 1970-01-01 = Thursday) so no timezone
+  /// reconstruction can shift it. 2024-01-01 is a Monday anchor.
+  static DateTime _weekdayRef(int epochDay) {
     final mon0 = ((epochDay % 7) + 3) % 7; // 0 = Monday
-    final ref = DateTime(2024, 1, 1).add(Duration(days: mon0));
-    final name = DateFormat.E(localeName).format(ref);
+    return DateTime(2024, 1, 1).add(Duration(days: mon0));
+  }
+
+  /// Calendar-correct localized single-letter weekday (the visual label).
+  static String _weekdayLetter(int epochDay, String localeName) {
+    final name = DateFormat.E(localeName).format(_weekdayRef(epochDay));
     return name.isEmpty ? '' : name.substring(0, 1);
   }
+
+  /// The full localized weekday name — spoken to a screen reader (round 127),
+  /// where a bare letter would be ambiguous.
+  static String _weekdayFull(int epochDay, String localeName) =>
+      DateFormat.EEEE(localeName).format(_weekdayRef(epochDay));
 }

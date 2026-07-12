@@ -204,6 +204,8 @@
   "progressSessions": "Alkalom",
   "progressStreak": "Napi sorozat",
   "progressThisWeek": "Ezen a héten (perc)",
+  "progressBarSemantic": "{weekday}: {count} perc gyakorlás",
+  "@progressBarSemantic": { "placeholders": { "weekday": { "type": "String" }, "count": { "type": "int" } } },
   "progressBySource": "Hol gyakorolsz",
   "progressStrumAccuracyTitle": "Pengetésirány-pontosság",
   "progressStrumAccuracyHint": "Amit egyetlen más app sem mér — a ↓/↑ pengetésirányod.",
