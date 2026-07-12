@@ -93,6 +93,11 @@ audio is usually the largest on Android. Approach:
   done: the 48 kHz low-latency audio path + pre-scheduled beat audio. True
   end-to-end latency numbers need the real-guitar APK test.
 - **P4** Progressive strum density (Dynamic Difficulty). *medium.*
+  ✅ r63 static half (Easy toggle) + **r154 progressive half**: `LessonScorer.failStreak`
+  (consecutive miss/wrong since the last hit; one hit resets) → at 4 the HUD shows a
+  QUIET offer row "try Easy mode?" (switch = toggle + restart, never forced); the
+  reverse offer ("try the full lesson?") appears in Easy at ≥90 % accuracy over ≥8
+  resolved events. True per-event density morphing (Rocksmith-style) stays future work.
 - **P5** Vanishing-point perspective + radial-shader glow (screenshot/reel-worthy). *medium.*
 - **P6** Signed timing + wrong-direction feedback vocabulary. *low–medium.*
 - **P7** Reel viral polish (branded end-card, downbeat punch-in, 1-tap share) once P0/P5 land. *low.*

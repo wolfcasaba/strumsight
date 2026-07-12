@@ -454,5 +454,8 @@
   "streakSkillStrums": "Strums played",
   "streakSkillWeekMinutes": "This week",
   "streakSkillAccuracy": "↓↑ accuracy",
-  "streakSkillGrowing": "Your strumming hand is getting better — keep building on it."
+  "streakSkillGrowing": "Your strumming hand is getting better — keep building on it.",
+  "ddSuggestEasy": "Tough one — try Easy mode?",
+  "ddSuggestFull": "You're nailing it — try the full lesson?",
+  "ddSwitch": "Switch"
 }

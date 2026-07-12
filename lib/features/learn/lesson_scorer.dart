@@ -151,6 +151,15 @@ class LessonScorer {
   int chordHits = 0;
   int chordMiss = 0;
 
+  /// Dynamic-difficulty signal (016b P4, r154): consecutive failed events
+  /// (miss or wrong-direction) since the last clean hit.
+  int failStreak = 0;
+
+  /// After this many consecutive failures the screen OFFERS the Easy cut
+  /// (never forces it — the player stays in charge).
+  static const int suggestEasyAfter = 4;
+  bool get suggestsEasier => failStreak >= suggestEasyAfter;
+
   /// Pass mark (share of events hit correctly).
   static const double passThreshold = 0.7;
 
@@ -253,6 +262,7 @@ class LessonScorer {
     best.matched = true;
     if (dir == best.event.direction) {
       hits++;
+      failStreak = 0;
       combo++;
       if (combo > maxCombo) maxCombo = combo;
       lastResult = HitResult.hit;
@@ -270,6 +280,7 @@ class LessonScorer {
       return HitResult.hit;
     } else {
       wrong++;
+      failStreak++;
       combo = 0;
       lastResult = HitResult.wrongDirection;
       lastTiming = null;
@@ -289,6 +300,7 @@ class LessonScorer {
       if (t.time + windowSec < playedSec) {
         t.matched = true;
         missed++;
+        failStreak++;
         combo = 0;
         lastResult = HitResult.missed;
         lastTiming = null;

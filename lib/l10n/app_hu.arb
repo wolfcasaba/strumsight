@@ -399,5 +399,8 @@
   "streakSkillStrums": "Lejátszott pengetés",
   "streakSkillWeekMinutes": "Ezen a héten",
   "streakSkillAccuracy": "↓↑ pontosság",
-  "streakSkillGrowing": "A pengető kezed egyre jobb — építs rá tovább."
+  "streakSkillGrowing": "A pengető kezed egyre jobb — építs rá tovább.",
+  "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
+  "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",
+  "ddSwitch": "Váltás"
 }

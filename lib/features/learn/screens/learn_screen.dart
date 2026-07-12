@@ -597,6 +597,32 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                           '${l10n.learnChords}: $chordsUsed',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
+                      // Dynamic difficulty (016b P4, r154): OFFER a switch —
+                      // down after a fail streak, up when Easy is aced. Quiet
+                      // inline row; the player stays in charge, and switching
+                      // restarts the run (which clears the signal).
+                      if (_playing && !_easy &&
+                          (_scorer?.suggestsEasier ?? false))
+                        _DdBanner(
+                          text: l10n.ddSuggestEasy,
+                          action: l10n.ddSwitch,
+                          onSwitch: () {
+                            setState(() => _easy = true);
+                            _restart();
+                          },
+                        )
+                      else if (_playing && _easy &&
+                          score != null &&
+                          score.resolved >= 8 &&
+                          score.accuracy >= 0.9)
+                        _DdBanner(
+                          text: l10n.ddSuggestFull,
+                          action: l10n.ddSwitch,
+                          onSwitch: () {
+                            setState(() => _easy = false);
+                            _restart();
+                          },
+                        ),
                       const Spacer(),
                       Stack(
                         alignment: Alignment.center,
@@ -693,6 +719,39 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The quiet dynamic-difficulty offer row (016b P4): one line + one action,
+/// never a modal — a struggling player gets a hand, not an interruption.
+class _DdBanner extends StatelessWidget {
+  const _DdBanner({
+    required this.text,
+    required this.action,
+    required this.onSwitch,
+  });
+
+  final String text;
+  final String action;
+  final VoidCallback onSwitch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.school_outlined,
+              size: 16, color: AppColors.secondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(text, style: const TextStyle(fontSize: 12)),
+          ),
+          TextButton(onPressed: onSwitch, child: Text(action)),
+        ],
       ),
     );
   }
