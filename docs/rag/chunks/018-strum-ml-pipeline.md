@@ -103,3 +103,17 @@ direction-SEPARATED (1001 all-D, 1002 all-U) — draw train/eval splits across
 MANY recording ids or the split leaks direction via recording identity.
 Wavs are 44.1 kHz mono 16-bit; `prepare_dataset._read_wav` linear-resamples
 to 16 kHz (documented approximation; upgrade to polyphase if accuracy stalls).
+
+## Full label statistics (round 141 — all 82 .strums parsed)
+**11 767 strums over 81.4 labeled minutes: 7 228 down / 4 539 up (38.6 % up —
+up IS the minority class, as the papers warn; keep the class weight).**
+70/82 recordings are mixed-direction (the r140 all-D/all-U pair was just the
+first two takes). Guitarist id-prefixes 1/2/4 ≈ 4 069/3 977/3 721 strums.
+Chord vocabulary (12): G 2 216 · C 1 982 · D 1 804 · A 1 546 · E 1 283 ·
+F 1 024 · B 860 · F# 408 · Bb 284 · C# 138 · Bm 124 · Am 98 — heavily
+major-biased; minor-chord strum audio is scarce (relevant if the joint
+chord+direction head is ever trained). **Split rule (r141, enforced in code):
+`klangio.npz` carries `rec` (recording id per window); `train.py` splits BY
+RECORDING via `split_by_recording` (never window-level — identity leak).
+Guitarist-level splits (id prefix) remain the stricter option if eval looks
+too rosy.**

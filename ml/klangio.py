@@ -84,8 +84,14 @@ def windows_for_recording(pcm, events):
 
 
 def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
-    """All recordings in [data_dir] -> a chunk-018-shaped dataset.npz."""
-    xs, ys, per_rec = [], [], []
+    """All recordings in [data_dir] -> a chunk-018-shaped dataset.npz.
+
+    Besides X/y the npz carries `rec` (the recording id per window) so the
+    train/eval split can be drawn BY RECORDING: some takes are single-
+    direction and all share a room/guitar per take, so a window-level random
+    split leaks recording identity into the direction task (round-140 lesson).
+    """
+    xs, ys, recs, per_rec = [], [], [], []
     for rid in recording_ids(data_dir):
         with open(os.path.join(data_dir, f"recording_{rid}.strums")) as fh:
             events = parse_strums(fh.read())
@@ -94,6 +100,7 @@ def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
         x, y = windows_for_recording(pcm, events)
         xs.extend(x)
         ys.extend(y)
+        recs.extend([rid] * len(y))
         per_rec.append((rid, len(y), sum(1 for v in y if v == 1)))
     if not xs:
         print(f"no complete recording sets under {data_dir} — see the fetch "
@@ -101,10 +108,26 @@ def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
         return None
     X = np.stack(xs).astype(np.float32)
     y = np.array(ys, dtype=np.int64)
-    np.savez_compressed(out, X=X, y=y)
+    rec = np.array(recs)
+    np.savez_compressed(out, X=X, y=y, rec=rec)
     stats(per_rec, y)
     print(f"wrote {out}")
-    return X, y
+    return X, y, rec
+
+
+def split_by_recording(rec, eval_frac: float = 0.2, seed: int = 42):
+    """(train_mask, eval_mask) with WHOLE recordings on one side only.
+
+    Never splits a recording across train/eval (identity leak); at least one
+    recording always lands in eval. Deterministic per seed.
+    """
+    ids = sorted(set(rec.tolist()))
+    rng = np.random.default_rng(seed)
+    rng.shuffle(ids)
+    n_eval = max(1, int(round(len(ids) * eval_frac)))
+    eval_ids = set(ids[:n_eval])
+    eval_mask = np.array([r in eval_ids for r in rec.tolist()])
+    return ~eval_mask, eval_mask
 
 
 def stats(per_rec, y):

@@ -81,6 +81,20 @@ def main() -> int:
         xs[0].shape == (F.PRE_FRAMES + F.POST_FRAMES, F.N_MELS),
     )
 
+    # 7. Split-by-recording (round 141): whole recordings stay on one side —
+    #    a window-level split would leak recording identity (round-140 lesson:
+    #    some takes are single-direction).
+    rec = np.array(["a"] * 5 + ["b"] * 3 + ["c"] * 4 + ["d"] * 2)
+    train, ev = klangio.split_by_recording(rec, eval_frac=0.25, seed=7)
+    ok &= _check("split masks disjoint+complete",
+                 bool(np.all(train ^ ev)) and int(ev.sum()) > 0)
+    straddles = any(
+        len({bool(m) for m, r2 in zip(ev.tolist(), rec.tolist()) if r2 == r})
+        > 1 for r in set(rec.tolist()))
+    ok &= _check("no recording straddles the split", not straddles)
+    t2, e2 = klangio.split_by_recording(rec, eval_frac=0.25, seed=7)
+    ok &= _check("split deterministic per seed", bool(np.all(ev == e2)))
+
     print("PASS" if ok else "FAILURES ABOVE")
     return 0 if ok else 1
 

@@ -50,14 +50,28 @@ def main(npz_path, out="strum_direction.tflite"):
     Xn = (X - mean) / std
     np.savez("norm.npz", mean=mean, std=std)
 
+    # Eval split BY RECORDING when the npz carries ids (klangio.py) — some
+    # takes are single-direction and share a room/guitar, so a window-level
+    # split leaks recording identity into the eval score (round-140 lesson).
+    if "rec" in d:
+        from klangio import split_by_recording
+
+        tr, ev = split_by_recording(d["rec"])
+        fit_kw = {"validation_data": (Xn[ev], y[ev])}
+        Xn, y = Xn[tr], y[tr]
+        print(f"split by recording: {int(tr.sum())} train / "
+              f"{int(ev.sum())} eval windows")
+    else:
+        fit_kw = {"validation_split": 0.2}  # legacy dataset.npz (no ids)
+
     model = build_model(X.shape[1], X.shape[2])
     # Up-strums are the minority + harder class → weight them up (chunk 015).
     n_up = int((y == 1).sum()) or 1
     cw = {0: 1.0, 1: max(1.0, (y == 0).sum() / n_up)}
     model.compile(optimizer=tf.keras.optimizers.Adam(1e-3),
                   loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-    model.fit(Xn, y, epochs=30, batch_size=32, validation_split=0.2,
-              class_weight=cw, verbose=2)
+    model.fit(Xn, y, epochs=30, batch_size=32,
+              class_weight=cw, verbose=2, **fit_kw)
 
     conv = tf.lite.TFLiteConverter.from_keras_model(model)
     conv.optimizations = [tf.lite.Optimize.DEFAULT]  # int8-ish size cut
