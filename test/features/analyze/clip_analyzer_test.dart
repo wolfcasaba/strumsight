@@ -103,4 +103,22 @@ void main() {
     expect(back.upCount, 1);
     expect(back.chordSummary, 'C');
   });
+
+  test('strum timestamps track the true attacks within ±25 ms (r145)', () {
+    // The r145 probe measured the old feed-position stamps 85–165 ms LATE
+    // with ±40 ms jitter (emit cadence + classify delay) — enough to shift a
+    // strum half an eighth at 120 BPM in fromAnalyze's beat quantisation.
+    // The timeline must carry the strum's own r144-corrected attack time.
+    final signal = strumPattern(
+      lowFirstPerStrum: [true, false, true, false],
+      gapSeconds: 0.5,
+    );
+    final result = const ClipAnalyzer().analyze(signal.toList(), 44100);
+    expect(result.strums, hasLength(4));
+    for (var i = 0; i < 4; i++) {
+      final expectedT = 0.1 + i * 0.5;
+      expect((result.strums[i].timeSec - expectedT).abs(), lessThan(0.025),
+          reason: 'strum $i at ${result.strums[i].timeSec}');
+    }
+  });
 }

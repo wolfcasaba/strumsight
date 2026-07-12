@@ -17,6 +17,7 @@ class LiveFrame {
     required this.tuningHz,
     required this.listening,
     this.strumSeq = 0,
+    this.latestStrumTime = -1,
   });
 
   /// Currently sounding chord (null before the first detection).
@@ -48,6 +49,14 @@ class LiveFrame {
   /// consecutive strokes share a direction — [latestStrum] alone can't.
   final int strumSeq;
 
+  /// The [latestStrum]'s attack instant on the engine's own sample clock
+  /// (seconds from session start; −1 while none). This is the r144-corrected
+  /// StrumEvent time — batch consumers (Analyze) must use THIS rather than
+  /// their feed position: frames arrive on a ~66 ms cadence plus a ~70 ms
+  /// classification delay, so "when the frame arrived" runs 85–165 ms late
+  /// with ±40 ms jitter (measured, r145).
+  final double latestStrumTime;
+
   /// Confidence of the latest strum, or 0 if none.
   double get confidence => latestStrum?.confidence ?? 0;
 
@@ -71,6 +80,7 @@ class LiveFrame {
       tuningHz: tuningHz ?? this.tuningHz,
       listening: listening ?? this.listening,
       strumSeq: strumSeq,
+      latestStrumTime: latestStrumTime,
     );
   }
 

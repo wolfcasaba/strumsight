@@ -133,3 +133,12 @@ late-side margin for uncalibrated users. The correction applies ONLY to the
 reported time — classification and the Viterbi onset boost keep the
 peak-frame reference (shifting them would slide the r59 baseline window into
 the attack). Constant shifts cancel in TempoTracker/bar deltas.
+
+**r145 follow-up (Analyze):** the Analyze timeline used its FEED position as
+the strum timestamp — measured **85–165 ms late with ±40 ms jitter** (emit
+cadence ~66 ms + classify delay ~70 ms + chunk quantisation), enough to shift
+a strum half an eighth at 120 BPM in `Lessons.fromAnalyze` beat quantisation
+and in shared cards. `LiveFrame` now carries `latestStrumTime` (the
+r144-corrected attack instant on the engine's sample clock) and
+`ClipAnalyzer._strumPass` stamps THAT; pinned at ±25 ms on a 4-strum clip.
+Also improves `_bpmFromStrums` (median IOI on accurate times).

@@ -45,13 +45,10 @@ class ClipAnalyzer {
     final pipeline = LivePipeline(sampleRate: sampleRate);
     final strums = <TimelineStrum>[];
     Strum? lastStrum;
-    var fed = 0;
 
     for (var i = 0; i < pcm.length; i += chunkSize) {
       final end = (i + chunkSize < pcm.length) ? i + chunkSize : pcm.length;
       final chunk = pcm.sublist(i, end);
-      fed += chunk.length;
-      final t = fed / sampleRate;
 
       for (final frame in pipeline.addChunk(chunk)) {
         final s = frame.latestStrum;
@@ -60,7 +57,10 @@ class ClipAnalyzer {
         if (s != null && !identical(s, lastStrum)) {
           strums.add(TimelineStrum(
             direction: s.direction,
-            timeSec: t,
+            // The strum's own attack time (r145): the feed position runs
+            // 85–165 ms late with ±40 ms jitter (emit cadence + classify
+            // delay), which corrupted fromAnalyze beat quantisation.
+            timeSec: frame.latestStrumTime,
             confidence: s.confidence,
           ));
           lastStrum = s;

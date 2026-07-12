@@ -166,6 +166,7 @@ class LivePipeline {
       tuningHz: 440,
       listening: true,
       strumSeq: _strumSeq,
+      latestStrumTime: _latestStrumTime,
     );
   }
 
