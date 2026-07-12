@@ -111,6 +111,12 @@ class SuperFluxOnsetDetector {
       if (_fluxWindow.length > _medianFrames) _fluxWindow.removeFirst();
       _fluxHist.add(0);
       _thrHist.add(double.infinity); // a gated frame can never be a peak
+      // Silence still advances the release + peak state machines (r142 audit:
+      // a staccato stab hard-cut to silence must re-arm eligibility, and a
+      // frozen flux peak must not suppress a later soft strum).
+      _belowStreak++;
+      if (_belowStreak >= _releaseFrames) _eligible = true;
+      _fluxPeak *= _peakDecay;
       return null;
     }
 

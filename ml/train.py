@@ -45,24 +45,30 @@ def main(npz_path, out="strum_direction.tflite"):
     print(f"dataset: {X.shape} windows, {int((y == 0).sum())} down / "
           f"{int((y == 1).sum())} up")
 
-    # Per-mel standardisation (store these; the Dart side must apply the same).
-    mean, std = X.mean(axis=(0, 1)), X.std(axis=(0, 1)) + 1e-6
-    Xn = (X - mean) / std
-    np.savez("norm.npz", mean=mean, std=std)
-
     # Eval split BY RECORDING when the npz carries ids (klangio.py) — some
     # takes are single-direction and share a room/guitar, so a window-level
     # split leaks recording identity into the eval score (round-140 lesson).
+    # Normalisation stats come from the TRAIN fold only (r142 audit: full-X
+    # stats leak eval data into the eval score).
     if "rec" in d:
-        from klangio import split_by_recording
+        from klangio import assert_folds_trainable, split_by_recording
 
         tr, ev = split_by_recording(d["rec"])
+        assert_folds_trainable(y, tr, ev)  # loud failure beats a fake model
+        mean = X[tr].mean(axis=(0, 1))
+        std = X[tr].std(axis=(0, 1)) + 1e-6
+        Xn = (X - mean) / std
         fit_kw = {"validation_data": (Xn[ev], y[ev])}
         Xn, y = Xn[tr], y[tr]
         print(f"split by recording: {int(tr.sum())} train / "
               f"{int(ev.sum())} eval windows")
     else:
+        mean, std = X.mean(axis=(0, 1)), X.std(axis=(0, 1)) + 1e-6
+        Xn = (X - mean) / std
         fit_kw = {"validation_split": 0.2}  # legacy dataset.npz (no ids)
+
+    # Store these; the Dart side must apply the same standardisation.
+    np.savez("norm.npz", mean=mean, std=std)
 
     model = build_model(X.shape[1], X.shape[2])
     # Up-strums are the minority + harder class → weight them up (chunk 015).

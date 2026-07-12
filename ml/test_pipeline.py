@@ -74,12 +74,19 @@ def main() -> int:
     lead = 0.1  # synth.strum lead silence
     evs = [(lead, "down", "C-major"),
            (lead + len(synth.strum("down")) / F.SR, "up", "C-major")]
-    xs, ys = klangio.windows_for_recording(sig, evs)
-    ok &= _check("klangio windows count", len(xs) == 2 and ys == [0, 1])
+    xs, ys, skipped = klangio.windows_for_recording(sig, evs)
+    ok &= _check("klangio windows count",
+                 len(xs) == 2 and ys == [0, 1] and skipped == 0)
     ok &= _check(
         "klangio window shape",
         xs[0].shape == (F.PRE_FRAMES + F.POST_FRAMES, F.N_MELS),
     )
+
+    # 6b. A label past the audio end is SKIPPED, never a labeled zero window
+    #     (r142 audit R4: truncated wav must not poison training).
+    late = evs + [(len(sig) / F.SR + 5.0, "up", "C-major")]
+    xs2, ys2, skipped2 = klangio.windows_for_recording(sig, late)
+    ok &= _check("late label skipped", len(xs2) == 2 and skipped2 == 1)
 
     # 7. Split-by-recording (round 141): whole recordings stay on one side —
     #    a window-level split would leak recording identity (round-140 lesson:
@@ -94,6 +101,25 @@ def main() -> int:
     ok &= _check("no recording straddles the split", not straddles)
     t2, e2 = klangio.split_by_recording(rec, eval_frac=0.25, seed=7)
     ok &= _check("split deterministic per seed", bool(np.all(ev == e2)))
+
+    # 8. r142 audit: degenerate splits fail LOUDLY.
+    try:
+        klangio.split_by_recording(np.array(["only"] * 4))
+        ok &= _check("single-recording split rejected", False)
+    except ValueError:
+        ok &= _check("single-recording split rejected", True)
+    big = np.array(["a"] * 3 + ["b"] * 3)
+    tb, eb = klangio.split_by_recording(big, eval_frac=0.9)
+    ok &= _check("train side never empty", int(tb.sum()) > 0)
+    y_bad = np.array([0, 0, 0, 1, 1, 1])  # a=all-down, b=all-up
+    try:
+        klangio.assert_folds_trainable(y_bad, tb, eb)
+        ok &= _check("single-class fold rejected", False)
+    except ValueError:
+        ok &= _check("single-class fold rejected", True)
+    y_good = np.array([0, 1, 0, 1, 0, 1])
+    klangio.assert_folds_trainable(y_good, tb, eb)
+    ok &= _check("mixed folds accepted", True)
 
     print("PASS" if ok else "FAILURES ABOVE")
     return 0 if ok else 1

@@ -145,6 +145,34 @@ void main() {
           reason: 'one marginal frame cannot flip once the boost expired');
     });
 
+    test('gated (silent) chord frames do not consume the boost (r142)', () {
+      // R2 audit finding: the pipeline feeds zero chroma for sub-tonalness
+      // frames — flagged gated, those frames must neither eat the 2-frame
+      // boost window nor lower the incumbent's guard on silence.
+      final base = ViterbiChordDecoder();
+      feed(base, cMaj, 8);
+      base.noteOnset();
+      var baseline = 0;
+      while (baseline < 60) {
+        baseline++;
+        if (base.process(cMaj7[0], cMaj7[1])?.chord.label == 'Cmaj7') break;
+      }
+
+      final d = ViterbiChordDecoder();
+      feed(d, cMaj, 8);
+      d.noteOnset();
+      // Two gated frames land between the onset and the tonal evidence.
+      d.process(silence[0], silence[1], gated: true);
+      d.process(silence[0], silence[1], gated: true);
+      var n = 0;
+      while (n < 60) {
+        n++;
+        if (d.process(cMaj7[0], cMaj7[1])?.chord.label == 'Cmaj7') break;
+      }
+      expect(n, lessThanOrEqualTo(baseline),
+          reason: 'the boost must still cover the first TONAL frames');
+    });
+
     test('an onset on the SAME sustained chord changes nothing', () {
       final d = ViterbiChordDecoder();
       feed(d, cMaj, 8);
@@ -176,6 +204,21 @@ void main() {
           reason: 'expecting C must never rename a real G');
     });
 
+    test('a NOISY weak-third G still beats an expected C (r142 audit)', () {
+      // The clean-G test alone left the safety claim untested on degraded
+      // input: a phone-mic G with a weak third and smeared chroma is the
+      // realistic "wrong chord" a beginner plays while the lesson expects C.
+      final noisyG = [
+        chroma({7: 1, 0: 0.25, 5: 0.15}),
+        chroma({7: 1, 11: 0.35, 2: 0.7, 0: 0.3, 4: 0.2, 9: 0.15}),
+      ];
+      final d = ViterbiChordDecoder()..setExpected('C');
+      final m = feed(d, noisyG, 8);
+      expect(m!.chord.label, startsWith('G'),
+          reason: 'the 0.05 prior must stay below a real similarity gap '
+              'even on degraded input (got ${m.chord.label})');
+    });
+
     test('clearing the expectation restores baseline behaviour', () {
       final d = ViterbiChordDecoder()..setExpected('C');
       d.setExpected(null);
@@ -195,6 +238,16 @@ void main() {
       final d = ViterbiChordDecoder()..setExpected('C');
       expect(feed(d, silence, 8), isNull,
           reason: 'the prior must not beat the no-chord floor');
+    });
+
+    test('reset clears the prior and the onset boost (r142 audit)', () {
+      final d = ViterbiChordDecoder()..setExpected('C');
+      d.noteOnset();
+      d.reset();
+      feed(d, cMaj, 8);
+      final held = feed(d, cMaj7, 25);
+      expect(held!.chord.label, 'Cmaj7',
+          reason: 'a fresh session must not inherit a past lesson bias');
     });
   });
 }

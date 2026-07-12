@@ -74,14 +74,19 @@ class ViterbiChordDecoder {
 
   /// Advance one frame with the observed bass+treble chroma pair and return the
   /// stable chord, or null when the path sits in the no-chord state (silence /
-  /// noise / rest). Feed zero vectors on a gated/silent frame — the no-chord
-  /// floor then wins and the chord decays out over a couple of frames.
-  ChordMatch? process(Float64List bass, Float64List treble) {
+  /// noise / rest). Feed zero vectors WITH `gated: true` on a gated/silent
+  /// frame — the no-chord floor then wins and the chord decays out over a
+  /// couple of frames, but the frame neither consumes the onset boost nor
+  /// lowers the incumbent's guard (r142 audit: a gated frame right after an
+  /// onset must not cause a chord dropout ON the strum).
+  ChordMatch? process(Float64List bass, Float64List treble,
+      {bool gated = false}) {
     final sim = dictionary.score(bass, treble);
     final n = sim.length;
 
-    final bonus = _boostLeft > 0 ? selfBonus * _onsetBonusScale : selfBonus;
-    if (_boostLeft > 0) _boostLeft--;
+    final boosted = _boostLeft > 0 && !gated;
+    final bonus = boosted ? selfBonus * _onsetBonusScale : selfBonus;
+    if (boosted) _boostLeft--;
 
     if (!_seeded) {
       for (var s = 0; s < n; s++) {
@@ -207,11 +212,15 @@ class ViterbiChordDecoder {
     return ChordMatch(Chord(dictionary.profiles[idx].label), confidence);
   }
 
-  /// Reset the trellis (new session).
+  /// Reset the trellis (new session) — including the transient onset boost
+  /// and the expected-chord prior: a fresh session must never inherit a past
+  /// lesson's bias (the engine re-asserts an ACTIVE hint explicitly).
   void reset() {
     for (var s = 0; s < _delta.length; s++) {
       _delta[s] = 0;
     }
     _seeded = false;
+    _boostLeft = 0;
+    _expectedIdx = -1;
   }
 }

@@ -109,3 +109,19 @@ confirms, ~12 ms after the attack — well inside one chord frame) →
 `LivePipeline` fast path calls `noteOnset()`. Tested: a marginal change flips
 faster post-onset than steady-state; the boost expires; an onset on the same
 sustained chord changes nothing.
+
+**r142 audit fixes/notes:** (1) `process(..., gated: true)` on sub-tonalness
+frames — a gated frame neither consumes the 2-frame onset boost nor lowers the
+incumbent's guard (before: a silent chord-frame right after a strum could
+cause a dropout ON the strum and waste the boost). (2) `reset()` now clears
+the prior AND the boost (a fresh session never inherits a lesson bias).
+(3) HONEST RESTATEMENT of the prior's safety claim: it "never masks a
+CLEARLY-DIFFERENT chord" (clean AND noisy weak-third G both tested vs an
+expected C) — but it deliberately resolves marginal maj↔maj7-class ambiguity
+toward the target; that is the feature, stated plainly. (4) Known residual
+(documented, not coded): the expected-hint's cross-screen safety rests on the
+nav invariant that LearnScreen must be popped (disposed) before Live is
+reachable; a future deep-link/Live-inside-Learn entry must clear the hint on
+Live entry. The onset-boost × transition-noise latch risk (wrong chord
+grabbed during the low-guard window then protected by the full bonus) remains
+theoretical — no synthetic repro; the real-guitar gate arbitrates.

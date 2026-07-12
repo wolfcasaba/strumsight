@@ -57,3 +57,4 @@ lib/l10n/app_localizations*.dart
 /shots/
 /.playwright-mcp/
 ml/data/
+ml/klangio.npz

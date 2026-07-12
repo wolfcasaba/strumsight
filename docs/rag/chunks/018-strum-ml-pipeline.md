@@ -117,3 +117,19 @@ chord+direction head is ever trained). **Split rule (r141, enforced in code):
 RECORDING via `split_by_recording` (never window-level — identity leak).
 Guitarist-level splits (id prefix) remain the stricter option if eval looks
 too rosy.**
+
+## r142 audit — the dataset is now REALLY consumable + guarded
+All 82 `_phone.wav` takes downloaded (~300 MB, `ml/data/` local-only):
+`build()` → **11 767 windows**; `split_by_recording` → train 9 754 (38.4 % up,
+66 recs) / eval 2 013 (39.5 % up, 16 recs) — both folds direction-balanced.
+Guards added after the audit's BLOCKER (the first two fetched takes were
+all-D/all-U → a model would have trained on zero up-strums with green tests):
+`assert_folds_trainable` (single-class fold = loud ValueError, called by
+train.py), `split_by_recording` keeps BOTH sides non-empty (raises on <2
+recordings), labels past the audio end are SKIPPED not zero-emitted, and
+train.py computes norm.npz from the TRAIN fold only (eval-leak fix). The
+ready `ml/klangio.npz` (82 MB, gitignored) sits on this box for the training
+run. Deferred (recorded): adversarial log-mel parity fixtures (clipped/DC/
+near-floor), an end-to-end isolate-plumbing test for the expected-chord hint,
+re-checking the input-latency default against SuperFlux's onset instant on
+the real-guitar gate.

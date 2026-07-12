@@ -117,3 +117,9 @@ attack rises ≥100 across bands, a late ring-out beating bump ≤10 — measure
 retune the randomized gate reads **recall 100 %, spurious 0 % on 5 seeds**).
 Honest cost: one extra 1024-pt FFT per hop (detector owns its log-mel);
 200 BPM 16ths stays 11/12 (the confidence tier reports that limit honestly).
+
+**r142 audit fix:** the silence-gate branch now ALSO advances the release
+hysteresis and decays the flux-peak tracker — before the fix, a staccato stab
+hard-cut to digital silence froze `_eligible=false` forever and a stale loud
+peak could suppress a later soft strum (reproduced in test: stab → 1 s true
+silence → 0.25× soft strum was DROPPED; now detected).

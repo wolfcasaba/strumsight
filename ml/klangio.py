@@ -72,15 +72,21 @@ def recording_ids(data_dir: str):
 
 
 def windows_for_recording(pcm, events):
-    """(X, y) for one 16 kHz recording: a log-mel window cut at each LABELED
-    strum time (the dataset's annotations are ground truth — detection is not
-    in the training loop)."""
+    """(X, y, skipped) for one 16 kHz recording: a log-mel window cut at each
+    LABELED strum time (the dataset's annotations are ground truth — detection
+    is not in the training loop). Labels past the audio end are SKIPPED, not
+    emitted as zero-filled windows (r142 audit: a truncated wav must never
+    poison training with labeled silence)."""
     logmel = F.log_mel(pcm)
-    xs, ys = [], []
+    xs, ys, skipped = [], [], 0
     for t, direction, _chord in events:
+        center = int(round(t * F.SR / F.HOP))
+        if center - F.PRE_FRAMES >= len(logmel):
+            skipped += 1
+            continue
         xs.append(F.window_at(logmel, t))
         ys.append(LABELS[direction])
-    return xs, ys
+    return xs, ys, skipped
 
 
 def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
@@ -91,13 +97,14 @@ def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
     direction and all share a room/guitar per take, so a window-level random
     split leaks recording identity into the direction task (round-140 lesson).
     """
-    xs, ys, recs, per_rec = [], [], [], []
+    xs, ys, recs, per_rec, n_skipped = [], [], [], [], 0
     for rid in recording_ids(data_dir):
         with open(os.path.join(data_dir, f"recording_{rid}.strums")) as fh:
             events = parse_strums(fh.read())
         pcm = _read_wav(
             os.path.join(data_dir, f"recording_{rid}_{variant}.wav"))
-        x, y = windows_for_recording(pcm, events)
+        x, y, skipped = windows_for_recording(pcm, events)
+        n_skipped += skipped
         xs.extend(x)
         ys.extend(y)
         recs.extend([rid] * len(y))
@@ -111,6 +118,8 @@ def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
     rec = np.array(recs)
     np.savez_compressed(out, X=X, y=y, rec=rec)
     stats(per_rec, y)
+    if n_skipped:
+        print(f"skipped {n_skipped} labels past their audio end")
     print(f"wrote {out}")
     return X, y, rec
 
@@ -118,16 +127,32 @@ def build(data_dir: str, out: str = "klangio.npz", variant: str = "phone"):
 def split_by_recording(rec, eval_frac: float = 0.2, seed: int = 42):
     """(train_mask, eval_mask) with WHOLE recordings on one side only.
 
-    Never splits a recording across train/eval (identity leak); at least one
-    recording always lands in eval. Deterministic per seed.
+    Never splits a recording across train/eval (identity leak); BOTH sides get
+    at least one recording (r142 audit: a single-recording dataset cannot be
+    split honestly — raise instead of silently training on nothing).
+    Deterministic per seed.
     """
     ids = sorted(set(rec.tolist()))
+    if len(ids) < 2:
+        raise ValueError("need >=2 recordings to split by recording")
     rng = np.random.default_rng(seed)
     rng.shuffle(ids)
-    n_eval = max(1, int(round(len(ids) * eval_frac)))
+    n_eval = min(len(ids) - 1, max(1, int(round(len(ids) * eval_frac))))
     eval_ids = set(ids[:n_eval])
     eval_mask = np.array([r in eval_ids for r in rec.tolist()])
     return ~eval_mask, eval_mask
+
+
+def assert_folds_trainable(y, train_mask, eval_mask):
+    """Fail LOUDLY when either fold is single-class (r142 audit BLOCKER: the
+    first two fetched takes were all-D and all-U — a model would have trained
+    on zero up-strums with every test green)."""
+    for name, mask in (("train", train_mask), ("eval", eval_mask)):
+        classes = set(np.asarray(y)[mask].tolist())
+        if classes != {0, 1}:
+            raise ValueError(
+                f"{name} fold is single-class ({classes}) — fetch more "
+                "recordings or reseed the split; training would be meaningless")
 
 
 def stats(per_rec, y):

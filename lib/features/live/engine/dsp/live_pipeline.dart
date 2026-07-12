@@ -110,7 +110,7 @@ class LivePipeline {
       _lastChord = tonal
           ? _chordDecoder.process(
               _chroma.lastBassChroma, _chroma.lastTrebleChroma)
-          : _chordDecoder.process(_silentChroma, _silentChroma);
+          : _chordDecoder.process(_silentChroma, _silentChroma, gated: true);
     }
 
     // Sample-clock emission (~15 Hz).
