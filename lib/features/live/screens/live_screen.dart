@@ -51,6 +51,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     super.initState();
     // Keep the screen awake during a session (best-effort; no-op in tests).
     WakelockPlus.enable().catchError((_) {});
+    // Defence in depth (r146): free-play must never inherit a lesson's
+    // expected-chord bias — clear it explicitly instead of trusting the nav
+    // invariant that LearnScreen was disposed first (chunk 016 residual).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(strumEngineProvider).setExpectedChord(null);
+    });
   }
 
   @override

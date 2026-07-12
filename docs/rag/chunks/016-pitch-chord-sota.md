@@ -118,10 +118,10 @@ the prior AND the boost (a fresh session never inherits a lesson bias).
 (3) HONEST RESTATEMENT of the prior's safety claim: it "never masks a
 CLEARLY-DIFFERENT chord" (clean AND noisy weak-third G both tested vs an
 expected C) — but it deliberately resolves marginal maj↔maj7-class ambiguity
-toward the target; that is the feature, stated plainly. (4) Known residual
-(documented, not coded): the expected-hint's cross-screen safety rests on the
-nav invariant that LearnScreen must be popped (disposed) before Live is
-reachable; a future deep-link/Live-inside-Learn entry must clear the hint on
-Live entry. The onset-boost × transition-noise latch risk (wrong chord
+toward the target; that is the feature, stated plainly. (4) ✅ residual CLOSED r146: LiveScreen now clears the hint explicitly on
+entry (post-frame callback) — defence in depth instead of the nav invariant;
+widget-tested with a pre-seeded stale hint. The setlist→Learn boundary was
+probed CLEAN the same round (the combined lesson's warped events carry the
+hint across songs; locked by a widget test). The onset-boost × transition-noise latch risk (wrong chord
 grabbed during the low-guard window then protected by the full bonus) remains
 theoretical — no synthetic repro; the real-guitar gate arbitrates.
