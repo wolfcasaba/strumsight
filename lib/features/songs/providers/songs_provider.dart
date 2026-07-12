@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +13,10 @@ class SongsController extends Notifier<List<Song>> {
   static const _key = 'user_songs_v1';
 
   SharedPreferences? _prefs;
-  bool _dirty = false;
+  // Mutations WAIT for the initial load (r150, the r149 race class): a
+  // mutation racing the load used to persist the near-empty default over the
+  // unread on-disk collection, wiping it.
+  final Completer<void> _loaded = Completer<void>();
   int _seq = 0; // disambiguates ids created within the same microsecond
 
   @override
@@ -25,13 +29,15 @@ class SongsController extends Notifier<List<Song>> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final raw = _prefs!.getString(_key);
-      if (raw != null && !_dirty) {
+      if (raw != null) {
         state = (jsonDecode(raw) as List)
             .map((e) => Song.fromJson(e as Map<String, dynamic>))
             .toList();
       }
     } catch (_) {
       // Prefs unavailable → keep the empty default.
+    } finally {
+      _loaded.complete();
     }
   }
 
@@ -54,7 +60,7 @@ class SongsController extends Notifier<List<Song>> {
       bpm: bpm,
       beatsPerBar: beatsPerBar,
     );
-    _dirty = true;
+    await _loaded.future;
     state = [song, ...state];
     await _persist();
     return song.id;
@@ -63,13 +69,13 @@ class SongsController extends Notifier<List<Song>> {
   /// Replace an existing song by id (no-op if the id is gone).
   Future<void> update(Song song) async {
     if (!state.any((s) => s.id == song.id)) return;
-    _dirty = true;
+    await _loaded.future;
     state = [for (final s in state) if (s.id == song.id) song else s];
     await _persist();
   }
 
   Future<void> remove(String id) async {
-    _dirty = true;
+    await _loaded.future;
     state = state.where((s) => s.id != id).toList();
     await _persist();
   }

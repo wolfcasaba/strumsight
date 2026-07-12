@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,7 +9,10 @@ class FavoriteChordsNotifier extends Notifier<Set<String>> {
   static const _key = 'favorite_chords';
 
   SharedPreferences? _prefs;
-  bool _userSet = false;
+  // Mutations WAIT for the initial load (r150, the r149 race class): a
+  // mutation racing the load used to persist the near-empty default over the
+  // unread on-disk collection, wiping it.
+  final Completer<void> _loaded = Completer<void>();
 
   @override
   Set<String> build() {
@@ -19,15 +24,16 @@ class FavoriteChordsNotifier extends Notifier<Set<String>> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final list = _prefs!.getStringList(_key);
-      // Don't clobber a toggle made before prefs finished loading.
-      if (list != null && !_userSet) state = list.toSet();
+      if (list != null) state = list.toSet();
     } catch (_) {
       // Prefs unavailable → keep the default.
+    } finally {
+      _loaded.complete();
     }
   }
 
   Future<void> toggle(String label) async {
-    _userSet = true;
+    await _loaded.future; // merge onto the LOADED set, never the default
     state = state.contains(label)
         ? ({...state}..remove(label))
         : {...state, label};

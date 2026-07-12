@@ -12,8 +12,20 @@ class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
   @override
   Future<List<AnalyzedSession>> build() => _repo.load();
 
+  /// The loaded list, WAITING for the initial load if it is still in flight
+  /// (r150, the r149 race class): `state.value ?? []` during AsyncLoading let
+  /// an add-from-Analyze save a single-element list over the whole on-disk
+  /// library. On a load error an empty list is accepted (nothing to lose).
+  Future<List<AnalyzedSession>> _current() async {
+    try {
+      return await future;
+    } catch (_) {
+      return state.value ?? const [];
+    }
+  }
+
   Future<void> add(AnalyzedSession session) async {
-    final current = state.value ?? const [];
+    final current = await _current();
     var next = [session, ...current];
     if (next.length > _maxSessions) next = next.sublist(0, _maxSessions);
     state = AsyncData(next);
@@ -21,7 +33,7 @@ class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
   }
 
   Future<void> delete(String id) async {
-    final current = state.value ?? const [];
+    final current = await _current();
     final next = current.where((s) => s.id != id).toList();
     state = AsyncData(next);
     await _repo.save(next);
@@ -32,7 +44,7 @@ class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
   Future<void> rename(String id, String title) async {
     final trimmed = title.trim();
     if (trimmed.isEmpty) return;
-    final current = state.value ?? const [];
+    final current = await _current();
     final next = [
       for (final s in current) s.id == id ? s.withTitle(trimmed) : s,
     ];

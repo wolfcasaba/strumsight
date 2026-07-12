@@ -32,7 +32,10 @@ class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
   final List<Song> _seed;
   @override
-  List<Song> build() => _seed;
+  List<Song> build() {
+    super.build(); // opens the r150 write gate (mock prefs are empty)
+    return _seed;
+  }
 }
 
 Future<void> pumpSongList(WidgetTester tester, List<Song> seed) async {

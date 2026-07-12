@@ -16,14 +16,20 @@ class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
   final List<Song> _seed;
   @override
-  List<Song> build() => _seed;
+  List<Song> build() {
+    super.build(); // opens the r150 write gate (mock prefs are empty)
+    return _seed;
+  }
 }
 
 class _SeededSetlists extends SetlistsController {
   _SeededSetlists(this._seed);
   final List<Setlist> _seed;
   @override
-  List<Setlist> build() => _seed;
+  List<Setlist> build() {
+    super.build(); // opens the r150 write gate (mock prefs are empty)
+    return _seed;
+  }
 }
 
 const _song = Song(

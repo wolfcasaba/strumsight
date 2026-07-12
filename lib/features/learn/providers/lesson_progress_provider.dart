@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +14,10 @@ class LessonProgressController extends Notifier<Map<String, double>> {
   static const _key = 'lesson_progress_v1';
 
   SharedPreferences? _prefs;
-  bool _dirty = false;
+  // Mutations WAIT for the initial load (r150, the r149 race class): a
+  // mutation racing the load used to persist the near-empty default over the
+  // unread on-disk collection, wiping it.
+  final Completer<void> _loaded = Completer<void>();
 
   @override
   Map<String, double> build() {
@@ -25,7 +29,7 @@ class LessonProgressController extends Notifier<Map<String, double>> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final raw = _prefs!.getString(_key);
-      if (raw != null && !_dirty) {
+      if (raw != null) {
         final map = (jsonDecode(raw) as Map).map(
           (k, v) => MapEntry(k as String, (v as num).toDouble()),
         );
@@ -33,14 +37,16 @@ class LessonProgressController extends Notifier<Map<String, double>> {
       }
     } catch (_) {
       // Prefs unavailable → keep the empty default.
+    } finally {
+      _loaded.complete();
     }
   }
 
   /// Record a run's [accuracy] for [lessonId], keeping the best so far.
   Future<void> record(String lessonId, double accuracy) async {
+    await _loaded.future; // merge onto the LOADED map, never the default
     final prev = state[lessonId] ?? 0;
     if (accuracy <= prev) return; // never regress the best score
-    _dirty = true;
     state = {...state, lessonId: accuracy};
     await _persist();
   }

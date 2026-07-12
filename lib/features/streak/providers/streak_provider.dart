@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +15,10 @@ class StreakController extends Notifier<StreakData> {
   static const _key = 'practice_streak_v1';
 
   SharedPreferences? _prefs;
-  bool _dirty = false; // a practice landed before prefs finished loading
+  // Mutations WAIT for the initial load (r150, the r149 race class): a
+  // cold-start practice moment used to apply onto the EMPTY default and
+  // persist it — overwriting a multi-day streak on disk with a streak of 1.
+  final Completer<void> _loaded = Completer<void>();
 
   @override
   StreakData build() {
@@ -26,22 +30,23 @@ class StreakController extends Notifier<StreakData> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final raw = _prefs!.getString(_key);
-      // Don't clobber a practice recorded before prefs finished loading.
-      if (raw != null && !_dirty) {
+      if (raw != null) {
         state = StreakData.fromJson(jsonDecode(raw) as Map<String, dynamic>);
       }
     } catch (_) {
       // Prefs unavailable → keep the in-memory default.
+    } finally {
+      _loaded.complete();
     }
   }
 
   /// Record that the user practised now. Idempotent within a calendar day.
   /// Returns true if this call advanced the streak (i.e. first practice today).
   Future<bool> recordPracticeToday([DateTime? now]) async {
+    await _loaded.future; // apply onto the LOADED streak, never the default
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final next = StreakLogic.applyPractice(state, today);
     if (next == state) return false; // already practised today / no change
-    _dirty = true;
     state = next;
     await _persist();
     return true;

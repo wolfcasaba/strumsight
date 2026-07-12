@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,10 @@ class SetlistsController extends Notifier<List<Setlist>> {
   static const _key = 'user_setlists_v1';
 
   SharedPreferences? _prefs;
-  bool _dirty = false;
+  // Mutations WAIT for the initial load (r150, the r149 race class): a
+  // mutation racing the load used to persist the near-empty default over the
+  // unread on-disk collection, wiping it.
+  final Completer<void> _loaded = Completer<void>();
   int _seq = 0;
 
   @override
@@ -24,13 +28,15 @@ class SetlistsController extends Notifier<List<Setlist>> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final raw = _prefs!.getString(_key);
-      if (raw != null && !_dirty) {
+      if (raw != null) {
         state = (jsonDecode(raw) as List)
             .map((e) => Setlist.fromJson(e as Map<String, dynamic>))
             .toList();
       }
     } catch (_) {
       // Prefs unavailable → keep the empty default.
+    } finally {
+      _loaded.complete();
     }
   }
 
@@ -38,7 +44,7 @@ class SetlistsController extends Notifier<List<Setlist>> {
 
   Future<String> add(String name) async {
     final s = Setlist(id: _newId(), name: name, songIds: const []);
-    _dirty = true;
+    await _loaded.future;
     state = [s, ...state];
     await _persist();
     return s.id;
@@ -48,7 +54,7 @@ class SetlistsController extends Notifier<List<Setlist>> {
       _mutate(id, (s) => s.copyWith(name: name));
 
   Future<void> remove(String id) async {
-    _dirty = true;
+    await _loaded.future;
     state = state.where((s) => s.id != id).toList();
     await _persist();
   }
@@ -77,8 +83,8 @@ class SetlistsController extends Notifier<List<Setlist>> {
       });
 
   Future<void> _mutate(String id, Setlist Function(Setlist) f) async {
+    await _loaded.future; // the existence check must see the LOADED list
     if (!state.any((s) => s.id == id)) return;
-    _dirty = true;
     state = [for (final s in state) if (s.id == id) f(s) else s];
     await _persist();
   }
