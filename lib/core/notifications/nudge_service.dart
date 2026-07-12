@@ -26,6 +26,9 @@ class NudgeService {
   NudgeService._();
   static final NudgeService instance = NudgeService._();
 
+  /// Base notification id — ids 1001..1007 are RESERVED for the practice
+  /// nudge's week of one-shots (r161 audit note); any future notification
+  /// feature must pick ids outside this range.
   static const int _id = 1001;
   static const int hour = 19;
 
