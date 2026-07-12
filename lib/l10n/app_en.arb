@@ -457,5 +457,6 @@
   "streakSkillGrowing": "Your strumming hand is getting better — keep building on it.",
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",
-  "ddSwitch": "Switch"
+  "ddSwitch": "Switch",
+  "onboardFirstWin": "Try your first win — 30 seconds"
 }

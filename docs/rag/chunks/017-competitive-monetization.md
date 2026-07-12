@@ -91,7 +91,16 @@ streak), a 9:16 `WrappedCard` (same brand language as the other cards,
 English-global copy), `WrappedPreviewScreen` → the existing
 RepaintBoundary→PNG→share pipeline, caption with moat + install link +
 hashtags. Entry: a share action on the Progress AppBar (hidden until there is
-anything to share). ✅ r153: the AUTO-prompt half shipped — the lesson-finish dialog offers
+anything to share). ✅ r155 (rec #4, product half): the onboarding's last page now LEADS with
+"Try your first win — 30 seconds" → mic priming → `Lessons.firstWin` (one
+easy Em, downstrokes on the beat, 2 bars @70 BPM ≈ 27 s, OUTSIDE the
+curriculum chain, no stars) → the existing scored finish dialog = the aha
+("it grades my strumming hand") inside the first two minutes. The quieter
+"Start playing" stays as a secondary path. The PAYWALL placement half of
+rec #4 stays deferred with the business layer. Test gotcha recorded: the
+permission platform-channel future never completes under flutter_test —
+mic priming is injectable (`primeMic`).
+✅ r153: the AUTO-prompt half shipped — the lesson-finish dialog offers
 "Share my week" as a quiet inline row when accuracy ≥ 80 % (`WrappedPrompt`,
 threshold pinned by tests; the moment of pride is the share moment, and a
 weak run stays prompt-free). The weekly notification cadence remains TODO. Remaining

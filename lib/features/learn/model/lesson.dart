@@ -136,6 +136,18 @@ const _u = StrumDirection.up;
 class Lessons {
   Lessons._();
 
+  /// The onboarding "first win" (chunk 017 rec #4, r155): the shortest
+  /// possible route to a SCORED strum — one easy chord, downstrokes on the
+  /// beat, two bars at a gentle tempo ≈ a 30-second aha. NOT in [all]: it
+  /// lives outside the curriculum/unlock chain and records no stars.
+  static Lesson get firstWin => Lesson(
+        id: 'first-win',
+        name: 'Your first win',
+        bpm: 70,
+        chords: const ['Em', 'Em'],
+        pattern: const [_d, null, _d, null, _d, null, _d, null],
+      );
+
   // ---- Beginner ----
 
   /// All-downstrokes on the beat — the absolute beginner's first strum.

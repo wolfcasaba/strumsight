@@ -5,6 +5,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../learn/model/lesson.dart';
+import '../../learn/screens/learn_screen.dart';
 import '../onboarding_provider.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
@@ -12,10 +14,19 @@ import '../onboarding_provider.dart';
 /// Minimal by design (Simply Guitar's lesson: a few taps, then play). Growth =
 /// activation — convert every viral install into an active user (chunk 013).
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key, this.onDone});
+  const OnboardingScreen(
+      {super.key, this.onDone, this.onFirstWin, this.primeMic});
 
   /// Where to go when finished; defaults to the Live tab (overridable in tests).
   final VoidCallback? onDone;
+
+  /// Where the "first win" CTA lands (chunk 017 rec #4); defaults to the Live
+  /// tab with the [Lessons.firstWin] mini-lesson pushed on top.
+  final VoidCallback? onFirstWin;
+
+  /// Mic-permission priming, injectable for tests (the platform channel does
+  /// not exist under flutter_test and its future never completes there).
+  final Future<void> Function()? primeMic;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -37,7 +48,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _finishing = true;
     if (requestMic) {
       try {
-        await Permission.microphone.request();
+        await (widget.primeMic ?? () => Permission.microphone.request())();
       } catch (_) {
         // Best-effort priming; the Live screen re-requests if still ungranted.
       }
@@ -45,6 +56,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await ref.read(onboardingSeenProvider.notifier).complete();
     if (!mounted) return;
     (widget.onDone ?? () => context.go('/live'))();
+  }
+
+  /// The activation shortcut (chunk 017 rec #4, r155): straight from the last
+  /// onboarding page into a 30-second SCORED mini-lesson — the aha moment
+  /// ("it grades my strumming hand") lands inside the first two minutes.
+  Future<void> _firstWin() async {
+    if (_finishing) return;
+    _finishing = true;
+    try {
+      await (widget.primeMic ?? () => Permission.microphone.request())();
+    } catch (_) {
+      // Best-effort; the lesson's mic path surfaces its own error banner.
+    }
+    await ref.read(onboardingSeenProvider.notifier).complete();
+    if (!mounted) return;
+    (widget.onFirstWin ??
+        () {
+          context.go('/live');
+          Navigator.of(context, rootNavigator: true).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LearnScreen(lesson: Lessons.firstWin),
+            ),
+          );
+        })();
   }
 
   void _next(int lastIndex) {
@@ -105,12 +140,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              child: FilledButton(
-                onPressed: () => _next(last),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                ),
-                child: Text(onLast ? l10n.onboardStart : l10n.onboardNext),
+              child: Column(
+                children: [
+                  FilledButton(
+                    onPressed: onLast ? _firstWin : () => _next(last),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                    ),
+                    child:
+                        Text(onLast ? l10n.onboardFirstWin : l10n.onboardNext),
+                  ),
+                  // The quieter path for players who just want to explore.
+                  if (onLast)
+                    TextButton(
+                      onPressed: () => _finish(requestMic: true),
+                      child: Text(l10n.onboardStart),
+                    ),
+                ],
               ),
             ),
           ],
