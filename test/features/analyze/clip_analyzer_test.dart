@@ -15,6 +15,29 @@ void main() {
     expect(analyzer.analyze([0.1, 0.2], 0).durationSec, 0);
   });
 
+  test('a SILENT clip is honest — real duration, but no fabricated content',
+      () {
+    // The degenerate user path: tap Record, sit in silence, tap Stop. The
+    // analyzer must report the true length yet invent NO chords or strums
+    // (the integration-level twin of the "white noise ≠ chord" property).
+    final silence = List<double>.filled(44100 * 2, 0.0); // 2 s of digital 0
+    final result = analyzer.analyze(silence, 44100);
+    expect(result.durationSec, closeTo(2.0, 0.001),
+        reason: 'the clip length is real even when its content is empty');
+    expect(result.chords, isEmpty, reason: 'silence is not a chord');
+    expect(result.strums, isEmpty, reason: 'silence has no strums');
+    expect(result.bpm, 0);
+  });
+
+  test('a clip shorter than one analysis window does not crash', () {
+    // Stop tapped almost instantly → a handful of samples, fewer than the
+    // NNLS window. Must return cleanly, not throw a range error.
+    final tiny = chordSignal(cMajorFreqs, seconds: 0.005).toList(); // ~220 smp
+    final result = analyzer.analyze(tiny, 44100);
+    expect(result.chords, isEmpty);
+    expect(result.durationSec, greaterThan(0));
+  });
+
   test('analyzes a strum pattern into an ordered strum timeline', () {
     final pcm = strumPattern(
       lowFirstPerStrum: [true, false, true, false], // down, up, down, up
