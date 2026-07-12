@@ -66,6 +66,7 @@ class SuperFluxOnsetDetector {
   // Local-max confirmation: the candidate must top ±2 neighbouring frames.
   static const int _postFrames = 2;
 
+
   final LogMelExtractor _mel;
   // Release hysteresis (same idea as the whitened-flux path, chunk 005): one
   // strum = ONE continuous flux plateau. A new onset is eligible only after

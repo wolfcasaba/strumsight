@@ -63,6 +63,16 @@ class StrumAnalyzer {
   static const _highBandMinHz = 1000.0;
   static const _classifyAfterFrames = 12; // ~70 ms of post-onset evidence
 
+  // Reported-time correction (r144, MEASURED): the SuperFlux peak frame
+  // STARTS a constant ~2.5 hops (14.2 ms) before the true attack instant —
+  // invariant across stagger 4–12 ms and level 1.0/0.3. StrumEvent.timeSec
+  // reports the estimated ATTACK so the LessonScorer's ±50 ms PERFECT window
+  // keeps its full late-side margin for uncalibrated users. The correction is
+  // applied ONLY to the reported time — classification and the Viterbi onset
+  // boost keep the peak-frame reference (shifting them would slide the r59
+  // baseline window into the attack).
+  static const double _attackOffsetFrames = 2.5;
+
   final FFT _fft;
   final Float64List _hann;
   final Float64List _windowed;
@@ -137,7 +147,7 @@ class StrumAnalyzer {
         currentFrame: _frameIndex,
       );
       return StrumEvent(
-        timeSec: onsetFrame * _frameSec,
+        timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
         direction: c.direction,
         confidence: c.confidence,
       );

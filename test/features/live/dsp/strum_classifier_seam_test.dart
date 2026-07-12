@@ -54,10 +54,11 @@ void main() {
     expect(current - onset, 12,
         reason: 'the evidence-window policy stays in the analyzer');
 
-    // The injected verdict flows through to the event verbatim.
+    // The injected verdict flows through to the event verbatim; the reported
+    // time is the peak frame + the r144 attack offset (+2.5 hops).
     expect(events.single.direction, StrumDirection.up);
     expect(events.single.confidence, 0.9);
     expect(events.single.timeSec,
-        closeTo(onset * analyzer.hop / sr, 1e-9));
+        closeTo((onset + 2.5) * analyzer.hop / sr, 1e-9));
   });
 }

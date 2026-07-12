@@ -123,3 +123,13 @@ hysteresis and decays the flux-peak tracker — before the fix, a staccato stab
 hard-cut to digital silence froze `_eligible=false` forever and a stale loud
 peak could suppress a later soft strum (reproduced in test: stab → 1 s true
 silence → 0.25× soft strum was DROPPED; now detected).
+
+**r144 onset-TIME correction (measured):** the flux-peak frame STARTS a
+constant **2.5 hops (14.2 ms) before the true attack** — invariant across
+stagger 4–12 ms and level 1.0/0.3. `StrumEvent.timeSec` now reports
+`(peakFrame + 2.5) × hop/sr` (the estimated attack), pinned at |bias| < 6 ms;
+without it the LessonScorer's ±50 ms PERFECT window silently lost 14 ms of
+late-side margin for uncalibrated users. The correction applies ONLY to the
+reported time — classification and the Viterbi onset boost keep the
+peak-frame reference (shifting them would slide the r59 baseline window into
+the attack). Constant shifts cancel in TempoTracker/bar deltas.

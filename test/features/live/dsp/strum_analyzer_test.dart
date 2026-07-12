@@ -113,6 +113,33 @@ void main() {
         reason: 'missed strums at ${remaining.toList()}');
   });
 
+  test('reported onset time tracks the true attack within ±6 ms (r144)', () {
+    // The LessonScorer PERFECT window is ±50 ms; the r144 probe measured a
+    // constant −14.2 ms bias (the flux-peak FRAME START was reported, not the
+    // attack instant), which silently ate the late-side PERFECT margin for
+    // uncalibrated users. Pin the corrected accuracy across stagger + level.
+    for (final stagger in [4.0, 8.0, 12.0]) {
+      for (final amp in [1.0, 0.3]) {
+        final base = strumSignal(
+            lowFirst: true, staggerMs: stagger, leadSilenceSeconds: 0.2);
+        final signal = Float64List(base.length);
+        for (var i = 0; i < base.length; i++) {
+          signal[i] = base[i] * amp;
+        }
+        final analyzer = StrumAnalyzer(sampleRate: sr);
+        double? reported;
+        for (final frame in frames(signal, analyzer.window, analyzer.hop)) {
+          final e = analyzer.process(frame);
+          if (e != null && reported == null) reported = e.timeSec;
+        }
+        expect(reported, isNotNull);
+        expect((reported! - 0.2).abs(), lessThan(0.006),
+            reason: 'stagger=$stagger amp=$amp bias='
+                '${((reported - 0.2) * 1000).toStringAsFixed(1)}ms');
+      }
+    }
+  });
+
   test('onsetJustFired flags exactly the confirming frames (round 138)', () {
     final analyzer = StrumAnalyzer(sampleRate: sr);
     final signal = strumPattern(
