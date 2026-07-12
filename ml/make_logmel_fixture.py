@@ -39,23 +39,66 @@ def make_signal(sr: int, n: int) -> np.ndarray:
     return np.clip(x, -1.0, 1.0).astype(np.float32)
 
 
-def main() -> None:
-    n = 6000  # 0.375 s -> 25 log-mel frames: small fixture, full coverage
-    pcm = make_signal(features.SR, n)
+def _round_pcm(pcm):
+    """Round to the 8 sig-figs stored in JSON, so BOTH sides consume the
+    IDENTICAL input (r142 audit N2 — the reference must not be computed from
+    higher-precision samples than the fixture ships)."""
+    return np.array([float(f"{v:.8g}") for v in pcm.tolist()], dtype=np.float32)
+
+
+def _entry(pcm):
+    pcm = _round_pcm(pcm)
     lm = features.log_mel(pcm)
+    return pcm, lm
+
+
+def make_adversarial_cases(sr: int):
+    """The r142-audit adversarial input classes (short: 0.25 s each)."""
+    n = 4000
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(20260713)
+
+    loud = 5.0 * np.sin(2 * np.pi * 220.0 * t) * np.exp(-t * 2.0)
+    clipped = np.clip(loud, -1.0, 1.0).astype(np.float32)  # truly saturated
+
+    dc = (0.15 + 0.3 * np.sin(2 * np.pi * 110.0 * t) * np.exp(-t * 3.0))
+    dc = np.clip(dc, -1.0, 1.0).astype(np.float32)  # DC offset (cheap mic)
+
+    quiet = (rng.normal(0.0, 0.004, n)
+             + 0.02 * np.sin(2 * np.pi * 196.0 * t) * np.exp(-t * 4.0))
+    quiet = np.clip(quiet, -1.0, 1.0).astype(np.float32)  # near the log floor
+
+    return {"clipped": clipped, "dc_offset": dc, "near_floor": quiet}
+
+
+def main() -> None:
+    fixtures = pathlib.Path(__file__).resolve().parent.parent / "test" / "fixtures"
+    fixtures.mkdir(parents=True, exist_ok=True)
+
+    n = 6000  # 0.375 s -> 25 log-mel frames: small fixture, full coverage
+    pcm, lm = _entry(make_signal(features.SR, n))
     out = {
         "sr": features.SR,
         "n_fft": features.N_FFT,
         "hop": features.HOP,
         "n_mels": features.N_MELS,
         "fmin": features.FMIN,
-        "pcm": [float(f"{v:.8g}") for v in pcm.tolist()],
+        "pcm": pcm.tolist(),
         "logmel": [[float(f"{v:.6f}") for v in row] for row in lm.tolist()],
     }
-    dest = pathlib.Path(__file__).resolve().parent.parent / "test" / "fixtures" / "logmel_parity.json"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(out))
-    print(f"wrote {dest} — {lm.shape[0]} frames x {lm.shape[1]} mels")
+    (fixtures / "logmel_parity.json").write_text(json.dumps(out))
+    print(f"wrote logmel_parity.json — {lm.shape[0]} frames x {lm.shape[1]} mels")
+
+    cases = []
+    for name, sig in make_adversarial_cases(features.SR).items():
+        pcm, lm = _entry(sig)
+        cases.append({
+            "name": name,
+            "pcm": pcm.tolist(),
+            "logmel": [[float(f"{v:.6f}") for v in row] for row in lm.tolist()],
+        })
+    (fixtures / "logmel_parity_cases.json").write_text(json.dumps({"cases": cases}))
+    print(f"wrote logmel_parity_cases.json — {[c['name'] for c in cases]}")
 
 
 if __name__ == "__main__":

@@ -129,7 +129,10 @@ train.py), `split_by_recording` keeps BOTH sides non-empty (raises on <2
 recordings), labels past the audio end are SKIPPED not zero-emitted, and
 train.py computes norm.npz from the TRAIN fold only (eval-leak fix). The
 ready `ml/klangio.npz` (82 MB, gitignored) sits on this box for the training
-run. Deferred (recorded): adversarial log-mel parity fixtures (clipped/DC/
-near-floor), an end-to-end isolate-plumbing test for the expected-chord hint,
-re-checking the input-latency default against SuperFlux's onset instant on
-the real-guitar gate.
+run. Deferred (recorded): an end-to-end isolate-plumbing test for the
+expected-chord hint, re-checking the input-latency default against
+SuperFlux's onset instant on the real-guitar gate.
+✅ r143 closed the parity-fixture gap: `logmel_parity_cases.json` adds
+clipped/DC-offset/near-floor adversarial cases (all ≤1e-3), and BOTH fixtures
+now compute the Python reference from the ROUNDED pcm the JSON actually
+ships (N2 — identical input on both sides).

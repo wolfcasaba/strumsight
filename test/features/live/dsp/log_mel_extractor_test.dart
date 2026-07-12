@@ -64,5 +64,34 @@ void main() {
         expect(v, closeTo(-13.815510557964274, 1e-9)); // ln(1e-6)
       }
     });
+
+    // r142 audit: the single benign fixture left the adversarial input
+    // classes unexercised — a saturated (clipped) signal, a DC-offset mic,
+    // and a near-log-floor quiet signal must ALL stay within parity.
+    final cases = json.decode(
+      File('test/fixtures/logmel_parity_cases.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    for (final c in (cases['cases'] as List).cast<Map<String, dynamic>>()) {
+      test('adversarial parity: ${c['name']}', () {
+        final pcm = Float64List.fromList(
+          (c['pcm'] as List).cast<num>().map((v) => v.toDouble()).toList(),
+        );
+        final expected = (c['logmel'] as List)
+            .map((row) =>
+                (row as List).cast<num>().map((v) => v.toDouble()).toList())
+            .toList();
+        final frames = LogMelExtractor(sampleRate: 16000).process(pcm);
+        expect(frames.length, expected.length);
+        var maxErr = 0.0;
+        for (var i = 0; i < frames.length; i++) {
+          for (var m = 0; m < 128; m++) {
+            final err = (frames[i][m] - expected[i][m]).abs();
+            if (err > maxErr) maxErr = err;
+          }
+        }
+        expect(maxErr, lessThan(1e-3),
+            reason: 'max |dart - python| for the ${c['name']} case');
+      });
+    }
   });
 }
