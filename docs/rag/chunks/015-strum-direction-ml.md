@@ -142,3 +142,12 @@ and in shared cards. `LiveFrame` now carries `latestStrumTime` (the
 r144-corrected attack instant on the engine's sample clock) and
 `ClipAnalyzer._strumPass` stamps THAT; pinned at ±25 ms on a 4-strum clip.
 Also improves `_bpmFromStrums` (median IOI on accurate times).
+
+**r147 (the LIVE twin):** the Learn scorer received the frame-ARRIVAL lesson
+time — the classify-delay constant is the calibration's job, but the emit
+cadence adds **0–66 ms of jitter** a constant offset cannot absorb (up to
+±33 ms on a ±50 ms PERFECT window). `LiveFrame.engineTimeSec` (emit instant,
+same sample clock as `latestStrumTime`) lets `_onFrame` hand the scorer
+`elapsed − (emit − attack)` — the jitter cancels exactly on the engine clock;
+only transport (~ms) and the mic constant (calibration) remain. Guards:
+lag ∈ (0, 0.5 s), clockless producers (−1, mocks) skip correction.

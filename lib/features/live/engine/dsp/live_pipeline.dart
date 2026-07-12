@@ -167,6 +167,7 @@ class LivePipeline {
       listening: true,
       strumSeq: _strumSeq,
       latestStrumTime: _latestStrumTime,
+      engineTimeSec: nowSec,
     );
   }
 

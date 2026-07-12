@@ -167,12 +167,26 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // A new discrete strum → score it against the nearest lesson event.
     if (frame.strumSeq > _lastSeq && frame.latestStrum != null) {
       _lastSeq = frame.strumSeq as int;
+      // De-jitter (r147): the frame arrives classify-delay + emit-cadence
+      // after the attack; both instants ride the frame on the engine's own
+      // sample clock, so subtracting their difference removes the 0–66 ms
+      // cadence JITTER the constant latency calibration cannot. Bounded to
+      // 0.5 s as a sanity guard; mocks without clocks (−1) skip correction.
+      var at = _elapsedSec;
+      final lag =
+          (frame.engineTimeSec as double) - (frame.latestStrumTime as double);
+      if (frame.engineTimeSec >= 0 &&
+          frame.latestStrumTime >= 0 &&
+          lag > 0 &&
+          lag < 0.5) {
+        at -= lag;
+      }
       // Only buzz when the strum actually resolved an event — a stray strum
       // with no event in range returns null and must NOT re-fire the previous
       // verdict's haptic.
       final result = _scorer!.registerStrum(
         frame.latestStrum.direction,
-        _elapsedSec,
+        at,
       );
       final snap = _scorer!.snapshot();
       if (result != null) _fireHaptic(result, snap.lastTiming);

@@ -18,6 +18,7 @@ class LiveFrame {
     required this.listening,
     this.strumSeq = 0,
     this.latestStrumTime = -1,
+    this.engineTimeSec = -1,
   });
 
   /// Currently sounding chord (null before the first detection).
@@ -57,6 +58,13 @@ class LiveFrame {
   /// with ±40 ms jitter (measured, r145).
   final double latestStrumTime;
 
+  /// This frame's EMIT instant on the same engine sample clock (−1 when the
+  /// producer doesn't track it, e.g. mocks). Together with [latestStrumTime]
+  /// a consumer can subtract the classify-delay + emit-cadence lag — the
+  /// cadence part is 0–66 ms of JITTER a constant latency calibration cannot
+  /// absorb (r147; the live twin of the r145 Analyze fix).
+  final double engineTimeSec;
+
   /// Confidence of the latest strum, or 0 if none.
   double get confidence => latestStrum?.confidence ?? 0;
 
@@ -81,6 +89,7 @@ class LiveFrame {
       listening: listening ?? this.listening,
       strumSeq: strumSeq,
       latestStrumTime: latestStrumTime,
+      engineTimeSec: engineTimeSec,
     );
   }
 
