@@ -80,3 +80,20 @@ GPU-class, reference only.
 commit to `docs/rag/chunks/`; run neural inference in a separate isolate; mic +
 acoustic + noise is where leaders drop to ~85 % — prioritize noise robustness;
 validate on a real acoustic guitar via the CI APK (synthetic green ≠ done).
+
+## AS BUILT round 137 (2026-07-12) — expected-target prior (rec #1)
+`ViterbiChordDecoder.setExpected(label)` + **`expectedPrior = 0.05`** added to
+the expected state's TRELLIS accumulation only (never the raw similarity, so
+reported confidence stays honest; never the no-chord state, so expecting a
+chord cannot conjure one from silence; unknown labels — e.g. slash chords —
+clear the prior). Measured semantics: ambiguous maj-vs-maj7 evidence
+(sustained near-Cmaj7 that flips in 25 frames unbiased) HOLDS the expected C;
+a clearly-played G still wins over an expected C in 8 frames (off-chart
+safety). Plumbing: `LivePipeline.setExpectedChord` → `StrumEngine`
+interface method (mock/fake = recorded no-op) → `RealStrumEngine` control
+message (`_ExpectedChord`) into the DSP isolate, re-asserted on the SendPort
+handshake (a lesson can set it before the mic finishes starting). Learn wiring:
+`_activeChord()` (0.25-beat lookahead + pre-roll) pushed on play/restart +
+every tick when changed; CLEARED on finish and on dispose via a captured
+engine reference (`ref` is unreliable during tree finalization) — a stale
+lesson bias must never leak into free-play Live.

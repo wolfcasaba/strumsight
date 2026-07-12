@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/widgets/chord_diagram.dart';
+import '../../live/engine/strum_engine.dart';
 import '../../live/model/strum.dart';
 import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
@@ -93,11 +94,33 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   @override
   void dispose() {
+    // Clear the expected-chord hint — a lesson bias left on the engine would
+    // silently skew free-play Live detection afterwards (round 137). Uses the
+    // captured engine reference: `ref` is not reliable while the tree is
+    // being finalized.
+    if (_sentExpected != null) {
+      _hintedEngine?.setExpectedChord(null);
+    }
     _frameSub?.close();
     _ticker.dispose();
     _metronome.dispose();
     _backing.dispose();
     super.dispose();
+  }
+
+  /// Push the current lesson target chord to the detector when it changes
+  /// (the chunk-016 expected-target prior). Jam mode and a finished/idle
+  /// screen hint nothing.
+  String? _sentExpected;
+  StrumEngine? _hintedEngine; // captured so dispose can clear without ref
+  void _updateExpectedChord() {
+    final active = !_jam && _scorer != null ? _activeChord() : '';
+    final label = active.isEmpty ? null : active;
+    if (label != _sentExpected) {
+      _sentExpected = label;
+      _hintedEngine = ref.read(strumEngineProvider);
+      _hintedEngine!.setExpectedChord(label);
+    }
   }
 
   double get _playhead =>
@@ -132,6 +155,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       if (_jam && downbeat && beat >= 0) _backing.playChord(_activeChord());
     }
     _prevPlayhead = now;
+    _updateExpectedChord();
     if (LessonTiming.isFinished(now, _lesson.totalBeats, _lesson.beatsPerBar)) {
       _finish();
     }
@@ -190,6 +214,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = _playhead; // don't re-click beats already passed
+    _updateExpectedChord(); // hint the first target during the count-in
     setState(() => _playing = true);
     _ticker.start();
   }
@@ -219,6 +244,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       _frameSub ??= ref.listenManual(liveFrameProvider, _onFrame);
     }
     _prevPlayhead = -_countInBeats.toDouble();
+    _updateExpectedChord();
     setState(() {
       _accumSec = 0;
       _elapsedSec = 0;
@@ -237,6 +263,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   Future<void> _finish() async {
     if (!_playing) return;
     _pause();
+    // The run is over — stop biasing detection toward the last chord.
+    _sentExpected = null;
+    _hintedEngine?.setExpectedChord(null);
     _scorer?.finalize();
     final snap = _scorer?.snapshot();
     setState(() => _score = snap);

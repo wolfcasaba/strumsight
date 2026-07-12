@@ -15,6 +15,12 @@ abstract class StrumEngine {
   /// Stop producing frames (the engine stays reusable — call [start] again).
   Future<void> stop();
 
+  /// Hint the currently EXPECTED chord (lesson/song target) to the detector,
+  /// or clear it with null. The chord path biases ambiguous evidence toward
+  /// the target (chunk 016 expected-target prior, round 137); a genuinely
+  /// different played chord still wins. Default: no-op (mock/test engines).
+  void setExpectedChord(String? label) {}
+
   /// Release all resources.
   Future<void> dispose();
 }

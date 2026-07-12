@@ -69,6 +69,9 @@ class MockStrumEngine implements StrumEngine {
   }
 
   @override
+  void setExpectedChord(String? label) {} // mock: no detector to hint
+
+  @override
   Future<void> dispose() async {
     await stop();
     await _controller?.close();

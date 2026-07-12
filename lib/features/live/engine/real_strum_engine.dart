@@ -18,6 +18,13 @@ class RealStrumEngine implements StrumEngine {
   ReceivePort? _fromDsp;
   final List<List<double>> _pendingChunks = [];
   bool _running = false;
+  String? _expectedChord;
+
+  @override
+  void setExpectedChord(String? label) {
+    _expectedChord = label;
+    _toDsp?.send(_ExpectedChord(label));
+  }
 
   @override
   Stream<LiveFrame> get frames {
@@ -56,6 +63,11 @@ class RealStrumEngine implements StrumEngine {
       _fromDsp!.listen((message) {
         if (message is SendPort) {
           _toDsp = message;
+          // Re-assert the expected-chord hint: the isolate is fresh (a lesson
+          // may have set it before/while the mic was starting).
+          if (_expectedChord != null) {
+            _toDsp!.send(_ExpectedChord(_expectedChord));
+          }
           for (final c in _pendingChunks) {
             _toDsp!.send(c);
           }
@@ -103,6 +115,13 @@ class _DspInit {
   final int sampleRate;
 }
 
+/// Control message: the lesson's expected chord (round-137 prior).
+class _ExpectedChord {
+  const _ExpectedChord(this.label);
+
+  final String? label;
+}
+
 void _dspEntry(_DspInit init) {
   final pipeline = LivePipeline(sampleRate: init.sampleRate);
   final inbox = ReceivePort();
@@ -112,6 +131,8 @@ void _dspEntry(_DspInit init) {
       for (final frame in pipeline.addChunk(message)) {
         init.sendPort.send(frame);
       }
+    } else if (message is _ExpectedChord) {
+      pipeline.setExpectedChord(message.label);
     }
   });
 }

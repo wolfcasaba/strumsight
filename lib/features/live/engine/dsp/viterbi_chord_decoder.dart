@@ -40,6 +40,25 @@ class ViterbiChordDecoder {
   /// Index of the no-chord state (always 0 in [ChordDictionary]).
   static const int _noChord = 0;
 
+  /// Expected-target prior (chunk 016 rec #1 — round 137). In a lesson/song
+  /// the target chord is KNOWN, so its trellis score gains a small per-frame
+  /// bonus: ambiguous evidence (maj vs maj7, weak thirds) resolves toward the
+  /// target, while a genuinely different played chord still out-scores it —
+  /// the bonus is far below a real similarity gap, and it is NEVER applied to
+  /// the no-chord state (expecting a chord cannot conjure one from silence).
+  /// Confidence reporting stays on the RAW similarity (no self-deception).
+  static const double expectedPrior = 0.05;
+  int _expectedIdx = -1;
+
+  /// Set (or clear with null) the currently expected chord label. Unknown
+  /// labels (e.g. a slash chord outside the dictionary) clear the prior.
+  void setExpected(String? label) {
+    _expectedIdx = label == null
+        ? -1
+        : dictionary.profiles
+            .indexWhere((p) => !p.isNoChord && p.label == label);
+  }
+
   /// Advance one frame with the observed bass+treble chroma pair and return the
   /// stable chord, or null when the path sits in the no-chord state (silence /
   /// noise / rest). Feed zero vectors on a gated/silent frame — the no-chord
@@ -50,7 +69,7 @@ class ViterbiChordDecoder {
 
     if (!_seeded) {
       for (var s = 0; s < n; s++) {
-        _delta[s] = sim[s];
+        _delta[s] = sim[s] + (s == _expectedIdx ? expectedPrior : 0.0);
       }
       _seeded = true;
     } else {
@@ -60,7 +79,9 @@ class ViterbiChordDecoder {
       }
       for (var s = 0; s < n; s++) {
         final stay = _delta[s] + selfBonus;
-        _delta[s] = sim[s] + (stay > bestPrev ? stay : bestPrev);
+        _delta[s] = sim[s] +
+            (s == _expectedIdx ? expectedPrior : 0.0) +
+            (stay > bestPrev ? stay : bestPrev);
       }
     }
 

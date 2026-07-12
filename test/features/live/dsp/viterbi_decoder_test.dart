@@ -106,4 +106,48 @@ void main() {
     final m = d.process(gMaj[0], gMaj[1]);
     expect(m!.chord.label, 'G');
   });
+
+  // Round 137 (chunk 016 rec #1): the expected-target prior. During a lesson
+  // the target chord is KNOWN — a small per-frame bonus resolves AMBIGUOUS
+  // evidence toward the target, but must never mask a genuinely different
+  // played chord (the "off-chart" guarantee).
+  group('expected-chord prior', () {
+    test('ambiguous maj-vs-maj7 evidence resolves to the expected chord', () {
+      final d = ViterbiChordDecoder()..setExpected('C');
+      feed(d, cMaj, 8);
+      // Without the prior this sustained marginal Cmaj7 flips within 25
+      // frames (see the flicker test above); expecting C it must hold C.
+      final held = feed(d, cMaj7, 25);
+      expect(held!.chord.label, 'C',
+          reason: 'the prior tips the ambiguous call toward the target');
+    });
+
+    test('a clearly different played chord still wins (off-chart safety)', () {
+      final d = ViterbiChordDecoder()..setExpected('C');
+      final m = feed(d, gMaj, 8);
+      expect(m!.chord.label, 'G',
+          reason: 'expecting C must never rename a real G');
+    });
+
+    test('clearing the expectation restores baseline behaviour', () {
+      final d = ViterbiChordDecoder()..setExpected('C');
+      d.setExpected(null);
+      feed(d, cMaj, 8);
+      final held = feed(d, cMaj7, 25);
+      expect(held!.chord.label, 'Cmaj7',
+          reason: 'null expectation = the pre-prior switch behaviour');
+    });
+
+    test('an unknown label is ignored gracefully', () {
+      final d = ViterbiChordDecoder()..setExpected('G/B');
+      final m = feed(d, cMaj, 8);
+      expect(m!.chord.label, 'C');
+    });
+
+    test('expecting a chord never conjures it from silence', () {
+      final d = ViterbiChordDecoder()..setExpected('C');
+      expect(feed(d, silence, 8), isNull,
+          reason: 'the prior must not beat the no-chord floor');
+    });
+  });
 }

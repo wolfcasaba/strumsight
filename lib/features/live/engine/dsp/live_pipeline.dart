@@ -53,6 +53,10 @@ class LivePipeline {
   int _samplesSeen = 0;
   int _lastEmitAt = 0;
 
+  /// Hint the currently expected chord (or clear with null) — the Viterbi
+  /// expected-target prior (chunk 016, round 137).
+  void setExpectedChord(String? label) => _chordDecoder.setExpected(label);
+
   ChordMatch? _lastChord;
   Strum? _latestStrum;
   double _latestStrumTime = -1;

@@ -13,6 +13,13 @@ class FakeStrumEngine implements StrumEngine {
   int startCalls = 0;
   int stopCalls = 0;
 
+  /// Every [setExpectedChord] call in order (null = cleared) — lets tests
+  /// assert the Learn wiring of the round-137 expected-target prior.
+  final List<String?> expectedChordCalls = [];
+
+  @override
+  void setExpectedChord(String? label) => expectedChordCalls.add(label);
+
   @override
   Stream<LiveFrame> get frames => _controller.stream;
 

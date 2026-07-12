@@ -3,7 +3,6 @@
 // PROPERTY_SEED env (CI: run id), absent → 42 (deterministic dev loop).
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/engine/dsp/superflux_onset_detector.dart';
