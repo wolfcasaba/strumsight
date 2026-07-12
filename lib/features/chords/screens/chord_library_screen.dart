@@ -104,6 +104,18 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
                 children: [for (final label in entry.value) _tile(label)],
               ),
             ],
+            // A non-matching search must not leave a blank screen (round 133).
+            if (_query.isNotEmpty && groups.isEmpty && favList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 40, 6, 8),
+                child: Center(
+                  child: Text(
+                    l10n.chordLibraryNoResults(_query),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

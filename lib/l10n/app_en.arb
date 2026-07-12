@@ -211,6 +211,8 @@
   "settingsLeftHandedHint": "Mirror chord diagrams for a left-handed guitar",
   "chordLibraryTitle": "Chord library",
   "chordLibrarySearch": "Search chords…",
+  "chordLibraryNoResults": "No chords match “{query}”",
+  "@chordLibraryNoResults": { "placeholders": { "query": { "type": "String" } } },
   "chordGroupFavorites": "Favorites",
   "chordGroupMajor": "Major",
   "chordGroupMinor": "Minor",

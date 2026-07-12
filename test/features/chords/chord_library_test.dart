@@ -47,4 +47,24 @@ void main() {
     expect(find.text('MAJOR'), findsNothing);
     expect(find.text('MINOR'), findsNothing);
   });
+
+  testWidgets('a search with no matches shows an empty state, not a blank '
+      'screen (round 133)', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ChordLibraryScreen(),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'zzzz');
+    await tester.pump();
+
+    expect(find.textContaining('No chords match'), findsOneWidget);
+    expect(find.byType(ChordDiagram), findsNothing);
+    // No stray group headers either.
+    expect(find.text('MAJOR'), findsNothing);
+  });
 }
