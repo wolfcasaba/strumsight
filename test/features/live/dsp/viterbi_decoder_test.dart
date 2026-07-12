@@ -107,6 +107,53 @@ void main() {
     expect(m!.chord.label, 'G');
   });
 
+  // Round 138 (chunk 016 rec #2): onset-aligned updates. A strum onset is the
+  // only moment a chord CAN change — right after one, the switch penalty is
+  // relaxed for a couple of frames (fast, decisive changes); between onsets
+  // the full bonus keeps the track stable.
+  group('onset-aligned switch boost', () {
+    int framesToFlip(ViterbiChordDecoder d) {
+      var n = 0;
+      while (n < 60) {
+        n++;
+        if (d.process(cMaj7[0], cMaj7[1])?.chord.label == 'Cmaj7') break;
+      }
+      return n;
+    }
+
+    test('a marginal change lands faster right after an onset', () {
+      final base = ViterbiChordDecoder();
+      feed(base, cMaj, 8);
+      final baseline = framesToFlip(base);
+
+      final boosted = ViterbiChordDecoder();
+      feed(boosted, cMaj, 8);
+      boosted.noteOnset();
+      expect(framesToFlip(boosted), lessThan(baseline),
+          reason: 'the post-onset window must switch sooner than steady-state');
+    });
+
+    test('the boost expires — stability returns between onsets', () {
+      final d = ViterbiChordDecoder();
+      feed(d, cMaj, 8);
+      d.noteOnset();
+      feed(d, cMaj, 4); // boost window passes while the SAME chord sustains
+      // A single marginal frame afterwards must not flip (the r28 flicker
+      // guarantee is back in force).
+      final blip = d.process(cMaj7[0], cMaj7[1]);
+      expect(blip!.chord.label, 'C',
+          reason: 'one marginal frame cannot flip once the boost expired');
+    });
+
+    test('an onset on the SAME sustained chord changes nothing', () {
+      final d = ViterbiChordDecoder();
+      feed(d, cMaj, 8);
+      d.noteOnset();
+      final m = feed(d, cMaj, 4);
+      expect(m!.chord.label, 'C');
+    });
+  });
+
   // Round 137 (chunk 016 rec #1): the expected-target prior. During a lesson
   // the target chord is KNOWN — a small per-frame bonus resolves AMBIGUOUS
   // evidence toward the target, but must never mask a genuinely different

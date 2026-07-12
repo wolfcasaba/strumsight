@@ -82,6 +82,11 @@ class StrumAnalyzer {
   /// RMS of the most recent frame (level meter).
   double lastRms = 0;
 
+  /// True when THIS frame confirmed a new onset (before classification — the
+  /// pipeline uses it to trigger the decoder's onset-aligned switch boost,
+  /// round 138). Reset every [process] call.
+  bool onsetJustFired = false;
+
   double get _frameSec => hop / sampleRate;
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
@@ -119,6 +124,7 @@ class StrumAnalyzer {
     // SuperFlux onset trigger (silence gate, release hysteresis and the
     // attack-relative peak gate all live inside the detector).
     final onsetSec = _onsets.processFrame(frame);
+    onsetJustFired = onsetSec != null;
     if (onsetSec != null) {
       _pendingOnsets.addLast((onsetSec * sampleRate / hop).round());
     }

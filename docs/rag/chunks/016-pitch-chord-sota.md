@@ -97,3 +97,15 @@ handshake (a lesson can set it before the mic finishes starting). Learn wiring:
 every tick when changed; CLEARED on finish and on dispose via a captured
 engine reference (`ref` is unreliable during tree finalization) — a stale
 lesson bias must never leak into free-play Live.
+
+## AS BUILT round 138 (2026-07-12) — onset-aligned updates (rec #2)
+`ViterbiChordDecoder.noteOnset()`: for the next **2 chord frames** (~186 ms at
+the 93 ms NNLS hop) the self-transition bonus is scaled by **0.25** — the
+decoder switches decisively ON a strum and re-locks between onsets (the r28
+one-frame-blip guarantee is back in force once the window passes). ONLINE path
+only; the batch backtrace (Analyze) already sees future evidence and needs no
+boost. Trigger: `StrumAnalyzer.onsetJustFired` (set the frame SuperFlux
+confirms, ~12 ms after the attack — well inside one chord frame) →
+`LivePipeline` fast path calls `noteOnset()`. Tested: a marginal change flips
+faster post-onset than steady-state; the boost expires; an onset on the same
+sustained chord changes nothing.

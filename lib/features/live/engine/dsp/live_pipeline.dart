@@ -81,6 +81,10 @@ class LivePipeline {
     // Fast path: onsets + direction.
     for (final frame in _onsetFramer.add(chunk)) {
       final event = _strums.process(frame);
+      // Onset-aligned chord updates (chunk 016, round 138): a fresh onset
+      // relaxes the Viterbi switch penalty for the next couple of chord
+      // frames — the chord changes ON the strum, stays stable between.
+      if (_strums.onsetJustFired) _chordDecoder.noteOnset();
       if (event == null) continue;
       _tempo.addOnset(event.timeSec);
       if (event.direction != null) {

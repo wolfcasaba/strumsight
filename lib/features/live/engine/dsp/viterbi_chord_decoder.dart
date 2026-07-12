@@ -59,6 +59,19 @@ class ViterbiChordDecoder {
             .indexWhere((p) => !p.isNoChord && p.label == label);
   }
 
+  /// Onset-aligned updates (chunk 016 rec #2 — round 138): a strum onset is
+  /// the only moment a chord CAN change, so for the next [_onsetBoostFrames]
+  /// chord frames the self-transition bonus is scaled by [_onsetBonusScale] —
+  /// the decoder switches decisively ON the strum and stays stable between
+  /// onsets. Online path only (the batch backtrace already sees the future).
+  static const int _onsetBoostFrames = 2; // ~186 ms at the 93 ms chord hop
+  static const double _onsetBonusScale = 0.25;
+  int _boostLeft = 0;
+
+  /// Tell the decoder a strum onset just happened (called by the pipeline
+  /// from the fast path; ~12 ms detection lag vs the 93 ms chord hop).
+  void noteOnset() => _boostLeft = _onsetBoostFrames;
+
   /// Advance one frame with the observed bass+treble chroma pair and return the
   /// stable chord, or null when the path sits in the no-chord state (silence /
   /// noise / rest). Feed zero vectors on a gated/silent frame — the no-chord
@@ -66,6 +79,9 @@ class ViterbiChordDecoder {
   ChordMatch? process(Float64List bass, Float64List treble) {
     final sim = dictionary.score(bass, treble);
     final n = sim.length;
+
+    final bonus = _boostLeft > 0 ? selfBonus * _onsetBonusScale : selfBonus;
+    if (_boostLeft > 0) _boostLeft--;
 
     if (!_seeded) {
       for (var s = 0; s < n; s++) {
@@ -78,7 +94,7 @@ class ViterbiChordDecoder {
         if (_delta[s] > bestPrev) bestPrev = _delta[s];
       }
       for (var s = 0; s < n; s++) {
-        final stay = _delta[s] + selfBonus;
+        final stay = _delta[s] + bonus;
         _delta[s] = sim[s] +
             (s == _expectedIdx ? expectedPrior : 0.0) +
             (stay > bestPrev ? stay : bestPrev);

@@ -113,6 +113,21 @@ void main() {
         reason: 'missed strums at ${remaining.toList()}');
   });
 
+  test('onsetJustFired flags exactly the confirming frames (round 138)', () {
+    final analyzer = StrumAnalyzer(sampleRate: sr);
+    final signal = strumPattern(
+      lowFirstPerStrum: [true, true, true],
+      gapSeconds: 0.5,
+    );
+    var fired = 0;
+    for (final frame in frames(signal, win, hop)) {
+      analyzer.process(frame);
+      if (analyzer.onsetJustFired) fired++;
+    }
+    expect(fired, 3,
+        reason: 'one onset signal per strum — feeds the Viterbi switch boost');
+  });
+
   test('TempoTracker: 0.5 s spacing → 120 BPM', () {
     final tracker = TempoTracker();
     for (var i = 0; i < 6; i++) {
