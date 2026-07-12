@@ -91,8 +91,10 @@ streak), a 9:16 `WrappedCard` (same brand language as the other cards,
 English-global copy), `WrappedPreviewScreen` → the existing
 RepaintBoundary→PNG→share pipeline, caption with moat + install link +
 hashtags. Entry: a share action on the Progress AppBar (hidden until there is
-anything to share). The AUTO-prompt after a good session and the weekly
-cadence (notification) remain TODO — this ships the manual v1. Remaining
+anything to share). ✅ r153: the AUTO-prompt half shipped — the lesson-finish dialog offers
+"Share my week" as a quiet inline row when accuracy ≥ 80 % (`WrappedPrompt`,
+threshold pinned by tests; the moment of pride is the share moment, and a
+weak run stays prompt-free). The weekly notification cadence remains TODO. Remaining
 mined backlog lives in the [[hermes-research-mining]] memory: scored-strum
 onboarding win (#4), streak→skill reframe, dynamic difficulty (016b P4),
 Friday nudge copy; business items still deferred.

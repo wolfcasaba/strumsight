@@ -10,7 +10,12 @@ import '../../live/engine/strum_engine.dart';
 import '../../live/model/strum.dart';
 import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
+import 'package:intl/intl.dart';
+
+import '../../progress/model/practice_stats.dart';
 import '../../progress/providers/practice_log_provider.dart';
+import '../../share/model/weekly_recap.dart';
+import '../../share/screens/wrapped_preview_screen.dart';
 import '../../settings/providers/input_latency_provider.dart';
 import '../../settings/providers/visual_latency_provider.dart';
 import '../../streak/providers/streak_provider.dart';
@@ -25,6 +30,7 @@ import '../lesson_timing.dart';
 import '../model/lesson.dart';
 import '../widgets/hit_burst.dart';
 import '../widgets/lesson_highway.dart';
+import '../widgets/wrapped_prompt.dart';
 import 'lesson_score_preview_screen.dart';
 
 /// The play-along player: a [Lesson]'s chord + ↓/↑ strokes scroll toward the
@@ -312,6 +318,27 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     if (mounted && snap != null) _showSummary(snap);
   }
 
+  void _openWrapped() {
+    final stats = PracticeStats(ref.read(practiceLogProvider));
+    final nowDate = DateTime.now();
+    final today = StreakLogic.epochDayOf(nowDate);
+    final recap = WeeklyRecap.fromEntries(
+      stats.entries,
+      today: today,
+      streak: ref.read(streakProvider).current,
+    );
+    final start = nowDate.subtract(const Duration(days: 6));
+    final label = '${DateFormat.MMMd().format(start)} – '
+        '${DateFormat.MMMd().format(nowDate)}';
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => WrappedPreviewScreen(
+        recap: recap,
+        weekLabel: label,
+        today: today,
+      ),
+    ));
+  }
+
   void _showSummary(ScoreSnapshot snap) {
     final l10n = AppLocalizations.of(context);
     final passed = _scorer?.passed ?? false;
@@ -355,6 +382,15 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                   '${l10n.learnChords}: ${(snap.chordAccuracy * 100).round()}%',
                 ),
               ),
+            // A good run is the moment of pride — offer the weekly Wrapped
+            // (chunk 017 rec #5's auto-prompt half, r153). Quiet inline row.
+            WrappedPrompt(
+              accuracy: snap.accuracy,
+              onOpen: () {
+                Navigator.of(ctx).pop();
+                _openWrapped();
+              },
+            ),
           ],
         ),
         actions: [
