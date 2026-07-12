@@ -38,8 +38,15 @@ class Chord {
 
   /// Transpose a chord label's root by [semitones], preserving its quality
   /// suffix (spelled with sharps). Unparseable roots are returned untouched.
+  /// A slash chord ("G/B") shifts BOTH the chord and its bass note (round 129).
   static String transposeLabel(String label, int semitones) {
     if (label.isEmpty || semitones % 12 == 0) return label;
+    // Slash chord: transpose each side independently (the bass moves too).
+    final slash = label.indexOf('/');
+    if (slash >= 0) {
+      return '${transposeLabel(label.substring(0, slash), semitones)}'
+          '/${transposeLabel(label.substring(slash + 1), semitones)}';
+    }
     // Root = first letter plus an optional accidental.
     var rootLen = 1;
     if (label.length > 1 && (label[1] == '#' || label[1] == 'b')) rootLen = 2;

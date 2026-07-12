@@ -45,6 +45,17 @@ void main() {
       expect(Chord.transposeLabel('Bb', -2), 'G#'); // Bb = A#, −2 = G#
     });
 
+    test('slash chords transpose the bass note too (round 129)', () {
+      // "G/B" is a real vocabulary chord (library + Song Builder chip); a
+      // capo user sharing a song with it must see BOTH parts shifted, not a
+      // stale bass. Bug was: only the root moved → "A/B".
+      expect(Chord.transposeLabel('G/B', 2), 'A/C#');
+      expect(Chord.transposeLabel('D/F#', -2), 'C/E');
+      expect(Chord.transposeLabel('C/E', 0), 'C/E'); // capo 0 identity
+      // An unparseable bass leaves that part alone, still shifts the root.
+      expect(Chord.transposeLabel('G/x', 2), 'A/x');
+    });
+
     test('unparseable / empty labels pass through untouched', () {
       expect(Chord.transposeLabel('—', -2), '—');
       expect(Chord.transposeLabel('', -2), '');
