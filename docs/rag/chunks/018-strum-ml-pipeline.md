@@ -63,7 +63,22 @@ the live budget. Augment with **±6-semitone pitch shift** before training
 3. Feed the on-device log-mel (standardised with `norm.npz`) to the stateful GRU.
 4. **Acceptance = the real-guitar APK test**, never synthetic F1 (HORIZON).
 
-## Honest status
-The dataset does not exist yet (needs a recording session with a worn IMU). The
-pipeline that turns it into a trained, deployable model is built + smoke-tested.
-This converts "we have no data path" into "record takes → run three commands".
+## AS BUILT round 134 (2026-07-12) — the Dart front-end parity contract
+`lib/features/live/engine/dsp/log_mel_extractor.dart` (`LogMelExtractor`) is the
+on-device port of `features.py::log_mel` — identical params, sparse triangular
+filters, `processFrame` as the streaming primitive. The contract is enforced by
+a golden fixture (`ml/make_logmel_fixture.py` → `test/fixtures/logmel_parity.json`,
+25 frames × 128 mels, max |dart−python| < 1e-3). Re-generate the fixture in the
+SAME commit as any features.py change.
+
+## Honest status (UPDATED 2026-07-12 — supersedes "the dataset does not exist")
+**The ISMIR-2025 dataset/code/checkpoint went public** (API-verified):
+`github.com/Klangio/guitar-strumming-transcription`, Apache-2.0, ~770 MB in-repo —
+56 recording sets (90 min real audio, 3 guitarists, `_phone.wav` mic variant =
+our deployment condition, `.strums` direction labels, IMU CSVs), training
+scripts, pretrained checkpoint (f1=0.8225, Git-LFS). Correction to chunk 015:
+the paper used 90 min real + 4 h VST-rendered synthetic (not 94 h); their
+ablation: joint synth+real training BEATS sequential pretrain→finetune, and
+VST-rendered synth ≫ pure Karplus-Strong (89.8 % vs 66 % synthetic-only on the
+sibling task). A user recording session is now OPTIONAL domain adaptation.
+Full plan: `docs/plans/ml-track.md`.
