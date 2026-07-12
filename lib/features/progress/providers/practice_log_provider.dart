@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,11 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
 
   SharedPreferences? _prefs;
   bool _dirty = false; // an entry landed before prefs finished loading
+  // Writes are GATED on the initial load: a record racing the load used to
+  // overwrite the on-disk history with just its own entry before the load
+  // ever read it (r149 data-loss bug — microtask ordering is not guaranteed
+  // in either direction, so the write must wait, not hope).
+  final Completer<void> _loaded = Completer<void>();
 
   @override
   List<PracticeEntry> build() {
@@ -30,15 +36,27 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
     try {
       _prefs = await SharedPreferences.getInstance();
       final raw = _prefs!.getString(_key);
-      // Don't clobber an entry recorded before prefs finished loading.
-      if (raw != null && !_dirty) {
+      if (raw != null) {
         final list = (jsonDecode(raw) as List)
             .map((e) => PracticeEntry.fromJson(e as Map<String, dynamic>))
             .toList();
-        state = list;
+        if (!_dirty) {
+          state = list;
+        } else {
+          // Entries landed before prefs finished loading (cold start → an
+          // immediate practice moment): MERGE — disk history in front of the
+          // new in-memory entries — then write the union below.
+          final merged = [...list, ...state];
+          state = merged.length > _cap
+              ? merged.sublist(merged.length - _cap)
+              : merged;
+        }
       }
+      if (_dirty) await _write();
     } catch (_) {
       // Prefs unavailable → keep the in-memory default.
+    } finally {
+      _loaded.complete();
     }
   }
 
@@ -51,10 +69,11 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
     state = next.length > _cap
         ? next.sublist(next.length - _cap)
         : next;
-    await _persist();
+    await _loaded.future; // never write over an unread disk blob
+    await _write();
   }
 
-  Future<void> _persist() async {
+  Future<void> _write() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       await _prefs!.setString(
