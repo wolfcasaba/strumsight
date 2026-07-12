@@ -342,6 +342,9 @@ class Lessons {
   /// one-off lessons (daily challenges, Analyze imports) that live outside
   /// the curriculum (round 92 — the finish→next retention loop).
   static Lesson? nextAfter(String id) {
+    // A passed onboarding first-win funnels straight into the curriculum —
+    // a brand-new user must never dead-end on "Play again" (r159).
+    if (id == 'first-win') return all.first;
     final lessons = all;
     for (var i = 0; i < lessons.length - 1; i++) {
       if (lessons[i].id == id) return lessons[i + 1];

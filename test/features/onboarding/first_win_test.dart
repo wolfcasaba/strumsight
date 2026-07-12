@@ -29,6 +29,14 @@ void main() {
         reason: 'outside the curriculum/unlock chain');
   });
 
+  test('a passed first win funnels into the curriculum (r159)', () {
+    final next = Lessons.nextAfter('first-win');
+    expect(next, isNotNull,
+        reason: 'the finish dialog must offer the first real lesson, '
+            'not dead-end a brand-new user on "Play again"');
+    expect(next!.id, Lessons.all.first.id);
+  });
+
   testWidgets('the last page leads with the first-win CTA', (tester) async {
     var firstWin = 0;
     await tester.pumpWidget(ProviderScope(
