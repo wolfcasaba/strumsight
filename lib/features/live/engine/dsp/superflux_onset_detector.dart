@@ -25,7 +25,7 @@ class SuperFluxOnsetDetector {
     this.hop = 256,
     this.bands = 64,
     this.lag = 2,
-    this.minIoiSec = 0.05,
+    this.minIoiSec = 0.06,
   }) : _mel = LogMelExtractor(
           sampleRate: sampleRate,
           nFft: window,
@@ -54,7 +54,12 @@ class SuperFluxOnsetDetector {
   // Adaptive threshold: flux > delta + lambda × median(recent flux), matching
   // the whitened-flux path's shape (chunk 005). Values are in summed
   // log-power units (tuned on the deterministic + randomized suites).
-  static const double _delta = 3.0;
+  // Delta is deliberately HIGH: log-domain flux is amplitude-invariant (a log
+  // difference is a power ratio), so even a soft attack rises strongly across
+  // most bands (measured ≥100) while ring-out beating bumps localise to a few
+  // bands (measured ≤10, e.g. 0.836 s into a single default strum) — 20 splits
+  // the two populations with margin on both sides.
+  static const double _delta = 20.0;
   static const double _lambda = 2.0;
   static const int _medianFrames = 69; // ~0.4 s @ 44.1 kHz / 256 hop
 

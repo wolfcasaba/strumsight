@@ -6,6 +6,7 @@ import 'package:fftea/fftea.dart';
 
 import '../../model/strum.dart';
 import 'dsp_config.dart';
+import 'superflux_onset_detector.dart';
 
 /// A detected strum: when, which direction (null = truly ambiguous), and how
 /// confident the direction call is.
@@ -23,16 +24,23 @@ class StrumEvent {
 
 /// Per-hop spectral measurements kept in a short history ring.
 class _Frame {
-  double flux = 0;
   double lowEnergy = 0;
   double highEnergy = 0;
   double centroid = 0;
 }
 
-/// Onset detection (spectral flux, RAG chunk 005) + strum-direction
+/// Onset detection (SuperFlux, chunk 015 rec #3 — round 136) + strum-direction
 /// classification (sub-band rise order × centroid slope fusion, chunk 006)
 /// + level. Pure & streaming: push fixed frames via [process]; confirmed,
 /// classified strums come back a few frames later (~70–90 ms).
+///
+/// Round 136 replaced the whitened-flux onset trigger with the r135
+/// [SuperFluxOnsetDetector] — A/B MEASURED: vibrato false onsets 23 → 1 on a
+/// 3 s constant-amplitude bend, 180/200 BPM 16ths 10–11/12 → 12/12, parity on
+/// the mixed randomized suite. The classification stage (with its r59
+/// onset-relative baseline subtraction) is unchanged. Cost note: this runs a
+/// second 1024-pt FFT per hop (the detector owns its own log-mel) — ~tens of
+/// µs, dwarfed by the NNLS path.
 class StrumAnalyzer {
   StrumAnalyzer({
     required this.sampleRate,
@@ -41,8 +49,9 @@ class StrumAnalyzer {
   })  : _fft = FFT(window),
         _hann = Float64List(window),
         _windowed = Float64List(window),
-        _mags = Float64List(window ~/ 2),
-        _prevMags = Float64List(window ~/ 2) {
+        _onsets = SuperFluxOnsetDetector(sampleRate: sampleRate) {
+    assert(window == _onsets.window && hop == _onsets.hop,
+        'StrumAnalyzer framing must match the SuperFlux detector');
     for (var i = 0; i < window; i++) {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (window - 1));
     }
@@ -53,16 +62,6 @@ class StrumAnalyzer {
   final int hop;
 
   // Tunables (RAG chunks 005–006; update the chunk when retuned).
-  // Adaptive whitening (Stowell & Plumbley): normalise each bin by its
-  // recent peak so attacks pop out and steady inter-string beating is
-  // suppressed. MEASURED: without it, ring-out beating floods the flux
-  // baseline and re-strums never cross a median-scaled threshold.
-  static const _whitenDecay = 0.995; // per ~5.8 ms frame
-  static const _whitenFloor = 1e-4;
-  static const _fluxDelta = 1.0; // additive, on whitened linear flux
-  static const _fluxLambda = 2.0; // × median, on whitened linear flux
-  static const _medianFrames = 20;
-  static const _minOnsetGapMs = 60.0;
   static const _lowBandMaxHz = 200.0;
   static const _highBandMinHz = 1000.0;
   static const _classifyAfterFrames = 12; // ~70 ms of post-onset evidence
@@ -71,38 +70,17 @@ class StrumAnalyzer {
   final FFT _fft;
   final Float64List _hann;
   final Float64List _windowed;
-  final Float64List _mags;
-  final Float64List _prevMags; // previous WHITENED magnitudes
-  late final Float64List _binPeaks = Float64List(window ~/ 2);
+  final SuperFluxOnsetDetector _onsets;
 
   final ListQueue<_Frame> _history = ListQueue();
-  final ListQueue<double> _fluxWindow = ListQueue();
+  // Onsets awaiting their post-onset evidence window. A queue (not a single
+  // slot): at 200 BPM 16ths the next onset (~75 ms) can land while the
+  // previous one is still inside its ~70 ms classify window.
+  final ListQueue<int> _pendingOnsets = ListQueue();
   int _frameIndex = -1;
-  int _lastOnsetFrame = -1 << 30;
-  int _pendingOnsetFrame = -1;
-  bool _hasPrev = false;
-  // Release hysteresis: one strum = one continuous flux plateau. A new onset
-  // is only eligible after the flux dipped below the threshold for ≥3
-  // consecutive frames (~17 ms) — longer than the widest per-string gap of a
-  // slow strum (~14 ms), so even a lazy rake stays ONE onset, while real
-  // inter-strum pauses (≥100 ms) release easily.
-  bool _released = true;
-  int _belowThrStreak = 0;
-  static const _releaseFrames = 3;
-  // Attack-relative gate: a candidate must reach ≥15% of the recent flux
-  // peak (decaying tracker) — ring-out beating spikes (~5–10) cannot compete
-  // with a real attack (~20–270), yet a soft strum after a loud one still
-  // passes once the tracker decays (halves in ~270 ms).
-  double _fluxPeak = 0;
-  static const _peakDecay = 0.985; // per frame
-  static const _peakRatio = 0.15;
 
   /// RMS of the most recent frame (level meter).
   double lastRms = 0;
-
-  /// Diagnostics (tests/tuning only).
-  double debugLastFlux = 0;
-  double debugLastThreshold = 0;
 
   double get _frameSec => hop / sampleRate;
 
@@ -123,82 +101,34 @@ class StrumAnalyzer {
     final spectrum = _fft.realFft(_windowed);
     final nBins = window ~/ 2;
     final f = _Frame();
-    var flux = 0.0, magSum = 0.0, weighted = 0.0;
+    var magSum = 0.0, weighted = 0.0;
     for (var k = 1; k < nBins; k++) {
       final re = spectrum[k].x, im = spectrum[k].y;
       final m = math.sqrt(re * re + im * im);
       final freq = k * sampleRate / window;
-
-      // Adaptive whitening: track the recent per-bin peak, normalise by it.
-      final p = math.max(m, _whitenDecay * _binPeaks[k]);
-      _binPeaks[k] = p;
-      final w = m / math.max(p, _whitenFloor);
-
-      final rise = w - _prevMags[k];
-      if (rise > 0) flux += rise; // half-wave rectified, whitened
       if (freq <= _lowBandMaxHz) f.lowEnergy += m;
       if (freq >= _highBandMinHz) f.highEnergy += m;
       magSum += m;
       weighted += m * freq;
-      _mags[k] = w;
     }
-    _prevMags.setAll(0, _mags);
     f.centroid = magSum > 0 ? weighted / magSum : 0;
-    f.flux = _hasPrev ? flux : 0; // linear whitened flux; first frame: none
-    _hasPrev = true;
 
     _history.addLast(f);
     if (_history.length > _historyLen) _history.removeFirst();
-    _fluxWindow.addLast(f.flux);
-    if (_fluxWindow.length > _medianFrames) _fluxWindow.removeFirst();
 
-    // Silence gate: no onsets from the noise floor.
-    final gated = lastRms < DspConfig.silenceRms;
-
-    // Threshold + release tracking run EVERY frame (also while pending or
-    // gated) so the hysteresis state stays truthful.
-    final thr = _fluxDelta + _fluxLambda * _median(_fluxWindow);
-    debugLastFlux = f.flux;
-    debugLastThreshold = thr;
-    if (f.flux < thr) {
-      _belowThrStreak++;
-      if (_belowThrStreak >= _releaseFrames) _released = true;
-    } else {
-      _belowThrStreak = 0;
-    }
-    _fluxPeak = math.max(f.flux, _peakDecay * _fluxPeak);
-
-    // Peak picking with 2-frame confirmation lag (chunk 005): frame n-2 is an
-    // onset if it exceeded the adaptive threshold, is a ±2-frame local max,
-    // and the detector has RELEASED since the previous onset.
-    StrumEvent? event;
-    if (!gated && _history.length >= 5 && _pendingOnsetFrame < 0 && _released) {
-      final h = _history.toList();
-      final n = h.length;
-      final cand = h[n - 3].flux;
-      final isMax = cand > thr &&
-          cand >= _peakRatio * _fluxPeak &&
-          cand >= h[n - 5].flux &&
-          cand >= h[n - 4].flux &&
-          cand >= h[n - 2].flux &&
-          cand >= h[n - 1].flux;
-      final candFrame = _frameIndex - 2;
-      final msSinceLast = (candFrame - _lastOnsetFrame) * _frameSec * 1000;
-      if (isMax && msSinceLast >= _minOnsetGapMs) {
-        _lastOnsetFrame = candFrame;
-        _pendingOnsetFrame = candFrame;
-        _released = false;
-        _belowThrStreak = 0;
-      }
+    // SuperFlux onset trigger (silence gate, release hysteresis and the
+    // attack-relative peak gate all live inside the detector).
+    final onsetSec = _onsets.processFrame(frame);
+    if (onsetSec != null) {
+      _pendingOnsets.addLast((onsetSec * sampleRate / hop).round());
     }
 
     // Classify once enough post-onset evidence has accumulated (chunk 006).
-    if (_pendingOnsetFrame >= 0 &&
-        _frameIndex - _pendingOnsetFrame >= _classifyAfterFrames) {
-      event = _classify(_pendingOnsetFrame);
-      _pendingOnsetFrame = -1;
+    if (_pendingOnsets.isNotEmpty &&
+        _frameIndex - _pendingOnsets.first >= _classifyAfterFrames) {
+      return _classify(_pendingOnsets.removeFirst());
     }
-    return event;
+    return null;
   }
 
   StrumEvent _classify(int onsetFrame) {
@@ -301,12 +231,4 @@ class StrumAnalyzer {
     return n == 0 ? 0 : sum / n;
   }
 
-  static double _median(Iterable<double> xs) {
-    final sorted = xs.toList()..sort();
-    if (sorted.isEmpty) return 0;
-    final mid = sorted.length ~/ 2;
-    return sorted.length.isOdd
-        ? sorted[mid]
-        : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
 }

@@ -95,6 +95,25 @@ fire). Measured on the randomized gate (overlapping ring-out strums, 100–180
 BPM 16ths, stagger 6–10 ms, 5 seeds): **recall 98–100 %, spurious 0–1.9 %**;
 the peak gate was the decisive fix (before it: spurious up to 22 %). Vibrato
 (±30 cent, 6 Hz, constant amplitude) produces ZERO onsets — the SuperFlux
-signature win over plain flux. NOT yet wired into the live path (that's the
-next integration round; the detector reports frame-start time, decision lag
-= 2 frames ≈ 11.6 ms).
+signature win over plain flux. (Detector reports frame-start time, decision
+lag = 2 frames ≈ 11.6 ms.)
+
+## AS BUILT round 136 (2026-07-12) — SuperFlux IS the live onset trigger
+`StrumAnalyzer` now delegates onset detection to `SuperFluxOnsetDetector`;
+the whitened-flux machinery (whitening, flux, median threshold, hysteresis,
+peak gate) was REMOVED from the analyzer (it all lives in the detector). The
+chunk-006 classification stage (sub-band rise order + centroid fusion, r59
+onset-relative baseline) is untouched; pending onsets are a QUEUE (at 200 BPM
+16ths the next onset lands inside the ~70 ms classify window). Analyze inherits
+the upgrade via LivePipeline. **A/B measured before the swap** (identical
+randomized suite): whitened flux hallucinated **23 onsets on a 3 s
+constant-amplitude vibrato** (SuperFlux: 1 — a REAL user-facing bug class:
+sustained bends read as strums) and dropped 1–2 strums at 180–200 BPM 16ths
+(SuperFlux 12/12 pre-tune). Integration retunes (same commit): **min-IOI
+50 → 60 ms** (the old analyzer's value; a 40 ms lazy rake double-fired at 50)
+and **threshold delta 3 → 20** (log-domain flux is amplitude-invariant: a real
+attack rises ≥100 across bands, a late ring-out beating bump ≤10 — measured at
+0.836 s into a single default strum — so 20 splits the populations; after the
+retune the randomized gate reads **recall 100 %, spurious 0 % on 5 seeds**).
+Honest cost: one extra 1024-pt FFT per hop (detector owns its log-mel);
+200 BPM 16ths stays 11/12 (the confidence tier reports that limit honestly).

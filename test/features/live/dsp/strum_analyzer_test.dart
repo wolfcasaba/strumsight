@@ -84,6 +84,35 @@ void main() {
     }
   });
 
+  // Round 136: the live onset trigger is SuperFlux (chunk 015 rec #3) — these
+  // pin the two measured wins over the old whitened flux (A/B probe: vibrato
+  // 23→1 false onsets; 180/200 BPM 16ths 10-11/12 → 12/12).
+  test('constant-amplitude vibrato yields at most the initial attack', () {
+    final events = analyze(vibratoNote(freq: 440, seconds: 3.0, amp: 0.25));
+    expect(events.length, lessThanOrEqualTo(1),
+        reason: 'a sustained bend/vibrato must not hallucinate strums '
+            '(got ${events.map((e) => e.timeSec).toList()})');
+  });
+
+  test('180 BPM 16th-note strums are all detected', () {
+    const gap = 60 / 180 / 4;
+    final signal = overlappingStrums(
+      lowFirstPerStrum: List.filled(12, true),
+      gapSeconds: gap,
+      ringSeconds: gap * 2,
+      sampleRate: sr,
+    );
+    final events = analyze(signal);
+    final expected = [for (var i = 0; i < 12; i++) 0.1 + i * gap];
+    final remaining = List<double>.from(expected);
+    for (final e in events) {
+      final i = remaining.indexWhere((t) => (t - e.timeSec).abs() <= 0.05);
+      if (i >= 0) remaining.removeAt(i);
+    }
+    expect(remaining, isEmpty,
+        reason: 'missed strums at ${remaining.toList()}');
+  });
+
   test('TempoTracker: 0.5 s spacing → 120 BPM', () {
     final tracker = TempoTracker();
     for (var i = 0; i < 6; i++) {
