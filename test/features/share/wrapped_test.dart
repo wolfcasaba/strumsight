@@ -69,6 +69,28 @@ void main() {
     expect(caption, contains('#StrumSightChallenge'));
   });
 
+  testWidgets('the card survives heavy-user numbers without overflow (r160)',
+      (tester) async {
+    const recap = WeeklyRecap(
+      minutes: 2100, // 5 h/day for a week — the realistic ceiling
+      sessions: 99,
+      strokes: 25000,
+      daysPracticed: 7,
+      bestDay: 100,
+      averageAccuracy: 1.0,
+      streak: 365,
+    );
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
+      ),
+    ));
+    // Overflow paints throw in tests — reaching here green IS the assert.
+    expect(find.text('2100'), findsOneWidget);
+    expect(find.text('25000'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the card renders the recap values', (tester) async {
     const recap = WeeklyRecap(
       minutes: 42,
