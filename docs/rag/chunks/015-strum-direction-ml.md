@@ -79,3 +79,22 @@ onsets/s, ~125 ms apart). Upgrade, staying pure-Dart:
 toward it and set product expectations; synthetic-only training gives good onset
 F1 but POOR direction — real IMU-labeled data is mandatory. Final acceptance
 stays the real-guitar APK test, never synthetic F1.
+
+## AS BUILT round 135 (2026-07-12) — SuperFlux onsets (rec #3)
+`lib/features/live/engine/dsp/superflux_onset_detector.dart` — standalone
+`SuperFluxOnsetDetector` on the StrumAnalyzer framing (1024 win / 256 hop @
+device rate): 64-band log-mel (`LogMelExtractor`, fMin 30 Hz) floored at
+**−9.0 log-power** (kills noise-floor log-ratios), rectified difference vs a
+**±1-band maximum-filtered reference lag=2 frames** back (~11.6 ms), adaptive
+threshold **flux > 3.0 + 2.0 × median(0.4 s)**, ±2-frame local max, min-IOI
+50 ms, **RMS silence gate** (DspConfig.silenceRms), plus BOTH chunk-005 guards
+ported from the whitened-flux path: release hysteresis (≥3 frames below
+threshold re-arms — one rake = one onset) and the attack-relative gate
+(candidate ≥ 0.15 × 0.985-decayed flux peak — ring-out beating bumps can't
+fire). Measured on the randomized gate (overlapping ring-out strums, 100–180
+BPM 16ths, stagger 6–10 ms, 5 seeds): **recall 98–100 %, spurious 0–1.9 %**;
+the peak gate was the decisive fix (before it: spurious up to 22 %). Vibrato
+(±30 cent, 6 Hz, constant amplitude) produces ZERO onsets — the SuperFlux
+signature win over plain flux. NOT yet wired into the live path (that's the
+next integration round; the detector reports frame-start time, decision lag
+= 2 frames ≈ 11.6 ms).

@@ -116,6 +116,37 @@ const aMinorFreqs = [110.00, 130.81, 164.81]; // A2 C3 E3
 // chord vocabulary — chunk 012.)
 const fMajorFreqs = [87.31, 110.00, 130.81];
 
+/// A constant-amplitude tone with sinusoidal VIBRATO (frequency modulation).
+/// After a short attack the amplitude never changes — so a correct onset
+/// detector must stay silent while the pitch wobbles (the SuperFlux paper's
+/// motivating false-positive case for plain spectral flux).
+Float64List vibratoNote({
+  required double freq,
+  required double seconds,
+  double vibratoCents = 30,
+  double vibratoHz = 6,
+  int sampleRate = 44100,
+  double amp = 0.2,
+  double attackSeconds = 0.02,
+}) {
+  final n = (seconds * sampleRate).round();
+  final out = Float64List(n);
+  final depth = math.pow(2.0, vibratoCents / 1200.0) - 1.0;
+  var phase = 0.0;
+  for (var i = 0; i < n; i++) {
+    final t = i / sampleRate;
+    final f = freq * (1 + depth * math.sin(2 * math.pi * vibratoHz * t));
+    phase += 2 * math.pi * f / sampleRate;
+    final attack = t >= attackSeconds ? 1.0 : t / attackSeconds;
+    out[i] = amp * attack * math.sin(phase);
+  }
+  final ramp = math.min((0.010 * sampleRate).round(), n);
+  for (var i = 0; i < ramp; i++) {
+    out[n - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / ramp);
+  }
+  return out;
+}
+
 /// Slice [signal] into consecutive frames of [window] advancing by [hop].
 Iterable<Float64List> frames(Float64List signal, int window, int hop) sync* {
   for (var start = 0; start + window <= signal.length; start += hop) {
