@@ -88,3 +88,18 @@ ablation: joint synth+real training BEATS sequential pretrain→finetune, and
 VST-rendered synth ≫ pure Karplus-Strong (89.8 % vs 66 % synthetic-only on the
 sibling task). A user recording session is now OPTIONAL domain adaptation.
 Full plan: `docs/plans/ml-track.md`.
+
+## AS BUILT round 140 (2026-07-12) — Klangio adapter (`ml/klangio.py`)
+`.strums` format VERIFIED on real files: `time_s \t D|U \t chord-label`
+(TAB-separated; e.g. `0.451 D C-major`). Adapter: strict parser (unknown
+direction letter = loud ValueError, never a mislabel), `windows_for_recording`
+cuts the chunk-018 log-mel window at each LABELED time (annotations are ground
+truth — onset detection is NOT in the training loop), `build()` →
+`klangio.npz` with the exact model-input shape. **Proven end-to-end on real
+data:** sets 1001+1002 (fetched via raw.githubusercontent; `ml/data/` is
+gitignored — third-party data stays out of the repo) → **162 windows
+(15, 128) float32, 49 down / 113 up**. Dataset quirk worth knowing: takes are
+direction-SEPARATED (1001 all-D, 1002 all-U) — draw train/eval splits across
+MANY recording ids or the split leaks direction via recording identity.
+Wavs are 44.1 kHz mono 16-bit; `prepare_dataset._read_wav` linear-resamples
+to 16 kHz (documented approximation; upgrade to polyphase if accuracy stalls).

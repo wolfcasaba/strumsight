@@ -38,7 +38,7 @@ established pattern). Each item is one autonomous round.
 | Round | Item |
 |---|---|
 | P1.1 | `StrumDirectionClassifier` seam: extract today's heuristic behind the interface; flag + automatic fallback (model missing/failed → heuristic). Zero behaviour change round. |
-| P1.2 | **CI training job** (x86_64 GitHub Actions): `ml/train.py` on `ml/synth.py` synthetic data → tiny quantized `.tflite` artifact + `norm.npz`. Purpose: an end-to-end SMOKE model (synthetic direction accuracy is known-poor — chunk 015 pitfall), validating export→asset→inference plumbing, NOT accuracy. |
+| P1.2 | **CI training job** (x86_64 GitHub Actions): `ml/train.py` on `ml/synth.py` synthetic data → tiny quantized `.tflite` artifact + `norm.npz`. Purpose: an end-to-end SMOKE model (synthetic direction accuracy is known-poor — chunk 015 pitfall), validating export→asset→inference plumbing, NOT accuracy. **⚠ BLOCKED (found r139): a new workflow file needs the same workflow-scope PAT as the CI hard-gate (HANDOFF §3 item 3). Unblock EITHER by the PAT grant OR by the user running `ml/train.py` once on any x86_64 PC/Colab and dropping the `.tflite` into the repo.** |
 | P1.3 | `tflite_flutter` integration: model asset load, **stateful GRU streaming** (state tensors fed back per 10 ms hop — exact pattern per research), inference in the DSP isolate. **Check the win32-major rule before adding the plugin.** Parity gate: Dart TFLite output == Python TFLite output on fixture windows. |
 | P1.4 | A/B property harness: heuristic vs model on the existing adversarial synth suite (overlap/detune/EQ), so any future real-data model drops into a ready scoreboard. |
 

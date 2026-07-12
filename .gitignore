@@ -56,3 +56,4 @@ lib/l10n/app_localizations*.dart
 # Playwright visual-test rig output (web build driven headlessly — see HANDOFF)
 /shots/
 /.playwright-mcp/
+ml/data/

@@ -13,6 +13,7 @@ import sys
 import numpy as np
 
 import features as F
+import klangio
 import synth
 
 
@@ -51,6 +52,33 @@ def main() -> int:
     ok &= _check(
         f"window shape ({F.PRE_FRAMES + F.POST_FRAMES},{F.N_MELS})",
         win.shape == (F.PRE_FRAMES + F.POST_FRAMES, F.N_MELS),
+    )
+
+    # 5. Klangio .strums parsing (round 140): exact fields, strict directions.
+    events = klangio.parse_strums(
+        "0.451\tD\tC-major\n\n1.612\tU\tF-major\n2.912\tD\tA-minor\n")
+    ok &= _check("parse_strums 3 events", len(events) == 3)
+    ok &= _check(
+        "parse_strums fields",
+        events[1] == (1.612, "up", "F-major") and events[0][1] == "down",
+    )
+    try:
+        klangio.parse_strums("0.5\tX\tC-major\n")
+        ok &= _check("unknown direction rejected", False)
+    except ValueError:
+        ok &= _check("unknown direction rejected", True)
+
+    # 6. Klangio windows: labeled times → chunk-018-shaped (X, y), no
+    #    detection in the loop (annotations are ground truth).
+    sig = np.concatenate([synth.strum("down"), synth.strum("up")])
+    lead = 0.1  # synth.strum lead silence
+    evs = [(lead, "down", "C-major"),
+           (lead + len(synth.strum("down")) / F.SR, "up", "C-major")]
+    xs, ys = klangio.windows_for_recording(sig, evs)
+    ok &= _check("klangio windows count", len(xs) == 2 and ys == [0, 1])
+    ok &= _check(
+        "klangio window shape",
+        xs[0].shape == (F.PRE_FRAMES + F.POST_FRAMES, F.N_MELS),
     )
 
     print("PASS" if ok else "FAILURES ABOVE")
