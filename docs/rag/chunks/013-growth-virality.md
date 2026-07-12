@@ -100,6 +100,13 @@ fast-to-ship, low-risk v1 of the "Strum Cam" video idea).
    keeps the maths pure/testable. 18 tests. TODO: a Friday-aware local
    notification nudge (needs a notifications plugin) and reframing the streak as
    skill-progress (Simply's more durable motivator).
+   ✅ **Skill reframe BUILT round 152:** the /streak screen shows a "Your
+   skill" section under the flame — all-time strums, this week's minutes, and
+   the ↓↑ accuracy with a week-over-week trend arrow (`WeeklyRecap` reuse,
+   r151) + growth copy (en/hu). Hidden until any practice exists (zeros
+   demotivate). The flame = what you protect; this = what you BUILT.
+   The daily 19:00 nudge itself shipped earlier (nudge_service.dart);
+   the Friday-aware COPY variant remains open (needs per-day re-arming).
 3. **`#StrumSightChallenge` UGC prompt** — already seeded in the caption; grow
    into an in-app challenge feed.
 4. **Referral via deferred deep links** (Branch) — closes and *measures* the

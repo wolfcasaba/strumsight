@@ -8,6 +8,9 @@ import '../../learn/model/lesson.dart';
 import '../../learn/screens/learn_screen.dart';
 import '../../live/model/strum.dart';
 import '../daily_challenge.dart';
+import '../../progress/model/practice_stats.dart';
+import '../../progress/providers/practice_log_provider.dart';
+import '../../share/model/weekly_recap.dart';
 import '../providers/streak_provider.dart';
 import '../streak_logic.dart';
 
@@ -23,7 +26,10 @@ class StreakScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final streak = ref.watch(streakProvider);
+    final stats = PracticeStats(ref.watch(practiceLogProvider));
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
+    final thisWeek = WeeklyRecap.fromEntries(stats.entries, today: today);
+    final lastWeek = WeeklyRecap.fromEntries(stats.entries, today: today - 7);
     final challenge = DailyChallenge.forDay(today);
     final done = StreakLogic.practicedToday(streak, today);
     final atRisk = StreakLogic.atRisk(streak, today);
@@ -76,6 +82,63 @@ class StreakScreen extends ConsumerWidget {
                           : l10n.streakStart,
               positive: done,
             ),
+            // Skill reframe (chunk 013 #2 TODO, r152 — Simply's evidence:
+            // a growing-skill narrative retains more durably than pure
+            // loss-aversion): the flame is what you PROTECT, this is what
+            // you BUILT. Hidden until there is any practice to show.
+            if (stats.totalSessions > 0) ...[
+              const SizedBox(height: 24),
+              Text(
+                l10n.streakSkillTitle.toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Stat(
+                      value: '${stats.totalStrokes}',
+                      label: l10n.streakSkillStrums,
+                      icon: Icons.music_note_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _Stat(
+                      value: '${thisWeek.minutes} min',
+                      label: l10n.streakSkillWeekMinutes,
+                      icon: Icons.timer_outlined,
+                    ),
+                  ),
+                  if (thisWeek.averageAccuracy != null) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _Stat(
+                        value: _accuracyTrend(thisWeek, lastWeek),
+                        label: l10n.streakSkillAccuracy,
+                        icon: Icons.trending_up,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.streakSkillGrowing,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Text(
               l10n.challengeTitle,
@@ -113,6 +176,17 @@ class StreakScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// "87% ▲" when both weeks scored runs; plain "87%" for the first week.
+String _accuracyTrend(WeeklyRecap thisWeek, WeeklyRecap lastWeek) {
+  final cur = thisWeek.averageAccuracy!;
+  final prev = lastWeek.averageAccuracy;
+  final pct = '${(cur * 100).round()}%';
+  if (prev == null) return pct;
+  final d = cur - prev;
+  if (d.abs() < 0.005) return pct;
+  return d > 0 ? '$pct ▲' : '$pct ▼';
 }
 
 class _Hero extends StatelessWidget {

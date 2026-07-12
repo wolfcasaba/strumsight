@@ -394,5 +394,10 @@
   "metronomeStart": "Indítás",
   "metronomeStop": "Leállítás",
   "wrappedTitle": "A heti pengetésem",
-  "wrappedShareTooltip": "Heti összegzés megosztása"
+  "wrappedShareTooltip": "Heti összegzés megosztása",
+  "streakSkillTitle": "A készséged",
+  "streakSkillStrums": "Lejátszott pengetés",
+  "streakSkillWeekMinutes": "Ezen a héten",
+  "streakSkillAccuracy": "↓↑ pontosság",
+  "streakSkillGrowing": "A pengető kezed egyre jobb — építs rá tovább."
 }

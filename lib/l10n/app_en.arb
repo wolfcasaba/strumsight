@@ -449,5 +449,10 @@
   "metronomeStart": "Start",
   "metronomeStop": "Stop",
   "wrappedTitle": "My strum week",
-  "wrappedShareTooltip": "Share my week"
+  "wrappedShareTooltip": "Share my week",
+  "streakSkillTitle": "Your skill",
+  "streakSkillStrums": "Strums played",
+  "streakSkillWeekMinutes": "This week",
+  "streakSkillAccuracy": "↓↑ accuracy",
+  "streakSkillGrowing": "Your strumming hand is getting better — keep building on it."
 }
