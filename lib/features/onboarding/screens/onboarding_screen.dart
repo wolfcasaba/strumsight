@@ -73,12 +73,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (!mounted) return;
     (widget.onFirstWin ??
         () {
+          // Capture the root navigator BEFORE go(): the route swap unmounts
+          // this screen and a defunct context can no longer look it up
+          // (r156 rig catch — the URL changed but the lesson never opened;
+          // the injected-callback widget test was blind to the default path).
+          final nav = Navigator.of(context, rootNavigator: true);
           context.go('/live');
-          Navigator.of(context, rootNavigator: true).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LearnScreen(lesson: Lessons.firstWin),
-            ),
-          );
+          // Push AFTER the route swap lands: a pageless route pushed now
+          // would anchor to the outgoing /welcome page and be disposed with
+          // it (r156 rig catch #2 — the first fix still lost the push).
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            nav.push(
+              MaterialPageRoute<void>(
+                builder: (_) => LearnScreen(lesson: Lessons.firstWin),
+              ),
+            );
+          });
         })();
   }
 
