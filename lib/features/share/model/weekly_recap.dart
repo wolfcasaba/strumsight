@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../../progress/model/practice_entry.dart';
 
 /// One week of practice, rolled up for the shareable "Strum Wrapped" card
@@ -46,7 +48,9 @@ class WeeklyRecap {
       }
     });
     return WeeklyRecap(
-      minutes: (seconds / 60).round(),
+      // Floor at 1 when ANY practice happened: a 27-second first win must
+      // never brag "0 minutes" (r158 edge; rounding stays honest above that).
+      minutes: seconds == 0 ? 0 : math.max(1, (seconds / 60).round()),
       sessions: week.length,
       strokes: strokes,
       daysPracticed: byDay.keys.length,

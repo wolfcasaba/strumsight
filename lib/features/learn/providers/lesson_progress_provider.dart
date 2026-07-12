@@ -38,7 +38,10 @@ class LessonProgressController extends Notifier<Map<String, double>> {
     } catch (_) {
       // Prefs unavailable → keep the empty default.
     } finally {
-      _loaded.complete();
+      // Riverpod keeps the notifier instance across ref.invalidate — build()
+      // and _load() re-run on the SAME object, so the Completer may already
+      // be done (r158 probe: 'Bad state: Future already completed').
+      if (!_loaded.isCompleted) _loaded.complete();
     }
   }
 

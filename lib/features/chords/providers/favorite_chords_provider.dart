@@ -28,7 +28,10 @@ class FavoriteChordsNotifier extends Notifier<Set<String>> {
     } catch (_) {
       // Prefs unavailable → keep the default.
     } finally {
-      _loaded.complete();
+      // Riverpod keeps the notifier instance across ref.invalidate — build()
+      // and _load() re-run on the SAME object, so the Completer may already
+      // be done (r158 probe: 'Bad state: Future already completed').
+      if (!_loaded.isCompleted) _loaded.complete();
     }
   }
 

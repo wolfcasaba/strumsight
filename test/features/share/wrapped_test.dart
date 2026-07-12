@@ -38,6 +38,12 @@ void main() {
       expect(recap.isEmpty, isFalse);
     });
 
+    test('a sub-minute week still reads 1 minute, never a braggy zero', () {
+      final recap =
+          WeeklyRecap.fromEntries([_e(100, 27, strokes: 8)], today: 100);
+      expect(recap.minutes, 1, reason: 'the 27-second first win is not "0"');
+    });
+
     test('an empty week reports empty with null accuracy/bestDay', () {
       final recap = WeeklyRecap.fromEntries([_e(50, 600)], today: 100);
       expect(recap.isEmpty, isTrue);
