@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -9,6 +10,8 @@ import '../model/practice_entry.dart';
 import '../model/practice_stats.dart';
 import '../providers/daily_goal_provider.dart';
 import '../providers/practice_log_provider.dart';
+import '../../share/model/weekly_recap.dart';
+import '../../share/screens/wrapped_preview_screen.dart';
 import '../widgets/weekly_bars.dart';
 
 /// The Progress dashboard — a Yousician/Simply-Guitar-style practice tracker, but
@@ -27,8 +30,38 @@ class ProgressScreen extends ConsumerWidget {
     final streak = ref.watch(streakProvider);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
 
+    final nowDate = now ?? DateTime.now();
+
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.progressTitle)),
+      appBar: AppBar(
+        title: Text(l10n.progressTitle),
+        actions: [
+          // Weekly "Strum Wrapped" share (chunk 017 rec #5) — only once
+          // there's something worth sharing.
+          if (stats.totalSessions > 0)
+            IconButton(
+              tooltip: l10n.wrappedShareTooltip,
+              icon: const Icon(Icons.ios_share),
+              onPressed: () {
+                final recap = WeeklyRecap.fromEntries(
+                  stats.entries,
+                  today: today,
+                  streak: streak.current,
+                );
+                final start = nowDate.subtract(const Duration(days: 6));
+                final label = '${DateFormat.MMMd().format(start)} – '
+                    '${DateFormat.MMMd().format(nowDate)}';
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => WrappedPreviewScreen(
+                    recap: recap,
+                    weekLabel: label,
+                    today: today,
+                  ),
+                ));
+              },
+            ),
+        ],
+      ),
       body: SafeArea(
         child: stats.totalSessions == 0
             ? _Empty(text: l10n.progressEmpty)

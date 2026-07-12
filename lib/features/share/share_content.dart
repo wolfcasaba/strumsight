@@ -91,6 +91,34 @@ class ShareContent {
   static String lessonFileName(String lessonId) =>
       'strumsight-score-$lessonId.png';
 
+  /// Caption for the weekly "Strum Wrapped" recap (chunk 017 rec #5).
+  static String wrappedCaption({
+    required int minutes,
+    required int daysPracticed,
+    required int strokes,
+    required int streak,
+    double? averageAccuracy,
+  }) {
+    final buf = StringBuffer()
+      ..writeln('🎸 My strum week: $minutes min · $daysPracticed/7 days · '
+          '$strokes strums');
+    if (averageAccuracy != null) {
+      buf.writeln(
+          '↓↑ direction accuracy: ${(averageAccuracy * 100).round()}%');
+    }
+    if (streak > 0) buf.writeln('🔥 $streak-day streak');
+    buf
+      ..writeln()
+      ..writeln('Tracked by StrumSight — the only app that grades your '
+          'strum direction. 🎯')
+      ..writeln('Get it: $installUrl')
+      ..write(hashtags);
+    return buf.toString();
+  }
+
+  /// Share-file name for a weekly recap card (unique-ish per epoch day).
+  static String wrappedFileName(int today) => 'strumsight-week-$today.png';
+
   /// Helper for the card's arrow row: the strum directions in order, capped.
   static List<StrumDirection> strumDirections(AnalyzeResult result,
           {int max = 16}) =>

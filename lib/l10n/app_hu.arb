@@ -35,13 +35,17 @@
   "calibrationCurrent": "Jelenlegi eltolás: {ms} ms",
   "@calibrationCurrent": {
     "placeholders": {
-      "ms": { "type": "String" }
+      "ms": {
+        "type": "String"
+      }
     }
   },
   "calibrationResult": "A késleltetésed: {ms} ms",
   "@calibrationResult": {
     "placeholders": {
-      "ms": { "type": "String" }
+      "ms": {
+        "type": "String"
+      }
     }
   },
   "calibrationUnstable": "A koppintások szórtak — próbáld újra a megbízható eredményhez.",
@@ -55,13 +59,22 @@
   "calibrationSaved": "Kalibráció elmentve",
   "settingsNudge": "Napi gyakorlás-emlékeztető",
   "settingsNudgeHint": "Finom emlékeztető 19:00-kor azokon a napokon, amikor még nem gyakoroltál.",
-  "nudgeTitle": "Tartsd életben a sorozatod \ud83d\udd25",
+  "nudgeTitle": "Tartsd életben a sorozatod 🔥",
   "nudgeBody": "Pár perc pengetés, és megy tovább a sorozat.",
   "tunerTitle": "Hangoló",
   "tunerInTune": "Tiszta",
   "tunerPinned": "kitűzött cél",
   "tunerStringSemantic": "{name} húr{state}. Koppints a hangolási cél kitűzéséhez.",
-  "@tunerStringSemantic": { "placeholders": { "name": { "type": "String" }, "state": { "type": "String" } } },
+  "@tunerStringSemantic": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "commonClose": "Bezárás",
   "tunerListening": "Pendíts meg egy húrt…",
   "tunerReference": "Referencia A = {hz} Hz",
@@ -87,14 +100,18 @@
   "settingsCapoFret": "{fret}. bund",
   "@settingsCapoFret": {
     "placeholders": {
-      "fret": { "type": "int" }
+      "fret": {
+        "type": "int"
+      }
     }
   },
   "settingsCapoHint": "A fogott akkordalakot mutatja, nem a megszólaló hangot. A felismerés kamarahangon marad.",
   "liveCapo": "Kapo {fret}",
   "@liveCapo": {
     "placeholders": {
-      "fret": { "type": "int" }
+      "fret": {
+        "type": "int"
+      }
     }
   },
   "settingsAbout": "Névjegy",
@@ -131,7 +148,13 @@
   "streakTitle": "Gyakorlási sorozat",
   "streakTooltip": "A gyakorlási sorozatod",
   "streakDays": "{count, plural, =0{Még nincs sorozat} =1{1 napos sorozat} other{{count} napos sorozat}}",
-  "@streakDays": { "placeholders": { "count": { "type": "int" } } },
+  "@streakDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "streakLongest": "Leghosszabb",
   "streakFreezes": "Fagyasztások",
   "streakDoneToday": "Ma gyakoroltál ✓ — holnap találkozunk!",
@@ -175,7 +198,13 @@
   "chordLibraryTitle": "Akkordtár",
   "chordLibrarySearch": "Akkord keresése…",
   "chordLibraryNoResults": "Nincs találat erre: „{query}”",
-  "@chordLibraryNoResults": { "placeholders": { "query": { "type": "String" } } },
+  "@chordLibraryNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
   "chordGroupFavorites": "Kedvencek",
   "chordGroupMajor": "Dúr",
   "chordGroupMinor": "Moll",
@@ -199,7 +228,19 @@
   "learnContinue": "Folytatás",
   "learnPlayAgain": "Újra",
   "learnScoreLine": "{hits}/{total} találat · legjobb kombó {combo}",
-  "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } },
+  "@learnScoreLine": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "combo": {
+        "type": "int"
+      }
+    }
+  },
   "progressTitle": "Haladás",
   "progressTotalPractice": "Összes gyakorlás",
   "progressDaysPracticed": "Játéknap",
@@ -207,7 +248,16 @@
   "progressStreak": "Napi sorozat",
   "progressThisWeek": "Ezen a héten (perc)",
   "progressBarSemantic": "{weekday}: {count} perc gyakorlás",
-  "@progressBarSemantic": { "placeholders": { "weekday": { "type": "String" }, "count": { "type": "int" } } },
+  "@progressBarSemantic": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressBySource": "Hol gyakorolsz",
   "progressStrumAccuracyTitle": "Pengetésirány-pontosság",
   "progressStrumAccuracyHint": "Amit egyetlen más app sem mér — a ↓/↑ pengetésirányod.",
@@ -217,20 +267,62 @@
   "progressEmpty": "Játssz élőben, elemezz egy riffet, vagy teljesíts egy leckét — itt jelenik meg a haladásod.",
   "progressOpen": "Haladás",
   "progressSeconds": "{count} mp",
-  "@progressSeconds": { "placeholders": { "count": { "type": "int" } } },
+  "@progressSeconds": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressMinutes": "{count} p",
-  "@progressMinutes": { "placeholders": { "count": { "type": "int" } } },
+  "@progressMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressHoursMinutes": "{hours} ó {minutes} p",
-  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
+  "@progressHoursMinutes": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "progressDailyGoal": "Napi cél",
   "progressGoalProgress": "{done} / {goal} perc ma",
-  "@progressGoalProgress": { "placeholders": { "done": { "type": "int" }, "goal": { "type": "int" } } },
+  "@progressGoalProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "goal": {
+        "type": "int"
+      }
+    }
+  },
   "progressGoalMet": "Mai cél teljesítve 🎉",
   "progressGoalRemaining": "Még {count} perc",
-  "@progressGoalRemaining": { "placeholders": { "count": { "type": "int" } } },
+  "@progressGoalRemaining": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressSetGoal": "Napi cél beállítása",
   "progressGoalOption": "{count} perc",
-  "@progressGoalOption": { "placeholders": { "count": { "type": "int" } } },
+  "@progressGoalOption": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "songsTitle": "Dalaim",
   "songsEmpty": "Építsd meg a saját dalod — válassz akkordokat, tervezz ↓/↑ pengetésmintát, majd játszd le. Pontoz, mint egy lecke.",
   "songNew": "Új dal",
@@ -244,12 +336,33 @@
   "songStrumPatternHint": "Koppints a mezőkre: szünet → ↓ le → ↑ fel.",
   "strumRest": "Szünet",
   "songSlotAnd": "{beat} és",
-  "@songSlotAnd": { "placeholders": { "beat": { "type": "int" } } },
+  "@songSlotAnd": {
+    "placeholders": {
+      "beat": {
+        "type": "int"
+      }
+    }
+  },
   "songSlotSemantic": "{position}. ütés, {state}. Koppints a módosításhoz.",
-  "@songSlotSemantic": { "placeholders": { "position": { "type": "String" }, "state": { "type": "String" } } },
+  "@songSlotSemantic": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "songTempo": "Tempó",
   "songBpm": "{count} BPM",
-  "@songBpm": { "placeholders": { "count": { "type": "int" } } },
+  "@songBpm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "songSave": "Mentés",
   "songDelete": "Törlés",
   "songSuggest": "Javaslat",
@@ -261,7 +374,13 @@
   "setlistNew": "Új szettlista",
   "setlistName": "Szettlista neve",
   "setlistSongCount": "{count, plural, =0{Nincs dal} =1{1 dal} other{{count} dal}}",
-  "@setlistSongCount": { "placeholders": { "count": { "type": "int" } } },
+  "@setlistSongCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "setlistAddSong": "Dal hozzáadása",
   "setlistPlayAll": "Szett lejátszása",
   "setlistEmptyDetail": "Adj dalokat a szetthez a + gombbal.",
@@ -273,5 +392,7 @@
   "metronomeBpm": "BPM",
   "metronomeTap": "Tap tempó",
   "metronomeStart": "Indítás",
-  "metronomeStop": "Leállítás"
+  "metronomeStop": "Leállítás",
+  "wrappedTitle": "A heti pengetésem",
+  "wrappedShareTooltip": "Heti összegzés megosztása"
 }

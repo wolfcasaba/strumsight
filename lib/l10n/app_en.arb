@@ -28,8 +28,12 @@
   "analyzeStrumsSummary": "{down} down · {up} up",
   "@analyzeStrumsSummary": {
     "placeholders": {
-      "down": { "type": "int" },
-      "up": { "type": "int" }
+      "down": {
+        "type": "int"
+      },
+      "up": {
+        "type": "int"
+      }
     }
   },
   "libraryIntro": "Record something in Analyze and save it — your sessions will appear here.",
@@ -41,13 +45,17 @@
   "calibrationCurrent": "Current offset: {ms} ms",
   "@calibrationCurrent": {
     "placeholders": {
-      "ms": { "type": "String" }
+      "ms": {
+        "type": "String"
+      }
     }
   },
   "calibrationResult": "Your delay: {ms} ms",
   "@calibrationResult": {
     "placeholders": {
-      "ms": { "type": "String" }
+      "ms": {
+        "type": "String"
+      }
     }
   },
   "calibrationUnstable": "Taps were inconsistent — try again for a reliable result.",
@@ -61,19 +69,30 @@
   "calibrationSaved": "Calibration saved",
   "settingsNudge": "Daily practice reminder",
   "settingsNudgeHint": "A gentle nudge at 19:00 on days you haven't practised yet.",
-  "nudgeTitle": "Keep your streak alive \ud83d\udd25",
+  "nudgeTitle": "Keep your streak alive 🔥",
   "nudgeBody": "A few minutes of strumming keeps the streak going.",
   "tunerTitle": "Tuner",
   "tunerInTune": "In tune",
   "tunerPinned": "pinned target",
   "tunerStringSemantic": "String {name}{state}. Tap to pin as the tuning target.",
-  "@tunerStringSemantic": { "placeholders": { "name": { "type": "String" }, "state": { "type": "String" } } },
+  "@tunerStringSemantic": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "commonClose": "Close",
   "tunerListening": "Play a string…",
   "tunerReference": "Reference A = {hz} Hz",
   "@tunerReference": {
     "placeholders": {
-      "hz": { "type": "int" }
+      "hz": {
+        "type": "int"
+      }
     }
   },
   "tunerTuningLabel": "Tuning",
@@ -85,20 +104,28 @@
   "tunerCentsSharp": "{cents} cents sharp",
   "@tunerCentsSharp": {
     "placeholders": {
-      "cents": { "type": "int" }
+      "cents": {
+        "type": "int"
+      }
     }
   },
   "tunerCentsFlat": "{cents} cents flat",
   "@tunerCentsFlat": {
     "placeholders": {
-      "cents": { "type": "int" }
+      "cents": {
+        "type": "int"
+      }
     }
   },
   "chordDiagramSemantics": "{chord} chord diagram, fingering: {fingering}",
   "@chordDiagramSemantics": {
     "placeholders": {
-      "chord": { "type": "String" },
-      "fingering": { "type": "String" }
+      "chord": {
+        "type": "String"
+      },
+      "fingering": {
+        "type": "String"
+      }
     }
   },
   "settingsTitle": "Settings",
@@ -114,21 +141,27 @@
   "settingsCapoFret": "Fret {fret}",
   "@settingsCapoFret": {
     "placeholders": {
-      "fret": { "type": "int" }
+      "fret": {
+        "type": "int"
+      }
     }
   },
   "settingsCapoHint": "Shows the chord shape you fret, not the sounding pitch. Detection stays at concert pitch.",
   "liveCapo": "Capo {fret}",
   "@liveCapo": {
     "placeholders": {
-      "fret": { "type": "int" }
+      "fret": {
+        "type": "int"
+      }
     }
   },
   "settingsAbout": "About",
   "settingsVersion": "Version {version}",
   "@settingsVersion": {
     "placeholders": {
-      "version": { "type": "String" }
+      "version": {
+        "type": "String"
+      }
     }
   },
   "themeLight": "Light",
@@ -139,7 +172,9 @@
   "accountSignedInAs": "Signed in as {email}",
   "@accountSignedInAs": {
     "placeholders": {
-      "email": { "type": "String" }
+      "email": {
+        "type": "String"
+      }
     }
   },
   "accountSignIn": "Sign in",
@@ -168,7 +203,13 @@
   "streakTitle": "Practice streak",
   "streakTooltip": "Your practice streak",
   "streakDays": "{count, plural, =0{No streak yet} =1{1-day streak} other{{count}-day streak}}",
-  "@streakDays": { "placeholders": { "count": { "type": "int" } } },
+  "@streakDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "streakLongest": "Longest",
   "streakFreezes": "Freezes",
   "streakDoneToday": "Practised today ✓ — see you tomorrow!",
@@ -212,7 +253,13 @@
   "chordLibraryTitle": "Chord library",
   "chordLibrarySearch": "Search chords…",
   "chordLibraryNoResults": "No chords match “{query}”",
-  "@chordLibraryNoResults": { "placeholders": { "query": { "type": "String" } } },
+  "@chordLibraryNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
   "chordGroupFavorites": "Favorites",
   "chordGroupMajor": "Major",
   "chordGroupMinor": "Minor",
@@ -236,7 +283,19 @@
   "learnNextLesson": "Next lesson",
   "learnContinue": "Continue",
   "learnScoreLine": "{hits}/{total} hits · best combo {combo}",
-  "@learnScoreLine": { "placeholders": { "hits": { "type": "int" }, "total": { "type": "int" }, "combo": { "type": "int" } } },
+  "@learnScoreLine": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "combo": {
+        "type": "int"
+      }
+    }
+  },
   "progressTitle": "Progress",
   "progressTotalPractice": "Total practice",
   "progressDaysPracticed": "Days played",
@@ -244,7 +303,16 @@
   "progressStreak": "Day streak",
   "progressThisWeek": "This week (minutes)",
   "progressBarSemantic": "{weekday}: {count} minutes practised",
-  "@progressBarSemantic": { "placeholders": { "weekday": { "type": "String" }, "count": { "type": "int" } } },
+  "@progressBarSemantic": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressBySource": "Where you practise",
   "progressStrumAccuracyTitle": "Strum-direction accuracy",
   "progressStrumAccuracyHint": "The one thing no other app scores — your ↓/↑ hand.",
@@ -254,20 +322,62 @@
   "progressEmpty": "Play in Live, analyse a riff, or pass a lesson — your progress shows up here.",
   "progressOpen": "Progress",
   "progressSeconds": "{count}s",
-  "@progressSeconds": { "placeholders": { "count": { "type": "int" } } },
+  "@progressSeconds": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressMinutes": "{count}m",
-  "@progressMinutes": { "placeholders": { "count": { "type": "int" } } },
+  "@progressMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressHoursMinutes": "{hours}h {minutes}m",
-  "@progressHoursMinutes": { "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } } },
+  "@progressHoursMinutes": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "progressDailyGoal": "Daily goal",
   "progressGoalProgress": "{done} of {goal} min today",
-  "@progressGoalProgress": { "placeholders": { "done": { "type": "int" }, "goal": { "type": "int" } } },
+  "@progressGoalProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "goal": {
+        "type": "int"
+      }
+    }
+  },
   "progressGoalMet": "Goal reached today 🎉",
   "progressGoalRemaining": "{count} min to go",
-  "@progressGoalRemaining": { "placeholders": { "count": { "type": "int" } } },
+  "@progressGoalRemaining": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "progressSetGoal": "Set daily goal",
   "progressGoalOption": "{count} min",
-  "@progressGoalOption": { "placeholders": { "count": { "type": "int" } } },
+  "@progressGoalOption": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "songsTitle": "My songs",
   "songsEmpty": "Build your own song — pick chords, design a ↓/↑ strum pattern, then play it. It scores just like a lesson.",
   "songNew": "New song",
@@ -281,12 +391,33 @@
   "songStrumPatternHint": "Tap each slot to cycle rest → ↓ down → ↑ up.",
   "strumRest": "Rest",
   "songSlotAnd": "{beat} and",
-  "@songSlotAnd": { "placeholders": { "beat": { "type": "int" } } },
+  "@songSlotAnd": {
+    "placeholders": {
+      "beat": {
+        "type": "int"
+      }
+    }
+  },
   "songSlotSemantic": "Beat {position}, {state}. Tap to change.",
-  "@songSlotSemantic": { "placeholders": { "position": { "type": "String" }, "state": { "type": "String" } } },
+  "@songSlotSemantic": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "songTempo": "Tempo",
   "songBpm": "{count} BPM",
-  "@songBpm": { "placeholders": { "count": { "type": "int" } } },
+  "@songBpm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "songSave": "Save",
   "songDelete": "Delete",
   "songSuggest": "Suggest",
@@ -298,7 +429,13 @@
   "setlistNew": "New setlist",
   "setlistName": "Setlist name",
   "setlistSongCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
-  "@setlistSongCount": { "placeholders": { "count": { "type": "int" } } },
+  "@setlistSongCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "setlistAddSong": "Add song",
   "setlistPlayAll": "Play set",
   "setlistEmptyDetail": "Add songs to this set with the + button.",
@@ -310,5 +447,7 @@
   "metronomeBpm": "BPM",
   "metronomeTap": "Tap tempo",
   "metronomeStart": "Start",
-  "metronomeStop": "Stop"
+  "metronomeStop": "Stop",
+  "wrappedTitle": "My strum week",
+  "wrappedShareTooltip": "Share my week"
 }

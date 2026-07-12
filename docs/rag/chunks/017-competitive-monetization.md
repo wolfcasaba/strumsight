@@ -82,3 +82,17 @@ first — aligns with us).
 **Honest expectation:** solo-dev median <$1k/mo; top-quartile $3–15k/mo after
 12–18 months with tight niche + subscriptions + one viral loop. Plan a ramp,
 not an overnight hit.
+
+## AS BUILT round 151 (2026-07-12) — "Strum Wrapped" (rec #5, non-video half)
+User order: mine these chunks and build the unimplemented items. Shipped the
+weekly recap: `WeeklyRecap.fromEntries` (pure 7-day rollup of PracticeLog:
+minutes, sessions, strums, days/7, best day, mean ↓↑ accuracy, current
+streak), a 9:16 `WrappedCard` (same brand language as the other cards,
+English-global copy), `WrappedPreviewScreen` → the existing
+RepaintBoundary→PNG→share pipeline, caption with moat + install link +
+hashtags. Entry: a share action on the Progress AppBar (hidden until there is
+anything to share). The AUTO-prompt after a good session and the weekly
+cadence (notification) remain TODO — this ships the manual v1. Remaining
+mined backlog lives in the [[hermes-research-mining]] memory: scored-strum
+onboarding win (#4), streak→skill reframe, dynamic difficulty (016b P4),
+Friday nudge copy; business items still deferred.
