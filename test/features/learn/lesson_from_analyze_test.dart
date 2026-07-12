@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
 import 'package:music_theory/features/analyze/model/analyze_result.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/live/model/strum.dart';
+
+import '../../support/synth.dart';
 
 AnalyzeResult _result() => AnalyzeResult(
       durationSec: 4,
@@ -60,5 +63,24 @@ void main() {
     final lesson = Lessons.fromAnalyze(AnalyzeResult.empty, name: 'empty');
     expect(lesson.events, isEmpty);
     expect(lesson.totalBeats, 4);
+  });
+
+  test('END-TO-END: real audio → analyzer → beats land on the grid (r148)',
+      () {
+    // The unit tests above use hand-built exact times; this locks the WHOLE
+    // chain on synthesized audio. Before the r145 timestamp fix the analyzer
+    // fed times 85–165 ms late with ±40 ms jitter — up to ~0.3 beat of error
+    // at 120 BPM, silently mangling imported lessons.
+    final signal = strumPattern(
+      lowFirstPerStrum: List.filled(5, true),
+      gapSeconds: 0.5, // 120 BPM quarters
+    );
+    final result = const ClipAnalyzer().analyze(signal.toList(), 44100);
+    final lesson = Lessons.fromAnalyze(result, name: 'e2e');
+    expect(lesson.events, hasLength(5));
+    for (var i = 0; i < 5; i++) {
+      expect((lesson.events[i].beat - i).abs(), lessThan(0.12),
+          reason: 'event $i at beat ${lesson.events[i].beat}');
+    }
   });
 }
