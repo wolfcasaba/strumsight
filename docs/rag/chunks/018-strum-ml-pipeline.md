@@ -56,10 +56,16 @@ the live budget. Augment with **±6-semitone pitch shift** before training
   x86_64 (the ARM64 dev VM can't run TF, same as it can't build the APK).
 
 ## On-device integration (spec — the next code round once a model exists)
-1. Add `tflite_flutter` — **keep ONE win32 major** (repo gotcha); inference in
-   the existing DSP isolate.
-2. `StrumDirectionClassifier` seam: heuristic impl (today) ↔ TFLite impl (new),
-   behind a flag, heuristic as fallback.
+1. Add `flutter_litert` (researched 2026-07-12: tflite_flutter-compatible, 16 KB-page
+   compliant, no win32 dep); inference in the existing DSP isolate.
+2. ✅ **DONE round 139** — `StrumDirectionClassifier` seam
+   (`lib/features/live/engine/dsp/strum_direction_classifier.dart`): streaming-shaped
+   contract (`observe(rawFrame, features)` EVERY hop → the CRNN keeps GRU state /
+   log-mel from the raw frame, the heuristic reads the analyzer's precomputed band
+   features — no duplicate FFT; `classifyAt(onsetFrame, currentFrame)` when the
+   analyzer's 12-frame evidence window elapses). `HeuristicStrumClassifier` = the
+   chunk-006 fusion moved verbatim; behaviour pinned by the direction tests + the
+   randomized gate; the seam contract pinned by an injected recording classifier.
 3. Feed the on-device log-mel (standardised with `norm.npz`) to the stateful GRU.
 4. **Acceptance = the real-guitar APK test**, never synthetic F1 (HORIZON).
 
