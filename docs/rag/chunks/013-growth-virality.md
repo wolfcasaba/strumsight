@@ -105,8 +105,13 @@ fast-to-ship, low-risk v1 of the "Strum Cam" video idea).
    the ↓↑ accuracy with a week-over-week trend arrow (`WeeklyRecap` reuse,
    r151) + growth copy (en/hu). Hidden until any practice exists (zeros
    demotivate). The flame = what you protect; this = what you BUILT.
-   The daily 19:00 nudge itself shipped earlier (nudge_service.dart);
-   the Friday-aware COPY variant remains open (needs per-day re-arming).
+   The daily 19:00 nudge itself shipped earlier (nudge_service.dart).
+   ✅ **Friday-aware copy BUILT round 157:** the static wall-time repeat became
+   **7 one-shots re-armed on every app open** (ids 1001–1007, idempotent), so
+   each day carries its own text: Friday = weekend-kickoff, Sat/Sun = weekend
+   tone, weekdays = the streak copy (en/hu). Honest trade-off documented: an
+   app untouched for >7 days goes quiet until the next open (the
+   Duolingo-class pattern; the old static repeat never varied copy at all).
 3. **`#StrumSightChallenge` UGC prompt** — already seeded in the caption; grow
    into an in-app challenge feed.
 4. **Referral via deferred deep links** (Branch) — closes and *measures* the

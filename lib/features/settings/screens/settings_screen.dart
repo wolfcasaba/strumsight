@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/notifications/nudge_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -166,10 +168,21 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.settingsNudge),
             subtitle: Text(l10n.settingsNudgeHint),
             value: ref.watch(nudgeEnabledProvider),
-            onChanged: (v) => ref.read(nudgeEnabledProvider.notifier).setEnabled(
-                v,
-                title: l10n.nudgeTitle,
-                body: l10n.nudgeBody),
+            onChanged: (v) =>
+                ref.read(nudgeEnabledProvider.notifier).setEnabled(
+                      v,
+                      copyFor: (variant) => switch (variant) {
+                        NudgeCopyVariant.friday => (
+                            title: l10n.nudgeTitleFriday,
+                            body: l10n.nudgeBodyFriday
+                          ),
+                        NudgeCopyVariant.weekend => (
+                            title: l10n.nudgeTitleWeekend,
+                            body: l10n.nudgeBodyWeekend
+                          ),
+                        _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
+                      },
+                    ),
           ),
           const SizedBox(height: 28),
 

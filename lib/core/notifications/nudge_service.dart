@@ -12,12 +12,48 @@ import 'package:timezone/timezone.dart' as tz;
 /// inexact — no exact-alarm permission needed) rather than a per-day re-armed
 /// one-shot: it survives without any boot/app-open wiring. Trade-off: the
 /// copy is static (no per-day Friday variants) — revisit with real users.
+/// Which flavour of reminder copy a given day gets (chunk 013's
+/// Friday-aware TODO, r157): Friday kicks off the weekend, Sat/Sun get the
+/// weekend tone, weekdays the regular streak copy.
+enum NudgeCopyVariant { regular, friday, weekend }
+
+/// Localised (title, body) for one variant — resolved by the caller, which
+/// has a BuildContext.
+typedef NudgeCopyFor = ({String title, String body}) Function(
+    NudgeCopyVariant variant);
+
 class NudgeService {
   NudgeService._();
   static final NudgeService instance = NudgeService._();
 
   static const int _id = 1001;
   static const int hour = 19;
+
+  /// One-shots armed ahead (re-armed on every app open). 7 = a full week of
+  /// coverage even if the app stays closed; the honest trade-off vs the old
+  /// static repeat: an app untouched for >7 days goes quiet until the next
+  /// open — acceptable for per-day copy (the Duolingo-class pattern).
+  static const int daysAhead = 7;
+
+  /// The copy variant for a weekday (DateTime.monday..sunday).
+  static NudgeCopyVariant variantFor(int weekday) =>
+      weekday == DateTime.friday
+          ? NudgeCopyVariant.friday
+          : (weekday == DateTime.saturday || weekday == DateTime.sunday)
+              ? NudgeCopyVariant.weekend
+              : NudgeCopyVariant.regular;
+
+  /// The next [count] occurrences of [h]:00 local wall time (calendar-added —
+  /// DST-safe like [nextInstanceOf]).
+  static List<tz.TZDateTime> nextInstances(int h,
+      {int count = daysAhead, tz.TZDateTime? now}) {
+    final first = nextInstanceOf(h, now: now);
+    return [
+      for (var i = 0; i < count; i++)
+        tz.TZDateTime(
+            first.location, first.year, first.month, first.day + i, h),
+    ];
+  }
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
@@ -59,7 +95,7 @@ class NudgeService {
   /// 13+/iOS), then schedules the repeating 19:00 nudge. Returns false when
   /// the platform refused (permission denied / plugin unavailable) so the
   /// Settings toggle can reflect reality instead of lying.
-  Future<bool> enable({required String title, required String body}) async {
+  Future<bool> enable({required NudgeCopyFor copyFor}) async {
     if (!await _init()) return false;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
@@ -74,11 +110,25 @@ class NudgeService {
           await ios?.requestPermissions(alert: true, badge: true, sound: true);
       if (iosGranted == false) return false;
 
+      await _scheduleWeek(copyFor);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Arm the next [daysAhead] evenings as one-shots, each with its day's copy
+  /// (r157 — this replaced the static wall-time repeat so Friday/weekend get
+  /// their own text; ids are stable so re-arming replaces idempotently).
+  Future<void> _scheduleWeek(NudgeCopyFor copyFor) async {
+    final ats = nextInstances(hour);
+    for (var i = 0; i < ats.length; i++) {
+      final copy = copyFor(variantFor(ats[i].weekday));
       await _plugin.zonedSchedule(
-        id: _id,
-        title: title,
-        body: body,
-        scheduledDate: nextInstanceOf(hour),
+        id: _id + i,
+        title: copy.title,
+        body: copy.body,
+        scheduledDate: ats[i],
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'practice_nudge',
@@ -90,11 +140,7 @@ class NudgeService {
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time, // repeat daily
       );
-      return true;
-    } catch (_) {
-      return false;
     }
   }
 
@@ -104,8 +150,7 @@ class NudgeService {
   /// permission (never requests — no startup ambush) and re-arms the
   /// idempotent schedule (same id replaces). Returns whether the reminder is
   /// really live.
-  Future<bool> verifyAndRearm(
-      {required String title, required String body}) async {
+  Future<bool> verifyAndRearm({required NudgeCopyFor copyFor}) async {
     if (!await _init()) return false;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
@@ -113,35 +158,20 @@ class NudgeService {
       final enabled = await android?.areNotificationsEnabled();
       if (enabled == false) return false;
 
-      await _plugin.zonedSchedule(
-        id: _id,
-        title: title,
-        body: body,
-        scheduledDate: nextInstanceOf(hour),
-        notificationDetails: const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'practice_nudge',
-            'Practice reminder',
-            channelDescription: 'Daily practice reminder',
-            importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
+      await _scheduleWeek(copyFor);
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  /// Cancel the daily reminder.
+  /// Cancel the daily reminder (all armed one-shots).
   Future<void> disable() async {
     if (!await _init()) return;
     try {
-      await _plugin.cancel(id: _id);
+      for (var i = 0; i < daysAhead; i++) {
+        await _plugin.cancel(id: _id + i);
+      }
     } catch (_) {
       // best-effort
     }

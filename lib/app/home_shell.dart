@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/notifications/nudge_service.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/settings/providers/nudge_enabled_provider.dart';
@@ -38,7 +40,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       final l10n = AppLocalizations.of(context);
       ref
           .read(nudgeEnabledProvider.notifier)
-          .reconcile(title: l10n.nudgeTitle, body: l10n.nudgeBody);
+          .reconcile(
+              copyFor: (v) => switch (v) {
+                    NudgeCopyVariant.friday => (
+                        title: l10n.nudgeTitleFriday,
+                        body: l10n.nudgeBodyFriday
+                      ),
+                    NudgeCopyVariant.weekend => (
+                        title: l10n.nudgeTitleWeekend,
+                        body: l10n.nudgeBodyWeekend
+                      ),
+                    _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
+                  });
     });
   }
 

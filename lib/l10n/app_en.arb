@@ -458,5 +458,9 @@
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",
   "ddSwitch": "Switch",
-  "onboardFirstWin": "Try your first win — 30 seconds"
+  "onboardFirstWin": "Try your first win — 30 seconds",
+  "nudgeTitleFriday": "Weekend kickoff 🎸",
+  "nudgeBodyFriday": "Start the weekend with a strum — your streak will thank you.",
+  "nudgeTitleWeekend": "Weekend session? 🔥",
+  "nudgeBodyWeekend": "A lazy strum still counts — keep the streak rolling."
 }

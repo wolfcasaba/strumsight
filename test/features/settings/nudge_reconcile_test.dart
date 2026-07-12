@@ -18,7 +18,7 @@ void main() {
     addTearDown(container.dispose);
 
     final notifier = container.read(nudgeEnabledProvider.notifier);
-    await notifier.reconcile(title: 't', body: 'b');
+    await notifier.reconcile(copyFor: (_) => (title: 't', body: 'b'));
 
     expect(container.read(nudgeEnabledProvider), isFalse);
     final prefs = await SharedPreferences.getInstance();
@@ -33,7 +33,7 @@ void main() {
 
     await container
         .read(nudgeEnabledProvider.notifier)
-        .reconcile(title: 't', body: 'b');
+        .reconcile(copyFor: (_) => (title: 't', body: 'b'));
     expect(container.read(nudgeEnabledProvider), isFalse);
   });
 }

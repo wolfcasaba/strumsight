@@ -403,5 +403,9 @@
   "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
   "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",
   "ddSwitch": "Váltás",
-  "onboardFirstWin": "Próbáld ki az első győzelmed — 30 mp"
+  "onboardFirstWin": "Próbáld ki az első győzelmed — 30 mp",
+  "nudgeTitleFriday": "Hétvége-indító 🎸",
+  "nudgeBodyFriday": "Indítsd a hétvégét egy pengetéssel — a sorozatod hálás lesz.",
+  "nudgeTitleWeekend": "Hétvégi session? 🔥",
+  "nudgeBodyWeekend": "Egy laza pengetés is számít — pörögjön a sorozat."
 }

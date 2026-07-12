@@ -40,4 +40,29 @@ void main() {
     expect(at.day, 25);
     expect(at.hour, 19, reason: 'wall-clock hour holds through the change');
   });
+
+  // Round 157 — per-day copy (chunk 013's Friday-aware TODO): the schedule
+  // becomes 7 one-shots re-armed on every app open, so each day can carry
+  // its own text.
+  test('nextInstances yields 7 consecutive wall-time evenings', () {
+    final loc = tz.getLocation('Europe/Budapest');
+    final now = tz.TZDateTime(loc, 2026, 10, 23, 8, 0); // spans the DST change
+    final ats = NudgeService.nextInstances(19, now: now);
+    expect(ats, hasLength(7));
+    for (var i = 0; i < 7; i++) {
+      expect(ats[i].hour, 19, reason: 'day $i keeps the wall hour (DST-safe)');
+      expect(ats[i].day, 23 + i);
+    }
+    expect(ats.first.isAfter(now), isTrue);
+  });
+
+  test('variantFor: Friday kicks off the weekend, Sat/Sun are weekend', () {
+    expect(NudgeService.variantFor(DateTime.friday), NudgeCopyVariant.friday);
+    expect(NudgeService.variantFor(DateTime.saturday), NudgeCopyVariant.weekend);
+    expect(NudgeService.variantFor(DateTime.sunday), NudgeCopyVariant.weekend);
+    for (final d in [DateTime.monday, DateTime.tuesday, DateTime.wednesday,
+        DateTime.thursday]) {
+      expect(NudgeService.variantFor(d), NudgeCopyVariant.regular);
+    }
+  });
 }
