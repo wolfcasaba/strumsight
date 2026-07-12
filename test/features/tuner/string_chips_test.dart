@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/tuner/model/in_tune_lock.dart';
@@ -81,6 +82,13 @@ void main() {
         find.bySemanticsLabel(
             'String A2, In tune. Tap to pin as the tuning target.'),
         findsOneWidget);
+
+    // The chip must be ACTIVATABLE by a screen reader, not just labelled
+    // (round 130 regression: excludeSemantics dropped the InkWell's action).
+    final node = tester.getSemantics(
+        find.bySemanticsLabel('String E2. Tap to pin as the tuning target.'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+        reason: 'a screen-reader activation must reach the pin toggle');
     handle.dispose();
   });
 

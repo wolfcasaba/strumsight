@@ -108,16 +108,35 @@ class Song {
         'bpb': beatsPerBar,
       };
 
-  factory Song.fromJson(Map<String, dynamic> j) => Song(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        chords: (j['chords'] as List).map((e) => e as String).toList(),
-        pattern:
-            (j['pat'] as String).split('').map(Song._unslot).toList(),
-        bpm: (j['bpm'] as num).toInt(),
-        // Records saved before round 116 are all 4/4.
-        beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
-      );
+  factory Song.fromJson(Map<String, dynamic> j) {
+    // Records saved before round 116 are all 4/4.
+    final beatsPerBar = (j['bpb'] as num?)?.toInt() ?? 4;
+    final pattern =
+        (j['pat'] as String).split('').map(Song._unslot).toList();
+    return Song(
+      id: j['id'] as String,
+      name: j['name'] as String,
+      chords: (j['chords'] as List).map((e) => e as String).toList(),
+      // A corrupt/hand-edited record could carry a pattern whose length
+      // doesn't match the metre; the release build has no assert to catch it,
+      // and a mismatch would spill slots into the next bar (round 130, R1). Fit
+      // the pattern to exactly beatsPerBar*2 slots (truncate / pad with rests).
+      pattern: _fitToMeter(pattern, beatsPerBar),
+      bpm: (j['bpm'] as num).toInt(),
+      beatsPerBar: beatsPerBar,
+    );
+  }
+
+  /// Force [pattern] to exactly `beatsPerBar * 2` slots — the one-bar contract
+  /// [Lesson._expand] relies on. Longer is truncated, shorter is rest-padded.
+  static List<StrumDirection?> _fitToMeter(
+      List<StrumDirection?> pattern, int beatsPerBar) {
+    final want = beatsPerBar * 2;
+    if (pattern.length == want) return pattern;
+    return [
+      for (var i = 0; i < want; i++) i < pattern.length ? pattern[i] : null,
+    ];
+  }
 
   @override
   bool operator ==(Object other) =>

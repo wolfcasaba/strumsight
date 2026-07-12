@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/live/model/strum.dart';
@@ -57,6 +58,27 @@ void main() {
       expect(lesson.totalBeats, 6);
       final barTwo = lesson.events.firstWhere((e) => e.chord == 'G');
       expect(barTwo.beat, 3.0);
+    });
+
+    test('fromJson fits a corrupt pattern to the metre (release-safe, R1)', () {
+      // A hand-edited/corrupt record: 8 slots but bpb=3. The debug assert in
+      // _expand is stripped in release, so fromJson must repair it rather than
+      // let slots spill into the next bar (round 130).
+      final corrupt = {
+        'id': 'x',
+        'name': 'Corrupt',
+        'chords': ['C'],
+        'pat': 'dudududu', // 8 slots
+        'bpm': 90,
+        'bpb': 3, // wants 6
+      };
+      final song = Song.fromJson(corrupt);
+      expect(song.pattern.length, 6, reason: 'truncated to one 3/4 bar');
+      // Too-short is padded with rests, never left short.
+      final short = Song.fromJson({...corrupt, 'pat': 'd', 'bpb': 4});
+      expect(short.pattern.length, 8);
+      // toLesson must not throw (the invariant _expand asserts now holds).
+      expect(song.toLesson().beatsPerBar, 3);
     });
 
     test('JSON round-trips the metre; legacy records default to 4/4', () {
@@ -168,6 +190,14 @@ void main() {
           findsOneWidget);
       // The raw "&" glyph must NOT leak into the a11y tree (excludeSemantics).
       expect(find.bySemanticsLabel('&'), findsNothing);
+
+      // …and the slot must be ACTIVATABLE by a screen reader — the label is
+      // useless if double-tap dispatches no tap action (round 130 regression:
+      // excludeSemantics dropped the child InkWell's action).
+      final node =
+          tester.getSemantics(find.bySemanticsLabel('Beat 1, Down. Tap to change.'));
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+          reason: 'a screen-reader activation must reach the toggle');
       handle.dispose();
     });
   });

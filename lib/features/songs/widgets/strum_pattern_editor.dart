@@ -94,9 +94,12 @@ class _Slot extends StatelessWidget {
             : Theme.of(context).colorScheme.outline;
     // One button node speaking beat+state; the icon and beat glyph are visual
     // only, so exclude their (redundant / "ampersand") semantics (round 125).
+    // onTap lives HERE so a screen-reader activation reaches the toggle —
+    // excludeSemantics drops the child InkWell's own tap action (round 130).
     return Semantics(
       button: true,
       label: semanticLabel,
+      onTap: onTap,
       excludeSemantics: true,
       child: Column(
         children: [

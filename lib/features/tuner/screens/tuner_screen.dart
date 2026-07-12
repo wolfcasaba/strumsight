@@ -296,6 +296,9 @@ class _StringChips extends StatelessWidget {
                 button: true,
                 selected: identical(s, active),
                 label: l10n.tunerStringSemantic(s.label, _stateSuffix(l10n, s)),
+                // onTap HERE so a screen reader can activate the pin toggle —
+                // excludeSemantics drops the child's own action (round 130).
+                onTap: () => onTap(s),
                 excludeSemantics: true,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(999),
