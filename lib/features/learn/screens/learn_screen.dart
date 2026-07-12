@@ -15,6 +15,7 @@ import '../../settings/providers/visual_latency_provider.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../providers/lesson_progress_provider.dart';
+import '../providers/practice_speed_provider.dart';
 import '../audio/chord_audio.dart';
 import '../audio/metronome.dart';
 import '../providers/metronome_pref_provider.dart';
@@ -54,9 +55,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   bool _jam =
       false; // jam mode: chord backing, scoring off (avoids mic conflict)
   bool _easy = false; // beginner cut: on-beat down-strokes only
-  double _speed = 1.0; // practice-tempo multiplier
+  double _speed = 1.0; // practice-tempo multiplier (restored in initState)
 
-  static const _speeds = [0.5, 0.75, 1.0];
+  // One source of truth for the selectable speeds (shared with the persisted
+  // practiceSpeedProvider so the chips and the stored value can't drift).
+  static const _speeds = PracticeSpeedController.options;
 
   /// The lesson actually being played — simplified to on-beat down-strokes in
   /// Easy mode. Same id/tempo/length, so timing + scoring stay consistent.
@@ -83,6 +86,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick);
+    // Restore the learner's preferred practice speed (round 132) — read once
+    // in initState so entering a lesson doesn't fight a mid-play rebuild.
+    _speed = ref.read(practiceSpeedProvider);
   }
 
   @override
@@ -438,6 +444,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _setSpeed(double s) {
     if (s == _speed) return;
     _speed = s;
+    ref.read(practiceSpeedProvider.notifier).set(s); // remember it (round 132)
     // Restart so the new tempo applies cleanly (playhead maths depends on it).
     if (_playing || (_score != null)) {
       _restart();
