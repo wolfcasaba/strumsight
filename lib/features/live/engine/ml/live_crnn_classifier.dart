@@ -145,7 +145,32 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     final up = probs[1] > probs[0];
     return StrumClassification(
       direction: up ? StrumDirection.up : StrumDirection.down,
-      confidence: up ? probs[1] : probs[0],
+      confidence: calibrate(up ? probs[1] : probs[0]),
     );
+  }
+
+  /// Raw softmax → empirical P(correct) (r170). The net is OVERCONFIDENT on
+  /// real audio — measured on the eval fold (2 018 matched strums):
+  /// p<0.7 → 58 %, 0.7–0.9 → 63 %, 0.9–0.97 → 74 %, ≥0.97 → 86 % — so the
+  /// emitted confidence is remapped piecewise-linearly through those knots.
+  /// Keeps the UI tiers and the user's confidence threshold meaning what
+  /// they always meant (≈ probability the arrow is right). Note: false-alarm
+  /// onsets score the SAME raw confidence as real strums (median 0.94 vs
+  /// 0.97), so confidence can NOT gate noise — that stays the onset
+  /// detector's job (chunk 018 r170).
+  static double calibrate(double p) {
+    const knots = [
+      (0.50, 0.55), (0.60, 0.58), (0.80, 0.63), //
+      (0.935, 0.74), (0.9825, 0.86), (1.00, 0.87),
+    ];
+    if (p <= knots.first.$1) return knots.first.$2;
+    for (var i = 1; i < knots.length; i++) {
+      if (p <= knots[i].$1) {
+        final (x0, y0) = knots[i - 1];
+        final (x1, y1) = knots[i];
+        return y0 + (y1 - y0) * (p - x0) / (x1 - x0);
+      }
+    }
+    return knots.last.$2;
   }
 }

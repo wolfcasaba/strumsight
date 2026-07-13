@@ -248,3 +248,16 @@ Live arrow, Learn scoring, streak crediting — real-guitar direction goes
 38.9 % → ~79.8 % at UNCHANGED arrow timing. The batch/Analyze path keeps its
 own full-window model (0.867). Still open: 188 ms delayed-refine (85.6 %) as
 a second stage; the real-guitar APK test remains the final gate.
+
+## r170 — live confidence CALIBRATED; confidence cannot gate noise
+
+Fold measurement (2 018 matched strums): the raw softmax is overconfident —
+p<0.7 → 58 % correct, 0.7–0.9 → 63 %, 0.9–0.97 → 74 %, ≥0.97 → 86 % — and
+FALSE-ALARM onsets score the same raw confidence as real strums (median 0.94
+vs 0.97), so confidence can NOT be used to suppress noise arrows (that stays
+the onset detector's precision job; r166 trade-off holds). Fix shipped:
+`LiveCrnnStrumClassifier.calibrate` — piecewise-linear raw→P(correct) through
+the measured knots, so the emitted confidence keeps the heuristic-era meaning
+and the UI tiers (≥0.75 high / ≥0.45 mid) regain semantics ("high" ≈ raw
+≥0.94 ≈ 74–86 % real accuracy). Batch/Analyze model calibration NOT yet
+measured (different model) — its confidences feed share cards/timeline only.

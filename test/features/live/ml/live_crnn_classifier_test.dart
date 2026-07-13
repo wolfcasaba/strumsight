@@ -100,6 +100,44 @@ void main() {
     expect(c.confidence, inInclusiveRange(0.5, 1.0));
   });
 
+  group('confidence calibration (r170, measured on the real eval fold)', () {
+    test('maps raw softmax to empirical P(correct), monotonically', () {
+      // Knots from the fold measurement: <0.7->0.58, 0.7-0.9->0.63,
+      // 0.9-0.97->0.74, >=0.97->0.86.
+      expect(LiveCrnnStrumClassifier.calibrate(0.60), closeTo(0.58, 0.03));
+      expect(LiveCrnnStrumClassifier.calibrate(0.80), closeTo(0.63, 0.03));
+      expect(LiveCrnnStrumClassifier.calibrate(0.935), closeTo(0.74, 0.03));
+      expect(LiveCrnnStrumClassifier.calibrate(0.99), closeTo(0.86, 0.03));
+      // Monotone and bounded.
+      var prev = 0.0;
+      for (var p = 0.5; p <= 1.0001; p += 0.01) {
+        final c = LiveCrnnStrumClassifier.calibrate(p);
+        expect(c, greaterThanOrEqualTo(prev));
+        expect(c, inInclusiveRange(0.5, 0.9));
+        prev = c;
+      }
+    });
+
+    test('classifyAt emits the calibrated confidence', () {
+      final classifier = LiveCrnnStrumClassifier.tryLoad(
+          'assets/ml/strum_crnn_live.bin',
+          sampleRate: sr)!;
+      final signal = synthSignal(sr, 5);
+      final nFrames = 1 + (signal.length - window) ~/ hop;
+      StrumClassification? c;
+      for (var f = 0; f < nFrames; f++) {
+        classifier.observe(
+          Float64List.sublistView(signal, f * hop, f * hop + window),
+          const StrumFrameFeatures(lowEnergy: 0, highEnergy: 0, centroid: 0),
+        );
+        if (f == 92) c = classifier.classifyAt(onsetFrame: 80, currentFrame: 92);
+      }
+      // Whatever the raw softmax was, the emitted value sits in the
+      // calibrated range — never the raw 0.9+ overconfidence band.
+      expect(c!.confidence, inInclusiveRange(0.55, 0.88));
+    });
+  });
+
   test('tryLoad returns null when the asset is missing (heuristic fallback)',
       () {
     expect(
