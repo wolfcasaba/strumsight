@@ -108,3 +108,23 @@ Also `Klangio/KLANGIO-GST-MM-T` (+5 min, different rig) for held-out eval.
   of a core at 10 ms hop; NO existing Dart CQT package → implement Brown–Puckette 1992 in-house over fftea
   (~100 lines, kernel precomputed, sparsity threshold ~0.005, optional per-octave FFT sizes).
 - *(pending)* Hermes 6-thread reply (Telegram; needs user forwarding — msg 8807, 2026-07-12).
+
+## Next (r167+): live-path delayed-refine — plan note (2026-07-13)
+
+The live arrow keeps the heuristic verdict at ~70 ms (r164: 39 % on real
+guitar — the confidence tier must stay honest about it). The CRNN needs the
+onset+120 ms log-mel window plus the 128 ms FFT tail ≈ onset+240 ms, i.e.
+~170 ms AFTER today's verdict. Options, in preference order:
+1. **Delayed refine:** show the heuristic arrow at 70 ms, run the CRNN window
+   at ~240 ms in the same isolate, and if it disagrees update the arrow +
+   emit a corrected `LiveFrame` (scorer consumes the refined direction — the
+   Learn hit windows are ±120 ms so a 240 ms correction still lands inside
+   the scoring window at ≤~150 BPM). UX risk: visible arrow flips — needs
+   on-device feel-testing (the real-guitar gate).
+2. **Retrain shorter-window model** (POST 7 ≈ 70 ms): eval accuracy cost
+   unknown — measurable in one local training run now that TF works on this
+   box; worth an experiment round.
+3. **Streaming GRU** (chunk 015): biggest rewrite, best latency; only if 1/2
+   fail the feel test.
+The infra for all three exists (classifier seam, parity gates, local
+training, the real-fold harness).
