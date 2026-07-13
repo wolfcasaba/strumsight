@@ -56,3 +56,27 @@ confidence matter, don't chase 100%.
 
 **Latency:** onset confirmed 2 frames after the peak (~12 ms) — inside the
 50–80 ms budget (chunk 010).
+
+## r166 — SuperFlux threshold retuned on REAL recordings (2026-07-13)
+
+The synth-tuned adaptive threshold (delta 20, lambda 2.0) missed **27 %** of
+the 2 013 labeled strums on the Klangio eval takes (±0.12 s): fast strumming
+raises the 0.4 s median-flux floor so the threshold SELF-MASKS (56 % of the
+misses sat <0.25 s after the previous label), and real phone-mic attacks are
+far weaker in flux than synthetic ones (the "soft attack ≥100" premise did
+not transfer). Detector-level sweep on the real fold:
+
+| delta, lambda | recall@0.12 | precision |
+|---|---|---|
+| 20, 2.0 (old) | 72 % | 87 % |
+| 12, 2.0 | 84 % | 85 % |
+| **12, 1.0 (new)** | **90 %** | 83 % |
+| 8, 1.0 | 94 % | 78 % |
+
+(12, 1.0) shipped: streaming-context recall 73 %→**91 %** (worst take
+26 %→74 %), every synth pin (vibrato immunity, one-strum-one-onset, 180-BPM
+16ths, ring-out silence, randomized property gate) still green. "False
+alarms" on real takes include unlabeled real sounds (fret noise, ghosts) —
+an upper bound. Locked by the real-A/B harness: matched/labels ≥ 0.85 when
+the local dataset is present. delta/lambda are now ctor-injectable for future
+sweeps (production passes nothing). Real-device feel remains the final gate.

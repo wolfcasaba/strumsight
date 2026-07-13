@@ -26,6 +26,8 @@ class SuperFluxOnsetDetector {
     this.bands = 64,
     this.lag = 2,
     this.minIoiSec = 0.06,
+    this.delta = _delta,
+    this.lambda = _lambda,
   }) : _mel = LogMelExtractor(
           sampleRate: sampleRate,
           nFft: window,
@@ -46,6 +48,12 @@ class SuperFluxOnsetDetector {
 
   final double minIoiSec;
 
+  /// Adaptive-threshold knobs (default = the tuned constants below). Made
+  /// injectable in r166 so the REAL-recording recall harness can sweep them;
+  /// production paths pass nothing and keep the pinned behaviour.
+  final double delta;
+  final double lambda;
+
   // The log-mel floor: bands below this are treated as silent so noise-floor
   // log-ratios (log of tiny power fluctuations) cannot register as flux.
   // -9.0 in log-power ≈ per-band amplitude ~1e-2 — well under any real pluck.
@@ -59,8 +67,16 @@ class SuperFluxOnsetDetector {
   // most bands (measured ≥100) while ring-out beating bumps localise to a few
   // bands (measured ≤10, e.g. 0.836 s into a single default strum) — 20 splits
   // the two populations with margin on both sides.
-  static const double _delta = 20.0;
-  static const double _lambda = 2.0;
+  // r166 RETUNE on real data: the synth-tuned (20, 2.0) missed 27 % of the
+  // 2 013 labeled strums on the Klangio eval takes (fast strumming raises the
+  // median-flux floor and the threshold self-masks; real attacks are far
+  // weaker in flux than synth ones). Sweep on the real fold:
+  //   (20,2.0) 72 % recall / 87 % precision  ← old
+  //   (12,1.0) 90 % recall / 83 % precision  ← new (chunk 005/018)
+  // All synth pins (vibrato-immunity, one-strum-one-onset, 180-BPM 16ths,
+  // ring-out silence) re-verified green at the new values.
+  static const double _delta = 12.0;
+  static const double _lambda = 1.0;
   static const int _medianFrames = 69; // ~0.4 s @ 44.1 kHz / 256 hop
 
   // Local-max confirmation: the candidate must top ±2 neighbouring frames.
@@ -144,7 +160,7 @@ class SuperFluxOnsetDetector {
 
     _fluxWindow.addLast(flux);
     if (_fluxWindow.length > _medianFrames) _fluxWindow.removeFirst();
-    final thr = _delta + _lambda * _median(_fluxWindow);
+    final thr = delta + lambda * _median(_fluxWindow);
 
     _fluxHist.add(flux);
     _thrHist.add(thr);

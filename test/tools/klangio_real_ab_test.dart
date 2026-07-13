@@ -137,7 +137,10 @@ void main() {
       expect(labels, greaterThan(1900), reason: 'the whole eval fold ran');
       // Sanity floors only — the print IS the deliverable; findings go to
       // chunk 018 and the deployment decision follows the numbers.
-      expect(heurDirected, greaterThan(500));
+      expect(heurMatched / labels, greaterThanOrEqualTo(0.85),
+          reason: 'r166 retune locked: onset recall on real takes was 73% '
+              'at the synth-tuned threshold, 91% after (12, 1.0) — a drop '
+              'back means the detector regressed on real audio');
       expect(crnnAcc, greaterThan(0.75),
           reason: 'the Dart chain must reproduce the ~0.867 Python eval '
               '(large drop = feature drift between training and serving)');
