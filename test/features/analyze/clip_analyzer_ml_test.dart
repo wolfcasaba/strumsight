@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
 import 'package:music_theory/features/analyze/providers/analyze_providers.dart';
 import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 
 import '../../support/synth.dart';
@@ -74,6 +75,30 @@ void main() {
       expect(refined.strums[i].timeSec, baseline.strums[i].timeSec);
       expect(refined.strums[i].confidence, inInclusiveRange(0.5, 1.0),
           reason: 'softmax max-prob is always >= 0.5 for 2 classes');
+    }
+  });
+
+  test('batch confidences are CALIBRATED P(correct), not raw softmax (r171)',
+      () {
+    // Fold-measured knots: <0.7→62%, 0.7–0.9→64%, 0.9–0.97→73%,
+    // 0.97–0.995→83%, ≥0.995→96%.
+    expect(StrumCrnn.calibrate(0.60), closeTo(0.62, 0.03));
+    expect(StrumCrnn.calibrate(0.935), closeTo(0.73, 0.03));
+    expect(StrumCrnn.calibrate(0.999), closeTo(0.96, 0.02));
+    var prev = 0.0;
+    for (var p = 0.5; p <= 1.0001; p += 0.01) {
+      final c = StrumCrnn.calibrate(p);
+      expect(c, greaterThanOrEqualTo(prev));
+      expect(c, inInclusiveRange(0.5, 0.97));
+      prev = c;
+    }
+    // And the clip path emits the calibrated value (share cards / timeline).
+    final bytes = Uint8List.fromList(
+        File('assets/ml/strum_crnn.bin').readAsBytesSync());
+    final refined = runClipAnalysis((clip.toList(), 44100, bytes));
+    for (final s in refined.strums) {
+      expect(s.confidence, lessThanOrEqualTo(0.97),
+          reason: 'raw softmax 0.99+ must not surface on the timeline');
     }
   });
 

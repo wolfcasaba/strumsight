@@ -261,3 +261,21 @@ the measured knots, so the emitted confidence keeps the heuristic-era meaning
 and the UI tiers (≥0.75 high / ≥0.45 mid) regain semantics ("high" ≈ raw
 ≥0.94 ≈ 74–86 % real accuracy). Batch/Analyze model calibration NOT yet
 measured (different model) — its confidences feed share cards/timeline only.
+
+## r171 — cost measured + conv repack; batch confidences calibrated
+
+(a) Learn scorer × confidence: CLEAN — the scorer consumes direction only,
+never confidence; the r170 calibration cannot affect scoring.
+(b) Live classify cost (JIT test VM, this box): windowAt 1.9 ms + forward
+42.6 ms/strum → **33 ms** after repacking the conv kernels per-tap to [o][c]
+(the original [c][o] layout strided the kernel by outC on every inner step).
+~16.5 M MACs; AOT release is typically 3–5× faster, verdicts run once per
+strum (≥150 ms apart) — a few fast-hops of inbox backlog per strum, drains
+immediately; acceptable, bound locked at <60 ms JIT in the cost harness.
+observe() = 8.7 µs/hop (ring append, trivial).
+(c) BATCH model calibration (eval fold, labeled times): <0.7 → 62 %,
+0.7–0.9 → 64 %, 0.9–0.97 → 73 %, 0.97–0.995 → 83 %, ≥0.995 → 96 % (n=1203,
+60 % of verdicts) — far better top-end than the live model (the full window
+is decisive), still overconfident below 0.97. `StrumCrnn.calibrate` shipped
+(same piecewise pattern as r170) so timeline/share percentages read as
+P(correct).

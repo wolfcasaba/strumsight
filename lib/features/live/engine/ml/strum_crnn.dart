@@ -58,7 +58,29 @@ class StrumCrnn {
     final up = probs[1] > probs[0];
     return StrumClassification(
       direction: up ? StrumDirection.up : StrumDirection.down,
-      confidence: up ? probs[1] : probs[0],
+      confidence: calibrate(up ? probs[1] : probs[0]),
     );
+  }
+
+  /// Raw softmax → empirical P(correct) for the BATCH model (r171, measured
+  /// on the eval fold at labeled times, 2 013 strums): <0.7 → 62 %,
+  /// 0.7–0.9 → 64 %, 0.9–0.97 → 73 %, 0.97–0.995 → 83 %, ≥0.995 → 96 % —
+  /// better top-end calibration than the live 70 ms model (r170) because the
+  /// full window is far more decisive, but still overconfident below 0.97.
+  /// Keeps timeline/share-card percentages honest.
+  static double calibrate(double p) {
+    const knots = [
+      (0.50, 0.60), (0.60, 0.62), (0.80, 0.64), //
+      (0.935, 0.73), (0.9825, 0.83), (0.9975, 0.96), (1.00, 0.96),
+    ];
+    if (p <= knots.first.$1) return knots.first.$2;
+    for (var i = 1; i < knots.length; i++) {
+      if (p <= knots[i].$1) {
+        final (x0, y0) = knots[i - 1];
+        final (x1, y1) = knots[i];
+        return y0 + (y1 - y0) * (p - x0) / (x1 - x0);
+      }
+    }
+    return knots.last.$2;
   }
 }

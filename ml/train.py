@@ -14,9 +14,27 @@ Usage: python3 ml/train.py dataset.npz [strum_direction.tflite]
 """
 from __future__ import annotations
 
+import os
+import random
 import sys
 
 import numpy as np
+
+
+def set_seeds(seed: int) -> None:
+    """Make a training run reproducible (r171 honest-measurement).
+
+    Seeds Python, NumPy and TensorFlow RNGs and pins PYTHONHASHSEED so weight
+    init, the class-weighted shuffle and dropout (if any) repeat run-to-run.
+    Point estimates from a single unseeded run were noise (r171); with this,
+    `--seed` sweeps tell signal from variance.
+    """
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    import tensorflow as tf  # noqa: WPS433
+    tf.random.set_seed(seed)
+    tf.keras.utils.set_random_seed(seed)
 
 
 def build_model(frames, mels):
@@ -37,9 +55,11 @@ def build_model(frames, mels):
     ])
 
 
-def main(npz_path, out="strum_direction.tflite"):
+def main(npz_path, out="strum_direction.tflite", seed=42):
     import tensorflow as tf
 
+    set_seeds(seed)
+    print(f"seed={seed}")
     d = np.load(npz_path)
     X, y = d["X"], d["y"]
     print(f"dataset: {X.shape} windows, {int((y == 0).sum())} down / "
@@ -81,7 +101,7 @@ def main(npz_path, out="strum_direction.tflite"):
     # weights, never the last epoch's.
     stop = tf.keras.callbacks.EarlyStopping(
         monitor="val_accuracy", patience=8, restore_best_weights=True)
-    model.fit(Xn, y, epochs=40, batch_size=32,
+    model.fit(Xn, y, epochs=40, batch_size=32, shuffle=True,
               class_weight=cw, verbose=2, callbacks=[stop], **fit_kw)
 
     # Raw float32 weights FIRST — this is the shipping path (ml-track P1.3,
@@ -108,7 +128,13 @@ def main(npz_path, out="strum_direction.tflite"):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    args = [a for a in sys.argv[1:] if not a.startswith("--seed")]
+    seed = 42
+    for a in sys.argv[1:]:
+        if a.startswith("--seed="):
+            seed = int(a.split("=", 1)[1])
+    if not args:
         print(__doc__)
         sys.exit(1)
-    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "strum_direction.tflite")
+    main(args[0], args[1] if len(args) > 1 else "strum_direction.tflite",
+         seed=seed)

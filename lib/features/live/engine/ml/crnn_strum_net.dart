@@ -113,33 +113,63 @@ class CrnnStrumNet {
     return [e0 / (e0 + e1), e1 / (e0 + e1)];
   }
 
-  /// Conv2D 3×3, stride 1, SAME zero padding, ReLU. Kernel (3,3,in,out).
+  /// Conv2D 3×3, stride 1, SAME zero padding, ReLU. Kernel (3,3,in,out),
+  /// repacked per tap to [o][c] so the inner channel loop reads BOTH the
+  /// input row and the kernel row contiguously (r171: this halves the
+  /// forward cost — the original [c][o] layout strided the kernel by outC
+  /// every step).
   static _Tensor3 _conv3x3Relu(_Tensor3 x, _NdArray k, _NdArray b) {
     final outC = k.dims[3];
     final inC = k.dims[2];
+    final kPacked = k.packedConv ??= _packConv(k, inC, outC);
     final out = _Tensor3(x.h, x.w, outC);
+    final xData = x.data;
+    final outData = out.data;
     for (var i = 0; i < x.h; i++) {
       for (var j = 0; j < x.w; j++) {
+        final outBase = (i * x.w + j) * outC;
         for (var o = 0; o < outC; o++) {
-          var acc = b.data[o];
-          for (var di = -1; di <= 1; di++) {
-            final ii = i + di;
-            if (ii < 0 || ii >= x.h) continue;
-            for (var dj = -1; dj <= 1; dj++) {
-              final jj = j + dj;
-              if (jj < 0 || jj >= x.w) continue;
-              final kBase = ((di + 1) * 3 + (dj + 1)) * inC * outC + o;
-              final xBase = (ii * x.w + jj) * x.c;
+          outData[outBase + o] = b.data[o];
+        }
+        for (var di = -1; di <= 1; di++) {
+          final ii = i + di;
+          if (ii < 0 || ii >= x.h) continue;
+          for (var dj = -1; dj <= 1; dj++) {
+            final jj = j + dj;
+            if (jj < 0 || jj >= x.w) continue;
+            final tap = ((di + 1) * 3 + (dj + 1)) * inC * outC;
+            final xBase = (ii * x.w + jj) * x.c;
+            for (var o = 0; o < outC; o++) {
+              final kBase = tap + o * inC;
+              var acc = 0.0;
               for (var c = 0; c < inC; c++) {
-                acc += x.data[xBase + c] * k.data[kBase + c * outC];
+                acc += xData[xBase + c] * kPacked[kBase + c];
               }
+              outData[outBase + o] += acc;
             }
           }
-          out.set(i, j, o, acc > 0 ? acc : 0);
+        }
+        for (var o = 0; o < outC; o++) {
+          final v = outData[outBase + o];
+          if (v < 0) outData[outBase + o] = 0;
         }
       }
     }
     return out;
+  }
+
+  /// One-time repack of a (3,3,in,out) kernel to per-tap [o][c] rows.
+  static Float64List _packConv(_NdArray k, int inC, int outC) {
+    final packed = Float64List(9 * inC * outC);
+    for (var t = 0; t < 9; t++) {
+      for (var c = 0; c < inC; c++) {
+        for (var o = 0; o < outC; o++) {
+          packed[t * inC * outC + o * inC + c] =
+              k.data[t * inC * outC + c * outC + o];
+        }
+      }
+    }
+    return packed;
   }
 
   /// MaxPool2D pool (1,2), stride (1,2), VALID — halves the mel axis.
@@ -218,6 +248,9 @@ class _NdArray {
   _NdArray(this.dims, this.data);
   final List<int> dims;
   final Float64List data;
+
+  /// Lazily repacked conv layout (see _packConv) — computed once per net.
+  Float64List? packedConv;
 }
 
 class _Tensor3 {
