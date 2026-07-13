@@ -1,7 +1,7 @@
 {
   "model": "StrumSight strum-direction CRNN (down/up)",
   "generated": "2026-07-13",
-  "round": 172,
+  "round": 173,
   "architecture": "3x[Conv2D 3x3 + ReLU + MaxPool(1,2)] -> GRU(128) -> Dense(2 softmax); ~364k params; input (15, 128) log-mel window (PRE 3 / POST 12 frames, 10 ms hop)",
   "configs": {
     "batch": "full window (~240 ms post-onset audio) \u2014 Analyze path",
@@ -37,6 +37,7 @@
   "training": {
     "seeding": "tf.keras.utils.set_random_seed + PYTHONHASHSEED (ml/train.py::set_seeds); --seed arg, default 42",
     "recipe": "Adam 1e-3, batch 32, <=40 epochs, EarlyStopping on val_accuracy (patience 8, restore_best_weights), class-weighted up-strums, train-fold-only norm stats",
+    "r173_augment_reg": "logo_aug / threeway_aug results add PCM-domain augmentation (augment.py: pitch \u00b16 st varispeed [Murgul optimum] + synthetic-RIR reverb + phone mic-sim EQ/band-limit + gain/noise, n_aug=2) to the TRAIN fold ONLY, plus build_model regularization (dropout 0.25 + GRU recurrent_dropout 0.15 + L2 1e-4). Val/test stay CLEAN and identical to the r172 folds, so the numbers are directly comparable. Default build_model (all reg args 0) stays byte-identical for fixture back-compat.",
     "splits": {
       "legacy_2way": "split_by_recording seed 42 (80/20) \u2014 kept for fixture back-compat; its 'eval' fold was BOTH early-stopping val and headline test pre-r172 (the source of the optimistic 0.867/0.799)",
       "3way": "split_by_recording_3way seed 42 (val 15% / test 15% by recording); VAL early-stops, TEST touched once",
@@ -203,6 +204,86 @@
       "live_test_acc": 0.7633209417596035,
       "n_val": 1478,
       "n_test": 1614
+    },
+    "logo_aug": {
+      "settings": {
+        "n_aug": 2,
+        "semitone_range": 6.0,
+        "reg": {
+          "dropout": 0.25,
+          "rec_dropout": 0.15,
+          "l2": 0.0001
+        },
+        "augment": "pitch\u00b16 varispeed + reverb + mic-sim + gain/noise (augment.py), TRAIN fold only"
+      },
+      "batch": {
+        "folds": [
+          {
+            "held_out_guitarist": "1",
+            "n_test": 4069,
+            "test_acc": 0.686163676579012,
+            "val_acc": 0.9021148036253777,
+            "n_aug_train": 12086
+          },
+          {
+            "held_out_guitarist": "2",
+            "n_test": 3977,
+            "test_acc": 0.7005280362081971,
+            "val_acc": 0.7738231917336394,
+            "n_aug_train": 12096
+          },
+          {
+            "held_out_guitarist": "4",
+            "n_test": 3721,
+            "test_acc": 0.708680462241333,
+            "val_acc": 0.860733695652174,
+            "n_aug_train": 13148
+          }
+        ],
+        "mean_test_acc": 0.6984573916761807,
+        "std_test_acc": 0.009308314767783439
+      },
+      "live70": {
+        "folds": [
+          {
+            "held_out_guitarist": "1",
+            "n_test": 4069,
+            "test_acc": 0.39690341607274515,
+            "val_acc": 0.39395770392749246,
+            "n_aug_train": 12086
+          },
+          {
+            "held_out_guitarist": "2",
+            "n_test": 3977,
+            "test_acc": 0.6180538094040734,
+            "val_acc": 0.6486796785304249,
+            "n_aug_train": 12096
+          },
+          {
+            "held_out_guitarist": "4",
+            "n_test": 3721,
+            "test_acc": 0.5716205321150228,
+            "val_acc": 0.8057065217391305,
+            "n_aug_train": 13148
+          }
+        ],
+        "mean_test_acc": 0.5288592525306138,
+        "std_test_acc": 0.09521298717934892
+      }
+    },
+    "threeway_aug": {
+      "split": "by-recording 3-way, seed 42 (same fold as threeway)",
+      "settings": {
+        "n_aug": 2,
+        "reg": {
+          "dropout": 0.25,
+          "rec_dropout": 0.15,
+          "l2": 0.0001
+        }
+      },
+      "val_acc": 0.8673883626522327,
+      "test_acc": 0.8451053283767038,
+      "n_aug_train": 17350
     }
   },
   "timing_seconds": {
@@ -210,6 +291,8 @@
     "logo": 2682.2,
     "bootstrap": 0.1,
     "seeds": 1657.6,
-    "calib": 636.6
+    "calib": 636.6,
+    "logo_aug": 10769.7,
+    "threeway_aug": 3647.7
   }
 }

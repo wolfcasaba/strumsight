@@ -316,3 +316,34 @@ measured. Repro: seeds via `train.py::set_seeds`; splits
 recording- or guitarist-straddle). `ml/model_card.json` is the provenance record
 (regenerate, never hand-edit). The legacy seed-42 two-way split stays only for
 fixture back-compat.
+
+## r173 — augmentation tried against the new-player gap: MEASURED NEGATIVE, not shipped
+
+Hypothesis (research chunk lever): multiply the 3 real guitarists with audio
+augmentation to close the r172 new-player gap. Built `ml/augment.py` (pure-NumPy:
+varispeed pitch-shift ±6 [Murgul's spectrogram optimum], synth-RIR reverb,
+mic-sim EQ/band-limit, gain, additive noise), AUG_N=2 augmented copies + clean
+per TRAIN recording, plus dropout 0.25 / recurrent-dropout 0.15 / L2 1e-4
+regularization. Re-ran the SAME `logo_folds` splits (`honest_eval.py` sections
+`logo_aug`/`threeway_aug`). Result — it did NOT help; it slightly HURT:
+
+| LOGO (new-player) | r172 clean | r173 augmented |
+|---|---|---|
+| batch/Analyze | 0.707 ± 0.017 | **0.699 ± 0.009** (flat, within noise) |
+| live-70 ms | 0.606 ± 0.055 | **0.529 ± 0.095** (worse AND noisier) |
+| same-player 3-way (batch) | 0.852 | 0.845 |
+
+Why it backfires (the honest read): the pitch-shift is **varispeed** — it
+stretches/compresses TIME as it shifts pitch, and reverb+noise smear the strum's
+sub-band onset envelope, which is the exact temporal cue up/down direction is
+read from. The live-70 ms model, with only 70 ms of context, is hurt most (0.61
+→ 0.53). So naive audio augmentation is the wrong lever for a *timing*-based
+direction task. **Not shipped** — the production model stays the r168/r172 one;
+`augment.py` is kept as an evaluated-and-rejected experiment (HORIZON: log the
+rejected attempt). Verified on TWO independent machines: the ARM dev box and the
+x86 CI trainer (`.github/workflows/ml-train.yml`) reproduced the same negative.
+
+Next lever (supersedes augmentation): the r172-roadmap's **multi-head learned
+onset** (Klangio recipe — fixes false-onset confidence, replaces the heuristic
+detector) and **per-user last-layer fine-tune**; more real guitarists would help
+but no public strum-direction dataset beyond Klangio exists.
