@@ -15,6 +15,16 @@ void main() {
     expect(LessonTiming.playhead(5, 60, 4), 1);
   });
 
+  test('beatsCrossedLooped handles the loop wrap as a beat-0 downbeat', () {
+    // No wrap → same as beatsCrossed.
+    expect(LessonTiming.beatsCrossedLooped(0.5, 1.5, 8), [1]);
+    expect(LessonTiming.beatsCrossedLooped(2.0, 2.0, 8), isEmpty);
+    // Wrap: the loop restart IS beat 0 (the downbeat must sound).
+    expect(LessonTiming.beatsCrossedLooped(7.5, 0.5, 8), [0]);
+    // Wrap with beats on both sides, in playback order.
+    expect(LessonTiming.beatsCrossedLooped(6.5, 1.2, 8), [7, 0, 1]);
+  });
+
   test('countInNumber counts 1..N then null once playing', () {
     expect(LessonTiming.countInNumber(-4.0, 4), 1);
     expect(LessonTiming.countInNumber(-3.5, 4), 1);

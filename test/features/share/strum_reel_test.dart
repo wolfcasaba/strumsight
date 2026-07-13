@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/analyze/model/analyze_result.dart';
+import 'package:music_theory/features/learn/audio/chord_audio.dart';
+import 'package:music_theory/features/learn/audio/metronome.dart';
 import 'package:music_theory/features/learn/widgets/lesson_highway.dart';
 import 'package:music_theory/features/live/model/strum.dart';
 import 'package:music_theory/features/share/screens/strum_reel_screen.dart';
@@ -15,6 +17,21 @@ class _FakeShareService extends ShareService {
   Future<void> shareText(AnalyzeResult result,
           {int capo = 0, Rect? sharePositionOrigin}) async =>
       log.add('text-share capo=$capo strums=${result.strums.length}');
+}
+
+class _FakeMetronome extends Metronome {
+  final List<String> log = [];
+
+  @override
+  Future<void> tick({bool accent = false}) async =>
+      log.add(accent ? 'accent' : 'click');
+}
+
+class _FakeBacking extends Backing {
+  final List<String> log = [];
+
+  @override
+  Future<void> playChord(String label) async => log.add(label);
 }
 
 final _result = AnalyzeResult(
@@ -101,6 +118,101 @@ void main() {
         tester.widget<LessonHighway>(find.byType(LessonHighway)).playheadBeat;
     expect(resumed, greaterThanOrEqualTo(paused),
         reason: 'resume must continue, not restart the ticker at beat 0');
+
+    await tester.tap(find.byType(LessonHighway)); // pause for teardown
+    await tester.pump();
+  });
+
+  testWidgets('the reel SOUNDS: clicks ride the drawn beats, chords the bars',
+      (tester) async {
+    final metronome = _FakeMetronome();
+    final backing = _FakeBacking();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(
+          result: _result, metronome: metronome, backing: backing),
+    ));
+    await tester.pump();
+    // The opening downbeat sounds immediately: accented click + the C pad —
+    // the animation and the audio start from the SAME playhead instant.
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(metronome.log, ['accent']);
+    expect(backing.log, ['C']);
+
+    // 100 BPM → 600 ms/beat: beat 1 is a plain click, no new chord.
+    await tester.pump(const Duration(milliseconds: 650));
+    expect(metronome.log, ['accent', 'click']);
+    expect(backing.log, ['C']);
+
+    await tester.tap(find.byType(LessonHighway)); // pause ticker
+    await tester.pump();
+  });
+
+  testWidgets('the reel sound toggle mutes clicks and chords', (tester) async {
+    final metronome = _FakeMetronome();
+    final backing = _FakeBacking();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(
+          result: _result, metronome: metronome, backing: backing),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.byIcon(Icons.volume_up)); // mute
+    await tester.pump();
+    final clicksAtMute = metronome.log.length;
+    final chordsAtMute = backing.log.length;
+
+    await tester.pump(const Duration(milliseconds: 1300)); // ~2 beats
+    expect(metronome.log.length, clicksAtMute,
+        reason: 'muted reel must not click');
+    expect(backing.log.length, chordsAtMute,
+        reason: 'muted reel must not play chords');
+
+    await tester.tap(find.byIcon(Icons.volume_off)); // unmute
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 650));
+    expect(metronome.log.length, greaterThan(clicksAtMute),
+        reason: 'unmuting resumes the clicks');
+
+    await tester.tap(find.byType(LessonHighway)); // pause ticker
+    await tester.pump();
+  });
+
+  testWidgets('pause silences the reel; the loop wrap re-sounds the downbeat',
+      (tester) async {
+    final metronome = _FakeMetronome();
+    final backing = _FakeBacking();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StrumReelScreen(
+          result: _result, metronome: metronome, backing: backing),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.byType(LessonHighway)); // pause
+    await tester.pump();
+    final clicksAtPause = metronome.log.length;
+    await tester.pump(const Duration(milliseconds: 1300));
+    expect(metronome.log.length, clicksAtPause,
+        reason: 'a paused reel is silent');
+
+    await tester.tap(find.byType(LessonHighway)); // resume
+    await tester.pump();
+    // Drive across the loop wrap (totalBeats 8 @100 BPM = 4.8 s): the wrap
+    // is beat 0 again — accent + chord must re-fire, in sync with the
+    // highway jumping back.
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 450));
+    }
+    expect(metronome.log.where((e) => e == 'accent').length, greaterThan(1),
+        reason: 'the wrap re-sounds the bar-0 downbeat');
+    expect(backing.log.length, greaterThan(1));
 
     await tester.tap(find.byType(LessonHighway)); // pause for teardown
     await tester.pump();

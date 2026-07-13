@@ -198,6 +198,7 @@
   "shareCardButton": "Share card",
   "shareTextButton": "Share as text",
   "reelButton": "Play as reel",
+  "reelSoundToggle": "Reel sound on/off",
   "reelHint": "Screen-record this to share it!",
   "reelTagline": "The only app that sees your strum direction",
   "streakTitle": "Practice streak",

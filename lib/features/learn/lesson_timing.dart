@@ -58,6 +58,20 @@ class LessonTiming {
     return out;
   }
 
+  /// [beatsCrossed] for a LOOPING playhead (the Strum Reel): when [next]
+  /// wrapped past [total] back to the loop head, the crossing sequence is the
+  /// loop tail, then the restart instant AS BEAT 0 (the downbeat must sound
+  /// exactly when the highway jumps back), then the new head.
+  static List<int> beatsCrossedLooped(double prev, double next, double total) {
+    if (total <= 0) return const [];
+    if (next >= prev) return beatsCrossed(prev, next);
+    return [
+      ...beatsCrossed(prev, total).where((b) => b < total),
+      0,
+      ...beatsCrossed(0, next),
+    ];
+  }
+
   /// The events whose position is currently within the visible lane, so the
   /// widget only lays out what's on screen.
   static List<LessonEvent> visibleEvents(
