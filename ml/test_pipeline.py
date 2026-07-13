@@ -343,5 +343,94 @@ def test_augment_pcm_is_stochastic_but_deterministic_per_seed():
     assert not (a1.shape == a3.shape and np.array_equal(a1, a3))
 
 
+# ---------------------------------------------------------------------------
+# r174 HARD-NEGATIVE mining for the no-strum reject head (pytest). Written
+# test-first (TDD) — see ml/negatives.py. A no-strum window must NEVER overlap
+# a labeled strum, must stay inside the audio, and the mining must be
+# deterministic per rng so the reject-head dataset is reproducible.
+# ---------------------------------------------------------------------------
+
+def _clicky(duration_s, click_times, sr=F.SR):
+    """Synthetic recording: a decaying 300 Hz tone-burst at each click time
+    over a low noise floor — each burst is a spectral-flux onset."""
+    n = int(duration_s * sr)
+    x = (0.001 * np.random.default_rng(0).standard_normal(n)).astype(np.float32)
+    L = sr // 4
+    env = np.exp(-np.arange(L) / (0.03 * sr)).astype(np.float32)
+    tone = np.sin(2 * np.pi * 300 * np.arange(L) / sr).astype(np.float32)
+    burst = env * tone
+    for t in click_times:
+        i = int(t * sr)
+        end = min(n, i + L)
+        x[i:end] += burst[: end - i]
+    return x
+
+
+def test_negatives_never_overlap_a_labeled_strum():
+    import negatives as NEG
+    strums = np.array([0.5, 1.2, 2.0])
+    # extra transients at 0.85 / 1.6 are NOT strums -> candidate hard negatives
+    pcm = _clicky(3.0, [0.5, 0.85, 1.2, 1.6, 2.0])
+    times, kinds = NEG.negative_times(
+        pcm, strums, rng=np.random.default_rng(1), n_per_strum=2.0)
+    assert len(times) > 0
+    for t in times:
+        assert np.min(np.abs(strums - t)) > NEG.MARGIN_S
+
+
+def test_negatives_stay_inside_the_audio_with_window_room():
+    import negatives as NEG
+    strums = np.array([0.5, 1.2, 2.0])
+    pcm = _clicky(3.0, [0.5, 0.85, 1.2, 1.6, 2.0])
+    dur = len(pcm) / F.SR
+    times, _ = NEG.negative_times(pcm, strums, rng=np.random.default_rng(2))
+    assert np.all(times >= NEG.EDGE_LO_S)
+    assert np.all(times <= dur - NEG.EDGE_HI_PAD_S)
+
+
+def test_negatives_are_deterministic_per_seed():
+    import negatives as NEG
+    strums = np.array([0.5, 1.2, 2.0])
+    pcm = _clicky(3.0, [0.5, 0.85, 1.2, 1.6, 2.0])
+    t1, k1 = NEG.negative_times(pcm, strums, rng=np.random.default_rng(7),
+                                n_per_strum=2.0)
+    t2, k2 = NEG.negative_times(pcm, strums, rng=np.random.default_rng(7),
+                                n_per_strum=2.0)
+    assert np.array_equal(t1, t2) and np.array_equal(k1, k2)
+    t3, _ = NEG.negative_times(pcm, strums, rng=np.random.default_rng(8),
+                               n_per_strum=2.0)
+    # A different seed permutes the EASY draws (the recording has >1 valid gap).
+    assert not (len(t1) == len(t3) and np.array_equal(t1, t3))
+
+
+def test_hard_negatives_are_flux_peaks_far_from_strums():
+    import negatives as NEG
+    strums = np.array([0.5, 1.2, 2.0])
+    pcm = _clicky(3.0, [0.5, 0.85, 1.2, 1.6, 2.0])
+    peaks = np.array(F.spectral_flux_onsets(pcm))
+    times, kinds = NEG.negative_times(
+        pcm, strums, rng=np.random.default_rng(3), n_per_strum=3.0)
+    hard = times[kinds == "hard"]
+    assert len(hard) > 0
+    for t in hard:
+        # a hard negative coincides with a real flux peak ...
+        assert np.min(np.abs(peaks - t)) <= 0.06
+        # ... and is far from every labeled strum (it's a FALSE onset).
+        assert np.min(np.abs(strums - t)) > NEG.MARGIN_S
+
+
+def test_negatives_handle_no_strums_and_tiny_audio_gracefully():
+    import negatives as NEG
+    # No labeled strums: still returns interior no-strum windows.
+    pcm = _clicky(2.0, [0.9])
+    times, _ = NEG.negative_times(pcm, np.array([]), rng=np.random.default_rng(4),
+                                  n_per_strum=1.0)
+    assert np.all((times >= NEG.EDGE_LO_S) & (times <= 2.0 - NEG.EDGE_HI_PAD_S))
+    # Audio too short for any interior window -> empty, no crash.
+    tiny = np.zeros(int(0.15 * F.SR), dtype=np.float32)
+    t0, k0 = NEG.negative_times(tiny, np.array([0.05]))
+    assert len(t0) == 0 and len(k0) == 0
+
+
 if __name__ == "__main__":
     sys.exit(main())

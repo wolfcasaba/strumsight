@@ -347,3 +347,46 @@ Next lever (supersedes augmentation): the r172-roadmap's **multi-head learned
 onset** (Klangio recipe — fixes false-onset confidence, replaces the heuristic
 detector) and **per-user last-layer fine-tune**; more real guitarists would help
 but no public strum-direction dataset beyond Klangio exists.
+
+## r174 — a learned no-strum reject class BEATS the confidence gate (positive)
+
+The r170-open problem: the heuristic onset detector fires ~1-in-6 FALSE onsets
+(91 % recall / 83 % precision) and the direction CRNN is EQUALLY confident on
+them (median raw 0.94) as on real strums (0.97), so confidence CANNOT gate noise.
+r173 proved augmentation is the wrong lever; r174 tries the right one — give the
+model a way to SAY "no strum here". Added a 3rd **no-strum class** (0=down /
+1=up / 2=no-strum) trained with HARD NEGATIVES mined from the SAME recordings
+(`ml/negatives.py`): spectral-flux onset PEAKS >120 ms from every labeled strum
+(these approximate the detector's actual false positives) + easy interior gaps.
+`build_model(n_classes=3)` (default 2 stays byte-identical — every fixture/export
+parity test holds). Measured in `honest_eval.py` (`noreject_fast` / `noreject`):
+each fold trains the r170 2-class baseline (positives only) AND the 3-class
+reject model on the same split, and both gates are calibrated to keep **≥95 % of
+TRUE strums**, then we compare how many false onsets each rejects.
+
+**FAST proof (batch, 3-way split seed 42 — same fold as `threeway`):**
+
+| metric | value |
+|---|---|
+| direction acc on TRUE strums, 2-class (r172) | 0.837 |
+| direction acc on TRUE strums, 3-class | **0.815** (~2 pt cost) |
+| no-strum recall (held-out negatives) | **0.979** |
+| false-onset REJECTION @ ≥95 % retention — **reject head** | **0.938** |
+| false-onset REJECTION @ ≥95 % retention — r170 **confidence gate** | **0.086** |
+
+At equal 95 % true-strum retention the learned reject head suppresses **~94 % of
+false onsets vs ~9 % for confidence gating — an ~11× win**, exactly the noise the
+r170 finding said confidence could not touch. Cost: direction accuracy on true
+strums drops ~2 pt (0.837 → 0.815) on this single split — near the seed noise
+band, to be confirmed by the LOGO run. Dataset: 11 767 strums + 10 022 mined
+negatives (balanced). The full **leave-one-guitarist-out** measurement (both
+configs, the honest new-player number, comparable to `logo`) runs in the
+background — `honest_results.json` `noreject`; `model_card.json` regenerates from
+it. Honesty gate: nothing tuned to lift the number; the ~2-pt direction cost is
+reported as measured, and the LOGO folds decide whether it holds for new players.
+
+Read: this is the **GO signal** for the r172-roadmap multi-head — the reject
+capability confidence could never provide is real and large. Wiring it into the
+Dart live path (route P(no-strum) as the arrow-suppression gate, replacing the
+heuristic detector's precision job) is a LATER round once LOGO confirms the
+direction cost stays small for unseen players.

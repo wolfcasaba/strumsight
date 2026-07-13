@@ -37,10 +37,13 @@ def main():
     card = {
         "model": "StrumSight strum-direction CRNN (down/up)",
         "generated": str(date.today()),
-        "round": 173,
+        "round": 174,
         "architecture": "3x[Conv2D 3x3 + ReLU + MaxPool(1,2)] -> GRU(128) -> "
                         "Dense(2 softmax); ~364k params; input (15, 128) "
-                        "log-mel window (PRE 3 / POST 12 frames, 10 ms hop)",
+                        "log-mel window (PRE 3 / POST 12 frames, 10 ms hop). "
+                        "r174 adds an optional Dense(3) head (down/up/no-strum) "
+                        "for the reject experiment (build_model n_classes=3); "
+                        "the shipped model stays Dense(2).",
         "configs": {
             "batch": "full window (~240 ms post-onset audio) — Analyze path",
             "live70": "audio zeroed past onset+70 ms — Live path "
@@ -77,6 +80,15 @@ def main():
                                 "numbers are directly comparable. Default "
                                 "build_model (all reg args 0) stays byte-"
                                 "identical for fixture back-compat.",
+            "r174_noreject": "noreject / noreject_fast results add a 3rd "
+                             "no-strum class trained with HARD NEGATIVES mined "
+                             "from the same recordings (negatives.py: flux-peak "
+                             "false onsets + easy interior gaps, >120 ms from "
+                             "every labeled strum). Compares routing P(no-strum) "
+                             "as a reject gate vs the r170 confidence gate at "
+                             ">=95% true-strum retention; direction accuracy on "
+                             "true strums read from both the 2-class (r172) and "
+                             "3-class models.",
             "splits": {
                 "legacy_2way": "split_by_recording seed 42 (80/20) — kept for "
                                "fixture back-compat; its 'eval' fold was BOTH "

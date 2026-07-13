@@ -37,14 +37,20 @@ def set_seeds(seed: int) -> None:
     tf.keras.utils.set_random_seed(seed)
 
 
-def build_model(frames, mels, dropout=0.0, rec_dropout=0.0, l2=0.0):
-    """The streaming CRNN. With all regularization args at 0 (the default) this
-    is BYTE-IDENTICAL to the shipped architecture — no extra layers, no weight
-    reordering — so every existing fixture / exported-weight parity test still
-    holds. r173 adds optional regularization (dropout after each conv pool,
-    GRU dropout / recurrent_dropout, L2 weight decay) to attack the documented
-    train-0.99 / val-0.84 overfit on ~364k params; Dropout layers carry no
-    weights, so even the regularized graph keeps the same get_weights() order.
+def build_model(frames, mels, dropout=0.0, rec_dropout=0.0, l2=0.0,
+                n_classes=2):
+    """The streaming CRNN. With all regularization args at 0 AND n_classes=2
+    (the defaults) this is BYTE-IDENTICAL to the shipped architecture — no extra
+    layers, no weight reordering — so every existing fixture / exported-weight
+    parity test still holds. r173 adds optional regularization (dropout after
+    each conv pool, GRU dropout / recurrent_dropout, L2 weight decay) to attack
+    the documented train-0.99 / val-0.84 overfit on ~364k params; Dropout layers
+    carry no weights, so even the regularized graph keeps the same get_weights()
+    order. r174 adds `n_classes` for the no-strum reject head: n_classes=3 makes
+    the final Dense (down / up / no-strum) softmax; class order is preserved
+    (0=down, 1=up, 2=no-strum) so a 3-class model's [:, :2] is the same direction
+    logit space as the 2-class model. Only the final Dense changes width — the
+    trunk (conv + GRU) is identical, so 3-class weights back-port cleanly.
     """
     import tensorflow as tf  # noqa: WPS433 (lazy — keeps NumPy tools TF-free)
     L = tf.keras.layers
@@ -63,7 +69,8 @@ def build_model(frames, mels, dropout=0.0, rec_dropout=0.0, l2=0.0):
     layers.append(L.Reshape((frames, -1)))
     layers.append(L.GRU(128, dropout=dropout, recurrent_dropout=rec_dropout,
                         kernel_regularizer=reg))
-    layers.append(L.Dense(2, activation="softmax", kernel_regularizer=reg))
+    layers.append(L.Dense(n_classes, activation="softmax",
+                          kernel_regularizer=reg))
     return tf.keras.Sequential(layers)
 
 
