@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../live/engine/ml/crnn_strum_net.dart';
+import '../../live/engine/ml/strum_crnn.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
 import '../../streak/providers/streak_provider.dart';
@@ -26,10 +29,34 @@ class AnalyzeState {
   static const initial = AnalyzeState();
 }
 
-/// Top-level so it can run off the UI isolate via [compute] — a long clip is a
-/// lot of FFTs and must not jank the UI.
-AnalyzeResult _runAnalysis((List<double>, int) args) =>
-    const ClipAnalyzer().analyze(args.$1, args.$2);
+/// Top-level so it can run off the UI isolate via [compute] — a long clip is
+/// a lot of FFTs and must not jank the UI. The third element is the CRNN
+/// weights asset's bytes (r165: rootBundle is main-isolate-only, so the
+/// caller loads them and the isolate parses); null or unparseable → the
+/// heuristic labels stand.
+AnalyzeResult runClipAnalysis((List<double>, int, Uint8List?) args) {
+  final (pcm, sr, weights) = args;
+  StrumCrnn? crnn;
+  if (weights != null) {
+    try {
+      crnn = StrumCrnn(CrnnStrumNet.parse(ByteData.sublistView(weights)));
+    } catch (_) {
+      crnn = null; // fall back to the heuristic, never fail an analyze
+    }
+  }
+  return ClipAnalyzer(strumRefiner: crnn?.classifyClip).analyze(pcm, sr);
+}
+
+/// The CRNN weights asset, loaded once (null where the asset is absent —
+/// e.g. a stripped build — which simply keeps the heuristic path).
+Future<Uint8List?> _crnnWeights() async {
+  try {
+    final data = await rootBundle.load('assets/ml/strum_crnn.bin');
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
@@ -92,7 +119,7 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     final pcm = await _recorder.stop();
     final sr = _recorder.sampleRate;
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
-    final result = await compute(_runAnalysis, (pcm, sr));
+    final result = await compute(runClipAnalysis, (pcm, sr, await _crnnWeights()));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
     // A completed analysis with real content counts as practice (chunk 013).
     if (result.chords.isNotEmpty || result.strums.isNotEmpty) {

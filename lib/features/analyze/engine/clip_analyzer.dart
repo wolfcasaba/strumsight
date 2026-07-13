@@ -3,9 +3,16 @@ import 'dart:typed_data';
 import '../../live/engine/dsp/dsp_config.dart';
 import '../../live/engine/dsp/live_pipeline.dart';
 import '../../live/engine/dsp/nnls_chroma.dart';
+import '../../live/engine/dsp/strum_direction_classifier.dart';
 import '../../live/engine/dsp/viterbi_chord_decoder.dart';
 import '../../live/model/strum.dart';
 import '../model/analyze_result.dart';
+
+/// Re-labels each detected strum's direction at its attack time — the CRNN
+/// deployment seam (r165). Given the whole clip and the attack times, returns
+/// one verdict per time, in order.
+typedef StrumRefiner = List<StrumClassification> Function(
+    Float64List pcm, int sampleRate, List<double> onsetTimes);
 
 /// Runs the REAL Live DSP over a recorded PCM clip and distils it into a
 /// timeline (chord segments + strum marks). Pure and deterministic — fully
@@ -20,15 +27,21 @@ import '../model/analyze_result.dart';
 ///   can end a clip on a wrong label (measured: C·G·Am·F @0.8 s each gave 7
 ///   segments ending in Csus4); the batch path yields the clean 4.
 class ClipAnalyzer {
-  const ClipAnalyzer({this.chunkSize = 2048});
+  const ClipAnalyzer({this.chunkSize = 2048, this.strumRefiner});
 
   /// How many samples to feed per step (mirrors a mic callback size).
   final int chunkSize;
 
+  /// Optional direction re-labeler (the CRNN, r164 A/B: 86.7 % vs the
+  /// heuristic's 38.9 % on real recordings). Null → heuristic labels stand;
+  /// a refiner failure also falls back — the model is an upgrade, never a
+  /// dependency.
+  final StrumRefiner? strumRefiner;
+
   AnalyzeResult analyze(List<double> pcm, int sampleRate) {
     if (pcm.isEmpty || sampleRate <= 0) return AnalyzeResult.empty;
 
-    final strums = _strumPass(pcm, sampleRate);
+    final strums = _refine(_strumPass(pcm, sampleRate), pcm, sampleRate);
     final duration = pcm.length / sampleRate;
     final chords = _chordPass(pcm, sampleRate, duration);
 
@@ -38,6 +51,36 @@ class ClipAnalyzer {
       chords: chords,
       strums: strums,
     );
+  }
+
+  /// Direction refine pass (r165): keep every detected strum's TIME, swap
+  /// its direction/confidence for the refiner's verdict. Any refiner failure
+  /// keeps the heuristic labels — an analyze must never crash on the model.
+  List<TimelineStrum> _refine(
+      List<TimelineStrum> strums, List<double> pcm, int sampleRate) {
+    final refiner = strumRefiner;
+    if (refiner == null || strums.isEmpty) return strums;
+    try {
+      final verdicts = refiner(
+        pcm is Float64List ? pcm : Float64List.fromList(pcm),
+        sampleRate,
+        [for (final s in strums) s.timeSec],
+      );
+      if (verdicts.length != strums.length) return strums;
+      return [
+        for (var i = 0; i < strums.length; i++)
+          TimelineStrum(
+            // A null verdict = honestly ambiguous → the heuristic label
+            // stands (the CRNN softmax never abstains today, but the seam
+            // contract allows it).
+            direction: verdicts[i].direction ?? strums[i].direction,
+            timeSec: strums[i].timeSec,
+            confidence: verdicts[i].confidence,
+          ),
+      ];
+    } catch (_) {
+      return strums;
+    }
   }
 
   /// Stream the clip through the Live pipeline for strum marks.
