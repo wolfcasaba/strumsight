@@ -4,3 +4,4 @@ __pycache__/
 *.tflite
 recordings/
 dataset/
+strum_model.keras
