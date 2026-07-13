@@ -385,17 +385,26 @@ TRUE strums**, then we compare how many false onsets each rejects.
 
 At equal 95 % true-strum retention the learned reject head suppresses **~94 % of
 false onsets vs ~9 % for confidence gating — an ~11× win**, exactly the noise the
-r170 finding said confidence could not touch. Cost: direction accuracy on true
-strums drops ~2 pt (0.837 → 0.815) on this single split — near the seed noise
-band, to be confirmed by the LOGO run. Dataset: 11 767 strums + 10 022 mined
-negatives (balanced). The full **leave-one-guitarist-out** measurement (both
-configs, the honest new-player number, comparable to `logo`) runs in the
-background — `honest_results.json` `noreject`; `model_card.json` regenerates from
-it. Honesty gate: nothing tuned to lift the number; the ~2-pt direction cost is
-reported as measured, and the LOGO folds decide whether it holds for new players.
+r170 finding said confidence could not touch. Cost on this single split: direction
+on true strums ~2 pt (0.837 → 0.815). Dataset: 11 767 strums + 10 022 mined
+negatives (balanced).
+
+**LOGO (new-player) CONFIRMS it — and the direction cost vanishes on unseen players:**
+
+| config | dir 2-class | dir 3-class (reject) | neg-reject HEAD | neg-reject r170 conf-gate |
+|---|---|---|---|---|
+| batch/Analyze | 0.678 | **0.681** (+, no cost) | **0.902 ± 0.058** | 0.070 ± 0.016 (~13×) |
+| live-70 ms | 0.610 | **0.617** (+, no cost) | **0.866 ± 0.100** | 0.032 ± 0.014 (~27×) |
+
+On the honest new-player folds the 3-class reject model does NOT hurt direction
+(it's net-neutral-to-slightly-better both configs — the fast-proof's ~2-pt cost
+did not generalize into a cost), while rejecting **~87–90 % of false onsets vs
+~3–7 % for confidence** (per-fold no-strum recall 0.76–0.99). Honesty gate:
+nothing tuned; reported as measured. This is a robust GO — confidence provably
+cannot gate this noise, the learned class does, and it's free on direction.
 
 Read: this is the **GO signal** for the r172-roadmap multi-head — the reject
-capability confidence could never provide is real and large. Wiring it into the
-Dart live path (route P(no-strum) as the arrow-suppression gate, replacing the
-heuristic detector's precision job) is a LATER round once LOGO confirms the
-direction cost stays small for unseen players.
+capability confidence could never provide is real, large, and LOGO-confirmed at
+zero direction cost. Next round (r175): wire it into the Dart live path — route
+P(no-strum) as the arrow-suppression gate, retiring the heuristic detector's
+precision job; then per-user fine-tune, then the real-guitar APK test.

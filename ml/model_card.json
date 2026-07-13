@@ -303,6 +303,138 @@
         "true_retention": 0.949814126394052,
         "neg_reject": 0.0856269113149847
       }
+    },
+    "noreject": {
+      "retention_target": 0.95,
+      "negatives": "hard flux-peak false onsets + easy interior gaps, >120 ms from every labeled strum (negatives.py)",
+      "batch": {
+        "folds": [
+          {
+            "n_test_pos": 4069,
+            "n_test_neg": 3405,
+            "dir_acc_2class_r172": 0.6731383632342098,
+            "dir_acc_3class": 0.6684689112804129,
+            "nostrum_recall": 0.8919236417033773,
+            "reject_head_gate": {
+              "threshold": 0.9524970054626465,
+              "true_retention": 0.9498648316539691,
+              "neg_reject": 0.8223201174743024
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.3899075388908386,
+              "true_retention": 0.9498648316539691,
+              "neg_reject": 0.06607929515418502
+            },
+            "held_out_guitarist": "1"
+          },
+          {
+            "n_test_pos": 3977,
+            "n_test_neg": 3473,
+            "dir_acc_2class_r172": 0.7138546643198391,
+            "dir_acc_3class": 0.7284385214986171,
+            "nostrum_recall": 0.9239850273538728,
+            "reject_head_gate": {
+              "threshold": 0.030860356986522675,
+              "true_retention": 0.9499622831279859,
+              "neg_reject": 0.9562338036279874
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.31880101561546326,
+              "true_retention": 0.9499622831279859,
+              "neg_reject": 0.09156348977828967
+            },
+            "held_out_guitarist": "2"
+          },
+          {
+            "n_test_pos": 3721,
+            "n_test_neg": 3144,
+            "dir_acc_2class_r172": 0.6471378661650095,
+            "dir_acc_3class": 0.6463316312819135,
+            "nostrum_recall": 0.9936386768447837,
+            "reject_head_gate": {
+              "threshold": 0.9993959665298462,
+              "true_retention": 0.9497446922870196,
+              "neg_reject": 0.9284351145038168
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.4092877507209778,
+              "true_retention": 0.9497446922870196,
+              "neg_reject": 0.05311704834605598
+            },
+            "held_out_guitarist": "4"
+          }
+        ],
+        "mean_neg_reject_head": 0.9023296785353688,
+        "std_neg_reject_head": 0.05770233487560076,
+        "mean_neg_reject_confidence_gate": 0.07025327775951022,
+        "std_neg_reject_confidence_gate": 0.01597078192184532,
+        "mean_dir_acc_2class_r172": 0.6780436312396861,
+        "mean_dir_acc_3class": 0.6810796880203145
+      },
+      "live70": {
+        "folds": [
+          {
+            "n_test_pos": 4069,
+            "n_test_neg": 3405,
+            "dir_acc_2class_r172": 0.6414352420742198,
+            "dir_acc_3class": 0.6571639223396412,
+            "nostrum_recall": 0.7635829662261381,
+            "reject_head_gate": {
+              "threshold": 0.6448384523391724,
+              "true_retention": 0.9498648316539691,
+              "neg_reject": 0.7292217327459618
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.25644800066947937,
+              "true_retention": 0.9498648316539691,
+              "neg_reject": 0.04199706314243759
+            },
+            "held_out_guitarist": "1"
+          },
+          {
+            "n_test_pos": 3977,
+            "n_test_neg": 3473,
+            "dir_acc_2class_r172": 0.6442041740005029,
+            "dir_acc_3class": 0.6771435755594669,
+            "nostrum_recall": 0.9182263173049237,
+            "reject_head_gate": {
+              "threshold": 0.07940204441547394,
+              "true_retention": 0.9499622831279859,
+              "neg_reject": 0.9671753527209905
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.419564813375473,
+              "true_retention": 0.9499622831279859,
+              "neg_reject": 0.041174776849985606
+            },
+            "held_out_guitarist": "2"
+          },
+          {
+            "n_test_pos": 3721,
+            "n_test_neg": 3144,
+            "dir_acc_2class_r172": 0.5434023112066648,
+            "dir_acc_3class": 0.5173340499865627,
+            "nostrum_recall": 0.9942748091603053,
+            "reject_head_gate": {
+              "threshold": 0.9998363852500916,
+              "true_retention": 0.9497446922870196,
+              "neg_reject": 0.9020356234096693
+            },
+            "confidence_gate_r170": {
+              "threshold": 0.4549294114112854,
+              "true_retention": 0.9497446922870196,
+              "neg_reject": 0.012086513994910942
+            },
+            "held_out_guitarist": "4"
+          }
+        ],
+        "mean_neg_reject_head": 0.8661442362922073,
+        "std_neg_reject_head": 0.10040459838977077,
+        "mean_neg_reject_confidence_gate": 0.03175278466244471,
+        "std_neg_reject_confidence_gate": 0.013910204651339318,
+        "mean_dir_acc_2class_r172": 0.6096805757604625,
+        "mean_dir_acc_3class": 0.6172138492952236
+      }
     }
   },
   "timing_seconds": {
@@ -313,6 +445,7 @@
     "calib": 636.6,
     "logo_aug": 10769.7,
     "threeway_aug": 3647.7,
-    "noreject_fast": 1656.5
+    "noreject_fast": 1656.5,
+    "noreject": 6758.4
   }
 }
