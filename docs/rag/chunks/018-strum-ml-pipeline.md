@@ -340,8 +340,17 @@ read from. The live-70 ms model, with only 70 ms of context, is hurt most (0.61
 → 0.53). So naive audio augmentation is the wrong lever for a *timing*-based
 direction task. **Not shipped** — the production model stays the r168/r172 one;
 `augment.py` is kept as an evaluated-and-rejected experiment (HORIZON: log the
-rejected attempt). Verified on TWO independent machines: the ARM dev box and the
-x86 CI trainer (`.github/workflows/ml-train.yml`) reproduced the same negative.
+rejected attempt). Cross-checked on TWO machines (ARM dev box + x86 CI trainer
+`.github/workflows/ml-train.yml`), and the honest read is nuanced: the **live
+degradation reproduced on both** (Oracle 0.606→0.529, CI 0.612→0.550, both
+clearly down), but the **batch effect is WITHIN NOISE and machine-inconsistent**
+(Oracle 0.707→0.699 flat, CI 0.676→0.727 slight up). Cause: high 3-fold variance
+(only 3 guitarists) + different TF version/arch (Oracle TF 2.21 aarch64 vs CI
+TF 2.16+ x86 — CI even read a lower same-player 3-way of 0.807 vs 0.852, so
+ABSOLUTE numbers are machine-dependent; only the within-machine clean→aug DELTA
+is comparable). Net: augmentation is not a dependable win and clearly hurts the
+live path → still not shipped. (Earlier wording "reproduced the same negative"
+was an over-claim: only the live-negative reproduced.)
 
 Next lever (supersedes augmentation): the r172-roadmap's **multi-head learned
 onset** (Klangio recipe — fixes false-onset confidence, replaces the heuristic
