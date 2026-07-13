@@ -79,6 +79,9 @@ class StrumAnalyzer {
   final SuperFluxOnsetDetector _onsets;
   final StrumDirectionClassifier _classifier;
 
+  /// The classifier behind the seam (wiring proof surface, r169).
+  StrumDirectionClassifier get debugClassifier => _classifier;
+
   // Onsets awaiting their post-onset evidence window. A queue (not a single
   // slot): at 200 BPM 16ths the next onset (~75 ms) can land while the
   // previous one is still inside its ~70 ms classify window.

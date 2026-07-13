@@ -236,3 +236,15 @@ was 39.2 %. NOT yet wired into the app: LivePipeline constructs
 StrumAnalyzer inside the DSP isolate, so the asset bytes must travel at
 engine start (r169) — same bytes-through-compute pattern as the r165
 Analyze wiring.
+
+## r169 — the live model is WIRED: the app's arrow now comes from the CRNN
+
+`RealStrumEngine.start()` loads `assets/ml/strum_crnn_live.bin` on the main
+isolate (cached per app run) and ships the BYTES in `_DspInit`;
+`LivePipeline(crnnWeights:)` parses them and puts `LiveCrnnStrumClassifier`
+behind the r139 seam (null/garbage → heuristic, wiring pinned by
+live_pipeline_ml_wiring_test). Every live consumer upgrades at once: the
+Live arrow, Learn scoring, streak crediting — real-guitar direction goes
+38.9 % → ~79.8 % at UNCHANGED arrow timing. The batch/Analyze path keeps its
+own full-window model (0.867). Still open: 188 ms delayed-refine (85.6 %) as
+a second stage; the real-guitar APK test remains the final gate.

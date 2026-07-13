@@ -1,16 +1,33 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../model/chord.dart';
 import '../../model/live_frame.dart';
 import '../../model/strum.dart';
+import '../ml/crnn_strum_net.dart';
+import '../ml/live_crnn_classifier.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
 import 'sliding_framer.dart';
 import 'strum_analyzer.dart';
+import 'strum_direction_classifier.dart';
 import 'tempo_tracker.dart';
 import 'viterbi_chord_decoder.dart';
+
+StrumDirectionClassifier? _tryLiveCrnn(Uint8List? weights, int sampleRate) {
+  if (weights == null) return null;
+  try {
+    return LiveCrnnStrumClassifier(
+      CrnnStrumNet.parse(ByteData.sublistView(weights)),
+      sampleRate: sampleRate,
+    );
+  } catch (_) {
+    return null; // fall back to the heuristic, never fail the pipeline
+  }
+}
 
 /// The REAL detection pipeline: PCM chunks in → [LiveFrame]s out (~15 Hz).
 ///
@@ -18,9 +35,17 @@ import 'viterbi_chord_decoder.dart';
 /// — the isolate and mic are plumbing around this class, and tests drive it
 /// directly with synthesized PCM (RAG chunk 010).
 class LivePipeline {
-  LivePipeline({required this.sampleRate})
+  LivePipeline({required this.sampleRate, Uint8List? crnnWeights})
       : _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
-        _strums = StrumAnalyzer(sampleRate: sampleRate),
+        _strums = StrumAnalyzer(
+          sampleRate: sampleRate,
+          // The live 70 ms model behind the r139 seam (r169): the engine
+          // hands the weights-asset BYTES across the isolate boundary
+          // (rootBundle is main-isolate-only, same pattern as the r165
+          // Analyze wiring); null/unparseable keeps the heuristic — the
+          // model is an upgrade, never a dependency.
+          classifier: _tryLiveCrnn(crnnWeights, sampleRate),
+        ),
         _chordFramer = SlidingFramer(
           window: DspConfig.nnlsWindow,
           hop: DspConfig.nnlsHop,
@@ -174,6 +199,11 @@ class LivePipeline {
   /// Chord-match confidence (separate from the strum confidence the pill
   /// shows) — available for future UI use.
   double get chordConfidence => _lastChord?.confidence ?? 0;
+
+  /// The strum classifier actually behind the seam (r169 wiring proof).
+  @visibleForTesting
+  StrumDirectionClassifier get debugStrumClassifier =>
+      _strums.debugClassifier;
 
   void reset() {
     _chordFramer.reset();

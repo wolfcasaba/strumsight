@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../../../core/audio/mic_capture.dart';
 import '../model/live_frame.dart';
@@ -58,7 +61,11 @@ class RealStrumEngine implements StrumEngine {
       _fromDsp = ReceivePort();
       _isolate = await Isolate.spawn(
         _dspEntry,
-        _DspInit(sendPort: _fromDsp!.sendPort, sampleRate: actualRate),
+        _DspInit(
+          sendPort: _fromDsp!.sendPort,
+          sampleRate: actualRate,
+          crnnWeights: await _liveCrnnWeights(),
+        ),
       );
       _fromDsp!.listen((message) {
         if (message is SendPort) {
@@ -109,11 +116,36 @@ class RealStrumEngine implements StrumEngine {
 }
 
 class _DspInit {
-  const _DspInit({required this.sendPort, required this.sampleRate});
+  const _DspInit({
+    required this.sendPort,
+    required this.sampleRate,
+    this.crnnWeights,
+  });
 
   final SendPort sendPort;
   final int sampleRate;
+
+  /// The live strum model's weights bytes (r169): loaded on the MAIN isolate
+  /// (rootBundle doesn't exist in the DSP isolate) and parsed inside. Null →
+  /// the pipeline keeps the heuristic.
+  final Uint8List? crnnWeights;
 }
+
+/// Loaded once per app run; null where the asset is absent (stripped builds)
+/// or the bundle is unavailable — the heuristic path then stands.
+Future<Uint8List?> _liveCrnnWeights() async {
+  if (_cachedLiveWeights != null) return _cachedLiveWeights;
+  try {
+    final data = await rootBundle.load('assets/ml/strum_crnn_live.bin');
+    _cachedLiveWeights =
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  } catch (_) {
+    // Keep null — retried on the next engine start, harmless.
+  }
+  return _cachedLiveWeights;
+}
+
+Uint8List? _cachedLiveWeights;
 
 /// Control message: the lesson's expected chord (round-137 prior).
 class _ExpectedChord {
@@ -123,7 +155,10 @@ class _ExpectedChord {
 }
 
 void _dspEntry(_DspInit init) {
-  final pipeline = LivePipeline(sampleRate: init.sampleRate);
+  final pipeline = LivePipeline(
+    sampleRate: init.sampleRate,
+    crnnWeights: init.crnnWeights,
+  );
   final inbox = ReceivePort();
   init.sendPort.send(inbox.sendPort);
   inbox.listen((message) {
