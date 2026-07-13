@@ -221,5 +221,127 @@ def test_legacy_two_way_split_unchanged():
     assert not _straddles(ev, _LOGO_REC)
 
 
+# ---------------------------------------------------------------------------
+# r173 AUDIO AUGMENTATION transforms (pytest). PCM-domain, pure NumPy — each
+# operates on the raw signal BEFORE log-mel so the augmentation is realistic
+# (chunk 018). Direction labels (down/up) are never touched by pitch/EQ/noise;
+# pitch-shift is varispeed so it rescales onset TIMES, which the composed
+# augmentor returns. Written test-first (TDD) — see ml/augment.py.
+# ---------------------------------------------------------------------------
+
+def _dominant_hz(sig, sr):
+    mag = np.abs(np.fft.rfft(sig))
+    freqs = np.fft.rfftfreq(len(sig), 1.0 / sr)
+    return float(freqs[int(np.argmax(mag))])
+
+
+def test_pitch_shift_up_raises_pitch_and_shortens():
+    import augment as A
+    sr = F.SR
+    t = np.arange(sr) / sr
+    x = np.sin(2 * np.pi * 440 * t).astype(np.float32)
+    up, f = A.pitch_shift(x, 12.0)  # +1 octave -> ~880 Hz
+    assert abs(_dominant_hz(up, sr) - 880.0) < 15.0
+    assert f > 1.0 and len(up) < len(x)  # up-shift = time compression
+    assert np.all(np.isfinite(up))
+
+
+def test_pitch_shift_down_lowers_pitch_and_lengthens():
+    import augment as A
+    sr = F.SR
+    t = np.arange(sr) / sr
+    x = np.sin(2 * np.pi * 440 * t).astype(np.float32)
+    down, f = A.pitch_shift(x, -12.0)  # -1 octave -> ~220 Hz
+    assert abs(_dominant_hz(down, sr) - 220.0) < 8.0
+    assert f < 1.0 and len(down) > len(x)
+
+
+def test_pitch_shift_rescales_onset_time():
+    import augment as A
+    sr = F.SR
+    x = np.zeros(sr, dtype=np.float32)
+    x[sr // 2] = 1.0  # impulse at 0.5 s
+    up, f = A.pitch_shift(x, 7.0)
+    peak_s = float(np.argmax(np.abs(up))) / sr
+    assert abs(peak_s - 0.5 / f) < 0.01  # onset maps t -> t / f
+
+
+def test_add_noise_hits_target_snr_and_keeps_shape():
+    import augment as A
+    rng = np.random.default_rng(0)
+    sr = F.SR
+    x = np.sin(2 * np.pi * 440 * np.arange(sr) / sr).astype(np.float32)
+    y = A.add_noise(x, 20.0, rng)
+    assert y.shape == x.shape and np.all(np.isfinite(y))
+    resid = y - x
+    snr = 20.0 * np.log10(np.sqrt(np.mean(x ** 2))
+                          / (np.sqrt(np.mean(resid ** 2)) + 1e-12))
+    assert abs(snr - 20.0) < 1.5
+
+
+def test_gain_scales_amplitude_exactly():
+    import augment as A
+    x = np.ones(100, dtype=np.float32)
+    assert np.allclose(A.gain(x, 6.0), 10 ** (6 / 20), atol=1e-4)
+    assert np.allclose(A.gain(x, -6.0), 10 ** (-6 / 20), atol=1e-4)
+    assert A.gain(x, 0.0).shape == x.shape
+
+
+def test_reverb_preserves_length_and_onset_adds_tail():
+    import augment as A
+    x = np.zeros(2000, dtype=np.float32)
+    x[500] = 1.0
+    rir = A.synth_rir(decay_s=0.05, direct=1.0, wet=0.5,
+                      rng=np.random.default_rng(1))
+    y = A.reverb(x, rir)
+    assert len(y) == len(x) and np.all(np.isfinite(y))
+    # No pre-delay: the direct path keeps the onset at its original index.
+    assert np.allclose(y[:500], 0.0, atol=1e-6)
+    assert abs(y[500] - 1.0) < 1e-5
+    # A decaying tail follows the direct path.
+    assert np.sum(np.abs(y[501:700])) > 0.0
+
+
+def test_mic_sim_bandlimits_and_keeps_shape():
+    import augment as A
+    rng = np.random.default_rng(3)
+    sr, n = F.SR, F.SR
+    hi = np.sin(2 * np.pi * 7800 * np.arange(n) / sr).astype(np.float32)
+    y_hi = A.mic_sim(hi, rng, lp_hz=6000.0, hp_hz=80.0, tilt_db=0.0)
+    assert y_hi.shape == hi.shape and np.all(np.isfinite(y_hi))
+    # A tone above the low-pass cutoff is attenuated.
+    assert np.sqrt(np.mean(y_hi ** 2)) < 0.6 * np.sqrt(np.mean(hi ** 2))
+    lo = np.sin(2 * np.pi * 1000 * np.arange(n) / sr).astype(np.float32)
+    y_lo = A.mic_sim(lo, rng, lp_hz=6000.0, hp_hz=80.0, tilt_db=0.0)
+    # An in-band tone passes largely intact.
+    assert np.sqrt(np.mean(y_lo ** 2)) > 0.5 * np.sqrt(np.mean(lo ** 2))
+
+
+def test_augment_pcm_rescales_onsets_stays_ordered_and_finite():
+    import augment as A
+    rng = np.random.default_rng(5)
+    sr = F.SR
+    pcm = np.sin(2 * np.pi * 220 * np.arange(sr) / sr).astype(np.float32)
+    onsets = np.array([0.1, 0.5, 0.9])
+    aug, ao = A.augment_pcm(pcm, onsets, rng)
+    assert np.all(np.isfinite(aug))
+    assert len(ao) == len(onsets)
+    assert np.all(ao[:-1] <= ao[1:])  # monotonic (order preserved)
+    dur = len(aug) / sr
+    assert np.all((ao >= 0.0) & (ao <= dur + 1e-6))
+
+
+def test_augment_pcm_is_stochastic_but_deterministic_per_seed():
+    import augment as A
+    sr = F.SR
+    pcm = np.sin(2 * np.pi * 220 * np.arange(sr) / sr).astype(np.float32)
+    onsets = np.array([0.25, 0.75])
+    a1, o1 = A.augment_pcm(pcm, onsets.copy(), np.random.default_rng(7))
+    a2, o2 = A.augment_pcm(pcm, onsets.copy(), np.random.default_rng(7))
+    assert np.array_equal(a1, a2) and np.array_equal(o1, o2)
+    a3, _ = A.augment_pcm(pcm, onsets.copy(), np.random.default_rng(8))
+    assert not (a1.shape == a3.shape and np.array_equal(a1, a3))
+
+
 if __name__ == "__main__":
     sys.exit(main())

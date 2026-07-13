@@ -37,7 +37,7 @@ def main():
     card = {
         "model": "StrumSight strum-direction CRNN (down/up)",
         "generated": str(date.today()),
-        "round": 172,
+        "round": 173,
         "architecture": "3x[Conv2D 3x3 + ReLU + MaxPool(1,2)] -> GRU(128) -> "
                         "Dense(2 softmax); ~364k params; input (15, 128) "
                         "log-mel window (PRE 3 / POST 12 frames, 10 ms hop)",
@@ -66,6 +66,17 @@ def main():
             "recipe": "Adam 1e-3, batch 32, <=40 epochs, EarlyStopping on "
                       "val_accuracy (patience 8, restore_best_weights), "
                       "class-weighted up-strums, train-fold-only norm stats",
+            "r173_augment_reg": "logo_aug / threeway_aug results add PCM-domain "
+                                "augmentation (augment.py: pitch ±6 st varispeed "
+                                "[Murgul optimum] + synthetic-RIR reverb + phone "
+                                "mic-sim EQ/band-limit + gain/noise, n_aug=2) to "
+                                "the TRAIN fold ONLY, plus build_model "
+                                "regularization (dropout 0.25 + GRU "
+                                "recurrent_dropout 0.15 + L2 1e-4). Val/test stay "
+                                "CLEAN and identical to the r172 folds, so the "
+                                "numbers are directly comparable. Default "
+                                "build_model (all reg args 0) stays byte-"
+                                "identical for fixture back-compat.",
             "splits": {
                 "legacy_2way": "split_by_recording seed 42 (80/20) — kept for "
                                "fixture back-compat; its 'eval' fold was BOTH "

@@ -37,22 +37,34 @@ def set_seeds(seed: int) -> None:
     tf.keras.utils.set_random_seed(seed)
 
 
-def build_model(frames, mels):
+def build_model(frames, mels, dropout=0.0, rec_dropout=0.0, l2=0.0):
+    """The streaming CRNN. With all regularization args at 0 (the default) this
+    is BYTE-IDENTICAL to the shipped architecture — no extra layers, no weight
+    reordering — so every existing fixture / exported-weight parity test still
+    holds. r173 adds optional regularization (dropout after each conv pool,
+    GRU dropout / recurrent_dropout, L2 weight decay) to attack the documented
+    train-0.99 / val-0.84 overfit on ~364k params; Dropout layers carry no
+    weights, so even the regularized graph keeps the same get_weights() order.
+    """
     import tensorflow as tf  # noqa: WPS433 (lazy — keeps NumPy tools TF-free)
     L = tf.keras.layers
-    return tf.keras.Sequential([
-        L.Input(shape=(frames, mels)),
-        L.Reshape((frames, mels, 1)),
-        L.Conv2D(16, 3, padding="same", activation="relu"),
-        L.MaxPool2D((1, 2)),
-        L.Conv2D(32, 3, padding="same", activation="relu"),
-        L.MaxPool2D((1, 2)),
-        L.Conv2D(48, 3, padding="same", activation="relu"),
-        L.MaxPool2D((1, 2)),
-        L.Reshape((frames, -1)),
-        L.GRU(128),
-        L.Dense(2, activation="softmax"),
-    ])
+    reg = tf.keras.regularizers.l2(l2) if l2 else None
+
+    def conv(filters):
+        return L.Conv2D(filters, 3, padding="same", activation="relu",
+                        kernel_regularizer=reg)
+
+    layers = [L.Input(shape=(frames, mels)), L.Reshape((frames, mels, 1))]
+    for filt in (16, 32, 48):
+        layers.append(conv(filt))
+        layers.append(L.MaxPool2D((1, 2)))
+        if dropout:
+            layers.append(L.Dropout(dropout))
+    layers.append(L.Reshape((frames, -1)))
+    layers.append(L.GRU(128, dropout=dropout, recurrent_dropout=rec_dropout,
+                        kernel_regularizer=reg))
+    layers.append(L.Dense(2, activation="softmax", kernel_regularizer=reg))
+    return tf.keras.Sequential(layers)
 
 
 def main(npz_path, out="strum_direction.tflite", seed=42):

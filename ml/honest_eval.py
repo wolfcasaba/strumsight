@@ -36,6 +36,11 @@ RESULTS = os.path.join(os.path.dirname(__file__), "honest_results.json")
 LIVE_DEADLINE_S = 0.070
 STD_SEEDS = [42, 1, 2]  # standard-config multi-seed sweep
 
+# r173 augmentation + regularization treatment (applied to TRAIN folds only).
+AUG_N = 2                       # augmented copies per training recording
+AUG_REG = dict(dropout=0.25, rec_dropout=0.15, l2=1e-4)  # a-priori, NOT tuned
+AUG_SEMITONES = 6.0             # Murgul ablation optimum (chunk 018)
+
 
 # ---------------------------------------------------------------------------
 # Datasets
@@ -122,6 +127,91 @@ def train_eval(X, y, tr, va, te, seed):
 
 
 # ---------------------------------------------------------------------------
+# r173 augmentation — build augmented TRAIN windows from PCM (before log-mel).
+# ---------------------------------------------------------------------------
+def build_aug_windows(train_rids, config, seed, n_aug=AUG_N):
+    """Augmented windows for the given TRAIN recordings only, config-matched.
+
+    For each recording we draw `n_aug` stochastic augmented takes (augment.py:
+    pitch ±6 st varispeed + reverb + mic-sim + gain/noise), recompute the
+    log-mel, and cut windows at the RESCALED onset times. `batch` = full
+    (PRE 3 / POST 12) window; `live70` = audio-truncated at onset+70 ms
+    (train == serve geometry, same as build_live). Returns (X, y).
+    """
+    import augment as A
+
+    rng = np.random.default_rng(seed)
+    xs, ys = [], []
+    for rid in sorted(train_rids):
+        with open(f"{DATA}/recording_{rid}.strums") as fh:
+            events = parse_strums(fh.read())
+        pcm = _read_wav(f"{DATA}/recording_{rid}_phone.wav")
+        onsets = np.array([t for t, _, _ in events], dtype=np.float64)
+        dirs = [0 if d == "down" else 1 for _, d, _ in events]
+        for _ in range(n_aug):
+            aug_pcm, aug_onsets = A.augment_pcm(pcm, onsets, rng,
+                                                semitone_range=AUG_SEMITONES)
+            if config == "batch":
+                lm = F.log_mel(aug_pcm)
+                for t, dlab in zip(aug_onsets, dirs):
+                    if t * F.SR >= len(aug_pcm):
+                        continue
+                    center = int(round(t * F.SR / F.HOP))
+                    if center - F.PRE_FRAMES >= len(lm):
+                        continue
+                    xs.append(F.window_at(lm, t))
+                    ys.append(dlab)
+            else:  # live70
+                for t, dlab in zip(aug_onsets, dirs):
+                    if t * F.SR >= len(aug_pcm):
+                        continue
+                    xs.append(window_truncated(aug_pcm, t, LIVE_DEADLINE_S))
+                    ys.append(dlab)
+    if not xs:
+        return (np.zeros((0, F.PRE_FRAMES + F.POST_FRAMES, F.N_MELS), np.float32),
+                np.zeros((0,), np.int64))
+    return np.stack(xs).astype(np.float32), np.array(ys, dtype=np.int64)
+
+
+def train_eval_aug(X, y, rec, tr, va, te, seed, config, reg=AUG_REG):
+    """train_eval, but the TRAIN fold is CLEAN windows + augmented copies of the
+    same train recordings, and the model is regularized. Val/test stay CLEAN
+    (identical to r172) so the number is directly comparable."""
+    import tensorflow as tf
+
+    set_seeds(seed)
+    assert_folds_trainable(y, tr, te)
+    train_rids = set(rec[tr].tolist())
+    Xa, ya = build_aug_windows(train_rids, config, seed)
+    Xtr = np.concatenate([X[tr], Xa], axis=0)
+    ytr = np.concatenate([y[tr], ya], axis=0)
+    # Normalisation stats from the (augmented) TRAIN fold only — no eval leak.
+    mean = Xtr.mean(axis=(0, 1))
+    std = Xtr.std(axis=(0, 1)) + 1e-6
+    Xtr_n = (Xtr - mean) / std
+    Xva_n = (X[va] - mean) / std
+    Xte_n = (X[te] - mean) / std
+
+    model = build_model(X.shape[1], X.shape[2], **reg)
+    n_up = int((ytr == 1).sum()) or 1
+    cw = {0: 1.0, 1: max(1.0, (ytr == 0).sum() / n_up)}
+    model.compile(optimizer=tf.keras.optimizers.Adam(1e-3),
+                  loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    stop = tf.keras.callbacks.EarlyStopping(
+        monitor="val_accuracy", patience=8, restore_best_weights=True)
+    model.fit(Xtr_n, ytr, epochs=40, batch_size=32, shuffle=True,
+              class_weight=cw, verbose=0, callbacks=[stop],
+              validation_data=(Xva_n, y[va]))
+    ptest = model.predict(Xte_n, verbose=0)
+    pval = model.predict(Xva_n, verbose=0)
+    return {
+        "test_acc": float((ptest.argmax(1) == y[te]).mean()),
+        "val_acc": float((pval.argmax(1) == y[va]).mean()),
+        "n_aug_train": int(len(ya)), "n_clean_train": int(tr.sum()),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Sections
 # ---------------------------------------------------------------------------
 def section_threeway(results):
@@ -182,6 +272,56 @@ def section_logo(results):
         out[cfg] = {"folds": folds, "mean_test_acc": m, "std_test_acc": s}
         print(f"[logo/{cfg}] mean±std test_acc = {m:.4f} ± {s:.4f}")
     results["logo"] = out
+    return results
+
+
+def section_logo_aug(results):
+    """r173: leave-one-guitarist-out CV WITH augmentation + regularization on
+    the TRAIN folds — the same logo_folds splits as section_logo so the
+    new-player number is directly comparable to the r172 baseline."""
+    out = {"settings": {"n_aug": AUG_N, "semitone_range": AUG_SEMITONES,
+                        "reg": AUG_REG,
+                        "augment": "pitch±6 varispeed + reverb + mic-sim + "
+                                   "gain/noise (augment.py), TRAIN fold only"}}
+    for cfg, loader in (("batch", load_batch), ("live70", build_live)):
+        X, y, rec = loader()
+        folds = []
+        for g, trall, te in logo_folds(rec):
+            tr_rec = rec[trall]
+            tr_only, va_only = split_by_recording(tr_rec, eval_frac=0.2,
+                                                  seed=42)
+            tr = np.zeros(len(rec), dtype=bool)
+            va = np.zeros(len(rec), dtype=bool)
+            idx = np.where(trall)[0]
+            tr[idx[tr_only]] = True
+            va[idx[va_only]] = True
+            r = train_eval_aug(X, y, rec, tr, va, te, seed=42, config=cfg)
+            folds.append({"held_out_guitarist": g, "n_test": int(te.sum()),
+                          "test_acc": r["test_acc"], "val_acc": r["val_acc"],
+                          "n_aug_train": r["n_aug_train"]})
+            print(f"[logo_aug/{cfg}] hold-out {g}: test_acc={r['test_acc']:.4f} "
+                  f"(clean_tr={r['n_clean_train']} +aug={r['n_aug_train']})")
+        m, s = _mean_std([f["test_acc"] for f in folds])
+        out[cfg] = {"folds": folds, "mean_test_acc": m, "std_test_acc": s}
+        print(f"[logo_aug/{cfg}] mean±std test_acc = {m:.4f} ± {s:.4f}")
+    results["logo_aug"] = out
+    return results
+
+
+def section_threeway_aug(results):
+    """r173: the guitarist-mixed 3-way split (regression check) with the SAME
+    aug+reg treatment — comparable to the r172 batch 0.852."""
+    X, y, rec = load_batch()
+    tr, va, te = split_by_recording_3way(rec, seed=42)
+    r = train_eval_aug(X, y, rec, tr, va, te, seed=42, config="batch")
+    results["threeway_aug"] = {
+        "split": "by-recording 3-way, seed 42 (same fold as threeway)",
+        "settings": {"n_aug": AUG_N, "reg": AUG_REG},
+        "val_acc": r["val_acc"], "test_acc": r["test_acc"],
+        "n_aug_train": r["n_aug_train"],
+    }
+    print(f"[threeway_aug] val_acc={r['val_acc']:.4f} "
+          f"test_acc={r['test_acc']:.4f} (vs r172 batch 0.852)")
     return results
 
 
@@ -321,6 +461,8 @@ def section_calib(results):
 SECTIONS = {
     "threeway": section_threeway,
     "logo": section_logo,
+    "logo_aug": section_logo_aug,
+    "threeway_aug": section_threeway_aug,
     "bootstrap": section_bootstrap,
     "seeds": section_seeds,
     "calib": section_calib,
@@ -332,7 +474,8 @@ def main(which):
     if os.path.exists(RESULTS):
         with open(RESULTS) as fh:
             results = json.load(fh)
-    order = ["threeway", "logo", "bootstrap", "seeds", "calib"]
+    order = ["threeway", "logo", "logo_aug", "threeway_aug",
+             "bootstrap", "seeds", "calib"]
     todo = order if "all" in which else [s for s in order if s in which]
     for name in todo:
         t0 = time.time()
