@@ -128,3 +128,30 @@ onset+120 ms log-mel window plus the 128 ms FFT tail ≈ onset+240 ms, i.e.
    fail the feel test.
 The infra for all three exists (classifier seam, parity gates, local
 training, the real-fold harness).
+
+## r167 RESULTS — the latency-accuracy curve is measured (2026-07-13)
+
+All trained locally on the Klangio fold, same recipe/split as the shipped
+model; "true" = audio ZEROED past onset+deadline (train == serve):
+
+| verdict deadline | eval accuracy | note |
+|---|---|---|
+| 70 ms (true) | **0.799** | fits TODAY's arrow timing |
+| 188 ms (true) | **0.856** | POST-7 window's real audio span |
+| ~240 ms (full, shipped) | 0.867 | the Analyze-path model |
+| heuristic @70 ms | 0.389 | today's live arrow (r164) |
+
+Beware: a naive POST_FRAMES=7 FRAME truncation scored 0.844 but LEAKS ~118 ms
+of future audio through the 2048-sample FFT tail — only audio-truncated
+numbers are honest (ml/experiment_deadline.py).
+
+Also measured: at DEPLOYED event times the shipped model scores 85.9 % (the
+r144 +2.5-hop correction already absorbs the detector's time bias; +15 ms
+extra shift gains only +0.4 — NOT applied, eval-fold-fitting risk).
+
+**r168 decision:** ship the TRUE-70 ms model on the live path behind the
+r139 classifier seam (heuristic fallback stays): the arrow keeps today's
+timing and jumps 38.9 % → ~80 % on real guitar. The 188 ms refine (85.6 %)
+becomes an optional second stage (delayed-refine, needs on-device feel).
+Integration work: streaming 44.1→16 k resample + log-mel ring in the DSP
+isolate + a second weights asset; the CI/A/B harnesses already arbitrate.

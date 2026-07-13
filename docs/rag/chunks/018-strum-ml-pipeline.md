@@ -202,3 +202,20 @@ the LIVE path keeps the heuristic verdict at 70 ms (the 240 ms window can't
 make the arrow deadline) — the candidate fix there is a delayed-refine pass
 (arrow updates ~170 ms later when the CRNN disagrees) which needs on-device
 UX testing, or the streaming-GRU variant (chunk 015).
+
+## r167 — the latency-accuracy curve (local trainings, real fold)
+
+True deadline-limited models (audio zeroed past onset+D — a naive
+POST_FRAMES=7 frame cut scored 0.844 but leaks ~118 ms of future audio via
+the 2048-sample FFT tail; only audio-truncated numbers are honest):
+**70 ms → 0.799**, **188 ms → 0.856**, full ~240 ms → 0.867; the heuristic's
+real-audio 0.389 is the live baseline. At DEPLOYED (detected, r144-corrected)
+event times the shipped model scores 85.9 %; an extra +15 ms window shift
+gains +0.4 only → not applied (eval-fold-fitting risk). Detector-vs-label
+median offset: raw SuperFlux time −42 ms (the r144 +2.5-hop correction
+covers most of it). Experiments: ml/experiment_deadline.py /
+experiment_short_window.py; probes kept as auto-skip harnesses in
+test/tools/. r168 = ship the true-70 ms model behind the live classifier
+seam (arrow timing unchanged, 38.9 %→~80 %); 188 ms refine optional later.
+Ops lesson: never pipe a background training through `tail` — the first
+run's 70 ms RESULT line was lost and cost a 15-minute retrain.
