@@ -136,3 +136,35 @@ SuperFlux's onset instant on the real-guitar gate.
 clipped/DC-offset/near-floor adversarial cases (all ≤1e-3), and BOTH fixtures
 now compute the Python reference from the ROUNDED pcm the JSON actually
 ships (N2 — identical input on both sides).
+
+## r163 — the model is TRAINED and shipping IN PURE DART (2026-07-13)
+
+The "ARM64 box can't run TF" premise was stale: **TF 2.21 ships official
+linux/aarch64 wheels** — installed into `~/tf-venv`, and `ml/train.py` ran the
+full training HERE (no PAT, no Colab). Results on klangio.npz (11 767 windows,
+recording-level split): **val_accuracy 0.867** (best epoch 9, EarlyStopping
+patience 8, `restore_best_weights=True` — added after observing epoch-8
+overfit: train .98 / val .84 / val_loss rising). Class weights up-weight the
+minority up-strums.
+
+**Shipping path is PURE DART, not tflite_flutter** (P1.3 revised): the net is
+~350 k params ≈ 1.4 MB float32 → `ml/export_dart_weights.py` writes
+`assets/ml/strum_crnn.bin` (SSML v1 binary: named arrays + train-fold
+mean/std) + a 32-window eval-fold parity fixture. Dart side:
+`CrnnStrumNet` (conv×3 + reset-after GRU + softmax, parity ≤1e-3 vs Keras
+locked by test), `CrnnFrontend` (linear resample 44.1→16 k + `window_at`
+port, both parity-pinned), `StrumCrnn` facade (clip → per-onset verdicts,
+`tryLoad` → null = heuristic fallback). Real-domain accuracy gate: ≥0.75 on
+the 32 fixture windows (measured 0.91). The keras TFLite converter CRASHES on
+the GRU TensorList lowering in TF 2.21 — non-fatal now (weights export first;
+`strum_model.keras` saved for re-exports); the tflite artifact is optional.
+
+**A/B finding (P1.4, measured, 24 randomized synth strums):** heuristic
+24/24; CRNN 9/24 (seed 42) / 8/24 (seed 7123) — the real-guitar-trained model
+is systematically WRONG on the synthetic stagger cue while at 0.867 on real
+phone-mic eval. Consequence: **the synth suite cannot arbitrate
+heuristic-vs-model**; deployment needs the reverse measurement — the
+HEURISTIC evaluated on the real Klangio eval recordings (r164) — before the
+Analyze path may switch. The CRNN window needs ~240 ms post-onset audio, so
+the LIVE path (70 ms verdict deadline) keeps the heuristic regardless;
+deployment target is the batch/Analyze path.

@@ -76,14 +76,35 @@ def main(npz_path, out="strum_direction.tflite"):
     cw = {0: 1.0, 1: max(1.0, (y == 0).sum() / n_up)}
     model.compile(optimizer=tf.keras.optimizers.Adam(1e-3),
                   loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-    model.fit(Xn, y, epochs=30, batch_size=32,
-              class_weight=cw, verbose=2, **fit_kw)
+    # The net overfits the ~10k-window set fast (observed 2026-07-13: train
+    # 0.99 vs val ~0.84 by epoch 8, val loss rising) — keep the BEST-val
+    # weights, never the last epoch's.
+    stop = tf.keras.callbacks.EarlyStopping(
+        monitor="val_accuracy", patience=8, restore_best_weights=True)
+    model.fit(Xn, y, epochs=40, batch_size=32,
+              class_weight=cw, verbose=2, callbacks=[stop], **fit_kw)
 
-    conv = tf.lite.TFLiteConverter.from_keras_model(model)
-    conv.optimizations = [tf.lite.Optimize.DEFAULT]  # int8-ish size cut
-    open(out, "wb").write(conv.convert())
-    print(f"wrote {out} — copy to assets/ and wire via tflite_flutter "
-          f"(keep ONE win32 major; see chunk 018)")
+    # Raw float32 weights FIRST — this is the shipping path (ml-track P1.3,
+    # revised 2026-07-13: pure-Dart inference; the model is tiny enough to run
+    # in hand-written Dart, which keeps the win32 rule safe and makes
+    # inference host-testable). Order = model.get_weights() (documented in
+    # the Dart loader). Never let the optional tflite step destroy a finished
+    # training run (2026-07-13: the converter crashed on the GRU's TensorList
+    # lowering in TF 2.21 and took the un-exported weights with it).
+    ws = model.get_weights()
+    np.savez("weights.npz", *[w.astype(np.float32) for w in ws],
+             mean=mean.astype(np.float32), std=std.astype(np.float32))
+    print(f"wrote weights.npz ({len(ws)} arrays) for the Dart inference port")
+    model.save("strum_model.keras")  # re-exports never need a retrain
+
+    try:
+        conv = tf.lite.TFLiteConverter.from_keras_model(model)
+        conv.optimizations = [tf.lite.Optimize.DEFAULT]  # int8-ish size cut
+        open(out, "wb").write(conv.convert())
+        print(f"wrote {out} (optional native path)")
+    except Exception as e:  # noqa: BLE001 — best-effort side artifact
+        print(f"tflite export failed (non-fatal, Dart path unaffected): "
+              f"{type(e).__name__}: {str(e)[:300]}")
 
 
 if __name__ == "__main__":

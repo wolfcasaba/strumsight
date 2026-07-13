@@ -48,6 +48,10 @@ flutter:
   generate: true
   uses-material-design: true
 
+  assets:
+    # Trained strum-direction CRNN weights (pure-Dart inference, round 163).
+    - assets/ml/strum_crnn.bin
+
   fonts:
     - family: Poppins
       fonts:
