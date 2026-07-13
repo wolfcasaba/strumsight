@@ -1,0 +1,77 @@
+name: ML honest-measurement (x86 CI trainer)
+
+# Runs the strum-direction honest-measurement sweep on a fast x86 runner —
+# the ARM64 dev box (free-tier-arm) trains the SAME code ~3-5x slower, so this
+# is the parallel fast path (round 173+). Manual trigger; uploads the results
+# JSON + model card as artifacts. The Klangio GST-MM dataset is fetched at the
+# SHA pinned in ml/klangio.py (DATASET_SHA), so the run is reproducible.
+on:
+  workflow_dispatch:
+    inputs:
+      sections:
+        description: "honest_eval.py sections to run (space-separated)"
+        required: false
+        default: "logo threeway logo_aug threeway_aug"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (x86 TensorFlow wheel)
+        run: |
+          python -m pip install --upgrade pip
+          pip install "numpy>=1.26" "tensorflow>=2.16"
+
+      - name: Fetch Klangio GST-MM dataset at the pinned SHA
+        run: |
+          set -euo pipefail
+          SHA=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_SHA)")
+          REPO=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_REPO)")
+          SUBPATH=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_PATH)")
+          echo "Fetching $REPO @ $SHA / $SUBPATH"
+          git clone --quiet "https://github.com/${REPO}.git" klangio-src
+          git -C klangio-src checkout --quiet "$SHA"
+          HEAD_SHA=$(git -C klangio-src rev-parse HEAD)
+          if [ "$HEAD_SHA" != "$SHA" ]; then echo "SHA mismatch: $HEAD_SHA != $SHA"; exit 1; fi
+          mkdir -p ml/data/klangio
+          cp klangio-src/${SUBPATH}/recording_*.strums ml/data/klangio/
+          cp klangio-src/${SUBPATH}/recording_*_phone.wav ml/data/klangio/
+          echo "recordings fetched: $(ls ml/data/klangio/recording_*_phone.wav | wc -l)"
+
+      - name: Build the clean-window dataset cache
+        working-directory: ml
+        run: python -c "import klangio; klangio.build('data/klangio')"
+
+      - name: Run honest-measurement sweep
+        working-directory: ml
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: |
+          python honest_eval.py ${{ github.event.inputs.sections }}
+
+      - name: Augmentation unit tests (TDD gate)
+        working-directory: ml
+        run: python -m pytest test_pipeline.py -q
+
+      - name: Regenerate model card
+        working-directory: ml
+        run: python make_model_card.py
+
+      - name: Show results
+        working-directory: ml
+        run: cat honest_results.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-honest-results
+          path: |
+            ml/honest_results.json
+            ml/model_card.json
