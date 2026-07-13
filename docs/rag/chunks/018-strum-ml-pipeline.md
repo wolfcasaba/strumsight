@@ -219,3 +219,20 @@ test/tools/. r168 = ship the true-70 ms model behind the live classifier
 seam (arrow timing unchanged, 38.9 %→~80 %); 188 ms refine optional later.
 Ops lesson: never pipe a background training through `tail` — the first
 run's 70 ms RESULT line was lost and cost a 15-minute retrain.
+
+## r168 — the LIVE model is built and serve-proven (integration pending)
+
+`weights_live_d70.npz` (eval 0.7968, best-epoch restore) → export via
+`ml/export_live_weights.py` → `assets/ml/strum_crnn_live.bin` + an
+audio-truncated 32-window parity fixture. Dart: `LiveCrnnFrontend` (raw ring
+fed per fast hop; at classify time rebuilds `window_truncated` EXACTLY — the
+truncation IS the audio availability at onset+12 hops; window centre =
+onset+2.5 hops, the r144 reported-time instant) + `LiveCrnnStrumClassifier`
+behind the r139 seam, tryLoad→null = heuristic. **Serve-chain proof on the
+eval fold: 79.8 % vs 79.9 % training eval** (zero drift through ring +
+slice-resample + zero-tail rows; harness
+`test/tools/live_crnn_serve_harness_test.dart`, floor 0.70). Heuristic serve
+was 39.2 %. NOT yet wired into the app: LivePipeline constructs
+StrumAnalyzer inside the DSP isolate, so the asset bytes must travel at
+engine start (r169) — same bytes-through-compute pattern as the r165
+Analyze wiring.

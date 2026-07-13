@@ -51,6 +51,8 @@ flutter:
   assets:
     # Trained strum-direction CRNN weights (pure-Dart inference, round 163).
     - assets/ml/strum_crnn.bin
+    # The 70 ms-deadline LIVE variant (round 168; serve-chain 79.8% real).
+    - assets/ml/strum_crnn_live.bin
 
   fonts:
     - family: Poppins

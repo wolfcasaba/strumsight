@@ -82,6 +82,13 @@ def run(deadline_s):
     _, acc = model.evaluate(Xn[ev], y[ev], verbose=0)
     print(f"RESULT deadline={deadline_s * 1000:.0f}ms "
           f"eval_accuracy={acc:.4f} (full window: 0.867)")
+    # Save weights so a good run is shippable without a retrain (the r167
+    # lesson: a lost RESULT line cost 15 minutes; a lost model costs more).
+    ms = round(deadline_s * 1000)
+    np.savez(f"weights_live_d{ms}.npz",
+             *[w.astype(np.float32) for w in model.get_weights()],
+             mean=mean.astype(np.float32), std=std.astype(np.float32))
+    print(f"wrote weights_live_d{ms}.npz")
     return acc
 
 
