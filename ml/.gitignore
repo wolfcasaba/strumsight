@@ -5,3 +5,5 @@ __pycache__/
 recordings/
 dataset/
 strum_model.keras
+honest_results.json
+_threeway_test.npz

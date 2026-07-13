@@ -279,3 +279,40 @@ observe() = 8.7 µs/hop (ring append, trivial).
 is decisive), still overconfident below 0.97. `StrumCrnn.calibrate` shipped
 (same piecewise pattern as r170) so timeline/share percentages read as
 P(correct).
+
+## r172 — HONEST MEASUREMENT: the reported numbers were optimistic (no new data)
+
+Before r172 ONE seed-42 fold did quadruple duty — EarlyStopping validation,
+headline test, hyperparameter selection (deadline/window), AND the calibration
+fit — and all three guitarists sat in both train and eval. So 0.867/0.799 were
+"new take, SAME player" numbers, restore-best-over-epochs, calibrated in-sample.
+`ml/honest_eval.py` repriced everything on the box (10 real trainings; results
+in `ml/model_card.json`, dataset pinned to Klangio SHA `929e403f`):
+
+- **Proper 3-way split (val early-stops, test touched once), batch/Analyze:**
+  test **0.852** (was 0.867). Seed-stable: 3 seeds → **0.853 ± 0.003** (the fold,
+  not the seed, is the variance). Cluster-bootstrap over the 12 test recordings:
+  95 % CI **[0.768, 0.909]** — wide, because n=12 recordings, not 1614 windows.
+- **Leave-one-guitarist-out CV — the honest NEW-PLAYER number** (each of players
+  1/2/4 held out entirely):
+  - batch/Analyze **0.707 ± 0.017** (folds 0.714 / 0.722 / 0.684)
+  - live-70 ms **0.606 ± 0.055** (folds 0.651 / 0.639 / **0.529** — the worst
+    unseen guitarist is near coin-flip on up/down).
+  The ~15-point same-player→new-player drop is the real deployment gap and is
+  the case for the r172-roadmap's multi-guitarist data + per-user last-layer
+  fine-tune. It does NOT change the shipped model — it prices it.
+- **Calibration hygiene:** refit the live piecewise map on VAL, scored ECE on
+  TEST → raw softmax ECE **0.150 → calibrated 0.088**. The method generalises
+  out-of-sample (halves ECE). The VAL-fitted knots are NOT written back to the
+  Dart: they are measured on LABELED onsets, whereas the shipped
+  `live_crnn_classifier.dart` knots are fit on DETECTED onsets (which include
+  false alarms that lower P(correct) at every confidence) — different
+  populations, not interchangeable. A production re-fit needs the detected-onset
+  probe on a held-out fold, which the r172-roadmap's learned onset head enables.
+
+Kept honest: no parameter was tuned to lift the LOGO number; it is reported as
+measured. Repro: seeds via `train.py::set_seeds`; splits
+`klangio.split_by_recording_3way` / `logo_folds` (8 pytest guards, no
+recording- or guitarist-straddle). `ml/model_card.json` is the provenance record
+(regenerate, never hand-edit). The legacy seed-42 two-way split stays only for
+fixture back-compat.

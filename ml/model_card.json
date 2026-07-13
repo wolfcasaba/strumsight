@@ -1,0 +1,215 @@
+{
+  "model": "StrumSight strum-direction CRNN (down/up)",
+  "generated": "2026-07-13",
+  "round": 172,
+  "architecture": "3x[Conv2D 3x3 + ReLU + MaxPool(1,2)] -> GRU(128) -> Dense(2 softmax); ~364k params; input (15, 128) log-mel window (PRE 3 / POST 12 frames, 10 ms hop)",
+  "configs": {
+    "batch": "full window (~240 ms post-onset audio) \u2014 Analyze path",
+    "live70": "audio zeroed past onset+70 ms \u2014 Live path (train == serve, ml/experiment_deadline.py geometry)"
+  },
+  "dataset": {
+    "name": "Klangio GST-MM 2025 (ISMIR 2025, arXiv:2508.07973)",
+    "repo": "Klangio/guitar-strumming-transcription",
+    "pinned_commit": "929e403f3256b055c1eea27064ae39f36905359e",
+    "path": "dataset/klangio-gst-mm-2025",
+    "license": "Apache-2.0",
+    "variant": "phone-mic wavs (deployment condition)",
+    "recordings": 82,
+    "windows": 11767,
+    "down": 7228,
+    "up": 4539,
+    "per_guitarist": {
+      "1": {
+        "recordings": 27,
+        "windows": 4069
+      },
+      "2": {
+        "recordings": 28,
+        "windows": 3977
+      },
+      "4": {
+        "recordings": 27,
+        "windows": 3721
+      }
+    },
+    "guitarist_id_rule": "leading digit of recording id (1/2/4)"
+  },
+  "training": {
+    "seeding": "tf.keras.utils.set_random_seed + PYTHONHASHSEED (ml/train.py::set_seeds); --seed arg, default 42",
+    "recipe": "Adam 1e-3, batch 32, <=40 epochs, EarlyStopping on val_accuracy (patience 8, restore_best_weights), class-weighted up-strums, train-fold-only norm stats",
+    "splits": {
+      "legacy_2way": "split_by_recording seed 42 (80/20) \u2014 kept for fixture back-compat; its 'eval' fold was BOTH early-stopping val and headline test pre-r172 (the source of the optimistic 0.867/0.799)",
+      "3way": "split_by_recording_3way seed 42 (val 15% / test 15% by recording); VAL early-stops, TEST touched once",
+      "logo": "leave-one-guitarist-out; VAL carved from the remaining guitarists' recordings (seed 42)"
+    }
+  },
+  "measured": {
+    "old_claims_superseded": {
+      "batch_0.867": "single fold = val = test = calibration fit",
+      "live70_0.799": "same single fold"
+    },
+    "threeway": {
+      "split": "by-recording 3-way, seed 42, val_frac 0.15 test_frac 0.15",
+      "n_train": 8675,
+      "n_val": 1478,
+      "n_test": 1614,
+      "test_ids": [
+        "1003",
+        "1005",
+        "1026",
+        "1028",
+        "2001",
+        "2003",
+        "2007",
+        "2014",
+        "2026",
+        "4005",
+        "4007",
+        "4009"
+      ],
+      "val_ids": [
+        "1001",
+        "1008",
+        "1018",
+        "1019",
+        "1023",
+        "2002",
+        "2011",
+        "2013",
+        "2016",
+        "2019",
+        "4002",
+        "4008"
+      ],
+      "val_acc": 0.8755074424898511,
+      "test_acc": 0.8519206939281289
+    },
+    "logo": {
+      "batch": {
+        "folds": [
+          {
+            "held_out_guitarist": "1",
+            "n_test": 4069,
+            "test_acc": 0.7139346276726468,
+            "val_acc": 0.8700906344410876
+          },
+          {
+            "held_out_guitarist": "2",
+            "n_test": 3977,
+            "test_acc": 0.7221523761629369,
+            "val_acc": 0.8185993111366245
+          },
+          {
+            "held_out_guitarist": "4",
+            "n_test": 3721,
+            "test_acc": 0.6836871808653587,
+            "val_acc": 0.8444293478260869
+          }
+        ],
+        "mean_test_acc": 0.7065913949003142,
+        "std_test_acc": 0.01653955083996546
+      },
+      "live70": {
+        "folds": [
+          {
+            "held_out_guitarist": "1",
+            "n_test": 4069,
+            "test_acc": 0.6507741459818137,
+            "val_acc": 0.8084592145015106
+          },
+          {
+            "held_out_guitarist": "2",
+            "n_test": 3977,
+            "test_acc": 0.6386723661051044,
+            "val_acc": 0.7692307692307693
+          },
+          {
+            "held_out_guitarist": "4",
+            "n_test": 3721,
+            "test_acc": 0.5288900833109379,
+            "val_acc": 0.7690217391304348
+          }
+        ],
+        "mean_test_acc": 0.606112198465952,
+        "std_test_acc": 0.05482733242223125
+      }
+    },
+    "bootstrap": {
+      "metric": "3-way test accuracy (standard/batch config, seed 42)",
+      "point": 0.8519206939281289,
+      "ci95_lo": 0.7676845730781772,
+      "ci95_hi": 0.9087980982216315,
+      "n_boot": 2000,
+      "n_recordings": 12
+    },
+    "multiseed": {
+      "config": "standard/batch, fixed 3-way split (seed 42), train seeds [42, 1, 2]",
+      "per_seed_test_acc": {
+        "42": 0.8519206939281289,
+        "1": 0.8506815365551424,
+        "2": 0.8568773234200744
+      },
+      "mean_test_acc": 0.8531598513011153,
+      "std_test_acc": 0.0026768858729483477
+    },
+    "calibration": {
+      "note": "live-70ms model; VAL-fitted piecewise-linear, ECE on TEST. Confidence = max softmax; correctness = argmax==label at LABELED onsets (reproducible proxy for the Dart detected-onset probe).",
+      "val_fitted_knots": [
+        [
+          0.602,
+          0.5808
+        ],
+        [
+          0.8138,
+          0.7148
+        ],
+        [
+          0.9406,
+          0.8327
+        ],
+        [
+          0.9927,
+          0.9465
+        ]
+      ],
+      "shipped_dart_knots": [
+        [
+          0.5,
+          0.55
+        ],
+        [
+          0.6,
+          0.58
+        ],
+        [
+          0.8,
+          0.63
+        ],
+        [
+          0.935,
+          0.74
+        ],
+        [
+          0.9825,
+          0.86
+        ],
+        [
+          1.0,
+          0.87
+        ]
+      ],
+      "ece_test_raw_softmax": 0.1505,
+      "ece_test_calibrated": 0.0881,
+      "live_test_acc": 0.7633209417596035,
+      "n_val": 1478,
+      "n_test": 1614
+    }
+  },
+  "timing_seconds": {
+    "threeway": 811.1,
+    "logo": 2682.2,
+    "bootstrap": 0.1,
+    "seeds": 1657.6,
+    "calib": 636.6
+  }
+}

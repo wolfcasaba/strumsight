@@ -125,5 +125,101 @@ def main() -> int:
     return 0 if ok else 1
 
 
+# ---------------------------------------------------------------------------
+# r172 honest-measurement splitters (pytest — run: `python -m pytest`).
+# The seed-42 two-way split above stays the legacy path; these guard the new
+# guitarist-aware three-way split and leave-one-guitarist-out CV.
+# ---------------------------------------------------------------------------
+
+_LOGO_REC = np.array(
+    ["1001"] * 4 + ["1002"] * 3 + ["1003"] * 2
+    + ["2001"] * 5 + ["2002"] * 2
+    + ["4001"] * 3 + ["4002"] * 4)
+
+
+def _straddles(mask, rec):
+    """True if any recording appears on BOTH sides of a boolean mask."""
+    return any(
+        len({bool(m) for m, r in zip(mask.tolist(), rec.tolist()) if r == rid})
+        > 1 for rid in set(rec.tolist()))
+
+
+def test_guitarist_of_is_leading_digit():
+    assert klangio.guitarist_of("1001") == "1"
+    assert klangio.guitarist_of("2028") == "2"
+    assert klangio.guitarist_of("4015") == "4"
+
+
+def test_three_way_split_partitions_all_windows():
+    tr, va, te = klangio.split_by_recording_3way(
+        _LOGO_REC, val_frac=0.2, test_frac=0.2, seed=1)
+    # Every window lands in exactly one fold.
+    assert np.all((tr.astype(int) + va.astype(int) + te.astype(int)) == 1)
+    assert tr.sum() > 0 and va.sum() > 0 and te.sum() > 0
+
+
+def test_three_way_split_no_recording_overlap():
+    tr, va, te = klangio.split_by_recording_3way(
+        _LOGO_REC, val_frac=0.2, test_frac=0.2, seed=3)
+    for mask in (tr, va, te):
+        assert not _straddles(mask, _LOGO_REC)
+    # A recording in one fold is in no other fold.
+    def ids(mask):
+        return {r for m, r in zip(mask.tolist(), _LOGO_REC.tolist()) if m}
+    assert ids(tr).isdisjoint(ids(va))
+    assert ids(tr).isdisjoint(ids(te))
+    assert ids(va).isdisjoint(ids(te))
+
+
+def test_three_way_split_deterministic_per_seed():
+    a = klangio.split_by_recording_3way(_LOGO_REC, seed=9)
+    b = klangio.split_by_recording_3way(_LOGO_REC, seed=9)
+    for x, y in zip(a, b):
+        assert np.all(x == y)
+    # A different seed permutes the assignment (not a hard guarantee of
+    # inequality, but with 7 recordings it must differ for these two seeds).
+    c = klangio.split_by_recording_3way(_LOGO_REC, seed=10)
+    assert not all(np.all(x == y) for x, y in zip(a, c))
+
+
+def test_three_way_split_rejects_too_few_recordings():
+    import pytest
+    with pytest.raises(ValueError):
+        klangio.split_by_recording_3way(np.array(["a", "a", "b"]))
+
+
+def test_logo_folds_hold_out_each_guitarist_entirely():
+    folds = list(klangio.logo_folds(_LOGO_REC))
+    guitarists = sorted({klangio.guitarist_of(r) for r in _LOGO_REC.tolist()})
+    assert [g for g, _, _ in folds] == guitarists  # one fold per guitarist
+    for g, tr, te in folds:
+        # The held-out guitarist is ENTIRELY in test, and in no training row.
+        test_g = {klangio.guitarist_of(r)
+                  for m, r in zip(te.tolist(), _LOGO_REC.tolist()) if m}
+        train_g = {klangio.guitarist_of(r)
+                   for m, r in zip(tr.tolist(), _LOGO_REC.tolist()) if m}
+        assert test_g == {g}
+        assert g not in train_g
+        # Partition: train and test cover everything, disjoint.
+        assert np.all(tr ^ te)
+        assert not _straddles(te, _LOGO_REC)
+
+
+def test_logo_folds_no_guitarist_overlap_between_train_and_test():
+    for g, tr, te in klangio.logo_folds(_LOGO_REC):
+        train_g = {klangio.guitarist_of(r)
+                   for m, r in zip(tr.tolist(), _LOGO_REC.tolist()) if m}
+        test_g = {klangio.guitarist_of(r)
+                  for m, r in zip(te.tolist(), _LOGO_REC.tolist()) if m}
+        assert train_g.isdisjoint(test_g)
+
+
+def test_legacy_two_way_split_unchanged():
+    # Backward-compat: the seed-42 two-way split still exists and behaves.
+    tr, ev = klangio.split_by_recording(_LOGO_REC, eval_frac=0.2, seed=42)
+    assert np.all(tr ^ ev)
+    assert not _straddles(ev, _LOGO_REC)
+
+
 if __name__ == "__main__":
     sys.exit(main())

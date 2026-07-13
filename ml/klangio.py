@@ -12,8 +12,9 @@ arXiv:2508.07973) ships 56 recording sets under `dataset/klangio-gst-mm-2025/`:
 Fetch sets into `ml/data/klangio/` (gitignored — third-party data stays out of
 the repo) with:
 
+    # Pinned to DATASET_SHA (below) for reproducibility, not `main`:
     curl -sL -o ml/data/klangio/recording_1001.strums \
-      https://raw.githubusercontent.com/Klangio/guitar-strumming-transcription/main/dataset/klangio-gst-mm-2025/recording_1001.strums
+      https://raw.githubusercontent.com/Klangio/guitar-strumming-transcription/929e403f3256b055c1eea27064ae39f36905359e/dataset/klangio-gst-mm-2025/recording_1001.strums
     # same URL pattern for recording_<id>_phone.wav
 
 Then build the training set (windows cut at the LABELED strum times — no onset
@@ -34,6 +35,15 @@ import numpy as np
 
 import features as F
 from prepare_dataset import _read_wav
+
+#: Pinned provenance of the third-party dataset (r172). The GST-MM corpus is
+#: fetched from Klangio/guitar-strumming-transcription at this commit — the
+#: repo's single "initial commit" (2025-09-21), default branch `main`. Pinning
+#: a SHA (not `main`) makes every measured number reproducible against a fixed
+#: dataset. See ml/model_card.json.
+DATASET_REPO = "Klangio/guitar-strumming-transcription"
+DATASET_SHA = "929e403f3256b055c1eea27064ae39f36905359e"
+DATASET_PATH = "dataset/klangio-gst-mm-2025"
 
 #: .strums direction letters -> our label names (chunk 018 LABELS order).
 DIRECTIONS = {"D": "down", "U": "up"}
@@ -143,6 +153,60 @@ def split_by_recording(rec, eval_frac: float = 0.2, seed: int = 42):
     return ~eval_mask, eval_mask
 
 
+def guitarist_of(rid) -> str:
+    """Guitarist id = the LEADING digit of the recording id.
+
+    The GST-MM takes are numbered 1xxx / 2xxx / 4xxx — one thousands-block per
+    player (r172 honest-measurement: this is what leave-one-guitarist-out CV
+    holds out to get the *new-player* accuracy, not a same-player number)."""
+    return str(rid)[0]
+
+
+def split_by_recording_3way(rec, val_frac: float = 0.15,
+                            test_frac: float = 0.15, seed: int = 42):
+    """(train_mask, val_mask, test_mask) with WHOLE recordings on one side.
+
+    r172: extends `split_by_recording` to a proper three-way split so
+    EarlyStopping can monitor VAL while TEST is touched exactly once at the
+    end (the seed-42 two-way `split_by_recording` stays for fixture
+    back-compat). Never straddles a recording; every fold non-empty;
+    deterministic per seed.
+    """
+    ids = sorted(set(rec.tolist()))
+    if len(ids) < 3:
+        raise ValueError("need >=3 recordings for a train/val/test split")
+    rng = np.random.default_rng(seed)
+    rng.shuffle(ids)
+    n = len(ids)
+    n_test = max(1, int(round(n * test_frac)))
+    n_val = max(1, int(round(n * val_frac)))
+    if n_test + n_val >= n:  # leave at least one recording for train
+        n_val = 1
+        n_test = 1
+    test_ids = set(ids[:n_test])
+    val_ids = set(ids[n_test:n_test + n_val])
+    r = rec.tolist()
+    test_mask = np.array([x in test_ids for x in r])
+    val_mask = np.array([x in val_ids for x in r])
+    train_mask = ~(test_mask | val_mask)
+    return train_mask, val_mask, test_mask
+
+
+def logo_folds(rec):
+    """Yield (held_out_guitarist, train_mask, test_mask) — each guitarist held
+    out ENTIRELY once (leave-one-guitarist-out CV, r172).
+
+    train_mask covers every OTHER guitarist's recordings; the held-out
+    guitarist never appears in training. This is the honest *new player*
+    generalisation measurement.
+    """
+    r = rec.tolist()
+    recg = [guitarist_of(x) for x in r]
+    for g in sorted(set(recg)):
+        test_mask = np.array([gg == g for gg in recg])
+        yield g, ~test_mask, test_mask
+
+
 def assert_folds_trainable(y, train_mask, eval_mask):
     """Fail LOUDLY when either fold is single-class (r142 audit BLOCKER: the
     first two fetched takes were all-D and all-U — a model would have trained
@@ -185,3 +249,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
