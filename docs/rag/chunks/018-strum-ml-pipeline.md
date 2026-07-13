@@ -168,3 +168,37 @@ HEURISTIC evaluated on the real Klangio eval recordings (r164) — before the
 Analyze path may switch. The CRNN window needs ~240 ms post-onset audio, so
 the LIVE path (70 ms verdict deadline) keeps the heuristic regardless;
 deployment target is the batch/Analyze path.
+
+## r164 — the REAL-recording A/B: the heuristic collapses on real guitar
+
+`test/tools/klangio_real_ab_test.dart` (auto-skips without the local dataset)
+ran both classifiers over the SAME 16 eval recordings / 2 013 labeled strums:
+
+| | detection | direction accuracy |
+|---|---|---|
+| heuristic (full StrumAnalyzer stream) | 1 477/2 013 matched (73 %) | **38.9 %** |
+| CRNN (full Dart serving chain) | verdict at every label | **86.7 %** |
+
+Two hard findings:
+1. **The heuristic's sub-band rise cue does not survive real phone-mic
+   recordings** — 38.9 % is BELOW coin-flip (systematically anti-correlated),
+   while the same code is 100 % on the synth suite. Symmetric with the CRNN's
+   38 % on synth: the two domains share almost no cue structure. Every
+   heuristic direction number ever measured on synth (r59/r60 ~88 %) says
+   NOTHING about real-world accuracy. The confidence tier kept this honest in
+   the UI, but the moat feature on real guitars effectively starts with the
+   CRNN.
+2. **The Dart serving chain reproduces the Python eval EXACTLY** (86.7 % vs
+   0.8669) — resample + log-mel + window + forward have zero drift; the
+   parity-fixture discipline paid off end-to-end.
+
+Also honest: SuperFlux matched only 73 % of labeled strums in continuous real
+strumming (±0.12 s window) — onset recall on real audio is its own next
+thread (may be masking/legato labels, needs listening, not assumed a bug).
+
+Deployment decision (r165): the ANALYZE path switches to the CRNN (full clip
+available, no deadline) with heuristic fallback when the asset is missing;
+the LIVE path keeps the heuristic verdict at 70 ms (the 240 ms window can't
+make the arrow deadline) — the candidate fix there is a delayed-refine pass
+(arrow updates ~170 ms later when the CRNN disagrees) which needs on-device
+UX testing, or the streaming-GRU variant (chunk 015).
