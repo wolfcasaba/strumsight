@@ -1,0 +1,1 @@
+round=183 verdict=plan lesson=ML chord track kickoff; CQT->CNN->BiGRU->25-class majmin->existing Viterbi; synth+GuitarSet data; chords transfer synth->real unlike strum; P0.1 label mapper done
