@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
 
@@ -36,7 +37,17 @@ class LessonHighway extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    // The lane + scrolling cards are painted, so a screen reader hears nothing.
+    // Speak a lightweight region label naming the next expected chord (r188).
+    final l10n = AppLocalizations.of(context);
+    final nextChord = _nextChord(lesson, playheadBeat);
+    final label = nextChord == null
+        ? l10n.learnHighwayLabel
+        : l10n.learnHighwayLabelChord(nextChord);
+    return Semantics(
+      label: label,
+      container: true,
+      child: SizedBox(
       height: height,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -88,7 +99,22 @@ class LessonHighway extends StatelessWidget {
           );
         },
       ),
+      ),
     );
+  }
+
+  /// The chord a learner should be fretting now/next: the nearest upcoming
+  /// non-empty chord at or after the playhead, else the last one seen. Null for
+  /// a strum-only lesson (no chords). Cheap linear scan — the label is rebuilt
+  /// per frame, so it stays O(events) and allocates nothing.
+  static String? _nextChord(Lesson lesson, double playheadBeat) {
+    String? last;
+    for (final e in lesson.events) {
+      if (e.chord.isEmpty) continue;
+      last = e.chord;
+      if (e.beat >= playheadBeat - 0.25) return e.chord;
+    }
+    return last;
   }
 
   /// 0 far from the strike line → 1 right on it (within half a beat).

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -74,6 +75,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   void _togglePause() {
+    // Tactile confirmation the mic toggled on/off (no-op off-device/in tests).
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
     final engine = ref.read(strumEngineProvider);
     setState(() {
       _paused = !_paused;
@@ -106,7 +111,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           _lastStrumSeq = f.strumSeq;
           _strokeCount++;
         }
-        if (!_practiceRecorded) {
+        // Require ≥2 distinct strums this session so a single stray transient
+        // (e.g. a bump or a spoken word) never credits the practice streak.
+        if (!_practiceRecorded && _strokeCount >= 2) {
           _practiceRecorded = true;
           ref.read(streakProvider.notifier).recordPracticeToday();
         }

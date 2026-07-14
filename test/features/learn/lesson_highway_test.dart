@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_theory/features/learn/model/lesson.dart';
 import 'package:music_theory/features/learn/widgets/lesson_highway.dart';
+import 'package:music_theory/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Lesson lesson, double playhead) =>
     tester.pumpWidget(MaterialApp(
+      // LessonHighway reads AppLocalizations for its a11y semantics label, so
+      // the delegates must be present (production always has them via the app
+      // shell) — otherwise AppLocalizations.of(context) is null.
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Center(
           child: SizedBox(

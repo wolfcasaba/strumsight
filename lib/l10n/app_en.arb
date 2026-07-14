@@ -251,6 +251,19 @@
   "learnEasyMode": "Easy mode (on-beat down-strokes only)",
   "learnSpeed": "Speed",
   "learnPracticeThis": "Practice as a lesson",
+  "learnHighwayLabel": "Play-along highway",
+  "@learnHighwayLabel": {
+    "description": "Screen-reader label for the scrolling play-along highway when no upcoming chord is known."
+  },
+  "learnHighwayLabelChord": "Play-along highway, next chord {chord}",
+  "@learnHighwayLabelChord": {
+    "description": "Screen-reader label for the play-along highway, naming the next expected chord.",
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "analyzeMyRecording": "My recording",
   "settingsPlaying": "Playing",
   "settingsLeftHanded": "Left-handed",

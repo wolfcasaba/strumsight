@@ -196,6 +196,8 @@
   "learnEasyMode": "Könnyű mód (csak ütemre eső lefelé pengetések)",
   "learnSpeed": "Sebesség",
   "learnPracticeThis": "Gyakorlás leckeként",
+  "learnHighwayLabel": "Játszd-velem sáv",
+  "learnHighwayLabelChord": "Játszd-velem sáv, következő akkord: {chord}",
   "analyzeMyRecording": "A felvételem",
   "settingsPlaying": "Játék",
   "settingsLeftHanded": "Balkezes",

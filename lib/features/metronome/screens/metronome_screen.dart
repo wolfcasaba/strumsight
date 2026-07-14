@@ -101,124 +101,182 @@ class _MetronomeScreenState extends State<MetronomeScreen>
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          // Scroll only when the content is taller than the viewport
-          // (landscape phones); Spacers keep working when there is room.
+          // Landscape phones lay the controls out in two columns so nothing is
+          // crowded; portrait keeps the single tall column. Either way the
+          // content scrolls when it is taller than the viewport, so there is
+          // never a vertical overflow (small portrait / short landscape).
           child: LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      const Spacer(),
-                      // Beat pulse dots.
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          for (var i = 0; i < _beatsPerBar; i++)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                              ),
-                              child: _BeatDot(
-                                active: _playing && i == _currentBeat,
-                                downbeat: i == 0,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Text(
-                        '$_bpm',
-                        style: const TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 72,
-                          height: 1.0,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      Text(
-                        l10n.metronomeBpm,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton.filledTonal(
-                            onPressed: () => _setBpm(_bpm - 1),
-                            icon: const Icon(Icons.remove),
-                          ),
-                          Expanded(
-                            child: Slider(
-                              value: _bpm.toDouble(),
-                              min: _minBpm.toDouble(),
-                              max: _maxBpm.toDouble(),
-                              onChanged: (v) => _setBpm(v.round()),
-                            ),
-                          ),
-                          IconButton.filledTonal(
-                            onPressed: () => _setBpm(_bpm + 1),
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      SegmentedButton<int>(
-                        showSelectedIcon: false,
-                        segments: [
-                          for (final n in const [2, 3, 4, 6])
-                            ButtonSegment(value: n, label: Text('$n/4')),
-                        ],
-                        selected: {_beatsPerBar},
-                        onSelectionChanged: (s) =>
-                            setState(() => _beatsPerBar = s.first),
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _onTap,
-                              icon: const Icon(Icons.touch_app_outlined),
-                              label: Text(l10n.metronomeTap),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(56),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _toggle,
-                              icon: Icon(
-                                _playing
-                                    ? Icons.stop_rounded
-                                    : Icons.play_arrow_rounded,
-                              ),
-                              label: Text(
-                                _playing
-                                    ? l10n.metronomeStop
-                                    : l10n.metronomeStart,
-                              ),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(56),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+            builder: (context, constraints) {
+              final landscape = constraints.maxWidth > constraints.maxHeight;
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints:
+                      BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: landscape
+                        ? _landscapeBody(l10n)
+                        : _portraitBody(l10n),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
+
+  /// Single-column layout for portrait; Spacers breathe when there is room.
+  Widget _portraitBody(AppLocalizations l10n) => Column(
+        children: [
+          const Spacer(),
+          _beatDots(),
+          const SizedBox(height: 28),
+          _bpmHero(l10n),
+          const SizedBox(height: 16),
+          _tempoSlider(),
+          const SizedBox(height: 20),
+          _timeSignature(),
+          const Spacer(),
+          _actions(l10n),
+        ],
+      );
+
+  /// Two-column layout for landscape: the hero + beat pulse on the left, the
+  /// slider / time-signature / tap+play controls on the right.
+  Widget _landscapeBody(AppLocalizations l10n) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _beatDots(),
+                const SizedBox(height: 24),
+                _bpmHero(l10n),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _tempoSlider(),
+                const SizedBox(height: 16),
+                _timeSignature(),
+                const SizedBox(height: 20),
+                _actions(l10n),
+              ],
+            ),
+          ),
+        ],
+      );
+
+  /// Visual beat-pulse dots (one per beat in the bar).
+  Widget _beatDots() => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < _beatsPerBar; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: _BeatDot(
+                active: _playing && i == _currentBeat,
+                downbeat: i == 0,
+              ),
+            ),
+        ],
+      );
+
+  /// Big BPM readout. FittedBox scales the number down on narrow (320px)
+  /// phones so it never forces a horizontal overflow.
+  Widget _bpmHero(AppLocalizations l10n) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$_bpm',
+              style: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w800,
+                fontSize: 72,
+                height: 1.0,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          Text(
+            l10n.metronomeBpm,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+
+  /// − / slider / + tempo control.
+  Widget _tempoSlider() => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton.filledTonal(
+            onPressed: () => _setBpm(_bpm - 1),
+            icon: const Icon(Icons.remove),
+          ),
+          Expanded(
+            child: Slider(
+              value: _bpm.toDouble(),
+              min: _minBpm.toDouble(),
+              max: _maxBpm.toDouble(),
+              onChanged: (v) => _setBpm(v.round()),
+            ),
+          ),
+          IconButton.filledTonal(
+            onPressed: () => _setBpm(_bpm + 1),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      );
+
+  /// Time-signature toggle (2/4, 3/4, 4/4, 6/4).
+  Widget _timeSignature() => SegmentedButton<int>(
+        showSelectedIcon: false,
+        segments: [
+          for (final n in const [2, 3, 4, 6])
+            ButtonSegment(value: n, label: Text('$n/4')),
+        ],
+        selected: {_beatsPerBar},
+        onSelectionChanged: (s) => setState(() => _beatsPerBar = s.first),
+      );
+
+  /// Tap-tempo + start/stop actions.
+  Widget _actions(AppLocalizations l10n) => Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _onTap,
+              icon: const Icon(Icons.touch_app_outlined),
+              label: Text(l10n.metronomeTap),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: _toggle,
+              icon: Icon(
+                _playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              ),
+              label: Text(
+                _playing ? l10n.metronomeStop : l10n.metronomeStart,
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _BeatDot extends StatelessWidget {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../model/strum.dart';
 
 /// A down/up strum arrow whose meaning is carried by BOTH colour (the
@@ -61,9 +62,15 @@ class StrumArrow extends StatelessWidget {
       );
     }
 
+    // Fall back to the bare direction ("Down"/"Up") when no caller-supplied
+    // label is given, so an unlabelled arrow is never a silent Semantics node
+    // (r188). A painted arrow always has a meaning worth speaking.
+    final l10n = AppLocalizations.of(context);
+    final label = semanticLabel ??
+        (direction == StrumDirection.down ? l10n.strumDown : l10n.strumUp);
     return Semantics(
-      label: semanticLabel,
-      excludeSemantics: semanticLabel != null,
+      label: label,
+      excludeSemantics: true,
       child: paint,
     );
   }
