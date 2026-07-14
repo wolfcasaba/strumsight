@@ -94,6 +94,41 @@ def build(data_dir: str = DATA_DIR, win: int = 100, step: int = 50,
     return X, Y, rec, ids
 
 
+def build_synth(n_songs: int, seed: int, win: int = 100, step: int = 50):
+    """Build a SYNTHETIC full-band chord dataset (same convention as `build`).
+
+    Renders `n_songs` full-band songs with `synth_songs.render_dataset` (pure
+    NumPy, seedable — NO global randomness), then reuses the EXACT same feature
+    (`cqt.cqt`) + label (`frames.frame_labels`) + window (`_windows`) pipeline as
+    the Klangio `build`. Every window from song index `k` is tagged
+    `rec = "synth_<k>"`, a namespace disjoint from Klangio recording ids so the
+    two never collide in a split.
+
+    Returns (X (N,win,144) float32, Y (N,win) int32, rec (N,) object) — the same
+    dtypes/shapes as `build` (minus the Klangio-only `ids`). No TensorFlow.
+    """
+    from chords import synth_songs
+
+    songs = synth_songs.render_dataset(n_songs, seed=seed)
+    Xs, Ys, recs = [], [], []
+    for k, (pcm, events) in enumerate(songs):
+        feat = cqt.cqt(pcm, cqt.SR).astype(np.float32)          # (F, 144)
+        lab = frames.frame_labels(
+            events, feat.shape[0], cqt.HOP, cqt.SR).astype(np.int32)  # (F,)
+        rid = f"synth_{k}"
+        for fx, ly in _windows(feat, lab, win, step):
+            Xs.append(fx)
+            Ys.append(ly)
+            recs.append(rid)
+    if not Xs:
+        return (np.zeros((0, win, cqt.N_BINS), np.float32),
+                np.zeros((0, win), np.int32), np.array([], object))
+    X = np.stack(Xs).astype(np.float32)
+    Y = np.stack(Ys).astype(np.int32)
+    rec = np.array(recs, dtype=object)
+    return X, Y, rec
+
+
 if __name__ == "__main__":
     if not os.path.isdir(DATA_DIR):
         print(f"[skip] no dataset at {DATA_DIR}")

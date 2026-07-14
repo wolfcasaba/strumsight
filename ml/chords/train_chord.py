@@ -114,9 +114,32 @@ def main():
     os.makedirs("ml/chords/out", exist_ok=True)
     np.savez("ml/chords/out/chord_weights.npz",
              *model.get_weights(), mean=mean, std=std)
+
+    # --- Held-out SYNTH full-band eval (CI tripwire, NOT real audio) ----------
+    # A FIXED synthetic full-band set (guitar+bass+drums) NEVER mixed into
+    # training — the honest baseline drop for the solo-trained model on full
+    # band. Same train-only mean/std norm + same WCSR/chord-only metric as the
+    # Klangio eval above. This is a synthetic regression tripwire only; the real
+    # acceptance gate stays the real-guitar/full-mix APK test (HORIZON).
+    print("\nBuilding held-out SYNTH full-band eval set "
+          "(n_songs=16, seed=1234)...", flush=True)
+    Xsy, Ysy, _ = dataset.build_synth(n_songs=16, seed=1234, win=WIN, step=WIN // 2)
+    Xsy = (Xsy - mean) / std
+    psy = model.predict(Xsy, verbose=0).argmax(-1)
+    synth_wcsr = float((psy == Ysy).mean())
+    nzsy = Ysy != 0
+    synth_chord = float((psy[nzsy] == Ysy[nzsy]).mean()) if nzsy.any() else 0.0
+    print("=== SYNTH full-band (held-out) — CI tripwire, NOT real audio ===")
+    print(f"synth_fullband_wcsr = {synth_wcsr:.3f}")
+    print(f"synth_fullband_chord_only = {synth_chord:.3f}")
+
     with open("ml/chords/out/chord_eval.txt", "w") as f:
         f.write(f"frame_wcsr={frame_acc:.4f}\nchord_only={chord_acc:.4f}\n"
                 f"val_recordings={val_ids}\nclass_balance={dist.tolist()}\n")
+        f.write("# SYNTH full-band (held-out, n_songs=16 seed=1234) — "
+                "CI tripwire, NOT real audio\n")
+        f.write(f"synth_fullband_wcsr={synth_wcsr:.4f}\n"
+                f"synth_fullband_chord_only={synth_chord:.4f}\n")
     print("saved ml/chords/out/chord_weights.npz + chord_eval.txt")
 
 
