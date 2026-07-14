@@ -13,3 +13,5 @@ dataset/
 strum_model.keras
 honest_results.json
 _threeway_test.npz
+corpus/_*.sh
+corpus/_*.log

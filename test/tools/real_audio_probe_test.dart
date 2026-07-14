@@ -87,6 +87,9 @@ class _Probe {
   double tonalP50 = 0;
   double confP50 = 0;
   double confP90 = 0;
+  double inSetPct = -1; // % of shown-chord frames whose label ∈ named chords
+  double rawConfP90 = 0; // raw match confidence ceiling over ALL frames
+  final Set<String> expected = {};
   final Set<String> labels = {};
   Map<String, Object?> toJson() => {
         'name': name,
@@ -99,8 +102,24 @@ class _Probe {
         'tonalP50': double.parse(tonalP50.toStringAsFixed(3)),
         'confP50': double.parse(confP50.toStringAsFixed(3)),
         'confP90': double.parse(confP90.toStringAsFixed(3)),
+        if (inSetPct >= 0) 'inSetPct': double.parse(inSetPct.toStringAsFixed(1)),
+        if (expected.isNotEmpty) 'expected': (expected.toList()..sort()),
         'labels': labels.toList()..sort(),
       };
+}
+
+/// Ground-truth chords parsed from a SoundCloud corpus filename like
+/// `guitar_C-G-Am-F_backing_1.wav` → {C, G, Am, F}. Empty when the name has no
+/// chord token (no ground truth for that clip).
+final _chordRe = RegExp(r'^[A-G][#b]?(m|maj7|m7|7|sus4|sus2|dim|aug)?$');
+Set<String> _expectedChords(String name) {
+  for (final tok in name.replaceAll('.wav', '').split('_')) {
+    final parts = tok.split('-');
+    if (parts.length >= 2 && parts.every(_chordRe.hasMatch)) {
+      return parts.toSet();
+    }
+  }
+  return {};
 }
 
 _Probe _run(String path, String kind) {
@@ -108,6 +127,7 @@ _Probe _run(String path, String kind) {
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
   final p = _Probe(path.split('/').last, kind);
+  p.expected.addAll(_expectedChords(p.name));
 
   // LIVE path — stream in mic-sized chunks, watch what the UI would show.
   // Load the shipped 3-class reject CRNN so the strum count matches on-device.
@@ -117,17 +137,21 @@ _Probe _run(String path, String kind) {
   var changes = 0;
   var frames = 0;
   var shown = 0;
+  var inSet = 0;
   var lastStrumSeq = 0;
   final tonals = <double>[];
   final confs = <double>[]; // chord-match confidence when a chord IS shown
+  final rawConfs = <double>[]; // raw match confidence EVERY frame (gate diag)
   for (var i = 0; i < pcm.length; i += chunk) {
     final end = (i + chunk < pcm.length) ? i + chunk : pcm.length;
     for (final f in pipe.addChunk(pcm.sublist(i, end))) {
       frames++;
       final label = f.current?.label;
       tonals.add(pipe.debugTonalness);
+      rawConfs.add(pipe.chordConfidence);
       if (label != null) {
         shown++;
+        if (p.expected.contains(label)) inSet++;
         confs.add(pipe.chordConfidence);
         p.labels.add(label);
       }
@@ -148,6 +172,8 @@ _Probe _run(String path, String kind) {
   p.tonalP50 = pct(tonals, 0.5);
   p.confP50 = pct(confs, 0.5);
   p.confP90 = pct(confs, 0.9);
+  p.rawConfP90 = pct(rawConfs, 0.9);
+  if (p.expected.isNotEmpty && shown > 0) p.inSetPct = 100.0 * inSet / shown;
 
   // ANALYZE path — the batch timeline.
   final res = const ClipAnalyzer().analyze(pcm.toList(), sr);
@@ -349,16 +375,16 @@ void main() {
     // ignore: avoid_print
     print('\n=== REAL-AUDIO PROBE (round 176) ===');
     // ignore: avoid_print
-    print('kind    chordShown%  changes/s  strums  tonP50  confP50  confP90  clip');
+    print('kind    chordShown%  changes/s  strums  inSet%  rawCf90  clip');
     for (final p in probes) {
       // ignore: avoid_print
       print('${p.kind.padRight(7)} '
           '${p.chordShownPct.toStringAsFixed(1).padLeft(9)}  '
           '${p.changesPerSec.toStringAsFixed(2).padLeft(8)}  '
           '${p.liveStrums.toString().padLeft(6)}  '
-          '${p.tonalP50.toStringAsFixed(3).padLeft(6)}  '
-          '${p.confP50.toStringAsFixed(3).padLeft(7)}  '
-          '${p.confP90.toStringAsFixed(3).padLeft(7)}  ${p.name}');
+          '${(p.inSetPct < 0 ? '  -' : p.inSetPct.toStringAsFixed(0)).padLeft(6)}  '
+          '${p.rawConfP90.toStringAsFixed(3).padLeft(7)}  ${p.name}'
+          '${p.expected.isEmpty ? '' : '  exp=${(p.expected.toList()..sort()).join(",")}  got=${(p.labels.toList()..sort()).join(",")}'}');
     }
 
     double avg(String kind, double Function(_Probe) sel) {
@@ -372,6 +398,13 @@ void main() {
     // ignore: avoid_print
     print('GUITAR avg chordShown% = ${avg('guitar', (p) => p.chordShownPct).toStringAsFixed(1)}'
         '  (want high) avg changes/s = ${avg('guitar', (p) => p.changesPerSec).toStringAsFixed(2)}');
+    final gt = probes.where((p) => p.inSetPct >= 0).toList();
+    if (gt.isNotEmpty) {
+      final acc = gt.map((p) => p.inSetPct).reduce((a, b) => a + b) / gt.length;
+      // ignore: avoid_print
+      print('CHORD ACCURACY (named-chord clips, n=${gt.length}): '
+          'avg inSet% = ${acc.toStringAsFixed(1)}  (want ~100 — shown chord is IN the song\'s progression)');
+    }
 
     File('ml/corpus/report.json').writeAsStringSync(
         const JsonEncoder.withIndent('  ')
