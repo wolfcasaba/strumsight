@@ -57,3 +57,44 @@ chord on a single frame — a report needs the hysteresis streak or an
 instant-switch, so a lone stray-tonal noise frame (random label) shows nothing.
 May need real-device tuning; the property gate asserts noise fakes a chord in
 ≤2/20 random trials.
+
+## Musical-presence gate (round 176 — reject VOICE, not just noise)
+
+**⚠ MEASURED on REAL audio (round 176 offline probe, `test/tools/real_audio_
+probe_test.dart`): the tonalness gate above rejects broadband noise but NOT
+voiced human speech / humming.** Field bug (user report): in Live mode the
+chord label jumps around wildly on talking. Both speech and a sung vowel are
+*harmonic* → their chroma concentrates in a few pitch classes → tonalness
+clears 0.7. Measured P50 tonalness: speech ≈ **0.82–0.84**, a sustained hum ≈
+**0.99** — overlapping real guitar (**0.85–0.95**). So tonalness cannot be the
+voice/guitar discriminator (raising it kills guitar too).
+
+**The feature that DOES separate is the chord-MATCH confidence** (chunk 012:
+`winSim × (0.5 + 2·margin)`). A guitar chord is an unambiguous, high-margin,
+*sustained* match; voiced speech matches many profiles weakly and only in brief
+choppy spikes. Measured per-clip confidence:
+
+| source | conf P50 | conf P90 |
+|--------|---------:|---------:|
+| real guitar (klangio phone takes) | 0.45–0.54 | **0.60–0.69** |
+| synth speech / hum negatives      | 0.39–0.41 | **0.42–0.53** |
+
+**Fix — a Schmitt trigger on the EMA-smoothed match confidence** gates the
+DISPLAYED chord (`LivePipeline`, `DspConfig.chordConfRise/Release/EmaAlpha`):
+the chord is surfaced once the smoothed confidence RISES past `chordConfRise`
+and HELD until it FALLS below `chordConfRelease`. Guitar's confident strum
+spike latches the display and rings out above the release floor; voice never
+sustains past the rise gate, so the screen shows nothing (blank `—`) instead of
+a phantom chord. The EMA (`α=0.35`, ~200 ms) is what stops a lone speech spike
+from latching.
+
+**AS BUILT (tuned on the real-audio probe — voice negatives vs 82 klangio
+takes): `chordConfRise = 0.54`, `chordConfRelease = 0.22`.** At these values
+chordShown% went: talking **79–85 % → 0 %**, sustained hum **85 % → 0 %**, pink
+noise 0 % (already), while real guitar stays **~74 %** over full clips (incl.
+rests). Talk alone is 0 % for any rise ≥ 0.46; the 0.54 rise is what also
+rejects a steady hum, and the low 0.22 release holds a latched chord through
+its ring-out. **Live display path only** — the Analyze batch timeline
+(`decodeBatch`) is unchanged. Re-confirm on the real-guitar APK test; if guitar
+chords drop out on a quieter mic, lower `chordConfRise` (the probe re-tunes it
+in seconds).

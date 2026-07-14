@@ -35,8 +35,14 @@ StrumDirectionClassifier? _tryLiveCrnn(Uint8List? weights, int sampleRate) {
 /// — the isolate and mic are plumbing around this class, and tests drive it
 /// directly with synthesized PCM (RAG chunk 010).
 class LivePipeline {
-  LivePipeline({required this.sampleRate, Uint8List? crnnWeights})
-      : _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
+  LivePipeline({
+    required this.sampleRate,
+    Uint8List? crnnWeights,
+    double? chordConfRise,
+    double? chordConfRelease,
+  })  : _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
+        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
+        _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
         _strums = StrumAnalyzer(
           sampleRate: sampleRate,
           // The live 70 ms model behind the r139 seam (r169): the engine
@@ -57,6 +63,18 @@ class LivePipeline {
         _emitEverySamples = (sampleRate * 0.066).round();
 
   final int sampleRate;
+
+  /// The musical-presence gate (round 176): a Schmitt trigger on the
+  /// EMA-smoothed chord-match confidence. A chord is surfaced to the UI once
+  /// the smoothed confidence rises past [_chordConfRise] and held until it
+  /// falls below [_chordConfRelease] — so voiced speech (weak, ambiguous, spiky
+  /// chord matches) never latches and the screen shows nothing instead of
+  /// jumping between phantom chords, while a real guitar chord latches on the
+  /// strum and rings out. Injectable so the offline probe can sweep it.
+  final double _chordConfRise;
+  final double _chordConfRelease;
+  double _chordConfEma = 0;
+  bool _chordLatched = false;
 
   final NnlsChroma _chroma;
   final ViterbiChordDecoder _chordDecoder = ViterbiChordDecoder(
@@ -136,6 +154,17 @@ class LivePipeline {
           ? _chordDecoder.process(
               _chroma.lastBassChroma, _chroma.lastTrebleChroma)
           : _chordDecoder.process(_silentChroma, _silentChroma, gated: true);
+      // Musical-presence gate (round 176 probe): EMA-smooth the match
+      // confidence so a sustained guitar chord builds up over the gate while a
+      // brief speech spike cannot. A gated/no-chord frame feeds 0, decaying the
+      // EMA back down so a phantom chord fades out.
+      final conf = _lastChord?.confidence ?? 0.0;
+      _chordConfEma += DspConfig.chordConfEmaAlpha * (conf - _chordConfEma);
+      if (_chordConfEma >= _chordConfRise) {
+        _chordLatched = true;
+      } else if (_chordConfEma < _chordConfRelease) {
+        _chordLatched = false;
+      }
     }
 
     // Sample-clock emission (~15 Hz).
@@ -181,8 +210,12 @@ class LivePipeline {
       _latestStrum = null;
     }
     final level = (_strums.lastRms * 8).clamp(0.0, 1.0).toDouble();
+    // Only surface the chord once the smoothed match confidence clears the
+    // musical-presence gate: below it we're almost certainly hearing speech /
+    // noise, not a guitar, so show nothing rather than a phantom chord.
+    final showChord = _lastChord != null && _chordLatched;
     return LiveFrame(
-      current: _lastChord == null ? null : Chord(_lastChord!.chord.label),
+      current: showChord ? Chord(_lastChord!.chord.label) : null,
       next: null, // the real engine cannot know the future
       latestStrum: _latestStrum,
       bar: List.unmodifiable(_bar),
@@ -200,6 +233,16 @@ class LivePipeline {
   /// shows) — available for future UI use.
   double get chordConfidence => _lastChord?.confidence ?? 0;
 
+  /// The most recent chroma tonalness (top-3 pitch-class energy) — the value
+  /// the non-guitar gate tests. Exposed for the offline real-audio probe
+  /// harness (`test/tools/real_audio_probe_test.dart`).
+  @visibleForTesting
+  double get debugTonalness => _chroma.lastTonalness;
+
+  /// The EMA-smoothed chord-match confidence the musical-presence gate tests.
+  @visibleForTesting
+  double get debugChordConfEma => _chordConfEma;
+
   /// The strum classifier actually behind the seam (r169 wiring proof).
   @visibleForTesting
   StrumDirectionClassifier get debugStrumClassifier =>
@@ -211,6 +254,8 @@ class LivePipeline {
     _chordDecoder.reset();
     _tempo.reset();
     _lastChord = null;
+    _chordConfEma = 0;
+    _chordLatched = false;
     _latestStrum = null;
     _strumSeq = 0;
     _clearBar();

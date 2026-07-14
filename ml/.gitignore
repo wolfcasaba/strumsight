@@ -1,5 +1,11 @@
 # Generated ML artifacts — never commit data or models.
 __pycache__/
+# Real-audio DSP corpus — keep the scripts (README/fetch.sh/make_*.py), never
+# the audio or the generated report.
+corpus/wav/
+corpus/raw/
+corpus/report.json
+corpus/fetch.log
 *.npz
 *.tflite
 recordings/
