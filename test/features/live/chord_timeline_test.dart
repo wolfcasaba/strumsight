@@ -85,6 +85,26 @@ void main() {
     expect(history, findsNWidgets(2));
   });
 
+  testWidgets('a beat-index change fires a finite pulse and settles cleanly',
+      (tester) async {
+    // Guards the r186 beat-pulse: a changing beat index must stay finite (no
+    // repeating controller → pumpAndSettle terminates) and must NOT drop the
+    // hero. The beat==0 unit path never exercises an actual beat change.
+    final events = [
+      _event('Am', StrumDirection.down, 0),
+      _event('C', StrumDirection.up, 1),
+    ];
+    await _pump(tester, ChordTimeline(events: events, capo: 0, beat: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('C'), findsOneWidget); // hero present
+
+    // Bump the beat (same events) — the pulse must settle, hero stays.
+    await _pump(tester, ChordTimeline(events: events, capo: 0, beat: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('C'), findsOneWidget);
+    expect(find.text('Am'), findsOneWidget); // history untouched
+  });
+
   testWidgets('shows the next-ghost when a next chord is known',
       (tester) async {
     final events = [_event('C', StrumDirection.down, 0)];

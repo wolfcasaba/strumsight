@@ -122,6 +122,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final timeline = ref.watch(chordTimelineProvider);
     // Capo: the detector hears concert pitch; show the fretted shape (−capo).
     final capo = ref.watch(capoProvider);
+    // Discrete beat index off the engine clock — a new value fires ONE finite
+    // hero pulse (see ChordTimeline.beat). No free-running metronome, so widget
+    // tests still settle. Guards keep it 0 (disabled) when there's no clock/BPM.
+    final beat = (frame.bpm > 0 && frame.engineTimeSec >= 0)
+        ? (frame.engineTimeSec * frame.bpm / 60).floor()
+        : 0;
 
     final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
     // The mic failed to start (busy / platform error) — surface it, never a
@@ -161,6 +167,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   next: frame.next,
                   capo: capo,
                   listening: !_paused && frame.listening,
+                  beat: beat,
                 ),
               ),
               if (frame.bar.isNotEmpty)

@@ -27,6 +27,7 @@ class ChordTimeline extends StatelessWidget {
     this.next,
     required this.capo,
     this.listening = true,
+    this.beat = 0,
   });
 
   /// Rolling history, newest LAST. Empty → idle prompt.
@@ -40,6 +41,11 @@ class ChordTimeline extends StatelessWidget {
 
   /// Paused (frozen) timelines dim slightly but keep their history.
   final bool listening;
+
+  /// Monotonic beat index from the engine clock; a new value fires one subtle
+  /// hero pulse — 0 disables it. Each pulse is finite (keyed by this index), so
+  /// it never repeats forever and `pumpAndSettle` still terminates.
+  final int beat;
 
   /// Size tiers from the hero outward (1.0 = nearest the hero, shrinking left).
   static const _tiers = <double>[1.0, 0.72, 0.55, 0.42];
@@ -75,7 +81,7 @@ class ChordTimeline extends StatelessWidget {
     final children = <Widget>[
       for (var i = 0; i < history.length; i++)
         _historyCard(history[i], history.length - i),
-      _heroCard(context, hero),
+      _heroCard(context, hero, beat),
       if (next != null) _nextGhost(context, l10n),
     ];
 
@@ -130,7 +136,7 @@ class ChordTimeline extends StatelessWidget {
 
   // --- Hero card: spring-in from the right + decoupled recognition flash -----
 
-  Widget _heroCard(BuildContext context, ChordEvent hero) {
+  Widget _heroCard(BuildContext context, ChordEvent hero, int beat) {
     // Directional strum flourish: down nudges downward, up nudges upward.
     final dirBegin = switch (hero.direction) {
       StrumDirection.down => 0.3,
@@ -145,7 +151,18 @@ class ChordTimeline extends StatelessWidget {
       capo: capo,
     );
 
-    // Inner: recognition flash + micro scale-pulse + directional flourish.
+    // INNERMOST: a single subtle beat-pulse per engine beat. flutter_animate
+    // replays a keyed .animate by REMOUNTING it, so this MUST be the innermost
+    // wrapper — a beat-index change then remounts only the (cheap, stateless)
+    // card below it, NOT the flash/enter animations above it. (If it were the
+    // outer wrapper, every beat would remount the whole subtree and replay the
+    // spring-in entrance ~2×/sec — a glitch the beat==0 tests never surface.)
+    // Finite scale each time, so `pumpAndSettle` still terminates.
+    card = card
+        .animate(key: ValueKey('beat-$beat'))
+        .scaleXY(begin: 1.035, end: 1.0, duration: 150.ms, curve: Curves.easeOut);
+
+    // Middle: recognition flash + micro scale-pulse + directional flourish.
     // Keyed by seq+direction so it re-fires when a strum lands on the same
     // chord (direction/confidence update in place) as well as on a new chord.
     card = card
@@ -162,7 +179,9 @@ class ChordTimeline extends StatelessWidget {
           curve: Curves.easeOut,
         );
 
-    // Outer: the spring-in entrance; fire a light haptic on each new hero.
+    // OUTERMOST: the spring-in entrance; fire a light haptic on each new hero.
+    // Keyed by seq alone so it plays once per NEW chord and is untouched by
+    // beat/direction changes (no re-entrance while a chord holds).
     card = card
         .animate(
           key: ValueKey('enter-${hero.seq}'),
