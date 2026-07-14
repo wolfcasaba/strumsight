@@ -10,9 +10,11 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/model/analyzed_session.dart';
 import '../../library/providers/library_providers.dart';
+import '../../diagnostics/widgets/diagnostics_panel.dart';
 import '../../learn/model/lesson.dart';
 import '../../learn/screens/learn_screen.dart';
 import '../../settings/providers/capo_provider.dart';
+import '../../settings/providers/lab_mode_provider.dart';
 import '../../share/screens/share_preview_screen.dart';
 import '../model/analyze_result.dart';
 import '../providers/analyze_providers.dart';
@@ -227,7 +229,24 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ),
           );
         }
-        return TimelineView(result: result, capo: ref.watch(capoProvider));
+        final timeline =
+            TimelineView(result: result, capo: ref.watch(capoProvider));
+        // Lab mode (r198): show the ML-vs-DSP diagnostics panel below the
+        // timeline when diagnostics were collected.
+        final showDiag =
+            ref.watch(labModeProvider) && result.diagnostics != null;
+        if (!showDiag) return timeline;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(flex: 2, child: timeline),
+            Flexible(
+              child: SingleChildScrollView(
+                child: DiagnosticsPanel(result: result),
+              ),
+            ),
+          ],
+        );
     }
   }
 

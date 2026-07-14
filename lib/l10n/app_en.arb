@@ -482,5 +482,14 @@
   "nudgeTitleFriday": "Weekend kickoff 🎸",
   "nudgeBodyFriday": "Start the weekend with a strum — your streak will thank you.",
   "nudgeTitleWeekend": "Weekend session? 🔥",
-  "nudgeBodyWeekend": "A lazy strum still counts — keep the streak rolling."
+  "nudgeBodyWeekend": "A lazy strum still counts — keep the streak rolling.",
+  "labModeTitle": "Lab mode (diagnostics)",
+  "labModeConsent": "Collects detection data + short audio and uploads it over the internet to improve chord detection. Only while ON.",
+  "labDiagnosticsTitle": "ML vs DSP",
+  "labModeAgreement": "Agreement",
+  "labMlChord": "ML",
+  "labDspChord": "DSP",
+  "labUploading": "Uploading diagnostics…",
+  "labUploaded": "Diagnostics uploaded",
+  "labUploadFailed": "Upload failed — will retry next time"
 }

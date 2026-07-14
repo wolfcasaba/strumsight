@@ -24,4 +24,14 @@ class ApiConfig {
     'STRUMSIGHT_ACCOUNT',
     defaultValue: false,
   );
+
+  /// Shared secret for the Lab-mode diagnostics endpoint (`POST /diagnostics`),
+  /// sent as the `X-Diag-Token` header. This is NOT a user credential — it only
+  /// gates the anonymous, opt-in diagnostics upload (Lab mode). Override the
+  /// dev default for a real deployment:
+  ///   flutter build apk --dart-define=STRUMSIGHT_DIAG_TOKEN=`your-secret`
+  static const String diagToken = String.fromEnvironment(
+    'STRUMSIGHT_DIAG_TOKEN',
+    defaultValue: 'strumsight-lab-dev',
+  );
 }

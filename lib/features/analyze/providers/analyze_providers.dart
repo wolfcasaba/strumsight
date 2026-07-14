@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../live/engine/ml/chord_crnn.dart';
 import '../../live/engine/ml/crnn_strum_net.dart';
 import '../../live/engine/ml/strum_crnn.dart';
+import '../../diagnostics/providers/diagnostics_providers.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
 import '../../settings/providers/lab_mode_provider.dart';
@@ -171,11 +172,21 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     // Lab mode gates the ML chord path: when OFF, the chord weights aren't even
     // loaded and the isolate does zero extra work (r197).
     final labMode = ref.read(labModeProvider);
+    // A fresh analyze clears any prior upload status.
+    ref.read(diagnosticsUploadProvider.notifier).reset();
     final chordWeights = labMode ? await _chordWeights() : null;
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
     final result = await compute(runClipAnalysis,
         (pcm, sr, await _crnnWeights(), labMode, chordWeights));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
+    // Lab mode (r198): package the diagnostics session (ML-vs-DSP events +
+    // the recorded clip) and upload it best-effort. Fire-and-forget — the
+    // result is already published above; a diagnostics failure never disturbs
+    // it (the uploader never throws).
+    if (labMode && result.diagnostics != null) {
+      unawaited(
+          ref.read(diagnosticsUploadProvider.notifier).upload(result, pcm, sr));
+    }
     // A completed analysis with real content counts as practice (chunk 013).
     if (result.chords.isNotEmpty || result.strums.isNotEmpty) {
       ref.read(streakProvider.notifier).recordPracticeToday();

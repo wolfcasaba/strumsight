@@ -416,5 +416,14 @@
   "nudgeTitleFriday": "Hétvége-indító 🎸",
   "nudgeBodyFriday": "Indítsd a hétvégét egy pengetéssel — a sorozatod hálás lesz.",
   "nudgeTitleWeekend": "Hétvégi session? 🔥",
-  "nudgeBodyWeekend": "Egy laza pengetés is számít — pörögjön a sorozat."
+  "nudgeBodyWeekend": "Egy laza pengetés is számít — pörögjön a sorozat.",
+  "labModeTitle": "Labor mód (diagnosztika)",
+  "labModeConsent": "Felismerési adatokat és rövid hangot gyűjt, és az interneten feltölti az akkordfelismerés javításához. Csak amíg BE van kapcsolva.",
+  "labDiagnosticsTitle": "ML vs DSP",
+  "labModeAgreement": "Egyezés",
+  "labMlChord": "ML",
+  "labDspChord": "DSP",
+  "labUploading": "Diagnosztika feltöltése…",
+  "labUploaded": "Diagnosztika feltöltve",
+  "labUploadFailed": "Feltöltés sikertelen — legközelebb újrapróbálja"
 }
