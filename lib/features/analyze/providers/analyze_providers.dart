@@ -4,14 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../live/engine/ml/chord_crnn.dart';
 import '../../live/engine/ml/crnn_strum_net.dart';
 import '../../live/engine/ml/strum_crnn.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
+import '../../settings/providers/lab_mode_provider.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../engine/clip_analyzer.dart';
 import '../engine/clip_recorder.dart';
+import '../engine/ml_chord_decoder.dart';
 import '../model/analyze_result.dart';
 
 enum AnalyzePhase { idle, recording, analyzing, done, micDenied, micError }
@@ -34,8 +37,9 @@ class AnalyzeState {
 /// weights asset's bytes (r165: rootBundle is main-isolate-only, so the
 /// caller loads them and the isolate parses); null or unparseable → the
 /// heuristic labels stand.
-AnalyzeResult runClipAnalysis((List<double>, int, Uint8List?) args) {
-  final (pcm, sr, weights) = args;
+AnalyzeResult runClipAnalysis(
+    (List<double>, int, Uint8List?, bool, Uint8List?) args) {
+  final (pcm, sr, weights, labMode, chordWeights) = args;
   StrumCrnn? crnn;
   if (weights != null) {
     try {
@@ -44,7 +48,25 @@ AnalyzeResult runClipAnalysis((List<double>, int, Uint8List?) args) {
       crnn = null; // fall back to the heuristic, never fail an analyze
     }
   }
-  return ClipAnalyzer(strumRefiner: crnn?.classifyClip).analyze(pcm, sr);
+  final result = ClipAnalyzer(strumRefiner: crnn?.classifyClip).analyze(pcm, sr);
+
+  // Lab mode (r197): ALSO run the ML chord model and attach both timelines +
+  // their agreement. Best-effort — the ML path never fails an analyze, and it
+  // only runs when the flag is on AND the model asset is present.
+  if (labMode && chordWeights != null) {
+    try {
+      final chordNet = ChordCrnn.parse(ByteData.sublistView(chordWeights));
+      final mlChords =
+          MlChordDecoder(chordNet).decode(pcm, sr, result.durationSec);
+      final agreement = MlChordDecoder.agreementFraction(
+          result.chords, mlChords, result.durationSec);
+      return result.withDiagnostics(
+          MlChordDiagnostics(mlChords: mlChords, agreement: agreement));
+    } catch (_) {
+      // Diagnostics are a bonus; the DSP result stands unchanged on any error.
+    }
+  }
+  return result;
 }
 
 /// The CRNN weights asset, loaded once (null where the asset is absent —
@@ -52,6 +74,17 @@ AnalyzeResult runClipAnalysis((List<double>, int, Uint8List?) args) {
 Future<Uint8List?> _crnnWeights() async {
   try {
     final data = await rootBundle.load('assets/ml/strum_crnn.bin');
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The full-band CHORD CRNN weights asset (r197), loaded once and ONLY when Lab
+/// mode is on (null where absent — a stripped build simply skips the ML path).
+Future<Uint8List?> _chordWeights() async {
+  try {
+    final data = await rootBundle.load('assets/ml/chord_crnn.bin');
     return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   } catch (_) {
     return null;
@@ -135,8 +168,13 @@ class AnalyzeController extends Notifier<AnalyzeState> {
   /// credit practice if it found real content. Assumes the state is already
   /// `analyzing` (set by the caller before its own awaits).
   Future<void> _analyze(List<double> pcm, int sr) async {
+    // Lab mode gates the ML chord path: when OFF, the chord weights aren't even
+    // loaded and the isolate does zero extra work (r197).
+    final labMode = ref.read(labModeProvider);
+    final chordWeights = labMode ? await _chordWeights() : null;
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
-    final result = await compute(runClipAnalysis, (pcm, sr, await _crnnWeights()));
+    final result = await compute(runClipAnalysis,
+        (pcm, sr, await _crnnWeights(), labMode, chordWeights));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
     // A completed analysis with real content counts as practice (chunk 013).
     if (result.chords.isNotEmpty || result.strums.isNotEmpty) {

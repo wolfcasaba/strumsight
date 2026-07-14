@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../model/chord.dart';
@@ -135,10 +136,48 @@ class ViterbiChordDecoder {
     assert(bass.length == treble.length);
     final t = bass.length;
     if (t == 0) return const [];
-    final n = dictionary.length;
 
     final sims = List<Float64List>.generate(
         t, (i) => dictionary.score(bass[i], treble[i]));
+    final path = _viterbiPath(sims, selfBonus);
+    return [for (var i = 0; i < t; i++) _matchFor(path[i], sims[i])];
+  }
+
+  /// The SAME full-sequence Viterbi as [decodeBatch], but over caller-supplied
+  /// per-frame emission [scores] (`N` states each) and a parallel [labels]
+  /// list, instead of chroma-cosine similarities. This is the deployment seam
+  /// for the ML chord head (r197): the CRNN's per-frame 25-dim log-posteriors
+  /// become the emissions and the same self-transition smoothing that cleans
+  /// the DSP path cleans the ML path. State 0 is the no-chord state (label
+  /// `labels[0]`, conventionally `N.C.`) and decodes to `null`, mirroring
+  /// [decodeBatch]. Confidence is the reported class's posterior probability
+  /// `exp(score)` (the emissions are log-probabilities), not the DSP
+  /// similarity/margin shape.
+  ///
+  /// [selfBonus] is in the SAME units as [scores]; for log-posteriors that is
+  /// the log-domain, a very different scale from the 0..1 cosine [selfBonus]
+  /// this class defaults to — callers must pass an explicitly tuned value.
+  /// Returns a `List<ChordMatch?>` frame-aligned to [scores].
+  List<ChordMatch?> decodeBatchFromScores(
+      List<Float64List> scores, List<String> labels,
+      {double? selfBonus}) {
+    final t = scores.length;
+    if (t == 0) return const [];
+    assert(labels.length == scores[0].length);
+    final path = _viterbiPath(scores, selfBonus ?? this.selfBonus);
+    return [
+      for (var i = 0; i < t; i++) _matchForLabel(path[i], scores[i], labels)
+    ];
+  }
+
+  /// Shared full-sequence Viterbi forward pass + backtrace over per-frame
+  /// emission [sims] (`N` states each) with a uniform switch model and a
+  /// per-frame [selfBonus] persistence reward. Returns the globally optimal
+  /// state index per frame. Factored out so [decodeBatch] (chroma cosine) and
+  /// [decodeBatchFromScores] (ML posteriors) share ONE verified trellis.
+  static Int32List _viterbiPath(List<Float64List> sims, double selfBonus) {
+    final t = sims.length;
+    final n = sims[0].length;
 
     // Forward pass. With a uniform switch model the predecessor of a switch
     // is the globally best previous state — one shared backpointer per frame
@@ -192,8 +231,7 @@ class ViterbiChordDecoder {
       cur = stayed[i][cur] == 1 ? cur : switchFrom[i];
       path[i - 1] = cur;
     }
-
-    return [for (var i = 0; i < t; i++) _matchFor(path[i], sims[i])];
+    return path;
   }
 
   /// Confidence from a single frame's evidence (not the accumulated trellis):
@@ -210,6 +248,15 @@ class ViterbiChordDecoder {
     final margin = winSim <= 0 ? 0.0 : (winSim - second) / winSim;
     final confidence = (winSim * (0.5 + 2 * margin)).clamp(0.0, 1.0);
     return ChordMatch(Chord(dictionary.profiles[idx].label), confidence);
+  }
+
+  /// Confidence + label for a state on the ML posterior path: the winning
+  /// class's posterior probability `exp(score)` (scores are log-probabilities),
+  /// clamped to `0..1`. State 0 (`labels[0]`, N.C.) → null, like [_matchFor].
+  ChordMatch? _matchForLabel(int idx, Float64List score, List<String> labels) {
+    if (idx == _noChord) return null;
+    final confidence = math.exp(score[idx]).clamp(0.0, 1.0);
+    return ChordMatch(Chord(labels[idx]), confidence);
   }
 
   /// Reset the trellis (new session) — including the transient onset boost

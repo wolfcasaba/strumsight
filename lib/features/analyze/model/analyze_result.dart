@@ -55,6 +55,39 @@ class TimelineStrum {
       );
 }
 
+/// Lab-mode diagnostics attached to an [AnalyzeResult] (ship-path step 4,
+/// r197): the ML chord-model timeline decoded ALONGSIDE the DSP one, plus how
+/// often they agree. Null on every default (Lab-mode-off) result — attaching it
+/// never changes the flag-off shape or behaviour.
+@immutable
+class MlChordDiagnostics {
+  const MlChordDiagnostics({
+    required this.mlChords,
+    required this.agreement,
+  });
+
+  /// The full-band CRNN chord timeline (majmin labels), time-aligned in seconds
+  /// to the same clip as [AnalyzeResult.chords] (its own CQT frame grid).
+  final List<TimelineChord> mlChords;
+
+  /// Fraction (0..1) of ML-hop frames where the ML and DSP chord timelines
+  /// agree, both reduced to majmin. Diagnostic only.
+  final double agreement;
+
+  Map<String, dynamic> toJson() => {
+        'mlChords': mlChords.map((c) => c.toJson()).toList(),
+        'agreement': agreement,
+      };
+
+  factory MlChordDiagnostics.fromJson(Map<String, dynamic> j) =>
+      MlChordDiagnostics(
+        mlChords: (j['mlChords'] as List)
+            .map((e) => TimelineChord.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        agreement: (j['agreement'] as num).toDouble(),
+      );
+}
+
 /// The result of analysing a recorded clip: the chord timeline, the strum
 /// marks, and summary stats.
 @immutable
@@ -65,6 +98,7 @@ class AnalyzeResult {
     required this.chords,
     required this.strums,
     this.beatsPerBar = 4,
+    this.diagnostics,
   });
 
   final double durationSec;
@@ -76,6 +110,22 @@ class AnalyzeResult {
   /// synthetic result from a user SONG carries the song's own (round 118 —
   /// a shared waltz's reel looped in 4/4).
   final int beatsPerBar;
+
+  /// Optional Lab-mode ML-vs-DSP diagnostics (r197). Null unless
+  /// `labModeProvider` is ON — the default (flag-off) result carries none, so
+  /// no existing behaviour, shape, or serialization changes.
+  final MlChordDiagnostics? diagnostics;
+
+  /// Return a copy with [diagnostics] attached (Lab mode). Everything else is
+  /// carried verbatim — the DSP timeline is untouched.
+  AnalyzeResult withDiagnostics(MlChordDiagnostics d) => AnalyzeResult(
+        durationSec: durationSec,
+        bpm: bpm,
+        chords: chords,
+        strums: strums,
+        beatsPerBar: beatsPerBar,
+        diagnostics: d,
+      );
 
   int get downCount => strums.where((s) => s.isDown).length;
   int get upCount => strums.length - downCount;
@@ -98,6 +148,9 @@ class AnalyzeResult {
         'chords': chords.map((c) => c.toJson()).toList(),
         'strums': strums.map((s) => s.toJson()).toList(),
         'bpb': beatsPerBar,
+        // Only present in Lab mode — a flag-off result serializes identically
+        // to before r197 (the 'diag' key is simply absent).
+        if (diagnostics != null) 'diag': diagnostics!.toJson(),
       };
 
   factory AnalyzeResult.fromJson(Map<String, dynamic> j) => AnalyzeResult(
@@ -111,5 +164,8 @@ class AnalyzeResult {
             .toList(),
         // Records saved before round 118 are all 4/4.
         beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
+        diagnostics: j['diag'] == null
+            ? null
+            : MlChordDiagnostics.fromJson(j['diag'] as Map<String, dynamic>),
       );
 }

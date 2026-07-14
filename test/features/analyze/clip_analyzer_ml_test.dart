@@ -66,8 +66,8 @@ void main() {
   test('runClipAnalysis wires real weights bytes end-to-end (smoke)', () {
     final bytes = Uint8List.fromList(
         File('assets/ml/strum_crnn.bin').readAsBytesSync());
-    final refined = runClipAnalysis((clip.toList(), 44100, bytes));
-    final baseline = runClipAnalysis((clip.toList(), 44100, null));
+    final refined = runClipAnalysis((clip.toList(), 44100, bytes, false, null));
+    final baseline = runClipAnalysis((clip.toList(), 44100, null, false, null));
 
     expect(refined.strums, hasLength(baseline.strums.length),
         reason: "the CRNN refines labels; detection stays the DSP's");
@@ -95,7 +95,7 @@ void main() {
     // And the clip path emits the calibrated value (share cards / timeline).
     final bytes = Uint8List.fromList(
         File('assets/ml/strum_crnn.bin').readAsBytesSync());
-    final refined = runClipAnalysis((clip.toList(), 44100, bytes));
+    final refined = runClipAnalysis((clip.toList(), 44100, bytes, false, null));
     for (final s in refined.strums) {
       expect(s.confidence, lessThanOrEqualTo(0.97),
           reason: 'raw softmax 0.99+ must not surface on the timeline');
@@ -104,8 +104,8 @@ void main() {
 
   test('runClipAnalysis with garbage weights bytes falls back cleanly', () {
     final result =
-        runClipAnalysis((clip.toList(), 44100, Uint8List(16)));
-    final baseline = runClipAnalysis((clip.toList(), 44100, null));
+        runClipAnalysis((clip.toList(), 44100, Uint8List(16), false, null));
+    final baseline = runClipAnalysis((clip.toList(), 44100, null, false, null));
     expect(result.strums, hasLength(baseline.strums.length));
   });
 }
