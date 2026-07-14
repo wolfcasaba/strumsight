@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/streak_provider.dart';
 
@@ -16,7 +17,7 @@ class StreakBadge extends ConsumerWidget {
     final streak = ref.watch(streakProvider);
     final l10n = AppLocalizations.of(context);
     final active = streak.current > 0;
-    final color = active ? AppColors.primary : const Color(0xFF6E7480);
+    final color = active ? AppColors.primary : context.palette.muted;
     return Semantics(
       button: true,
       label: l10n.streakTooltip,

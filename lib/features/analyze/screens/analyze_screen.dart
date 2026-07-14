@@ -15,6 +15,7 @@ import '../../settings/providers/capo_provider.dart';
 import '../../share/screens/share_preview_screen.dart';
 import '../model/analyze_result.dart';
 import '../providers/analyze_providers.dart';
+import '../widgets/analyze_skeleton.dart';
 import '../widgets/timeline_view.dart';
 
 // (chord/strum timeline rendering lives in widgets/timeline_view.dart)
@@ -207,19 +208,11 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
           ),
         );
       case AnalyzePhase.analyzing:
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(
-                l10n.analyzeAnalyzing,
-                style: TextStyle(color: palette.muted, fontFamily: 'Poppins'),
-              ),
-            ],
-          ),
-        );
+        // A shimmer skeleton that previews the result-timeline shape (chips +
+        // chord-row cards + strum lane) so the multi-second DSP wait feels
+        // productive instead of frozen behind a bare spinner. The
+        // "Analyzing…" copy rides along as the semantics label.
+        return AnalyzeSkeleton(label: l10n.analyzeAnalyzing);
       case AnalyzePhase.done:
         final result = state.result ?? AnalyzeResult.empty;
         if (result.chords.isEmpty && result.strums.isEmpty) {
@@ -408,7 +401,7 @@ class _BigButton extends StatelessWidget {
       label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: const Color(0xFF1A1206),
+        foregroundColor: context.palette.onAccent,
         minimumSize: const Size.fromHeight(52),
         textStyle: const TextStyle(
           fontFamily: 'Poppins',

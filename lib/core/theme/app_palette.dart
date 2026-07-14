@@ -14,6 +14,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.muted,
     required this.track,
     required this.border,
+    required this.onAccent,
   });
 
   /// Scaffold / screen background.
@@ -34,6 +35,11 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Hairline borders / dividers.
   final Color border;
 
+  /// Ink (text/icon) that sits ON the copper [AppColors.primary] accent — e.g.
+  /// the label/icon of a filled primary action button. The accent is a
+  /// constant brand colour, so this is the same dark-brown ink in both themes.
+  final Color onAccent;
+
   // StrumSight is dark-first (a performance/stage surface), but light is fully
   // supported. Neutrals are warm-biased toward the copper accent, not pure grey.
   static const light = AppPalette(
@@ -43,6 +49,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     muted: Color(0xFF6A645B),
     track: Color(0xFFEDE8DF),
     border: Color(0xFFD8D2C6),
+    onAccent: Color(0xFF1A1206),
   );
 
   static const dark = AppPalette(
@@ -52,6 +59,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     muted: Color(0xFF948D82),
     track: Color(0xFF22201F),
     border: Color(0xFF2E2A28),
+    onAccent: Color(0xFF1A1206),
   );
 
   @override
@@ -62,6 +70,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? muted,
     Color? track,
     Color? border,
+    Color? onAccent,
   }) {
     return AppPalette(
       bg: bg ?? this.bg,
@@ -70,6 +79,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       muted: muted ?? this.muted,
       track: track ?? this.track,
       border: border ?? this.border,
+      onAccent: onAccent ?? this.onAccent,
     );
   }
 
@@ -83,6 +93,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       muted: Color.lerp(muted, other.muted, t)!,
       track: Color.lerp(track, other.track, t)!,
       border: Color.lerp(border, other.border, t)!,
+      onAccent: Color.lerp(onAccent, other.onAccent, t)!,
     );
   }
 }

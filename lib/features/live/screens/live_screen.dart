@@ -266,7 +266,7 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final fg = primary ? const Color(0xFF1A1206) : palette.ink;
+    final fg = primary ? palette.onAccent : palette.ink;
     final bg = primary ? AppColors.primary : palette.surface;
     return Semantics(
       button: true,
