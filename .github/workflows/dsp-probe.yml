@@ -1,0 +1,48 @@
+name: DSP real-audio probe
+# Runs the real-audio DSP probe on FAST x86 CI (the Oracle ARM box is very slow).
+# Downloads a SoundCloud corpus (SoundCloud is not bot-walled), streams it
+# through the EXACT shipping DSP, and uploads the per-clip report so we can see
+# what the detector decides on real songs and tune it. Manual trigger.
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: 'optional extra scsearch query (label=query), unused for now'
+        required: false
+        default: ''
+jobs:
+  dsp-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Install ffmpeg + yt-dlp
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          python3 -m pip install --user --upgrade yt-dlp
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get
+      - name: Fetch SoundCloud real-audio corpus
+        run: bash ml/corpus/sc_fetch.sh || true
+      - name: List corpus
+        run: ls -la ml/corpus/wav/ || true
+      - name: Run DSP probe
+        env:
+          DSP_PROBE: '1'
+        run: |
+          set -o pipefail
+          flutter test test/tools/real_audio_probe_test.dart 2>&1 | tee dsp-probe.log
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsp-probe-results
+          path: |
+            dsp-probe.log
+            ml/corpus/report.json
+          if-no-files-found: warn

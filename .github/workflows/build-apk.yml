@@ -18,10 +18,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze lib/
-        continue-on-error: true
+      # HARD gates since round 76 — the suite is mature (350+ tests); a red
+      # analyze/test must never produce a green APK. (They were soft in the
+      # early rounds to keep APK delivery unblocked.)
+      - run: flutter analyze lib/ test/
       - run: flutter test
-        continue-on-error: true
       # Randomized property gate (anti-reward-hacking, HORIZON pattern):
       # a fresh seed every run so code can't be tuned to fixed fixtures.
       # Hard gate — no continue-on-error.
