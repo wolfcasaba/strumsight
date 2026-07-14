@@ -49,6 +49,14 @@ jobs:
         run: python ml/chords/train_chord.py
       - name: Show eval
         run: cat ml/chords/out/chord_eval.txt || true
+      - name: Export Dart weights + inference-parity fixture
+        # Ship-path step 2 (r195): serialize the trained model to the compact
+        # Dart-loadable CCRN blob + a golden forward-pass fixture. TF-only (the
+        # ARM dev box lacks TF) so it runs here, after training. Writes
+        # chord_crnn.bin + chord_infer_fixture.json into ml/chords/out/.
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: python ml/chords/export_chord_dart.py
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,3 +66,5 @@ jobs:
           path: |
             ml/chords/out/chord_eval.txt
             ml/chords/out/chord_weights.npz
+            ml/chords/out/chord_crnn.bin
+            ml/chords/out/chord_infer_fixture.json
