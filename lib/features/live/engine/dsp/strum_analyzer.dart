@@ -149,6 +149,13 @@ class StrumAnalyzer {
         onsetFrame: onsetFrame,
         currentFrame: _frameIndex,
       );
+      // r175: the learned no-strum reject fired — this detected onset is not a
+      // strum, so emit NO event. Every downstream consumer (Live arrow, Learn
+      // scoring, streak) sees nothing, exactly as if the onset never happened.
+      // A 2-class model / the heuristic never set this, so their behaviour is
+      // unchanged (a null direction still yields a StrumEvent — ambiguous
+      // strum, not no-strum).
+      if (c.suppressed) return null;
       return StrumEvent(
         timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
         direction: c.direction,

@@ -432,5 +432,80 @@ def test_negatives_handle_no_strums_and_tiny_audio_gracefully():
     assert len(t0) == 0 and len(k0) == 0
 
 
+# ---------------------------------------------------------------------------
+# r175 — the 3-class LIVE model export (down/up/no-strum). Parity between the
+# SHIPPED asset and the parity fixture, TF-free so it runs anywhere: the bin's
+# Dense layer must be 3-wide, and the fixture must carry 3-column softmax rows
+# that sum to 1 and actually exercise the no-strum class. (The <=1e-3 Dart<->
+# Keras numeric match is owned by the Dart parity test; here we lock that the
+# export shipped a 3-class model consistent with its own fixture.)
+# ---------------------------------------------------------------------------
+import json  # noqa: E402
+import os  # noqa: E402
+import struct  # noqa: E402
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_BIN_3C = os.path.join(_ROOT, "assets", "ml", "strum_crnn_live_3c.bin")
+_FIX_3C = os.path.join(_ROOT, "test", "fixtures", "crnn_live_3c_parity.json")
+
+
+def _read_ssml(path):
+    """Parse the SSML v1 binary (export_dart_weights.write_bin) → {name: dims}.
+    Pure struct — no NumPy/TF needed."""
+    with open(path, "rb") as fh:
+        buf = fh.read()
+    off = 0
+
+    def u32():
+        nonlocal off
+        (v,) = struct.unpack_from("<I", buf, off)
+        off += 4
+        return v
+
+    assert buf[:4] == b"SSML", "bad magic"
+    off = 4
+    version, count = u32(), u32()
+    assert version == 1
+    dims = {}
+    for _ in range(count):
+        nlen = u32()
+        name = buf[off:off + nlen].decode()
+        off += nlen
+        ndim = u32()
+        shp = [u32() for _ in range(ndim)]
+        dims[name] = shp
+        off += 4 * int(np.prod(shp)) if shp else 0
+    return dims
+
+
+def test_live_3c_asset_is_a_three_class_model():
+    if not os.path.exists(_BIN_3C):
+        import pytest
+        pytest.skip("3-class live asset not built (run train_live_3c.py)")
+    dims = _read_ssml(_BIN_3C)
+    # Dense kernel (units, n_classes) and bias (n_classes) must be 3-wide.
+    assert dims["dense_k"][-1] == 3, dims["dense_k"]
+    assert dims["dense_b"] == [3], dims["dense_b"]
+    assert dims["mean"] == [F.N_MELS] and dims["std"] == [F.N_MELS]
+
+
+def test_live_3c_fixture_exercises_the_reject_class():
+    if not os.path.exists(_FIX_3C):
+        import pytest
+        pytest.skip("3-class live fixture not built (run train_live_3c.py)")
+    with open(_FIX_3C) as fh:
+        fix = json.load(fh)
+    probs = fix["probs"]
+    labels = fix["labels"]
+    assert len(probs) == len(labels) and len(probs) > 0
+    assert all(len(p) == 3 for p in probs), "3-column softmax"
+    assert all(abs(sum(p) - 1.0) < 1e-3 for p in probs), "rows sum to 1"
+    assert 0.0 < fix["no_strum_threshold"] < 1.0
+    negs = [p for p, y in zip(probs, labels) if y == 2]
+    assert len(negs) > 0, "fixture must include no-strum windows"
+    rejected = sum(1 for p in negs if p[2] >= p[0] and p[2] >= p[1])
+    assert rejected / len(negs) >= 0.6, "reject weights must be the trained ones"
+
+
 if __name__ == "__main__":
     sys.exit(main())

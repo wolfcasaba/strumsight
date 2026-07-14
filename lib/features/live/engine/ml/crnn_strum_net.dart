@@ -25,6 +25,12 @@ class CrnnStrumNet {
   /// Model input mel-band count.
   int get mels => _arrays['mean']!.dims[0];
 
+  /// Output class count read from the Dense bias width: 2 = down/up (the
+  /// shipped 2-class models), 3 = down/up/no-strum (the r175 reject head).
+  /// The trunk (conv + GRU) is identical either way — only the final Dense
+  /// width differs — so one parser serves both assets (chunk 018 r175).
+  int get nClasses => _arrays['dense_b']!.dims[0];
+
   /// Parses the `SSML` v1 binary written by ml/export_dart_weights.py:
   /// magic | u32 version | u32 count | per array:
   /// u32 nameLen | utf8 name | u32 ndim | u32 dims[ndim] | f32 data.
@@ -72,8 +78,9 @@ class CrnnStrumNet {
     return CrnnStrumNet._(arrays);
   }
 
-  /// Softmax [P(down), P(up)] for one RAW (un-normalised) log-mel window of
-  /// [frames] rows × [mels] columns.
+  /// Softmax over the [nClasses] outputs for one RAW (un-normalised) log-mel
+  /// window of [frames] rows × [mels] columns: [P(down), P(up)] for a 2-class
+  /// model, [P(down), P(up), P(no-strum)] for the r175 3-class reject model.
   List<double> forward(List<List<double>> window) {
     final mean = _arrays['mean']!.data;
     final std = _arrays['std']!.data;
@@ -96,21 +103,29 @@ class CrnnStrumNet {
     final stepLen = x.w * x.c;
     final h = _gruLastState(x, stepLen);
 
-    // Dense(2) softmax.
-    final dk = _arrays['dense_k']!; // (units, 2)
+    // Dense(nClasses) softmax.
+    final dk = _arrays['dense_k']!; // (units, nClasses)
     final db = _arrays['dense_b']!.data;
-    final logits = List<double>.filled(2, 0);
-    for (var c = 0; c < 2; c++) {
+    final n = nClasses;
+    final logits = List<double>.filled(n, 0);
+    for (var c = 0; c < n; c++) {
       var acc = db[c];
       for (var u = 0; u < h.length; u++) {
-        acc += h[u] * dk.data[u * 2 + c];
+        acc += h[u] * dk.data[u * n + c];
       }
       logits[c] = acc;
     }
-    final peak = math.max(logits[0], logits[1]);
-    final e0 = math.exp(logits[0] - peak);
-    final e1 = math.exp(logits[1] - peak);
-    return [e0 / (e0 + e1), e1 / (e0 + e1)];
+    var peak = logits[0];
+    for (final l in logits) {
+      if (l > peak) peak = l;
+    }
+    var sum = 0.0;
+    final exps = List<double>.filled(n, 0);
+    for (var c = 0; c < n; c++) {
+      exps[c] = math.exp(logits[c] - peak);
+      sum += exps[c];
+    }
+    return [for (final e in exps) e / sum];
   }
 
   /// Conv2D 3×3, stride 1, SAME zero padding, ReLU. Kernel (3,3,in,out),

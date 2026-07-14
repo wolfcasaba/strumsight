@@ -135,12 +135,23 @@ class _DspInit {
 /// or the bundle is unavailable — the heuristic path then stands.
 Future<Uint8List?> _liveCrnnWeights() async {
   if (_cachedLiveWeights != null) return _cachedLiveWeights;
-  try {
-    final data = await rootBundle.load('assets/ml/strum_crnn_live.bin');
-    _cachedLiveWeights =
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-  } catch (_) {
-    // Keep null — retried on the next engine start, harmless.
+  // r175: prefer the 3-class model (down/up + learned no-strum reject) so the
+  // live path can SUPPRESS false-onset arrows; fall back to the 2-class live
+  // model, then to the heuristic (null). CrnnStrumNet reads the class count
+  // from the weights, so both assets parse; the classifier only suppresses for
+  // a 3-class one (r139 seam).
+  for (final asset in const [
+    'assets/ml/strum_crnn_live_3c.bin',
+    'assets/ml/strum_crnn_live.bin',
+  ]) {
+    try {
+      final data = await rootBundle.load(asset);
+      _cachedLiveWeights =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      break;
+    } catch (_) {
+      // Try the next asset; keep null if none load (retried next start).
+    }
   }
   return _cachedLiveWeights;
 }

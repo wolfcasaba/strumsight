@@ -132,6 +132,21 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     }
   }
 
+  /// r175 — the learned no-strum reject gate. P(no-strum) above this SUPPRESSES
+  /// the arrow. Fit on the shipped 3-class live model's HELD-OUT eval fold as
+  /// the P(no-strum) quantile that keeps ≥95 % of TRUE strums (chunk 018 r175 —
+  /// the same rule as `honest_eval._gate`, retention target 0.95); the measured
+  /// value + the retention/rejection it buys are recorded in
+  /// `ml/live_3c_threshold.json`. MEASURED for the shipped model: 0.43877 keeps
+  /// 95.0 % of true strums (eval fold, n=2013) while rejecting 93.0 % of false
+  /// onsets (n=1707; no-strum recall 0.929, direction acc on true strums
+  /// 0.807). The capability is LOGO-confirmed (r174): at 95 % true-strum
+  /// retention the reject head suppresses ~87 % of false onsets on UNSEEN
+  /// players vs ~3 % for the r170 confidence gate — the noise the r170 finding
+  /// proved confidence cannot touch. Only consulted for a 3-class model; a
+  /// 2-class asset never suppresses (r139 fallback preserved).
+  static const noStrumThreshold = 0.4387717843055725;
+
   @override
   void observe(Float64List frame, StrumFrameFeatures features) =>
       _frontend.observe(frame);
@@ -140,8 +155,32 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   StrumClassification classifyAt({
     required int onsetFrame,
     required int currentFrame,
-  }) {
-    final probs = _net.forward(_frontend.windowAt(onsetFrame, currentFrame));
+  }) =>
+      classifyProbs(_net.forward(_frontend.windowAt(onsetFrame, currentFrame)));
+
+  /// The r175 decision rule for a raw softmax [probs]. A 3-class vector
+  /// `[P(down), P(up), P(no-strum)]` SUPPRESSES the arrow when P(no-strum)
+  /// exceeds [noStrumThreshold]; otherwise it emits the winning direction with
+  /// the r170 calibrated confidence over the RENORMALISED down/up mass (so the
+  /// confidence keeps meaning "P(the arrow is right | it is a strum)"). A
+  /// 2-class vector takes today's path and NEVER suppresses — the r139 seam is
+  /// preserved byte-for-byte for a 2-class asset. Pure/static so the gate is
+  /// unit-testable without an asset.
+  static StrumClassification classifyProbs(List<double> probs) {
+    if (probs.length >= 3) {
+      if (probs[2] > noStrumThreshold) {
+        return const StrumClassification(
+            direction: null, confidence: 0, suppressed: true);
+      }
+      final sum = probs[0] + probs[1];
+      final pDown = sum > 0 ? probs[0] / sum : 0.5;
+      final pUp = sum > 0 ? probs[1] / sum : 0.5;
+      final up = pUp > pDown;
+      return StrumClassification(
+        direction: up ? StrumDirection.up : StrumDirection.down,
+        confidence: calibrate(up ? pUp : pDown),
+      );
+    }
     final up = probs[1] > probs[0];
     return StrumClassification(
       direction: up ? StrumDirection.up : StrumDirection.down,

@@ -1,0 +1,12 @@
+{
+  "note": "r175 shipped 3-class live model. Threshold = P(no-strum) quantile keeping >=95% of TRUE strums on the EVAL fold (same rule as honest_eval._gate). Dart hard-codes no_strum_threshold; retention/neg_reject document it.",
+  "seed": 42,
+  "retention_target": 0.95,
+  "n_eval_pos": 2013,
+  "n_eval_neg": 1707,
+  "no_strum_threshold": 0.4387717843055725,
+  "true_strum_retention": 0.949826130153999,
+  "false_onset_rejection": 0.929701230228471,
+  "eval_dir_acc_true_strums": 0.8067560854446101,
+  "eval_nostrum_recall": 0.9291154071470415
+}

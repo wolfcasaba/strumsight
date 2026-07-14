@@ -53,6 +53,9 @@ flutter:
     - assets/ml/strum_crnn.bin
     # The 70 ms-deadline LIVE variant (round 168; serve-chain 79.8% real).
     - assets/ml/strum_crnn_live.bin
+    # The 3-class LIVE variant (round 175: down/up + learned no-strum reject
+    # → false-onset arrow suppression). Preferred over the 2-class asset.
+    - assets/ml/strum_crnn_live_3c.bin
 
   fonts:
     - family: Poppins

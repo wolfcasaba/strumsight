@@ -408,3 +408,54 @@ capability confidence could never provide is real, large, and LOGO-confirmed at
 zero direction cost. Next round (r175): wire it into the Dart live path — route
 P(no-strum) as the arrow-suppression gate, retiring the heuristic detector's
 precision job; then per-user fine-tune, then the real-guitar APK test.
+
+## r175 — the learned no-strum reject is SHIPPED in the LIVE path (AS BUILT)
+
+The r174 GO signal is now wired end-to-end. A FINAL 3-class LIVE model
+(`build_model(n_classes=3)`, live-70 ms geometry) was trained ONCE on ALL
+recordings (`ml/train_live_3c.py`: positives 7 228 down / 4 539 up + 10 022
+mined hard negatives = 21 789 windows; split by recording → 18 069 train /
+3 720 eval; train-fold norm + inverse-frequency class weights; EarlyStopping
+best-val restore). Shipped asset: **`assets/ml/strum_crnn_live_3c.bin`** (SSML
+v1, mirrors `export_live_weights.py`); the 2-class `strum_crnn_live.bin` is left
+UNTOUCHED. Parity fixture `test/fixtures/crnn_live_3c_parity.json` (32 eval-fold
+windows, 11 down / 11 up / 10 no-strum) locks the Dart 3-col softmax to Keras
+`<=1e-3`.
+
+**The suppression gate (measured on the held-out eval fold, n_pos=2013,
+n_neg=1707):** the threshold on P(no-strum) that keeps **95.0 %** of TRUE strums
+is **`no_strum_threshold = 0.43877`**; at that operating point it **rejects
+93.0 % of false onsets** (no-strum recall 0.929; direction acc on true strums
+0.807). Provenance: `ml/live_3c_threshold.json` (same rule as
+`honest_eval._gate`, retention target 0.95). The value is hard-coded as
+`LiveCrnnStrumClassifier.noStrumThreshold` — model-specific (per-fold thresholds
+ranged 0.08–0.9998 in the r174 LOGO run, so it MUST be re-measured from the
+shipped model, never reused from a fold). New-player generalisation is the r174
+LOGO number: ~87 % false-onset rejection at 95 % retention vs ~3 % for the r170
+confidence gate.
+
+**Dart wiring (all behind the r139 seam):**
+- `CrnnStrumNet` reads the class count from the Dense width (`nClasses`) and
+  softmaxes over N — one parser serves both the 2-class and 3-class assets; the
+  trunk is byte-identical, so every existing 2-class fixture/parity test still
+  holds.
+- `LiveCrnnStrumClassifier.classifyProbs` (pure/static, unit-tested without an
+  asset) is the decision rule: 3-class + P(no-strum) > `noStrumThreshold` →
+  `StrumClassification(suppressed: true)`; else emit the winning direction with
+  the r170 calibration applied to the RENORMALISED down/up mass (confidence
+  keeps meaning "P(arrow right | it is a strum)"). A 2-class vector never
+  suppresses.
+- `StrumAnalyzer.process` returns `null` on a suppressed classification, so NO
+  `StrumEvent` reaches any consumer — the Live arrow, Learn scoring and streak
+  all see nothing (consistent suppression). The seam is still consulted on
+  every onset; suppression is a decision, not a bypass.
+- `RealStrumEngine._liveCrnnWeights` prefers `strum_crnn_live_3c.bin`, falls
+  back to `strum_crnn_live.bin`, then to the heuristic (null) — the model is an
+  upgrade, never a dependency (r139/r169 fallback chain intact).
+
+Kept honest: nothing was tuned to lift the gate; the threshold is the measured
+95 %-retention quantile and is documented as such. The onset detector's
+precision job is now BACKED by the learned reject (false onsets that slip
+through SuperFlux draw no confident wrong arrow). **Acceptance remains the
+real-guitar APK test** — synthetic/eval green is never "done" (HORIZON). r175 is
+the last dev round before that gate.

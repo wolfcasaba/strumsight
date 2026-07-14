@@ -25,10 +25,22 @@ class StrumFrameFeatures {
 
 /// A classifier's verdict for one onset (null direction = honestly ambiguous).
 class StrumClassification {
-  const StrumClassification({required this.direction, required this.confidence});
+  const StrumClassification({
+    required this.direction,
+    required this.confidence,
+    this.suppressed = false,
+  });
 
   final StrumDirection? direction;
   final double confidence;
+
+  /// r175: the learned no-strum reject head judged this onset NOT to be a
+  /// strum (P(no-strum) cleared the calibrated gate). The analyzer then emits
+  /// no [StrumEvent], so no arrow draws, no Learn stroke scores, no streak is
+  /// credited — the false onset simply produces nothing. Only a 3-class model
+  /// ever sets this; the heuristic and the 2-class model never do (a null
+  /// direction there still means "ambiguous strum", not "no strum").
+  final bool suppressed;
 }
 
 /// The ↓/↑ decision seam (docs/plans/ml-track.md P1.1, chunk 018 step 2).
