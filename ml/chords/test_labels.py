@@ -23,6 +23,17 @@ def test_no_chord_spellings():
         assert to_majmin_class(tok) == NO_CHORD
 
 
+def test_klangio_word_form():
+    # Klangio spells qualities as '<root>-major' / '<root>-minor'.
+    assert to_majmin_class("C-major") == 1
+    assert to_majmin_class("G-major") == 8
+    assert to_majmin_class("A-minor") == to_majmin_class("Am")
+    assert to_majmin_class("B-minor") == to_majmin_class("Bm")
+    assert to_majmin_class("Bb-major") == to_majmin_class("A#")
+    assert to_majmin_class("C#-major") == to_majmin_class("C#")
+    assert to_majmin_class("F#-minor") == 13 + 6
+
+
 def test_richer_qualities_reduce_by_third():
     # Major-third family -> major class of the root.
     assert to_majmin_class("Cmaj7") == 1
@@ -77,3 +88,12 @@ def test_class_to_label_roundtrip():
 def test_every_class_reachable():
     seen = {to_majmin_class(class_to_label(c)) for c in range(25)}
     assert seen == set(range(25))
+
+
+if __name__ == "__main__":
+    import inspect
+    fns = [v for k, v in sorted(globals().items())
+           if k.startswith("test_") and inspect.isfunction(v)]
+    for fn in fns:
+        fn()
+    print(f"ALL {len(fns)} LABEL TESTS PASSED")

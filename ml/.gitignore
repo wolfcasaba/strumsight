@@ -15,3 +15,4 @@ honest_results.json
 _threeway_test.npz
 corpus/_*.sh
 corpus/_*.log
+chords/out/

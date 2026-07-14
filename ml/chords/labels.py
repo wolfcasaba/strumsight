@@ -55,18 +55,24 @@ def _split_root(label: str) -> tuple[int, str]:
 
 
 def _is_minor_third(rest: str) -> bool:
-    """Does the quality suffix carry a MINOR third? (majmin reduction rule)."""
-    r = rest
+    """Does the quality suffix carry a MINOR third? (majmin reduction rule).
+
+    Handles the spellings seen in the wild: bare Harte (`m`, `maj7`, `dim`),
+    the Klangio `<root>-minor`/`<root>-major` word form, and the `:min`/`:maj`
+    separator form."""
     # Strip a bass slash (inversion) — the third lives in the quality, not bass.
-    r = r.split("/", 1)[0]
-    # 'maj'/'M' means a MAJOR quality even though it contains 'm'.
+    r = rest.split("/", 1)[0]
+    # Drop a leading Klangio '-' / Harte ':' quality separator (and spaces).
+    r = r.lstrip("-: ")
     low = r.lower()
-    if low.startswith("maj") or r.startswith("M"):
+    # 'maj'/'major'/'M...' means a MAJOR quality even though it contains 'm'.
+    if low.startswith("maj") or (r[:1] == "M" and not low.startswith("min")):
         return False
-    # dim / diminished / half-diminished -> minor third.
-    if low.startswith("dim") or low.startswith("o") or "hdim" in low or low.startswith("min"):
+    # minor / min / dim / diminished / half-diminished / 'o' -> minor third.
+    if (low.startswith("min") or low.startswith("dim") or low.startswith("o") or
+        "hdim" in low):
         return True
-    # a leading 'm' (m, m7, m6, m9, mMaj7 already handled above) -> minor.
+    # a leading 'm' (m, m7, m6, m9; mMaj7 handled above) -> minor.
     if low.startswith("m"):
         return True
     return False

@@ -1,0 +1,52 @@
+name: Chord model train (x86 CI)
+
+# ML CHORD track, phase 1 — trains the v0 frame-wise majmin chord model on the
+# real Klangio solo-guitar recordings on a fast x86 runner (the ARM dev box is
+# slow + unreliable for TF/GRU). Fetches Klangio at the SHA pinned in klangio.py,
+# builds CQT features + per-frame chord labels, trains, uploads eval + weights.
+# Manual trigger. See docs/plans/ml-chord-track.md.
+on:
+  workflow_dispatch:
+jobs:
+  chord-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "numpy>=1.26" "tensorflow>=2.16" pytest
+      - name: Fetch Klangio dataset at the pinned SHA
+        run: |
+          set -euo pipefail
+          SHA=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_SHA)")
+          REPO=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_REPO)")
+          SUBPATH=$(python -c "import sys; sys.path.insert(0,'ml'); import klangio; print(klangio.DATASET_PATH)")
+          git clone --quiet "https://github.com/${REPO}.git" klangio-src
+          git -C klangio-src checkout --quiet "$SHA"
+          mkdir -p ml/data/klangio
+          cp klangio-src/${SUBPATH}/recording_*.strums ml/data/klangio/
+          cp klangio-src/${SUBPATH}/recording_*_phone.wav ml/data/klangio/
+          echo "recordings: $(ls ml/data/klangio/recording_*_phone.wav | wc -l)"
+      - name: Chord module unit tests (TDD gate)
+        working-directory: ml
+        run: python -m pytest chords/test_labels.py chords/test_frames.py chords/test_cqt.py chords/test_synth_songs.py -q
+      - name: Train v0 chord model
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: python ml/chords/train_chord.py
+      - name: Show eval
+        run: cat ml/chords/out/chord_eval.txt || true
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chord-model-v0
+          if-no-files-found: warn
+          path: |
+            ml/chords/out/chord_eval.txt
+            ml/chords/out/chord_weights.npz
