@@ -33,10 +33,14 @@ grab () {  # label  scsearch-query  [count]
   done <<< "$ids"
 }
 
-# --- Guitar with NAMED chords (approx ground truth in the label) ---
+# --- Full-band (HARD domain): guitar with NAMED chords + drums/bass ---
 grab "guitar_C-G-Am-F_backing"  "C G Am F acoustic guitar backing track" 2
 grab "guitar_G-D-Em-C_backing"  "G D Em C guitar backing track" 2
 grab "guitar_Em-C-G-D_progression" "Em C G D acoustic guitar progression" 1
+# --- SOLO guitar (the LIVE-use domain: single instrument, into a mic) ---
+grab "guitar_solo_fingerstyle"  "fingerstyle guitar cover" 2
+grab "guitar_solo_classical"    "classical guitar practice" 1
+grab "guitar_C-G-Am-F_solo"     "acoustic guitar chords C G Am F" 1
 # --- Guitar lessons (talk + play) — the real strum-on-speech negatives ---
 grab "lesson_beginner"          "beginner guitar lesson open chords" 2
 # --- Pure speech (real voice negatives) ---
