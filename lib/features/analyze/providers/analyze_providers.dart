@@ -117,7 +117,24 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     // reset the state under the analysis (round 114, review R2).
     state = const AnalyzeState(phase: AnalyzePhase.analyzing);
     final pcm = await _recorder.stop();
-    final sr = _recorder.sampleRate;
+    await _analyze(pcm, _recorder.sampleRate);
+  }
+
+  /// Analyze an IMPORTED clip (round 179): the user picks/shares a `.wav` from
+  /// their device, the UI decodes it to mono PCM, and it runs through the
+  /// identical DSP a mic recording does — no mic involved. Ignored mid-record
+  /// (the mic take owns the pipeline) and no-ops on empty audio.
+  Future<void> analyzeImported(List<double> pcm, int sampleRate) async {
+    if (state.phase == AnalyzePhase.recording) return;
+    if (pcm.isEmpty || sampleRate <= 0) return;
+    state = const AnalyzeState(phase: AnalyzePhase.analyzing);
+    await _analyze(pcm, sampleRate);
+  }
+
+  /// Shared tail: run the analysis off the UI isolate, publish the result, and
+  /// credit practice if it found real content. Assumes the state is already
+  /// `analyzing` (set by the caller before its own awaits).
+  Future<void> _analyze(List<double> pcm, int sr) async {
     // Off the UI isolate — a 30 s clip is thousands of FFTs.
     final result = await compute(runClipAnalysis, (pcm, sr, await _crnnWeights()));
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
