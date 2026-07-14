@@ -57,6 +57,9 @@ flutter:
     # The 3-class LIVE variant (round 175: down/up + learned no-strum reject
     # → false-onset arrow suppression). Preferred over the 2-class asset.
     - assets/ml/strum_crnn_live_3c.bin
+    # Full-band CHORD-recognition CRNN (CCRN blob, round 195 export; CQT→CNN→
+    # BiGRU→25-class majmin). Pure-Dart inference feeds the Viterbi decoder.
+    - assets/ml/chord_crnn.bin
 
   fonts:
     - family: Poppins
