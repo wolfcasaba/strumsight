@@ -21,6 +21,18 @@ abstract class StrumEngine {
   /// different played chord still wins. Default: no-op (mock/test engines).
   void setExpectedChord(String? label) {}
 
+  /// Lab mode diagnostics (r199): turn a rolling mic-PCM capture on/off. When
+  /// ON, the engine retains roughly the last 30 s of microphone audio so the
+  /// Live Lab panel can re-run the full ML+DSP analysis on external guitar
+  /// audio. When OFF the engine does ZERO extra work — no buffer, no append —
+  /// so the default Live experience is untouched. Default: no-op.
+  void setDiagnosticsCapture(bool on) {}
+
+  /// The most recently captured PCM (a COPY) and its actual sample rate, for a
+  /// Lab-mode capture-and-analyze. Empty (`(<double>[], 0)`) when capture is
+  /// off or nothing has been buffered. Default: empty (mock/test engines).
+  (List<double>, int) recentPcm() => (const <double>[], 0);
+
   /// Release all resources.
   Future<void> dispose();
 }

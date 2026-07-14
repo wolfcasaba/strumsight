@@ -72,6 +72,12 @@ class MockStrumEngine implements StrumEngine {
   void setExpectedChord(String? label) {} // mock: no detector to hint
 
   @override
+  void setDiagnosticsCapture(bool on) {} // mock: nothing to capture
+
+  @override
+  (List<double>, int) recentPcm() => (const <double>[], 0);
+
+  @override
   Future<void> dispose() async {
     await stop();
     await _controller?.close();

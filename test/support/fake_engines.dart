@@ -20,6 +20,21 @@ class FakeStrumEngine implements StrumEngine {
   @override
   void setExpectedChord(String? label) => expectedChordCalls.add(label);
 
+  /// Every [setDiagnosticsCapture] value in order — lets tests assert the Live
+  /// Lab wiring turns capture on with the flag (r199).
+  final List<bool> captureCalls = [];
+
+  /// A canned PCM buffer + rate the fake returns from [recentPcm], so a widget
+  /// test can drive the Live Lab capture without a real mic.
+  List<double> fakePcm = const [];
+  int fakeRate = 0;
+
+  @override
+  void setDiagnosticsCapture(bool on) => captureCalls.add(on);
+
+  @override
+  (List<double>, int) recentPcm() => (fakePcm, fakeRate);
+
   @override
   Stream<LiveFrame> get frames => _controller.stream;
 

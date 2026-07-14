@@ -92,6 +92,20 @@ Future<Uint8List?> _chordWeights() async {
   }
 }
 
+/// Load the model weights on the MAIN isolate (rootBundle is main-only) and run
+/// [runClipAnalysis] OFF the UI thread via [compute]. The single place that
+/// wires weight-loading + the isolate hop together, shared by the Analyze path
+/// and the Live Lab capture-and-analyze (r199). When [labMode] is off the chord
+/// weights aren't even loaded and the isolate does zero ML work.
+Future<AnalyzeResult> computeClipAnalysis(
+    List<double> pcm, int sr, bool labMode) async {
+  final chordWeights = labMode ? await _chordWeights() : null;
+  return compute(
+    runClipAnalysis,
+    (pcm, sr, await _crnnWeights(), labMode, chordWeights),
+  );
+}
+
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
   /// [recorder] is injectable for tests; defaults to the real one.
@@ -174,10 +188,9 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     final labMode = ref.read(labModeProvider);
     // A fresh analyze clears any prior upload status.
     ref.read(diagnosticsUploadProvider.notifier).reset();
-    final chordWeights = labMode ? await _chordWeights() : null;
-    // Off the UI isolate — a 30 s clip is thousands of FFTs.
-    final result = await compute(runClipAnalysis,
-        (pcm, sr, await _crnnWeights(), labMode, chordWeights));
+    // Off the UI isolate — a 30 s clip is thousands of FFTs. Shared helper so
+    // the Live Lab path (r199) runs the identical weight-loading + isolate hop.
+    final result = await computeClipAnalysis(pcm, sr, labMode);
     state = AnalyzeState(phase: AnalyzePhase.done, result: result);
     // Lab mode (r198): package the diagnostics session (ML-vs-DSP events +
     // the recorded clip) and upload it best-effort. Fire-and-forget — the

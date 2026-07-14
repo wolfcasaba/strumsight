@@ -11,11 +11,14 @@ import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/providers/capo_provider.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
+import '../../settings/providers/lab_mode_provider.dart';
+import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 import '../providers/chord_timeline_provider.dart';
 import '../providers/live_providers.dart';
 import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
+import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
@@ -44,6 +47,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   int _strokeCount = 0;
   // Captured in build so dispose never has to touch `ref` (unsafe post-unmount).
   PracticeLogController? _log;
+  // The engine, captured in build so dispose can turn Lab capture off without
+  // touching `ref` after unmount (r199).
+  StrumEngine? _engine;
 
   @override
   void initState() {
@@ -61,6 +67,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   void dispose() {
     WakelockPlus.disable().catchError((_) {});
+    // Stop the Lab-mode rolling capture when leaving Live (r199) — no buffering
+    // once the screen is gone. Safe after unmount (touches no provider state).
+    _engine?.setDiagnosticsCapture(false);
     // Log the finished Live session for the Progress dashboard (only if the user
     // actually played). Uses the captured notifier — safe after unmount.
     if (_sessionStart != null && _strokeCount > 0) {
@@ -100,6 +109,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   Widget build(BuildContext context) {
     _log = ref.read(practiceLogProvider.notifier);
+    // Lab mode (r199): enable the engine's rolling mic-PCM capture so the Live
+    // Lab panel can re-analyze external guitar audio. Off → the engine buffers
+    // nothing (zero overhead on the default Live path). Idempotent bool set.
+    final labMode = ref.watch(labModeProvider);
+    final engine = ref.read(strumEngineProvider);
+    engine.setDiagnosticsCapture(labMode);
+    _engine = engine;
     // Real playing detected → credit today's practice streak (once per visit;
     // the record call is itself idempotent per calendar day). RAG chunk 013.
     ref.listen(liveFrameProvider, (_, next) {
@@ -185,6 +201,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                     activeIndex: _activeSlot(frame),
                   ),
                 ),
+              if (labMode) const LiveLabPanel(),
               _ActionBar(
                 paused: _paused,
                 onTuner: () => context.push('/tuner'),

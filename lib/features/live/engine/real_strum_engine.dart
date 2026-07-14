@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/audio/mic_capture.dart';
 import '../model/live_frame.dart';
 import 'dsp/live_pipeline.dart';
+import 'pcm_ring_buffer.dart';
 import 'strum_engine.dart';
 
 /// The REAL engine: microphone → DSP isolate (LivePipeline) → LiveFrames.
@@ -23,11 +24,25 @@ class RealStrumEngine implements StrumEngine {
   bool _running = false;
   String? _expectedChord;
 
+  // Lab-mode rolling capture (r199): a drop-oldest ring of recent mic PCM,
+  // only populated while enabled. Off by default → the default Live path
+  // allocates and appends nothing.
+  final PcmRingBuffer _capture = PcmRingBuffer();
+
   @override
   void setExpectedChord(String? label) {
     _expectedChord = label;
     _toDsp?.send(_ExpectedChord(label));
   }
+
+  @override
+  void setDiagnosticsCapture(bool on) {
+    _capture.enabled = on;
+    if (!on) _capture.clear(); // release the buffer the moment it's off
+  }
+
+  @override
+  (List<double>, int) recentPcm() => _capture.recent();
 
   @override
   Stream<LiveFrame> get frames {
@@ -50,6 +65,9 @@ class RealStrumEngine implements StrumEngine {
     try {
       // Mic first — the actual sample rate is only known once capture runs.
       final actualRate = await _mic.start((chunk) {
+        // Lab-mode rolling capture: append + drop-oldest past ~30 s. Entirely
+        // skipped when capture is off (default) — zero overhead.
+        _capture.add(chunk);
         final port = _toDsp;
         if (port != null) {
           port.send(chunk);
@@ -57,6 +75,7 @@ class RealStrumEngine implements StrumEngine {
           _pendingChunks.add(chunk); // buffer during isolate spin-up
         }
       });
+      _capture.sampleRate = actualRate;
 
       _fromDsp = ReceivePort();
       _isolate = await Isolate.spawn(
@@ -105,6 +124,9 @@ class RealStrumEngine implements StrumEngine {
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
     _pendingChunks.clear();
+    // Reset the Lab-mode capture buffer on stop (the capture toggle itself is
+    // re-asserted by the Live screen on the next start).
+    _capture.reset();
   }
 
   @override

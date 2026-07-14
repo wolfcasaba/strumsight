@@ -26,8 +26,10 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
   /// Build a diagnostics session from [result] + its recorded clip ([pcm]/[sr])
   /// and upload it best-effort. Fire-and-forget: sets `uploading`, then
   /// `uploaded`/`failed`. Never throws — a diagnostics failure never disturbs
-  /// the Analyze result. No-op if the result carries no diagnostics.
-  Future<void> upload(AnalyzeResult result, List<double> pcm, int sr) async {
+  /// the Analyze result. No-op if the result carries no diagnostics. [surface]
+  /// tags which screen produced it — `analyze` (default) or `live` (r199).
+  Future<void> upload(AnalyzeResult result, List<double> pcm, int sr,
+      {String surface = 'analyze'}) async {
     if (result.diagnostics == null) return;
     state = DiagnosticsUploadStatus.uploading;
 
@@ -39,6 +41,7 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
       appVersion: appVersion,
       device: device,
       startedAt: DateTime.now().toUtc().toIso8601String(),
+      surface: surface,
       events: DiagnosticsSession.eventsFrom(result),
       audioClips: clip == null ? const [] : [clip],
     );
