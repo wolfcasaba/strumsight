@@ -103,6 +103,29 @@ void main() {
         reason: 'sustained silence must release the latched chord');
   });
 
+  test('a longer release-hold keeps a sustained chord shown across a dip '
+      '(round 176 anti-flicker) — and never resurrects voice', () {
+    // chord, a brief low-confidence dip, chord again.
+    final chord = chordSignal(cMajorFreqs, seconds: 1.5, sampleRate: sr);
+    final dip = Float64List(sr ~/ 4); // 0.25 s near-silence
+    List<LiveFrame> runHold(int hold) {
+      final pipe = LivePipeline(sampleRate: sr, chordReleaseHoldFrames: hold);
+      return _drive(pipe, chord) + _drive(pipe, dip) + _drive(pipe, chord);
+    }
+
+    // A longer hold can only SHOW the chord on more frames, never fewer.
+    expect(_shown(runHold(8)), greaterThanOrEqualTo(_shown(runHold(0))),
+        reason: 'the release debounce reduces mid-chord flicker');
+
+    // Voice-safe: a long hold cannot resurrect a phantom chord on speech,
+    // because speech never latches in the first place.
+    final tone = harmonicNote(freq: 220, seconds: 2.5, sampleRate: sr);
+    final voice =
+        LivePipeline(sampleRate: sr, chordReleaseHoldFrames: 8);
+    expect(_shown(_drive(voice, tone)), 0,
+        reason: 'a longer hold must not surface a chord on non-guitar audio');
+  });
+
   test('the default gate constants are ordered (rise > release, both in 0..1)',
       () {
     expect(DspConfig.chordConfRise, greaterThan(DspConfig.chordConfRelease));

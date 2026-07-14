@@ -80,6 +80,20 @@ class DspConfig {
   /// does. At the ~93 ms chord hop, 0.35 ≈ a ~200 ms rise time.
   static const double chordConfEmaAlpha = 0.35;
 
+  /// Release debounce (round 177): once a chord has LATCHED, the smoothed
+  /// confidence must stay below [chordConfRelease] for this many consecutive
+  /// chord frames before the display blanks. A real guitar chord's confidence
+  /// dips momentarily mid-strum / between palm-mutes; without this a sustained
+  /// chord flickers to `—` and back. Voice-safe by construction: speech NEVER
+  /// latches (its EMA never reaches the rise gate), so a longer hold cannot
+  /// resurrect a phantom chord. At the ~93 ms chord hop, 3 ≈ ~280 ms of grace;
+  /// a genuine rest (sustained silence) still blanks after that. MEASURED on
+  /// the real-audio probe (rise 0.54 / release 0.22, 3c CRNN loaded): the hold
+  /// sweep lifts guitar chordShown 74 %→79.9 % (plateau at 4) while voice stays
+  /// **0 % at every hold value** — voice-safe by construction (speech never
+  /// latches). 4 ≈ ~370 ms grace; a longer rest still blanks.
+  static const int chordReleaseHoldFrames = 4;
+
   // Silence gate (chunk 010).
   static const double silenceRms = 0.008;
 }

@@ -40,8 +40,11 @@ class LivePipeline {
     Uint8List? crnnWeights,
     double? chordConfRise,
     double? chordConfRelease,
+    int? chordReleaseHoldFrames,
   })  : _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
         _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
+        _chordReleaseHoldFrames =
+            chordReleaseHoldFrames ?? DspConfig.chordReleaseHoldFrames,
         _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
         _strums = StrumAnalyzer(
           sampleRate: sampleRate,
@@ -73,8 +76,10 @@ class LivePipeline {
   /// strum and rings out. Injectable so the offline probe can sweep it.
   final double _chordConfRise;
   final double _chordConfRelease;
+  final int _chordReleaseHoldFrames;
   double _chordConfEma = 0;
   bool _chordLatched = false;
+  int _belowReleaseFrames = 0;
 
   final NnlsChroma _chroma;
   final ViterbiChordDecoder _chordDecoder = ViterbiChordDecoder(
@@ -162,8 +167,15 @@ class LivePipeline {
       _chordConfEma += DspConfig.chordConfEmaAlpha * (conf - _chordConfEma);
       if (_chordConfEma >= _chordConfRise) {
         _chordLatched = true;
+        _belowReleaseFrames = 0;
       } else if (_chordConfEma < _chordConfRelease) {
-        _chordLatched = false;
+        // Debounced release: blank only after the confidence has stayed low for
+        // a few frames, so a mid-strum dip doesn't flicker a sustained chord.
+        if (++_belowReleaseFrames >= _chordReleaseHoldFrames) {
+          _chordLatched = false;
+        }
+      } else {
+        _belowReleaseFrames = 0; // between release and rise: still supported
       }
     }
 
@@ -256,6 +268,7 @@ class LivePipeline {
     _lastChord = null;
     _chordConfEma = 0;
     _chordLatched = false;
+    _belowReleaseFrames = 0;
     _latestStrum = null;
     _strumSeq = 0;
     _clearBar();

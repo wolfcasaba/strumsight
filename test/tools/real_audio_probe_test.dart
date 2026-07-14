@@ -33,6 +33,14 @@ import 'package:music_theory/features/live/engine/dsp/live_pipeline.dart';
 /// Only run the heavy real-audio probe when explicitly requested (dev tuning).
 final bool _enabled = Platform.environment['DSP_PROBE'] == '1';
 
+/// The SHIPPED 3-class live strum CRNN (r175) — loaded so the harness measures
+/// the on-device strum reality (the heuristic alone fires far more false onsets
+/// on speech than the app, which runs this reject model). Null if absent.
+Uint8List? _liveCrnn() {
+  const p = 'assets/ml/strum_crnn_live_3c.bin';
+  return File(p).existsSync() ? File(p).readAsBytesSync() : null;
+}
+
 const _corpusDir = 'ml/corpus/wav';
 const _klangioDir = 'ml/data/klangio';
 const _maxSeconds = 20.0; // cap per clip so the sweep stays fast
@@ -102,7 +110,8 @@ _Probe _run(String path, String kind) {
   final p = _Probe(path.split('/').last, kind);
 
   // LIVE path — stream in mic-sized chunks, watch what the UI would show.
-  final pipe = LivePipeline(sampleRate: sr);
+  // Load the shipped 3-class reject CRNN so the strum count matches on-device.
+  final pipe = LivePipeline(sampleRate: sr, crnnWeights: _liveCrnn());
   const chunk = 2048;
   String? prevLabel;
   var changes = 0;
@@ -147,13 +156,18 @@ _Probe _run(String path, String kind) {
   return p;
 }
 
-/// Live-only chordShown% for one clip at a given Schmitt (rise, release) pair.
-double _chordShownAt(String path, double rise, [double release = 0.30]) {
+/// Live-only chordShown% for one clip at a given Schmitt (rise, release, hold).
+double _chordShownAt(String path, double rise,
+    [double release = 0.22, int hold = 3]) {
   final (full, sr) = _readWav(path);
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
   final pipe = LivePipeline(
-      sampleRate: sr, chordConfRise: rise, chordConfRelease: release);
+      sampleRate: sr,
+      crnnWeights: _liveCrnn(),
+      chordConfRise: rise,
+      chordConfRelease: release,
+      chordReleaseHoldFrames: hold);
   const chunk = 2048;
   var frames = 0, shown = 0;
   for (var i = 0; i < pcm.length; i += chunk) {
@@ -196,31 +210,28 @@ List<(File, String)> _discover() {
 }
 
 void main() {
-  test('REAL-AUDIO gate sweep — chordShown% vs (rise, release)', () {
+  test('REAL-AUDIO release-hold sweep — chordShown% vs hold frames', () {
     if (!_enabled) return; // dev-only; set DSP_PROBE=1
     final clips = _discover();
     if (clips.isEmpty) return;
-    const pairs = [
-      (0.48, 0.20), (0.48, 0.25), (0.50, 0.20), (0.50, 0.25), //
-      (0.50, 0.30), (0.52, 0.22), (0.54, 0.22), (0.56, 0.25),
-    ];
+    const holds = [0, 2, 3, 4, 6, 8]; // at rise 0.54 / release 0.22
     // ignore: avoid_print
-    print('\n=== GATE SWEEP: avg chordShown% by kind (round 177) ===');
+    print('\n=== RELEASE-HOLD SWEEP: avg chordShown% (rise0.54/rel0.22) ===');
     // ignore: avoid_print
-    print('rise/rel  ${pairs.map((p) => '${p.$1}/${p.$2}'.padLeft(9)).join()}');
+    print('hold    ${holds.map((h) => h.toString().padLeft(6)).join()}');
     for (final kind in ['voice', 'guitar']) {
       final row = <String>[];
-      for (final p in pairs) {
+      for (final h in holds) {
         final vals = clips
             .where((c) => c.$2 == kind)
-            .map((c) => _chordShownAt(c.$1.path, p.$1, p.$2))
+            .map((c) => _chordShownAt(c.$1.path, 0.54, 0.22, h))
             .toList();
         final avg =
             vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
-        row.add(avg.toStringAsFixed(1).padLeft(9));
+        row.add(avg.toStringAsFixed(1).padLeft(6));
       }
       // ignore: avoid_print
-      print('${kind.padRight(8)} ${row.join()}');
+      print('${kind.padRight(7)} ${row.join()}');
     }
   });
 
