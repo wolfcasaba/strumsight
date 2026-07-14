@@ -20,10 +20,24 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from chords import dataset  # noqa: E402
+from chords.augment import augment_windows  # noqa: E402
 from chords.labels import N_CLASSES  # noqa: E402
 
 WIN = 100
 SEED = 42
+
+# --- Synth full-band TRAIN pool params (r192) — single source of truth so the
+# eval-file comment can't drift from the actual run. ------------------------
+SYN_TRAIN_N = 256        # songs mixed into TRAIN
+SYN_TRAIN_SEED = 7       # != held-out eval seed (no leakage)
+SYN_TRAIN_SPC = 2.0      # seconds_per_chord (>= 2 windows of real chord content)
+# --- Held-out SYNTH full-band eval (CI tripwire) ---------------------------
+SYN_EVAL_N = 16
+SYN_EVAL_SEED = 1234
+# --- ±semitone CQT-transposition augmentation (r193) — key-invariance ------
+AUG_COPIES = 2           # transposed copies per base window (-> ~3x train data)
+AUG_MAX_SEMI = 5         # max |semitone| shift (±10 CQT bins, safe zero-fill)
+AUG_SEED = 4243          # fixed aug RNG seed (distinct from SEED / eval seeds)
 
 
 def set_seeds(seed=SEED):
@@ -96,19 +110,34 @@ def main():
     # content (short 1s-per-chord songs were < WIN frames → one half-padding
     # window each, a weak/N.C.-heavy signal — r192 second-eye fix). The held-out
     # eval below keeps the DEFAULT 1.0 so it stays the r191-comparable baseline.
-    print("Building synth full-band TRAIN pool "
-          "(n_songs=256, seed=7, seconds_per_chord=2.0)...", flush=True)
+    print(f"Building synth full-band TRAIN pool (n_songs={SYN_TRAIN_N}, "
+          f"seed={SYN_TRAIN_SEED}, seconds_per_chord={SYN_TRAIN_SPC})...",
+          flush=True)
     Xsyn, Ysyn, syn_rec = dataset.build_synth(
-        n_songs=256, seed=7, win=WIN, step=WIN // 2, seconds_per_chord=2.0)
+        n_songs=SYN_TRAIN_N, seed=SYN_TRAIN_SEED, win=WIN, step=WIN // 2,
+        seconds_per_chord=SYN_TRAIN_SPC)
     n_synth_tr = Xsyn.shape[0]
     Xtr = np.concatenate([Xtr, Xsyn], axis=0)
     Ytr = np.concatenate([Ytr, Ysyn], axis=0)
+    n_base_tr = Xtr.shape[0]
     print(f"TRAIN windows: klangio={n_klangio_tr} + synth={n_synth_tr} "
-          f"= {Xtr.shape[0]} total "
+          f"= {n_base_tr} total "
           f"(synth songs {len(set(syn_rec.tolist()))})", flush=True)
 
-    # Train-only normalization (per bin), recomputed on the COMBINED (Klangio +
-    # synth) train set and applied to model input and all three evals.
+    # --- ±semitone CQT-transposition augmentation (r193) ---------------------
+    # Key-invariance: shift the CQT freq axis ±k semitones (2 bins each) + roll
+    # the labels by k. Applied to the TRAIN windows ONLY (after the Klangio +
+    # synth concat, BEFORE mean/std) — val and both held-out evals stay
+    # untouched so their metrics remain honest. Fixed seed = reproducible.
+    Xtr, Ytr = augment_windows(
+        Xtr, Ytr, np.random.default_rng(AUG_SEED),
+        copies=AUG_COPIES, max_semi=AUG_MAX_SEMI)
+    n_aug_tr = Xtr.shape[0]
+    print(f"AUGMENT (±{AUG_MAX_SEMI} semi, copies={AUG_COPIES}): "
+          f"{n_base_tr} base -> {n_aug_tr} augmented TRAIN windows", flush=True)
+
+    # Train-only normalization (per bin), recomputed on the AUGMENTED (Klangio +
+    # synth + transpositions) train set and applied to model input and all evals.
     mean = Xtr.reshape(-1, X.shape[-1]).mean(0)
     std = Xtr.reshape(-1, X.shape[-1]).std(0) + 1e-6
     Xtr = (Xtr - mean) / std
@@ -144,9 +173,10 @@ def main():
     # band. Same train-only mean/std norm + same WCSR/chord-only metric as the
     # Klangio eval above. This is a synthetic regression tripwire only; the real
     # acceptance gate stays the real-guitar/full-mix APK test (HORIZON).
-    print("\nBuilding held-out SYNTH full-band eval set "
-          "(n_songs=16, seed=1234)...", flush=True)
-    Xsy, Ysy, _ = dataset.build_synth(n_songs=16, seed=1234, win=WIN, step=WIN // 2)
+    print(f"\nBuilding held-out SYNTH full-band eval set "
+          f"(n_songs={SYN_EVAL_N}, seed={SYN_EVAL_SEED})...", flush=True)
+    Xsy, Ysy, _ = dataset.build_synth(
+        n_songs=SYN_EVAL_N, seed=SYN_EVAL_SEED, win=WIN, step=WIN // 2)
     Xsy = (Xsy - mean) / std
     psy = model.predict(Xsy, verbose=0).argmax(-1)
     synth_wcsr = float((psy == Ysy).mean())
@@ -163,12 +193,21 @@ def main():
         f.write(f"frame_wcsr={frame_acc:.4f}\nchord_only={chord_acc:.4f}\n"
                 f"val_recordings={val_ids}\nclass_balance={dist.tolist()}\n")
         f.write(f"train_windows_klangio={n_klangio_tr}\n"
-                f"train_windows_synth={n_synth_tr}\n")
-        f.write("# SYNTH full-band TRAIN pool mixed in (n_songs=64 seed=7); "
-                "held-out eval below is a DIFFERENT set (seed=1234, no leakage)\n")
-        f.write("# SYNTH full-band (held-out, n_songs=16 seed=1234) — "
-                "CI tripwire, NOT real audio (a jump proves learnability, "
-                "not real-world full-band accuracy)\n")
+                f"train_windows_synth={n_synth_tr}\n"
+                f"train_windows_base={n_base_tr}\n"
+                f"aug_copies={AUG_COPIES}\naug_max_semi={AUG_MAX_SEMI}\n"
+                f"train_windows_augmented={n_aug_tr}\n")
+        f.write(f"# SYNTH full-band TRAIN pool mixed in (n_songs={SYN_TRAIN_N} "
+                f"seed={SYN_TRAIN_SEED} seconds_per_chord={SYN_TRAIN_SPC}); "
+                f"held-out eval below is a DIFFERENT set "
+                f"(seed={SYN_EVAL_SEED}, no leakage)\n")
+        f.write(f"# TRAIN windows augmented ±{AUG_MAX_SEMI} semitones "
+                f"(copies={AUG_COPIES}): {n_base_tr} -> {n_aug_tr}; "
+                f"val + both held-out evals are NOT augmented\n")
+        f.write(f"# SYNTH full-band (held-out, n_songs={SYN_EVAL_N} "
+                f"seed={SYN_EVAL_SEED}) — CI tripwire, NOT real audio "
+                f"(a jump proves learnability, not real-world full-band "
+                f"accuracy)\n")
         f.write(f"synth_fullband_wcsr={synth_wcsr:.4f}\n"
                 f"synth_fullband_chord_only={synth_chord:.4f}\n")
     print("saved ml/chords/out/chord_weights.npz + chord_eval.txt")

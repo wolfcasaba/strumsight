@@ -42,7 +42,7 @@ jobs:
           echo "recordings: $(ls ml/data/klangio/recording_*_phone.wav | wc -l)"
       - name: Chord module unit tests (TDD gate)
         working-directory: ml
-        run: python -m pytest chords/test_labels.py chords/test_frames.py chords/test_cqt.py chords/test_synth_songs.py chords/test_dataset_synth.py -q
+        run: python -m pytest chords/test_labels.py chords/test_frames.py chords/test_cqt.py chords/test_synth_songs.py chords/test_dataset_synth.py chords/test_augment.py -q
       - name: Train v0 chord model
         env:
           TF_CPP_MIN_LOG_LEVEL: "3"
