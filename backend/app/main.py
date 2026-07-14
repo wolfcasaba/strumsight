@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import __version__
 from .config import Settings, get_settings
 from .database import Base, engine
-from .routers import auth, settings as settings_router
+from .routers import auth, diagnostics, settings as settings_router
 
 _DEV_SECRET = Settings.model_fields["secret_key"].default
 
@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(settings_router.router)
+    app.include_router(diagnostics.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
