@@ -235,6 +235,79 @@ void main() {
     }
   });
 
+  test('REAL-AUDIO strum-onset separability — ZCR & low-band ratio (A residual)',
+      () {
+    if (!_enabled) return; // dev-only; set DSP_PROBE=1
+    final clips = _discover();
+    if (clips.isEmpty) return;
+
+    // For each DETECTED strum, measure onset-window features that might tell a
+    // guitar strum (bass strings → low ZCR, strong sub-bass) from a speech
+    // onset (formants 300-3k → higher ZCR, little sub-bass). If they separate,
+    // a cheap onset gate fixes the false-arrow-on-speech bug without retraining.
+    final byKind = <String, ({List<double> zcr, List<double> subBass})>{
+      'voice': (zcr: [], subBass: []),
+      'guitar': (zcr: [], subBass: []),
+    };
+    for (final (file, kind) in clips) {
+      final (full, sr) = _readWav(file.path);
+      final cap = (sr * _maxSeconds).round();
+      final pcm =
+          full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
+      final pipe = LivePipeline(sampleRate: sr, crnnWeights: _liveCrnn());
+      const chunk = 2048;
+      final strumSamples = <int>[];
+      var seq = 0;
+      for (var i = 0; i < pcm.length; i += chunk) {
+        final end = (i + chunk < pcm.length) ? i + chunk : pcm.length;
+        for (final f in pipe.addChunk(pcm.sublist(i, end))) {
+          if (f.strumSeq > seq && f.latestStrumTime >= 0) {
+            seq = f.strumSeq;
+            strumSamples.add((f.latestStrumTime * sr).round());
+          }
+        }
+      }
+      final acc = byKind[kind == 'voice' ? 'voice' : 'guitar']!;
+      for (final s0 in strumSamples) {
+        final s = s0.clamp(0, pcm.length - 1);
+        final win = 1024;
+        final a = (s - 256).clamp(0, pcm.length - win).toInt();
+        final seg = Float64List.sublistView(pcm, a, a + win);
+        // ZCR
+        var crossings = 0;
+        for (var i = 1; i < seg.length; i++) {
+          if ((seg[i] < 0) != (seg[i - 1] < 0)) crossings++;
+        }
+        acc.zcr.add(crossings / seg.length);
+        // Low-band ratio via a 1-pole low-pass (~180 Hz cutoff): sub-bass / total
+        final rc = 1.0 / (2 * 3.14159 * 180);
+        final dt = 1.0 / sr;
+        final alpha = dt / (rc + dt);
+        var lp = 0.0, eLow = 0.0, eTot = 0.0;
+        for (final x in seg) {
+          lp += alpha * (x - lp);
+          eLow += lp * lp;
+          eTot += x * x;
+        }
+        acc.subBass.add(eTot <= 0 ? 0 : eLow / eTot);
+      }
+    }
+    double med(List<double> xs) {
+      if (xs.isEmpty) return -1;
+      final s = [...xs]..sort();
+      return s[s.length ~/ 2];
+    }
+    // ignore: avoid_print
+    print('\n=== STRUM-ONSET SEPARABILITY (round 178 probe) ===');
+    for (final k in ['voice', 'guitar']) {
+      final a = byKind[k]!;
+      // ignore: avoid_print
+      print('${k.padRight(7)} n=${a.zcr.length.toString().padLeft(4)}  '
+          'ZCR p50=${med(a.zcr).toStringAsFixed(4)}  '
+          'subBassRatio p50=${med(a.subBass).toStringAsFixed(4)}');
+    }
+  });
+
   test('REAL-AUDIO PROBE — Live+Analyze over corpus & guitar recordings', () {
     if (!_enabled) return; // dev-only; set DSP_PROBE=1
     final probes = <_Probe>[];
