@@ -39,7 +39,10 @@ final _fullBuffer = <ChordEvent>[
 ];
 
 Future<void> _pumpAt(WidgetTester tester, double width) async {
-  await tester.binding.setSurfaceSize(Size(width, 440));
+  // ~ the height the Live Expanded actually gives the timeline after the status
+  // bar / beat counter / action bar claim their space — so the hero's
+  // height-bounded FittedBox scale is representative, not over-inflated.
+  await tester.binding.setSurfaceSize(Size(width, 340));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(

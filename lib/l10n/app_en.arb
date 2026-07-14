@@ -425,6 +425,8 @@
   },
   "songSave": "Save",
   "songDelete": "Delete",
+  "songDeleted": "Song deleted",
+  "undo": "Undo",
   "songSuggest": "Suggest",
   "songSuggestTitle": "Suggest a progression",
   "songKeyLabel": "Key",

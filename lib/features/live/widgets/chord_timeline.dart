@@ -60,45 +60,91 @@ class ChordTimeline extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     if (events.isEmpty) {
-      return Center(
-        child: Text(
-          l10n.liveWaitingForChord,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            letterSpacing: 0.5,
-            color: context.palette.muted,
-          ),
-        ),
-      );
+      return _emptyState(context, l10n);
     }
 
     final hero = events.last;
     final history = events.sublist(0, events.length - 1);
 
-    final children = <Widget>[
-      for (var i = 0; i < history.length; i++)
-        _historyCard(history[i], history.length - i),
-      _heroCard(context, hero, beat),
-      if (next != null) _nextGhost(context, l10n),
-    ];
-
-    final strip = Row(
+    final historyRow = Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: children,
+      children: [
+        for (var i = 0; i < history.length; i++)
+          _historyCard(history[i], history.length - i),
+      ],
+    );
+
+    // A full-width, right-anchored Row so the history region can compress by
+    // WIDTH (it's a `Flexible` → bounded width) while the hero keeps its
+    // natural size. Each of the hero and the history is independently wrapped
+    // in a `FittedBox(scaleDown)` so nothing overflows VERTICALLY on a short
+    // Expanded (r187: the earlier whole-strip FittedBox fixed height but shrank
+    // the hero with history; a Flexible needs a bounded width, so it can't live
+    // inside an outer FittedBox — hence per-part scaleDown instead).
+    final strip = Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (history.isNotEmpty)
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: historyRow,
+            ),
+          ),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _heroCard(context, hero, beat),
+        ),
+        if (next != null)
+          FittedBox(fit: BoxFit.scaleDown, child: _nextGhost(context, l10n)),
+      ],
     );
 
     return Opacity(
       opacity: listening ? 1.0 : 0.6,
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerRight,
-          child: strip,
-        ),
+      child: strip,
+    );
+  }
+
+  // --- Empty state: muted instrument glyph + idle prompt, one gentle pulse ---
+  //
+  // A single finite fade+scale on the icon (no `.repeat()`), so `pumpAndSettle`
+  // still terminates. The `liveWaitingForChord` text is kept verbatim.
+  Widget _emptyState(BuildContext context, AppLocalizations l10n) {
+    final palette = context.palette;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.graphic_eq,
+            size: 40,
+            color: palette.muted,
+          )
+              .animate(key: const ValueKey('empty-pulse'))
+              .fadeIn(duration: 400.ms)
+              .scaleXY(
+                begin: 0.85,
+                end: 1.0,
+                duration: 400.ms,
+                curve: Curves.easeOut,
+              ),
+          const SizedBox(height: 14),
+          Text(
+            l10n.liveWaitingForChord,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              letterSpacing: 0.5,
+              color: palette.muted,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -209,6 +255,10 @@ class ChordTimeline extends StatelessWidget {
   Widget _nextGhost(BuildContext context, AppLocalizations l10n) {
     final palette = context.palette;
     final label = next!.transposed(-capo).label;
+    // Fade the ghost in whenever the predicted chord changes (keyed by label),
+    // so a new hint appears gently rather than popping. Finite, so
+    // `pumpAndSettle` still terminates. The outer `ValueKey('next-ghost')`
+    // stays on the returned widget for the existing finder.
     return Opacity(
       key: const ValueKey('next-ghost'),
       opacity: 0.4,
@@ -240,7 +290,7 @@ class ChordTimeline extends StatelessWidget {
             ),
           ],
         ),
-      ),
+      ).animate(key: ValueKey('ghost-$label')).fadeIn(duration: 200.ms),
     );
   }
 

@@ -83,6 +83,18 @@ class SongsController extends Notifier<List<Song>> {
     await _persist();
   }
 
+  /// Undo of [remove]: re-insert [song] at its original [index] (clamped to the
+  /// current bounds) with all fields intact, persisting like a normal save.
+  /// No-op if a song with the same id is already present.
+  Future<void> restore(int index, Song song) async {
+    await _loaded.future;
+    if (state.any((s) => s.id == song.id)) return;
+    final next = [...state];
+    next.insert(index.clamp(0, next.length), song);
+    state = next;
+    await _persist();
+  }
+
   Future<void> _persist() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();

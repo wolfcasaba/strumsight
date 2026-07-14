@@ -35,6 +35,31 @@ class SongListScreen extends ConsumerWidget {
     ));
   }
 
+  /// Delete with an UNDO affordance: the remove is applied (and persisted)
+  /// immediately, but a SnackBar lets the user restore the song at its
+  /// original position before the SnackBar dismisses (r187).
+  void _delete(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    int index,
+    Song song,
+  ) {
+    ref.read(songsProvider.notifier).remove(song.id);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.songDeleted),
+          action: SnackBarAction(
+            label: l10n.undo,
+            onPressed: () =>
+                ref.read(songsProvider.notifier).restore(index, song),
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -104,9 +129,8 @@ class SongListScreen extends ConsumerWidget {
                           IconButton(
                             icon: const Icon(Icons.delete_outline),
                             tooltip: l10n.songDelete,
-                            onPressed: () => ref
-                                .read(songsProvider.notifier)
-                                .remove(song.id),
+                            onPressed: () =>
+                                _delete(context, ref, l10n, i, song),
                           ),
                         ],
                       ),

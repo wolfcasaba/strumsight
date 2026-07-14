@@ -370,6 +370,8 @@
   },
   "songSave": "Mentés",
   "songDelete": "Törlés",
+  "songDeleted": "Dal törölve",
+  "undo": "Visszavonás",
   "songSuggest": "Javaslat",
   "songSuggestTitle": "Menet javaslása",
   "songKeyLabel": "Hangnem",

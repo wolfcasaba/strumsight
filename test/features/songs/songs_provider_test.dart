@@ -50,6 +50,28 @@ void main() {
     expect(c.read(songsProvider), isEmpty);
   });
 
+  test('restore re-inserts a removed song at its original position', () async {
+    final c = container();
+    final ctrl = c.read(songsProvider.notifier);
+    // List order after adds (newest-first): [Three, Two, One].
+    await ctrl.add(name: 'One', chords: ['G'], pattern: [d], bpm: 90);
+    await ctrl.add(name: 'Two', chords: ['C'], pattern: [d], bpm: 90);
+    await ctrl.add(name: 'Three', chords: ['D'], pattern: [d], bpm: 90);
+
+    final middle = c.read(songsProvider)[1]; // 'Two' at index 1
+    await ctrl.remove(middle.id);
+    expect(c.read(songsProvider).map((s) => s.name), ['Three', 'One']);
+
+    // Undo → back at index 1 with all fields intact.
+    await ctrl.restore(1, middle);
+    expect(c.read(songsProvider).map((s) => s.name), ['Three', 'Two', 'One']);
+    expect(c.read(songsProvider)[1].id, middle.id);
+
+    // Idempotent: restoring an already-present song is a no-op.
+    await ctrl.restore(1, middle);
+    expect(c.read(songsProvider).length, 3);
+  });
+
   test('songs persist across a fresh container (shared_preferences)', () async {
     final c1 = container();
     await c1.read(songsProvider.notifier).add(
