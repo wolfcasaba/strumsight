@@ -4,9 +4,17 @@ name: Chord model train (x86 CI)
 # real Klangio solo-guitar recordings on a fast x86 runner (the ARM dev box is
 # slow + unreliable for TF/GRU). Fetches Klangio at the SHA pinned in klangio.py,
 # builds CQT features + per-frame chord labels, trains, uploads eval + weights.
-# Manual trigger. See docs/plans/ml-chord-track.md.
+# Triggers: manual (workflow_dispatch) OR a push that touches the chord ML code
+# (path-filtered so it runs only for deliberate ML changes, not every commit) —
+# the latter lets the autonomous loop kick a training run with an ordinary push
+# when a token can't dispatch. See docs/plans/ml-chord-track.md.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ml/chords/**'
+      - '.github/workflows/chord-train.yml'
 jobs:
   chord-train:
     runs-on: ubuntu-latest
