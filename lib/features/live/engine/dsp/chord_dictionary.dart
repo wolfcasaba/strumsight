@@ -118,7 +118,13 @@ class ChordDictionary {
     ['7', [0, 4, 7, 10], [1.0, 0.9, 0.6, 0.9], 0.02], // dominant 7
     ['maj7', [0, 4, 7, 11], [1.0, 0.9, 0.6, 0.9], 0.055], // major 7
     ['m7', [0, 3, 7, 10], [1.0, 0.9, 0.6, 0.9], 0.055], // minor 7
-    ['sus4', [0, 5, 7], [1.0, 1.0, 0.7], 0.0], // suspended 4
+    // sus4 gets a real Occam handicap (round 181): with bias 0.0 it had NO
+    // guard, so on real audio a stray 4th (an adjacent chord's ring-out, a
+    // bass note, another instrument) flipped D→Dsus4 / G→Gsus4 (MEASURED on
+    // the SoundCloud probe). A genuine, sustained sus4 (root+4th+5th all clearly
+    // present) still beats the triad by far — the `C+F+G → Csus4` unit test
+    // holds — but a faint passing 4th no longer renames a plain triad.
+    ['sus4', [0, 5, 7], [1.0, 1.0, 0.7], 0.04], // suspended 4
     // dim/aug (round 78): they differ from m/maj only in the FIFTH — the
     // lightest chord tone — so the altered fifth carries FULL weight here
     // (it IS the distinguishing evidence) and a small rarity bias keeps
