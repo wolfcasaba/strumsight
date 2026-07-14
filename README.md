@@ -1,4 +1,5 @@
 # StrumSight APK downloads
 
-- **strumsight-build-179-voicefix.apk** — voice-rejection fix (chord no longer jumps on speech r176 / no longer drops out r177), commit 251a9a3.
-- strumsight-build-112.apk — earlier build (rounds 88-112).
+- **strumsight-build-181-chordfix.apk** — LATEST: voice-rejection (r176/177) + WAV import (r179) + sus4 chord fix (r181, real-song accuracy 50%->57%). commit cefe685.
+- strumsight-build-179-voicefix.apk — voice fix only.
+- strumsight-build-112.apk — older.
