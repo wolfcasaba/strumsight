@@ -9,6 +9,10 @@
   "micErrorAction": "Újra",
   "strumDown": "Le",
   "strumUp": "Fel",
+  "liveWaitingForChord": "Pengess egy akkordot…",
+  "@liveWaitingForChord": {
+    "description": "Idle prompt shown in the Live chord timeline before any chord is detected."
+  },
   "livePause": "Szünet",
   "liveResume": "Folytatás",
   "liveTuner": "Hangoló",

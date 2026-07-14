@@ -8,25 +8,23 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../chords/widgets/chord_diagram.dart';
 import '../../settings/providers/capo_provider.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../model/live_frame.dart';
-import '../model/strum.dart';
+import '../providers/chord_timeline_provider.dart';
 import '../providers/live_providers.dart';
 import '../widgets/beat_counter.dart';
-import '../widgets/chord_display.dart';
-import '../widgets/confidence_pill.dart';
+import '../widgets/chord_timeline.dart';
 import '../widgets/live_status_bar.dart';
-import '../widgets/strum_arrow.dart';
 import '../../progress/model/practice_entry.dart';
 import '../../progress/providers/practice_log_provider.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
 import '../../streak/widgets/streak_badge.dart';
 
-/// The Live "mirror": the hero screen. Big current chord + strum arrow +
-/// confidence + rolling beat counter, glanceable while both hands play.
+/// The Live "mirror": the hero screen. A horizontal chord timeline (newest
+/// chord large, previously recognised chords receding left, each with its ↓/↑
+/// strum direction) + rolling beat counter, glanceable while both hands play.
 class LiveScreen extends ConsumerStatefulWidget {
   const LiveScreen({super.key});
 
@@ -96,7 +94,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     _log = ref.read(practiceLogProvider.notifier);
     // Real playing detected → credit today's practice streak (once per visit;
     // the record call is itself idempotent per calendar day). RAG chunk 013.
@@ -120,7 +117,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // While paused the engine is stopped, so reflect "not listening" honestly.
     final frame =
         _paused ? (_frozen ?? live).copyWith(listening: false) : live;
-    final latest = frame.latestStrum;
+    // The rolling chord-timeline history (newest last), folded from the same
+    // live frames in [chordTimelineProvider].
+    final timeline = ref.watch(chordTimelineProvider);
     // Capo: the detector hears concert pitch; show the fretted shape (−capo).
     final capo = ref.watch(capoProvider);
 
@@ -132,9 +131,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        child: Stack(
-          children: [
-            Column(
+        child: Column(
             children: [
               Row(
                 children: [
@@ -155,38 +152,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   onRetry: () => ref.invalidate(liveFrameProvider),
                 ),
               Expanded(
-                child: Center(
-                  // scaleDown: the hero group is taller than the space left
-                  // on a landscape phone — scale it instead of overflowing.
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ChordDisplay(
-                          current: frame.current?.transposed(-capo),
-                          next: frame.next?.transposed(-capo),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          height: 116,
-                          child: Center(
-                            child: latest == null
-                                ? null
-                                : StrumArrow(
-                                    direction: latest.direction,
-                                    confidence: latest.confidence,
-                                    size: 84,
-                                    glow: true,
-                                    semanticLabel: _arrowLabel(l10n, latest),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        ConfidencePill(strum: latest),
-                      ],
-                    ),
-                  ),
+                // The chord-timeline filmstrip: newest chord big on the right,
+                // previously recognised chords receding left, each with its
+                // own ↓/↑ strum direction. Subsumes the old big-chord + arrow +
+                // confidence-pill hero and the fingering overlay.
+                child: ChordTimeline(
+                  events: timeline,
+                  next: frame.next,
+                  capo: capo,
+                  listening: !_paused && frame.listening,
                 ),
               ),
               if (frame.bar.isNotEmpty)
@@ -205,20 +179,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               ),
             ],
           ),
-            // The current chord's fretting, as a small non-intrusive overlay
-            // (top-left) so it never disturbs the tight hero layout.
-            if (!_paused && frame.current != null)
-              Positioned(
-                top: 40,
-                left: 0,
-                child: ChordDiagram(
-                  label: frame.current!.transposed(-capo).label,
-                  size: 60,
-                  showLabel: false,
-                ),
-              ),
-          ],
-        ),
         ),
       );
   }
@@ -230,11 +190,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       if (identical(frame.bar[i].strum, latest)) return i;
     }
     return null;
-  }
-
-  String _arrowLabel(AppLocalizations l10n, Strum s) {
-    final dir = s.isDown ? l10n.strumDown : l10n.strumUp;
-    return '$dir ${(s.confidence * 100).round()}%';
   }
 }
 

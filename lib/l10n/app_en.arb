@@ -9,6 +9,10 @@
   "micErrorAction": "Retry",
   "strumDown": "Down",
   "strumUp": "Up",
+  "liveWaitingForChord": "Play a chord…",
+  "@liveWaitingForChord": {
+    "description": "Idle prompt shown in the Live chord timeline before any chord is detected."
+  },
   "livePause": "Pause",
   "liveResume": "Resume",
   "liveTuner": "Tuner",

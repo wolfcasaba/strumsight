@@ -27,6 +27,7 @@ dependencies:
   audioplayers: ^6.8.0          # tuner reference tone / metronome click
   shared_preferences: ^2.3.2    # persist settings (theme, language, threshold)
   package_info_plus: ^10.1.0    # app version on the Settings screen
+  flutter_animate: ^4.5.2       # declarative UI motion (Live chord timeline, r185)
 
   # OPTIONAL account layer (login + cloud settings sync). Detection stays
   # 100% offline; the app is fully usable logged-out. See backend/.

@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-14** (round 184).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-14** (round 185).
 
 > 🤖 **ML TRACK GREEN-LIT (2026-07-12, user order):** research → plan → autonomous rounds. Plan:
 > `docs/plans/ml-track.md`. Round-134 discovery: the **ISMIR-2025 strum-direction dataset + code +
@@ -40,6 +40,7 @@ touches the network. Payments are out of scope.
 | Area | State | Where |
 |------|-------|-------|
 | **Live** screen — big chord, ↓/↑ arrow, confidence pill, `1 & 2 & 3 & 4` beat counter, status bar | ✅ REAL mic detection | `lib/features/live/` |
+| **Live — chord TIMELINE** (r185) — the old big-chord hero is now a **horizontal filmstrip**: newest chord = large **hero** card (mini fingering diagram + big ↓/↑ arrow + confidence bar, on surgical copper frosted glass), previous chords **recede left** (implicit AnimatedScale/AnimatedOpacity tween, tiers 1.0→0.72→0.55→0.42), each with its own ↓/↑. Spring-in enter (`easeOutBack`) + decoupled recognition flash (copper shimmer + micro scale-pulse) + directional strum flourish + one-shot light haptic per new chord (`flutter_animate`). Pure `reduceChordTimeline` (dedupes consecutive same-label, in-place strum update, cap-6 ring buffer, concert-pitch storage + view-time −capo) folded from `liveFrameProvider` by an **autoDispose** `chordTimelineProvider` (autoDispose is load-bearing — a plain provider would pin the mic on after leaving Live). Verified: 12 new tests (property invariants + widget + C1 mic-release regression guard) + reviewer + devil-advocate passes. **DEFERRED:** the spec's free-running BPM beat-pulse — a metronomic loop would be an infinite animation (breaks `pumpAndSettle` in every Live-mounting test); the hero currently pulses per-strum via the recognition flash. **Real-guitar APK test still the final gate.** | ✅ **round 185** (added `flutter_animate ^4.5.2`, win32 pin intact) | `lib/features/live/widgets/chord_timeline*.dart`, `providers/chord_timeline_provider.dart`, `model/chord_event.dart` |
 | **Tuner** — note + cents gauge + in-tune indicator; **mic-error banner + Retry** (parity with Live, round 68; shared `MicErrorBanner` in `core/widgets/`) | ✅ REAL YIN pitch (mic) | `lib/features/tuner/` |
 | **Settings** — theme (persisted), lang en/hu, confidence threshold (persisted), version | ✅ built | `lib/features/settings/` |
 | **DSP pipeline** — whitened spectral-flux onsets, **NNLS bass+treble chroma → chord-dictionary + Viterbi** chord, sub-band strum ↓/↑, median-IOI tempo | ✅ pure Dart, runs in isolate | `lib/features/live/engine/dsp/` |
