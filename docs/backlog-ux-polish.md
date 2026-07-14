@@ -18,6 +18,6 @@ devil-advocate → fix → CI green → next.
 | 9 | **First-run Live empty state** = bare text → icon + hint + subtle pulse | `live/widgets/chord_timeline.dart` (empty branch) | S | ✅ r187 |
 | 10 | **Streak credited on first strum** (a stray noise credits the day) — gate on `_strokeCount >= N` or elapsed time | `live_screen.dart:109` | S | ✅ r188 |
 | 11 | **`next` ghost never animates in/out** → AnimatedOpacity/fadeIn keyed on label | `live/widgets/chord_timeline.dart` `_nextGhost` | S | ✅ r187 |
-| 12 | **Shared `EmptyState` widget** for consistent first-run across Analyze/Live/Library/Progress | `core/widgets/` + callers | S | ☐ |
+| 12 | **Shared `EmptyState` widget** for consistent first-run across Analyze/Live/Library/Progress | `core/widgets/` + callers | S | ✅ r190 |
 
 Already good (scout): silent catches limited to intentional haptic/wakelock no-ops; providers dispose correctly; `ref` captured before dispose; strings go through ARB.

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/providers/streak_provider.dart';
 import '../../streak/streak_logic.dart';
@@ -64,7 +65,10 @@ class ProgressScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: stats.totalSessions == 0
-            ? _Empty(text: l10n.progressEmpty)
+            ? EmptyState(
+                icon: Icons.insights_outlined,
+                title: l10n.progressEmpty,
+              )
             : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
@@ -468,29 +472,6 @@ class _Stat extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall),
         ],
-      ),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.insights_outlined,
-                size: 56, color: AppColors.primary.withValues(alpha: 0.6)),
-            const SizedBox(height: 16),
-            Text(text, textAlign: TextAlign.center),
-          ],
-        ),
       ),
     );
   }

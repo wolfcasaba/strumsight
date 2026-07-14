@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../live/model/chord.dart';
 import '../../settings/providers/capo_provider.dart';
@@ -46,7 +47,10 @@ class LibraryScreen extends ConsumerWidget {
                       style: TextStyle(color: palette.muted)),
                 ),
                 data: (sessions) => sessions.isEmpty
-                    ? _EmptyState(text: l10n.libraryIntro)
+                    ? EmptyState(
+                        icon: Icons.library_music_outlined,
+                        title: l10n.libraryIntro,
+                      )
                     : ListView.separated(
                         itemCount: sessions.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -62,38 +66,6 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.library_music_outlined, size: 56, color: palette.muted),
-          const SizedBox(height: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 300),
-            child: Text(
-              text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                height: 1.45,
-                color: palette.muted,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

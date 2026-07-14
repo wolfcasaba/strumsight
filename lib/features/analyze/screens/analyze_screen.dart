@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/model/analyzed_session.dart';
 import '../../library/providers/library_providers.dart';
@@ -129,7 +130,13 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     final palette = context.palette;
     switch (state.phase) {
       case AnalyzePhase.idle:
+        return EmptyState(
+          icon: Icons.multitrack_audio,
+          title: l10n.analyzeIntro,
+        );
       case AnalyzePhase.micDenied:
+        // Kept bespoke: this variant needs an action button (open settings)
+        // below the copy, which the icon+title EmptyState doesn't model.
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -137,9 +144,7 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
               Icon(Icons.multitrack_audio, size: 56, color: palette.muted),
               const SizedBox(height: 16),
               Text(
-                state.phase == AnalyzePhase.micDenied
-                    ? l10n.micPermissionBody
-                    : l10n.analyzeIntro,
+                l10n.micPermissionBody,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Poppins',
@@ -148,13 +153,11 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
                   color: palette.muted,
                 ),
               ),
-              if (state.phase == AnalyzePhase.micDenied) ...[
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: openAppSettings,
-                  child: Text(l10n.micPermissionAction),
-                ),
-              ],
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: openAppSettings,
+                child: Text(l10n.micPermissionAction),
+              ),
             ],
           ),
         );

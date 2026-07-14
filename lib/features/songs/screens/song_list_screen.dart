@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/screens/learn_screen.dart';
 import '../../share/screens/share_preview_screen.dart';
@@ -87,7 +88,10 @@ class SongListScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: songs.isEmpty
-            ? _Empty(text: l10n.songsEmpty)
+            ? EmptyState(
+                icon: Icons.library_music_outlined,
+                title: l10n.songsEmpty,
+              )
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                 itemCount: songs.length,
@@ -138,29 +142,6 @@ class SongListScreen extends ConsumerWidget {
                   );
                 },
               ),
-      ),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.library_music_outlined,
-                size: 56, color: AppColors.primary.withValues(alpha: 0.6)),
-            const SizedBox(height: 16),
-            Text(text, textAlign: TextAlign.center),
-          ],
-        ),
       ),
     );
   }
