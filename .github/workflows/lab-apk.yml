@@ -1,0 +1,41 @@
+name: Lab APK (diagnostics build)
+
+# Builds a "Lab mode" APK wired to the diagnostics tunnel: the STRUMSIGHT_API_URL
+# + STRUMSIGHT_DIAG_TOKEN come from lab_build.json via --dart-define-from-file, so
+# the user's opt-in Lab mode uploads real-guitar sessions to the box for analysis.
+#
+# Triggers on a push that touches lab_build.json (or this workflow) — the token
+# can't workflow_dispatch, so editing lab_build.json (e.g. when the cloudflared
+# quick-tunnel URL changes) kicks a fresh build. NOTE: the token here is a
+# throwaway spam-gate for a diagnostics endpoint on an ephemeral tunnel, not a
+# secret protecting user data — rotate/kill it after testing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lab_build.json'
+      - '.github/workflows/lab-apk.yml'
+  workflow_dispatch:
+jobs:
+  lab-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Lean build — the main build-apk workflow already runs the analyze/test
+      # gates on every push; this one just produces the diagnostics-wired APK.
+      - run: flutter build apk --release --dart-define-from-file=lab_build.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strumsight-lab-apk
+          if-no-files-found: error
+          path: build/app/outputs/flutter-apk/app-release.apk
