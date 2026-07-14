@@ -4,7 +4,7 @@ Run locally:  uvicorn app.main:app --reload
 Docs:         http://127.0.0.1:8000/docs
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
@@ -62,6 +62,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    @app.get("/download", tags=["meta"])
+    def download_apk():
+        """Serve the staged Lab-mode APK for easy on-phone install over the
+        (already-authorized) diagnostics tunnel — set STRUMSIGHT_APK_PATH on the
+        box. Generic (points at a file), no secret in the code."""
+        import os
+
+        from fastapi.responses import FileResponse
+        path = os.environ.get("STRUMSIGHT_APK_PATH", "")
+        if not path or not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail="no APK staged")
+        return FileResponse(path, media_type="application/vnd.android.package-archive",
+                            filename="strumsight-lab.apk")
 
     return app
 
