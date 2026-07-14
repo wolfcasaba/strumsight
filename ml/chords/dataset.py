@@ -94,7 +94,8 @@ def build(data_dir: str = DATA_DIR, win: int = 100, step: int = 50,
     return X, Y, rec, ids
 
 
-def build_synth(n_songs: int, seed: int, win: int = 100, step: int = 50):
+def build_synth(n_songs: int, seed: int, win: int = 100, step: int = 50,
+                seconds_per_chord: float = 1.0):
     """Build a SYNTHETIC full-band chord dataset (same convention as `build`).
 
     Renders `n_songs` full-band songs with `synth_songs.render_dataset` (pure
@@ -109,7 +110,8 @@ def build_synth(n_songs: int, seed: int, win: int = 100, step: int = 50):
     """
     from chords import synth_songs
 
-    songs = synth_songs.render_dataset(n_songs, seed=seed)
+    songs = synth_songs.render_dataset(
+        n_songs, seed=seed, seconds_per_chord=seconds_per_chord)
     Xs, Ys, recs = [], [], []
     for k, (pcm, events) in enumerate(songs):
         feat = cqt.cqt(pcm, cqt.SR).astype(np.float32)          # (F, 144)
