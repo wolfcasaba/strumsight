@@ -4,6 +4,7 @@ import '../../live/engine/dsp/dsp_config.dart';
 import '../../live/engine/dsp/live_pipeline.dart';
 import '../../live/engine/dsp/nnls_chroma.dart';
 import '../../live/engine/dsp/strum_direction_classifier.dart';
+import '../../live/engine/dsp/chord_dictionary.dart';
 import '../../live/engine/dsp/viterbi_chord_decoder.dart';
 import '../../live/model/strum.dart';
 import '../model/analyze_result.dart';
@@ -32,6 +33,7 @@ class ClipAnalyzer {
     this.chunkSize = 2048,
     this.strumRefiner,
     this.chromaMedianWindow = 1,
+    this.bassWeight,
   });
 
   /// How many samples to feed per step (mirrors a mic callback size).
@@ -43,6 +45,12 @@ class ClipAnalyzer {
   /// chord tones are sustained, so a per-pitch-class median over a few hops
   /// removes the transients and the spurious chords they cause. Odd, e.g. 5.
   final int chromaMedianWindow;
+
+  /// Bass-register cosine weight for the BATCH chord dictionary (round 182,
+  /// null = use `DspConfig.chordBassWeight`). On full-band audio the bass often
+  /// plays passing/walking notes that drag the root to the wrong chord; a lower
+  /// bass weight leans on the treble (chord) evidence. Treble weight = 1−bass.
+  final double? bassWeight;
 
   /// Optional direction re-labeler (the CRNN, r164 A/B: 86.7 % vs the
   /// heuristic's 38.9 % on real recordings). Null → heuristic labels stand;
@@ -162,8 +170,16 @@ class ClipAnalyzer {
         ? ChromaDenoise.temporalMedian(trebleFrames, window: chromaMedianWindow)
         : trebleFrames;
 
+    final bw = bassWeight;
     final decoder = ViterbiChordDecoder(
       selfBonus: DspConfig.chordSelfTransitionBonus,
+      dictionary: bw == null
+          ? null
+          : ChordDictionary(
+              bassWeight: bw,
+              trebleWeight: 1 - bw,
+              noChordScore: DspConfig.chordNoChordScore,
+            ),
     );
     final path = decoder.decodeBatch(bass, treble);
 

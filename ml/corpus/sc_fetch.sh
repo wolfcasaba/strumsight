@@ -37,6 +37,11 @@ grab () {  # label  scsearch-query  [count]
 grab "guitar_C-G-Am-F_backing"  "C G Am F acoustic guitar backing track" 2
 grab "guitar_G-D-Em-C_backing"  "G D Em C guitar backing track" 2
 grab "guitar_Em-C-G-D_progression" "Em C G D acoustic guitar progression" 1
+grab "guitar_C-G-Am-F_chords"   "C G Am F guitar chords" 2
+grab "guitar_G-C-D_backing"     "G C D guitar backing track" 2
+grab "guitar_Am-G-C-F_prog"     "Am G C F chord progression guitar" 2
+grab "guitar_D-A-G_backing"     "D A G acoustic guitar backing" 1
+grab "guitar_E-A-D_chords"      "E A D guitar chords progression" 1
 # --- SOLO guitar (the LIVE-use domain: single instrument, into a mic) ---
 grab "guitar_solo_fingerstyle"  "fingerstyle guitar cover" 2
 grab "guitar_solo_classical"    "classical guitar practice" 1

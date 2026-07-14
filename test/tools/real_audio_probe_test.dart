@@ -223,12 +223,13 @@ double _chordShownAt(String path, double rise,
 
 /// Analyze-path chord accuracy (inSet% by chord-time) at a given temporal-
 /// median window, for one named-chord clip.
-double _analyzeInSetAt(String path, Set<String> expected, int window) {
+double _analyzeInSetAt(String path, Set<String> expected, int window,
+    [double? bassWeight]) {
   final (full, sr) = _readWav(path);
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
-  final res =
-      ClipAnalyzer(chromaMedianWindow: window).analyze(pcm.toList(), sr);
+  final res = ClipAnalyzer(chromaMedianWindow: window, bassWeight: bassWeight)
+      .analyze(pcm.toList(), sr);
   var inSet = 0.0, total = 0.0;
   for (final c in res.chords) {
     final d = c.endSec - c.startSec;
@@ -320,6 +321,28 @@ void main() {
     }
     // ignore: avoid_print
     print('inSet% ${row.join()}   (window 1 = current/off; want higher)');
+
+    // Bass-weight sweep (the direct lever for wrong-ROOT chords from bass
+    // passing notes on full-band audio). Default is 0.35.
+    const bws = [0.15, 0.25, 0.35, 0.45];
+    // ignore: avoid_print
+    print('\n=== ANALYZE bass-weight sweep: avg inSet% (window 1) ===');
+    // ignore: avoid_print
+    print('bassW  ${bws.map((b) => b.toStringAsFixed(2).padLeft(6)).join()}');
+    final brow = <String>[];
+    for (final b in bws) {
+      final vals = <double>[];
+      for (final (file, _) in clips) {
+        final exp = _expectedChords(file.path.split('/').last);
+        final v = _analyzeInSetAt(file.path, exp, 1, b);
+        if (v >= 0) vals.add(v);
+      }
+      final avg =
+          vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
+      brow.add(avg.toStringAsFixed(1).padLeft(6));
+    }
+    // ignore: avoid_print
+    print('inSet% ${brow.join()}   (0.35 = current)');
   });
 
   test('REAL-AUDIO strum-onset separability — ZCR & low-band ratio (A residual)',
