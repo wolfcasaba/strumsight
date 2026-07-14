@@ -52,10 +52,12 @@ class StrumArrow extends StatelessWidget {
     );
 
     if (glow) {
+      // A crisp halo, not a smudge: a tighter, slightly stronger blur reads as
+      // a deliberate glow around the mark rather than a diffuse wash.
       paint = DecoratedBox(
         decoration: BoxDecoration(
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: size * 0.5),
+            BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: size * 0.38),
           ],
         ),
         child: paint,
@@ -96,8 +98,8 @@ class _StrumArrowPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final cx = w / 2;
-    final hw = w * 0.32; // half-width of the arrowhead
-    final hh = h * 0.30; // height of the arrowhead
+    final hw = w * 0.31; // half-width of the arrowhead
+    final hh = h * 0.33; // height of the arrowhead (taller → a crisper point)
 
     final line = Paint()
       ..color = color
@@ -118,13 +120,23 @@ class _StrumArrowPainter extends CustomPainter {
     final right = Offset(cx + hw, baseY);
 
     if (tier == 2) {
-      // High: filled arrowhead.
+      // High: filled arrowhead. A matching round-join stroke outline crisps the
+      // tip + shoulders (a bare fill leaves them mathematically sharp but
+      // aliased at small sizes).
       final head = Path()
         ..moveTo(tip.dx, tip.dy)
         ..lineTo(left.dx, left.dy)
         ..lineTo(right.dx, right.dy)
         ..close();
       canvas.drawPath(head, Paint()..color = color..style = PaintingStyle.fill);
+      canvas.drawPath(
+        head,
+        Paint()
+          ..color = color
+          ..strokeWidth = stroke * 0.5
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke,
+      );
     } else {
       // Mid & low: open chevron.
       final chevron = Paint()

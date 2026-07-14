@@ -164,12 +164,12 @@ class ChordTimeline extends StatelessWidget {
       child: AnimatedOpacity(
         key: ValueKey(event.seq),
         opacity: opacity,
-        duration: 260.ms,
-        curve: Curves.easeOut,
+        duration: 340.ms,
+        curve: Curves.easeOutCubic,
         child: AnimatedScale(
           scale: scale,
-          duration: 260.ms,
-          curve: Curves.easeOut,
+          duration: 340.ms,
+          curve: Curves.easeOutCubic,
           child: ChordTimelineCard(
             event: event,
             isHero: false,
@@ -183,10 +183,11 @@ class ChordTimeline extends StatelessWidget {
   // --- Hero card: spring-in from the right + decoupled recognition flash -----
 
   Widget _heroCard(BuildContext context, ChordEvent hero, int beat) {
-    // Directional strum flourish: down nudges downward, up nudges upward.
+    // Directional strum flourish: down settles from just-above, up from
+    // just-below — a small, calm nudge (not a bounce) that reads the ↓/↑ intent.
     final dirBegin = switch (hero.direction) {
-      StrumDirection.down => 0.3,
-      StrumDirection.up => -0.3,
+      StrumDirection.down => 0.16,
+      StrumDirection.up => -0.16,
       null => 0.0,
     };
 
@@ -197,54 +198,62 @@ class ChordTimeline extends StatelessWidget {
       capo: capo,
     );
 
-    // INNERMOST: a single subtle beat-pulse per engine beat. flutter_animate
-    // replays a keyed .animate by REMOUNTING it, so this MUST be the innermost
-    // wrapper — a beat-index change then remounts only the (cheap, stateless)
-    // card below it, NOT the flash/enter animations above it. (If it were the
-    // outer wrapper, every beat would remount the whole subtree and replay the
-    // spring-in entrance ~2×/sec — a glitch the beat==0 tests never surface.)
-    // Finite scale each time, so `pumpAndSettle` still terminates.
-    card = card
-        .animate(key: ValueKey('beat-$beat'))
-        .scaleXY(begin: 1.035, end: 1.0, duration: 150.ms, curve: Curves.easeOut);
+    // INNERMOST: a single, whisper-subtle beat-pulse per engine beat.
+    // flutter_animate replays a keyed .animate by REMOUNTING it, so this MUST
+    // be the innermost wrapper — a beat-index change then remounts only the
+    // (cheap, stateless) card below it, NOT the flash/enter animations above it.
+    // (If it were the outer wrapper, every beat would remount the whole subtree
+    // and replay the entrance ~2×/sec — a glitch the beat==0 tests never
+    // surface.) Finite scale each time, so `pumpAndSettle` still terminates.
+    card = card.animate(key: ValueKey('beat-$beat')).scaleXY(
+          begin: 1.022,
+          end: 1.0,
+          duration: 180.ms,
+          curve: Curves.easeOutCubic,
+        );
 
-    // Middle: recognition flash + micro scale-pulse + directional flourish.
-    // Keyed by seq+direction so it re-fires when a strum lands on the same
-    // chord (direction/confidence update in place) as well as on a new chord.
+    // MIDDLE: the recognition beat — one coherent gesture, not a pile-up. A
+    // soft copper shimmer sweep + a single directional settle. (The old
+    // competing 1.06→1.0 scale-pulse was dropped: it fought the entrance's
+    // scale and made "landing" read as two separate pops.) Keyed by
+    // seq+direction so it re-fires when a strum lands on the same held chord
+    // (direction/confidence update in place) as well as on a new chord.
     card = card
         .animate(key: ValueKey('flash-${hero.seq}-${hero.direction}'))
         .shimmer(
-          duration: 220.ms,
-          color: AppColors.primary.withValues(alpha: 0.5),
+          duration: 320.ms,
+          color: AppColors.primary.withValues(alpha: 0.28),
         )
-        .scaleXY(begin: 1.06, end: 1.0, duration: 150.ms, curve: Curves.easeOut)
         .slideY(
           begin: dirBegin,
           end: 0,
-          duration: 150.ms,
-          curve: Curves.easeOut,
+          duration: 260.ms,
+          curve: Curves.easeOutCubic,
         );
 
-    // OUTERMOST: the spring-in entrance; fire a light haptic on each new hero.
-    // Keyed by seq alone so it plays once per NEW chord and is untouched by
-    // beat/direction changes (no re-entrance while a chord holds).
+    // OUTERMOST: a smooth glide-in entrance (no overshoot); fire a light haptic
+    // on each new hero. easeOutCubic decelerates cleanly instead of the old
+    // easeOutBack bounce, and the slide/scale start closer to their resting
+    // values so the chord arrives composed rather than springing. Keyed by seq
+    // alone so it plays once per NEW chord and is untouched by beat/direction
+    // changes (no re-entrance while a chord holds).
     card = card
         .animate(
           key: ValueKey('enter-${hero.seq}'),
           onPlay: (_) => _lightHaptic(),
         )
+        .fadeIn(duration: 300.ms, curve: Curves.easeOutCubic)
         .slideX(
-          begin: 0.3,
+          begin: 0.16,
           end: 0,
-          duration: 250.ms,
-          curve: Curves.easeOutBack,
+          duration: 340.ms,
+          curve: Curves.easeOutCubic,
         )
-        .fadeIn(duration: 250.ms)
         .scaleXY(
-          begin: 0.9,
+          begin: 0.95,
           end: 1.0,
-          duration: 250.ms,
-          curve: Curves.easeOutBack,
+          duration: 340.ms,
+          curve: Curves.easeOutCubic,
         );
 
     return card;
@@ -290,7 +299,9 @@ class ChordTimeline extends StatelessWidget {
             ),
           ],
         ),
-      ).animate(key: ValueKey('ghost-$label')).fadeIn(duration: 200.ms),
+      )
+          .animate(key: ValueKey('ghost-$label'))
+          .fadeIn(duration: 280.ms, curve: Curves.easeOutCubic),
     );
   }
 
