@@ -87,7 +87,8 @@ class _Probe {
   double tonalP50 = 0;
   double confP50 = 0;
   double confP90 = 0;
-  double inSetPct = -1; // % of shown-chord frames whose label ∈ named chords
+  double inSetPct = -1; // LIVE: % of shown-chord frames whose label ∈ named
+  double analyzeInSetPct = -1; // ANALYZE/batch: % of chord-TIME in the named set
   double rawConfP90 = 0; // raw match confidence ceiling over ALL frames
   final Set<String> expected = {};
   final Set<String> labels = {};
@@ -103,6 +104,8 @@ class _Probe {
         'confP50': double.parse(confP50.toStringAsFixed(3)),
         'confP90': double.parse(confP90.toStringAsFixed(3)),
         if (inSetPct >= 0) 'inSetPct': double.parse(inSetPct.toStringAsFixed(1)),
+        if (analyzeInSetPct >= 0)
+          'analyzeInSetPct': double.parse(analyzeInSetPct.toStringAsFixed(1)),
         if (expected.isNotEmpty) 'expected': (expected.toList()..sort()),
         'labels': labels.toList()..sort(),
       };
@@ -175,10 +178,22 @@ _Probe _run(String path, String kind) {
   p.rawConfP90 = pct(rawConfs, 0.9);
   if (p.expected.isNotEmpty && shown > 0) p.inSetPct = 100.0 * inSet / shown;
 
-  // ANALYZE path — the batch timeline.
+  // ANALYZE path — the batch timeline (the "analyze an imported song" path).
   final res = const ClipAnalyzer().analyze(pcm.toList(), sr);
   p.analyzeChords = res.chords.length;
   p.analyzeStrums = res.strums.length;
+  // Analyze-path chord accuracy: fraction of chord-TIME whose label ∈ the
+  // song's named progression (the batch/import metric to improve for full-band).
+  if (p.expected.isNotEmpty && res.chords.isNotEmpty) {
+    var inSetSec = 0.0, totalSec = 0.0;
+    for (final c in res.chords) {
+      final d = c.endSec - c.startSec;
+      if (d <= 0) continue;
+      totalSec += d;
+      if (p.expected.contains(c.label)) inSetSec += d;
+    }
+    if (totalSec > 0) p.analyzeInSetPct = 100.0 * inSetSec / totalSec;
+  }
   return p;
 }
 
@@ -204,6 +219,24 @@ double _chordShownAt(String path, double rise,
     }
   }
   return frames == 0 ? 0 : 100.0 * shown / frames;
+}
+
+/// Analyze-path chord accuracy (inSet% by chord-time) at a given temporal-
+/// median window, for one named-chord clip.
+double _analyzeInSetAt(String path, Set<String> expected, int window) {
+  final (full, sr) = _readWav(path);
+  final cap = (sr * _maxSeconds).round();
+  final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
+  final res =
+      ClipAnalyzer(chromaMedianWindow: window).analyze(pcm.toList(), sr);
+  var inSet = 0.0, total = 0.0;
+  for (final c in res.chords) {
+    final d = c.endSec - c.startSec;
+    if (d <= 0) continue;
+    total += d;
+    if (expected.contains(c.label)) inSet += d;
+  }
+  return total <= 0 ? -1 : 100.0 * inSet / total;
 }
 
 List<(File, String)> _discover() {
@@ -259,6 +292,34 @@ void main() {
       // ignore: avoid_print
       print('${kind.padRight(7)} ${row.join()}');
     }
+  });
+
+  test('REAL-AUDIO analyze chroma-median sweep — inSet% vs window (full-band)',
+      () {
+    if (!_enabled) return; // dev-only; set DSP_PROBE=1
+    final clips = _discover()
+        .where((c) => _expectedChords(c.$1.path.split('/').last).isNotEmpty)
+        .toList();
+    if (clips.isEmpty) return;
+    const windows = [1, 3, 5, 7, 9, 13];
+    // ignore: avoid_print
+    print('\n=== ANALYZE chroma-median sweep: avg inSet% by window (round 182) ===');
+    // ignore: avoid_print
+    print('window ${windows.map((w) => w.toString().padLeft(6)).join()}');
+    final row = <String>[];
+    for (final w in windows) {
+      final vals = <double>[];
+      for (final (file, _) in clips) {
+        final exp = _expectedChords(file.path.split('/').last);
+        final v = _analyzeInSetAt(file.path, exp, w);
+        if (v >= 0) vals.add(v);
+      }
+      final avg =
+          vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
+      row.add(avg.toStringAsFixed(1).padLeft(6));
+    }
+    // ignore: avoid_print
+    print('inSet% ${row.join()}   (window 1 = current/off; want higher)');
   });
 
   test('REAL-AUDIO strum-onset separability — ZCR & low-band ratio (A residual)',
@@ -402,8 +463,20 @@ void main() {
     if (gt.isNotEmpty) {
       final acc = gt.map((p) => p.inSetPct).reduce((a, b) => a + b) / gt.length;
       // ignore: avoid_print
-      print('CHORD ACCURACY (named-chord clips, n=${gt.length}): '
-          'avg inSet% = ${acc.toStringAsFixed(1)}  (want ~100 — shown chord is IN the song\'s progression)');
+      print('CHORD ACCURACY LIVE   (n=${gt.length}): avg inSet% = ${acc.toStringAsFixed(1)}  (want ~100)');
+    }
+    final ga = probes.where((p) => p.analyzeInSetPct >= 0).toList();
+    if (ga.isNotEmpty) {
+      final acc =
+          ga.map((p) => p.analyzeInSetPct).reduce((a, b) => a + b) / ga.length;
+      // ignore: avoid_print
+      print('CHORD ACCURACY ANALYZE (n=${ga.length}): avg inSet% = ${acc.toStringAsFixed(1)}  '
+          '(the import/analyze-a-song metric to lift for full-band)');
+      for (final p in ga) {
+        // ignore: avoid_print
+        print('   ${p.analyzeInSetPct.toStringAsFixed(0).padLeft(3)}%  ${p.name}  '
+            'exp=${(p.expected.toList()..sort()).join(",")}');
+      }
     }
 
     File('ml/corpus/report.json').writeAsStringSync(

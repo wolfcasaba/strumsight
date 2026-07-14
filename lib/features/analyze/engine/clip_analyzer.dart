@@ -7,6 +7,7 @@ import '../../live/engine/dsp/strum_direction_classifier.dart';
 import '../../live/engine/dsp/viterbi_chord_decoder.dart';
 import '../../live/model/strum.dart';
 import '../model/analyze_result.dart';
+import 'chroma_denoise.dart';
 
 /// Re-labels each detected strum's direction at its attack time — the CRNN
 /// deployment seam (r165). Given the whole clip and the attack times, returns
@@ -27,10 +28,21 @@ typedef StrumRefiner = List<StrumClassification> Function(
 ///   can end a clip on a wrong label (measured: C·G·Am·F @0.8 s each gave 7
 ///   segments ending in Csus4); the batch path yields the clean 4.
 class ClipAnalyzer {
-  const ClipAnalyzer({this.chunkSize = 2048, this.strumRefiner});
+  const ClipAnalyzer({
+    this.chunkSize = 2048,
+    this.strumRefiner,
+    this.chromaMedianWindow = 1,
+  });
 
   /// How many samples to feed per step (mirrors a mic callback size).
   final int chunkSize;
+
+  /// Temporal-median denoise window (in chord hops) applied to the batch
+  /// chroma before Viterbi (round 182). 1 = off (unchanged). On FULL-BAND
+  /// audio, drum hits and bass passing-notes are transient (1-frame) while
+  /// chord tones are sustained, so a per-pitch-class median over a few hops
+  /// removes the transients and the spurious chords they cause. Odd, e.g. 5.
+  final int chromaMedianWindow;
 
   /// Optional direction re-labeler (the CRNN, r164 A/B: 86.7 % vs the
   /// heuristic's 38.9 % on real recordings). Null → heuristic labels stand;
@@ -141,10 +153,19 @@ class ClipAnalyzer {
     }
     if (bassFrames.isEmpty) return const [];
 
+    // Temporal-median denoise (round 182): strip transient drum/passing-note
+    // spikes so they can't fake a chord on full-band audio (off at window 1).
+    final bass = chromaMedianWindow > 1
+        ? ChromaDenoise.temporalMedian(bassFrames, window: chromaMedianWindow)
+        : bassFrames;
+    final treble = chromaMedianWindow > 1
+        ? ChromaDenoise.temporalMedian(trebleFrames, window: chromaMedianWindow)
+        : trebleFrames;
+
     final decoder = ViterbiChordDecoder(
       selfBonus: DspConfig.chordSelfTransitionBonus,
     );
-    final path = decoder.decodeBatch(bassFrames, trebleFrames);
+    final path = decoder.decodeBatch(bass, treble);
 
     final chords = <TimelineChord>[];
     String? openLabel;
