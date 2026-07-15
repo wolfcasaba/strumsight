@@ -379,15 +379,23 @@ def test_eval_predict_frames_windowing_is_exact():
     # non-multiples of WIN.
     from chords import eval_guitarset as E
     for F in (1, 99, 100, 101, 250, 323):
-        pred = E.predict_frames(_StubModel(), np.zeros((F, 144), np.float32))
+        pred, pred_nonc = E.predict_frames(
+            _StubModel(), np.zeros((F, 144), np.float32))
         assert pred.shape == (F,), (F, pred.shape)
         assert pred.dtype == np.int32
         assert pred.tolist() == [i % 25 for i in range(F)], F
+        # The N.C.-suppressed variant is the same shape and NEVER emits class 0
+        # (r202b: it prices the model's bail-to-no-chord escape hatch).
+        assert pred_nonc.shape == (F,), (F, pred_nonc.shape)
+        assert pred_nonc.dtype == np.int32
+        assert 0 not in pred_nonc.tolist(), F
 
 
 def test_eval_predict_frames_empty():
     from chords import eval_guitarset as E
-    assert E.predict_frames(_StubModel(), np.zeros((0, 144), np.float32)).size == 0
+    pred, pred_nonc = E.predict_frames(
+        _StubModel(), np.zeros((0, 144), np.float32))
+    assert pred.size == 0 and pred_nonc.size == 0
 
 
 def test_eval_win_matches_the_trained_model_input():

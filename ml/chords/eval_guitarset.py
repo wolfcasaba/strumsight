@@ -143,24 +143,37 @@ def load_model(npz_path: str):
     return build_loaded_model(weights), mean, std
 
 
-def predict_frames(model, feat_norm: np.ndarray) -> np.ndarray:
-    """Per-frame argmax classes for a whole take -> (F,) int32.
+def predict_frames(model, feat_norm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Per-frame argmax classes for a whole take -> (plain, noNC) each (F,) int32.
 
     The model's Input is a fixed (WIN,144), so a take is cut into NON-OVERLAPPING
     WIN-frame chunks (every frame predicted exactly once — no averaging that
     could flatter the score), the tail zero-padded and trimmed back off. Weights
     are length-independent, so this is the same function the app's windowed path
     would compute.
+
+    Returns TWO predictions:
+      * `plain` — the model's own argmax over all 25 classes.
+      * `noNC`  — argmax restricted to the 24 CHORD classes (N.C. suppressed).
+        r202 found the model bails to N.C. on ~25% of real frames while the
+        GuitarSet sheet truth is gapless (0.17% N.C.), so this variant prices
+        exactly how much that escape hatch costs. It is a MEASUREMENT, not a
+        shipping decision — the app must still be able to say "no chord" when
+        nothing is played (that call belongs to the presence gate, not here).
     """
     F = feat_norm.shape[0]
     if F == 0:
-        return np.zeros((0,), dtype=np.int32)
+        z = np.zeros((0,), dtype=np.int32)
+        return z, z
     n_chunks = -(-F // WIN)                       # ceil
     buf = np.zeros((n_chunks * WIN, feat_norm.shape[1]), dtype=np.float32)
     buf[:F] = feat_norm
     batch = buf.reshape(n_chunks, WIN, feat_norm.shape[1])
     probs = model.predict(batch, verbose=0)       # (n_chunks, WIN, 25)
-    return probs.reshape(-1, probs.shape[-1]).argmax(-1)[:F].astype(np.int32)
+    flat = probs.reshape(-1, probs.shape[-1])[:F]
+    plain = flat.argmax(-1).astype(np.int32)
+    no_nc = (flat[:, 1:].argmax(-1) + 1).astype(np.int32)
+    return plain, no_nc
 
 
 # --------------------------------------------------------------------------- #
@@ -218,6 +231,10 @@ def main() -> int:
     model, mean, std = load_model(npz)
 
     overall, chord_only = Acc(), Acc()
+    # r202b: the same frames scored with N.C. removed from the model's choices —
+    # prices the model's 'bail to no-chord' escape hatch (measurement only).
+    overall_nonc = Acc()
+    by_mode_nonc = collections.defaultdict(Acc)
     by_guitarist = collections.defaultdict(Acc)
     by_mode = collections.defaultdict(Acc)
     by_style = collections.defaultdict(Acc)
@@ -234,14 +251,17 @@ def main() -> int:
             if feat.shape[0] == 0:
                 continue
             y_true = guitarset.frame_labels(segs, feat.shape[0], cqt.HOP, cqt.SR)
-            y_pred = predict_frames(model, (feat - mean) / std)
+            y_pred, y_pred_nonc = predict_frames(model, (feat - mean) / std)
         except Exception as e:  # one bad take must not sink a 360-track run
             print(f"[warn] {os.path.basename(wav_path)}: {e}", file=sys.stderr)
             continue
 
         hit = (y_pred == y_true)
+        hit_nonc = (y_pred_nonc == y_true)
         n = hit.size
         overall.add(hit.sum(), n)
+        overall_nonc.add(hit_nonc.sum(), n)
+        by_mode_nonc[mode].add(hit_nonc.sum(), n)
         by_guitarist[gid].add(hit.sum(), n)
         by_mode[mode].add(hit.sum(), n)
         by_style[style].add(hit.sum(), n)
@@ -282,6 +302,15 @@ def main() -> int:
     lines.append("")
     lines.append(_fmt("frame_wcsr", overall))
     lines.append(_fmt("chord_only(excl N.C.)", chord_only))
+    lines.append("")
+    lines.append("--- N.C.-suppressed variant (measurement, not a shipping change) ---")
+    lines.append("# The model bails to N.C. on real audio while the sheet truth is")
+    lines.append("# gapless. Re-scoring with N.C. removed from its choices prices that")
+    lines.append("# escape hatch. A big lift here => fix the N.C. bias (training-side")
+    lines.append("# re-balance), and let the presence gate own the no-chord call.")
+    lines.append(_fmt("frame_wcsr_noNC", overall_nonc))
+    for m in sorted(by_mode_nonc):
+        lines.append(_fmt(f"mode_{m}_noNC", by_mode_nonc[m]))
     lines.append("")
     lines.append("--- per guitarist (leave-one-guitarist-out view) ---")
     for g in sorted(by_guitarist):
