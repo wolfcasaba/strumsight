@@ -492,6 +492,6 @@
   "labUploading": "Uploading diagnostics…",
   "labUploaded": "Diagnostics uploaded",
   "labUploadFailed": "Upload failed — will retry next time",
-  "labCaptureUpload": "Capture & analyze last ~30 s",
+  "labCaptureUpload": "Capture & analyze last ~60 s",
   "labCaptureEmpty": "No audio captured yet — play a guitar track into the mic first."
 }

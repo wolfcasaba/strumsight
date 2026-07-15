@@ -426,6 +426,6 @@
   "labUploading": "Diagnosztika feltöltése…",
   "labUploaded": "Diagnosztika feltöltve",
   "labUploadFailed": "Feltöltés sikertelen — legközelebb újrapróbálja",
-  "labCaptureUpload": "Utolsó ~30 mp rögzítése és elemzése",
+  "labCaptureUpload": "Utolsó ~60 mp rögzítése és elemzése",
   "labCaptureEmpty": "Még nincs rögzített hang — előbb játssz be egy gitársávot a mikrofonba."
 }

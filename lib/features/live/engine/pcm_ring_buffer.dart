@@ -1,12 +1,15 @@
 /// A drop-oldest rolling buffer of recent microphone PCM, used by the Lab-mode
 /// Live capture (r199). Holds at most [maxSeconds] of audio at the mic's actual
+/// rate — 60 s (r201, user request: 30 s was too short a window). At 44.1 kHz
+/// that is ~21 MB, allocated ONLY while Lab mode is on; the uploader then
+/// decimates it to 22.05 kHz (exactly the CQT rate) so the WAV stays ~2.6 MB.
 /// sample rate; older samples are dropped as new chunks arrive.
 ///
 /// Zero overhead until it is [enabled] AND a [sampleRate] is known — the
 /// default Live path never touches it. Trimming keeps a 1 s slack so the O(n)
 /// front-drop runs at most ~once per second rather than on every chunk.
 class PcmRingBuffer {
-  PcmRingBuffer({this.maxSeconds = 30});
+  PcmRingBuffer({this.maxSeconds = 60});
 
   /// How many seconds of the most recent audio to retain.
   final int maxSeconds;
