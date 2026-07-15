@@ -68,6 +68,7 @@ import json
 import os
 import re
 import sys
+import wave
 import zipfile
 from typing import List, Optional, Sequence, Tuple
 
@@ -77,9 +78,10 @@ import numpy as np
 # `python3 ml/chords/test_guitarset.py` (this dir on the path) and
 # `import chords.guitarset` from the ml/ root — same shim as frames.py.
 try:  # pragma: no cover - import shim
-    from chords import frames, labels
+    from chords import cqt, frames, labels
 except Exception:  # pragma: no cover - import shim
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cqt  # type: ignore
     import frames  # type: ignore
     import labels  # type: ignore
 
@@ -305,6 +307,72 @@ def tracks(root: Optional[str] = None) -> List[Track]:
         out.append((wav, jams, meta["gid"]))
     out.sort()
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Audio
+#
+# These two live HERE, next to the loader, because BOTH consumers need them and
+# they must not drift: `eval_guitarset.py` (the benchmark, which re-exports them
+# for backwards compatibility) and `dataset.build_guitarset` (the TRAIN pool,
+# r203). One definition = the eval and the training data are decoded and
+# resampled identically; two copies would silently make the LOGO number
+# incomparable to the benchmark's.
+# --------------------------------------------------------------------------- #
+def read_wav(path: str):
+    """WAV -> (mono float32 in [-1,1], sample_rate).
+
+    `dataset.read_wav` assumes 16-bit PCM; GuitarSet's provenance is not ours to
+    assume, so handle the widths the `wave` module can hand back (8/16/24/32-bit
+    int and 32-bit float) and fail loudly on anything else rather than silently
+    decoding noise and reporting it as a low score.
+    """
+    with wave.open(path, "rb") as w:
+        ch, sw, sr, n = (w.getnchannels(), w.getsampwidth(),
+                         w.getframerate(), w.getnframes())
+        raw = w.readframes(n)
+    if sw == 1:                                    # unsigned 8-bit
+        x = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    elif sw == 2:
+        x = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif sw == 3:                                  # packed 24-bit little-endian
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        v = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        v = np.where(v & 0x800000, v - 0x1000000, v)   # sign-extend
+        x = v.astype(np.float32) / 8388608.0
+    elif sw == 4:
+        i = np.frombuffer(raw, dtype="<i4")
+        x = i.astype(np.float32) / 2147483648.0
+    else:
+        raise ValueError(f"{path}: unsupported sample width {sw} bytes")
+    if ch > 1:
+        x = x.reshape(-1, ch).mean(axis=1)
+    return x.astype(np.float32), sr
+
+
+def to_model_sr(pcm: np.ndarray, sr: int) -> np.ndarray:
+    """Resample to cqt.SR (22050). GuitarSet mic audio is 44.1 kHz -> exactly 2:1.
+
+    Prefers `scipy.signal.resample_poly` (polyphase FIR = proper anti-aliasing).
+    `cqt.cqt` would otherwise resample internally by LINEAR interpolation, which
+    for a 2:1 decimation aliases everything above 11 kHz back down into the band
+    the CQT reads — that would penalise the model for our own front-end. Falls
+    back to cqt's linear path (with a loud warning) if scipy is unavailable, so
+    a missing dep degrades transparently instead of crashing.
+    """
+    if sr == cqt.SR or len(pcm) == 0:
+        return pcm
+    try:
+        from math import gcd
+
+        from scipy.signal import resample_poly
+        g = gcd(int(sr), int(cqt.SR))
+        return resample_poly(pcm, cqt.SR // g, sr // g).astype(np.float32)
+    except ImportError:
+        print(f"[warn] scipy missing — falling back to cqt's LINEAR resample "
+              f"({sr} -> {cqt.SR} Hz); expect aliasing to depress the score.",
+              file=sys.stderr)
+        return cqt._resample(pcm, sr)
 
 
 # --------------------------------------------------------------------------- #

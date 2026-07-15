@@ -45,28 +45,16 @@ jobs:
           echo "recordings: $(ls ml/data/klangio/recording_*_phone.wav | wc -l)"
       - name: Chord module unit tests (TDD gate)
         working-directory: ml
-        run: python -m pytest chords/test_labels.py chords/test_frames.py chords/test_cqt.py chords/test_synth_songs.py chords/test_dataset_synth.py chords/test_augment.py chords/test_guitarset.py -q
-      - name: Train v0 chord model
-        env:
-          TF_CPP_MIN_LOG_LEVEL: "3"
-        run: python ml/chords/train_chord.py
-      - name: Show eval
-        run: cat ml/chords/out/chord_eval.txt || true
-      - name: Export Dart weights + inference-parity fixture
-        # Ship-path step 2 (r195): serialize the trained model to the compact
-        # Dart-loadable CCRN blob + a golden forward-pass fixture. TF-only (the
-        # ARM dev box lacks TF) so it runs here, after training. Writes
-        # chord_crnn.bin + chord_infer_fixture.json into ml/chords/out/.
-        env:
-          TF_CPP_MIN_LOG_LEVEL: "3"
-        run: python ml/chords/export_chord_dart.py
+        run: python -m pytest chords/test_labels.py chords/test_frames.py chords/test_cqt.py chords/test_synth_songs.py chords/test_dataset_synth.py chords/test_augment.py chords/test_guitarset.py chords/test_dataset_guitarset.py -q
 
-      # --- GuitarSet REAL-audio benchmark (r202) ------------------------------
-      # The honest real-data measurement: real guitar audio with TRUE chord
-      # labels (synth held-out is saturated and transfers nothing). Everything
-      # below is BEST-EFFORT — Zenodo being slow/down must never fail a training
-      # run, so the download + eval are continue-on-error and the eval script
-      # exits 0 when the dataset or the weights are absent.
+      # --- GuitarSet: REAL guitar audio with TRUE chord labels ----------------
+      # Fetched BEFORE training since r203: GuitarSet is now a TRAINING pool (all
+      # guitarists except the held-out one) as well as the honest benchmark, and
+      # the LOGO hold-out eval at the end of training reads it too.
+      # Still BEST-EFFORT — Zenodo being slow/down must never fail a training
+      # run: the download is continue-on-error, and train_chord.py skips the
+      # real-audio pool + the LOGO score gracefully when the dataset is absent
+      # (the run then trains on Klangio+synth exactly as it did pre-r203).
       - name: GuitarSet cache key
         id: gskey
         # Derived from the Zenodo record + the exact file names guitarset.py
@@ -86,6 +74,28 @@ jobs:
         timeout-minutes: 30
         # Idempotent: a cache hit means the extract dirs exist and this no-ops.
         run: python -c "import sys; sys.path.insert(0,'ml'); from chords import guitarset; guitarset.download()"
+
+      - name: Train v0 chord model
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: python ml/chords/train_chord.py
+      - name: Show eval
+        run: cat ml/chords/out/chord_eval.txt || true
+      - name: Export Dart weights + inference-parity fixture
+        # Ship-path step 2 (r195): serialize the trained model to the compact
+        # Dart-loadable CCRN blob + a golden forward-pass fixture. TF-only (the
+        # ARM dev box lacks TF) so it runs here, after training. Writes
+        # chord_crnn.bin + chord_infer_fixture.json into ml/chords/out/.
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: python ml/chords/export_chord_dart.py
+
+      # --- GuitarSet full benchmark (r202) ------------------------------------
+      # The whole-corpus breakdown (per guitarist / mode / style + degeneracy
+      # tripwires). NOTE since r203 most of these guitarists are IN the train
+      # pool, so their scores are fit, not generalisation — the honest
+      # new-player number is `guitarset_logo_comp_wcsr` in chord_eval.txt, and
+      # the `guitarist_05` line here is its per-track cross-check.
       - name: Eval on GuitarSet (real audio, true labels)
         continue-on-error: true
         env:

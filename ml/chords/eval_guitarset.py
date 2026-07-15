@@ -50,7 +50,6 @@ import argparse
 import collections
 import os
 import sys
-import wave
 
 import numpy as np
 
@@ -60,6 +59,11 @@ if _ML_DIR not in sys.path:
     sys.path.insert(0, _ML_DIR)
 
 from chords import cqt, guitarset  # noqa: E402
+# Audio decode + anti-aliased resample live in `guitarset` so this benchmark and
+# `dataset.build_guitarset` (the r203 TRAIN pool) share ONE definition — the
+# LOGO score is only comparable to this eval if both hear identical audio.
+# Re-exported here because these names are part of this module's tested surface.
+from chords.guitarset import read_wav, to_model_sr  # noqa: E402,F401
 from chords.labels import N_CLASSES, class_to_label  # noqa: E402
 
 WIN = 100  # must match train_chord.WIN (the model's fixed input length)
@@ -67,65 +71,6 @@ WIN = 100  # must match train_chord.WIN (the model's fixed input length)
 
 def _out_dir() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
-
-
-# --------------------------------------------------------------------------- #
-# Audio
-# --------------------------------------------------------------------------- #
-def read_wav(path: str):
-    """WAV -> (mono float32 in [-1,1], sample_rate).
-
-    `dataset.read_wav` assumes 16-bit PCM; GuitarSet's provenance is not ours to
-    assume, so handle the widths the `wave` module can hand back (8/16/24/32-bit
-    int and 32-bit float) and fail loudly on anything else rather than silently
-    decoding noise and reporting it as a low score.
-    """
-    with wave.open(path, "rb") as w:
-        ch, sw, sr, n = (w.getnchannels(), w.getsampwidth(),
-                         w.getframerate(), w.getnframes())
-        raw = w.readframes(n)
-    if sw == 1:                                    # unsigned 8-bit
-        x = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
-    elif sw == 2:
-        x = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
-    elif sw == 3:                                  # packed 24-bit little-endian
-        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
-        v = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
-        v = np.where(v & 0x800000, v - 0x1000000, v)   # sign-extend
-        x = v.astype(np.float32) / 8388608.0
-    elif sw == 4:
-        i = np.frombuffer(raw, dtype="<i4")
-        x = i.astype(np.float32) / 2147483648.0
-    else:
-        raise ValueError(f"{path}: unsupported sample width {sw} bytes")
-    if ch > 1:
-        x = x.reshape(-1, ch).mean(axis=1)
-    return x.astype(np.float32), sr
-
-
-def to_model_sr(pcm: np.ndarray, sr: int) -> np.ndarray:
-    """Resample to cqt.SR (22050). GuitarSet mic audio is 44.1 kHz -> exactly 2:1.
-
-    Prefers `scipy.signal.resample_poly` (polyphase FIR = proper anti-aliasing).
-    `cqt.cqt` would otherwise resample internally by LINEAR interpolation, which
-    for a 2:1 decimation aliases everything above 11 kHz back down into the band
-    the CQT reads — that would penalise the model for our own front-end. Falls
-    back to cqt's linear path (with a loud warning) if scipy is unavailable, so
-    a missing dep degrades transparently instead of crashing.
-    """
-    if sr == cqt.SR or len(pcm) == 0:
-        return pcm
-    try:
-        from math import gcd
-
-        from scipy.signal import resample_poly
-        g = gcd(int(sr), int(cqt.SR))
-        return resample_poly(pcm, cqt.SR // g, sr // g).astype(np.float32)
-    except ImportError:
-        print(f"[warn] scipy missing — falling back to cqt's LINEAR resample "
-              f"({sr} -> {cqt.SR} Hz); expect aliasing to depress the score.",
-              file=sys.stderr)
-        return cqt._resample(pcm, sr)
 
 
 # --------------------------------------------------------------------------- #
