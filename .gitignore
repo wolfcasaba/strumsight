@@ -58,3 +58,5 @@ lib/l10n/app_localizations*.dart
 /.playwright-mcp/
 ml/data/
 ml/klangio.npz
+dev-tools/doc-rag-index.json
+docs/plans/gpt-inbox/

@@ -12,6 +12,17 @@ node tools/dsp-rag.mjs "onset threshold median"      # ranked chunk hits
 node tools/dsp-rag.mjs --list                        # list all chunks
 ```
 
+Superset tool (same BM25 + optional Jina semantic hybrid, plus the `plan` corpus
+= the ChatGPT dev-plan chunks in `docs/plans/gpt/`):
+
+```bash
+node tools/rag.mjs --corpus dsp "onset threshold"            # this corpus only
+node tools/rag.mjs --semantic "hogyan mérjük a pengetést"    # hybrid, needs JINA_API_KEY (present on box)
+```
+
+Conflict rule: **a plan chunk never overrides a dsp chunk** — measurements win
+(see `docs/plans/gpt/README.md`).
+
 ## Chunk map
 
 | id | topic | feeds |

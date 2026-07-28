@@ -36,7 +36,7 @@ function loadEnvFile(path) {
 loadEnvFile('/home/ubuntu/Recipewiser/.env.local');
 loadEnvFile('.env.local');
 
-const ROOT = '/home/ubuntu/recipewiser-mobile';
+const ROOT = '/home/ubuntu/music-theory';
 const INDEX_FILE = join(ROOT, 'dev-tools', 'flutter-code-index.json');
 const SCAN_DIRS = ['lib'];
 const EXTS = new Set(['.dart']);
