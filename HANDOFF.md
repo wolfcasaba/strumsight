@@ -142,6 +142,11 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 > 🧭 **A munkasor mostantól az SDD-program.** Kötelező olvasási sorrend: [`AGENTS.md`](AGENTS.md) →
 > [`docs/sdd/00-index.md`](docs/sdd/00-index.md) (Ch1–12) → [`docs/execution/`](docs/execution/).
 > **Egy session = egy kör** (CLAUDE.md szabály) — a kör végén MEG KELL ÁLLNI, nem szabad továbbfutni.
+> **Minden kör saját branchen fut és PR-ként záródik** (user döntés 2026-07-28,
+> [ADR 0005](docs/adr/0005-branch-per-round-pr-workflow.md)): `codex/e<epic>-r<round>-<slug>`,
+> `[EXX-RYY] …` PR-cím, squash merge, zöld CI; emberi review helyett ügynöki second-eye.
+> A push/PR jelenleg **token-blokkolt** (Contents + Workflows + Pull requests: Read+write kell),
+> addig a branchek lokálisan sorban állnak.
 > A korábbi saját track-jeink nem tűntek el, hanem beolvadtak az epicekbe: **LEARN** → Ch3 Practice
 > Engine + Ch4 Song Trainer, **GROWTH** (share/streak/UGC/referral) → Ch9 Gamification + Ch10
 > Community, **ML + bővített akkordkészlet** → Ch7 Audio Analysis 2.0 + Ch11 Offline AI,
@@ -161,9 +166,14 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
      meglévő (Lab-os) telepítés nem frissül, hanem külön ikonként marad meg, a helyi adatai/beállításai
      nem vándorolnak át. A terv szerint ez publikus store-release előtt elfogadható, de **ADR-ben
      rögzítendő** és a user beleegyezése kell hozzá.
-  2. 🔴 **branch-per-round + PR workflow-váltás**
-     ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md)) — amíg
-     nincs döntés, a körök a **status quo** szerint közvetlenül `main`-re commitolnak.
+  2. ✅ **ELDŐLT (2026-07-28, user): branch-per-round + PR workflow** a terv szerint
+     ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md),
+     [ADR 0005](docs/adr/0005-branch-per-round-pr-workflow.md)) — a kör a
+     `codex/e01-r02-<slug>` branchen fut, `[E01-R02] …` című PR-rel, squash merge-dzsel, zöld CI-vel;
+     emberi review helyett ügynöki second-eye (`flutter-reviewer` + `flutter-devil-advocate`).
+     🔴 **Maradék blokkoló: CSAK a token** — a box PAT-ja pushra 403-at ad, kell rá
+     **Contents + Workflows + Pull requests: Read+write**; addig a branch és a PR lokálisan
+     elkészül és sorban áll.
   ⚠ A kör kötelező tesztjei közt van `dart format --output=none --set-exit-if-changed lib test` (a repo
   formázási állapota még FELMÉRETLEN — a format gate az E01-R14 köré tartozik, itt tömeges, körön kívüli
   diffet okozhat) és `flutter build apk --debug` (a boxon NEM futtatható → CI, `build-apk.yml`).

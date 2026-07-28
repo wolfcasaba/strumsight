@@ -61,12 +61,15 @@
 
 **⚠ Nyitott döntések (P1 — user):**
 
-1. **Workflow-váltás (116):** a terv branch-per-round + PR + védett main + review-t ír elő; eddig
-   az autonóm körök közvetlenül main-re commitoltak. Döntés kell: átállunk-e a codex/eXX-rYY
-   branch-modellre (ajánlott: igen, de review-er nélkül a "legalább 1 review" szabály lazítandó).
+1. ✅ **ELDŐLT (2026-07-28, user) — Workflow-váltás (116):** átállunk a terv szerinti
+   `codex/eXX-rYY` branch-per-round + PR modellre (squash merge, zöld CI), a szóló-adaptációkkal:
+   a „legalább 1 review" ügynöki second-eye review-ra lazítva, a formális GitHub branch-protection
+   külön körre (RTM `INT-R04`) halasztva. Rögzítve: `docs/adr/0005-branch-per-round-pr-workflow.md`.
+   Maradék blokkoló csak a token (Contents + Workflows + Pull requests: Read+write).
 2. **E01-R02 rename:** az Android application ID csere a telepített appot ÚJ appként jeleníti meg
    (a terv dokumentálja). Store-release előtt OK — de a user Lab-telepítéseit érinti; jelezni.
-3. **Hiányzó fejezetek feltöltése** (lásd lent) — Ch8/10/11/12 nélkül a Fázis C–E nem indítható.
+3. ✅ **MEGOLDVA (2026-07-28) — Hiányzó fejezetek feltöltése:** a Ch8 a 3. batchben megérkezett
+   (chunk 127), így az SDD Ch1–12 TELJES; a Fázis C–E nincs többé fejezethiány miatt blokkolva.
 
 ## Hiányzó dokumentumok (a manifest 58 fájljából még nincs feltöltve)
 
