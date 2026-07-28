@@ -5,6 +5,7 @@ tags: [execution, traceability, requirements, matrix]
 status: active
 depends_on: [103]
 canonical_target: docs/execution/06-requirements-traceability-matrix.md
+as_built: docs/execution/06-requirements-traceability-matrix.md (E01-R01, r207)
 verify: körönként frissül (státusz + PR link)
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

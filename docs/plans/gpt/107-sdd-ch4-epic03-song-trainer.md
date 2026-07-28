@@ -5,6 +5,7 @@ tags: [sdd, epic3, song-trainer, import, musicxml, midi, transport, migration]
 status: active
 depends_on: [105, 106]
 canonical_target: docs/sdd/04-epic-03-song-trainer.md
+as_built: docs/sdd/04-epic-03-song-trainer.md (E01-R01, r207)
 verify: legacy Song migráció veszteségmentes + parser fixture-ök zöldek
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

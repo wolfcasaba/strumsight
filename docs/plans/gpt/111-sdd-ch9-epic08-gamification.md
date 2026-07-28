@@ -5,6 +5,7 @@ tags: [sdd, epic8, gamification, xp, ledger, streak, quests, ethics]
 status: active
 depends_on: [106]
 canonical_target: docs/sdd/09-epic-08-gamification.md
+as_built: docs/sdd/09-epic-08-gamification.md (E01-R01, r207)
 verify: reward duplication rate 0 + legacy streak migráció zöld
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

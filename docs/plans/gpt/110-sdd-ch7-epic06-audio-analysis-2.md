@@ -5,6 +5,7 @@ tags: [sdd, epic6, analyze, dsp, metrics, confidence, timing, insights, migratio
 status: active
 depends_on: [105]
 canonical_target: docs/sdd/07-epic-06-audio-analysis-2.md
+as_built: docs/sdd/07-epic-06-audio-analysis-2.md (E01-R01, r207)
 verify: legacy AnalyzeResult migráció + real-audio evaluation gate (r199 harness)
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

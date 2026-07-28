@@ -5,6 +5,7 @@ tags: [process, onboarding, codex]
 status: active
 depends_on: [101, 103]
 canonical_target: CODEX_START_HERE.md (repo root, E01-R01)
+as_built: CODEX_START_HERE.md (E01-R01, r207)
 verify: első kör (E01-R01) e szerint indul
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

@@ -5,6 +5,7 @@ tags: [sdd, epic9, community, backend, privacy, moderation, leaderboard, feed]
 status: active
 depends_on: [105, 111]
 canonical_target: docs/sdd/10-epic-09-community-platform.md
+as_built: docs/sdd/10-epic-09-community-platform.md (E01-R01, r207)
 verify: block azonnal érvényesül minden útvonalon + verified receipt anti-replay tesztek + offline learning érintetlen
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, batch 2)
 ---

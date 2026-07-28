@@ -5,6 +5,7 @@ tags: [execution, risk, governance]
 status: active
 depends_on: []
 canonical_target: docs/execution/07-risk-register.md
+as_built: docs/execution/07-risk-register.md (E01-R01, r207)
 verify: epic-nyitáskor/záráskor review
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

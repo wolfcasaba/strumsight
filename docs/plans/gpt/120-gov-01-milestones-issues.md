@@ -5,6 +5,7 @@ tags: [governance, github, milestones, issues]
 status: active
 depends_on: [122]
 canonical_target: docs/governance/01-github-milestones-and-issues.md
+as_built: docs/governance/01-github-milestones-and-issues.md (E01-R01, r207)
 verify: milestone-ok és issue-k léteznek GitHubon
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

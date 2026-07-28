@@ -6,6 +6,13 @@ though it reuses their Flutter infrastructure, plugin set, dev-agents and learni
 > 📌 **READ [`HANDOFF.md`](HANDOFF.md) FIRST every session** — it is the always-current snapshot of
 > what's done / what's next, and MUST be updated after every development round.
 
+> 🧭 **SDD-DRIVEN DEVELOPMENT (2026-07-28-tól):** development follows the SDD program.
+> Binding rules: [`AGENTS.md`](AGENTS.md) (agent rulebook, doc-priority chain) →
+> [`docs/sdd/00-index.md`](docs/sdd/00-index.md) (Ch1–12) → [`docs/execution/`](docs/execution/)
+> (playbook, DoR/DoD, traceability). One session = one SDD round (E01-R01, …), stop after.
+> Searchable plan corpus: `node tools/rag.mjs --corpus plan "..."`. On conflict AGENTS.md wins
+> over this file (except the build gotchas below — those are measured truths of this box).
+
 > ✅ **App is specified & building:** **StrumSight** — offline on-device guitar chord + strum-direction
 > detector. See `HANDOFF.md` for live status, `docs/` for spec/plan, `docs/rag/chunks/` for DSP truth.
 

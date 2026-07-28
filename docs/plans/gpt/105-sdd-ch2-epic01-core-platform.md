@@ -5,6 +5,7 @@ tags: [sdd, epic1, core-platform, refactor, storage, network, audio-lifecycle, b
 status: active
 depends_on: [104]
 canonical_target: docs/sdd/02-epic-01-core-platform.md
+as_built: docs/sdd/02-epic-01-core-platform.md (E01-R01, r207)
 verify: Epic 1 DoD (fejezet 10. pontja) + epic-01-completion-report
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

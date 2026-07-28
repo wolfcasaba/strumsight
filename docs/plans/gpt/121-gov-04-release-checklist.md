@@ -5,6 +5,7 @@ tags: [governance, release, checklist, rollout]
 status: active
 depends_on: []
 canonical_target: docs/governance/04-release-checklist.md
+as_built: docs/governance/04-release-checklist.md (E01-R01, r207)
 verify: release előtt minden pont pipálva
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

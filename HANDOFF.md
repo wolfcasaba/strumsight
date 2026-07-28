@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-14** (round 185).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-28** (round 207).
 
 > 🤖 **ML TRACK GREEN-LIT (2026-07-12, user order):** research → plan → autonomous rounds. Plan:
 > `docs/plans/ml-track.md`. Round-134 discovery: the **ISMIR-2025 strum-direction dataset + code +
@@ -39,6 +39,7 @@ touches the network. Payments are out of scope.
 
 | Area | State | Where |
 |------|-------|-------|
+| **📐 E01-R01 REPOSITORY BASELINE — az SDD-program 1. köre KÉSZ** (r207) — kanonikus szabályrendszer létrehozva: `AGENTS.md` + `CODEX_START_HERE.md` a gyökérben, `docs/sdd/00–12` (a 3. batch-ben érkezett Ch8-cal az **SDD Ch1–12 TELJES**), `docs/execution/` (playbook, DoR/DoD, branch-szabályok, RTM, risk register), `docs/adr/0001–0004`, `docs/baseline/epic-01-start.md` (verziók, kódbázis-számok, megerősített Ch2 §3.4 adósságlista); CLAUDE.md-be SDD-fejléc; plan-korpusz: chunk 127 (Ch8) + `as_built:` frontmatter a 101–126-on. Piros baseline javítva: `live_lab_panel_test.dart` a r201-es ~60 s stringre (az l10n a forrás-igazság, `lib/` NEM változott). **Verifikáció (2026-07-28, külön parancsokként):** `flutter analyze lib/ test/` → **No issues found** (5.5s) · teljes `flutter test` → **700 passed / 2 skipped** (14:38, exit 0) · `test/features/live/` → **171 passed / 2 skipped** · backend `pytest` → **29 passed** (7.34s) · plan-RAG: „spaced repetition maintenance queue" → **chunk 127** (top hit, 14.90), „offline AI runtime bake-off LiteRT" → **chunk 125** (13.58), „definition of done checklist" → **chunk 115** (4.302, hajszállal a `123-manifest` 4.307 mögött), `--semantic` „mikrofon lifecycle kizárólagos owner" → **chunk 105** (valódi hibrid Jina-v3+RRF, nem BM25-fallback). ⚠ A baseline-doksi eredeti „1596 passed" állítása NEM reprodukálható — a mért érték 700 (159 tesztfájl / ~680 statikus deklaráció), a doksi javítva. Nyitott P1 döntések (user): branch-per-round+PR workflow-váltás; E01-R02 rename = új appként települ. **Következő kör: E01-R02 Projektazonosítók és verziókezelés (docs/sdd/02, Kör 2).** | ✅ **round 207** | `AGENTS.md`, `docs/sdd/`, `docs/execution/`, `docs/plans/gpt/127…`, `docs/baseline/epic-01-start.md` |
 | **📋 SDD PLAN INGESTED — a fejlesztés mostantól e szerint megy** (r206) — a user feltöltötte a ChatGPT **Codex Execution Pack**-et (58 fájlos manifest, ebből 23 megvan): SDD Ch1–7 + Ch9 (Epic 1 Core Platform 16 kör, Practice Engine, Song Trainer, AI Teacher, Vision, Audio Analysis 2.0, Gamification) + AGENTS/playbook/DoR/DoD/branch-szabályok/RTM/risk register. Minden chunk a plan-korpuszban (`docs/plans/gpt/101–123`, frontmatter+status), kereshető: `node tools/rag.mjs --corpus plan "..."` (+`--semantic`). **Triage kész** (INDEX.md): Flutter 3.44.2 ✓ egyezik, remote már `wolfcasaba/strumsight` ✓, R-001 = r199 verdikt (a terv kodifikálja a synth→real tanulságot), Lab-flag/property-gate/mic-guard részben kész → baseline-audit. **Nyitott P1 döntések: (1) branch-per-round+PR workflow-váltás, (2) E01-R02 rename = új appként települ, (3) ⚠ Ch8 (AI Practice Generator) feltöltése — az EGYETLEN hiányzó SDD-fejezet.** **Következő kör: E01-R01 Repository baseline (plan/105, Kör 1).** *(r206b, 2. batch: Ch10 Community + Ch11 Offline AI + Ch12 Release Roadmap betöltve → chunk 124–126; a batch többi 13 fájlja md5-azonos duplikátum volt.)* | ✅ **round 206** | `docs/plans/gpt/INDEX.md` (triage + hiányzó fájlok), chunk 101–123 |
 | **Plan-RAG infra** (r205) — unified doc RAG `tools/rag.mjs`: BM25 + optional Jina-v3 semantic (hybrid RRF, `--semantic`; key auto-read from the web repo's `.env.local`, cached index in `dev-tools/`, silent BM25 fallback). Two corpora: `dsp` (= `docs/rag/chunks/`, measured truth) + `plan` (= `docs/plans/gpt/`, the incoming ChatGPT dev-plan chunks, id 101+, `status:` lifecycle new→active→done/conflicts/superseded). **Rule: plan chunk never overrides a dsp chunk** — on contradiction the measurement wins, plan chunk → `conflicts` + verdict, kept on disk. Also fixed `tools/flutter-rag.mjs` ROOT (pointed at recipewiser-mobile) → music-theory `lib/` now code-searchable (168 files indexed). **Next: user uploads the plan → chunk + triage vs HANDOFF + dsp 001–018 → fill `INDEX.md`.** | ✅ **round 205** | `tools/rag.mjs`, `docs/plans/gpt/README.md` (rules), `docs/plans/gpt/INDEX.md` |
 | **Live** screen — big chord, ↓/↑ arrow, confidence pill, `1 & 2 & 3 & 4` beat counter, status bar | ✅ REAL mic detection | `lib/features/live/` |
@@ -138,111 +139,69 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 ## 3. What's NOT done — NEXT 🔜
 
-- **🔴 WAITING ON THE USER (round 87 consolidation)** — everything below is blocked on these four:
-  1. **Real-guitar APK test** with build-81+ (tag pushed; artifact on CI run 29117048445): detuned
-     chords, calibration flow feel (incl. the input-vs-output latency semantics — if PERFECTs feel
-     off, split the calibration), the 19:00 nudge firing, reel screen-recording.
-  2. ~~**Publish the release**~~ — ✅ UNBLOCKED 2026-07-11: user supplied a fine-grained PAT with
-     **Contents: Read and write** and **build-112** was published (round 112 APK, 60 MB) →
-     https://github.com/wolfcasaba/strumsight/releases/download/build-112/app-release.apk .
-     NOTE: the *session's* default gh token still lacks Contents:write — future rounds must be
-     handed a write-scoped token to publish. See [[apk-delivery]].
-  3. **PAT + Workflows:R+W** — the CI hard-gate change (red suite ⇒ no green APK) sits uncommitted
-     in the working tree until the token can push workflow files. Retried 2026-07-11 15:26 after
-     the release-PAT appeared → the *git-push* token still refuses workflow files ("without
-     `workflow` scope"); commit reverted (soft), change kept in tree.
-  4. **Hermes research** — the 6-thread quality-bar assignment sits in the user's Telegram chat
-     (the bridge writes AS Hermes, so no agent processes it); forward it or give a proper target.
-- **⚠️ Login / account backend is NOT hosted** — `ApiConfig.baseUrl` defaults to `10.0.2.2:8000`
-  (Android **emulator** only). On a real phone login can't reach it, so the account UI is **gated OFF**
-  (`ApiConfig.accountEnabled=false`, round 22). To enable: deploy `backend/` to a public host, then
-  build with `--dart-define=STRUMSIGHT_ACCOUNT=true --dart-define=STRUMSIGHT_API_URL=https://…`.
-  User chose to defer login (2026-07-07); app is fully usable logged out. Local ARM64 box CANNOT
-  build the APK — use CI (see [[apk-delivery]]).
-- **⚠️ Live mic on a real device** — the mic→DSP→UI wiring is audited & correct in code, and mic
-  start-errors now surface (round 13). But "does it detect a real guitar" is **NOT verified on
-  hardware** — the user's real-guitar APK acceptance test. If it seems dead, the Retry banner says why.
-- **Backend hardening for prod** — remaining: SQLite→Postgres, Alembic migrations, backend CI
-  (CI blocked on the workflow-scope PAT). ✅ DONE round 120: per-IP auth rate-limits (login 10/min,
-  register 5/min → 429 + Retry-After), and `STRUMSIGHT_ENV=prod` boot guards (dev secret or
-  wildcard CORS ⇒ refuses to start). See `backend/README.md`.
-- **Password reset / email verification / refresh tokens** — not implemented (14-day JWT, no refresh).
-- **Mid-session token expiry (known limitation, found round 124)** — the app drops a bad token at
-  STARTUP (`AuthController.build` → `me()` 401 → clear → logged out) and settings-sync no longer
-  loops on a 401 (round 123), but there is **no Dio error-interceptor** that logs the user out when a
-  token expires *while the app is open*. Once the backend is hosted, a session that 401s mid-use would
-  keep showing a "logged in" UI whose writes silently fail. Deferred intentionally: a global
-  401→logout interceptor risks Riverpod re-entrancy (the interceptor reading `authControllerProvider`
-  while its own `build()`'s `me()` call is the in-flight request) and must exempt the `/auth/login`
-  + `/auth/register` 401s (wrong-credentials, not expiry). Fix when the backend goes live and the path
-  is exercisable end-to-end. Account layer is gated OFF until then, so this bites no one today.
-- **iOS build** — needs a Mac. Android-first for now. (STALE bullets removed round 87: Analyze and
-  Library shipped in rounds 20–21 and are long in the DONE table; Analyze got batch Viterbi in r71.)
-- **FINAL acceptance is the user's real-guitar APK test** — synthetic-green is never "done" (HORIZON).
-  The optional C++/FFI port is an optimization path *only if on-device profiling demands it*.
-- **✅ DONE round 28 — chord DICTIONARY + Viterbi engine (spec: `docs/rag/chunks/012`).** Built the
-  pure-Dart, testable port: **bass+treble split chroma (24-dim) → chord-profile similarity → online
-  Viterbi (+ no-chord state)**, replacing note-templates + hand-tuned hysteresis. Extended chords
-  (7/maj7/m7/sus4), inversions via the bass chroma, and a principled smooth track. The round-26
-  7th failure is fixed (G7/A7/B7 detected; plain triads stay triads). See "AS BUILT" params in
-  chunk 012. **Strum ↓/↑ direction remains our unique moat — no competitor does it.**
-- **✅ DONE round 69 — per-frame tuning estimation** (chunk 012 "AS BUILT round 69"): detuned-synth
-  tests exposed AND fixed a hidden +1/3-semitone dictionary bias (35-cent-flat C read as B!) plus
-  added the Chordino tuning stage (circular-mean estimate → EMA → spectrum resample). ±40-cent
-  property gate green on 5 seeds.
-- **✅ DONE round 70 — spectral whitening pre-NNLS** (chunk 012 "AS BUILT round 70"): coloured-synth
-  probe found the real failure (phone-mic bass roll-off read C as Em); fixed with half-octave RMS
-  whitening at **exponent 0.7** (1.0 eroded the root and regressed the chroma gate). The full
-  chunk-012 Chordino pipeline is now COMPLETE except batch Viterbi.
-- **✅ DONE round 71 — batch Viterbi with backtrace for Analyze** (chunk 012 COMPLETE): fast-change
-  clips no longer produce transient junk segments / wrong final labels (7→4 segments measured).
-- **✅ DONE round 72 — latency calibration (chunk 016b P3, the scoring-fairness half):** Settings →
-  tap-test → persisted offset → `LessonScorer.inputLatencySec` corrects all mic-fed timestamps.
-  Still open from P3: 48 kHz low-latency audio path, pre-scheduled beat audio, separate VISUAL offset.
-- **⭐ NEXT (post-sprint state, round 112)** — the OFFLINE backlog is effectively drained after
-  rounds 88–111 (see §4): tuner parity trio, retention loops, a11y, overflow guards at 3 sizes,
-  metre-aware count-in, 15-lesson curriculum, favourites, rename, tap-tempo ×2, mic-hygiene
-  everywhere, 2 adversarial reviews with all findings closed. What remains needs INPUT:
-  1. **User's real-guitar APK test** → unlocks device-tuning rounds (DSP thresholds on real audio,
-     P2 CustomPainter profiling, latency-semantics split, 48 kHz + pre-scheduled beat audio —
-     all blind-tuning risks without a device).
-  2. **Hermes research reply** → unlocks the competitive-polish backlog.
-  3. **Release/token actions** → unlocks publish + CI hard-gate.
-  Vocabulary growth (add9/6/slash) explicitly waits for real-guitar validation (round-78 decision).
-- **Extended chord vocabulary** — the round-26 revert is now SUPERSEDED: 7ths work via the dictionary
-  engine (round 28). Known honest limit (measured, in chunk 012): a dom7 whose m7 coincides with the
-  root's own 7th harmonic (roots ≥ C3) still collapses to the triad — correct when the tone isn't
-  audible; hearing every voicing is the ML-era goal. Power-5/sus2 remain OUT of the vocabulary (they
-  steal weak-third triads); revisit with real-guitar data.
-- **⭐ ML TRACK — ACTIVE since round 134** (user order 2026-07-12; supersedes the old "optional later"
-  ML bullets). Plan + research: `docs/plans/ml-track.md`. Phases: P0 pure-Dart groundwork (✅ P0.1 log-mel
-  parity r134; ✅ P0.2 SuperFlux detector r135 — integration + priors + onset-aligned Viterbi next), P1 TFLite
-  plumbing (`flutter_litert`, explicit-state GRU, heuristic fallback seam), P2 train on the now-PUBLIC
-  Klangio dataset (Apache-2.0) on x86_64 CI/Colab, P3 CQT/chord/pitch ML (contingent). Heuristic stays
-  default until the model wins the A/B gates AND the real-guitar test.
-- **⭐ GROWTH TRACK (research: `docs/rag/chunks/013`) — make the moat go viral.** Round 29 shipped the
-  static shareable **Strum Card** (the fast-to-ship v1). Ranked next, evidence-backed:
-  1. **"Strum Cam" video/animated card** — a 9:16 clip with the ↓/↑ arrows + chords animating in sync
-     with the audio (the ultimate moat-as-content; heavier — frame capture + a maintained encoder like
-     `ffmpeg_kit_flutter_new`/`widget_record_video`; note `ffmpeg_kit_flutter` was discontinued Apr-2025).
-  2. ✅ **DONE round 30 — Streak + daily strum-pattern challenge** (`lib/features/streak/`). TODO on top:
-     a Friday-aware local-notification nudge (needs a notifications plugin) + reframe streak as skill progress.
-  3. **`#StrumSightChallenge` UGC feed** — hashtag already seeded in every share caption; grow in-app.
-  4. **Referral via deferred deep links** (Branch `flutter_branch_sdk`) — closes + *measures* the
-     share→install loop; the one hosted dependency. Honest target K ≈ 0.3–0.7 (CAC reduction, not K>1).
-  - When published, swap `ShareContent.installUrl` (currently the GitHub Release) for the store/landing URL.
-- **⭐ LEARN TRACK (chunk 014) — the play-along trainer.** Round 32 shipped the strum-highway animation +
-  lessons. Next, ranked: (1) **⭐ live scoring (round 33)** — run the real DSP while a lesson plays and
-  score each event on the right **chord AND strum direction** within a timing window → hit/miss, accuracy
-  %, combo; a passed lesson counts as practice (feeds the streak). Reuse `LivePipeline`, compare to the
-  nearest `LessonEvent` by time. (2) a real lesson library + difficulty/progression + import a saved
-  Analyze clip as a lesson. (3) metronome click / backing track (existing `audioplayers`). (4) share a
-  completed-lesson score card (feeds the chunk-013 share loop).
+> 🧭 **A munkasor mostantól az SDD-program.** Kötelező olvasási sorrend: [`AGENTS.md`](AGENTS.md) →
+> [`docs/sdd/00-index.md`](docs/sdd/00-index.md) (Ch1–12) → [`docs/execution/`](docs/execution/).
+> **Egy session = egy kör** (CLAUDE.md szabály) — a kör végén MEG KELL ÁLLNI, nem szabad továbbfutni.
+> A korábbi saját track-jeink nem tűntek el, hanem beolvadtak az epicekbe: **LEARN** → Ch3 Practice
+> Engine + Ch4 Song Trainer, **GROWTH** (share/streak/UGC/referral) → Ch9 Gamification + Ch10
+> Community, **ML + bővített akkordkészlet** → Ch7 Audio Analysis 2.0 + Ch11 Offline AI,
+> **backend-hardening** (Postgres/Alembic/backend-CI) → Epic 1 E01-R12/R14/R15. A mért DSP-korlátok
+> és -döntések igazságforrása változatlanul a `docs/rag/chunks/` (012: dom7-összeomlás ≥C3 gyökértől,
+> power-5/sus2 szándékosan kívül, add9/6/slash a valós-gitáros validációra vár — r78).
+> Az Epic-1 megerősített adósságlistája: [`docs/baseline/epic-01-start.md`](docs/baseline/epic-01-start.md).
+
+- **⭐ KÖVETKEZŐ KÖR — E01-R02 Projektazonosítók és verziókezelés**
+  ([`docs/sdd/02-epic-01-core-platform.md`](docs/sdd/02-epic-01-core-platform.md), Kör 2):
+  `pubspec.yaml` name `music_theory` → `strumsight` + minden `package:music_theory/` import átírása,
+  Android namespace és iOS bundle id → `com.wolfcasaba.strumsight`, a verzió-igazságforrás
+  egységesítése (a `pubspec.yaml` a forrás; a README ellentmondó „v0.2.0"-ja rendezendő), plusz egy
+  régi-név-őr teszt/script allowlisttel (2.5).
+  **Két user-döntés az indítás ELŐTT:**
+  1. 🔴 **A rename ÚJ appként települ a telefonra** — az Android application ID megváltozik, így a
+     meglévő (Lab-os) telepítés nem frissül, hanem külön ikonként marad meg, a helyi adatai/beállításai
+     nem vándorolnak át. A terv szerint ez publikus store-release előtt elfogadható, de **ADR-ben
+     rögzítendő** és a user beleegyezése kell hozzá.
+  2. 🔴 **branch-per-round + PR workflow-váltás**
+     ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md)) — amíg
+     nincs döntés, a körök a **status quo** szerint közvetlenül `main`-re commitolnak.
+  ⚠ A kör kötelező tesztjei közt van `dart format --output=none --set-exit-if-changed lib test` (a repo
+  formázási állapota még FELMÉRETLEN — a format gate az E01-R14 köré tartozik, itt tömeges, körön kívüli
+  diffet okozhat) és `flutter build apk --debug` (a boxon NEM futtatható → CI, `build-apk.yml`).
+
+- **🔴 PERMANENS ELFOGADÁSI KAPU — a user valós-gitáros APK-tesztje.** A szintetikus/CI-zöld SOHA nem
+  „kész" (HORIZON). Ide tartozik a **Live mic valós eszközön**: a mic→DSP→UI lánc kódban auditált és a
+  mic-indítási hibák felszínre jönnek (r13), de hogy „felismeri-e a valódi gitárt", hardveren NINCS
+  igazolva. Ez a kapu oldja fel az eszközfüggő hangolási köröket (DSP-küszöbök valós audión,
+  CustomPainter-profilozás, latency-szemantika szétválasztása, 48 kHz + előre ütemezett beat-audio) —
+  ezek eszköz nélkül vak hangolások. A lokális ARM64 box NEM tud APK-t buildelni → CI ([[apk-delivery]]).
+
+- **🔴 USER-INPUTRA VÁR** — (1) **release-publikálás tokenje:** a build-112 kiment
+  (`…/releases/download/build-112/app-release.apk`), de a session default `gh` tokenje továbbra sem
+  Contents:write — publikáláshoz írás-jogú tokent kell adni a körnek; (2) **Workflows:R+W PAT** a
+  workflow-fájlok pushához (a CI hard-gate módosítás emiatt ült a munkafában); (3) **Hermes-kutatás:**
+  a 6 szálas minőségi-léc feladat a user Telegram-chatjében áll (a bridge Hermesként ír, így ügynök nem
+  dolgozza fel) — továbbítani kell, vagy új célt adni.
+
+- **⚠️ Login / account backend NINCS hosztolva** — `ApiConfig.baseUrl` alapértelmezése `10.0.2.2:8000`
+  (csak Android **emulátor**), ezért valós telefonon a login nem érné el, és az account-UI **ki van
+  kapcsolva** (`ApiConfig.accountEnabled=false`, r22). Bekapcsolás: `backend/` publikus hosztra, majd
+  `--dart-define=STRUMSIGHT_ACCOUNT=true --dart-define=STRUMSIGHT_API_URL=https://…`. A user
+  2026-07-07-én halasztotta a logint; az app kijelentkezve teljes értékű.
+- **Auth-hiányosságok** — nincs jelszó-visszaállítás / e-mail-verifikáció / refresh token (14 napos JWT).
+- **Mid-session token-lejárat (ismert korlát, r124)** — induláskor a rossz tokent eldobjuk
+  (`AuthController.build` → `me()` 401 → törlés → kijelentkezve), és a settings-sync sem pörög 401-en
+  (r123), de **nincs Dio error-interceptor**, ami futó appban lejáró tokennél kiléptetne. Szándékosan
+  halasztva: a globális 401→logout interceptor Riverpod-reentranciát kockáztat (az interceptor a
+  `authControllerProvider`-t olvasná, miközben a saját `build()`-je `me()` hívása az in-flight kérés), és
+  mentesítenie kell a `/auth/login` + `/auth/register` 401-eket (rossz jelszó ≠ lejárat). Az
+  account-réteg addig ki van kapcsolva, így ma senkit nem érint.
+- **iOS build** — Mac kell hozzá; egyelőre Android-first.
 
 ## 4. Round history (from git notes — `git log --show-notes`)
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
+| 207 | (this) | 700 Dart + 2 skipped · 29 backend | **E01-R01 REPOSITORY BASELINE — a repó megkapta a kanonikus szabályrendszerét, az SDD-program formálisan elindult.** A 3. feltöltési batch meghozta a hiányzó **Ch8-at (AI Practice Generator)** → az **SDD Ch1–12 TELJES**: a repóba került `AGENTS.md` + `CODEX_START_HERE.md`, `docs/sdd/00–12`, `docs/execution/` (playbook, DoR/DoD, branch-szabályok, RTM, risk register), `docs/adr/0001–0004`, `docs/governance/`, `docs/development/`, és a `docs/baseline/epic-01-start.md` (verziók, kódbázis-számok, a Ch2 §3.4 adósságlista MIND megerősítve a valós kódon). Plan-korpusz: chunk 127 + `as_built:` frontmatter a 101–126-on — a terv és a megépült valóság innentől visszakereshetően össze van kötve (`node tools/rag.mjs --corpus plan`). **Tanulság: egy baseline-kör értéke a MÉRÉS, nem a doksi.** A futtatás egy piros tesztet talált — `live_lab_panel_test.dart` a r201 óta driftelt `~30 s` gombfelirattal; a forrás-igazság az l10n (`app_en.arb` = `~60 s`), ezért a TESZT lett hozzáigazítva, `lib/` érintetlen. Ennél is fontosabb: a baseline-doksiba először beírt „1596 passed" **NEM volt reprodukálható** — az újramért érték **700 passed / 2 skipped** (14:38, exit 0), ami a 159 tesztfájl ~680 statikus `test(`/`testWidgets(` deklarációjával konzisztens → a doksi javítva. Verifikáció (külön parancsokként): `flutter analyze lib/ test/` **No issues found** (5.5s), teljes suite zöld, `test/features/live/` **171/2**, backend `pytest` **29 passed** (7.34s), plan-RAG spot-check 4/4 a várt chunkra (127, 125, 115, 105 — a `--semantic` valódi Jina-v3+RRF hibrid volt, nem BM25-fallback). Nyitva a két P1 user-döntés: a rename új appként települ, illetve a branch-per-round+PR váltás. |
 | 182 | (this) | 645 + 12 (denoise/hpss modules) | **Full-band (drums+bass) chord accuracy is a DSP CEILING (~59 %) — measured honestly on CI; simple knobs don't move it, it needs an ML chord model.** User steered to the hard full-band domain, "do it with agents for speed." Ran **2 parallel Opus agents** → self-contained tested modules: `ChromaDenoise.temporalMedian` (transient/drum/passing-note removal, 7 tests) + `Hpss.harmonicEnhance` (Fitzgerald median-filter HPSS, 5 tests). Added an **Analyze-path chord-accuracy metric** to the probe + made batch `chromaMedianWindow` and `bassWeight` injectable. **MEASURED on CI (10 SoundCloud named-chord clips):** analyze-path accuracy ≈ **59 %** (high variance: E-A-D/Em-C-G-D = 100 %, C-G-Am-F_chords_2 = 0 %); the dominant error is **wrong-ROOT** (bass passing-notes drag the root). **Both levers measured FLAT within noise:** chroma-median windows 1–13 all ≈59; bassWeight 0.15–0.45 all ≈59. HPSS not wired (it removes percussion; the error is bass = harmonic). **Conclusion:** full-band = a deep-model problem (Chordify-class ML on labelled songs), NOT a tuning knob — the knobs/modules ship **OFF by default (behavior unchanged)** as infrastructure for a future ML chord track. What works: SOLO guitar (the LIVE use) 76–92 %; the real tuning win stays r181's sus4 fix. See `full-band-chord-ceiling` memory. |
 | 181 | `45e82c6` | 645 Dart (unchanged) | **First CI-driven DSP tune: sus4 Occam handicap — real-song chord accuracy 50 %→57.5 %.** The user directed heavy work to CI (Oracle is very slow). Pushed **`dsp-probe.yml`** (real-audio probe on fast x86; user supplied a Workflows-scoped PAT) + activated the long-pending build-apk HARD gates. The CI probe (SoundCloud corpus, same as Oracle) confirmed the r180 finding, then diagnosed the top error: **`sus4` had Occam bias 0.0** (no guard), so on full-band real audio a stray 4th (adjacent-chord ring-out / bass / another instrument) flipped D→Dsus4, G→Gsus4. Gave sus4 a **0.04 handicap** (`chord_dictionary.dart`) — a genuine sustained sus4 still wins big (the `C+F+G→Csus4` unit test holds; 7th/dim/aug intact; property gate green), a faint 4th no longer renames a triad. **MEASURED on CI (2 runs, same songs): inSet% 50.1→57.5** (G-D-Em-C 41→54, lesson_beginner shown 55→88 %). VERIFY: chord+dim/aug+property tests green locally; **full suite green on CI** (build-apk 29320567764) + fresh APK. **Honest ceiling:** the remaining full-band errors are wrong-ROOT chords (B/D in a C-G-Am-F song) from chroma/bass confusion in the mix — a source-separation-class problem, not a bias knob. **Solo guitar (the LIVE use) detects well** (76–92 %); added solo-guitar clips to `sc_fetch.sh` so the probe covers that domain. APK: `apk-dist/strumsight-build-181-chordfix.apk`. |
 | 180 | `c23cf1b` | 645 Dart (probe only) | **AUTONOMOUS real-audio test loop — I can now "play a real song, watch the DSP decide, and tune" WITHOUT a device.** The breakthrough: **SoundCloud is NOT bot-walled from the datacenter box** (YouTube is) — `yt-dlp "scsearch:...guitar chords C G Am F"` downloads real guitar (backing tracks / demos whose TITLE names the chords → approx ground truth) + real speech (podcasts) + guitar lessons. Built `ml/corpus/sc_fetch.sh` + extended the probe with a **chord-accuracy metric** (inSet% = shown-chord frames whose label ∈ the song's named progression) and a **raw-confidence ceiling** (rawCf90). **MEASURED on real songs (the truth synth hid):** (1) solo guitar — fingerstyle/classical/klangio — detects WELL (76–92 % shown, rawCf90 0.63–0.71); (2) full-band backing tracks get SPURIOUS chords (inSet ~50 %: C-G-Am-F → also B7/Baug/Cmaj7; G-D-Em-C → D→Dsus4, G→Gsus4); (3) some real guitar clips over-suppress to 0 % (rawCf90 0.46–0.55, just below/at the rise gate); (4) real SPEECH can leak (a storytelling clip showed a chord 34.6 %, rawCf90 0.674 — my synth said 0 %). **Key honest finding: on real audio, weak-guitar (0.46–0.55) and strong-speech (0.67) confidences OVERLAP — a single confidence gate can't fully separate them; a 2nd discriminator (harmonic/temporal) is the real fix.** Dev-tooling only (env-gated `DSP_PROBE=1`, no shipping change); normal suite still 645. Next: iterate the gate/dictionary on this loop (bias toward plain triads to kill sus4/7 spurious; investigate the 0 % over-suppression vs the speech overlap). |

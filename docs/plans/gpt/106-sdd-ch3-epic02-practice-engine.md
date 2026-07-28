@@ -5,6 +5,7 @@ tags: [sdd, epic2, practice-engine, scoring, state-machine, speed-builder, parit
 status: active
 depends_on: [105]
 canonical_target: docs/sdd/03-epic-02-practice-engine.md
+as_built: docs/sdd/03-epic-02-practice-engine.md (E01-R01, r207)
 verify: LessonScorer parity fixtures zöld + valós eszközös gate
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

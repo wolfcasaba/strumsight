@@ -5,6 +5,7 @@ tags: [execution, order, phases, rounds]
 status: active
 depends_on: [103]
 canonical_target: docs/execution/01-implementation-order.md
+as_built: docs/execution/01-implementation-order.md (E01-R01, r207)
 verify: fázisváltás csak completion report után
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

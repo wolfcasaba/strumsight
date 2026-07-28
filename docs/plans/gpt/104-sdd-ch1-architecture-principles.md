@@ -5,6 +5,7 @@ tags: [sdd, architecture, principles, clean-architecture, offline-first]
 status: active
 depends_on: [101]
 canonical_target: docs/sdd/01-architecture-engineering-principles.md
+as_built: docs/sdd/01-architecture-engineering-principles.md (E01-R01, r207)
 verify: architecture guard + DoD checklist él
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

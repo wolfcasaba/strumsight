@@ -5,6 +5,7 @@ tags: [sdd, release, roadmap, sprints, integration, rollout, governance, ci]
 status: active
 depends_on: [103, 104, 105, 106, 107, 108, 109, 110, 111, 124, 125]
 canonical_target: docs/sdd/12-release-roadmap-final-integration.md
+as_built: docs/sdd/12-release-roadmap-final-integration.md (E01-R01, r207)
 verify: stage-kapuk (6. fejezet) + go/no-go kritériumok (29.3) + rollback drill
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, batch 2)
 ---

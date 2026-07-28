@@ -5,6 +5,7 @@ tags: [sdd, epic10, offline-ai, llm, runtime, quantization, gateway, benchmark]
 status: active
 depends_on: [105, 108]
 canonical_target: docs/sdd/11-epic-10-offline-ai.md
+as_built: docs/sdd/11-epic-10-offline-ai.md (E01-R01, r207)
 verify: a Ch5 TutorModelGateway contract változatlan implementálása + valós eszközös TTFT/token-rate gate
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, batch 2)
 ---

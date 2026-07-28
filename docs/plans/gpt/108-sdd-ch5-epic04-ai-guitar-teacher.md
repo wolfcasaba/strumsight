@@ -5,6 +5,7 @@ tags: [sdd, epic4, ai-tutor, rag, llm, gateway, prompt, safety, privacy]
 status: active
 depends_on: [105, 106, 110]
 canonical_target: docs/sdd/05-epic-04-ai-guitar-teacher.md
+as_built: docs/sdd/05-epic-04-ai-guitar-teacher.md (E01-R01, r207)
 verify: deterministic debrief cloud nélkül + prompt/contract tesztek
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

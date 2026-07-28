@@ -5,6 +5,7 @@ tags: [development, testing, gates, property]
 status: active
 depends_on: []
 canonical_target: docs/development/07-testing.md
+as_built: docs/development/07-testing.md (E01-R01, r207)
 verify: CI a leírt gate-eket futtatja
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

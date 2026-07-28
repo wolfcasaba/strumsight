@@ -5,6 +5,7 @@ tags: [execution, dod, checklist]
 status: active
 depends_on: []
 canonical_target: docs/execution/04-definition-of-done.md
+as_built: docs/execution/04-definition-of-done.md (E01-R01, r207)
 verify: kör csak teljes DoD után Done
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

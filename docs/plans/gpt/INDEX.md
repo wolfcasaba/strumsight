@@ -33,7 +33,8 @@
 | 123 | Execution Pack MANIFEST | active | — | |
 | 124 | SDD Ch10 / Epic 9 — Community Platform (32 kör) | active | 105, 111 | 2. batch |
 | 125 | SDD Ch11 / Epic 10 — Offline AI (32 kör) | active | 105, 108 | 2. batch |
-| 126 | SDD Ch12 — Release Roadmap & Final Integration (42 kör) | active | 103–111, 124, 125 | 2. batch |
+| 126 | SDD Ch12 — Release Roadmap & Final Integration (42 kör) | active | 103–111, 124, 125, 127 | 2. batch |
+| 127 | SDD Ch8 / Epic 7 — AI Practice Generator (30 kör) | active | 106, 108, 110 | 3. batch — **ezzel a Ch1–12 TELJES** ✅ |
 
 ## Triage-eredmény (2026-07-28, HANDOFF r205 + dsp corpus ellen)
 
@@ -69,8 +70,8 @@
 
 ## Hiányzó dokumentumok (a manifest 58 fájljából még nincs feltöltve)
 
-- ⚠ **`docs/sdd/08-epic-07-ai-practice-generator.md` (Ch8) — az EGYETLEN hiányzó SDD-fejezet!**
-  A 111 (gamification) és 126 (Ch12 roadmap, Sprint 19) függősége; a Fázis C nem zárható nélküle.
+> ✅ **Az SDD Ch1–12 TELJES** (a Ch8 a 3. batchben, 2026-07-28 érkezett). Csak támogató fájlok hiányoznak:
+
 - `docs/execution/08-codex-round-prompt-template.md`, `09-document-authority-and-migration.md`
 - `docs/development/01–06, 08` (local/android/backend/ml setup, env vars, secrets, troubleshooting)
 - `docs/governance/02, 03, 05–13` (labels, board, device matrix, security, licence, UX, fixtures, business, privacy)

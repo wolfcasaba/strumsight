@@ -60,3 +60,4 @@ ml/data/
 ml/klangio.npz
 dev-tools/doc-rag-index.json
 docs/plans/gpt-inbox/
+backend/.venv/

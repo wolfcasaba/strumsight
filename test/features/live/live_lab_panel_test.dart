@@ -37,7 +37,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Capture & analyze last ~30 s'), findsNothing);
+    expect(find.text('Capture & analyze last ~60 s'), findsNothing);
     // With Lab off the engine is told NOT to capture (never a stray `true`).
     expect(engine.captureCalls, isNot(contains(true)));
 
@@ -60,7 +60,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Capture & analyze last ~30 s'), findsOneWidget);
+    expect(find.text('Capture & analyze last ~60 s'), findsOneWidget);
     // Lab on → the engine's rolling capture was enabled.
     expect(engine.captureCalls, contains(true));
 
@@ -83,7 +83,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Capture & analyze last ~30 s'));
+    await tester.tap(find.text('Capture & analyze last ~60 s'));
     await tester.pumpAndSettle();
 
     // Empty buffer → the guard reports "no audio", never runs analysis/crashes.

@@ -5,6 +5,7 @@ tags: [sdd, index, dependencies, roadmap]
 status: active
 depends_on: []
 canonical_target: docs/sdd/00-index.md (E01-R01)
+as_built: docs/sdd/00-index.md (E01-R01, r207)
 verify: docs/sdd/ létrejön E01-R01-ben
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

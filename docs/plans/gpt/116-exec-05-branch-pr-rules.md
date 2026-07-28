@@ -5,6 +5,7 @@ tags: [execution, git, branch, pr, policy]
 status: active
 depends_on: []
 canonical_target: docs/execution/05-branch-and-pr-rules.md
+as_built: docs/execution/05-branch-and-pr-rules.md (E01-R01, r207)
 verify: branch védelmi szabályok élnek GitHubon
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

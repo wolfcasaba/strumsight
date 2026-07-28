@@ -5,6 +5,7 @@ tags: [sdd, epic5, vision, camera, landmarks, calibration, privacy, experimental
 status: active
 depends_on: [105, 106]
 canonical_target: docs/sdd/06-epic-05-computer-vision.md
+as_built: docs/sdd/06-epic-05-computer-vision.md (E01-R01, r207)
 verify: false technical feedback rate gate + valós eszközös benchmark
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

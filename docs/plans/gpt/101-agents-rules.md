@@ -5,6 +5,7 @@ tags: [process, rules, agents, gates]
 status: active
 depends_on: []
 canonical_target: AGENTS.md (repo root, E01-R01)
+as_built: AGENTS.md (E01-R01, r207)
 verify: AGENTS.md a repo gyökerében, E01-R01 acceptance
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---

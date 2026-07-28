@@ -5,6 +5,7 @@ tags: [execution, playbook, workflow]
 status: active
 depends_on: [101]
 canonical_target: docs/execution/02-codex-playbook.md
+as_built: docs/execution/02-codex-playbook.md (E01-R01, r207)
 verify: minden kör e szerint fut
 source: chatgpt-plan 2026-07-28 (Codex Execution Pack, 58-file manifest)
 ---
