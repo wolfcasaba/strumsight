@@ -1,6 +1,6 @@
 ---
 id: 123
-topic: Execution Pack MANIFEST — az 58 fájlos csomag leltára (ebből 23 feltöltve, a hiányzókat lásd INDEX.md)
+topic: Execution Pack MANIFEST — az 58 fájlos csomag leltára (ebből 26 feltöltve — minden SDD-fejezet megvan a Ch8 KIVÉTELÉVEL; hiányzók: INDEX.md)
 tags: [manifest, inventory]
 status: active
 depends_on: []

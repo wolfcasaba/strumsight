@@ -1,6 +1,7 @@
 # GPT plan corpus — index
 
-> Feltöltve: **2026-07-28** (Codex Execution Pack, 58 fájlos manifest → 23 chunk itt).
+> Feltöltve: **2026-07-28**, két batchben (Codex Execution Pack, 58 fájlos manifest → **26 chunk** itt).
+> 2. batch: Ch10/11/12 új; a többi 13 fájl bit-azonos duplikátum volt (ellenőrizve md5-tel).
 > Triage a HANDOFF (r205) + dsp chunk 001–018 ellen: lásd lent. Frissítsd minden chunk-változással egy commitban.
 
 ## Chunkok
@@ -30,6 +31,9 @@
 | 121 | Release Checklist | active | — | |
 | 122 | Requirements Traceability Matrix | active | 103 | körönként frissítendő |
 | 123 | Execution Pack MANIFEST | active | — | |
+| 124 | SDD Ch10 / Epic 9 — Community Platform (32 kör) | active | 105, 111 | 2. batch |
+| 125 | SDD Ch11 / Epic 10 — Offline AI (32 kör) | active | 105, 108 | 2. batch |
+| 126 | SDD Ch12 — Release Roadmap & Final Integration (42 kör) | active | 103–111, 124, 125 | 2. batch |
 
 ## Triage-eredmény (2026-07-28, HANDOFF r205 + dsp corpus ellen)
 
@@ -65,10 +69,8 @@
 
 ## Hiányzó dokumentumok (a manifest 58 fájljából még nincs feltöltve)
 
-- `docs/sdd/08-epic-07-ai-practice-generator.md` (Ch8) — a 111 (gamification) függősége!
-- `docs/sdd/10-epic-09-community-platform.md` (Ch10)
-- `docs/sdd/11-epic-10-offline-ai.md` (Ch11)
-- `docs/sdd/12-release-roadmap-final-integration.md` (Ch12, 42 kör)
+- ⚠ **`docs/sdd/08-epic-07-ai-practice-generator.md` (Ch8) — az EGYETLEN hiányzó SDD-fejezet!**
+  A 111 (gamification) és 126 (Ch12 roadmap, Sprint 19) függősége; a Fázis C nem zárható nélküle.
 - `docs/execution/08-codex-round-prompt-template.md`, `09-document-authority-and-migration.md`
 - `docs/development/01–06, 08` (local/android/backend/ml setup, env vars, secrets, troubleshooting)
 - `docs/governance/02, 03, 05–13` (labels, board, device matrix, security, licence, UX, fixtures, business, privacy)
