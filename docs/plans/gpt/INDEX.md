@@ -45,6 +45,11 @@
   még `music_theory` → **E01-R02 valós munka** (rename + Android/iOS azonosítók).
 - A terv fájlszámai (~165 forrás / 159 teszt) egyeznek a valósággal (168 dart fájl).
 - Ch2 §3.4 "azonosított adósságok" listája pontos (create_all, debug signing, cross-feature importok…).
+- ⚠ **Terv-belső számozási drift (E01-R01b felfedezés):** az RTM (chunk 122 / `docs/execution/06`)
+  az issue-sablonokat és a branch protectiont KÜLÖN körként listázza (INT-R03 / INT-R04), a Ch12
+  fejezetszöveg (chunk 126) viszont a Kör 3-ban összevonja őket. A 00-index szabálya szerint
+  végrehajtáskor a fejezet-fájl az irányadó — a Ch12 körök indításakor az RTM-sorokat ehhez kell
+  igazítani.
 
 **Megerősített tanulságok** (a terv NEM ütközik a mért igazsággal, hanem kodifikálja):
 
