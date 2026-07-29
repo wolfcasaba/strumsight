@@ -196,7 +196,45 @@ A kör végén a `HANDOFF.md` tartalmazza:
 - pontos következő kör;
 - nem commitolt vagy külső függőség.
 
-## 15. Végrehajtási jelentés
+## 15. Párhuzamos fejlesztés (Claude + Codex)
+
+Két agent EGYSZERRE két külön kört vihet (bevált 2026-07-29: Codex = E01-R08,
+Claude = E01-R09). Kötelező feltételek — ha bármelyik nem teljesül, a köröket
+sorban kell vinni:
+
+1. **Külön munkapéldány.** Minden agent SAJÁT klónban dolgozik
+   (`/home/ubuntu/ss-<agent>-<kör>`), soha nem a közös working tree-ben, és
+   saját branchen (`codex/epic-01-round-NN-<slug>`). A sandbox-izoláció NEM
+   véd a git-szintű felülírás ellen.
+2. **Fájlszinten diszjunkt körök.** Csak olyan két kör futhat együtt, amelyek
+   forrásfájljai nem fedik egymást (pl. hálózati réteg vs. audio lifecycle).
+   Ha ez kétséges, nincs párhuzamosítás.
+3. **Területkiosztás a promptban.** A prompt sorolja fel tételesen: mihez NYÚLHAT
+   az agent, és mi a másik agent területe (oda TILOS írni — ha kellene, meg kell
+   állni és jelenteni).
+4. **Előre kiosztott ADR-számok** (pl. 0055 = korábbi kör, 0056 = későbbi), hogy
+   ne ütközzön a sorszám.
+5. **A `HANDOFF.md`-t csak EGY agent írja.** A másik hozzá sem nyúl; a merge-ök
+   után egyetlen `docs(handoff)` commit rögzíti mindkét kört.
+6. **Közös fájl csak saját szekcióban.** Megosztott enumba/konstansfájlba
+   (pl. `lib/core/foundation/app_failure.dart`) mindenki csak a saját köréhez
+   tartozó szekcióba ír.
+7. **Merge-sorrend:** az alacsonyabb sorszámú kör megy be előbb; a másik utána
+   rebase-el `main`-re és ÚJRA lefuttatja a CI-t a merge előtt. A merge-bar
+   változatlan: minden gate zöld (§12), különben nincs merge.
+
+Codex indítása headless módban (a bwrap-sandbox ezen a boxon AppArmor miatt nem
+tud user namespace-t nyitni, ezért `-s danger-full-access`):
+
+```bash
+codex exec -C /home/ubuntu/ss-codex-<kör> -s danger-full-access "$(cat <prompt>.md)"
+```
+
+A prompt tartalmazza a kötelező olvasnivalót (§3), a kör pontos scope-ját, a
+területkiosztást, a gate-parancsokat KÜLÖN hívásokként, a CI-dispatchet és a
+megállási pontokat.
+
+## 16. Végrehajtási jelentés
 
 A válaszban add meg:
 

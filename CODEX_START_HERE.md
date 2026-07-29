@@ -38,6 +38,30 @@ Ne kezdd el a Kör 2-t. Ne módosíts DSP-paramétert vagy ML-súlyt. A meglév�
 - kockázatok és következő pontos kör.
 ```
 
+## Párhuzamos kör egy másik agenttel (bevált felállás, 2026-07-29)
+
+A Codex és a Claude egyszerre vihet két KÜLÖN kört. A szabályok teljes listája:
+[`AGENTS.md` §15](AGENTS.md). Röviden:
+
+- **Saját klón, saját branch.** A Codex `/home/ubuntu/ss-codex-<kör>` klónban
+  dolgozik (nem a közös working tree-ben), branch:
+  `codex/epic-01-round-NN-<slug>`.
+- **Indítás headless módban** (a bwrap sandbox ezen a gépen AppArmor miatt nem
+  indul, ezért teljes hozzáférésű mód, dedikált klónban):
+
+  ```bash
+  codex exec -C /home/ubuntu/ss-codex-<kör> -s danger-full-access "$(cat <prompt>.md)"
+  ```
+
+- **A prompt mindig sorolja fel:** a kör pontos scope-ját, a saját fájlterületet,
+  a másik agent TILTOTT területét, az előre kiosztott ADR-sorszámot, a gate-eket
+  külön parancsokként, a CI-dispatchet és a megállási pontokat.
+- **A `HANDOFF.md`-hez a Codex ilyenkor NEM nyúl** — a merge-ök után a másik
+  agent rögzíti mindkét kört egyetlen `docs(handoff)` committal.
+- **Merge-sorrend:** az alacsonyabb sorszámú kör előbb; utána a másik rebase-el
+  `main`-re és újra lefuttatja a CI-t.
+- **Csak fájlszinten diszjunkt körök** futhatnak együtt; kétség esetén sorban.
+
 ## Kötelező megállási pontok
 
 A Codex álljon meg és jelentse a problémát, ha:
