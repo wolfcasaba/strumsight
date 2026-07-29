@@ -223,6 +223,30 @@ sorban kell vinni:
    rebase-el `main`-re és ÚJRA lefuttatja a CI-t a merge előtt. A merge-bar
    változatlan: minden gate zöld (§12), különben nincs merge.
 
+### 15.1 Egy kör két félre osztva
+
+Nemcsak két KÜLÖN kör futhat párhuzamosan: egy kör is szétvágható két
+fájlszinten diszjunkt félre (bevált 2026-07-29, E01-R10 — A = zenei domain +
+feature public API, B = WAV codec + architecture guard). A fenti hét feltétel
+változatlanul kötelező, plusz:
+
+8. **A függő fél megy másodikként.** Ha a B-rész eredménye függ az A-résztől
+   (pl. az architecture guard allowlistje csak az A-rész import-migrációja
+   után végleges), a B-rész az A merge-e UTÁN rebase-el `main`-re,
+   ÚJRAGENERÁLJA a származtatott tartalmat, és csak azután futtat CI-t.
+
+### 15.2 A Codex kizárólag kódol (user-szabály, 2026-07-29)
+
+A Codex feladata a **kód és a hozzá tartozó teszt megírása**. A kör
+levezénylése a Claude-oldalé:
+
+- CI-dispatch, a futás figyelése és a build-evidencia begyűjtése;
+- PR-nyitás és a squash-merge;
+- a gate-ek **független** ellenőrzése a merge-elt `main`-en — az „X kész és
+  zöld" állítást nem elfogadjuk, hanem újrafuttatjuk (az E01-R10-ben a guard
+  mind a négy szabályát valódi, kézzel bevitt sértéssel próbáltuk ki);
+- `HANDOFF.md`, RTM, ADR-hivatkozások és a végrehajtási jelentés.
+
 Codex indítása headless módban (a bwrap-sandbox ezen a boxon AppArmor miatt nem
 tud user namespace-t nyitni, ezért `-s danger-full-access`):
 
