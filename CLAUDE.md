@@ -10,6 +10,10 @@ though it reuses their Flutter infrastructure, plugin set, dev-agents and learni
 > Binding rules: [`AGENTS.md`](AGENTS.md) (agent rulebook, doc-priority chain) →
 > [`docs/sdd/00-index.md`](docs/sdd/00-index.md) (Ch1–12) → [`docs/execution/`](docs/execution/)
 > (playbook, DoR/DoD, traceability). One session = one SDD round (E01-R01, …), stop after.
+> **Agent roles ([ADR 0055](docs/adr/0055-agent-role-protocol.md), AGENTS.md §15):** Claude plans
+> (round brief with an explicit allowed-files list) → Codex implements → Claude reviews
+> (`docs/reviews/`, BLOCKER/MAJOR/MINOR/NOTE, no production edits during review) → Codex fixes →
+> Claude merges under the unchanged ADR 0052 green gate.
 > Searchable plan corpus: `node tools/rag.mjs --corpus plan "..."`. On conflict AGENTS.md wins
 > over this file (except the build gotchas below — those are measured truths of this box).
 

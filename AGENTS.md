@@ -183,6 +183,14 @@ ML változtatásnál a fejezetben megadott célzott pytest/parity/evaluation par
 - Ne módosíts vagy törölj más munkáját.
 - Ne használj force push-t külön engedély nélkül.
 - Ne commitolj generált buildet, secretet, lokális adatbázist vagy nagy datasetet.
+- **Explicit staging.** A fájlokat tételesen kell stage-elni; `git add .` és
+  `git add -A` tilos — kétágenses munkában behúzza a másik ágens vagy a
+  working tree ismeretlen változtatásait.
+- **Destruktív parancsok tilalma külön user-engedély nélkül:** `git reset --hard`,
+  `git checkout -- .`, `git restore .`, `git clean -fd`, `git stash drop/clear`,
+  `git branch -D` idegen branchre. Ezek némán megsemmisítik a másik ágens
+  még nem commitolt munkáját, és a git-szintű veszteség nem visszaállítható a
+  sandboxból. Ha a working tree zavaros, állj meg és jelentsd.
 
 ## 14. HANDOFF frissítés
 
@@ -196,11 +204,74 @@ A kör végén a `HANDOFF.md` tartalmazza:
 - pontos következő kör;
 - nem commitolt vagy külső függőség.
 
-## 15. Párhuzamos fejlesztés (Claude + Codex)
+## 15. Ágensszerepek (Claude + Codex)
 
-Két agent EGYSZERRE két külön kört vihet (bevált 2026-07-29: Codex = E01-R08,
-Claude = E01-R09). Kötelező feltételek — ha bármelyik nem teljesül, a köröket
-sorban kell vinni:
+**Alapértelmezett modell — váltóbot** ([ADR 0055](docs/adr/0055-agent-role-protocol.md),
+user-döntés 2026-07-29). Egy körön egyszerre EGY ágens ír; a munka átadásra
+kerül, nem párhuzamosan zajlik:
+
+```
+Claude tervez → Codex implementál → Claude review-z → Codex javít → Claude merge-el
+```
+
+### 15.1 Claude — tervező és reviewer
+
+- Elolvassa az SDD-t (§3) és megírja a **kör-briefet**
+  (`docs/execution/08-round-brief.md` sablon): cél, scope, scope-on kívüli
+  rész, **engedélyezett fájlok tételes listája**, acceptance criteria,
+  kötelező gate-parancsok, kockázatok, implementációs sorrend.
+- A brief a kör indítása ELŐTT commitolva van — az „engedélyezett fájlok"
+  lista így a review-nál objektíven ellenőrizhető, nem a sessionnel elszálló
+  prompt-megállapodás.
+- A Codex-diff átvétele után **független review-jelentést** ír
+  (`docs/execution/09-review-report.md` sablon → `docs/reviews/eXX-rYY-review.md`),
+  BLOCKER / MAJOR / MINOR / NOTE osztályozással.
+- **Review közben Claude nem ír production kódot.** A review kimenete
+  jelentés. Kivétel: aktuális explicit user-utasítás, vagy ha a Codex-oldal
+  nem elérhető — ezt a jelentésben rögzíteni kell.
+- **A kör levezénylése is Claude-oldal** (user-szabály, 2026-07-29):
+  CI-dispatch, a futás figyelése és a build-evidencia begyűjtése; PR-nyitás és
+  a squash-merge az [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)
+  zöld-kapus szabálya szerint (§13); `HANDOFF.md`, RTM, ADR-hivatkozások és a
+  végrehajtási jelentés.
+- **A gate-eket függetlenül újra kell futtatni** a merge-elt `main`-en. Az „X
+  kész és zöld" állítást nem fogadjuk el bemondásra (az E01-R10-ben az
+  architecture guard mind a négy szabályát valódi, kézzel bevitt sértéssel
+  próbáltuk ki).
+
+### 15.2 Codex — implementáló
+
+- Csak a briefben **engedélyezett fájlokat** módosítja. Ha a kör
+  elvégezhetetlennek tűnik a listán belül, MEGÁLL és jelent — nem tágítja a
+  scope-ot magától.
+- Implementál + tesztet ír, futtatja a formázást, analyzert és a célzott
+  teszteket (§12, külön parancsokként).
+- Kitölti a brief „Implementation handoff" szekcióját: fájlonkénti
+  összefoglaló, futtatott parancsok TÉNYLEGES kimenettel, eltérések, nem
+  futtatott ellenőrzések és okuk.
+- A review után minden BLOCKER és MAJOR megállapítást javít; MINOR-t csak ha
+  nem növeli érdemben a diffet. Kapcsolódó, de scope-on kívüli refaktort nem
+  végez.
+- Nem tervezi újra a jóváhagyott architektúrát külön ADR nélkül.
+
+### 15.3 Indítás
+
+```bash
+codex exec -C /home/ubuntu/ss-codex-<kör> -s danger-full-access "$(cat <prompt>.md)"
+```
+
+(A bwrap-sandbox ezen a boxon AppArmor miatt nem tud user namespace-t nyitni,
+ezért `-s danger-full-access` — az izolációt a külön munkapéldány adja, nem a
+sandbox.) A prompt tartalmazza a kötelező olvasnivalót (§3), a kör-brief
+elérési útját, az engedélyezett fájlok listáját, a gate-parancsokat KÜLÖN
+hívásokként, a CI-dispatchet és a megállási pontokat.
+
+### 15.4 Párhuzamos kétkörös futás — OPT-IN KIVÉTEL
+
+Két agent EGYSZERRE két külön kört is vihet (bevált 2026-07-29: Codex = E01-R08,
+Claude = E01-R09), de ez az ADR 0055 óta **nem alapértelmezés, csak explicit
+user-döntésre** indítható — cserébe a kör elveszti a független reviewert.
+Kötelező feltételek — ha bármelyik nem teljesül, a köröket sorban kell vinni:
 
 1. **Külön munkapéldány.** Minden agent SAJÁT klónban dolgozik
    (`/home/ubuntu/ss-<agent>-<kör>`), soha nem a közös working tree-ben, és
@@ -222,41 +293,21 @@ sorban kell vinni:
 7. **Merge-sorrend:** az alacsonyabb sorszámú kör megy be előbb; a másik utána
    rebase-el `main`-re és ÚJRA lefuttatja a CI-t a merge előtt. A merge-bar
    változatlan: minden gate zöld (§12), különben nincs merge.
+8. **Pótolt review.** Mivel párhuzamos módban nincs szabad reviewer, a merge
+   előtt kötelező a kézi diff-audit (§11/9) + a hiányzó független review
+   rögzítése a PR-ben.
 
-### 15.1 Egy kör két félre osztva
+### 15.5 Egy kör két félre osztva
 
 Nemcsak két KÜLÖN kör futhat párhuzamosan: egy kör is szétvágható két
 fájlszinten diszjunkt félre (bevált 2026-07-29, E01-R10 — A = zenei domain +
-feature public API, B = WAV codec + architecture guard). A fenti hét feltétel
-változatlanul kötelező, plusz:
+feature public API, B = WAV codec + architecture guard). A §15.4 nyolc
+feltétele változatlanul kötelező, plusz:
 
-8. **A függő fél megy másodikként.** Ha a B-rész eredménye függ az A-résztől
+9. **A függő fél megy másodikként.** Ha a B-rész eredménye függ az A-résztől
    (pl. az architecture guard allowlistje csak az A-rész import-migrációja
    után végleges), a B-rész az A merge-e UTÁN rebase-el `main`-re,
    ÚJRAGENERÁLJA a származtatott tartalmat, és csak azután futtat CI-t.
-
-### 15.2 A Codex kizárólag kódol (user-szabály, 2026-07-29)
-
-A Codex feladata a **kód és a hozzá tartozó teszt megírása**. A kör
-levezénylése a Claude-oldalé:
-
-- CI-dispatch, a futás figyelése és a build-evidencia begyűjtése;
-- PR-nyitás és a squash-merge;
-- a gate-ek **független** ellenőrzése a merge-elt `main`-en — az „X kész és
-  zöld" állítást nem elfogadjuk, hanem újrafuttatjuk (az E01-R10-ben a guard
-  mind a négy szabályát valódi, kézzel bevitt sértéssel próbáltuk ki);
-- `HANDOFF.md`, RTM, ADR-hivatkozások és a végrehajtási jelentés.
-
-Codex indítása headless módban (a bwrap-sandbox ezen a boxon AppArmor miatt nem
-tud user namespace-t nyitni, ezért `-s danger-full-access`):
-
-```bash
-codex exec -C /home/ubuntu/ss-codex-<kör> -s danger-full-access "$(cat <prompt>.md)"
-```
-
-A prompt tartalmazza a kötelező olvasnivalót (§3), a kör pontos scope-ját, a
-területkiosztást, a gate-parancsokat KÜLÖN hívásokként, a CI-dispatchet és a
-megállási pontokat.
 
 ## 16. Végrehajtási jelentés
 
