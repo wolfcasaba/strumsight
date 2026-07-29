@@ -161,11 +161,10 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   Android namespace és iOS bundle id → `com.wolfcasaba.strumsight`, a verzió-igazságforrás
   egységesítése (a `pubspec.yaml` a forrás; a README ellentmondó „v0.2.0"-ja rendezendő), plusz egy
   régi-név-őr teszt/script allowlisttel (2.5).
-  **Két user-döntés az indítás ELŐTT:**
-  1. 🔴 **A rename ÚJ appként települ a telefonra** — az Android application ID megváltozik, így a
-     meglévő (Lab-os) telepítés nem frissül, hanem külön ikonként marad meg, a helyi adatai/beállításai
-     nem vándorolnak át. A terv szerint ez publikus store-release előtt elfogadható, de **ADR-ben
-     rögzítendő** és a user beleegyezése kell hozzá.
+  **A két indítás-előtti user-döntés MEGVAN:**
+  1. ✅ **ELDŐLT (2026-07-28, user: „igen"): a rename mehet** — elfogadva, hogy az application ID
+     csere miatt az app ÚJ appként települ (a régi Lab-telepítés külön ikonként marad, lokális adatai
+     nem vándorolnak). A kör során ADR-ben rögzítendő (a terv migrációs-kockázat szabálya szerint).
   2. ✅ **ELDŐLT (2026-07-28, user): branch-per-round + PR workflow** a terv szerint
      ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md),
      [ADR 0005](docs/adr/0005-branch-per-round-pr-workflow.md)) — a kör a

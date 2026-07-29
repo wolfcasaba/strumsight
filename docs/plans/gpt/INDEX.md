@@ -71,8 +71,10 @@
    a „legalább 1 review" ügynöki second-eye review-ra lazítva, a formális GitHub branch-protection
    külön körre (RTM `INT-R04`) halasztva. Rögzítve: `docs/adr/0005-branch-per-round-pr-workflow.md`.
    Maradék blokkoló csak a token (Contents + Workflows + Pull requests: Read+write).
-2. **E01-R02 rename:** az Android application ID csere a telepített appot ÚJ appként jeleníti meg
-   (a terv dokumentálja). Store-release előtt OK — de a user Lab-telepítéseit érinti; jelezni.
+2. ✅ **ELDŐLT (2026-07-28, user: „igen") — E01-R02 rename:** a user elfogadta, hogy az Android
+   application ID csere miatt az app ÚJ appként települ a telefonra (a régi Lab-telepítés külön
+   ikonként marad, lokális adatai nem vándorolnak). A kockázatot a kör során ADR rögzíti (a terv
+   2.x szerint). **E01-R02 indítható.**
 3. ✅ **MEGOLDVA (2026-07-28) — Hiányzó fejezetek feltöltése:** a Ch8 a 3. batchben megérkezett
    (chunk 127), így az SDD Ch1–12 TELJES; a Fázis C–E nincs többé fejezethiány miatt blokkolva.
 
