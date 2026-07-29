@@ -8,6 +8,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 111 — the count-in must be ONE BAR of the lesson's own metre:
 /// counting "1-2-3-4" into a 3/4 waltz is musically wrong (and misaligns
@@ -22,7 +23,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

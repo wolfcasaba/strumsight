@@ -7,8 +7,11 @@ import 'package:strumsight/features/settings/providers/visual_latency_provider.d
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _app() => const ProviderScope(
-  child: MaterialApp(
+import '../../support/preference_store.dart';
+
+Widget _app() => ProviderScope(
+  overrides: preferenceOverrides(),
+  child: const MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: LatencyCalibrationScreen(),

@@ -8,6 +8,8 @@ import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 155 — the onboarding "first win" (chunk 017 rec #4): the shortest
 /// route from install to a SCORED strum, inside the first two minutes.
 void main() {
@@ -58,6 +60,7 @@ void main() {
     var firstWin = 0;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: preferenceOverrides(),
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

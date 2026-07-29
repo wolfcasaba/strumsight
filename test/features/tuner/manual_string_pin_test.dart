@@ -12,6 +12,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 91 — manual string mode (GuitarTuna parity): tap a chip to PIN that
 /// string; the gauge then reads against the pinned target instead of the
@@ -20,7 +21,10 @@ import '../../support/fake_engines.dart';
 Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
     tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -89,7 +93,7 @@ void main() {
   });
 
   test('switching tuning clears a pin that is not in the new tuning', () {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     final pin = container.read(pinnedStringProvider.notifier);
     pin.toggle(Tunings.standard.strings.first); // E2

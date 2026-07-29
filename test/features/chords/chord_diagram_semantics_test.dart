@@ -6,6 +6,8 @@ import 'package:strumsight/features/settings/providers/left_handed_provider.dart
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 88 — the chord diagram is painter-only: a screen-reader user gets
 /// no fingering at all. The label speaks the standard tab notation
 /// ("x 3 2 0 1 0", low-E → high-E), which is exactly how fingerings are
@@ -17,6 +19,7 @@ Future<void> pumpDiagram(
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
+      ...preferenceOverrides(),
       if (leftHanded) leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
     ],
     child: MaterialApp(

@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/settings/providers/nudge_enabled_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round-82 devil-advocate fix: the toggle must never LIE. After a
 /// force-stop / permission revoke the persisted ON is stale — the startup
@@ -14,17 +16,18 @@ void main() {
   test(
     'persisted ON + platform says no → reconciled to OFF (persisted too)',
     () async {
-      SharedPreferences.setMockInitialValues({'nudge_enabled': true});
-      final container = ProviderContainer();
+      final store = InMemoryKeyValueStore({StorageKeys.nudgeEnabled: true});
+      final container = ProviderContainer(
+        overrides: [preferenceStoreOverride(store)],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(nudgeEnabledProvider.notifier);
       await notifier.reconcile(copyFor: (_) => (title: 't', body: 'b'));
 
       expect(container.read(nudgeEnabledProvider), isFalse);
-      final prefs = await SharedPreferences.getInstance();
       expect(
-        prefs.getBool('nudge_enabled'),
+        store.values[StorageKeys.nudgeEnabled],
         isFalse,
         reason: 'the honest OFF must survive the next restart too',
       );
@@ -32,13 +35,20 @@ void main() {
   );
 
   test('persisted OFF → reconcile is a no-op', () async {
-    SharedPreferences.setMockInitialValues({'nudge_enabled': false});
-    final container = ProviderContainer();
+    final store = InMemoryKeyValueStore({StorageKeys.nudgeEnabled: false});
+    final container = ProviderContainer(
+      overrides: [preferenceStoreOverride(store)],
+    );
     addTearDown(container.dispose);
 
     await container
         .read(nudgeEnabledProvider.notifier)
         .reconcile(copyFor: (_) => (title: 't', body: 'b'));
     expect(container.read(nudgeEnabledProvider), isFalse);
+    expect(
+      store.writeLog,
+      isEmpty,
+      reason: 'an off reminder must not touch the store at all',
+    );
   });
 }

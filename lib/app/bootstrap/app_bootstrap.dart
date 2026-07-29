@@ -87,8 +87,11 @@ abstract final class AppBootstrap {
         migrations: migrations,
       ).migrate();
 
-      final onboardingSeen =
-          await (loadOnboardingSeen ?? OnboardingController.load)();
+      // Read AFTER the migrations, so a build that renamed the key still sees
+      // the returning user's flag rather than restarting onboarding.
+      final onboardingSeen = loadOnboardingSeen == null
+          ? OnboardingController.readSeen(store)
+          : await loadOnboardingSeen();
 
       return BootstrapSuccess(
         config: config,

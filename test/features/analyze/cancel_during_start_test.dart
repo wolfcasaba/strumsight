@@ -6,6 +6,8 @@ import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
 import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 114 — the round-102 dispose-time cancel only covered a take whose
 /// phase was already `recording`. A tab switch DURING the mic-start handshake
 /// (Record tapped, `_recorder.start()` still awaiting) slipped past both the
@@ -42,6 +44,7 @@ void main() {
     final recorder = _GatedRecorder();
     final container = ProviderContainer(
       overrides: [
+        ...preferenceOverrides(),
         analyzeControllerProvider.overrideWith(
           () => AnalyzeController(recorder: recorder),
         ),

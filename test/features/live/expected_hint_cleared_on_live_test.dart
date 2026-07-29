@@ -4,6 +4,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 146 — defence in depth for the r137 expected-chord hint: free-play
 /// Live must EXPLICITLY clear any hint on entry instead of trusting the nav
@@ -21,7 +22,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: const StrumSightApp(),
       ),
     );

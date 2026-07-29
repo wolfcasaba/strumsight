@@ -4,13 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/providers/favorite_chords_provider.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round 108 — favourite chords: long-press a diagram in the library to pin
 /// it into a FAVORITES group at the top (persisted). The chords you're
 /// drilling this month shouldn't need scrolling past the whole catalogue.
 Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
   ProviderScope(
+    overrides: preferenceOverrides(),
     child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -20,20 +22,18 @@ Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
 );
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   test('toggle adds and removes, and persists across containers', () async {
-    final c1 = ProviderContainer();
+    final store = InMemoryKeyValueStore();
+
+    final c1 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c1.dispose);
     await c1.read(favoriteChordsProvider.notifier).toggle('Am');
     await c1.read(favoriteChordsProvider.notifier).toggle('C');
     await c1.read(favoriteChordsProvider.notifier).toggle('Am');
     expect(c1.read(favoriteChordsProvider), {'C'});
 
-    final c2 = ProviderContainer();
+    final c2 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c2.dispose);
-    c2.read(favoriteChordsProvider);
-    await Future<void>.delayed(Duration.zero);
     expect(c2.read(favoriteChordsProvider), {'C'});
   });
 

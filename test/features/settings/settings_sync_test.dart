@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_auth.dart';
 import '../../support/fake_settings.dart';
+import '../../support/preference_store.dart';
 
 ProviderContainer _container({
   required FakeTokenStore tokens,
@@ -22,6 +23,7 @@ ProviderContainer _container({
 }) {
   final container = ProviderContainer(
     overrides: [
+      ...preferenceOverrides(),
       tokenStoreProvider.overrideWithValue(tokens),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
       settingsRepositoryProvider.overrideWithValue(settings),

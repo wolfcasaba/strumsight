@@ -7,6 +7,8 @@ import 'package:strumsight/features/learn/providers/backing_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 90 — tap a chord in the library to HEAR it (the reference tool
 /// teaches sound, not just shape). The pad player is injected so tests can
 /// record what was asked to play.
@@ -24,7 +26,10 @@ void main() {
     final backing = _RecordingBacking();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [backingProvider.overrideWithValue(backing)],
+        overrides: [
+          ...preferenceOverrides(),
+          backingProvider.overrideWithValue(backing),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -44,7 +49,10 @@ void main() {
     final backing = _RecordingBacking();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [backingProvider.overrideWithValue(backing)],
+        overrides: [
+          ...preferenceOverrides(),
+          backingProvider.overrideWithValue(backing),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

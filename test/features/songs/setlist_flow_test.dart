@@ -12,6 +12,8 @@ import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
   final List<Song> _seed;
@@ -49,6 +51,7 @@ Widget _app(
   List<Setlist> setlists = const [],
 }) => ProviderScope(
   overrides: [
+    ...preferenceOverrides(),
     songsProvider.overrideWith(() => _SeededSongs(songs)),
     setlistsProvider.overrideWith(() => _SeededSetlists(setlists)),
   ],

@@ -10,6 +10,8 @@ import 'package:strumsight/features/settings/providers/capo_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 114 — a RENAMED title must never go through the capo transposer.
 /// Auto-titles are chord summaries ("C · G"), so showing them transposed under
 /// a capo is correct. But r106 user titles took the same path: "Campfire
@@ -54,7 +56,10 @@ void main() {
   ) async {
     final session = _session('a', 'C · G');
     await tester.pumpWidget(
-      ProviderScope(child: _app(SessionDetailScreen(session: session))),
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: _app(SessionDetailScreen(session: session)),
+      ),
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
@@ -79,7 +84,10 @@ void main() {
   ) async {
     final session = _session('a', 'C · G');
     await tester.pumpWidget(
-      ProviderScope(child: _app(SessionDetailScreen(session: session))),
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: _app(SessionDetailScreen(session: session)),
+      ),
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
@@ -102,7 +110,10 @@ void main() {
   ) async {
     // The library screen is a tab body — it brings no Material of its own.
     await tester.pumpWidget(
-      ProviderScope(child: _app(const Scaffold(body: LibraryScreen()))),
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: _app(const Scaffold(body: LibraryScreen())),
+      ),
     );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(

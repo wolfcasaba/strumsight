@@ -7,6 +7,8 @@ import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/settings/providers/left_handed_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 Future<void> pumpDiagram(
   WidgetTester tester,
   String label, {
@@ -14,6 +16,7 @@ Future<void> pumpDiagram(
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
+      ...preferenceOverrides(),
       if (leftHanded) leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
     ],
     child: MaterialApp(

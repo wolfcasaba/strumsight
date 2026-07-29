@@ -10,6 +10,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -19,7 +20,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -40,7 +44,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -64,7 +71,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -111,7 +121,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

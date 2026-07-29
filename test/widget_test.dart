@@ -5,6 +5,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
 import 'support/fake_engines.dart';
+import 'support/preference_store.dart';
 
 void main() {
   testWidgets('App boots to the Live tab with bottom navigation', (
@@ -15,7 +16,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: const StrumSightApp(),
       ),
     );

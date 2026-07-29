@@ -11,6 +11,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 class _FixedMs extends InputLatencyNotifier {
   _FixedMs(this._v);
@@ -41,6 +42,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           // Audio 100 ms, visual 40 ms → skew 60 ms. First Strums is 70 BPM
           // → 0.06 s × (70/60) beats = 0.07 beats drawn LATER.
@@ -68,7 +70,10 @@ void main() {
     addTearDown(engine.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

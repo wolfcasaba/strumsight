@@ -6,6 +6,7 @@ import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// A LabMode notifier fixed at [_v] (skips the async prefs load) for tests.
 class _FixedLabMode extends LabModeNotifier {
@@ -30,6 +31,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           labModeProvider.overrideWith(() => _FixedLabMode(false)),
         ],
@@ -54,6 +56,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...preferenceOverrides(),
             strumEngineProvider.overrideWithValue(engine),
             labModeProvider.overrideWith(() => _FixedLabMode(true)),
           ],
@@ -79,6 +82,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           labModeProvider.overrideWith(() => _FixedLabMode(true)),
         ],

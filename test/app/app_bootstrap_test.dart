@@ -137,6 +137,43 @@ void main() {
     expect(store.contains(LegacyStorageKeys.capoFret), isFalse);
   });
 
+  test(
+    'E01-R06: the onboarding flag is read from the store AFTER the '
+    'migrations — an updating user is not sent back through onboarding',
+    () async {
+      final store = InMemoryKeyValueStore({
+        LegacyStorageKeys.onboardingSeen: true,
+      });
+
+      final success =
+          await AppBootstrap.run(
+                rawEnvironment: 'development',
+                buildMode: 'debug',
+                loadVersion: () async => '1.0.0+1',
+                openStore: () async => Success(store),
+                migrations: appStorageMigrations,
+              )
+              as BootstrapSuccess;
+
+      expect(success.onboardingSeen, isTrue);
+      expect(store.values[StorageKeys.onboardingSeen], isTrue);
+    },
+  );
+
+  test('E01-R06: a genuine first run reports onboarding as unseen', () async {
+    final success =
+        await AppBootstrap.run(
+              rawEnvironment: 'development',
+              buildMode: 'debug',
+              loadVersion: () async => '1.0.0+1',
+              openStore: () async => Success(InMemoryKeyValueStore()),
+              migrations: appStorageMigrations,
+            )
+            as BootstrapSuccess;
+
+    expect(success.onboardingSeen, isFalse);
+  });
+
   test('a failing migration does not block boot — the app starts on the '
       'values it already has', () async {
     final store = InMemoryKeyValueStore({LegacyStorageKeys.capoFret: 4})

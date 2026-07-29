@@ -8,6 +8,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 137 — the expected-target prior's Learn wiring (chunk 016 rec #1):
 /// while a lesson plays, the engine is HINTED with the chord the player is
@@ -28,7 +29,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

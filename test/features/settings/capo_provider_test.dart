@@ -1,21 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/settings/providers/capo_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   test('defaults to no capo', () {
-    final c = ProviderContainer();
+    final c = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(c.dispose);
     expect(c.read(capoProvider), 0);
   });
 
   test('set persists and clamps to 0..11', () async {
-    final c = ProviderContainer();
+    final store = InMemoryKeyValueStore();
+    final c = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c.dispose);
     final n = c.read(capoProvider.notifier);
 
@@ -28,21 +29,14 @@ void main() {
     await n.set(-5); // below min
     expect(c.read(capoProvider), 0);
 
-    // Persisted to SharedPreferences.
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getInt('capo_fret'), 0);
+    expect(store.values[StorageKeys.capoFret], 0);
   });
 
-  test('a stored value is loaded on build', () async {
-    SharedPreferences.setMockInitialValues({'capo_fret': 5});
-    final c = ProviderContainer();
+  test('a stored value is there on the FIRST read, with no async gap', () {
+    final c = ProviderContainer(
+      overrides: preferenceOverrides({StorageKeys.capoFret: 5}),
+    );
     addTearDown(c.dispose);
-    // First read instantiates the notifier, which kicks off the async prefs
-    // load; pump the event loop a few turns so getInstance + apply complete.
-    expect(c.read(capoProvider), 0); // default before load resolves
-    for (var i = 0; i < 5; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
     expect(c.read(capoProvider), 5);
   });
 }

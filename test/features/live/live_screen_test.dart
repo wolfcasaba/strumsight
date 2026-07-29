@@ -8,6 +8,7 @@ import 'package:strumsight/features/settings/providers/capo_provider.dart';
 import 'package:strumsight/main.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// A capo notifier fixed at [_v] (skips the async prefs load) for widget tests.
 class _FixedCapo extends CapoNotifier {
@@ -26,7 +27,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [strumEngineProvider.overrideWithValue(engine)],
+          overrides: [
+            ...preferenceOverrides(),
+            strumEngineProvider.overrideWithValue(engine),
+          ],
           child: const StrumSightApp(),
         ),
       );
@@ -63,6 +67,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           capoProvider.overrideWith(() => _FixedCapo(2)),
         ],
@@ -93,7 +98,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: const StrumSightApp(),
       ),
     );
@@ -128,7 +136,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: const StrumSightApp(),
       ),
     );
@@ -161,7 +172,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: const StrumSightApp(),
       ),
     );
