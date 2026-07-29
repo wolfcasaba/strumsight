@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/foundation/json_validation.dart';
-import '../../analyze/model/analyze_result.dart';
+import '../../analyze/public.dart';
 
 /// A saved analysis: the result plus when it was recorded and a title.
 @immutable

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
-import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/core/music/tuning.dart';
 import 'package:strumsight/features/tuner/providers/tuner_tuning_provider.dart';
 
 import '../../support/preference_store.dart';

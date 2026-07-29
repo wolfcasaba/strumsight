@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 void main() {
   final engine = MockStrumEngine(bpm: 96); // one bar = 2.5 s

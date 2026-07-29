@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 import '../../../support/synth.dart';
 

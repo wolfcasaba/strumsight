@@ -2,9 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
-import '../../analyze/model/analyze_result.dart';
-import '../../live/model/strum.dart';
-import '../../streak/daily_challenge.dart';
+import '../../analyze/public.dart';
+import '../../../core/music/strum.dart';
+import '../../streak/public.dart';
 
 /// One thing to play at a point in a lesson: a strum (with a direction) on a
 /// chord, timed in **beats** from the lesson start (eighth-note resolution →

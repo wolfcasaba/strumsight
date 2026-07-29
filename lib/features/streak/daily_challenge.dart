@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import '../live/model/strum.dart';
+import '../../core/music/strum.dart';
 
 /// A daily strum-pattern challenge, derived **deterministically** from the
 /// epoch day so every device shows the same pattern on the same date with no

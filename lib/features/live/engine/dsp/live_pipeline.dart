@@ -2,16 +2,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
-import '../../model/chord.dart';
+import '../../../../core/music/chord.dart';
 import '../../model/live_frame.dart';
-import '../../model/strum.dart';
+import '../../../../core/music/strum.dart';
+import '../../model/beat_slot.dart';
 import '../ml/crnn_strum_net.dart';
 import '../ml/live_crnn_classifier.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
-import 'sliding_framer.dart';
+import '../../../../core/audio/dsp/sliding_framer.dart';
 import 'strum_analyzer.dart';
 import 'strum_direction_classifier.dart';
 import 'tempo_tracker.dart';

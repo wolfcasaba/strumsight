@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../../analyze/engine/ml_chord_decoder.dart';
-import '../../analyze/model/analyze_result.dart';
+import '../../analyze/public.dart';
 
 /// One ML-vs-DSP comparison point, sampled at an ML chord segment (Lab mode,
 /// r198). Everything but the timestamp is nullable — the batch Analyze path

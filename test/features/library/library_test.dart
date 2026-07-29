@@ -4,7 +4,7 @@ import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/library/data/library_repository.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 

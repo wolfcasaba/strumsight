@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/tuner/model/guitar_strings.dart';
+import 'package:strumsight/core/music/guitar_strings.dart';
 import 'package:strumsight/features/tuner/model/tuner_reading.dart';
-import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/core/music/tuning.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/providers/pinned_string_provider.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/foundation/json_validation.dart';
-import '../../learn/model/lesson.dart';
+import '../../learn/public.dart';
 import 'song.dart';
 
 /// Bound on how many songs one persisted setlist may reference (Kör 7 §7.1).

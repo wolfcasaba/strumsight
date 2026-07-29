@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../analyze/model/analyze_result.dart';
-import '../../live/model/strum.dart';
+import '../../analyze/public.dart';
+import '../../../core/music/strum.dart';
 import '../share_content.dart';
 
 /// The shareable "Strum Card" — a self-contained, brand-styled artifact that

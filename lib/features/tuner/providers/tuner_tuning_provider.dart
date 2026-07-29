@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/persisted_preference.dart';
 import '../../../core/storage/storage_keys.dart';
-import '../model/tuning.dart';
+import '../../../core/music/tuning.dart';
 
 /// The tuner's selected tuning. Persisted by id; LOCAL-only (a device/session
 /// preference like the A4 reference — never synced).

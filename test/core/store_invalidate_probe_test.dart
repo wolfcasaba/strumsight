@@ -4,7 +4,7 @@ import 'package:strumsight/features/progress/model/practice_entry.dart';
 import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/streak/providers/streak_provider.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 import '../support/preference_store.dart';
 

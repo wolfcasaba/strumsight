@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../model/chord_event.dart';
+import '../../../core/music/chord_event.dart';
 import '../model/live_frame.dart';
 import 'live_providers.dart';
 

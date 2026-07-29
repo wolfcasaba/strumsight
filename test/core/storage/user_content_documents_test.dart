@@ -9,7 +9,7 @@ import 'package:strumsight/features/learn/providers/lesson_progress_provider.dar
 import 'package:strumsight/features/library/data/library_repository.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/progress/data/practice_log_repository.dart';
 import 'package:strumsight/features/progress/model/practice_entry.dart';
 import 'package:strumsight/features/progress/providers/practice_log_provider.dart';

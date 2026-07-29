@@ -5,9 +5,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../model/chord.dart';
-import '../model/chord_event.dart';
-import '../model/strum.dart';
+import '../../../core/music/chord.dart';
+import '../../../core/music/chord_event.dart';
+import '../../../core/music/strum.dart';
 import 'chord_timeline_card.dart';
 
 /// The Live screen's horizontal, right-anchored chord filmstrip.

@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-import 'chord.dart';
-import 'strum.dart';
+import '../../../core/music/chord.dart';
+import '../../../core/music/strum.dart';
+import 'beat_slot.dart';
 
 /// An immutable snapshot the engine emits many times per second, driving the
 /// Live "mirror" screen.

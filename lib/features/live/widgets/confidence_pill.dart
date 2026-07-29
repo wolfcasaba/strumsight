@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../model/strum.dart';
+import '../../../core/music/strum.dart';
 
 /// A small pill under the hero arrow: e.g. "DOWN · 94%", coloured by the
 /// confidence ramp. Renders nothing when there is no strum yet.

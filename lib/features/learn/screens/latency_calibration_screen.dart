@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../settings/providers/input_latency_provider.dart';
-import '../../settings/providers/visual_latency_provider.dart';
+import '../../settings/public.dart';
 import '../audio/metronome.dart';
 import '../calibration/latency_calibrator.dart';
 

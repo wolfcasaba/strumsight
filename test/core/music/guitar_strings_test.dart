@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/tuner/model/guitar_strings.dart';
+import 'package:strumsight/core/music/guitar_strings.dart';
 
 /// GuitarTuna-class tuner UX (round 84): show the six standard-tuning
 /// strings and highlight the one being tuned — a beginner shouldn't have to

@@ -2,7 +2,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import '../../model/strum.dart';
+import '../../../../core/music/strum.dart';
 
 /// One fast-hop frame's spectral features — computed ONCE by the analyzer's
 /// FFT pass and shared with the classifier (no duplicate FFT).

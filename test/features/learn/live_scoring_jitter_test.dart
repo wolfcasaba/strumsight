@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/screens/learn_screen.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';

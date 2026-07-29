@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../analyze/engine/ml_chord_decoder.dart';
-import '../../analyze/model/analyze_result.dart';
+import '../../analyze/public.dart';
 import '../data/diagnostics_uploader.dart';
 import '../providers/diagnostics_providers.dart';
 

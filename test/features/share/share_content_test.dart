@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/share/share_content.dart';
 
 AnalyzeResult _result({double bpm = 96}) => AnalyzeResult(

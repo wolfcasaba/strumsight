@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../model/chord.dart';
+import '../../../core/music/chord.dart';
 
 /// The hero of the Live screen: the huge current chord with the next chord
 /// ghosted above it. Readable at arm's length while both hands are on the neck.

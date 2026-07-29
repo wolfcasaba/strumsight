@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../model/strum.dart';
+import '../../../core/music/strum.dart';
 
 /// A down/up strum arrow whose meaning is carried by BOTH colour (the
 /// confidence ramp) AND shape — so it stays legible for colour-blind users:

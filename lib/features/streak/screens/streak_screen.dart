@@ -4,13 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/model/lesson.dart';
-import '../../learn/screens/learn_screen.dart';
-import '../../live/model/strum.dart';
+import '../../learn/public.dart';
+import '../../../core/music/strum.dart';
 import '../daily_challenge.dart';
-import '../../progress/model/practice_stats.dart';
-import '../../progress/providers/practice_log_provider.dart';
-import '../../share/model/weekly_recap.dart';
+import '../../progress/public.dart';
+import '../../share/public.dart';
 import '../providers/streak_provider.dart';
 import '../streak_logic.dart';
 

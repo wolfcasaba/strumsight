@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 
 /// A one-bar (eighth-note) strum-pattern editor — 8 slots in 4/4, 6 in 3/4.
 /// Tapping a slot cycles it rest → down → up → rest, so the user authors the

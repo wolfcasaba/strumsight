@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:fftea/fftea.dart';
 
-import '../../model/strum.dart';
+import '../../../../core/music/strum.dart';
 import 'dsp_config.dart';
 import 'strum_direction_classifier.dart';
 import 'superflux_onset_detector.dart';

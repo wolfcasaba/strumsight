@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../live/model/chord.dart';
-import '../../live/widgets/strum_arrow.dart';
+import '../../../core/music/chord.dart';
+import '../../live/public.dart';
 import '../model/analyze_result.dart';
 
 /// Renders an [AnalyzeResult] as summary chips + a scrollable list of chord

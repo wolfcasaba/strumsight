@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 
 const _d = StrumDirection.down;
 const _u = StrumDirection.up;

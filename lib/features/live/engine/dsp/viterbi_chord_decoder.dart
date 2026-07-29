@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import '../../model/chord.dart';
+import '../../../../core/music/chord.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart' show ChordMatch;
 

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 import '../../support/synth.dart';
 

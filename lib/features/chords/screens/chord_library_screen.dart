@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/providers/backing_provider.dart';
+import '../../learn/public.dart';
 import '../chord_shape.dart';
 import '../providers/favorite_chords_provider.dart';
 import '../widgets/chord_diagram.dart';

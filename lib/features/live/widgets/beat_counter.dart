@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../model/strum.dart';
+import '../model/beat_slot.dart';
 import 'strum_arrow.dart';
 
 /// The rolling beat counter "1 & 2 & 3 & 4 &" with a small strum mark above

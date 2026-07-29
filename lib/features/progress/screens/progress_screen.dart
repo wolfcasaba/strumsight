@@ -5,14 +5,12 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../streak/providers/streak_provider.dart';
-import '../../streak/streak_logic.dart';
+import '../../streak/public.dart';
 import '../model/practice_entry.dart';
 import '../model/practice_stats.dart';
 import '../providers/daily_goal_provider.dart';
 import '../providers/practice_log_provider.dart';
-import '../../share/model/weekly_recap.dart';
-import '../../share/screens/wrapped_preview_screen.dart';
+import '../../share/public.dart';
 import '../widgets/weekly_bars.dart';
 
 /// The Progress dashboard — a Yousician/Simply-Guitar-style practice tracker, but

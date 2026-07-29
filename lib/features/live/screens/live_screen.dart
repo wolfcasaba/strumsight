@@ -13,9 +13,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../settings/providers/capo_provider.dart';
-import '../../settings/providers/tuning_reference_provider.dart';
-import '../../settings/providers/lab_mode_provider.dart';
+import '../../settings/public.dart';
 import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 import '../providers/chord_timeline_provider.dart';
@@ -24,11 +22,8 @@ import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
-import '../../progress/model/practice_entry.dart';
-import '../../progress/providers/practice_log_provider.dart';
-import '../../streak/providers/streak_provider.dart';
-import '../../streak/streak_logic.dart';
-import '../../streak/widgets/streak_badge.dart';
+import '../../progress/public.dart';
+import '../../streak/public.dart';
 
 /// The Live "mirror": the hero screen. A horizontal chord timeline (newest
 /// chord large, previously recognised chords receding left, each with its ↓/↑

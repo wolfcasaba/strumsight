@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import '../model/chord.dart';
+import '../../../core/music/chord.dart';
 import '../model/live_frame.dart';
-import '../model/strum.dart';
+import '../../../core/music/strum.dart';
+import '../model/beat_slot.dart';
 import 'strum_engine.dart';
 
 /// A deterministic mock engine that loops a I–V–vi–IV progression with a

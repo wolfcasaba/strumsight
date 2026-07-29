@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/live/model/chord.dart';
+import 'package:strumsight/core/music/chord.dart';
 
 void main() {
   group('Chord.transposeLabel — capo transposition', () {
@@ -83,6 +83,37 @@ void main() {
 
     test('empty summary stays empty', () {
       expect(Chord.transposeSummary('', -3), '');
+    });
+  });
+
+  group('Chord — value identity (the canonical domain contract)', () {
+    test('two chords with the same label are equal and hash alike', () {
+      expect(const Chord('Am'), const Chord('Am'));
+      expect(const Chord('Am').hashCode, const Chord('Am').hashCode);
+    });
+
+    test('different labels are not equal', () {
+      expect(const Chord('Am') == const Chord('A'), isFalse);
+      expect(const Chord('C') == const Chord('Cm'), isFalse);
+    });
+
+    test('a Chord is never equal to its bare label', () {
+      // Guards the `==` override against an accidental dynamic comparison:
+      // Set/Map lookups across features rely on this staying type-strict.
+      const Object bareLabel = 'C';
+      expect(const Chord('C') == bareLabel, isFalse);
+    });
+
+    test('works as a Set/Map key across features', () {
+      // Built from labels (not const literals) so the de-duplication is done
+      // by `==`/hashCode at runtime, which is what consumers rely on.
+      final seen = ['C', 'G', 'C'].map(Chord.new).toSet();
+      expect(seen, hasLength(2));
+      expect(seen.contains(const Chord('G')), isTrue);
+    });
+
+    test('toString is the label — timeline summaries depend on it', () {
+      expect(const Chord('F#m').toString(), 'F#m');
     });
   });
 }

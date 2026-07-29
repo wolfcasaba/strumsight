@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../settings/providers/left_handed_provider.dart';
+import '../../settings/public.dart';
 import '../chord_shape.dart';
 
 /// A compact open-position chord diagram: 6 strings × 4 frets, with ○/× markers

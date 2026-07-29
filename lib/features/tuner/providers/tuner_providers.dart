@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/audio/lifecycle/audio_session_lease.dart';
-import '../../settings/providers/tuning_reference_provider.dart';
+import '../../settings/public.dart';
 import '../engine/real_tuner_engine.dart';
 import '../engine/tuner_engine.dart';
 import '../model/tuner_reading.dart';

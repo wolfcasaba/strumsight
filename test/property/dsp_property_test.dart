@@ -19,7 +19,7 @@ import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
 import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
 import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
 import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/tuner/engine/dsp/tuner_analyzer.dart';
 
 import '../support/synth.dart';

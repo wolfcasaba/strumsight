@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
-import '../../analyze/widgets/timeline_view.dart';
-import '../../learn/model/lesson.dart';
-import '../../learn/screens/learn_screen.dart';
-import '../../live/model/chord.dart';
-import '../../settings/providers/capo_provider.dart';
-import '../../share/screens/share_preview_screen.dart';
+import '../../analyze/public.dart';
+import '../../learn/public.dart';
+import '../../../core/music/chord.dart';
+import '../../settings/public.dart';
+import '../../share/public.dart';
 import '../model/analyzed_session.dart';
 import '../providers/library_providers.dart';
 

@@ -6,8 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../live/model/chord.dart';
-import '../../settings/providers/capo_provider.dart';
+import '../../../core/music/chord.dart';
+import '../../settings/public.dart';
 import '../model/analyzed_session.dart';
 import '../providers/library_providers.dart';
 

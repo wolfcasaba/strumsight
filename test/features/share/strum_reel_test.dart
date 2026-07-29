@@ -4,7 +4,7 @@ import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/learn/audio/chord_audio.dart';
 import 'package:strumsight/features/learn/audio/metronome.dart';
 import 'package:strumsight/features/learn/widgets/lesson_highway.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/share/screens/strum_reel_screen.dart';
 import 'package:strumsight/features/share/share_service.dart';
 import 'package:strumsight/l10n/app_localizations.dart';

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../dsp/log_mel_extractor.dart';
 import '../dsp/strum_direction_classifier.dart';
-import '../../model/strum.dart';
+import '../../../../core/music/strum.dart';
 import 'crnn_frontend.dart';
 import 'crnn_strum_net.dart';
 
