@@ -6,7 +6,9 @@ import 'app/bootstrap/bootstrap_result.dart';
 import 'app/config/app_config.dart';
 import 'app/strumsight_app.dart';
 import 'core/storage/storage_providers.dart';
+import 'features/diagnostics/providers/diagnostics_providers.dart';
 import 'features/onboarding/onboarding_provider.dart';
+import 'features/settings/providers/lab_mode_provider.dart';
 
 export 'app/strumsight_app.dart' show StrumSightApp;
 
@@ -30,6 +32,9 @@ Future<void> main() async {
         overrides: [
           appConfigProvider.overrideWithValue(config),
           keyValueStoreProvider.overrideWithValue(keyValueStore),
+          diagnosticsConsentProvider.overrideWith(
+            (ref) => ref.watch(labModeProvider),
+          ),
           onboardingSeenProvider.overrideWith(
             () => OnboardingController(onboardingSeen),
           ),

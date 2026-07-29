@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/network/dio_factory.dart';
 import 'package:strumsight/features/auth/data/auth_repository.dart';
 
 /// Canned transport: either a status + body, or a thrown [DioException].
@@ -37,10 +39,20 @@ class _FakeAdapter implements HttpClientAdapter {
 }
 
 AuthRepository _repo(_FakeAdapter adapter) {
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8000'))
-    // Non-2xx must reach us as a DioException so the mapper sees the status.
-    ..httpClientAdapter = adapter;
-  return HttpAuthRepository(dio);
+  final client =
+      DioFactory(
+        baseUrl: 'http://localhost:8000',
+        appVersion: 'test',
+        logger: const NoopAppLogger(),
+        adapter: adapter,
+        correlationIdGenerator: () => 'test-correlation',
+      ).createAccountClient(
+        accountEnabled: true,
+        readToken: () async => const Success('test-token'),
+        readSessionGeneration: () => 0,
+        onUnauthorized: (_) {},
+      );
+  return HttpAuthRepository(client);
 }
 
 void main() {
@@ -70,6 +82,21 @@ void main() {
     ).register('taken@strumsight.app', 'sixstrings');
 
     expect(result.failureOrNull!.code, FailureCode.validationEmailTaken);
+  });
+
+  test('422 → controlled validation failure', () async {
+    final result = await _repo(
+      _FakeAdapter(status: 422, body: '{"detail":"invalid"}'),
+    ).register('bad', 'short');
+
+    expect(result.failureOrNull, isA<ValidationFailure>());
+    expect(result.failureOrNull!.code, FailureCode.validationInvalidInput);
+  });
+
+  test('unknown status → controlled bad-response failure', () async {
+    final result = await _repo(_FakeAdapter(status: 418, body: '{}')).me();
+
+    expect(result.failureOrNull!.code, FailureCode.networkBadResponse);
   });
 
   test('5xx → retryable server failure', () async {
@@ -118,7 +145,7 @@ void main() {
   });
 
   test('a malformed user payload is a bad response, not a crash', () async {
-    final result = await _repo(_FakeAdapter(body: '{"id":"NaN"}')).me();
+    final result = await _repo(_FakeAdapter(body: '{"id":1,"email":"@"}')).me();
 
     expect(result.failureOrNull!.code, FailureCode.networkBadResponse);
   });

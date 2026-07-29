@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:strumsight/features/auth/data/auth_repository.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';

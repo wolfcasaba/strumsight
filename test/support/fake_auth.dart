@@ -11,6 +11,7 @@ class FakeTokenStore implements TokenStore {
   FakeTokenStore([this.token]);
 
   String? token;
+  int reads = 0;
   int clears = 0;
   int writes = 0;
 
@@ -19,8 +20,10 @@ class FakeTokenStore implements TokenStore {
   AppFailure? clearFailure;
 
   @override
-  Future<AppResult<String?>> read() async =>
-      readFailure != null ? Failure(readFailure!) : Success(token);
+  Future<AppResult<String?>> read() async {
+    reads++;
+    return readFailure != null ? Failure(readFailure!) : Success(token);
+  }
 
   @override
   Future<AppResult<void>> write(String token) async {
@@ -53,6 +56,7 @@ class FakeAuthRepository implements AuthRepository {
 
   int loginCalls = 0;
   int registerCalls = 0;
+  int meCalls = 0;
 
   @override
   Future<AppResult<String>> login(String email, String password) async {
@@ -69,8 +73,10 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppResult<AuthUser>> me() async =>
-      meFailure != null ? Failure(meFailure!) : Success(user);
+  Future<AppResult<AuthUser>> me() async {
+    meCalls++;
+    return meFailure != null ? Failure(meFailure!) : Success(user);
+  }
 }
 
 /// Captures what was logged so a test can assert both what IS and what is NOT

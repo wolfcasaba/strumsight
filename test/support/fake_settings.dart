@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/settings/data/settings_repository.dart';
 
 /// In-memory settings backend for tests. Holds a [RemoteSettings] and records
@@ -19,13 +21,12 @@ class FakeSettingsRepository implements SettingsRepository {
   int fetchCalls = 0;
   final List<Map<String, dynamic>> updates = [];
 
-  /// Make the next N `update` calls throw (simulate offline). Each throwing
-  /// attempt is still recorded in [updates] so tests can count retries.
+  /// Make the next N updates return an offline failure. Every attempt is
+  /// recorded so tests can prove writes are not replayed automatically.
   int failNextUpdates = 0;
 
-  /// If set, every `update` throws this instead (simulate a PERMANENT server
-  /// rejection, e.g. an expired token 401 or a 422). Each attempt is recorded.
-  Object? alwaysFailWith;
+  AppFailure? fetchFailure;
+  AppFailure? updateFailure;
 
   RemoteSettings get _current => RemoteSettings(
     themeMode: themeMode,
@@ -35,25 +36,23 @@ class FakeSettingsRepository implements SettingsRepository {
   );
 
   @override
-  Future<RemoteSettings> fetch() async {
+  Future<AppResult<RemoteSettings>> fetch() async {
     fetchCalls++;
-    return _current;
+    return fetchFailure == null ? Success(_current) : Failure(fetchFailure!);
   }
 
   @override
-  Future<RemoteSettings> update(Map<String, dynamic> patch) async {
+  Future<AppResult<RemoteSettings>> update(Map<String, Object?> patch) async {
     updates.add(patch);
-    if (alwaysFailWith != null) {
-      throw alwaysFailWith!;
+    if (updateFailure != null) {
+      return Failure(updateFailure!);
     }
     if (failNextUpdates > 0) {
       failNextUpdates--;
-      throw Exception('offline');
+      return const Failure(NetworkFailure());
     }
     if (patch.containsKey('theme_mode')) {
-      themeMode = RemoteSettings.fromJson({
-        'theme_mode': patch['theme_mode'],
-      }).themeMode;
+      themeMode = ThemeMode.values.byName(patch['theme_mode']! as String);
     }
     if (patch.containsKey('locale')) {
       final code = patch['locale'] as String?;
@@ -62,6 +61,6 @@ class FakeSettingsRepository implements SettingsRepository {
     if (patch.containsKey('confidence_threshold')) {
       confidenceThreshold = (patch['confidence_threshold'] as num).toDouble();
     }
-    return _current;
+    return Success(_current);
   }
 }
