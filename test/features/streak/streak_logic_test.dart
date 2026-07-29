@@ -92,7 +92,9 @@ void main() {
     final b = StreakLogic.epochDayOf(DateTime(2026, 7, 10, 0, 1));
     expect(b - a, 1);
     // Same day, different times → same epoch day.
-    expect(StreakLogic.epochDayOf(DateTime(2026, 7, 9, 6)),
-        StreakLogic.epochDayOf(DateTime(2026, 7, 9, 20)));
+    expect(
+      StreakLogic.epochDayOf(DateTime(2026, 7, 9, 6)),
+      StreakLogic.epochDayOf(DateTime(2026, 7, 9, 20)),
+    );
   });
 }

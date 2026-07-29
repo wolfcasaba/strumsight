@@ -13,15 +13,18 @@ void main() {
     expect(labels.length, greaterThan(15));
   });
 
-  testWidgets('the library groups shapes by type and renders diagrams',
-      (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+  testWidgets('the library groups shapes by type and renders diagrams', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     expect(find.text('MAJOR'), findsOneWidget);
@@ -30,13 +33,15 @@ void main() {
   });
 
   testWidgets('the search box filters the catalogue', (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'sus');
@@ -50,13 +55,15 @@ void main() {
 
   testWidgets('a search with no matches shows an empty state, not a blank '
       'screen (round 133)', (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'zzzz');

@@ -5,7 +5,11 @@ import 'practice_entry.dart';
 /// One day's rolled-up practice, used by the weekly chart.
 @immutable
 class DayTotal {
-  const DayTotal({required this.day, required this.seconds, required this.sessions});
+  const DayTotal({
+    required this.day,
+    required this.seconds,
+    required this.sessions,
+  });
 
   /// Epoch day (local midnight).
   final int day;
@@ -51,8 +55,9 @@ class PracticeStats {
   /// Average strum-direction accuracy across scored runs (0..1), or null if none
   /// scored yet. THE headline "better than competitors" metric.
   double? get averageDirectionAccuracy {
-    final scored =
-        entries.where((e) => e.directionAccuracy != null).toList(growable: false);
+    final scored = entries
+        .where((e) => e.directionAccuracy != null)
+        .toList(growable: false);
     if (scored.isEmpty) return null;
     final sum = scored.fold<double>(0, (s, e) => s + e.directionAccuracy!);
     return sum / scored.length;
@@ -75,7 +80,8 @@ class PracticeStats {
     final secByDay = <int, int>{};
     final sessByDay = <int, int>{};
     for (final e in entries) {
-      secByDay[e.day] = (secByDay[e.day] ?? 0) + (e.seconds < 0 ? 0 : e.seconds);
+      secByDay[e.day] =
+          (secByDay[e.day] ?? 0) + (e.seconds < 0 ? 0 : e.seconds);
       sessByDay[e.day] = (sessByDay[e.day] ?? 0) + 1;
     }
     return [

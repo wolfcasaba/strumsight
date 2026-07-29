@@ -142,10 +142,10 @@ class LessonScorer {
   int get multiplier => combo >= 20
       ? 4
       : combo >= 10
-          ? 3
-          : combo >= 5
-              ? 2
-              : 1;
+      ? 3
+      : combo >= 5
+      ? 2
+      : 1;
 
   int chordTotal = 0;
   int chordHits = 0;
@@ -169,21 +169,21 @@ class LessonScorer {
   bool get passed => total > 0 && accuracy >= passThreshold;
 
   ScoreSnapshot snapshot() => ScoreSnapshot(
-        hits: hits,
-        wrong: wrong,
-        missed: missed,
-        combo: combo,
-        maxCombo: maxCombo,
-        total: total,
-        lastResult: lastResult,
-        score: score,
-        multiplier: multiplier,
-        perfect: perfectHits,
-        lastTiming: lastTiming,
-        expectedDirection: lastExpectedDirection,
-        chordHits: chordHits,
-        chordTotal: chordTotal,
-      );
+    hits: hits,
+    wrong: wrong,
+    missed: missed,
+    combo: combo,
+    maxCombo: maxCombo,
+    total: total,
+    lastResult: lastResult,
+    score: score,
+    multiplier: multiplier,
+    perfect: perfectHits,
+    lastTiming: lastTiming,
+    expectedDirection: lastExpectedDirection,
+    chordHits: chordHits,
+    chordTotal: chordTotal,
+  );
 
   /// Timing tier for a hit landed [offsetSec] from the target (signed:
   /// negative = early, positive = late).
@@ -225,7 +225,8 @@ class LessonScorer {
       s.evaluated = true;
       // Correct if the target chord was sounding at the stroke, or shortly
       // after (allowing for chord-detection lag).
-      final ok = _chordAt(s.time) == s.chord ||
+      final ok =
+          _chordAt(s.time) == s.chord ||
           _chordAt(s.time + _chordLagSec) == s.chord;
       if (ok) {
         chordHits++;
@@ -237,8 +238,7 @@ class LessonScorer {
 
   /// The absolute elapsed time (seconds from lesson start, count-in included)
   /// at which [event] should be struck — handy for UI hit flashes.
-  double timeOf(LessonEvent event) =>
-      (countInBeats + event.beat) * _secPerBeat;
+  double timeOf(LessonEvent event) => (countInBeats + event.beat) * _secPerBeat;
 
   /// Register a detected strum at [elapsedSec]; matches it to the nearest
   /// still-open event within [windowSec]. A strum with no event in range is an

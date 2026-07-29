@@ -30,8 +30,9 @@ class _LatencyCalibrationScreenState
   static const _beatPeriodSec = 0.6; // 100 BPM
 
   final Metronome _metronome = Metronome();
-  LatencyCalibrator _calibrator =
-      LatencyCalibrator(beatPeriodSec: _beatPeriodSec);
+  LatencyCalibrator _calibrator = LatencyCalibrator(
+    beatPeriodSec: _beatPeriodSec,
+  );
   late final Ticker _ticker;
 
   bool _visualMode = false;
@@ -120,8 +121,10 @@ class _LatencyCalibrationScreenState
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final savedMs = ref.watch(
-        _visualMode ? visualLatencyProvider : inputLatencyProvider);
-    final done = !_running &&
+      _visualMode ? visualLatencyProvider : inputLatencyProvider,
+    );
+    final done =
+        !_running &&
         _calibrator.sampleCount >= LatencyCalibrationScreen.tapsNeeded;
     final offset = _calibrator.offsetSec;
 
@@ -136,9 +139,13 @@ class _LatencyCalibrationScreenState
                 showSelectedIcon: false,
                 segments: [
                   ButtonSegment(
-                      value: false, label: Text(l10n.calibrationModeAudio)),
+                    value: false,
+                    label: Text(l10n.calibrationModeAudio),
+                  ),
                   ButtonSegment(
-                      value: true, label: Text(l10n.calibrationModeVisual)),
+                    value: true,
+                    label: Text(l10n.calibrationModeVisual),
+                  ),
                 ],
                 selected: {_visualMode},
                 onSelectionChanged: _running
@@ -147,14 +154,17 @@ class _LatencyCalibrationScreenState
               ),
               const SizedBox(height: 12),
               Text(
-                  _visualMode
-                      ? l10n.calibrationIntroVisual
-                      : l10n.calibrationIntro,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium),
+                _visualMode
+                    ? l10n.calibrationIntroVisual
+                    : l10n.calibrationIntro,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
               const SizedBox(height: 6),
-              Text(l10n.calibrationCurrent('$savedMs'),
-                  style: theme.textTheme.bodySmall),
+              Text(
+                l10n.calibrationCurrent('$savedMs'),
+                style: theme.textTheme.bodySmall,
+              ),
               const Spacer(),
               // Beat pulse.
               AnimatedContainer(
@@ -163,8 +173,9 @@ class _LatencyCalibrationScreenState
                 height: _pulse ? 34 : 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primary
-                      .withValues(alpha: _pulse ? 1.0 : 0.25),
+                  color: AppColors.primary.withValues(
+                    alpha: _pulse ? 1.0 : 0.25,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -172,17 +183,20 @@ class _LatencyCalibrationScreenState
                 done && offset != null
                     ? l10n.calibrationResult('${(offset * 1000).round()}')
                     : '${_calibrator.sampleCount} / '
-                        '${LatencyCalibrationScreen.tapsNeeded}',
+                          '${LatencyCalibrationScreen.tapsNeeded}',
                 style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 30),
+                  fontFamily: 'Montserrat',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 30,
+                ),
               ),
               if (done && !_calibrator.isStable)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(l10n.calibrationUnstable,
-                      style: TextStyle(color: AppColors.confidenceMid)),
+                  child: Text(
+                    l10n.calibrationUnstable,
+                    style: TextStyle(color: AppColors.confidenceMid),
+                  ),
                 ),
               if (_running && _lastTapOffset != null)
                 Padding(
@@ -204,9 +218,13 @@ class _LatencyCalibrationScreenState
                       shape: const CircleBorder(),
                       backgroundColor: AppColors.primary,
                     ),
-                    child: Text(l10n.calibrationTap,
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w700)),
+                    child: Text(
+                      l10n.calibrationTap,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 )
               else ...[
@@ -216,16 +234,19 @@ class _LatencyCalibrationScreenState
                     icon: const Icon(Icons.check_rounded),
                     label: Text(l10n.calibrationSave),
                     style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(56)),
+                      minimumSize: const Size.fromHeight(56),
+                    ),
                   ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _start,
                   icon: const Icon(Icons.play_arrow_rounded),
                   label: Text(
-                      done ? l10n.calibrationRetry : l10n.calibrationStart),
+                    done ? l10n.calibrationRetry : l10n.calibrationStart,
+                  ),
                   style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56)),
+                    minimumSize: const Size.fromHeight(56),
+                  ),
                 ),
               ],
               const SizedBox(height: 8),

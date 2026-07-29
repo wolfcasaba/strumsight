@@ -74,23 +74,23 @@ class LessonListScreen extends ConsumerWidget {
   }
 
   static String _tierName(AppLocalizations l10n, Difficulty d) => switch (d) {
-        Difficulty.beginner => l10n.learnBeginner,
-        Difficulty.intermediate => l10n.learnIntermediate,
-        Difficulty.advanced => l10n.learnAdvanced,
-      };
+    Difficulty.beginner => l10n.learnBeginner,
+    Difficulty.intermediate => l10n.learnIntermediate,
+    Difficulty.advanced => l10n.learnAdvanced,
+  };
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
-        child: Text(
-          text.toUpperCase(),
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            letterSpacing: 1.2,
-            color: AppColors.primary,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
+    child: Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 12,
+        letterSpacing: 1.2,
+        color: AppColors.primary,
+      ),
+    ),
+  );
 }
 
 /// The hero "pick up where you left off" card — filled with the brand colour
@@ -111,8 +111,7 @@ class _ContinueCard extends StatelessWidget {
       ),
       margin: EdgeInsets.zero,
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: const CircleAvatar(
           backgroundColor: AppColors.primary,
           child: Icon(Icons.play_arrow, color: Colors.white),
@@ -135,9 +134,7 @@ class _ContinueCard extends StatelessWidget {
           ),
         ),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => LearnScreen(lesson: lesson),
-          ),
+          MaterialPageRoute<void>(builder: (_) => LearnScreen(lesson: lesson)),
         ),
       ),
     );
@@ -170,25 +167,32 @@ class _LessonTile extends StatelessWidget {
         enabled: unlocked,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: CircleAvatar(
-          backgroundColor: (unlocked ? AppColors.primary : AppColors.confidenceLow)
-              .withValues(alpha: 0.15),
-          child: Icon(unlocked ? Icons.play_arrow : Icons.lock,
-              color: unlocked ? AppColors.primary : AppColors.confidenceLow),
+          backgroundColor:
+              (unlocked ? AppColors.primary : AppColors.confidenceLow)
+                  .withValues(alpha: 0.15),
+          child: Icon(
+            unlocked ? Icons.play_arrow : Icons.lock,
+            color: unlocked ? AppColors.primary : AppColors.confidenceLow,
+          ),
         ),
-        title: Text(lesson.name,
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, fontFamily: 'Montserrat')),
+        title: Text(
+          lesson.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Montserrat',
+          ),
+        ),
         subtitle: Text(subtitle),
         trailing: unlocked && stars > 0 ? _Stars(stars: stars) : null,
         onTap: unlocked
             ? () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LearnScreen(lesson: lesson),
-                  ),
-                )
-            : () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.learnLocked)),
+                MaterialPageRoute<void>(
+                  builder: (_) => LearnScreen(lesson: lesson),
                 ),
+              )
+            : () => ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(l10n.learnLocked))),
       ),
     );
   }
@@ -200,14 +204,14 @@ class _Stars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < 3; i++)
-            Icon(
-              i < stars ? Icons.star : Icons.star_border,
-              size: 18,
-              color: AppColors.secondary,
-            ),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = 0; i < 3; i++)
+        Icon(
+          i < stars ? Icons.star : Icons.star_border,
+          size: 18,
+          color: AppColors.secondary,
+        ),
+    ],
+  );
 }

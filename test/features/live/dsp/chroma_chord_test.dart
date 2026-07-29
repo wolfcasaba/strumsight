@@ -68,7 +68,8 @@ void main() {
     // …then feed G; the FIRST frame must not flip the report unless decisive.
     final gFrames = frames(chordSignal(gMajorFreqs), win, hop).toList();
     final first = matcher.process(extractor.process(gFrames.first));
-    final immediateFlip = first!.chord.label == 'G' &&
+    final immediateFlip =
+        first!.chord.label == 'G' &&
         first.confidence >= DspConfig.chordInstantSwitchConfidence;
     if (!immediateFlip) {
       expect(first.chord.label, 'C', reason: 'no flicker on one weak frame');

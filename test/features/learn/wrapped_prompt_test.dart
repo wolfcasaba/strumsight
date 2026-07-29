@@ -7,12 +7,12 @@ import 'package:strumsight/l10n/app_localizations.dart';
 /// half): offered exactly when pride is fresh (≥80%), never as noise below.
 void main() {
   Widget app(double accuracy) => MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: WrappedPrompt(accuracy: accuracy, onOpen: () {}),
-        ),
-      );
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(
+      body: WrappedPrompt(accuracy: accuracy, onOpen: () {}),
+    ),
+  );
 
   testWidgets('a good run (≥80%) offers the weekly share', (tester) async {
     await tester.pumpWidget(app(0.85));
@@ -23,7 +23,10 @@ void main() {
   testWidgets('below the threshold the prompt stays silent', (tester) async {
     await tester.pumpWidget(app(0.79));
     await tester.pumpAndSettle();
-    expect(find.text('Share my week'), findsNothing,
-        reason: 'a weak run is not a share moment — no prompt spam');
+    expect(
+      find.text('Share my week'),
+      findsNothing,
+      reason: 'a weak run is not a share moment — no prompt spam',
+    );
   });
 }

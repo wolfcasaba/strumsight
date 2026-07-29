@@ -20,8 +20,18 @@ void main() {
   test('add inserts newest-first and returns a unique id', () async {
     final c = container();
     final ctrl = c.read(songsProvider.notifier);
-    final id1 = await ctrl.add(name: 'One', chords: ['G'], pattern: [d], bpm: 90);
-    final id2 = await ctrl.add(name: 'Two', chords: ['C'], pattern: [d], bpm: 90);
+    final id1 = await ctrl.add(
+      name: 'One',
+      chords: ['G'],
+      pattern: [d],
+      bpm: 90,
+    );
+    final id2 = await ctrl.add(
+      name: 'Two',
+      chords: ['C'],
+      pattern: [d],
+      bpm: 90,
+    );
     expect(id1, isNot(id2));
     final songs = c.read(songsProvider);
     expect(songs.map((s) => s.name), ['Two', 'One']); // newest first
@@ -30,22 +40,33 @@ void main() {
   test('update replaces by id; unknown id is a no-op', () async {
     final c = container();
     final ctrl = c.read(songsProvider.notifier);
-    final id = await ctrl.add(name: 'One', chords: ['G'], pattern: [d], bpm: 90);
+    final id = await ctrl.add(
+      name: 'One',
+      chords: ['G'],
+      pattern: [d],
+      bpm: 90,
+    );
     final original = c.read(songsProvider).first;
     await ctrl.update(original.copyWith(name: 'Renamed', bpm: 120));
     expect(c.read(songsProvider).single.name, 'Renamed');
     expect(c.read(songsProvider).single.bpm, 120);
     expect(c.read(songsProvider).single.id, id);
 
-    await ctrl.update(const Song(
-        id: 'ghost', name: 'x', chords: ['A'], pattern: [d], bpm: 90));
+    await ctrl.update(
+      const Song(id: 'ghost', name: 'x', chords: ['A'], pattern: [d], bpm: 90),
+    );
     expect(c.read(songsProvider).length, 1); // no ghost added
   });
 
   test('remove deletes by id', () async {
     final c = container();
     final ctrl = c.read(songsProvider.notifier);
-    final id = await ctrl.add(name: 'One', chords: ['G'], pattern: [d], bpm: 90);
+    final id = await ctrl.add(
+      name: 'One',
+      chords: ['G'],
+      pattern: [d],
+      bpm: 90,
+    );
     await ctrl.remove(id);
     expect(c.read(songsProvider), isEmpty);
   });
@@ -74,8 +95,14 @@ void main() {
 
   test('songs persist across a fresh container (shared_preferences)', () async {
     final c1 = container();
-    await c1.read(songsProvider.notifier).add(
-        name: 'Persisted', chords: ['Em', 'G'], pattern: [d, null], bpm: 100);
+    await c1
+        .read(songsProvider.notifier)
+        .add(
+          name: 'Persisted',
+          chords: ['Em', 'G'],
+          pattern: [d, null],
+          bpm: 100,
+        );
 
     // A new container re-reads from prefs.
     final c2 = container();

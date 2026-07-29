@@ -8,11 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Round 161 lock — the 100-session cap: the OLDEST session falls off, the
 /// newest stays, and boundary rename/delete keep working.
 AnalyzedSession _s(int i) => AnalyzedSession(
-      id: 's$i',
-      title: 'Take $i',
-      createdAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: i)),
-      result: AnalyzeResult.empty,
-    );
+  id: 's$i',
+  title: 'Take $i',
+  createdAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: i)),
+  result: AnalyzeResult.empty,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,8 +29,11 @@ void main() {
     var list = c.read(libraryProvider).value!;
     expect(list, hasLength(100));
     expect(list.first.id, 's100', reason: 'newest-first head');
-    expect(list.map((s) => s.id), isNot(contains('s0')),
-        reason: 'the oldest falls off');
+    expect(
+      list.map((s) => s.id),
+      isNot(contains('s0')),
+      reason: 'the oldest falls off',
+    );
 
     await lib.rename('s100', 'Renamed');
     await lib.delete('s1');

@@ -17,45 +17,55 @@ import '../../support/fake_engines.dart';
 /// cannot absorb. The frame carries BOTH clocks (emit instant + the strum's
 /// attack instant), so the scorer can be handed the de-jittered time.
 Lesson _lesson() => Lesson(
-      id: 'jit',
-      name: 'Jitter',
-      bpm: 60, // 1 beat = 1 s; count-in = one 4/4 bar = 4 s
-      chords: const ['C'],
-      pattern: const [
-        StrumDirection.down, null, null, null, null, null, null, null,
-      ],
-    );
+  id: 'jit',
+  name: 'Jitter',
+  bpm: 60, // 1 beat = 1 s; count-in = one 4/4 bar = 4 s
+  chords: const ['C'],
+  pattern: const [
+    StrumDirection.down,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+  ],
+);
 
 LiveFrame _frame({required double attack, required double emit}) => LiveFrame(
-      current: null,
-      next: null,
-      latestStrum: const Strum(direction: StrumDirection.down, confidence: 0.9),
-      bar: const [],
-      bpm: 60,
-      inputLevel: 0.5,
-      tuningHz: 440,
-      listening: true,
-      strumSeq: 1,
-      latestStrumTime: attack,
-      engineTimeSec: emit,
-    );
+  current: null,
+  next: null,
+  latestStrum: const Strum(direction: StrumDirection.down, confidence: 0.9),
+  bar: const [],
+  bpm: 60,
+  inputLevel: 0.5,
+  tuningHz: 440,
+  listening: true,
+  strumSeq: 1,
+  latestStrumTime: attack,
+  engineTimeSec: emit,
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('a stale frame is scored at the strum time, not arrival',
-      (tester) async {
+  testWidgets('a stale frame is scored at the strum time, not arrival', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: _lesson()),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: _lesson()),
+        ),
       ),
-    ));
+    );
     await tester.tap(find.text('Play'));
     await tester.pump();
 
@@ -68,8 +78,11 @@ void main() {
 
     // Uncorrected, 4.10 vs the 4.00 event is outside the ±50 ms PERFECT
     // window (it would read GOOD); corrected it is dead-on PERFECT.
-    expect(find.text('Perfect!'), findsOneWidget,
-        reason: 'the scorer must receive the de-jittered strum time');
+    expect(
+      find.text('Perfect!'),
+      findsOneWidget,
+      reason: 'the scorer must receive the de-jittered strum time',
+    );
 
     await tester.pumpWidget(const SizedBox());
   });

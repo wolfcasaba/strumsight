@@ -20,10 +20,10 @@ class StrumPatternEditor extends StatelessWidget {
   final ValueChanged<List<StrumDirection?>> onChanged;
 
   static StrumDirection? _next(StrumDirection? d) => switch (d) {
-        null => StrumDirection.down,
-        StrumDirection.down => StrumDirection.up,
-        StrumDirection.up => null,
-      };
+    null => StrumDirection.down,
+    StrumDirection.down => StrumDirection.up,
+    StrumDirection.up => null,
+  };
 
   /// "1 & 2 & …" up to the bar's own beat count (round 116 — 3/4 support).
   static String _label(int slot) => slot.isEven ? '${slot ~/ 2 + 1}' : '&';
@@ -90,8 +90,8 @@ class _Slot extends StatelessWidget {
     final color = isDown
         ? AppColors.primary
         : isUp
-            ? AppColors.confidenceHigh
-            : Theme.of(context).colorScheme.outline;
+        ? AppColors.confidenceHigh
+        : Theme.of(context).colorScheme.outline;
     // One button node speaking beat+state; the icon and beat glyph are visual
     // only, so exclude their (redundant / "ampersand") semantics (round 125).
     // onTap lives HERE so a screen-reader activation reaches the toggle —
@@ -119,17 +119,18 @@ class _Slot extends StatelessWidget {
                 isDown
                     ? Icons.arrow_downward
                     : isUp
-                        ? Icons.arrow_upward
-                        : Icons.remove,
+                    ? Icons.arrow_upward
+                    : Icons.remove,
                 size: 20,
                 color: color,
               ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11, color: Theme.of(context).hintColor)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
+          ),
         ],
       ),
     );

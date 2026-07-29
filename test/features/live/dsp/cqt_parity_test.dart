@@ -27,7 +27,8 @@ void main() {
       fail('cqt_fixture.json not found from ${Directory.current.path}');
     }
 
-    final fx = jsonDecode(findFixture().readAsStringSync()) as Map<String, dynamic>;
+    final fx =
+        jsonDecode(findFixture().readAsStringSync()) as Map<String, dynamic>;
     final fixtureSr = fx['sr'] as int;
     final expNFrames = fx['n_frames'] as int;
     final expNBins = fx['n_bins'] as int;
@@ -45,8 +46,11 @@ void main() {
     final got = CqtExtractor().extract(pcm, fixtureSr);
 
     // Shape parity.
-    expect(got.length, expected.length,
-        reason: 'frame count ${got.length} vs ${expected.length}');
+    expect(
+      got.length,
+      expected.length,
+      reason: 'frame count ${got.length} vs ${expected.length}',
+    );
     for (final row in got) {
       expect(row.length, CqtExtractor.nBins);
     }
@@ -65,11 +69,16 @@ void main() {
       }
     }
     // ignore: avoid_print
-    print('CQT parity: max abs diff = $maxAbs at frame $argFrame bin $argBin '
-        '(${got.length}x${CqtExtractor.nBins}, fftLen=${CqtExtractor.fftLen})');
+    print(
+      'CQT parity: max abs diff = $maxAbs at frame $argFrame bin $argBin '
+      '(${got.length}x${CqtExtractor.nBins}, fftLen=${CqtExtractor.fftLen})',
+    );
 
-    expect(maxAbs, lessThan(1e-4),
-        reason: 'max abs diff $maxAbs at frame $argFrame bin $argBin');
+    expect(
+      maxAbs,
+      lessThan(1e-4),
+      reason: 'max abs diff $maxAbs at frame $argFrame bin $argBin',
+    );
     expect(maxAbs.isFinite, isTrue);
     // Sanity: output is non-negative (log1p of a magnitude) and non-trivial.
     var anyNonZero = false;

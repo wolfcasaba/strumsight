@@ -15,8 +15,7 @@ void main() {
     for (final f in frames(chord, chordEx.window, chordEx.window)) {
       chordEx.process(f);
     }
-    expect(chordEx.lastTonalness,
-        greaterThan(DspConfig.chordMinTonalness));
+    expect(chordEx.lastTonalness, greaterThan(DspConfig.chordMinTonalness));
 
     // Loud white noise passes the level gate but must read as diffuse.
     final noiseEx = ChromaExtractor(sampleRate: 44100);

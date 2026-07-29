@@ -40,8 +40,7 @@ class TapTempo {
   /// The current BPM estimate from the retained taps, or null if < 2 taps.
   int? get bpm {
     if (_taps.length < 2) return null;
-    final totalMs =
-        _taps.last.difference(_taps.first).inMicroseconds / 1000.0;
+    final totalMs = _taps.last.difference(_taps.first).inMicroseconds / 1000.0;
     final avgMs = totalMs / (_taps.length - 1);
     if (avgMs <= 0) return null;
     final raw = (60000.0 / avgMs).round();

@@ -15,8 +15,22 @@ class ChordAudio {
   ChordAudio._();
 
   static const _pitchClass = <String, int>{
-    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5,
-    'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10,
+    'C': 0,
+    'C#': 1,
+    'Db': 1,
+    'D': 2,
+    'D#': 3,
+    'Eb': 3,
+    'E': 4,
+    'F': 5,
+    'F#': 6,
+    'Gb': 6,
+    'G': 7,
+    'G#': 8,
+    'Ab': 8,
+    'A': 9,
+    'A#': 10,
+    'Bb': 10,
     'B': 11,
   };
 
@@ -37,14 +51,16 @@ class ChordAudio {
   /// if the label can't be parsed.
   static List<double>? frequencies(String label) {
     if (label.isEmpty) return null;
-    final rootLen =
-        (label.length > 1 && (label[1] == '#' || label[1] == 'b')) ? 2 : 1;
+    final rootLen = (label.length > 1 && (label[1] == '#' || label[1] == 'b'))
+        ? 2
+        : 1;
     final pc = _pitchClass[label.substring(0, rootLen)];
     if (pc == null) return null;
     final offsets = _quality[label.substring(rootLen)] ?? const [0, 4, 7];
     final baseMidi = 48 + pc; // around C3
     return [
-      for (final o in offsets) 440 * math.pow(2, (baseMidi + o - 69) / 12).toDouble(),
+      for (final o in offsets)
+        440 * math.pow(2, (baseMidi + o - 69) / 12).toDouble(),
     ];
   }
 
@@ -109,8 +125,10 @@ class Backing {
   /// string). Longer than a chord pad so the ear has time to compare.
   Future<void> playTone(double freqHz) async {
     if (freqHz <= 0) return;
-    _play('tone:${freqHz.toStringAsFixed(2)}',
-        () => ChordAudio.padWav([freqHz], ms: 1500, amp: 0.3));
+    _play(
+      'tone:${freqHz.toStringAsFixed(2)}',
+      () => ChordAudio.padWav([freqHz], ms: 1500, amp: 0.3),
+    );
   }
 
   void _play(String cacheKey, Uint8List Function() build) {

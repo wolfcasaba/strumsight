@@ -29,10 +29,10 @@ class NnlsChroma {
     this.spectralWhitening = true,
     this.whiteningExponent = 0.7,
     this.whiteningHalfWindow = 18, // ±half octave at 3 bins/semitone
-  })  : _fft = FFT(window),
-        _hann = Float64List(window),
-        _windowed = Float64List(window),
-        nNotes = maxMidi - minMidi + 1 {
+  }) : _fft = FFT(window),
+       _hann = Float64List(window),
+       _windowed = Float64List(window),
+       nNotes = maxMidi - minMidi + 1 {
     for (var i = 0; i < window; i++) {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (window - 1));
     }
@@ -137,8 +137,8 @@ class NnlsChroma {
       final base = n * binsPerSemitone;
       for (var h = 1; h <= harmonics; h++) {
         // Harmonic h sits log2(h) octaves above → +12·log2(h) semitones.
-        final offsetBins =
-            (binsPerSemitone * 12 * (math.log(h) / math.ln2)).round();
+        final offsetBins = (binsPerSemitone * 12 * (math.log(h) / math.ln2))
+            .round();
         final j = base + offsetBins;
         if (j >= 0 && j < _nBins) {
           col[j] += math.pow(spectralShape, h - 1).toDouble();
@@ -209,14 +209,14 @@ class NnlsChroma {
         // atan2 already lands in (−0.5, 0.5] semitone — no wrap needed.
         final frac = math.atan2(im, re) / (2 * math.pi);
         _tuningInit
-            ? lastTuningSemitones = lastTuningSemitones +
-                tuningSmoothing * (frac - lastTuningSemitones)
+            ? lastTuningSemitones =
+                  lastTuningSemitones +
+                  tuningSmoothing * (frac - lastTuningSemitones)
             : lastTuningSemitones = frac;
         _tuningInit = true;
       }
       if (lastTuningSemitones.abs() > 0.02) {
-        final factor =
-            math.pow(2, lastTuningSemitones / 12).toDouble();
+        final factor = math.pow(2, lastTuningSemitones / 12).toDouble();
         maxS = _sampleLogFreq(spec, nFft, factor);
         if (maxS <= 0) return null;
       }

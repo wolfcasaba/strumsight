@@ -16,26 +16,32 @@ void main() {
     });
 
     test('one event per ML segment with DSP label + agree at the midpoint', () {
-      final result = const AnalyzeResult(
-        durationSec: 4,
-        bpm: 120,
-        chords: [
-          TimelineChord(label: 'C', startSec: 0, endSec: 2),
-          TimelineChord(label: 'Am7', startSec: 2, endSec: 4),
-        ],
-        strums: [
-          TimelineStrum(
-              direction: StrumDirection.down, timeSec: 0.5, confidence: 0.9),
-        ],
-      ).withDiagnostics(const MlChordDiagnostics(
-        mlChords: [
-          // Agrees with DSP 'C' at t=1.
-          TimelineChord(label: 'C', startSec: 0, endSec: 2),
-          // DSP is 'Am7' → majmin 'Am'; ML 'Am' agrees.
-          TimelineChord(label: 'Am', startSec: 2, endSec: 4),
-        ],
-        agreement: 1.0,
-      ));
+      final result =
+          const AnalyzeResult(
+            durationSec: 4,
+            bpm: 120,
+            chords: [
+              TimelineChord(label: 'C', startSec: 0, endSec: 2),
+              TimelineChord(label: 'Am7', startSec: 2, endSec: 4),
+            ],
+            strums: [
+              TimelineStrum(
+                direction: StrumDirection.down,
+                timeSec: 0.5,
+                confidence: 0.9,
+              ),
+            ],
+          ).withDiagnostics(
+            const MlChordDiagnostics(
+              mlChords: [
+                // Agrees with DSP 'C' at t=1.
+                TimelineChord(label: 'C', startSec: 0, endSec: 2),
+                // DSP is 'Am7' → majmin 'Am'; ML 'Am' agrees.
+                TimelineChord(label: 'Am', startSec: 2, endSec: 4),
+              ],
+              agreement: 1.0,
+            ),
+          );
 
       final events = DiagnosticsSession.eventsFrom(result);
       expect(events, hasLength(2));
@@ -58,15 +64,18 @@ void main() {
     });
 
     test('agree is false when majmin reductions differ', () {
-      final result = const AnalyzeResult(
-        durationSec: 2,
-        bpm: 90,
-        chords: [TimelineChord(label: 'G', startSec: 0, endSec: 2)],
-        strums: [],
-      ).withDiagnostics(const MlChordDiagnostics(
-        mlChords: [TimelineChord(label: 'Em', startSec: 0, endSec: 2)],
-        agreement: 0.0,
-      ));
+      final result =
+          const AnalyzeResult(
+            durationSec: 2,
+            bpm: 90,
+            chords: [TimelineChord(label: 'G', startSec: 0, endSec: 2)],
+            strums: [],
+          ).withDiagnostics(
+            const MlChordDiagnostics(
+              mlChords: [TimelineChord(label: 'Em', startSec: 0, endSec: 2)],
+              agreement: 0.0,
+            ),
+          );
       final events = DiagnosticsSession.eventsFrom(result);
       expect(events.single.agree, isFalse);
     });
@@ -88,9 +97,7 @@ void main() {
             bpm: 120,
           ),
         ],
-        audioClips: const [
-          DiagnosticsAudioClip(tSec: 0, wavBase64: 'AAAA'),
-        ],
+        audioClips: const [DiagnosticsAudioClip(tSec: 0, wavBase64: 'AAAA')],
       );
 
       final json = session.toJson();
@@ -103,17 +110,20 @@ void main() {
       final events = json['events'] as List;
       expect(events, hasLength(1));
       final e = events.first as Map<String, dynamic>;
-      expect(e.keys, containsAll(<String>[
-        'tSec',
-        'mlChord',
-        'dspChord',
-        'agree',
-        'mlConf',
-        'dspConf',
-        'strumDir',
-        'bpm',
-        'inputLevel',
-      ]));
+      expect(
+        e.keys,
+        containsAll(<String>[
+          'tSec',
+          'mlChord',
+          'dspChord',
+          'agree',
+          'mlConf',
+          'dspConf',
+          'strumDir',
+          'bpm',
+          'inputLevel',
+        ]),
+      );
       expect(e['mlConf'], isNull); // null-safe, present but null
 
       final clips = json['audioClips'] as List;

@@ -49,10 +49,16 @@ void main() {
       );
       final expected = [for (var i = 0; i < 8; i++) 0.1 + i * gap];
       final onsets = _detect(signal);
-      expect(_matches(onsets, expected), 8,
-          reason: 'every strum detected within ±50 ms (got $onsets)');
-      expect(onsets.length, lessThanOrEqualTo(9),
-          reason: 'no more than one spurious extra');
+      expect(
+        _matches(onsets, expected),
+        8,
+        reason: 'every strum detected within ±50 ms (got $onsets)',
+      );
+      expect(
+        onsets.length,
+        lessThanOrEqualTo(9),
+        reason: 'no more than one spurious extra',
+      );
     });
 
     test('finds all 16th-note strums at 160 BPM within ±50 ms', () {
@@ -63,17 +69,26 @@ void main() {
       );
       final expected = [for (var i = 0; i < 8; i++) 0.1 + i * gap];
       final onsets = _detect(signal);
-      expect(_matches(onsets, expected), greaterThanOrEqualTo(7),
-          reason: '≥7/8 at the hard tempo (got $onsets)');
-      expect(onsets.length, lessThanOrEqualTo(9),
-          reason: 'precision bound — a fire-constantly detector must fail');
+      expect(
+        _matches(onsets, expected),
+        greaterThanOrEqualTo(7),
+        reason: '≥7/8 at the hard tempo (got $onsets)',
+      );
+      expect(
+        onsets.length,
+        lessThanOrEqualTo(9),
+        reason: 'precision bound — a fire-constantly detector must fail',
+      );
     });
 
     test('stays silent on constant-amplitude vibrato (the SuperFlux win)', () {
       final signal = vibratoNote(freq: 440, seconds: 2.0);
       final onsets = _detect(signal);
-      expect(onsets.length, lessThanOrEqualTo(1),
-          reason: 'only the initial attack may fire (got $onsets)');
+      expect(
+        onsets.length,
+        lessThanOrEqualTo(1),
+        reason: 'only the initial attack may fire (got $onsets)',
+      );
     });
 
     test('silence and a stationary noise floor produce zero onsets', () {
@@ -86,36 +101,44 @@ void main() {
       expect(_detect(noise), isEmpty);
     });
 
-    test('a SOFT strum after loud strums + true silence still fires (r142)',
-        () {
-      // R1 audit finding: the silence-gate branch must keep re-arming the
-      // release hysteresis and keep decaying the flux-peak tracker — a
-      // staccato stab CUT to digital silence right after its attack (palm
-      // mute) must not eat the next (soft) strum.
-      final stabFull = strumSignal(
-          lowFirst: true, seconds: 0.5, leadSilenceSeconds: 0.1);
-      final stabLen = (0.15 * _sr).round(); // hard-cut 50 ms after the attack
-      final stab = Float64List(stabLen)
-        ..setAll(0, Float64List.sublistView(stabFull, 0, stabLen));
-      final soft = strumSignal(
-          lowFirst: true, seconds: 0.4, leadSilenceSeconds: 0);
-      for (var i = 0; i < soft.length; i++) {
-        soft[i] *= 0.25; // clearly quieter than the stab
-      }
-      final gap = Float64List(_sr); // 1 s of TRUE digital silence
-      final signal = Float64List(stab.length + gap.length + soft.length)
-        ..setAll(0, stab)
-        ..setAll(stab.length, gap)
-        ..setAll(stab.length + gap.length, soft);
-      final softStart = (stab.length + gap.length) / _sr;
+    test(
+      'a SOFT strum after loud strums + true silence still fires (r142)',
+      () {
+        // R1 audit finding: the silence-gate branch must keep re-arming the
+        // release hysteresis and keep decaying the flux-peak tracker — a
+        // staccato stab CUT to digital silence right after its attack (palm
+        // mute) must not eat the next (soft) strum.
+        final stabFull = strumSignal(
+          lowFirst: true,
+          seconds: 0.5,
+          leadSilenceSeconds: 0.1,
+        );
+        final stabLen = (0.15 * _sr).round(); // hard-cut 50 ms after the attack
+        final stab = Float64List(stabLen)
+          ..setAll(0, Float64List.sublistView(stabFull, 0, stabLen));
+        final soft = strumSignal(
+          lowFirst: true,
+          seconds: 0.4,
+          leadSilenceSeconds: 0,
+        );
+        for (var i = 0; i < soft.length; i++) {
+          soft[i] *= 0.25; // clearly quieter than the stab
+        }
+        final gap = Float64List(_sr); // 1 s of TRUE digital silence
+        final signal = Float64List(stab.length + gap.length + soft.length)
+          ..setAll(0, stab)
+          ..setAll(stab.length, gap)
+          ..setAll(stab.length + gap.length, soft);
+        final softStart = (stab.length + gap.length) / _sr;
 
-      final onsets = _detect(signal);
-      expect(
-        onsets.where((t) => (t - softStart).abs() <= _tolSec),
-        isNotEmpty,
-        reason: 'the post-silence soft strum must be detected (got $onsets)',
-      );
-    });
+        final onsets = _detect(signal);
+        expect(
+          onsets.where((t) => (t - softStart).abs() <= _tolSec),
+          isNotEmpty,
+          reason: 'the post-silence soft strum must be detected (got $onsets)',
+        );
+      },
+    );
 
     test('overlapping ring-out strums are still separated', () {
       final signal = overlappingStrums(
@@ -125,8 +148,11 @@ void main() {
       );
       final expected = [for (var i = 0; i < 6; i++) 0.1 + i * 0.15];
       final onsets = _detect(signal);
-      expect(_matches(onsets, expected), greaterThanOrEqualTo(5),
-          reason: '≥5/6 under heavy ring-out (got $onsets)');
+      expect(
+        _matches(onsets, expected),
+        greaterThanOrEqualTo(5),
+        reason: '≥5/6 under heavy ring-out (got $onsets)',
+      );
     });
   });
 }

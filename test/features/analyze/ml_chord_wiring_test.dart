@@ -19,15 +19,17 @@ void main() {
   final binFile = File('assets/ml/chord_crnn.bin');
 
   ChordCrnn loadNet() => ChordCrnn.parse(
-        Uint8List.fromList(binFile.readAsBytesSync()).buffer.asByteData(),
-      );
+    Uint8List.fromList(binFile.readAsBytesSync()).buffer.asByteData(),
+  );
 
-  test('the chord model asset loads with the expected 25-class majmin head',
-      () {
-    final net = loadNet();
-    expect(net.nBins, CqtExtractor.nBins); // 144
-    expect(net.nClasses, MlChordDecoder.majmin25Labels.length); // 25
-  });
+  test(
+    'the chord model asset loads with the expected 25-class majmin head',
+    () {
+      final net = loadNet();
+      expect(net.nBins, CqtExtractor.nBins); // 144
+      expect(net.nClasses, MlChordDecoder.majmin25Labels.length); // 25
+    },
+  );
 
   test('a sustained single-chord clip yields that chord as the dominant ML '
       'label, over a timeline of ~the CQT frame length', () {
@@ -45,8 +47,9 @@ void main() {
     for (final c in timeline) {
       byLabel[c.label] = (byLabel[c.label] ?? 0) + c.durationSec;
     }
-    final dominant =
-        byLabel.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    final dominant = byLabel.entries
+        .reduce((a, b) => a.value >= b.value ? a : b)
+        .key;
     expect(dominant, 'C', reason: 'a C-major triad should decode to C');
 
     // The timeline spans roughly the whole clip and stamps times on the CQT
@@ -54,30 +57,34 @@ void main() {
     expect(timeline.first.startSec, 0.0);
     expect(timeline.last.endSec, closeTo(duration, 1e-9));
     final expectedFrames = CqtExtractor.nFrames(
-        (clip.length * CqtExtractor.sr / sr).round());
-    expect(expectedFrames, greaterThan(10),
-        reason: 'a 3 s clip is many CQT frames');
+      (clip.length * CqtExtractor.sr / sr).round(),
+    );
+    expect(
+      expectedFrames,
+      greaterThan(10),
+      reason: 'a 3 s clip is many CQT frames',
+    );
   });
 
-  test('agreementFraction reduces DSP richer labels to majmin before diffing',
-      () {
-    // DSP timeline uses a rich label; ML uses plain majmin. They should agree.
-    final dsp = [
-      const TimelineChord(label: 'Cmaj7', startSec: 0, endSec: 1.0),
-      const TimelineChord(label: 'G7', startSec: 1.0, endSec: 2.0),
-    ];
-    final ml = [
-      const TimelineChord(label: 'C', startSec: 0, endSec: 1.0),
-      const TimelineChord(label: 'G', startSec: 1.0, endSec: 2.0),
-    ];
-    expect(MlChordDecoder.agreementFraction(dsp, ml, 2.0), 1.0);
+  test(
+    'agreementFraction reduces DSP richer labels to majmin before diffing',
+    () {
+      // DSP timeline uses a rich label; ML uses plain majmin. They should agree.
+      final dsp = [
+        const TimelineChord(label: 'Cmaj7', startSec: 0, endSec: 1.0),
+        const TimelineChord(label: 'G7', startSec: 1.0, endSec: 2.0),
+      ];
+      final ml = [
+        const TimelineChord(label: 'C', startSec: 0, endSec: 1.0),
+        const TimelineChord(label: 'G', startSec: 1.0, endSec: 2.0),
+      ];
+      expect(MlChordDecoder.agreementFraction(dsp, ml, 2.0), 1.0);
 
-    // A genuine disagreement (Dm vs D) drops the fraction.
-    final ml2 = [
-      const TimelineChord(label: 'Dm', startSec: 0, endSec: 2.0),
-    ];
-    expect(MlChordDecoder.agreementFraction(dsp, ml2, 2.0), lessThan(1.0));
-  });
+      // A genuine disagreement (Dm vs D) drops the fraction.
+      final ml2 = [const TimelineChord(label: 'Dm', startSec: 0, endSec: 2.0)];
+      expect(MlChordDecoder.agreementFraction(dsp, ml2, 2.0), lessThan(1.0));
+    },
+  );
 
   test('majminReduce mirrors the labels.py reduction rules', () {
     expect(MlChordDecoder.majminReduce('Cmaj7'), 'C');
@@ -106,8 +113,10 @@ void main() {
     expect(on.diagnostics!.mlChords, isNotEmpty);
     expect(on.diagnostics!.agreement, inInclusiveRange(0.0, 1.0));
     // The DSP timeline is untouched by the ML path.
-    expect(on.chords.map((c) => c.label).toList(),
-        off.chords.map((c) => c.label).toList());
+    expect(
+      on.chords.map((c) => c.label).toList(),
+      off.chords.map((c) => c.label).toList(),
+    );
   });
 
   test('flag-off result serializes without the diag key (r197 compat)', () {
@@ -122,10 +131,12 @@ void main() {
     expect(AnalyzeResult.fromJson(base.toJson()).diagnostics, isNull);
 
     // With diagnostics, the key is present and round-trips.
-    final withDiag = base.withDiagnostics(const MlChordDiagnostics(
-      mlChords: [TimelineChord(label: 'C', startSec: 0, endSec: 2)],
-      agreement: 0.75,
-    ));
+    final withDiag = base.withDiagnostics(
+      const MlChordDiagnostics(
+        mlChords: [TimelineChord(label: 'C', startSec: 0, endSec: 2)],
+        agreement: 0.75,
+      ),
+    );
     expect(withDiag.toJson().containsKey('diag'), isTrue);
     final rt = AnalyzeResult.fromJson(withDiag.toJson());
     expect(rt.diagnostics, isNotNull);

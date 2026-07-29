@@ -9,12 +9,12 @@ const _u = StrumDirection.up;
 // A tidy 60 BPM lesson (1 s/beat) with two strokes: down@beat0, up@beat0.5.
 // With a 4-beat count-in their absolute times are 4.0 s and 4.5 s.
 Lesson _lesson() => Lesson(
-      id: 't',
-      name: 'T',
-      bpm: 60,
-      chords: const ['C'],
-      pattern: const [_d, _u, null, null, null, null, null, null],
-    );
+  id: 't',
+  name: 'T',
+  bpm: 60,
+  chords: const ['C'],
+  pattern: const [_d, _u, null, null, null, null, null, null],
+);
 
 void main() {
   test('correct direction within the window is a hit and builds combo', () {
@@ -59,13 +59,15 @@ void main() {
     expect(s.hits, 0);
   });
 
-  test('registerStrum returns how it resolved (null when it matched nothing)',
-      () {
-    final s = LessonScorer(_lesson());
-    expect(s.registerStrum(_d, 10.0), isNull); // no event nearby
-    expect(s.registerStrum(_d, 4.0), HitResult.hit);
-    expect(s.registerStrum(_d, 4.5), HitResult.wrongDirection); // event is up
-  });
+  test(
+    'registerStrum returns how it resolved (null when it matched nothing)',
+    () {
+      final s = LessonScorer(_lesson());
+      expect(s.registerStrum(_d, 10.0), isNull); // no event nearby
+      expect(s.registerStrum(_d, 4.0), HitResult.hit);
+      expect(s.registerStrum(_d, 4.5), HitResult.wrongDirection); // event is up
+    },
+  );
 
   test('finalize turns the remaining open events into misses', () {
     final s = LessonScorer(_lesson());
@@ -87,12 +89,12 @@ void main() {
   // A 60 BPM lesson with a chord change: down@beat0 on C, down@beat4 on G.
   // Count-in 4 → chord slots at 4.0 s (C) and 8.0 s (G).
   Lesson chordLesson() => Lesson(
-        id: 'c',
-        name: 'c',
-        bpm: 60,
-        chords: const ['C', 'G'],
-        pattern: const [_d, null, null, null, null, null, null, null],
-      );
+    id: 'c',
+    name: 'c',
+    bpm: 60,
+    chords: const ['C', 'G'],
+    pattern: const [_d, null, null, null, null, null, null, null],
+  );
 
   group('chord grading (secondary, lenient)', () {
     test('counts chord slots and grades correct chords as hits', () {
@@ -106,14 +108,16 @@ void main() {
       expect(s.snapshot().chordAccuracy, 1.0);
     });
 
-    test('tolerates chord-detection lag (chord arrives just after the stroke)',
-        () {
-      final s = LessonScorer(chordLesson());
-      s.observeChord('C', 4.3); // ~0.3 s late — still within the lag window
-      s.observeChord('G', 8.3);
-      s.finalize();
-      expect(s.chordHits, 2);
-    });
+    test(
+      'tolerates chord-detection lag (chord arrives just after the stroke)',
+      () {
+        final s = LessonScorer(chordLesson());
+        s.observeChord('C', 4.3); // ~0.3 s late — still within the lag window
+        s.observeChord('G', 8.3);
+        s.finalize();
+        expect(s.chordHits, 2);
+      },
+    );
 
     test('wrong chords are missed and never touch the strum score', () {
       final s = LessonScorer(chordLesson());
@@ -127,13 +131,15 @@ void main() {
     });
 
     test('a strum-only lesson reports no chords', () {
-      final s = LessonScorer(Lesson(
-        id: 'so',
-        name: 'so',
-        bpm: 60,
-        chords: const [''],
-        pattern: const [_d, _u, null, null, null, null, null, null],
-      ));
+      final s = LessonScorer(
+        Lesson(
+          id: 'so',
+          name: 'so',
+          bpm: 60,
+          chords: const [''],
+          pattern: const [_d, _u, null, null, null, null, null, null],
+        ),
+      );
       expect(s.chordTotal, 0);
       expect(s.snapshot().hasChords, isFalse);
     });
@@ -143,12 +149,12 @@ void main() {
   // A full down-strum bar (8 slots) over two chords → 16 events at 60 BPM,
   // 0.5 s apart, first at 4.0 s (after the 4-beat count-in).
   Lesson downLesson() => Lesson(
-        id: 'dn',
-        name: 'dn',
-        bpm: 60,
-        chords: const ['C', 'G'],
-        pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
-      );
+    id: 'dn',
+    name: 'dn',
+    bpm: 60,
+    chords: const ['C', 'G'],
+    pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
+  );
 
   group('game-feel: timing, points, multiplier', () {
     test('a dead-on hit is PERFECT and scores the base 100', () {

@@ -20,13 +20,16 @@ enum DiagnosticsUploadStatus { idle, uploading, uploaded, failed }
 /// Analyze path.
 class DiagnosticsUploader {
   DiagnosticsUploader({Dio? dio, this.maxRetries = 2})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: ApiConfig.baseUrl,
               connectTimeout: const Duration(seconds: 6),
               sendTimeout: const Duration(seconds: 12),
               receiveTimeout: const Duration(seconds: 6),
-            ));
+            ),
+          );
 
   final Dio _dio;
 

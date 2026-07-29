@@ -35,7 +35,8 @@ ProviderContainer _container({
 }
 
 /// Let scheduled timers/microtasks (debounce, listener flush) run.
-Future<void> _settle() => Future<void>.delayed(const Duration(milliseconds: 20));
+Future<void> _settle() =>
+    Future<void>.delayed(const Duration(milliseconds: 20));
 
 void main() {
   setUp(() {
@@ -67,8 +68,10 @@ void main() {
       tuningA4: 432,
     );
     // A stored token => the session restores => sign-in transition => pull.
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    final container = _container(
+      tokens: FakeTokenStore('tok'),
+      settings: settings,
+    );
     container.read(settingsSyncProvider);
     await container.read(authControllerProvider.future);
     await _settle();
@@ -82,8 +85,10 @@ void main() {
 
   test('applying a pulled profile does not echo back as a push', () async {
     final settings = FakeSettingsRepository(themeMode: ThemeMode.light);
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    final container = _container(
+      tokens: FakeTokenStore('tok'),
+      settings: settings,
+    );
     container.read(settingsSyncProvider);
     await container.read(authControllerProvider.future);
     await _settle();
@@ -94,8 +99,10 @@ void main() {
 
   test('pushes a local change to the backend when signed in', () async {
     final settings = FakeSettingsRepository();
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    final container = _container(
+      tokens: FakeTokenStore('tok'),
+      settings: settings,
+    );
     container.read(settingsSyncProvider);
     await container.read(authControllerProvider.future);
     await _settle(); // initial pull settles
@@ -109,8 +116,10 @@ void main() {
 
   test('pushes a tuning-reference change to the backend', () async {
     final settings = FakeSettingsRepository();
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    final container = _container(
+      tokens: FakeTokenStore('tok'),
+      settings: settings,
+    );
     container.read(settingsSyncProvider);
     await container.read(authControllerProvider.future);
     await _settle(); // initial pull
@@ -121,33 +130,40 @@ void main() {
     expect(settings.updates.last['tuning_a4'], 442);
   });
 
-  test('register pushes local settings up (does not clobber them with defaults)',
-      () async {
-    final settings = FakeSettingsRepository(); // remote = defaults
-    final container = _container(tokens: FakeTokenStore(), settings: settings);
-    container.read(settingsSyncProvider);
-    await container.read(authControllerProvider.future);
+  test(
+    'register pushes local settings up (does not clobber them with defaults)',
+    () async {
+      final settings = FakeSettingsRepository(); // remote = defaults
+      final container = _container(
+        tokens: FakeTokenStore(),
+        settings: settings,
+      );
+      container.read(settingsSyncProvider);
+      await container.read(authControllerProvider.future);
 
-    // The user customised settings offline BEFORE creating an account.
-    await container.read(themeModeProvider.notifier).setMode(ThemeMode.light);
-    await _settle();
-    expect(settings.updates, isEmpty); // nothing pushed while logged out
+      // The user customised settings offline BEFORE creating an account.
+      await container.read(themeModeProvider.notifier).setMode(ThemeMode.light);
+      await _settle();
+      expect(settings.updates, isEmpty); // nothing pushed while logged out
 
-    await container
-        .read(authControllerProvider.notifier)
-        .register('new@strumsight.app', 'sixstrings');
-    await _settle();
+      await container
+          .read(authControllerProvider.notifier)
+          .register('new@strumsight.app', 'sixstrings');
+      await _settle();
 
-    // Signup adopts the local settings as the cloud profile — not the reverse.
-    expect(settings.updates, isNotEmpty);
-    expect(settings.updates.last['theme_mode'], 'light');
-    expect(container.read(themeModeProvider), ThemeMode.light); // unchanged
-  });
+      // Signup adopts the local settings as the cloud profile — not the reverse.
+      expect(settings.updates, isNotEmpty);
+      expect(settings.updates.last['theme_mode'], 'light');
+      expect(container.read(themeModeProvider), ThemeMode.light); // unchanged
+    },
+  );
 
   test('an offline push is retried, not silently dropped', () async {
     final settings = FakeSettingsRepository();
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
+    final container = _container(
+      tokens: FakeTokenStore('tok'),
+      settings: settings,
+    );
     container.read(settingsSyncProvider);
     await container.read(authControllerProvider.future);
     await _settle(); // initial pull
@@ -161,50 +177,64 @@ void main() {
     expect(settings.confidenceThreshold, 0.8);
   });
 
-  test('a PERMANENT rejection (401/422) is NOT retried — no infinite loop',
-      () async {
-    // Round 123: _sendPatch retried on ANY error with a 10s timer. An expired
-    // 14-day JWT (401) or a validation 422 can never succeed, so that spun a
-    // forever loop draining battery + hammering the server. A permanent 4xx
-    // must be given up on (until the next genuine local change / re-login).
-    final settings = FakeSettingsRepository();
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
-    container.read(settingsSyncProvider);
-    await container.read(authControllerProvider.future);
-    await _settle(); // initial pull
+  test(
+    'a PERMANENT rejection (401/422) is NOT retried — no infinite loop',
+    () async {
+      // Round 123: _sendPatch retried on ANY error with a 10s timer. An expired
+      // 14-day JWT (401) or a validation 422 can never succeed, so that spun a
+      // forever loop draining battery + hammering the server. A permanent 4xx
+      // must be given up on (until the next genuine local change / re-login).
+      final settings = FakeSettingsRepository();
+      final container = _container(
+        tokens: FakeTokenStore('tok'),
+        settings: settings,
+      );
+      container.read(settingsSyncProvider);
+      await container.read(authControllerProvider.future);
+      await _settle(); // initial pull
 
-    settings.alwaysFailWith = DioException(
-      requestOptions: RequestOptions(path: '/settings'),
-      response: Response(
+      settings.alwaysFailWith = DioException(
         requestOptions: RequestOptions(path: '/settings'),
-        statusCode: 401,
-      ),
-      type: DioExceptionType.badResponse,
-    );
-    await container.read(confidenceThresholdProvider.notifier).set(0.8);
-    // Give any (buggy) retry timers several windows to fire.
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+        response: Response(
+          requestOptions: RequestOptions(path: '/settings'),
+          statusCode: 401,
+        ),
+        type: DioExceptionType.badResponse,
+      );
+      await container.read(confidenceThresholdProvider.notifier).set(0.8);
+      // Give any (buggy) retry timers several windows to fire.
+      await Future<void>.delayed(const Duration(milliseconds: 80));
 
-    expect(settings.updates.length, 1,
-        reason: 'a permanent 4xx must be attempted exactly once, not retried');
-  });
+      expect(
+        settings.updates.length,
+        1,
+        reason: 'a permanent 4xx must be attempted exactly once, not retried',
+      );
+    },
+  );
 
-  test('a transient 5xx IS retried (server hiccup, not client error)',
-      () async {
-    final settings = FakeSettingsRepository();
-    final container =
-        _container(tokens: FakeTokenStore('tok'), settings: settings);
-    container.read(settingsSyncProvider);
-    await container.read(authControllerProvider.future);
-    await _settle();
+  test(
+    'a transient 5xx IS retried (server hiccup, not client error)',
+    () async {
+      final settings = FakeSettingsRepository();
+      final container = _container(
+        tokens: FakeTokenStore('tok'),
+        settings: settings,
+      );
+      container.read(settingsSyncProvider);
+      await container.read(authControllerProvider.future);
+      await _settle();
 
-    // Fail the first attempt with a 503, then let it succeed.
-    settings.failNextUpdates = 1;
-    await container.read(confidenceThresholdProvider.notifier).set(0.8);
-    await _settle();
-    expect(settings.updates.length, greaterThanOrEqualTo(2),
-        reason: 'a generic/transient failure stays retryable');
-    expect(settings.confidenceThreshold, 0.8);
-  });
+      // Fail the first attempt with a 503, then let it succeed.
+      settings.failNextUpdates = 1;
+      await container.read(confidenceThresholdProvider.notifier).set(0.8);
+      await _settle();
+      expect(
+        settings.updates.length,
+        greaterThanOrEqualTo(2),
+        reason: 'a generic/transient failure stays retryable',
+      );
+      expect(settings.confidenceThreshold, 0.8);
+    },
+  );
 }

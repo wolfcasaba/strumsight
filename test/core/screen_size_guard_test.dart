@@ -28,8 +28,11 @@ import '../support/fake_engines.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  Future<void> atSize(WidgetTester tester, Size logical,
-      Future<void> Function() pumpScreen) async {
+  Future<void> atSize(
+    WidgetTester tester,
+    Size logical,
+    Future<void> Function() pumpScreen,
+  ) async {
     tester.view.physicalSize = logical;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -49,85 +52,98 @@ void main() {
         final engine = FakeTunerEngine();
         addTearDown(engine.dispose);
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            overrides: [tunerEngineProvider.overrideWithValue(engine)],
-            child: const MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: TunerScreen(),
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [tunerEngineProvider.overrideWithValue(engine)],
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: TunerScreen(),
+              ),
             ),
-          ));
+          );
           await tester.pump();
           engine.emit(
-              const TunerReading(note: 'A', cents: 3, frequencyHz: 110));
+            const TunerReading(note: 'A', cents: 3, frequencyHz: 110),
+          );
           await tester.pump();
         });
       });
 
       testWidgets('Learn home (lesson list)', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            child: MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: LessonListScreen(now: DateTime(2026, 7, 11)),
+          await tester.pumpWidget(
+            ProviderScope(
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: LessonListScreen(now: DateTime(2026, 7, 11)),
+              ),
             ),
-          ));
+          );
         });
       });
 
-      testWidgets('Learn player (paused, with score HUD area)',
-          (tester) async {
+      testWidgets('Learn player (paused, with score HUD area)', (tester) async {
         final engine = FakeStrumEngine();
         addTearDown(engine.dispose);
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            overrides: [strumEngineProvider.overrideWithValue(engine)],
-            child: MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: LearnScreen(lesson: Lessons.downUpGroove),
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [strumEngineProvider.overrideWithValue(engine)],
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: LearnScreen(lesson: Lessons.downUpGroove),
+              ),
             ),
-          ));
+          );
         });
       });
 
       testWidgets('Metronome', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: const MetronomeScreen(),
-          ));
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const MetronomeScreen(),
+            ),
+          );
         });
       });
 
       testWidgets('Chord library', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            child: const MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: ChordLibraryScreen(),
+          await tester.pumpWidget(
+            ProviderScope(
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: ChordLibraryScreen(),
+              ),
             ),
-          ));
+          );
         });
       });
 
       testWidgets('Progress', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            child: const MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: ProgressScreen(),
+          await tester.pumpWidget(
+            ProviderScope(
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: ProgressScreen(),
+              ),
             ),
-          ));
+          );
         });
       });
 
-      testWidgets('full app tab walk (Live→Analyze→Learn→Library→Settings)',
-          (tester) async {
+      testWidgets('full app tab walk (Live→Analyze→Learn→Library→Settings)', (
+        tester,
+      ) async {
         PackageInfo.setMockInitialValues(
           appName: 'StrumSight',
           packageName: 'test',
@@ -138,10 +154,12 @@ void main() {
         final engine = FakeStrumEngine();
         addTearDown(engine.dispose);
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            overrides: [strumEngineProvider.overrideWithValue(engine)],
-            child: const StrumSightApp(),
-          ));
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [strumEngineProvider.overrideWithValue(engine)],
+              child: const StrumSightApp(),
+            ),
+          );
           await tester.pumpAndSettle();
           for (final tab in ['Analyze', 'Learn', 'Library', 'Settings']) {
             await tester.tap(find.text(tab), warnIfMissed: false);
@@ -152,35 +170,41 @@ void main() {
 
       testWidgets('Onboarding', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(const MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: OnboardingScreen(),
-          ));
+          await tester.pumpWidget(
+            const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: OnboardingScreen(),
+            ),
+          );
         });
       });
 
       testWidgets('Streak', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            child: MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: StreakScreen(now: DateTime(2026, 7, 11)),
+          await tester.pumpWidget(
+            ProviderScope(
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: StreakScreen(now: DateTime(2026, 7, 11)),
+              ),
             ),
-          ));
+          );
         });
       });
 
       testWidgets('Song builder', (tester) async {
         await atSize(tester, entry.value, () async {
-          await tester.pumpWidget(ProviderScope(
-            child: const MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: SongBuilderScreen(),
+          await tester.pumpWidget(
+            ProviderScope(
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: SongBuilderScreen(),
+              ),
             ),
-          ));
+          );
         });
       });
     });

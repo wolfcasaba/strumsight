@@ -35,14 +35,19 @@ class _ProgressionPickerState extends State<_ProgressionPicker> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.songSuggestTitle,
-                style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20)),
+            Text(
+              l10n.songSuggestTitle,
+              style: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(l10n.songKeyLabel,
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              l10n.songKeyLabel,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -86,8 +91,10 @@ class _ProgressionTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        title: Text('${template.name}  ·  ${chords.join(' ')}',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          '${template.name}  ·  ${chords.join(' ')}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(template.roman),
         trailing: const Icon(Icons.add, color: AppColors.primary),
         onTap: onTap,

@@ -39,7 +39,8 @@ class AnalyzeState {
 /// caller loads them and the isolate parses); null or unparseable → the
 /// heuristic labels stand.
 AnalyzeResult runClipAnalysis(
-    (List<double>, int, Uint8List?, bool, Uint8List?) args) {
+  (List<double>, int, Uint8List?, bool, Uint8List?) args,
+) {
   final (pcm, sr, weights, labMode, chordWeights) = args;
   StrumCrnn? crnn;
   if (weights != null) {
@@ -49,7 +50,9 @@ AnalyzeResult runClipAnalysis(
       crnn = null; // fall back to the heuristic, never fail an analyze
     }
   }
-  final result = ClipAnalyzer(strumRefiner: crnn?.classifyClip).analyze(pcm, sr);
+  final result = ClipAnalyzer(
+    strumRefiner: crnn?.classifyClip,
+  ).analyze(pcm, sr);
 
   // Lab mode (r197): ALSO run the ML chord model and attach both timelines +
   // their agreement. Best-effort — the ML path never fails an analyze, and it
@@ -57,12 +60,17 @@ AnalyzeResult runClipAnalysis(
   if (labMode && chordWeights != null) {
     try {
       final chordNet = ChordCrnn.parse(ByteData.sublistView(chordWeights));
-      final mlChords =
-          MlChordDecoder(chordNet).decode(pcm, sr, result.durationSec);
+      final mlChords = MlChordDecoder(
+        chordNet,
+      ).decode(pcm, sr, result.durationSec);
       final agreement = MlChordDecoder.agreementFraction(
-          result.chords, mlChords, result.durationSec);
+        result.chords,
+        mlChords,
+        result.durationSec,
+      );
       return result.withDiagnostics(
-          MlChordDiagnostics(mlChords: mlChords, agreement: agreement));
+        MlChordDiagnostics(mlChords: mlChords, agreement: agreement),
+      );
     } catch (_) {
       // Diagnostics are a bonus; the DSP result stands unchanged on any error.
     }
@@ -98,19 +106,25 @@ Future<Uint8List?> _chordWeights() async {
 /// and the Live Lab capture-and-analyze (r199). When [labMode] is off the chord
 /// weights aren't even loaded and the isolate does zero ML work.
 Future<AnalyzeResult> computeClipAnalysis(
-    List<double> pcm, int sr, bool labMode) async {
+  List<double> pcm,
+  int sr,
+  bool labMode,
+) async {
   final chordWeights = labMode ? await _chordWeights() : null;
-  return compute(
-    runClipAnalysis,
-    (pcm, sr, await _crnnWeights(), labMode, chordWeights),
-  );
+  return compute(runClipAnalysis, (
+    pcm,
+    sr,
+    await _crnnWeights(),
+    labMode,
+    chordWeights,
+  ));
 }
 
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
   /// [recorder] is injectable for tests; defaults to the real one.
   AnalyzeController({ClipRecorder? recorder})
-      : _recorder = recorder ?? ClipRecorder();
+    : _recorder = recorder ?? ClipRecorder();
 
   final ClipRecorder _recorder;
 
@@ -198,18 +212,23 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     // it (the uploader never throws).
     if (labMode && result.diagnostics != null) {
       unawaited(
-          ref.read(diagnosticsUploadProvider.notifier).upload(result, pcm, sr));
+        ref.read(diagnosticsUploadProvider.notifier).upload(result, pcm, sr),
+      );
     }
     // A completed analysis with real content counts as practice (chunk 013).
     if (result.chords.isNotEmpty || result.strums.isNotEmpty) {
       ref.read(streakProvider.notifier).recordPracticeToday();
-      ref.read(practiceLogProvider.notifier).record(PracticeEntry(
-            day: StreakLogic.epochDayOf(DateTime.now()),
-            source: PracticeSource.analyze,
-            seconds: result.durationSec.round(),
-            strokes: result.strums.length,
-            chords: result.chords.map((c) => c.label).toSet().length,
-          ));
+      ref
+          .read(practiceLogProvider.notifier)
+          .record(
+            PracticeEntry(
+              day: StreakLogic.epochDayOf(DateTime.now()),
+              source: PracticeSource.analyze,
+              seconds: result.durationSec.round(),
+              strokes: result.strums.length,
+              chords: result.chords.map((c) => c.label).toSet().length,
+            ),
+          );
     }
   }
 

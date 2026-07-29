@@ -23,8 +23,9 @@ class AuthEventController extends Notifier<AuthEvent?> {
 
 /// Fires on each successful authentication (login/restore/register). Null until
 /// the first event.
-final authEventProvider =
-    NotifierProvider<AuthEventController, AuthEvent?>(AuthEventController.new);
+final authEventProvider = NotifierProvider<AuthEventController, AuthEvent?>(
+  AuthEventController.new,
+);
 
 /// The session controller. State is the signed-in [AuthUser], or null when
 /// logged out. Restores a persisted session on first read.
@@ -55,8 +56,10 @@ class AuthController extends AsyncNotifier<AuthUser?> {
   Future<void> login(String email, String password) =>
       _authenticate(() => _repo.login(email, password), AuthEvent.loggedIn);
 
-  Future<void> register(String email, String password) =>
-      _authenticate(() => _repo.register(email, password), AuthEvent.registered);
+  Future<void> register(String email, String password) => _authenticate(
+    () => _repo.register(email, password),
+    AuthEvent.registered,
+  );
 
   /// Store the token from [getToken], then load the user. Errors (e.g.
   /// [AuthException]) surface as an AsyncError the UI reads via `state.error`.
@@ -81,8 +84,9 @@ class AuthController extends AsyncNotifier<AuthUser?> {
   }
 }
 
-final authControllerProvider =
-    AsyncNotifierProvider<AuthController, AuthUser?>(AuthController.new);
+final authControllerProvider = AsyncNotifierProvider<AuthController, AuthUser?>(
+  AuthController.new,
+);
 
 /// Convenience: true when a user is signed in (ignores loading/error).
 final isSignedInProvider = Provider<bool>(

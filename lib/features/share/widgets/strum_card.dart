@@ -10,12 +10,7 @@ import '../share_content.dart';
 /// tempo and stroke counts of a clip. Rendered offline; captured to PNG by the
 /// share service. Fixed logical size (4:5 portrait) for a consistent export.
 class StrumCard extends StatelessWidget {
-  const StrumCard({
-    super.key,
-    required this.result,
-    this.capo = 0,
-    this.title,
-  });
+  const StrumCard({super.key, required this.result, this.capo = 0, this.title});
 
   final AnalyzeResult result;
   final int capo;
@@ -57,7 +52,9 @@ class StrumCard extends StatelessWidget {
               Text(
                 'Chord & strum-direction detector',
                 style: TextStyle(
-                    fontSize: 11.5, color: _ink.withValues(alpha: 0.6)),
+                  fontSize: 11.5,
+                  color: _ink.withValues(alpha: 0.6),
+                ),
               ),
               const Spacer(),
               _label('CHORDS'),
@@ -90,39 +87,39 @@ class StrumCard extends StatelessWidget {
   }
 
   Widget _wordmark() => Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              gradient: AppColors.brandGradient,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: const Icon(Icons.graphic_eq, size: 16, color: Colors.white),
-          ),
-          const SizedBox(width: 9),
-          const Text(
-            'StrumSight',
-            style: TextStyle(
-              fontFamily: 'Montserrat',
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-              color: _ink,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      );
+    children: [
+      Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          gradient: AppColors.brandGradient,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: const Icon(Icons.graphic_eq, size: 16, color: Colors.white),
+      ),
+      const SizedBox(width: 9),
+      const Text(
+        'StrumSight',
+        style: TextStyle(
+          fontFamily: 'Montserrat',
+          fontWeight: FontWeight.w700,
+          fontSize: 17,
+          color: _ink,
+          letterSpacing: 0.2,
+        ),
+      ),
+    ],
+  );
 
   Widget _label(String text) => Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-          letterSpacing: 1.4,
-          color: AppColors.primary,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 11,
+      letterSpacing: 1.4,
+      color: AppColors.primary,
+    ),
+  );
 
   Widget _stats() {
     final chips = <Widget>[
@@ -142,58 +139,55 @@ class StrumCard extends StatelessWidget {
   }
 
   Widget _chip(String value, String label) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+    padding: const EdgeInsets.symmetric(vertical: 9),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+    ),
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontFamily: 'Montserrat',
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: _ink,
+          ),
         ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: _ink,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 8.5,
-                letterSpacing: 0.6,
-                color: _ink.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 8.5,
+            letterSpacing: 0.6,
+            color: _ink.withValues(alpha: 0.6),
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _footer() => Row(
-        children: [
-          const Text(
-            '↓↑',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              'The only app that sees your down/up strokes',
-              style: TextStyle(
-                fontSize: 10,
-                color: _ink.withValues(alpha: 0.7),
-              ),
-            ),
-          ),
-        ],
-      );
+    children: [
+      const Text(
+        '↓↑',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: AppColors.primary,
+        ),
+      ),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(
+          'The only app that sees your down/up strokes',
+          style: TextStyle(fontSize: 10, color: _ink.withValues(alpha: 0.7)),
+        ),
+      ),
+    ],
+  );
 
   static String _dur(double seconds) {
     final s = seconds.round();
@@ -217,7 +211,9 @@ class _StrumArrows extends StatelessWidget {
       return Text(
         'No strums detected',
         style: TextStyle(
-            fontSize: 12, color: const Color(0xFFE9E5DE).withValues(alpha: 0.5)),
+          fontSize: 12,
+          color: const Color(0xFFE9E5DE).withValues(alpha: 0.5),
+        ),
       );
     }
     return Wrap(
@@ -226,15 +222,19 @@ class _StrumArrows extends StatelessWidget {
       children: [
         for (final d in dirs)
           Icon(
-            d == StrumDirection.down ? Icons.arrow_downward : Icons.arrow_upward,
+            d == StrumDirection.down
+                ? Icons.arrow_downward
+                : Icons.arrow_upward,
             size: 26,
             color: d == StrumDirection.down
                 ? AppColors.primary
                 : AppColors.confidenceHigh,
           ),
         if (truncated)
-          const Text('…',
-              style: TextStyle(fontSize: 18, color: Color(0xFFE9E5DE))),
+          const Text(
+            '…',
+            style: TextStyle(fontSize: 18, color: Color(0xFFE9E5DE)),
+          ),
       ],
     );
   }

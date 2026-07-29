@@ -22,14 +22,16 @@ void main() {
 
   testWidgets('tapping a chord diagram plays that chord', (tester) async {
     final backing = _RecordingBacking();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [backingProvider.overrideWithValue(backing)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [backingProvider.overrideWithValue(backing)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('C'));
@@ -40,14 +42,16 @@ void main() {
 
   testWidgets('each tile plays its OWN chord', (tester) async {
     final backing = _RecordingBacking();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [backingProvider.overrideWithValue(backing)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [backingProvider.overrideWithValue(backing)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Em'));

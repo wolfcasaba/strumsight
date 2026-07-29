@@ -12,26 +12,30 @@ import '../../support/fake_engines.dart';
 /// Round 89 — the tuner's tuning selector: picking Drop D re-labels the
 /// string chips (D2 replaces E2) so the player tunes to the RIGHT targets.
 Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [tunerEngineProvider.overrideWithValue(engine)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: TunerScreen(),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: TunerScreen(),
+        ),
       ),
-    ));
+    );
 
 /// The whole menu item, not its Text — a ListTile's title rect and its hit
 /// region don't coincide, which trips tap()'s missed-hit warning.
 Finder menuItem(String label) => find.ancestor(
-    of: find.text(label),
-    matching: find.byWidgetPredicate((w) => w is PopupMenuItem<Tuning>));
+  of: find.text(label),
+  matching: find.byWidgetPredicate((w) => w is PopupMenuItem<Tuning>),
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('standard tuning is the default; the selector shows it',
-      (tester) async {
+  testWidgets('standard tuning is the default; the selector shows it', (
+    tester,
+  ) async {
     final engine = FakeTunerEngine();
     addTearDown(engine.dispose);
     await pumpTuner(tester, engine);
@@ -41,8 +45,9 @@ void main() {
     expect(find.text('E2'), findsOneWidget);
   });
 
-  testWidgets('selecting Drop D swaps the low chip from E2 to D2',
-      (tester) async {
+  testWidgets('selecting Drop D swaps the low chip from E2 to D2', (
+    tester,
+  ) async {
     final engine = FakeTunerEngine();
     addTearDown(engine.dispose);
     await pumpTuner(tester, engine);

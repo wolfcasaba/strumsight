@@ -9,13 +9,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Round 108 — favourite chords: long-press a diagram in the library to pin
 /// it into a FAVORITES group at the top (persisted). The chords you're
 /// drilling this month shouldn't need scrolling past the whole catalogue.
-Future<void> _pump(WidgetTester tester) => tester.pumpWidget(ProviderScope(
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
-      ),
-    ));
+Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
+  ProviderScope(
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: ChordLibraryScreen(),
+    ),
+  ),
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -35,8 +37,9 @@ void main() {
     expect(c2.read(favoriteChordsProvider), {'C'});
   });
 
-  testWidgets('long-pressing a chord pins it into a Favorites group on top',
-      (tester) async {
+  testWidgets('long-pressing a chord pins it into a Favorites group on top', (
+    tester,
+  ) async {
     await _pump(tester);
     await tester.pumpAndSettle();
 

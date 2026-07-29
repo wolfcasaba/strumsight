@@ -21,8 +21,7 @@ String? decode(Float64List signal) {
     dictionary: ChordDictionary(),
   );
   ChordMatch? last;
-  for (final frame
-      in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+  for (final frame in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
     final chroma = nc.process(frame);
     final tonal =
         chroma != null && nc.lastTonalness >= DspConfig.chordMinTonalness;

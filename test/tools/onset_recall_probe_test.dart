@@ -29,11 +29,14 @@ void main() {
         final events = readStrums('$dataDir/recording_$id.strums');
         final analyzer = StrumAnalyzer(sampleRate: sr);
         final det = <double>[];
-        for (var s = 0;
-            s + DspConfig.onsetWindow <= pcm.length;
-            s += DspConfig.onsetHop) {
+        for (
+          var s = 0;
+          s + DspConfig.onsetWindow <= pcm.length;
+          s += DspConfig.onsetHop
+        ) {
           final e = analyzer.process(
-              Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow));
+            Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow),
+          );
           if (e != null) det.add(e.timeSec);
         }
         detectedTotal += det.length;
@@ -76,11 +79,13 @@ void main() {
       }
 
       // ignore: avoid_print
-      print('PROBE labels=$labels recall@0.12=${(100 * m12 / labels).round()}% '
-          '@0.20=${(100 * m20 / labels).round()}% '
-          '@0.35=${(100 * m35 / labels).round()}% | misses: '
-          'afterClose(<0.25s)=$missAfterClose afterFar=$missAfterFar | '
-          'detected=$detectedTotal falseAlarms=$falseAlarms');
+      print(
+        'PROBE labels=$labels recall@0.12=${(100 * m12 / labels).round()}% '
+        '@0.20=${(100 * m20 / labels).round()}% '
+        '@0.35=${(100 * m35 / labels).round()}% | misses: '
+        'afterClose(<0.25s)=$missAfterClose afterFar=$missAfterFar | '
+        'detected=$detectedTotal falseAlarms=$falseAlarms',
+      );
       // ignore: avoid_print
       print('PROBE per-recording recall@0.12: ${perRec.join(' ')}');
       expect(labels, greaterThan(1900));

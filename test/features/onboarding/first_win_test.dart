@@ -16,40 +16,59 @@ void main() {
   test('the first-win lesson is a true 30-second starter', () {
     final l = Lessons.firstWin;
     expect(l.events, isNotEmpty);
-    expect(l.events.every((e) => e.direction == StrumDirection.down), isTrue,
-        reason: 'downstrokes only — nothing to fail on but the beat');
-    expect(l.events.map((e) => e.chord).toSet(), {'Em'},
-        reason: 'one easy chord');
-    expect(ChordShapes.has('Em'), isTrue,
-        reason: 'the diagram must render for the very first screen');
+    expect(
+      l.events.every((e) => e.direction == StrumDirection.down),
+      isTrue,
+      reason: 'downstrokes only — nothing to fail on but the beat',
+    );
+    expect(l.events.map((e) => e.chord).toSet(), {
+      'Em',
+    }, reason: 'one easy chord');
+    expect(
+      ChordShapes.has('Em'),
+      isTrue,
+      reason: 'the diagram must render for the very first screen',
+    );
     final seconds = l.totalBeats * 60 / l.bpm;
-    expect(seconds, lessThanOrEqualTo(35),
-        reason: 'a first win must be ~30 seconds, not a commitment');
-    expect(Lessons.all.map((x) => x.id), isNot(contains('first-win')),
-        reason: 'outside the curriculum/unlock chain');
+    expect(
+      seconds,
+      lessThanOrEqualTo(35),
+      reason: 'a first win must be ~30 seconds, not a commitment',
+    );
+    expect(
+      Lessons.all.map((x) => x.id),
+      isNot(contains('first-win')),
+      reason: 'outside the curriculum/unlock chain',
+    );
   });
 
   test('a passed first win funnels into the curriculum (r159)', () {
     final next = Lessons.nextAfter('first-win');
-    expect(next, isNotNull,
-        reason: 'the finish dialog must offer the first real lesson, '
-            'not dead-end a brand-new user on "Play again"');
+    expect(
+      next,
+      isNotNull,
+      reason:
+          'the finish dialog must offer the first real lesson, '
+          'not dead-end a brand-new user on "Play again"',
+    );
     expect(next!.id, Lessons.all.first.id);
   });
 
   testWidgets('the last page leads with the first-win CTA', (tester) async {
     var firstWin = 0;
-    await tester.pumpWidget(ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: OnboardingScreen(
-          onDone: () {},
-          onFirstWin: () => firstWin++,
-          primeMic: () async {},
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: OnboardingScreen(
+            onDone: () {},
+            onFirstWin: () => firstWin++,
+            primeMic: () async {},
+          ),
         ),
       ),
-    ));
+    );
     // Page 1+2: normal Next; the CTA must not appear early.
     expect(find.text('Try your first win — 30 seconds'), findsNothing);
     await tester.tap(find.text('Next'));

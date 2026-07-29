@@ -7,7 +7,9 @@ import 'package:strumsight/main.dart';
 import 'support/fake_engines.dart';
 
 void main() {
-  testWidgets('App boots to the Live tab with bottom navigation', (tester) async {
+  testWidgets('App boots to the Live tab with bottom navigation', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 

@@ -90,4 +90,5 @@ class LessonProgressController extends Notifier<Map<String, double>> {
 
 final lessonProgressProvider =
     NotifierProvider<LessonProgressController, Map<String, double>>(
-        LessonProgressController.new);
+      LessonProgressController.new,
+    );

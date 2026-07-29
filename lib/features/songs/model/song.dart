@@ -39,26 +39,25 @@ class Song {
     List<StrumDirection?>? pattern,
     int? bpm,
     int? beatsPerBar,
-  }) =>
-      Song(
-        id: id,
-        name: name ?? this.name,
-        chords: chords ?? this.chords,
-        pattern: pattern ?? this.pattern,
-        bpm: bpm ?? this.bpm,
-        beatsPerBar: beatsPerBar ?? this.beatsPerBar,
-      );
+  }) => Song(
+    id: id,
+    name: name ?? this.name,
+    chords: chords ?? this.chords,
+    pattern: pattern ?? this.pattern,
+    bpm: bpm ?? this.bpm,
+    beatsPerBar: beatsPerBar ?? this.beatsPerBar,
+  );
 
   /// A playable/scorable lesson (Learn engine + live scoring feed the streak +
   /// Progress dashboard just like a built-in lesson).
   Lesson toLesson() => Lesson(
-        id: 'song_$id',
-        name: name,
-        bpm: bpm.toDouble(),
-        chords: chords,
-        pattern: pattern,
-        beatsPerBar: beatsPerBar,
-      );
+    id: 'song_$id',
+    name: name,
+    bpm: bpm.toDouble(),
+    chords: chords,
+    pattern: pattern,
+    beatsPerBar: beatsPerBar,
+  );
 
   /// A synthetic [AnalyzeResult] for this song so it can flow through the whole
   /// share pipeline (Strum Card + Strum Reel) exactly like a recorded clip —
@@ -68,7 +67,10 @@ class Song {
     final strums = [
       for (final e in toLesson().events)
         TimelineStrum(
-            direction: e.direction, timeSec: e.beat * spb, confidence: 1),
+          direction: e.direction,
+          timeSec: e.beat * spb,
+          confidence: 1,
+        ),
     ];
     final timeline = [
       for (var bar = 0; bar < chords.length; bar++)
@@ -88,31 +90,30 @@ class Song {
   }
 
   static String _slot(StrumDirection? d) => switch (d) {
-        StrumDirection.down => 'd',
-        StrumDirection.up => 'u',
-        null => '-',
-      };
+    StrumDirection.down => 'd',
+    StrumDirection.up => 'u',
+    null => '-',
+  };
 
   static StrumDirection? _unslot(String s) => switch (s) {
-        'd' => StrumDirection.down,
-        'u' => StrumDirection.up,
-        _ => null,
-      };
+    'd' => StrumDirection.down,
+    'u' => StrumDirection.up,
+    _ => null,
+  };
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'chords': chords,
-        'pat': pattern.map(_slot).join(),
-        'bpm': bpm,
-        'bpb': beatsPerBar,
-      };
+    'id': id,
+    'name': name,
+    'chords': chords,
+    'pat': pattern.map(_slot).join(),
+    'bpm': bpm,
+    'bpb': beatsPerBar,
+  };
 
   factory Song.fromJson(Map<String, dynamic> j) {
     // Records saved before round 116 are all 4/4.
     final beatsPerBar = (j['bpb'] as num?)?.toInt() ?? 4;
-    final pattern =
-        (j['pat'] as String).split('').map(Song._unslot).toList();
+    final pattern = (j['pat'] as String).split('').map(Song._unslot).toList();
     return Song(
       id: j['id'] as String,
       name: j['name'] as String,
@@ -130,7 +131,9 @@ class Song {
   /// Force [pattern] to exactly `beatsPerBar * 2` slots — the one-bar contract
   /// [Lesson._expand] relies on. Longer is truncated, shorter is rest-padded.
   static List<StrumDirection?> _fitToMeter(
-      List<StrumDirection?> pattern, int beatsPerBar) {
+    List<StrumDirection?> pattern,
+    int beatsPerBar,
+  ) {
     final want = beatsPerBar * 2;
     if (pattern.length == want) return pattern;
     return [
@@ -149,6 +152,12 @@ class Song {
       other.beatsPerBar == beatsPerBar;
 
   @override
-  int get hashCode => Object.hash(id, name, Object.hashAll(chords),
-      Object.hashAll(pattern), bpm, beatsPerBar);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    Object.hashAll(chords),
+    Object.hashAll(pattern),
+    bpm,
+    beatsPerBar,
+  );
 }

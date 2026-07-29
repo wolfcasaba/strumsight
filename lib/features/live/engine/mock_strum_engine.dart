@@ -89,8 +89,9 @@ class MockStrumEngine implements StrumEngine {
     final barMicros = _barMicros;
     final elapsedMicros = elapsed.inMicroseconds;
     final barIndex = barMicros == 0 ? 0 : elapsedMicros ~/ barMicros;
-    final posInBar =
-        barMicros == 0 ? 0.0 : (elapsedMicros % barMicros) / barMicros; // 0..1
+    final posInBar = barMicros == 0
+        ? 0.0
+        : (elapsedMicros % barMicros) / barMicros; // 0..1
 
     final current = _progression[barIndex % _progression.length];
     final next = _progression[(barIndex + 1) % _progression.length];
@@ -127,11 +128,12 @@ class MockStrumEngine implements StrumEngine {
 
     // Simulated mic level: a gentle pulse that spikes on strums.
     final onStrum = bar[slot].strum != null;
-    final level = (0.25 +
-            0.4 * (0.5 + 0.5 * math.sin(posInBar * 2 * math.pi)) +
-            (onStrum ? 0.25 : 0.0))
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final level =
+        (0.25 +
+                0.4 * (0.5 + 0.5 * math.sin(posInBar * 2 * math.pi)) +
+                (onStrum ? 0.25 : 0.0))
+            .clamp(0.0, 1.0)
+            .toDouble();
 
     return LiveFrame(
       current: current,

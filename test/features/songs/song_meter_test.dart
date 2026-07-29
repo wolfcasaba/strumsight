@@ -20,13 +20,13 @@ const _u = StrumDirection.up;
 const StrumDirection? _x = null;
 
 Song _waltzSong({int bpm = 60}) => Song(
-      id: 'w1',
-      name: 'My Waltz',
-      chords: const ['C', 'G'],
-      pattern: const [_d, _x, _u, _x, _u, _x], // 6 slots = one 3/4 bar
-      beatsPerBar: 3,
-      bpm: bpm,
-    );
+  id: 'w1',
+  name: 'My Waltz',
+  chords: const ['C', 'G'],
+  pattern: const [_d, _x, _u, _x, _u, _x], // 6 slots = one 3/4 bar
+  beatsPerBar: 3,
+  bpm: bpm,
+);
 
 class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
@@ -40,14 +40,16 @@ class _SeededSongs extends SongsController {
 
 Future<void> pumpSongList(WidgetTester tester, List<Song> seed) async {
   SharedPreferences.setMockInitialValues({});
-  await tester.pumpWidget(ProviderScope(
-    overrides: [songsProvider.overrideWith(() => _SeededSongs(seed))],
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: const SongListScreen(),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [songsProvider.overrideWith(() => _SeededSongs(seed))],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const SongListScreen(),
+      ),
     ),
-  ));
+  );
   await tester.pump();
 }
 
@@ -95,8 +97,7 @@ void main() {
         chords: const ['C'],
         pattern: const [_d, _x, _d, _x, _d, _x, _d, _x],
         bpm: 90,
-      ).toJson()
-        ..remove('bpb');
+      ).toJson()..remove('bpb');
       expect(Song.fromJson(legacy).beatsPerBar, 4);
     });
 
@@ -110,8 +111,11 @@ void main() {
     test('a setlist opening with a 3/4 song counts in as a waltz', () {
       const set = Setlist(id: 's1', name: 'Gig', songIds: ['w1']);
       final lesson = set.combine([_waltzSong()]);
-      expect(lesson.beatsPerBar, 3,
-          reason: 'count-in/bar grid must follow the opening song');
+      expect(
+        lesson.beatsPerBar,
+        3,
+        reason: 'count-in/bar grid must follow the opening song',
+      );
     });
   });
 
@@ -130,8 +134,9 @@ void main() {
   });
 
   group('song list shows the metre', () {
-    testWidgets('a 3/4 song row carries a 3/4 badge, a 4/4 row does not',
-        (tester) async {
+    testWidgets('a 3/4 song row carries a 3/4 badge, a 4/4 row does not', (
+      tester,
+    ) async {
       // Imports deferred to keep this file model-focused: the list screen
       // and provider come from the flow-test's seeding pattern.
       await pumpSongList(tester, [
@@ -144,63 +149,84 @@ void main() {
           bpm: 90,
         ),
       ]);
-      expect(find.textContaining('3/4'), findsOneWidget,
-          reason: 'only the waltz row shows the metre');
+      expect(
+        find.textContaining('3/4'),
+        findsOneWidget,
+        reason: 'only the waltz row shows the metre',
+      );
     });
   });
 
   group('pattern editor follows the metre', () {
-    testWidgets('a 6-slot pattern shows beat labels 1 & 2 & 3 & only',
-        (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: StrumPatternEditor(
-            pattern: const [_d, _x, _u, _x, _u, _x],
-            onChanged: (_) {},
+    testWidgets('a 6-slot pattern shows beat labels 1 & 2 & 3 & only', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: StrumPatternEditor(
+              pattern: const [_d, _x, _u, _x, _u, _x],
+              onChanged: (_) {},
+            ),
           ),
         ),
-      ));
+      );
       expect(find.text('1'), findsOneWidget);
       expect(find.text('2'), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
-      expect(find.text('4'), findsNothing,
-          reason: 'a 3/4 bar has no fourth beat');
+      expect(
+        find.text('4'),
+        findsNothing,
+        reason: 'a 3/4 bar has no fourth beat',
+      );
       expect(find.text('&'), findsNWidgets(3));
     });
 
     testWidgets('each slot is a screen-reader button announcing beat + state '
         '(round 125 a11y)', (tester) async {
       final handle = tester.ensureSemantics();
-      await tester.pumpWidget(MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: StrumPatternEditor(
-            pattern: const [_d, _x, _u, _x, _u, _x],
-            onChanged: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: StrumPatternEditor(
+              pattern: const [_d, _x, _u, _x, _u, _x],
+              onChanged: (_) {},
+            ),
           ),
         ),
-      ));
+      );
 
       // Downbeat 1 = down-strum; the off-beat after 1 = a rest; beat 2 = up.
-      expect(find.bySemanticsLabel('Beat 1, Down. Tap to change.'),
-          findsOneWidget);
-      expect(find.bySemanticsLabel('Beat 1 and, Rest. Tap to change.'),
-          findsOneWidget);
-      expect(find.bySemanticsLabel('Beat 2, Up. Tap to change.'),
-          findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Beat 1, Down. Tap to change.'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('Beat 1 and, Rest. Tap to change.'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('Beat 2, Up. Tap to change.'),
+        findsOneWidget,
+      );
       // The raw "&" glyph must NOT leak into the a11y tree (excludeSemantics).
       expect(find.bySemanticsLabel('&'), findsNothing);
 
       // …and the slot must be ACTIVATABLE by a screen reader — the label is
       // useless if double-tap dispatches no tap action (round 130 regression:
       // excludeSemantics dropped the child InkWell's action).
-      final node =
-          tester.getSemantics(find.bySemanticsLabel('Beat 1, Down. Tap to change.'));
-      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
-          reason: 'a screen-reader activation must reach the toggle');
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Beat 1, Down. Tap to change.'),
+      );
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'a screen-reader activation must reach the toggle',
+      );
       handle.dispose();
     });
   });

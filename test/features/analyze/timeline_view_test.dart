@@ -33,13 +33,17 @@ const _result = AnalyzeResult(
 );
 
 void main() {
-  testWidgets('timeline shows concert-pitch labels with no capo', (tester) async {
+  testWidgets('timeline shows concert-pitch labels with no capo', (
+    tester,
+  ) async {
     await _pump(tester, const TimelineView(result: _result));
     expect(find.text('D'), findsOneWidget);
     expect(find.text('Am'), findsOneWidget);
   });
 
-  testWidgets('capo transposes the timeline labels (view-time)', (tester) async {
+  testWidgets('capo transposes the timeline labels (view-time)', (
+    tester,
+  ) async {
     await _pump(tester, const TimelineView(result: _result, capo: 2));
     // D → C, Am → Gm at capo 2. Stored result is untouched (concert pitch).
     expect(find.text('C'), findsOneWidget);

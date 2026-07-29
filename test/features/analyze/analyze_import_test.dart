@@ -30,8 +30,11 @@ void main() {
     expect(s.phase, AnalyzePhase.done);
     expect(s.result, isNotNull);
     expect(s.result!.durationSec, closeTo(2.0, 0.1));
-    expect(s.result!.chords, isNotEmpty,
-        reason: 'the imported chord should appear on the timeline');
+    expect(
+      s.result!.chords,
+      isNotEmpty,
+      reason: 'the imported chord should appear on the timeline',
+    );
 
     // Let the fire-and-forget practice/streak writes settle before the
     // container is torn down (the real app never disposes this fast).

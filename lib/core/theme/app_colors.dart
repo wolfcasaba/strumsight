@@ -42,7 +42,10 @@ class AppColors {
 
   /// Confidence colour for a 0..1 score, contrast-tuned for [brightness].
   /// Thresholds mirror the Settings gate (≥0.75 high, ≥0.45 mid, else low).
-  static Color confidence(double score, [Brightness brightness = Brightness.dark]) {
+  static Color confidence(
+    double score, [
+    Brightness brightness = Brightness.dark,
+  ]) {
     final light = brightness == Brightness.light;
     if (score >= 0.75) return light ? _confidenceHighInk : confidenceHigh;
     if (score >= 0.45) return light ? _confidenceMidInk : confidenceMid;

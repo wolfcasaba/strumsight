@@ -4,14 +4,15 @@ import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 Widget _app() => const MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: MetronomeScreen(),
-    );
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: MetronomeScreen(),
+);
 
 void main() {
-  testWidgets('shows the default tempo and time-signature options',
-      (tester) async {
+  testWidgets('shows the default tempo and time-signature options', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.pump();
     expect(find.text('100'), findsOneWidget); // default BPM
@@ -32,8 +33,9 @@ void main() {
     expect(find.text('99'), findsOneWidget);
   });
 
-  testWidgets('Start toggles to Stop and back (ticker left stopped)',
-      (tester) async {
+  testWidgets('Start toggles to Stop and back (ticker left stopped)', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.pump();
     await tester.tap(find.text('Start'));

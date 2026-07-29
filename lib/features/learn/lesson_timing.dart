@@ -23,8 +23,7 @@ class LessonTiming {
     double playheadBeat,
     double pxPerBeat,
     double strikeX,
-  ) =>
-      strikeX + (eventBeat - playheadBeat) * pxPerBeat;
+  ) => strikeX + (eventBeat - playheadBeat) * pxPerBeat;
 
   /// During the count-in (playhead < 0) the number to flash, 1..countInBeats;
   /// null once the lesson has started.
@@ -39,8 +38,7 @@ class LessonTiming {
     double playheadBeat,
     double totalBeats,
     int beatsPerBar,
-  ) =>
-      playheadBeat >= totalBeats + beatsPerBar;
+  ) => playheadBeat >= totalBeats + beatsPerBar;
 
   /// Integer beats crossed as the playhead moves from [prev] to [next]
   /// (exclusive of prev, inclusive of next) — drives the metronome click,
@@ -79,11 +77,10 @@ class LessonTiming {
     double playheadBeat, {
     double aheadBeats = 8,
     double behindBeats = 2,
-  }) =>
-      [
-        for (final e in events)
-          if (e.beat >= playheadBeat - behindBeats &&
-              e.beat <= playheadBeat + aheadBeats)
-            e,
-      ];
+  }) => [
+    for (final e in events)
+      if (e.beat >= playheadBeat - behindBeats &&
+          e.beat <= playheadBeat + aheadBeats)
+        e,
+  ];
 }

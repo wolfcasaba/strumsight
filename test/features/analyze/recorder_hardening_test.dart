@@ -13,27 +13,34 @@ import 'package:strumsight/features/learn/audio/chord_audio.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('concurrent start() calls are single-flight — one mic attempt only',
-      () async {
-    var permissionChecks = 0;
-    final recorder = ClipRecorder(ensurePermission: () async {
-      permissionChecks++;
-      // Yield so the second start() genuinely overlaps the first.
-      await Future<void>.delayed(Duration.zero);
-      return false; // denied — never touches the real mic in tests
-    });
+  test(
+    'concurrent start() calls are single-flight — one mic attempt only',
+    () async {
+      var permissionChecks = 0;
+      final recorder = ClipRecorder(
+        ensurePermission: () async {
+          permissionChecks++;
+          // Yield so the second start() genuinely overlaps the first.
+          await Future<void>.delayed(Duration.zero);
+          return false; // denied — never touches the real mic in tests
+        },
+      );
 
-    final first = recorder.start();
-    final second = recorder.start(); // fired while the first is in flight
-    expect(await first, MicStart.denied);
-    expect(await second, MicStart.denied);
-    expect(permissionChecks, 1,
-        reason: 'the overlapping call must join the in-flight attempt');
+      final first = recorder.start();
+      final second = recorder.start(); // fired while the first is in flight
+      expect(await first, MicStart.denied);
+      expect(await second, MicStart.denied);
+      expect(
+        permissionChecks,
+        1,
+        reason: 'the overlapping call must join the in-flight attempt',
+      );
 
-    // After the attempt settles, a fresh start is a fresh attempt.
-    expect(await recorder.start(), MicStart.denied);
-    expect(permissionChecks, 2);
-  });
+      // After the attempt settles, a fresh start is a fresh attempt.
+      expect(await recorder.start(), MicStart.denied);
+      expect(permissionChecks, 2);
+    },
+  );
 
   test('the pad cache is bounded — old entries are evicted', () async {
     final backing = Backing();
@@ -47,24 +54,32 @@ void main() {
     expect(backing.cacheSize, Backing.maxCachedPads);
   });
 
-  test('a cache HIT refreshes recency — the re-touched pad survives eviction',
-      () async {
-    // Round 115 — the r100 devil-advocate flagged this as untested: the LRU
-    // was proven bounded but not that a hit genuinely moves an entry to the
-    // recent end (a broken re-insert would silently evict hot pads).
-    final backing = Backing();
-    addTearDown(() {
-      unawaited(backing.dispose());
-    });
-    for (var i = 0; i < Backing.maxCachedPads; i++) {
-      await backing.playTone(100.0 + i); // fill to the cap, 100 is oldest
-    }
-    await backing.playTone(100.0); // HIT the oldest → must become newest
-    await backing.playTone(999.0); // one insert past the cap → one eviction
-    expect(backing.cacheSize, Backing.maxCachedPads);
-    expect(backing.debugCacheKeys, contains('tone:100.00'),
-        reason: 'the re-touched pad must survive');
-    expect(backing.debugCacheKeys, isNot(contains('tone:101.00')),
-        reason: 'the true LRU (101) is the one evicted');
-  });
+  test(
+    'a cache HIT refreshes recency — the re-touched pad survives eviction',
+    () async {
+      // Round 115 — the r100 devil-advocate flagged this as untested: the LRU
+      // was proven bounded but not that a hit genuinely moves an entry to the
+      // recent end (a broken re-insert would silently evict hot pads).
+      final backing = Backing();
+      addTearDown(() {
+        unawaited(backing.dispose());
+      });
+      for (var i = 0; i < Backing.maxCachedPads; i++) {
+        await backing.playTone(100.0 + i); // fill to the cap, 100 is oldest
+      }
+      await backing.playTone(100.0); // HIT the oldest → must become newest
+      await backing.playTone(999.0); // one insert past the cap → one eviction
+      expect(backing.cacheSize, Backing.maxCachedPads);
+      expect(
+        backing.debugCacheKeys,
+        contains('tone:100.00'),
+        reason: 'the re-touched pad must survive',
+      );
+      expect(
+        backing.debugCacheKeys,
+        isNot(contains('tone:101.00')),
+        reason: 'the true LRU (101) is the one evicted',
+      );
+    },
+  );
 }

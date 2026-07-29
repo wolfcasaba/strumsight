@@ -88,27 +88,28 @@ class _Probe {
   double confP50 = 0;
   double confP90 = 0;
   double inSetPct = -1; // LIVE: % of shown-chord frames whose label ∈ named
-  double analyzeInSetPct = -1; // ANALYZE/batch: % of chord-TIME in the named set
+  double analyzeInSetPct =
+      -1; // ANALYZE/batch: % of chord-TIME in the named set
   double rawConfP90 = 0; // raw match confidence ceiling over ALL frames
   final Set<String> expected = {};
   final Set<String> labels = {};
   Map<String, Object?> toJson() => {
-        'name': name,
-        'kind': kind,
-        'chordShownPct': double.parse(chordShownPct.toStringAsFixed(1)),
-        'changesPerSec': double.parse(changesPerSec.toStringAsFixed(2)),
-        'liveStrums': liveStrums,
-        'analyzeChords': analyzeChords,
-        'analyzeStrums': analyzeStrums,
-        'tonalP50': double.parse(tonalP50.toStringAsFixed(3)),
-        'confP50': double.parse(confP50.toStringAsFixed(3)),
-        'confP90': double.parse(confP90.toStringAsFixed(3)),
-        if (inSetPct >= 0) 'inSetPct': double.parse(inSetPct.toStringAsFixed(1)),
-        if (analyzeInSetPct >= 0)
-          'analyzeInSetPct': double.parse(analyzeInSetPct.toStringAsFixed(1)),
-        if (expected.isNotEmpty) 'expected': (expected.toList()..sort()),
-        'labels': labels.toList()..sort(),
-      };
+    'name': name,
+    'kind': kind,
+    'chordShownPct': double.parse(chordShownPct.toStringAsFixed(1)),
+    'changesPerSec': double.parse(changesPerSec.toStringAsFixed(2)),
+    'liveStrums': liveStrums,
+    'analyzeChords': analyzeChords,
+    'analyzeStrums': analyzeStrums,
+    'tonalP50': double.parse(tonalP50.toStringAsFixed(3)),
+    'confP50': double.parse(confP50.toStringAsFixed(3)),
+    'confP90': double.parse(confP90.toStringAsFixed(3)),
+    if (inSetPct >= 0) 'inSetPct': double.parse(inSetPct.toStringAsFixed(1)),
+    if (analyzeInSetPct >= 0)
+      'analyzeInSetPct': double.parse(analyzeInSetPct.toStringAsFixed(1)),
+    if (expected.isNotEmpty) 'expected': (expected.toList()..sort()),
+    'labels': labels.toList()..sort(),
+  };
 }
 
 /// Ground-truth chords parsed from a SoundCloud corpus filename like
@@ -172,6 +173,7 @@ _Probe _run(String path, String kind) {
     final s = [...xs]..sort();
     return s[((s.length - 1) * q).round()];
   }
+
   p.tonalP50 = pct(tonals, 0.5);
   p.confP50 = pct(confs, 0.5);
   p.confP90 = pct(confs, 0.9);
@@ -198,17 +200,22 @@ _Probe _run(String path, String kind) {
 }
 
 /// Live-only chordShown% for one clip at a given Schmitt (rise, release, hold).
-double _chordShownAt(String path, double rise,
-    [double release = 0.22, int hold = 3]) {
+double _chordShownAt(
+  String path,
+  double rise, [
+  double release = 0.22,
+  int hold = 3,
+]) {
   final (full, sr) = _readWav(path);
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
   final pipe = LivePipeline(
-      sampleRate: sr,
-      crnnWeights: _liveCrnn(),
-      chordConfRise: rise,
-      chordConfRelease: release,
-      chordReleaseHoldFrames: hold);
+    sampleRate: sr,
+    crnnWeights: _liveCrnn(),
+    chordConfRise: rise,
+    chordConfRelease: release,
+    chordReleaseHoldFrames: hold,
+  );
   const chunk = 2048;
   var frames = 0, shown = 0;
   for (var i = 0; i < pcm.length; i += chunk) {
@@ -223,13 +230,19 @@ double _chordShownAt(String path, double rise,
 
 /// Analyze-path chord accuracy (inSet% by chord-time) at a given temporal-
 /// median window, for one named-chord clip.
-double _analyzeInSetAt(String path, Set<String> expected, int window,
-    [double? bassWeight]) {
+double _analyzeInSetAt(
+  String path,
+  Set<String> expected,
+  int window, [
+  double? bassWeight,
+]) {
   final (full, sr) = _readWav(path);
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
-  final res = ClipAnalyzer(chromaMedianWindow: window, bassWeight: bassWeight)
-      .analyze(pcm.toList(), sr);
+  final res = ClipAnalyzer(
+    chromaMedianWindow: window,
+    bassWeight: bassWeight,
+  ).analyze(pcm.toList(), sr);
   var inSet = 0.0, total = 0.0;
   for (final c in res.chords) {
     final d = c.endSec - c.startSec;
@@ -247,7 +260,8 @@ List<(File, String)> _discover() {
     for (final f in corpus.listSync().whereType<File>()) {
       if (!f.path.endsWith('.wav')) continue;
       final n = f.path.toLowerCase();
-      final voice = n.contains('speech') ||
+      final voice =
+          n.contains('speech') ||
           n.contains('hum') ||
           n.contains('noise') ||
           n.contains('talk');
@@ -256,12 +270,13 @@ List<(File, String)> _discover() {
   }
   final klangio = Directory(_klangioDir);
   if (klangio.existsSync()) {
-    final wavs = klangio
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('_phone.wav'))
-        .toList()
-      ..sort((a, b) => a.path.compareTo(b.path));
+    final wavs =
+        klangio
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('_phone.wav'))
+            .toList()
+          ..sort((a, b) => a.path.compareTo(b.path));
     for (final f in wavs.take(8)) {
       out.add((f, 'guitar'));
     }
@@ -286,8 +301,9 @@ void main() {
             .where((c) => c.$2 == kind)
             .map((c) => _chordShownAt(c.$1.path, 0.54, 0.22, h))
             .toList();
-        final avg =
-            vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
+        final avg = vals.isEmpty
+            ? 0.0
+            : vals.reduce((a, b) => a + b) / vals.length;
         row.add(avg.toStringAsFixed(1).padLeft(6));
       }
       // ignore: avoid_print
@@ -295,58 +311,63 @@ void main() {
     }
   });
 
-  test('REAL-AUDIO analyze chroma-median sweep — inSet% vs window (full-band)',
-      () {
-    if (!_enabled) return; // dev-only; set DSP_PROBE=1
-    final clips = _discover()
-        .where((c) => _expectedChords(c.$1.path.split('/').last).isNotEmpty)
-        .toList();
-    if (clips.isEmpty) return;
-    const windows = [1, 3, 5, 7, 9, 13];
-    // ignore: avoid_print
-    print('\n=== ANALYZE chroma-median sweep: avg inSet% by window (round 182) ===');
-    // ignore: avoid_print
-    print('window ${windows.map((w) => w.toString().padLeft(6)).join()}');
-    final row = <String>[];
-    for (final w in windows) {
-      final vals = <double>[];
-      for (final (file, _) in clips) {
-        final exp = _expectedChords(file.path.split('/').last);
-        final v = _analyzeInSetAt(file.path, exp, w);
-        if (v >= 0) vals.add(v);
+  test(
+    'REAL-AUDIO analyze chroma-median sweep — inSet% vs window (full-band)',
+    () {
+      if (!_enabled) return; // dev-only; set DSP_PROBE=1
+      final clips = _discover()
+          .where((c) => _expectedChords(c.$1.path.split('/').last).isNotEmpty)
+          .toList();
+      if (clips.isEmpty) return;
+      const windows = [1, 3, 5, 7, 9, 13];
+      // ignore: avoid_print
+      print(
+        '\n=== ANALYZE chroma-median sweep: avg inSet% by window (round 182) ===',
+      );
+      // ignore: avoid_print
+      print('window ${windows.map((w) => w.toString().padLeft(6)).join()}');
+      final row = <String>[];
+      for (final w in windows) {
+        final vals = <double>[];
+        for (final (file, _) in clips) {
+          final exp = _expectedChords(file.path.split('/').last);
+          final v = _analyzeInSetAt(file.path, exp, w);
+          if (v >= 0) vals.add(v);
+        }
+        final avg = vals.isEmpty
+            ? 0.0
+            : vals.reduce((a, b) => a + b) / vals.length;
+        row.add(avg.toStringAsFixed(1).padLeft(6));
       }
-      final avg =
-          vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
-      row.add(avg.toStringAsFixed(1).padLeft(6));
-    }
-    // ignore: avoid_print
-    print('inSet% ${row.join()}   (window 1 = current/off; want higher)');
+      // ignore: avoid_print
+      print('inSet% ${row.join()}   (window 1 = current/off; want higher)');
 
-    // Bass-weight sweep (the direct lever for wrong-ROOT chords from bass
-    // passing notes on full-band audio). Default is 0.35.
-    const bws = [0.15, 0.25, 0.35, 0.45];
-    // ignore: avoid_print
-    print('\n=== ANALYZE bass-weight sweep: avg inSet% (window 1) ===');
-    // ignore: avoid_print
-    print('bassW  ${bws.map((b) => b.toStringAsFixed(2).padLeft(6)).join()}');
-    final brow = <String>[];
-    for (final b in bws) {
-      final vals = <double>[];
-      for (final (file, _) in clips) {
-        final exp = _expectedChords(file.path.split('/').last);
-        final v = _analyzeInSetAt(file.path, exp, 1, b);
-        if (v >= 0) vals.add(v);
+      // Bass-weight sweep (the direct lever for wrong-ROOT chords from bass
+      // passing notes on full-band audio). Default is 0.35.
+      const bws = [0.15, 0.25, 0.35, 0.45];
+      // ignore: avoid_print
+      print('\n=== ANALYZE bass-weight sweep: avg inSet% (window 1) ===');
+      // ignore: avoid_print
+      print('bassW  ${bws.map((b) => b.toStringAsFixed(2).padLeft(6)).join()}');
+      final brow = <String>[];
+      for (final b in bws) {
+        final vals = <double>[];
+        for (final (file, _) in clips) {
+          final exp = _expectedChords(file.path.split('/').last);
+          final v = _analyzeInSetAt(file.path, exp, 1, b);
+          if (v >= 0) vals.add(v);
+        }
+        final avg = vals.isEmpty
+            ? 0.0
+            : vals.reduce((a, b) => a + b) / vals.length;
+        brow.add(avg.toStringAsFixed(1).padLeft(6));
       }
-      final avg =
-          vals.isEmpty ? 0.0 : vals.reduce((a, b) => a + b) / vals.length;
-      brow.add(avg.toStringAsFixed(1).padLeft(6));
-    }
-    // ignore: avoid_print
-    print('inSet% ${brow.join()}   (0.35 = current)');
-  });
+      // ignore: avoid_print
+      print('inSet% ${brow.join()}   (0.35 = current)');
+    },
+  );
 
-  test('REAL-AUDIO strum-onset separability — ZCR & low-band ratio (A residual)',
-      () {
+  test('REAL-AUDIO strum-onset separability — ZCR & low-band ratio (A residual)', () {
     if (!_enabled) return; // dev-only; set DSP_PROBE=1
     final clips = _discover();
     if (clips.isEmpty) return;
@@ -362,8 +383,9 @@ void main() {
     for (final (file, kind) in clips) {
       final (full, sr) = _readWav(file.path);
       final cap = (sr * _maxSeconds).round();
-      final pcm =
-          full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
+      final pcm = full.length > cap
+          ? Float64List.sublistView(full, 0, cap)
+          : full;
       final pipe = LivePipeline(sampleRate: sr, crnnWeights: _liveCrnn());
       const chunk = 2048;
       final strumSamples = <int>[];
@@ -407,14 +429,17 @@ void main() {
       final s = [...xs]..sort();
       return s[s.length ~/ 2];
     }
+
     // ignore: avoid_print
     print('\n=== STRUM-ONSET SEPARABILITY (round 178 probe) ===');
     for (final k in ['voice', 'guitar']) {
       final a = byKind[k]!;
       // ignore: avoid_print
-      print('${k.padRight(7)} n=${a.zcr.length.toString().padLeft(4)}  '
-          'ZCR p50=${med(a.zcr).toStringAsFixed(4)}  '
-          'subBassRatio p50=${med(a.subBass).toStringAsFixed(4)}');
+      print(
+        '${k.padRight(7)} n=${a.zcr.length.toString().padLeft(4)}  '
+        'ZCR p50=${med(a.zcr).toStringAsFixed(4)}  '
+        'subBassRatio p50=${med(a.subBass).toStringAsFixed(4)}',
+      );
     }
   });
 
@@ -427,7 +452,8 @@ void main() {
       for (final f in corpus.listSync().whereType<File>()) {
         if (!f.path.endsWith('.wav')) continue;
         final n = f.path.toLowerCase();
-        final kind = (n.contains('speech') ||
+        final kind =
+            (n.contains('speech') ||
                 n.contains('hum') ||
                 n.contains('noise') ||
                 n.contains('talk'))
@@ -439,12 +465,13 @@ void main() {
 
     final klangio = Directory(_klangioDir);
     if (klangio.existsSync()) {
-      final wavs = klangio
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('_phone.wav'))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final wavs =
+          klangio
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('_phone.wav'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
       for (final f in wavs.take(8)) {
         probes.add(_run(f.path, 'guitar'));
       }
@@ -462,13 +489,15 @@ void main() {
     print('kind    chordShown%  changes/s  strums  inSet%  rawCf90  clip');
     for (final p in probes) {
       // ignore: avoid_print
-      print('${p.kind.padRight(7)} '
-          '${p.chordShownPct.toStringAsFixed(1).padLeft(9)}  '
-          '${p.changesPerSec.toStringAsFixed(2).padLeft(8)}  '
-          '${p.liveStrums.toString().padLeft(6)}  '
-          '${(p.inSetPct < 0 ? '  -' : p.inSetPct.toStringAsFixed(0)).padLeft(6)}  '
-          '${p.rawConfP90.toStringAsFixed(3).padLeft(7)}  ${p.name}'
-          '${p.expected.isEmpty ? '' : '  exp=${(p.expected.toList()..sort()).join(",")}  got=${(p.labels.toList()..sort()).join(",")}'}');
+      print(
+        '${p.kind.padRight(7)} '
+        '${p.chordShownPct.toStringAsFixed(1).padLeft(9)}  '
+        '${p.changesPerSec.toStringAsFixed(2).padLeft(8)}  '
+        '${p.liveStrums.toString().padLeft(6)}  '
+        '${(p.inSetPct < 0 ? '  -' : p.inSetPct.toStringAsFixed(0)).padLeft(6)}  '
+        '${p.rawConfP90.toStringAsFixed(3).padLeft(7)}  ${p.name}'
+        '${p.expected.isEmpty ? '' : '  exp=${(p.expected.toList()..sort()).join(",")}  got=${(p.labels.toList()..sort()).join(",")}'}',
+      );
     }
 
     double avg(String kind, double Function(_Probe) sel) {
@@ -477,33 +506,45 @@ void main() {
     }
 
     // ignore: avoid_print
-    print('\nVOICE  avg chordShown% = ${avg('voice', (p) => p.chordShownPct).toStringAsFixed(1)}'
-        '  (want ~0)   avg changes/s = ${avg('voice', (p) => p.changesPerSec).toStringAsFixed(2)}');
+    print(
+      '\nVOICE  avg chordShown% = ${avg('voice', (p) => p.chordShownPct).toStringAsFixed(1)}'
+      '  (want ~0)   avg changes/s = ${avg('voice', (p) => p.changesPerSec).toStringAsFixed(2)}',
+    );
     // ignore: avoid_print
-    print('GUITAR avg chordShown% = ${avg('guitar', (p) => p.chordShownPct).toStringAsFixed(1)}'
-        '  (want high) avg changes/s = ${avg('guitar', (p) => p.changesPerSec).toStringAsFixed(2)}');
+    print(
+      'GUITAR avg chordShown% = ${avg('guitar', (p) => p.chordShownPct).toStringAsFixed(1)}'
+      '  (want high) avg changes/s = ${avg('guitar', (p) => p.changesPerSec).toStringAsFixed(2)}',
+    );
     final gt = probes.where((p) => p.inSetPct >= 0).toList();
     if (gt.isNotEmpty) {
       final acc = gt.map((p) => p.inSetPct).reduce((a, b) => a + b) / gt.length;
       // ignore: avoid_print
-      print('CHORD ACCURACY LIVE   (n=${gt.length}): avg inSet% = ${acc.toStringAsFixed(1)}  (want ~100)');
+      print(
+        'CHORD ACCURACY LIVE   (n=${gt.length}): avg inSet% = ${acc.toStringAsFixed(1)}  (want ~100)',
+      );
     }
     final ga = probes.where((p) => p.analyzeInSetPct >= 0).toList();
     if (ga.isNotEmpty) {
       final acc =
           ga.map((p) => p.analyzeInSetPct).reduce((a, b) => a + b) / ga.length;
       // ignore: avoid_print
-      print('CHORD ACCURACY ANALYZE (n=${ga.length}): avg inSet% = ${acc.toStringAsFixed(1)}  '
-          '(the import/analyze-a-song metric to lift for full-band)');
+      print(
+        'CHORD ACCURACY ANALYZE (n=${ga.length}): avg inSet% = ${acc.toStringAsFixed(1)}  '
+        '(the import/analyze-a-song metric to lift for full-band)',
+      );
       for (final p in ga) {
         // ignore: avoid_print
-        print('   ${p.analyzeInSetPct.toStringAsFixed(0).padLeft(3)}%  ${p.name}  '
-            'exp=${(p.expected.toList()..sort()).join(",")}');
+        print(
+          '   ${p.analyzeInSetPct.toStringAsFixed(0).padLeft(3)}%  ${p.name}  '
+          'exp=${(p.expected.toList()..sort()).join(",")}',
+        );
       }
     }
 
     File('ml/corpus/report.json').writeAsStringSync(
-        const JsonEncoder.withIndent('  ')
-            .convert(probes.map((p) => p.toJson()).toList()));
+      const JsonEncoder.withIndent(
+        '  ',
+      ).convert(probes.map((p) => p.toJson()).toList()),
+    );
   });
 }

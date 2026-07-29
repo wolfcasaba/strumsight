@@ -18,7 +18,7 @@ import 'crnn_strum_net.dart';
 /// the whole recording exists, and the live path keeps the heuristic.
 class StrumCrnn {
   StrumCrnn(this._net)
-      : _logMel = LogMelExtractor(sampleRate: CrnnFrontend.modelSampleRate);
+    : _logMel = LogMelExtractor(sampleRate: CrnnFrontend.modelSampleRate);
 
   final CrnnStrumNet _net;
   final LogMelExtractor _logMel;
@@ -29,9 +29,7 @@ class StrumCrnn {
   static StrumCrnn? tryLoad(String path) {
     try {
       final bytes = File(path).readAsBytesSync();
-      return StrumCrnn(
-        CrnnStrumNet.parse(ByteData.sublistView(bytes)),
-      );
+      return StrumCrnn(CrnnStrumNet.parse(ByteData.sublistView(bytes)));
     } catch (_) {
       return null;
     }
@@ -45,15 +43,18 @@ class StrumCrnn {
     List<double> onsetTimes,
   ) {
     final pcm16k = CrnnFrontend.resampleLinear(
-        pcm, sampleRate, CrnnFrontend.modelSampleRate);
+      pcm,
+      sampleRate,
+      CrnnFrontend.modelSampleRate,
+    );
     final logmel = _logMel.process(pcm16k);
-    return [
-      for (final t in onsetTimes) _classifyWindow(logmel, t),
-    ];
+    return [for (final t in onsetTimes) _classifyWindow(logmel, t)];
   }
 
   StrumClassification _classifyWindow(
-      List<Float64List> logmel, double onsetSec) {
+    List<Float64List> logmel,
+    double onsetSec,
+  ) {
     final probs = _net.forward(CrnnFrontend.windowAt(logmel, onsetSec));
     final up = probs[1] > probs[0];
     return StrumClassification(

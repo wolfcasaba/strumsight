@@ -50,15 +50,18 @@ class ProgressScreen extends ConsumerWidget {
                   streak: streak.current,
                 );
                 final start = nowDate.subtract(const Duration(days: 6));
-                final label = '${DateFormat.MMMd().format(start)} – '
+                final label =
+                    '${DateFormat.MMMd().format(start)} – '
                     '${DateFormat.MMMd().format(nowDate)}';
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => WrappedPreviewScreen(
-                    recap: recap,
-                    weekLabel: label,
-                    today: today,
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WrappedPreviewScreen(
+                      recap: recap,
+                      weekLabel: label,
+                      today: today,
+                    ),
                   ),
-                ));
+                );
               },
             ),
         ],
@@ -143,8 +146,10 @@ class _TotalHero extends StatelessWidget {
             color: AppColors.primary,
           ),
         ),
-        Text(l10n.progressTotalPractice,
-            style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          l10n.progressTotalPractice,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
       ],
     );
   }
@@ -152,7 +157,10 @@ class _TotalHero extends StatelessWidget {
 
 /// Pick a new daily goal from a preset sheet.
 Future<void> _editGoal(
-    BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+  BuildContext context,
+  WidgetRef ref,
+  AppLocalizations l10n,
+) async {
   final current = ref.read(dailyGoalProvider);
   final picked = await showModalBottomSheet<int>(
     context: context,
@@ -164,11 +172,14 @@ Future<void> _editGoal(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.progressSetGoal,
-                style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18)),
+            Text(
+              l10n.progressSetGoal,
+              style: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -218,8 +229,9 @@ class _DailyGoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final goalSeconds = goalMinutes * 60;
     final todayMin = todaySeconds ~/ 60;
-    final progress =
-        goalSeconds <= 0 ? 0.0 : (todaySeconds / goalSeconds).clamp(0.0, 1.0);
+    final progress = goalSeconds <= 0
+        ? 0.0
+        : (todaySeconds / goalSeconds).clamp(0.0, 1.0);
     final met = todaySeconds >= goalSeconds;
     final remaining = ((goalSeconds - todaySeconds) / 60).ceil();
 
@@ -228,8 +240,9 @@ class _DailyGoalCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: (met ? AppColors.confidenceHigh : AppColors.primary)
-                .withValues(alpha: 0.35)),
+          color: (met ? AppColors.confidenceHigh : AppColors.primary)
+              .withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         children: [
@@ -245,17 +258,19 @@ class _DailyGoalCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 5,
-                    backgroundColor: Theme.of(context)
-                        .colorScheme
-                        .outline
-                        .withValues(alpha: 0.2),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.2),
                     valueColor: AlwaysStoppedAnimation(
-                        met ? AppColors.confidenceHigh : AppColors.primary),
+                      met ? AppColors.confidenceHigh : AppColors.primary,
+                    ),
                   ),
                 ),
-                Icon(met ? Icons.check : Icons.bolt,
-                    size: 20,
-                    color: met ? AppColors.confidenceHigh : AppColors.primary),
+                Icon(
+                  met ? Icons.check : Icons.bolt,
+                  size: 20,
+                  color: met ? AppColors.confidenceHigh : AppColors.primary,
+                ),
               ],
             ),
           ),
@@ -264,12 +279,18 @@ class _DailyGoalCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.progressDailyGoal,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15)),
+                Text(
+                  l10n.progressDailyGoal,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(l10n.progressGoalProgress(todayMin, goalMinutes),
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  l10n.progressGoalProgress(todayMin, goalMinutes),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 2),
                 Text(
                   met
@@ -326,31 +347,36 @@ class _StrumAccuracyCard extends StatelessWidget {
               const Icon(Icons.swap_vert, size: 20, color: AppColors.primary),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(l10n.progressStrumAccuracyTitle,
-                    style: const TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16)),
+                child: Text(
+                  l10n.progressStrumAccuracyTitle,
+                  style: const TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(l10n.progressStrumAccuracyHint,
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            l10n.progressStrumAccuracyHint,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 16),
           if (avg == null)
-            Text(l10n.progressNoScores,
-                style: TextStyle(
-                    color: Theme.of(context).hintColor,
-                    fontStyle: FontStyle.italic))
+            Text(
+              l10n.progressNoScores,
+              style: TextStyle(
+                color: Theme.of(context).hintColor,
+                fontStyle: FontStyle.italic,
+              ),
+            )
           else
             Row(
               children: [
                 Expanded(
-                  child: _AccStat(
-                    percent: avg,
-                    label: l10n.progressAverage,
-                  ),
+                  child: _AccStat(percent: avg, label: l10n.progressAverage),
                 ),
                 Expanded(
                   child: _AccStat(
@@ -399,10 +425,16 @@ class _SourceBreakdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <(String, IconData, int)>[
       (l10n.navLive, Icons.graphic_eq, stats.sessionsFrom(PracticeSource.live)),
-      (l10n.navLearn, Icons.school_outlined,
-          stats.sessionsFrom(PracticeSource.learn)),
-      (l10n.navAnalyze, Icons.multitrack_audio,
-          stats.sessionsFrom(PracticeSource.analyze)),
+      (
+        l10n.navLearn,
+        Icons.school_outlined,
+        stats.sessionsFrom(PracticeSource.learn),
+      ),
+      (
+        l10n.navAnalyze,
+        Icons.multitrack_audio,
+        stats.sessionsFrom(PracticeSource.analyze),
+      ),
     ];
     return Column(
       children: [
@@ -414,8 +446,10 @@ class _SourceBreakdown extends StatelessWidget {
                 Icon(icon, size: 18, color: AppColors.primary),
                 const SizedBox(width: 12),
                 Expanded(child: Text(label)),
-                Text('$count',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  '$count',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ],
             ),
           ),
@@ -453,24 +487,28 @@ class _Stat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withValues(alpha: 0.3),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
           Icon(icon, size: 20, color: AppColors.primary),
           const SizedBox(height: 6),
-          Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22)),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Montserrat',
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+            ),
+          ),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );

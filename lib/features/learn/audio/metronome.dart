@@ -12,8 +12,8 @@ import 'wav.dart';
 /// absent, e.g. tests). RAG chunk 014.
 class Metronome {
   Metronome()
-      : _click = buildClickWav(freq: 1000, amp: 0.5),
-        _accent = buildClickWav(freq: 1600, amp: 0.7);
+    : _click = buildClickWav(freq: 1000, amp: 0.5),
+      _accent = buildClickWav(freq: 1600, amp: 0.7);
 
   final Uint8List _click;
   final Uint8List _accent;

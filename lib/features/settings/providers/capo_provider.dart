@@ -39,5 +39,4 @@ class CapoNotifier extends Notifier<int> {
   }
 }
 
-final capoProvider =
-    NotifierProvider<CapoNotifier, int>(CapoNotifier.new);
+final capoProvider = NotifierProvider<CapoNotifier, int>(CapoNotifier.new);

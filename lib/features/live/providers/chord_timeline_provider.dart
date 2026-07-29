@@ -36,17 +36,15 @@ List<ChordEvent> reduceChordTimeline(
     // so this branch runs on every frame while a chord holds. Return the SAME
     // list reference when nothing actually changed — otherwise the notifier
     // emits an equal-but-new list ~15 fps and needlessly rebuilds the timeline.
-    if (last.direction == strum.direction && last.confidence == strum.confidence) {
+    if (last.direction == strum.direction &&
+        last.confidence == strum.confidence) {
       return buffer;
     }
     final updated = last.copyWith(
       direction: strum.direction,
       confidence: strum.confidence,
     );
-    return [
-      ...buffer.sublist(0, buffer.length - 1),
-      updated,
-    ];
+    return [...buffer.sublist(0, buffer.length - 1), updated];
   }
 
   // Rule 3 — changed/new chord: append a new card.
@@ -55,8 +53,9 @@ List<ChordEvent> reduceChordTimeline(
     direction: strum?.direction,
     confidence: strum?.confidence ?? frame.confidence,
     seq: buffer.isEmpty ? 0 : buffer.last.seq + 1,
-    timeSec:
-        frame.latestStrumTime >= 0 ? frame.latestStrumTime : frame.engineTimeSec,
+    timeSec: frame.latestStrumTime >= 0
+        ? frame.latestStrumTime
+        : frame.engineTimeSec,
   );
   final appended = [...buffer, event];
   // Trim from the front so the newest cards are always kept (newest last).
@@ -94,5 +93,5 @@ class ChordTimelineController extends Notifier<List<ChordEvent>> {
 /// The Live chord-timeline history buffer (newest last, capped ring buffer).
 final chordTimelineProvider =
     NotifierProvider.autoDispose<ChordTimelineController, List<ChordEvent>>(
-  ChordTimelineController.new,
-);
+      ChordTimelineController.new,
+    );

@@ -42,5 +42,6 @@ class OnboardingController extends Notifier<bool> {
   }
 }
 
-final onboardingSeenProvider =
-    NotifierProvider<OnboardingController, bool>(() => OnboardingController(true));
+final onboardingSeenProvider = NotifierProvider<OnboardingController, bool>(
+  () => OnboardingController(true),
+);

@@ -20,7 +20,11 @@ void main() {
     await ctrl.addSong(id, 'song1');
     await ctrl.addSong(id, 'song2');
     await ctrl.addSong(id, 'song1'); // duplicates allowed
-    expect(c.read(setlistsProvider).single.songIds, ['song1', 'song2', 'song1']);
+    expect(c.read(setlistsProvider).single.songIds, [
+      'song1',
+      'song2',
+      'song1',
+    ]);
 
     await ctrl.removeAt(id, 1);
     expect(c.read(setlistsProvider).single.songIds, ['song1', 'song1']);

@@ -15,32 +15,32 @@ import '../../support/fake_engines.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('a 3/4 lesson counts in 1-2-3 — never a fourth beat',
-      (tester) async {
+  testWidgets('a 3/4 lesson counts in 1-2-3 — never a fourth beat', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.waltzTime),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.waltzTime),
+        ),
       ),
-    ));
+    );
     await tester.tap(find.text('Play'));
     await tester.pump();
 
     const spb = 60.0 / 84.0; // Waltz Time BPM
     // 2.5 beats in: the LAST count of a one-bar 3/4 count-in.
-    await tester
-        .pump(Duration(microseconds: (2.5 * spb * 1e6).round()));
+    await tester.pump(Duration(microseconds: (2.5 * spb * 1e6).round()));
     expect(find.text('3'), findsOneWidget);
 
     // 3.2 beats in: play has started — the old 4-beat count-in would still
     // be showing "4" here.
-    await tester
-        .pump(Duration(microseconds: (0.7 * spb * 1e6).round()));
-    expect(find.text('4'), findsNothing,
-        reason: 'a waltz has no fourth count');
+    await tester.pump(Duration(microseconds: (0.7 * spb * 1e6).round()));
+    expect(find.text('4'), findsNothing, reason: 'a waltz has no fourth count');
   });
 }

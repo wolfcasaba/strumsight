@@ -39,20 +39,28 @@ void main() {
       expect(windows, isNotEmpty);
       for (var i = 0; i < windows.length; i++) {
         final w = (windows[i] as List<dynamic>)
-            .map((row) => (row as List<dynamic>)
-                .map((v) => (v as num).toDouble())
-                .toList())
+            .map(
+              (row) => (row as List<dynamic>)
+                  .map((v) => (v as num).toDouble())
+                  .toList(),
+            )
             .toList();
         final out = net.forward(w);
         final ref = (probs[i] as List<dynamic>)
             .map((v) => (v as num).toDouble())
             .toList();
         expect(out, hasLength(2));
-        expect((out[0] + out[1] - 1.0).abs(), lessThan(1e-6),
-            reason: 'softmax must sum to 1');
+        expect(
+          (out[0] + out[1] - 1.0).abs(),
+          lessThan(1e-6),
+          reason: 'softmax must sum to 1',
+        );
         for (var c = 0; c < 2; c++) {
-          expect((out[c] - ref[c]).abs(), lessThan(1e-3),
-              reason: 'window $i class $c: dart=${out[c]} keras=${ref[c]}');
+          expect(
+            (out[c] - ref[c]).abs(),
+            lessThan(1e-3),
+            reason: 'window $i class $c: dart=${out[c]} keras=${ref[c]}',
+          );
         }
       }
     });
@@ -66,9 +74,11 @@ void main() {
       var correct = 0;
       for (var i = 0; i < windows.length; i++) {
         final w = (windows[i] as List<dynamic>)
-            .map((row) => (row as List<dynamic>)
-                .map((v) => (v as num).toDouble())
-                .toList())
+            .map(
+              (row) => (row as List<dynamic>)
+                  .map((v) => (v as num).toDouble())
+                  .toList(),
+            )
             .toList();
         final out = net.forward(w);
         if ((out[1] > out[0] ? 1 : 0) == labels[i] as int) correct++;

@@ -8,8 +8,11 @@ void main() {
     for (final key in SongKey.all) {
       expect(key.diatonic.length, 6, reason: '${key.name} needs I..vi');
       for (final chord in key.diatonic) {
-        expect(playable, contains(chord),
-            reason: '${key.name}: $chord has no ChordShapes fingering');
+        expect(
+          playable,
+          contains(chord),
+          reason: '${key.name}: $chord has no ChordShapes fingering',
+        );
       }
     }
   });
@@ -30,8 +33,9 @@ void main() {
 
   test('Pachelbel is 8 chords and stays within the diatonic set', () {
     final d = SongKey.all.firstWhere((k) => k.name == 'D');
-    final pac =
-        ProgressionTemplate.all.firstWhere((p) => p.name == 'Pachelbel');
+    final pac = ProgressionTemplate.all.firstWhere(
+      (p) => p.name == 'Pachelbel',
+    );
     final chords = pac.chordsFor(d);
     expect(chords.length, 8);
     expect(chords.toSet().every(d.diatonic.contains), isTrue);
@@ -51,8 +55,11 @@ void main() {
 
   test('every template degree is a valid 1..6 index', () {
     for (final p in ProgressionTemplate.all) {
-      expect(p.degrees.every((deg) => deg >= 1 && deg <= 6), isTrue,
-          reason: '${p.name} has an out-of-range degree');
+      expect(
+        p.degrees.every((deg) => deg >= 1 && deg <= 6),
+        isTrue,
+        reason: '${p.name} has an out-of-range degree',
+      );
     }
   });
 }

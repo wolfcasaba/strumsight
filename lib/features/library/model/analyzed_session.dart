@@ -25,26 +25,26 @@ class AnalyzedSession {
 
   /// The same session under a new name (round 106 — rename).
   AnalyzedSession withTitle(String newTitle) => AnalyzedSession(
-        id: id,
-        createdAt: createdAt,
-        title: newTitle,
-        result: result,
-        customTitle: true,
-      );
+    id: id,
+    createdAt: createdAt,
+    title: newTitle,
+    result: result,
+    customTitle: true,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'createdAt': createdAt.toIso8601String(),
-        'title': title,
-        'result': result.toJson(),
-        'customTitle': customTitle,
-      };
+    'id': id,
+    'createdAt': createdAt.toIso8601String(),
+    'title': title,
+    'result': result.toJson(),
+    'customTitle': customTitle,
+  };
 
   factory AnalyzedSession.fromJson(Map<String, dynamic> j) => AnalyzedSession(
-        id: j['id'] as String,
-        createdAt: DateTime.parse(j['createdAt'] as String),
-        title: j['title'] as String,
-        result: AnalyzeResult.fromJson(j['result'] as Map<String, dynamic>),
-        customTitle: j['customTitle'] as bool? ?? false,
-      );
+    id: j['id'] as String,
+    createdAt: DateTime.parse(j['createdAt'] as String),
+    title: j['title'] as String,
+    result: AnalyzeResult.fromJson(j['result'] as Map<String, dynamic>),
+    customTitle: j['customTitle'] as bool? ?? false,
+  );
 }

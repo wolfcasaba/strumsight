@@ -23,8 +23,9 @@ class WeeklyRecap {
     int streak = 0,
   }) {
     final start = today - 6;
-    final week =
-        entries.where((e) => e.day >= start && e.day <= today).toList();
+    final week = entries
+        .where((e) => e.day >= start && e.day <= today)
+        .toList();
     var seconds = 0, strokes = 0;
     final byDay = <int, int>{};
     double accSum = 0;

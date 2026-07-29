@@ -61,17 +61,17 @@ const dataDir = 'ml/data/klangio';
 }
 
 List<(double, StrumDirection)> readStrums(String path) => [
-      for (final line in File(path).readAsLinesSync())
-        if (line.trim().isNotEmpty)
-          (
-            double.parse(line.split('\t')[0]),
-            switch (line.split('\t')[1]) {
-              'D' => StrumDirection.down,
-              'U' => StrumDirection.up,
-              final d => throw FormatException('unknown direction $d'),
-            },
-          ),
-    ];
+  for (final line in File(path).readAsLinesSync())
+    if (line.trim().isNotEmpty)
+      (
+        double.parse(line.split('\t')[0]),
+        switch (line.split('\t')[1]) {
+          'D' => StrumDirection.down,
+          'U' => StrumDirection.up,
+          final d => throw FormatException('unknown direction $d'),
+        },
+      ),
+];
 
 void main() {
   final present = Directory(dataDir).existsSync();
@@ -92,11 +92,14 @@ void main() {
         // Heuristic: stream the whole take through the live analyzer.
         final analyzer = StrumAnalyzer(sampleRate: sr);
         final detected = <StrumEvent>[];
-        for (var s = 0;
-            s + DspConfig.onsetWindow <= pcm.length;
-            s += DspConfig.onsetHop) {
-          final e = analyzer
-              .process(Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow));
+        for (
+          var s = 0;
+          s + DspConfig.onsetWindow <= pcm.length;
+          s += DspConfig.onsetHop
+        ) {
+          final e = analyzer.process(
+            Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow),
+          );
           if (e != null) detected.add(e);
         }
         for (final (t, want) in events) {
@@ -118,8 +121,9 @@ void main() {
         }
 
         // CRNN: the deployment chain at the labeled times.
-        final verdicts =
-            crnn.classifyClip(pcm, sr, [for (final (t, _) in events) t]);
+        final verdicts = crnn.classifyClip(pcm, sr, [
+          for (final (t, _) in events) t,
+        ]);
         for (var i = 0; i < events.length; i++) {
           if (verdicts[i].direction == events[i].$2) crnnCorrect++;
         }
@@ -129,21 +133,31 @@ void main() {
       final crnnAcc = crnnCorrect / labels;
       // The scoreboard that decides the Analyze-path deployment.
       // ignore: avoid_print
-      print('REAL A/B (eval fold, $labels labels): '
-          'heuristic matched=$heurMatched directed=$heurDirected '
-          'acc=${(heurAcc * 100).toStringAsFixed(1)}% | '
-          'crnn acc=${(crnnAcc * 100).toStringAsFixed(1)}%');
+      print(
+        'REAL A/B (eval fold, $labels labels): '
+        'heuristic matched=$heurMatched directed=$heurDirected '
+        'acc=${(heurAcc * 100).toStringAsFixed(1)}% | '
+        'crnn acc=${(crnnAcc * 100).toStringAsFixed(1)}%',
+      );
 
       expect(labels, greaterThan(1900), reason: 'the whole eval fold ran');
       // Sanity floors only — the print IS the deliverable; findings go to
       // chunk 018 and the deployment decision follows the numbers.
-      expect(heurMatched / labels, greaterThanOrEqualTo(0.85),
-          reason: 'r166 retune locked: onset recall on real takes was 73% '
-              'at the synth-tuned threshold, 91% after (12, 1.0) — a drop '
-              'back means the detector regressed on real audio');
-      expect(crnnAcc, greaterThan(0.75),
-          reason: 'the Dart chain must reproduce the ~0.867 Python eval '
-              '(large drop = feature drift between training and serving)');
+      expect(
+        heurMatched / labels,
+        greaterThanOrEqualTo(0.85),
+        reason:
+            'r166 retune locked: onset recall on real takes was 73% '
+            'at the synth-tuned threshold, 91% after (12, 1.0) — a drop '
+            'back means the detector regressed on real audio',
+      );
+      expect(
+        crnnAcc,
+        greaterThan(0.75),
+        reason:
+            'the Dart chain must reproduce the ~0.867 Python eval '
+            '(large drop = feature drift between training and serving)',
+      );
     },
     skip: present
         ? false

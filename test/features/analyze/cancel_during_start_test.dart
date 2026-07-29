@@ -40,28 +40,40 @@ void main() {
 
   (ProviderContainer, AnalyzeController, _GatedRecorder) rig() {
     final recorder = _GatedRecorder();
-    final container = ProviderContainer(overrides: [
-      analyzeControllerProvider
-          .overrideWith(() => AnalyzeController(recorder: recorder)),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        analyzeControllerProvider.overrideWith(
+          () => AnalyzeController(recorder: recorder),
+        ),
+      ],
+    );
     final controller = container.read(analyzeControllerProvider.notifier);
     return (container, controller, recorder);
   }
 
-  test('screen leaving during the mic handshake aborts the landed take', () async {
-    final (container, controller, recorder) = rig();
-    addTearDown(container.dispose);
-    controller.screenAttached();
+  test(
+    'screen leaving during the mic handshake aborts the landed take',
+    () async {
+      final (container, controller, recorder) = rig();
+      addTearDown(container.dispose);
+      controller.screenAttached();
 
-    final pending = controller.startRecording();
-    controller.screenDetached(); // tab switch while start() is awaiting
-    recorder.startGate.complete(MicStart.ok);
-    await pending;
+      final pending = controller.startRecording();
+      controller.screenDetached(); // tab switch while start() is awaiting
+      recorder.startGate.complete(MicStart.ok);
+      await pending;
 
-    expect(recorder.stopCalls, 1,
-        reason: 'the take must be released — a hot mic behind another tab');
-    expect(container.read(analyzeControllerProvider).phase, AnalyzePhase.idle);
-  });
+      expect(
+        recorder.stopCalls,
+        1,
+        reason: 'the take must be released — a hot mic behind another tab',
+      );
+      expect(
+        container.read(analyzeControllerProvider).phase,
+        AnalyzePhase.idle,
+      );
+    },
+  );
 
   test('a denied start landing after the screen left stays quiet', () async {
     final (container, controller, recorder) = rig();
@@ -73,9 +85,16 @@ void main() {
     recorder.startGate.complete(MicStart.denied);
     await pending;
 
-    expect(recorder.stopCalls, 0, reason: 'nothing went live — nothing to stop');
-    expect(container.read(analyzeControllerProvider).phase, AnalyzePhase.idle,
-        reason: 'no error banner may flash for a screen the user already left');
+    expect(
+      recorder.stopCalls,
+      0,
+      reason: 'nothing went live — nothing to stop',
+    );
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.idle,
+      reason: 'no error banner may flash for a screen the user already left',
+    );
   });
 
   test('start landing while attached records normally', () async {
@@ -87,34 +106,47 @@ void main() {
     recorder.startGate.complete(MicStart.ok);
     await pending;
 
-    expect(container.read(analyzeControllerProvider).phase,
-        AnalyzePhase.recording);
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.recording,
+    );
     expect(recorder.stopCalls, 0);
   });
 
-  test('returning to the screen re-arms recording after an aborted start',
-      () async {
-    final (container, controller, recorder) = rig();
-    addTearDown(container.dispose);
-    controller.screenAttached();
+  test(
+    'returning to the screen re-arms recording after an aborted start',
+    () async {
+      final (container, controller, recorder) = rig();
+      addTearDown(container.dispose);
+      controller.screenAttached();
 
-    final first = controller.startRecording();
-    controller.screenDetached();
-    recorder.startGate.complete(MicStart.ok);
-    await first;
-    expect(container.read(analyzeControllerProvider).phase, AnalyzePhase.idle);
+      final first = controller.startRecording();
+      controller.screenDetached();
+      recorder.startGate.complete(MicStart.ok);
+      await first;
+      expect(
+        container.read(analyzeControllerProvider).phase,
+        AnalyzePhase.idle,
+      );
 
-    // The user comes back and records again — the controller must not have
-    // latched itself into a dead state.
-    controller.screenAttached();
-    recorder.startGate = Completer<MicStart>();
-    final second = controller.startRecording();
-    recorder.startGate.complete(MicStart.ok);
-    await second;
-    expect(container.read(analyzeControllerProvider).phase,
-        AnalyzePhase.recording);
-    expect(recorder.stopCalls, 1, reason: 'only the aborted take was stopped');
-  });
+      // The user comes back and records again — the controller must not have
+      // latched itself into a dead state.
+      controller.screenAttached();
+      recorder.startGate = Completer<MicStart>();
+      final second = controller.startRecording();
+      recorder.startGate.complete(MicStart.ok);
+      await second;
+      expect(
+        container.read(analyzeControllerProvider).phase,
+        AnalyzePhase.recording,
+      );
+      expect(
+        recorder.stopCalls,
+        1,
+        reason: 'only the aborted take was stopped',
+      );
+    },
+  );
 
   test('cancelRecording leaves a genuinely FINISHED analysis alone', () async {
     // Round 115: the r102 "leaves a finished result alone" test was partly
@@ -135,8 +167,11 @@ void main() {
 
     controller.cancelRecording();
     final after = container.read(analyzeControllerProvider);
-    expect(after.phase, AnalyzePhase.done,
-        reason: 'a finished analysis must survive a late deferred cancel');
+    expect(
+      after.phase,
+      AnalyzePhase.done,
+      reason: 'a finished analysis must survive a late deferred cancel',
+    );
     expect(identical(after.result, done.result), isTrue);
   });
 
@@ -149,17 +184,21 @@ void main() {
     final pending = controller.startRecording();
     recorder.startGate.complete(MicStart.ok);
     await pending;
-    expect(container.read(analyzeControllerProvider).phase,
-        AnalyzePhase.recording);
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.recording,
+    );
 
     recorder.stopGate = Completer<List<double>>();
     final stopping = controller.stopAndAnalyze();
     // The deferred round-102 cancel could fire exactly here, while stop()'s
     // await is still flushing. It must see a non-recording phase and no-op.
     controller.cancelRecording();
-    expect(container.read(analyzeControllerProvider).phase,
-        AnalyzePhase.analyzing,
-        reason: 'the take is being analyzed — cancel must not reset it');
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.analyzing,
+      reason: 'the take is being analyzed — cancel must not reset it',
+    );
     expect(recorder.stopCalls, 1, reason: 'no second stop on the mic');
 
     recorder.stopGate!.complete(List<double>.filled(4096, 0));

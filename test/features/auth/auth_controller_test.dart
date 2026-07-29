@@ -49,10 +49,9 @@ void main() {
     final container = _container(store, repo);
     await container.read(authControllerProvider.future);
 
-    await container.read(authControllerProvider.notifier).login(
-          'player@strumsight.app',
-          'sixstrings',
-        );
+    await container
+        .read(authControllerProvider.notifier)
+        .login('player@strumsight.app', 'sixstrings');
 
     final state = container.read(authControllerProvider);
     expect(state.value, isA<AuthUser>());
@@ -74,8 +73,10 @@ void main() {
     final state = container.read(authControllerProvider);
     expect(state.hasError, isTrue);
     expect(state.error, isA<AuthException>());
-    expect((state.error as AuthException).kind,
-        AuthErrorKind.invalidCredentials);
+    expect(
+      (state.error as AuthException).kind,
+      AuthErrorKind.invalidCredentials,
+    );
     expect(store.token, isNull);
   });
 

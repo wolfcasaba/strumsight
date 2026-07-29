@@ -18,14 +18,16 @@ import '../../support/fake_engines.dart';
 /// chromatic nearest note — essential when a string is so far off (or the
 /// room so noisy) that auto mode names a different note entirely.
 Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [tunerEngineProvider.overrideWithValue(engine)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: TunerScreen(),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: TunerScreen(),
+        ),
       ),
-    ));
+    );
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -45,8 +47,9 @@ void main() {
     });
   });
 
-  testWidgets('tapping a chip pins the string: the gauge reads against IT',
-      (tester) async {
+  testWidgets('tapping a chip pins the string: the gauge reads against IT', (
+    tester,
+  ) async {
     final engine = FakeTunerEngine();
     addTearDown(engine.dispose);
     await pumpTuner(tester, engine);

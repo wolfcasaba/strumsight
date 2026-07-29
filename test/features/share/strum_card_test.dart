@@ -5,30 +5,37 @@ import 'package:strumsight/features/live/model/strum.dart';
 import 'package:strumsight/features/share/widgets/strum_card.dart';
 
 AnalyzeResult _result(int nStrums) => AnalyzeResult(
-      durationSec: 12,
-      bpm: 96,
-      chords: const [
-        TimelineChord(label: 'C', startSec: 0, endSec: 3),
-        TimelineChord(label: 'G', startSec: 3, endSec: 6),
-      ],
-      strums: [
-        for (var i = 0; i < nStrums; i++)
-          TimelineStrum(
-            direction: i.isEven ? StrumDirection.down : StrumDirection.up,
-            timeSec: i.toDouble(),
-            confidence: 0.9,
-          ),
-      ],
-    );
+  durationSec: 12,
+  bpm: 96,
+  chords: const [
+    TimelineChord(label: 'C', startSec: 0, endSec: 3),
+    TimelineChord(label: 'G', startSec: 3, endSec: 6),
+  ],
+  strums: [
+    for (var i = 0; i < nStrums; i++)
+      TimelineStrum(
+        direction: i.isEven ? StrumDirection.down : StrumDirection.up,
+        timeSec: i.toDouble(),
+        confidence: 0.9,
+      ),
+  ],
+);
 
 Future<void> _pump(WidgetTester tester, AnalyzeResult r, {int capo = 0}) =>
-    tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: Center(child: StrumCard(result: r, capo: capo))),
-    ));
+    tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: StrumCard(result: r, capo: capo),
+          ),
+        ),
+      ),
+    );
 
 void main() {
-  testWidgets('renders brand, chords and the strum-direction arrows',
-      (tester) async {
+  testWidgets('renders brand, chords and the strum-direction arrows', (
+    tester,
+  ) async {
     await _pump(tester, _result(4));
     expect(find.text('StrumSight'), findsOneWidget);
     expect(find.text('C · G'), findsOneWidget);
@@ -54,8 +61,9 @@ void main() {
     expect(find.text('A# · F'), findsOneWidget);
   });
 
-  testWidgets('a strum-less result shows a graceful placeholder',
-      (tester) async {
+  testWidgets('a strum-less result shows a graceful placeholder', (
+    tester,
+  ) async {
     await _pump(tester, AnalyzeResult.empty);
     expect(find.text('No strums detected'), findsOneWidget);
     expect(find.text('My riff'), findsOneWidget); // no chords → fallback

@@ -28,8 +28,12 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
   /// `uploaded`/`failed`. Never throws — a diagnostics failure never disturbs
   /// the Analyze result. No-op if the result carries no diagnostics. [surface]
   /// tags which screen produced it — `analyze` (default) or `live` (r199).
-  Future<void> upload(AnalyzeResult result, List<double> pcm, int sr,
-      {String surface = 'analyze'}) async {
+  Future<void> upload(
+    AnalyzeResult result,
+    List<double> pcm,
+    int sr, {
+    String surface = 'analyze',
+  }) async {
     if (result.diagnostics == null) return;
     state = DiagnosticsUploadStatus.uploading;
 
@@ -73,5 +77,5 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
 
 final diagnosticsUploadProvider =
     NotifierProvider<DiagnosticsUploadNotifier, DiagnosticsUploadStatus>(
-  DiagnosticsUploadNotifier.new,
-);
+      DiagnosticsUploadNotifier.new,
+    );

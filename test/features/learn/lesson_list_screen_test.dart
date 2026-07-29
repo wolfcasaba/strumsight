@@ -7,20 +7,23 @@ import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pump(WidgetTester tester) => tester.pumpWidget(ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LessonListScreen(now: DateTime(2026, 7, 9)),
-      ),
-    ));
+Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
+  ProviderScope(
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: LessonListScreen(now: DateTime(2026, 7, 9)),
+    ),
+  ),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('groups lessons by tier and locks the un-earned ones',
-      (tester) async {
+  testWidgets('groups lessons by tier and locks the un-earned ones', (
+    tester,
+  ) async {
     await _pump(tester);
     await tester.pump();
 
@@ -36,25 +39,30 @@ void main() {
     expect(find.text('ADVANCED'), findsOneWidget);
   });
 
-  testWidgets('passing a lesson unlocks the next (lock clears)',
-      (tester) async {
+  testWidgets('passing a lesson unlocks the next (lock clears)', (
+    tester,
+  ) async {
     final tier = Lessons.byDifficulty(Difficulty.beginner);
-    await tester.pumpWidget(ProviderScope(
-      overrides: const [],
-      child: Consumer(builder: (context, ref, _) {
-        // Pre-pass the first beginner lesson.
-        return FutureBuilder(
-          future: ref
-              .read(lessonProgressProvider.notifier)
-              .record(tier[0].id, 0.85),
-          builder: (_, _) => MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: LessonListScreen(now: DateTime(2026, 7, 9)),
-          ),
-        );
-      }),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: const [],
+        child: Consumer(
+          builder: (context, ref, _) {
+            // Pre-pass the first beginner lesson.
+            return FutureBuilder(
+              future: ref
+                  .read(lessonProgressProvider.notifier)
+                  .record(tier[0].id, 0.85),
+              builder: (_, _) => MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: LessonListScreen(now: DateTime(2026, 7, 9)),
+              ),
+            );
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // The second beginner lesson is now unlocked → it is the Continue card's

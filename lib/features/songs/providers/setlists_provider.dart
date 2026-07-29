@@ -67,10 +67,10 @@ class SetlistsController extends Notifier<List<Setlist>> {
       _mutate(setlistId, (s) => s.copyWith(songIds: [...s.songIds, songId]));
 
   Future<void> removeAt(String setlistId, int index) => _mutate(setlistId, (s) {
-        if (index < 0 || index >= s.songIds.length) return s;
-        final ids = [...s.songIds]..removeAt(index);
-        return s.copyWith(songIds: ids);
-      });
+    if (index < 0 || index >= s.songIds.length) return s;
+    final ids = [...s.songIds]..removeAt(index);
+    return s.copyWith(songIds: ids);
+  });
 
   /// Reorder within a setlist (ReorderableListView semantics: [oldIndex] item
   /// moves to [newIndex]).
@@ -88,7 +88,10 @@ class SetlistsController extends Notifier<List<Setlist>> {
   Future<void> _mutate(String id, Setlist Function(Setlist) f) async {
     await _loaded.future; // the existence check must see the LOADED list
     if (!state.any((s) => s.id == id)) return;
-    state = [for (final s in state) if (s.id == id) f(s) else s];
+    state = [
+      for (final s in state)
+        if (s.id == id) f(s) else s,
+    ];
     await _persist();
   }
 
@@ -105,5 +108,6 @@ class SetlistsController extends Notifier<List<Setlist>> {
   }
 }
 
-final setlistsProvider =
-    NotifierProvider<SetlistsController, List<Setlist>>(SetlistsController.new);
+final setlistsProvider = NotifierProvider<SetlistsController, List<Setlist>>(
+  SetlistsController.new,
+);

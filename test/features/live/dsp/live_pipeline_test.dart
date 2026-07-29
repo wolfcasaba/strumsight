@@ -28,28 +28,32 @@ void main() {
     expect(frames.last.listening, isTrue);
   });
 
-  test('end-to-end: alternating strums produce directions, tempo and a bar',
-      () {
-    final frames = run(strumPattern(
-      lowFirstPerStrum: [true, false, true, false, true, false],
-      gapSeconds: 0.5,
-    ));
-    expect(frames, isNotEmpty);
+  test(
+    'end-to-end: alternating strums produce directions, tempo and a bar',
+    () {
+      final frames = run(
+        strumPattern(
+          lowFirstPerStrum: [true, false, true, false, true, false],
+          gapSeconds: 0.5,
+        ),
+      );
+      expect(frames, isNotEmpty);
 
-    // Direction: both downs and ups must appear as latestStrum over time.
-    final dirs = frames
-        .map((f) => f.latestStrum?.direction)
-        .whereType<StrumDirection>()
-        .toSet();
-    expect(dirs, containsAll({StrumDirection.down, StrumDirection.up}));
+      // Direction: both downs and ups must appear as latestStrum over time.
+      final dirs = frames
+          .map((f) => f.latestStrum?.direction)
+          .whereType<StrumDirection>()
+          .toSet();
+      expect(dirs, containsAll({StrumDirection.down, StrumDirection.up}));
 
-    // Tempo: 0.5 s spacing → ~120 BPM once enough onsets accumulated.
-    expect(frames.last.bpm, closeTo(120, 10));
+      // Tempo: 0.5 s spacing → ~120 BPM once enough onsets accumulated.
+      expect(frames.last.bpm, closeTo(120, 10));
 
-    // The bar shows at least two strum marks.
-    final marked = frames.last.bar.where((s) => s.strum != null).length;
-    expect(marked, greaterThanOrEqualTo(2));
-  });
+      // The bar shows at least two strum marks.
+      final marked = frames.last.bar.where((s) => s.strum != null).length;
+      expect(marked, greaterThanOrEqualTo(2));
+    },
+  );
 
   test('end-to-end: silence yields no chord and near-zero level', () {
     final frames = run(Float64List(sr)); // 1 s of silence
@@ -71,9 +75,15 @@ void main() {
     for (var fed = 0; fed < sr * 3; fed += 1024) {
       frames.addAll(pipeline.addChunk(silence));
     }
-    expect(frames.any((f) => f.latestStrum != null), isTrue,
-        reason: 'the strum was visible right after the onset');
-    expect(frames.last.latestStrum, isNull,
-        reason: 'the arrow must fade after 2 s of silence');
+    expect(
+      frames.any((f) => f.latestStrum != null),
+      isTrue,
+      reason: 'the strum was visible right after the onset',
+    );
+    expect(
+      frames.last.latestStrum,
+      isNull,
+      reason: 'the arrow must fade after 2 s of silence',
+    );
   });
 }

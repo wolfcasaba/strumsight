@@ -14,19 +14,37 @@ void main() {
   });
 
   test('progression advances by bar', () {
-    expect(engine.frameAt(const Duration(milliseconds: 2600)).current!.label, 'G');
-    expect(engine.frameAt(const Duration(milliseconds: 5200)).current!.label, 'Am');
-    expect(engine.frameAt(const Duration(milliseconds: 7700)).current!.label, 'F');
-    expect(engine.frameAt(const Duration(milliseconds: 10200)).current!.label, 'C');
+    expect(
+      engine.frameAt(const Duration(milliseconds: 2600)).current!.label,
+      'G',
+    );
+    expect(
+      engine.frameAt(const Duration(milliseconds: 5200)).current!.label,
+      'Am',
+    );
+    expect(
+      engine.frameAt(const Duration(milliseconds: 7700)).current!.label,
+      'F',
+    );
+    expect(
+      engine.frameAt(const Duration(milliseconds: 10200)).current!.label,
+      'C',
+    );
   });
 
   test('bar always has 8 labelled slots in the standard order', () {
     final f = engine.frameAt(const Duration(milliseconds: 1000));
     expect(f.bar.length, 8);
-    expect(
-      f.bar.map((b) => b.label).toList(),
-      ['1', '&', '2', '&', '3', '&', '4', '&'],
-    );
+    expect(f.bar.map((b) => b.label).toList(), [
+      '1',
+      '&',
+      '2',
+      '&',
+      '3',
+      '&',
+      '4',
+      '&',
+    ]);
     // Numbered beats are down-beats; "&" are off-beats.
     expect(f.bar[0].isDownbeat, isTrue);
     expect(f.bar[1].isDownbeat, isFalse);
@@ -47,10 +65,12 @@ void main() {
 
   test('up-strokes are modelled as less confident than down-strokes', () {
     final f = engine.frameAt(const Duration(milliseconds: 1000));
-    final downs =
-        f.bar.where((b) => b.strum?.isDown ?? false).map((b) => b.strum!.confidence);
-    final ups =
-        f.bar.where((b) => b.strum?.isUp ?? false).map((b) => b.strum!.confidence);
+    final downs = f.bar
+        .where((b) => b.strum?.isDown ?? false)
+        .map((b) => b.strum!.confidence);
+    final ups = f.bar
+        .where((b) => b.strum?.isUp ?? false)
+        .map((b) => b.strum!.confidence);
     final avgDown = downs.reduce((a, b) => a + b) / downs.length;
     final avgUp = ups.reduce((a, b) => a + b) / ups.length;
     expect(avgUp, lessThan(avgDown));

@@ -76,15 +76,17 @@ void main() {
     expect(reading.hasSignal, isFalse);
   });
 
-  test('TunerAnalyzer: a single clear frame does NOT lock (needs stability)',
-      () {
-    final analyzer = TunerAnalyzer(sampleRate: sr);
-    final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
-    // One frame is not enough evidence — a real note is held for many frames,
-    // a transient/glide is not.
-    final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
-    expect(reading.hasSignal, isFalse);
-  });
+  test(
+    'TunerAnalyzer: a single clear frame does NOT lock (needs stability)',
+    () {
+      final analyzer = TunerAnalyzer(sampleRate: sr);
+      final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
+      // One frame is not enough evidence — a real note is held for many frames,
+      // a transient/glide is not.
+      final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
+      expect(reading.hasSignal, isFalse);
+    },
+  );
 
   test('TunerAnalyzer: a gliding pitch (voice-like) never locks', () {
     final analyzer = TunerAnalyzer(sampleRate: sr);

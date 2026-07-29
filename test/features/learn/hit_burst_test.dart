@@ -3,11 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/learn/widgets/hit_burst.dart';
 
 void main() {
-  HitBurst burst({double start = 1.0, double strength = 1.0}) => HitBurst(
-        startSec: start,
-        color: Colors.orange,
-        strength: strength,
-      );
+  HitBurst burst({double start = 1.0, double strength = 1.0}) =>
+      HitBurst(startSec: start, color: Colors.orange, strength: strength);
 
   test('emits its full particle count while active', () {
     final b = burst();
@@ -46,8 +43,10 @@ void main() {
         .particlesAt(now)
         .map((p) => p.offset.distance)
         .fold(0.0, (a, d) => d > a ? d : a);
-    double maxAlpha(double now) =>
-        b.particlesAt(now).map((p) => p.alpha).fold(0.0, (a, x) => x > a ? x : a);
+    double maxAlpha(double now) => b
+        .particlesAt(now)
+        .map((p) => p.alpha)
+        .fold(0.0, (a, x) => x > a ? x : a);
 
     expect(maxDist(1.0), lessThan(1.0)); // t=0: all at the centre
     expect(maxDist(1.2), greaterThan(maxDist(1.0))); // spread out
@@ -66,12 +65,16 @@ void main() {
     final list = [burst()];
     final a = HitBurstPainter(bursts: list, nowSec: 1.1, center: Offset.zero);
     expect(
-        a.shouldRepaint(
-            HitBurstPainter(bursts: list, nowSec: 1.1, center: Offset.zero)),
-        isFalse);
+      a.shouldRepaint(
+        HitBurstPainter(bursts: list, nowSec: 1.1, center: Offset.zero),
+      ),
+      isFalse,
+    );
     expect(
-        a.shouldRepaint(
-            HitBurstPainter(bursts: list, nowSec: 1.2, center: Offset.zero)),
-        isTrue);
+      a.shouldRepaint(
+        HitBurstPainter(bursts: list, nowSec: 1.2, center: Offset.zero),
+      ),
+      isTrue,
+    );
   });
 }

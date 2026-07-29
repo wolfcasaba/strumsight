@@ -19,8 +19,7 @@ class _FakeShareService extends ShareService {
     required String fileName,
     String? fallbackText,
     Rect? sharePositionOrigin,
-  }) async =>
-      log.add('$fileName::$caption');
+  }) async => log.add('$fileName::$caption');
 }
 
 void main() {
@@ -39,22 +38,25 @@ void main() {
     expect(c, contains('#StrumSightChallenge'));
   });
 
-  testWidgets('score card shows the lesson, accuracy, stars and stats',
-      (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: LessonScoreCard(
-            lessonName: 'Funk Chop',
-            accuracy: 0.8,
-            stars: 2,
-            maxCombo: 9,
-            hits: 12,
-            total: 15,
+  testWidgets('score card shows the lesson, accuracy, stars and stats', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: LessonScoreCard(
+              lessonName: 'Funk Chop',
+              accuracy: 0.8,
+              stars: 2,
+              maxCombo: 9,
+              hits: 12,
+              total: 15,
+            ),
           ),
         ),
       ),
-    ));
+    );
     expect(find.text('Funk Chop'), findsOneWidget);
     expect(find.text('80%'), findsOneWidget);
     expect(find.text('12/15'), findsOneWidget);
@@ -62,57 +64,65 @@ void main() {
     expect(find.byIcon(Icons.star), findsNWidgets(2)); // 2 filled stars
   });
 
-  testWidgets('score % colour follows the confidence ramp, not always green',
-      (tester) async {
-    Color scoreColor(WidgetTester t) => t
-        .widget<Text>(find.textContaining('%').first)
-        .style!
-        .color!;
+  testWidgets('score % colour follows the confidence ramp, not always green', (
+    tester,
+  ) async {
+    Color scoreColor(WidgetTester t) =>
+        t.widget<Text>(find.textContaining('%').first).style!.color!;
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: LessonScoreCard(
-          lessonName: 'L',
-          accuracy: 0.0,
-          stars: 0,
-          maxCombo: 0,
-          hits: 0,
-          total: 16,
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LessonScoreCard(
+            lessonName: 'L',
+            accuracy: 0.0,
+            stars: 0,
+            maxCombo: 0,
+            hits: 0,
+            total: 16,
+          ),
         ),
       ),
-    ));
-    expect(scoreColor(tester), AppColors.confidence(0.0),
-        reason: 'a failing score must not render in the success green');
+    );
+    expect(
+      scoreColor(tester),
+      AppColors.confidence(0.0),
+      reason: 'a failing score must not render in the success green',
+    );
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: LessonScoreCard(
-          lessonName: 'L',
-          accuracy: 0.9,
-          stars: 3,
-          maxCombo: 9,
-          hits: 14,
-          total: 16,
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LessonScoreCard(
+            lessonName: 'L',
+            accuracy: 0.9,
+            stars: 3,
+            maxCombo: 9,
+            hits: 14,
+            total: 16,
+          ),
         ),
       ),
-    ));
+    );
     expect(scoreColor(tester), AppColors.confidence(0.9));
   });
 
   testWidgets('preview shares the score card image on tap', (tester) async {
     final log = <String>[];
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: LessonScorePreviewScreen(
-        lesson: Lessons.downUpGroove,
-        accuracy: 0.85,
-        maxCombo: 11,
-        hits: 10,
-        total: 12,
-        shareService: _FakeShareService(log),
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LessonScorePreviewScreen(
+          lesson: Lessons.downUpGroove,
+          accuracy: 0.85,
+          maxCombo: 11,
+          hits: 10,
+          total: 12,
+          shareService: _FakeShareService(log),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(LessonScoreCard), findsOneWidget);

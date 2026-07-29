@@ -73,9 +73,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// Cached: `_lesson` is read on every ticker frame, and `simplified`
   /// rebuilds its event list on each call (round 114).
   Lesson? _simplifiedCache;
-  Lesson get _lesson => _easy
-      ? (_simplifiedCache ??= widget.lesson.simplified)
-      : widget.lesson;
+  Lesson get _lesson =>
+      _easy ? (_simplifiedCache ??= widget.lesson.simplified) : widget.lesson;
 
   /// Effective tempo after the practice-speed multiplier.
   double get _bpm => _lesson.bpm * _speed;
@@ -190,10 +189,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       // Only buzz when the strum actually resolved an event — a stray strum
       // with no event in range returns null and must NOT re-fire the previous
       // verdict's haptic.
-      final result = _scorer!.registerStrum(
-        frame.latestStrum.direction,
-        at,
-      );
+      final result = _scorer!.registerStrum(frame.latestStrum.direction, at);
       final snap = _scorer!.snapshot();
       if (result != null) _fireHaptic(result, snap.lastTiming);
       // A clean hit throws a spark burst in the stroke's colour at the strike
@@ -328,15 +324,15 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       streak: ref.read(streakProvider).current,
     );
     final start = nowDate.subtract(const Duration(days: 6));
-    final label = '${DateFormat.MMMd().format(start)} – '
+    final label =
+        '${DateFormat.MMMd().format(start)} – '
         '${DateFormat.MMMd().format(nowDate)}';
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => WrappedPreviewScreen(
-        recap: recap,
-        weekLabel: label,
-        today: today,
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            WrappedPreviewScreen(recap: recap, weekLabel: label, today: today),
       ),
-    ));
+    );
   }
 
   void _showSummary(ScoreSnapshot snap) {
@@ -347,8 +343,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     // (daily challenge, Analyze imports) have no successor. Easy-mode passes
     // don't advance the curriculum (they don't record progress either —
     // round 100 review), so they get no CTA.
-    final next =
-        passed && !_easy ? Lessons.nextAfter(widget.lesson.id) : null;
+    final next = passed && !_easy ? Lessons.nextAfter(widget.lesson.id) : null;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -601,7 +596,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                       // down after a fail streak, up when Easy is aced. Quiet
                       // inline row; the player stays in charge, and switching
                       // restarts the run (which clears the signal).
-                      if (_playing && !_easy &&
+                      if (_playing &&
+                          !_easy &&
                           (_scorer?.suggestsEasier ?? false))
                         _DdBanner(
                           text: l10n.ddSuggestEasy,
@@ -611,7 +607,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                             _restart();
                           },
                         )
-                      else if (_playing && _easy &&
+                      else if (_playing &&
+                          _easy &&
                           score != null &&
                           score.resolved >= 8 &&
                           score.accuracy >= 0.9)
@@ -744,12 +741,13 @@ class _DdBanner extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.school_outlined,
-              size: 16, color: AppColors.secondary),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(text, style: const TextStyle(fontSize: 12)),
+          const Icon(
+            Icons.school_outlined,
+            size: 16,
+            color: AppColors.secondary,
           ),
+          const SizedBox(width: 6),
+          Flexible(child: Text(text, style: const TextStyle(fontSize: 12))),
           TextButton(onPressed: onSwitch, child: Text(action)),
         ],
       ),

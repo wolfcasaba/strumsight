@@ -6,8 +6,11 @@ void main() {
   test('every preset is exactly 8 slots with at least one stroke', () {
     for (final p in StrumPatternPreset.all) {
       expect(p.pattern.length, 8, reason: '${p.name} must be 8 slots');
-      expect(p.pattern.any((d) => d != null), isTrue,
-          reason: '${p.name} must have a stroke');
+      expect(
+        p.pattern.any((d) => d != null),
+        isTrue,
+        reason: '${p.name} must have a stroke',
+      );
     }
   });
 
@@ -18,8 +21,9 @@ void main() {
   });
 
   test('Eighths is eight alternating down/up strokes', () {
-    final eighths =
-        StrumPatternPreset.all.firstWhere((p) => p.name == 'Eighths');
+    final eighths = StrumPatternPreset.all.firstWhere(
+      (p) => p.name == 'Eighths',
+    );
     expect(eighths.pattern.every((d) => d != null), isTrue);
     expect(eighths.pattern.where((d) => d == StrumDirection.up).length, 4);
   });

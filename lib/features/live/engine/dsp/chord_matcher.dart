@@ -21,7 +21,18 @@ class ChordMatcher {
   }
 
   static const _pitchClasses = [
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
   static const _qualities = <String, List<int>>{
     '': [0, 4, 7], // major

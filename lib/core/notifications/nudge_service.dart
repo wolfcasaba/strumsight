@@ -19,8 +19,8 @@ enum NudgeCopyVariant { regular, friday, weekend }
 
 /// Localised (title, body) for one variant — resolved by the caller, which
 /// has a BuildContext.
-typedef NudgeCopyFor = ({String title, String body}) Function(
-    NudgeCopyVariant variant);
+typedef NudgeCopyFor =
+    ({String title, String body}) Function(NudgeCopyVariant variant);
 
 class NudgeService {
   NudgeService._();
@@ -39,22 +39,29 @@ class NudgeService {
   static const int daysAhead = 7;
 
   /// The copy variant for a weekday (DateTime.monday..sunday).
-  static NudgeCopyVariant variantFor(int weekday) =>
-      weekday == DateTime.friday
-          ? NudgeCopyVariant.friday
-          : (weekday == DateTime.saturday || weekday == DateTime.sunday)
-              ? NudgeCopyVariant.weekend
-              : NudgeCopyVariant.regular;
+  static NudgeCopyVariant variantFor(int weekday) => weekday == DateTime.friday
+      ? NudgeCopyVariant.friday
+      : (weekday == DateTime.saturday || weekday == DateTime.sunday)
+      ? NudgeCopyVariant.weekend
+      : NudgeCopyVariant.regular;
 
   /// The next [count] occurrences of [h]:00 local wall time (calendar-added —
   /// DST-safe like [nextInstanceOf]).
-  static List<tz.TZDateTime> nextInstances(int h,
-      {int count = daysAhead, tz.TZDateTime? now}) {
+  static List<tz.TZDateTime> nextInstances(
+    int h, {
+    int count = daysAhead,
+    tz.TZDateTime? now,
+  }) {
     final first = nextInstanceOf(h, now: now);
     return [
       for (var i = 0; i < count; i++)
         tz.TZDateTime(
-            first.location, first.year, first.month, first.day + i, h),
+          first.location,
+          first.year,
+          first.month,
+          first.day + i,
+          h,
+        ),
     ];
   }
 
@@ -101,16 +108,23 @@ class NudgeService {
   Future<bool> enable({required NudgeCopyFor copyFor}) async {
     if (!await _init()) return false;
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       final granted = await android?.requestNotificationsPermission();
       if (granted == false) return false;
       // iOS: the Darwin plugin must be asked separately or a denied
       // permission would still report success (reviewer, round 82).
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-      final iosGranted =
-          await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+      final iosGranted = await ios?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       if (iosGranted == false) return false;
 
       await _scheduleWeek(copyFor);
@@ -156,8 +170,10 @@ class NudgeService {
   Future<bool> verifyAndRearm({required NudgeCopyFor copyFor}) async {
     if (!await _init()) return false;
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       final enabled = await android?.areNotificationsEnabled();
       if (enabled == false) return false;
 

@@ -23,18 +23,22 @@ class _RecordingBacking extends Backing {
 }
 
 Future<void> pumpTuner(
-        WidgetTester tester, FakeTunerEngine engine, Backing backing) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [
-        tunerEngineProvider.overrideWithValue(engine),
-        backingProvider.overrideWithValue(backing),
-      ],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: TunerScreen(),
-      ),
-    ));
+  WidgetTester tester,
+  FakeTunerEngine engine,
+  Backing backing,
+) => tester.pumpWidget(
+  ProviderScope(
+    overrides: [
+      tunerEngineProvider.overrideWithValue(engine),
+      backingProvider.overrideWithValue(backing),
+    ],
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: TunerScreen(),
+    ),
+  ),
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -71,8 +75,7 @@ void main() {
   // widget-test binding. Its dispose() must NOT be awaited here — it awaits a
   // platform-channel future that never completes under the test binding
   // (production never awaits it either; State.dispose is sync).
-  testWidgets('Backing.playTone ignores nonsense frequencies',
-      (tester) async {
+  testWidgets('Backing.playTone ignores nonsense frequencies', (tester) async {
     final backing = Backing();
     addTearDown(() {
       unawaited(backing.dispose());

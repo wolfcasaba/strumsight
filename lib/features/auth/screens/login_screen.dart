@@ -103,8 +103,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     validator: (v) {
                       final value = (v ?? '').trim();
-                      final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                          .hasMatch(value);
+                      final ok = RegExp(
+                        r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                      ).hasMatch(value);
                       return ok ? null : l10n.authEmailInvalid;
                     },
                   ),
@@ -148,18 +149,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             height: 22,
                             child: CircularProgressIndicator(strokeWidth: 2.5),
                           )
-                        : Text(_isSignUp
-                            ? l10n.authSignUpAction
-                            : l10n.authSignInAction),
+                        : Text(
+                            _isSignUp
+                                ? l10n.authSignUpAction
+                                : l10n.authSignInAction,
+                          ),
                   ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: loading
                         ? null
                         : () => setState(() => _isSignUp = !_isSignUp),
-                    child: Text(_isSignUp
-                        ? l10n.authToggleToSignIn
-                        : l10n.authToggleToSignUp),
+                    child: Text(
+                      _isSignUp
+                          ? l10n.authToggleToSignIn
+                          : l10n.authToggleToSignUp,
+                    ),
                   ),
                 ],
               ),

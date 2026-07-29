@@ -59,8 +59,8 @@ class BeatCounter extends StatelessWidget {
             color: active
                 ? palette.ink
                 : (slot.isDownbeat
-                    ? palette.ink.withValues(alpha: 0.7)
-                    : palette.muted),
+                      ? palette.ink.withValues(alpha: 0.7)
+                      : palette.muted),
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),

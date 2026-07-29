@@ -40,11 +40,12 @@ class LibraryScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             Expanded(
               child: async.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (_, _) => Center(
-                  child: Text(l10n.libraryIntro,
-                      style: TextStyle(color: palette.muted)),
+                  child: Text(
+                    l10n.libraryIntro,
+                    style: TextStyle(color: palette.muted),
+                  ),
                 ),
                 data: (sessions) => sessions.isEmpty
                     ? EmptyState(
@@ -92,9 +93,9 @@ class _SessionCard extends StatelessWidget {
       direction: DismissDirection.endToStart,
       onDismissed: (_) {
         onDelete();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.libraryDeleted)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.libraryDeleted)));
       },
       background: Container(
         alignment: Alignment.centerRight,

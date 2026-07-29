@@ -48,7 +48,10 @@ class RealTunerEngine implements TunerEngine {
       _isolate = await Isolate.spawn(
         _tunerEntry,
         _TunerInit(
-            sendPort: _fromDsp!.sendPort, sampleRate: actualRate, a4: a4),
+          sendPort: _fromDsp!.sendPort,
+          sampleRate: actualRate,
+          a4: a4,
+        ),
       );
       _fromDsp!.listen((message) {
         if (message is SendPort) {
@@ -108,8 +111,10 @@ class _TunerInit {
 
 void _tunerEntry(_TunerInit init) {
   final analyzer = TunerAnalyzer(sampleRate: init.sampleRate, a4: init.a4);
-  final framer =
-      SlidingFramer(window: analyzer.bufferSize, hop: analyzer.bufferSize ~/ 2);
+  final framer = SlidingFramer(
+    window: analyzer.bufferSize,
+    hop: analyzer.bufferSize ~/ 2,
+  );
   final inbox = ReceivePort();
   init.sendPort.send(inbox.sendPort);
   inbox.listen((message) {

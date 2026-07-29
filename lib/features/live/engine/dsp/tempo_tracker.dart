@@ -27,8 +27,9 @@ class TempoTracker {
       for (var i = 1; i < times.length; i++) times[i] - times[i - 1],
     ]..sort();
     final mid = iois.length ~/ 2;
-    final medianIoi =
-        iois.length.isOdd ? iois[mid] : (iois[mid - 1] + iois[mid]) / 2;
+    final medianIoi = iois.length.isOdd
+        ? iois[mid]
+        : (iois[mid - 1] + iois[mid]) / 2;
     if (medianIoi <= 0) return;
 
     // Fold eighth/half-time interpretations into the displayable range.

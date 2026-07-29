@@ -168,8 +168,10 @@ Future<Uint8List?> _liveCrnnWeights() async {
   ]) {
     try {
       final data = await rootBundle.load(asset);
-      _cachedLiveWeights =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      _cachedLiveWeights = data.buffer.asUint8List(
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
       break;
     } catch (_) {
       // Try the next asset; keep null if none load (retried next start).

@@ -37,30 +37,29 @@ class StreakData {
     int? lastPracticeDay,
     int? freezes,
     int? totalDays,
-  }) =>
-      StreakData(
-        current: current ?? this.current,
-        longest: longest ?? this.longest,
-        lastPracticeDay: lastPracticeDay ?? this.lastPracticeDay,
-        freezes: freezes ?? this.freezes,
-        totalDays: totalDays ?? this.totalDays,
-      );
+  }) => StreakData(
+    current: current ?? this.current,
+    longest: longest ?? this.longest,
+    lastPracticeDay: lastPracticeDay ?? this.lastPracticeDay,
+    freezes: freezes ?? this.freezes,
+    totalDays: totalDays ?? this.totalDays,
+  );
 
   Map<String, dynamic> toJson() => {
-        'current': current,
-        'longest': longest,
-        'last': lastPracticeDay,
-        'freezes': freezes,
-        'total': totalDays,
-      };
+    'current': current,
+    'longest': longest,
+    'last': lastPracticeDay,
+    'freezes': freezes,
+    'total': totalDays,
+  };
 
   factory StreakData.fromJson(Map<String, dynamic> j) => StreakData(
-        current: (j['current'] as num?)?.toInt() ?? 0,
-        longest: (j['longest'] as num?)?.toInt() ?? 0,
-        lastPracticeDay: (j['last'] as num?)?.toInt() ?? -1,
-        freezes: (j['freezes'] as num?)?.toInt() ?? 0,
-        totalDays: (j['total'] as num?)?.toInt() ?? 0,
-      );
+    current: (j['current'] as num?)?.toInt() ?? 0,
+    longest: (j['longest'] as num?)?.toInt() ?? 0,
+    lastPracticeDay: (j['last'] as num?)?.toInt() ?? -1,
+    freezes: (j['freezes'] as num?)?.toInt() ?? 0,
+    totalDays: (j['total'] as num?)?.toInt() ?? 0,
+  );
 
   @override
   bool operator ==(Object other) =>

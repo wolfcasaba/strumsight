@@ -48,20 +48,22 @@ void main() {
       expect(n.stars('a'), 3);
     });
 
-    test('progression unlocks the next lesson once the previous passes',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final n = c.read(lessonProgressProvider.notifier);
-      final tier = Lessons.byDifficulty(Difficulty.beginner);
+    test(
+      'progression unlocks the next lesson once the previous passes',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = c.read(lessonProgressProvider.notifier);
+        final tier = Lessons.byDifficulty(Difficulty.beginner);
 
-      expect(n.isUnlocked(tier[0]), isTrue); // first is always open
-      expect(n.isUnlocked(tier[1]), isFalse); // locked until #1 passes
+        expect(n.isUnlocked(tier[0]), isTrue); // first is always open
+        expect(n.isUnlocked(tier[1]), isFalse); // locked until #1 passes
 
-      await n.record(tier[0].id, 0.75); // pass #1
-      expect(n.isUnlocked(tier[1]), isTrue);
-      expect(n.isUnlocked(tier[2]), isFalse); // #3 still locked
-    });
+        await n.record(tier[0].id, 0.75); // pass #1
+        expect(n.isUnlocked(tier[1]), isTrue);
+        expect(n.isUnlocked(tier[2]), isFalse); // #3 still locked
+      },
+    );
 
     test('progress persists across a fresh controller', () async {
       final c1 = ProviderContainer();

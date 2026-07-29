@@ -16,8 +16,7 @@ class ChordLibraryScreen extends ConsumerStatefulWidget {
   const ChordLibraryScreen({super.key});
 
   @override
-  ConsumerState<ChordLibraryScreen> createState() =>
-      _ChordLibraryScreenState();
+  ConsumerState<ChordLibraryScreen> createState() => _ChordLibraryScreenState();
 }
 
 class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
@@ -26,15 +25,11 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
   /// One tappable diagram tile: tap plays (round 90), long-press pins into
   /// the Favorites group (round 108).
   Widget _tile(String label) => InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => ref.read(backingProvider).playChord(label),
-        onLongPress: () =>
-            ref.read(favoriteChordsProvider.notifier).toggle(label),
-        child: SizedBox(
-          width: 96,
-          child: ChordDiagram(label: label, size: 76),
-        ),
-      );
+    borderRadius: BorderRadius.circular(8),
+    onTap: () => ref.read(backingProvider).playChord(label),
+    onLongPress: () => ref.read(favoriteChordsProvider.notifier).toggle(label),
+    child: SizedBox(width: 96, child: ChordDiagram(label: label, size: 76)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -145,11 +140,11 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
   }
 
   static String _groupLabel(AppLocalizations l10n, _Group g) => switch (g) {
-        _Group.major => l10n.chordGroupMajor,
-        _Group.minor => l10n.chordGroupMinor,
-        _Group.seventh => l10n.chordGroupSeventh,
-        _Group.suspended => l10n.chordGroupSuspended,
-      };
+    _Group.major => l10n.chordGroupMajor,
+    _Group.minor => l10n.chordGroupMinor,
+    _Group.seventh => l10n.chordGroupSeventh,
+    _Group.suspended => l10n.chordGroupSuspended,
+  };
 }
 
 enum _Group { major, minor, seventh, suspended }

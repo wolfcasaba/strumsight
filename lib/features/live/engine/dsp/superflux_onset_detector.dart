@@ -29,12 +29,12 @@ class SuperFluxOnsetDetector {
     this.delta = _delta,
     this.lambda = _lambda,
   }) : _mel = LogMelExtractor(
-          sampleRate: sampleRate,
-          nFft: window,
-          hop: hop,
-          nMels: bands,
-          fMin: 30.0,
-        );
+         sampleRate: sampleRate,
+         nFft: window,
+         hop: hop,
+         nMels: bands,
+         fMin: 30.0,
+       );
 
   final int sampleRate;
   final int window;
@@ -81,7 +81,6 @@ class SuperFluxOnsetDetector {
 
   // Local-max confirmation: the candidate must top ±2 neighbouring frames.
   static const int _postFrames = 2;
-
 
   final LogMelExtractor _mel;
   // Release hysteresis (same idea as the whitened-flux path, chunk 005): one

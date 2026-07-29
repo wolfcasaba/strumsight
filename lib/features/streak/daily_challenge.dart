@@ -22,14 +22,22 @@ class DailyChallenge {
   /// The target strokes, in order.
   final List<StrumDirection> pattern;
 
-  int get downCount =>
-      pattern.where((d) => d == StrumDirection.down).length;
+  int get downCount => pattern.where((d) => d == StrumDirection.down).length;
   int get upCount => pattern.length - downCount;
 
   static const _names = [
-    'Campfire', 'Backbeat Bounce', 'Island Groove', 'Folk Shuffle',
-    'Pop Punk Push', 'Country Roll', 'Reggae Skank', 'Ballad Sway',
-    'Funk Chop', 'Train Beat', 'Waltz Lilt', 'Anthem Drive',
+    'Campfire',
+    'Backbeat Bounce',
+    'Island Groove',
+    'Folk Shuffle',
+    'Pop Punk Push',
+    'Country Roll',
+    'Reggae Skank',
+    'Ballad Sway',
+    'Funk Chop',
+    'Train Beat',
+    'Waltz Lilt',
+    'Anthem Drive',
   ];
 
   /// The challenge for [epochDay]. On-beats are down-strokes; off-beats vary,
@@ -44,8 +52,8 @@ class DailyChallenge {
       final up = !onBeat && rng.nextDouble() < 0.7; // off-beats mostly up
       pattern.add(up ? StrumDirection.up : StrumDirection.down);
     }
-    final name = _names[(epochDay % _names.length + _names.length) %
-        _names.length];
+    final name =
+        _names[(epochDay % _names.length + _names.length) % _names.length];
     return DailyChallenge(day: epochDay, name: name, pattern: pattern);
   }
 

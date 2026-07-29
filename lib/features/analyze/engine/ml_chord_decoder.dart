@@ -40,8 +40,30 @@ class MlChordDecoder {
   /// (0 = N.C., 1..12 = C..B major, 13..24 = C..B minor).
   static const List<String> majmin25Labels = [
     'N.C.',
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
-    'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
+    'Cm',
+    'C#m',
+    'Dm',
+    'D#m',
+    'Em',
+    'Fm',
+    'F#m',
+    'Gm',
+    'G#m',
+    'Am',
+    'A#m',
+    'Bm',
   ];
 
   /// Self-transition bonus for the Viterbi over the CRNN's LOG-posteriors.
@@ -59,7 +81,11 @@ class MlChordDecoder {
 
   /// Decode [pcm] (mono, [sampleRate] Hz) into an ML chord timeline spanning
   /// `[0, duration]`. Empty / too-short input → an empty timeline.
-  List<TimelineChord> decode(List<double> pcm, int sampleRate, double duration) {
+  List<TimelineChord> decode(
+    List<double> pcm,
+    int sampleRate,
+    double duration,
+  ) {
     if (pcm.isEmpty) return const [];
     final f32 = pcm is Float32List ? pcm : Float32List.fromList(pcm);
     final cqt = CqtExtractor().extract(f32, sampleRate);
@@ -73,8 +99,10 @@ class MlChordDecoder {
     ];
 
     final path = ViterbiChordDecoder().decodeBatchFromScores(
-        scores, majmin25Labels,
-        selfBonus: posteriorSelfBonus);
+      scores,
+      majmin25Labels,
+      selfBonus: posteriorSelfBonus,
+    );
 
     // Merge the per-frame path into contiguous segments, exactly like the DSP
     // _chordPass: a no-chord (null) frame sustains the open segment; boundaries
@@ -87,16 +115,22 @@ class MlChordDecoder {
       final label = path[i]?.chord.label;
       if (label != null && label != openLabel) {
         if (openLabel != null) {
-          chords.add(TimelineChord(
-              label: openLabel, startSec: openStart, endSec: i * hop));
+          chords.add(
+            TimelineChord(
+              label: openLabel,
+              startSec: openStart,
+              endSec: i * hop,
+            ),
+          );
         }
         openLabel = label;
         openStart = i * hop;
       }
     }
     if (openLabel != null) {
-      chords.add(TimelineChord(
-          label: openLabel, startSec: openStart, endSec: duration));
+      chords.add(
+        TimelineChord(label: openLabel, startSec: openStart, endSec: duration),
+      );
     }
     return chords;
   }
@@ -107,7 +141,10 @@ class MlChordDecoder {
   /// (`Cmaj7`, `G7`, `Asus4`, ...) than the ML head's majmin, so comparing raw
   /// labels would understate agreement; [majminReduce] folds both first.
   static double agreementFraction(
-      List<TimelineChord> dsp, List<TimelineChord> ml, double duration) {
+    List<TimelineChord> dsp,
+    List<TimelineChord> ml,
+    double duration,
+  ) {
     if (duration <= 0) return 0;
     final hop = frameHopSec;
     final n = (duration / hop).floor();
@@ -132,12 +169,41 @@ class MlChordDecoder {
   // --- majmin reduction (Dart port of ml/chords/labels.py) ------------------
 
   static const Map<String, int> _pc = {
-    'C': 0, 'B#': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4,
-    'Fb': 4, 'F': 5, 'E#': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8,
-    'A': 9, 'A#': 10, 'Bb': 10, 'B': 11, 'Cb': 11,
+    'C': 0,
+    'B#': 0,
+    'C#': 1,
+    'Db': 1,
+    'D': 2,
+    'D#': 3,
+    'Eb': 3,
+    'E': 4,
+    'Fb': 4,
+    'F': 5,
+    'E#': 5,
+    'F#': 6,
+    'Gb': 6,
+    'G': 7,
+    'G#': 8,
+    'Ab': 8,
+    'A': 9,
+    'A#': 10,
+    'Bb': 10,
+    'B': 11,
+    'Cb': 11,
   };
   static const List<String> _names = [
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
 
   /// Reduce any chord label to its canonical majmin form (`C`..`B`, `Cm`..`Bm`,

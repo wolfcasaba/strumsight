@@ -17,8 +17,7 @@ void main() {
     expect(waltz.beatsPerBar, 3);
     expect(waltz.totalBeats, waltz.chordSequence.isEmpty ? 0 : 4 * 3.0);
     // Bar 2 starts at beat 3, not 4: the bass stroke of the second chord.
-    final barTwoFirst =
-        waltz.events.firstWhere((e) => e.beat >= 3.0);
+    final barTwoFirst = waltz.events.firstWhere((e) => e.beat >= 3.0);
     expect(barTwoFirst.beat, 3.0);
     // The waltz feel: a downstroke bass on beat 1 of every bar.
     for (var bar = 0; bar < 4; bar++) {
@@ -61,8 +60,11 @@ void main() {
     }
     // Every bar still opens with its bass downstroke at bar*3.
     for (var bar = 0; bar < 4; bar++) {
-      expect(easy.events.any((e) => e.beat == bar * 3.0), isTrue,
-          reason: 'bar $bar must keep its downbeat in 3/4');
+      expect(
+        easy.events.any((e) => e.beat == bar * 3.0),
+        isTrue,
+        reason: 'bar $bar must keep its downbeat in 3/4',
+      );
     }
   });
 }

@@ -19,8 +19,11 @@ import 'package:strumsight/features/live/model/live_frame.dart';
 import '../../../support/synth.dart';
 
 /// Stream a signal through the pipeline and return every emitted frame.
-List<LiveFrame> _drive(LivePipeline pipe, Float64List signal,
-    {int chunk = 2048}) {
+List<LiveFrame> _drive(
+  LivePipeline pipe,
+  Float64List signal, {
+  int chunk = 2048,
+}) {
   final frames = <LiveFrame>[];
   for (var i = 0; i < signal.length; i += chunk) {
     final end = (i + chunk < signal.length) ? i + chunk : signal.length;
@@ -39,24 +42,34 @@ void main() {
     final pipe = LivePipeline(sampleRate: sr);
     final triad = chordSignal(cMajorFreqs, seconds: 2.5, sampleRate: sr);
     final frames = _drive(pipe, triad);
-    expect(_shown(frames), greaterThan(0),
-        reason: 'a clean guitar chord must clear the musical-presence gate');
-    expect(frames.map((f) => f.current?.label).whereType<String>(),
-        contains('C'),
-        reason: 'and it should read as C');
+    expect(
+      _shown(frames),
+      greaterThan(0),
+      reason: 'a clean guitar chord must clear the musical-presence gate',
+    );
+    expect(
+      frames.map((f) => f.current?.label).whereType<String>(),
+      contains('C'),
+      reason: 'and it should read as C',
+    );
   });
 
-  test('a single sustained tone (monophonic, ambiguous) shows NO phantom chord',
-      () {
-    // One pitch is not a chord — it matches many profiles weakly (low margin →
-    // low confidence), so the gate must keep the display blank rather than
-    // guessing. This is the mechanism that also rejects a hummed/sung note.
-    final pipe = LivePipeline(sampleRate: sr);
-    final tone = harmonicNote(freq: 220, seconds: 2.5, sampleRate: sr);
-    final frames = _drive(pipe, tone);
-    expect(_shown(frames), 0,
-        reason: 'ambiguous single-pitch audio must not latch a chord');
-  });
+  test(
+    'a single sustained tone (monophonic, ambiguous) shows NO phantom chord',
+    () {
+      // One pitch is not a chord — it matches many profiles weakly (low margin →
+      // low confidence), so the gate must keep the display blank rather than
+      // guessing. This is the mechanism that also rejects a hummed/sung note.
+      final pipe = LivePipeline(sampleRate: sr);
+      final tone = harmonicNote(freq: 220, seconds: 2.5, sampleRate: sr);
+      final frames = _drive(pipe, tone);
+      expect(
+        _shown(frames),
+        0,
+        reason: 'ambiguous single-pitch audio must not latch a chord',
+      );
+    },
+  );
 
   test('the confidence gate is wired: an impossible rise shows nothing, '
       'a zero rise shows the chord', () {
@@ -65,10 +78,16 @@ void main() {
     final open = LivePipeline(sampleRate: sr, chordConfRise: 0.0);
     expect(_shown(_drive(open, triad)), greaterThan(0));
 
-    final closed =
-        LivePipeline(sampleRate: sr, chordConfRise: 1.01, chordConfRelease: 1.0);
-    expect(_shown(_drive(closed, triad)), 0,
-        reason: 'no real confidence can cross an impossible gate');
+    final closed = LivePipeline(
+      sampleRate: sr,
+      chordConfRise: 1.01,
+      chordConfRelease: 1.0,
+    );
+    expect(
+      _shown(_drive(closed, triad)),
+      0,
+      reason: 'no real confidence can cross an impossible gate',
+    );
   });
 
   test('raising the rise gate never INCREASES the frames a chord is shown '
@@ -76,10 +95,14 @@ void main() {
     final triad = chordSignal(cMajorFreqs, seconds: 3.0, sampleRate: sr);
     var prev = 1 << 30;
     for (final rise in [0.0, 0.3, 0.5, 0.54, 0.7, 0.9]) {
-      final n = _shown(_drive(
-          LivePipeline(sampleRate: sr, chordConfRise: rise), triad));
-      expect(n, lessThanOrEqualTo(prev),
-          reason: 'a stricter gate cannot surface more chord frames');
+      final n = _shown(
+        _drive(LivePipeline(sampleRate: sr, chordConfRise: rise), triad),
+      );
+      expect(
+        n,
+        lessThanOrEqualTo(prev),
+        reason: 'a stricter gate cannot surface more chord frames',
+      );
       prev = n;
     }
   });
@@ -92,15 +115,16 @@ void main() {
     final silence = Float64List(sr); // 1 s silence — must release
     // chord, short gap, chord again: the display should stay latched across the
     // short gap (a real strum's momentary decay must not blank the chord).
-    final held = _drive(pipe, chord) +
-        _drive(pipe, gap) +
-        _drive(pipe, chord);
+    final held = _drive(pipe, chord) + _drive(pipe, gap) + _drive(pipe, chord);
     expect(_shown(held), greaterThan(0));
     // Now a long silence: the chord must eventually release (fall below the
     // release floor) — the display goes blank, not stuck on a stale chord.
     final tail = _drive(pipe, silence);
-    expect(tail.isNotEmpty && tail.last.current == null, isTrue,
-        reason: 'sustained silence must release the latched chord');
+    expect(
+      tail.isNotEmpty && tail.last.current == null,
+      isTrue,
+      reason: 'sustained silence must release the latched chord',
+    );
   });
 
   test('a longer release-hold keeps a sustained chord shown across a dip '
@@ -114,22 +138,29 @@ void main() {
     }
 
     // A longer hold can only SHOW the chord on more frames, never fewer.
-    expect(_shown(runHold(8)), greaterThanOrEqualTo(_shown(runHold(0))),
-        reason: 'the release debounce reduces mid-chord flicker');
+    expect(
+      _shown(runHold(8)),
+      greaterThanOrEqualTo(_shown(runHold(0))),
+      reason: 'the release debounce reduces mid-chord flicker',
+    );
 
     // Voice-safe: a long hold cannot resurrect a phantom chord on speech,
     // because speech never latches in the first place.
     final tone = harmonicNote(freq: 220, seconds: 2.5, sampleRate: sr);
-    final voice =
-        LivePipeline(sampleRate: sr, chordReleaseHoldFrames: 8);
-    expect(_shown(_drive(voice, tone)), 0,
-        reason: 'a longer hold must not surface a chord on non-guitar audio');
+    final voice = LivePipeline(sampleRate: sr, chordReleaseHoldFrames: 8);
+    expect(
+      _shown(_drive(voice, tone)),
+      0,
+      reason: 'a longer hold must not surface a chord on non-guitar audio',
+    );
   });
 
-  test('the default gate constants are ordered (rise > release, both in 0..1)',
-      () {
-    expect(DspConfig.chordConfRise, greaterThan(DspConfig.chordConfRelease));
-    expect(DspConfig.chordConfRelease, greaterThan(0));
-    expect(DspConfig.chordConfRise, lessThan(1));
-  });
+  test(
+    'the default gate constants are ordered (rise > release, both in 0..1)',
+    () {
+      expect(DspConfig.chordConfRise, greaterThan(DspConfig.chordConfRelease));
+      expect(DspConfig.chordConfRelease, greaterThan(0));
+      expect(DspConfig.chordConfRise, lessThan(1));
+    },
+  );
 }

@@ -19,17 +19,34 @@ void main() {
     addTearDown(c.dispose);
 
     // First lifecycle: touch + mutate.
-    await c.read(practiceLogProvider.notifier).record(PracticeEntry(
-        day: 20000,
-        source: PracticeSource.live,
-        seconds: 60,
-        strokes: 5));
+    await c
+        .read(practiceLogProvider.notifier)
+        .record(
+          PracticeEntry(
+            day: 20000,
+            source: PracticeSource.live,
+            seconds: 60,
+            strokes: 5,
+          ),
+        );
     await c.read(streakProvider.notifier).recordPracticeToday();
     await c
         .read(songsProvider.notifier)
-        .add(name: 'S', chords: const ['C'], pattern: const [
-      StrumDirection.down, null, null, null, null, null, null, null,
-    ], bpm: 90);
+        .add(
+          name: 'S',
+          chords: const ['C'],
+          pattern: const [
+            StrumDirection.down,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+          bpm: 90,
+        );
 
     // Invalidate → the providers rebuild; a second full lifecycle must work.
     c.invalidate(practiceLogProvider);
@@ -37,18 +54,38 @@ void main() {
     c.invalidate(songsProvider);
     await Future<void>.delayed(Duration.zero);
 
-    await c.read(practiceLogProvider.notifier).record(PracticeEntry(
-        day: 20001,
-        source: PracticeSource.learn,
-        seconds: 30,
-        strokes: 3));
-    expect(c.read(practiceLogProvider).length, 2,
-        reason: 'post-invalidate record must merge with the persisted entry');
+    await c
+        .read(practiceLogProvider.notifier)
+        .record(
+          PracticeEntry(
+            day: 20001,
+            source: PracticeSource.learn,
+            seconds: 30,
+            strokes: 3,
+          ),
+        );
+    expect(
+      c.read(practiceLogProvider).length,
+      2,
+      reason: 'post-invalidate record must merge with the persisted entry',
+    );
     await c
         .read(songsProvider.notifier)
-        .add(name: 'T', chords: const ['G'], pattern: const [
-      StrumDirection.down, null, null, null, null, null, null, null,
-    ], bpm: 80);
+        .add(
+          name: 'T',
+          chords: const ['G'],
+          pattern: const [
+            StrumDirection.down,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+          bpm: 80,
+        );
     expect(c.read(songsProvider).length, 2);
   });
 }

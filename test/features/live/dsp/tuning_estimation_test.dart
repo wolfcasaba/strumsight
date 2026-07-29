@@ -14,8 +14,9 @@ import '../../../support/synth.dart';
 /// instruments sit 10–40 cents off concert pitch. Chunk 012 carries Chordino's
 /// answer — per-frame TUNING ESTIMATION shifting the log-freq mapping — so a
 /// uniformly detuned chord still lands on its note centres.
-List<double> detuneCents(List<double> freqs, double cents) =>
-    [for (final f in freqs) f * math.pow(2, cents / 1200)];
+List<double> detuneCents(List<double> freqs, double cents) => [
+  for (final f in freqs) f * math.pow(2, cents / 1200),
+];
 
 String? decode(Float64List signal) {
   final nc = NnlsChroma(sampleRate: 44100);

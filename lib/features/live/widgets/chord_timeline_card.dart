@@ -73,74 +73,74 @@ class ChordTimelineCard extends StatelessWidget {
     // rebuilds of the surrounding timeline don't force them to re-raster.
     return RepaintBoundary(
       child: ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 220,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            // Surgical copper-tinted glass — hero only.
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primary.withValues(alpha: 0.18),
-                palette.surface.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            width: 220,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              // Surgical copper-tinted glass — hero only.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.18),
+                  palette.surface.withValues(alpha: 0.28),
+                ],
+              ),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.35),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.20),
+                  blurRadius: 32,
+                  spreadRadius: -6,
+                ),
               ],
             ),
-            border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.20),
-                blurRadius: 32,
-                spreadRadius: -6,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ChordDiagram(label: _label, size: 78, showLabel: false),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _label,
-                  style: TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 104,
-                    height: 0.9,
-                    letterSpacing: -3,
-                    color: palette.ink,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ChordDiagram(label: _label, size: 78, showLabel: false),
+                const SizedBox(height: 8),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _label,
+                    style: TextStyle(
+                      fontFamily: 'Montserrat',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 104,
+                      height: 0.9,
+                      letterSpacing: -3,
+                      color: palette.ink,
+                    ),
                   ),
                 ),
-              ),
-              if (event.direction != null) ...[
-                const SizedBox(height: 10),
-                StrumArrow(
-                  direction: event.direction!,
-                  confidence: event.confidence,
-                  size: 72,
-                  glow: true,
-                  semanticLabel: _dirLabel(context),
-                ),
-                const SizedBox(height: 12),
-                _ConfidenceBar(
-                  confidence: event.confidence,
-                  color: confColor,
-                  track: palette.track,
-                ),
+                if (event.direction != null) ...[
+                  const SizedBox(height: 10),
+                  StrumArrow(
+                    direction: event.direction!,
+                    confidence: event.confidence,
+                    size: 72,
+                    glow: true,
+                    semanticLabel: _dirLabel(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _ConfidenceBar(
+                    confidence: event.confidence,
+                    color: confColor,
+                    track: palette.track,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

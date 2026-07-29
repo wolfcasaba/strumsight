@@ -72,9 +72,9 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     await ref.read(libraryProvider.notifier).add(session);
     if (!mounted) return;
     setState(() => _saved = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.analyzeSaved)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.analyzeSaved)));
   }
 
   void _syncTicker(AnalyzePhase phase) {
@@ -229,8 +229,10 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ),
           );
         }
-        final timeline =
-            TimelineView(result: result, capo: ref.watch(capoProvider));
+        final timeline = TimelineView(
+          result: result,
+          capo: ref.watch(capoProvider),
+        );
         // Lab mode (r198): show the ML-vs-DSP diagnostics panel below the
         // timeline when diagnostics were collected.
         final showDiag =
@@ -289,45 +291,42 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
         return const SizedBox(height: 52);
       case AnalyzePhase.done:
         final result = state.result ?? AnalyzeResult.empty;
-        final hasContent =
-            result.chords.isNotEmpty || result.strums.isNotEmpty;
+        final hasContent = result.chords.isNotEmpty || result.strums.isNotEmpty;
         final canSave = !_saved && hasContent;
         return Row(
           children: [
             IconButton.filledTonal(
               onPressed: hasContent
                   ? () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => SharePreviewScreen(
-                            result: result,
-                            capo: ref.read(capoProvider),
-                          ),
+                      MaterialPageRoute<void>(
+                        builder: (_) => SharePreviewScreen(
+                          result: result,
+                          capo: ref.read(capoProvider),
                         ),
-                      )
+                      ),
+                    )
                   : null,
               icon: const Icon(Icons.ios_share),
               tooltip: l10n.actionShare,
-              style: IconButton.styleFrom(
-                minimumSize: const Size.square(52),
-              ),
+              style: IconButton.styleFrom(minimumSize: const Size.square(52)),
             ),
             const SizedBox(width: 8),
             IconButton.filledTonal(
               onPressed: result.strums.isNotEmpty
                   ? () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LearnScreen(
-                            lesson: Lessons.fromAnalyze(result,
-                                name: l10n.analyzeMyRecording),
+                      MaterialPageRoute<void>(
+                        builder: (_) => LearnScreen(
+                          lesson: Lessons.fromAnalyze(
+                            result,
+                            name: l10n.analyzeMyRecording,
                           ),
                         ),
-                      )
+                      ),
+                    )
                   : null,
               icon: const Icon(Icons.school_outlined),
               tooltip: l10n.learnPracticeThis,
-              style: IconButton.styleFrom(
-                minimumSize: const Size.square(52),
-              ),
+              style: IconButton.styleFrom(minimumSize: const Size.square(52)),
             ),
             const SizedBox(width: 12),
             Expanded(

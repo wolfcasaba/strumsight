@@ -16,28 +16,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// riff" at capo 2 rendered as "A#ampfire riff" (the leading letter parsed as
 /// a chord root) — and inconsistently, Share/Practice used the raw name.
 AnalyzedSession _session(String id, String title) => AnalyzedSession(
-      id: id,
-      createdAt: DateTime(2026, 7, 11),
-      title: title,
-      result: const AnalyzeResult(
-        durationSec: 4,
-        bpm: 90,
-        chords: [TimelineChord(label: 'C', startSec: 0, endSec: 4)],
-        strums: [],
-      ),
-    );
+  id: id,
+  createdAt: DateTime(2026, 7, 11),
+  title: title,
+  result: const AnalyzeResult(
+    durationSec: 4,
+    bpm: 90,
+    chords: [TimelineChord(label: 'C', startSec: 0, endSec: 4)],
+    strums: [],
+  ),
+);
 
 Widget _app(Widget home) => MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: home,
-    );
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: home,
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('withTitle marks the session as custom-titled and it survives JSON',
-      () {
+  test('withTitle marks the session as custom-titled and it survives JSON', () {
     final auto = _session('a', 'C · G');
     expect(auto.customTitle, isFalse);
     final named = auto.withTitle('Campfire riff');
@@ -50,50 +49,65 @@ void main() {
     expect(AnalyzedSession.fromJson(legacyJson).customTitle, isFalse);
   });
 
-  testWidgets('a renamed title renders VERBATIM under a capo (detail screen)',
-      (tester) async {
+  testWidgets('a renamed title renders VERBATIM under a capo (detail screen)', (
+    tester,
+  ) async {
     final session = _session('a', 'C · G');
     await tester.pumpWidget(
-        ProviderScope(child: _app(SessionDetailScreen(session: session))));
+      ProviderScope(child: _app(SessionDetailScreen(session: session))),
+    );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(SessionDetailScreen)));
+      tester.element(find.byType(SessionDetailScreen)),
+    );
     await container.read(libraryProvider.future);
     await container.read(libraryProvider.notifier).add(session);
     await container.read(libraryProvider.notifier).rename('a', 'Campfire riff');
     await container.read(capoProvider.notifier).set(2);
     await tester.pumpAndSettle();
 
-    expect(find.text('Campfire riff'), findsOneWidget,
-        reason: 'a personal name is not a chord summary — never transpose it');
+    expect(
+      find.text('Campfire riff'),
+      findsOneWidget,
+      reason: 'a personal name is not a chord summary — never transpose it',
+    );
     expect(find.text('A#ampfire riff'), findsNothing);
   });
 
-  testWidgets('an auto chord-summary title still transposes under a capo',
-      (tester) async {
+  testWidgets('an auto chord-summary title still transposes under a capo', (
+    tester,
+  ) async {
     final session = _session('a', 'C · G');
     await tester.pumpWidget(
-        ProviderScope(child: _app(SessionDetailScreen(session: session))));
+      ProviderScope(child: _app(SessionDetailScreen(session: session))),
+    );
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(SessionDetailScreen)));
+      tester.element(find.byType(SessionDetailScreen)),
+    );
     await container.read(libraryProvider.future);
     await container.read(libraryProvider.notifier).add(session);
     await container.read(capoProvider.notifier).set(2);
     await tester.pumpAndSettle();
 
-    expect(find.text('A# · F'), findsOneWidget,
-        reason: 'capo 2: the played SHAPE for C·G is A#·F — keep transposing');
+    expect(
+      find.text('A# · F'),
+      findsOneWidget,
+      reason: 'capo 2: the played SHAPE for C·G is A#·F — keep transposing',
+    );
   });
 
-  testWidgets('the library list also shows a renamed title verbatim',
-      (tester) async {
+  testWidgets('the library list also shows a renamed title verbatim', (
+    tester,
+  ) async {
     // The library screen is a tab body — it brings no Material of its own.
-    await tester.pumpWidget(ProviderScope(
-        child: _app(const Scaffold(body: LibraryScreen()))));
+    await tester.pumpWidget(
+      ProviderScope(child: _app(const Scaffold(body: LibraryScreen()))),
+    );
     await tester.pumpAndSettle();
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(LibraryScreen)));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryScreen)),
+    );
     await container.read(libraryProvider.future);
     await container.read(libraryProvider.notifier).add(_session('a', 'C · G'));
     await container.read(libraryProvider.notifier).rename('a', 'Campfire riff');

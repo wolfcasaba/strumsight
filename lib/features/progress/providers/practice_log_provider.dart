@@ -69,9 +69,7 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
     _dirty = true;
     final next = [...state, entry];
     // Bound the blob — drop the oldest once over the cap.
-    state = next.length > _cap
-        ? next.sublist(next.length - _cap)
-        : next;
+    state = next.length > _cap ? next.sublist(next.length - _cap) : next;
     await _loaded.future; // never write over an unread disk blob
     await _write();
   }
@@ -91,4 +89,5 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
 
 final practiceLogProvider =
     NotifierProvider<PracticeLogController, List<PracticeEntry>>(
-        PracticeLogController.new);
+      PracticeLogController.new,
+    );

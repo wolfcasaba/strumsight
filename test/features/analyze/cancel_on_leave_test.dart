@@ -38,21 +38,25 @@ void main() {
     expect(container.read(analyzeControllerProvider).phase, AnalyzePhase.idle);
   });
 
-  testWidgets('switching tabs away from a recording Analyze cancels it',
-      (tester) async {
+  testWidgets('switching tabs away from a recording Analyze cancels it', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        strumEngineProvider.overrideWithValue(engine),
-        analyzeControllerProvider.overrideWith(_RecordingStub.new),
-      ],
-      child: const StrumSightApp(),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          strumEngineProvider.overrideWithValue(engine),
+          analyzeControllerProvider.overrideWith(_RecordingStub.new),
+        ],
+        child: const StrumSightApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(StrumSightApp)));
+      tester.element(find.byType(StrumSightApp)),
+    );
 
     // Mount the Analyze screen (it believes it is recording). Bounded pumps:
     // the recording phase runs a periodic UI ticker, so pumpAndSettle would
@@ -63,8 +67,10 @@ void main() {
     // The screen must really be MOUNTED (the phase alone is the stub's
     // build value, true even without navigation).
     expect(find.text('Playing — StrumSight is listening…'), findsOneWidget);
-    expect(container.read(analyzeControllerProvider).phase,
-        AnalyzePhase.recording);
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.recording,
+    );
 
     // …then leave: the disposed screen must cancel the take. The old page
     // unmounts only when the route transition FINISHES — pump past it.
@@ -72,7 +78,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(milliseconds: 50));
-    expect(container.read(analyzeControllerProvider).phase, AnalyzePhase.idle,
-        reason: 'the mic must not stay hot behind another tab');
+    expect(
+      container.read(analyzeControllerProvider).phase,
+      AnalyzePhase.idle,
+      reason: 'the mic must not stay hot behind another tab',
+    );
   });
 }

@@ -27,20 +27,22 @@ void main() {
     expect(c.read(streakProvider).current, 2);
   });
 
-  test('streak persists across a fresh controller (shared_preferences)',
-      () async {
-    final c1 = ProviderContainer();
-    await c1.read(streakProvider.notifier).recordPracticeToday(
-          DateTime(2026, 7, 9),
-        );
-    expect(c1.read(streakProvider).current, 1);
-    c1.dispose();
+  test(
+    'streak persists across a fresh controller (shared_preferences)',
+    () async {
+      final c1 = ProviderContainer();
+      await c1
+          .read(streakProvider.notifier)
+          .recordPracticeToday(DateTime(2026, 7, 9));
+      expect(c1.read(streakProvider).current, 1);
+      c1.dispose();
 
-    // A brand-new container must reload the persisted streak.
-    final c2 = ProviderContainer();
-    addTearDown(c2.dispose);
-    c2.read(streakProvider); // trigger build → async _load
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(c2.read(streakProvider).current, 1);
-  });
+      // A brand-new container must reload the persisted streak.
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      c2.read(streakProvider); // trigger build → async _load
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(c2.read(streakProvider).current, 1);
+    },
+  );
 }

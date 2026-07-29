@@ -19,13 +19,15 @@ void main() {
   testWidgets('a chord-library tile is one node with BOTH the fingering label '
       'and a tap action', (tester) async {
     final handle = tester.ensureSemantics();
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // The C tile: its accessible node must speak the fingering AND be
@@ -38,7 +40,10 @@ void main() {
     final hasTap = data.hasAction(SemanticsAction.tap);
     handle.dispose();
 
-    expect(hasTap, isTrue,
-        reason: 'tap-to-hear must be reachable on the labelled node');
+    expect(
+      hasTap,
+      isTrue,
+      reason: 'tap-to-hear must be reachable on the labelled node',
+    );
   });
 }

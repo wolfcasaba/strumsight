@@ -19,12 +19,12 @@ class LogMelExtractor {
     this.hop = 160,
     this.nMels = 128,
     this.fMin = 30.0,
-  })  : _fft = FFT(nFft),
-        _hann = Float64List(nFft),
-        _windowed = Float64List(nFft),
-        _power = Float64List(nFft ~/ 2 + 1),
-        _filterStart = Int32List(nMels),
-        _filterWeights = List.generate(nMels, (_) => Float64List(0)) {
+  }) : _fft = FFT(nFft),
+       _hann = Float64List(nFft),
+       _windowed = Float64List(nFft),
+       _power = Float64List(nFft ~/ 2 + 1),
+       _filterStart = Int32List(nMels),
+       _filterWeights = List.generate(nMels, (_) => Float64List(0)) {
     // np.hanning: symmetric Hann, denominator N-1 (matches ChromaExtractor).
     for (var i = 0; i < nFft; i++) {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (nFft - 1));
@@ -48,8 +48,10 @@ class LogMelExtractor {
   final Int32List _filterStart;
   final List<Float64List> _filterWeights;
 
-  static double _hzToMel(double f) => 2595.0 * (math.log(1.0 + f / 700.0) / math.ln10);
-  static double _melToHz(double m) => 700.0 * (math.pow(10.0, m / 2595.0) - 1.0);
+  static double _hzToMel(double f) =>
+      2595.0 * (math.log(1.0 + f / 700.0) / math.ln10);
+  static double _melToHz(double m) =>
+      700.0 * (math.pow(10.0, m / 2595.0) - 1.0);
 
   void _buildFilterbank() {
     final nBins = nFft ~/ 2 + 1;
@@ -121,9 +123,8 @@ class LogMelExtractor {
     final n = 1 + (pcm.length - nFft) ~/ hop;
     return List.generate(
       n,
-      (i) => processFrame(
-        Float64List.sublistView(pcm, i * hop, i * hop + nFft),
-      ),
+      (i) =>
+          processFrame(Float64List.sublistView(pcm, i * hop, i * hop + nFft)),
     );
   }
 }

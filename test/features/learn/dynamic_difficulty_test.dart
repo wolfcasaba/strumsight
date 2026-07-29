@@ -8,17 +8,21 @@ import 'package:strumsight/features/live/model/strum.dart';
 /// clean hit resets — a struggling player gets a hand, a recovering one
 /// doesn't get nagged.
 Lesson _lesson() => Lesson(
-      id: 'dd',
-      name: 'DD',
-      bpm: 60,
-      chords: const ['C', 'C'],
-      pattern: const [
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-      ],
-    );
+  id: 'dd',
+  name: 'DD',
+  bpm: 60,
+  chords: const ['C', 'C'],
+  pattern: const [
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+  ],
+);
 
 void main() {
   test('4 consecutive failures raise the suggestion', () {

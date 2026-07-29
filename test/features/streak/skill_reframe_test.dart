@@ -29,48 +29,56 @@ void main() {
   final today = StreakLogic.epochDayOf(now);
 
   Widget app(List<PracticeEntry> entries) => ProviderScope(
-        overrides: [
-          practiceLogProvider.overrideWith(() => _SeededLog(entries)),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: StreakScreen(now: now),
-        ),
-      );
+    overrides: [practiceLogProvider.overrideWith(() => _SeededLog(entries))],
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: StreakScreen(now: now),
+    ),
+  );
 
-  testWidgets('shows skill stats with an accuracy trend arrow',
-      (tester) async {
-    await tester.pumpWidget(app([
-      // Last week: 70% accuracy.
-      PracticeEntry(
+  testWidgets('shows skill stats with an accuracy trend arrow', (tester) async {
+    await tester.pumpWidget(
+      app([
+        // Last week: 70% accuracy.
+        PracticeEntry(
           day: today - 8,
           source: PracticeSource.learn,
           seconds: 300,
           strokes: 50,
-          directionAccuracy: 0.7),
-      // This week: 90% — improving.
-      PracticeEntry(
+          directionAccuracy: 0.7,
+        ),
+        // This week: 90% — improving.
+        PracticeEntry(
           day: today - 1,
           source: PracticeSource.learn,
           seconds: 600,
           strokes: 120,
-          directionAccuracy: 0.9),
-    ]));
+          directionAccuracy: 0.9,
+        ),
+      ]),
+    );
     await tester.pump();
 
     expect(find.text('YOUR SKILL'), findsOneWidget);
     expect(find.text('170'), findsOneWidget); // total strums, all time
     expect(find.text('10 min'), findsOneWidget); // this week only
-    expect(find.text('90% ▲'), findsOneWidget,
-        reason: 'this week beat last week — the trend must say so');
+    expect(
+      find.text('90% ▲'),
+      findsOneWidget,
+      reason: 'this week beat last week — the trend must say so',
+    );
   });
 
-  testWidgets('the skill section hides while there is nothing built yet',
-      (tester) async {
+  testWidgets('the skill section hides while there is nothing built yet', (
+    tester,
+  ) async {
     await tester.pumpWidget(app(const []));
     await tester.pump();
-    expect(find.text('YOUR SKILL'), findsNothing,
-        reason: 'zeros would demotivate — hide until real practice exists');
+    expect(
+      find.text('YOUR SKILL'),
+      findsNothing,
+      reason: 'zeros would demotivate — hide until real practice exists',
+    );
   });
 }

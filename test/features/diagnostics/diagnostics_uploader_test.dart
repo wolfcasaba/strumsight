@@ -29,7 +29,8 @@ class _FakeAdapter implements HttpClientAdapter {
     if (requestStream != null) {
       final chunks = await requestStream.toList();
       lastBody = Uint8List.fromList(
-          chunks.expand((c) => c).toList(growable: false));
+        chunks.expand((c) => c).toList(growable: false),
+      );
     }
     if (throwError) {
       throw DioException(
@@ -51,14 +52,12 @@ class _FakeAdapter implements HttpClientAdapter {
 }
 
 DiagnosticsSession _session() => const DiagnosticsSession(
-      sessionId: 'sid-1',
-      appVersion: '1.0.0+1',
-      device: 'android',
-      startedAt: '2026-07-14T00:00:00.000Z',
-      events: [
-        DiagnosticsEvent(tSec: 0, mlChord: 'C', dspChord: 'C', agree: true),
-      ],
-    );
+  sessionId: 'sid-1',
+  appVersion: '1.0.0+1',
+  device: 'android',
+  startedAt: '2026-07-14T00:00:00.000Z',
+  events: [DiagnosticsEvent(tSec: 0, mlChord: 'C', dspChord: 'C', agree: true)],
+);
 
 Dio _dioWith(_FakeAdapter adapter) {
   final dio = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
@@ -71,8 +70,11 @@ void main() {
     final adapter = _FakeAdapter(status: 200);
     final uploader = DiagnosticsUploader(dio: _dioWith(adapter));
 
-    final status = await uploader.upload(_session(),
-        appVersion: '1.0.0+1', device: 'android');
+    final status = await uploader.upload(
+      _session(),
+      appVersion: '1.0.0+1',
+      device: 'android',
+    );
 
     expect(status, DiagnosticsUploadStatus.uploaded);
     expect(adapter.calls, 1);

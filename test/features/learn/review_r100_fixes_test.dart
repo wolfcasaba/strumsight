@@ -13,26 +13,28 @@ import '../../support/fake_engines.dart';
 
 /// Round 100 — the two RISK findings of the sprint-88–99 adversarial review.
 LiveFrame _strumFrame(int seq) => LiveFrame(
-      current: null,
-      next: null,
-      latestStrum: const Strum(direction: StrumDirection.down, confidence: 1),
-      bar: const [],
-      bpm: 0,
-      inputLevel: 0.5,
-      tuningHz: 440,
-      listening: true,
-      strumSeq: seq,
-    );
+  current: null,
+  next: null,
+  latestStrum: const Strum(direction: StrumDirection.down, confidence: 1),
+  bar: const [],
+  bpm: 0,
+  inputLevel: 0.5,
+  tuningHz: 440,
+  listening: true,
+  strumSeq: seq,
+);
 
 Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
+    );
 
 Future<void> _playToPass(WidgetTester tester, FakeStrumEngine engine) async {
   await tester.tap(find.text('Play'));
@@ -42,8 +44,9 @@ Future<void> _playToPass(WidgetTester tester, FakeStrumEngine engine) async {
   var seq = 0;
   for (var k = 0; k < 16; k++) {
     final target = (4 + k) * spb + 0.01;
-    await tester
-        .pump(Duration(microseconds: ((target - elapsed) * 1e6).round()));
+    await tester.pump(
+      Duration(microseconds: ((target - elapsed) * 1e6).round()),
+    );
     elapsed = target;
     engine.emit(_strumFrame(++seq));
     await tester.pump();
@@ -71,8 +74,11 @@ void main() {
     await _playToPass(tester, engine);
 
     expect(find.text('Passed! 🎉'), findsOneWidget);
-    expect(find.text('Next lesson'), findsNothing,
-        reason: 'Easy passes must not walk a locked curriculum');
+    expect(
+      find.text('Next lesson'),
+      findsNothing,
+      reason: 'Easy passes must not walk a locked curriculum',
+    );
   });
 
   testWidgets('switching to Jam mid-play releases the mic — the frame '
@@ -91,7 +97,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(engine.stopCalls, greaterThan(0),
-        reason: 'jam mode must not keep the mic open');
+    expect(
+      engine.stopCalls,
+      greaterThan(0),
+      reason: 'jam mode must not keep the mic open',
+    );
   });
 }

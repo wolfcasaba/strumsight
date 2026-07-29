@@ -29,28 +29,38 @@ void main() {
     final recorder = ClipRecorder();
     final result = await recorder.start();
     expect(result, MicStart.failed);
-    expect(recorder.isRecording, isFalse,
-        reason: 'a failed start must not leave the recorder "recording"');
+    expect(
+      recorder.isRecording,
+      isFalse,
+      reason: 'a failed start must not leave the recorder "recording"',
+    );
     // Retrying still reports failure honestly (not a stuck "already on").
     expect(await recorder.start(), MicStart.failed);
   });
 
   testWidgets('the micError phase shows the retry UI, not the permission '
       'copy', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [analyzeControllerProvider.overrideWith(_MicErrorStub.new)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: AnalyzeScreen()),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [analyzeControllerProvider.overrideWith(_MicErrorStub.new)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: AnalyzeScreen()),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining("Couldn't start the microphone"),
-        findsOneWidget);
+    expect(
+      find.textContaining("Couldn't start the microphone"),
+      findsOneWidget,
+    );
     expect(find.text('Retry'), findsOneWidget);
-    expect(find.textContaining('needs the microphone'), findsNothing,
-        reason: 'a busy mic is not a permission problem');
+    expect(
+      find.textContaining('needs the microphone'),
+      findsNothing,
+      reason: 'a busy mic is not a permission problem',
+    );
   });
 }

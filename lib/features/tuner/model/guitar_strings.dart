@@ -38,14 +38,17 @@ class GuitarStrings {
   /// the boundary between two strings is their geometric mean), or null for
   /// silence / far-out-of-range pitches. Searches [strings] (defaults to
   /// standard tuning; pass the selected tuning's set — round 89).
-  static GuitarString? nearest(double freqHz,
-      {int a4 = 440, List<GuitarString> strings = standard}) {
+  static GuitarString? nearest(
+    double freqHz, {
+    int a4 = 440,
+    List<GuitarString> strings = standard,
+  }) {
     if (freqHz <= 0) return null;
     GuitarString? best;
     var bestDist = double.infinity;
     for (final s in strings) {
-      final dist =
-          (12 * (math.log(freqHz / s.frequencyHz(a4)) / math.ln2)).abs();
+      final dist = (12 * (math.log(freqHz / s.frequencyHz(a4)) / math.ln2))
+          .abs();
       if (dist < bestDist) {
         bestDist = dist;
         best = s;

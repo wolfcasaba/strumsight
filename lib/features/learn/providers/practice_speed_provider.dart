@@ -47,6 +47,6 @@ class PracticeSpeedController extends Notifier<double> {
   }
 }
 
-final practiceSpeedProvider =
-    NotifierProvider<PracticeSpeedController, double>(
-        PracticeSpeedController.new);
+final practiceSpeedProvider = NotifierProvider<PracticeSpeedController, double>(
+  PracticeSpeedController.new,
+);

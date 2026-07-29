@@ -36,43 +36,52 @@ const _song = Song(
   id: 'a',
   name: 'First Song',
   chords: ['C', 'G'],
-  pattern: [StrumDirection.down, null, StrumDirection.down, null, //
-    StrumDirection.down, null, StrumDirection.down, null],
+  pattern: [
+    StrumDirection.down, null, StrumDirection.down, null, //
+    StrumDirection.down, null, StrumDirection.down, null,
+  ],
   bpm: 100,
 );
 
-Widget _app(Widget home,
-        {List<Song> songs = const [], List<Setlist> setlists = const []}) =>
-    ProviderScope(
-      overrides: [
-        songsProvider.overrideWith(() => _SeededSongs(songs)),
-        setlistsProvider.overrideWith(() => _SeededSetlists(setlists)),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: home,
-      ),
-    );
+Widget _app(
+  Widget home, {
+  List<Song> songs = const [],
+  List<Setlist> setlists = const [],
+}) => ProviderScope(
+  overrides: [
+    songsProvider.overrideWith(() => _SeededSongs(songs)),
+    setlistsProvider.overrideWith(() => _SeededSetlists(setlists)),
+  ],
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: home,
+  ),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('empty setlists shows the group-your-songs nudge', (tester) async {
+  testWidgets('empty setlists shows the group-your-songs nudge', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(const SetlistListScreen()));
     await tester.pump();
     expect(find.textContaining('Group your songs'), findsOneWidget);
   });
 
-  testWidgets('detail shows songs, Play set enabled, remove works',
-      (tester) async {
+  testWidgets('detail shows songs, Play set enabled, remove works', (
+    tester,
+  ) async {
     const set = Setlist(id: 's', name: 'My Gig', songIds: ['a']);
-    await tester.pumpWidget(_app(
-      const SetlistDetailScreen(setlistId: 's'),
-      songs: [_song],
-      setlists: [set],
-    ));
+    await tester.pumpWidget(
+      _app(
+        const SetlistDetailScreen(setlistId: 's'),
+        songs: [_song],
+        setlists: [set],
+      ),
+    );
     await tester.pump();
 
     expect(find.text('First Song'), findsOneWidget);
@@ -87,11 +96,13 @@ void main() {
 
   testWidgets('Play set launches the combined lesson', (tester) async {
     const set = Setlist(id: 's', name: 'My Gig', songIds: ['a']);
-    await tester.pumpWidget(_app(
-      const SetlistDetailScreen(setlistId: 's'),
-      songs: [_song],
-      setlists: [set],
-    ));
+    await tester.pumpWidget(
+      _app(
+        const SetlistDetailScreen(setlistId: 's'),
+        songs: [_song],
+        setlists: [set],
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Play set'));

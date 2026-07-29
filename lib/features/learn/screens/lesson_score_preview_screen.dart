@@ -52,8 +52,9 @@ class _LessonScorePreviewScreenState extends State<LessonScorePreviewScreen> {
           maxCombo: widget.maxCombo,
         ),
         fileName: ShareContent.lessonFileName(widget.lesson.id),
-        sharePositionOrigin:
-            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -98,7 +99,8 @@ class _LessonScorePreviewScreenState extends State<LessonScorePreviewScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.ios_share, size: 20),
                   label: Text(l10n.shareCardButton),
                   style: FilledButton.styleFrom(

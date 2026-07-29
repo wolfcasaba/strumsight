@@ -47,8 +47,9 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
           averageAccuracy: widget.recap.averageAccuracy,
         ),
         fileName: ShareContent.wrappedFileName(widget.today),
-        sharePositionOrigin:
-            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
       );
     } finally {
       if (mounted) setState(() => _busy = false);

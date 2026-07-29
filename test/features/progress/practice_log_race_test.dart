@@ -14,11 +14,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   PracticeEntry entry(int day, int seconds) => PracticeEntry(
-        day: day,
-        source: PracticeSource.live,
-        seconds: seconds,
-        strokes: 10,
-      );
+    day: day,
+    source: PracticeSource.live,
+    seconds: seconds,
+    strokes: 10,
+  );
 
   test('a record racing the initial load MERGES with disk history', () async {
     final old = entry(20000, 300);
@@ -37,15 +37,21 @@ void main() {
     await Future<void>.delayed(Duration.zero); // let the load settle too
 
     final state = c.read(practiceLogProvider);
-    expect(state.map((e) => e.day), containsAll([20000, 20001]),
-        reason: 'the disk history must survive a racing record');
+    expect(
+      state.map((e) => e.day),
+      containsAll([20000, 20001]),
+      reason: 'the disk history must survive a racing record',
+    );
 
     // The persisted blob must also carry BOTH entries.
     final prefs = await SharedPreferences.getInstance();
     final persisted = (jsonDecode(prefs.getString('practice_log_v1')!) as List)
         .map((e) => PracticeEntry.fromJson(e as Map<String, dynamic>))
         .toList();
-    expect(persisted.map((e) => e.day), containsAll([20000, 20001]),
-        reason: 'the disk write must not clobber prior history');
+    expect(
+      persisted.map((e) => e.day),
+      containsAll([20000, 20001]),
+      reason: 'the disk write must not clobber prior history',
+    );
   });
 }

@@ -39,8 +39,9 @@ Future<void> _openSettings(
 }
 
 void main() {
-  testWidgets('Account section is hidden while the account layer is disabled',
-      (tester) async {
+  testWidgets('Account section is hidden while the account layer is disabled', (
+    tester,
+  ) async {
     await _openSettings(tester, accountEnabled: false);
 
     expect(find.text('Sign in'), findsNothing);
@@ -49,16 +50,18 @@ void main() {
     expect(find.text('ACCOUNT'), findsNothing);
   });
 
-  testWidgets('Account section shows Sign in when logged out (enabled)',
-      (tester) async {
+  testWidgets('Account section shows Sign in when logged out (enabled)', (
+    tester,
+  ) async {
     await _openSettings(tester);
 
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.textContaining('sync your settings'), findsOneWidget);
   });
 
-  testWidgets('Account section shows the email + Sign out when logged in',
-      (tester) async {
+  testWidgets('Account section shows the email + Sign out when logged in', (
+    tester,
+  ) async {
     await _openSettings(tester, token: 'stored-token');
 
     expect(find.textContaining('player@strumsight.app'), findsOneWidget);

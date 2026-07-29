@@ -15,19 +15,24 @@ void main() {
     expect(analyzer.analyze([0.1, 0.2], 0).durationSec, 0);
   });
 
-  test('a SILENT clip is honest — real duration, but no fabricated content',
-      () {
-    // The degenerate user path: tap Record, sit in silence, tap Stop. The
-    // analyzer must report the true length yet invent NO chords or strums
-    // (the integration-level twin of the "white noise ≠ chord" property).
-    final silence = List<double>.filled(44100 * 2, 0.0); // 2 s of digital 0
-    final result = analyzer.analyze(silence, 44100);
-    expect(result.durationSec, closeTo(2.0, 0.001),
-        reason: 'the clip length is real even when its content is empty');
-    expect(result.chords, isEmpty, reason: 'silence is not a chord');
-    expect(result.strums, isEmpty, reason: 'silence has no strums');
-    expect(result.bpm, 0);
-  });
+  test(
+    'a SILENT clip is honest — real duration, but no fabricated content',
+    () {
+      // The degenerate user path: tap Record, sit in silence, tap Stop. The
+      // analyzer must report the true length yet invent NO chords or strums
+      // (the integration-level twin of the "white noise ≠ chord" property).
+      final silence = List<double>.filled(44100 * 2, 0.0); // 2 s of digital 0
+      final result = analyzer.analyze(silence, 44100);
+      expect(
+        result.durationSec,
+        closeTo(2.0, 0.001),
+        reason: 'the clip length is real even when its content is empty',
+      );
+      expect(result.chords, isEmpty, reason: 'silence is not a chord');
+      expect(result.strums, isEmpty, reason: 'silence has no strums');
+      expect(result.bpm, 0);
+    },
+  );
 
   test('a clip shorter than one analysis window does not crash', () {
     // Stop tapped almost instantly → a handful of samples, fewer than the
@@ -50,8 +55,10 @@ void main() {
     expect(result.upCount, greaterThan(0));
     // Strum marks are in chronological order and inside the clip.
     for (var i = 1; i < result.strums.length; i++) {
-      expect(result.strums[i].timeSec,
-          greaterThanOrEqualTo(result.strums[i - 1].timeSec));
+      expect(
+        result.strums[i].timeSec,
+        greaterThanOrEqualTo(result.strums[i - 1].timeSec),
+      );
     }
     expect(result.strums.last.timeSec, lessThanOrEqualTo(result.durationSec));
   });
@@ -74,8 +81,10 @@ void main() {
     expect(result.durationSec, closeTo(3.0, 0.3));
     // Chord segments are contiguous and ordered.
     for (var i = 1; i < result.chords.length; i++) {
-      expect(result.chords[i].startSec,
-          greaterThanOrEqualTo(result.chords[i - 1].startSec));
+      expect(
+        result.chords[i].startSec,
+        greaterThanOrEqualTo(result.chords[i - 1].startSec),
+      );
     }
   });
 
@@ -86,14 +95,21 @@ void main() {
       chords: [TimelineChord(label: 'C', startSec: 0, endSec: 1.2)],
       strums: [
         TimelineStrum(
-            direction: StrumDirection.down, timeSec: 0.5, confidence: 0.8),
+          direction: StrumDirection.down,
+          timeSec: 0.5,
+          confidence: 0.8,
+        ),
         TimelineStrum(
-            direction: StrumDirection.up, timeSec: 1.0, confidence: 0.4),
+          direction: StrumDirection.up,
+          timeSec: 1.0,
+          confidence: 0.4,
+        ),
       ],
     );
 
-    final back =
-        AnalyzeResult.fromJson(jsonDecode(jsonEncode(r.toJson())) as Map<String, dynamic>);
+    final back = AnalyzeResult.fromJson(
+      jsonDecode(jsonEncode(r.toJson())) as Map<String, dynamic>,
+    );
 
     expect(back.durationSec, 2.5);
     expect(back.bpm, 120);
@@ -117,8 +133,11 @@ void main() {
     expect(result.strums, hasLength(4));
     for (var i = 0; i < 4; i++) {
       final expectedT = 0.1 + i * 0.5;
-      expect((result.strums[i].timeSec - expectedT).abs(), lessThan(0.025),
-          reason: 'strum $i at ${result.strums[i].timeSec}');
+      expect(
+        (result.strums[i].timeSec - expectedT).abs(),
+        lessThan(0.025),
+        reason: 'strum $i at ${result.strums[i].timeSec}',
+      );
     }
   });
 }

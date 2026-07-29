@@ -10,15 +10,14 @@ void main() {
     int strokes = 0,
     int chords = 0,
     double? dir,
-  }) =>
-      PracticeEntry(
-        day: day,
-        source: source,
-        seconds: seconds,
-        strokes: strokes,
-        chords: chords,
-        directionAccuracy: dir,
-      );
+  }) => PracticeEntry(
+    day: day,
+    source: source,
+    seconds: seconds,
+    strokes: strokes,
+    chords: chords,
+    directionAccuracy: dir,
+  );
 
   test('totals fold seconds / strokes / distinct days', () {
     final stats = PracticeStats([

@@ -29,12 +29,17 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 
 void main() {
   testWidgets('ChordDisplay shows the current and next chord', (tester) async {
-    await _pump(tester, const ChordDisplay(current: Chord('C'), next: Chord('G')));
+    await _pump(
+      tester,
+      const ChordDisplay(current: Chord('C'), next: Chord('G')),
+    );
     expect(find.text('C'), findsOneWidget);
     expect(find.textContaining('G'), findsWidgets); // "NEXT · G"
   });
 
-  testWidgets('ConfidencePill shows direction word and percentage', (tester) async {
+  testWidgets('ConfidencePill shows direction word and percentage', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ConfidencePill(

@@ -27,13 +27,19 @@ void main() {
     test('P(no-strum) below the threshold emits the winning direction', () {
       final pNo = thr / 2; // strictly below thr
       final rest = 1 - pNo;
-      final down =
-          LiveCrnnStrumClassifier.classifyProbs([0.8 * rest, 0.2 * rest, pNo]);
+      final down = LiveCrnnStrumClassifier.classifyProbs([
+        0.8 * rest,
+        0.2 * rest,
+        pNo,
+      ]);
       expect(down.suppressed, isFalse);
       expect(down.direction, StrumDirection.down);
 
-      final up =
-          LiveCrnnStrumClassifier.classifyProbs([0.2 * rest, 0.8 * rest, pNo]);
+      final up = LiveCrnnStrumClassifier.classifyProbs([
+        0.2 * rest,
+        0.8 * rest,
+        pNo,
+      ]);
       expect(up.suppressed, isFalse);
       expect(up.direction, StrumDirection.up);
     });
@@ -41,21 +47,29 @@ void main() {
     test('direction confidence stays in the r170 calibrated band', () {
       final pNo = thr / 2;
       final rest = 1 - pNo;
-      final c =
-          LiveCrnnStrumClassifier.classifyProbs([0.9 * rest, 0.1 * rest, pNo]);
-      expect(c.confidence, inInclusiveRange(0.5, 0.9),
-          reason: 'the r170 down/up calibration is preserved for 3-class');
+      final c = LiveCrnnStrumClassifier.classifyProbs([
+        0.9 * rest,
+        0.1 * rest,
+        pNo,
+      ]);
+      expect(
+        c.confidence,
+        inInclusiveRange(0.5, 0.9),
+        reason: 'the r170 down/up calibration is preserved for 3-class',
+      );
     });
 
-    test('a 2-class prob vector never suppresses (r139 fallback behaviour)',
-        () {
-      final down = LiveCrnnStrumClassifier.classifyProbs([0.7, 0.3]);
-      expect(down.suppressed, isFalse);
-      expect(down.direction, StrumDirection.down);
+    test(
+      'a 2-class prob vector never suppresses (r139 fallback behaviour)',
+      () {
+        final down = LiveCrnnStrumClassifier.classifyProbs([0.7, 0.3]);
+        expect(down.suppressed, isFalse);
+        expect(down.direction, StrumDirection.down);
 
-      final up = LiveCrnnStrumClassifier.classifyProbs([0.3, 0.7]);
-      expect(up.suppressed, isFalse);
-      expect(up.direction, StrumDirection.up);
-    });
+        final up = LiveCrnnStrumClassifier.classifyProbs([0.3, 0.7]);
+        expect(up.suppressed, isFalse);
+        expect(up.direction, StrumDirection.up);
+      },
+    );
   });
 }

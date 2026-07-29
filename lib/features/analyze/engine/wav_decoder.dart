@@ -39,10 +39,17 @@ abstract final class WavDecoder {
         sampleRate = bd.getUint32(body + 4, Endian.little);
         bitsPerSample = bd.getUint16(body + 14, Endian.little);
       } else if (id == 'data') {
-        final dataEnd =
-            (body + size <= bytes.length) ? body + size : bytes.length;
+        final dataEnd = (body + size <= bytes.length)
+            ? body + size
+            : bytes.length;
         pcm = _readSamples(
-            bd, body, dataEnd, format ?? 1, channels, bitsPerSample);
+          bd,
+          body,
+          dataEnd,
+          format ?? 1,
+          channels,
+          bitsPerSample,
+        );
       }
       // Chunks are word-aligned: an odd size carries a pad byte.
       off = body + size + (size & 1);
@@ -52,8 +59,14 @@ abstract final class WavDecoder {
     return (pcm, sampleRate);
   }
 
-  static List<double>? _readSamples(ByteData bd, int start, int end, int format,
-      int channels, int bitsPerSample) {
+  static List<double>? _readSamples(
+    ByteData bd,
+    int start,
+    int end,
+    int format,
+    int channels,
+    int bitsPerSample,
+  ) {
     if (channels < 1) return null;
     if (format == 1 && bitsPerSample == 16) {
       final frameBytes = 2 * channels;

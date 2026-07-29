@@ -31,7 +31,11 @@ void main() {
 
   test('streak: a cold-start practice EXTENDS the loaded streak', () async {
     const old = StreakData(
-        current: 7, longest: 9, lastPracticeDay: 20643, freezes: 1);
+      current: 7,
+      longest: 9,
+      lastPracticeDay: 20643,
+      freezes: 1,
+    );
     SharedPreferences.setMockInitialValues({
       'practice_streak_v1': jsonEncode(old.toJson()),
     });
@@ -39,12 +43,18 @@ void main() {
     // Record for the day AFTER the stored last practice — before load lands.
     final advanced = await c
         .read(streakProvider.notifier)
-        .recordPracticeToday(DateTime.fromMillisecondsSinceEpoch(
+        .recordPracticeToday(
+          DateTime.fromMillisecondsSinceEpoch(
             (20644 * 24 * 3600 + 12 * 3600) * 1000,
-            isUtc: true));
+            isUtc: true,
+          ),
+        );
     expect(advanced, isTrue);
-    expect(c.read(streakProvider).current, 8,
-        reason: 'a 7-day streak must become 8, never reset to 1');
+    expect(
+      c.read(streakProvider).current,
+      8,
+      reason: 'a 7-day streak must become 8, never reset to 1',
+    );
   });
 
   test('lesson progress: a cold-start record keeps other lessons', () async {
@@ -54,29 +64,56 @@ void main() {
     final c = container();
     await c.read(lessonProgressProvider.notifier).record('new-lesson', 0.8);
     final map = c.read(lessonProgressProvider);
-    expect(map['old-lesson'], 0.9,
-        reason: 'other lessons\' stars must survive');
+    expect(
+      map['old-lesson'],
+      0.9,
+      reason: 'other lessons\' stars must survive',
+    );
     expect(map['new-lesson'], 0.8);
   });
 
   test('songs: a cold-start add keeps the saved songbook', () async {
     final old = Song(
-        id: 'old',
-        name: 'Old song',
-        chords: const ['C'],
-        pattern: const [StrumDirection.down, null, null, null, null, null, null, null],
-        bpm: 100);
+      id: 'old',
+      name: 'Old song',
+      chords: const ['C'],
+      pattern: const [
+        StrumDirection.down,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ],
+      bpm: 100,
+    );
     SharedPreferences.setMockInitialValues({
       'user_songs_v1': jsonEncode([old.toJson()]),
     });
     final c = container();
-    await c.read(songsProvider.notifier).add(
-        name: 'New song',
-        chords: const ['G'],
-        pattern: const [StrumDirection.down, null, null, null, null, null, null, null],
-        bpm: 90);
-    expect(c.read(songsProvider).map((s) => s.name),
-        containsAll(['Old song', 'New song']));
+    await c
+        .read(songsProvider.notifier)
+        .add(
+          name: 'New song',
+          chords: const ['G'],
+          pattern: const [
+            StrumDirection.down,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+          bpm: 90,
+        );
+    expect(
+      c.read(songsProvider).map((s) => s.name),
+      containsAll(['Old song', 'New song']),
+    );
   });
 
   test('setlists: a cold-start add keeps the saved sets', () async {
@@ -86,8 +123,10 @@ void main() {
     });
     final c = container();
     await c.read(setlistsProvider.notifier).add('New set');
-    expect(c.read(setlistsProvider).map((s) => s.name),
-        containsAll(['Old set', 'New set']));
+    expect(
+      c.read(setlistsProvider).map((s) => s.name),
+      containsAll(['Old set', 'New set']),
+    );
   });
 
   test('favourites: a cold-start toggle keeps other pins', () async {
@@ -118,7 +157,10 @@ void main() {
     );
     await c.read(libraryProvider.notifier).add(fresh);
     final list = c.read(libraryProvider).value!;
-    expect(list.map((s) => s.id), containsAll(['old', 'new']),
-        reason: 'the on-disk library must survive an add-from-Analyze');
+    expect(
+      list.map((s) => s.id),
+      containsAll(['old', 'new']),
+      reason: 'the on-disk library must survive an add-from-Analyze',
+    );
   });
 }

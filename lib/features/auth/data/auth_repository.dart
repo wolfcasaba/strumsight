@@ -40,7 +40,11 @@ class HttpAuthRepository implements AuthRepository {
   Future<String> login(String email, String password) =>
       _postForToken('/auth/login', email, password);
 
-  Future<String> _postForToken(String path, String email, String password) async {
+  Future<String> _postForToken(
+    String path,
+    String email,
+    String password,
+  ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
         path,

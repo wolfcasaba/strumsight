@@ -42,27 +42,27 @@ class PracticeEntry {
   final double? directionAccuracy;
 
   Map<String, dynamic> toJson() => {
-        'day': day,
-        'src': source.name,
-        'sec': seconds,
-        'str': strokes,
-        'chd': chords,
-        if (directionAccuracy != null) 'dir': directionAccuracy,
-      };
+    'day': day,
+    'src': source.name,
+    'sec': seconds,
+    'str': strokes,
+    'chd': chords,
+    if (directionAccuracy != null) 'dir': directionAccuracy,
+  };
 
   factory PracticeEntry.fromJson(Map<String, dynamic> j) => PracticeEntry(
-        day: (j['day'] as num).toInt(),
-        // Unknown/renamed source names degrade to `live` rather than throwing on
-        // an old persisted blob.
-        source: PracticeSource.values.firstWhere(
-          (s) => s.name == j['src'],
-          orElse: () => PracticeSource.live,
-        ),
-        seconds: (j['sec'] as num?)?.toInt() ?? 0,
-        strokes: (j['str'] as num?)?.toInt() ?? 0,
-        chords: (j['chd'] as num?)?.toInt() ?? 0,
-        directionAccuracy: (j['dir'] as num?)?.toDouble(),
-      );
+    day: (j['day'] as num).toInt(),
+    // Unknown/renamed source names degrade to `live` rather than throwing on
+    // an old persisted blob.
+    source: PracticeSource.values.firstWhere(
+      (s) => s.name == j['src'],
+      orElse: () => PracticeSource.live,
+    ),
+    seconds: (j['sec'] as num?)?.toInt() ?? 0,
+    strokes: (j['str'] as num?)?.toInt() ?? 0,
+    chords: (j['chd'] as num?)?.toInt() ?? 0,
+    directionAccuracy: (j['dir'] as num?)?.toDouble(),
+  );
 
   @override
   bool operator ==(Object other) =>

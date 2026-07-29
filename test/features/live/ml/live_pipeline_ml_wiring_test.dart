@@ -12,7 +12,8 @@ import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
 /// puts the CRNN behind the r139 seam; anything invalid keeps the heuristic.
 void main() {
   final bytes = Uint8List.fromList(
-      File('assets/ml/strum_crnn_live.bin').readAsBytesSync());
+    File('assets/ml/strum_crnn_live.bin').readAsBytesSync(),
+  );
 
   test('valid weights bytes put the live CRNN behind the seam', () {
     final p = LivePipeline(sampleRate: 44100, crnnWeights: bytes);

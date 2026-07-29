@@ -6,8 +6,9 @@ import 'package:strumsight/main.dart';
 import '../../support/fake_engines.dart';
 
 void main() {
-  testWidgets('Analyze tab shows the Record CTA (no more "coming soon")',
-      (tester) async {
+  testWidgets('Analyze tab shows the Record CTA (no more "coming soon")', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 

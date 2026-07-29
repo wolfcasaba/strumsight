@@ -33,46 +33,50 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('the highway draws with the calibrated audio↔display skew',
-      (tester) async {
+  testWidgets('the highway draws with the calibrated audio↔display skew', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        strumEngineProvider.overrideWithValue(engine),
-        // Audio 100 ms, visual 40 ms → skew 60 ms. First Strums is 70 BPM
-        // → 0.06 s × (70/60) beats = 0.07 beats drawn LATER.
-        inputLatencyProvider.overrideWith(() => _FixedMs(100)),
-        visualLatencyProvider.overrideWith(() => _FixedVisualMs(40)),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          strumEngineProvider.overrideWithValue(engine),
+          // Audio 100 ms, visual 40 ms → skew 60 ms. First Strums is 70 BPM
+          // → 0.06 s × (70/60) beats = 0.07 beats drawn LATER.
+          inputLatencyProvider.overrideWith(() => _FixedMs(100)),
+          visualLatencyProvider.overrideWith(() => _FixedVisualMs(40)),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
+    );
 
-    final highway =
-        tester.widget<LessonHighway>(find.byType(LessonHighway));
+    final highway = tester.widget<LessonHighway>(find.byType(LessonHighway));
     const truePlayhead = -4.0; // paused before start: −countIn beats
     final expected = truePlayhead - 0.06 * (Lessons.firstStrums.bpm / 60.0);
     expect(highway.playheadBeat, closeTo(expected, 1e-9));
   });
 
-  testWidgets('uncalibrated devices draw the true playhead (no shift)',
-      (tester) async {
+  testWidgets('uncalibrated devices draw the true playhead (no shift)', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
-    final highway =
-        tester.widget<LessonHighway>(find.byType(LessonHighway));
+    );
+    final highway = tester.widget<LessonHighway>(find.byType(LessonHighway));
     expect(highway.playheadBeat, closeTo(-4.0, 1e-9));
   });
 }

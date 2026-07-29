@@ -13,13 +13,15 @@ void main() {
 
   testWidgets('shows the streak state and today\'s challenge', (tester) async {
     final now = DateTime(2026, 7, 9);
-    await tester.pumpWidget(ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: StreakScreen(now: now),
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StreakScreen(now: now),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     // Default (no practice yet) → "No streak yet" + a start nudge.
@@ -33,8 +35,9 @@ void main() {
     // One arrow icon per stroke in the pattern.
     final arrows = tester
         .widgetList<Icon>(find.byType(Icon))
-        .where((i) =>
-            i.icon == Icons.arrow_downward || i.icon == Icons.arrow_upward)
+        .where(
+          (i) => i.icon == Icons.arrow_downward || i.icon == Icons.arrow_upward,
+        )
         .length;
     expect(arrows, challenge.pattern.length);
 

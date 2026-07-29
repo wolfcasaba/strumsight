@@ -8,9 +8,19 @@ void main() {
   const downbeats = <StrumDirection?>[d, null, d, null, d, null, d, null];
 
   const songA = Song(
-      id: 'a', name: 'A', chords: ['C', 'G'], pattern: downbeats, bpm: 100);
-  const songB =
-      Song(id: 'b', name: 'B', chords: ['Am'], pattern: downbeats, bpm: 120);
+    id: 'a',
+    name: 'A',
+    chords: ['C', 'G'],
+    pattern: downbeats,
+    bpm: 100,
+  );
+  const songB = Song(
+    id: 'b',
+    name: 'B',
+    chords: ['Am'],
+    pattern: downbeats,
+    bpm: 120,
+  );
 
   test('resolve preserves order and drops missing ids', () {
     const set = Setlist(id: 's', name: 'Set', songIds: ['b', 'ghost', 'a']);
@@ -20,8 +30,13 @@ void main() {
 
   test('combine concatenates events with a running beat offset', () {
     // Same-tempo songs → pure concatenation (no warp).
-    const b100 =
-        Song(id: 'b', name: 'B', chords: ['Am'], pattern: downbeats, bpm: 100);
+    const b100 = Song(
+      id: 'b',
+      name: 'B',
+      chords: ['Am'],
+      pattern: downbeats,
+      bpm: 100,
+    );
     const set = Setlist(id: 's', name: 'My Set', songIds: ['a', 'b']);
     final lesson = set.combine([songA, b100]);
     // A = 2 bars, B = 1 bar → 3 bars × 4 struck slots = 12 events, 12 beats.

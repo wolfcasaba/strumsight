@@ -97,7 +97,8 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.ios_share, size: 20),
                       label: Text(l10n.shareCardButton),
                       style: FilledButton.styleFrom(
@@ -110,11 +111,16 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       TextButton.icon(
-                        icon: const Icon(Icons.movie_creation_outlined, size: 18),
+                        icon: const Icon(
+                          Icons.movie_creation_outlined,
+                          size: 18,
+                        ),
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => StrumReelScreen(
-                                result: widget.result, capo: widget.capo),
+                              result: widget.result,
+                              capo: widget.capo,
+                            ),
                           ),
                         ),
                         label: Text(l10n.reelButton),

@@ -26,27 +26,44 @@ void main() {
     addTearDown(c2.dispose);
     c2.read(practiceSpeedProvider); // trigger load
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(c2.read(practiceSpeedProvider), 0.75,
-        reason: 'the drill tempo must stick across sessions');
+    expect(
+      c2.read(practiceSpeedProvider),
+      0.75,
+      reason: 'the drill tempo must stick across sessions',
+    );
   });
 
-  test('an off-grid speed is never stored (chips stay representable)', () async {
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    await c.read(practiceSpeedProvider.notifier).set(0.9); // not in options
-    expect(c.read(practiceSpeedProvider), 1.0, reason: 'rejected, stays default');
-  });
+  test(
+    'an off-grid speed is never stored (chips stay representable)',
+    () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      await c.read(practiceSpeedProvider.notifier).set(0.9); // not in options
+      expect(
+        c.read(practiceSpeedProvider),
+        1.0,
+        reason: 'rejected, stays default',
+      );
+    },
+  );
 
-  test('a late prefs load does not clobber a speed the user just picked',
-      () async {
-    // Seed a stored 0.5, then immediately set 0.75 before the async load runs.
-    SharedPreferences.setMockInitialValues({'practice_speed_v1': 0.5});
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    c.read(practiceSpeedProvider); // kicks off _load()
-    await c.read(practiceSpeedProvider.notifier).set(0.75); // user beats the load
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(c.read(practiceSpeedProvider), 0.75,
-        reason: 'the _userSet guard must win over a late stored value');
-  });
+  test(
+    'a late prefs load does not clobber a speed the user just picked',
+    () async {
+      // Seed a stored 0.5, then immediately set 0.75 before the async load runs.
+      SharedPreferences.setMockInitialValues({'practice_speed_v1': 0.5});
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      c.read(practiceSpeedProvider); // kicks off _load()
+      await c
+          .read(practiceSpeedProvider.notifier)
+          .set(0.75); // user beats the load
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(
+        c.read(practiceSpeedProvider),
+        0.75,
+        reason: 'the _userSet guard must win over a late stored value',
+      );
+    },
+  );
 }

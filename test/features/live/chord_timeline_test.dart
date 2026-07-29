@@ -33,16 +33,17 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 }
 
 ChordEvent _event(String label, StrumDirection? dir, int seq) => ChordEvent(
-      chord: Chord(label),
-      direction: dir,
-      confidence: 0.8,
-      seq: seq,
-      timeSec: seq.toDouble(),
-    );
+  chord: Chord(label),
+  direction: dir,
+  confidence: 0.8,
+  seq: seq,
+  timeSec: seq.toDouble(),
+);
 
 void main() {
-  testWidgets('empty events shows the idle "play a chord" prompt',
-      (tester) async {
+  testWidgets('empty events shows the idle "play a chord" prompt', (
+    tester,
+  ) async {
     await _pump(tester, const ChordTimeline(events: [], capo: 0));
     await tester.pumpAndSettle();
 
@@ -52,8 +53,9 @@ void main() {
     expect(find.text(l10n.liveWaitingForChord), findsOneWidget);
   });
 
-  testWidgets('renders each chord label with its strum arrow, newest as hero',
-      (tester) async {
+  testWidgets('renders each chord label with its strum arrow, newest as hero', (
+    tester,
+  ) async {
     final events = [
       _event('Am', StrumDirection.down, 0),
       _event('F', StrumDirection.up, 1),
@@ -85,8 +87,9 @@ void main() {
     expect(history, findsNWidgets(2));
   });
 
-  testWidgets('a beat-index change fires a finite pulse and settles cleanly',
-      (tester) async {
+  testWidgets('a beat-index change fires a finite pulse and settles cleanly', (
+    tester,
+  ) async {
     // Guards the r186 beat-pulse: a changing beat index must stay finite (no
     // repeating controller → pumpAndSettle terminates) and must NOT drop the
     // hero. The beat==0 unit path never exercises an actual beat change.
@@ -105,8 +108,9 @@ void main() {
     expect(find.text('Am'), findsOneWidget); // history untouched
   });
 
-  testWidgets('shows the next-ghost when a next chord is known',
-      (tester) async {
+  testWidgets('shows the next-ghost when a next chord is known', (
+    tester,
+  ) async {
     final events = [_event('C', StrumDirection.down, 0)];
     await _pump(
       tester,

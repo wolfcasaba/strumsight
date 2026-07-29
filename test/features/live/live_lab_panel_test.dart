@@ -21,8 +21,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('Live Lab panel is HIDDEN when Lab mode is off (default)',
-      (tester) async {
+  testWidgets('Live Lab panel is HIDDEN when Lab mode is off (default)', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
@@ -44,31 +45,34 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   });
 
-  testWidgets('Live Lab panel SHOWS with a capture button when Lab mode is on',
-      (tester) async {
-    final engine = FakeStrumEngine();
-    addTearDown(engine.dispose);
+  testWidgets(
+    'Live Lab panel SHOWS with a capture button when Lab mode is on',
+    (tester) async {
+      final engine = FakeStrumEngine();
+      addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          strumEngineProvider.overrideWithValue(engine),
-          labModeProvider.overrideWith(() => _FixedLabMode(true)),
-        ],
-        child: const StrumSightApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            strumEngineProvider.overrideWithValue(engine),
+            labModeProvider.overrideWith(() => _FixedLabMode(true)),
+          ],
+          child: const StrumSightApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Capture & analyze last ~60 s'), findsOneWidget);
-    // Lab on → the engine's rolling capture was enabled.
-    expect(engine.captureCalls, contains(true));
+      expect(find.text('Capture & analyze last ~60 s'), findsOneWidget);
+      // Lab on → the engine's rolling capture was enabled.
+      expect(engine.captureCalls, contains(true));
 
-    await tester.pump(const Duration(milliseconds: 400));
-  });
+      await tester.pump(const Duration(milliseconds: 400));
+    },
+  );
 
-  testWidgets('Capture with an empty mic buffer shows the "no audio yet" hint',
-      (tester) async {
+  testWidgets('Capture with an empty mic buffer shows the "no audio yet" hint', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine(); // fakePcm empty by default
     addTearDown(engine.dispose);
 

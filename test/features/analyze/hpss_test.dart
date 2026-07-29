@@ -16,7 +16,9 @@ List<Float64List> _synthetic({
   double percussive = 1.0,
 }) {
   final s = List<Float64List>.generate(
-      t, (_) => Float64List(f)..fillRange(0, f, base));
+    t,
+    (_) => Float64List(f)..fillRange(0, f, base),
+  );
   for (var i = 0; i < t; i++) {
     s[i][f0] += harmonic; // horizontal harmonic ridge
   }
@@ -51,8 +53,11 @@ void main() {
         harmOut += out[i][f0];
       }
       // The held note is horizontally smooth → mask ≈ 1 → energy preserved.
-      expect(harmOut / harmIn, greaterThan(0.9),
-          reason: 'harmonic ridge energy must be largely preserved');
+      expect(
+        harmOut / harmIn,
+        greaterThan(0.9),
+        reason: 'harmonic ridge energy must be largely preserved',
+      );
 
       // A single interior harmonic cell keeps essentially all its value.
       expect(out[5][f0] / s[5][f0], greaterThan(0.9));
@@ -65,8 +70,11 @@ void main() {
         percOut += out[t0][j];
       }
       // The drum hit is vertically smooth → mask ≈ 0 → energy killed.
-      expect(percOut / percIn, lessThan(0.05),
-          reason: 'percussive ridge energy must be strongly attenuated');
+      expect(
+        percOut / percIn,
+        lessThan(0.05),
+        reason: 'percussive ridge energy must be strongly attenuated',
+      );
 
       // A single interior percussive cell is knocked down to a tiny fraction.
       expect(out[t0][5] / s[t0][5], lessThan(0.05));
@@ -91,34 +99,38 @@ void main() {
       expect(identical(out[0], s[0]), isFalse);
     });
 
-    test('handles empty, single-frame and single-bin input without crashing',
-        () {
-      expect(Hpss.harmonicEnhance(const []), isEmpty);
+    test(
+      'handles empty, single-frame and single-bin input without crashing',
+      () {
+        expect(Hpss.harmonicEnhance(const []), isEmpty);
 
-      // Single frame: nothing to separate along time → a faithful copy.
-      final oneFrame = [Float64List.fromList([0.1, 0.9, 0.3, 0.7])];
-      final r1 = Hpss.harmonicEnhance(oneFrame);
-      expect(r1.length, 1);
-      expect(r1[0], orderedEquals(oneFrame[0]));
+        // Single frame: nothing to separate along time → a faithful copy.
+        final oneFrame = [
+          Float64List.fromList([0.1, 0.9, 0.3, 0.7]),
+        ];
+        final r1 = Hpss.harmonicEnhance(oneFrame);
+        expect(r1.length, 1);
+        expect(r1[0], orderedEquals(oneFrame[0]));
 
-      // Single bin per frame: nothing to separate along frequency → copy.
-      final oneBin = [
-        Float64List.fromList([0.2]),
-        Float64List.fromList([0.8]),
-        Float64List.fromList([0.5]),
-      ];
-      final r2 = Hpss.harmonicEnhance(oneBin);
-      expect(r2.length, 3);
-      for (var i = 0; i < 3; i++) {
-        expect(r2[i][0], oneBin[i][0]);
-      }
+        // Single bin per frame: nothing to separate along frequency → copy.
+        final oneBin = [
+          Float64List.fromList([0.2]),
+          Float64List.fromList([0.8]),
+          Float64List.fromList([0.5]),
+        ];
+        final r2 = Hpss.harmonicEnhance(oneBin);
+        expect(r2.length, 3);
+        for (var i = 0; i < 3; i++) {
+          expect(r2[i][0], oneBin[i][0]);
+        }
 
-      // Zero-width frames.
-      final zeroWide = [Float64List(0), Float64List(0)];
-      final r3 = Hpss.harmonicEnhance(zeroWide);
-      expect(r3.length, 2);
-      expect(r3[0], isEmpty);
-    });
+        // Zero-width frames.
+        final zeroWide = [Float64List(0), Float64List(0)];
+        final r3 = Hpss.harmonicEnhance(zeroWide);
+        expect(r3.length, 2);
+        expect(r3[0], isEmpty);
+      },
+    );
   });
 
   group('Hpss.harmonicMask / hardHarmonicMask', () {

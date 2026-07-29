@@ -25,15 +25,19 @@ void main() {
         final (pcm, sr) = readWav('$dataDir/recording_${id}_phone.wav');
         final events = readStrums('$dataDir/recording_$id.strums');
         final classifier = LiveCrnnStrumClassifier.tryLoad(
-            'assets/ml/strum_crnn_live.bin',
-            sampleRate: sr)!;
+          'assets/ml/strum_crnn_live.bin',
+          sampleRate: sr,
+        )!;
         final analyzer = StrumAnalyzer(sampleRate: sr, classifier: classifier);
         final det = <StrumEvent>[];
-        for (var s = 0;
-            s + DspConfig.onsetWindow <= pcm.length;
-            s += DspConfig.onsetHop) {
+        for (
+          var s = 0;
+          s + DspConfig.onsetWindow <= pcm.length;
+          s += DspConfig.onsetHop
+        ) {
           final e = analyzer.process(
-              Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow));
+            Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow),
+          );
           if (e != null) det.add(e);
         }
         for (final (t, want) in events) {
@@ -53,12 +57,18 @@ void main() {
       }
       final acc = correct / n;
       // ignore: avoid_print
-      print('LIVE SERVE n=$n acc=${(100 * acc).toStringAsFixed(1)}% '
-          '(training eval 79.9%; heuristic serve was 39.2%)');
+      print(
+        'LIVE SERVE n=$n acc=${(100 * acc).toStringAsFixed(1)}% '
+        '(training eval 79.9%; heuristic serve was 39.2%)',
+      );
       expect(n, greaterThan(1500));
-      expect(acc, greaterThan(0.70),
-          reason: 'a big drop vs the 0.799 training eval = serve-chain '
-              'drift (resample grid / window alignment / ring bug)');
+      expect(
+        acc,
+        greaterThan(0.70),
+        reason:
+            'a big drop vs the 0.799 training eval = serve-chain '
+            'drift (resample grid / window alignment / ring bug)',
+      );
     },
     skip: present ? false : 'ml/data/klangio absent',
     timeout: const Timeout(Duration(minutes: 15)),

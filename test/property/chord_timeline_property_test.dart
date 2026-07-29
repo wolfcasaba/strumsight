@@ -60,8 +60,9 @@ void main() {
         final hasStrum = rng.nextBool();
         final strum = hasStrum
             ? Strum(
-                direction:
-                    rng.nextBool() ? StrumDirection.down : StrumDirection.up,
+                direction: rng.nextBool()
+                    ? StrumDirection.down
+                    : StrumDirection.up,
                 confidence: rng.nextDouble(),
               )
             : null;
@@ -75,37 +76,51 @@ void main() {
         // Snapshot to prove the reducer never mutates its input.
         final before = List<ChordEvent>.of(buffer);
         final lenBefore = buffer.length;
-        final lastLabelBefore =
-            buffer.isEmpty ? null : buffer.last.chord.label;
+        final lastLabelBefore = buffer.isEmpty ? null : buffer.last.chord.label;
 
         final next = reduceChordTimeline(buffer, frame, cap: cap);
 
         // Input must be untouched (same instance, same contents).
-        expect(buffer, orderedEquals(before),
-            reason: 'seed=$seed trial=$trial step=$s: input mutated');
+        expect(
+          buffer,
+          orderedEquals(before),
+          reason: 'seed=$seed trial=$trial step=$s: input mutated',
+        );
 
         // Invariant: never exceed cap.
-        expect(next.length, lessThanOrEqualTo(cap),
-            reason: 'seed=$seed trial=$trial step=$s: buffer over cap');
+        expect(
+          next.length,
+          lessThanOrEqualTo(cap),
+          reason: 'seed=$seed trial=$trial step=$s: buffer over cap',
+        );
 
         // Invariant: seq strictly increasing (newest last).
         for (var i = 1; i < next.length; i++) {
-          expect(next[i].seq, greaterThan(next[i - 1].seq),
-              reason: 'seed=$seed trial=$trial step=$s: seq not increasing');
+          expect(
+            next[i].seq,
+            greaterThan(next[i - 1].seq),
+            reason: 'seed=$seed trial=$trial step=$s: seq not increasing',
+          );
         }
 
         // Invariant: no two CONSECUTIVE events share a chord label.
         for (var i = 1; i < next.length; i++) {
-          expect(next[i].chord.label == next[i - 1].chord.label, isFalse,
-              reason:
-                  'seed=$seed trial=$trial step=$s: consecutive dup label');
+          expect(
+            next[i].chord.label == next[i - 1].chord.label,
+            isFalse,
+            reason: 'seed=$seed trial=$trial step=$s: consecutive dup label',
+          );
         }
 
         // Same-label + strum → in-place update (length unchanged, not append).
         if (label != null && label == lastLabelBefore && strum != null) {
-          expect(next.length, lenBefore,
-              reason: 'seed=$seed trial=$trial step=$s: dedupe should update '
-                  'in place, not append');
+          expect(
+            next.length,
+            lenBefore,
+            reason:
+                'seed=$seed trial=$trial step=$s: dedupe should update '
+                'in place, not append',
+          );
           expect(next.last.direction, strum.direction);
           expect(next.last.confidence, strum.confidence);
           // The identity fields must be preserved through the update.
@@ -115,8 +130,11 @@ void main() {
 
         // Idle frames never change the buffer.
         if (label == null) {
-          expect(next, same(buffer),
-              reason: 'seed=$seed trial=$trial step=$s: idle changed buffer');
+          expect(
+            next,
+            same(buffer),
+            reason: 'seed=$seed trial=$trial step=$s: idle changed buffer',
+          );
         }
 
         buffer = next;
@@ -140,8 +158,10 @@ void main() {
     final firstSeq = b.single.seq;
     b = reduceChordTimeline(
       b,
-      _frame('C',
-          strum: const Strum(direction: StrumDirection.up, confidence: 0.9)),
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.up, confidence: 0.9),
+      ),
     );
     expect(b.length, 1, reason: 'still one card');
     expect(b.single.seq, firstSeq, reason: 'identity preserved');
@@ -154,22 +174,31 @@ void main() {
     var b = <ChordEvent>[];
     b = reduceChordTimeline(
       b,
-      _frame('C',
-          strum: const Strum(direction: StrumDirection.down, confidence: 0.8)),
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.down, confidence: 0.8),
+      ),
     );
     // `latestStrum` is sticky: the very same frame arrives again next tick.
     final same = reduceChordTimeline(
       b,
-      _frame('C',
-          strum: const Strum(direction: StrumDirection.down, confidence: 0.8)),
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.down, confidence: 0.8),
+      ),
     );
-    expect(identical(same, b), isTrue,
-        reason: 'unchanged held chord must not allocate a new buffer');
+    expect(
+      identical(same, b),
+      isTrue,
+      reason: 'unchanged held chord must not allocate a new buffer',
+    );
     // A genuinely new strum on the same chord still updates in place.
     final updated = reduceChordTimeline(
       b,
-      _frame('C',
-          strum: const Strum(direction: StrumDirection.up, confidence: 0.4)),
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.up, confidence: 0.4),
+      ),
     );
     expect(identical(updated, b), isFalse);
     expect(updated.single.direction, StrumDirection.up);
@@ -196,8 +225,14 @@ void main() {
     // The two oldest ('C','G' at seq 0,1) fell off the front.
     expect(b.first.seq, 2);
     expect(b.last.seq, 7);
-    expect(b.map((e) => e.chord.label).toList(),
-        ['Am', 'F', 'D', 'Em', 'C', 'G']);
+    expect(b.map((e) => e.chord.label).toList(), [
+      'Am',
+      'F',
+      'D',
+      'Em',
+      'C',
+      'G',
+    ]);
   });
 
   test('timeSec falls back to engineTimeSec when no strum time', () {

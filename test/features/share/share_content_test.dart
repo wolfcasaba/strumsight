@@ -4,22 +4,22 @@ import 'package:strumsight/features/live/model/strum.dart';
 import 'package:strumsight/features/share/share_content.dart';
 
 AnalyzeResult _result({double bpm = 96}) => AnalyzeResult(
-      durationSec: 12,
-      bpm: bpm,
-      chords: const [
-        TimelineChord(label: 'C', startSec: 0, endSec: 3),
-        TimelineChord(label: 'G', startSec: 3, endSec: 6),
-        TimelineChord(label: 'Am', startSec: 6, endSec: 9),
-      ],
-      strums: [
-        for (var i = 0; i < 5; i++)
-          TimelineStrum(
-            direction: i.isEven ? StrumDirection.down : StrumDirection.up,
-            timeSec: i.toDouble(),
-            confidence: 0.9,
-          ),
-      ],
-    );
+  durationSec: 12,
+  bpm: bpm,
+  chords: const [
+    TimelineChord(label: 'C', startSec: 0, endSec: 3),
+    TimelineChord(label: 'G', startSec: 3, endSec: 6),
+    TimelineChord(label: 'Am', startSec: 6, endSec: 9),
+  ],
+  strums: [
+    for (var i = 0; i < 5; i++)
+      TimelineStrum(
+        direction: i.isEven ? StrumDirection.down : StrumDirection.up,
+        timeSec: i.toDouble(),
+        confidence: 0.9,
+      ),
+  ],
+);
 
 void main() {
   test('caption carries the chords, the ↓/↑ moat stats, and the BPM', () {
@@ -54,7 +54,10 @@ void main() {
       strums: [
         for (var i = 0; i < 40; i++)
           TimelineStrum(
-              direction: StrumDirection.down, timeSec: i.toDouble(), confidence: 1),
+            direction: StrumDirection.down,
+            timeSec: i.toDouble(),
+            confidence: 1,
+          ),
       ],
     );
     final g = ShareContent.strumGlyphs(many, max: 16);

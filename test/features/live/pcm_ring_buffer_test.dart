@@ -43,7 +43,7 @@ void main() {
       var idx = 0;
       for (var s = 0; s < 10; s++) {
         final chunk = List<double>.generate(rate, (_) => (idx++).toDouble());
-      buf.add(chunk);
+        buf.add(chunk);
       }
 
       final (pcm, _) = buf.recent();
@@ -56,22 +56,24 @@ void main() {
       expect(pcm.first, greaterThan(0));
     });
 
-    test('clear() drops audio but keeps rate + enabled; reset() clears all',
-        () {
-      final buf = PcmRingBuffer()
-        ..sampleRate = 8000
-        ..enabled = true;
-      buf.add([0.1, 0.2]);
-      buf.clear();
-      expect(buf.length, 0);
-      expect(buf.sampleRate, 8000);
-      expect(buf.enabled, isTrue);
-      buf.add([0.3]); // still enabled → keeps capturing
-      expect(buf.length, 1);
+    test(
+      'clear() drops audio but keeps rate + enabled; reset() clears all',
+      () {
+        final buf = PcmRingBuffer()
+          ..sampleRate = 8000
+          ..enabled = true;
+        buf.add([0.1, 0.2]);
+        buf.clear();
+        expect(buf.length, 0);
+        expect(buf.sampleRate, 8000);
+        expect(buf.enabled, isTrue);
+        buf.add([0.3]); // still enabled → keeps capturing
+        expect(buf.length, 1);
 
-      buf.reset();
-      expect(buf.length, 0);
-      expect(buf.sampleRate, 0);
-    });
+        buf.reset();
+        expect(buf.length, 0);
+        expect(buf.sampleRate, 0);
+      },
+    );
   });
 }

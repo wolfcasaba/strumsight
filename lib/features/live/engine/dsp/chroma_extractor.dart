@@ -14,12 +14,12 @@ class ChromaExtractor {
   ChromaExtractor({
     required this.sampleRate,
     this.window = DspConfig.chromaWindow,
-  })  : _fft = FFT(window),
-        _hann = Float64List(window),
-        _windowed = Float64List(window),
-        _mags = Float64List(window ~/ 2),
-        _smoothed = List<double>.filled(12, 0),
-        _raw = List<double>.filled(12, 0) {
+  }) : _fft = FFT(window),
+       _hann = Float64List(window),
+       _windowed = Float64List(window),
+       _mags = Float64List(window ~/ 2),
+       _smoothed = List<double>.filled(12, 0),
+       _raw = List<double>.filled(12, 0) {
     for (var i = 0; i < window; i++) {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (window - 1));
     }

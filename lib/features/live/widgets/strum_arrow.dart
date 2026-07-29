@@ -37,7 +37,10 @@ class StrumArrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = AppColors.confidence(confidence, Theme.of(context).brightness);
+    final color = AppColors.confidence(
+      confidence,
+      Theme.of(context).brightness,
+    );
     final tier = AppColors.confidenceTier(confidence);
     final stroke = strokeWidth ?? (size * 0.11);
 
@@ -57,7 +60,10 @@ class StrumArrow extends StatelessWidget {
       paint = DecoratedBox(
         decoration: BoxDecoration(
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: size * 0.38),
+            BoxShadow(
+              color: color.withValues(alpha: 0.5),
+              blurRadius: size * 0.38,
+            ),
           ],
         ),
         child: paint,
@@ -68,13 +74,10 @@ class StrumArrow extends StatelessWidget {
     // label is given, so an unlabelled arrow is never a silent Semantics node
     // (r188). A painted arrow always has a meaning worth speaking.
     final l10n = AppLocalizations.of(context);
-    final label = semanticLabel ??
+    final label =
+        semanticLabel ??
         (direction == StrumDirection.down ? l10n.strumDown : l10n.strumUp);
-    return Semantics(
-      label: label,
-      excludeSemantics: true,
-      child: paint,
-    );
+    return Semantics(label: label, excludeSemantics: true, child: paint);
   }
 }
 
@@ -128,7 +131,12 @@ class _StrumArrowPainter extends CustomPainter {
         ..lineTo(left.dx, left.dy)
         ..lineTo(right.dx, right.dy)
         ..close();
-      canvas.drawPath(head, Paint()..color = color..style = PaintingStyle.fill);
+      canvas.drawPath(
+        head,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
       canvas.drawPath(
         head,
         Paint()

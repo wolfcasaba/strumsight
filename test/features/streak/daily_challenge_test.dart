@@ -23,8 +23,11 @@ void main() {
       final c = DailyChallenge.forDay(d);
       expect([4, 6, 8], contains(c.pattern.length));
       for (var i = 0; i < c.pattern.length; i += 2) {
-        expect(c.pattern[i], StrumDirection.down,
-            reason: 'on-beat $i of day $d should be a down-stroke');
+        expect(
+          c.pattern[i],
+          StrumDirection.down,
+          reason: 'on-beat $i of day $d should be a down-stroke',
+        );
       }
       expect(c.downCount + c.upCount, c.pattern.length);
     }
@@ -38,7 +41,9 @@ void main() {
 
   test('glyphs render the ↓/↑ arrows', () {
     final c = DailyChallenge.forDay(20000);
-    expect(c.glyphs.replaceAll(' ', '').split(''),
-        everyElement(anyOf('↓', '↑')));
+    expect(
+      c.glyphs.replaceAll(' ', '').split(''),
+      everyElement(anyOf('↓', '↑')),
+    );
   });
 }

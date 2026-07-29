@@ -47,4 +47,5 @@ class FavoriteChordsNotifier extends Notifier<Set<String>> {
 
 final favoriteChordsProvider =
     NotifierProvider<FavoriteChordsNotifier, Set<String>>(
-        FavoriteChordsNotifier.new);
+      FavoriteChordsNotifier.new,
+    );

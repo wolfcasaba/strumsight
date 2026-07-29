@@ -25,7 +25,10 @@ class _SuppressingClassifier implements StrumDirectionClassifier {
   }) {
     classifyCalls++;
     return const StrumClassification(
-        direction: null, confidence: 0, suppressed: true);
+      direction: null,
+      confidence: 0,
+      suppressed: true,
+    );
   }
 }
 
@@ -37,33 +40,44 @@ class _DownClassifier implements StrumDirectionClassifier {
   StrumClassification classifyAt({
     required int onsetFrame,
     required int currentFrame,
-  }) =>
-      const StrumClassification(
-          direction: StrumDirection.down, confidence: 0.9);
+  }) => const StrumClassification(
+    direction: StrumDirection.down,
+    confidence: 0.9,
+  );
 }
 
 void main() {
   const sr = DspConfig.defaultSampleRate;
 
-  test('a suppressed classification emits NO StrumEvent (no arrow/Learn hit)',
-      () {
-    final fake = _SuppressingClassifier();
-    final analyzer = StrumAnalyzer(sampleRate: sr, classifier: fake);
-    final signal = strumSignal(lowFirst: true);
-    final events = <StrumEvent>[];
-    for (final frame in frames(signal, analyzer.window, analyzer.hop)) {
-      final e = analyzer.process(frame);
-      if (e != null) events.add(e);
-    }
-    expect(fake.classifyCalls, 1,
-        reason: 'the onset was detected and the seam consulted');
-    expect(events, isEmpty,
-        reason: 'suppression stops the strum reaching every consumer');
-  });
+  test(
+    'a suppressed classification emits NO StrumEvent (no arrow/Learn hit)',
+    () {
+      final fake = _SuppressingClassifier();
+      final analyzer = StrumAnalyzer(sampleRate: sr, classifier: fake);
+      final signal = strumSignal(lowFirst: true);
+      final events = <StrumEvent>[];
+      for (final frame in frames(signal, analyzer.window, analyzer.hop)) {
+        final e = analyzer.process(frame);
+        if (e != null) events.add(e);
+      }
+      expect(
+        fake.classifyCalls,
+        1,
+        reason: 'the onset was detected and the seam consulted',
+      );
+      expect(
+        events,
+        isEmpty,
+        reason: 'suppression stops the strum reaching every consumer',
+      );
+    },
+  );
 
   test('a non-suppressed classification still emits the strum', () {
-    final analyzer =
-        StrumAnalyzer(sampleRate: sr, classifier: _DownClassifier());
+    final analyzer = StrumAnalyzer(
+      sampleRate: sr,
+      classifier: _DownClassifier(),
+    );
     final signal = strumSignal(lowFirst: true);
     final events = <StrumEvent>[];
     for (final frame in frames(signal, analyzer.window, analyzer.hop)) {

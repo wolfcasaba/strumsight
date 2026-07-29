@@ -58,10 +58,17 @@ void main() {
 
   test('variantFor: Friday kicks off the weekend, Sat/Sun are weekend', () {
     expect(NudgeService.variantFor(DateTime.friday), NudgeCopyVariant.friday);
-    expect(NudgeService.variantFor(DateTime.saturday), NudgeCopyVariant.weekend);
+    expect(
+      NudgeService.variantFor(DateTime.saturday),
+      NudgeCopyVariant.weekend,
+    );
     expect(NudgeService.variantFor(DateTime.sunday), NudgeCopyVariant.weekend);
-    for (final d in [DateTime.monday, DateTime.tuesday, DateTime.wednesday,
-        DateTime.thursday]) {
+    for (final d in [
+      DateTime.monday,
+      DateTime.tuesday,
+      DateTime.wednesday,
+      DateTime.thursday,
+    ]) {
       expect(NudgeService.variantFor(d), NudgeCopyVariant.regular);
     }
   });

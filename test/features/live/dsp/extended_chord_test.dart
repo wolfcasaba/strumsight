@@ -22,8 +22,8 @@ String? decode(Float64List signal) {
   const hop = DspConfig.nnlsHop;
   for (final frame in frames(signal, win, hop)) {
     final chroma = nc.process(frame);
-    final tonal = chroma != null &&
-        nc.lastTonalness >= DspConfig.chordMinTonalness;
+    final tonal =
+        chroma != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
     last = tonal
         ? decoder.process(nc.lastBassChroma, nc.lastTrebleChroma)
         : decoder.process(Float64List(12), Float64List(12));
@@ -43,13 +43,15 @@ void main() {
     expect(decode(chordSignal(cMajFreqs, seconds: 1.5)), 'C');
   });
 
-  test('a G7 voicing with the 7th present is recognised as G7 (round-26 fix)',
-      () {
-    // The whole point of the dictionary+Viterbi port: the 7th, when it truly
-    // sounds and survives NNLS, is now heard as a G7 rather than collapsing to
-    // a plain G triad.
-    expect(decode(chordSignal(g7Freqs, seconds: 1.5)), 'G7');
-  });
+  test(
+    'a G7 voicing with the 7th present is recognised as G7 (round-26 fix)',
+    () {
+      // The whole point of the dictionary+Viterbi port: the 7th, when it truly
+      // sounds and survives NNLS, is now heard as a G7 rather than collapsing to
+      // a plain G triad.
+      expect(decode(chordSignal(g7Freqs, seconds: 1.5)), 'G7');
+    },
+  );
 
   test('silence decodes to no chord', () {
     expect(decode(Float64List(44100)), isNull);

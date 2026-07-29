@@ -29,8 +29,10 @@ void main() {
     // A=432 → A2 = 108; 108 must be dead-on A2, and 110 still nearest A2.
     final s = GuitarStrings.nearest(108.0, a4: 432);
     expect(s?.label, 'A2');
-    expect(GuitarStrings.nearest(108.0, a4: 432)!.frequencyHz(432),
-        closeTo(108.0, 0.01));
+    expect(
+      GuitarStrings.nearest(108.0, a4: 432)!.frequencyHz(432),
+      closeTo(108.0, 0.01),
+    );
   });
 
   test('silence / nonsense frequencies map to nothing', () {
@@ -39,8 +41,11 @@ void main() {
   });
 
   test('far-out-of-range pitches (voice, whistle) are not claimed', () {
-    expect(GuitarStrings.nearest(1200), isNull,
-        reason: 'more than ~5 semitones above E4 is not a string being tuned');
+    expect(
+      GuitarStrings.nearest(1200),
+      isNull,
+      reason: 'more than ~5 semitones above E4 is not a string being tuned',
+    );
     expect(GuitarStrings.nearest(40), isNull);
   });
 }
