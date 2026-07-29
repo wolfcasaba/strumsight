@@ -1,0 +1,1 @@
+round=181 verdict=pass tests=645 lesson=CI-driven-DSP-tune; sus4 Occam handicap 0.04 lifts real-song accuracy 50->57%; full-band wrong-root is a source-separation ceiling; solo guitar (live) is good
