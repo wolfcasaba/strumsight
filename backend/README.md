@@ -47,7 +47,10 @@ migration over existing tables:
 
 Stamping records migration ownership; it does not change the schema. Back up
 valuable local data and inspect the schema before stamping. A fresh database
-must use `upgrade head`.
+must use `upgrade head`. Until an existing dev database is explicitly stamped,
+`/health/ready` remains `503 migration_mismatch`; run
+`.venv/bin/python -m alembic stamp head` only after verifying that its schema
+matches the current ORM.
 
 ## Test
 
@@ -90,11 +93,20 @@ cd backend
   deploy — the app then REFUSES to boot with the dev `secret_key` or a
   wildcard CORS origin (`STRUMSIGHT_CORS_ORIGINS=["https://your.app"]`).
   A misconfigured deploy fails at startup, never serves traffic.
+- **Lab service isolation:** diagnostics and APK download are enabled by
+  default only in dev. Production does not register either surface unless
+  `STRUMSIGHT_DIAGNOSTICS_ENABLED=true` and/or
+  `STRUMSIGHT_APK_DOWNLOAD_ENABLED=true` is set explicitly. Enabling
+  diagnostics in production also requires a non-empty, non-development
+  `STRUMSIGHT_DIAG_TOKEN`; otherwise the process refuses to boot. Configure
+  upload storage with `STRUMSIGHT_DIAG_DIR` and stage the optional APK with
+  `STRUMSIGHT_APK_PATH`.
 - **Auth throttling (round 120):** per-IP sliding-window rate limits on
   `/auth/login` (10/min) and `/auth/register` (5/min) → `429` +
-  `Retry-After`. In-memory by design (single-instance service); swap the
-  storage if it ever scales out. The attempt is counted BEFORE the
-  credential check, so a 429 never confirms a password guess.
+  `Retry-After`. The counters are process-local: multiple workers do not share
+  them. The single-process target is intentional; production scaling requires
+  Redis or another shared store. The attempt is counted BEFORE the credential
+  check, so a 429 never confirms a password guess.
 - **Production database:** PostgreSQL is recommended. Set a
   `postgresql+psycopg://...` `STRUMSIGHT_DATABASE_URL` and install a compatible
   Psycopg driver in the deployment image (the driver is intentionally not a

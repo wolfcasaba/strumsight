@@ -1,5 +1,10 @@
 """Auth flow: register, login, /me, and the failure paths."""
 
+import bcrypt
+import pytest
+
+from app.security import hash_password, verify_password
+
 
 def test_health(client):
     resp = client.get("/health")
@@ -36,6 +41,55 @@ def test_register_rejects_short_password(client):
     assert resp.status_code == 422
 
 
+def test_register_and_login_accept_72_utf8_byte_password(client):
+    password = "é" * 36
+    assert len(password) == 36
+    assert len(password.encode("utf-8")) == 72
+
+    registered = client.post(
+        "/auth/register",
+        json={"email": "unicode72@example.com", "password": password},
+    )
+    logged_in = client.post(
+        "/auth/login",
+        json={"email": "unicode72@example.com", "password": password},
+    )
+
+    assert registered.status_code == 201, registered.text
+    assert logged_in.status_code == 200, logged_in.text
+
+
+def test_register_rejects_73_utf8_byte_password(client):
+    password = ("é" * 36) + "a"
+    assert len(password) == 37
+    assert len(password.encode("utf-8")) == 73
+
+    response = client.post(
+        "/auth/register",
+        json={"email": "unicode73@example.com", "password": password},
+    )
+
+    assert response.status_code == 422
+    assert "72 UTF-8 bytes" in response.text
+
+
+def test_hash_password_rejects_overlong_utf8_input():
+    password = ("é" * 36) + "a"
+
+    with pytest.raises(ValueError, match="72 UTF-8 bytes"):
+        hash_password(password)
+
+
+def test_verify_password_keeps_legacy_72_byte_truncation_compatibility():
+    legacy_password = ("é" * 36) + "legacy-suffix"
+    legacy_hash = bcrypt.hashpw(
+        legacy_password.encode("utf-8")[:72],
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+
+    assert verify_password(legacy_password, legacy_hash) is True
+
+
 def test_login_success_and_wrong_password(client):
     client.post(
         "/auth/register",
@@ -62,6 +116,26 @@ def test_login_unknown_email(client):
         json={"email": "ghost@example.com", "password": "whatever1"},
     )
     assert resp.status_code == 401
+
+
+def test_unknown_email_and_wrong_password_responses_are_byte_identical(client):
+    client.post(
+        "/auth/register",
+        json={"email": "known@example.com", "password": "sixstrings"},
+    )
+
+    wrong_password = client.post(
+        "/auth/login",
+        json={"email": "known@example.com", "password": "wrongpass"},
+    )
+    unknown_email = client.post(
+        "/auth/login",
+        json={"email": "unknown@example.com", "password": "wrongpass"},
+    )
+
+    assert wrong_password.status_code == 401
+    assert unknown_email.status_code == 401
+    assert wrong_password.content == unknown_email.content
 
 
 def test_me_requires_auth(client):

@@ -3,7 +3,16 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+from .config import BCRYPT_MAX_PASSWORD_BYTES
 
 ThemeMode = Literal["light", "dark", "system"]
 Locale = Literal["en", "hu"]
@@ -17,7 +26,20 @@ _NON_NULLABLE = ("theme_mode", "confidence_threshold", "tuning_a4")
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=72)  # bcrypt caps at 72 bytes
+    password: str = Field(
+        min_length=8,
+        max_length=72,
+    )
+
+    @field_validator("password")
+    @classmethod
+    def _reject_passwords_over_bcrypt_byte_limit(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+            raise ValueError(
+                f"password must not exceed "
+                f"{BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
+            )
+        return password
 
 
 class UserLogin(BaseModel):

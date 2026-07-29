@@ -5,9 +5,15 @@ Override in production via real environment variables (NEVER commit secrets).
 """
 
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_DIAGNOSTICS_DIR = str(
+    Path(__file__).resolve().parents[1] / "diagnostics_data"
+)
+BCRYPT_MAX_PASSWORD_BYTES = 72
 
 
 class Settings(BaseSettings):
@@ -40,6 +46,25 @@ class Settings(BaseSettings):
 
     # CORS origins for the Flutter web/dev client. "*" is fine for dev.
     cors_origins: list[str] = ["*"]
+
+    # Lab services stay zero-setup in dev, but are absent from production
+    # unless explicitly enabled. The validator supplies environment-sensitive
+    # defaults while preserving explicit kwargs and STRUMSIGHT_* overrides.
+    diagnostics_enabled: bool = True
+    apk_download_enabled: bool = True
+    diag_token: str = "strumsight-lab-dev"
+    diag_dir: str = _DEFAULT_DIAGNOSTICS_DIR
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_lab_flags_for_environment(cls, values):
+        if not isinstance(values, dict):
+            return values
+        resolved = dict(values)
+        default_enabled = resolved.get("env", "dev") != "prod"
+        resolved.setdefault("diagnostics_enabled", default_enabled)
+        resolved.setdefault("apk_download_enabled", default_enabled)
+        return resolved
 
 
 @lru_cache

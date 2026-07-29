@@ -1,5 +1,6 @@
 """Database lifecycle and migration contract tests."""
 
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -13,6 +14,7 @@ from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import models as _models  # noqa: F401 -- registers ORM metadata
 from app.config import Settings
@@ -179,6 +181,31 @@ def test_production_startup_never_calls_create_all(tmp_path, monkeypatch):
         pass
 
     assert calls == []
+
+
+def test_dev_schema_initialization_failure_is_logged(
+    caplog,
+    monkeypatch,
+):
+    def fail_schema_initialization(*args, **kwargs):
+        raise SQLAlchemyError("synthetic schema initialization failure")
+
+    monkeypatch.setattr(
+        Base.metadata,
+        "create_all",
+        fail_schema_initialization,
+    )
+    app = create_app(Settings(database_url="sqlite://"))
+    # Alembic's in-process fileConfig call disables loggers not listed in
+    # alembic.ini. Re-enable this logger so the test is order-independent.
+    monkeypatch.setattr(logging.getLogger("app.main"), "disabled", False)
+
+    with caplog.at_level(logging.ERROR, logger="app.main"):
+        with TestClient(app):
+            pass
+
+    assert "Development schema initialization failed" in caplog.messages
+    assert not hasattr(app.state, "dev_schema_initialization_failed")
 
 
 def test_unprefixed_sqlite_permission_environment_is_ignored(monkeypatch):
