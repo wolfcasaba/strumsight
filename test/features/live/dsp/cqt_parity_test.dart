@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/cqt_extractor.dart';
+import 'package:strumsight/features/live/engine/dsp/cqt_extractor.dart';
 
 /// Bit-parity golden test for [CqtExtractor] against the Python reference
 /// (`ml/chords/cqt.py`, fixture `ml/chords/cqt_fixture.json`) — StrumSight r194.

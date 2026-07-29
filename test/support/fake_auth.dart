@@ -1,6 +1,6 @@
-import 'package:music_theory/features/auth/data/auth_repository.dart';
-import 'package:music_theory/features/auth/data/token_store.dart';
-import 'package:music_theory/features/auth/model/auth_user.dart';
+import 'package:strumsight/features/auth/data/auth_repository.dart';
+import 'package:strumsight/features/auth/data/token_store.dart';
+import 'package:strumsight/features/auth/model/auth_user.dart';
 
 /// In-memory token store for tests (no platform channel).
 class FakeTokenStore implements TokenStore {

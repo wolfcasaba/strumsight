@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/lesson_scorer.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/learn/lesson_scorer.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 /// Round 154 — dynamic difficulty (016b P4): the fail-streak signal that
 /// offers the Easy cut. Consecutive misses/wrong-directions accumulate; one

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/model/chord.dart';
+import 'package:strumsight/features/live/model/chord.dart';
 
 void main() {
   group('Chord.transposeLabel — capo transposition', () {

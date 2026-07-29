@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/streak/daily_challenge.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/streak/daily_challenge.dart';
 
 void main() {
   group('simplified (beginner dynamic-difficulty cut)', () {

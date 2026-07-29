@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/model/guitar_strings.dart';
-import 'package:music_theory/features/tuner/model/tuning.dart';
+import 'package:strumsight/features/tuner/model/guitar_strings.dart';
+import 'package:strumsight/features/tuner/model/tuning.dart';
 
 /// Round 89 — alternate tunings (GuitarTuna-class parity). A tuning is a
 /// named set of six strings; the tuner's chips + nearest-string mapping

@@ -11,7 +11,11 @@ chord-detection app leaves out.
   devices. It's purely additive: logged out, everything still works and nothing hits the network.
 - **Android-first** (iOS later; needs a Mac to build).
 
-> **Status (v0.2.0):** REAL on-device detection in **pure Dart** — microphone → DSP isolate →
+> **Client version:** the single source of truth is `version:` in [`pubspec.yaml`](pubspec.yaml)
+> (read at runtime via `package_info_plus` and shown in Settings). Do not restate a version number
+> anywhere else in the docs.
+>
+> **Status:** REAL on-device detection in **pure Dart** — microphone → DSP isolate →
 > chroma/chord + whitened-spectral-flux onsets + sub-band strum direction + YIN tuner. The DSP
 > follows the sourced parameters in the [RAG knowledge base](docs/rag/README.md) and is fully
 > unit-tested on synthesized guitar signals. A C++/FFI port remains the optimization path only

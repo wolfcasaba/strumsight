@@ -12,15 +12,15 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/tuner/engine/dsp/tuner_analyzer.dart';
 
 import '../support/synth.dart';
 

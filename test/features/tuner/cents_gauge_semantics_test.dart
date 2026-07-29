@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/widgets/cents_gauge.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/tuner/widgets/cents_gauge.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Round 88 — the cents gauge is a pure CustomPaint: without a semantics
 /// label a screen-reader user gets NOTHING from the tuner's core readout.

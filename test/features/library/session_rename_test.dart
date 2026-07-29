@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/library/model/analyzed_session.dart';
-import 'package:music_theory/features/library/providers/library_providers.dart';
-import 'package:music_theory/features/library/screens/session_detail_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/library/model/analyzed_session.dart';
+import 'package:strumsight/features/library/providers/library_providers.dart';
+import 'package:strumsight/features/library/screens/session_detail_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 106 — rename a saved recording. Auto-titles are the chord summary

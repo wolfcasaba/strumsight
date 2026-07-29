@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/screens/share_preview_screen.dart';
-import 'package:music_theory/features/share/share_service.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/screens/share_preview_screen.dart';
+import 'package:strumsight/features/share/share_service.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Records which share path was taken instead of hitting the OS share sheet.
 class FakeShareService extends ShareService {

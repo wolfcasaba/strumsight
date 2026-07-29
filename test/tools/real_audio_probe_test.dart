@@ -27,8 +27,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/live_pipeline.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
 
 /// Only run the heavy real-audio probe when explicitly requested (dev tuning).
 final bool _enabled = Platform.environment['DSP_PROBE'] == '1';

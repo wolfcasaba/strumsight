@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/songs/model/song.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

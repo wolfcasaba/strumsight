@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/learn/audio/chord_audio.dart';
-import 'package:music_theory/features/learn/audio/metronome.dart';
-import 'package:music_theory/features/learn/widgets/lesson_highway.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/screens/strum_reel_screen.dart';
-import 'package:music_theory/features/share/share_service.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/learn/audio/chord_audio.dart';
+import 'package:strumsight/features/learn/audio/metronome.dart';
+import 'package:strumsight/features/learn/widgets/lesson_highway.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/screens/strum_reel_screen.dart';
+import 'package:strumsight/features/share/share_service.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 class _FakeShareService extends ShareService {
   const _FakeShareService(this.log);

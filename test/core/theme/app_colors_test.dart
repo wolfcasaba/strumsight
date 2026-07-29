@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/theme/app_colors.dart';
+import 'package:strumsight/core/theme/app_colors.dart';
 
 void main() {
   test('confidenceTier maps scores to 0/1/2 at the ramp boundaries', () {

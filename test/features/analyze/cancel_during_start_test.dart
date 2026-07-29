@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_recorder.dart';
-import 'package:music_theory/features/analyze/providers/analyze_providers.dart';
+import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
+import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 114 — the round-102 dispose-time cancel only covered a take whose

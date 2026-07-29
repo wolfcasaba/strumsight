@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/log_mel_extractor.dart';
+import 'package:strumsight/features/live/engine/dsp/log_mel_extractor.dart';
 
 /// PARITY gate for the ML front-end (docs/plans/ml-track.md P0.1, chunk 018).
 ///

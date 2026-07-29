@@ -5,7 +5,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/superflux_onset_detector.dart';
+import 'package:strumsight/features/live/engine/dsp/superflux_onset_detector.dart';
 
 import '../support/synth.dart';
 

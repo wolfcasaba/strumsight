@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/crnn_strum_net.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_strum_net.dart';
 
 /// r175 — parity + reject lock for the 3-class LIVE model (down/up/no-strum),
 /// mirroring crnn_live_parity_test.dart. The fixture (built by

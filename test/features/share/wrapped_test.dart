@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/share/model/weekly_recap.dart';
-import 'package:music_theory/features/share/share_content.dart';
-import 'package:music_theory/features/share/widgets/wrapped_card.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/share/model/weekly_recap.dart';
+import 'package:strumsight/features/share/share_content.dart';
+import 'package:strumsight/features/share/widgets/wrapped_card.dart';
 
 /// Round 151 — "Strum Wrapped" weekly recap (chunk 017 rec #5: the
 /// Wrapped-style recap is the category's strongest install hook).

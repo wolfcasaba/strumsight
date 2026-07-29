@@ -2,11 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/ml_chord_decoder.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/analyze/providers/analyze_providers.dart';
-import 'package:music_theory/features/live/engine/dsp/cqt_extractor.dart';
-import 'package:music_theory/features/live/engine/ml/chord_crnn.dart';
+import 'package:strumsight/features/analyze/engine/ml_chord_decoder.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
+import 'package:strumsight/features/live/engine/dsp/cqt_extractor.dart';
+import 'package:strumsight/features/live/engine/ml/chord_crnn.dart';
 
 import '../../support/synth.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/songs/model/song.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/songs/model/song.dart';
 
 void main() {
   const d = StrumDirection.down;

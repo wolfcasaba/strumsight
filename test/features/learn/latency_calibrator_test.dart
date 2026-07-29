@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/calibration/latency_calibrator.dart';
+import 'package:strumsight/features/learn/calibration/latency_calibrator.dart';
 
 void main() {
   test('a consistently late tapper measures a positive offset (median)', () {

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
-import 'package:music_theory/features/live/engine/mock_strum_engine.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/features/live/widgets/strum_arrow.dart';
-import 'package:music_theory/features/settings/providers/capo_provider.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/live/widgets/strum_arrow.dart';
+import 'package:strumsight/features/settings/providers/capo_provider.dart';
+import 'package:strumsight/main.dart';
 
 import '../../support/fake_engines.dart';
 

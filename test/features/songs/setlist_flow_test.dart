@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/screens/learn_screen.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/songs/model/setlist.dart';
-import 'package:music_theory/features/songs/model/song.dart';
-import 'package:music_theory/features/songs/providers/setlists_provider.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
-import 'package:music_theory/features/songs/screens/setlist_detail_screen.dart';
-import 'package:music_theory/features/songs/screens/setlist_list_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/screens/learn_screen.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/songs/model/setlist.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/setlists_provider.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/songs/screens/setlist_detail_screen.dart';
+import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _SeededSongs extends SongsController {

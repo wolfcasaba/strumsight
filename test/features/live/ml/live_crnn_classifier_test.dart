@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 /// r168 — the STREAMING front-end of the live 70 ms model. The risky logic is
 /// the ring/frame bookkeeping (absolute sample indexing across hops), so the

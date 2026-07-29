@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/settings/providers/nudge_enabled_provider.dart';
+import 'package:strumsight/features/settings/providers/nudge_enabled_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round-82 devil-advocate fix: the toggle must never LIE. After a

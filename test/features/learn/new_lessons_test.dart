@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
 
 /// Round 110 — three new lessons, one per tier, including the app's first
 /// 3/4 lesson ("Waltz Time"): the beatsPerBar path finally gets real

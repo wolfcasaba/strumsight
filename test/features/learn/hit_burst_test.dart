@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/widgets/hit_burst.dart';
+import 'package:strumsight/features/learn/widgets/hit_burst.dart';
 
 void main() {
   HitBurst burst({double start = 1.0, double strength = 1.0}) => HitBurst(

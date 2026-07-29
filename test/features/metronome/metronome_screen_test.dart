@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/metronome/screens/metronome_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Widget _app() => const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

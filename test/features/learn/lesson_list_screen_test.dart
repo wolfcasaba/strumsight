@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/providers/lesson_progress_provider.dart';
-import 'package:music_theory/features/learn/screens/lesson_list_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
+import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pump(WidgetTester tester) => tester.pumpWidget(ProviderScope(

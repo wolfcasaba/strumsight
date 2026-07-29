@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/widgets/wrapped_prompt.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/widgets/wrapped_prompt.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Round 153 — the post-win Wrapped prompt (chunk 017 rec #5 auto-prompt
 /// half): offered exactly when pride is fresh (≥80%), never as noise below.

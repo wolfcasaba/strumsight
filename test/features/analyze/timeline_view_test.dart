@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/theme/app_theme.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/analyze/widgets/timeline_view.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/analyze/widgets/timeline_view.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child) {
   return tester.pumpWidget(

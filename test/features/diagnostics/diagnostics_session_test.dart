@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/diagnostics/model/diagnostics_session.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/diagnostics/model/diagnostics_session.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 void main() {
   group('DiagnosticsSession.eventsFrom', () {

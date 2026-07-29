@@ -2,9 +2,9 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/api/api_config.dart';
-import 'package:music_theory/features/diagnostics/data/diagnostics_uploader.dart';
-import 'package:music_theory/features/diagnostics/model/diagnostics_session.dart';
+import 'package:strumsight/core/api/api_config.dart';
+import 'package:strumsight/features/diagnostics/data/diagnostics_uploader.dart';
+import 'package:strumsight/features/diagnostics/model/diagnostics_session.dart';
 
 /// A Dio adapter that records the request and returns a canned status (or
 /// throws a transport error) so the uploader can be exercised without a server.

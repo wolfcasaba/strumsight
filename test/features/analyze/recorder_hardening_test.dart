@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_recorder.dart';
-import 'package:music_theory/features/learn/audio/chord_audio.dart';
+import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
+import 'package:strumsight/features/learn/audio/chord_audio.dart';
 
 /// Round 101 — the round-100 review's two adjacent NOTEs, closed:
 /// (1) `startRecording` re-entrancy: a second start() during the in-flight

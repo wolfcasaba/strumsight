@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/audio/chord_audio.dart';
+import 'package:strumsight/features/learn/audio/chord_audio.dart';
 
 String _tag(List<int> b, int o) => String.fromCharCodes(b.sublist(o, o + 4));
 

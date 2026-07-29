@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/pcm_ring_buffer.dart';
+import 'package:strumsight/features/live/engine/pcm_ring_buffer.dart';
 
 void main() {
   group('PcmRingBuffer (Lab-mode rolling capture, r199)', () {

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.musictheory.music_theory"
+    namespace = "com.wolfcasaba.strumsight"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -18,10 +18,10 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.musictheory.music_theory"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // StrumSight application ID (SDD Ch2, Kör 2 / ADR 0051). Changing it
+        // makes the app install as a NEW app next to any older pre-rename
+        // build already on a device — accepted before the store release.
+        applicationId = "com.wolfcasaba.strumsight"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -30,8 +30,9 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Debug keys for now so `flutter run --release` works. Production
+            // signing is the job of SDD Ch2, Kör 14 (Flutter CI és release
+            // pipeline) — a production release must NOT ship debug signing.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

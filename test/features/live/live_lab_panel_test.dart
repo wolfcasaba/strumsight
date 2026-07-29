@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/features/settings/providers/lab_mode_provider.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/settings/providers/lab_mode_provider.dart';
+import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_stats.dart';
-import 'package:music_theory/features/progress/widgets/weekly_bars.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/progress/model/practice_stats.dart';
+import 'package:strumsight/features/progress/widgets/weekly_bars.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Round 127 — the weekly bar chart used to expose only disconnected "12" /
 /// "M" text fragments to a screen reader (no unit, no full day). Each bar is

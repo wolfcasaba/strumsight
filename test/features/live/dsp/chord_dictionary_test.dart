@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
 
 /// Build an L2-normalised 12-bin chroma from pitch-class → weight (0..11 = C..B).
 Float64List chroma(Map<int, double> weights) {

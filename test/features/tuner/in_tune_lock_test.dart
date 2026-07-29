@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/model/in_tune_lock.dart';
+import 'package:strumsight/features/tuner/model/in_tune_lock.dart';
 
 /// Round 85 — the "string locked in" moment. A single in-tune reading is
 /// noise; holding it is the achievement. The lock engages after

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/auth/data/auth_repository.dart';
-import 'package:music_theory/features/auth/data/token_store.dart';
-import 'package:music_theory/features/auth/providers/auth_providers.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/features/settings/data/settings_repository.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/auth/data/auth_repository.dart';
+import 'package:strumsight/features/auth/data/token_store.dart';
+import 'package:strumsight/features/auth/providers/auth_providers.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/settings/data/settings_repository.dart';
+import 'package:strumsight/main.dart';
 
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';

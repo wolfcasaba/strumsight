@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/progress/providers/practice_log_provider.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
-import 'package:music_theory/features/streak/providers/streak_provider.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/streak/providers/streak_provider.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 158 probe (b): the r149/r150 load-gate Completers live on the

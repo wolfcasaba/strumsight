@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/live_pipeline.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
-import 'package:music_theory/features/live/engine/ml/live_crnn_classifier.dart';
+import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
 
 /// r169 — the live model reaches the DSP isolate: LivePipeline accepts the
 /// weights BYTES (rootBundle is main-isolate-only; the engine loads them and

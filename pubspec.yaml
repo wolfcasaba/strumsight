@@ -1,4 +1,4 @@
-name: music_theory
+name: strumsight
 description: "StrumSight — offline, on-device guitar chord & strum-direction detection"
 publish_to: 'none'
 

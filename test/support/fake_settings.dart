@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:music_theory/features/settings/data/settings_repository.dart';
+import 'package:strumsight/features/settings/data/settings_repository.dart';
 
 /// In-memory settings backend for tests. Holds a [RemoteSettings] and records
 /// every `update` patch so tests can assert what was pushed.

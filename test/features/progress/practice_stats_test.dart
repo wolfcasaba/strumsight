@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/progress/model/practice_stats.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/model/practice_stats.dart';
 
 void main() {
   PracticeEntry entry({

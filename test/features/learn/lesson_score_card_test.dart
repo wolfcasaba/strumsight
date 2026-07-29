@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/theme/app_colors.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/screens/lesson_score_preview_screen.dart';
-import 'package:music_theory/features/learn/widgets/lesson_score_card.dart';
-import 'package:music_theory/features/share/share_content.dart';
-import 'package:music_theory/features/share/share_service.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/core/theme/app_colors.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/screens/lesson_score_preview_screen.dart';
+import 'package:strumsight/features/learn/widgets/lesson_score_card.dart';
+import 'package:strumsight/features/share/share_content.dart';
+import 'package:strumsight/features/share/share_service.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 class _FakeShareService extends ShareService {
   const _FakeShareService(this.log);

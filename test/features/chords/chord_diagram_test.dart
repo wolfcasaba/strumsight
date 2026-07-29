@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/settings/providers/left_handed_provider.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/settings/providers/left_handed_provider.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Future<void> pumpDiagram(WidgetTester tester, String label,
         {bool leftHanded = false}) =>

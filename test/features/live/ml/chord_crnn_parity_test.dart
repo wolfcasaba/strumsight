@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/chord_crnn.dart';
+import 'package:strumsight/features/live/engine/ml/chord_crnn.dart';
 
 /// Parity contract for the pure-Dart CHORD CRNN forward pass (r196).
 ///

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/streak/model/streak_data.dart';
-import 'package:music_theory/features/streak/streak_logic.dart';
+import 'package:strumsight/features/streak/model/streak_data.dart';
+import 'package:strumsight/features/streak/streak_logic.dart';
 
 void main() {
   const start = StreakData();

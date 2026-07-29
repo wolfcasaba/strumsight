@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/progress/providers/practice_log_provider.dart';
-import 'package:music_theory/features/streak/screens/streak_screen.dart';
-import 'package:music_theory/features/streak/streak_logic.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
+import 'package:strumsight/features/streak/screens/streak_screen.dart';
+import 'package:strumsight/features/streak/streak_logic.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 152 — the streak→SKILL reframe (chunk 013 #2 TODO, Simply's

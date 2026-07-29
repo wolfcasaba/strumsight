@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/crnn_strum_net.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_strum_net.dart';
 
 /// Parity contract for the pure-Dart CRNN forward pass (ml-track P1.3).
 ///

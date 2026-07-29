@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/chroma_denoise.dart';
+import 'package:strumsight/features/analyze/engine/chroma_denoise.dart';
 
 /// Build a 12-dim chroma frame with the given per-pitch-class values.
 Float64List frame(Map<int, double> pcs) {

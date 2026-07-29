@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/model/tuning.dart';
-import 'package:music_theory/features/tuner/screens/tuner_screen.dart';
-import 'package:music_theory/features/tuner/providers/tuner_providers.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
+import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';

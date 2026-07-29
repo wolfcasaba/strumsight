@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/screens/strum_reel_screen.dart';
-import 'package:music_theory/features/songs/model/song.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/screens/strum_reel_screen.dart';
+import 'package:strumsight/features/songs/model/song.dart';
 
 /// Round 118 — the r116 devil-advocate's WARNING closed: a shared 3/4 song
 /// played its Strum Reel as a 4/4 loop (8 beats for a 6-beat waltz, downbeat

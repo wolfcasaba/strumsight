@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/songs/theory/progressions.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/songs/theory/progressions.dart';
 
 void main() {
   test('every diatonic chord in every supported key has a fingering', () {

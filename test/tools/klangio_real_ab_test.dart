@@ -15,10 +15,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 /// Eval-fold ids = ml/klangio.py split_by_recording(seed 42) — keep in sync.
 const evalIds = [

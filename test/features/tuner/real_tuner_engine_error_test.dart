@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/engine/real_tuner_engine.dart';
+import 'package:strumsight/features/tuner/engine/real_tuner_engine.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

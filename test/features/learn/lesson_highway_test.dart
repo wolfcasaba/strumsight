@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/widgets/lesson_highway.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/widgets/lesson_highway.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Lesson lesson, double playhead) =>
     tester.pumpWidget(MaterialApp(

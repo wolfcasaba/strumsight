@@ -1,12 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/library/data/library_repository.dart';
-import 'package:music_theory/features/library/model/analyzed_session.dart';
-import 'package:music_theory/features/library/providers/library_providers.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/library/data/library_repository.dart';
+import 'package:strumsight/features/library/model/analyzed_session.dart';
+import 'package:strumsight/features/library/providers/library_providers.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';

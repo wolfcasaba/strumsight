@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/songs/theory/strum_patterns.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/songs/theory/strum_patterns.dart';
 
 void main() {
   test('every preset is exactly 8 slots with at least one stroke', () {

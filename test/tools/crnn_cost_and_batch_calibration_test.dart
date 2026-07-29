@@ -12,9 +12,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
-import 'package:music_theory/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 

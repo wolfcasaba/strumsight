@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/metronome/beat_clock.dart';
+import 'package:strumsight/features/metronome/beat_clock.dart';
 
 /// Round 98 — changing the metronome tempo MID-PLAY must not jump the beat.
 /// The old `beat = secs · bpm/60` rescaled the whole elapsed time

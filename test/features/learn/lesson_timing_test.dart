@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/lesson_timing.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/lesson_timing.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
 
 void main() {
   test('beatForElapsed converts seconds to beats at a tempo', () {

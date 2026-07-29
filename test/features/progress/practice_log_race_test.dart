@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/progress/providers/practice_log_provider.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 149 probe finding: a [record] that lands BEFORE the async prefs load

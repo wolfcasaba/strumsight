@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
-import 'package:music_theory/features/tuner/engine/dsp/yin_pitch_detector.dart';
-import 'package:music_theory/features/tuner/model/tuner_reading.dart';
+import 'package:strumsight/features/tuner/engine/dsp/tuner_analyzer.dart';
+import 'package:strumsight/features/tuner/engine/dsp/yin_pitch_detector.dart';
+import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 
 import '../../../support/synth.dart';
 

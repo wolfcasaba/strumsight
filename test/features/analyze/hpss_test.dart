@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/hpss.dart';
+import 'package:strumsight/features/analyze/engine/hpss.dart';
 
 /// A T×F magnitude spectrogram = small broadband base + a HORIZONTAL ridge
 /// (one bin [f0] strong across ALL frames = a held harmonic) + a VERTICAL

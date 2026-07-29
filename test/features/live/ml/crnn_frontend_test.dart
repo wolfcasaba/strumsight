@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/crnn_frontend.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_frontend.dart';
 
 /// The Dart ports feeding the CRNN must mirror the Python training pipeline
 /// exactly (ml/prepare_dataset.py::_read_wav resample, ml/features.py::

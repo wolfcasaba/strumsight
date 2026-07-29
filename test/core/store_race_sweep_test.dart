@@ -2,18 +2,18 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/providers/favorite_chords_provider.dart';
-import 'package:music_theory/features/learn/providers/lesson_progress_provider.dart';
-import 'package:music_theory/features/library/providers/library_providers.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/library/model/analyzed_session.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/songs/model/setlist.dart';
-import 'package:music_theory/features/songs/model/song.dart';
-import 'package:music_theory/features/songs/providers/setlists_provider.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
-import 'package:music_theory/features/streak/model/streak_data.dart';
-import 'package:music_theory/features/streak/providers/streak_provider.dart';
+import 'package:strumsight/features/chords/providers/favorite_chords_provider.dart';
+import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
+import 'package:strumsight/features/library/providers/library_providers.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/library/model/analyzed_session.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/songs/model/setlist.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/setlists_provider.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/streak/model/streak_data.dart';
+import 'package:strumsight/features/streak/providers/streak_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 150 sweep — the r149 race class across every COLLECTION store: a

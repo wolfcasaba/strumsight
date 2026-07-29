@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/widgets/strum_card.dart';
-import 'package:music_theory/features/songs/model/song.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
-import 'package:music_theory/features/songs/screens/song_list_screen.dart';
-import 'package:music_theory/features/songs/widgets/strum_pattern_editor.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/widgets/strum_card.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/songs/screens/song_list_screen.dart';
+import 'package:strumsight/features/songs/widgets/strum_pattern_editor.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A songbook seeded with fixed songs, not touching disk.

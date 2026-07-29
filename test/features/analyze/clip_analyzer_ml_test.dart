@@ -2,11 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
-import 'package:music_theory/features/analyze/providers/analyze_providers.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 import '../../support/synth.dart';
 

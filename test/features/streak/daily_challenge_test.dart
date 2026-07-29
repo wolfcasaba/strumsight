@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/streak/daily_challenge.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/streak/daily_challenge.dart';
 
 void main() {
   test('is deterministic — same day yields the same pattern and name', () {

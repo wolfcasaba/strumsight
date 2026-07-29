@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/crnn_strum_net.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_strum_net.dart';
 
 /// r168 — parity + real-domain lock for the LIVE (70 ms audio-truncated)
 /// model, mirroring crnn_strum_net_test.dart for the shipped batch model.
