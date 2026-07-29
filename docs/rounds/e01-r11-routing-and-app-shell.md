@@ -5,6 +5,15 @@ SDD: docs/sdd/02-epic-01-core-platform.md § „Kör 11 — Routing és alkalmaz
 Branch: `codex/epic-01-round-11-routing`
 Brief szerzője: Claude · Implementáció: Codex
 
+**Revízió R1 (2026-07-29).** Az első indítás a brief §5 megállási szabálya szerint
+**megállt, nulla kóddiffel**: a kötelező reaktív redirect (§5.4) ütközött az
+onboarding first-win vezérlésével, és a javítás nem fért bele az engedélyezett
+fájllistába. A megállás helyes volt — a hiba tervezői, nem implementációs. Ez a
+revízió feloldja az ütközést: bővül a 4. szekció (onboarding képernyő + egy új
+regressziós teszt), és új kötött döntés került az 5. szekcióba (**5.8**), új
+kritérium a 6.-ba, új lépés a 8.-ba, új kockázat a 9.-be. A többi változatlan.
+A megállás bizonyítéka a §10-ben rögzítendő.
+
 ## 1. Cél
 
 A navigáció ma szétszórt string-literálokból és egy ellenőrizetlen `as` castból áll,
@@ -53,6 +62,21 @@ Elolvasott kód (`main` @ `7033fed`):
 - **Architecture guard** (`tool/check_architecture.dart`): a `lib/app/` nem
   feature, így a feature-importjai nem sértik a `public.dart` szabályt; a guardot
   ez a kör nem módosítja.
+- **Onboarding-befejezés sorrendje (R1 revízió — a megállás oka).**
+  `OnboardingController.complete()` (`lib/features/onboarding/onboarding_provider.dart:30–36`)
+  **előbb** állítja `state = true`-ra a providert, és **utána** await-eli a
+  perzisztálást. Az `OnboardingScreen` mindkét kilépési útja
+  (`_finish()` :54–67, `_firstWin()` :72–101) a `complete()` **után**
+  `if (!mounted) return`-nel őrzi a navigációt, és a `context`-et az await
+  után használja. Amint a redirect reaktívvá válik, a `state = true` azonnal
+  elindítja a `/welcome` → `/live` váltást, ami a még futó tárolás-írás alatt
+  unmountolja a képernyőt → a `mounted` őr **elnyeli** a first-win lecke
+  megnyitását (`Lessons.firstWin`). Ez pontosan az az aktivációs útvonal, amit
+  az r155/r156 körök kétszer javítottak (a kód kommentjei ott vannak), és amire
+  az injektált `onDone`/`onFirstWin` callbackes tesztek **vakok** — a hibát csak
+  a default útvonal mutatja meg. Baseline (Codex mérés, 2026-07-29, `8c9189e`):
+  `test/app` 26 zöld, `test/tooling` 8 zöld, `test/features/live` 160 zöld +
+  2 skipped, `test/features/library` 12 zöld.
 
 ## 3. Scope
 
@@ -104,15 +128,19 @@ Csak az alábbi útvonalak módosíthatók. Bármi más → **MEGÁLLÁS és jel
 | `lib/features/settings/screens/settings_screen.dart` | 3 nav-hívás (`/progress`, `/calibrate`, `/login`) → konstans |
 | `lib/features/streak/screens/streak_screen.dart` | 2 nav-hívás (`/progress`, `/live`) → konstans |
 | `lib/features/streak/widgets/streak_badge.dart` | 1 nav-hívás (`/streak`) → konstans |
-| `lib/features/onboarding/screens/onboarding_screen.dart` | 2 nav-hívás (`/live`) → konstans |
+| `lib/features/onboarding/screens/onboarding_screen.dart` | 2 nav-hívás (`/live`) → konstans **+ (R1) a `_finish()` / `_firstWin()` navigációs sorrendje az 5.8 szerint** |
 | `test/app/routing/app_router_test.dart` | ÚJ — router-viselkedés |
 | `test/app/routing/route_guards_test.dart` | ÚJ — guard unit tesztek |
 | `test/app/routing/shell_lifecycle_test.dart` | ÚJ — tab-navigáció + mic release |
 | `test/tooling/route_literal_guard_test.dart` | ÚJ — route-literál guard |
+| `test/app/routing/onboarding_first_win_test.dart` | ÚJ (R1) — késleltetett preference-írás melletti first-win regresszió |
 | `docs/rounds/e01-r11-routing-and-app-shell.md` | **csak a 10. szekció** (Implementation handoff) |
 
 **Tilos zóna:** `lib/core/**`, `lib/features/**` minden más fájlja és a felsorolt
-fájlokban minden, ami nem a navigációs literál cseréje; `tool/`, `backend/`,
+fájlokban minden, ami nem a navigációs literál cseréje — **egyetlen kivétel (R1):
+`onboarding_screen.dart` `_finish()` / `_firstWin()` metódusai az 5.8 szerint**.
+Kiemelten tilos marad **`lib/features/onboarding/onboarding_provider.dart`**
+(a `complete()` sorrendje NEM változhat, indoklás az 5.8-ban); `tool/`, `backend/`,
 `ml/`, `.github/`, `pubspec.yaml`, `lib/l10n/**`, `docs/**` (a fenti egy fájl 10.
 szekcióján kívül), `HANDOFF.md`, RTM, ADR-ek — ezek Claude-oldal.
 
@@ -160,6 +188,23 @@ Ezektől külön ADR nélkül nem lehet eltérni. Előre kiosztott ADR-szám: **
 7. **A mic-lifecycle mechanizmusa változatlan.** A mikrofont továbbra is a
    `liveFrameProvider` `autoDispose`-a szabadítja fel. A kör ehhez **tesztet**
    ad, nem új mechanizmust.
+8. **(R1) Az onboarding kilépési útjai unmount-tűrőek lesznek.** A reaktív
+   redirect marad (az SDD §11.3 ezt kéri), a `complete()` sorrendje **nem
+   változik** — a state optimista felvillantása szándékos (`onboarding_provider.dart`
+   az R06 storage-contract területe, és egy elbukó írás után a felhasználó nem
+   ragadhat be az onboardingba). Helyette az `OnboardingScreen` alkalmazkodik:
+   - `_finish()` és `_firstWin()` **az első `await` ELŐTT** elkapja a
+     navigációs objektumokat (`GoRouter.of(context)`, a first-winnél
+     `Navigator.of(context, rootNavigator: true)`) lokális változóba;
+   - az await-ek után a kód **nem nyúl `context`-hez**, és a navigációt
+     **nem őrzi `mounted`** — a redirect okozta unmount nem nyelheti el;
+   - az injektált `widget.onDone` / `widget.onFirstWin` továbbra is meghívódik
+     (a meglévő tesztek erre építenek), szintén `mounted`-őr nélkül;
+   - a `_finishing` re-entrancia-őr és a postFrame-es lecke-push
+     (r156 tanulság) **változatlan marad**;
+   - `context.go(...)` helyett az elkapott `router.go(AppRoutes.live)` hívódik.
+   Ezen a két metóduson kívül az `onboarding_screen.dart` nem módosulhat
+   (nincs UI-, szöveg- vagy állapotváltozás).
 
 ## 6. Acceptance criteria
 
@@ -187,7 +232,21 @@ Ezektől külön ADR nélkül nem lehet eltérni. Előre kiosztott ADR-szám: **
       **leállt** (a `liveFrameProvider` autoDispose-a lefutott — fake engine
       `stop()` hívásának megfigyelésével, `test/support/fake_engines.dart`
       mintájára), és Live → Tuner → vissza után a shell ugyanazon a tabon áll.
-- [ ] `lib/l10n/**`, `pubspec.yaml`, `tool/**` és `lib/core/**` diffje **üres**.
+- [ ] **(R1) `onboarding_first_win_test.dart`** — a default útvonalon (injektált
+      `onDone`/`onFirstWin` **NÉLKÜL**), valódi `routerProvider`-rel,
+      `seen=false` indulásból: a first-win CTA megnyomása után a
+      `Lessons.firstWin` lecke képernyője **megjelenik**, ÉS a router a
+      `/live`-en áll. A tesztnek **késleltetett** preference-írást kell
+      használnia (a teszt fájlban definiált privát `KeyValueStore` dekorátor,
+      ami a `writeBool`-t egy `Future.delayed`-del engedi vissza) — a
+      megosztott `test/core/storage/in_memory_key_value_store.dart` **nem
+      módosítható**. A tesztnek a mai (nem reaktív) kódon is értelmesnek kell
+      lennie, az 5.8 nélkül viszont **piros** — ezt a §10-ben bizonyítsd
+      (ideiglenesen visszaállított `mounted`-őr → piros → visszaállítás).
+- [ ] **(R1)** `flutter test test/features/onboarding` változatlanul zöld
+      (a két meglévő teszt egyike sem módosult).
+- [ ] `lib/l10n/**`, `pubspec.yaml`, `tool/**` és `lib/core/**` diffje **üres**;
+      `lib/features/onboarding/onboarding_provider.dart` diffje **üres**.
 - [ ] `git diff --stat main...` kizárólag a 4. szekció tábláját tartalmazza.
 - [ ] Egyetlen meglévő teszt sem lett átírva, kikapcsolva vagy lazítva.
 
@@ -196,12 +255,14 @@ Ezektől külön ADR nélkül nem lehet eltérni. Előre kiosztott ADR-szám: **
 Külön parancsokként (`AGENTS.md` §12 — soha ne láncold `&&`-del):
 
 ```bash
+~/flutter/bin/flutter gen-l10n
 ~/flutter/bin/dart format --output=none --set-exit-if-changed lib test
 ~/flutter/bin/flutter analyze lib/ test/
 ~/flutter/bin/flutter test test/app
 ~/flutter/bin/flutter test test/tooling
 ~/flutter/bin/flutter test test/features/live
 ~/flutter/bin/flutter test test/features/library
+~/flutter/bin/flutter test test/features/onboarding
 ```
 
 A teljes suite + property gate + APK a CI-ban ([ADR 0053](../adr/0053-ci-full-test-suite.md)).
@@ -219,7 +280,10 @@ a Codex ne hívjon `gh`-t.
    konstansokra, `refreshListenable`, `/library/session` redirect-validáció,
    `onException`. `lib/app/router.dart` törlése, `strumsight_app.dart` import.
 5. `lib/app/home_shell.dart` — `AppRoutes.shellTabs`.
-6. A 7 feature-fájl navigációs literáljainak cseréje (semmi más).
+6. A 7 feature-fájl navigációs literáljainak cseréje (semmi más), majd
+   **(R1)** az `onboarding_screen.dart` `_finish()` / `_firstWin()` átalakítása
+   az 5.8 szerint + `test/app/routing/onboarding_first_win_test.dart`
+   (a teszt ELŐBB, hogy a piros → zöld átmenet bizonyítható legyen).
 7. `test/app/routing/app_router_test.dart`, `shell_lifecycle_test.dart`.
 8. `test/tooling/route_literal_guard_test.dart` + a guard valódi sértéssel
    való kipróbálása.
@@ -241,6 +305,16 @@ a Codex ne hívjon `gh`-t.
   production kód „teszt-tudatossá" tételével.
 - **`onboardingSeenProvider` defaultja `true`** (a widgettesztek átugorják az
   onboardingot). A `seen=false` ágat expliciten felül kell írni a tesztben.
+- **(R1) A first-win útvonal load-bearing és kétszer elrontott** (r155, r156).
+  A veszély nem a kód, hanem a **teszt-vakság**: az injektált callbackes tesztek
+  akkor is zöldek, ha a default útvonal néma. Ezért kötelező a callback nélküli,
+  késleltetett írású regressziós teszt, és ezért kell bizonyítani, hogy a teszt
+  az 5.8 nélkül piros. Ha a `Navigator`/`GoRouter` await előtti elkapása a
+  teszt-környezetben nem működik, az **megállási pont** — ne kerüld meg a
+  `complete()` sorrendjének átírásával.
+- **(R1) Friss klón = hiányzó generált lokalizáció.** A `test/app` futtatása
+  előtt `~/flutter/bin/flutter gen-l10n` kell (a generált
+  `app_localizations*.dart` gitignore-olt). Ez nem kódhiba.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
