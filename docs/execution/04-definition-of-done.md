@@ -3,9 +3,11 @@
 ## Funkció és scope
 
 - [ ] Minden kijelölt acceptance criterion teljesült.
-- [ ] Scope-on kívüli változás nincs a diffben.
+- [ ] Scope-on kívüli változás nincs a diffben — a `git diff --stat` a
+      kör-brief engedélyezett-fájllistája ellen ellenőrizve.
 - [ ] A következő SDD-kör nem kezdődött el.
 - [ ] Feature flag és fallback viselkedés dokumentált.
+- [ ] A brief „Implementation handoff" szekciója kitöltve.
 
 ## Kód és architektúra
 
@@ -71,7 +73,9 @@
 - [ ] Diff review-zható méretű.
 - [ ] PR leírás tartalmazza a tesztbizonyítékot.
 - [ ] CI zöld.
-- [ ] Nincs unresolved blocking review.
+- [ ] Nincs unresolved blocking review — a független review-jelentés
+      (`docs/reviews/eXX-rYY-review.md`, sablon: [09-review-report](09-review-report.md))
+      commitolva, és nincs benne OPEN státuszú BLOCKER vagy MAJOR.
 - [ ] Merge után a main zöld és az artifact azonosítható.
 
 Egy kör nem Done, ha a tesztet nem lehetett futtatni és a hiányzó ellenőrzés release-kritikus.

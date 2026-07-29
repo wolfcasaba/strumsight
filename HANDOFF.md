@@ -16,6 +16,13 @@
 > és ÚJRA lefuttatta a CI-t. Ez a §15 kiterjesztése: eddig két KÜLÖN kör futott párhuzamosan, most
 > egy kör két diszjunkt fele. **User-szabály (2026-07-29): a Codexet CSAK kódolásra használjuk** —
 > a CI-dispatch, PR, merge, verifikáció és dokumentáció a Claude-oldalé.
+> **ÁGENSSZEREP-PROTOKOLL ([ADR 0055](docs/adr/0055-agent-role-protocol.md), 2026-07-29,
+> [PR #14](https://github.com/wolfcasaba/strumsight/pull/14)):** az alapértelmezés mostantól a
+> váltóbot — Claude **kör-briefet** ír (`docs/rounds/`, tételes engedélyezett-fájllistával) → Codex
+> implementál → Claude **független review-jelentést** ír (`docs/reviews/`, BLOCKER/MAJOR/MINOR/NOTE,
+> review közben production kódot NEM ír) → Codex javít → Claude merge-el. A párhuzamos kétkörös
+> futás opt-in kivétellé vált. Sablonok: `docs/execution/08-round-brief.md`, `09-review-report.md`.
+> A merge-szabály NEM változott (ADR 0052).
 > **Következő: E01-R11 Routing és alkalmazás-shell stabilizálása** (Ch2, Kör 11) — ÚJ SESSIONBEN.
 > Állandó user-szabályok (2026-07-29,
 > [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
