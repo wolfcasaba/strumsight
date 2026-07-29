@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/api/api_config.dart';
+import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/features/diagnostics/data/diagnostics_uploader.dart';
 import 'package:strumsight/features/diagnostics/model/diagnostics_session.dart';
 
@@ -60,7 +60,7 @@ DiagnosticsSession _session() => const DiagnosticsSession(
 );
 
 Dio _dioWith(_FakeAdapter adapter) {
-  final dio = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
+  final dio = Dio(BaseOptions(baseUrl: AppConfig.devApiBaseUrl));
   dio.httpClientAdapter = adapter;
   return dio;
 }
@@ -79,7 +79,7 @@ void main() {
     expect(status, DiagnosticsUploadStatus.uploaded);
     expect(adapter.calls, 1);
     final headers = adapter.lastOptions!.headers;
-    expect(headers['X-Diag-Token'], ApiConfig.diagToken);
+    expect(headers['X-Diag-Token'], AppConfig.devDiagnosticsToken);
     expect(headers['Content-Encoding'], 'gzip');
     expect(headers['X-App-Version'], '1.0.0+1');
     expect(headers['X-Device'], 'android');

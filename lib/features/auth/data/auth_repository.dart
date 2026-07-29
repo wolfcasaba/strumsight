@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/api/api_config.dart';
+import '../../../app/config/app_config.dart';
 import '../model/auth_user.dart';
 import 'token_store.dart';
 
@@ -85,7 +85,7 @@ class HttpAuthRepository implements AuthRepository {
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
-      baseUrl: ApiConfig.baseUrl,
+      baseUrl: ref.watch(appConfigProvider).apiBaseUrl,
       connectTimeout: const Duration(seconds: 8),
       receiveTimeout: const Duration(seconds: 8),
       contentType: 'application/json',
