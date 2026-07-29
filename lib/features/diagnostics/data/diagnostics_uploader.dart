@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'dart:io' show gzip;
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
-
-import '../../../app/config/app_config.dart';
 import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
+import '../../../core/network/api_client.dart';
 import '../../learn/audio/wav.dart';
 import '../model/diagnostics_session.dart';
 
@@ -16,32 +15,16 @@ import '../model/diagnostics_session.dart';
 enum DiagnosticsUploadStatus { idle, uploading, uploaded, failed }
 
 /// Best-effort uploader for a Lab-mode [DiagnosticsSession] (r198). Gzips the
-/// session JSON, POSTs it to `<baseUrl>/diagnostics` with the diag token +
-/// `Content-Encoding: gzip`, retries a couple of times on network failure,
-/// and returns a status — NEVER throwing. Fire-and-forget from the Analyze
-/// path. [baseUrl]/[diagToken] come from the bootstrap-validated `AppConfig`
-/// (via `diagnosticsUploaderProvider`); the dev defaults keep direct
-/// construction in tests working.
+/// session JSON, POSTs it once with the diagnostics token +
+/// `Content-Encoding: gzip`, and returns a status — NEVER throwing.
 class DiagnosticsUploader {
   DiagnosticsUploader({
-    Dio? dio,
-    String baseUrl = AppConfig.devApiBaseUrl,
-    this.diagToken = AppConfig.devDiagnosticsToken,
-    this.maxRetries = 2,
+    required this.client,
+    required this.diagToken,
     AppLogger logger = const NoopAppLogger(),
-  }) : _log = logger,
-       _dio =
-           dio ??
-           Dio(
-             BaseOptions(
-               baseUrl: baseUrl,
-               connectTimeout: const Duration(seconds: 6),
-               sendTimeout: const Duration(seconds: 12),
-               receiveTimeout: const Duration(seconds: 6),
-             ),
-           );
+  }) : _log = logger;
 
-  final Dio _dio;
+  final ApiClient? client;
 
   /// Every swallowed error is reported here — the upload stays best-effort,
   /// but it is no longer *silent* (E01-R04 §4.5).
@@ -49,9 +32,6 @@ class DiagnosticsUploader {
 
   /// `X-Diag-Token` header value for the diagnostics endpoint.
   final String diagToken;
-
-  /// How many additional attempts after the first (total = maxRetries + 1).
-  final int maxRetries;
 
   /// Cap on the raw (pre-base64) WAV clip. base64 inflates ~4/3, so this keeps
   /// the encoded clip well under the ~8 MB upload budget. A longer clip is
@@ -63,9 +43,15 @@ class DiagnosticsUploader {
   /// Returns [DiagnosticsUploadStatus.uploaded] on a 2xx, else `.failed`.
   Future<DiagnosticsUploadStatus> upload(
     DiagnosticsSession session, {
+    required bool consentGranted,
     String? appVersion,
     String? device,
   }) async {
+    final apiClient = client;
+    if (!consentGranted || apiClient == null) {
+      return DiagnosticsUploadStatus.failed;
+    }
+
     final Uint8List body;
     try {
       final json = jsonEncode(session.toJson());
@@ -82,56 +68,30 @@ class DiagnosticsUploader {
       return DiagnosticsUploadStatus.failed;
     }
 
-    for (var attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        final res = await _dio.post<dynamic>(
-          '/diagnostics',
-          data: Stream.fromIterable([body]),
-          options: Options(
-            headers: {
-              'X-Diag-Token': diagToken,
-              'Content-Type': 'application/json',
-              'Content-Encoding': 'gzip',
-              'Content-Length': body.length,
-              'X-Session-Id': session.sessionId,
-              'X-App-Version': ?appVersion,
-              'X-Device': ?device,
-            },
-          ),
-        );
-        final code = res.statusCode ?? 0;
-        if (code >= 200 && code < 300) {
-          return DiagnosticsUploadStatus.uploaded;
-        }
-        // A non-2xx that isn't a transport error: no point retrying auth/shape
-        // problems — report failed.
-        _log.warning(
-          'diagnostics.upload_rejected',
-          fields: {'code': FailureCode.networkServer, 'status': code},
-        );
-        return DiagnosticsUploadStatus.failed;
-      } on DioException catch (e) {
-        // Transport error — retry if attempts remain, else fail.
-        _log.warning(
-          'diagnostics.upload_transport_failed',
-          fields: {
-            'code': FailureCode.networkUnavailable,
-            'type': e.type.name,
-            'attempt': attempt,
-          },
-        );
-        if (attempt >= maxRetries) return DiagnosticsUploadStatus.failed;
-      } catch (e, stackTrace) {
+    final result = await apiClient.post(
+      '/diagnostics',
+      data: Stream<Uint8List>.fromIterable([body]),
+      headers: {
+        'X-Diag-Token': diagToken,
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip',
+        'Content-Length': body.length,
+        'X-Session-Id': session.sessionId,
+        'X-App-Version': ?appVersion,
+        'X-Device': ?device,
+      },
+      requiresAuthentication: false,
+    );
+    return switch (result) {
+      Success() => DiagnosticsUploadStatus.uploaded,
+      Failure(:final error) => () {
         _log.warning(
           'diagnostics.upload_failed',
-          error: e,
-          stackTrace: stackTrace,
-          fields: const {'code': FailureCode.unknown},
+          fields: {'code': error.code, 'retryable': error.retryable},
         );
         return DiagnosticsUploadStatus.failed;
-      }
-    }
-    return DiagnosticsUploadStatus.failed;
+      }(),
+    };
   }
 
   /// Encode mono [pcm] (samples in [-1, 1]) at [sampleRate] Hz into a base64

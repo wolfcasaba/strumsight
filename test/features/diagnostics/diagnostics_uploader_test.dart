@@ -3,6 +3,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/network/api_client.dart';
+import 'package:strumsight/core/network/dio_factory.dart';
 import 'package:strumsight/features/diagnostics/data/diagnostics_uploader.dart';
 import 'package:strumsight/features/diagnostics/model/diagnostics_session.dart';
 
@@ -59,19 +62,25 @@ DiagnosticsSession _session() => const DiagnosticsSession(
   events: [DiagnosticsEvent(tSec: 0, mlChord: 'C', dspChord: 'C', agree: true)],
 );
 
-Dio _dioWith(_FakeAdapter adapter) {
-  final dio = Dio(BaseOptions(baseUrl: AppConfig.devApiBaseUrl));
-  dio.httpClientAdapter = adapter;
-  return dio;
-}
+ApiClient _clientWith(_FakeAdapter adapter) => DioFactory(
+  baseUrl: AppConfig.devApiBaseUrl,
+  appVersion: 'test',
+  logger: const NoopAppLogger(),
+  adapter: adapter,
+  correlationIdGenerator: () => 'test-correlation',
+).createDiagnosticsClient(diagnosticsEnabled: true);
 
 void main() {
   test('success (2xx) → uploaded, sends token + gzip headers', () async {
     final adapter = _FakeAdapter(status: 200);
-    final uploader = DiagnosticsUploader(dio: _dioWith(adapter));
+    final uploader = DiagnosticsUploader(
+      client: _clientWith(adapter),
+      diagToken: AppConfig.devDiagnosticsToken,
+    );
 
     final status = await uploader.upload(
       _session(),
+      consentGranted: true,
       appVersion: '1.0.0+1',
       device: 'android',
     );
@@ -90,24 +99,42 @@ void main() {
     expect(adapter.lastBody![1], 0x8b);
   });
 
-  test('network error → failed, never throws, retries then gives up', () async {
+  test('network error → failed, never throws, and is not retried', () async {
     final adapter = _FakeAdapter(throwError: true);
-    final uploader = DiagnosticsUploader(dio: _dioWith(adapter), maxRetries: 2);
+    final uploader = DiagnosticsUploader(
+      client: _clientWith(adapter),
+      diagToken: AppConfig.devDiagnosticsToken,
+    );
 
-    final status = await uploader.upload(_session());
+    final status = await uploader.upload(_session(), consentGranted: true);
 
     expect(status, DiagnosticsUploadStatus.failed);
-    // First attempt + 2 retries = 3 calls.
-    expect(adapter.calls, 3);
+    expect(adapter.calls, 1);
   });
 
   test('non-2xx server response → failed', () async {
     final adapter = _FakeAdapter(status: 401);
-    final uploader = DiagnosticsUploader(dio: _dioWith(adapter));
+    final uploader = DiagnosticsUploader(
+      client: _clientWith(adapter),
+      diagToken: AppConfig.devDiagnosticsToken,
+    );
 
-    // Dio throws on 4xx by default; the uploader catches it as a failure.
-    final status = await uploader.upload(_session());
+    final status = await uploader.upload(_session(), consentGranted: true);
     expect(status, DiagnosticsUploadStatus.failed);
+    expect(adapter.calls, 1);
+  });
+
+  test('missing consent fails closed without constructing a request', () async {
+    final adapter = _FakeAdapter();
+    final uploader = DiagnosticsUploader(
+      client: _clientWith(adapter),
+      diagToken: AppConfig.devDiagnosticsToken,
+    );
+
+    final status = await uploader.upload(_session(), consentGranted: false);
+
+    expect(status, DiagnosticsUploadStatus.failed);
+    expect(adapter.calls, 0);
   });
 
   group('clipFromPcm', () {

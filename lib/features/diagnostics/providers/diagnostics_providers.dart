@@ -5,16 +5,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../core/logging/logger_provider.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/dio_factory.dart';
 import '../../analyze/model/analyze_result.dart';
 import '../data/diagnostics_uploader.dart';
 import '../model/diagnostics_session.dart';
 
-/// The best-effort diagnostics uploader, bound to the bootstrap-validated
-/// [AppConfig] endpoint + token (injectable for tests via override).
+/// Explicit, revocable upload consent. The composition root binds this to the
+/// persisted Lab-mode setting; tests default to fail-closed.
+final diagnosticsConsentProvider = Provider<bool>((_) => false);
+
+/// A transport that is separate from the account client and has no bearer
+/// interceptor. Disabled builds never instantiate it.
+final diagnosticsApiClientProvider = Provider<ApiClient?>((ref) {
+  final config = ref.watch(appConfigProvider);
+  if (!config.flags.diagnosticsEnabled) return null;
+
+  final client = DioFactory(
+    baseUrl: config.apiBaseUrl,
+    appVersion: config.appVersion,
+    logger: ref.watch(appLoggerProvider),
+  ).createDiagnosticsClient(diagnosticsEnabled: true);
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// The best-effort diagnostics uploader, bound to the separately gated client.
 final diagnosticsUploaderProvider = Provider<DiagnosticsUploader>((ref) {
   final config = ref.watch(appConfigProvider);
   return DiagnosticsUploader(
-    baseUrl: config.apiBaseUrl,
+    client: ref.watch(diagnosticsApiClientProvider),
     diagToken: config.diagnosticsToken,
     logger: ref.watch(appLoggerProvider),
   );
@@ -42,9 +62,13 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
     String surface = 'analyze',
   }) async {
     if (result.diagnostics == null) return;
+    final config = ref.read(appConfigProvider);
+    final consentGranted = ref.read(diagnosticsConsentProvider);
+    if (!config.flags.diagnosticsEnabled || !consentGranted) return;
+
     state = DiagnosticsUploadStatus.uploading;
 
-    final appVersion = ref.read(appConfigProvider).appVersion;
+    final appVersion = config.appVersion;
     final device = _device();
     final clip = DiagnosticsUploader.clipFromPcm(pcm, sr);
     final session = DiagnosticsSession(
@@ -59,7 +83,13 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
 
     final status = await ref
         .read(diagnosticsUploaderProvider)
-        .upload(session, appVersion: appVersion, device: device);
+        .upload(
+          session,
+          consentGranted: consentGranted,
+          appVersion: appVersion,
+          device: device,
+        );
+    if (!ref.mounted) return;
     state = status;
   }
 

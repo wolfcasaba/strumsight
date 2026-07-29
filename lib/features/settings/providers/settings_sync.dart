@@ -1,11 +1,13 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 import '../../../core/i18n/locale_provider.dart';
+import '../../../core/logging/logger_provider.dart';
 import '../../../core/theme/theme_mode_provider.dart';
-import '../../auth/providers/auth_providers.dart';
+import '../../auth/public.dart';
 import '../data/settings_repository.dart';
 import 'confidence_threshold_provider.dart';
 import 'tuning_reference_provider.dart';
@@ -16,24 +18,22 @@ final settingsSyncDebounceProvider = Provider<Duration>(
   (_) => const Duration(milliseconds: 600),
 );
 
-/// Backoff before retrying a push that failed (offline). Overridden in tests.
-final settingsSyncRetryProvider = Provider<Duration>(
-  (_) => const Duration(seconds: 10),
-);
-
 /// Keeps local settings and the signed-in user's cloud profile in sync.
 ///
 /// - **Login / session restore** ⇒ pull the cloud profile and apply it locally
 ///   (the account is the source of truth for an existing session).
 /// - **Register** ⇒ push the current LOCAL settings up as the new profile, so a
 ///   user who customised the app offline doesn't lose those on signup.
-/// - **Any local change while signed in** ⇒ push it (debounced), with a bounded
-///   retry so an offline edit is never silently dropped.
+/// - **Any local change while signed in** ⇒ push it once (debounced). A later
+///   genuine edit sends the latest full profile; writes are never replayed
+///   automatically.
 ///
 /// Logged out, this is inert — the app works fully offline. Synced fields:
 /// theme, locale, confidence threshold, and tuning reference A4.
 class SettingsSync {
   SettingsSync(this._ref) {
+    if (!_ref.read(accountEnabledProvider)) return;
+
     // Drive sync from explicit auth events so register (adopt local) is
     // distinguished from login/restore (adopt remote).
     _ref.listen(authEventProvider, (_, next) {
@@ -48,17 +48,32 @@ class SettingsSync {
     });
 
     // Ensure a stored session restores at launch (triggers the event above).
-    _ref.listen(authControllerProvider, (_, _) {}, fireImmediately: true);
+    _ref.listen(authControllerProvider, (_, next) {
+      _authRevision++;
+      if (next.value == null) {
+        _debounce?.cancel();
+        _pushPending = false;
+        _forcePendingPush = false;
+        _syncedSignature = null;
+      }
+    }, fireImmediately: true);
 
     // Push local edits (guarded so a pull's own writes don't echo back).
     _ref.listen(themeModeProvider, (_, _) => _onLocalChange());
     _ref.listen(localeProvider, (_, _) => _onLocalChange());
     _ref.listen(confidenceThresholdProvider, (_, _) => _onLocalChange());
     _ref.listen(tuningReferenceProvider, (_, _) => _onLocalChange());
+    _ref.onDispose(() => _debounce?.cancel());
   }
 
   final Ref _ref;
   Timer? _debounce;
+  int _authRevision = 0;
+  int _localRevision = 0;
+  int _pullRevision = 0;
+  bool _pushInFlight = false;
+  bool _pushPending = false;
+  bool _forcePendingPush = false;
 
   /// True while a pull is applying remote values locally — suppresses the
   /// resulting change notifications so they don't bounce straight back.
@@ -78,7 +93,7 @@ class SettingsSync {
     return '$theme|$locale|$threshold|$a4';
   }
 
-  Map<String, dynamic> _currentPatch() {
+  Map<String, Object?> _currentPatch() {
     return {
       'theme_mode': _ref.read(themeModeProvider).name,
       'locale': _ref.read(localeProvider)?.languageCode,
@@ -88,73 +103,182 @@ class SettingsSync {
   }
 
   Future<void> _pull() async {
-    try {
-      final remote = await _ref.read(settingsRepositoryProvider).fetch();
-      _applyingPull = true;
-      _syncedSignature =
-          '${remote.themeMode.name}|${remote.locale?.languageCode ?? ''}'
-          '|${remote.confidenceThreshold}|${remote.tuningA4}';
-      _ref.read(themeModeProvider.notifier).setMode(remote.themeMode);
-      _ref.read(localeProvider.notifier).set(remote.locale);
-      _ref
-          .read(confidenceThresholdProvider.notifier)
-          .set(remote.confidenceThreshold);
-      _ref.read(tuningReferenceProvider.notifier).set(remote.tuningA4);
-      // Let the resulting change-listeners flush while still suppressed.
-      await Future<void>.delayed(Duration.zero);
-    } catch (_) {
-      // Offline / server down — keep local settings; a later change re-syncs.
-    } finally {
-      _applyingPull = false;
+    final pullRevision = ++_pullRevision;
+    final authRevision = _authRevision;
+    final localRevision = _localRevision;
+    final localSignature = _currentSignature();
+    final result = await _ref.read(settingsRepositoryProvider).fetch();
+    if (!_ref.mounted ||
+        pullRevision != _pullRevision ||
+        authRevision != _authRevision ||
+        localRevision != _localRevision ||
+        localSignature != _currentSignature()) {
+      return;
+    }
+    switch (result) {
+      case Failure(:final error):
+        _ref
+            .read(appLoggerProvider)
+            .warning(
+              'settings.sync_pull_failed',
+              fields: {'code': error.code, 'retryable': error.retryable},
+            );
+        if (_isExpiredSession(error)) {
+          await _ref.read(authControllerProvider.notifier).invalidateSession();
+        }
+        return;
+      case Success(:final value):
+        if (!_signedIn) return;
+        final remoteSignature =
+            '${value.themeMode.name}|${value.locale?.languageCode ?? ''}'
+            '|${value.confidenceThreshold}|${value.tuningA4}';
+        final localRevisionAtApply = _localRevision;
+
+        // Every notifier publishes its in-memory state before its first await.
+        // Start all four setters in one synchronous turn so no user edit can
+        // land between fields and be overwritten by a later remote setter.
+        _applyingPull = true;
+        late final List<Future<void>> persistence;
+        try {
+          persistence = [
+            _ref.read(themeModeProvider.notifier).setMode(value.themeMode),
+            _ref.read(localeProvider.notifier).set(value.locale),
+            _ref
+                .read(confidenceThresholdProvider.notifier)
+                .set(value.confidenceThreshold),
+            _ref.read(tuningReferenceProvider.notifier).set(value.tuningA4),
+          ];
+          _syncedSignature = remoteSignature;
+        } finally {
+          _applyingPull = false;
+        }
+        await Future.wait(persistence);
+        if (!_ref.mounted || authRevision != _authRevision || !_signedIn) {
+          return;
+        }
+
+        // A genuine edit may have arrived while the four persistence futures
+        // were pending. Re-persist the latest complete snapshot after the old
+        // writes, repeating only if another edit lands during reconciliation.
+        // This prevents a delayed remote write from winning on disk.
+        if (_localRevision != localRevisionAtApply) {
+          await _reconcileLocalPersistence(authRevision);
+        }
+        if (!_ref.mounted || authRevision != _authRevision || !_signedIn) {
+          return;
+        }
+        if (_currentSignature() != _syncedSignature) {
+          _schedulePush();
+        }
     }
   }
 
-  /// Push current local settings up (used on register — local wins).
-  Future<void> _pushAll() async {
-    if (!_signedIn) return;
-    await _sendPatch(_currentPatch(), _currentSignature());
-  }
+  Future<void> _reconcileLocalPersistence(int authRevision) async {
+    while (_ref.mounted && authRevision == _authRevision && _signedIn) {
+      final revision = _localRevision;
+      final theme = _ref.read(themeModeProvider);
+      final locale = _ref.read(localeProvider);
+      final confidence = _ref.read(confidenceThresholdProvider);
+      final tuning = _ref.read(tuningReferenceProvider);
 
-  void _onLocalChange() {
-    if (!_signedIn || _applyingPull) return;
-    if (_currentSignature() == _syncedSignature) return; // echo of a pull
-    _debounce?.cancel();
-    _debounce = Timer(_ref.read(settingsSyncDebounceProvider), _push);
-  }
-
-  Future<void> _push() async {
-    if (!_signedIn) return;
-    await _sendPatch(_currentPatch(), _currentSignature());
-  }
-
-  Future<void> _sendPatch(Map<String, dynamic> patch, String signature) async {
-    try {
-      await _ref.read(settingsRepositoryProvider).update(patch);
-      // Only mark synced AFTER the server confirms — otherwise an offline edit
-      // would be falsely recorded as synced and silently lost.
-      _syncedSignature = signature;
-    } catch (error) {
-      // A PERMANENT rejection (expired token, bad input) can never succeed on
-      // retry — retrying it spins a forever timer that drains battery and
-      // hammers the server. Give up; the next genuine local change (or a
-      // re-login → pull) re-syncs. Only TRANSIENT failures (offline, 5xx) are
-      // retried so an edit made offline is never silently dropped (round 123).
-      if (_isRetryable(error)) {
-        _debounce?.cancel();
-        _debounce = Timer(_ref.read(settingsSyncRetryProvider), _push);
+      _applyingPull = true;
+      late final List<Future<void>> persistence;
+      try {
+        persistence = [
+          _ref.read(themeModeProvider.notifier).setMode(theme),
+          _ref.read(localeProvider.notifier).set(locale),
+          _ref.read(confidenceThresholdProvider.notifier).set(confidence),
+          _ref.read(tuningReferenceProvider.notifier).set(tuning),
+        ];
+      } finally {
+        _applyingPull = false;
+      }
+      await Future.wait(persistence);
+      if (!_ref.mounted ||
+          authRevision != _authRevision ||
+          !_signedIn ||
+          revision == _localRevision) {
+        return;
       }
     }
   }
 
-  /// A failure worth retrying: a network error, or a server-side 5xx / 408 /
-  /// 429. A 4xx (except those) is a permanent client error — don't loop on it.
-  static bool _isRetryable(Object error) {
-    if (error is! DioException) return true; // unknown → assume transient
-    final status = error.response?.statusCode;
-    if (status == null) return true; // no response = network layer → transient
-    if (status == 408 || status == 429) return true; // timeout / rate-limited
-    return status >= 500; // 5xx transient; other 4xx permanent
+  /// Push current local settings up (used on register — local wins).
+  Future<void> _pushAll() => _queuePush(force: true);
+
+  void _onLocalChange() {
+    if (_applyingPull) return;
+    _localRevision++;
+    if (!_signedIn) return;
+    if (!_pushInFlight && _currentSignature() == _syncedSignature) {
+      _debounce?.cancel();
+      return;
+    }
+    _schedulePush();
   }
+
+  void _schedulePush() {
+    _debounce?.cancel();
+    _debounce = Timer(_ref.read(settingsSyncDebounceProvider), () {
+      _debounce = null;
+      unawaited(_push());
+    });
+  }
+
+  Future<void> _push() => _queuePush();
+
+  /// Serializes full-profile PUTs. A genuine edit received during an in-flight
+  /// request marks the queue dirty; once that request finishes, exactly one
+  /// latest snapshot follows it. Failed writes are not replayed unless such a
+  /// later edit actually occurred.
+  Future<void> _queuePush({bool force = false}) async {
+    if (!_signedIn) return;
+    _pushPending = true;
+    _forcePendingPush = _forcePendingPush || force;
+    if (_pushInFlight) return;
+
+    _pushInFlight = true;
+    try {
+      while (_ref.mounted && _pushPending) {
+        _pushPending = false;
+        final forceThisPush = _forcePendingPush;
+        _forcePendingPush = false;
+        if (!_signedIn) break;
+
+        final signature = _currentSignature();
+        if (!forceThisPush && signature == _syncedSignature) continue;
+        await _sendPatch(_currentPatch(), signature);
+      }
+    } finally {
+      _pushInFlight = false;
+    }
+  }
+
+  Future<void> _sendPatch(Map<String, Object?> patch, String signature) async {
+    final authRevision = _authRevision;
+    final result = await _ref.read(settingsRepositoryProvider).update(patch);
+    if (!_ref.mounted || authRevision != _authRevision) return;
+    switch (result) {
+      case Success():
+        // Only mark synced AFTER the server confirms — otherwise an offline
+        // edit would be falsely recorded as synced and silently lost.
+        _syncedSignature = signature;
+      case Failure(:final error):
+        _ref
+            .read(appLoggerProvider)
+            .warning(
+              'settings.sync_push_failed',
+              fields: {'code': error.code, 'retryable': error.retryable},
+            );
+        if (_isExpiredSession(error)) {
+          await _ref.read(authControllerProvider.notifier).invalidateSession();
+        }
+    }
+  }
+
+  static bool _isExpiredSession(AppFailure error) =>
+      error is AuthenticationFailure &&
+      error.code == FailureCode.authSessionExpired;
 }
 
 /// Instantiate once (watched at app root) to wire the listeners for the app's

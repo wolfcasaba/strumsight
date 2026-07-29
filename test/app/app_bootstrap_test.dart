@@ -218,13 +218,19 @@ void main() {
   });
 
   test('with the account off the auth API is never initialised', () async {
-    // The default (un-overridden) config has every network feature off for
-    // the account layer; reading the auth gate must not construct a Dio.
-    final container = ProviderContainer();
+    var factoryReads = 0;
+    final container = ProviderContainer(
+      overrides: [
+        accountDioFactoryProvider.overrideWith((ref) {
+          factoryReads++;
+          throw StateError('account-off must not construct its Dio factory');
+        }),
+      ],
+    );
     addTearDown(container.dispose);
+
     expect(container.read(accountEnabledProvider), isFalse);
-    // Riverpod providers are lazy: the Dio/auth repository provider is only
-    // instantiated on first read. Nothing in the logged-out, account-off
-    // path reads it — guarded here by the gate being false.
+    expect(container.read(accountApiClientProvider), isNull);
+    expect(factoryReads, 0);
   });
 }
