@@ -9,26 +9,32 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 
-from .config import get_settings
+from .config import BCRYPT_MAX_PASSWORD_BYTES, get_settings
 
 settings = get_settings()
 
-# bcrypt hashes at most the first 72 BYTES of the password. UserCreate already
-# caps length at 72 chars; we also encode+truncate defensively here.
-_BCRYPT_MAX_BYTES = 72
 
-
-def _to_bytes(password: str) -> bytes:
-    return password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+def _password_bytes(password: str) -> bytes:
+    return password.encode("utf-8")
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(_to_bytes(password), bcrypt.gensalt()).decode("utf-8")
+    password_bytes = _password_bytes(password)
+    if len(password_bytes) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"password must not exceed "
+            f"{BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
+        )
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
     try:
-        return bcrypt.checkpw(_to_bytes(password), hashed.encode("utf-8"))
+        # Compatibility: accounts created before E01-R13 were hashed after a
+        # silent 72-byte truncation. Keep truncation only on verification so
+        # those users can still log in; new hashes reject overlong input.
+        password_bytes = _password_bytes(password)[:BCRYPT_MAX_PASSWORD_BYTES]
+        return bcrypt.checkpw(password_bytes, hashed.encode("utf-8"))
     except (ValueError, TypeError):
         return False
 

@@ -5,6 +5,8 @@ Docs:         http://127.0.0.1:8000/docs
 """
 
 from contextlib import asynccontextmanager
+import logging
+import os
 from pathlib import Path
 
 from alembic.config import Config as AlembicConfig
@@ -13,7 +15,7 @@ from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,7 +26,9 @@ from .database import Base, create_database_engine, create_session_factory
 from .routers import auth, diagnostics, settings as settings_router
 
 _DEV_SECRET = Settings.model_fields["secret_key"].default
+_DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
+_logger = logging.getLogger(__name__)
 
 
 def _guard_prod(settings: Settings) -> None:
@@ -41,6 +45,14 @@ def _guard_prod(settings: Settings) -> None:
         raise RuntimeError(
             "STRUMSIGHT_ENV=prod requires explicit CORS origins — "
             "set STRUMSIGHT_CORS_ORIGINS (wildcard refused)."
+        )
+    if settings.diagnostics_enabled and (
+        not settings.diag_token.strip()
+        or settings.diag_token == _DEV_DIAGNOSTICS_TOKEN
+    ):
+        raise RuntimeError(
+            "Production diagnostics requires a non-empty, non-development "
+            "diagnostics token."
         )
     if (
         settings.database_url.startswith("sqlite")
@@ -98,7 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 try:
                     Base.metadata.create_all(bind=engine)
                 except SQLAlchemyError:
-                    application.state.dev_schema_initialization_failed = True
+                    _logger.exception("Development schema initialization failed")
             yield
         finally:
             engine.dispose()
@@ -125,7 +137,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(settings_router.router)
-    app.include_router(diagnostics.router)
+    if settings.diagnostics_enabled:
+        app.include_router(diagnostics.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
@@ -145,19 +158,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return {"status": "ready"}
 
-    @app.get("/download", tags=["meta"])
-    def download_apk():
-        """Serve the staged Lab-mode APK for easy on-phone install over the
-        (already-authorized) diagnostics tunnel — set STRUMSIGHT_APK_PATH on the
-        box. Generic (points at a file), no secret in the code."""
-        import os
+    if settings.apk_download_enabled:
 
-        from fastapi.responses import FileResponse
-        path = os.environ.get("STRUMSIGHT_APK_PATH", "")
-        if not path or not os.path.isfile(path):
-            raise HTTPException(status_code=404, detail="no APK staged")
-        return FileResponse(path, media_type="application/vnd.android.package-archive",
-                            filename="strumsight-lab.apk")
+        @app.get("/download", tags=["meta"])
+        def download_apk():
+            """Serve the staged Lab APK over the diagnostics tunnel."""
+            path = os.environ.get("STRUMSIGHT_APK_PATH", "")
+            if not path or not os.path.isfile(path):
+                raise HTTPException(status_code=404, detail="no APK staged")
+            return FileResponse(
+                path,
+                media_type="application/vnd.android.package-archive",
+                filename="strumsight-lab.apk",
+            )
 
     return app
 

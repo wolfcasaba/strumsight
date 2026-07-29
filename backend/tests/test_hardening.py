@@ -7,6 +7,7 @@ serve traffic.
 """
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
@@ -81,6 +82,76 @@ class TestAuthThrottle:
 
 
 class TestProdBootGuards:
+    def test_lab_routes_default_on_in_dev_and_off_in_prod(self, monkeypatch):
+        monkeypatch.delenv("STRUMSIGHT_DIAGNOSTICS_ENABLED", raising=False)
+        monkeypatch.delenv("STRUMSIGHT_APK_DOWNLOAD_ENABLED", raising=False)
+        dev = Settings(env="dev")
+        prod = Settings(env="prod")
+
+        assert dev.diagnostics_enabled is True
+        assert dev.apk_download_enabled is True
+        assert prod.diagnostics_enabled is False
+        assert prod.apk_download_enabled is False
+
+    def test_prod_defaults_do_not_register_lab_routes(self, monkeypatch):
+        monkeypatch.delenv("STRUMSIGHT_DIAGNOSTICS_ENABLED", raising=False)
+        monkeypatch.delenv("STRUMSIGHT_APK_DOWNLOAD_ENABLED", raising=False)
+        app = create_app(
+            Settings(
+                env="prod",
+                secret_key="a-real-32-char-production-secret",
+                cors_origins=["https://app.strumsight.app"],
+                allow_sqlite_in_prod=True,
+            )
+        )
+
+        with TestClient(app) as client:
+            assert client.post("/diagnostics", content=b"x").status_code == 404
+            assert client.get("/diagnostics/health").status_code == 404
+            assert client.get("/download").status_code == 404
+
+    def test_prod_lab_routes_can_be_enabled_from_environment(self, monkeypatch):
+        monkeypatch.setenv("STRUMSIGHT_DIAGNOSTICS_ENABLED", "true")
+        monkeypatch.setenv("STRUMSIGHT_APK_DOWNLOAD_ENABLED", "true")
+        monkeypatch.setenv("STRUMSIGHT_DIAG_TOKEN", "runtime-lab-token")
+        app = create_app(
+            Settings(
+                env="prod",
+                secret_key="a-real-32-char-production-secret",
+                cors_origins=["https://app.strumsight.app"],
+                allow_sqlite_in_prod=True,
+            )
+        )
+
+        paths = app.openapi()["paths"]
+        assert "/diagnostics" in paths
+        assert "/diagnostics/health" in paths
+        assert "/download" in paths
+
+    @pytest.mark.parametrize(
+        "diagnostics_token",
+        ["strumsight-lab-dev", ""],
+        ids=["dev-default", "empty"],
+    )
+    def test_prod_enabled_diagnostics_refuses_insecure_token(
+        self,
+        diagnostics_token,
+    ):
+        settings = Settings(
+            env="prod",
+            secret_key="a-real-32-char-production-secret",
+            cors_origins=["https://app.strumsight.app"],
+            allow_sqlite_in_prod=True,
+            diagnostics_enabled=True,
+            diag_token=diagnostics_token,
+        )
+
+        with pytest.raises(RuntimeError, match="diagnostics token") as error:
+            create_app(settings)
+
+        if diagnostics_token:
+            assert diagnostics_token not in str(error.value)
+
     def test_prod_with_dev_secret_refuses_to_boot(self):
         s = Settings(env="prod", cors_origins=["https://app.strumsight.app"])
         with pytest.raises(RuntimeError, match="secret"):
@@ -100,7 +171,11 @@ class TestProdBootGuards:
         )
         assert create_app(s) is not None
 
-    def test_prod_with_sqlite_without_explicit_permission_refuses_to_boot(self):
+    def test_prod_with_sqlite_without_explicit_permission_refuses_to_boot(
+        self,
+        monkeypatch,
+    ):
+        monkeypatch.delenv("STRUMSIGHT_ALLOW_SQLITE", raising=False)
         s = Settings(
             env="prod",
             secret_key="a-real-32-char-production-secret",

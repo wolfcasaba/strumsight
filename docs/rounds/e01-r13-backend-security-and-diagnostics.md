@@ -234,11 +234,116 @@ kör-branchre (ADR 0052) — a Codex ne hívjon `gh`-t.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet.
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk.
-- Follow-up issue-k.
+### Fájlonkénti összefoglaló
+
+- `backend/app/config.py` — environment-függő Lab-flag defaultok (dev: be,
+  prod: ki), `diag_token` és `diag_dir` Settings-mezők, valamint a közös bcrypt
+  byte-limit konstans.
+- `backend/app/main.py` — prod diagnostics-token boot-guard, feltételes
+  diagnostics- és APK-route regisztráció, a néma dev schema-init flag helyett
+  modul-szintű `logger.exception`.
+- `backend/app/routers/diagnostics.py` — Settings-alapú token/data-dir,
+  `hmac.compare_digest`, olvasás közbeni streaming limit, 0600-as temp-fájl,
+  siker esetén ugyanazon könyvtárban `os.replace`, minden hibaágon
+  temp-takarítás, ütközési suffix, 0600-as index, kezelt indexhiba.
+- `backend/app/schemas.py` — a meglévő 8–72 karakteres korlát mellett
+  72 UTF-8 bájtos `UserCreate` validátor.
+- `backend/app/security.py` — az új hash-út nem csonkol, hanem >72 bájtnál
+  explicit hibát ad; a verify-út dokumentált legacy-kompatibilitásként továbbra
+  is 72 bájtra csonkol.
+- `backend/tests/test_diagnostics.py` — dev-default/token, secret-mentes 401,
+  streaming early-stop, endpoint 413, disconnect cleanup, temp+atomikus replace,
+  0600 módok, collision, relatív/abszolút/URL-encoded traversal és indexhiba.
+- `backend/tests/test_hardening.py` — dev/prod flag-defaultok, prod 404 route-
+  hiány, env-ből explicit Lab-enable, default/üres prod diagnostics-token guard,
+  valamint a MINOR-3 `delenv`.
+- `backend/tests/test_auth.py` — 72/73 bájtos Unicode regisztráció, legacy
+  verify-kompatibilitás és bájtra azonos login-hibaválasz.
+- `backend/tests/test_migrations.py` — caplog-bizonyíték a dev schema-init
+  hibára; a teszt az Alembic in-process `fileConfig` logger-letiltását lokálisan
+  semlegesíti, hogy futási sorrendtől független legyen.
+- `backend/README.md` — tartós unstamped-dev `503 migration_mismatch` +
+  `alembic stamp head`, prod Lab-deploy szabályok, explicit process-lokális
+  rate-limit korlát és shared-store skálázási követelmény.
+
+### Futtatott parancsok és tényleges kimenet
+
+- Config/route/log TDD RED:
+  `.venv/bin/python -m pytest -q <5 új hardening/migration célteszt>` →
+  **5 failed** (hiányzó flagek, prod route 401 a várt 404 helyett, token-guard
+  nem dobott, caplog üres), exit 1.
+- Config/route/log TDD GREEN: ugyanaz a célkészlet → **5 passed**, exit 0.
+- MINOR-3 célpróba:
+  `STRUMSIGHT_ALLOW_SQLITE=true .venv/bin/python -m pytest -q
+  tests/test_hardening.py::TestProdBootGuards::
+  test_prod_with_sqlite_without_explicit_permission_refuses_to_boot` →
+  **1 passed**, exit 0.
+- Diagnostics Settings-seam RED: `... pytest -q tests/test_diagnostics.py` →
+  **2 failed, 2 passed** (a régi env-olvasás 401-et adott), exit 1; GREEN →
+  **4 passed**, exit 0.
+- Diagnostics streaming/filesystem RED: ugyanaz a fájl a teljes security
+  tesztkészlettel → **5 failed, 7 passed** (nem volt replace/early-stop/temp/
+  suffix/index-jelzés), exit 1; GREEN → **12 passed**, exit 0.
+- Auth byte-limit RED: öt új célteszt → **2 failed, 3 passed** (73 bájt
+  regisztrált és a hash nem dobott), exit 1; GREEN → **5 passed**, exit 0.
+- Érintett regresszió:
+  `.venv/bin/python -m pytest -q tests/test_diagnostics.py tests/test_auth.py
+  tests/test_hardening.py tests/test_migrations.py` → először **1 failed**
+  (Alembic `fileConfig` letiltotta az `app.main` loggert); minimalizált
+  reprodukció: upgrade-teszt + caplog-teszt → **1 failed, 1 passed**.
+  A sorrendfüggetlen tesztizolálás után a pár → **2 passed**, majd a négy fájl
+  → **54 passed**, exit 0. A két utólag hozzáadott dev/env-regresszió külön →
+  **2 passed**, exit 0.
+- Settings env-próbák:
+  `STRUMSIGHT_ENV=prod ... Settings()` → `prod False False`;
+  explicit két `STRUMSIGHT_*_ENABLED=true` + runtime token →
+  `prod True True True`, mindkettő exit 0.
+- Kötelező valódi guard-sértés: a diagnostics `include_router` feltételét
+  ideiglenesen igazra rontva
+  `... pytest -q ...::test_prod_defaults_do_not_register_lab_routes` →
+  **1 failed**, tényleges eltérés: `/diagnostics` **401**, elvárt **404**,
+  exit 1. `apply_patch` visszaállítás után ugyanaz → **1 passed**, exit 0.
+- Kötelező teljes gate:
+  `.venv/bin/python -m pytest -q` →
+  `................................................................ [100%]`,
+  **64 teszt, exit 0**.
+- MINOR-3 teljes gate:
+  `STRUMSIGHT_ALLOW_SQLITE=true .venv/bin/python -m pytest -q` →
+  `................................................................ [100%]`,
+  **64 teszt, exit 0**.
+- Darabszám-bizonyíték:
+  `.venv/bin/python -m pytest --collect-only -q -o addopts=` →
+  **64 tests collected in 0.02s**, exit 0.
+
+### Eltérések a tervtől és okuk
+
+- Funkcionális/scope eltérés nincs. Az indexhiba a kötelező három
+  válaszmezőt és azok jelentését változatlanul hagyja; kizárólag a hibaágon ad
+  hozzá egy érzékeny adatot nem tartalmazó `index_status: "failed"` jelzést.
+- A caplog-tesztben szükséges logger-visszakapcsolás tesztizoláció: az ugyanabban
+  a processben futó Alembic `fileConfig` alapértelmezésben letiltja az
+  `alembic.ini`-ben fel nem sorolt meglévő loggereket. Production kódot emiatt
+  nem kellett módosítani.
+- `STRUMSIGHT_DIAG_MAX_BYTES` megmaradt a meglévő per-request env-helperben;
+  a brief §4/§8 kifejezetten a token és a data-dir Settings-be emelését kérte,
+  a limit wire/dev viselkedése változatlan.
+
+### Nem futtatott ellenőrzések és okuk
+
+- Flutter format/analyze/test, property gate és lokális APK-build: backend-only
+  kör, a Flutter-fa diffje üres; az APK lokálisan tiltott/nem támogatott.
+- GitHub CI, APK workflow, push, PR és merge: az AGENTS.md §15.1 szerint
+  Claude-oldali feladat; `gh` nem futott.
+- Black/Ruff/isort: a backend requirements/venv nem tartalmaz Python
+  formázó/lint eszközt. A módosított fájlokon 88 karakteres sor-audit és
+  `git diff --check` futott.
+- A user által megadott 44-es baseline-t nem mértem újra implementáció előtt;
+  explicit pre-flight tényként kellett elfogadni.
+
+### Follow-upok
+
+- Új in-scope follow-up nincs. A többprocesszes/shared rate-limit store továbbra
+  szándékosan scope-on kívüli; a README most explicit dokumentálja.
 
 ## 11. Review — a Claude tölti ki
 
