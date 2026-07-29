@@ -4,7 +4,7 @@
 > "what's done / what's next". Update it after every development round (see
 > [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 212 = E01-R05).
 >
-> **Branch/commit:** `codex/e01-r05-storage` → PR. Utolsó befejezett kör: **E01-R05**
+> **Branch/commit:** `main` @ PR #6 (merged, CI run 30440637055 zöld). Utolsó befejezett kör: **E01-R05**
 > (SDD Ch2, Kör 5). **Következő: E01-R06 Settings és core preference migráció** (Ch2, Kör 6) —
 > **ÚJ SESSIONBEN indítandó** (ADR 0052). Állandó user-szabályok (2026-07-29,
 > [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
