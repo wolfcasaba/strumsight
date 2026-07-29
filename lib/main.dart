@@ -5,6 +5,7 @@ import 'app/bootstrap/app_bootstrap.dart';
 import 'app/bootstrap/bootstrap_result.dart';
 import 'app/config/app_config.dart';
 import 'app/strumsight_app.dart';
+import 'core/storage/storage_providers.dart';
 import 'features/onboarding/onboarding_provider.dart';
 
 export 'app/strumsight_app.dart' show StrumSightApp;
@@ -20,14 +21,20 @@ Future<void> main() async {
     BootstrapFailure(:final problems) => BootstrapFailureApp(
       problems: problems,
     ),
-    BootstrapSuccess(:final config, :final onboardingSeen) => ProviderScope(
-      overrides: [
-        appConfigProvider.overrideWithValue(config),
-        onboardingSeenProvider.overrideWith(
-          () => OnboardingController(onboardingSeen),
-        ),
-      ],
-      child: const StrumSightApp(),
-    ),
+    BootstrapSuccess(
+      :final config,
+      :final onboardingSeen,
+      :final keyValueStore,
+    ) =>
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(config),
+          keyValueStoreProvider.overrideWithValue(keyValueStore),
+          onboardingSeenProvider.overrideWith(
+            () => OnboardingController(onboardingSeen),
+          ),
+        ],
+        child: const StrumSightApp(),
+      ),
   });
 }

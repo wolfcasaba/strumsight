@@ -1,9 +1,9 @@
-import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
+import '../../../core/storage/secure_store.dart';
+import '../../../core/storage/storage_keys.dart';
+import '../../../core/storage/storage_providers.dart';
 
 /// Persists the JWT in the platform secure store (Android Keystore / iOS
 /// Keychain). Abstracted so tests can substitute an in-memory implementation.
@@ -20,58 +20,24 @@ abstract interface class TokenStore {
   Future<AppResult<void>> clear();
 }
 
+/// The auth feature's view of the shared [SecureStore] (E01-R05 §5.4): it owns
+/// the key, the core store owns the platform and its failure mapping.
 class SecureTokenStore implements TokenStore {
-  SecureTokenStore([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+  const SecureTokenStore(this._store);
 
-  static const _key = 'strumsight_auth_token';
-  final FlutterSecureStorage _storage;
+  final SecureStore _store;
 
   @override
-  Future<AppResult<String?>> read() => _guard(
-    () => _storage.read(key: _key),
-    FailureCode.storageRead,
-    // No platform channel (host tests / unsupported desktop): there cannot be
-    // a stored token, so "no token" IS the correct answer, not a guess.
-    onMissingPlugin: () => null,
-  );
+  Future<AppResult<String?>> read() => _store.read(StorageKeys.secureAuthToken);
 
   @override
-  Future<AppResult<void>> write(String token) => _guard(
-    () => _storage.write(key: _key, value: token),
-    FailureCode.storageWrite,
-  );
+  Future<AppResult<void>> write(String token) =>
+      _store.write(StorageKeys.secureAuthToken, token);
 
   @override
-  Future<AppResult<void>> clear() =>
-      _guard(() => _storage.delete(key: _key), FailureCode.storageWrite);
-
-  /// Runs [action], converting the two failure modes we can distinguish into
-  /// values. A missing platform channel is only reported as success when
-  /// [onMissingPlugin] supplies a genuinely correct answer for that case;
-  /// otherwise it is a [StorageFailure] like any other.
-  Future<AppResult<T>> _guard<T>(
-    Future<T> Function() action,
-    String code, {
-    T Function()? onMissingPlugin,
-  }) async {
-    try {
-      return Success(await action());
-    } on MissingPluginException catch (e, stackTrace) {
-      if (onMissingPlugin != null) return Success(onMissingPlugin());
-      return Failure(
-        StorageFailure(
-          code: FailureCode.storageUnavailable,
-          cause: e,
-          stackTrace: stackTrace,
-        ),
-      );
-    } catch (e, stackTrace) {
-      return Failure(
-        StorageFailure(code: code, cause: e, stackTrace: stackTrace),
-      );
-    }
-  }
+  Future<AppResult<void>> clear() => _store.delete(StorageKeys.secureAuthToken);
 }
 
-final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
+final tokenStoreProvider = Provider<TokenStore>(
+  (ref) => SecureTokenStore(ref.watch(secureStoreProvider)),
+);

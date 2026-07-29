@@ -1,6 +1,12 @@
 import 'package:flutter/foundation.dart' show kProfileMode, kReleaseMode;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../core/foundation/app_result.dart';
+import '../../core/logging/app_logger.dart';
+import '../../core/logging/logger_provider.dart';
+import '../../core/storage/key_value_store.dart';
+import '../../core/storage/shared_preferences_store.dart';
+import '../../core/storage/storage_migrator.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../config/app_config.dart';
 import '../config/app_environment.dart';
@@ -25,6 +31,9 @@ abstract final class AppBootstrap {
     String? buildMode,
     Future<String> Function()? loadVersion,
     Future<bool> Function()? loadOnboardingSeen,
+    Future<AppResult<KeyValueStore>> Function()? openStore,
+    List<StorageMigration> migrations = appStorageMigrations,
+    AppLogger? logger,
   }) async {
     try {
       final raw = rawEnvironment ?? AppEnvironment.rawDefine;
@@ -51,10 +60,41 @@ abstract final class AppBootstrap {
         appVersion: await (loadVersion ?? _loadVersion)(),
       );
 
+      // One SharedPreferences instance for the whole app (E01-R05 §5.1). A
+      // device whose preference store cannot be opened would drop every write,
+      // so it is a controlled failure screen — not an app that quietly forgets
+      // the user's songs, streak and settings.
+      final log = logger ?? createDefaultAppLogger();
+      final storeResult = await (openStore ?? _openStore)();
+      if (storeResult case Failure(:final error)) {
+        log.error(
+          'bootstrap.storage_unavailable',
+          error: error,
+          stackTrace: error.stackTrace ?? StackTrace.current,
+        );
+        return BootstrapFailure([
+          'Local storage is unavailable (${error.code}). '
+              'StrumSight cannot start without on-device persistence.',
+        ]);
+      }
+      final store = (storeResult as Success<KeyValueStore>).value;
+
+      // Migrations run before the first read, and a failing one is logged and
+      // retried next boot rather than blocking the app (§5.3).
+      await StorageMigrator(
+        store: store,
+        logger: log,
+        migrations: migrations,
+      ).migrate();
+
       final onboardingSeen =
           await (loadOnboardingSeen ?? OnboardingController.load)();
 
-      return BootstrapSuccess(config: config, onboardingSeen: onboardingSeen);
+      return BootstrapSuccess(
+        config: config,
+        onboardingSeen: onboardingSeen,
+        keyValueStore: store,
+      );
     } on ConfigurationException catch (e) {
       return BootstrapFailure(e.problems);
     } catch (e) {
@@ -63,6 +103,9 @@ abstract final class AppBootstrap {
       return BootstrapFailure(['Bootstrap failed: $e']);
     }
   }
+
+  static Future<AppResult<KeyValueStore>> _openStore() async =>
+      (await SharedPreferencesStore.open()).map<KeyValueStore>((s) => s);
 
   static String get _buildMode => kReleaseMode
       ? 'release'
