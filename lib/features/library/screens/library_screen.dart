@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -108,7 +109,7 @@ class _SessionCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => context.push('/library/session', extra: session),
+        onTap: () => context.push(AppRoutes.librarySession, extra: session),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(

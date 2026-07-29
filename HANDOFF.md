@@ -23,7 +23,23 @@
 > review közben production kódot NEM ír) → Codex javít → Claude merge-el. A párhuzamos kétkörös
 > futás opt-in kivétellé vált. Sablonok: `docs/execution/08-round-brief.md`, `09-review-report.md`.
 > A merge-szabály NEM változott (ADR 0052).
-> **Következő: E01-R11 Routing és alkalmazás-shell stabilizálása** (Ch2, Kör 11) — ÚJ SESSIONBEN.
+> **E01-R11 KÉSZ (2026-07-29, [PR #16](https://github.com/wolfcasaba/strumsight/pull/16)):** routing és
+> app-shell stabilizálás — `AppRoutes` katalógus (`lib/app/routing/`), tiszta + **idempotens**
+> `onboardingRedirect`, reaktív `refreshListenable`, castmentes `/library/session` (érvénytelen `extra`
+> → `/library`), `onException` → `/live`, unmount-tűrő onboarding kilépési utak; `lib/app/router.dart`
+> megszűnt. Öt új tesztfájl, köztük a **késleltetett írású first-win regresszió**, ami magát a race-t
+> reprodukálja. [ADR 0059](docs/adr/0059-central-route-catalogue-and-validated-navigation.md),
+> review: [`docs/reviews/e01-r11-review.md`](docs/reviews/e01-r11-review.md) (APPROVED, 1 MINOR →
+> E01-R14: a literál-guard a `router.go('/…')` alakot nem fogja).
+> **A kör tanulsága:** a Codex első futása a brief megállási szabálya szerint **nulla kóddiffel
+> megállt** — a kötelező reaktív redirect ütközött az onboarding first-win vezérlésével. A feloldás
+> dokumentált **R1 brief-revízió** volt (§5.8), nem csendes scope-tágítás. Ebből született a
+> kötelező kör-jelzés is: [ADR 0064](docs/adr/0064-codex-hands-over-ci-at-code-complete.md) +
+> `tools/codex-{signal,round,watch}.sh` — a Codex `code-complete`-nél **átadja a CI-t** (az a
+> jelentésírás és a review alatt fut), lokálisan pedig már csak a kör SAJÁT tesztjeit futtatja,
+> így semmi nem fut kétszer.
+> **Következő: E01-R12 Backend konfiguráció és adatbázis-migráció** (Ch2, Kör 12) — ÚJ SESSIONBEN.
+> A brief előre elkészítve: `docs/rounds/e01-r12-backend-config-and-migrations.md` (pre-flight kell).
 > Állandó user-szabályok (2026-07-29,
 > [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
 > (`gh workflow run build-apk.yml --ref <branch>`); minden gate zöld → automatikus squash-merge;

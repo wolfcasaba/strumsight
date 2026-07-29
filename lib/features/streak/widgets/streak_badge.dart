@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
@@ -23,7 +24,7 @@ class StreakBadge extends ConsumerWidget {
       label: l10n.streakTooltip,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => context.push('/streak'),
+        onTap: () => context.push(AppRoutes.streak),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           child: Row(

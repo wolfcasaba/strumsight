@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
@@ -40,7 +41,7 @@ class StreakScreen extends ConsumerWidget {
           IconButton(
             tooltip: l10n.progressOpen,
             icon: const Icon(Icons.insights_outlined),
-            onPressed: () => context.go('/progress'),
+            onPressed: () => context.go(AppRoutes.progress),
           ),
         ],
       ),
@@ -168,7 +169,7 @@ class StreakScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             TextButton(
-              onPressed: () => context.go('/live'),
+              onPressed: () => context.go(AppRoutes.live),
               child: Text(l10n.challengeTryInLive),
             ),
           ],

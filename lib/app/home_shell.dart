@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/settings/providers/nudge_enabled_provider.dart';
 import '../l10n/app_localizations.dart';
+import 'routing/app_route.dart';
 
 /// The bottom-navigation shell hosting the four top-level tabs. The current
 /// tab's screen is rendered as [child]; switching tabs disposes the previous
@@ -21,10 +22,10 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  static const _tabs = ['/live', '/analyze', '/learn', '/library', '/settings'];
-
   int get _index {
-    final i = _tabs.indexWhere((t) => widget.location.startsWith(t));
+    final i = AppRoutes.shellTabs.indexWhere(
+      (tab) => widget.location.startsWith(tab),
+    );
     return i < 0 ? 0 : i;
   }
 
@@ -64,7 +65,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => context.go(_tabs[i]),
+        onDestinationSelected: (i) => context.go(AppRoutes.shellTabs[i]),
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.mic_none_outlined),

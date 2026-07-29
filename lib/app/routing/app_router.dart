@@ -1,0 +1,116 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/auth/screens/login_screen.dart';
+import '../../features/chords/screens/chord_library_screen.dart';
+import '../../features/learn/screens/latency_calibration_screen.dart';
+import '../../features/learn/screens/lesson_list_screen.dart';
+import '../../features/library/public.dart';
+import '../../features/library/screens/library_screen.dart';
+import '../../features/library/screens/session_detail_screen.dart';
+import '../../features/live/screens/live_screen.dart';
+import '../../features/metronome/screens/metronome_screen.dart';
+import '../../features/onboarding/onboarding_provider.dart';
+import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/progress/screens/progress_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
+import '../../features/songs/screens/setlist_list_screen.dart';
+import '../../features/songs/screens/song_list_screen.dart';
+import '../../features/streak/screens/streak_screen.dart';
+import '../../features/tuner/screens/tuner_screen.dart';
+import '../home_shell.dart';
+import 'app_route.dart';
+import 'route_guards.dart';
+
+final class _RouterRefreshNotifier extends ChangeNotifier {
+  void refresh() => notifyListeners();
+}
+
+/// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
+/// routes pushed from those destinations.
+final routerProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = _RouterRefreshNotifier();
+  ref.listen(onboardingSeenProvider, (_, _) => refreshNotifier.refresh());
+
+  final router = GoRouter(
+    initialLocation: AppRoutes.live,
+    refreshListenable: refreshNotifier,
+    onException: (_, _, router) => router.go(AppRoutes.live),
+    redirect: (_, state) => onboardingRedirect(
+      seen: ref.read(onboardingSeenProvider),
+      location: state.uri.path,
+    ),
+    routes: [
+      GoRoute(
+        path: AppRoutes.welcome,
+        builder: (_, _) => const OnboardingScreen(),
+      ),
+      ShellRoute(
+        builder: (context, state, child) =>
+            HomeShell(location: state.uri.path, child: child),
+        routes: [
+          GoRoute(path: AppRoutes.live, builder: (_, _) => const LiveScreen()),
+          GoRoute(
+            path: AppRoutes.analyze,
+            builder: (_, _) => const AnalyzeScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.learn,
+            builder: (_, _) => const LessonListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.library,
+            builder: (_, _) => const LibraryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.settings,
+            builder: (_, _) => const SettingsScreen(),
+          ),
+        ],
+      ),
+      GoRoute(path: AppRoutes.tuner, builder: (_, _) => const TunerScreen()),
+      GoRoute(
+        path: AppRoutes.metronome,
+        builder: (_, _) => const MetronomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.calibrate,
+        builder: (_, _) => const LatencyCalibrationScreen(),
+      ),
+      GoRoute(path: AppRoutes.streak, builder: (_, _) => const StreakScreen()),
+      GoRoute(
+        path: AppRoutes.progress,
+        builder: (_, _) => const ProgressScreen(),
+      ),
+      GoRoute(path: AppRoutes.songs, builder: (_, _) => const SongListScreen()),
+      GoRoute(
+        path: AppRoutes.setlists,
+        builder: (_, _) => const SetlistListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.chords,
+        builder: (_, _) => const ChordLibraryScreen(),
+      ),
+      GoRoute(path: AppRoutes.login, builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: AppRoutes.librarySession,
+        redirect: (_, state) =>
+            state.extra is AnalyzedSession ? null : AppRoutes.library,
+        builder: (_, state) {
+          final session = state.extra;
+          if (session is AnalyzedSession) {
+            return SessionDetailScreen(session: session);
+          }
+          return const LibraryScreen();
+        },
+      ),
+    ],
+  );
+  ref.onDispose(() {
+    router.dispose();
+    refreshNotifier.dispose();
+  });
+  return router;
+});

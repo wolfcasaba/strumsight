@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/public.dart';
@@ -35,12 +36,12 @@ class LessonListScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.library_music_outlined),
             tooltip: l10n.songsTitle,
-            onPressed: () => context.push('/songs'),
+            onPressed: () => context.push(AppRoutes.songs),
           ),
           IconButton(
             icon: const Icon(Icons.grid_view),
             tooltip: l10n.chordLibraryTitle,
-            onPressed: () => context.push('/chords'),
+            onPressed: () => context.push(AppRoutes.chords),
           ),
         ],
       ),

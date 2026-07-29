@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/platform/app_lifecycle.dart';
 import '../../../core/platform/platform_providers.dart';
 import '../../../core/platform/screen_wakelock.dart';
@@ -227,8 +228,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             if (labMode) const LiveLabPanel(),
             _ActionBar(
               paused: _paused,
-              onTuner: () => context.push('/tuner'),
-              onMetronome: () => context.push('/metronome'),
+              onTuner: () => context.push(AppRoutes.tuner),
+              onMetronome: () => context.push(AppRoutes.metronome),
               onPauseToggle: _togglePause,
             ),
           ],
