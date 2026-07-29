@@ -1,48 +1,24 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../live/model/strum.dart';
+import '../data/songs_repository.dart';
 import '../model/song.dart';
 
 /// The user's saved songs, persisted locally (like the library — offline,
 /// per-device, not synced). Newest-first for display.
+///
+/// The r149/r150 load-race guard (a `Completer` every mutation had to await, so
+/// an add could not persist the empty default over the unread songbook) is gone
+/// with the async load itself (E01-R07): the songbook is read synchronously in
+/// [build] from the injected repository, so a mutation always starts from the
+/// stored list.
 class SongsController extends Notifier<List<Song>> {
-  static const _key = 'user_songs_v1';
+  SongsRepository get _repo => ref.read(songsRepositoryProvider);
 
-  SharedPreferences? _prefs;
-  // Mutations WAIT for the initial load (r150, the r149 race class): a
-  // mutation racing the load used to persist the near-empty default over the
-  // unread on-disk collection, wiping it.
-  final Completer<void> _loaded = Completer<void>();
   int _seq = 0; // disambiguates ids created within the same microsecond
 
   @override
-  List<Song> build() {
-    _load();
-    return const [];
-  }
-
-  Future<void> _load() async {
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      final raw = _prefs!.getString(_key);
-      if (raw != null) {
-        state = (jsonDecode(raw) as List)
-            .map((e) => Song.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (_) {
-      // Prefs unavailable → keep the empty default.
-    } finally {
-      // Riverpod keeps the notifier instance across ref.invalidate — build()
-      // and _load() re-run on the SAME object, so the Completer may already
-      // be done (r158 probe: 'Bad state: Future already completed').
-      if (!_loaded.isCompleted) _loaded.complete();
-    }
-  }
+  List<Song> build() => _repo.load();
 
   String _newId() => '${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
 
@@ -62,51 +38,40 @@ class SongsController extends Notifier<List<Song>> {
       bpm: bpm,
       beatsPerBar: beatsPerBar,
     );
-    await _loaded.future;
-    state = [song, ...state];
-    await _persist();
+    var next = [song, ...state];
+    // Documented cap (§7.5) — the OLDEST song is evicted, never the new one.
+    if (next.length > SongsRepository.maxSongs) {
+      next = next.sublist(0, SongsRepository.maxSongs);
+    }
+    state = next;
+    await _repo.save(state);
     return song.id;
   }
 
   /// Replace an existing song by id (no-op if the id is gone).
   Future<void> update(Song song) async {
     if (!state.any((s) => s.id == song.id)) return;
-    await _loaded.future;
     state = [
       for (final s in state)
         if (s.id == song.id) song else s,
     ];
-    await _persist();
+    await _repo.save(state);
   }
 
   Future<void> remove(String id) async {
-    await _loaded.future;
     state = state.where((s) => s.id != id).toList();
-    await _persist();
+    await _repo.save(state);
   }
 
   /// Undo of [remove]: re-insert [song] at its original [index] (clamped to the
   /// current bounds) with all fields intact, persisting like a normal save.
   /// No-op if a song with the same id is already present.
   Future<void> restore(int index, Song song) async {
-    await _loaded.future;
     if (state.any((s) => s.id == song.id)) return;
     final next = [...state];
     next.insert(index.clamp(0, next.length), song);
     state = next;
-    await _persist();
-  }
-
-  Future<void> _persist() async {
-    try {
-      _prefs ??= await SharedPreferences.getInstance();
-      await _prefs!.setString(
-        _key,
-        jsonEncode(state.map((s) => s.toJson()).toList()),
-      );
-    } catch (_) {
-      // Best-effort; state stays correct in memory for this session.
-    }
+    await _repo.save(state);
   }
 }
 

@@ -5,10 +5,12 @@ import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
   ProviderScope(
+    overrides: preferenceOverrides(),
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -19,7 +21,6 @@ Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('groups lessons by tier and locks the un-earned ones', (
     tester,
@@ -45,7 +46,7 @@ void main() {
     final tier = Lessons.byDifficulty(Difficulty.beginner);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: const [],
+        overrides: preferenceOverrides(),
         child: Consumer(
           builder: (context, ref, _) {
             // Pre-pass the first beginner lesson.

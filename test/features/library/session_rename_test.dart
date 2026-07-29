@@ -6,7 +6,6 @@ import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
 import 'package:strumsight/features/library/screens/session_detail_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/preference_store.dart';
 
@@ -25,10 +24,12 @@ AnalyzedSession _session(String id, String title) => AnalyzedSession(
 );
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   test('rename updates the session and persists it', () async {
-    final container = ProviderContainer(overrides: preferenceOverrides());
+    // ONE store behind both containers — the reload is what is under test.
+    final store = InMemoryKeyValueStore();
+    final container = ProviderContainer(
+      overrides: [preferenceStoreOverride(store)],
+    );
     addTearDown(container.dispose);
     final lib = container.read(libraryProvider.notifier);
     await container.read(libraryProvider.future);
@@ -39,8 +40,10 @@ void main() {
       container.read(libraryProvider).value!.single.title,
       'Campfire riff',
     ); // trimmed
-    // Persisted: a FRESH container (same mock prefs) reloads the new name.
-    final fresh = ProviderContainer(overrides: preferenceOverrides());
+    // Persisted: a FRESH container over the same store reloads the new name.
+    final fresh = ProviderContainer(
+      overrides: [preferenceStoreOverride(store)],
+    );
     addTearDown(fresh.dispose);
     final reloaded = await fresh.read(libraryProvider.future);
     expect(reloaded.single.title, 'Campfire riff');

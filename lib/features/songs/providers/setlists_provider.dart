@@ -1,55 +1,32 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/setlists_repository.dart';
 import '../model/setlist.dart';
 
 /// The user's saved setlists, persisted locally (newest-first). Stores song ids
 /// only; songs are resolved from the songbook at play time.
+///
+/// Like the songbook, the sets are read synchronously in [build] (E01-R07), so
+/// the r149/r150 load-race guard is gone with the async load that needed it.
 class SetlistsController extends Notifier<List<Setlist>> {
-  static const _key = 'user_setlists_v1';
+  SetlistsRepository get _repo => ref.read(setlistsRepositoryProvider);
 
-  SharedPreferences? _prefs;
-  // Mutations WAIT for the initial load (r150, the r149 race class): a
-  // mutation racing the load used to persist the near-empty default over the
-  // unread on-disk collection, wiping it.
-  final Completer<void> _loaded = Completer<void>();
   int _seq = 0;
 
   @override
-  List<Setlist> build() {
-    _load();
-    return const [];
-  }
-
-  Future<void> _load() async {
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      final raw = _prefs!.getString(_key);
-      if (raw != null) {
-        state = (jsonDecode(raw) as List)
-            .map((e) => Setlist.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (_) {
-      // Prefs unavailable → keep the empty default.
-    } finally {
-      // Riverpod keeps the notifier instance across ref.invalidate — build()
-      // and _load() re-run on the SAME object, so the Completer may already
-      // be done (r158 probe: 'Bad state: Future already completed').
-      if (!_loaded.isCompleted) _loaded.complete();
-    }
-  }
+  List<Setlist> build() => _repo.load();
 
   String _newId() => '${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
 
   Future<String> add(String name) async {
     final s = Setlist(id: _newId(), name: name, songIds: const []);
-    await _loaded.future;
-    state = [s, ...state];
-    await _persist();
+    var next = [s, ...state];
+    // Documented cap (§7.5) — the oldest set is evicted, never the new one.
+    if (next.length > SetlistsRepository.maxSetlists) {
+      next = next.sublist(0, SetlistsRepository.maxSetlists);
+    }
+    state = next;
+    await _repo.save(state);
     return s.id;
   }
 
@@ -57,9 +34,8 @@ class SetlistsController extends Notifier<List<Setlist>> {
       _mutate(id, (s) => s.copyWith(name: name));
 
   Future<void> remove(String id) async {
-    await _loaded.future;
     state = state.where((s) => s.id != id).toList();
-    await _persist();
+    await _repo.save(state);
   }
 
   /// Append a song id (allowing duplicates — a set can repeat a song).
@@ -86,25 +62,12 @@ class SetlistsController extends Notifier<List<Setlist>> {
       });
 
   Future<void> _mutate(String id, Setlist Function(Setlist) f) async {
-    await _loaded.future; // the existence check must see the LOADED list
     if (!state.any((s) => s.id == id)) return;
     state = [
       for (final s in state)
         if (s.id == id) f(s) else s,
     ];
-    await _persist();
-  }
-
-  Future<void> _persist() async {
-    try {
-      _prefs ??= await SharedPreferences.getInstance();
-      await _prefs!.setString(
-        _key,
-        jsonEncode(state.map((s) => s.toJson()).toList()),
-      );
-    } catch (_) {
-      // Best-effort; state stays correct in memory for this session.
-    }
+    await _repo.save(state);
   }
 }
 

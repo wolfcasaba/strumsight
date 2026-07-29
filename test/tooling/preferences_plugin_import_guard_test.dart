@@ -2,26 +2,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// E01-R06 acceptance §6.1 — the migrated providers must not hold their own
+/// E01-R06 §6.1 + E01-R07 §7.2 acceptance — no feature holds its own
 /// `SharedPreferences` instance any more.
 ///
-/// The guard is a whitelist rather than a per-file assertion so it keeps
-/// working as Kör 7 lands: every file that still talks to the plugin is listed
-/// here with the round that will move it. The list may only ever shrink — a new
-/// direct importer fails this test.
+/// With Kör 7 the allowlist is EMPTY: the store implementation is the only
+/// production file left that imports the plugin. The list may only ever shrink
+/// — a new direct importer fails this test.
 void main() {
   /// The one production file allowed to touch the plugin: the store itself.
   const storeImplementation = 'lib/core/storage/shared_preferences_store.dart';
 
-  /// JSON-blob stores still on the plugin; SDD Ch2 Kör 7 migrates them.
-  const pendingKor7 = <String>{
-    'lib/features/learn/providers/lesson_progress_provider.dart',
-    'lib/features/library/data/library_repository.dart',
-    'lib/features/progress/providers/practice_log_provider.dart',
-    'lib/features/songs/providers/setlists_provider.dart',
-    'lib/features/songs/providers/songs_provider.dart',
-    'lib/features/streak/providers/streak_provider.dart',
-  };
+  /// Nothing is waiting to be migrated any more (E01-R07 moved the last six).
+  const pending = <String>{};
 
   test('only the storage layer imports shared_preferences', () {
     final importers = <String>{};
@@ -34,7 +26,7 @@ void main() {
     }
 
     expect(
-      importers.difference({storeImplementation, ...pendingKor7}),
+      importers.difference({storeImplementation, ...pending}),
       isEmpty,
       reason:
           'a feature must depend on KeyValueStore, not on the plugin — '
@@ -47,7 +39,7 @@ void main() {
     );
   });
 
-  test('every preference migrated in Kör 6 is off the plugin', () {
+  test('every migrated feature is off the plugin', () {
     const migrated = <String>[
       'lib/core/theme/theme_mode_provider.dart',
       'lib/core/i18n/locale_provider.dart',
@@ -65,6 +57,18 @@ void main() {
       'lib/features/learn/providers/practice_speed_provider.dart',
       'lib/features/chords/providers/favorite_chords_provider.dart',
       'lib/features/progress/providers/daily_goal_provider.dart',
+      // E01-R07 — the user-content and progress documents.
+      'lib/features/learn/data/lesson_progress_repository.dart',
+      'lib/features/learn/providers/lesson_progress_provider.dart',
+      'lib/features/library/data/library_repository.dart',
+      'lib/features/progress/data/practice_log_repository.dart',
+      'lib/features/progress/providers/practice_log_provider.dart',
+      'lib/features/songs/data/setlists_repository.dart',
+      'lib/features/songs/data/songs_repository.dart',
+      'lib/features/songs/providers/setlists_provider.dart',
+      'lib/features/songs/providers/songs_provider.dart',
+      'lib/features/streak/data/streak_repository.dart',
+      'lib/features/streak/providers/streak_provider.dart',
     ];
 
     for (final path in migrated) {

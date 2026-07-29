@@ -1,13 +1,13 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round 93 — the list-side half of the retention loop: a "Continue" hero
 /// card at the top of the Learn home deep-links to the first unlocked,
@@ -15,21 +15,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// screen must REBUILD when progress changes (it used to watch only the
 /// notifier, so a pass recorded behind a pushed route never re-rendered
 /// the unlock states).
-Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
-  ProviderScope(
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: LessonListScreen(now: DateTime(2026, 7, 11)),
-    ),
-  ),
-);
+Future<void> _pump(WidgetTester tester, [Map<String, Object>? stored]) =>
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: preferenceOverrides(stored),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LessonListScreen(now: DateTime(2026, 7, 11)),
+        ),
+      ),
+    );
 
 void main() {
   group('recommendedNext', () {
     test('fresh install points at the first lesson', () async {
-      SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
+      final container = ProviderContainer(overrides: preferenceOverrides());
       addTearDown(container.dispose);
       expect(
         container.read(lessonProgressProvider.notifier).recommendedNext()!.id,
@@ -40,8 +41,7 @@ void main() {
     test(
       'advances past passed lessons and is null when all are done',
       () async {
-        SharedPreferences.setMockInitialValues({});
-        final container = ProviderContainer();
+        final container = ProviderContainer(overrides: preferenceOverrides());
         addTearDown(container.dispose);
         final progress = container.read(lessonProgressProvider.notifier);
         await progress.record('first-strums', 0.85);
@@ -57,7 +57,6 @@ void main() {
   testWidgets('the Learn home shows a Continue card for the next lesson', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
     await _pump(tester);
     await tester.pumpAndSettle();
 
@@ -68,7 +67,6 @@ void main() {
 
   testWidgets('recording a pass MOVES the card — the list rebuilds on '
       'progress change', (tester) async {
-    SharedPreferences.setMockInitialValues({});
     await _pump(tester);
     await tester.pumpAndSettle();
 
@@ -88,12 +86,11 @@ void main() {
   });
 
   testWidgets('all lessons passed → no Continue card', (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'lesson_progress_v1': jsonEncode({
+    await _pump(tester, {
+      StorageKeys.lessonProgress: storedDocument({
         for (final l in Lessons.all) l.id: 1.0,
       }),
     });
-    await _pump(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('Continue'), findsNothing);

@@ -5,17 +5,22 @@ import 'package:strumsight/features/progress/providers/practice_log_provider.dar
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/streak/providers/streak_provider.dart';
 import 'package:strumsight/features/live/model/strum.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// Round 158 probe (b): the r149/r150 load-gate Completers live on the
-/// notifier INSTANCE. `ref.invalidate` must not re-run `_load` on an
-/// already-completed Completer (StateError) nor leave the write gate stuck.
+import '../support/preference_store.dart';
+
+/// Round 158 probe (b): the r149/r150 load-gate Completers lived on the
+/// notifier INSTANCE, so `ref.invalidate` could re-run `_load` on an
+/// already-completed Completer (StateError) or leave the write gate stuck.
+///
+/// E01-R07 deleted those gates along with the async loads. The probe stays as
+/// the regression guard for what it actually checks end to end: a second full
+/// lifecycle after `invalidate` still rebuilds from the store and merges onto
+/// what the first lifecycle persisted.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('invalidate + mutate works on every gated store', () async {
-    final c = ProviderContainer();
+  test('invalidate + mutate works on every store', () async {
+    final c = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(c.dispose);
 
     // First lifecycle: touch + mutate.

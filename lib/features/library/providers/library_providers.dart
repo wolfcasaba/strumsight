@@ -7,7 +7,7 @@ import '../model/analyzed_session.dart';
 class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
   LibraryRepository get _repo => ref.read(libraryRepositoryProvider);
 
-  static const _maxSessions = 100;
+  static const _maxSessions = LibraryRepository.maxSessions;
 
   @override
   Future<List<AnalyzedSession>> build() => _repo.load();

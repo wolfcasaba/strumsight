@@ -1,8 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
 import '../../analyze/model/analyze_result.dart';
 import '../../learn/model/lesson.dart';
 import '../../live/model/strum.dart';
+
+/// Bound on a persisted song's progression (Kör 7 §7.1). Generous next to any
+/// authored song — it exists to reject a corrupt record, not to limit writing.
+const int maxSongBars = 512;
 
 /// A user-created song: a chord-per-bar progression + a repeating strum
 /// pattern (the ↓/↑ hand — our moat, now author-able) + a tempo. Persisted
@@ -112,18 +117,26 @@ class Song {
 
   factory Song.fromJson(Map<String, dynamic> j) {
     // Records saved before round 116 are all 4/4.
-    final beatsPerBar = (j['bpb'] as num?)?.toInt() ?? 4;
-    final pattern = (j['pat'] as String).split('').map(Song._unslot).toList();
+    final beatsPerBar = optionalInt(j, 'bpb', fallback: 4, min: 1, max: 16);
+    final pattern = requireString(
+      j,
+      'pat',
+      allowEmpty: true,
+      maxLength: maxSongBars,
+    ).split('').map(Song._unslot).toList();
     return Song(
-      id: j['id'] as String,
-      name: j['name'] as String,
-      chords: (j['chords'] as List).map((e) => e as String).toList(),
+      id: requireString(j, 'id'),
+      // A song the user never named is still the user's song.
+      name: requireString(j, 'name', allowEmpty: true),
+      // A bar with no chord label would render as a blank cell and score as
+      // nothing — the record is rejected instead (§7.1).
+      chords: requireStringList(j, 'chords', maxLength: maxSongBars),
       // A corrupt/hand-edited record could carry a pattern whose length
       // doesn't match the metre; the release build has no assert to catch it,
       // and a mismatch would spill slots into the next bar (round 130, R1). Fit
       // the pattern to exactly beatsPerBar*2 slots (truncate / pad with rests).
       pattern: _fitToMeter(pattern, beatsPerBar),
-      bpm: (j['bpm'] as num).toInt(),
+      bpm: requireInt(j, 'bpm', min: 1, max: 400),
       beatsPerBar: beatsPerBar,
     );
   }

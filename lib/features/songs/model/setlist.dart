@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
 import '../../learn/model/lesson.dart';
 import 'song.dart';
+
+/// Bound on how many songs one persisted setlist may reference (Kör 7 §7.1).
+const int maxSetlistEntries = 500;
 
 /// An ordered practice set of songs — a gig/practice-routine grouping. Stores
 /// only song *ids*; the concrete songs are resolved from the songbook at play
@@ -74,9 +78,9 @@ class Setlist {
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'songs': songIds};
 
   factory Setlist.fromJson(Map<String, dynamic> j) => Setlist(
-    id: j['id'] as String,
-    name: j['name'] as String,
-    songIds: (j['songs'] as List).map((e) => e as String).toList(),
+    id: requireString(j, 'id'),
+    name: requireString(j, 'name', allowEmpty: true),
+    songIds: requireStringList(j, 'songs', maxLength: maxSetlistEntries),
   );
 
   @override

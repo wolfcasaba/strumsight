@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
 import '../../analyze/model/analyze_result.dart';
 
 /// A saved analysis: the result plus when it was recorded and a title.
@@ -40,11 +41,15 @@ class AnalyzedSession {
     'customTitle': customTitle,
   };
 
+  /// Decode one saved session (Kör 7 §7.1). Throws [JsonRecordException] on a
+  /// record the app could not have written — the storage layer skips it and
+  /// keeps the rest of the library.
   factory AnalyzedSession.fromJson(Map<String, dynamic> j) => AnalyzedSession(
-    id: j['id'] as String,
-    createdAt: DateTime.parse(j['createdAt'] as String),
-    title: j['title'] as String,
-    result: AnalyzeResult.fromJson(j['result'] as Map<String, dynamic>),
-    customTitle: j['customTitle'] as bool? ?? false,
+    id: requireString(j, 'id'),
+    createdAt: requireDateTime(j, 'createdAt'),
+    // An auto-title of an empty analysis is legitimately blank.
+    title: requireString(j, 'title', allowEmpty: true),
+    result: AnalyzeResult.fromJson(requireObject(j['result'], field: 'result')),
+    customTitle: optionalBool(j, 'customTitle', fallback: false),
   );
 }

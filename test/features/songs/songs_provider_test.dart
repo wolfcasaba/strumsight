@@ -3,16 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/model/strum.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const d = StrumDirection.down;
 
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  // One store shared by every container in a test: the songbook is persisted
+  // in it, so a "fresh container" reads what the previous one wrote (E01-R07).
+  late InMemoryKeyValueStore store;
+  setUp(() => store = InMemoryKeyValueStore());
 
   ProviderContainer container() {
-    final c = ProviderContainer();
+    final c = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c.dispose);
     return c;
   }
@@ -93,7 +97,7 @@ void main() {
     expect(c.read(songsProvider).length, 3);
   });
 
-  test('songs persist across a fresh container (shared_preferences)', () async {
+  test('songs persist across a fresh container', () async {
     final c1 = container();
     await c1
         .read(songsProvider.notifier)
@@ -104,12 +108,8 @@ void main() {
           bpm: 100,
         );
 
-    // A new container re-reads from prefs.
-    final c2 = container();
-    // Force build + let the async _load complete.
-    c2.read(songsProvider);
-    await Future<void>.delayed(Duration.zero);
-    final loaded = c2.read(songsProvider);
+    // A new container re-reads the stored document — synchronously, in build.
+    final loaded = container().read(songsProvider);
     expect(loaded.single.name, 'Persisted');
     expect(loaded.single.chords, ['Em', 'G']);
   });

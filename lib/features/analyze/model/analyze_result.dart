@@ -1,6 +1,16 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
 import '../../live/model/strum.dart';
+
+/// Bounds on the lists inside one persisted analysis (Kör 7 §7.1/§7.5).
+///
+/// A recorded clip is a handful of minutes at most, so these are far above any
+/// real result; they exist so a corrupt or hand-edited blob claiming a
+/// gigantic timeline is rejected as a bad record instead of being decoded into
+/// memory.
+const int maxTimelineChords = 5000;
+const int maxTimelineStrums = 20000;
 
 /// A chord that sounded over a span of the clip.
 @immutable
@@ -23,10 +33,12 @@ class TimelineChord {
     'end': endSec,
   };
 
+  /// A chord with no label is not a chord — the record is rejected rather than
+  /// rendered as a blank cell in the timeline (Kör 7 §7.1).
   factory TimelineChord.fromJson(Map<String, dynamic> j) => TimelineChord(
-    label: j['label'] as String,
-    startSec: (j['start'] as num).toDouble(),
-    endSec: (j['end'] as num).toDouble(),
+    label: requireString(j, 'label'),
+    startSec: requireDouble(j, 'start'),
+    endSec: requireDouble(j, 'end'),
   );
 }
 
@@ -52,9 +64,11 @@ class TimelineStrum {
   };
 
   factory TimelineStrum.fromJson(Map<String, dynamic> j) => TimelineStrum(
-    direction: StrumDirection.values.byName(j['dir'] as String),
-    timeSec: (j['time'] as num).toDouble(),
-    confidence: (j['conf'] as num).toDouble(),
+    // ↓/↑ is the whole point of the record: an unknown direction cannot be
+    // guessed at, so the record is dropped.
+    direction: requireEnumByName(j, 'dir', StrumDirection.values),
+    timeSec: requireDouble(j, 'time'),
+    confidence: requireDouble(j, 'conf'),
   );
 }
 
@@ -81,10 +95,15 @@ class MlChordDiagnostics {
 
   factory MlChordDiagnostics.fromJson(Map<String, dynamic> j) =>
       MlChordDiagnostics(
-        mlChords: (j['mlChords'] as List)
-            .map((e) => TimelineChord.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        agreement: (j['agreement'] as num).toDouble(),
+        mlChords: [
+          for (final e in requireList(
+            j,
+            'mlChords',
+            maxLength: maxTimelineChords,
+          ))
+            TimelineChord.fromJson(requireObject(e, field: 'mlChords')),
+        ],
+        agreement: requireDouble(j, 'agreement'),
       );
 }
 
@@ -157,19 +176,23 @@ class AnalyzeResult {
     if (diagnostics != null) 'diag': diagnostics!.toJson(),
   };
 
+  /// Decode a persisted analysis. A negative duration/tempo or an oversized
+  /// timeline is a corrupt record, not something to render (Kör 7 §7.1).
   factory AnalyzeResult.fromJson(Map<String, dynamic> j) => AnalyzeResult(
-    durationSec: (j['duration'] as num).toDouble(),
-    bpm: (j['bpm'] as num).toDouble(),
-    chords: (j['chords'] as List)
-        .map((e) => TimelineChord.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    strums: (j['strums'] as List)
-        .map((e) => TimelineStrum.fromJson(e as Map<String, dynamic>))
-        .toList(),
+    durationSec: requireDouble(j, 'duration'),
+    bpm: requireDouble(j, 'bpm'),
+    chords: [
+      for (final e in requireList(j, 'chords', maxLength: maxTimelineChords))
+        TimelineChord.fromJson(requireObject(e, field: 'chords')),
+    ],
+    strums: [
+      for (final e in requireList(j, 'strums', maxLength: maxTimelineStrums))
+        TimelineStrum.fromJson(requireObject(e, field: 'strums')),
+    ],
     // Records saved before round 118 are all 4/4.
-    beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
+    beatsPerBar: optionalInt(j, 'bpb', fallback: 4, min: 1, max: 16),
     diagnostics: j['diag'] == null
         ? null
-        : MlChordDiagnostics.fromJson(j['diag'] as Map<String, dynamic>),
+        : MlChordDiagnostics.fromJson(requireObject(j['diag'], field: 'diag')),
   );
 }

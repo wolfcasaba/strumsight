@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
+
 /// Persisted practice-streak state. Days are stored as an integer **epoch day**
 /// (local-midnight days since the Unix epoch) so streak maths is pure integer
 /// arithmetic — no timezone/DST drift inside the logic (see streak_logic.dart).
@@ -53,12 +55,14 @@ class StreakData {
     'total': totalDays,
   };
 
+  /// Decode the persisted streak (Kör 7 §7.1). Every counter is validated as
+  /// non-negative; `last` keeps its "-1 = never practised" sentinel.
   factory StreakData.fromJson(Map<String, dynamic> j) => StreakData(
-    current: (j['current'] as num?)?.toInt() ?? 0,
-    longest: (j['longest'] as num?)?.toInt() ?? 0,
-    lastPracticeDay: (j['last'] as num?)?.toInt() ?? -1,
-    freezes: (j['freezes'] as num?)?.toInt() ?? 0,
-    totalDays: (j['total'] as num?)?.toInt() ?? 0,
+    current: optionalInt(j, 'current', fallback: 0),
+    longest: optionalInt(j, 'longest', fallback: 0),
+    lastPracticeDay: optionalInt(j, 'last', fallback: -1, min: -1),
+    freezes: optionalInt(j, 'freezes', fallback: 0),
+    totalDays: optionalInt(j, 'total', fallback: 0),
   );
 
   @override

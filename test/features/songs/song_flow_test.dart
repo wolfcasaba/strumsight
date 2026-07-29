@@ -9,7 +9,8 @@ import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/songs/widgets/strum_pattern_editor.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// A songbook seeded with fixed songs, not touching disk.
 class _SeededSongs extends SongsController {
@@ -17,13 +18,14 @@ class _SeededSongs extends SongsController {
   final List<Song> _seed;
   @override
   List<Song> build() {
-    super.build(); // opens the r150 write gate (mock prefs are empty)
+    super.build(); // reads the (empty) injected store
     return _seed;
   }
 }
 
 Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
   overrides: [
+    ...preferenceOverrides(),
     if (seed != null) songsProvider.overrideWith(() => _SeededSongs(seed)),
   ],
   child: MaterialApp(
@@ -35,7 +37,6 @@ Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('empty songbook shows the build-your-own nudge', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));

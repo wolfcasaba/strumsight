@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import '../foundation/app_failure.dart';
 import '../logging/app_logger.dart';
+import 'json_document_store.dart';
 import 'key_value_store.dart';
 import 'storage_keys.dart';
 
@@ -120,6 +123,88 @@ class RenameKeyMigration implements StorageMigration {
 
 enum _ValueKind { string, boolean, integer, number, stringList }
 
+/// The shape a legacy JSON blob is expected to have.
+enum JsonBodyShape { list, object }
+
+/// Moves a pre-envelope JSON blob to its `ss.` key **and** wraps it in the
+/// versioned document envelope (Kör 7 §7.3).
+///
+/// The workhorse migration for the six user-content documents. It keeps
+/// [RenameKeyMigration]'s contract — write before remove, never overwrite an
+/// already-migrated document, never destroy an unreadable value — and adds one
+/// rule: a blob it cannot parse is **left on the legacy key**. The owning
+/// repository still reads legacy keys, so an unparseable blob reaches the
+/// document store, which quarantines it on the next write instead of the
+/// migrator deleting it here.
+class WrapJsonDocumentMigration implements StorageMigration {
+  const WrapJsonDocumentMigration({
+    required this.version,
+    required this.id,
+    required this.from,
+    required this.to,
+    required this.shape,
+    this.bodyKey = 'items',
+  });
+
+  @override
+  final int version;
+
+  @override
+  final String id;
+
+  final String from;
+  final String to;
+  final JsonBodyShape shape;
+  final String bodyKey;
+
+  @override
+  Future<void> apply(KeyValueStore store, AppLogger logger) async {
+    if (store.contains(to)) {
+      if (store.contains(from)) await store.remove(from);
+      return;
+    }
+    if (!store.contains(from)) return;
+
+    final raw = store.readString(from);
+    if (raw == null || raw.isEmpty) {
+      logger.warning(
+        'storage.migration.unreadable_value',
+        fields: {'migration': id, 'key': from},
+      );
+      return;
+    }
+
+    Object? body;
+    try {
+      body = jsonDecode(raw);
+    } catch (e) {
+      logger.warning(
+        'storage.migration.unparsable_document',
+        error: e,
+        fields: {'migration': id, 'key': from},
+      );
+      return;
+    }
+    final matchesShape = switch (shape) {
+      JsonBodyShape.list => body is List,
+      JsonBodyShape.object => body is Map,
+    };
+    if (!matchesShape) {
+      logger.warning(
+        'storage.migration.unexpected_shape',
+        fields: {'migration': id, 'key': from},
+      );
+      return;
+    }
+
+    await store.writeString(
+      to,
+      jsonEncode({'schemaVersion': documentSchemaVersion, bodyKey: body}),
+    );
+    await store.remove(from);
+  }
+}
+
 /// What a [StorageMigrator.migrate] run did — the caller logs it, tests assert
 /// on it.
 class StorageMigrationReport {
@@ -215,11 +300,10 @@ class StorageMigrator {
 /// The app's migration list, in version order.
 ///
 /// Schema **1–16** (E01-R06) move the simple preferences onto their namespaced
-/// [StorageKeys] entries. Each key is renamed in the same round that moves its
-/// owner onto [KeyValueStore] — renaming while the owner still reads the old
-/// key would lose the user's data. The JSON-blob stores (library, songs,
-/// setlists, lesson progress, practice log, streak) keep their legacy keys
-/// until Kör 7 moves those features.
+/// [StorageKeys] entries; **17–22** (E01-R07) move the six user-content
+/// documents and wrap them in the versioned envelope. Each key is renamed in
+/// the same round that moves its owner onto [KeyValueStore] — renaming while
+/// the owner still reads the old key would lose the user's data.
 ///
 /// One version per key, rather than one bulk step: a run interrupted after the
 /// eighth rename resumes at the ninth instead of replaying eight no-ops.
@@ -319,5 +403,49 @@ const List<StorageMigration> appStorageMigrations = [
     id: 'r06.daily_goal_minutes',
     from: LegacyStorageKeys.dailyGoalMinutes,
     to: StorageKeys.dailyGoalMinutes,
+  ),
+  WrapJsonDocumentMigration(
+    version: 17,
+    id: 'r07.library_sessions',
+    from: LegacyStorageKeys.librarySessions,
+    to: StorageKeys.librarySessions,
+    shape: JsonBodyShape.list,
+  ),
+  WrapJsonDocumentMigration(
+    version: 18,
+    id: 'r07.songs',
+    from: LegacyStorageKeys.songs,
+    to: StorageKeys.songs,
+    shape: JsonBodyShape.list,
+  ),
+  WrapJsonDocumentMigration(
+    version: 19,
+    id: 'r07.setlists',
+    from: LegacyStorageKeys.setlists,
+    to: StorageKeys.setlists,
+    shape: JsonBodyShape.list,
+  ),
+  WrapJsonDocumentMigration(
+    version: 20,
+    id: 'r07.practice_log',
+    from: LegacyStorageKeys.practiceLog,
+    to: StorageKeys.practiceLog,
+    shape: JsonBodyShape.list,
+  ),
+  WrapJsonDocumentMigration(
+    version: 21,
+    id: 'r07.lesson_progress',
+    from: LegacyStorageKeys.lessonProgress,
+    to: StorageKeys.lessonProgress,
+    shape: JsonBodyShape.object,
+    bodyKey: 'data',
+  ),
+  WrapJsonDocumentMigration(
+    version: 22,
+    id: 'r07.streak',
+    from: LegacyStorageKeys.streak,
+    to: StorageKeys.streak,
+    shape: JsonBodyShape.object,
+    bodyKey: 'data',
   ),
 ];

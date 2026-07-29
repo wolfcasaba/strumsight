@@ -10,7 +10,8 @@ import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/songs/theory/strum_patterns.dart';
 import 'package:strumsight/features/songs/widgets/strum_pattern_editor.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round 116 — 3/4 songs in the Song Builder. The app has TAUGHT waltz time
 /// since r110/111 (curriculum, count-in, bar grid), but users could not
@@ -33,16 +34,18 @@ class _SeededSongs extends SongsController {
   final List<Song> _seed;
   @override
   List<Song> build() {
-    super.build(); // opens the r150 write gate (mock prefs are empty)
+    super.build(); // reads the (empty) injected store
     return _seed;
   }
 }
 
 Future<void> pumpSongList(WidgetTester tester, List<Song> seed) async {
-  SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [songsProvider.overrideWith(() => _SeededSongs(seed))],
+      overrides: [
+        ...preferenceOverrides(),
+        songsProvider.overrideWith(() => _SeededSongs(seed)),
+      ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

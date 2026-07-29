@@ -1,49 +1,49 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/chords/providers/favorite_chords_provider.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
+import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
 import 'package:strumsight/features/live/model/strum.dart';
-import 'package:strumsight/features/library/model/analyzed_session.dart';
-import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/songs/model/setlist.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/setlists_provider.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/streak/model/streak_data.dart';
 import 'package:strumsight/features/streak/providers/streak_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:strumsight/core/storage/storage_keys.dart';
 
 import '../support/preference_store.dart';
 
 /// Round 150 sweep — the r149 race class across every COLLECTION store: a
-/// mutation racing the initial prefs load must never wipe the on-disk data
-/// (the old `_dirty`/`_userSet` guards skipped the disk read while the
-/// mutation's persist overwrote the blob).
+/// mutation must never wipe what is already stored.
+///
+/// Since E01-R07 the class is structurally gone rather than guarded: every one
+/// of these stores is read **synchronously** in `build()` from the injected
+/// key-value store, so there is no "empty default now, stored data later"
+/// window for a mutation to fall into (the `Completer` gates were deleted with
+/// the async loads that needed them). The sweep stays as the regression proof
+/// of the invariant it was written for: a cold-start mutation merges onto the
+/// stored data.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  ProviderContainer container() {
-    final c = ProviderContainer();
+  ProviderContainer container(Map<String, Object> stored) {
+    final c = ProviderContainer(overrides: preferenceOverrides(stored));
     addTearDown(c.dispose);
     return c;
   }
 
-  test('streak: a cold-start practice EXTENDS the loaded streak', () async {
+  test('streak: a cold-start practice EXTENDS the stored streak', () async {
     const old = StreakData(
       current: 7,
       longest: 9,
       lastPracticeDay: 20643,
       freezes: 1,
     );
-    SharedPreferences.setMockInitialValues({
-      'practice_streak_v1': jsonEncode(old.toJson()),
-    });
-    final c = container();
-    // Record for the day AFTER the stored last practice — before load lands.
+    final c = container({StorageKeys.streak: storedDocument(old.toJson())});
+    // Record for the day AFTER the stored last practice.
     final advanced = await c
         .read(streakProvider.notifier)
         .recordPracticeToday(
@@ -61,10 +61,9 @@ void main() {
   });
 
   test('lesson progress: a cold-start record keeps other lessons', () async {
-    SharedPreferences.setMockInitialValues({
-      'lesson_progress_v1': jsonEncode({'old-lesson': 0.9}),
+    final c = container({
+      StorageKeys.lessonProgress: storedDocument({'old-lesson': 0.9}),
     });
-    final c = container();
     await c.read(lessonProgressProvider.notifier).record('new-lesson', 0.8);
     final map = c.read(lessonProgressProvider);
     expect(
@@ -92,10 +91,9 @@ void main() {
       ],
       bpm: 100,
     );
-    SharedPreferences.setMockInitialValues({
-      'user_songs_v1': jsonEncode([old.toJson()]),
+    final c = container({
+      StorageKeys.songs: storedCollection([old.toJson()]),
     });
-    final c = container();
     await c
         .read(songsProvider.notifier)
         .add(
@@ -121,10 +119,9 @@ void main() {
 
   test('setlists: a cold-start add keeps the saved sets', () async {
     const old = Setlist(id: 'old', name: 'Old set', songIds: ['a']);
-    SharedPreferences.setMockInitialValues({
-      'user_setlists_v1': jsonEncode([old.toJson()]),
+    final c = container({
+      StorageKeys.setlists: storedCollection([old.toJson()]),
     });
-    final c = container();
     await c.read(setlistsProvider.notifier).add('New set');
     expect(
       c.read(setlistsProvider).map((s) => s.name),
@@ -133,14 +130,9 @@ void main() {
   });
 
   test('favourites: a cold-start toggle keeps other pins', () async {
-    // Migrated to the injected store in E01-R06: the pins are read
-    // synchronously, so a toggle can no longer race an unfinished load.
-    final c = ProviderContainer(
-      overrides: preferenceOverrides({
-        StorageKeys.favoriteChords: <String>['Am', 'G7'],
-      }),
-    );
-    addTearDown(c.dispose);
+    final c = container({
+      StorageKeys.favoriteChords: <String>['Am', 'G7'],
+    });
     await c.read(favoriteChordsProvider.notifier).toggle('C');
     expect(c.read(favoriteChordsProvider), containsAll({'Am', 'G7', 'C'}));
   });
@@ -152,10 +144,9 @@ void main() {
       createdAt: DateTime.utc(2026, 7, 1),
       result: AnalyzeResult.empty,
     );
-    SharedPreferences.setMockInitialValues({
-      'library_sessions': jsonEncode([old.toJson()]),
+    final c = container({
+      StorageKeys.librarySessions: storedCollection([old.toJson()]),
     });
-    final c = container();
     final fresh = AnalyzedSession(
       id: 'new',
       title: 'New take',
@@ -167,7 +158,7 @@ void main() {
     expect(
       list.map((s) => s.id),
       containsAll(['old', 'new']),
-      reason: 'the on-disk library must survive an add-from-Analyze',
+      reason: 'the stored library must survive an add-from-Analyze',
     );
   });
 }

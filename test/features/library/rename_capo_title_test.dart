@@ -8,7 +8,6 @@ import 'package:strumsight/features/library/screens/library_screen.dart';
 import 'package:strumsight/features/library/screens/session_detail_screen.dart';
 import 'package:strumsight/features/settings/providers/capo_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/preference_store.dart';
 
@@ -36,8 +35,6 @@ Widget _app(Widget home) => MaterialApp(
 );
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   test('withTitle marks the session as custom-titled and it survives JSON', () {
     final auto = _session('a', 'C · G');
     expect(auto.customTitle, isFalse);

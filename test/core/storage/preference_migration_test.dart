@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
@@ -56,6 +58,43 @@ void main() {
     ),
   };
 
+  /// E01-R07 §7.3 — the six user-content documents. The value is the legacy
+  /// blob exactly as a shipped build wrote it (a bare array / object).
+  final legacyDocuments = <String, ({String to, String body, String bodyKey})>{
+    LegacyStorageKeys.librarySessions: (
+      to: StorageKeys.librarySessions,
+      body: '[]',
+      bodyKey: 'items',
+    ),
+    LegacyStorageKeys.songs: (
+      to: StorageKeys.songs,
+      body:
+          '[{"id":"s1","name":"Riff","chords":["C"],"pat":"d-------",'
+          '"bpm":90,"bpb":4}]',
+      bodyKey: 'items',
+    ),
+    LegacyStorageKeys.setlists: (
+      to: StorageKeys.setlists,
+      body: '[{"id":"l1","name":"Gig","songs":["s1"]}]',
+      bodyKey: 'items',
+    ),
+    LegacyStorageKeys.practiceLog: (
+      to: StorageKeys.practiceLog,
+      body: '[{"day":20643,"src":"live","sec":60,"str":8,"chd":3}]',
+      bodyKey: 'items',
+    ),
+    LegacyStorageKeys.lessonProgress: (
+      to: StorageKeys.lessonProgress,
+      body: '{"lesson-1":0.9}',
+      bodyKey: 'data',
+    ),
+    LegacyStorageKeys.streak: (
+      to: StorageKeys.streak,
+      body: '{"current":7,"longest":9,"last":20643,"freezes":1,"total":11}',
+      bodyKey: 'data',
+    ),
+  };
+
   test('every migrated preference has exactly one migration', () {
     final versions = appStorageMigrations.map((m) => m.version).toList();
     expect(
@@ -68,7 +107,81 @@ void main() {
       appStorageMigrations.length,
       reason: 'a migration id is a stable log identifier and is never reused',
     );
-    expect(appStorageMigrations.length, legacyValues.length);
+    expect(
+      appStorageMigrations.length,
+      legacyValues.length + legacyDocuments.length,
+      reason: 'each migrated key — preference or document — has one migration',
+    );
+  });
+
+  test('a returning user keeps every stored document, wrapped', () async {
+    final store = InMemoryKeyValueStore({
+      for (final entry in legacyDocuments.entries) entry.key: entry.value.body,
+    });
+
+    final report = await StorageMigrator(
+      store: store,
+      logger: const NoopAppLogger(),
+    ).migrate();
+
+    expect(report.isComplete, isTrue);
+    for (final entry in legacyDocuments.entries) {
+      final raw = store.readString(entry.value.to);
+      expect(raw, isNotNull, reason: '${entry.key} must arrive at its new key');
+      final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(decoded['schemaVersion'], 1, reason: 'the §7.3 envelope');
+      expect(
+        decoded[entry.value.bodyKey],
+        jsonDecode(entry.value.body),
+        reason: 'the user content itself is carried over verbatim',
+      );
+      expect(
+        store.contains(entry.key),
+        isFalse,
+        reason: 'the legacy key is removed once the new one is written',
+      );
+    }
+  });
+
+  test('an unparsable document is left where it is, never deleted', () async {
+    final store = InMemoryKeyValueStore({
+      LegacyStorageKeys.songs: 'not json at all',
+    });
+
+    final report = await StorageMigrator(
+      store: store,
+      logger: const NoopAppLogger(),
+    ).migrate();
+
+    expect(report.isComplete, isTrue, reason: 'a bad blob must not block boot');
+    expect(
+      store.readString(LegacyStorageKeys.songs),
+      'not json at all',
+      reason: 'the bytes stay for the document store to quarantine',
+    );
+    expect(store.contains(StorageKeys.songs), isFalse);
+  });
+
+  test('an already-migrated document is never overwritten', () async {
+    final migrated = jsonEncode({
+      'schemaVersion': 1,
+      'items': [
+        {'id': 'l1', 'name': 'New', 'songs': <String>[]},
+      ],
+    });
+    // The shape after a run that died between the write and the removal.
+    final store = InMemoryKeyValueStore({
+      StorageKeys.setlists: migrated,
+      LegacyStorageKeys.setlists: '[{"id":"l0","name":"Stale","songs":[]}]',
+    });
+
+    await StorageMigrator(
+      store: store,
+      logger: const NoopAppLogger(),
+    ).migrate();
+
+    expect(store.readString(StorageKeys.setlists), migrated);
+    expect(store.contains(LegacyStorageKeys.setlists), isFalse);
   });
 
   test('a returning user keeps every stored preference', () async {
