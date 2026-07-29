@@ -5,12 +5,8 @@ import 'package:flutter/scheduler.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../analyze/model/analyze_result.dart';
-import '../../learn/audio/chord_audio.dart';
-import '../../learn/audio/metronome.dart';
-import '../../learn/lesson_timing.dart';
-import '../../learn/model/lesson.dart';
-import '../../learn/widgets/lesson_highway.dart';
+import '../../analyze/public.dart';
+import '../../learn/public.dart';
 import '../share_content.dart';
 import '../share_service.dart';
 

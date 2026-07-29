@@ -5,8 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/model/lesson.dart';
-import '../../learn/screens/learn_screen.dart';
+import '../../learn/public.dart';
 import '../onboarding_provider.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),

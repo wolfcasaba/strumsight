@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/screens/learn_screen.dart';
+import '../../learn/public.dart';
 import '../model/setlist.dart';
 import '../model/song.dart';
 import '../providers/setlists_provider.dart';

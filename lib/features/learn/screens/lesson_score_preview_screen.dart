@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
-import '../../share/share_content.dart';
-import '../../share/share_service.dart';
+import '../../share/public.dart';
 import '../model/lesson.dart';
 import '../model/lesson_progress.dart';
 import '../widgets/lesson_score_card.dart';

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import '../../progress/model/practice_entry.dart';
+import '../../progress/public.dart';
 
 /// One week of practice, rolled up for the shareable "Strum Wrapped" card
 /// (RAG chunk 017 rec #5 — the Duolingo-Wrapped-style recap is the category's

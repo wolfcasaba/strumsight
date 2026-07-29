@@ -1,4 +1,4 @@
-import '../analyze/model/analyze_result.dart';
+import '../analyze/public.dart';
 import '../../core/music/chord.dart';
 import '../../core/music/strum.dart';
 

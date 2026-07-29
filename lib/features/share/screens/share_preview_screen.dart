@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
-import '../../analyze/model/analyze_result.dart';
+import '../../analyze/public.dart';
 import '../share_service.dart';
 import '../widgets/strum_card.dart';
 import 'strum_reel_screen.dart';

@@ -3,7 +3,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/audio/metronome.dart';
+import '../../learn/public.dart';
 import '../beat_clock.dart';
 import '../tap_tempo.dart';
 

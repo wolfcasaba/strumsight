@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/foundation/json_validation.dart';
-import '../../analyze/model/analyze_result.dart';
-import '../../learn/model/lesson.dart';
+import '../../analyze/public.dart';
+import '../../learn/public.dart';
 import '../../../core/music/strum.dart';
 
 /// Bound on a persisted song's progression (Kör 7 §7.1). Generous next to any

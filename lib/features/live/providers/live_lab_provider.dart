@@ -3,10 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../analyze/model/analyze_result.dart';
-import '../../analyze/providers/analyze_providers.dart';
-import '../../diagnostics/providers/diagnostics_providers.dart';
-import '../../settings/providers/lab_mode_provider.dart';
+import '../../analyze/public.dart';
+import '../../diagnostics/public.dart';
+import '../../settings/public.dart';
 import 'live_providers.dart';
 
 /// Where the Live Lab capture-and-analyze is in its lifecycle (r199).

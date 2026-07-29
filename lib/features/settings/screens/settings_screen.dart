@@ -11,7 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../auth/providers/auth_providers.dart';
+import '../../auth/public.dart';
 import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
 import '../providers/input_latency_provider.dart';

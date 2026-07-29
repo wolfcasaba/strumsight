@@ -7,7 +7,7 @@ import '../../../app/config/app_config.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/dio_factory.dart';
-import '../../analyze/model/analyze_result.dart';
+import '../../analyze/public.dart';
 import '../data/diagnostics_uploader.dart';
 import '../model/diagnostics_session.dart';
 

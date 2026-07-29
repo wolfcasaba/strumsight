@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../streak/daily_challenge.dart';
-import '../../streak/streak_logic.dart';
+import '../../streak/public.dart';
 import '../providers/lesson_progress_provider.dart';
 import '../model/lesson.dart';
 import 'learn_screen.dart';

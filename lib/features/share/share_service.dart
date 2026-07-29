@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../analyze/model/analyze_result.dart';
+import '../analyze/public.dart';
 import 'share_content.dart';
 
 /// Captures the on-screen Strum Card (a [RepaintBoundary]) to a PNG and hands

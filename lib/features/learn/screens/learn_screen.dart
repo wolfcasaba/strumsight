@@ -5,21 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../chords/widgets/chord_diagram.dart';
-import '../../live/engine/strum_engine.dart';
+import '../../chords/public.dart';
 import '../../../core/music/strum.dart';
-import '../../live/providers/live_providers.dart';
-import '../../progress/model/practice_entry.dart';
+import '../../live/public.dart';
+import '../../progress/public.dart';
 import 'package:intl/intl.dart';
 
-import '../../progress/model/practice_stats.dart';
-import '../../progress/providers/practice_log_provider.dart';
-import '../../share/model/weekly_recap.dart';
-import '../../share/screens/wrapped_preview_screen.dart';
-import '../../settings/providers/input_latency_provider.dart';
-import '../../settings/providers/visual_latency_provider.dart';
-import '../../streak/providers/streak_provider.dart';
-import '../../streak/streak_logic.dart';
+import '../../share/public.dart';
+import '../../settings/public.dart';
+import '../../streak/public.dart';
 import '../providers/lesson_progress_provider.dart';
 import '../providers/practice_speed_provider.dart';
 import '../audio/chord_audio.dart';

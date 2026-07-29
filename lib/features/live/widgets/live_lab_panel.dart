@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../diagnostics/widgets/diagnostics_panel.dart';
+import '../../diagnostics/public.dart';
 import '../providers/live_lab_provider.dart';
 
 /// Lab-mode Live panel (r199): a button that captures the last ~30 s of mic
