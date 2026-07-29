@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/foundation/json_validation.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 
 /// Bounds on the lists inside one persisted analysis (Kör 7 §7.1/§7.5).
 ///

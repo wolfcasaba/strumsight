@@ -18,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
 import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
 import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 import '../support/synth.dart';
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/share/widgets/strum_card.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';

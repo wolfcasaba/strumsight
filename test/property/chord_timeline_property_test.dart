@@ -11,10 +11,11 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/live/model/chord.dart';
-import 'package:strumsight/features/live/model/chord_event.dart';
+import 'package:strumsight/core/music/chord.dart';
+import 'package:strumsight/core/music/chord_event.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/live/model/beat_slot.dart';
 import 'package:strumsight/features/live/providers/chord_timeline_provider.dart';
 
 /// A minimal engine frame carrying only what the reducer reads.

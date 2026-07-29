@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 /// r175 — the learned no-strum reject in the LIVE path. The 3-class model
 /// emits [P(down), P(up), P(no-strum)]; when P(no-strum) clears the calibrated

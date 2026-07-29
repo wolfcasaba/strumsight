@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/model/lesson.dart';
 import '../../learn/screens/learn_screen.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../daily_challenge.dart';
 import '../../progress/model/practice_stats.dart';
 import '../../progress/providers/practice_log_provider.dart';

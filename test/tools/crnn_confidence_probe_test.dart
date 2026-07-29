@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
 import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
 import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 

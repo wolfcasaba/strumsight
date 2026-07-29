@@ -4,7 +4,7 @@ import 'dart:isolate';
 import '../../../core/audio/mic_capture.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
-import '../../live/engine/dsp/sliding_framer.dart';
+import '../../../core/audio/dsp/sliding_framer.dart';
 import '../model/tuner_reading.dart';
 import 'dsp/tuner_analyzer.dart';
 import 'tuner_engine.dart';

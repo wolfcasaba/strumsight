@@ -6,7 +6,7 @@ import '../../live/engine/dsp/nnls_chroma.dart';
 import '../../live/engine/dsp/strum_direction_classifier.dart';
 import '../../live/engine/dsp/chord_dictionary.dart';
 import '../../live/engine/dsp/viterbi_chord_decoder.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../model/analyze_result.dart';
 import 'chroma_denoise.dart';
 

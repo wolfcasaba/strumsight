@@ -17,7 +17,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-
+  meta: ^1.16.0                 # @immutable for the Flutter-free core domain
+                                # (lib/core/music/) — see docs/adr/0057
   audio_streamer: ^4.3.0        # mic → PCM stream (real engine — RAG chunk 001)
   fftea: ^1.5.0                 # pure-Dart FFT/STFT (DSP core — see docs/rag)
   flutter_riverpod: ^3.3.2      # state (hand-written providers, no codegen)

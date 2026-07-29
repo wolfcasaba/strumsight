@@ -6,7 +6,7 @@ import 'package:strumsight/features/chords/providers/favorite_chords_provider.da
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/songs/model/setlist.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/setlists_provider.dart';

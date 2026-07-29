@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import '../../model/chord.dart';
+import '../../../../core/music/chord.dart';
 import 'dsp_config.dart';
 
 /// Result of matching one chroma frame.

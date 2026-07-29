@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/widgets/chord_diagram.dart';
 import '../../live/engine/strum_engine.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../../live/providers/live_providers.dart';
 import '../../progress/model/practice_entry.dart';
 import 'package:intl/intl.dart';

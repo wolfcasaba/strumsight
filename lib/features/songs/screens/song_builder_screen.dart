@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/chord_shape.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
 import '../../metronome/tap_tempo.dart';

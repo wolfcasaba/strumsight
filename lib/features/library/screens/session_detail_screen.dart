@@ -5,7 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../analyze/widgets/timeline_view.dart';
 import '../../learn/model/lesson.dart';
 import '../../learn/screens/learn_screen.dart';
-import '../../live/model/chord.dart';
+import '../../../core/music/chord.dart';
 import '../../settings/providers/capo_provider.dart';
 import '../../share/screens/share_preview_screen.dart';
 import '../model/analyzed_session.dart';

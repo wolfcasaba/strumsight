@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
-import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/share/widgets/strum_card.dart';
 
 AnalyzeResult _result(int nStrums) => AnalyzeResult(

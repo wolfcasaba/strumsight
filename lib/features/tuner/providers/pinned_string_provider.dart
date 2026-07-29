@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../model/guitar_strings.dart';
+import '../../../core/music/guitar_strings.dart';
 
 /// The manually pinned target string (round 91), or null for auto (chromatic)
 /// mode. Session-only by design — pinning is a moment-to-moment tool, not a

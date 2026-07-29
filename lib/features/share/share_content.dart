@@ -1,6 +1,6 @@
 import '../analyze/model/analyze_result.dart';
-import '../live/model/chord.dart';
-import '../live/model/strum.dart';
+import '../../core/music/chord.dart';
+import '../../core/music/strum.dart';
 
 /// Pure builders for the shareable artifact (the "Strum Card"). Kept free of
 /// Flutter/IO so the viral caption + glyph logic is unit-testable.

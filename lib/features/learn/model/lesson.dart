@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../analyze/model/analyze_result.dart';
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../../streak/daily_challenge.dart';
 
 /// One thing to play at a point in a lesson: a strum (with a direction) on a

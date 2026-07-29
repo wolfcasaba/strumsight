@@ -17,7 +17,7 @@ import 'package:strumsight/features/settings/providers/lab_mode_provider.dart';
 import 'package:strumsight/features/settings/providers/left_handed_provider.dart';
 import 'package:strumsight/features/settings/providers/tuning_reference_provider.dart';
 import 'package:strumsight/features/settings/providers/visual_latency_provider.dart';
-import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/core/music/tuning.dart';
 import 'package:strumsight/features/tuner/providers/tuner_tuning_provider.dart';
 
 import '../../support/preference_store.dart';

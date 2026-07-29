@@ -1,4 +1,4 @@
-import '../live/model/strum.dart';
+import '../../core/music/strum.dart';
 import 'model/lesson.dart';
 
 /// How a single lesson event resolved.

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../live/model/strum.dart';
+import '../../../core/music/strum.dart';
 import '../data/songs_repository.dart';
 import '../model/song.dart';
 
