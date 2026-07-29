@@ -1,7 +1,7 @@
 # GPT plan corpus — index
 
-> Feltöltve: **2026-07-28**, két batchben (Codex Execution Pack, 58 fájlos manifest → **26 chunk** itt).
-> 2. batch: Ch10/11/12 új; a többi 13 fájl bit-azonos duplikátum volt (ellenőrizve md5-tel).
+> Feltöltve: **2026-07-28**, három batchben (Codex Execution Pack, 58 fájlos manifest → **27 chunk** itt).
+> 2. batch: Ch10/11/12 új; a többi 13 fájl bit-azonos duplikátum volt (ellenőrizve md5-tel). 3. batch: Ch8 (chunk 127).
 > Triage a HANDOFF (r205) + dsp chunk 001–018 ellen: lásd lent. Frissítsd minden chunk-változással egy commitban.
 
 ## Chunkok
@@ -69,8 +69,10 @@
 1. ✅ **ELDŐLT (2026-07-28, user) — Workflow-váltás (116):** átállunk a terv szerinti
    `codex/eXX-rYY` branch-per-round + PR modellre (squash merge, zöld CI), a szóló-adaptációkkal:
    a „legalább 1 review" ügynöki second-eye review-ra lazítva, a formális GitHub branch-protection
-   külön körre (RTM `INT-R04`) halasztva. Rögzítve: `docs/adr/0005-branch-per-round-pr-workflow.md`.
-   Maradék blokkoló csak a token (Contents + Workflows + Pull requests: Read+write).
+   külön körre (Ch12 branch-protection kör, jelenleg RTM `INT-R04`) halasztva.
+   Rögzítve: `docs/adr/0050-branch-per-round-pr-workflow.md` (a 0005-ös számot a terv az Epic 2
+   `0005-practice-engine-v2`-nek tartja fenn → folyamat-ADR-ek a 0050+ sávban).
+   ✅ A token-blokkoló feloldva (2026-07-29, új PAT mindhárom joggal).
 2. ✅ **ELDŐLT (2026-07-28, user: „igen") — E01-R02 rename:** a user elfogadta, hogy az Android
    application ID csere miatt az app ÚJ appként települ a telefonra (a régi Lab-telepítés külön
    ikonként marad, lokális adatai nem vándorolnak). A kockázatot a kör során ADR rögzíti (a terv
@@ -87,6 +89,8 @@
 - `docs/governance/02, 03, 05–13` (labels, board, device matrix, security, licence, UX, fixtures, business, privacy)
 - `templates/*` (ADR, ISSUE, PR, HANDOFF, EPIC report, release notes), `README.md`, `VALIDATION_REPORT.md`
 - `.github/ISSUE_TEMPLATE/codex-sdd-round.md`, `.github/PULL_REQUEST_TEMPLATE.md`
+  (⚠ a PR-sablon E01-R01b-ben **előrehozva elkészült** `.github/pull_request_template.md` néven —
+  a manifest kanonikus sablonjával az INT-R03 körben egyeztetendő)
 
 ## Elhelyezési terv
 

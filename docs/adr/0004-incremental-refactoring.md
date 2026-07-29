@@ -16,6 +16,10 @@ scope-fegyelem nélkül. A 204 korábbi kör bizonyította a kis-kör modellt.
 
 ## Git-megjegyzés (nyitott P1 döntés)
 
+> **⛔ Felülírva (2026-07-28):** a döntés megszületett — a workflow a
+> branch-per-round + PR modell, lásd [ADR 0050](0050-branch-per-round-pr-workflow.md).
+> Az alábbi szakasz csak történeti kontextus.
+
 A terv branch-per-round + PR + védett main modellt ír elő (docs/execution/05).
 Amíg a user nem dönt a workflow-váltásról, az elfogadott minimum a Ch2 §5.2
 szerinti "külön, önálló commit" a main-en, HANDOFF + git-note kísérettel.
