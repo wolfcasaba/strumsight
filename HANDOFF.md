@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-28** (round 207).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 208 = E01-R01b).
 
 > 🤖 **ML TRACK GREEN-LIT (2026-07-12, user order):** research → plan → autonomous rounds. Plan:
 > `docs/plans/ml-track.md`. Round-134 discovery: the **ISMIR-2025 strum-direction dataset + code +
@@ -142,6 +142,11 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 > 🧭 **A munkasor mostantól az SDD-program.** Kötelező olvasási sorrend: [`AGENTS.md`](AGENTS.md) →
 > [`docs/sdd/00-index.md`](docs/sdd/00-index.md) (Ch1–12) → [`docs/execution/`](docs/execution/).
 > **Egy session = egy kör** (CLAUDE.md szabály) — a kör végén MEG KELL ÁLLNI, nem szabad továbbfutni.
+> **Minden kör saját branchen fut és PR-ként záródik** (user döntés 2026-07-28,
+> [ADR 0050](docs/adr/0050-branch-per-round-pr-workflow.md)): `codex/e<epic>-r<round>-<slug>`,
+> `[EXX-RYY] …` PR-cím, squash merge, zöld CI; emberi review helyett ügynöki second-eye.
+> ✅ A token-blokkoló **feloldva 2026-07-29-én** (új PAT Contents + Workflows + Pull requests:
+> Read+write joggal, a megosztott `~/.git-credentials` + `gh` auth-ban) — push/PR/merge működik.
 > A korábbi saját track-jeink nem tűntek el, hanem beolvadtak az epicekbe: **LEARN** → Ch3 Practice
 > Engine + Ch4 Song Trainer, **GROWTH** (share/streak/UGC/referral) → Ch9 Gamification + Ch10
 > Community, **ML + bővített akkordkészlet** → Ch7 Audio Analysis 2.0 + Ch11 Offline AI,
@@ -156,14 +161,17 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   Android namespace és iOS bundle id → `com.wolfcasaba.strumsight`, a verzió-igazságforrás
   egységesítése (a `pubspec.yaml` a forrás; a README ellentmondó „v0.2.0"-ja rendezendő), plusz egy
   régi-név-őr teszt/script allowlisttel (2.5).
-  **Két user-döntés az indítás ELŐTT:**
-  1. 🔴 **A rename ÚJ appként települ a telefonra** — az Android application ID megváltozik, így a
-     meglévő (Lab-os) telepítés nem frissül, hanem külön ikonként marad meg, a helyi adatai/beállításai
-     nem vándorolnak át. A terv szerint ez publikus store-release előtt elfogadható, de **ADR-ben
-     rögzítendő** és a user beleegyezése kell hozzá.
-  2. 🔴 **branch-per-round + PR workflow-váltás**
-     ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md)) — amíg
-     nincs döntés, a körök a **status quo** szerint közvetlenül `main`-re commitolnak.
+  **A két indítás-előtti user-döntés MEGVAN:**
+  1. ✅ **ELDŐLT (2026-07-28, user: „igen"): a rename mehet** — elfogadva, hogy az application ID
+     csere miatt az app ÚJ appként települ (a régi Lab-telepítés külön ikonként marad, lokális adatai
+     nem vándorolnak). A kör során ADR-ben rögzítendő (a terv migrációs-kockázat szabálya szerint).
+  2. ✅ **ELDŐLT (2026-07-28, user): branch-per-round + PR workflow** a terv szerint
+     ([`docs/execution/05-branch-and-pr-rules.md`](docs/execution/05-branch-and-pr-rules.md),
+     [ADR 0050](docs/adr/0050-branch-per-round-pr-workflow.md)) — a kör a
+     `codex/e01-r02-<slug>` branchen fut, `[E01-R02] …` című PR-rel, squash merge-dzsel, zöld CI-vel;
+     emberi review helyett ügynöki second-eye (`flutter-reviewer` + `flutter-devil-advocate`).
+     ✅ **A token-blokkoló feloldva (2026-07-29):** új PAT mindhárom joggal — nincs több
+     indítási akadály.
   ⚠ A kör kötelező tesztjei közt van `dart format --output=none --set-exit-if-changed lib test` (a repo
   formázási állapota még FELMÉRETLEN — a format gate az E01-R14 köré tartozik, itt tömeges, körön kívüli
   diffet okozhat) és `flutter build apk --debug` (a boxon NEM futtatható → CI, `build-apk.yml`).
@@ -201,6 +209,7 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
+| 208 | PR #1 (squash) | docs-only — kapuk a 207-es körben | **E01-R01b PR-WORKFLOW ÁTÁLLÁS — az első kör, ami már saját branchen + PR-ként futott (dogfooding).** ADR 0050 (branch-per-round + squash merge + zöld CI; szóló-adaptáció: ügynöki second-eye review humán helyett, branch-protection a Ch12 körére halasztva), `.github/pull_request_template.md` (a terv kanonikus kisbetűs útvonalán, INT-R03-ból előrehozva), mindkét P1 user-döntés átvezetve (workflow + rename → E01-R02 indítható). A second-eye review ÉLESBEN fogott: az eredetileg 0005-ös ADR-szám ütközött a terv Epic 2-nek fenntartott `0005-practice-engine-v2` slotjával (docs/sdd/03 Kör 1) → folyamat-ADR-ek a 0050+ sávba; az ADR 0004 felülírt szakasza „Felülírva" jelölést kapott (AGENTS.md: elavult doksit tilos csendben követni). **Tanulság: a terv nemcsak szöveget, hanem NÉVTERET is foglal (ADR-számok, fájl-útvonalak) — új azonosító kiosztása előtt a terv-korpuszban keresni kell.** A token-blokkoló feloldva (új PAT, 2026-07-29): main + branch + notes push, PR #1 nyitás és merge mind a boxról ment. |
 | 207 | `860bbc5` | 700 Dart + 2 skipped · 29 backend | **E01-R01 REPOSITORY BASELINE — a repó megkapta a kanonikus szabályrendszerét, az SDD-program formálisan elindult.** A 3. feltöltési batch meghozta a hiányzó **Ch8-at (AI Practice Generator)** → az **SDD Ch1–12 TELJES**: a repóba került `AGENTS.md` + `CODEX_START_HERE.md`, `docs/sdd/00–12`, `docs/execution/` (playbook, DoR/DoD, branch-szabályok, RTM, risk register), `docs/adr/0001–0004`, `docs/governance/`, `docs/development/`, és a `docs/baseline/epic-01-start.md` (verziók, kódbázis-számok, a Ch2 §3.4 adósságlista MIND megerősítve a valós kódon). Plan-korpusz: chunk 127 + `as_built:` frontmatter a 101–126-on — a terv és a megépült valóság innentől visszakereshetően össze van kötve (`node tools/rag.mjs --corpus plan`). **Tanulság: egy baseline-kör értéke a MÉRÉS, nem a doksi.** A futtatás egy piros tesztet talált — `live_lab_panel_test.dart` a r201 óta driftelt `~30 s` gombfelirattal; a forrás-igazság az l10n (`app_en.arb` = `~60 s`), ezért a TESZT lett hozzáigazítva, `lib/` érintetlen. Ennél is fontosabb: a baseline-doksiba először beírt „1596 passed" **NEM volt reprodukálható** — az újramért érték **700 passed / 2 skipped** (14:38, exit 0), ami a 159 tesztfájl ~680 statikus `test(`/`testWidgets(` deklarációjával konzisztens → a doksi javítva. Verifikáció (külön parancsokként): `flutter analyze lib/ test/` **No issues found** (5.5s), teljes suite zöld, `test/features/live/` **171/2**, backend `pytest` **29 passed** (7.34s), plan-RAG spot-check 4/4 a várt chunkra (127, 125, 115, 105 — a `--semantic` valódi Jina-v3+RRF hibrid volt, nem BM25-fallback). Nyitva a két P1 user-döntés: a rename új appként települ, illetve a branch-per-round+PR váltás. |
 | 182 | `039b585` | 645 + 12 (denoise/hpss modules) | **Full-band (drums+bass) chord accuracy is a DSP CEILING (~59 %) — measured honestly on CI; simple knobs don't move it, it needs an ML chord model.** User steered to the hard full-band domain, "do it with agents for speed." Ran **2 parallel Opus agents** → self-contained tested modules: `ChromaDenoise.temporalMedian` (transient/drum/passing-note removal, 7 tests) + `Hpss.harmonicEnhance` (Fitzgerald median-filter HPSS, 5 tests). Added an **Analyze-path chord-accuracy metric** to the probe + made batch `chromaMedianWindow` and `bassWeight` injectable. **MEASURED on CI (10 SoundCloud named-chord clips):** analyze-path accuracy ≈ **59 %** (high variance: E-A-D/Em-C-G-D = 100 %, C-G-Am-F_chords_2 = 0 %); the dominant error is **wrong-ROOT** (bass passing-notes drag the root). **Both levers measured FLAT within noise:** chroma-median windows 1–13 all ≈59; bassWeight 0.15–0.45 all ≈59. HPSS not wired (it removes percussion; the error is bass = harmonic). **Conclusion:** full-band = a deep-model problem (Chordify-class ML on labelled songs), NOT a tuning knob — the knobs/modules ship **OFF by default (behavior unchanged)** as infrastructure for a future ML chord track. What works: SOLO guitar (the LIVE use) 76–92 %; the real tuning win stays r181's sus4 fix. See `full-band-chord-ceiling` memory. |
 | 181 | `45e82c6` | 645 Dart (unchanged) | **First CI-driven DSP tune: sus4 Occam handicap — real-song chord accuracy 50 %→57.5 %.** The user directed heavy work to CI (Oracle is very slow). Pushed **`dsp-probe.yml`** (real-audio probe on fast x86; user supplied a Workflows-scoped PAT) + activated the long-pending build-apk HARD gates. The CI probe (SoundCloud corpus, same as Oracle) confirmed the r180 finding, then diagnosed the top error: **`sus4` had Occam bias 0.0** (no guard), so on full-band real audio a stray 4th (adjacent-chord ring-out / bass / another instrument) flipped D→Dsus4, G→Gsus4. Gave sus4 a **0.04 handicap** (`chord_dictionary.dart`) — a genuine sustained sus4 still wins big (the `C+F+G→Csus4` unit test holds; 7th/dim/aug intact; property gate green), a faint 4th no longer renames a triad. **MEASURED on CI (2 runs, same songs): inSet% 50.1→57.5** (G-D-Em-C 41→54, lesson_beginner shown 55→88 %). VERIFY: chord+dim/aug+property tests green locally; **full suite green on CI** (build-apk 29320567764) + fresh APK. **Honest ceiling:** the remaining full-band errors are wrong-ROOT chords (B/D in a C-G-Am-F song) from chroma/bass confusion in the mix — a source-separation-class problem, not a bias knob. **Solo guitar (the LIVE use) detects well** (76–92 %); added solo-guitar clips to `sc_fetch.sh` so the probe covers that domain. APK: `apk-dist/strumsight-build-181-chordfix.apk`. |

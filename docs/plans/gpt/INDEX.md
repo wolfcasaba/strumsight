@@ -1,7 +1,7 @@
 # GPT plan corpus — index
 
-> Feltöltve: **2026-07-28**, két batchben (Codex Execution Pack, 58 fájlos manifest → **26 chunk** itt).
-> 2. batch: Ch10/11/12 új; a többi 13 fájl bit-azonos duplikátum volt (ellenőrizve md5-tel).
+> Feltöltve: **2026-07-28**, három batchben (Codex Execution Pack, 58 fájlos manifest → **27 chunk** itt).
+> 2. batch: Ch10/11/12 új; a többi 13 fájl bit-azonos duplikátum volt (ellenőrizve md5-tel). 3. batch: Ch8 (chunk 127).
 > Triage a HANDOFF (r205) + dsp chunk 001–018 ellen: lásd lent. Frissítsd minden chunk-változással egy commitban.
 
 ## Chunkok
@@ -45,6 +45,11 @@
   még `music_theory` → **E01-R02 valós munka** (rename + Android/iOS azonosítók).
 - A terv fájlszámai (~165 forrás / 159 teszt) egyeznek a valósággal (168 dart fájl).
 - Ch2 §3.4 "azonosított adósságok" listája pontos (create_all, debug signing, cross-feature importok…).
+- ⚠ **Terv-belső számozási drift (E01-R01b felfedezés):** az RTM (chunk 122 / `docs/execution/06`)
+  az issue-sablonokat és a branch protectiont KÜLÖN körként listázza (INT-R03 / INT-R04), a Ch12
+  fejezetszöveg (chunk 126) viszont a Kör 3-ban összevonja őket. A 00-index szabálya szerint
+  végrehajtáskor a fejezet-fájl az irányadó — a Ch12 körök indításakor az RTM-sorokat ehhez kell
+  igazítani.
 
 **Megerősített tanulságok** (a terv NEM ütközik a mért igazsággal, hanem kodifikálja):
 
@@ -61,12 +66,19 @@
 
 **⚠ Nyitott döntések (P1 — user):**
 
-1. **Workflow-váltás (116):** a terv branch-per-round + PR + védett main + review-t ír elő; eddig
-   az autonóm körök közvetlenül main-re commitoltak. Döntés kell: átállunk-e a codex/eXX-rYY
-   branch-modellre (ajánlott: igen, de review-er nélkül a "legalább 1 review" szabály lazítandó).
-2. **E01-R02 rename:** az Android application ID csere a telepített appot ÚJ appként jeleníti meg
-   (a terv dokumentálja). Store-release előtt OK — de a user Lab-telepítéseit érinti; jelezni.
-3. **Hiányzó fejezetek feltöltése** (lásd lent) — Ch8/10/11/12 nélkül a Fázis C–E nem indítható.
+1. ✅ **ELDŐLT (2026-07-28, user) — Workflow-váltás (116):** átállunk a terv szerinti
+   `codex/eXX-rYY` branch-per-round + PR modellre (squash merge, zöld CI), a szóló-adaptációkkal:
+   a „legalább 1 review" ügynöki second-eye review-ra lazítva, a formális GitHub branch-protection
+   külön körre (Ch12 branch-protection kör, jelenleg RTM `INT-R04`) halasztva.
+   Rögzítve: `docs/adr/0050-branch-per-round-pr-workflow.md` (a 0005-ös számot a terv az Epic 2
+   `0005-practice-engine-v2`-nek tartja fenn → folyamat-ADR-ek a 0050+ sávban).
+   ✅ A token-blokkoló feloldva (2026-07-29, új PAT mindhárom joggal).
+2. ✅ **ELDŐLT (2026-07-28, user: „igen") — E01-R02 rename:** a user elfogadta, hogy az Android
+   application ID csere miatt az app ÚJ appként települ a telefonra (a régi Lab-telepítés külön
+   ikonként marad, lokális adatai nem vándorolnak). A kockázatot a kör során ADR rögzíti (a terv
+   2.x szerint). **E01-R02 indítható.**
+3. ✅ **MEGOLDVA (2026-07-28) — Hiányzó fejezetek feltöltése:** a Ch8 a 3. batchben megérkezett
+   (chunk 127), így az SDD Ch1–12 TELJES; a Fázis C–E nincs többé fejezethiány miatt blokkolva.
 
 ## Hiányzó dokumentumok (a manifest 58 fájljából még nincs feltöltve)
 
@@ -77,6 +89,8 @@
 - `docs/governance/02, 03, 05–13` (labels, board, device matrix, security, licence, UX, fixtures, business, privacy)
 - `templates/*` (ADR, ISSUE, PR, HANDOFF, EPIC report, release notes), `README.md`, `VALIDATION_REPORT.md`
 - `.github/ISSUE_TEMPLATE/codex-sdd-round.md`, `.github/PULL_REQUEST_TEMPLATE.md`
+  (⚠ a PR-sablon E01-R01b-ben **előrehozva elkészült** `.github/pull_request_template.md` néven —
+  a manifest kanonikus sablonjával az INT-R03 körben egyeztetendő)
 
 ## Elhelyezési terv
 
