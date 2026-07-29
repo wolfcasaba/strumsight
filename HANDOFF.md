@@ -4,8 +4,9 @@
 > "what's done / what's next". Update it after every development round (see
 > [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 214 = E01-R07).
 >
-> **Branch/commit:** `codex/e01-r07-user-content-storage` → PR #9 (a merge feltétele a branchre
-> dispatchelt `build-apk.yml` zöld futása).
+> **Branch/commit:** `main` @ [PR #9](https://github.com/wolfcasaba/strumsight/pull/9) (merged, CI run
+> [30449803817](https://github.com/wolfcasaba/strumsight/actions/runs/30449803817) zöld: analyze + teljes
+> suite + randomizált-seedű property gate + release APK).
 > Utolsó befejezett kör: **E01-R07** (SDD Ch2, Kör 7).
 > **Következő: E01-R08 Hálózati kliens és auth hardening** (Ch2, Kör 8 — egységes hálózati réteg,
 > interceptorok, timeout/retry, feature-flag) — **ÚJ SESSIONBEN indítandó** (ADR 0052). Állandó user-szabályok (2026-07-29,
