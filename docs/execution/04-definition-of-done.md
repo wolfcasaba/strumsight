@@ -20,8 +20,9 @@
 
 - [ ] Új logika unit teszttel védett.
 - [ ] Regressziós teszt készült a javított hibára.
-- [ ] Érintett widget/integration/property teszt zöld.
-- [ ] Teljes kötelező Flutter gate zöld.
+- [ ] Érintett widget/integration/property teszt zöld (lokálisan).
+- [ ] Teljes kötelező Flutter gate zöld — a **teljes suite + property gate a CI-ban**
+      ([ADR 0053](../adr/0053-ci-full-test-suite.md)), a bizonyíték a run linkje.
 - [ ] Backend/ML gate zöld, ha releváns.
 - [ ] Valódi device/real-audio gate teljesült vagy explicit release blocker.
 

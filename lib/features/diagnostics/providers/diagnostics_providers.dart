@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/config/app_config.dart';
+import '../../../core/logging/logger_provider.dart';
 import '../../analyze/model/analyze_result.dart';
 import '../data/diagnostics_uploader.dart';
 import '../model/diagnostics_session.dart';
@@ -15,6 +16,7 @@ final diagnosticsUploaderProvider = Provider<DiagnosticsUploader>((ref) {
   return DiagnosticsUploader(
     baseUrl: config.apiBaseUrl,
     diagToken: config.diagnosticsToken,
+    logger: ref.watch(appLoggerProvider),
   );
 });
 
@@ -61,6 +63,9 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
     state = status;
   }
 
+  /// Documented swallow (§4.5): `Platform` is unavailable on some hosts, and
+  /// the device string is a cosmetic diagnostics header — an unknown platform
+  /// is a correct answer here, not an error hidden from the user.
   String _device() {
     try {
       if (kIsWeb) return 'web';

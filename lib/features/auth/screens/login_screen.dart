@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../data/auth_repository.dart';
+import '../presentation/auth_failure_message.dart';
 import '../providers/auth_providers.dart';
 
 /// Sign-in / create-account screen. Pushed from Settings; pops on success.
@@ -39,20 +39,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await controller.register(email, password);
     } else {
       await controller.login(email, password);
-    }
-  }
-
-  String _errorText(AppLocalizations l10n, Object error) {
-    final kind = error is AuthException ? error.kind : AuthErrorKind.unknown;
-    switch (kind) {
-      case AuthErrorKind.invalidCredentials:
-        return l10n.authErrorInvalidCredentials;
-      case AuthErrorKind.emailTaken:
-        return l10n.authErrorEmailTaken;
-      case AuthErrorKind.network:
-        return l10n.authErrorNetwork;
-      case AuthErrorKind.unknown:
-        return l10n.authErrorUnknown;
     }
   }
 
@@ -128,7 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   if (auth.hasError) ...[
                     const SizedBox(height: 16),
                     Text(
-                      _errorText(l10n, auth.error!),
+                      authFailureMessage(l10n, auth.error),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontFamily: 'Poppins',

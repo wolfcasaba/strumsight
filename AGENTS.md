@@ -131,13 +131,21 @@ Kötelező:
 
 A konkrét kör felülírhatja vagy bővítheti, de alapértelmezetten:
 
+**Lokálisan** (a fejlesztői boxon):
+
 ```bash
 flutter pub get
 dart format --output=none --set-exit-if-changed lib test tool
 flutter analyze lib/ test/ tool/
-flutter test
-flutter test test/property
+flutter test test/<a kör által érintett terület>
 ```
+
+**A CI-ban** (kötelező, a kör-branchre dispatchelve — user szabály 2026-07-29,
+[ADR 0053](docs/adr/0053-ci-full-test-suite.md)): a **teljes `flutter test`**,
+a **property gate** (friss seeddel) és a release APK. A boxon a teljes suite
+~15 perc, a CI-ban ~4–5 — ezért a teljes regresszió bizonyítéka a CI-run linkje,
+nem lokális kimenet. A merge feltétele változatlan: minden gate zöld, a CI-ban
+futó teljes suite is.
 
 A parancsokat külön futtasd; ne láncold őket `&&` használatával a korlátozott fejlesztői környezetben.
 

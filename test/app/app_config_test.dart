@@ -33,10 +33,10 @@ AppConfig _resolve({
 List<String> _problemsOf(void Function() act) {
   try {
     act();
-  } on ConfigurationFailure catch (e) {
+  } on ConfigurationException catch (e) {
     return e.problems;
   }
-  fail('expected ConfigurationFailure');
+  fail('expected ConfigurationException');
 }
 
 void main() {

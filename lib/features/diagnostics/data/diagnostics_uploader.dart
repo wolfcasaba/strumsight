@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../../app/config/app_config.dart';
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../learn/audio/wav.dart';
 import '../model/diagnostics_session.dart';
 
@@ -26,7 +28,9 @@ class DiagnosticsUploader {
     String baseUrl = AppConfig.devApiBaseUrl,
     this.diagToken = AppConfig.devDiagnosticsToken,
     this.maxRetries = 2,
-  }) : _dio =
+    AppLogger logger = const NoopAppLogger(),
+  }) : _log = logger,
+       _dio =
            dio ??
            Dio(
              BaseOptions(
@@ -38,6 +42,10 @@ class DiagnosticsUploader {
            );
 
   final Dio _dio;
+
+  /// Every swallowed error is reported here — the upload stays best-effort,
+  /// but it is no longer *silent* (E01-R04 §4.5).
+  final AppLogger _log;
 
   /// `X-Diag-Token` header value for the diagnostics endpoint.
   final String diagToken;
@@ -62,9 +70,15 @@ class DiagnosticsUploader {
     try {
       final json = jsonEncode(session.toJson());
       body = Uint8List.fromList(gzip.encode(utf8.encode(json)));
-    } catch (_) {
+    } catch (e, stackTrace) {
       // Serialization/compression should never fail, but if it does, don't
-      // throw — just report a failed upload.
+      // throw — just report (and log) a failed upload.
+      _log.warning(
+        'diagnostics.encode_failed',
+        error: e,
+        stackTrace: stackTrace,
+        fields: const {'code': FailureCode.unknown},
+      );
       return DiagnosticsUploadStatus.failed;
     }
 
@@ -91,11 +105,29 @@ class DiagnosticsUploader {
         }
         // A non-2xx that isn't a transport error: no point retrying auth/shape
         // problems — report failed.
+        _log.warning(
+          'diagnostics.upload_rejected',
+          fields: {'code': FailureCode.networkServer, 'status': code},
+        );
         return DiagnosticsUploadStatus.failed;
-      } on DioException catch (_) {
+      } on DioException catch (e) {
         // Transport error — retry if attempts remain, else fail.
+        _log.warning(
+          'diagnostics.upload_transport_failed',
+          fields: {
+            'code': FailureCode.networkUnavailable,
+            'type': e.type.name,
+            'attempt': attempt,
+          },
+        );
         if (attempt >= maxRetries) return DiagnosticsUploadStatus.failed;
-      } catch (_) {
+      } catch (e, stackTrace) {
+        _log.warning(
+          'diagnostics.upload_failed',
+          error: e,
+          stackTrace: stackTrace,
+          fields: const {'code': FailureCode.unknown},
+        );
         return DiagnosticsUploadStatus.failed;
       }
     }

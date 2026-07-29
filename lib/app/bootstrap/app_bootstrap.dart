@@ -55,7 +55,7 @@ abstract final class AppBootstrap {
           await (loadOnboardingSeen ?? OnboardingController.load)();
 
       return BootstrapSuccess(config: config, onboardingSeen: onboardingSeen);
-    } on ConfigurationFailure catch (e) {
+    } on ConfigurationException catch (e) {
       return BootstrapFailure(e.problems);
     } catch (e) {
       // An unexpected boot error is still a controlled failure screen, not a
