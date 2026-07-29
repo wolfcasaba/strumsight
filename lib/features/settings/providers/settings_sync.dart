@@ -153,9 +153,17 @@ class SettingsSync {
           _applyingPull = false;
         }
         await Future.wait(persistence);
-        if (!_ref.mounted || authRevision != _authRevision || !_signedIn) {
+        if (!_ref.mounted) return;
+        if (authRevision != _authRevision) {
+          // The session changed while these writes were in flight, so what we
+          // just put on disk belongs to the PREVIOUS account — and it landed
+          // after the current account's own pull already wrote. Re-persist the
+          // live snapshot so the file agrees with what the app is showing
+          // (round 216: the in-memory state was right, only the disk lied).
+          await _persistSnapshot();
           return;
         }
+        if (!_signedIn) return;
 
         // A genuine edit may have arrived while the four persistence futures
         // were pending. Re-persist the latest complete snapshot after the old
@@ -171,6 +179,32 @@ class SettingsSync {
           _schedulePush();
         }
     }
+  }
+
+  /// Write the CURRENT in-memory settings back, whatever the session state is.
+  ///
+  /// Used when a stale write has just landed: the notifiers are the source of
+  /// truth for this session, so the file has to be brought back to them.
+  Future<void> _persistSnapshot() async {
+    if (!_ref.mounted) return;
+    final theme = _ref.read(themeModeProvider);
+    final locale = _ref.read(localeProvider);
+    final confidence = _ref.read(confidenceThresholdProvider);
+    final tuning = _ref.read(tuningReferenceProvider);
+
+    _applyingPull = true;
+    late final List<Future<void>> persistence;
+    try {
+      persistence = [
+        _ref.read(themeModeProvider.notifier).setMode(theme),
+        _ref.read(localeProvider.notifier).set(locale),
+        _ref.read(confidenceThresholdProvider.notifier).set(confidence),
+        _ref.read(tuningReferenceProvider.notifier).set(tuning),
+      ];
+    } finally {
+      _applyingPull = false;
+    }
+    await Future.wait(persistence);
   }
 
   Future<void> _reconcileLocalPersistence(int authRevision) async {
