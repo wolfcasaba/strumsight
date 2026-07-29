@@ -49,6 +49,16 @@ abstract final class StorageKeys {
   /// out every signed-in user.
   static const String secureAuthToken = 'strumsight_auth_token';
 
+  /// Where a document that could not be decoded is kept (Kör 7 §7.4).
+  ///
+  /// Corrupt user content is isolated, never dropped: the unreadable bytes move
+  /// here so the app can carry on with a clean document while the original
+  /// stays recoverable (by a support build, a later repair migration, or a
+  /// device dump). One slot per document — a second corruption replaces the
+  /// first, which is still strictly more than the zero copies a blind
+  /// overwrite would leave.
+  static String quarantineOf(String key) => '$key.corrupt';
+
   /// All preference keys, for guard tests (uniqueness, namespace).
   static const List<String> all = [
     schemaVersion,

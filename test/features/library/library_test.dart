@@ -7,7 +7,6 @@ import 'package:strumsight/features/library/providers/library_providers.dart';
 import 'package:strumsight/features/live/model/strum.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
@@ -44,19 +43,18 @@ class FakeLibraryRepository implements LibraryRepository {
 }
 
 void main() {
-  setUp(() {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    SharedPreferences.setMockInitialValues({});
-  });
+  setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
 
-  test('add persists across a fresh container (real prefs repo)', () async {
-    final c1 = ProviderContainer(overrides: preferenceOverrides());
+  test('add persists across a fresh container (real store repo)', () async {
+    // ONE store behind both containers — persistence is what is under test.
+    final store = InMemoryKeyValueStore();
+    final c1 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c1.dispose);
     await c1.read(libraryProvider.future);
     await c1.read(libraryProvider.notifier).add(_session('1', 'C · G'));
 
     // A brand-new container reloads from persistence.
-    final c2 = ProviderContainer(overrides: preferenceOverrides());
+    final c2 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c2.dispose);
     final loaded = await c2.read(libraryProvider.future);
     expect(loaded.map((s) => s.id), contains('1'));

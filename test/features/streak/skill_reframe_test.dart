@@ -6,7 +6,8 @@ import 'package:strumsight/features/progress/providers/practice_log_provider.dar
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/features/streak/streak_logic.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round 152 — the streak→SKILL reframe (chunk 013 #2 TODO, Simply's
 /// evidence: a growing-skill narrative retains more durably than pure
@@ -17,19 +18,20 @@ class _SeededLog extends PracticeLogController {
   final List<PracticeEntry> _seed;
   @override
   List<PracticeEntry> build() {
-    super.build(); // opens the r150 write gate (mock prefs are empty)
+    super.build(); // reads the (empty) injected store
     return _seed;
   }
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   final now = DateTime(2026, 7, 12, 12);
   final today = StreakLogic.epochDayOf(now);
 
   Widget app(List<PracticeEntry> entries) => ProviderScope(
-    overrides: [practiceLogProvider.overrideWith(() => _SeededLog(entries))],
+    overrides: [
+      ...preferenceOverrides(),
+      practiceLogProvider.overrideWith(() => _SeededLog(entries)),
+    ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

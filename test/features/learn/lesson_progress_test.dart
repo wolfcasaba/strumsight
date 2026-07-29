@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/model/lesson_progress.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   group('LessonProgress.stars', () {
@@ -30,10 +31,12 @@ void main() {
 
   group('LessonProgressController', () {
     TestWidgetsFlutterBinding.ensureInitialized();
-    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    late InMemoryKeyValueStore store;
+    setUp(() => store = InMemoryKeyValueStore());
 
     test('keeps the best accuracy and never regresses', () async {
-      final c = ProviderContainer();
+      final c = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
       addTearDown(c.dispose);
       final n = c.read(lessonProgressProvider.notifier);
 
@@ -51,7 +54,9 @@ void main() {
     test(
       'progression unlocks the next lesson once the previous passes',
       () async {
-        final c = ProviderContainer();
+        final c = ProviderContainer(
+          overrides: [preferenceStoreOverride(store)],
+        );
         addTearDown(c.dispose);
         final n = c.read(lessonProgressProvider.notifier);
         final tier = Lessons.byDifficulty(Difficulty.beginner);
@@ -66,14 +71,12 @@ void main() {
     );
 
     test('progress persists across a fresh controller', () async {
-      final c1 = ProviderContainer();
+      final c1 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
       await c1.read(lessonProgressProvider.notifier).record('x', 0.9);
       c1.dispose();
 
-      final c2 = ProviderContainer();
+      final c2 = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
       addTearDown(c2.dispose);
-      c2.read(lessonProgressProvider);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(c2.read(lessonProgressProvider.notifier).bestAccuracy('x'), 0.9);
     });
   });

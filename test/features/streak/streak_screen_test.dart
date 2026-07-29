@@ -5,16 +5,17 @@ import 'package:strumsight/features/streak/daily_challenge.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/features/streak/streak_logic.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('shows the streak state and today\'s challenge', (tester) async {
     final now = DateTime(2026, 7, 9);
     await tester.pumpWidget(
       ProviderScope(
+        overrides: preferenceOverrides(),
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

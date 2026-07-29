@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 /// Round 161 lock — the 100-session cap: the OLDEST session falls off, the
 /// newest stays, and boundary rename/delete keep working.
@@ -16,10 +17,9 @@ AnalyzedSession _s(int i) => AnalyzedSession(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('the 101st add drops the oldest, boundary ops still work', () async {
-    final c = ProviderContainer();
+    final c = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(c.dispose);
     final lib = c.read(libraryProvider.notifier);
 

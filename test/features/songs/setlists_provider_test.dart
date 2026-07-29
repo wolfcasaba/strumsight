@@ -1,14 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/songs/providers/setlists_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  // Shared across the containers of one test, so "a fresh container" reads
+  // what the previous one persisted (E01-R07).
+  late InMemoryKeyValueStore store;
+  setUp(() => store = InMemoryKeyValueStore());
 
   ProviderContainer container() {
-    final c = ProviderContainer();
+    final c = ProviderContainer(overrides: [preferenceStoreOverride(store)]);
     addTearDown(c.dispose);
     return c;
   }
@@ -61,8 +66,6 @@ void main() {
     await c1.read(setlistsProvider.notifier).addSong(id, 'song1');
 
     final c2 = container();
-    c2.read(setlistsProvider);
-    await Future<void>.delayed(Duration.zero);
     expect(c2.read(setlistsProvider).single.name, 'Persisted');
     expect(c2.read(setlistsProvider).single.songIds, ['song1']);
   });

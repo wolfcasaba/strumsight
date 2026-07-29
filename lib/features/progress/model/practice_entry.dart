@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/foundation/json_validation.dart';
+
 /// Where a practice moment came from. Kept small + stable — the string names are
 /// persisted, so never rename an existing value (add new ones at the end).
 enum PracticeSource { live, analyze, learn }
@@ -50,18 +52,22 @@ class PracticeEntry {
     if (directionAccuracy != null) 'dir': directionAccuracy,
   };
 
+  /// Decode one logged moment (Kör 7 §7.1). A missing day or a negative
+  /// duration/count is a corrupt record — the storage layer skips it and keeps
+  /// the rest of the history.
   factory PracticeEntry.fromJson(Map<String, dynamic> j) => PracticeEntry(
-    day: (j['day'] as num).toInt(),
-    // Unknown/renamed source names degrade to `live` rather than throwing on
-    // an old persisted blob.
+    day: requireInt(j, 'day'),
+    // Deliberate exception to "an unknown enum is a bad record": a source name
+    // added by a NEWER build must not cost this build the whole entry — the
+    // practice actually happened, and only its attribution is unknown.
     source: PracticeSource.values.firstWhere(
       (s) => s.name == j['src'],
       orElse: () => PracticeSource.live,
     ),
-    seconds: (j['sec'] as num?)?.toInt() ?? 0,
-    strokes: (j['str'] as num?)?.toInt() ?? 0,
-    chords: (j['chd'] as num?)?.toInt() ?? 0,
-    directionAccuracy: (j['dir'] as num?)?.toDouble(),
+    seconds: optionalInt(j, 'sec', fallback: 0),
+    strokes: optionalInt(j, 'str', fallback: 0),
+    chords: optionalInt(j, 'chd', fallback: 0),
+    directionAccuracy: optionalDouble(j, 'dir', max: 1),
   );
 
   @override
