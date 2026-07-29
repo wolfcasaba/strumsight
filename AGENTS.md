@@ -137,8 +137,16 @@ A konkrét kör felülírhatja vagy bővítheti, de alapértelmezetten:
 flutter pub get
 dart format --output=none --set-exit-if-changed lib test tool
 flutter analyze lib/ test/ tool/
-flutter test test/<a kör által érintett terület>
+flutter test test/<a kör SAJÁT új/módosított tesztjei>
 ```
+
+**Nincs kétszeres futtatás** (user szabály 2026-07-29,
+[ADR 0064](docs/adr/0064-codex-hands-over-ci-at-code-complete.md)): lokálisan
+csak a kör által ÍRT tesztek futnak — az a smoke-teszt, hogy az új teszt
+tényleg zöld. A tágabb területi suite futtatása lokálisan tilos pazarlás, mert
+a CI úgyis lefuttatja a teljeset; ezen a boxon egy-egy terület (pl.
+`test/features/live`, 160 teszt) percekbe kerül, és pont azt duplázza, ami a
+CI-ban amúgy is lemegy.
 
 **A CI-ban** (kötelező, a kör-branchre dispatchelve — user szabály 2026-07-29,
 [ADR 0053](docs/adr/0053-ci-full-test-suite.md)): a **teljes `flutter test`**,
@@ -244,8 +252,11 @@ Claude tervez → Codex implementál → Claude review-z → Codex javít → Cl
 - Csak a briefben **engedélyezett fájlokat** módosítja. Ha a kör
   elvégezhetetlennek tűnik a listán belül, MEGÁLL és jelent — nem tágítja a
   scope-ot magától.
-- Implementál + tesztet ír, futtatja a formázást, analyzert és a célzott
-  teszteket (§12, külön parancsokként).
+- Implementál + tesztet ír, futtatja a formázást, az analyzert és **kizárólag a
+  kör SAJÁT új/módosított tesztjeit** (§12, külön parancsokként) — a tágabb
+  területi és a teljes regressziót NEM futtatja le lokálisan, mert azt a CI
+  úgyis lefuttatja (kétszeres futtatás tilalma, user-szabály 2026-07-29,
+  [ADR 0064](docs/adr/0064-codex-hands-over-ci-at-code-complete.md)).
 - Kitölti a brief „Implementation handoff" szekcióját: fájlonkénti
   összefoglaló, futtatott parancsok TÉNYLEGES kimenettel, eltérések, nem
   futtatott ellenőrzések és okuk.
@@ -257,11 +268,19 @@ Claude tervez → Codex implementál → Claude review-z → Codex javít → Cl
   jelzéssel zár, a kimenetel MINDEGY:
 
   ```bash
-  tools/codex-signal.sh done    "R11 implementálva, minden célzott teszt zöld"
+  tools/codex-signal.sh code-complete "kód kész + pusholva, format/analyze zöld"
+  tools/codex-signal.sh done    "a §10 handoff kitöltve, végeztem"
   tools/codex-signal.sh stopped "a brief §5.8 ütközik az onboarding first-win úttal"
   tools/codex-signal.sh blocked "flutter analyze 3 javítási kísérlet után is piros"
   tools/codex-signal.sh progress "route katalógus kész, jönnek a tesztek"   # opcionális mérföldkő
   ```
+
+  **`code-complete` = a CI átadása** (user-szabály 2026-07-29,
+  [ADR 0064](docs/adr/0064-codex-hands-over-ci-at-code-complete.md)). Amint a
+  kód kész, formázott, analyze-zöld és **fel van tolva**, jelezz
+  `code-complete`-et — a figyelő ekkor azonnal dispatch-eli a teljes CI-t, és
+  az a jelentésírás + review alatt fut. Csak feltolt commitra jelezd, különben
+  a CI-bizonyíték régi kódra futna. A `done` ezután jön, a §10 handoff-fal.
 
   **Problémánál a jelzés az ELSŐ lépés, nem az utolsó.** Amint megállási pontot
   (§15.2 lista) vagy blokkolót azonosítasz: előbb `stopped`/`blocked` jelzés a

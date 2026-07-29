@@ -76,9 +76,16 @@ if [ -n "$killed_reason" ]; then
 elif [ ! -f "$signal" ] || ! grep -qE '^status=(done|stopped|blocked)$' "$signal"; then
   # Kilépett, de nem zárta le magát: összeomlás, kill, vagy figyelmen kívül
   # hagyta a §15.2 jelzési szabályt. Az orchestrátor sosem találgat.
+  # A `code-complete` külön eset: a kód megvan (és a CI már fut), csak a
+  # jelentés maradt el — ezt ki kell mondani, nem elmosni.
+  if grep -q '^status=code-complete$' "$signal" 2>/dev/null; then
+    unknown_summary="code-complete után jelentés nélkül lépett ki (exit ${exit_code}) — a kód pusholva, a §10 handoff hiányzik: ${log_file}"
+  else
+    unknown_summary="a Codex lezáró jelzés nélkül lépett ki (exit ${exit_code}) — nézd meg: ${log_file}"
+  fi
   {
     echo "status=unknown"
-    echo "summary=a Codex lezáró jelzés nélkül lépett ki (exit ${exit_code}) — nézd meg: ${log_file}"
+    echo "summary=${unknown_summary}"
     echo "branch=$(git -C "$workdir" branch --show-current)"
     echo "head=$(git -C "$workdir" rev-parse --short HEAD)"
     echo "dirty_files=$(git -C "$workdir" status --porcelain | wc -l | tr -d ' ')"

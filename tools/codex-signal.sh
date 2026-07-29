@@ -2,10 +2,16 @@
 # Codex-oldali kör-jelzés (AGENTS.md §15.2). A Codex ezzel szól az őt indító
 # ágensnek — a jelzés a kör MINDEN kimenetelére kötelező, nem csak a sikerre.
 #
-#   tools/codex-signal.sh progress "route katalógus kész, jönnek a tesztek"
-#   tools/codex-signal.sh done     "R11 implementálva, minden célzott teszt zöld"
-#   tools/codex-signal.sh stopped  "brief §5.8 ütközik az onboarding first-win úttal"
-#   tools/codex-signal.sh blocked  "flutter analyze 3 javítás után is piros"
+#   tools/codex-signal.sh progress      "route katalógus kész, jönnek a tesztek"
+#   tools/codex-signal.sh code-complete "kód kész + pusholva, format/analyze zöld"
+#   tools/codex-signal.sh done          "a §10 handoff is kitöltve, végeztem"
+#   tools/codex-signal.sh stopped       "brief §5.8 ütközik az onboarding first-win úttal"
+#   tools/codex-signal.sh blocked       "flutter analyze 3 javítás után is piros"
+#
+# A `code-complete` a CI ÁTADÁSA (AGENTS.md §15.3): a figyelő ekkor azonnal
+# dispatch-eli a teljes CI-t, és az a jelentésírás + review alatt fut. Ezért
+# csak akkor jelezd, ha a commit már fel van tolva — különben a CI-bizonyíték
+# régi commitra futna.
 #
 # FONTOS: problémánál a jelzés az ELSŐ lépés, nem az utolsó. Előbb jelezz,
 # utána írd meg a részletes jelentést — így az orchestrátor másodpercekben
@@ -19,9 +25,9 @@ shift || true
 summary=${*:-}
 
 case "$status" in
-  progress | done | stopped | blocked) ;;
+  progress | code-complete | done | stopped | blocked) ;;
   *)
-    echo "usage: codex-signal.sh <progress|done|stopped|blocked> \"<egy soros összegzés>\"" >&2
+    echo "usage: codex-signal.sh <progress|code-complete|done|stopped|blocked> \"<egy soros összegzés>\"" >&2
     exit 2
     ;;
 esac
