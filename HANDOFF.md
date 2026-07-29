@@ -182,7 +182,13 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   még nyers Dio-hibákkal dolgozik — a `core/network/` API-kliens és a mapper odaköltöztetése az
   **E01-R08** (Kör 8, hálózati kliens és auth hardening) dolga; jelenleg az `authFailureFromDio` az
   auth data rétegben lakik. (2) A `MicCapture` tipizált `requestPermission()`-jét a hívók még a `bool`
-  wrapperen keresztül használják — a teljes audio-lifecycle átállás az **E01-R09**.
+  wrapperen keresztül használják — a teljes audio-lifecycle átállás az **E01-R09**. (3) **A `lib/`-ben
+  MARADT 62 `catch (_)`** — szinte mind a SharedPreferences-alapú settings/tartalom-providerekben
+  (`streak`, `songs`, `setlists`, `practice_log`, `lesson_progress`, `capo`, `lab_mode`, …); ezek
+  szándékosan kívül estek az R04 scope-ján (a Kör 4 §4.5 négy területet nevez meg: MicCapture,
+  TokenStore, auth repository, diagnostics uploader), és a **Kör 5–7 storage-migrációjában** kell
+  `StorageFailure`-re váltaniuk. Az „elnyelt hiba" mérőszám tehát 62 → a következő körök feladata
+  lenyomni; az R04 NEM állítja, hogy a repó egésze tiszta.
 
 - **🔴 PERMANENS ELFOGADÁSI KAPU — a user valós-gitáros APK-tesztje.** A szintetikus/CI-zöld SOHA nem
   „kész" (HORIZON). Ide tartozik a **Live mic valós eszközön**: a mic→DSP→UI lánc kódban auditált és a
