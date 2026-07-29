@@ -1,0 +1,340 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../tool/check_architecture.dart';
+
+void main() {
+  group('repository architecture', () {
+    test('contains exactly the allowlisted dependency deviations', () {
+      final report = checkArchitecture(projectRoot: Directory.current);
+
+      expect(report.isClean, isTrue, reason: report.format());
+    });
+  });
+
+  group('architecture dependency rules', () {
+    late Directory project;
+
+    setUp(() {
+      project = Directory.systemTemp.createTempSync(
+        'strumsight_architecture_test_',
+      );
+    });
+
+    tearDown(() {
+      project.deleteSync(recursive: true);
+    });
+
+    test('detects relative and package core-to-feature dependencies', () {
+      _write(
+        project,
+        'lib/core/first.dart',
+        "import '../features/live/engine/live_pipeline.dart';",
+      );
+      _write(project, 'lib/core/second.dart', '''
+export
+  'package:strumsight/features/tuner/model/tuner_reading.dart'
+  show TunerReading;
+''');
+      _write(project, 'lib/core/third.dart', '''
+import 'safe_transport.dart'
+    if (dart.library.io)
+        'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+''');
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        containsAll({
+          'lib/core/first.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+          'lib/core/second.dart -> '
+              'lib/features/tuner/model/tuner_reading.dart',
+          'lib/core/third.dart -> '
+              'lib/features/analyze/engine/clip_analyzer.dart',
+        }),
+      );
+    });
+
+    test('decodes escaped dependency URIs before applying rules', () {
+      _write(
+        project,
+        'lib/core/music/escaped_framework.dart',
+        r"import 'package:\x66lutter/widgets.dart';",
+      );
+      _write(
+        project,
+        'lib/core/escaped_feature.dart',
+        r"import 'package:strumsight/\u{66}eatures/live/engine/live_pipeline.dart';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({
+          'lib/core/music/escaped_framework.dart -> '
+              'package:flutter/widgets.dart',
+          'lib/core/escaped_feature.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+        }),
+      );
+    });
+
+    test('canonicalizes percent-encoded dependency URIs', () {
+      _write(
+        project,
+        'lib/core/music/encoded_framework.dart',
+        "import 'package:%66lutter/widgets.dart';",
+      );
+      _write(
+        project,
+        'lib/core/encoded_package_feature.dart',
+        "import 'package:strumsight/%66eatures/live/engine/live_pipeline.dart';",
+      );
+      _write(
+        project,
+        'lib/core/encoded_relative_feature.dart',
+        "import '../%66eatures/live/engine/live_pipeline.dart';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({
+          'lib/core/music/encoded_framework.dart -> '
+              'package:flutter/widgets.dart',
+          'lib/core/encoded_package_feature.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+          'lib/core/encoded_relative_feature.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+        }),
+      );
+    });
+
+    test('checks part and part-of architecture dependencies', () {
+      _write(
+        project,
+        'lib/core/feature_part.dart',
+        "part '../features/live/engine/live_pipeline.dart';",
+      );
+      _write(
+        project,
+        'lib/core/music/framework_part.dart',
+        "part 'package:flutter/widgets.dart';",
+      );
+      _write(
+        project,
+        'lib/core/owned_by_feature.dart',
+        "part of '../features/live/live_library.dart';",
+      );
+      _write(
+        project,
+        'lib/core/music/owned_by_framework.dart',
+        "part of 'package:flutter/widgets.dart';",
+      );
+      _write(
+        project,
+        'lib/features/live/named_library.dart',
+        "part '../../core/named_feature_part.dart';",
+      );
+      _write(
+        project,
+        'lib/core/named_feature_part.dart',
+        'part of live_feature;',
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({
+          'lib/core/feature_part.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+          'lib/core/music/framework_part.dart -> '
+              'package:flutter/widgets.dart',
+          'lib/core/owned_by_feature.dart -> '
+              'lib/features/live/live_library.dart',
+          'lib/core/music/owned_by_framework.dart -> '
+              'package:flutter/widgets.dart',
+          'lib/core/named_feature_part.dart -> '
+              'lib/features/live/named_library.dart',
+        }),
+      );
+    });
+
+    test('keeps shared music and WAV codec domains framework-free', () {
+      _write(
+        project,
+        'lib/core/music/chord.dart',
+        "import 'package:flutter/foundation.dart';",
+      );
+      _write(
+        project,
+        'lib/core/audio/codec/adapter.dart',
+        "import 'package:dio/dio.dart';",
+      );
+      _write(
+        project,
+        'lib/core/music/progression.dart',
+        "import 'package:riverpod/riverpod.dart';",
+      );
+      _write(
+        project,
+        'lib/core/audio/codec/preferences.dart',
+        "import 'package:shared_preferences/shared_preferences.dart';",
+      );
+      _write(
+        project,
+        'lib/core/music/label.dart',
+        "import '../../l10n/app_localizations.dart';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        containsAll({
+          'lib/core/music/chord.dart -> package:flutter/foundation.dart',
+          'lib/core/audio/codec/adapter.dart -> package:dio/dio.dart',
+          'lib/core/music/progression.dart -> package:riverpod/riverpod.dart',
+          'lib/core/audio/codec/preferences.dart -> '
+              'package:shared_preferences/shared_preferences.dart',
+          'lib/core/music/label.dart -> lib/l10n/app_localizations.dart',
+        }),
+      );
+    });
+
+    test('allows public APIs and core while blocking feature internals', () {
+      _write(project, 'lib/features/analyze/screens/analyze_screen.dart', '''
+import '../../live/public.dart';
+import '../../live/engine/live_pipeline.dart';
+import 'package:strumsight/features/tuner/providers/tuner_provider.dart';
+import '../../../core/music/chord.dart';
+''');
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({
+          'lib/features/analyze/screens/analyze_screen.dart -> '
+              'lib/features/live/engine/live_pipeline.dart',
+          'lib/features/analyze/screens/analyze_screen.dart -> '
+              'lib/features/tuner/providers/tuner_provider.dart',
+        }),
+      );
+    });
+
+    test('ignores imports inside comments', () {
+      _write(project, 'lib/core/music/commented.dart', '''
+// import 'package:flutter/widgets.dart';
+/*
+import 'package:dio/dio.dart';
+*/
+const example = "import 'package:flutter/foundation.dart';";
+''');
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(report.violations, isEmpty);
+    });
+
+    test('continues scanning after raw strings in library metadata', () {
+      _write(project, 'lib/core/music/annotated.dart', r'''
+@Marker(r'ends with \')
+library annotated;
+import 'package:flutter/widgets.dart';
+''');
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        contains(
+          'lib/core/music/annotated.dart -> package:flutter/widgets.dart',
+        ),
+      );
+    });
+
+    test('fails when an allowlist entry no longer describes a violation', () {
+      _write(project, 'lib/core/safe.dart', 'const safe = true;');
+      const stale = 'lib/core/old.dart -> lib/features/live/engine/old.dart';
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {stale},
+      );
+
+      expect(report.unexpectedViolations, isEmpty);
+      expect(report.staleAllowlistEntries, [stale]);
+      expect(report.isClean, isFalse);
+    });
+
+    test('does not allowlist hard core or domain boundaries', () {
+      _write(
+        project,
+        'lib/core/bridge.dart',
+        "import '../features/live/engine/live_pipeline.dart';",
+      );
+      _write(
+        project,
+        'lib/core/music/chord.dart',
+        "import 'package:flutter/foundation.dart';",
+      );
+      const coreViolation =
+          'lib/core/bridge.dart -> '
+          'lib/features/live/engine/live_pipeline.dart';
+      const domainViolation =
+          'lib/core/music/chord.dart -> package:flutter/foundation.dart';
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {coreViolation, domainViolation},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({coreViolation, domainViolation}),
+      );
+      expect(
+        report.staleAllowlistEntries,
+        unorderedEquals({coreViolation, domainViolation}),
+      );
+      expect(report.isClean, isFalse);
+    });
+  });
+}
+
+void _write(Directory project, String relativePath, String contents) {
+  final file = File('${project.path}/$relativePath');
+  file.parent.createSync(recursive: true);
+  file.writeAsStringSync(contents);
+}

@@ -5,7 +5,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/analyze/engine/wav_decoder.dart';
+import 'package:strumsight/core/audio/codec/wav_decoder.dart';
 
 /// Build a minimal WAV (format 1 = PCM16, or 3 = float32) from per-channel
 /// interleaved samples in [-1, 1].

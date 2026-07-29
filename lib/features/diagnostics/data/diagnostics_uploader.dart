@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io' show gzip;
 import 'dart:typed_data';
 
+import '../../../core/audio/codec/wav_encoder.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
-import '../../learn/audio/wav.dart';
 import '../model/diagnostics_session.dart';
 
 /// Outcome of a diagnostics upload, surfaced to the Lab-mode UI. This is the

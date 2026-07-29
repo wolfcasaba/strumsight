@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 
-import 'wav.dart';
+import '../../../core/audio/codec/wav_encoder.dart';
 
 /// A play-along metronome. The click is **synthesised in pure Dart** (a short
 /// decaying sine → a valid 16-bit PCM WAV) so there is no bundled asset and the
