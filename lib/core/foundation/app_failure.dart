@@ -35,6 +35,7 @@ abstract final class FailureCode {
   // --- audio ---------------------------------------------------------------
   static const String audioCaptureFailed = 'audio.capture_failed';
   static const String audioUnavailable = 'audio.unavailable';
+  static const String audioSessionBusy = 'audio.session_busy';
 
   // --- ml ------------------------------------------------------------------
   static const String mlModelLoad = 'ml.model_load';

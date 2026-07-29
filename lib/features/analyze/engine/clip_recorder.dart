@@ -1,22 +1,20 @@
 import '../../../core/audio/mic_capture.dart';
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 
 /// How a recording attempt started (round 99 — a busy mic is NOT a denied
 /// permission; the UI copy and the recovery differ).
 enum MicStart { ok, denied, failed }
 
 /// Records the microphone into an in-memory PCM buffer for offline analysis.
-/// Reuses the same [MicCapture] the Live/Tuner engines use.
+/// Holds an `analyzeRecorder` lease on the one shared microphone session.
 class ClipRecorder {
-  /// [ensurePermission] is injectable for tests; defaults to the real check.
-  ClipRecorder({Future<bool> Function()? ensurePermission})
-    : _ensurePermission = ensurePermission ?? MicCapture.ensurePermission;
+  ClipRecorder({required this._mic});
 
-  final Future<bool> Function() _ensurePermission;
-  final MicCapture _mic = MicCapture();
+  final MicCapture _mic;
   final List<double> _buffer = [];
   int _sampleRate = 44100;
   bool _recording = false;
-  Future<MicStart>? _inFlight;
 
   int get sampleRate => _sampleRate;
   int get sampleCount => _buffer.length;
@@ -28,26 +26,25 @@ class ClipRecorder {
   /// Begin recording. A start FAILURE (busy mic / platform error) surfaces
   /// as [MicStart.failed] instead of throwing out of the button handler —
   /// and must never leave [_recording] stuck true (round 99, parity with the
-  /// Live round-13 / Tuner round-68 fixes). SINGLE-FLIGHT: a second call
-  /// while a start is awaiting joins the in-flight attempt instead of
-  /// running a second mic start that would orphan the first subscription
-  /// (round 101, review NOTE).
-  Future<MicStart> start() {
-    if (_recording) return Future.value(MicStart.ok);
-    return _inFlight ??= _doStart().whenComplete(() => _inFlight = null);
+  /// Live round-13 / Tuner round-68 fixes). The single-flight guarantee that
+  /// used to live here now lives in [MicCapture.start], so an overlapping
+  /// call joins the same attempt instead of opening a second capture
+  /// (round 101).
+  Future<MicStart> start() async {
+    if (_recording) return MicStart.ok;
+    _buffer.clear();
+    final started = await _mic.start((chunk) {
+      if (_recording) _buffer.addAll(chunk);
+    });
+    return switch (started) {
+      Success<int>(:final value) => _begin(value),
+      Failure<int>(error: PermissionFailure()) => MicStart.denied,
+      Failure<int>() => MicStart.failed,
+    };
   }
 
-  Future<MicStart> _doStart() async {
-    if (!await _ensurePermission()) return MicStart.denied;
-    _buffer.clear();
-    try {
-      _sampleRate = await _mic.start((chunk) {
-        if (_recording) _buffer.addAll(chunk);
-      });
-    } catch (_) {
-      await _mic.stop();
-      return MicStart.failed;
-    }
+  MicStart _begin(int sampleRate) {
+    _sampleRate = sampleRate;
     _recording = true;
     return MicStart.ok;
   }

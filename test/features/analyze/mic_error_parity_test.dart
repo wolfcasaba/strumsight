@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
 import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
 import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
+
 /// Round 99 — Analyze mic-error parity (Live got it round 13, Tuner round
 /// 68): a mic START failure (busy / platform error — distinct from a DENIED
 /// permission) must surface a Retry UI, not throw out of the button handler
-/// and leave the screen idling silently. The test environment's genuinely
-/// missing audio channel IS the failing mic.
+/// and leave the screen idling silently. E01-R09: the failing mic is now an
+/// injected capture that throws — deterministic, no platform channel needed.
 class _MicErrorStub extends AnalyzeController {
   @override
   AnalyzeState build() => const AnalyzeState(phase: AnalyzePhase.micError);
@@ -21,12 +24,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  // Plain test() + ensureInitialized (the round-68 engine-test pattern):
-  // under testWidgets' FakeAsync the missing-plugin reply never gets pumped
-  // and the await hangs; in a plain test it throws fast.
   test('a mic start failure surfaces as failed — no throw, no stuck '
       'recording flag', () async {
-    final recorder = ClipRecorder();
+    final recorder = ClipRecorder(
+      mic: fakeMicCapture(
+        owner: AudioOwner.analyzeRecorder,
+        capture: FakeAudioCapture(failWith: StateError('mic busy')),
+      ),
+    );
     final result = await recorder.start();
     expect(result, MicStart.failed);
     expect(

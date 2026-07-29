@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
 import 'package:strumsight/features/learn/audio/chord_audio.dart';
+
+import '../../support/fake_audio.dart';
 
 /// Round 101 — the round-100 review's two adjacent NOTEs, closed:
 /// (1) `startRecording` re-entrancy: a second start() during the in-flight
@@ -16,14 +20,14 @@ void main() {
   test(
     'concurrent start() calls are single-flight — one mic attempt only',
     () async {
-      var permissionChecks = 0;
+      final permissions = FakeMicrophonePermissionGateway(
+        state: MicrophonePermissionState.denied, // never touches a real mic
+      );
       final recorder = ClipRecorder(
-        ensurePermission: () async {
-          permissionChecks++;
-          // Yield so the second start() genuinely overlaps the first.
-          await Future<void>.delayed(Duration.zero);
-          return false; // denied — never touches the real mic in tests
-        },
+        mic: fakeMicCapture(
+          owner: AudioOwner.analyzeRecorder,
+          permissions: permissions,
+        ),
       );
 
       final first = recorder.start();
@@ -31,14 +35,14 @@ void main() {
       expect(await first, MicStart.denied);
       expect(await second, MicStart.denied);
       expect(
-        permissionChecks,
+        permissions.currentStateCalls,
         1,
         reason: 'the overlapping call must join the in-flight attempt',
       );
 
       // After the attempt settles, a fresh start is a fresh attempt.
       expect(await recorder.start(), MicStart.denied);
-      expect(permissionChecks, 2);
+      expect(permissions.currentStateCalls, 2);
     },
   );
 

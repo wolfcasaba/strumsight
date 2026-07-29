@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../core/platform/app_lifecycle.dart';
+import '../../../core/platform/platform_providers.dart';
+import '../../../core/platform/screen_wakelock.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
@@ -50,12 +54,21 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   // The engine, captured in build so dispose can turn Lab capture off without
   // touching `ref` after unmount (r199).
   StrumEngine? _engine;
+  // Captured in initState so dispose/background never touch `ref`.
+  late final ScreenWakelock _wakelock;
+  late final AppLifecycleEvents _lifecycle;
 
   @override
   void initState() {
     super.initState();
     // Keep the screen awake during a session (best-effort; no-op in tests).
-    WakelockPlus.enable().catchError((_) {});
+    _wakelock = ref.read(screenWakelockProvider);
+    unawaited(_wakelock.enable());
+    // Backgrounding stops the mic (the coordinator revokes the session); the
+    // screen has to agree with that — otherwise the UI keeps claiming it is
+    // listening while nothing is (E01-R09 §9.4).
+    _lifecycle = ref.read(appLifecycleEventsProvider);
+    _lifecycle.addListener(_onAppLifecycle);
     // Defence in depth (r146): free-play must never inherit a lesson's
     // expected-chord bias — clear it explicitly instead of trusting the nav
     // invariant that LearnScreen was disposed first (chunk 016 residual).
@@ -64,9 +77,23 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     });
   }
 
+  /// Backgrounded: release the screen wakelock and show the session as paused.
+  /// The microphone itself is stopped by the AudioLifecycleGuard — resuming
+  /// must NOT restart it behind the user's back (§9.4).
+  void _onAppLifecycle(AppLifecycleState state) {
+    if (!isBackgroundLifecycleState(state) || !mounted || _paused) return;
+    unawaited(_wakelock.disable());
+    setState(() {
+      _frozen = ref.read(liveFrameProvider).asData?.value;
+      _paused = true;
+    });
+    unawaited(ref.read(strumEngineProvider).stop());
+  }
+
   @override
   void dispose() {
-    WakelockPlus.disable().catchError((_) {});
+    _lifecycle.removeListener(_onAppLifecycle);
+    unawaited(_wakelock.disable());
     // Stop the Lab-mode rolling capture when leaving Live (r199) — no buffering
     // once the screen is gone. Safe after unmount (touches no provider state).
     _engine?.setDiagnosticsCapture(false);
@@ -98,8 +125,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         // display — a battery/privacy concern once the FFI engine is wired.
         _frozen = ref.read(liveFrameProvider).asData?.value;
         engine.stop();
+        unawaited(_wakelock.disable());
       } else {
         _frozen = null;
+        unawaited(_wakelock.enable());
         // Invalidate (not just start()) so a prior mic AsyncError is cleared
         // and the engine restarts through the provider's own lifecycle —
         // otherwise a stale error banner lingers until the next frame.

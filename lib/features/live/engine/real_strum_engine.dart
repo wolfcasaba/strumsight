@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../../core/audio/mic_capture.dart';
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 import '../model/live_frame.dart';
 import 'dsp/live_pipeline.dart';
 import 'pcm_ring_buffer.dart';
@@ -15,8 +17,12 @@ import 'strum_engine.dart';
 /// All analysis runs off the UI isolate (RAG chunk 010). stop() releases the
 /// microphone AND kills the isolate — pause must truly stop detection.
 class RealStrumEngine implements StrumEngine {
+  /// [mic] carries the exclusive-session lease (E01-R09): the engine no longer
+  /// owns a microphone, it owns a *lease* on the one microphone.
+  RealStrumEngine({required this._mic});
+
   StreamController<LiveFrame>? _controller;
-  final MicCapture _mic = MicCapture();
+  final MicCapture _mic;
   Isolate? _isolate;
   SendPort? _toDsp;
   ReceivePort? _fromDsp;
@@ -55,26 +61,47 @@ class RealStrumEngine implements StrumEngine {
     if (_running) return;
     _controller ??= StreamController<LiveFrame>.broadcast();
 
-    if (!await MicCapture.ensurePermission()) {
-      // No permission: stay silent; the Live screen shows the mic banner.
-      _controller?.add(LiveFrame.empty);
-      return;
-    }
+    // Set BEFORE the first await: a second start() landing during the mic
+    // handshake must not run a parallel spin-up (§9.3 start/start race).
     _running = true;
 
+    // Mic first — the actual sample rate is only known once capture runs.
+    // The session is exclusive: a busy mic comes back as a failure here
+    // instead of silently stealing the Tuner's capture.
+    final started = await _mic.start((chunk) {
+      // Lab-mode rolling capture: append + drop-oldest past ~30 s. Entirely
+      // skipped when capture is off (default) — zero overhead.
+      _capture.add(chunk);
+      final port = _toDsp;
+      if (port != null) {
+        port.send(chunk);
+      } else if (_pendingChunks.length < 64) {
+        _pendingChunks.add(chunk); // buffer during isolate spin-up
+      }
+    }, onRevoke: stop);
+    if (started case Failure<int>(:final error)) {
+      _running = false;
+      switch (error) {
+        case PermissionFailure():
+          // No permission: stay silent; the Live screen shows the mic banner.
+          _controller?.add(LiveFrame.empty);
+        case CancelledFailure():
+          // stop() won the race (screen left during the handshake) — nothing
+          // to report, and nothing is running.
+          break;
+        default:
+          // Busy microphone or a capture error: an honest error on the stream,
+          // never a screen that pretends to listen (round 13 lesson).
+          final controller = _controller;
+          if (controller != null && !controller.isClosed) {
+            controller.addError(error, error.stackTrace ?? StackTrace.current);
+          }
+      }
+      return;
+    }
+    final actualRate = (started as Success<int>).value;
+
     try {
-      // Mic first — the actual sample rate is only known once capture runs.
-      final actualRate = await _mic.start((chunk) {
-        // Lab-mode rolling capture: append + drop-oldest past ~30 s. Entirely
-        // skipped when capture is off (default) — zero overhead.
-        _capture.add(chunk);
-        final port = _toDsp;
-        if (port != null) {
-          port.send(chunk);
-        } else if (_pendingChunks.length < 64) {
-          _pendingChunks.add(chunk); // buffer during isolate spin-up
-        }
-      });
       _capture.sampleRate = actualRate;
 
       _fromDsp = ReceivePort();

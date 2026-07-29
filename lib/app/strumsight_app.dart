@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/audio/audio_providers.dart';
 import '../core/i18n/locale_provider.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_mode_provider.dart';
@@ -22,6 +23,9 @@ class StrumSightApp extends ConsumerWidget {
     // Instantiate the settings-sync listener for the app's lifetime (inert
     // while logged out; pulls on sign-in, pushes local changes when signed in).
     ref.watch(settingsSyncProvider);
+    // The mic must die when the app leaves the foreground (E01-R09 §9.4) —
+    // the guard only does that while something keeps it alive.
+    ref.watch(audioLifecycleGuardProvider);
 
     return MaterialApp.router(
       title: 'StrumSight',
