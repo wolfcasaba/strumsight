@@ -4,7 +4,8 @@ Optional **login + cloud settings sync** for StrumSight. **Detection stays 100%
 on-device** — this backend never sees audio. Logged-out users get the full app
 with settings stored locally; logging in syncs those settings across devices.
 
-- **Stack:** FastAPI · SQLAlchemy 2 · SQLite (Postgres-ready) · JWT (PyJWT) · bcrypt
+- **Stack:** FastAPI · SQLAlchemy 2 · Alembic · SQLite (Postgres-ready) · JWT
+  (PyJWT) · bcrypt
 - **Auth:** email + password → bearer JWT (14-day expiry)
 - **Zero-config:** runs with no `.env` and no external services (SQLite file)
 
@@ -14,25 +15,54 @@ with settings stored locally; logging in syncs those settings across devices.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python -m alembic upgrade head
 uvicorn app.main:app --reload            # http://127.0.0.1:8000
 # Interactive docs: http://127.0.0.1:8000/docs
 ```
 
 For the Android emulator, the host machine is reachable at `http://10.0.2.2:8000`.
 
+## Database migrations
+
+Alembic is the only production schema source. Its database URL comes from the
+same `Settings` field as the app (`STRUMSIGHT_DATABASE_URL`); no connection
+string is duplicated in `alembic.ini`.
+
+```bash
+cd backend
+.venv/bin/python -m alembic upgrade head
+.venv/bin/python -m alembic current
+.venv/bin/python -m alembic downgrade -1  # rollback verification / development
+```
+
+The dev app retains a zero-setup `create_all` helper, but it runs only during
+the app lifespan and never in production. If an existing local
+`strumsight.db` was already created by that helper and its schema matches the
+current ORM, adopt it explicitly once instead of replaying the initial
+migration over existing tables:
+
+```bash
+.venv/bin/python -m alembic stamp head
+```
+
+Stamping records migration ownership; it does not change the schema. Back up
+valuable local data and inspect the schema before stamping. A fresh database
+must use `upgrade head`.
+
 ## Test
 
 ```bash
 cd backend
-source .venv/bin/activate
-pytest                                   # in-memory SQLite, isolated per test
+.venv/bin/python -m pytest -q            # isolated SQLite databases
 ```
 
 ## API
 
 | Method | Path             | Auth   | Body / returns |
 |--------|------------------|--------|----------------|
-| GET    | `/health`        | –      | `{status, version}` |
+| GET    | `/health`        | –      | compatibility health: `{status, version}` |
+| GET    | `/health/live`   | –      | process liveness; never touches the DB |
+| GET    | `/health/ready`  | –      | DB + Alembic head + config readiness |
 | POST   | `/auth/register` | –      | `{email, password}` → `{access_token}` (auto-login, 201) |
 | POST   | `/auth/login`    | –      | `{email, password}` → `{access_token}` |
 | GET    | `/auth/me`       | bearer | `{id, email, created_at}` |
@@ -49,8 +79,11 @@ pytest                                   # in-memory SQLite, isolated per test
 - **Password hashing** uses `bcrypt` directly (not passlib) to dodge the
   passlib/bcrypt-4.x version-probe breakage. bcrypt caps at 72 bytes — enforced
   in the schema and defensively in `security.py`.
-- **Tables** are auto-created on boot (`Base.metadata.create_all`) for dev
-  convenience. **Production should use Alembic migrations** and a real Postgres.
+- **Schema lifecycle:** local dev may auto-create tables for zero-setup use.
+  Production never calls `Base.metadata.create_all`; run Alembic before
+  starting or updating the service. Readiness returns `503` with a stable
+  `database_unavailable`, `migration_mismatch`, or `configuration_invalid`
+  reason and never includes a secret or database URL.
 - **Secrets** come from env (`STRUMSIGHT_*`). The default `secret_key` is
   insecure and for local dev only — override it in production.
 - **Prod boot guards (round 120):** set `STRUMSIGHT_ENV=prod` on any public
@@ -62,6 +95,12 @@ pytest                                   # in-memory SQLite, isolated per test
   `Retry-After`. In-memory by design (single-instance service); swap the
   storage if it ever scales out. The attempt is counted BEFORE the
   credential check, so a 429 never confirms a password guess.
+- **Production database:** PostgreSQL is recommended. Set a
+  `postgresql+psycopg://...` `STRUMSIGHT_DATABASE_URL` and install a compatible
+  Psycopg driver in the deployment image (the driver is intentionally not a
+  mandatory local/test dependency). Production SQLite fails closed; the
+  exceptional single-node escape hatch is the explicit
+  `STRUMSIGHT_ALLOW_SQLITE=true`, and migrations are still required.
 - One-to-one `User` ⇄ `UserSettings`; a default profile is created at
   registration so `/settings` never 404s.
 
@@ -72,11 +111,13 @@ backend/
 ├── app/
 │   ├── main.py        # app factory, CORS, /health, router wiring
 │   ├── config.py      # env-driven settings (pydantic-settings)
-│   ├── database.py    # engine, SessionLocal, Base, get_db
+│   ├── database.py    # engine/session factories, Base, get_db
 │   ├── models.py      # User, UserSettings
 │   ├── schemas.py     # Pydantic contracts
 │   ├── security.py    # bcrypt + JWT
 │   ├── deps.py        # get_current_user (HTTP bearer)
 │   └── routers/       # auth.py, settings.py
-└── tests/             # pytest — auth + settings, in-memory DB
+├── alembic/           # versioned production schema
+├── alembic.ini
+└── tests/             # pytest — auth/settings/migration contracts
 ```
