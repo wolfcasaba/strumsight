@@ -4,7 +4,8 @@
 > "what's done / what's next". Update it after every development round (see
 > [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 213 = E01-R06).
 >
-> **Branch/commit:** `codex/e01-r06-settings-storage` @ [PR #7](https://github.com/wolfcasaba/strumsight/pull/7).
+> **Branch/commit:** `main` @ [PR #7](https://github.com/wolfcasaba/strumsight/pull/7) (merged, CI run
+> [30445993323](https://github.com/wolfcasaba/strumsight/actions/runs/30445993323) zöld).
 > Utolsó befejezett kör: **E01-R06** (SDD Ch2, Kör 6).
 > **Következő: E01-R07 Felhasználói tartalom és progress storage migráció** (Ch2, Kör 7 — lesson
 > progress, library, songs, setlists, practice log, streak) — **ÚJ SESSIONBEN indítandó** (ADR 0052). Állandó user-szabályok (2026-07-29,
