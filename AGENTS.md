@@ -253,18 +253,60 @@ Claude tervez → Codex implementál → Claude review-z → Codex javít → Cl
   nem növeli érdemben a diffet. Kapcsolódó, de scope-on kívüli refaktort nem
   végez.
 - Nem tervezi újra a jóváhagyott architektúrát külön ADR nélkül.
+- **KÖTELEZŐ KÖR-JELZÉS** (user-szabály 2026-07-29). A Codex minden futást
+  jelzéssel zár, a kimenetel MINDEGY:
+
+  ```bash
+  tools/codex-signal.sh done    "R11 implementálva, minden célzott teszt zöld"
+  tools/codex-signal.sh stopped "a brief §5.8 ütközik az onboarding first-win úttal"
+  tools/codex-signal.sh blocked "flutter analyze 3 javítási kísérlet után is piros"
+  tools/codex-signal.sh progress "route katalógus kész, jönnek a tesztek"   # opcionális mérföldkő
+  ```
+
+  **Problémánál a jelzés az ELSŐ lépés, nem az utolsó.** Amint megállási pontot
+  (§15.2 lista) vagy blokkolót azonosítasz: előbb `stopped`/`blocked` jelzés a
+  rövid okkal, és csak UTÁNA a részletes jelentés/auditok. Az indoklás mérve:
+  az E01-R11 első futásán a megállás helyes volt, de a jelzés csak három
+  megerősítő audit után jött — az orchestrátor addig vakon várt. A cél, hogy
+  a hívó **másodpercekben** értesüljön, ne a futás végén.
+  A `progress` nem zárja le a kört; a `done`/`stopped`/`blocked` igen.
 
 ### 15.3 Indítás
 
+A Codexet **soha ne közvetlen `codex exec`-kel** indítsd (és főleg ne
+`nohup … &`-vel, mert akkor csak pollozni tudsz). A burkoló garantálja, hogy a
+futás véget ér és nyomot hagy:
+
 ```bash
-codex exec -C /home/ubuntu/ss-codex-<kör> -s danger-full-access "$(cat <prompt>.md)"
+# 1) a kör — háttér-taskként, hogy a harness a kilépéskor értesítsen
+tools/codex-round.sh /home/ubuntu/ss-codex-<kör> <prompt>.md /tmp/codex-<kör>.log
+
+# 2) korai riasztás ugyanarra a körre, MÁSODIK háttér-taskként
+tools/codex-watch.sh /home/ubuntu/ss-codex-<kör> /tmp/codex-<kör>.log
 ```
 
 (A bwrap-sandbox ezen a boxon AppArmor miatt nem tud user namespace-t nyitni,
-ezért `-s danger-full-access` — az izolációt a külön munkapéldány adja, nem a
-sandbox.) A prompt tartalmazza a kötelező olvasnivalót (§3), a kör-brief
-elérési útját, az engedélyezett fájlok listáját, a gate-parancsokat KÜLÖN
-hívásokként, a CI-dispatchet és a megállási pontokat.
+ezért a burkoló `-s danger-full-access`-t ad — az izolációt a külön
+munkapéldány adja, nem a sandbox.)
+
+**Három védelmi vonal, hogy soha ne várjunk vakon** (user-szabály 2026-07-29:
+„ne várjunk rá fél napot"):
+
+| Vonal | Ki adja | Mikor szól |
+|---|---|---|
+| Kör-jelzés | a Codex (`codex-signal.sh`, §15.2) | `done` / `stopped` / `blocked` — problémánál AZONNAL |
+| Elakadás-őr | `codex-round.sh` + `codex-watch.sh` | ha a log `CODEX_STALL_MINUTES` (alap: 12) percig nem nő → kilövi és jelenti |
+| Időkorlát | `codex-round.sh` | `CODEX_ROUND_TIMEOUT` (alap: 3600s) után kilövi és jelenti |
+
+A jelzés a munkapéldány `.codex-round-status` fájlja (gitignore-olt,
+`KEY=VALUE` sorok: `status`, `summary`, `branch`, `head`, `dirty_files`,
+`signalled_at`). Az orchestrátor értesüléskor **először ezt olvassa el**, és
+csak utána a logot. Ha `status=unknown`, a Codex jelzés nélkül halt meg —
+a log az egyetlen bizonyíték, a jelentését ne fogadd el bemondásra.
+
+A prompt tartalmazza a kötelező olvasnivalót (§3), a kör-brief elérési útját,
+az engedélyezett fájlok listáját, a gate-parancsokat KÜLÖN hívásokként, a
+CI-dispatchet, a megállási pontokat és a **kör-jelzés kötelezettségét** (§15.2).
 
 ### 15.4 Párhuzamos kétkörös futás — OPT-IN KIVÉTEL
 
