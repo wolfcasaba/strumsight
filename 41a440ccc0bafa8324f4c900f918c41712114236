@@ -1,0 +1,1 @@
+round=E01-R08 verdict=pass tests=645 lesson=stale-account-write-loses-on-disk
