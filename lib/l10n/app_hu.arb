@@ -427,5 +427,7 @@
   "labUploaded": "Diagnosztika feltöltve",
   "labUploadFailed": "Feltöltés sikertelen — legközelebb újrapróbálja",
   "labCaptureUpload": "Utolsó ~60 mp rögzítése és elemzése",
-  "labCaptureEmpty": "Még nincs rögzített hang — előbb játssz be egy gitársávot a mikrofonba."
+  "labCaptureEmpty": "Még nincs rögzített hang — előbb játssz be egy gitársávot a mikrofonba.",
+  "bootstrapFailureTitle": "Konfigurációs hiba",
+  "bootstrapFailureBody": "A StrumSight nem tud elindulni, mert ez a build hibásan van konfigurálva. Részletek:"
 }

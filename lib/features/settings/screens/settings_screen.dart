@@ -5,6 +5,7 @@ import '../../../core/notifications/nudge_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/i18n/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
@@ -197,16 +198,21 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
-          _SectionHeader(l10n.labModeTitle),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.labModeTitle),
-            subtitle: Text(l10n.labModeConsent),
-            isThreeLine: true,
-            value: ref.watch(labModeProvider),
-            onChanged: (v) => ref.read(labModeProvider.notifier).setEnabled(v),
-          ),
-          const SizedBox(height: 28),
+          // Lab mode is a build-level availability (E01-R03 FeatureFlags):
+          // production artifacts don't offer the toggle at all.
+          if (ref.watch(appConfigProvider).flags.labModeAvailable) ...[
+            _SectionHeader(l10n.labModeTitle),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.labModeTitle),
+              subtitle: Text(l10n.labModeConsent),
+              isThreeLine: true,
+              value: ref.watch(labModeProvider),
+              onChanged: (v) =>
+                  ref.read(labModeProvider.notifier).setEnabled(v),
+            ),
+            const SizedBox(height: 28),
+          ],
 
           _SectionHeader(l10n.settingsAbout),
           FutureBuilder<String>(

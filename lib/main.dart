@@ -1,60 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'app/router.dart';
-import 'core/i18n/locale_provider.dart';
-import 'core/theme/app_theme.dart';
-import 'core/theme/theme_mode_provider.dart';
+import 'app/bootstrap/app_bootstrap.dart';
+import 'app/bootstrap/bootstrap_result.dart';
+import 'app/config/app_config.dart';
+import 'app/strumsight_app.dart';
 import 'features/onboarding/onboarding_provider.dart';
-import 'features/settings/providers/settings_sync.dart';
-import 'l10n/app_localizations.dart';
 
+export 'app/strumsight_app.dart' show StrumSightApp;
+
+/// Minimal by design (E01-R03 §3.4): binding → bootstrap → run the app with
+/// the validated config injected, or the failure screen. Everything else
+/// (config validation, platform loads) lives in [AppBootstrap].
 Future<void> main() async {
-  // StrumSight is fully offline / on-device — no backend init, no network.
+  // StrumSight is fully offline / on-device by default — no backend init here.
   WidgetsFlutterBinding.ensureInitialized();
-  // Load the first-run flag before the first frame so the router can gate on it
-  // synchronously (no onboarding flicker for returning users).
-  final onboardingSeen = await OnboardingController.load();
-  runApp(
-    ProviderScope(
+  final result = await AppBootstrap.run();
+  runApp(switch (result) {
+    BootstrapFailure(:final problems) => BootstrapFailureApp(
+      problems: problems,
+    ),
+    BootstrapSuccess(:final config, :final onboardingSeen) => ProviderScope(
       overrides: [
+        appConfigProvider.overrideWithValue(config),
         onboardingSeenProvider.overrideWith(
           () => OnboardingController(onboardingSeen),
         ),
       ],
       child: const StrumSightApp(),
     ),
-  );
-}
-
-class StrumSightApp extends ConsumerWidget {
-  const StrumSightApp({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
-    final locale = ref.watch(localeProvider);
-    final router = ref.watch(routerProvider);
-    // Instantiate the settings-sync listener for the app's lifetime (inert
-    // while logged out; pulls on sign-in, pushes local changes when signed in).
-    ref.watch(settingsSyncProvider);
-
-    return MaterialApp.router(
-      title: 'StrumSight',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
-      locale: locale,
-      routerConfig: router,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-    );
-  }
+  });
 }

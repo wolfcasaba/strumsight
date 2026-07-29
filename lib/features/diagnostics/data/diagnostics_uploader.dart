@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
-import '../../../core/api/api_config.dart';
+import '../../../app/config/app_config.dart';
 import '../../learn/audio/wav.dart';
 import '../model/diagnostics_session.dart';
 
@@ -14,24 +14,33 @@ import '../model/diagnostics_session.dart';
 enum DiagnosticsUploadStatus { idle, uploading, uploaded, failed }
 
 /// Best-effort uploader for a Lab-mode [DiagnosticsSession] (r198). Gzips the
-/// session JSON, POSTs it to `${ApiConfig.baseUrl}/diagnostics` with the diag
-/// token + `Content-Encoding: gzip`, retries a couple of times on network
-/// failure, and returns a status — NEVER throwing. Fire-and-forget from the
-/// Analyze path.
+/// session JSON, POSTs it to `<baseUrl>/diagnostics` with the diag token +
+/// `Content-Encoding: gzip`, retries a couple of times on network failure,
+/// and returns a status — NEVER throwing. Fire-and-forget from the Analyze
+/// path. [baseUrl]/[diagToken] come from the bootstrap-validated `AppConfig`
+/// (via `diagnosticsUploaderProvider`); the dev defaults keep direct
+/// construction in tests working.
 class DiagnosticsUploader {
-  DiagnosticsUploader({Dio? dio, this.maxRetries = 2})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: ApiConfig.baseUrl,
-              connectTimeout: const Duration(seconds: 6),
-              sendTimeout: const Duration(seconds: 12),
-              receiveTimeout: const Duration(seconds: 6),
-            ),
-          );
+  DiagnosticsUploader({
+    Dio? dio,
+    String baseUrl = AppConfig.devApiBaseUrl,
+    this.diagToken = AppConfig.devDiagnosticsToken,
+    this.maxRetries = 2,
+  }) : _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               baseUrl: baseUrl,
+               connectTimeout: const Duration(seconds: 6),
+               sendTimeout: const Duration(seconds: 12),
+               receiveTimeout: const Duration(seconds: 6),
+             ),
+           );
 
   final Dio _dio;
+
+  /// `X-Diag-Token` header value for the diagnostics endpoint.
+  final String diagToken;
 
   /// How many additional attempts after the first (total = maxRetries + 1).
   final int maxRetries;
@@ -66,7 +75,7 @@ class DiagnosticsUploader {
           data: Stream.fromIterable([body]),
           options: Options(
             headers: {
-              'X-Diag-Token': ApiConfig.diagToken,
+              'X-Diag-Token': diagToken,
               'Content-Type': 'application/json',
               'Content-Encoding': 'gzip',
               'Content-Length': body.length,

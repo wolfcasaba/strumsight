@@ -493,5 +493,7 @@
   "labUploaded": "Diagnostics uploaded",
   "labUploadFailed": "Upload failed — will retry next time",
   "labCaptureUpload": "Capture & analyze last ~60 s",
-  "labCaptureEmpty": "No audio captured yet — play a guitar track into the mic first."
+  "labCaptureEmpty": "No audio captured yet — play a guitar track into the mic first.",
+  "bootstrapFailureTitle": "Configuration error",
+  "bootstrapFailureBody": "StrumSight can't start because this build is misconfigured. Details:"
 }
