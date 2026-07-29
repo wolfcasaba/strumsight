@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (E01-R12, PR #17).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (E01-R13, PR #18).
 >
 > **Branch/commit:** `main` @ [PR #13](https://github.com/wolfcasaba/strumsight/pull/13) (merged, CI run
 > [30470460895](https://github.com/wolfcasaba/strumsight/actions/runs/30470460895) zöld: analyze + teljes
@@ -59,10 +59,29 @@
 > brief-revízió** (§5.8). Brief-íráskor a TESZTFÁN is kötelező a „ki állítja ma az ellenkezőjét?"
 > grep. **Deploy-jegyzet:** a `main.py` mostantól futásidőben importál `alembic`-ot — a box
 > venvjébe telepítve; a :8019-es uvicorn a kör idején nem futott, újraindítani nem kellett.
-> **Következő: E01-R13 Backend security és diagnosztika** (Ch2, Kör 13) — ÚJ SESSIONBEN.
-> A brief előre elkészítve: `docs/rounds/e01-r13-backend-security-and-diagnostics.md` (pre-flight
-> kell + a review három MINOR-ja oda folyik be: néma dev-`create_all` hiba, README readiness-mondat,
-> env-érzékeny prod-SQLite teszt).
+> **E01-R13 KÉSZ (2026-07-29, [PR #18](https://github.com/wolfcasaba/strumsight/pull/18)):** backend
+> security és diagnosztikai elkülönítés — **flag-vezérelt Lab-route-regisztráció**
+> (`diagnostics_enabled`/`apk_download_enabled` a `Settings`-ben, env-függő defaulttal: dev be,
+> prod ki — prodban a `/diagnostics` és `/download` **nem létezik**, 404), **fail-closed
+> diag-token boot-guard** (prod + enabled + dev-default/üres token → RuntimeError; a token se
+> logba, se hibaválaszba nem kerül — tesztelve), `hmac.compare_digest`, **streaming upload**
+> (limit a beolvasás KÖZBEN — szkriptelt-receive teszt bizonyítja a korai megszakítást; temp +
+> `os.replace` atomikus írás, disconnect-ágon temp-takarítás, 0o600, ütközés-suffix, kezelt
+> indexhiba `index_status: "failed"` jelzéssel), **72 UTF-8 bájtos jelszó-validáció** (422 az új
+> regisztrációnál, a `verify_password` legacy-csonkolása kompatibilitásból marad), és az R12
+> review mindhárom MINOR-ja (néma dev-`create_all` → `logger.exception`; README unstamped-dev
+> 503-mondat; `delenv` a prod-SQLite tesztben). Backend suite: **64 passed** (44 régi + 20 új)
+> két futásban (sima + `STRUMSIGHT_ALLOW_SQLITE=true`), függetlenül újramérve; a dev zero-setup
+> Lab-pipeline viselkedése változatlan (a wire contract érintetlen, a Flutter-diff üres).
+> [ADR 0061](docs/adr/0061-lab-route-isolation-and-hardened-diagnostics.md), review:
+> [`docs/reviews/e01-r13-review.md`](docs/reviews/e01-r13-review.md) (APPROVED, 0 BLOCKER/MAJOR/
+> MINOR, 3 NOTE — a NOTE-3 follow-up-jelölt: a prodban engedélyezett `/download` token nélküli).
+> A kör simán futott: nulla megállás, nulla brief-revízió — a pre-flight (a tesztfa-grep szabállyal)
+> és az R12-minták előre feloldották az ütközéseket.
+> **Következő: E01-R14 Flutter CI release pipeline** (Ch2, Kör 14) — ÚJ SESSIONBEN.
+> A brief előre elkészítve: `docs/rounds/e01-r14-flutter-ci-release-pipeline.md` (indítás előtt
+> pre-flight a `round-brief-prep` skill szerint; az R11 review MINOR-ja — a literál-guard nem fogja
+> a `router.go('/…')` alakot — oda folyik be).
 > Állandó user-szabályok (2026-07-29,
 > [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
 > (`gh workflow run build-apk.yml --ref <branch>`); minden gate zöld → automatikus squash-merge;
