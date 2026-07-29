@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/audio/audio_providers.dart';
+import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../../live/engine/ml/chord_crnn.dart';
 import '../../live/engine/ml/crnn_strum_net.dart';
 import '../../live/engine/ml/strum_crnn.dart';
@@ -122,11 +124,17 @@ Future<AnalyzeResult> computeClipAnalysis(
 
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
-  /// [recorder] is injectable for tests; defaults to the real one.
-  AnalyzeController({ClipRecorder? recorder})
-    : _recorder = recorder ?? ClipRecorder();
+  /// [recorder] is injectable for tests; defaults to one holding an
+  /// `analyzeRecorder` lease on the shared microphone session (E01-R09).
+  AnalyzeController({ClipRecorder? recorder}) : _injectedRecorder = recorder;
 
-  final ClipRecorder _recorder;
+  final ClipRecorder? _injectedRecorder;
+
+  /// Lazy so `ref` is only touched after `build` — and so a test-injected
+  /// recorder never builds a real mic session.
+  late final ClipRecorder _recorder =
+      _injectedRecorder ??
+      ClipRecorder(mic: createMicCapture(ref, AudioOwner.analyzeRecorder));
 
   /// Whether the Analyze screen is on stage. The round-102 dispose-time
   /// cancel only covered a take already in the `recording` phase; a tab

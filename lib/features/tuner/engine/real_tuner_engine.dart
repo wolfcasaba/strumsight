@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:isolate';
 
 import '../../../core/audio/mic_capture.dart';
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 import '../../live/engine/dsp/sliding_framer.dart';
 import '../model/tuner_reading.dart';
 import 'dsp/tuner_analyzer.dart';
@@ -9,8 +11,11 @@ import 'tuner_engine.dart';
 
 /// The REAL tuner: microphone → DSP isolate (YIN) → TunerReadings.
 class RealTunerEngine implements TunerEngine {
+  /// [mic] carries the exclusive-session lease (E01-R09).
+  RealTunerEngine({required this._mic});
+
   StreamController<TunerReading>? _controller;
-  final MicCapture _mic = MicCapture();
+  final MicCapture _mic;
   Isolate? _isolate;
   SendPort? _toDsp;
   ReceivePort? _fromDsp;
@@ -28,22 +33,35 @@ class RealTunerEngine implements TunerEngine {
     if (_running) return;
     _controller ??= StreamController<TunerReading>.broadcast();
 
-    if (!await MicCapture.ensurePermission()) {
-      _controller?.add(TunerReading.silent);
-      return;
-    }
+    // Set BEFORE the first await (§9.3 start/start race).
     _running = true;
 
-    try {
-      final actualRate = await _mic.start((chunk) {
-        final port = _toDsp;
-        if (port != null) {
-          port.send(chunk);
-        } else if (_pendingChunks.length < 64) {
-          _pendingChunks.add(chunk);
-        }
-      });
+    final started = await _mic.start((chunk) {
+      final port = _toDsp;
+      if (port != null) {
+        port.send(chunk);
+      } else if (_pendingChunks.length < 64) {
+        _pendingChunks.add(chunk);
+      }
+    }, onRevoke: stop);
+    if (started case Failure<int>(:final error)) {
+      _running = false;
+      switch (error) {
+        case PermissionFailure():
+          _controller?.add(TunerReading.silent);
+        case CancelledFailure():
+          break; // the screen left during the handshake — nothing is running
+        default:
+          final controller = _controller;
+          if (controller != null && !controller.isClosed) {
+            controller.addError(error, error.stackTrace ?? StackTrace.current);
+          }
+      }
+      return;
+    }
+    final actualRate = (started as Success<int>).value;
 
+    try {
       _fromDsp = ReceivePort();
       _isolate = await Isolate.spawn(
         _tunerEntry,

@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
 import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
 import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/preference_store.dart';
 
 /// Round 114 — the round-102 dispose-time cancel only covered a take whose
@@ -16,7 +18,8 @@ import '../../support/preference_store.dart';
 /// tab. The controller now tracks screen attachment and aborts a landing
 /// start when the screen has gone.
 class _GatedRecorder extends ClipRecorder {
-  _GatedRecorder() : super(ensurePermission: () async => true);
+  _GatedRecorder()
+    : super(mic: fakeMicCapture(owner: AudioOwner.analyzeRecorder));
 
   Completer<MicStart> startGate = Completer<MicStart>();
   Completer<List<double>>? stopGate;

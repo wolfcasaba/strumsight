@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/audio/audio_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/model/lesson.dart';
@@ -47,12 +47,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  /// Priming goes through the permission gateway (E01-R09 §9.1) — a screen
+  /// never calls the plugin itself.
+  Future<void> _requestMicPermission() =>
+      ref.read(microphonePermissionGatewayProvider).request();
+
   Future<void> _finish({bool requestMic = false}) async {
     if (_finishing) return;
     _finishing = true;
     if (requestMic) {
       try {
-        await (widget.primeMic ?? () => Permission.microphone.request())();
+        await (widget.primeMic ?? _requestMicPermission)();
       } catch (_) {
         // Best-effort priming; the Live screen re-requests if still ungranted.
       }
@@ -69,7 +74,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_finishing) return;
     _finishing = true;
     try {
-      await (widget.primeMic ?? () => Permission.microphone.request())();
+      await (widget.primeMic ?? _requestMicPermission)();
     } catch (_) {
       // Best-effort; the lesson's mic path surfaces its own error banner.
     }

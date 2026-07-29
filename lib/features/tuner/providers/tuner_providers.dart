@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/audio/audio_providers.dart';
+import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../../settings/providers/tuning_reference_provider.dart';
 import '../engine/real_tuner_engine.dart';
 import '../engine/tuner_engine.dart';
@@ -8,7 +10,7 @@ import '../model/tuner_reading.dart';
 /// The active tuner engine — the REAL microphone+YIN engine.
 /// (MockTunerEngine remains test infrastructure; tests override this.)
 final tunerEngineProvider = Provider<TunerEngine>((ref) {
-  final engine = RealTunerEngine();
+  final engine = RealTunerEngine(mic: createMicCapture(ref, AudioOwner.tuner));
   ref.onDispose(engine.dispose);
   return engine;
 });

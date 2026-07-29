@@ -1,77 +1,138 @@
 import 'dart:async';
 
-import 'package:audio_streamer/audio_streamer.dart';
-import 'package:flutter/services.dart' show MissingPluginException;
-import 'package:permission_handler/permission_handler.dart';
-
 import '../foundation/app_failure.dart';
 import '../foundation/app_result.dart';
+import '../platform/microphone_permission.dart';
+import 'capture/audio_capture.dart';
+import 'capture/audio_capture_factory.dart';
+import 'lifecycle/audio_session_coordinator.dart';
+import 'lifecycle/audio_session_lease.dart';
 
-/// Thin wrapper around the mic PCM stream + runtime permission (RAG chunk
-/// 001). Both real engines share it; stop() actually releases the microphone.
+/// One microphone session for one owner (RAG chunk 001, SDD Ch2 Kör 9).
+///
+/// Every mic user (Live, Tuner, Analyze recorder) goes through this class, and
+/// it enforces the three rules that used to be re-implemented per engine:
+///
+/// 1. **permission first** — an unknown permission state is never "granted";
+/// 2. **exclusive session** — the [AudioSessionCoordinator] lease means a
+///    second owner gets a busy failure instead of stealing a live capture;
+/// 3. **no orphan stream** — every failure path (denied, busy, engine throw,
+///    a stop that lands mid-handshake) releases both the capture and the lease.
+///
+/// [start] is single-flight: a second call while one is in flight joins it
+/// instead of opening a second capture (round 101 lesson, now shared).
 class MicCapture {
-  StreamSubscription<List<double>>? _sub;
+  MicCapture({
+    required this.owner,
+    required this._coordinator,
+    this._permissions = const PermissionHandlerMicrophoneGateway(),
+    this._captureFactory = createPlatformAudioCapture,
+  });
 
-  /// Whether mic permission is granted, requesting it if needed.
-  ///
-  /// Convenience view of [requestPermission] for the existing call sites: a
-  /// failure — denied OR a platform error — is false, so the caller shows the
-  /// mic-error banner instead of starting a capture that cannot work.
-  static Future<bool> ensurePermission() async =>
-      (await requestPermission()).isSuccess;
+  final AudioOwner owner;
+  final AudioSessionCoordinator _coordinator;
+  final MicrophonePermissionGateway _permissions;
+  final AudioCaptureFactory _captureFactory;
 
-  /// Ask for the microphone permission, reporting *why* it is unavailable.
+  AudioSessionLease? _lease;
+  AudioCapture? _capture;
+  int _sampleRate = 0;
+  bool _stopRequested = false;
+  Future<AppResult<int>>? _inFlight;
+
+  /// Whether a capture is currently running for this owner.
+  bool get isActive => _capture != null;
+
+  /// The permission state, asking the user only when it is not granted yet.
+  Future<MicrophonePermissionState> ensurePermission() async {
+    final current = await _permissions.currentState();
+    if (current.isGranted) return current;
+    return _permissions.request();
+  }
+
+  /// Starts capture; the value is the ACTUAL sample rate.
   ///
-  /// The only error treated as "granted" is a [MissingPluginException], i.e.
-  /// there is no permission channel at all (host widget tests, desktop dev) —
-  /// there is no permission system to deny us. Any other platform error is a
-  /// [PermissionFailure]: an unknown error is never reported as success
-  /// (E01-R04 §4.5). Tests that need a *denied* path inject a fake instead
-  /// (see `ClipRecorder.ensurePermission`).
-  static Future<AppResult<void>> requestPermission() async {
+  /// [onRevoke] is what the coordinator calls when the app goes to the
+  /// background; it defaults to [stop], which is enough for a plain capture.
+  /// Engines pass their own teardown so the DSP isolate dies with the stream.
+  Future<AppResult<int>> start(
+    void Function(List<double> chunk) onChunk, {
+    Future<void> Function()? onRevoke,
+  }) {
+    final inFlight = _inFlight;
+    if (inFlight != null) return inFlight;
+    if (_capture != null) return Future.value(Success(_sampleRate));
+    _stopRequested = false;
+    return _inFlight = _doStart(
+      onChunk,
+      onRevoke,
+    ).whenComplete(() => _inFlight = null);
+  }
+
+  Future<AppResult<int>> _doStart(
+    void Function(List<double> chunk) onChunk,
+    Future<void> Function()? onRevoke,
+  ) async {
+    final permission = await ensurePermission();
+    if (!permission.isGranted) return Failure(permission.failure!);
+    // The user may have left the screen while the dialog was up (§9.3): honour
+    // the stop instead of opening a microphone nobody is watching.
+    if (_stopRequested) return const Failure(CancelledFailure());
+
+    final leaseResult = await _coordinator.acquire(
+      owner,
+      onRevoke: onRevoke ?? stop,
+    );
+    if (leaseResult case Failure<AudioSessionLease>(:final error)) {
+      return Failure(error);
+    }
+    final lease = (leaseResult as Success<AudioSessionLease>).value;
+    if (_stopRequested) {
+      await lease.release();
+      return const Failure(CancelledFailure());
+    }
+    _lease = lease;
+
+    final capture = _captureFactory();
     try {
-      final status = await Permission.microphone.status;
-      if (status.isGranted) return const Success(null);
-      final result = await Permission.microphone.request();
-      if (result.isGranted) return const Success(null);
+      _sampleRate = await capture.start(onChunk);
+    } catch (error, stackTrace) {
+      // Busy device, revoked mid-handshake, platform channel error: unwind
+      // completely so a retry starts from a clean state.
+      await capture.stop();
+      await _release(lease);
       return Failure(
-        PermissionFailure(
-          code: FailureCode.permissionMicrophoneDenied,
-          // Permanently denied ⇒ retrying the dialog cannot help; the user
-          // has to change it in system settings.
-          retryable: !result.isPermanentlyDenied,
-        ),
-      );
-    } on MissingPluginException {
-      // No permission platform channel — nothing can deny us here.
-      return const Success(null);
-    } catch (e, stackTrace) {
-      return Failure(
-        PermissionFailure(
-          code: FailureCode.permissionUnavailable,
-          cause: e,
+        AudioFailure(
+          code: FailureCode.audioCaptureFailed,
+          cause: error,
           stackTrace: stackTrace,
         ),
       );
     }
+    if (_stopRequested) {
+      // stop() landed while the platform was handing us the stream — it could
+      // not cancel a capture that did not exist yet, so do it here.
+      await capture.stop();
+      await _release(lease);
+      return const Failure(CancelledFailure());
+    }
+    _capture = capture;
+    return Success(_sampleRate);
   }
 
-  /// Start streaming; [onChunk] receives PCM chunks (-1..1, mono). Returns the
-  /// ACTUAL sample rate (may differ from the requested 44.1 kHz — chunk 001).
-  Future<int> start(void Function(List<double> chunk) onChunk) async {
-    final streamer = AudioStreamer();
-    streamer.sampleRate = 44100;
-    _sub = streamer.audioStream.listen(onChunk);
-    return streamer.actualSampleRate;
-  }
-
-  /// Stop streaming and release the microphone.
+  /// Stops the capture and gives the session back. Idempotent, and safe to
+  /// call while a [start] is still in flight — that start then unwinds itself.
   Future<void> stop() async {
-    // Only null the field if it still points at the subscription WE are
-    // cancelling — a start() racing this await may already have installed a
-    // new one, and blindly nulling would orphan it live (round 114).
-    final sub = _sub;
-    await sub?.cancel();
-    if (identical(_sub, sub)) _sub = null;
+    _stopRequested = true;
+    final capture = _capture;
+    _capture = null;
+    await capture?.stop();
+    final lease = _lease;
+    if (lease != null) await _release(lease);
+  }
+
+  Future<void> _release(AudioSessionLease lease) async {
+    if (identical(_lease, lease)) _lease = null;
+    await lease.release();
   }
 }
