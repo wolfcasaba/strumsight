@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 217 = E01-R10).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (E01-R12, PR #17).
 >
 > **Branch/commit:** `main` @ [PR #13](https://github.com/wolfcasaba/strumsight/pull/13) (merged, CI run
 > [30470460895](https://github.com/wolfcasaba/strumsight/actions/runs/30470460895) zöld: analyze + teljes
@@ -38,8 +38,31 @@
 > `tools/codex-{signal,round,watch}.sh` — a Codex `code-complete`-nél **átadja a CI-t** (az a
 > jelentésírás és a review alatt fut), lokálisan pedig már csak a kör SAJÁT tesztjeit futtatja,
 > így semmi nem fut kétszer.
-> **Következő: E01-R12 Backend konfiguráció és adatbázis-migráció** (Ch2, Kör 12) — ÚJ SESSIONBEN.
-> A brief előre elkészítve: `docs/rounds/e01-r12-backend-config-and-migrations.md` (pre-flight kell).
+> **E01-R12 KÉSZ (2026-07-29, [PR #17](https://github.com/wolfcasaba/strumsight/pull/17)):** backend
+> konfiguráció és adatbázis-migráció — **Alembic az egyetlen prod schema-forrás**
+> (`backend/alembic/`, kezdeti `users`+`user_settings` migráció; az env.py az app `Settings`-éből
+> olvassa az URL-t), **injektált engine-életciklus** (a `database.py` module-global engine-je
+> megszűnt, `create_app(settings)` építi + lifespan dispose-olja; a `get_db` teszt-seam változatlan),
+> `create_all` csak dev + csak lifespanban (prodban spy-teszt bizonyítja a nulla hívást; az
+> import-mellékhatás megszűnt — subprocess-teszt őrzi), **`/health/live` + `/health/ready`**
+> (SELECT 1 + alembic head + config; 503 stabil gépi ok-kóddal, secret/URL-mentes válasz; a régi
+> `/health` marad), **prod+SQLite fail-closed** explicit `STRUMSIGHT_ALLOW_SQLITE=true` escape
+> hatch-csel (a prefix nélküli env-név NEM nyitja ki — teszt fedi), és a Codex brief fölötti valódi
+> lelete: **SQLite-on `PRAGMA foreign_keys=ON` minden kapcsolatra** — enélkül a migráció cascade-je
+> szöveg lett volna, nem viselkedés (viselkedési teszt bizonyítja). Backend suite: **44 passed**
+> (29 régi + 15 új), függetlenül újramérve; ORM-parity valódi sértéssel kipróbálva (CASCADE→SET NULL
+> → piros). [ADR 0060](docs/adr/0060-alembic-schema-source-and-injected-engine-lifecycle.md), review:
+> [`docs/reviews/e01-r12-review.md`](docs/reviews/e01-r12-review.md) (APPROVED, 3 MINOR → R13/R15).
+> **A kör tanulsága (másodszor ugyanaz az osztály, mint R11-ben, most teszt-oldalon):** a brief
+> §5.5-ös viselkedésváltozása ütközött a meglévő `test_prod_with_real_config_boots`-szal, amit a
+> fájllista lezárt — a Codex az implementáció ELŐTT megállt, a feloldás dokumentált **R1
+> brief-revízió** (§5.8). Brief-íráskor a TESZTFÁN is kötelező a „ki állítja ma az ellenkezőjét?"
+> grep. **Deploy-jegyzet:** a `main.py` mostantól futásidőben importál `alembic`-ot — a box
+> venvjébe telepítve; a :8019-es uvicorn a kör idején nem futott, újraindítani nem kellett.
+> **Következő: E01-R13 Backend security és diagnosztika** (Ch2, Kör 13) — ÚJ SESSIONBEN.
+> A brief előre elkészítve: `docs/rounds/e01-r13-backend-security-and-diagnostics.md` (pre-flight
+> kell + a review három MINOR-ja oda folyik be: néma dev-`create_all` hiba, README readiness-mondat,
+> env-érzékeny prod-SQLite teszt).
 > Állandó user-szabályok (2026-07-29,
 > [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
 > (`gh workflow run build-apk.yml --ref <branch>`); minden gate zöld → automatikus squash-merge;
