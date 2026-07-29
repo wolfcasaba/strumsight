@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
-import 'wav.dart';
+import '../../../core/audio/codec/wav_encoder.dart';
 
 /// Synthesises a soft chord "pad" in pure Dart and plays it as a jam-mode
 /// backing (RAG chunk 014). The chord tones are summed sines with a gentle
