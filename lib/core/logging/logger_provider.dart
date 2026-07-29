@@ -10,6 +10,10 @@ import 'debug_app_logger.dart';
 /// ([NoopAppLogger]) so a shipping artifact never writes unbounded diagnostics
 /// to the device log. Override in tests to capture what was logged — and, just
 /// as importantly, to assert what was NOT.
-final appLoggerProvider = Provider<AppLogger>(
-  (_) => kDebugMode ? DebugAppLogger() : const NoopAppLogger(),
-);
+final appLoggerProvider = Provider<AppLogger>((_) => createDefaultAppLogger());
+
+/// The same choice, for the pre-`ProviderScope` boot path (bootstrap runs
+/// before any container exists). Kept here so there is one definition of what
+/// "the app's logger" means.
+AppLogger createDefaultAppLogger() =>
+    kDebugMode ? DebugAppLogger() : const NoopAppLogger();

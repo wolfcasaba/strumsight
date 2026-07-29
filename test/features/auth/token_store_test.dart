@@ -1,140 +1,67 @@
-import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/storage/secure_store.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 
-/// Secure storage that fails the way the platform can: either with no channel
-/// at all (host tests / unsupported desktop) or with a real platform error.
-class _FailingStorage extends FlutterSecureStorage {
-  const _FailingStorage(this.error);
+// E01-R05 §5.4 — the auth feature owns the KEY, the core SecureStore owns the
+// platform. These tests pin that split: the right key is used, and a storage
+// failure is passed through untouched (never softened into "no token", which
+// would silently sign the user out).
+// The platform-error mapping itself lives in test/core/storage/secure_store_test.dart.
 
-  final Object error;
+class _FakeSecureStore implements SecureStore {
+  _FakeSecureStore({this.failure});
 
-  @override
-  Future<String?> read({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async => throw error;
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async => throw error;
-
-  @override
-  Future<void> delete({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async => throw error;
-}
-
-/// A working in-memory secure storage.
-class _MemoryStorage extends FlutterSecureStorage {
-  _MemoryStorage();
-
+  final AppFailure? failure;
   final Map<String, String> values = {};
+  final List<String> keysTouched = [];
 
   @override
-  Future<String?> read({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async => values[key];
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    if (value == null) {
-      values.remove(key);
-    } else {
-      values[key] = value;
-    }
+  Future<AppResult<String?>> read(String key) async {
+    keysTouched.add(key);
+    return failure == null ? Success(values[key]) : Failure(failure!);
   }
 
   @override
-  Future<void> delete({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async => values.remove(key);
+  Future<AppResult<void>> write(String key, String value) async {
+    keysTouched.add(key);
+    if (failure != null) return Failure(failure!);
+    values[key] = value;
+    return const Success(null);
+  }
+
+  @override
+  Future<AppResult<void>> delete(String key) async {
+    keysTouched.add(key);
+    if (failure != null) return Failure(failure!);
+    values.remove(key);
+    return const Success(null);
+  }
 }
 
 void main() {
-  test('round-trips a token through the secure store', () async {
-    final store = SecureTokenStore(_MemoryStorage());
+  test('round-trips a token under the documented secure key', () async {
+    final secure = _FakeSecureStore();
+    final store = SecureTokenStore(secure);
 
     expect((await store.read()).valueOrNull, isNull);
     expect(await store.write('jwt-1'), isA<Success<void>>());
+    expect(secure.values[StorageKeys.secureAuthToken], 'jwt-1');
     expect((await store.read()).valueOrNull, 'jwt-1');
     expect(await store.clear(), isA<Success<void>>());
     expect((await store.read()).valueOrNull, isNull);
+
+    expect(secure.keysTouched, everyElement(StorageKeys.secureAuthToken));
   });
 
-  test('a platform error becomes a StorageFailure, not an exception', () async {
-    final store = SecureTokenStore(
-      _FailingStorage(PlatformException(code: 'keystore')),
-    );
+  test('a storage failure reaches the caller unchanged', () async {
+    const error = StorageFailure(code: FailureCode.storageRead);
+    final store = SecureTokenStore(_FakeSecureStore(failure: error));
 
-    final read = await store.read();
-    expect(read, isA<Failure<String?>>());
-    expect(read.failureOrNull, isA<StorageFailure>());
-    expect(read.failureOrNull!.code, FailureCode.storageRead);
-
-    expect(
-      (await store.write('jwt')).failureOrNull!.code,
-      FailureCode.storageWrite,
-    );
-    expect((await store.clear()).failureOrNull!.code, FailureCode.storageWrite);
-  });
-
-  test('no platform channel: read is "no token", writes still fail', () async {
-    // A missing channel means there IS no stored token — that is a correct
-    // answer for read. It is NOT a licence to report a write as successful.
-    final store = SecureTokenStore(
-      _FailingStorage(MissingPluginException('no channel')),
-    );
-
-    final read = await store.read();
-    expect(read, isA<Success<String?>>());
-    expect(read.valueOrNull, isNull);
-
-    final write = await store.write('jwt');
-    expect(write, isA<Failure<void>>());
-    expect(write.failureOrNull!.code, FailureCode.storageUnavailable);
+    expect((await store.read()).failureOrNull, same(error));
+    expect((await store.write('jwt')).failureOrNull, same(error));
+    expect((await store.clear()).failureOrNull, same(error));
   });
 }
