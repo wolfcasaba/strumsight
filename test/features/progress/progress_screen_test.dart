@@ -9,6 +9,8 @@ import 'package:strumsight/features/streak/streak_logic.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// A log seeded with fixed entries and NOT touching disk (so the populated
 /// dashboard is deterministic in a widget test).
 class _SeededLog extends PracticeLogController {
@@ -20,6 +22,7 @@ class _SeededLog extends PracticeLogController {
 
 Widget _host(DateTime now, {List<PracticeEntry>? seed}) => ProviderScope(
   overrides: [
+    ...preferenceOverrides(),
     if (seed != null) practiceLogProvider.overrideWith(() => _SeededLog(seed)),
   ],
   child: MaterialApp(

@@ -10,6 +10,7 @@ import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 AnalyzedSession _session(String id, String title) => AnalyzedSession(
   id: id,
@@ -49,13 +50,13 @@ void main() {
   });
 
   test('add persists across a fresh container (real prefs repo)', () async {
-    final c1 = ProviderContainer();
+    final c1 = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(c1.dispose);
     await c1.read(libraryProvider.future);
     await c1.read(libraryProvider.notifier).add(_session('1', 'C · G'));
 
     // A brand-new container reloads from persistence.
-    final c2 = ProviderContainer();
+    final c2 = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(c2.dispose);
     final loaded = await c2.read(libraryProvider.future);
     expect(loaded.map((s) => s.id), contains('1'));
@@ -63,7 +64,7 @@ void main() {
   });
 
   test('newest is first and delete removes by id', () async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     await container.read(libraryProvider.future);
     final ctrl = container.read(libraryProvider.notifier);
@@ -89,6 +90,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           libraryRepositoryProvider.overrideWithValue(
             FakeLibraryRepository([_session('1', 'C · G · Am')]),

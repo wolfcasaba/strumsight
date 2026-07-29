@@ -6,6 +6,7 @@ import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 102 — leaving the Analyze tab mid-recording must RELEASE the mic.
 /// The shell disposes the screen on tab switch, but the controller (a
@@ -22,7 +23,10 @@ void main() {
 
   test('cancelRecording releases the take and resets to idle', () {
     final container = ProviderContainer(
-      overrides: [analyzeControllerProvider.overrideWith(_RecordingStub.new)],
+      overrides: [
+        ...preferenceOverrides(),
+        analyzeControllerProvider.overrideWith(_RecordingStub.new),
+      ],
     );
     addTearDown(container.dispose);
     final controller = container.read(analyzeControllerProvider.notifier);
@@ -31,7 +35,7 @@ void main() {
   });
 
   test('cancelRecording leaves a finished result alone', () {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     container.read(analyzeControllerProvider); // idle
     container.read(analyzeControllerProvider.notifier).cancelRecording();
@@ -46,6 +50,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           analyzeControllerProvider.overrideWith(_RecordingStub.new),
         ],

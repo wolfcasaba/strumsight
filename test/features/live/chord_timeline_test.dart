@@ -11,12 +11,15 @@ import 'package:strumsight/features/live/widgets/chord_timeline_card.dart';
 import 'package:strumsight/features/live/widgets/strum_arrow.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 /// Pump a widget inside the app's Material + localization + Riverpod shell.
 /// ProviderScope is required because the hero card embeds [ChordDiagram]
 /// (a ConsumerWidget that reads the left-handed provider).
 Future<void> _pump(WidgetTester tester, Widget child) {
   return tester.pumpWidget(
     ProviderScope(
+      overrides: preferenceOverrides(),
       child: MaterialApp(
         theme: AppTheme.dark(),
         localizationsDelegates: const [

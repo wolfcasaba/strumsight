@@ -1,39 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../core/storage/persisted_preference.dart';
+import '../../../core/storage/storage_keys.dart';
 
 /// Whether the play-along metronome is muted. Persisted locally so the choice
 /// sticks across lessons/sessions (RAG chunk 014). Default: not muted (hear it).
-class MetronomeMutedController extends Notifier<bool> {
-  static const _key = 'metronome_muted_v1';
-
-  SharedPreferences? _prefs;
-  bool _userSet = false;
-
+class MetronomeMutedController extends Notifier<bool>
+    with PersistedPreference<bool> {
   @override
-  bool build() {
-    _load();
-    return false;
-  }
-
-  Future<void> _load() async {
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      final v = _prefs!.getBool(_key);
-      if (v != null && !_userSet) state = v;
-    } catch (_) {
-      // Prefs unavailable → keep the default.
-    }
-  }
+  bool build() => preferences.readBool(StorageKeys.metronomeMuted) ?? false;
 
   Future<void> toggle() async {
-    _userSet = true;
     state = !state;
-    try {
-      _prefs ??= await SharedPreferences.getInstance();
-      await _prefs!.setBool(_key, state);
-    } catch (_) {
-      // Best-effort.
-    }
+    await persist(
+      StorageKeys.metronomeMuted,
+      (store) => store.writeBool(StorageKeys.metronomeMuted, state),
+    );
   }
 }
 

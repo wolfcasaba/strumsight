@@ -20,6 +20,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_engines.dart';
+import '../support/preference_store.dart';
 
 /// Round 96 — layout guard: every main screen must build WITHOUT overflow on
 /// a small phone (320×568 logical, iPhone-SE class) and in landscape
@@ -54,7 +55,10 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
-              overrides: [tunerEngineProvider.overrideWithValue(engine)],
+              overrides: [
+                ...preferenceOverrides(),
+                tunerEngineProvider.overrideWithValue(engine),
+              ],
               child: const MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -74,6 +78,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
+              overrides: preferenceOverrides(),
               child: MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -90,7 +95,10 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
-              overrides: [strumEngineProvider.overrideWithValue(engine)],
+              overrides: [
+                ...preferenceOverrides(),
+                strumEngineProvider.overrideWithValue(engine),
+              ],
               child: MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -117,6 +125,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
+              overrides: preferenceOverrides(),
               child: const MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -131,6 +140,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
+              overrides: preferenceOverrides(),
               child: const MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -156,7 +166,10 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
-              overrides: [strumEngineProvider.overrideWithValue(engine)],
+              overrides: [
+                ...preferenceOverrides(),
+                strumEngineProvider.overrideWithValue(engine),
+              ],
               child: const StrumSightApp(),
             ),
           );
@@ -184,6 +197,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
+              overrides: preferenceOverrides(),
               child: MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
@@ -198,6 +212,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             ProviderScope(
+              overrides: preferenceOverrides(),
               child: const MaterialApp(
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,

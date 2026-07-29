@@ -10,6 +10,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 92 — the retention loop's missing link: PASSING a lesson offers the
 /// NEXT one right in the summary dialog (Yousician's core loop: finish →
@@ -30,7 +31,10 @@ LiveFrame _strumFrame(int seq) => LiveFrame(
 Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
     tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

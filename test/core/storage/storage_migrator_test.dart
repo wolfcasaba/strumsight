@@ -99,9 +99,17 @@ void main() {
       expect(store.writeLog, isEmpty);
     });
 
-    test('the shipped migration list is empty until Kör 6–7 moves the '
-        'features (renaming a key its owner still reads loses data)', () {
-      expect(appStorageMigrations, isEmpty);
+    test('the shipped migration list is forward-only and starts at 1 '
+        '(a key is renamed in the round that moves its owner)', () {
+      // What each shipped migration DOES is covered by
+      // `preference_migration_test.dart`; this pins the list's shape.
+      expect(appStorageMigrations, isNotEmpty);
+      expect(appStorageMigrations.first.version, 1);
+      expect(
+        appStorageMigrations.map((m) => m.version).toList()..sort(),
+        appStorageMigrations.map((m) => m.version).toList(),
+        reason: 'the list is stored in version order',
+      );
     });
 
     test('an already-current store runs nothing', () async {

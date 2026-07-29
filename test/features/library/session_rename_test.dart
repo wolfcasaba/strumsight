@@ -8,6 +8,8 @@ import 'package:strumsight/features/library/screens/session_detail_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 106 — rename a saved recording. Auto-titles are the chord summary
 /// ("C · G · Am"); a personal library needs personal names ("Campfire riff").
 AnalyzedSession _session(String id, String title) => AnalyzedSession(
@@ -26,7 +28,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('rename updates the session and persists it', () async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     final lib = container.read(libraryProvider.notifier);
     await container.read(libraryProvider.future);
@@ -38,7 +40,7 @@ void main() {
       'Campfire riff',
     ); // trimmed
     // Persisted: a FRESH container (same mock prefs) reloads the new name.
-    final fresh = ProviderContainer();
+    final fresh = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(fresh.dispose);
     final reloaded = await fresh.read(libraryProvider.future);
     expect(reloaded.single.title, 'Campfire riff');
@@ -47,7 +49,7 @@ void main() {
   test('renaming a session deleted meanwhile is a harmless no-op', () async {
     // Round 115 (r114 devil-advocate coverage gap): the detail screen can
     // still hold a session another surface just deleted.
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     final lib = container.read(libraryProvider.notifier);
     await container.read(libraryProvider.future);
@@ -58,7 +60,7 @@ void main() {
   });
 
   test('an empty or whitespace name is ignored', () async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     addTearDown(container.dispose);
     final lib = container.read(libraryProvider.notifier);
     await container.read(libraryProvider.future);
@@ -72,6 +74,7 @@ void main() {
     final session = _session('a', 'C · G');
     await tester.pumpWidget(
       ProviderScope(
+        overrides: preferenceOverrides(),
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

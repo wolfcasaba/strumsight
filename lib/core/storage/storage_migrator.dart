@@ -214,9 +214,110 @@ class StorageMigrator {
 
 /// The app's migration list, in version order.
 ///
-/// Empty by design in E01-R05: this round ships the mechanism, while the keys
-/// themselves stay where the shipped builds put them. A feature is renamed to
-/// its [StorageKeys] entry in the same round that moves it onto
-/// [KeyValueStore] (Kör 6–7) — renaming a key while its owner still reads the
-/// old one would lose the user's data.
-const List<StorageMigration> appStorageMigrations = [];
+/// Schema **1–16** (E01-R06) move the simple preferences onto their namespaced
+/// [StorageKeys] entries. Each key is renamed in the same round that moves its
+/// owner onto [KeyValueStore] — renaming while the owner still reads the old
+/// key would lose the user's data. The JSON-blob stores (library, songs,
+/// setlists, lesson progress, practice log, streak) keep their legacy keys
+/// until Kör 7 moves those features.
+///
+/// One version per key, rather than one bulk step: a run interrupted after the
+/// eighth rename resumes at the ninth instead of replaying eight no-ops.
+const List<StorageMigration> appStorageMigrations = [
+  RenameKeyMigration.string(
+    version: 1,
+    id: 'r06.theme_mode',
+    from: LegacyStorageKeys.themeMode,
+    to: StorageKeys.themeMode,
+  ),
+  RenameKeyMigration.string(
+    version: 2,
+    id: 'r06.locale',
+    from: LegacyStorageKeys.locale,
+    to: StorageKeys.locale,
+  ),
+  RenameKeyMigration.number(
+    version: 3,
+    id: 'r06.confidence_threshold',
+    from: LegacyStorageKeys.confidenceThreshold,
+    to: StorageKeys.confidenceThreshold,
+  ),
+  RenameKeyMigration.integer(
+    version: 4,
+    id: 'r06.capo_fret',
+    from: LegacyStorageKeys.capoFret,
+    to: StorageKeys.capoFret,
+  ),
+  RenameKeyMigration.integer(
+    version: 5,
+    id: 'r06.tuning_a4',
+    from: LegacyStorageKeys.tuningA4,
+    to: StorageKeys.tuningA4,
+  ),
+  RenameKeyMigration.boolean(
+    version: 6,
+    id: 'r06.left_handed',
+    from: LegacyStorageKeys.leftHanded,
+    to: StorageKeys.leftHanded,
+  ),
+  RenameKeyMigration.integer(
+    version: 7,
+    id: 'r06.input_latency_ms',
+    from: LegacyStorageKeys.inputLatencyMs,
+    to: StorageKeys.inputLatencyMs,
+  ),
+  RenameKeyMigration.integer(
+    version: 8,
+    id: 'r06.visual_latency_ms',
+    from: LegacyStorageKeys.visualLatencyMs,
+    to: StorageKeys.visualLatencyMs,
+  ),
+  RenameKeyMigration.boolean(
+    version: 9,
+    id: 'r06.lab_mode',
+    from: LegacyStorageKeys.labMode,
+    to: StorageKeys.labMode,
+  ),
+  RenameKeyMigration.boolean(
+    version: 10,
+    id: 'r06.nudge_enabled',
+    from: LegacyStorageKeys.nudgeEnabled,
+    to: StorageKeys.nudgeEnabled,
+  ),
+  RenameKeyMigration.boolean(
+    version: 11,
+    id: 'r06.onboarding_seen',
+    from: LegacyStorageKeys.onboardingSeen,
+    to: StorageKeys.onboardingSeen,
+  ),
+  RenameKeyMigration.string(
+    version: 12,
+    id: 'r06.tuner_tuning',
+    from: LegacyStorageKeys.tunerTuning,
+    to: StorageKeys.tunerTuning,
+  ),
+  RenameKeyMigration.stringList(
+    version: 13,
+    id: 'r06.favorite_chords',
+    from: LegacyStorageKeys.favoriteChords,
+    to: StorageKeys.favoriteChords,
+  ),
+  RenameKeyMigration.boolean(
+    version: 14,
+    id: 'r06.metronome_muted',
+    from: LegacyStorageKeys.metronomeMuted,
+    to: StorageKeys.metronomeMuted,
+  ),
+  RenameKeyMigration.number(
+    version: 15,
+    id: 'r06.practice_speed',
+    from: LegacyStorageKeys.practiceSpeed,
+    to: StorageKeys.practiceSpeed,
+  ),
+  RenameKeyMigration.integer(
+    version: 16,
+    id: 'r06.daily_goal_minutes',
+    from: LegacyStorageKeys.dailyGoalMinutes,
+    to: StorageKeys.dailyGoalMinutes,
+  ),
+];

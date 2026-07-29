@@ -11,6 +11,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 94 — tune by EAR: with a string pinned (round 91's manual mode), a
 /// speaker button plays the target's reference tone. No pin → no button
@@ -29,6 +30,7 @@ Future<void> pumpTuner(
 ) => tester.pumpWidget(
   ProviderScope(
     overrides: [
+      ...preferenceOverrides(),
       tunerEngineProvider.overrideWithValue(engine),
       backingProvider.overrideWithValue(backing),
     ],

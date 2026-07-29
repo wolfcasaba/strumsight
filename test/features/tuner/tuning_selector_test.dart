@@ -8,13 +8,17 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 89 — the tuner's tuning selector: picking Drop D re-labels the
 /// string chips (D2 replaces E2) so the player tunes to the RIGHT targets.
 Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
     tester.pumpWidget(
       ProviderScope(
-        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          tunerEngineProvider.overrideWithValue(engine),
+        ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

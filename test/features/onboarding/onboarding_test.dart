@@ -3,19 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('OnboardingController', () {
-    test('load() is false on first run, true once completed', () async {
-      expect(await OnboardingController.load(), isFalse);
+    test('readSeen is false on first run, true once completed', () async {
+      final store = InMemoryKeyValueStore();
+      expect(OnboardingController.readSeen(store), isFalse);
 
       final c = ProviderContainer(
         overrides: [
+          preferenceStoreOverride(store),
           onboardingSeenProvider.overrideWith(
             () => OnboardingController(false),
           ),
@@ -24,7 +27,8 @@ void main() {
       addTearDown(c.dispose);
       await c.read(onboardingSeenProvider.notifier).complete();
       expect(c.read(onboardingSeenProvider), isTrue);
-      expect(await OnboardingController.load(), isTrue); // persisted
+      expect(store.values[StorageKeys.onboardingSeen], isTrue); // persisted
+      expect(OnboardingController.readSeen(store), isTrue);
     });
   });
 
@@ -35,6 +39,7 @@ void main() {
     }) async {
       final container = ProviderContainer(
         overrides: [
+          ...preferenceOverrides(),
           onboardingSeenProvider.overrideWith(
             () => OnboardingController(false),
           ),

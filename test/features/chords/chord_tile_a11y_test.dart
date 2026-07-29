@@ -6,6 +6,8 @@ import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/preference_store.dart';
+
 /// Round 131 — the r130 B1 finding (a label without a tap action is a
 /// half-broken a11y control) prompted a sweep of every excludeSemantics
 /// wrapper. The chord-library tile is the one interactive case left: its
@@ -20,8 +22,9 @@ void main() {
       'and a tap action', (tester) async {
     final handle = tester.ensureSemantics();
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: ChordLibraryScreen(),

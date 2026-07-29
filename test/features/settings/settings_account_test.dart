@@ -10,6 +10,7 @@ import 'package:strumsight/main.dart';
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
+import '../../support/preference_store.dart';
 
 /// Boot the app and open the Settings tab. [token] non-null => a session is
 /// restored (logged in). [accountEnabled] gates the account layer UI.
@@ -23,6 +24,7 @@ Future<void> _openSettings(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...preferenceOverrides(),
         strumEngineProvider.overrideWithValue(engine),
         tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),

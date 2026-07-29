@@ -8,13 +8,14 @@ import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/synth.dart';
+import '../../support/preference_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   (ProviderContainer, AnalyzeController) rig() {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: preferenceOverrides());
     return (container, container.read(analyzeControllerProvider.notifier));
   }
 

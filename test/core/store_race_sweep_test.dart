@@ -15,6 +15,9 @@ import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/streak/model/streak_data.dart';
 import 'package:strumsight/features/streak/providers/streak_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
+
+import '../support/preference_store.dart';
 
 /// Round 150 sweep — the r149 race class across every COLLECTION store: a
 /// mutation racing the initial prefs load must never wipe the on-disk data
@@ -130,10 +133,14 @@ void main() {
   });
 
   test('favourites: a cold-start toggle keeps other pins', () async {
-    SharedPreferences.setMockInitialValues({
-      'favorite_chords': ['Am', 'G7'],
-    });
-    final c = container();
+    // Migrated to the injected store in E01-R06: the pins are read
+    // synchronously, so a toggle can no longer race an unfinished load.
+    final c = ProviderContainer(
+      overrides: preferenceOverrides({
+        StorageKeys.favoriteChords: <String>['Am', 'G7'],
+      }),
+    );
+    addTearDown(c.dispose);
     await c.read(favoriteChordsProvider.notifier).toggle('C');
     expect(c.read(favoriteChordsProvider), containsAll({'Am', 'G7', 'C'}));
   });

@@ -10,6 +10,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 /// Round 100 — the two RISK findings of the sprint-88–99 adversarial review.
 LiveFrame _strumFrame(int seq) => LiveFrame(
@@ -27,7 +28,10 @@ LiveFrame _strumFrame(int seq) => LiveFrame(
 Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
     tester.pumpWidget(
       ProviderScope(
-        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

@@ -6,6 +6,8 @@ import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 void main() {
   test('allLabels exposes the full catalogue', () {
     final labels = ChordShapes.allLabels;
@@ -17,8 +19,9 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: ChordLibraryScreen(),
@@ -34,8 +37,9 @@ void main() {
 
   testWidgets('the search box filters the catalogue', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: ChordLibraryScreen(),
@@ -56,8 +60,9 @@ void main() {
   testWidgets('a search with no matches shows an empty state, not a blank '
       'screen (round 133)', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: ChordLibraryScreen(),

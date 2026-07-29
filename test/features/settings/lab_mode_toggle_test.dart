@@ -8,17 +8,14 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/settings/data/settings_repository.dart';
 import 'package:strumsight/features/settings/providers/lab_mode_provider.dart';
 import 'package:strumsight/main.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
+import '../../support/preference_store.dart';
 
 void main() {
-  setUp(() {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    SharedPreferences.setMockInitialValues({});
-  });
+  setUp(TestWidgetsFlutterBinding.ensureInitialized);
 
   testWidgets(
     'Lab mode SwitchListTile is present, off by default, and toggles',
@@ -30,6 +27,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...preferenceOverrides(),
             strumEngineProvider.overrideWithValue(engine),
             tokenStoreProvider.overrideWithValue(FakeTokenStore()),
             authRepositoryProvider.overrideWithValue(FakeAuthRepository()),

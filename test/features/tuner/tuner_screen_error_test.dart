@@ -9,9 +9,13 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
+import '../../support/preference_store.dart';
 
 Widget _app(FakeTunerEngine engine) => ProviderScope(
-  overrides: [tunerEngineProvider.overrideWithValue(engine)],
+  overrides: [
+    ...preferenceOverrides(),
+    tunerEngineProvider.overrideWithValue(engine),
+  ],
   child: const MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -78,6 +82,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...preferenceOverrides(),
           tunerEngineProvider.overrideWithValue(engine),
           micPermissionProvider.overrideWith((ref) async => false),
         ],
