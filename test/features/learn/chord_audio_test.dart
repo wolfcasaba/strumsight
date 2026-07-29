@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/audio/chord_audio.dart';
+import 'package:strumsight/features/learn/audio/chord_audio.dart';
 
 String _tag(List<int> b, int o) => String.fromCharCodes(b.sublist(o, o + 4));
 
@@ -27,8 +27,7 @@ void main() {
       expect(ChordAudio.frequencies(''), isNull);
     });
 
-    test('7sus4 keeps the suspended fourth, not a major third (round 90)',
-        () {
+    test('7sus4 keeps the suspended fourth, not a major third (round 90)', () {
       // A7sus4 is in the library; before round 90 it fell back to a plain
       // major triad. The 2nd tone must be the FOURTH (5 semitones up).
       final f = ChordAudio.frequencies('A7sus4')!;

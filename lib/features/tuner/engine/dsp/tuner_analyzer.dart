@@ -59,10 +59,7 @@ class TunerAnalyzer {
 
     final f0 = _yin.detect(buffer);
     // Gate on periodicity (clarity), validity and instrument range.
-    if (f0 == null ||
-        _yin.clarity < minClarity ||
-        f0 < minHz ||
-        f0 > maxHz) {
+    if (f0 == null || _yin.clarity < minClarity || f0 < minHz || f0 > maxHz) {
       return _unstable();
     }
 

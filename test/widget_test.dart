@@ -1,13 +1,15 @@
 // Smoke test: the app boots into the Live tab with bottom navigation.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/main.dart';
 
 import 'support/fake_engines.dart';
 
 void main() {
-  testWidgets('App boots to the Live tab with bottom navigation', (tester) async {
+  testWidgets('App boots to the Live tab with bottom navigation', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 

@@ -20,10 +20,8 @@ import 'chord_matcher.dart' show ChordMatch;
 /// O(N²). Scores are renormalised each frame (subtract the max) so the trellis
 /// stays bounded during long sustains.
 class ViterbiChordDecoder {
-  ViterbiChordDecoder({
-    ChordDictionary? dictionary,
-    this.selfBonus = 0.22,
-  }) : dictionary = dictionary ?? ChordDictionary() {
+  ViterbiChordDecoder({ChordDictionary? dictionary, this.selfBonus = 0.22})
+    : dictionary = dictionary ?? ChordDictionary() {
     _delta = Float64List(this.dictionary.length);
   }
 
@@ -56,8 +54,9 @@ class ViterbiChordDecoder {
   void setExpected(String? label) {
     _expectedIdx = label == null
         ? -1
-        : dictionary.profiles
-            .indexWhere((p) => !p.isNoChord && p.label == label);
+        : dictionary.profiles.indexWhere(
+            (p) => !p.isNoChord && p.label == label,
+          );
   }
 
   /// Onset-aligned updates (chunk 016 rec #2 — round 138): a strum onset is
@@ -80,8 +79,11 @@ class ViterbiChordDecoder {
   /// couple of frames, but the frame neither consumes the onset boost nor
   /// lowers the incumbent's guard (r142 audit: a gated frame right after an
   /// onset must not cause a chord dropout ON the strum).
-  ChordMatch? process(Float64List bass, Float64List treble,
-      {bool gated = false}) {
+  ChordMatch? process(
+    Float64List bass,
+    Float64List treble, {
+    bool gated = false,
+  }) {
     final sim = dictionary.score(bass, treble);
     final n = sim.length;
 
@@ -101,7 +103,8 @@ class ViterbiChordDecoder {
       }
       for (var s = 0; s < n; s++) {
         final stay = _delta[s] + bonus;
-        _delta[s] = sim[s] +
+        _delta[s] =
+            sim[s] +
             (s == _expectedIdx ? expectedPrior : 0.0) +
             (stay > bestPrev ? stay : bestPrev);
       }
@@ -132,13 +135,17 @@ class ViterbiChordDecoder {
   /// penalties on the global path and loses to staying put — measured, this
   /// removes the junk segments the online path leaves on fast chord changes.
   List<ChordMatch?> decodeBatch(
-      List<Float64List> bass, List<Float64List> treble) {
+    List<Float64List> bass,
+    List<Float64List> treble,
+  ) {
     assert(bass.length == treble.length);
     final t = bass.length;
     if (t == 0) return const [];
 
     final sims = List<Float64List>.generate(
-        t, (i) => dictionary.score(bass[i], treble[i]));
+      t,
+      (i) => dictionary.score(bass[i], treble[i]),
+    );
     final path = _viterbiPath(sims, selfBonus);
     return [for (var i = 0; i < t; i++) _matchFor(path[i], sims[i])];
   }
@@ -159,14 +166,16 @@ class ViterbiChordDecoder {
   /// this class defaults to — callers must pass an explicitly tuned value.
   /// Returns a `List<ChordMatch?>` frame-aligned to [scores].
   List<ChordMatch?> decodeBatchFromScores(
-      List<Float64List> scores, List<String> labels,
-      {double? selfBonus}) {
+    List<Float64List> scores,
+    List<String> labels, {
+    double? selfBonus,
+  }) {
     final t = scores.length;
     if (t == 0) return const [];
     assert(labels.length == scores[0].length);
     final path = _viterbiPath(scores, selfBonus ?? this.selfBonus);
     return [
-      for (var i = 0; i < t; i++) _matchForLabel(path[i], scores[i], labels)
+      for (var i = 0; i < t; i++) _matchForLabel(path[i], scores[i], labels),
     ];
   }
 

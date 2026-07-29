@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/settings/providers/left_handed_provider.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/settings/providers/left_handed_provider.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
-Future<void> pumpDiagram(WidgetTester tester, String label,
-        {bool leftHanded = false}) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [
-        if (leftHanded)
-          leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: Center(child: ChordDiagram(label: label))),
+Future<void> pumpDiagram(
+  WidgetTester tester,
+  String label, {
+  bool leftHanded = false,
+}) => tester.pumpWidget(
+  ProviderScope(
+    overrides: [
+      if (leftHanded) leftHandedProvider.overrideWith(() => _FixedLeftHanded()),
+    ],
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Center(child: ChordDiagram(label: label)),
       ),
-    ));
+    ),
+  ),
+);
 
 class _FixedLeftHanded extends LeftHandedController {
   @override
@@ -49,7 +54,10 @@ void main() {
 
     test('baseFret is 0 at the nut and shifts for high barre shapes', () {
       expect(ChordShapes.forLabel('C')!.baseFret, 0); // open
-      expect(ChordShapes.forLabel('Bm')!.baseFret, 0); // max fret 4 → nut window
+      expect(
+        ChordShapes.forLabel('Bm')!.baseFret,
+        0,
+      ); // max fret 4 → nut window
       // Movable barres past fret 4 slide the window down.
       expect(ChordShapes.forLabel('C#m')!.baseFret, 3); // [x,4,6,6,5,4] → 4fr
       expect(ChordShapes.forLabel('G#m')!.baseFret, 3); // [4,6,6,4,4,4] → 4fr
@@ -57,15 +65,17 @@ void main() {
   });
 
   group('ChordDiagram', () {
-    testWidgets('renders the label + a painted grid for a known chord',
-        (tester) async {
+    testWidgets('renders the label + a painted grid for a known chord', (
+      tester,
+    ) async {
       await pumpDiagram(tester, 'Am');
       expect(find.text('Am'), findsOneWidget);
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
-    testWidgets('draws nothing for a chord we have no shape for',
-        (tester) async {
+    testWidgets('draws nothing for a chord we have no shape for', (
+      tester,
+    ) async {
       await pumpDiagram(tester, 'Zz9');
       expect(find.text('Zz9'), findsNothing);
     });
@@ -76,8 +86,9 @@ void main() {
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
-    testWidgets('a movable barre shows its base-fret position label',
-        (tester) async {
+    testWidgets('a movable barre shows its base-fret position label', (
+      tester,
+    ) async {
       await pumpDiagram(tester, 'C#m');
       expect(find.text('C#m'), findsOneWidget);
       expect(find.text('4fr'), findsOneWidget); // window starts at fret 4

@@ -11,7 +11,7 @@ abstract interface class TokenStore {
 
 class SecureTokenStore implements TokenStore {
   SecureTokenStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'strumsight_auth_token';
   final FlutterSecureStorage _storage;

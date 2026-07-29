@@ -12,12 +12,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/theme/app_theme.dart';
-import 'package:music_theory/features/live/model/chord.dart';
-import 'package:music_theory/features/live/model/chord_event.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/live/widgets/chord_timeline.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/features/live/model/chord.dart';
+import 'package:strumsight/features/live/model/chord_event.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/live/widgets/chord_timeline.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 ChordEvent _e(String label, StrumDirection dir, double conf, int seq) =>
     ChordEvent(

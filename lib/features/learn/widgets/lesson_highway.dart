@@ -48,57 +48,60 @@ class LessonHighway extends StatelessWidget {
       label: label,
       container: true,
       child: SizedBox(
-      height: height,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final pxPerBeat = (width - strikeX) / beatsVisibleAhead;
-          final visible = LessonTiming.visibleEvents(
-            lesson.events,
-            playheadBeat,
-            aheadBeats: beatsVisibleAhead + 1,
-            behindBeats: 1.5,
-          );
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                color: Color(0xFF0E0E12),
-              ),
-              child: Stack(
-                children: [
-                  // Painted lane: perspective depth gradient + flowing beat grid
-                  // + a glowing strike line. One cheap CustomPaint on its own
-                  // layer, behind the cards (chunk 016b P5).
-                  Positioned.fill(
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        painter: HighwayBackgroundPainter(
-                          playheadBeat: playheadBeat,
-                          pxPerBeat: pxPerBeat,
-                          strikeX: strikeX,
-                          beatsVisibleAhead: beatsVisibleAhead,
-                          beatsPerBar: lesson.beatsPerBar,
+        height: height,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final pxPerBeat = (width - strikeX) / beatsVisibleAhead;
+            final visible = LessonTiming.visibleEvents(
+              lesson.events,
+              playheadBeat,
+              aheadBeats: beatsVisibleAhead + 1,
+              behindBeats: 1.5,
+            );
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(color: Color(0xFF0E0E12)),
+                child: Stack(
+                  children: [
+                    // Painted lane: perspective depth gradient + flowing beat grid
+                    // + a glowing strike line. One cheap CustomPaint on its own
+                    // layer, behind the cards (chunk 016b P5).
+                    Positioned.fill(
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: HighwayBackgroundPainter(
+                            playheadBeat: playheadBeat,
+                            pxPerBeat: pxPerBeat,
+                            strikeX: strikeX,
+                            beatsVisibleAhead: beatsVisibleAhead,
+                            beatsPerBar: lesson.beatsPerBar,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  for (final e in visible)
-                    _EventCard(
-                      event: e,
-                      left: LessonTiming.xForEvent(
-                            e.beat, playheadBeat, pxPerBeat, strikeX) -
-                          _EventCard.width / 2,
-                      proximity: _proximity(e.beat, playheadBeat),
-                      depth: _depth(e.beat, playheadBeat, beatsVisibleAhead),
-                      height: height,
-                    ),
-                ],
+                    for (final e in visible)
+                      _EventCard(
+                        event: e,
+                        left:
+                            LessonTiming.xForEvent(
+                              e.beat,
+                              playheadBeat,
+                              pxPerBeat,
+                              strikeX,
+                            ) -
+                            _EventCard.width / 2,
+                        proximity: _proximity(e.beat, playheadBeat),
+                        depth: _depth(e.beat, playheadBeat, beatsVisibleAhead),
+                        height: height,
+                      ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -124,7 +127,10 @@ class LessonHighway extends StatelessWidget {
   /// Perspective depth: 1.0 at/near the strike line, shrinking to ~0.5 at the
   /// far (future) edge so the lane reads with read-ahead depth.
   static double _depth(
-      double eventBeat, double playheadBeat, double aheadBeats) {
+    double eventBeat,
+    double playheadBeat,
+    double aheadBeats,
+  ) {
     final ahead = (eventBeat - playheadBeat).clamp(0.0, aheadBeats);
     return 1.0 - (ahead / aheadBeats) * 0.5;
   }
@@ -161,12 +167,14 @@ class HighwayBackgroundPainter extends CustomPainter {
       final x = strikeX + (b - playheadBeat) * pxPerBeat;
       if (x < -2 || x > size.width + 2) continue;
       final near =
-          1 - ((b - playheadBeat).abs() / (beatsVisibleAhead + 1)).clamp(0.0, 1.0);
+          1 -
+          ((b - playheadBeat).abs() / (beatsVisibleAhead + 1)).clamp(0.0, 1.0);
       final isDownbeat = (b % beatsPerBar).abs() < 1e-6;
       line
         ..strokeWidth = isDownbeat ? 2 : 1
         ..color = (isDownbeat ? AppColors.primary : Colors.white).withValues(
-            alpha: (isDownbeat ? 0.20 : 0.08) * (0.3 + 0.7 * near));
+          alpha: (isDownbeat ? 0.20 : 0.08) * (0.3 + 0.7 * near),
+        );
       canvas.drawLine(Offset(x, 0), Offset(x, h), line);
     }
 
@@ -234,49 +242,49 @@ class _EventCard extends StatelessWidget {
           child: Opacity(
             opacity: (0.55 + 0.45 * depth).clamp(0.0, 1.0),
             child: Transform.scale(
-            scale: scale,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (event.chord.isNotEmpty) ...[
-                  Text(
-                    event.chord,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: Color.lerp(
-                          Colors.white.withValues(alpha: 0.75), color, proximity),
+              scale: scale,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (event.chord.isNotEmpty) ...[
+                    Text(
+                      event.chord,
+                      style: TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: Color.lerp(
+                          Colors.white.withValues(alpha: 0.75),
+                          color,
+                          proximity,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: 0.15 + 0.25 * proximity),
+                      boxShadow: proximity > 0.6
+                          ? [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.5 * proximity),
+                                blurRadius: 16 * proximity,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Icon(
+                      event.isDown ? Icons.arrow_downward : Icons.arrow_upward,
+                      color: color,
+                      size: 30,
                     ),
                   ),
-                  const SizedBox(height: 6),
                 ],
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withValues(alpha: 0.15 + 0.25 * proximity),
-                    boxShadow: proximity > 0.6
-                        ? [
-                            BoxShadow(
-                              color: color.withValues(
-                                  alpha: 0.5 * proximity),
-                              blurRadius: 16 * proximity,
-                            )
-                          ]
-                        : null,
-                  ),
-                  child: Icon(
-                    event.isDown
-                        ? Icons.arrow_downward
-                        : Icons.arrow_upward,
-                    color: color,
-                    size: 30,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
           ),
         ),
       ),
@@ -291,15 +299,16 @@ class CountInOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Text(
-          '$number',
-          style: TextStyle(
-            fontFamily: 'Montserrat',
-            fontWeight: FontWeight.w900,
-            fontSize: 72,
-            color: AppColors.primary
-                .withValues(alpha: 0.5 + 0.5 * (number / math.max(1, number))),
-          ),
+    child: Text(
+      '$number',
+      style: TextStyle(
+        fontFamily: 'Montserrat',
+        fontWeight: FontWeight.w900,
+        fontSize: 72,
+        color: AppColors.primary.withValues(
+          alpha: 0.5 + 0.5 * (number / math.max(1, number)),
         ),
-      );
+      ),
+    ),
+  );
 }

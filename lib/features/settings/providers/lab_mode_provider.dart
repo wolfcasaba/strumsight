@@ -40,5 +40,6 @@ class LabModeNotifier extends Notifier<bool> {
   }
 }
 
-final labModeProvider =
-    NotifierProvider<LabModeNotifier, bool>(LabModeNotifier.new);
+final labModeProvider = NotifierProvider<LabModeNotifier, bool>(
+  LabModeNotifier.new,
+);

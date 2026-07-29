@@ -19,8 +19,8 @@ class LiveCrnnFrontend {
     required this.sampleRate,
     this.window = 1024,
     this.hop = 256,
-  })  : _ring = Float64List(sampleRate), // 1 s — window needs ~300 ms
-        _logMel = LogMelExtractor(sampleRate: CrnnFrontend.modelSampleRate);
+  }) : _ring = Float64List(sampleRate), // 1 s — window needs ~300 ms
+       _logMel = LogMelExtractor(sampleRate: CrnnFrontend.modelSampleRate);
 
   final int sampleRate;
   final int window;
@@ -63,7 +63,10 @@ class LiveCrnnFrontend {
   /// The same window computed from a WHOLE signal (no ring) — the test
   /// reference and the parity anchor for the streamed path.
   static List<List<double>> referenceWindow(
-      Float64List available, int sampleRate, double onsetFrameStartSec) {
+    Float64List available,
+    int sampleRate,
+    double onsetFrameStartSec,
+  ) {
     final fe = LiveCrnnFrontend(sampleRate: sampleRate);
     fe._append(available, 0);
     final onsetSec = onsetFrameStartSec + 2.5 * fe.hop / sampleRate;
@@ -81,8 +84,10 @@ class LiveCrnnFrontend {
 
     // The 16 k grid maps to source samples at ratio sr/16k; fill what exists.
     final lo44 = (lo16 * sampleRate / mSr).floor();
-    final hi44 = math.min(availableEnd,
-        ((lo16 + segLen) * sampleRate / mSr).ceil());
+    final hi44 = math.min(
+      availableEnd,
+      ((lo16 + segLen) * sampleRate / mSr).ceil(),
+    );
     final oldest = math.max(0, _end - _ring.length);
     final a = math.max(lo44, oldest);
     if (hi44 > a) {
@@ -102,7 +107,8 @@ class LiveCrnnFrontend {
       for (var r = 0; r < rows; r++)
         _logMel
             .processFrame(
-                Float64List.sublistView(seg, r * mHop, r * mHop + _logMel.nFft))
+              Float64List.sublistView(seg, r * mHop, r * mHop + _logMel.nFft),
+            )
             .toList(),
     ];
   }
@@ -114,13 +120,15 @@ class LiveCrnnFrontend {
 /// the heuristic instead ([tryLoad] returns null).
 class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   LiveCrnnStrumClassifier(this._net, {required int sampleRate})
-      : _frontend = LiveCrnnFrontend(sampleRate: sampleRate);
+    : _frontend = LiveCrnnFrontend(sampleRate: sampleRate);
 
   final CrnnStrumNet _net;
   final LiveCrnnFrontend _frontend;
 
-  static LiveCrnnStrumClassifier? tryLoad(String path,
-      {required int sampleRate}) {
+  static LiveCrnnStrumClassifier? tryLoad(
+    String path, {
+    required int sampleRate,
+  }) {
     try {
       final bytes = File(path).readAsBytesSync();
       return LiveCrnnStrumClassifier(
@@ -170,7 +178,10 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     if (probs.length >= 3) {
       if (probs[2] > noStrumThreshold) {
         return const StrumClassification(
-            direction: null, confidence: 0, suppressed: true);
+          direction: null,
+          confidence: 0,
+          suppressed: true,
+        );
       }
       final sum = probs[0] + probs[1];
       final pDown = sum > 0 ? probs[0] / sum : 0.5;

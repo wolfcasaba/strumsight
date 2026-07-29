@@ -14,8 +14,12 @@ import '../onboarding_provider.dart';
 /// Minimal by design (Simply Guitar's lesson: a few taps, then play). Growth =
 /// activation — convert every viral install into an active user (chunk 013).
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen(
-      {super.key, this.onDone, this.onFirstWin, this.primeMic});
+  const OnboardingScreen({
+    super.key,
+    this.onDone,
+    this.onFirstWin,
+    this.primeMic,
+  });
 
   /// Where to go when finished; defaults to the Live tab (overridable in tests).
   final VoidCallback? onDone;
@@ -157,8 +161,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(54),
                     ),
-                    child:
-                        Text(onLast ? l10n.onboardFirstWin : l10n.onboardNext),
+                    child: Text(
+                      onLast ? l10n.onboardFirstWin : l10n.onboardNext,
+                    ),
                   ),
                   // The quieter path for players who just want to explore.
                   if (onLast)
@@ -202,8 +207,11 @@ class _Page extends StatelessWidget {
               children: [
                 Icon(Icons.arrow_downward, size: 64, color: AppColors.primary),
                 SizedBox(width: 12),
-                Icon(Icons.arrow_upward,
-                    size: 64, color: AppColors.confidenceHigh),
+                Icon(
+                  Icons.arrow_upward,
+                  size: 64,
+                  color: AppColors.confidenceHigh,
+                ),
               ],
             )
           else
@@ -241,21 +249,21 @@ class _Dots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var i = 0; i < count; i++)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: i == active ? 22 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: i == active
-                    ? AppColors.primary
-                    : AppColors.primary.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-        ],
-      );
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      for (var i = 0; i < count; i++)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: i == active ? 22 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: i == active
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+    ],
+  );
 }

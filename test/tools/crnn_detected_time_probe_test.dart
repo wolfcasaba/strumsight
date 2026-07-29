@@ -6,8 +6,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/superflux_onset_detector.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/engine/dsp/superflux_onset_detector.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 
@@ -27,8 +27,9 @@ void main() {
         final det = <double>[];
         final d = SuperFluxOnsetDetector(sampleRate: sr);
         for (var s = 0; s + d.window <= pcm.length; s += d.hop) {
-          final t =
-              d.processFrame(Float64List.sublistView(pcm, s, s + d.window));
+          final t = d.processFrame(
+            Float64List.sublistView(pcm, s, s + d.window),
+          );
           if (t != null) det.add(t);
         }
         // Pair each label with its nearest detection within 0.12 s.
@@ -46,12 +47,15 @@ void main() {
             pairs.add((t, bt, dir.index)); // StrumDirection.down=0? verify
           }
         }
-        final labelVerdicts =
-            crnn.classifyClip(pcm, sr, [for (final p in pairs) p.$1]);
-        final detVerdicts =
-            crnn.classifyClip(pcm, sr, [for (final p in pairs) p.$2]);
-        final shiftVerdicts = crnn
-            .classifyClip(pcm, sr, [for (final p in pairs) p.$2 + 0.042]);
+        final labelVerdicts = crnn.classifyClip(pcm, sr, [
+          for (final p in pairs) p.$1,
+        ]);
+        final detVerdicts = crnn.classifyClip(pcm, sr, [
+          for (final p in pairs) p.$2,
+        ]);
+        final shiftVerdicts = crnn.classifyClip(pcm, sr, [
+          for (final p in pairs) p.$2 + 0.042,
+        ]);
         for (var i = 0; i < pairs.length; i++) {
           n++;
           offsets.add(pairs[i].$2 - pairs[i].$1);
@@ -64,12 +68,14 @@ void main() {
       offsets.sort();
       final med = offsets[offsets.length ~/ 2];
       // ignore: avoid_print
-      print('PROBE n=$n atLabel=${(100 * atLabel / n).toStringAsFixed(1)}% '
-          'atDetected=${(100 * atDetected / n).toStringAsFixed(1)}% '
-          'atShifted+42ms=${(100 * atShifted / n).toStringAsFixed(1)}% '
-          'medianOffset=${(med * 1000).toStringAsFixed(0)}ms '
-          'p10=${(offsets[(offsets.length * 0.1).floor()] * 1000).toStringAsFixed(0)}ms '
-          'p90=${(offsets[(offsets.length * 0.9).floor()] * 1000).toStringAsFixed(0)}ms');
+      print(
+        'PROBE n=$n atLabel=${(100 * atLabel / n).toStringAsFixed(1)}% '
+        'atDetected=${(100 * atDetected / n).toStringAsFixed(1)}% '
+        'atShifted+42ms=${(100 * atShifted / n).toStringAsFixed(1)}% '
+        'medianOffset=${(med * 1000).toStringAsFixed(0)}ms '
+        'p10=${(offsets[(offsets.length * 0.1).floor()] * 1000).toStringAsFixed(0)}ms '
+        'p90=${(offsets[(offsets.length * 0.9).floor()] * 1000).toStringAsFixed(0)}ms',
+      );
       expect(n, greaterThan(1500));
     },
     skip: present ? false : 'ml/data/klangio absent',

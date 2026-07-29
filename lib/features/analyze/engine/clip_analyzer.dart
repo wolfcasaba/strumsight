@@ -13,8 +13,12 @@ import 'chroma_denoise.dart';
 /// Re-labels each detected strum's direction at its attack time — the CRNN
 /// deployment seam (r165). Given the whole clip and the attack times, returns
 /// one verdict per time, in order.
-typedef StrumRefiner = List<StrumClassification> Function(
-    Float64List pcm, int sampleRate, List<double> onsetTimes);
+typedef StrumRefiner =
+    List<StrumClassification> Function(
+      Float64List pcm,
+      int sampleRate,
+      List<double> onsetTimes,
+    );
 
 /// Runs the REAL Live DSP over a recorded PCM clip and distils it into a
 /// timeline (chord segments + strum marks). Pure and deterministic — fully
@@ -77,7 +81,10 @@ class ClipAnalyzer {
   /// its direction/confidence for the refiner's verdict. Any refiner failure
   /// keeps the heuristic labels — an analyze must never crash on the model.
   List<TimelineStrum> _refine(
-      List<TimelineStrum> strums, List<double> pcm, int sampleRate) {
+    List<TimelineStrum> strums,
+    List<double> pcm,
+    int sampleRate,
+  ) {
     final refiner = strumRefiner;
     if (refiner == null || strums.isEmpty) return strums;
     try {
@@ -118,14 +125,16 @@ class ClipAnalyzer {
         // The pipeline reuses the same Strum instance until a NEW one is
         // detected, so identity marks a genuinely new strum.
         if (s != null && !identical(s, lastStrum)) {
-          strums.add(TimelineStrum(
-            direction: s.direction,
-            // The strum's own attack time (r145): the feed position runs
-            // 85–165 ms late with ±40 ms jitter (emit cadence + classify
-            // delay), which corrupted fromAnalyze beat quantisation.
-            timeSec: frame.latestStrumTime,
-            confidence: s.confidence,
-          ));
+          strums.add(
+            TimelineStrum(
+              direction: s.direction,
+              // The strum's own attack time (r145): the feed position runs
+              // 85–165 ms late with ±40 ms jitter (emit cadence + classify
+              // delay), which corrupted fromAnalyze beat quantisation.
+              timeSec: frame.latestStrumTime,
+              confidence: s.confidence,
+            ),
+          );
           lastStrum = s;
         }
       }
@@ -137,7 +146,10 @@ class ClipAnalyzer {
   /// → merge the per-frame path into contiguous segments. Boundaries are
   /// stamped at the deciding frame's window centre.
   List<TimelineChord> _chordPass(
-      List<double> pcm, int sampleRate, double duration) {
+    List<double> pcm,
+    int sampleRate,
+    double duration,
+  ) {
     const win = DspConfig.nnlsWindow;
     const hop = DspConfig.nnlsHop;
     if (pcm.length < win) return const [];
@@ -155,8 +167,9 @@ class ClipAnalyzer {
       final tonal =
           chroma != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
       bassFrames.add(tonal ? Float64List.fromList(nc.lastBassChroma) : zero);
-      trebleFrames
-          .add(tonal ? Float64List.fromList(nc.lastTrebleChroma) : zero);
+      trebleFrames.add(
+        tonal ? Float64List.fromList(nc.lastTrebleChroma) : zero,
+      );
       centers.add((start + win / 2) / sampleRate);
     }
     if (bassFrames.isEmpty) return const [];
@@ -193,16 +206,22 @@ class ClipAnalyzer {
       // behaviour the UI was built around.
       if (label != null && label != openLabel) {
         if (openLabel != null) {
-          chords.add(TimelineChord(
-              label: openLabel, startSec: openStart, endSec: centers[i]));
+          chords.add(
+            TimelineChord(
+              label: openLabel,
+              startSec: openStart,
+              endSec: centers[i],
+            ),
+          );
         }
         openLabel = label;
         openStart = centers[i];
       }
     }
     if (openLabel != null) {
-      chords.add(TimelineChord(
-          label: openLabel, startSec: openStart, endSec: duration));
+      chords.add(
+        TimelineChord(label: openLabel, startSec: openStart, endSec: duration),
+      );
     }
     return chords;
   }

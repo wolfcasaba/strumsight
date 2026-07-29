@@ -5,9 +5,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 
@@ -27,11 +27,14 @@ void main() {
         final events = readStrums('$dataDir/recording_$id.strums');
         final analyzer = StrumAnalyzer(sampleRate: sr);
         final det = <double>[];
-        for (var s = 0;
-            s + DspConfig.onsetWindow <= pcm.length;
-            s += DspConfig.onsetHop) {
+        for (
+          var s = 0;
+          s + DspConfig.onsetWindow <= pcm.length;
+          s += DspConfig.onsetHop
+        ) {
           final e = analyzer.process(
-              Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow));
+            Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow),
+          );
           if (e != null) det.add(e.timeSec);
         }
         final pairs = <(double, int)>[]; // (event time, label)
@@ -47,8 +50,9 @@ void main() {
           if (bt != null && best <= 0.12) pairs.add((bt, dir.index));
         }
         for (var s = 0; s < shifts.length; s++) {
-          final v = crnn.classifyClip(
-              pcm, sr, [for (final p in pairs) p.$1 + shifts[s]]);
+          final v = crnn.classifyClip(pcm, sr, [
+            for (final p in pairs) p.$1 + shifts[s],
+          ]);
           for (var i = 0; i < pairs.length; i++) {
             if (v[i].direction!.index == pairs[i].$2) correct[s]++;
           }
@@ -56,10 +60,9 @@ void main() {
         n += pairs.length;
       }
       // ignore: avoid_print
-      print('SHIFT SWEEP n=$n: ${[
-        for (var s = 0; s < shifts.length; s++)
-          '+${(shifts[s] * 1000).round()}ms=${(100 * correct[s] / n).toStringAsFixed(1)}%'
-      ].join(' ')}');
+      print(
+        'SHIFT SWEEP n=$n: ${[for (var s = 0; s < shifts.length; s++) '+${(shifts[s] * 1000).round()}ms=${(100 * correct[s] / n).toStringAsFixed(1)}%'].join(' ')}',
+      );
       expect(n, greaterThan(1500));
     },
     skip: present ? false : 'ml/data/klangio absent',

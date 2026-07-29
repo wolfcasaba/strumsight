@@ -13,8 +13,10 @@ class YinPitchDetector {
     this.threshold = 0.12,
     double minFrequency = 60,
   }) : _maxLag = (sampleRate / minFrequency).floor() {
-    assert(_maxLag < bufferSize ~/ 2,
-        'buffer must hold ≥2 periods of the lowest pitch');
+    assert(
+      _maxLag < bufferSize ~/ 2,
+      'buffer must hold ≥2 periods of the lowest pitch',
+    );
     _d = Float64List(_maxLag + 1);
     _cmndf = Float64List(_maxLag + 1);
   }
@@ -93,7 +95,18 @@ class YinPitchDetector {
 /// Maps a frequency to the nearest note + cents offset (chunk 008).
 ({String note, double cents}) noteForFrequency(double f0, {double a4 = 440}) {
   const names = [
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
   final midi = 69 + 12 * (math.log(f0 / a4) / math.ln2);
   final nearest = midi.round();

@@ -6,7 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/superflux_onset_detector.dart';
+import 'package:strumsight/features/live/engine/dsp/superflux_onset_detector.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 
@@ -37,10 +37,14 @@ void main() {
         for (final ((pcm, sr), events) in takes) {
           final det = <double>[];
           final d = SuperFluxOnsetDetector(
-              sampleRate: sr, delta: delta, lambda: lambda);
+            sampleRate: sr,
+            delta: delta,
+            lambda: lambda,
+          );
           for (var s = 0; s + d.window <= pcm.length; s += d.hop) {
-            final t =
-                d.processFrame(Float64List.sublistView(pcm, s, s + d.window));
+            final t = d.processFrame(
+              Float64List.sublistView(pcm, s, s + d.window),
+            );
             if (t != null) det.add(t);
           }
           detected += det.length;
@@ -53,10 +57,12 @@ void main() {
           }
         }
         // ignore: avoid_print
-        print('SWEEP delta=$delta lambda=$lambda '
-            'recall=${(100 * hit / labels).round()}% '
-            'det=$detected fa=$falseAlarms '
-            'precision=${(100 * (detected - falseAlarms) / detected).round()}%');
+        print(
+          'SWEEP delta=$delta lambda=$lambda '
+          'recall=${(100 * hit / labels).round()}% '
+          'det=$detected fa=$falseAlarms '
+          'precision=${(100 * (detected - falseAlarms) / detected).round()}%',
+        );
       }
       expect(present, isTrue);
     },

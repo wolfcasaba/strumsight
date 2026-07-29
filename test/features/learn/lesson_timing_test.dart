@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/lesson_timing.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/lesson_timing.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
 
 void main() {
   test('beatForElapsed converts seconds to beats at a tempo', () {
@@ -34,12 +34,17 @@ void main() {
     expect(LessonTiming.countInNumber(2.0, 4), isNull);
   });
 
-  test('xForEvent puts an event on the strike line when its beat == playhead',
-      () {
-    expect(LessonTiming.xForEvent(4, 4, 40, 68), 68); // on the line
-    expect(LessonTiming.xForEvent(5, 4, 40, 68), 108); // one beat ahead → right
-    expect(LessonTiming.xForEvent(3, 4, 40, 68), 28); // one beat past → left
-  });
+  test(
+    'xForEvent puts an event on the strike line when its beat == playhead',
+    () {
+      expect(LessonTiming.xForEvent(4, 4, 40, 68), 68); // on the line
+      expect(
+        LessonTiming.xForEvent(5, 4, 40, 68),
+        108,
+      ); // one beat ahead → right
+      expect(LessonTiming.xForEvent(3, 4, 40, 68), 28); // one beat past → left
+    },
+  );
 
   test('isFinished only after the lesson plus a bar of ring-out', () {
     // 8 beats total, 4 beats/bar → finished at playhead >= 12.
@@ -50,8 +55,12 @@ void main() {
 
   test('visibleEvents windows around the playhead', () {
     final lesson = Lessons.downUpGroove; // events across 4 bars
-    final near = LessonTiming.visibleEvents(lesson.events, 0,
-        aheadBeats: 4, behindBeats: 1);
+    final near = LessonTiming.visibleEvents(
+      lesson.events,
+      0,
+      aheadBeats: 4,
+      behindBeats: 1,
+    );
     // Only early events (beat within [-1, 4]) are visible at playhead 0.
     expect(near.every((e) => e.beat >= -1 && e.beat <= 4), isTrue);
     expect(near.length, lessThan(lesson.events.length));

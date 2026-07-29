@@ -45,11 +45,14 @@ class ChordDiagram extends ConsumerWidget {
             top: size * 0.18,
             left: mirror ? null : -2,
             right: mirror ? -2 : null,
-            child: Text('${baseFret + 1}fr',
-                style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: onSurface.withValues(alpha: 0.7))),
+            child: Text(
+              '${baseFret + 1}fr',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: onSurface.withValues(alpha: 0.7),
+              ),
+            ),
           ),
         ],
       );
@@ -58,12 +61,15 @@ class ChordDiagram extends ConsumerWidget {
         ? Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      height: 1.1)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Montserrat',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  height: 1.1,
+                ),
+              ),
               const SizedBox(height: 2),
               grid,
             ],
@@ -72,13 +78,11 @@ class ChordDiagram extends ConsumerWidget {
     // Painter-only content is invisible to a screen reader — speak the
     // fingering in tab notation, always low-E → high-E even when the drawing
     // is mirrored for left-handed players (round 88).
-    final fingering =
-        shape.frets.map((f) => f < 0 ? 'x' : '$f').join(' ');
+    final fingering = shape.frets.map((f) => f < 0 ? 'x' : '$f').join(' ');
     return Semantics(
-      label: AppLocalizations.of(context).chordDiagramSemantics(
-        label,
-        fingering,
-      ),
+      label: AppLocalizations.of(
+        context,
+      ).chordDiagramSemantics(label, fingering),
       excludeSemantics: true,
       child: content,
     );
@@ -129,8 +133,11 @@ class _ChordPainter extends CustomPainter {
       final y = topPad + f * rowGap;
       // The thick nut only exists at the top of an OPEN-position window; a
       // shifted (base-fret) window has an ordinary fret line there.
-      canvas.drawLine(Offset(left, y), Offset(left + gridW, y),
-          (f == 0 && baseFret == 0) ? nut : line);
+      canvas.drawLine(
+        Offset(left, y),
+        Offset(left + gridW, y),
+        (f == 0 && baseFret == 0) ? nut : line,
+      );
     }
 
     // Markers + dots per string (mirrored for left-handed).
@@ -142,8 +149,9 @@ class _ChordPainter extends CustomPainter {
         // ○ (open) or × (muted) above the nut.
         tp
           ..text = TextSpan(
-              text: fret == 0 ? '○' : '×',
-              style: TextStyle(color: ink.withValues(alpha: 0.8), fontSize: 12))
+            text: fret == 0 ? '○' : '×',
+            style: TextStyle(color: ink.withValues(alpha: 0.8), fontSize: 12),
+          )
           ..layout();
         tp.paint(canvas, Offset(x - tp.width / 2, 0));
       } else {

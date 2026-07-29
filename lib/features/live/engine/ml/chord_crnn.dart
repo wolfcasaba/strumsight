@@ -47,8 +47,9 @@ class ChordCrnn {
       return v;
     }
 
-    final magic = String.fromCharCodes(
-        [for (var i = 0; i < 4; i++) bytes.getUint8(off + i)]);
+    final magic = String.fromCharCodes([
+      for (var i = 0; i < 4; i++) bytes.getUint8(off + i),
+    ]);
     off += 4;
     if (magic != 'CCRN') {
       throw FormatException('not a chord_crnn.bin (magic $magic)');
@@ -61,8 +62,9 @@ class ChordCrnn {
     final arrays = <String, _NdArray>{};
     for (var a = 0; a < count; a++) {
       final nameLen = u32();
-      final name = String.fromCharCodes(
-          [for (var i = 0; i < nameLen; i++) bytes.getUint8(off + i)]);
+      final name = String.fromCharCodes([
+        for (var i = 0; i < nameLen; i++) bytes.getUint8(off + i),
+      ]);
       off += nameLen;
       final ndim = u32();
       final dims = [for (var i = 0; i < ndim; i++) u32()];
@@ -165,8 +167,13 @@ class ChordCrnn {
   /// as the Keras Conv2D(activation="relu") → BatchNormalization graph.
   _Tensor3 _block(_Tensor3 x, String conv, String bn) {
     var y = _conv3x3Relu(x, _arrays['${conv}_k']!, _arrays['${conv}_b']!);
-    y = _batchNorm(y, _arrays['${bn}_gamma']!, _arrays['${bn}_beta']!,
-        _arrays['${bn}_mean']!, _arrays['${bn}_var']!);
+    y = _batchNorm(
+      y,
+      _arrays['${bn}_gamma']!,
+      _arrays['${bn}_beta']!,
+      _arrays['${bn}_mean']!,
+      _arrays['${bn}_var']!,
+    );
     return _maxPoolW2(y);
   }
 
@@ -174,7 +181,12 @@ class ChordCrnn {
   ///   y = gamma * (x - moving_mean) / sqrt(moving_var + eps) + beta
   /// Applied in place per channel.
   static _Tensor3 _batchNorm(
-      _Tensor3 x, _NdArray gamma, _NdArray beta, _NdArray mean, _NdArray var_) {
+    _Tensor3 x,
+    _NdArray gamma,
+    _NdArray beta,
+    _NdArray mean,
+    _NdArray var_,
+  ) {
     const eps = 1e-3;
     final c = x.c;
     final scale = Float64List(c);
@@ -255,8 +267,12 @@ class ChordCrnn {
     for (var i = 0; i < out.h; i++) {
       for (var j = 0; j < out.w; j++) {
         for (var c = 0; c < x.c; c++) {
-          out.set(i, j, c,
-              math.max(x.get(i, 2 * j, c), x.get(i, 2 * j + 1, c)));
+          out.set(
+            i,
+            j,
+            c,
+            math.max(x.get(i, 2 * j, c), x.get(i, 2 * j + 1, c)),
+          );
         }
       }
     }
@@ -271,8 +287,11 @@ class ChordCrnn {
   /// For [reverse]=true the sequence is consumed t=T-1..0 and each output is
   /// stored at its ORIGINAL time index, so the caller can concat forward and
   /// backward frame-aligned exactly like Keras Bidirectional(merge='concat').
-  List<Float64List> _gruSeq(List<Float64List> xs, String prefix,
-      {required bool reverse}) {
+  List<Float64List> _gruSeq(
+    List<Float64List> xs,
+    String prefix, {
+    required bool reverse,
+  }) {
     final gk = _arrays['${prefix}_k']!; // (stepLen, 3*units)
     final grk = _arrays['${prefix}_rk']!; // (units, 3*units)
     final gb = _arrays['${prefix}_b']!; // (2, 3*units)

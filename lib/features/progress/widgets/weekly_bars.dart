@@ -35,12 +35,14 @@ class WeeklyBars extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           for (final d in days)
-            Expanded(child: _Bar(
-              day: d,
-              isToday: d.day == todayDay,
-              peakMinutes: peakMinutes,
-              localeName: locale,
-            )),
+            Expanded(
+              child: _Bar(
+                day: d,
+                isToday: d.day == todayDay,
+                peakMinutes: peakMinutes,
+                localeName: locale,
+              ),
+            ),
         ],
       ),
     );
@@ -66,39 +68,41 @@ class _Bar extends StatelessWidget {
     final frac = peakMinutes == 0 ? 0.0 : minutes / peakMinutes;
     final height = day.isEmpty
         ? WeeklyBars._minBar
-        : (WeeklyBars._minBar + frac * (WeeklyBars._maxBar - WeeklyBars._minBar));
+        : (WeeklyBars._minBar +
+              frac * (WeeklyBars._maxBar - WeeklyBars._minBar));
     final color = isToday
         ? AppColors.primary
         : day.isEmpty
-            ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.25)
-            : AppColors.primary.withValues(alpha: 0.45);
+        ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.25)
+        : AppColors.primary.withValues(alpha: 0.45);
 
     // A screen reader would otherwise hear disconnected "12" / "M" fragments
     // with no unit or day (round 127); speak the whole bar as one fact.
     return Semantics(
-      label: AppLocalizations.of(context)
-          .progressBarSemantic(_weekdayFull(day.day, localeName), minutes),
+      label: AppLocalizations.of(
+        context,
+      ).progressBarSemantic(_weekdayFull(day.day, localeName), minutes),
       excludeSemantics: true,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-        Text(
-          minutes > 0 ? '$minutes' : '',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: isToday ? AppColors.primary : Theme.of(context).hintColor,
+          Text(
+            minutes > 0 ? '$minutes' : '',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: isToday ? AppColors.primary : Theme.of(context).hintColor,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Container(
-          width: 14,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+          const SizedBox(height: 2),
+          Container(
+            width: 14,
+            height: height,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+            ),
           ),
-        ),
           const SizedBox(height: 6),
           Text(
             _weekdayLetter(day.day, localeName),

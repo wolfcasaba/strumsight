@@ -7,10 +7,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 import 'klangio_real_ab_test.dart' show readWav, readStrums, evalIds, dataDir;
 
@@ -37,15 +37,19 @@ void main() {
         final (pcm, sr) = readWav('$dataDir/recording_${id}_phone.wav');
         final events = readStrums('$dataDir/recording_$id.strums');
         final classifier = LiveCrnnStrumClassifier.tryLoad(
-            'assets/ml/strum_crnn_live.bin',
-            sampleRate: sr)!;
+          'assets/ml/strum_crnn_live.bin',
+          sampleRate: sr,
+        )!;
         final analyzer = StrumAnalyzer(sampleRate: sr, classifier: classifier);
         final det = <StrumEvent>[];
-        for (var s = 0;
-            s + DspConfig.onsetWindow <= pcm.length;
-            s += DspConfig.onsetHop) {
+        for (
+          var s = 0;
+          s + DspConfig.onsetWindow <= pcm.length;
+          s += DspConfig.onsetHop
+        ) {
           final e = analyzer.process(
-              Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow));
+            Float64List.sublistView(pcm, s, s + DspConfig.onsetWindow),
+          );
           if (e != null) det.add(e);
         }
         for (final e in det) {
@@ -71,15 +75,18 @@ void main() {
       faConf.sort();
       double med(List<double> xs) => xs[xs.length ~/ 2];
       // ignore: avoid_print
-      print('CONF PROBE matched=${matchedConf.length} '
-          'median=${med(matchedConf).toStringAsFixed(2)} | '
-          'falseAlarms=${faConf.length} median=${med(faConf).toStringAsFixed(2)} | '
-          'calibration: ${[
-        for (var b = 0; b < bucketN.length; b++)
-          '${b == 0 ? '<${edges[0]}' : b == bucketN.length - 1 ? '>=${edges.last}' : '${edges[b - 1]}-${edges[b]}'}'
+      print(
+        'CONF PROBE matched=${matchedConf.length} '
+        'median=${med(matchedConf).toStringAsFixed(2)} | '
+        'falseAlarms=${faConf.length} median=${med(faConf).toStringAsFixed(2)} | '
+        'calibration: ${[for (var b = 0; b < bucketN.length; b++) '${b == 0
+                  ? '<${edges[0]}'
+                  : b == bucketN.length - 1
+                  ? '>=${edges.last}'
+                  : '${edges[b - 1]}-${edges[b]}'}'
               ' -> n=${bucketN[b]} acc='
-              '${(100 * bucketCorrect[b] / (bucketN[b] == 0 ? 1 : bucketN[b])).round()}%'
-      ].join(', ')}');
+              '${(100 * bucketCorrect[b] / (bucketN[b] == 0 ? 1 : bucketN[b])).round()}%'].join(', ')}',
+      );
       expect(matchedConf.length, greaterThan(1000));
     },
     skip: present ? false : 'ml/data/klangio absent',

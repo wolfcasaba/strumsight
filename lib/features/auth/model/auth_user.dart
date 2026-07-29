@@ -8,10 +8,8 @@ class AuthUser {
   final int id;
   final String email;
 
-  factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-        id: json['id'] as int,
-        email: json['email'] as String,
-      );
+  factory AuthUser.fromJson(Map<String, dynamic> json) =>
+      AuthUser(id: json['id'] as int, email: json['email'] as String);
 
   @override
   bool operator ==(Object other) =>

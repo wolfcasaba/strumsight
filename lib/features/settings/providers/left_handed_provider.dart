@@ -38,5 +38,6 @@ class LeftHandedController extends Notifier<bool> {
   }
 }
 
-final leftHandedProvider =
-    NotifierProvider<LeftHandedController, bool>(LeftHandedController.new);
+final leftHandedProvider = NotifierProvider<LeftHandedController, bool>(
+  LeftHandedController.new,
+);

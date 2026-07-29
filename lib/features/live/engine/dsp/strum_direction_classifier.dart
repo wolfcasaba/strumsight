@@ -87,8 +87,10 @@ class HeuristicStrumClassifier implements StrumDirectionClassifier {
     required int onsetFrame,
     required int currentFrame,
   }) {
-    assert(currentFrame == _lastObservedFrame,
-        'classifyAt must be called in step with observe()');
+    assert(
+      currentFrame == _lastObservedFrame,
+      'classifyAt must be called in step with observe()',
+    );
     final h = _history.toList();
     // History index of the onset frame.
     final oIdx = h.length - 1 - (currentFrame - onsetFrame);
@@ -123,10 +125,12 @@ class HeuristicStrumClassifier implements StrumDirectionClassifier {
     // Cue 1 — sub-band rise order on the BASELINE-SUBTRACTED envelopes: which
     // band's NEW energy reaches 50% of its in-window peak first. Bass first →
     // down, treble first → up.
-    final lowRise =
-        _firstRise([for (final x in win) math.max(0.0, x.lowEnergy - baseLow)]);
-    final highRise = _firstRise(
-        [for (final x in win) math.max(0.0, x.highEnergy - baseHigh)]);
+    final lowRise = _firstRise([
+      for (final x in win) math.max(0.0, x.lowEnergy - baseLow),
+    ]);
+    final highRise = _firstRise([
+      for (final x in win) math.max(0.0, x.highEnergy - baseHigh),
+    ]);
     int? gap; // positive → low first → down
     if (lowRise != null && highRise != null) gap = highRise - lowRise;
 

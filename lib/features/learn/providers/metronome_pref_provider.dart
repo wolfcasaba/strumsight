@@ -37,6 +37,6 @@ class MetronomeMutedController extends Notifier<bool> {
   }
 }
 
-final metronomeMutedProvider =
-    NotifierProvider<MetronomeMutedController, bool>(
-        MetronomeMutedController.new);
+final metronomeMutedProvider = NotifierProvider<MetronomeMutedController, bool>(
+  MetronomeMutedController.new,
+);

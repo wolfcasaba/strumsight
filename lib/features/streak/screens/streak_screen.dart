@@ -50,7 +50,10 @@ class StreakScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
-            _Hero(count: streak.current, label: l10n.streakDays(streak.current)),
+            _Hero(
+              count: streak.current,
+              label: l10n.streakDays(streak.current),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -76,10 +79,10 @@ class StreakScreen extends ConsumerWidget {
               text: done
                   ? l10n.streakDoneToday
                   : broken
-                      ? l10n.streakBroken
-                      : atRisk
-                          ? l10n.streakAtRisk
-                          : l10n.streakStart,
+                  ? l10n.streakBroken
+                  : atRisk
+                  ? l10n.streakAtRisk
+                  : l10n.streakStart,
               positive: done,
             ),
             // Skill reframe (chunk 013 #2 TODO, r152 — Simply's evidence:
@@ -132,10 +135,9 @@ class StreakScreen extends ConsumerWidget {
                 l10n.streakSkillGrowing,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
             ],
@@ -231,19 +233,23 @@ class _Stat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest
-            .withValues(alpha: 0.3),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
           Icon(icon, size: 20, color: AppColors.primary),
           const SizedBox(height: 6),
-          Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Montserrat',
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+            ),
+          ),
           Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -267,9 +273,11 @@ class _StatusBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text(text,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -285,16 +293,20 @@ class _ChallengeCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(challenge.name,
-              style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20)),
+          Text(
+            challenge.name,
+            style: const TextStyle(
+              fontFamily: 'Montserrat',
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+            ),
+          ),
           const SizedBox(height: 14),
           Wrap(
             spacing: 6,

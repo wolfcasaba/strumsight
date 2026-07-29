@@ -1,18 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/lesson_scorer.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/learn/lesson_scorer.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 const _d = StrumDirection.down;
 const _u = StrumDirection.up;
 
 Lesson _lesson() => Lesson(
-      id: 't',
-      name: 'T',
-      bpm: 60,
-      chords: const ['C'],
-      pattern: const [_d, _u, null, null, null, null, null, null],
-    );
+  id: 't',
+  name: 'T',
+  bpm: 60,
+  chords: const ['C'],
+  pattern: const [_d, _u, null, null, null, null, null, null],
+);
 
 /// Chunk 016b P3 — latency calibration. The mic→DSP→score path detects a
 /// strum ~100–200 ms after it was PLAYED (device-specific). Without
@@ -60,8 +60,11 @@ void main() {
     final s = LessonScorer(_lesson());
     s.registerStrum(_u, 4.0); // the beat-0 event wants a DOWN stroke
     expect(s.lastResult, HitResult.wrongDirection);
-    expect(s.lastExpectedDirection, _d,
-        reason: 'the UI badge must say which way the stroke SHOULD have gone');
+    expect(
+      s.lastExpectedDirection,
+      _d,
+      reason: 'the UI badge must say which way the stroke SHOULD have gone',
+    );
     // A correct hit clears it (no stale coaching on the next verdict).
     s.registerStrum(_u, 4.5);
     expect(s.lastResult, HitResult.hit);

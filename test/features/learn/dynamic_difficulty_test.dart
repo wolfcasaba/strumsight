@@ -1,24 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/lesson_scorer.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/learn/lesson_scorer.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 /// Round 154 — dynamic difficulty (016b P4): the fail-streak signal that
 /// offers the Easy cut. Consecutive misses/wrong-directions accumulate; one
 /// clean hit resets — a struggling player gets a hand, a recovering one
 /// doesn't get nagged.
 Lesson _lesson() => Lesson(
-      id: 'dd',
-      name: 'DD',
-      bpm: 60,
-      chords: const ['C', 'C'],
-      pattern: const [
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-        StrumDirection.down, StrumDirection.down,
-      ],
-    );
+  id: 'dd',
+  name: 'DD',
+  bpm: 60,
+  chords: const ['C', 'C'],
+  pattern: const [
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+    StrumDirection.down,
+  ],
+);
 
 void main() {
   test('4 consecutive failures raise the suggestion', () {

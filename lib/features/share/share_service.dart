@@ -39,14 +39,13 @@ class ShareService {
     required AnalyzeResult result,
     int capo = 0,
     Rect? sharePositionOrigin,
-  }) =>
-      shareImage(
-        boundaryKey: boundaryKey,
-        caption: ShareContent.caption(result, capo: capo),
-        fileName: ShareContent.fileName(result),
-        fallbackText: ShareContent.caption(result, capo: capo),
-        sharePositionOrigin: sharePositionOrigin,
-      );
+  }) => shareImage(
+    boundaryKey: boundaryKey,
+    caption: ShareContent.caption(result, capo: capo),
+    fileName: ShareContent.fileName(result),
+    fallbackText: ShareContent.caption(result, capo: capo),
+    sharePositionOrigin: sharePositionOrigin,
+  );
 
   /// Generic: capture any [RepaintBoundary] to PNG and share it with [caption].
   /// Falls back to a text-only share (of [fallbackText] ?? [caption]) if the
@@ -60,20 +59,24 @@ class ShareService {
   }) async {
     final png = await capturePng(boundaryKey);
     if (png == null) {
-      await SharePlus.instance.share(ShareParams(
-        text: fallbackText ?? caption,
-        subject: 'StrumSight',
-        sharePositionOrigin: sharePositionOrigin,
-      ));
+      await SharePlus.instance.share(
+        ShareParams(
+          text: fallbackText ?? caption,
+          subject: 'StrumSight',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
       return;
     }
     final file = await _writeTemp(png, fileName);
-    await SharePlus.instance.share(ShareParams(
-      files: [XFile(file.path, mimeType: 'image/png')],
-      text: caption,
-      subject: 'StrumSight',
-      sharePositionOrigin: sharePositionOrigin,
-    ));
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'image/png')],
+        text: caption,
+        subject: 'StrumSight',
+        sharePositionOrigin: sharePositionOrigin,
+      ),
+    );
   }
 
   /// Share just the caption text (no image) — the always-available path.
@@ -82,11 +85,13 @@ class ShareService {
     int capo = 0,
     Rect? sharePositionOrigin,
   }) async {
-    await SharePlus.instance.share(ShareParams(
-      text: ShareContent.caption(result, capo: capo),
-      subject: 'My StrumSight practice',
-      sharePositionOrigin: sharePositionOrigin,
-    ));
+    await SharePlus.instance.share(
+      ShareParams(
+        text: ShareContent.caption(result, capo: capo),
+        subject: 'My StrumSight practice',
+        sharePositionOrigin: sharePositionOrigin,
+      ),
+    );
   }
 
   Future<File> _writeTemp(Uint8List bytes, String name) async {

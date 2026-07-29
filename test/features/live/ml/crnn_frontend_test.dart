@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/crnn_frontend.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_frontend.dart';
 
 /// The Dart ports feeding the CRNN must mirror the Python training pipeline
 /// exactly (ml/prepare_dataset.py::_read_wav resample, ml/features.py::
@@ -12,8 +12,7 @@ void main() {
   group('resampleLinear', () {
     test('mirrors np.interp over linspace(0, n-1, round(n*to/from))', () {
       // 8 samples at 4 Hz -> 4 samples at 2 Hz: positions 0, 7/3, 14/3, 7.
-      final x = Float64List.fromList(
-          [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+      final x = Float64List.fromList([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
       final y = CrnnFrontend.resampleLinear(x, 4, 2);
       expect(y, hasLength(4));
       expect(y[0], closeTo(0.0, 1e-12));
@@ -48,7 +47,9 @@ void main() {
     // so slicing mistakes are visible.
     final frames = [
       for (var i = 0; i < 20; i++)
-        Float64List(128)..[0] = i.toDouble()..[127] = -i.toDouble(),
+        Float64List(128)
+          ..[0] = i.toDouble()
+          ..[127] = -i.toDouble(),
     ];
 
     test('cuts PRE=3 before and POST=12 after the onset frame', () {

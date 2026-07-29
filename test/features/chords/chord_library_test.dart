@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/chords/screens/chord_library_screen.dart';
-import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
+import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 void main() {
   test('allLabels exposes the full catalogue', () {
@@ -13,15 +13,18 @@ void main() {
     expect(labels.length, greaterThan(15));
   });
 
-  testWidgets('the library groups shapes by type and renders diagrams',
-      (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+  testWidgets('the library groups shapes by type and renders diagrams', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     expect(find.text('MAJOR'), findsOneWidget);
@@ -30,13 +33,15 @@ void main() {
   });
 
   testWidgets('the search box filters the catalogue', (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'sus');
@@ -50,13 +55,15 @@ void main() {
 
   testWidgets('a search with no matches shows an empty state, not a blank '
       'screen (round 133)', (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'zzzz');

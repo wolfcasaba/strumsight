@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/tempo_tracker.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/tempo_tracker.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 import '../../../support/synth.dart';
 
@@ -25,8 +25,11 @@ List<StrumEvent> analyze(Float64List signal) {
 void main() {
   test('a single staggered strum produces exactly one onset', () {
     final events = analyze(strumSignal(lowFirst: true));
-    expect(events.length, 1,
-        reason: '6 string hits over ~40 ms must merge into ONE strum');
+    expect(
+      events.length,
+      1,
+      reason: '6 string hits over ~40 ms must merge into ONE strum',
+    );
   });
 
   test('silence produces no events', () {
@@ -45,34 +48,46 @@ void main() {
     expect(events.single.confidence, greaterThan(0.45));
   });
 
-  test('fast overlapping strums keep correct direction (ring-out isolation)',
-      () {
-    // 8th notes at 120 BPM (250 ms apart) each ringing 0.5 s → every strum
-    // lands while the previous is still sounding. Before round 59 the absolute
-    // sub-band cue read the ring-out and the direction call collapsed; the
-    // onset-relative baseline must isolate each strum's own attack.
-    final dirs = [true, false, true, false, true, false];
-    final events = analyze(overlappingStrums(
-      lowFirstPerStrum: dirs,
-      gapSeconds: 0.25,
-      ringSeconds: 0.5,
-    ));
-    expect(events.length, greaterThanOrEqualTo(6),
-        reason: 'all six overlapping strums must still register as onsets');
-    var correct = 0;
-    for (var i = 0; i < dirs.length && i < events.length; i++) {
-      final want = dirs[i] ? StrumDirection.down : StrumDirection.up;
-      if (events[i].direction == want) correct++;
-    }
-    expect(correct, greaterThanOrEqualTo(5),
-        reason: 'baseline subtraction must isolate each strum from ring-out');
-  });
+  test(
+    'fast overlapping strums keep correct direction (ring-out isolation)',
+    () {
+      // 8th notes at 120 BPM (250 ms apart) each ringing 0.5 s → every strum
+      // lands while the previous is still sounding. Before round 59 the absolute
+      // sub-band cue read the ring-out and the direction call collapsed; the
+      // onset-relative baseline must isolate each strum's own attack.
+      final dirs = [true, false, true, false, true, false];
+      final events = analyze(
+        overlappingStrums(
+          lowFirstPerStrum: dirs,
+          gapSeconds: 0.25,
+          ringSeconds: 0.5,
+        ),
+      );
+      expect(
+        events.length,
+        greaterThanOrEqualTo(6),
+        reason: 'all six overlapping strums must still register as onsets',
+      );
+      var correct = 0;
+      for (var i = 0; i < dirs.length && i < events.length; i++) {
+        final want = dirs[i] ? StrumDirection.down : StrumDirection.up;
+        if (events[i].direction == want) correct++;
+      }
+      expect(
+        correct,
+        greaterThanOrEqualTo(5),
+        reason: 'baseline subtraction must isolate each strum from ring-out',
+      );
+    },
+  );
 
   test('alternating pattern detects all four strums in order', () {
-    final events = analyze(strumPattern(
-      lowFirstPerStrum: [true, false, true, false],
-      gapSeconds: 0.5,
-    ));
+    final events = analyze(
+      strumPattern(
+        lowFirstPerStrum: [true, false, true, false],
+        gapSeconds: 0.5,
+      ),
+    );
     expect(events.length, 4);
     expect(events[0].direction, StrumDirection.down);
     expect(events[1].direction, StrumDirection.up);
@@ -89,9 +104,13 @@ void main() {
   // 23→1 false onsets; 180/200 BPM 16ths 10-11/12 → 12/12).
   test('constant-amplitude vibrato yields at most the initial attack', () {
     final events = analyze(vibratoNote(freq: 440, seconds: 3.0, amp: 0.25));
-    expect(events.length, lessThanOrEqualTo(1),
-        reason: 'a sustained bend/vibrato must not hallucinate strums '
-            '(got ${events.map((e) => e.timeSec).toList()})');
+    expect(
+      events.length,
+      lessThanOrEqualTo(1),
+      reason:
+          'a sustained bend/vibrato must not hallucinate strums '
+          '(got ${events.map((e) => e.timeSec).toList()})',
+    );
   });
 
   test('180 BPM 16th-note strums are all detected', () {
@@ -109,8 +128,11 @@ void main() {
       final i = remaining.indexWhere((t) => (t - e.timeSec).abs() <= 0.05);
       if (i >= 0) remaining.removeAt(i);
     }
-    expect(remaining, isEmpty,
-        reason: 'missed strums at ${remaining.toList()}');
+    expect(
+      remaining,
+      isEmpty,
+      reason: 'missed strums at ${remaining.toList()}',
+    );
   });
 
   test('reported onset time tracks the true attack within ±6 ms (r144)', () {
@@ -121,7 +143,10 @@ void main() {
     for (final stagger in [4.0, 8.0, 12.0]) {
       for (final amp in [1.0, 0.3]) {
         final base = strumSignal(
-            lowFirst: true, staggerMs: stagger, leadSilenceSeconds: 0.2);
+          lowFirst: true,
+          staggerMs: stagger,
+          leadSilenceSeconds: 0.2,
+        );
         final signal = Float64List(base.length);
         for (var i = 0; i < base.length; i++) {
           signal[i] = base[i] * amp;
@@ -133,9 +158,13 @@ void main() {
           if (e != null && reported == null) reported = e.timeSec;
         }
         expect(reported, isNotNull);
-        expect((reported! - 0.2).abs(), lessThan(0.006),
-            reason: 'stagger=$stagger amp=$amp bias='
-                '${((reported - 0.2) * 1000).toStringAsFixed(1)}ms');
+        expect(
+          (reported! - 0.2).abs(),
+          lessThan(0.006),
+          reason:
+              'stagger=$stagger amp=$amp bias='
+              '${((reported - 0.2) * 1000).toStringAsFixed(1)}ms',
+        );
       }
     }
   });
@@ -151,8 +180,11 @@ void main() {
       analyzer.process(frame);
       if (analyzer.onsetJustFired) fired++;
     }
-    expect(fired, 3,
-        reason: 'one onset signal per strum — feeds the Viterbi switch boost');
+    expect(
+      fired,
+      3,
+      reason: 'one onset signal per strum — feeds the Viterbi switch boost',
+    );
   });
 
   test('TempoTracker: 0.5 s spacing → 120 BPM', () {

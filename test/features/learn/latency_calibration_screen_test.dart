@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/screens/latency_calibration_screen.dart';
-import 'package:music_theory/features/settings/providers/input_latency_provider.dart';
-import 'package:music_theory/features/settings/providers/visual_latency_provider.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/screens/latency_calibration_screen.dart';
+import 'package:strumsight/features/settings/providers/input_latency_provider.dart';
+import 'package:strumsight/features/settings/providers/visual_latency_provider.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _app() => const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LatencyCalibrationScreen(),
-      ),
-    );
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: LatencyCalibrationScreen(),
+  ),
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('a consistent 8-tap run measures the offset and saves it',
-      (tester) async {
+  testWidgets('a consistent 8-tap run measures the offset and saves it', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.tap(find.text('Start'));
     await tester.pump();
@@ -47,8 +48,9 @@ void main() {
     expect(saved, 80);
   });
 
-  testWidgets('progress counts taps and shows the running total',
-      (tester) async {
+  testWidgets('progress counts taps and shows the running total', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     expect(find.text('0 / 8'), findsOneWidget);
     await tester.tap(find.text('Start'));
@@ -59,8 +61,9 @@ void main() {
     expect(find.text('1 / 8'), findsOneWidget);
   });
 
-  testWidgets('Visual mode saves to the VISUAL latency provider',
-      (tester) async {
+  testWidgets('Visual mode saves to the VISUAL latency provider', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.tap(find.text('Visual'));
     await tester.pump();
@@ -79,7 +82,10 @@ void main() {
     final ctx = tester.element(find.byType(LatencyCalibrationScreen));
     final container = ProviderScope.containerOf(ctx);
     expect(container.read(visualLatencyProvider), 40);
-    expect(container.read(inputLatencyProvider), 0,
-        reason: 'visual mode must not touch the audio offset');
+    expect(
+      container.read(inputLatencyProvider),
+      0,
+      reason: 'visual mode must not touch the audio offset',
+    );
   });
 }

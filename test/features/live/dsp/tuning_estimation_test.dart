@@ -2,11 +2,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
 
 import '../../../support/synth.dart';
 
@@ -14,8 +14,9 @@ import '../../../support/synth.dart';
 /// instruments sit 10–40 cents off concert pitch. Chunk 012 carries Chordino's
 /// answer — per-frame TUNING ESTIMATION shifting the log-freq mapping — so a
 /// uniformly detuned chord still lands on its note centres.
-List<double> detuneCents(List<double> freqs, double cents) =>
-    [for (final f in freqs) f * math.pow(2, cents / 1200)];
+List<double> detuneCents(List<double> freqs, double cents) => [
+  for (final f in freqs) f * math.pow(2, cents / 1200),
+];
 
 String? decode(Float64List signal) {
   final nc = NnlsChroma(sampleRate: 44100);

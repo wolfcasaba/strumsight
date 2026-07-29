@@ -54,50 +54,68 @@ class LessonScoreCard extends StatelessWidget {
                       gradient: AppColors.brandGradient,
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child:
-                        const Icon(Icons.graphic_eq, size: 16, color: Colors.white),
+                    child: const Icon(
+                      Icons.graphic_eq,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 9),
-                  const Text('StrumSight',
-                      style: TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 17,
-                          color: _ink)),
+                  const Text(
+                    'StrumSight',
+                    style: TextStyle(
+                      fontFamily: 'Montserrat',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                      color: _ink,
+                    ),
+                  ),
                 ],
               ),
               const Spacer(),
-              const Text('LESSON COMPLETE',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      letterSpacing: 2,
-                      color: AppColors.primary)),
+              const Text(
+                'LESSON COMPLETE',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  letterSpacing: 2,
+                  color: AppColors.primary,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(lessonName,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 26,
-                      color: _ink)),
+              Text(
+                lessonName,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Montserrat',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 26,
+                  color: _ink,
+                ),
+              ),
               const SizedBox(height: 20),
-              Text('${(accuracy * 100).round()}%',
-                  style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 72,
-                      height: 1,
-                      color: AppColors.confidence(accuracy))),
+              Text(
+                '${(accuracy * 100).round()}%',
+                style: TextStyle(
+                  fontFamily: 'Montserrat',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 72,
+                  height: 1,
+                  color: AppColors.confidence(accuracy),
+                ),
+              ),
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   for (var i = 0; i < 3; i++)
-                    Icon(i < stars ? Icons.star : Icons.star_border,
-                        size: 40, color: AppColors.secondary),
+                    Icon(
+                      i < stars ? Icons.star : Icons.star_border,
+                      size: 40,
+                      color: AppColors.secondary,
+                    ),
                 ],
               ),
               const Spacer(),
@@ -112,16 +130,23 @@ class LessonScoreCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('↓↑',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary)),
+                  const Text(
+                    '↓↑',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
                   const SizedBox(width: 7),
                   Flexible(
-                    child: Text('Graded on my strum direction',
-                        style: TextStyle(
-                            fontSize: 10, color: _ink.withValues(alpha: 0.7))),
+                    child: Text(
+                      'Graded on my strum direction',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: _ink.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -133,26 +158,33 @@ class LessonScoreCard extends StatelessWidget {
   }
 
   Widget _chip(String value, String label) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+    ),
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontFamily: 'Montserrat',
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            color: _ink,
+          ),
         ),
-        child: Column(
-          children: [
-            Text(value,
-                style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                    color: _ink)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 9, letterSpacing: 0.6,
-                    color: _ink.withValues(alpha: 0.6))),
-          ],
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            letterSpacing: 0.6,
+            color: _ink.withValues(alpha: 0.6),
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }

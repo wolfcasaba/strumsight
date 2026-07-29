@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/live_crnn_classifier.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_direction_classifier.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 /// r168 — the STREAMING front-end of the live 70 ms model. The risky logic is
 /// the ring/frame bookkeeping (absolute sample indexing across hops), so the
@@ -20,7 +20,8 @@ void main() {
     final x = Float64List(n);
     for (var i = 0; i < n; i++) {
       // A few sines + noise so every log-mel band has structure.
-      x[i] = 0.3 * math.sin(2 * math.pi * 110 * i / sr) +
+      x[i] =
+          0.3 * math.sin(2 * math.pi * 110 * i / sr) +
           0.2 * math.sin(2 * math.pi * 523 * i / sr) +
           0.1 * (rng.nextDouble() * 2 - 1);
     }
@@ -51,8 +52,11 @@ void main() {
     expect(streamed, hasLength(reference.length));
     for (var i = 0; i < reference.length; i++) {
       for (var j = 0; j < reference[i].length; j++) {
-        expect(streamed[i][j], closeTo(reference[i][j], 1e-9),
-            reason: 'row $i mel $j');
+        expect(
+          streamed[i][j],
+          closeTo(reference[i][j], 1e-9),
+          reason: 'row $i mel $j',
+        );
       }
     }
   });
@@ -69,20 +73,25 @@ void main() {
     // exactly like training's zeroed tail.
     final w = fe.windowAt(nFrames - 13, nFrames - 1);
     final floor = math.log(1e-6);
-    expect(w.last.every((v) => (v - floor).abs() < 1e-9), isTrue,
-        reason: 'the final row is fully past the deadline');
+    expect(
+      w.last.every((v) => (v - floor).abs() < 1e-9),
+      isTrue,
+      reason: 'the final row is fully past the deadline',
+    );
   });
 
-  test('LiveCrnnStrumClassifier implements the seam and returns a verdict',
-      () {
+  test('LiveCrnnStrumClassifier implements the seam and returns a verdict', () {
     // Degenerate weights are fine — the seam contract is direction+confidence
     // shapes, exercised without the real asset (which the parity tests own).
     final classifier = LiveCrnnStrumClassifier.tryLoad(
       'assets/ml/strum_crnn_live.bin',
       sampleRate: sr,
     );
-    expect(classifier, isNotNull,
-        reason: 'the live weights asset ships with the repo');
+    expect(
+      classifier,
+      isNotNull,
+      reason: 'the live weights asset ships with the repo',
+    );
     final signal = synthSignal(sr, 11);
     final nFrames = 1 + (signal.length - window) ~/ hop;
     StrumClassification? c;
@@ -120,8 +129,9 @@ void main() {
 
     test('classifyAt emits the calibrated confidence', () {
       final classifier = LiveCrnnStrumClassifier.tryLoad(
-          'assets/ml/strum_crnn_live.bin',
-          sampleRate: sr)!;
+        'assets/ml/strum_crnn_live.bin',
+        sampleRate: sr,
+      )!;
       final signal = synthSignal(sr, 5);
       final nFrames = 1 + (signal.length - window) ~/ hop;
       StrumClassification? c;
@@ -130,7 +140,9 @@ void main() {
           Float64List.sublistView(signal, f * hop, f * hop + window),
           const StrumFrameFeatures(lowEnergy: 0, highEnergy: 0, centroid: 0),
         );
-        if (f == 92) c = classifier.classifyAt(onsetFrame: 80, currentFrame: 92);
+        if (f == 92) {
+          c = classifier.classifyAt(onsetFrame: 80, currentFrame: 92);
+        }
       }
       // Whatever the raw softmax was, the emitted value sits in the
       // calibrated range — never the raw 0.9+ overconfidence band.
@@ -138,10 +150,13 @@ void main() {
     });
   });
 
-  test('tryLoad returns null when the asset is missing (heuristic fallback)',
-      () {
-    expect(
+  test(
+    'tryLoad returns null when the asset is missing (heuristic fallback)',
+    () {
+      expect(
         LiveCrnnStrumClassifier.tryLoad('assets/ml/nope.bin', sampleRate: sr),
-        isNull);
-  });
+        isNull,
+      );
+    },
+  );
 }

@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/main.dart';
 
 import '../../support/fake_engines.dart';
 
 void main() {
-  testWidgets('Analyze tab shows the Record CTA (no more "coming soon")',
-      (tester) async {
+  testWidgets('Analyze tab shows the Record CTA (no more "coming soon")', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/screens/chord_library_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 131 — the r130 B1 finding (a label without a tap action is a
@@ -19,13 +19,15 @@ void main() {
   testWidgets('a chord-library tile is one node with BOTH the fingering label '
       'and a tap action', (tester) async {
     final handle = tester.ensureSemantics();
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChordLibraryScreen(),
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // The C tile: its accessible node must speak the fingering AND be
@@ -38,7 +40,10 @@ void main() {
     final hasTap = data.hasAction(SemanticsAction.tap);
     handle.dispose();
 
-    expect(hasTap, isTrue,
-        reason: 'tap-to-hear must be reachable on the labelled node');
+    expect(
+      hasTap,
+      isTrue,
+      reason: 'tap-to-hear must be reachable on the labelled node',
+    );
   });
 }

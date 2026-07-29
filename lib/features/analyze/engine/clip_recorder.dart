@@ -9,7 +9,7 @@ enum MicStart { ok, denied, failed }
 class ClipRecorder {
   /// [ensurePermission] is injectable for tests; defaults to the real check.
   ClipRecorder({Future<bool> Function()? ensurePermission})
-      : _ensurePermission = ensurePermission ?? MicCapture.ensurePermission;
+    : _ensurePermission = ensurePermission ?? MicCapture.ensurePermission;
 
   final Future<bool> Function() _ensurePermission;
   final MicCapture _mic = MicCapture();

@@ -44,5 +44,6 @@ class DailyGoalController extends Notifier<int> {
   }
 }
 
-final dailyGoalProvider =
-    NotifierProvider<DailyGoalController, int>(DailyGoalController.new);
+final dailyGoalProvider = NotifierProvider<DailyGoalController, int>(
+  DailyGoalController.new,
+);

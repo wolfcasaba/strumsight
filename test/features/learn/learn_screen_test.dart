@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/widgets/chord_diagram.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/providers/practice_speed_provider.dart';
-import 'package:music_theory/features/learn/screens/learn_screen.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/providers/practice_speed_provider.dart';
+import 'package:strumsight/features/learn/screens/learn_screen.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -19,21 +19,24 @@ class _Speed75 extends PracticeSpeedController {
 }
 
 Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('starts paused, then plays and scores without settling',
-      (tester) async {
+  testWidgets('starts paused, then plays and scores without settling', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
     await _pump(tester, engine);
@@ -70,32 +73,41 @@ void main() {
     expect(find.byIcon(Icons.volume_off), findsOneWidget);
   });
 
-  testWidgets('opens at the persisted practice speed (round 132)',
-      (tester) async {
+  testWidgets('opens at the persisted practice speed (round 132)', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
     // The learner last drilled at 75% — the screen's initState reads the
     // (here overridden) persisted speed, so it must open there, not 100%.
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        strumEngineProvider.overrideWithValue(engine),
-        practiceSpeedProvider.overrideWith(_Speed75.new),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          strumEngineProvider.overrideWithValue(engine),
+          practiceSpeedProvider.overrideWith(_Speed75.new),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     expect(
-        tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '75%')).selected,
-        isTrue,
-        reason: 'the screen restored the persisted 75% drill speed');
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '75%'))
+          .selected,
+      isTrue,
+      reason: 'the screen restored the persisted 75% drill speed',
+    );
     expect(
-        tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '100%')).selected,
-        isFalse);
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '100%'))
+          .selected,
+      isFalse,
+    );
   });
 
   testWidgets('jam mode can be toggled from the app bar', (tester) async {
@@ -113,14 +125,16 @@ void main() {
   testWidgets('easy mode can be toggled from the app bar', (tester) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.downUpGroove), // simplifies
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.downUpGroove), // simplifies
+        ),
       ),
-    ));
+    );
 
     expect(find.byIcon(Icons.school_outlined), findsOneWidget);
     await tester.tap(find.byIcon(Icons.school_outlined));

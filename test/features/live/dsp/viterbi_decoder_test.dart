@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
 
 Float64List chroma(Map<int, double> weights) {
   final v = Float64List(12);
@@ -22,11 +22,20 @@ Float64List chroma(Map<int, double> weights) {
 }
 
 // Observed (bass, treble) pairs for a few chords.
-final cMaj = [chroma({0: 1}), chroma({0: 1, 4: 1, 7: 1})];
-final gMaj = [chroma({7: 1}), chroma({7: 1, 11: 1, 2: 1})];
+final cMaj = [
+  chroma({0: 1}),
+  chroma({0: 1, 4: 1, 7: 1}),
+];
+final gMaj = [
+  chroma({7: 1}),
+  chroma({7: 1, 11: 1, 2: 1}),
+];
 // Cmaj7 = C E G B — a *marginal* competitor to C (C explains it almost as well),
 // exactly the maj↔maj7 flicker case the self-transition bonus must damp.
-final cMaj7 = [chroma({0: 1}), chroma({0: 1, 4: 1, 7: 0.9, 11: 0.9})];
+final cMaj7 = [
+  chroma({0: 1}),
+  chroma({0: 1, 4: 1, 7: 0.9, 11: 0.9}),
+];
 final silence = [Float64List(12), Float64List(12)];
 
 ChordMatch? feed(ViterbiChordDecoder d, List<Float64List> obs, int times) {
@@ -129,8 +138,11 @@ void main() {
       final boosted = ViterbiChordDecoder();
       feed(boosted, cMaj, 8);
       boosted.noteOnset();
-      expect(framesToFlip(boosted), lessThan(baseline),
-          reason: 'the post-onset window must switch sooner than steady-state');
+      expect(
+        framesToFlip(boosted),
+        lessThan(baseline),
+        reason: 'the post-onset window must switch sooner than steady-state',
+      );
     });
 
     test('the boost expires — stability returns between onsets', () {
@@ -141,8 +153,11 @@ void main() {
       // A single marginal frame afterwards must not flip (the r28 flicker
       // guarantee is back in force).
       final blip = d.process(cMaj7[0], cMaj7[1]);
-      expect(blip!.chord.label, 'C',
-          reason: 'one marginal frame cannot flip once the boost expired');
+      expect(
+        blip!.chord.label,
+        'C',
+        reason: 'one marginal frame cannot flip once the boost expired',
+      );
     });
 
     test('gated (silent) chord frames do not consume the boost (r142)', () {
@@ -169,8 +184,11 @@ void main() {
         n++;
         if (d.process(cMaj7[0], cMaj7[1])?.chord.label == 'Cmaj7') break;
       }
-      expect(n, lessThanOrEqualTo(baseline),
-          reason: 'the boost must still cover the first TONAL frames');
+      expect(
+        n,
+        lessThanOrEqualTo(baseline),
+        reason: 'the boost must still cover the first TONAL frames',
+      );
     });
 
     test('an onset on the SAME sustained chord changes nothing', () {
@@ -193,15 +211,21 @@ void main() {
       // Without the prior this sustained marginal Cmaj7 flips within 25
       // frames (see the flicker test above); expecting C it must hold C.
       final held = feed(d, cMaj7, 25);
-      expect(held!.chord.label, 'C',
-          reason: 'the prior tips the ambiguous call toward the target');
+      expect(
+        held!.chord.label,
+        'C',
+        reason: 'the prior tips the ambiguous call toward the target',
+      );
     });
 
     test('a clearly different played chord still wins (off-chart safety)', () {
       final d = ViterbiChordDecoder()..setExpected('C');
       final m = feed(d, gMaj, 8);
-      expect(m!.chord.label, 'G',
-          reason: 'expecting C must never rename a real G');
+      expect(
+        m!.chord.label,
+        'G',
+        reason: 'expecting C must never rename a real G',
+      );
     });
 
     test('a NOISY weak-third G still beats an expected C (r142 audit)', () {
@@ -214,9 +238,13 @@ void main() {
       ];
       final d = ViterbiChordDecoder()..setExpected('C');
       final m = feed(d, noisyG, 8);
-      expect(m!.chord.label, startsWith('G'),
-          reason: 'the 0.05 prior must stay below a real similarity gap '
-              'even on degraded input (got ${m.chord.label})');
+      expect(
+        m!.chord.label,
+        startsWith('G'),
+        reason:
+            'the 0.05 prior must stay below a real similarity gap '
+            'even on degraded input (got ${m.chord.label})',
+      );
     });
 
     test('clearing the expectation restores baseline behaviour', () {
@@ -224,8 +252,11 @@ void main() {
       d.setExpected(null);
       feed(d, cMaj, 8);
       final held = feed(d, cMaj7, 25);
-      expect(held!.chord.label, 'Cmaj7',
-          reason: 'null expectation = the pre-prior switch behaviour');
+      expect(
+        held!.chord.label,
+        'Cmaj7',
+        reason: 'null expectation = the pre-prior switch behaviour',
+      );
     });
 
     test('an unknown label is ignored gracefully', () {
@@ -236,8 +267,11 @@ void main() {
 
     test('expecting a chord never conjures it from silence', () {
       final d = ViterbiChordDecoder()..setExpected('C');
-      expect(feed(d, silence, 8), isNull,
-          reason: 'the prior must not beat the no-chord floor');
+      expect(
+        feed(d, silence, 8),
+        isNull,
+        reason: 'the prior must not beat the no-chord floor',
+      );
     });
 
     test('reset clears the prior and the onset boost (r142 audit)', () {
@@ -246,8 +280,11 @@ void main() {
       d.reset();
       feed(d, cMaj, 8);
       final held = feed(d, cMaj7, 25);
-      expect(held!.chord.label, 'Cmaj7',
-          reason: 'a fresh session must not inherit a past lesson bias');
+      expect(
+        held!.chord.label,
+        'Cmaj7',
+        reason: 'a fresh session must not inherit a past lesson bias',
+      );
     });
   });
 }

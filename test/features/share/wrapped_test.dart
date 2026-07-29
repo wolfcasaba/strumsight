@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/share/model/weekly_recap.dart';
-import 'package:music_theory/features/share/share_content.dart';
-import 'package:music_theory/features/share/widgets/wrapped_card.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/share/model/weekly_recap.dart';
+import 'package:strumsight/features/share/share_content.dart';
+import 'package:strumsight/features/share/widgets/wrapped_card.dart';
 
 /// Round 151 — "Strum Wrapped" weekly recap (chunk 017 rec #5: the
 /// Wrapped-style recap is the category's strongest install hook).
-PracticeEntry _e(int day, int seconds,
-        {int strokes = 0, double? accuracy}) =>
+PracticeEntry _e(int day, int seconds, {int strokes = 0, double? accuracy}) =>
     PracticeEntry(
       day: day,
       source: PracticeSource.learn,
@@ -20,13 +19,17 @@ PracticeEntry _e(int day, int seconds,
 void main() {
   group('WeeklyRecap.fromEntries', () {
     test('rolls up exactly the trailing 7 days', () {
-      final recap = WeeklyRecap.fromEntries([
-        _e(93, 600), // 8 days ago — outside the window
-        _e(94, 300, strokes: 40), // exactly 6 days back — inside
-        _e(98, 240, strokes: 30, accuracy: 0.8),
-        _e(100, 60, strokes: 10, accuracy: 0.6), // today
-        _e(100, 120, strokes: 20),
-      ], today: 100, streak: 4);
+      final recap = WeeklyRecap.fromEntries(
+        [
+          _e(93, 600), // 8 days ago — outside the window
+          _e(94, 300, strokes: 40), // exactly 6 days back — inside
+          _e(98, 240, strokes: 30, accuracy: 0.8),
+          _e(100, 60, strokes: 10, accuracy: 0.6), // today
+          _e(100, 120, strokes: 20),
+        ],
+        today: 100,
+        streak: 4,
+      );
 
       expect(recap.minutes, 12); // (300+240+60+120)/60
       expect(recap.sessions, 4);
@@ -39,8 +42,9 @@ void main() {
     });
 
     test('a sub-minute week still reads 1 minute, never a braggy zero', () {
-      final recap =
-          WeeklyRecap.fromEntries([_e(100, 27, strokes: 8)], today: 100);
+      final recap = WeeklyRecap.fromEntries([
+        _e(100, 27, strokes: 8),
+      ], today: 100);
       expect(recap.minutes, 1, reason: 'the 27-second first win is not "0"');
     });
 
@@ -69,8 +73,9 @@ void main() {
     expect(caption, contains('#StrumSightChallenge'));
   });
 
-  testWidgets('the card survives heavy-user numbers without overflow (r160)',
-      (tester) async {
+  testWidgets('the card survives heavy-user numbers without overflow (r160)', (
+    tester,
+  ) async {
     const recap = WeeklyRecap(
       minutes: 2100, // 5 h/day for a week — the realistic ceiling
       sessions: 99,
@@ -80,11 +85,13 @@ void main() {
       averageAccuracy: 1.0,
       streak: 365,
     );
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
+        ),
       ),
-    ));
+    );
     // Overflow paints throw in tests — reaching here green IS the assert.
     expect(find.text('2100'), findsOneWidget);
     expect(find.text('25000'), findsOneWidget);
@@ -101,11 +108,13 @@ void main() {
       averageAccuracy: 0.87,
       streak: 6,
     );
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
+        ),
       ),
-    ));
+    );
     expect(find.text('42'), findsOneWidget);
     expect(find.text('5/7'), findsOneWidget);
     expect(find.text('980'), findsOneWidget);

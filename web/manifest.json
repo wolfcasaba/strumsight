@@ -1,6 +1,6 @@
 {
-    "name": "music_theory",
-    "short_name": "music_theory",
+    "name": "StrumSight",
+    "short_name": "StrumSight",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

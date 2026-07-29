@@ -37,5 +37,6 @@ class TuningReferenceNotifier extends Notifier<int> {
   }
 }
 
-final tuningReferenceProvider =
-    NotifierProvider<TuningReferenceNotifier, int>(TuningReferenceNotifier.new);
+final tuningReferenceProvider = NotifierProvider<TuningReferenceNotifier, int>(
+  TuningReferenceNotifier.new,
+);

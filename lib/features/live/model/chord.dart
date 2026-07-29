@@ -17,7 +17,18 @@ class Chord {
   Chord transposed(int semitones) => Chord(transposeLabel(label, semitones));
 
   static const _sharpNames = [
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
   static const _pitchClass = <String, int>{
     'C': 0, 'B#': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, //

@@ -51,7 +51,15 @@ class ProgressionTemplate {
     ProgressionTemplate("'50s", [1, 6, 4, 5], 'I–vi–IV–V'),
     ProgressionTemplate('Axis', [6, 4, 1, 5], 'vi–IV–I–V'),
     ProgressionTemplate('Folk', [1, 4, 1, 5], 'I–IV–I–V'),
-    ProgressionTemplate('Pachelbel', [1, 5, 6, 3, 4, 1, 4, 5],
-        'I–V–vi–iii–IV–I–IV–V'),
+    ProgressionTemplate('Pachelbel', [
+      1,
+      5,
+      6,
+      3,
+      4,
+      1,
+      4,
+      5,
+    ], 'I–V–vi–iii–IV–I–IV–V'),
   ];
 }

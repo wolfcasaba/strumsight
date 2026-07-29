@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:music_theory/features/live/engine/strum_engine.dart';
-import 'package:music_theory/features/live/model/live_frame.dart';
-import 'package:music_theory/features/tuner/engine/tuner_engine.dart';
-import 'package:music_theory/features/tuner/model/tuner_reading.dart';
+import 'package:strumsight/features/live/engine/strum_engine.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
+import 'package:strumsight/features/tuner/engine/tuner_engine.dart';
+import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 
 /// A timer-free StrumEngine for widget tests: emit frames on demand so
 /// `pumpAndSettle` never hangs on a periodic timer.

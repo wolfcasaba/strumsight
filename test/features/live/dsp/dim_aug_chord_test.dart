@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
 
 import '../../../support/synth.dart';
 
@@ -21,8 +21,7 @@ String? decode(Float64List signal) {
     dictionary: ChordDictionary(),
   );
   ChordMatch? last;
-  for (final frame
-      in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+  for (final frame in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
     final chroma = nc.process(frame);
     final tonal =
         chroma != null && nc.lastTonalness >= DspConfig.chordMinTonalness;

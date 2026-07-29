@@ -23,8 +23,9 @@ class _RenameDialog extends StatefulWidget {
 }
 
 class _RenameDialogState extends State<_RenameDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {
@@ -64,7 +65,10 @@ class SessionDetailScreen extends ConsumerWidget {
   final AnalyzedSession session;
 
   Future<void> _rename(
-      BuildContext context, WidgetRef ref, AnalyzedSession live) async {
+    BuildContext context,
+    WidgetRef ref,
+    AnalyzedSession live,
+  ) async {
     final name = await showDialog<String>(
       context: context,
       builder: (_) => _RenameDialog(initial: live.title),
@@ -81,17 +85,22 @@ class SessionDetailScreen extends ConsumerWidget {
     // A rename must show immediately: prefer the LIVE copy from the library
     // over the (immutable) route argument.
     final sessions = ref.watch(libraryProvider).value;
-    final live = sessions?.firstWhere((s) => s.id == session.id,
-            orElse: () => session) ??
+    final live =
+        sessions?.firstWhere(
+          (s) => s.id == session.id,
+          orElse: () => session,
+        ) ??
         session;
     return Scaffold(
       appBar: AppBar(
         // A user-chosen name renders verbatim; only auto chord-summary titles
         // go through the capo transposer (round 114 — "Campfire riff" at capo
         // 2 rendered as "A#ampfire riff").
-        title: Text(live.customTitle
-            ? live.title
-            : Chord.transposeSummary(live.title, -capo)),
+        title: Text(
+          live.customTitle
+              ? live.title
+              : Chord.transposeSummary(live.title, -capo),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
@@ -105,8 +114,7 @@ class SessionDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => LearnScreen(
-                    lesson: Lessons.fromAnalyze(live.result,
-                        name: live.title),
+                    lesson: Lessons.fromAnalyze(live.result, name: live.title),
                   ),
                 ),
               ),

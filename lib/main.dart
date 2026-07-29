@@ -19,8 +19,9 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
-        onboardingSeenProvider
-            .overrideWith(() => OnboardingController(onboardingSeen)),
+        onboardingSeenProvider.overrideWith(
+          () => OnboardingController(onboardingSeen),
+        ),
       ],
       child: const StrumSightApp(),
     ),

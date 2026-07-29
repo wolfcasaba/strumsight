@@ -43,5 +43,6 @@ class PrefsLibraryRepository implements LibraryRepository {
   }
 }
 
-final libraryRepositoryProvider =
-    Provider<LibraryRepository>((ref) => PrefsLibraryRepository());
+final libraryRepositoryProvider = Provider<LibraryRepository>(
+  (ref) => PrefsLibraryRepository(),
+);

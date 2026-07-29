@@ -17,14 +17,17 @@ class TimelineChord {
 
   double get durationSec => endSec - startSec;
 
-  Map<String, dynamic> toJson() =>
-      {'label': label, 'start': startSec, 'end': endSec};
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'start': startSec,
+    'end': endSec,
+  };
 
   factory TimelineChord.fromJson(Map<String, dynamic> j) => TimelineChord(
-        label: j['label'] as String,
-        startSec: (j['start'] as num).toDouble(),
-        endSec: (j['end'] as num).toDouble(),
-      );
+    label: j['label'] as String,
+    startSec: (j['start'] as num).toDouble(),
+    endSec: (j['end'] as num).toDouble(),
+  );
 }
 
 /// A single strum detected at a point in the clip.
@@ -43,16 +46,16 @@ class TimelineStrum {
   bool get isDown => direction == StrumDirection.down;
 
   Map<String, dynamic> toJson() => {
-        'dir': direction.name,
-        'time': timeSec,
-        'conf': confidence,
-      };
+    'dir': direction.name,
+    'time': timeSec,
+    'conf': confidence,
+  };
 
   factory TimelineStrum.fromJson(Map<String, dynamic> j) => TimelineStrum(
-        direction: StrumDirection.values.byName(j['dir'] as String),
-        timeSec: (j['time'] as num).toDouble(),
-        confidence: (j['conf'] as num).toDouble(),
-      );
+    direction: StrumDirection.values.byName(j['dir'] as String),
+    timeSec: (j['time'] as num).toDouble(),
+    confidence: (j['conf'] as num).toDouble(),
+  );
 }
 
 /// Lab-mode diagnostics attached to an [AnalyzeResult] (ship-path step 4,
@@ -61,10 +64,7 @@ class TimelineStrum {
 /// never changes the flag-off shape or behaviour.
 @immutable
 class MlChordDiagnostics {
-  const MlChordDiagnostics({
-    required this.mlChords,
-    required this.agreement,
-  });
+  const MlChordDiagnostics({required this.mlChords, required this.agreement});
 
   /// The full-band CRNN chord timeline (majmin labels), time-aligned in seconds
   /// to the same clip as [AnalyzeResult.chords] (its own CQT frame grid).
@@ -75,9 +75,9 @@ class MlChordDiagnostics {
   final double agreement;
 
   Map<String, dynamic> toJson() => {
-        'mlChords': mlChords.map((c) => c.toJson()).toList(),
-        'agreement': agreement,
-      };
+    'mlChords': mlChords.map((c) => c.toJson()).toList(),
+    'agreement': agreement,
+  };
 
   factory MlChordDiagnostics.fromJson(Map<String, dynamic> j) =>
       MlChordDiagnostics(
@@ -119,13 +119,13 @@ class AnalyzeResult {
   /// Return a copy with [diagnostics] attached (Lab mode). Everything else is
   /// carried verbatim — the DSP timeline is untouched.
   AnalyzeResult withDiagnostics(MlChordDiagnostics d) => AnalyzeResult(
-        durationSec: durationSec,
-        bpm: bpm,
-        chords: chords,
-        strums: strums,
-        beatsPerBar: beatsPerBar,
-        diagnostics: d,
-      );
+    durationSec: durationSec,
+    bpm: bpm,
+    chords: chords,
+    strums: strums,
+    beatsPerBar: beatsPerBar,
+    diagnostics: d,
+  );
 
   int get downCount => strums.where((s) => s.isDown).length;
   int get upCount => strums.length - downCount;
@@ -139,33 +139,37 @@ class AnalyzeResult {
     return labels.join(' · ');
   }
 
-  static const empty =
-      AnalyzeResult(durationSec: 0, bpm: 0, chords: [], strums: []);
+  static const empty = AnalyzeResult(
+    durationSec: 0,
+    bpm: 0,
+    chords: [],
+    strums: [],
+  );
 
   Map<String, dynamic> toJson() => {
-        'duration': durationSec,
-        'bpm': bpm,
-        'chords': chords.map((c) => c.toJson()).toList(),
-        'strums': strums.map((s) => s.toJson()).toList(),
-        'bpb': beatsPerBar,
-        // Only present in Lab mode — a flag-off result serializes identically
-        // to before r197 (the 'diag' key is simply absent).
-        if (diagnostics != null) 'diag': diagnostics!.toJson(),
-      };
+    'duration': durationSec,
+    'bpm': bpm,
+    'chords': chords.map((c) => c.toJson()).toList(),
+    'strums': strums.map((s) => s.toJson()).toList(),
+    'bpb': beatsPerBar,
+    // Only present in Lab mode — a flag-off result serializes identically
+    // to before r197 (the 'diag' key is simply absent).
+    if (diagnostics != null) 'diag': diagnostics!.toJson(),
+  };
 
   factory AnalyzeResult.fromJson(Map<String, dynamic> j) => AnalyzeResult(
-        durationSec: (j['duration'] as num).toDouble(),
-        bpm: (j['bpm'] as num).toDouble(),
-        chords: (j['chords'] as List)
-            .map((e) => TimelineChord.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        strums: (j['strums'] as List)
-            .map((e) => TimelineStrum.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        // Records saved before round 118 are all 4/4.
-        beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
-        diagnostics: j['diag'] == null
-            ? null
-            : MlChordDiagnostics.fromJson(j['diag'] as Map<String, dynamic>),
-      );
+    durationSec: (j['duration'] as num).toDouble(),
+    bpm: (j['bpm'] as num).toDouble(),
+    chords: (j['chords'] as List)
+        .map((e) => TimelineChord.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    strums: (j['strums'] as List)
+        .map((e) => TimelineStrum.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    // Records saved before round 118 are all 4/4.
+    beatsPerBar: (j['bpb'] as num?)?.toInt() ?? 4,
+    diagnostics: j['diag'] == null
+        ? null
+        : MlChordDiagnostics.fromJson(j['diag'] as Map<String, dynamic>),
+  );
 }

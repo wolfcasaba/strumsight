@@ -45,8 +45,8 @@ class Lesson {
     required List<StrumDirection?> pattern,
     this.difficulty = Difficulty.beginner,
     this.beatsPerBar = 4,
-  })  : events = _expand(chords, pattern, beatsPerBar),
-        totalBeats = chords.length * beatsPerBar.toDouble();
+  }) : events = _expand(chords, pattern, beatsPerBar),
+       totalBeats = chords.length * beatsPerBar.toDouble();
 
   /// Build directly from a timed event list (e.g. an imported Analyze clip).
   const Lesson.fromEvents({
@@ -78,19 +78,23 @@ class Lesson {
   ) {
     // Two slots per beat (8ths): a mismatched pattern would silently spill
     // its tail into the NEXT bar, overlapping the following chord (round 114).
-    assert(pattern.length == beatsPerBar * 2,
-        'pattern has ${pattern.length} slots but $beatsPerBar beats/bar '
-        'needs ${beatsPerBar * 2}');
+    assert(
+      pattern.length == beatsPerBar * 2,
+      'pattern has ${pattern.length} slots but $beatsPerBar beats/bar '
+      'needs ${beatsPerBar * 2}',
+    );
     final out = <LessonEvent>[];
     for (var bar = 0; bar < chords.length; bar++) {
       for (var slot = 0; slot < pattern.length; slot++) {
         final dir = pattern[slot];
         if (dir == null) continue;
-        out.add(LessonEvent(
-          beat: bar * beatsPerBar + slot * 0.5,
-          chord: chords[bar],
-          direction: dir,
-        ));
+        out.add(
+          LessonEvent(
+            beat: bar * beatsPerBar + slot * 0.5,
+            chord: chords[bar],
+            direction: dir,
+          ),
+        );
       }
     }
     return out;
@@ -102,8 +106,7 @@ class Lesson {
   /// lesson if it has no on-beat down-strokes (e.g. a purely off-beat reggae
   /// skank), so it can never yield an unplayable empty lesson.
   Lesson get simplified {
-    final kept =
-        events.where((e) => e.isDown && e.beat % 1.0 == 0).toList();
+    final kept = events.where((e) => e.isDown && e.beat % 1.0 == 0).toList();
     if (kept.isEmpty || kept.length == events.length) return this;
     return Lesson.fromEvents(
       id: id,
@@ -141,198 +144,198 @@ class Lessons {
   /// beat, two bars at a gentle tempo ≈ a 30-second aha. NOT in [all]: it
   /// lives outside the curriculum/unlock chain and records no stars.
   static Lesson get firstWin => Lesson(
-        id: 'first-win',
-        name: 'Your first win',
-        bpm: 70,
-        chords: const ['Em', 'Em'],
-        pattern: const [_d, null, _d, null, _d, null, _d, null],
-      );
+    id: 'first-win',
+    name: 'Your first win',
+    bpm: 70,
+    chords: const ['Em', 'Em'],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
 
   // ---- Beginner ----
 
   /// All-downstrokes on the beat — the absolute beginner's first strum.
   static Lesson get firstStrums => Lesson(
-        id: 'first-strums',
-        name: 'First Strums',
-        bpm: 70,
-        chords: const ['Em', 'Em', 'G', 'G'],
-        pattern: const [_d, null, _d, null, _d, null, _d, null],
-      );
+    id: 'first-strums',
+    name: 'First Strums',
+    bpm: 70,
+    chords: const ['Em', 'Em', 'G', 'G'],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
 
   /// Practising a clean chord change on every downstroke.
   static Lesson get twoChordChange => Lesson(
-        id: 'two-chord-change',
-        name: 'Two-Chord Change',
-        bpm: 74,
-        chords: const ['Am', 'C', 'Am', 'C'],
-        pattern: const [_d, null, _d, null, _d, null, _d, null],
-      );
+    id: 'two-chord-change',
+    name: 'Two-Chord Change',
+    bpm: 74,
+    chords: const ['Am', 'C', 'Am', 'C'],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
 
   /// Eighth-note down-strokes — steady and driving.
   static Lesson get eighthDrive => Lesson(
-        id: 'eighth-drive',
-        name: 'Eighth-Note Drive',
-        bpm: 80,
-        chords: const ['G', 'G', 'D', 'D'],
-        pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
-      );
+    id: 'eighth-drive',
+    name: 'Eighth-Note Drive',
+    bpm: 80,
+    chords: const ['G', 'G', 'D', 'D'],
+    pattern: const [_d, _d, _d, _d, _d, _d, _d, _d],
+  );
 
   /// The I–vi–IV–V "50s" doo-wop progression.
   static Lesson get fiftiesDooWop => Lesson(
-        id: 'fifties-doo-wop',
-        name: 'Fifties Doo-Wop',
-        bpm: 82,
-        chords: const ['C', 'Am', 'F', 'G'],
-        pattern: const [_d, null, _d, null, _d, null, _d, null],
-      );
+    id: 'fifties-doo-wop',
+    name: 'Fifties Doo-Wop',
+    bpm: 82,
+    chords: const ['C', 'Am', 'F', 'G'],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
 
   /// Two one-finger-apart shapes (Em7 ↔ Cmaj7) — chord CHANGES with almost
   /// no left-hand work, so the right hand can focus on the beat.
   static Lesson get twoFingerFrame => Lesson(
-        id: 'two-finger-frame',
-        name: 'Two-Finger Frame',
-        bpm: 72,
-        chords: const ['Em7', 'Cmaj7', 'Em7', 'Cmaj7'],
-        pattern: const [_d, null, _d, null, _d, null, _d, null],
-      );
+    id: 'two-finger-frame',
+    name: 'Two-Finger Frame',
+    bpm: 72,
+    chords: const ['Em7', 'Cmaj7', 'Em7', 'Cmaj7'],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
 
   /// The gentlest possible 3/4 (round 121): downs on 1-2-3 over two easy
   /// shapes — feel the waltz bar before the intermediate oom-pah-pah adds
   /// up-strokes. Ends the beginner tier so the metre is met early.
   static Lesson get firstWaltz => Lesson(
-        id: 'first-waltz',
-        name: 'First Waltz',
-        bpm: 76,
-        beatsPerBar: 3,
-        chords: const ['Em', 'C', 'Em', 'C'],
-        pattern: const [_d, null, _d, null, _d, null],
-      );
+    id: 'first-waltz',
+    name: 'First Waltz',
+    bpm: 76,
+    beatsPerBar: 3,
+    chords: const ['Em', 'C', 'Em', 'C'],
+    pattern: const [_d, null, _d, null, _d, null],
+  );
 
   // ---- Intermediate ----
 
   /// The ubiquitous D-DU-UDU pop/folk pattern over a I–V–vi–IV progression.
   static Lesson get downUpGroove => Lesson(
-        id: 'down-up-groove',
-        name: 'Down-Up Groove',
-        bpm: 90,
-        difficulty: Difficulty.intermediate,
-        chords: const ['C', 'G', 'Am', 'F'],
-        pattern: const [_d, null, _d, _u, null, _u, _d, _u],
-      );
+    id: 'down-up-groove',
+    name: 'Down-Up Groove',
+    bpm: 90,
+    difficulty: Difficulty.intermediate,
+    chords: const ['C', 'G', 'Am', 'F'],
+    pattern: const [_d, null, _d, _u, null, _u, _d, _u],
+  );
 
   /// A folk pattern with a syncopated push.
   static Lesson get folkPattern => Lesson(
-        id: 'folk-pattern',
-        name: 'Folk Fingers',
-        bpm: 96,
-        difficulty: Difficulty.intermediate,
-        chords: const ['G', 'Em', 'C', 'D'],
-        pattern: const [_d, null, _d, _u, _d, _u, _d, _u],
-      );
+    id: 'folk-pattern',
+    name: 'Folk Fingers',
+    bpm: 96,
+    difficulty: Difficulty.intermediate,
+    chords: const ['G', 'Em', 'C', 'D'],
+    pattern: const [_d, null, _d, _u, _d, _u, _d, _u],
+  );
 
   /// Introduces a barre chord (Bm) in a common minor-key progression.
   static Lesson get barreGroove => Lesson(
-        id: 'barre-groove',
-        name: 'Barre Groove',
-        bpm: 92,
-        difficulty: Difficulty.intermediate,
-        chords: const ['Bm', 'G', 'D', 'A'],
-        pattern: const [_d, null, _d, _u, null, _u, _d, _u],
-      );
+    id: 'barre-groove',
+    name: 'Barre Groove',
+    bpm: 92,
+    difficulty: Difficulty.intermediate,
+    chords: const ['Bm', 'G', 'D', 'A'],
+    pattern: const [_d, null, _d, _u, null, _u, _d, _u],
+  );
 
   /// An anthemic G–D–Em–C with the classic down-up feel.
   static Lesson get anthemDrive => Lesson(
-        id: 'anthem-drive',
-        name: 'Anthem Drive',
-        bpm: 98,
-        difficulty: Difficulty.intermediate,
-        chords: const ['G', 'D', 'Em', 'C'],
-        pattern: const [_d, null, _d, _u, null, _u, _d, _u],
-      );
+    id: 'anthem-drive',
+    name: 'Anthem Drive',
+    bpm: 98,
+    difficulty: Difficulty.intermediate,
+    chords: const ['G', 'D', 'Em', 'C'],
+    pattern: const [_d, null, _d, _u, null, _u, _d, _u],
+  );
 
   /// A minor "rising" progression with a steady down-up arpeggio feel.
   static Lesson get risingMinor => Lesson(
-        id: 'rising-minor',
-        name: 'Rising Minor',
-        bpm: 86,
-        difficulty: Difficulty.intermediate,
-        chords: const ['Am', 'C', 'D', 'F'],
-        pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
-      );
+    id: 'rising-minor',
+    name: 'Rising Minor',
+    bpm: 86,
+    difficulty: Difficulty.intermediate,
+    chords: const ['Am', 'C', 'D', 'F'],
+    pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
+  );
 
   /// The app's first 3/4 lesson: bass on ONE, light strums on two and three
   /// (oom-pah-pah). Waltz time is where 4/4 habits go to be found out.
   static Lesson get waltzTime => Lesson(
-        id: 'waltz-time',
-        name: 'Waltz Time',
-        bpm: 84,
-        difficulty: Difficulty.intermediate,
-        beatsPerBar: 3,
-        chords: const ['C', 'F', 'C', 'G'],
-        pattern: const [_d, null, _u, null, _u, null],
-      );
+    id: 'waltz-time',
+    name: 'Waltz Time',
+    bpm: 84,
+    difficulty: Difficulty.intermediate,
+    beatsPerBar: 3,
+    chords: const ['C', 'F', 'C', 'G'],
+    pattern: const [_d, null, _u, null, _u, null],
+  );
 
   // ---- Advanced ----
 
   /// Off-beat up-strokes — a reggae-style skank.
   static Lesson get reggaeSkank => Lesson(
-        id: 'reggae-skank',
-        name: 'Reggae Skank',
-        bpm: 100,
-        difficulty: Difficulty.advanced,
-        chords: const ['Am', 'Dm', 'Am', 'E'],
-        pattern: const [null, _u, null, _u, null, _u, null, _u],
-      );
+    id: 'reggae-skank',
+    name: 'Reggae Skank',
+    bpm: 100,
+    difficulty: Difficulty.advanced,
+    chords: const ['Am', 'Dm', 'Am', 'E'],
+    pattern: const [null, _u, null, _u, null, _u, null, _u],
+  );
 
   /// Busy sixteenth-ish funk with alternating strokes.
   static Lesson get funkChop => Lesson(
-        id: 'funk-chop',
-        name: 'Funk Chop',
-        bpm: 104,
-        difficulty: Difficulty.advanced,
-        chords: const ['Em', 'Em', 'A', 'A'],
-        pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
-      );
+    id: 'funk-chop',
+    name: 'Funk Chop',
+    bpm: 104,
+    difficulty: Difficulty.advanced,
+    chords: const ['Em', 'Em', 'A', 'A'],
+    pattern: const [_d, _u, _d, _u, _d, _u, _d, _u],
+  );
 
   /// A dominant-7 blues shuffle over A7–D7.
   static Lesson get bluesShuffle => Lesson(
-        id: 'blues-shuffle',
-        name: 'Blues Shuffle',
-        bpm: 100,
-        difficulty: Difficulty.advanced,
-        chords: const ['A7', 'A7', 'D7', 'A7'],
-        pattern: const [_d, null, _d, _u, _d, null, _d, _u],
-      );
+    id: 'blues-shuffle',
+    name: 'Blues Shuffle',
+    bpm: 100,
+    difficulty: Difficulty.advanced,
+    chords: const ['A7', 'A7', 'D7', 'A7'],
+    pattern: const [_d, null, _d, _u, _d, null, _d, _u],
+  );
 
   /// Syncopation drill: after the downbeat, everything lands on the "and"s —
   /// the strumming hand must keep moving through the silent downstrokes.
   static Lesson get pushAndPull => Lesson(
-        id: 'push-and-pull',
-        name: 'Push & Pull',
-        bpm: 96,
-        difficulty: Difficulty.advanced,
-        chords: const ['Am', 'G', 'F', 'E'],
-        pattern: const [_d, null, null, _u, null, _u, null, _u],
-      );
+    id: 'push-and-pull',
+    name: 'Push & Pull',
+    bpm: 96,
+    difficulty: Difficulty.advanced,
+    chords: const ['Am', 'G', 'F', 'E'],
+    pattern: const [_d, null, null, _u, null, _u, null, _u],
+  );
 
   static List<Lesson> get all => [
-        firstStrums,
-        twoChordChange,
-        eighthDrive,
-        fiftiesDooWop,
-        twoFingerFrame,
-        firstWaltz,
-        downUpGroove,
-        folkPattern,
-        barreGroove,
-        anthemDrive,
-        risingMinor,
-        waltzTime,
-        reggaeSkank,
-        funkChop,
-        bluesShuffle,
-        pushAndPull,
-      ];
+    firstStrums,
+    twoChordChange,
+    eighthDrive,
+    fiftiesDooWop,
+    twoFingerFrame,
+    firstWaltz,
+    downUpGroove,
+    folkPattern,
+    barreGroove,
+    anthemDrive,
+    risingMinor,
+    waltzTime,
+    reggaeSkank,
+    funkChop,
+    bluesShuffle,
+    pushAndPull,
+  ];
 
   /// Lessons of a given tier, in curriculum order.
   static List<Lesson> byDifficulty(Difficulty d) =>

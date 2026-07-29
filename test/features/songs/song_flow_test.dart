@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/chords/chord_shape.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/widgets/strum_card.dart';
-import 'package:music_theory/features/songs/model/song.dart';
-import 'package:music_theory/features/songs/providers/songs_provider.dart';
-import 'package:music_theory/features/songs/screens/song_list_screen.dart';
-import 'package:music_theory/features/songs/widgets/strum_pattern_editor.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/chords/chord_shape.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/widgets/strum_card.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/songs/screens/song_list_screen.dart';
+import 'package:strumsight/features/songs/widgets/strum_pattern_editor.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A songbook seeded with fixed songs, not touching disk.
@@ -23,15 +23,15 @@ class _SeededSongs extends SongsController {
 }
 
 Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
-      overrides: [
-        if (seed != null) songsProvider.overrideWith(() => _SeededSongs(seed)),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: home,
-      ),
-    );
+  overrides: [
+    if (seed != null) songsProvider.overrideWith(() => _SeededSongs(seed)),
+  ],
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: home,
+  ),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -43,8 +43,9 @@ void main() {
     expect(find.textContaining('Build your own song'), findsOneWidget);
   });
 
-  testWidgets('create a song end-to-end: name → chord → save → appears',
-      (tester) async {
+  testWidgets('create a song end-to-end: name → chord → save → appears', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
 
@@ -59,8 +60,11 @@ void main() {
     // Add the first available chord.
     final label = ChordShapes.allLabels.first;
     final chip = find.widgetWithText(ActionChip, label).first;
-    await tester.scrollUntilVisible(chip, 120,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      chip,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(chip);
     await tester.pump();
 
@@ -81,30 +85,43 @@ void main() {
     await tester.pump();
     final label = ChordShapes.allLabels.first;
     final chip = find.widgetWithText(ActionChip, label).first;
-    await tester.scrollUntilVisible(chip, 120,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      chip,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(chip);
     await tester.pump();
 
     // Switch to 3/4 — the editor drops to 6 slots (no beat "4" label).
     final meter = find.text('3/4');
-    await tester.scrollUntilVisible(meter, 120,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      meter,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(meter);
     await tester.pump();
-    expect(find.text('4'), findsNothing,
-        reason: 'a 3/4 bar has no fourth beat label');
+    expect(
+      find.text('4'),
+      findsNothing,
+      reason: 'a 3/4 bar has no fourth beat label',
+    );
 
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(SongListScreen)));
+      tester.element(find.byType(SongListScreen)),
+    );
     final song = container.read(songsProvider).single;
     expect(song.beatsPerBar, 3);
     expect(song.pattern.length, 6);
-    expect(song.pattern.any((d) => d != null), isTrue,
-        reason: 'the metre switch must keep the song playable');
+    expect(
+      song.pattern.any((d) => d != null),
+      isTrue,
+      reason: 'the metre switch must keep the song playable',
+    );
   });
 
   testWidgets('suggest-a-progression fills the chord list', (tester) async {
@@ -156,8 +173,11 @@ void main() {
 
     // The preset row + editor are below the fold — scroll them into view.
     final eighths = find.widgetWithText(ActionChip, 'Eighths');
-    await tester.scrollUntilVisible(eighths, 120,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      eighths,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     // Default builder pattern is "Down" → no up-strokes yet.
     expect(find.byIcon(Icons.arrow_upward), findsNothing);
@@ -168,19 +188,22 @@ void main() {
     expect(find.byIcon(Icons.arrow_upward), findsNWidgets(4));
   });
 
-  testWidgets('pattern editor cycles a rest slot to a down-strum on tap',
-      (tester) async {
+  testWidgets('pattern editor cycles a rest slot to a down-strum on tap', (
+    tester,
+  ) async {
     List<StrumDirection?>? emitted;
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: StrumPatternEditor(
-          pattern: List<StrumDirection?>.filled(8, null),
-          onChanged: (p) => emitted = p,
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: StrumPatternEditor(
+            pattern: List<StrumDirection?>.filled(8, null),
+            onChanged: (p) => emitted = p,
+          ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.byType(InkWell).first);
     expect(emitted, isNotNull);
     expect(emitted![0], StrumDirection.down); // rest → down

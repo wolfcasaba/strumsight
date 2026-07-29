@@ -43,11 +43,7 @@ class Strum {
 /// One slot in a bar's rolling beat counter ("1 & 2 & 3 & 4").
 @immutable
 class BeatSlot {
-  const BeatSlot({
-    required this.label,
-    required this.isDownbeat,
-    this.strum,
-  });
+  const BeatSlot({required this.label, required this.isDownbeat, this.strum});
 
   /// Display label: "1", "&", "2", …
   final String label;

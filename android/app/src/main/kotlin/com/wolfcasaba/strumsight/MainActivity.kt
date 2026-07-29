@@ -1,4 +1,4 @@
-package com.musictheory.music_theory
+package com.wolfcasaba.strumsight
 
 import io.flutter.embedding.android.FlutterActivity
 

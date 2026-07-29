@@ -39,5 +39,6 @@ class InputLatencyNotifier extends Notifier<int> {
   }
 }
 
-final inputLatencyProvider =
-    NotifierProvider<InputLatencyNotifier, int>(InputLatencyNotifier.new);
+final inputLatencyProvider = NotifierProvider<InputLatencyNotifier, int>(
+  InputLatencyNotifier.new,
+);

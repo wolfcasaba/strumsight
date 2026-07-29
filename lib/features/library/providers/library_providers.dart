@@ -55,5 +55,5 @@ class LibraryController extends AsyncNotifier<List<AnalyzedSession>> {
 
 final libraryProvider =
     AsyncNotifierProvider<LibraryController, List<AnalyzedSession>>(
-  LibraryController.new,
-);
+      LibraryController.new,
+    );

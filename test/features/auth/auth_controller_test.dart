@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/auth/data/auth_repository.dart';
-import 'package:music_theory/features/auth/data/token_store.dart';
-import 'package:music_theory/features/auth/model/auth_user.dart';
-import 'package:music_theory/features/auth/providers/auth_providers.dart';
+import 'package:strumsight/features/auth/data/auth_repository.dart';
+import 'package:strumsight/features/auth/data/token_store.dart';
+import 'package:strumsight/features/auth/model/auth_user.dart';
+import 'package:strumsight/features/auth/providers/auth_providers.dart';
 
 import '../../support/fake_auth.dart';
 
@@ -49,10 +49,9 @@ void main() {
     final container = _container(store, repo);
     await container.read(authControllerProvider.future);
 
-    await container.read(authControllerProvider.notifier).login(
-          'player@strumsight.app',
-          'sixstrings',
-        );
+    await container
+        .read(authControllerProvider.notifier)
+        .login('player@strumsight.app', 'sixstrings');
 
     final state = container.read(authControllerProvider);
     expect(state.value, isA<AuthUser>());
@@ -74,8 +73,10 @@ void main() {
     final state = container.read(authControllerProvider);
     expect(state.hasError, isTrue);
     expect(state.error, isA<AuthException>());
-    expect((state.error as AuthException).kind,
-        AuthErrorKind.invalidCredentials);
+    expect(
+      (state.error as AuthException).kind,
+      AuthErrorKind.invalidCredentials,
+    );
     expect(store.token, isNull);
   });
 

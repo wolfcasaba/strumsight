@@ -38,8 +38,7 @@ class NudgeEnabledNotifier extends Notifier<bool> {
     _prefs ??= await SharedPreferences.getInstance();
     final persisted = _prefs!.getBool(_key) ?? false;
     if (!persisted) return;
-    final live =
-        await NudgeService.instance.verifyAndRearm(copyFor: copyFor);
+    final live = await NudgeService.instance.verifyAndRearm(copyFor: copyFor);
     if (!live && !_userSet) {
       state = false;
       await _prefs!.setBool(_key, false);
@@ -63,5 +62,6 @@ class NudgeEnabledNotifier extends Notifier<bool> {
   }
 }
 
-final nudgeEnabledProvider =
-    NotifierProvider<NudgeEnabledNotifier, bool>(NudgeEnabledNotifier.new);
+final nudgeEnabledProvider = NotifierProvider<NudgeEnabledNotifier, bool>(
+  NudgeEnabledNotifier.new,
+);

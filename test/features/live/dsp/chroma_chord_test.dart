@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/chroma_extractor.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/chroma_extractor.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
 
 import '../../../support/synth.dart';
 
@@ -68,7 +68,8 @@ void main() {
     // …then feed G; the FIRST frame must not flip the report unless decisive.
     final gFrames = frames(chordSignal(gMajorFreqs), win, hop).toList();
     final first = matcher.process(extractor.process(gFrames.first));
-    final immediateFlip = first!.chord.label == 'G' &&
+    final immediateFlip =
+        first!.chord.label == 'G' &&
         first.confidence >= DspConfig.chordInstantSwitchConfidence;
     if (!immediateFlip) {
       expect(first.chord.label, 'C', reason: 'no flicker on one weak frame');

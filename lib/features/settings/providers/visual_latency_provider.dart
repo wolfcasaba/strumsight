@@ -41,5 +41,6 @@ class VisualLatencyNotifier extends Notifier<int> {
   }
 }
 
-final visualLatencyProvider =
-    NotifierProvider<VisualLatencyNotifier, int>(VisualLatencyNotifier.new);
+final visualLatencyProvider = NotifierProvider<VisualLatencyNotifier, int>(
+  VisualLatencyNotifier.new,
+);

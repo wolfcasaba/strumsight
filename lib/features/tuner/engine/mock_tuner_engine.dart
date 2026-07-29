@@ -55,8 +55,9 @@ class MockTunerEngine implements TunerEngine {
     final idx = (ms ~/ 3000) % _strings.length; // change string every 3 s
     // Damped drift toward 0 cents, clamped to the ±50 display range.
     final phase = (ms % 3000) / 3000; // 0..1 within a string
-    final cents =
-        (30 * math.sin(ms / 500) * (1 - phase)).clamp(-50.0, 50.0).toDouble();
+    final cents = (30 * math.sin(ms / 500) * (1 - phase))
+        .clamp(-50.0, 50.0)
+        .toDouble();
     return TunerReading(
       note: _strings[idx],
       cents: cents,

@@ -65,5 +65,6 @@ class StreakController extends Notifier<StreakData> {
   }
 }
 
-final streakProvider =
-    NotifierProvider<StreakController, StreakData>(StreakController.new);
+final streakProvider = NotifierProvider<StreakController, StreakData>(
+  StreakController.new,
+);

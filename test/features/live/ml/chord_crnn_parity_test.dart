@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/ml/chord_crnn.dart';
+import 'package:strumsight/features/live/engine/ml/chord_crnn.dart';
 
 /// Parity contract for the pure-Dart CHORD CRNN forward pass (r196).
 ///
@@ -36,9 +36,11 @@ void main() {
 
     test('forward pass matches the Keras reference to <=1e-3', () {
       final input = (fixture['input_cqt'] as List<dynamic>)
-          .map((row) => (row as List<dynamic>)
-              .map((v) => (v as num).toDouble())
-              .toList())
+          .map(
+            (row) => (row as List<dynamic>)
+                .map((v) => (v as num).toDouble())
+                .toList(),
+          )
           .toList();
       final refProbs = fixture['probs'] as List<dynamic>;
       final refArgmax = (fixture['argmax'] as List<dynamic>)
@@ -69,14 +71,19 @@ void main() {
             dartArg = c;
           }
         }
-        expect((sum - 1.0).abs(), lessThan(1e-5),
-            reason: 'frame $i softmax must sum to 1 (got $sum)');
+        expect(
+          (sum - 1.0).abs(),
+          lessThan(1e-5),
+          reason: 'frame $i softmax must sum to 1 (got $sum)',
+        );
         if (dartArg != refArgmax[i]) argmaxMismatches++;
       }
 
       // ignore: avoid_print
-      print('ChordCrnn parity: maxAbsDiff=$maxAbsDiff '
-          'argmaxMismatches=$argmaxMismatches / ${out.length}');
+      print(
+        'ChordCrnn parity: maxAbsDiff=$maxAbsDiff '
+        'argmaxMismatches=$argmaxMismatches / ${out.length}',
+      );
 
       // Per-probability tolerance (report happens above regardless).
       for (var i = 0; i < out.length; i++) {
@@ -84,8 +91,11 @@ void main() {
             .map((v) => (v as num).toDouble())
             .toList();
         for (var c = 0; c < 25; c++) {
-          expect((out[i][c] - ref[c]).abs(), lessThan(1e-3),
-              reason: 'frame $i class $c: dart=${out[i][c]} keras=${ref[c]}');
+          expect(
+            (out[i][c] - ref[c]).abs(),
+            lessThan(1e-3),
+            reason: 'frame $i class $c: dart=${out[i][c]} keras=${ref[c]}',
+          );
         }
       }
       expect(argmaxMismatches, 0, reason: 'argmax sequence must match exactly');

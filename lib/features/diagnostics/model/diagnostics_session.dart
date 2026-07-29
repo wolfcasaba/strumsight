@@ -49,16 +49,16 @@ class DiagnosticsEvent {
   final double? inputLevel;
 
   Map<String, dynamic> toJson() => {
-        'tSec': tSec,
-        'mlChord': mlChord,
-        'dspChord': dspChord,
-        'agree': agree,
-        'mlConf': mlConf,
-        'dspConf': dspConf,
-        'strumDir': strumDir,
-        'bpm': bpm,
-        'inputLevel': inputLevel,
-      };
+    'tSec': tSec,
+    'mlChord': mlChord,
+    'dspChord': dspChord,
+    'agree': agree,
+    'mlConf': mlConf,
+    'dspConf': dspConf,
+    'strumDir': strumDir,
+    'bpm': bpm,
+    'inputLevel': inputLevel,
+  };
 }
 
 /// A short recorded audio clip attached to a diagnostics session (16-bit WAV,
@@ -102,14 +102,14 @@ class DiagnosticsSession {
   final List<DiagnosticsAudioClip> audioClips;
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'appVersion': appVersion,
-        'device': device,
-        'startedAt': startedAt,
-        'surface': surface,
-        'events': events.map((e) => e.toJson()).toList(),
-        'audioClips': audioClips.map((c) => c.toJson()).toList(),
-      };
+    'sessionId': sessionId,
+    'appVersion': appVersion,
+    'device': device,
+    'startedAt': startedAt,
+    'surface': surface,
+    'events': events.map((e) => e.toJson()).toList(),
+    'audioClips': audioClips.map((c) => c.toJson()).toList(),
+  };
 
   /// Build the events for a diagnostics session from a completed Analyze
   /// [result] whose Lab-mode [MlChordDiagnostics] are attached. One event per
@@ -125,16 +125,19 @@ class DiagnosticsSession {
     for (final seg in diag.mlChords) {
       final mid = (seg.startSec + seg.endSec) / 2;
       final dspLabel = _labelAt(result.chords, mid);
-      final agree = MlChordDecoder.majminReduce(seg.label) ==
+      final agree =
+          MlChordDecoder.majminReduce(seg.label) ==
           MlChordDecoder.majminReduce(dspLabel);
-      events.add(DiagnosticsEvent(
-        tSec: seg.startSec,
-        mlChord: seg.label,
-        dspChord: dspLabel,
-        agree: agree,
-        bpm: bpm.isFinite && bpm > 0 ? bpm : null,
-        strumDir: _strumDirIn(result.strums, seg.startSec, seg.endSec),
-      ));
+      events.add(
+        DiagnosticsEvent(
+          tSec: seg.startSec,
+          mlChord: seg.label,
+          dspChord: dspLabel,
+          agree: agree,
+          bpm: bpm.isFinite && bpm > 0 ? bpm : null,
+          strumDir: _strumDirIn(result.strums, seg.startSec, seg.endSec),
+        ),
+      );
     }
     return events;
   }
@@ -149,7 +152,10 @@ class DiagnosticsSession {
 
   /// The direction of the first strum landing within `[start, end)`, or null.
   static String? _strumDirIn(
-      List<TimelineStrum> strums, double start, double end) {
+    List<TimelineStrum> strums,
+    double start,
+    double end,
+  ) {
     for (final s in strums) {
       if (s.timeSec >= start && s.timeSec < end) return s.direction.name;
     }

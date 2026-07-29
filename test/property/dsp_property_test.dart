@@ -12,21 +12,32 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/tuner/engine/dsp/tuner_analyzer.dart';
 
 import '../support/synth.dart';
 
 const sr = DspConfig.defaultSampleRate;
 const _pitchClasses = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 double _midiToFreq(int midi) => 440 * math.pow(2, (midi - 69) / 12).toDouble();
@@ -42,8 +53,7 @@ String? _decodeChord(Float64List signal) {
   ChordMatch? m;
   for (final frame in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
     final ch = nc.process(frame);
-    final tonal =
-        ch != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
+    final tonal = ch != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
     m = tonal
         ? decoder.process(nc.lastBassChroma, nc.lastTrebleChroma)
         : decoder.process(Float64List(12), Float64List(12));
@@ -52,8 +62,7 @@ String? _decodeChord(Float64List signal) {
 }
 
 void main() {
-  final seed =
-      int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
+  final seed = int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
   final rng = math.Random(seed);
   // Always visible in logs so any failure is reproducible.
   // ignore: avoid_print
@@ -82,14 +91,21 @@ void main() {
         decayPerSecond: 1.0 + rng.nextDouble() * 1.5,
       );
 
-      final extractor = NnlsChroma(sampleRate: sr, window: DspConfig.nnlsWindow);
+      final extractor = NnlsChroma(
+        sampleRate: sr,
+        window: DspConfig.nnlsWindow,
+      );
       final matcher = ChordMatcher();
       ChordMatch? match;
-      for (final frame
-          in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+      for (final frame in frames(
+        signal,
+        DspConfig.nnlsWindow,
+        DspConfig.nnlsHop,
+      )) {
         final ch = extractor.process(frame);
         final tonal =
-            ch != null && extractor.lastTonalness >= DspConfig.chordMinTonalness;
+            ch != null &&
+            extractor.lastTonalness >= DspConfig.chordMinTonalness;
         match = matcher.process(tonal ? ch : null);
       }
       if (match?.chord.label == expected) {
@@ -98,8 +114,11 @@ void main() {
         failures.add('trial=$t expected=$expected got=${match?.chord.label}');
       }
     }
-    expect(correct, greaterThanOrEqualTo(18),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(18),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 — the dictionary+Viterbi engine must nail plain triads (root AND
@@ -132,8 +151,11 @@ void main() {
         failures.add('trial=$t expected=$expected got=$got');
       }
     }
-    expect(correct, greaterThanOrEqualTo(17),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(17),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 / round 69 — per-frame TUNING ESTIMATION: real guitars sit
@@ -166,12 +188,17 @@ void main() {
       if (got == expected) {
         correct++;
       } else {
-        failures.add('trial=$t cents=${cents.toStringAsFixed(1)} '
-            'expected=$expected got=$got');
+        failures.add(
+          'trial=$t cents=${cents.toStringAsFixed(1)} '
+          'expected=$expected got=$got',
+        );
       }
     }
-    expect(correct, greaterThanOrEqualTo(16),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(16),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 / round 70 — SPECTRAL WHITENING: a phone mic's low-shelf bass
@@ -206,12 +233,17 @@ void main() {
       if (got == expected) {
         correct++;
       } else {
-        failures.add('trial=$t cut=${cutHz.round()}Hz '
-            'atten=${atten.toStringAsFixed(2)} expected=$expected got=$got');
+        failures.add(
+          'trial=$t cut=${cutHz.round()}Hz '
+          'atten=${atten.toStringAsFixed(2)} expected=$expected got=$got',
+        );
       }
     }
-    expect(correct, greaterThanOrEqualTo(16),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(16),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 / round 71 — the BATCH Viterbi path (Analyze): a random chord
@@ -246,21 +278,29 @@ void main() {
       final secsPer = 0.7 + rng.nextDouble() * 0.5; // 0.7..1.2 s per chord
       final pcm = <double>[
         for (final name in seq)
-          ...chordSignal(pool[name]!, seconds: secsPer,
-              amp: 0.12 + rng.nextDouble() * 0.15),
+          ...chordSignal(
+            pool[name]!,
+            seconds: secsPer,
+            amp: 0.12 + rng.nextDouble() * 0.15,
+          ),
       ];
       final got = [
-        for (final c in analyzer.analyze(pcm, 44100).chords) c.label
+        for (final c in analyzer.analyze(pcm, 44100).chords) c.label,
       ];
       if (got.join(' ') == seq.join(' ')) {
         correct++;
       } else {
-        failures.add('trial=$t secs=${secsPer.toStringAsFixed(2)} '
-            'expected=${seq.join('·')} got=${got.join('·')}');
+        failures.add(
+          'trial=$t secs=${secsPer.toStringAsFixed(2)} '
+          'expected=${seq.join('·')} got=${got.join('·')}',
+        );
       }
     }
-    expect(correct, greaterThanOrEqualTo(16),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(16),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 / round 78 — dim/aug vocabulary growth. dim differs from minor
@@ -289,7 +329,7 @@ void main() {
       final Set<String> accepted = aug
           ? {
               for (final o in [0, 4, 8])
-                '${_pitchClasses[(rootMidi + o) % 12]}aug'
+                '${_pitchClasses[(rootMidi + o) % 12]}aug',
             }
           : {'${_pitchClasses[rootMidi % 12]}dim'};
       if (got != null && accepted.contains(got)) {
@@ -298,8 +338,11 @@ void main() {
         failures.add('trial=$t expected-one-of=$accepted got=$got');
       }
     }
-    expect(correct, greaterThanOrEqualTo(16),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      correct,
+      greaterThanOrEqualTo(16),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // chunk 012 — the headline round-26 fix: a low-voiced dominant 7 (7th just
@@ -339,15 +382,21 @@ void main() {
         failures.add('trial=$t expected=${root}7 got=$got');
       }
     }
-    expect(rootCorrect, greaterThanOrEqualTo(14),
-        reason: 'seed=$seed: the root must be right; ${failures.join('; ')}');
-    expect(seventhExact, greaterThanOrEqualTo(12),
-        reason: 'seed=$seed: low-voiced dom7s should read as 7; '
-            '${failures.join('; ')}');
+    expect(
+      rootCorrect,
+      greaterThanOrEqualTo(14),
+      reason: 'seed=$seed: the root must be right; ${failures.join('; ')}',
+    );
+    expect(
+      seventhExact,
+      greaterThanOrEqualTo(12),
+      reason:
+          'seed=$seed: low-voiced dom7s should read as 7; '
+          '${failures.join('; ')}',
+    );
   });
 
-  test('property: random strums — one onset, correct direction (20 trials)',
-      () {
+  test('property: random strums — one onset, correct direction (20 trials)', () {
     var singleOnset = 0;
     var directionChecked = 0;
     var directionCorrect = 0;
@@ -363,8 +412,11 @@ void main() {
 
       final analyzer = StrumAnalyzer(sampleRate: sr);
       final events = <StrumEvent>[];
-      for (final frame
-          in frames(signal, DspConfig.onsetWindow, DspConfig.onsetHop)) {
+      for (final frame in frames(
+        signal,
+        DspConfig.onsetWindow,
+        DspConfig.onsetHop,
+      )) {
         final e = analyzer.process(frame);
         if (e != null) events.add(e);
       }
@@ -378,17 +430,26 @@ void main() {
           directionCorrect++;
         } else {
           failures.add(
-              'trial=$t lowFirst=$lowFirst stagger=${stagger.toStringAsFixed(1)}ms got=$dir');
+            'trial=$t lowFirst=$lowFirst stagger=${stagger.toStringAsFixed(1)}ms got=$dir',
+          );
         }
       }
     }
-    expect(singleOnset, greaterThanOrEqualTo(18),
-        reason: 'seed=$seed: a strum must merge into ONE onset');
-    expect(directionChecked, greaterThanOrEqualTo(15),
-        reason: 'seed=$seed: direction should rarely be ambiguous on synth');
-    expect(directionCorrect / math.max(1, directionChecked),
-        greaterThanOrEqualTo(0.85),
-        reason: 'seed=$seed failures: ${failures.join('; ')}');
+    expect(
+      singleOnset,
+      greaterThanOrEqualTo(18),
+      reason: 'seed=$seed: a strum must merge into ONE onset',
+    );
+    expect(
+      directionChecked,
+      greaterThanOrEqualTo(15),
+      reason: 'seed=$seed: direction should rarely be ambiguous on synth',
+    );
+    expect(
+      directionCorrect / math.max(1, directionChecked),
+      greaterThanOrEqualTo(0.85),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
   });
 
   // Round 59 — direction must survive RING-OUT overlap at realistic strumming
@@ -396,8 +457,7 @@ void main() {
   // previous strum is still sounding; onset-relative baseline subtraction
   // isolates each attack. Tempos capped at the hand-strum ceiling (≤160 BPM
   // 16ths); 200 BPM 16ths remains an honest low-confidence limit (chunk 006).
-  test('property: overlapping strums keep direction at realistic tempo (20)',
-      () {
+  test('property: overlapping strums keep direction at realistic tempo (20)', () {
     var checked = 0;
     var correct = 0;
     final failures = <String>[];
@@ -413,8 +473,11 @@ void main() {
       );
       final analyzer = StrumAnalyzer(sampleRate: sr);
       final events = <StrumEvent>[];
-      for (final frame
-          in frames(signal, DspConfig.onsetWindow, DspConfig.onsetHop)) {
+      for (final frame in frames(
+        signal,
+        DspConfig.onsetWindow,
+        DspConfig.onsetHop,
+      )) {
         final e = analyzer.process(frame);
         if (e != null) events.add(e);
       }
@@ -437,19 +500,28 @@ void main() {
         if (e.direction == want) {
           correct++;
         } else {
-          failures.add('t=$t bpm=$bpm i=$bestI want=${dirs[bestI]} got=${e.direction}');
+          failures.add(
+            't=$t bpm=$bpm i=$bestI want=${dirs[bestI]} got=${e.direction}',
+          );
         }
       }
     }
-    expect(checked, greaterThanOrEqualTo(80),
-        reason: 'seed=$seed: most overlapping strums should be detected');
+    expect(
+      checked,
+      greaterThanOrEqualTo(80),
+      reason: 'seed=$seed: most overlapping strums should be detected',
+    );
     // Floor set below the measured spread (≈0.77–0.86 across seeds) so the
     // gate is non-flaky, yet well above the pre-round-59 behaviour (absolute
     // cues collapsed to ~0.6 under ring-out). Round 60 (better band design)
     // targets ≥0.85. Note the trained-CRNN up-strum ceiling is ~0.79.
-    expect(correct / math.max(1, checked), greaterThanOrEqualTo(0.72),
-        reason: 'seed=$seed: ring-out must not corrupt direction; '
-            '${failures.join('; ')}');
+    expect(
+      correct / math.max(1, checked),
+      greaterThanOrEqualTo(0.72),
+      reason:
+          'seed=$seed: ring-out must not corrupt direction; '
+          '${failures.join('; ')}',
+    );
   });
 
   // Voice/noise rejection (round 23): the tuner must lock a STABLE, in-range
@@ -491,10 +563,16 @@ void main() {
       }
       if (tunerLocks(glide)) glideLocked++;
     }
-    expect(stableLocked, greaterThanOrEqualTo(17),
-        reason: 'seed=$seed: a held in-range tone must lock');
-    expect(glideLocked, lessThanOrEqualTo(2),
-        reason: 'seed=$seed: a gliding pitch (speech-like) must be rejected');
+    expect(
+      stableLocked,
+      greaterThanOrEqualTo(17),
+      reason: 'seed=$seed: a held in-range tone must lock',
+    );
+    expect(
+      glideLocked,
+      lessThanOrEqualTo(2),
+      reason: 'seed=$seed: a gliding pitch (speech-like) must be rejected',
+    );
   });
 
   test('property: white noise does not fake a chord (20 trials)', () {
@@ -510,13 +588,16 @@ void main() {
           frame[i] = (rng.nextDouble() * 2 - 1) * amp;
         }
         final chroma = ex.process(frame);
-        final tonal = chroma != null &&
-            ex.lastTonalness >= DspConfig.chordMinTonalness;
+        final tonal =
+            chroma != null && ex.lastTonalness >= DspConfig.chordMinTonalness;
         m = matcher.process(tonal ? chroma : null);
       }
       if (m != null) chordShown++;
     }
-    expect(chordShown, lessThanOrEqualTo(2),
-        reason: 'seed=$seed: diffuse noise must not accumulate a chord');
+    expect(
+      chordShown,
+      lessThanOrEqualTo(2),
+      reason: 'seed=$seed: diffuse noise must not accumulate a chord',
+    );
   });
 }

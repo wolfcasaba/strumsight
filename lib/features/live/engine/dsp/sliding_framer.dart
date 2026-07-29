@@ -4,7 +4,7 @@ import 'dart:typed_data';
 /// advancing by [hop] (RAG chunk 001: mic chunk size ≠ analysis frame size).
 class SlidingFramer {
   SlidingFramer({required this.window, required this.hop})
-      : assert(hop <= window);
+    : assert(hop <= window);
 
   final int window;
   final int hop;

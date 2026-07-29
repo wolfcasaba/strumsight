@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
 
 /// Build an L2-normalised 12-bin chroma from pitch-class → weight (0..11 = C..B).
 Float64List chroma(Map<int, double> weights) {
@@ -36,39 +36,43 @@ const c = 0, e = 4, g = 7, b = 11, a = 9, d = 2, f = 5;
 void main() {
   final dict = ChordDictionary();
 
-  test('vocabulary: N.C. first, and the eight qualities × 12 roots present',
-      () {
+  test('vocabulary: N.C. first, and the eight qualities × 12 roots present', () {
     expect(dict.profiles.first.label, 'N.C.');
     expect(dict.profiles.first.isNoChord, isTrue);
     final labels = dict.profiles.map((p) => p.label).toSet();
-    expect(labels,
-        containsAll(['C', 'Am', 'G7', 'Cmaj7', 'Dm7', 'Asus4', 'Bdim', 'Caug']));
+    expect(
+      labels,
+      containsAll(['C', 'Am', 'G7', 'Cmaj7', 'Dm7', 'Asus4', 'Bdim', 'Caug']),
+    );
     // Power-5 and sus2 are deliberately excluded (they steal weak-third triads).
     expect(labels.any((l) => l.endsWith('5') || l.contains('sus2')), isFalse);
     expect(dict.length, 1 + 8 * 12); // 97 (dim/aug added round 78)
   });
 
-  test('a plain C major triad is C — NOT Cmaj7 (the round-26 superset fix)', () {
-    // Observed: C E G in the treble, C in the bass. No B present.
-    final treble = chroma({c: 1, e: 1, g: 1});
-    final bass = chroma({c: 1});
-    final s = dict.score(bass, treble);
-    final byLabel = {
-      for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i]
-    };
-    expect(winner(dict, bass, treble), 'C');
-    // The crux: with note-templates Cmaj7 ⊇ C would tie/beat C; with profiles
-    // the absent B makes Cmaj7 score strictly LOWER than C.
-    expect(byLabel['Cmaj7']!, lessThan(byLabel['C']!));
-    expect(byLabel['C7']!, lessThan(byLabel['C']!));
-  });
+  test(
+    'a plain C major triad is C — NOT Cmaj7 (the round-26 superset fix)',
+    () {
+      // Observed: C E G in the treble, C in the bass. No B present.
+      final treble = chroma({c: 1, e: 1, g: 1});
+      final bass = chroma({c: 1});
+      final s = dict.score(bass, treble);
+      final byLabel = {
+        for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i],
+      };
+      expect(winner(dict, bass, treble), 'C');
+      // The crux: with note-templates Cmaj7 ⊇ C would tie/beat C; with profiles
+      // the absent B makes Cmaj7 score strictly LOWER than C.
+      expect(byLabel['Cmaj7']!, lessThan(byLabel['C']!));
+      expect(byLabel['C7']!, lessThan(byLabel['C']!));
+    },
+  );
 
   test('an actual Cmaj7 (B present) is recognised as Cmaj7, beating C', () {
     final treble = chroma({c: 1, e: 1, g: 0.9, b: 0.9});
     final bass = chroma({c: 1});
     final s = dict.score(bass, treble);
     final byLabel = {
-      for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i]
+      for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i],
     };
     expect(winner(dict, bass, treble), 'Cmaj7');
     expect(byLabel['Cmaj7']!, greaterThan(byLabel['C']!));
@@ -80,7 +84,7 @@ void main() {
     final bass = chroma({g: 1});
     final s = dict.score(bass, treble);
     final byLabel = {
-      for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i]
+      for (var i = 0; i < dict.length; i++) dict.profiles[i].label: s[i],
     };
     expect(winner(dict, bass, treble), 'G7');
     expect(byLabel['G7']!, greaterThan(byLabel['G']!));

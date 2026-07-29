@@ -54,16 +54,14 @@ class AnalyzeSkeleton extends StatelessWidget {
 
     // A single sweeping highlight over the whole placeholder block. `muted`
     // over `track` gives visible contrast in BOTH light and dark themes.
-    final shimmer = content.animate(onPlay: (c) => c.repeat()).shimmer(
+    final shimmer = content
+        .animate(onPlay: (c) => c.repeat())
+        .shimmer(
           duration: 1200.ms,
           color: palette.muted.withValues(alpha: 0.35),
         );
 
-    return Semantics(
-      label: label,
-      container: true,
-      child: shimmer,
-    );
+    return Semantics(label: label, container: true, child: shimmer);
   }
 }
 

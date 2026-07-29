@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/model/guitar_strings.dart';
-import 'package:music_theory/features/tuner/model/tuner_reading.dart';
-import 'package:music_theory/features/tuner/model/tuning.dart';
-import 'package:music_theory/features/tuner/providers/tuner_providers.dart';
-import 'package:music_theory/features/tuner/providers/pinned_string_provider.dart';
-import 'package:music_theory/features/tuner/screens/tuner_screen.dart';
-import 'package:music_theory/features/tuner/widgets/cents_gauge.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/tuner/model/guitar_strings.dart';
+import 'package:strumsight/features/tuner/model/tuner_reading.dart';
+import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
+import 'package:strumsight/features/tuner/providers/pinned_string_provider.dart';
+import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
+import 'package:strumsight/features/tuner/widgets/cents_gauge.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -18,14 +18,16 @@ import '../../support/fake_engines.dart';
 /// chromatic nearest note — essential when a string is so far off (or the
 /// room so noisy) that auto mode names a different note entirely.
 Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [tunerEngineProvider.overrideWithValue(engine)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: TunerScreen(),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [tunerEngineProvider.overrideWithValue(engine)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: TunerScreen(),
+        ),
       ),
-    ));
+    );
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -45,8 +47,9 @@ void main() {
     });
   });
 
-  testWidgets('tapping a chip pins the string: the gauge reads against IT',
-      (tester) async {
+  testWidgets('tapping a chip pins the string: the gauge reads against IT', (
+    tester,
+  ) async {
     final engine = FakeTunerEngine();
     addTearDown(engine.dispose);
     await pumpTuner(tester, engine);

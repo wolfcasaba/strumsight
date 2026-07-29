@@ -18,22 +18,30 @@ class SongListScreen extends ConsumerWidget {
   const SongListScreen({super.key});
 
   void _openBuilder(BuildContext context, {Song? existing}) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => SongBuilderScreen(existing: existing),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SongBuilderScreen(existing: existing),
+      ),
+    );
   }
 
   void _play(BuildContext context, Song song) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => LearnScreen(lesson: song.toLesson()),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LearnScreen(lesson: song.toLesson()),
+      ),
+    );
   }
 
   void _share(BuildContext context, Song song) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) =>
-          SharePreviewScreen(result: song.toAnalyzeResult(), title: song.name),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SharePreviewScreen(
+          result: song.toAnalyzeResult(),
+          title: song.name,
+        ),
+      ),
+    );
   }
 
   /// Delete with an UNDO affordance: the remove is applied (and persisted)
@@ -75,7 +83,8 @@ class SongListScreen extends ConsumerWidget {
             tooltip: l10n.setlistsTitle,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                  builder: (_) => const SetlistListScreen()),
+                builder: (_) => const SetlistListScreen(),
+              ),
             ),
           ),
         ],
@@ -106,8 +115,10 @@ class SongListScreen extends ConsumerWidget {
                         backgroundColor: AppColors.primary,
                         child: Icon(Icons.music_note, color: Colors.white),
                       ),
-                      title: Text(song.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      title: Text(
+                        song.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       subtitle: Text(
                         // Time-signature notation is universal (round 116
                         // decision) — only the non-default metre is shown.

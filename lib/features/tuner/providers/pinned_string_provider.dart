@@ -24,4 +24,5 @@ class PinnedStringNotifier extends Notifier<GuitarString?> {
 
 final pinnedStringProvider =
     NotifierProvider<PinnedStringNotifier, GuitarString?>(
-        PinnedStringNotifier.new);
+      PinnedStringNotifier.new,
+    );

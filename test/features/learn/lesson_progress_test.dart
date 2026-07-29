@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/model/lesson_progress.dart';
-import 'package:music_theory/features/learn/providers/lesson_progress_provider.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/model/lesson_progress.dart';
+import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -48,20 +48,22 @@ void main() {
       expect(n.stars('a'), 3);
     });
 
-    test('progression unlocks the next lesson once the previous passes',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final n = c.read(lessonProgressProvider.notifier);
-      final tier = Lessons.byDifficulty(Difficulty.beginner);
+    test(
+      'progression unlocks the next lesson once the previous passes',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = c.read(lessonProgressProvider.notifier);
+        final tier = Lessons.byDifficulty(Difficulty.beginner);
 
-      expect(n.isUnlocked(tier[0]), isTrue); // first is always open
-      expect(n.isUnlocked(tier[1]), isFalse); // locked until #1 passes
+        expect(n.isUnlocked(tier[0]), isTrue); // first is always open
+        expect(n.isUnlocked(tier[1]), isFalse); // locked until #1 passes
 
-      await n.record(tier[0].id, 0.75); // pass #1
-      expect(n.isUnlocked(tier[1]), isTrue);
-      expect(n.isUnlocked(tier[2]), isFalse); // #3 still locked
-    });
+        await n.record(tier[0].id, 0.75); // pass #1
+        expect(n.isUnlocked(tier[1]), isTrue);
+        expect(n.isUnlocked(tier[2]), isFalse); // #3 still locked
+      },
+    );
 
     test('progress persists across a fresh controller', () async {
       final c1 = ProviderContainer();

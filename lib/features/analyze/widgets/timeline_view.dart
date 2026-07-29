@@ -48,8 +48,7 @@ class TimelineView extends StatelessWidget {
           child: result.chords.isEmpty
               ? Center(
                   child: Text(
-                    l10n.analyzeStrumsSummary(
-                        result.downCount, result.upCount),
+                    l10n.analyzeStrumsSummary(result.downCount, result.upCount),
                     style: TextStyle(color: palette.muted),
                   ),
                 )

@@ -94,19 +94,13 @@ class ChordTimeline extends StatelessWidget {
               child: historyRow,
             ),
           ),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: _heroCard(context, hero, beat),
-        ),
+        FittedBox(fit: BoxFit.scaleDown, child: _heroCard(context, hero, beat)),
         if (next != null)
           FittedBox(fit: BoxFit.scaleDown, child: _nextGhost(context, l10n)),
       ],
     );
 
-    return Opacity(
-      opacity: listening ? 1.0 : 0.6,
-      child: strip,
-    );
+    return Opacity(opacity: listening ? 1.0 : 0.6, child: strip);
   }
 
   // --- Empty state: muted instrument glyph + idle prompt, one gentle pulse ---
@@ -119,11 +113,7 @@ class ChordTimeline extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.graphic_eq,
-            size: 40,
-            color: palette.muted,
-          )
+          Icon(Icons.graphic_eq, size: 40, color: palette.muted)
               .animate(key: const ValueKey('empty-pulse'))
               .fadeIn(duration: 400.ms)
               .scaleXY(
@@ -170,11 +160,7 @@ class ChordTimeline extends StatelessWidget {
           scale: scale,
           duration: 340.ms,
           curve: Curves.easeOutCubic,
-          child: ChordTimelineCard(
-            event: event,
-            isHero: false,
-            capo: capo,
-          ),
+          child: ChordTimelineCard(event: event, isHero: false, capo: capo),
         ),
       ),
     );
@@ -205,7 +191,9 @@ class ChordTimeline extends StatelessWidget {
     // (If it were the outer wrapper, every beat would remount the whole subtree
     // and replay the entrance ~2×/sec — a glitch the beat==0 tests never
     // surface.) Finite scale each time, so `pumpAndSettle` still terminates.
-    card = card.animate(key: ValueKey('beat-$beat')).scaleXY(
+    card = card
+        .animate(key: ValueKey('beat-$beat'))
+        .scaleXY(
           begin: 1.022,
           end: 1.0,
           duration: 180.ms,
@@ -271,37 +259,38 @@ class ChordTimeline extends StatelessWidget {
     return Opacity(
       key: const ValueKey('next-ghost'),
       opacity: 0.4,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              l10n.liveNext.toUpperCase(),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                letterSpacing: 2,
-                color: palette.muted,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w700,
-                fontSize: 34,
-                height: 0.9,
-                color: palette.muted,
-              ),
-            ),
-          ],
-        ),
-      )
-          .animate(key: ValueKey('ghost-$label'))
-          .fadeIn(duration: 280.ms, curve: Curves.easeOutCubic),
+      child:
+          Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.liveNext.toUpperCase(),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        letterSpacing: 2,
+                        color: palette.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 34,
+                        height: 0.9,
+                        color: palette.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              .animate(key: ValueKey('ghost-$label'))
+              .fadeIn(duration: 280.ms, curve: Curves.easeOutCubic),
     );
   }
 

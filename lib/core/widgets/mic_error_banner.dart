@@ -42,10 +42,7 @@ class MicErrorBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          TextButton(
-            onPressed: onRetry,
-            child: Text(l10n.micErrorAction),
-          ),
+          TextButton(onPressed: onRetry, child: Text(l10n.micErrorAction)),
         ],
       ),
     );

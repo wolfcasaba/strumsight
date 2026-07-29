@@ -37,8 +37,11 @@ class LiveLabPanel extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.science_outlined,
-                  size: 18, color: AppColors.primary),
+              const Icon(
+                Icons.science_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -55,13 +58,16 @@ class LiveLabPanel extends ConsumerWidget {
               FilledButton(
                 onPressed: analyzing
                     ? null
-                    : () =>
-                        ref.read(liveLabProvider.notifier).captureAndAnalyze(),
+                    : () => ref
+                          .read(liveLabProvider.notifier)
+                          .captureAndAnalyze(),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: palette.onAccent,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                 ),
                 child: analyzing
                     ? const SizedBox(

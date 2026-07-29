@@ -41,29 +41,32 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
-  })  : _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
-        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
-        _chordReleaseHoldFrames =
-            chordReleaseHoldFrames ?? DspConfig.chordReleaseHoldFrames,
-        _chroma = NnlsChroma(sampleRate: sampleRate, window: DspConfig.nnlsWindow),
-        _strums = StrumAnalyzer(
-          sampleRate: sampleRate,
-          // The live 70 ms model behind the r139 seam (r169): the engine
-          // hands the weights-asset BYTES across the isolate boundary
-          // (rootBundle is main-isolate-only, same pattern as the r165
-          // Analyze wiring); null/unparseable keeps the heuristic — the
-          // model is an upgrade, never a dependency.
-          classifier: _tryLiveCrnn(crnnWeights, sampleRate),
-        ),
-        _chordFramer = SlidingFramer(
-          window: DspConfig.nnlsWindow,
-          hop: DspConfig.nnlsHop,
-        ),
-        _onsetFramer = SlidingFramer(
-          window: DspConfig.onsetWindow,
-          hop: DspConfig.onsetHop,
-        ),
-        _emitEverySamples = (sampleRate * 0.066).round();
+  }) : _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
+       _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
+       _chordReleaseHoldFrames =
+           chordReleaseHoldFrames ?? DspConfig.chordReleaseHoldFrames,
+       _chroma = NnlsChroma(
+         sampleRate: sampleRate,
+         window: DspConfig.nnlsWindow,
+       ),
+       _strums = StrumAnalyzer(
+         sampleRate: sampleRate,
+         // The live 70 ms model behind the r139 seam (r169): the engine
+         // hands the weights-asset BYTES across the isolate boundary
+         // (rootBundle is main-isolate-only, same pattern as the r165
+         // Analyze wiring); null/unparseable keeps the heuristic — the
+         // model is an upgrade, never a dependency.
+         classifier: _tryLiveCrnn(crnnWeights, sampleRate),
+       ),
+       _chordFramer = SlidingFramer(
+         window: DspConfig.nnlsWindow,
+         hop: DspConfig.nnlsHop,
+       ),
+       _onsetFramer = SlidingFramer(
+         window: DspConfig.onsetWindow,
+         hop: DspConfig.onsetHop,
+       ),
+       _emitEverySamples = (sampleRate * 0.066).round();
 
   final int sampleRate;
 
@@ -116,9 +119,9 @@ class LivePipeline {
   static const _labels = ['1', '&', '2', '&', '3', '&', '4', '&'];
 
   static List<BeatSlot> _emptyBar() => [
-        for (var i = 0; i < 8; i++)
-          BeatSlot(label: _labels[i], isDownbeat: i.isEven),
-      ];
+    for (var i = 0; i < 8; i++)
+      BeatSlot(label: _labels[i], isDownbeat: i.isEven),
+  ];
 
   /// Feed a PCM chunk (any length, -1..1). Returns the frames due for
   /// emission (usually 0 or 1).
@@ -154,10 +157,13 @@ class LivePipeline {
     for (final frame in _chordFramer.add(chunk)) {
       final chroma = _chroma.process(frame);
       final tonal =
-          chroma != null && _chroma.lastTonalness >= DspConfig.chordMinTonalness;
+          chroma != null &&
+          _chroma.lastTonalness >= DspConfig.chordMinTonalness;
       _lastChord = tonal
           ? _chordDecoder.process(
-              _chroma.lastBassChroma, _chroma.lastTrebleChroma)
+              _chroma.lastBassChroma,
+              _chroma.lastTrebleChroma,
+            )
           : _chordDecoder.process(_silentChroma, _silentChroma, gated: true);
       // Musical-presence gate (round 176 probe): EMA-smooth the match
       // confidence so a sustained guitar chord builds up over the gate while a
@@ -257,8 +263,7 @@ class LivePipeline {
 
   /// The strum classifier actually behind the seam (r169 wiring proof).
   @visibleForTesting
-  StrumDirectionClassifier get debugStrumClassifier =>
-      _strums.debugClassifier;
+  StrumDirectionClassifier get debugStrumClassifier => _strums.debugClassifier;
 
   void reset() {
     _chordFramer.reset();

@@ -5,12 +5,16 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/wav_decoder.dart';
+import 'package:strumsight/features/analyze/engine/wav_decoder.dart';
 
 /// Build a minimal WAV (format 1 = PCM16, or 3 = float32) from per-channel
 /// interleaved samples in [-1, 1].
-Uint8List _wav(List<double> mono,
-    {int sampleRate = 16000, int channels = 1, int format = 1}) {
+Uint8List _wav(
+  List<double> mono, {
+  int sampleRate = 16000,
+  int channels = 1,
+  int format = 1,
+}) {
   final bitsPerSample = format == 3 ? 32 : 16;
   final bytesPerSample = bitsPerSample ~/ 8;
   final frames = mono.length;
@@ -72,10 +76,12 @@ void main() {
     final lr = [0.5, -0.5, 0.4, 0.4]; // interleaved L,R,L,R
     final b = BytesBuilder();
     void str(String s) => b.add(s.codeUnits);
-    void u32(int v) =>
-        b.add((ByteData(4)..setUint32(0, v, Endian.little)).buffer.asUint8List());
-    void u16(int v) =>
-        b.add((ByteData(2)..setUint16(0, v, Endian.little)).buffer.asUint8List());
+    void u32(int v) => b.add(
+      (ByteData(4)..setUint32(0, v, Endian.little)).buffer.asUint8List(),
+    );
+    void u16(int v) => b.add(
+      (ByteData(2)..setUint16(0, v, Endian.little)).buffer.asUint8List(),
+    );
     final dataLen = lr.length * 2;
     str('RIFF');
     u32(36 + dataLen);
@@ -110,8 +116,10 @@ void main() {
 
   test('rejects non-WAV / unsupported bytes with null (no garbage decode)', () {
     expect(WavDecoder.decode(Uint8List(10)), isNull); // too short
-    expect(WavDecoder.decode(Uint8List.fromList('NOTAWAVFILE!!'.codeUnits)),
-        isNull);
+    expect(
+      WavDecoder.decode(Uint8List.fromList('NOTAWAVFILE!!'.codeUnits)),
+      isNull,
+    );
     // A valid RIFF header but 8-bit depth (unsupported) → null.
     final eight = _wav([0.1, 0.2]);
     eight[34] = 8; // bitsPerSample = 8
@@ -119,7 +127,13 @@ void main() {
   });
 
   test('an MP3-like blob (not RIFF) is rejected', () {
-    final mp3 = Uint8List.fromList([0xFF, 0xFB, 0x90, 0x00, ...List.filled(60, 0)]);
+    final mp3 = Uint8List.fromList([
+      0xFF,
+      0xFB,
+      0x90,
+      0x00,
+      ...List.filled(60, 0),
+    ]);
     expect(WavDecoder.decode(mp3), isNull);
   });
 }

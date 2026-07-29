@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/engine/dsp/tuner_analyzer.dart';
-import 'package:music_theory/features/tuner/engine/dsp/yin_pitch_detector.dart';
-import 'package:music_theory/features/tuner/model/tuner_reading.dart';
+import 'package:strumsight/features/tuner/engine/dsp/tuner_analyzer.dart';
+import 'package:strumsight/features/tuner/engine/dsp/yin_pitch_detector.dart';
+import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 
 import '../../../support/synth.dart';
 
@@ -76,15 +76,17 @@ void main() {
     expect(reading.hasSignal, isFalse);
   });
 
-  test('TunerAnalyzer: a single clear frame does NOT lock (needs stability)',
-      () {
-    final analyzer = TunerAnalyzer(sampleRate: sr);
-    final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
-    // One frame is not enough evidence — a real note is held for many frames,
-    // a transient/glide is not.
-    final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
-    expect(reading.hasSignal, isFalse);
-  });
+  test(
+    'TunerAnalyzer: a single clear frame does NOT lock (needs stability)',
+    () {
+      final analyzer = TunerAnalyzer(sampleRate: sr);
+      final note = harmonicNote(freq: 110, seconds: 0.4, amp: 0.3);
+      // One frame is not enough evidence — a real note is held for many frames,
+      // a transient/glide is not.
+      final reading = analyzer.process(note.sublist(0, analyzer.bufferSize));
+      expect(reading.hasSignal, isFalse);
+    },
+  );
 
   test('TunerAnalyzer: a gliding pitch (voice-like) never locks', () {
     final analyzer = TunerAnalyzer(sampleRate: sr);

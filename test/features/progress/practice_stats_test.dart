@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/progress/model/practice_entry.dart';
-import 'package:music_theory/features/progress/model/practice_stats.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/model/practice_stats.dart';
 
 void main() {
   PracticeEntry entry({
@@ -10,15 +10,14 @@ void main() {
     int strokes = 0,
     int chords = 0,
     double? dir,
-  }) =>
-      PracticeEntry(
-        day: day,
-        source: source,
-        seconds: seconds,
-        strokes: strokes,
-        chords: chords,
-        directionAccuracy: dir,
-      );
+  }) => PracticeEntry(
+    day: day,
+    source: source,
+    seconds: seconds,
+    strokes: strokes,
+    chords: chords,
+    directionAccuracy: dir,
+  );
 
   test('totals fold seconds / strokes / distinct days', () {
     final stats = PracticeStats([

@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/chroma_denoise.dart';
+import 'package:strumsight/features/analyze/engine/chroma_denoise.dart';
 
 /// Build a 12-dim chroma frame with the given per-pitch-class values.
 Float64List frame(Map<int, double> pcs) {
@@ -12,24 +12,25 @@ Float64List frame(Map<int, double> pcs) {
 
 void main() {
   group('ChromaDenoise.temporalMedian', () {
-    test('removes a single-frame transient spike, preserves the sustained tone',
-        () {
-      // A chord held on pc=0 across 9 frames. pc=6 spikes hugely in ONLY the
-      // middle frame (index 4) — a drum-hit / passing-note transient.
-      final frames = <Float64List>[
-        for (var i = 0; i < 9; i++)
-          frame({0: 1.0, if (i == 4) 6: 50.0}),
-      ];
+    test(
+      'removes a single-frame transient spike, preserves the sustained tone',
+      () {
+        // A chord held on pc=0 across 9 frames. pc=6 spikes hugely in ONLY the
+        // middle frame (index 4) — a drum-hit / passing-note transient.
+        final frames = <Float64List>[
+          for (var i = 0; i < 9; i++) frame({0: 1.0, if (i == 4) 6: 50.0}),
+        ];
 
-      final out = ChromaDenoise.temporalMedian(frames, window: 5);
+        final out = ChromaDenoise.temporalMedian(frames, window: 5);
 
-      // The transient at the middle frame is outvoted by its neighbours.
-      expect(out[4][6], closeTo(0.0, 1e-12));
-      // The sustained chord tone survives everywhere.
-      for (var i = 0; i < 9; i++) {
-        expect(out[i][0], closeTo(1.0, 1e-12));
-      }
-    });
+        // The transient at the middle frame is outvoted by its neighbours.
+        expect(out[4][6], closeTo(0.0, 1e-12));
+        // The sustained chord tone survives everywhere.
+        for (var i = 0; i < 9; i++) {
+          expect(out[i][0], closeTo(1.0, 1e-12));
+        }
+      },
+    );
 
     test('preserves a value present in a MAJORITY of the window', () {
       // pc=3 is present (value 2.0) in 3 of the 5 window frames around index 2.
@@ -53,9 +54,7 @@ void main() {
         frame({2: 3.0}),
       ];
       // Snapshot to detect mutation.
-      final snapshot = [
-        for (final f in original) Float64List.fromList(f),
-      ];
+      final snapshot = [for (final f in original) Float64List.fromList(f)];
 
       for (final w in [0, 1]) {
         final out = ChromaDenoise.temporalMedian(original, window: w);
@@ -77,15 +76,16 @@ void main() {
       final frames = <Float64List>[
         for (var i = 0; i < 7; i++) frame({0: 1.0, if (i == 3) 5: 40.0}),
       ];
-      final snapshot = [
-        for (final f in frames) Float64List.fromList(f),
-      ];
+      final snapshot = [for (final f in frames) Float64List.fromList(f)];
 
       ChromaDenoise.temporalMedian(frames, window: 5);
 
       for (var i = 0; i < frames.length; i++) {
-        expect(frames[i], orderedEquals(snapshot[i]),
-            reason: 'input frame $i must be untouched');
+        expect(
+          frames[i],
+          orderedEquals(snapshot[i]),
+          reason: 'input frame $i must be untouched',
+        );
       }
     });
 

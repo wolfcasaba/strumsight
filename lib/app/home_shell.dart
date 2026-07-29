@@ -41,17 +41,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ref
           .read(nudgeEnabledProvider.notifier)
           .reconcile(
-              copyFor: (v) => switch (v) {
-                    NudgeCopyVariant.friday => (
-                        title: l10n.nudgeTitleFriday,
-                        body: l10n.nudgeBodyFriday
-                      ),
-                    NudgeCopyVariant.weekend => (
-                        title: l10n.nudgeTitleWeekend,
-                        body: l10n.nudgeBodyWeekend
-                      ),
-                    _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
-                  });
+            copyFor: (v) => switch (v) {
+              NudgeCopyVariant.friday => (
+                title: l10n.nudgeTitleFriday,
+                body: l10n.nudgeBodyFriday,
+              ),
+              NudgeCopyVariant.weekend => (
+                title: l10n.nudgeTitleWeekend,
+                body: l10n.nudgeBodyWeekend,
+              ),
+              _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
+            },
+          );
     });
   }
 

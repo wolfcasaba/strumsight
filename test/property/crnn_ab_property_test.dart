@@ -15,10 +15,10 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/strum_analyzer.dart';
-import 'package:music_theory/features/live/engine/ml/strum_crnn.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_analyzer.dart';
+import 'package:strumsight/features/live/engine/ml/strum_crnn.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 import '../support/synth.dart';
 
@@ -34,11 +34,13 @@ void main() {
   final seed = int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
   final rng = math.Random(seed);
 
-  test('A/B: heuristic vs CRNN direction on randomized synth strums (24)',
-      () {
+  test('A/B: heuristic vs CRNN direction on randomized synth strums (24)', () {
     final crnn = StrumCrnn.tryLoad('assets/ml/strum_crnn.bin');
-    expect(crnn, isNotNull,
-        reason: 'assets/ml/strum_crnn.bin must ship with the repo');
+    expect(
+      crnn,
+      isNotNull,
+      reason: 'assets/ml/strum_crnn.bin must ship with the repo',
+    );
 
     var heurChecked = 0, heurCorrect = 0;
     var crnnChecked = 0, crnnCorrect = 0;
@@ -61,8 +63,11 @@ void main() {
       // Heuristic side: the full analyzer (onset detection included).
       final analyzer = StrumAnalyzer(sampleRate: sr);
       StrumEvent? event;
-      for (final frame
-          in _frames(clip, DspConfig.onsetWindow, DspConfig.onsetHop)) {
+      for (final frame in _frames(
+        clip,
+        DspConfig.onsetWindow,
+        DspConfig.onsetHop,
+      )) {
         event ??= analyzer.process(frame);
       }
       if (event?.direction != null) {
@@ -83,24 +88,31 @@ void main() {
     final crnnAcc = crnnCorrect / math.max(1, crnnChecked);
     // The scoreboard — printed every run so drift is visible in CI logs.
     // ignore: avoid_print
-    print('A/B seed=$seed heuristic=$heurCorrect/$heurChecked '
-        '(${(heurAcc * 100).toStringAsFixed(0)}%) '
-        'crnn=$crnnCorrect/$crnnChecked '
-        '(${(crnnAcc * 100).toStringAsFixed(0)}%)');
+    print(
+      'A/B seed=$seed heuristic=$heurCorrect/$heurChecked '
+      '(${(heurAcc * 100).toStringAsFixed(0)}%) '
+      'crnn=$crnnCorrect/$crnnChecked '
+      '(${(crnnAcc * 100).toStringAsFixed(0)}%)',
+    );
 
-    expect(heurChecked, greaterThanOrEqualTo(18),
-        reason: 'seed=$seed: synth strums should rarely be ambiguous');
+    expect(
+      heurChecked,
+      greaterThanOrEqualTo(18),
+      reason: 'seed=$seed: synth strums should rarely be ambiguous',
+    );
     expect(crnnChecked, 24, reason: 'the CRNN always answers');
-    expect(heurAcc, greaterThanOrEqualTo(0.85),
-        reason: 'seed=$seed: heuristic floor (r59 property)');
+    expect(
+      heurAcc,
+      greaterThanOrEqualTo(0.85),
+      reason: 'seed=$seed: heuristic floor (r59 property)',
+    );
     // No CRNN accuracy gate here — synth is off-domain for the model
     // (see header); crnnAcc is scoreboard-only. The unused variable would
     // otherwise lint:
     expect(crnnAcc, inInclusiveRange(0.0, 1.0));
   });
 
-  test('tryLoad returns null when the weights asset is missing (fallback)',
-      () {
+  test('tryLoad returns null when the weights asset is missing (fallback)', () {
     expect(StrumCrnn.tryLoad('assets/ml/nope.bin'), isNull);
   });
 }

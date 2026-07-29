@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/metronome/tap_tempo.dart';
+import 'package:strumsight/features/metronome/tap_tempo.dart';
 
 void main() {
   final t0 = DateTime(2026, 1, 1, 12, 0, 0);

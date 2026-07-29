@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/songs/providers/setlists_provider.dart';
+import 'package:strumsight/features/songs/providers/setlists_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -20,7 +20,11 @@ void main() {
     await ctrl.addSong(id, 'song1');
     await ctrl.addSong(id, 'song2');
     await ctrl.addSong(id, 'song1'); // duplicates allowed
-    expect(c.read(setlistsProvider).single.songIds, ['song1', 'song2', 'song1']);
+    expect(c.read(setlistsProvider).single.songIds, [
+      'song1',
+      'song2',
+      'song1',
+    ]);
 
     await ctrl.removeAt(id, 1);
     expect(c.read(setlistsProvider).single.songIds, ['song1', 'song1']);

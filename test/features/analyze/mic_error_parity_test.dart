@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_recorder.dart';
-import 'package:music_theory/features/analyze/providers/analyze_providers.dart';
-import 'package:music_theory/features/analyze/screens/analyze_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
+import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
+import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 99 — Analyze mic-error parity (Live got it round 13, Tuner round
@@ -29,28 +29,38 @@ void main() {
     final recorder = ClipRecorder();
     final result = await recorder.start();
     expect(result, MicStart.failed);
-    expect(recorder.isRecording, isFalse,
-        reason: 'a failed start must not leave the recorder "recording"');
+    expect(
+      recorder.isRecording,
+      isFalse,
+      reason: 'a failed start must not leave the recorder "recording"',
+    );
     // Retrying still reports failure honestly (not a stuck "already on").
     expect(await recorder.start(), MicStart.failed);
   });
 
   testWidgets('the micError phase shows the retry UI, not the permission '
       'copy', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [analyzeControllerProvider.overrideWith(_MicErrorStub.new)],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: AnalyzeScreen()),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [analyzeControllerProvider.overrideWith(_MicErrorStub.new)],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: AnalyzeScreen()),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining("Couldn't start the microphone"),
-        findsOneWidget);
+    expect(
+      find.textContaining("Couldn't start the microphone"),
+      findsOneWidget,
+    );
     expect(find.text('Retry'), findsOneWidget);
-    expect(find.textContaining('needs the microphone'), findsNothing,
-        reason: 'a busy mic is not a permission problem');
+    expect(
+      find.textContaining('needs the microphone'),
+      findsNothing,
+      reason: 'a busy mic is not a permission problem',
+    );
   });
 }

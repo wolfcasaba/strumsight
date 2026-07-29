@@ -49,8 +49,10 @@ class SettingsScreen extends ConsumerWidget {
             margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             child: ListTile(
-              leading: const Icon(Icons.insights_outlined,
-                  color: AppColors.primary),
+              leading: const Icon(
+                Icons.insights_outlined,
+                color: AppColors.primary,
+              ),
               title: Text(l10n.progressTitle),
               subtitle: Text(l10n.progressTotalPractice),
               trailing: const Icon(Icons.chevron_right),
@@ -69,9 +71,15 @@ class SettingsScreen extends ConsumerWidget {
           SegmentedButton<ThemeMode>(
             showSelectedIcon: false,
             segments: [
-              ButtonSegment(value: ThemeMode.light, label: Text(l10n.themeLight)),
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text(l10n.themeLight),
+              ),
               ButtonSegment(value: ThemeMode.dark, label: Text(l10n.themeDark)),
-              ButtonSegment(value: ThemeMode.system, label: Text(l10n.themeSystem)),
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text(l10n.themeSystem),
+              ),
             ],
             selected: {themeMode},
             onSelectionChanged: (s) =>
@@ -159,8 +167,9 @@ class SettingsScreen extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.timer_outlined),
             title: Text(l10n.calibrationTitle),
-            subtitle:
-                Text(l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}')),
+            subtitle: Text(
+              l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}'),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/calibrate'),
           ),
@@ -169,21 +178,22 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.settingsNudge),
             subtitle: Text(l10n.settingsNudgeHint),
             value: ref.watch(nudgeEnabledProvider),
-            onChanged: (v) =>
-                ref.read(nudgeEnabledProvider.notifier).setEnabled(
-                      v,
-                      copyFor: (variant) => switch (variant) {
-                        NudgeCopyVariant.friday => (
-                            title: l10n.nudgeTitleFriday,
-                            body: l10n.nudgeBodyFriday
-                          ),
-                        NudgeCopyVariant.weekend => (
-                            title: l10n.nudgeTitleWeekend,
-                            body: l10n.nudgeBodyWeekend
-                          ),
-                        _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
-                      },
+            onChanged: (v) => ref
+                .read(nudgeEnabledProvider.notifier)
+                .setEnabled(
+                  v,
+                  copyFor: (variant) => switch (variant) {
+                    NudgeCopyVariant.friday => (
+                      title: l10n.nudgeTitleFriday,
+                      body: l10n.nudgeBodyFriday,
                     ),
+                    NudgeCopyVariant.weekend => (
+                      title: l10n.nudgeTitleWeekend,
+                      body: l10n.nudgeBodyWeekend,
+                    ),
+                    _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
+                  },
+                ),
           ),
           const SizedBox(height: 28),
 
@@ -365,8 +375,9 @@ class _CapoStepper extends ConsumerWidget {
         Row(
           children: [
             IconButton.outlined(
-              onPressed:
-                  capo > CapoNotifier.minFret ? () => notifier.set(capo - 1) : null,
+              onPressed: capo > CapoNotifier.minFret
+                  ? () => notifier.set(capo - 1)
+                  : null,
               icon: const Icon(Icons.remove),
               tooltip: '−1',
             ),
@@ -384,8 +395,9 @@ class _CapoStepper extends ConsumerWidget {
               ),
             ),
             IconButton.outlined(
-              onPressed:
-                  capo < CapoNotifier.maxFret ? () => notifier.set(capo + 1) : null,
+              onPressed: capo < CapoNotifier.maxFret
+                  ? () => notifier.set(capo + 1)
+                  : null,
               icon: const Icon(Icons.add),
               tooltip: '+1',
             ),

@@ -1,24 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
 
 import '../../support/synth.dart';
 
 AnalyzeResult _result() => AnalyzeResult(
-      durationSec: 4,
-      bpm: 120, // 0.5 s / beat
-      chords: const [
-        TimelineChord(label: 'C', startSec: 0, endSec: 2),
-        TimelineChord(label: 'G', startSec: 2, endSec: 4),
-      ],
-      strums: [
-        TimelineStrum(direction: StrumDirection.down, timeSec: 0.0, confidence: 1),
-        TimelineStrum(direction: StrumDirection.up, timeSec: 0.5, confidence: 1),
-        TimelineStrum(direction: StrumDirection.down, timeSec: 2.0, confidence: 1),
-      ],
-    );
+  durationSec: 4,
+  bpm: 120, // 0.5 s / beat
+  chords: const [
+    TimelineChord(label: 'C', startSec: 0, endSec: 2),
+    TimelineChord(label: 'G', startSec: 2, endSec: 4),
+  ],
+  strums: [
+    TimelineStrum(direction: StrumDirection.down, timeSec: 0.0, confidence: 1),
+    TimelineStrum(direction: StrumDirection.up, timeSec: 0.5, confidence: 1),
+    TimelineStrum(direction: StrumDirection.down, timeSec: 2.0, confidence: 1),
+  ],
+);
 
 void main() {
   test('imports strums as beat-timed events on the sounding chord', () {
@@ -49,7 +49,11 @@ void main() {
       bpm: 0, // undetected
       chords: const [],
       strums: [
-        TimelineStrum(direction: StrumDirection.down, timeSec: 0.3, confidence: 1),
+        TimelineStrum(
+          direction: StrumDirection.down,
+          timeSec: 0.3,
+          confidence: 1,
+        ),
       ],
     );
     final lesson = Lessons.fromAnalyze(r, name: 'x');
@@ -65,8 +69,7 @@ void main() {
     expect(lesson.totalBeats, 4);
   });
 
-  test('END-TO-END: real audio → analyzer → beats land on the grid (r148)',
-      () {
+  test('END-TO-END: real audio → analyzer → beats land on the grid (r148)', () {
     // The unit tests above use hand-built exact times; this locks the WHOLE
     // chain on synthesized audio. Before the r145 timestamp fix the analyzer
     // fed times 85–165 ms late with ±40 ms jitter — up to ~0.3 beat of error
@@ -79,8 +82,11 @@ void main() {
     final lesson = Lessons.fromAnalyze(result, name: 'e2e');
     expect(lesson.events, hasLength(5));
     for (var i = 0; i < 5; i++) {
-      expect((lesson.events[i].beat - i).abs(), lessThan(0.12),
-          reason: 'event $i at beat ${lesson.events[i].beat}');
+      expect(
+        (lesson.events[i].beat - i).abs(),
+        lessThan(0.12),
+        reason: 'event $i at beat ${lesson.events[i].beat}',
+      );
     }
   });
 }

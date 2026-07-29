@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/model/analyze_result.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/share/screens/share_preview_screen.dart';
-import 'package:music_theory/features/share/share_service.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/share/screens/share_preview_screen.dart';
+import 'package:strumsight/features/share/share_service.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Records which share path was taken instead of hitting the OS share sheet.
 class FakeShareService extends ShareService {
@@ -17,16 +17,14 @@ class FakeShareService extends ShareService {
     required AnalyzeResult result,
     int capo = 0,
     Rect? sharePositionOrigin,
-  }) async =>
-      log.add('card:${result.strums.length}:capo$capo');
+  }) async => log.add('card:${result.strums.length}:capo$capo');
 
   @override
   Future<void> shareText(
     AnalyzeResult result, {
     int capo = 0,
     Rect? sharePositionOrigin,
-  }) async =>
-      log.add('text');
+  }) async => log.add('text');
 }
 
 final _result = AnalyzeResult(
@@ -36,20 +34,25 @@ final _result = AnalyzeResult(
   strums: [
     for (var i = 0; i < 3; i++)
       TimelineStrum(
-          direction: StrumDirection.down, timeSec: i.toDouble(), confidence: 1),
+        direction: StrumDirection.down,
+        timeSec: i.toDouble(),
+        confidence: 1,
+      ),
   ],
 );
 
 Future<void> _pump(WidgetTester tester, List<String> log, {int capo = 0}) =>
-    tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: SharePreviewScreen(
-        result: _result,
-        capo: capo,
-        shareService: FakeShareService(log),
+    tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SharePreviewScreen(
+          result: _result,
+          capo: capo,
+          shareService: FakeShareService(log),
+        ),
       ),
-    ));
+    );
 
 void main() {
   testWidgets('previews the card and shares the image on tap', (tester) async {

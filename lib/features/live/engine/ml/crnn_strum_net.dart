@@ -42,8 +42,9 @@ class CrnnStrumNet {
       return v;
     }
 
-    final magic = String.fromCharCodes(
-        [for (var i = 0; i < 4; i++) bytes.getUint8(off + i)]);
+    final magic = String.fromCharCodes([
+      for (var i = 0; i < 4; i++) bytes.getUint8(off + i),
+    ]);
     off += 4;
     if (magic != 'SSML') {
       throw FormatException('not a strum_crnn.bin (magic $magic)');
@@ -55,8 +56,9 @@ class CrnnStrumNet {
     final arrays = <String, _NdArray>{};
     for (var a = 0; a < count; a++) {
       final nameLen = u32();
-      final name = String.fromCharCodes(
-          [for (var i = 0; i < nameLen; i++) bytes.getUint8(off + i)]);
+      final name = String.fromCharCodes([
+        for (var i = 0; i < nameLen; i++) bytes.getUint8(off + i),
+      ]);
       off += nameLen;
       final ndim = u32();
       final dims = [for (var i = 0; i < ndim; i++) u32()];
@@ -193,8 +195,12 @@ class CrnnStrumNet {
     for (var i = 0; i < out.h; i++) {
       for (var j = 0; j < out.w; j++) {
         for (var c = 0; c < x.c; c++) {
-          out.set(i, j, c,
-              math.max(x.get(i, 2 * j, c), x.get(i, 2 * j + 1, c)));
+          out.set(
+            i,
+            j,
+            c,
+            math.max(x.get(i, 2 * j, c), x.get(i, 2 * j + 1, c)),
+          );
         }
       }
     }

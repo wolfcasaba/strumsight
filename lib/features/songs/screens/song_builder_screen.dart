@@ -85,13 +85,15 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   Future<void> _save() async {
     final ctrl = ref.read(songsProvider.notifier);
     if (widget.existing != null) {
-      await ctrl.update(widget.existing!.copyWith(
-        name: _name.text.trim(),
-        chords: _chords,
-        pattern: _pattern,
-        bpm: _bpm,
-        beatsPerBar: _beatsPerBar,
-      ));
+      await ctrl.update(
+        widget.existing!.copyWith(
+          name: _name.text.trim(),
+          chords: _chords,
+          pattern: _pattern,
+          bpm: _bpm,
+          beatsPerBar: _beatsPerBar,
+        ),
+      );
     } else {
       await ctrl.add(
         name: _name.text.trim(),
@@ -109,9 +111,9 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing == null
-            ? l10n.songNewTitle
-            : l10n.songEditTitle),
+        title: Text(
+          widget.existing == null ? l10n.songNewTitle : l10n.songEditTitle,
+        ),
       ),
       body: SafeArea(
         child: ListView(
@@ -140,8 +142,10 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             ),
             const SizedBox(height: 8),
             if (_chords.isEmpty)
-              Text(l10n.songProgressionHint,
-                  style: TextStyle(color: Theme.of(context).hintColor))
+              Text(
+                l10n.songProgressionHint,
+                style: TextStyle(color: Theme.of(context).hintColor),
+              )
             else
               Wrap(
                 spacing: 6,
@@ -155,8 +159,10 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
                 ],
               ),
             const SizedBox(height: 12),
-            Text(l10n.songAddChord,
-                style: Theme.of(context).textTheme.labelMedium),
+            Text(
+              l10n.songAddChord,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
@@ -191,8 +197,10 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            Text(l10n.songStrumPatternHint,
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              l10n.songStrumPatternHint,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -237,9 +245,11 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
                 ),
                 SizedBox(
                   width: 64,
-                  child: Text(l10n.songBpm(_bpm),
-                      textAlign: TextAlign.end,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  child: Text(
+                    l10n.songBpm(_bpm),
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -248,8 +258,9 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _valid ? _save : null,
-        backgroundColor:
-            _valid ? AppColors.primary : Theme.of(context).disabledColor,
+        backgroundColor: _valid
+            ? AppColors.primary
+            : Theme.of(context).disabledColor,
         icon: const Icon(Icons.check),
         label: Text(l10n.songSave),
       ),

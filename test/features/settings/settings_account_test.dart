@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/auth/data/auth_repository.dart';
-import 'package:music_theory/features/auth/data/token_store.dart';
-import 'package:music_theory/features/auth/providers/auth_providers.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/features/settings/data/settings_repository.dart';
-import 'package:music_theory/main.dart';
+import 'package:strumsight/features/auth/data/auth_repository.dart';
+import 'package:strumsight/features/auth/data/token_store.dart';
+import 'package:strumsight/features/auth/providers/auth_providers.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/settings/data/settings_repository.dart';
+import 'package:strumsight/main.dart';
 
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
@@ -39,8 +39,9 @@ Future<void> _openSettings(
 }
 
 void main() {
-  testWidgets('Account section is hidden while the account layer is disabled',
-      (tester) async {
+  testWidgets('Account section is hidden while the account layer is disabled', (
+    tester,
+  ) async {
     await _openSettings(tester, accountEnabled: false);
 
     expect(find.text('Sign in'), findsNothing);
@@ -49,16 +50,18 @@ void main() {
     expect(find.text('ACCOUNT'), findsNothing);
   });
 
-  testWidgets('Account section shows Sign in when logged out (enabled)',
-      (tester) async {
+  testWidgets('Account section shows Sign in when logged out (enabled)', (
+    tester,
+  ) async {
     await _openSettings(tester);
 
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.textContaining('sync your settings'), findsOneWidget);
   });
 
-  testWidgets('Account section shows the email + Sign out when logged in',
-      (tester) async {
+  testWidgets('Account section shows the email + Sign out when logged in', (
+    tester,
+  ) async {
     await _openSettings(tester, token: 'stored-token');
 
     expect(find.textContaining('player@strumsight.app'), findsOneWidget);

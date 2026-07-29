@@ -42,13 +42,15 @@ class StrumAnalyzer {
     this.window = DspConfig.onsetWindow,
     this.hop = DspConfig.onsetHop,
     StrumDirectionClassifier? classifier,
-  })  : _fft = FFT(window),
-        _hann = Float64List(window),
-        _windowed = Float64List(window),
-        _onsets = SuperFluxOnsetDetector(sampleRate: sampleRate),
-        _classifier = classifier ?? HeuristicStrumClassifier() {
-    assert(window == _onsets.window && hop == _onsets.hop,
-        'StrumAnalyzer framing must match the SuperFlux detector');
+  }) : _fft = FFT(window),
+       _hann = Float64List(window),
+       _windowed = Float64List(window),
+       _onsets = SuperFluxOnsetDetector(sampleRate: sampleRate),
+       _classifier = classifier ?? HeuristicStrumClassifier() {
+    assert(
+      window == _onsets.window && hop == _onsets.hop,
+      'StrumAnalyzer framing must match the SuperFlux detector',
+    );
     for (var i = 0; i < window; i++) {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (window - 1));
     }

@@ -73,12 +73,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // Log the finished Live session for the Progress dashboard (only if the user
     // actually played). Uses the captured notifier — safe after unmount.
     if (_sessionStart != null && _strokeCount > 0) {
-      _log?.record(PracticeEntry(
-        day: StreakLogic.epochDayOf(DateTime.now()),
-        source: PracticeSource.live,
-        seconds: DateTime.now().difference(_sessionStart!).inSeconds,
-        strokes: _strokeCount,
-      ));
+      _log?.record(
+        PracticeEntry(
+          day: StreakLogic.epochDayOf(DateTime.now()),
+          source: PracticeSource.live,
+          seconds: DateTime.now().difference(_sessionStart!).inSeconds,
+          strokes: _strokeCount,
+        ),
+      );
     }
     super.dispose();
   }
@@ -138,8 +140,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final liveAsync = ref.watch(liveFrameProvider);
     final live = liveAsync.asData?.value ?? LiveFrame.empty;
     // While paused the engine is stopped, so reflect "not listening" honestly.
-    final frame =
-        _paused ? (_frozen ?? live).copyWith(listening: false) : live;
+    final frame = _paused ? (_frozen ?? live).copyWith(listening: false) : live;
     // The rolling chord-timeline history (newest last), folded from the same
     // live frames in [chordTimelineProvider].
     final timeline = ref.watch(chordTimelineProvider);
@@ -161,57 +162,55 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: LiveStatusBar(
-                      frame: frame,
-                      a4: ref.watch(tuningReferenceProvider),
-                      capo: capo,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const StreakBadge(),
-                ],
-              ),
-              if (!micGranted) const MicPermissionBanner(),
-              if (micGranted && micError)
-                MicErrorBanner(
-                  onRetry: () => ref.invalidate(liveFrameProvider),
-                ),
-              Expanded(
-                // The chord-timeline filmstrip: newest chord big on the right,
-                // previously recognised chords receding left, each with its
-                // own ↓/↑ strum direction. Subsumes the old big-chord + arrow +
-                // confidence-pill hero and the fingering overlay.
-                child: ChordTimeline(
-                  events: timeline,
-                  next: frame.next,
-                  capo: capo,
-                  listening: !_paused && frame.listening,
-                  beat: beat,
-                ),
-              ),
-              if (frame.bar.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: BeatCounter(
-                    bar: frame.bar,
-                    activeIndex: _activeSlot(frame),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: LiveStatusBar(
+                    frame: frame,
+                    a4: ref.watch(tuningReferenceProvider),
+                    capo: capo,
                   ),
                 ),
-              if (labMode) const LiveLabPanel(),
-              _ActionBar(
-                paused: _paused,
-                onTuner: () => context.push('/tuner'),
-                onMetronome: () => context.push('/metronome'),
-                onPauseToggle: _togglePause,
+                const SizedBox(width: 8),
+                const StreakBadge(),
+              ],
+            ),
+            if (!micGranted) const MicPermissionBanner(),
+            if (micGranted && micError)
+              MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
+            Expanded(
+              // The chord-timeline filmstrip: newest chord big on the right,
+              // previously recognised chords receding left, each with its
+              // own ↓/↑ strum direction. Subsumes the old big-chord + arrow +
+              // confidence-pill hero and the fingering overlay.
+              child: ChordTimeline(
+                events: timeline,
+                next: frame.next,
+                capo: capo,
+                listening: !_paused && frame.listening,
+                beat: beat,
               ),
-            ],
-          ),
+            ),
+            if (frame.bar.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: BeatCounter(
+                  bar: frame.bar,
+                  activeIndex: _activeSlot(frame),
+                ),
+              ),
+            if (labMode) const LiveLabPanel(),
+            _ActionBar(
+              paused: _paused,
+              onTuner: () => context.push('/tuner'),
+              onMetronome: () => context.push('/metronome'),
+              onPauseToggle: _togglePause,
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   int? _activeSlot(LiveFrame frame) {

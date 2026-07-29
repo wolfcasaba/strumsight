@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/learn/screens/learn_screen.dart';
-import 'package:music_theory/features/live/model/live_frame.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/live/providers/live_providers.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/screens/learn_screen.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -16,26 +16,28 @@ import '../../support/fake_engines.dart';
 /// next). Failing keeps the focus on "Play again"; one-off lessons (daily
 /// challenge, Analyze imports) have no curriculum successor.
 LiveFrame _strumFrame(int seq) => LiveFrame(
-      current: null,
-      next: null,
-      latestStrum: const Strum(direction: StrumDirection.down, confidence: 1),
-      bar: const [],
-      bpm: 0,
-      inputLevel: 0.5,
-      tuningHz: 440,
-      listening: true,
-      strumSeq: seq,
-    );
+  current: null,
+  next: null,
+  latestStrum: const Strum(direction: StrumDirection.down, confidence: 1),
+  bar: const [],
+  bpm: 0,
+  inputLevel: 0.5,
+  tuningHz: 440,
+  listening: true,
+  strumSeq: seq,
+);
 
 Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [strumEngineProvider.overrideWithValue(engine)],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: LearnScreen(lesson: Lessons.firstStrums),
+    tester.pumpWidget(
+      ProviderScope(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LearnScreen(lesson: Lessons.firstStrums),
+        ),
       ),
-    ));
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -70,8 +72,9 @@ void main() {
     var seq = 0;
     for (var k = 0; k < 16; k++) {
       final target = (4 + k) * spb + 0.01;
-      await tester
-          .pump(Duration(microseconds: ((target - elapsed) * 1e6).round()));
+      await tester.pump(
+        Duration(microseconds: ((target - elapsed) * 1e6).round()),
+      );
       elapsed = target;
       engine.emit(_strumFrame(++seq));
       await tester.pump();
@@ -90,8 +93,9 @@ void main() {
     expect(find.text('Two-Chord Change'), findsOneWidget);
   });
 
-  testWidgets('a FAILED run keeps the focus on retrying — no next-lesson CTA',
-      (tester) async {
+  testWidgets('a FAILED run keeps the focus on retrying — no next-lesson CTA', (
+    tester,
+  ) async {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
     await _pump(tester, engine);

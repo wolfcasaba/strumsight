@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:music_theory/features/settings/data/settings_repository.dart';
+import 'package:strumsight/features/settings/data/settings_repository.dart';
 
 /// In-memory settings backend for tests. Holds a [RemoteSettings] and records
 /// every `update` patch so tests can assert what was pushed.
@@ -28,11 +28,11 @@ class FakeSettingsRepository implements SettingsRepository {
   Object? alwaysFailWith;
 
   RemoteSettings get _current => RemoteSettings(
-        themeMode: themeMode,
-        locale: locale,
-        confidenceThreshold: confidenceThreshold,
-        tuningA4: tuningA4,
-      );
+    themeMode: themeMode,
+    locale: locale,
+    confidenceThreshold: confidenceThreshold,
+    tuningA4: tuningA4,
+  );
 
   @override
   Future<RemoteSettings> fetch() async {
@@ -51,8 +51,9 @@ class FakeSettingsRepository implements SettingsRepository {
       throw Exception('offline');
     }
     if (patch.containsKey('theme_mode')) {
-      themeMode = RemoteSettings.fromJson({'theme_mode': patch['theme_mode']})
-          .themeMode;
+      themeMode = RemoteSettings.fromJson({
+        'theme_mode': patch['theme_mode'],
+      }).themeMode;
     }
     if (patch.containsKey('locale')) {
       final code = patch['locale'] as String?;

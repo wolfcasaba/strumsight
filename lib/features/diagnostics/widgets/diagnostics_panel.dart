@@ -40,8 +40,11 @@ class DiagnosticsPanel extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.science_outlined,
-                  size: 18, color: AppColors.primary),
+              const Icon(
+                Icons.science_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 8),
               Text(
                 l10n.labDiagnosticsTitle,
@@ -77,61 +80,67 @@ class DiagnosticsPanel extends ConsumerWidget {
   }
 
   List<Widget> _rows(
-      BuildContext context, AppPalette palette, List<TimelineChord> mlChords) {
+    BuildContext context,
+    AppPalette palette,
+    List<TimelineChord> mlChords,
+  ) {
     return [
       for (final seg in mlChords)
-        Builder(builder: (_) {
-          final mid = (seg.startSec + seg.endSec) / 2;
-          final dspLabel = _labelAt(result.chords, mid);
-          final agree = MlChordDecoder.majminReduce(seg.label) ==
-              MlChordDecoder.majminReduce(dspLabel);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 44,
-                  child: Text(
-                    '${seg.startSec.toStringAsFixed(1)}s',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: palette.muted,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+        Builder(
+          builder: (_) {
+            final mid = (seg.startSec + seg.endSec) / 2;
+            final dspLabel = _labelAt(result.chords, mid);
+            final agree =
+                MlChordDecoder.majminReduce(seg.label) ==
+                MlChordDecoder.majminReduce(dspLabel);
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      '${seg.startSec.toStringAsFixed(1)}s',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: palette.muted,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Text(
-                    seg.label,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: palette.ink,
+                  Expanded(
+                    child: Text(
+                      seg.label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: palette.ink,
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Text(
-                    dspLabel ?? '—',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: palette.muted,
+                  Expanded(
+                    child: Text(
+                      dspLabel ?? '—',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: palette.muted,
+                      ),
                     ),
                   ),
-                ),
-                Icon(
-                  agree ? Icons.check_circle : Icons.remove_circle_outline,
-                  size: 16,
-                  color: agree ? AppColors.primary : palette.muted,
-                ),
-              ],
-            ),
-          );
-        }),
+                  Icon(
+                    agree ? Icons.check_circle : Icons.remove_circle_outline,
+                    size: 16,
+                    color: agree ? AppColors.primary : palette.muted,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
     ];
   }
 
@@ -152,12 +161,12 @@ class _Legend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     TextStyle head() => TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
-          letterSpacing: 0.8,
-          color: palette.muted,
-        );
+      fontFamily: 'Poppins',
+      fontWeight: FontWeight.w600,
+      fontSize: 11,
+      letterSpacing: 0.8,
+      color: palette.muted,
+    );
     return Row(
       children: [
         const SizedBox(width: 44),
@@ -184,20 +193,20 @@ class _UploadStatusLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, label, color) = switch (status) {
       DiagnosticsUploadStatus.uploading => (
-          null,
-          l10n.labUploading,
-          palette.muted,
-        ),
+        null,
+        l10n.labUploading,
+        palette.muted,
+      ),
       DiagnosticsUploadStatus.uploaded => (
-          Icons.cloud_done_outlined,
-          l10n.labUploaded,
-          AppColors.primary,
-        ),
+        Icons.cloud_done_outlined,
+        l10n.labUploaded,
+        AppColors.primary,
+      ),
       DiagnosticsUploadStatus.failed => (
-          Icons.cloud_off_outlined,
-          l10n.labUploadFailed,
-          palette.muted,
-        ),
+        Icons.cloud_off_outlined,
+        l10n.labUploadFailed,
+        palette.muted,
+      ),
       DiagnosticsUploadStatus.idle => (null, null, palette.muted),
     };
     if (label == null) return const SizedBox.shrink();
@@ -214,11 +223,7 @@ class _UploadStatusLine extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-            color: color,
-          ),
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: color),
         ),
       ],
     );

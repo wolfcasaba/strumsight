@@ -19,17 +19,23 @@ class SetlistDetailScreen extends ConsumerWidget {
 
   void _playAll(BuildContext context, Setlist set, List<Song> songs) {
     if (songs.isEmpty) return;
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => LearnScreen(lesson: set.combine(songs)),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LearnScreen(lesson: set.combine(songs)),
+      ),
+    );
   }
 
   Future<void> _addSong(
-      BuildContext context, WidgetRef ref, List<Song> library) async {
+    BuildContext context,
+    WidgetRef ref,
+    List<Song> library,
+  ) async {
     final l10n = AppLocalizations.of(context);
     if (library.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.setlistNoSongsYet)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.setlistNoSongsYet)));
       return;
     }
     final picked = await showModalBottomSheet<Song>(
@@ -106,12 +112,14 @@ class SetlistDetailScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: FilledButton.icon(
-                onPressed:
-                    songs.isEmpty ? null : () => _playAll(context, set, songs),
+                onPressed: songs.isEmpty
+                    ? null
+                    : () => _playAll(context, set, songs),
                 icon: const Icon(Icons.play_arrow),
                 label: Text(l10n.setlistPlayAll),
                 style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52)),
+                  minimumSize: const Size.fromHeight(52),
+                ),
               ),
             ),
             Expanded(
@@ -119,8 +127,10 @@ class SetlistDetailScreen extends ConsumerWidget {
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text(l10n.setlistEmptyDetail,
-                            textAlign: TextAlign.center),
+                        child: Text(
+                          l10n.setlistEmptyDetail,
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     )
                   : ReorderableListView.builder(
@@ -139,13 +149,19 @@ class SetlistDetailScreen extends ConsumerWidget {
                           margin: const EdgeInsets.only(bottom: 8),
                           clipBehavior: Clip.antiAlias,
                           child: ListTile(
-                            leading: Text('${i + 1}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primary)),
-                            title: Text(song.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
+                            leading: Text(
+                              '${i + 1}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            title: Text(
+                              song.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             subtitle: Text(song.chords.join(' · ')),
                             trailing: IconButton(
                               icon: const Icon(Icons.remove_circle_outline),

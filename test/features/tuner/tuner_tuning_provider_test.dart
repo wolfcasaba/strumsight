@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/model/tuning.dart';
-import 'package:music_theory/features/tuner/providers/tuner_tuning_provider.dart';
+import 'package:strumsight/features/tuner/model/tuning.dart';
+import 'package:strumsight/features/tuner/providers/tuner_tuning_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Round 89 — the selected tuning is a persisted, LOCAL preference (like the

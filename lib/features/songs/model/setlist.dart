@@ -8,11 +8,7 @@ import 'song.dart';
 /// time (so editing a song updates every setlist it's in).
 @immutable
 class Setlist {
-  const Setlist({
-    required this.id,
-    required this.name,
-    required this.songIds,
-  });
+  const Setlist({required this.id, required this.name, required this.songIds});
 
   final String id;
   final String name;
@@ -21,10 +17,10 @@ class Setlist {
   final List<String> songIds;
 
   Setlist copyWith({String? name, List<String>? songIds}) => Setlist(
-        id: id,
-        name: name ?? this.name,
-        songIds: songIds ?? this.songIds,
-      );
+    id: id,
+    name: name ?? this.name,
+    songIds: songIds ?? this.songIds,
+  );
 
   /// Resolve this setlist's ids to concrete [Song]s (order preserved, missing
   /// ids dropped) against the current songbook.
@@ -52,11 +48,13 @@ class Setlist {
       // Warp this song's beats to the reference tempo (1.0 for the first song).
       final warp = song.bpm <= 0 ? 1.0 : refBpm / song.bpm;
       for (final e in lesson.events) {
-        events.add(LessonEvent(
-          beat: e.beat * warp + beatOffset,
-          chord: e.chord,
-          direction: e.direction,
-        ));
+        events.add(
+          LessonEvent(
+            beat: e.beat * warp + beatOffset,
+            chord: e.chord,
+            direction: e.direction,
+          ),
+        );
       }
       beatOffset += lesson.totalBeats * warp;
     }
@@ -73,14 +71,13 @@ class Setlist {
     );
   }
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'name': name, 'songs': songIds};
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'songs': songIds};
 
   factory Setlist.fromJson(Map<String, dynamic> j) => Setlist(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        songIds: (j['songs'] as List).map((e) => e as String).toList(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    songIds: (j['songs'] as List).map((e) => e as String).toList(),
+  );
 
   @override
   bool operator ==(Object other) =>

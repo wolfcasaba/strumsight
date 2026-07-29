@@ -22,7 +22,7 @@ Ez a fájl az SDD-követelményeket GitHub Issue-, PR- és tesztbizonyítékhoz 
 | ID | Chapter / kör | SDD forrás | Elvárt bizonyíték | GitHub Issue | PR | Státusz |
 |---|---|---|---|---|---|---|
 | E01-R01 | Chapter 2, Kör 1 — Repository baseline és Codex szabályrendszer | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | r207 commit (main) | **Done (2026-07-28)** |
-| E01-R02 | Chapter 2, Kör 2 — Projektazonosítók és verziókezelés | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | _TBD_ | Planned |
+| E01-R02 | Chapter 2, Kör 2 — Projektazonosítók és verziókezelés | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | PR #2 (`codex/e01-r02-project-identifiers`) | **Done (2026-07-29)** — [ADR 0051](../adr/0051-strumsight-application-identifiers.md), guard: `test/tooling/legacy_identifier_guard_test.dart` |
 | E01-R03 | Chapter 2, Kör 3 — App bootstrap és környezeti konfiguráció | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | _TBD_ | Planned |
 | E01-R04 | Chapter 2, Kör 4 — Egységes failure, result és logging | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | _TBD_ | Planned |
 | E01-R05 | Chapter 2, Kör 5 — Lokális storage infrastruktúra | [`02-epic-01-core-platform.md`](../sdd/02-epic-01-core-platform.md) | Acceptance criteria + célzott tesztek + HANDOFF | _TBD_ | _TBD_ | Planned |

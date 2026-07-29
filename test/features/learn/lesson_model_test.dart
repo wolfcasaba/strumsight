@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/model/lesson.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/streak/daily_challenge.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/streak/daily_challenge.dart';
 
 void main() {
   group('simplified (beginner dynamic-difficulty cut)', () {
@@ -24,13 +24,15 @@ void main() {
       expect(identical(l.simplified, l), isTrue);
     });
 
-    test('a purely off-beat pattern falls back to the full lesson (never empty)',
-        () {
-      // reggaeSkank = all up-strokes on off-beats → no on-beat downs.
-      final l = Lessons.reggaeSkank;
-      expect(identical(l.simplified, l), isTrue);
-      expect(l.simplified.events, isNotEmpty);
-    });
+    test(
+      'a purely off-beat pattern falls back to the full lesson (never empty)',
+      () {
+        // reggaeSkank = all up-strokes on off-beats → no on-beat downs.
+        final l = Lessons.reggaeSkank;
+        expect(identical(l.simplified, l), isTrue);
+        expect(l.simplified.events, isNotEmpty);
+      },
+    );
   });
 
   test('a lesson expands its pattern into beat-timed, chord-tagged events', () {
@@ -49,7 +51,9 @@ void main() {
 
   test('eighth-note offbeats land on x.5 beats', () {
     final lesson = Lessons.downUpGroove; // has up-strokes on offbeats
-    final up = lesson.events.firstWhere((e) => e.direction == StrumDirection.up);
+    final up = lesson.events.firstWhere(
+      (e) => e.direction == StrumDirection.up,
+    );
     expect(up.beat % 1, 0.5);
   });
 
@@ -70,8 +74,14 @@ void main() {
     for (final lesson in Lessons.all) {
       expect(lesson.events, isNotEmpty);
       expect(lesson.bpm, greaterThan(0));
-      expect(lesson.events, everyElement(
-          predicate<LessonEvent>((e) => e.beat >= 0 && e.beat < lesson.totalBeats)));
+      expect(
+        lesson.events,
+        everyElement(
+          predicate<LessonEvent>(
+            (e) => e.beat >= 0 && e.beat < lesson.totalBeats,
+          ),
+        ),
+      );
     }
   });
 }

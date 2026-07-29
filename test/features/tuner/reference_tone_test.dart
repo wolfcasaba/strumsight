@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/audio/chord_audio.dart';
-import 'package:music_theory/features/learn/providers/backing_provider.dart';
-import 'package:music_theory/features/tuner/providers/tuner_providers.dart';
-import 'package:music_theory/features/tuner/screens/tuner_screen.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/features/learn/audio/chord_audio.dart';
+import 'package:strumsight/features/learn/providers/backing_provider.dart';
+import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
+import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -23,18 +23,22 @@ class _RecordingBacking extends Backing {
 }
 
 Future<void> pumpTuner(
-        WidgetTester tester, FakeTunerEngine engine, Backing backing) =>
-    tester.pumpWidget(ProviderScope(
-      overrides: [
-        tunerEngineProvider.overrideWithValue(engine),
-        backingProvider.overrideWithValue(backing),
-      ],
-      child: const MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: TunerScreen(),
-      ),
-    ));
+  WidgetTester tester,
+  FakeTunerEngine engine,
+  Backing backing,
+) => tester.pumpWidget(
+  ProviderScope(
+    overrides: [
+      tunerEngineProvider.overrideWithValue(engine),
+      backingProvider.overrideWithValue(backing),
+    ],
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: TunerScreen(),
+    ),
+  ),
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -71,8 +75,7 @@ void main() {
   // widget-test binding. Its dispose() must NOT be awaited here — it awaits a
   // platform-channel future that never completes under the test binding
   // (production never awaits it either; State.dispose is sync).
-  testWidgets('Backing.playTone ignores nonsense frequencies',
-      (tester) async {
+  testWidgets('Backing.playTone ignores nonsense frequencies', (tester) async {
     final backing = Backing();
     addTearDown(() {
       unawaited(backing.dispose());

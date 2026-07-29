@@ -1,11 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/audio/metronome.dart';
-import 'package:music_theory/features/learn/lesson_timing.dart';
+import 'package:strumsight/features/learn/audio/metronome.dart';
+import 'package:strumsight/features/learn/lesson_timing.dart';
 
-String _tag(Uint8List b, int o) =>
-    String.fromCharCodes(b.sublist(o, o + 4));
+String _tag(Uint8List b, int o) => String.fromCharCodes(b.sublist(o, o + 4));
 
 void main() {
   group('beatsCrossed', () {

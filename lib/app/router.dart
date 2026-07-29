@@ -41,37 +41,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             HomeShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/live', builder: (_, _) => const LiveScreen()),
-          GoRoute(
-            path: '/analyze',
-            builder: (_, _) => const AnalyzeScreen(),
-          ),
-          GoRoute(
-            path: '/learn',
-            builder: (_, _) => const LessonListScreen(),
-          ),
-          GoRoute(
-            path: '/library',
-            builder: (_, _) => const LibraryScreen(),
-          ),
-          GoRoute(
-            path: '/settings',
-            builder: (_, _) => const SettingsScreen(),
-          ),
+          GoRoute(path: '/analyze', builder: (_, _) => const AnalyzeScreen()),
+          GoRoute(path: '/learn', builder: (_, _) => const LessonListScreen()),
+          GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+          GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
       ),
       GoRoute(path: '/tuner', builder: (_, _) => const TunerScreen()),
+      GoRoute(path: '/metronome', builder: (_, _) => const MetronomeScreen()),
       GoRoute(
-          path: '/metronome', builder: (_, _) => const MetronomeScreen()),
-      GoRoute(
-          path: '/calibrate',
-          builder: (_, _) => const LatencyCalibrationScreen()),
+        path: '/calibrate',
+        builder: (_, _) => const LatencyCalibrationScreen(),
+      ),
       GoRoute(path: '/streak', builder: (_, _) => const StreakScreen()),
       GoRoute(path: '/progress', builder: (_, _) => const ProgressScreen()),
       GoRoute(path: '/songs', builder: (_, _) => const SongListScreen()),
-      GoRoute(
-          path: '/setlists', builder: (_, _) => const SetlistListScreen()),
-      GoRoute(
-          path: '/chords', builder: (_, _) => const ChordLibraryScreen()),
+      GoRoute(path: '/setlists', builder: (_, _) => const SetlistListScreen()),
+      GoRoute(path: '/chords', builder: (_, _) => const ChordLibraryScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
         path: '/library/session',

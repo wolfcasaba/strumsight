@@ -30,8 +30,8 @@ class CentsGauge extends StatelessWidget {
     final label = inTune
         ? l10n.tunerInTune
         : (cents >= 0
-            ? l10n.tunerCentsSharp(rounded)
-            : l10n.tunerCentsFlat(rounded));
+              ? l10n.tunerCentsSharp(rounded)
+              : l10n.tunerCentsFlat(rounded));
     return Semantics(
       label: label,
       child: SizedBox(
@@ -90,7 +90,11 @@ class _GaugePainter extends CustomPainter {
     for (final c in const [-50.0, -25.0, 0.0, 25.0, 50.0]) {
       final x = xForCents(c);
       final len = c == 0 ? 16.0 : 9.0;
-      canvas.drawLine(Offset(x, baseY - len), Offset(x, baseY + len), tickPaint);
+      canvas.drawLine(
+        Offset(x, baseY - len),
+        Offset(x, baseY + len),
+        tickPaint,
+      );
     }
 
     // Marker: a filled triangle above the baseline at the current cents.

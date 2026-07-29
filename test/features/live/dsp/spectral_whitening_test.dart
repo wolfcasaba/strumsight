@@ -2,11 +2,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_dictionary.dart';
-import 'package:music_theory/features/live/engine/dsp/chord_matcher.dart';
-import 'package:music_theory/features/live/engine/dsp/dsp_config.dart';
-import 'package:music_theory/features/live/engine/dsp/nnls_chroma.dart';
-import 'package:music_theory/features/live/engine/dsp/viterbi_chord_decoder.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
+import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
+import 'package:strumsight/features/live/engine/dsp/dsp_config.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
+import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
 
 import '../../../support/synth.dart';
 
@@ -16,16 +16,18 @@ import '../../../support/synth.dart';
 /// round-70 failure: a "thin mic" low-shelf cut (fundamentals below 300 Hz
 /// attenuated ×0.15) made a C major read as **Em** — the fundamentals
 /// vanished under their own harmonics.
-Float64List thinMicChord(List<double> freqs,
-        {double cutHz = 300, double atten = 0.15}) =>
-    mixNotes([
-      for (final f in freqs)
-        colouredNote(
-          freq: f,
-          seconds: 1.5,
-          gain: (h, hf) => (0.15 / h) * (hf < cutHz ? atten : 1.0),
-        ),
-    ]);
+Float64List thinMicChord(
+  List<double> freqs, {
+  double cutHz = 300,
+  double atten = 0.15,
+}) => mixNotes([
+  for (final f in freqs)
+    colouredNote(
+      freq: f,
+      seconds: 1.5,
+      gain: (h, hf) => (0.15 / h) * (hf < cutHz ? atten : 1.0),
+    ),
+]);
 
 String? decode(Float64List signal) {
   final nc = NnlsChroma(sampleRate: 44100);
@@ -34,8 +36,7 @@ String? decode(Float64List signal) {
     dictionary: ChordDictionary(),
   );
   ChordMatch? last;
-  for (final frame
-      in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
+  for (final frame in frames(signal, DspConfig.nnlsWindow, DspConfig.nnlsHop)) {
     final chroma = nc.process(frame);
     final tonal =
         chroma != null && nc.lastTonalness >= DspConfig.chordMinTonalness;

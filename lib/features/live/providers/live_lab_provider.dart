@@ -62,9 +62,11 @@ class LiveLabController extends Notifier<LiveLabState> {
 
     // Upload the diagnostics session best-effort, tagged as a Live capture.
     if (result.diagnostics != null) {
-      unawaited(ref
-          .read(diagnosticsUploadProvider.notifier)
-          .upload(result, pcm, sr, surface: 'live'));
+      unawaited(
+        ref
+            .read(diagnosticsUploadProvider.notifier)
+            .upload(result, pcm, sr, surface: 'live'),
+      );
     }
   }
 
@@ -72,5 +74,6 @@ class LiveLabController extends Notifier<LiveLabState> {
   void reset() => state = LiveLabState.initial;
 }
 
-final liveLabProvider =
-    NotifierProvider<LiveLabController, LiveLabState>(LiveLabController.new);
+final liveLabProvider = NotifierProvider<LiveLabController, LiveLabState>(
+  LiveLabController.new,
+);

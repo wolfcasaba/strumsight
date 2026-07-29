@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
 
 import '../../support/synth.dart';
 

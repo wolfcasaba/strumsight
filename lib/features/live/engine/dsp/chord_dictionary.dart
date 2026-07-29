@@ -11,7 +11,12 @@ import 'dart:typed_data';
 /// has to be *present* to win, not merely allowed.
 class ChordProfile {
   ChordProfile._(
-      this.label, this.isNoChord, this._bass, this._treble, this.bias);
+    this.label,
+    this.isNoChord,
+    this._bass,
+    this._treble,
+    this.bias,
+  );
 
   /// Display label, e.g. `C`, `Am`, `G7`, `Cmaj7`, `Dm7`, `Asus4`, `E5`,
   /// or `N.C.` for the no-chord state.
@@ -91,7 +96,18 @@ class ChordDictionary {
   final double extensionPenalty;
 
   static const _pitchClasses = [
-    'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
 
   /// Quality → (suffix, chord-tone offsets, matching treble weights, Occam
@@ -113,25 +129,65 @@ class ChordDictionary {
   // minor 7th has no such strong phantom source) needs almost none or real
   // A7/B7 voicings would collapse to the bare triad.
   static const _qualities = <List<Object>>[
-    ['', [0, 4, 7], [1.0, 1.0, 0.7], 0.0], // major
-    ['m', [0, 3, 7], [1.0, 1.0, 0.7], 0.0], // minor
-    ['7', [0, 4, 7, 10], [1.0, 0.9, 0.6, 0.9], 0.02], // dominant 7
-    ['maj7', [0, 4, 7, 11], [1.0, 0.9, 0.6, 0.9], 0.055], // major 7
-    ['m7', [0, 3, 7, 10], [1.0, 0.9, 0.6, 0.9], 0.055], // minor 7
+    [
+      '',
+      [0, 4, 7],
+      [1.0, 1.0, 0.7],
+      0.0,
+    ], // major
+    [
+      'm',
+      [0, 3, 7],
+      [1.0, 1.0, 0.7],
+      0.0,
+    ], // minor
+    [
+      '7',
+      [0, 4, 7, 10],
+      [1.0, 0.9, 0.6, 0.9],
+      0.02,
+    ], // dominant 7
+    [
+      'maj7',
+      [0, 4, 7, 11],
+      [1.0, 0.9, 0.6, 0.9],
+      0.055,
+    ], // major 7
+    [
+      'm7',
+      [0, 3, 7, 10],
+      [1.0, 0.9, 0.6, 0.9],
+      0.055,
+    ], // minor 7
     // sus4 gets a real Occam handicap (round 181): with bias 0.0 it had NO
     // guard, so on real audio a stray 4th (an adjacent chord's ring-out, a
     // bass note, another instrument) flipped D→Dsus4 / G→Gsus4 (MEASURED on
     // the SoundCloud probe). A genuine, sustained sus4 (root+4th+5th all clearly
     // present) still beats the triad by far — the `C+F+G → Csus4` unit test
     // holds — but a faint passing 4th no longer renames a plain triad.
-    ['sus4', [0, 5, 7], [1.0, 1.0, 0.7], 0.04], // suspended 4
+    [
+      'sus4',
+      [0, 5, 7],
+      [1.0, 1.0, 0.7],
+      0.04,
+    ], // suspended 4
     // dim/aug (round 78): they differ from m/maj only in the FIFTH — the
     // lightest chord tone — so the altered fifth carries FULL weight here
     // (it IS the distinguishing evidence) and a small rarity bias keeps
     // ambiguous frames on the common triads. Gated by the multi-seed
     // property suite (no stealing measured).
-    ['dim', [0, 3, 6], [1.0, 1.0, 0.9], 0.02], // diminished
-    ['aug', [0, 4, 8], [1.0, 1.0, 0.9], 0.02], // augmented
+    [
+      'dim',
+      [0, 3, 6],
+      [1.0, 1.0, 0.9],
+      0.02,
+    ], // diminished
+    [
+      'aug',
+      [0, 4, 8],
+      [1.0, 1.0, 0.9],
+      0.02,
+    ], // augmented
   ];
 
   late final List<ChordProfile> _profiles;
@@ -163,8 +219,15 @@ class ChordDictionary {
         bass[(root + 7) % 12] += 0.3;
         _l2(treble);
         _l2(bass);
-        _profiles.add(ChordProfile._(
-            _pitchClasses[root] + suffix, false, bass, treble, bias));
+        _profiles.add(
+          ChordProfile._(
+            _pitchClasses[root] + suffix,
+            false,
+            bass,
+            treble,
+            bias,
+          ),
+        );
       }
     }
   }
@@ -178,8 +241,12 @@ class ChordDictionary {
       final p = _profiles[i];
       out[i] = p.isNoChord
           ? noChordScore
-          : p.similarity(bass, treble,
-              bassWeight: bassWeight, trebleWeight: trebleWeight);
+          : p.similarity(
+              bass,
+              treble,
+              bassWeight: bassWeight,
+              trebleWeight: trebleWeight,
+            );
     }
     return out;
   }

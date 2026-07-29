@@ -94,17 +94,16 @@ Float64List chordSignal(
   int sampleRate = 44100,
   double amp = 0.2,
   double decayPerSecond = 1.5,
-}) =>
-    mixNotes([
-      for (final f in freqs)
-        harmonicNote(
-          freq: f,
-          seconds: seconds,
-          sampleRate: sampleRate,
-          amp: amp,
-          decayPerSecond: decayPerSecond,
-        ),
-    ]);
+}) => mixNotes([
+  for (final f in freqs)
+    harmonicNote(
+      freq: f,
+      seconds: seconds,
+      sampleRate: sampleRate,
+      amp: amp,
+      decayPerSecond: decayPerSecond,
+    ),
+]);
 
 /// Common chord voicings (Hz, standard tuning region).
 const cMajorFreqs = [130.81, 164.81, 196.00]; // C3 E3 G3
@@ -171,7 +170,12 @@ Float64List strumSignal({
   final order = lowFirst ? openStrings : openStrings.reversed.toList();
   final notes = [
     for (final f in order)
-      harmonicNote(freq: f, seconds: seconds, sampleRate: sampleRate, amp: 0.12),
+      harmonicNote(
+        freq: f,
+        seconds: seconds,
+        sampleRate: sampleRate,
+        amp: 0.12,
+      ),
   ];
   final offsets = [for (var i = 0; i < notes.length; i++) lead + i * stagger];
   return mixNotes(notes, startOffsets: offsets);
@@ -194,13 +198,15 @@ Float64List overlappingStrums({
   final parts = <Float64List>[];
   final offsets = <int>[];
   for (var i = 0; i < lowFirstPerStrum.length; i++) {
-    parts.add(strumSignal(
-      lowFirst: lowFirstPerStrum[i],
-      staggerMs: staggerMs,
-      seconds: ringSeconds,
-      sampleRate: sampleRate,
-      leadSilenceSeconds: 0,
-    ));
+    parts.add(
+      strumSignal(
+        lowFirst: lowFirstPerStrum[i],
+        staggerMs: staggerMs,
+        seconds: ringSeconds,
+        sampleRate: sampleRate,
+        leadSilenceSeconds: 0,
+      ),
+    );
     offsets.add(lead + i * gap);
   }
   final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();
@@ -217,12 +223,14 @@ Float64List strumPattern({
   final parts = <Float64List>[];
   final offsets = <int>[];
   for (var i = 0; i < lowFirstPerStrum.length; i++) {
-    parts.add(strumSignal(
-      lowFirst: lowFirstPerStrum[i],
-      sampleRate: sampleRate,
-      seconds: gapSeconds * 0.9,
-      leadSilenceSeconds: 0,
-    ));
+    parts.add(
+      strumSignal(
+        lowFirst: lowFirstPerStrum[i],
+        sampleRate: sampleRate,
+        seconds: gapSeconds * 0.9,
+        leadSilenceSeconds: 0,
+      ),
+    );
     offsets.add((i * one) + (0.1 * sampleRate).round());
   }
   final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();

@@ -19,9 +19,11 @@ class SetlistListScreen extends ConsumerWidget {
   }
 
   void _open(BuildContext context, String id) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => SetlistDetailScreen(setlistId: id),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SetlistDetailScreen(setlistId: id),
+      ),
+    );
   }
 
   @override
@@ -54,8 +56,10 @@ class SetlistListScreen extends ConsumerWidget {
                         backgroundColor: AppColors.primary,
                         child: Icon(Icons.queue_music, color: Colors.white),
                       ),
-                      title: Text(set.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      title: Text(
+                        set.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       subtitle: Text(l10n.setlistSongCount(set.songIds.length)),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _open(context, set.id),
@@ -98,8 +102,10 @@ Future<String?> _promptName(BuildContext context, {String initial = ''}) {
 }
 
 // Exposed for the detail screen's rename action.
-Future<String?> promptSetlistName(BuildContext context, {String initial = ''}) =>
-    _promptName(context, initial: initial);
+Future<String?> promptSetlistName(
+  BuildContext context, {
+  String initial = '',
+}) => _promptName(context, initial: initial);
 
 class _Empty extends StatelessWidget {
   const _Empty({required this.text});
@@ -113,8 +119,11 @@ class _Empty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.queue_music,
-                size: 56, color: AppColors.primary.withValues(alpha: 0.6)),
+            Icon(
+              Icons.queue_music,
+              size: 56,
+              color: AppColors.primary.withValues(alpha: 0.6),
+            ),
             const SizedBox(height: 16),
             Text(text, textAlign: TextAlign.center),
           ],

@@ -95,7 +95,10 @@ class _StrumReelScreenState extends State<StrumReelScreen>
       // including the wrap, where beat 0's downbeat re-fires as the lane
       // jumps back (LessonTiming.beatsCrossedLooped).
       for (final beat in LessonTiming.beatsCrossedLooped(
-          _prevBeat, now, _lesson.totalBeats.toDouble())) {
+        _prevBeat,
+        now,
+        _lesson.totalBeats.toDouble(),
+      )) {
         final downbeat = beat % _lesson.beatsPerBar == 0;
         _metronome.tick(accent: downbeat);
         if (downbeat) _backing.playChord(_activeChord(beat.toDouble()));
@@ -162,64 +165,81 @@ class _StrumReelScreenState extends State<StrumReelScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.brandGradient,
-                        borderRadius: BorderRadius.circular(6),
+                  Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.brandGradient,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.graphic_eq,
+                          size: 15,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: const Icon(Icons.graphic_eq,
-                          size: 15, color: Colors.white),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('StrumSight',
+                      const SizedBox(width: 8),
+                      const Text(
+                        'StrumSight',
                         style: TextStyle(
-                            fontFamily: 'Montserrat',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: Color(0xFFE9E5DE))),
-                  ]),
-                  Row(children: [
-                    // Sound on/off — a recorded reel should HAVE sound, so
-                    // the default is on (round 162).
-                    IconButton(
-                      icon: Icon(
+                          fontFamily: 'Montserrat',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: Color(0xFFE9E5DE),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      // Sound on/off — a recorded reel should HAVE sound, so
+                      // the default is on (round 162).
+                      IconButton(
+                        icon: Icon(
                           _soundOn ? Icons.volume_up : Icons.volume_off,
-                          color: const Color(0xFFE9E5DE)),
-                      tooltip: l10n.reelSoundToggle,
-                      onPressed: () =>
-                          setState(() => _soundOn = !_soundOn),
-                    ),
-                    // 1-tap share (chunk 016b P7): the caption + install link
-                    // without leaving the reel.
-                    IconButton(
-                      icon: const Icon(Icons.ios_share,
-                          color: Color(0xFFE9E5DE)),
-                      tooltip: l10n.shareTextButton,
-                      onPressed: () => widget.shareService
-                          .shareText(widget.result, capo: widget.capo),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Color(0xFFE9E5DE)),
-                      tooltip: l10n.commonClose,
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ]),
+                          color: const Color(0xFFE9E5DE),
+                        ),
+                        tooltip: l10n.reelSoundToggle,
+                        onPressed: () => setState(() => _soundOn = !_soundOn),
+                      ),
+                      // 1-tap share (chunk 016b P7): the caption + install link
+                      // without leaving the reel.
+                      IconButton(
+                        icon: const Icon(
+                          Icons.ios_share,
+                          color: Color(0xFFE9E5DE),
+                        ),
+                        tooltip: l10n.shareTextButton,
+                        onPressed: () => widget.shareService.shareText(
+                          widget.result,
+                          capo: widget.capo,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFFE9E5DE)),
+                        tooltip: l10n.commonClose,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const Spacer(),
               if (chords.isNotEmpty)
-                Text(chords,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 26,
-                        color: Color(0xFFE9E5DE))),
+                Text(
+                  chords,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    color: Color(0xFFE9E5DE),
+                  ),
+                ),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: _toggle,
@@ -227,8 +247,10 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                   alignment: Alignment.center,
                   children: [
                     Transform.scale(
-                      scale: StrumReelScreen.punchScale(_playhead,
-                          beatsPerBar: _lesson.beatsPerBar),
+                      scale: StrumReelScreen.punchScale(
+                        _playhead,
+                        beatsPerBar: _lesson.beatsPerBar,
+                      ),
                       child: LessonHighway(
                         lesson: _lesson,
                         playheadBeat: _playhead,
@@ -239,47 +261,65 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                     // Only in the tree while visible (also keeps the base
                     // finders unique in tests).
                     if (StrumReelScreen.endCardOpacity(
-                            _playhead, _lesson.totalBeats.toDouble()) >
+                          _playhead,
+                          _lesson.totalBeats.toDouble(),
+                        ) >
                         0)
                       IgnorePointer(
-                      child: Opacity(
-                        opacity: StrumReelScreen.endCardOpacity(
-                            _playhead, _lesson.totalBeats.toDouble()),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 22, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xE6111013),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                                color: AppColors.primary
-                                    .withValues(alpha: 0.55)),
+                        child: Opacity(
+                          opacity: StrumReelScreen.endCardOpacity(
+                            _playhead,
+                            _lesson.totalBeats.toDouble(),
                           ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('↓↑',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 22,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xE6111013),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.55,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '↓↑',
                                   style: TextStyle(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.primary)),
-                              const Text('StrumSight',
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const Text(
+                                  'StrumSight',
                                   style: TextStyle(
-                                      fontFamily: 'Montserrat',
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 20,
-                                      color: Color(0xFFE9E5DE))),
-                              const SizedBox(height: 4),
-                              Text('#StrumSightChallenge',
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 20,
+                                    color: Color(0xFFE9E5DE),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '#StrumSightChallenge',
                                   style: TextStyle(
-                                      fontSize: 12,
-                                      color: const Color(0xFFE9E5DE)
-                                          .withValues(alpha: 0.8))),
-                            ],
+                                    fontSize: 12,
+                                    color: const Color(
+                                      0xFFE9E5DE,
+                                    ).withValues(alpha: 0.8),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -288,23 +328,30 @@ class _StrumReelScreenState extends State<StrumReelScreen>
                 '${l10n.reelHint}\n#StrumSightChallenge',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: const Color(0xFFE9E5DE).withValues(alpha: 0.7)),
+                  fontSize: 12,
+                  height: 1.4,
+                  color: const Color(0xFFE9E5DE).withValues(alpha: 0.7),
+                ),
               ),
               const Spacer(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('↓↑',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary)),
+                  const Text(
+                    '↓↑',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Text(l10n.reelTagline,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: const Color(0xFFE9E5DE).withValues(alpha: 0.7))),
+                  Text(
+                    l10n.reelTagline,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: const Color(0xFFE9E5DE).withValues(alpha: 0.7),
+                    ),
+                  ),
                 ],
               ),
             ],

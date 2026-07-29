@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/core/theme/app_theme.dart';
-import 'package:music_theory/features/live/model/chord.dart';
-import 'package:music_theory/features/live/model/strum.dart';
-import 'package:music_theory/features/live/widgets/beat_counter.dart';
-import 'package:music_theory/features/live/widgets/chord_display.dart';
-import 'package:music_theory/features/live/widgets/confidence_pill.dart';
-import 'package:music_theory/features/live/widgets/input_level_meter.dart';
-import 'package:music_theory/features/live/widgets/strum_arrow.dart';
-import 'package:music_theory/l10n/app_localizations.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/features/live/model/chord.dart';
+import 'package:strumsight/features/live/model/strum.dart';
+import 'package:strumsight/features/live/widgets/beat_counter.dart';
+import 'package:strumsight/features/live/widgets/chord_display.dart';
+import 'package:strumsight/features/live/widgets/confidence_pill.dart';
+import 'package:strumsight/features/live/widgets/input_level_meter.dart';
+import 'package:strumsight/features/live/widgets/strum_arrow.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child) {
   return tester.pumpWidget(
@@ -29,12 +29,17 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 
 void main() {
   testWidgets('ChordDisplay shows the current and next chord', (tester) async {
-    await _pump(tester, const ChordDisplay(current: Chord('C'), next: Chord('G')));
+    await _pump(
+      tester,
+      const ChordDisplay(current: Chord('C'), next: Chord('G')),
+    );
     expect(find.text('C'), findsOneWidget);
     expect(find.textContaining('G'), findsWidgets); // "NEXT · G"
   });
 
-  testWidgets('ConfidencePill shows direction word and percentage', (tester) async {
+  testWidgets('ConfidencePill shows direction word and percentage', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ConfidencePill(

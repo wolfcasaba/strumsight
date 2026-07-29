@@ -1,11 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/tuner/engine/real_tuner_engine.dart';
+import 'package:strumsight/features/tuner/engine/real_tuner_engine.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-      'RealTunerEngine surfaces a mic start failure on the readings stream '
+  test('RealTunerEngine surfaces a mic start failure on the readings stream '
       '(never throws out of start) — parity with RealStrumEngine', () async {
     final engine = RealTunerEngine();
     addTearDown(engine.dispose);
@@ -20,7 +19,10 @@ void main() {
     await engine.start();
     await Future<void>.delayed(Duration.zero);
 
-    expect(errors, isNotEmpty,
-        reason: 'a mic failure must surface on the stream, not vanish');
+    expect(
+      errors,
+      isNotEmpty,
+      reason: 'a mic failure must surface on the stream, not vanish',
+    );
   });
 }

@@ -36,5 +36,6 @@ class TunerTuningNotifier extends Notifier<Tuning> {
   }
 }
 
-final tunerTuningProvider =
-    NotifierProvider<TunerTuningNotifier, Tuning>(TunerTuningNotifier.new);
+final tunerTuningProvider = NotifierProvider<TunerTuningNotifier, Tuning>(
+  TunerTuningNotifier.new,
+);

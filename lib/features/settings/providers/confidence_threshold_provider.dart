@@ -36,5 +36,5 @@ class ConfidenceThresholdNotifier extends Notifier<double> {
 
 final confidenceThresholdProvider =
     NotifierProvider<ConfidenceThresholdNotifier, double>(
-  ConfidenceThresholdNotifier.new,
-);
+      ConfidenceThresholdNotifier.new,
+    );

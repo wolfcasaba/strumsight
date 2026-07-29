@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_theory/features/learn/providers/metronome_pref_provider.dart';
+import 'package:strumsight/features/learn/providers/metronome_pref_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

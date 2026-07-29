@@ -46,13 +46,17 @@ class ShareContent {
     final buf = StringBuffer()
       ..writeln('🎸 ${prog.isEmpty ? 'My riff' : prog}');
     // The headline: down/up strokes — the thing only StrumSight detects.
-    final strokes = StringBuffer('↓ ${result.downCount} down · '
-        '↑ ${result.upCount} up strokes');
+    final strokes = StringBuffer(
+      '↓ ${result.downCount} down · '
+      '↑ ${result.upCount} up strokes',
+    );
     if (bpm != null) strokes.write(' @ $bpm');
     buf.writeln(strokes.toString());
     buf.writeln();
-    buf.writeln('Caught by StrumSight — the only app that sees my '
-        'DOWN ↓ / UP ↑ strums. 🎯');
+    buf.writeln(
+      'Caught by StrumSight — the only app that sees my '
+      'DOWN ↓ / UP ↑ strums. 🎯',
+    );
     buf.writeln('Can you match my strum pattern? 👇');
     buf.writeln('Get it: $installUrl');
     buf.write(hashtags);
@@ -80,8 +84,10 @@ class ShareContent {
       ..writeln('🎸 $lessonName — $pct% $starStr')
       ..writeln('Best combo: $maxCombo · scored on my DOWN ↓ / UP ↑ strums.')
       ..writeln()
-      ..writeln('Learn guitar with StrumSight — the only app that grades your '
-          'strum direction. 🎯')
+      ..writeln(
+        'Learn guitar with StrumSight — the only app that grades your '
+        'strum direction. 🎯',
+      )
       ..writeln('Get it: $installUrl')
       ..write(hashtags);
     return buf.toString();
@@ -100,17 +106,20 @@ class ShareContent {
     double? averageAccuracy,
   }) {
     final buf = StringBuffer()
-      ..writeln('🎸 My strum week: $minutes min · $daysPracticed/7 days · '
-          '$strokes strums');
+      ..writeln(
+        '🎸 My strum week: $minutes min · $daysPracticed/7 days · '
+        '$strokes strums',
+      );
     if (averageAccuracy != null) {
-      buf.writeln(
-          '↓↑ direction accuracy: ${(averageAccuracy * 100).round()}%');
+      buf.writeln('↓↑ direction accuracy: ${(averageAccuracy * 100).round()}%');
     }
     if (streak > 0) buf.writeln('🔥 $streak-day streak');
     buf
       ..writeln()
-      ..writeln('Tracked by StrumSight — the only app that grades your '
-          'strum direction. 🎯')
+      ..writeln(
+        'Tracked by StrumSight — the only app that grades your '
+        'strum direction. 🎯',
+      )
       ..writeln('Get it: $installUrl')
       ..write(hashtags);
     return buf.toString();
@@ -120,7 +129,8 @@ class ShareContent {
   static String wrappedFileName(int today) => 'strumsight-week-$today.png';
 
   /// Helper for the card's arrow row: the strum directions in order, capped.
-  static List<StrumDirection> strumDirections(AnalyzeResult result,
-          {int max = 16}) =>
-      result.strums.take(max).map((s) => s.direction).toList();
+  static List<StrumDirection> strumDirections(
+    AnalyzeResult result, {
+    int max = 16,
+  }) => result.strums.take(max).map((s) => s.direction).toList();
 }

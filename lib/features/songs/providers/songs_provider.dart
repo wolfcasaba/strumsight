@@ -44,8 +44,7 @@ class SongsController extends Notifier<List<Song>> {
     }
   }
 
-  String _newId() =>
-      '${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
+  String _newId() => '${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
 
   /// Create a new song (newest-first) and persist. Returns its id.
   Future<String> add({
@@ -73,7 +72,10 @@ class SongsController extends Notifier<List<Song>> {
   Future<void> update(Song song) async {
     if (!state.any((s) => s.id == song.id)) return;
     await _loaded.future;
-    state = [for (final s in state) if (s.id == song.id) song else s];
+    state = [
+      for (final s in state)
+        if (s.id == song.id) song else s,
+    ];
     await _persist();
   }
 
@@ -108,5 +110,6 @@ class SongsController extends Notifier<List<Song>> {
   }
 }
 
-final songsProvider =
-    NotifierProvider<SongsController, List<Song>>(SongsController.new);
+final songsProvider = NotifierProvider<SongsController, List<Song>>(
+  SongsController.new,
+);
