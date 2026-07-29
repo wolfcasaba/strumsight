@@ -318,13 +318,131 @@ a Codex ne hívjon `gh`-t.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet (ne állíts sikert, ami nem futott).
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk.
-- A route-literál guard valódi sértéssel való kipróbálásának kimenete.
-- Az SDD §11.3 auth-vonatkozású pontjának státusza (miért nem alkalmazható).
-- Follow-up issue-k.
+### Fájlonkénti összefoglaló
+
+- `lib/app/routing/app_route.dart` — új, teljes `AppRoutes` path-katalógus és
+  az öt shell-tab egyetlen sorrendi forrása (`shellTabs`).
+- `lib/app/routing/route_guards.dart` — tiszta, `BuildContext`/`Ref` nélküli,
+  idempotens `onboardingRedirect`.
+- `lib/app/routing/app_router.dart` — ide költözött a `routerProvider`; a
+  provider-változás `ChangeNotifier`-en frissíti a redirectet, a router és a
+  notifier a provider `ref.onDispose` callbackjében felszabadul, a session-extra
+  validált, az ismeretlen path `/live`-ra áll helyre.
+- `lib/app/router.dart` — törölve; kontrollálatlan `AnalyzedSession` casttal
+  együtt megszűnt.
+- `lib/app/strumsight_app.dart` — az új routermodul importját használja.
+- `lib/app/home_shell.dart` — tabfelismerés és tabváltás
+  `AppRoutes.shellTabs`-ból dolgozik.
+- `lib/features/live/screens/live_screen.dart` — Tuner és Metronome hívóhely
+  `AppRoutes` konstansra cserélve.
+- `lib/features/library/screens/library_screen.dart` — session-detail hívóhely
+  `AppRoutes.librarySession`-t használ.
+- `lib/features/learn/screens/lesson_list_screen.dart` — Songs és Chords
+  hívóhely `AppRoutes` konstansra cserélve.
+- `lib/features/settings/screens/settings_screen.dart` — Progress, Calibrate és
+  Login hívóhely `AppRoutes` konstansra cserélve.
+- `lib/features/streak/screens/streak_screen.dart` — Progress és Live hívóhely
+  `AppRoutes` konstansra cserélve.
+- `lib/features/streak/widgets/streak_badge.dart` — Streak hívóhely
+  `AppRoutes.streak`-et használ.
+- `lib/features/onboarding/screens/onboarding_screen.dart` — a két Live
+  navigáció `AppRoutes`-ot használ; `_finish()` és `_firstWin()` a default
+  routert/root navigatort az első await előtt, csak a default callbackágban
+  kapja el, majd unmount után is végigviszi a navigációt. Az injektált callbackes
+  `MaterialApp`-tesztek ezért változatlanul működnek.
+- `test/app/routing/route_guards_test.dart` — unseen/seen döntési tábla és
+  redirect-idempotencia.
+- `test/app/routing/app_router_test.dart` — első indítás, callback nélküli
+  reaktív redirect, hibás/érvényes session-extra, ismeretlen path és valódi
+  Settings → Login → sikeres pop, valamint a provider tulajdonolta router
+  felszabadítása.
+- `test/app/routing/shell_lifecycle_test.dart` — Live → Settings mic release és
+  Live → Tuner → back tab-megőrzés fake engine-ekkel.
+- `test/app/routing/onboarding_first_win_test.dart` — callback nélküli,
+  két másodperccel késleltetett `KeyValueStore.writeBool` melletti first-win
+  regresszió valódi `routerProvider`-rel.
+- `test/tooling/route_literal_guard_test.dart` — a `lib/` alatti közvetlen
+  `context.go('/…')` / `context.push('/…')` literálokat fájl:sor pontossággal
+  tiltja.
+
+### Futtatott parancsok és tényleges eredmények
+
+- `~/flutter/bin/flutter gen-l10n` — exit 0; az `l10n.yaml` beállításait
+  használta, tracked l10n-diff nem keletkezett.
+- `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test` —
+  exit 0, `Formatted 445 files (0 changed)`.
+- `~/flutter/bin/flutter analyze lib/ test/` — a végső futás exit 0,
+  `No issues found!`. Az első futás egyetlen
+  `unused_element_parameter` warningot talált a regressziós teszt fölösleges
+  opcionális `delay` paraméterén; egy javítási kísérlet után lett zöld.
+- `~/flutter/bin/flutter test test/app` — exit 0, 39 teszt zöld.
+- `~/flutter/bin/flutter test test/tooling` — exit 0, 9 teszt zöld.
+- `~/flutter/bin/flutter test test/features/live` — exit 0, 160 teszt zöld,
+  2 meglévő teszt skipped.
+- `~/flutter/bin/flutter test test/features/library` — exit 0, 12 teszt zöld.
+- `~/flutter/bin/flutter test test/features/onboarding` — exit 0, 7 teszt
+  zöld; a két meglévő tesztfájl változatlan.
+- Guard TDD: az első `route_guards_test.dart` futás a null stubon 3/3 várt
+  assertionnel piros; a minimális döntési logika után 3/3 zöld.
+- Router TDD: a régi viselkedést megtartó átköltöztetésen 3 teszt zöld és
+  pontosan 3 új szerződés piros volt (reaktív redirect, hiányzó extra
+  `TypeError`, ismeretlen path); implementáció után 6/6 zöld. A belső
+  diff-audit által talált provider-lifecycle hiány reprodukáló tesztje először
+  6+1 állásban a várt módon piros volt (a dispose utáni `router.go` nem dobott),
+  majd a `GoRouter` providerhez kötött felszabadítása után 7/7 zöld.
+- First-win TDD: a késleltetett írású teszt a régi `mounted`-őrrel 0/1 piros
+  (`LearnScreen` nem volt a fában), az 5.8 implementáció után 1/1 zöld.
+- Belső read-only újra-review: a router-lifecycle javítása után nem maradt
+  BLOCKER, MAJOR vagy MINOR megállapítás.
+- `git diff --check` — exit 0.
+- `rg -n "context\\.(go|push)\\(\\s*['\\\"]" lib` — nincs találat.
+- `grep -R -n " as " lib/app/routing` — route-argumentum cast nincs; egyetlen
+  szöveges találat az `app_route.dart` doc commentjének angol „as” szava.
+- A `7033fed` (`origin/main` merge-base) ellen futtatott tiloszóna-diff
+  (`lib/core`, `lib/l10n`, `pubspec.yaml`, `tool`, `backend`, `ml`, `.github`,
+  `HANDOFF.md`, ADR/RTM, `onboarding_provider.dart`) exit 0 és üres; meglévő
+  tesztfájl módosítása szintén nincs.
+
+### Negatív bizonyítások
+
+- Route-literál guard: ideiglenesen
+  `streak_badge.dart`-ban `context.push('/streak')` került vissza. A teszt
+  exit 1-gyel bukott, tényleges találat:
+  `Actual: ['lib/features/streak/widgets/streak_badge.dart:27']`. A konstans
+  visszaállítása után 1/1 zöld.
+- First-win regresszió: a kész kódba ideiglenesen visszatett
+  `if (!mounted) return;` mellett a router már `/live`-on állt és az onboarding
+  unmountolt, de a végső `tester.widget<LearnScreen>` `Bad state: No element`
+  hibával bukott. Az őr eltávolítása után 1/1 zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Az első, R1 előtti indítás helyesen megállt nulla kóddiffel, mert a reaktív
+  redirect és a first-win útvonal az akkori engedélyezett fájllistán belül nem
+  volt összeegyeztethető. Az R1 §5.8 és a kibővített fájllista ezt feloldotta;
+  újabb architekturális eltérés nem merült fel.
+- A brief szó szerinti `git diff --stat main...` parancsa ebben az egylokális-
+  branches klónban nem futtatható (`main` lokális ref nincs, csak
+  `origin/main`). A scope-audit a kanonikus `origin/main` merge-base
+  `7033fed` ellen futott; commit után a review-hoz az ekvivalens
+  `git diff --stat origin/main...HEAD` használható.
+- Teljes `flutter test`, randomizált property gate és release APK lokálisan
+  nem futott: ADR 0052/0053 és az explicit user-utasítás szerint ezek a
+  Claude-oldali branch-CI feladatai. `gh`, PR-nyitás és merge nem történt.
+- Backend/ML gate nem futott, mert backend-, ML- vagy DSP-változás nincs.
+- Valódi device/real-audio gate nem futott; a mic-mechanizmus nem változott,
+  a kör a meglévő autoDispose útvonalat determinisztikus fake engine-nel védi.
+
+### SDD §11.3 auth-státusz és follow-up
+
+- Auth-gate/védett route továbbra sincs és ebben a termékben a „login után
+  rossz route” / „logout után védett route-on maradás” pont nem alkalmazható:
+  kijelentkezve az offline alapapp teljes értékű. A meglévő `/login` route
+  elérhetőségét és sikeres auth utáni Settingsre `pop`-ot a routerteszt lefedi.
+- Nyitott product/code follow-up nincs. Következő folyamatlépés: Claude
+  független review-ja, branch-CI, PR és zöld-kapus merge. A következő SDD-kör
+  ezután, új sessionben: **E01-R12 — Backend konfiguráció és
+  adatbázis-migráció**.
 
 ## 11. Review — a Claude tölti ki
 

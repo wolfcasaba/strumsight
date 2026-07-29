@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -54,6 +55,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _finish({bool requestMic = false}) async {
     if (_finishing) return;
     _finishing = true;
+    final router = widget.onDone == null ? GoRouter.of(context) : null;
     if (requestMic) {
       try {
         await (widget.primeMic ?? _requestMicPermission)();
@@ -62,8 +64,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       }
     }
     await ref.read(onboardingSeenProvider.notifier).complete();
-    if (!mounted) return;
-    (widget.onDone ?? () => context.go('/live'))();
+    (widget.onDone ?? () => router!.go(AppRoutes.live))();
   }
 
   /// The activation shortcut (chunk 017 rec #4, r155): straight from the last
@@ -72,26 +73,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _firstWin() async {
     if (_finishing) return;
     _finishing = true;
+    final useDefaultNavigation = widget.onFirstWin == null;
+    final router = useDefaultNavigation ? GoRouter.of(context) : null;
+    final navigator = useDefaultNavigation
+        ? Navigator.of(context, rootNavigator: true)
+        : null;
     try {
       await (widget.primeMic ?? _requestMicPermission)();
     } catch (_) {
       // Best-effort; the lesson's mic path surfaces its own error banner.
     }
     await ref.read(onboardingSeenProvider.notifier).complete();
-    if (!mounted) return;
     (widget.onFirstWin ??
         () {
-          // Capture the root navigator BEFORE go(): the route swap unmounts
-          // this screen and a defunct context can no longer look it up
-          // (r156 rig catch — the URL changed but the lesson never opened;
-          // the injected-callback widget test was blind to the default path).
-          final nav = Navigator.of(context, rootNavigator: true);
-          context.go('/live');
+          router!.go(AppRoutes.live);
           // Push AFTER the route swap lands: a pageless route pushed now
           // would anchor to the outgoing /welcome page and be disposed with
           // it (r156 rig catch #2 — the first fix still lost the push).
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            nav.push(
+            navigator!.push(
               MaterialPageRoute<void>(
                 builder: (_) => LearnScreen(lesson: Lessons.firstWin),
               ),

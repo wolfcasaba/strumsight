@@ -8,7 +8,7 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/theme_mode_provider.dart';
 import '../features/settings/providers/settings_sync.dart';
 import '../l10n/app_localizations.dart';
-import 'router.dart';
+import 'routing/app_router.dart';
 
 /// The root widget (moved out of main.dart in E01-R03 §3.4 — main stays
 /// minimal, the app shell lives here).

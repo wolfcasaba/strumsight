@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../app/config/app_config.dart';
+import '../../../app/routing/app_route.dart';
 import '../../../core/i18n/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
@@ -57,7 +58,7 @@ class SettingsScreen extends ConsumerWidget {
               title: Text(l10n.progressTitle),
               subtitle: Text(l10n.progressTotalPractice),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go('/progress'),
+              onTap: () => context.go(AppRoutes.progress),
             ),
           ),
           const SizedBox(height: 28),
@@ -172,7 +173,7 @@ class SettingsScreen extends ConsumerWidget {
               l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}'),
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/calibrate'),
+            onTap: () => context.push(AppRoutes.calibrate),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -293,7 +294,7 @@ class _AccountSection extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => context.push('/login'),
+          onPressed: () => context.push(AppRoutes.login),
           icon: const Icon(Icons.login, size: 18, color: AppColors.primary),
           label: Text(l10n.accountSignIn),
         ),
