@@ -15,6 +15,20 @@ Brief szerzője: Claude · Implementáció: Codex
 > letölthető), és a mért baseline **29 passed** (`.venv/bin/python -m pytest -q`,
 > exit 0). Lásd a 2. és 7. szekciót.
 
+> 🔁 **R1 REVÍZIÓ (2026-07-29, a Codex első futásának `stopped` jelzése után).**
+> A Codex az implementáció megkezdése ELŐTT megállt, helyesen: a brief §5.5
+> (prod + SQLite → boot-hiba) közvetlenül ellentmond a meglévő
+> `backend/tests/test_hardening.py::TestProdBootGuards::test_prod_with_real_config_boots`
+> tesztnek, ami `env="prod"` + valódi secret + explicit CORS mellett — de a
+> **default `sqlite:///./strumsight.db` URL-lel** — sikeres bootot állít; a §4-es
+> fájllista pedig a `test_*.py` átírását csak a `create_app`-szignatúraváltás
+> jogcímén engedte, ez pedig nem az. **A hiba az enyém (tervezői), nem
+> implementációs:** viselkedésváltozást írtam elő úgy, hogy az azt rögzítő
+> tesztet lezártam (ugyanaz az osztály, mint az E01-R11-ben). A feloldás a
+> §5.8-as új kötött döntés + a §4 kiegészített sora + a §6 két új kritériuma.
+> Az ütközés hatóköre mérve: `env="prod"`-ot a tesztfában CSAK ez a három
+> hardening-teszt használ, és ebből egyedül ez a **sikeres-boot** eset ütközik.
+
 ## 1. Cél
 
 A FastAPI backend ma import-időben, globálisan hozza létre a database engine-t, és a
@@ -103,7 +117,8 @@ Csak az alábbi útvonalak módosíthatók. Bármi más → **MEGÁLLÁS és jel
 | `backend/app/routers/*.py` | CSAK importsor, ha a refaktor kényszeríti |
 | `backend/tests/test_migrations.py` | ÚJ — migrációs tesztek |
 | `backend/tests/conftest.py` | átállás a paraméterezett `create_app`-ra |
-| `backend/tests/test_*.py` | csak amennyit a `create_app` szignatúraváltása kényszerít |
+| `backend/tests/test_hardening.py` | **R1:** a `test_prod_with_real_config_boots` átírása + a §5.8 szerinti ÚJ tesztek. Az osztály többi tesztjéhez (dev-secret, wildcard-CORS, dev-default boot, rate limiter) NEM nyúlsz |
+| `backend/tests/test_*.py` | egyebekben csak amennyit a `create_app` szignatúraváltása kényszerít |
 | `backend/requirements.txt` | `alembic` felvétele |
 | `backend/README.md` | migráció futtatása, prod-DB szabályok |
 | `docs/rounds/e01-r12-backend-config-and-migrations.md` | **csak a 10. szekció** |
@@ -141,6 +156,21 @@ létre `docs/adr/` fájlt.
 6. **Readiness ≠ boot-crash.** DB-kapcsolati hiba readiness-failure (503), nem
    process-halál — a liveness közben éljen.
 7. **Secret és database URL sosem kerül logba vagy health-válaszba.**
+8. **(R1) A prod-SQLite szabály és a meglévő „prod bootol" teszt feloldása.**
+   A `test_prod_with_real_config_boots` ma azt rögzíti, hogy *egy helyesen
+   konfigurált prod app elindul* — ez a szándék **érvényes marad**, csak a
+   „helyesen konfigurált" definíciója bővül a §5.5-tel. Ezért:
+   - a meglévő teszt **átírandó** úgy, hogy a prod Settings az explicit
+     `allow_sqlite_in_prod=True` engedéllyel (a §5.5 escape hatch) bootoljon —
+     így továbbra is a **sikeres prod-boot** útját fedi;
+   - **ÚJ teszt**: `env="prod"` + valódi secret + explicit CORS + SQLite URL,
+     engedély NÉLKÜL → `RuntimeError` (a §5.5 tilalma);
+   - **ÚJ teszt**: a §5.5 engedélye a `STRUMSIGHT_ALLOW_SQLITE` env-változóból is
+     jön (a `Settings` `STRUMSIGHT_` prefixén keresztül) — ne csak a kwarg-út legyen fedve.
+   - **NEM megoldás** Postgres URL-t adni a tesztnek: a `create_engine` a DBAPI-t
+     azonnal importálja, a driver pedig szándékosan nincs a requirements-ben (§5.5)
+     — a teszt `ModuleNotFoundError`-ral halna el.
+   Az átírás **jogcíme ez a pont**; a §10-ben tételesen fel kell sorolni.
 
 ## 6. Acceptance criteria
 
@@ -157,7 +187,12 @@ létre `docs/adr/` fájlt.
       schemák lényegi mezői rögzítve.
 - [ ] A tesztfutásnak nincs fájlrendszeri mellékhatása (nem keletkezik
       `strumsight.db` a repo-gyökérben import-mellékhatásból).
-- [ ] Mind a 29 meglévő backend-teszt zöld (átírás csak a §4-ben engedett okból).
+- [ ] **(R1)** Prod + SQLite engedély nélkül → boot-hiba; `allow_sqlite_in_prod=True`
+      mellett → bootol; az engedély env-változóból (`STRUMSIGHT_ALLOW_SQLITE`) is hat.
+- [ ] **(R1)** A `TestProdBootGuards` többi tesztje (dev-secret, wildcard-CORS,
+      dev-default boot) **változatlanul** zöld — a §5.5 nem lazíthatja a round-120-as
+      guardokat, és a dev út továbbra is nulla setuppal indul.
+- [ ] Mind a 29 meglévő backend-teszt zöld (átírás csak a §4-ben / §5.8-ban engedett okból).
 - [ ] `git diff --stat main...` kizárólag a 4. szekció tábláját tartalmazza.
 
 ## 7. Kötelező ellenőrzések
