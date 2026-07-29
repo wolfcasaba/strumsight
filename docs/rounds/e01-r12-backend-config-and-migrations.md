@@ -249,12 +249,142 @@ dispatch-et is lefuttatja (ADR 0052 — a Codex ne hívjon `gh`-t).
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet (ne állíts sikert, ami nem futott).
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk.
-- Az átírt meglévő tesztek tételes listája + az átírás brief-beli jogcíme.
-- Follow-up issue-k.
+### Összefoglaló fájlonként
+
+- `backend/alembic.ini`: helyfüggetlen Alembic script-path és secretmentes
+  logging-konfiguráció; database URL nincs duplikálva.
+- `backend/alembic/env.py`: közvetlen `Settings()`-ből olvassa a database URL-t,
+  explicit betölti az ORM metadata-t, online/offline módban type/default
+  összevetést és SQLite batch-renderelést használ; az online SQLite
+  kapcsolatain az FK enforcement is aktív.
+- `backend/alembic/script.py.mako`: a későbbi verziózott revisionök sablonja.
+- `backend/alembic/versions/e01_r12_0001_initial_account_schema.py`: kezdeti
+  `users` + `user_settings` schema, unique email-index, `user_id` unique
+  constraint, `ON DELETE CASCADE` FK és timezone-os timestamp deklarációk;
+  fordított sorrendű downgrade.
+- `backend/app/database.py`: megszűnt a module-global engine és `SessionLocal`;
+  tiszta engine/session-factory konstruktorok készültek, a kanonikus `get_db`
+  seam az aktuális FastAPI app state-jéből nyit és minden úton zár sessiont.
+  Minden SQLite kapcsolat connect-hookkal `PRAGMA foreign_keys=ON` állapotban
+  indul, így a deklarált cascade ténylegesen érvényesül.
+- `backend/app/config.py`: `allow_sqlite_in_prod` flag; a kwarg mellett az
+  explicit `STRUMSIGHT_ALLOW_SQLITE` env-nevet is elfogadja, prefix nélküli
+  környezeti változó viszont nem nyithatja az escape hatch-et.
+- `backend/app/main.py`: a guard után apponként épül engine + session factory;
+  dev `create_all` csak lifespanban fut, prod-ban soha, shutdownkor az engine
+  dispose-olódik. Új `/health/live` és sanitizált `/health/ready` contract
+  (`SELECT 1`, Alembic current/head, config guard).
+- `backend/tests/conftest.py`: tesztenként paraméterezett `create_app(Settings(
+  database_url="sqlite://"))`, a meglévő `get_db` override-seam megtartásával;
+  a fixture-engine FK enforcementtel fut és teardownkor dispose-olódik.
+- `backend/tests/test_migrations.py`: 13 új
+  lifecycle/migráció/readiness/OpenAPI/config teszt, köztük ORM-parity,
+  upgrade/downgrade, viselkedési SQLite cascade, prod `create_all`-tilalom,
+  import-mellékhatás, prefix nélküli escape-hatch tiltás,
+  DB-hiba/migration-mismatch/head readiness és auth/settings schema-contract.
+- `backend/tests/test_hardening.py`: az R1 §5.8 szerinti egy meglévő teszt
+  pontosítása és két új prod-SQLite guard teszt.
+- `backend/requirements.txt`: `alembic>=1.18,<1.19`.
+- `backend/README.md`: upgrade/current/downgrade és explicit dev-DB stamp
+  workflow, prod PostgreSQL/driver szabály, SQLite escape hatch és health API.
+
+### Futtatott parancsok és tényleges eredmények
+
+- Seam-refaktor utáni meglévő-suite checkpoint:
+  `.venv/bin/python -m pytest -q tests/test_auth.py tests/test_settings.py
+  tests/test_diagnostics.py tests/test_hardening.py` →
+  `............................. [100%]` (**29 passed**, exit 0).
+- TDD RED bizonyítékok:
+  - import-regresszió: az új teszt először bukott, mert
+    `tmp_path/strumsight.db.exists()` `True` volt;
+  - prod SQLite tiltás: először `Failed: DID NOT RAISE RuntimeError`;
+  - `/health/live`: először `404`, nem a várt `200`;
+  - config namespace: a prefix nélküli `ALLOW_SQLITE_IN_PROD=true` tesztje
+    először `assert True is False` eredménnyel bukott;
+  - SQLite cascade: friss migrált DB-n először
+    `PRAGMA foreign_keys == 0` (várt: 1), és kézi reprodukcióban a parent
+    törlése után `children_after_delete 1` maradt;
+  - az első ready-route regisztráció a FastAPI által jelzett érvénytelen
+    `dict | JSONResponse` response-fielddel állt meg; az explicit
+    `response_model=None` javítás után ugyanaz az 5 health/startup teszt
+    `..... [100%]` lett.
+- Új R12 tesztfájl:
+  `.venv/bin/python -m pytest -q tests/test_migrations.py` →
+  `............. [100%]` (**13 passed**, exit 0).
+- Végső teljes backend gate (a default DB eltávolítása, a config-namespace
+  szigorítása és az SQLite FK enforcement után):
+  `.venv/bin/python -m pytest -q` →
+  `............................................ [100%]`
+  (**44 passed**, exit 0). Korábban három 42 tesztes és egy 43 tesztes teljes
+  gate is exit 0-val futott.
+- Friss ideiglenes DB:
+  `STRUMSIGHT_DATABASE_URL=sqlite:////tmp/strumsight-r12-fk-gate.HHLuZf/gate.db
+  .venv/bin/python -m alembic upgrade head` → exit 0,
+  `Running upgrade -> e01_r12_0001`.
+- Ugyanazon ideiglenes DB:
+  `STRUMSIGHT_DATABASE_URL=sqlite:////tmp/strumsight-r12-fk-gate.HHLuZf/gate.db
+  .venv/bin/python -m alembic downgrade -1` → exit 0,
+  `Running downgrade e01_r12_0001 ->`.
+- Fájlrendszeri mellékhatás külön bizonyítéka: a meglévő
+  `backend/strumsight.db` eltávolítása után két 42 tesztes, egy 43 tesztes és a
+  végső 44 tesztes teljes suite is futott; utána
+  `.venv/bin/python -c ...Path("strumsight.db").exists()` →
+  `strumsight.db: exists=False`. A fájl biztonsági mentése ideiglenesen:
+  `/tmp/strumsight-r12-db-backup.2ixrDh/strumsight.db`.
+- `.venv/bin/python -m pip check` → `No broken requirements found.` (exit 0).
+- `git diff --check` → üres kimenet, exit 0.
+- Flutter-scope audit:
+  `git status --short -- lib test tool pubspec.yaml` → üres kimenet.
+- Secret-marker audit a backend diffen → nincs találat (az `rg` exit 1-e itt
+  „nincs egyezés”).
+
+### Acceptance criteria
+
+- Az üres DB upgrade-je és az ORM-mal üres autogenerate-diff tesztelt; a teszt
+  külön ellenőrzi a revision headet, a unique indexet/constraintet és a cascade
+  FK-t. Külön viselkedési teszt igazolja, hogy runtime SQLite-on a parent
+  törlése ténylegesen cascade-eli a `user_settings` sort.
+- A `downgrade -1` tesztben és külön CLI-gate-ben is lefutott.
+- Prod lifespanban a `create_all` spy hívásszáma nulla.
+- Readiness: elérhetetlen DB → sanitizált 503; unstamped DB → 503
+  `migration_mismatch`; migrált head → 200; liveness DB-kapcsolat nélkül 200.
+- Explicit Settings/database URL működik dependency override nélkül is; a teljes
+  régi suite a megtartott `get_db` override-on fut.
+- OpenAPI title/version, teljes üzleti route-készlet, auth/settings request és
+  response refek, bearer security és lényeges mezőkorlátok rögzítve.
+- Import és teljes tesztfutás után sem keletkezik default `strumsight.db`.
+- Prod SQLite engedély nélkül boot-hiba; kwarg- és env-engedéllyel bootol.
+- A 29 meglévő teszt checkpointja és a végső 44 tesztes teljes suite zöld.
+- A módosított/új fájlok mind a brief §4 engedélyezett listáján vannak; a
+  Flutter-fa diffje üres.
+
+### Eltérések, átírt meglévő tesztek
+
+- Funkcionális eltérés a briefhez képest nincs. A dev `create_all` lifespanba
+  került (nem közvetlen factory-hívásba), mert csak így marad meg egyszerre a
+  zero-setup dev helper és az import-időbeli fájlmellékhatás tilalma.
+- A kért törlés visszaállítható módon történt: a gitignore-olt dev DB nincs a
+  backendben és nem keletkezett újra, de a fenti `/tmp` backupból a box
+  újraindításáig visszaállítható.
+- Egyetlen meglévő teszt lett átírva:
+  `TestProdBootGuards::test_prod_with_real_config_boots` — hozzáadott
+  `allow_sqlite_in_prod=True`; jogcím: brief **§5.8**. Ugyanitt a §5.8 által
+  előírt két új teszt készült (engedély nélküli boot-hiba; env-flag).
+- Más meglévő teszt állítása nem változott. A `conftest.py` fixture-átállítása a
+  brief §4-ben engedett `create_app`/dependency-injection refaktor.
+
+### Nem futtatott ellenőrzések és follow-upok
+
+- Flutter format/analyze/test és lokális APK-build nem futott: a Flutter-fa
+  érintetlen, a brief ezt kifejezetten nem kéri; APK-build amúgy is CI-only.
+- CI-dispatch, `gh`, PR, merge és deploy nem futott: Claude-oldali feladat.
+- PostgreSQL integration nem futott: a driver a brief szerint szándékosan nincs
+  a kötelező requirements-ben; deploykor kompatibilis Psycopg driver és valódi
+  Postgres smoke-test kell.
+- Claude follow-up: ADR 0060, CI/PR/review/merge, HANDOFF/RTM és a merge utáni
+  független gate-ek. A repó tanulságlogjába érdemes felvenni: SQLite-on a
+  deklarált FK/cascade csak minden kapcsolatra kiadott
+  `PRAGMA foreign_keys=ON` mellett működik. Ismert implementációs blocker nincs.
 
 ## 11. Review — a Claude tölti ki
 

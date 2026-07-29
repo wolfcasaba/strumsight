@@ -96,7 +96,27 @@ class TestProdBootGuards:
             env="prod",
             secret_key="a-real-32-char-production-secret",
             cors_origins=["https://app.strumsight.app"],
+            allow_sqlite_in_prod=True,
         )
+        assert create_app(s) is not None
+
+    def test_prod_with_sqlite_without_explicit_permission_refuses_to_boot(self):
+        s = Settings(
+            env="prod",
+            secret_key="a-real-32-char-production-secret",
+            cors_origins=["https://app.strumsight.app"],
+        )
+        with pytest.raises(RuntimeError, match="SQLite"):
+            create_app(s)
+
+    def test_prod_sqlite_permission_can_come_from_environment(self, monkeypatch):
+        monkeypatch.setenv("STRUMSIGHT_ALLOW_SQLITE", "true")
+        s = Settings(
+            env="prod",
+            secret_key="a-real-32-char-production-secret",
+            cors_origins=["https://app.strumsight.app"],
+        )
+        assert s.allow_sqlite_in_prod is True
         assert create_app(s) is not None
 
     def test_dev_defaults_still_boot_with_zero_setup(self):

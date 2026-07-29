@@ -6,6 +6,7 @@ Override in production via real environment variables (NEVER commit secrets).
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_prefix="STRUMSIGHT_",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # "dev" boots with zero setup; "prod" refuses to boot on insecure
@@ -29,6 +31,12 @@ class Settings(BaseSettings):
     # SQLite by default (zero-config). Swap to Postgres in prod by setting
     # STRUMSIGHT_DATABASE_URL=postgresql+psycopg://user:pass@host/db
     database_url: str = "sqlite:///./strumsight.db"
+    allow_sqlite_in_prod: bool = Field(
+        default=False,
+        # Keep the explicit Settings(allow_sqlite_in_prod=...) kwarg through
+        # populate_by_name while mapping the documented short env name exactly.
+        validation_alias="STRUMSIGHT_ALLOW_SQLITE",
+    )
 
     # CORS origins for the Flutter web/dev client. "*" is fine for dev.
     cors_origins: list[str] = ["*"]
