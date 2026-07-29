@@ -83,9 +83,21 @@ music-theory/
 ## Verify gate (before "done")
 
 ```bash
-~/flutter/bin/flutter analyze lib/     # clean
-~/flutter/bin/flutter test             # separate call — all green
+~/flutter/bin/dart format --set-exit-if-changed lib test   # 0 changed
+~/flutter/bin/flutter analyze lib/ test/                   # clean
+~/flutter/bin/flutter test test/<area touched by the round> # separate call
 ```
+
+**The FULL suite + property gate + APK run in CI, not here** (user rule 2026-07-29,
+[ADR 0053](docs/adr/0053-ci-full-test-suite.md)): this box needs ~15 min for
+`flutter test`, CI ~4–5 min, and one `build-apk.yml` run covers analyze + full
+suite + randomized-seed property gate + release APK:
+
+```bash
+gh workflow run build-apk.yml --ref <round-branch>
+```
+
+The merge bar is unchanged — every gate green, including the CI-side full suite.
 
 Use the `flutter-*` agents + `verify-before-done` / `session-learning` skills.
 

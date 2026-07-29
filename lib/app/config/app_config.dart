@@ -1,19 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/foundation/app_failure.dart';
+
 import 'app_environment.dart';
 import 'feature_flags.dart';
 
 /// A configuration problem found by [AppConfig.resolve]. Controlled failure:
 /// bootstrap catches it and shows the failure screen instead of launching a
 /// misconfigured app (fail-closed).
-final class ConfigurationFailure implements Exception {
-  const ConfigurationFailure(this.problems);
+///
+/// Named `…Exception` because it is thrown; the corresponding *value* type in
+/// the unified taxonomy is `ConfigurationFailure` (E01-R04,
+/// `core/foundation/app_failure.dart`) — see [asFailure].
+final class ConfigurationException implements Exception {
+  const ConfigurationException(this.problems);
 
   /// Human-readable problems, one per violated rule.
   final List<String> problems;
 
+  /// The same problem as an [AppFailure], for code that reports results
+  /// instead of throwing.
+  ConfigurationFailure asFailure([StackTrace? stackTrace]) =>
+      ConfigurationFailure(cause: this, stackTrace: stackTrace);
+
   @override
-  String toString() => 'ConfigurationFailure: ${problems.join('; ')}';
+  String toString() => 'ConfigurationException: ${problems.join('; ')}';
 }
 
 /// Validated application configuration (E01-R03, SDD Ch2 Kör 3 §3.3).
@@ -71,7 +82,7 @@ final class AppConfig {
   /// `version+build` from pubspec.yaml via package_info_plus, or `unknown`.
   final String appVersion;
 
-  /// Validate and build the config. Throws [ConfigurationFailure] listing
+  /// Validate and build the config. Throws [ConfigurationException] listing
   /// EVERY violated rule (not just the first) so a misconfigured build is
   /// fixed in one pass.
   ///
@@ -139,7 +150,7 @@ final class AppConfig {
       );
     }
 
-    if (problems.isNotEmpty) throw ConfigurationFailure(problems);
+    if (problems.isNotEmpty) throw ConfigurationException(problems);
 
     return AppConfig(
       environment: environment,
