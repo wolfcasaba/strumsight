@@ -34,6 +34,10 @@ Elavult dokumentumot nem szabad csendben követni. Dokumentáld az eltérést.
 
 - Egy munkamenetben egy kijelölt Codex-kör.
 - Ne kezdd el a következő kört.
+- Amit a terv új sessionre ír elő, azt MINDIG új sessionben indítsd: a kör
+  lezárása (merge + végrehajtási jelentés) után a session megáll. Kivétel
+  csak aktuális, explicit user-utasítás (elsőbbségi lista 1. pont) — user
+  szabály 2026-07-29, [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md).
 - Ne végezz „mellékesen” teljes repo refaktort.
 - Talált, de scope-on kívüli hibát dokumentálj follow-up issue-ként.
 - Minden változtatás legyen önállóan review-zható és visszaállítható.
@@ -137,6 +141,16 @@ flutter test test/property
 
 A parancsokat külön futtasd; ne láncold őket `&&` használatával a korlátozott fejlesztői környezetben.
 
+**APK-build MINDIG CI-vel** (user szabály 2026-07-29, ADR 0052): a fejlesztői
+boxon nincs Android SDK — `flutter build apk`-t ne futtass és ne is próbálj
+lokálisan; a build-evidencia a kör-branchre dispatchelt workflow:
+
+```bash
+gh workflow run build-apk.yml --ref <kör-branch>
+```
+
+A futás linkje a PR kötelező build-evidenciája.
+
 Backend változtatásnál:
 
 ```bash
@@ -151,6 +165,11 @@ ML változtatásnál a fejezetben megadott célzott pytest/parity/evaluation par
 - Alapértelmezett branch: `main`.
 - Közvetlen main push nem megengedett a védett workflow-ban.
 - Branch: `codex/eXX-rYY-rovid-leiras`.
+- **Zöld-kapus auto-merge** (user szabály 2026-07-29, ADR 0052): ha a kör
+  MINDEN kötelező gate-je zöld (format, analyze, teljes test, property, a
+  fejezet kör-tesztjei ÉS a branchre dispatchelt CI-build success), a PR-t
+  külön jóváhagyás nélkül squash-merge-eld. Bármely gate hiánya/pirossága →
+  a merge tilos marad.
 - Egy commit egy logikai egység.
 - Conventional Commit előtag.
 - Ne módosíts vagy törölj más munkáját.

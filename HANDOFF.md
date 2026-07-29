@@ -4,8 +4,12 @@
 > "what's done / what's next". Update it after every development round (see
 > [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (round 210 = E01-R03).
 >
-> **Branch/commit:** `codex/e01-r03-app-bootstrap` — PR #3. Utolsó befejezett kör: **E01-R03**
-> (SDD Ch2, Kör 3). **Következő: E01-R04 Egységes failure, result és logging** (Ch2, Kör 4).
+> **Branch/commit:** `main` @ `58ab1b0` (PR #3 merged). Utolsó befejezett kör: **E01-R03**
+> (SDD Ch2, Kör 3). **Következő: E01-R04 Egységes failure, result és logging** (Ch2, Kör 4) —
+> **ÚJ SESSIONBEN indítandó** (ADR 0052). Állandó user-szabályok (2026-07-29,
+> [ADR 0052](docs/adr/0052-ci-apk-automerge-session-per-round.md)): APK-build MINDIG CI-vel
+> (`gh workflow run build-apk.yml --ref <branch>`); minden gate zöld → automatikus squash-merge;
+> egy session = egy kör, a következő kör új sessionben.
 
 > 🤖 **ML TRACK GREEN-LIT (2026-07-12, user order):** research → plan → autonomous rounds. Plan:
 > `docs/plans/ml-track.md`. Round-134 discovery: the **ISMIR-2025 strum-direction dataset + code +
