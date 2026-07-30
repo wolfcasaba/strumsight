@@ -256,15 +256,16 @@ A workflow-dispatchek (backend-ci a kör-branchre + a szokásos build-apk gate)
 - `backend/README.md`: Python 3.12, prod/dev requirements-használat és a
   backend-CI gate-jei.
 - `ml/make_manifest.py`: dependencymentes generátor; a checksumot és a bináris
-  header metaadatait méri, checksum-egyezésnél megőrzi a `created_at` értéket.
+  header metaadatait méri, checksum-egyezésnél megőrzi a `created_at` értéket,
+  és a git-történetből rekonstruált shipping-revíziót írja a provenance-be.
 - `assets/ml/model_manifest.json`: a négy shipping bináris generált SHA-256,
-  format/version, input shape, classlista, `pre-manifest` provenance,
-  exporter-verzió és dátum metaadata.
+  format/version, input shape, classlista, pontos `repository-history`
+  provenance, exporter-verzió és dátum metaadata.
 - `test/tooling/ml_asset_manifest_test.dart`: a manifestből induló, négy
   modelles alsó korlát; regular/non-empty fájl, saját SHA-256, kötelező
   metaadat, exporter-létezés, pubspec-deklaráció és fordított
-  pubspec→manifest teljesség ellenőrzése. A SHA-256 segédet két standard vektor
-  ellenőrzi.
+  pubspec→manifest teljesség ellenőrzése. A négy ismert shipping-revíziót is
+  rögzíti; a SHA-256 segédet két standard vektor ellenőrzi.
 - `docs/rounds/e01-r15-backend-and-ml-ci.md`: kizárólag ez a §10 handoff.
 
 ### Commitok
@@ -274,6 +275,8 @@ A workflow-dispatchek (backend-ci a kör-branchre + a szokásos build-apk gate)
 - `01cc4b0` — `ci(backend): add quality and migration workflow`
 - `08301eb` — `feat(ml): generate shipping model manifest`
 - `6a5fe22` — `test(ml): enforce model manifest integrity`
+- `2af5500` — `docs(backend): document Python 3.12 and R15 evidence`
+- `a4fa32b` — `fix(ml): record reconstructable model provenance`
 
 ### Kötelező lokális gate-ek — tényleges kimenet
 
@@ -327,6 +330,16 @@ prod-only smoke DB: 20480 bytes
 Workflow lokális statikus audit:
 workflow YAML syntax parsed
 workflow structure assertions passed
+
+Független review MAJOR reprodukció:
+shipping manifest covers four valid declared ML binaries
+4 hiba: a négy ismert shipping-revízió helyett `pre-manifest` (exit 1)
+
+Provenance-javítás után:
+flutter test test/tooling/ml_asset_manifest_test.dart
+00:00 +3: All tests passed!
+python3 ml/make_manifest.py
+unchanged assets/ml/model_manifest.json (4 models)
 ```
 
 ### Kötelező piros utak — tényleges kimenet, majd visszaállítás
@@ -383,6 +396,10 @@ workflow structure assertions passed
   meglévő asset-checker mintájára `FileSystemEntity.typeSync(...,
   followLinks: false)` lett a célzott javítás; utána 3/3 teszt és analyzer
   zöld.
+- A független review igazolta, hogy mind a négy asset shipping-revíziója
+  rekonstruálható; az eredeti blanket `pre-manifest` provenance ezért MAJOR
+  volt. A generátor most a bizonyított git-azonosítókat írja, a guard pedig
+  ezeket rögzíti.
 - `actionlint` nincs telepítve a boxon; helyette a workflow YAML-t PyYAML
   parse és explicit kötelező-lépés assertion ellenőrizte. A tényleges
   GitHub-workflow eredménye továbbra is Claude-oldali gate.
