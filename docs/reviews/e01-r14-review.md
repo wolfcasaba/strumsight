@@ -262,6 +262,29 @@ A merge az ADR 0052 zöld-kapus szabálya szerint mehet.
 dispatchének kontrollált piros futása csak a default branchre kerülés után
 szerezhető meg. A merge után azonnal elvégzem, és a linket ide írom.
 
-### Merge utáni bizonyíték — `release-apk.yml` fail-closed
+### Merge utáni bizonyíték — `release-apk.yml` fail-closed ✅
 
-_(a merge utáni dispatch után kitöltve)_
+A merge (PR #19, `65330d3`) után azonnal, secret nélkül dispatchelve:
+[run 30514352164](https://github.com/wolfcasaba/strumsight/actions/runs/30514352164)
+— **failure**, ahogy kell.
+
+```
+success   Set up job
+failure   Verify production signing prerequisites   ← itt áll meg
+skipped   Run actions/checkout@v4
+skipped   … (a teljes gate-sor, keystore, build, upload)
+success   Remove production keystore                ← if: always() cleanup lefutott
+```
+
+A hibaüzenet mind a négy hiányzó secretet néven nevezi, érték nélkül:
+
+```
+Missing required production signing secret: ANDROID_KEYSTORE_BASE64
+Missing required production signing secret: ANDROID_STORE_PASSWORD
+Missing required production signing secret: ANDROID_KEY_ALIAS
+Missing required production signing secret: ANDROID_KEY_PASSWORD
+```
+
+**Artifact-szám a futásban: `0`** — debug kulcsú, „release"-nek nevezett APK nem
+keletkezett. A NOTE-3 kötelezettsége ezzel teljesítve, a brief §6 fail-closed
+kritériuma bizonyítva.

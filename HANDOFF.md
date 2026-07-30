@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-29** (E01-R13, PR #18).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-30** (E01-R14, PR #19).
 >
 > **Branch/commit:** `main` @ [PR #13](https://github.com/wolfcasaba/strumsight/pull/13) (merged, CI run
 > [30470460895](https://github.com/wolfcasaba/strumsight/actions/runs/30470460895) zöld: analyze + teljes
@@ -78,6 +78,36 @@
 > MINOR, 3 NOTE — a NOTE-3 follow-up-jelölt: a prodban engedélyezett `/download` token nélküli).
 > A kör simán futott: nulla megállás, nulla brief-revízió — a pre-flight (a tesztfa-grep szabállyal)
 > és az R12-minták előre feloldották az ütközéseket.
+> **E01-R14 KÉSZ (2026-07-30, [PR #19](https://github.com/wolfcasaba/strumsight/pull/19)):** a merge-gate
+> workflow immár **teljes gate-sor** olcsó → drága sorrendben — format → analyze (**`tool/`-ra is
+> kiterjesztve**) → architecture (`check_architecture.dart` eddig CI-ben NEM futott) → **asset-gate**
+> → `flutter test --coverage` → property gate (friss seed, változatlan) → APK. Új
+> `tool/ci/check_assets.dart` (+3 teszt): a bejárás **kizárólag** a pubspec `flutter.assets` +
+> `fonts[*].asset` halmaza, ezért a nem deklarált, 0 bájtos `ml/strum_direction.tflite` nem
+> hamis-pirosít (a Codex TDD közben talált és gyökérokon javított egy false-green parserhibát: a
+> nested `dependencies.flutter`-t tévesztette a top-level blokkal). **Artifactok visszavezethetők:**
+> `strumsight-1.0.0-1-62adeef-development.apk` a pubspecből (ADR 0051), a statikus `strumsight-apk`
+> név megszűnt; coverage LCOV külön artifact **küszöb nélkül** (előbb baseline — a kritikus modulok
+> együtt 88,07%, a `config` 79,66% és a `foundation` 76,19% a Ch2 §14.8 90%-os célja alatt).
+> **Fail-closed production release:** új `release-apk.yml` (csak dispatch) — hiányzó signing-secret
+> esetén az ELSŐ lépésen elhasal, **debug-signing fallback ág nem létezik**; a `build.gradle.kts`
+> `STRUMSIGHT_REQUIRE_RELEASE_SIGNING=true` mellett szintén megáll (kettős védelem), `key.properties`
+> hiányában viszont a lokális `flutter build apk --release` változatlanul debug kulccsal megy.
+> **Merge után bizonyítva** ([run 30514352164](https://github.com/wolfcasaba/strumsight/actions/runs/30514352164)):
+> failure az első lépésen, minden további skipped, mind a 4 secret néven nevezve, **0 artifact**.
+> Az R11-review MINOR-1 lezárva: a route-guard receiver-független lett — ugyanarra az injektált
+> `router.go('/live')`-ra a **régi guard zöld maradt, az új piros**.
+> [ADR 0062](docs/adr/0062-ci-gate-chain-and-fail-closed-release-signing.md), review:
+> [`docs/reviews/e01-r14-review.md`](docs/reviews/e01-r14-review.md) (APPROVED, 0 BLOCKER/MAJOR,
+> 3 MINOR → R15/R16: asset-gate üres deklarációs halmazon zöld · gate-duplikáció a két workflow közt
+> · CI-idő 9m → 11m).
+> **A kör tanulsága — a scope-audit AKKOR is fog, ha a tervező hibázik:** a planning commitba
+> bekerült egy `.claude/skills/` fájl, ami nem volt a brief §4 listáján. A Codex megtalálta, **megállt
+> és nem pusholt**. A feloldás NEM a §4 utólagos kitágítása volt (az önkiszolgáló szerződésmódosítás
+> lett volna), hanem rebase: a skill kikerült a körből. **A fájllista a tervezőt is köti.**
+> Második tanulság: a brief §6-ban olyan acceptance criteriumot írtam elő (a `release-apk.yml`
+> secret nélküli futásának linkje), amit merge ELŐTT a GitHub `workflow_dispatch` default-branch
+> szabálya miatt lehetetlen teljesíteni — **új workflow bizonyítéka mindig merge utáni kötelezettség.**
 > **Következő: E01-R14 Flutter CI release pipeline** (Ch2, Kör 14) — ÚJ SESSIONBEN.
 > A brief előre elkészítve: `docs/rounds/e01-r14-flutter-ci-release-pipeline.md` (indítás előtt
 > pre-flight a `round-brief-prep` skill szerint; az R11 review MINOR-ja — a literál-guard nem fogja
@@ -259,6 +289,11 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
   a `build-apk.yml` **branchre dispatchelt** futásából (a workflow csak `main`-re triggerel magától;
   a `pull_request` trigger felvétele az E01-R14 CI-kör dolga). **A teljes tesztsuite is ide tartozik**
   (user-döntés 2026-07-29): lokálisan csak a kör érintett könyvtárai futnak.
+  ⚠ **Frissítés (E01-R14, 2026-07-30):** a `pull_request` trigger **NEM** került be — az
+  [ADR 0062](docs/adr/0062-ci-gate-chain-and-fail-closed-release-signing.md) §1 szándékosan
+  változatlanul hagyta a `build-apk.yml` triggereit (az ADR 0052 kör-gate modellje branchre
+  dispatchelt futásra épül). A kör a lépéssort bővítette, nem a triggereket. A `pull_request`
+  trigger így **nyitott kérdés marad** — ha kell, önálló döntés (R16 vagy Ch12 branch-protection).
 
 - **Follow-up az R04-ből (scope-on kívül, külön kör):** (1) ~~a `settings_sync.dart` + `SettingsRepository`
   még nyers Dio-hibákkal dolgozik~~ — **lezárva az E01-R08-ban**: az `ApiClient` + a
@@ -307,6 +342,7 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 
 | Round | Commit | tests | Lesson (compressed) |
 |------:|--------|------:|---------------------|
+| 216 | PR #19 | teljes suite + property + coverage CI-ben zöld (run 30513701633, 11m45s); lokálisan 12/12 `test/tooling` | **E01-R14 CI GATE-SOR + FAIL-CLOSED RELEASE SIGNING — a merge-gate-ből többé nem jöhet ki „kiadható" build hibás kódból.** format + `tool/`-ra kiterjesztett analyze + architecture + asset-gate + coverage bekerült a `build-apk.yml`-be (olcsó → drága sorrendben); az artifact neve a pubspecből jön (`strumsight-1.0.0-1-62adeef-development.apk`), a statikus `strumsight-apk` megszűnt; új `release-apk.yml` valódi keystore-ral, **debug-fallback ág nélkül** ([ADR 0062](docs/adr/0062-ci-gate-chain-and-fail-closed-release-signing.md)). **Tanulság 1: a fájllista a TERVEZŐT is köti.** A planning commitomba bekerült egy `.claude/skills/` fájl a brief §4 listáján kívül; a Codex a kötelező scope-audittal megtalálta, megállt és nem pusholt. A helyes feloldás a rebase (a fájl kikerült a körből) volt, NEM a §4 utólagos kitágítása — az saját magamnak írt felmentés lett volna, és pont azt a mércét rontja el, amivel a kört mérem. **Tanulság 2: új workflow bizonyítéka merge utáni kötelezettség.** A §6-ban előírtam a `release-apk.yml` secret nélküli futásának linkjét a kör elfogadásához — de a GitHub `workflow_dispatch` csak default-branchen létező workflow-t indít, tehát merge előtt ez teljesíthetetlen volt. A brief hibája, nem az implementációé; a merge után azonnal pótolva (run 30514352164: failure az 1. lépésen, minden más skipped, 0 artifact). **Tanulság 3: a guard „zöld" önmagában nem bizonyítja a szigorítást** — az R11 MINOR-1 lezárásához ugyanazt az injektált `router.go('/live')` sértést futtattam a RÉGI és az ÚJ regexszel: régi zöld, új piros. **Tanulság 4: gate-írásnál a false-green a fő kockázat** — a Codex asset-parsere először `0 declared asset(s)`-t adott (a nested `dependencies.flutter`-t nézte top-levelnek), azaz vidáman zöld lett volna mindenre; reprodukáló fixture + gyökérok-javítás lett belőle, nem workaround. Ugyanez a review MINOR-1-e: a gate üres deklarációs halmazon MA is zöld (mérve, exit 0) → a Kör 15 checksum-manifestje adjon alsó korlátot. |
 | 211 | PR #5 | 778 passed / 2 skipped (14:31) — ebből 76 új | **E01-R04 EGYSÉGES FAILURE/RESULT/LOGGING — a várt hiba mostantól ÉRTÉK, nem exception, és nem tűnik el egy `catch (_)`-ben.** `AppResult` + 10 kategóriás `AppFailure` (stabil `code` + `retryable`) + `AppLogger`/`LogRedactor`; az auth data→UI lánc végigmigrálva (`DioException` nem hagyja el a repository-t, a UI a `code`-ból lokalizál). **Tanulság 1: a hibataxonómia nem könyvelés — VALÓDI BUGOKAT talál.** Amint a „miért nem sikerült" tipizált lett, két néma hiba azonnal kiesett: (a) az offline induló app a `catch (_)` miatt ELDOBTA a tárolt tokent (hálózat nélkül végleges kijelentkezés) — mostantól csak `AuthenticationFailure` töröl; (b) a `MicCapture.ensurePermission` MINDEN ismeretlen hibát „granted"-nek vett, mert egy teszt-környezeti `MissingPluginException` kedvéért volt egy csupasz `catch (_) => true`. **A „tesztkörnyezet kedvéért engedékeny" catch productionben hazugság — szűkítsd a kivétel TÍPUSÁRA.** **Tanulság 2: a redaction a loggerbe való, nem a hívóhoz** — a `LogRedactor` a kulcsnév, a szabad szöveg (e-mail/JWT/Bearer), a >200 karakteres string és a >16 elemű számlista szintjén is maszkol, így egy figyelmetlen jövőbeli hívás sem szivárogtat; a teszt azt is állítja, hogy mi NINCS a logban. **Tanulság 3: a névtér-ütközést a terv oldja fel, nem a kreativitás** — az R03 `ConfigurationFailure` exception ütközött a §7.2 kötelező kategórianévvel; az exception lett `ConfigurationException` (3 hívó), mert a terv nevét kell szabadon hagyni. **Folyamat:** a user a kör közben elrendelte, hogy a teljes suite ezentúl CI-ban fusson ([ADR 0053](docs/adr/0053-ci-full-test-suite.md)) — a boxon 14:31, a CI-n ~4–5 perc. |
 | 210 | PR #3 | 20 új app-teszt + teljes suite | **E01-R03 APP BOOTSTRAP — a konfiguráció mostantól validált és fail-closed.** `AppEnvironment`/`FeatureFlags`/`AppConfig.resolve` + `AppBootstrap` sealed result-tal + lokalizált `BootstrapFailureApp`; `ApiConfig` deprecated, 0 importer. **Tanulság 1: a validációs szabályt a HASZNÁLATHOZ kell kötni, nem az environmenthez** — a „production nem mutathat 10.0.2.2-re" szabály naiv (feltétel nélküli) betartatása MINDEN offline production buildet eltört volna, mert a define default épp a dev loopback; a helyes kapu `flags.usesNetwork` — URL-szabály csak akkor fut, ha valami tárcsázna. **Tanulság 2: hibalistát adj, ne first-error-t** — a `resolve` az ÖSSZES megsértett szabályt egyszerre dobja (a teszt bizonyítja: 4 hiba egy hívásból), így egy félrekonfigurált build egy körben javítható. **Tanulság 3: a StrumSightApp áthelyezésénél a settingsSync watch majdnem kiesett a shellből** — a „main legyen minimális" refaktor kísértése, hogy viselkedést is „szépítsen"; a shell-mozgatásnak byte-azonos viselkedésűnek kell lennie, a sync-listener a shellben maradt. |
 | 209 | PR #2 | 702 Dart + 2 skipped · 23 property | **E01-R02 PROJEKTAZONOSÍTÓK — a `music_theory` örökség kigyomlálva, a repó mindenhol StrumSight.** 548 import 161 fájlban, Android/iOS/web azonosítók, `pubspec` mint egyetlen verzió-forrás, [ADR 0051](docs/adr/0051-strumsight-application-identifiers.md) (az app ÚJ appként települ — a pre-rename build lokális adatai nem öröklődnek). **Tanulság 1: a kör kötelező gate-jei közül a `dart format --set-exit-if-changed` MÁR A KÖR ELŐTT PIROS VOLT** — mielőtt 275 fájlnyi újraformázást a rename-diffbe kevertem volna, külön worktree-ben leellenőriztem a baseline commiton (`328a53e`): 275/328 fájl ott is „changed". A tall-style migráció így külön, önállóan visszaforgatható commitba került, a rename diff pedig olvasható maradt. **Egy piros gate-et előbb be kell határolni (az én változtatásom okozta, vagy örökölt?), csak utána javítani.** **Tanulság 2: a §2.5 őr-teszt ELSŐ futása saját magát bukttatta el** — a doc-commentje kiírta a tiltott literált. A tiltott stringeket fragmentumokból összerakva a guard önmagát is szkennelheti, ahelyett hogy ki kellene magát zárnia a vizsgálatból (vakfolt). **Tanulság 3: a reflow egy addig rejtett lintet hozott ki** (`curly_braces_in_flow_control_structures`) — a formázás „viselkedés-semleges", de az analyze-t nem az. Külön-parancsos analyze + teljes suite újrafuttatás a formázás UTÁN is kötelező. |
