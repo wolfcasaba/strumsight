@@ -360,7 +360,7 @@ dől el körönként, melyik motor implementál:
 
 | Kör jellege | Motor | Indítás |
 |---|---|---|
-| Jól specifikált domain/model/teszt kör, adapter, katalógus, i18n, mechanikus refaktor, migráció, boilerplate-tömeg | **MiniMax M3** | `tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log` |
+| Jól specifikált domain/model/teszt kör, adapter, katalógus, i18n, mechanikus refaktor, migráció, boilerplate-tömeg | **MiniMax M3** | `tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log` + MÁSODIK háttér-taskként `tools/mm-watch.sh <munkapéldány> /tmp/mm-<kör>.log` |
 | DSP-hangolás, baseline-érzékeny scorer/matcher, teljesítmény-kritikus út, felderítő vagy kétértelmű feladat | **Codex** | `tools/codex-round.sh …` (§15.3) |
 | Bizonytalan besorolás | **Codex** | a drágább motor a biztonságos alapértelmezés |
 

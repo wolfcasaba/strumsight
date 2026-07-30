@@ -69,7 +69,15 @@ tools/mm-round.sh <munkapéldány> <prompt-fájl> [logfájl]
   mérten elfogad 498K tokent; a modell 1M-et hirdet, garantált minimum 512K-val.
 - A `tools/codex-round.sh` három védelmi vonala (kör-jelzés, elakadás-őr,
   időkorlát) változatlanul érvényes — a `tools/mm-round.sh` ugyanazt a
-  `.codex-round-status` szerződést és a közös `tools/codex-signal.sh`-t használja.
+  `.codex-round-status` szerződést és a közös `tools/codex-signal.sh`-t használja,
+  a korai riasztást pedig a `tools/mm-watch.sh` adja (második háttér-task).
+- **Az elakadás-küszöb 5 perc** (user-szabály 2026-07-30: „nem kell nagy időtáv").
+  Ehhez a burkoló `--output-format stream-json --verbose`-szal futtatja a
+  harness-t: a sima `claude -p` mindent a futás VÉGÉN ír ki, így a log addig
+  0 bájt marad, és egy log-alapú őr minden hosszabb kört tévesen kilőne. A
+  stream-json eseményenként ír, tehát a log folyamatosan nő, a watcher pedig
+  meg tudja mutatni, épp melyik tool fut. A futás végén a burkoló kiemeli az
+  olvasható kör-jelentést `<log>.report.md`-be.
 
 ### 3. Kötelező brief-elemek MiniMax-körhöz
 
