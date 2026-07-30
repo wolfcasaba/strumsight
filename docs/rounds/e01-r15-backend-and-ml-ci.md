@@ -238,12 +238,173 @@ A workflow-dispatchek (backend-ci a kör-branchre + a szokásos build-apk gate)
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet.
-- A piros-út bizonyítékok (ruff-sértés, bin-rontás) kimenete.
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk (várhatóan: a CI-dispatchek — Claude-oldal).
-- Follow-up issue-k.
+### Fájlonkénti összefoglaló
+
+- `.github/workflows/backend-ci.yml`: új, path-filterelt push +
+  `workflow_dispatch` backend workflow Python 3.12-vel; külön Ruff lint,
+  Ruff format, pytest és izolált temp-SQLite Alembic gate.
+- `backend/requirements.txt`: csak runtime dependencyk maradtak.
+- `backend/requirements-dev.txt`: új dev/gate lista (`pytest`, `httpx`,
+  `ruff>=0.16,<0.17`).
+- `backend/pyproject.toml`: Python 3.12 / 88 karakter; `E4,E7,E9,F,I`;
+  `alembic` és `.venv` explicit kizárva.
+- `backend/app/config.py`, `database.py`, `main.py`,
+  `routers/diagnostics.py`, `schemas.py`, `security.py`: kizárólag Ruff
+  whitespace/import-formázás.
+- `backend/tests/test_diagnostics.py`, `test_migrations.py`,
+  `test_settings.py`: kizárólag Ruff whitespace/import-formázás.
+- `backend/README.md`: Python 3.12, prod/dev requirements-használat és a
+  backend-CI gate-jei.
+- `ml/make_manifest.py`: dependencymentes generátor; a checksumot és a bináris
+  header metaadatait méri, checksum-egyezésnél megőrzi a `created_at` értéket.
+- `assets/ml/model_manifest.json`: a négy shipping bináris generált SHA-256,
+  format/version, input shape, classlista, `pre-manifest` provenance,
+  exporter-verzió és dátum metaadata.
+- `test/tooling/ml_asset_manifest_test.dart`: a manifestből induló, négy
+  modelles alsó korlát; regular/non-empty fájl, saját SHA-256, kötelező
+  metaadat, exporter-létezés, pubspec-deklaráció és fordított
+  pubspec→manifest teljesség ellenőrzése. A SHA-256 segédet két standard vektor
+  ellenőrzi.
+- `docs/rounds/e01-r15-backend-and-ml-ci.md`: kizárólag ez a §10 handoff.
+
+### Commitok
+
+- `d68bb11` — `chore(backend): split dev dependencies and configure Ruff`
+- `1e1ba32` — `style(backend): apply Ruff formatting` (önálló formázó commit)
+- `01cc4b0` — `ci(backend): add quality and migration workflow`
+- `08301eb` — `feat(ml): generate shipping model manifest`
+- `6a5fe22` — `test(ml): enforce model manifest integrity`
+
+### Kötelező lokális gate-ek — tényleges kimenet
+
+```text
+backend/.venv/bin/python -m ruff check app tests
+All checks passed!
+
+backend/.venv/bin/python -m ruff format --check app tests
+20 files already formatted
+
+backend/.venv/bin/python -m pytest -q
+................................................................ [100%]
+exit 0; külön collect: 64 tests collected in 0.02s
+
+python3 ml/make_manifest.py
+unchanged assets/ml/model_manifest.json (4 models)
+
+~/flutter/bin/flutter test test/tooling
+00:11 +15: All tests passed!
+
+~/flutter/bin/dart format --output=none --set-exit-if-changed test
+Formatted 208 files (0 changed) in 0.56 seconds.
+
+~/flutter/bin/flutter analyze test/
+Analyzing test...
+No issues found! (ran in 4.1s)
+```
+
+További bizonyítékok:
+
+```text
+Ruff egyszeri migráció:
+Found 3 errors (3 fixed, 0 remaining).
+9 files reformatted, 11 files left unchanged.
+
+Formázó-diff normalizált Python AST-auditja:
+FORMAT_ONLY mind a 9 érintett app/test fájlra.
+
+Izolált Alembic smoke:
+Running upgrade -> e01_r12_0001, Create the initial account and settings schema.
+isolated migration DB: 28672 bytes
+
+Prod-only Python 3.12 venv (`requirements.txt`, dev fájl nélkül):
+No broken requirements found.
+prod-only imports OK: FastAPI=StrumSight Account API; uvicorn=0.34.3
+dev packages absent: pytest, httpx, ruff
+Application startup complete.
+Application shutdown complete.
+prod-only smoke DB: 20480 bytes
+
+Workflow lokális statikus audit:
+workflow YAML syntax parsed
+workflow structure assertions passed
+```
+
+### Kötelező piros utak — tényleges kimenet, majd visszaállítás
+
+1. Szándékos Ruff-sértés (`backend/tests/test_settings.py`, eldobható import +
+   rossz formázás):
+
+   ```text
+   E402 Module level import not at top of file
+   F401 `os` imported but unused
+   Found 2 errors.
+
+   ruff format --check:
+   unformatted: File would be reformatted
+   1 file would be reformatted, 19 files already formatted
+   ```
+
+   Az eldobható kód visszavonva; utána mindkét Ruff gate exit 0.
+
+2. `assets/ml/chord_crnn.bin` utolsó bájtjának egybites rontása
+   (`3a` → `3b`):
+
+   ```text
+   checksum mismatch for assets/ml/chord_crnn.bin:
+   expected 8f7596d45784fecd472be3bda141599e77a690edc8d526b85a9929532709fc74
+   actual   3d99145edb84b16e3ecabed8dd83aa5b49f2750d51d704d219ce30b366dd2753
+   Some tests failed. (exit 1)
+   ```
+
+   A bájt visszaállítva; a végső checksum ismét
+   `8f7596d45784fecd472be3bda141599e77a690edc8d526b85a9929532709fc74`,
+   a bináris diff üres.
+
+3. Az új teszt eldobható fixture-pubspecjéből az
+   `assets/ml/model.bin` deklaráció törlése:
+
+   ```text
+   Actual: ['manifest asset is not declared in pubspec: assets/ml/model.bin']
+   Some tests failed. (exit 1)
+   ```
+
+   A fixture-sor visszaállítva; a fókuszált manifest-teszt utána 3/3 zöld.
+   A valódi `pubspec.yaml` és a `tool/ci/check_assets.dart` egyik próbában sem
+   változott.
+
+### Eltérések, helyreállítás és scope-audit
+
+- Architektúra- vagy scope-eltérés nincs.
+- A legelső tooling baseline a klónban hiányzó, gitignore-olt
+  `lib/l10n/app_localizations.dart` miatt 9 siker / 1 load error volt. A
+  repository dokumentált bootstrapja (`flutter gen-l10n`) exit 0-val
+  legenerálta; utána a baseline 12/12 zöld lett, tracked diff nélkül.
+- Az új guard első fordítása négy `File.isFileSync` API-hibát jelzett. A
+  meglévő asset-checker mintájára `FileSystemEntity.typeSync(...,
+  followLinks: false)` lett a célzott javítás; utána 3/3 teszt és analyzer
+  zöld.
+- `actionlint` nincs telepítve a boxon; helyette a workflow YAML-t PyYAML
+  parse és explicit kötelező-lépés assertion ellenőrizte. A tényleges
+  GitHub-workflow eredménye továbbra is Claude-oldali gate.
+- A visszaállítási auditban a rontott `.bin` checksumja és git diffje az
+  eredetivel egyezik; a szándékos Ruff-sértés diffje üres.
+
+### Nem futtatott ellenőrzések
+
+- `gh` és a `backend-ci.yml` / `build-apk.yml` dispatchek: explicit
+  Claude-oldali feladat (ADR 0052, ADR 0055); a Codex nem hívott `gh`-t.
+- Teljes `flutter test` és property gate: CI-oldali feladat (ADR 0053);
+  lokálisan a kör által érintett teljes `test/tooling` futott.
+- Lokális APK-build: tilos és Android SDK sincs a boxon (ADR 0052).
+
+### Kockázat és follow-up
+
+- Új R15 follow-up nem keletkezett.
+- Az R14 MINOR-1 lezárását a manifest→pubspec piros út bizonyítja.
+- Az R14 MINOR-2/3 változatlanul **E01-R16** bemenet (workflow-duplikáció és
+  Flutter-CI futásidő).
+- Következő pontos SDD-kör: **E01-R16 — végső regresszió, teljesítmény és
+  dokumentáció**, új sessionben.
 
 ## 11. Review — a Claude tölti ki
 

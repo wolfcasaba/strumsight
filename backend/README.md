@@ -9,11 +9,26 @@ with settings stored locally; logging in syncs those settings across devices.
 - **Auth:** email + password → bearer JWT (14-day expiry)
 - **Zero-config:** runs with no `.env` and no external services (SQLite file)
 
+## Python and dependencies
+
+The backend supports **Python 3.12**. Runtime packages live in
+`requirements.txt`; tests and quality tools (`pytest`, `httpx`, Ruff) live in
+`requirements-dev.txt`. Production needs only the runtime file, while local
+development and CI install both:
+
+```bash
+# Production/runtime:
+pip install -r requirements.txt
+
+# Development/CI:
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
 ## Run
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m alembic upgrade head
 uvicorn app.main:app --reload            # http://127.0.0.1:8000
@@ -56,8 +71,14 @@ matches the current ORM.
 
 ```bash
 cd backend
+.venv/bin/python -m ruff check app tests
+.venv/bin/python -m ruff format --check app tests
 .venv/bin/python -m pytest -q            # isolated SQLite databases
 ```
+
+`.github/workflows/backend-ci.yml` runs the same Ruff and pytest gates on
+Python 3.12 for backend changes, then applies `alembic upgrade head` to an
+isolated temporary SQLite database. It can also be started manually.
 
 ## API
 
