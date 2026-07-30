@@ -74,6 +74,19 @@
   (E02-R02 MINOR-1 zárva). Test-oldali purity-őr (`domain_purity_test.dart`).
   Hívó továbbra sincs — production viselkedés változatlan, flagek OFF.
 
+- **Practice V2 tartalom (E02-R04, ADR 0070):** `lib/features/practice/data/`
+  `BuiltinPracticeCatalog` — tíz beépített gyakorlat (négy/nyolcad strum-minták,
+  folk pattern, G↔D és Em↔C akkordváltás, C-G-Am-F progresszió, 3/4 keringő,
+  szinkópált upstroke-ok, rhythm-only, free-practice sablon) stabil
+  `builtin.<slug>.v1` ID-kkel, unmodifiable `events`/`const skillTags`
+  listákkal; `domain/repository/practice_catalog_repository.dart` szinkron
+  szerződés; `application/practice_catalog_controller.dart` két Riverpod
+  providerrel. Hívó UI még nincs, ARB-fordítás az első UI-hívóval jön.
+- **Kétmotoros implementer-készlet (ADR 0069):** `tools/mm-round.sh` +
+  `tools/mm-watch.sh` (5 perces korai riasztás) + `tools/mm-trace.py`
+  (munkastílus-elemzés) — a MiniMax M3 ugyanazt a kör-jelzés-szerződést
+  használja, mint a Codex. Besorolás és a kötelező brief-elemek: AGENTS.md §15.6.
+
 ## 3. Known blockers / risks
 
 - **§16.3/§16.4 készülékes menet PENDING** — az Epic-1 zárás végső elfogadási
@@ -90,11 +103,11 @@
 
 ## 4. Current branch
 
-`main` @ [PR #24](https://github.com/wolfcasaba/strumsight/pull/24) (E02-R03,
-merge `692ab34`, CI run
-[30555556947](https://github.com/wolfcasaba/strumsight/actions/runs/30555556947)
+`main` @ [PR #25](https://github.com/wolfcasaba/strumsight/pull/25) (E02-R04,
+merge `b1ab7ab`, CI run
+[30562187556](https://github.com/wolfcasaba/strumsight/actions/runs/30562187556)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `codex/epic-02-round-03-domain-models` (merge után törölve).
+Kör-branch: `mm/epic-02-round-04-practice-catalog` (merge után törölve).
 
 ## 5. Last completed round
 
