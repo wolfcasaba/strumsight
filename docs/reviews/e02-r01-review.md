@@ -3,7 +3,8 @@
 Brief: `docs/rounds/e02-r01-practice-baseline.md`
 Diff: `git diff 27ef496..ea10a58` (8 fájl, +2422 / −13)
 Reviewer: Claude · Dátum: 2026-07-30
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **CHANGES REQUIRED** → **APPROVED** a javító commit után (`8340a79`,
+lásd „Javítás-ellenőrzés")
 
 ## Összegzés
 
@@ -185,3 +186,91 @@ javítása után.
 
 MINOR-1 **nem ebben a körben** javítandó (tilos zóna) — follow-upként rögzítve.
 NOTE-2/NOTE-3 nem igényel változtatást.
+
+---
+
+## Javítás-ellenőrzés (`8340a79`, 2026-07-30)
+
+**Scope:** 5 fájl (`test/support/`, `test/fixtures/`, `test/features/learn/`,
+`docs/baseline/`, `docs/rounds/` §10). `lib/**` **egyáltalán nem szerepel** a
+javító diffben — a baseline felvétele változatlanul nulla production-változás.
+
+### MAJOR-1 — ✅ lezárva
+
+Az új `p44_eighths_contended`: váltott le/fel nyolcadok **96 BPM**-en. A BPM
+választása szándékos és jó: `60/96 = 0,625 s` egzakt, ezért a cél-távolság
+**312,5 ms** kerekítési hiba nélkül áll elő, a holtverseny tehát nem
+lebegőpontos műtermék. A szomszédos ablakok **247,5 ms-on átfednek** — a
+készlet ezzel belép az ütközési tartományba.
+
+A három kért eset **saját, kézi levezetéssel ellenőrizve** a golden ellen
+(célidők: `2,5 / 2,8125 / 3,125 / 3,4375 / 3,75 / 4,0625 / 4,375 / 4,6875 s`):
+
+| Eset | Levezetés | Golden verdict | Egyezés |
+|---|---|---|---|
+| (a) holtverseny | `U @ 2,96875` — e1-től és e2-től egyaránt `156,25 ms`; szigorú `d < bestDelta` ⇒ a korábbi e1 nyer; `156,25 ms > 120 ms good` ⇒ `late` | e1: `hit / late` | ✅ |
+| (b) windowon belüli extra | `U @ 3,25` — e2-től `125 ms`, e3-tól `187,5 ms`, **mindkettő windowon belül**; e2 a közelebbi, iránya `down` ⇒ `wrongDirection`, `expectedDirection: down` | e2: `wrongDirection`, `down` | ✅ |
+| (c) lezárt target | `elapsedSec 3,4375` (pont a célon), de `frameArrivalSec 3,734375` > zárási küszöb `3,7175` ⇒ az előzetes `advance()` missre zárja; a windowon belüli observation nem nyitja újra, és e4 `312,5 ms`-ra van ⇒ nem veszi át | e3: `missed` | ✅ |
+
+Végállapot `6 hit / 1 wrong / 1 miss`, 5 perfect, 540 pont, `accuracy 0,75` —
+az összesítés konzisztens az event-szintű sorozattal.
+
+**Független érzékenység-próba a MATCHERRE (reviewer):** a holtverseny-ütés
+`2,96875` → `2,97` (a döntés e2 felé billen). **Két, egymástól független
+guard tüzelt:**
+
+```text
+contended eighths exercise overlapping legacy match windows [E]
+  Expected: <0.1549999999999998>   Actual: <0.1575000000000002>   ← az egyenlő-távolság invariáns
+legacy LessonScorer replay matches the frozen JSON byte for byte [E]
+  Expected: <2>   Actual: <1>      ← a független legacy matcher már e2-t választja
++3 ~1 -2: Some tests failed.
+```
+
+Visszaállítás után `+5 ~1: All tests passed!`, a working tree tiszta. A golden
+tehát **most már a matcher döntését is diszkriminálja** — ez volt a MAJOR-1
+tárgya.
+
+Külön elismerés a megoldás formájának: a `legacyMatchedEventIndex` mező
+elválasztja a **zenei szándékot** (`targetEventIndex: null` — ez egy extra) a
+**mai megfigyelt matcher-eredménytől** (a 2-es targetet elfogyasztotta), egy
+assertióval kikötve, hogy a kettő nem adható meg együtt. A V2 parity-replaynek
+pontosan erre a kettősségre lesz szüksége. Az új invariáns-teszt nem csak
+számot fagyaszt, hanem a forgatókönyv **szándékát** is (távolság = `0,3125`,
+`< 2×window`, egzakt egyenlő-távolság, az extra mindkét szomszéd ablakában, a
+frame-érkezés a zárási küszöb után) — így egy későbbi szerkesztés, amely
+véletlenül elrontja az ütközési tulajdonságot, hangosan elbukik.
+
+### Új lelet, amit a javítás hozott felszínre
+
+A baseline-jelentés „Ismert rések" listája **7. tétellel** bővült, és ez
+tartalmilag értékes: az „extra strum nem büntet" állítás **csak akkor igaz, ha
+nincs nyitott target ±280 ms-on belül**. Sűrű mintákon egy extra ütés elfogyaszt
+egy targetet, `wrongDirection`-t okoz, combót tör és fail streaket növel. Ez a
+mai viselkedés, most rögzítve — az extra-strum policy döntése E02-R09.
+
+### NOTE-1 — ✅ lezárva
+
+Az ADR 0067 §1/§3 szabálya bekerült a generátor-kulcs doc-commentjébe
+(`legacy_scorer_baseline_test.dart:12-14`).
+
+### Gate-ek a javítás után (reviewer, külön hívásokként)
+
+```text
+dart format --output=none --set-exit-if-changed lib test tool  → Formatted 452 files (0 changed)
+flutter analyze lib/ test/ tool/                               → No issues found! (3.6s)
+flutter test test/app test/features/learn                      → +178 ~1: All tests passed!
+flutter test test/features/{progress,streak,metronome}          → +50: All tests passed!
+dart run tool/check_architecture.dart                          → OK (12 allowlisted deviation(s))
+```
+
+A `~1` az env-kulcshoz kötött, alapból skipped golden-generátor.
+
+### Nyitott follow-up (nem blokkol)
+
+**MINOR-1:** `docs/rag/chunks/014-play-along-learn.md:56-59` továbbra is azt
+állítja, hogy a Learn „only while playing" fizet elő a frame-ekre, „closed on
+pause" — ez ma hamis. A chunk javítása a pause-rés lezárásával (E02-R08/R11)
+egy commitban esedékes.
+
+**Verdikt: APPROVED** — merge a CI-gate-ek zöldjével (ADR 0052/0053).
