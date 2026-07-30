@@ -12,18 +12,26 @@ import 'package:strumsight/features/practice/domain/repository/practice_catalog_
 
 /// The shipped, offline built-in catalog of practice definitions.
 ///
-/// Every entry is `const`-constructed, stable across builds, and pinned to
-/// schema version 1. Adding or removing an entry requires either a new ID
-/// version (for content changes) or an ADR-justified catalog bump.
+/// Every entry is stable across builds and pinned to schema version 1.
+/// Adding or removing an entry requires either a new ID version (for content
+/// changes) or an ADR-justified catalog bump.
 ///
 /// The catalog is returned in declaration order from every
 /// [BuiltinPracticeCatalog] method; that order is part of the contract and
 /// the tests pin the ID list by name.
 ///
-/// The list is `final` rather than literal-`const` because some
-/// [BeatPosition] factories are runtime factories, but every element is a
-/// `const PracticeDefinition` constructed at build time. The repository
-/// returns unmodifiable views, so the catalog is effectively immutable.
+/// Immutability guarantees:
+///   * `_builtinPracticeDefinitions` is a top-level `final` list built when
+///     the library is first loaded.
+///   * Every `skillTags:` literal is a `const` list.
+///   * The free-practice `events:` literal is `const []`.
+///   * Every comprehension-driven `events:` list is wrapped with
+///     `List.unmodifiable(...)` (helper-returned for the more complex
+///     patterns, inline-wrapped for the others).
+///   * `PracticeDefinition.events` and `skillTags` honor the
+///     `practice_definition.dart` contract — callers cannot mutate them.
+///   * `BuiltinPracticeCatalog.all()` returns a single cached
+///     `List.unmodifiable` snapshot of this list.
 final List<PracticeDefinition> _builtinPracticeDefinitions = [
   // 1. Quarter-note downstrokes across 4 bars.
   PracticeDefinition(
@@ -36,16 +44,16 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(70),
     totalBeats: BeatPosition.quarters(16),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var index = 0; index < 16; index++)
         PracticeEvent(
           id: 'quarterDownstrokes.e$index',
           position: BeatPosition.quarters(index),
           direction: StrumDirection.down,
         ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.legacyLearnParity,
-    skillTags: ['downstrokes', 'quarterNotes'],
+    skillTags: const ['downstrokes', 'quarterNotes'],
   ),
 
   // 2. Alternating down/up eighths across 4 bars.
@@ -59,16 +67,16 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(70),
     totalBeats: BeatPosition.quarters(16),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var index = 0; index < 32; index++)
         PracticeEvent(
           id: 'alternatingEighths.e$index',
           position: BeatPosition.eighths(index),
           direction: index.isEven ? StrumDirection.down : StrumDirection.up,
         ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.legacyLearnParity,
-    skillTags: ['eighthNotes', 'alternating', 'rhythm'],
+    skillTags: const ['eighthNotes', 'alternating', 'rhythm'],
   ),
 
   // 3. Folk syncopated pattern: "D - D U - U D U" on eighths, per bar.
@@ -84,10 +92,10 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     totalBeats: BeatPosition.quarters(16),
     events: _folkPatternEvents(),
     scoringProfile: ScoringProfile.legacyLearnParity,
-    skillTags: ['folk', 'syncopation', 'eighthNotes'],
+    skillTags: const ['folk', 'syncopation', 'eighthNotes'],
   ),
 
-  // 4. G <-> D chord changes on quarter notes across 8 bars.
+  // 4. G <-> D chord changes on quarter notes across 8 bars (one bar per chord).
   PracticeDefinition(
     id: 'builtin.gToDChanges.v1',
     schemaVersion: 1,
@@ -98,16 +106,16 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(60),
     totalBeats: BeatPosition.quarters(32),
-    events: _alternatingChordEvents(
+    events: _barGroupedChordEvents(
       slug: 'gToDChanges',
       firstChord: 'G',
       secondChord: 'D',
     ),
     scoringProfile: ScoringProfile.chordChangeDefault,
-    skillTags: ['chordChanges', 'openChords', 'gChord', 'dChord'],
+    skillTags: const ['chordChanges', 'openChords', 'gChord', 'dChord'],
   ),
 
-  // 5. Em <-> C chord changes on quarter notes across 8 bars.
+  // 5. Em <-> C chord changes on quarter notes across 8 bars (one bar per chord).
   PracticeDefinition(
     id: 'builtin.emToCChanges.v1',
     schemaVersion: 1,
@@ -118,13 +126,13 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(60),
     totalBeats: BeatPosition.quarters(32),
-    events: _alternatingChordEvents(
+    events: _barGroupedChordEvents(
       slug: 'emToCChanges',
       firstChord: 'Em',
       secondChord: 'C',
     ),
     scoringProfile: ScoringProfile.chordChangeDefault,
-    skillTags: ['chordChanges', 'minorChords', 'emChord', 'cChord'],
+    skillTags: const ['chordChanges', 'minorChords', 'emChord', 'cChord'],
   ),
 
   // 6. C / G / Am / F chord progression across 4 bars, quarter downstrokes.
@@ -138,7 +146,7 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(70),
     totalBeats: BeatPosition.quarters(16),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var bar = 0; bar < 4; bar++)
         for (var beat = 0; beat < 4; beat++)
           PracticeEvent(
@@ -147,10 +155,10 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
             chord: const ['C', 'G', 'Am', 'F'][bar],
             direction: StrumDirection.down,
           ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.chordProgressionDefault,
     difficulty: PracticeDifficulty.intermediate,
-    skillTags: ['chordProgression', 'pop', 'fourChords'],
+    skillTags: const ['chordProgression', 'pop', 'fourChords'],
   ),
 
   // 7. 3/4 waltz: D U U on the three quarter notes per bar, 4 bars.
@@ -164,7 +172,7 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 3),
     defaultTempo: Tempo(90),
     totalBeats: BeatPosition.quarters(12),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var bar = 0; bar < 4; bar++)
         for (var beat = 0; beat < 3; beat++)
           PracticeEvent(
@@ -172,9 +180,9 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
             position: BeatPosition.quarters(bar * 3 + beat),
             direction: beat == 0 ? StrumDirection.down : StrumDirection.up,
           ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.legacyLearnParity,
-    skillTags: ['waltz', 'threeFour', 'upstrokes'],
+    skillTags: const ['waltz', 'threeFour', 'upstrokes'],
   ),
 
   // 8. Syncopated upstrokes on the off-beats after 2, 3, and 4.
@@ -188,7 +196,7 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(90),
     totalBeats: BeatPosition.quarters(16),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var bar = 0; bar < 4; bar++)
         for (final entry in const [
           _SyncopatedSlot(0, StrumDirection.down),
@@ -201,10 +209,10 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
             position: BeatPosition.eighths(bar * 8 + entry.eighthIndex),
             direction: entry.direction,
           ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.legacyLearnParity,
     difficulty: PracticeDifficulty.intermediate,
-    skillTags: ['syncopation', 'offBeat', 'upstrokes'],
+    skillTags: const ['syncopation', 'offBeat', 'upstrokes'],
   ),
 
   // 9. Rhythm-only quarter downstrokes (no chord/direction scoring).
@@ -218,16 +226,16 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(70),
     totalBeats: BeatPosition.quarters(16),
-    events: [
+    events: List<PracticeEvent>.unmodifiable([
       for (var index = 0; index < 16; index++)
         PracticeEvent(
           id: 'rhythmOnlyQuarters.e$index',
           position: BeatPosition.quarters(index),
           direction: StrumDirection.down,
         ),
-    ],
+    ]),
     scoringProfile: ScoringProfile.rhythmOnlyDefault,
-    skillTags: ['rhythmOnly', 'quarterNotes'],
+    skillTags: const ['rhythmOnly', 'quarterNotes'],
   ),
 
   // 10. Free-practice template: no targets, no scoring.
@@ -241,9 +249,9 @@ final List<PracticeDefinition> _builtinPracticeDefinitions = [
     meter: Meter(beatsPerBar: 4),
     defaultTempo: Tempo(80),
     totalBeats: BeatPosition.quarters(16),
-    events: [],
+    events: const <PracticeEvent>[],
     scoringProfile: ScoringProfile.freePracticeOpen,
-    skillTags: ['freePlay', 'open'],
+    skillTags: const ['freePlay', 'open'],
   ),
 ];
 
@@ -265,7 +273,7 @@ List<PracticeEvent> _folkPatternEvents() {
     StrumDirection.up,
   ];
   const perBarEighthIndices = <int>[0, 2, 3, 5, 6, 7];
-  return [
+  return List<PracticeEvent>.unmodifiable([
     for (var bar = 0; bar < 4; bar++)
       for (var index = 0; index < perBarDirections.length; index++)
         PracticeEvent(
@@ -273,25 +281,26 @@ List<PracticeEvent> _folkPatternEvents() {
           position: BeatPosition.eighths(bar * 8 + perBarEighthIndices[index]),
           direction: perBarDirections[index],
         ),
-  ];
+  ]);
 }
 
-/// G↔D or Em↔C chord-change events: a quarter-note downstroke per beat, the
-/// chord toggles on every beat. 8 bars × 4 beats = 32 events.
-List<PracticeEvent> _alternatingChordEvents({
+/// G↔D or Em↔C chord-change events: a quarter-note downstroke per beat, with
+/// the chord grouped per bar — four beats of the first chord, then four beats
+/// of the second chord, alternating by bar. 8 bars × 4 beats = 32 events.
+List<PracticeEvent> _barGroupedChordEvents({
   required String slug,
   required String firstChord,
   required String secondChord,
 }) {
-  return [
+  return List<PracticeEvent>.unmodifiable([
     for (var index = 0; index < 32; index++)
       PracticeEvent(
         id: '$slug.e$index',
         position: BeatPosition.quarters(index),
-        chord: index.isEven ? firstChord : secondChord,
+        chord: (index ~/ 4).isEven ? firstChord : secondChord,
         direction: StrumDirection.down,
       ),
-  ];
+  ]);
 }
 
 /// One slot of the syncopated-upstrokes pattern, expressed as the eighth
@@ -308,16 +317,18 @@ class _SyncopatedSlot {
 final class BuiltinPracticeCatalog implements PracticeCatalogRepository {
   const BuiltinPracticeCatalog();
 
-  static final List<PracticeDefinition> _definitions =
-      _builtinPracticeDefinitions;
+  /// One-shot unmodifiable snapshot of [_builtinPracticeDefinitions].
+  /// Allocated lazily on first access and shared across every
+  /// [BuiltinPracticeCatalog] instance.
+  static final List<PracticeDefinition> _unmodifiableDefinitions =
+      List<PracticeDefinition>.unmodifiable(_builtinPracticeDefinitions);
 
   @override
-  List<PracticeDefinition> all() =>
-      List<PracticeDefinition>.unmodifiable(_definitions);
+  List<PracticeDefinition> all() => _unmodifiableDefinitions;
 
   @override
   PracticeDefinition? byId(String id) {
-    for (final definition in _definitions) {
+    for (final definition in _unmodifiableDefinitions) {
       if (definition.id == id) return definition;
     }
     return null;
@@ -326,7 +337,7 @@ final class BuiltinPracticeCatalog implements PracticeCatalogRepository {
   @override
   List<PracticeDefinition> byMode(PracticeMode mode) {
     final matches = <PracticeDefinition>[];
-    for (final definition in _definitions) {
+    for (final definition in _unmodifiableDefinitions) {
       if (definition.mode == mode) matches.add(definition);
     }
     return List<PracticeDefinition>.unmodifiable(matches);
@@ -335,7 +346,7 @@ final class BuiltinPracticeCatalog implements PracticeCatalogRepository {
   @override
   List<PracticeDefinition> byDifficulty(PracticeDifficulty difficulty) {
     final matches = <PracticeDefinition>[];
-    for (final definition in _definitions) {
+    for (final definition in _unmodifiableDefinitions) {
       if (definition.difficulty == difficulty) matches.add(definition);
     }
     return List<PracticeDefinition>.unmodifiable(matches);

@@ -5,6 +5,7 @@ import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/practice/data/builtin_practice_catalog.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
+import 'package:strumsight/features/practice/domain/model/practice_event.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
 
@@ -278,5 +279,89 @@ void main() {
         );
       }
     });
+  });
+
+  group('BuiltinPracticeCatalog per-definition immutability', () {
+    // A throwaway probe event with the minimum required fields. It must
+    // never actually be stored — the goal is only to attempt a mutation
+    // against the unmodifiable list and observe the rejection.
+    final probeEvent = PracticeEvent(
+      id: 'probe.neverStored',
+      position: BeatPosition.quarters(0),
+    );
+
+    test('events list rejects add() for every catalog definition', () {
+      for (final definition in catalog.all()) {
+        expect(
+          () => definition.events.add(probeEvent),
+          throwsUnsupportedError,
+          reason:
+              'events must be an unmodifiable view for ${definition.id}; '
+              'shared mutable state would leak across all catalog consumers.',
+        );
+      }
+    });
+
+    test('skillTags list rejects add() for every catalog definition', () {
+      for (final definition in catalog.all()) {
+        expect(
+          () => definition.skillTags.add('probe-tag-must-be-rejected'),
+          throwsUnsupportedError,
+          reason:
+              'skillTags must be a const list for ${definition.id}; '
+              'shared mutable state would leak across all catalog consumers.',
+        );
+      }
+    });
+  });
+
+  group('BuiltinPracticeCatalog chord-change bar grouping', () {
+    test(
+      'builtin.gToDChanges.v1 holds G for the first bar, D for the second',
+      () {
+        final definition = catalog.byId('builtin.gToDChanges.v1')!;
+
+        expect(definition.events, hasLength(32));
+        expect(
+          definition.events.take(8).map((e) => e.chord).toList(),
+          <String>['G', 'G', 'G', 'G', 'D', 'D', 'D', 'D'],
+          reason:
+              'First 8 quarter-beat events must be G,G,G,G,D,D,D,D '
+              '(four beats per bar, swap on bar boundary).',
+        );
+        expect(
+          definition.events.skip(8).take(8).map((e) => e.chord).toList(),
+          <String>['G', 'G', 'G', 'G', 'D', 'D', 'D', 'D'],
+        );
+        expect(
+          definition.events.skip(16).take(8).map((e) => e.chord).toList(),
+          <String>['G', 'G', 'G', 'G', 'D', 'D', 'D', 'D'],
+        );
+        expect(
+          definition.events.skip(24).take(8).map((e) => e.chord).toList(),
+          <String>['G', 'G', 'G', 'G', 'D', 'D', 'D', 'D'],
+        );
+      },
+    );
+
+    test(
+      'builtin.emToCChanges.v1 holds Em for the first bar, C for the second',
+      () {
+        final definition = catalog.byId('builtin.emToCChanges.v1')!;
+
+        expect(definition.events, hasLength(32));
+        expect(
+          definition.events.take(8).map((e) => e.chord).toList(),
+          <String>['Em', 'Em', 'Em', 'Em', 'C', 'C', 'C', 'C'],
+          reason:
+              'First 8 quarter-beat events must be Em,Em,Em,Em,C,C,C,C '
+              '(four beats per bar, swap on bar boundary).',
+        );
+        expect(
+          definition.events.skip(8).take(8).map((e) => e.chord).toList(),
+          <String>['Em', 'Em', 'Em', 'Em', 'C', 'C', 'C', 'C'],
+        );
+      },
+    );
   });
 }
