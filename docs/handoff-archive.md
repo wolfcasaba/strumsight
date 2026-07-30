@@ -575,3 +575,15 @@ Pipeline is driven by a **sample-count clock** (not wall-clock) → deterministi
 | 3  | `138b078` | 14 | shape+colour for meaning (never colour alone) |
 | 2  | `acd525f` | 8  | engine interface before real impl |
 | 1  | `3036a07` | 1  | design-token retune: keep names |
+
+---
+
+## E) E01-R16 részletes kör-történet (a HANDOFF §5-ből archiválva E02-R01-kor)
+
+**E01-R16 — végső regresszió, teljesítmény és dokumentáció** (Epic-1 zárókör):
+rendszer-szintű offline network guard teszt (0 request, érzékenység-próbával) ·
+CI gate-sor dedup composite actionbe + coverage külön jobba (R14 MINOR-2/3
+lezárva) · README/HANDOFF/archívum átszervezés · `epic-01-completion-report.md`
+a teljes DoD-checklistával · ADR 0058+0064 fájlok pótolva. Review: APPROVED
+(0 BLOCKER/MAJOR/MINOR, 4 NOTE) — [`docs/reviews/e01-r16-review.md`](reviews/e01-r16-review.md).
+Merge: [PR #21](https://github.com/wolfcasaba/strumsight/pull/21).

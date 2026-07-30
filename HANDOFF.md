@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E01-R16)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R01)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -19,6 +19,9 @@
   gate-jei zöldek; a végső elfogadás a user valódi-eszközös §16.3/§16.4 menetén
   áll (HORIZON-szabály: synthetic green ≠ done). Evidencia:
   [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md).
+- **Epic 2 (Practice Engine) elindult** — E02-R01 (baseline-befagyasztás +
+  rollout-guardok) kész; a három practice-flag minden környezetben OFF, tehát a
+  felhasználói viselkedés még változatlan.
 
 ## 2. What is working
 
@@ -45,6 +48,11 @@
   test → randomizált property), coverage külön párhuzamos required jobban;
   `backend-ci.yml` (ruff + pytest + alembic-gate); fail-closed release signing.
   ADR 0062/0063 + E01-R16.
+- **Practice V2 parity-mérce (E02-R01):** `test/support/practice_baseline_scenarios.dart`
+  (10 scorer-semleges forgatókönyv) + `test/fixtures/practice/legacy_scorer_baseline.json`
+  (befagyasztott golden, event-szintű verdictekkel). A replay független legacy
+  matchert vezet a scorer mellett; a golden regenerálása csak
+  `UPDATE_LEGACY_SCORER_BASELINE=1`-gyel, megnevezett okkal (ADR 0067 §1/§3).
 
 ## 3. Known blockers / risks
 
@@ -62,25 +70,41 @@
 
 ## 4. Current branch
 
-`codex/epic-01-round-16-final-regression` (E01-R16 zárókör; merge a teljes
-gate-sor zöldjével). Main: `wolfcasaba/strumsight`.
+`main` @ [PR #22](https://github.com/wolfcasaba/strumsight/pull/22) (E02-R01,
+merge `57f37ea`, CI run
+[30534783258](https://github.com/wolfcasaba/strumsight/actions/runs/30534783258)
+zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
+Kör-branch: `codex/epic-02-round-01-practice-baseline`.
 
 ## 5. Last completed round
 
-**E01-R16 — végső regresszió, teljesítmény és dokumentáció** (Epic-1 zárókör):
-rendszer-szintű offline network guard teszt (0 request, érzékenység-próbával) ·
-CI gate-sor dedup composite actionbe + coverage külön jobba (R14 MINOR-2/3
-lezárva) · README/HANDOFF/archívum átszervezés · `epic-01-completion-report.md`
-a teljes DoD-checklistával · ADR 0058+0064 fájlok pótolva. Review: APPROVED
-(0 BLOCKER/MAJOR/MINOR, 4 NOTE) — [`docs/reviews/e01-r16-review.md`](docs/reviews/e01-r16-review.md).
+**E02-R01 — Practice baseline befagyasztás és rollout-guardok** (Epic 2
+nyitókör, ADR 0065/0066/0067): 3 új `FeatureFlags` mező környezetenkénti
+default-táblával és két gépiesen próbált függőségi szabállyal (mindhárom flag ON
+⇒ `usesNetwork == false`) · 10 determinisztikus forgatókönyv scorer-semleges
+katalógusban + befagyasztott golden, amely event-indexenként `HitResult`/`Timing`/
+elvárt irányt is rögzít, **független legacy matcherből** írva ·
+[`docs/baseline/epic-02-practice-start.md`](docs/baseline/epic-02-practice-start.md)
+7 ismert réssel. Production Learn/Progress/Streak/DSP/ML kód nem változott.
+Review: CHANGES REQUIRED (1 MAJOR — a készlet nem lépett be a match-window
+ütközési tartományba) → javítás `p44_eighths_contended`-del (96 BPM nyolcadok,
+312,5 ms célköz vs 560 ms ablak: holtverseny, windowon belüli extra, lezárt
+target újranyitási próbája) → **APPROVED**:
+[`docs/reviews/e02-r01-review.md`](docs/reviews/e02-r01-review.md).
 Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **Epic 2 — Practice Engine** (`docs/sdd/03-epic-02-practice-engine.md`)
-   első köre ÚJ sessionben, kör-brieffel (ADR 0055 váltóbot-protokoll).
+2. **E02-R02 — BeatPosition, Tempo és Meter értékobjektumok**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 2") ÚJ sessionben,
+   kör-brieffel (ADR 0055 váltóbot-protokoll).
+3. **Follow-up (E02-R08/R11-ig nyitva):**
+   `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
+   while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
+   subscriptiont), plusz 4-beat count-in és 12 lecke. A chunk javítása a
+   pause-rés lezárásával EGY commitban (AGENTS.md §9).
 
 ## 7. Required verification (before any "done")
 
