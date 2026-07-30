@@ -253,3 +253,33 @@ implementáció megkülönböztethetetlen.
   teszt ugyanabból a default-ból indul, a lefedettség látszólagos.
 - Kapcsolódó: [L01](#l01--a-zöld-gate-nem-bizonyíték) — itt is 370 zöld teszt
   mellett élt a hiba.
+
+## L11 — A javító kör eredményét VISSZA kell húzni a fő repóba, mielőtt bármit ráépítesz
+
+**Forrás:** E02-R07 merge, 2026-07-30 (PR #28 → `b5e0dfc`).
+
+A javító kör a **külön munkapéldányban** (`/home/ubuntu/ss-mm-e02-r07`) hozta
+létre a `47aae85` commitot. Az orchestrátor a fő repóban közben a *javítás előtti*
+`dedfc13`-ra írta a további commitokat (review-frissítés, tanulságok), majd azt
+pusholta és mergelte. Eredmény: **a `main`-re az R0 kód került, a négy MAJOR
+javítása nélkül** — miközben a CI zöld volt (az R0 is zöld volt), a review pedig
+jogosan APPROVED, mert a mérés a munkapéldányból klónozott `47aae85`-ön történt.
+A hiba a merge utáni ellenőrzésen bukott ki (`grep statusPath` → 0 találat), és
+külön hiánypótló PR-t igényelt.
+
+**Miért.** A kétpéldányos futtatás (orchestrátor a fő repóban, implementer külön
+munkapéldányban) minden javító körnél **két divergens ágat** hoz létre. A
+`git fetch` a kör ELEJÉN megtörtént, a javító kör UTÁN viszont nem — és semmi
+nem jelezte: a branch nevek azonosak, a `git log` a fő repóban rendben nézett ki,
+a CI zöld lett.
+
+**Hogyan alkalmazd.**
+- **A javító kör `done` jelzése után az ELSŐ parancs a visszahúzás:**
+  `git fetch <munkapéldány> <branch>` + `git merge --ff-only FETCH_HEAD`.
+  Csak ezután írj bármit a branchre.
+- **A merge után futtass tartalmi ellenőrzést, ne csak gate-et:** grep-eld a
+  javítás egy-két azonosítóját a `main`-en (itt: `statusPath`, `countInSpanBeats`,
+  a clamp eltűnése). A zöld gate nem különbözteti meg az R0-t az R1-től, ha
+  mindkettő zöld — [L01](#l01--a-zöld-gate-nem-bizonyíték) egy újabb változata.
+- A `.codex-round-status` `head=` mezője megmondja, mire számíts:
+  **ha a fő repó `git rev-parse HEAD`-je nem ez, még nem húztad vissza.**
