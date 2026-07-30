@@ -562,10 +562,169 @@ javasolt (AGENTS.md §15.2) — az nem zárja le a kört.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-<!-- Fájlonkénti összefoglaló · a futtatott parancsok TÉNYLEGES kimenete ·
-     TDD RED→GREEN evidencia · a purity-őr valódi-sértés próbája (piros ÉS zöld) ·
-     eltérések a tervtől és okuk · nem futtatott ellenőrzések és okuk ·
-     follow-up leletek. -->
+### 10.1 Módosítások fájlonként
+
+- `lib/features/practice/domain/model/practice_validation.dart` — az 5 meglévő
+  kód változatlanul maradt; bekerült az ADR 0068 / brief által kötött 55 új
+  kód és a teljes, 60 elemű `values` katalógus.
+- `lib/features/practice/domain/model/practice_value_equality.dart` — sorrend-
+  érzékeny lista- és beszúrási sorrendtől független map-egyenlőség/hash helper.
+- `lib/features/practice/domain/model/practice_mode.dart` — stabil kódú
+  `PracticeMode`, szigorú nullable `fromCode`, pontos `scoredDimensions`.
+- `lib/features/practice/domain/model/practice_source.dart` — stabil kódú
+  `PracticeSource` és szigorú nullable `fromCode`.
+- `lib/features/practice/domain/model/practice_difficulty.dart` — stabil kódú
+  `PracticeDifficulty` és szigorú nullable `fromCode`.
+- `lib/features/practice/domain/model/scoring_profile.dart` — stabil kódú
+  `PracticeScoreDimension` és `ExtraStrumPolicy`; integer-percent súlyok és
+  küszöbök, `Duration` ablakok, aggregáló validáció, strukturális
+  map-egyenlőség, valamint a kötött 55/45-ös Learn parity profil.
+- `lib/features/practice/domain/model/practice_event.dart` — a 24 elemű
+  kanonikus akkordlabel-predikátum és a marker/scored event contract
+  aggregáló validációval.
+- `lib/features/practice/domain/model/practice_definition.dart` — authored
+  definition metadata, tick-alapú időmodell, nested validáció, rendezés/
+  duplikáció/exkluzív végpont, mód–profil kompatibilitás és strukturális
+  lista-egyenlőség.
+- `lib/features/practice/domain/model/practice_session_config.dart` — immutable
+  snapshot/session beállítások, aggregáló validáció és a briefben engedélyezett
+  `copyWith`.
+- `lib/features/practice/domain/model/practice_observation.dart` — sealed
+  strum/chord observation hierarchia, véges zárt confidence-tartomány és
+  kanonikus akkordlabel-validáció.
+- `lib/features/practice/domain/model/practice_verdict.dart` — stabil kódú
+  `TimingGrade`, direction/chord outcome-ok, kanonikus coaching-kódok és
+  konzisztens matched/unmatched verdict contract.
+- `lib/features/practice/domain/model/practice_metrics.dart` — sealed
+  available/not-applicable/insufficient-data metrikaértékek és aggregált
+  `PracticeMetrics`, minden invariánssal és strukturális értékszemantikával.
+- `lib/features/practice/domain/model/practice_attempt_result.dart` — stabil
+  outcome-kódok, attempt-validáció, verdict-cél egyediség és strukturális
+  lista-egyenlőség.
+- `lib/features/practice/domain/model/practice_session_result.dart` — stabil
+  finish-reason kódok, minden attemptre továbbhaladó nested validáció,
+  coaching-summary ellenőrzés, valamint determinisztikus `bestAttempt` és
+  `finalAttempt`.
+- `lib/features/practice/domain/model/meter.dart` — a `ticksPerBar` most a
+  `beatsPerBar` és a `beatUnit` minden invalid állapotára szimmetrikusan
+  `StateError`-ral fail-fastel; más viselkedés nem változott.
+- `test/features/practice/domain/practice_validation_test.dart` — a teljes 60
+  elemű kódkészlet literál-pinelése, továbbá az 5 korábbi kód producer-boundary
+  bizonyítása; a meglévő tesztek változatlanok.
+- `test/features/practice/domain/meter_test.dart` — a MINOR-1 mindkét invalid
+  mezőágának fail-fast regressziója; a meglévő állítások változatlanok.
+- `test/features/practice/domain/practice_value_equality_test.dart` — lista- és
+  map-egyenlőség/hash tesztek külön runtime példányokkal.
+- `test/features/practice/domain/practice_enums_test.dart` — mind a 8 persisted
+  enum pontos kódjai, egyedisége, roundtripje és unknown-code ága.
+- `test/features/practice/domain/scoring_profile_test.dart` — súly-, ablak-,
+  küszöb-, aggregáció-, parity- és strukturális egyenlőség tesztek.
+- `test/features/practice/domain/practice_event_test.dart` — canonical
+  chord-label, event-validáció és értékszemantika tesztek.
+- `test/features/practice/domain/practice_definition_test.dart` — nested és
+  eventlista-validáció, mód–profil kompatibilitás és mély egyenlőség tesztek.
+- `test/features/practice/domain/practice_session_config_test.dart` — config
+  boundary, aggregáció, nested `Tempo`, `copyWith` és egyenlőség tesztek.
+- `test/features/practice/domain/practice_observation_test.dart` — mindkét
+  sealed observation ág boundary-, finite-, label- és értékszemantika tesztjei.
+- `test/features/practice/domain/practice_verdict_test.dart` — verdict
+  konzisztencia, score boundary, coaching-kód és egyenlőség tesztek.
+- `test/features/practice/domain/practice_metrics_test.dart` — mindhárom
+  `MetricValue` ág, aggregate counter/offset és értékszemantika tesztek.
+- `test/features/practice/domain/practice_result_test.dart` — attempt/session
+  aggregáció, unordered lista melletti nested validáció, best/final
+  determinizmus és strukturális egyenlőség tesztek.
+- `test/features/practice/domain/domain_purity_test.dart` — rekurzív,
+  symlinket nem követő domain-forrásszkenner; tiltott app/package importok,
+  ambient idő/véletlen/konzol tiltása, komment/string kizárás és végrehajtható
+  string-interpoláció vizsgálata.
+- `docs/rounds/e02-r03-domain-models.md` — kizárólag ez a §10 handoff készült el.
+
+### 10.2 TDD RED → GREEN evidencia
+
+A brief §8 rétegsorrendjében előbb készültek a tesztek. A tényleges első RED-ek
+hiányzó import/típus fordítási hibák voltak; az alapréteg emellett a várt 60
+helyett a korábbi 5 validation kódot látta. A rétegenkénti célzott GREEN
+eredmények:
+
+- alap + enumok: `+11: All tests passed!`;
+- scoring profile: `+10: All tests passed!`;
+- event + definition: `+20: All tests passed!`;
+- session config: `+10: All tests passed!`;
+- observation/verdict és metrics: `+15`, majd `+19: All tests passed!`;
+- attempt + session result: `+24: All tests passed!`;
+- Meter MINOR-1 RED: invalid `beatsPerBar` mellett a getter `0`-t adott a várt
+  `StateError` helyett; GREEN: `+7: All tests passed!`.
+
+A kézi contract-audit egy session-aggregációs regressziót is valódi RED-del
+fogott: unordered attempt-listánál hiányzott az
+`attempt.index.negative` nested hiba, csak a
+`session.attempts.unordered` érkezett. A korai `break` flag-alapú rendezési
+ellenőrzésre cserélése után: `+16: All tests passed!`.
+
+A purity scanner interpolációs regressziótesztje először RED volt
+(`Actual: []`, hiányzott a várt wall-clock/console találat), majd az
+interpolációs expressionök vizsgálata után:
+`+4: All tests passed!`.
+
+### 10.3 Purity-őr valódi-sértés próbája
+
+Ideiglenesen ez került a
+`lib/features/practice/domain/model/practice_value_equality.dart` fájlba:
+
+```dart
+void temporaryPurityViolation() {
+  print('x');
+}
+```
+
+Parancs:
+`~/flutter/bin/flutter test test/features/practice/domain/domain_purity_test.dart`
+
+- **RED, exit 1:**
+  `Actual: ['lib/features/practice/domain/model/practice_value_equality.dart:15: console output']`
+- Az ideiglenes sértés teljes visszavonása után **GREEN, exit 0:**
+  `+4: All tests passed!`
+
+### 10.4 Végső ellenőrzések tényleges eredménye
+
+Minden parancs külön processzben futott. A gépoldali korábbi
+processzmegszakítás után a teljes mátrixot frissen újrafuttattam.
+
+| Parancs | Exit | Tényleges eredmény |
+|---|---:|---|
+| `~/flutter/bin/flutter pub get` | 0 | `Got dependencies!`; 32 újabb, a jelenlegi constrainttel inkompatibilis package csak informatív jelzés |
+| `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test` | 0 | `Formatted 482 files (0 changed)` |
+| `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool` | 0 | `Formatted 484 files (0 changed)` |
+| `~/flutter/bin/flutter analyze lib/ test/` | 0 | `No issues found! (ran in 7.4s)` |
+| `~/flutter/bin/flutter analyze lib/ test/ tool/` | 0 | `No issues found! (ran in 2.5s)` |
+| `~/flutter/bin/flutter test test/features/practice/domain/` | 0 | `+125: All tests passed!` |
+| `~/flutter/bin/flutter test test/features/practice` | 0 | `+125: All tests passed!` |
+| `~/flutter/bin/flutter test test/core` | 0 | `+287: All tests passed!` |
+| `~/flutter/bin/flutter test test/app` | 0 | `+47: All tests passed!` |
+| `~/flutter/bin/flutter test test/features/learn` | 0 | `+131 ~1: All tests passed!`; az egy skip a meglévő opt-in legacy baseline-generátor |
+| `~/flutter/bin/dart run tool/check_architecture.dart` | 0 | `Architecture dependencies OK (12 allowlisted deviation(s)).` |
+| `git diff --check` | 0 | nincs kimenet |
+
+### 10.5 Eltérések, nem futtatott ellenőrzések, follow-up
+
+- A kötött tervtől, ADR 0068-tól és a §4 scope-tól nincs eltérés. Nem kellett
+  a §5/9 kódkészletet bővíteni, új package/codegen/JSON/algoritmus nem került
+  be, és production viselkedést csak a kért `Meter.ticksPerBar` fail-fast
+  változtatás érint.
+- Az analyzer első futása egy `equal_elements_in_set` teszt-warningot talált;
+  a fixture runtime setre cserélése után a fent rögzített két analyzer gate
+  zöld.
+- A teljes `flutter test`, a property gate, a CI és a release APK nem futott
+  lokálisan: ADR 0052/0053 szerint ezeket Claude dispatch-eli és gyűjti be a
+  reviewer/merge oldalon. PR nem nyílt, mert az ADR 0055 protokoll szerint az
+  is a reviewer feladata. Backend/ML ellenőrzés nem releváns, ilyen fájl nem
+  változott.
+- Blokkoló follow-up nincs. A `const` konstruktorok listái/mapjei az ADR
+  tudatos döntése szerint caller-immutability szerződésre támaszkodnak; ezt
+  minden érintett publikus contract dokumentálja és a domain nem mutálja őket.
+- Pontos következő kör: **E02-R04 — practice catalog / authored definition
+  tartalom**, külön reviewer-döntés és kör-brief után.
 
 ## 11. Review
 

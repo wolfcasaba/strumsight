@@ -51,6 +51,19 @@ void main() {
       expect(const Meter(beatsPerBar: 6, beatUnit: 8).ticksPerBar, 1440);
       expect(const Meter(beatsPerBar: 2, beatUnit: 2).ticksPerBar, 1920);
     });
+
+    test('fails fast symmetrically for every invalid input field', () {
+      for (final beatsPerBar in [0, -1, 17]) {
+        expect(
+          () => Meter(beatsPerBar: beatsPerBar).ticksPerBar,
+          throwsStateError,
+        );
+      }
+      expect(
+        () => const Meter(beatsPerBar: 4, beatUnit: 5).ticksPerBar,
+        throwsStateError,
+      );
+    });
   });
 
   group('Meter value semantics', () {
