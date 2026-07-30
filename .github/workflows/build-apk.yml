@@ -18,11 +18,22 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      # HARD gates since round 76 — the suite is mature (350+ tests); a red
-      # analyze/test must never produce a green APK. (They were soft in the
-      # early rounds to keep APK delivery unblocked.)
-      - run: flutter analyze lib/ test/
-      - run: flutter test
+      - name: Format gate
+        run: dart format --output=none --set-exit-if-changed lib test tool
+      - name: Analyze gate
+        run: flutter analyze lib/ test/ tool/
+      - name: Architecture gate
+        run: dart run tool/check_architecture.dart
+      - name: Asset gate
+        run: dart run tool/ci/check_assets.dart
+      - name: Test and coverage gate
+        run: flutter test --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: strumsight-coverage-${{ github.run_id }}
+          path: coverage/lcov.info
+          if-no-files-found: error
       # Randomized property gate (anti-reward-hacking, HORIZON pattern):
       # a fresh seed every run so code can't be tuned to fixed fixtures.
       # Hard gate — no continue-on-error.
@@ -30,12 +41,46 @@ jobs:
         run: flutter test test/property
         env:
           PROPERTY_SEED: ${{ github.run_id }}
-      # StrumSight is fully offline — no --dart-define needed. Release signs
-      # with the debug keystore (android/app/build.gradle.kts) so the APK is
-      # sideloadable without a keystore secret.
-      - run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
+      - name: Read APK metadata from pubspec
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_value="$(
+            sed -nE \
+              's/^version:[[:space:]]*([^[:space:]#]+).*$/\1/p' \
+              pubspec.yaml
+          )"
+          if [[ ! "$version_value" =~ ^([0-9A-Za-z][0-9A-Za-z._-]*)\+([0-9]+)$ ]]; then
+            echo "::error::pubspec.yaml must contain exactly one version in <version>+<buildNumber> form."
+            exit 1
+          fi
+          app_version="${BASH_REMATCH[1]}"
+          build_number="${BASH_REMATCH[2]}"
+          short_sha="${GITHUB_SHA:0:7}"
+          artifact_name="strumsight-${app_version}-${build_number}-${short_sha}-development.apk"
+          printf 'name=%s\n' "$artifact_name" >> "$GITHUB_OUTPUT"
+      # Development release-mode APK: debug signing remains intentional so
+      # round builds are directly sideloadable without production secrets.
+      - name: Build development APK
+        run: >-
+          flutter build apk --release
+          --dart-define=STRUMSIGHT_ENV=development
+      - name: Stage versioned APK
+        env:
+          ARTIFACT_NAME: ${{ steps.apk.outputs.name }}
+        run: |
+          set -euo pipefail
+          source_apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [[ ! -s "$source_apk" ]]; then
+            echo "::error::Development APK is missing or empty."
+            exit 1
+          fi
+          mkdir -p dist
+          cp -- "$source_apk" "dist/$ARTIFACT_NAME"
+      - name: Upload development APK
+        uses: actions/upload-artifact@v4
         with:
-          name: strumsight-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ steps.apk.outputs.name }}
+          path: dist/${{ steps.apk.outputs.name }}
           if-no-files-found: error

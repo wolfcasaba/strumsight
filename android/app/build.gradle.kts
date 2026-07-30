@@ -1,7 +1,72 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val signingPropertyNames = listOf(
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword",
+)
+val signingEnvironmentNames = mapOf(
+    "storeFile" to "STRUMSIGHT_RELEASE_STORE_FILE",
+    "storePassword" to "STRUMSIGHT_RELEASE_STORE_PASSWORD",
+    "keyAlias" to "STRUMSIGHT_RELEASE_KEY_ALIAS",
+    "keyPassword" to "STRUMSIGHT_RELEASE_KEY_PASSWORD",
+)
+
+fun completeSigningValues(
+    source: String,
+    values: Map<String, String?>,
+): Map<String, String> {
+    val missing = signingPropertyNames.filter { values[it].isNullOrBlank() }
+    if (missing.isNotEmpty()) {
+        throw GradleException(
+            "Incomplete release signing configuration in $source; " +
+                "missing ${missing.joinToString()}.",
+        )
+    }
+    return values.mapValues { (_, value) -> value!! }
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val releaseSigningValues = if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    completeSigningValues(
+        source = "android/key.properties",
+        values = signingPropertyNames.associateWith { keystoreProperties.getProperty(it) },
+    )
+} else {
+    val environmentValues = signingEnvironmentNames.mapValues { (_, environmentName) ->
+        System.getenv(environmentName)
+    }
+    if (environmentValues.values.all { it.isNullOrBlank() }) {
+        null
+    } else {
+        completeSigningValues(
+            source = "release signing environment",
+            values = environmentValues,
+        )
+    }
+}
+
+val releaseSigningRequired =
+    System.getenv("STRUMSIGHT_REQUIRE_RELEASE_SIGNING")
+        ?.equals("true", ignoreCase = true) == true
+if (releaseSigningRequired && releaseSigningValues == null) {
+    throw GradleException("Production release signing configuration is required.")
+}
+
+val releaseStoreFile = releaseSigningValues?.let { file(it.getValue("storeFile")) }
+if (releaseStoreFile != null &&
+    (!releaseStoreFile.isFile || releaseStoreFile.length() == 0L)
+) {
+    throw GradleException("The configured release signing keystore is missing or empty.")
 }
 
 android {
@@ -28,12 +93,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningValues != null) {
+            create("release") {
+                keyAlias = releaseSigningValues.getValue("keyAlias")
+                keyPassword = releaseSigningValues.getValue("keyPassword")
+                storeFile = requireNotNull(releaseStoreFile)
+                storePassword = releaseSigningValues.getValue("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Debug keys for now so `flutter run --release` works. Production
-            // signing is the job of SDD Ch2, Kör 14 (Flutter CI és release
-            // pipeline) — a production release must NOT ship debug signing.
-            signingConfig = signingConfigs.getByName("debug")
+            // Local development remains zero-config; the production workflow
+            // supplies complete signing values and requires release signing.
+            signingConfig = if (releaseSigningValues == null) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
         }
     }
 }
