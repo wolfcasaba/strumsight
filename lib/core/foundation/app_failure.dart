@@ -51,6 +51,8 @@ abstract final class FailureCode {
       'practice.content_unsupported';
   static const String practiceTargetUncompilable =
       'practice.target_uncompilable';
+  static const String practiceInvalidSessionTransition =
+      'practice.invalid_session_transition';
 }
 
 /// Base type of every expected failure in the app (SDD Ch2 §7.2).
