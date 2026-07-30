@@ -36,9 +36,14 @@ final class Meter {
 
   /// Exact 480-PPQ duration of one bar.
   ///
-  /// Validate the meter before reading this getter. An unsupported [beatUnit]
-  /// cannot be converted and throws [StateError].
+  /// Validate the meter before reading this getter. An out-of-range
+  /// [beatsPerBar] or unsupported [beatUnit] throws [StateError].
   int get ticksPerBar {
+    if (beatsPerBar < minimumBeatsPerBar || beatsPerBar > maximumBeatsPerBar) {
+      throw StateError(
+        'Cannot calculate ticksPerBar for invalid beats per bar $beatsPerBar.',
+      );
+    }
     final ticksPerMeterBeat = switch (beatUnit) {
       2 => BeatPosition.ticksPerBeat * 2,
       4 => BeatPosition.ticksPerBeat,
