@@ -243,12 +243,192 @@ a Codex ne hívjon `gh`-t): zöld út + a két piros bizonyíték-futás.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet.
-- Coverage-baseline számok (összesített + a kritikus core-modulok).
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk (várhatóan: a CI-dispatchek — Claude-oldal).
-- Follow-up issue-k (várhatóan: keystore-generálás + secret-feltöltés).
+### Összefoglaló és commitok
+
+Branch: `codex/epic-01-round-14-flutter-ci`.
+
+Az implementáció olvasható, logikai commitjai:
+
+1. `69b83af` — `ci(flutter): validate declared bundle assets`;
+2. `6ab12ce` — `test(routing): widen route literal guard`;
+3. `39dc26c` — `ci(flutter): enforce release build quality gates`;
+4. `d1b8469` — `build(android): configure fail-closed release signing`;
+5. `aaca916` — `ci(android): add fail-closed production APK workflow`.
+
+### Fájlonkénti összefoglaló
+
+- `.github/workflows/build-apk.yml` — a kötelező gate-sorrend:
+  format → analyze (`tool/`-lal) → architecture → asset → teljes test coverage-dzsel
+  → friss seedű property → development APK. A coverage LCOV külön artifact. A
+  `pubspec.yaml` `version+buildNumber` mezőjéből és a rövid SHA-ból készül a
+  `strumsight-<version>-<build>-<sha7>-development.apk` név; a workflow a fizikai
+  APK-fájlt is erre nevezi át, nem csak az artifact-konténert.
+- `.github/workflows/release-apk.yml` — új, kizárólag `workflow_dispatch`
+  production pipeline. A négy signing secretet első lépésben, név szerint,
+  értékkiírás nélkül ellenőrzi; a teljes gate-sor után temp-keystore-ból,
+  `STRUMSIGHT_ENV=production` beállítással és kötelező release signinggal buildel.
+  A keystore nem kerül outputba/artifactba, és az `always()` cleanup törli.
+- `android/app/build.gradle.kts` — a Flutter kanonikus
+  `android/key.properties` mintáját és egy CI-env forrást támogat. A két forrás
+  mezőnként nem keverhető: részleges file vagy részleges env kontrollált
+  `GradleException`. Konfiguráció nélkül a development/lab release-mode build
+  továbbra is debug signingot kap; `STRUMSIGHT_REQUIRE_RELEASE_SIGNING=true`
+  mellett nincs fallback.
+- `android/key.properties.example` — secretmentes lokális minta, az
+  `android/app`-hoz viszonyított `storeFile` út dokumentálásával.
+- `android/.gitignore` — nem változott: a `key.properties`, `**/*.jks` és
+  `**/*.keystore` kizárása már megvolt; ezt `git check-ignore -v` igazolta.
+- `tool/ci/check_assets.dart` — dependency nélküli, tesztelhető Dart gate. Csak a
+  top-level pubspec `flutter.assets` és `flutter.fonts[*].fonts[*].asset`
+  útvonalait járja; minden deklarált út létezését és a deklarált
+  `assets/ml/*.bin` fájlok nemürességét ellenőrzi.
+- `test/tooling/check_assets_test.dart` — létező asset+font, minden hiányzó
+  deklaráció, üres deklarált ML-bin, üres font és nem deklarált üres
+  `ml/strum_direction.tflite` esetei. A valós pubspec-szerkezetet is őrzi, ahol
+  a `dependencies.flutter` megelőzi a top-level `flutter:` blokkot.
+- `test/tooling/route_literal_guard_test.dart` — a regex receiver-független és
+  a `go|push|replace|pushReplacement|goNamed` hívásokat fedi; a katalógusfájl
+  kizárása és a bejárási logika változatlan.
+- Ez a brief — csak a jelen §10 implementation handoff szakasza változott.
+
+### Futtatott parancsok és tényleges eredmények
+
+Módosítás előtti baseline:
+
+- `~/flutter/bin/flutter pub get` → `Got dependencies!`;
+- `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool`
+  → `Formatted 446 files (0 changed)`;
+- `~/flutter/bin/flutter analyze lib/ test/ tool/` → `No issues found`;
+- `~/flutter/bin/dart run tool/check_architecture.dart` →
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`;
+- `~/flutter/bin/flutter test test/tooling` → `9` teszt, mind zöld.
+
+Asset-check TDD és valódi-sértés:
+
+- első RED: az új teszt a még nem létező `tool/ci/check_assets.dart` import és
+  `checkAssets` miatt compile-hibával állt meg;
+- a valós pubspec első futása feltárt egy false-green parserhibát (`0 declared
+  asset(s)`): a nested `dependencies.flutter` kulcsot tévesztette össze a
+  top-level blokkal. A realisztikus fixture RED-je `Expected: [...] Actual: []`
+  volt; az `indent == 0` root-cause fix után zöld;
+- `~/flutter/bin/flutter test test/tooling/check_assets_test.dart` → `3` teszt,
+  mind zöld;
+- `~/flutter/bin/dart run tool/ci/check_assets.dart` →
+  `Asset check OK (10 declared asset(s), 4 non-empty ML binary/binaries).`;
+- eldobható fixture-sértés: a deklarált `assets/ml/model.bin` helyett más fájl
+  létrehozásakor a pozitív teszt exit `1`, `Expected: true, Actual: false`;
+  visszaállítás után a teljes asset-teszt ismét `3/3` zöld.
+
+Route-literál valódi-sértés:
+
+- változatlan `lib/` mellett
+  `~/flutter/bin/flutter test test/tooling/route_literal_guard_test.dart` →
+  `1/1` zöld;
+- ideiglenesen az `app_router.dart` meglévő exception ágába került a tényleges
+  `router.go('/live')`; a guard exit `1` és pontosan
+  `lib/app/routing/app_router.dart:40` találatot adott;
+- a visszaállítás után a fájl git-object hash-e ismét
+  `99efa057ad29d5c452e3ea6ab15b0dfe3bbac0cb`, a `git diff -- lib` üres, a
+  route-guard ismét `1/1` zöld.
+
+Workflow- és signing-statikus ellenőrzések:
+
+- PyYAML parse → `YAML syntax OK: 2 workflows`;
+- checksum-ellenőrzött `actionlint 1.7.12` a két módosított workflow-n →
+  exit `0`, megállapítás nélkül;
+- a workflow pontos metadata-scriptje fake SHA-val:
+  `strumsight-1.0.0-1-0123456-development.apk`, illetve
+  `strumsight-1.0.0-1-0123456-production.apk`;
+- a production signing-preflight üres envvel exit `1`, és kizárólag a négy
+  hiányzó secret nevét írta ki; dummy nem-secret értékekkel csendes exit `0`;
+- `git check-ignore -v` igazolta a `key.properties`, `.jks` és `.keystore`
+  szabályokat; a `key.properties.example` nincs ignore-olva.
+
+Végleges kötelező lokális gate-ek:
+
+- `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool`
+  → `Formatted 448 files (0 changed)`;
+- `~/flutter/bin/flutter analyze lib/ test/ tool/` →
+  `No issues found! (ran in 3.5s)`;
+- `~/flutter/bin/dart run tool/check_architecture.dart` →
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`;
+- `~/flutter/bin/dart run tool/ci/check_assets.dart` →
+  `Asset check OK (10 declared asset(s), 4 non-empty ML binary/binaries).`;
+- `~/flutter/bin/flutter test test/tooling` → `12` teszt, mind zöld.
+
+### Coverage baseline
+
+A teljes suite lokálisan az ADR 0053 és a brief §7 szerint nem futott. A helyi
+baseline ezért explicit célzott report: nyolc releváns tesztútvonal,
+`--coverage-path=/tmp/e01-r14-critical-with-auth.lcov`; eredmény: `81` teszt,
+mind zöld.
+
+```bash
+~/flutter/bin/flutter test --no-pub --coverage \
+  --coverage-path=/tmp/e01-r14-critical-with-auth.lcov \
+  test/app/app_bootstrap_test.dart \
+  test/app/app_config_test.dart \
+  test/core/foundation/app_result_test.dart \
+  test/core/storage/storage_migrator_test.dart \
+  test/core/storage/preference_migration_test.dart \
+  test/core/network/network_failure_mapper_test.dart \
+  test/features/auth/auth_repository_test.dart \
+  test/core/audio/audio_session_coordinator_test.dart
+```
+
+- célzott report összesen: **432 / 901 = 47,95%**;
+- az öt kijelölt kritikus modul együtt: **214 / 243 = 88,07%**;
+- config (`lib/app/config/`): **47 / 59 = 79,66%**;
+- foundation result/failure: **32 / 42 = 76,19%**;
+- storage migrator: **64 / 68 = 94,12%**;
+- network failure mapper (az auth fogyasztói tesztjével): **31 / 34 = 91,18%**;
+- audio session coordinator: **40 / 40 = 100,00%**.
+
+A `config` és `foundation` a Chapter 2 §14.8 90%-os célja alatt van. Ebben a
+körben nincs coverage-küszöb, és e modulok tesztfájljai nincsenek az
+engedélyezett fájllistán, ezért az eredményt baseline-ként rögzítettük, nem
+scope-on kívüli tesztbővítéssel „javítottuk”. A teljes-repo összesített baseline
+a Claude-oldali teljes CI `coverage/lcov.info` artifactból pótlandó.
+
+### Eltérések a tervtől és okuk
+
+- `android/.gitignore` nem kapott diffet, mert a brief pre-flightjának megfelelő
+  mindhárom szükséges szabály már létezett.
+- A dependency nélküli parser első változata a valós pubspecen false-green lett
+  a `dependencies.flutter` miatt. Nem workaround készült: reprodukáló fixture
+  után a parser kizárólag top-level `flutter:` blokkot fogad el.
+- A production workflow megismétli a teljes gate-sort. Így kézi dispatchnél egy
+  tetszőleges ref sem kerülhet közvetlenül signing/build lépésre a minőségi
+  gate-ek megkerülésével.
+
+### Nem futtatott ellenőrzések és ok
+
+- Teljes `flutter test`, randomizált property gate és APK-build: kizárólag a
+  Claude-oldali, branchre dispatch-elt CI feladata (ADR 0052/0053/0055).
+- `flutter build apk --release` és Gradle Android build lokálisan: a boxon nincs
+  Android SDK, és a brief kifejezetten tiltja a próbát is.
+- `build-apk.yml` zöld run, verziózott artifact-lista és CI-s teljes coverage:
+  nincs Codex-oldali dispatch; Claude pótolja a push után.
+- `release-apk.yml` secret nélküli piros run-link: az új
+  `workflow_dispatch` workflow a GitHub platformszabálya szerint csak azután
+  indítható, hogy a fájl már a default branchen létezik. Ezért a merge előtti
+  branchről technikailag nem szerezhető run-link; post-merge/default-branch
+  bizonyíték szükséges. Helyben a pontos preflight-script piros útja igazolt.
+- Valódi production signing-success: nincs keystore és nincsenek feltöltött
+  signing secretek; ez a kör szándékos fail-closed állapota.
+
+### Kockázatok és follow-upok
+
+1. A tulajdonos generálja/őrzi a production upload keystore-t, majd feltölti a
+   `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS` és
+   `ANDROID_KEY_PASSWORD` repo secreteket; egyik érték sem kerülhet commitba.
+2. Claude a push után dispatch-eli a `build-apk.yml`-t, begyűjti a zöld teljes
+   suite/property/APK/coverage bizonyítékot és a verziózott artifact-nevet.
+3. A `release-apk.yml` default-branchre kerülése után külön secret nélküli
+   dispatch igazolja a signing-preflight kontrollált piros útját.
+4. Következő coverage-körben a config és foundation hiányzó ágai célzott
+   teszteket igényelnek a 90%-os modulcél eléréséhez; globális küszöb továbbra
+   sem vezethető be a teljes CI-baseline review-ja előtt.
 
 ## 11. Review — a Claude tölti ki
 
