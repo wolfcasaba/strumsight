@@ -223,6 +223,32 @@ import 'safe_transport.dart'
       );
     });
 
+    test('keeps the practice domain framework-free', () {
+      _write(
+        project,
+        'lib/features/practice/domain/model/beat_position.dart',
+        "import 'package:flutter/foundation.dart';",
+      );
+      _write(
+        project,
+        'lib/features/practice/domain/model/tempo.dart',
+        "import 'dart:math';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        unorderedEquals({
+          'lib/features/practice/domain/model/beat_position.dart -> '
+              'package:flutter/foundation.dart',
+        }),
+      );
+    });
+
     test('allows public APIs and core while blocking feature internals', () {
       _write(project, 'lib/features/analyze/screens/analyze_screen.dart', '''
 import '../../live/public.dart';
