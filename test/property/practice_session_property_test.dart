@@ -9,6 +9,17 @@
 // Seed: PROPERTY_SEED env var — CI passes the run id (a fresh gate every
 // run); locally absent → fixed 42, so the dev-loop suite stays
 // deterministic.
+//
+// R1 MAJOR-3: the transition check is now edge-by-edge. The reducer
+// reports the full status chain in `transition.statusPath`; the gate walks
+// every adjacent pair and asserts each pair is a member of the RAW
+// `allowedTransitions` table (not its transitive closure — that was
+// vacuous and hid R1 MAJOR-2).
+//
+// R1 MINOR-3: the timelinePosition no longer clamps to totalDuration, so
+// the previous upper-bound check is gone. Instead, whenever
+// `timelinePosition >= target.totalDuration`, the reducer MUST have moved
+// the status out of `running` (into `finishing` or `completed`).
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -86,25 +97,36 @@ PracticeSessionConfig _config() => PracticeSessionConfig(
 
 PracticeSessionState _initialState() => PracticeSessionState.initial;
 
+/// Asserts that every adjacent pair of [path] is a member of the raw
+/// [allowedTransitions] table — not a transitive closure. R1 MAJOR-3.
+void _assertStatusPathIsEdgeByEdge(
+  List<PracticeSessionStatus> path,
+  int trial,
+  int step,
+  int seed,
+) {
+  expect(path, isNotEmpty, reason: 'seed=$seed trial=$trial step=$step');
+  for (var i = 0; i + 1 < path.length; i++) {
+    final from = path[i];
+    final to = path[i + 1];
+    if (from == to) continue; // no-op edge (e.g. tempo change)
+    expect(
+      allowedTransitions[from]?.contains(to) ?? false,
+      isTrue,
+      reason:
+          'seed=$seed trial=$trial step=$step: '
+          'statusPath edge $from → $to is NOT in the raw '
+          'allowedTransitions table',
+    );
+  }
+}
+
 void main() {
   final seed = int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
   final rng = math.Random(seed);
   // Always visible in logs so any failure is reproducible.
   // ignore: avoid_print
   print('PROPERTY_SEED=$seed');
-
-  // Compute the transitive closure of `allowedTransitions` from `start`.
-  Set<PracticeSessionStatus> reachableStatuses(PracticeSessionStatus start) {
-    final seen = <PracticeSessionStatus>{start};
-    final stack = <PracticeSessionStatus>[start];
-    while (stack.isNotEmpty) {
-      final current = stack.removeLast();
-      for (final next in allowedTransitions[current] ?? const {}) {
-        if (seen.add(next)) stack.add(next);
-      }
-    }
-    return seen;
-  }
 
   // Build a randomized sequence of inputs starting from `idle`. Mixes
   // commands and ClockAdvanced with random active-time advances. Always
@@ -169,12 +191,12 @@ void main() {
     return inputs;
   }
 
-  test('property: reducer invariants hold over 200 random sequences', () {
+  test('property: reducer invariants hold over 200 random sequences '
+      '(edge-by-edge statusPath, R1 MAJOR-3)', () {
     for (var trial = 0; trial < 200; trial++) {
       final inputs = randomSequence(30);
       var state = _initialState();
 
-      var prevStatus = state.status;
       var prevWall = state.wallElapsed;
       var prevActive = state.activeElapsed;
       var prevPaused = state.pausedElapsed;
@@ -185,33 +207,18 @@ void main() {
         final input = inputs[step];
         final transition = reducePracticeSession(state, input);
 
-        // Invariant: reducer never throws.
+        // Invariant 0 — reducer never throws.
         // (The call already succeeded by reaching here.)
 
-        // Snapshot the post-state invariants.
+        // R1 MAJOR-3: every edge in the statusPath is in the RAW
+        // allowedTransitions table — NOT the transitive closure.
+        _assertStatusPathIsEdgeByEdge(transition.statusPath, trial, step, seed);
+
         final next = transition.state;
 
-        // Invariant 1 — accepted steps move to a status that is reachable
-        // from `prevStatus` via zero or more `allowedTransitions` edges.
-        // The reducer may chain multiple transitions in one tick (e.g.
-        // countIn → running → finishing when a single ClockAdvanced spans
-        // both the count-in end and the timeline end), so we cannot
-        // require a single edge — but the destination must still be a
-        // member of the same closure.
-        if (transition.isAccepted && next.status != prevStatus) {
-          final reachable = reachableStatuses(prevStatus);
-          expect(
-            reachable.contains(next.status),
-            isTrue,
-            reason:
-                'seed=$seed trial=$trial step=$step: '
-                'transition $prevStatus → ${next.status} is not reachable '
-                'through allowedTransitions',
-          );
-        }
-
-        // Invariant 2 — rejected steps keep the input state by value and
-        // emit no effects.
+        // Invariant 1 — rejected steps keep the input state by value and
+        // emit no effects; the statusPath is a single-element array of
+        // the input status (no edge to assert).
         if (transition.isRejected) {
           expect(
             next,
@@ -227,13 +234,23 @@ void main() {
                 'seed=$seed trial=$trial step=$step: rejected step '
                 'emitted effects',
           );
+          expect(
+            transition.statusPath.length,
+            1,
+            reason:
+                'seed=$seed trial=$trial step=$step: rejected step '
+                'has multi-element statusPath',
+          );
+          expect(
+            transition.statusPath.single,
+            state.status,
+            reason:
+                'seed=$seed trial=$trial step=$step: rejected step '
+                'statusPath is not the input status',
+          );
         }
 
-        // Invariant 3 — activeElapsed + pausedElapsed == wallElapsed.
-        // (countIn and playing are subsets of activeElapsed, so the
-        // identity is preserved when previousStatus is countIn or
-        // running. While paused, pausedElapsed grows and activeElapsed
-        // stays put — the identity still holds.)
+        // Invariant 2 — activeElapsed + pausedElapsed == wallElapsed.
         expect(
           next.activeElapsed + next.pausedElapsed,
           next.wallElapsed,
@@ -244,9 +261,7 @@ void main() {
               'paused=${next.pausedElapsed})',
         );
 
-        // Invariant 4 — countInElapsed + playingElapsed <= activeElapsed.
-        // (Some active time is spent in neither countIn nor running — e.g.
-        // while paused or in preparing/ready.)
+        // Invariant 3 — countInElapsed + playingElapsed <= activeElapsed.
         expect(
           next.countInElapsed + next.playingElapsed <= next.activeElapsed,
           isTrue,
@@ -255,9 +270,8 @@ void main() {
               'countIn + playing > active',
         );
 
-        // Invariant 5 — wall/active/paused/countIn/playing are monotonically
-        // nondecreasing (only RestartAttempt can zero countIn + playing;
-        // we treat it as resetting both — see below).
+        // Invariant 4 — wall/active/paused/countIn/playing are
+        // monotonically nondecreasing across non-restart steps.
         final isRestart = input is RestartAttempt;
         if (!isRestart) {
           expect(
@@ -287,20 +301,26 @@ void main() {
           );
         }
 
-        // Invariant 6 — timelinePosition never exceeds target.totalDuration
-        // (§6.5: getter clamps at totalDuration).
-        if (next.target != null) {
+        // R1 MINOR-3 — the getter no longer clamps. The new invariant
+        // is: when `timelinePosition >= target.totalDuration`, the
+        // status at the end of the tick is no longer `running` (the
+        // session has moved to `finishing` or `completed`). Pre-attempt
+        // statuses (`ready`, `cancelled`, `failed`, …) are excluded from
+        // the check — they happen when the timeline has not yet been
+        // consumed by an attempt.
+        if (next.target != null &&
+            next.timelinePosition >= next.target!.totalDuration) {
           expect(
-            next.timelinePosition <= next.target!.totalDuration,
+            next.status != PracticeSessionStatus.running,
             isTrue,
             reason:
-                'seed=$seed trial=$trial step=$step: timeline position '
-                '${next.timelinePosition} > totalDuration '
-                '${next.target!.totalDuration}',
+                'seed=$seed trial=$trial step=$step: timeline '
+                '${next.timelinePosition} >= totalDuration '
+                '${next.target!.totalDuration} but status is still '
+                'running (must move to finishing / completed)',
           );
         }
 
-        prevStatus = next.status;
         prevWall = next.wallElapsed;
         prevActive = next.activeElapsed;
         prevPaused = next.pausedElapsed;
@@ -310,8 +330,6 @@ void main() {
       }
     }
   });
-
-  // (reachable-status helper is at top of main())
 
   test('property: timelinePosition can only decrease after ResumePractice', () {
     // A more focused property: across many random sequences, count the
@@ -329,11 +347,17 @@ void main() {
         final newPosition = next.timelinePosition;
 
         if (newPosition < previousPosition) {
-          // The only input that may legitimately decrease the playhead is
-          // ResumePractice.
+          // ResumePractice and RestartAttempt reset the playhead by
+          // definition. After R1 MAJOR-1, `StartPractice` also resets
+          // it to zero when called from `ready` (because `activeBase`
+          // is set to `state.activeElapsed`, which may be non-zero on a
+          // session that went through a CancelPractice → RestartAttempt
+          // → StartPractice cycle). That reset is also legitimate.
           expect(
-            input,
-            isA<ResumePractice>(),
+            input is ResumePractice ||
+                input is RestartAttempt ||
+                input is StartPractice,
+            isTrue,
             reason:
                 'seed=$seed trial=$trial step=$step: '
                 'timelinePosition decreased on $input',
