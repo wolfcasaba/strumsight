@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R02)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R03)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -61,6 +61,18 @@
   `lib/features/practice/domain/` prefix framework-independence-e GÉPI őr alatt
   (`tool/check_architecture.dart`). Hívója még nincs — production viselkedés
   változatlan.
+- **Practice V2 domain-szerződések (E02-R03, ADR 0068):** a teljes modellkészlet
+  a `lib/features/practice/domain/model/` alatt — `PracticeEvent`/`PracticeDefinition`
+  (kanonikus sharp-spelled chord-labelkészlet, rendezettség/egyediség/tartomány
+  aggregáló validációval), `PracticeSessionConfig`, sealed observation-hierarchia,
+  `PracticeVerdict` (+TimingGrade/outcome/coaching kódok), `MetricValue`/`PracticeMetrics`,
+  attempt/session result (+`PracticeFinishReason`), `ScoringProfile`
+  (integer-percent súlyok, összeg=100; `perfect<=good<=match` ablak-rendezés;
+  `legacyLearnParity` const profil), mode/source/difficulty enumok stabil
+  `code`+fallback-mentes `fromCode` párral — összesen 60 stabil validációs kód,
+  mind literálisan tesztelve. `Meter.ticksPerBar` szimmetrikus fail-fast
+  (E02-R02 MINOR-1 zárva). Test-oldali purity-őr (`domain_purity_test.dart`).
+  Hívó továbbra sincs — production viselkedés változatlan, flagek OFF.
 
 ## 3. Known blockers / risks
 
@@ -78,38 +90,43 @@
 
 ## 4. Current branch
 
-`main` @ [PR #23](https://github.com/wolfcasaba/strumsight/pull/23) (E02-R02,
-merge `a3c72d3`, CI run
-[30542055290](https://github.com/wolfcasaba/strumsight/actions/runs/30542055290)
+`main` @ [PR #24](https://github.com/wolfcasaba/strumsight/pull/24) (E02-R03,
+merge `692ab34`, CI run
+[30555556947](https://github.com/wolfcasaba/strumsight/actions/runs/30555556947)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `codex/epic-02-round-02-musical-time` (merge után törölve).
+Kör-branch: `codex/epic-02-round-03-domain-models` (merge után törölve).
 
 ## 5. Last completed round
 
-**E02-R02 — BeatPosition, Tempo és Meter értékobjektumok** (ADR 0066
-implementációja): 4 új pure-Dart fájl a `lib/features/practice/domain/model/`
-alatt — 480 PPQ integer tick-pozíció egzakt subdivision-factorykkal (3
-nyolcad-triola `==` 1 negyed, tolerancia nélkül), egyetlen auditált legacy
-híd (≤ 1/960 beat, dokumentálva), Tempo/Meter lista-alapú validáció stabil
-hibakódokkal · a framework-independence architektúra-szabály kiterjesztve a
-practice domainre, kétirányú szintetikus teszttel · 24 új determinisztikus
-unit-teszt, TDD RED→GREEN evidenciával. Hívó kód nincs — production
-viselkedés változatlan; új ADR nem született (a 0068 szabad). Review:
-**APPROVED** (0 BLOCKER/MAJOR · 1 MINOR: `Meter.ticksPerBar` aszimmetrikus
-őrzése → R03/R06 · 3 NOTE), reviewer-oldali független gate-újrafuttatással és
-saját guard-törés próbával:
-[`docs/reviews/e02-r02-review.md`](docs/reviews/e02-r02-review.md).
+**E02-R03 — Practice domain modellek és validáció** (ADR 0068 implementációja):
+13 új pure-Dart modellfájl + `meter.dart` MINOR-1 zárás a
+`lib/features/practice/domain/model/` alatt — a Practice V2 teljes
+domain-szerződése (event/definition, session config, sealed observation,
+verdict, metrikák, attempt/session result, scoring profile, enumok), minden
+aggregátum immutable, aggregáló `validate()`-tel, 60 stabil validációs kóddal
+és strukturális lista/map-egyenlőséggel · test-oldali purity-őr valódi-sértés
+RED→GREEN próbával · 101 új determinisztikus unit-teszt (a domain könyvtárban
+125), rétegenkénti TDD-evidenciával. Hívó kód nincs — production viselkedés a
+`ticksPerBar` fail-fast-on kívül változatlan. Az implementáló process menet
+közben gépoldali okból megszakadt; ugyanaz a Codex-session resume-mal zárta a
+kört, a teljes gate-mátrix friss újrafuttatásával (brief §10.4). Review:
+**APPROVED** (0 BLOCKER/MAJOR/MINOR · 3 NOTE — caller-immutability szerződés,
+`listEquals` névütközés-kockázat nem-domain hívóknál, chord-label
+konzisztencia-teszt az R05 adapter-körre), izolált-klónos független
+gate-újrafuttatással és tételes 29/29 scope-audittal:
+[`docs/reviews/e02-r03-review.md`](docs/reviews/e02-r03-review.md).
 Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R03 — Practice domain modellek és validáció**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 3") ÚJ sessionben,
-   kör-brieffel (ADR 0055 váltóbot-protokoll). A briefbe: E02-R02 review
-   MINOR-1 (a `Meter.ticksPerBar` vagy mindkét mezőre fail-fast, vagy
-   egyikre sem — döntés + teszt).
+2. **E02-R04 — Practice catalog / authored definition tartalom**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 4") ÚJ sessionben,
+   kör-brieffel (ADR 0055 váltóbot-protokoll). A katalógus `const` adatként
+   írja le magát az R03 domain-modellekkel. A briefbe: az R03 review NOTE-1
+   (const-forrásból épülő katalógus → a caller-immutability szerződés itt
+   triviálisan teljesül, de rögzítendő).
 3. **Follow-up (E02-R08/R11-ig nyitva):**
    `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
    while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
