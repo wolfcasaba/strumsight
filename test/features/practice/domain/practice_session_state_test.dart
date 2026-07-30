@@ -15,6 +15,8 @@ void main() {
       expect(state.recoverableFailure, isNull);
       expect(state.timelineBase, Duration.zero);
       expect(state.activeBase, Duration.zero);
+      expect(state.countInKind, PracticeCountInKind.initial);
+      expect(state.countInSpanBeats, 0);
       expect(state.pausedAtTimeline, isNull);
       expect(state.countInSpanStartActive, isNull);
       expect(state.emittedCountInClicks, 0);

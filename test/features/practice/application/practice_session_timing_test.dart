@@ -399,7 +399,7 @@ void main() {
   });
 
   group('RestartAttempt (§0.1)', () {
-    test('full second attempt: timelineBase=0, activeBase=0, '
+    test('full second attempt: timelineBase=0, activeBase==activeElapsed, '
         'playingElapsed=0, wallElapsed continues', () {
       var state = _seed();
       // Push past count-in via one tick, then play 4 bars via separate ticks
@@ -426,15 +426,33 @@ void main() {
         state,
         const PausePractice(cause: PauseCause.user),
       ).state;
+      // Snapshot the activeElapsed BEFORE restart — activeBase must equal
+      // it after RestartAttempt (R1 MAJOR-1 fix: was Duration.zero).
+      final activeBeforeRestart = state.activeElapsed;
       state = reducePracticeSession(state, const RestartAttempt()).state;
       expect(state.status, PracticeSessionStatus.countIn);
       expect(state.timelineBase, Duration.zero);
-      expect(state.activeBase, Duration.zero);
+      expect(state.activeBase, activeBeforeRestart);
       expect(state.countInElapsed, Duration.zero);
       expect(state.playingElapsed, Duration.zero);
       expect(state.attemptIndex, 1);
       // wallElapsed continues from the previous attempt (no reset).
       expect(state.wallElapsed, const Duration(seconds: 10));
+
+      // R1 MAJOR-1 acceptance — the second attempt's playhead starts at
+      // zero, not at `activeElapsed`. The next 500ms tick advances the
+      // timeline by exactly 500ms (NOT activeElapsed + 500ms).
+      expect(state.timelinePosition, Duration.zero);
+      state = reducePracticeSession(
+        state,
+        ClockAdvanced(
+          snap(
+            wall: const Duration(seconds: 11),
+            active: activeBeforeRestart + const Duration(milliseconds: 500),
+          ),
+        ),
+      ).state;
+      expect(state.timelinePosition, const Duration(milliseconds: 500));
     });
   });
 

@@ -682,3 +682,115 @@ Mind az öt legyen zöld a `done` jelzés előtt. A teljes suite + APK a CI-ban
 ## 11. Review — Claude tölti ki
 
 Link: `docs/reviews/e02-r07-review.md`
+
+---
+
+## 12. Javító kör (R1) — implementer handoff
+
+Az első review (`docs/reviews/e02-r07-review.md`) négy MAJOR és három MINOR
+leletet mért, hét eldobható próbával alátámasztva. Ez a szakasz a javító
+kör (R1) eredményét dokumentálja: mi változott, melyik teszt fogja meg a
+leletet, és a futtatott parancsok tényleges kimenetét.
+
+### 12.1 Leletenkénti javítás
+
+| Lelet | Hol javítva | Elfogó teszt |
+|---|---|---|
+| **MAJOR-1** — második attempt `activeBase` | `_reduceStartPractice` / `_reduceRestartAttempt` (`practice_session_reducer.dart:285-296`, `:387-393`): `activeBase = state.activeElapsed`; `PracticeCountInKind.initial` explicit mező | `practice_session_review_probes_test.dart` P5 + `practice_session_reducer_test.dart` "restart attempt" + `practice_session_timing_test.dart` "full second attempt" |
+| **MAJOR-2** — `PreparationSucceeded`/`Failed` tábla-kívüli él | `_reducePreparationSucceeded`/`_reducePreparationFailed` (`:623-651`, `:655-678`): kizárólag `preparing` forrás, kettős `_canTransition` kapuzás | `practice_session_review_probes_test.dart` P1 + P1b + `practice_session_reducer_test.dart` exhaustive matrix |
+| **MAJOR-3** — property gate tranzitív lezárt → élenkénti | `PracticeSessionTransition.statusPath` mező (`:67-138`); `_assertStatusPathIsEdgeByEdge` helper a property tesztben | `practice_session_property_test.dart` "edge-by-edge statusPath" + `practice_session_review_probes_test.dart` "R1 MAJOR-3" |
+| **MAJOR-4** — count-in span hossz | `countInSpanBeats` explicit mező (state + reducer); `StartPractice` `countInBars * beatsPerBar`, `ResumePractice` `beatsPerBar` | `practice_session_review_probes_test.dart` P2 + "StartPractice sets countInSpanBeats" |
+| **MINOR-1** — timeout erősebb | `_reduceClockAdvanced` (`:709-734`): a timeout az `if` ág, a timeline-vég az `else if` | `practice_session_review_probes_test.dart` P3 + `practice_session_timing_test.dart` "timeout wins" |
+| **MINOR-2** — paused is őrzött | `_reduceClockAdvanced` (`:702-734`): `shouldCheckTimeout = status ∈ {running, paused}` | `practice_session_review_probes_test.dart` P4 |
+| **MINOR-3** — clamp törlése | `timelinePosition` getter clamp nélkül (state); property invariáns: `timelinePosition >= totalDuration → status != running` | `practice_session_review_probes_test.dart` P6 + property gate "MINOR-3" |
+| **NOTE-1** — handoff-állítás | E §12.1 ezen táblázata: minden fenti MAJOR/MINOR tesztje a kódban mérve | a fenti 7 teszt |
+
+A hét review-próba (P1, P1b, P2, P3, P4, P5, P6) és egy R1 MAJOR-3
+kiegészítő probe mostantól a `practice_session_review_probes_test.dart`
+fájlban maradandó — ezek nem eldobható próbák, hanem a jövőben is
+védik a reviewer által kimért hét viselkedést.
+
+A §5.5 táblája és §6.4 elfogadási kritériumai (`activeBase = state.activeElapsed`,
+a `countInSpanBeats` explicit mező, az új timeout sorrend és a paused
+őrzés, a clamp nélküli getter és az új property invariáns) mostantól a
+reviderált szerződés — a §0.0 BRIEF-REVÍZIÓ pontjaival együtt ez a
+kör tervdokumentuma.
+
+A §5.5 második attempt viselkedéséhez:
+- StartPractice / RestartAttempt `paused`-ból → `activeBase = state.activeElapsed`
+  (a korábbi `Duration.zero` helyett). Friss sessionben `activeElapsed == 0`,
+  a viselkedés változatlan; második attemptben a playhead nulláról indul.
+
+### 12.2 Futtatott parancsok — TÉNYLEGES kimenet
+
+1. `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool`
+   → `Formatted 520 files (0 changed) in 1.76 seconds.`
+2. `~/flutter/bin/flutter analyze lib/ test/ tool/`
+   → `No issues found! (ran in 2.7s)`
+3. `~/flutter/bin/flutter test test/features/practice/`
+   → `00:17 +379: All tests passed!` (370 + 9 új review-probe teszt)
+4. `~/flutter/bin/flutter test test/property/practice_session_property_test.dart`
+   → `00:00 +2: All tests passed!` (`PROPERTY_SEED=42`)
+5. `~/flutter/bin/dart run tool/check_architecture.dart`
+   → `Architecture dependencies OK (12 allowlisted deviation(s)).`
+
+A CI-ról futtatott `PROPERTY_SEED=987654321` (HARD lépés) is zöld:
+`00:00 +2: All tests passed!`.
+
+### 12.3 Eltérések a R0 javításhoz képest
+
+- **`countInKind` / `countInSpanBeats` új mezők.** A `PracticeSessionState`
+  immár explicit `PracticeCountInKind { initial, resume }` és
+  `countInSpanBeats: int` mezőket hordoz. A `countIn → running` váltás
+  a `countInKind` értékétől függ, NEM a `activeBase > 0` heurisztikától.
+- **`statusPath` a `PracticeSessionTransition`-ön.** Minden átmenet
+  visszaadja a bejárt státusz-sorozatot (egyelemű a commandokra,
+  hosszabb a `ClockAdvanced` ágra). A property gate az ÉLENKÉNTI
+  ellenőrzést a nyers `allowedTransitions` táblával végzi — a tranzitív
+  lezárt elfogadhatatlan.
+- **`timelinePosition` getter clamp nélkül.** A §6.5 invariáns új
+  fogalmazása: `timelinePosition >= totalDuration` esetén a status nem
+  lehet `running` — ehelyett `finishing` vagy `completed`.
+- **A `PausePractice` `paused` státuszra is töri a span-t.** A `countInKind`
+  és `countInSpanBeats` mezők nullázódnak a `PausePractice` ágon, hogy a
+  resume count-in a későbbi `ResumePractice`-ben újra íródjon.
+- **`StartPractice` a `countIn → running` váltás feltételét
+  `PracticeCountInKind` alapján dönti el.** A resume count-in a
+  `snapshot.active >= activeBase` feltétellel zárul (egy bar aktív idő),
+  az initial count-in a `timelinePosition >= target.countInDuration`
+  feltétellel (a zenei count-in hossza).
+- **`StartPractice` második attemptre `activeBase = state.activeElapsed`-
+  tel csökkenti a `timelinePosition`-t.** A property gate ezt a
+  csökkenést is legitimnek fogadja el (`StartPractice` felkerült az
+  elfogadott inputok listájára a `ResumePractice` és `RestartAttempt`
+  mellé).
+
+### 12.4 Nem futtatott ellenőrzések és okuk
+
+- **Teljes `flutter test` suite + release APK.** A teljes suite + CI a
+  CI-ban fut (ADR 0053); ez a kör csak a `test/features/practice/` és a
+  `test/property/practice_session_property_test.dart` kapuit ellenőrzi,
+  ahogy a R0-ban is.
+- **`flutter build apk`.** CI-feladat (ADR 0053). Az `analyze` zöld és
+  a `lib/features/practice/data/**` / `lib/features/learn/**` nem
+  változott.
+- **`tools/codex-signal.sh done` a commit előtt.** A §11-et Claude
+  tölti ki; én a commit után küldöm a jelet.
+
+### 12.5 Follow-up-ok
+
+- **`ChangeTempoBeforeAttempt` / `AcceptAdaptiveSuggestion` path.**
+  Ezek a §5.4 szerinti `target = null` inválidációt végzik, és a hívó
+  `PreparePractice`-et küld. Az E02-R08+ gateway controller dolga.
+- **`statusPath` a `cancelled` / `failed` terminálisokon.** A
+  reducer most is kiadja a `statusPath`-t minden lépésre; a jövőbeli
+  UI-oldali runner ennek segítségével tud pontos indikátort mutatni
+  (pl. „erre a lépésre a session végigment countIn → running → finishing
+  → completed"). Jelenleg a tesztek ezt a path-t a §6.5 invariant-on
+  keresztül ellenőrzik.
+- **`StartPractice` mint legitim playhead-reset.** A R0-ás §6.5
+  invariáns (`ResumePractice` / `RestartAttempt`) mostantól a
+  `StartPractice`-et is elfogadja — a dokumentáció a §6.4 R1
+  elfogadási kritériumok alatt frissítendő, ha a felsőbb körök másképp
+  akarják kezelni.
+

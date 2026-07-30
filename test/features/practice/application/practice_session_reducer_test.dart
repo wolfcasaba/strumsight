@@ -309,8 +309,14 @@ void main() {
       expect(state.attemptIndex, 3);
       expect(state.playingElapsed, Duration.zero);
       expect(state.timelineBase, Duration.zero);
-      expect(state.activeBase, Duration.zero);
+      // R1 MAJOR-1: activeBase carries the activeElapsed — on a second
+      // attempt, the clock's `active` accumulator survives, so the
+      // timelineBase-anchored playhead must wait for it. On a fresh
+      // session activeElapsed == 0 and the value collapses to zero; here
+      // it equals 5s.
+      expect(state.activeBase, const Duration(seconds: 5));
       expect(state.pauseCause, isNull);
+      expect(state.timelinePosition, Duration.zero);
       expect(transition.effects, contains(const PlayHaptic()));
     },
   );
@@ -386,29 +392,29 @@ void main() {
       // RetryPractice
       (PracticeSessionStatus.failed, RetryPractice):
           PracticeSessionStatus.preparing,
-      // ChangeTempoBeforeAttempt
+      // ChangeTempoBeforeAttempt — accepted but does NOT change status
+      // (the §11.2 table has no edge for it; we keep the literal entries
+      // here so the matrix still asserts the same value back).
       (PracticeSessionStatus.ready, ChangeTempoBeforeAttempt):
           PracticeSessionStatus.ready,
       (PracticeSessionStatus.completed, ChangeTempoBeforeAttempt):
           PracticeSessionStatus.completed,
       (PracticeSessionStatus.cancelled, ChangeTempoBeforeAttempt):
           PracticeSessionStatus.cancelled,
-      // AcceptAdaptiveSuggestion
+      // AcceptAdaptiveSuggestion — same as ChangeTempoBeforeAttempt.
       (PracticeSessionStatus.ready, AcceptAdaptiveSuggestion):
           PracticeSessionStatus.ready,
       (PracticeSessionStatus.completed, AcceptAdaptiveSuggestion):
           PracticeSessionStatus.completed,
       (PracticeSessionStatus.cancelled, AcceptAdaptiveSuggestion):
           PracticeSessionStatus.cancelled,
-      // PreparationSucceeded
+      // PreparationSucceeded — R1 MAJOR-2: ONLY from `preparing`. The
+      // direct `permissionRequired → ready` hop is not in the §11.2 table
+      // and is therefore rejected (the caller must GrantPermission first).
       (PracticeSessionStatus.preparing, PreparationSucceeded):
           PracticeSessionStatus.ready,
-      (PracticeSessionStatus.permissionRequired, PreparationSucceeded):
-          PracticeSessionStatus.ready,
-      // PreparationFailed
+      // PreparationFailed — same gating as PreparationSucceeded.
       (PracticeSessionStatus.preparing, PreparationFailed):
-          PracticeSessionStatus.failed,
-      (PracticeSessionStatus.permissionRequired, PreparationFailed):
           PracticeSessionStatus.failed,
       // PermissionDenied
       (PracticeSessionStatus.preparing, PermissionDenied):

@@ -25,6 +25,8 @@ final class PracticeSessionState {
     this.recoverableFailure,
     this.timelineBase = Duration.zero,
     this.activeBase = Duration.zero,
+    this.countInKind = PracticeCountInKind.initial,
+    this.countInSpanBeats = 0,
     this.pausedAtTimeline,
     this.countInSpanStartActive,
     this.emittedCountInClicks = 0,
@@ -56,9 +58,23 @@ final class PracticeSessionState {
   final Duration timelineBase;
 
   /// `active` offset at which the playhead reaches `timelineBase`. For an
-  /// initial session this is zero; for a resumed session it equals
-  /// `active + barDuration` so the playhead waits one bar before resuming.
+  /// initial session this is the active time at `StartPractice` (typically
+  /// zero on the first attempt, non-zero on a `RestartAttempt` since the
+  /// `active` accumulator survives across attempts); for a resumed session
+  /// it equals `active + barDuration` so the playhead waits one bar before
+  /// resuming.
   final Duration activeBase;
+
+  /// What kind of count-in span is currently active. Cleared to
+  /// [PracticeCountInKind.initial] when not in a count-in; set on every
+  /// `StartPractice` / `ResumePractice` / `RestartAttempt` that drives
+  /// `ready → countIn` or `paused → countIn`.
+  final PracticeCountInKind countInKind;
+
+  /// Length (in beats) of the active count-in span. Initial span =
+  /// `countInBars * meter.beatsPerBar`; resume span = `meter.beatsPerBar`.
+  /// Zero when no count-in is active.
+  final int countInSpanBeats;
 
   /// The `timelinePosition` value at the moment the session was paused, if
   /// currently in [PracticeSessionStatus.paused]. Used to compute the
@@ -104,17 +120,14 @@ final class PracticeSessionState {
   /// timelinePosition = timelineBase + max(Duration.zero, activeElapsed − activeBase)
   /// ```
   ///
-  /// Clamped to `target.totalDuration` when the latter is set — the
-  /// property invariant from §6.5 requires the position to never exceed
-  /// totalDuration, so a single ClockAdvanced that overshoots the end of
-  /// the timeline still reports `totalDuration` exactly.
+  /// **NOT clamped** (R1 MINOR-3). The §6.5 invariant is reformulated as
+  /// "when `timelinePosition >= target.totalDuration`, the status at the
+  /// end of the tick is no longer `running`" — see
+  /// `test/property/practice_session_property_test.dart`.
   Duration get timelinePosition {
     final delta = activeElapsed - activeBase;
     final offset = delta < Duration.zero ? Duration.zero : delta;
-    final computed = timelineBase + offset;
-    final t = target;
-    if (t != null && computed > t.totalDuration) return t.totalDuration;
-    return computed;
+    return timelineBase + offset;
   }
 
   /// Whether the session is in an active (not terminal) phase.
@@ -150,6 +163,8 @@ final class PracticeSessionState {
     AppFailure? recoverableFailure,
     Duration? timelineBase,
     Duration? activeBase,
+    PracticeCountInKind? countInKind,
+    int? countInSpanBeats,
     Duration? pausedAtTimeline,
     Duration? countInSpanStartActive,
     int? emittedCountInClicks,
@@ -182,6 +197,8 @@ final class PracticeSessionState {
         : (recoverableFailure ?? this.recoverableFailure),
     timelineBase: timelineBase ?? this.timelineBase,
     activeBase: activeBase ?? this.activeBase,
+    countInKind: countInKind ?? this.countInKind,
+    countInSpanBeats: countInSpanBeats ?? this.countInSpanBeats,
     pausedAtTimeline: clearPausedAtTimeline
         ? null
         : (pausedAtTimeline ?? this.pausedAtTimeline),
@@ -211,6 +228,8 @@ final class PracticeSessionState {
           other.recoverableFailure == recoverableFailure &&
           other.timelineBase == timelineBase &&
           other.activeBase == activeBase &&
+          other.countInKind == countInKind &&
+          other.countInSpanBeats == countInSpanBeats &&
           other.pausedAtTimeline == pausedAtTimeline &&
           other.countInSpanStartActive == countInSpanStartActive &&
           other.emittedCountInClicks == emittedCountInClicks &&
@@ -222,7 +241,7 @@ final class PracticeSessionState {
           other.attemptElapsed == attemptElapsed;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll(<Object?>[
     status,
     definition,
     config,
@@ -233,6 +252,8 @@ final class PracticeSessionState {
     recoverableFailure,
     timelineBase,
     activeBase,
+    countInKind,
+    countInSpanBeats,
     pausedAtTimeline,
     countInSpanStartActive,
     emittedCountInClicks,
@@ -242,7 +263,7 @@ final class PracticeSessionState {
     countInElapsed,
     playingElapsed,
     attemptElapsed,
-  );
+  ]);
 }
 
 /// Practice session lifecycle states — SDD §11.2 verbatim.
@@ -341,6 +362,27 @@ enum PauseCause {
 
   /// System-initiated pause (phone call, app backgrounded, …).
   interruption,
+}
+
+/// The kind of count-in span the session is currently driving through.
+///
+/// Set on every `StartPractice` / `ResumePractice` / `RestartAttempt` that
+/// moves the session into [PracticeSessionStatus.countIn]. Cleared (back to
+/// [PracticeCountInKind.initial]) once the count-in finishes and the session
+/// reaches [PracticeSessionStatus.running].
+///
+/// The reducer uses this field — NOT a heuristic on `activeBase` — to
+/// decide what "count-in finished" means. An **initial** count-in ends when
+/// `timelinePosition >= target.countInDuration`; a **resume** count-in ends
+/// when `activeElapsed >= activeBase` (i.e. one full bar of active time
+/// past the resume anchor). Both spans are measured in beats via
+/// [PracticeSessionState.countInSpanBeats].
+enum PracticeCountInKind {
+  /// Initial count-in at the start of the session (or at a `RestartAttempt`).
+  initial,
+
+  /// Resume count-in after a `ResumePractice` — always one bar long.
+  resume,
 }
 
 /// How the session reached a terminal state.
