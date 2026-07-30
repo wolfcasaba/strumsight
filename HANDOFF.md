@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R06)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R07)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -128,44 +128,60 @@
 
 ## 4. Current branch
 
-`main` @ [PR #27](https://github.com/wolfcasaba/strumsight/pull/27) (E02-R06,
-merge `491f2d0`, CI run
-[30573906740](https://github.com/wolfcasaba/strumsight/actions/runs/30573906740)
+`main` @ [PR #28](https://github.com/wolfcasaba/strumsight/pull/28) (E02-R07,
+merge `b5e0dfc`) + [PR #29](https://github.com/wolfcasaba/strumsight/pull/29)
+(hiánypótlás, merge `0c9ab51`, CI run
+[30584474704](https://github.com/wolfcasaba/strumsight/actions/runs/30584474704)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `codex/epic-02-round-06-target-compiler` (merge után törölve).
-Merge után a `main`-en függetlenül újrafuttatva: format 506/0 changed · analyze
-No issues found · `test/features/practice/` 291 zöld.
+Kör-branchek törölve. **Figyelmeztetés a jövőre (L11):** a PR #28 az E02-R07
+javító körének kódja NÉLKÜL ment fel — a munkapéldányban készült commitot nem
+húzták vissza a fő repóba. A PR #29 pótolta; a `main` most tartalmilag helyes.
+Merge után a `main`-en függetlenül újrafuttatva (`tools/round-gate.sh`):
+format 520/0 changed · analyze No issues found · `test/features/practice/` 379
+zöld · property +2 · architecture OK.
 
 ## 5. Last completed round
 
-**E02-R06 — Target compiler és beat-idő konverzió**
-([ADR 0072](docs/adr/0072-practice-target-compiler.md) implementációja, PR #27):
-`BeatTimeConverter` — a practice domain **egyetlen** beat↔idő konverziója, egész
-mikroszekundum (`round(ticks * 60e6 / (bpm * 480))`), egyszeri kerekítés, inverz
-`positionAt`, fail-fast `StateError` érvénytelen `Tempo`/`Meter` mellett ·
-`CompiledPracticeTarget` + `CompiledTargetEvent` + `ExpectedChordSegment` +
-`PracticeLoopRange` immutable, value-equal modellek konstruktorbeli
-`List.unmodifiable` snapshottal · `compilePracticeTarget` — ötlépcsős validációs
-sorrend stabil kódokkal, count-in, egész ütemre kerekített pass-hossz,
-loop-kiválasztás/rebase/ismétlés, ütemhatárok, marker-szűrés, monotonitás-őr,
-és a legacy `_activeChord()` **120 tickes** lookahead szemantikáját követő
-expected-chord szegmentálás · öt új `PracticeValidationCode` +
-`FailureCode.practiceTargetUncompilable`. Ezzel a Learn út hat szétszórt
-`double` időképlete (`lesson_scorer.dart:85/87/241`, `lesson_timing.dart:11/15/39`,
-`learn_screen.dart:47/74/498`) helyett egy auditálható pont van — a legacy kód
-maga **érintetlen**, hívó UI nincs, flagek OFF → production viselkedés változatlan.
-**Mért parity:** 10 befagyasztott baseline scenario (`finishAtSec` + eseményszint)
-és 17 szállított lecke × 3 practice speed → **0 µs** max eltérés; korpusz
-28/28 whole-bar kerekítési no-op. Implementer: **Codex**.
-Review: első kör **CHANGES REQUESTED** (1 MINOR), két javító kör után
-**APPROVED**: [`docs/reviews/e02-r06-review.md`](docs/reviews/e02-r06-review.md).
-**A MINOR-t 289 zöld teszt mellett a reviewer próbatesztje fogta meg** (ugyanaz a
-zenei pillanat két különböző időt kapott: 90 BPM-en 5 333 333 vs 5 333 334 µs), és
-a javítása egy valódi tervezői kérdést kényszerített ki — egész µs mellett nem
-tartható egyszerre „minden időtartam egyszeri konverzió" és „a részek összege az
-egész". A feloldás az **ADR 0072 §1.1**: *pillanat pontos, időtartam származtatott*
-(minden abszolút pillanat a nullponttól vett tickszám egyetlen konverziója, minden
-időtartam két pillanat különbsége). **A Codex mindkét megállása helyes volt.**
+**E02-R07 — Session clock és determinisztikus state machine**
+([ADR 0073](docs/adr/0073-practice-session-state-machine.md) implementációja,
+PR #28 + #29): `PracticeSessionClock` interfész + `PracticeClockSnapshot`
+(`wall`/`active`/`paused`/`attempt`, invariáns `active + paused == wall`) +
+monoton `Stopwatch`-alapú `MonotonicPracticeSessionClock` az **`application/`**
+rétegben (a domain purity-teszt tiltja a `Stopwatch`-ot) + `FakePracticeSessionClock`
+a `test/support/` alatt · `PracticeSessionStatus` (11 érték) és a SDD §11.2
+átmenettáblájának **szó szerinti** `const` átirata, amin a reducer MINDEN
+statusváltása átmegy · egyetlen pure reducer, bemenete a 11 SDD-command és 4
+környezeti signal (`PreparationSucceeded/Failed`, `PermissionDenied`,
+`ClockAdvanced`); soha nem dob, tiltott bemenetre a state változatlan +
+`InvalidSessionTransitionFailure` (`FailureCode.practiceInvalidSessionTransition`) ·
+**időkönyvelés (SDD §12.2):** hat akkumulátor,
+`timelinePosition = timelineBase + max(0, active − activeBase)`, **a napi célba
+kizárólag a `playingElapsed` számít** (count-in és pause NEM) · resume: egy
+ütemnyi count-in, majd folytatás a `barBoundaries` szerinti ütemhatárról ·
+one-shot effect-modell. Saját beat→idő képlet nincs (ADR 0072 §1.1). Hívó UI
+és provider nincs, a legacy Learn út érintetlen, flagek OFF → production
+viselkedés változatlan. Implementer: **MiniMax M3** (a user döntése, érzékeny kör).
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 4 MAJOR · 3 MINOR · 2 NOTE),
+javító kör után **APPROVED**:
+[`docs/reviews/e02-r07-review.md`](docs/reviews/e02-r07-review.md).
+**Mind a hét lelet 370 zöld teszt és zöld gate-sor mellett csúszott át** — a
+reviewer eldobható próbatesztje mérte: a 2. attempt idővonala 0 helyett 3 s-nál
+indult · a reducer a §11.2 táblán KÍVÜLI élt hajtott végre
+(`permissionRequired → ready`) · a property gate a tábla **tranzitív lezártját**
+mérte az élenkénti pár helyett, és pont ez rejtette el az előzőt · 2 ütemes
+count-in 4 kattanást adott 8 helyett. A hétből **három gyökere maga a kör-brief
+volt** — dokumentált brief-revízióként felülírva (§0.0), nem utólagos
+lista-tágítással. A javító kör után a reviewer saját próbatesztje mind a hetet
+zártnak mérte, és a felélesztett property-őr **valódi-sértés próbája** (a
+`_canTransition` szándékos eltávolítása) pirosra váltott.
+
+**Folyamat-hozadék ugyanebben a körben:** `tools/round-gate.sh` — a záró gate
+futtatható artefaktumként (az implementer háromszor futtatta `| tail -N`-nel a
+szó szerinti tiltás ellenére); a `docs/execution/08-round-brief.md` sablon négy
+új szabálya; `docs/LESSONS.md` **L09–L11**; és a kiadható
+[`docs/rounds/gov-01-gate-artifact-rollout.md`](docs/rounds/gov-01-gate-artifact-rollout.md)
+brief a gate-artefaktum rendszer-szintű átvezetésére.
 
 ### Korábbi kör
 
@@ -218,28 +234,26 @@ Korábbi körök (E02-R03 részletes története is):
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R07 — Session clock és state machine**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 7") ÚJ sessionben,
-   kör-brieffel (ADR 0055): `PracticeSessionClock` interfész + monotonic
-   Stopwatch-implementáció + `FakePracticeSessionClock`, session status,
-   commandok, transition reducer, invalid-transition failure, aktív/wall/
-   count-in/pause idő, attempt reset, resume policy, finish reason, one-shot
-   effect model. **Motorválasztás: KÉRDEZD MEG A USERT indítás előtt** — a kör
-   a befagyasztott parity-időzítéssel érintkezik (ADR 0069 §15.6 „érzékeny"
-   sor), és a user 2026-07-30-i szabálya szerint az érzékeny körök motorja
-   egyeztetendő. Bemenet: az R06 `CompiledPracticeTarget` (a timeline
-   nullpontja a session start, a count-in a timeline RÉSZE) és az ADR 0072
-   §1.1 időszabálya — a clock ne vezessen be saját beat→idő képletet.
-   A briefbe kötelezően: a §12.2 szerint a **daily goalba csak az aktív
-   playing idő** számít, a count-in és a pause NEM.
-3. **Follow-up (E02-R08/R11-ig nyitva):**
+2. **GOV-01 — a gate-artefaktum átvezetése** ÚJ sessionben. A brief KÉSZ és
+   kiadható: [`docs/rounds/gov-01-gate-artifact-rollout.md`](docs/rounds/gov-01-gate-artifact-rollout.md).
+   Mechanikus szövegátvezetés (AGENTS.md §12, CLAUDE.md verify-gate, három
+   skill, DoD, a két round-wrapper fejléce) — **javasolt motor: MiniMax M3**,
+   az acceptance két `grep` + `git diff --stat`. Dart kódot nem érint.
+3. **E02-R08 — Observation gateway és audio lifecycle adapter**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 8") ÚJ sessionben,
+   kör-brieffel. Bemenete az R07 állapotgépe: a gateway a
+   `status == running` állapotot kérdezze, ne widget-flaget — ezzel zárható a
+   `docs/rag/chunks/014-play-along-learn.md` pause-rése is (lásd 4. pont).
+   Előre kiosztható ADR: **0074**.
+4. **Follow-up (E02-R08/R11-ig nyitva):**
    `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
    while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
    subscriptiont), plusz 4-beat count-in és 12 lecke. A chunk javítása a
    pause-rés lezárásával EGY commitban (AGENTS.md §9).
-4. **Governance-döntés LEZÁRVA (2026-07-30):** a `docs/LESSONS.md` létrejött
-   (commit `65c280f`) — hét mért tanulság hivatkozható forrással. Új tanulság
-   oda kerül, a saját köre commitjában.
+5. **Nyitva hagyott NOTE (E02-R07):** `MonotonicPracticeSessionClock.start()`
+   pause alatt teljes resetet végez, a szerződés viszont idempotenciát ír elő.
+   Nem blokkol (a reducer a második `StartPractice`-t elutasítja); az E02-R09
+   controller-körben zárandó, amikor valódi hívó lesz.
 
 ## 7. Required verification (before any "done")
 
