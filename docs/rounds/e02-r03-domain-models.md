@@ -728,4 +728,7 @@ processzmegszakítás után a teljes mátrixot frissen újrafuttattam.
 
 ## 11. Review
 
-<!-- Claude tölti ki: docs/reviews/e02-r03-review.md link + verdikt. -->
+Review: [`docs/reviews/e02-r03-review.md`](../reviews/e02-r03-review.md) —
+**APPROVED** (BLOCKER 0 · MAJOR 0 · MINOR 0 · NOTE 3), reviewer-oldali független
+gate-újrafuttatással izolált klónban (format 0 changed · analyze clean ·
+125/125 domain teszt) és tételes scope-audittal (29/29 fájl a §4 tábla szerint).
