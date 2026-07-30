@@ -223,11 +223,122 @@ ADR 0052/0053).
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + TÉNYLEGES kimenet.
-- Az offline-guard érzékenység-próbájának kimenete.
-- Eltérések a tervtől és okuk.
-- Follow-up issue-k.
+### Fájlonkénti összefoglaló
+
+- `test/app/offline_network_guard_test.dart` (új): a valódi
+  `AppBootstrap.run` + production konfiguráció + in-memory store/migrációk után
+  felépíti a `StrumSightApp` gyökeret, majd végigjárja a Live, Analyze, Learn,
+  Library, Settings, Tuner, Songs és Progress képernyőt. Két külön esetet fed:
+  account+diagnostics disabled és account enabled, de üres token store miatt
+  kijelentkezett állapot. Az account `DioFactory` providere valódi factoryt kap
+  számláló `HttpClientAdapter`rel; az állítás egyszerre méri a factory/client
+  létrehozását és az adapterig jutó requestet. A production diagnostics gate-et
+  a valódi `diagnosticsApiClientProvider == null` és a null kliensű uploader
+  ellenőrzi. Minden audio/plugin/secure-storage forrás determinisztikus fake.
+- `.github/actions/flutter-gates/action.yml` (új): egyetlen composite actionben
+  él a dependency-resolve és a kötött hard-gate sorrend: format → analyze →
+  architecture → asset → teljes `flutter test` → randomizált property gate.
+  Minden `run` lépés explicit `shell: bash`.
+- `.github/workflows/build-apk.yml`: a build job a composite actiont hívja; a
+  coverage külön, párhuzamos, nem opcionális job (`flutter test --coverage` +
+  az eddigi LCOV artifactnév). Az APK metadata/build/stage/upload út változatlan.
+- `.github/workflows/release-apk.yml`: a release job ugyanazt a composite
+  actiont hívja, a coverage külön párhuzamos job. A rövid
+  `signing-prerequisites` job megakadályozza, hogy secret nélküli próbán a
+  coverage artifactot töltsön fel: hiányzó secret → első lépés failure, mindkét
+  downstream job skipped, 0 artifact. Az eredeti release secret-guard és a
+  materialize/build/cleanup keystore-lépések strukturálisan változatlanok és a
+  release jobban az eredeti helyükön maradtak.
+- `docs/rounds/e01-r16-final-regression-and-docs.md`: kizárólag ez a §10 handoff
+  frissült.
+
+### Futtatott parancsok és tényleges eredmény
+
+- `~/flutter/bin/flutter pub get` → exit 0, `Got dependencies!`; 32 újabb,
+  constrainttel inkompatibilis verzió csak informatív jelzés.
+- Baseline: `~/flutter/bin/flutter test test/app` → `+39: All tests passed!`.
+- Új guard GREEN:
+  `~/flutter/bin/flutter test test/app/offline_network_guard_test.dart` →
+  `+2: All tests passed!`.
+- `~/flutter/bin/dart format --set-exit-if-changed lib test tool` →
+  `Formatted 450 files (0 changed)`.
+- `~/flutter/bin/flutter analyze lib/ test/ tool/` →
+  `No issues found! (ran in 2.5s)`.
+- Végső célzott suite: `~/flutter/bin/flutter test test/app` →
+  `+41: All tests passed!` (a 39 baseline + 2 új guard).
+- `~/flutter/bin/dart run tool/check_architecture.dart` →
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`
+- Python 3 + PyYAML szintaxis-audit a composite és a két workflow fájlra →
+  `YAML syntax OK: ...flutter-gates/action.yml, ...build-apk.yml,
+  ...release-apk.yml`.
+- Strukturális workflow-audit (gate-nevek/sorrend, minden composite shell,
+  property seed, mindkét composite-hívás, coverage hard job, release `needs`,
+  védett release-lépések összevetése a `HEAD`-del) →
+  `Workflow semantics OK: shared ordered hard gates, parallel required
+  coverage, protected release steps unchanged.`
+- A signing-preflight lokális érzékenység-próbája üres env-vel exit 1 és csak a
+  négy hiányzó secret nevét adta; nem üres tesztértékekkel exit 0 →
+  `Release preflight sensitivity OK: missing secrets -> exit 1 with names
+  only; non-empty test values -> exit 0.`
+- `git diff --check` → exit 0, kimenet nélkül.
+
+### Offline-guard érzékenység-próba
+
+Az account-enabled/kijelentkezett esetbe ideiglenesen, a production
+`accountApiClientProvider → DioFactory → ApiClient → HttpClientAdapter` útvonalon
+egy public POST került. A futtatás:
+
+```text
+~/flutter/bin/flutter test test/app/offline_network_guard_test.dart \
+  --plain-name 'account enabled but signed out: full boot and main screens stay offline' \
+  --reporter expanded
+
+Expected: [0, 0]
+  Actual: [1, 1]
+Which: at location [0] is <1> instead of <0>
+00:02 +0 -1: Some tests failed.
+```
+
+A két szám sorrendben a factory/client létrehozás és az adapter-request. Az
+ideiglenes request és a diagnosztikai logok vissza lettek vonva; ugyanaz a
+végleges teszt ezután `+2: All tests passed!`.
+
+Az első próba a Dio future/stream láncát közvetlenül awaitelte a widget-teszt
+fake-async zónájában, ezért nem jutott el az assertig és kézzel meg lett
+szakítva (`did not complete`); ez nem elfogadási evidencia. A Dio 5.10
+csomagforrásának visszakövetése után az ideiglenes request kizárólag a RED
+próbában `tester.runAsync` alatt futott, így determinisztikusan az adapterig
+jutott és a fenti várt piros eredményt adta. A végleges fájlban sem request,
+sem `runAsync`, sem debug log nem maradt.
+
+### Eltérések, nem futtatott ellenőrzések és kockázatok
+
+- Production kód nem változott. A `DioFactory` `final`, a diagnostics provider
+  pedig közvetlenül hozza létre; a whitelist nem engedett új production seamet.
+  Ezért az account-oldal a meglévő factory-provider override-on mér, a
+  diagnostics-oldal pedig a valódi disabled early-returnt (`null`) bizonyítja.
+  A repository tooling-guardja külön őrzi, hogy production Dio más úton nem
+  jöhet létre.
+- `actionlint`/`yamllint` nincs telepítve a boxon; a lokális YAML +
+  strukturális audit zöld, a GitHub Actions futás marad az autoritatív
+  workflow-validáció.
+- A teljes Flutter suite, coverage, randomizált property gate és APK-build
+  lokálisan szándékosan nem futott (ADR 0052/0053/0064 + aktuális user-utasítás);
+  ezeket Claude dispatch-eli a kör-branchre. GitHub run-link ezért még nincs.
+- A `release-apk.yml` secret nélküli 0-artifact bizonyítéka szintén Claude
+  workflow-dispatche; lokálisan csak a preflight script két ágát mértük.
+- Backend gate-ek nem futottak: backend diff nincs, a teljes §16.1 regresszió és
+  a backend CI Claude-rész. Valódi készülék/audio/teljesítmény mérés a user-rész.
+
+### Follow-upok
+
+- Claude a CI-evidenciában külön ellenőrizze a `Coverage` job sikerét mindkét
+  workflow-ban, és a release secret nélküli futásnál a 0 artifactot.
+- A prompt/HANDOFF által hivatkozott ADR 0064 fájl nincs a jelenlegi branch
+  történetében; a dokumentum csak a `chore/codex-code-complete-signal` branchen,
+  `1959bc6` alatt található. A Claude-oldali záródokumentáció rendezze ezt az
+  eltérést; Codex a §4 whitelist miatt nem nyúlt hozzá.
+- Repo-kód follow-up lelet nincs.
 
 ## 11. Review — a Claude tölti ki
 
