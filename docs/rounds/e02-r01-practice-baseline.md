@@ -409,9 +409,203 @@ futtasson `gh`-t.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-_(üres — a Codex tölti ki: fájlonkénti összefoglaló, futtatott parancsok a
-TÉNYLEGES kimenettel, az érzékenység-próba piros/zöld kimenete, eltérések a
-tervtől és okuk, nem futtatott ellenőrzések és okuk, follow-up leletek.)_
+### 10.1 Módosított fájlok
+
+- `lib/app/config/feature_flags.dart` — a három opcionális, alapból `false`
+  practice availability flag; a kötött environment-defaultok; frissített
+  value semantics és dokumentáció. A `usesNetwork` képlete változatlan.
+- `lib/app/config/app_config.dart` — a két önálló, aggregált fail-closed
+  függőségi szabály; mindkét üzenet megnevezi az engedélyezett, de hiányzó
+  `practiceEngineV2Enabled` flaget.
+- `test/app/app_config_test.dart` — a meglévő állítások változtatása nélkül hat
+  új teszt a három environment-default, a konstruktor/value semantics, a két
+  valódi sértés, az együttes hibaaggregáció és az offline-garancia
+  bizonyítására.
+- `test/support/practice_baseline_scenarios.dart` — scorer-semleges,
+  determinisztikus bemeneti katalógus a §5.1 mind a kilenc scenario-ID-jával;
+  defensively frozen lesson-snapshot, fix BPM/count-in/latency/strum/chord
+  adatok és külön korrigált strum-/frame-dispatch idő.
+- `test/fixtures/practice/legacy_scorer_baseline.json` — a legacy scorerből
+  generált, átnézett és befagyasztott golden: kilenc végállapot és minden
+  lesson event verdictje.
+- `test/features/learn/legacy_scorer_baseline_test.dart` — katalógus-invariáns,
+  független legacy event-matcher és annotációellenőrzés, dispatch-/observation-
+  órát szétválasztó determinisztikus replay, byte-for-byte freeze assertion és
+  kizárólag `UPDATE_LEGACY_SCORER_BASELINE=1` mellett engedélyezett generátor.
+- `docs/baseline/epic-02-practice-start.md` — rollout-, tartalom-, timing-,
+  scorer-, képernyő-, speed-, Progress V1-, teszt- és valódi-eszközös
+  baseline; a fixture eredménytáblája és külön ismert-rések szakasz.
+- `docs/rounds/e02-r01-practice-baseline.md` — csak ez a §10 handoff-szakasz.
+
+Production Learn/Progress/Streak/DSP/ML kód nem változott.
+
+### 10.2 TDD, golden-generálás és érzékenység-próba
+
+Kiinduló regresszió:
+
+```text
+~/flutter/bin/flutter test test/app
++41: All tests passed!
+
+~/flutter/bin/flutter test test/features/learn
++126: All tests passed!
+```
+
+A flag-tesztek első, implementáció előtti futása valódi RED volt:
+
+```text
+~/flutter/bin/flutter test test/app/app_config_test.dart
+exit 1 — compile errors: a három új named parameter/getter még nem létezett
+```
+
+Az implementáció után ugyanaz a fájl:
+
+```text
+~/flutter/bin/flutter test test/app/app_config_test.dart
++17: All tests passed!
+```
+
+A replay első futása golden nélkül RED volt (`PathNotFoundException`,
+`test/fixtures/practice/legacy_scorer_baseline.json`), majd az engedélyezett
+egyszeri generátor:
+
+```text
+UPDATE_LEGACY_SCORER_BASELINE=1 ~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'GENERATE legacy LessonScorer baseline JSON'
++1: All tests passed!
+```
+
+A generált eredményt a §2.2 konstansokkal és event-verdict sorozatokkal
+ellenőriztem. Ezután a normál replay byte-for-byte zöld lett.
+
+Az előírt érzékenység-próbában a `p44_timing_tiers` második strumja
+`5.05 s` → `5.06 s` ideiglenes változtatást kapott (+10 ms):
+
+```text
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'legacy LessonScorer replay matches the frozen JSON byte for byte'
+exit 1 — Expected: `"perfect": 2`; Actual: `"perfect": 1`;
+          a szöveg az offset 3497 körül eltért
+```
+
+A scenario visszaállítása után ugyanaz a parancs:
+
+```text
++1: All tests passed!
+```
+
+Az ideiglenes érzékenységi módosítás nincs a végső diffben.
+
+Az implementálói diff-review két további, célzott reprodukciót kért. A
+replay-fájl első futása az új tesztekkel, a javítás előtt:
+
+```text
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart
+exit 1; +2 ~1 -2: Some tests failed.
+
+replay rejects a target annotation that is not the matched event:
+Expected: throws TestFailure; Actual: returned a byte-azonos verdict map.
+
+replay advances at frame arrival before a de-jittered strum:
+Expected hits: 0; Actual hits: 1.
+```
+
+A replay ezután függetlenül vezeti a legacy ablakot/nearest-open sorrendet,
+ellenőrzi az annotált targetet, a derivált indexet serializálja, és
+`frameArrivalSec ?? elapsedSec` időn advance-el a korrigált `elapsedSec`
+regisztrálása előtt. A lesson event-listát a scenario konstruktor
+defenzíven befagyasztja. A javítás utáni fókuszált eredmények:
+
+```text
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart
++4 ~1: All tests passed!
+
+~/flutter/bin/flutter test test/app/app_config_test.dart
++18: All tests passed!
+
+UPDATE_LEGACY_SCORER_BASELINE=1 ~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'GENERATE legacy LessonScorer baseline JSON'
++1: All tests passed!
+```
+
+Az újragenerált kilenc-scenario golden a szigorított replay mellett is
+byte-kompatibilis maradt; a normál freeze assertion ezt ismét zölden
+ellenőrizte.
+
+### 10.3 Kötelező gate-ek — tényleges eredmény
+
+Minden parancs külön hívásban futott:
+
+```text
+~/flutter/bin/flutter pub get
+Got dependencies!
+32 packages have newer versions incompatible with dependency constraints.
+
+~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+Formatted 452 files (0 changed) in 1.62 seconds.
+
+~/flutter/bin/flutter analyze lib/ test/ tool/
+No issues found! (ran in 3.4s)
+
+~/flutter/bin/flutter test test/app
++47: All tests passed!
+
+~/flutter/bin/flutter test test/features/learn
++130 ~1: All tests passed!
+```
+
+A `~1` az alapértelmezetten kihagyott, explicit environment-kulcshoz kötött
+golden-generátor; a freeze replay futott és zöld volt.
+
+```text
+~/flutter/bin/flutter test test/features/progress
++17: All tests passed!
+
+~/flutter/bin/flutter test test/features/streak
++20: All tests passed!
+
+~/flutter/bin/flutter test test/features/metronome
++13: All tests passed!
+
+~/flutter/bin/dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+```
+
+### 10.4 Eltérések, nem futtatott ellenőrzések
+
+- A jóváhagyott scope-tól és implementációs sorrendtől nincs eltérés. A
+  generátor a brief által engedett módon ugyanabban a tesztfájlban,
+  alapértelmezetten skip-elve maradt.
+- Teljes `flutter test`, randomizált property gate, release APK és CI nem
+  futott lokálisan; ezeket ADR 0052/0053 szerint Claude dispatch-eli CI-ban.
+- `gh`, CI-dispatch, PR és merge nem futott, mert ADR 0064 szerint
+  Claude-oldali feladat.
+- Backend- és ML-gate nem releváns: ilyen fájl és viselkedés nem változott.
+- Új valódi-eszközös mérés nem futott; a reprodukálható eszközmátrix az
+  E02-R20 elfogadási köre.
+
+### 10.5 Follow-up leletek
+
+A baseline felvétele nem tört el meglévő tesztet, ezért a kör a scorer
+módosítása nélkül befejezhető volt. A mért, de ebben a körben szándékosan nem
+javított leletek a baseline-jelentés „Ismert rések" szakaszában szerepelnek:
+
+1. pause alatt a frame-subscription és a pontozás tovább élhet;
+2. a lebegőpontos `+120 ms` / `+280 ms` ablakhatár abszolút időponttól függően
+   másik legacy tierbe eshet;
+3. korai direkt `finalize()` nem frissíti konzisztensen a fail/combo/last
+   állapotot;
+4. a chord-eredmény másodlagos, kétpillanatos mintavétel;
+5. nincs teljes pause-frame/restart end-to-end regresszió;
+6. nincs reprodukálható valódi-eszközös Learn mérési mátrix.
+
+Ezek a goldenben csak ott szerepelnek, ahol a mai legitim scorer-replay
+részei; a tudott pause-réshez nem készült zöld assertion.
 
 ## 11. Review — a Claude tölti ki
 

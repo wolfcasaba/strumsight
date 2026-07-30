@@ -31,7 +31,8 @@ final class ConfigurationException implements Exception {
 ///
 /// Built once during bootstrap via [AppConfig.resolve] and injected through
 /// [appConfigProvider]. Detection stays 100% on-device regardless of anything
-/// here — this only configures the OPTIONAL account/diagnostics layers.
+/// here — this configures the OPTIONAL account/diagnostics layers and guards
+/// the availability stages of the on-device Practice rollout.
 final class AppConfig {
   const AppConfig({
     required this.environment,
@@ -86,6 +87,9 @@ final class AppConfig {
   /// EVERY violated rule (not just the first) so a misconfigured build is
   /// fixed in one pass.
   ///
+  /// In every environment, migrated Learn and detailed Practice history require
+  /// Practice Engine V2 to be available.
+  ///
   /// Production is fail-closed (§3.3):
   /// - any network-using flag ⇒ the URL must be a well-formed **https** URL
   ///   and must not point at a loopback (`localhost`, `127.0.0.1`, `10.0.2.2`);
@@ -107,6 +111,17 @@ final class AppConfig {
   }) {
     final problems = <String>[];
     final isProd = environment == AppEnvironment.production;
+
+    if (flags.migratedLearnEnabled && !flags.practiceEngineV2Enabled) {
+      problems.add('migratedLearnEnabled requires practiceEngineV2Enabled.');
+    }
+
+    if (flags.practiceDetailedHistoryEnabled &&
+        !flags.practiceEngineV2Enabled) {
+      problems.add(
+        'practiceDetailedHistoryEnabled requires practiceEngineV2Enabled.',
+      );
+    }
 
     if (flags.usesNetwork) {
       final uri = Uri.tryParse(apiBaseUrl);

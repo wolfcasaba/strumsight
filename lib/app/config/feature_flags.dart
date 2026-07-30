@@ -3,15 +3,18 @@ import 'app_environment.dart';
 /// Compile-time feature availability (E01-R03, SDD Ch2 Kör 3 §3.2).
 ///
 /// These are *availability* switches, not user preferences: whether the
-/// account layer exists in this build, whether the diagnostics upload path is
-/// compiled in, and whether the Settings screen offers the Lab-mode toggle at
-/// all. The user's own opt-ins (e.g. `labModeProvider`) sit on top and can
-/// only turn things on where the flag makes them available.
+/// account layer exists in this build, whether diagnostics/Lab paths are
+/// available, and which stage of the parallel Practice V2 rollout is present.
+/// The user's own opt-ins (e.g. `labModeProvider`) sit on top and can only turn
+/// things on where the flag makes them available.
 final class FeatureFlags {
   const FeatureFlags({
     required this.accountEnabled,
     required this.diagnosticsEnabled,
     required this.labModeAvailable,
+    this.practiceEngineV2Enabled = false,
+    this.migratedLearnEnabled = false,
+    this.practiceDetailedHistoryEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -23,6 +26,9 @@ final class FeatureFlags {
   ///   OFF in production. There is deliberately NO define to force them on in
   ///   production ("a diagnosztika nem kapcsolható be véletlenül") — a
   ///   diagnostics-capable device build is what [AppEnvironment.lab] is for.
+  /// - Practice V2 + detailed history are available outside production;
+  ///   migrated Learn stays OFF everywhere until the parity rollout decision.
+  ///   None of the practice flags has a dart-define override.
   factory FeatureFlags.forEnvironment(
     AppEnvironment environment, {
     required bool accountEnabled,
@@ -32,6 +38,9 @@ final class FeatureFlags {
       accountEnabled: accountEnabled,
       diagnosticsEnabled: nonProd,
       labModeAvailable: nonProd,
+      practiceEngineV2Enabled: nonProd,
+      migratedLearnEnabled: false,
+      practiceDetailedHistoryEnabled: nonProd,
     );
   }
 
@@ -45,6 +54,15 @@ final class FeatureFlags {
   /// Whether Settings offers the Lab-mode toggle.
   final bool labModeAvailable;
 
+  /// Whether the parallel Practice Engine V2 is available in this build.
+  final bool practiceEngineV2Enabled;
+
+  /// Whether Learn is served by Practice Engine V2 instead of the legacy path.
+  final bool migratedLearnEnabled;
+
+  /// Whether the versioned, detailed Practice history store may be written.
+  final bool practiceDetailedHistoryEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -53,14 +71,27 @@ final class FeatureFlags {
       other is FeatureFlags &&
       other.accountEnabled == accountEnabled &&
       other.diagnosticsEnabled == diagnosticsEnabled &&
-      other.labModeAvailable == labModeAvailable;
+      other.labModeAvailable == labModeAvailable &&
+      other.practiceEngineV2Enabled == practiceEngineV2Enabled &&
+      other.migratedLearnEnabled == migratedLearnEnabled &&
+      other.practiceDetailedHistoryEnabled == practiceDetailedHistoryEnabled;
 
   @override
-  int get hashCode =>
-      Object.hash(accountEnabled, diagnosticsEnabled, labModeAvailable);
+  int get hashCode => Object.hash(
+    accountEnabled,
+    diagnosticsEnabled,
+    labModeAvailable,
+    practiceEngineV2Enabled,
+    migratedLearnEnabled,
+    practiceDetailedHistoryEnabled,
+  );
 
   @override
   String toString() =>
-      'FeatureFlags(account: $accountEnabled, diagnostics: '
-      '$diagnosticsEnabled, lab: $labModeAvailable)';
+      'FeatureFlags(accountEnabled: $accountEnabled, '
+      'diagnosticsEnabled: $diagnosticsEnabled, '
+      'labModeAvailable: $labModeAvailable, '
+      'practiceEngineV2Enabled: $practiceEngineV2Enabled, '
+      'migratedLearnEnabled: $migratedLearnEnabled, '
+      'practiceDetailedHistoryEnabled: $practiceDetailedHistoryEnabled)';
 }

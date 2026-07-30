@@ -1,0 +1,651 @@
+{
+  "schemaVersion": 1,
+  "engine": "legacyLessonScorer",
+  "scenarios": [
+    {
+      "id": "p44_basic_all_perfect",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 8,
+        "score": 1200,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_all_late",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 0,
+        "score": 480,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_timing_tiers",
+      "final": {
+        "hits": 7,
+        "wrong": 0,
+        "missed": 1,
+        "combo": 0,
+        "maxCombo": 7,
+        "total": 8,
+        "perfect": 2,
+        "score": 550,
+        "multiplier": 1,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 0.875,
+        "passed": true,
+        "failStreak": 1
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "good",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "early",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "early",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "missed",
+          "timing": null,
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_wrong_direction",
+      "final": {
+        "hits": 5,
+        "wrong": 3,
+        "missed": 0,
+        "combo": 0,
+        "maxCombo": 5,
+        "total": 8,
+        "perfect": 5,
+        "score": 600,
+        "multiplier": 1,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 0.625,
+        "passed": false,
+        "failStreak": 3
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "wrongDirection",
+          "timing": null,
+          "expectedDirection": "down"
+        },
+        {
+          "eventIndex": 6,
+          "result": "wrongDirection",
+          "timing": null,
+          "expectedDirection": "down"
+        },
+        {
+          "eventIndex": 7,
+          "result": "wrongDirection",
+          "timing": null,
+          "expectedDirection": "down"
+        }
+      ]
+    },
+    {
+      "id": "p44_extra_strums",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 8,
+        "score": 1200,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_chord_lag",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 8,
+        "score": 1200,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_input_latency",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 8,
+        "score": 1200,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p44_dejittered",
+      "final": {
+        "hits": 8,
+        "wrong": 0,
+        "missed": 0,
+        "combo": 8,
+        "maxCombo": 8,
+        "total": 8,
+        "perfect": 8,
+        "score": 1200,
+        "multiplier": 2,
+        "chordHits": 8,
+        "chordTotal": 8,
+        "accuracy": 1.0,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
+      "id": "p34_waltz",
+      "final": {
+        "hits": 9,
+        "wrong": 1,
+        "missed": 2,
+        "combo": 1,
+        "maxCombo": 5,
+        "total": 12,
+        "perfect": 4,
+        "score": 700,
+        "multiplier": 1,
+        "chordHits": 12,
+        "chordTotal": 12,
+        "accuracy": 0.75,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "good",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 3,
+          "result": "wrongDirection",
+          "timing": null,
+          "expectedDirection": "down"
+        },
+        {
+          "eventIndex": 4,
+          "result": "missed",
+          "timing": null,
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "good",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "early",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 8,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 9,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 10,
+          "result": "missed",
+          "timing": null,
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 11,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    }
+  ]
+}

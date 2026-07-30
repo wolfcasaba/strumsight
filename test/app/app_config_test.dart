@@ -191,4 +191,164 @@ void main() {
     );
     expect(config.toString(), isNot(contains('secret')));
   });
+
+  group('practice rollout flags', () {
+    test('environment defaults match the guarded rollout table', () {
+      final development = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+      expect(development.practiceEngineV2Enabled, isTrue);
+      expect(development.migratedLearnEnabled, isFalse);
+      expect(development.practiceDetailedHistoryEnabled, isTrue);
+
+      final lab = FeatureFlags.forEnvironment(
+        AppEnvironment.lab,
+        accountEnabled: false,
+      );
+      expect(lab.practiceEngineV2Enabled, isTrue);
+      expect(lab.migratedLearnEnabled, isFalse);
+      expect(lab.practiceDetailedHistoryEnabled, isTrue);
+
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+      expect(production.practiceEngineV2Enabled, isFalse);
+      expect(production.migratedLearnEnabled, isFalse);
+      expect(production.practiceDetailedHistoryEnabled, isFalse);
+    });
+
+    test('new constructor fields are optional and part of value semantics', () {
+      const defaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(defaults.practiceEngineV2Enabled, isFalse);
+      expect(defaults.migratedLearnEnabled, isFalse);
+      expect(defaults.practiceDetailedHistoryEnabled, isFalse);
+
+      const engine = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        practiceEngineV2Enabled: true,
+      );
+      const migrated = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        migratedLearnEnabled: true,
+      );
+      const detailedHistory = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        practiceDetailedHistoryEnabled: true,
+      );
+      const detailedHistoryCopy = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        practiceDetailedHistoryEnabled: true,
+      );
+
+      expect(engine, isNot(defaults));
+      expect(migrated, isNot(defaults));
+      expect(detailedHistory, isNot(defaults));
+      expect(detailedHistoryCopy, detailedHistory);
+      expect(detailedHistoryCopy.hashCode, detailedHistory.hashCode);
+      expect(
+        detailedHistory.hashCode,
+        Object.hash(false, false, false, false, false, true),
+      );
+      expect(
+        detailedHistory.toString(),
+        allOf(
+          contains('practiceEngineV2Enabled: false'),
+          contains('migratedLearnEnabled: false'),
+          contains('practiceDetailedHistoryEnabled: true'),
+        ),
+      );
+    });
+
+    test('migrated Learn fails closed without Practice Engine V2', () {
+      final problems = _problemsOf(
+        () => _resolve(
+          apiBaseUrl: '',
+          flags: const FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            migratedLearnEnabled: true,
+          ),
+        ),
+      );
+
+      expect(problems, hasLength(1));
+      expect(problems.single, contains('migratedLearnEnabled'));
+      expect(problems.single, contains('practiceEngineV2Enabled'));
+    });
+
+    test('detailed history fails closed without Practice Engine V2', () {
+      final problems = _problemsOf(
+        () => _resolve(
+          apiBaseUrl: '',
+          flags: const FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            practiceDetailedHistoryEnabled: true,
+          ),
+        ),
+      );
+
+      expect(problems, hasLength(1));
+      expect(problems.single, contains('practiceDetailedHistoryEnabled'));
+      expect(problems.single, contains('practiceEngineV2Enabled'));
+    });
+
+    test('collects both practice dependency violations in one pass', () {
+      final problems = _problemsOf(
+        () => _resolve(
+          apiBaseUrl: '',
+          flags: const FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            migratedLearnEnabled: true,
+            practiceDetailedHistoryEnabled: true,
+          ),
+        ),
+      );
+
+      expect(
+        problems,
+        unorderedEquals([
+          'migratedLearnEnabled requires practiceEngineV2Enabled.',
+          'practiceDetailedHistoryEnabled requires practiceEngineV2Enabled.',
+        ]),
+      );
+    });
+
+    test('all practice flags stay offline when dependencies are valid', () {
+      const flags = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        practiceEngineV2Enabled: true,
+        migratedLearnEnabled: true,
+        practiceDetailedHistoryEnabled: true,
+      );
+
+      expect(flags.usesNetwork, isFalse);
+      final config = _resolve(
+        environment: AppEnvironment.production,
+        apiBaseUrl: '',
+        flags: flags,
+      );
+      expect(config.flags, same(flags));
+    });
+  });
 }
