@@ -1,6 +1,6 @@
 # E02-R06 — Target compiler és beat-idő konverzió
 
-- **Státusz:** PLANNING (indítás: 2026-07-30, kód olvasva: `main @ 7288969`)
+- **Státusz:** IMPLEMENTED — REVIEW PENDING (2026-07-30)
 - **SDD:** `docs/sdd/03-epic-02-practice-engine.md` §12.3, §14, „Kör 6 — Target compiler és beat-idő konverzió"
 - **Előfeltétel:** E02-R05 merge-ölve (PR #26) — a domain-modellek, a katalógus és a legacy adapterek készen állnak
 - **Branch:** `codex/epic-02-round-06-target-compiler`
@@ -514,8 +514,73 @@ ne hívj `gh`-t.
 
 ## 10. Implementation handoff (a Codex tölti ki)
 
-_(kitöltendő a kör végén: mit implementáltál, mit mértél, mit hagytál ki és miért,
-a záró gate-parancsok teljes kimenete)_
+### Megvalósítás fájlonként
+
+- `lib/features/practice/domain/model/beat_time_converter.dart`: kanonikus,
+  egész mikroszekundumos beat↔idő konverzió egyszeri kerekítéssel, inverz
+  konverzióval és érvénytelen tempo/meter fail-fast őrrel.
+- `lib/features/practice/domain/model/compiled_practice_target.dart`:
+  `CompiledPracticeTarget`, `CompiledTargetEvent`, `ExpectedChordSegment` és
+  `PracticeLoopRange` immutable értékmodellek; teljes value equality/hash és
+  védekező `List.unmodifiable` snapshotok.
+- `lib/features/practice/domain/service/practice_target_compiler.dart`:
+  kötött validációs sorrend, egész ütemre kerekített pass, count-in, együtemes
+  ring-out, loop-kiválasztás/rebase/ismétlés, ütemhatárok, marker-szűrés,
+  monotonitás-őr és a legacy `_activeChord()` 120 tickes lookahead
+  szemantikáját követő expected-chord szegmentálás.
+- `lib/features/practice/domain/model/practice_validation.dart` és
+  `lib/core/foundation/app_failure.dart`: öt stabil target-validációs kód,
+  kanonikus `allCodes` (kompatibilis `values` alias) és
+  `practice.target_uncompilable`.
+- `test/features/practice/domain/{beat_time_converter,compiled_practice_target,practice_target_compiler,practice_target_legacy_parity}_test.dart`
+  és `practice_validation_test.dart`: konverter-, értékmodell-, compiler-,
+  validációs sorrend-, loop-, Free Practice-, expected-chord-, legacy parity-
+  és teljes szállított korpusztesztek. Külön kipinnelve: nem nulla count-in,
+  két count-in ütem, három loop, 3/4 és 3/8 meter, 0,5/0,75/1,0 speed,
+  kizárólagos utolsó tick, marker-only, egy-eseményes és üres target, részleges
+  utolsó ütem loopja, valamint loop-határon váltó akkord.
+- `docs/execution/06-requirements-traceability-matrix.md`: csak az E02-R06 sor
+  frissítve ezzel a bizonyítékkal.
+
+### Mért parity és korpusz
+
+- 10 befagyasztott baseline scenario: maximum total/finish eltérés **0 µs**,
+  maximum eseményeltérés **0 µs**.
+- 17 szállított lecke × 3 speed (0,5 / 0,75 / 1,0): maximum
+  eseményeltérés **0 µs**; kihagyott tempó **nincs**.
+- 17 lecke + 10 builtin + 1 Daily Challenge, összesen 28 nevesített
+  definition: **28/28** whole-bar kerekítési no-op; minden compiled eseményidő
+  nemcsökkenő és minden duration-kompozíció pontos.
+- Független read-only auditok: scope/API **APPROVE**, compiler-matematika
+  **APPROVE**, acceptance/test újraaudit **APPROVE** (53/53 releváns célteszt).
+
+### Záró gate-ek tényleges kimenete
+
+A parancsok külön hívásban, csővezeték és `tail` nélkül futottak:
+
+```text
+$ ~/flutter/bin/dart format --output=none --set-exit-if-changed lib test
+Formatted 506 files (0 changed) in 1.70 seconds.
+
+$ ~/flutter/bin/flutter analyze lib/ test/
+Analyzing 2 items...
+No issues found! (ran in 2.7s)
+
+$ ~/flutter/bin/flutter test test/features/practice/
+00:15 +289: All tests passed!
+```
+
+### Nem futtatott ellenőrzések, eltérések és follow-up
+
+- A teljes `flutter test`, a randomizált property gate és a release APK csak
+  CI-ban fut; a dispatch, a PR és a merge az ADR 0064 szerint Claude feladata.
+- Backend- és ML-gate nem releváns, mert a kör nem módosított backend-, DSP-
+  vagy ML-kódot.
+- Implementációs eltérés és ismert funkcionális follow-up nincs. A brief első
+  változatának elérhetetlen nulla-`totalBeats` Free Practice elvárását a
+  brief-revízió javította; a compiler a javított szerződés szerint az ilyen
+  definitiont az első validációs lépésben elutasítja.
+- Pontos következő kör: **E02-R07 — Session clock és state machine**.
 
 ## 11. Review
 

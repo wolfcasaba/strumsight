@@ -49,6 +49,8 @@ abstract final class FailureCode {
   // --- practice -----------------------------------------------------------
   static const String practiceContentUnsupported =
       'practice.content_unsupported';
+  static const String practiceTargetUncompilable =
+      'practice.target_uncompilable';
 }
 
 /// Base type of every expected failure in the app (SDD Ch2 §7.2).
