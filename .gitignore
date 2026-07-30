@@ -64,3 +64,4 @@ backend/.venv/
 
 # Codex kör-jelzés (tools/codex-signal.sh) — futásonkénti, lokális
 .codex-round-status
+.mm-round-pid

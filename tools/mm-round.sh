@@ -36,6 +36,17 @@ log_file=${3:-/tmp/mm-$(basename "$workdir").log}
 prompt_file=$(readlink -f "$prompt_file")
 workdir=$(readlink -f "$workdir")
 
+if [ ! -f "$prompt_file" ]; then
+  echo "mm-round.sh: a prompt-fájl nem létezik: $prompt_file" >&2
+  echo "  (tipp: a kör-brief a KÖR-BRANCHEN van — a munkapéldányban add meg:" >&2
+  echo "   $workdir/docs/rounds/<kör>.md)" >&2
+  exit 2
+fi
+if [ ! -d "$workdir/.git" ]; then
+  echo "mm-round.sh: a munkapéldány nem git-fa: $workdir" >&2
+  exit 2
+fi
+
 stall_minutes=${MM_STALL_MINUTES:-5}
 round_timeout=${MM_ROUND_TIMEOUT:-3600}
 config_dir=${MM_CONFIG_DIR:-$HOME/.claude-minimax}
