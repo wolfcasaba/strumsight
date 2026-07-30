@@ -26,6 +26,8 @@ abstract final class PracticeValidationCode {
       'definition.totalBeats.nonPositive';
   static const String definitionScoringProfileIncompatibleWithMode =
       'definition.scoringProfile.incompatibleWithMode';
+  static const String definitionDisplayTitleBlank =
+      'definition.displayTitle.blank';
   static const String configDefinitionIdEmpty = 'config.definitionId.empty';
   static const String configSnapshotVersionInvalid =
       'config.snapshotVersion.invalid';
@@ -113,6 +115,7 @@ abstract final class PracticeValidationCode {
     definitionDescriptionKeyEmpty,
     definitionTotalBeatsNonPositive,
     definitionScoringProfileIncompatibleWithMode,
+    definitionDisplayTitleBlank,
     configDefinitionIdEmpty,
     configSnapshotVersionInvalid,
     configCountInBarsOutOfRange,

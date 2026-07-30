@@ -32,6 +32,7 @@ final class PracticeDefinition {
     required this.skillTags,
     this.sourceReference,
     this.difficulty = PracticeDifficulty.beginner,
+    this.displayTitle,
   });
 
   final String id;
@@ -54,6 +55,12 @@ final class PracticeDefinition {
 
   final String? sourceReference;
   final PracticeDifficulty difficulty;
+
+  /// Already-localized display text for adapted user content. The UI resolves
+  /// `displayTitle ?? l10n(titleKey)`. `null` means the UI should localize by
+  /// [titleKey]; a non-null value carries user-provided text that must NOT be
+  /// re-localized. An empty/whitespace-only value is rejected by [validate].
+  final String? displayTitle;
 
   /// Returns field, nested-value, and event-list validation problems.
   List<PracticeValidationFailure> validate() {
@@ -95,6 +102,14 @@ final class PracticeDefinition {
         const PracticeValidationFailure(
           code: PracticeValidationCode.definitionTotalBeatsNonPositive,
           message: 'Definition total beats must be strictly positive.',
+        ),
+      );
+    }
+    if (displayTitle != null && displayTitle!.trim().isEmpty) {
+      failures.add(
+        const PracticeValidationFailure(
+          code: PracticeValidationCode.definitionDisplayTitleBlank,
+          message: 'Display title cannot be blank when present.',
         ),
       );
     }
@@ -208,7 +223,8 @@ final class PracticeDefinition {
           other.scoringProfile == scoringProfile &&
           listEquals(other.skillTags, skillTags) &&
           other.sourceReference == sourceReference &&
-          other.difficulty == difficulty;
+          other.difficulty == difficulty &&
+          other.displayTitle == displayTitle;
 
   @override
   int get hashCode => Object.hash(
@@ -226,5 +242,6 @@ final class PracticeDefinition {
     listHash(skillTags),
     sourceReference,
     difficulty,
+    displayTitle,
   );
 }

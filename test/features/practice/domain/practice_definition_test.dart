@@ -186,6 +186,23 @@ void main() {
         contains('definition.scoringProfile.incompatibleWithMode'),
       );
     });
+
+    test('displayTitle accepts null and non-blank text, rejects blank', () {
+      expect(_definition().validate(), isEmpty);
+      expect(
+        _definition(displayTitle: 'User-Supplied Title').validate(),
+        isEmpty,
+      );
+      for (final blank in ['', '   ', '\t\n']) {
+        expect(
+          _definition(
+            displayTitle: blank,
+          ).validate().map((failure) => failure.code),
+          contains('definition.displayTitle.blank'),
+          reason: 'blank=$blank must surface the displayTitle failure',
+        );
+      }
+    });
   });
 
   group('PracticeDefinition value semantics', () {
@@ -262,6 +279,7 @@ PracticeDefinition _definition({
   List<String> skillTags = const ['rhythm'],
   String? sourceReference,
   PracticeDifficulty difficulty = PracticeDifficulty.beginner,
+  String? displayTitle,
 }) => PracticeDefinition(
   id: id,
   schemaVersion: schemaVersion,
@@ -277,4 +295,5 @@ PracticeDefinition _definition({
   skillTags: skillTags,
   sourceReference: sourceReference,
   difficulty: difficulty,
+  displayTitle: displayTitle,
 );
