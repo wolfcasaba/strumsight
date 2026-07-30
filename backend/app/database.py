@@ -15,9 +15,7 @@ class Base(DeclarativeBase):
 def create_database_engine(database_url: str) -> Engine:
     """Build an engine without opening a connection or mutating the schema."""
     connect_args = (
-        {"check_same_thread": False}
-        if database_url.startswith("sqlite")
-        else {}
+        {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     )
     engine = create_engine(database_url, connect_args=connect_args)
     enable_sqlite_foreign_keys(engine)

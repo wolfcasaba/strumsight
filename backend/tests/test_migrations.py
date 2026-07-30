@@ -2,25 +2,24 @@
 
 import logging
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
-from alembic import command
+import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
-import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from alembic import command
 from app import models as _models  # noqa: F401 -- registers ORM metadata
 from app.config import Settings
 from app.database import Base, create_database_engine
 from app.main import create_app
-
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
@@ -86,9 +85,7 @@ def test_upgrade_head_matches_current_orm_schema(tmp_path, monkeypatch):
             assert compare_metadata(migration_context, Base.metadata) == []
 
             inspector = inspect(connection)
-            assert {"users", "user_settings"}.issubset(
-                inspector.get_table_names()
-            )
+            assert {"users", "user_settings"}.issubset(inspector.get_table_names())
             assert inspector.get_indexes("users") == [
                 {
                     "name": "ix_users_email",
@@ -139,9 +136,7 @@ def test_sqlite_runtime_enforces_foreign_key_cascade(tmp_path, monkeypatch):
 
     try:
         with engine.begin() as connection:
-            assert connection.execute(
-                text("PRAGMA foreign_keys")
-            ).scalar_one() == 1
+            assert connection.execute(text("PRAGMA foreign_keys")).scalar_one() == 1
             connection.execute(
                 text(
                     "INSERT INTO users "
@@ -159,9 +154,7 @@ def test_sqlite_runtime_enforces_foreign_key_cascade(tmp_path, monkeypatch):
             )
             connection.execute(text("DELETE FROM users WHERE id = 1"))
             children = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM user_settings WHERE user_id = 1"
-                )
+                text("SELECT COUNT(*) FROM user_settings WHERE user_id = 1")
             ).scalar_one()
             assert children == 0
     finally:
@@ -299,9 +292,7 @@ def test_readiness_returns_200_for_database_at_head(tmp_path, monkeypatch):
 
 
 def test_readiness_reports_invalid_runtime_configuration(tmp_path):
-    app = create_app(
-        _prod_settings(f"sqlite:///{tmp_path / 'configuration.db'}")
-    )
+    app = create_app(_prod_settings(f"sqlite:///{tmp_path / 'configuration.db'}"))
     app.state.settings = Settings(env="prod")
 
     with TestClient(app) as client:
@@ -319,10 +310,7 @@ def test_openapi_contract_is_deterministic():
 
     assert schema["info"]["title"] == "StrumSight Account API"
     assert schema["info"]["version"] == "0.1.0"
-    assert {
-        path: set(operations)
-        for path, operations in schema["paths"].items()
-    } == {
+    assert {path: set(operations) for path, operations in schema["paths"].items()} == {
         "/auth/register": {"post"},
         "/auth/login": {"post"},
         "/auth/me": {"get"},
@@ -343,21 +331,21 @@ def test_openapi_contract_is_deterministic():
     assert register["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/UserCreate"
     }
-    assert register["responses"]["201"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/Token"}
+    assert register["responses"]["201"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/Token"
+    }
     assert login["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/UserLogin"
     }
-    assert login["responses"]["200"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/Token"}
+    assert login["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/Token"
+    }
     assert current_user["responses"]["200"]["content"]["application/json"][
         "schema"
     ] == {"$ref": "#/components/schemas/UserOut"}
-    assert settings_put["requestBody"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/SettingsUpdate"}
+    assert settings_put["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/SettingsUpdate"
+    }
     for operation in (settings_get, settings_put):
         assert operation["responses"]["200"]["content"]["application/json"][
             "schema"
@@ -405,9 +393,7 @@ def test_openapi_contract_is_deterministic():
     assert set(settings_out["properties"]) == settings_fields
     assert set(settings_out["required"]) == settings_fields
     assert settings_update["additionalProperties"] is False
-    assert set(settings_update["properties"]) == settings_fields - {
-        "updated_at"
-    }
+    assert set(settings_update["properties"]) == settings_fields - {"updated_at"}
     update_properties = settings_update["properties"]
     assert update_properties["theme_mode"]["anyOf"][0]["enum"] == [
         "light",

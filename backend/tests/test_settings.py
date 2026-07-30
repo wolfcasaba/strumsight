@@ -48,7 +48,9 @@ def test_validation_rejects_out_of_range(client, auth_headers):
         == 422
     )
     assert (
-        client.put("/settings", headers=auth_headers, json={"tuning_a4": 700}).status_code
+        client.put(
+            "/settings", headers=auth_headers, json={"tuning_a4": 700}
+        ).status_code
         == 422
     )
     assert (

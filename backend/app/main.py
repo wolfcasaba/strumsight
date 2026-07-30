@@ -4,9 +4,9 @@ Run locally:  uvicorn app.main:app --reload
 Docs:         http://127.0.0.1:8000/docs
 """
 
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from alembic.config import Config as AlembicConfig
@@ -23,7 +23,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from . import __version__
 from .config import Settings, get_settings
 from .database import Base, create_database_engine, create_session_factory
-from .routers import auth, diagnostics, settings as settings_router
+from .routers import auth, diagnostics
+from .routers import settings as settings_router
 
 _DEV_SECRET = Settings.model_fields["secret_key"].default
 _DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
@@ -47,17 +48,13 @@ def _guard_prod(settings: Settings) -> None:
             "set STRUMSIGHT_CORS_ORIGINS (wildcard refused)."
         )
     if settings.diagnostics_enabled and (
-        not settings.diag_token.strip()
-        or settings.diag_token == _DEV_DIAGNOSTICS_TOKEN
+        not settings.diag_token.strip() or settings.diag_token == _DEV_DIAGNOSTICS_TOKEN
     ):
         raise RuntimeError(
             "Production diagnostics requires a non-empty, non-development "
             "diagnostics token."
         )
-    if (
-        settings.database_url.startswith("sqlite")
-        and not settings.allow_sqlite_in_prod
-    ):
+    if settings.database_url.startswith("sqlite") and not settings.allow_sqlite_in_prod:
         raise RuntimeError(
             "SQLite in production requires the explicit "
             "STRUMSIGHT_ALLOW_SQLITE=true escape hatch."

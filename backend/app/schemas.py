@@ -36,8 +36,7 @@ class UserCreate(BaseModel):
     def _reject_passwords_over_bcrypt_byte_limit(cls, password: str) -> str:
         if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
             raise ValueError(
-                f"password must not exceed "
-                f"{BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
+                f"password must not exceed {BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
             )
         return password
 
@@ -92,9 +91,7 @@ class SettingsUpdate(BaseModel):
     @classmethod
     def _reject_explicit_null(cls, data):
         if isinstance(data, dict):
-            offenders = [
-                f for f in _NON_NULLABLE if f in data and data[f] is None
-            ]
+            offenders = [f for f in _NON_NULLABLE if f in data and data[f] is None]
             if offenders:
                 raise ValueError(
                     f"{', '.join(offenders)} cannot be null — omit the key to "

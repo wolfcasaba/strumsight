@@ -10,9 +10,7 @@ from pathlib import Path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_DEFAULT_DIAGNOSTICS_DIR = str(
-    Path(__file__).resolve().parents[1] / "diagnostics_data"
-)
+_DEFAULT_DIAGNOSTICS_DIR = str(Path(__file__).resolve().parents[1] / "diagnostics_data")
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
 

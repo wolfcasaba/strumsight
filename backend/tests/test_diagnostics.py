@@ -3,12 +3,12 @@
 import asyncio
 import gzip
 import json
-from pathlib import Path
 import stat
+from pathlib import Path
 from types import SimpleNamespace
 
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 from starlette.requests import ClientDisconnect, Request
 
 from app.routers import diagnostics
@@ -65,8 +65,9 @@ def test_diagnostics_rejects_bad_token(client, tmp_path, monkeypatch):
     _configure_diagnostics(client, tmp_path, token="server-secret")
     monkeypatch.setenv("STRUMSIGHT_DIAG_TOKEN", "ignored-env-secret")
     monkeypatch.setenv("STRUMSIGHT_DIAG_DIR", str(tmp_path / "ignored-env-dir"))
-    r = client.post("/diagnostics", content=b"x",
-                    headers={"X-Diag-Token": "submitted-secret"})
+    r = client.post(
+        "/diagnostics", content=b"x", headers={"X-Diag-Token": "submitted-secret"}
+    )
     assert r.status_code == 401
     assert "server-secret" not in r.text
     assert "submitted-secret" not in r.text
@@ -76,8 +77,7 @@ def test_diagnostics_rejects_bad_token(client, tmp_path, monkeypatch):
 
 def test_diagnostics_rejects_empty(client, tmp_path):
     _configure_diagnostics(client, tmp_path)
-    r = client.post("/diagnostics", content=b"",
-                    headers={"X-Diag-Token": "secret"})
+    r = client.post("/diagnostics", content=b"", headers={"X-Diag-Token": "secret"})
     assert r.status_code == 400
     assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob("*.bin"))
@@ -98,11 +98,18 @@ def test_diagnostics_stores_session_verbatim(
 
     monkeypatch.setattr(diagnostics.os, "replace", record_replace)
     payload = gzip.compress(
-        json.dumps({"sessionId": "s1", "surface": "live", "events": []}).encode())
+        json.dumps({"sessionId": "s1", "surface": "live", "events": []}).encode()
+    )
     r = client.post(
-        "/diagnostics", content=payload,
-        headers={"X-Diag-Token": "secret", "X-Session-Id": "s1",
-                 "Content-Encoding": "gzip", "X-App-Version": "lab1"})
+        "/diagnostics",
+        content=payload,
+        headers={
+            "X-Diag-Token": "secret",
+            "X-Session-Id": "s1",
+            "Content-Encoding": "gzip",
+            "X-App-Version": "lab1",
+        },
+    )
     assert r.status_code == 201, r.text
     assert r.json()["status"] == "stored"
     bins = list(tmp_path.glob("*.bin"))
