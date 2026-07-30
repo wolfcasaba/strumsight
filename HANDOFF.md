@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R05)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R06)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -96,6 +96,17 @@
   validációs kód). Songs feature-barrel: `lib/features/songs/public.dart`.
   A legacy API (`Lesson`, `Song.toLesson()`, `Lessons.fromAnalyze`,
   `LessonScorer`) érintetlen; hívó UI nincs.
+- **Practice V2 időréteg (E02-R06, ADR 0072):**
+  `lib/features/practice/domain/model/beat_time_converter.dart` — a domain
+  **egyetlen** beat↔idő konverziója (egész µs, egyszeri kerekítés, fail-fast) ·
+  `compiled_practice_target.dart` (4 immutable, value-equal modell) ·
+  `domain/service/practice_target_compiler.dart` — determinisztikus
+  session-timeline count-innal, egész ütemű pass-hosszal, loop-rebase-szel,
+  ütemhatárokkal, expected-chord szegmensekkel és scoring applicabilityvel.
+  **ADR 0072 §1.1 az egész epic időmodellje:** minden abszolút pillanat a
+  nullponttól vett tickszám egyetlen konverziója, minden időtartam két pillanat
+  különbsége — így a kompozíció pontos ÉS minden pillanat bitre egyezik a legacy
+  képlettel. Parity a szállított korpuszon: **0 µs**. Hívó UI nincs.
 - **Kétmotoros implementer-készlet (ADR 0069):** `tools/mm-round.sh` +
   `tools/mm-watch.sh` (5 perces korai riasztás) + `tools/mm-trace.py`
   (munkastílus-elemzés) — a MiniMax M3 ugyanazt a kör-jelzés-szerződést
@@ -117,13 +128,46 @@
 
 ## 4. Current branch
 
-`main` @ [PR #26](https://github.com/wolfcasaba/strumsight/pull/26) (E02-R05,
-merge `856b2d2`, CI run
-[30566423813](https://github.com/wolfcasaba/strumsight/actions/runs/30566423813)
+`main` @ [PR #27](https://github.com/wolfcasaba/strumsight/pull/27) (E02-R06,
+merge `491f2d0`, CI run
+[30573906740](https://github.com/wolfcasaba/strumsight/actions/runs/30573906740)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `mm/epic-02-round-05-legacy-adapters` (merge után törölve).
+Kör-branch: `codex/epic-02-round-06-target-compiler` (merge után törölve).
+Merge után a `main`-en függetlenül újrafuttatva: format 506/0 changed · analyze
+No issues found · `test/features/practice/` 291 zöld.
 
 ## 5. Last completed round
+
+**E02-R06 — Target compiler és beat-idő konverzió**
+([ADR 0072](docs/adr/0072-practice-target-compiler.md) implementációja, PR #27):
+`BeatTimeConverter` — a practice domain **egyetlen** beat↔idő konverziója, egész
+mikroszekundum (`round(ticks * 60e6 / (bpm * 480))`), egyszeri kerekítés, inverz
+`positionAt`, fail-fast `StateError` érvénytelen `Tempo`/`Meter` mellett ·
+`CompiledPracticeTarget` + `CompiledTargetEvent` + `ExpectedChordSegment` +
+`PracticeLoopRange` immutable, value-equal modellek konstruktorbeli
+`List.unmodifiable` snapshottal · `compilePracticeTarget` — ötlépcsős validációs
+sorrend stabil kódokkal, count-in, egész ütemre kerekített pass-hossz,
+loop-kiválasztás/rebase/ismétlés, ütemhatárok, marker-szűrés, monotonitás-őr,
+és a legacy `_activeChord()` **120 tickes** lookahead szemantikáját követő
+expected-chord szegmentálás · öt új `PracticeValidationCode` +
+`FailureCode.practiceTargetUncompilable`. Ezzel a Learn út hat szétszórt
+`double` időképlete (`lesson_scorer.dart:85/87/241`, `lesson_timing.dart:11/15/39`,
+`learn_screen.dart:47/74/498`) helyett egy auditálható pont van — a legacy kód
+maga **érintetlen**, hívó UI nincs, flagek OFF → production viselkedés változatlan.
+**Mért parity:** 10 befagyasztott baseline scenario (`finishAtSec` + eseményszint)
+és 17 szállított lecke × 3 practice speed → **0 µs** max eltérés; korpusz
+28/28 whole-bar kerekítési no-op. Implementer: **Codex**.
+Review: első kör **CHANGES REQUESTED** (1 MINOR), két javító kör után
+**APPROVED**: [`docs/reviews/e02-r06-review.md`](docs/reviews/e02-r06-review.md).
+**A MINOR-t 289 zöld teszt mellett a reviewer próbatesztje fogta meg** (ugyanaz a
+zenei pillanat két különböző időt kapott: 90 BPM-en 5 333 333 vs 5 333 334 µs), és
+a javítása egy valódi tervezői kérdést kényszerített ki — egész µs mellett nem
+tartható egyszerre „minden időtartam egyszeri konverzió" és „a részek összege az
+egész". A feloldás az **ADR 0072 §1.1**: *pillanat pontos, időtartam származtatott*
+(minden abszolút pillanat a nullponttól vett tickszám egyetlen konverziója, minden
+időtartam két pillanat különbsége). **A Codex mindkét megállása helyes volt.**
+
+### Korábbi kör
 
 **E02-R05 — Legacy adapterek: Lesson / Song / Analyze / Daily Challenge**
 ([ADR 0071](docs/adr/0071-legacy-practice-adapters.md) implementációja, PR #26):
@@ -174,27 +218,28 @@ Korábbi körök (E02-R03 részletes története is):
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R06 — Target compiler és beat-idő konverzió**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 6") ÚJ sessionben,
-   kör-brieffel (ADR 0055): `CompiledPracticeTarget`, beat→duration, count-in,
-   ring-out, bar-határok, expected-chord szegmensek, loop-normalizálás,
-   nehézség-variáció, monotonitás-ellenőrzés. **Implementer: valószínűleg
-   Codex** (ADR 0069 §15.6) — a count-in/ring-out és a tempó-skálázás a
-   befagyasztott `legacyLearnParity` időzítéssel érintkezik, tehát
-   baseline-érzékeny. A briefbe kötelezően: **az R05 tanulsága — a zöld gate
-   nem bizonyíték, minden számolt kimenetnek legyen a legacy referenciával
-   szembe mérő tesztje az éleken** (nem-nulla kezdet, határra kerekedő utolsó
-   esemény), különben a review-nak kell próbateszttel megfognia. Bemenet: az R04
-   katalógus + az R05 adapterek (`practiceDefinitionFrom*`), amelyek
-   szándékosan NEM szállítanak session-paramétert.
+2. **E02-R07 — Session clock és state machine**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 7") ÚJ sessionben,
+   kör-brieffel (ADR 0055): `PracticeSessionClock` interfész + monotonic
+   Stopwatch-implementáció + `FakePracticeSessionClock`, session status,
+   commandok, transition reducer, invalid-transition failure, aktív/wall/
+   count-in/pause idő, attempt reset, resume policy, finish reason, one-shot
+   effect model. **Motorválasztás: KÉRDEZD MEG A USERT indítás előtt** — a kör
+   a befagyasztott parity-időzítéssel érintkezik (ADR 0069 §15.6 „érzékeny"
+   sor), és a user 2026-07-30-i szabálya szerint az érzékeny körök motorja
+   egyeztetendő. Bemenet: az R06 `CompiledPracticeTarget` (a timeline
+   nullpontja a session start, a count-in a timeline RÉSZE) és az ADR 0072
+   §1.1 időszabálya — a clock ne vezessen be saját beat→idő képletet.
+   A briefbe kötelezően: a §12.2 szerint a **daily goalba csak az aktív
+   playing idő** számít, a count-in és a pause NEM.
 3. **Follow-up (E02-R08/R11-ig nyitva):**
    `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
    while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
    subscriptiont), plusz 4-beat count-in és 12 lecke. A chunk javítása a
    pause-rés lezárásával EGY commitban (AGENTS.md §9).
-4. **Governance-döntés (user):** a Codex E02-R02 §10 lelete — a globális
-   együttműködési szabályzat `docs/LESSONS.md`-re hivatkozik, ami ebben a
-   repóban nem létezik (létrehozni vagy a hivatkozást kivezetni).
+4. **Governance-döntés LEZÁRVA (2026-07-30):** a `docs/LESSONS.md` létrejött
+   (commit `65c280f`) — hét mért tanulság hivatkozható forrással. Új tanulság
+   oda kerül, a saját köre commitjában.
 
 ## 7. Required verification (before any "done")
 
