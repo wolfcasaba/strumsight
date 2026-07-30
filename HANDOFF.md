@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R03)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R04)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -98,6 +98,24 @@ Kör-branch: `codex/epic-02-round-03-domain-models` (merge után törölve).
 
 ## 5. Last completed round
 
+**E02-R04 — Practice catalog és beépített gyakorlatok** (ADR 0070
+implementációja, PR #25): tíz beépített gyakorlat `const` adatként, stabil
+`builtin.<slug>.v1` ID-kkel és determinisztikus deklarációs sorrendben ·
+`PracticeCatalogRepository` szinkron domain-szerződés (`all`/`byId`/`byMode`/
+`byDifficulty`, ismeretlen ID-re `null`) · `BuiltinPracticeCatalog` · négy
+mód-specifikus `const ScoringProfile` a **befagyasztott** `legacyLearnParity`
+mellett · két Riverpod provider (override-olható repository). Hívó UI nincs;
+production viselkedés változatlan.
+**Ez volt az első kör, amit MiniMax M3 implementált** ([ADR 0069](docs/adr/0069-two-engine-implementer-pool.md),
+`engine=minimax-m3`). Review: első kör **CHANGES REQUESTED** (3 MAJOR — mutábilis
+`events`/`skillTags`, valótlan `const` doc-comment, ütésenként váltó akkordok az
+előírt ütemenkénti helyett), javító kör után **APPROVED**:
+[`docs/reviews/e02-r04-review.md`](docs/reviews/e02-r04-review.md). Mindhárom
+MAJOR zöld gate mellett csúszott át — a review eldobható próba-teszttel mérte,
+nem bemondásra fogadta el.
+
+### Korábbi kör
+
 **E02-R03 — Practice domain modellek és validáció** (ADR 0068 implementációja):
 13 új pure-Dart modellfájl + `meter.dart` MINOR-1 zárás a
 `lib/features/practice/domain/model/` alatt — a Practice V2 teljes
@@ -121,13 +139,16 @@ Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R04 — Practice catalog / authored definition tartalom**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 4") ÚJ sessionben,
-   kör-brieffel (ADR 0055 váltóbot-protokoll). **Implementer: MiniMax M3**
-   (`tools/mm-round.sh`, ADR 0069 §15.6 besorolás — `const` adatkatalógus =
-   volumenmunka; a Codex-kvótát a DSP/scorer körökre tartjuk). A briefbe
-   kötelezően bekerül a szó szerinti gate-kikötés + a STOP-klauzula
-   (ADR 0069 §3). A katalógus `const` adatként
+2. **E02-R05 — Legacy adapterek (Lesson / Song / Analyze / Daily Challenge)**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 5") ÚJ sessionben,
+   kör-brieffel (ADR 0055). **Implementer: a besorolás szerint** (ADR 0069
+   §15.6) — az adapterek jól specifikált, parity-teszttel mérhető munkák, tehát
+   alapesetben MiniMax M3; ha a brief írásakor kiderül, hogy a legacy
+   `Lesson.events` szemantika felderítést igényel, Codex. A briefbe kötelezően:
+   az R03 review NOTE-3 (chord-label konzisztencia-teszt) és az **R04 tanulsága
+   — minden szövegesen leírt tartalmi előírás mellé gépi mérce is kell**
+   (kipinnelt szekvencia), különben a tartalmi csúszás átmegy a zöld gate-en.
+   Az R04 katalógus `const` adatként
    írja le magát az R03 domain-modellekkel. A briefbe: az R03 review NOTE-1
    (const-forrásból épülő katalógus → a caller-immutability szerződés itt
    triviálisan teljesül, de rögzítendő).
