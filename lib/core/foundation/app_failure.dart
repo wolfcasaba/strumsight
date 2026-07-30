@@ -45,6 +45,10 @@ abstract final class FailureCode {
   static const String configurationInvalid = 'configuration.invalid';
   static const String cancelled = 'cancelled';
   static const String unknown = 'unknown';
+
+  // --- practice -----------------------------------------------------------
+  static const String practiceContentUnsupported =
+      'practice.content_unsupported';
 }
 
 /// Base type of every expected failure in the app (SDD Ch2 §7.2).

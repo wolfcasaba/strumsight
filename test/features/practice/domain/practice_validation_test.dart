@@ -31,6 +31,7 @@ void main() {
           'definition.descriptionKey.empty',
           'definition.totalBeats.nonPositive',
           'definition.scoringProfile.incompatibleWithMode',
+          'definition.displayTitle.blank',
           'config.definitionId.empty',
           'config.snapshotVersion.invalid',
           'config.countInBars.outOfRange',

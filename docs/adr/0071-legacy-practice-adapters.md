@@ -164,10 +164,17 @@ A felvett klip pengetései tetszőleges másodperc-időpontokon állnak, a
 domain `events.positionDuplicate` szabályába ütközne.
 
 Döntés: az ütköző eseményt a **következő szabad tickre toljuk előre**
-(monoton, ≤ pár ezredmásodperces eltolás), és csak akkor dobjuk el, ha így már
-elérné a `totalBeats` kizárólagos határt. Indok: a detektált pengetések száma
+(monoton, ≤ pár ezredmásodperces eltolás). Indok: a detektált pengetések száma
 a felhasználó teljesítményének mércéje — egy tick eltolás hallhatatlan, egy
 eldobott pengetés viszont hamis „kihagytad" visszajelzést adna.
+
+Ha az így kapott tick elérné a `totalBeats` kizárólagos határt (mert a
+kerekítés a klip utolsó pengetését pont az ütemhatárra vitte), az idővonalat
+**egy ütemmel megnöveljük**, nem az eseményt dobjuk el — ugyanaz az indok, egy
+lépéssel következetesebben (E02-R05 review MINOR-2: az implementáció ezt a
+jobb változatot választotta, a döntés utólag ide került). A növelés
+KIZÁRÓLAG erre az esetre szól: egy szabályosan a határ alatt maradó utolsó
+esemény soha nem nyújthatja meg az idővonalat (MINOR-1).
 
 ### 7. A legacy API-hoz nem nyúlunk
 
