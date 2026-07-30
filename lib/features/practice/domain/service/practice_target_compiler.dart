@@ -71,7 +71,7 @@ AppResult<CompiledPracticeTarget> compilePracticeTarget({
     meter: definition.meter,
   );
   final countInTicks = config.countInBars * ticksPerBar;
-  final countInDuration = converter.timeOfTicks(countInTicks);
+  final countInEnd = converter.timeOfTicks(countInTicks);
   final sourceStartTicks = loopRange == null
       ? 0
       : loopRange.startBar * ticksPerBar;
@@ -111,9 +111,14 @@ AppResult<CompiledPracticeTarget> compilePracticeTarget({
   _ensureNondecreasingEventTimes(compiledEvents);
 
   final musicalTicks = passTicks * config.loopCount;
-  final musicalDuration = converter.timeOfTicks(musicalTicks);
-  final ringOutDuration = converter.barDuration;
-  final totalDuration = countInDuration + musicalDuration + ringOutDuration;
+  final musicalEnd = converter.timeOfTicks(countInTicks + musicalTicks);
+  final sessionEnd = converter.timeOfTicks(
+    countInTicks + musicalTicks + ticksPerBar,
+  );
+  final countInDuration = countInEnd;
+  final musicalDuration = musicalEnd - countInEnd;
+  final ringOutDuration = sessionEnd - musicalEnd;
+  final totalDuration = sessionEnd;
   final musicalBars = musicalTicks ~/ ticksPerBar;
 
   final target = CompiledPracticeTarget(
@@ -132,7 +137,7 @@ AppResult<CompiledPracticeTarget> compilePracticeTarget({
       countInBars: config.countInBars,
       musicalBars: musicalBars,
       ticksPerBar: ticksPerBar,
-      countInDuration: countInDuration,
+      countInTicks: countInTicks,
     ),
     loopCount: config.loopCount,
     loopRange: loopRange,
@@ -173,12 +178,12 @@ List<Duration> _barBoundaries({
   required int countInBars,
   required int musicalBars,
   required int ticksPerBar,
-  required Duration countInDuration,
+  required int countInTicks,
 }) => List<Duration>.unmodifiable([
   for (var bar = 0; bar <= countInBars; bar++)
     converter.timeOfTicks(bar * ticksPerBar),
   for (var bar = 1; bar <= musicalBars; bar++)
-    countInDuration + converter.timeOfTicks(bar * ticksPerBar),
+    converter.timeOfTicks(countInTicks + bar * ticksPerBar),
 ]);
 
 void _ensureNondecreasingEventTimes(List<CompiledTargetEvent> events) {

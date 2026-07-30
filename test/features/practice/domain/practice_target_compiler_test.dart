@@ -115,6 +115,71 @@ void main() {
       expect(target.barBoundaries.length, target.countInBars + 3 + 1);
     });
 
+    test(
+      'gives a downbeat event and its bar boundary the same time at 90 BPM',
+      () {
+        final definition = _definition(
+          totalBeats: BeatPosition.quarters(8),
+          events: const [
+            PracticeEvent(
+              id: 'first.downbeat',
+              position: BeatPosition(0),
+              direction: StrumDirection.down,
+            ),
+            PracticeEvent(
+              id: 'second.downbeat',
+              position: BeatPosition(1920),
+              direction: StrumDirection.down,
+            ),
+          ],
+        );
+        final target = _success(
+          compilePracticeTarget(
+            definition: definition,
+            config: _config(definition, tempo: const Tempo(90)),
+          ),
+        );
+        final secondDownbeat = target.events.singleWhere(
+          (event) => event.sourceEventId == 'second.downbeat',
+        );
+
+        expect(secondDownbeat.time, target.barBoundaries[2]);
+      },
+    );
+
+    test('computes total duration from all absolute ticks at 90 BPM', () {
+      final definition = _definition(totalBeats: BeatPosition.quarters(4));
+      const converter = BeatTimeConverter(
+        tempo: Tempo(90),
+        meter: Meter(beatsPerBar: 4),
+      );
+      final target = _success(
+        compilePracticeTarget(
+          definition: definition,
+          config: _config(definition, tempo: const Tempo(90)),
+        ),
+      );
+      final ticksPerBar = definition.meter.ticksPerBar;
+      final countInTicks = target.countInBars * ticksPerBar;
+      final musicalTicks = ticksPerBar;
+      final countInEnd = converter.timeOfTicks(countInTicks);
+      final musicalEnd = converter.timeOfTicks(countInTicks + musicalTicks);
+      final sessionEnd = converter.timeOfTicks(
+        countInTicks + musicalTicks + ticksPerBar,
+      );
+
+      expect(target.countInDuration, countInEnd);
+      expect(target.musicalDuration, musicalEnd - countInEnd);
+      expect(target.ringOutDuration, sessionEnd - musicalEnd);
+      expect(
+        target.totalDuration,
+        target.countInDuration +
+            target.musicalDuration +
+            target.ringOutDuration,
+      );
+      expect(target.totalDuration, sessionEnd);
+    });
+
     test('compiles the final in-range tick instead of dropping it', () {
       final definition = _definition(
         totalBeats: const BeatPosition(1920),

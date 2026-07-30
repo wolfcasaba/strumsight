@@ -278,12 +278,15 @@ void main() {
       expect(definition.events, isEmpty);
       expect(definition.totalBeats.ticks, greaterThan(0));
       expect(target.events, isEmpty);
+      final converter = BeatTimeConverter(
+        tempo: definition.defaultTempo,
+        meter: definition.meter,
+      );
+      final countInTicks = target.countInBars * definition.meter.ticksPerBar;
       expect(
         target.musicalDuration,
-        BeatTimeConverter(
-          tempo: definition.defaultTempo,
-          meter: definition.meter,
-        ).barDuration,
+        converter.timeOfTicks(countInTicks + definition.meter.ticksPerBar) -
+            converter.timeOfTicks(countInTicks),
       );
       expect(target.scoringApplicable, isFalse);
     });

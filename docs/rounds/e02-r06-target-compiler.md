@@ -525,7 +525,9 @@ ne hívj `gh`-t.
   védekező `List.unmodifiable` snapshotok.
 - `lib/features/practice/domain/service/practice_target_compiler.dart`:
   kötött validációs sorrend, egész ütemre kerekített pass, count-in, együtemes
-  ring-out, loop-kiválasztás/rebase/ismétlés, ütemhatárok, marker-szűrés,
+  ring-out, abszolút session-pillanatok egyszeri tick-konverziója és a
+  pillanatkülönbségekből származtatott időtartamok,
+  loop-kiválasztás/rebase/ismétlés, ütemhatárok, marker-szűrés,
   monotonitás-őr és a legacy `_activeChord()` 120 tickes lookahead
   szemantikáját követő expected-chord szegmentálás.
 - `lib/features/practice/domain/model/practice_validation.dart` és
@@ -538,7 +540,8 @@ ne hívj `gh`-t.
   és teljes szállított korpusztesztek. Külön kipinnelve: nem nulla count-in,
   két count-in ütem, három loop, 3/4 és 3/8 meter, 0,5/0,75/1,0 speed,
   kizárólagos utolsó tick, marker-only, egy-eseményes és üres target, részleges
-  utolsó ütem loopja, valamint loop-határon váltó akkord.
+  utolsó ütem loopja, loop-határon váltó akkord, valamint 90 BPM-en az
+  abszolút downbeat/ütemhatár-egyezés és az egzakt duration-kompozíció.
 - `docs/execution/06-requirements-traceability-matrix.md`: csak az E02-R06 sor
   frissítve ezzel a bizonyítékkal.
 
@@ -550,7 +553,22 @@ ne hívj `gh`-t.
   eseményeltérés **0 µs**; kihagyott tempó **nincs**.
 - 17 lecke + 10 builtin + 1 Daily Challenge, összesen 28 nevesített
   definition: **28/28** whole-bar kerekítési no-op; minden compiled eseményidő
-  nemcsökkenő és minden duration-kompozíció pontos.
+  nemcsökkenő. Az ADR 0072 §1.1 szerint minden abszolút pillanat egyetlen,
+  session-nullponttól számított tick-konverzió; a közölt időtartamok két ilyen
+  pillanat különbségei, ezért
+  `countInDuration + musicalDuration + ringOutDuration == totalDuration`
+  egzakt, miközben `totalDuration == sessionEnd` is megmarad.
+- 90 BPM, egy count-in + egy zenei + egy ring-out ütem:
+  `countInEnd = 2 666 667 µs`, `musicalEnd = 5 333 333 µs`,
+  `sessionEnd = 8 000 000 µs`; a származtatott időtartamok
+  `2 666 667 + 2 666 666 + 2 666 667 = 8 000 000 µs`. A második zenei
+  downbeat eseménye és ütemhatára egyaránt `5 333 333 µs` (a javítás előtt
+  az ütemhatár `5 333 334 µs` volt), a régi három névleges rész összege pedig
+  `8 000 001 µs` volt.
+- `lesson.first-strums.v1` 70 BPM-en: a származtatott felosztás
+  `3 428 571 + 13 714 286 + 3 428 572 = 20 571 429 µs`; a korábbi, a részeket
+  külön konvertáló összeg `20 571 428 µs` volt, míg az abszolút session-vég
+  egyszeri konverziója változatlanul `20 571 429 µs`.
 - Független read-only auditok: scope/API **APPROVE**, compiler-matematika
   **APPROVE**, acceptance/test újraaudit **APPROVE** (53/53 releváns célteszt).
 
@@ -560,14 +578,14 @@ A parancsok külön hívásban, csővezeték és `tail` nélkül futottak:
 
 ```text
 $ ~/flutter/bin/dart format --output=none --set-exit-if-changed lib test
-Formatted 506 files (0 changed) in 1.70 seconds.
+Formatted 506 files (0 changed) in 1.77 seconds.
 
 $ ~/flutter/bin/flutter analyze lib/ test/
 Analyzing 2 items...
 No issues found! (ran in 2.7s)
 
 $ ~/flutter/bin/flutter test test/features/practice/
-00:15 +289: All tests passed!
+00:15 +291: All tests passed!
 ```
 
 ### Nem futtatott ellenőrzések, eltérések és follow-up
