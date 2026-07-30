@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_validation.dart';
@@ -8,7 +9,7 @@ void main() {
   group('PracticeValidationCode', () {
     test('defines the complete stable code set', () {
       expect(
-        PracticeValidationCode.values,
+        PracticeValidationCode.allCodes,
         unorderedEquals({
           'tempo.bpm.notFinite',
           'tempo.bpm.outOfRange',
@@ -71,7 +72,40 @@ void main() {
           'scoringProfile.weights.negative',
           'scoringProfile.weights.sumNotHundred',
           'scoringProfile.threshold.outOfRange',
+          'target.definitionInvalid',
+          'target.configInvalid',
+          'target.definitionMismatch',
+          'target.variationMismatch',
+          'target.loopRangeInvalid',
         }),
+      );
+      expect(PracticeValidationCode.values, PracticeValidationCode.allCodes);
+    });
+
+    test('pins target compiler validation and failure codes', () {
+      expect(
+        PracticeValidationCode.targetDefinitionInvalid,
+        'target.definitionInvalid',
+      );
+      expect(
+        PracticeValidationCode.targetConfigInvalid,
+        'target.configInvalid',
+      );
+      expect(
+        PracticeValidationCode.targetDefinitionMismatch,
+        'target.definitionMismatch',
+      );
+      expect(
+        PracticeValidationCode.targetVariationMismatch,
+        'target.variationMismatch',
+      );
+      expect(
+        PracticeValidationCode.targetLoopRangeInvalid,
+        'target.loopRangeInvalid',
+      );
+      expect(
+        FailureCode.practiceTargetUncompilable,
+        'practice.target_uncompilable',
       );
     });
 

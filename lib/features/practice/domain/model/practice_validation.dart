@@ -91,9 +91,14 @@ abstract final class PracticeValidationCode {
       'scoringProfile.weights.sumNotHundred';
   static const String scoringProfileThresholdOutOfRange =
       'scoringProfile.threshold.outOfRange';
+  static const String targetDefinitionInvalid = 'target.definitionInvalid';
+  static const String targetConfigInvalid = 'target.configInvalid';
+  static const String targetDefinitionMismatch = 'target.definitionMismatch';
+  static const String targetVariationMismatch = 'target.variationMismatch';
+  static const String targetLoopRangeInvalid = 'target.loopRangeInvalid';
 
   /// The complete validation-code catalogue for the current Practice domain.
-  static const Set<String> values = {
+  static const Set<String> allCodes = {
     tempoBpmNotFinite,
     tempoBpmOutOfRange,
     meterBeatsPerBarOutOfRange,
@@ -155,7 +160,15 @@ abstract final class PracticeValidationCode {
     scoringProfileWeightsNegative,
     scoringProfileWeightsSumNotHundred,
     scoringProfileThresholdOutOfRange,
+    targetDefinitionInvalid,
+    targetConfigInvalid,
+    targetDefinitionMismatch,
+    targetVariationMismatch,
+    targetLoopRangeInvalid,
   };
+
+  /// Backward-compatible name for [allCodes].
+  static const Set<String> values = allCodes;
 }
 
 /// One data-driven Practice domain validation problem.
