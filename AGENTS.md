@@ -204,7 +204,7 @@ A kör végén a `HANDOFF.md` tartalmazza:
 - pontos következő kör;
 - nem commitolt vagy külső függőség.
 
-## 15. Ágensszerepek (Claude + Codex)
+## 15. Ágensszerepek (Claude + Codex + MiniMax M3)
 
 **Alapértelmezett modell — váltóbot** ([ADR 0055](docs/adr/0055-agent-role-protocol.md),
 user-döntés 2026-07-29). Egy körön egyszerre EGY ágens ír; a munka átadásra
@@ -350,6 +350,38 @@ feltétele változatlanul kötelező, plusz:
    (pl. az architecture guard allowlistje csak az A-rész import-migrációja
    után végleges), a B-rész az A merge-e UTÁN rebase-el `main`-re,
    ÚJRAGENERÁLJA a származtatott tartalmat, és csak azután futtat CI-t.
+
+### 15.6 Két implementer motor — melyik kört ki viszi
+
+Az implementer szerepet 2026-07-30 óta két motor tölti be
+([ADR 0069](docs/adr/0069-two-engine-implementer-pool.md)). A lánc, a
+brief-szerződés, a kör-jelzés (§15.2) és a gate-ek változatlanok — csak az
+dől el körönként, melyik motor implementál:
+
+| Kör jellege | Motor | Indítás |
+|---|---|---|
+| Jól specifikált domain/model/teszt kör, adapter, katalógus, i18n, mechanikus refaktor, migráció, boilerplate-tömeg | **MiniMax M3** | `tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log` |
+| DSP-hangolás, baseline-érzékeny scorer/matcher, teljesítmény-kritikus út, felderítő vagy kétértelmű feladat | **Codex** | `tools/codex-round.sh …` (§15.3) |
+| Bizonytalan besorolás | **Codex** | a drágább motor a biztonságos alapértelmezés |
+
+A szűkös erőforrás a Codex heti kvótája, nem a MiniMax tokenje: volumen- és
+ismétlődő munkából inkább többet adunk M3-nak, semmint hogy Codex-kvótát
+égessünk.
+
+**MiniMax-körnél a briefbe KÖTELEZŐ** (mért hibák ellenszere, ADR 0069):
+
+1. a gate-parancsok szó szerint — „run each as a SEPARATE command, EXACTLY as
+   written" + „narrowing any gate command to only the touched files is a round
+   failure" (mérten hajlamos a gate-et a nyúlt fájlokra szűkíteni);
+2. explicit STOP-klauzula — „If any requirement conflicts with the allowed-files
+   list or with an existing test, STOP, send the `stopped` signal, and report."
+   (enélkül némán megkerüli a zárolt fájlt, és feature-ként jelenti);
+3. a kör-jelzés kötelezettsége (§15.2) szó szerint a prompt elején.
+
+**Review-oldalon:** a gate-et a reviewer maga futtatja újra (a bemásolt kimenet
+nem evidencia), `git diff --stat` scope-audit az engedélyezett listával
+összevetve, és a PR törzse rögzíti, melyik motor implementálta a kört. A
+git-notes bufferbe is bekerül: `engine=minimax-m3` vagy `engine=codex`.
 
 ## 16. Végrehajtási jelentés
 
