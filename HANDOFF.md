@@ -2,7 +2,7 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next". Update it after every development round (see
-> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-30** (E01-R14, PR #19).
+> [How to update](#how-to-update-this-file) at the bottom). Last updated: **2026-07-30** (E01-R15, PR #20).
 >
 > **Branch/commit:** `main` @ [PR #13](https://github.com/wolfcasaba/strumsight/pull/13) (merged, CI run
 > [30470460895](https://github.com/wolfcasaba/strumsight/actions/runs/30470460895) zöld: analyze + teljes
@@ -108,7 +108,30 @@
 > Második tanulság: a brief §6-ban olyan acceptance criteriumot írtam elő (a `release-apk.yml`
 > secret nélküli futásának linkje), amit merge ELŐTT a GitHub `workflow_dispatch` default-branch
 > szabálya miatt lehetetlen teljesíteni — **új workflow bizonyítéka mindig merge utáni kötelezettség.**
-> **Következő: E01-R14 Flutter CI release pipeline** (Ch2, Kör 14) — ÚJ SESSIONBEN.
+> **E01-R15 KÉSZ (2026-07-30, [PR #20](https://github.com/wolfcasaba/strumsight/pull/20)):** backend és
+> ML CI — új **`backend-ci.yml`** (Ruff lint + format-check + 64 pytest + izolált temp-SQLite
+> `alembic upgrade head`, Python 3.12; push-trigger a `backend/**`-ra + dispatch): a backend tesztjei
+> **először futnak merge előtt CI-ben** — a kör-branchen bizonyítottan zölden
+> ([run 30517873919](https://github.com/wolfcasaba/strumsight/actions/runs/30517873919)).
+> Requirements-szétválasztás (prod / `requirements-dev.txt`: pytest, httpx, ruff) + `pyproject.toml`
+> Ruff-konfig (`E4,E7,E9,F,I`, alembic+.venv exclude); a formázás önálló, **függetlenül AST-auditált**
+> viselkedés-azonos commit (3 fájl AST-eltérése kizárólag import-átrendezés). **ML asset manifest:**
+> `assets/ml/model_manifest.json` — generált (`ml/make_manifest.py`, idempotens: a `created_at` csak
+> checksum-változásnál frissül; a bináris headert is parseolja és a classlistát a mért `dense*_b`
+> shape-hez validálja) + `test/tooling/ml_asset_manifest_test.dart` **kétirányú** manifest↔pubspec
+> gate-tel: bináris nem cserélhető és pubspec-deklaráció nem törölhető némán (**az R14-review MINOR-1
+> ezzel lezárva**). A Codex a brief `pre-manifest` placeholdere HELYETT mind a négy bináris valódi
+> shipping-commitját **rekonstruálta** a git-történetből (round163/168/175/204 — mind az öt SHA
+> függetlenül ellenőrizve, a guard rögzíti is őket). Piros utak: Ruff-sértés + bin-bájt rontás
+> (Codex-oldali ÉS attól független reviewer-oldali) + pubspec-deklaráció törlés — mind piros, mind
+> visszaállítva. SHA-256 a tesztben kézzel implementált (a `pubspec.yaml` zárt volt — NIST-vektorokkal
+> + a Python-oldali checksumokkal kereszt-validált). [ADR 0063](docs/adr/0063-generated-ml-manifest-and-backend-ci.md),
+> review: [`docs/reviews/e01-r15-review.md`](docs/reviews/e01-r15-review.md) (APPROVED, 0 BLOCKER/
+> MAJOR/MINOR, 4 NOTE). Az R14 MINOR-2 (gate-duplikáció) és MINOR-3 (CI-idő) terv szerint az R16
+> pre-flight bemenete. A kör nulla megállással, nulla brief-revízióval futott.
+> **Következő: E01-R16 — végső regresszió, teljesítmény és dokumentáció** (Ch2, Kör 16, Epic-zárókör;
+> a brief PREPARED: `docs/rounds/e01-r16-final-regression-and-docs.md` — indításkor KÖTELEZŐ
+> pre-flight az Epic-1 DoD-előszűréssel) — ÚJ SESSIONBEN.
 > A brief előre elkészítve: `docs/rounds/e01-r14-flutter-ci-release-pipeline.md` (indítás előtt
 > pre-flight a `round-brief-prep` skill szerint; az R11 review MINOR-ja — a literál-guard nem fogja
 > a `router.go('/…')` alakot — oda folyik be).
