@@ -6,7 +6,7 @@ void main() {
   test('navigation calls use the central AppRoutes catalogue', () {
     const catalogue = 'lib/app/routing/app_route.dart';
     final routeLiteral = RegExp(
-      r'''\bcontext\s*\.\s*(?:go|push)\s*\(\s*['"]/''',
+      r'''\.\s*(?:go|push|replace|pushReplacement|goNamed)\s*\(\s*['"]/''',
     );
     final violations = <String>[];
 
@@ -26,7 +26,8 @@ void main() {
       violations,
       isEmpty,
       reason:
-          'Use an AppRoutes constant instead of a route string literal. '
+          'Use an AppRoutes constant for GoRouter navigation instead of a '
+          'route string literal. '
           'Found: ${violations.join(', ')}',
     );
   });
