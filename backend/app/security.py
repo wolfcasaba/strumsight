@@ -22,8 +22,7 @@ def hash_password(password: str) -> str:
     password_bytes = _password_bytes(password)
     if len(password_bytes) > BCRYPT_MAX_PASSWORD_BYTES:
         raise ValueError(
-            f"password must not exceed "
-            f"{BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
+            f"password must not exceed {BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
         )
     return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
 

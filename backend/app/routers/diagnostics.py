@@ -128,8 +128,10 @@ async def upload_diagnostics(
         provided_token.encode("utf-8"),
         expected_token.encode("utf-8"),
     ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="bad or missing X-Diag-Token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="bad or missing X-Diag-Token",
+        )
 
     max_bytes = _max_bytes()
     data_dir = _data_dir(request)
