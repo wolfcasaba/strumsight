@@ -104,13 +104,22 @@ Mért szemantika:
 
 ## Befagyasztott fixture-mérés
 
-Minden 4/4 fixture 60 BPM-es, negyedes, 8 eventes adatsor; a 3/4 eset a valódi
-`Lessons.firstWaltz`, 76 BPM és 12 event. A count-in minden esetben
-`lesson.beatsPerBar`, a de-jitter fixture pedig már a képernyő által korrigált
-időbélyeget adja a scorernek. A replay ettől külön kezeli a frame dispatch
-idejét: előbb a `frameArrivalSec` órán advance-el, majd a korrigált
+Az eredeti nyolc 4/4 fixture 60 BPM-es, negyedes, 8 eventes adatsor. A
+`p44_eighths_contended` 96 BPM-es, váltott le/fel nyolcadminta: a 312,5 ms-os
+célköz kisebb a legacy match window 560 ms-os teljes szélességénél, így a
+szomszédos ablakok 247,5 ms-on átfednek. Ez az egyetlen fixture, amely több
+egyidejű jelölttel a matcher választását is diszkriminálja. A 96 BPM
+szándékosan választott egzakt érték (`60 / 96 = 0,625 s`), ezért a
+holtverseny nem lebegőpontos kerekítés eredménye
+(`test/features/learn/legacy_scorer_baseline_test.dart:61-109`;
+`test/support/practice_baseline_scenarios.dart:610-661`).
+
+A 3/4 eset a valódi `Lessons.firstWaltz`, 76 BPM és 12 event. A count-in minden
+esetben `lesson.beatsPerBar`, a de-jitter fixture pedig már a képernyő által
+korrigált időbélyeget adja a scorernek. A replay ettől külön kezeli a frame
+dispatch idejét: előbb a `frameArrivalSec` órán advance-el, majd a korrigált
 strum-idővel regisztrál, ahogy a ticker és `_onFrame` külön órája működik
-(`test/features/learn/legacy_scorer_baseline_test.dart:169-185,380-405`). A
+(`test/features/learn/legacy_scorer_baseline_test.dart:215-238,460-466`). A
 golden a következő végállapotot rögzíti:
 
 | Scenario | hit / wrong / miss | combo / max | perfect | score | mult | chord | accuracy | pass | fail streak |
@@ -123,15 +132,35 @@ golden a következő végállapotot rögzíti:
 | `p44_chord_lag` | 8 / 0 / 0 | 8 / 8 | 8 | 1200 | 2 | 8 / 8 | 1.000 | igen | 0 |
 | `p44_input_latency` | 8 / 0 / 0 | 8 / 8 | 8 | 1200 | 2 | 8 / 8 | 1.000 | igen | 0 |
 | `p44_dejittered` | 8 / 0 / 0 | 8 / 8 | 8 | 1200 | 2 | 8 / 8 | 1.000 | igen | 0 |
+| `p44_eighths_contended` | 6 / 1 / 1 | 4 / 4 | 5 | 540 | 1 | 0 / 0 | 0.750 | igen | 0 |
 | `p34_waltz` | 9 / 1 / 2 | 1 / 5 | 4 | 700 | 1 | 12 / 12 | 0.750 | igen | 0 |
+
+A contended fixture event-szintű ellenőrzése a `LessonScorer` jelenlegi
+`±0,28 s` ablakával és szigorú `d < bestDelta` választásával:
+
+- **(a) holtverseny:** az `U @ 2,96875 s` observation az 1-es és 2-es indexű
+  nyitott targettől egyaránt 156,25 ms-ra van. A korábbi, 1-es indexű target
+  nyer és `hit/late` lesz.
+- **(b) windowon belüli extra:** a szándékos `U @ 3,25 s` extra target-
+  annotációja `null`, de a legacy matcher a 2-es indexű targetet 125 ms-ra, a
+  3-as indexűt 187,5 ms-ra találja. Mindkettő windowon belüli; a közelebbi
+  2-es indexű target elfogy `wrongDirection` eredménnyel, az elvárt irány
+  `down`.
+- **(c) lezárt target:** a 3-as indexű target observation-ideje pontosan
+  `3,4375 s`, de a frame csak `3,734375 s`-nél érkezik. Az előzetes `advance()` a
+  `3,7175 s` zárási küszöb után missre zárja; a még önmagában windowon belüli
+  observation nem nyitja újra. A következő target 312,5 ms-ra van, tehát nem
+  veszi át az ütést.
+- A 0. és 4–7. target `hit/perfect`; így a generált összesítés
+  `6 hit / 1 wrong / 1 miss`, 5 perfect és 540 pont.
 
 A golden a végállapot mellett event-index szerint a `HitResult`, `Timing` és
 wrong-direction esetén az elvárt irány sorozatát is tárolja. Az indexet egy
 független, befagyasztott legacy matcher vezeti; az input target-annotációt
 ellenőrzi, de nem abból írja a verdictet
-(`test/features/learn/legacy_scorer_baseline_test.dart:180-257,335-365`). A
+(`test/features/learn/legacy_scorer_baseline_test.dart:222-318,397-427`). A
 replay a JSON teljes szövegét hasonlítja, nem csak a dekódolt összesítést
-(`test/features/learn/legacy_scorer_baseline_test.dart:115-149,283-302`).
+(`test/features/learn/legacy_scorer_baseline_test.dart:168-202,325-365`).
 
 ## A valódi Learn út felelősségei
 
@@ -220,7 +249,7 @@ Az E02-R01 egy új Learn replay-t ad, ezért a kör-branch aktuális Learn szám
   `test/features/learn/lesson_from_analyze_test.dart:24-91`;
 - speed-grid és perzisztencia:
   `test/features/learn/practice_speed_test.dart:14-67`;
-- az új kilenc-scenario parity alap:
+- az új tíz-scenario parity alap:
   `test/features/learn/legacy_scorer_baseline_test.dart`.
 
 ## Valódi eszközös evidencia
@@ -269,6 +298,13 @@ szintetikus parity-mérce, nem valódi-eszközös elfogadás.
 6. **Valódi eszközös mátrix hiányzik.** A szintetikus golden nem méri a
    készülékfüggő mic-latencyt, AGC-t, frame cadence-et, thermalt vagy gitárérzetet;
    a végső ellenőrzés E02-R20.
+7. **Windowon belüli extra targetet fogyaszt.** A legacy „extra strum nem
+   büntet" csak akkor igaz, ha nincs nyitott target `±280 ms`-on belül. A
+   `p44_eighths_contended` szándékos extrája a közelebbi targetet
+   `wrongDirection` eredménnyel elfogyasztja, ezért combót tör és átmenetileg
+   fail streaket növel (`test/support/practice_baseline_scenarios.dart:626-632`;
+   `lib/features/learn/lesson_scorer.dart:243-289`). A golden a mai viselkedést
+   rögzíti; az extra-policy/parity döntés E02-R09, a végső regresszió E02-R20.
 
 Történeti dokumentációban még található elavult 4-beat/12-lesson/pause-release
 leírás (`docs/rag/chunks/014-play-along-learn.md:37-53,65-71`); a jelen

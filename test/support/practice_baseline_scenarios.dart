@@ -53,7 +53,11 @@ final class PracticeBaselineStrum {
     required this.direction,
     required this.targetEventIndex,
     this.frameArrivalSec,
-  });
+    this.legacyMatchedEventIndex,
+  }) : assert(
+         legacyMatchedEventIndex == null || targetEventIndex == null,
+         'A legacy-consumed extra must remain targetEventIndex: null.',
+       );
 
   /// Timestamp passed to the scorer.
   ///
@@ -68,6 +72,12 @@ final class PracticeBaselineStrum {
   /// A non-null target can still resolve to null when the observation is
   /// outside the legacy match window.
   final int? targetEventIndex;
+
+  /// Target consumed by legacy matching despite this being an intended extra.
+  ///
+  /// This stays separate from [targetEventIndex] so later V2 parity replays
+  /// retain both the musical intent and today's observed matcher result.
+  final int? legacyMatchedEventIndex;
 
   /// Frame-dispatch time for de-jitter cases.
   ///
@@ -121,6 +131,23 @@ const _chordLagLesson = Lesson.fromEvents(
     LessonEvent(beat: 5, chord: 'G', direction: _down),
     LessonEvent(beat: 6, chord: 'Am', direction: _down),
     LessonEvent(beat: 7, chord: 'F', direction: _down),
+  ],
+);
+
+const _contendedEighthsLesson = Lesson.fromEvents(
+  id: 'baseline-contended-eighths',
+  name: 'Baseline contended eighths',
+  bpm: 96,
+  totalBeats: 4,
+  events: [
+    LessonEvent(beat: 0, chord: '', direction: _down),
+    LessonEvent(beat: 0.5, chord: '', direction: _up),
+    LessonEvent(beat: 1, chord: '', direction: _down),
+    LessonEvent(beat: 1.5, chord: '', direction: _up),
+    LessonEvent(beat: 2, chord: '', direction: _down),
+    LessonEvent(beat: 2.5, chord: '', direction: _up),
+    LessonEvent(beat: 3, chord: '', direction: _down),
+    LessonEvent(beat: 3.5, chord: '', direction: _up),
   ],
 );
 
@@ -578,6 +605,60 @@ final List<PracticeBaselineScenario> legacyPracticeBaselineScenarios =
           ),
         ],
         chordObservations: _quarterChordObservations,
+      ),
+      PracticeBaselineScenario(
+        id: 'p44_eighths_contended',
+        lesson: _contendedEighthsLesson,
+        bpm: 96,
+        countInBeats: 4,
+        strums: const [
+          PracticeBaselineStrum(
+            elapsedSec: 2.5,
+            direction: _down,
+            targetEventIndex: 0,
+          ),
+          // (a) Exactly midway between open targets 1 and 2; target 1 wins.
+          PracticeBaselineStrum(
+            elapsedSec: 2.96875,
+            direction: _up,
+            targetEventIndex: 1,
+          ),
+          // (b) Intended extra; legacy consumes target 2 as wrong-direction.
+          PracticeBaselineStrum(
+            elapsedSec: 3.25,
+            direction: _up,
+            targetEventIndex: null,
+            legacyMatchedEventIndex: 2,
+          ),
+          // (c) Dispatch closes target 3 before its in-window observation.
+          PracticeBaselineStrum(
+            elapsedSec: 3.4375,
+            frameArrivalSec: 3.734375,
+            direction: _up,
+            targetEventIndex: 3,
+          ),
+          PracticeBaselineStrum(
+            elapsedSec: 3.75,
+            direction: _down,
+            targetEventIndex: 4,
+          ),
+          PracticeBaselineStrum(
+            elapsedSec: 4.0625,
+            direction: _up,
+            targetEventIndex: 5,
+          ),
+          PracticeBaselineStrum(
+            elapsedSec: 4.375,
+            direction: _down,
+            targetEventIndex: 6,
+          ),
+          PracticeBaselineStrum(
+            elapsedSec: 4.6875,
+            direction: _up,
+            targetEventIndex: 7,
+          ),
+        ],
+        chordObservations: const [],
       ),
       PracticeBaselineScenario(
         id: 'p34_waltz',

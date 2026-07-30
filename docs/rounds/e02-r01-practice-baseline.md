@@ -422,19 +422,23 @@ futtasson `gh`-t.
   valódi sértés, az együttes hibaaggregáció és az offline-garancia
   bizonyítására.
 - `test/support/practice_baseline_scenarios.dart` — scorer-semleges,
-  determinisztikus bemeneti katalógus a §5.1 mind a kilenc scenario-ID-jával;
-  defensively frozen lesson-snapshot, fix BPM/count-in/latency/strum/chord
-  adatok és külön korrigált strum-/frame-dispatch idő.
+  determinisztikus bemeneti katalógus a §5.1 kilenc scenario-ID-jával és a
+  review-fix `p44_eighths_contended` esetével; defensively frozen
+  lesson-snapshot, fix BPM/count-in/latency/strum/chord adatok, külön korrigált
+  strum-/frame-dispatch idő és géppel olvasható extra→legacy-target annotáció.
 - `test/fixtures/practice/legacy_scorer_baseline.json` — a legacy scorerből
-  generált, átnézett és befagyasztott golden: kilenc végállapot és minden
+  generált, átnézett és befagyasztott golden: tíz végállapot és minden
   lesson event verdictje.
 - `test/features/learn/legacy_scorer_baseline_test.dart` — katalógus-invariáns,
-  független legacy event-matcher és annotációellenőrzés, dispatch-/observation-
-  órát szétválasztó determinisztikus replay, byte-for-byte freeze assertion és
-  kizárólag `UPDATE_LEGACY_SCORER_BASELINE=1` mellett engedélyezett generátor.
+  a contended célköz/tie/extra/reopen szerkezet gépi őre, független legacy
+  event-matcher és annotációellenőrzés, dispatch-/observation-órát szétválasztó
+  determinisztikus replay, byte-for-byte freeze assertion és kizárólag
+  `UPDATE_LEGACY_SCORER_BASELINE=1` mellett engedélyezett generátor. A kulcs
+  doc-commentje rögzíti az ADR 0067 §1/§3 regenerálási szabályát.
 - `docs/baseline/epic-02-practice-start.md` — rollout-, tartalom-, timing-,
   scorer-, képernyő-, speed-, Progress V1-, teszt- és valódi-eszközös
-  baseline; a fixture eredménytáblája és külön ismert-rések szakasz.
+  baseline; a tízsoros fixture-eredménytábla, a célköz/window viszony, az
+  (a)/(b)/(c) event-audit és külön ismert-rések szakasz.
 - `docs/rounds/e02-r01-practice-baseline.md` — csak ez a §10 handoff-szakasz.
 
 Production Learn/Progress/Streak/DSP/ML kód nem változott.
@@ -537,50 +541,113 @@ Az újragenerált kilenc-scenario golden a szigorított replay mellett is
 byte-kompatibilis maradt; a normál freeze assertion ezt ismét zölden
 ellenőrizte.
 
-### 10.3 Kötelező gate-ek — tényleges eredmény
-
-Minden parancs külön hívásban futott:
+A MAJOR-1 review-fix első tesztváltoztatása a kötelező ID-halmazt tíz elemre
+bővítette. A scenario implementációja előtti futás valódi RED volt:
 
 ```text
-~/flutter/bin/flutter pub get
-Got dependencies!
-32 packages have newer versions incompatible with dependency constraints.
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'scenario catalog contains every required deterministic baseline'
+exit 1 — Expected tíz ID; Actual kilenc ID;
+         does not contain 'p44_eighths_contended'
+```
 
+A 96 BPM-es váltott nyolcadminta 312,5 ms-os, binárisan egzakt célközzel került
+be. Ez kisebb a `2 × 280 = 560 ms` teljes match-window szélességnél; a
+szomszédos ablakok 247,5 ms-on átfednek. A katalógus és a contended-invariáns
+fókuszált futásai:
+
+```text
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'scenario catalog contains every required deterministic baseline'
++1: All tests passed!
+
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'contended eighths exercise overlapping legacy match windows'
++1: All tests passed!
+```
+
+A review miatt megnevezett okkal, az ADR 0067 §1/§3 szerint újragenerált
+tíz-scenario golden parancsa és tényleges eredménye:
+
+```text
+UPDATE_LEGACY_SCORER_BASELINE=1 ~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'GENERATE legacy LessonScorer baseline JSON'
++1: All tests passed!
+```
+
+A generált `p44_eighths_contended` végállapotot a
+`lib/features/learn/lesson_scorer.dart:79-82,243-310` konstansaival és
+átmeneteivel tételesen ellenőriztem:
+
+- **(a)** `U @ 2,96875 s` egyaránt 156,25 ms-ra van a nyitott 1-es és 2-es
+  indexű eventtől; a szigorú `d < bestDelta` miatt az 1-es nyer: `hit/late`;
+- **(b)** a szándékos `U @ 3,25 s` extra a 2-es indexű eventtől 125 ms-ra, a
+  3-as indexűtől 187,5 ms-ra van; mindkettő windowon belüli, a közelebbi 2-es
+  indexű eventet `wrongDirection` verdictként elfogyasztja,
+  `expectedDirection: down`;
+- **(c)** a 3-as indexű event observation-ideje `3,4375 s`, de a dispatch
+  `3,734375 s`, a `3,7175 s` close-küszöb után. Az `advance()` előbb
+  `missed` állapotra zárja, a windowon belüli observation nem nyitja újra.
+
+A teljes generált eredmény: `hits=6`, `wrong=1`, `missed=1`, `combo=4`,
+`maxCombo=4`, `perfect=5`, `score=540`, `accuracy=0.75`, `passed=true`,
+`failStreak=0`; a 0. és 4–7. event `hit/perfect`.
+
+Az új scenario érzékenység-próbájában a (b) extra iránya ideiglenesen
+`up` → `down` lett, a goldent nem generáltam újra:
+
+```text
+~/flutter/bin/flutter test \
+  test/features/learn/legacy_scorer_baseline_test.dart \
+  --plain-name 'legacy LessonScorer replay matches the frozen JSON byte for byte'
+exit 1 — Expected hits: 6; Actual hits: 7;
+         wrong: 1 → 0; score: 540 → 580; eltérés offset 13089
+```
+
+Az irány visszaállítása után ugyanaz a parancs:
+
+```text
++1: All tests passed!
+```
+
+Az ideiglenes mutáció nincs a végső diffben. A normál, teljes replay-fájl a
+tíz-scenario goldennel `+5 ~1: All tests passed!`; a `~1` továbbra is az
+alapértelmezetten kihagyott generátor.
+
+### 10.3 Kötelező gate-ek — tényleges eredmény
+
+A javítókör minden előírt parancsa külön hívásban futott:
+
+```text
 ~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
-Formatted 452 files (0 changed) in 1.62 seconds.
+Formatted 452 files (0 changed) in 1.51 seconds.
 
 ~/flutter/bin/flutter analyze lib/ test/ tool/
-No issues found! (ran in 3.4s)
+No issues found! (ran in 3.7s)
+
+~/flutter/bin/flutter test test/features/learn
++131 ~1: All tests passed!
 
 ~/flutter/bin/flutter test test/app
 +47: All tests passed!
-
-~/flutter/bin/flutter test test/features/learn
-+130 ~1: All tests passed!
 ```
 
 A `~1` az alapértelmezetten kihagyott, explicit environment-kulcshoz kötött
 golden-generátor; a freeze replay futott és zöld volt.
-
-```text
-~/flutter/bin/flutter test test/features/progress
-+17: All tests passed!
-
-~/flutter/bin/flutter test test/features/streak
-+20: All tests passed!
-
-~/flutter/bin/flutter test test/features/metronome
-+13: All tests passed!
-
-~/flutter/bin/dart run tool/check_architecture.dart
-Architecture dependencies OK (12 allowlisted deviation(s)).
-```
 
 ### 10.4 Eltérések, nem futtatott ellenőrzések
 
 - A jóváhagyott scope-tól és implementációs sorrendtől nincs eltérés. A
   generátor a brief által engedett módon ugyanabban a tesztfájlban,
   alapértelmezetten skip-elve maradt.
+- A javítókör explicit gate-listája csak a format/analyze/Learn/app négyest
+  kérte. A korábbi körben már zöld progress/streak/metronome és architecture
+  gate-eket nem futtattam újra; production kód és e területek tesztjei nem
+  változtak.
 - Teljes `flutter test`, randomizált property gate, release APK és CI nem
   futott lokálisan; ezeket ADR 0052/0053 szerint Claude dispatch-eli CI-ban.
 - `gh`, CI-dispatch, PR és merge nem futott, mert ADR 0064 szerint
@@ -602,7 +669,10 @@ javított leletek a baseline-jelentés „Ismert rések" szakaszában szerepelne
    állapotot;
 4. a chord-eredmény másodlagos, kétpillanatos mintavétel;
 5. nincs teljes pause-frame/restart end-to-end regresszió;
-6. nincs reprodukálható valódi-eszközös Learn mérési mátrix.
+6. nincs reprodukálható valódi-eszközös Learn mérési mátrix;
+7. a windowon belüli szándékos extra a legacy matcherben targetet fogyaszt,
+   wrong-direction verdictet, combo-resetet és átmeneti fail-streak növekedést
+   okozhat; az extra-policy/parity döntés E02-R09, a végső regresszió E02-R20.
 
 Ezek a goldenben csak ott szerepelnek, ahol a mai legitim scorer-replay
 részei; a tudott pause-réshez nem készült zöld assertion.

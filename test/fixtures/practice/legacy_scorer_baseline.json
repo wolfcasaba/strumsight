@@ -555,6 +555,75 @@
       ]
     },
     {
+      "id": "p44_eighths_contended",
+      "final": {
+        "hits": 6,
+        "wrong": 1,
+        "missed": 1,
+        "combo": 4,
+        "maxCombo": 4,
+        "total": 8,
+        "perfect": 5,
+        "score": 540,
+        "multiplier": 1,
+        "chordHits": 0,
+        "chordTotal": 0,
+        "accuracy": 0.75,
+        "passed": true,
+        "failStreak": 0
+      },
+      "verdicts": [
+        {
+          "eventIndex": 0,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 1,
+          "result": "hit",
+          "timing": "late",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 2,
+          "result": "wrongDirection",
+          "timing": null,
+          "expectedDirection": "down"
+        },
+        {
+          "eventIndex": 3,
+          "result": "missed",
+          "timing": null,
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 4,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 5,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 6,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        },
+        {
+          "eventIndex": 7,
+          "result": "hit",
+          "timing": "perfect",
+          "expectedDirection": null
+        }
+      ]
+    },
+    {
       "id": "p34_waltz",
       "final": {
         "hits": 9,

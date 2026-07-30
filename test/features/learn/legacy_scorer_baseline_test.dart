@@ -9,6 +9,9 @@ import 'package:strumsight/features/learn/model/lesson.dart';
 import '../../support/practice_baseline_scenarios.dart';
 
 const _goldenPath = 'test/fixtures/practice/legacy_scorer_baseline.json';
+
+/// ADR 0067 §1/§3: this golden records legacy behavior; it does not prescribe it.
+/// Regenerate only in a reviewable commit with a stated reason.
 const _generatorEnvironmentKey = 'UPDATE_LEGACY_SCORER_BASELINE';
 const _legacyMatchWindowSec = 0.28;
 const _legacyPerfectWindowSec = 0.05;
@@ -27,6 +30,7 @@ void main() {
       'p44_chord_lag',
       'p44_input_latency',
       'p44_dejittered',
+      'p44_eighths_contended',
       'p34_waltz',
     };
     final ids = legacyPracticeBaselineScenarios
@@ -52,6 +56,55 @@ void main() {
       expect(lag, greaterThan(0));
       expect(lag, lessThan(0.5));
     }
+  });
+
+  test('contended eighths exercise overlapping legacy match windows', () {
+    final scenario = legacyPracticeBaselineScenarios.singleWhere(
+      (scenario) => scenario.id == 'p44_eighths_contended',
+    );
+    final targetTimes = [
+      for (var i = 0; i < scenario.lesson.events.length; i++)
+        _legacyEventTimeSec(scenario, i),
+    ];
+
+    expect(scenario.bpm, 96);
+    for (var i = 1; i < targetTimes.length; i++) {
+      final spacing = targetTimes[i] - targetTimes[i - 1];
+      expect(spacing, 0.3125);
+      expect(spacing, lessThan(2 * _legacyMatchWindowSec));
+    }
+
+    final tie = scenario.strums[1];
+    expect(tie.targetEventIndex, 1);
+    expect(
+      (tie.elapsedSec - targetTimes[1]).abs(),
+      (tie.elapsedSec - targetTimes[2]).abs(),
+    );
+
+    final consumedExtra = scenario.strums.singleWhere(
+      (strum) => strum.legacyMatchedEventIndex != null,
+    );
+    expect(consumedExtra.targetEventIndex, isNull);
+    expect(consumedExtra.legacyMatchedEventIndex, 2);
+    final consumedDelta = (consumedExtra.elapsedSec - targetTimes[2]).abs();
+    final competingDelta = (consumedExtra.elapsedSec - targetTimes[3]).abs();
+    expect(consumedDelta, lessThanOrEqualTo(_legacyMatchWindowSec));
+    expect(competingDelta, lessThanOrEqualTo(_legacyMatchWindowSec));
+    expect(consumedDelta, lessThan(competingDelta));
+    expect(consumedExtra.direction, isNot(scenario.lesson.events[2].direction));
+
+    final reopenAttempt = scenario.strums.singleWhere(
+      (strum) => strum.frameArrivalSec != null,
+    );
+    final reopenTargetTime = targetTimes[reopenAttempt.targetEventIndex!];
+    expect(
+      (reopenAttempt.elapsedSec - reopenTargetTime).abs(),
+      lessThanOrEqualTo(_legacyMatchWindowSec),
+    );
+    expect(
+      reopenAttempt.frameArrivalSec,
+      greaterThan(reopenTargetTime + _legacyMatchWindowSec),
+    );
   });
 
   test('replay rejects a target annotation that is not the matched event', () {
@@ -187,6 +240,13 @@ Map<String, Object?> _runScenario(PracticeBaselineScenario scenario) {
 
         if (matchedEventIndex == null) {
           expect(
+            strum.legacyMatchedEventIndex,
+            isNull,
+            reason:
+                '${scenario.id} expected a legacy-consumed extra but the '
+                'observation matched no event',
+          );
+          expect(
             result,
             isNull,
             reason: '${scenario.id} strum $index unexpectedly matched an event',
@@ -201,8 +261,10 @@ Map<String, Object?> _runScenario(PracticeBaselineScenario scenario) {
             );
           }
         } else {
+          final expectedMatchedEventIndex =
+              annotatedTarget ?? strum.legacyMatchedEventIndex;
           expect(
-            annotatedTarget,
+            expectedMatchedEventIndex,
             matchedEventIndex,
             reason:
                 '${scenario.id} strum $index annotation must identify the '
