@@ -6,7 +6,37 @@ permissions:
   contents: read
 
 jobs:
+  signing-prerequisites:
+    name: Production signing prerequisites
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production signing prerequisites
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for secret_name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_STORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing required production signing secret: $secret_name"
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+
   release-apk:
+    needs: signing-prerequisites
     runs-on: ubuntu-latest
     steps:
       - name: Verify production signing prerequisites
@@ -43,27 +73,8 @@ jobs:
           flutter-version: '3.44.2'
           channel: stable
           cache: true
-      - run: flutter pub get
-      - name: Format gate
-        run: dart format --output=none --set-exit-if-changed lib test tool
-      - name: Analyze gate
-        run: flutter analyze lib/ test/ tool/
-      - name: Architecture gate
-        run: dart run tool/check_architecture.dart
-      - name: Asset gate
-        run: dart run tool/ci/check_assets.dart
-      - name: Test and coverage gate
-        run: flutter test --coverage
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: strumsight-production-coverage-${{ github.run_id }}
-          path: coverage/lcov.info
-          if-no-files-found: error
-      - name: Property gate (randomized seed)
-        run: flutter test test/property
-        env:
-          PROPERTY_SEED: ${{ github.run_id }}
+      - name: Run Flutter quality gates
+        uses: ./.github/actions/flutter-gates
       - name: Read APK metadata from pubspec
         id: apk
         shell: bash
@@ -136,3 +147,28 @@ jobs:
           if [[ -n "${KEYSTORE_PATH:-}" ]]; then
             rm -f -- "$KEYSTORE_PATH"
           fi
+
+  coverage:
+    name: Coverage
+    needs: signing-prerequisites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Test coverage gate
+        run: flutter test --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: strumsight-production-coverage-${{ github.run_id }}
+          path: coverage/lcov.info
+          if-no-files-found: error
