@@ -79,6 +79,61 @@ final class ScoringProfile {
     overallThresholdPercent: 70,
   );
 
+  /// Default scoring for chord-change practice (chord-led, rhythm secondary).
+  static const chordChangeDefault = ScoringProfile(
+    id: 'chordChangeDefault',
+    matchWindow: Duration(milliseconds: 280),
+    perfectWindow: Duration(milliseconds: 50),
+    goodWindow: Duration(milliseconds: 120),
+    extraStrumPolicy: ExtraStrumPolicy.ignore,
+    weights: {
+      PracticeScoreDimension.chord: 60,
+      PracticeScoreDimension.rhythm: 40,
+    },
+    completionThresholdPercent: 85,
+    overallThresholdPercent: 70,
+  );
+
+  /// Default scoring for chord-progression practice (rhythm + direction + chord).
+  static const chordProgressionDefault = ScoringProfile(
+    id: 'chordProgressionDefault',
+    matchWindow: Duration(milliseconds: 280),
+    perfectWindow: Duration(milliseconds: 50),
+    goodWindow: Duration(milliseconds: 120),
+    extraStrumPolicy: ExtraStrumPolicy.ignore,
+    weights: {
+      PracticeScoreDimension.rhythm: 40,
+      PracticeScoreDimension.direction: 25,
+      PracticeScoreDimension.chord: 35,
+    },
+    completionThresholdPercent: 85,
+    overallThresholdPercent: 70,
+  );
+
+  /// Default scoring for rhythm-only practice (no chord or direction scoring).
+  static const rhythmOnlyDefault = ScoringProfile(
+    id: 'rhythmOnlyDefault',
+    matchWindow: Duration(milliseconds: 280),
+    perfectWindow: Duration(milliseconds: 50),
+    goodWindow: Duration(milliseconds: 120),
+    extraStrumPolicy: ExtraStrumPolicy.ignore,
+    weights: {PracticeScoreDimension.rhythm: 100},
+    completionThresholdPercent: 85,
+    overallThresholdPercent: 70,
+  );
+
+  /// Open scoring for free-practice mode: no dimensions, no thresholds.
+  static const freePracticeOpen = ScoringProfile(
+    id: 'freePracticeOpen',
+    matchWindow: Duration(milliseconds: 280),
+    perfectWindow: Duration(milliseconds: 50),
+    goodWindow: Duration(milliseconds: 120),
+    extraStrumPolicy: ExtraStrumPolicy.ignore,
+    weights: {},
+    completionThresholdPercent: 0,
+    overallThresholdPercent: 0,
+  );
+
   final String id;
   final Duration matchWindow;
   final Duration perfectWindow;

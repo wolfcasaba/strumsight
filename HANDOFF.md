@@ -123,7 +123,11 @@ Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
    APK-val; eredmény vissza → completion report frissítése.
 2. **E02-R04 — Practice catalog / authored definition tartalom**
    (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 4") ÚJ sessionben,
-   kör-brieffel (ADR 0055 váltóbot-protokoll). A katalógus `const` adatként
+   kör-brieffel (ADR 0055 váltóbot-protokoll). **Implementer: MiniMax M3**
+   (`tools/mm-round.sh`, ADR 0069 §15.6 besorolás — `const` adatkatalógus =
+   volumenmunka; a Codex-kvótát a DSP/scorer körökre tartjuk). A briefbe
+   kötelezően bekerül a szó szerinti gate-kikötés + a STOP-klauzula
+   (ADR 0069 §3). A katalógus `const` adatként
    írja le magát az R03 domain-modellekkel. A briefbe: az R03 review NOTE-1
    (const-forrásból épülő katalógus → a caller-immutability szerződés itt
    triviálisan teljesül, de rögzítendő).
