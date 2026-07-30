@@ -1,0 +1,138 @@
+name: Production Android APK
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production signing prerequisites
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for secret_name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_STORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing required production signing secret: $secret_name"
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Format gate
+        run: dart format --output=none --set-exit-if-changed lib test tool
+      - name: Analyze gate
+        run: flutter analyze lib/ test/ tool/
+      - name: Architecture gate
+        run: dart run tool/check_architecture.dart
+      - name: Asset gate
+        run: dart run tool/ci/check_assets.dart
+      - name: Test and coverage gate
+        run: flutter test --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: strumsight-production-coverage-${{ github.run_id }}
+          path: coverage/lcov.info
+          if-no-files-found: error
+      - name: Property gate (randomized seed)
+        run: flutter test test/property
+        env:
+          PROPERTY_SEED: ${{ github.run_id }}
+      - name: Read APK metadata from pubspec
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_value="$(
+            sed -nE \
+              's/^version:[[:space:]]*([^[:space:]#]+).*$/\1/p' \
+              pubspec.yaml
+          )"
+          if [[ ! "$version_value" =~ ^([0-9A-Za-z][0-9A-Za-z._-]*)\+([0-9]+)$ ]]; then
+            echo "::error::pubspec.yaml must contain exactly one version in <version>+<buildNumber> form."
+            exit 1
+          fi
+          app_version="${BASH_REMATCH[1]}"
+          build_number="${BASH_REMATCH[2]}"
+          short_sha="${GITHUB_SHA:0:7}"
+          artifact_name="strumsight-${app_version}-${build_number}-${short_sha}-production.apk"
+          printf 'name=%s\n' "$artifact_name" >> "$GITHUB_OUTPUT"
+      - name: Materialize production keystore
+        id: keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keystore_path="$RUNNER_TEMP/strumsight-release-$GITHUB_RUN_ID.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" |
+            base64 --decode > "$keystore_path"
+          if [[ ! -s "$keystore_path" ]]; then
+            echo "::error::The decoded production keystore is empty."
+            exit 1
+          fi
+          printf 'path=%s\n' "$keystore_path" >> "$GITHUB_OUTPUT"
+      - name: Build production APK
+        env:
+          STRUMSIGHT_RELEASE_STORE_FILE: ${{ steps.keystore.outputs.path }}
+          STRUMSIGHT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          STRUMSIGHT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STRUMSIGHT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STRUMSIGHT_REQUIRE_RELEASE_SIGNING: 'true'
+        run: >-
+          flutter build apk --release
+          --dart-define=STRUMSIGHT_ENV=production
+      - name: Stage versioned production APK
+        env:
+          ARTIFACT_NAME: ${{ steps.apk.outputs.name }}
+        run: |
+          set -euo pipefail
+          source_apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [[ ! -s "$source_apk" ]]; then
+            echo "::error::Production APK is missing or empty."
+            exit 1
+          fi
+          mkdir -p dist
+          cp -- "$source_apk" "dist/$ARTIFACT_NAME"
+      - name: Upload production APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: dist/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+      - name: Remove production keystore
+        if: always()
+        shell: bash
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+        run: |
+          if [[ -n "${KEYSTORE_PATH:-}" ]]; then
+            rm -f -- "$KEYSTORE_PATH"
+          fi
