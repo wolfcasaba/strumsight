@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R01)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R02)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -53,6 +53,14 @@
   (befagyasztott golden, event-szintű verdictekkel). A replay független legacy
   matchert vezet a scorer mellett; a golden regenerálása csak
   `UPDATE_LEGACY_SCORER_BASELINE=1`-gyel, megnevezett okkal (ADR 0067 §1/§3).
+- **Practice V2 domain időalap (E02-R02):** `lib/features/practice/domain/model/`
+  — `BeatPosition` (480 PPQ integer tick, ADR 0066; egzakt subdivision-factoryk,
+  egyetlen auditált legacy `double beat` híd ≤ 1/960 beat toleranciával),
+  `Tempo` (30–300 BPM zárt tartomány, clamp nélküli lista-validáció), `Meter`
+  (4/4·3/4·6/8, egzakt `ticksPerBar`), stabil validációs kódkészlet. A
+  `lib/features/practice/domain/` prefix framework-independence-e GÉPI őr alatt
+  (`tool/check_architecture.dart`). Hívója még nincs — production viselkedés
+  változatlan.
 
 ## 3. Known blockers / risks
 
@@ -70,41 +78,46 @@
 
 ## 4. Current branch
 
-`main` @ [PR #22](https://github.com/wolfcasaba/strumsight/pull/22) (E02-R01,
-merge `57f37ea`, CI run
-[30534783258](https://github.com/wolfcasaba/strumsight/actions/runs/30534783258)
+`main` @ [PR #23](https://github.com/wolfcasaba/strumsight/pull/23) (E02-R02,
+merge `a3c72d3`, CI run
+[30542055290](https://github.com/wolfcasaba/strumsight/actions/runs/30542055290)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `codex/epic-02-round-01-practice-baseline`.
+Kör-branch: `codex/epic-02-round-02-musical-time` (merge után törölve).
 
 ## 5. Last completed round
 
-**E02-R01 — Practice baseline befagyasztás és rollout-guardok** (Epic 2
-nyitókör, ADR 0065/0066/0067): 3 új `FeatureFlags` mező környezetenkénti
-default-táblával és két gépiesen próbált függőségi szabállyal (mindhárom flag ON
-⇒ `usesNetwork == false`) · 10 determinisztikus forgatókönyv scorer-semleges
-katalógusban + befagyasztott golden, amely event-indexenként `HitResult`/`Timing`/
-elvárt irányt is rögzít, **független legacy matcherből** írva ·
-[`docs/baseline/epic-02-practice-start.md`](docs/baseline/epic-02-practice-start.md)
-7 ismert réssel. Production Learn/Progress/Streak/DSP/ML kód nem változott.
-Review: CHANGES REQUIRED (1 MAJOR — a készlet nem lépett be a match-window
-ütközési tartományba) → javítás `p44_eighths_contended`-del (96 BPM nyolcadok,
-312,5 ms célköz vs 560 ms ablak: holtverseny, windowon belüli extra, lezárt
-target újranyitási próbája) → **APPROVED**:
-[`docs/reviews/e02-r01-review.md`](docs/reviews/e02-r01-review.md).
+**E02-R02 — BeatPosition, Tempo és Meter értékobjektumok** (ADR 0066
+implementációja): 4 új pure-Dart fájl a `lib/features/practice/domain/model/`
+alatt — 480 PPQ integer tick-pozíció egzakt subdivision-factorykkal (3
+nyolcad-triola `==` 1 negyed, tolerancia nélkül), egyetlen auditált legacy
+híd (≤ 1/960 beat, dokumentálva), Tempo/Meter lista-alapú validáció stabil
+hibakódokkal · a framework-independence architektúra-szabály kiterjesztve a
+practice domainre, kétirányú szintetikus teszttel · 24 új determinisztikus
+unit-teszt, TDD RED→GREEN evidenciával. Hívó kód nincs — production
+viselkedés változatlan; új ADR nem született (a 0068 szabad). Review:
+**APPROVED** (0 BLOCKER/MAJOR · 1 MINOR: `Meter.ticksPerBar` aszimmetrikus
+őrzése → R03/R06 · 3 NOTE), reviewer-oldali független gate-újrafuttatással és
+saját guard-törés próbával:
+[`docs/reviews/e02-r02-review.md`](docs/reviews/e02-r02-review.md).
 Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R02 — BeatPosition, Tempo és Meter értékobjektumok**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 2") ÚJ sessionben,
-   kör-brieffel (ADR 0055 váltóbot-protokoll).
+2. **E02-R03 — Practice domain modellek és validáció**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 3") ÚJ sessionben,
+   kör-brieffel (ADR 0055 váltóbot-protokoll). A briefbe: E02-R02 review
+   MINOR-1 (a `Meter.ticksPerBar` vagy mindkét mezőre fail-fast, vagy
+   egyikre sem — döntés + teszt).
 3. **Follow-up (E02-R08/R11-ig nyitva):**
    `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
    while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
    subscriptiont), plusz 4-beat count-in és 12 lecke. A chunk javítása a
    pause-rés lezárásával EGY commitban (AGENTS.md §9).
+4. **Governance-döntés (user):** a Codex E02-R02 §10 lelete — a globális
+   együttműködési szabályzat `docs/LESSONS.md`-re hivatkozik, ami ebben a
+   repóban nem létezik (létrehozni vagy a hivatkozást kivezetni).
 
 ## 7. Required verification (before any "done")
 

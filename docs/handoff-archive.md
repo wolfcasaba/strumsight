@@ -587,3 +587,20 @@ lezárva) · README/HANDOFF/archívum átszervezés · `epic-01-completion-repor
 a teljes DoD-checklistával · ADR 0058+0064 fájlok pótolva. Review: APPROVED
 (0 BLOCKER/MAJOR/MINOR, 4 NOTE) — [`docs/reviews/e01-r16-review.md`](reviews/e01-r16-review.md).
 Merge: [PR #21](https://github.com/wolfcasaba/strumsight/pull/21).
+
+## F) E02-R01 részletes kör-történet (a HANDOFF §5-ből archiválva E02-R02-kor)
+
+**E02-R01 — Practice baseline befagyasztás és rollout-guardok** (Epic 2
+nyitókör, ADR 0065/0066/0067): 3 új `FeatureFlags` mező környezetenkénti
+default-táblával és két gépiesen próbált függőségi szabállyal (mindhárom flag ON
+⇒ `usesNetwork == false`) · 10 determinisztikus forgatókönyv scorer-semleges
+katalógusban + befagyasztott golden, amely event-indexenként `HitResult`/`Timing`/
+elvárt irányt is rögzít, **független legacy matcherből** írva ·
+[`docs/baseline/epic-02-practice-start.md`](baseline/epic-02-practice-start.md)
+7 ismert réssel. Production Learn/Progress/Streak/DSP/ML kód nem változott.
+Review: CHANGES REQUIRED (1 MAJOR — a készlet nem lépett be a match-window
+ütközési tartományba) → javítás `p44_eighths_contended`-del (96 BPM nyolcadok,
+312,5 ms célköz vs 560 ms ablak: holtverseny, windowon belüli extra, lezárt
+target újranyitási próbája) → **APPROVED**:
+[`docs/reviews/e02-r01-review.md`](reviews/e02-r01-review.md).
+Merge: [PR #22](https://github.com/wolfcasaba/strumsight/pull/22).
