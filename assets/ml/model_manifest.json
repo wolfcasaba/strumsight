@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "filename": "chord_crnn.bin",
+      "path": "assets/ml/chord_crnn.bin",
+      "sha256": "8f7596d45784fecd472be3bda141599e77a690edc8d526b85a9929532709fc74",
+      "format": "CCRN",
+      "format_version": 1,
+      "input_shape": [
+        100,
+        144
+      ],
+      "output_classes": [
+        "N.C.",
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B",
+        "Cm",
+        "C#m",
+        "Dm",
+        "D#m",
+        "Em",
+        "Fm",
+        "F#m",
+        "Gm",
+        "G#m",
+        "Am",
+        "A#m",
+        "Bm"
+      ],
+      "training_run": {
+        "origin": "pre-manifest"
+      },
+      "export_script": {
+        "path": "ml/chords/export_chord_dart.py",
+        "version": "git:ea2bc103edc515cfa9ddc75096e2ded3f5b013b4"
+      },
+      "created_at": "2026-07-15T06:58:37Z"
+    },
+    {
+      "filename": "strum_crnn.bin",
+      "path": "assets/ml/strum_crnn.bin",
+      "sha256": "fbee598e94132731bfc39569b2ae65c99262699c8a05b46a5c48ff7a59f332ad",
+      "format": "SSML",
+      "format_version": 1,
+      "input_shape": [
+        15,
+        128
+      ],
+      "output_classes": [
+        "down",
+        "up"
+      ],
+      "training_run": {
+        "origin": "pre-manifest"
+      },
+      "export_script": {
+        "path": "ml/export_dart_weights.py",
+        "version": "git:66c0f9a2e60f2e386e0d62de38a46fc0b11b96a2"
+      },
+      "created_at": "2026-07-13T09:13:39Z"
+    },
+    {
+      "filename": "strum_crnn_live.bin",
+      "path": "assets/ml/strum_crnn_live.bin",
+      "sha256": "463810f8932d8df31d7feb00f4de5bf0e0581d65a011ac9bb9f8546a0971ce3d",
+      "format": "SSML",
+      "format_version": 1,
+      "input_shape": [
+        15,
+        128
+      ],
+      "output_classes": [
+        "down",
+        "up"
+      ],
+      "training_run": {
+        "origin": "pre-manifest"
+      },
+      "export_script": {
+        "path": "ml/export_live_weights.py",
+        "version": "git:cb325a2b698fffc124cfb5875f5eed055b9dd124"
+      },
+      "created_at": "2026-07-13T11:34:32Z"
+    },
+    {
+      "filename": "strum_crnn_live_3c.bin",
+      "path": "assets/ml/strum_crnn_live_3c.bin",
+      "sha256": "a9ea77d7c1eaea31c1fd69980768d8c123076ed27cda091f110f43c73e9622d4",
+      "format": "SSML",
+      "format_version": 1,
+      "input_shape": [
+        15,
+        128
+      ],
+      "output_classes": [
+        "down",
+        "up",
+        "no-strum"
+      ],
+      "training_run": {
+        "origin": "pre-manifest"
+      },
+      "export_script": {
+        "path": "ml/train_live_3c.py",
+        "version": "git:f9293d6ab0693d9d56aeca4898cb229afe7392ea"
+      },
+      "created_at": "2026-07-14T00:38:31Z"
+    }
+  ]
+}
