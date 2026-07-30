@@ -115,7 +115,39 @@ per-hívás).
 - A `data`-réteg tisztaság-őre (§6.7) valóban forrásolvasó teszt lett.
 - Teljes idő: **~7 perc**, a kör-jelzés hibátlan.
 
-## 7. Következő lépés
+## 7. Javító kör — lezárva (`e7ff69c`)
 
-A három MAJOR javítása vissza az implementerhez (ADR 0055 javító kör), utána
-ismételt független gate + scope-audit, majd CI-dispatch → PR → zöld-kapus merge.
+Javító brief: `docs/rounds/e02-r04-fix.md`, ugyanaz az implementer motor.
+Mindhárom MAJOR és a MINOR zárva, 2 fájl, +145/−49 sor.
+
+**A javításokat nem bemondásra fogadtam el**, hanem ugyanazzal az eldobható
+review-próbával mértem újra (futtatás után törölve):
+
+```
+PROBE mutable: []
+PROBE gToD  first 8 chords: [G, G, G, G, D, D, D, D]  (events: 32)
+PROBE emToC first 8 chords: [Em, Em, Em, Em, C, C, C, C]
+```
+
+Az implementer a MAJOR-1-hez valódi RED → GREEN evidenciát adott: az új
+per-definition immutability tesztek először a RÉGI kódon futottak, pirosan
+(`Expected: throws UnsupportedError / Actual: returned <null>`), és csak utána
+jött a javítás.
+
+Ismételt független gate-sor, `tail` nélkül: `format` 0 changed · `analyze lib/
+test/` tiszta · **147/147** practice teszt · **12/12** architecture teszt.
+
+**Verdikt a javítás után: APPROVED** — a merge-bar az ADR 0052 zöld kapuja
+(CI-oldali teljes suite + property gate + APK).
+
+## 8. Munkamódszer-tanulságok (bekerültek az AGENTS.md §15.6-ba)
+
+A kör stream-json logját a `tools/mm-trace.py` elemezte. A négy új
+brief-szabály hatása a javító körben azonnal mérhető volt:
+
+| Megfigyelés az alapkörben | Új szabály | Hatás a javító körben |
+|---|---|---|
+| 9 `TaskCreate` + 15 `TaskUpdate` a ~75 érdemi hívás mellett | „a brief a terved, ne készíts task-listát" | **0** task-hívás |
+| záró gate `2>&1 \| tail -25`-tel, csonkolt evidencia | „a záró gate-eket csővezeték és `tail` nélkül" | mind a 4 záró gate csupaszon futott |
+| köztes `analyze` a nyúlt alfára szűkítve, miközben a brief ezt „körbukásnak" mondta | „köztes szűkíthető, a záró nem" | ugyanez a viselkedés, de már szabályosan |
+| valótlan `const` állítás a doc-commentben | „ne állíts olyat, amit nem ellenőriztél" | a komment a tényleges garanciákat sorolja |

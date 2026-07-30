@@ -368,15 +368,34 @@ A szűkös erőforrás a Codex heti kvótája, nem a MiniMax tokenje: volumen- �
 ismétlődő munkából inkább többet adunk M3-nak, semmint hogy Codex-kvótát
 égessünk.
 
-**MiniMax-körnél a briefbe KÖTELEZŐ** (mért hibák ellenszere, ADR 0069):
+**MiniMax-körnél a briefbe KÖTELEZŐ** (mért hibák ellenszere, ADR 0069 — az
+E02-R04 kör és javító köre igazolta mindegyiket):
 
-1. a gate-parancsok szó szerint — „run each as a SEPARATE command, EXACTLY as
-   written" + „narrowing any gate command to only the touched files is a round
-   failure" (mérten hajlamos a gate-et a nyúlt fájlokra szűkíteni);
-2. explicit STOP-klauzula — „If any requirement conflicts with the allowed-files
-   list or with an existing test, STOP, send the `stopped` signal, and report."
-   (enélkül némán megkerüli a zárolt fájlt, és feature-ként jelenti);
-3. a kör-jelzés kötelezettsége (§15.2) szó szerint a prompt elején.
+1. **Gate-fegyelem, pontos megfogalmazással:** „köztes gyors ellenőrzést
+   szűkíthetsz (egy tesztfájl, egy alfa), de a ZÁRÓ gate-sort pontosan úgy kell
+   lefuttatni, ahogy a briefben áll" — plusz: **„a záró gate-parancsokat
+   csővezeték és `tail` nélkül, teljes kimenettel"** (mérten `2>&1 | tail -25`-öt
+   használ, és a csonkolt kimenetet másolja a jelentésbe).
+2. **STOP-klauzula:** „If any requirement conflicts with the allowed-files list
+   or with an existing test, STOP, send the `stopped` signal, and report."
+   (enélkül némán megkerüli a zárolt fájlt, és feature-ként jelenti).
+3. **A kör-jelzés kötelezettsége** (§15.2) szó szerint a prompt elején.
+4. **„A brief §8 a terved — ne készíts külön task-listát, fázisonként legfeljebb
+   egy állapotfrissítés."** (E02-R04-ben 9 `TaskCreate` + 15 `TaskUpdate` ment el
+   erre; a javító körben ezzel a mondattal **nulla** lett.)
+5. **„Ne állíts a kódról a doc-commentben olyat, amit nem ellenőriztél — ha
+   `const`-ot vagy `immutable`-t írsz, előbb bizonyítsd tesztben."** (E02-R04
+   MAJOR-2: a fájl `const`-konstruáltnak mondta magát, miközben egyetlen eleme
+   sem volt az.)
+
+**A gyenge pontja a TARTALMI hűség, nem a forma.** A formai fegyelme kiváló
+(E02-R04: 0 hibás tool-hívás ~75 hívásból, nulla fölösleges újraolvasás), de a
+briefben szövegesen leírt tartalmi előírást elronthatja úgy, hogy minden gate
+zöld marad (MAJOR-3: „ütemenként váltakozó akkord" helyett ütésenként váltót
+generált, és semmilyen teszt nem pinnelte ki). **Ezért minden szövegesen leírt
+tartalmi előírás mellé a briefnek gépi mércét is kell adnia** (kipinnelt
+szekvencia, tételes lista), különben a review-nak kell kézzel elolvasnia az
+adatot.
 
 **Review-oldalon:** a gate-et a reviewer maga futtatja újra (a bemásolt kimenet
 nem evidencia), `git diff --stat` scope-audit az engedélyezett listával
