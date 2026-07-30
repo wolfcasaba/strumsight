@@ -331,8 +331,21 @@ Siker esetén:
 
 - `scoringApplicable = definition.mode.scoredDimensions.isNotEmpty && events.isNotEmpty`
 - **Free Practice** (üres eseménylista): NEM hiba — `events` üres,
-  `musicalDuration` a `passTicks`-ből számolt (nulla `totalBeats` esetén
-  `Duration.zero`), `scoringApplicable == false`, `expectedChordSegments` üres.
+  `scoringApplicable == false`, `expectedChordSegments` üres, a
+  `musicalDuration` viszont a szokásos `passTicks × loopCount` (tehát NEM nulla).
+  **Brief-revízió 2026-07-30 (az első futás `stopped` jelzése nyomán):** az
+  eredeti szöveg „nulla `totalBeats` esetén `Duration.zero`"-t írt — ez az
+  állapot **elérhetetlen**, és a Codex helyesen állt meg rajta. A
+  `PracticeDefinition.validate()` (`practice_definition.dart:100`,
+  `definitionTotalBeatsNonPositive`) minden `totalBeats <= 0`-t elutasít, és ezt
+  meglévő teszt rögzíti (`practice_definition_test.dart:42`). Egy Free Practice
+  definition `totalBeats`-e is szigorúan pozitív; a ma szállított két forrás:
+  `builtin.freePracticeTemplate.v1` → `BeatPosition.quarters(16)`, az
+  eseménymentes Analyze-import → `quarters(beatsPerBar)` (egy ütem).
+  Nulla `totalBeats`-ű definition tehát el sem jut a fordításig — a fenti
+  1. lépés `target.definitionInvalid`-dal bukik, és **ez a helyes viselkedés**.
+  A `PracticeDefinition` validációját és tesztjét ebben a körben **tilos**
+  hozzáigazítani; a fájl a §4 tilos zónájában marad.
 - **Monotonitás**: a kimeneti `events` ideje nemcsökkenő. Ezt a compiler a
   visszaadás előtt ellenőrizze, és sértésnél `StateError`-t dobjon (belső
   invariáns, nem user-hiba) — a tesztek a korpuszon bizonyítják, hogy nem sül el.
