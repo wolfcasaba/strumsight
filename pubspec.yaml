@@ -7,10 +7,11 @@ version: 1.0.0+1
 environment:
   sdk: ^3.12.2
 
-# StrumSight is a fully OFFLINE, on-device app: no backend, no network at
-# runtime. The inherited recipewiser-mobile plugin set has been PRUNED down to
-# only what v1 (Live mirror + Tuner + Settings) needs. Detection runs behind an
-# engine interface (mock now, C++ FFI later) — see lib/features/live/engine/.
+# Detection is 100% on-device: audio never leaves the phone, and logged out /
+# account-disabled the app makes ZERO network requests (offline_network_guard
+# test). Network deps (dio, flutter_secure_storage) serve only the OPTIONAL
+# account layer (login + settings sync, backend/). The inherited
+# recipewiser-mobile plugin set has been pruned to what StrumSight needs.
 dependencies:
   flutter:
     sdk: flutter
