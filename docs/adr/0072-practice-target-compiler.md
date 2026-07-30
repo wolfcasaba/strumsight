@@ -54,6 +54,32 @@ nagyságrenddel a 50 ms-os `perfect` ablak alatt.
 Az inverz (`positionAt`) a **legközelebbi tickre** kerekít, összhangban a
 `BeatPosition.fromLegacyBeats` szerződésével (ADR 0066).
 
+#### 1.1 Pillanat és időtartam — kiegészítés (E02-R06 review, 2026-07-30)
+
+Egész mikroszekundum mellett két kívánatos tulajdonság **nem tartható egyszerre**
+minden tempón: (a) minden közölt időtartam a saját tickszámának egyszeri
+konverziója, és (b) a részek összege pontosan kiadja az egészet. A kör review-ja
+mérte a különbséget (90 BPM, 4/4: `timeOfTicks(3840) = 5 333 333 µs`, de
+`timeOfTicks(1920) * 2 = 5 333 334 µs`), és a kettősség valós hibát okozott: egy
+ütem-downbeatre eső esemény ideje eltért attól az ütemhatártól, ami ugyanazt a
+pillanatot jelöli.
+
+**A feloldás szabálya — PILLANAT pontos, IDŐTARTAM származtatott:**
+
+1. Minden **abszolút pillanat** (esemény ideje, ütemhatár, count-in vége, zenei
+   vég, session vég) a session nullpontjától vett **abszolút tickszám egyetlen
+   konverziója** — soha nem részeredmények összege.
+2. Minden közölt **időtartam** két ilyen pillanat **különbsége**:
+   `countInDuration = t(countIn)`, `musicalDuration = t(countIn+musical) − t(countIn)`,
+   `ringOutDuration = t(countIn+musical+bar) − t(countIn+musical)`.
+
+Ebből mindkét tulajdonság következik: a részek összege definíció szerint az egész
+(`countIn + musical + ringOut == totalDuration`), és minden pillanat bitre egyezik
+a legacy egyszeri képlettel. Az ár, hogy egy időtartam a saját tickszámának
+konverziójától ≤ 1 µs-mal eltérhet (pl. a ring-out „egy ütem" ± 1 µs) — ez a
+helyes viselkedés: **két egzakt pillanat különbsége a valódi időtartam**, nem a
+névlegesé. Maradék nélküli tempón (a mai tesztkorpusz java) a két alak azonos.
+
 **Fail-fast szimmetria** (E02-R02 MINOR-1 tanulsága, `Meter.ticksPerBar` mintája):
 érvénytelen `Tempo`/`Meter` mellett a konverter getterei `StateError`-t dobnak,
 nem adnak csendben végtelent vagy NaN-t. A hívó dolga `validate()`-elni.
