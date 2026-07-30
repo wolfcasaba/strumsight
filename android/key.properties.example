@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties and keep the real file private.
+# Relative storeFile paths resolve from android/app; this example points to
+# android/strumsight-upload-keystore.jks. An absolute path is also supported.
+storeFile=../strumsight-upload-keystore.jks
+storePassword=replace-with-keystore-password
+keyAlias=upload
+keyPassword=replace-with-key-password
