@@ -604,3 +604,25 @@ Review: CHANGES REQUIRED (1 MAJOR — a készlet nem lépett be a match-window
 target újranyitási próbája) → **APPROVED**:
 [`docs/reviews/e02-r01-review.md`](reviews/e02-r01-review.md).
 Merge: [PR #22](https://github.com/wolfcasaba/strumsight/pull/22).
+
+## G) E02-R03 részletes kör-történet (a HANDOFF §5-ből archiválva E02-R05-kor)
+
+**E02-R03 — Practice domain modellek és validáció** (ADR 0068 implementációja):
+13 új pure-Dart modellfájl + `meter.dart` MINOR-1 zárás a
+`lib/features/practice/domain/model/` alatt — a Practice V2 teljes
+domain-szerződése (event/definition, session config, sealed observation,
+verdict, metrikák, attempt/session result, scoring profile, enumok), minden
+aggregátum immutable, aggregáló `validate()`-tel, 60 stabil validációs kóddal
+és strukturális lista/map-egyenlőséggel · test-oldali purity-őr valódi-sértés
+RED→GREEN próbával · 101 új determinisztikus unit-teszt (a domain könyvtárban
+125), rétegenkénti TDD-evidenciával. Hívó kód nincs — production viselkedés a
+`ticksPerBar` fail-fast-on kívül változatlan. Az implementáló process menet
+közben gépoldali okból megszakadt; ugyanaz a Codex-session resume-mal zárta a
+kört, a teljes gate-mátrix friss újrafuttatásával (brief §10.4). Review:
+**APPROVED** (0 BLOCKER/MAJOR/MINOR · 3 NOTE — caller-immutability szerződés,
+`listEquals` névütközés-kockázat nem-domain hívóknál, chord-label
+konzisztencia-teszt az R05 adapter-körre), izolált-klónos független
+gate-újrafuttatással és tételes 29/29 scope-audittal:
+[`docs/reviews/e02-r03-review.md`](reviews/e02-r03-review.md).
+Merge: [PR #24](https://github.com/wolfcasaba/strumsight/pull/24).
+A NOTE-3 (chord-label konzisztencia) az E02-R05-ben lezárva.

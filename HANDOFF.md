@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R04)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R05)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -82,6 +82,20 @@
   listákkal; `domain/repository/practice_catalog_repository.dart` szinkron
   szerződés; `application/practice_catalog_controller.dart` két Riverpod
   providerrel. Hívó UI még nincs, ARB-fordítás az első UI-hívóval jön.
+- **Practice V2 legacy adapterek (E02-R05, ADR 0071):**
+  `lib/features/practice/data/adapters/` — `practiceDefinitionFromLesson`
+  (+`easy:`), `…FromSong`, `…FromAnalyze`, `…FromDailyChallenge`: tiszta,
+  óra-mentes függvények `AppResult<PracticeDefinition>`-nel (sosem dobnak,
+  hibakód `practice.content_unsupported`). Minden adaptált tartalom
+  `strumPattern` + befagyasztott `legacyLearnParity` (kivétel: az eseménymentes
+  Analyze-import → `freePractice`). `legacyPracticeChordLabel` a legacy
+  akkordcímkéket a detektor tényleges 24-elemű maj/min szótárára redukálja
+  (`Em7`→`Em`, `Bb`→`A#`, `G/B`→`G`, értelmezhetetlen → strum-only) —
+  veszteséges, de nem parity-rontó (ADR 0071 §2).
+  `PracticeDefinition.displayTitle` a user-tartalom nevének (61 stabil
+  validációs kód). Songs feature-barrel: `lib/features/songs/public.dart`.
+  A legacy API (`Lesson`, `Song.toLesson()`, `Lessons.fromAnalyze`,
+  `LessonScorer`) érintetlen; hívó UI nincs.
 - **Kétmotoros implementer-készlet (ADR 0069):** `tools/mm-round.sh` +
   `tools/mm-watch.sh` (5 perces korai riasztás) + `tools/mm-trace.py`
   (munkastílus-elemzés) — a MiniMax M3 ugyanazt a kör-jelzés-szerződést
@@ -103,13 +117,37 @@
 
 ## 4. Current branch
 
-`main` @ [PR #25](https://github.com/wolfcasaba/strumsight/pull/25) (E02-R04,
-merge `b1ab7ab`, CI run
-[30562187556](https://github.com/wolfcasaba/strumsight/actions/runs/30562187556)
+`main` @ [PR #26](https://github.com/wolfcasaba/strumsight/pull/26) (E02-R05,
+merge `856b2d2`, CI run
+[30566423813](https://github.com/wolfcasaba/strumsight/actions/runs/30566423813)
 zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branch: `mm/epic-02-round-04-practice-catalog` (merge után törölve).
+Kör-branch: `mm/epic-02-round-05-legacy-adapters` (merge után törölve).
 
 ## 5. Last completed round
+
+**E02-R05 — Legacy adapterek: Lesson / Song / Analyze / Daily Challenge**
+([ADR 0071](docs/adr/0071-legacy-practice-adapters.md) implementációja, PR #26):
+négy tiszta adapter a `lib/features/practice/data/adapters/` alatt, mind
+`AppResult<PracticeDefinition>`-t ad és sosem dob · **Lesson (+Easy)**
+esemény-szintű parity mind a 17 szállított leckére, egzakt tick-egyenlőséggel ·
+**Song** a `toLesson()` hívása NÉLKÜL (forrás-scan teszt őrzi), kontrollált
+hibával rossz mintahosszra/BPM-re · **Analyze** t0-normalizálással,
+`Tempo`-tartományra szűkített BPM-fallbackkel, tick-ütközés előre-tolással
+(pengetés nem vész el), üres klip → `freePractice` · **Daily Challenge**
+nap-stabil ID-vel, óra-mentesen. Kísérő szerződés: `legacyPracticeChordLabel`
+(veszteséges maj/min redukció a detektor tényleges 24-címkés szótárára),
+`PracticeDefinition.displayTitle` (+61. stabil validációs kód),
+`FailureCode.practiceContentUnsupported`, `lib/features/songs/public.dart`
+barrel — az architektúra-allowlist **nem** bővült. Hívó UI nincs, flagek OFF →
+production viselkedés változatlan. Implementer: **MiniMax M3**. Review: első kör
+**CHANGES REQUESTED** (0 BLOCKER/MAJOR · 3 MINOR: az Analyze-idővonal egy hibátlan
+klipnél némán kétszer olyan hosszú lett, a növelő ág és a t0-normalizálás
+tesztfedetlen), javító kör után **APPROVED**:
+[`docs/reviews/e02-r05-review.md`](docs/reviews/e02-r05-review.md).
+**Mindhárom MINOR zöld gate mellett csúszott át** — a review eldobható
+próbateszttel, a legacy `Lessons.fromAnalyze` referenciával szembe mérve fogta meg.
+
+### Korábbi kör
 
 **E02-R04 — Practice catalog és beépített gyakorlatok** (ADR 0070
 implementációja, PR #25): tíz beépített gyakorlat `const` adatként, stabil
@@ -129,42 +167,26 @@ nem bemondásra fogadta el.
 
 ### Korábbi kör
 
-**E02-R03 — Practice domain modellek és validáció** (ADR 0068 implementációja):
-13 új pure-Dart modellfájl + `meter.dart` MINOR-1 zárás a
-`lib/features/practice/domain/model/` alatt — a Practice V2 teljes
-domain-szerződése (event/definition, session config, sealed observation,
-verdict, metrikák, attempt/session result, scoring profile, enumok), minden
-aggregátum immutable, aggregáló `validate()`-tel, 60 stabil validációs kóddal
-és strukturális lista/map-egyenlőséggel · test-oldali purity-őr valódi-sértés
-RED→GREEN próbával · 101 új determinisztikus unit-teszt (a domain könyvtárban
-125), rétegenkénti TDD-evidenciával. Hívó kód nincs — production viselkedés a
-`ticksPerBar` fail-fast-on kívül változatlan. Az implementáló process menet
-közben gépoldali okból megszakadt; ugyanaz a Codex-session resume-mal zárta a
-kört, a teljes gate-mátrix friss újrafuttatásával (brief §10.4). Review:
-**APPROVED** (0 BLOCKER/MAJOR/MINOR · 3 NOTE — caller-immutability szerződés,
-`listEquals` névütközés-kockázat nem-domain hívóknál, chord-label
-konzisztencia-teszt az R05 adapter-körre), izolált-klónos független
-gate-újrafuttatással és tételes 29/29 scope-audittal:
-[`docs/reviews/e02-r03-review.md`](docs/reviews/e02-r03-review.md).
-Korábbi körök: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+Korábbi körök (E02-R03 részletes története is):
+[`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése.
-2. **E02-R05 — Legacy adapterek (Lesson / Song / Analyze / Daily Challenge)**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 5") ÚJ sessionben,
-   kör-brieffel (ADR 0055). **Implementer: a besorolás szerint** (ADR 0069
-   §15.6) — az adapterek jól specifikált, parity-teszttel mérhető munkák, tehát
-   alapesetben MiniMax M3; ha a brief írásakor kiderül, hogy a legacy
-   `Lesson.events` szemantika felderítést igényel, Codex. A briefbe kötelezően:
-   az R03 review NOTE-3 (chord-label konzisztencia-teszt) és az **R04 tanulsága
-   — minden szövegesen leírt tartalmi előírás mellé gépi mérce is kell**
-   (kipinnelt szekvencia), különben a tartalmi csúszás átmegy a zöld gate-en.
-   Az R04 katalógus `const` adatként
-   írja le magát az R03 domain-modellekkel. A briefbe: az R03 review NOTE-1
-   (const-forrásból épülő katalógus → a caller-immutability szerződés itt
-   triviálisan teljesül, de rögzítendő).
+2. **E02-R06 — Target compiler és beat-idő konverzió**
+   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 6") ÚJ sessionben,
+   kör-brieffel (ADR 0055): `CompiledPracticeTarget`, beat→duration, count-in,
+   ring-out, bar-határok, expected-chord szegmensek, loop-normalizálás,
+   nehézség-variáció, monotonitás-ellenőrzés. **Implementer: valószínűleg
+   Codex** (ADR 0069 §15.6) — a count-in/ring-out és a tempó-skálázás a
+   befagyasztott `legacyLearnParity` időzítéssel érintkezik, tehát
+   baseline-érzékeny. A briefbe kötelezően: **az R05 tanulsága — a zöld gate
+   nem bizonyíték, minden számolt kimenetnek legyen a legacy referenciával
+   szembe mérő tesztje az éleken** (nem-nulla kezdet, határra kerekedő utolsó
+   esemény), különben a review-nak kell próbateszttel megfognia. Bemenet: az R04
+   katalógus + az R05 adapterek (`practiceDefinitionFrom*`), amelyek
+   szándékosan NEM szállítanak session-paramétert.
 3. **Follow-up (E02-R08/R11-ig nyitva):**
    `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
    while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
