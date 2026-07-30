@@ -39,7 +39,8 @@
         "Bm"
       ],
       "training_run": {
-        "origin": "pre-manifest"
+        "origin": "repository-history",
+        "identifier": "git:9150dbc9765b4390617a13ecd807f7b3461cc11f"
       },
       "export_script": {
         "path": "ml/chords/export_chord_dart.py",
@@ -62,7 +63,8 @@
         "up"
       ],
       "training_run": {
-        "origin": "pre-manifest"
+        "origin": "repository-history",
+        "identifier": "git:66c0f9a2e60f2e386e0d62de38a46fc0b11b96a2"
       },
       "export_script": {
         "path": "ml/export_dart_weights.py",
@@ -85,7 +87,8 @@
         "up"
       ],
       "training_run": {
-        "origin": "pre-manifest"
+        "origin": "repository-history",
+        "identifier": "git:cb325a2b698fffc124cfb5875f5eed055b9dd124"
       },
       "export_script": {
         "path": "ml/export_live_weights.py",
@@ -109,7 +112,8 @@
         "no-strum"
       ],
       "training_run": {
-        "origin": "pre-manifest"
+        "origin": "repository-history",
+        "identifier": "git:f9293d6ab0693d9d56aeca4898cb229afe7392ea"
       },
       "export_script": {
         "path": "ml/train_live_3c.py",

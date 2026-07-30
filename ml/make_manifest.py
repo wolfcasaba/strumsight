@@ -46,6 +46,10 @@ _MODEL_SPECS = (
             "path": "ml/chords/export_chord_dart.py",
             "version": "git:ea2bc103edc515cfa9ddc75096e2ded3f5b013b4",
         },
+        "training_run": {
+            "origin": "repository-history",
+            "identifier": "git:9150dbc9765b4390617a13ecd807f7b3461cc11f",
+        },
         "initial_created_at": "2026-07-15T06:58:37Z",
     },
     {
@@ -57,6 +61,10 @@ _MODEL_SPECS = (
         "export_script": {
             "path": "ml/export_dart_weights.py",
             "version": "git:66c0f9a2e60f2e386e0d62de38a46fc0b11b96a2",
+        },
+        "training_run": {
+            "origin": "repository-history",
+            "identifier": "git:66c0f9a2e60f2e386e0d62de38a46fc0b11b96a2",
         },
         "initial_created_at": "2026-07-13T09:13:39Z",
     },
@@ -70,6 +78,10 @@ _MODEL_SPECS = (
             "path": "ml/export_live_weights.py",
             "version": "git:cb325a2b698fffc124cfb5875f5eed055b9dd124",
         },
+        "training_run": {
+            "origin": "repository-history",
+            "identifier": "git:cb325a2b698fffc124cfb5875f5eed055b9dd124",
+        },
         "initial_created_at": "2026-07-13T11:34:32Z",
     },
     {
@@ -81,6 +93,10 @@ _MODEL_SPECS = (
         "export_script": {
             "path": "ml/train_live_3c.py",
             "version": "git:f9293d6ab0693d9d56aeca4898cb229afe7392ea",
+        },
+        "training_run": {
+            "origin": "repository-history",
+            "identifier": "git:f9293d6ab0693d9d56aeca4898cb229afe7392ea",
         },
         "initial_created_at": "2026-07-14T00:38:31Z",
     },
@@ -235,7 +251,7 @@ def _build_entry(
         "format_version": format_version,
         "input_shape": [int(spec["input_frames"]), mean_shape[0]],
         "output_classes": list(output_classes),
-        "training_run": {"origin": "pre-manifest"},
+        "training_run": dict(spec["training_run"]),
         "export_script": dict(spec["export_script"]),
         "created_at": created_at,
     }

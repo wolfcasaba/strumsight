@@ -11,6 +11,15 @@ final _modelPathPattern = RegExp(
   r'^assets/ml/[A-Za-z0-9][A-Za-z0-9._-]*\.bin$',
 );
 final _checksumPattern = RegExp(r'^[0-9a-f]{64}$');
+final _gitIdentifierPattern = RegExp(r'^git:[0-9a-f]{40}$');
+const _knownTrainingRunIdentifiers = <String, String>{
+  'assets/ml/chord_crnn.bin': 'git:9150dbc9765b4390617a13ecd807f7b3461cc11f',
+  'assets/ml/strum_crnn.bin': 'git:66c0f9a2e60f2e386e0d62de38a46fc0b11b96a2',
+  'assets/ml/strum_crnn_live.bin':
+      'git:cb325a2b698fffc124cfb5875f5eed055b9dd124',
+  'assets/ml/strum_crnn_live_3c.bin':
+      'git:f9293d6ab0693d9d56aeca4898cb229afe7392ea',
+};
 
 void main() {
   test('SHA-256 implementation matches standard vectors', () {
@@ -145,7 +154,7 @@ List<String> _validateManifest({
     _validatePositiveInt(model, 'format_version', index, issues);
     _validatePositiveIntList(model, 'input_shape', index, issues);
     _validateOutputClasses(model, index, issues);
-    _validateTrainingRun(model, index, issues);
+    _validateTrainingRun(model, path, index, issues);
     _validateExportScript(projectRoot, model, index, issues);
     _validateCreatedAt(model, index, issues);
 
@@ -271,6 +280,7 @@ void _validateOutputClasses(
 
 void _validateTrainingRun(
   Map<String, Object?> model,
+  String? path,
   int index,
   List<String> issues,
 ) {
@@ -279,6 +289,32 @@ void _validateTrainingRun(
       value['origin'] is! String ||
       (value['origin'] as String).trim().isEmpty) {
     issues.add('models[$index].training_run.origin must be non-empty');
+    return;
+  }
+
+  final origin = value['origin'] as String;
+  final identifier = value['identifier'];
+  final expectedIdentifier = _knownTrainingRunIdentifiers[path];
+  if (expectedIdentifier != null) {
+    if (origin != 'repository-history' || identifier != expectedIdentifier) {
+      issues.add(
+        'models[$index].training_run must identify the known shipping revision '
+        '$expectedIdentifier',
+      );
+    }
+    return;
+  }
+
+  if (origin == 'pre-manifest') {
+    return;
+  }
+  if (origin != 'repository-history' ||
+      identifier is! String ||
+      !_gitIdentifierPattern.hasMatch(identifier)) {
+    issues.add(
+      'models[$index].training_run must be pre-manifest or identify a git '
+      'revision',
+    );
   }
 }
 
