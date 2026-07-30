@@ -161,3 +161,42 @@ baseline-érzékeny scorer/matcher, teljesítménykritikus út, felderítő fela
 hozzá a kör. Nem-érzékeny kör (jól specifikált domain/model/teszt, adapter,
 katalógus, i18n, mechanikus refaktor) mehet kérdés nélkül az alapértelmezett
 motorral.
+
+---
+
+## L08 — A review kérése is lehet hiányos; „meglévő teszt" ≠ „a kör saját tesztje"
+
+**Mit mértünk.** Az E02-R06 review egy valós MINOR-t fogott (ugyanaz a zenei
+pillanat két különböző időt kapott), de a javítási kérése **hiányos** volt: a
+`totalDuration` egyszeri konverzióját kérte anélkül, hogy végiggondolta volna,
+hogy egész mikroszekundum mellett ez ütközik a „részek összege = egész"
+állítással. Az implementer a javító körben megmérte és megállt
+(`lesson.first-strums.v1`: 20 571 429 vs 20 571 428 µs).
+
+A javító prompt „meglévő tesztet ne írj át" kitétele ráadásul **túl tág** volt: az
+implementer emiatt a **saját, ugyanabban a körben írt** tesztjét is
+érinthetetlennek vette. A második megállás így részben a review hibája volt, nem
+az implementeré.
+
+**Miért.** A reviewer ugyanúgy tervez, amikor javítási irányt ír elő, mint a
+brief-író — és ugyanúgy elronthatja (lásd [L02](#l02--ne-írj-elő-viselkedést-lezárt-fájlra-három-variáns)).
+A „ne írd át a meglévő tesztet" szabály célja a **befagyasztott** referencia
+védelme; ha a kör saját, aznap írt tesztjeire is kiterjed, akkor a szerződés
+jogos változásakor is megbénítja a javítást.
+
+**Hogyan alkalmazd.**
+- Javítási irány előírásakor **számold ki a következményt**, ne csak a hibát
+  nevezd meg. Ha két invariáns versenyezhet, mondd ki, melyik nyer — vagy jelöld
+  meg explicit tervezői kérdésként.
+- A teszt-zárat mindig **nevesítve** add meg: „a befagyasztott
+  `practice_baseline_scenarios.dart` / `legacy_scorer_baseline.json` / korábbi
+  körök tesztjei zártak; a kör saját tesztjei a szerződés változásakor
+  igazíthatók". A blanket „meglévő teszt" megfogalmazás kétértelmű.
+- Ha a javítás tervezői döntést igényel, az **ADR-be** kerüljön (nem a prompt
+  szövegébe), és az implementer a frissített ADR-re kapjon hivatkozást.
+
+**A kör tartalmi hozadéka** (ADR 0072 §1.1, az egész Practice Engine időmodellje):
+egész mikroszekundum mellett *pillanat pontos, időtartam származtatott* — minden
+abszolút pillanat a nullponttól vett tickszám egyetlen konverziója, minden
+időtartam két pillanat különbsége. Így a kompozíció pontos ÉS minden pillanat
+bitre egyezik a legacy egyszeri képlettel.
