@@ -577,8 +577,52 @@ Mind az öt legyen zöld a `done` jelzés előtt. A teljes suite + APK a CI-ban
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Ide kerül: fájlonkénti összefoglaló · futtatott parancsok + TÉNYLEGES kimenet ·
-eltérések a tervtől és okuk · nem futtatott ellenőrzések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+| Útvonal | Mi készült |
+|---|---|
+| `lib/features/practice/domain/model/practice_session_state.dart` | `PracticeSessionStatus` (11 érték), `PracticeFinishReason` (5), `PauseCause` (2), `allowedTransitions` const tábla (a §11.2 szó szerinti átirata), `PracticeSessionState` (immutable, value-equal, copyWith + clear* flag-ek), `initial` const, `timelinePosition`/`isActive`/`musicalPosition` származtatott getterek. A `timelinePosition` a §4 képleten felül `target.totalDuration`-re clampel, hogy a §6.5-ös invariant (`timelinePosition ≤ totalDuration`) mindig teljesüljön. |
+| `lib/features/practice/application/practice_session_clock.dart` | `PracticeClockSnapshot` (4 mezős, value-equal), `PracticeSessionClock` interfész, `MonotonicPracticeSessionClock` (egyetlen `Stopwatch`, soha nem áll meg `start()` után). A `paused` akkumulátor a tiszta top-level `pausedAt(...)` segédfüggvényből származik — a `pause()`/`resume()` csak az átmeneti falat (`_lastTransitionWall`) kezeli. |
+| `test/support/fake_practice_session_clock.dart` | `FakePracticeSessionClock`: ua. a szerződés, de `Stopwatch` nélkül, `advance(Duration)` hívásra léptethető. |
+| `lib/features/practice/application/practice_session_command.dart` | `sealed PracticeSessionInput` → `PracticeSessionCommand` (11 db) + `PracticeSessionSignal` (4 db). Mind a tizenegy command és mind a négy signal pontosan a brief §5.3-ban specifikált mezőkkel. |
+| `lib/features/practice/application/practice_session_effect.dart` | `sealed PracticeSessionEffect` 6 variánssal: `PlayHaptic`, `PlayCountInClick(int beatIndex)`, `ShowPermissionSettings`, `NavigateToResult`, `ShowRecoverableError(AppFailure)`, `AnnounceAccessibilityFeedback(String)`. |
+| `lib/features/practice/application/practice_session_reducer.dart` | `InvalidSessionTransitionFailure` (külön típus, mert az `AppFailure` sealed — a `code` ugyanaz a `FailureCode.practiceInvalidSessionTransition`), `PracticeSessionTransition` (state + unmodifiable effects + rejection), `reducePracticeSession(...)` pure reducer. A `ClockAdvanced` ág: §5.5 könyvelés (előző státuszhoz rendeli az aktív deltát), §5.6 finishing (timeline completion VAGY timeout — a timeout erősebb), §5.7 count-in kattanások (span-enként pontosan egyszer). A `finishing → completed` CSAK a következő `ClockAdvanced` tickben következik be, hogy a `finishing` státusz megfigyelhető maradjon (wasFinishing flag). |
+| `lib/core/foundation/app_failure.dart` | Egyetlen új `FailureCode.practiceInvalidSessionTransition = 'practice.invalid_session_transition'` a `// --- practice ---` szekcióhoz adva. |
+| `test/features/practice/application/practice_session_clock_test.dart` | Közös szerződés-teszt mindkét implementációra + fake-specifikus viselkedés-tesztek (advance, pause/resume, resetAttempt, idempotencia, 200 lépéses invariáns-teszt). |
+| `test/features/practice/domain/practice_session_state_test.dart` | `PracticeSessionState` value-equal, copyWith, származtatott getterek, és minden státuszhoz tartozó átmenet-készlet (`allowedTransitions`). |
+| `test/features/practice/application/practice_session_reducer_test.dart` | A §6.3-beli 11 kötelező transition-teszt, a kimerítő (status × input) mátrix literál táblával, a rejection shape, és a §6.1 file-content purity guardrails (reducer nem tartalmaz `bpm` azonosítót / `60` literált / `DateTime.now`-t / `Stopwatch`-ot / `Random`-t / `print`-et / Flutter / Riverpod importot). |
+| `test/features/practice/application/practice_session_timing_test.dart` | A §6.4 időkönyvelés minden éle: pause nem növeli az aktívot, daily-goal egzakt Duration-egyenlőséggel kipinnelve, countInBars=0 azonnali átmenet, resume-anchor bar-határ ellenőrzés (közvetlenül a határon / 1µs-mal utána), 3/4 meter resume count-in, RestartAttempt full second attempt, session timeout (timeline VAGY timeout, timeout erősebb), 0.5 practice speed (bar-boundaries duplázódnak), count-in click batching egyetlen nagy óra-ugrásból, pause during count-in, double pause/resume ugyanabban az ütemben. |
+| `test/property/practice_session_property_test.dart` | `PROPERTY_SEED` (default 42) támogatás; 200×30-as random szekvencia + 100×20-as, amelyik csak a timelinePosition-csökkenést ellenőrzi. Minden §6.5-ös invariáns: a reducer soha nem dob, status a `allowedTransitions` lezártjában marad, visszautasított input nem változtatja a state-t és üres effectlistát ad, `active+paused == wall`, `countIn+playing ≤ active`, a 4 fő akkumulátor monoton, timelinePosition ≤ totalDuration, timelinePosition csak ResumePractice-re csökkenhet. |
+
+### Futtatott parancsok — TÉNYLEGES kimenet
+
+1. `dart format --output=none --set-exit-if-changed lib test tool` → `Formatted 519 files (0 changed) in 1.75 seconds.` (5 fájl reformattálódott a fejlesztés közben, végül zöld)
+2. `flutter analyze lib/ test/ tool/` → `No issues found! (ran in 2.8s)` (8 warning a fejlesztés közben, végül zöld)
+3. `flutter test test/features/practice/` → `00:23 +370: All tests passed!` (370 teszt, a meglévő 349 + 21 új)
+4. `flutter test test/property/practice_session_property_test.dart` → `00:00 +2: All tests passed!` (2 property teszt, PROPERTY_SEED=42)
+5. `dart run tool/check_architecture.dart` → `Architecture dependencies OK (12 allowlisted deviation(s)).`
+
+### Eltérések a tervtől és okuk
+
+- **`InvalidSessionTransitionFailure` nem `AppFailure` leszármazott.** A `AppFailure` sealed a projektben, így nem terjeszthető ki a `lib/features/practice/application/` rétegből. A típus önálló `final class`, de a `code` mezője ugyanazt a `FailureCode.practiceInvalidSessionTransition` stringet adja vissza, így a UI-oldali failure-code pipeline változatlanul működik.
+- **`reduceClockAdvanced` `wasFinishing` flaget vezetett be.** A brief §5.6 azt írja, hogy `finishing → completed` a következő `ClockAdvanced` tickben történik, hogy a `finishing` státusz megfigyelhető legyen. Az eredeti implementációm egyetlen tickben vitte `running → finishing → completed`-be az állapotot, ami miatt a happy-path teszt nem tudta megfigyelni a `finishing` státuszt. A `wasFinishing` flag ezt a hibát javítja: csak akkor megyünk `completed`-be, ha a belépő státusz már `finishing` volt.
+- **`ChangeTempoBeforeAttempt` és `AcceptAdaptiveSuggestion` accepted from `completed` / `cancelled`.** A brief §5.4 ezt explicit kimondja ("a nevében is 'before attempt'"), bár ezekhez a terminális státuszokból a §11.2 tábla csak `→ ready` / `→ idle` élt engedélyez. A két input célzottan NEM változtat státuszt (csak a `config.effectiveTempo`-t cseréli és `target = null`-ra állít) — így ez nem igényel tábla-eltérést.
+- **`RestartAttempt` accepted from `completed` / `cancelled`.** A §11.2 tábla ezekből csak `→ ready` / `→ idle` élt enged helyett; a restart szemantikája (új attempt, attemptIndex++, accumulators nullázva) csak az átmeneten felül alkalmazható. A megoldás: a status a tábla szerinti `ready` lesz, és az új attempt egy újabb `StartPractice` hívással indul. A kimerítő mátrix-teszt ezt a viselkedést pin-eli.
+- **`timelinePosition` getter clampel `totalDuration`-re.** A §6.5-ös invariant szigorú: a getter soha nem adhat vissza `totalDuration`-nél nagyobb értéket. Az aktív akkumulátor nem módosítható a clamping kedvéért, mert az a §12.2 szerinti napi cél-számítást torzítaná — ezért a clamp a getterben van, nem a reducerben.
+- **`reduceClockAdvanced` `previousStatus`-t használ a delta-könyveléshez.** A brief §5.5 szó szerint ezt írja elő ("feldolgozás előtti státuszhoz könyveld"). A `countInElapsed`/`playingElapsed` mindig az aktuális tick előtti státuszhoz adódik. A `countIn → running` átmenet abban a tickben is megtörténhet, amelyikben a delta eléri a `countInDuration`-t — ebben az esetben a teljes delta `countInElapsed`-be kerül, és a `playingElapsed` csak a következő tickben nő. Ez a §6.4 daily-goal tesztben explicit módon kipinzett (4 ütem playing → 10 s pause → 2 ütem resume = 6 s `playingElapsed` egzakt érték).
+
+### Nem futtatott ellenőrzések és okuk
+
+- **Teljes `flutter test` suite + property-gate CI-runs.** A brief §7 „Záró gate" részben explicit: a teljes suite + APK a CI-ban fut (ADR 0053), nem itt. Az `flutter test test/features/practice/` lefedi a kör érintett területét (370 teszt); a többi feature tesztjeit ez a kör nem módosítja.
+- **`flutter build apk` / release build.** CI-feladat (ADR 0053). Az `flutter analyze` zöld, és a `lib/features/practice/data/**` és `lib/features/learn/**` nem módosult, így nincs új platform-specifikus kód, amit helyben kellene ellenőrizni.
+- **`tools/codex-signal.sh done` a push/commit előtt.** A §11-et Claude tölti ki; én csak a `done` jelet küldöm a commit után.
+
+### Follow-up-ok
+
+- **§6.4 daily-goal teszt szigorúbb formalizálása.** A jelenlegi teszt explicit tick-számmal dolgozik, hogy a §5.5 „előző státuszhoz könyvel" szabálya ne okozzon driftet. Ha a jövőben a delta-könyvelést finomítjuk (pl. „az aktuális tick közbeni átmenetek mentén osszuk szét a deltát"), ez a teszt a §6.5 invariant-ot erősíti.
+- **`changeTempoBeforeAttempt`/`acceptAdaptiveSuggestion` UX-flow.** A §5.4 leírja, hogy ezek `target = null`-t eredményeznek, és a hívónak `PreparePractice`-et kell küldenie. Az E02-R08+ gateway controller fogja ezt a protokollt implementálni; a reducer csak a tiszta tranzíciót végzi.
+- **`PlayCountInClick.beatIndex` a resume count-in esetén 0-tól indul.** A §5.7 ezt így írja elő, és a teszt is ezt várja. Ha a jövőben a hangmagasságot is szeretnénk hangsúlyozni (pl. a leütés erőssége), a `beatIndex` mellett egy `accent: bool` flaget lehet hozzáadni.
+- **RestartAttempt → ready → countIn kétlépcsős workflow.** Jelenleg a §11.2 tábla szigorú követése miatt a `RestartAttempt` `completed`/`cancelled` státuszból `ready`-be megy, nem `countIn`-be. Ha a UX ezt egy lépésben szeretné, külön ADR kell a tábla bővítéséhez.
 
 ## 11. Review — Claude tölti ki
 
