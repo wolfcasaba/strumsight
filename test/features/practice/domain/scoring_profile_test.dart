@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
 
 void main() {
@@ -68,6 +69,82 @@ void main() {
         PracticeScoreDimension.direction: 45,
       });
       expect(profile.validate(), isEmpty);
+    });
+
+    test(
+      'validates the four built-in non-strum profiles and pins literals',
+      () {
+        expect(ScoringProfile.chordChangeDefault.validate(), isEmpty);
+        expect(ScoringProfile.chordChangeDefault.id, 'chordChangeDefault');
+        expect(
+          ScoringProfile.chordChangeDefault.matchWindow,
+          const Duration(milliseconds: 280),
+        );
+        expect(
+          ScoringProfile.chordChangeDefault.perfectWindow,
+          const Duration(milliseconds: 50),
+        );
+        expect(
+          ScoringProfile.chordChangeDefault.goodWindow,
+          const Duration(milliseconds: 120),
+        );
+        expect(
+          ScoringProfile.chordChangeDefault.extraStrumPolicy,
+          ExtraStrumPolicy.ignore,
+        );
+        expect(
+          ScoringProfile.chordChangeDefault.completionThresholdPercent,
+          85,
+        );
+        expect(ScoringProfile.chordChangeDefault.overallThresholdPercent, 70);
+        expect(ScoringProfile.chordChangeDefault.weights, {
+          PracticeScoreDimension.chord: 60,
+          PracticeScoreDimension.rhythm: 40,
+        });
+
+        expect(ScoringProfile.chordProgressionDefault.validate(), isEmpty);
+        expect(
+          ScoringProfile.chordProgressionDefault.id,
+          'chordProgressionDefault',
+        );
+        expect(ScoringProfile.chordProgressionDefault.weights, {
+          PracticeScoreDimension.rhythm: 40,
+          PracticeScoreDimension.direction: 25,
+          PracticeScoreDimension.chord: 35,
+        });
+
+        expect(ScoringProfile.rhythmOnlyDefault.validate(), isEmpty);
+        expect(ScoringProfile.rhythmOnlyDefault.id, 'rhythmOnlyDefault');
+        expect(ScoringProfile.rhythmOnlyDefault.weights, {
+          PracticeScoreDimension.rhythm: 100,
+        });
+
+        expect(ScoringProfile.freePracticeOpen.validate(), isEmpty);
+        expect(ScoringProfile.freePracticeOpen.id, 'freePracticeOpen');
+        expect(ScoringProfile.freePracticeOpen.weights, isEmpty);
+        expect(ScoringProfile.freePracticeOpen.completionThresholdPercent, 0);
+        expect(ScoringProfile.freePracticeOpen.overallThresholdPercent, 0);
+      },
+    );
+
+    test('built-in non-strum profile weights exactly match their mode scored '
+        'dimensions', () {
+      expect(
+        ScoringProfile.chordChangeDefault.weights.keys.toSet(),
+        PracticeMode.chordChanges.scoredDimensions,
+      );
+      expect(
+        ScoringProfile.chordProgressionDefault.weights.keys.toSet(),
+        PracticeMode.chordProgression.scoredDimensions,
+      );
+      expect(
+        ScoringProfile.rhythmOnlyDefault.weights.keys.toSet(),
+        PracticeMode.rhythmOnly.scoredDimensions,
+      );
+      expect(
+        ScoringProfile.freePracticeOpen.weights.keys.toSet(),
+        PracticeMode.freePractice.scoredDimensions,
+      );
     });
 
     test('reports an empty identifier with the pinned code literal', () {
