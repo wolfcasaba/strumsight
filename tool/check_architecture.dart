@@ -228,7 +228,8 @@ void _collectViolations({
 
 bool _isSharedDomain(String sourcePath) =>
     sourcePath.startsWith('lib/core/music/') ||
-    sourcePath.startsWith('lib/core/audio/codec/');
+    sourcePath.startsWith('lib/core/audio/codec/') ||
+    sourcePath.startsWith('lib/features/practice/domain/');
 
 bool _isForbiddenDomainDependency(String rawUri, String? targetPath) {
   const forbiddenPackagePrefixes = <String>[
@@ -577,7 +578,8 @@ String _ruleDescription(ArchitectureRule rule) => switch (rule) {
   ArchitectureRule.coreMustNotImportFeatures =>
     'core must not depend on features',
   ArchitectureRule.sharedDomainMustRemainFrameworkIndependent =>
-    'shared music/audio domain must remain framework-independent',
+    'shared music/audio and practice domains must remain '
+        'framework-independent',
   ArchitectureRule.crossFeatureImportsMustUsePublicApi =>
     'cross-feature imports must target public.dart',
 };

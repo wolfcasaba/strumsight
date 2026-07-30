@@ -339,9 +339,119 @@ a PR és a merge Claude-oldal** ([ADR 0064](../adr/0064-codex-hands-over-ci-at-c
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-_(Fájlonkénti összefoglaló · futtatott parancsok TÉNYLEGES kimenettel ·
-valódi-sértés próba kimenete · eltérések és okuk · nem futtatott ellenőrzések
-és okuk · follow-up leletek.)_
+### Fájlonkénti összefoglaló
+
+- `lib/features/practice/domain/model/practice_validation.dart` — önálló,
+  pure-Dart `PracticeValidationFailure` value-típus és az öt kötött, stabil
+  `PracticeValidationCode`.
+- `lib/features/practice/domain/model/beat_position.dart` — 480 PPQ integer
+  tick modell, checked runtime factory, egzakt subdivision-factoryk,
+  `Comparable`, összeadás/kivonás és az egyetlen auditált legacy
+  `double beat` híd. A helper doc-commentje rögzíti a legfeljebb `1/960 beat`
+  (fél tick) kerekítési hibát.
+- `lib/features/practice/domain/model/tempo.dart` — 30.0–300.0 BPM zárt
+  tartományú, nem clampelő, lista-alapú validáció; NaN és ±∞ külön
+  `notFinite` failure.
+- `lib/features/practice/domain/model/meter.dart` — aggregáló
+  beats-per-bar/beat-unit validáció és egzakt `ticksPerBar` 2/4/8
+  nevezőkhöz.
+- `test/features/practice/domain/{practice_validation,beat_position,tempo,meter}_test.dart`
+  — 24 determinisztikus unit teszt a kódokra, value semanticsre, exact
+  fraction/triola/roundtrip/legacy/negatív/rendezési utakra, BPM-határokra,
+  aggregációra és meter tickekre.
+- `tool/check_architecture.dart` — a framework-independent domain-prefixek
+  kiegészítve kizárólag a `lib/features/practice/domain/` úttal; az allowlist
+  és a tiltott dependency-készlet változatlan.
+- `test/core/architecture_dependency_test.dart` — új szintetikus eset:
+  practice-domain Flutter import tiltott, `dart:` import tiszta. Meglévő
+  assertion nem változott.
+
+### TDD RED → GREEN evidencia
+
+- `practice_validation_test.dart`: RED exit 1 — a production fájl hiányzott,
+  a `PracticeValidationCode`/`PracticeValidationFailure` feloldhatatlan volt;
+  GREEN: `+3: All tests passed!`.
+- `beat_position_test.dart`: RED exit 1 — a `beat_position.dart` és a teljes
+  `BeatPosition` contract hiányzott; GREEN: `+11: All tests passed!`.
+- `tempo_test.dart`: RED exit 1 — a `tempo.dart`/`Tempo` hiányzott; GREEN:
+  `+4: All tests passed!`.
+- `meter_test.dart`: RED exit 1 — a `meter.dart`/`Meter` hiányzott; GREEN:
+  `+6: All tests passed!`.
+- `architecture_dependency_test.dart`: RED exit 1 — az új practice-domain
+  eset várt egy Flutter-sértést, az actual lista üres volt (`0 < 1`);
+  GREEN a checker-prefix bővítése után: `+12: All tests passed!`.
+
+### Valódi-sértés próba
+
+Ideiglenesen ez az import került a valós
+`lib/features/practice/domain/model/beat_position.dart` fájlba:
+
+```dart
+import 'package:flutter/foundation.dart';
+```
+
+Piros checker, exit 1:
+
+```text
+Architecture dependency check failed.
+Unexpected violation(s) — fix them; adding an allowlist entry requires justification and an ADR:
+- lib/features/practice/domain/model/beat_position.dart -> package:flutter/foundation.dart [shared music/audio and practice domains must remain framework-independent]
+```
+
+Piros `flutter test test/core`, exit 1:
+
+```text
+repository architecture contains exactly the allowlisted dependency deviations [E]
+Expected: true
+  Actual: <false>
+- lib/features/practice/domain/model/beat_position.dart -> package:flutter/foundation.dart [shared music/audio and practice domains must remain framework-independent]
+...
++286 -1: Some tests failed.
+```
+
+Az ideiglenes import eltávolítása után:
+
+```text
+Architecture dependencies OK (12 allowlisted deviation(s)).
++287: All tests passed!
+```
+
+### Kötelező gate-ek — tényleges kimenet
+
+- `~/flutter/bin/flutter pub get` — exit 0; `Got dependencies!` (32 constraint
+  miatt nem frissíthető package-ről tájékoztató üzenet, dependency-változás
+  nélkül).
+- `~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool`
+  — exit 0; `Formatted 460 files (0 changed)`.
+- `~/flutter/bin/flutter analyze lib/ test/ tool/` — exit 0;
+  `No issues found! (ran in 9.9s)`.
+- `~/flutter/bin/flutter test test/features/practice` — exit 0;
+  `+24: All tests passed!`.
+- `~/flutter/bin/flutter test test/core` — exit 0;
+  `+287: All tests passed!`.
+- `~/flutter/bin/flutter test test/app` — exit 0;
+  `+47: All tests passed!`.
+- `~/flutter/bin/flutter test test/features/learn` — exit 0;
+  `+131 ~1: All tests passed!`; az egy skip a meglévő, env-varral indítható
+  golden-generator.
+- `~/flutter/bin/dart run tool/check_architecture.dart` — exit 0;
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`.
+
+### Eltérések, nem futtatott ellenőrzések, follow-up
+
+- A brief §5 kötött döntéseitől és §8 sorrendjétől nem volt eltérés.
+- Teljes `flutter test`, randomizált property gate, CI és APK nem futott:
+  ezek ADR 0052/0053/0064 és a brief §7 szerint Claude/CI-oldali feladatok.
+  `gh` hívás nem történt. Backend/ML gate nem futott, mert ilyen fájl nem
+  változott.
+- Scope/import/secret audit: kizárólag a §4 engedélyezett kód- és
+  tesztútvonalai érintettek; a négy lib-fájl csak egymást importálja, nincs
+  framework/package import, R03+ modell, JSON, barrel, TODO/FIXME, production
+  `print` vagy secret.
+- Follow-up lelet: a globális együttműködési szabály által hivatkozott
+  `docs/LESSONS.md` nem létezik ebben a repositoryban. Nem jött létre ebben a
+  körben, mert nincs a §4 engedélyezett fájllistáján; Claude dönthet külön
+  governance follow-upról.
 
 ## 11. Review — a Claude tölti ki
 
