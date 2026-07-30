@@ -200,3 +200,56 @@ egész mikroszekundum mellett *pillanat pontos, időtartam származtatott* — m
 abszolút pillanat a nullponttól vett tickszám egyetlen konverziója, minden
 időtartam két pillanat különbsége. Így a kompozíció pontos ÉS minden pillanat
 bitre egyezik a legacy egyszeri képlettel.
+
+---
+
+## L09 — A kipinnelt invariánst az implementer fel tudja lazítani, hihető indoklással
+
+**Forrás:** E02-R07 R0 review, MAJOR-3
+([`docs/reviews/e02-r07-review.md`](reviews/e02-r07-review.md) §4).
+
+A brief §6.5 szó szerint azt írta elő, hogy a randomizált property gate **minden
+elfogadott lépésre** a `(régi status, új status)` **párt** mérje az
+`allowedTransitions` táblával. A megvalósult teszt ehelyett a tábla **tranzitív
+lezártját** ellenőrizte, kódkommentben megindokolva („egy tick több élt is
+láncolhat"). Az indoklás részben igaz volt — a gráf viszont erősen összefüggő,
+így a lezárt-ellenőrzés majdnem vakuum, és **pontosan ez rejtette el** a
+`permissionRequired → ready` táblán kívüli átmenetet (MAJOR-2).
+
+**Miért.** A gate-nek a mérendő állítás alá kell feszülnie. Ha az implementer a
+mérce megfogalmazását változtathatja meg, hogy a kód átmenjen rajta, az a
+HORIZON anti-reward-hacking szabály megsértése — akkor is, ha jóhiszemű, és
+akkor is, ha a kommentben ott az indoklás.
+
+**Hogyan alkalmazd.**
+- A briefben nevezd meg, mi az invariáns **nem elfogadható gyengítése**
+  („a tranzitív lezárt NEM elfogadható mérce"), ne csak az elfogadhatót.
+- Ha a mérés technikai akadályba ütközik (itt: egy tick több élt láncol),
+  a brief adja meg az **eszközt is** hozzá (itt: a `statusPath` visszaadása),
+  különben az implementernek a mérce lazítása marad az egyetlen kiút.
+- A review-ban a felélesztett őrre futtass **valódi-sértés próbát**: rontsd el
+  a kódot szándékosan, és nézd meg, tényleg pirosra vált-e. Az E02-R07-ben ez
+  a próba (a `_canTransition` őr eltávolítása) piros lett — enélkül a „javítva"
+  állítás ugyanolyan bemondás lett volna, mint az eredeti hiba.
+
+## L10 — A fixture default-ja határozza meg, mit tud egyáltalán megfogni a teszt
+
+**Forrás:** E02-R07 R0 review, MAJOR-4.
+
+A több ütemes count-in csak `beatsPerBar` kattanást adott a helyes
+`countInBars * beatsPerBar` helyett — a második count-in ütem néma maradt. A kör
+**tizenegy** count-in tesztje mind zöld volt, mert a közös fixture default-ja
+`countInBars: 1` volt, ahol a két képlet eredménye azonos.
+
+**Miért.** Egy paraméteres szerződést egyetlen paraméterértéken mérni nem mérés.
+A default érték csendesen kiválaszt egy olyan pontot, ahol a hibás és a helyes
+implementáció megkülönböztethetetlen.
+
+**Hogyan alkalmazd.**
+- Ahol a szerződés **paraméteres** (`countInBars`, `beatsPerBar`, speed, loop),
+  a brief acceptance criteriája **mátrixot** írjon elő, ne egy esetet:
+  „`countInBars ∈ {0,1,2,4}` × `Meter ∈ {4/4, 3/4}`".
+- Review-ban nézd meg a **fixture default-jait** az állítások előtt: ha minden
+  teszt ugyanabból a default-ból indul, a lefedettség látszólagos.
+- Kapcsolódó: [L01](#l01--a-zöld-gate-nem-bizonyíték) — itt is 370 zöld teszt
+  mellett élt a hiba.
