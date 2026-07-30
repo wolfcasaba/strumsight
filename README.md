@@ -4,34 +4,36 @@
 strum direction (↓ down / ↑ up)** in real time while you play guitar — the one output every other
 chord-detection app leaves out.
 
-- **On-device detection** — the mic → DSP pipeline runs entirely on the phone; **no audio ever
-  leaves the device**, and the app is fully usable offline.
+- **On-device detection** — the mic → DSP → ML pipeline runs entirely on the phone; **no audio
+  ever leaves the device**, and the app is fully usable offline and logged out.
 - **Strum direction as the headline** — down/up per beat, with a confidence ramp.
-- **Optional account** — an opt-in login (FastAPI backend, `backend/`) syncs your *settings* across
-  devices. It's purely additive: logged out, everything still works and nothing hits the network.
+- **Optional account** — an opt-in login (FastAPI backend, [`backend/`](backend/README.md)) syncs
+  your *settings* across devices. Purely additive: logged out, nothing hits the network — enforced
+  by a system-level zero-request test (`test/app/offline_network_guard_test.dart`).
 - **Android-first** (iOS later; needs a Mac to build).
 
 > **Client version:** the single source of truth is `version:` in [`pubspec.yaml`](pubspec.yaml)
 > (read at runtime via `package_info_plus` and shown in Settings). Do not restate a version number
 > anywhere else in the docs.
 >
-> **Status:** REAL on-device detection in **pure Dart** — microphone → DSP isolate →
-> chroma/chord + whitened-spectral-flux onsets + sub-band strum direction + YIN tuner. The DSP
-> follows the sourced parameters in the [RAG knowledge base](docs/rag/README.md) and is fully
-> unit-tested on synthesized guitar signals. A C++/FFI port remains the optimization path only
-> if on-device profiling demands it.
+> **Status:** Epic 1 (Core Platform) complete — see
+> [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md) for the full
+> evidence-backed Definition-of-Done. Live state snapshot: [`HANDOFF.md`](HANDOFF.md).
 
 ---
 
-## What's in v1
+## Features
 
 | Surface | State |
 |--------|-------|
-| 🎤 **Live** mirror — huge current chord, big ↓/↑ arrow, confidence pill, rolling `1 & 2 & 3 & 4` beat counter, listening/level/BPM status | ✅ **real detection** (mic) |
-| 🎛️ **Tuner** — note + cents gauge + in-tune indicator | ✅ **real YIN pitch** (mic) |
-| ⚙️ **Settings** — theme (persisted), language (en/hu), confidence threshold (persisted), version | ✅ built |
-| 🔐 **Account** (optional) — email/password login, settings synced to the cloud (`backend/`) | ✅ opt-in |
-| 🎬 **Analyze** (recording → timeline) · 📚 **Library** (saved sessions) | 🔜 v2 (placeholders) |
+| 🎤 **Live** — current chord, ↓/↑ arrow, confidence pill, beat counter; DSP + CRNN ML on-device | ✅ real detection |
+| 🎛️ **Tuner** — note + cents gauge (YIN pitch) | ✅ real detection |
+| 🎬 **Analyze** — record a clip, get a chord/strum timeline | ✅ |
+| 📚 **Library** — saved sessions (rename, review) | ✅ |
+| 🎓 **Learn** — lessons with chord audio + metronome · **Songs** · **Progress** · **Streak** | ✅ |
+| ⚙️ **Settings** — theme, language (en/hu), thresholds; cloud-synced when logged in | ✅ |
+| 🔐 **Account** (optional) — email/password JWT login, settings sync only | ✅ opt-in |
+| 🧪 **Lab mode** — on-device diagnostics capture + upload to the Lab backend | ✅ dev-only |
 
 ## Architecture
 
@@ -40,54 +42,89 @@ mic (audio_streamer) ──▶ DSP ISOLATE                         ┌─ Live s
   PCM chunks             LivePipeline                        │   watches
                          ├─ fast  1024/256 : whitened flux ─ onsets → sub-band ↓/↑
                          ├─ slow 4096/1024 : peak-picked chroma → 24-template chord
+                         ├─ CRNN chord + strum nets (TFLite-free pure-Dart inference)
                          └─ tempo (median IOI) + bar slots → LiveFrame ~15 Hz ──▶ UI
 ```
 
-The UI only talks to the `StrumEngine`/`TunerEngine` interfaces. `RealStrumEngine` runs the whole
-pipeline off the UI isolate; `stop()` releases the microphone. The mocks remain as deterministic
-test infrastructure. Every DSP stage is unit-tested on synthesized guitar signals (staggered-string
-strums, harmonic-rich triads), and every parameter is documented + sourced in `docs/rag/`.
-
-**Design language:** dark-first Material 3, warm-neutral palette + **copper** brand accent, a
-**separate semantic confidence ramp** (high `#3ED598` / mid `#F2B33D` / low `#6E7480`) that is
-always reinforced by arrow *shape* (filled = high, outline = low) so meaning never depends on colour
-alone. Tokens live in `lib/core/theme/` (`AppColors`, `AppPalette`).
-
-## Project layout
-
-```
-lib/
-├── app/                     # router + bottom-nav shell
-├── core/theme · i18n · widgets
-├── features/
-│   ├── live/     model · engine · providers · widgets · screens
-│   ├── tuner/    model · engine · providers · widgets · screens
-│   ├── analyze/  (v2 placeholder) · library/ (v2 placeholder)
-│   └── settings/ providers · screens
-└── l10n/         app_en.arb · app_hu.arb
-```
+- **Feature-first layout:** `lib/features/<feature>/` (screens/providers/repositories/models),
+  shared code in `lib/core/` (music domain, audio codec/DSP, foundation `AppResult`/`AppFailure`,
+  network, storage, logging, platform seams, theme, i18n).
+- **State:** Riverpod 3 hand-written providers (no codegen); repository-provider pattern.
+- **Routing:** `go_router` with a central route catalogue (`lib/app/routing/`, ADR 0059).
+- **Architecture rules are machine-enforced:** `dart run tool/check_architecture.dart` — core
+  never imports features, the shared domain is Flutter-free, cross-feature imports go through
+  `public.dart`, and the 12-entry allowlist may only shrink (ADR 0057/0058). Runs in CI.
+- Every DSP parameter is documented + sourced in [`docs/rag/`](docs/rag/README.md); changes
+  require an ADR and a same-commit chunk update (AGENTS.md §9).
 
 ## Run
 
 ```bash
 ~/flutter/bin/flutter pub get
-~/flutter/bin/flutter run          # boots to the Live tab (mock detection)
+~/flutter/bin/flutter run          # boots to the Live tab
 ```
 
-## Verify gate (run as SEPARATE calls — chaining OOMs this box)
+## Build environments
+
+`--dart-define=STRUMSIGHT_ENV=development|staging|production` (validated, fail-closed
+`AppConfig` at bootstrap). Key flags:
+
+- `STRUMSIGHT_API_URL` — account backend base URL (default `http://10.0.2.2:8000` for emulators).
+- `STRUMSIGHT_ACCOUNT_ENABLED` — opt-in account layer; disabled ⇒ zero account requests.
+- Diagnostics (Lab) has its own flag + consent gate; disabled ⇒ the client is never created.
+- Production APK: `release-apk.yml` only — **fail-closed signing** (missing secrets stop the
+  first step; no debug-signing fallback, ADR 0062). Local `flutter build apk --release`
+  without `key.properties` intentionally uses the debug key for sideloading.
+
+## Backend (optional account layer)
+
+FastAPI + SQLite + JWT in [`backend/`](backend/README.md) — login + settings sync only;
+detection never touches it. Alembic owns the production schema; `/health/live` +
+`/health/ready`; production is fail-closed (secret validation, SQLite guard, Lab routes not
+registered). Run/tests: `backend/README.md`.
+
+## Lab mode
+
+Dev-only diagnostics: flag-gated routes (`diagnostics_enabled`, prod default OFF — the routes
+do not exist in production), token-guarded streaming upload with size limits, explicit user
+consent in-app. See ADR 0061.
+
+## Testing
+
+Run as **SEPARATE** calls (chaining `analyze && test` OOMs this box):
 
 ```bash
-~/flutter/bin/flutter analyze lib/     # clean
-~/flutter/bin/flutter test             # all green
+~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+~/flutter/bin/flutter analyze lib/ test/ tool/
+~/flutter/bin/flutter test                          # ~1000 tests; full suite normally in CI
+~/flutter/bin/flutter test test/property            # randomized property gate (PROPERTY_SEED)
+~/flutter/bin/dart run tool/check_architecture.dart
+cd backend && .venv/bin/python -m pytest            # 64 backend tests
 ```
 
-## Roadmap
+CI (`.github/workflows/`): `build-apk.yml` and `release-apk.yml` share one gate chain via
+`.github/actions/flutter-gates` (format → analyze → architecture → asset → test → randomized
+property), with coverage in a parallel required job; `backend-ci.yml` runs Ruff + pytest +
+an isolated Alembic upgrade. The final acceptance predicate is always a real-guitar APK test
+on a physical device — synthetic green is never "done".
 
-1. **Phase 1** — validate the chord + strum-direction algorithm in Python on real clips (go/no-go).
-2. **Phase 2** — port the validated algorithm to a C++ DSP core with unit tests.
-3. **Phase 3** — native audio (Oboe mic capture, MediaCodec file decode) + JNI/FFI bridge.
-4. **Phase 4** — wire the FFI engine into this Live UI (drop-in).
-5. **v2** — Analyze (recording → timeline), Library (offline saved sessions), optional TFLite
-   direction model.
+## Offline & privacy
 
-Payments/monetization are intentionally out of scope.
+- Audio never leaves the device; detection is 100% on-device.
+- Logged out / account-disabled / diagnostics-disabled ⇒ **zero network requests**, proven by
+  `test/app/offline_network_guard_test.dart` at the single `DioFactory` seam
+  (`test/tooling/dio_factory_guard_test.dart` guarantees no other Dio source exists).
+- Tokens live in `flutter_secure_storage`; logs are redacted (no token/password/raw audio).
+
+## Model assets
+
+CRNN chord/strum models ship as binary assets under `assets/ml/`, described by a **generated
+manifest** (`assets/ml/model_manifest.json`, created by `ml/make_manifest.py`). A two-way CI
+gate (`test/tooling/ml_asset_manifest_test.dart` + asset gate) keeps pubspec, manifest and
+binaries in sync (ADR 0063). The manifest is intentionally not a Flutter asset — it is
+build/guard-time metadata.
+
+## What's next
+
+Epic 2 — Practice Engine (`docs/sdd/03-epic-02-practice-engine.md`). Payments/monetization
+remain out of scope for now.

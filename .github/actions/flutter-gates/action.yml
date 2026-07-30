@@ -1,0 +1,36 @@
+name: Flutter quality gates
+description: Runs the shared StrumSight Flutter quality gate chain.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Flutter dependencies
+      shell: bash
+      run: flutter pub get
+
+    - name: Format gate
+      shell: bash
+      run: dart format --output=none --set-exit-if-changed lib test tool
+
+    - name: Analyze gate
+      shell: bash
+      run: flutter analyze lib/ test/ tool/
+
+    - name: Architecture gate
+      shell: bash
+      run: dart run tool/check_architecture.dart
+
+    - name: Asset gate
+      shell: bash
+      run: dart run tool/ci/check_assets.dart
+
+    - name: Test gate
+      shell: bash
+      run: flutter test
+
+    # A fresh seed on every workflow run prevents tuning to fixed fixtures.
+    - name: Property gate (randomized seed)
+      shell: bash
+      run: flutter test test/property
+      env:
+        PROPERTY_SEED: ${{ github.run_id }}
