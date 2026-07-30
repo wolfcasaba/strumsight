@@ -8,6 +8,29 @@
 - **Kiosztott ADR:** **0073** — [`docs/adr/0073-practice-session-state-machine.md`](../adr/0073-practice-session-state-machine.md).
   **Az ADR-t Claude írta; az implementer NEM hoz létre és NEM módosít `docs/adr/` fájlt.**
 
+## 0.0 BRIEF-REVÍZIÓ — 2026-07-30, az első review után (R1)
+
+Az első implementációs kör (`01f7ccc`) review-ja
+([`docs/reviews/e02-r07-review.md`](../reviews/e02-r07-review.md)) négy MAJOR és
+három MINOR leletet mért **370 zöld teszt mellett**. Három lelet gyökere maga
+ez a brief volt; az alábbi négy pont **felülírja** a korábbi szöveget, és a
+javító kör ezekre a revideált szabályokra épül:
+
+1. **§5.5 (időbázisok):** `StartPractice` és `RestartAttempt` esetén
+   `activeBase = state.activeElapsed` (NEM `Duration.zero`), mert az óra
+   `active` mezője attemptek között is nő. A count-in fajtáját **explicit
+   állapotmező** különböztesse meg, ne az `activeBase > 0` heurisztika.
+2. **§5.6 (befejezés):** a timeout-őrzés statusai **`running` ÉS `paused`**
+   (a `countIn` teljesíthetetlen volt: a §5.2 tábla nem ismer
+   `countIn → finishing` élt), és a timeoutot **előbb** kell vizsgálni, mint a
+   timeline-véget.
+3. **§5.7 (kattanások):** a **kezdeti** count-in span hossza
+   `countInBars * beatsPerBar` ütés (a resume spané `beatsPerBar`), explicit
+   `countInSpanBeats` állapotmezővel.
+4. **§6.5 (property gate):** az átmenet-invariáns **élenkénti**, a tábla
+   tranzitív lezártja NEM elfogadható; a `timelinePosition` invariáns clamp
+   nélkül fogalmazandó újra.
+
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
 Te vagy ennek a körnek az IMPLEMENTERE. Nem te tervezel és nem te review-zol.
@@ -315,19 +338,26 @@ Egyetlen képlet:
 timelinePosition = timelineBase + max(Duration.zero, active - activeBase)
 ```
 
-| Esemény | `timelineBase` | `activeBase` |
-|---|---|---|
-| `StartPractice` elfogadva | `Duration.zero` | `Duration.zero` |
-| `ResumePractice` elfogadva | `barBoundaryAtOrBefore(pausedAtTimeline)` | `active + converter.barDuration` |
+| Esemény | `timelineBase` | `activeBase` | count-in fajta |
+|---|---|---|---|
+| `StartPractice` / `RestartAttempt` elfogadva | `Duration.zero` | **`state.activeElapsed`** | `initial` |
+| `ResumePractice` elfogadva | `barBoundaryAtOrBefore(pausedAtTimeline)` | `state.activeElapsed + converter.barDuration` | `resume` |
 
 - `barBoundaryAtOrBefore(t)` = a `target.barBoundaries` **legnagyobb** eleme,
   ami `<= t`; ha nincs ilyen → `Duration.zero`.
-- **Kezdeti count-in:** `activeBase == 0`, tehát az idővonal a count-in alatt
-  HALAD (ADR 0072: a count-in a timeline része).
+- **Az óra `active` mezője attemptek között NEM nullázódik** (a `resetAttempt()`
+  csak az `attempt`-et nullázza), ezért a bázis a *pillanatnyi* `activeElapsed`.
+  Friss sessionben ez `Duration.zero`, tehát a viselkedés változatlan; a
+  második attemptben viszont a playhead így indul nulláról (R1 MAJOR-1).
+- **Kezdeti count-in:** `activeBase == activeElapsed` a start pillanatában,
+  tehát az idővonal a count-in alatt HALAD (ADR 0072: a count-in a timeline része).
 - **Resume count-in:** `activeBase` a jövőben van, a `max` miatt a playhead a
   `timelineBase`-en ÁLL egy `barDuration`-nyi aktív időn át, majd onnan folytatódik.
-- **A status `countIn`**, ha `active < activeBase` (resume count-in) VAGY
-  `timelinePosition < target.countInDuration` (kezdeti count-in); egyébként
+- **A count-in fajtáját EXPLICIT állapotmező hordozza** (pl.
+  `PracticeCountInKind { initial, resume }`) — az `activeBase > Duration.zero`
+  heurisztika a fenti bázisváltozás után hibás lenne.
+- **A status `countIn`**, ha a fajta `resume` és `active < activeBase`, VAGY a
+  fajta `initial` és `timelinePosition < target.countInDuration`; egyébként
   `running`. A váltás `ClockAdvanced` feldolgozásakor történik, az
   átmenettáblán keresztül (`countIn -> running`).
 
@@ -351,11 +381,14 @@ A `wallElapsed` **kizárólag** a `sessionTimeout` őrzésére való.
 
 `PracticeFinishReason { completedTimeline, userFinished, cancelled, timedOut, failed }`.
 
-- `ClockAdvanced` `running`-ban, `timelinePosition >= target.totalDuration`
-  → `finishing`, `finishReason = completedTimeline`.
-- `ClockAdvanced` bármely aktív statusban, `wallElapsed > config.sessionTimeout`
-  → `finishing`, `finishReason = timedOut` (ez erősebb a `completedTimeline`-nál:
-  előbb a timeoutot vizsgáld).
+- **A timeout ELŐBB vizsgálandó** (R1 MINOR-1): `ClockAdvanced` **`running` vagy
+  `paused`** statusban, `wallElapsed > config.sessionTimeout` → `finishing`,
+  `finishReason = timedOut`. Mindkét élt engedi a §5.2 tábla
+  (`running -> finishing`, `paused -> finishing`); a `countIn`-re NINCS ilyen él,
+  onnan tehát nem lehet timeoutolni.
+- Csak ha a timeout nem tüzelt: `ClockAdvanced` `running`-ban,
+  `timelinePosition >= target.totalDuration` → `finishing`,
+  `finishReason = completedTimeline`.
 - `FinishPractice` → `finishing`, `userFinished`.
 - `CancelPractice` → `cancelled`, `cancelled`.
 - `finishing` + `ClockAdvanced` → `completed` (nincs mire várni ebben a körben),
@@ -370,11 +403,13 @@ A `wallElapsed` **kizárólag** a `sessionTimeout` őrzésére való.
 Ebben a körben kibocsátva:
 
 - `playCountInClick(k)` — minden count-in ütés-határon **span-enként pontosan
-  egyszer**. A kezdeti span kattanásai a `timelinePosition`
-  `k * converter.beatDuration` (k = 0 … `countInBars * meter.beatsPerBar - 1`)
-  átlépésekor; a resume span kattanásai az `active`
-  `countInSpanStartActive + k * converter.beatDuration`
-  (k = 0 … `meter.beatsPerBar - 1`) átlépésekor.
+  egyszer**, `k = 0 … countInSpanBeats - 1`. A span hosszát **explicit
+  állapotmező** (`countInSpanBeats`) hordozza, nem a `meter.beatsPerBar`
+  (R1 MAJOR-4):
+  - **kezdeti span:** `countInSpanBeats = countInBars * meter.beatsPerBar`,
+    a kattanások a `timelinePosition` `k * converter.beatDuration` átlépésekor;
+  - **resume span:** `countInSpanBeats = meter.beatsPerBar`, a kattanások az
+    `active` `countInSpanStartActive + k * converter.beatDuration` átlépésekor.
   Egyetlen nagy `ClockAdvanced` ugrás **több** kattanást ad vissza, sorrendben,
   duplikátum nélkül.
 - `navigateToResult` — `completed`-be lépéskor.
@@ -472,9 +507,22 @@ Továbbá:
       (az anchor maga a határ), és 1 µs-mal utána (az anchor ugyanaz).
 - [ ] **3/4:** a resume count-in `converter.barDuration`-nyi, azaz **3** ütés —
       a kattanások száma 3, nem 4.
-- [ ] `RestartAttempt` után `timelineBase == 0`, `activeBase == 0`,
-      `countInElapsed == 0`, `playingElapsed == 0`, `attemptIndex` +1,
-      a `wallElapsed` **folytatódik** (nem nullázódik).
+- [ ] `RestartAttempt` után `timelineBase == 0`,
+      `activeBase == state.activeElapsed`, `countInElapsed == 0`,
+      `playingElapsed == 0`, `attemptIndex` +1, a `wallElapsed` **folytatódik**
+      (nem nullázódik), **és `timelinePosition == Duration.zero`** — egy
+      ezt követő 500 ms-os tick után pontosan `500 ms` (R1 MAJOR-1).
+      Ugyanez mérendő a `completed → ready → StartPractice` úton indított
+      második sessionre is.
+- [ ] `countInBars ∈ {0, 1, 2, 4}` × `Meter ∈ {4/4, 3/4}` mátrixon a kezdeti
+      count-in kattanásainak száma pontosan `countInBars * beatsPerBar`
+      (R1 MAJOR-4).
+- [ ] `permissionRequired` állapotban a `PreparationSucceeded` és a
+      `PreparationFailed` **elutasított** — a §5.2 tábla onnan csak
+      `preparing` és `cancelled` élt ismer (R1 MAJOR-2).
+- [ ] Egy tickben egyszerre bekövetkező timeout és timeline-vég esetén a
+      `finishReason` `timedOut` (R1 MINOR-1); `paused` állapotban a
+      `sessionTimeout` túllépése `finishing`-be visz (R1 MINOR-2).
 - [ ] `sessionTimeout` túllépése `finishing` + `timedOut`, akkor is, ha az
       idővonal még nem ért véget.
 
@@ -486,15 +534,22 @@ legalább 200 véletlen bemeneti sorozat, sorozatonként legalább 30 bemenet
 beleértve). Állítások:
 
 - [ ] a reducer soha nem dob;
-- [ ] minden elfogadott lépésre a `(régi status, új status)` pár szerepel az
-      `allowedTransitions` táblában (vagy a két status azonos);
+- [ ] **élenkénti** átmenet-ellenőrzés (R1 MAJOR-3): a tranzitív lezárt NEM
+      elfogadható mérce. Ha egy `ClockAdvanced` több élt láncol
+      (`countIn → running → finishing`), a `PracticeSessionTransition` adja
+      vissza a bejárt statusok sorozatát (`statusPath`; nem-tick lépésnél
+      egyelemű), és a property MINDEN szomszédos párját a **nyers**
+      `allowedTransitions` táblával mérje;
 - [ ] minden elutasított lépésre a state változatlan és `effects` üres;
 - [ ] `activeElapsed + pausedElapsed == wallElapsed` végig;
 - [ ] `countInElapsed + playingElapsed <= activeElapsed` végig;
 - [ ] `wallElapsed`, `activeElapsed`, `pausedElapsed`, `countInElapsed`,
       `playingElapsed` monoton nemcsökkenő;
-- [ ] `timelinePosition` sosem nagyobb `target.totalDuration`-nél, és csak
-      elfogadott `ResumePractice` után csökkenhet.
+- [ ] `timelinePosition` csak elfogadott `ResumePractice` vagy `RestartAttempt`
+      után csökkenhet. **Clamp TILOS** (R1 MINOR-3): a getter az ADR 0073 §4
+      képletét adja nyersen. A felső korlát ehelyett így mérendő: ha
+      `timelinePosition >= target.totalDuration`, akkor a status a tick végén
+      már NEM `running` (hanem `finishing` vagy `completed`).
 
 ### 6.6 Nemregresszió
 
