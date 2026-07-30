@@ -2,9 +2,10 @@
 
 - **Kör:** E02-R06 · **Brief:** [`docs/rounds/e02-r06-target-compiler.md`](../rounds/e02-r06-target-compiler.md)
 - **ADR:** [0072](../adr/0072-practice-target-compiler.md) · **Implementer:** Codex
-- **Branch:** `codex/epic-02-round-06-target-compiler` @ `1fd6125`
+- **Branch:** `codex/epic-02-round-06-target-compiler` — első review `1fd6125`, javítás után **`09ed793`**
 - **Reviewer:** Claude (Opus 5), read-only — production kód nem készült a review során
-- **Verdikt:** **CHANGES REQUESTED** — 0 BLOCKER · 0 MAJOR · **1 MINOR** · 2 NOTE
+- **Verdikt:** első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · 1 MINOR · 2 NOTE)
+  → két javító kör után **APPROVED** (lásd §9)
 
 ## 1. Gate-ek — a reviewer SAJÁT futtatása
 
@@ -141,3 +142,78 @@ a compiler bizonyított invariánsa. A MINOR-1 javítása ezt invariánssá tenn
 A javítás után a kör **APPROVED**-ra állítható; BLOCKER/MAJOR nincs, a merge-et
 kizárólag a MINOR-1 tartja vissza (a diff nem nő érdemben, ezért körön belüli
 javítás indokolt, nem follow-up).
+
+---
+
+## 9. Javító körök és zárás — **APPROVED** @ `09ed793`
+
+### 9.1 A javítás két körben ment, mindkét megállás helyes volt
+
+**Javító kör #1 → `stopped`.** Az ütemhatárok átállítása egyetlen konverzióra
+rendben lement, a két kért regressziós teszt megszületett — de a review 2. pontja
+(`totalDuration` egyszeri konverziója) a kör **saját** korpusz-tesztjének
+kompozíciós állításába ütközött: `lesson.first-strums.v1` → 20 571 429 µs
+(egyszeri) vs 20 571 428 µs (a három komponens összege). A Codex nem gyengítette
+csendben a saját állítását, hanem megállt és jelentette a számokat.
+
+**A lelet valós volt, és a review kérése hiányos.** Egész mikroszekundum mellett
+nem tartható egyszerre, hogy (a) minden időtartam a saját tickszámának egyszeri
+konverziója, és (b) a részek összege kiadja az egészet. A feloldás tervezői
+döntést igényelt, ezért az **ADR 0072 új §1.1** szakaszt kapott
+(*pillanat pontos, időtartam származtatott*, commit `c5e71e0`): minden abszolút
+pillanat a nullponttól vett tickszám egyetlen konverziója, minden időtartam két
+pillanat különbsége — így mindkét tulajdonság egyszerre teljesül.
+
+**Reviewer-önkorrekció.** Az első javító prompt „meglévő tesztet ne írj át"
+kitétele túl tág volt: a Codex ezért a saját, ebben a körben írt tesztjét is
+érinthetetlennek vette. A második prompt megkülönbözteti a **befagyasztott**
+teszteket (baseline, korábbi körök — zártak) a kör saját tesztjeitől
+(a szerződés változásakor igazíthatók). A megállás emiatt volt indokolt, nem
+a Codex hibája.
+
+**Javító kör #2 → `done`** (`09ed793`, „fix(practice): derive durations from
+timeline moments"): a compiler `countInEnd` / `musicalEnd` / `sessionEnd`
+pillanatokból származtatja a három időtartamot, az ütemhatárok abszolút tickből
+jönnek. Diff: 5 fájl, +133/−16 — nem hizlalta a kört.
+
+### 9.2 MINOR-1 zárva — a reviewer próbateszt ELŐTTE/UTÁNA
+
+Ugyanaz a próbateszt a javított kódon (`/tmp/review-e02r06b`, friss klón):
+
+```text
+                        ELŐTTE (1fd6125)         UTÁNA (09ed793)
+PROBE-1 (downbeat)      5333333 vs 5333334us     5333333 vs 5333333us  → delta 0
+PROBE-2 (totalDuration) 8000001 vs 8000000us     8000000 vs 8000000us  → delta 0
+PROBE-3 (kompozíció)    —                        total == sum (13333333us)
+```
+
+A MINOR-1 tehát nem „elvileg javítva", hanem **mérten**: a downbeat-esemény és az
+ütemhatára ma azonos időt kap, és a `totalDuration` maradékos tempón (90 BPM) is
+bitre egyezik a legacy egyszeri képlettel. A NOTE-2 ezzel szintén rendeződött: a
+0 µs már nem a korpusz tulajdonsága, hanem a §1.1-ből következő invariáns.
+
+### 9.3 Gate-ek a javítás után — újra a reviewer saját futtatása
+
+Friss izolált klón a javított branchről:
+
+```text
+$ ~/flutter/bin/dart format --output=none --set-exit-if-changed lib test
+Formatted 506 files (0 changed) in 1.70 seconds.
+
+$ ~/flutter/bin/flutter analyze lib/ test/
+Analyzing 2 items...
+No issues found! (ran in 7.0s)
+
+$ ~/flutter/bin/flutter test test/features/practice/
+00:21 +291: All tests passed!
+```
+
+289 → **291** (a két új regressziós teszt). A korpusz-teszt kompozíciós állítása
+változatlanul benne van és zöld — ez a legerősebb bizonyíték, hogy a §1.1 nem
+lazítás, hanem szigorítás.
+
+### 9.4 Verdikt
+
+**APPROVED** @ `09ed793`. BLOCKER/MAJOR nincs, a MINOR-1 mérten zárva, a NOTE-1
+(brief §6.5 pontatlan kritériuma) és a NOTE-2 rendezve. A kör mehet a zöld
+kapura: CI-dispatch a kör-branchre, majd merge.
