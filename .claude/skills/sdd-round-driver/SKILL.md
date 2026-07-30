@@ -1,0 +1,102 @@
+---
+name: sdd-round-driver
+description: Egy StrumSight SDD-kör TELJES levezénylése az orchestrátor (Claude / Opus 5) székéből — pre-flight, kör-brief, implementer-motor kiválasztás (Codex vs MiniMax M3), headless indítás a wrapper scriptekkel, kör-jelzés figyelés, review-kézfogás, javító kör, CI-dispatch, zöld-kapus squash-merge és a záró rituálék (HANDOFF, git-notes, Viking). Használd, amikor a feladat "vidd a következő kört", "indítsd az E02-RXX-et", "folytasd az SDD-t" vagy bármilyen kör-végrehajtás; akkor is, ha a modell először vezényel le kört ebben a repóban.
+---
+
+# SDD kör-levezénylés (orchestrátor-oldal)
+
+Egy kör = egy session (ADR 0052). A lánc: tervezés → implementálás (másik
+motor!) → review → javítás → merge → zárás → STOP. Te vagy a karmester; a
+production kódot a körben NEM te írod (kivétel: explicit user-utasítás, vagy
+a motor-oldal nem elérhető — jelentésben rögzítve).
+
+## 0. Pre-flight
+
+1. `HANDOFF.md` §6 — melyik kör a következő, mik az előfeltételei.
+2. `git status --short` — ismeretlen working-tree változást NE módosíts.
+3. `gh pr list` + `gh run list --limit 5` — fut-e párhuzamos autonóm driver
+   ugyanazon a körön (ismert jelenség ezen a boxon). Ha igen: állj meg, jelents.
+4. A kör SDD-fejezete + érintett kód + a legutóbbi review tanulságai.
+
+## 1. Kör-brief (→ `round-brief-prep` skill)
+
+A brief a `docs/rounds/eXX-rYY-<slug>.md` fájl, a `docs/execution/08-round-brief.md`
+sablonra. Kritikus elemek: mért „Jelenlegi állapot", **engedélyezett fájlok
+tételes listája + tilos zóna**, előre kiosztott ADR-szám (az ADR-t TE írod),
+mérhető acceptance criteria, gate-parancsok KÜLÖN hívásokként. A brief a kör
+indítása ELŐTT commitolva van a kör-branchre.
+
+**Kötelező tanulság-átvitel (E02-R04/R05):** a zöld gate nem bizonyíték —
+minden szövegesen leírt tartalmi előírás mellé GÉPI mércét adj (kipinnelt
+szekvencia, legacy-referenciával szembe mérő teszt az éleken), különben a
+review-nak kell próbateszttel megfognia.
+
+## 2. Motor-választás (ADR 0069, AGENTS.md §15.6)
+
+| Kör jellege | Motor |
+|---|---|
+| Jól specifikált domain/model/teszt, adapter, katalógus, i18n, mechanikus refaktor, boilerplate | **MiniMax M3** |
+| DSP-hangolás, baseline-érzékeny scorer/matcher, perf-kritikus, felderítő/kétértelmű | **Codex** |
+| Bizonytalan | **Codex** (a drágább a biztonságos default) |
+
+A szűkös erőforrás a Codex-kvóta — volument inkább M3-nak.
+
+**MiniMax-briefbe KÖTELEZŐ öt elem** (mért hibák ellenszere): (1) záró gate-sor
+szó szerint, csővezeték és `tail` nélkül; (2) STOP-klauzula scope-ütközésre
+(`stopped` jelzés + jelentés); (3) a kör-jelzés kötelezettsége a prompt elején;
+(4) „a brief §8 a terved — nincs külön task-lista"; (5) „doc-commentben csak
+tesztben bizonyított állítás (`const`, `immutable`)".
+
+## 3. Indítás (SOHA nem csupasz `codex exec`)
+
+Külön munkapéldányban (`/home/ubuntu/ss-<motor>-<kör>`), KÉT háttér-taskként:
+
+```bash
+# Codex:
+tools/codex-round.sh /home/ubuntu/ss-codex-<kör> <prompt>.md /tmp/codex-<kör>.log
+tools/codex-watch.sh /home/ubuntu/ss-codex-<kör> /tmp/codex-<kör>.log
+# MiniMax M3:
+tools/mm-round.sh /home/ubuntu/ss-mm-<kör> <prompt>.md /tmp/mm-<kör>.log
+tools/mm-watch.sh /home/ubuntu/ss-mm-<kör> /tmp/mm-<kör>.log
+```
+
+A wrapper `-s danger-full-access`-szel fut (a bwrap itt nem megy) — az
+izolációt a külön munkapéldány adja. Védelmi vonalak: kör-jelzés
+(`.codex-round-status`), stall-őr (12 perc néma log → kill), timeout (3600s).
+
+**Értesüléskor ELŐSZÖR a `.codex-round-status` fájlt olvasd** (`status`,
+`summary`, `branch`, `head`, `dirty_files`), csak utána a logot. `status=unknown`
+→ a motor jelzés nélkül halt meg; a jelentését ne fogadd el bemondásra.
+Crash-nél: resume UGYANAZZAL a session-iddel + a TELJES gate-mátrix újrafuttatása.
+
+## 4. Review (→ `sdd-round-review` skill)
+
+Független, read-only review-jelentés a `docs/reviews/eXX-rYY-review.md`-be.
+BLOCKER/MAJOR nyitva → nincs merge; a javító kört UGYANAZ a motor viszi, a
+findings-listával a promptban. A javító kör után a review-t frissítsd
+(APPROVED / újra CHANGES REQUESTED) és a zárást ellenőrizd leletenként.
+
+## 5. CI-dispatch és merge
+
+```bash
+gh workflow run build-apk.yml --ref <kör-branch>
+gh run watch <run-id>        # vagy gh run list --workflow=build-apk.yml
+```
+
+A run linkje a PR kötelező build-evidenciája. A PR-törzs rögzíti, melyik motor
+implementált. **Zöld kapu** (ADR 0052): format + analyze + architecture +
+teljes CI-suite + randomizált property + APK mind zöld → **squash-merge külön
+jóváhagyás nélkül**. Bármi piros/hiányzik → merge TILOS, jelents.
+
+## 6. Zárás (mind kötelező, sorrendben)
+
+1. `HANDOFF.md` frissítés (fejléc-dátum, §4–§6; a kész kör részletes története
+   → `docs/handoff-archive.md`), `docs(handoff)` commit.
+2. RTM (`docs/execution/06-…`) + ADR-hivatkozások, ha a kör érintette.
+3. Git-notes: `git notes add -m "round=<n> verdict=pass tests=<n> lesson=<slug> engine=<motor>"`
+   majd `git push origin 'refs/notes/*'`.
+4. Viking: `viking_remember` (tanulságok) + `viking_session_commit`.
+5. Végrehajtási jelentés a válaszban (AGENTS.md §16: összefoglaló, fájlok,
+   acceptance-teljesítés, futtatott parancsok TÉNYLEGES kimenettel, nem
+   futtatott ellenőrzések + ok, kockázatok, pontos következő kör).
+6. **STOP.** A következő kör ÚJ sessionben indul — ne kezdd el.
