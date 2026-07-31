@@ -305,6 +305,63 @@ eredeti lelet mind zárva, a mércék bizonyítottan fognak.
 
 ---
 
-## 11. Második javító kör — újraellenőrzés
+## 11. Második javító kör — újraellenőrzés (`4876568`)
 
-*(a második javító kör után tölti ki a reviewer)*
+**Verdikt: APPROVED.** 0 BLOCKER · 0 MAJOR · 0 MINOR nyitva.
+
+Diff a `3e2a455` óta: `+4` sor production (a státusz-őr és a doc-commentje),
+`10` sor teszt-input csere, és a §10 handoff. Semmi más.
+
+### 11.1 A bevezetett őr
+
+```dart
+// ADR 0077 §3 — observations delivered after `gateway.stop()` (the
+// `paused` → capture-off transition is async) must not reach the scorer.
+// Source of truth for capture activation is `practiceCaptureActiveByStatus`.
+if (!practiceCaptureActive(_state.status)) return;
+```
+
+Pontosan az előírt alak: a **meglévő** táblát terjeszti ki az observation-útra,
+új mező és új logika nélkül.
+
+### 11.2 A megelőlegezett mérce — teljesül
+
+A review §10.3-ban előre kihirdetett próba: az őr **kivétele** után
+
+```
+Failing tests:
+  … practice_session_controller_test.dart:
+    A6 — pause semantics running → paused: strum during pause does not change liveScore
+```
+
+**PIROS**, ahogy kellett — és a kontroll (mutáció nélkül) **602/602 ZÖLD**.
+Az A6 első cellája ezentúl a valódi hibaalakot fogja meg (`at: event1Time`,
+a korábbi, sosem párosuló `30 ms` helyett).
+
+### 11.3 Merge-döntés
+
+**A merge nincs blokkolva.** Marad az ADR 0052 zöld kapuja: a CI-t a
+teszt-változások miatt **újra kell** dispatch-elni; a korábbi zöld run
+(`30655646387`) a `98a1bea` HEAD-en futott, tehát már nem evidencia.
+
+### 11.4 A körből származó, MERGE UTÁNRA hagyott follow-upok
+
+| # | Tárgy | Gazda |
+|---|---|---|
+| 1 | a `noSignal` a direction és rhythm dimenzióban ma „nem párosult", nem „nem volt jel" (két lezárt scorer aláírása) — ADR 0077 „Ismert korlát" | E02-R18 pre-flight |
+| 2 | a state machine-nek **nincs futásidejű fatal éle** (`countIn/running → failed` szerepel az `allowedTransitions`-ben, de egyetlen input sem produkálja) — ADR 0077 „Ismert korlát 2" | önálló reducer-kör, legkésőbb E02-R18 |
+| 3 | `AudioOwner.practice` — a Practice ma a Live motor lease-ét használja, a lease-logok félrevezetőek | E02-R13 pre-flight |
+| 4 | a `practiceSessionControllerProvider` production oldalon **nem példányosítható** gateway-provider nélkül (a Live → Practice bekötés hiányzik) | E02-R13 |
+
+### 11.5 Orchestrátori önértékelés
+
+Ezt a kört **három** brief-hibám állította meg vagy lassította, mind mérhető
+gyökérokkal — a tanulságok a `docs/LESSONS.md`-be mennek:
+
+1. **erőforrás-tulajdonlás feltételezve, nem mérve** (lease → `MicCapture`);
+   a helyes mérés `grep -rn "\.acquire(" lib/`;
+2. **elérhetetlen cél-státusz előírva**; a helyes mérés nem az átmenettábla,
+   hanem `grep -n "status: <Enum>.<érték>"` a reduceren;
+3. a **javító prompt kihagyta a „commitolni kell" mondatot**, ezért az
+   implementer `done`-t jelzett három uncommitted fájllal — a
+   kör-prompt sablonjába kötelező elemként visszakerül.
