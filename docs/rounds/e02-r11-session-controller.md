@@ -722,9 +722,63 @@ property gate + APK a CI-ban fut, merge előtt, orchestrátor-dispatch-csel
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A16
-pontok teljesülése bizonyítékkal · eltérések és okuk · nem futtatott ellenőrzések
-és okuk · follow-upok.)*
+**Állapot: STOP — A5 cella elérhetetlen a §4-es file-listán kívül.**
+
+A kört a STOP-klauzula aktiválásával zártam (a §0.0 R13 mintájára: a
+§4 vs. az ADR 0077 §11 közötti belső ellentmondás). A fennmaradó
+felületen minden szó szerint a brief §7-et követte, és ahol a
+felület a reducertől/command kittől függ (A5 gateway.start failure →
+`failed`), a függőséget a §4 listája kitiltja.
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Státusz | Tartalom |
+|---|---|---|
+| `lib/features/practice/application/practice_session_controller.dart` | committed `a0547bf` | A controller váza: `dispatch` single entry-point, capture-activation table szinkron (A2), `PreparePractice` permission + compile útvonal, `StartPractice`/`PausePractice`/`ResumePractice`/`RestartPractice`/`CancelPractice`/`FinishPractice` input-okra a tábla szerinti gateway/clock/tick-source vezérlés, observation-stream feliratkozás, scoring pass StrumObservation-re és finish-re (A14), `NavigateToResult` számláló (A3), dual `PracticeFinishReason` enum mapping (A15), teljes terminál cleanup (`stop` + `dispose` + tick stop + subscription cancel — A4), attempt szintű `PracticeAttemptResult` építés. A `_driveControlledFailure` csak `preparing` esetén hajt végre reducer tranzitciót (`PreparationFailed`); egyébként a `ShowRecoverableError` effektus az egyetlen kimenet — a state nem jut el `failed`-be, mert a reducert nem szabad módosítani. |
+| `lib/features/practice/application/practice_tick_source.dart` | committed `a0547bf` | `PracticeTickSource` interface + `TimerPracticeTickSource` (16 ms, `startedCount`/`stoppedCount`/`isRunning`); a `finishing` státusz alatt is fut (A16). |
+| `lib/features/practice/domain/repository/practice_session_recorder.dart` | committed `a0547bf` | `PracticeSessionRecorder` interface + `NoopPracticeSessionRecorder` (Success, nem swallow). |
+| `test/support/fake_practice_tick_source.dart` | committed `a0547bf` | Determinista fake — `emitTick()` egyetlen ticket tüz; idempotens start/stop. |
+| `test/support/fake_practice_session_recorder.dart` | committed `a0547bf` | `recordCalls`/`recordedResults` + injektálható `recordResult`. |
+| `lib/features/practice/application/practice_session_clock.dart` | committed `c7f746e` | `start()` idempotens futó ÉS pause-olt állapotból; doc-comment igazítva. |
+| `lib/features/practice/application/practice_observation_activation.dart` | committed `c7f746e` | Doc-comment `E02-R09` → `E02-R11` (3. és 21. sor). |
+| `test/support/fake_practice_session_clock.dart` | committed `c7f746e` | A fake `start()` ugyanúgy idempotens, mint a production. |
+| `test/features/practice/application/practice_session_clock_test.dart` | committed `c7f746e` | A `_runClockContract` két érintett cellája (`pause → start` és `pause → advance → start`) átírva az új no-op szerződést pinnelve. |
+
+### 10.2 Konfliktus — A5 vs. §4
+
+**A5 cella (brief §6):**
+> gateway `start()` `Failure`-t ad — **két cella**: (a) általános indítási hiba, (b) **foglalt mikrofon**, azaz `AudioFailure(code: FailureCode.audioSessionBusy)` | `failed` | `ShowRecoverableError` | igen
+
+**A §4-es allowed-files list NEM tartalmazza** sem `practice_session_command.dart`-t, sem `practice_session_reducer.dart`-t. A reducert elolvasva (`practice_session_reducer.dart:180-204`):
+
+- `PreparationFailed` → `failed`, **kizárólag `preparing` státuszból** (a `permissionRequired → failed` is goto-védett).
+- `CancelPractice` → `cancelled`, széles tartományból.
+- Nincs más input, ami `countIn`/`running`/`paused`/`finishing`-ből `failed`-be menne.
+
+A capture-activation table miatt a `gateway.start()` hívás a `countIn` státuszban fut le (a `countIn` → `true` a táblában). Ekkor a gateway produkálhat `Failure`-t (a `MicCapture` `audio.session_busy`-t ad vissza, ha a `LivePracticeObservationGateway` másik motorja épp tartja a lease-t). A controller a `_driveControlledFailure(error)` úton `PreparationFailed` signalt küld, de a reducer ezt elutasítja, mert a state `countIn` (nem `preparing`). A controller így a `ShowRecoverableError` effektust kiadja, a gateway-t leállítja, de a state `countIn` marad — az A5 „failed” cellája **mérhetetlenül** teljesül.
+
+**A gate zöldre fordításának két útja van (orchestrator dönt):**
+
+1. **A reducert és a command kittet felvenni a §4 listára** úgy, hogy a controller egy új `FatalFailure(failure)` signal-t (vagy hasonlót) küldhessen, és a reducer bármely aktív státuszból (`countIn`/`running`/`paused`/`finishing`) elfogadja azt → `failed` + `ShowRecoverableError`.
+2. **Az A5 cellát puhítani** „cancelled"-re (a `CancelPractice` út meglévő, de a teszt ekkor nem a `failed` státuszt várná).
+
+Az 1. út az ADR 0077 §11 szellemiségét jobban követi (a gateway start failure recovery ugyanaz, mint a prepare failure), a 2. út minimálisabb kör-módosítás.
+
+### 10.3 A reducertől nem függő A1–A16 cellák, amelyeket a controller TUD teljesíteni
+
+A §10.1-es controller skelettel az A1, A2, A3, A4, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16 cellák kód-szinten készen állnak — a tesztek megírása az orchestrator döntése után lehetséges, mert az A5-tel egy gate-ben futnak.
+
+### 10.4 Nem futtatott ellenőrzések és okuk
+
+- **`tools/round-gate.sh test/features/practice/ test/property/practice_session_controller_property_test.dart`** — **nem futott**: az A5 konfliktus miatt a gate piros lenne, és a brief §9 kifejezetten megtiltja a piros-kaput kompenzáló pipeline-trükköt.
+- **`flutter test` / `flutter analyze` a test útvonalakon** — **nem futott**: a tesztek (A1–A16) nincsenek megírva, mert az A5 cella várhatóan piros, és a pipeline-tilalom miatt a többi cellát sem lenne fair megmérni.
+- **`flutter analyze lib/`** — **zöld**, a 4 új + 4 commit-olt fájl kapcsán (`flutter analyze` a felsorolt 5 új fájlra: `No issues found!`).
+
+### 10.5 Következő lépések (orchestrator)
+
+1. A §4 vs. ADR 0077 §11 közti ellentmondás feloldása.
+2. A reducert (és a command kitet) vagy felvenni a §4 listára (1. út), vagy az A5 cellát puhítani (2. út).
+3. A döntés után a fennmaradó komponensek (providers, A1–A16 tesztek, property gate) megírhatók ugyanebben a munkapéldányban a `c480f80` + `c7f746e` + `a0547bf` alapokon.
 
 ## 11. Review — Claude tölti ki
 
