@@ -92,7 +92,8 @@ final class PracticeSessionController {
   final Future<AppResult<CompiledPracticeTarget>> Function(
     PracticeDefinition definition,
     PracticeSessionConfig config,
-  ) compileTarget;
+  )
+  compileTarget;
 
   // --- Internal configurable dependencies -----------------------------------
   PracticeObservationGateway? _observationGateway;
@@ -119,6 +120,13 @@ final class PracticeSessionController {
   presult.PracticeSessionResult? _result;
   bool _recordInvoked = false;
   bool _disposed = false;
+
+  // Recovery flag — set when a gateway-start failure has initiated the
+  // controller-injected cancel flow (R14 / ADR 0077 §11). Suppresses the
+  // capture-activation loop and any retry of `gateway.start()` while the
+  // recursive `CancelPractice` dispatch converges to the `cancelled`
+  // terminal. Reset at the start of every top-level dispatch.
+  bool _recoveryInProgress = false;
 
   // --- Test-visible counters ------------------------------------------------
   int _gatewayStartCalls = 0;
@@ -157,6 +165,9 @@ final class PracticeSessionController {
 
   Future<void> dispatch(PracticeSessionInput input) async {
     if (_disposed) return;
+    // Clear the recovery guard at every top-level entry so a fresh
+    // dispatch isn't shadowed by a previous failure's recovery flow.
+    _recoveryInProgress = false;
     final transition = reducePracticeSession(_state, input);
     _state = transition.state;
     if (!transition.isRejected) {
@@ -197,13 +208,17 @@ final class PracticeSessionController {
   ) async {
     final path = transition.statusPath;
 
-    // Capture-activation sync.
-    for (final status in path) {
-      final shouldBeActive = practiceCaptureActive(status);
-      if (shouldBeActive && !_gatewayActive) {
-        await _startGateway();
-      } else if (!shouldBeActive && _gatewayActive) {
-        await _stopGateway();
+    // Capture-activation sync. Skipped during the cancel-recovery flow so
+    // a recursive `CancelPractice` dispatch (R14 / ADR 0077 §11) doesn't
+    // re-enter `gateway.start()`.
+    if (!_recoveryInProgress) {
+      for (final status in path) {
+        final shouldBeActive = practiceCaptureActive(status);
+        if (shouldBeActive && !_gatewayActive) {
+          await _startGateway();
+        } else if (!shouldBeActive && _gatewayActive) {
+          await _stopGateway();
+        }
       }
     }
 
@@ -227,16 +242,17 @@ final class PracticeSessionController {
       _resetAttemptObservation();
     }
 
-    // Terminal-state cleanup.
+    // Terminal-state cleanup. Per A15, `PracticeSessionResult` and the
+    // `recorder.record()` call are reserved for the `completed` branch; the
+    // `cancelled` and `failed` branches run only the resource-cleanup half.
     final newStatus = transition.state.status;
     if (newStatus == PracticeSessionStatus.completed) {
+      await _stopAndDisposeGateway();
       await _finalizeSession(terminalReason: _stateReasonOn(transition.state));
     } else if (newStatus == PracticeSessionStatus.cancelled) {
-      await _stopAndDisposeGateway();
-      await _finalizeSession(terminalReason: _stateReasonOn(transition.state));
+      await _cleanupTerminalResources();
     } else if (newStatus == PracticeSessionStatus.failed) {
-      await _stopAndDisposeGateway();
-      await _finalizeSession(terminalReason: _stateReasonOn(transition.state));
+      await _cleanupTerminalResources();
     }
 
     // Tick-source management.
@@ -265,6 +281,7 @@ final class PracticeSessionController {
     final gateway = _observationGateway;
     if (gateway == null) return;
     if (_gatewayActive) return;
+    if (_recoveryInProgress) return;
     _gatewayStartCalls++;
     final result = await gateway.start(config: observationConfig);
     if (result case Failure(:final error)) {
@@ -273,9 +290,8 @@ final class PracticeSessionController {
         error: error,
         fields: <String, Object?>{'code': error.code},
       );
-      _effectsController.add(ShowRecoverableError(error));
       _gatewayActive = false;
-      await _driveControlledFailure(error);
+      await _driveControlledCancelFailure(error);
     } else {
       _gatewayActive = true;
     }
@@ -309,9 +325,40 @@ final class PracticeSessionController {
     }
   }
 
-  Future<void> _driveControlledFailure(AppFailure error) async {
+  /// Handles a gateway-start failure for a session that is **not** in
+  /// `preparing` state.
+  ///
+  /// Per ADR 0077 §11 / E02-R11 R14: the `failed` status is unreachable from
+  /// non-`preparing` states (the reducer's `_reducePreparationFailed` is
+  /// explicitly gated to `preparing`), and a recorder call would create a
+  /// bogus history entry for a never-started session.
+  ///
+  /// Action: emit `ShowRecoverableError` (controller-injected effect — the
+  /// reducer can't know about a gateway error) and dispatch
+  /// `CancelPractice` so the session transitions to the `cancelled`
+  /// terminal without calling `recorder.record()`.
+  Future<void> _driveControlledCancelFailure(AppFailure error) async {
     if (_disposed) return;
-    await dispatch(PreparationFailed(error));
+    _recoveryInProgress = true;
+    try {
+      _effectsController.add(ShowRecoverableError(error));
+      await dispatch(const CancelPractice());
+    } finally {
+      _recoveryInProgress = false;
+    }
+  }
+
+  /// Resource-cleanup half of terminal handling. Runs on `cancelled` /
+  /// `failed` (and as a pre-step of `completed`). Cancels the observation
+  /// subscription, stops + disposes the gateway exactly once, stops the
+  /// tick source. Does NOT create or persist a `PracticeSessionResult` —
+  /// that is reserved for `_finalizeSession` on the `completed` branch.
+  Future<void> _cleanupTerminalResources() async {
+    await _stopAndDisposeGateway();
+    tickSource.stop();
+    final subscription = _observationSubscription;
+    _observationSubscription = null;
+    await subscription?.cancel();
   }
 
   Future<void> _onPreparePractice(PreparePractice input) async {
@@ -330,11 +377,13 @@ final class PracticeSessionController {
       case Success(:final value):
         _currentTarget = value;
         _currentScoringProfile = input.definition.scoringProfile;
-        _matcher = _matcher ?? PracticeEventMatcher(
-                target: value,
-                scoringProfile: _currentScoringProfile!,
-                inputLatency: input.config.inputLatency,
-              );
+        _matcher =
+            _matcher ??
+            PracticeEventMatcher(
+              target: value,
+              scoringProfile: _currentScoringProfile!,
+              inputLatency: input.config.inputLatency,
+            );
         _resetAttemptObservation();
         await dispatch(PreparationSucceeded(value));
       case Failure(:final error):

@@ -213,23 +213,25 @@ void main() {
       expect(snapshot.attempt, const Duration(seconds: 3));
     });
 
-    test('start() after pause is a no-op (clock stays paused, fields intact)',
-        () {
-      final clock = FakePracticeSessionClock();
-      clock.start();
-      clock.advance(const Duration(seconds: 5));
-      clock.pause();
-      clock.advance(const Duration(seconds: 3));
-      final before = clock.now();
-      clock.start(); // <-- no-op under the new contract
-      final snapshot = clock.now();
-      // The clock is still paused, so `paused` keeps growing as `wall`
-      // grows, and `active` stays put.
-      expect(snapshot.wall, before.wall);
-      expect(snapshot.paused, before.paused);
-      expect(snapshot.active, before.active);
-      expect(snapshot.attempt, before.attempt);
-    });
+    test(
+      'start() after pause is a no-op (clock stays paused, fields intact)',
+      () {
+        final clock = FakePracticeSessionClock();
+        clock.start();
+        clock.advance(const Duration(seconds: 5));
+        clock.pause();
+        clock.advance(const Duration(seconds: 3));
+        final before = clock.now();
+        clock.start(); // <-- no-op under the new contract
+        final snapshot = clock.now();
+        // The clock is still paused, so `paused` keeps growing as `wall`
+        // grows, and `active` stays put.
+        expect(snapshot.wall, before.wall);
+        expect(snapshot.paused, before.paused);
+        expect(snapshot.active, before.active);
+        expect(snapshot.attempt, before.attempt);
+      },
+    );
 
     test('pause() before start() is a no-op (no fields change)', () {
       final clock = FakePracticeSessionClock();
