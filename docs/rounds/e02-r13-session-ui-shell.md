@@ -1,21 +1,39 @@
 # E02-R13 — Practice Session UI shell
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight elvégezve 2026-07-31, kód mérve: `main` @ `bc7beb8`)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 13"** (+ §21.3, §21.6, §22)
-- **Branch:** `codex/e02-r13-session-ui-shell`
-- **Előfeltétel:** **E02-R12 merge-ölve** (Hub + Setup + route-ok + ARB-alap).
-- **ADR:** **0079** — `docs/adr/0079-state-driven-practice-session-shell.md`,
-  **az orchestrátor írja meg a pre-flightban** a §5 tartalmával.
-- **Implementer motor:** a pre-flightban a user dönt. *Ajánlás:* **Codex** —
-  életciklus- és leak-érzékeny kör (ticker, subscription, back-gomb, háttérbe
-  kerülés).
+- **Branch:** `mm/e02-r13-session-ui-shell`
+- **Előfeltétel:** **E02-R12 merge-ölve** ✅ (`874e163`, PR #36)
+- **ADR:** **0079** — [`docs/adr/0079-state-driven-practice-session-shell.md`](../adr/0079-state-driven-practice-session-shell.md)
+  — az orchestrátor megírta a pre-flightban. **A §5 kötött döntései onnan jönnek.**
+- **Implementer motor:** **MiniMax M3** (pipeline-döntés, `docs/execution/pipeline-queue.tsv`).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ)**
-> 1. Olvasd újra az R11 controller publikus felületét (state-stream, effekt-
->    csatorna, command API) és az R12 route-argumentumait.
-> 2. Ellenőrizd, hogy az R12 review nyitott leletei közül mi tartozik ide.
-> 3. ADR-szám ütközés ellenőrzése, majd az ADR 0079 megírása.
-> 4. Státusz → PLANNING, dátum/sha frissítés, brief commit a kör-branchre.
+## 0.0 Revíziós napló (orchestrátor, 2026-07-31 pre-flight)
+
+A brief 2026-07-31-én előre készült. A pre-flight minden hivatkozott szimbólumot
+kimért; **nyolc** állítás bizonyult avultnak, tévesnek vagy elérhetetlen célt
+előírónak. Mindegyik javítva:
+
+| # | Eredeti brief-állítás | Mérés | Feloldás |
+|---|---|---|---|
+| R1 | Branch: `codex/e02-r13-session-ui-shell` | a motor **MiniMax M3** (queue), az R12 branch-e `mm/e02-r12-…` | Branch: **`mm/e02-r13-session-ui-shell`** |
+| R2 | „A képernyő a **controller** state-jét olvassa" | `practiceSessionControllerProvider` **ma sem létezik** (`practice_session_providers.dart:110-114`), és az `application/` **tilos zóna** ebben a körben | A képernyő egy **presentation-oldali** `PracticeSessionHost` határon keresztül lát (ADR 0079 §2); production default **`null`** → lokalizált „session nem elérhető" állapot |
+| R3 | A1 `permissionRequired`: „engedélykérő akció" | a `GrantPermission` `preparing`-be visz **újrafordítás nélkül** (reducer:256-268), és a controller **csak** `PreparePractice`-re fordít újra (controller:222-224) → **zsákutca** | Az akció parancsa **`PreparePractice(state.definition!, state.config!)`** — ezt a reducer `permissionRequired`-ből elfogadja (reducer:238-241). A `GrantPermission` kiadása **tilos** |
+| R4 | A1 `failed`: „hibapanel, a session megmarad" | `RetryPractice` → `preparing` (reducer:502-518), de onnan a `PreparePractice` **elutasított** → a `failed → futó session` út **ma nem zárul** | A panel „újra" gombja `RetryPractice`-t ad ki, és **ennyit ígér**; a hiány ADR 0079 §6-ban nevesített follow-up. Látszatparancs tilos |
+| R5 | A4: minden kilépési út „`CancelPractice`" | a cancel tisztán az `allowedTransitions`-ön kapuzódik (reducer:487) → `preparing`, `finishing`, `completed`, `cancelled`, `failed` állapotból **elutasított**, és a terminális takarítás már lefutott (controller:249-255) | Kilépés **`const` parancs-táblán** (ADR 0079 §4): parancs csak `permissionRequired`/`ready`/`countIn`/`running`/`paused` esetén; `finishing`-ben a kilépés **blokkolt**; terminális állapotban **nulla parancs** |
+| R6 | A1 `running`: „score-pillanatkép" a state-ből | a `PracticeSessionState`-nek **nincs** score-mezője; az élő aggregátum a controller `liveScore` gettere (controller:144), típusa `domain/service/` alatt | A host **`int? liveOverallPerMille`** primitívet ad át (ADR 0079 §2) — a presentation nem importál `domain/service/`-t |
+| R7 | §2: „`l10n_parity_test` (375 kulcs)" | mérve **327 kulcs** mindkét ARB-ban, ebből 54 `practice*` | A kulcsszám nem mérce; a mérce a **kulcshalmaz-egyezés**. A hivatkozás javítva |
+| R8 | A6 csak `running` alatti háttérbe kerülést ír elő | a `paused` a táblán `countIn`-ból is elérhető (reducer:324 az `allowedTransitions`-t nézi) | A6 kiegészítve a `countIn` cellával; minden más állapotban **nulla parancs** |
+
+**Nem oldottam fel lista-tágítással:** a `PracticeSessionHost`, a
+`PracticeFeedbackOutput` és a navigációs nyelő a **már engedélyezett**
+`practice_effect_listener.dart`-ban lakik — új fájl nincs.
+
+**Ami kimarad ebből a körből (és miért):** a HANDOFF §5 az `AudioOwner.practice`
++ Live→Practice gateway-bekötést az E02-R13-hoz rendelte. Az `application/` és a
+`data/` viszont ennek a körnek a **tilos zónája** (§4), és a bekötés
+audio-lease-döntés, nem UI-döntés. Ezért a follow-up **változatlanul nyitva
+marad** (ADR 0079 §Következmények/1), és a HANDOFF a merge után átsorolja.
 
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
@@ -27,51 +45,75 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélküli kör = bukott kör. `gh`-t NE hívj, ne pusholj, PR-t ne nyiss.
+**A munkádat commitold a kör-branchre** — `done` jelzés uncommitted fájlokkal
+bukott kör.
 **STOP-klauzula:** listán kívüli fájl, vagy ellentmondó előírás → `stopped`.
-**A §7 a terved.**
+**A §7 a terved — nincs külön task-lista.**
+**Doc-commentben csak tesztben bizonyított állítás** (`const`, `immutable`, …).
 
 ## 1. Cél
 
-A **közös** session-képernyő: minden státuszt renderel (`preparing`,
-`permissionRequired`, `ready`, `countIn`, `running`, `paused`, `finishing`,
-`failed`), fogadja a controller effektjeit, és **kizárólag** parancsokat küld
-vissza. **Mode-specifikus nézet és pontozó-vizuál ebben a körben nincs** — az a
-Kör 14–16. A kör tétje az **életciklus**: nincs saját business-óra, nincs ticker-
-leak, nincs duplikált navigáció, és a képernyő elhagyása **mindig** cleanupot kér.
+A **közös** session-képernyő: minden státuszt renderel, fogadja a controller
+effektjeit, és **kizárólag** parancsokat küld vissza. **Mode-specifikus nézet és
+pontozó-vizuál ebben a körben nincs** — az a Kör 14–16. A kör tétje az
+**életciklus**: nincs saját business-óra, nincs ticker-leak, nincs duplikált
+navigáció, és a képernyő elhagyása **mindig** a mért állapotgép szerinti
+takarítást kéri.
 
-## 2. Jelenlegi állapot (mért tények, `main` @ `ce8fbce`)
+## 2. Jelenlegi állapot (mért tények, `main` @ `bc7beb8`)
 
-- **A V2-nek nincs session-képernyője.** Az R12 után a `presentation/screens/`
-  alatt a Hub és a Setup van.
+- **A V2-nek nincs session-képernyője.** A `presentation/` alatt a Hub, a Setup,
+  a mód-kártya és a route-argumentum-parser van (R12).
 - **A legacy referencia és ellenpélda: `lib/features/learn/screens/learn_screen.dart`
   (839 sor).** Mért szerkezet:
   - `SingleTickerProviderStateMixin` + saját `Ticker` (44., 49., 88. sor) —
     a `_onTick` **maga hajtja** a scorert és az időt: ez a business-óra a
-    widgetben, amit a V2 **nem** másolhat (SDD Kör 13);
+    widgetben, amit a V2 **nem** másolhat;
   - `Metronome _metronome = Metronome()` (50. sor) — a widget hozza létre az
     audio erőforrást;
-  - `_scorer ??= LessonScorer(...)` (218. és 248. sor) — a widget példányosít
-    scorert;
-  - `ref.listenManual(liveFrameProvider, _onFrame)` (224. sor) — a widget
-    iratkozik fel a detektor-folyamra;
-  - a `_pause()` (232. sor) **nem** állítja le a mikrofon-fogyasztást — ez a
-    HANDOFF §6.4-ben nyilvántartott, felhasználó-látható pause-rés, amit a V2
-    úton a `practiceCaptureActiveByStatus` tábla (R08) és az R11 controller
-    szerkezetileg zár.
+  - `_scorer ??= LessonScorer(...)` (218. és 248. sor);
+  - `ref.listenManual(liveFrameProvider, _onFrame)` (224. sor);
+  - a `_pause()` (232. sor) **nem** állítja le a mikrofon-fogyasztást.
   Ebből a fájlból **semmit nem másolsz át**; referenciaként olvasható.
-- **Controller (R11):** state-stream + effekt-csatorna + command API; a
-  capture-életciklus, az óra és a cleanup **az övé**.
-- **Effektek (R07):** `PlayHaptic`, `PlayCountInClick`, `ShowPermissionSettings`,
-  `NavigateToResult`, `ShowRecoverableError`, `AnnounceAccessibilityFeedback`
+- **Controller (R11):** `states` / `state` / `effects` / `liveScore` / `result`
+  getterek + `dispatch(PracticeSessionInput)` + `dispose()`
+  (`practice_session_controller.dart:141-192`). **Provider nincs hozzá** — lásd
+  R2 revízió.
+- **Állapotgép:** 11 státusz, `const allowedTransitions` tábla
+  (`practice_session_state.dart:273-355`). A parancs-elfogadás ezen a táblán
+  kapuzódik; a `PreparePractice` `idle`/`permissionRequired`-ből, a
+  `RetryPractice` `failed`-ből, a `GrantPermission` `permissionRequired`-ből
+  fogadható el.
+- **Count-in mérése a state-ből:** `countInSpanBeats` és `emittedCountInClicks`
+  (`practice_session_state.dart:77,90`) — a hátralévő ütés a kettő különbsége.
+- **Effektek (R07):** `PlayHaptic`, `PlayCountInClick(beatIndex)`,
+  `ShowPermissionSettings`, `NavigateToResult`, `ShowRecoverableError(failure)`,
+  `AnnounceAccessibilityFeedback(messageKey)`
   (`application/practice_session_effect.dart`, 54 sor) — a sealed switch
-  **kimerítő**, tehát minden effektet kezelned kell.
-- **Core widgetek, amiket újra kell használni:** `core/widgets/mic_permission_banner.dart`,
-  `core/widgets/mic_error_banner.dart`, `core/widgets/empty_state.dart`.
-- **App-életciklus:** `lib/core/platform/app_lifecycle.dart` (69 sor) — a
-  háttérbe kerülés jelzésének meglévő útja; `screen_wakelock.dart` (35 sor).
-- **Layout-őr:** `test/core/screen_size_guard_test.dart`; **a11y-minta:**
-  `test/features/chords/chord_tile_a11y_test.dart`; **i18n-gate:**
-  `test/core/l10n_parity_test.dart` (375 kulcs, azonos kulcshalmaz kötelező).
+  **kimerítő**. Mérve: az `AnnounceAccessibilityFeedback`-et **ma egyetlen ág
+  sem emittálja** (a reducerben nulla találat).
+- **Core widgetek, amiket újra kell használni:** `core/widgets/mic_permission_banner.dart`
+  (`const MicPermissionBanner()`, saját „beállítások" gombbal),
+  `core/widgets/mic_error_banner.dart` (`required onRetry`),
+  `core/widgets/empty_state.dart` (`required icon`, `required title`).
+- **App-életciklus:** `lib/core/platform/app_lifecycle.dart` —
+  `AppLifecycleEvents` interfész + `isBackgroundLifecycleState(state)` (20. sor);
+  provider: **`appLifecycleEventsProvider`**
+  (`lib/core/platform/platform_providers.dart:8`). A Live képernyő ugyanezt
+  használja (`live_screen.dart:66`) — kövesd a mintát.
+- **Haptika ma:** nincs absztrakció és nincs beállítás (nulla `haptic` találat a
+  `settings/` és a `core/` alatt); a legacy képernyők közvetlenül hívják a
+  `HapticFeedback` statikusait.
+- **Minta a parancs-határra:** ADR 0078 §5 / `practice_setup_controller.dart:31-55`
+  — `typedef` + logoló production default + provider. **Ugyanezt a mintát
+  kövesd** a navigációs nyelőnél.
+- **Layout-őr:** `test/core/screen_size_guard_test.dart` (három méret:
+  320×568, 412×915, 915×412); **a11y-minta:** `test/features/chords/chord_tile_a11y_test.dart`;
+  **i18n-gate:** `test/core/l10n_parity_test.dart` (mérve 327 kulcs/nyelv, a
+  mérce a **kulcshalmaz-egyezés**); **forrás-mintaőr minta:**
+  `test/features/practice/presentation/practice_presentation_guard_test.dart`
+  (a `_stripComments` segédfüggvényével — **ezt a fájlt nem módosítod**, de a
+  technikát átveheted a saját tesztfájlodba).
 
 ## 3. Scope
 
@@ -86,10 +128,14 @@ ARB-kulcsok + widget-tesztek minden státuszra.
   állapotot mutatja (státusz, eltelt idő, attempt-index, score-pillanatkép),
   gördülő grafika nélkül.
 - Result képernyő és a hozzá tartozó navigáció **célja** — a `NavigateToResult`
-  effektet ebben a körben egy **lokalizált placeholder** fogadja (a Result a
-  Kör 18); a placeholder ne állítson pontszámot, amit nem mértünk.
-- A controller, a reducer, a gateway, a scorerek **bármilyen** módosítása.
-- `lib/features/learn/**` bármilyen módosítása.
+  effektet egy **lokalizált placeholder** fogadja (a Result a Kör 18); a
+  placeholder ne állítson pontszámot, amit nem mértünk.
+- A controller, a reducer, a gateway, a scorerek, a providerek **bármilyen**
+  módosítása; `practiceSessionControllerProvider` **létrehozása is tilos**.
+- `lib/features/learn/**` és `lib/features/practice/presentation/screens/practice_setup_screen.dart`
+  bármilyen módosítása (a Setup → session navigáció **nem** ebben a körben jön).
+- Wakelock felvétele, audio-lease szerzése, `StrumEngine`/`Metronome`
+  példányosítása.
 - Új ADR, `docs/sdd/**`, `HANDOFF.md`, `.github/**`, DSP.
 
 ## 4. Engedélyezett fájlok
@@ -98,10 +144,10 @@ ARB-kulcsok + widget-tesztek minden státuszra.
 |---|---|---|
 | `lib/features/practice/presentation/screens/practice_session_screen.dart` | **ÚJ** | a session shell |
 | `lib/features/practice/presentation/widgets/practice_hud.dart` | **ÚJ** | közös státusz-HUD (szöveges) |
-| `lib/features/practice/presentation/widgets/practice_controls.dart` | **ÚJ** | pause/resume/exit vezérlők |
+| `lib/features/practice/presentation/widgets/practice_controls.dart` | **ÚJ** | start/pause/resume/finish/exit vezérlők |
 | `lib/features/practice/presentation/widgets/practice_count_in_overlay.dart` | **ÚJ** | count-in overlay |
 | `lib/features/practice/presentation/widgets/practice_error_panel.dart` | **ÚJ** | recoverable hibapanel |
-| `lib/features/practice/presentation/practice_effect_listener.dart` | **ÚJ** | effekt → haptika/hang/navigációs kérés |
+| `lib/features/practice/presentation/practice_effect_listener.dart` | **ÚJ** | `PracticeSessionHost` + `PracticeFeedbackOutput` + navigációs nyelő + az effekt-előfizetés |
 | `lib/features/practice/public.dart` | — | az új képernyő exportja |
 | `lib/app/routing/app_route.dart` | — | **CSAK** a `practiceSession` konstans |
 | `lib/app/routing/app_router.dart` | — | **CSAK** a session-route regisztrációja a flag mögött |
@@ -112,62 +158,59 @@ ARB-kulcsok + widget-tesztek minden státuszra.
 | `docs/rounds/e02-r13-session-ui-shell.md` | — | **CSAK a §10** (handoff) |
 
 **Tilos zóna:** minden más. Nevezetesen `lib/features/practice/application/**`,
-`domain/**`, `data/**`, `lib/features/learn/**`, `lib/app/config/**`,
-`docs/adr/**`, `.github/**`.
+`domain/**`, `data/**`, a többi `presentation/` fájl,
+`lib/features/learn/**`, `lib/app/config/**`, `lib/core/**`, `docs/adr/**`,
+`.github/**`, és a `test/features/practice/presentation/` alatti **meglévő**
+tesztfájlok.
 
 **Új fájl a listán kívül = scope-sértés** → `stopped`.
 
 ## 5. Kötött döntések (ADR 0079 — NEM tárgyalhatók)
 
-1. **A képernyő állapotvezérelt.** Az egyetlen igazságforrás a controller
-   state-je; a widget **nem tart** párhuzamos session-állapotot (nincs saját
-   „isPlaying" bool, nincs saját eltelt idő).
-2. **Nincs saját business-óra.** `Ticker`/`Timer`/`Stopwatch` **kizárólag**
-   renderelési interpolációra használható, és soha nem hajthat scorert, órát,
-   státuszváltást. (A legacy `learn_screen.dart` pont az ellenkezőjét csinálja —
-   ez a kör tanulsága, nem a mintája.)
-3. **A widget nem példányosít motort.** Nincs `LessonScorer`, `StrumEngine`,
-   `Metronome`, matcher vagy gateway a presentation rétegben. A count-in
-   kattanás a `PlayCountInClick` **effekt** hatására szólal meg, egy
-   injektálható hang-kimeneten keresztül.
-4. **A kilépés mindig cleanupot kér.** Rendszer-back, AppBar-vissza, route-csere
-   és a `PopScope` út **mind ugyanazt** a `CancelPractice`/`FinishPractice`
-   parancsot adja ki; a képernyő soha nem tűnik el úgy, hogy a controller aktív
-   marad.
-5. **Megerősítés kell futó sessionből kilépéskor.** `running`/`countIn`/`paused`
-   állapotban a kilépés lokalizált megerősítést kér; `ready`, `completed`,
-   `cancelled`, `failed` állapotból megerősítés nélkül kiléphető.
-6. **A recoverable hiba nem dob ki.** `ShowRecoverableError` → panel a
-   képernyőn belül, „újra" és „kilépés" úttal; a session **marad**
-   (SDD §21.6).
-7. **Az effekt egyszer hat.** Minden effekt **pontosan egyszer** dolgozandó fel;
-   újraépítés (`rebuild`) nem játszhatja le újra a haptikát és nem navigálhat
-   másodszor.
-8. **Reduced motion és haptika-tiltás tiszteletben tartva.** `MediaQuery`
-   `disableAnimations` esetén nincs animált átmenet; a haptika kikapcsolható
-   (a beállítás hiányában a default: bekapcsolva).
-9. **Az életciklus továbbítva, nem értelmezve.** A háttérbe kerülés a
-   controllernek szóló **parancs** (pause), nem a widget saját döntése arról,
-   mi történjen az audióval.
-10. **Minden szöveg ARB-ból**, mindkét nyelven; a státuszok nevei **nem**
-    szivároghatnak ki nyers enum-névként a felületre.
+Az ADR 0079 §1–§10 teljes szövege kötelező olvasmány. A tíz döntés kivonata:
+
+1. **Állapotvezérelt képernyő** — egyetlen igazságforrás a session-state; a
+   widget nem tart párhuzamos session-mezőt (§1).
+2. **`PracticeSessionHost` presentation-határ** — `states` / `state` /
+   `effects` / `int? liveOverallPerMille` / `send(PracticeSessionCommand)`;
+   production default **`null`** → lokalizált „nem elérhető" állapot (§2).
+3. **Nincs saját business-óra és nincs motor a widgetben**; az effekt-kimenet
+   (`PracticeFeedbackOutput`) injektálható, a haptika
+   `practiceHapticsEnabledProvider` mögött, **default `true`** (§3).
+4. **A kilépés `const` parancs-táblán megy** (§4) — a tábla cellái:
+   `permissionRequired`/`ready`/`countIn`/`running`/`paused` → `CancelPractice`;
+   `finishing` → a kilépés **blokkolt**; minden más → **nulla parancs**.
+   Egy kilépés legfeljebb **egy** parancsot ad ki.
+5. **Megerősítés csak `countIn`/`running`/`paused`-ból**; elutasított
+   megerősítés → **nulla parancs**, a képernyő marad (§5).
+6. **A recoverable hiba nem dob ki**; a `failed` panel egyetlen parancsa a
+   `RetryPractice`, a „kilépés" parancs nélkül léptet ki (§6).
+7. **Az engedélykérő út parancsa a `PreparePractice`**, a `GrantPermission`
+   kiadása tilos (§7).
+8. **Az effekt pontosan egyszer hat**; az előfizetés `initState`-ben jön létre,
+   `dispose`-ban szűnik meg, **soha nem `build()`-ben**; a navigációs kérés
+   egyszeri kapuval védett (§8).
+9. **Az életciklus továbbítva, nem értelmezve**: háttérbe kerülés →
+   `PausePractice(cause: PauseCause.interruption)` `countIn`/`running`-ból;
+   automatikus resume **nincs**; wakelock **nincs** (§9).
+10. **Reduced motion, nem-csak-szín, 48×48 dp, minden szöveg ARB-ból** (§10).
 
 ## 6. Acceptance criteria
 
 ### A1 — Státusz-render mátrix (mind a nyolc látható állapot)
 
-Fake controller-állapottal, cellánként külön `expect`:
+Fake `PracticeSessionHost`-tal, cellánként külön `expect`:
 
 | Státusz | Elvárt a képernyőn |
 |---|---|
 | `preparing` | folyamatjelző + lokalizált „előkészítés" |
-| `permissionRequired` | `mic_permission_banner` + engedélykérő akció |
+| `permissionRequired` | `MicPermissionBanner` + engedélykérő akció (parancsa: `PreparePractice`) |
 | `ready` | Start-vezérlő, **nincs** count-in overlay |
-| `countIn` | count-in overlay a hátralévő ütésekkel |
-| `running` | HUD (eltelt idő, attempt, score-pillanatkép), pause elérhető |
+| `countIn` | count-in overlay a **hátralévő ütésekkel** (`countInSpanBeats − emittedCountInClicks`) |
+| `running` | HUD (eltelt idő, attempt-index, score-pillanatkép), pause elérhető |
 | `paused` | „szünet" jelzés + resume; **nincs** count-in overlay |
 | `finishing` | folyamatjelző, vezérlők letiltva |
-| `failed` | hibapanel (§5.6), a session megmarad |
+| `failed` | hibapanel (§5.6) „újra" + „kilépés" úttal, a session megmarad |
 
 ***Pirosra fogja:*** a „minden nem-running állapot ugyanaz a spinner"
 egyszerűsítés.
@@ -175,12 +218,23 @@ egyszerűsítés.
 **NEM elfogadható gyengítés:** két-három állapot tesztelése „a többi triviális"
 indoklással — a nyolc cella mindegyike kötelező.
 
+### A1b — A maradék három státusz és a hiányzó host
+
+| Bemenet | Elvárt |
+|---|---|
+| `idle` | lokalizált semleges állapot, **nincs** kivétel |
+| `completed` | lokalizált „kész" állapot + kilépési út |
+| `cancelled` | lokalizált „megszakítva" állapot + kilépési út |
+| `practiceSessionHostProvider == null` (production default) | lokalizált „a session nem elérhető" állapot, **nincs** kivétel, **nincs** parancs |
+
 ### A2 — Nincs párhuzamos állapot a widgetben
 
 A képernyő forrása **nem tartalmaz** `setState`-tel kezelt session-mezőt
 (`_playing`, `_elapsed`, `_score` és társai). Guard-állítás a saját
-tesztfájlban: a forrásban nincs `Ticker`, `Stopwatch`, `DateTime.now(`,
-`LessonScorer`, `StrumEngine`, `Metronome(` minta.
+tesztfájlban (kommentek kiszűrésével, az R12-őr `_stripComments` mintája
+szerint): a forrásban **nulla** `Ticker`, `Stopwatch`, `DateTime.now(`,
+`LessonScorer`, `StrumEngine`, `Metronome(` előfordulás, és nulla
+`domain/service/` import a §4 új presentation-fájljaiban.
 
 ***Pirosra fogja:*** a legacy `learn_screen.dart` szerkezetének átemelése.
 
@@ -191,32 +245,41 @@ tesztfájlban: a forrásban nincs `Ticker`, `Stopwatch`, `DateTime.now(`,
 | egy `PlayHaptic` + három widget-rebuild | **1** haptika-hívás |
 | egy `NavigateToResult` + három rebuild | **1** navigációs kérés |
 | két külön `PlayCountInClick` | **2** hang-hívás |
+| egy `ShowPermissionSettings` | **1** `openPermissionSettings()` hívás |
+| `AnnounceAccessibilityFeedback('bármi')` | **0** hívás, **nincs** kivétel (ma egyetlen ág sem emittálja) |
+| `practiceHapticsEnabledProvider == false` + `PlayHaptic` | **0** haptika-hívás |
 | a képernyő `dispose()`-a után érkező effekt | **0** hívás, **nincs** kivétel |
 
-**A mérés eszköze:** a haptika- és hang-kimenet injektálható absztrakció
-hívásnaplóval (nem közvetlen `HapticFeedback` hívás a widgetben) — ezt a brief
-írja elő, hogy a mérce ne legyen kikerülhető.
+**A mérés eszköze:** a `PracticeFeedbackOutput` és a navigációs nyelő
+injektálható, hívásnaplós fake-je (nem közvetlen `HapticFeedback` hívás a
+widgetben) — ezt a brief írja elő, hogy a mérce ne legyen kikerülhető.
 
 ***Pirosra fogja:*** az effektek `build()`-ben való feldolgozása.
 
-### A4 — Kilépési utak mátrixa
+### A4 — Kilépési utak mátrixa (a §5.4 táblája cellánként)
 
 | Kiindulás | Kilépési út | Elvárt |
 |---|---|---|
-| `running` | rendszer-back | megerősítés, majd `CancelPractice` |
-| `running` | AppBar-vissza | megerősítés, majd `CancelPractice` |
-| `paused` | rendszer-back | megerősítés, majd `CancelPractice` |
-| `ready` | rendszer-back | **nincs** megerősítés, kilép |
-| `completed` | bármely út | **nincs** megerősítés, kilép |
-| bármely | megerősítés **elutasítva** | a képernyő marad, **nincs** parancs |
+| `running` | rendszer-back | megerősítés, majd **1** `CancelPractice` |
+| `running` | AppBar-vissza | megerősítés, majd **1** `CancelPractice` |
+| `countIn` | rendszer-back | megerősítés, majd **1** `CancelPractice` |
+| `paused` | rendszer-back | megerősítés, majd **1** `CancelPractice` |
+| `ready` | rendszer-back | **nincs** megerősítés, **1** `CancelPractice`, kilép |
+| `permissionRequired` | rendszer-back | **nincs** megerősítés, **1** `CancelPractice`, kilép |
+| `preparing` | rendszer-back | **nincs** megerősítés, **0** parancs, kilép |
+| `finishing` | rendszer-back | **0** parancs, a képernyő **marad** |
+| `completed` · `cancelled` · `failed` | bármely út | **nincs** megerősítés, **0** parancs, kilép |
+| bármely | megerősítés **elutasítva** | a képernyő marad, **0** parancs |
+| `running` | két gyors back egymás után | **1** `CancelPractice` (nem kettő) |
 
-Minden cellában mérendő: **hány** parancs ment ki (0 vagy pontosan 1) —
-duplikált `CancelPractice` nem fogadható el.
+Minden cellában mérendő: **hány** parancs ment ki — duplikált vagy
+elutasításba futó parancs nem fogadható el.
 
 ### A5 — Nincs duplikált navigáció
 
 Két gyors egymás utáni `NavigateToResult` effekt (ugyanarra a sessionre) →
 **egy** navigációs kérés. Rebuild + effekt-ismétlés kombinációja sem növeli.
+A placeholder **nem** állít pontszámot.
 
 ***Pirosra fogja:*** a „minden effekt-listener hívásnál `context.go(...)`"
 implementáció, ami valódi eszközön dupla képernyőt push-ol.
@@ -225,9 +288,14 @@ implementáció, ami valódi eszközön dupla képernyőt push-ol.
 
 | Esemény | Elvárt parancs |
 |---|---|
-| app háttérbe kerül `running` alatt | `PausePractice` **pontosan egyszer** |
+| app háttérbe kerül `running` alatt | `PausePractice(interruption)` **pontosan egyszer** |
+| app háttérbe kerül `countIn` alatt | `PausePractice(interruption)` **pontosan egyszer** |
 | app előtérbe jön `paused` alatt | **nincs** automatikus resume (a user dönt) |
-| app háttérbe kerül `ready` alatt | **nincs** parancs |
+| app háttérbe kerül `ready` / `preparing` / `finishing` / terminális alatt | **nincs** parancs |
+| `AppLifecycleState.inactive` `running` alatt | **nincs** parancs (a `isBackgroundLifecycleState` szándékosan kizárja) |
+
+Az életciklus-forrás az `appLifecycleEventsProvider` **override-olva** egy
+fake-kel — nem platform-üzenet-pumpálással.
 
 ***Pirosra fogja:*** az automatikus resume — ez valódi eszközön a mikrofont
 a user tudta nélkül kapcsolná vissza.
@@ -235,54 +303,72 @@ a user tudta nélkül kapcsolná vissza.
 ### A7 — Nincs ticker- és subscription-leak
 
 - A képernyő `dispose()`-a után **nincs** aktív animációs ticker
-  (`tester.binding.transientCallbackCount == 0`), és a controller effekt-/
-  state-előfizetése lemondva (fake hívásnaplója).
-- Ötszöri be- és kilépés után a fake controller `dispose` hívásszáma **5**, és a
-  visszamaradt előfizetések száma **0**.
+  (`tester.binding.transientCallbackCount == 0`), és a host state-/effekt-
+  előfizetése lemondva (a fake host hívásnaplója: `0` élő listener), valamint az
+  életciklus-listener eltávolítva (a fake `removeListener` hívásszáma `1`).
+- Ötszöri be- és kilépés után a fake host visszamaradt előfizetéseinek száma
+  **0**, és az életciklus-listenerek száma **0**.
 
 **NEM elfogadható gyengítés:** „a teszt nem dobott kivételt" — a számláló a mérce.
 
 ### A8 — a11y, reduced motion, i18n, layout
 
 - Minden vezérlő ≥ 48×48 dp, címkével és akcióval **egy** szemantikus node-on.
-- A verdict/státusz jelentése **nem csak színnel** jelenik meg (szöveg vagy ikon
-  is hordozza).
-- `disableAnimations: true` → nincs animált átmenet (a count-in overlay
-  statikus).
-- Angol és magyar felépülés; `l10n_parity_test` zöld.
-- `screen_size_guard_test` zöld 320×568 és 915×412 méreten; 200%-os
-  szövegméretnél nincs overflow.
+- A státusz jelentése **nem csak színnel** jelenik meg (szöveg vagy ikon is
+  hordozza).
+- `disableAnimations: true` → nincs animált átmenet; a count-in overlay
+  statikus, de a hátralévő ütések száma **továbbra is látszik**.
+- Angol és magyar felépülés; `l10n_parity_test` zöld (kulcshalmaz-egyezés).
+- Egyetlen státusz neve sem szivárog ki nyers enum-névként (`running`,
+  `countIn`, … nem jelenhet meg szövegként).
+- `screen_size_guard_test` zöld mindhárom méreten; 200%-os szövegméretnél
+  nincs overflow.
 
 ### A9 — Nulla változás a legacy úton
 
 `git diff --stat origin/main...HEAD` a §4 listáján belül; `lib/features/learn/`
-**0 sor**; a controller/reducer/gateway fájlok **0 sor**.
+**0 sor**; a controller/reducer/gateway/provider fájlok **0 sor**; a
+`practice_setup_screen.dart` **0 sor**.
 
 ## 7. Implementációs sorrend (ez a TERVED)
 
-1. Olvasd el: ADR 0079, az R11 controller felülete, az effekt-készlet,
-   `mic_permission_banner.dart`, `app_lifecycle.dart`, és **referenciaként**
-   (nem másolásra) a `learn_screen.dart` 43–260. sorát.
-2. ARB-kulcsok mindkét nyelven.
-3. A képernyő váza + a nyolc státusz-render (A1).
-4. Vezérlők + kilépési utak + megerősítés (A4).
-5. Effekt-listener injektálható haptika/hang kimenettel (A3, A5).
+1. Olvasd el: **ADR 0079** (teljes), a `practice_session_state.dart`
+   átmenettáblája, a `practice_session_command.dart`, a
+   `practice_session_effect.dart`, a `practice_setup_controller.dart:31-55`
+   (a nyelő-minta), `mic_permission_banner.dart`, `app_lifecycle.dart` +
+   `platform_providers.dart`, és **referenciaként** (nem másolásra) a
+   `learn_screen.dart` 43–260. sorát.
+2. `practice_effect_listener.dart`: `PracticeSessionHost`,
+   `PracticeFeedbackOutput` (+ production default), navigációs nyelő,
+   `practiceHapticsEnabledProvider`, és az effekt-előfizetés (A3, A5).
+3. ARB-kulcsok mindkét nyelven.
+4. A képernyő váza + a nyolc státusz-render + a maradék három + a `null` host
+   (A1, A1b).
+5. Vezérlők + a `const` kilépési tábla + megerősítés (A4).
 6. Életciklus-továbbítás (A6).
 7. Leak-tesztek (A7), a11y/i18n/layout (A8), guard-állítás (A2).
-8. Záró gate (§9), majd a §10 kitöltése.
+8. `public.dart` export, route-konstans + flag mögötti regisztráció,
+   `screen_size_guard_test` felvétel.
+9. Záró gate (§9), majd a §10 kitöltése.
 
 ## 8. Kockázatok
 
 - **A legacy minta vonzása.** A `learn_screen.dart` működik és kézenfekvő —
   de pontosan azt a szerkezetet tiltja ez a kör. Ha úgy érzed, ticker nélkül
   nem megy, az `stopped` + jelentés, nem „csak egy kis Ticker".
+- **Néma no-op parancs.** A reducer az elutasított parancsot **csendben**
+  eldobja. Ezért kötött a §5.4 tábla: parancsot csak onnan adsz ki, ahonnan az
+  átmenettábla elfogadja.
 - **`PopScope` szemantika.** A rendszer-back elfogása és a megerősítés
   kombinációja az a pont, ahol könnyű duplikált parancsot kiadni — az A4
-  cellái ezt mérik.
-- **Effekt-újrajátszás rebuildkor.** A Riverpod `listen`/`listenManual`
-  helytelen elhelyezése `build()`-ben ismételt haptikát és dupla navigációt ad.
+  cellái ezt mérik. Riverpod/Flutter 3.12: `onPopInvokedWithResult`.
+- **Effekt-újrajátszás rebuildkor.** A `listen`/`listenManual` helytelen
+  elhelyezése `build()`-ben ismételt haptikát és dupla navigációt ad.
 - **A count-in overlay és a reduced motion** együtt: az animáció kikapcsolása
-  nem törölheti az információt (a hátralévő ütések számát).
+  nem törölheti az információt.
+- **A forrás-mintaőr és a doc-komment ütközése:** ha a doc-commentben leírod,
+  hogy „nincs `Ticker`", a nyers `indexOf` guard elbukik — szűrd ki a
+  kommenteket (R12-minta), vagy ne nevezd meg a tiltott szimbólumokat.
 - **`AsyncValue.value`** (nullable), **NEM** `.valueOrNull`.
 
 ## 9. Záró gate — szó szerint ez az egyetlen hívás
@@ -291,8 +377,8 @@ a user tudta nélkül kapcsolná vissza.
 tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
-Csővezeték nélkül, a teljes kimenetet a §10-be. A teljes suite + property gate +
-APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
+Csővezeték nélkül (`| tail` és `&&` nélkül), a teljes kimenetet a §10-be. A
+teljes suite + property gate + APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
@@ -305,5 +391,7 @@ Link: `docs/reviews/e02-r13-review.md`
 
 Kiemelt figyelem: **valódi-sértés próba** az A7 ticker-számlálóra (ideiglenes
 `Ticker` beszúrása → pirosnak kell lennie), az A3 effekt-egyszeriségre
-(a listener `build()`-be mozgatása → pirosnak kell lennie), és az A4 „megerősítés
-elutasítva" cellájára (ez az, ami néma parancs-kiadást szokott elfedni).
+(a listener `build()`-be mozgatása → pirosnak kell lennie), az A4 „megerősítés
+elutasítva" és „`finishing` blokkol" celláira (ezek fedik el a néma
+parancs-kiadást), valamint arra, hogy a felület **nem** ad ki `GrantPermission`
+vagy elutasításba futó `CancelPractice` parancsot.
