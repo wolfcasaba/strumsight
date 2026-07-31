@@ -152,48 +152,38 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 ) &
 pinger_pid=$!
 
-# Háttér-agentként indítjuk (`--bg`), NEM `-p`-vel: a --bg session megjelenik
-# a user claude.ai Code-listájában (telefonon is), névvel — user-kérés
-# 2026-07-31. A --bg azonnal visszatér; a kör végét a $status_file jelzi.
-# A promptot NEM argv-ban adjuk át: az E02-R12 orchestrátora megölte magát,
-# mert a saját argv-jában ott volt a teljes prompt, és egy takarító
-# `pgrep -f "tools/round-gate.sh"` önmagára illeszkedett (L12 argv-változata,
-# exit 143). Rövid bootstrap-prompt + fájl-hivatkozás = az argv steril.
-launch_out=$("$claude_bin" --bg -n "Pipeline $round" \
-    --model "$claude_model" \
-    --permission-mode bypassPermissions \
-    "Olvasd el és kovesd pontosan: $prompt_file" 2>&1)
-printf '%s\n' "$launch_out" >> "$session_log"
-agent_id=$(printf '%s\n' "$launch_out" | sed -n 's/^backgrounded · \([a-z0-9]*\) .*/\1/p')
-log "orchestrátor háttér-agent: ${agent_id:-?} — a Code-listában: Pipeline $round · napló: claude logs $agent_id"
+# Az orchestrátor INTERAKTÍV claude sessionként fut egy tmux-ban (user-döntés
+# 2026-07-31): az interaktív session automatikusan rákapcsolódik a futó
+# remote-control hídra (/rc active), ezért MEGJELENIK a user telefonos
+# Code-listájában — a -p és a --bg mód sehol nem látszott. A bootstrap-prompt
+# rövid fájl-hivatkozás (az argv-önillesztés — L12 — kizárva); a
+# bypass-disclaimer és az MCP-consent egyszer, kézzel elfogadva 2026-07-31-én.
+tmux_session="pipeline-$round"
+tmux kill-session -t "$tmux_session" 2>/dev/null || true
+tmux new-session -d -s "$tmux_session" bash
+tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
+tmux send-keys -t "$tmux_session" "env -u CLAUDE_CONFIG_DIR claude --permission-mode bypassPermissions --model $claude_model 'Pipeline $round — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" Enter
+log "orchestrátor tmux-session: $tmux_session (látszik a telefon Code-listájában) → $session_log"
 
-# Várakozás a kör-jelzésre. Korai kilépés, ha az agent már nem él és jelzés
-# sincs (nem várjuk ki a teljes időkorlátot egy halott agentre).
+# Várakozás a kör-jelzésre; korai kilépés, ha a tmux-session meghalt.
 deadline=$(( $(date +%s) + session_timeout ))
 session_exit=0
-agent_gone_checks=0
 while [ ! -f "$status_file" ]; do
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    log "időkorlát lejárt — az agentet leállítjuk"
-    [ -n "$agent_id" ] && "$claude_bin" stop "$agent_id" >> "$session_log" 2>&1
+    log "időkorlát lejárt — a tmux-sessiont leállítjuk"
     session_exit=124
     break
   fi
-  if [ -n "$agent_id" ] && ! "$claude_bin" agents --json 2>/dev/null | grep -q "$agent_id"; then
-    agent_gone_checks=$(( agent_gone_checks + 1 ))
-    # két egymást követő "nincs a listában" + türelmi kör = tényleg halott
-    if [ "$agent_gone_checks" -ge 2 ]; then
-      sleep 15
-      break
-    fi
-  else
-    agent_gone_checks=0
+  if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
+    # meghalt jelzés nélkül — türelmi kör a fájl-írás versenyére, aztán ki
+    sleep 15
+    break
   fi
   sleep 30
 done
+tmux kill-session -t "$tmux_session" 2>/dev/null || true
 kill "$pinger_pid" 2>/dev/null
 
-log "orchestrátor-agent lezárult (exit-jelleg: $session_exit)"
 
 # --- 7. Kimenet osztályozása ----------------------------------------------
 # A session KÖTELESSÉGE megírni a $status_file-t. Ha nincs, a jelentését NEM
