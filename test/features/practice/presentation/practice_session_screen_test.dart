@@ -30,6 +30,7 @@ import 'package:strumsight/features/practice/domain/model/tempo.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
 import 'package:strumsight/features/practice/presentation/widgets/practice_controls.dart';
+import 'package:strumsight/features/practice/presentation/widgets/practice_error_panel.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
 
@@ -500,6 +501,20 @@ void main() {
         );
       }
     });
+
+    test('no flutter_riverpod legacy import remains under lib', () {
+      final dartFiles = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'));
+      for (final file in dartFiles) {
+        expect(
+          file.readAsStringSync(),
+          isNot(contains('package:flutter_riverpod/legacy.dart')),
+          reason: '${file.path} imports the legacy Riverpod API',
+        );
+      }
+    });
   });
 
   // -----------------------------------------------------------------
@@ -570,7 +585,7 @@ void main() {
     });
 
     testWidgets(
-      'AnnounceAccessibilityFeedback("anything") → no throw, 0 side effects',
+      'AnnounceAccessibilityFeedback("anything") → 0 calls, no throw',
       (tester) async {
         final host = _FakeSessionHost();
         final fb = _RecordingFeedback();
@@ -580,8 +595,7 @@ void main() {
         await _pumpScreen(tester, host: host, feedback: fb, navSink: nav);
         host.emitEffect(const AnnounceAccessibilityFeedback('aria.key'));
         await tester.pump(const Duration(milliseconds: 10));
-        // The reducer never emits this; the listener does not crash and
-        // does not raise a haptic/navigation side effect.
+        expect(fb.announcements, isEmpty);
         expect(fb.hapticCalls, 0);
         expect(nav.calls, 0);
         expect(tester.takeException(), isNull);
@@ -600,6 +614,85 @@ void main() {
       await tester.pump(const Duration(milliseconds: 10));
       expect(fb.hapticCalls, 0);
     });
+  });
+
+  group('Review regressions — recoverable errors', () {
+    testWidgets(
+      'failed + ShowRecoverableError renders one panel and one error title',
+      (tester) async {
+        const failure = UnknownFailure(code: 'practice.target_uncompilable');
+        final host = _FakeSessionHost();
+        addTearDown(host.close);
+        host.emitState(
+          _stateFor(
+            PracticeSessionStatus.failed,
+            definition: _fixtureDefinition(),
+            config: _fixtureConfig(),
+          ).copyWith(recoverableFailure: failure),
+        );
+        await _pumpScreen(tester, host: host);
+
+        host.emitEffect(const ShowRecoverableError(failure));
+        await tester.pump(const Duration(milliseconds: 10));
+
+        expect(find.byType(PracticeErrorPanel), findsOneWidget);
+        expect(find.text(l10nEn().practiceSessionErrorTitle), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'leave and re-enter in the same ProviderScope shows no stale error',
+      (tester) async {
+        final host = _FakeSessionHost();
+        final feedback = _RecordingFeedback();
+        final navigation = _RecordingNavigationSink();
+        final lifecycle = FakeAppLifecycleEvents();
+        final sessionVisible = ValueNotifier<bool>(true);
+        addTearDown(host.close);
+        addTearDown(sessionVisible.dispose);
+        host.emitState(_stateFor(PracticeSessionStatus.running));
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              practiceSessionHostProvider.overrideWithValue(host),
+              practiceFeedbackOutputProvider.overrideWithValue(feedback),
+              practiceResultNavigationSinkProvider.overrideWithValue(
+                navigation.call,
+              ),
+              practiceHapticsEnabledProvider.overrideWithValue(true),
+              appLifecycleEventsProvider.overrideWithValue(lifecycle),
+            ],
+            child: ValueListenableBuilder<bool>(
+              valueListenable: sessionVisible,
+              builder: (context, visible, child) => MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: visible
+                    ? const PracticeSessionScreen()
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        host.emitEffect(
+          const ShowRecoverableError(
+            UnknownFailure(code: 'practice.target_uncompilable'),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(find.text(l10nEn().practiceSessionErrorTitle), findsOneWidget);
+
+        sessionVisible.value = false;
+        await tester.pump();
+        sessionVisible.value = true;
+        await tester.pump();
+
+        expect(find.byType(PracticeErrorPanel), findsNothing);
+        expect(find.text(l10nEn().practiceSessionErrorTitle), findsNothing);
+      },
+    );
   });
 
   // -----------------------------------------------------------------

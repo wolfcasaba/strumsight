@@ -113,7 +113,8 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
                     failure: _state.recoverableFailure!,
                     onRetry: () => host.send(const RetryPractice()),
                   ),
-                _RecoverableErrorOverlay(),
+                if (_state.status != PracticeSessionStatus.failed)
+                  _RecoverableErrorOverlay(),
                 if (_state.status == PracticeSessionStatus.idle ||
                     _state.status == PracticeSessionStatus.completed ||
                     _state.status == PracticeSessionStatus.cancelled)

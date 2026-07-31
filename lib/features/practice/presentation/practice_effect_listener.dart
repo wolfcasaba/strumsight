@@ -5,7 +5,6 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/foundation/app_failure.dart';
@@ -71,14 +70,24 @@ typedef PracticeResultNavigationSink = void Function();
 final practiceResultNavigationSinkProvider =
     Provider<PracticeResultNavigationSink>((_) => () {});
 
-/// The most recent recoverable failure delivered through a
-/// [ShowRecoverableError] effect. The screen reads it via
-/// `ref.read(practiceErrorOverlayProvider)` and dismisses it via
-/// [dismissPracticeError]. A `null` value means "no overlay active".
-final practiceErrorOverlayProvider = StateProvider<AppFailure?>((_) => null);
+/// Stores the recoverable failure shown by the active session screen.
+/// Auto-disposal gives every screen entry a fresh overlay state.
+final class PracticeErrorOverlayController extends Notifier<AppFailure?> {
+  @override
+  AppFailure? build() => null;
+
+  void show(AppFailure failure) => state = failure;
+
+  void clear() => state = null;
+}
+
+final practiceErrorOverlayProvider =
+    NotifierProvider.autoDispose<PracticeErrorOverlayController, AppFailure?>(
+      PracticeErrorOverlayController.new,
+    );
 
 void dismissPracticeError(WidgetRef ref) =>
-    ref.read(practiceErrorOverlayProvider.notifier).state = null;
+    ref.read(practiceErrorOverlayProvider.notifier).clear();
 
 class PracticeEffectListener extends ConsumerStatefulWidget {
   const PracticeEffectListener({required this.child, super.key});
@@ -117,12 +126,11 @@ class _PracticeEffectListenerState
       case ShowRecoverableError(:final failure):
         // ADR 0079 §6: a recoverable error keeps the session alive and
         // surfaces an in-app panel. No command is emitted.
-        ref.read(practiceErrorOverlayProvider.notifier).state = failure;
-      case AnnounceAccessibilityFeedback(:final messageKey):
-        // The reducer never emits this variant today, but if it does the
-        // surface is the screen-reader announcement channel — never
-        // user-visible text.
-        output.announce(messageKey);
+        ref.read(practiceErrorOverlayProvider.notifier).show(failure);
+      case AnnounceAccessibilityFeedback():
+        // Reserved until effect keys have an ARB-backed localisation map.
+        // Raw machine keys must not reach the screen-reader channel.
+        return;
     }
   }
 
