@@ -118,6 +118,12 @@ Akárhány `FinishPractice` / automatikus befejezés (timeout, timeline-vég)
 `PracticeSessionResult` ezután **ugyanaz az objektum** minden lekérdezésnél
 (identitás, nem csak érték-egyenlőség).
 
+**Result kizárólag a `completed` ágon készül.** A `cancelled` és a `failed`
+terminal státusz nem állít elő `PracticeSessionResult`-ot (nincs befejezett
+attempt), és nem hív recordert — így nem keletkezik history-bejegyzés egy meg
+sem kezdett vagy megszakított sessionről. A megszakadt sessionök rögzítése a
+**Kör 18** hatásköre.
+
 ### 9. Két `PracticeFinishReason` enum van — a leképezés itt rögzül
 
 Mért tény: a `practice_session_state.dart:389` és a
@@ -178,12 +184,33 @@ mikrofont.
 
 ### 11. Hibaosztályok
 
-| Kiváltó | Státusz | Effekt |
-|---|---|---|
-| mikrofon-engedély megtagadva | `permissionRequired` | `ShowPermissionSettings` |
-| gateway `start()` `Failure`-t ad — **beleértve a foglalt mikrofont** (`audio.session_busy`, amit a `MicCapture` ad tovább) | `failed` | `ShowRecoverableError` |
-| observation stream **futás közbeni** hibája | **marad** (`countIn`/`running`) | `ShowRecoverableError` |
-| recorder mentési hibája finish-kor | `completed` (a session sikeres) | `ShowRecoverableError` |
+**Előfeltétel — mért korlát:** a `failed` státusz **kizárólag `preparing`-ből
+érhető el.** Az egész reducerben egyetlen sor állít `failed`-et
+(`practice_session_reducer.dart:612`, `_reducePreparationFailed`), és az
+kifejezetten őrizve van a `preparing` státuszra (`:604–606`). A
+`countIn → failed`, `running → failed` és `finishing → failed` élek **szerepelnek
+az `allowedTransitions` táblában, de egyetlen input sem produkálja őket.** Lásd
+az „Ismert korlát 2" szakaszt.
+
+| Kiváltó | Státusz | Effekt | Ki adja az effektet |
+|---|---|---|---|
+| mikrofon-engedély megtagadva (`preparing` alatt) | `permissionRequired` | `ShowPermissionSettings` | reducer |
+| **fordítási / előkészítési hiba** (`compilePracticeTarget` `Failure`-t ad) | `failed` | `ShowRecoverableError` | reducer |
+| gateway `start()` `Failure`-t ad — **beleértve a foglalt mikrofont** (`audio.session_busy`, amit a `MicCapture` ad tovább) | **`cancelled`** (a `countIn`-ből ez az egyetlen elérhető nem-user terminal), **recorder NEM hívódik** | `ShowRecoverableError` | **controller injektálja** |
+| observation stream **futás közbeni** hibája | **marad** (`countIn`/`running`) | `ShowRecoverableError` | **controller injektálja** |
+| recorder mentési hibája finish-kor | `completed` (a session sikeres) | `ShowRecoverableError` | **controller injektálja** |
+
+**A controller injektálhat effektet.** Ez nem kiskapu: a recorder- és a
+stream-hibáról a reducer definíció szerint nem tud (nem ismeri sem a recordert,
+sem a gatewayt), tehát ezek az effektek **csak** a controllertől jöhetnek. Az
+injektált effekt ugyanabba az `effects` streambe megy, és ugyanúgy pontosan
+egyszer sül el.
+
+**Miért `cancelled` és nem `failed` a gateway-start hibára:** mert a `failed`
+onnan **nem elérhető** (lásd fent), és mert a `cancelled` ág **nem hív
+recordert** — így nem keletkezik hamis history-bejegyzés egy meg sem kezdett
+sessionről. A `cancelled` `finishReason`-je a state-oldali `cancelled`; a
+felhasználónak a `ShowRecoverableError` mondja meg, hogy nem ő szakította meg.
 
 A recoverable hiba **nem** dobja ki a felhasználót a sessionből (SDD §21.6). A
 mentési hibát elnyelő `try/catch` tilos — ez a projekt mért néma-no-op
@@ -259,6 +286,27 @@ valódi jel-jelenlétet). Ez önálló, két scorer + két teszt terjedelmű kö
 Addig a mai viselkedés **kipinnelve** van egy acceptance-cellában (A13), hogy a
 záró körnek legyen piros/zöld horgonya. Follow-up gazdája: **E02-R18**
 (result + coaching) pre-flightja.
+
+## Ismert korlát 2 — a state machine-nek nincs futásidejű fatal éle
+
+Mérve (`practice_session_reducer.dart`): **egyetlen** sor állít `failed`
+státuszt (`:612`), és az a `_reducePreparationFailed`, amely explicit guarddal
+csak `preparing`-ből fogadja el az inputot (`:604–606`). Ugyanakkor az
+`allowedTransitions` tábla megengedi a `countIn → failed`, `running → failed`
+és `finishing → failed` éleket (`practice_session_state.dart:320–341`).
+
+Vagyis az E02-R07 **szándékolta** a futásidejű fatal utat, de a hozzá tartozó
+inputot (pl. egy `SessionFailed(AppFailure)` signalt) nem építette meg. Ez a
+kör ezt **nem** zárja: új sealed signal + új reducer-ág egy 809 soros, lezárt
+kör fájljában viselkedésváltozás, amit a jelen kör engedélyezett-fájllistája
+kifejezetten kizár, és a blast radius aránytalan lenne.
+
+Amíg nincs meg, a futás közbeni fatal hiba (gateway-start bukás) a
+`cancelled` ágon, recorder-hívás nélkül zárja a sessiont — lásd a §11 táblát és
+az A17 cellát, amely ezt a mai szerződést **kipinneli**.
+
+Gazdája: önálló reducer-kör, legkésőbb az **E02-R18** pre-flightja (ugyanaz a
+kör, amelyik a `noSignal` szemantikát is rendezi).
 
 ## Nyitott follow-up — `AudioOwner.practice`
 
