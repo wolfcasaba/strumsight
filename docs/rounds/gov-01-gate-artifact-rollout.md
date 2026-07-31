@@ -491,6 +491,83 @@ A working tree tiszta, minden commit `mm/gov-01-gate-artifact-rollout` HEAD-jén
    `step_number`/`step_names`/`step_results` tömbök a script fejlécében vannak
    csak dokumentálva) — ez is egy külön doksi-kör lehet.
 
+### Javító kör (MINOR-1)
+
+A review §4 MINOR-1 leletére a §0.2 brief-revízió adott feloldást: a
+`verify-before-done` skillbe EGY blockquote-szerűen megjelenő StrumSight-mérce
+hivatkozás került a Tier 4 „before DONE" kapuja mellé — a skill egyéb
+része (build, vizuális, persistence-proof, „#1 source of agent mistakes"
+keretezés) **változatlan**. A `review-loop` és a `flutter-dev` skillek a
+saját `description` mezőjük szerint kifejezetten recipewiser-mobile-hatókörűek,
+ezért **szándékosan nem módosultak** (§0.2 lezárt döntés, nem follow-up).
+
+**Mit írtam, hova:**
+
+- **`.claude/skills/verify-before-done/SKILL.md`** — a Tier 4 fejléc
+  („## Tier 4 — before „DONE" …") és az első `flutter analyze lib/`
+  kódblokk közé egy `> **StrumSight:**` kezdetű blockquote: a lokális
+  mérce a `tools/round-gate.sh <érintett terület> [további ...]`
+  artefaktum (normatív forrás: `AGENTS.md` §12; indoklás: a csővezeték
+  elrejti a kilépési kódot — `docs/LESSONS.md` L09). Az alábbi
+  mobil-blokkok mint általános projekt-független ellenőrzések maradnak.
+  A meglévő `flutter analyze lib/        # run ALONE — must be 0 errors`
+  (most a Tier 1 blokkban) és a Tier 4 `flutter analyze lib/        # call 1 — clean`
+  (most a 46. sorban) **érintetlenül** maradtak — a StrumSight-mondat
+  HIVATKOZÁS, nem átírás. A fájl hossza 54 → 57 sor, azaz +3 sor
+  (a §5 A8-as elfogadhatósági sáv ≤6 sor alatt).
+
+**A négy záró parancs TÉNYLEGES, teljes kimenete (a §5-ből, poszt-commit):**
+
+#### 1. `grep -rn "round-gate.sh" .claude/skills/verify-before-done/SKILL.md`
+
+```
+43:> **StrumSight:** a lokális mérce a `tools/round-gate.sh <érintett terület> [további ...]` artefaktum (normatív forrás: `AGENTS.md` §12; indoklás: a csővezeték elrejti a kilépési kódot — `docs/LESSONS.md` L09). Az alábbi mobil-blokkok mint általános projekt-független ellenőrzések maradnak.
+```
+
+#### 2. `grep -rn "flutter analyze lib/" AGENTS.md CLAUDE.md .claude/skills/ docs/execution/`
+
+```
+.claude/skills/review-loop/SKILL.md:22:3. `flutter analyze lib/` (ALONE) → baseline állapot.
+.claude/skills/review-loop/SKILL.md:31:- `flutter analyze lib/` → javítsd az összes analyzer hibát/warningot/lintet (flutter_lints ^6).
+.claude/skills/flutter-dev/SKILL.md:36:1. `analyze_files` → 0 hiba (vagy `flutter analyze lib/` ÖNÁLLÓAN, ≥240s timeout).
+.claude/skills/verify-before-done/SKILL.md:17:`flutter analyze lib/<path>`. Fix surfaced errors before stacking more edits on a broken file.
+.claude/skills/verify-before-done/SKILL.md:22:flutter analyze lib/        # run ALONE — must be 0 errors
+.claude/skills/verify-before-done/SKILL.md:46:flutter analyze lib/        # call 1 — clean
+```
+
+#### 3. `git diff --stat origin/main...HEAD`
+
+```
+ .claude/skills/round-brief-prep/SKILL.md          |  18 +-
+ .claude/skills/sdd-round-driver/SKILL.md          |  21 +-
+ .claude/skills/sdd-round-review/SKILL.md          |   7 +-
+ .claude/skills/strumsight-how-we-develop/SKILL.md |  18 +-
+ .claude/skills/verify-before-done/SKILL.md        |   3 +
+ AGENTS.md                                         |  29 +-
+ CLAUDE.md                                         |  16 +-
+ docs/execution/04-definition-of-done.md           |   5 +-
+ docs/reviews/gov-01-review.md                     | 121 ++++++
+ docs/rounds/gov-01-gate-artifact-rollout.md       | 492 ++++++++++++++++++++--
+ 10 files changed, 669 insertions(+), 61 deletions(-)
+```
+
+#### 4. `git status --porcelain`
+
+```
+(kimenet: üres — poszt-commit, working tree tiszta)
+```
+
+**A8 elfogadhatóság:** az 1. parancs **1** találatot ad (a beidézett
+blockquote); a 2. parancsban a `verify-before-done/SKILL.md` 17. és 22.
+sori `flutter analyze lib/<path>` / `flutter analyze lib/` sorai
+**változatlanok** maradtak (ezek a Tier 0 és Tier 1, nem a Tier 4 gate),
+a 46. sori `flutter analyze lib/` a Tier 4 „before DONE" blokk sora
+(nem töröltük, csak a StrumSight-mondat került FÖLÉJE); a `review-loop`
+(2 sor) és a `flutter-dev` (1 sor) maradványok **elvártan megmaradnak**
+(§0.2 lezárt döntés); a 3. parancsban a `verify-before-done/SKILL.md`
+diff-egyenlege **+3 sor** (≤6 soros sáv); a 4. parancs poszt-commit
+üres (lásd fent).
+
 ## 9. Review — Claude tölti ki
 
 Link: `docs/reviews/gov-01-review.md`

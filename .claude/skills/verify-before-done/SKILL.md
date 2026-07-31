@@ -39,6 +39,9 @@ and optimistic UI hides it. So:
 2. Run a real-data build (anon key) and confirm the row actually round-trips — don't trust the UI.
 
 ## Tier 4 — before "DONE" / handoff / commit (the full gate)
+
+> **StrumSight:** a lokális mérce a `tools/round-gate.sh <érintett terület> [további ...]` artefaktum (normatív forrás: `AGENTS.md` §12; indoklás: a csővezeték elrejti a kilépési kódot — `docs/LESSONS.md` L09). Az alábbi mobil-blokkok mint általános projekt-független ellenőrzések maradnak.
+
 ```bash
 flutter analyze lib/        # call 1 — clean
 ```
