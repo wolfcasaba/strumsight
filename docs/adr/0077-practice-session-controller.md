@@ -53,9 +53,10 @@ naplózza (redaktáltan) és eldobja; az állapot változatlan marad.
 ### 2. Tiltott függőségek
 
 A `practice_session_controller.dart` forrásában nem szerepelhet `BuildContext`,
-`Navigator`, `GoRouter`, `SharedPreferences`, `StrumEngine(`, `dart:ui`.
-Navigáció **nem** a controller dolga: a `NavigateToResult` **effekt**, amit a
-Kör 13 UI-ja hajt végre.
+`Navigator`, `GoRouter`, `SharedPreferences`, `StrumEngine(`, `dart:ui`,
+`DateTime.now(`, **`AudioSessionCoordinator`** és
+**`audioSessionCoordinatorProvider`** (lásd §10). Navigáció **nem** a controller
+dolga: a `NavigateToResult` **effekt**, amit a Kör 13 UI-ja hajt végre.
 
 ### 3. A capture-aktiváció egyetlen forrása a státusztábla
 
@@ -134,13 +135,41 @@ definiál. A controller a state-oldaliból a result-oldalira képez:
 A result-oldali `interrupted` ebben a körben **nem keletkezik** — az
 alkalmazás-életciklus (háttérbe kerülés) kezelése a Kör 18 hatásköre.
 
-### 10. Terminal státusz = teljes cleanup, mérve
+### 10. A mikrofon-lease tulajdonosa a `MicCapture`, NEM a controller
+
+**Ez a döntés az eredeti ADR-vázlat javítása** — az implementer a kör indítása
+után `stopped` jelzéssel megfogta, hogy a vázlat „a controller szerezzen audio
+lease-t" előírása a production utat **halottá tette volna**. A mérés:
+
+| # | Tény | Bizonyíték |
+|---|---|---|
+| 1 | a `LivePracticeObservationGateway.start()` a `StrumEngine`-t indítja | `live_practice_observation_gateway.dart:113` |
+| 2 | a `RealStrumEngine.start()` a `MicCapture.start()`-ot hívja | `real_strum_engine.dart:71` |
+| 3 | a `MicCapture._doStart()` **maga szerzi** a lease-t | `mic_capture.dart:82` |
+| 4 | a coordinator **nem reentráns**: aktív lease mellett minden `acquire()` `audio.session_busy` hibát ad — **akkor is, ha ugyanaz az `AudioOwner` kéri** | `audio_session_coordinator.dart:38–50` |
+| 5 | a `MicCapture` az egyetlen `acquire()` hívó az egész `lib/`-ben | `grep -rn "\.acquire(" lib/` → egyetlen találat |
+
+Ha tehát a controller előbb megszerezné a lease-t, a gateway által indított
+`MicCapture` második kérése **szükségszerűen** megbukna, és a production
+session soha nem tudna capture-t indítani.
+
+**Döntés:** a controller **soha nem hívja** az `AudioSessionCoordinator`-t, és
+nem tart `AudioSessionLease`-t. Az erőforrás-tulajdonos a `MicCapture`, a
+gateway alatt egy réteggel. A controller audio-életciklus-felelőssége
+kimerül a `gateway.start()` / `stop()` / `dispose()` hívásokban.
+
+A mikrofon felszabadulása így **tranzitív**, és mérve az is:
+`gateway.stop()`/`dispose()` → `_stopActiveCapture()` → `_engine.stop()` →
+`_mic.stop()` → `lease.release()`
+(`live_practice_observation_gateway.dart:159,185` · `real_strum_engine.dart:147`
+· `mic_capture.dart:125–131`).
+
+### 10b. Terminal státusz = teljes cleanup, mérve
 
 Mind a három terminal státuszban (`completed`, `cancelled`, `failed`):
 observation-subscription lemondva, gateway `stop()` majd `dispose()`,
-tick-forrás lezárva, audio lease elengedve, óra megállítva. A controller
-`dispose()`-a után érkező observation vagy tick **nem dob** és nem változtat
-állapotot.
+tick-forrás lezárva, óra megállítva. A controller `dispose()`-a után érkező
+observation vagy tick **nem dob** és nem változtat állapotot.
 
 Ez nem ígéret, hanem mért invariáns: a fake-ek számlálókat publikálnak, és a
 kör acceptance-e mind a három terminal ágra **külön cellát** ír elő — a
@@ -152,8 +181,7 @@ mikrofont.
 | Kiváltó | Státusz | Effekt |
 |---|---|---|
 | mikrofon-engedély megtagadva | `permissionRequired` | `ShowPermissionSettings` |
-| audio lease nem szerezhető | `failed` | `ShowRecoverableError` |
-| gateway `start()` `Failure`-t ad | `failed` | `ShowRecoverableError` |
+| gateway `start()` `Failure`-t ad — **beleértve a foglalt mikrofont** (`audio.session_busy`, amit a `MicCapture` ad tovább) | `failed` | `ShowRecoverableError` |
 | observation stream **futás közbeni** hibája | **marad** (`countIn`/`running`) | `ShowRecoverableError` |
 | recorder mentési hibája finish-kor | `completed` (a session sikeres) | `ShowRecoverableError` |
 
@@ -231,6 +259,19 @@ valódi jel-jelenlétet). Ez önálló, két scorer + két teszt terjedelmű kö
 Addig a mai viselkedés **kipinnelve** van egy acceptance-cellában (A13), hogy a
 záró körnek legyen piros/zöld horgonya. Follow-up gazdája: **E02-R18**
 (result + coaching) pre-flightja.
+
+## Nyitott follow-up — `AudioOwner.practice`
+
+A Practice V2 gateway ma a `strumEngineProvider`-en keresztül a **Live** út
+motorját használja, tehát a mikrofon-lease `AudioOwner.live` néven kel el
+(`live_providers.dart:12`). Ez működik — a lease exkluzív, és a Practice meg a
+Live úgysem futhat egyszerre —, de a lease-ütközési logok félrevezetőek
+lesznek („held by live", miközben a Practice tartja).
+
+Egy saját `AudioOwner.practice` enum-tag a `lib/core/**` alatt van (ebben a
+körben lezárt zóna), és a Practice-nek saját `StrumEngine`-példányt is adna.
+Gazdája: az a kör, amelyik először nyúl a Practice `data/` rétegéhez a
+gateway-provider véglegesítésekor (legkésőbb **E02-R13** pre-flight).
 
 ## Következmények
 

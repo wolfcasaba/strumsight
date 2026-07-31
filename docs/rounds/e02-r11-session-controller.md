@@ -32,6 +32,16 @@ tévesnek. Mind a tizenkettő javítva lentebb; a revíziók naplója:
 | R10 | §5.5 „a controller olvassa a settings latency providereket" | a `PracticeSessionConfig` **már hordozza** az `inputLatency`/`visualLatency` mezőt (`:45–46`) | a controller **a configból** fagyasztja be; settings providert **nem** olvas |
 | R11 | branch `codex/e02-r11-…` | a motor MiniMax M3 | `mm/e02-r11-session-controller` |
 | R12 | §7.7 „observation-út → inkrementális snapshot" (mikor fut a scoring pass, nyitva) | tickre futtatott scoring pass SDD §24.1-et sértene és O(tick) munkát adna | ADR 0077 §7: a pass **csak** `StrumObservation`-re és finish-kor fut; **A14** méri |
+| **R13** | **„a controller szerezzen audio lease-t, terminal státuszban engedje el" (A4/A5)** | **a `MicCapture` MAGA szerzi a lease-t a gateway alatt (`mic_capture.dart:82`), és a coordinator NEM reentráns (`audio_session_coordinator.dart:38`) — a controller lease-e a gateway startját `audio.session_busy`-ra vinné, azaz a production út HALOTT lenne** | **a controller SOHA nem hívja az `AudioSessionCoordinator`-t (ADR 0077 §10); a felszabadítás tranzitív a `gateway.stop()/dispose()`-on át; A4/A5/A9 átírva** |
+
+> **R13 eredete:** ezt **nem** a pre-flight találta meg, hanem az implementer
+> (MiniMax M3) a kör első percében, a STOP-klauzula szerint `stopped` jelzéssel
+> — a brief §4 listáján kívüli fájl módosítása nélkül, commit nélkül. A
+> normatív döntést az orchestrátor hozta meg (ADR 0077 §10), a kör onnan
+> folytatódik. Tanulság a `docs/LESSONS.md`-be: **az erőforrás-tulajdonlást a
+> tényleges hívási láncon kell kimérni, nem a réteg-diagram alapján
+> feltételezni** — a `grep -rn "\.acquire(" lib/` egyetlen sora eldöntötte volna
+> a pre-flightban.
 
 **Ami NEM változott:** a kör célja, a scope, a tilos zóna szelleme és az A1–A12
 mérési filozófiája.
@@ -170,14 +180,18 @@ képernyők közül **egy sem** olvassa.
 - **Compiler (R06):** `AppResult<CompiledPracticeTarget> compilePracticeTarget({required PracticeDefinition definition, required PracticeSessionConfig config, PracticeLoopRange? loopRange})`.
 - **Core (Epic 1):** `MicrophonePermissionGateway`
   (`core/platform/microphone_permission.dart`: `currentState()`, `request()`,
-  `MicrophonePermissionState` enum `.failure` getterrel);
-  `AudioSessionCoordinator` (`core/audio/lifecycle/audio_session_coordinator.dart`:
-  `Future<AppResult<AudioSessionLease>> acquire(owner, onRevoke)`, exkluzív
-  lease, `lease.release()`, ADR 0056); providerek:
-  `lib/core/audio/audio_providers.dart` →
-  `audioSessionCoordinatorProvider` (26. sor), mikrofon-engedély provider
-  (15. sor); `appLoggerProvider` (`lib/core/logging/logger_provider.dart`);
+  `MicrophonePermissionState` enum `.failure` getterrel) — **ezt a controller
+  használja** a permission-ágra; providere:
+  `lib/core/audio/audio_providers.dart:15`.
+  `appLoggerProvider` (`lib/core/logging/logger_provider.dart`);
   `AppResult`/`AppFailure` (`core/foundation/`).
+  ⚠ **`AudioSessionCoordinator` — a controller NEM használja** (R13 revízió,
+  ADR 0077 §10). Egyetlen `acquire()` hívó van az egész `lib/`-ben, a
+  `MicCapture` (`mic_capture.dart:82`), és a coordinator nem reentráns
+  (`audio_session_coordinator.dart:38`). A mikrofon felszabadulása tranzitív:
+  `gateway.stop()/dispose()` → `_engine.stop()` → `_mic.stop()` →
+  `lease.release()` (`live_practice_observation_gateway.dart:159,185` ·
+  `real_strum_engine.dart:147` · `mic_capture.dart:125–131`).
 - **Tesztsegédek:** `test/support/fake_practice_observation_gateway.dart`
   (`startCalls`, `stopCalls`, `startConfigs`, `expectedChordCalls`,
   `startResult`, `emit()`, `emitError()`) és
@@ -263,7 +277,8 @@ pont kivonata.
    `reducePracticeSession`-ön megy át. A `rejection` nem hiba: redaktáltan
    naplózni, eldobni, állapot változatlan.
 2. **Tiltott függőségek a controllerben:** `BuildContext`, `Navigator`,
-   `GoRouter`, `SharedPreferences`, `StrumEngine(`, `dart:ui`. A
+   `GoRouter`, `SharedPreferences`, `StrumEngine(`, `dart:ui`, `DateTime.now(`,
+   **`AudioSessionCoordinator`**, **`audioSessionCoordinatorProvider`**. A
    `NavigateToResult` **effekt**, nem navigáció.
 3. **A capture-aktiváció EGYETLEN forrása a `practiceCaptureActiveByStatus`
    tábla.** Minden elfogadott lépés után — a `statusPath` **minden** elemére,
@@ -292,10 +307,19 @@ pont kivonata.
    `completedTimeline → completedAllTargets` · `userFinished → userFinished` ·
    `cancelled → cancelled` · `timedOut → timedOut` · `failed → failed`.
    A result-oldali `interrupted` ebben a körben **nem keletkezik**.
-10. **Minden terminal státuszban teljes cleanup:** subscription lemondva,
-    gateway `stop()` majd `dispose()`, tick-forrás lezárva, audio lease
-    elengedve, óra megállítva. A `dispose()` után érkező observation/tick nem
-    dob és nem változtat állapotot.
+10. **A mikrofon-lease tulajdonosa a `MicCapture`, NEM a controller**
+    (ADR 0077 §10). A controller **soha nem hívja** az
+    `AudioSessionCoordinator`-t és nem tart `AudioSessionLease`-t: a
+    `MicCapture` a gateway alatt egy réteggel maga szerzi
+    (`mic_capture.dart:82`), és a coordinator nem reentráns
+    (`audio_session_coordinator.dart:38`) — a controller lease-e a
+    `gateway.start()`-ot `audio.session_busy`-ra vinné. A felszabadítás
+    **tranzitív**: `gateway.stop()/dispose()` → `_engine.stop()` →
+    `_mic.stop()` → `lease.release()`.
+10b. **Minden terminal státuszban teljes cleanup:** subscription lemondva,
+    gateway `stop()` majd `dispose()`, tick-forrás lezárva, óra megállítva.
+    A `dispose()` után érkező observation/tick nem dob és nem változtat
+    állapotot.
 11. **Hibakezelés** az ADR 0077 §11 táblája szerint. Recoverable hiba **nem**
     dobja ki a felhasználót a sessionből. `try/catch`-be nyelt mentési hiba
     tilos.
@@ -392,14 +416,17 @@ duplikált history-bejegyzést jelentene a Kör 18-ban.
 ### A4 — Cleanup-mátrix, MÉRVE
 
 A fake-ek számlálókat publikálnak (`startCalls`, `stopCalls`, `disposeCalls`,
-`tickSubscriptions`/`closed`, `leaseReleaseCount`). Mind a három terminal
-státuszra **külön** cella:
+`tickSubscriptions`/`closed`). Mind a három terminal státuszra **külön** cella:
 
-| Terminal státusz | observation-subscription | gateway `stop` | gateway `dispose` | tick-forrás | audio lease |
-|---|---|---|---|---|---|
-| `completed` | 0 aktív | ≥1, utolsó hívás a terminal előtt | 1 | lezárva | elengedve |
-| `cancelled` | 0 aktív | ≥1 | 1 | lezárva | elengedve |
-| `failed` | 0 aktív | ≥1 | 1 | lezárva | elengedve |
+| Terminal státusz | observation-subscription | gateway `stop` | gateway `dispose` | tick-forrás |
+|---|---|---|---|---|
+| `completed` | 0 aktív | ≥1, utolsó hívás a terminal előtt | 1 | lezárva |
+| `cancelled` | 0 aktív | ≥1 | 1 | lezárva |
+| `failed` | 0 aktív | ≥1 | 1 | lezárva |
+
+⚠ **Audio lease oszlop nincs** (R13 revízió): a mikrofont a `MicCapture`
+engedi el a `gateway.dispose()` láncán át, a controller nem tart lease-t. Ezt
+az **A9** guard méri, nem ez a mátrix.
 
 Plusz: a controller `dispose()`-a **után** érkező observation vagy tick
 **nem dob kivételt** és nem változtat állapotot (a `states` stream nem bocsát ki
@@ -416,8 +443,7 @@ kivételt" indoklás; a cleanup ellenőrzése csak a `completed` ágon.
 | Kiváltó | Elvárt státusz | Elvárt effekt | `AppFailure`? |
 |---|---|---|---|
 | mikrofon-engedély megtagadva | `permissionRequired` | `ShowPermissionSettings` | — |
-| audio lease nem szerezhető (foglalt mikrofon) | `failed` | `ShowRecoverableError` | igen |
-| gateway `start()` `Failure`-t ad | `failed` | `ShowRecoverableError` | igen |
+| gateway `start()` `Failure`-t ad — **két cella**: (a) általános indítási hiba, (b) **foglalt mikrofon**, azaz `AudioFailure(code: FailureCode.audioSessionBusy)`, amit a `MicCapture` ad tovább | `failed` | `ShowRecoverableError` | igen |
 | observation stream **futás közbeni** hibája | **változatlan** (`running`) | `ShowRecoverableError` | igen |
 | recorder mentési hibája finish-kor | `completed` (a session sikeres) | `ShowRecoverableError` | igen |
 
@@ -478,7 +504,11 @@ adna.
 - Guard-teszt a **saját** tesztfájlodban (ne bővítsd a `test/tooling/`-ot): a
   `practice_session_controller.dart` forrása **nem tartalmazza** a
   `BuildContext`, `Navigator`, `GoRouter`, `SharedPreferences`, `StrumEngine(`,
-  `dart:ui`, `DateTime.now(` mintákat.
+  `dart:ui`, `DateTime.now(`, **`AudioSessionCoordinator`**,
+  **`audioSessionCoordinatorProvider`** mintákat.
+  Az utolsó kettő az **R13 revízió gépi őre**: a lease-tulajdonlás a
+  `MicCapture`-é, és ez a guard az, ami ezt a döntést visszavonhatatlanná teszi
+  — nem a doc-comment.
 - `tools/round-gate.sh` **architecture** lépése zöld; az allowlist nem bővül.
 
 ### A10 — Integrációs forgatókönyvek (SDD Kör 11, mind a tíz)
@@ -581,8 +611,9 @@ implementáció — ott a session **örökre** `finishing`-ben ragadna, és a
    `_reduceResumePractice`), a state akkumulátorai és a **két**
    `PracticeFinishReason` enum, a command/effect készlet, a gateway és az
    aktivációs tábla, a matcher és a négy scorer aláírásai,
-   `audio_session_coordinator.dart`, `microphone_permission.dart`,
-   `lib/core/audio/audio_providers.dart`, és a három meglévő fake.
+   `microphone_permission.dart`, `lib/core/audio/audio_providers.dart`, és a
+   három meglévő fake. (Az `audio_session_coordinator.dart`-ot **nem** kell
+   hívnod — lásd §5.10.)
 2. `PracticeTickSource` (interfész + `Timer.periodic` production) + a fake
    tick-forrás a `test/support/` alatt.
 3. `PracticeSessionRecorder` interfész + `NoopPracticeSessionRecorder` + fake.
