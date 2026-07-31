@@ -9,6 +9,6 @@ library;
 
 export 'presentation/practice_route_args.dart';
 export 'presentation/screens/practice_hub_screen.dart';
-export 'presentation/screens/practice_setup_screen.dart';
+export 'presentation/screens/practice_session_screen.dart';
 export 'presentation/widgets/practice_mode_card.dart';
 export 'application/practice_setup_controller.dart';

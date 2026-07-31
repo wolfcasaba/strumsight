@@ -16,6 +16,7 @@ import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
+import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
@@ -126,6 +127,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceSetup,
           builder: (_, _) => const PracticeSetupScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceSession,
+          builder: (_, _) => const PracticeSessionScreen(),
         ),
       ],
     ],
