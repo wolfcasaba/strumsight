@@ -18,6 +18,48 @@ kör adatai:
 
 Olvasd el a `HANDOFF.md`-t, az `AGENTS.md`-t és a briefet, mielőtt bármit teszel.
 
+## 0.1 HEADLESS-SZABÁLY: az implementerre SOSEM háttér-taskkal várj
+
+Te egy `claude -p` headless sessionben futsz. **Amint a válaszod véget ér és
+nincs előtérben futó munkád, a CLI kilép és MEGÖLI a háttér-taskjaidat** — az
+E02-R12 első futása pontosan így halt meg jelzés nélkül (H-NOSIGNAL): az
+orchestrátor `run_in_background`-dal várt az implementerre, a session pedig a
+válasz végén kilépett alóla.
+
+Ezért az implementer-várakozás KÖTELEZŐ alakja egy **előtérben futó** ciklus,
+ismételt szinkron hívásokkal:
+
+```bash
+tools/wait-for-round.sh <munkapéldány> 540
+```
+
+Kilépési kód `5` = még fut, de lejárt a várakozási keret → **hívd meg újra**
+(akárhányszor). `0` = done, `3` = stopped, `4` = stalled/timeout/unknown.
+Ugyanígy előtérben fusson a `gh run watch` is. Az implementert pedig **ne** a
+session háttértaskjaként indítsd (azt a CLI kilépése megöli), hanem a
+sessionről LEVÁLASZTVA, egyetlen azonnal visszatérő Bash-hívással:
+
+```bash
+setsid tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log \
+  >/dev/null 2>&1 < /dev/null &
+```
+
+## 0.2 Örökség-ellenőrzés: egy korábbi halott session hagyhatott munkát
+
+A pre-flight ELŐTT nézd meg, hagyott-e egy korábbi (halt-olt/megölt) session
+ehhez a körhöz tartozó munkát:
+
+```bash
+ls -d /home/ubuntu/ss-*$(echo {{ROUND}} | tr 'A-Z' 'a-z' | tr -d '-')* /home/ubuntu/ss-*e02*r* 2>/dev/null
+git -C <talált munkapéldány> log --oneline -3   # van-e kör-commit (ADR, brief-revízió)
+```
+
+Ha találsz commitolt pre-flightot (ADR + §0.0 brief-revízió) egy korábbi
+munkapéldányban: **olvasd el és HASZNÁLD FEL** (fetch-eld a branchét), ne írd
+meg vakon újra — két divergens ADR-szöveg ugyanarra a számra rosszabb, mint az
+újrahasznosítás. Ha csak félkész, jelöletlen munka van: hagyd, és indíts
+tisztán.
+
 ## 1. A pre-flight KÖTELEZŐ, és két mérési szabállyal bővült
 
 Az előre megírt briefek mért állításai avulnak. Indítás előtt minden briefben

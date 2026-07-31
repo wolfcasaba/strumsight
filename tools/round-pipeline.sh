@@ -44,6 +44,18 @@ mkdir -p "$state_dir"
 
 log() { printf '%s  %s\n' "$(date -Is)" "$*" | tee -a "$chain_log" >&2; }
 
+# Telefon-értesítés ntfy.sh-n át (user-kérés 2026-07-31). A topic a gitignore-olt
+# .pipeline/ntfy-topic fájlban él — a repó publikus, a topic nem kerülhet bele.
+# Nincs topic-fájl → néma no-op (az értesítés kényelem, nem kapu).
+notify() {
+  local title="$1" body="$2" prio="${3:-default}"
+  local topic_file="$state_dir/ntfy-topic"
+  [ -f "$topic_file" ] || return 0
+  curl -s -m 10 -o /dev/null \
+    -H "Title: $title" -H "Priority: $prio" -H "Tags: guitar" \
+    -d "$body" "https://ntfy.sh/$(cat "$topic_file")" || true
+}
+
 die() { log "HIBA: $*"; exit "${2:-4}"; }
 
 # --- 1. Zár ---------------------------------------------------------------
@@ -128,6 +140,17 @@ sed -e "s|{{ROUND}}|$round|g" \
 # --- 6. Friss headless orchestrátor-session -------------------------------
 rm -f "$status_file"
 log "orchestrátor-session indul ($round), időkorlát ${session_timeout}s → $session_log"
+notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-session"
+
+# 30 percenkénti életjel, amíg a session fut — a telefonon látszik, hogy dolgozik.
+(
+  elapsed=0
+  while sleep 1800; do
+    elapsed=$(( elapsed + 30 ))
+    notify "⏳ $round még fut" "${elapsed} perce dolgozik ($engine)" low
+  done
+) &
+pinger_pid=$!
 
 timeout --signal=TERM --kill-after=60 "$session_timeout" \
   "$claude_bin" -p "$(cat "$prompt_file")" \
@@ -137,6 +160,7 @@ timeout --signal=TERM --kill-after=60 "$session_timeout" \
     --verbose \
   >> "$session_log" 2>&1
 session_exit=$?
+kill "$pinger_pid" 2>/dev/null
 
 log "orchestrátor-session kilépett (kód $session_exit)"
 
@@ -153,6 +177,7 @@ if [ ! -f "$status_file" ]; then
     echo "halted_at=$(date -Is)"
   } > "$halt_file"
   log "HALT: nincs kör-jelzés — $halt_file"
+  notify "⛔ HALT: $round" "az orchestrátor-session jelzés nélkül ért véget — kivizsgálás kell" high
   exit 5
 fi
 
@@ -162,6 +187,7 @@ summary=$(grep -m1 '^summary=' "$status_file" | cut -d= -f2-)
 case "$outcome" in
   merged)
     log "$round MERGE-ELVE — $summary"
+    notify "✅ $round merge-elve" "$summary"
     git fetch -q origin main && git reset -q --hard origin/main
     # A sor-fájl frissítése SAJÁT commitban, hogy a kör diffjét ne szennyezze.
     sed -i "s|^\($round\t.*\t\)pending$|\1done|" "$queue_file"
@@ -181,6 +207,7 @@ case "$outcome" in
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
     log "HALT ($halt_code) a(z) $round körön — $summary"
+    notify "⛔ HALT ($halt_code): $round" "$summary — döntésed kell: pipeline-status.sh --resume" high
     log "feloldás emberi döntés után: tools/pipeline-status.sh --resume"
     exit 3
     ;;
@@ -193,6 +220,7 @@ case "$outcome" in
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
     log "HALT: értelmezhetetlen kör-jelzés ('$outcome')"
+    notify "⛔ HALT: $round" "értelmezhetetlen kör-jelzés: '$outcome'" high
     exit 5
     ;;
 esac
