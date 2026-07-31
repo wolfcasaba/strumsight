@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-30 (E02-R07)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31 (E02-R08)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -107,6 +107,21 @@
   nullponttól vett tickszám egyetlen konverziója, minden időtartam két pillanat
   különbsége — így a kompozíció pontos ÉS minden pillanat bitre egyezik a legacy
   képlettel. Parity a szállított korpuszon: **0 µs**. Hívó UI nincs.
+- **Practice V2 observation gateway (E02-R08, ADR 0074):** a Live detektor és a
+  Practice domain közötti híd. `application/practice_observation_gateway.dart`
+  (SDD §13.1 interfész + `PracticeObservationConfig`: 0.55 / 0.60 / 180 ms /
+  500 ms) · **`application/practice_observation_activation.dart` — a
+  `practiceCaptureActiveByStatus` `const` tábla mind a 11 státuszra**, ez a
+  „hallgat-e a mikrofon" EGYETLEN igazságforrása (`countIn` + `running` → be,
+  minden más → ki; a `paused → false` a chunk 014 pause-résének szerkezeti
+  lezárása a V2 úton), a kulcshalmaz-egyezés gépi őr alatt ·
+  `data/live_practice_observation_gateway.dart` — `strumSeq`-dedup, engine-óra
+  de-jitter a legacy **szigorú `<`** predikátumával (a kalibrált input latency
+  a matcheré marad, ADR 0074 §3), **fajtánként külön** monoton padló, saját sűrű
+  `sequence` (§12.5 baseline), change-point + stabilitási chord-mintavétel,
+  engedély-elsőség, idempotens start/stop/dispose, hibaleképezés. Fake gateway a
+  `test/support/` alatt az R09/R10 számára. Hívó és provider nincs, flagek OFF →
+  production viselkedés bitre azonos.
 - **Kétmotoros implementer-készlet (ADR 0069):** `tools/mm-round.sh` +
   `tools/mm-watch.sh` (5 perces korai riasztás) + `tools/mm-trace.py`
   (munkastílus-elemzés) — a MiniMax M3 ugyanazt a kör-jelzés-szerződést
@@ -128,60 +143,46 @@
 
 ## 4. Current branch
 
-`main` @ [PR #28](https://github.com/wolfcasaba/strumsight/pull/28) (E02-R07,
-merge `b5e0dfc`) + [PR #29](https://github.com/wolfcasaba/strumsight/pull/29)
-(hiánypótlás, merge `0c9ab51`, CI run
-[30584474704](https://github.com/wolfcasaba/strumsight/actions/runs/30584474704)
-zöld: gate-sor + teljes suite + randomizált property gate + APK + coverage).
-Kör-branchek törölve. **Figyelmeztetés a jövőre (L11):** a PR #28 az E02-R07
-javító körének kódja NÉLKÜL ment fel — a munkapéldányban készült commitot nem
-húzták vissza a fő repóba. A PR #29 pótolta; a `main` most tartalmilag helyes.
-Merge után a `main`-en függetlenül újrafuttatva (`tools/round-gate.sh`):
-format 520/0 changed · analyze No issues found · `test/features/practice/` 379
-zöld · property +2 · architecture OK.
+`main` @ [PR #30](https://github.com/wolfcasaba/strumsight/pull/30) (E02-R08,
+squash-merge `e80a878`), CI run
+[30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)
+zöld (gate-sor + teljes suite + randomizált property gate + release APK +
+coverage). Kör-branch törölve. Merge után a `main`-en függetlenül újrafuttatva
+(`tools/round-gate.sh`): format 528/0 changed · analyze No issues found ·
+`test/features/practice/` **440** zöld · property **6** zöld · architecture OK
+(12 allowlisted, változatlan).
 
 ## 5. Last completed round
 
-**E02-R07 — Session clock és determinisztikus state machine**
-([ADR 0073](docs/adr/0073-practice-session-state-machine.md) implementációja,
-PR #28 + #29): `PracticeSessionClock` interfész + `PracticeClockSnapshot`
-(`wall`/`active`/`paused`/`attempt`, invariáns `active + paused == wall`) +
-monoton `Stopwatch`-alapú `MonotonicPracticeSessionClock` az **`application/`**
-rétegben (a domain purity-teszt tiltja a `Stopwatch`-ot) + `FakePracticeSessionClock`
-a `test/support/` alatt · `PracticeSessionStatus` (11 érték) és a SDD §11.2
-átmenettáblájának **szó szerinti** `const` átirata, amin a reducer MINDEN
-statusváltása átmegy · egyetlen pure reducer, bemenete a 11 SDD-command és 4
-környezeti signal (`PreparationSucceeded/Failed`, `PermissionDenied`,
-`ClockAdvanced`); soha nem dob, tiltott bemenetre a state változatlan +
-`InvalidSessionTransitionFailure` (`FailureCode.practiceInvalidSessionTransition`) ·
-**időkönyvelés (SDD §12.2):** hat akkumulátor,
-`timelinePosition = timelineBase + max(0, active − activeBase)`, **a napi célba
-kizárólag a `playingElapsed` számít** (count-in és pause NEM) · resume: egy
-ütemnyi count-in, majd folytatás a `barBoundaries` szerinti ütemhatárról ·
-one-shot effect-modell. Saját beat→idő képlet nincs (ADR 0072 §1.1). Hívó UI
-és provider nincs, a legacy Learn út érintetlen, flagek OFF → production
-viselkedés változatlan. Implementer: **MiniMax M3** (a user döntése, érzékeny kör).
+**E02-R08 — Observation gateway és audio lifecycle adapter**
+([ADR 0074](docs/adr/0074-practice-observation-gateway.md) implementációja,
+PR #30): a `LiveFrame → PracticeObservation` híd, és a kör lényege — **a
+mikrofon-hallgatás igazságforrása az E02-R07 session-státusza lett, nem egy
+widget-mező**. A `practiceCaptureActiveByStatus` `const` tábla mind a 11
+státuszra terjed ki, a kulcshalmaz-egyezést teszt őrzi (új státusz ⇒ piros, nem
+csendes `false`), és a `paused → false` a `docs/rag/chunks/014-play-along-learn.md`
+**pause-résének szerkezeti lezárása a V2 úton**. Az adapter a legacy időfelosztást
+őrzi: engine-óra de-jitter a szigorú `<` predikátummal, a kalibrált input latency
+a matcheré marad (ADR 0074 §3). Hívó és provider nincs, a legacy Learn út és a DSP
+érintetlen, flagek OFF → production viselkedés bitre azonos.
+Implementer: **MiniMax M3** (a user döntése).
 
-Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 4 MAJOR · 3 MINOR · 2 NOTE),
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · **2 MAJOR** · 1 MINOR · 3 NOTE),
 javító kör után **APPROVED**:
-[`docs/reviews/e02-r07-review.md`](docs/reviews/e02-r07-review.md).
-**Mind a hét lelet 370 zöld teszt és zöld gate-sor mellett csúszott át** — a
-reviewer eldobható próbatesztje mérte: a 2. attempt idővonala 0 helyett 3 s-nál
-indult · a reducer a §11.2 táblán KÍVÜLI élt hajtott végre
-(`permissionRequired → ready`) · a property gate a tábla **tranzitív lezártját**
-mérte az élenkénti pár helyett, és pont ez rejtette el az előzőt · 2 ütemes
-count-in 4 kattanást adott 8 helyett. A hétből **három gyökere maga a kör-brief
-volt** — dokumentált brief-revízióként felülírva (§0.0), nem utólagos
-lista-tágítással. A javító kör után a reviewer saját próbatesztje mind a hetet
-zártnak mérte, és a felélesztett property-őr **valódi-sértés próbája** (a
-`_canTransition` szándékos eltávolítása) pirosra váltott.
+[`docs/reviews/e02-r08-review.md`](docs/reviews/e02-r08-review.md).
+**Mind a hat lelet 437 zöld teszt és 5 zöld property mellett csúszott át** — két
+eldobható próbateszt mérte, a legacy referenciával szemben: a frame-kézbesítési
+lag a chord observationökre is rámehetett egy beégett, MÁSIK strum lagjával
+(`2.000 s` → `1.700 s`), és a **közös monoton padló kioltotta a strum
+de-jittert** (`0.916 s` → `1.000 s`, azaz a 84 ms-os korrekcióból 0 maradt). A
+javítás után a próbák eltérése a legacy képlettől **0 µs**.
 
-**Folyamat-hozadék ugyanebben a körben:** `tools/round-gate.sh` — a záró gate
-futtatható artefaktumként (az implementer háromszor futtatta `| tail -N`-nel a
-szó szerinti tiltás ellenére); a `docs/execution/08-round-brief.md` sablon négy
-új szabálya; `docs/LESSONS.md` **L09–L11**; és a kiadható
-[`docs/rounds/gov-01-gate-artifact-rollout.md`](docs/rounds/gov-01-gate-artifact-rollout.md)
-brief a gate-artefaktum rendszer-szintű átvezetésére.
+**Folyamat-hozadék:** a kör három **orchestrátor-oldali** hibát is termelt, mind
+a mércét érintve — hiányzó küszöb-fölötti mátrixcella (az implementer
+`stopped`-dal fogta meg), kimondatlan korrekciós hatókör, és egy olyan
+valódi-sértés próba, amit a kért őr elvileg sem tudott volna kimutatni. Ebből
+két dokumentált brief-revízió (§0.0, §0.1), a `docs/LESSONS.md` **L12–L14**, és
+a `tools/wait-for-round.sh` futtatható várakoztató artefaktum lett.
 
 ### Korábbi kör
 
@@ -233,27 +234,31 @@ Korábbi körök (E02-R03 részletes története is):
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
-   APK-val; eredmény vissza → completion report frissítése.
+   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #30
+   CI-runjából tölthető
+   ([30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)).
 2. **GOV-01 — a gate-artefaktum átvezetése** ÚJ sessionben. A brief KÉSZ és
    kiadható: [`docs/rounds/gov-01-gate-artifact-rollout.md`](docs/rounds/gov-01-gate-artifact-rollout.md).
-   Mechanikus szövegátvezetés (AGENTS.md §12, CLAUDE.md verify-gate, három
-   skill, DoD, a két round-wrapper fejléce) — **javasolt motor: MiniMax M3**,
-   az acceptance két `grep` + `git diff --stat`. Dart kódot nem érint.
-3. **E02-R08 — Observation gateway és audio lifecycle adapter**
-   (`docs/sdd/03-epic-02-practice-engine.md`, „Kör 8") ÚJ sessionben,
-   kör-brieffel. Bemenete az R07 állapotgépe: a gateway a
-   `status == running` állapotot kérdezze, ne widget-flaget — ezzel zárható a
-   `docs/rag/chunks/014-play-along-learn.md` pause-rése is (lásd 4. pont).
-   Előre kiosztható ADR: **0074**.
-4. **Follow-up (E02-R08/R11-ig nyitva):**
-   `docs/rag/chunks/014-play-along-learn.md` elavult — a „liveFrameProvider only
-   while playing / closed on pause" állítás ma NEM igaz (`_pause()` nem zárja a
-   subscriptiont), plusz 4-beat count-in és 12 lecke. A chunk javítása a
-   pause-rés lezárásával EGY commitban (AGENTS.md §9).
+   Mechanikus szövegátvezetés — **javasolt motor: MiniMax M3**, az acceptance két
+   `grep` + `git diff --stat`. Dart kódot nem érint. **Bővítendő:** az E02-R08
+   óta a `tools/wait-for-round.sh` is a készlet része (AGENTS.md §15.3).
+3. **E02-R09 — Session controller** (`docs/sdd/03-epic-02-practice-engine.md`,
+   „Kör 9"/„Kör 10" a fejezet szerint) ÚJ sessionben, kör-brieffel. Ez köti össze
+   az R07 állapotgépét, az R06 targetjét és az R08 gatewayjét egy Riverpod
+   controllerben — **ez lesz a `practiceCaptureActiveByStatus` tábla első valódi
+   hívója**. Előre kiosztható ADR: **0075**.
+4. **Az E02-R08 nyitva hagyott follow-upjai** (a review §4 + a brief §10.6):
+   - a `ScoringProfile → PracticeObservationConfig` küszöb-leképezés (R09);
+   - a chord-confidence felvitele a `LiveFrame`-be — az Analyze úton is közös,
+     ezért külön kör; addig a Live adapter `confidence: 1.0` = „nem mért";
+   - a `StrumEngine.start()` `AppResult`-osítása, hogy a „foglalt mikrofon"
+     szinkron `start()`-hiba lehessen (ADR 0074 §7 ismert korlát);
+   - a legacy `learn_screen.dart` `_pause()` pause-rése — **felhasználó-látható**,
+     valódi eszközön verifikálandó, a migrációs kör (E02-R11) hatásköre; a
+     chunk 014 addig a mai igazságot írja le.
 5. **Nyitva hagyott NOTE (E02-R07):** `MonotonicPracticeSessionClock.start()`
    pause alatt teljes resetet végez, a szerződés viszont idempotenciát ír elő.
-   Nem blokkol (a reducer a második `StartPractice`-t elutasítja); az E02-R09
-   controller-körben zárandó, amikor valódi hívó lesz.
+   Nem blokkol; az E02-R09 controller-körben zárandó, amikor valódi hívó lesz.
 
 ## 7. Required verification (before any "done")
 

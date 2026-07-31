@@ -362,3 +362,45 @@ egy olyan pontot, ahol nem mérünk semmit.
 - Ha az implementer ellentmondást jelez a kötött döntés és az acceptance között,
   a helyes válasz **dokumentált brief-revízió** (§0.0), nem a kötött döntés
   csendes enyhítése és nem a lista-tágítás.
+
+## L14 — A MÉRCÉT is annyira szigorúan kell ellenőrizni, mint a kódot
+
+**Forrás:** E02-R08 — egyetlen körben **három** orchestrátor-oldali hiba, mind
+ugyanabból a családból.
+
+**Mit mértünk.**
+
+1. **A brief §6.2 lag-mátrixából hiányzott a küszöb FÖLÖTTI cella** — a
+   „határ fölöttinek" szánt `(1.0, 0.5001)` valójában `lag = 0.4999`. Az
+   implementer `stopped`-dal fogta meg ([L13](#l13--a-határpont-mátrixot-a-származtatott-mennyiségre-add-meg-ne-a-bemenetekre)).
+2. **A §5.5 nem mondta ki a korrekció HATÓKÖRÉT** („minden emittált
+   observationre"), ezért a strum-becsapódáshoz tartozó de-jitter a
+   chord observationökre is rákerült — R0 MAJOR-1.
+3. **A javító prompt a rossz őrtől kért valódi-sértés próbát:** azt kértem,
+   hogy a *fajtánkénti* monotonitás-property váltson pirosra a hibás **közös**
+   padlótól. Ez matematikailag lehetetlen: a közös padló globálisan monoton,
+   tehát fajtánként is az. A reviewer-mérés: property **zöld (6/6)**, a
+   determinisztikus §6.2b cella **piros**.
+
+**Miért.** Mindhárom a mércét érinti, nem a kódot. A projekt fegyelme addig a
+pontig erős, hogy „a zöld gate nem bizonyíték" ([L01](#l01--a-zöld-gate-nem-bizonyíték)) —
+de a mérce maga is termék, és **ugyanúgy lehet hibás, mint a kód**. Egy hibás
+mérce két irányba árt: vagy nem fog meg valós hibát (1., 3.), vagy hibás
+viselkedést ír elő (2.).
+
+**Hogyan alkalmazd.**
+
+- **Mielőtt egy acceptance-pontot kiadsz, kérdezd meg: melyik konkrét hibás
+  implementációt fogja ez pirosra?** Ha nincs ilyen, a pont vacuous. Ez a
+  valódi-sértés próba **tervezés-idejű** párja.
+- **Invariáns-alapú őr (property) és példány-alapú őr (unit-cella) mást tud.**
+  Egy invariánst a hibás implementáció is teljesíthet — a monotonitás nem
+  detektálja a de-jitter kioltását. Számértéket ellenőrző, determinisztikus
+  cella kell hozzá. A briefben mondd meg, MELYIK őr a lelet mércéje.
+- **Korrekciónál/transzformációnál mindig írd le a HATÓKÖRT is**, ne csak a
+  képletet: melyik kimenetre vonatkozik, és melyikre nem.
+- **A javító prompt is brief** — ugyanaz a szigor jár neki. A benne kért
+  bizonyítékot előbb gondold végig, mint amit az implementernek elhiszel.
+- Kapcsolódó: [L10](#l10--a-fixture-defaultja-határozza-meg-mit-tud-egyáltalán-megfogni-a-teszt)
+  (fixture-default vakfolt) — ott a teszt írója, itt a brief írója választott
+  olyan pontot, ahol nem mérünk semmit.
