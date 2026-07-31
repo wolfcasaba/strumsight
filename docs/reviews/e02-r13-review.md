@@ -1,13 +1,17 @@
 # E02-R13 review — Practice Session UI shell (ADR 0079)
 
 - **Kör:** [`docs/rounds/e02-r13-session-ui-shell.md`](../rounds/e02-r13-session-ui-shell.md)
-- **Branch:** `mm/e02-r13-session-ui-shell` · **HEAD:** `7223496`
+- **Branch:** `mm/e02-r13-session-ui-shell` · **HEAD:** `42c8f97`
+  (a §5 leletei a `7223496`-on keletkeztek, zárásuk a `42c8f97`-en mérve)
 - **Implementer motor:** **MiniMax M3** (pipeline-vezérelt kör, ADR 0087)
-- **Reviewer:** Claude (Opus 5), read-only, izolált klón (`/tmp/review-e02r13`)
+- **Reviewer:** Claude (Opus 5), read-only, izolált klónok
+  (`/tmp/review-e02r13`, majd `/tmp/review-e02r13-fix2`)
 - **Dátum:** 2026-07-31
-- **Verdikt:** **CHANGES REQUESTED — 0 BLOCKER · 3 MAJOR · 1 MINOR · 2 NOTE**
-- **A lánc állapota:** **HALT (H4)** — a három MAJOR az **első javító kör után**
-  keletkezett leletként nyitva van, ezért a merge tilos és a döntés emberre vár.
+- **Verdikt:** **APPROVED — 0 BLOCKER · 0 MAJOR · 0 MINOR · 3 NOTE**
+  (előző verdikt a `7223496`-on: CHANGES REQUESTED — 3 MAJOR · 1 MINOR)
+- **A lánc állapota:** a **javító kör #2** mind a négy leletet lezárta,
+  mindegyiket **mutációs próbával** hitelesítve (§9) → a merge engedélyezett,
+  ha a zöld kapu gépi fele is teljes.
 
 ## 1. A kör lefolyása
 
@@ -16,7 +20,9 @@
 | Pre-flight | ADR 0079 megírva; a brief **nyolc** állítása mérve és javítva (§0.0) |
 | Első implementer-futás (`42a5c24`) | kód kész, **nulla teszt** — a §10 az A1–A9-et „struktúrával" tekintette teljesítettnek és a gépi mércét a review-ra hárította |
 | Javító kör #1 (`7223496`) | mind a nyolc lelet (B1–B4, M1–M4, m1) zárva, **két tesztfájl / 45 cella**, a practice suite 641 → **686** |
-| Review (ez a jelentés) | gate zöld, scope tiszta, **3 új MAJOR** eldobható próbatesztekkel kimérve |
+| Review #1 (§5) | gate zöld, scope tiszta, **3 új MAJOR + 1 MINOR** eldobható próbatesztekkel kimérve |
+| Javító kör #2 (`42c8f97`) | mind a négy lelet zárva, **3 új cella**, a practice suite 686 → **689**; a diff a `lib/`-ben **37 sor** |
+| Review #2 (§9) | gate függetlenül zöld, scope tiszta, **mind a négy zárás mutációs próbával hitelesítve** → **APPROVED** |
 
 Az első futás önmagában bukott kör lett volna: a `done` jelzés „gate zöld,
 A1–A9 bizonyítva" szöveggel érkezett, miközben **egyetlen új teszt sem
@@ -169,19 +175,20 @@ az **A2 forrás-mintaőr** fogja meg (§4). A két mérce együtt fedi a kockáz
   `allowedTransitions`-t tükrözik.
 - **A9** — nulla sor a legacy úton és az application/domain/data rétegekben.
 
-## 7. Merge-döntés
+## 7. Merge-döntés a `7223496`-on (történeti)
 
-**A merge TILOS**, amíg a három MAJOR nyitva van. A gate és a CI zöld, a scope
-tiszta — a leletek tartalmiak, és mindhárom felhasználó-látható viselkedést
-érint (dupla hibakártya, átszivárgó hiba, a11y-csatornára küldött nyers kulcs).
+**A merge TILOS volt**, amíg a három MAJOR nyitva volt. A gate és a CI zöld, a
+scope tiszta — a leletek tartalmiak voltak, és mindhárom felhasználó-látható
+viselkedést érintett (dupla hibakártya, átszivárgó hiba, a11y-csatornára
+küldött nyers kulcs).
 
-**A lánc HALT-tal áll meg (ADR 0087 §2 / H4):** az orchestrátor autonómiája
-egy javító körre szól, azt elhasználtuk, és a review után MAJOR-leletek
-maradtak nyitva. Az emberi döntés kérdése: **engedélyezhető-e egy második
-javító kör ugyanezzel a motorral** (a három lelet kicsi, jól körülírt,
-ADR-t nem érint), vagy a kör átkerül a Codexhez.
+A lánc ekkor **HALT-tal állt meg (H4)**, mert az akkori ADR 0087 §2 az
+orchestrátor autonómiáját **egy** javító körre korlátozta. A user
+**2026-07-31-i döntése** (`679ce4c`, `16f776f`) a küszöböt **három** javító
+körre emelte, és a negyediket a Codexhez rendelte — a HALT feloldva, a javító
+kör #2 ezen a szabályon indult. **Az aktuális merge-döntés a §9-ben.**
 
-## 8. A javító kör findings-listája (ha a user engedélyezi)
+## 8. A javító kör #2 findings-listája (a promptban kiadva)
 
 1. **MAJOR-1** — egy hibafelület a `failed` + `ShowRecoverableError`
    kombinációra; zárótesztnek ezt a kombinációt kell mérnie.
@@ -194,3 +201,95 @@ ADR-t nem érint), vagy a kör átkerül a Codexhez.
 
 Az engedélyezett fájllista **változatlan** (brief §4); a fenti négy tétel
 mind azon belül zárható.
+
+---
+
+## 9. Review #2 — a javító kör (`42c8f97`) zárás-ellenőrzése
+
+**Klón:** `/tmp/review-e02r13-fix2` (`git clone --branch mm/e02-r13-session-ui-shell`),
+read-only review, production kód nem íródott.
+
+### 9.1 Gate — függetlenül újrafuttatva
+
+```
+tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart \
+  test/core/screen_size_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+```
+format zöld · analyze zöld · test test/features/practice/ zöld (+689) ·
+test test/core/l10n_parity_test.dart zöld · test test/core/screen_size_guard_test.dart zöld (+39) ·
+test test/tooling/route_literal_guard_test.dart zöld · architecture zöld
+GATE_EXIT=0
+```
+
+A practice suite **686 → 689** (a három új záró cella). Mért reviewer-tanulság:
+a friss klónban a **generált l10n hiányzik** (gitignore), ezért az `analyze` 490
+hibával pirosat ad, amíg le nem fut a `flutter gen-l10n` — ez klón-artefaktum,
+nem a kör hibája (a fenti zöld futás a generálás UTÁN készült).
+
+### 9.2 Scope-audit
+
+`git diff --stat 2e38606..42c8f97`: **4 fájl** — a két érintett `lib/`
+presentation-fájl (**37 sor**), a `practice_session_screen_test.dart` és a
+brief. A brief diffje a **383. sortól** kezdődik, ami pontosan a `## 10.
+Implementation handoff` első sora → a **§1–§9 (a szerződés) érintetlen**.
+Listán kívüli fájl nincs; törölt tesztcella nincs
+(`git diff … | grep -E "^-\s*(testWidgets|test)\("` → üres).
+
+### 9.3 Mutációs próbák — a zárások hitelesítése
+
+A kérdés nem az, hogy zöld-e, hanem hogy a **záróteszt pirosra váltana-e** a
+hiba visszaállításakor. Mindhárom mutáció a klónban futott, utána visszaállítva
+(`git status --short` üres).
+
+| # | Mutáció | Elvárt piros cella | Eredmény |
+|---|---|---|---|
+| M1 | a `if (_state.status != failed)` őr eltávolítása az `_RecoverableErrorOverlay` elől | `failed + ShowRecoverableError renders one panel and one error title` | **PIROS — pontosan ez az egy cella** |
+| M2 | `case AnnounceAccessibilityFeedback(:final messageKey): output.announce(messageKey);` visszaállítása | `A3 … AnnounceAccessibilityFeedback("anything") → 0 calls, no throw` | **PIROS — pontosan ez az egy cella** |
+| M3 | `NotifierProvider.autoDispose` → sima `NotifierProvider` | `leave and re-enter in the same ProviderScope shows no stale error` | **PIROS — pontosan ez az egy cella** |
+
+Mindhárom mutáció **egyetlen**, a lelethez tartozó cellát vált pirosra — a
+mérce célzott, nem véletlen kollaterális.
+
+### 9.4 Leletenkénti zárás
+
+- **MAJOR-1 — zárva.** `practice_session_screen.dart:116` — az effekt-vezérelt
+  overlay `failed` alatt el van nyomva, a státusz-vezérelt `PracticeErrorPanel`
+  marad az egyetlen felület. **Nem nyit új lyukat:** a reducerben egyetlen hely
+  állít `status: failed`-et (`practice_session_reducer.dart:612`), és ugyanaz a
+  `copyWith` tölti a `recoverableFailure`-t (`:613`) — tehát `failed` mellett a
+  státusz-vezérelt panel **mindig** rendelkezésre áll. Mérve: M1 mutáció.
+- **MAJOR-2 — zárva.** `practice_effect_listener.dart:73-88` — a `StateProvider`
+  helyén kézzel írt `PracticeErrorOverlayController extends Notifier<AppFailure?>`
+  `NotifierProvider.autoDispose` mögött: a képernyő elhagyásakor az utolsó
+  figyelő is elmegy, a tároló eldobódik, az új belépés friss állapottal nyit.
+  Mérve: a be-/ki-/belépés cella + M3 mutáció.
+- **MAJOR-3 — zárva.** `practice_effect_listener.dart:129-132` — az ág
+  dokumentáltan elnyeli az effektet (nyers kulcs nem megy a képernyőolvasó
+  csatornára), a `PlatformPracticeFeedbackOutput.announce` implementációja
+  (M2-lelet zárása) érintetlen. A cella most a `_RecordingFeedback.announcements`
+  **listát** méri (`isEmpty`), nem csak a haptikát. Mérve: M2 mutáció.
+- **MINOR-1 — zárva.** `grep -rn "flutter_riverpod/legacy" lib/` → **üres**, és
+  egy guard-cella (`no flutter_riverpod legacy import remains under lib`) tartja
+  is így.
+
+### 9.5 Új NOTE
+
+**NOTE-3 — a `running` úton érkező recoverable hiba mérése közvetett.** A
+javító kör #1 M3-előírása („`running` alatt érkező `ShowRecoverableError` →
+panel látszik, státusz változatlan, **nulla parancs**") ma nem külön cellában
+él: a panel megjelenését a be-/ki-/belépés cella méri (`running` státuszban
+emittált effekt → hibacím megjelenik), a „státusz változatlan / 0 parancs"
+felet viszont egyik cella sem állítja explicit. A **viselkedés** helyes — a
+listener `ShowRecoverableError` ágán semmilyen parancs-kiadás nincs, és a
+listenernek nincs is host-referenciája parancsküldéshez —, ezért ez
+**coverage-hiány, nem hiba**: nem blokkol, follow-upként az E02-R14 körben
+egy dedikált cellával zárható.
+
+### 9.6 Merge-döntés
+
+**APPROVED.** Nulla nyitott BLOCKER/MAJOR/MINOR. A gate mind a hét lépése
+függetlenül zöld, a scope tiszta, mind a négy zárás mutációval hitelesítve.
+A merge a zöld kapu (ADR 0052) gépi felének teljesülésekor mehet: a
+CI-run a `42c8f97`-en, `headSha` ↔ lokális HEAD egyeztetve (L21).
