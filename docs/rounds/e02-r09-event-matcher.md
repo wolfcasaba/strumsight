@@ -42,7 +42,18 @@ eltér, és ez pontosan a döntési határon válik meghatározóvá:
 | Cella | Mért érték |
 |---|---|
 | `first-strums` (70 BPM), 1. cél | legacy `t = 3.4285714285714284 s` → compiled `3 428 571 µs`; `played = 3 148 571 µs`-nál a legacy eltérés **280 000,42857 µs > 280 ms → extra**, a matcheré pontosan **280 000 µs ≤ 280 ms → párosul** |
-| `anthem-drive` (98 BPM), két szomszédos cél egész-µs felezőpontja | a matcher **egzakt holtversenyt** lát → a **korábbit** választja (P4); a legacy `double` eltérései nem egyenlők (`153 061,408` vs `153 061,041 µs`) → a **későbbit** választja |
+| `anthem-drive` (98 BPM), célesemény **`[5, 6]`** (beat 3,5 → 4,0), felezőpont **`4 744 898 µs`** | a matcher **egzakt holtversenyt** lát → a **korábbit** választja (P4); a legacy `double` eltérései nem egyenlők (**`153 061,265306`** vs **`153 061,183673 µs`**) → a **későbbit** választja |
+
+> **Számjavítás (orchestrátor, 2026-07-31, R2):** ez a sor korábban a
+> `153 061,408 / 153 061,041 µs` értékpárt írta, egy `[beat 0 → 0,5]` párra. **Az
+> téves volt** — az `anthem-drive` mintája `[_d, null, _d, _u, null, _u, _d, _u]`,
+> tehát a 0 → 0,5 pár **nem is létezik a leckében**; a referenciacellát egyenletes
+> nyolcad-rácsból számoltam, nem a lecke tényleges eseménylistájából. Az
+> implementer a §0.1 előírása szerint **`stopped`-dal jelezte a számeltérést,
+> nem igazította hozzá csendben** — helyesen. A fenti értékek az újramért
+> igazak. A jelenség nem egyedi: az `anthem-drive`-ban **négy** szomszédos
+> célpár mutatja (`[5,6]`, `[8,9]`, `[13,14]`, `[21,22]`), tehát az A1c-hez
+> bármelyik használható — a `[5,6]` a kanonikus.
 
 ### A döntés: a µs-kvantált időalap az igazság
 

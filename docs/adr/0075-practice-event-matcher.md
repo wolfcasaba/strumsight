@@ -100,8 +100,9 @@ megfigyelésre, amely a döntési határoktól levezetetten elég távol van:
 
 **A sávon belül a matcher szándékosan tér el** — két mért cella:
 `first-strums` (70 BPM) határon párosít ott, ahol a legacy extraként dobja el;
-`anthem-drive` (98 BPM) egész-µs felezőponton a **korábbi** célt választja (P4),
-ahol a legacy `double`-eltérései alapján a későbbit. Ez **megnevezett, tesztelt
+`anthem-drive` (98 BPM) a `[5, 6]` célpár egész-µs felezőpontján (`4 744 898 µs`)
+a **korábbi** célt választja (P4), ahol a legacy `double`-eltérései
+(`153 061,265306` vs `153 061,183673 µs`) alapján a későbbit. Ez **megnevezett, tesztelt
 viselkedés** (E02-R09 A1c), nem szabad a `double` felé „visszaigazítani".
 
 ### 3. Új viselkedés a legacyn túl
