@@ -30,6 +30,43 @@ cellát némán a rossz oldalra tett.
 
 ---
 
+## 0.1 Brief-revízió — R2, 2026-07-31 (a lag hatóköre és a monoton padló)
+
+Az R0 review két MAJOR-t mért ([`docs/reviews/e02-r08-review.md`](../reviews/e02-r08-review.md)
+§3–§4), és **a MAJOR-1 gyökere a brief**: a §5.5 „Minden emittált observationre"
+fordulata azt sugallta, hogy a frame-kézbesítési lagot a `ChordObservation`-re is
+alkalmazni kell. Nem kell — a legacy referencia (`learn_screen.dart`) a chordot
+korrigálatlan idővel adja tovább (`observeChord(chord, _elapsedSec)`), és az
+ADR 0074 §3 ezt a felosztást őrzi.
+
+**A §5.5 és §5.6 az alábbiakkal ÍRÓDIK FELÜL** (a szigorú `<` predikátum és
+minden más változatlan):
+
+1. **A lag hatóköre.** A `frameDeliveryLag` kizárólag akkor számítandó és
+   alkalmazandó, ha a frame **ÚJ strumot** hoz (a §5.6 1–4. lépése szerint
+   `emitStrum == true`). Következmények:
+   - a `ChordObservation.at` **mindig a korrigálatlan `timelineNow()`**
+     (a monoton padlóval, lásd 2. pont);
+   - strum nélküli frame-en lag **nem** számítódik, tehát a beégett
+     `latestStrumTime` miatti fölösleges lag-warning sem keletkezik (MINOR-1).
+2. **A monoton padló FAJTÁNKÉNT külön.** Két padló kell
+   (`_lastEmittedStrumAt`, `_lastEmittedChordAt`), mindkettő a `start()`-nál
+   nullázódik. **A fajtafüggetlen, közös padló NEM elfogadható**: a chord
+   observation a de-jitterezetlen pillanatra kerül, ezért a közös padló
+   felfelé clampeli a rá következő strumot, és **kioltja a de-jittert**
+   (mérve: 84 ms-os korrekcióból 0 maradt).
+3. **A §6.9 monotonitás-invariáns fajtánként mérendő** — „az egymást követő
+   `StrumObservation`-ök `at`-ja nem csökken" ÉS „az egymást követő
+   `ChordObservation`-öké sem". A **teljes stream** globális monotonitása
+   NEM elfogadható mérce: azt a hibás közös padló definíció szerint teljesíti,
+   tehát az őr pont a hibát igazolná.
+
+*Tanulság a brief-írásra:* ha egy korrekció egy KONKRÉT eseményhez tartozik
+(itt: a strum becsapódásához), a brief mondja ki a **hatókörét** is, ne csak a
+képletét — különben az implementer jóhiszeműen ráteszi minden kimenetre.
+
+---
+
 ## 0. Kör-jelzés — ezzel kezdd, mielőtt bármit olvasnál
 
 A munkád első és utolsó lépése a jelzés (`AGENTS.md` §15.2):
@@ -475,6 +512,25 @@ A mátrixot a **származtatott `lag`-ra** olvasd, ne a bemeneti párra (§0.0 R1
       beküldve továbbra sem ad observationt (a dedup-alap frissült).
 - [ ] **NEM elfogadható gyengítés:** csak 0.0 és 1.0 pontokon mérni.
 
+### 6.2b A lag hatóköre és a fajtánkénti padló (R2, a két MAJOR mércéje)
+
+Ezek a pontok azok, amiknek a mai kódot **pirosra kellett volna** fogniuk:
+
+- [ ] **A de-jitter túléli a chord observationt.** `timelineNow = 1.000 s`-on egy
+      chord-hordozó frame ÚJ strum nélkül (engine-óra hiányzik) → chord
+      observation. Majd `timelineNow = 1.066 s`-on ÚJ strum
+      `engineTimeSec = 5.000`, `latestStrumTime = 4.850` (lag 150 ms) →
+      a strum `at`-ja **pontosan `0.916 s`** (`1.066 − 0.150`), NEM `1.000 s`.
+- [ ] **A chord change-point nem kap idegen lagot.** Egyetlen frame
+      `timelineNow = 2.000 s`-on, ÚJ strum NÉLKÜL, de beégett
+      `latestStrumTime = 9.700` / `engineTimeSec = 10.0` (300 ms) →
+      a chord `at`-ja **pontosan `2.000 s`**, és **nincs** lag-warning.
+- [ ] Ugyanez `latestStrumTime = 9.400` (600 ms, a határ fölött) esetén is:
+      chord `at = 2.000 s`, és **nincs** warning (mert lag nem is számítódik).
+- [ ] **NEM elfogadható gyengítés:** a monotonitást a teljes streamre mérni
+      (a hibás közös padló ezt teljesíti); a chord `at`-ot „úgyis közel van"
+      alapon a strumével azonosnak hagyni.
+
 ### 6.4 Monotonitás és sűrű sorszám
 
 - [ ] Olyan eset, ahol **változatlan `timelineNow()` mellett** egy nagy lagú frame
@@ -542,7 +598,9 @@ A mátrixot a **származtatott `lag`-ra** olvasd, ne a bemeneti párra (§0.0 R1
 `PROPERTY_SEED` env (hiányzik → 42), a `practice_session_property_test.dart`
 mintája szerint. Randomizált frame-sorozatokon **100%-ban** kell teljesülnie:
 
-- [ ] az emittált `at` értékek nem csökkennek;
+- [ ] az egymást követő `StrumObservation`-ök `at`-ja nem csökken, **és** az
+      egymást követő `ChordObservation`-öké sem (R2 §0.1/3 — fajtánként; a
+      teljes stream globális monotonitása NEM elfogadható mérce);
 - [ ] a `StrumObservation.sequence`-ek pontosan `0..n-1`, hézag nélkül;
 - [ ] minden emittált observation `validate()`-je üres;
 - [ ] `start()` nélkül / `stop()` után nulla observation;
