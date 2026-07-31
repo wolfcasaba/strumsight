@@ -69,7 +69,7 @@ Az orchestrátor **KÖTELEZŐEN MEGÁLL** (halt, merge nélkül), ha a feloldás
 | H1 | egy **már merge-elt** ADR módosítását kívánná |
 | H2 | egy **lezárt kör** viselkedésének megváltoztatását kívánná (a brief tilos zónája) |
 | H3 | a **tilos zóna feloldását** kívánná (új fájl az engedélyezett listán kívül) |
-| H4 | **BLOCKER vagy MAJOR** lelet, amely **egy** javító kör után is nyitva van |
+| H4 | **BLOCKER vagy MAJOR** lelet, amely **három** javító kör után is nyitva van *(2026-07-31-i user-döntés: az eredeti „egy javító kör" küszöböt a user automatikus javító körökre módosította — a leletlistás javító kör a lánc normál útja, nem megállási ok)* |
 | H5 | a **CI kétszer piros** ugyanazon a körön |
 | H6 | az implementer **`blocked`** jelzést ad, vagy `unknown`/`stalled` állapotban hal meg kétszer |
 | H7 | a `tools/round-gate.sh` nem hozható zöldre |

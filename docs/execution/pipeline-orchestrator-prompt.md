@@ -63,6 +63,12 @@ ls -d /home/ubuntu/ss-*$(echo {{ROUND}} | tr 'A-Z' 'a-z' | tr -d '-')* /home/ubu
 git -C <talált munkapéldány> log --oneline -3   # van-e kör-commit (ADR, brief-revízió)
 ```
 
+Ha a kör branchén (lokálisan vagy az originon) már **kész review van nyitott
+leletekkel** (`docs/reviews/eXX-rYY-review.md`), akkor a dolgod NEM a kör
+újrakezdése, hanem a **következő javító kör levezénylése**: a nyitott
+leletlistával indítsd az implementert a meglévő branchen, majd frissítsd a
+review-t és folytasd a normál lépéssort (CI-újradispatch, merge).
+
 Ha találsz commitolt pre-flightot (ADR + §0.0 brief-revízió) egy korábbi
 munkapéldányban: **olvasd el és HASZNÁLD FEL** (fetch-eld a branchét), ne írd
 meg vakon újra — két divergens ADR-szöveg ugyanarra a számra rosszabb, mint az
@@ -106,11 +112,19 @@ ne lista-tágítással.
 | **H1** | egy **már merge-elt** ADR módosítását kívánná |
 | **H2** | egy **lezárt kör** viselkedésének megváltoztatását kívánná |
 | **H3** | a **tilos zóna** feloldását kívánná (új fájl az engedélyezett listán kívül) |
-| **H4** | **BLOCKER vagy MAJOR** lelet, amely **egy** javító kör után is nyitva van |
+| **H4** | **BLOCKER vagy MAJOR** lelet, amely **HÁROM** javító kör után is nyitva van |
 | **H5** | a **CI kétszer piros** ezen a körön |
 | **H6** | az implementer **`blocked`**-ot jelez, vagy kétszer hal meg `unknown`/`stalled` állapotban |
 | **H7** | a `tools/round-gate.sh` nem hozható zöldre |
 | **H8** | a `main` a dispatch óta mozdult, és a rebase konfliktust ad |
+
+**A javító kör a lánc NORMÁL útja, nem megállási ok** (user-döntés
+2026-07-31): ha a review BLOCKER/MAJOR leletet talál — akár az előző javító
+kör után is —, indítsd a következő javító kört ugyanazzal a motorral,
+a leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
+köröket a kör-branch commitjaiból; **a harmadik sikertelen javító kör után**
+(azaz ha a leletek a 3. javítás után is nyitva vannak) jön csak a H4 halt.
+Minden javító-promptban legyen benne: „a munkádat commitold a branchre".
 
 Kétség esetén **halt**. A lánc megállítása olcsó; egy rossz normatív döntés,
 ami több körön át beépül, nem az.
