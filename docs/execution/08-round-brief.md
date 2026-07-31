@@ -87,6 +87,20 @@ Három kötelező elem, mind mért hibából
    implementáció megkülönböztethetetlen.
    *Példa:* „`countInBars ∈ {0,1,2,4}` × `Meter ∈ {4/4, 3/4}`" — E02-R07-ben a
    `countInBars: 1` default miatt 11 zöld teszt mellett élt a hiba.
+4. **A küszöb-mátrix a SZÁRMAZTATOTT mennyiségre szóljon, ne a bemenetekre**, és
+   a táblázat oszlopként tartalmazza a származtatott értéket is. Küszöbnél
+   **három** cella kell: szigorúan alatta, **pontosan rajta**, szigorúan fölötte
+   — a „rajta" cella az egyetlen, ami a `<` és a `<=` közti különbséget méri.
+   **Számold ki a cellákat (`python3 -c`), ne fejben.**
+   *Példa:* E02-R08-ban a lag-mátrix a `(engineTimeSec, latestStrumTime)` párokat
+   sorolta fel, és a „határ fölötti" cellának szánt `(1.0, 0.5001)` valójában
+   `lag = 0.4999` — a mátrixban egyetlen a határ fölötti eset sem volt.
+   ([`docs/LESSONS.md`](../LESSONS.md) L13.)
+
+> **Ha az implementer `stopped`-dal ellentmondást jelez a kötött döntés és az
+> acceptance között, a helyes válasz dokumentált brief-revízió** (a brief §0.0
+> szekciója: mit mért, melyik feloldás nyert és miért), **nem** a kötött döntés
+> csendes enyhítése és **nem** a fájllista tágítása.
 
 ## 7. Kötelező ellenőrzések
 

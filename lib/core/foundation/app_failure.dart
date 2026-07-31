@@ -53,6 +53,10 @@ abstract final class FailureCode {
       'practice.target_uncompilable';
   static const String practiceInvalidSessionTransition =
       'practice.invalid_session_transition';
+  static const String practiceObservationStreamFailed =
+      'practice.observation_stream_failed';
+  static const String practiceObservationGatewayDisposed =
+      'practice.observation_gateway_disposed';
 }
 
 /// Base type of every expected failure in the app (SDD Ch2 §7.2).
