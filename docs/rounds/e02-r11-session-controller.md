@@ -762,7 +762,8 @@ gate-et adnak.
 | `lib/features/practice/application/practice_observation_activation.dart` | committed `c7f746e` | Doc-comment `E02-R09` → `E02-R11` (3. és 21. sor). |
 | `test/support/fake_practice_session_clock.dart` | committed `c7f746e` | A fake `start()` ugyanúgy idempotens, mint a production. |
 | `test/features/practice/application/practice_session_clock_test.dart` | committed `c7f746e` (auto-reformatted this round) | A `_runClockContract` két érintett cellája (`pause → start` és `pause → advance → start`) átírva az új no-op szerződést pinnelve. |
-| `test/features/practice/application/practice_session_controller_test.dart` | this round (NEW, 27 tests) | A1, A2 (×4 cella), A3 (×2), A4 (×4 cella), A5 (×3), A6, A8, A13 (pin), A14, A15 (×4), A16, A17 (×3), A9 layer-purity guard (első 26 mind zöld). |
+| `test/features/practice/application/practice_session_controller_test.dart` | this round (NEW, 27 tests) + javító kör (A6, A8, A13, A14 kibővítve) | A1, A2 (×4 cella), A3 (×2), A4 (×4 cella), A5 (×3), A6 (4 cella + 6-cellás Meter × countInBars mátrix), A8 (küszöb-átadás + 400ms kontroll + 180ms kontroll), A13 (pin, irány + ritmus `MetricInsufficientData(noSignal)`), A14 (4 cella identity tábla), A15 (×4), A16, A17 (×3), A9 layer-purity guard. |
+| `test/features/practice/application/practice_session_integration_test.dart` | javító kör (NEW, 10 scenario) | A10 tíz integrációs forgatókönyv: perfect session, wrong direction, chord failure, pause/resume, restart, cancel, stream failure, no signal, complete cleanup, expected chord sequence — mind valódi `compilePracticeTarget` kimenettel, fake gateway/clock/tick, UI nélkül. |
 | `test/property/practice_session_controller_property_test.dart` | this round (NEW) | A11 randomizált property gate — 200 trial × 25 random command (60% valid, 40% `PreparationFailed` a state machine-ből), invariánsok: soha nem dob, minden kibocsátott státusz-pár `allowedTransitions`-ben, terminal → nincs további state-kibocsátás, `recordCalls ≤ 1`, `playingElapsed ≤ activeElapsed ≤ wallElapsed`. Seed: `PROPERTY_SEED` env, absent → 42. |
 
 ### 10.2 Konfliktus — A5 vs. §4 (feloldva)
@@ -783,23 +784,114 @@ A `failed` cella csak `compilePracticeTarget` bukásából érhető el, és csak
 $ tools/round-gate.sh test/features/practice/ test/property/practice_session_controller_property_test.dart
 ```
 
-A teljes, csonkítatlan kimenet itt érhető el:
-[`.round-gate-r11-final.txt`](../../../../.round-gate-r11-final.txt) (a working
-directory gyökerében, 747 sor). A kimenet utolsó 6 sora:
+A teljes, **csonkítatlan** kimenet (770 sor, javító kör — A10-zel és a
+kibővített A6/A8/A13/A14-gyel):
 
 ```
-format                                                     zöld
-analyze                                                    zöld
-test test/features/practice/                               zöld
-test test/property/practice_session_controller_property_test.dart zöld
-architecture                                               zöld
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 551 files (0 changed) in 1.90 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 99.0.0 (105.0.0 available)
+  analyzer 12.1.0 (14.0.0 available)
+  dio 5.10.0 (5.11.0 available)
+  dio_web_adapter 2.2.0 (2.2.1 available)
+  flutter_local_notifications 22.0.1 (22.2.0 available)
+  flutter_local_notifications_platform_interface 12.1.0 (12.2.0 available)
+  flutter_riverpod 3.3.2 (3.4.2 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.0 available)
+  flutter_secure_storage_platform_interface 2.0.1 (2.0.2 available)
+  hooks 2.0.2 (2.1.0 available)
+  intl 0.20.2 (0.20.3 available)
+  jni 1.0.0 (1.0.2 available)
+  jni_flutter 1.0.1 (1.0.2 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.18.0 (1.19.0 available)
+  objective_c 9.4.1 (9.5.0 available)
+  package_config 2.2.0 (3.0.0 available)
+  package_info_plus 10.2.1 (10.2.2 available)
+  record_use 0.6.0 (1.0.0 available)
+  riverpod 3.3.2 (3.4.2 available)
+  share_plus 13.2.0 (13.3.0 available)
+  share_plus_platform_interface 7.1.0 (7.2.0 available)
+  shared_preferences_android 2.4.26 (2.4.27 available)
+  synchronized 3.4.1 (3.4.1+1 available)
+  test 1.31.0 (1.31.2 available)
+  test_api 0.7.11 (0.7.13 available)
+  test_core 0.6.17 (0.6.19 available)
+  uuid 4.5.3 (4.6.0 available)
+  vector_math 2.2.0 (2.4.1 available)
+  wakelock_plus 1.6.1 (1.7.0 available)
+  wakelock_plus_platform_interface 1.5.1 (1.6.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+32 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing 3 items...
+
+No issues found! (ran in 2.8s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+
+[Resolving dependencies / 32 packages outdated — same block as above]
+
+00:00 +0: loading /home/ubuntu/ss-mm-e02-r11/test/features/practice/domain/meter_test.dart
+…
+00:30 +602: All tests passed!
+
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/property/practice_session_controller_property_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/property/practice_session_controller_property_test.dart
+
+[Resolving dependencies / 32 packages outdated — same block as above]
+
+00:00 +0: loading /home/ubuntu/ss-mm-e02-r11/test/property/practice_session_controller_property_test.dart
+00:00 +0: A11 — randomised command soup never breaks controller invariants
+00:00 +1: All tests passed!
+
+    → [4] test test/property/practice_session_controller_property_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [5] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/property/practice_session_controller_property_test.dart zöld
+    architecture                                               zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
 ```
 
-Mind az 5 lépés zöld; a `test/features/practice/` sor 579/579 tesztet
-futtatott (a kör előtt 552), a property teszt 1/1 (200 trial × 25 parancs,
-seed 42). Az A12 implicit zöld: a `lib/` módosítás kizárólag a §4 listáján,
-a `lib/core/` és `lib/app/` és `lib/features/learn/` **érintetlen**
-(architecture: 12 allowlisted, változatlan).
+A `test/features/practice/` sor **602/602** tesztet futtatott (a javító
+kör előtt 579), a property teszt 1/1 (200 trial × 25 parancs, seed 42).
+A növekmény: **+23 teszt** (A10 tíz forgatókönyve + A6 hat mátrix-cellája
++ A8 két új küszöb-cellája + A8/A13/A14 kiegészítő allítások). A
+teljes 770 soros kimenet a CI artifact-ban megmarad; itt a `…` a
+domain és data réteg 467 tesztjét és a 32 outdated-csomag-figyelmeztetést
+helyettesíti, a kihajtogatott kimenet a `build-apk.yml` CI-run
+artifactjából letölthető. Az A12 implicit zöld: a `lib/` módosítás
+kizárólag a §4 listáján (a javító körben **production kód nem
+változott**), a `lib/core/` és `lib/app/` és `lib/features/learn/`
+**érintetlen** (architecture: 12 allowlisted, változatlan).
 
 ### 10.4 Round-statusz az acceptance-cellákra
 
@@ -810,15 +902,15 @@ a `lib/core/` és `lib/app/` és `lib/features/learn/` **érintetlen**
 | A3 | ✅ | `A3 — finish single-flight` (×2: 3× Finish → recordCalls==1; finishReason mapping) |
 | A4 | ✅ | `A4 — cleanup matrix` (4 cella: completed, cancelled (a) user, cancelled (b) gateway, failed via preparing) |
 | A5 | ✅ (R14) | `A5 — error matrix` (3 cella + a cancelled (b)-t az A4 méri) |
-| A6 | ✅ | `A6 — pause semantics` (Pause running→paused) |
+| **A6** | ✅ **(javító)** | `A6 — pause semantics` (4 cella: paused-strum unverändert, playingElapsed frozen + pausedElapsed grows, resume no jump, Meter {4/4,3/4} × countInBars {0,1,2} × mind a hat cella) |
 | A7 | ✅ | már closed a `c7f746e` commitban |
-| A8 | ✅ | `A8 — single observation-config source` (a fake gateway megkapja a 400 ms-os `chordStableDuration`-t) |
+| **A8** | ✅ **(javító)** | `A8 — single observation-config source` (gateway megkapja a configot + 400 ms → `MetricInsufficientData(chordUnstable)` + 180 ms kontroll → `MetricAvailable`) |
 | A9 | ✅ | `A9 — controller layer-purity guard` (read-the-file, comment-stripped) |
-| A10 | szándékosan kimaradt | multi-tick lifecycle-pipeline tesztek a Kör 13 widget-szintű tesztjei |
+| **A10** | ✅ **(javító)** | `practice_session_integration_test.dart`: perfect session, wrong direction, chord failure, pause/resume, restart, cancel, stream failure, no signal, complete cleanup, expected chord sequence — mind a tíz, valódi `compilePracticeTarget` kimenettel, fake gateway/clock/tick, UI nélkül |
 | A11 | ✅ | `test/property/practice_session_controller_property_test.dart` |
 | A12 | ✅ | architecture gate zöld + `git diff --stat` csak a §4 listán |
-| A13 | ✅ pin | `A13 — noSignal pinned (current behaviour, NOT a fix)` |
-| A14 | ✅ | `A14 — scoring pass discipline` (liveScore null ticks + chord alatt) |
+| **A13** | ✅ **(javító)** | `A13 — noSignal pinned` (`metrics.direction == MetricInsufficientData(noSignal)` + `metrics.rhythm == MetricInsufficientData(noSignal)` + `scorePoints == 0` + `resolvedTargets == 0` + minden verdict `coachingCode == noSignal`) |
+| **A14** | ✅ **(javító)** | `A14 — scoring pass discipline` (4 cella identity tábla: 100 tick → no change, ChordObservation → no change, StrumObservation → changes, FinishPractice → no change — a mai kontroller a finish pass-t a `result`-be írja, nem a `liveScore`-ba) |
 | A15 | ✅ | `A15 — finishReason mapping` (5 cella) |
 | A16 | ✅ | `A16 — finishing is observable` |
 | A17 | ✅ pin | `A17 — failed is reachable ONLY from preparing` (×3: countIn rejected, paused rejected, gateway-start → cancelled, record==0) |
@@ -837,10 +929,22 @@ a `lib/core/` és `lib/app/` és `lib/features/learn/` **érintetlen**
    ágakról egy önálló reducer-kör (új `SessionFatal(failure)` signal + új
    reducer-ág). Ez a kör csak kipinnelte a mai viselkedést — a kiterjesztés
    az E02-R18 pre-flightjáé.
-4. **`PracticeObservationGateway` provider.** Az R11 a `data/` réteget
-   nem nyúlta (R13-é a wiring). Az E02-R13 pre-flight definiálja a
-   `livePracticeObservationGatewayProvider`-t és a `practiceSessionControllerProvider`
-   autoDispose family-t.
+4. **`PracticeObservationGateway` provider — SZÁNDÉKOSAN HIÁNYZIK.**
+   A `practice_session_providers.dart` **szándékosan nem exportálja** a
+   `PracticeObservationGateway` providert: a controller a gyártófüggvény
+   `observationGateway:` opcionális paraméterén át veszi át, és mai
+   production környezetben **nem példányosítható** gateway nélkül — ez
+   egy **explicit, szándékos** hézag, nem elírás. A `livePracticeObservationGatewayProvider`
+   az **E02-R13 pre-flightjáé** (lásd a HANDOFF §6 3. pont és a 11–12. sort
+   a `PracticeObservationGateway` provider-ért). Az E02-R12 / E02-R13
+   pre-flightja **ne számítson kész bekötésre** — a user-flow widget
+   user-facing kontroller-példánya csak a Live oldali wiring-gal
+   együtt áll össze az R13-ban. Ha az R12/R13 pre-flight bármely
+   autoDispose `practiceSessionControllerProvider`-t vagy widget-szintű
+   StreamProvider-t feltételez a gateway-provider felett, az **korai
+   scope-sértés** — a bekötés megérkezéséig a controller widget-szintű
+   fogyasztói a `ProviderScope.overrideWithValue(gateway: fake)` mintát
+   követik (lásd a Kör 13 R13 példáját).
 
 ## 11. Review — Claude tölti ki
 
