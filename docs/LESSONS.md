@@ -283,3 +283,82 @@ a CI zöld lett.
   mindkettő zöld — [L01](#l01--a-zöld-gate-nem-bizonyíték) egy újabb változata.
 - A `.codex-round-status` `head=` mezője megmondja, mire számíts:
   **ha a fő repó `git rev-parse HEAD`-je nem ez, még nem húztad vissza.**
+
+## L12 — Az ORCHESTRÁTOR várakozása is meghibásodhat: az implementer kész, te mégis vársz
+
+**Forrás:** E02-R08, 2026-07-31. A `stopped` jelzés `01:05:40`-kor megszületett,
+az orchestrátor `07:08`-kor vette észre — **hat óra állás**.
+
+**Mit mértünk.** Az orchestrátor így várt a körre:
+
+```bash
+until ! pgrep -f "mm-r08-resume.sh" >/dev/null; do sleep 30; done
+```
+
+A `pgrep -f` a **teljes parancssorra** illeszt, és a várakozó ciklust futtató
+shell parancssorában is ott van a `"mm-r08-resume.sh"` sztring — a `pgrep`
+tehát **önmagát találta meg**, a feltétel sosem vált igazzá. Közben az
+implementer szabályosan `stopped`-ot jelzett és döntést kért.
+
+**Miért.** Két, egymást erősítő hiba:
+
+1. **Önillesztő minta.** Bármely `pgrep -f <minta>` / `ps | grep <minta>`
+   várakozás megfogja a saját héját, ha a minta a parancssorában szerepel.
+2. **Rossz jelre vártunk.** A kör-szerződés (`AGENTS.md` §15.2) jele a
+   `.codex-round-status` **jelzésfájl**, nem a processz élete. A processz-életre
+   várás akkor is néma, ha a kör `stopped`-dal döntést kér — pedig épp az a
+   pillanat, amikor a leggyorsabban kellene reagálni.
+
+**Hogyan alkalmazd.**
+
+- **Ne írj kézzel várakozó egysorost — használd az artefaktumot:**
+  ```bash
+  tools/wait-for-round.sh /home/ubuntu/ss-<motor>-<kör>
+  ```
+  A jelzésfájl terminális állapotára vár, és beszédes kilépési kódot ad
+  (`0`=done, `3`=stopped/döntést vár, `4`=stalled|timeout|unknown, `5`=lejárt
+  a várakozás). Egy korábbi kör bent maradt terminális jelzése nem zárja le
+  azonnal (a `signalled_at` az alapvonal).
+- Ha mégis processzre kell várni, a mintát tedd önillesztés-mentessé:
+  `pgrep -f '[m]m-round\.sh'` — a karakterosztály miatt a saját parancssor
+  szövege már nem illeszkedik a mintára.
+- **A várakozásnak legyen felső korlátja.** A végtelen `until` a néma
+  meghibásodás legjobb rejtekhelye: a „még fut" és a „a ciklusom elromlott"
+  kívülről megkülönböztethetetlen.
+- Kapcsolódó: a wrapper elakadás-őre (`MM_STALL_MINUTES`, alap **5 perc**)
+  ugyanebben a körben lőtte ki a futást egy néma `flutter test` szakasz miatt.
+  Gate-et futtató körnél indítsd `MM_STALL_MINUTES=20`-szal; a resume
+  UGYANAZZAL a session-iddel megy (`claude -p --resume <session-id>`).
+
+## L13 — A határpont-mátrixot a SZÁRMAZTATOTT mennyiségre add meg, ne a bemenetekre
+
+**Forrás:** E02-R08 brief-revízió R1 (`docs/rounds/e02-r08-observation-gateway.md` §0.0).
+
+**Mit mértünk.** A kör-brief a frame-kézbesítési lag küszöbét mérő mátrixot a
+bemeneti párokkal adta meg, és a `(engineTimeSec, latestStrumTime) = (1.0, 0.5001)`
+cellát szánta a „határ **fölötti** lag" esetének. Csakhogy
+`1.0 − 0.5001 = 0.4999 s`, ami a `maxFrameDeliveryLag` (0.5 s) **alatt** van —
+a mátrixban így **egyetlen a határ fölötti cella sem volt**, pont az az eset
+hiányzott, amit mérni akart. Az implementer `stopped` jelzéssel fogta meg.
+
+**Miért.** A mérce a `lag`-ra vonatkozik, a brief mégis a `lag` **operandusait**
+sorolta fel, és a kivonást a tervező fejben végezte el. Egy fejben elvégzett
+művelet néma: a hibás cella ugyanúgy néz ki, mint a helyes, és a review-ig
+(vagy tovább) elél. Ez az [L10](#l10--a-fixture-defaultja-határozza-meg-mit-tud-egyáltalán-megfogni-a-teszt)
+tervezői oldala — ott a fixture default-ja, itt a tervező fejszámolása választott
+egy olyan pontot, ahol nem mérünk semmit.
+
+**Hogyan alkalmazd.**
+
+- A brief acceptance-mátrixa **a származtatott mennyiségre** szóljon, és a
+  táblázat tartalmazza a származtatott értéket is oszlopként (itt: `lag`), ne
+  csak a bemeneteket.
+- Küszöbnél **három** cella kell: szigorúan alatta, **pontosan rajta**, szigorúan
+  fölötte. A „rajta" cella az egyetlen, ami a `<` és a `<=` közti különbséget
+  méri — a másik kettő nem.
+- **Számold ki, ne becsüld.** Egy `python3 -c` a brief írása közben olcsóbb, mint
+  egy `stopped` kör; lebegőpontos határnál ez nem opcionális
+  (`1.0 - 0.5001 == 0.4999000000000001`).
+- Ha az implementer ellentmondást jelez a kötött döntés és az acceptance között,
+  a helyes válasz **dokumentált brief-revízió** (§0.0), nem a kötött döntés
+  csendes enyhítése és nem a lista-tágítás.

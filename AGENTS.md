@@ -304,6 +304,21 @@ A jelzés a munkapéldány `.codex-round-status` fájlja (gitignore-olt,
 csak utána a logot. Ha `status=unknown`, a Codex jelzés nélkül halt meg —
 a log az egyetlen bizonyíték, a jelentését ne fogadd el bemondásra.
 
+**Az orchestrátor a jelzésre vár, nem processz-életre — és nem kézzel írt
+egysorossal:**
+
+```bash
+tools/wait-for-round.sh /home/ubuntu/ss-<motor>-<kör>   # 0=done 3=stopped 4=elhalt 5=lejárt
+```
+
+Az E02-R08-ban egy `until ! pgrep -f "…"` ciklus a **saját parancssorára**
+illeszkedett, ezért sosem lépett ki: az implementer `stopped`-dal döntést kért,
+az orchestrátor hat órán át azt hitte, a kör fut
+([`docs/LESSONS.md`](docs/LESSONS.md) L12). Gate-et futtató körnél a wrapper
+elakadás-őrét is emeld meg (`MM_STALL_MINUTES=20`), mert a `flutter test`
+percekig néma; a folytatás UGYANAZZAL a session-iddel megy
+(`claude -p --resume <session-id>`).
+
 A prompt tartalmazza a kötelező olvasnivalót (§3), a kör-brief elérési útját,
 az engedélyezett fájlok listáját, a gate-parancsokat KÜLÖN hívásokként, a
 CI-dispatchet, a megállási pontokat és a **kör-jelzés kötelezettségét** (§15.2).
