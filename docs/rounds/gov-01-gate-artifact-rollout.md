@@ -29,6 +29,39 @@ a mért állapoton, ezért a kör hatóköre **bővül** (a tilos zóna NEM lazu
 A `HANDOFF.md` §7 szintén felsorolja a gate-parancsokat, de **marad a tilos
 zónában**: azt az orchestrátor írja a kör zárásakor.
 
+## 0.2 Brief-revízió — 2026-07-31, a review után (orchestrátor)
+
+A review MINOR-1 leletét ez a revízió oldja fel. **A §2 felmérésem harmadszor is
+hiányos volt**: a `grep` mátrixot a `flutter analyze lib/ test/` pontos alakra
+futtattam, ezért a rövidebb `flutter analyze lib/` alakot használó skillek nem
+jelentek meg benne. Az implementer helyesen NEM tágította a listát — jelentette
+(§8 „Eltérések" 1.). A feloldás dokumentált revízió, nem lista-tágítás.
+
+**Az engedélyezett fájllista EGY fájllal bővül:**
+
+| Útvonal | Miért |
+|---|---|
+| `.claude/skills/verify-before-done/SKILL.md` | a `CLAUDE.md:116` **név szerint erre a skillre irányít** a StrumSight verify-gate szakaszából, tehát az AKTÍV láncban van, és ma a `CLAUDE.md`-vel ellentétes parancslistát ír elő (17., 22., 43. sor) |
+
+**Ami SZÁNDÉKOSAN kimarad, és ez a kör lezárt döntése** (nem follow-up):
+a `.claude/skills/review-loop/SKILL.md` és a `.claude/skills/flutter-dev/SKILL.md`
+a saját `description` mezőjük szerint **kifejezetten recipewiser-mobile-hatókörű**
+(„RecipeWiser-mobile fejlesztési workflow…", „…a recipewiser-mobile projektben").
+Egy másik projekt workflow-ját nem írjuk át StrumSight-artefaktumra. Ezek a
+találatok a jövőbeli felmérésekben **elfogadott maradványok**.
+
+**A módosítás mértéke a `verify-before-done` skillben:** a StrumSight-specifikus
+mérce EGY hivatkozó mondata a gate-blokk mellé — „StrumSight-ban a lokális mérce
+a `tools/round-gate.sh <érintett terület> [további …]` artefaktum (normatív
+forrás: `AGENTS.md` §12)". A skill többi része (build, vizuális ellenőrzés,
+persistence-proof, a `#1 source of agent mistakes` keretezés) **változatlan** —
+ez a skill tágabb, mint a kör-gate, és nem a kör-lánc része.
+
+**Kiegészítő acceptance (A8):** `grep -rn "round-gate.sh" .claude/skills/verify-before-done/SKILL.md`
+→ legalább egy találat, **és** `git diff --stat` szerint ez a fájl **legfeljebb
+6 sorral** nő. *Pirosra fogja:* a skill teljes átírása StrumSight-ra, ami egy
+projekt-független ellenőrzési szokásrendet semmisítene meg.
+
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
 ```bash
