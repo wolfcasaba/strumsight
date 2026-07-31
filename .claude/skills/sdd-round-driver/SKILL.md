@@ -96,9 +96,24 @@ findings-listával a promptban. A javító kör után a review-t frissítsd
 ## 5. CI-dispatch és merge
 
 ```bash
+git fetch origin main && git rev-parse origin/main   # JEGYEZD FEL ezt a SHA-t
 gh workflow run build-apk.yml --ref <kör-branch>
 gh run watch <run-id>        # vagy gh run list --workflow=build-apk.yml
 ```
+
+**A dispatch mehet, amint az implementer „kész"-t jelez — nem kell megvárni a
+review-t.** A ~10 perces futás így a review alatt telik. Ha a javító kör KÓDOT
+módosít, újra kell dispatch-elni (a `concurrency` a régi futást eldobja).
+
+**Merge ELŐTT** (ADR 0086 §2 — a `build-apk.yml` már nem fut automatikusan a
+`main`-re, ezt a rést ez az ellenőrzés zárja):
+
+```bash
+git fetch origin main && git rev-parse origin/main   # egyezzen a fentivel
+```
+
+Ha a `main` a dispatch óta mozdult (ezen a boxon egy másik autonóm kör-driver is
+merge-el): rebase + **újra-dispatch**, és az új run a merge evidenciája.
 
 A run linkje a PR kötelező build-evidenciája. A PR-törzs rögzíti, melyik motor
 implementált. **Zöld kapu** (ADR 0052): format + analyze + architecture +

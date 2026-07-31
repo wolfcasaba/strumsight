@@ -167,6 +167,18 @@ gh workflow run build-apk.yml --ref <kör-branch>
 
 A futás linkje a PR kötelező build-evidenciája.
 
+**A `build-apk.yml` 2026-07-31 óta CSAK dispatch-re fut** (ADR 0086) — a
+`main`-re szóló automatikus push-trigger megszűnt, mert körönként két
+információ nélküli futást indított. Ennek ára egy KÖTELEZŐ merge-előtti
+ellenőrzés: a kör-branch legyen naprakész az `origin/main`-nel, és ha a `main` a
+dispatch ÓTA mozdult, **újra kell dispatch-elni** a merge előtt (ezen a boxon
+egy másik autonóm kör-driver is merge-el):
+
+```bash
+git fetch origin main
+git rev-parse origin/main    # egyezzen a dispatch idejekor látott SHA-val
+```
+
 Backend változtatásnál:
 
 ```bash

@@ -36,6 +36,9 @@ sem visszavezethető, sem valódi kiadásra alkalmas nem volt.
 
 1. **Egy gate-workflow marad.** A `build-apk.yml` neve, triggerei és az
    „egy workflow tartalmazza az összes kör-gate-et" elve nem változik (ADR 0052);
+   *(a trigger-részt 2026-07-31-én az [ADR 0086](0086-ci-dispatch-only-build-gate.md)
+   felülírja: a workflow már csak `workflow_dispatch`-re fut. Az „egy
+   gate-workflow" elv és a lépéssor változatlan.)*
    a kör kizárólag **bővíti** a lépéssort. Nem jön létre külön lint- vagy
    test-workflow, mert a kör-gate egyetlen zöld/piros jelzése az ADR 0052-es
    merge-szabály alapja.

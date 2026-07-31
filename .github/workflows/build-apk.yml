@@ -1,8 +1,22 @@
 name: Build Android APK
+
+# A kör build-evidenciájának EGYETLEN forrása a kör-branchre dispatchelt futás
+# (ADR 0052 §1). A `main`-re szóló automatikus push-trigger megszűnt
+# (ADR 0086), mert körönként két felesleges ~10 perces futást indított: a
+# squash-merge ugyanazt a fát állítja elő, amit a branch-futás már gate-elt, a
+# HANDOFF/docs commit pedig egyetlen buildbe kerülő bájtot sem érint.
+# Cserébe KÖTELEZŐ (ADR 0086 §2): dispatch előtt a branch legyen naprakész az
+# `origin/main`-nel, és ha a `main` a dispatch UTÁN mozdult, a merge előtt újra
+# kell dispatch-elni — ez zárja azt a rést, amit korábban a main-futás fedett.
 on:
-  push:
-    branches: [master, main]
   workflow_dispatch:
+
+# Ugyanarra a refre indított újabb futás (pl. javító kör utáni újra-dispatch)
+# érvényteleníti a korábbit — a merge kapuja mindig a legfrissebb fa.
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
