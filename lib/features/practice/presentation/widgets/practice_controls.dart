@@ -15,6 +15,10 @@ class PracticeControls extends StatelessWidget {
   final void Function(PracticeSessionCommand command) onCommand;
   final VoidCallback onExit;
 
+  /// Per ADR 0079 §4 the controls freeze while the session is in its
+  /// terminal `finishing` phase — nothing else can be issued in parallel.
+  bool get _locked => state.status == PracticeSessionStatus.finishing;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -68,25 +72,31 @@ class PracticeControls extends StatelessWidget {
       }
     }
     if (state.status == PracticeSessionStatus.failed) {
-      buttons.add(
-        _button(
-          l10n.practiceSessionRetry,
-          () => onCommand(const RetryPractice()),
-        ),
-      );
+      // The PracticeErrorPanel already exposes a Retry button; the
+      // controls row only needs to provide the exit affordance.
     }
-    buttons.add(_button(l10n.practiceSessionExit, onExit));
-    return Wrap(spacing: 8, runSpacing: 8, children: buttons);
+    // Exit is always present so the user can always reach the leave path,
+    // but in `finishing` the gate inside `_requestExit` is closed.
+    buttons.add(_button(l10n.practiceSessionExit, onExit, enabled: !_locked));
+    return Semantics(
+      enabled: !_locked,
+      child: Wrap(spacing: 8, runSpacing: 8, children: buttons),
+    );
   }
 
-  Widget _button(String label, VoidCallback onPressed) => Semantics(
-    button: true,
-    label: label,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      child: ElevatedButton(onPressed: onPressed, child: Text(label)),
-    ),
-  );
+  Widget _button(String label, VoidCallback onPressed, {bool enabled = true}) =>
+      Semantics(
+        button: true,
+        enabled: enabled,
+        label: label,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: ElevatedButton(
+            onPressed: enabled ? onPressed : null,
+            child: Text(label),
+          ),
+        ),
+      );
 }
 
 const Map<PracticeSessionStatus, bool> practiceExitNeedsConfirmation = {

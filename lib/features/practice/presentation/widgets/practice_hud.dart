@@ -27,7 +27,7 @@ class PracticeHud extends StatelessWidget {
           children: [
             Text(l10n.practiceSessionStatusLabel),
             Text(
-              _statusLabel(l10n, state.status),
+              statusLabel(l10n, state.status),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
@@ -45,21 +45,26 @@ class PracticeHud extends StatelessWidget {
   String _format(Duration value) =>
       '${value.inMinutes.toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
 
-  String _statusLabel(AppLocalizations l10n, PracticeSessionStatus status) =>
-      switch (status) {
-        PracticeSessionStatus.idle => l10n.practiceSessionStatusIdle,
-        PracticeSessionStatus.preparing => l10n.practiceSessionStatusPreparing,
-        PracticeSessionStatus.permissionRequired =>
-          l10n.practiceSessionStatusPermission,
-        PracticeSessionStatus.ready => l10n.practiceSessionStatusReady,
-        PracticeSessionStatus.countIn => l10n.practiceSessionStatusCountIn,
-        PracticeSessionStatus.running => l10n.practiceSessionStatusRunning,
-        PracticeSessionStatus.paused => l10n.practiceSessionStatusPaused,
-        PracticeSessionStatus.finishing => l10n.practiceSessionStatusFinishing,
-        PracticeSessionStatus.completed => l10n.practiceSessionStatusCompleted,
-        PracticeSessionStatus.cancelled => l10n.practiceSessionStatusCancelled,
-        PracticeSessionStatus.failed => l10n.practiceSessionStatusFailed,
-      };
+  /// Maps a [PracticeSessionStatus] to the localized status label. Exposed
+  /// as a static so the screen and the HUD agree on the exact string for
+  /// every cell of the A1 matrix.
+  static String statusLabel(
+    AppLocalizations l10n,
+    PracticeSessionStatus status,
+  ) => switch (status) {
+    PracticeSessionStatus.idle => l10n.practiceSessionStatusIdle,
+    PracticeSessionStatus.preparing => l10n.practiceSessionStatusPreparing,
+    PracticeSessionStatus.permissionRequired =>
+      l10n.practiceSessionStatusPermission,
+    PracticeSessionStatus.ready => l10n.practiceSessionStatusReady,
+    PracticeSessionStatus.countIn => l10n.practiceSessionStatusCountIn,
+    PracticeSessionStatus.running => l10n.practiceSessionStatusRunning,
+    PracticeSessionStatus.paused => l10n.practiceSessionStatusPaused,
+    PracticeSessionStatus.finishing => l10n.practiceSessionStatusFinishing,
+    PracticeSessionStatus.completed => l10n.practiceSessionStatusCompleted,
+    PracticeSessionStatus.cancelled => l10n.practiceSessionStatusCancelled,
+    PracticeSessionStatus.failed => l10n.practiceSessionStatusFailed,
+  };
 }
 
 class PracticeStateMessage extends StatelessWidget {

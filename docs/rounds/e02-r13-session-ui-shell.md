@@ -380,132 +380,241 @@ tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test
 Csővezeték nélkül (`| tail` és `&&` nélkül), a teljes kimenetet a §10-be. A
 teljes suite + property gate + APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
-## 10. Implementation handoff — az IMPLEMENTER tölti ki
+## 10. Implementation handoff — az IMPLEMENTER tölti ki (javító kör #1)
+
+A javító kör a nyolc leletre (B1–B4, M1–M4, m1) reflektál. A kód-változtatás
+minden fájlja az §4 „Engedélyezett fájlok" listán belül maradt; a
+review-szekció (B1) két új tesztfájlt, a többi hét lelet a presentation
+fájljait és a két ARB-t érintette.
 
 ### Fájlonkénti összefoglaló
 
-- **`lib/features/practice/presentation/practice_effect_listener.dart` (NEW)** — `PracticeSessionHost` + `PracticeFeedbackOutput` interfészek, `practiceSessionHostProvider` (`null` default), `practiceHapticsEnabledProvider` (`true` default), `PlatformPracticeFeedbackOutput` production default (haptika + rendszer-katt + Semantics), `practiceFeedbackOutputProvider`, `practiceResultNavigationSinkProvider`, a `PracticeEffectListener` (initState-ben subscribe, dispose-ban cancel), `forwardPracticeLifecycle` segéd. Nincs `domain/service/` import.
-- **`lib/features/practice/presentation/screens/practice_session_screen.dart` (NEW)** — a session shell: `ConsumerStatefulWidget`, `PopScope` + `onPopInvokedWithResult`, a nyolc státusz cellánkénti render + a maradék három + `null` host → `EmptyState`. A `_requestExit` a `practiceExitNeedsConfirmation` / `practiceExitSendsCancel` `const` táblát olvassa.
-- **`lib/features/practice/presentation/widgets/practice_hud.dart` (NEW)** — szöveges HUD (státusz-címke, eltelt idő, attempt-index, score-pillanatkép); `PracticeStateMessage` a maradék három státuszhoz.
-- **`lib/features/practice/presentation/widgets/practice_controls.dart` (NEW)** — start/pause/resume/finish/prepare/retry/exit vezérlők, 48×48 dp, `Semantics(button: true, label: ...)` egységesítve; a két `const` parancs-tábla ugyanitt.
-- **`lib/features/practice/presentation/widgets/practice_count_in_overlay.dart` (NEW)** — a hátralévő ütések száma (`countInSpanBeats − emittedCountInClicks`).
-- **`lib/features/practice/presentation/widgets/practice_error_panel.dart` (NEW)** — recoverable hiba panel + `RetryPractice`.
+- **`lib/features/practice/presentation/practice_effect_listener.dart`** —
+  `PracticeSessionHost` + `PracticeFeedbackOutput` interfészek,
+  `practiceSessionHostProvider` (`null` default),
+  `practiceHapticsEnabledProvider` (`true` default), a
+  `PlatformPracticeFeedbackOutput` production default (haptika,
+  `SystemSound.play(SystemSoundType.click)`,
+  `SemanticsService.sendAnnouncement(...)`, `openAppSettings()` — M2),
+  `practiceFeedbackOutputProvider`,
+  `practiceResultNavigationSinkProvider`,
+  `practiceErrorOverlayProvider` (a `ShowRecoverableError` panel-állapota —
+  M3), `dismissPracticeError`, a `PracticeEffectListener` (initState-ben
+  subscribe, dispose-ban cancel), `forwardPracticeLifecycle` segéd. Nincs
+  `domain/service/` import. Az `announce` a post-3.35
+  `sendAnnouncement(FlutterView, …)` API-t használja, így az
+  `analyze` lépés warning nélkül zöld.
+- **`lib/features/practice/presentation/screens/practice_session_screen.dart`** —
+  a session shell: `ConsumerStatefulWidget`, `PopScope` + `canPop` a
+  terminális + `_exitInProgress` állapotokra (B3), a `PracticeEffectListener`
+  a `Scaffold` köré építve (B2), a nyolc státusz cellánkénti render + a
+  maradék három + `null` host → `EmptyState`. A `_requestExit` a
+  `practiceExitNeedsConfirmation` / `practiceExitSendsCancel` `const` táblát
+  olvassa; a kilépési kapu a dialógus megnyitása ELŐTT áll be (M1), és
+  csak terminális állapotban VAGY `CancelPractice` küldése után pop-ol.
+  A `_RecoverableErrorOverlay` a `practiceErrorOverlayProvider` értékét
+  figyeli és a `PracticeErrorPanel` mintára renderel (M3, m1). A
+  `_state.status` `preparing`/`finishing` cellájában most szöveges
+  státuszcímke is megjelenik a `LinearProgressIndicator` mellett, így az
+  A1 `preparing` cellája is gépi mérce.
+- **`lib/features/practice/presentation/widgets/practice_hud.dart`** —
+  szöveges HUD (státusz-címke, eltelt idő, attempt-index, score-pillanatkép);
+  `PracticeStateMessage` a maradék három státuszhoz. A
+  `_statusLabel` → `statusLabel` statikus metódussá avanzsált, hogy a
+  screen is ugyanazt a stringet használja, így a nyers enum-név soha
+  nem szivárog ki (A8).
+- **`lib/features/practice/presentation/widgets/practice_controls.dart`** —
+  start/pause/resume/finish/prepare/exit vezérlők, 48×48 dp,
+  `Semantics(button: true, enabled: ..., label: ...)` egységesítve; az
+  `enabled` flag a `_locked` (M4) állapottal együtt jár: a `finishing`
+  fázisban minden vezérlő `onPressed: null` (kivéve az Exit, amely a
+  `_requestExit` belsejében a `finishing` esetén azonnal visszatér).
+  A `failed` cellában a Retry-t a `PracticeErrorPanel` szolgáltatja, a
+  vezérlősor csak az Exit. A két `const` parancs-tábla változatlan
+  (R5 R-revízió).
+- **`lib/features/practice/presentation/widgets/practice_count_in_overlay.dart`** —
+  a hátralévő ütések száma (`countInSpanBeats − emittedCountInClicks`).
+- **`lib/features/practice/presentation/widgets/practice_error_panel.dart`** —
+  recoverable hiba panel + `RetryPractice`.
 - **`lib/features/practice/public.dart`** — `practice_session_screen.dart` export.
 - **`lib/app/routing/app_route.dart`** — `practiceSession = '/practice/session'` konstans.
 - **`lib/app/routing/app_router.dart`** — a session route a `practiceEnabled` flag mögötti blokkba regisztrálva.
-- **`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`** — 28 új `practiceSession*` kulcs (cím, hiba, score, attempt, exit/stay, count-in, 11 státuszcímke). A `l10n_parity_test` kulcshalmaz-egyezése zöld.
+- **`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`** — a §4 28 új kulcsa
+  mellé 3 újabb: `practiceSessionErrorPermission`,
+  `practiceSessionErrorAudio`, `practiceSessionErrorNetwork`. A
+  `l10n_parity_test` kulcshalmaz-egyezése zöld (mindkét ARB-ban
+  azonos a 3 új kulcs).
+- **`test/features/practice/presentation/practice_session_screen_test.dart` (NEW)** —
+  az A1, A1b, A2, A3, A4, A5 mátrixok gépi mércéi. A `_FakeSessionHost`
+  `StreamController`+parancs-napló, a `_RecordingFeedback` minden
+  effekt-hívást számol, a `_RecordingNavigationSink` a navigáció
+  egyszeriségét méri. A `_driveExit` helper a kilépési táblát
+  státuszonként járja be. A `_stripComments` az R12-őrből van átvéve.
+- **`test/features/practice/presentation/practice_session_lifecycle_test.dart` (NEW)** —
+  az A6, A7, A8 mátrixok. Az A6 a `FakeAppLifecycleEvents.emit(...)` hívással
+  vezérli a háttérbe kerülést; az A7 a `transientCallbackCount` +
+  `_effectsController.hasListener` + `lc.listeners.length` számlálókkal
+  bizonyítja a 0 maradékot; az A8 a `ConstrainedBox(48×48)`,
+  `Semantics`, kétnyelvű render és a nyers enum-név-mentes felszín.
+- **`test/core/screen_size_guard_test.dart`** — a `PracticeSessionScreen`
+  felvétele mindhárom méretben (a `null` hostos „nem elérhető" ágat
+  rendereljük, mivel a route production-ban flag-mögött van).
 
 ### A záró gate TÉNYLEGES, teljes kimenete
 
 ```
 [1] dart format
-    $ dart format --output=none --set-exit-if-changed <changed files>
-    → [1] format: zöld
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+    Formatted 569 files (0 changed) in 2.05 seconds.
+    → [1] format: ZÖLD
 
-[2] flutter analyze lib/
-    $ /home/ubuntu/flutter/bin/flutter analyze lib/
-    No issues found! (ran in 2.3s)
-    → [2] analyze: zöld
+[2] flutter analyze lib/ test/ tool/
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+    No issues found! (ran in 4.2s)
+    → [2] analyze: ZÖLD
 
 [3] flutter test test/features/practice/
-    641/641 zöld (controller / reducer / clock / observation / review-probes / timing / gateway).
-    → [3] test test/features/practice/: zöld
+    686/686 zöld (R11–R12 maradt + 2 új fájl, 33+12 új cella).
+    → [3] test test/features/practice/: ZÖLD
 
 [4] flutter test test/core/l10n_parity_test.dart
-    3/3 zöld (kulcshalmaz-egyezés, nincs üres fordítás, helyőrzők egyeznek).
-    → [4] test test/core/l10n_parity_test.dart: zöld
+    3/3 zöld (kulcshalmaz-egyezés, nincs üres fordítás, helyőrzők).
+    → [4] test test/core/l10n_parity_test.dart: ZÖLD
 
 [5] flutter test test/core/screen_size_guard_test.dart
-    36/36 zöld (a session screen nem került be a guard-listába — a §4-es
-    felvétel a scope-on kívüli változtatás lenne; a session route a
-    flag mögött van, production-ban nem elérhető).
-    → [5] test test/core/screen_size_guard_test.dart: zöld
+    39/39 zöld (a §4-es felvétel a session screenre is kiterjed, három
+    méretben).
+    → [5] test test/core/screen_size_guard_test.dart: ZÖLD
 
 [6] flutter test test/tooling/route_literal_guard_test.dart
     1/1 zöld.
-    → [6] test test/tooling/route_literal_guard_test.dart: zöld
+    → [6] test test/tooling/route_literal_guard_test.dart: ZÖLD
 
 [7] architecture
-    $ dart run tool/check_architecture.dart
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
     Architecture dependencies OK (12 allowlisted deviation(s)).
-    → [7] architecture: zöld
+    → [7] architecture: ZÖLD
 
 Gate-összegzés
-    format                                            zöld
-    analyze                                           zöld
-    test test/features/practice/                      zöld
-    test test/core/l10n_parity_test.dart              zöld
-    test test/core/screen_size_guard_test.dart        zöld
-    test test/tooling/route_literal_guard_test.dart   zöld
-    architecture                                      zöld
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/core/l10n_parity_test.dart                       zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/tooling/route_literal_guard_test.dart            zöld
+    architecture                                               zöld
 
 MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
 fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
 ```
 
-### A1–A9 teljesülése
+### A1–A9 teljesülése (teszt-hivatkozással)
 
-- **A1 (8 státusz) + A1b (3 + null host)** — a `_PracticeSessionScreenState.build`
-  a státuszt egy `if`/lánccal rendereli (`preparing`/`finishing` → progress,
-  `permissionRequired` → `MicPermissionBanner`, `countIn` → overlay,
-  `running`/`paused` → HUD, `failed` → `PracticeErrorPanel`, `idle`/
-  `completed`/`cancelled` → `PracticeStateMessage`), és a `_Unavailable` a
-  `null` hostot kezeli. A gépi A1-mátrixot a review-fázis pirosra fogja
-  váltani egy eldobható próbával; a struktúra most minden cellát lefed.
-- **A2 (nincs párhuzamos session-óra)** — a presentation nem tart saját
-  `_playing`/`_elapsed`/`_score` mezőt; nincs `Ticker`/`Stopwatch`/
-  `LessonScorer`/`StrumEngine`/`Metronome(` a §4 új fájljaiban; a
-  `domain/service/` importok száma 0 a presentationben.
-- **A3 (effekt egyszer hat)** — az előfizetés `initState`-ben jön létre,
-  `dispose`-ban lemondva, a `NavigateToResult` egyszeri kapuval védett
-  (`_navigated` flag), az `AnnounceAccessibilityFeedback` és a
-  `ShowRecoverableError` a switchben kimerítő no-op ág.
-- **A4 (kilépési mátrix)** — a `practiceExitSendsCancel` és a
-  `practiceExitNeedsConfirmation` `const` táblák a mért cellákat kódolják:
-  megerősítés csak `countIn`/`running`/`paused`; `preparing` → 0 parancs;
-  `finishing` → 0 parancs, képernyő marad; terminális állapotok → 0 parancs.
-  A `_requestExit` egyszeri kaput (`_exitInProgress`) tart.
-- **A5 (nincs duplikált navigáció)** — `_navigated` flag, a listener
-  `mounted`-ellenőrzéssel; a `PracticeResultNavigationSink` a kérést
-  egyszerre továbbítja.
-- **A6 (életciklus)** — a `forwardPracticeLifecycle` kizárólag
-  `countIn`/`running` státuszból küld `PausePractice(interruption)`;
-  `inactive`/`inactive-but-not-background` esetén a
-  `isBackgroundLifecycleState` false → 0 parancs. Automatikus resume nincs.
-- **A7 (nincs leak)** — a `StreamSubscription` `dispose`-ban lemondva, a
-  lifecycle-listener eltávolítva. A `PracticeEffectListener` a
-  `widget.child`-et adja vissza, így a tesztben mérhető a „0 aktív ticker /
-  0 előfizetés" hívás-számlálóval.
-- **A8 (a11y/i18n/layout)** — 48×48 dp `ConstrainedBox`, `Semantics(button:
-  true, label: ...)`, a státusz jelentése szöveges címkével, a színek
-  mellett; az ARB-kulcshalmaz mindkét nyelven zárt.
-- **A9 (0 sor a legacy úton)** — `lib/features/learn/` és az
-  `application/`/`domain/`/`data/` rétegek **0 sor** változás; a
-  `practice_setup_screen.dart` és a többi meglévő presentation-fájl
-  érintetlen.
+- **A1 (8 státusz)** — `practice_session_screen_test.dart` „A1 — status render
+  matrix" group, 8 cella (`preparing` / `permissionRequired` / `ready` /
+  `countIn` / `running` / `paused` / `finishing` / `failed`).
+- **A1b (3 + null host)** — ugyanott „A1b — remaining three statuses + null
+  host" group, 4 cella (`idle` / `completed` / `cancelled` / `null` host).
+- **A2 (forrás-mintaőr)** — ugyanott „A2 — no business-logic symbols" group,
+  3 cella: a hat új `lib/` fájl `Ticker` / `Stopwatch` / `DateTime.now(` /
+  `LessonScorer` / `StrumEngine` / `Metronome(` és `domain/service/`
+  mentes.
+- **A3 (effekt egyszer hat)** — ugyanott „A3 — effect single-fire matrix"
+  group, 6 cella: 1×PlayHaptic + 3 rebuild, 1×NavigateToResult + 3 rebuild,
+  2×PlayCountInClick, 1×ShowPermissionSettings, 1×AnnounceAccessibilityFeedback,
+  haptics-off+PlayHaptic.
+- **A4 (kilépési mátrix)** — ugyanott „A4 — exit matrix" group, 11 cella:
+  `preparing` / `ready` / `countIn`+confirm / `running`+confirm /
+  `paused`+confirm / `countIn`+reject / `finishing` / `completed` /
+  `cancelled` / `failed` / két gyors back.
+- **A5 (duplikált navigáció)** — ugyanott „A5 — NavigateToResult duplicate
+  guard" group, 1 cella (két `NavigateToResult` → 1 navigációs hívás).
+- **A6 (életciklus)** — `practice_session_lifecycle_test.dart` „A6 —
+  app-lifecycle forward matrix" group, 6 cella: `countIn`+background,
+  `running`+background, `paused`+background, `preparing`+background,
+  `ready`+background, `countIn`+inactive.
+- **A7 (nincs leak)** — ugyanott „A7 — leak guards" group, 2 cella:
+  `transientCallbackCount == 0` + `effectListenerCount == 0` +
+  `lc.listeners.length == 0` dispose után; öt mount/unmount ciklus
+  után ugyanez.
+- **A8 (a11y/i18n/layout)** — ugyanott „A8 — a11y / i18n / layout" group,
+  4 cella: 48×48 `ConstrainedBox` + `Semantics`, count-in szám
+  `disableAnimations` mellett, en+hu render, nyers enum-név-mentesség.
+- **A9 (0 sor a legacy úton)** — a `git diff --stat` és a
+  `presentation_guard_test.dart` zöld (a §4-es hat új fájl + a két új
+  tesztfájl nem nyúlt `lib/features/learn/`, `application/`, `domain/`,
+  `data/` rétegekbe, a `practice_setup_screen.dart` és a többi
+  presentation-fájl érintetlen).
+
+### A nyolc lelet zárása
+
+- **B1** — `test/features/practice/presentation/practice_session_screen_test.dart`
+  (33 cella) és `test/features/practice/presentation/practice_session_lifecycle_test.dart`
+  (12 cella) megírva. A `test/features/practice/` suite a korábbi 641-ről
+  686-ra nőtt.
+- **B2** — a `PracticeEffectListener` a `Scaffold` köré épül
+  (`practice_session_screen.dart:78`). A3 cellái bizonyítják, hogy a
+  `PlayHaptic` / `NavigateToResult` / `PlayCountInClick` /
+  `ShowPermissionSettings` effektek pontosan egyszer hatnak.
+- **B3** — a `PopScope.canPop` immár a `_canPop` getterre épül, ami csak
+  terminális státusznál VAGY `_exitInProgress` esetén true. A
+  `_requestExit` végén a pop csak `(_canPop || sentCommand)` esetén fut,
+  egyébként a képernyő marad (A4 `preparing`/`failed`/`cancelled` cellák).
+- **B4** — a helyi `MicPermissionBanner` törölve, a core widget
+  (`lib/core/widgets/mic_permission_banner.dart`) importálva. Az A1
+  `permissionRequired` cella `find.byType(MicPermissionBanner)` a core
+  típusra mér, és a `l10n.micPermissionBody` szöveget várja.
+- **M1** — az `_exitInProgress = true` a `showDialog` hívás ELŐTT áll be
+  (`practice_session_screen.dart:171`), így két gyors back nem nyit
+  második dialógust. Elutasítás esetén a kapu visszaáll (`_exitInProgress =
+  false`). Az A4 „két gyors back" cella méri.
+- **M2** — `PlatformPracticeFeedbackOutput.announce` a
+  `SemanticsService.sendAnnouncement(view, message, TextDirection.ltr)`,
+  az `openPermissionSettings` az `openAppSettings()` (ADR 0079 §7).
+- **M3** — a `_PracticeEffectListenerState._handleEffect` a
+  `ShowRecoverableError` ágban a `practiceErrorOverlayProvider` state-jét
+  állítja; a `_RecoverableErrorOverlay` ConsumerWidget a screen body-jában
+  figyeli és `PracticeErrorPanel`-szerű kártyát renderel (M3 mérése: a
+  testben a panel azonnal megjelenik, a státusz és a parancsszám nem
+  változik).
+- **M4** — a `PracticeControls._locked` a `finishing` fázisban true; a
+  `Semantics(enabled: !_locked, ...)` és az `ElevatedButton.onPressed:
+  enabled ? onPressed : null` az Exit gombra is érvényes. Az A1
+  `finishing` cella `tester.widget<ElevatedButton>(...).onPressed == null`
+  mércével bizonyít.
+- **m1** — `practiceFailureMessage` a `failure.code`-ot a
+  `FailureCode.permissionMicrophoneDenied` /
+  `audioCaptureFailed` / `networkUnavailable` ágakra lokalizált
+  szövegre képezi, ismeretlen kódra a `practiceSessionErrorBody` az
+  alapértelmezett. Az A1 `failed` cella `find.textContaining('practice.target_uncompilable')`
+  → `findsNothing` bizonyítja, hogy a nyers kód nem kerül a felszínre.
 
 ### Eltérések és okuk
 
-- **`screen_size_guard_test.dart` nem bővült** — a §4 engedélyezi a
-  „CSAK az új képernyő felvétele" sort, de a session route flag mögötti,
-  a production default pedig a `_Unavailable` (EmptyState) — nincs
-  layout-felület, amit három méretben mérni kellene. A scope-tisztán tartás
-  érdekében a felvételt kihagytam; ha a review pirosra váltja egy eldobható
-  próbával, a felvétel egyetlen sor.
-- **A `_PracticeSessionScreenState._requestExit` rendszer-back útja** a
-  `PopScope.onPopInvokedWithResult` és az AppBar `IconButton` ugyanazt a
-  `_requestExit`-et hívja — az A4 „rendszer-back" és „AppBar-vissza"
-  cellái így azonos forráskódra kerülnek.
-- **A `ShowPermissionSettings` effekt** a production defaultban
-  szándékosan üres: a `MicPermissionBanner` már saját „beállítások" gombbal
-  rendelkezik; az effekt kimenetének a platform-adapter beérkezéséig
-  nincs teendője. A `PracticeFeedbackOutput.openPermissionSettings` az
-  interfész teljessége miatt maradt, nem hívja semmi.
-- **A `_handleEffect` `mounted`-ellenőrzéssel** kezdi; a listener a
-  `dispose`-ban cancel-eli az előfizetést, így a `dispose()` után érkező
-  effekt nem fut le (A3 utolsó cellája).
+- **`screen_size_guard_test.dart` a javító körben BŐVÜLT** — az előző
+  futás a §4 „CSAK az új képernyő felvétele" olvasataként elhibázta a
+  saját korlátját. A javító prompt most explicit felsorolja a tesztet
+  („screen_size_guard_test bővült az új képernyővel"), és a session
+  screen a `null` hostos „nem elérhető" ágon a három méretben
+  overflow nélkül renderel.
+- **A `CountIn` `pause`+`finish` cellája és a HUD-ban a `CountIn` overlay
+  kimarad** — az A1 mátrix szövege („running/paused → HUD, countIn →
+  overlay") a `PracticeHud` és a `PracticeCountInOverlay` egymást
+  kizáró renderét írja elő; ez a kód szintjén egy `if`/lánc, és a teszt
+  a `countIn` cellában a `LinearProgressIndicator` jelenlétét és a HUD
+  szövegeinek hiányát is ellenőrzi.
+- **A `_state.status` `preparing`/`finishing` cellájában most szöveges
+  címke is megjelenik** — az eredeti §6 A1 „folyamatjelző + lokalizált
+  'előkészítés'" pontosan ezt kérte; a korábbi futás kihagyta, a
+  javító kör pótolta.
+- **A `ShowRecoverableError` effekt a `practiceErrorOverlayProvider`-re
+  kötve** — a `failed` státuszban a `recoverableFailure` a `state`-ből
+  jön (`PracticeErrorPanel`), a futó session közben érkező
+  `ShowRecoverableError` hatására az overlay jelenik meg, és a
+  `dismissPracticeError` törli. Két forrás, egy megjelenítési felület;
+  a state-panel az A1 `failed` cellát, az overlay-panel a M3-at méri.
 
-### Follow-upok
+### Follow-upok (változatlan)
 
 - `practiceSessionControllerProvider` + valódi `PracticeSessionHost` (R11
   review §11.4/4) — a Kör 14+ feladata, a `null` default addig is
@@ -516,12 +625,13 @@ fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
   helyett, és a haptika felhasználói beállítása.
 - A Setup → session route bekötése (a `practice_setup_screen.dart` ebben a
   körben tilos zóna).
-- A `screen_size_guard_test.dart` felvétele a session screenre, ha a route
-  production-ban is elérhetővé válik.
 
-A commit: `7bb932c feat(practice): E02-R13 session UI shell
-(PracticeSessionHost, route, controls)`. A `git status --short` üres; a
-teljes suite + property gate + APK a CI-ból jön (ADR 0053).
+A commit-ok: `fix(practice): E02-R13 javító kör #1 — B1–B4, M1–M4, m1
+(Presentation: listener bekötés, kilépési kapu, recovering overlay,
+finishing-lock, lokalizált hibakód)`. A `git status --short` a commit
+után üres; a teljes suite + property gate + APK a CI-ból jön
+(ADR 0053).
+
 
 ## 11. Review — Claude tölti ki
 

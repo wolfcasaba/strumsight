@@ -27,6 +27,7 @@ import 'package:strumsight/features/practice/domain/model/tempo.dart';
 import 'package:strumsight/features/practice/domain/repository/practice_catalog_repository.dart';
 import 'package:strumsight/features/practice/presentation/practice_route_args.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
 import 'package:strumsight/features/tuner/model/tuner_reading.dart';
@@ -280,6 +281,24 @@ void main() {
                     definitionId: _GuardRepository.id,
                   ),
                 ),
+              ),
+            ),
+          );
+          await tester.pump();
+        });
+      });
+
+      testWidgets('Practice session (E02-R13, null host → unavailable)', (
+        tester,
+      ) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: preferenceOverrides(),
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: PracticeSessionScreen(),
               ),
             ),
           );
