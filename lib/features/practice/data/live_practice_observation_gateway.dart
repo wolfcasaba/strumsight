@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:strumsight/features/live/public.dart';
 
 import '../../../core/foundation/app_failure.dart';
-import '../../../core/logging/app_logger.dart';
 import '../../../core/foundation/app_result.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/platform/microphone_permission.dart';
 import '../application/practice_observation_gateway.dart';
 import '../domain/model/practice_observation.dart';
@@ -16,6 +16,16 @@ import 'adapters/legacy_chord_label.dart';
 /// `1.0` because LiveFrame has no chord-confidence field; that value means
 /// "not measured" on this adapter path, so [PracticeObservationConfig.chordMinConfidence]
 /// does not filter them.
+///
+/// Frame-delivery lag scope (E02-R08 R2): the lag is applied **only** to the
+/// strum observation. The chord observation receives the uncorrected
+/// `timelineNow()` so the chord change-point is not dragged back by a stale
+/// `latestStrum*` value (chunk 014 / R0 PRÓBA-B).
+///
+/// Two per-kind monotonic pads (`_lastEmittedStrumAt`,
+/// `_lastEmittedChordAt`) keep the de-jitter alive across a chord change-
+/// point (R0 PRÓBA-A): a chord observation must not raise the floor for the
+/// following strum observation, and vice versa.
 final class LivePracticeObservationGateway
     implements PracticeObservationGateway {
   LivePracticeObservationGateway({
@@ -39,9 +49,12 @@ final class LivePracticeObservationGateway
   bool _running = false;
   bool _disposed = false;
 
-  int _lastSeenStrumSeq = -1;
+  /// Legacy `_lastSeq = 0` baseline — see
+  /// `lib/features/learn/screens/learn_screen.dart:163`.
+  int _lastSeenStrumSeq = 0;
   int _nextObservationSequence = 0;
-  Duration _lastEmittedAt = Duration.zero;
+  Duration _lastEmittedStrumAt = Duration.zero;
+  Duration _lastEmittedChordAt = Duration.zero;
   bool _hasEmittedChord = false;
   String? _lastChordLabel;
   Duration _lastChordEmittedAt = Duration.zero;
@@ -176,9 +189,10 @@ final class LivePracticeObservationGateway
   }
 
   void _resetObservationState() {
-    _lastSeenStrumSeq = -1;
+    _lastSeenStrumSeq = 0;
     _nextObservationSequence = 0;
-    _lastEmittedAt = Duration.zero;
+    _lastEmittedStrumAt = Duration.zero;
+    _lastEmittedChordAt = Duration.zero;
     _hasEmittedChord = false;
     _lastChordLabel = null;
     _lastChordEmittedAt = Duration.zero;
@@ -191,7 +205,6 @@ final class LivePracticeObservationGateway
     if (config == null) return;
 
     final timelineNow = _timelineNow();
-    final lag = _frameDeliveryLag(frame, config, timelineNow);
     final strum = frame.latestStrum;
     var emitStrum = false;
     if (strum != null && frame.strumSeq > _lastSeenStrumSeq) {
@@ -208,8 +221,16 @@ final class LivePracticeObservationGateway
         timelineNow - _lastChordEmittedAt >= config.chordStableDuration;
     if (!emitStrum && !emitChord) return;
 
-    final at = _observationAt(timelineNow, lag);
+    // Lag is computed ONLY for the strum observation (R2 / MAJOR-1). The
+    // chord observation always uses the uncorrected timelineNow().
+    Duration strumAt = timelineNow;
     if (emitStrum) {
+      final lag = _frameDeliveryLag(frame, config, timelineNow);
+      strumAt = timelineNow - lag;
+    }
+
+    if (emitStrum) {
+      final at = _strumObservationAt(strumAt);
       _observationsController.add(
         StrumObservation(
           at: at,
@@ -223,6 +244,7 @@ final class LivePracticeObservationGateway
       _hasEmittedChord = true;
       _lastChordLabel = chordLabel;
       _lastChordEmittedAt = timelineNow;
+      final at = _chordObservationAt(timelineNow);
       _observationsController.add(
         ChordObservation(at: at, label: chordLabel, confidence: 1.0),
       );
@@ -272,11 +294,21 @@ final class LivePracticeObservationGateway
     );
   }
 
-  Duration _observationAt(Duration timelineNow, Duration lag) {
-    final raw = timelineNow - lag;
+  /// Returns the (clamped, non-decreasing) `at` for the next strum
+  /// observation, and updates the strum-only monotonic pad.
+  Duration _strumObservationAt(Duration raw) {
     var at = raw < Duration.zero ? Duration.zero : raw;
-    if (at < _lastEmittedAt) at = _lastEmittedAt;
-    _lastEmittedAt = at;
+    if (at < _lastEmittedStrumAt) at = _lastEmittedStrumAt;
+    _lastEmittedStrumAt = at;
+    return at;
+  }
+
+  /// Returns the (clamped, non-decreasing) `at` for the next chord
+  /// observation, and updates the chord-only monotonic pad.
+  Duration _chordObservationAt(Duration raw) {
+    var at = raw < Duration.zero ? Duration.zero : raw;
+    if (at < _lastEmittedChordAt) at = _lastEmittedChordAt;
+    _lastEmittedChordAt = at;
     return at;
   }
 

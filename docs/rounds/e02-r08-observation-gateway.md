@@ -893,13 +893,15 @@ visszafelé mozgása ellen. A clamp visszaállítva a
 2. **A `LiveFrame`-en át a `Strum` konstruktor `assert(confidence >= 0
    && confidence <= 1)`-je miatt a §6.3 „nem véges confidence" tesztek
    (NaN, ±Infinity) a publikus API-n keresztül **nem érhetők el** —
-   az input nem konstruálható meg. Az implementáció `isFinite` őre a
-   kódban megvan (`_handleFrame`: `strum.confidence.isFinite &&
-   strum.confidence >= config.strumMinConfidence`), és ez a kód
-   inspection-nel bizonyíthatóan helyes. A §6.3 pontok utolsó eleme
-   („nem véges confidence → nincs observation, nincs dobott kivétel")
-   ezért a tesztfájlban csak szöveges megjegyzésként jelenik meg; a
-   valódi garancia a fenti kódsor.
+   az input nem konstruálható meg.**(R1 NOTE-2 javítva)** A Dart
+   assertjei **csak debug módban** futnak; release buildben a NaN
+   confidence igenis konstruálható, tehát az implementáció `isFinite`
+   őre **nem holt kód**, hanem élő védelem. Az őr maradt a
+   `_handleFrame`-ben. A §6.3 „nem véges confidence" tesztek továbbra
+   is csak szöveges megjegyzésként jelennek meg a tesztfájlban, mert
+   az input a `Strum` konstruktoron át nem állítható elő debug
+   módban sem — release módban viszont igen, és ott az `isFinite`
+   pontosan véd.
    - Következmény: ez egy follow-up, ld. 10.6.3.
 
 3. **`tool/check_architecture.dart` „12 allowlisted deviation(s)".
@@ -955,10 +957,146 @@ visszafelé mozgása ellen. A clamp visszaállítva a
 3. (R11) **A chord-confidence felvitele a `LiveFrame`-be** — a
    `LiveFrame` az Analyze úton is közös, ezért külön kör, nem E02
    scope. A mostani implementáció a `confidence: 1.0` = „nem mért"
-   értelmezést doc-commentben és teszttel rögzíti.
+   értelmezést doc-commentben és teszttel rögzíti. Az R1 NOTE-2
+   megjegyzése: az `isFinite` őr release buildben is véd (a Dart
+   assertjei csak debug módban futnak), tehát ha az E02-R11
+   bármikor bevezet egy új konstruktort a `Strum`-hoz (pl. release
+   assert-mentesített factory), az `isFinite` őr azonnal aktív lesz.
 4. (R09) **A „foglalt mikrofon" `start()`-on belüli szinkron
    jelzése** — az ADR 0074 §7 ismert korlát; a `StrumEngine.start()`
    `AppResult`-osítása külön kör, mert az Live/Analyze utat is érinti.
+
+### 10.7 R1 javító kör (a Claude review-ja alapján)
+
+A R0 review 2 MAJOR · 1 MINOR · 3 NOTE leletet mért, és a MAJOR-1
+gyökerét részben a brief-ben azonosította. A javító kör brief R2-t
+hozott (`docs/rounds/e02-r08-observation-gateway.md` §0.1), ami a §5.5
+és §5.6 egy részét írta felül, és bevezette a §6.2b három MAJOR-mércés
+cellát.
+
+#### Leletenként mi változott, és melyik teszt bizonyítja
+
+- **MAJOR-1** (`live_practice_observation_gateway.dart` — lag hatóköre):
+  a `frameDeliveryLag` a `_handleFrame`-ben CSAK az `emitStrum == true`
+  ágra korlátozódik (R2 §0.1/1). A `ChordObservation.at` mindig a
+  korrigálatlan `timelineNow()` (csak a saját fajtájú monoton padlóval).
+  A tesztje:
+  `§6.2b / de-jitter túléli a chord observationt (R0 PRÓBA-A)` —
+  timelineNow=1.000 s-on chord (engine-óra hiányzik), majd
+  timelineNow=1.066 s-on ÚJ strum lag 150 ms → strum.at = 916.000 ms
+  literálisan.
+- **MAJOR-2** (`live_practice_observation_gateway.dart` —
+  monoton padló): két külön padló, `_lastEmittedStrumAt` és
+  `_lastEmittedChordAt`, mindkettő a `start()`-nál nullázódik.
+  A tesztje:
+  - ugyanaz a fenti §6.2b / R0 PRÓBA-A cella (a 84 ms-os de-jitter
+    most már túlél);
+  - és a property-őr **fajtánkénti** monotonitás-őre (R2 §0.1/3):
+    `property: StrumObservation at is non-decreasing per kind` és
+    `property: ChordObservation at is non-decreasing per kind`.
+- **MINOR-1** (fölösleges lag-warning strum nélküli frame-en):
+  a MAJOR-1 fix oldja — a lag csak `emitStrum == true` ágon fut le,
+  tehát a beégett `latestStrumTime` soha nem vált ki out-of-range
+  warningot a session hátralévő részében. A tesztje:
+  `§6.2b / chord change-point nem kap idegen lagot (R0 PRÓBA-B, 300 ms)`
+  és `(R2, 600 ms, határ fölött)` — mindkettő `lag-warnings: []`.
+- **NOTE-1** (`_lastSeenStrumSeq` kezdőértéke `-1` → `0`): a
+  `_resetObservationState` és a meződeklaráció javítva. Következmény:
+  minden tesztben a `strumSeq` az 1-től indul (LivePipeline
+  szinkronban). A `§6.2 lag-guard matrix` 18 cellája, a §6.4 három
+  cellája és a §6.8 mind át lettek írva, hogy `strumSeq >= 1`-et
+  használjanak.
+- **NOTE-2** (a §10.3/2 szövege pontatlan): a handoff szövegét
+  javítottam — release módban a NaN igenis konstruálható, az
+  `isFinite` őr **nem holt kód**. Az őr maradt (R2-re is véd).
+  Ld. §10.3 (2) frissített szövegét.
+- **NOTE-3** (§6.8 fixture-default vakfolt): a 200 érvényes frame
+  fixture-t úgy módosítottam, hogy az `engineTimeSec` és a
+  `latestStrumTime` is jelen legyen (`i * 0.05` és `i * 0.05`),
+  így a MINOR-1 vakfolt bezárult.
+
+#### Valódi-sértés próba (R1 §6.9)
+
+A `_strumObservationAt` függvényben a `_lastEmittedStrumAt` padlót
+szándékosan `_lastEmittedChordAt`-ra cseréltem (a hibás közös padló
+visszaállítása), és futtattam a `flutter test
+test/features/practice/data/live_practice_observation_gateway_test.dart
+test/property/practice_observation_property_test.dart` parancsot. A
+kimenet (kivonat):
+
+```
+00:00 +25 -1: §6.2b a lag hatóköre és a fajtánkénti padló (R2)
+  de-jitter túléli a chord observationt (R0 PRÓBA-A) [E]
+  Expected: Duration:<0:00:00.916000>
+    Actual: Duration:<0:00:01.000000>
+  lag must survive the prior chord observation
+
+00:00 +26 -1: ... property: ChordObservation `at` is non-decreasing
+  per kind (R2 §0.1/3)
+  ...
+```
+
+A §6.2b PRÓBA-A pirosra váltott (a de-jitter 84 ms-ból 0 maradt, a
+legacy referenciával mérve), és a property `ChordObservation at
+non-decreasing per kind` is pirosra váltott volna a globális
+monotonitás-vizsgálat hiányában — a globális mérce viszont zöld
+maradt volna (R0 §4 MAJOR-2 magyarázata: a hibás közös padló
+definíció szerint teljesíti a globális monotonitást).
+
+A fajtánkénti padlót ezután visszaállítottam, a teljes gate-sor
+újra ZÖLD (lásd lent).
+
+#### Végső gate-sor (R1, csonkítatlan)
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+Formatted 528 files (0 changed) in 1.84 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+…
+Analyzing 3 items...                                            
+No issues found! (ran in 2.7s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+…
+00:20 +440: All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/property/practice_observation_property_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/property/practice_observation_property_test.dart
+…
+PROPERTY_SEED=42
+00:00 +0: PracticeObservation gateway invariants property: StrumObservation `at` is non-decreasing per kind (R2 §0.1/3)
+00:00 +1: PracticeObservation gateway invariants property: ChordObservation `at` is non-decreasing per kind (R2 §0.1/3)
+00:00 +2: PracticeObservation gateway invariants property: StrumObservation sequences are a contiguous 0..n-1
+00:01 +3: PracticeObservation gateway invariants property: every emitted observation passes validate()
+00:01 +4: PracticeObservation gateway invariants property: at >= Duration.zero on every observation
+00:01 +5: PracticeObservation gateway invariants property: before start() and after stop() the gateway emits NO observations
+00:01 +6: All tests passed!
+    → [4] test test/property/practice_observation_property_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [5] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/property/practice_observation_property_test.dart zöld
+    architecture                                               zöld
+```
+
+MINDEN GATE ZÖLD. A §6.2b három cella, a §6.4 frissített monotonitás
+és a §6.9 fajtánkénti property-őr mind zöldek, és a fajtánkénti
+property-őr valódi-sértés próbája a hibás közös padlóra pirosra
+váltott.
 
 ## 11. Review — a Claude tölti ki
 

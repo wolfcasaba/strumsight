@@ -167,26 +167,53 @@ void main() {
   print('PROPERTY_SEED=$seed');
 
   group('PracticeObservation gateway invariants', () {
-    test('property: every emitted `at` is non-decreasing across '
-        'randomized frame streams', () async {
-      for (var trial = 0; trial < 80; trial++) {
-        final observations = await _collectObservations(
-          rng: math.Random(trial * 1000 + seed),
-          frames: 40,
-        );
-
-        // Monotonicity check — every observation's `at` is >= previous.
-        for (var i = 1; i < observations.length; i++) {
-          expect(
-            observations[i].at >= observations[i - 1].at,
-            isTrue,
-            reason:
-                'seed=$seed trial=$trial: observation $i at=${observations[i].at} '
-                'regressed vs ${i - 1} at=${observations[i - 1].at}',
+    test(
+      'property: StrumObservation `at` is non-decreasing per kind (R2 §0.1/3)',
+      () async {
+        for (var trial = 0; trial < 80; trial++) {
+          final observations = await _collectObservations(
+            rng: math.Random(trial * 1000 + seed),
+            frames: 40,
           );
+          final strums = observations.whereType<StrumObservation>().toList(
+            growable: false,
+          );
+          for (var i = 1; i < strums.length; i++) {
+            expect(
+              strums[i].at >= strums[i - 1].at,
+              isTrue,
+              reason:
+                  'seed=$seed trial=$trial: strum $i at=${strums[i].at} '
+                  'regressed vs ${i - 1} at=${strums[i - 1].at}',
+            );
+          }
         }
-      }
-    });
+      },
+    );
+
+    test(
+      'property: ChordObservation `at` is non-decreasing per kind (R2 §0.1/3)',
+      () async {
+        for (var trial = 0; trial < 80; trial++) {
+          final observations = await _collectObservations(
+            rng: math.Random(trial * 1000 + seed),
+            frames: 40,
+          );
+          final chords = observations.whereType<ChordObservation>().toList(
+            growable: false,
+          );
+          for (var i = 1; i < chords.length; i++) {
+            expect(
+              chords[i].at >= chords[i - 1].at,
+              isTrue,
+              reason:
+                  'seed=$seed trial=$trial: chord $i at=${chords[i].at} '
+                  'regressed vs ${i - 1} at=${chords[i - 1].at}',
+            );
+          }
+        }
+      },
+    );
 
     test(
       'property: StrumObservation sequences are a contiguous 0..n-1',

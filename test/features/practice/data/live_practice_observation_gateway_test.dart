@@ -184,7 +184,7 @@ void main() {
 
       h.engine.emit(
         _frame(
-          strumSeq: 0,
+          strumSeq: 1,
           strum: _strum(1.0),
           engineTimeSec: engineTime,
           latestStrumTime: latestStrum,
@@ -413,7 +413,7 @@ void main() {
       addTearDown(h.gateway.dispose);
       addTearDown(h.observationsSub.cancel);
 
-      h.engine.emit(_frame(strumSeq: 0, strum: _strum(confidence)));
+      h.engine.emit(_frame(strumSeq: 1, strum: _strum(confidence)));
       await _pump();
 
       final strums = h.observations.whereType<StrumObservation>().toList();
@@ -471,6 +471,98 @@ void main() {
     );
   });
 
+  group('§6.2b a lag hatóköre és a fajtánkénti padló (R2)', () {
+    test('de-jitter túléli a chord observationt (R0 PRÓBA-A)', () async {
+      var timeline = const Duration(seconds: 1);
+      final h = await _spinUp(timeline: () => timeline);
+      addTearDown(h.gateway.dispose);
+      addTearDown(h.observationsSub.cancel);
+
+      // First: chord-hordozó frame ÚJ strum nélkül (engine-óra hiányzik).
+      h.engine.emit(_frame(chord: const Chord('C')));
+      await _pump();
+
+      // Second: ÚJ strum 150 ms-os laggal.
+      timeline = const Duration(milliseconds: 1066);
+      h.engine.emit(
+        _frame(
+          strumSeq: 1,
+          strum: _strum(1.0),
+          engineTimeSec: 5.0,
+          latestStrumTime: 4.85,
+        ),
+      );
+      await _pump();
+
+      final strums = h.observations.whereType<StrumObservation>().toList();
+      expect(strums, hasLength(1), reason: 'exactly one strum');
+      expect(
+        strums.single.at,
+        const Duration(microseconds: 916000),
+        reason: 'lag must survive the prior chord observation',
+      );
+    });
+
+    test(
+      'chord change-point nem kap idegen lagot (R0 PRÓBA-B, 300 ms)',
+      () async {
+        final h = await _spinUp(timeline: () => const Duration(seconds: 2));
+        addTearDown(h.gateway.dispose);
+        addTearDown(h.observationsSub.cancel);
+
+        // Single frame, ÚJ strum NÉLKÜL, beégett latestStrumTime 300 ms-mal
+        // az engine-óra mögött — chord-ot ad, nem strumot, lag nem is
+        // számítódik.
+        h.engine.emit(
+          _frame(
+            strum: null,
+            chord: const Chord('G'),
+            engineTimeSec: 10.0,
+            latestStrumTime: 9.7,
+          ),
+        );
+        await _pump();
+
+        final chords = h.observations.whereType<ChordObservation>().toList();
+        expect(chords, hasLength(1));
+        expect(chords.single.at, const Duration(seconds: 2));
+        expect(chords.single.label, 'G');
+        expect(
+          h.logger.warnings.where((w) => w.contains('lag')),
+          isEmpty,
+          reason: 'no lag-warning — lag is not computed for strumless frames',
+        );
+      },
+    );
+
+    test(
+      'chord change-point nem kap idegen lagot (R2, 600 ms, határ fölött)',
+      () async {
+        final h = await _spinUp(timeline: () => const Duration(seconds: 2));
+        addTearDown(h.gateway.dispose);
+        addTearDown(h.observationsSub.cancel);
+
+        // Same scenario but lag (600 ms) is above the maxFrameDeliveryLag.
+        // Per R2 the lag must NOT be computed for strumless frames — no
+        // warning, chord at the uncorrected timelineNow().
+        h.engine.emit(
+          _frame(
+            strum: null,
+            chord: const Chord('G'),
+            engineTimeSec: 10.0,
+            latestStrumTime: 9.4,
+          ),
+        );
+        await _pump();
+
+        final chords = h.observations.whereType<ChordObservation>().toList();
+        expect(chords, hasLength(1));
+        expect(chords.single.at, const Duration(seconds: 2));
+        expect(h.logger.warnings.where((w) => w.contains('lag')), isEmpty);
+      },
+    );
+  });
+
   group('§6.4 monotonitás és sűrű sorszám', () {
     test('változatlan timelineNow mellett a nagy lagú frame után '
         'a lag nélküli frame at-ja nem kisebb', () async {
@@ -483,7 +575,7 @@ void main() {
       // at = 2.0 − 0.4 = 1.6 s.
       h.engine.emit(
         _frame(
-          strumSeq: 0,
+          strumSeq: 1,
           strum: _strum(1.0),
           engineTimeSec: 1.0,
           latestStrumTime: 0.6,
@@ -494,7 +586,7 @@ void main() {
       // Second frame: same timeline, no lag → at = 2.0 s, must NOT be < 1.6 s.
       h.engine.emit(
         _frame(
-          strumSeq: 1,
+          strumSeq: 2,
           strum: _strum(1.0),
           engineTimeSec: 1.0,
           latestStrumTime: 1.0,
@@ -533,11 +625,11 @@ void main() {
         addTearDown(h.gateway.dispose);
         addTearDown(h.observationsSub.cancel);
 
-        h.engine.emit(_frame(strumSeq: 0, strum: _strum(0.9)));
+        h.engine.emit(_frame(strumSeq: 1, strum: _strum(0.9)));
         await _pump();
-        h.engine.emit(_frame(strumSeq: 1, strum: _strum(0.1)));
+        h.engine.emit(_frame(strumSeq: 2, strum: _strum(0.1)));
         await _pump();
-        h.engine.emit(_frame(strumSeq: 2, strum: _strum(0.9)));
+        h.engine.emit(_frame(strumSeq: 3, strum: _strum(0.9)));
         await _pump();
 
         final sequences = h.observations
@@ -555,7 +647,7 @@ void main() {
       addTearDown(h.observationsSub.cancel);
 
       // First session: 3 strums.
-      for (var i = 0; i < 3; i++) {
+      for (var i = 1; i <= 3; i++) {
         h.engine.emit(_frame(strumSeq: i, strum: _strum(1.0)));
         await _pump();
       }
@@ -571,7 +663,7 @@ void main() {
       expect(start.isSuccess, isTrue);
       await _pump();
 
-      h.engine.emit(_frame(strumSeq: 0, strum: _strum(1.0)));
+      h.engine.emit(_frame(strumSeq: 1, strum: _strum(1.0)));
       await _pump();
 
       final strums = h.observations.whereType<StrumObservation>().toList();
@@ -909,7 +1001,7 @@ void main() {
       h.engine.emitError(StateError('boom'));
       await _pump();
 
-      h.engine.emit(_frame(strumSeq: 0, strum: _strum(1.0)));
+      h.engine.emit(_frame(strumSeq: 1, strum: _strum(1.0)));
       await _pump();
 
       final strums = h.observations.whereType<StrumObservation>().toList();
@@ -924,8 +1016,15 @@ void main() {
       final h = await _spinUp();
       addTearDown(h.observationsSub.cancel);
 
-      for (var i = 0; i < 200; i++) {
-        h.engine.emit(_frame(strumSeq: i, strum: _strum(1.0)));
+      for (var i = 1; i <= 200; i++) {
+        h.engine.emit(
+          _frame(
+            strumSeq: i,
+            strum: _strum(1.0),
+            engineTimeSec: i * 0.05,
+            latestStrumTime: i * 0.05,
+          ),
+        );
         await _pump();
       }
       await h.gateway.stop();
@@ -945,7 +1044,7 @@ void main() {
       addTearDown(h.gateway.dispose);
       addTearDown(h.observationsSub.cancel);
 
-      for (var i = 0; i < 10; i++) {
+      for (var i = 1; i <= 10; i++) {
         h.engine.emit(
           _frame(
             strumSeq: i,
