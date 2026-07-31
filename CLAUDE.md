@@ -86,11 +86,21 @@ music-theory/
 
 ## Verify gate (before "done")
 
+A mérce egyetlen futtatható artefaktum — a parancssorban reprodukált
+parancslista a csővezeték (`| tail`, `&&`) miatt nem bizonyíték:
+
 ```bash
-~/flutter/bin/dart format --set-exit-if-changed lib test   # 0 changed
-~/flutter/bin/flutter analyze lib/ test/                   # clean
-~/flutter/bin/flutter test test/<area touched by the round> # separate call
+tools/round-gate.sh test/<area touched by the round> [további teszt-útvonal ...]
 ```
+
+A gate a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`
+lépéseket külön processzként futtatja, csonkítatlan kimenettel. A mérce
+artefaktum, nem prompt-szöveg — részletek és a forrás: [`AGENTS.md` §12](AGENTS.md)
+(és a brief-sablon: `docs/execution/08-round-brief.md` §7; mért indoklás:
+`docs/LESSONS.md` L09). A box mért igazságai — OOM a `flutter analyze && flutter
+test` láncra (L05), ONE win32 major, `flutter_secure_storage` v10, Riverpod
+3.3.2 `.value` (NEM `.valueOrNull`) — a gate belső folyamat-szétválasztással
+véd, parancssori reprodukálásuk tilos.
 
 **The FULL suite + property gate + APK run in CI, not here** (user rule 2026-07-29,
 [ADR 0053](docs/adr/0053-ci-full-test-suite.md)): this box needs ~15 min for

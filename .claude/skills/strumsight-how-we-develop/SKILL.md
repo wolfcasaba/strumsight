@@ -41,6 +41,7 @@ Egyszerre EGY ágens ír. Részletek: `sdd-round-driver` skill (levezénylés),
 ## A box mért igazságai (megsérteni = órák elvesztése)
 
 - **`flutter analyze` és `flutter test` KÜLÖN hívás — láncolva (`&&`) OOM.**
+  A mérce egyetlen futtatható artefaktum, lásd lent.
 - **Nincs lokális Android SDK** — `flutter build apk`-t ne is próbálj; APK és
   teljes suite MINDIG CI-ből: `gh workflow run build-apk.yml --ref <branch>`.
   A teljes suite lokálisan ~15 perc, CI-ban ~4–5 → **a regresszió-evidencia a
@@ -54,13 +55,20 @@ Egyszerre EGY ágens ír. Részletek: `sdd-round-driver` skill (levezénylés),
 
 ## Verify gate (mielőtt bármit „kész"-nek mondasz)
 
+A mérce egyetlen futtatható artefaktum, nem prompt-szöveg — a csővezeték
+(`| tail`, `| head`, `&&`) elrejti a kilépési kódot, így a „minden gate zöld"
+jelentés bizonyíthatatlanná válik ([`docs/LESSONS.md` L09](docs/LESSONS.md);
+mért eset: E02-R07). A normatív forrás: `AGENTS.md` §12.
+
 ```bash
-~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
-~/flutter/bin/flutter analyze lib/ test/ tool/
-~/flutter/bin/flutter test test/<a kör területe>      # KÜLÖN hívás!
-~/flutter/bin/dart run tool/check_architecture.dart
-cd backend && .venv/bin/python -m pytest              # ha backendhez nyúltál
+tools/round-gate.sh test/<a kör területe> [további teszt-útvonal ...]
 ```
+
+A script a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`
+lépéseket egymás után, KÜLÖN processzként futtatja; az első piros lépésnél a
+helyes kilépési kóddal megáll. A teljes suite + randomizált property gate +
+APK a CI-ből jön (lásd fenn). Backend-érintésnél a `cd backend && .venv/bin/python
+-m pytest` a kiegészítő lépés — NEM a gate része.
 
 Új DSP-viselkedés ⇒ randomizált property `test/property/`-be (`PROPERTY_SEED`).
 DSP-paraméter változás ⇒ `docs/rag/chunks/` frissítés UGYANABBAN a commitban.

@@ -38,9 +38,23 @@ Stílus-horgony: mindig a legutóbbi kész brief a `docs/rounds/`-ban (jelenleg
   parancs-kimenet vagy futás-link tartozzon. Guard-jellegű tesztnél kötelező a
   **valódi-sértés próba** (ideiglenes rontás → piros → visszaállítás, §10-ben
   dokumentálva).
-- **Kötelező ellenőrzések külön parancsokként** (AGENTS.md §12 — `&&` láncolás
-  tilos, analyze és test soha nem egy hívásban). CI-dispatch / PR / merge mindig
+- **Kötelező ellenőrzések: a gate-hívás az artefaktumon**
+  (`tools/round-gate.sh <érintett terület> [további …]`, `AGENTS.md` §12 és
+  `docs/execution/08-round-brief.md` §7 — a mérce artefaktum, nem prompt-szöveg:
+  a csővezeték elrejti a kilépési kódot, `docs/LESSONS.md` L09). A kód-útvonal
+  és a teszt-útvonal külön hívásként megy a scripten belül, és `&&` láncolás
+  a promptban sem jelenik meg (OOM, L05). CI-dispatch / PR / merge mindig
   Claude-oldal — a Codex ne hívjon `gh`-t.
+- **Az acceptance-be építsd be a brief-sablon három kötelező szabályát**
+  ([`docs/execution/08-round-brief.md` §6](docs/execution/08-round-brief.md) —
+  az E02-R07 L09 / E02-R07 L10 / E02-R08 L13 mért hibák ellenszere):
+  **(1)** az invariánsnál mondd ki a **NEM** elfogadható gyengítést (ne csak az
+  elfogadhatót — különben az implementer a kódkommentben megindokolva fellazítja
+  a mércét); **(2)** ha a mérés technikai akadályba ütközik, add meg az
+  **eszközt** is (pl. `statusPath` visszaadása), különben a mérce lazítása
+  marad az egyetlen kiút; **(3)** paraméteres szerződéshez **mátrixot** írj
+  elő, ne egy esetet — a fixture default-ja csendesen kiválaszthat egy olyan
+  pontot, ahol a hibás és a helyes implementáció megkülönböztethetetlen.
 - **Kockázatok**: konkrétak (melyik refaktor mit tör el, melyik teszt-környezeti
   csapda ismert), ne általánosságok.
 - Üres **§10 Implementation handoff** (Codex tölti) és **§11 Review-link**.
