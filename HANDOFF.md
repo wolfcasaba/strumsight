@@ -3,7 +3,7 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31 (E02-R08)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31 (GOV-01)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -143,16 +143,44 @@
 
 ## 4. Current branch
 
-`main` @ [PR #30](https://github.com/wolfcasaba/strumsight/pull/30) (E02-R08,
-squash-merge `e80a878`), CI run
+`main` @ [PR #31](https://github.com/wolfcasaba/strumsight/pull/31) (GOV-01,
+squash-merge `c15ccf8`), CI run
+[30623157950](https://github.com/wolfcasaba/strumsight/actions/runs/30623157950)
+zöld (build-apk + Coverage). Kör-branch törölve. Ez governance-kör volt, Dart
+kódot nem érint, ezért a lokális mérce a grep-mátrix volt, nem a gate — a merge
+utáni `main`-en függetlenül újramérve: a `tools/round-gate.sh` artefaktumra
+**8 fájl** hivatkozik, a `tools/wait-for-round.sh`-ra a driver-skill.
+
+Az utolsó Dart-érintő kör (E02-R08, PR #30, `e80a878`) CI-runja
 [30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)
-zöld (gate-sor + teljes suite + randomizált property gate + release APK +
-coverage). Kör-branch törölve. Merge után a `main`-en függetlenül újrafuttatva
-(`tools/round-gate.sh`): format 528/0 changed · analyze No issues found ·
-`test/features/practice/` **440** zöld · property **6** zöld · architecture OK
-(12 allowlisted, változatlan).
+zöld volt; a `main`-en akkor mérve: format 528/0 changed · analyze No issues
+found · `test/features/practice/` **440** zöld · property **6** zöld ·
+architecture OK (12 allowlisted, változatlan).
 
 ## 5. Last completed round
+
+**GOV-01 — A gate- és várakoztató artefaktum átvezetése** (governance-kör,
+nem SDD-fejezet, PR #31): a `tools/round-gate.sh` és a `tools/wait-for-round.sh`
+**futtatható artefaktumok** átvezetése mindenhova, ahol eddig kézzel felsorolt
+parancslista vagy szabad szöveg állt — `AGENTS.md` §12 (a normatív forrás) és
+§15.3, `CLAUDE.md`, négy kör-skill (`sdd-round-driver`, `sdd-round-review`,
+`round-brief-prep`, `strumsight-how-we-develop`), a `verify-before-done` skill
+és a DoD. A `sdd-round-driver` §3-ba bekerült a várakoztató artefaktum mind a
+négy kilépési kódjával (`0=done`, `3=stopped`, `4=stalled|timeout|unknown`,
+`5=lejárt`) — ez az L12 hatórás vakfoltjának szerkezeti lezárása.
+Implementer: **MiniMax M3**.
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · **1 MINOR** ·
+2 NOTE), javító kör után **APPROVED**:
+[`docs/reviews/gov-01-review.md`](docs/reviews/gov-01-review.md).
+A MINOR **az orchestrátor felmérési hibája volt**, nem az implementeré: a
+felmérő greppet a hosszabb `flutter analyze lib/ test/` alakra futtattam, ezért
+három, a rövidebb alakot használó skill kimaradt a brief §4-listájából — köztük
+a `verify-before-done`, amire a `CLAUDE.md:116` **név szerint ráirányít**. Az
+implementer helyesen nem tágította a listát, hanem jelentette; a feloldás
+dokumentált brief-revízió (§0.2). Ebből lett a `docs/LESSONS.md` **L15**.
+
+### Korábbi kör
 
 **E02-R08 — Observation gateway és audio lifecycle adapter**
 ([ADR 0074](docs/adr/0074-practice-observation-gateway.md) implementációja,
@@ -237,16 +265,22 @@ Korábbi körök (E02-R03 részletes története is):
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #30
    CI-runjából tölthető
    ([30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)).
-2. **GOV-01 — a gate-artefaktum átvezetése** ÚJ sessionben. A brief KÉSZ és
-   kiadható: [`docs/rounds/gov-01-gate-artifact-rollout.md`](docs/rounds/gov-01-gate-artifact-rollout.md).
-   Mechanikus szövegátvezetés — **javasolt motor: MiniMax M3**, az acceptance két
-   `grep` + `git diff --stat`. Dart kódot nem érint. **Bővítendő:** az E02-R08
-   óta a `tools/wait-for-round.sh` is a készlet része (AGENTS.md §15.3).
-3. **E02-R09 — Session controller** (`docs/sdd/03-epic-02-practice-engine.md`,
-   „Kör 9"/„Kör 10" a fejezet szerint) ÚJ sessionben, kör-brieffel. Ez köti össze
-   az R07 állapotgépét, az R06 targetjét és az R08 gatewayjét egy Riverpod
-   controllerben — **ez lesz a `practiceCaptureActiveByStatus` tábla első valódi
-   hívója**. Előre kiosztható ADR: **0075**.
+2. **~~GOV-01~~ — KÉSZ** (PR #31, 2026-07-31).
+3. **E02-R09 — Event matcher és legacy timing parity** ÚJ sessionben.
+   **A brief és az ADR KÉSZ és kiadható:**
+   [`docs/rounds/e02-r09-event-matcher.md`](docs/rounds/e02-r09-event-matcher.md) +
+   [ADR 0075](docs/adr/0075-practice-event-matcher.md) (az ADR-t az orchestrátor
+   már megírta — az implementer `docs/adr/`-hez NEM nyúl).
+   **Implementer motor: Codex** (a user döntése 2026-07-31 — baseline-érzékeny
+   matcher). Branch: `codex/e02-r09-event-matcher`.
+
+   > **Kör-számozási javítás (2026-07-31):** ez a sor korábban „E02-R09 =
+   > Session controller"-t írt. **Téves volt.** Az SDD-fejezet szerint a Kör 9
+   > az **event matcher**, a Kör 10 a három scorer, és a
+   > `PracticeSessionController` a **Kör 11** — az eddigi számozás 1:1
+   > (E02-R08 = „Kör 8 — Observation gateway"). Következmény: a
+   > `practiceCaptureActiveByStatus` tábla első valódi hívója és az E02-R07
+   > nyitott clock-NOTE-ja **az E02-R11-ben** zárul, nem az R09-ben.
 4. **Az E02-R08 nyitva hagyott follow-upjai** (a review §4 + a brief §10.6):
    - a `ScoringProfile → PracticeObservationConfig` küszöb-leképezés (R09);
    - a chord-confidence felvitele a `LiveFrame`-be — az Analyze úton is közös,
@@ -258,19 +292,23 @@ Korábbi körök (E02-R03 részletes története is):
      chunk 014 addig a mai igazságot írja le.
 5. **Nyitva hagyott NOTE (E02-R07):** `MonotonicPracticeSessionClock.start()`
    pause alatt teljes resetet végez, a szerződés viszont idempotenciát ír elő.
-   Nem blokkol; az E02-R09 controller-körben zárandó, amikor valódi hívó lesz.
+   Nem blokkol; a **controller-körben (E02-R11)** zárandó, amikor valódi hívó
+   lesz — nem az R09-ben (lásd a 3. pont kör-számozási javítását).
 
 ## 7. Required verification (before any "done")
 
-Run as **SEPARATE** calls (chaining OOMs this box):
+A lokális mérce **egyetlen futtatható artefaktum** (GOV-01) — a parancssorban
+reprodukált lista a csővezeték miatt nem bizonyíték (`docs/LESSONS.md` L09):
 
 ```bash
-~/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
-~/flutter/bin/flutter analyze lib/ test/ tool/
-~/flutter/bin/flutter test test/<a kör területe>     # full suite: CI-ben (ADR 0053)
-~/flutter/bin/dart run tool/check_architecture.dart
-cd backend && .venv/bin/python -m pytest             # ha backendhez nyúltál
+tools/round-gate.sh test/<a kör területe> [további teszt-útvonal ...]
 ```
+
+A script a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`
+lépéseket **külön processzként** futtatja (ezért nem OOM-ol), és az első piros
+lépésnél a helyes kilépési kóddal megáll. Normatív forrás: `AGENTS.md` §12.
+Backend-érintésnél kiegészítő lépés (NEM a gate része):
+`cd backend && .venv/bin/python -m pytest`.
 
 - Full suite + property gate + APK: `gh workflow run build-apk.yml --ref <branch>`.
 - **Never chain `analyze && test`.** ONE win32 major across the tree

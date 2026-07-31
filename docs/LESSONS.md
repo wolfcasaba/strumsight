@@ -404,3 +404,51 @@ viselkedést ír elő (2.).
 - Kapcsolódó: [L10](#l10--a-fixture-defaultja-határozza-meg-mit-tud-egyáltalán-megfogni-a-teszt)
   (fixture-default vakfolt) — ott a teszt írója, itt a brief írója választott
   olyan pontot, ahol nem mérünk semmit.
+
+---
+
+## L15 — A felmérő `grep` alakja dönti el, mit fog egyáltalán megtalálni a brief
+
+**Forrás:** GOV-01 — a „hol él még a régi gate-parancslista" felmérésem
+**háromszor** volt hiányos, ugyanabból az okból.
+
+**Mit mértünk.**
+
+1. Az eredeti (2026-07-30-i) brief §2 hét helyet sorolt fel — kimaradt belőle a
+   `.claude/skills/strumsight-how-we-develop/SKILL.md`, pedig négysoros
+   gate-listát tartalmazott. A §0.0 revízió pótolta.
+2. A pótlás után is kimaradt három skill (`verify-before-done`, `review-loop`,
+   `flutter-dev`), mert a felmérő greppet a **hosszabb**
+   `flutter analyze lib/ test/` alakra futtattam, a három skill viszont a
+   rövidebb `flutter analyze lib/` alakot használja. Az implementer az A2
+   acceptance futtatásakor találta meg őket, helyesen NEM tágította a listát,
+   hanem jelentette. A §0.2 revízió pótolta.
+3. A `verify-before-done` skillre a `CLAUDE.md:116` **név szerint ráirányít** —
+   tehát a maradvány az AKTÍV láncban ült, nem egy holt sarokban.
+
+**Miért.** A kör-brief §2 („mért állapot") minősége **a felmérő parancs
+alakjától** függ, nem az igyekezettől. Egy túl specifikus minta csendben
+letakarja a felmérendő halmaz egy részét — és mivel a brief §4 (engedélyezett
+fájlok) a §2-ből származik, a hiány **beépül a szerződésbe**: az implementer
+onnantól nem is nyúlhat a kimaradt fájlhoz. Ez ugyanaz a hibaosztály, mint az
+[L10](#l10--a-fixture-defaultja-határozza-meg-mit-tud-egyáltalán-megfogni-a-teszt)
+fixture-default vakfoltja, csak a brief-írás szintjén.
+
+**Hogyan alkalmazd.**
+
+- **Felmérésre a legrövidebb közös törzset grepeld**, ne a teljes parancssort:
+  `flutter analyze` — nem `flutter analyze lib/ test/`. A zajt utána szűröd, de
+  legalább látod.
+- **Két irányból mérj:** a régi alakra ÉS az újra (`grep -rln <új artefaktum>`).
+  A kettő különbsége a még hátralévő munka; ha csak az egyiket futtatod, nem
+  tudod, mekkora a halmaz.
+- **A felmérés kimenetét tedd be a briefbe nyersen** (§2 „mért kiindulás") —
+  így a review és az implementer is ugyanazt látja, és a hiány felismerhető.
+- **Ha az acceptance és az engedélyezett-fájllista ütközik, az a TERVEZŐ hibája.**
+  A feloldás dokumentált brief-revízió (§0.x), nem lista-tágítás és nem az
+  acceptance halkítása. Kapcsolódó:
+  [L11](#l11--a-javító-kör-eredményét-vissza-kell-húzni-a-fő-repóba-mielőtt-bármit-ráépítesz).
+- **A szerződés szerint az ütközés `stopped`.** Az implementer itt `done`-t
+  adott follow-uppal — nem okozott kárt, mert a kör-jelzés summary mezőjében és
+  a §8-ban is szó szerint jelentette. A jelzés INFORMÁCIÓTARTALMA a lényeg, nem
+  a betűje; de a briefben érdemes kiírni, hogy a részleges teljesülés is `stopped`.
