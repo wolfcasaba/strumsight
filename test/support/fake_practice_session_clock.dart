@@ -44,7 +44,7 @@ final class FakePracticeSessionClock implements PracticeSessionClock {
 
   @override
   void start() {
-    if (_hasStarted && !_isPaused) return;
+    if (_hasStarted) return;
     _wall = Duration.zero;
     _pausedTotal = Duration.zero;
     _lastTransitionWall = Duration.zero;

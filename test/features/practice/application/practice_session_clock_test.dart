@@ -117,18 +117,40 @@ void _runClockContract(_ClockFactory make) {
     },
   );
 
-  test('start() while paused restarts the session fresh', () {
+  // R07 REVIEW NOTE-2 / E02-R11 §5.15: `start()` is now a no-op when the
+  // session has already started — including from `paused`. A fresh session
+  // starts with `resetAttempt()` + the reducer's `RestartAttempt`. The clock
+  // contract test pins the new behaviour on BOTH implementations.
+  test('start() while paused is a no-op (no fields reset)', () {
     final clock = make();
     clock.start();
+    final veryEarly = clock.now();
+    // The pre-pause snapshots are noisy on the monotonic clock (real
+    // elapsed time between `start()` and the snapshot reads), so we
+    // tolerate drift within the tolerance window.
     clock.pause();
-    clock.start();
-    final snapshot = clock.now();
-    expect(snapshot.wall, lessThanOrEqualTo(_monotonicTolerance));
-    expect(snapshot.paused, Duration.zero);
-    // active == wall when paused is 0.
-    expect(snapshot.active, snapshot.wall);
-    // attempt tracks active from a fresh zero baseline.
-    expect(snapshot.attempt, snapshot.active);
+    final pausedBefore = clock.now();
+    clock.start(); // <-- this is the call under test
+    final pausedAfter = clock.now();
+    // The clock is still paused after the redundant start().
+    expect(pausedAfter.paused >= pausedBefore.paused, isTrue);
+    expect(
+      (pausedAfter.wall - pausedAfter.paused).abs() <= _monotonicTolerance,
+      isTrue,
+      reason:
+          'active must remain within the tolerance window of the pre-pause '
+          'active; start() while paused must not reset the clock.',
+    );
+    // Sanity: the very-early snapshot is ignored for the comparison — the
+    // test exercises the *paused* state, not the very first start. The
+    // delta from `pausedBefore -> pausedAfter` must be tiny (only the
+    // time the test took to invoke .start()).
+    expect(
+      (pausedAfter.wall - pausedBefore.wall).abs() <= _monotonicTolerance,
+      isTrue,
+    );
+    // Stash the early snapshot to silence the unused warning.
+    expect(veryEarly, isA<PracticeClockSnapshot>());
   });
 }
 
@@ -191,18 +213,22 @@ void main() {
       expect(snapshot.attempt, const Duration(seconds: 3));
     });
 
-    test('start() after pause resets the clock fully', () {
+    test('start() after pause is a no-op (clock stays paused, fields intact)',
+        () {
       final clock = FakePracticeSessionClock();
       clock.start();
       clock.advance(const Duration(seconds: 5));
       clock.pause();
       clock.advance(const Duration(seconds: 3));
-      clock.start();
+      final before = clock.now();
+      clock.start(); // <-- no-op under the new contract
       final snapshot = clock.now();
-      expect(snapshot.wall, Duration.zero);
-      expect(snapshot.active, Duration.zero);
-      expect(snapshot.paused, Duration.zero);
-      expect(snapshot.attempt, Duration.zero);
+      // The clock is still paused, so `paused` keeps growing as `wall`
+      // grows, and `active` stays put.
+      expect(snapshot.wall, before.wall);
+      expect(snapshot.paused, before.paused);
+      expect(snapshot.active, before.active);
+      expect(snapshot.attempt, before.attempt);
     });
 
     test('pause() before start() is a no-op (no fields change)', () {
