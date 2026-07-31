@@ -1,6 +1,6 @@
 import '../domain/model/practice_session_state.dart';
 
-/// The status table used by the E02-R09 controller to decide whether capture
+/// The status table used by the E02-R11 controller to decide whether capture
 /// may be active. The controller reads this table rather than a widget field.
 const Map<PracticeSessionStatus, bool> practiceCaptureActiveByStatus = {
   PracticeSessionStatus.idle: false,
@@ -18,7 +18,7 @@ const Map<PracticeSessionStatus, bool> practiceCaptureActiveByStatus = {
 
 /// Returns the capture decision from [practiceCaptureActiveByStatus].
 ///
-/// The E02-R09 controller is the intended caller. Capture activation is owned
+/// The E02-R11 controller is the intended caller. Capture activation is owned
 /// by this status table, never by a presentation-layer widget field.
 bool practiceCaptureActive(PracticeSessionStatus status) =>
     practiceCaptureActiveByStatus[status] ??

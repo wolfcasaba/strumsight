@@ -66,9 +66,11 @@ abstract interface class PracticeSessionClock {
   /// Returns a fresh monotonic snapshot.
   PracticeClockSnapshot now();
 
-  /// Begins a new session, zeroing every accumulator. A no-op when already
-  /// running (idempotent). If invoked while paused, restarts the session
-  /// fresh.
+  /// Begins a new session, zeroing every accumulator. A no-op when the
+  /// session has already started — whether running or paused
+  /// (idempotent). A fresh session can be initiated only by first calling
+  /// [resetAttempt] / the reducer's `RestartAttempt` and re-driving the
+  /// `start` path.
   void start();
 
   /// Pauses the running session; idempotent when already paused (or before
@@ -105,7 +107,7 @@ final class MonotonicPracticeSessionClock implements PracticeSessionClock {
 
   @override
   void start() {
-    if (_hasStarted && !_isPaused) return;
+    if (_hasStarted) return;
     _stopwatch
       ..reset()
       ..start();
