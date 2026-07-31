@@ -8,6 +8,28 @@ ADR: [0074](../adr/0074-practice-observation-gateway.md) — **már meg van írv
 
 ---
 
+## 0.0 Brief-revízió — R1, 2026-07-31 (a §6.2 lag-mátrix hibás cellája)
+
+Az implementer `stopped` jelzéssel megállt, mert a **§5.5 kötött döntés** és a
+**§6.2 mátrix** ellentmondott. Igaza volt, és a hiba a briefben volt:
+
+- a §6.2 eredeti mátrixa a `(engineTimeSec, latestStrumTime) = (1.0, 0.5001)`
+  cellát szánta a „határ fölötti lag" esetének, de `1.0 − 0.5001 = 0.4999 s`,
+  ami a határ **alatt** van → a §5.5 szerint a lagot LE KELL vonni;
+- azaz a mátrixban **nem volt egyetlen olyan cella sem, ami a `maxFrameDeliveryLag`
+  fölött lett volna** — pontosan az az eset hiányzott, amit a §6.2 mérni akart.
+
+**Feloldás: (a) — a §6.2 mátrixa javul, a §5.5 NEM enyhül.** A szigorú `<` a
+legacy `lag < 0.5` predikátuma, amit az ADR 0074 §3 véd; a parity nyer. Az új
+mátrix tartalmaz egy szigorúan a határ alatti (`0.4999 s`), egy pontosan a
+határon lévő (`0.5 s`) és egy szigorúan a határ fölötti (`0.5001 s`) cellát.
+
+*Tanulság a brief-írásra:* a határpont-mátrixot a **származtatott** mennyiségre
+(itt: `lag`) kell megadni, nem a bemenetekre — a fejben elvégzett kivonás egy
+cellát némán a rossz oldalra tett.
+
+---
+
 ## 0. Kör-jelzés — ezzel kezdd, mielőtt bármit olvasnál
 
 A munkád első és utolsó lépése a jelzés (`AGENTS.md` §15.2):
@@ -421,16 +443,27 @@ implementáció megkülönböztethetetlen — E02-R07 mért tanulsága, `docs/LE
 
 ### 6.2 Lag-guard mátrix (§5.5)
 
-- [ ] `timelineNow ∈ {0 s, 10 s}` × `(engineTimeSec, latestStrumTime) ∈`
-      `{(-1,-1), (-1, 0.5), (1.0, -1), (1.0, 1.0), (1.0, 0.90), (1.0, 1.10),
-      (1.0, 0.50), (1.0, 0.5001)}` — minden cellára a várt `at` **literálisan**
-      kiszámolva a tesztben, nem az implementáció képletével.
-- [ ] A `(1.0, 0.50)` cella (lag pontosan 500 ms) elvárt eredménye: **a lag NEM
-      kerül levonásra** (szigorú `<`, legacy-parity), és a logger pontosan egy
-      warning-ot kap.
-- [ ] A `(1.0, 1.10)` cella (negatív lag) elvárt eredménye: lag = 0, **nincs** log.
-- [ ] **NEM elfogadható gyengítés:** csak a „normál" (0 < lag < 0.5) esetet mérni;
-      a határpontot (`== maxFrameDeliveryLag`) kihagyni.
+A mátrixot a **származtatott `lag`-ra** olvasd, ne a bemeneti párra (§0.0 R1):
+
+| # | `engineTimeSec` | `latestStrumTime` | `lag` | Elvárás |
+|---|---|---|---|---|
+| 1 | `-1` | `-1` | — (hiányzó óra) | lag = 0, nincs log |
+| 2 | `-1` | `0.5` | — (hiányzó óra) | lag = 0, nincs log |
+| 3 | `1.0` | `-1` | — (hiányzó óra) | lag = 0, nincs log |
+| 4 | `1.0` | `1.0` | `0` | lag = 0 (nem `> 0`), nincs log |
+| 5 | `1.0` | `1.10` | `−0.10` (negatív) | lag = 0, **nincs** log |
+| 6 | `1.0` | `0.90` | `0.10` | **levonva** (100 000 µs), nincs log |
+| 7 | `1.0` | `0.5001` | `0.4999` (szigorúan a határ ALATT) | **levonva** (499 900 µs), nincs log |
+| 8 | `1.0` | `0.50` | `0.5` (pontosan a határon) | **NEM vonódik le** (szigorú `<`, legacy-parity), **1 warning** |
+| 9 | `1.0` | `0.4999` | `0.5001` (szigorúan a határ FÖLÖTT) | **NEM vonódik le**, **1 warning** |
+
+- [ ] `timelineNow ∈ {0 s, 10 s}` × a fenti kilenc sor — minden cellára a várt
+      `at` **literálisan** kiszámolva a tesztben, nem az implementáció képletével.
+- [ ] A `timelineNow = 0 s` oszlopban az `at` a `max(Duration.zero, …)` miatt
+      mindenhol `Duration.zero` — ez az alsó clamp mércéje.
+- [ ] **NEM elfogadható gyengítés:** csak a „normál" (6. sor) esetet mérni; a
+      8. és 9. sor bármelyikét kihagyni; a `lag == 0.5` sort a `> 0.5` sorral
+      összevonni („úgyis ugyanaz az ág") — a szigorú `<` pont ott mérhető.
 
 ### 6.3 Confidence-határ
 
