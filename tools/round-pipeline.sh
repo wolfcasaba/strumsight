@@ -144,6 +144,9 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 
 # 30 percenkénti életjel, amíg a session fut — a telefonon látszik, hogy dolgozik.
 (
+  # fd 9 (a lánc-zár) lezárása az alhéjban — különben a pinger örökli, és a
+  # driver halála után árvaként fogva tartaná a zárat (mérve 2026-07-31).
+  exec 9>&-
   elapsed=0
   while sleep 1800; do
     elapsed=$(( elapsed + 30 ))
