@@ -12,6 +12,22 @@ import 'package:strumsight/features/learn/screens/learn_screen.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
+import 'package:strumsight/features/practice/application/practice_catalog_controller.dart';
+import 'package:strumsight/features/practice/application/practice_session_command.dart';
+import 'package:strumsight/features/practice/application/practice_setup_controller.dart';
+import 'package:strumsight/features/practice/domain/model/beat_position.dart';
+import 'package:strumsight/features/practice/domain/model/meter.dart';
+import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
+import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
+import 'package:strumsight/features/practice/domain/model/practice_event.dart';
+import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
+import 'package:strumsight/features/practice/domain/model/practice_source.dart';
+import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
+import 'package:strumsight/features/practice/domain/model/tempo.dart';
+import 'package:strumsight/features/practice/domain/repository/practice_catalog_repository.dart';
+import 'package:strumsight/features/practice/presentation/practice_route_args.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
 import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
@@ -222,6 +238,94 @@ void main() {
           );
         });
       });
+
+      testWidgets('Practice hub (E02-R12)', (tester) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                ...preferenceOverrides(),
+                practiceCatalogRepositoryProvider.overrideWithValue(
+                  const _GuardRepository(),
+                ),
+              ],
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: PracticeHubScreen(now: DateTime(2026, 7, 11)),
+              ),
+            ),
+          );
+          await tester.pump();
+        });
+      });
+
+      testWidgets('Practice setup (E02-R12)', (tester) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                ...preferenceOverrides(),
+                practiceCatalogRepositoryProvider.overrideWithValue(
+                  const _GuardRepository(),
+                ),
+                practicePrepareSinkProvider.overrideWithValue(_noopSink),
+              ],
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: const PracticeSetupScreen(
+                  argsOverride: PracticeSetupArgs(
+                    request: PracticeSetupRequest.hasId,
+                    definitionId: _GuardRepository.id,
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+        });
+      });
     });
   }
 }
+
+/// One-definition catalog for the layout guard. The single definition
+/// exercises every layout-sensitive surface (BPM slider, count-in stepper,
+/// loop stepper, meter readout, scoring profile, chord hint).
+class _GuardRepository implements PracticeCatalogRepository {
+  const _GuardRepository();
+
+  static const String id = 'guard.practice.v1';
+
+  static final PracticeDefinition _def = PracticeDefinition(
+    id: id,
+    schemaVersion: 1,
+    titleKey: 'practiceCatalogGuardTitle',
+    descriptionKey: 'practiceCatalogGuardDescription',
+    mode: PracticeMode.chordChanges,
+    source: PracticeSource.builtin,
+    meter: const Meter(beatsPerBar: 4),
+    defaultTempo: const Tempo(100),
+    totalBeats: BeatPosition.quarters(16),
+    events: const <PracticeEvent>[],
+    scoringProfile: ScoringProfile.chordChangeDefault,
+    skillTags: const ['guard'],
+    displayTitle: 'Guard fixture',
+  );
+
+  @override
+  List<PracticeDefinition> all() =>
+      List<PracticeDefinition>.unmodifiable(<PracticeDefinition>[_def]);
+  @override
+  PracticeDefinition? byId(String id) => id == _def.id ? _def : null;
+  @override
+  List<PracticeDefinition> byMode(PracticeMode mode) => mode == _def.mode
+      ? List<PracticeDefinition>.unmodifiable(<PracticeDefinition>[_def])
+      : const <PracticeDefinition>[];
+  @override
+  List<PracticeDefinition> byDifficulty(PracticeDifficulty difficulty) =>
+      const <PracticeDefinition>[];
+}
+
+void _noopSink(PreparePractice _) {}
