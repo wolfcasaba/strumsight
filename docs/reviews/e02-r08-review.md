@@ -4,7 +4,8 @@
 - **Branch:** `mm/e02-r08-observation-gateway` @ `ff905fd`
 - **Implementer:** MiniMax M3 · **Reviewer:** Claude (Opus 5)
 - **Dátum:** 2026-07-31
-- **Verdikt (R0, `ff905fd`):** **CHANGES REQUESTED** — 0 BLOCKER · **2 MAJOR** · 1 MINOR · 3 NOTE
+- **Verdikt (R0, `ff905fd`):** CHANGES REQUESTED — 0 BLOCKER · **2 MAJOR** · 1 MINOR · 3 NOTE
+- **Verdikt (R1, `2a8bf89`): ✅ APPROVED** — mind a 6 lelet zárva, függetlenül mérve (§7)
 
 ## 1. Gate-újrafuttatás (reviewer, izolált klón `/tmp/review-e02r08`)
 
@@ -199,3 +200,82 @@ mai kódot pirosra fogta volna** (a fenti két próba mércéje), és hogy a §6
 property-őr fajtánként mérje a monotonitást.
 
 ## 7. Javító kör (R1) — a Claude tölti ki a re-review után
+
+Re-review az izolált `/tmp/review-e02r08r1` klónban, a javító commit
+(`2a8bf89`) felett.
+
+### 7.1 Gate-újrafuttatás (reviewer)
+
+| Gate | Kimenet |
+|---|---|
+| `dart format --output=none --set-exit-if-changed lib test tool` | `Formatted 528 files (0 changed)` |
+| `flutter analyze lib/ test/ tool/` | `No issues found!` |
+| `flutter test test/features/practice/` | `00:20 +440: All tests passed!` |
+| `flutter test test/property/practice_observation_property_test.dart` | `00:01 +6: All tests passed!` |
+| `dart run tool/check_architecture.dart` | `Architecture dependencies OK (12 allowlisted deviation(s)).` |
+
+### 7.2 A két MAJOR zárása — az R0 próbái ÚJRAFUTTATVA, változatlanul
+
+Ugyanaz a `zz_reviewer_probe_test.dart`, amivel az R0-t megfogtam, a javított
+kód felett:
+
+```
+PRÓBA A: strum.at = 0:00:00.916000 · legacy referencia = 0:00:00.916000 · eltérés = 0:00:00.000000
+PRÓBA B: chord.at = 0:00:02.000000 · timelineNow = 0:00:02.000000 · lag-warningok = []
+All tests passed!
+```
+
+**MAJOR-1 zárva:** a chord change-point a korrigálatlan `timelineNow()`-t kapja;
+a lag kizárólag az `emitStrum == true` ágon számítódik
+(`live_practice_observation_gateway.dart:224-229`).
+**MAJOR-2 zárva:** két külön padló (`_lastEmittedStrumAt`,
+`_lastEmittedChordAt`, `:296-311`), a de-jitter eltérése a legacy képlettől
+**0 µs**.
+**MINOR-1 zárva** (a lag strum nélküli frame-en nem is számítódik) ·
+**NOTE-1 zárva** (`_lastSeenStrumSeq = 0`, a legacy alap) · **NOTE-2 zárva**
+(az őr maradt, a handoff szövege javítva) · **NOTE-3 zárva** (a §6.8 fixture
+most engine-órát is hoz).
+
+### 7.3 Valódi-sértés próba — REVIEWER-oldali mérés, és egy pontosítás
+
+A hibás **közös padló** visszaállítása után magam futtattam mindkét őrt:
+
+| Őr | Rontott kóddal |
+|---|---|
+| `test/features/practice/data/live_practice_observation_gateway_test.dart` §6.2b PRÓBA-A | **PIROS** — `Expected: 0:00:00.916000` / `Actual: 0:00:01.000000` |
+| `test/property/practice_observation_property_test.dart` (6 property) | **ZÖLD (6/6)** |
+
+**A MAJOR-2-t a determinisztikus §6.2b cella fogja meg, NEM a property-őr** —
+és ez így is van rendjén: egy *fajtánkénti* monotonitás-invariánst a hibás közös
+padló definíció szerint teljesít (a közös padló globálisan monoton, tehát
+fajtánként is az). Ilyen property elvileg nem képes kimutatni a de-jitter
+kioltását.
+
+Két következmény:
+
+1. **A javító prompt harmadik pontja az én hibám volt:** azt kértem, hogy a
+   *property gate* váltson pirosra a közös padlótól. Ez matematikailag
+   lehetetlen. A helyes mérce a §6.2b determinisztikus cellája — az megvan és
+   piros.
+2. **NOTE-4 (handoff-pontosság):** a §10 „Valódi-sértés próba" szakasza ezt
+   feltételes módban, félreérthetően írja le („pirosra váltott volna … a
+   globális mérce viszont zöld maradt volna"). A tényleges mérés: property
+   **zöld**, unit **piros**. Nem blokkol — a valódi őr létezik, magam mértem —
+   de a handoff állítása pontosításra szorul. (`docs/LESSONS.md` L11: állítás
+   teszt nélkül = bemondás; itt a *mérés* jó volt, a *megfogalmazás* nem.)
+
+## 8. Merge-döntés (R1) — ✅ APPROVED
+
+- 2 MAJOR · 1 MINOR · 3 NOTE **mind zárva**, leletenként függetlenül mérve.
+- NOTE-4 nem blokkol (handoff-szövegezés, nem viselkedés).
+- Gate függetlenül zöld: 440 practice + 6 property teszt.
+- Scope változatlanul tiszta; a legacy Learn út, a DSP és az
+  `architectureAllowlist` érintetlen; nincs hívó, nincs provider → a production
+  viselkedés bitre azonos.
+
+**Marad az ADR 0052 zöld kapu:** a CI-run (teljes suite + randomizált property
+gate + APK) a kör-branchre — azt az orchestrátor indítja, és a linkje a PR
+kötelező build-evidenciája.
+
+A reviewer-próba (`zz_reviewer_probe_test.dart`) eldobható volt, a klónokban
+maradt, a kör-branchre **nem** került fel.
