@@ -30,7 +30,13 @@ TimingGrade? timingGradeFromCode(String code) {
 enum DirectionOutcome { correct, wrong, notApplicable }
 
 /// Comparison result for a chord target.
-enum ChordOutcome { correct, wrong, insufficientData, notApplicable }
+enum ChordOutcome {
+  correct,
+  wrong,
+  insufficientData,
+  notApplicable,
+  noDetection,
+}
 
 /// Stable coaching codes that may be attached to a practice verdict.
 abstract final class PracticeCoachingCode {

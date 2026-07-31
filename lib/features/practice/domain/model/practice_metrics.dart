@@ -206,3 +206,20 @@ final class PracticeMetrics {
     timingBias,
   );
 }
+
+/// Stable reason codes for unavailable practice scoring dimensions.
+abstract final class PracticeMetricReasonCode {
+  static const String noSignal = 'practice.metric.no_signal';
+  static const String noApplicableTargets =
+      'practice.metric.no_applicable_targets';
+  static const String chordUnstable = 'practice.metric.chord_unstable';
+  static const String insufficientSamples =
+      'practice.metric.insufficient_samples';
+
+  static const Set<String> values = {
+    noSignal,
+    noApplicableTargets,
+    chordUnstable,
+    insufficientSamples,
+  };
+}
