@@ -305,6 +305,125 @@ void main() {
     });
   });
 
+  group('PracticeEventMatchResult value semantics', () {
+    test('separate matchers produce equal results and hash codes', () {
+      final target = _compiledTarget(const [
+        Duration(seconds: 1),
+        Duration(seconds: 2),
+      ]);
+      final first = _matcherForTarget(target);
+      final second = _matcherForTarget(target);
+      const observations = <StrumObservation>[
+        StrumObservation(
+          at: Duration(seconds: 1),
+          sequence: 10,
+          direction: StrumDirection.down,
+          confidence: 1,
+        ),
+        StrumObservation(
+          at: Duration(seconds: 2),
+          sequence: 11,
+          direction: StrumDirection.down,
+          confidence: 1,
+        ),
+      ];
+
+      for (final observation in observations) {
+        first.registerStrum(observation);
+        second.registerStrum(observation);
+      }
+
+      for (var index = 0; index < target.events.length; index++) {
+        _expectMatchResultDifferences(
+          first.results[index],
+          second.results[index],
+        );
+        expect(first.results[index].hashCode, second.results[index].hashCode);
+      }
+    });
+
+    test('targetIndex alone contributes to equality', () {
+      final event = _compiledTarget([_targetTime]).events.single;
+      final matcher = _matcherForTarget(
+        _compiledTargetFromEvents([event, event]),
+      );
+
+      _expectMatchResultDifferences(
+        matcher.results[0],
+        matcher.results[1],
+        targetIndexDiffers: true,
+      );
+    });
+
+    test('target alone contributes to equality', () {
+      final required = _matcher([_targetTime]).results.single;
+      final optional = _matcher(
+        [_targetTime],
+        optionalIndices: {0},
+      ).results.single;
+
+      _expectMatchResultDifferences(required, optional, targetDiffers: true);
+    });
+
+    test('resolution alone contributes to equality', () {
+      final matcher = _matcher([_targetTime]);
+      final open = matcher.results.single;
+
+      matcher.finalize();
+      final missed = matcher.results.single;
+
+      _expectMatchResultDifferences(open, missed, resolutionDiffers: true);
+    });
+
+    test('matched observation sequence alone contributes to equality', () {
+      final target = _compiledTarget([_targetTime]);
+      final first = _matcherForTarget(
+        target,
+      ).registerStrum(_observation(at: _targetTime, sequence: 20))!;
+      final second = _matcherForTarget(
+        target,
+      ).registerStrum(_observation(at: _targetTime, sequence: 21))!;
+
+      _expectMatchResultDifferences(
+        first,
+        second,
+        matchedObservationSequenceDiffers: true,
+      );
+    });
+
+    test('observedAt and timingOffset together contribute to equality', () {
+      final target = _compiledTarget([_targetTime]);
+      final early = _matcherForTarget(target).registerStrum(
+        _observation(
+          at: _targetTime - const Duration(microseconds: 1),
+          sequence: 30,
+        ),
+      )!;
+      final late = _matcherForTarget(target).registerStrum(
+        _observation(
+          at: _targetTime + const Duration(microseconds: 1),
+          sequence: 30,
+        ),
+      )!;
+
+      _expectMatchResultDifferences(
+        early,
+        late,
+        observedAtDiffers: true,
+        timingOffsetDiffers: true,
+      );
+    });
+
+    test('results rejects mutation', () {
+      final matcher = _matcher([_targetTime]);
+
+      expect(
+        () => matcher.results.add(matcher.results.single),
+        throwsUnsupportedError,
+      );
+    });
+  });
+
   group('PracticeEventMatcher measured scaling', () {
     test('20k targets and 1k strums stay below the cursor threshold', () {
       const targetCount = 20000;
@@ -373,8 +492,16 @@ PracticeEventMatcher _matcher(
   List<Duration> times, {
   Duration inputLatency = Duration.zero,
   Set<int> optionalIndices = const {},
+}) => _matcherForTarget(
+  _compiledTarget(times, optionalIndices: optionalIndices),
+  inputLatency: inputLatency,
+);
+
+PracticeEventMatcher _matcherForTarget(
+  CompiledPracticeTarget target, {
+  Duration inputLatency = Duration.zero,
 }) => PracticeEventMatcher(
-  target: _compiledTarget(times, optionalIndices: optionalIndices),
+  target: target,
   scoringProfile: ScoringProfile.legacyLearnParity,
   inputLatency: inputLatency,
 );
@@ -382,10 +509,27 @@ PracticeEventMatcher _matcher(
 CompiledPracticeTarget _compiledTarget(
   List<Duration> times, {
   Set<int> optionalIndices = const {},
-}) {
-  final totalDuration = times.isEmpty
+}) => _compiledTargetFromEvents([
+  for (var index = 0; index < times.length; index++)
+    CompiledTargetEvent(
+      sourceEventId: 'event-$index',
+      loopIndex: 0,
+      position: BeatPosition.fromTicks(index),
+      time: times[index],
+      barIndex: 0,
+      chord: null,
+      direction: StrumDirection.down,
+      accent: false,
+      optional: optionalIndices.contains(index),
+    ),
+]);
+
+CompiledPracticeTarget _compiledTargetFromEvents(
+  List<CompiledTargetEvent> events,
+) {
+  final totalDuration = events.isEmpty
       ? Duration.zero
-      : times.last + const Duration(seconds: 1);
+      : events.last.time + const Duration(seconds: 1);
   return CompiledPracticeTarget(
     definitionId: 'matcher-test',
     definitionSnapshotVersion: 1,
@@ -393,20 +537,7 @@ CompiledPracticeTarget _compiledTarget(
     meter: const Meter(beatsPerBar: 4),
     countInBars: 0,
     countInDuration: Duration.zero,
-    events: [
-      for (var index = 0; index < times.length; index++)
-        CompiledTargetEvent(
-          sourceEventId: 'event-$index',
-          loopIndex: 0,
-          position: BeatPosition.fromTicks(index),
-          time: times[index],
-          barIndex: 0,
-          chord: null,
-          direction: StrumDirection.down,
-          accent: false,
-          optional: optionalIndices.contains(index),
-        ),
-    ],
+    events: events,
     musicalDuration: totalDuration,
     ringOutDuration: Duration.zero,
     totalDuration: totalDuration,
@@ -414,8 +545,59 @@ CompiledPracticeTarget _compiledTarget(
     loopCount: 1,
     loopRange: null,
     expectedChordSegments: const [],
-    scoringApplicable: times.isNotEmpty,
+    scoringApplicable: events.isNotEmpty,
   );
+}
+
+void _expectMatchResultDifferences(
+  PracticeEventMatchResult first,
+  PracticeEventMatchResult second, {
+  bool targetIndexDiffers = false,
+  bool targetDiffers = false,
+  bool resolutionDiffers = false,
+  bool matchedObservationSequenceDiffers = false,
+  bool observedAtDiffers = false,
+  bool timingOffsetDiffers = false,
+}) {
+  expect(
+    first.targetIndex == second.targetIndex,
+    !targetIndexDiffers,
+    reason: 'targetIndex isolation',
+  );
+  expect(
+    first.target == second.target,
+    !targetDiffers,
+    reason: 'target isolation',
+  );
+  expect(
+    first.resolution == second.resolution,
+    !resolutionDiffers,
+    reason: 'resolution isolation',
+  );
+  expect(
+    first.matchedObservationSequence == second.matchedObservationSequence,
+    !matchedObservationSequenceDiffers,
+    reason: 'matchedObservationSequence isolation',
+  );
+  expect(
+    first.observedAt == second.observedAt,
+    !observedAtDiffers,
+    reason: 'observedAt isolation',
+  );
+  expect(
+    first.timingOffset == second.timingOffset,
+    !timingOffsetDiffers,
+    reason: 'timingOffset isolation',
+  );
+
+  final shouldDiffer =
+      targetIndexDiffers ||
+      targetDiffers ||
+      resolutionDiffers ||
+      matchedObservationSequenceDiffers ||
+      observedAtDiffers ||
+      timingOffsetDiffers;
+  expect(first == second, !shouldDiffer, reason: 'overall equality');
 }
 
 StrumObservation _observation({
