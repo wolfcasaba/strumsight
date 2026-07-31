@@ -122,8 +122,11 @@ ne lista-tágítással.
 2026-07-31): ha a review BLOCKER/MAJOR leletet talál — akár az előző javító
 kör után is —, indítsd a következő javító kört ugyanazzal a motorral,
 a leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
-köröket a kör-branch commitjaiból; **a harmadik sikertelen javító kör után**
-(azaz ha a leletek a 3. javítás után is nyitva vannak) jön csak a H4 halt.
+köröket a kör-branch commitjaiból. **Motor-eszkaláció (user-döntés
+2026-07-31): ha a MiniMax HÁROM javító körrel sem zárja a leleteket, a
+KÖVETKEZŐ javító kört a Codex viszi** (`tools/codex-round.sh` +
+`tools/codex-watch.sh`, külön munkapéldány, ugyanaz a leletlista). H4 halt
+csak akkor, ha a Codex javító köre UTÁN is nyitva marad BLOCKER/MAJOR.
 Minden javító-promptban legyen benne: „a munkádat commitold a branchre".
 
 Kétség esetén **halt**. A lánc megállítása olcsó; egy rossz normatív döntés,

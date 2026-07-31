@@ -200,6 +200,7 @@ if [ ! -f "$status_file" ]; then
     echo "session_log=$session_log"
     echo "halted_at=$(date -Is)"
   } > "$halt_file"
+  git checkout -q main 2>/dev/null || true
   log "HALT: nincs kör-jelzés — $halt_file"
   notify "⛔ HALT: $round" "az orchestrátor-session jelzés nélkül ért véget — kivizsgálás kell" high
   exit 5
@@ -224,6 +225,7 @@ case "$outcome" in
     exit 0
     ;;
   halted)
+    git checkout -q main 2>/dev/null || log "figyelem: a munkafa nem tért vissza mainre"
     halt_code=$(grep -m1 '^halt=' "$status_file" | cut -d= -f2-)
     {
       cat "$status_file"
