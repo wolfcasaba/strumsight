@@ -2,11 +2,12 @@
 
 - **Kör:** E02-R09 — [`docs/rounds/e02-r09-event-matcher.md`](../rounds/e02-r09-event-matcher.md)
 - **ADR:** [0075](../adr/0075-practice-event-matcher.md) (+ a §2b kiegészítés ebben a körben)
-- **Branch / commit:** `codex/e02-r09-event-matcher` @ **`4359db1`**
+- **Branch / commit:** `codex/e02-r09-event-matcher` @ **`4359db1`**, javító kör @ **`9179483`**
 - **Implementer:** **Codex**
 - **Reviewer:** Claude (Opus 5), read-only — production kódot nem írtam
 - **Dátum:** 2026-07-31
-- **Verdikt:** **APPROVED** — 0 BLOCKER · 0 MAJOR · **1 MINOR** · 3 NOTE
+- **Verdikt:** első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · **1 MINOR** ·
+  3 NOTE) → javító kör után **APPROVED** (lásd §9)
 
 ---
 
@@ -173,3 +174,59 @@ kérek rá (a NOTE-1-gyel együtt), utána CI-dispatch és zöld kapus merge.
 
 **Nyitott az R10/R11 felé:** NOTE-2 (irány a hívónál), NOTE-3 (rendezetlen
 target), és a brief §10.6 korábbi follow-upjai.
+
+---
+
+## 9. Javító kör — újraellenőrzés (`9179483`)
+
+**Verdikt: APPROVED.** Diff: **csak** `practice_event_matcher_test.dart` (+220)
+és a §8 handoff — **production kód nem változott**, ahogy elő volt írva.
+
+### 9.1 Egy negyedik orchestrátor-hiba, megint a mércében
+
+A javító prompt eredeti MINOR-1 előírása (**„mind a hat mezőre külön cella"**)
+**önellentmondó volt** a vele egy lapon álló „production kód NEM változik"
+kikötéssel: a `PracticeEventMatchResult` mindkét konstruktora privát (`._`,
+`._open`), tehát tesztből csak a matcher publikus API-ján át kaphatók példányok,
+a `timingOffset` pedig származtatott (`observedAt − target.time`), ezért soha
+nem variálható önállóan. Az implementer **harmadszor is `stopped`-dal jelzett**,
+és a következtetése pontosabb volt a kérésnél:
+
+**A `timingOffset` jelenléte az `==`-ben bizonyíthatóan redundáns** — `observedAt`
+és (a `target`-en keresztül) `target.time` már összevetésre kerül, tehát nincs
+olyan két példány, amit **csak** ő különböztetne meg. Nem hiányzó teszt, hanem
+levezetett tény; a §8 ezt rögzíti is.
+
+A pontosított előírás (négy izolált negatív cella + egy összevont
+`observedAt`/`timingOffset` cella + pozitív cella) így teljesíthető lett,
+production API-tágítás nélkül.
+
+### 9.2 Gate — saját újrafuttatás friss klónban
+
+`/tmp/review2-e02-r09`, ugyanaz az egyetlen artefaktum-hívás:
+format **ZÖLD** · analyze **ZÖLD** · `test/features/practice/` **ZÖLD — 469
+teszt** (462 → 469, azaz **+7** új cella) · property **ZÖLD 3** ·
+architecture **ZÖLD** (allowlist változatlan). Exit **0**.
+
+### 9.3 A lelet zárásának valódi-sértés próbája
+
+Hét további rontás a matcheren (`/tmp/probe2-e02-r09`), az `==`/`hashCode`/
+unmodifiable őrökre:
+
+| Szándékos rontás | Eredmény |
+|---|---|
+| `==` kihagyja a `resolution` mezőt | 🔴 PIROS |
+| `==` kihagyja a `matchedObservationSequence` mezőt | 🔴 PIROS |
+| `==` kihagyja a `targetIndex` mezőt | 🔴 PIROS |
+| `==` kihagyja a `target` mezőt | 🔴 PIROS |
+| `==` kihagyja az `observedAt` **és** `timingOffset` mezőt | 🔴 PIROS |
+| `results` már nem `UnmodifiableListView` | 🔴 PIROS |
+| `hashCode` → konstans `0` | 🟢 zöld maradt |
+
+**Az utolsó NEM lelet, és szándékosan nem is az.** A Dart-szerződés csak annyit
+követel, hogy **egyenlő** objektumok hashCode-ja egyezzen; a konstans hashCode
+legális (csak teljesítmény-romlás), a hash-ütközés megengedett. Egy „különböző
+objektum → különböző hashCode" állítás **túlspecifikálás** volna. A próbám volt
+rossz, nem a teszt — rögzítve, hogy a következő reviewer ne írja ki leletnek.
+
+**MINOR-1 és NOTE-1 lezárva.** NOTE-2 és NOTE-3 szándékosan nyitva (R10/R11).
