@@ -402,6 +402,10 @@ final class PracticeSessionController {
 
   void _onObservation(PracticeObservation observation) {
     if (_disposed) return;
+    // ADR 0077 §3 — observations delivered after `gateway.stop()` (the
+    // `paused` → capture-off transition is async) must not reach the scorer.
+    // Source of truth for capture activation is `practiceCaptureActiveByStatus`.
+    if (!practiceCaptureActive(_state.status)) return;
     final matcher = _matcher;
     final target = _currentTarget;
     if (matcher == null || target == null) return;

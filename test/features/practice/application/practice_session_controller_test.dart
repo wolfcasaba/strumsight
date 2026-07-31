@@ -634,13 +634,19 @@ void main() {
         final scorePointsBefore = liveScoreBefore.metrics.scorePoints;
         final resolvedBefore = liveScoreBefore.metrics.resolvedTargets;
 
-        // Pause and emit a strum that falls well outside every match window.
+        // Pause and emit a strum whose `at` lands inside the match window of
+        // an unmatched target event (event.1 at 4*480 ticks @ 120 BPM = 1s).
+        // The previous `Duration(milliseconds: 30)` was deliberately outside
+        // every window — the cell only stayed green because the controller
+        // ignored an obviously non-matching strum. With a true match-window
+        // time, the new guard in `_onObservation` is what pins the aggregate.
+        final event1Time = target.events[1].time;
         await h.controller.dispatch(
           const PausePractice(cause: PauseCause.user),
         );
         h.gateway.emit(
           StrumObservation(
-            at: const Duration(milliseconds: 30),
+            at: event1Time,
             sequence: 1,
             direction: StrumDirection.down,
             confidence: 0.95,
