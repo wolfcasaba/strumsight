@@ -3,7 +3,8 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31 (GOV-01)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31
+> (E02-R09 mergelve + az Epic 2 maradék körei: E02-R10…R20 briefek előkészítve)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -122,6 +123,23 @@
   engedély-elsőség, idempotens start/stop/dispose, hibaleképezés. Fake gateway a
   `test/support/` alatt az R09/R10 számára. Hívó és provider nincs, flagek OFF →
   production viselkedés bitre azonos.
+- **Practice V2 event matcher (E02-R09, ADR 0075):**
+  `domain/service/practice_event_matcher.dart` — pure, determinisztikus,
+  **kurzoralapú** párosító: eldönti, melyik `StrumObservation` melyik
+  `CompiledTargetEvent`-hez tartozik, és mikor zárul egy cél kimaradásként.
+  Pontozás-mentes (`TimingGrade`/score/combo a Kör 10-é), **megfigyelést nem
+  tárol** (`O(célesemény)` memória), az opcionális célt külön feloldással zárja.
+  A legacy `LessonScorer` szemantikája (P1–P9) megőrizve: jogosultság `<=`,
+  zárás **szigorú `<`**, holtversenynél a **korábbi**, a rossz irány is
+  **elfogyasztja** a célt, az extra pengetés **állapotot nem változtat**.
+  **A paritás értelmezési tartománya kimondva (ADR 0075 §2b):** a legacy
+  kerekítetlen `double`-lel dönt, a compiled target egész µs-mal, ezért a két
+  időalap ≤ **0,5 µs**-ban eltér (mérve **0,489795919508 µs** mind a 348
+  szállított eseményen) — a **µs-kvantált alap az igazság**, és a levezetett
+  védősávon kívül (`≥ 1 µs` a határoktól, `≥ 2 µs` argmin-különbség) a paritás
+  **bitre egzakt**, tűrés nélkül. A sávon belüli két divergencia-cella
+  (`first-strums[0]`, `anthem-drive[5,6]`) **kipinnelt, őrzött viselkedés**.
+  Hívó, provider és flag nincs → production viselkedés bitre azonos.
 - **Kétmotoros implementer-készlet (ADR 0069):** `tools/mm-round.sh` +
   `tools/mm-watch.sh` (5 perces korai riasztás) + `tools/mm-trace.py`
   (munkastílus-elemzés) — a MiniMax M3 ugyanazt a kör-jelzés-szerződést
@@ -143,21 +161,58 @@
 
 ## 4. Current branch
 
-`main` @ [PR #31](https://github.com/wolfcasaba/strumsight/pull/31) (GOV-01,
-squash-merge `c15ccf8`), CI run
-[30623157950](https://github.com/wolfcasaba/strumsight/actions/runs/30623157950)
-zöld (build-apk + Coverage). Kör-branch törölve. Ez governance-kör volt, Dart
-kódot nem érint, ezért a lokális mérce a grep-mátrix volt, nem a gate — a merge
-utáni `main`-en függetlenül újramérve: a `tools/round-gate.sh` artefaktumra
-**8 fájl** hivatkozik, a `tools/wait-for-round.sh`-ra a driver-skill.
+`main` @ [PR #32](https://github.com/wolfcasaba/strumsight/pull/32) (E02-R09,
+squash-merge `e7942e6`), CI run
+[30639620082](https://github.com/wolfcasaba/strumsight/actions/runs/30639620082)
+zöld (build-apk + Coverage). Kör-branch törölve.
 
-Az utolsó Dart-érintő kör (E02-R08, PR #30, `e80a878`) CI-runja
-[30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)
-zöld volt; a `main`-en akkor mérve: format 528/0 changed · analyze No issues
-found · `test/features/practice/` **440** zöld · property **6** zöld ·
-architecture OK (12 allowlisted, változatlan).
+A merge utáni `main`-en **függetlenül újramérve** (`tools/round-gate.sh`,
+exit 0): format **532 fájl / 0 changed** · analyze ZÖLD ·
+`test/features/practice/` **469** zöld (a kör előtt 462) ·
+`test/property/practice_event_matcher_property_test.dart` **3** zöld ·
+architecture OK (**12 allowlisted, változatlan**).
 
 ## 5. Last completed round
+
+**E02-R09 — Event matcher és legacy timing parity**
+([ADR 0075](docs/adr/0075-practice-event-matcher.md) implementációja, PR #32):
+pure, determinisztikus, **kurzoralapú** `PracticeEventMatcher` — eldönti, melyik
+`StrumObservation` melyik `CompiledTargetEvent`-hez tartozik, és mikor zárul egy
+cél kimaradásként. Pontozás-mentes, megfigyelést nem tárol, az opcionális célt
+külön feloldással zárja. Hívó, provider és flag nincs → production viselkedés
+bitre azonos.
+
+**A kör érdemi hozadéka egy szerződéshiba megfogása volt.** Az eredeti A1
+tűrés nélküli µs-paritást írt elő a legacyvel szemben, miközben a bemenet
+µs-ra kvantált — **matematikailag teljesíthetetlen**. A legacy kerekítetlen
+`double`-lel dönt, a compiled target egész µs-mal (ADR 0066/0072); ahol
+`60/bpm` nem µs-reprezentálható (a katalógus döntő többsége), a két időalap
+≤ 0,5 µs-ban eltér, ami **csak a döntési határon** meghatározó.
+**Döntés (ADR 0075 §2b): a µs-kvantált alap az igazság** — a parity-állítás nem
+törlődött és nem lazult tűréssel, hanem a **levezetett** védősávon kívül bitre
+egzakt maradt, a kizárt sávot pedig két új acceptance-pont pinneli ki:
+**A1b** (a két időalap eltérése mind a 348 eseményen: max **0,489795919508 µs**)
+és **A1c** (a két divergencia-cella reprodukálva).
+Implementer: **Codex**.
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · **1 MINOR** ·
+3 NOTE), javító kör után **APPROVED**:
+[`docs/reviews/e02-r09-review.md`](docs/reviews/e02-r09-review.md).
+A reviewer a gate-et saját kezűleg futtatta izolált klónban, és **17 eldobható
+valódi-sértés próbát** vitt a matcherbe (operátorpár, holtverseny-irány, latency
+mindkét ágon, kurzorosság, a paritás **non-vacuity**-ja, `==` mezőnkénti fedése)
+— mind pirosra futott, egy szándékos kivétellel (konstans `hashCode`: a
+Dart-szerződés szerint legális, tehát a próba volt rossz, nem a teszt).
+
+**Folyamat-hozadék:** az implementer **háromszor** állt meg `stopped` jelzéssel,
+és **mindháromszor az orchestrátor mércéje hibázott** — a teljesíthetetlen A1,
+egy idealizált rácsból számolt referenciacella (`anthem-drive`: a hivatkozott
+`beat 0 → 0,5` pár nem is létezik a leckében), és egy önellentmondó javító-
+előírás (privát konstruktor + származtatott mező mellett „mezőnként izolált"
+teszt). **Egyszer sem tágított fájllistát és egyszer sem igazította hozzá
+csendben a tesztet.** Ebből lett a `docs/LESSONS.md` **L16**.
+
+### Korábbi kör
 
 **GOV-01 — A gate- és várakoztató artefaktum átvezetése** (governance-kör,
 nem SDD-fejezet, PR #31): a `tools/round-gate.sh` és a `tools/wait-for-round.sh`
@@ -262,38 +317,67 @@ Korábbi körök (E02-R03 részletes története is):
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
-   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #30
+   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #32
    CI-runjából tölthető
-   ([30613858430](https://github.com/wolfcasaba/strumsight/actions/runs/30613858430)).
+   ([30639620082](https://github.com/wolfcasaba/strumsight/actions/runs/30639620082)).
 2. **~~GOV-01~~ — KÉSZ** (PR #31, 2026-07-31).
-3. **E02-R09 — Event matcher és legacy timing parity** ÚJ sessionben.
-   **A brief és az ADR KÉSZ és kiadható:**
-   [`docs/rounds/e02-r09-event-matcher.md`](docs/rounds/e02-r09-event-matcher.md) +
-   [ADR 0075](docs/adr/0075-practice-event-matcher.md) (az ADR-t az orchestrátor
-   már megírta — az implementer `docs/adr/`-hez NEM nyúl).
-   **Implementer motor: Codex** (a user döntése 2026-07-31 — baseline-érzékeny
-   matcher). Branch: `codex/e02-r09-event-matcher`.
+3. **~~E02-R09 — Event matcher~~ — KÉSZ** (PR #32, `e7942e6`, 2026-07-31,
+   implementer Codex). Review APPROVED. **Következő az E02-R10** (scorerek) —
+   ÚJ sessionben, a lenti 4. pont táblája szerint.
 
-   > **Kör-számozási javítás (2026-07-31):** ez a sor korábban „E02-R09 =
+   > **Kör-számozási javítás (2026-07-31):** a §6 korábban „E02-R09 =
    > Session controller"-t írt. **Téves volt.** Az SDD-fejezet szerint a Kör 9
    > az **event matcher**, a Kör 10 a három scorer, és a
    > `PracticeSessionController` a **Kör 11** — az eddigi számozás 1:1
    > (E02-R08 = „Kör 8 — Observation gateway"). Következmény: a
    > `practiceCaptureActiveByStatus` tábla első valódi hívója és az E02-R07
-   > nyitott clock-NOTE-ja **az E02-R11-ben** zárul, nem az R09-ben.
-4. **Az E02-R08 nyitva hagyott follow-upjai** (a review §4 + a brief §10.6):
-   - a `ScoringProfile → PracticeObservationConfig` küszöb-leképezés (R09);
+   > nyitott clock-NOTE-ja **az E02-R11-ben** zárul.
+
+   > **Az R10 briefjének pre-flightjához (E02-R09 review, NOTE-2):** a matcher
+   > eredménye a párosított megfigyelés **irányát nem hordozza** (szándékosan —
+   > pontozás-mentes, `O(célesemény)` memória, megfigyelést nem tárol). A
+   > direction-scorernek ezért a **hívónál** kell párban tartania a
+   > `StrumObservation`-t a visszakapott `PracticeEventMatchResult`-tal. Ezt az
+   > R10 briefjében ki kell mondani, nehogy ott derüljön ki.
+4. **Az Epic 2 MARADÉK körei (E02-R10…R20) ELŐRE MEGÍRVA** (2026-07-31,
+   kód olvasva: `main` @ `ce8fbce`). Tizenegy `PREPARED` brief a
+   [`docs/rounds/`](docs/rounds/) alatt, mindegyik ⚠ pre-flight blokkal
+   (mit kell indítás előtt újraolvasni), tételes engedélyezett-fájllistával és
+   mátrix-alapú acceptance-szel. **Az ADR-számok előre kiosztva** — az ADR-t az
+   orchestrátor írja a pre-flightban, az implementer `docs/adr/`-hez nem nyúl:
+
+   | Kör | Brief | ADR | Előfeltétel |
+   |---|---|---|---|
+   | E02-R10 | [scorerek](docs/rounds/e02-r10-practice-scorers.md) | 0076 | R09 |
+   | E02-R11 | [session controller](docs/rounds/e02-r11-session-controller.md) | 0077 | R09+R10 |
+   | E02-R12 | [Hub + Setup UI](docs/rounds/e02-r12-practice-hub-and-setup.md) | 0078 | R11 |
+   | E02-R13 | [session UI shell](docs/rounds/e02-r13-session-ui-shell.md) | 0079 | R12 |
+   | E02-R14 | [strum + progression mód](docs/rounds/e02-r14-strum-and-progression-modes.md) | 0080 | R13 |
+   | E02-R15 | [chord change mód](docs/rounds/e02-r15-chord-change-mode.md) | 0081 | R14 |
+   | E02-R16 | [rhythm-only + free practice](docs/rounds/e02-r16-rhythm-only-and-free-practice.md) | 0082 | R14 |
+   | E02-R17 | [Speed Builder](docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md) | 0083 | R11+R14 |
+   | E02-R18 | [result + coaching + history](docs/rounds/e02-r18-result-coaching-history.md) | 0084 | R14–R17 |
+   | E02-R19 | [progress + Learn migráció](docs/rounds/e02-r19-progress-and-learn-migration.md) | 0085 | R18 |
+   | E02-R20 | [Epic-zárás](docs/rounds/e02-r20-epic-closure.md) | — | R19 |
+
+   Az **első szabad ADR-szám a batch után: 0086.** Minden kör külön sessionben
+   indul (ADR 0052), a brief a saját kör-branchére commitolva.
+5. **Az E02-R08 nyitva hagyott follow-upjai** (a review §4 + a brief §10.6):
+   - a `ScoringProfile → PracticeObservationConfig` küszöb-leképezés — az R09
+     briefje nem vette be, ezért az **E02-R11 §5.4** zárja (egyetlen
+     `PracticeObservationConfig` példány a gatewaynek és az akkord-scorernek);
    - a chord-confidence felvitele a `LiveFrame`-be — az Analyze úton is közös,
      ezért külön kör; addig a Live adapter `confidence: 1.0` = „nem mért";
    - a `StrumEngine.start()` `AppResult`-osítása, hogy a „foglalt mikrofon"
      szinkron `start()`-hiba lehessen (ADR 0074 §7 ismert korlát);
    - a legacy `learn_screen.dart` `_pause()` pause-rése — **felhasználó-látható**,
-     valódi eszközön verifikálandó, a migrációs kör (E02-R11) hatásköre; a
-     chunk 014 addig a mai igazságot írja le.
-5. **Nyitva hagyott NOTE (E02-R07):** `MonotonicPracticeSessionClock.start()`
+     valódi eszközön verifikálandó; a V2 úton a `practiceCaptureActiveByStatus`
+     tábla szerkezetileg zárja (E02-R11), a **legacy** út javítása az
+     **E02-R19** migrációs köréé; a chunk 014 addig a mai igazságot írja le.
+6. **Nyitva hagyott NOTE (E02-R07):** `MonotonicPracticeSessionClock.start()`
    pause alatt teljes resetet végez, a szerződés viszont idempotenciát ír elő.
    Nem blokkol; a **controller-körben (E02-R11)** zárandó, amikor valódi hívó
-   lesz — nem az R09-ben (lásd a 3. pont kör-számozási javítását).
+   lesz (a brief §5.9 + A7 mátrixa) — nem az R09-ben.
 
 ## 7. Required verification (before any "done")
 

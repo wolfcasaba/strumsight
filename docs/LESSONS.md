@@ -452,3 +452,70 @@ fixture-default vakfoltja, csak a brief-írás szintjén.
   adott follow-uppal — nem okozott kárt, mert a kör-jelzés summary mezőjében és
   a §8-ban is szó szerint jelentette. A jelzés INFORMÁCIÓTARTALMA a lényeg, nem
   a betűje; de a briefben érdemes kiírni, hogy a részleges teljesülés is `stopped`.
+
+---
+
+## L16 — Az előírt MÉRÉS ALAKJÁT is ellenőrizni kell: teljesíthető-e egyáltalán
+
+**Mit mértünk.** Az E02-R09-ben ([PR #32](https://github.com/wolfcasaba/strumsight/pull/32),
+[review](reviews/e02-r09-review.md)) az implementer **háromszor** állt meg
+`stopped` jelzéssel, és **mindháromszor az orchestrátor mércéje volt hibás** —
+egyszer sem a kód:
+
+1. **Teljesíthetetlen acceptance.** Az A1 „tűrés nélküli, mikroszekundumra
+   egzakt paritás" a legacy `LessonScorer`-rel, miközben a matcher bemenete a
+   **µs-ra kvantált** `CompiledPracticeTarget`. A legacy kerekítetlen `double`
+   másodpercekkel dönt, a compiled target egész µs-mal (ADR 0066/0072); ahol
+   `60/bpm` nem µs-reprezentálható — a lecke-katalógus **döntő többsége** —, a
+   két időalap ≤ 0,5 µs-ban eltér, ami **pontosan a döntési határon**
+   meghatározó. Mért ellenpélda: `first-strums` (70 BPM), legacy eltérés
+   `280 000,42857 µs` → extra, matcher `280 000 µs` → párosul.
+2. **Idealizált rácsból számolt referenciacella.** A javító revízióba írt
+   `anthem-drive` holtverseny-cella (`153 061,408 / 153 061,041 µs`) egyenletes
+   nyolcad-rácsból jött, de a lecke mintája `[_d, null, _d, _u, null, _u, _d, _u]`
+   — a hivatkozott `beat 0 → 0,5` pár **nem is létezik**. A valódi cella a
+   `[5,6]` célpár, `4 744 898 µs` felezőponttal, más számokkal.
+3. **Önellentmondó javító-előírás.** „Mind a hat mezőre külön egyenlőség-cella"
+   **és** „production kód NEM változik" egyszerre — miközben a
+   `PracticeEventMatchResult` mindkét konstruktora privát, a `timingOffset`
+   pedig származtatott (`observedAt − target.time`), tehát önállóan soha nem
+   variálható.
+
+**Miért.** Az [L14](#l14--a-mércét-is-annyira-szigorúan-kell-ellenőrizni-mint-a-kódot)
+azt mondja ki, hogy a mérce *tartalmát* ellenőrizni kell. Ez a kör egy szinttel
+mélyebbre mutat: a mérce **alakja** is lehet eleve teljesíthetetlen — nem azért,
+mert rossz számot vár, hanem mert **olyan méréstn ír elő, amit a mért rendszer
+szerkezete nem enged meg**. Két rendszer bitre egyeztetése csak akkor
+értelmezhető, ha közös az időalapjuk; egy típus mezőnkénti tesztje csak akkor,
+ha a mezők függetlenül variálhatók. Ezt a tervezés közben **le kell mérni**, nem
+az implementerre hagyni.
+
+Ez ugyanaz a hibacsalád, mint az
+[L15](#l15--a-felmérő-grep-alakja-dönti-el-mit-fog-egyáltalán-megtalálni-a-brief)
+(a felmérés alakja) és az
+[L13](#l13--a-határpont-mátrixot-a-származtatott-mennyiségre-add-meg-ne-a-bemenetekre)
+(a mátrix alakja) — mindháromban a **mérés formája**, nem a szándéka a hiba.
+
+**Hogyan alkalmazd.**
+
+- **Mielőtt egzakt (tűrés nélküli) egyezést írsz elő két rendszer között, mérd
+  össze az időalapjukat / reprezentációjukat.** Ha eltérnek, a helyes feloldás
+  **nem** tűrés és **nem** az állítás törlése, hanem hármas: (a) a **levezetett**
+  védősáv kimondása — sávon kívül bitre egzakt marad; (b) a sáv szélességének
+  **mérése** külön acceptance-ponttal (itt: `max |legacy_µs − compiled_µs| ≤ 0,5 µs`,
+  mérve **0,489795919508 µs**); (c) a kizárt cellák **kipinnelése** saját
+  teszttel, hogy a divergencia megnevezett, őrzött viselkedés legyen.
+- **Referenciacellát a tényleges adatszerkezetből generálj** (`python3`-mal
+  bejárva a valódi esemény-/mintalistát), soha ne a fejben tartott idealizált
+  modellből. A generáló egysorost tedd a brief mellé.
+- **Teszt-alakot csak a típus konstruálhatóságának ellenőrzése után írj elő.**
+  Privát konstruktor és származtatott mező mellett a „mezőnként izolált" cella
+  nem létezik; ilyenkor mondd ki, **melyik mező nem izolálható és miért nem kell**
+  (itt: a `timingOffset` jelenléte az `==`-ben bizonyíthatóan redundáns, mert
+  `observedAt` és `target.time` már összevetésre kerül).
+- **Írd a briefbe:** „ha a te mérésed eltér az ittenitől, az `stopped` a két
+  számmal, NEM csendes hozzáigazítás." Ez fogta meg a 2. hibát.
+- **A reviewer a saját próbáját is ellenőrizze.** Ebben a körben egy próba
+  (konstans `hashCode`) zöld maradt — de az **legális Dart**, a próba volt rossz.
+  Zöldön maradt próbából csak akkor lesz lelet, ha előbb igazolod, hogy a
+  megsértett állítás valóban kötelező.
