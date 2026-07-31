@@ -34,7 +34,10 @@ LessonListScreen (built-ins + today's challenge)   lib/features/learn/screens/le
 - **Deterministic tests:** the screen **starts paused** so the animation doesn't
   free-run; widget tests advance time with `tester.pump(Duration)` and never
   `pumpAndSettle` a live ticker.
-- **Count-in:** a 4-beat count-in (playhead runs −4→0) with a flashed number.
+- **Count-in:** a ONE-BAR count-in (`_countInBeats = lesson.beatsPerBar`, so 4
+  beats in 4/4 but **3** in the 3/4 lessons; playhead runs −beatsPerBar→0) with a
+  flashed number. *(Corrected E02-R08 — this chunk previously said a fixed
+  4-beat count-in.)*
 - **Entry points:** a 5th **Learn** nav tab (`/learn`), and the streak screen's
   **Play along** button opens today's challenge as a one-bar strum-only lesson
   (`Lessons.fromDailyChallenge`).
@@ -49,8 +52,8 @@ tiers once scoring lands.
 elapsed time) to the nearest open `LessonEvent` within `windowSec` (±0.28 s) →
 **hit / wrong-direction / missed**, with combo, max-combo and accuracy; `passed`
 at ≥70%. `LearnScreen` (now `ConsumerStatefulWidget`) subscribes to
-`liveFrameProvider` **only while playing** (`ref.listenManual`, closed on
-pause/dispose — starts the mic just for the run), scores each **discrete** strum,
+`liveFrameProvider` when a run starts (`ref.listenManual` in `_play()`/`_restart()`
+— starts the mic just for the run), scores each **discrete** strum,
 shows a live accuracy/combo HUD + a hit/miss flash, and on finish records
 practice (feeds the streak) and shows a score summary.
 - **Discrete-strum detection:** `latestStrum` lingers ~2 s and repeats can share
@@ -63,8 +66,10 @@ practice (feeds the streak) and shows a score summary.
   exhaustively unit-tested.
 
 ## Curriculum (round 34 — ✅ built)
-12 built-in lessons across **Beginner / Intermediate / Advanced** tiers (incl. a barre-chord lesson, round 44)
-(`Lessons.byDifficulty`). `LessonProgressController` persists per-lesson **best
+**16** built-in lessons (`Lesson.all`) across **Beginner / Intermediate /
+Advanced** tiers (`Lesson.byDifficulty`), incl. a barre-chord lesson (round 44).
+*(Corrected E02-R08 — the roster grew past the 12 this chunk used to claim.)*
+`LessonProgressController` persists per-lesson **best
 accuracy** (`lesson_progress_v1`, local like the streak); `LessonProgress.stars`
 maps it to 0–3 stars (≥90/80/70%). The `LearnScreen` records the run's accuracy
 on finish. The list groups by tier, shows stars, and **gates progression** —
@@ -142,3 +147,46 @@ Sevenths / Suspended (`ChordShapes.allLabels` + a suffix classifier). A referenc
 tool for learners; reuses `ChordDiagram`.
 
 
+
+## The pause gap — measured truth, and how Practice V2 closes it (E02-R08)
+
+**What this chunk used to claim, and why it was wrong.** Up to E02-R08 this file
+said the Learn screen's frame subscription is "closed on pause/dispose". It is
+**not**: `LearnScreen._pause()` only stops the `Ticker` and flips `_playing`;
+`_frameSub` stays open, so `liveFrameProvider` keeps its listener, `autoDispose`
+never fires, and **the microphone plus the DSP isolate keep running while the
+lesson is paused**. (`_frameSub.close()` happens in exactly three places:
+`dispose()`, and the two jam-mode branches of `_play()`/`_restart()` that
+deliberately release the mic behind the backing track, round 100.)
+
+The gap is not a forgotten `close()` — it is that the source of truth for
+"should we be listening" was a **widget field** (`_playing` / `_scorer != null`).
+A widget field cannot be audited, cannot be tested without a widget test, and
+nothing forces every state change to maintain it.
+
+**Practice V2's answer (ADR 0074).** The V2 path never asks a widget. The
+`PracticeObservationGateway` is driven from the E02-R07 session state machine
+through one `const` table over all eleven `PracticeSessionStatus` values
+(`practiceCaptureActiveByStatus`, `lib/features/practice/application/
+practice_observation_activation.dart`):
+
+- `countIn` → capture **on** (warm-up: the mic + DSP isolate come up during the
+  count-in so the first stroke is not lost);
+- `running` → capture **on** — the only status whose observations are scored;
+- `paused` → capture **off** ← the gap, closed by construction;
+- the other eight statuses → off.
+
+A test asserts the table's key set equals `PracticeSessionStatus.values`, so a
+new status fails the build instead of silently defaulting to "don't listen".
+
+**Still true of the legacy screen.** E02-R08 adds the V2 gateway but touches no
+legacy file and ships with the practice flags OFF, so the paragraph above
+describes *today's* shipped Learn behaviour. It changes when Learn migrates onto
+Practice V2 (E02-R11) — releasing the mic on pause is user-visible (resume pays a
+mic + isolate warm-up), so it needs the real-device run, not a green unit suite.
+
+**Timing split (ADR 0074 §3), unchanged from legacy.** The gateway subtracts only
+the engine-clock de-jitter (`engineTimeSec − latestStrumTime`, guarded: missing
+clock or lag outside (0, 500 ms] → 0, logged); the user-calibrated input latency
+stays with the scorer/matcher — exactly the legacy `LearnScreen` (de-jitter) +
+`LessonScorer(inputLatencySec:)` division, so the frozen parity baseline holds.
