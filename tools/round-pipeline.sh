@@ -155,10 +155,14 @@ pinger_pid=$!
 # Háttér-agentként indítjuk (`--bg`), NEM `-p`-vel: a --bg session megjelenik
 # a user claude.ai Code-listájában (telefonon is), névvel — user-kérés
 # 2026-07-31. A --bg azonnal visszatér; a kör végét a $status_file jelzi.
+# A promptot NEM argv-ban adjuk át: az E02-R12 orchestrátora megölte magát,
+# mert a saját argv-jában ott volt a teljes prompt, és egy takarító
+# `pgrep -f "tools/round-gate.sh"` önmagára illeszkedett (L12 argv-változata,
+# exit 143). Rövid bootstrap-prompt + fájl-hivatkozás = az argv steril.
 launch_out=$("$claude_bin" --bg -n "Pipeline $round" \
     --model "$claude_model" \
     --permission-mode bypassPermissions \
-    "$(cat "$prompt_file")" 2>&1)
+    "Olvasd el és kovesd pontosan: $prompt_file" 2>&1)
 printf '%s\n' "$launch_out" >> "$session_log"
 agent_id=$(printf '%s\n' "$launch_out" | sed -n 's/^backgrounded · \([a-z0-9]*\) .*/\1/p')
 log "orchestrátor háttér-agent: ${agent_id:-?} — a Code-listában: Pipeline $round · napló: claude logs $agent_id"

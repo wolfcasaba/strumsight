@@ -37,7 +37,14 @@ tools/wait-for-round.sh <munkapéldány> 540
 
 Kilépési kód `5` = még fut, de lejárt a várakozási keret → **hívd meg újra**
 (akárhányszor). `0` = done, `3` = stopped, `4` = stalled/timeout/unknown.
-Ugyanígy előtérben fusson a `gh run watch` is. Az implementert pedig **ne** a
+Ugyanígy előtérben fusson a `gh run watch` is.
+
+**SOHA ne futtass `pgrep -f` / `pkill -f` hívást olyan mintával, amely a saját
+promptodban előfordul** (pl. `round-gate.sh`, `flutter analyze`) — az E02-R12
+orchestrátora így ölte meg magát (exit 143), amikor beragadt gate-processzeket
+takarított. Ha processzt kell állítanod, PID-listával dolgozz
+(`pgrep -f <minta> | grep -v $$`), vagy szűkítsd a mintát a munkapéldány
+útvonalára (pl. `pgrep -f "/tmp/r12-review/.*round-gate"`). Az implementert pedig **ne** a
 session háttértaskjaként indítsd (azt a CLI kilépése megöli), hanem a
 sessionről LEVÁLASZTVA, egyetlen azonnal visszatérő Bash-hívással:
 
