@@ -16,6 +16,8 @@ abstract final class AppRoutes {
   static const String chords = '/chords';
   static const String login = '/login';
   static const String librarySession = '/library/session';
+  static const String practiceHub = '/practice';
+  static const String practiceSetup = '/practice/setup';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[

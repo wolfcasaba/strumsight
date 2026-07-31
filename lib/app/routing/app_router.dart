@@ -14,12 +14,15 @@ import '../../features/live/screens/live_screen.dart';
 import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/practice/presentation/screens/practice_hub_screen.dart';
+import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
+import '../config/app_config.dart';
 import '../home_shell.dart';
 import 'app_route.dart';
 import 'route_guards.dart';
@@ -33,6 +36,15 @@ final class _RouterRefreshNotifier extends ChangeNotifier {
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _RouterRefreshNotifier();
   ref.listen(onboardingSeenProvider, (_, _) => refreshNotifier.refresh());
+
+  // E02-R12: the Practice hub and setup routes are flag-gated. When the
+  // flag is off, the routes are not registered, so a `/practice*` URL
+  // hits the existing onException below and lands on Live — a
+  // measurement, not new behaviour.
+  final practiceEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .practiceEngineV2Enabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -106,6 +118,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           return const LibraryScreen();
         },
       ),
+      if (practiceEnabled) ...[
+        GoRoute(
+          path: AppRoutes.practiceHub,
+          builder: (_, _) => const PracticeHubScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceSetup,
+          builder: (_, _) => const PracticeSetupScreen(),
+        ),
+      ],
     ],
   );
   ref.onDispose(() {

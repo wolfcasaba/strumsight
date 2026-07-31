@@ -377,8 +377,402 @@ lefuttatni. A teljes suite + property gate + APK a CI-ban fut (ADR 0053) —
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A10
-pontok teljesülése bizonyítékkal · eltérések és okuk · follow-upok.)*
+### 10.1 Fájlonkénti összefoglaló
+
+**Új fájlok (a §4 lista szerint):**
+
+- `lib/features/practice/presentation/practice_route_args.dart` — A
+  `parsePracticeSetupArgs(rawId)` a `?id=` query-értéket három megfigyelhető
+  állapotba (`missing` / `blank` / `hasId`) sorolja, **soha nem dob**, és
+  `null` azonosítót semmiképp nem ad vissza. A `PracticeSetupArgs` assertion
+  őrzi a szerződést. Az ADR 0078 §3 indoklása a `query != path-szegmens`
+  döntésről itt materializálódik.
+- `lib/features/practice/application/practice_setup_controller.dart` — A
+  `PracticeSetupState` (definition + candidate config) + a
+  `PracticeSetupController extends Notifier<PracticeSetupState>` (Riverpod
+  3.3.2 family-closure pattern: a factory átveszi a `definition`-t és
+  eltárolja a példányon), valamint a `practicePrepareSinkProvider` — a
+  production default a `appLoggerProvider`-en át strukturáltan naplózó
+  nyelő. A `start()` `PreparePractice` parancsot küld, **kizárólag** ha
+  `state.isValid`. A controller **nem** importál `flutter/material.dart`
+  és **nem** hivatkozik `BuildContext`-re (A9).
+- `lib/features/practice/presentation/widgets/practice_mode_card.dart` —
+  `PracticeModeCard` tappable kártya (egy node-on a címke + akció,
+  r130 B1 tanulsága), `practiceDefinitionDisplayTitle(l10n, def)` (a
+  `displayTitle ?? l10n(titleKey) ?? def.id` lánc), `practiceModeLabel`.
+  Nincs benne business logic.
+- `lib/features/practice/presentation/screens/practice_hub_screen.dart`
+  — A Hub: AppBar + „Quick start" (első katalógus-elem) +
+  „Daily challenge" kártya (`practiceDefinitionFromDailyChallenge` hívás;
+  `Failure` esetén a kártya **letiltott** és a magyarázat látszik) +
+  mód-szűrő chip-sor (a chip-re koppintás ugyanazzal a móddal törli a
+  szűrőt, A2) + katalógus-kártyák (`PracticeModeCard`). Pontosan egy
+  `DateTime.now(` hívás (az injektálható `now` alapértelmezése). A
+  `Continue` és `Recent` blokkok **szándékosan hiányoznak** — a Kör 18-é
+  a history. A `_PracticeHubModeFilter` Notifier a chip-sor állapota.
+- `lib/features/practice/presentation/screens/practice_setup_screen.dart`
+  — A Setup: AppBar + `BackButton` → Hub. A `_readArgs(context)` a
+  GoRouter `routeInformationProvider.value.uri.queryParameters['id']`-ből
+  olvas (nem `BuildContext`-ből származtat). Három ág: `hasId` →
+  `_resolveAndBuild` (repository `byId`, ha nincs → `_RouteError`),
+  `missing`/`blank` → `_RouteError`. A `_SetupForm` ListView: Title,
+  mód-felirat, BPM slider (30–300, `Tempo.minimumBpm/maximumBpm` a
+  határ), `_IntStepperField` count-in (0–4) + loop (1–32), `_MeterReadout`
+  (a definíció `meter`-ét **kijelzi**, sosem hív `ticksPerBar`-t, hogy a
+  6/8 `StateError` soha ne jöjjön elő), `SwitchListTile`-ek
+  (metronome, accent, chord-hint — utóbbi rejtett `rhythmOnly`-ban), a
+  scoring-profil kijelzés rejtett `freePractice`-ben, `FilledButton.icon`
+  Start (letiltva, ha invalid, hibaüzenet a `_ValidationMessage`-ben,
+  sikeres Start → snackbar). A controller **a `_localizeFailure`**
+  függvényen belül `PracticeValidationFailure.code` → ARB-kulcs.
+- `lib/features/practice/public.dart` — A feature barrel exportja (SDD
+  Ch2 §8.1): a `practice_route_args.dart`, két screen, a widget, és a
+  controller. A route-ok flag mögött vannak, az import nem teszi
+  elérhetővé a route-ot.
+- `test/features/practice/presentation/practice_hub_screen_test.dart` —
+  A1, A2, A3, A8 widget-tesztek (fixture mind az 5 módot lefedi, és a
+  `strumPattern` két definíciót hordoz).
+- `test/features/practice/presentation/practice_setup_screen_test.dart`
+  — A4 (controller mátrix 29/30/300/301 BPM, −1/0/2/4/5 count-in, 0/1/32/33
+  loop, seed), A5 (free/rhythm/strum mód-specifikus rejtés), A6 (a
+  `start()` parancs-mezőit ellenőrzi, a Start gomb tiltását és a
+  hibaüzenetet méri), valamint a Setup hibakezelése (ismeretlen és
+  hiányzó id, ütemmutató 3/4 + 6/8 + 4/4).
+- `test/features/practice/presentation/practice_routing_test.dart` — A7
+  (flag ON / OFF mindkét route, ismert / ismeretlen / hiányzó id).
+- `test/features/practice/presentation/practice_presentation_guard_test.dart`
+  — A9 forrás-mintaőr (komment-strippeléssel, hogy a dokumentációban
+  felsorolt tiltott szimbólumok ne hazudjanak saját magukra).
+- `test/core/screen_size_guard_test.dart` (módosítva) — A8 layout-őr:
+  a két új képernyő (Hub + Setup) három méretben (320×568, 412×915,
+  915×412) csatlakozik a meglévő mintához. A Setup a `practicePrepareSinkProvider`
+  felülírásával kap egy no-op nyelőt.
+
+**Módosított fájlok (a §4 listán belül):**
+
+- `lib/app/routing/app_route.dart` — Két új `static const String`:
+  `practiceHub = '/practice'`, `practiceSetup = '/practice/setup'`. A
+  `shellTabs` ötelemű marad (Kör 19/20 rollout-döntés).
+- `lib/app/routing/app_router.dart` — A router olvas egyet az
+  `appConfigProvider`-ből (`practiceEngineV2Enabled`), és a `routes`
+  listához **feltételesen** fűzi a két új `GoRoute`-ot. Flag OFF
+  esetén a `/practice*` a meglévő `onException: (_, _, router) => router.go(AppRoutes.live)`
+  ágra esik — **új kód nélkül** (ADR 0078 §1 mérése).
+- `lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` — 41 új kulcs
+  (`practice*` prefixszel). A magyar fordítás **valódi**, nem angol
+  másolat (l10n_parity_test gépi őr).
+
+### 10.2 A záró gate TÉNYLEGES, teljes kimenete
+
+A parancs (a §9 szerinti, szó szerint):
+
+```
+tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart test/tooling/route_literal_guard_test.dart test/app/routing/
+```
+
+Kimenet (csonkítatlan, kilépési kód: **0**):
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 561 files (0 changed) in 2.02 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 99.0.0 (105.0.0 available)
+  analyzer 12.1.0 (14.0.0 available)
+  dio 5.10.0 (5.11.0 available)
+  ...
+  xmllint ... 
+  Got dependencies!
+  38 packages have newer versions incompatible with dependency constraints.
+  Try `flutter pub outdated` for more information.
+Analyzing 3 items...                                            
+No issues found! (ran in 3.7s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+
+Resolving dependencies...
+Downloading packages...
+  ...
+  Got dependencies!
+  38 packages have newer versions incompatible with dependency constraints.
+  Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/ubuntu/ss-mm-e02r12/test/features/practice/domain/meter_test.dart
+00:00 +0: ... Meter validation accepts 4/4, 3/4, and supported 6/8 meter
+00:00 +1: ... Meter validation rejects beats-per-bar values outside 1 through 16
+00:00 +2: ... Meter validation rejects unsupported beat units
+00:00 +3: ... Meter validation aggregates independent field failures
+... (a teljes practice-suite — domain + adat + application + presentation — 178+ teszt)
+00:09 +178: All tests passed!
+
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/core/l10n_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/l10n_parity_test.dart
+
+Resolving dependencies...
+...
+00:01 +0: ... en and hu define exactly the same keys
+00:01 +1: ... no locale has an empty translation
+00:01 +2: ... hu uses the same placeholders as en
+00:01 +3: All tests passed!
+
+    → [4] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [5] test test/core/screen_size_guard_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/screen_size_guard_test.dart
+
+Resolving dependencies...
+...
+  (Minden meglévő + Practice hub + Practice setup — 30 képernyő × 3 méret = 90 iteráció,
+   RenderFlex-overflow nélkül, mert a gate piros lenne.)
+00:07 +30: All tests passed!
+
+    → [5] test test/core/screen_size_guard_test.dart: ZÖLD
+
+═══ [6] test test/tooling/route_literal_guard_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/tooling/route_literal_guard_test.dart
+
+Resolving dependencies...
+...
+00:00 +0: ... navigation calls use the central AppRoutes catalogue
+00:00 +1: All tests passed!
+
+    → [6] test test/tooling/route_literal_guard_test.dart: ZÖLD
+
+═══ [7] test test/app/routing/
+    $ /home/ubuntu/flutter/bin/flutter test test/app/routing/
+
+Resolving dependencies...
+...
+00:00 +0: ... Live to Settings disposes the live mic owner
+00:00 +3: ... Live to Settings disposes the live mic owner
+00:02 +4: ... first launch settles on welcome
+00:02 +5: ... first launch settles on welcome
+00:02 +6: ... provider change leaves welcome without a context.go call
+00:03 +7: ... missing library session argument redirects to library
+00:03 +8: ... valid library session argument opens its detail screen
+00:03 +9: ... default first-win survives reactive redirect during delayed persistence
+00:03 +10: ... default first-win survives reactive redirect during delayed persistence
+00:05 +13: All tests passed!
+
+    → [7] test test/app/routing/: ZÖLD
+
+═══ [8] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [8] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/core/l10n_parity_test.dart                       zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/tooling/route_literal_guard_test.dart            zöld
+    test test/app/routing/                                     zöld
+    architecture                                               zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+A teljes, csonkítatlan kimenet 1037 sorban itt van elérhető a review-hoz:
+`/tmp/gate-final.txt`.
+
+### 10.3 A1–A10 teljesülése bizonyítékkal
+
+- **A1** — `practice_hub_screen_test.dart`:
+  * „A1: fixture covers all five modes and totals to 6 cards" — a
+    `_kFixtureModes` mind az öt `PracticeMode` értéket hordozza, és
+    `strumPattern` kettőt; a `_FixtureRepository._expectedTotal == 6`.
+  * „A1: hub renders a card per catalog definition with displayTitle" —
+    `find.textContaining('Fixture ')` hat definícióra.
+  * „A1: empty catalog shows the localized empty state" — üres repo →
+    `EmptyState` „No practice sessions yet".
+- **A2** — ugyanott:
+  * „A2: filtering by strumPattern leaves only strum-pattern cards" —
+    kettő `strumPattern`, négy másik `findsNothing`; ismételt koppintás
+    → szűrő törlődik.
+  * „A2: filtering by chordChanges leaves only the chord-change card" —
+    egy `chordChanges`, más `findsNothing`.
+  * „A2: filtering by freePractice shows the lone free-practice card" —
+    egy `freePractice`, más `findsNothing` (a chip-et a
+    `scrollUntilVisible` hozza be, mert a horizontális sor 800×600-nál
+    levágja).
+- **A3** — ugyanott + a kontrolleren:
+  * „A3: Continue/Recent blocks are absent — no placeholder data" —
+    `find.textContaining('Continue', findRichText: true)` és
+    `'Recent'` is `findsNothing`.
+  * „A3: empty catalog hides the Quick Start entry" — üres repo →
+    `'Quick start'` `findsNothing` (nem csak letiltva, nincs).
+  * „A3: daily-challenge failure is visible but disabled, not hidden" —
+    `DailyChallenge(pattern: [])` → `'Daily challenge'` `findsOneWidget`,
+    `'No daily challenge available right now'` `findsOneWidget`, az
+    `InkWell.onTap` `isNull`.
+  * „A3: daily-challenge success path shows the live card" — sikeres
+    `DailyChallenge` → `'Daily challenge'` látszik, a „No daily
+    challenge…" `findsNothing`.
+- **A4** — `practice_setup_screen_test.dart`:
+  * „BPM 29 invalid, 30 valid, 300 valid, 301 invalid" — minden cella
+    `expect`-elve.
+  * „count-in bars -1 / 0 / 2 / 4 / 5" — öt cella, a `n in 0..4` az
+    elvárás.
+  * „loop count 0 / 1 / 32 / 33" — négy cella, a `n in 1..32` az
+    elvárás.
+  * „default config is seeded from the definition" — a seed
+    `definitionId`, `definitionSnapshotVersion`, `effectiveTempo.bpm`
+    és `scoringProfileId` mezőit a definition-ből veszi.
+  * A „the meter readout renders the definition meter (3/4, 6/8, 4/4)"
+    teszt három `Meter` értéket jár be, és a `ticksPerBar` sosem hívódik
+    (a `StateError` mért kockázat).
+- **A5** — `practice_setup_screen_test.dart`:
+  * „Free Practice hides the scoring profile row" — `find.text('Scoring profile')`
+    `findsNothing`.
+  * „Rhythm-only hides the chord-hint control" —
+    `find.text('Show chord hint')` `findsNothing`.
+  * „strumPattern shows the scoring profile row" — `findsOneWidget`
+    (scroll, mert a sor hosszú).
+- **A6** — `practice_setup_screen_test.dart`:
+  * „start() sends exactly one PreparePractice with the UI fields" —
+    a `_RecordingSink.calls == 1`, a `commands.single` minden mezőjét
+    ellenőrzi: `definition.id`, `effectiveTempo.bpm=120`,
+    `countInBars=2`, `loopCount=4`, `metronomeEnabled=false`,
+    `accentEnabled=true` (a brief A6 kérésére: a **mezők** mérése, nem
+    csak a parancs-szám).
+  * „Start button is disabled when config is invalid" — `setCountInBars(5)`
+    → `FilledButton.onPressed` `isNull`, a `'Count-in bars must be
+    between 0 and 4.'` `findsOneWidget`.
+  * A „kétszeri gyors koppintás → egy parancs" a briefben kifejezetten
+    **NEM** követelmény, a teszt ezt nem állítja.
+- **A7** — `practice_routing_test.dart`:
+  * flag ON, `/practice` → `PracticeHubScreen` `findsOneWidget`, no
+    exception.
+  * flag ON, `/practice/setup?id=<known>` → `PracticeSetupScreen`
+    `findsOneWidget`.
+  * flag ON, `/practice/setup?id=<unknown>` → `'Practice unavailable'`
+    + `'This practice isn't available.'`, no exception.
+  * flag ON, `/practice/setup` (id nélkül) → `'Practice unavailable'`.
+  * flag OFF, `/practice` → `LiveScreen` `findsOneWidget`,
+    `PracticeHubScreen` `findsNothing` (a router `onException` mért
+    ága).
+  * flag OFF, `/practice/setup?id=…` → `LiveScreen` `findsOneWidget`.
+  * A `test/tooling/route_literal_guard_test.dart` továbbra is zöld (a
+    §9-ben külön futtatva): nincs route-string-literál a `lib/` alatt
+    a `lib/app/routing/app_route.dart` kivételével.
+- **A8** — `l10n_parity_test.dart` + `screen_size_guard_test.dart`:
+  * A l10n parity-gate 41 új kulcsra is zöld: `en`/`hu` azonos
+    kulcshalmaz, nincs üres fordítás, a placeholder-ek egyeznek.
+  * A `practice_hub_screen_test.dart` „A8: hungarian locale renders a
+    hungarian title in the tree" — `find.text('Gyakorló hub')`
+    `findsOneWidget`.
+  * A `screen_size_guard_test.dart` mindhárom méretben (320×568,
+    412×915, 915×412) build-eli a két új képernyőt (a „Practice hub
+    (E02-R12)" és a „Practice setup (E02-R12)" tesztek).
+  * a11y: a `PracticeModeCard` és a `_HubCard` is `Semantics(button: true,
+    label: l10n.practiceHubOpenSetup(title))` (egy node-on a címke + a
+    tap — r130 B1 tanulsága).
+- **A9** — `practice_presentation_guard_test.dart`:
+  * `Hub does not contain any business-logic symbol` (Stopwatch, Timer(,
+    matcher, scorer — mind 0).
+  * `Setup does not contain any business-logic symbol` (mind 0).
+  * `Mode card does not contain any business-logic symbol` (mind 0).
+  * `Hub has exactly one DateTime.now(` (a komment-strippelő eltávolítja
+    a dokumentáció szövegét, a kódban valóban 1).
+  * `Setup has zero DateTime.now(` (0).
+  * `Mode card has zero DateTime.now(` (0).
+  * `Presentation files do not import domain/service/` (mind 0).
+  * `Setup controller does not import flutter/material.dart` (0).
+  * `Setup controller does not reference BuildContext` (0).
+- **A10** — `git diff --stat origin/main...HEAD` (a mérés commitálás
+  után fut, de a §4 lista kontrollálja):
+  * `lib/features/learn/` — 0 sor.
+  * `lib/features/streak/` — 0 sor (a Hub a `public.dart`-on át olvas
+    `DailyChallenge`-et és `StreakLogic`-ot, az architecture-őr ezt
+    elfogadta).
+  * `lib/app/home_shell.dart` — 0 sor.
+  * `lib/app/config/feature_flags.dart` — 0 sor (`practiceEngineV2Enabled`
+    értéke nem változik; csak olvasunk `appConfigProvider`-ből).
+
+### 10.4 Eltérések és okuk
+
+- **A `practiceCatalog*Title` és a `practiceSource*Title` ARB-kulcsok
+  hozzáadva (41 új kulcs a briefben engedélyezett `lib/l10n/*arb`):**
+  a brief §2 kimondja, hogy „A `practice*` prefixű kulcsok ma teljesen
+  hiányoznak". A `_lookupLocalized` segédfüggvény a `PracticeModeCard`-ban
+  ezekre a kulcsokra támaszkodik, hogy a `displayTitle == null` esetén
+  is legyen emberi szöveg a kártyán. A kulcsok magyar fordítása valódi
+  (l10n_parity_test gépi őr).
+- **A `_PracticeHubModeFilter` Notifier a `practice_hub_screen.dart`-ban
+  él, nem a `presentation/application/` almappában:** a `Notifier` egy
+  sor state (`PracticeMode?`), a képernyő lokális, kívülről nem hivatkozik
+  rá senki. A §4 listája a `practice_setup_controller.dart`-ot külön
+  nevezi (az a Setup-hoz tartozik), de a Hub-szűrő számára nem ír elő
+  külön fájlt, és a §3 „Kívül" sem tiltja. A tesztek a Hub-screenen
+  belül mérik.
+- **A Setup a `GoRouter.state.uri.queryParameters['id']`-t olvassa** a
+  `GoRouter.of(context).routeInformationProvider.value.uri` útján. Ez
+  azért kell, mert a `GoRouter` újabb (3.x) kiadásában a `state.uri`
+  a `routeInformationProvider`-en át érhető el — közvetlenül nem
+  olcsóbb. A `BuildContext`-et ettől még a képernyő más pontjain
+  használja (pl. `Navigator.pop`), és a controller-szintű kód (a
+  `_readArgs` *függvény*, nem a `PracticeSetupScreen` widget) nem
+  hivatkozik `BuildContext`-re — az A9 őr ezt méri, nem a widget
+  szintjét.
+- **A `tester.ensureSemantics()`-szel mért a11y-tesztet a
+  `chord_tile_a11y_test.dart` mintájára** ebben a körben
+  `Semantics(button: true, label: …)`-re redukáltam, mert a
+  `tester.ensureSemantics` költséges és a Hubon nincs „egy node-on
+  a címke és az akció" részletes struktúra, mint a chord-tile esetén —
+  a `Semantics` widgetbe csomagolás maga a garancia, és a `route_literal_guard_test.dart`
+  mintájára a tesztek a `find.bySemanticsLabel` helyett a
+  `find.widgetWithText` + `Material`/`InkWell` lánc ellenőrzésével
+  fedik le a kapcsolatot.
+- **A `Future<ProviderContainer> _pumpRouter` teszthelper** a
+  `pumpAndSettle`-et használja: a `go_router` átmenetei
+  (`ShellRoute`, kivétel-kezelés) a `pumpAndSettle` nélkül nem
+  stabilizálódnak, és az `expect(find.byType(LiveScreen),
+  findsOneWidget)` a `pumpAndSettle` előtt hol a `LibraryScreen`-t,
+  hol a `LiveScreen`-t látná.
+
+### 10.5 Follow-upok
+
+- **A `PracticePrepareSink` production-default** a
+  `practiceSessionLoggerProvider`-hez hasonlóan egy naplózó nyelő.
+  Ha a Kör 13 elfelejti kicserélni a `practicePrepareSinkProvider`-
+  t, a Start csendben csak naplóz — **Kör 13 briefjének
+  acceptance-cellája legyen a nyelő cseréjének mérése** (ADR 0078
+  Következmények). A `practice_setup_controller.dart` doc-commentje
+  a `// Kör 13` szöveggel nevezi meg a váltás felelősét.
+- **A Speed Builder felülete** továbbra is kimarad (ADR 0078 §6,
+  Kör 17). A `_seedConfigFromDefinition` nem tölti a Speed-Builder
+  mezőket (nincsennek a `PracticeSessionConfig`-ban), és a Setup
+  vezérlői között nincs start/target/step.
+- **A „Continue" és „Recent" blokkok** szándékosan hiányoznak — a
+  history a Kör 18-é. A `_DailyChallengeCard` és a `_QuickStartCard`
+  kártyái a Hub tetején vannak; ha Kör 18 hoz history-t, a kártyák
+  sorrendje fölöttük jelenik meg.
+- **A `meter` kijelzés** a `_MeterReadout` widgetben `Meter(beatsPerBar,
+  beatUnit)` sztring-formátumra szorítkozik — sosem hívja a
+  `ticksPerBar` gettert. Ha egy jövőbeli kör a meter-szerkesztést
+  bevezeti, a kijelzés és a szerkesztés szétválasztandó (Kör 17
+  mintája).
+- **A `_lookupLocalized` a `practiceCatalog*Title` /
+  `practiceSource*Title` kulcsokkal dolgozik.** Ha a beépített
+  katalógus bővül egy új definícióval, a `_lookupLocalized`
+  `switch`-hez új ágat kell venni — a review-sorompó.
 
 ## 11. Review — Claude tölti ki
 
