@@ -38,9 +38,9 @@ chain_log="$state_dir/chain.log"
 
 session_timeout=${PIPELINE_SESSION_TIMEOUT:-14400}   # 4 óra: kör + javító kör + CI
 claude_bin=${CLAUDE_BIN:-claude}
-# Sonnet az orchestrátor-default (user-döntés 2026-07-31: a Claude heti keret
-# kímélése — az implementer úgyis MiniMax, a keretet az orchestrátor fogyasztja).
-claude_model=${PIPELINE_MODEL:-sonnet}
+# Opus 4.8 az orchestrátor-default (user-döntés 2026-07-31: erős reviewer,
+# mérsékelt keret-fogyasztás — az implementer úgyis MiniMax).
+claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
 
 mkdir -p "$state_dir"
 
