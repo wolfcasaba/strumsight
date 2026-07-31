@@ -69,6 +69,41 @@ párosításával **mikroszekundumra egyező** eredményt ad:
 jogosult** — az utolsó mikroszekundumban párosítható. Egy „egységesítsük a két
 predikátumot" refaktor ezt a cellát csendben elveszi.
 
+### 2b. A paritás értelmezési tartománya (kiegészítés, 2026-07-31)
+
+A §2 első mondata — „**mikroszekundumra egyező** eredményt ad" — **feltétel
+nélkül nem tartható**, és ezt az E02-R09 implementációja mérte ki. A legacy
+`LessonScorer` **kerekítetlen `double` másodpercekkel** dönt
+(`timeOf(e) = (countInBeats + e.beat) * 60.0/bpm`), a `CompiledPracticeTarget.time`
+viszont **egész mikroszekundum** (ADR 0066 / ADR 0072). Ahol `60/bpm` nem
+µs-reprezentálható — a lecke-katalógus döntő többsége —, a két időalap
+**legfeljebb 0,5 µs**-ban eltér (round-to-nearest), és ez **kizárólag a döntési
+határon** válik meghatározóvá.
+
+**Döntés: a µs-kvantált időalap az igazság.** A matcher a compiled targetet
+követi, nem a legacy `double`-t. Indoklás: az egész-tick időalap mergelt,
+paritás-tesztelt szerződés (ADR 0066/0072), a `double` visszahozása a domainbe
+két lezárt kört nyitna újra, az eltérés pedig felülről korlátos és **nem
+felhasználó-látható** (0,5 µs = a 44,1 kHz-es mintaidő 1/45-e).
+
+**A P1–P9 tábla ezért így olvasandó:** a szabályok a **compiled, egész-µs**
+időalapon érvényesek, és a legacyvel **bitre egyeznek** minden olyan
+megfigyelésre, amely a döntési határoktól levezetetten elég távol van:
+
+| Döntés | A legacyvel való egyezés levezetett feltétele |
+|---|---|
+| jogosultság (P2) | `\|d_matcher − matchWindow\| ≥ 1 µs` |
+| argmin / holtverseny (P3, P4) | a két legkisebb eltérés `≥ 2 µs`-ban különbözik |
+| zárás (P7) | `\|played − (target.time + matchWindow)\| ≥ 1 µs` |
+
+(A korlátok `\|d_legacy − d_matcher\| ≤ 0,5 µs`-ból következnek, nem választottak.)
+
+**A sávon belül a matcher szándékosan tér el** — két mért cella:
+`first-strums` (70 BPM) határon párosít ott, ahol a legacy extraként dobja el;
+`anthem-drive` (98 BPM) egész-µs felezőponton a **korábbi** célt választja (P4),
+ahol a legacy `double`-eltérései alapján a későbbit. Ez **megnevezett, tesztelt
+viselkedés** (E02-R09 A1c), nem szabad a `double` felé „visszaigazítani".
+
 ### 3. Új viselkedés a legacyn túl
 
 - **Opcionális célesemény** (`CompiledTargetEvent.optional`): párosítható, de

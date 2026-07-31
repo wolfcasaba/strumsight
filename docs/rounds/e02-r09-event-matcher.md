@@ -22,6 +22,90 @@ Következmény: **a `practiceCaptureActiveByStatus` tábla első valódi hívój
 E02-R07 nyitott `MonotonicPracticeSessionClock.start()` NOTE-ja NEM ebben a
 körben zárul** — mindkettő a controller-köré (E02-R11). Ne nyúlj hozzájuk.
 
+## 0.1 Brief-revízió — a paritás értelmezési tartománya (orchestrátor, 2026-07-31)
+
+**Az implementer helyesen állt meg `stopped` jelzéssel: a hiba a briefben volt.**
+Az eredeti §6/A1 „mikroszekundumra egzakt, tűrés nélküli" paritást követelt a
+teljes 17 leckés korpuszon, miközben a bemenet a **µs-ra kvantált**
+`CompiledPracticeTarget`. **Ez a kettő matematikailag összeegyeztethetetlen** —
+nem implementációs hiba, hanem a brief ellentmondása.
+
+### A mért gyökérok (az orchestrátor függetlenül reprodukálta)
+
+A legacy `LessonScorer` **kerekítetlen `double` másodpercekkel** dönt
+(`timeOf(e) = (countInBeats + e.beat) * 60.0/bpm`, `lesson_scorer.dart:241`), a
+compiled target `time` mezője viszont **egész mikroszekundum** (ADR 0066/0072,
+E02-R06 — már mergelt szerződés). Ahol `60/bpm` nem µs-reprezentálható — ami a
+lecke-katalógus **döntő többsége** —, a két időalap **legfeljebb 0,5 µs**-ban
+eltér, és ez pontosan a döntési határon válik meghatározóvá:
+
+| Cella | Mért érték |
+|---|---|
+| `first-strums` (70 BPM), 1. cél | legacy `t = 3.4285714285714284 s` → compiled `3 428 571 µs`; `played = 3 148 571 µs`-nál a legacy eltérés **280 000,42857 µs > 280 ms → extra**, a matcheré pontosan **280 000 µs ≤ 280 ms → párosul** |
+| `anthem-drive` (98 BPM), két szomszédos cél egész-µs felezőpontja | a matcher **egzakt holtversenyt** lát → a **korábbit** választja (P4); a legacy `double` eltérései nem egyenlők (`153 061,408` vs `153 061,041 µs`) → a **későbbit** választja |
+
+### A döntés: a µs-kvantált időalap az igazság
+
+A 0075-ös ADR §2b-ként rögzítve. Indoklás:
+
+1. Az egész-tick/egész-µs időalap **mergelt, paritás-tesztelt szerződés**
+   (ADR 0066 480 PPQ · ADR 0072 compiled target). Az 1. opció — „a nyers
+   `double` az igazság" — két lezárt kört nyitna újra, és a `double`-t
+   visszahozná a domainbe.
+2. Az eltérés **felülről korlátos és nem felhasználó-látható**: 0,5 µs =
+   a 44,1 kHz-es mintaidő **1/45-e**, a milliszekundum 1/2000-e.
+3. **A parity-állítást NEM töröljük és NEM lazítjuk tűréssel.** Az
+   összehasonlítás egzakt marad; azt a **tartományt** mondjuk ki pontosan, ahol
+   a két rendszer egyáltalán összehasonlítható, a kizárt tartományt pedig
+   **saját teszt pinneli ki** — nem elfedjük, hanem megnevezzük.
+
+### Amiért ez nem „gyengítés"
+
+A védősáv **levezetett, nem választott**. Ha `|t_legacy_µs − c_µs| ≤ 0,5`
+(round-to-nearest), akkor minden célra `|d_legacy − d_matcher| ≤ 0,5 µs`, ezért:
+
+- a **jogosultsági** döntés egyezik, ha `|d_matcher − matchWindow| ≥ 1 µs`;
+- az **argmin** (P3/P4) egyezik, ha a két legkisebb matcher-oldali eltérés
+  `≥ 2 µs`-ban különbözik (0,5 + 0,5 kerekítés, egészre felfelé);
+- a **zárási** döntés egyezik, ha `|played − (target.time + matchWindow)| ≥ 1 µs`.
+
+**Sávon kívül a paritás továbbra is bitre egzakt, tűrés nélkül.**
+
+### Amit a §6 helyébe lép (A1 újrafogalmazva, A1b és A1c ÚJ)
+
+**A1 (módosítva).** Változatlanul a **teljes 17 leckés korpusz × 3 latency**,
+egzakt egyenlőség, `closeTo`/epszilon **továbbra is tilos** — de a
+megfigyelés-generátor a fenti **védősávot betartja**, és ezt a harness
+**állítással ellenőrzi** minden szcenárióra, nem véletlenül kerüli el.
+*(A jelenlegi harness 51 szcenárióval, 0 µs eltéréssel zöld — de **véletlenül**,
+mert nem érinti az éleket. Ez az implementer saját, helyes megfigyelése volt;
+a sávot ezért ki kell mondani és le kell ellenőrizni.)* A harness **jelentse a
+kizárt megfigyelések számát** — ha ez nem 0-hoz közeli, az `stopped`.
+
+**A1b (ÚJ, kötelező mérés).** A 17 lecke **minden** eseményére mérd:
+`max |legacy timeOf(e)·1e6 − compiled.time.inMicroseconds|`. Az elvárás
+**≤ 0,5 µs**. Ez bizonyítja, hogy a két időalap között **kizárólag**
+round-to-nearest kerekítés van. Ha nagyobb, az **BLOKKOLÓ** compiler-lelet
+(nem tűréssel elfedendő) → `blocked` a mért számmal.
+
+**A1c (ÚJ, a kizárt tartomány kipinnelése).** Reprodukáld **mindkét fenti
+mért cellát** (`first-strums` határcella, `anthem-drive` holtverseny-cella), és
+állítsd, hogy a matcher a **compiled egész-µs igazságot** követi (párosul,
+illetve a korábbit választja) — a legacy `double`-tól **szándékosan** eltérve.
+Így a divergencia megnevezett, őrzött viselkedés lesz: aki később „visszaigazítja"
+a matchert a `double`-höz, annak ez pirosra fut.
+
+**A2/A4 változatlan** — azok szintetikus, egzaktul µs-reprezentálható célokon
+mérnek, ott az élek bitre tesztelhetők. A négy legacy-él kipinnelése tehát
+**nem sérül**: az A1 kizárt sávja pontosan az a két cella, amit az A2/A4
+szintetikus célon egzaktul mér.
+
+### Ami NEM változik
+
+A §3 scope, a §4 engedélyezett fájllista (**továbbra is négy fájl**, ötödik =
+scope-sértés), a §5 kötött döntések, az A5–A9, és a §9 záró gate. A
+`lib/features/learn/**` zárva marad.
+
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
 ```bash
@@ -207,6 +291,11 @@ egység-, paritás- és property-tesztek.
 Minden pont mellett ott van, **melyik hibás implementációt fogja pirosra**.
 
 ### A1 — Paritás a legacy `LessonScorer`-rel, mikroszekundumra
+
+> ⚠️ **A §0.1 brief-revízió MÓDOSÍTJA ezt a pontot** (értelmezési tartomány +
+> védősáv), és **két új kötelező pontot ad**: **A1b** (a két időalap eltérésének
+> mérése, `≤ 0,5 µs`) és **A1c** (a két mért divergencia-cella kipinnelése).
+> Az alábbi szöveg a védősávon **kívül** érvényes, változatlanul.
 
 Paritás-teszt, ami **ugyanazt** a lecke-tartalmat és **ugyanazt** a pengetés-
 sorozatot futtatja át a legacy `LessonScorer`-en és az új matcheren, majd
