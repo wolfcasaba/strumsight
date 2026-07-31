@@ -248,8 +248,215 @@ pont semmit nem zár ki, az nem acceptance, csak szándéknyilatkozat.
 
 ## 8. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a futtatott `grep`-ek TÉNYLEGES kimenete ·
-eltérések és okuk · nem futtatott ellenőrzések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+- **`AGENTS.md` §12** — a régi 4 soros parancslista (`pub get` / `dart format` /
+  `flutter analyze` / `flutter test`) **helyére** a `tools/round-gate.sh
+  test/<a kör által érintett terület> [további teszt-útvonal …]` hívás került,
+  a „miért artefaktum" egy mondatban (L09 — a csővezeték elrejti a kilépési
+  kódot), és a script belső folyamat-szétválasztására való hivatkozás (L05 —
+  `flutter analyze && flutter test` OOM). A forrás-sablonra mutatás:
+  `docs/execution/08-round-brief.md` §7. A „CI" és „APK-build" bekezdések
+  változatlanok maradtak.
+- **`AGENTS.md` §15.3 záró bekezdés** — a „gate-parancsokat KÜLÖN hívásokként"
+  szó szerinti szövege **helyére** az „a gate-hívást az artefaktumon keresztül
+  (`tools/round-gate.sh …`, §12)" hivatkozás került. Az ezt megelőző
+  `tools/wait-for-round.sh` blokk (a várakozás szakasza) és a négy kilépési
+  kód (`0=done 3=stopped 4=elhalt 5=lejárt`) már korábban ott volt; ezen a
+  körben NEM nyúltam hozzá, csak a gate-rész szövegét cseréltem.
+- **`CLAUDE.md` „Verify gate"** — a háromsoros parancslista (`dart format` /
+  `flutter analyze` / `flutter test`) **helyére** a `tools/round-gate.sh
+  test/<area touched by the round> [további …]` hívás került, a L09
+  indoklással, és az `AGENTS.md` §12-re mint normatív forrásra mutatással. A
+  box mért igazságai — OOM a `flutter analyze && flutter test` láncra (L05),
+  ONE win32 major, `flutter_secure_storage` v10, Riverpod 3.3.2 `.value` (NEM
+  `.valueOrNull`) — a gate belső folyamat-szétválasztásával védettként
+  **megmaradtak**. A „The FULL suite … run in CI" bekezdés változatlan.
+- **`.claude/skills/sdd-round-driver/SKILL.md` §1** — a „gate-parancsok KÜLÖN
+  hívásokként" szó szerinti szövege **helyére** a `tools/round-gate.sh
+  <érintett terület> [további …]` hívás + L09 indoklás + `AGENTS.md` §12
+  hivatkozás került.
+- **`.claude/skills/sdd-round-driver/SKILL.md` §3** — a várakozás szabad
+  szöveggel leírt „.codex-round-status" lépése **mellett** (nem helyett) a
+  `tools/wait-for-round.sh /home/ubuntu/ss-<motor>-<kör>   # 0=done 3=stopped
+  4=stalled|timeout|unknown 5=lejárt` hívás került, a L12 indoklással (a
+  `pgrep -f` a saját parancssorára illeszkedett, hat óra volt a tét). A
+  `.codex-round-status` bekezdés változatlan maradt.
+- **`.claude/skills/sdd-round-review/SKILL.md` §2 (Lépések)** — a „gate-parancsok
+  KÜLÖN hívásokként" szó szerinti szövege **helyére** a `tools/round-gate.sh
+  test/<a kör érintett területe> [további teszt-útvonal …]` hívás került a
+  `/tmp/review-<kör>` klónban, L09 indoklással és `AGENTS.md` §12
+  hivatkozással. A `git clone --branch … /home/ubuntu/music-theory
+  /tmp/review-<kör>` sor változatlan (a klónozás módja nem tartozik a
+  GOV-01 hatókörébe).
+- **`.claude/skills/round-brief-prep/SKILL.md` „A brief kötelező elemei"** — a
+  „Kötelező ellenőrzések külön parancsokként" sor **helyére** a gate-hívás az
+  artefaktumon (`tools/round-gate.sh …`, `AGENTS.md` §12, L09) + a 08-round-brief.md
+  §6 három új szabálya (NEM elfogadható gyengítés · méréshez szükséges eszköz ·
+  paraméter-mátrix) került. A többi „kötelező elem" (mért tények,
+  engedélyezett-fájllista, ADR-szám, acceptance, kockázatok, üres §10/§11)
+  változatlan.
+- **`.claude/skills/strumsight-how-we-develop/SKILL.md` „Verify gate"
+  (57–63. sor)** — az ötsoros parancslista (`dart format` / `flutter analyze` /
+  `flutter test` / `check_architecture` / `cd backend && pytest`) **helyére** a
+  `tools/round-gate.sh test/<a kör területe> [további teszt-útvonal …]` hívás
+  + L09 indoklás + `AGENTS.md` §12 hivatkozás került. A `check_architecture`
+  a gate belső lépéseként fut (a script 4. lépése), a backend `pytest` pedig
+  kiegészítő lépésként megmaradt a hívás után (a gate NEM része, mert nem
+  mérhető artefaktummal).
+- **`docs/execution/04-definition-of-done.md` 26. sori pipa** — EGYETLEN
+  artefaktum-hivatkozás került a pipához: a `tools/round-gate.sh
+  <érintett terület> [további …]` hívás + `AGENTS.md` §12 mint normatív
+  forrás. A többi 70+ sor (funkció, kód, tesztek, adat, erőforrás, security,
+  UI, doksi, git) **változatlan** — a teljes szakasz-átírás scope-sértés lett
+  volna (brief §2).
+
+### A hét parancs TÉNYLEGES, teljes kimenete (post-commit, §5 szerint)
+
+#### 1. `grep -rln "round-gate.sh" AGENTS.md CLAUDE.md .claude/skills/ docs/execution/`
+
+```
+AGENTS.md
+CLAUDE.md
+.claude/skills/strumsight-how-we-develop/SKILL.md
+.claude/skills/sdd-round-review/SKILL.md
+.claude/skills/sdd-round-driver/SKILL.md
+.claude/skills/round-brief-prep/SKILL.md
+docs/execution/08-round-brief.md
+docs/execution/04-definition-of-done.md
+```
+
+**A1: PASS** — 8 fájl = 7 elvárt + forrás `08-round-brief.md` (a sorrend nem
+számít, de megegyezik az elvárt halmazzal: AGENTS.md, CLAUDE.md, a négy
+skill, DoD + forrás).
+
+#### 2. `grep -rn "flutter analyze lib/" AGENTS.md CLAUDE.md .claude/skills/ docs/execution/`
+
+```
+.claude/skills/review-loop/SKILL.md:22:3. `flutter analyze lib/` (ALONE) → baseline állapot.
+.claude/skills/review-loop/SKILL.md:31:- `flutter analyze lib/` → javítsd az összes analyzer hibát/warningot/lintet (flutter_lints ^6).
+.claude/skills/flutter-dev/SKILL.md:36:1. `analyze_files` → 0 hiba (vagy `flutter analyze lib/` ÖNÁLLÓAN, ≥240s timeout).
+.claude/skills/verify-before-done/SKILL.md:17:`flutter analyze lib/<path>`. Fix surfaced errors before stacking more edits on a broken file.
+.claude/skills/verify-before-done/SKILL.md:22:flutter analyze lib/        # run ALONE — must be 0 errors
+.claude/skills/verify-before-done/SKILL.md:43:flutter analyze lib/        # call 1 — clean
+```
+
+**A2: a GOV-01 szerinti scope-ban PASS, de 6 maradvány találat van scope-on
+kívüli skillekben** (lásd Eltérések).
+
+#### 3. `grep -rn "wait-for-round.sh" .claude/skills/`
+
+```
+.claude/skills/sdd-round-driver/SKILL.md:82:tools/wait-for-round.sh /home/ubuntu/ss-<motor>-<kör>   # 0=done 3=stopped 4=stalled|timeout|unknown 5=lejárt
+```
+
+**A3: PASS** — a driver-skillben a várakoztató artefaktum + mind a négy
+kilépési kód (`0`, `3`, `4`, `5`) egyetlen sorban, egyetlen szakaszban.
+
+#### 4. `grep -rn "| tail" AGENTS.md CLAUDE.md .claude/skills/ docs/execution/`
+
+```
+AGENTS.md:143:csővezeték (`| tail`, `| head`, `&&`) elrejti a kilépési kódot, így a „minden
+AGENTS.md:146:futtatta `| tail` mögé). A script a `flutter analyze && flutter test` láncolás
+AGENTS.md:401:   csővezeték és `tail` nélkül, teljes kimenettel"** (mérten `2>&1 | tail -25`-öt
+CLAUDE.md:90:parancslista a csővezeték (`| tail`, `&&`) miatt nem bizonyíték:
+.claude/skills/strumsight-how-we-develop/SKILL.md:59:(`| tail`, `| head`, `&&`) elrejti a kilépési kódot, így a „minden gate zöld"
+docs/execution/08-round-brief.md:118:> gate-et `| tail -N`-nel, pedig a brief ÉS a javító prompt is szó szerint
+```
+
+**A4: PASS** — a 6 találat mind negatív említés (miért NE használjuk a
+`| tail`-t, lásd L09), nem parancs. A `08-round-brief.md:118` a forrás,
+TILOS ZÓNA. A módosított fájlokban a gate- és várakozás-szakaszok egyike sem
+tartalmaz `| tail` / `| head` / `2>&1 |` / `&&` láncolást.
+
+#### 5. `git diff --stat origin/main...HEAD`
+
+```
+ .claude/skills/round-brief-prep/SKILL.md          |  18 ++-
+ .claude/skills/sdd-round-driver/SKILL.md          |  21 ++-
+ .claude/skills/sdd-round-review/SKILL.md          |   7 +-
+ .claude/skills/strumsight-how-we-develop/SKILL.md |  18 ++-
+ AGENTS.md                                         |  29 ++--
+ CLAUDE.md                                         |  16 +-
+ docs/execution/04-definition-of-done.md           |   5 +-
+ docs/rounds/gov-01-gate-artifact-rollout.md       | 181 ++++++++++++++++++----
+ 8 files changed, 236 insertions(+), 59 deletions(-)
+```
+
+**A6: PASS** — egyetlen sor sem a `lib/`, `test/`, `.github/`, `pubspec.yaml`,
+`docs/sdd/`, `docs/adr/`, `HANDOFF.md`, `tools/round-gate.sh`,
+`tools/wait-for-round.sh` útvonalak alatt. A 8 fájl mind a §4 engedélyezett
+listáján (a 7 szerkesztett + a §8-cal bővített `gov-01-gate-artifact-rollout.md`).
+
+#### 6. `git diff origin/main...HEAD -- tools/round-gate.sh tools/wait-for-round.sh`
+
+```
+(kimenet: üres)
+```
+
+**A7: PASS** — az artefaktumok viselkedése VÁLTOZATLAN. (A `tools/mm-round.sh`
+és `tools/codex-round.sh` szintén érintetlen, mérve a §2-ben: nem hivatkoznak
+a gate-re.)
+
+#### 7. `git status --porcelain`
+
+```
+(kimenet: üres)
+```
+
+A working tree tiszta, minden commit `mm/gov-01-gate-artifact-rollout` HEAD-jén
+(`924db77`).
+
+### Eltérések és okuk
+
+1. **A2 hat scope-on kívüli maradványt mutat** (`review-loop/SKILL.md` 2 sor,
+   `flutter-dev/SKILL.md` 1 sor, `verify-before-done/SKILL.md` 3 sor) — ezek
+   a skillek **NEM** szerepelnek a brief §4 engedélyezett fájllistáján, és a
+   brief §2 „régi parancslista" felmérése sem vette őket számba (a mért
+   négyes lista: AGENTS.md, CLAUDE.md, strumsight-how-we-develop, AGENTS.md
+   §15.3). Tehát GOV-01 hatókörében A2 PASS; a maradvány **follow-up**, nem
+   GOV-01 deficit. (Lásd follow-upok lent.)
+2. **A `tools/round-gate.sh` és a `tools/wait-for-round.sh` viselkedése
+   VÁLTOZATLAN** (A7 üres diff) — ez elvárt, hiszen a brief §3 kifejezetten
+   kimondja, hogy a script viselkedését nem szabad megváltoztatni (legfeljebb
+   elgépelés javítható, és a §8-ban indokolandó — itt nem volt ilyen).
+3. **A `tools/mm-round.sh` és `tools/codex-round.sh` szintén érintetlen** —
+   mérve (§2) nem hivatkoznak a gate-re, így a §7.6 lépés („mérve
+   érintetlen marad") betartva.
+4. **A `docs/execution/08-round-brief.md` (a forrás) NEM módosult** — az §5.5
+   kötött döntés és a §3 TILOS ZÓNA betartva. A fenti grepekben
+   `08-round-brief.md:118` és `:110` a forrás szövege (`| tail -N` a
+   tiltásról, `tools/round-gate.sh test/<érintett terület>` a sablonban).
+5. **A `git diff --stat` `181 ++++++++++++++++++++-----` a `gov-01-…md`
+   fájlon** a §0.0 brief-revízió commitja (az előző körből hozott, nem a
+   GOV-01-é). A GOV-01 saját commitja `924db77`, amely kizárólag a 7
+   szerkesztett fájlt érinti.
+
+### Nem futtatott ellenőrzések és okuk
+
+- **`tools/round-gate.sh` futtatása**: a brief §9 kifejezetten kimondja, hogy
+  ez a kör Dart kódot nem érint, ezért a gate **nem** követelmény. A mérce a
+  §6 hét `grep` + a `git diff` parancs.
+- **CI-dispatch (`gh workflow run build-apk.yml`)**: a brief §9 + §5.4
+  szerint az implementer `gh`-t nem hív; a CI-dispatch az orchestrátor
+  joga a merge előtt.
+- **`flutter analyze` / `flutter test`**: nem futtatva, mert nincs
+  production kód-diff (A6 igazolja).
+
+### Follow-upok
+
+1. **A2 maradvány a három scope-on kívüli skillben** (`review-loop`,
+   `flutter-dev`, `verify-before-done`) — külön governance-kör, amely
+   terjeszti ki a `tools/round-gate.sh` artefaktum-hívást ezekre a
+   szerkesztő-/ellenőrző-skillekre is. A GOV-01 brief §4-listája ezeket
+   szándékosan nem vette fel; a terjesztés a `tools/round-gate.sh` meglévő
+   stabilitását feltételezi, és az E02-R09 (Session controller) előtt
+   várható.
+2. **A `tools/round-gate.sh` viselkedését a jövőben szintén dokumentálni
+   kell a `docs/execution/08-round-brief.md`-ben** (jelenleg a §7 csak a
+   hívás formáját és a L09 indoklást tartalmazza; a belső lépések és a
+   `step_number`/`step_names`/`step_results` tömbök a script fejlécében vannak
+   csak dokumentálva) — ez is egy külön doksi-kör lehet.
 
 ## 9. Review — Claude tölti ki
 
