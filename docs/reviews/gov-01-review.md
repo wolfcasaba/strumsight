@@ -116,6 +116,38 @@ be. Ez nem valótlan állítás, csak a mérés természetes időpont-eltolódá
 a többi hat parancs kimenete az én független mérésemmel **karakterre egyezik**.
 Nem blokkol.
 
-## 5. Javító kör
+## 5. Javító kör — **APPROVED**
 
-*(A §0.2 brief-revízió alapján — a lezárást leletenként ellenőrizve.)*
+- **Javító commit:** `2770f5c` (implementer: MiniMax M3, jelzés `status=done`)
+- **Diff:** `.claude/skills/verify-before-done/SKILL.md` **+3 sor** ·
+  `docs/rounds/gov-01-gate-artifact-rollout.md` +77 sor (a §8 „Javító kör"
+  alszakasza). Más fájl nem változott.
+
+**MINOR-1 — LEZÁRVA.** Saját mérés friss `/tmp/review-gov01b` klónban:
+
+```
+$ grep -rn "round-gate.sh" .claude/skills/verify-before-done/SKILL.md
+.claude/skills/verify-before-done/SKILL.md:43:> **StrumSight:** a lokális mérce a `tools/round-gate.sh <érintett terület> [további ...]` artefaktum (normatív forrás: `AGENTS.md` §12; indoklás: a csővezeték elrejti a kilépési kódot — `docs/LESSONS.md` L09). Az alábbi mobil-blokkok mint általános projekt-független ellenőrzések maradnak.
+```
+
+**A8 PASS** — egy találat, és a fájl 3 sorral nőtt (a plafon 6 volt). A
+hivatkozás közvetlenül a „Tier 4 — before 'DONE' … (the full gate)" cím alá,
+a `flutter analyze lib/` blokk **elé** került, tehát az olvasó nem tudja
+kihagyni. A skill általános mobil-blokkjai (17., 22., 46. sor) az előírás
+szerint **megmaradtak** — a skill nem íródott át StrumSight-ra.
+
+`grep -rn "flutter analyze lib/" …` maradék találatai a `review-loop` és a
+`flutter-dev` skillben, valamint a `verify-before-done` általános soraiban —
+**mind a §0.2 lezárt döntése szerint elvárt**.
+
+**NOTE-1 és NOTE-2** nem blokkol, javítást nem igényel; a NOTE-1-ből tanulság
+lesz (`docs/LESSONS.md`).
+
+### Merge-döntés
+
+A brief §9 szerint ez a kör Dart kódot nem érint, ezért a `tools/round-gate.sh`
+nem követelmény; a mérce az A1–A8 mátrix, ami **teljes egészében zöld**, saját,
+független újraméréssel. A CI-dispatch a kör-branchre a merge előtt ettől
+függetlenül kötelező (ADR 0052) — a run linkje a PR törzsében.
+
+**Verdikt: APPROVED.**
