@@ -10,6 +10,9 @@ library;
 /// The strum-engine seam (real/mock) Learn drives during a lesson.
 export 'engine/strum_engine.dart';
 
+/// The frame the Practice observation gateway adapts (E02-R08).
+export 'model/live_frame.dart';
+
 /// Live frame stream + engine lifecycle providers.
 export 'providers/live_providers.dart';
 

@@ -96,6 +96,12 @@ abstract final class PracticeValidationCode {
   static const String targetDefinitionMismatch = 'target.definitionMismatch';
   static const String targetVariationMismatch = 'target.variationMismatch';
   static const String targetLoopRangeInvalid = 'target.loopRangeInvalid';
+  static const String observationConfigConfidenceOutOfRange =
+      'observationConfig.confidence.outOfRange';
+  static const String observationConfigStableDurationNonPositive =
+      'observationConfig.stableDuration.nonPositive';
+  static const String observationConfigMaxLagNonPositive =
+      'observationConfig.maxLag.nonPositive';
 
   /// The complete validation-code catalogue for the current Practice domain.
   static const Set<String> allCodes = {
@@ -165,6 +171,9 @@ abstract final class PracticeValidationCode {
     targetDefinitionMismatch,
     targetVariationMismatch,
     targetLoopRangeInvalid,
+    observationConfigConfidenceOutOfRange,
+    observationConfigStableDurationNonPositive,
+    observationConfigMaxLagNonPositive,
   };
 
   /// Backward-compatible name for [allCodes].

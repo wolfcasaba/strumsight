@@ -77,6 +77,9 @@ void main() {
           'target.definitionMismatch',
           'target.variationMismatch',
           'target.loopRangeInvalid',
+          'observationConfig.confidence.outOfRange',
+          'observationConfig.stableDuration.nonPositive',
+          'observationConfig.maxLag.nonPositive',
         }),
       );
       expect(PracticeValidationCode.values, PracticeValidationCode.allCodes);

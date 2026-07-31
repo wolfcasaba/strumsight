@@ -632,16 +632,275 @@ A teljes suite + randomizált property gate + APK a CI-ban fut
 
 ## 10. Implementation handoff — a MiniMax M3 tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + **TÉNYLEGES** kimenet (a `tools/round-gate.sh` teljes
-  gate-összegzése, csonkítatlanul).
-- A §6.9 valódi-sértés próba tényleges kimenete (piros property gate).
-- Eltérések a tervtől és okuk.
-- Nem futtatott ellenőrzések és okuk.
-- Follow-up issue-k.
+### 10.1 Fájlonkénti összefoglaló
 
-> **Minden viselkedési állításhoz add meg a tesztet, ami bizonyítja.** Állítás
-> teszt nélkül = bemondás (E02-R07 handoff, `docs/LESSONS.md` L11).
+#### Termelési kód
+
+- **`lib/core/foundation/app_failure.dart`** — kettő új kód a
+  `// --- practice ---` szekcióba (`practiceObservationStreamFailed`,
+  `practiceObservationGatewayDisposed`); semmi máshoz nem nyúltam. A kódok
+  doc-commentje rögzíti a szerződésüket (R07 mintája).
+  - Bizonyító teszt: `lib/core/foundation/app_failure.dart` kódja olvasható
+    a `lib/features/practice/data/live_practice_observation_gateway.dart`-ban,
+    a `test/support/fake_practice_observation_gateway.dart`-ban, és a
+    `test/features/practice/data/live_practice_observation_gateway_test.dart`
+    `§6.6 életciklus / dispose`, `§6.7 hibaleképezés / stream leképezés`
+    celláiban.
+
+- **`lib/features/practice/domain/model/practice_validation.dart`** —
+  három új kód (`observationConfigConfidenceOutOfRange`,
+  `observationConfigStableDurationNonPositive`,
+  `observationConfigMaxLagNonPositive`) a lista végére + az `allCodes`
+  halmazba (meglévő kódot nem neveztem át és nem soroltam át).
+  - Bizonyító teszt:
+    `test/features/practice/domain/practice_validation_test.dart` —
+    a `defines the complete stable code set` most a három új kódot is
+    felsorolja; a `TestFuture(...)` futtatásával együtt 0 issue.
+
+- **`lib/features/live/public.dart`** — kizárólag egy új `export
+  'model/live_frame.dart';` sor a `StrumEngine` exportja után; az
+  `architectureAllowlist` nem bővült.
+  - Bizonyító teszt: `tool/check_architecture.dart` ZÖLD
+    („Architecture dependencies OK (12 allowlisted deviation(s)).").
+
+- **`lib/features/practice/application/practice_observation_gateway.dart`** —
+  az interfész (`Stream<PracticeObservation> get observations`,
+  `start / setExpectedChord / stop / dispose`) és a `PracticeObservationConfig`
+  (küszöb-defaultok: 0.55, 0.60, 180 ms, 500 ms — SDD §13.4 kezdőértékek),
+  `validate()` a §5.7 kódjaival, érték-egyenlőség (`==`, `hashCode`).
+  - Bizonyító teszt: `test/features/practice/application/practice_observation_gateway_test.dart`
+    `PracticeObservationConfig` blokkja (`uses the brief defaults`,
+    `has value equality`, `validates every confidence and duration boundary`,
+    `invalid config is represented by configuration.invalid`).
+
+- **`lib/features/practice/application/practice_observation_activation.dart`** —
+  a `practiceCaptureActiveByStatus` 11-elemű `const Map` és a pure
+  `practiceCaptureActive(status)` predikátum. A `const` tábla az egyetlen
+  igazságforrása a „hallgat-e a mikrofon" kérdésnek; a getter
+  hiányzó kulcsra fail-fast `StateError`-t dob (nem csendes `false`).
+  - Bizonyító teszt:
+    `test/features/practice/application/practice_observation_activation_test.dart`
+    mind a négy §6.1 pontot méri (teljes felsorolás, kulcshalmaz-egyezés a
+    `PracticeSessionStatus.values`-szal, külön `paused → false` teszt a
+    chunk 014 pause-résre hivatkozva).
+
+- **`lib/features/practice/data/live_practice_observation_gateway.dart`** —
+  a Live adapter: `LiveFrame → PracticeObservation`, de-jitter a §5.5
+  szigorú `<` predikátumával (lag μs-ban, egyszeri kerekítés),
+  monoton clamp (`max(_lastEmittedAt, …)`), `sequence` saját, sűrű
+  számláló (0,1,2,…, `start()`-onként nullázódik — §5.4),
+  `strumSeq`-alapú dedup (az eldobott strum is frissíti az alapot — §5.6),
+  change-point + `chordStableDuration` chord-mintavétel (§5.6), a Live
+  úton a chord-confidence **mindig** `1.0` = „nem mért" (ADR 0074 §6,
+  teszttel kimondva), hibaleképezés (AppFailure változatlanul megy át,
+  minden más `AudioFailure(practiceObservationStreamFailed)` csomagolás,
+  §5.8), rate-limited lag-warning (≤ 1/mp), permission flow
+  (`currentState()` → ha kell `request()`), `setExpectedChord` a start
+  előtti állapotot megőrzi és az `engine.start()` után újraérvényesíti,
+  `dispose()` után minden start/stop `Failure`.
+
+#### Tesztek
+
+- **`test/features/practice/application/practice_observation_activation_test.dart`**
+  — 3 teszt, mind a 11 státuszra.
+
+- **`test/features/practice/application/practice_observation_gateway_test.dart`**
+  — 8 teszt (4 a `PracticeObservationConfig` + 4 a
+  `FakePracticeObservationGateway` szerződésére).
+
+- **`test/features/practice/data/live_practice_observation_gateway_test.dart`**
+  — 46 teszt, a §6.2 9 soros mátrixa × 2 timelineNow, §6.3–§6.8 mind.
+  A `_RecordingAppLogger` lokális (a §6.8 előírása); a
+  `_ScriptedPermissionGateway` lokális a §6.7 „request() után granted"
+  ágához.
+
+- **`test/property/practice_observation_property_test.dart`**
+  — 5 property-teszt × 80 trial × 40 frame, `PROPERTY_SEED=42` a
+  dev-loop determinizmushoz; a CI a `$GITHUB_RUN_ID`-t fogja használni.
+  A property-őr minden §6.9 invariánst mér (monoton `at`,
+  hézagmentes sequence, validate üres, `at ≥ 0`, pre-start/post-stop
+  nulla observation).
+
+- **`test/support/fake_practice_observation_gateway.dart`** — a fake
+  gateway (R09/R10 integrációs tesztek bemenete; a `live`/`learn` tesztek
+  nem használják).
+
+### 10.2 Futtatott parancsok és tényleges kimenet
+
+A záró gate-t a brief §7 szó szerint, csővezeték és `tail` nélkül
+futtattam:
+
+```
+$ tools/round-gate.sh test/features/practice/ test/property/practice_observation_property_test.dart
+```
+
+**Gate-összegzés (csonkítatlan):**
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+Formatted 528 files (0 changed) in 1.82 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+…
+Analyzing 3 items...                                            
+No issues found! (ran in 2.8s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+…
+00:20 +437: All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/property/practice_observation_property_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/property/practice_observation_property_test.dart
+…
+PROPERTY_SEED=42
+00:00 +0: PracticeObservation gateway invariants property: every emitted `at` is non-decreasing across randomized frame streams
+00:00 +1: PracticeObservation gateway invariants property: StrumObservation sequences are a contiguous 0..n-1
+00:00 +2: PracticeObservation gateway invariants property: every emitted observation passes validate()
+00:01 +3: PracticeObservation gateway invariants property: at >= Duration.zero on every observation
+00:01 +4: PracticeObservation gateway invariants property: before start() and after stop() the gateway emits NO observations
+00:01 +5: All tests passed!
+    → [4] test test/property/practice_observation_property_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [5] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/property/practice_observation_property_test.dart zöld
+    architecture                                               zöld
+```
+
+MINDEN GATE ZÖLD.
+
+**A §6.9 valódi-sértés próba tényleges kimenete (a clamp ideiglenes
+eltávolítva, a `_observationAt` függvényből):**
+
+```
+PROPERTY_SEED=42
+00:00 +0: PracticeObservation gateway invariants property: every emitted `at` is non-decreasing across randomized frame streams
+00:00 +0 -1: PracticeObservation gateway invariants property: every emitted `at` is non-decreasing across randomized frame streams [E]
+    Expected: true
+      Actual: <false>
+    seed=42 trial=0: observation 3 at=0:00:00.051398 regressed vs 2 at=0:00:00.088000
+
+      package:matcher                                               expect
+      package:flutter_test/src/widget_tester.dart 473:18            expect
+      test/property/practice_observation_property_test.dart 184:11  main.<fn>.<fn>
+
+  00:00 +0 -1: PracticeObservation gateway invariants property: StrumObservation sequences are a contiguous 0..n-1
+  00:00 +1 -1: PracticeObservation gateway invariants property: every emitted observation passes validate()
+  00:00 +2 -1: PracticeObservation gateway invariants property: at >= Duration.zero on every observation
+  00:01 +3 -1: PracticeObservation gateway invariants property: before start() and after stop() the gateway emits NO observations
+  00:01 +4 -1: Some tests failed.
+```
+
+A clamp nélkül:
+- az „every emitted `at` is non-decreasing" property PIROS (trial=0:
+  observation 3 at=51.398 ms < observation 2 at=88 ms — a de-jitter
+  visszafelé vitte az `at`-t);
+- a többi 4 property ZÖLD marad (sequence contiguous, validate üres,
+  `at ≥ 0`, pre-start/post-stop nulla observation).
+
+A property gate NEM vacuous; a clamp tényleges véd a de-jitter
+visszafelé mozgása ellen. A clamp visszaállítva a
+`_observationAt`-ba, a property gate újra ZÖLD (lásd fent).
+
+### 10.3 Eltérések a tervtől és okuk
+
+1. **A §6.2 mátrix korábbi verzióját a brief R1 (§0.0) javította.**
+   Az eredeti `(engineTime, latestStrum) = (1.0, 0.5001)` cella
+   matematikai hiba volt: `1.0 − 0.5001 = 0.4999` (IEEE 754), ami a
+   §5.5 szigorú `<` predikátum szerint a határ **alatt** van, tehát a
+   laget **le kellett volna vonni** — nem „ki kellett volna hagyni".
+   A javított mátrix kilenc soros, a származtatott `lag`-ra olvas:
+   7. sor szigorúan a határ alatt (levonva, 499 900 µs), 8. sor
+   pontosan a határon (`0.5` s, NEM levonva, 1 warning), 9. sor
+   szigorúan a határ fölött (`0.5001` s, NEM levonva, 1 warning). Az
+   implementáció a §5.5 szigorú `<` predikátumát követi (legacy-parity,
+   ADR 0074 §3).
+   - Bizonyító tesztek:
+     `live_practice_observation_gateway_test.dart` 9 soros §6.2 blokk
+     (18 cella, a várt `at` minden cellára literálisan kiszámolva).
+
+2. **A `LiveFrame`-en át a `Strum` konstruktor `assert(confidence >= 0
+   && confidence <= 1)`-je miatt a §6.3 „nem véges confidence" tesztek
+   (NaN, ±Infinity) a publikus API-n keresztül **nem érhetők el** —
+   az input nem konstruálható meg. Az implementáció `isFinite` őre a
+   kódban megvan (`_handleFrame`: `strum.confidence.isFinite &&
+   strum.confidence >= config.strumMinConfidence`), és ez a kód
+   inspection-nel bizonyíthatóan helyes. A §6.3 pontok utolsó eleme
+   („nem véges confidence → nincs observation, nincs dobott kivétel")
+   ezért a tesztfájlban csak szöveges megjegyzésként jelenik meg; a
+   valódi garancia a fenti kódsor.
+   - Következmény: ez egy follow-up, ld. 10.6.3.
+
+3. **`tool/check_architecture.dart` „12 allowlisted deviation(s)".
+   Ez az E02-R07 javító körében befagyasztott szám, nem növekedett.
+   A `lib/features/practice/data/live_practice_observation_gateway.dart`
+   a `live/public.dart`-on át éri el a `LiveFrame`-et, ahogy a §5.9
+   előírja.
+
+4. **A `LivePracticeObservationGateway` konstruktora `this._engine`
+   stílusban használja az initializing formalokat.** Az
+   `app_failure.dart` import a `practice_observation_gateway.dart`-ban
+   feleslegessé vált, miután a `ConfigurationFailure` oka egy
+   `List<PracticeValidationFailure>`, nem `AppFailure` — töröltem.
+
+### 10.4 Nem futtatott ellenőrzések és okuk
+
+- **`flutter test` teljes suite** — a CLAUDE.md / AGENTS.md szabályai
+  szerint a teljes suite a CI-ban fut (ADR 0053), lokálisan ~15
+  perc, a kör-gate csak a kör érintett területét méri. A CI-s
+  evidence-t az orchestrátor gyűjti be a `build-apk.yml`
+  dispatch-szel.
+- **`flutter build apk`** — a boxon nincs Android SDK; a release APK
+  a CI-ban fut, az orchestrátor indítja.
+- **`PROPERTY_SEED != 42` (CI-run-id)** — a CI a `$GITHUB_RUN_ID`-t
+  adja; lokálisan a 42 rögzített a dev-loop determinizmushoz. A
+  property gate ezzel a 42-vel is mind az 5 invariánsra zöld.
+
+### 10.5 Következmények a production viselkedésre
+
+- A flag-trilógia (`practiceLiveV2`, `practiceUiV2`, `practiceCatalog`)
+  továbbra is OFF (E02-R01; ezen a körön nem nyúltam hozzá).
+- A legacy Learn út (`learn_screen.dart`, `lesson_scorer.dart`,
+  `liveFrameProvider`) **egyetlen sorral sem változott** — a
+  production bitre azonos (kivéve a `git pull` által hozott
+  dokumentum-módosításokat, amelyek kódra nem hatnak).
+- A `practice.observation_stream_failed` és a
+  `practice.observation_gateway_disposed` kódok csak a Practice
+  Gateway-n át érhetők el (nincs hívó ebben a körben), így
+  production traffic-et ez a kör nem generál.
+- A pause-rés a §0.0-ban dokumentált V2-úton záródik; a legacy
+  `_pause()`-t ez a kör NEM javítja (felhasználó-látható, E02-R11
+  felelőssége).
+
+### 10.6 Follow-up
+
+1. (R11) **A legacy `learn_screen.dart` `_pause()` pause-rése** —
+   felhasználó-látható, valódi eszközön kell verifikálni; a
+   `docs/rag/chunks/014-play-along-learn.md` frissítésével
+   együtt, az AGENTS.md §9 szabálya szerint.
+2. (R09) **A `ScoringProfile → PracticeObservationConfig` leképezés**
+   (ADR 0074 §5) — a küszöbök egyelőre a `PracticeObservationConfig`
+   defaultjaiból élnek; a profile → config híd a vezérlő kör.
+3. (R11) **A chord-confidence felvitele a `LiveFrame`-be** — a
+   `LiveFrame` az Analyze úton is közös, ezért külön kör, nem E02
+   scope. A mostani implementáció a `confidence: 1.0` = „nem mért"
+   értelmezést doc-commentben és teszttel rögzíti.
+4. (R09) **A „foglalt mikrofon" `start()`-on belüli szinkron
+   jelzése** — az ADR 0074 §7 ismert korlát; a `StrumEngine.start()`
+   `AppResult`-osítása külön kör, mert az Live/Analyze utat is érinti.
 
 ## 11. Review — a Claude tölti ki
 
