@@ -626,3 +626,200 @@ gate-újrafuttatással és tételes 29/29 scope-audittal:
 [`docs/reviews/e02-r03-review.md`](reviews/e02-r03-review.md).
 Merge: [PR #24](https://github.com/wolfcasaba/strumsight/pull/24).
 A NOTE-3 (chord-label konzisztencia) az E02-R05-ben lezárva.
+
+---
+
+## H) E02-R10 kör-összefoglaló (a 2026-07-31-i HANDOFF §5 teljes tartalma, E02-R11 merge-ekor archiválva)
+
+## 5. Last completed round
+
+**E02-R10 — Timing, direction és chord scorer**
+([ADR 0076](docs/adr/0076-practice-scoring-dimensions.md) implementációja, PR #33):
+négy pure domain service a `lib/features/practice/domain/service/` alatt —
+**timing** (grade + eseménypont + előjeles bias), **direction** (outcome +
+dimenzió), **chord** (inkluzív, aszimmetrikus `[−120 ms, +420 ms]` ablak, öt
+outcome) és az **aggregátor** (overall + completion + pass + legacy combo/pont).
+Ez a `PracticeVerdict` és a `PracticeMetrics` **első előállítója** (a modellek az
+R03 óta álltak, eddig csak tesztek konstruálták őket). Hívó, provider és UI
+nincs, a practice flagek OFF-ban → **production viselkedés változatlan**.
+Implementer: **Codex**.
+
+**A kör két kötött invariánsa**, mindkettő a projekt mért hibaosztályaiból:
+
+1. **Egész ezrelék belül, `perMille / 1000` kifelé.** A `0.8 − 0.45 · ratio`
+   lebegőpontos alak a match-határon `0.35000000000000003`-at adna, tehát a
+   350-es cella egzakt teszttel nem lenne fogható.
+2. **„Nem mértük" ≠ „nulla".** Az el nem érhető dimenzió kimarad az overall
+   **nevezőjéből is**; a nulla-kitöltéses változat 1000 helyett 650-et adna.
+
+**Modell-bővítés (additív):** a `ChordOutcome` a végére fűzve kapott egy
+`noDetection` értéket — a **pre-flight** mérte ki, hogy a brief ezt előírta,
+miközben az enum négyértékű volt és a fájl tiltott zónában (feloldás:
+ADR 0076 §5b, brief §0.0/R2). Az E02-R15 briefje már erre a megkülönböztetésre
+épül.
+
+**Paritás:** a legacy `LessonScorer`-rel **51 forgatókönyvön** (17 lecke ×
+0/40/300 ms latency) egzakt egyezés, **nulla** védősávba eső kizárt eseménnyel.
+Az A7b mért időalap-maximuma **0,489795919508 µs** az `anthem-drive[23]`
+eseményen — **bitre** az az érték és ugyanaz az esemény, amit az E02-R09 az
+[ADR 0075 §2b](docs/adr/0075-practice-event-matcher.md)-ben függetlenül kimért.
+
+Review: **APPROVED első körben** (0 BLOCKER · 0 MAJOR · 0 MINOR · 3 NOTE):
+[`docs/reviews/e02-r10-review.md`](docs/reviews/e02-r10-review.md). A reviewer
+izolált klónban futtatta újra a gate-et (exit 0), és **három valódi-sértés
+próbát** injektált — nulla-kitöltés → **A4 piros**, lebegőpontos alak → **A1
+határcella piros** (mindkét előjel), a `good` alappont 70→71 → **A7 paritás
+piros**. Mind a három a helyes tesztet fogta meg. A három NOTE nem blokkol és
+mind az **R11**-re szól (a legfontosabb: a direction-scorer „volt-e egyáltalán
+jel" döntése ma a bemeneti map ürességéből következik — lásd §6).
+
+**Eszköz-lelet:** az első Codex-futást a `codex-round.sh` 3600 s-os abszolút
+időkorlátja lőtte ki (nem elakadás: a munka és a zöld gate készen volt, a
+kilövés a handoff kitöltése közben ért). A zárás a crash-resume mintával,
+ugyanazzal a session-iddel, a **teljes gate kötelező újrafuttatásával** készült.
+Menet közben kiderült: a `codex exec resume` **nem fogadja el a `-C` és a `-s`
+kapcsolót** — a sandbox `-c sandbox_mode='"danger-full-access"'` alakban adandó
+át. Follow-up: a `tools/codex-round.sh` kapjon resume-módot.
+
+### Korábbi kör
+
+**E02-R09 — Event matcher és legacy timing parity**
+([ADR 0075](docs/adr/0075-practice-event-matcher.md) implementációja, PR #32):
+pure, determinisztikus, **kurzoralapú** `PracticeEventMatcher` — eldönti, melyik
+`StrumObservation` melyik `CompiledTargetEvent`-hez tartozik, és mikor zárul egy
+cél kimaradásként. Pontozás-mentes, megfigyelést nem tárol, az opcionális célt
+külön feloldással zárja. Hívó, provider és flag nincs → production viselkedés
+bitre azonos.
+
+**A kör érdemi hozadéka egy szerződéshiba megfogása volt.** Az eredeti A1
+tűrés nélküli µs-paritást írt elő a legacyvel szemben, miközben a bemenet
+µs-ra kvantált — **matematikailag teljesíthetetlen**. A legacy kerekítetlen
+`double`-lel dönt, a compiled target egész µs-mal (ADR 0066/0072); ahol
+`60/bpm` nem µs-reprezentálható (a katalógus döntő többsége), a két időalap
+≤ 0,5 µs-ban eltér, ami **csak a döntési határon** meghatározó.
+**Döntés (ADR 0075 §2b): a µs-kvantált alap az igazság** — a parity-állítás nem
+törlődött és nem lazult tűréssel, hanem a **levezetett** védősávon kívül bitre
+egzakt maradt, a kizárt sávot pedig két új acceptance-pont pinneli ki:
+**A1b** (a két időalap eltérése mind a 348 eseményen: max **0,489795919508 µs**)
+és **A1c** (a két divergencia-cella reprodukálva).
+Implementer: **Codex**.
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · **1 MINOR** ·
+3 NOTE), javító kör után **APPROVED**:
+[`docs/reviews/e02-r09-review.md`](docs/reviews/e02-r09-review.md).
+A reviewer a gate-et saját kezűleg futtatta izolált klónban, és **17 eldobható
+valódi-sértés próbát** vitt a matcherbe (operátorpár, holtverseny-irány, latency
+mindkét ágon, kurzorosság, a paritás **non-vacuity**-ja, `==` mezőnkénti fedése)
+— mind pirosra futott, egy szándékos kivétellel (konstans `hashCode`: a
+Dart-szerződés szerint legális, tehát a próba volt rossz, nem a teszt).
+
+**Folyamat-hozadék:** az implementer **háromszor** állt meg `stopped` jelzéssel,
+és **mindháromszor az orchestrátor mércéje hibázott** — a teljesíthetetlen A1,
+egy idealizált rácsból számolt referenciacella (`anthem-drive`: a hivatkozott
+`beat 0 → 0,5` pár nem is létezik a leckében), és egy önellentmondó javító-
+előírás (privát konstruktor + származtatott mező mellett „mezőnként izolált"
+teszt). **Egyszer sem tágított fájllistát és egyszer sem igazította hozzá
+csendben a tesztet.** Ebből lett a `docs/LESSONS.md` **L16**.
+
+### Korábbi kör
+
+**GOV-01 — A gate- és várakoztató artefaktum átvezetése** (governance-kör,
+nem SDD-fejezet, PR #31): a `tools/round-gate.sh` és a `tools/wait-for-round.sh`
+**futtatható artefaktumok** átvezetése mindenhova, ahol eddig kézzel felsorolt
+parancslista vagy szabad szöveg állt — `AGENTS.md` §12 (a normatív forrás) és
+§15.3, `CLAUDE.md`, négy kör-skill (`sdd-round-driver`, `sdd-round-review`,
+`round-brief-prep`, `strumsight-how-we-develop`), a `verify-before-done` skill
+és a DoD. A `sdd-round-driver` §3-ba bekerült a várakoztató artefaktum mind a
+négy kilépési kódjával (`0=done`, `3=stopped`, `4=stalled|timeout|unknown`,
+`5=lejárt`) — ez az L12 hatórás vakfoltjának szerkezeti lezárása.
+Implementer: **MiniMax M3**.
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · 0 MAJOR · **1 MINOR** ·
+2 NOTE), javító kör után **APPROVED**:
+[`docs/reviews/gov-01-review.md`](docs/reviews/gov-01-review.md).
+A MINOR **az orchestrátor felmérési hibája volt**, nem az implementeré: a
+felmérő greppet a hosszabb `flutter analyze lib/ test/` alakra futtattam, ezért
+három, a rövidebb alakot használó skill kimaradt a brief §4-listájából — köztük
+a `verify-before-done`, amire a `CLAUDE.md:116` **név szerint ráirányít**. Az
+implementer helyesen nem tágította a listát, hanem jelentette; a feloldás
+dokumentált brief-revízió (§0.2). Ebből lett a `docs/LESSONS.md` **L15**.
+
+### Korábbi kör
+
+**E02-R08 — Observation gateway és audio lifecycle adapter**
+([ADR 0074](docs/adr/0074-practice-observation-gateway.md) implementációja,
+PR #30): a `LiveFrame → PracticeObservation` híd, és a kör lényege — **a
+mikrofon-hallgatás igazságforrása az E02-R07 session-státusza lett, nem egy
+widget-mező**. A `practiceCaptureActiveByStatus` `const` tábla mind a 11
+státuszra terjed ki, a kulcshalmaz-egyezést teszt őrzi (új státusz ⇒ piros, nem
+csendes `false`), és a `paused → false` a `docs/rag/chunks/014-play-along-learn.md`
+**pause-résének szerkezeti lezárása a V2 úton**. Az adapter a legacy időfelosztást
+őrzi: engine-óra de-jitter a szigorú `<` predikátummal, a kalibrált input latency
+a matcheré marad (ADR 0074 §3). Hívó és provider nincs, a legacy Learn út és a DSP
+érintetlen, flagek OFF → production viselkedés bitre azonos.
+Implementer: **MiniMax M3** (a user döntése).
+
+Review: első kör **CHANGES REQUESTED** (0 BLOCKER · **2 MAJOR** · 1 MINOR · 3 NOTE),
+javító kör után **APPROVED**:
+[`docs/reviews/e02-r08-review.md`](docs/reviews/e02-r08-review.md).
+**Mind a hat lelet 437 zöld teszt és 5 zöld property mellett csúszott át** — két
+eldobható próbateszt mérte, a legacy referenciával szemben: a frame-kézbesítési
+lag a chord observationökre is rámehetett egy beégett, MÁSIK strum lagjával
+(`2.000 s` → `1.700 s`), és a **közös monoton padló kioltotta a strum
+de-jittert** (`0.916 s` → `1.000 s`, azaz a 84 ms-os korrekcióból 0 maradt). A
+javítás után a próbák eltérése a legacy képlettől **0 µs**.
+
+**Folyamat-hozadék:** a kör három **orchestrátor-oldali** hibát is termelt, mind
+a mércét érintve — hiányzó küszöb-fölötti mátrixcella (az implementer
+`stopped`-dal fogta meg), kimondatlan korrekciós hatókör, és egy olyan
+valódi-sértés próba, amit a kért őr elvileg sem tudott volna kimutatni. Ebből
+két dokumentált brief-revízió (§0.0, §0.1), a `docs/LESSONS.md` **L12–L14**, és
+a `tools/wait-for-round.sh` futtatható várakoztató artefaktum lett.
+
+### Korábbi kör
+
+**E02-R05 — Legacy adapterek: Lesson / Song / Analyze / Daily Challenge**
+([ADR 0071](docs/adr/0071-legacy-practice-adapters.md) implementációja, PR #26):
+négy tiszta adapter a `lib/features/practice/data/adapters/` alatt, mind
+`AppResult<PracticeDefinition>`-t ad és sosem dob · **Lesson (+Easy)**
+esemény-szintű parity mind a 17 szállított leckére, egzakt tick-egyenlőséggel ·
+**Song** a `toLesson()` hívása NÉLKÜL (forrás-scan teszt őrzi), kontrollált
+hibával rossz mintahosszra/BPM-re · **Analyze** t0-normalizálással,
+`Tempo`-tartományra szűkített BPM-fallbackkel, tick-ütközés előre-tolással
+(pengetés nem vész el), üres klip → `freePractice` · **Daily Challenge**
+nap-stabil ID-vel, óra-mentesen. Kísérő szerződés: `legacyPracticeChordLabel`
+(veszteséges maj/min redukció a detektor tényleges 24-címkés szótárára),
+`PracticeDefinition.displayTitle` (+61. stabil validációs kód),
+`FailureCode.practiceContentUnsupported`, `lib/features/songs/public.dart`
+barrel — az architektúra-allowlist **nem** bővült. Hívó UI nincs, flagek OFF →
+production viselkedés változatlan. Implementer: **MiniMax M3**. Review: első kör
+**CHANGES REQUESTED** (0 BLOCKER/MAJOR · 3 MINOR: az Analyze-idővonal egy hibátlan
+klipnél némán kétszer olyan hosszú lett, a növelő ág és a t0-normalizálás
+tesztfedetlen), javító kör után **APPROVED**:
+[`docs/reviews/e02-r05-review.md`](docs/reviews/e02-r05-review.md).
+**Mindhárom MINOR zöld gate mellett csúszott át** — a review eldobható
+próbateszttel, a legacy `Lessons.fromAnalyze` referenciával szembe mérve fogta meg.
+
+### Korábbi kör
+
+**E02-R04 — Practice catalog és beépített gyakorlatok** (ADR 0070
+implementációja, PR #25): tíz beépített gyakorlat `const` adatként, stabil
+`builtin.<slug>.v1` ID-kkel és determinisztikus deklarációs sorrendben ·
+`PracticeCatalogRepository` szinkron domain-szerződés (`all`/`byId`/`byMode`/
+`byDifficulty`, ismeretlen ID-re `null`) · `BuiltinPracticeCatalog` · négy
+mód-specifikus `const ScoringProfile` a **befagyasztott** `legacyLearnParity`
+mellett · két Riverpod provider (override-olható repository). Hívó UI nincs;
+production viselkedés változatlan.
+**Ez volt az első kör, amit MiniMax M3 implementált** ([ADR 0069](docs/adr/0069-two-engine-implementer-pool.md),
+`engine=minimax-m3`). Review: első kör **CHANGES REQUESTED** (3 MAJOR — mutábilis
+`events`/`skillTags`, valótlan `const` doc-comment, ütésenként váltó akkordok az
+előírt ütemenkénti helyett), javító kör után **APPROVED**:
+[`docs/reviews/e02-r04-review.md`](docs/reviews/e02-r04-review.md). Mindhárom
+MAJOR zöld gate mellett csúszott át — a review eldobható próba-teszttel mérte,
+nem bemondásra fogadta el.
+
+### Korábbi kör
+
+Korábbi körök (E02-R03 részletes története is):
+[`docs/handoff-archive.md`](docs/handoff-archive.md).
+

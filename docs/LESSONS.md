@@ -598,3 +598,65 @@ válasz nem a legláthatóbb lépés kivágása, hanem az időmérleg megmérés
 szűk keresztmetszet az implementer → review → javítás **soros lánc** volt; a
 nyereség onnan jött, hogy a kör-CI-t az implementer „kész" jelzésekor
 dispatch-eljük, nem a review után — így a 10 perc **elrejtőzik** a review mögött.
+
+## L19 — Az erőforrás-tulajdonlást a hívási láncon kell mérni, nem a réteg-diagramon
+
+**Mit mértünk.** Az E02-R11 ADR-vázlata (0077) a `PracticeSessionController`-re
+bízta az `AudioSessionLease` megszerzését — a réteg-diagram alapján ez tűnt a
+„lifecycle-tulajdonos" természetes helyének. Az implementer (MiniMax M3) az
+első percben `stopped`-dal megfogta: a `MicCapture` a gateway alatt **maga
+szerzi** a lease-t (`mic_capture.dart:82`), és a koordinátor **nem reentráns**
+(`audio_session_coordinator.dart:38` — azonos `AudioOwner`-nek is
+`audio.session_busy`-t ad). A controller lease-e a `gateway.start()`-ot
+determinisztikusan hibára vitte volna: a production út halott, miközben a fake
+gatewayes tesztek zöldek.
+
+**Mit csinálunk.** Erőforrás-előírás (lease, lock, handle, subscription) csak
+kimért hívási lánccal kerülhet briefbe/ADR-be. A mérés egy grep:
+`grep -rn "\.acquire(" lib/` — itt egyetlen sort adott, és az eldöntötte a
+tulajdonost. Feloldás: ADR 0077 §10 (a felszabadítás tranzitív a
+`gateway.stop()/dispose()` láncán), gépi őre az A9 forrásminta-guard.
+
+**Forrás:** `docs/reviews/e02-r11-review.md` §0, a brief §0.0 R13 sora.
+
+## L20 — Elérhetetlen cél-státusz: az átmenettábla nem bizonyítja, hogy az él bejárható
+
+**Mit mértünk.** Az E02-R11 brief A5 cellája a gateway-start bukására `failed`
+státuszt írt elő `countIn`-ból. Az `allowedTransitions` tábla tartalmazza a
+`countIn → failed` élt — de az egész reducerben **egyetlen** sor állít
+`failed`-et (`practice_session_reducer.dart:612`), és az a `preparing`
+státuszra van őrizve (`:604–606`). Az él a táblában van, de **egyetlen input
+sem produkálja**: az előírás teljesíthetetlen volt. Ez az L16 hibaosztály
+(„a mérés alakját is ellenőrizd") státuszgép-változata, és a harmadik eset a
+sorban (E01-R11/R12, E02-R06 után).
+
+**Mit csinálunk.** A pre-flightban minden előírt cél-státuszra a **producenst**
+kell megmérni, nem a táblát: `grep -n "status: <Enum>.<érték>" <reducer>`,
+és megnézni, milyen guard van az adott ágon. Feloldás az R11-ben: a
+gateway-start bukása `cancelled`-be visz (recorder-hívás nélkül — nincs hamis
+history-bejegyzés), a korlátot az A17 cella pinneli, a hiányzó futásidejű
+fatal él gazdája az E02-R18 (ADR 0077 „Ismert korlát 2").
+
+**Forrás:** a brief §0.0 R14 sora, `docs/adr/0077-practice-session-controller.md`.
+
+## L21 — A néma no-op nem csak try/catch-ben él: `&&`-lánc és a dispatch-SHA
+
+**Mit mértünk.** Két különböző néma-bukás ugyanabban a körben (E02-R11):
+
+1. A javító-kör promptjából kimaradt a „commitold a munkád" mondat → az
+   implementer `done`-t jelzett **három uncommitted fájllal** (`dirty_files=3`).
+   A jelzésfájl `dirty_files` mezője fogta meg.
+2. Az orchestrátor `git branch -f X && git checkout X` lánca: a `branch -f`
+   elbukott (a branch ki volt jelentkezve), a checkout néma no-op lett, és a
+   review-commit + a CI-dispatch a **második javító kör nélküli** SHA-ra ment.
+   Zöld CI lett volna a merge-evidencia egy olyan HEAD-en, amiből hiányzik a
+   MAJOR-4 javítás.
+
+**Mit csinálunk.** (1) A kör- és javító-promptok kötelező eleme a
+commit-utasítás, és a `done` jelzés feldolgozásakor a `dirty_files != 0` mindig
+kivizsgálandó. (2) Dispatch után kötelező ellenőrzés:
+`gh run list --json headSha` ↔ `git rev-parse HEAD` — a run csak akkor
+merge-evidencia, ha a kettő egyezik. Az ADR 0087 pipeline-promptja mindkettőt
+tartalmazza.
+
+**Forrás:** `docs/reviews/e02-r11-review.md` §11.5.
