@@ -519,3 +519,82 @@ Ez ugyanaz a hibacsalád, mint az
   (konstans `hashCode`) zöld maradt — de az **legális Dart**, a próba volt rossz.
   Zöldön maradt próbából csak akkor lesz lelet, ha előbb igazolod, hogy a
   megsértett állítás valóban kötelező.
+
+---
+
+## L17 — Az ELŐRE MEGÍRT brief-köteg nem létező szimbólumra hivatkozhat: a pre-flight grep-elje ki mindet
+
+**Mit mértünk.** Az E02-R10 briefje ([PR #33](https://github.com/wolfcasaba/strumsight/pull/33))
+a többi Epic 2-es körrel együtt **előre** készült el (E02-R10…R20, egy köteg,
+`main` @ `ce8fbce`). A kör pre-flightja két driftet talált benne, az egyik
+**blokkoló**:
+
+1. **Nem létező enum-érték.** A §5.6 és az A3 `ChordOutcome.noDetection`-t írt
+   elő, miközben az enum négyértékű volt
+   (`correct, wrong, insufficientData, notApplicable`), és a `practice_verdict.dart`
+   a brief **tiltott zónájában**. Ez az [L-osztály](#l11--kör-brief-viselkedésváltozás-vs-fájl-zár),
+   amit a projekt már háromszor mért — most **negyedszer**, és először egy előre
+   megírt briefből.
+2. **Avult sorszám.** A brief a matchert „283 sor"-ként hivatkozta; a mergelt
+   fájl **257 sor**. A szám a merge előtti állapotból származott.
+
+**Miért ez más, mint az L11.** Az L11 esetei a brief írása közben keletkeztek, és
+az implementer `stopped`-je fogta meg őket — egy-egy teljes futás árán. Itt a
+brief **hetekre előre** készült el, tizenegy körre egyszerre, a kód pedig
+közben mozgott. A hiba tehát nem egyedi figyelmetlenség, hanem a batch-előkészítés
+**szisztematikus** kockázata: az **E02-R15 briefje ugyanígy `noDetection`-re
+épül**, tehát a hiba ott is ott ült volna.
+
+**Mit csinálunk másképp.**
+
+- **Minden előre megírt brief pre-flightjában grep-eld ki a kódból a briefben
+  hivatkozott MINDEN enum-értéket, mezőt és metódust**, és mérd újra a
+  sorszám-hivatkozásokat (`wc -l`). Ami nincs meg: vagy additív engedéllyel
+  felkerül az engedélyezett fájllistára, vagy a viselkedés-előírást írod át —
+  **dokumentált §0.0 brief-revízióban**, nem az implementerre bízva.
+- **A feloldás iránya számít.** Itt a `noDetection` beolvasztása az
+  `insufficientData`-ba olcsóbbnak tűnt (nem nyit lezárt fájlt), de az **R15
+  UI-ja** külön jelenítést vár — az összevonás oda tolta volna a modellnyitás
+  költségét. Additív enum-bővítés lett, **az enum végére fűzve**, és előbb
+  megmértük, hogy nincs kimerítő `switch`, amit törne (`grep -rn ChordOutcome
+  lib/ test/` → három találat, mind teszt-oldali konstrukció).
+- **A pre-flight a numerikus cellákat is számolja újra.** Az A1/A4/A6 összes
+  cellája `python3`-mal újraszámolva egyezett — ez tette hitelessé a két talált
+  driftet: tudtuk, hogy a brief többi része tartható.
+
+---
+
+## L18 — A gyorsításnál mérd meg, mi viszi az időt: itt nem a CI vitte
+
+**Mit mértünk.** A user 2026-07-31-én azt kérte, ne kelljen minden körben CI-t
+futtatni, elég lenne epicenként. A döntés előtt megmértük a kör-időmérleget:
+
+| | mért érték |
+|---|---|
+| kör átfutása (merge→merge) | **1,5–2,5 óra** (R05→R06 1h41 · R06→R07 2h13 · R08→GOV-01 2h35) |
+| egy `build-apk.yml` futás | **9–10 perc** |
+| futás körönként | **3** — kör-branch dispatch (a kapu) + push-to-main a merge után + push-to-main a docs-commitra |
+
+**A CI tehát a kör idejének ~8%-a**, és annak is csak a harmada kapu. Az
+epicenkénti gate ~10 percet spórolt volna körönként — cserébe az Epic 2
+szigorú láncán (R10 → R11 → R12 → R13 → R14, minden kör az előző merge-ét
+igényli) egy R11-es regresszió az epic végén, öt egymásra épülő kör alatt
+eltemetve derült volna ki.
+
+**Mit csinálunk.** Az epicenkénti gate **elutasítva**; helyette a valóban
+információ nélküli futások szűntek meg ([ADR 0086](adr/0086-ci-dispatch-only-build-gate.md)):
+a `build-apk.yml` már **csak `workflow_dispatch`**-re fut. A merge utáni
+main-futás normál esetben nulla információt adott (a squash ugyanazt a fát
+állítja elő, amit a branch-futás gate-elt), a docs-commité pedig egyetlen
+buildbe kerülő bájtot sem érintett.
+
+**A rést, amit a main-futás fedett** (ha a `main` a dispatch UTÁN mozdul — ezen
+a boxon másik autonóm driver is merge-el), egy **kötelező merge-előtti
+ellenőrzés** zárja: `git fetch origin main && git rev-parse origin/main`
+egyezzen a dispatch idejekor látott SHA-val, különben rebase + újra-dispatch.
+
+**Az általános tanulság:** amikor „lassú a fejlesztés" panasz érkezik, a
+válasz nem a legláthatóbb lépés kivágása, hanem az időmérleg megmérése. Itt a
+szűk keresztmetszet az implementer → review → javítás **soros lánc** volt; a
+nyereség onnan jött, hogy a kör-CI-t az implementer „kész" jelzésekor
+dispatch-eljük, nem a review után — így a 10 perc **elrejtőzik** a review mögött.
