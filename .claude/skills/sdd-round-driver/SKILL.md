@@ -1,6 +1,6 @@
 ---
 name: sdd-round-driver
-description: Egy StrumSight SDD-kör TELJES levezénylése az orchestrátor (Claude / Opus 5) székéből — pre-flight, kör-brief, implementer-motor kiválasztás (Codex vs MiniMax M3), headless indítás a wrapper scriptekkel, kör-jelzés figyelés, review-kézfogás, javító kör, CI-dispatch, zöld-kapus squash-merge és a záró rituálék (HANDOFF, git-notes, Viking). Használd, amikor a feladat "vidd a következő kört", "indítsd az E02-RXX-et", "folytasd az SDD-t" vagy bármilyen kör-végrehajtás; akkor is, ha a modell először vezényel le kört ebben a repóban.
+description: Egy StrumSight SDD-kör TELJES levezénylése az orchestrátor (Claude / Opus 5) székéből — pre-flight, kör-brief, implementer-motor kiválasztás (Codex vs MiniMax M3), headless indítás a wrapper scriptekkel, kör-jelzés figyelése, review-kézfogás, javító kör, CI-dispatch, zöld-kapus squash-merge és a záró rituálék (HANDOFF, git-notes, Viking). Használd, amikor a feladat "vidd a következő kört", "indítsd az E02-RXX-et", "folytasd az SDD-t" vagy bármilyen kör-végrehajtás; akkor is, ha a modell először vezényel le kört ebben a repóban.
 ---
 
 # SDD kör-levezénylés (orchestrátor-oldal)
@@ -23,7 +23,10 @@ a motor-oldal nem elérhető — jelentésben rögzítve).
 A brief a `docs/rounds/eXX-rYY-<slug>.md` fájl, a `docs/execution/08-round-brief.md`
 sablonra. Kritikus elemek: mért „Jelenlegi állapot", **engedélyezett fájlok
 tételes listája + tilos zóna**, előre kiosztott ADR-szám (az ADR-t TE írod),
-mérhető acceptance criteria, gate-parancsok KÜLÖN hívásokként. A brief a kör
+mérhető acceptance criteria, és a **gate-hívás az artefaktumon** —
+`tools/round-gate.sh <érintett terület> [további …]` (a mérce artefaktum,
+nem prompt-szöveg: a csővezeték elrejti a kilépési kódot, lásd
+`docs/LESSONS.md` L09; normatív forrás: `AGENTS.md` §12). A brief a kör
 indítása ELŐTT commitolva van a kör-branchre.
 
 **Kötelező tanulság-átvitel (E02-R04/R05):** a zöld gate nem bizonyíték —
@@ -68,6 +71,20 @@ izolációt a külön munkapéldány adja. Védelmi vonalak: kör-jelzés
 `summary`, `branch`, `head`, `dirty_files`), csak utána a logot. `status=unknown`
 → a motor jelzés nélkül halt meg; a jelentését ne fogadd el bemondásra.
 Crash-nél: resume UGYANAZZAL a session-iddel + a TELJES gate-mátrix újrafuttatása.
+
+**A várakozás a JELZÉSFÁJLRA megy, nem processz-életre — és nem kézzel írt
+egysorossal.** Az E02-R08-ban egy `until ! pgrep -f "…"` ciklus a **saját
+parancssorára** illeszkedett, és az implementer `stopped` jele hat órán át
+rejtve maradt ([`docs/LESSONS.md`](docs/LESSONS.md) L12). A helyes várakozás
+futtatható artefaktum:
+
+```bash
+tools/wait-for-round.sh /home/ubuntu/ss-<motor>-<kör>   # 0=done 3=stopped 4=stalled|timeout|unknown 5=lejárt
+```
+
+A négy kilépési kód a `done` / `stopped` / `stalled|timeout|unknown` / „még fut,
+de lejárt az időkorlát" eseteket különbözteti meg — a `stopped` (3) a
+döntést-kérő állapot, nem szabad futó körnek nézni.
 
 ## 4. Review (→ `sdd-round-review` skill)
 

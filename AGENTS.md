@@ -127,18 +127,28 @@ Kötelező:
 11. Készíts végrehajtási jelentést.
 12. Állj meg.
 
-## 12. Kötelező ellenőrzések
+## 12. Kötelező ellenőrzések — a gate egyetlen futtatható artefaktum
 
 A konkrét kör felülírhatja vagy bővítheti, de alapértelmezetten:
 
-**Lokálisan** (a fejlesztői boxon):
+**Lokálisan** (a fejlesztői boxon) a mérce egyetlen hívás:
 
 ```bash
-flutter pub get
-dart format --output=none --set-exit-if-changed lib test tool
-flutter analyze lib/ test/ tool/
-flutter test test/<a kör által érintett terület>
+tools/round-gate.sh test/<a kör által érintett terület> [további teszt-útvonal ...]
 ```
+
+A script a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`
+lépéseket egymás után, KÜLÖN processzként futtatja, és az első piros lépésnél
+a helyes kilépési kóddal megáll. **A gate artefaktum, nem prompt-szöveg** — a
+csővezeték (`| tail`, `| head`, `&&`) elrejti a kilépési kódot, így a „minden
+gate zöld" jelentés bizonyíthatatlanná válik
+([`docs/LESSONS.md`](docs/LESSONS.md) L09; mért eset: E02-R07, háromszor
+futtatta `| tail` mögé). A script a `flutter analyze && flutter test` láncolás
+OOM-ját (L05) belső folyamat-szétválasztással oldja fel, ezért a mérce
+parancssorban nem reprodukálható.
+
+A brief-sablon és a részletes szabályok forrása:
+[`docs/execution/08-round-brief.md` §7](docs/execution/08-round-brief.md).
 
 **A CI-ban** (kötelező, a kör-branchre dispatchelve — user szabály 2026-07-29,
 [ADR 0053](docs/adr/0053-ci-full-test-suite.md)): a **teljes `flutter test`**,
@@ -146,8 +156,6 @@ a **property gate** (friss seeddel) és a release APK. A boxon a teljes suite
 ~15 perc, a CI-ban ~4–5 — ezért a teljes regresszió bizonyítéka a CI-run linkje,
 nem lokális kimenet. A merge feltétele változatlan: minden gate zöld, a CI-ban
 futó teljes suite is.
-
-A parancsokat külön futtasd; ne láncold őket `&&` használatával a korlátozott fejlesztői környezetben.
 
 **APK-build MINDIG CI-vel** (user szabály 2026-07-29, ADR 0052): a fejlesztői
 boxon nincs Android SDK — `flutter build apk`-t ne futtass és ne is próbálj
@@ -320,8 +328,9 @@ percekig néma; a folytatás UGYANAZZAL a session-iddel megy
 (`claude -p --resume <session-id>`).
 
 A prompt tartalmazza a kötelező olvasnivalót (§3), a kör-brief elérési útját,
-az engedélyezett fájlok listáját, a gate-parancsokat KÜLÖN hívásokként, a
-CI-dispatchet, a megállási pontokat és a **kör-jelzés kötelezettségét** (§15.2).
+az engedélyezett fájlok listáját, a gate-hívást az artefaktumon keresztül
+(`tools/round-gate.sh …`, §12), a CI-dispatchet, a megállási pontokat és a
+**kör-jelzés kötelezettségét** (§15.2).
 
 ### 15.4 Párhuzamos kétkörös futás — OPT-IN KIVÉTEL
 

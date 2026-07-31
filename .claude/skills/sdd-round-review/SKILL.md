@@ -25,10 +25,13 @@ kimenetet a legacy referenciával / a brief szó szerinti előírásával veti �
    semmit nem fogadsz el bemondásra.
 2. **Gate-újrafuttatás SAJÁT kézzel, izolált /tmp klónban** — ezen a boxon
    párhuzamos ágens dolgozhat a közös working tree-ben, ezért reviewer-próbát
-   SOHA ne a közös példányban futtass:
+   SOHA ne a közös példányban futtass. A mérce egyetlen futtatható artefaktum
+   (a csővezeték elrejti a kilépési kódot, `docs/LESSONS.md` L09; normatív
+   forrás: `AGENTS.md` §12):
    ```bash
    git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>
-   cd /tmp/review-<kör>   # majd a gate-parancsok KÜLÖN hívásokként
+   cd /tmp/review-<kör>
+   tools/round-gate.sh test/<a kör érintett területe> [további teszt-útvonal ...]
    ```
 3. **Scope-audit:** `git diff --stat main...<branch>` a brief engedélyezett
    listája ellen. Bármi a listán kívül automatikusan legalább MAJOR.
