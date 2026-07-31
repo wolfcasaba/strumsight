@@ -223,6 +223,88 @@ Ha bármelyik mutáció mellett zöld marad a készlet, a lelet **nem** zárt.
 
 ---
 
-## 10. Javító kör — újraellenőrzés
+## 10. Javító kör — újraellenőrzés (`013a7d8`)
 
-*(a javító kör után tölti ki a reviewer)*
+**Verdikt: a 8 eredeti lelet mind ZÁRVA — de EGY ÚJ MAJOR nyílt.**
+
+Diff: **csak teszt + §10 handoff** (`+1231 / −87`), production kód **nem
+változott** — ahogy elő volt írva.
+
+### 10.1 A megelőlegezett mutációk — mind pirosra vált
+
+A review §9-ben előre kihirdetett mércét futtattam a teljes
+`test/features/practice/` készleten (602 teszt):
+
+| # | Mutáció | Eredmény |
+|---|---|---|
+| M1 | `chordStableDuration:` elhagyva a scorer-hívásból | **PIROS** — `A8 … 250ms-stable chord run → MetricInsufficientData(chordUnstable)` |
+| M2 | scoring pass **minden** tickre | **PIROS** — 4 A14-cella |
+| M4 | `setExpectedChord(null)` elhagyva stopkor | **PIROS** — `expected chord sequence … then null on finish` |
+| — | kontroll, mutáció nélkül | **ZÖLD** (602/602) |
+
+### 10.2 Leletenkénti zárás
+
+| Lelet | Állapot | Bizonyíték |
+|---|---|---|
+| BLOCKER-1 (A10 hiányzik) | **ZÁRVA** | `practice_session_integration_test.dart`, **10** forgatókönyv, a `cancel` cellával együtt |
+| BLOCKER-2 (A6 „without crashing") | **ZÁRVA** | négy invariáns + a `Meter × countInBars` mátrix `_definitionFor(...)`-ral |
+| BLOCKER-3 (nulla-eseményű fixture) | **ZÁRVA** | a fixture a **valódi** `compilePracticeTarget(definition, config)`-ot hívja (`:167–175`) — ADR 0077 §14 szerint |
+| MAJOR-1 (A8 nem fog) | **ZÁRVA** | M1 pirosra vált |
+| MAJOR-2 (A13 üres pin) | **ZÁRVA** | direction+rhythm `noSignal` állítás + `extraStrumCount` |
+| MAJOR-3 (A14 hiányos) | **ZÁRVA** | mind a négy identitás-cella, M2 pirosra vált |
+| MINOR-1 (gate-kimenet) | **ZÁRVA** | a teljes kimenet a §10.3-ban, kódblokkban |
+| MINOR-2 (gateway-provider) | **ZÁRVA** | §10.5 kimondja, hogy a controller-provider ma szándékosan nem áll össze production oldalon |
+
+### 10.3 ÚJ MAJOR-4 — a controllernek nincs pause-őre az observation-úton
+
+**Lelet.** A `_onObservation` (`practice_session_controller.dart:403–415`)
+**nem vizsgálja a státuszt**: minden beérkező `StrumObservation`-t
+`registerStrum(...)`-ol és scoring passt futtat, akkor is, ha a session
+`paused`.
+
+**Bizonyíték (eldobható próba, izolált klónban).** Az A6 első tesztjében a
+pause alatt kibocsátott strum idejét `30 ms`-ról a **második célesemény pontos
+idejére** írtam át — más semmit. A teszt **pirosra váltott**:
+
+```
+A6 — pause semantics running → paused: strum during pause does not change liveScore
+```
+
+Vagyis a cella zöldje **azon múlik, hogy a teszt nem párosuló időt választott**,
+nem azon, hogy a controller elutasítja a pause alatti pontozást. A brief A6
+„Pirosra fogja" mondata (*„a pause alatt is fogadjuk a strumokat"*) ma **nem**
+teljesül.
+
+**Miért nem elméleti.** Az A2 helyesen garantálja, hogy `paused`-ben a capture
+áll — de a `gateway.stop()` **aszinkron**, és a broadcast streamben már bent
+lévő megfigyelések a `stop()` után is kézbesítődnek az előfizetőnek. Egy
+közvetlenül a pause előtt detektált strum tehát a pause **utáni** feldolgozásban
+beleszámolhat az attemptbe. Az ADR 0077 §3 szándéka („a capture-aktiváció
+egyetlen forrása a státusztábla") így az observation-úton **nem** érvényesül
+végig.
+
+**Elvárt javítás — szűk, két hely:**
+
+1. `_onObservation` elején státusz-őr a **meglévő** táblával:
+   `if (!practiceCaptureActive(_state.status)) return;` — ne új logika, a
+   §5.3 egyetlen forrása maradjon;
+2. az A6 első tesztjében a pause alatti strum ideje **párosuló** időpont legyen
+   (a mai `30 ms` helyett egy tényleges célesemény ideje), hogy a cella
+   ezentúl a valódi hibaalakot fogja meg.
+
+**A javító kör mércéje:** a fenti 1. pont **kivétele** után az A6 első
+tesztjének pirosnak kell lennie.
+
+### 10.4 Merge-döntés
+
+**0 BLOCKER · 1 MAJOR (új) → a merge egyelőre blokkolva.**
+
+A lelet szűk és pontosan specifikált (egy sor production + egy teszt-input
+csere), ezért **rövid, második javító kört** kérek rá, nem haltot. A nyolc
+eredeti lelet mind zárva, a mércék bizonyítottan fognak.
+
+---
+
+## 11. Második javító kör — újraellenőrzés
+
+*(a második javító kör után tölti ki a reviewer)*
