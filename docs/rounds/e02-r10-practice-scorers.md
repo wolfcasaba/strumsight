@@ -1,6 +1,7 @@
 # E02-R10 — Timing, direction és chord scorer
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight lefuttatva 2026-07-31, kód újramérve:
+  `main` @ `d7595c3`; előre megírva ugyanaznap `ce8fbce`-nél)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 10"** (+ §16 Pontozási rendszer)
 - **Branch:** `codex/e02-r10-practice-scorers`
 - **Előfeltétel:** **E02-R09 merge-ölve** (a matcher a scorer bemenete).
@@ -14,7 +15,7 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ)**
 > 1. Olvasd újra a mergelt matchert (`domain/service/practice_event_matcher.dart`,
->    **283 sor**) és a paritás-harnessét
+>    **257 sor** — a brief eredeti 283-as száma elavult volt, lásd §0.0/R1) és a paritás-harnessét
 >    (`test/features/practice/domain/practice_event_matcher_parity_test.dart`,
 >    **652 sor**) — a §2.2 és az A7 erre épül.
 > 2. Ellenőrizd az R09 review nyitott NOTE-jait: ami a scorert érinti, ide kerül §0.0-ként.
@@ -22,6 +23,44 @@
 >    **Az ADR 0076 kötelezően hivatkozzon az [ADR 0075 §2b](../adr/0075-practice-event-matcher.md)
 >    védősáv-döntésére** — a scorer küszöbei ugyanazt az időalap-eltérést öröklik.
 > 4. Státusz → PLANNING, dátum/sha frissítés, brief commit a kör-branchre.
+
+## 0.0 Pre-flight eredménye — BRIEF-REVÍZIÓ (2026-07-31, orchestrátor)
+
+A pre-flight újramérte a brief minden load-bearing állítását `main` @ `d7595c3`-en.
+**Az ADR 0076 megírva** (`docs/adr/0076-practice-scoring-dimensions.md`).
+
+**Ami stimmel** (ne mérd újra, de ne is bízz benne vakon — a §9 gate a mérce):
+`legacyLearnParity` ablakok 50/120/280 ms · a legacy konstansok (100/70/40,
+`passThreshold 0.7`, `_chordLagSec 0.37`, multiplier-lépcsők 5/10/20) · a
+matcher API §2.2 szerinti alakja · `Lessons.all` = **16** és a `firstWin`
+**nincs** benne (⇒ a korpusz 17) · `chordStableDuration` alapérték **180 ms** a
+`PracticeObservationConfig`-on · **az A1, A4 és A6 minden cellája** (`python3`-mal
+újraszámolva, egyezik a briefben írtakkal, a 650-es hibás-implementáció-cellát
+is beleértve).
+
+**R1 — A matcher 257 sor, nem 283.** A ⚠ pre-flight 1. pontja és a §2.2
+sorszáma elavult (a szám a merge előtti állapotból származott). A fájl
+tartalma és API-ja változatlanul az, amit a §2.2 leír. **Semmit nem kell
+emiatt másképp csinálnod** — a szám javítva, hogy ne keress nem létező 26 sort.
+
+**R2 — `ChordOutcome.noDetection` MA NEM LÉTEZIK (blokkoló ütközés, feloldva).**
+Mérve: `enum ChordOutcome { correct, wrong, insufficientData, notApplicable }`
+(`practice_verdict.dart:33`) — négy érték. A §5.6 és az A3 viszont ötödikként
+`noDetection`-t ír elő, miközben a §4 a `practice_verdict.dart`-ot **tiltott
+zónába** tette. Ez az a hibaosztály, amit a projekt már mért („ne írj elő
+viselkedést lezárt fájlra").
+
+**Feloldás (ADR 0076 §5b):** a `practice_verdict.dart` felkerül az engedélyezett
+fájlok listájára **CSAK ADDITÍV** jogosultsággal, és a `ChordOutcome` bővül a
+`noDetection` értékkel, **az enum végére fűzve**. Meglévő érték átnevezése,
+törlése, átsorolása, vagy bármi más módosítása ebben a fájlban → **`stopped`**.
+Biztonságos: a `ChordOutcome`-nak ma egyetlen production fogyasztója sincs
+(mérve: három találat, mind teszt-oldali konstrukció), tehát nincs kimerítő
+`switch`, amit a bővítés törne.
+
+**R3 — Az E02-R09 review NOTE-3 NEM ennek a körnek szól.** A „rendezetlen,
+kézzel épített target" viselkedése a **hívó** felelőssége → E02-R11. Ha emiatt
+akarnál a matcheren vagy a compileren változtatni: `stopped`.
 
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
@@ -54,7 +93,7 @@ Két dolog dönti el, hogy a kör sikerült-e:
 Hívó UI és provider **nincs** ebben a körben; a practice flagek OFF-ban maradnak,
 a production viselkedés **változatlan**.
 
-## 2. Jelenlegi állapot (mért tények, `main` @ `ce8fbce`)
+## 2. Jelenlegi állapot (mért tények, `main` @ `ce8fbce`; a pre-flight `d7595c3`-en újramérte — §0.0)
 
 ### 2.1 A paritás-referencia: `lib/features/learn/lesson_scorer.dart` (343 sor)
 
@@ -88,7 +127,7 @@ További mért tények:
 
 ### 2.2 Amire épül (kész, változatlanul használandó)
 
-- **R09 matcher (mérve, `practice_event_matcher.dart` 283 sor):**
+- **R09 matcher (mérve, `practice_event_matcher.dart` 257 sor):**
   `PracticeEventMatcher({required CompiledPracticeTarget target, required
   ScoringProfile scoringProfile, required Duration inputLatency})`, és
   céleseményenként egy `PracticeEventMatchResult`:
@@ -178,6 +217,7 @@ egység-, paritás- és property-tesztek.
 | `lib/features/practice/domain/service/practice_chord_scorer.dart` | **ÚJ** | chord outcome + dimenzió-érték |
 | `lib/features/practice/domain/service/practice_score_aggregator.dart` | **ÚJ** | verdict-lista + `PracticeMetrics` + pass/combo/pont |
 | `lib/features/practice/domain/model/practice_metrics.dart` | — | **CSAK additív**: `PracticeMetricReasonCode` stabil kódkészlet (§5.7). Meglévő tag módosítása TILOS |
+| `lib/features/practice/domain/model/practice_verdict.dart` | — | **CSAK additív, EGYETLEN változás** (§0.0/R2, ADR 0076 §5b): a `ChordOutcome` enum **végére** fűzött `noDetection` érték. Bármi más ebben a fájlban (meglévő érték átnevezése/törlése/átsorolása, mező, validáció, doc-comment) → **`stopped`** |
 | `test/features/practice/domain/practice_timing_scorer_test.dart` | **ÚJ** | A1 mátrix |
 | `test/features/practice/domain/practice_direction_scorer_test.dart` | **ÚJ** | A2 mátrix |
 | `test/features/practice/domain/practice_chord_scorer_test.dart` | **ÚJ** | A3 mátrix |
@@ -187,8 +227,9 @@ egység-, paritás- és property-tesztek.
 | `docs/rounds/e02-r10-practice-scorers.md` | — | **CSAK a §10** (handoff) kitöltése |
 
 **Tilos zóna:** minden más. Nevezetesen `lib/features/learn/**`,
-`lib/features/practice/` minden más fájlja (beleértve a `scoring_profile.dart`-ot
-és a `practice_verdict.dart`-ot), `docs/adr/**`, `docs/sdd/**`, `HANDOFF.md`,
+`lib/features/practice/` minden más fájlja (beleértve a `scoring_profile.dart`-ot;
+a `practice_verdict.dart` a fenti táblázat szerinti EGYETLEN additív enum-értékre
+szűkítve kivétel), `docs/adr/**`, `docs/sdd/**`, `HANDOFF.md`,
 `.github/**`, `pubspec.yaml`, `tool/**`, `docs/rag/chunks/**`.
 
 **Új fájl a fenti listán kívül = scope-sértés** → `stopped`.
@@ -231,8 +272,9 @@ egység-, paritás- és property-tesztek.
      rövidebb ideig fennálló címkék összevonás nélkül) egyezik az elvárttal →
      `correct`; ha nem egyezik → `wrong`;
    - ha minden ablakbeli megfigyelés `label == null` → `noDetection` (a
-     `ChordOutcome` enumban ez a `wrong`-tól **külön** érték: `insufficientData`
-     NEM használható rá);
+     `wrong`-tól **külön** érték: `insufficientData` NEM használható rá).
+     ⚠ Ez az enum-érték MA NEM LÉTEZIK — **ez a kör hozza létre**, additívan,
+     a `ChordOutcome` végére fűzve (§0.0/R2, ADR 0076 §5b);
    - ha egyetlen címke sem éri el a profil `chordStableDuration`-jét
      (⚠ ez a **gateway** configján van, nem a `ScoringProfile`-on — a scorer
      ezt **paraméterként kapja**, alapértéke `Duration(milliseconds: 180)`) →
@@ -344,15 +386,18 @@ Cél `targetAt = T`, elvárt akkord `G`. Egyetlen `ChordObservation` `G` címké
 | **`T + 420 000 µs`** | **ablakon belül** (inkluzív) |
 | `T + 420 001 µs` | ablakon KÍVÜL |
 
-Plusz a négy kimeneti ág külön esete: `correct` · `wrong` (más címke) ·
+Plusz mind az öt kimeneti ág külön esete: `correct` · `wrong` (más címke) ·
 `noDetection` (csak `label == null` az ablakban) · `insufficientData` (üres ablak
-**vagy** a stabilitási küszöböt egyik címke sem éri el).
+**vagy** a stabilitási küszöböt egyik címke sem éri el) · `notApplicable`
+(elvárt akkord nélküli célesemény).
 
 ***Pirosra fogja:*** a szimmetrikus ±270 ms-os ablak (a chord detection késését
 figyelmen kívül hagyó „egyszerűsítés"), és a `null` címke `wrong`-ként kezelése.
 
 **NEM elfogadható gyengítés:** a `noDetection` beolvasztása a `wrong`-ba
-„úgyis nulla pont" indoklással — a `ChordOutcome` enum négy értéke a szerződés.
+„úgyis nulla pont" indoklással, vagy az `insufficientData`-ba „úgyis nincs adat"
+indoklással — a `ChordOutcome` enum **öt** értéke (a körben hozzáadott
+`noDetection`-nel együtt) a szerződés, és az E02-R15 UI-ja már erre épül.
 
 ### A4 — Overall: az el nem érhető dimenzió nem nulla
 
@@ -503,7 +548,8 @@ A küszöbök invariáns-jellegűek vagy %-alapúak (nem flaky-k).
 `tools/round-gate.sh` **architecture** lépése zöld, `domain_purity_test.dart`
 zöld, az architektúra-allowlist **nem bővül**. `git diff --stat origin/main...HEAD`
 → a `lib/` alatt kizárólag a négy új service + a `practice_metrics.dart` additív
-blokkja; `lib/features/learn/` **0 sor**.
+blokkja + a `practice_verdict.dart` **egysoros** `noDetection` enum-bővítése
+(§0.0/R2); `lib/features/learn/` **0 sor**.
 
 ## 7. Implementációs sorrend (ez a TERVED)
 
