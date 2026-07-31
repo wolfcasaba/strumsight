@@ -65,3 +65,6 @@ backend/.venv/
 # Codex kör-jelzés (tools/codex-signal.sh) — futásonkénti, lokális
 .codex-round-status
 .mm-round-pid
+
+# Autonóm kör-pipeline futásidejű állapota (ADR 0087) — sosem committolt
+.pipeline/

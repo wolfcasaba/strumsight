@@ -1,0 +1,22 @@
+# Autonóm kör-pipeline sora (ADR 0087 §5). Egy sor = egy kör.
+# Oszlopok TAB-bal elválasztva:
+#   round   brief                                  engine   adr    status
+# status: pending | running | done | halted
+# engine: minimax | codex   (ADR 0069 besorolás; kézzel átírható)
+# A '#'-tel kezdődő sorokat a driver átugorja.
+#
+# MEGJEGYZÉS a motorválasztáshoz: az ADR 0069 szerint az R17–R19 a
+# "ítéletigényes" osztályba esik (adaptív logika, perzisztencia, legacy
+# migráció), ahol a Codex a biztonságosabb default. A user 2026-07-31-i
+# döntése alapján a sor MiniMax M3-mal indul végig; ha egy kör kétszer
+# haltol, ez az oszlop az első hely, amit érdemes átírni.
+E02-R12	docs/rounds/e02-r12-practice-hub-and-setup.md	minimax	0078	pending
+E02-R13	docs/rounds/e02-r13-session-ui-shell.md	minimax	0079	pending
+E02-R14	docs/rounds/e02-r14-strum-and-progression-modes.md	minimax	0080	pending
+E02-R15	docs/rounds/e02-r15-chord-change-mode.md	minimax	0081	pending
+E02-R16	docs/rounds/e02-r16-rhythm-only-and-free-practice.md	minimax	0082	pending
+E02-R17	docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md	minimax	0083	pending
+E02-R18	docs/rounds/e02-r18-result-coaching-history.md	minimax	0084	pending
+E02-R19	docs/rounds/e02-r19-progress-and-learn-migration.md	minimax	0085	pending
+# E02-R20 (epic-zárás) SZÁNDÉKOSAN nincs a sorban — ADR 0087 §7: a záró kört
+# ember indítja. A driver az R19 után halttal áll meg.
