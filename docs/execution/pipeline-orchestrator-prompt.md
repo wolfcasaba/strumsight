@@ -20,8 +20,10 @@ Olvasd el a `HANDOFF.md`-t, az `AGENTS.md`-t és a briefet, mielőtt bármit tes
 
 ## 0.1 HEADLESS-SZABÁLY: az implementerre SOSEM háttér-taskkal várj
 
-Te egy `claude -p` headless sessionben futsz. **Amint a válaszod véget ér és
-nincs előtérben futó munkád, a CLI kilép és MEGÖLI a háttér-taskjaidat** — az
+Te egy `claude --bg` háttér-agent sessionben futsz — a user a telefonja
+Code-listájában lát téged „Pipeline {{ROUND}}" néven, és bele is nézhet.
+**Amint a válaszod véget ér és nincs előtérben futó munkád, a session lezárul
+és MEGÖLI a háttér-taskjaidat** — az
 E02-R12 első futása pontosan így halt meg jelzés nélkül (H-NOSIGNAL): az
 orchestrátor `run_in_background`-dal várt az implementerre, a session pedig a
 válasz végén kilépett alóla.

@@ -152,17 +152,44 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 ) &
 pinger_pid=$!
 
-timeout --signal=TERM --kill-after=60 "$session_timeout" \
-  "$claude_bin" -p "$(cat "$prompt_file")" \
+# Háttér-agentként indítjuk (`--bg`), NEM `-p`-vel: a --bg session megjelenik
+# a user claude.ai Code-listájában (telefonon is), névvel — user-kérés
+# 2026-07-31. A --bg azonnal visszatér; a kör végét a $status_file jelzi.
+launch_out=$("$claude_bin" --bg -n "Pipeline $round" \
     --model "$claude_model" \
     --permission-mode bypassPermissions \
-    --output-format stream-json \
-    --verbose \
-  >> "$session_log" 2>&1
-session_exit=$?
+    "$(cat "$prompt_file")" 2>&1)
+printf '%s\n' "$launch_out" >> "$session_log"
+agent_id=$(printf '%s\n' "$launch_out" | sed -n 's/^backgrounded · \([a-z0-9]*\) .*/\1/p')
+log "orchestrátor háttér-agent: ${agent_id:-?} — a Code-listában: Pipeline $round · napló: claude logs $agent_id"
+
+# Várakozás a kör-jelzésre. Korai kilépés, ha az agent már nem él és jelzés
+# sincs (nem várjuk ki a teljes időkorlátot egy halott agentre).
+deadline=$(( $(date +%s) + session_timeout ))
+session_exit=0
+agent_gone_checks=0
+while [ ! -f "$status_file" ]; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    log "időkorlát lejárt — az agentet leállítjuk"
+    [ -n "$agent_id" ] && "$claude_bin" stop "$agent_id" >> "$session_log" 2>&1
+    session_exit=124
+    break
+  fi
+  if [ -n "$agent_id" ] && ! "$claude_bin" agents --json 2>/dev/null | grep -q "$agent_id"; then
+    agent_gone_checks=$(( agent_gone_checks + 1 ))
+    # két egymást követő "nincs a listában" + türelmi kör = tényleg halott
+    if [ "$agent_gone_checks" -ge 2 ]; then
+      sleep 15
+      break
+    fi
+  else
+    agent_gone_checks=0
+  fi
+  sleep 30
+done
 kill "$pinger_pid" 2>/dev/null
 
-log "orchestrátor-session kilépett (kód $session_exit)"
+log "orchestrátor-agent lezárult (exit-jelleg: $session_exit)"
 
 # --- 7. Kimenet osztályozása ----------------------------------------------
 # A session KÖTELESSÉGE megírni a $status_file-t. Ha nincs, a jelentését NEM
