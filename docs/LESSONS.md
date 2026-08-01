@@ -875,3 +875,70 @@ a write-then-drop nem.
 `30b8b1d`; `json_document_store.dart:103-129` (swallow), `key_value_store.dart:19-21`
 (a szerződés, ami a `StorageException`-t ígéri), `practice_history_serializer.dart:77-86`
 (unknown-enum reject on read).
+
+---
+
+## L29 — A paritás-elemzés a SZÁMLÁLÓ/NEVEZŐ egyezésénél nem ér véget: a ZÁRÓ OSZTÁS numerikus alapja külön mérendő
+
+**Mit mértem.** Az E02-R19/b pre-flightjában (brief §0.1) sorról sorra összevetettem
+a legacy `LessonScorer`-t és a V2 `PracticeEventMatcher` + `PracticeDirectionScorer`
+párost: óra-korrekció, illesztési politika, ablak (`windowSec = 0.28` ↔
+`matchWindow = 280 ms`), extra ütés kezelése, rossz irány kezelése, számláló,
+nevező — **mind azonos**. Ebből azt a következtetést írtam a briefbe, hogy „az
+egzakt paritás tervezetten elérhető; ha eltérést mérsz, az az adapter
+konfigurációs hibája". **Két helyen tévedtem, és mindkettő a záró aritmetika volt:**
+
+1. **Kvantálás.** A `PracticeDirectionScorer` ezrelékre kvantál
+   (`correctCount * 1000 ~/ applicableCount / 1000`), a legacy nem →
+   7/24 = `0.2916666666666667` vs `0.291` (`practice_direction_scorer.dart:129-131`).
+2. **Numerikus alap az ablak-határon.** A legacy `d <= windowSec` **double**
+   (`0.28` legközelebbi double-je `0.28000000000000002665`), a V2
+   `deltaMicroseconds <= matchWindow.inMicroseconds` **egész**. Pontosan
+   `±280.000 ms`-nál a kettő eltér (mérve: legacy `0.0` vs V2 `1/24`); minden
+   más offseten és minden mért latencyn a paritás tart.
+
+**Miért fontos.** A brief §0.1 táblája a *szemantikát* mérte össze (mit számolunk),
+nem az *aritmetikát* (hogyan zárjuk le a számítást). Az implementer emiatt kapott
+egy „ha eltérsz, te rontottad el" instrukciót egy olyan eltérésre, amit nem ő
+okozott — helyesen `stopped`-ot jelzett (Codex), ami megmentette a kört egy
+mércelazítástól.
+
+**Mit csinálunk.** Két rendszer paritásának előírása előtt a szemantikai tábla
+mellé **külön sor kell a záró aritmetikáról**: (a) kvantálás/kerekítés van-e
+valamelyik oldalon, (b) milyen numerikus típuson történik az utolsó
+összehasonlítás (double vs. egész µs), (c) a küszöbök reprezentálhatók-e
+egzaktul. Ahol a **referencia maga sem jól definiált** (double-kerekítés dönt),
+ott a mércét nem lazítani kell, hanem **pontosan definiálni** — az E02-R19/b-ben
+a §0.2 (egzakt arány a per-event kimenetből) és a §0.3 (a határpont dokumentált
+kizárása) ezt tette, a paritás minden szigorúan belső/külső offseten kötelező
+maradt.
+
+**Forrás:** E02-R19 brief §0.1/§0.2/§0.3, `docs/reviews/e02-r19-review.md`
+(második passz 4.1), `practice_direction_scorer.dart:129-131`,
+`practice_event_matcher.dart:164`, `lesson_scorer.dart:249-256`.
+
+---
+
+## L30 — A `flutter test <könyvtár>` compact reportere NEM ír sort minden suite-hoz: a grep-alapú „nem futott" következtetés hamis
+
+**Mit mértem.** Az E02-R19/b review-jában a gate `test/features/learn/` lépésének
+kimenetében a `learn_migration_parity_test.dart` **egyetlen sorral sem** jelent
+meg (0 grep-találat a fájlnévre és a teszt-nevekre is), miközben a fájl külön
+futtatva 56 tesztet ad zölden. Ebből majdnem azt a BLOCKER-t írtam, hogy a kör
+központi acceptance-e (A7.1, 51 paritás-cella) nem fut a gate-ben, és a zöld
+semmit nem bizonyít. A `\r`→`\n` konverzió sem hozott találatot.
+
+**A valóság (mérve, nem feltételezve).** Ideiglenesen kivettem a fájlt a
+könyvtárból és újrafuttattam: a suite `194` → **`138`** tesztre esett.
+`194 − 138 = 56` = pontosan a paritás-fájl tesztszáma. **A mátrix fut.** A
+compact reporter a gyorsan lefutó suite-oknál nem flush-öl külön sort (a sorok
+felülíródnak), és 32 tesztfájlból 9-hez egyáltalán nem írt nevet.
+
+**Mit csinálunk.** A „szerepel-e a teszt a kimenetben" **nem** mércéje annak,
+hogy lefutott-e. A futás bizonyítéka a **tesztszám-különbség**: vedd ki a fájlt,
+futtasd újra, és a delta legyen a fájl saját tesztszáma (vagy használj
+`--reporter json`-t). Ez ugyanannak az osztálynak a tagja, mint az L09
+(`| tail` elrejti a kilépési kódot): **a kimenet formája nem a tény.**
+
+**Forrás:** E02-R19/b review harmadik passz §4; `flutter test` compact reporter,
+`test/features/learn/` (32 fájl, 194 teszt).

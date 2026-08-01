@@ -4,9 +4,10 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (E02-R18 mergelve — Result-képernyő + PracticeCoach + Practice History V2:
-> mode-specifikus result, mérés-alapú coaching, verziózott/idempotens
-> perzisztencia; az autonóm kör-pipeline az E02-R19-cel folytatódik)**.
+> (E02-R19 mergelve — progress-egyesítés, streak-jogosultság, daily-goal aktív
+> idő és a Learn V2-migráció VALÓDI direction-scoringgal; a kör HALT H3-mal állt
+> meg, user-döntésre újra-scope-olva és Codexszel befejezve. Következik az
+> E02-R20 epic-zárás, amit EMBER indít)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -199,13 +200,18 @@
 
 ## 4. Current branch
 
-`main` @ [PR #42](https://github.com/wolfcasaba/strumsight/pull/42) (E02-R18,
-squash-merge `463446c`), CI run
-[30689633170](https://github.com/wolfcasaba/strumsight/actions/runs/30689633170)
-**success** az **exact HEAD-en** (`1586095` — teljes suite + randomizált
-property + APK). Post-merge `main`-en a reviewer-gate `flutter gen-l10n` után zöld
-(a lenti l10n-csapda: a friss ARB-kulcsok a gitignore-olt generált fájlokban
-regen-ig hiányoznak).
+`main` @ [PR #43](https://github.com/wolfcasaba/strumsight/pull/43) (E02-R19,
+squash-merge `0bdee7e`), CI run
+[30694250840](https://github.com/wolfcasaba/strumsight/actions/runs/30694250840)
+**success** a `5ab9a37` kód-HEAD-en (teljes suite + randomizált property + APK);
+utána már csak `docs/reviews/**` változott. A reviewer-gate friss izolált
+klónban `GATE_EXIT=0`.
+
+> ⚠ **A squash-commit üzenete tévesen a régi, „HALT H3" PR-címet viszi**
+> (`0bdee7e`): a `gh pr edit` a merge előtt a Projects-classic GraphQL
+> deprecation miatt némán elhasalt, a cím csak utólag, REST-en át (`gh api -X
+> PATCH .../pulls/43`) lett javítva. A kör állapota **APPROVED**. Tanulság:
+> `gh pr edit` után **ellenőrizd** a címet, mielőtt mergelsz.
 
 > **Klón-/friss-munkafa csapda (mérve 2026-08-01):** a generált
 > `lib/l10n/app_localizations*.dart` **gitignore-olt**, ezért egy friss klónban
@@ -220,43 +226,51 @@ regen-ig hiányoznak).
 
 ## 5. Last completed round
 
-**E02-R18 — Result-képernyő, PracticeCoach és Practice History V2**
-([ADR 0084](docs/adr/0084-practice-history-v2-and-coaching.md), PR #42, squash
-`463446c`): mode-specifikus **result képernyő** (csak alkalmazható dimenziók;
-`MetricNotApplicable` → rejtve, `MetricInsufficientData` → „nincs elég adat",
-nem 0%; Free Practice külön layout), **`PracticeCoach`** pure service
-(mérés-alapú, bizonyíték-küszöbös insight-kódok, determinisztikus prioritás), és
-**Practice History V2** — verziózott/karanténos/capelt (`maxSessions=200`,
-detail-window `N=20`), **idempotens** (`sessionId`) perzisztencia, a V1
-`ss.progress.practice_log` **bájtra érintetlen** hagyásával. Implementer:
-**MiniMax M3**, **egy javító körrel** (első review CHANGES REQUESTED → fix#1
-APPROVED).
+**E02-R19 — Progress-egyesítés, streak-jogosultság, daily goal és Learn
+V2-migráció** ([ADR 0085](docs/adr/0085-learn-migration-and-progress-merge.md),
+PR #43, squash `0bdee7e`): a V1 (`PracticeEntry`) és V2 (`PracticeHistoryEntry`)
+store **olvasáskor** egyesül egy pure aggregátorban (dedup a
+`PracticeHistoryEntry.id`-re, hamis adat nélkül); a **streak** az R16
+jogosultsági predikátumához kötve (20 s aktív ‖ 4 cél ‖ 8 pengetés, idempotens
+napi frissítés); a **daily goal kizárólag** a `playingElapsed`-ből számol; és a
+**Learn képernyő a `migratedLearnEnabled` flag mögött a V2 direction-scoringot
+használja**, egzakt paritással a legacy `LessonScorer`-rel. Minden flag OFF —
+a rollout az R20 döntése.
 
 **A kör lefolyása a jegyzőkönyvhöz** (részletek:
-[review](docs/reviews/e02-r18-review.md), §10 handoff):
+[review](docs/reviews/e02-r19-review.md) — három passz):
 
-- **pre-flight:** ADR 0084 megírása; a brief §2 mért állításai helytállók. Mért
-  pontosítás: a `recorder.record` **és** a `ShowRecoverableError`-emisszió **már
-  a controllerben** be van kötve (`:493`/`:500`), a controller single-flightot
-  tart — az új repository dolga csak a hiba `failure`-ként való felszínre hozása
-  és a `sessionId`-idempotencia a repository szintjén;
-- **implementer-futás (1. kör):** `done`, `dirty_files=0`, `6414993`; **3
-  dekompozíciós fájl a §4 listán felül** (recorder/mapper/metric-snapshot) —
-  scope MAJOR, az orchestrátor **§0.0 R1 brief-revízióval elfogadta** (egyik sem
-  tilos zóna);
-- **review → CHANGES REQUESTED (2 BLOCKER + 4 MAJOR):** eldobható próbatesztek
-  izolált `/tmp` klónban fogták meg a **zöld CI+gate mellett** átcsúszott
-  BLOCKER-eket: **B1** — a reális `StorageException` írás-hiba a swallowoló
-  `JsonDocumentStore.write`-on át `Success`-t adott (a szállított A9-teszt
-  `StateError`-ral kerülte meg); **B2** — a produkciós recorder `unknown`
-  mode/source kóddal írt, amit a szerializáló olvasáskor **eldob**
-  (write-then-drop, betölthető rekord = 0);
-- **fix#1 (`30b8b1d`) → APPROVED:** B1 a repository közvetlen `KeyValueStore`-írásával
-  (propagáló `StorageException` → `AppResult.failure`); B2 **honest deferral** —
-  placeholder-metaadatnál `Noop` recorder (nincs eldobható rekord), a valós
-  session-metaadat plumbing dokumentáltan **R19**; +detail-window, timing-bias
-  címke, A4 coach-cellák, 3 MINOR — mind teszttel zárva. Reviewer-gate friss
-  `/tmp` klónban `GATE_EXIT=0`; CI success az exact HEAD-en.
+- **első passz (MiniMax M3, `7cf1ca4`):** a plumbing (A1–A6, A8–A10) valósan
+  elkészült, de a Learn scoring-útja **tautológia** volt — a flag-ON ág a legacy
+  `LessonScorer.accuracy`-t adta tovább `directionAccuracy`-ként, és az A7
+  paritás-teszt ugyanazt az értéket hasonlította önmagához. A hű megvalósítás a
+  §4 listán kívüli fájlokat igényelt → **HALT (H3)**, a lánc emberre várt;
+- **user-döntés: (b) újra-scope.** A brief §4 bővült a V2-scoring felszínnel
+  (`learn/adapter/lesson_practice_target.dart`, `lesson_v2_scoring.dart`,
+  `practice/public.dart`) + egy „olvasandó, de nem módosítható"
+  paritás-referencia listával; az A7 valódi piros→zöld harness lett **öt
+  anti-tautológia őrrel** (típus-zár, gépiesen mért import-tilalom, mutációs
+  cella, részleges cellák, kvantálás-konzisztencia). Motor: **Codex**
+  (`gpt-5.6-terra`, `high` effort — user-döntés: „jó modell, de ne a legerősebb");
+- **két orchestrátor-döntés menet közbeni mért leletre** (ADR 0087 §2, saját nem
+  merge-elt brief): **§0.2** — a `PracticeDirectionScorer` **ezrelékre kvantál**
+  (7/24 → `0.2916̄` vs `0.291`), ezért az adapter a scorer **saját per-event
+  kimenetéből** számol egzakt arányt (nem mércelazítás); **§0.3** — a legacy
+  `d <= 0.28` **double**, a V2 `<= 280000` **egész**, így a pontos ablak-határon
+  eltérnek: dokumentált, elfogadott mikro-eltérés, a paritás minden szigorúan
+  belső/külső offseten kötelező marad. Az implementer mindkét eltérésnél
+  **helyesen `stopped`-ot jelzett** — ezért volt jó választás a Codex;
+- **review → CHANGES REQUESTED (1 MAJOR + 1 MINOR):** az 51 paritás-cella mind
+  `offset = 0`, `latency = 0` volt, tehát a paritás **időzítés-dimenziója
+  mérés nélkül maradt**; eldobható próbateszt izolált klónban meg is találta a
+  határponti eltérést. **fix#1 (`5ab9a37`) → APPROVED:** szigorúan belső
+  (+150 ms → találat), szigorúan külső (+400 ms → miss) és nem-nulla latency
+  (300 ms) cellák, mind **nem-vákuum őrrel** (`hits == total`, `missed == 1`);
+  + a §10 csonkítatlan gate-streamje;
+- **tanulságok:** [L29](docs/LESSONS.md) (a paritás-elemzés a záró aritmetikánál
+  nem ér véget) és [L30](docs/LESSONS.md) (a `flutter test <könyvtár>` compact
+  reportere nem ír sort minden suite-hoz — a „nem futott" grep-következtetés
+  hamis; a futás bizonyítéka a tesztszám-különbség: 194 − 138 = 56).
 
 ## 6. Exact next task
 
@@ -264,13 +278,17 @@ APPROVED).
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
    ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
-2. **~~E02-R18 — Result-képernyő + coaching + history~~ — KÉSZ** (PR #42,
-   `463446c`, 2026-08-01, implementer **MiniMax M3**, review CHANGES REQUESTED →
-   **fix#1 APPROVED**). A következő kör a sorból: **E02-R19 — a két practice-log
-   forrás egyesítése + progress/streak/learn-migráció + a live recorder valós
-   session-metaadat-plumbingje** (a R18 tudatos adóssága: mode/source/definition a
-   `PracticeSessionConfig`-ból a recorderbe, hogy a live rögzítés valós rekordot
-   írjon) — ezt a **pipeline** indítja, nem kézzel.
+2. **~~E02-R19 — progress/streak/daily-goal + Learn V2-migráció~~ — KÉSZ**
+   (PR #43, `0bdee7e`, 2026-08-01, implementer **Codex** `gpt-5.6-terra`, HALT H3
+   → user-döntés (b) újra-scope → review CHANGES REQUESTED → **fix#1 APPROVED**).
+   **A sor ezzel kiürült.** A következő kör az **E02-R20 (epic-zárás), amit
+   SZÁNDÉKOSAN ember indít** (ADR 0087 §7) — a pipeline nem viszi.
+   **Nyitott a rollout-döntés:** a `migratedLearnEnabled` mindenhol OFF; a
+   bekapcsolása külön user-döntés, amit az R19 paritása készít elő (a §0.3
+   szerint az ablak-határon egy dokumentált mikro-eltérés van).
+   *(A R18 adóssága — valós session-metaadat a live recorderbe — az R19 recording
+   use case-ével rendeződött; a `PracticeSessionConfig` → recorder plumbing
+   maradék részét az R20 zárja.)*
    (E02-R17 Speed Builder — KÉSZ: PR #41, `1285f57`; E02-R16 Rhythm-only + Free
    Practice — KÉSZ: PR #40, `33d89c9`.)
 3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
