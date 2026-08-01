@@ -37,6 +37,14 @@ GENERATED_IGNORED_PREFIXES = (
     "macos/Flutter/Flutter-Generated.xcconfig",
     "linux/flutter/ephemeral",
     "windows/flutter/ephemeral",
+    # A router SAJÁT jelzőfájlja (tools/codex-signal.sh írja, NEM az M3
+    # modell) és a reviewer/orchestrátor dokumentált review-artefaktuma
+    # (docs/execution/02-codex-playbook.md §13, 09-review-report.md) — ezeket
+    # a `resume` munkafolyamat MINDIG a munkapéldányba írja a leletekkel
+    # együtt, tehát scope-sértésként kezelésük önmagával ütközteti a
+    # dokumentált folyamatot. Mérve 2026-08-01, E02-R21 (H6 halt, 3. eset).
+    ".codex-round-status",
+    "docs/reviews",
 )
 
 # Ugyanaz a kategória, de a fájlnév változó része miatt mintával fogható:
@@ -46,6 +54,11 @@ GENERATED_IGNORED_GLOBS = (
     "lib/l10n/app_localizations*.dart",
     "GeneratedPluginRegistrant.*",
     "*/GeneratedPluginRegistrant.*",
+    # A resume-hoz átadott review-findings fájl neve a hívó választása
+    # (orchestrátor-prompt §1.1 "<review-findings.md>"), de mindig ezzel a
+    # `.ai/`-alatti előtaggal íródik — lásd a fenti .codex-round-status
+    # megjegyzést.
+    ".ai/review-findings-*.md",
 )
 
 
@@ -64,6 +77,19 @@ class ScopeAudit:
     violations: tuple[str, ...]
     high_risk: bool
     diff_hash: str
+    # A "történt-e valódi munka" jelzésre szánt, generált/ignorált (pl.
+    # .dart_tool/build build-cache churn, a router saját jelzőfájlja, a
+    # reviewer docs/reviews artefaktuma) útvonalaktól MEGTISZTÍTOTT halmaz —
+    # lásd L38 (docs/LESSONS.md): a violation-check és a "volt-e diff" check
+    # korábban ugyanazt a changed_paths halmazt használta, ezért a
+    # BASELINE_GATE saját melléktermékét "M3 diffnek" nézte. `None` esetén
+    # (pl. kézzel írt ScopeAudit teszt-fixture-ökben) megegyezik
+    # changed_paths-szal.
+    scoped_changed_paths: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.scoped_changed_paths is None:
+            object.__setattr__(self, "scoped_changed_paths", self.changed_paths)
 
 
 def redact_text(text: str, *, secret_values: Iterable[str] = ()) -> str:
@@ -196,14 +222,21 @@ def audit_scope(
     new_ignored = ignored_now - baseline.ignored_paths
     changed = set(tracked) | set(new_untracked) | set(new_ignored)
     violations: list[str] = []
+    generated_ignored: set[str] = set()
     current_head = _git(repo, ["rev-parse", "HEAD"]).decode().strip()
     if current_head != baseline.baseline_head:
         violations.append("model-created commit is not allowed: HEAD changed from baseline")
     for path in sorted(changed):
-        is_ignored_generated = path in new_ignored and _is_generated_ignored(
-            path, ignored_allow_paths
-        )
+        # Korábban csak az ÚJONNAN ignorált útvonalakra (new_ignored) állt
+        # fenn ez a mentesség — egy MÁR TRACKELT fájl (pl. az orchestrátor
+        # docs/reviews/<kör>.md review-jelentésének módosítása) így SOHA nem
+        # kaphatott mentességet, függetlenül a GENERATED_IGNORED_PREFIXES
+        # tartalmától. A kategória (tracked/untracked/ignored) itt nem a
+        # bizalmi döntés alapja — a `_is_generated_ignored` minta az. Mérve
+        # 2026-08-01, E02-R21 (H6 halt, 3. eset, L38).
+        is_ignored_generated = _is_generated_ignored(path, ignored_allow_paths)
         if is_ignored_generated:
+            generated_ignored.add(path)
             continue
         if _matches(path, protected_paths):
             violations.append(f"protected path changed: {path}")
@@ -233,4 +266,5 @@ def audit_scope(
         violations=tuple(violations),
         high_risk=high_risk,
         diff_hash="sha256:" + digest.hexdigest(),
+        scoped_changed_paths=tuple(sorted(changed - generated_ignored)),
     )
