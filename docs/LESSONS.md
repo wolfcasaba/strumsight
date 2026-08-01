@@ -1040,3 +1040,17 @@ fogyasztást engedne.
 **Hogyan alkalmazd.** Fájllock alatt atomikusan `reserved → started → finished`;
 bizonytalan kimenetnél fail-closed fogyasztás. Resume soha nem törli a ledgert,
 és a napi limitet worktree vagy task-state másolása sem kerülheti meg.
+
+## L33 — Codex 0.145-ben az approval globális opció
+
+**Mit mértünk (2026-08-01).** A valós M3 smoke `returncode 2`-vel, providerhívás
+előtt állt le: `unexpected argument --ask-for-approval`. A `codex exec --help` az
+approval opciót nem az exec alparancsnál, hanem a gyökérparancsnál mutatja.
+
+**Miért.** A külön profil parsingja és a `--help` ellenőrzése zöld lehet akkor is,
+ha a tényleges headless argv sorrendje hibás. A 0.145.0 CLI-ben az
+`--ask-for-approval never` az `exec` elé tartozik.
+
+**Hogyan alkalmazd.** A router `codex --ask-for-approval never exec ...` argv-listát
+épít shell nélkül. Az execution- és smoke-regresszió a pozíciót is ellenőrzi; a
+telepítés csak valós, stdin-es M3 és Terra smoke után tekinthető késznek.

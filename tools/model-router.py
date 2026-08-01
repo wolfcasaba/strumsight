@@ -169,6 +169,8 @@ def _smoke(profile: str, codex_bin: str, worktree: Path) -> int:
     prompt = f"Válaszolj kizárólag ezzel: {expected}"
     argv = [
         codex_bin,
+        "--ask-for-approval",
+        "never",
         "exec",
         "--profile",
         profile,
@@ -176,8 +178,6 @@ def _smoke(profile: str, codex_bin: str, worktree: Path) -> int:
         os.fspath(worktree.resolve()),
         "--sandbox",
         "read-only",
-        "--ask-for-approval",
-        "never",
         "--ephemeral",
         "--json",
         "-",

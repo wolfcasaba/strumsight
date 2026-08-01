@@ -378,10 +378,10 @@ A router nem hagyatkozik az interaktív profil approval-beállítására, hanem
 explicit futtatási kapcsolókat ad:
 
 ```text
-codex exec --profile <m3|terra> \
+codex --ask-for-approval never \
+  exec --profile <m3|terra> \
   --cd <izolált-task-worktree> \
   --sandbox workspace-write \
-  --ask-for-approval never \
   --ephemeral \
   --json \
   -
