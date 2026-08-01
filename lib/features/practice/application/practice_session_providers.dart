@@ -27,14 +27,19 @@
 // guard asserts this.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/microphone_permission.dart';
+import '../data/local_practice_history_repository.dart';
+import '../data/practice_history_recorder.dart';
+import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
+import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
@@ -53,11 +58,29 @@ final practiceTickSourceProvider = Provider<PracticeTickSource>(
   (_) => TimerPracticeTickSource(),
 );
 
-/// Default persistence boundary. Kör 18 swaps this for a real repository;
-/// until then the no-op returns `Success` without writing.
-final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>(
-  (_) => const NoopPracticeSessionRecorder(),
-);
+/// Default persistence boundary. Kör 18 ships the real recorder backed by
+/// the versioned [PracticeHistoryRepository]; the controller's finish path
+/// reads through this provider.
+final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
+  ref,
+) {
+  final repository = ref.watch(practiceHistoryRepositoryProvider);
+  final detailed = ref.watch(
+    appConfigProvider.select((cfg) => cfg.flags.practiceDetailedHistoryEnabled),
+  );
+  return PracticeHistoryRecorder(
+    repository: repository,
+    mapperFactory: () => PracticeSessionResultHistoryMapper(
+      now: DateTime.now,
+      detailEnabled: detailed,
+      modeCode: 'practice.mode.unknown',
+      sourceCode: 'practice.source.unknown',
+      definitionId: 'practice.definition.unknown',
+      displayTitle: '',
+      skillTags: const <String>[],
+    ),
+  );
+});
 
 /// Deterministic-then-monotonic session-id factory. Defaults to a
 /// counter-based factory so production builds get unique ids while tests

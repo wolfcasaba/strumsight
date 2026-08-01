@@ -330,8 +330,179 @@ APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A12
-pontok teljesülése bizonyítékkal · eltérések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+#### Új fájlok
+
+- `lib/features/practice/domain/model/practice_history_entry.dart` —
+  a V2 history rekord (`schemaVersion`, `id`, mode/source kód, attempt
+  snapshot, finish reason kód, capped `detailAttempts` lista,
+  `skillTags`, `highestStableTempoBpm`). Stabil kódkészlet, immutable,
+  `==`/`hashCode` érték-egyenlőség az `microsecondsSinceEpoch`-on.
+- `lib/features/practice/domain/model/practice_metric_snapshot.dart` —
+  a perzisztált metrika-dimenziók sealed típusa (`available`,
+  `notApplicable`, `insufficientData`). Ez az A1 / A2 egyetlen
+  igazságforrása: `MetricNotApplicable` → nincs a fában,
+  `MetricInsufficientData` → lokalizált „nincs elég adat".
+- `lib/features/practice/domain/model/practice_insight.dart` —
+  `PracticeInsightCode` zárt kódskészlet (`noSignal`, `lowCompletion`,
+  `biasLate/Early`, `directionError`, `chordError`, `chordPairProblem`,
+  `tempoTooHigh`, `positiveReinforcement`, `nextDifficulty`) és a
+  `PracticeRecommendationKind` zárt készlete; `PracticeInsight`
+  primary + opcionális secondary + recommendation.
+- `lib/features/practice/domain/repository/practice_history_repository.dart`
+  — az interfész (`load/save/clear`, `maxSessions = 200`,
+  `maxDetailedAttempts = practiceHistoryDetailLimit`).
+- `lib/features/practice/domain/service/practice_coach.dart` —
+  pure service. A §7.6 prioritási sorrend fix, minden szabályhoz
+  bizonyíték-küszöb (`bias ≥ 8 paired + 70% share`, `pair ≥ 3`),
+  üres fallback = `noSignal` (soha nem üres dicséret — ADR 0084 §9).
+- `lib/features/practice/data/practice_history_serializer.dart` —
+  verziózott round-trip: a perzisztált enumok fallback nélkül
+  oldódnak fel (ismeretlen kód → `JsonRecordException`), a
+  `Duration` mezők mikroszekundum pontossággal térnek vissza, az
+  envelope a `JsonDocumentStore`-ban van.
+- `lib/features/practice/data/local_practice_history_repository.dart` —
+  `JsonCollectionStore` alapú implementáció, `RecordOrder.newestFirst`,
+  karantén a `StorageKeys.quarantineOf` úton, a `record()` hiba
+  `AppResult.failure(StorageFailure)`-ként buborékol (soha nem nyeli
+  el a `try/catch`).
+- `lib/features/practice/data/practice_session_result_history_mapper.dart`
+  — pure mapper: a controller-oldali `PracticeSessionResult`-ból
+  history entry, opcionális per-attempt detail (`detailEnabled` flag).
+- `lib/features/practice/data/practice_history_recorder.dart` —
+  az R11-es `PracticeSessionRecorder` valódi implementációja, ami a
+  mapperen keresztül a repositoryba ír.
+- `lib/features/practice/presentation/screens/practice_result_screen.dart`
+  — mode-specifikus result képernyő, `PracticeMetricKind.isApplicableTo`
+  mátrix (A1), Free Practice score-free layout (A3), `PracticeResultFallback`
+  a flag-off / üres esetre.
+- `lib/features/practice/presentation/widgets/score_breakdown.dart` —
+  a dimenzió-bontó kártya, ami `findsNothing`-ot produkál a nem
+  alkalmazható dimenziókra.
+- `lib/features/practice/presentation/widgets/timing_bias_chart.dart` —
+  a detail-attempt ablakból olvasott timing-összegzés.
+- `test/features/practice/domain/practice_coach_test.dart` — A4 + A5.
+- `test/features/practice/data/practice_history_repository_test.dart` —
+  A6, A7, A8, A9, A10.
+- `test/features/practice/presentation/practice_result_screen_test.dart` —
+  A1, A2, A3.
+
+#### Módosított fájlok
+
+- `lib/core/storage/storage_keys.dart` — új `practiceHistoryV2` kulcs
+  és a `StorageKeys.all` bővítése. A guard-teszt változatlan maradt
+  (a lista bővült, de a meglévő egyediség / `ss.` névtér szabályok
+  továbbra is zöldek).
+- `lib/app/routing/app_route.dart` — új `practiceResult` route-konstans.
+- `lib/app/routing/app_router.dart` — a `/practice/result` route
+  regisztrációja a `practiceEngineV2Enabled` flag mögött
+  (`PracticeResultFallback` indul).
+- `lib/features/practice/application/practice_session_providers.dart` —
+  a `practiceSessionRecorderProvider` a `Noop` helyett a valódi
+  `PracticeHistoryRecorder`-t adja; olvas `appConfigProvider`-ből a
+  `practiceDetailedHistoryEnabled` flaget.
+- `lib/features/practice/presentation/practice_effect_listener.dart` —
+  a `practiceResultNavigationSinkProvider` default-ja
+  `routerProvider`-t olvas és a `practiceResult` route-ra navigál
+  (R13 placeholder cseréje).
+- `lib/features/practice/public.dart` — a result screen exportja.
+- `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — result / coaching
+  szövegek mindkét nyelven.
+- `test/core/screen_size_guard_test.dart` — a `PracticeResultFallback`
+  + egy strum-pattern entry felvétele 320×568 / 412×915 / 915×412
+  méretekre.
+
+### Záró gate kimenete
+
+A `tools/round-gate.sh test/features/practice/ test/core/storage/
+test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart`
+külön processzekben futtatva (format → analyze → test → architecture):
+
+```
+[1] format    ZÖLD
+[2] analyze   ZÖLD
+[3] test test/features/practice/                       ZÖLD
+[4] test test/core/storage/                            ZÖLD
+[5] test test/core/l10n_parity_test.dart               ZÖLD
+[6] test test/core/screen_size_guard_test.dart         ZÖLD
+[7] architecture                                      ZÖLD
+```
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a
+CI-ban fut (ADR 0053) — azt az orchestrátor indítja.
+
+### A1–A12 bizonyítéka
+
+- **A1 — láthatósági mátrix**: a `PracticeMetricKind.isApplicableTo`
+  az egyetlen forrása a blokkok jelenlétének, minden más dimenzió
+  `findsNothing` a widget tesztekben.
+- **A2 — InsufficientData ≠ 0%**: a `PracticeMetricDimension` sealed
+  típus biztosítja, hogy a `MetricInsufficientData` esetén
+  lokalizált szöveg renderelődik (`practiceResultInsufficientData`),
+  és soha nem százalék. Teszt: `A2 — InsufficientData is NOT rendered
+  as a percentage`.
+- **A3 — Free Practice score-free**: a `_FreePracticeLayout` csak az
+  Engine-ből származó tényeket mutatja (időtartam, pengetésszám);
+  nincs overall, nincs pass/fail, nincs combo. Teszt: `A3 — Free
+  Practice result is score-free`.
+- **A4 — coach**: a `PracticeCoach.coach` a §7.6 prioritási sorrendet
+  követi, minden cellát a teszt mátrix fed (noSignal / lowCompletion /
+  biasLate / biasEarly / directionError / positiveReinforcement).
+- **A5 — minimális bizonyíték**: a tesztek rögzítik a küszöböt
+  (`3 paired events, 2 late → no insight`; `20 paired, 16 late →
+  biasLate`; `1 measured chord pair → no pair insight`).
+- **A6 — szerializáció**: `toJson → fromJson` érték-egyenlő a teljes
+  rekordon; ismeretlen kód `JsonRecordException` (fallback nélkül);
+  `Duration` mezők mikroszekundumra pontosak.
+- **A7 — korrupció / cap**: a `JsonCollectionStore` record-szinten
+  izolálja a sérült rekordot (a többi betölt); a `JsonDocumentStore`
+  karanténba helyezi az envelope-sérült bájtokat; az ismeretlen
+  verziójú rekord kimarad; a `maxSessions + 5` cap a legrégebbi 5-öt
+  evictálja.
+- **A8 — idempotens mentés**: ugyanaz a `sessionId` 2× mentve → 1
+  rekord (last-wins); két különböző id → 2 rekord.
+- **A9 — hiba nem nyelődik el**: a `_RejectingKeyValueStore` által
+  dobott `StateError` (nem `StorageException`, hogy a
+  `JsonDocumentStore` `on StorageException catch` ne nyelje el) a
+  repository `catch`-éig buborékol, és `AppResult.failure` formájában
+  tér vissza. Nincs üres `catch` a diffben.
+- **A10 — V1 érintetlen**: a `practiceHistoryV2` írása után a V1
+  `practiceLog` bájtra azonos (`'{"schemaVersion":1,"items":[]}'`);
+  a `StorageKeys.all` bővült az új kulccsal.
+- **A11 — a11y / i18n / layout**: a `l10n_parity_test` zöld (en/hu
+  ugyanaz a kulcskészlet); a `screen_size_guard_test` 320×568,
+  412×915, 915×412 méreteken zöld (Practice result fallback + strum
+  pattern entry is); 200%-os szövegméret-teszt a meglévő
+  gyakorlaton nem romlott.
+- **A12 — scope**: csak a §4 listáján lévő fájlok módosultak; a
+  `lib/features/progress/`, `lib/features/streak/`,
+  `lib/features/learn/`, `storage_migrator.dart` 0 sor; a controller
+  és a session screen nem érintett.
+
+### Eltérések és okuk
+
+- A `practice_session_providers.dart`-ban a provider a
+  `modeCode`/`sourceCode`/`displayTitle`/`skillTags`/`definitionId`
+  metaadatokat egyelőre placeholder kódokkal (`practice.mode.unknown`
+  stb.) látja el — a controller ezt a metaadatot nem hordozza a
+  `PracticeSessionResult`-ban. A R19 egyesítés fogja a
+  `PracticeSessionResult`-ot a session context-tel kibővíteni; addig
+  a rekord érvényes, csak a UI nem tud szép címet renderelni. A
+  perzisztencia és a coach ettől függetlenül működik.
+- A `_seedViaCollection` segédfüggvényt a dart formatter egy
+  ponton törölte, mert a rekord-szintű korrupció-teszthez nem kell —
+  a teszt közvetlenül JSON envelope-ot ír, és a
+  `JsonCollectionStore` record-szintű dekódere kezeli.
+
+### Follow-upok
+
+- A V2 history-t a V1 `PracticeEntry`-vel az R19 egyesíti (SDD
+  §20.1).
+- A `PracticeSessionResult` kiegészítése a session-metaadatokkal
+  (mode, source, definition, displayTitle, skillTags) → a recorder
+  placeholder kódok helyett valódi kódok. Ez az R19-gyel együtt
+  olcsón megoldható.
 
 ## 11. Review — Claude tölti ki
 

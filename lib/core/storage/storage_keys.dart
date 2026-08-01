@@ -44,6 +44,12 @@ abstract final class StorageKeys {
   static const String dailyGoalMinutes = 'ss.progress.daily_goal_minutes';
   static const String streak = 'ss.streak.state';
 
+  // --- practice ------------------------------------------------------------
+  /// Versioned Practice History V2 — separate from the V1 `practiceLog`
+  /// (ADR 0084 §Döntés 1). The V1 store is deliberately untouched in this
+  /// round; the two sources will be unified in E02-R19.
+  static const String practiceHistoryV2 = 'ss.practice.history_v2';
+
   /// Secure-store key for the JWT. Deliberately NOT renamed: the secure store
   /// is not covered by the preference migrator, so a rename would silently log
   /// out every signed-in user.
@@ -84,6 +90,7 @@ abstract final class StorageKeys {
     practiceLog,
     dailyGoalMinutes,
     streak,
+    practiceHistoryV2,
   ];
 }
 
