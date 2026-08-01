@@ -1410,3 +1410,48 @@ elégtelen. (3) A `codex-signal.sh` cwd-függése miatt a `branch=`/`head=`/
 amíg a szkript nem oldja fel a saját útvonalát a munkapéldányhoz képest
 (javítási hely: `tools/codex-signal.sh`, a `root=$(git rev-parse
 --show-toplevel)` sor körül).
+
+**A javítás** (izolált worktree `heal/E02-R21-H6-1`, PR #50). (1)
+`tools/ai_router/router.py`, a resume-ág `M3_ATTEMPT_`/`M3_CALL_` közös
+kezelése: `M3_CALL_N` KIZÁRÓLAG közvetlenül a `run_model()` hívás ELŐTT
+perzisztálódik, és sikeres visszatérés után azonnal `M3_ATTEMPT_N`-re vált
+— tehát resume-on `M3_CALL_N` fázis SOSEM jelentheti, hogy a hívás
+lezajlott. Ha a resume-scope-audit ezen a fázison nem talál hatókörön
+belüli diffet, a router most visszaadja a kísérletet
+(`m3_attempts -= 1`, `phase = "M3_READY"`) és a hurok friss próbaként
+ismétli, ahelyett hogy szintetikus `code_failure`-ként elfogyasztaná — ez
+ugyanaz a mintázat, mint a meglévő `partial_changes=False` ág a
+`_provider_decision`-ben. Ha VAN partiális diff, a régi (gate-elő,
+elfogyasztó) útvonal marad — az valódi részmunka. (2)
+`tools/codex-signal.sh`: a `root` mostantól a szkript SAJÁT elérési útjából
+(`${BASH_SOURCE[0]}`) oldódik fel, nem a hívó öröklött cwd-jéből, és minden
+git-parancs `git -C "$root"`-tal fut — a hívó cwd-je immár irreleváns.
+
+**Regressziós teszt, mérten RED→GREEN.**
+`tools/tests/test_router_resume.py::test_resume_after_interrupted_m3_call_retries_without_consuming_the_attempt`
+egy `M3_CALL_1` fázisban megszakadt, üres diffet hagyó state-et resume-ol:
+a fix előtt a régi kód egy plusz, nem tervezett `run_gate()`-hívást
+kísérelt meg (a teszt `FakeGate`-je ezért `IndexError`-ral RED-ben bukott),
+utána a hurok egyetlen friss `run_model()`-hívással GREEN-ben zárja, és
+`m3_attempts` visszaáll 1-re (nem nő 2-re).
+`tools/tests/test_pipeline_integration.py::test_signal_resolves_git_state_from_the_worktree_not_the_callers_cwd`
+két külön git-repót épít (a `worktree`-t és egy tőle független `caller`
+repót), és a szkriptet a `worktree`-n belüli abszolút úton, de `cwd=caller`
+mellett hívja — a fix előtt a `.codex-round-status` a ROSSZ repóba
+(`caller`) íródott (`FileNotFoundError` a `worktree`-ben, RED), utána a
+helyes `branch=`/`head=` kerül a `worktree` jelzőfájljába. Teljes
+`tools/tests`: 106 teszt, 33 subtest, zöld. `router-ci.yml` zöld a
+merge-SHA-n: [PR #50](https://github.com/wolfcasaba/strumsight/pull/50)
+(squash `2e70a1a`).
+
+**Hogyan alkalmazd (kiegészítés).** Ha egy állapotgép egy műveletet KÉT
+lépésben perzisztál (fázis-jelzés → külső hívás → eredmény-jelzés), és a
+folyamat a kettő között bármikor kilőhető, a resume-kódnak külön ágat kell
+adnia a "a hívás előtt álltunk meg" (nincs bizonyíték eredményről → ne
+fogyassz, próbáld újra) és a "a hívás után álltunk meg" (van eredmény →
+azt értékeld) eseteknek — az azonos kezelés szisztematikusan a rosszabbik
+felé torzít (elfogyaszt egy sosem lezajlott kísérletet). Egy segédszkript,
+amit a hívója abszolút úton indít, SOSEM támaszkodhat az öröklött cwd-re
+(`git rev-parse --show-toplevel`, relatív fájlutak) — a saját
+`${BASH_SOURCE[0]}`-ból oldja fel magát, különben a hívási minta (van-e
+`cd` előtte) csendben megváltoztatja, melyik repót méri.

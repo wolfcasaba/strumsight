@@ -4,6 +4,33 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (önjavító kör, E02-R21 H6 4. előfordulása JAVÍTVA.** Mért gyökérok
+> (`docs/LESSONS.md` L42, két FÜGGETLEN hiba egyszerre): (1)
+> `tools/ai_router/router.py` resume-ága a `M3_CALL_N` fázist (a hívó
+> Bash-eszköz 600s-es plafonja által mid-call megölt router-folyamat) ugyanúgy
+> kezelte, mint a `M3_ATTEMPT_N`-t (a hívás már lezajlott) — pedig `M3_CALL_N`
+> resume-on SOSEM jelentheti, hogy a `run_model()` visszatért, mégis
+> szintetikus `code_failure`-ként elfogyasztotta a modell egyetlen valódi
+> esélyét. (2) `tools/codex-signal.sh` a `git rev-parse --show-toplevel`-t a
+> hívó öröklött cwd-jéből oldotta fel, nem a saját szkript-útvonalából, ezért
+> a dokumentált (abszolút úton, `cd` nélküli) orchestrátor-hívási minta
+> szisztematikusan a rossz repót mérte. Javítva: (1) resume-on `M3_CALL_N` +
+> nincs hatókörön belüli diff ⇒ a router visszaadja a kísérletet
+> (`m3_attempts -= 1`, `phase = "M3_READY"`) és friss próbaként ismétli
+> (ugyanaz a minta, mint a `_provider_decision` meglévő
+> `partial_changes=False` ága); (2) a szkript a saját
+> `${BASH_SOURCE[0]}`-jából oldja fel a repo-gyökeret, minden git-parancs
+> `git -C "$root"`-tal fut. Mért RED→GREEN két külön regresszióval:
+> `tools/tests/test_router_resume.py::test_resume_after_interrupted_m3_call_retries_without_consuming_the_attempt`,
+> `tools/tests/test_pipeline_integration.py::test_signal_resolves_git_state_from_the_worktree_not_the_callers_cwd`.
+> Teljes `tools/tests` (106 teszt, 33 subtest) zöld, `router-ci.yml` zöld a
+> merge-SHA-n: [PR #50](https://github.com/wolfcasaba/strumsight/pull/50)
+> (squash `2e70a1a`). Tanulság: `docs/LESSONS.md` L42.
+> **A Practice V2 production drótozás (a kör tényleges célja) ÉRINTETLEN —
+> ez a kör kizárólag a router-infrastruktúrát javította, NEGYEDSZER ugyanezen
+> a task-on. A stuck task-state resetelése és a következő `run` a lánc
+> következő firingjén automatikusan indul.**
+> Előző kör: 2026-08-01
 > (Pipeline E02-R21 — a H4+H6 fixek (#48/#49) UTÁNI, első valóban éles router-
 > futás is HALT-ba futott, ÚJ, a router-infrastruktúrától FÜGGETLEN okkal:
 > H6.** A munkapéldány rebase-elve `origin/main`-re (mindkét fix benne), a
