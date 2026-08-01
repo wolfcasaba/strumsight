@@ -117,7 +117,7 @@ eredménye ezért `READY_FOR_REVIEW`, nem a teljes kör végleges `done` állapo
 ### 5.2 Repository-komponensek
 
 - `tools/model-router.py`: a determinisztikus állapotgép;
-- `.ai/router.yaml`: limitek, retry-szabályok, tiltott útvonalak és
+- `.ai/router.toml`: limitek, retry-szabályok, tiltott útvonalak és
   magas-kockázatú minták;
 - `tools/round-pipeline.sh`: az `auto` motor integrációja;
 - `tools/round-gate.sh`: a meglévő Flutter quality gate, változatlan
@@ -125,9 +125,9 @@ eredménye ezért `READY_FOR_REVIEW`, nem a teljes kör végleges `done` állapo
 - router unit- és integrációs tesztek;
 - dokumentáció és a következő szabad sorszámú ADR.
 
-A YAML-konfiguráció verziózott sémát használ, safe loaderrel töltődik be, és
-ismeretlen vagy hibás kulcsnál fail-closed módon leáll. A szükséges tooling
-dependency verziója rögzített; hiánya `ENV_BLOCKED`, nem modellhiba.
+A TOML-konfiguráció verziózott sémát használ, a Python 3.11+ stdlib
+`tomllib` moduljával töltődik be, és ismeretlen vagy hibás kulcsnál fail-closed
+módon leáll. Külső Python runtime dependency nem szükséges.
 
 ### 5.3 Kompatibilitás
 
@@ -215,19 +215,21 @@ Az állapotok:
 
 ### 7.1 Alapkorlátok
 
-```yaml
-routing:
-  default_engine: auto
-  default_provider: minimax
-  default_model: MiniMax-M3
+```toml
+schema_version = 1
 
-limits:
-  max_m3_attempts_per_task: 2
-  max_terra_calls_per_task: 1
-  max_automatic_terra_calls_per_utc_day: 3
-  terra_reasoning: medium
-  terra_packet_target_tokens: 40000
-  terra_packet_max_bytes: 81920
+[routing]
+default_engine = "auto"
+default_provider = "minimax"
+default_model = "MiniMax-M3"
+
+[limits]
+max_m3_attempts_per_task = 2
+max_terra_calls_per_task = 1
+max_automatic_terra_calls_per_utc_day = 3
+terra_reasoning = "medium"
+terra_packet_target_tokens = 40000
+terra_packet_max_bytes = 81920
 ```
 
 A `terra_packet_target_tokens` router-szintű csomagméret-cél, nem kitalált vagy
