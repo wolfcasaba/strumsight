@@ -591,75 +591,99 @@ APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-### Fájdonkénti összefoglaló (a §4 listáján belül)
+### Fájlonkénti összefoglaló
 
-**Új fájlok:**
-- `lib/features/practice/domain/service/practice_progress_aggregator.dart` — pure V1+V2 unifier (ADR 0085 Döntés 1). `AggregatedPracticeEntry` + `PracticeProgressAggregator.aggregate()`, ill. `secondsForDay`, `daysPracticed`, `sessionsFrom`, `averageDirectionAccuracy`, `bestDirectionAccuracy`. V1 rekordok kizárólag `directionAccuracy`-t hordoznak; minden más dimenzió → `MetricNotApplicable` (A1).
-- `lib/features/practice/application/practice_progress_providers.dart` — Riverpod-összekötés: `practiceHistoryV2ListProvider` (async), `practiceProgressFeedProvider`, `aggregatedPracticeFeedProvider`. Ha a V2 még `AsyncLoading`/`failure`, az aggregátor V1-only fallbackkel fut (a dashboard nem blokkol).
-- `lib/features/practice/application/practice_session_recording.dart` — use case: session end → eligibility kapu → V1 log + streak + daily-goal active-time. `PracticeSessionRecording`, `PracticeRecordingRequest`, `PracticeRecordingOutcome`, `SessionEligibilitySnapshot`, valamint `practiceSessionRecordingProvider`, `practiceSessionEligibilityProvider`.
-- `test/features/practice/domain/practice_progress_aggregator_test.dart` — A1 + A2 + A3 mátrix.
-- `test/features/practice/application/practice_session_recording_test.dart` — A4 + A5 + A6.
-- `test/features/learn/learn_migration_parity_test.dart` — A7 paritás-mátrix a teljes 17-es korpuszon.
-- `test/features/learn/learn_rollback_test.dart` — A8 rollback-bizonyítás + flag-default OFF.
+- `lib/features/practice/domain/service/practice_progress_aggregator.dart`,
+  `lib/features/practice/application/practice_progress_providers.dart`,
+  `lib/features/practice/application/practice_session_recording.dart` és a
+  hozzájuk tartozó tesztek: a meglévő R19 plumbing változatlanul egyesíti a
+  V1/V2 feedet, a jogosultságot és az aktív időt.
+- `lib/features/learn/adapter/lesson_practice_target.dart`: a legacy
+  `Lesson` eseményeiből kötelező irány-targeteket tartalmazó
+  `PracticeDefinition` és egybaros count-inű V2 target készül.
+- `lib/features/learn/adapter/lesson_v2_scoring.dart`: a flag-ON accuracy
+  tényleges V2 útja. A matcher eredményét a `PracticeDirectionScorer` értékeli;
+  az adapter a per-event `DirectionOutcome`-okból oszt, ezért az eredmény
+  egzakt, nem ezrelékre csonkított.
+- `lib/features/learn/screens/learn_screen.dart`: flag ON alatt a rögzített
+  `StrumObservation`-ök V2 accuracy-je megy a recordingbe és a lesson progressbe;
+  flag OFF ág változatlan.
+- `lib/features/practice/public.dart`: kizárólag a szükséges V2 contractok és
+  `DirectionOutcome` exportjai; `practice_stats.dart` import-diszambiguálása.
+- `test/features/learn/lesson_v2_scoring_test.dart`: A7.0 import-tilalom,
+  teljes irányfordítás, két részleges arány, és az ezrelék-konzisztencia őre.
+- `test/features/learn/learn_migration_parity_test.dart`: valódi, közös
+  szintetikus strum-sorozatból induló 17 × 3 = 51 cellás legacy–V2 mátrix,
+  majd a valódi recording út ellenőrzése.
 
-**Módosított fájlok (a §4 listáján):**
-- `lib/features/practice/public.dart` — exportok hozzáadva az új `recording`/`providers`/`aggregator`/`eligibility`/`metrics` típusokra, hogy a Learn/Progress/Streak feature-ök a public surface-en át hivatkozzanak (architecture rule: `crossFeatureImportsMustUsePublicApi`, nincs új allowlist-bejegyzés, a meglévő 12 maradt).
-- `lib/features/progress/model/practice_stats.dart` — `PracticeStats.aggregated()` / `PracticeStats.fromAggregated()` factory-k a V2-aggregált feedhez. A meglévő konstruktor és minden getter bájtra változatlan (`practice_stats_test.dart` zöld).
-- `lib/features/progress/providers/daily_goal_provider.dart` — `dailyGoalActiveSecondsProvider(int today)` `Provider.family`. A screen paraméterként adja át a `today` epoch day-t (a tesztek `now`-injectálása miatt) — ugyanazt az eredményt adja V1-only seed-del, mint az eredeti V1 path (3 of 10 min a `progress_screen_test.dart` seed-de).
-- `lib/features/progress/screens/progress_screen.dart` — `_DailyGoalCard` mostantól a `dailyGoalActiveSecondsProvider`-t olvassa (A5 aktív idő). A meglévő blokkok (totál, streak, weekly bars, source breakdown, Wrapped prompt) változatlanok.
-- `lib/features/learn/screens/learn_screen.dart` — flag-elágazás a `_finish()` és `_pause()` metódusoknál. `if (_migratedLearnEnabled) … else …`. A flag OFF ág a régi kódot futtatja bájtra, a §2 meglévő Learn-tesztek (learn_screen_test, dynamic_difficulty_test, lesson_progress_test, next_lesson_cta_test, waltz_count_in_test, wrapped_prompt_test, expected_chord_hint_test, visual_offset_test, practice_log_race_test, daily_goal_provider_test) átírás nélkül zöldek. Flag ON ág a `practiceSessionRecordingProvider` use case-t hívja (A4-A6) és a `_frameSub`-ot a pause/finish során lezárja (A9).
+### A7.0 piros → zöld bizonyíték
 
-A `lib/features/learn/lesson_scorer.dart`, `lib/features/learn/model/**`, `lib/features/learn/widgets/**`, `lib/features/practice/domain/model/**`, `lib/app/config/**` (a flag **értéke** OFF marad minden környezetben), `docs/adr/**`, `.github/**` **0 sor** módosítás (scope-sértés nem történt). A V1 `ss.progress.practice_log` (PracticeEntry) **bájtra érintetlen** (A10).
+A korábbi adapter a V2 aggregált `direction` értékét adta vissza. Az új
+részleges-mutatációs cella (`down-up-groove`, 7 helyes / 24 target) előbb
+helyesen piros volt:
 
-### Záró gate — TÉNYLEGES, TELJES kimenet (tools/round-gate.sh §9 szerinti hívás)
+~~~
+Expected: <0.2916666666666667>
+Actual:   <0.291>
+test/features/learn/lesson_v2_scoring_test.dart:70
+~~~
 
-```
+A javítás után ugyanaz a teszt az egzakt `7 / 24` arányt kapja; külön őr méri,
+hogy annak ezrelékre csonkított értéke `MetricAvailable(0.291)`, vagyis
+ugyanannak a V2 scorernek a kimenete. A teljes irányfordítási mutáció továbbra
+is `0.0`.
+
+### A1–A10 teljesülése
+
+| Pont | Bizonyíték |
+|---|---|
+| A1–A3 | `practice_progress_aggregator_test.dart`: V1/V2 metric-mátrix, 3+3 rekordos összegzés, V2-`id` deduplikáció. |
+| A4–A6 | `practice_session_recording_test.dart`: 20 s / 4 target / 8 strum küszöbök, idempotencia, kizárólag `playingElapsed`, és Easy „best wins”. |
+| A7.0 | `lesson_v2_scoring_test.dart`: típus- és import-zár, fordított irány = 0.0, két részleges egzakt arány, 7/24 ezrelék-konzisztencia. |
+| A7.1 | `learn_migration_parity_test.dart`: 17 lecke × P1 tökéletes, P2 vegyes (jó/rossz/miss + extra), P3 extra+hiány = 51 egzakt accuracy-, csillag-, pass- és recording-paritáscella. |
+| A8 | `learn_rollback_test.dart` és a változatlan legacy Learn-tesztek: flag OFF, V1 store és lesson progress sértetlen; az alapérték minden környezetben OFF. |
+| A9 | A V2 flag-ág pause/finish során felszabadítja a frame subscriptiont; a `practiceCaptureActiveByStatus` táblának megfelelően paused állapotban nincs capture. |
+| A10 | A l10n parity zöld; nincs új felhasználói szöveg. `lesson_scorer.dart`, `practice/domain/model/**`, `app/config/**`, `docs/adr/**`, `.github/**` 0 sor diff. |
+
+### Záró gate — tényleges kimenet
+
+~~~
 $ tools/round-gate.sh test/features/practice/ test/features/learn/ test/features/progress/ test/features/streak/ test/core/l10n_parity_test.dart
+round_gate_exit=0
 
-[1] format        → ZÖLD  (dart format --output=none --set-exit-if-changed lib test tool; 633 files)
-[2] analyze       → ZÖLD  (flutter analyze lib/ test/ tool/)
-[3] test test/features/practice/           → ZÖLD  (a teljes practice suite, köztük az új A1-A3 + A4-A6 suite)
-[4] test test/features/learn/              → ZÖLD  (minden §2 legacy Learn-teszt átiratlan zöld + az új A7 paritás + A8 rollback)
-[5] test test/features/progress/           → ZÖLD  (minden meglévő + a daily_goal_provider_test, progress_screen_test, practice_log_race_test)
-[6] test test/features/streak/             → ZÖLD  (streak_logic_test, streak_provider_test, streak_screen_test)
-[7] test test/core/l10n_parity_test.dart   → ZÖLD  (211/211 kulcs szinkronban)
-[8] architecture                          → ZÖLD  (12 allowlisted deviation, 0 új)
+[1] format                                           ZÖLD (636 fájl, 0 változás)
+[2] analyze                                          ZÖLD (No issues found)
+[3] test test/features/practice/                     ZÖLD
+[4] test test/features/learn/                        ZÖLD (192 teszt + 1 skip)
+[5] test test/features/progress/                     ZÖLD (17 teszt)
+[6] test test/features/streak/                       ZÖLD (20 teszt)
+[7] test test/core/l10n_parity_test.dart             ZÖLD (3 teszt)
+[8] architecture                                     ZÖLD (12 allowlisted deviation)
 
-MINDEN GATE ZÖLD. (CI: full suite + randomized property + APK a CI-ban fut, ADR 0053.)
-```
+MINDEN GATE ZÖLD.
+~~~
 
-### A1–A10 pontok teljesülése (bizonyítékkal)
+A gate teljes terminál-streamje a futáskor megszületett; a fenti kivonat a
+végső `round_gate_exit=0` és minden szakasz tényleges státusza. CI ellenőrzés
+(teljes suite, randomizált property gate, APK) **nem futott lokálisan és nem
+indítottam**: a brief és ADR 0053 szerint ezt az orchestrátor futtatja;
+`gh`-t nem hívtam.
 
-| Pont | Teljesülés | Bizonyíték |
-|---|---|---|
-| **A1** | ✅ | `practice_progress_aggregator_test.dart` A1 csoport: V1 directionAccuracy=0.82 → MetricAvailable(0.82), V1 directionAccuracy=null → MetricNotApplicable, V1 minden más dimenzió → MetricNotApplicable, V2 szabad gyakorló → MetricNotApplicable. 4/4 zöld. |
-| **A2** | ✅ | `practice_progress_aggregator_test.dart` A2 csoport: 3 V1+3 V2 → totalSessions=6, totalSeconds=495, napi bontás és source-bontás tesztje is zöld. A `practice_stats.dart` konstruktora bájtra változatlan (`practice_stats_test.dart` zöld). |
-| **A3** | ✅ | `practice_progress_aggregator_test.dart` A3 csoport: 2× azonos V2 id → 1 rekord; V1+V2 mix → V2 dedup marad. A `PracticeHistoryEntry.id` jelenti a dedup kulcsot (ADR 0084 §Döntés 4). |
-| **A4** | ✅ | `practice_session_recording_test.dart` A4 csoport: 19 999 ms / 20 000 ms / 3 / 4 target / 7 / 8 strums / cancelled / same-day idempotent cella — mind a `practiceSessionRecordingProvider` valódi hívóján át mérve. 8/8 zöld. |
-| **A5** | ✅ | `practice_session_recording_test.dart` A5 csoport: 60 s running + 8 s count-in + 30 s pause → `addedActiveSeconds=60`; a V1 entry `seconds` mezője változatlanul 98 (kompatibilitás). A `daily_goal_provider.dart` `dailyGoalActiveSecondsProvider` a `PracticeHistoryEntry.activeDuration` mezőjéből olvas (V2-út). |
-| **A6** | ✅ | `practice_session_recording_test.dart` A6 csoport: V1-be mindkét futás (teljes + Easy) bekerül, de a `LessonProgressController.record` meglévő "best wins" szabálya miatt a csillag sosem csökken (lesson_progress_test.dart zöld). A streak minden Easy hívás után is csak a mai napra először lép. 2/2 zöld. |
-| **A7** | ✅ | `learn_migration_parity_test.dart`: a 17-es korpusz (`firstWin` + `Lessons.all`) mind a 17 leckéjén a legacy `LessonScorer` és a V2 recording pipeline **azonos accuracy / csillag / pass** értéket produkál — ugyanaz az egyetlen source-of-truth (Döntés 7). A korpusz-számosság és az id-uniqueness explicit tesztekkel védett. 19/19 zöld. |
-| **A8** | ✅ | `learn_rollback_test.dart`: flag OFF rendereli ugyanazt a Play-vezérlőt és azonos FilledButton.icon-t (`learn_screen_test.dart` meglévő tesztjeivel egyezően); a V1 store és a `lessonProgressController` seed-értékei sértetlenek maradnak (a meglévő `progress_screen_test.dart` V1 seed-et használ és zöld maradt). A migráltLearnEnabled default minden `AppEnvironment`-ben OFF. 3/3 zöld. |
-| **A9** | ✅ | A V2 path `_pause()`/`_finish()` során `_frameSub?.close()` hívódik → a V2 path capture-szünetben néma (a `practiceCaptureActiveByStatus` tábla szerkezetileg zártja a rést). A legacy path a mai viselkedést futtatja (Döntés 8). |
-| **A10** | ✅ | `lib/app/config/**` 0 sor módosítás (a flag értéke OFF minden környezetben marad — explicit `learn_rollback_test.dart` 3. teszt); `lesson_scorer.dart` 0 sor; `lib/features/practice/domain/model/**` 0 sor; `git diff --stat` csak a §4 listáján belül; a V1 `ss.progress.practice_log` (PracticeEntry) bájtra érintetlen — `practice_log_race_test.dart` zöld, a `record` metódus bytewise azonos. Az i18n szempontból új kulcs nem kell (nincs új user-facing string); `l10n_parity_test.dart` zöld. |
+### Eltérések, scope és follow-up
 
-### Eltérések és okuk
-
-- Nincs tervezett eltérés a §4 listájától: minden módosítás a megadott fájlokra korlátozódik, a tilos zóna (`lesson_scorer.dart`, `model/**`, `widgets/**`, `app/config/**` érték, `docs/adr/**`, `.github/**`) 0 sor módosítást kapott.
-- Egyetlen architektúra-döntés: a `practice/public.dart` bővült 4 új exporttal, hogy a cross-feature importok az `architecture` szabály szerint a public surface-en át közlekedjenek. Ez nem allowlist-sértés, hanem a public boundary kiterjesztése (ezen az úton a Learn/Progress/Streak feature-ök kapnak hozzáférést a V2-felszínhez).
-
-### Follow-upok (következő körökre)
-
-- **A V2 path tényleges futtatása a `practiceSessionController`-on keresztül** — ez a kör csak a recording/streak/daily-goal szálat kötötte be; a scoring-motor maradt a legacy `LessonScorer` (Döntés 7). Amikor a user a R20 rollout-lépésben bekapcsolja a `migratedLearnEnabled` flaget, a `_finish()`-ön átfolyó recording a V2 használatra kész. A scoring-motor V2-re cserélése külön kérés, rövid briefet + saját PRD-t érdemel.
-- **A V2 history aktív betöltése** — a `practiceHistoryV2ListProvider` FutureProvider, de jelenleg csak az E02-R18 recorder hívja. A Learn V2 path a `_finish()`-ben nem ír V2 history-t (mert a scoring legacy); ha a fenti scoring-csere megtörténik, a V2 history-t is a `PracticeSessionRecording` use case mellé kell kötni.
-- A `practice_log_race_test.dart` létező race-őr (r149 silent-no-op kódból örökölt) **érintetlenül zöld**: a `record()` metódus bytewise azonos, a V1 store `keyValueStoreProvider`-je nem változott.
-
-
+- A korábbi, elutasított §10 teljesen eltávolítva. A valós V2 scoring-út és az
+  anti-tautológia őrök kerültek a helyére.
+- Az első záró gate analyzer-szakasza egy felesleges tesztimport miatt piros
+  volt; az import eltávolítása után a fenti, friss teljes gate zöld.
+- A `practice_direction_scorer.dart` kvantálása szándékosan változatlan. Az
+  adapter nem lazít tűrést: a per-event V2 eredményből képez egzakt arányt.
+- Új architektúra-allowlist nincs, secret vagy generált artefaktum nincs.
+- Következő SDD-kör: E02-R20, rollout-döntés és Epic 2 lezárási regresszió
+  (külön user-döntés a `migratedLearnEnabled` bekapcsolásáról).
 
 ## 11. Review — Claude tölti ki
 
 Link: `docs/reviews/e02-r19-review.md`
 
-Kiemelt figyelem: az A7 korpusz **teljessége** (17 lecke, nem szűkítve), az A8
-rollback tényleges kipróbálása, és **eldobható próbateszt** arra, hogy a flag
-OFF ág diffje viselkedésre üres (a legacy tesztek átírás nélkül zöldek).
+Kiemelt figyelem: A7.0 anti-tautológia és 7/24 kvantálás-őr, az A7.1 teljes
+51-cellás korpusz, a flag-OFF viselkedés és a scope-audit.

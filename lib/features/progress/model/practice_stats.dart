@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'practice_entry.dart';
-import '../../practice/public.dart';
+import '../../practice/public.dart' hide PracticeSource;
 
 /// One day's rolled-up practice, used by the weekly chart.
 @immutable

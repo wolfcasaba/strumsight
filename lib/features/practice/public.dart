@@ -24,4 +24,26 @@ export 'domain/service/practice_progress_aggregator.dart'
 export 'domain/service/practice_session_eligibility.dart'
     show PracticeSessionEligibility, PracticeSessionEligibilityInput;
 export 'domain/model/practice_metrics.dart'
-    show MetricAvailable, MetricNotApplicable, MetricValue, PracticeMetrics;
+    show
+        MetricAvailable,
+        MetricInsufficientData,
+        MetricNotApplicable,
+        MetricValue,
+        PracticeMetrics;
+export 'domain/model/beat_position.dart' show BeatPosition;
+export 'domain/model/compiled_practice_target.dart' show CompiledPracticeTarget;
+export 'domain/model/meter.dart' show Meter;
+export 'domain/model/practice_definition.dart' show PracticeDefinition;
+export 'domain/model/practice_event.dart' show PracticeEvent;
+export 'domain/model/practice_mode.dart' show PracticeMode;
+export 'domain/model/practice_observation.dart' show StrumObservation;
+export 'domain/model/practice_session_config.dart' show PracticeSessionConfig;
+export 'domain/model/practice_source.dart' show PracticeSource;
+export 'domain/model/practice_verdict.dart' show DirectionOutcome;
+export 'domain/model/scoring_profile.dart' show ScoringProfile;
+export 'domain/model/tempo.dart' show Tempo;
+export 'domain/service/practice_direction_scorer.dart'
+    show PracticeDirectionScorer;
+export 'domain/service/practice_event_matcher.dart' show PracticeEventMatcher;
+export 'domain/service/practice_target_compiler.dart'
+    show compilePracticeTarget;

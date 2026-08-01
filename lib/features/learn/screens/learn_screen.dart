@@ -12,7 +12,7 @@ import '../../live/public.dart';
 import '../../progress/public.dart';
 import 'package:intl/intl.dart';
 
-import '../../practice/public.dart';
+import '../../practice/public.dart' hide PracticeSource;
 import '../../share/public.dart';
 import '../../settings/public.dart';
 import '../../streak/public.dart';
@@ -21,6 +21,7 @@ import '../providers/practice_speed_provider.dart';
 import '../audio/chord_audio.dart';
 import '../audio/metronome.dart';
 import '../providers/metronome_pref_provider.dart';
+import '../adapter/lesson_v2_scoring.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
@@ -82,6 +83,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   static const double _highwayHeight = 140;
   static const double _strikeX = 68; // must match LessonHighway.strikeX default
   int _lastSeq = 0;
+  final List<StrumObservation> _v2Observations = [];
   ProviderSubscription<AsyncValue<dynamic>>? _frameSub;
 
   @override
@@ -182,6 +184,18 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           lag < 0.5) {
         at -= lag;
       }
+      if (_migratedLearnEnabled) {
+        _v2Observations.add(
+          StrumObservation(
+            at: Duration(
+              microseconds: (at * Duration.microsecondsPerSecond).round(),
+            ),
+            sequence: _lastSeq,
+            direction: frame.latestStrum.direction as StrumDirection,
+            confidence: frame.latestStrum.confidence as double,
+          ),
+        );
+      }
       // Only buzz when the strum actually resolved an event — a stray strum
       // with no event in range returns null and must NOT re-fire the previous
       // verdict's haptic.
@@ -248,6 +262,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _restart() {
     _ticker.stop();
     _lastSeq = 0;
+    _v2Observations.clear();
     if (_jam) {
       _scorer = null;
       // Release the mic — jam must not idle behind the backing (round 100).
@@ -295,6 +310,16 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
     _hintedEngine?.setExpectedChord(null);
     _scorer?.finalize();
     final snap = _scorer?.snapshot();
+    final directionAccuracy = _migratedLearnEnabled
+        ? scoreLessonV2(
+            _lesson,
+            _v2Observations,
+            inputLatency: Duration(
+              milliseconds: ref.read(inputLatencyProvider),
+            ),
+            bpm: _bpm,
+          )
+        : null;
     setState(() => _score = snap);
     // Playing a lesson counts as practice, and its score updates the library.
     if ((snap?.total ?? 0) > 0) {
@@ -304,7 +329,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
         // every other Practice call site (Döntés 4 + 5). Lesson-progress
         // stays under the "best wins" controller (Easy never overwrites,
         // Döntés 6).
-        await _recordLearnMomentV2(snap!);
+        await _recordLearnMomentV2(snap!, directionAccuracy!);
       } else {
         // Legacy path (today, OFF) — UNCHANGED. The current behaviour is the
         // contract; every Learn test in §2 stays green by construction.
@@ -348,7 +373,10 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// gate, the daily-goal ring and the V1 entry shape stay identical to
   /// every other Practice call site. Lesson-progress still goes through the
   /// existing "best wins" controller (Easy-mode-rewrite-prevention, A6).
-  Future<void> _recordLearnMomentV2(ScoreSnapshot snap) async {
+  Future<void> _recordLearnMomentV2(
+    ScoreSnapshot snap,
+    double directionAccuracy,
+  ) async {
     final now = DateTime.now();
     final recording = ref.read(practiceSessionRecordingProvider);
     final eligibilitySnap = SessionEligibilitySnapshot(
@@ -376,14 +404,14 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
         elapsedSeconds: _elapsedSec.round(),
         strokes: snap.total,
         chords: widget.lesson.chordSequence.toSet().length,
-        directionAccuracy: snap.accuracy,
+        directionAccuracy: directionAccuracy,
         finishedAt: now,
       ),
     );
     if (!_easy && outcome.loggedEntry != null) {
       ref
           .read(lessonProgressProvider.notifier)
-          .record(widget.lesson.id, snap.accuracy);
+          .record(widget.lesson.id, directionAccuracy);
     }
   }
 
