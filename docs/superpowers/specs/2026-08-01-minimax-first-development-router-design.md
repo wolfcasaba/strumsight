@@ -410,6 +410,10 @@ policy-felülírás vagy nem ellenőrizhető sandbox esetén `POLICY_BLOCKED`
 - A helper csak a tokent írja stdout-ra, egyéb adatot nem.
 - Nincs `set -x`, teljes environment dump vagy Authorization fejléc naplózás.
 - A Codex command-backed authentication hívja meg a helpert.
+- Ha ugyanez a kulcs a korábbi OpenSpace MCP inline environmentjében literálként
+  szerepel, az installer privát runtime-wrapperre migrálja; a wrapper csak az
+  MCP gyermekfolyamat környezetmásolatába injektálja, és más MCP-beállítást nem
+  változtat.
 - A kulcs nem kerül job-wide környezeti változóba, ezért a repository által
   indított tesztfolyamatok nem öröklik `MINIMAX_API_KEY` néven.
 

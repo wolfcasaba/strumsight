@@ -1,5 +1,4 @@
 import json
-import os
 import stat
 import tempfile
 import tomllib
@@ -23,7 +22,13 @@ class InstallTest(unittest.TestCase):
             codex = home / ".codex"
             codex.mkdir(parents=True)
             config = codex / "config.toml"
-            config.write_text('model = "gpt-existing"\nmodel_reasoning_effort = "ultra"\n')
+            config.write_text(
+                'model = "gpt-existing"\nmodel_reasoning_effort = "ultra"\n\n'
+                '[mcp_servers."openspace-vm"]\n'
+                'command = "/opt/OpenSpace/venv/bin/openspace-mcp"\n'
+                'args = []\n'
+                'env = { OPENAI_API_KEY = "test-secret", SAFE = "yes" }\n'
+            )
             source = self.make_source(root)
             repo_root = Path(__file__).resolve().parents[2]
 
@@ -47,7 +52,16 @@ class InstallTest(unittest.TestCase):
             for profile in (codex / "m3.config.toml", codex / "terra.config.toml"):
                 self.assertEqual(stat.S_IMODE(profile.stat().st_mode), 0o600)
             libexec = home / ".local" / "libexec" / "strumsight-ai"
-            for helper in (libexec / "minimax-credential", libexec / "minimax-quota"):
+            server = parsed["mcp_servers"]["openspace-vm"]
+            self.assertEqual(server["command"], str(libexec / "openspace-vm"))
+            self.assertEqual(server["env"], {"SAFE": "yes"})
+            backup = codex / "config.toml.pre-minimax-router.bak"
+            self.assertNotIn("test-secret", backup.read_text())
+            for helper in (
+                libexec / "minimax-credential",
+                libexec / "minimax-quota",
+                libexec / "openspace-vm",
+            ):
                 self.assertEqual(stat.S_IMODE(helper.stat().st_mode), 0o700)
             self.assertEqual(
                 stat.S_IMODE((home / ".local" / "state" / "strumsight-ai-router").stat().st_mode),

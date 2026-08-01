@@ -123,6 +123,8 @@ gate-eli a megmaradt diffet; csak üres/piros diffnél nyithat következő kört
 - a smoke tesztek `read-only` módban futnak;
 - a MiniMax provider command-backed credential helpert használ, amely a privát
   `~/.mmx/config.json` fájlból csak stdouton adja át a tokent;
+- a korábbi OpenSpace MCP-ben ugyanennek a kulcsnak a literal példánya privát
+  runtime-wrapperre migrálódik, a többi MCP-beállítás változtatása nélkül;
 - a globális Codex modell/provider és a ChatGPT login változatlan marad.
 
 A quota helper kizárólag tipizált, redaktált százalékos állapotot ír ki; nyers

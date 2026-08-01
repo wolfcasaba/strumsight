@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tempfile
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,6 +68,82 @@ def _managed_provider_block(helper: Path) -> str:
     )
 
 
+def _migrate_openspace_secret(existing: str, api_key: str, wrapper: Path) -> str:
+    """Remove a legacy literal MiniMax key without changing other MCP settings."""
+    try:
+        parsed = tomllib.loads(existing)
+    except tomllib.TOMLDecodeError as error:
+        raise InstallError("existing Codex config is not valid TOML") from error
+    servers = parsed.get("mcp_servers")
+    server = servers.get("openspace-vm") if isinstance(servers, dict) else None
+    environment = server.get("env") if isinstance(server, dict) else None
+    if not isinstance(environment, dict) or environment.get("OPENAI_API_KEY") != api_key:
+        return existing
+    if server.get("command") not in (
+        "/opt/OpenSpace/venv/bin/openspace-mcp",
+        os.fspath(wrapper),
+    ):
+        raise InstallError("cannot migrate the OpenSpace credential from an unknown command")
+    if not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in environment.items()
+    ):
+        raise InstallError("OpenSpace environment must contain only string values")
+
+    lines = existing.splitlines(keepends=True)
+    headers = {'[mcp_servers."openspace-vm"]', "[mcp_servers.openspace-vm]"}
+    table = [index for index, line in enumerate(lines) if line.strip() in headers]
+    if len(table) != 1:
+        raise InstallError("cannot locate the OpenSpace MCP table uniquely")
+    start = table[0] + 1
+    end = next(
+        (index for index in range(start, len(lines)) if lines[index].lstrip().startswith("[")),
+        len(lines),
+    )
+
+    def assignment(name: str) -> int:
+        matches = []
+        for index in range(start, end):
+            line = lines[index]
+            if line.lstrip().startswith("#") or "=" not in line:
+                continue
+            if line.split("=", 1)[0].strip() == name:
+                matches.append(index)
+        if len(matches) != 1:
+            raise InstallError(f"cannot locate OpenSpace {name} assignment uniquely")
+        return matches[0]
+
+    command_index = assignment("command")
+    environment_index = assignment("env")
+    remaining = {key: value for key, value in environment.items() if key != "OPENAI_API_KEY"}
+    newline = "\r\n" if lines[environment_index].endswith("\r\n") else "\n"
+    command_indent = lines[command_index][
+        : len(lines[command_index]) - len(lines[command_index].lstrip())
+    ]
+    env_indent = lines[environment_index][
+        : len(lines[environment_index]) - len(lines[environment_index].lstrip())
+    ]
+    inline = ", ".join(
+        f"{json.dumps(key, ensure_ascii=False)} = {json.dumps(value, ensure_ascii=False)}"
+        for key, value in remaining.items()
+    )
+    encoded_wrapper = json.dumps(os.fspath(wrapper))
+    lines[command_index] = f"{command_indent}command = {encoded_wrapper}{newline}"
+    lines[environment_index] = f"{env_indent}env = {{ {inline} }}{newline}"
+    migrated = "".join(lines)
+    expected = parsed
+    expected_server = expected["mcp_servers"]["openspace-vm"]
+    expected_server["command"] = os.fspath(wrapper)
+    expected_server["env"] = remaining
+    try:
+        reparsed = tomllib.loads(migrated)
+    except tomllib.TOMLDecodeError as error:
+        raise InstallError("migrated Codex config is not valid TOML") from error
+    if reparsed != expected:
+        raise InstallError("OpenSpace credential migration changed unrelated configuration")
+    return migrated
+
+
 def _merge_provider(existing: str, block: str) -> str:
     has_begin = BEGIN_MARKER in existing
     has_end = END_MARKER in existing
@@ -103,7 +179,7 @@ sandbox_mode = "workspace-write"
 
 
 def install_router(*, home: Path, repo_root: Path, source_config: Path) -> InstallReport:
-    read_minimax_api_key(source_config)
+    minimax_key = read_minimax_api_key(source_config)
     codex_dir = home / ".codex"
     libexec = home / ".local" / "libexec" / "strumsight-ai"
     runtime = libexec / "ai_router"
@@ -115,8 +191,10 @@ def install_router(*, home: Path, repo_root: Path, source_config: Path) -> Insta
     sources = {
         libexec / "minimax-credential": repo_root / "tools" / "minimax-credential.py",
         libexec / "minimax-quota": repo_root / "tools" / "minimax-quota.py",
+        libexec / "openspace-vm": repo_root / "tools" / "openspace-vm-wrapper.py",
         runtime / "credential.py": repo_root / "tools" / "ai_router" / "credential.py",
         runtime / "quota.py": repo_root / "tools" / "ai_router" / "quota.py",
+        runtime / "openspace.py": repo_root / "tools" / "ai_router" / "openspace.py",
     }
     changed = False
     installed: list[str] = []
@@ -133,11 +211,19 @@ def install_router(*, home: Path, repo_root: Path, source_config: Path) -> Insta
 
     config_path = codex_dir / "config.toml"
     existing = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-    merged = _merge_provider(existing, _managed_provider_block(libexec / "minimax-credential"))
-    if merged != existing and config_path.exists():
-        backup = codex_dir / "config.toml.pre-minimax-router.bak"
-        if not backup.exists():
-            _atomic_write(backup, existing.encode(), 0o600)
+    sanitized = _migrate_openspace_secret(existing, minimax_key, libexec / "openspace-vm")
+    merged = _merge_provider(sanitized, _managed_provider_block(libexec / "minimax-credential"))
+    backup = codex_dir / "config.toml.pre-minimax-router.bak"
+    if merged != existing and config_path.exists() and not backup.exists():
+        changed |= _atomic_write(backup, sanitized.encode(), 0o600)
+        installed.append(os.fspath(backup))
+    elif backup.exists():
+        backup_text = backup.read_text(encoding="utf-8")
+        sanitized_backup = _migrate_openspace_secret(
+            backup_text, minimax_key, libexec / "openspace-vm"
+        )
+        if sanitized_backup != backup_text:
+            changed |= _atomic_write(backup, sanitized_backup.encode(), 0o600)
             installed.append(os.fspath(backup))
     changed |= _atomic_write(config_path, merged.encode(), 0o600)
     installed.append(os.fspath(config_path))

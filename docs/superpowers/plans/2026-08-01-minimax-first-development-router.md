@@ -268,28 +268,31 @@ Commit: `git commit -m "feat(ai): route automatic pipeline work through M3"`
 - Create: `tools/ai_router/credential.py`
 - Create: `tools/ai_router/quota.py`
 - Create: `tools/ai_router/install.py`
+- Create: `tools/ai_router/openspace.py`
 - Create: `tools/minimax-credential.py`
 - Create: `tools/minimax-quota.py`
+- Create: `tools/openspace-vm-wrapper.py`
 - Create: `tools/install-ai-router.py`
 - Create: `tools/tests/test_credential.py`
 - Create: `tools/tests/test_quota.py`
 - Create: `tools/tests/test_install.py`
+- Create: `tools/tests/test_openspace_wrapper.py`
 
 - [ ] **Step 1: Write failing security and installer tests**
 
-Use temporary home directories. Verify ownership/symlink/mode checks, JSON credential extraction without logs, sanitized quota output, HTTP classification, atomic config merge, backups, `0700` helpers/state directories, `0600` profiles/state files, idempotency, and preservation of the existing global default model.
+Use temporary home directories. Verify ownership/symlink/mode checks, JSON credential extraction without logs, sanitized quota output, HTTP classification, atomic config merge, backups, legacy OpenSpace literal-secret migration, `0700` helpers/state directories, `0600` profiles/state files, idempotency, and preservation of the existing global default model.
 
 - [ ] **Step 2: Run and observe expected failures**
 
-Run: `python3 -m unittest tools.tests.test_credential tools.tests.test_quota tools.tests.test_install -v`
+Run: `python3 -m unittest tools.tests.test_credential tools.tests.test_quota tools.tests.test_install tools.tests.test_openspace_wrapper -v`
 
 - [ ] **Step 3: Implement fail-closed helpers and installer**
 
-The credential helper reads only the user-owned, non-symlink `~/.mmx/config.json`. The quota helper calls `https://www.minimax.io/v1/token_plan/remains`, never prints a raw body or key, and returns a small typed status. The installer merges only the MiniMax provider block, writes `m3.config.toml` and `terra.config.toml`, installs absolute-path command-backed auth helpers, and leaves the global `model` unchanged.
+The credential helper reads only the user-owned, non-symlink `~/.mmx/config.json`. The quota helper calls `https://www.minimax.io/v1/token_plan/remains`, never prints a raw body or key, and returns a small typed status. The installer merges only the MiniMax provider block, writes `m3.config.toml` and `terra.config.toml`, installs absolute-path command-backed auth helpers, and leaves the global `model` unchanged. If the same MiniMax credential already exists literally in the known OpenSpace MCP environment, the installer narrowly migrates that one value to a private runtime wrapper, validates the reparsed TOML, and preserves every unrelated MCP setting.
 
 - [ ] **Step 4: Run tests and commit**
 
-Run: `python3 -m unittest tools.tests.test_credential tools.tests.test_quota tools.tests.test_install -v`
+Run: `python3 -m unittest tools.tests.test_credential tools.tests.test_quota tools.tests.test_install tools.tests.test_openspace_wrapper -v`
 
 Expected: PASS.
 
