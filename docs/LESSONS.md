@@ -1544,3 +1544,16 @@ hibaosztály jövőben a smoke-fázisban bukjon el. Teljes mérés + reprodukci�
 [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
 "Update 4" szakasz, a `codex/e02-r21-practice-production-wiring` ágon
 (`c1579f4`).
+
+**Javítva (önjavító kör, 2026-08-01, PR #51, `6d99820`).**
+`tools/ai_router/execution.py` `build_codex_argv`-jában `"workspace-write"`
+→ `"danger-full-access"` mindkét profilra; regressziós teszt
+(`tools/tests/test_execution.py`) a `--sandbox` argumentumra, RED
+`workspace-write`-on, GREEN utána. `python3 -m pytest tools/tests -q`: 107
+passed, 33 subtests passed. `router-ci.yml` zölden futott a merge-elt
+SHA-n. A production task-state (`E02-R21`, `STOPPED`,
+`m3_attempts=2/2`/`terra_calls=1/1`, mind sandbox-hibával kimerítve)
+`reset --task-id E02-R21`-lel törölve → `NOT_STARTED`, a lánc szabadon
+újraindulhat. A `_smoke()` valódi `exec_command`-dal kiegészítése (a fenti
+(2) pont) szándékosan KIMARADT ebből a javításból — a gyökérokot nem
+érinti, külön, tartalmi (nem heal-) kör dolga volna, ha egyáltalán kell.
