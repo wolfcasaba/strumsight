@@ -4,8 +4,8 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (E02-R15 mergelve — Chord Change mód: akkordpár-statisztika + mód-nézet; az
-> autonóm kör-pipeline az E02-R16-tal folytatódik)**.
+> (E02-R16 mergelve — Rhythm-only + Free Practice: pontszám-mentes összegzés;
+> az autonóm kör-pipeline az E02-R17-tel folytatódik)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -174,10 +174,10 @@
 
 ## 4. Current branch
 
-`main` @ [PR #39](https://github.com/wolfcasaba/strumsight/pull/39) (E02-R15,
-squash-merge `f891c76`), CI run
-[30682290224](https://github.com/wolfcasaba/strumsight/actions/runs/30682290224)
-**success** az **exact HEAD-en** (`867633d` — teljes suite + randomizált
+`main` @ [PR #40](https://github.com/wolfcasaba/strumsight/pull/40) (E02-R16,
+squash-merge `33d89c9`), CI run
+[30684333906](https://github.com/wolfcasaba/strumsight/actions/runs/30684333906)
+**success** az **exact HEAD-en** (`e48e76f` — teljes suite + randomizált
 property + APK). A merge-elt `main`-en az `analyze` `flutter gen-l10n` után zöld
 (a lenti l10n-csapda: a friss ARB-kulcsok a gitignore-olt generált fájlokban
 regen-ig hiányoznak).
@@ -195,39 +195,40 @@ regen-ig hiányoznak).
 
 ## 5. Last completed round
 
-**E02-R15 — Chord Change mód: akkordpár-statisztika + mód-nézet**
-([ADR 0081](docs/adr/0081-chord-change-measurement.md), PR #39, squash
-`f891c76`): célzott akkordváltás-gyakorlás **mérhető** minősítéssel. Új domain:
-`ChordPair` / `ChordPairStats` / `ChordChangeMeasurement` (immutable, value-
-equal, validált) + a pure, **meter-agnosztikus** `ChordChangeAnalyzer` (nincs
-óra/random/IO; stabil, kanonikus rendezés — nem `Map`-iteráció). A mérési
-szerződés (ADR 0081): **csak mért állítás** („felismert és stabil akkord", nem
-„tiszta akkord"); **előjeles** felismerési késés (`recognizedChangeDelay`,
-hiányzáskor **null**, nem nulla); **medián** ≥3 mintától; öt megkülönböztetett
-váltás-kimenet (`correct`/`wrongChord`/`noDetection`/`unstable`/
-`insufficientSignal`). Nézet: `ChordChangeView` + `ChordChangeBreakdown`,
-becsatolva a `_ModeView` switchbe (a `chordChanges` ág futásidőben `analysis:
-null` — a live-forrás az `application/**` rétegben él, ami R15-ben tilos zóna;
-a bekötés R18). Implementer: **MiniMax M3**, **egy javító körrel**.
+**E02-R16 — Rhythm-only + Free Practice: pontszám-mentes összegzés**
+([ADR 0082](docs/adr/0082-free-practice-honest-summary.md), PR #40, squash
+`33d89c9`): egy elv — **ne állítsunk többet, mint amit mérünk** (SDD §15). Új
+domain: `FreePracticeSummary` (+ sealed `FreePracticeTempoStability` /
+`FreePracticeDirectionRatio`, nullable-label `FreePracticeChordSegment`) és a
+pure `FreePracticeSummarizer` (megfigyelések → **csak tények**: pengetésszám,
+le/fel arány, akkord-idővonal, BPM-minták, **MAD-alapú** tempó-stabilitás ≥4
+strumtól, aktív jel = `playingElapsed`; nincs óra/IO/random/detektor). A Free
+Practice `overall` bizonyítottan **`MetricNotApplicable`** (üres súlyú
+`freePracticeOpen` profil → aggregátor `availableWeightTotal==0`), `outcome`
+`notScored`. Rhythm-only: chord `NotApplicable`, irány opcionális
+(`NotApplicable`, nem 0). Új pure `PracticeSessionEligibility` predikátum (SDD
+§20.5, `||`, mind `>=`) — **hívó nélkül** (bekötés R19). Két mód-nézet
+(`RhythmOnlyView` / `FreePracticeView`, a session-screen switchbe csatolva),
+ARB en/hu parity-vel, A1–A10 + randomizált property gate. Implementer:
+**MiniMax M3**, **javító kör nélkül** (első review APPROVED).
 
 **A kör lefolyása a jegyzőkönyvhöz** (részletek:
-[review](docs/reviews/e02-r15-review.md), a brief §0.0 revíziója és §10
-handoffja):
+[review](docs/reviews/e02-r16-review.md), §10 handoff):
 
-- **pre-flight:** ADR 0081 megírása + a brief §0.0 revíziója (`ChordOutcome` ma
-  ötös — `noDetection` R10 óta —, ez nem érinti az analyzer saját enumját);
-- **implementer-futás:** egy **stall** (a MiniMax-stream 5 percig néma → a
-  stall-őr kilőtte), majd resume a filesystem-szinten megőrzött munkával
-  (`MM_STALL_MINUTES=14`) → `done`, gate zöld;
-- **review #1 → CHANGES REQUESTED:** 1 MAJOR + 1 MINOR **eldobható
-  próbatesztekkel kimérve**. MAJOR-1: az **A7 (3/4 ütem)** kötelező cella mérő
-  teszt nélkül maradt, a §10 handoff **hamisan** tulajdonította egy
-  pre-existing, az új analyzert nem is hivatkozó fájlnak (reviewer-próba
-  igazolta: az analyzer meter-agnosztikus, 3/4 → `correct`). MINOR-1: az **A2**
-  179999/180001 µs él-cellák hiánya (a 180000→`correct` megvolt);
-- **javító kör #1 → APPROVED:** MAJOR-1 új „meter boundaries" group (3/4 + 4/4
-  cella), MINOR-1 a két él-cella (`stableDuration` explicit assert-tel). Friss
-  `/tmp` klón gate zöld, CI success az exact HEAD-en.
+- **pre-flight:** ADR 0082 megírása; minden hivatkozott szimbólum grep-elve
+  (`freePracticeOpen` üres súly → `MetricNotApplicable` overall az aggr:76-81-en;
+  `PracticeMode.freePractice=={}`; `notScored`; `playingElapsed`; `LiveFrame.bpm`;
+  streak-predikátum nem létezett);
+- **implementer-futás:** stall nélkül `done`, `dirty_files=0`, minden §4-fájl
+  commitolva;
+- **review → APPROVED (első körben):** reviewer-gate zöld izolált `/tmp`
+  klónban (az első `analyze` PIROS **csak** a gitignore-olt generált l10n miatt
+  — `gen-l10n` után „No issues found!"); az **A2 valódi-sértés próba**
+  (aggregátor overall null-ág → `MetricAvailable(0)`) a pre-existing
+  `practice_score_aggregator_test` „free practice has no overall score" celláját
+  **pirosra** fogta → a „nincs hamis score" garancia bizonyítottan él; 1 NOTE
+  (a property-teszt bemenete a summarizer dokumentált rendezettségi
+  előfeltételére szűkített — R17+ hardening).
 
 ## 6. Exact next task
 
@@ -235,12 +236,13 @@ handoffja):
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
    ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
-2. **~~E02-R15 — Chord Change mód~~ — KÉSZ** (PR #39, `f891c76`, 2026-08-01,
-   implementer **MiniMax M3**, review **APPROVED egy javító kör után**).
-   A következő kör a sorból: **E02-R16 — Rhythm-only és Free Practice**
-   ([`docs/rounds/e02-r16-rhythm-only-and-free-practice.md`](docs/rounds/e02-r16-rhythm-only-and-free-practice.md),
-   ADR 0082, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel.
-   (E02-R14 — strum és progression módok — szintén KÉSZ: PR #38, `92a8291`.)
+2. **~~E02-R16 — Rhythm-only + Free Practice~~ — KÉSZ** (PR #40, `33d89c9`,
+   2026-08-01, implementer **MiniMax M3**, review **APPROVED első körben**).
+   A következő kör a sorból: **E02-R17 — Speed Builder + adaptív retry**
+   ([`docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md`](docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md),
+   ADR 0083, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel.
+   (E02-R15 Chord Change — KÉSZ: PR #39, `f891c76`; E02-R14 strum/progression —
+   KÉSZ: PR #38, `92a8291`.)
 3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
    a `tools/round-pipeline.sh` viszi, körönként **friss headless
    orchestrátor-sessionben**, cron-ütemezéssel. A sor:

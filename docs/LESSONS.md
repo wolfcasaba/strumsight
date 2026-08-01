@@ -750,3 +750,31 @@ resume** (friss session, folytatás-prompt a meglévő fájlokra) tisztán befej
 
 **Forrás:** `docs/reviews/e02-r15-review.md` §4 (A7/A2) és §0; a stall+resume
 mérve 2026-08-01 (`/tmp/mm-e02r15.log` → `mm-e02r15-resume.log`).
+
+## L25 — Ha az acceptance-invariánst egy TILOS-ZÓNÁS komponens állítja elő, a valódi-sértés próba AZT a komponenst rontsa, és a guard-teszt lehet pre-existing
+
+**Mit mértünk.** Az E02-R16 A2 („Free Practice alatt nincs hamis score,
+`overall == MetricNotApplicable`") központi invariánsa **nem** a kör új
+kódjában dől el: a `FreePracticeSummary` típusnak nincs is `overall` mezője. Az
+`overall`-t a **tilos zónás** R10 aggregátor számolja az üres súlyú
+`freePracticeOpen` profilból (`availableWeightTotal==0 → MetricNotApplicable`,
+`practice_score_aggregator.dart:76-81`). A kör új A2-teszt-csoportja
+(`free_practice_summarizer_test.dart:279`) ezért triviálisan zöld (nincs mit
+elrontani a summaryn). A **valódi** guard egy **pre-existing** teszt
+(`practice_score_aggregator_test.dart:167` „free practice has no overall
+score", R10 óta) — ami a kör-diffben nincs benne.
+
+**Mit csinálunk.** (1) Amikor az acceptance-cella állapotát a kör **hatókörén
+kívüli** komponens produkálja (aggregátor, scorer, state-gép), a reviewer a
+guardot a **teljes suite-ban** keresse, ne csak a kör új teszt-fájljaiban — a
+pre-existing teszt is legitim bizonyíték, ha a kritikus utat fedi (kiegészíti
+[[L24]]-et: a hiányzó ÚJ teszt önmagában nem lelet, ha a régi guard él). (2) A
+§11 valódi-sértés próbát **arra** a komponensre kell injektálni, amelyik az
+értéket adja: itt az aggregátor overall null-ágát `MetricAvailable(0)`-ra
+rontva a pre-existing cella pirosra vált (`Expected MetricNotApplicable, Actual
+MetricAvailable`) — ez bizonyítja, hogy a garancia él, nem a kör új tesztjének
+zöldje. (3) Ha a próba a kör tilos zónáját érinti, az az izolált `/tmp` klónban
+eldobható marad (revert), nem kör-scope-sértés.
+
+**Forrás:** `docs/reviews/e02-r16-review.md` §3 (A2) és §4; mérve 2026-08-01 a
+`/tmp/review-e02r16` klónon (injektált overall-rontás → piros → revert).

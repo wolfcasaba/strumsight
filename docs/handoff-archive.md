@@ -881,3 +881,18 @@ Az első két teljes, pontozott gyakorlási mód a gördülő highway-jel
 korlátos láthatósági ablak, verdict-vezérelt visszajelzés. Implementer MiniMax
 M3. Részletek a [review](reviews/e02-r14-review.md)-ban és a
 [kör-briefben](rounds/e02-r14-strum-and-progression-modes.md).
+
+---
+
+## E02-R16 archív — az E02-R15 kör részletes története (a HANDOFF §5-ből kimozgatva)
+
+**E02-R15 — Chord Change mód: akkordpár-statisztika + mód-nézet**
+([ADR 0081](adr/0081-chord-change-measurement.md), PR #39, squash `f891c76`):
+célzott akkordváltás-gyakorlás **mérhető** minősítéssel. Új domain: `ChordPair`
+/ `ChordPairStats` / `ChordChangeMeasurement` (immutable, value-equal, validált)
++ a pure, **meter-agnosztikus** `ChordChangeAnalyzer`. Mérési szerződés: csak
+mért állítás; előjeles felismerési késés (hiányzáskor null); medián ≥3 mintától;
+öt váltás-kimenet. Nézet: `ChordChangeView` + `ChordChangeBreakdown`. Implementer
+MiniMax M3, egy javító körrel (review #1: A7 3/4-ütem MAJOR + A2 él-cella MINOR
+eldobható próbatesztekkel kimérve → javító kör → APPROVED). Részletek:
+[review](reviews/e02-r15-review.md).
