@@ -231,8 +231,12 @@ user-döntés 2026-07-29). Egy körön egyszerre EGY ágens ír; a munka átadá
 kerül, nem párhuzamosan zajlik:
 
 ```
-Claude tervez → Codex implementál → Claude review-z → Codex javít → Claude merge-el
+Claude pre-flight/orchestrál → auto router (M3 → gate → szükség esetén Terra)
+→ Claude commitol és függetlenül review-z → ugyanaz a router javít → Claude CI/merge
 ```
+
+Az explicit `engine=minimax|codex` sorok örökölt reprodukciós override-ok; az
+új körök alapértelmezése `auto` ([ADR 0088](docs/adr/0088-minimax-first-development-router.md)).
 
 ### 15.1 Claude — tervező és reviewer
 
@@ -260,6 +264,11 @@ Claude tervez → Codex implementál → Claude review-z → Codex javít → Cl
   próbáltuk ki).
 
 ### 15.2 Codex — implementáló
+
+> **`engine=auto` kivétel:** az M3/Terra child agent nem ír közvetlen
+> kör-jelzést és nem commitol. A `tools/ai-router-round.sh` adapter jelzi a
+> router állapotát, `READY_FOR_REVIEW` pedig csak `progress`. Az alábbi közvetlen
+> jelzési szabály az explicit legacy Codex/MiniMax wrapperre érvényes.
 
 - Csak a briefben **engedélyezett fájlokat** módosítja. Ha a kör
   elvégezhetetlennek tűnik a listán belül, MEGÁLL és jelent — nem tágítja a
@@ -293,7 +302,10 @@ Claude tervez → Codex implementál → Claude review-z → Codex javít → Cl
 
 ### 15.3 Indítás
 
-A Codexet **soha ne közvetlen `codex exec`-kel** indítsd (és főleg ne
+`engine=auto` esetén az orchestrátor kizárólag a
+`tools/ai-router-round.sh run|resume` adaptert hívja előtérben; közvetlenül nem
+választ profilt és nem indít `codex exec`-et. Az explicit legacy Codexet
+**soha ne közvetlen `codex exec`-kel** indítsd (és főleg ne
 `nohup … &`-vel, mert akkor csak pollozni tudsz). A burkoló garantálja, hogy a
 futás véget ér és nyomot hagy:
 
@@ -387,56 +399,73 @@ feltétele változatlanul kötelező, plusz:
    után végleges), a B-rész az A merge-e UTÁN rebase-el `main`-re,
    ÚJRAGENERÁLJA a származtatott tartalmat, és csak azután futtat CI-t.
 
-### 15.6 Két implementer motor — melyik kört ki viszi
+### 15.6 MiniMax-first router és örökölt motor-override
 
-Az implementer szerepet 2026-07-30 óta két motor tölti be
-([ADR 0069](docs/adr/0069-two-engine-implementer-pool.md)). A lánc, a
-brief-szerződés, a kör-jelzés (§15.2) és a gate-ek változatlanok — csak az
-dől el körönként, melyik motor implementál:
+Az elfogadott szerződés az
+[ADR 0088](docs/adr/0088-minimax-first-development-router.md). A queue engine
+értéke kizárólag `auto | minimax | codex`; ismeretlen érték fail-closed.
 
-| Kör jellege | Motor | Indítás |
+#### `engine=auto` — alapértelmezett
+
+Az orchestrátor a pre-flight commit és az izolált munkapéldány után pontosan
+egyszer hívja:
+
+```bash
+PIPELINE_ROUTER_STATUS_FILE=<pipeline-router-status> \
+  <munkapéldány>/tools/ai-router-round.sh run \
+  <munkapéldány> docs/rounds/eXX-rYY-<slug>.md \
+  <munkapéldány>/.ai/runs/E03-RNN/router-result.json
+```
+
+Review-javításkor ugyanaz a task/state folytatódik:
+
+```bash
+<munkapéldány>/tools/ai-router-round.sh resume \
+  <munkapéldány> docs/rounds/eXX-rYY-<slug>.md \
+  <munkapéldány>/.ai/runs/E03-RNN/router-result.json \
+  <munkapéldány>/docs/reviews/eXX-rYY-review.md
+```
+
+Kötött router-szabályok:
+
+1. MiniMax M3 az elsődleges; legfeljebb **két befejezett M3 megoldási kör**.
+2. Taskonként legfeljebb **egy Terra**, automatikusan legfeljebb **3/UTC nap**.
+3. Terra csak két kódhibás gate után vagy magas kockázatú diff célzott
+   reviewjára indul.
+4. 429/quota/5xx/hálózat/timeout, hiányzó dependency és sandbox/jogosultság
+   **nem Terra-eszkaláció**, és nem fogyaszt M3 megoldási kört.
+5. A hiteles state `~/.local/state/strumsight-ai-router/` alatt él; tilos
+   törölni, másolni vagy task ID cserével keretet nullázni.
+6. A modellek csak a brief `allowed_paths` listáján írhatnak; nem commitolnak,
+   nem pusholnak, nem nyitnak PR-t, nem írnak queue-t és nem futtatják a
+   `codex-signal.sh`-t.
+7. `READY_FOR_REVIEW` **nem Done**: az orchestrátor auditálja/commitolja a
+   diffet, független review-t és exact-`headSha` CI-t futtat, majd merge-el.
+
+Minden auto briefben pontosan egy validált `ai-router` TOML blokk kötelező:
+`schema_version`, `risk`, tételes `allowed_paths`, célzott `gate_tests` és
+`native_gate`. A lokális router-gate format → analyze → célzott teszt →
+architecture → `git diff --check`; natív scope-nál debug APK build. A teljes
+suite + property + APK CI továbbra is az orchestrátor kapuja.
+
+Állapotleképezés:
+
+| Router | Jelzés | Teendő |
 |---|---|---|
-| Jól specifikált domain/model/teszt kör, adapter, katalógus, i18n, mechanikus refaktor, migráció, boilerplate-tömeg | **MiniMax M3** | `tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log` + MÁSODIK háttér-taskként `tools/mm-watch.sh <munkapéldány> /tmp/mm-<kör>.log` |
-| DSP-hangolás, baseline-érzékeny scorer/matcher, teljesítmény-kritikus út, felderítő vagy kétértelmű feladat | **Codex** | `tools/codex-round.sh …` (§15.3) |
-| Bizonytalan besorolás | **Codex** | a drágább motor a biztonságos alapértelmezés |
+| `READY_FOR_REVIEW` | `progress` | commit + független review |
+| `STOPPED` | `stopped` | HALT, nincs új modell |
+| `DEFERRED` | `blocked` | HALT, később ugyanaz a task resume |
+| `BLOCKED` / `INTERNAL_ERROR` | `blocked` | előfeltétel/diagnosztika, HALT |
 
-A szűkös erőforrás a Codex heti kvótája, nem a MiniMax tokenje: volumen- és
-ismétlődő munkából inkább többet adunk M3-nak, semmint hogy Codex-kvótát
-égessünk.
+#### `engine=minimax|codex` — örökölt override
 
-**MiniMax-körnél a briefbe KÖTELEZŐ** (mért hibák ellenszere, ADR 0069 — az
-E02-R04 kör és javító köre igazolta mindegyiket):
+A régi `tools/mm-round.sh` vagy `tools/codex-round.sh` + watcher útvonal csak
+kézi reprodukcióra marad. Az ADR 0069 brief-, STOP-, jelzés- és reviewer-
+szigorítása ezekre továbbra is él, de az `auto` task kereteit nem kerülheti meg,
+és providerhibára itt sincs automatikus drága fallback.
 
-1. **Gate-fegyelem, pontos megfogalmazással:** „köztes gyors ellenőrzést
-   szűkíthetsz (egy tesztfájl, egy alfa), de a ZÁRÓ gate-sort pontosan úgy kell
-   lefuttatni, ahogy a briefben áll" — plusz: **„a záró gate-parancsokat
-   csővezeték és `tail` nélkül, teljes kimenettel"** (mérten `2>&1 | tail -25`-öt
-   használ, és a csonkolt kimenetet másolja a jelentésbe).
-2. **STOP-klauzula:** „If any requirement conflicts with the allowed-files list
-   or with an existing test, STOP, send the `stopped` signal, and report."
-   (enélkül némán megkerüli a zárolt fájlt, és feature-ként jelenti).
-3. **A kör-jelzés kötelezettsége** (§15.2) szó szerint a prompt elején.
-4. **„A brief §8 a terved — ne készíts külön task-listát, fázisonként legfeljebb
-   egy állapotfrissítés."** (E02-R04-ben 9 `TaskCreate` + 15 `TaskUpdate` ment el
-   erre; a javító körben ezzel a mondattal **nulla** lett.)
-5. **„Ne állíts a kódról a doc-commentben olyat, amit nem ellenőriztél — ha
-   `const`-ot vagy `immutable`-t írsz, előbb bizonyítsd tesztben."** (E02-R04
-   MAJOR-2: a fájl `const`-konstruáltnak mondta magát, miközben egyetlen eleme
-   sem volt az.)
-
-**A gyenge pontja a TARTALMI hűség, nem a forma.** A formai fegyelme kiváló
-(E02-R04: 0 hibás tool-hívás ~75 hívásból, nulla fölösleges újraolvasás), de a
-briefben szövegesen leírt tartalmi előírást elronthatja úgy, hogy minden gate
-zöld marad (MAJOR-3: „ütemenként váltakozó akkord" helyett ütésenként váltót
-generált, és semmilyen teszt nem pinnelte ki). **Ezért minden szövegesen leírt
-tartalmi előírás mellé a briefnek gépi mércét is kell adnia** (kipinnelt
-szekvencia, tételes lista), különben a review-nak kell kézzel elolvasnia az
-adatot.
-
-**Review-oldalon:** a gate-et a reviewer maga futtatja újra (a bemásolt kimenet
-nem evidencia), `git diff --stat` scope-audit az engedélyezett listával
-összevetve, és a PR törzse rögzíti, melyik motor implementálta a kört. A
-git-notes bufferbe is bekerül: `engine=minimax-m3` vagy `engine=codex`.
+Az Epic 3 R01–R21 queue-sorai `auto`, de kezdetben `prepared`; ember állítja az
+első futtatható sort `pending`-re az Epic 2 lezárása után. R22 epic-zárás kézi.
 
 ## 16. Végrehajtási jelentés
 

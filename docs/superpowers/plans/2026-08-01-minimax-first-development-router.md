@@ -298,7 +298,7 @@ Commit: `git commit -m "feat(ai): add secure Codex profile installer"`
 ## Task 8: Add executable metadata to all Epic 3 briefs
 
 **Files:**
-- Modify: `docs/epic-03/rounds/EPIC3-R01-*.md` through `EPIC3-R22-*.md`
+- Modify: `docs/rounds/e03-r01-*.md` through `docs/rounds/e03-r22-*.md`
 - Modify: `tools/tests/test_brief_metadata.py`
 
 - [ ] **Step 1: Extend the parametrized test and observe failure**
@@ -320,7 +320,7 @@ Commit: `git commit -m "docs(epic-03): add router metadata to round briefs"`
 ## Task 9: Architecture and operating documentation
 
 **Files:**
-- Create: `docs/architecture/decisions/0070-minimax-first-development-router.md`
+- Create: `docs/adr/0088-minimax-first-development-router.md`
 - Modify: `AGENTS.md`
 - Modify: `docs/LESSONS.md`
 - Modify: `docs/execution/02-codex-playbook.md`
@@ -340,7 +340,7 @@ Add dated evidence-based bullets for bwrap constraints, command-backed authentic
 
 - [ ] **Step 4: Run documentation audits and commit**
 
-Run: `rg -n "TO[D]O|T[B]D|FIX[M]E|3 MiniMax|three MiniMax" AGENTS.md docs/execution docs/architecture/decisions/0070-minimax-first-development-router.md`
+Run: `rg -n "[3] MiniMax|thr[e]e MiniMax|docs/epic-03/rounds|docs/architecture/decisions/0070" AGENTS.md docs/execution/02-codex-playbook.md docs/execution/04-definition-of-done.md docs/execution/pipeline-orchestrator-prompt.md docs/adr/0088-minimax-first-development-router.md`
 
 Expected: no stale router rules or placeholders.
 
