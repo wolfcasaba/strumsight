@@ -6,6 +6,32 @@
 - **Előfeltétel:** E03-R18 merge és stabil Practice public contract
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/practice/public.dart",
+  "lib/features/song_trainer/domain/services/song_practice_compiler.dart",
+  "lib/features/song_trainer/domain/models/song_event_reference.dart",
+  "lib/features/song_trainer/domain/models/song_trainer_result.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_controller.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_state.dart",
+  "lib/features/song_trainer/application/trainer/song_result_mapper.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
+  "test/features/song_trainer/application/trainer/song_trainer_controller_test.dart",
+  "test/features/song_trainer/application/trainer/song_trainer_integration_test.dart",
+  "test/features/practice/presentation/practice_presentation_guard_test.dart",
+  "docs/rounds/e03-r19-practice-compiler-chord-rhythm.md",
+]
+gate_tests = [
+  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
+  "test/features/song_trainer/application/trainer",
+  "test/features/practice",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

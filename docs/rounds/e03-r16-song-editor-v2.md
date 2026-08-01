@@ -6,6 +6,41 @@
 - **Előfeltétel:** E03-R15 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/application/editor/song_editor_controller.dart",
+  "lib/features/song_trainer/application/editor/song_editor_state.dart",
+  "lib/features/song_trainer/application/editor/editor_command.dart",
+  "lib/features/song_trainer/application/editor/editor_history.dart",
+  "lib/features/song_trainer/presentation/screens/song_editor_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/song_metadata_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/song_section_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/measure_grid.dart",
+  "lib/features/song_trainer/presentation/widgets/song_event_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/backing_asset_editor.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/app/routing/route_guards.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/features/song_trainer/application/editor/song_editor_controller_test.dart",
+  "test/features/song_trainer/application/editor/editor_history_test.dart",
+  "test/features/song_trainer/presentation/song_editor_screen_test.dart",
+  "test/features/song_trainer/presentation/song_editor_route_guard_test.dart",
+  "test/app/routing/route_guards_test.dart",
+  "docs/rounds/e03-r16-song-editor-v2.md",
+]
+gate_tests = [
+  "test/features/song_trainer/application/editor",
+  "test/features/song_trainer/presentation/song_editor_screen_test.dart",
+  "test/features/song_trainer/presentation/song_editor_route_guard_test.dart",
+  "test/app/routing/route_guards_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

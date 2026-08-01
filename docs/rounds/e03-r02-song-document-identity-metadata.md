@@ -6,6 +6,31 @@
 - **Előfeltétel:** E03-R01 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/features/song_trainer/domain/models/song_id.dart",
+  "lib/features/song_trainer/domain/models/song_metadata.dart",
+  "lib/features/song_trainer/domain/models/song_source.dart",
+  "lib/features/song_trainer/domain/models/song_document.dart",
+  "lib/features/song_trainer/domain/models/song_asset_reference.dart",
+  "lib/features/song_trainer/domain/models/song_marker.dart",
+  "lib/features/song_trainer/domain/public.dart",
+  "lib/features/song_trainer/data/local/song_document_codec.dart",
+  "test/features/song_trainer/domain/song_id_test.dart",
+  "test/features/song_trainer/domain/song_document_test.dart",
+  "test/features/song_trainer/data/local/song_document_codec_test.dart",
+  "docs/rounds/e03-r02-song-document-identity-metadata.md",
+]
+gate_tests = [
+  "test/features/song_trainer/domain/song_id_test.dart",
+  "test/features/song_trainer/domain/song_document_test.dart",
+  "test/features/song_trainer/data/local/song_document_codec_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

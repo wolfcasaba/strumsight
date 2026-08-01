@@ -6,6 +6,32 @@
 - **Előfeltétel:** E03-R09 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/application/import/song_import_controller.dart",
+  "lib/features/song_trainer/application/import/song_import_state.dart",
+  "lib/features/song_trainer/application/import/song_import_effect.dart",
+  "lib/features/song_trainer/application/import/import_preview.dart",
+  "lib/features/song_trainer/application/import/cancellation_token.dart",
+  "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/data/importers/import_limits.dart",
+  "lib/features/song_trainer/data/importers/import_workspace.dart",
+  "lib/features/song_trainer/data/importers/file_picker_adapter.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "test/features/song_trainer/application/import/song_import_controller_test.dart",
+  "test/features/song_trainer/application/import/song_import_controller_integration_test.dart",
+  "test/features/song_trainer/data/importers/import_workspace_test.dart",
+  "docs/rounds/e03-r10-import-flow-security-boundary.md",
+]
+gate_tests = [
+  "test/features/song_trainer/application/import",
+  "test/features/song_trainer/data/importers/import_workspace_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

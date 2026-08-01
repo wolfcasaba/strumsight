@@ -6,6 +6,39 @@
 - **Előfeltétel:** E03-R16 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/features/song_trainer/domain/models/trainer_range.dart",
+  "lib/features/song_trainer/domain/models/loop_config.dart",
+  "lib/features/song_trainer/domain/models/trainer_config.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_setup_controller.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_setup_state.dart",
+  "lib/features/song_trainer/presentation/screens/song_overview_screen.dart",
+  "lib/features/song_trainer/presentation/screens/trainer_setup_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/song_section_list.dart",
+  "lib/features/song_trainer/presentation/widgets/song_track_picker.dart",
+  "lib/features/song_trainer/presentation/widgets/trainer_range_picker.dart",
+  "lib/features/song_trainer/presentation/widgets/tuning_capo_reminder.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/features/song_trainer/domain/trainer_range_test.dart",
+  "test/features/song_trainer/application/trainer/song_trainer_setup_controller_test.dart",
+  "test/features/song_trainer/presentation/song_overview_screen_test.dart",
+  "test/features/song_trainer/presentation/trainer_setup_screen_test.dart",
+  "docs/rounds/e03-r17-overview-track-range-setup.md",
+]
+gate_tests = [
+  "test/features/song_trainer/domain/trainer_range_test.dart",
+  "test/features/song_trainer/application/trainer/song_trainer_setup_controller_test.dart",
+  "test/features/song_trainer/presentation/song_overview_screen_test.dart",
+  "test/features/song_trainer/presentation/trainer_setup_screen_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

@@ -6,6 +6,43 @@
 - **Előfeltétel:** E03-R14 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/features/song_trainer/application/library/song_library_controller.dart",
+  "lib/features/song_trainer/application/library/song_library_state.dart",
+  "lib/features/song_trainer/application/library/song_query.dart",
+  "lib/features/song_trainer/presentation/screens/song_library_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_import_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/song_summary_tile.dart",
+  "lib/features/song_trainer/presentation/widgets/song_capability_badges.dart",
+  "lib/features/song_trainer/presentation/widgets/import_warning_list.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/public.dart",
+  "lib/app/routing/app_route.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/config/feature_flags.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/features/song_trainer/application/library/song_library_controller_test.dart",
+  "test/features/song_trainer/presentation/song_library_screen_test.dart",
+  "test/features/song_trainer/presentation/song_import_screen_test.dart",
+  "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "docs/rounds/e03-r15-song-library-import-ui.md",
+]
+gate_tests = [
+  "test/features/song_trainer/application/library/song_library_controller_test.dart",
+  "test/features/song_trainer/presentation/song_library_screen_test.dart",
+  "test/features/song_trainer/presentation/song_import_screen_test.dart",
+  "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
+  "test/app/routing",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

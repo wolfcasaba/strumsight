@@ -6,6 +6,27 @@
 - **Előfeltétel:** E03-R05 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/data/migration/legacy_song_reader.dart",
+  "lib/features/song_trainer/data/migration/legacy_song_adapter.dart",
+  "lib/features/song_trainer/data/migration/legacy_setlist_adapter.dart",
+  "lib/features/song_trainer/data/migration/legacy_migration_report.dart",
+  "test/features/song_trainer/data/migration/legacy_song_adapter_test.dart",
+  "test/features/song_trainer/data/migration/legacy_setlist_adapter_test.dart",
+  "test/features/song_trainer/data/migration/legacy_parity_test.dart",
+  "docs/rounds/e03-r06-legacy-song-setlist-adapters.md",
+]
+gate_tests = [
+  "test/features/song_trainer/data/migration",
+  "test/features/songs",
+  "test/features/learn/setlist_expected_hint_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

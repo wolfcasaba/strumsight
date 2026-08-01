@@ -6,6 +6,32 @@
 - **Előfeltétel:** E03-R04 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/features/song_trainer/domain/services/song_validator.dart",
+  "lib/features/song_trainer/domain/services/song_normalizer.dart",
+  "lib/features/song_trainer/domain/services/song_capability_resolver.dart",
+  "lib/features/song_trainer/domain/models/song_validation_report.dart",
+  "lib/features/song_trainer/domain/models/song_capability.dart",
+  "lib/features/song_trainer/domain/models/import_warning.dart",
+  "lib/features/song_trainer/domain/public.dart",
+  "test/features/song_trainer/domain/song_validator_test.dart",
+  "test/features/song_trainer/domain/song_normalizer_test.dart",
+  "test/features/song_trainer/domain/song_capability_resolver_test.dart",
+  "test/property/song_normalizer_property_test.dart",
+  "docs/rounds/e03-r05-validator-normalizer-capabilities.md",
+]
+gate_tests = [
+  "test/features/song_trainer/domain/song_validator_test.dart",
+  "test/features/song_trainer/domain/song_normalizer_test.dart",
+  "test/features/song_trainer/domain/song_capability_resolver_test.dart",
+  "test/property/song_normalizer_property_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel
