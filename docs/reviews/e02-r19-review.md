@@ -147,3 +147,162 @@ produkciós kockázat. **A merge mégis TILOS** a 3.1 MAJOR miatt: a kör
 deklarált magja (Learn-**migráció** a V2 scoring-motorra) nem készült el, és a
 feloldás a §4 tilos zónáját és/vagy emberi paritás-döntést igényel (H3, ADR 0087
 §2). A lánc HALT-tal megáll; a `.pipeline/round-status` `outcome=halted halt=H3`.
+
+---
+
+# Review — E02-R19/b (második passz, az újra-scope után)
+
+- **Kör-branch:** `codex/e02-r19-progress-and-learn-migration`
+- **Implementer motor:** **Codex** (`gpt-5.6-terra`, `high` effort — user-döntés
+  2026-08-01: „jó modell, de ne a legerősebb")
+- **Review commit-bázis:** `5660443` (impl) a `c303778` (orchestrátor:
+  brief-revízió §0.1 + §0.2) tetején.
+- **Ellenőr:** Claude (Opus 5), read-only, izolált klón: `/tmp/review-e02-r19b`.
+- **Verdikt:** **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR. A kör **magja
+  elkészült** (a tautológia valósan megszűnt), de a paritás egy teljes
+  dimenziója (időzítés/latency) mérés nélkül maradt, és a próbateszt ott
+  **valós eltérést** talált.
+
+## 1. Gate — újrafuttatva, izolált klónban
+
+`tools/round-gate.sh test/features/practice/ test/features/learn/ test/features/progress/ test/features/streak/ test/core/l10n_parity_test.dart`
+
+```
+[1] format                                   → ZÖLD
+[2] analyze                                  → ZÖLD
+[3] test test/features/practice/             → ZÖLD (878 teszt)
+[4] test test/features/learn/                → ZÖLD
+[5] test test/features/progress/             → ZÖLD
+[6] test test/features/streak/               → ZÖLD
+[7] test test/core/l10n_parity_test.dart     → ZÖLD
+[8] architecture                             → ZÖLD (12 allowlisted deviation)
+GATE_EXIT=0
+```
+
+Saját kézzel futtatva, nem bemondásra.
+
+## 2. Scope-audit (`git diff --stat c303778..5660443`)
+
+| Fájl | Státusz | Ítélet |
+|---|---|---|
+| `learn/adapter/lesson_practice_target.dart` (ÚJ) | §4 R19/b | OK |
+| `learn/adapter/lesson_v2_scoring.dart` (ÚJ) | §4 R19/b | OK |
+| `test/features/learn/lesson_v2_scoring_test.dart` (ÚJ) | §4 R19/b | OK |
+| `learn/screens/learn_screen.dart` | §4 | OK (flag-ON ág; OFF ág változatlan) |
+| `practice/public.dart` | §4 R19/b | OK (csak exportok) |
+| `progress/model/practice_stats.dart` | §4 | OK (1 import-diszambiguálás) |
+| `test/features/learn/learn_migration_parity_test.dart` | §4 | OK (újraírva) |
+| brief §10 | §4 | OK |
+
+**Tilos zóna mérve: 0 sor** — `lesson_scorer.dart`, `learn/model/**`,
+`practice/domain/model/**` (köztük `scoring_profile.dart`),
+`practice/domain/service/**` paritás-referenciák, `lib/app/config/**`,
+`docs/adr/**`, `.github/**`. A `ScoringProfile.legacyLearnParity` **létező**
+profil (`matchWindow: 280 ms`, már pinnelt a `scoring_profile_test.dart`-ban),
+nem a kör hozta létre.
+
+## 3. A kör magja — a tautológia MEGSZŰNT (mérve)
+
+- `scoreLessonV2(Lesson, List<StrumObservation>, {inputLatency, bpm}) → double`
+  — a szignatúrában és a fájl importjai közt **nincs** `ScoreSnapshot` /
+  `LessonScorer` (A7.0/1–2 teljesül; az import-tilalmat a teszt **gépiesen**
+  méri, forrásfájl-olvasással).
+- Az accuracy a `PracticeDirectionScore.events` per-event `DirectionOutcome`-jaiból
+  jön (`correct / applicable`) — a §0.2 döntés szerint egzaktul, kvantálás nélkül.
+- **Produkciós bekötés valós:** a flag-ON ág a `_onFrame`-ben gyűjti a
+  `StrumObservation`-öket (ugyanabból a lag-korrigált `at`-ből, amit a legacy
+  scorer is kap), és a `_finish()`-ben a V2 érték megy **mind** a
+  practice-logba (`directionAccuracy`), **mind** a `lessonProgress.record`-ba.
+  A `snap.accuracy` továbbadása eltűnt (mérve a diffben).
+- **A7.0 mind az öt őr megvan**, köztük a §0.2-ben előírt kvantálás-konzisztencia
+  (`7/24` cella: `accuracy = 7/24`, `direction = MetricAvailable(0.291)`,
+  `(accuracy*1000).floor()/1000 == 0.291`).
+- **A7.1: 51 valódi cella** — egyetlen közös szintetikus pengetés-sorozatból
+  két független út (legacy `registerStrum` vs. `StrumObservation`-lista), 17
+  lecke × 3 alak, egzakt egyezés accuracy / csillag / pass / log-mezők szintjén.
+  Külön teszt bizonyítja, hogy a vegyes alak tényleg produkál `hits > 0`,
+  `wrong > 0`, `missed > 0`-t (nem degenerált korpusz).
+- **A §10 tartalmazza a mutációs cella pirosan mért kimenetét**
+  (`Expected: <0.2916666666666667> / Actual: <0.291>`) — a §7.7 „előbb pirosan"
+  előírás teljesült.
+
+Ez a lelet a `7cf1ca4` 3.1 MAJOR-ját **lezárja**.
+
+## 4. Súlyossági táblázat
+
+| # | Osztály | Hely | Lelet |
+|---|---|---|---|
+| 4.1 | **MAJOR** | `test/features/learn/learn_migration_parity_test.dart:26-66` | Az 51 paritás-cella **egyetlen** időzítési offsetet és **nulla** latencyt mér — a paritás időzítés-dimenziója mérés nélkül maradt. |
+| 4.2 | MINOR | brief §10 | A gate-kimenet §10-ben **kivonat**, nem a csonkítatlan stream (§9 előírás). |
+
+### 4.1 — MAJOR: a paritás időzítés-dimenziója mérés nélkül
+
+**Előírás (brief §6 A7.1, P2 sor):** „~1/3 fordított irány, **~1/3 az ablakon
+kívülre csúsztatva (miss)**, ~1/3 pontos"; és az A7.1 tábla „input/visual
+latency hatása | egzakt egyezés" sora.
+
+**Mért valóság:** a `_sharedSequence` mind a három alakja **pontosan
+`event.time`-ra** teszi a pengetést (offset = 0); a „miss"-t nem csúsztatással,
+hanem az ütés **kihagyásával** állítja elő (`:44-47`). `inputLatency` mind az 51
+cellában `Duration.zero` (a legacy oldalon is default 0). Tehát a §0.1 két
+teherhordó állítása — `matchWindow 280 ms ≡ windowSec 0.28` és az azonos
+latency-korrekció — a kör **saját harnessével nem mérhető**.
+
+**Következmény — nem elméleti.** Eldobható próbateszttel (izolált klón,
+`Lessons.downUpGroove`, offset-sorozat) valós eltérést mértem:
+
+| offset | legacy accuracy | V2 accuracy |
+|---|---|---|
+| +0 / +150 / +270 / +279 ms | egyezik | egyezik |
+| **+280 ms** | **0.0** | **0.041666666666666664** (= 1/24) |
+| +281 / +300 / +400 ms | egyezik | egyezik |
+| latency 50 / 150 / 300 ms | egyezik | egyezik |
+
+**Ok:** a legacy `d <= windowSec` **double**-összehasonlítás
+(`0.28` legközelebbi double-je 0.28000000000000002665), a V2
+`deltaMicroseconds <= matchWindow.inMicroseconds` **egész**. A pontos
+ablak-határon a két numerikus alap eltér. Minden más offseten és minden mért
+latencyn a paritás **tart** — az implementáció alapvetően helyes.
+
+**Miért MAJOR és nem BLOCKER:** a flag OFF, tehát produkciós hatás nincs, és a
+divergencia mértéke gyakorlatilag nulla (pontos mikroszekundum-egybeesés kell
+hozzá). De a **következő** kör (R20 rollout) épp erre a paritásra hivatkozva
+kapcsolná be a flaget — hamis biztonságérzetet adna, ha az időzítés-dimenzió
+mérés nélkül maradna.
+
+**Kért javítás (mind a §4 már engedélyezett fájljain belül):**
+1. `learn_migration_parity_test.dart` — a P2 alak **csúsztatással** (nem
+   kihagyással) is állítson elő misst: legalább egy ablakon **belüli**
+   (pl. +150 ms) és egy ablakon **kívüli** (pl. +400 ms) offset-cella.
+2. Legalább egy **nem-nulla latency** paritás-cella (legacy `inputLatencySec`
+   ↔ V2 `inputLatency` azonos értékkel).
+3. Az **ablak-határ** (`|d| == matchWindow` egzaktul) **kihagyandó** a paritás
+   állításból, és a brief §0.2 mellé egy rövid §0.3 rögzítse **dokumentált,
+   elfogadott mikro-eltérésként** — indoklás: a legacy `<=` a double-ábrázolás
+   miatt ezen a ponton **maga sem jól definiált**, valós időbélyeg pedig nem
+   esik pontosan ide. Ez **nem mércelazítás**: a paritás minden szigorúan
+   belső és szigorúan külső offseten kötelező marad.
+
+### 4.2 — MINOR: a §10 gate-kimenete kivonat
+
+A §9 „a teljes kimenetet a §10-be" előírás ellenére a §10 összefoglaló táblát
+tartalmaz, és maga jelzi: „a fenti kivonat…". Mivel a gate-et magam
+futtattam újra izolált klónban (1. szakasz, `GATE_EXIT=0`), ez **nem
+bizonyíték-hiány**, csak dokumentációs pontatlanság — a javító körben pótolható.
+
+## 5. Amit megméretettem (nem olvastam)
+
+- Gate újrafuttatva izolált klónban, `GATE_EXIT=0`.
+- Tilos zóna: `git diff --stat` szerint 0 sor a paritás-referenciákon.
+- `ScoringProfile.legacyLearnParity.matchWindow = 280 ms` — létező, pinnelt.
+- A tautológia megszűnése: a `learn_screen.dart` diffjében a `snap.accuracy`
+  → `directionAccuracy` csere mindkét fogyasztón (log + lesson progress).
+- A 4.1 lelet: eldobható próbateszt, a fenti offset/latency mátrixszal
+  (a próbateszt a review után eldobva, nem került a repóba).
+
+## 6. Zárás
+
+A kör magja elkészült és valósan mérve van; a scope tiszta, a gate zöld, a flag
+OFF. **Egy javító kör kell** a 4.1 MAJOR-ra (időzítés/latency cellák + a
+határpont dokumentált kizárása) és a 4.2 MINOR-ra. Ezek mind a már engedélyezett
+fájlokon belül elvégezhetők — **nincs szükség sem scope-tágításra, sem HALT-ra**.
