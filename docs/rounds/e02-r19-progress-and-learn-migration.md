@@ -181,6 +181,41 @@ lazítunk tűrésre. Helyette az adapter az **egzakt arányt** számolja a V2 sc
 cellán. A `DirectionOutcome` a `practice_verdict.dart`-ban él; ha nincs
 exportálva, a `practice/public.dart` (§4 listán) bővíthető export-sorral.
 
+## 0.3 Brief-revízió — az ablak-határ dokumentált kizárása (orchestrátor, 2026-08-01)
+
+A review (`docs/reviews/e02-r19-review.md` 4.1 MAJOR) eldobható próbateszttel
+valós paritás-eltérést mért **pontosan az ablak-határon**:
+
+| offset | legacy accuracy | V2 accuracy |
+|---|---|---|
+| +0 / +150 / +270 / +279 ms | egyezik | egyezik |
+| **+280 ms** | **0.0** | **0.041666666666666664** (= 1/24) |
+| +281 / +300 / +400 ms | egyezik | egyezik |
+| latency 50 / 150 / 300 ms | egyezik | egyezik |
+
+**Ok:** a legacy `d <= windowSec` **double**-összehasonlítás (a `0.28`
+legközelebbi double-je `0.28000000000000002665`), a V2
+`deltaMicroseconds <= matchWindow.inMicroseconds` **egész**. A pontos határon a
+két numerikus alap eltér — minden más offseten és minden mért latencyn a
+paritás **tart**.
+
+### Döntés
+
+A paritás elvárása **kötelező marad** minden **szigorúan az ablakon belüli** és
+**szigorúan az ablakon kívüli** offsetre. A **pontos határpont**
+(`|d| == matchWindow` egzaktul, azaz `±280.000 ms`) **dokumentált, elfogadott
+mikro-eltérés**, és a paritás-állításból **kizárandó**.
+
+**Miért nem mércelazítás:** a legacy referencia ezen a ponton **maga sem jól
+definiált** — a `d <= 0.28` kimenete a double-ábrázolás kerekítésén múlik, nem
+a lecke szemantikáján. Valós mikrofonos időbélyeg nem esik pontosan ide
+(mikroszekundumra egybeeső véletlen kellene hozzá), és a flag OFF. A mércét
+tehát nem gyengítjük, hanem **ott definiáljuk pontosan, ahol a referencia
+maga sem definiált**.
+
+Ezt a döntést az orchestrátor hozta a saját, még nem merge-elt briefjén
+(ADR 0087 §2) — nem igényel HALT-ot.
+
 ## 1. Cél
 
 Az új motor **beér a meglévő rendszerekbe**:
