@@ -24,6 +24,23 @@ class PacketTest(unittest.TestCase):
         self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", packet)
         self.assertIn("minimal", packet.lower())
 
+    def test_packet_names_allowed_paths_untouched_by_any_attempt(self) -> None:
+        packet = build_escalation_packet(
+            task_text="Implement the requested feature",
+            acceptance=("passes",),
+            failed_command="flutter test test/example_test.dart",
+            error_log="failure",
+            attempts=("M3 changed lib/a.dart",),
+            diff_stat="1 file changed",
+            diff_text="+x\n",
+            relevant_files=("lib/a.dart",),
+            untouched_allowed_paths=("lib/b.dart", "lib/c.dart"),
+        )
+
+        self.assertIn("lib/b.dart", packet)
+        self.assertIn("lib/c.dart", packet)
+        self.assertIn("not scope creep", packet)
+
     def test_impossibly_small_packet_fails_closed(self) -> None:
         with self.assertRaises(PacketError):
             build_escalation_packet(
