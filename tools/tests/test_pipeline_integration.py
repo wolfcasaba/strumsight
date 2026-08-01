@@ -194,6 +194,48 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertLess(len(signal), 1200)
             self.assertEqual(mirror.read_text(), signal)
 
+    def test_signal_resolves_git_state_from_the_worktree_not_the_callers_cwd(self) -> None:
+        # Mért reprodukció (E02-R21, H6, docs/LESSONS.md L42): az
+        # orchestrátor a SAJÁT checkoutjából, `cd` nélkül, abszolút
+        # útvonalon hívja a `codex-signal.sh`-t (lásd
+        # `tools/ai-router-round.sh:50`) -- a `git rev-parse
+        # --show-toplevel` a hívó folyamat öröklött cwd-jét oldja fel, nem a
+        # munkapéldányt, ezért a `branch=`/`head=`/`dirty_files=` mezők a
+        # ROSSZ repót mérték.
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            worktree, _, _ = self.make_fake_worktree(directory)
+            subprocess.run(["git", "checkout", "-qb", "round-branch"], cwd=worktree, check=True)
+            (worktree / "marker.txt").write_text("round work\n")
+            subprocess.run(["git", "add", "marker.txt"], cwd=worktree, check=True)
+            subprocess.run(["git", "commit", "-qm", "round work"], cwd=worktree, check=True)
+            worktree_head = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=worktree,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.strip()
+
+            caller = directory / "caller-repo"
+            caller.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=caller, check=True)
+            subprocess.run(["git", "config", "user.email", "caller@example.invalid"], cwd=caller, check=True)
+            subprocess.run(["git", "config", "user.name", "Caller"], cwd=caller, check=True)
+            (caller / "readme.txt").write_text("unrelated repo\n")
+            subprocess.run(["git", "add", "readme.txt"], cwd=caller, check=True)
+            subprocess.run(["git", "commit", "-qm", "unrelated"], cwd=caller, check=True)
+
+            script = worktree / "tools" / "codex-signal.sh"
+            completed = self.run_command(
+                ["bash", str(script), "progress", "safe summary"], cwd=caller
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            signal = (worktree / ".codex-round-status").read_text()
+            self.assertIn("branch=round-branch", signal)
+            self.assertIn(f"head={worktree_head}", signal)
+
     def test_router_status_mapping_is_stable(self) -> None:
         expected = {
             "READY_FOR_REVIEW": "progress",

@@ -594,43 +594,64 @@ class DevelopmentRouter:
                 )
                 if decision is not None:
                     return decision
-                recovered = self.run_gate(
-                    worktree, brief.metadata.gate_tests, brief.metadata.native_gate
-                )
-                self._record_gate(state, f"RECOVERED_{phase}", recovered)
-                self.state.save_task(brief.task_id, state)
-                if (
-                    recovered.outcome == "pass"
-                    and audit is not None
-                    and audit.scoped_changed_paths
+                if phase.startswith("M3_CALL_") and not (
+                    audit is not None and audit.scoped_changed_paths
                 ):
-                    if brief.metadata.risk == "high":
-                        return self._terra(
-                            brief=brief,
-                            worktree=worktree,
-                            manifest=manifest,
-                            state=state,
-                            last_gate=recovered,
-                            high_risk_review=True,
-                            result_path=result_path,
+                    # `M3_CALL_N` is persisted only immediately before
+                    # run_model() is invoked (see the while-loop below) and is
+                    # overwritten with `M3_ATTEMPT_N` right after run_model()
+                    # returns. Resuming into `M3_CALL_N` therefore means the
+                    # whole router process died mid-call (e.g. the outer
+                    # tool's hard timeout) before the model got a chance to
+                    # respond -- unlike `M3_ATTEMPT_N`, this is not a real
+                    # model failure. Refund the pre-incremented attempt and
+                    # retry it fresh instead of consuming it, mirroring the
+                    # partial_changes=False branch of _provider_decision
+                    # (E02-R21 H6, docs/LESSONS.md L42).
+                    state["m3_attempts"] = max(0, int(state.get("m3_attempts", 0)) - 1)
+                    state["phase"] = "M3_READY"
+                    self.state.save_task(brief.task_id, state)
+                else:
+                    recovered = self.run_gate(
+                        worktree, brief.metadata.gate_tests, brief.metadata.native_gate
+                    )
+                    self._record_gate(state, f"RECOVERED_{phase}", recovered)
+                    self.state.save_task(brief.task_id, state)
+                    if (
+                        recovered.outcome == "pass"
+                        and audit is not None
+                        and audit.scoped_changed_paths
+                    ):
+                        if brief.metadata.risk == "high":
+                            return self._terra(
+                                brief=brief,
+                                worktree=worktree,
+                                manifest=manifest,
+                                state=state,
+                                last_gate=recovered,
+                                high_risk_review=True,
+                                result_path=result_path,
+                            )
+                        return self._finish(
+                            state,
+                            RouterStatus.READY_FOR_REVIEW,
+                            "recovered gate passed",
+                            result_path,
                         )
-                    return self._finish(
-                        state, RouterStatus.READY_FOR_REVIEW, "recovered gate passed", result_path
+                    if recovered.outcome == "pass":
+                        recovered = GateRun(
+                            "code_failure",
+                            "interrupted model produced no scoped changes",
+                            1,
+                            None,
+                            "No scoped changes were present after the interrupted model call.",
+                        )
+                    decision = self._gate_decision(
+                        gate=recovered, state=state, result_path=result_path
                     )
-                if recovered.outcome == "pass":
-                    recovered = GateRun(
-                        "code_failure",
-                        "interrupted model produced no scoped changes",
-                        1,
-                        None,
-                        "No scoped changes were present after the interrupted model call.",
-                    )
-                decision = self._gate_decision(
-                    gate=recovered, state=state, result_path=result_path
-                )
-                if decision is not None:
-                    return decision
-                previous_gate = recovered
+                    if decision is not None:
+                        return decision
+                    previous_gate = recovered
             elif phase == "TERRA_CALL":
                 return self._finish_terra(
                     state,

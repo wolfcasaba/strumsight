@@ -55,16 +55,22 @@ print(" ".join(value.split())[:500])
 ')
 [ -n "$safe_summary" ] || safe_summary="[REDACTED]"
 
-root=$(git rev-parse --show-toplevel)
+# Resolve the repo from the SCRIPT's own location, not the caller's
+# inherited cwd: the orchestrator invokes this script by absolute path from
+# its own checkout (no `cd` into the worktree), and bash does not change cwd
+# for an absolute-path script invocation, so `git rev-parse` here would
+# otherwise measure the wrong repo (E02-R21 H6, docs/LESSONS.md L42).
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(git -C "$script_dir" rev-parse --show-toplevel)
 signal="$root/.codex-round-status"
 temporary="$signal.tmp.$$"
 {
   echo "status=$status"
   [ -z "$router_status" ] || echo "router_status=$router_status"
   echo "summary=$safe_summary"
-  echo "branch=$(git branch --show-current)"
-  echo "head=$(git rev-parse --short HEAD)"
-  echo "dirty_files=$(git status --porcelain | wc -l | tr -d ' ')"
+  echo "branch=$(git -C "$root" branch --show-current)"
+  echo "head=$(git -C "$root" rev-parse --short HEAD)"
+  echo "dirty_files=$(git -C "$root" status --porcelain | wc -l | tr -d ' ')"
   echo "signalled_at=$(date -Iseconds)"
 } > "$temporary"
 chmod 600 "$temporary"
