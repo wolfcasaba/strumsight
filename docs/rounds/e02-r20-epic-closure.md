@@ -1,6 +1,7 @@
 # E02-R20 — Accessibility, teljesítmény, regresszió és Epic lezárás
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (előre megírva 2026-07-31; indításra engedve
+  2026-08-01, `main` @ `0dd85d3` — az E02-R19 merge-elve, a sor kiürült)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 20"** (+ §22, §24, §25, §28)
 - **Branch:** `codex/e02-r20-epic-closure`
 - **Előfeltétel:** **E02-R19 merge-ölve** (minden funkcionális kör kész).
@@ -19,6 +20,27 @@
 > 3. Ellenőrizd az Epic-2 DoD (SDD §28) minden tételét a mai kód ellen — a
 >    §6 A7 táblája ebből lesz.
 > 4. Státusz → PLANNING, dátum/sha frissítés, brief commit a kör-branchre.
+>
+> **A 2. és 4. pont ELDÖNTVE — lásd a §0.0-t. Az 1. és 3. pont az orchestrátoré.**
+
+## 0.0 Pre-flight döntések (user, 2026-08-01) — KÖTELEZŐEK
+
+1. **`migratedLearnEnabled`: CSAK DOKUMENTÁLÁS.** A zárókör a flaget **NEM**
+   kapcsolja be. A rollout-döntést és a feltételeit a zárójelentés rögzíti
+   (mit kell teljesülnie a bekapcsoláshoz, ki és mikor méri), a bekapcsolás
+   **külön, későbbi kör**. A `lib/app/config/**` marad tilos zóna (§4).
+2. **Nincs új ADR.** A zárókör nem hoz architekturális döntést; a pipeline
+   sor-fájljában az ADR-oszlop `nincs`. Az orchestrátor **NE** osszon ADR-számot
+   ehhez a körhöz.
+3. **Implementer motor: MiniMax M3-first router.** Az M3 viszi az
+   implementációt, és a **jóváhagyott router-szemantika szerint EGY** javító
+   kört kap; ha az után is nyitva marad BLOCKER/MAJOR, a következő javító kört
+   a **Codex `gpt-5.6-terra`** viszi (a küszöb 3-ról 1-re szigorítva —
+   `docs/execution/pipeline-orchestrator-prompt.md` §2). Indoka: az M3 mért
+   gyengéje a valótlan „kész" állítás, a zárókör terméke pedig épp a DoD-tábla
+   őszintesége — a review és az eszkaláció együtt a mérce.
+4. **A független review, a CI és a merge változatlan marad** a routeren kívül
+   (Claude review-zik, ADR 0052/0053 zöld kapu).
 
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 

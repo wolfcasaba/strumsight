@@ -112,21 +112,26 @@ ne lista-tágítással.
 | **H1** | egy **már merge-elt** ADR módosítását kívánná |
 | **H2** | egy **lezárt kör** viselkedésének megváltoztatását kívánná |
 | **H3** | a **tilos zóna** feloldását kívánná (új fájl az engedélyezett listán kívül) |
-| **H4** | **BLOCKER vagy MAJOR** lelet, amely **HÁROM** javító kör után is nyitva van |
+| **H4** | **BLOCKER vagy MAJOR** lelet, amely a **Codex javító köre után is** nyitva van (M3 1 javító kör + Codex 1 javító kör — lásd a motor-eszkalációt lentebb) |
 | **H5** | a **CI kétszer piros** ezen a körön |
 | **H6** | az implementer **`blocked`**-ot jelez, vagy kétszer hal meg `unknown`/`stalled` állapotban |
 | **H7** | a `tools/round-gate.sh` nem hozható zöldre |
 | **H8** | a `main` a dispatch óta mozdult, és a rebase konfliktust ad |
 
 **A javító kör a lánc NORMÁL útja, nem megállási ok** (user-döntés
-2026-07-31): ha a review BLOCKER/MAJOR leletet talál — akár az előző javító
-kör után is —, indítsd a következő javító kört ugyanazzal a motorral,
-a leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
-köröket a kör-branch commitjaiból. **Motor-eszkaláció (user-döntés
-2026-07-31): ha a MiniMax HÁROM javító körrel sem zárja a leleteket, a
-KÖVETKEZŐ javító kört a Codex viszi** (`tools/codex-round.sh` +
-`tools/codex-watch.sh`, külön munkapéldány, ugyanaz a leletlista). H4 halt
-csak akkor, ha a Codex javító köre UTÁN is nyitva marad BLOCKER/MAJOR.
+2026-07-31): ha a review BLOCKER/MAJOR leletet talál, indítsd a javító kört a
+leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
+köröket a kör-branch commitjaiból.
+
+**Motor-eszkaláció — MiniMax-first router (user-döntés 2026-08-01, a küszöb
+3-ról 1-re szigorítva):** a MiniMax **EGY** javító kört kap. Ha az ELSŐ javító
+kör után is nyitva marad BLOCKER vagy MAJOR lelet, a **KÖVETKEZŐ javító kört a
+Codex viszi** (`tools/codex-round.sh` + `tools/codex-watch.sh`, külön
+munkapéldány, ugyanaz a leletlista). Ez a jóváhagyott router-szemantika:
+*M3 dolgozik → review + gate ellenőrzi → M3 egyszer javíthat → Terra csak
+valódi elakadásnál.* H4 halt csak akkor, ha a Codex javító köre UTÁN is nyitva
+marad BLOCKER/MAJOR.
+
 Minden javító-promptban legyen benne: „a munkádat commitold a branchre".
 
 Kétség esetén **halt**. A lánc megállítása olcsó; egy rossz normatív döntés,
