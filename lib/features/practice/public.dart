@@ -13,3 +13,37 @@ export 'presentation/screens/practice_result_screen.dart';
 export 'presentation/screens/practice_session_screen.dart';
 export 'presentation/widgets/practice_mode_card.dart';
 export 'application/practice_setup_controller.dart';
+// E02-R19 — the cross-feature recording + progress providers + pure aggregator
+// surface. Exporting these here is what lets the Learn/Progress/Streak
+// features wire their flag branches and rollups through this public boundary
+// without an allowlist deviation.
+export 'application/practice_session_recording.dart';
+export 'application/practice_progress_providers.dart';
+export 'domain/service/practice_progress_aggregator.dart'
+    show AggregatedPracticeEntry, PracticeProgressAggregator;
+export 'domain/service/practice_session_eligibility.dart'
+    show PracticeSessionEligibility, PracticeSessionEligibilityInput;
+export 'domain/model/practice_metrics.dart'
+    show
+        MetricAvailable,
+        MetricInsufficientData,
+        MetricNotApplicable,
+        MetricValue,
+        PracticeMetrics;
+export 'domain/model/beat_position.dart' show BeatPosition;
+export 'domain/model/compiled_practice_target.dart' show CompiledPracticeTarget;
+export 'domain/model/meter.dart' show Meter;
+export 'domain/model/practice_definition.dart' show PracticeDefinition;
+export 'domain/model/practice_event.dart' show PracticeEvent;
+export 'domain/model/practice_mode.dart' show PracticeMode;
+export 'domain/model/practice_observation.dart' show StrumObservation;
+export 'domain/model/practice_session_config.dart' show PracticeSessionConfig;
+export 'domain/model/practice_source.dart' show PracticeSource;
+export 'domain/model/practice_verdict.dart' show DirectionOutcome;
+export 'domain/model/scoring_profile.dart' show ScoringProfile;
+export 'domain/model/tempo.dart' show Tempo;
+export 'domain/service/practice_direction_scorer.dart'
+    show PracticeDirectionScorer;
+export 'domain/service/practice_event_matcher.dart' show PracticeEventMatcher;
+export 'domain/service/practice_target_compiler.dart'
+    show compilePracticeTarget;

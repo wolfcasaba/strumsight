@@ -104,7 +104,9 @@ class ProgressScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 22),
                   _DailyGoalCard(
-                    todaySeconds: stats.secondsForDay(today),
+                    todaySeconds: ref.watch(
+                      dailyGoalActiveSecondsProvider(today),
+                    ),
                     goalMinutes: ref.watch(dailyGoalProvider),
                     l10n: l10n,
                     onEdit: () => _editGoal(context, ref, l10n),

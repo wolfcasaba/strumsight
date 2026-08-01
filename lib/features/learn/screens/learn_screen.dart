@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/public.dart';
@@ -11,6 +12,7 @@ import '../../live/public.dart';
 import '../../progress/public.dart';
 import 'package:intl/intl.dart';
 
+import '../../practice/public.dart' hide PracticeSource;
 import '../../share/public.dart';
 import '../../settings/public.dart';
 import '../../streak/public.dart';
@@ -19,6 +21,7 @@ import '../providers/practice_speed_provider.dart';
 import '../audio/chord_audio.dart';
 import '../audio/metronome.dart';
 import '../providers/metronome_pref_provider.dart';
+import '../adapter/lesson_v2_scoring.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
@@ -80,6 +83,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   static const double _highwayHeight = 140;
   static const double _strikeX = 68; // must match LessonHighway.strikeX default
   int _lastSeq = 0;
+  final List<StrumObservation> _v2Observations = [];
   ProviderSubscription<AsyncValue<dynamic>>? _frameSub;
 
   @override
@@ -180,6 +184,18 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           lag < 0.5) {
         at -= lag;
       }
+      if (_migratedLearnEnabled) {
+        _v2Observations.add(
+          StrumObservation(
+            at: Duration(
+              microseconds: (at * Duration.microsecondsPerSecond).round(),
+            ),
+            sequence: _lastSeq,
+            direction: frame.latestStrum.direction as StrumDirection,
+            confidence: frame.latestStrum.confidence as double,
+          ),
+        );
+      }
       // Only buzz when the strum actually resolved an event — a stray strum
       // with no event in range returns null and must NOT re-fire the previous
       // verdict's haptic.
@@ -231,6 +247,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _pause() {
     if (!_playing) return;
+    // V2 path: close the live-frame subscription the moment the user pauses,
+    // so the mic drops to silent (A9). The legacy path leaves _frameSub open
+    // — that is the original Learn behaviour, untouched (Döntés 8).
+    if (_migratedLearnEnabled) {
+      _frameSub?.close();
+      _frameSub = null;
+    }
     _accumSec = _elapsedSec;
     _ticker.stop();
     setState(() => _playing = false);
@@ -239,6 +262,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   void _restart() {
     _ticker.stop();
     _lastSeq = 0;
+    _v2Observations.clear();
     if (_jam) {
       _scorer = null;
       // Release the mic — jam must not idle behind the backing (round 100).
@@ -272,40 +296,123 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   Future<void> _finish() async {
     if (!_playing) return;
+    // V2-migrated Learn closes the capture subscription before pausing so the
+    // mic gap (A9) stays structurally closed on the migrated path; the legacy
+    // path keeps the existing `_pause()` semantics — every §2 Learn test stays
+    // green by construction.
+    if (_migratedLearnEnabled) {
+      _frameSub?.close();
+      _frameSub = null;
+    }
     _pause();
     // The run is over — stop biasing detection toward the last chord.
     _sentExpected = null;
     _hintedEngine?.setExpectedChord(null);
     _scorer?.finalize();
     final snap = _scorer?.snapshot();
+    final directionAccuracy = _migratedLearnEnabled
+        ? scoreLessonV2(
+            _lesson,
+            _v2Observations,
+            inputLatency: Duration(
+              milliseconds: ref.read(inputLatencyProvider),
+            ),
+            bpm: _bpm,
+          )
+        : null;
     setState(() => _score = snap);
     // Playing a lesson counts as practice, and its score updates the library.
     if ((snap?.total ?? 0) > 0) {
-      ref.read(streakProvider.notifier).recordPracticeToday();
-      // Easy mode still counts as PRACTICE (streak + Progress), but does NOT
-      // update the lesson's best-score/stars — those must reflect the FULL
-      // lesson, not the simplified cut.
-      if (!_easy) {
+      if (_migratedLearnEnabled) {
+        // V2 path: route through the canonical recording use case so the
+        // streak gate, daily-goal ring and V1 entry shape stay identical to
+        // every other Practice call site (Döntés 4 + 5). Lesson-progress
+        // stays under the "best wins" controller (Easy never overwrites,
+        // Döntés 6).
+        await _recordLearnMomentV2(snap!, directionAccuracy!);
+      } else {
+        // Legacy path (today, OFF) — UNCHANGED. The current behaviour is the
+        // contract; every Learn test in §2 stays green by construction.
+        ref.read(streakProvider.notifier).recordPracticeToday();
+        // Easy mode still counts as PRACTICE (streak + Progress), but does NOT
+        // update the lesson's best-score/stars — those must reflect the FULL
+        // lesson, not the simplified cut.
+        if (!_easy) {
+          ref
+              .read(lessonProgressProvider.notifier)
+              .record(widget.lesson.id, snap!.accuracy);
+        }
+        // Log for the Progress dashboard — Learn is the only source that scores
+        // strum DIRECTION, so it carries the moat metric.
         ref
-            .read(lessonProgressProvider.notifier)
-            .record(widget.lesson.id, snap!.accuracy);
+            .read(practiceLogProvider.notifier)
+            .record(
+              PracticeEntry(
+                day: StreakLogic.epochDayOf(DateTime.now()),
+                source: PracticeSource.learn,
+                seconds: _elapsedSec.round(),
+                strokes: snap!.total,
+                chords: widget.lesson.chordSequence.toSet().length,
+                directionAccuracy: snap.accuracy,
+              ),
+            );
       }
-      // Log for the Progress dashboard — Learn is the only source that scores
-      // strum DIRECTION, so it carries the moat metric.
-      ref
-          .read(practiceLogProvider.notifier)
-          .record(
-            PracticeEntry(
-              day: StreakLogic.epochDayOf(DateTime.now()),
-              source: PracticeSource.learn,
-              seconds: _elapsedSec.round(),
-              strokes: snap!.total,
-              chords: widget.lesson.chordSequence.toSet().length,
-              directionAccuracy: snap.accuracy,
-            ),
-          );
     }
     if (mounted && snap != null) _showSummary(snap);
+  }
+
+  /// Whether the V2-migrated Learn path is active for this build. The flag
+  /// is compile-time, so caching it in a getter keeps the hot paths
+  /// branch-free.
+  bool get _migratedLearnEnabled =>
+      ref.read(appConfigProvider).flags.migratedLearnEnabled;
+
+  /// V2-migrated Learn post-finish recording (ADR 0085 Döntés 4 + 5 + 6).
+  ///
+  /// Uses the canonical [PracticeSessionRecording] use case so the streak
+  /// gate, the daily-goal ring and the V1 entry shape stay identical to
+  /// every other Practice call site. Lesson-progress still goes through the
+  /// existing "best wins" controller (Easy-mode-rewrite-prevention, A6).
+  Future<void> _recordLearnMomentV2(
+    ScoreSnapshot snap,
+    double directionAccuracy,
+  ) async {
+    final now = DateTime.now();
+    final recording = ref.read(practiceSessionRecordingProvider);
+    final eligibilitySnap = SessionEligibilitySnapshot(
+      // The V2 session's playingElapsed (== wall minus count-in minus pause
+      // minus setup — A5); the Learn path reports it as the elapsed runner
+      // seconds. Lessons clear the count-in/pause-free path so we reuse the
+      // measured elapsed seconds.
+      activeDuration: Duration(seconds: _elapsedSec.round()),
+      resolvedRequiredTargets: 0,
+      // Free-practice strums = total event counts; lessons always clear the
+      // 8-strum threshold when they finish.
+      freePracticeStrums: snap.total,
+    );
+    final outcome = await recording.record(
+      PracticeRecordingRequest(
+        lessonId: widget.lesson.id,
+        eligibility: eligibilitySnap,
+        // An active Learn run always passes the coarse `eligible` flag —
+        // the predicate decides whether it qualifies (A4).
+        eligible: true,
+        activeDuration: Duration(seconds: _elapsedSec.round()),
+        // V1 stores the FULL elapsed seconds (count-in included); the
+        // daily-goal budget counts only the active time via the aggregator
+        // (A5 + A10 — V1 log bájtra érintetlen).
+        elapsedSeconds: _elapsedSec.round(),
+        strokes: snap.total,
+        chords: widget.lesson.chordSequence.toSet().length,
+        directionAccuracy: directionAccuracy,
+        finishedAt: now,
+      ),
+    );
+    if (!_easy && outcome.loggedEntry != null) {
+      ref
+          .read(lessonProgressProvider.notifier)
+          .record(widget.lesson.id, directionAccuracy);
+    }
   }
 
   void _openWrapped() {
