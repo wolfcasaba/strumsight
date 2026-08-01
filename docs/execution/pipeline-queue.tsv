@@ -26,8 +26,18 @@ E02-R19	docs/rounds/e02-r19-progress-and-learn-migration.md	codex	0085	done
 # visszamenőleg nem írjuk át.
 E02-R20	docs/rounds/e02-r20-epic-closure.md	minimax	nincs	done
 #
+# E02-R21 — a zárójelentés §3 rendszerszintű résének javítása: a Practice V2
+# négy hiányzó éles providere. Ez a MiniMax-first router (ADR 0088) ELSŐ ÉLES
+# köre — kicsi, jól körülhatárolt scope. Az ADR 0111, mert a 0089-0110 az
+# Epic 3 köreire foglalt. A production flag ebben a körben NEM mozdul
+# (user-döntés 2026-08-01): a rollout külön kör, a készülékes teszt UTÁN.
+# Az Epic 3 sorai szándékosan EZ ALATT vannak — ez fut előbb.
+E02-R21	docs/rounds/e02-r21-practice-production-wiring.md	auto	0111	pending
+#
 # Epic 3 előkészített sorok. Az ADR 0088 a routeré; a kör-ADR-ek 0089-től
 # sorrendben előre foglaltak. Egyik sor sem indul el prepared állapotban.
+# Az R01-R03 a bekötő kör és a briefek átnézése után vált pendingre
+# (user-döntés 2026-08-01: előbb három kör felügyelet mellett, aztán a többi).
 E03-R01	docs/rounds/e03-r01-baseline-and-boundaries.md	auto	0089	prepared
 E03-R02	docs/rounds/e03-r02-song-document-identity-metadata.md	auto	0090	prepared
 E03-R03	docs/rounds/e03-r03-song-structure-and-time-map.md	auto	0091	prepared
