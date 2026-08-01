@@ -1455,3 +1455,92 @@ amit a hívója abszolút úton indít, SOSEM támaszkodhat az öröklött cwd-r
 (`git rev-parse --show-toplevel`, relatív fájlutak) — a saját
 `${BASH_SOURCE[0]}`-ból oldja fel magát, különben a hívási minta (van-e
 `cd` előtte) csendben megváltoztatja, melyik repót méri.
+
+## L43 — A router valódi (nem-smoke) Codex-hívása `--sandbox workspace-write`-ot használ, ami bwrap hálózati-namespace-t igényel; ezen a konténeren ez sosem működik, és a smoke-teszt nem fedi fel
+
+**Mit mértünk (2026-08-01, E02-R21, ÖTÖDIK halt ugyanazon a taskon, de az
+ELSŐ, ahol a router állapotgépe hibátlanul futott le végig — mind az öt
+korábbi router-infra fix, #46/#47/#48/#49/#50, a munkapéldányban volt,
+`origin/main`-re rebase-elve `f27651a`-ra).** A pre-flight (ADR 0111, brief)
+változatlan, a `python3 tools/model-router.py run` egyetlen hívása 2
+M3-kísérletet és 1 Terra-hívást futtatott le teljesen, megszakítás nélkül.
+Mindhárom próbán a `round-gate.sh` **pass**-t adott (a baseline érintetlen
+maradt), de egyik modellhívás sem hozott létre egyetlen scope-on belüli
+fájlváltozást sem (`scoped_changed_paths=[]` mindhárom próbán,
+`last_diff_hash` = az üres string SHA-256-ja) — a router ezt korrekt
+`NO_CHANGE_1`/`NO_CHANGE_2`/`FINAL_GATE` `code_failure`-ként könyvelte, majd
+a keret kimerülése után helyesen `STOPPED`-et jelzett. **A router
+döntéslogikája ezúttal nem hibás** — a hiba egy szinttel lejjebb van, a
+tényleges modellhívás sandbox-konfigurációjában.
+
+**Gyökérok, router-független módon reprodukálva:**
+```
+bwrap --unshare-net --dev-bind / / true
+# → bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted (exit 1)
+```
+Ez a konténer nem tud hálózati namespace-t létrehozni (hiányzó
+`CAP_NET_ADMIN` vagy egyenértékű host-korlátozás) — állandó, nem tranziens
+képesség-hiány (214 meglévő net-namespace a `/proc/*/ns/net` alapján, messze
+a szokásos limit alatt, tehát nem kimerülés). A `codex` CLI `--sandbox
+workspace-write` (és `read-only`) módja Linuxon `bwrap`-alapú izolációt
+használ, aminek előfeltétele ugyanez a hálózati namespace — ezért **minden**
+`exec_command`-hívás azonnal elbukik a sandboxban, `true`/`echo`/`id` szintű
+parancsokra is. A pontos induló promptot közvetlenül elküldve az M3
+profilnak (`--sandbox read-only`, mellékhatás nélkül) a modell **helyesen
+megtagadta** a feladatot ahelyett, hogy fabrikált volna: „Every
+`exec_command` invocation exits immediately with `bwrap: loopback: Failed
+RTM_NEWADDR: Operation not permitted`... The bwrap sandbox cannot create a
+network namespace on this container, so no shell ever spawns.” Ez
+pontosan megfelel a brief §10 kikötésének (nincs fabrikált kimenet) — a
+modell hibátlanul viselkedett egy hibás környezetben.
+
+**Miért nem fogta meg korábban egyetlen halt sem, és miért nem a
+`smoke` parancs.** Az előző NÉGY halt (H4/H6, #46–#49 mérései) mind a
+router SAJÁT állapotgép-logikájában bukott el, mielőtt valódi M3/Terra-hívás
+egyáltalán végigfuthatott volna gate-passzoló, tartalom nélküli
+végkimenetellel — ez volt az ELSŐ alkalom, hogy a router elég sokáig
+hibátlanul futott ahhoz, hogy ez a réteg egyáltalán próbára legyen téve. A
+`tools/model-router.py smoke --profile {m3,terra}` parancs (`_smoke()`,
+`tools/model-router.py:165-196`) zölden fut ezen a boxon (`M3_OK`/`TERRA_OK`),
+mert `--sandbox read-only`-t használ egy triviális, `exec_command`-ot SOSEM
+igénylő szöveges válasz-prompttal — a smoke-teszt tehát strukturálisan vak
+erre a hibaosztályra, mert nem gyakorolja a ténylegesen hibás képességet
+(sandboxolt parancsvégrehajtás).
+
+**Az inkonzisztencia a saját repóban:** a **létező, működő** örökölt
+manuális útvonal (`tools/codex-round.sh:31`) már `-s danger-full-access`-t
+használ — pontosan azért, mert ezen a boxon a bwrap nem megy (ezt a
+`sdd-round-driver` skill saját szövege is kimondja: „A wrapper `-s
+danger-full-access`-szel fut (a bwrap itt nem megy) — az izolációt a külön
+munkapéldány adja”). A router `tools/ai_router/execution.py:88-105`
+(`build_codex_argv`) függvénye, amikor az ADR 0088-cal megszületett, ezt a
+már ismert, dokumentált box-tényt nem vette át — `"--sandbox",
+"workspace-write"`-et ad át mindkét profilra (M3 és Terra egyaránt).
+
+**Hogyan alkalmazd.** (1) Egy géppel futtatott smoke/health-teszt csak azt a
+képességet igazolja, amit ténylegesen gyakorol — egy szöveges válasz-prompt
+NEM bizonyítja, hogy a szabályozott parancsvégrehajtás (sandbox, shell,
+fájl-I/O) is működik; ha a valódi munka centrális eleme egy olyan
+képesség, amit a smoke kihagy, a smoke zöldje hamis biztonságot ad. (2) Egy
+adott konténer/box mért, dokumentált korlátja (itt: nincs bwrap
+hálózati-namespace) MINDEN ugyanazt a mechanizmust használó hívási útra
+vonatkozik — ha egy útvonal (`codex-round.sh`) már tud róla és kikerüli, egy
+másik, újabb útvonal (a router) írásakor ezt a tényt aktívan át kell venni,
+nem újra fel kell fedezni élesben. (3) „A gate zöld maradt, de a modell
+semmit sem csinált” (`scoped_changed_paths=[]`, tiszta `pass` gate) egy
+harmadik hibaosztály a korábbi kettő (router állapotgép-hiba, ledger-hiba)
+mellett — ha ez a mintázat jelentkezik (`NO_CHANGE_N`/`"...produced no
+scoped changes"` a `gate_history`-ban minden kísérleten), a legelső
+diagnosztikai lépés a modellhívás tényleges környezete (sandbox,
+jogosultságok), nem a router döntési logikája.
+
+**Javítás javasolt helye (self-heal kör, NEM ez az orchestrátor-kör —
+`tools/` tilos zóna számára).** `tools/ai_router/execution.py:100-101`:
+`"workspace-write"` → `"danger-full-access"` a `build_codex_argv`-ban;
+kötelező regressziós teszt a string-argumentumra (a tényleges bwrap-hívás
+box-specifikus, CI-ban nem reprodukálható). Érdemes a `_smoke()`-ot is
+kiegészíteni egy valódi `exec_command`-ot igénylő lépéssel, hogy ez a
+hibaosztály jövőben a smoke-fázisban bukjon el. Teljes mérés + reprodukció:
+[`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
+"Update 4" szakasz, a `codex/e02-r21-practice-production-wiring` ágon
+(`c1579f4`).

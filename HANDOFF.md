@@ -4,6 +4,46 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — az ÖSSZES korábbi router-infra fix (#46/#47/#48/#49/#50)
+> UTÁNI, első valóban végig lefutott router-állapotgép is HALT-ba futott, egy
+> ÚJ, a router logikájától FÜGGETLEN okkal: H4.** A munkapéldány
+> `origin/main`-re (`f27651a`) rebase-elve, a pre-flight (ADR 0111 + brief)
+> változatlanul jó. `python3 tools/model-router.py run` 2 M3-kísérletet + 1
+> Terra-hívást futtatott le **megszakítás nélkül, hibátlan állapotgép-logikával**
+> — mindhárom próbán a `round-gate.sh` **pass**-t adott, de **egyik
+> modellhívás sem hozott létre egyetlen scope-on belüli fájlváltozást sem**
+> (`scoped_changed_paths=[]` mindhárom próbán). Mért gyökérok: a `codex exec`
+> valódi (nem-smoke) hívása `--sandbox workspace-write`-ot használ
+> (`tools/ai_router/execution.py:100-101`), ami `bwrap`-alapú hálózati
+> namespace-izolációt igényel Linuxon — ez a konténer **nem** tud hálózati
+> namespace-t létrehozni, router-független módon reprodukálva: `bwrap
+> --unshare-net --dev-bind / / true` → `bwrap: loopback: Failed RTM_NEWADDR:
+> Operation not permitted` (állandó, nem tranziens képesség-hiány). Emiatt
+> minden `exec_command` azonnal elbukik a modellhívásban — a pontos induló
+> promptot közvetlenül elküldve az M3 profilnak, a modell **helyesen
+> megtagadta** a feladatot és pontos diagnózist adott ahelyett, hogy
+> fabrikált volna. A `tools/model-router.py smoke` parancs ezt nem fedi fel,
+> mert `--sandbox read-only`-t használ egy `exec_command`-ot sosem igénylő
+> triviális prompttal — strukturálisan vak erre a hibaosztályra. A **létező**
+> `tools/codex-round.sh:31` már `-s danger-full-access`-t használ pontosan
+> emiatt; a router saját Codex-hívása ezt a már ismert box-tényt sosem vette
+> át. Eredmény: `STOPPED`, a task 2/2 M3 + 1/1 Terra kerete kimerült valódi
+> tartalmi ok nélkül, a Practice V2 production-drótozás (a kör tényleges
+> célja) **még mindig el sem kezdődött** — ez az ÖTÖDIK önjavító/halt-kör
+> ugyanezen a task-on, de az ELSŐ, ahol a hiba nem a router állapotgépében
+> (`router.py`/`state.py`) van, hanem a `execution.py` sandbox-választásában.
+> Teljes mérés + reprodukció + javítási javaslat:
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
+> "Update 4" szakasz, a `codex/e02-r21-practice-production-wiring` ágon
+> (`c1579f4`). Tanulság: `docs/LESSONS.md` L43. **Az önjavító körnek**
+> `tools/ai_router/execution.py`-ban a `build_codex_argv` sandbox-argumentumát
+> `danger-full-access`-ra kell cserélnie (mindkét profilra), kötelező
+> regressziós teszttel, majd `reset --task-id E02-R21`-gyel felszabadítania a
+> kimerült M3+Terra keretet, mielőtt a lánc újra `run`-t próbál.
+> **A Practice V2 production drótozás (a kör tényleges célja) ÉRINTETLEN —
+> ez a kör kizárólag a router-infrastruktúrát vizsgálta, ÖTÖDSZÖR ugyanezen
+> a task-on.**
+> Előző kör: 2026-08-01
 > (önjavító kör, E02-R21 H6 4. előfordulása JAVÍTVA.** Mért gyökérok
 > (`docs/LESSONS.md` L42, két FÜGGETLEN hiba egyszerre): (1)
 > `tools/ai_router/router.py` resume-ága a `M3_CALL_N` fázist (a hívó
@@ -438,36 +478,43 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár — a NEGYEDIK halt-kör
-   ugyanezen a task-on, de az ELSŐ, ahol a router-infrastruktúra maga már
-   zöld volt (H4/H6 fixek #48/#49 rebase-elve a munkapéldányba, tiszta
-   rebase).** Az orchestrátor a §1.1 parancsot futtatta, de a Bash-eszköz
-   időkorlátja (alapértelmezett 120000 ms, kemény plafon 600000 ms) rövidebb,
-   mint egyetlen `model-router.py run` hívás ezen a boxon — az első két
-   hívást a Bash-eszköz SIGTERM-mel ölte meg, jelzés nélkül, mielőtt a router
-   jelezhetett volna. A HARMADIK (10 perces) hívás a megszakított `M3_CALL_2`
-   fázisból tért vissza: a router megszakítás-kezelése
-   (`tools/ai_router/router.py:581-604` körül) a csonka kísérletet
-   **elfogyasztja** (szintetikus `code_failure`), nem ismétli — az M3-keret
-   (2/2) így valódi próba nélkül merült ki egy kísérleten, a kötelező,
-   TELJES Terra-hívás pedig önmagában, tisztán üres diffet adott (`FINAL_GATE:
-   "Terra call produced no scoped changes"`). Eredmény: `STOPPED`, a task
-   kerete (2/2 M3 + 1/1 Terra) kimerült, a munkapéldány diffje üres — a
+0. **AZONNALI: E02-R21 HALT (H4), az önjavító körre vár — az ÖTÖDIK halt-kör
+   ugyanezen a task-on, de az ELSŐ, ahol a router állapotgépe hibátlanul,
+   megszakítás nélkül futott végig** (mind az öt korábbi router-infra fix —
+   #46/#47/#48/#49/#50 — a munkapéldányban, `origin/main`-re, `f27651a`-ra
+   rebase-elve). `python3 tools/model-router.py run` 2 M3-kísérletet + 1
+   Terra-hívást futtatott le, mindhárom próbán `round-gate.sh` **pass**-szal,
+   de **egyik modellhívás sem hozott létre egyetlen scope-on belüli
+   fájlváltozást sem** (`scoped_changed_paths=[]` mindhárom próbán). Mért
+   gyökérok: `tools/ai_router/execution.py:100-101` (`build_codex_argv`) a
+   valódi (nem-smoke) Codex-hívásra `--sandbox workspace-write`-ot ad át,
+   ami `bwrap`-alapú hálózati-namespace-izolációt igényel Linuxon — ez a
+   konténer nem tud hálózati namespace-t létrehozni, router-független módon
+   reprodukálva (`bwrap --unshare-net --dev-bind / / true` → `bwrap:
+   loopback: Failed RTM_NEWADDR: Operation not permitted`, állandó, nem
+   tranziens képesség-hiány). A pontos induló promptot közvetlenül elküldve
+   az M3 profilnak (`--sandbox read-only`, mellékhatás nélkül), a modell
+   **helyesen megtagadta** a feladatot ahelyett, hogy fabrikált volna,
+   pontos diagnózist adva a bwrap-hibáról. A `smoke` parancs ezt nem fedi
+   fel (`--sandbox read-only` + egy `exec_command`-ot sosem igénylő
+   triviális prompt — strukturálisan vak erre a hibaosztályra). A **létező**
+   `tools/codex-round.sh:31` már `-s danger-full-access`-t használ pontosan
+   emiatt; a router saját Codex-hívása ezt a már ismert box-tényt sosem
+   vette át. Eredmény: `STOPPED`, a task kerete (2/2 M3 + 1/1 Terra)
+   kimerült valódi tartalmi ok nélkül, a munkapéldány diffje üres — a
    Practice V2 production-drótozása (a kör célja) **még mindig el sem
-   kezdődött**. Egy MÁSODIK, független hiba is mérve: `tools/codex-signal.sh`
-   a hívó folyamat öröklött cwd-jéből oldja fel a repo-gyökeret, nem a
-   munkapéldányból — a dokumentált (cd nélküli) orchestrátor-hívási minta
-   mellett ez szisztematikusan rossz `branch=`/`head=`/`dirty_files=` mezőket
-   ír a `.pipeline/router-status` mirror-ba (mérve: `branch=main
-   head=a81838e` a tényleges `codex/e02-r21-practice-production-wiring`@
-   `deb4c9a` helyett), meghiúsítva a §3 kötelező ellenőrzéseket az `auto`
-   úton. Teljes mérés + reprodukció + javítási javaslat: `docs/LESSONS.md`
-   L42. A kör brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`)
-   kész és változatlan — nincs teendő rajta. **Az önjavító körnek el kell
-   döntenie**, hogy (a) a router megszakítás-kezelését kell-e retry-ra
-   módosítani, és/vagy (b) a `codex-signal.sh` cwd-függését kell javítani,
-   mielőtt a task-ot újra resetelik és futtatják — a `reset --task-id
-   E02-R21` a H6-fix (#49) óta korrekt, ez **nem** az ok.
+   kezdődött**. Teljes mérés + reprodukció + javítási javaslat:
+   [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
+   "Update 4" szakasz, a `codex/e02-r21-practice-production-wiring` ágon
+   (`c1579f4`); tanulság: `docs/LESSONS.md` L43. A kör brief-je és ADR-je
+   (`docs/adr/0111-practice-production-wiring.md`) kész és változatlan —
+   nincs teendő rajta. **Az önjavító kör feladata:** `tools/ai_router/
+   execution.py`-ban a `build_codex_argv` sandbox-argumentumát
+   `danger-full-access`-ra cserélni (mindkét profilra), kötelező
+   regressziós teszttel, opcionálisan a `smoke` parancsot egy valódi
+   `exec_command`-próbával kiegészíteni, majd `reset --task-id E02-R21`-gyel
+   felszabadítani a kimerült M3+Terra keretet, mielőtt a lánc újra `run`-t
+   próbál.
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
