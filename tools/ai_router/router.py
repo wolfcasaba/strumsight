@@ -280,7 +280,7 @@ class DevelopmentRouter:
         allowed = "\n".join(f"- {path}" for path in brief.metadata.allowed_paths)
         return (
             "Implement exactly one committed round brief in this worktree.\n"
-            "Do not push, open a PR, widen scope, edit router/pipeline policy, or weaken tests.\n"
+            "Do not commit, push, open a PR, widen scope, edit router/pipeline policy, or weaken tests.\n"
             "Use test-driven development and make the smallest complete change.\n"
             "Only these paths may change:\n"
             f"{allowed}\n\n"
@@ -293,6 +293,7 @@ class DevelopmentRouter:
         evidence = findings or gate.log
         return (
             "Repair the current implementation once. Keep the original brief and allowed paths unchanged.\n"
+            "Do not commit or push; the orchestrator owns the Git boundary.\n"
             "Diagnose the concrete failure, apply the minimal fix, and do not perform adjacent refactors.\n\n"
             "<repair-evidence>\n"
             f"{redact_text(evidence)[-16000:]}\n"
@@ -461,8 +462,8 @@ class DevelopmentRouter:
 
             previous_gate = GateRun("code_failure", "review", 1, None, review_findings)
             phase = str(state.get("phase", ""))
-            if phase.startswith("M3_ATTEMPT_"):
-                _, decision = self._scope_or_finish(
+            if phase.startswith(("M3_ATTEMPT_", "M3_CALL_")):
+                audit, decision = self._scope_or_finish(
                     brief=brief,
                     worktree=worktree,
                     manifest=manifest,
@@ -476,7 +477,7 @@ class DevelopmentRouter:
                 )
                 self._record_gate(state, f"RECOVERED_{phase}", recovered)
                 self.state.save_task(brief.task_id, state)
-                if recovered.outcome == "pass":
+                if recovered.outcome == "pass" and audit is not None and audit.changed_paths:
                     if brief.metadata.risk == "high":
                         return self._terra(
                             brief=brief,
@@ -489,6 +490,14 @@ class DevelopmentRouter:
                         )
                     return self._finish(
                         state, RouterStatus.READY_FOR_REVIEW, "recovered gate passed", result_path
+                    )
+                if recovered.outcome == "pass":
+                    recovered = GateRun(
+                        "code_failure",
+                        "interrupted model produced no scoped changes",
+                        1,
+                        None,
+                        "No scoped changes were present after the interrupted model call.",
                     )
                 previous_gate = recovered
             elif phase == "TERRA_CALL":
