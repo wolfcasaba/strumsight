@@ -1239,3 +1239,49 @@ utólagos kivétel (itt: generated_ignored) NEM terjed automatikusan a
 másikra — expliciten vezesd át mindkettőre, vagy külön mezőbe válaszd
 szét, ahogy itt a `scoped_changed_paths`. A `reset --task-id` csak EZUTÁN
 futott (`.pipeline` HALT protokoll §6).
+
+## L40 — A Terra FINAL_GATE ág ugyanazt a "zöld gate ≠ történt munka" hibát ismételte, mint L38, csak egy másik útvonalon
+
+**Mit mértünk (2026-08-01, E02-R21, H4 halt, önjavító kör).**
+A `.pipeline/HALTED` szerint a teljes M3+Terra keret (2/2 M3-kísérlet +
+1/1 Terra-hívás) kimerült valós diff nélkül (`changed_paths=[]`,
+`last_diff_hash` üres string SHA-256), a router mégis
+`READY_FOR_REVIEW`-t jelzett. Az L39 (H6) fixje bevezette
+`ScopeAudit.scoped_changed_paths`-t, és az M3-hurok (`router.py` `run()`,
+a `current_gate.outcome == "pass"` ág, kb. 709. sor) ezt helyesen
+ellenőrzi a `READY_FOR_REVIEW` visszaadása előtt (`NO_CHANGE_<n>` gate-be
+fordítja, ha üres). A Terra-ág (`_terra()` FINAL_GATE, `router.py:429`
+körül) és a `TERRA_REVIEW_OR_FIX` resume-ág (`run()`, `router.py:639`
+körül) ugyanezt az ellenőrzést KIHAGYTA — a `final_gate.outcome == "pass"`
+önmagában elég volt a `READY_FOR_REVIEW`-hoz. A két ág az M3-hurokéval
+azonos szerkezetű `audit` objektumot már számolta (`_scope_or_finish`
+visszaadja), csak nem használta fel a döntésben.
+
+**A javítás** (`tools/ai_router/router.py`, izolált worktree
+`heal/E02-R21-H4-1`): új `DevelopmentRouter._terra_final_gate(gate, audit)`
+statikus segédmetódus — ha a gate "pass", de `audit.scoped_changed_paths`
+üres, a gate-et `code_failure`-ra fordítja (`"Terra call produced no
+scoped changes"`), ugyanabba a mintába, mint az M3-hurok NO_CHANGE ága.
+Mindkét hívási hely (`_terra()` FINAL_GATE, `run()` TERRA_REVIEW_OR_FIX
+resume) most ezen a segéden megy át a `final_gate.outcome == "pass"`
+elágazás előtt.
+
+**Regressziós teszt, mérten RED→GREEN** (a fix ELŐTT lefuttatva, majd a
+fix UTÁN):
+`tools/tests/test_router.py::RouterTest::test_terra_final_gate_pass_with_no_scoped_changes_is_not_ready_for_review`
+(a friss `_terra()` hívást fedi) és
+`tools/tests/test_router_resume.py::RouterResumeTest::test_resumed_terra_review_or_fix_with_no_scoped_changes_is_not_ready_for_review`
+(a `TERRA_REVIEW_OR_FIX` resume-ágat fedi, kézzel felvett `terra_reservation`
++ `TERRA_REVIEW_OR_FIX` fázisú task-state-tel). Fix előtt mindkettő
+`READY_FOR_REVIEW`-t adott vissza `changed_paths=()` mellett — pontosan a
+HALT jelentés tünete. Fix után mindkettő `STOPPED`-et ad. Teljes
+`tools/tests` (104 teszt, 33 subtest): zöld.
+
+**Hogyan alkalmazd.** Ha egy ellenőrzést (itt: "van-e valódi scope-on
+belüli diff") egy ágban bevezetsz, keress meg MINDEN másik ágat, ami
+ugyanahhoz a végállapothoz (`READY_FOR_REVIEW`) vezet, és ellenőrizd, hogy
+azok is átmennek-e rajta — az L39 fixje csak az M3-hurkot fedte, a
+strukturálisan azonos Terra FINAL_GATE és a resume-duplikátuma kimaradt.
+Külön regressziós teszt kell minden útvonalhoz, nem csak egyhez, mert a
+resume-ág gyakran kézzel felvett task-state-tel tesztelhető csak (nincs
+valódi interrupt-mechanizmus a szinkron `router.run()`-ban).

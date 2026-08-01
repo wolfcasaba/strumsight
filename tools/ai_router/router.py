@@ -216,6 +216,22 @@ class DevelopmentRouter:
         return self._finish(state, status, terminal_reason, result_path)
 
     @staticmethod
+    def _terra_final_gate(gate: GateRun, audit: ScopeAudit | None) -> GateRun:
+        # Ugyanaz az őr, mint az M3-hurok NO_CHANGE_* ága (lásd
+        # `scoped_changed_paths` a `run()`-ban): egy zöld gate önmagában NEM
+        # elég a READY_FOR_REVIEW-hoz, ha a Terra-hívás nem hagyott valódi,
+        # hatókörön belüli diffet (E02-R21, H4 halt).
+        if gate.outcome == "pass" and audit is not None and not audit.scoped_changed_paths:
+            return GateRun(
+                "code_failure",
+                "Terra call produced no scoped changes",
+                1,
+                None,
+                "Terra returned successfully but produced no scoped changes.",
+            )
+        return gate
+
+    @staticmethod
     def _record_gate(state: dict[str, object], phase: str, gate: GateRun) -> None:
         history = state.setdefault("gate_history", [])
         if not isinstance(history, list):
@@ -424,6 +440,7 @@ class DevelopmentRouter:
         if decision is not None:
             return decision
         final_gate = self.run_gate(worktree, brief.metadata.gate_tests, brief.metadata.native_gate)
+        final_gate = self._terra_final_gate(final_gate, audit)
         self._record_gate(state, "FINAL_GATE", final_gate)
         self.state.save_task(brief.task_id, state)
         if final_gate.outcome == "pass":
@@ -622,7 +639,7 @@ class DevelopmentRouter:
                     result_path,
                 )
             elif phase == "TERRA_REVIEW_OR_FIX":
-                _, decision = self._scope_or_finish(
+                audit, decision = self._scope_or_finish(
                     brief=brief,
                     worktree=worktree,
                     manifest=manifest,
@@ -635,6 +652,7 @@ class DevelopmentRouter:
                 final_gate = self.run_gate(
                     worktree, brief.metadata.gate_tests, brief.metadata.native_gate
                 )
+                final_gate = self._terra_final_gate(final_gate, audit)
                 self._record_gate(state, "RECOVERED_FINAL_GATE", final_gate)
                 if final_gate.outcome == "pass":
                     return self._finish_terra(
