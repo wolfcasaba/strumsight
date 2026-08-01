@@ -1,6 +1,6 @@
 # E02-R16 — Rhythm-only és Free Practice mód
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight 2026-08-01, kód mérve: `main` @ `e6a5f22`; ADR 0082 megírva)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 16"** (+ §7.4, §7.5, §20.4, §20.5)
 - **Branch:** `codex/e02-r16-rhythm-and-free-practice`
 - **Előfeltétel:** **E02-R14 merge-ölve** (közös highway); az R15 nem előfeltétel.
