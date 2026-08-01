@@ -271,3 +271,127 @@ nélkül is). Az A1–A7 egyike sem teljesült, a Practice V2 production-drótoz
    közös helyen (`_finish`/`_finish_terra` előtt, minden READY_FOR_REVIEW
    visszatérési útra) elhelyezett egyetlen véd-pontot ahelyett, hogy minden
    egyes ágba külön-külön kerülne be ugyanaz az ellenőrzés.
+
+## Update 3 — a self-heal (#48, H4 fix) UTÁNI friss `run` DEFERRED-be futott, HARMADIK, a ledger-perzisztencia hibájából (2026-08-01 21:00)
+
+A H4 javítás (`ec81ef8`, PR #48, `_terra()` FINAL_GATE + `TERRA_REVIEW_OR_FIX`
+resume-ág `audit.scoped_changed_paths` őrrel) zöld `Router CI`-vel landolt
+`main`-en. Ez a session (Pipeline E02-R21, harmadik önjavítás utáni friss
+futás) a branchet rebase-elte `origin/main`-re
+(`7bdc175`, tartalmazza `ec81ef8`-at), majd:
+
+```bash
+python3 tools/model-router.py reset --task-id E02-R21
+# → {"schema_version": 1, "status": "NOT_STARTED", "task_id": "E02-R21"}
+```
+
+utána friss `run`-t indított. **Mérve, mi történt:**
+
+```
+BASELINE_GATE            pass
+GATE_1                   pass
+NO_CHANGE_1               code_failure  "model produced no scoped changes"
+RECOVERED_M3_CALL_2      pass   (m3_attempts kimerítve, 2/2)
+→ Terra hívás szükséges → DEFERRED "task Terra budget is exhausted"
+```
+
+Végállapot: `status=DEFERRED`, `phase=DEFERRED`, `reason="task Terra budget is
+exhausted"`, `m3_attempts=2`, `terra_calls=0` (a task saját `state.json`
+számlálója **soha nem jutott el** a Terra hívásig — a `reserve_terra()` a
+hívás ELŐTT dobja a hibát).
+
+**Orchestrátor önkezű audit** (§3 kötelező ellenőrzés):
+
+```bash
+cd /home/ubuntu/ss-auto-e02-r21
+git status --short && git diff HEAD --stat   # mindkettő üres — nincs valódi diff, ahogy a router is jelezte (helyesen, ezúttal)
+```
+
+### Gyökérok (mért, nem feltételezett) — HARMADIK, a H4/H6-tól különböző router-hiba
+
+`reset --task-id` (`tools/model-router.py:252-256` → `StateStore.reset_task`,
+`tools/ai_router/state.py:131-144`) **kizárólag** a
+`~/.local/state/strumsight-ai-router/tasks/<task-id>.json` fájlt törli. A
+docstring explicit ígéretet tesz: *"Clear a persisted task state so the next
+`run` re-prechecks from scratch. […] a stuck terminal state […] can always be
+cleared."* — ez az ígéret **nem teljesül** a Terra-kvótára.
+
+A Terra-hívás foglalása (`StateStore.reserve_terra`,
+`tools/ai_router/state.py:167-203`) egy **külön, nem törölt** perzisztens
+naplóból (`~/.local/state/strumsight-ai-router/terra-ledger.json`) dönt:
+
+```python
+daily_count = sum(1 for row in reservations
+                   if row.get("utc_day") == day and row.get("status") in active)   # NAP-hoz kötött
+task_count = sum(1 for row in reservations
+                  if row.get("task_id") == task_id and row.get("status") in active) # ÖRÖKRE, nap nélkül!
+...
+if daily_count >= daily_limit:
+    raise TerraBudgetError("automatic Terra daily budget is exhausted")
+if task_count >= task_limit:                # <-- itt: task_limit=1 (config.py:105 kikényszerítve)
+    raise TerraBudgetError("task Terra budget is exhausted")
+```
+
+A `daily_count` szűr `utc_day`-re, a `task_count` **nem** — a
+`terra-ledger.json`-ban az E02-R21 taskhoz a **mai H4-előtti** futásból egy
+`"status": "finished"` bejegyzés maradt (`reservation_id=6ef544b9…`,
+`reserved_at=2026-08-01T20:24:01Z`). Mivel `max_terra_calls_per_task=1`
+(`config.py:105-106`, kényszerített invariáns), ez az egyetlen, réges-régi
+bejegyzés **örökre** kimeríti az E02-R21 task Terra-kvótáját — a
+`reset --task-id` a `tasks/E02-R21.json`-t törli, de a
+`terra-ledger.json` sorait NEM, ezért a "fresh start" ígéret hamis, amint a
+taskhoz valaha is történt egyetlen Terra-foglalás.
+
+**Reprodukáló parancs** (a jelen munkapéldányban):
+
+```bash
+python3 -c "
+import json
+d = json.load(open('/home/ubuntu/.local/state/strumsight-ai-router/terra-ledger.json'))
+print([r for r in d['reservations'] if r['task_id'] == 'E02-R21'])
+"
+# → egy 'finished' bejegyzés a mai napról, a H4-fix ELŐTTI futásból
+python3 tools/model-router.py reset --task-id E02-R21   # "sikeres" reset
+# ... friss run() 2 M3-kísérlet után Terra-hívást próbál:
+# reserve_terra() -> task_count(1) >= task_limit(1) -> TerraBudgetError("task Terra budget is exhausted")
+# -> DEFERRED, exit 30, .pipeline/router-status: status=blocked reason="task Terra budget is exhausted"
+```
+
+**Javítás javasolt helye (kettő közül egy, az önjavító kör választ):**
+1. `tools/ai_router/state.py:184-188` — a `task_count` szűrőjéhez vegye fel a
+   `daily_count`-tal azonos `row.get("utc_day") == day` feltételt, ha a
+   szándék "1 Terra-hívás/task/nap" (konzisztens a `max_automatic_terra_calls_per_utc_day`
+   napi-kvóta névvel és a `daily_count` mintájával); VAGY
+2. `tools/ai_router/state.py:131-144` (`reset_task`) — a task-state törlésével
+   egyidejűleg (ugyanabban a `_ledger_lock()`-ban) jelölje archívnak/távolítsa
+   el a `terra-ledger.json` adott `task_id`-hez tartozó sorait, hogy a
+   docstring "re-prechecks from scratch" ígérete a Terra-kvótára is
+   teljesüljön.
+   Kötelező regressziós teszt mindkét esetre (`tools/tests/test_router*.py`
+   mintájára): `reset --task-id` UTÁN egy korábban Terra-t felhasznált task
+   ismét tudjon Terra-t foglalni (1. javításnál csak másnap / eltérő
+   `utc_day`-jel, 2. javításnál azonnal).
+
+### Döntés
+
+Ez router-infrastruktúra hiba (`tools/ai_router/state.py`), a jelen kör
+engedélyezett-fájllistáján (`docs/rounds/e02-r21-practice-production-wiring.md`
+§4) kívül — az orchestrátor ezt nem javíthatja (H3 tilos zóna). A DEFERRED
+állapot a strukturált leképezés szerint (orchestrátor-prompt §1.1) `blocked`
+kör-jelzés, HALT — de a kvóta **nem** fog "magától" helyreállni, mert a
+`task_count` szűrő nem nap-alapú: a self-heal javítása nélkül az E02-R21 task
+Terra-kvótája **véglegesen** kimerült marad, függetlenül attól, hány `reset`
+történik. A Practice V2 production-drótozás (a kör tényleges célja)
+**továbbra sincs elkezdve** — ez a HARMADIK önjavító kör ugyanezen a taskon,
+mindhárom alkalommal router-infrastruktúra hibával, nem a briefben vagy az
+implementáció tartalmában.
+
+**HALT — H6** (a router `DEFERRED` eredménye a strukturált leképezés szerint
+`blocked` kör-jelzés). Az önjavító kör feladata:
+1. A fenti két javítási lehetőség egyike `tools/ai_router/state.py`-ban,
+   kötelező regressziós teszttel.
+2. A `terra-ledger.json` jelen E02-R21 sorának kezelése a javítás
+   természetétől függően (1. javításnál nem kell bántani, másnap magától
+   elévül; 2. javításnál a `reset --task-id E02-R21` újrafuttatása törli).
+3. A brief/ADR pre-flight változatlanul kész (`4eb331f`/`ec81ef8` utáni
+   rebase, `7bdc175`) — nem kell újraírni.
