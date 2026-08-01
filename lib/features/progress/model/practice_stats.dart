@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'practice_entry.dart';
+import '../../practice/public.dart';
 
 /// One day's rolled-up practice, used by the weekly chart.
 @immutable
@@ -29,6 +30,37 @@ class DayTotal {
 @immutable
 class PracticeStats {
   const PracticeStats(this.entries);
+
+  /// Factory that unions V1 (`PracticeEntry`) and V2 (`AggregatedPracticeEntry`)
+  /// into the same rollup surface (ADR 0085 Döntés 1, brief A1–A3). V1 alone
+  /// still works through the default constructor — no behavioural break.
+  factory PracticeStats.aggregated(
+    List<AggregatedPracticeEntry> aggregatedEntries,
+  ) {
+    return PracticeStats.fromAggregated(aggregatedEntries);
+  }
+
+  /// Equivalent of [PracticeStats.aggregated] but exposed with the canonical
+  /// name used by screen test overrides.
+  static PracticeStats fromAggregated(
+    List<AggregatedPracticeEntry> aggregatedEntries,
+  ) {
+    final entries = <PracticeEntry>[
+      for (final a in aggregatedEntries)
+        PracticeEntry(
+          day: a.day,
+          source: a.source,
+          seconds: a.seconds,
+          strokes: a.strokes,
+          chords: 0,
+          directionAccuracy: switch (a.direction) {
+            MetricAvailable(:final value) => value,
+            _ => null,
+          },
+        ),
+    ];
+    return PracticeStats(entries);
+  }
 
   final List<PracticeEntry> entries;
 
