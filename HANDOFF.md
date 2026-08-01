@@ -4,6 +4,24 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — a self-heal (#46/#47) UTÁNI friss `run` is HALT-ba
+> futott, ÚJ, a H6-tól ELTÉRŐ router-hibával: H4.** A teljes M3+Terra keret
+> (2/2 M3-kísérlet + 1/1 Terra-hívás) kimerült **valódi diff nélkül**
+> (`changed_paths=[]`, `last_diff_hash` = üres string SHA-256), a router
+> mégis `READY_FOR_REVIEW`-t jelzett. Mért gyökérok: `_terra()` FINAL_GATE ága
+> (`tools/ai_router/router.py:426-432`) és a `TERRA_REVIEW_OR_FIX` resume-ág
+> (`router.py:635-648`) **nem ellenőrzi** `audit.scoped_changed_paths`-t a
+> `READY_FOR_REVIEW` visszaadása előtt — szemben az M3-kísérleti ág
+> 709-721. sorában lévő azonos célú őrrel, amely EZT a hibát helyesen
+> elkerülte (`NO_CHANGE_1` cella a gate-historyban, nem regresszió). Teljes
+> mérés + javítási javaslat + reprodukáló parancs:
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md) "Update 2"
+> szakasz, a `codex/e02-r21-practice-production-wiring` ágon (`3550e34`).
+> **A Practice V2 production drótozás (a kör tényleges célja) MÉG MINDIG el
+> sem kezdődött** — ez már a MÁSODIK önjavító kör lesz ugyanezen a task-on,
+> mindkét alkalommal a router-infrastruktúra hibájával, nem a briefben vagy
+> az implementáció tartalmában.**
+> Előző kör: 2026-08-01
 > (GOV-03 / ADR 0112 önjavító kör, H6 4. előfordulás, ugyanaz az E02-R21 kör —
 > az L38-ban diagnosztizált KÉT `tools/ai_router` hiba (a "csinált-e valamit
 > az M3" döntés ugyanazt a `changed_paths` halmazt használta, mint a
@@ -20,7 +38,6 @@
 > firing-en friss `run`-t indít. Tanulság: `docs/LESSONS.md` L39 (L38 zárása).
 > **A Practice V2 production drótozás (a kör tényleges célja) ÉRINTETLEN —
 > ez a kör kizárólag a router-infrastruktúrát javította.**).**
-> Előző kör: 2026-08-01
 > (GOV-03 / ADR 0112 önjavító kör, H6 3. előfordulás — a fenti két hiba
 > DIAGNOSZTIZÁLVA (`docs/LESSONS.md` L38, `docs/reviews/e02-r21-review.md` a
 > `codex/e02-r21-practice-production-wiring` ágon, `16b8d88`), a router-task
@@ -304,16 +321,20 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár.** A router két új
-   hibáját (téves `READY_FOR_REVIEW` valódi diff nélkül + a `resume`
-   önmagával ütköző scope-audit-ja — teljes gyökérok:
-   `docs/reviews/e02-r21-review.md` a `codex/e02-r21-practice-production-wiring`
-   ágon, `16b8d88`; tanulság `docs/LESSONS.md` L38) a `tools/ai_router`-ban
-   kell javítani, kötelező regressziós teszttel, MIELŐTT a
-   `model-router.py reset --task-id E02-R21` bármit is feloldana. A kör
+0. **AZONNALI: E02-R21 HALT (H4), az önjavító körre vár — a MÁSODIK önjavító
+   kör ugyanezen a task-on.** A self-heal (#46/#47) a H6-ot javította, a
+   task-state friss `run`-nal indult — de a Terra-ág (`_terra()` FINAL_GATE,
+   `router.py:426-432`, és a `TERRA_REVIEW_OR_FIX` resume-ág,
+   `router.py:635-648`) **nem ellenőrzi** `audit.scoped_changed_paths`-t a
+   `READY_FOR_REVIEW` visszaadása előtt (szemben az M3-ág 709-721. sorával),
+   ezért a teljes M3+Terra keret (2/2+1/1) kimerült úgy, hogy a router
+   `READY_FOR_REVIEW`-t jelzett **valódi diff nélkül**
+   (`changed_paths=[]`). Teljes gyökérok + javítási hely + reprodukáló
+   parancs: `docs/reviews/e02-r21-review.md` "Update 2" szakasz a
+   `codex/e02-r21-practice-production-wiring` ágon (`3550e34`). A kör
    brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`) kész és
    változatlan — a Practice V2 tényleges production-drótozása (a kör célja)
-   **még el sem kezdődött**, egy sor implementáció sem készült.
+   **még mindig el sem kezdődött**, egy sor implementáció sem készült.
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
