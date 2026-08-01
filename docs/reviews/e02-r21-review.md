@@ -506,3 +506,122 @@ Codex-hívása nem vett át. A Practice V2 production-drótozás (a kör tényle
 célja) **továbbra sincs elkezdve** — a munkapéldány `git diff HEAD` üres.
 Reprodukálva, mérve, a javítás pontos helyével — a self-heal kör bemenete
 kész.
+
+## Update 5 — a H4-sandbox-fix (#51) UTÁNI első ÉLES `run` valódi diffet termelt, de STOPPED-be futott GATE-KUDARCCAL, NEM infra-hibával (2026-08-01 23:25)
+
+**Ez az első alkalom ezen a task-on, hogy a teljes lánc — sandbox, router
+állapotgép, megszakítás-kezelés — mérve hibátlanul működött.** A munkapéldány
+(`ss-auto-e02-r21`) `origin/main`-re rebase-elve (`294a008`, tartalmazza a
+H4-sandbox-fixet, PR #51). `python3 tools/model-router.py status --task-id
+E02-R21` → `NOT_STARTED`. Az orchestrátor a §1.1 szerinti
+`tools/ai-router-round.sh run` hívást futtatta, **szigorúan előtérben**,
+ahogy a pipeline-prompt §0.1 előírja.
+
+**A hívás a Bash-eszköz 600s kemény plafonja miatt kétszer SIGTERM-mel
+megszakadt, mielőtt a harmadik hívás lezárult** — mindkét megszakítást a
+router H6-fix (#50) utáni logikája **helyesen** kezelte:
+
+1. 1. hívás (10 perc): megszakadt `M3_CALL_1` közben, a munkapéldány
+   `git status` üres → a router (helyesen) NEM fogyasztotta el a próbát
+   (`m3_attempts` maradt 0, `phase` visszaállt `M3_READY`-re,
+   `tools/ai_router/router.py:597-613`).
+2. 2. hívás (10 perc): megszakadt `M3_CALL_1` közben, de ezúttal a modell
+   MÁR valódi, hatókörön belüli diffet hagyott a munkapéldányban
+   (`practice_session_providers.dart` módosítva + két új fájl) — a router
+   megszakítás-kezelése ezt helyesen ismerte fel
+   (`audit.scoped_changed_paths` nem üres), ezért a KÖVETKEZŐ hívás NEM a
+   modellt hívta újra, hanem a gate-et futtatta a meglévő diffen
+   (`router.py:614-619`).
+3. 3. hívás (10 percen belül lezajlott): a router lefuttatta a teljes
+   állapotgépet a meglévő diffen, majd — mivel a gate pirosat adott — a teljes
+   keretet felhasználta:
+   - `RECOVERED_M3_CALL_1`: gate `code_failure`, `failed_step=format`.
+   - `M3_CALL_2` (friss, nem megszakított próba): gate `code_failure`,
+     `failed_step=analyze` (`GATE_2` fázisnév a gate_historyban).
+   - Terra-eszkaláció (`terra_calls=1`): gate `code_failure`,
+     `failed_step=test test/features/practice` (`FINAL_GATE`).
+   - `STOPPED`, `reason="final gate failed: code_failure"`.
+
+### Gyökérok — amennyire a router szándékos redakciója engedi mérni
+
+A router **tervezetten** nem tárolja a gate-hiba teljes szövegét — csak a
+kategóriát (`code_failure`), a bukott lépés nevét és egy SHA-256 hash-t
+(`_record_gate`, `tools/ai_router/router.py:245`,
+`"error_hash": gate.error_hash`). A `.ai/runs/E02-R21/router-result.std{out,err}.log`
+is csak a router saját JSON-válaszát tartalmazza, nem a `round-gate.sh` nyers
+kimenetét (a pipeline-prompt maga mondja ki: „A `.ai/runs` csak redaktált, nem
+hiteles munkapéldány-mirror"). **Ez NEM hiba, hanem szándékos redakció** — de
+azt jelenti, hogy ez az orchestrátor-session nem tudja file:sor szinten
+megmondani, PONTOSAN mit rontott el a modell a `format`/`analyze`/`test`
+lépéseken.
+
+**Amit a munkapéldány jelenlegi állapotából MÉGIS mérni lehetett** (a router
+sikertelen próba után visszaállítja a KÖVETKEZŐ próba előtt a manifesthez
+tartozó fájlokat, de az ÚJ, sosem committolt fájlokat nem törli — ezek
+túlélték az utolsó próbát):
+
+- `git status` ma **két** elárvult, committolatlan új fájlt mutat:
+  `lib/features/practice/data/practice_observation_gateway_provider.dart`
+  (71 sor) és
+  `test/features/practice/application/practice_production_wiring_test.dart`
+  (190 sor) — mindkettő **koherens, teljes, a brief §4/§6-nak megfelelő**
+  tartalommal (a teszt pontosan az A5 acceptance criteria-t implementálja, a
+  gateway provider a §2 réteg-split indoklását idézi kommentben).
+- **A három tervezett wiring-célfájl
+  (`practice_session_providers.dart`, `practice_setup_controller.dart`,
+  `practice_effect_listener.dart`) ma bitre a baseline-on áll**
+  (`git diff HEAD` üres mindháromra;
+  `practiceSessionHostProvider = Provider<PracticeSessionHost?>((_) => null)`
+  változatlanul a 64. soron). **Ez pontosan megmagyarázza a mért
+  `FINAL_GATE`/`test test/features/practice` kudarcot**: az új A5-teszt
+  `expect(host, isNotNull)`-t vár a `practicePrepareSinkProvider` hívása után
+  (`practice_production_wiring_test.dart:130-133`), de a host-provider
+  ma is `null`-t ad vissza — a teszt a jelenlegi (baseline) kóddal
+  **determinisztikusan bukik**, függetlenül attól, hogy melyik próba írta.
+- Ebből mérve: **egyik túlélő próba sem végezte el a kör tényleges magját**
+  (A1 controller-family + A2 host/sink bekötés + A3 recorder-metaadat) — csak
+  az ÚJ fájlokat (A4 gateway provider, A5 teszt) hozták létre. Hogy ez azért
+  van-e, mert a modell(ek) a meglévő fájlok szerkesztése előtt elfogytak az
+  időből/lépésekből, vagy mert a réteg-tisztasági kényszer (§2/§8 kockázat)
+  eltérítette a próbákat, a redakció miatt **nem dönthető el biztosan** — de
+  a mintázat (mindhárom próba az ÚJ fájlokig jut, egyik sem éri el a MEGLÉVŐ
+  fájlok szerkesztését) konzisztens egy olyan hibaosztállyal, ahol a modell a
+  brief §7 implementációs sorrendjét (A5 teszt ELŐSZÖR, utána A4, A1, A2, A3)
+  követi, de minden próba a sorrend elején (A4/A5 után) elakad, mielőtt A1-hez
+  érne.
+
+### Reprodukció / a javítás bemenete
+
+A `E02-R21` router-feladat kerete (2/2 M3 + 1/1 Terra) **kimerült** — az
+`auto` úton ez a session **nem indíthat újabb modellhívást** (pipeline-prompt
+§2: „STOPPED után H4/H6 HALT", „a router... task-keretét nem kerülheted
+meg"). Két lehetséges következő lépés (egyiket sem hajtottam végre, mindkettő
+modellhívást igényel):
+
+1. **Router-reset + friss `run`** — `python3 tools/model-router.py reset
+   --task-id E02-R21`, majd a §1.1 hívás megismétlése: friss 2+1 keretet nyit;
+   ha a fenti mintázat (A4/A5 után elakadás) valódi, ismétlődhet.
+2. **Explicit `codex`/`minimax` motor** ugyanerre a briefre
+   (`tools/codex-round.sh` / `tools/mm-round.sh`) — ezek a TELJES, NEM
+   redaktált logot `/tmp/codex-<kör>.log`-ba írják, ami tényleges
+   diagnosztikát adna arról, mit rontott el a modell a format/analyze/test
+   lépéseken, és hogy a fenti „elakad A4/A5 után" mintázat valódi-e.
+
+A két leftover fájl (gateway provider + A5 teszt) a munkapéldányban
+**szándékosan érintetlenül maradt** — nem commitoltam és nem töröltem őket,
+mert bizonyítékot hordoznak a következő (self-heal vagy user) session
+számára.
+
+### Döntés
+
+**HALT — H4** (`auto` engine, a router `STOPPED`-et jelzett, §1.1 táblázat
+szerint `stopped` kör-jelzés → azonnali HALT, további modellhívás tilos). Ez
+a HATODIK halt/önjavító kör ugyanezen a taskon, de az ELSŐ, ahol a router
+teljes infrastruktúrája (sandbox, állapotgép, megszakítás-kezelés) mérve
+**hibátlan** — a STOPPED valódi, tartalmi gate-kudarcból jön. A worktree
+állapotából mérve: mindhárom próba (M3×2 + Terra×1) létrehozta az A4/A5 ÚJ
+fájlokat, de egyik sem jutott el a MEGLÉVŐ három fájl (A1/A2/A3) tényleges
+szerkesztéséig — ez a kör tényleges célja **továbbra sincs elkezdve** a
+production-kódban. Nem `tools/`-hiba, nem sandbox-hiba: ez tartalmi kör-
+nehézség, amit a self-heal döntsön el (retry azonos brieffel, vagy a brief
+§7 sorrendjének/mérethatárának felülvizsgálata egy emberi/normatív döntéssel).
