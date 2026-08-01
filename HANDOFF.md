@@ -4,6 +4,37 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (önjavító kör, E02-R21 H4 — HETEDIK önjavító/halt kör ugyanazon a taskon —
+> a router repair/escalation promptja JAVÍTVA, PR #52, `813b826`.** Mért
+> gyökérok ([`docs/LESSONS.md` L44](docs/LESSONS.md)): a "Update 5" halt
+> (lásd lent) SZÖVEGE tartalmi gate-kudarcnak tűnt, de a saját mérés
+> (`docs/reviews/e02-r21-review.md` "Update 5") kimutatta, hogy mindhárom
+> független próba (2 M3 + 1 Terra) KIZÁRÓLAG a brief két ÚJ fájlját (A4/A5)
+> érintette — a router `_repair_prompt` (2. M3-próba) és
+> `build_escalation_packet` (Terra) SZÓ SZERINT "minimal fix, no adjacent
+> refactor / no widened scope"-ot mondott minden javító próbának, ami
+> szerkezetileg megtiltotta, hogy egy befejezetlen (nem hibás, csak
+> befejezetlen) 1. próba után a 2./3. próba a brief hátralévő, még
+> érintetlen `allowed_paths`-ait szerkessze. **Ez általános router-hiba, nem
+> E02-R21-specifikus** — bármely jövőbeli brief, ahol az 1. próba nem ér a
+> végére, ugyanide futna. **Javítás:** mindkét prompt-építő most a router
+> saját, perzisztált `state["changed_paths"]`-ából kiszámítja, mely
+> `allowed_paths` maradt érintetlenül, és a promptba explicit szakaszként +
+> egy carve-out mondattal kerül ("finishing the brief is not scope creep").
+> Kötelező regresszió, RED a javítás előtt / GREEN utána (stash-elt
+> production-diff-fel igazolva):
+> `test_router_hardening.py::test_m3_repair_prompt_tells_model_to_finish_untouched_allowed_paths`,
+> `test_packet.py::test_packet_names_allowed_paths_untouched_by_any_attempt`.
+> `python3 -m pytest tools/tests -q`: 109 passed, 33 subtests passed (107→109).
+> `router-ci.yml` zölden mind push-, mind workflow_dispatch-triggerrel, a
+> merge-elt SHA-n (`c14a7c6` → squash `813b826`). **Ez a javítás a router
+> prompt-építését korrigálja, NEM az E02-R21 task tartalmi munkáját** — a
+> kimerült task-state (`STOPPED`, 2/2 M3 + 1/1 Terra) továbbra is
+> `reset --task-id E02-R21`-re vár; a Practice V2 production-drótozás
+> (A1/A2/A3) még mindig el sem kezdődött. Ha a javított promptok mellett is
+> megismétlődik az "csak A4/A5" mintázat, az már a brief méretére/sorrendjére
+> mutat (Class B), nem a router promptjára.
+> Előző kör: 2026-08-01
 > (Pipeline E02-R21 — a H4-sandbox-fix (PR #51) UTÁNI első ÉLES `run` is HALT-ba
 > futott, de ez az ELSŐ E02-R21 kísérlet, ahol a router teljes infrastruktúrája
 > (sandbox, állapotgép, megszakítás-kezelés) mérve HIBÁTLANUL futott végig — a
@@ -536,23 +567,23 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 HATODIK halt, de ELSŐ tartalmi (nem infra) ok — H4,
-   a router STOPPED-et jelzett valódi gate-kudarcokkal (2026-08-01,
-   `docs/reviews/e02-r21-review.md` "Update 5").** A H4-sandbox-fix (PR #51)
-   után a router infrastruktúrája (sandbox, állapotgép, megszakítás-kezelés)
-   mérve hibátlanul futott — M3×2 + Terra×1 mind `code_failure`-t adott
-   (`format`/`analyze`/`test test/features/practice`), a router task-kerete
-   kimerült. Mérve: a két ÚJ fájl (A4 gateway provider, A5 teszt) túlélte,
-   koherens; a három MEGLÉVŐ wiring-célfájl (`practice_session_providers.dart`,
+0. **AZONNALI: E02-R21 — a router repair/escalation promptja JAVÍTVA (H4,
+   PR #52, `813b826`, 2026-08-01) — a task-state MAGA még mindig `STOPPED`,
+   `reset` kell.** A "Update 5" H4-halt gyökéroka a router SAJÁT
+   `_repair_prompt`/`build_escalation_packet` fogalmazása volt ("minimal fix,
+   no adjacent refactor"), ami megtiltotta a javító próbáknak, hogy a brief
+   érintetlen `allowed_paths`-ait befejezzék — ezért mindhárom próba (2 M3 +
+   1 Terra) csak a két ÚJ fájlt (A4/A5) érintette, a három MEGLÉVŐ
+   wiring-célfájl (`practice_session_providers.dart`,
    `practice_setup_controller.dart`, `practice_effect_listener.dart`) ma is
-   baseline. A pontos hibaszöveg a router szándékos redakciója miatt nem
-   kinyerhető ebből a sessionből. **A következő session döntsön:**
-   (a) `python3 tools/model-router.py reset --task-id E02-R21` + friss `run`
-   ugyanazzal a brieffel, vagy (b) explicit `codex`/`minimax` motor a NEM
-   redaktált logért (`tools/codex-round.sh`/`tools/mm-round.sh`). A kör
-   brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`)
-   változatlan, kész — a leletek NEM a briefben vannak. **A Practice V2
-   production-drótozása (a kör tényleges célja) még mindig el sem kezdődött.**
+   baseline. Javítva ([`docs/LESSONS.md` L44](docs/LESSONS.md), regresszióval,
+   `python3 -m pytest tools/tests -q`: 109 passed). **A következő session
+   dolga:** `python3 tools/model-router.py reset --task-id E02-R21` + friss
+   `run` ugyanazzal a brieffel (`docs/adr/0111-practice-production-wiring.md`
+   változatlan, kész). Ha a javított promptok mellett is csak A4/A5 készül el
+   újra, az a brief méretére/sorrendjére mutat, nem a router promptjára — l.
+   L44 záró bekezdését. **A Practice V2 production-drótozása (a kör
+   tényleges célja) még mindig el sem kezdődött.**
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
