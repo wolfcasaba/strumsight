@@ -108,6 +108,59 @@ void main() {
       );
       expect(insight.code, PracticeInsightCode.positiveReinforcement);
     });
+
+    test('chord 0.4 + chord-pair G→D median-worst → chordPairProblem', () {
+      // M4 — the chord-pair branch is only reachable when the chord
+      // metric itself is also below threshold; this test pins the
+      // positive chordPairProblem cell of the A4 matrix (chord < 0.6 AND
+      // a chord-pair with ≥ 3 measurements that is the median-slowest by
+      // ≥ 30%).
+      final insight = _coach(
+        result: _result(
+          metrics: _metrics(
+            const MetricAvailable(0.7),
+            rhythm: const MetricAvailable(0.8),
+            direction: const MetricAvailable(0.85),
+            chord: const MetricAvailable(0.4),
+            overall: const MetricAvailable(0.75),
+          ),
+        ),
+        context: _context(
+          strumCount: 30,
+          pairedEvents: 0,
+          slowestPair: const SlowestChordPair(
+            pairKey: 'G->D',
+            attempts: 4,
+            relativeDelayToFastest: 0.45,
+          ),
+        ),
+      );
+      expect(insight.code, PracticeInsightCode.chordPairProblem);
+    });
+
+    test(
+      'low completion AND direction error at the same time → completion wins',
+      () {
+        // M4 — the existing lowCompletion test (lines 25–36) leaves
+        // direction as NotApplicable, so it never exercised the tie-break
+        // between completion and direction. This test gives a real
+        // direction metric below the threshold so both branches COULD
+        // fire, and pins the §5.8 priority order: completion wins.
+        final insight = _coach(
+          result: _result(
+            metrics: _metrics(
+              const MetricAvailable(0.4),
+              rhythm: const MetricAvailable(0.85),
+              direction: const MetricAvailable(0.5),
+              chord: const MetricAvailable(0.85),
+              overall: const MetricAvailable(0.55),
+            ),
+          ),
+          context: _context(strumCount: 30, pairedEvents: 0),
+        );
+        expect(insight.code, PracticeInsightCode.lowCompletion);
+      },
+    );
   });
 
   group('PracticeCoach — A5: minimum evidence threshold', () {

@@ -39,13 +39,13 @@ void main() {
       final entry = _entry(PracticeMode.strumPattern);
       await pumpResult(tester, PracticeResultScreen(entry: entry));
       // Chord is not applicable to strum-pattern; the card never renders it.
-      expect(find.text('Chord'), findsNothing);
+      expect(find.text(l10n().practiceResultChord), findsNothing);
     });
 
     testWidgets('Chord Changes: direction is hidden', (tester) async {
       final entry = _entry(PracticeMode.chordChanges);
       await pumpResult(tester, PracticeResultScreen(entry: entry));
-      expect(find.text('Direction'), findsNothing);
+      expect(find.text(l10n().practiceResultDirection), findsNothing);
     });
 
     testWidgets('Chord Progression: all four dimensions render', (

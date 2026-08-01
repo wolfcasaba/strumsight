@@ -142,6 +142,59 @@ void main() {
         'cap-${total - PracticeHistoryRepository.maxSessions}',
       );
     });
+
+    test(
+      'beyond N sessions, only summary remains; per-attempt detail is stripped',
+      () async {
+        // The session-summary cap (maxSessions = 200) is wider than the
+        // per-attempt detail window (practiceHistoryDetailLimit = 20).
+        // After >20 sessions, the oldest entries keep their summary but lose
+        // the per-attempt detail list.
+        final store = await _openStore();
+        final repo = _buildRepo(store);
+        const sessionCount = practiceHistoryDetailLimit + 5;
+        for (var i = 0; i < sessionCount; i++) {
+          final entry = _entry('window-$i')._withDetail(<PracticeAttemptDetail>[
+            const PracticeAttemptDetail(
+              index: 0,
+              metricSnapshot: PracticeMetricSnapshot(
+                completion: PracticeMetricDimensionAvailable(0.9),
+                rhythm: PracticeMetricDimensionAvailable(0.85),
+                direction: PracticeMetricDimensionAvailable(0.95),
+                chord: PracticeMetricDimensionNotApplicable(),
+                overall: PracticeMetricDimensionAvailable(0.9),
+              ),
+            ),
+          ]);
+          expect(await repo.save(entry), isA<Success<void>>());
+        }
+        final list = (await repo.load()) as Success<List<PracticeHistoryEntry>>;
+        expect(list.value.length, sessionCount);
+        // The newest N entries keep their detail attempts.
+        for (var i = 0; i < practiceHistoryDetailLimit; i++) {
+          expect(
+            list.value[i].hasDetailedAttempts,
+            isTrue,
+            reason: 'newest entry $i must keep detail',
+          );
+        }
+        // Older entries lose their detail attempts (summary only).
+        for (var i = practiceHistoryDetailLimit; i < sessionCount; i++) {
+          expect(
+            list.value[i].detailAttempts,
+            isEmpty,
+            reason: 'older entry $i must lose detail',
+          );
+          expect(
+            list.value[i].hasDetailedAttempts,
+            isFalse,
+            reason: 'older entry $i must report no detail',
+          );
+          // But the summary survives — the result screen still has data.
+          expect(list.value[i].finalMetricSnapshot, isNotNull);
+        }
+      },
+    );
   });
 
   group('A8 — idempotent save', () {
@@ -178,6 +231,31 @@ void main() {
         expect((result as Failure<void>).error.code, FailureCode.storageWrite);
       },
     );
+
+    test('a StorageException from the KeyValueStore is NOT swallowed — '
+        'the real platform-write failure path returns Failure', () async {
+      // B1 — the previous test threw `StateError` (a non-StorageException)
+      // specifically to bypass `JsonDocumentStore.write`'s `on
+      // StorageException catch` swallow; the real persistence error
+      // shape is `StorageException`, and this test asserts that the
+      // repository propagates it as a `Failure` rather than swallowing it
+      // and reporting `Success`. The store here rejects writes only;
+      // reads return `null` so the test isolates the write path.
+      final store = _RejectingKeyValueStore()..rejectReads = false;
+      final repo = _buildRepo(store);
+      final result = await repo.save(_entry('e-real-fail'));
+      expect(result, isA<Failure<void>>());
+      final failure = result as Failure<void>;
+      expect(failure.error.code, FailureCode.storageWrite);
+      // The cause must carry the original StorageException — not be lost.
+      expect(failure.error.cause, isA<StorageException>());
+      expect(
+        (failure.error.cause as StorageException).code,
+        FailureCode.storageWrite,
+      );
+      // Sanity: the rejecting store observed at least one write attempt.
+      expect(store.writeAttempts, greaterThanOrEqualTo(1));
+    });
 
     test('a refused read surfaces StorageFailure', () async {
       final repo = _buildRepo(_RejectingKeyValueStore());
@@ -227,6 +305,7 @@ PracticeHistoryRepository _buildRepo(KeyValueStore store) {
       toJson: _encode,
       maxItems: PracticeHistoryRepository.maxSessions,
     ),
+    keyValueStore: store,
     logger: _SilentLogger(),
   );
 }
@@ -288,6 +367,32 @@ extension on PracticeHistoryEntry {
       detailAttempts: detailAttempts,
     );
   }
+
+  PracticeHistoryEntry _withDetail(List<PracticeAttemptDetail> details) {
+    return PracticeHistoryEntry(
+      id: id,
+      modeCode: modeCode,
+      sourceCode: sourceCode,
+      createdAt: createdAt,
+      definitionId: definitionId,
+      displayTitle: displayTitle,
+      finishReasonCode: finishReasonCode,
+      activeDuration: activeDuration,
+      pausedDuration: pausedDuration,
+      attemptsCount: details.length,
+      finalMetricSnapshot: finalMetricSnapshot,
+      totalTargets: totalTargets,
+      resolvedTargets: resolvedTargets,
+      scorePoints: scorePoints,
+      maxCombo: maxCombo,
+      meanAbsoluteOffset: meanAbsoluteOffset,
+      timingBias: timingBias,
+      coachingSummary: coachingSummary,
+      skillTags: skillTags,
+      highestStableTempoBpm: highestStableTempoBpm,
+      detailAttempts: details,
+    );
+  }
 }
 
 PracticeHistoryEntry _decode(Map<String, dynamic> json) =>
@@ -324,9 +429,20 @@ class _SilentLogger implements AppLogger {
 }
 
 class _RejectingKeyValueStore implements KeyValueStore {
+  int writeAttempts = 0;
+
+  /// When true (the default), reads also throw — used by the read-failure
+  /// test. The B1 write-failure test sets this to false so the repository's
+  /// pre-write `store.read()` call succeeds and the failure is observed
+  /// purely on the write path.
+  bool rejectReads = true;
+
   @override
   String? readString(String key) {
-    throw StateError('rejected');
+    if (rejectReads) {
+      throw const StorageException(FailureCode.storageRead, key: 'rejected');
+    }
+    return null;
   }
 
   @override
@@ -340,35 +456,39 @@ class _RejectingKeyValueStore implements KeyValueStore {
 
   @override
   Future<void> writeString(String key, String value) async {
-    // Throw a non-StorageException so the [JsonDocumentStore.write] catch
-    // does NOT swallow it — the exception bubbles up to the repository,
-    // which must surface it as `AppResult.failure` (A9).
-    throw StateError('rejected');
+    writeAttempts++;
+    // B1 — the real persistence-error shape is `StorageException`. The
+    // repository MUST propagate it as `AppResult.failure(StorageFailure)`
+    // rather than letting it be swallowed by `JsonDocumentStore.write`'s
+    // `on StorageException catch`. This is the assertion that pins the
+    // brief B1 fix: a real platform-write refusal must NEVER be reported
+    // as `Success`.
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override
   Future<void> writeInt(String key, int value) async {
-    throw StateError('rejected');
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override
   Future<void> writeDouble(String key, double value) async {
-    throw StateError('rejected');
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override
   Future<void> writeBool(String key, bool value) async {
-    throw StateError('rejected');
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override
   Future<void> writeStringList(String key, List<String> value) async {
-    throw StateError('rejected');
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override
   Future<void> remove(String key) async {
-    throw StateError('rejected');
+    throw const StorageException(FailureCode.storageWrite, key: 'rejected');
   }
 
   @override

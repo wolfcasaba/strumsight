@@ -772,6 +772,8 @@
   "practiceResultCoachingTitle": "Coaching",
   "practiceResultTimingTitle": "Timing",
   "practiceResultTimingBalanced": "On the beat",
+  "practiceResultTimingEarly": "Rushing ahead",
+  "practiceResultTimingLate": "Dragging behind",
   "practiceResultFinishUserFinished": "You finished the session",
   "practiceResultFinishTimedOut": "Session timed out",
   "practiceResultFinishInterrupted": "Session was interrupted",

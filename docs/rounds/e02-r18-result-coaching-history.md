@@ -521,6 +521,112 @@ CI-ban fut (ADR 0053) — azt az orchestrátor indítja.
   placeholder kódok helyett valódi kódok. Ez az R19-gyel együtt
   olcsón megoldható.
 
+## 10.1 Javító kör (MiniMax M3) — review CHANGES REQUESTED zárva
+
+**Dátum:** 2026-08-01 (a `docs/reviews/e02-r18-review.md` 2 BLOCKER + 4 MAJOR
++ 3 MINOR leletére). A javító kör ugyanazon a branchen
+(`codex/e02-r18-result-coaching-history`) futott; itt csak a §0.0 R1
+revízió által elfogadott, scope-on belüli fájlok módosultak. A
+`controller`, a `practice_session_recorder.dart` interfész és a
+`practice_session_result.dart` tilos zóna **0 sor**.
+
+### Leletenkénti megoldás
+
+- **B1 — reális írás-hiba elnyelése (BLOCKER, javítva).** A repository a
+  JSON-envelope közvetlenül a `KeyValueStore`-on írja (`save()`
+  `await keyValueStore.writeString(...)`), megkerülve a
+  `JsonDocumentStore.write` `on StorageException catch` blokkját.
+  A read-oldali dekódolás továbbra is a `JsonDocumentStore.readBody`
+  útján megy (corrupt-izoláció, schemaVersion, cap-on-read megmaradt).
+  A `_RejectingKeyValueStore` mostantól valódi `StorageException`-t
+  dob (nem `StateError`-t), és az A9 új tesztje a
+  `Failure<StorageFailure>(code: storage.write)`-ot és a `cause`
+  mezőben továbbvitt eredeti `StorageException`-t is ellenőrzi.
+- **B2 — write-then-drop a produkciós wiringen (BLOCKER, javítva).**
+  A `practiceSessionRecorderProvider` placeholder metaadatnál
+  (`modeCode == 'practice.mode.unknown'` stb.) `NoopPracticeSessionRecorder`
+  -t ad vissza — `// R19: real session metadata plumbing` kommenttel. Az
+  új `B2` teszt a produkciós wiringgel `record()` → `Success`-t és
+  `load()` → 0 rekordot mutat; a V2 kulcs nem is íródik (`store.values`
+  -ben nincs `practiceHistoryV2`).
+- **M2 — A7 detail-window (MAJOR, javítva).** A repository `save()`-je
+  az újramentett lista hossza alapján csak a legújabb
+  `practiceHistoryDetailLimit` (20) session-re hagy per-attempt detailt;
+  az idősebbek summary-re strippelődnek (`_stripOldDetailAttempts`).
+  Az A7 új cellája: `> N session → csak summary marad a régebbieknél`
+  (legújabb 20 részletes, a többi `detailAttempts.isEmpty`, de a
+  `finalMetricSnapshot` megmarad).
+- **M3 — timing bias chart mindig „balanced" (MAJOR, javítva).** A
+  `TimingBiasChart` immár a session-szintű `entry.timingBias`-t kapja
+  meg paraméterben; az early/late/balanced címke ±15 ms küszöb mellett
+  dől el. Két új l10n kulcs: `practiceResultTimingEarly/Late`
+  (en+hu). A widget-teszt késői, korai, balanced és üres detailt is
+  fed.
+- **M4 — A4 coach-mátrix két cellája (MAJOR, javítva).** Két új teszt:
+  (a) pozitív `chordPairProblem` (chord 0.4 + G→D 4 méréssel,
+  relatív delay 0.45), (b) prioritás-holtverseny (completion 0.4 + irány
+  0.5 → `lowCompletion` nyer).
+- **m1 — `NotApplicable` „Not scored" sorként (MINOR, javítva).** A
+  `ScoreBreakdown` `build()` szűri a `PracticeMetricDimensionNotApplicable`
+  sorokat — egyetlen igazságforrás a `MetricValue` altípusa.
+- **m2 — l10n-címkék a tesztben (MINOR, javítva).** A1 „Chord"/"Direction"
+  literálok `l10n().practiceResultChord/Direction`-ra cserélve.
+- **m3 — Speed Builder holt kód (MINOR, javítva).** A holt
+  `PracticeMetricKind.speedBuilder` ág és a screen-result blokkja
+  eltávolítva; komment a R19-es valódi belépési pontról.
+
+### Záró gate (javító kör, szó szerint)
+
+```
+tools/round-gate.sh test/features/practice/ test/core/storage/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart
+```
+
+Külön processzekben futtatva (format → analyze → test ×4 → architecture):
+
+```
+[1] format                                                        ZÖLD
+[2] analyze                                                       ZÖLD
+[3] test test/features/practice/                                  ZÖLD
+[4] test test/core/storage/                                       ZÖLD
+[5] test test/core/l10n_parity_test.dart                          ZÖLD
+[6] test test/core/screen_size_guard_test.dart                    ZÖLD
+[7] architecture                                                  ZÖLD
+```
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a
+CI-ban fut (ADR 0053) — `gh`-t nem hívtunk, push nem történt.
+
+### Érintett fájlok (javító kör, a §0.0 R1 listájával együtt)
+
+- `lib/features/practice/data/local_practice_history_repository.dart`
+  (B1: közvetlen KeyValueStore-írás, keyValueStore mező;
+   M2: `_stripOldDetailAttempts`).
+- `lib/features/practice/data/practice_history_recorder.dart` — nem
+  módosult; a provider-szintű placeholder-gate miatt a produkciós
+  rekorder ma nem hívódik.
+- `lib/features/practice/application/practice_session_providers.dart`
+  (B2: placeholder-meta gate, `NoopPracticeSessionRecorder` ág).
+- `lib/features/practice/presentation/widgets/timing_bias_chart.dart`
+  (M3: signed timingBias-ból származtatott címke).
+- `lib/features/practice/presentation/widgets/score_breakdown.dart`
+  (m1: NotApplicable → findsNothing).
+- `lib/features/practice/presentation/screens/practice_result_screen.dart`
+  (M3 hívó: `entry.timingBias` átadása; m3: Speed Builder holt kód
+  eltávolítva).
+- `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` (M3: Early/Late kulcsok).
+- `test/features/practice/data/practice_history_repository_test.dart`
+  (B1: `_RejectingKeyValueStore` `StorageException`-t dob;
+   M2: detail-window teszt; az A9 eredeti szövege is megmaradt).
+- `test/features/practice/data/practice_history_recorder_test.dart`
+  (új, B2: produkciós wiringen 0 eldobott rekord).
+- `test/features/practice/domain/practice_coach_test.dart`
+  (M4: chordPairProblem pozitív cella + completion↔direction
+  holtverseny).
+- `test/features/practice/presentation/practice_result_screen_test.dart`
+  (m2: l10n-címkék a literálok helyett).
+- `test/features/practice/presentation/timing_bias_chart_test.dart`
+  (új, M3: late/early/balanced/üres fixture-ek).
+
 ## 11. Review — Claude tölti ki
 
 Link: `docs/reviews/e02-r18-review.md`

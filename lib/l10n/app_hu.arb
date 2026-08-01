@@ -706,6 +706,8 @@
   "practiceResultCoachingTitle": "Coaching",
   "practiceResultTimingTitle": "Időzítés",
   "practiceResultTimingBalanced": "Ütemben",
+  "practiceResultTimingEarly": "Sietsz",
+  "practiceResultTimingLate": "Késik",
   "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
   "practiceResultFinishTimedOut": "A gyakorlat túllépte az időkeretet",
   "practiceResultFinishInterrupted": "A gyakorlat megszakadt",

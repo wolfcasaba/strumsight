@@ -120,13 +120,12 @@ class _ScoredLayout extends StatelessWidget {
           ),
         if (PracticeMetricKind.chordPair.isApplicableTo(mode))
           (label: PracticeMetricKind.chordPair.label(l10n), dimension: null),
-        if (entry.hasDetailedAttempts &&
-            mode == PracticeMode.chordChanges &&
-            PracticeMetricKind.speedBuilder.isApplicableTo(mode))
-          (
-            label: PracticeMetricKind.speedBuilder.label(l10n),
-            dimension: snapshot.overall,
-          ),
+        // Speed Builder result tile: dead-code branch removed (brief m3).
+        // The real wiring lives one layer down — the controller owns
+        // `SpeedBuilderState` and the controller is out of scope for
+        // R18; until then this screen has no Speed Builder row to show.
+        // Re-introduce once the controller exposes the active state
+        // through `entry` (R19 follow-up, see the brief's §3 followups).
       ],
     );
 
@@ -135,7 +134,10 @@ class _ScoredLayout extends StatelessWidget {
       children: [
         breakdown,
         const SizedBox(height: 16),
-        TimingBiasChart(detailAttempts: entry.detailAttempts),
+        TimingBiasChart(
+          detailAttempts: entry.detailAttempts,
+          timingBias: entry.timingBias,
+        ),
       ],
     );
   }
@@ -278,7 +280,6 @@ class PracticeMetricKind {
   static const direction = PracticeMetricKind._('direction');
   static const chord = PracticeMetricKind._('chord');
   static const chordPair = PracticeMetricKind._('chordPair');
-  static const speedBuilder = PracticeMetricKind._('speedBuilder');
 
   bool isApplicableTo(PracticeMode mode) {
     return switch (this) {
@@ -300,10 +301,6 @@ class PracticeMetricKind {
         PracticeMode.freePractice => false,
       },
       _ when identical(this, chordPair) => mode == PracticeMode.chordChanges,
-      _ when identical(this, speedBuilder) =>
-        // Speed Builder is a session-level overlay; the screen reads the
-        // presence of detail attempts as the trigger.
-        false,
       _ => false,
     };
   }
@@ -316,7 +313,6 @@ class PracticeMetricKind {
       _ when identical(this, direction) => l10n.practiceResultDirection,
       _ when identical(this, chord) => l10n.practiceResultChord,
       _ when identical(this, chordPair) => l10n.practiceResultChordPair,
-      _ when identical(this, speedBuilder) => l10n.practiceResultSpeedBuilder,
       _ => _name,
     };
   }

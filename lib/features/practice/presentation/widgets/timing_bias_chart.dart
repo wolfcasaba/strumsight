@@ -8,10 +8,28 @@ import '../../domain/model/practice_history_entry.dart';
 ///
 /// The chart is intentionally tiny — the screen reader summary carries
 /// the meaning (A11). Empty when the session kept no detail attempts.
+///
+/// The bias label is derived from the **session-level** signed
+/// [timingBias] (negative = early, positive = late); the previous build
+/// always emitted "balanced" regardless of input (M3), which made the
+/// chart a colour-only signal even when the session was clearly late or
+/// early.
 class TimingBiasChart extends StatelessWidget {
-  const TimingBiasChart({required this.detailAttempts, super.key});
+  const TimingBiasChart({
+    required this.detailAttempts,
+    required this.timingBias,
+    super.key,
+  });
 
   final List<PracticeAttemptDetail> detailAttempts;
+
+  /// Signed average timing error of the session. Negative ⇒ early,
+  /// positive ⇒ late, |bias| ≤ [_balancedThresholdMicros] ⇒ balanced.
+  final Duration timingBias;
+
+  /// Below ±15 ms the human ear cannot reliably detect a directional bias.
+  /// Anything under this is rendered as "on the beat".
+  static const int _balancedThresholdMicros = 15000;
 
   @override
   Widget build(BuildContext context) {
@@ -19,9 +37,7 @@ class TimingBiasChart extends StatelessWidget {
     if (detailAttempts.isEmpty) {
       return const SizedBox.shrink();
     }
-    final lastAttempt = detailAttempts.last;
-    final snapshot = lastAttempt.metricSnapshot;
-    final biasDirection = _biasDirectionLabel(l10n, snapshot);
+    final biasDirection = _biasDirectionLabel(l10n, timingBias);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -43,7 +59,15 @@ class TimingBiasChart extends StatelessWidget {
     );
   }
 
-  String _biasDirectionLabel(AppLocalizations l10n, dynamic snapshot) {
-    return l10n.practiceResultTimingBalanced;
+  String _biasDirectionLabel(AppLocalizations l10n, Duration bias) {
+    final micros = bias.inMicroseconds;
+    if (micros <= _balancedThresholdMicros &&
+        micros >= -_balancedThresholdMicros) {
+      return l10n.practiceResultTimingBalanced;
+    }
+    if (micros < 0) {
+      return l10n.practiceResultTimingEarly;
+    }
+    return l10n.practiceResultTimingLate;
   }
 }
