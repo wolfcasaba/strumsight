@@ -37,6 +37,44 @@ javításra szorult, minden más állítás mérve stimmelt:
   a feature-flag állapot, a réteg-tisztasági korlát szimbólum-listája a
   controller fájlon, a három terminal állapot) grep-pel igazolva, változtatás
   nélkül.
+- **Hiányzó `ai-router` metadata-blokk (a router első futtatási kísérlete
+  fedte fel, exit 50, `"brief must contain exactly one ai-router block"`).**
+  Ez a brief a router (ADR 0088) merge-je ELŐTT íródott, ezért nincs benne a
+  géppel olvasott TOML-blokk, amit `tools/ai_router/brief.py` megkövetel — az
+  Epic 3 briefek (ugyanaz a PR, amely a routert hozta) ezt már tartalmazzák.
+  A blokk alant, a §4 engedélyezett-fájllistával és a §9 záró gate-parancs
+  útvonalaival bitre egyező tartalommal pótolva:
+
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "docs/adr/0111-practice-production-wiring.md",
+  "lib/features/practice/application/practice_session_providers.dart",
+  "lib/features/practice/application/practice_setup_controller.dart",
+  "lib/features/practice/presentation/practice_effect_listener.dart",
+  "lib/features/practice/data/practice_observation_gateway_provider.dart",
+  "lib/features/practice/public.dart",
+  "test/features/practice/application/practice_production_wiring_test.dart",
+  "test/features/practice/application/practice_session_providers_test.dart",
+  "test/features/practice/presentation/practice_effect_listener_test.dart",
+  "docs/rounds/e02-r21-practice-production-wiring.md",
+]
+gate_tests = [
+  "test/features/practice",
+  "test/features/learn",
+  "test/core",
+  "test/app",
+  "test/property",
+]
+native_gate = false
+```
+
+  `risk = "normal"`: a kör provider-drótozás már megírt/tesztelt rétegek
+  között, nem érint autót/tokent/titkot/kriptót/fizetést, nem tárolómigráció
+  és nem publikus interfészt tör (ADR 0088 §2 magas-kockázat listája egyik
+  pontjának sem felel meg) — a mikrofon-lease életciklus kockázatát a §5/§6
+  A6 leak-számlálói mérik, nem a Terra-eszkaláció.
 
 ## 0. Kör-jelzés
 
