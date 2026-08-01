@@ -719,3 +719,34 @@ is piros, az már valódi lelet.
 
 **Forrás:** `docs/reviews/e02-r13-review.md` §9.1; mérve 2026-08-01, a
 `/tmp/review-e02r13-fix2` klónon és a `main` munkafán.
+
+## L24 — A §10 handoff HAMISAN tulajdoníthat teszt-lefedettséget; a review a MÉRŐ tesztet keresse, ne az állítást
+
+**Mit mértünk.** Az E02-R15-ben a gate, a CI és a scope-audit mind zöld volt, a
+§10 handoff pedig azt állította, hogy az **A7 (3/4 ütem)** kötelező
+acceptance-cellát a `practice_session_review_probes_test.dart` „A7 cellái"
+fedik. A review kimérte: az a fájl **pre-existing** (a kör-diffben nincs benne)
+és **nem hivatkozik** az új `ChordChangeAnalyzer`-re — tehát az új kód 3/4-es
+viselkedését nem bizonyíthatja. A három ÚJ teszt-fájlban a
+`grep "beatsPerBar: 3\|waltz\|3/4"` **0 találat** volt: A7 mérő teszt nélkül
+maradt. (Az analyzer kódja HELYES volt — reviewer-próba: 3/4 → `correct`, 100 ms
+—, tehát a hiba tiszta lefedettségi/attribúciós hiba, nem korrektség: MAJOR.)
+Másik mért cella: az **A2** három-cellás küszöbteszt (`>=`) csak a 180000 µs→
+`correct` ágat tartalmazta (az A1-correct teszten át); a 179999/180001 µs
+él-cellák hiányoztak — reviewer-próba igazolta a `>=`-t, MINOR.
+
+**Mit csinálunk.** (1) A review az acceptance-kritériumot a **kör saját, új
+teszt-fájljaiban** keresse meg grep-pel (érintett meter/enum/határérték szó
+szerint), és **ne fogadja el** a §10 hivatkozását egy fájlra, amíg nem látta,
+hogy az a fájl (a) a kör-diff része ÉS (b) hivatkozik az új szimbólumra. (2)
+Minden kötelező cellához, amit a kör saját tesztje nem fed, a reviewer **eldobható
+próbatesztet** ír a szállított kódra (izolált `/tmp` klón): ha a kód helyes, a
+lelet MAJOR/MINOR **teszt-lefedettség** (javító körben pótolt cellával, ami a
+hiányt PIROSRA fogta volna), ha hibás, BLOCKER. (3) A MiniMax-implementer
+`round-gate.sh`-t futtató lépése alatt a stream percekig néma lehet → a
+`mm-round.sh` stall-őrét ilyenkor **`MM_STALL_MINUTES=14`**-re emeld; egy
+mid-work stall után a munka a munkapéldányon megőrződik, és **filesystem-szintű
+resume** (friss session, folytatás-prompt a meglévő fájlokra) tisztán befejezi.
+
+**Forrás:** `docs/reviews/e02-r15-review.md` §4 (A7/A2) és §0; a stall+resume
+mérve 2026-08-01 (`/tmp/mm-e02r15.log` → `mm-e02r15-resume.log`).

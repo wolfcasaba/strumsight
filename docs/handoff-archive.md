@@ -861,3 +861,23 @@ hiányzó futásidejű fatal él (**E02-R18**), `AudioOwner.practice` + Live→P
 gateway-bekötés (**E02-R13** — a `practiceSessionControllerProvider` ma
 szándékosan nem példányosítható production oldalon).
 
+
+## E02-R13 — Állapotvezérelt Practice session UI shell (PR #37, `892e440`)
+
+A Practice session **felülete** — állapotvezérelt képernyő a
+`PracticeSessionHost` interfész mögött, mind a nyolc látható státusszal plusz az
+`idle`/`completed`/`cancelled`/`null host` utakkal; effekt-listener, tizenegy
+cellás kilépési mátrix, életciklus-továbbítás. Suite 641 → 689. Implementer
+MiniMax M3, **két javító kör**. A lefolyás (pre-flight ADR 0079 + §0.0; első
+futás nulla teszttel = L21 néma-bukás; javító #1 4 BLOCKER+4 MAJOR valódi
+eszköz-hibákkal; review #1 3 új MAJOR próbatesztekkel; javító #2 mutációs
+próbával hitelesítve → APPROVED) részletei a
+[review](reviews/e02-r13-review.md)-ban.
+
+## E02-R14 — Strum Pattern és Chord Progression módok (PR #38, `92a8291`)
+
+Az első két teljes, pontozott gyakorlási mód a gördülő highway-jel
+([ADR 0080](adr/0080-practice-highway-rendering.md)): pure pozíció-függvény,
+korlátos láthatósági ablak, verdict-vezérelt visszajelzés. Implementer MiniMax
+M3. Részletek a [review](reviews/e02-r14-review.md)-ban és a
+[kör-briefben](rounds/e02-r14-strum-and-progression-modes.md).
