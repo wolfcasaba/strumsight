@@ -44,14 +44,21 @@ class TimingBiasChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              l10n.practiceResultTimingTitle,
-              style: Theme.of(context).textTheme.titleMedium,
+            // ExcludeSemantics blocks the `practiceResultTimingTitle`
+            // Text from being merged into the inner semantics summary
+            // (A1.4 — the chart must announce one sentence, not
+            // "Timing: On the beat" plus "On the beat").
+            ExcludeSemantics(
+              child: Text(
+                l10n.practiceResultTimingTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             const SizedBox(height: 8),
             Semantics(
+              container: true,
               label: l10n.practiceResultTimingSemantic(biasDirection),
-              child: Text(biasDirection),
+              child: ExcludeSemantics(child: Text(biasDirection)),
             ),
           ],
         ),

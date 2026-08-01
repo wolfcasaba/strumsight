@@ -209,18 +209,54 @@ class _InsightRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text('• ${_label(code)}'),
+      child: Text('• ${_label(context, code)}'),
     );
   }
 
-  String _label(String code) {
-    if (PracticeInsightCode.values.contains(code)) {
-      return _humanise(code);
+  /// Resolves a coach code to its ARB-backed localised string.
+  ///
+  /// Each code in [PracticeInsightCode.values] / [PracticeRecommendationKind.values]
+  /// has a paired `practiceInsight*` / `practiceRecommendation*` ARB key
+  /// (R20 §6 A2). Unknown codes fall through to a humanised form of the
+  /// code itself so a future code never produces an empty row.
+  String _label(BuildContext context, String code) {
+    final l10n = AppLocalizations.of(context);
+    switch (code) {
+      case PracticeInsightCode.noSignal:
+        return l10n.practiceInsightNoSignal;
+      case PracticeInsightCode.lowCompletion:
+        return l10n.practiceInsightLowCompletion;
+      case PracticeInsightCode.biasLate:
+        return l10n.practiceInsightBiasLate;
+      case PracticeInsightCode.biasEarly:
+        return l10n.practiceInsightBiasEarly;
+      case PracticeInsightCode.directionError:
+        return l10n.practiceInsightDirectionError;
+      case PracticeInsightCode.chordError:
+        return l10n.practiceInsightChordError;
+      case PracticeInsightCode.chordPairProblem:
+        return l10n.practiceInsightChordPairProblem;
+      case PracticeInsightCode.tempoTooHigh:
+        return l10n.practiceInsightTempoTooHigh;
+      case PracticeInsightCode.positiveReinforcement:
+        return l10n.practiceInsightPositiveReinforcement;
+      case PracticeInsightCode.nextDifficulty:
+        return l10n.practiceInsightNextDifficulty;
+      case PracticeRecommendationKind.retry:
+        return l10n.practiceRecommendationRetry;
+      case PracticeRecommendationKind.reduceTempo:
+        return l10n.practiceRecommendationReduceTempo;
+      case PracticeRecommendationKind.enableMetronome:
+        return l10n.practiceRecommendationEnableMetronome;
+      case PracticeRecommendationKind.focusDirection:
+        return l10n.practiceRecommendationFocusDirection;
+      case PracticeRecommendationKind.focusChordChanges:
+        return l10n.practiceRecommendationFocusChordChanges;
+      case PracticeRecommendationKind.nextDifficulty:
+        return l10n.practiceRecommendationNextDifficulty;
     }
-    return code;
-  }
-
-  String _humanise(String code) {
+    // Unknown code: fall back to the humanised form so a future build
+    // never renders an empty bullet.
     final tail = code.split('.').last;
     return tail.replaceAll('_', ' ');
   }

@@ -797,5 +797,21 @@
         "type": "String"
       }
     }
-  }
+  },
+  "practiceInsightNoSignal": "We couldn't detect any strums — make sure the microphone is close to your guitar.",
+  "practiceInsightLowCompletion": "The session ended before most targets were played.",
+  "practiceInsightBiasLate": "Most of your strums landed slightly after the beat.",
+  "practiceInsightBiasEarly": "Most of your strums landed slightly before the beat.",
+  "practiceInsightDirectionError": "Down and up strums were frequently mixed up.",
+  "practiceInsightChordError": "Some chords didn't match what you were aiming for.",
+  "practiceInsightChordPairProblem": "One chord change was significantly slower than the rest.",
+  "practiceInsightTempoTooHigh": "The tempo pushed your rhythm accuracy below the threshold.",
+  "practiceInsightPositiveReinforcement": "Strong run — every available dimension cleared the bar.",
+  "practiceInsightNextDifficulty": "Ready for a harder practice.",
+  "practiceRecommendationRetry": "Try this practice again.",
+  "practiceRecommendationReduceTempo": "Drop the tempo by 10 BPM and try again.",
+  "practiceRecommendationEnableMetronome": "Turn on the metronome for the next attempt.",
+  "practiceRecommendationFocusDirection": "Focus only on direction for a few attempts.",
+  "practiceRecommendationFocusChordChanges": "Run a chord-change drill with the slowest pair.",
+  "practiceRecommendationNextDifficulty": "Move to the next difficulty level."
 }

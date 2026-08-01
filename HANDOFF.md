@@ -4,10 +4,11 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (E02-R19 mergelve — progress-egyesítés, streak-jogosultság, daily-goal aktív
-> idő és a Learn V2-migráció VALÓDI direction-scoringgal; a kör HALT H3-mal állt
-> meg, user-döntésre újra-scope-olva és Codexszel befejezve. Következik az
-> E02-R20 epic-zárás, amit EMBER indít)**.
+> (E02-R20 epic-zárás lezárva — accessibility mátrix, performance számlálók,
+> property gate, doD-tábla és a device-mátrix kész; a rendszerszintű rés
+> (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva. A
+> `migratedLearnEnabled` rollout-döntés a useré — a §3 rendszerszintű rés
+> pótlása külön kör)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -23,9 +24,16 @@
   gate-jei zöldek; a végső elfogadás a user valódi-eszközös §16.3/§16.4 menetén
   áll (HORIZON-szabály: synthetic green ≠ done). Evidencia:
   [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md).
-- **Epic 2 (Practice Engine) elindult** — E02-R01 (baseline-befagyasztás +
-  rollout-guardok) kész; a három practice-flag minden környezetben OFF, tehát a
-  felhasználói viselkedés még változatlan.
+- **Epic 1 (Core Platform) technikailag kész** — a zárókör (E01-R16) gépi
+  gate-jei zöldek; a végső elfogadás a user valódi-eszközös §16.3/§16.4 menetén
+  áll (HORIZON-szabály: synthetic green ≠ done). Evidencia:
+  [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md).
+- **Epic 2 (Practice Engine) lezárva** — E02-R20 (epic-zárókör) kész; a
+  Practice V2 domain és application réteg kimerítően tesztelt, a migrated
+  Learn útvonal (`migratedLearnEnabled`) élesíthető. Az önálló Practice V2
+  Hub→Setup→Session út **drótozatlan** — a `practiceSessionHostProvider`
+  defaultja `null`; a §3 rendszerszintű rés pótlása külön kör.
+  Evidencia: [`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md).
 
 ## 2. What is working
 
@@ -77,6 +85,9 @@
   mind literálisan tesztelve. `Meter.ticksPerBar` szimmetrikus fail-fast
   (E02-R02 MINOR-1 zárva). Test-oldali purity-őr (`domain_purity_test.dart`).
   Hívó továbbra sincs — production viselkedés változatlan, flagek OFF.
+
+- **Practice V2 accessibility-mátrix és performance-számlálók (E02-R20, nincs új ADR — a zárókör nem hoz architekturális döntést):**
+  `test/features/practice/presentation/practice_a11y_audit_test.dart` (A1.1–A1.10) — Hub/Setup/Result képernyőkön a touch-target + label+action + 200%-os szöveg + landscape + reduced motion + chart-szemantika + screen reader + ARB-paritás cellák zöldek, a `_HubCard` / `PracticeModeCard` / `PracticePatternPreview` / `TimingBiasChart` Semantics-merge fixekkel; `test/features/practice/practice_performance_test.dart` (A3) — R14 highway számláló, R09 matcher számlálók, 10 perces szimulált session cap, controller state-emission cap; `test/features/practice/practice_l10n_audit_test.dart` (A2) — minden `PracticeInsightCode` / `PracticeRecommendationKind` értékhez ARB-szöveg mindkét nyelven (a R20-ban hozzáadott 16 kulcs: `practiceInsight*` × 10 + `practiceRecommendation*` × 6); `test/property/practice_engine_property_test.dart` (A4) — öt epic-szintű invariáns (egy target/observation max egyszer, score ∈ [0,1] ∨ NotApplicable, free practice nincs overall accuracy, terminal state tiszta, playing ≤ active ≤ wall). A §3 rendszerszintű rés (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva a §5 DoD-táblában minden érintett cellánál.
 
 - **Practice V2 tartalom (E02-R04, ADR 0070):** `lib/features/practice/data/`
   `BuiltinPracticeCatalog` — tíz beépített gyakorlat (négy/nyolcad strum-minták,

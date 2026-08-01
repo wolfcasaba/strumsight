@@ -34,9 +34,14 @@ class PracticePatternPreview extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              l10n.practicePatternPreviewLabel,
-              style: theme.textTheme.labelLarge,
+            // ExcludeSemantics blocks the title from being merged into
+            // the per-slot labels (A1.3 — each slot must be reachable as
+            // its own Semantics node, not as a fragment of the parent).
+            ExcludeSemantics(
+              child: Text(
+                l10n.practicePatternPreviewLabel,
+                style: theme.textTheme.labelLarge,
+              ),
             ),
             const SizedBox(height: 8),
             if (barEvents.isEmpty)
@@ -79,6 +84,7 @@ class _Slot extends StatelessWidget {
               ? Icons.arrow_downward
               : Icons.arrow_upward);
     return Semantics(
+      container: true,
       label: label,
       child: Container(
         width: 56,
