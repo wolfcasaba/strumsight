@@ -1,0 +1,160 @@
+# E03-R06 — Legacy Song és Setlist adapterek
+
+- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 6; §3.2–3.4, §25.5
+- **Branch:** `codex/e03-r06-legacy-song-setlist-adapters`
+- **Előfeltétel:** E03-R05 merge
+- **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
+
+> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
+> elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
+> `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel
+> igazold a brief minden útvonalát, symbolját, state producerét, resource
+> ownerét és numerikus celláját. Drift esetén dokumentáld lent §0.0-ban,
+> módosítsd a scope/fájllistát, majd commitold a `PLANNING` briefet a
+> körbranchre az implementer indítása előtt. A `PREPARED` brief önmagában
+> nem végrehajtási engedély.
+
+## 0. Kör-jelzés és STOP-protokoll
+
+```bash
+tools/codex-signal.sh progress "<egy sor>"
+tools/codex-signal.sh done "<egy sor>"
+tools/codex-signal.sh stopped "<egy sor>"
+tools/codex-signal.sh blocked "<egy sor>"
+```
+
+Lezáró jelzés nélkül a kör bukott. Az implementer nem hív `gh`-t, nem pushol
+és nem nyit PR-t. Listán kívüli fájl, ellenőrizetlen contract, ellentmondó
+acceptance, hiányzó fixture/licence, vagy nem reprodukálható mérce esetén:
+`stopped` és pontos jelentés; nincs néma scope-tágítás vagy mércegyengítés.
+
+## 0.0 Tervezési baseline és pre-flight revízió
+
+- A legacy modellek a `features/songs` alatt maradnak a parity referenciaforrásai.
+- R01 jogtiszta fixturei és parity metrikái rendelkezésre állnak.
+- R05 validator/normalizer/capability a migrált output ellenőrzési boundaryje.
+
+A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
+szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
+Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
+
+## 1. Cél
+
+A legacy Song/Setlist rekordok veszteségmentes, determinisztikus V2 domain-adaptálása tartós írás vagy legacy törlés nélkül.
+
+## 2. Jelenlegi állapot
+
+- A legacy modellek a `features/songs` alatt maradnak a parity referenciaforrásai.
+- R01 jogtiszta fixturei és parity metrikái rendelkezésre állnak.
+- R05 validator/normalizer/capability a migrált output ellenőrzési boundaryje.
+
+## 3. Scope
+
+**Benne:**
+
+- kicsi legacy DTO/reader boundary
+- legacy Song→SongDocument adapter és report
+- legacy Setlist mapping, duplicate és unresolved referencia
+- tesztcélú parity projection, ha a méréshez szükséges
+
+**Kívül — ebben a körben TILOS:**
+
+- V2 repositoryba tartós írás
+- migration version és cleanup
+- legacy presentation vagy repository módosítása
+
+## 4. Engedélyezett fájlok
+
+| Útvonal | Állapot a kör elején | Miért |
+|---|---|---|
+| `lib/features/song_trainer/data/migration/legacy_song_reader.dart` | ÚJ | legacy DTO/codec boundary |
+| `lib/features/song_trainer/data/migration/legacy_song_adapter.dart` | ÚJ | Song→V2 adapter |
+| `lib/features/song_trainer/data/migration/legacy_setlist_adapter.dart` | ÚJ | setlist mapping |
+| `lib/features/song_trainer/data/migration/legacy_migration_report.dart` | ÚJ | parity/unresolved report |
+| `test/features/song_trainer/data/migration/legacy_song_adapter_test.dart` | ÚJ | fixture adapter |
+| `test/features/song_trainer/data/migration/legacy_setlist_adapter_test.dart` | ÚJ | setlist esetek |
+| `test/features/song_trainer/data/migration/legacy_parity_test.dart` | ÚJ | R01 parity mérce |
+| `docs/rounds/e03-r06-legacy-song-setlist-adapters.md` | meglévő | §10 handoff |
+
+**Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
+`.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
+`docs/adr/**`. ADR-fájl csak akkor kivétel, ha a pre-flight ütközésmentes
+exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
+Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
+
+## 5. Kötött architekturális döntések
+
+1. Adapter nem importál legacy presentation fájlt és nem ír storage-ot.
+2. Egy legacy chord teljes measure chord event; pattern minden measure-re másolódik; első tempo/meter beat 0.
+3. Legacy ID megmarad, source `legacyLocal`, Full song section létrejön.
+4. Setlist duplikáció megmarad; missing ID unresolved report, nem néma eldobás.
+
+E döntések enyhítése nem elfogadható „zöldre javítás”. Valódi ellentmondásnál
+brief-revízió vagy ADR szükséges.
+
+## 6. Acceptance criteria
+
+- [ ] Minden R01 fixture migrálható, determinisztikus és ismételt futtatásra azonos.
+- [ ] Event count, total beats, chord/direction sequence, duration, meter és Analyze timing parity igazolt.
+- [ ] Setlist sorrend, duplikáció és mixed BPM dalhatár változatlan; missing ID recoverable report.
+- [ ] Nincs legacy delete, persistent write vagy presentation import.
+
+### Kötelező megkülönböztető mátrix
+
+| Legacy eset | V2 kötelező eredmény |
+|---|---|
+| 4/4 chord+pattern | measure-enként esemény, beat-0 map |
+| 3/4 | 3 beat measure, parity duration |
+| rest | nincs kitalált chord |
+| corrupt pattern | dokumentált repair+warning parity |
+| duplicate setlist | mindkét item, eredeti sorrend |
+| missing ID | unresolved item, nincs crash |
+
+A reviewer legalább egy központi invariánst eldobható mutációval vagy független
+reference-számítással tesz pirossá; bemásolt zöld kimenet önmagában nem evidencia.
+
+## 7. Kötelező ellenőrzések
+
+```bash
+tools/round-gate.sh test/features/song_trainer/data/migration test/features/songs test/features/learn/setlist_expected_hint_test.dart
+```
+
+Ez az egyetlen lokális záró gate; külön processzben futó format → analyze →
+célzott testek → architecture lépéseit nem szabad `&&`-del, pipe-pal,
+`tail`-lel vagy csonkítással helyettesíteni. A full suite + randomizált
+property + APK CI-t az orchestrátor indítja, és exact branch `headSha`-t
+ellenőriz.
+
+## 8. Implementációs sorrend
+
+1. Írd meg a fixture parity teszteket a R01 snapshotból és futtasd RED-ként.
+2. Implementáld a DTO/read boundaryt belső presentation import nélkül.
+3. Implementáld a Song adaptert és reportot.
+4. Implementáld a Setlist adaptert a song mapping bemenetével.
+5. Futtasd a gate-et a legacy regressziókkal együtt.
+
+Javasolt körcommit: `feat(song-migration): adapt legacy songs and setlists to V2`.
+
+## 9. Kockázatok
+
+- Legacy corrupt-repair viselkedés dokumentáció és kód között driftelhet; a tényleges baseline nyer.
+- ID collision kezelést nem szabad forráshashből önkényesen feloldani.
+
+**STOP:** ha a kockázat csak listán kívüli módosítással, bizonyítatlan fallbackkel
+vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revíziót.
+
+## 10. Implementation handoff — az implementer tölti ki
+
+A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
+A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
+csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
+Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+
+## 11. Review — a független reviewer tölti ki
+
+Tervezett review-fájl:
+`docs/reviews/e03-r06-legacy-song-setlist-adapters-review.md`.
+
+Merge csak akkor engedett, ha az exact-SHA CI zöld, a diff a §4 listáján belül
+marad, és nincs OPEN BLOCKER vagy MAJOR.
