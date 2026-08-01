@@ -1,6 +1,18 @@
 # E02-R18 — Result, coaching és session history
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-01, kód újramérve: `main` @ `0e31bc6`;
+  ADR 0084 megírva, motor **MiniMax M3**)
+- **Pre-flight mérés (2026-08-01, `main` @ `0e31bc6`):** a brief §2 mért állításai
+  helytállók. Egy pontosítás az A9-hez: a `recorder.record` **és** a
+  `ShowRecoverableError`-emisszió **már a controllerben be van kötve**
+  (`practice_session_controller.dart:493` és `:500`), a controller single-flightot
+  tart (`:177`). A controller **nincs** az engedélyezett-fájllistán → R18 nem nyúl
+  hozzá; az új repository dolga csak annyi, hogy a hibát `AppResult` **failure**-ként
+  adja vissza (soha nem néma `catch`), és a rekord idempotens legyen a `sessionId`-re
+  a **repository** szintjén (a controller single-flightjától függetlenül). A
+  `PracticeCoachingCode` `abstract final class` (String-konstansok, nem enum). A
+  storage-minta a `library_repository.dart` (`JsonCollectionStore`, `maxItems`,
+  `StorageKeys.quarantineOf`, `StorageKeys.all` guard). Részletek: ADR 0084 §Kontextus.
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 18"** (+ §17, §20.1–20.2, §21.5)
 - **Branch:** `codex/e02-r18-result-coaching-history`
 - **Előfeltétel:** **E02-R14, R15, R16, R17 merge-ölve** (a result minden mód
