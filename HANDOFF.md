@@ -4,29 +4,27 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (GOV-03 / ADR 0112 önjavító kör, H6 3. előfordulás, ugyanaz az E02-R21 kör —
-> az L37-fix (reset CLI) UTÁN a router-taskot sikerült feloldani, de az ELSŐ
-> valódi `run` két ÚJ, önálló hibát fedett fel ugyanabban a `tools/ai_router`
-> modulban. (1) A router `READY_FOR_REVIEW`-t ("M3 gate passed") jelzett úgy,
-> hogy az M3 **egyetlen `lib/`/`test/` fájlt sem módosított** — a
-> `changed_paths` (`router.py:702-703`) ugyanazt a halmazt használja a "történt-e
-> munka" döntésre, mint a scope-sértés ellenőrzés, és a BASELINE_GATE saját
-> build-cache melléktermékét (`.dart_tool/`, `build/`) M3-diffnek nézte. (2) A
-> lelet `resume`-mal (review-findings fájllal) történő visszaadása ezután
-> `BLOCKED`-ba futott: a scope-audit a router saját `.codex-round-status`
-> jelzőfájlját és az orchestrátor saját findings/review fájljait is
-> scope-sértésnek jelezte — a dokumentált `resume`+findings munkafolyamat
-> strukturálisan önmagával ütközik. Mindkét M3-kísérlet (2/2) elfogyott, a
-> task-state BLOCKED (terminal). Teljes gyökérok + javítási pontok:
-> `docs/reviews/e02-r21-review.md` a `codex/e02-r21-practice-production-wiring`
-> ágon (`16b8d88`); tanulság: `docs/LESSONS.md` L38. **A Practice V2 production
-> drótozás (a kör tényleges célja) ÉRINTETLEN — nulla sor implementáció
-> készült el.**).**
+> (GOV-03 / ADR 0112 önjavító kör, H6 4. előfordulás, ugyanaz az E02-R21 kör —
+> az L38-ban diagnosztizált KÉT `tools/ai_router` hiba (a "csinált-e valamit
+> az M3" döntés ugyanazt a `changed_paths` halmazt használta, mint a
+> scope-sértés ellenőrzés, ezért a BASELINE_GATE `.dart_tool/`/`build/`
+> mellékterméke M3-diffnek tűnt; a generált/ignorált mentesség csak az újonnan
+> IGNORÁLT útvonalakra állt fenn, egy TRACKELT `docs/reviews/*.md` frissítés
+> sosem kaphatott mentességet) JAVÍTVA: `ScopeAudit.scoped_changed_paths` új
+> mező + kategória-független mentesség, `GENERATED_IGNORED_PREFIXES`/`GLOBS`
+> bővítve (`.codex-round-status`, `docs/reviews`, `.ai/review-findings-*.md`).
+> Mért RED→GREEN regresszió (`git stash`-sel igazolva) + zöld `router-ci.yml`
+> a merge-SHA-n: [PR #47](https://github.com/wolfcasaba/strumsight/pull/47)
+> (squash `35f6da1`). A stuck `E02-R21` router task-state
+> `reset --task-id`-vel feloldva (`NOT_STARTED`), a lánc a következő
+> firing-en friss `run`-t indít. Tanulság: `docs/LESSONS.md` L39 (L38 zárása).
+> **A Practice V2 production drótozás (a kör tényleges célja) ÉRINTETLEN —
+> ez a kör kizárólag a router-infrastruktúrát javította.**).**
 > Előző kör: 2026-08-01
-> (GOV-03 / ADR 0112 — önjavító pipeline: a HALT-ból a lánc magától indít
-> javító kört; egy korábbi körben javítva az E02-R21-et és az EGÉSZ Epic 3-at
-> blokkoló router-baseline hiba (`tools/ai_router/security.py` — a Flutter saját
-> generált fájljai)).
+> (GOV-03 / ADR 0112 önjavító kör, H6 3. előfordulás — a fenti két hiba
+> DIAGNOSZTIZÁLVA (`docs/LESSONS.md` L38, `docs/reviews/e02-r21-review.md` a
+> `codex/e02-r21-practice-production-wiring` ágon, `16b8d88`), a router-task
+> BLOCKED terminal állapotban hagyva javítás nélkül — ezt zárta le a fenti kör).
 > (E02-R20 epic-zárás lezárva — accessibility mátrix, performance számlálók,
 > property gate, doD-tábla és a device-mátrix kész; a rendszerszintű rés
 > (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva. A

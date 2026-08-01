@@ -1195,3 +1195,47 @@ vagy a `resume` hívás elfogadjon munkapéldányon KÍVÜLI findings-útvonalat
 reprodukáló állapotból (üres diff + sikeres gate; `.codex-round-status`
 jelenléte + `resume`), mielőtt a `reset --task-id E02-R21` bármit is
 feloldana.
+
+## L39 — L38 javítva: `scoped_changed_paths` + kategória-független generált/ignorált mentesség
+
+**Mit mértünk (2026-08-01, E02-R21, H6 önjavító kör, 4. előfordulás).**
+A `python3 tools/model-router.py status --task-id E02-R21 --json` a `reset`
+ELŐTT pontosan az L38-ban leírt állapotot mutatta: `status=BLOCKED`,
+`reason="path outside allowed scope: .ai/review-findings-e02-r21.md; ...
+.codex-round-status; ... docs/reviews/e02-r21-review.md"`, a
+`changed_paths` 31+ `.dart_tool/`/`build/` bejegyzést tartalmazott, egyetlen
+`lib/`/`test/` utat sem. Ez volt a MÉRT bizonyíték a javítás előtt.
+
+**A javítás** (`tools/ai_router/security.py`, `tools/ai_router/router.py`,
+PR [#47](https://github.com/wolfcasaba/strumsight/pull/47), commit
+`b80cf93`→squash `35f6da1`):
+
+1. `ScopeAudit` új mezője `scoped_changed_paths` — a `changed_paths`
+   generált/ignorált bejegyzésektől megtisztított változata. A router MOST
+   ezt használja minden "történt-e valódi munka" döntésnél (`router.py`
+   4 hívási hely: `_scope_or_finish` state-mentés, recovery-ág, Terra
+   `partial_changes`, a fő NO_CHANGE-ág) a nyers `changed_paths` helyett.
+2. `security.py` `audit_scope`-ban a generált/ignorált mentesség korábban
+   `path in new_ignored and _is_generated_ignored(...)` volt — ez egy MÁR
+   TRACKELT fájl (pl. `docs/reviews/eXX-rYY-review.md` frissítése) esetén
+   SOSE adott mentességet, a GENERATED_IGNORED_PREFIXES tartalmától
+   függetlenül. A feltétel mostantól kategória-független
+   (`_is_generated_ignored(path, ...)`), és `GENERATED_IGNORED_PREFIXES`/
+   `GLOBS` felvette a `.codex-round-status`-t, a `docs/reviews`
+   könyvtárat és a `.ai/review-findings-*.md` mintát.
+
+**Regressziós teszt, mérten RED→GREEN** (`git stash` a fix commitjára,
+teszt lefuttatva, majd `stash pop`):
+`tools/tests/test_router.py::test_build_cache_churn_alone_does_not_count_as_scoped_change`,
+`tools/tests/test_router_artifact_scope.py::test_resume_workflow_artifacts_do_not_self_conflict_with_scope_audit`.
+Fix előtt mindkettő ugyanazt a hibaüzenetet dobta, mint a valódi
+`.pipeline/HALTED` jelentés. Teljes `tools/tests` (100 teszt, 33 subtest):
+zöld. `router-ci.yml` CI: zöld, a merge-commit SHA-jén.
+
+**Hogyan alkalmazd.** Ha egy audit-jellegű ellenőrzés (scope, baseline,
+lint) egyetlen nyers halmazt épít több különböző döntéshez ("van-e
+sértés" / "történt-e munka" / "biztonságos-e"), az egyik döntéshez tett
+utólagos kivétel (itt: generated_ignored) NEM terjed automatikusan a
+másikra — expliciten vezesd át mindkettőre, vagy külön mezőbe válaszd
+szét, ahogy itt a `scoped_changed_paths`. A `reset --task-id` csak EZUTÁN
+futott (`.pipeline` HALT protokoll §6).
