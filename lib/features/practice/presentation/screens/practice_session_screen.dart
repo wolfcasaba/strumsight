@@ -13,6 +13,7 @@ import '../../application/practice_session_command.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
 import '../practice_effect_listener.dart';
+import '../views/chord_change_view.dart';
 import '../views/chord_progression_view.dart';
 import '../views/strum_pattern_view.dart';
 import '../widgets/practice_controls.dart';
@@ -293,6 +294,14 @@ class _ModeView extends ConsumerWidget {
           showChordHint: state.config?.expectedChordHintEnabled ?? true,
         );
       case PracticeMode.chordChanges:
+        return ChordChangeView(
+          target: target,
+          playhead: state.timelinePosition,
+          width: width,
+          latestChange: null,
+          analysis: null,
+          showChordHint: state.config?.expectedChordHintEnabled ?? true,
+        );
       case PracticeMode.rhythmOnly:
       case PracticeMode.freePractice:
         // Modes handled in later rounds (R15, R16).
