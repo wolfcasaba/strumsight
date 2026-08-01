@@ -123,4 +123,61 @@ Ha egy parancs nem elérhető vagy környezeti okból nem fut:
 - futtasd a lehetséges kisebb ellenőrzést;
 - jelöld a hiányzó gate-et blokkolónak, ha release-kritikus.
 
+## 13. MiniMax-first headless router (`engine=auto`)
+
+Normatív döntés: [ADR 0088](../adr/0088-minimax-first-development-router.md).
+Az orchestrátor a branch/worktree és pre-flight commit után a router adaptert
+**előtérben** futtatja:
+
+```bash
+PIPELINE_ROUTER_STATUS_FILE=<pipeline-state>/router-status \
+  <worktree>/tools/ai-router-round.sh run \
+  <worktree> docs/rounds/e03-rNN-<slug>.md \
+  <worktree>/.ai/runs/E03-RNN/router-result.json
+```
+
+Review findings folytatása — ugyanaz a task és külső state, nincs budget reset:
+
+```bash
+<worktree>/tools/ai-router-round.sh resume \
+  <worktree> docs/rounds/e03-rNN-<slug>.md \
+  <worktree>/.ai/runs/E03-RNN/router-result.json \
+  <worktree>/docs/reviews/e03-rNN-review.md
+```
+
+Állapot:
+
+- `READY_FOR_REVIEW` → csak progress; scope-audit után az orchestrátor commitol,
+  majd független review + CI következik;
+- `STOPPED` → nincs további automatikus modellhívás;
+- `DEFERRED` → szolgáltatás/kvóta/napi limit után ugyanaz a task resume-olható;
+- `BLOCKED` / `INTERNAL_ERROR` → előfeltétel vagy router-integritás javítandó.
+
+Kézi diagnosztika:
+
+```bash
+python3 tools/model-router.py status --task-id E03-RNN --json
+tools/pipeline-status.sh
+~/.local/libexec/strumsight-ai/minimax-quota --check-only
+```
+
+Gépi telepítés és read-only smoke:
+
+```bash
+python3 tools/install-ai-router.py \
+  --home /home/ubuntu --source-config /home/ubuntu/.mmx/config.json
+python3 tools/model-router.py smoke --profile m3 --worktree "$PWD"
+python3 tools/model-router.py smoke --profile terra --worktree "$PWD"
+```
+
+A smoke nem módosíthatja a repót. A globális Codex default és a ChatGPT login
+nem változhat. A source credential csak user-owned, nem symlink, `0600` fájl
+lehet; kulcs vagy nyers quota-body nem kerülhet logba vagy TOML-ba. Az installer
+az ugyanilyen, korábbi OpenSpace MCP literal kulcsot privát runtime-wrapperre
+migrálja; ezt idempotencia- és exact-secret scan ellenőrzi.
+
+Az Epic 3 queue-sorok `prepared` állapotban vannak. Ez szándékos: csak az Epic
+2 lezárása és emberi döntés után állítható az első sor `pending`-re; R22 kézi
+zárókör.
+
 ---

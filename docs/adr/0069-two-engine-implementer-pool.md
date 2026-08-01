@@ -1,6 +1,11 @@
 # ADR 0069 — Kétmotoros implementer-készlet: MiniMax M3 a volumenmunkára, Codex az ítéletigényes körökre
 
 **Státusz:** elfogadva (explicit user-utasítás, 2026-07-30).
+
+> **Pontosítás (2026-08-01):** az [ADR 0088](0088-minimax-first-development-router.md)
+> az `engine=auto` útvonalon felülírja az előzetes feladattípus szerinti
+> motorválasztást és a Claude Code MiniMax harness használatát. Ez az ADR az
+> explicit `engine=minimax|codex` legacy reprodukciós módokra tovább él.
 Kiegészíti az [ADR 0055](0055-agent-role-protocol.md) váltóbot-modellt — a
 szerepek változatlanok, csak az „implementál" szerepet mostantól két motor
 tölti be. A zöld-kapus merge ([ADR 0052](0052-ci-apk-automerge-session-per-round.md))

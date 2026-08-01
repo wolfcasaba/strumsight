@@ -1,0 +1,48 @@
+name: Router CI
+
+# A MiniMax-first fejlesztési router (ADR 0088) saját teszt-sávja.
+#
+# MIÉRT KELL: a router `tools/round-gate.sh`-t hív és eldönti, melyik modell
+# dolgozik — vagyis MAGA a mérce egy darabja. A repó Flutter-gate-je (ADR 0052)
+# Dart-only, ezért a router 87 Python-tesztje enélkül SEMMILYEN automatikus
+# ellenőrzés alatt nem állna: a mércét mérnie kell valaminek.
+#
+# A router stdlib-only (Python 3.11+ a `tomllib` miatt), ezért a futáshoz nincs
+# külső függőség — a CI csak a `pytest`-et telepíti.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/ai_router/**"
+      - "tools/model-router.py"
+      - "tools/minimax-quota.py"
+      - "tools/openspace-vm-wrapper.py"
+      - "tools/tests/**"
+      - "tools/round-gate.sh"
+      - ".ai/**"
+      - ".github/workflows/router-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  router-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Router test gate
+        run: python -m pytest tools/tests -q
+
+      - name: Router CLI smoke gate
+        run: PYTHONPATH=tools python3 tools/model-router.py --help

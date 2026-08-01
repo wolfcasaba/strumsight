@@ -22,6 +22,21 @@
 #   5 = az orchestrátor-session időtúllépéssel vagy jelzés nélkül halt meg
 set -uo pipefail
 
+validate_engine() {
+  case "${1:-}" in
+    auto | minimax | codex) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ "${1:-}" = "--validate-engine" ]; then
+  [ "$#" -eq 2 ] && validate_engine "$2" || {
+    echo "engine must be one of: auto | minimax | codex" >&2
+    exit 2
+  }
+  exit 0
+fi
+
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root" || exit 4
 
@@ -34,6 +49,7 @@ prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 lock_file="$state_dir/lock"
 halt_file="$state_dir/HALTED"
 status_file="$state_dir/round-status"
+router_status_file="$state_dir/router-status"
 chain_log="$state_dir/chain.log"
 
 session_timeout=${PIPELINE_SESSION_TIMEOUT:-14400}   # 4 óra: kör + javító kör + CI
@@ -119,6 +135,12 @@ engine=$(printf '%s' "$next_line" | cut -f3)
 adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
+validate_engine "$engine" || die "ismeretlen implementer motor: $engine (auto|minimax|codex)"
+if [ "$engine" = "auto" ]; then
+  [ -x "$repo_root/tools/ai-router-round.sh" ] || die "hiányzik a router adapter"
+  [ -x "$repo_root/tools/model-router.py" ] || die "hiányzik a model router"
+  [ -f "$repo_root/.ai/router.toml" ] || die "hiányzik a router konfiguráció"
+fi
 
 log "következő kör: $round · brief=$brief · motor=$engine · ADR=$adr"
 
@@ -137,11 +159,12 @@ sed -e "s|{{ROUND}}|$round|g" \
     -e "s|{{ENGINE}}|$engine|g" \
     -e "s|{{ADR}}|$adr|g" \
     -e "s|{{STATUS_FILE}}|$status_file|g" \
+    -e "s|{{ROUTER_STATUS_FILE}}|$router_status_file|g" \
     -e "s|{{HALT_FILE}}|$halt_file|g" \
     "$prompt_template" > "$prompt_file"
 
 # --- 6. Friss headless orchestrátor-session -------------------------------
-rm -f "$status_file"
+rm -f "$status_file" "$router_status_file"
 log "orchestrátor-session indul ($round), időkorlát ${session_timeout}s → $session_log"
 notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-session"
 

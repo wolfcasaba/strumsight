@@ -1,58 +1,141 @@
 #!/usr/bin/env bash
 # Kör-gate futtató (ADR 0052 zöld kapu, AGENTS.md §12).
 #
-#   tools/round-gate.sh <teszt-útvonal> [további teszt-útvonal ...]
+#   tools/round-gate.sh [--result-json PATH] <teszt-útvonal> [...]
 #
-# Példa:
-#   tools/round-gate.sh test/features/practice/ test/property/practice_session_property_test.dart
+# ROUND_GATE_RESULT_FILE ugyanazt a strukturált kimenetet kéri, mint a
+# --result-json. A lépések külön processzekben futnak; nincs shell-eval,
+# parancslánc vagy a valódi kilépési kódot elrejtő pipe.
 #
-# MIÉRT SCRIPT, és miért nem a promptban felsorolt parancsok:
-# az E02-R07-ben az implementer motor HÁROMSZOR futtatta a gate-et
-# `| tail -N`-nel, pedig a brief és a javító prompt is szó szerint tiltotta
-# (docs/LESSONS.md L09 környéke, docs/reviews/e02-r07-review.md). A csővezeték
-# elrejti a kilépési kódot és a hibalistát, így a „minden gate zöld" jelentés
-# bizonyíthatatlan. A mérce ezért futtatható artefaktum, nem prompt-szöveg.
-#
-# A lépések KÜLÖN processzként futnak, egymás után — soha nem `analyze && test`
-# egyetlen parancsban (ezen a boxon OOM-ol, docs/LESSONS.md L05). A kimenet
-# csonkítatlanul megy a terminálra; az első piros lépésnél megállunk.
-#
-# Kilépési kód: 0 = minden lépés zöld, egyébként az első bukott lépés kódja.
+# Kilépési kódok:
+#   0  = pass
+#   10 = code_failure
+#   20 = environment_failure
+#   30 = invalid_gate
+#   40 = internal_failure
 set -uo pipefail
 
 flutter_bin=${FLUTTER_BIN:-$HOME/flutter/bin/flutter}
 dart_bin=${DART_BIN:-$HOME/flutter/bin/dart}
+sleep_seconds=${ROUND_GATE_SLEEP_SECONDS:-2}
+result_file=${ROUND_GATE_RESULT_FILE:-}
+baseline_mode=0
+
+if [ "${1:-}" = "--result-json" ]; then
+  if [ "$#" -lt 2 ]; then
+    echo "round-gate.sh: a --result-json értéke kötelező" >&2
+    exit 30
+  fi
+  result_file=$2
+  shift 2
+fi
+
+if [ "${1:-}" = "--baseline" ]; then
+  baseline_mode=1
+  shift
+fi
+
+write_result() {
+  [ -n "$result_file" ] || return 0
+  local outcome=$1 exit_code=$2 failed_step=${3:-} command_exit=${4:-0} error_hash=${5:-}
+  python3 -c '
+import json, os, pathlib, sys, tempfile
+path = pathlib.Path(sys.argv[1])
+payload = {
+    "schema_version": 1,
+    "outcome": sys.argv[2],
+    "exit_code": int(sys.argv[3]),
+    "failed_step": sys.argv[4] or None,
+    "command_exit_code": int(sys.argv[5]),
+    "error_hash": sys.argv[6] or None,
+}
+path.parent.mkdir(parents=True, exist_ok=True)
+fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
+' "$result_file" "$outcome" "$exit_code" "$failed_step" "$command_exit" "$error_hash"
+}
+
+finish_error() {
+  local outcome=$1 router_exit=$2 message=$3 failed_step=${4:-} command_exit=${5:-0}
+  echo "round-gate.sh: $message" >&2
+  local fingerprint hash
+  fingerprint=$(mktemp)
+  printf '%s\n%s\n%s\n' "$outcome" "$failed_step" "$command_exit" > "$fingerprint"
+  hash=$(sha256sum "$fingerprint")
+  hash=${hash%% *}
+  rm -f "$fingerprint"
+  if ! write_result "$outcome" "$router_exit" "$failed_step" "$command_exit" "sha256:$hash"; then
+    echo "round-gate.sh: az eredményfájl nem írható" >&2
+    exit 40
+  fi
+  exit "$router_exit"
+}
 
 if [ ! -x "$flutter_bin" ] || [ ! -x "$dart_bin" ]; then
-  echo "round-gate.sh: nincs futtatható flutter/dart ($flutter_bin, $dart_bin)" >&2
-  echo "  állítsd be: FLUTTER_BIN=... DART_BIN=... tools/round-gate.sh ..." >&2
-  exit 2
+  finish_error "environment_failure" 20 \
+    "nincs futtatható flutter/dart ($flutter_bin, $dart_bin)" "preflight.tools" 2
 fi
 if [ ! -f pubspec.yaml ]; then
-  echo "round-gate.sh: a repó gyökeréből futtasd (nincs pubspec.yaml itt)" >&2
-  exit 2
+  finish_error "environment_failure" 20 \
+    "a repó gyökeréből futtasd (nincs pubspec.yaml itt)" "preflight.repository" 2
 fi
-if [ "$#" -eq 0 ]; then
-  echo "használat: tools/round-gate.sh <teszt-útvonal> [további teszt-útvonal ...]" >&2
-  echo "  a kör által ÉRINTETT terület tesztjei; a teljes suite a CI-ban fut (ADR 0053)" >&2
-  exit 2
+if [ "$#" -eq 0 ] && [ "$baseline_mode" -ne 1 ]; then
+  finish_error "invalid_gate" 30 \
+    "legalább egy célzott tesztútvonal kötelező" "preflight.arguments" 2
 fi
+
+for test_path in "$@"; do
+  case "$test_path" in
+    "" | -* | /* | *"/../"* | ../* | */..)
+      finish_error "invalid_gate" 30 \
+        "érvénytelen tesztútvonal: $test_path" "preflight.arguments" 2
+      ;;
+  esac
+done
 
 step_number=0
 declare -a step_names=()
 declare -a step_results=()
+gate_tmp=$(mktemp -d)
+trap 'rm -rf "$gate_tmp"' EXIT
+
+summary() {
+  echo
+  echo "═══ Gate-összegzés"
+  local index=0
+  while [ "$index" -lt "${#step_names[@]}" ]; do
+    printf '    %-58s %s\n' "${step_names[$index]}" "${step_results[$index]}"
+    index=$((index + 1))
+  done
+}
 
 run_step() {
   local name=$1
   shift
   step_number=$((step_number + 1))
+  local step_log="$gate_tmp/step-$step_number.log"
   echo
   echo "═══ [$step_number] $name"
-  echo "    \$ $*"
+  printf '    $'
+  printf ' %q' "$@"
   echo
-  # Külön processz, csonkítatlan kimenet, nincs csővezeték.
-  "$@"
+  echo
+  "$@" >"$step_log" 2>&1
   local code=$?
+  cat "$step_log"
   step_names+=("$name")
   if [ "$code" -eq 0 ]; then
     step_results+=("zöld")
@@ -63,20 +146,18 @@ run_step() {
     echo
     echo "    → [$step_number] $name: PIROS (kilépési kód $code)" >&2
     summary
-    exit "$code"
+    local digest
+    digest=$(sha256sum "$step_log")
+    digest=${digest%% *}
+    if ! write_result "code_failure" 10 "$name" "$code" "sha256:$digest"; then
+      echo "round-gate.sh: az eredményfájl nem írható" >&2
+      exit 40
+    fi
+    exit 10
   fi
-  # A következő lépés friss processzben induljon (analyze/test memória, L05).
-  sleep 2
-}
-
-summary() {
-  echo
-  echo "═══ Gate-összegzés"
-  local index=0
-  while [ "$index" -lt "${#step_names[@]}" ]; do
-    printf '    %-58s %s\n' "${step_names[$index]}" "${step_results[$index]}"
-    index=$((index + 1))
-  done
+  if [ "$sleep_seconds" != "0" ]; then
+    sleep "$sleep_seconds"
+  fi
 }
 
 run_step "format" \
@@ -96,3 +177,7 @@ summary
 echo
 echo "MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban"
 echo "fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t."
+if ! write_result "pass" 0 "" 0 ""; then
+  echo "round-gate.sh: az eredményfájl nem írható" >&2
+  exit 40
+fi
