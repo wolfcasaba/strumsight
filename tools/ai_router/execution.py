@@ -90,6 +90,8 @@ def build_codex_argv(codex_bin: str, profile: str, worktree: Path) -> list[str]:
         raise ValueError(f"unsupported Codex profile: {profile}")
     return [
         codex_bin,
+        "--ask-for-approval",
+        "never",
         "exec",
         "--profile",
         profile,
@@ -97,8 +99,6 @@ def build_codex_argv(codex_bin: str, profile: str, worktree: Path) -> list[str]:
         os.fspath(worktree.resolve()),
         "--sandbox",
         "workspace-write",
-        "--ask-for-approval",
-        "never",
         "--ephemeral",
         "--json",
         "-",

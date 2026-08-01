@@ -81,7 +81,8 @@ class RouterCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "M3_OK")
         self.assertIn("read-only", args)
-        self.assertIn("never", args)
+        self.assertLess(args.index("--ask-for-approval"), args.index("exec"))
+        self.assertEqual(args[args.index("--ask-for-approval") + 1], "never")
         self.assertIn("--ephemeral", args)
         self.assertNotIn("M3_OK", " ".join(args))
 

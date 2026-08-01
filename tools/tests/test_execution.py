@@ -21,6 +21,8 @@ class ExecutionTest(unittest.TestCase):
             argv,
             [
                 "codex",
+                "--ask-for-approval",
+                "never",
                 "exec",
                 "--profile",
                 "m3",
@@ -28,8 +30,6 @@ class ExecutionTest(unittest.TestCase):
                 "/tmp/worktree",
                 "--sandbox",
                 "workspace-write",
-                "--ask-for-approval",
-                "never",
                 "--ephemeral",
                 "--json",
                 "-",
