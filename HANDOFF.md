@@ -4,6 +4,29 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (önjavító kör, E02-R21 H6 3. előfordulása JAVÍTVA.** Mért gyökérok
+> (`docs/reviews/e02-r21-review.md` "Update 3"): `StateStore.reset_task`
+> (`tools/ai_router/state.py:131-144`) csak a `tasks/<id>.json`-t törölte,
+> a `terra-ledger.json`-t nem — a `reserve_terra` `task_count` szűrője
+> (`state.py:184-188`) a `daily_count`-tal ellentétben nem nap-alapú, ezért
+> a task egyetlen valaha történt Terra-foglalása örökre kimerítette a saját
+> kvótáját, `reset --task-id` után is. Javítva: `reset_task` egy új
+> `_archive_terra_reservations` segéddel a task saját ledger-sorait
+> `status="archived"`-ra állítja ugyanabban a hívásban (a `_ledger_lock()`
+> alatt), így mind a task-, mind az aznapi globális kvótája felszabadul; más
+> taskok sorai érintetlenek. Mért RED→GREEN
+> (`tools/tests/test_state_store.py::test_reset_task_clears_the_terra_ledger_so_the_task_can_reserve_again`,
+> `::test_reset_task_only_archives_that_tasks_own_reservations`), teljes
+> `tools/tests` (104 teszt, 33 subtest) zöld, `router-ci.yml` zöld a
+> merge-SHA-n: [PR #49](https://github.com/wolfcasaba/strumsight/pull/49)
+> (squash `dfb0e26`). A production `~/.local/state/strumsight-ai-router`
+> state-en is lefuttatva az ÚJ kódú `reset --task-id E02-R21` — a ledger
+> E02-R21 sora `archived`, a task `NOT_STARTED`, a lánc a következő
+> firing-en fresh PRECHECK-et futtat. Tanulság: `docs/LESSONS.md` L41.
+> **A Practice V2 production drótozás (a kör tényleges célja) ÉRINTETLEN —
+> ez a kör kizárólag a router-infrastruktúrát javította, HARMADSZOR
+> ugyanezen a task-on.**
+> Előző kör: 2026-08-01
 > (Pipeline E02-R21 — a H4-fix (#48) UTÁNI friss `run` is HALT-ba futott,
 > HARMADIK, a router `reset --task-id` és a Terra-ledger közötti
 > inkonzisztencia miatt: H6.** `python3 tools/model-router.py reset --task-id

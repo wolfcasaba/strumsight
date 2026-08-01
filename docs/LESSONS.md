@@ -1285,3 +1285,62 @@ strukturálisan azonos Terra FINAL_GATE és a resume-duplikátuma kimaradt.
 Külön regressziós teszt kell minden útvonalhoz, nem csak egyhez, mert a
 resume-ág gyakran kézzel felvett task-state-tel tesztelhető csak (nincs
 valódi interrupt-mechanizmus a szinkron `router.run()`-ban).
+
+## L41 — `reset --task-id` "fresh start" ígérete hamis volt a Terra-kvótára: a napi számláló nap-alapú, a task-számláló nem
+
+**Mit mértünk (2026-08-01, E02-R21, HARMADIK H6 halt ugyanazon a taskon,
+önjavító kör, docs/reviews/e02-r21-review.md Update 3).**
+Az L37 fixje (PR #46) bevezette a `model-router.py reset --task-id`
+parancsot azzal az ígérettel, hogy "a next `run` re-prechecks from
+scratch" és "a stuck terminal state ... can always be cleared". A H4-fix
+(L40) után egy orchestrátor-session lefuttatta `reset --task-id E02-R21`-et,
+majd friss `run()`-t indított — a friss futás `BASELINE_GATE`/`GATE_1`
+zölden ment, de a Terra-hívásnál `TerraBudgetError("task Terra budget is
+exhausted")`-tel `DEFERRED`-be futott, jóllehet a task aznap még sosem
+kapott VALÓDI Terra-választ (`terra_calls=0` a saját state-ben).
+
+**Gyökérok.** `StateStore.reserve_terra` (`tools/ai_router/state.py:167-203`)
+két számlálót vezet ugyanabból a `terra-ledger.json`-ból: `daily_count`
+(`row.get("utc_day") == day` szűrővel, globális, minden taskra) és
+`task_count` (`row.get("task_id") == task_id` szűrővel, **nap nélkül**).
+`max_terra_calls_per_task=1` kikényszerített konfig-invariáns
+(`config.py:105`), ezért a task egyetlen valaha történt Terra-foglalása —
+akár egy régóta lezárt, akár egy a mai H4-fix ELŐTTI hibás futásból maradt
+sor — örökre kimeríti a task saját kvótáját. A `reset_task`
+(`state.py:131-144`, L37 óta) **kizárólag** a `tasks/<id>.json`-t törölte;
+a `terra-ledger.json`-hoz nem nyúlt. A docstring ígérete tehát csak a
+task-fázisra teljesült, a Terra-kvótára nem — és mivel a `task_count` nem
+nap-alapú, a hiba magától sem évült volna el aznap.
+
+**A javítás** (`tools/ai_router/state.py`, izolált worktree
+`heal/E02-R21-H6-1`, PR #49): `reset_task` most, ugyanabban a hívásban,
+egy új `_archive_terra_reservations(task_id)` segéddel a `terra-ledger.json`
+adott `task_id`-hez tartozó, még aktív (`reserved`/`started`/`finished`)
+sorait `status="archived"` + `archived_at` mezőre állítja (nem törli — az
+audit-trail megmarad), a `_ledger_lock()` védelme alatt. Az `archived`
+státusz kimarad mind a `task_count`, mind a `daily_count` `active`
+halmazából, tehát a reset a task saját napi lefoglalt kvótáját is
+felszabadítja (szándékos: az a Terra-hívás soha nem termelt hasznos
+munkát). Más taskok sorait a szűrő (`task_id` egyezés) érintetlenül hagyja.
+
+**Regressziós teszt, mérten RED→GREEN**
+(`tools/tests/test_state_store.py::StateStoreTest`):
+`test_reset_task_clears_the_terra_ledger_so_the_task_can_reserve_again`
+pontosan a HALT-ot reprodukálja (foglal → befejez → reset → azonnal, aznap
+újra tud foglalni); a fix előtti `state.py`-on mérten `TerraBudgetError`-t
+dobott, utána zöld.
+`test_reset_task_only_archives_that_tasks_own_reservations` a
+hatókör-védelem: más task sora `reserved` marad reset után. Teljes
+`tools/tests` (104 teszt, 33 subtest): zöld. A javítás után a valódi
+production state-en (`~/.local/state/strumsight-ai-router`) is lefuttattuk
+az ÚJ kódú `reset --task-id E02-R21`-et — a `terra-ledger.json` E02-R21
+sora `archived`-ra váltott, a task state `NOT_STARTED`.
+
+**Hogyan alkalmazd.** Egy "fresh start" / "reset" API minden olyan
+perzisztens állapotot töröljön vagy semlegesítsen, amit a hívó a docstring
+alapján elvár — ha egy funkció TÖBB, egymástól független perzisztencia-
+réteget tart karban ugyanahhoz a domain-entitáshoz (itt: task-state fájl +
+globális Terra-ledger), a reset mindegyiket kezelje egy tranzakcióban, nem
+csak az elsőt, amit valaki megírt. Ha egy számláló nap-alapú a testvérénél
+(itt: `daily_count` vs. `task_count`), az az inkonzisztencia önmagában
+gyanús jel — vagy szándékos (dokumentáld, miért), vagy hiányzó szűrő.
