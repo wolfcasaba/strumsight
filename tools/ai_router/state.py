@@ -134,6 +134,11 @@ class StateStore:
         Idempotent: resetting a task with no persisted state is a no-op, so a
         stuck terminal state (e.g. BLOCKED on a since-fixed root cause) can
         always be cleared without first inspecting whether it exists.
+
+        Also archives the task's Terra ledger reservations: `task_count` in
+        `reserve_terra` is not day-scoped (unlike `daily_count`), so a single
+        past reservation would otherwise exhaust the task's Terra budget
+        forever, even across a reset.
         """
         self._validate_task_id(task_id)
         path = self.root / "tasks" / f"{task_id}.json"
@@ -142,6 +147,25 @@ class StateStore:
         else:
             with self.task_lock(task_id):
                 path.unlink(missing_ok=True)
+        self._archive_terra_reservations(task_id)
+
+    def _archive_terra_reservations(self, task_id: str) -> None:
+        now = self.clock().astimezone(timezone.utc).isoformat()
+        active = {"reserved", "started", "finished"}
+        with self._ledger_lock():
+            ledger = self._load_ledger()
+            changed = False
+            for row in ledger["reservations"]:
+                if (
+                    isinstance(row, dict)
+                    and row.get("task_id") == task_id
+                    and row.get("status") in active
+                ):
+                    row["status"] = "archived"
+                    row["archived_at"] = now
+                    changed = True
+            if changed:
+                self._write_json(self.root / "terra-ledger.json", ledger)
 
     @contextmanager
     def _ledger_lock(self) -> Iterator[None]:
