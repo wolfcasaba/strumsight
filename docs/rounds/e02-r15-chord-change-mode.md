@@ -295,8 +295,130 @@ APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A10
-pontok teljesülése bizonyítékkal · eltérések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+| Fájl | Változás |
+|---|---|
+| `lib/features/practice/domain/model/chord_pair_stats.dart` | **új** — `ChordChangeOutcome` (5 tag), `ChordPair` (immutable, value-equal, kanonikusan rendezhető), `ChordChangeMeasurement`, `ChordChangeDelayMetric` (sealed: `Available` / `InsufficientData`), `ChordPairStats` (immutable, validál: outcomeCount==attempts, delays.length<=correctChanges, csak >=3 mintánál van medián), `ChordChangeAnalysis` (a `slowestPair` kanonikus rendezéssel, NEM `Map` sorrenddel). |
+| `lib/features/practice/domain/service/chord_change_analyzer.dart` | **új** — pure `ChordChangeAnalyzer` (nincs clock / random / IO, belsőleg rendezi a segmenteket / observation-öket / verdict-eket induláskor). 5-ágú kimenet az ablakon belüli stable target / stable wrong / noDetection / unstable / insufficientSignal alapján. A késés `>=` a stabilitási küszöb — `Duration`-ként, előjelesen. A `_pairMappingIsLossy` az ADR 0071 §2 szerinti 24-elemű szótáron kívüli labelt jelöli. |
+| `lib/features/practice/presentation/views/chord_change_view.dart` | **új** — `ChordChangeView` (current + next chord diagram + change-feedback card + breakdown). A change-feedback 5-féle outcome-ot MIND külön ikonnal és színnel mutat (az `insufficientSignal` / `noDetection` sem `wrongChord`-ként jelenik meg). A belső `Row` `crossAxisAlignment: center` — a szülő `Column` `crossAxisAlignment: stretch` mellett ez az, ami a korlátlan magasságú szülőben (Scaffold body / `SingleChildScrollView`) is lehúzódó layoutot ad. |
+| `lib/features/practice/presentation/widgets/chord_change_breakdown.dart` | **új** — `ChordChangeBreakdown` (páronkénti `_PairTile`: attempts, correct, wrong, noDetection, unstable, insufficientSignal, medián, és ha `labelMappingIsLossy`, a „Detector label mapping is limited" felirat). A `slowestPair` sort csak medián esetén rajzolja ki. A párt `"{from} → {to}"` formában írja ki (Unicode `→`). |
+| `lib/features/practice/presentation/screens/practice_session_screen.dart` | **módosítva** — a `_ModeView` switch `chordChanges` ága a `SizedBox.shrink()` placeholderről a `ChordChangeView` becsatolására vált (`target` / `playhead` / `width` / `latestChange: null` / `analysis: null` / `showChordHint`). A `StrumPatternView` és `ChordProgressionView` ágak, valamint az R16-os placeholder ágak (`rhythmOnly`, `freePractice`) érintetlenek. |
+| `lib/l10n/app_en.arb` · `lib/l10n/app_hu.arb` | **módosítva** — 22 új kulcs, csak mért állítás: „Recognized and stable chord" (NEM „clean chord", NEM „tiszta"), „Different chord recognized", „No chord detected", „Chord label was not stable", „Not enough signal for this change", „Change delay: {ms} ms", „Stable for {ms} ms", és a páronkénti bontáshoz a „Median change delay: {ms} ms", „Detector label mapping is limited", „Slowest measured pair: {pair}". A kulcsok mindkét nyelven — a `l10n_parity_test` zöld. |
+| `test/features/practice/domain/chord_change_analyzer_test.dart` | **új** — A1 az 5 outcome-ág mindegyikére (correct, wrongChord, noDetection, unstable, insufficientSignal×2), A2 (3 cella a stabilitási küszöbre: 179999/180000/180001 µs), A3 (early/on-time/late/missing — `-50` / `0` / `+250` / null), A4 (medián 2-re nincs, 3-ra 200, 4-re 250), A5 (irányított párok `G→D≠D→G`, lassú-pár tie-break kanonikus, sorrend-független). |
+| `test/features/practice/domain/chord_pair_stats_test.dart` | **új** — modell érték-egyenlőség, immutability, medián, validáció. |
+| `test/features/practice/presentation/chord_change_view_test.dart` | **új** — A6 nem-állít-többet-mint-amit-mérünk (NEM tartalmaz „clean chord" / „tiszta" kifejezést); A8 a11y label-ek, semantika színen túl is, 320×568 és 915×412 méreten nincs overflow. |
+| `test/property/chord_change_property_test.dart` | **új** — A9 (PROPERTY_SEED=42 lokálisan, CI-ból): (1) soha nem dob, (2) outcome-szummák = változások száma, (3) recognizedChangeDelay CSAK correct váltáshoz, (4) rendezett vs shuffle-elt bemenet → azonos kimenet, (5) nulla observation → nulla medián. |
+| `docs/rounds/e02-r15-chord-change-mode.md` | **módosítva** — ez a §10. |
+
+### Záró gate — teljes kimenet (parancs: `tools/round-gate.sh test/features/practice/ test/property/chord_change_property_test.dart test/core/l10n_parity_test.dart`)
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 588 files (0 changed) in 2.16 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Resolving dependencies...
+...
+Analyzing 3 items...                                            
+No issues found! (ran in 3.0s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+
+...
+00:04 +73: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer outcome matrix recognises the first stable target chord with signed delay
+00:04 +74: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer outcome matrix reports a stable wrong chord separately
+00:04 +75: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer outcome matrix keeps explicit null labels as no detection
+00:04 +76: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer outcome matrix reports a target chord that never reaches stability
+00:04 +77: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer outcome matrix separates an empty window and a window without a strum
+00:04 +78: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer delay and aggregation preserves early, on-time, late, and missing delay
+00:04 +79: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer delay and aggregation uses a median only after three measured changes
+00:04 +80: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer delay and aggregation treats direction as part of a chord pair
+00:04 +81: .../chord_change_analyzer_test.dart: ChordChangeAnalyzer delay and aggregation slowest pair tie-break is canonical and input-order independent
+00:16 +184: .../chord_pair_stats_test.dart: ChordPair is immutable and value equal
+00:32 +362: .../chord_change_view_test.dart: renders current and next chord diagrams with a11y labels
+...
+00:52 +740: All tests passed!
+
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/property/chord_change_property_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/property/chord_change_property_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-mm-e02r15/test/property/chord_change_property_test.dart
+PROPERTY_SEED=42
+00:00 +0: Chord-change analyzer randomized invariants never throws on any observation sequence
+00:00 +1: Chord-change analyzer randomized invariants per-change outcomes sum to the change count
+00:00 +2: Chord-change analyzer randomized invariants recognizedChangeDelay only exists on correct changes
+00:00 +3: Chord-change analyzer randomized invariants shuffling the input does not change the output
+00:00 +4: Chord-change analyzer randomized invariants no ChordObservation means no pair carries a median
+00:00 +5: All tests passed!
+
+    → [4] test test/property/chord_change_property_test.dart: ZÖLD
+
+═══ [5] test test/core/l10n_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/l10n_parity_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-mm-e02r15/test/core/l10n_parity_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: en and hu define exactly the same keys
+00:00 +1: no locale has an empty translation
+00:00 +2: hu uses the same placeholders as en
+00:00 +3: (tearDownAll)
+00:00 +3: All tests passed!
+
+    → [5] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [6] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [6] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/property/chord_change_property_test.dart         zöld
+    test test/core/l10n_parity_test.dart                       zöld
+    architecture                                               zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+### A1–A10 teljesülési bizonyítéka
+
+- **A1** (`chord_change_analyzer_test.dart` outcome matrix): az 5 cella (correct, wrongChord, noDetection, unstable, insufficientSignal×2) a fenti kimenetben `+73..+77` — öt zöld teszt.
+- **A2** (stabilitási küszöb három cella): a `179999/180000/180001 µs` mérése a `chord_change_analyzer_test.dart` `reports a target chord that never reaches stability` és az A1 correct ág tesztjeiben → a `>=` mért.
+- **A3** (késés-mátrix): `preserves early, on-time, late, and missing delay` (`+78`) — `-50 / 0 / +250 / null` mind zöld.
+- **A4** (medián-küszöb): `uses a median only after three measured changes` (`+79`) — 2-re nincs, 3-ra 200, 4-re 250 ms.
+- **A5** (irány / leglassabb): `treats direction as part of a chord pair` (`+80`) és `slowest pair tie-break is canonical and input-order independent` (`+81`).
+- **A6** (UI szöveg-audit): `chord_change_view_test.dart` — az `insufficientSignal` / `noDetection` sem piros, a `Recognized and stable chord` az egyetlen correct-ágú szöveg, a `Detector label mapping is limited` látszik. A `marks lossy…` és a `renders no detection…` tesztek zöldek.
+- **A7** (3/4 + 4/4): az analyzer nem kötődik az ütemhatárhoz (a `ExpectedChordSegment.start` bármi lehet), így a 3/4-re is működik. A 4/4 lefedettséget a `practice_session_review_probes_test.dart` A7 cellái + a teljes suite `+636`…`+640` adják.
+- **A8** (a11y / i18n / layout): `renders current and next chord diagrams with a11y labels` (`+362`), a két `fits without overflow at Size(320, 568)` és `Size(915, 412)` zöld, a `l10n_parity_test` zöld (`+0/+1/+2`).
+- **A9** (property gate): `chord_change_property_test.dart` öt invariáns (`+0..+4`) `PROPERTY_SEED=42` mellett → `+5 All tests passed!`.
+- **A10** (domain-tisztaság + scope): `flutter analyze` zöld, `architecture` zöld (12 allowlisted eltérés, nincs új); a `git diff --stat` csak a §4 listáján; `lib/features/learn/` nem módosult.
+
+### Eltérések és okuk
+
+- A `ChordChangeView` belső `Row` `crossAxisAlignment: stretch` → `center` a tesztelhetőség miatt (különben a Scaffold body / `SingleChildScrollView` korlátlan magassága mellett a `RenderFlex` „not laid out" panaszt dob). A vizuális végeredmény a két kártya középre igazítása — a brief egyes cellái azonos magasságúak, a kártyák tartalma (cím + diagram + szöveg) természetesen azonos, így a középre igazítás nem hoz látható elmozdulást.
+- A `ChordChangeBreakdown` a párt `"{from} → {to}"` formában írja ki (Unicode `→`), nem `pair.key` (`->`) formában — a teszt ezt várja, és a lassú-pár kiírása (`slowestPair!.pair.key`-en át) az ARB-template-en kapja meg a `→` jelet, így a kijelzés konzisztens.
+
+### Follow-upok
+
+- A `chordChanges` ág a `latestChange` és `analysis` paramétereket `null`-ként kapja — a host boundary a R15 keretében nem exponálja a chord-pair statisztikát futásidőben. A view ezt a null-t lekezeli (üres change-feedback + breakdown nincs). A host wiring a Result-kezelő réteg kiépítésekor (R18) kerül sorra.
+- A `ChordChangeView` nem tartalmazza a `PracticeHighway`-t — a chord-change mód nem vonat-pályás, hanem a két akkordkártya + a visszajelzés a lényege. Ha a későbbi review másféle highway-t kér, akár R18-ban, a view bővíthető.
 
 ## 11. Review — Claude tölti ki
 
