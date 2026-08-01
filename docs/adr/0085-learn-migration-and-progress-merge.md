@@ -1,6 +1,9 @@
 # ADR 0085 — Learn-migráció, V1+V2 progress-egyesítés és streak-jogosultság
 
-**Státusz:** elfogadva (E02-R19 pre-flight, 2026-08-01).
+**Státusz:** elfogadva (E02-R19 pre-flight, 2026-08-01), **Döntés 7 pontosítva
+az R19/b revízióban (2026-08-01, user-döntés)** — lásd a „Döntés 7 pontosítás"
+dobozt lentebb. Az ADR még **nem merge-elt**, ezért a pontosítás nem ADR-módosítás,
+hanem a kör saját, még nyitott döntésének élesítése (ADR 0087 §2).
 Épít az [ADR 0068](0068-practice-domain-model-contracts.md) (`PracticeMetrics`,
 `MetricValue` — `MetricAvailable`/`MetricNotApplicable`/`MetricInsufficientData`),
 [ADR 0076](0076-practice-scoring-dimensions.md) (scorerek, `PracticeScoreAggregator`,
@@ -122,6 +125,29 @@ van és a **rollback a kör része, nem ígéret**:
    direction-dimenzió, ADR 0076 A7 szerint), és **arra** alkalmazza a meglévő
    `LessonProgress.stars` / `isPassed` szabályt (`passThreshold = 0.7`). A V2
    kettős kapuja (completion+overall) a Learn úton **nem** dönt csillagról.
+
+   > **Döntés 7 pontosítás (R19/b revízió, 2026-08-01 — user-döntés (b)).**
+   > Az első implementáció (`7cf1ca4`) a „V2 metrikákból képzi" mondatot úgy
+   > értelmezte, hogy a legacy `LessonScorer.accuracy`-t adja tovább
+   > `directionAccuracy` néven — **tautológia**, valódi V2 scoring-út nélkül
+   > (`docs/reviews/e02-r19-review.md` 3.1 MAJOR → HALT H3). A pontosítás:
+   >
+   > - a flag-ON út accuracy-je **kizárólag**
+   >   `PracticeDirectionScorer.score(...).direction` `MetricAvailable` értéke,
+   >   amit a `PracticeEventMatcher` illesztéseiből számol egy új Learn-oldali
+   >   adapter (`lesson_practice_target.dart` + `lesson_v2_scoring.dart`);
+   > - a legacy `LessonScorer` a flag-ON úton **referencia** (a paritás mércéje),
+   >   **nem forrás** — a `ScoreSnapshot` továbbadása tilos;
+   > - `MetricNotApplicable` / `MetricInsufficientData` → accuracy `0.0`
+   >   (a legacy `total == 0 ? 0 : hits/total` megfelelője);
+   > - a paritás **egzakt**, mert a két illesztő szemantikája mérve azonos
+   >   (korrigált óra, legközelebbi nyitott target, `matchWindow = 280 ms`
+   >   ≡ `windowSec = 0.28`, büntetlen extra ütés, irány nem befolyásolja a
+   >   match-et) — a részletes mérés a kör-brief §0.1-ében.
+   >
+   > A paritás-referenciák (`practice_event_matcher.dart`,
+   > `practice_direction_scorer.dart`, `practice_target_compiler.dart`, a
+   > `domain/model/**`) **nem módosulnak**: az adaptert kell hozzájuk igazítani.
 8. **A rollback működik.** `migratedLearnEnabled = false` → a mai Learn út
    **egyetlen sorral se** változik viselkedésben; a V2 alatt keletkezett
    history-rekordok megmaradnak, a V1 log és a lecke-progress sértetlen.

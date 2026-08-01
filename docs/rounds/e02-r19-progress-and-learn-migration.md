@@ -1,6 +1,6 @@
 # E02-R19 — Progress, streak, daily goal és Learn migráció
 
-- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-01, kód mérve: `main` @ `eeb4f6d`; előre megírva 2026-07-31 @ `ce8fbce`)
+- **Státusz:** **PLANNING — REVIDEÁLVA (R19/b, 2026-08-01)** a HALT H3 user-döntése után (lásd **§0.1**). Pre-flight lezárva 2026-08-01, kód mérve: `main` @ `eeb4f6d`; előre megírva 2026-07-31 @ `ce8fbce`. Kiindulási commit a branchen: `7cf1ca4` (plumbing, megtartva).
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 19"** (+ §20.3–20.6, §22.4)
 - **Branch:** `codex/e02-r19-progress-and-learn-migration`
 - **Előfeltétel:** **E02-R18 merge-ölve** (V2 history — a progress-aggregáció
@@ -67,6 +67,67 @@ helyett a tényleges hívási láncot mérve, L19/L20):
   `Lessons.firstWin` (`lesson.dart:146`, nincs az `all`-ban) = **17**.
 
 Az ADR 0085 (§5 kötött döntések forrása) ezzel a mért kontextussal elfogadva.
+
+## 0.1 Brief-revízió — R19/b újra-scope (user-döntés 2026-08-01)
+
+> **Ez a szakasz felülírja a §4 tilos zónáját és a §6 A7-et.** A korábbi
+> (revízió előtti) állapotot a `7cf1ca4` implementáció és a
+> [`docs/reviews/e02-r19-review.md`](../reviews/e02-r19-review.md) 3.1 MAJOR
+> rögzíti — ne ahhoz igazodj, hanem ehhez a szakaszhoz.
+
+**Mi történt.** Az első futás (`7cf1ca4`) a plumbing-oldalt (A1–A6, A8–A10)
+valósan megcsinálta, de a **Learn-migráció scoring-útját tautológiaként**
+készítette el: a flag-ON ág a legacy `LessonScorer` `snap.accuracy`-jét adta
+tovább `directionAccuracy`-ként, V2 scoring-út nélkül, és az A7 paritás-teszt
+ugyanazt az egy értéket hasonlította önmagához („trivially identical"). A hű
+megvalósítás a §4 listán kívüli fájlokat igényelt → **HALT (H3)**.
+
+**A user döntése: (b) — R19 újra-scope-olása.** A §4 lista bővül a V2-scoring
+felszínnel, és a kör **valódi, piros→zöld** A7-tel fut újra. A plumbing-commit
+(`7cf1ca4`) **megmarad** kiindulásnak (a review mérte: genuine, nem tautológia);
+az implementer erre építi rá a valódi scoring-utat, és **a teljes A1–A10-ért
+felel**, nem csak a scoring-részért.
+
+### Mért paritás-alap (orchestrátor, 2026-08-01) — ez teszi az A7-et teljesíthetővé
+
+A HALT után kimértem, hogy a két mérték **strukturálisan azonos**, tehát az
+egzakt paritás nem irreális elvárás. Mind grepelt/olvasott tény, nem tábla:
+
+| Szempont | legacy `LessonScorer` | V2 `PracticeEventMatcher` + `PracticeDirectionScorer` |
+|---|---|---|
+| óra-korrekció | `playedSec = elapsedSec - inputLatencySec` (`lesson_scorer.dart:245`) | `playedAt = observation.at - inputLatency` (`practice_event_matcher.dart:148`) |
+| illesztés | legközelebbi **nyitott** esemény, `d <= windowSec && d < bestDelta` (`:249-256`) | legközelebbi **nyitatlan** target, `delta <= matchWindow && delta < best` (`:156-170`) |
+| ablak | `windowSec = 0.28` (default, `:79`) | `matchWindow = Duration(milliseconds: 280)` — **mind az 5 profilban** (`scoring_profile.dart:70,85,100,116,128`) |
+| extra ütés | „no open event nearby" → `null`, **büntetlen** (`:258`) | `_extraStrumCount++` → `null`, **büntetlen** (`:172-175`) |
+| rossz irány | az esemény **elhasználva** (`best.matched = true`), `wrong`, nem hit (`:259,286`) | a target **resolved**, `DirectionOutcome.wrong`, 0 pont, **nevezőben marad** (`practice_direction_scorer.dart:103-114`) |
+| miss-zárás | `advance()` korrigált órán, nyitott esemény ablakon túl → miss (`:294-300`) | `advance()` korrigált órán, nem-növekvő óra figyelmen kívül (`:191-198`) |
+| **számláló** | `hits` = ablakon belüli **és jó irányú** ütés | `correctCount` = `observation.direction == expected` |
+| **nevező** | `total` = a lecke eseményeinek száma | `applicableCount` = irány-viselő, nem-kihagyott target |
+
+`LessonEvent.direction` **nem-nullable** (`lesson.dart:24`) → ha az adapter
+minden lecke-eseményt **kötelező** (nem `optional`) targetként fordít le,
+`applicableCount == total`. A count-in: a Learn képernyő
+`countInBeats: _countInBeats = lesson.beatsPerBar` (`learn_screen.dart:47,220`),
+ami a fordítóban `config.countInBars = 1`; a target-idő
+`(countInBeats + e.beat) * secPerBeat` ↔ `converter.timeOfTicks(countInTicks + eventTicks)`.
+
+**Következtetés:** az egzakt paritás **tervezetten elérhető**; ha eltérést mérsz,
+az az adapter konfigurációs hibája (ablak, latency, count-in, tick-rács,
+`optional` jelölés), nem a mérce hibája. A mércét NEM lazítjuk.
+
+### Mi változik ebben a revízióban
+
+1. **§4** — a lista bővül a V2-scoring felszínnel (lásd az ott jelölt
+   „**R19/b**" sorokat) és a `public.dart`-tal (a review 4.1 NOTE-ja).
+2. **§5.7 (ADR 0085 Döntés 7)** — pontosítva: a Learn accuracy forrása a **V2
+   direction-dimenzió**, a legacy `LessonScorer` a **referencia**, nem a forrás.
+3. **§6 A7** — valódi, két-utas paritás-mátrix, kötelező **anti-tautológia
+   őrökkel** és mutációs cellával.
+4. **§7** — az implementációs sorrend a scoring-úttal kezdődik.
+
+Minden más (A1–A6, A8–A10, §9 gate, tilos zóna maradéka) **változatlanul
+érvényes**, és a `7cf1ca4`-ben már teljesül — de a záró gate-nek a végén is
+zöldnek kell lennie.
 
 ## 1. Cél
 
@@ -157,10 +218,31 @@ paritás-tesztek, és a rollback bizonyítása.
 | `test/features/learn/learn_migration_parity_test.dart` | **ÚJ** | A7 paritás-mátrix |
 | `test/features/learn/learn_rollback_test.dart` | **ÚJ** | A8 rollback |
 | `docs/rounds/e02-r19-progress-and-learn-migration.md` | — | **CSAK a §10** |
+| **`lib/features/learn/adapter/lesson_practice_target.dart`** | **ÚJ — R19/b** | `Lesson` → `PracticeDefinition` → `CompiledPracticeTarget` fordító (count-in, tick-rács, kötelező targetek, `ScoringProfile`-választás) |
+| **`lib/features/learn/adapter/lesson_v2_scoring.dart`** | **ÚJ — R19/b** | a **valódi V2 scoring-út**: megfigyelés-lista → `PracticeEventMatcher` → `PracticeDirectionScorer` → legacy-alakú `accuracy` (§5.7) |
+| **`lib/features/practice/public.dart`** | — **R19/b** | **CSAK export-sorok** az in-scope szimbólumokra (matcher, direction-scorer, compiler, definíció-típusok, az R19 use case-ek). Nulla viselkedés. Ezt a review 4.1 NOTE-ja tette a listára. |
+| **`test/features/learn/lesson_v2_scoring_test.dart`** | **ÚJ — R19/b** | az adapter + V2 scoring-út egység-tesztje, **köztük az A7.0 mutációs cellák** |
+
+> **R19/b — amit OLVASNOD kell, de MÓDOSÍTANOD TILOS** (a paritás referenciái;
+> ha bármelyiket módosítanod kellene a zöldért, az **`stopped`**, nem
+> lista-tágítás): `lib/features/practice/domain/service/practice_event_matcher.dart`,
+> `practice_direction_scorer.dart`, `practice_target_compiler.dart`,
+> `lib/features/practice/domain/model/**` (`practice_definition.dart`,
+> `practice_event.dart`, `scoring_profile.dart`, `practice_observation.dart`,
+> `compiled_practice_target.dart`, `meter.dart`, `tempo.dart`,
+> `beat_position.dart`), `lib/features/learn/lesson_scorer.dart`,
+> `lib/features/learn/model/lesson.dart`, `lesson_progress.dart`.
+>
+> Ezek **változatlanul** hordozzák a paritást (§0.1 mérés) — az adaptert kell
+> hozzájuk igazítani, nem fordítva.
 
 **Tilos zóna:** minden más. Nevezetesen `lib/features/learn/lesson_scorer.dart`,
 `lib/features/learn/model/**`, `lib/features/learn/widgets/**`,
-`lib/features/practice/domain/model/**`, `lib/app/config/**` (a flag **értéke**
+`lib/features/practice/domain/model/**`,
+`lib/features/practice/domain/service/**` **egyetlen kivétellel**: a fenti
+listán néven nevezett `practice_progress_aggregator.dart` (az R19 saját új
+fájlja) szerkeszthető — minden más service-fájl, köztük a négy **olvasandó**
+paritás-referencia, **0 sor**. Továbbá `lib/app/config/**` (a flag **értéke**
 nem változik), `docs/adr/**`, `.github/**`.
 
 > **A meglévő Learn-teszteket (§2 lista) NEM írhatod át a zöldért.** Ha egy
@@ -195,6 +277,18 @@ nem változik), `docs/adr/**`, `.github/**`.
    (a direction-dimenzió, ADR 0076 A7 szerint), és **arra** alkalmazza a
    `LessonProgress.stars` / `isPassed` meglévő szabályát. A V2 kettős kapuja
    (completion+overall) a Learn úton **nem** dönt csillagról.
+
+   > **R19/b pontosítás (§0.1 revízió) — ez a kör magja.** A „V2 metrikákból
+   > képzi" **szó szerint** értendő: a flag-ON út accuracy-je
+   > `PracticeDirectionScorer.score(...).direction` `MetricAvailable` értéke,
+   > amit a `PracticeEventMatcher` illesztéseiből számol a `lesson_v2_scoring.dart`.
+   > A legacy `LessonScorer` a flag-ON úton **REFERENCIA** (amivel a paritást
+   > mérjük), **NEM forrás**. Tilos a `ScoreSnapshot.accuracy` továbbadása
+   > `directionAccuracy`-ként — pontosan ez volt a `7cf1ca4` tautológiája.
+   >
+   > `MetricNotApplicable` / `MetricInsufficientData` esetén (nulla
+   > irány-viselő target, vagy egyetlen megfigyelés sem) az accuracy **`0.0`**
+   > — ez a legacy `total == 0 ? 0 : hits/total` viselkedésének felel meg.
 8. **A rollback működik.** `migratedLearnEnabled = false` → a mai Learn út
    **változatlan** viselkedéssel fut; a V2 alatt keletkezett history-rekordok
    megmaradnak, a V1 log és a lecke-progress **sértetlen**.
@@ -270,11 +364,42 @@ túlszámolás.
 | Easy futás 2 csillag → teljes futás 3 csillag | **3** |
 | Easy futás → streak | **nem** csökken |
 
-### A7 — Learn paritás-mátrix (flag ON)
+### A7 — Learn paritás-mátrix (flag ON) — **R19/b: újraírva**
+
+> A revízió előtti A7-et a `7cf1ca4` tautológiával „teljesítette" (a legacy
+> kimenetét hasonlította önmagához). Az alábbi A7.0 őrök ezt **szerkezetileg**
+> zárják ki; enélkül az A7 nem elfogadható, akkor sem, ha a gate zöld.
+
+#### A7.0 — Anti-tautológia őrök (KÖTELEZŐ, mind a négy)
+
+1. **Típus-zár.** A V2 accuracy-t egyetlen **production** függvény állítja elő a
+   `lesson_v2_scoring.dart`-ban, amelynek szignatúrája **kizárólag**
+   `(Lesson lesson, List<StrumObservation> observations, {…konfiguráció})` →
+   `double`. `ScoreSnapshot`, `LessonScorer` és `HitResult` **nem szerepelhet**
+   sem a paraméterei közt, sem a fájl importjai közt. Így a teszt **nem tudja**
+   becsempészni a legacy kimenetet a V2 ágba.
+2. **Import-tilalom, gépiesen.** `lesson_v2_scoring.dart` és
+   `lesson_practice_target.dart` **nem importálja** a `lesson_scorer.dart`-ot.
+   Ezt a `lesson_v2_scoring_test.dart` egy tesztje **méri** (a forrásfájl
+   beolvasása és `contains('lesson_scorer')` → `isFalse`), nem csak állítja.
+3. **Mutációs cella (a piros bizonyítéka).** Ugyanaz a lecke, ugyanaz az
+   időzítés, de **minden megfigyelés iránya megfordítva** → a V2 accuracy
+   **`0.0`**, miközben a target-szám változatlan. Ha ez a cella nem megy 0.0-ra,
+   a V2 út nem olvassa az irányt.
+4. **Részleges cella.** `n` targetből pontosan `k` jó irányú, `n-k` fordított,
+   azonos időzítéssel → V2 accuracy **egzaktul `k/n`** (legalább két különböző
+   `k`-val). Ez zárja ki a „mindig 1.0" és a „mindig legacy" degenerációt.
+
+***Pirosra fogja:*** a `7cf1ca4` megoldása — az 1. és 2. őr **fordítási/mérési
+szinten** lehetetlenné teszi a legacy-passthrough-t.
+
+#### A7.1 — Paritás a teljes korpuszon
 
 A **teljes** lecke-korpuszon (`Lessons.all` 16 + `Lessons.firstWin`, összesen
-**17**), ugyanazzal a szintetikus pengetés-sorozattal, a legacy úton és a V2
-úton:
+**17**), **ugyanabból az egyetlen szintetikus pengetés-sorozatból** származtatva
+a két bemenetet — a legacy út `registerStrum(dir, elapsedSec)` hívásokat kap, a
+V2 út **ugyanazokból** az `(irány, időpont)` párokból épített
+`List<StrumObservation>`-t —, a legacy úton és a V2 úton:
 
 | Mérőszám | Elvárt |
 |---|---|
@@ -289,10 +414,30 @@ A **teljes** lecke-korpuszon (`Lessons.all` 16 + `Lessons.firstWin`, összesen
 | expected chord hint | egzakt egyezés |
 | input/visual latency hatása | egzakt egyezés |
 
+**Mind a 17 leckén, mind a HÁROM pengetés-alakkal** (a paritás nem mérhető egy
+tökéletes futáson, mert ott minden út 1.0-t ad):
+
+| Alak | Mit fed le |
+|---|---|
+| **P1 — tökéletes** | minden target pontosan a rácson, jó iránnyal → mindkét út `1.0` |
+| **P2 — vegyes** | ~1/3 fordított irány, ~1/3 az ablakon **kívülre** csúsztatva (miss), ~1/3 pontos | 
+| **P3 — extra + hiány** | 2 target teljesen kihagyva + 2 „extra" ütés target nélkül (büntetlennek kell lennie mindkét úton) |
+
+17 lecke × 3 alak = **51 paritás-cella**; a §10-be a cellák számát és a
+mért egyezést írd be.
+
 **NEM elfogadható gyengítés:** tűréssel („±1 csillag"), szűkített korpusszal
-(egy-két lecke), vagy „a V2 pontosabb, ezért eltér" indoklással. Ha valódi,
-indokolt eltérést találsz → `stopped` + jelentés; a feloldás **dokumentált
-brief-revízió**, nem a mérce lazítása.
+(egy-két lecke), egyetlen (tökéletes) pengetés-alakkal, vagy „a V2 pontosabb,
+ezért eltér" indoklással.
+
+**Ha valódi eltérést mérsz** (§0.1 szerint ez konfigurációs hibát jelez): előbb
+ellenőrizd a négy ismert forrást — (1) `matchWindow` ≠ `windowSec = 0.28`,
+(2) `inputLatency` mértékegység/előjel, (3) count-in (`countInBars = 1`,
+`meter` = `lesson.beatsPerBar`), (4) `optional` targetek a nevezőben. Ha
+mind a négy rendben van és az eltérés **megmarad** → **`stopped` + jelentés**
+a konkrét leckével, cellával és a két számmal. A feloldás dokumentált
+brief-revízió, **nem** a mérce lazítása és **nem** a paritás-referenciák
+(§4 „olvasandó" lista) módosítása.
 
 ### A8 — Rollback bizonyítva
 
@@ -315,21 +460,43 @@ marad (ez a kör nem javítja a legacyt).
 a11y-összefoglalói megmaradnak; `git diff --stat` a §4 listáján belül;
 `lesson_scorer.dart` **0 sor**; `lib/app/config/` **0 sor**.
 
-## 7. Implementációs sorrend (ez a TERVED)
+## 7. Implementációs sorrend (ez a TERVED) — **R19/b: újraírva**
 
-1. Olvasd el: ADR 0085, `learn_screen.dart` teljes egészében, `lesson_progress.dart`,
-   `streak_logic.dart`, `daily_goal_provider.dart`, `practice_stats.dart`,
-   az R18 history-repository, az R16 jogosultsági predikátum.
-2. `practice_progress_aggregator.dart` + A1–A3 (még hívó nélkül).
-3. `practice_session_recording.dart` use case + A4–A6.
-4. A providerek becsatolása (streak, daily goal, progress) — a meglévő tesztek
-   **végig zöldek maradnak**.
-5. A Learn flag-elágazás: a V2 út bekötése úgy, hogy a flag OFF ág **egyetlen
-   sorral se** változzon viselkedésben.
-6. Paritás-harness (A7) — **előbb pirosan**, majd zöldre.
-7. Rollback-teszt (A8), mikrofon-rés (A9).
-8. i18n (A10).
-9. Záró gate (§9), majd a §10 kitöltése.
+**Kiindulás:** a `7cf1ca4` commit (plumbing) a branchen már **rajta van**, és a
+review mérése szerint A1–A6 és A8–A10 valósan teljesül. A 2–4. lépést tehát
+**ne írd újra** — ellenőrizd, hogy zöld, és menj tovább. A kör magja az 5–7.
+
+1. Olvasd el: a §0.1 revíziót (ez a legfontosabb), az ADR 0085 Döntés 7-et,
+   a `docs/reviews/e02-r19-review.md` 3.1 leletét (mit rontott el az előző
+   futás), majd a §4 „olvasandó" listáját — különösen a
+   `practice_event_matcher.dart`, `practice_direction_scorer.dart`,
+   `practice_target_compiler.dart`, `practice_definition.dart`,
+   `scoring_profile.dart` fájlokat.
+2. **Ellenőrzés, nem újraírás:** `practice_progress_aggregator.dart` + A1–A3.
+3. **Ellenőrzés, nem újraírás:** `practice_session_recording.dart` + A4–A6.
+4. **Ellenőrzés, nem újraírás:** a providerek becsatolása (streak, daily goal,
+   progress) — a meglévő tesztek végig zöldek maradnak.
+5. **`lesson_practice_target.dart`** — `Lesson` → `PracticeDefinition` →
+   `compilePracticeTarget`. A rácsnak **egzaktul** a legacy
+   `(countInBeats + e.beat) * secPerBeat` időket kell adnia (§0.1). Minden
+   lecke-esemény **kötelező** (nem `optional`) target, `direction` kitöltve.
+   A `PracticeDefinition.validate()` megköveteli, hogy
+   `mode.scoredDimensions == scoringProfile.weights.keys` — ehhez válaszd a
+   megfelelő `PracticeMode`/`ScoringProfile` párost, ne a modellt írd át.
+6. **`lesson_v2_scoring.dart`** — a valódi V2 út: `StrumObservation`-lista →
+   `PracticeEventMatcher` (`inputLatency`, `scoringProfile`) → `advance()` a
+   session végéig → `PracticeDirectionScorer.score(...)` → `accuracy`.
+   A szignatúra az A7.0/1. őr szerint kötött.
+7. **`lesson_v2_scoring_test.dart`** — az A7.0 négy őre. **Előbb pirosan:**
+   írd meg a mutációs cellát (A7.0/3) az adapter kész állapota ELŐTT, és a
+   §10-be írd be, hogy pirosan mit adott.
+8. A Learn flag-elágazás átkötése: a flag-ON ág accuracy-je a 6. lépés
+   függvényéből jön (a `snap.accuracy` átadása **megszűnik**); a flag OFF ág
+   **egyetlen sorral se** változzon viselkedésben.
+9. `learn_migration_parity_test.dart` — az A7.1 51 cellája (17 lecke × P1/P2/P3).
+10. Rollback-teszt (A8), mikrofon-rés (A9), i18n (A10) — ellenőrzés.
+11. Záró gate (§9), majd a §10 **újraírása** (a jelenlegi tartalom az előző,
+    elutasított futásé — töröld és írd újra, ne told hozzá).
 
 ## 8. Kockázatok
 
@@ -339,6 +506,15 @@ a11y-összefoglalói megmaradnak; `git diff --stat` a §4 listáján belül;
   kapuja **különböző** politika (ADR 0076 §5.12). A §5.7 dönti el, hogy a Learn
   úton melyik érvényes — ha az implementáció közben ellentmondást találsz,
   `stopped` + brief-revízió, ne válassz magadtól.
+- **R19/b — a kör legnagyobb kockázata: a tautológia megismétlése.** Az előző
+  futás a scoring-utat úgy „teljesítette", hogy a legacy értéket adta tovább, és
+  ezt **zöld gate mellett** tette (`docs/LESSONS.md` L28). A §6 A7.0 négy őre
+  ezt szerkezetileg zárja; ha bármelyik őr kényelmetlen vagy megkerülhetőnek
+  tűnik, az **jelzés, hogy a V2 út nincs kész** — ilyenkor `stopped`, nem
+  őr-lazítás.
+- **Az adapter-illesztés a nehéz rész, nem a scoring.** A `PracticeDefinition`
+  validációja (mode ↔ scoringProfile dimenziók), a tick-rács és a count-in a
+  három hely, ahol a paritás elcsúszhat. A §0.1 táblája a referencia.
 - **Dupla számolás a rollout alatt.** A V1 és a V2 egyszerre írhat; az A3 ezt
   méri.
 - **A daily goal túlszámolása.** A count-in és a pause beszámítása a
