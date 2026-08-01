@@ -32,6 +32,23 @@
 > 3. ADR-szám ütközés ellenőrzése, majd az ADR 0084 megírása.
 > 4. Státusz → PLANNING, dátum/sha frissítés, brief commit a kör-branchre.
 
+## 0.0 Brief-revízió (orchestrátor, ADR 0087 §2 — a kör saját, még nem merge-elt briefje)
+
+**R1 (2026-08-01, review után) — scope-bővítés, elfogadva:** az implementer a §4
+listán felül három, feature-en belüli dekompozíciós fájlt hozott létre, egyik sem
+tilos zónában. Az orchestrátor ezeket a §4 engedélyezett listához adja
+(a fold-back felesleges diff-hízlalás volna):
+
+| Útvonal | Miért |
+|---|---|
+| `lib/features/practice/data/practice_history_recorder.dart` | a valódi `PracticeSessionRecorder` a repositoryból kiemelve (teszthetőbb) |
+| `lib/features/practice/data/practice_session_result_history_mapper.dart` | `PracticeSessionResult` → V2 history-entry leképezés |
+| `lib/features/practice/domain/model/practice_metric_snapshot.dart` | a szerializáló/result-screen által igényelt sealed metrika-snapshot modell |
+
+A **valódi** tilos zónák változatlanul tiltottak (progress/streak/learn, meglévő
+`domain/service` fájlok, `storage_migrator.dart`, más ADR-ek, `.github`, a
+`controller`/`recorder`-interfész/`practice_session_result.dart` zárt-kör modellek).
+
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
 ```bash
