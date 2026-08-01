@@ -1,13 +1,17 @@
 # E02-R21 — Review
 
 Brief: `docs/rounds/e02-r21-practice-production-wiring.md`
-Diff: `git diff origin/main...codex/e02-r21-practice-production-wiring` (HEAD `d45e6ce`)
+Diff: `git diff origin/main...codex/e02-r21-practice-production-wiring` (HEAD `4381be8`, rebase-elve `f27651a`-ra)
 Reviewer: Claude (Sonnet 5, orchestrátor-review) · Dátum: 2026-08-01
-Verdikt: **HALT (H4)** — lásd "Update 2": a self-heal (#46/#47) után indított
-friss `run` a teljes M3+Terra keretet (2/2 + 1/1) kimerítette **valódi diff
-nélkül**, egy a Terra-ágban hiányzó `audit.scoped_changed_paths` őr miatt
-(a §0.0 update 1 leírásában szereplő eredeti H6-tól különböző, új router-hiba).
-Az eredeti H6 (Update 1) leírás alább, változatlanul, történeti okból marad.
+Verdikt: **HALT (H4)** — lásd "Update 4": az ÖTÖDIK futás, az ÖSSZES korábbi
+router-infra fix (#46/#47/#48/#49/#50) UTÁN, a router állapotgépe hibátlanul
+lefutott, de mind a 2 M3-kísérlet és az 1 Terra-hívás **valódi diff nélkül**
+`STOPPED`-be futott — a gyökérok a `codex exec --sandbox workspace-write`
+bwrap-alapú izolációja, ami ezen a konténeren nem tud hálózati namespace-t
+létrehozni (`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`,
+router-független reprodukcióval igazolva). A korábbi Update 1–3 leírások
+(H6/H4/H6, mind router-állapotgép-hiba, mind javítva) alább, változatlanul,
+történeti okból maradnak.
 
 ## Összegzés
 
@@ -395,3 +399,110 @@ implementáció tartalmában.
    elévül; 2. javításnál a `reset --task-id E02-R21` újrafuttatása törli).
 3. A brief/ADR pre-flight változatlanul kész (`4eb331f`/`ec81ef8` utáni
    rebase, `7bdc175`) — nem kell újraírni.
+
+## Update 4 — az első ÉLES `run` (a H4/H6 #48/#49/#50 fixek UTÁN) STOPPED-be futott, ÖTÖDIK halt, de ELSŐ olyan, ahol a router-infrastruktúra maga mérve HIBÁTLAN (2026-08-01 22:34)
+
+**Ez NEM router-infrastruktúra hiba** — ez az első alkalom, hogy a router
+(minden korábbi H4/H6 javítással: #46/#47/#48/#49/#50) hibátlanul, elejétől
+végig lefutott: `python3 tools/model-router.py run` a munkapéldányon
+(rebase-elve `origin/main`-re, `f27651a`-ra, mind az öt korábbi fix benne)
+2 M3-kísérletet + 1 Terra-hívást futtatott, a gate-előzmény (`state.py`
+task-fájlja) mind a hármat helyesen látta: a `round-gate.sh` mindháromszor
+**pass**-t adott (a repo baseline-ja zöld maradt), de **egyik modellhívás sem
+hozott létre egyetlen scope-on belüli fájlváltozást sem**
+(`scoped_changed_paths=[]`, `last_diff_hash` = az üres string SHA-256-ja
+mind a három próbán). A router ezt helyesen `NO_CHANGE_1` / `NO_CHANGE_2` /
+`FINAL_GATE: "Terra call produced no scoped changes"` `code_failure`-ként
+könyvelte el, és a teljes keret kimerülése után korrekt `STOPPED`-et jelzett
+(§1.1 táblázat szerint `stopped` kör-jelzés) — **a router döntéslogikája ezen
+a ponton mérve helyes**.
+
+### Gyökérok (mért, reprodukálva, nem feltételezett) — a `codex exec` sandbox módja inkompatibilis ezzel a konténerrel
+
+A modellek (M3 ÉS Terra egyaránt) nem hibáztak — **nem tudtak dolgozni**.
+Diagnosztikai lépések (mindegyik ÚJRA lefuttatva, a jelen munkapéldányban,
+mellékhatás nélkül):
+
+1. `python3 tools/model-router.py smoke --profile m3 --worktree <munkapéldány>`
+   → `M3_OK` (exit 0); ugyanígy `--profile terra` → `TERRA_OK` (exit 0). A
+   profilok, a hitelesítés és a CLI-integráció **hibátlanok** — de a smoke
+   próba `--sandbox read-only`-val és egy triviális szöveges válasszal
+   (`_smoke()`, `tools/model-router.py:165-196`) SOSEM hív `exec_command`-ot,
+   ezért nem fedi fel a valódi hibát.
+2. A pontos induló promptot (`DevelopmentRouter._initial_prompt`,
+   `tools/ai_router/router.py:347-360`) újra elküldve `--sandbox read-only`
+   móddal az M3 profilnak: a modell **helyesen megtagadta** a végrehajtást, és
+   pontos diagnózist adott vissza (`item.completed`/`agent_message`, teljes
+   szöveg a jelen review commit mellékleteként a `.ai/runs/E02-R21/` alatt
+   NEM tárolt, de a stderr-ben mérve):
+   > „Every `exec_command` invocation exits immediately with `bwrap:
+   > loopback: Failed RTM_NEWADDR: Operation not permitted`, including
+   > `true`, `echo`, `id`, `printenv|. The bwrap sandbox cannot create a
+   > network namespace on this container, so no shell ever spawns.”
+3. **Közvetlen, router-független reprodukció** (a konténer bwrap-képessége
+   önmagában, `codex` nélkül):
+   ```
+   bwrap --unshare-net --dev-bind / / true
+   # → bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted (exit 1)
+   ```
+   Ez a **pontosan ugyanaz** a hiba, konzisztensen, kódex/modell nélkül —
+   tehát ez a konténer NEM tud hálózati namespace-t létrehozni (hiányzó
+   `CAP_NET_ADMIN` vagy egyenértékű host-korlátozás), ami a `bwrap`
+   alapértelmezett hálózat-izolációjának előfeltétele. Ez nem tranziens
+   erőforrás-kimerülés (214 meglévő net-namespace a `/proc/*/ns/net`
+   alapján, messze a szokásos limit alatt) — **állandó, ma is
+   reprodukálható** konténer-képesség-hiány.
+4. **A hívási lánc, ahol ez becsapódik:**
+   `tools/ai_router/execution.py:88-105` (`build_codex_argv`) a router
+   VALÓDI (nem-smoke) modellhívásaihoz `"--sandbox", "workspace-write"`-et
+   ad át — ez a `codex` CLI-ben `bwrap`-alapú izolációt igényel Linuxon,
+   ami ezen a boxon nem működik. Ezzel szemben a **létező, működő**
+   örökölt manuális útvonal (`tools/codex-round.sh:31`) már
+   `-s danger-full-access`-t használ, pontosan ezért — a
+   `sdd-round-driver` skill saját dokumentációja is kimondja: „A wrapper
+   `-s danger-full-access`-szel fut (a bwrap itt nem megy) — az izolációt
+   a külön munkapéldány adja.” A router `execution.py`-ja ezt a mért,
+   dokumentált box-tényt SOSEM vette át, amikor a `build_codex_argv`
+   megszületett (ADR 0088) — ez az ELSŐ alkalom, hogy ez ténylegesen
+   próbára lett téve, mert az előző négy halt mind korábban, a router
+   saját állapotgép-logikájában bukott el, mielőtt valódi M3/Terra-hívás
+   egyáltalán megtörténhetett volna gate-passzoló, de tartalom nélküli
+   végkimenetellel.
+
+**Miért nem fogta meg a baseline/smoke gate:** a `BASELINE_GATE` és a
+`round-gate.sh` a MEGLÉVŐ (változatlan) kódot futtatja — egy zöld baseline
+zöld marad akkor is, ha a modell soha nem ér hozzá egyetlen fájlhoz sem. A
+`smoke` parancs pedig szándékosan `read-only` sandboxot és egy
+`exec_command`-ot sosem igénylő promptot használ — így strukturálisan vak
+erre a hibaosztályra.
+
+**Javítás javasolt helye (az önjavító kör dolga, ez a session nem nyúlhat a
+`tools/`-hoz):**
+1. `tools/ai_router/execution.py:100-101` — `"workspace-write"` cseréje
+   `"danger-full-access"`-ra a `build_codex_argv`-ban (mindkét profilra,
+   M3-ra és Terra-ra egyaránt; az izolációt — a `codex-round.sh` mintájával
+   konzisztensen — a külön munkapéldány adja, nem a bwrap-sandbox).
+2. Érdemes a `_smoke()` (`tools/model-router.py:165-196`) próbát is
+   kiegészíteni egy valódi `exec_command`-ot igénylő lépéssel (pl. `echo
+   SMOKE_EXEC_OK` futtatása a modellel), hogy ez a hibaosztály jövőben a
+   smoke-fázisban bukjon el, NEM a teljes M3+Terra keret felégetésével.
+3. Kötelező regressziós teszt (`tools/tests/test_router*.py` mintájára): a
+   `build_codex_argv` sandbox-argumentuma `danger-full-access`, nem
+   `workspace-write` — string-szintű assert elég, mert a tényleges bwrap-hívás
+   ezen a boxon nem tesztelhető CI-ban (más konténer-környezet).
+4. A production task-state (`E02-R21`) `reset --task-id`-t igényel a fix
+   UTÁN, mielőtt a lánc újra `run`-t próbál — az M3 (2/2) és Terra (1/1)
+   kerete jelenleg kimerült egy sandbox-hibával, nem tartalmi okkal.
+
+### Döntés
+
+**HALT — H4** (`auto` engine, a router `STOPPED`-et jelzett, §1.1 táblázat
+szerint `stopped` kör-jelzés → azonnali HALT, további modellhívás tilos). Ez
+egy ÖTÖDIK önjavító/halt kör ugyanezen a taskon, de az ELSŐ, ahol a hiba nem
+a router állapotgépében (`tools/ai_router/router.py`/`state.py`) van, hanem
+a `execution.py` sandbox-választásában — egy a boxra vonatkozó, a
+`codex-round.sh`-ban már ismert és kezelt tény, amit a router saját
+Codex-hívása nem vett át. A Practice V2 production-drótozás (a kör tényleges
+célja) **továbbra sincs elkezdve** — a munkapéldány `git diff HEAD` üres.
+Reprodukálva, mérve, a javítás pontos helyével — a self-heal kör bemenete
+kész.
