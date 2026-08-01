@@ -1,6 +1,6 @@
 # E02-R19 — Progress, streak, daily goal és Learn migráció
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-01, kód mérve: `main` @ `eeb4f6d`; előre megírva 2026-07-31 @ `ce8fbce`)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 19"** (+ §20.3–20.6, §22.4)
 - **Branch:** `codex/e02-r19-progress-and-learn-migration`
 - **Előfeltétel:** **E02-R18 merge-ölve** (V2 history — a progress-aggregáció
@@ -33,6 +33,40 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélküli kör = bukott kör. `gh`-t NE hívj, ne pusholj, PR-t ne nyiss.
 **STOP-klauzula:** listán kívüli fájl, vagy ellentmondó előírás → `stopped`.
 **A §7 a terved.**
+
+## 0.0 Pre-flight mérés (orchestrátor, 2026-08-01 @ `eeb4f6d`) — NEM mércelazítás
+
+A §2 minden mért állítását grepeltem a kódból (nem táblából). **Mind
+CONFIRMED**, egyetlen contradiction sem — a brief nem szorul lista-tágításra. Az
+alábbi **pontos szimbólumnevek** kötelezőek az implementernek (a táblás nevek
+helyett a tényleges hívási láncot mérve, L19/L20):
+
+- **V2 dedup-kulcs = `PracticeHistoryEntry.id`**, NEM `sessionId` nevű mező (ADR
+  0084 §4, „Session ID — the dedup key"; = `PracticeSessionResult.id`). Az A3
+  azonosság-szabálya erre az `id`-re épül; a store már idempotens rá.
+- **Streak-jogosultság: `practice_session_eligibility.dart`** —
+  `isEligible(PracticeSessionEligibilityInput)` = `activeDuration >= 20 s ||
+  resolvedRequiredTargets >= 4 || freePracticeStrums >= 8`. Szándékosan
+  **huzalozatlan** (a doc szerint „a becsatolás az E02-R19 dolga"); a
+  `streak_provider.recordPracticeToday` ma csak `DateTime? now`-t vesz.
+- **Aktív idő: `PracticeSessionState.playingElapsed`** — a reducerben KIZÁRÓLAG
+  `running` alatt nő (`practice_session_reducer.dart:655`). A daily goal (A5)
+  ebből számol; a free-practice pengetést a `FreePracticeSummary` hordozza.
+- **Capture-rés (A9): `practiceCaptureActiveByStatus`** in
+  `practice_observation_activation.dart` — `paused → false` (csak `countIn`+
+  `running` → true). A V2 út ezt strukturálisan örökli.
+- **Legacy vs. V2 pass:** legacy `LessonProgress.isPassed = accuracy >= 0.70`;
+  V2 kettős kapu `practice_score_aggregator.dart:267` (completion≥85% &&
+  overall≥70%, `scoring_profile.dart`). A Learn út a **legacy** szemantikát
+  tartja (Döntés 7); a speed-builder `0.95/0.85` promóciós kapu NEM ez.
+- **`PracticeSource` névütközés:** `progress` `{live, analyze, learn}` vs.
+  `practice` domain `{builtin, lesson, song, analyze, setlist, dailyChallenge,
+  userCreated, futureAi}` — két külön típus; a V1 Learn-log a **progress**-enum
+  `learn` kódját írja.
+- **Korpusz (A7):** `Lessons.all` = **16** lecke (`lesson.dart:321`) +
+  `Lessons.firstWin` (`lesson.dart:146`, nincs az `all`-ban) = **17**.
+
+Az ADR 0085 (§5 kötött döntések forrása) ezzel a mért kontextussal elfogadva.
 
 ## 1. Cél
 
