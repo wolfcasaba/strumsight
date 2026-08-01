@@ -68,3 +68,7 @@ backend/.venv/
 
 # Autonóm kör-pipeline futásidejű állapota (ADR 0087) — sosem committolt
 .pipeline/
+
+# MiniMax-first router: redacted, non-authoritative workspace mirror + Python cache
+.ai/runs/
+__pycache__/

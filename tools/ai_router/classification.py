@@ -42,6 +42,10 @@ def classify_provider_failure(
         return FailureClass.PASS
     structured = json.dumps(tuple(events), ensure_ascii=False, sort_keys=True)
     evidence = f"{structured}\n{stderr}".lower()
+    if returncode == 127 or re.search(
+        r"executable unavailable|command not found|no such file or directory", evidence
+    ):
+        return FailureClass.ENV_BLOCKED
     if re.search(r"\b(?:401|403)\b|unauthori[sz]ed|invalid[^\n]*(?:credential|api.?key)", evidence):
         return FailureClass.CREDENTIAL_BLOCKED
     if re.search(r"\b429\b|rate[ _-]?limit|quota|token[ _-]?plan", evidence):
