@@ -730,5 +730,32 @@
       }
     }
   },
-  "practiceFreePracticeInsufficientData": "Not enough data yet"
+  "practiceFreePracticeInsufficientData": "Not enough data yet",
+  "speedBuilderTitle": "Speed Builder",
+  "speedBuilderCurrentBpm": "Current: {bpm} BPM",
+  "@speedBuilderCurrentBpm": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderTargetBpm": "Target: {bpm} BPM",
+  "@speedBuilderTargetBpm": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderPassStreak": "Pass streak: {current} of {required}",
+  "@speedBuilderPassStreak": {"placeholders": {"current": {"type": "int"}, "required": {"type": "int"}}},
+  "speedBuilderNextStep": "Next step: {bpm} BPM",
+  "@speedBuilderNextStep": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderAttempt": "Attempt: {current} of {maximum}",
+  "@speedBuilderAttempt": {"placeholders": {"current": {"type": "int"}, "maximum": {"type": "int"}}},
+  "speedBuilderHighestStable": "Highest stable BPM: {value}",
+  "@speedBuilderHighestStable": {"placeholders": {"value": {"type": "String"}}},
+  "speedBuilderNoStableBpm": "Not yet",
+  "speedBuilderLoop": "Loop: {current} of {total}",
+  "@speedBuilderLoop": {"placeholders": {"current": {"type": "int"}, "total": {"type": "int"}}},
+  "adaptiveSuggestionTitle": "Practice suggestion",
+  "adaptiveSuggestionInsufficientSignal": "Try once more to collect enough signal.",
+  "adaptiveSuggestionLowCompletion": "Reduce the tempo for the next attempt.",
+  "adaptiveSuggestionTimingBias": "Use the metronome or a shorter loop for the next attempt.",
+  "adaptiveSuggestionDirectionError": "Focus on strum direction in the next attempt.",
+  "adaptiveSuggestionChordError": "Focus on chord changes in the next attempt.",
+  "adaptiveSuggestionTempoTooHigh": "The current tempo may be too high.",
+  "adaptiveSuggestionPositive": "Good work — keep building from this attempt.",
+  "adaptiveSuggestionNextDifficulty": "You are ready for the next difficulty.",
+  "adaptiveSuggestionApply": "Apply",
+  "adaptiveSuggestionDismiss": "Dismiss"
 }

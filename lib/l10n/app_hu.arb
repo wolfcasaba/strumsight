@@ -664,5 +664,32 @@
       }
     }
   },
-  "practiceFreePracticeInsufficientData": "Még nincs elég adat"
+  "practiceFreePracticeInsufficientData": "Még nincs elég adat",
+  "speedBuilderTitle": "Tempóépítő",
+  "speedBuilderCurrentBpm": "Jelenlegi: {bpm} BPM",
+  "@speedBuilderCurrentBpm": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderTargetBpm": "Cél: {bpm} BPM",
+  "@speedBuilderTargetBpm": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderPassStreak": "Sikeres sorozat: {current} / {required}",
+  "@speedBuilderPassStreak": {"placeholders": {"current": {"type": "int"}, "required": {"type": "int"}}},
+  "speedBuilderNextStep": "Következő lépés: {bpm} BPM",
+  "@speedBuilderNextStep": {"placeholders": {"bpm": {"type": "String"}}},
+  "speedBuilderAttempt": "Próbálkozás: {current} / {maximum}",
+  "@speedBuilderAttempt": {"placeholders": {"current": {"type": "int"}, "maximum": {"type": "int"}}},
+  "speedBuilderHighestStable": "Legmagasabb stabil BPM: {value}",
+  "@speedBuilderHighestStable": {"placeholders": {"value": {"type": "String"}}},
+  "speedBuilderNoStableBpm": "Még nincs",
+  "speedBuilderLoop": "Ismétlés: {current} / {total}",
+  "@speedBuilderLoop": {"placeholders": {"current": {"type": "int"}, "total": {"type": "int"}}},
+  "adaptiveSuggestionTitle": "Gyakorlási javaslat",
+  "adaptiveSuggestionInsufficientSignal": "Próbáld meg újra, hogy elegendő jelet gyűjtsünk.",
+  "adaptiveSuggestionLowCompletion": "Csökkentsd a tempót a következő próbálkozásra.",
+  "adaptiveSuggestionTimingBias": "Használj metronómot vagy rövidebb ismétlést a következő próbálkozásnál.",
+  "adaptiveSuggestionDirectionError": "A következő próbálkozásnál figyelj a pengetésirányra.",
+  "adaptiveSuggestionChordError": "A következő próbálkozásnál figyelj az akkordváltásokra.",
+  "adaptiveSuggestionTempoTooHigh": "A jelenlegi tempó túl magas lehet.",
+  "adaptiveSuggestionPositive": "Szép munka — építs tovább erre a próbálkozásra.",
+  "adaptiveSuggestionNextDifficulty": "Készen állsz a következő nehézségre.",
+  "adaptiveSuggestionApply": "Alkalmazás",
+  "adaptiveSuggestionDismiss": "Elutasítás"
 }
