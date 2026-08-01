@@ -835,3 +835,43 @@ A klón `HEAD`-jét mindig vesd össze a várt SHA-val, mielőtt review-zol.
 **Forrás:** E02-R17 orchestrátor-futás, 2026-08-01 (`tools/mm-round.sh:45`
 `.git`-dir-check; `tools/wait-for-round.sh` jelzés-alapú várakozás); mérve a
 `ss-mm-e02-r17` klón + `/tmp/review-e02r17` reklón HEAD-egyeztetésével.
+
+## L28 — Egy „valódi implementációt" felváltó recorder KÉT néma osztályt csempészhet be zöld gate mellett: a swallowoló írás-réteg és a write-then-drop kód-eltérés
+
+**Mit mértünk.** Az E02-R18 (Practice History V2) zöld CI **és** zöld
+reviewer-gate mellett szállított **két** BLOCKER-t, amiket csak eldobható
+próbateszt fogott meg izolált klónban:
+
+1. **B1 — a swallowoló írás-réteg.** A repository a `JsonCollectionStore` →
+   `JsonDocumentStore.write`-on át írt, ami `on StorageException catch`-csel
+   **logol, majd normálisan visszatér** (a „in-memory a truth, a disk
+   best-effort" szerződés miatt). Egy STATELESS recorderre ez néma adatvesztés:
+   a `save()` `Success`-t ad, miközben semmi nem íródott ki. A szállított
+   A9-teszt `StateError`-t (nem `StorageException`-t) dobott — a **reális**
+   hibatípus KÖRÉ írva. Fix: a repository közvetlenül a `KeyValueStore`-ral ír
+   (az propagálja a `StorageException`-t) → `AppResult.failure`.
+2. **B2 — write-then-drop kód-eltérés.** A produkciós provider a mappert
+   `mode/source = 'practice.mode.unknown'` placeholderrel kötötte, mert a valós
+   metaadat (a `PracticeSessionConfig`) csak a controllerben él (tilos zóna), és
+   nincs provider, ami kiadná. A szerializáló **olvasáskor** eldobja az ismeretlen
+   kódú rekordot → minden produkciós rekord íródik, majd betöltéskor eltűnik. A
+   feature-tesztek zöldek voltak, mert **valós kódot injektáltak közvetlenül**,
+   megkerülve a szállított wiringet. Fix: honest deferral — placeholder-metaadatnál
+   `Noop` recorder (nincs eldobható rekord), a valós plumbing dokumentáltan R19.
+
+**Mit csinálunk.** (1) **Perzisztencia-review kötelező próbája a PRODUKCIÓS úton**
+fut, nem közvetlen injekcióval: a review-nak a szállított provider-wiringgel kell
+menteni-majd-visszaolvasni, és a „save `Success`, de load 0 rekord" állapot
+BLOCKER. (2) **A reális hibatípust dobd**, ne egy köré-írt helyettesítőt: egy
+`StorageException` írás-hiba a mérce, mert a réteg épp AZT nyeli el. (3) **Ha egy
+„valódi implementáció" (recorder) kötelező bemenete (mode/source) csak zárt-kör /
+tilos-zóna komponensből érhető el, az PRE-FLIGHT-hiba** — a `PracticeSessionResult`
+mezőit mértem, de nem jelöltem, hogy hiányzik belőle a mode/source. A pre-flight
+mérje a „valódi implementáció" MINDEN kötelező bemenetének forrását, ne csak a
+határ-interfészt. A honest deferral (dokumentált `Noop` + R19-followup) legitim,
+a write-then-drop nem.
+
+**Forrás:** E02-R18 review (`docs/reviews/e02-r18-review.md` B1/B2), fix#1
+`30b8b1d`; `json_document_store.dart:103-129` (swallow), `key_value_store.dart:19-21`
+(a szerződés, ami a `StorageException`-t ígéri), `practice_history_serializer.dart:77-86`
+(unknown-enum reject on read).
