@@ -1,6 +1,7 @@
 # E02-R17 — Speed Builder, loop és adaptív retry
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight 2026-08-01, kód újramérve: `main` @ `caca3a9`;
+  előre megírva 2026-07-31 `ce8fbce` ellen). **Implementer: MiniMax M3** (pipeline-döntés).
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 17"** (+ §18, §19, §16.7)
 - **Branch:** `codex/e02-r17-speed-builder`
 - **Előfeltétel:** **E02-R11 és E02-R14 merge-ölve** (attempt-lánc + session UI).
@@ -17,6 +18,48 @@
 >    mert a step-up küszöb ezekre hivatkozik.
 > 3. ADR-szám ütközés ellenőrzése, majd az ADR 0083 megírása.
 > 4. Státusz → PLANNING, dátum/sha frissítés, brief commit a kör-branchre.
+
+## 0.0 Pre-flight brief-revízió (2026-08-01, orchestrátor — MÉRT)
+
+A `main` a brief megírása óta mozdult (`ce8fbce` → `caca3a9`, R15/R16 merge).
+Az összes hivatkozott enum, mező és sorszám újramérve; egy **materiális
+pontosítás** kell, mert az eredeti §5.6 megfogalmazás félrevezető és a kör
+legfontosabb hamis-állítás kockázatát érinti.
+
+**MÉRT ELLENTMONDÁS.** A §5.6 azt írja: „a step-up küszöb **a profilból jön**
+(SDD §16.7)". Mérve viszont:
+- A `ScoringProfile` (`scoring_profile.dart`) `completionThresholdPercent`/
+  `overallThresholdPercent` mezői **85 / 70** — ez a **plain** scored-practice
+  pass, amely a `PracticeAttemptOutcome.passed`-et adja
+  (`practice_score_aggregator.dart:267-270`).
+- A `ScoringProfile` **NEM** tartalmaz `0.95 / 0.85 / 0.80` értéket, és **nincs
+  külön rhythm-threshold** mezője.
+- Az SDD §16.7 a „Speed Builder step-up"-ot **külön blokkban** rögzíti:
+  `completion ≥ 0.95 ∧ overall ≥ 0.85 ∧ rhythm ≥ 0.80 (ha alkalmazható)`.
+
+**FELOLDÁS (kötelező, ez felülírja a §5.6 „a profilból jön" megfogalmazását;
+a döntés az [ADR 0083](../adr/0083-speed-builder-and-adaptive-policy.md) §3):**
+
+1. A Speed Builder **step-up pass** predikátuma **KÜLÖN** a plain
+   `outcome == passed`-tól, és **tilos** onnan levezetni vagy a
+   `ScoringProfile`-ból kiolvasni.
+2. A step-up pass a `PracticeAttemptResult.metrics`-ből számol, `MetricValue`
+   típusokkal (`practice_metrics.dart`):
+   - `completion` **`MetricAvailable`** ∧ `value ≥ 0.95`, **és**
+   - `overall` **`MetricAvailable`** ∧ `value ≥ 0.85`, **és**
+   - `rhythm`: **`MetricAvailable`** → `value ≥ 0.80` kötelező;
+     **`MetricNotApplicable`** → a feltétel **kimarad** (ez az „ha alkalmazható");
+     **`MetricInsufficientData`** → **nem** step-up pass.
+   - `completion` vagy `overall` nem `MetricAvailable` → **nem** step-up pass.
+3. A `0.95 / 0.85 / 0.80` konstansok **EGY** helyen élnek a Speed Builder
+   domainben (nevesített konstans a policyben/engine-ben), a SDD §16.7 forrással
+   — nem a `ScoringProfile`-ban, nem három widgetben.
+4. Az A2–A6 táblák „pass/fail" címkéi ezt a **step-up pass** fogalmat jelentik;
+   a tesztek olyan `PracticeAttemptResult`-okat állítanak elő, amelyek metrikái
+   a 0.95/0.85/0.80 határ két oldalán vannak.
+
+Ez a felülírás a kör **még nem merge-elt** artefaktumát érinti (ADR 0087 §2
+autonómia); nem nyúl merge-elt ADR-hez, lezárt körhöz vagy tilos zónához.
 
 ## 0. Kör-jelzés — KÖTELEZŐ (AGENTS.md §15.2)
 
