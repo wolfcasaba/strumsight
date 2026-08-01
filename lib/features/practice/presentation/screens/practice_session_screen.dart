@@ -15,6 +15,8 @@ import '../../domain/model/practice_session_state.dart';
 import '../practice_effect_listener.dart';
 import '../views/chord_change_view.dart';
 import '../views/chord_progression_view.dart';
+import '../views/free_practice_view.dart';
+import '../views/rhythm_only_view.dart';
 import '../views/strum_pattern_view.dart';
 import '../widgets/practice_controls.dart';
 import '../widgets/practice_count_in_overlay.dart';
@@ -303,9 +305,14 @@ class _ModeView extends ConsumerWidget {
           showChordHint: state.config?.expectedChordHintEnabled ?? true,
         );
       case PracticeMode.rhythmOnly:
+        return RhythmOnlyView(
+          target: target,
+          playhead: state.timelinePosition,
+          width: width,
+          metrics: null,
+        );
       case PracticeMode.freePractice:
-        // Modes handled in later rounds (R15, R16).
-        return const SizedBox.shrink();
+        return FreePracticeView(summary: null, width: width);
     }
   }
 }

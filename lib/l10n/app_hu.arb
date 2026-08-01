@@ -585,5 +585,84 @@
   "practiceChordChangeMedian": "Medián váltási késés: {ms} ms",
   "practiceChordChangeMappingLimited": "A detektor akkordcímke-leképezése korlátozott",
   "practiceChordChangeSlowest": "Leglassabban mért pár: {pair}",
-  "practiceChordChangePairSemantic": "{pair}, {attempts} próbálkozás, {correct} felismert és stabil, medián {median}"
+  "practiceChordChangePairSemantic": "{pair}, {attempts} próbálkozás, {correct} felismert és stabil, medián {median}",
+  "practiceRhythmOnlyTitle": "Csak ritmus gyakorlás",
+  "practiceRhythmOnlyBodyWithDirection": "Tempózz a 4/4-re. Az akkord-dimenzió nem pontozódik; az irány csak tájékoztató jellegű.",
+  "practiceRhythmOnlyBodyNoDirection": "Tempózz a 4/4-re. Az akkord- és irány-dimenzió itt nem pontozódik.",
+  "practiceRhythmOnlyRhythmDimension": "Ritmus-dimenzió",
+  "practiceRhythmOnlyRhythmSemantics": "Csak ritmus gyakorlás, ritmus-dimenzió nem pontozódik",
+  "practiceRhythmOnlyDimensionPending": "Folyamatban",
+  "practiceRhythmOnlyDimensionAvailable": "Mérés alatt",
+  "practiceRhythmOnlyDimensionNotApplicable": "Ehhez a gyakorlathoz nem értelmezett",
+  "practiceRhythmOnlyDimensionInsufficient": "Még nincs elég adat",
+  "practiceFreePracticeNoSignalTitle": "Még nem hallottunk pengetést",
+  "practiceFreePracticeNoSignalBody": "Pengess néhányat, és a munkamenet megmutatja, mit észleltünk.",
+  "practiceFreePracticeNoSignalSemantics": "Ebben a szabad gyakorlásban még nem hallottunk pengetést",
+  "practiceFreePracticeCountsTitle": "Gyakorlás számlálói",
+  "practiceFreePracticeCountsSemantics": "Szabad gyakorlás számlálói",
+  "practiceFreePracticeStrumCount": "Pengetések száma",
+  "practiceFreePracticeActiveDuration": "Aktív idő",
+  "practiceFreePracticeDirectionTitle": "Irány (tájékoztató)",
+  "practiceFreePracticeDirectionSemantics": "Szabad gyakorlás irány-tények",
+  "practiceFreePracticeDirectionRatio": "Le/fel arány",
+  "practiceFreePracticeDirectionNotApplicable": "Ebben a gyakorlatban az irány nem értelmezett",
+  "practiceFreePracticeDirectionNotApplicableSemantics": "Ebben a gyakorlatban az irány nem értelmezett",
+  "practiceFreePracticeDirectionInsufficientSemantics": "Irány-tények még nem állnak rendelkezésre",
+  "practiceFreePracticeDownCount": "Le pengetések",
+  "practiceFreePracticeUpCount": "Fel pengetések",
+  "practiceFreePracticeDownRatio": "Le arány",
+  "practiceFreePracticeUpRatio": "Fel arány",
+  "practiceFreePracticePercent": "{percent} százalék",
+  "@practiceFreePracticePercent": {
+    "placeholders": {
+      "percent": {
+        "type": "double"
+      }
+    }
+  },
+  "practiceFreePracticeMilliseconds": "{ms} ms",
+  "@practiceFreePracticeMilliseconds": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceFreePracticeTempoStabilityTitle": "Tempó-stabilitás",
+  "practiceFreePracticeTempoStabilitySemantics": "Szabad gyakorlás tempó-stabilitás",
+  "practiceFreePracticeTempoStability": "Tempó eltérés (medián abszolút)",
+  "practiceFreePracticeTempoStabilityInsufficientSemantics": "Tempó-stabilitás még nem áll rendelkezésre",
+  "practiceFreePracticeChordTimelineTitle": "Akkord-idővonal",
+  "practiceFreePracticeChordTimelineSemantics": "Szabad gyakorlás akkord-idővonal",
+  "practiceFreePracticeChordTimeline": "Akkord-idővonal",
+  "practiceFreePracticeChordTimelineInsufficientSemantics": "Akkord-idővonal még nem áll rendelkezésre",
+  "practiceFreePracticeChordSegment": "{label}, {duration}",
+  "@practiceFreePracticeChordSegment": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFreePracticeChordSegmentSemantics": "Akkord-szegmens {label}, {duration}",
+  "practiceFreePracticeChordNone": "Nincs akkord",
+  "practiceFreePracticeBpmSamplesTitle": "Észlelt BPM-minták",
+  "practiceFreePracticeBpmSamplesSemantics": "Szabad gyakorlásban észlelt BPM-minták",
+  "practiceFreePracticeBpmSamples": "BPM-minták",
+  "practiceFreePracticeBpmSamplesInsufficientSemantics": "BPM-minták még nem állnak rendelkezésre",
+  "practiceFreePracticeBpmSample": "{bpm} BPM ekkor: {at}",
+  "@practiceFreePracticeBpmSample": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFreePracticeInsufficientData": "Még nincs elég adat"
 }

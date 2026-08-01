@@ -1,6 +1,6 @@
 # E02-R16 — Rhythm-only és Free Practice mód
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight 2026-08-01, kód mérve: `main` @ `e6a5f22`; ADR 0082 megírva)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 16"** (+ §7.4, §7.5, §20.4, §20.5)
 - **Branch:** `codex/e02-r16-rhythm-and-free-practice`
 - **Előfeltétel:** **E02-R14 merge-ölve** (közös highway); az R15 nem előfeltétel.
@@ -272,8 +272,162 @@ APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A10
-pontok teljesülése bizonyítékkal · eltérések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+**Új domain-modell:**
+
+- `lib/features/practice/domain/model/free_practice_summary.dart` —
+  `FreePracticeSummary` (score-free, immutable), `FreePracticeBpmSample`,
+  `FreePracticeChordSegment` (a `null` szegmens explicit „nincs akkord"),
+  `FreePracticeTempoStability` (sealed: `Available` Duration / `InsufficientData`),
+  `FreePracticeDirectionRatio` (sealed: `Available` / `NotApplicable` / `InsufficientData`),
+  `FreePracticeSummaryBundle` (az R10 aggregátorral közös csomag).
+
+**Új pure service-ek:**
+
+- `lib/features/practice/domain/service/free_practice_summarizer.dart` —
+  `FreePracticeSummarizer.summarize(observations, bpmSamples, activeDuration, definition)`.
+  Pure, nincs benne clock/IO/random/detektor. A direction-applicability a
+  PracticeMode-ból jön (`freePractice` → mindig applicable; más mód →
+  definition.events.any(direction != null)). A chord-timeline utolsó szegmense
+  az `activeDuration`-ig tart. A tempó-stabilitás medián-alapú MAD, ≥ 4 strummal.
+- `lib/features/practice/domain/service/practice_session_eligibility.dart` —
+  `PracticeSessionEligibility` (a §7.7-es VAGY-kapcsolat, mind `>=`),
+  `PracticeSessionEligibilityInput` (snapshot). Hívó nincs — R19 dolga.
+
+**Új mód-nézetek:**
+
+- `lib/features/practice/presentation/views/rhythm_only_view.dart` —
+  `RhythmOnlyView(target, playhead, width, metrics?)`. A chord-dimenzió
+  NotApplicable, a direction a definition alapján NotApplicable / Available.
+  Semantics-label a rhythm-dimenzión.
+- `lib/features/practice/presentation/views/free_practice_view.dart` —
+  `FreePracticeView(summary?, width)`. Nincs score / accuracy / pass / verdict
+  megjelenítés. Null summary → „nem hallottunk pengetést" kártya. Külön
+  kártyák: counts, direction (informational), tempo stability, chord timeline,
+  BPM samples. InsufficientData → lokalizált „még nincs elég adat".
+
+**Módosítás a session-képernyőn (engedélyezett):**
+
+- `lib/features/practice/presentation/screens/practice_session_screen.dart` —
+  a `PracticeMode.rhythmOnly` / `PracticeMode.freePractice` dispatch rájuk
+  irányít (korábban `SizedBox.shrink()`).
+
+**ARB-kulcsok (mindkét nyelven):**
+
+- `lib/l10n/app_en.arb` / `lib/l10n/app_hu.arb` — 9 Rhythm-only + 36 Free
+  Practice kulcs, teljes parity-val. A7 szöveg-audit: nincs „accuracy" /
+  „%“ / „pass" / „score" / „pontosság" a Free Practice blokkban.
+
+**Tesztek:**
+
+- `test/features/practice/domain/free_practice_summarizer_test.dart` (A3/A4/A5/A2)
+- `test/features/practice/domain/practice_session_eligibility_test.dart` (A6)
+- `test/features/practice/presentation/rhythm_only_view_test.dart` (A1/A8)
+- `test/features/practice/presentation/free_practice_view_test.dart` (A7/A8)
+- `test/property/free_practice_property_test.dart` (A9)
+
+### Záró gate — `tools/round-gate.sh test/features/practice/ test/property/free_practice_property_test.dart test/core/l10n_parity_test.dart`
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 598 files (0 changed) in 2.15 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Resolving dependencies...
+... (deps unchanged)
+Analyzing 3 items...                                            
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+
+00:55 +780 (a teljes feature-paletta lefut, 1 hiba nélkül)
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/property/free_practice_property_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/property/free_practice_property_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-mm-e02r16/test/property/free_practice_property_test.dart
+PROPERTY_SEED=42
+00:00 +0: Free Practice property invariants (R16 A9) property: summarizer never throws on randomized inputs
+00:00 +1: property: downCount + upCount == strumCount on every run
+00:00 +2: property: eligibility predicate is monotone in strums and seconds
+00:00 +3: property: chord-timeline segment durations sum to ≤ activeDuration
+00:00 +4: All tests passed!
+    → [4] test test/property/free_practice_property_test.dart: ZÖLD
+
+═══ [5] test test/core/l10n_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/l10n_parity_test.dart
+
+00:00 +3: All tests passed!
+    → [5] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [6] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [6] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/property/free_practice_property_test.dart        zöld
+    test test/core/l10n_parity_test.dart                       zöld
+    architecture                                               zöld
+
+MINDEN GATE ZÖLD.
+```
+
+### A1 — A10 teljesülési mátrix
+
+| Pont | Bizonyíték |
+|---|---|
+| **A1** | `RhythmOnlyView` body-copy + semantics-label; `RhythmOnlyViewTest` 4 mátrix-cella (direction-less, direction-bearing, Available, NotApplicable, InsufficientData). |
+| **A2** | `FreePracticeSummarizer` soha nem ad `MetricAvailable` overallt — a summary típus sem tartalmazza. Az R10 aggregátor `freePracticeOpen` profillal `MetricNotApplicable`-et ad, így a `PracticeAttemptResult.outcome == notScored` és a verdicts lista garantáltan üres. |
+| **A3** | `free_practice_summarizer_test.dart` A3-csoport: 10 strum (7/3) → 70% / 30%, 0 strum → InsufficientData. |
+| **A4** | `free_practice_summarizer_test.dart` A4-csoport: 3→InsufficientData, 4→Duration.zero, 12 egyenletes→0, 12 + 1500ms gap → MAD=0 (egy outlier NEM rántja el). Python-ellenőrzés: 11×500ms + 1×1500ms inter-arrival, median=500ms, deviations={0×10, 1000}, MAD=0. |
+| **A5** | `free_practice_summarizer_test.dart` A5-csoport: G(4s)→null(1s)→C(3s) → 3 szegmens, a `null` explicit „nincs akkord" címkét kap. |
+| **A6** | `practice_session_eligibility_test.dart`: 9 küszöb-cella (19999/20000/20001 ms, 3/4/5 target, 7/8/9 strum), VAGY-kapcsolat, mind `>=`. |
+| **A7** | `free_practice_view_test.dart` A7-csoport: tiltott szövegek (`accuracy` / `score` / `pass`) `findsNothing`. InsufficientData → lokalizált „Még nincs elég adat" / „Not enough data yet". Null summary → explicit „No strums heard yet". |
+| **A8** | A8-csoport: 320×568 és 915×412 méreteken `tester.takeException()` `null`. View Row-ok `Expanded` + `Flexible` + `softWrap` ellenálló. |
+| **A9** | `free_practice_property_test.dart` (PROPERTY_SEED=42): 4 invariáns, 80 trial × csoport; soha-nem-dob, down+up==strumCount, monoton predikátum, timeline ≤ active. |
+| **A10** | `domain_purity_test.dart` zöld (summarizer + eligibility + summary mind a domain alatt, nem nyúlnak keretrendszerhez); `architecture` gate zöld (0 új deviation); `git diff --stat` a §4 listán belül; `streak/progress/learn` 0 sor. |
+
+### Eltérések és okuk
+
+- **A `practiceFreePracticeBpmSample` ARB placeholder** a bpm és at mezőknek
+  külön-külön maradt (nincs `{percent}` típus, nincs kettős `double`.) — a
+  használat `practiceFreePracticeBpmSample('90.0', '0.50 s')` formátumban
+  megy, a `String` placeholder típussal. A kód a `_formatDuration` segéddel
+  formázza a Duration-t Stringgé.
+- **A `_RhythmOnlySummary` `Semantics.container` a Card köré került** —
+  a korábbi belső elhelyezés nem tette felfedezhetővé a `find.bySemanticsLabel`
+  számára; a Card-szintű container stabilan hordozza a rhythm-dimenzió labelt.
+- **A property test randomizált observation-timingei** `activeDuration`-on
+  belülre szorítva — így a §5 timeline-≤-active invariáns a 80 trial alatt
+  nem sérülhet a teszt-oldali elcsúszással. A valós gateway úton ez
+  triviálisan teljesül, mert a `_lastEmitted*At` pad-ek miatt az observation
+  sosem jön az aktív időn túlról.
+
+### Follow-upok (R17+)
+
+- A chord-timeline + BPM-samples host-bekötése a R10 host határon (E02-R10
+  toldása) — a view `null` summary-t kap, amíg a host nem szolgáltat.
+- A `PracticeSessionEligibility` hívó nélkül maradt — R19 beköti a streak
+  state-be.
+- A Free Practice view a `bpmSamples` listát a host-tól várja (L10D gateway
+  toldás). A `null` summary jelenleg a „no strums" kártyát mutatja, ami
+  továbbra is korrekt.
 
 ## 11. Review — Claude tölti ki
 
