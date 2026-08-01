@@ -20,7 +20,12 @@ class QuotaStatus:
     reachable: bool
     quota_known: bool
     remaining_units: int | None = None
+    remaining_percent: int | None = None
+    interval_remaining_percent: int | None = None
+    weekly_remaining_percent: int | None = None
     reset_at: int | str | None = None
+    interval_reset_at: int | str | None = None
+    weekly_reset_at: int | str | None = None
     model: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -29,6 +34,17 @@ class QuotaStatus:
 
 def _integer(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _percentage(value: object) -> int | None:
+    parsed = _integer(value)
+    return parsed if parsed is not None and parsed <= 100 else None
+
+
+def _timestamp(value: object) -> int | str | None:
+    if isinstance(value, (int, str)) and not isinstance(value, bool):
+        return value
+    return None
 
 
 def parse_quota_payload(payload: object) -> QuotaStatus:
@@ -47,20 +63,51 @@ def parse_quota_payload(payload: object) -> QuotaStatus:
         (
             item
             for item in rows
-            if isinstance(item.get("model_name"), str) and "m3" in item["model_name"].lower()
+            if isinstance(item.get("model_name"), str)
+            and item["model_name"].lower() == "general"
         ),
-        rows[0],
+        next(
+            (
+                item
+                for item in rows
+                if isinstance(item.get("model_name"), str)
+                and "m3" in item["model_name"].lower()
+            ),
+            rows[0],
+        ),
     )
+    model = row.get("model_name") if isinstance(row.get("model_name"), str) else None
+    interval_percent = _percentage(row.get("current_interval_remaining_percent"))
+    weekly_percent = _percentage(row.get("current_weekly_remaining_percent"))
+    known_percentages = [value for value in (interval_percent, weekly_percent) if value is not None]
+    if known_percentages:
+        remaining_percent = min(known_percentages)
+        interval_reset = _timestamp(row.get("end_time"))
+        weekly_reset = _timestamp(row.get("weekly_end_time"))
+        return QuotaStatus(
+            status="ok" if remaining_percent > 0 else "quota_limited",
+            reachable=True,
+            quota_known=True,
+            remaining_percent=remaining_percent,
+            interval_remaining_percent=interval_percent,
+            weekly_remaining_percent=weekly_percent,
+            interval_reset_at=interval_reset,
+            weekly_reset_at=weekly_reset,
+            model=model,
+        )
     total = _integer(row.get("current_interval_total_count"))
     used = _integer(row.get("current_interval_usage_count"))
     if total is None or used is None:
         return QuotaStatus("unknown_response", True, False)
     remaining = max(total - used, 0)
-    reset_at = row.get("current_interval_end_time")
-    if not isinstance(reset_at, (int, str)) or isinstance(reset_at, bool):
-        reset_at = None
-    model = row.get("model_name") if isinstance(row.get("model_name"), str) else None
-    return QuotaStatus("ok", True, True, remaining, reset_at, model)
+    return QuotaStatus(
+        status="ok" if remaining > 0 else "quota_limited",
+        reachable=True,
+        quota_known=True,
+        remaining_units=remaining,
+        reset_at=_timestamp(row.get("current_interval_end_time")),
+        model=model,
+    )
 
 
 def check_quota(
