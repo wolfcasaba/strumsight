@@ -11,7 +11,7 @@
 # döntése alapján a sor MiniMax M3-mal indul végig; ha egy kör kétszer
 # haltol, ez az oszlop az első hely, amit érdemes átírni.
 E02-R12	docs/rounds/e02-r12-practice-hub-and-setup.md	minimax	0078	done
-E02-R13	docs/rounds/e02-r13-session-ui-shell.md	minimax	0079	pending
+E02-R13	docs/rounds/e02-r13-session-ui-shell.md	minimax	0079	done
 E02-R14	docs/rounds/e02-r14-strum-and-progression-modes.md	minimax	0080	pending
 E02-R15	docs/rounds/e02-r15-chord-change-mode.md	minimax	0081	pending
 E02-R16	docs/rounds/e02-r16-rhythm-only-and-free-practice.md	minimax	0082	pending
