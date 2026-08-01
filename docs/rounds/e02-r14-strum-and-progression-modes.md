@@ -637,6 +637,71 @@ A `lib/features/practice/domain/`, `application/`, `data/`, és
 `lib/features/learn/**` útvonalak **0 sor** változás.
 
 
+## 10.2 Javító kör #2 — MAJOR-2 hiteles teszt-lezárása (implementer: MiniMax M3)
+
+A highway festő által ténylegesen fogyasztott geometria két widgetfüggetlen,
+tiszta függvénybe került: `barLineXs(...)` a compiled
+`target.barBoundaries` elemeit, `beatLineXs(...)` pedig a valós
+`60 / tempo.bpm` ütéstávolságot képezi x-koordinátákra. A festő közvetlenül
+ezek listáit rajzolja; külön, eltérhető másolat nem maradt benne.
+
+Az A3 záró cella most közvetlenül ezt a festő-geometriát méri 90 BPM, 3/4,
+`barBoundaries = [0 s, 2 s]`, `240 pps` mellett:
+
+- a második ütemvonal abszolút x-e `strikeX + 2 * pps`, és az elsőtől pontosan
+  `2 * pps` távolságra van — tehát nem jöhet 120 BPM-es 1,5 s-os feltételezésből;
+- a két ütemvonal között pontosan két belső beat-vonal van;
+- a beat-vonalak távolsága `240 * 60 / 90 = 160 px`.
+
+**Kötelező mutációs önellenőrzés:** egyszerre ideiglenesen (1) a
+`beatLineXs` `secPerBeat` értékét `0.5`-re, és (2) a `barLineXs` második
+forrás-időpontját 120 BPM-es 3/4 rács szerinti `1.5 s`-ra rontottam. A célzott
+A3 cella PIROS lett: a második ütemvonal várt `548.0` helyett `428.0` volt
+(`+0 -1: Some tests failed`). Ezután mindkét mutációt visszaállítottam; a
+helyes célzott fájl `+15: All tests passed` eredménnyel zárt.
+
+### Záró gate — TÉNYLEGES kimenet (javító kör #2)
+
+```
+$ tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart
+
+═══ [1] format
+Formatted 580 files (0 changed) in 2.09 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+No issues found! (ran in 3.7s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+00:45 +723: All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/core/l10n_parity_test.dart
+00:00 +3: All tests passed!
+    → [4] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [5] test test/core/screen_size_guard_test.dart
+00:06 +39: All tests passed!
+    → [5] test test/core/screen_size_guard_test.dart: ZÖLD
+
+═══ [6] architecture
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [6] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/core/l10n_parity_test.dart                       zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    architecture                                               zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+
 ## 11. Review — Claude tölti ki
 
 Link: `docs/reviews/e02-r14-review.md`

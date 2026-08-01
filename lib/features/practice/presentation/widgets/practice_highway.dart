@@ -29,6 +29,48 @@ double targetX({
   return strikeX + (delta + offset) * pixelsPerSecond;
 }
 
+/// Pure x-coordinates consumed by the highway painter for compiled bar lines.
+List<double> barLineXs({
+  required List<Duration> barBoundaries,
+  required Duration playhead,
+  required Duration visualOffset,
+  required double pixelsPerSecond,
+  required double strikeX,
+}) => barBoundaries
+    .map(
+      (boundary) => targetX(
+        targetTime: boundary,
+        playhead: playhead,
+        visualOffset: visualOffset,
+        pixelsPerSecond: pixelsPerSecond,
+        strikeX: strikeX,
+      ),
+    )
+    .toList(growable: false);
+
+/// Pure x-coordinates consumed by the highway painter for its beat grid.
+List<double> beatLineXs({
+  required Tempo tempo,
+  required Duration playhead,
+  required double pixelsPerSecond,
+  required double strikeX,
+  required double visibleSeconds,
+  required double behindSeconds,
+}) {
+  final secPerBeat = tempo.bpm > 0 ? 60.0 / tempo.bpm : 0.5;
+  final pxPerBeat = pixelsPerSecond * secPerBeat;
+  final playheadSeconds =
+      playhead.inMicroseconds / Duration.microsecondsPerSecond;
+  final firstBeat = (playheadSeconds - behindSeconds) / secPerBeat;
+  final lastBeat = (playheadSeconds + visibleSeconds) / secPerBeat;
+  final xs = <double>[];
+  for (var beat = firstBeat.floorToDouble(); beat <= lastBeat + 1; beat += 1) {
+    if (beat <= firstBeat.floorToDouble()) continue;
+    xs.add(strikeX + (beat - playheadSeconds) * pxPerBeat);
+  }
+  return xs;
+}
+
 /// Pure helper: is the candidate x-coordinate inside the visible lane plus
 /// the fixed margin? Used to decide whether a target event should be built
 /// at all (ADR 0080 D5).
@@ -285,32 +327,19 @@ class _HighwayBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final h = size.height;
     final beatsPerBar = meter.beatsPerBar;
-    // Tempo drives the beat grid: 60/bpm seconds per beat. The previous
-    // hardcoded 0.5 (= 120 BPM) drifted on every real practice — the
-    // catalog is 60–90 BPM, so the downbeats ended up two beats off.
-    final secPerBeat = tempo.bpm > 0 ? 60.0 / tempo.bpm : 0.5;
-    final pxPerBeat = pixelsPerSecond * secPerBeat;
-    final playheadSeconds =
-        playhead.inMicroseconds / Duration.microsecondsPerSecond;
-    final visualOffsetSeconds =
-        visualOffset.inMicroseconds / Duration.microsecondsPerSecond;
-
-    double xAt(Duration t) {
-      final delta =
-          (t.inMicroseconds / Duration.microsecondsPerSecond) -
-          playheadSeconds +
-          visualOffsetSeconds;
-      return strikeX + delta * pixelsPerSecond;
-    }
-
     final line = Paint()..strokeWidth = 1;
 
     // --- Bar lines: drawn from the compiled `barBoundaries`, which the
     // compiler produced for the actual tempo + meter (R06). The grid and
     // the markers therefore share the SAME time→x math.
-    if (barBoundaries.isNotEmpty && pxPerBeat > 0) {
-      for (final barStart in barBoundaries) {
-        final x = xAt(barStart);
+    if (barBoundaries.isNotEmpty) {
+      for (final x in barLineXs(
+        barBoundaries: barBoundaries,
+        playhead: playhead,
+        visualOffset: visualOffset,
+        pixelsPerSecond: pixelsPerSecond,
+        strikeX: strikeX,
+      )) {
         if (x < -2 || x > size.width + 2) continue;
         canvas.drawLine(
           Offset(x, 0),
@@ -325,12 +354,15 @@ class _HighwayBackgroundPainter extends CustomPainter {
     // --- Beat lines within the visible window. The first beat of each bar
     // is already drawn above (the bar line is the downbeat); we draw the
     // remaining `beatsPerBar - 1` beats per bar from the bar start.
-    if (pxPerBeat > 0 && beatsPerBar > 1) {
-      final firstBeat = (playheadSeconds - behindSeconds) / secPerBeat;
-      final lastBeat = (playheadSeconds + visibleSeconds) / secPerBeat;
-      for (var b = firstBeat.floorToDouble(); b <= lastBeat + 1; b += 1) {
-        if (b <= firstBeat.floorToDouble()) continue;
-        final x = strikeX + (b - playheadSeconds) * pxPerBeat;
+    if (beatsPerBar > 1) {
+      for (final x in beatLineXs(
+        tempo: tempo,
+        playhead: playhead,
+        pixelsPerSecond: pixelsPerSecond,
+        strikeX: strikeX,
+        visibleSeconds: visibleSeconds,
+        behindSeconds: behindSeconds,
+      )) {
         if (x < -2 || x > size.width + 2) continue;
         canvas.drawLine(
           Offset(x, 0),

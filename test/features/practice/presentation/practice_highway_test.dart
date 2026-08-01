@@ -291,112 +291,50 @@ void main() {
       expect(target.meter.beatsPerBar, 6);
     });
 
-    // MAJOR-2 follow-up: a non-120-BPM (90 BPM, 3/4) target with REAL
-    // barBoundaries. The bar-line x-coordinate (drawn from the first
-    // barBoundary through the painter's `xAt`) MUST coincide exactly with
-    // the FIRST event's marker x-coordinate (computed via the public
-    // `targetX`). If the painter hardcoded 120 BPM, the two would drift.
-    testWidgets(
-      'non-120-BPM (90 BPM 3/4) bar line x equals the first event x',
-      (tester) async {
-        // 90 BPM 3/4 → beat = 60/90 = 0.6666... s, bar = 2 s.
-        const bpm = 90.0;
-        const pixelsPerSecond = 240.0;
-        const strikeX = 68.0;
-        const playhead = Duration(seconds: 1);
+    test('90 BPM 3/4 bar and beat lines use the painter geometry', () {
+      const pixelsPerSecond = 240.0;
+      const strikeX = 68.0;
+      const playhead = Duration.zero;
+      const boundaries = [Duration.zero, Duration(seconds: 2)];
 
-        // Bar boundary at t = 0 (the first downbeat) and at t = 2s
-        // (second bar). The first event sits ON the first bar boundary.
-        final target = _target(
-          events: [
-            _event(
-              barIndex: 0,
-              time: Duration.zero,
-              direction: StrumDirection.down,
-              id: 'b0',
-            ),
-            _event(
-              barIndex: 0,
-              time: const Duration(milliseconds: 666),
-              direction: StrumDirection.up,
-              id: 'b0_2',
-            ),
-            _event(
-              barIndex: 0,
-              time: const Duration(milliseconds: 1332),
-              direction: StrumDirection.down,
-              id: 'b0_3',
-            ),
-            _event(
-              barIndex: 1,
-              time: const Duration(seconds: 2),
-              direction: StrumDirection.down,
-              id: 'b1',
-            ),
-          ],
-          meter: const Meter(beatsPerBar: 3),
-          tempo: const Tempo(bpm),
-          barBoundaries: const [Duration.zero, Duration(seconds: 2)],
-        );
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: _pumpHighway(
-                target: target,
-                playhead: playhead,
-                width: 600,
-                height: 168,
-                strikeX: strikeX,
-                pixelsPerSecond: pixelsPerSecond,
-                visibleSeconds: 4,
-                behindSeconds: 1.5,
-              ),
-            ),
-          ),
-        );
-        // The bar-boundary x and the first event's marker x are computed
-        // by the SAME `targetX` math, so they MUST be bit-exact. If the
-        // painter regressed to a 120 BPM assumption the bar line would
-        // drift and this assertion would fail.
-        final firstEventX = targetX(
-          targetTime: Duration.zero,
-          playhead: playhead,
-          visualOffset: Duration.zero,
-          pixelsPerSecond: pixelsPerSecond,
-          strikeX: strikeX,
-        );
-        final firstBarBoundaryX = targetX(
-          targetTime: Duration.zero,
-          playhead: playhead,
-          visualOffset: Duration.zero,
-          pixelsPerSecond: pixelsPerSecond,
-          strikeX: strikeX,
-        );
-        expect(
-          firstBarBoundaryX,
-          firstEventX,
-          reason: 'bar boundary and first event must share the same x',
-        );
-        // And the second bar boundary must fall 2 s to the right of the
-        // first (a 90 BPM 3/4 bar = 60/90 * 3 = 2 s), independent of the
-        // lane dimensions.
-        final secondBarBoundaryX = targetX(
-          targetTime: const Duration(seconds: 2),
-          playhead: playhead,
-          visualOffset: Duration.zero,
-          pixelsPerSecond: pixelsPerSecond,
-          strikeX: strikeX,
-        );
-        expect(
-          secondBarBoundaryX - firstBarBoundaryX,
-          2 * pixelsPerSecond,
-          reason: '90 BPM 3/4 bar = 2 s; difference is 2 * pps exactly',
-        );
-        expect(tester.takeException(), isNull);
-      },
-    );
+      final bars = barLineXs(
+        barBoundaries: boundaries,
+        playhead: playhead,
+        visualOffset: Duration.zero,
+        pixelsPerSecond: pixelsPerSecond,
+        strikeX: strikeX,
+      );
+      expect(bars, hasLength(2));
+      expect(
+        bars[1],
+        strikeX + 2 * pixelsPerSecond,
+        reason: 'the second painted bar line comes from the 2 s boundary',
+      );
+      expect(
+        bars[1] - bars[0],
+        2 * pixelsPerSecond,
+        reason: '90 BPM 3/4 bars are exactly 2 s apart',
+      );
+
+      final beats = beatLineXs(
+        tempo: const Tempo(90),
+        playhead: playhead,
+        pixelsPerSecond: pixelsPerSecond,
+        strikeX: strikeX,
+        visibleSeconds: 4,
+        behindSeconds: 1.5,
+      );
+      final internalBeats = beats
+          .where((x) => x > bars[0] && x < bars[1])
+          .toList(growable: false);
+      expect(
+        internalBeats,
+        hasLength(2),
+        reason: '3/4 has two internal beat lines between downbeats',
+      );
+      expect(internalBeats[0] - bars[0], closeTo(160, 1e-9));
+      expect(internalBeats[1] - internalBeats[0], closeTo(160, 1e-9));
+    });
   });
 
   group('A4 — visual latency shifts only the drawing', () {
