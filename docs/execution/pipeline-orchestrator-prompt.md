@@ -170,7 +170,6 @@ nem írják át, és nincs köztük automatikus fallback.
 | **H7** | a `tools/round-gate.sh` nem hozható zöldre |
 | **H8** | a `main` a dispatch óta mozdult, és a rebase konfliktust ad |
 
-<<<<<<< HEAD
 **A javító kör a lánc NORMÁL útja, nem megállási ok** (user-döntés
 2026-07-31): ha a review BLOCKER/MAJOR leletet talál, indítsd a javító kört a
 leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
