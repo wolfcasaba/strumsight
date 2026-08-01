@@ -6,6 +6,31 @@
 - **Előfeltétel:** E02-R20 merge és friss-main teljes regresszió
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "docs/baseline/epic-03-song-trainer-start.md",
+  "lib/app/config/feature_flags.dart",
+  "lib/features/song_trainer/public.dart",
+  "test/fixtures/song_trainer/legacy/song_44.json",
+  "test/fixtures/song_trainer/legacy/song_34.json",
+  "test/fixtures/song_trainer/legacy/song_rests.json",
+  "test/fixtures/song_trainer/legacy/song_multiple_chords.json",
+  "test/fixtures/song_trainer/legacy/setlist_duplicate.json",
+  "test/fixtures/song_trainer/legacy/setlist_missing_song.json",
+  "test/fixtures/song_trainer/legacy/setlist_mixed_bpm.json",
+  "test/features/song_trainer/baseline/legacy_fixture_parity_test.dart",
+  "docs/rounds/e03-r01-baseline-and-boundaries.md",
+]
+gate_tests = [
+  "test/features/songs",
+  "test/features/learn/setlist_expected_hint_test.dart",
+  "test/features/song_trainer/baseline",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

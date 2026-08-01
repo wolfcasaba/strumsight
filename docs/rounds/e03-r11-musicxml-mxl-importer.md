@@ -6,6 +6,41 @@
 - **Előfeltétel:** E03-R10 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "pubspec.yaml",
+  "pubspec.lock",
+  "lib/features/song_trainer/data/importers/musicxml_importer.dart",
+  "lib/features/song_trainer/data/importers/musicxml_parser_adapter.dart",
+  "lib/features/song_trainer/data/importers/musicxml_mapper.dart",
+  "lib/features/song_trainer/data/importers/musicxml_repeat_expander.dart",
+  "lib/features/song_trainer/data/importers/mxl_importer.dart",
+  "lib/features/song_trainer/data/importers/mxl_archive_reader.dart",
+  "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
+  "test/features/song_trainer/data/importers/mxl_security_test.dart",
+  "test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml",
+  "test/fixtures/song_trainer/musicxml/waltz_34.musicxml",
+  "test/fixtures/song_trainer/musicxml/meter_68.musicxml",
+  "test/fixtures/song_trainer/musicxml/tempo_meter_pickup.musicxml",
+  "test/fixtures/song_trainer/musicxml/two_chords.musicxml",
+  "test/fixtures/song_trainer/musicxml/monophonic_tie_rest.musicxml",
+  "test/fixtures/song_trainer/musicxml/multipart_polyphonic.musicxml",
+  "test/fixtures/song_trainer/musicxml/markers_lyrics_repeat.musicxml",
+  "test/fixtures/song_trainer/musicxml/corrupt.musicxml",
+  "test/fixtures/song_trainer/mxl/malicious_path.mxl",
+  "test/fixtures/song_trainer/mxl/extracted_limit.mxl",
+  "docs/rounds/e03-r11-musicxml-mxl-importer.md",
+]
+gate_tests = [
+  "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
+  "test/features/song_trainer/data/importers/mxl_security_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

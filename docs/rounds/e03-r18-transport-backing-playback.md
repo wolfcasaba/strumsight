@@ -6,6 +6,35 @@
 - **Előfeltétel:** E03-R17 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/application/trainer/song_transport.dart",
+  "lib/features/song_trainer/application/trainer/song_transport_state.dart",
+  "lib/features/song_trainer/application/trainer/song_transport_command.dart",
+  "lib/features/song_trainer/application/trainer/transport_effect.dart",
+  "lib/features/song_trainer/application/trainer/song_transport_clock.dart",
+  "lib/features/song_trainer/data/playback/backing_audio_player.dart",
+  "lib/features/song_trainer/data/playback/playback_capabilities.dart",
+  "lib/features/song_trainer/data/playback/local_backing_audio_player.dart",
+  "lib/features/song_trainer/data/playback/fake_backing_audio_player.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "docs/baseline/epic-03-backing-drift-benchmark.md",
+  "test/features/song_trainer/application/trainer/song_transport_test.dart",
+  "test/features/song_trainer/application/trainer/song_transport_lifecycle_test.dart",
+  "test/features/song_trainer/data/playback/backing_audio_player_test.dart",
+  "test/features/song_trainer/data/playback/backing_drift_test.dart",
+  "docs/rounds/e03-r18-transport-backing-playback.md",
+]
+gate_tests = [
+  "test/features/song_trainer/application/trainer/song_transport_test.dart",
+  "test/features/song_trainer/application/trainer/song_transport_lifecycle_test.dart",
+  "test/features/song_trainer/data/playback",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

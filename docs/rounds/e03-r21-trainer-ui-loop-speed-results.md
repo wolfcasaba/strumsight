@@ -6,6 +6,46 @@
 - **Előfeltétel:** E03-R20 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/application/trainer/song_progress_committer.dart",
+  "lib/features/song_trainer/application/trainer/song_resume_repository.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_controller.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_state.dart",
+  "lib/features/song_trainer/presentation/screens/song_trainer_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_result_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/chord_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/strum_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/note_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/tablature_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/transport_controls.dart",
+  "lib/features/song_trainer/presentation/widgets/loop_controls.dart",
+  "lib/features/song_trainer/presentation/widgets/measure_heatmap.dart",
+  "lib/features/song_trainer/presentation/widgets/song_loop_feedback.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/practice/public.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/features/song_trainer/application/trainer/song_progress_committer_test.dart",
+  "test/features/song_trainer/application/trainer/song_resume_repository_test.dart",
+  "test/features/song_trainer/presentation/song_trainer_screen_test.dart",
+  "test/features/song_trainer/presentation/song_result_screen_test.dart",
+  "test/features/song_trainer/presentation/song_trainer_accessibility_test.dart",
+  "test/features/song_trainer/integration/song_trainer_lifecycle_test.dart",
+  "docs/rounds/e03-r21-trainer-ui-loop-speed-results.md",
+]
+gate_tests = [
+  "test/features/song_trainer/application/trainer/song_progress_committer_test.dart",
+  "test/features/song_trainer/application/trainer/song_resume_repository_test.dart",
+  "test/features/song_trainer/presentation",
+  "test/features/song_trainer/integration/song_trainer_lifecycle_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

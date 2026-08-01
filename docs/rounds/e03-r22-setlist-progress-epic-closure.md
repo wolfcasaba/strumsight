@@ -6,6 +6,60 @@
 - **Előfeltétel:** E03-R21 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/domain/models/song_setlist.dart",
+  "lib/features/song_trainer/domain/models/setlist_result.dart",
+  "lib/features/song_trainer/domain/models/song_practice_record.dart",
+  "lib/features/song_trainer/domain/repositories/setlist_repository.dart",
+  "lib/features/song_trainer/domain/repositories/song_progress_repository.dart",
+  "lib/features/song_trainer/application/setlists/setlist_controller.dart",
+  "lib/features/song_trainer/application/setlists/setlist_session_controller.dart",
+  "lib/features/song_trainer/application/progress/song_progress_aggregator.dart",
+  "lib/features/song_trainer/application/progress/song_revision_progress_mapper.dart",
+  "lib/features/song_trainer/data/local/file_setlist_repository.dart",
+  "lib/features/song_trainer/data/local/file_song_progress_repository.dart",
+  "lib/features/song_trainer/data/migration/legacy_setlist_adapter.dart",
+  "lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart",
+  "lib/features/song_trainer/presentation/screens/setlist_session_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_result_screen.dart",
+  "lib/features/progress/public.dart",
+  "lib/features/streak/public.dart",
+  "lib/features/practice/public.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "tool/check_architecture.dart",
+  "tool/ci/check_song_schema.dart",
+  "tool/ci/check_song_fixture_licenses.dart",
+  ".github/workflows/build-apk.yml",
+  "test/features/song_trainer/application/setlists/setlist_session_controller_test.dart",
+  "test/features/song_trainer/data/local/file_setlist_repository_test.dart",
+  "test/features/song_trainer/application/progress/song_progress_test.dart",
+  "test/features/song_trainer/data/local/song_progress_wiring_test.dart",
+  "test/features/song_trainer/integration/legacy_setlist_migration_test.dart",
+  "test/features/song_trainer/integration/song_progress_public_integration_test.dart",
+  "test/features/song_trainer/security/import_security_suite_test.dart",
+  "test/features/song_trainer/performance/long_song_performance_test.dart",
+  "test/property/song_progress_property_test.dart",
+  "README.md",
+  "docs/sdd/00-index.md",
+  "docs/sdd/epic-03-completion-report.md",
+  "docs/execution/06-requirements-traceability-matrix.md",
+  "HANDOFF.md",
+  "docs/rounds/e03-r22-setlist-progress-epic-closure.md",
+]
+gate_tests = [
+  "test/features/song_trainer",
+  "test/features/songs",
+  "test/features/practice",
+  "test/property",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

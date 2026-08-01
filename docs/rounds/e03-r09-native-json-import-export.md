@@ -6,6 +6,29 @@
 - **Előfeltétel:** E03-R08 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/song_trainer/data/importers/song_importer.dart",
+  "lib/features/song_trainer/data/importers/native_json_importer.dart",
+  "lib/features/song_trainer/data/importers/native_json_exporter.dart",
+  "lib/features/song_trainer/data/importers/export_filename_sanitizer.dart",
+  "lib/features/song_trainer/data/local/song_document_codec.dart",
+  "test/features/song_trainer/data/importers/native_json_importer_test.dart",
+  "test/features/song_trainer/data/importers/native_json_exporter_test.dart",
+  "test/fixtures/song_trainer/native/full_song.strumsight-song.json",
+  "test/fixtures/song_trainer/native/newer_version.strumsight-song.json",
+  "test/fixtures/song_trainer/native/corrupt.strumsight-song.json",
+  "docs/rounds/e03-r09-native-json-import-export.md",
+]
+gate_tests = [
+  "test/features/song_trainer/data/importers/native_json_importer_test.dart",
+  "test/features/song_trainer/data/importers/native_json_exporter_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

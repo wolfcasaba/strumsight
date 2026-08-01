@@ -6,6 +6,32 @@
 - **Előfeltétel:** E03-R13 merge és elfogadott GP ADR
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "pubspec.yaml",
+  "pubspec.lock",
+  "lib/features/song_trainer/data/importers/guitar_pro_importer.dart",
+  "lib/features/song_trainer/data/importers/guitar_pro_parser_adapter.dart",
+  "lib/features/song_trainer/data/importers/guitar_pro_mapper.dart",
+  "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "test/features/song_trainer/data/importers/guitar_pro_importer_test.dart",
+  "test/features/song_trainer/data/importers/guitar_pro_unsupported_test.dart",
+  "lib/features/song_trainer/presentation/widgets/guitar_pro_conversion_guidance.dart",
+  "lib/features/song_trainer/presentation/screens/song_import_screen.dart",
+  "test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "docs/user-guide/guitar-pro-conversion.md",
+  "docs/rounds/e03-r14-guitar-pro-path.md",
+]
+gate_tests = [
+  "test/features/song_trainer/data/importers/guitar_pro_importer_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

@@ -6,6 +6,27 @@
 - **Előfeltétel:** E03-R12 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "docs/research/epic-03-guitar-pro-feasibility.md",
+  "tool/guitar_pro_feasibility/pubspec.yaml",
+  "tool/guitar_pro_feasibility/bin/run_spike.dart",
+  "tool/guitar_pro_feasibility/lib/gp_spike.dart",
+  "tool/guitar_pro_feasibility/test/gp_spike_test.dart",
+  "test/fixtures/song_trainer/guitar_pro/README.md",
+  "test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3",
+  "test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5",
+  "test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx",
+  "docs/rounds/e03-r13-guitar-pro-feasibility.md",
+]
+gate_tests = [
+  "test/features/song_trainer/data/importers",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel

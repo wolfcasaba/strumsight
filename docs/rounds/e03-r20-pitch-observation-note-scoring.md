@@ -6,6 +6,41 @@
 - **Előfeltétel:** E03-R19 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
 
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/core/audio/pitch/pitch_observation.dart",
+  "lib/core/audio/pitch/pitch_observation_config.dart",
+  "lib/core/audio/pitch/pitch_observation_gateway.dart",
+  "lib/core/audio/dsp/yin_pitch_detector.dart",
+  "lib/features/tuner/engine/dsp/yin_pitch_detector.dart",
+  "lib/features/tuner/engine/dsp/tuner_analyzer.dart",
+  "lib/features/song_trainer/domain/services/monophonic_note_scorer.dart",
+  "lib/features/song_trainer/domain/models/note_scoring_models.dart",
+  "lib/features/song_trainer/data/audio/live_pitch_observation_gateway.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_controller.dart",
+  "lib/features/song_trainer/presentation/widgets/note_lane.dart",
+  "tool/benchmarks/song_trainer_pitch_benchmark.dart",
+  "docs/baseline/epic-03-pitch-observation-benchmark.md",
+  "test/core/audio/dsp/yin_pitch_detector_test.dart",
+  "test/features/tuner/dsp/yin_test.dart",
+  "test/features/song_trainer/domain/monophonic_note_scorer_test.dart",
+  "test/features/song_trainer/data/audio/live_pitch_observation_gateway_test.dart",
+  "test/features/song_trainer/application/trainer/song_note_trainer_test.dart",
+  "test/fixtures/audio/song_trainer/pitch_fixture_manifest.json",
+  "docs/rounds/e03-r20-pitch-observation-note-scoring.md",
+]
+gate_tests = [
+  "test/core/audio/dsp",
+  "test/features/tuner",
+  "test/features/song_trainer/domain/monophonic_note_scorer_test.dart",
+  "test/features/song_trainer/data/audio",
+  "test/features/song_trainer/application/trainer/song_note_trainer_test.dart",
+]
+native_gate = false
+```
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd az `origin/main` és az
 > elődkör merge-jét; olvasd újra az `AGENTS.md`, Chapter 1/3/4,
 > `HANDOFF.md`, a releváns ADR-eket és a `docs/LESSONS.md` fájlt. `rg`-vel
