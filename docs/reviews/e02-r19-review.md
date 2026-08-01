@@ -306,3 +306,63 @@ A kör magja elkészült és valósan mérve van; a scope tiszta, a gate zöld, 
 OFF. **Egy javító kör kell** a 4.1 MAJOR-ra (időzítés/latency cellák + a
 határpont dokumentált kizárása) és a 4.2 MINOR-ra. Ezek mind a már engedélyezett
 fájlokon belül elvégezhetők — **nincs szükség sem scope-tágításra, sem HALT-ra**.
+
+---
+
+# Review — E02-R19/b fix#1 (harmadik passz) — **APPROVED**
+
+- **Javító commit:** `5ab9a37` (`test(learn): cover timing parity`) az `ef34831`
+  (orchestrátor: brief §0.3) tetején.
+- **Ellenőr:** Claude (Opus 5), read-only, **friss** izolált klón:
+  `/tmp/review-e02-r19b-fix1`.
+- **Verdikt:** **APPROVED** — mindkét lelet lezárva, új lelet nincs.
+
+## 1. Gate — újrafuttatva friss izolált klónban
+
+```
+[1] format → ZÖLD   [2] analyze → ZÖLD   [3] test practice/ → ZÖLD
+[4] test learn/ → ZÖLD (194 teszt, 1 skip)   [5] test progress/ → ZÖLD
+[6] test streak/ → ZÖLD   [7] l10n_parity → ZÖLD   [8] architecture → ZÖLD
+GATE_EXIT=0
+```
+
+## 2. A 4.1 MAJOR lezárva (mérve)
+
+`learn_migration_parity_test.dart` bővítve — és a cellák **nem vákuumosak**,
+mert az illesztés megtörténtét is pinnelik:
+
+| Új cella | Mit mér | Nem-vákuum őr |
+|---|---|---|
+| szigorúan **belső** offset (+150 ms) | mindkét úton **találat** | `expect(insideLegacy.hits, insideLegacy.total)` |
+| szigorúan **külső** offset (+400 ms) | mindkét úton **miss** | `expect(outsideLegacy.hits, total - 1)` + `missed == 1` |
+| **nem-nulla latency** (300 ms, mindkét úton azonos) | a korrekció után on-beat | `expect(legacy.hits, legacy.total)` |
+| P2 alak | most **csúsztatott** misst is tartalmaz, nem csak kihagyást | explicit `expect(..., isTrue, reason: 'P2 includes a shifted, strictly outside-window miss')` |
+
+Mindegyikben `expect(v2, legacy.accuracy)` — egzakt egyezés, tűrés nélkül.
+A §0.3-ban kizárt pontos határpontot (`|d| == matchWindow`) a teszt helyesen
+**nem** állítja paritásra. Az 51 eredeti cella megmaradt (bővítés, nem csere).
+
+## 3. A 4.2 MINOR lezárva
+
+A §10 „Záró gate — tényleges, **csonkítatlan** kimenet" szakasza immár a teljes
+stream (1128 időbélyeges tesztsor, mind a 8 lépés nyers kimenetével).
+
+## 4. Egy saját téves nyom — és a feloldása (mérve)
+
+A review során feltűnt, hogy a gate könyvtár-szintű `test/features/learn/`
+futásában a `learn_migration_parity_test.dart` **egyetlen sort sem** ír ki,
+holott külön futtatva 56 teszt zölden lemegy. Ez felvetette, hogy a kör központi
+acceptance-e (A7.1) **nem fut** a gate-ben, és a zöld semmit sem bizonyít.
+
+**Megmérve, nem feltételezve:** a paritás-fájlt ideiglenesen kivéve a könyvtárból
+a suite `194` → **`138`** tesztre esik. `194 − 138 = 56` = pontosan a
+paritás-fájl tesztszáma. **A mátrix tehát fut**; a compact reporter egyszerűen
+nem írt ki sort ehhez a suite-hoz (gyors, és a sorok felülíródnak). A grep-alapú
+hiány **nem** bizonyíték futás hiányára — ez a passz tanulsága
+(→ `docs/LESSONS.md`).
+
+## 5. Zárás
+
+Gate zöld friss izolált klónban, scope tiszta (tilos zóna 0 sor), a kör magja
+valósan mérve, mindkét lelet lezárva, a flag OFF. **APPROVED** — a merge a
+CI-run zöldje után mehet.
