@@ -107,6 +107,58 @@ class RouterResumeTest(unittest.TestCase):
         self.assertEqual(model.profiles, ["m3"])
         self.assertEqual(self.state.load_task(self.brief.task_id)["m3_attempts"], 1)
 
+    def test_resumed_terra_review_or_fix_with_no_scoped_changes_is_not_ready_for_review(
+        self,
+    ) -> None:
+        # Mért reprodukció (E02-R21, H4 halt): a `TERRA_REVIEW_OR_FIX` resume-ág
+        # (`DevelopmentRouter.run()`, router.py) ugyanazt a hibát ismétli, mint
+        # a friss `_terra()` hívás -- a final_gate "pass"-t önmagában elégnek
+        # vette, `audit.scoped_changed_paths`-t nem ellenőrizte a
+        # READY_FOR_REVIEW visszaadása előtt.
+        no_scoped_change = ScopeAudit(
+            ok=True,
+            changed_paths=(),
+            violations=(),
+            high_risk=False,
+            diff_hash="sha256:empty-terra-resume-diff",
+            scoped_changed_paths=(),
+        )
+        router, model = self.make_router(
+            [], [gate("pass")], [], audits=[no_scoped_change]
+        )
+        reservation = self.state.reserve_terra(
+            self.brief.task_id,
+            daily_limit=self.config.limits.max_automatic_terra_calls_per_utc_day,
+            task_limit=self.config.limits.max_terra_calls_per_task,
+        )
+        self.state.mark_terra_started(reservation.reservation_id)
+        self.state.save_task(
+            self.brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": self.brief.task_id,
+                "brief_hash": self.brief.metadata_hash,
+                "phase": "TERRA_REVIEW_OR_FIX",
+                "status": "RUNNING",
+                "reason": "",
+                "m3_attempts": 2,
+                "terra_calls": 1,
+                "gate_history": [],
+                "baseline_manifest": {
+                    "baseline_head": "baseline",
+                    "untracked_paths": [],
+                    "ignored_paths": [],
+                    "tracked_paths": [],
+                },
+                "terra_reservation": reservation.reservation_id,
+            },
+        )
+
+        result = router.run(self.brief, self.worktree, resume=True)
+
+        self.assertNotEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, [])
+
 
 if __name__ == "__main__":
     unittest.main()

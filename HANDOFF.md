@@ -4,6 +4,23 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — önjavító kör, H4 halt JAVÍTVA.** Mért gyökérok (lásd
+> alább az előző bejegyzésben): a `_terra()` FINAL_GATE ága
+> (`tools/ai_router/router.py:429` körül) és a `TERRA_REVIEW_OR_FIX`
+> resume-ág (`run()`, `router.py:639` körül) nem ellenőrizte
+> `audit.scoped_changed_paths`-t a `READY_FOR_REVIEW` visszaadása előtt —
+> ugyanaz a hibaosztály, mint az L39/H6, csak az M3-hurok helyett a Terra-ágon.
+> Javítva: új `DevelopmentRouter._terra_final_gate(gate, audit)` segéd,
+> mindkét hívási hely ezen megy át — zöld gate-et `code_failure`-ra fordít,
+> ha a diff üres. Mért RED→GREEN regresszió KÉT külön teszttel (a friss
+> `_terra()` hívásra ÉS a `TERRA_REVIEW_OR_FIX` resume-ágra külön, mert a
+> resume-ág csak kézzel felvett task-state-tel érhető el):
+> `tools/tests/test_router.py::test_terra_final_gate_pass_with_no_scoped_changes_is_not_ready_for_review`,
+> `tools/tests/test_router_resume.py::test_resumed_terra_review_or_fix_with_no_scoped_changes_is_not_ready_for_review`.
+> Teljes `tools/tests` (104 teszt, 33 subtest): zöld. Tanulság:
+> `docs/LESSONS.md` L40. **A Practice V2 production drótozás (a kör tényleges
+> célja) ÉRINTETLEN — ez a kör kizárólag a router-infrastruktúrát javította.**
+> Előző kör: 2026-08-01
 > (Pipeline E02-R21 — a self-heal (#46/#47) UTÁNI friss `run` is HALT-ba
 > futott, ÚJ, a H6-tól ELTÉRŐ router-hibával: H4.** A teljes M3+Terra keret
 > (2/2 M3-kísérlet + 1/1 Terra-hívás) kimerült **valódi diff nélkül**
@@ -21,7 +38,6 @@
 > sem kezdődött** — ez már a MÁSODIK önjavító kör lesz ugyanezen a task-on,
 > mindkét alkalommal a router-infrastruktúra hibájával, nem a briefben vagy
 > az implementáció tartalmában.**
-> Előző kör: 2026-08-01
 > (GOV-03 / ADR 0112 önjavító kör, H6 4. előfordulás, ugyanaz az E02-R21 kör —
 > az L38-ban diagnosztizált KÉT `tools/ai_router` hiba (a "csinált-e valamit
 > az M3" döntés ugyanazt a `changed_paths` halmazt használta, mint a

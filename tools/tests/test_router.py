@@ -264,6 +264,43 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(result.status, RouterStatus.STOPPED)
         self.assertEqual(model.profiles, ["m3", "m3", "terra"])
 
+    def test_terra_final_gate_pass_with_no_scoped_changes_is_not_ready_for_review(self) -> None:
+        # Mért reprodukció (E02-R21, H4 halt): a Terra-ág FINAL_GATE lépése
+        # (`_terra()`, router.py) a final_gate "pass" eredményét önmagában
+        # elégnek vette a READY_FOR_REVIEW-hoz, anélkül hogy ellenőrizte
+        # volna audit.scoped_changed_paths-t -- szemben az M3-hurok
+        # NO_CHANGE_* őrével (lásd fent,
+        # test_build_cache_churn_alone_does_not_count_as_scoped_change).
+        # A teljes M3+Terra keret kimerült valós diff nélkül
+        # (changed_paths=[]), a router mégis READY_FOR_REVIEW-t jelzett.
+        no_scoped_change = ScopeAudit(
+            ok=True,
+            changed_paths=(),
+            violations=(),
+            high_risk=False,
+            diff_hash="sha256:empty-terra-diff",
+            scoped_changed_paths=(),
+        )
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok(), codex_ok()],
+            [
+                gate("pass"),
+                gate("code_failure", "sha256:same"),
+                gate("code_failure", "sha256:same"),
+                gate("pass"),
+            ],
+            audits=[
+                ScopeAudit(True, ("lib/example.dart",), (), False, "sha256:m3-1"),
+                ScopeAudit(True, ("lib/example.dart",), (), False, "sha256:m3-2"),
+                no_scoped_change,
+            ],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertNotEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3", "m3", "terra"])
+
     def test_terminal_state_run_always_writes_result_path(self) -> None:
         brief = self.brief()
         self.state.save_task(
