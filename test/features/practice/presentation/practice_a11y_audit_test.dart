@@ -17,6 +17,9 @@
 // looks fine" cell does NOT exist — the cell either compiles and the
 // assertions hold, or the screen is marked as a finding.
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +34,7 @@ import 'package:strumsight/features/practice/domain/model/practice_definition.da
 import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
 import 'package:strumsight/features/practice/domain/model/practice_event.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
+import 'package:strumsight/features/practice/domain/model/practice_insight.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
@@ -263,6 +267,68 @@ void main() {
     handle.dispose();
   });
 
+  // -------------------------------------------------------------------------
+  // A1 cell 1b — `_QuickStartCard` / `_DailyChallengeCard` regression
+  // guard (R20 review F3). The fix wraps the inner `Row` of `_HubCard`
+  // in `ExcludeSemantics` so the descendant `Text` widgets (the title
+  // and subtitle strings) do NOT surface as separate semantic nodes —
+  // a screen reader announces the single parent label
+  // `practiceHubOpenSetup(title)` instead of three concatenated
+  // fragments (label + title + subtitle). The existing A1.1 cell
+  // covers the catalog cards' outer label only; this cell pins the
+  // structural half (the `ExcludeSemantics` block) by asserting that
+  // the subtitle strings are NOT separate semantic nodes. Red→green
+  // proof: reverting `ExcludeSemantics` in `_HubCard` makes this
+  // cell fail with `findsOneWidget` on the subtitle label.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'A1.1b Hub: _QuickStartCard / _DailyChallengeCard — subtitle strings '
+    'are NOT separate semantic nodes',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpHub(tester);
+      // The parent semantics node carries the merged label
+      // `practiceHubOpenSetup(title)`. The inner title/subtitle
+      // Text widgets must be hidden by `ExcludeSemantics` — they
+      // must not surface as their own semantic labels. The subtitle
+      // strings are distinct enough from the merged label that a
+      // bare `find.bySemanticsLabel(<subtitle>)` is unambiguous.
+      expect(
+        find.bySemanticsLabel(
+          l10n().practiceHubOpenSetup(l10n().practiceHubQuickStartLabel),
+        ),
+        findsOneWidget,
+        reason: 'QuickStart card parent label missing',
+      );
+      expect(
+        find.bySemanticsLabel(l10n().practiceHubQuickStartSubtitle),
+        findsNothing,
+        reason:
+            'QuickStart subtitle leaked as a separate semantic node '
+            '— _HubCard ExcludeSemantics is missing',
+      );
+      expect(
+        find.bySemanticsLabel(
+          l10n().practiceHubOpenSetup(l10n().practiceHubDailyChallengeLabel),
+        ),
+        findsOneWidget,
+        reason: 'DailyChallenge card parent label missing',
+      );
+      // The `pumpHub` fixture builds the `DailyChallenge` with
+      // `name: 'Audit'`, so the subtitle is the literal `'Audit'`.
+      // That distinct string must NOT be a separate semantic node.
+      expect(
+        find.bySemanticsLabel('Audit'),
+        findsNothing,
+        reason:
+            'DailyChallenge subtitle leaked as a separate semantic '
+            'node — _HubCard ExcludeSemantics is missing',
+      );
+      handle.dispose();
+    },
+  );
+
   testWidgets('A1.2 Setup: Start CTA is labelled, action wired, ≥ 48dp tall', (
     tester,
   ) async {
@@ -463,4 +529,236 @@ void main() {
     expect(find.text(l10n().practiceResultTitle), findsOneWidget);
     expect(find.text(l10n().practiceResultBreakdownTitle), findsOneWidget);
   });
+
+  // -------------------------------------------------------------------------
+  // A2 l10n cells (migrated from the now-deleted
+  // `test/features/practice/practice_l10n_audit_test.dart` after
+  // E02-R20 review F2 — the file was §4 scope-out). These cells cover
+  // the genuinely-new tests:
+  //   * the coach-code→ARB-key mapping-pin (two structural `test`s that
+  //     fail when a new code is added without an ARB counterpart),
+  //   * the result-screen widget-render proof that the ARB string
+  //     actually reaches the screen (two `testWidgets` that fail when
+  //     the screen falls back to the humanised machine code).
+  // The vacuous A2.3 "percentage formatting" cell was dropped — it
+  // compared two Dart string-literals and called no production code.
+  // -------------------------------------------------------------------------
+
+  test('A2.1 every PracticeInsightCode has a non-empty ARB translation '
+      'in both locales (mapping pin)', () {
+    final en =
+        jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync())
+            as Map<String, dynamic>;
+    final hu =
+        jsonDecode(File('lib/l10n/app_hu.arb').readAsStringSync())
+            as Map<String, dynamic>;
+
+    // The ARB keys are produced by stripping `practice.insight.` and
+    // camelCasing the remainder. This mirrors the manual mapping in
+    // `practice_result_screen.dart` — if the mapping diverges, this
+    // test must be updated in lockstep.
+    final pairs = <String, String>{
+      PracticeInsightCode.noSignal: 'practiceInsightNoSignal',
+      PracticeInsightCode.lowCompletion: 'practiceInsightLowCompletion',
+      PracticeInsightCode.biasLate: 'practiceInsightBiasLate',
+      PracticeInsightCode.biasEarly: 'practiceInsightBiasEarly',
+      PracticeInsightCode.directionError: 'practiceInsightDirectionError',
+      PracticeInsightCode.chordError: 'practiceInsightChordError',
+      PracticeInsightCode.chordPairProblem: 'practiceInsightChordPairProblem',
+      PracticeInsightCode.tempoTooHigh: 'practiceInsightTempoTooHigh',
+      PracticeInsightCode.positiveReinforcement:
+          'practiceInsightPositiveReinforcement',
+      PracticeInsightCode.nextDifficulty: 'practiceInsightNextDifficulty',
+    };
+    for (final entry in pairs.entries) {
+      expect(
+        en.containsKey(entry.value),
+        isTrue,
+        reason: '${entry.key} → missing English ARB key ${entry.value}',
+      );
+      expect(
+        (en[entry.value] as String).trim().isNotEmpty,
+        isTrue,
+        reason: '${entry.value} is empty in English',
+      );
+      expect(
+        hu.containsKey(entry.value),
+        isTrue,
+        reason: '${entry.key} → missing Hungarian ARB key ${entry.value}',
+      );
+      expect(
+        (hu[entry.value] as String).trim().isNotEmpty,
+        isTrue,
+        reason: '${entry.value} is empty in Hungarian',
+      );
+      // The brief §6 A2 explicitly forbids English-only values — every
+      // code must read as a real Hungarian sentence, not a copy-paste
+      // of the English version.
+      expect(
+        en[entry.value] == hu[entry.value],
+        isFalse,
+        reason:
+            '${entry.value} is identical between en and hu — must '
+            'have a real Hungarian translation',
+      );
+    }
+  });
+
+  test('A2.2 every PracticeRecommendationKind has a non-empty ARB '
+      'translation in both locales (mapping pin)', () {
+    final en =
+        jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync())
+            as Map<String, dynamic>;
+    final hu =
+        jsonDecode(File('lib/l10n/app_hu.arb').readAsStringSync())
+            as Map<String, dynamic>;
+    final pairs = <String, String>{
+      PracticeRecommendationKind.retry: 'practiceRecommendationRetry',
+      PracticeRecommendationKind.reduceTempo:
+          'practiceRecommendationReduceTempo',
+      PracticeRecommendationKind.enableMetronome:
+          'practiceRecommendationEnableMetronome',
+      PracticeRecommendationKind.focusDirection:
+          'practiceRecommendationFocusDirection',
+      PracticeRecommendationKind.focusChordChanges:
+          'practiceRecommendationFocusChordChanges',
+      PracticeRecommendationKind.nextDifficulty:
+          'practiceRecommendationNextDifficulty',
+    };
+    for (final entry in pairs.entries) {
+      expect(
+        en.containsKey(entry.value),
+        isTrue,
+        reason: '${entry.key} → missing English ARB key ${entry.value}',
+      );
+      expect((en[entry.value] as String).trim().isNotEmpty, isTrue);
+      expect(
+        hu.containsKey(entry.value),
+        isTrue,
+        reason: '${entry.key} → missing Hungarian ARB key ${entry.value}',
+      );
+      expect((hu[entry.value] as String).trim().isNotEmpty, isTrue);
+      expect(
+        en[entry.value] == hu[entry.value],
+        isFalse,
+        reason:
+            '${entry.value} is identical — must have a real '
+            'Hungarian translation',
+      );
+    }
+  });
+
+  Future<void> pumpResultWithLocale(
+    WidgetTester tester,
+    Locale locale,
+    PracticeHistoryEntry entry,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PracticeResultScreen(entry: entry),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The insight section sits at the bottom of a ListView — scroll it
+    // into the visible viewport so `find.text` reaches it.
+    final l10n = await AppLocalizations.delegate.load(locale);
+    final insightFinder = find.text(l10n.practiceResultCoachingTitle);
+    await tester.scrollUntilVisible(
+      insightFinder,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'A2.3 result screen renders the Hungarian ARB string for a coach code',
+    (tester) async {
+      final entry = PracticeHistoryEntry(
+        id: 'l10n-audit-hu',
+        modeCode: PracticeMode.strumPattern.code,
+        sourceCode: 'builtin',
+        createdAt: DateTime.utc(2026, 8, 1),
+        definitionId: 'd-hu',
+        displayTitle: 'Audit fixture',
+        finishReasonCode: 'completedAllTargets',
+        activeDuration: const Duration(seconds: 60),
+        pausedDuration: Duration.zero,
+        attemptsCount: 1,
+        finalMetricSnapshot: const PracticeMetricSnapshot(
+          completion: PracticeMetricDimensionAvailable(1.0),
+          rhythm: PracticeMetricDimensionAvailable(0.9),
+          direction: PracticeMetricDimensionAvailable(0.8),
+          chord: PracticeMetricDimensionNotApplicable(),
+          overall: PracticeMetricDimensionAvailable(0.85),
+        ),
+        totalTargets: 8,
+        resolvedTargets: 8,
+        scorePoints: 800,
+        maxCombo: 4,
+        meanAbsoluteOffset: const Duration(milliseconds: 25),
+        timingBias: Duration.zero,
+        coachingSummary: [PracticeInsightCode.biasLate],
+        skillTags: const ['rhythm.quarter_notes'],
+        highestStableTempoBpm: null,
+        detailAttempts: const [],
+      );
+      await pumpResultWithLocale(tester, const Locale('hu'), entry);
+      final hu =
+          (jsonDecode(File('lib/l10n/app_hu.arb').readAsStringSync())
+                  as Map<String, dynamic>)['practiceInsightBiasLate']
+              as String;
+      expect(find.textContaining(hu), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'A2.4 result screen renders the English ARB string for a coach code',
+    (tester) async {
+      final entry = PracticeHistoryEntry(
+        id: 'l10n-audit-en',
+        modeCode: PracticeMode.strumPattern.code,
+        sourceCode: 'builtin',
+        createdAt: DateTime.utc(2026, 8, 1),
+        definitionId: 'd-en',
+        displayTitle: 'Audit fixture',
+        finishReasonCode: 'completedAllTargets',
+        activeDuration: const Duration(seconds: 60),
+        pausedDuration: Duration.zero,
+        attemptsCount: 1,
+        finalMetricSnapshot: const PracticeMetricSnapshot(
+          completion: PracticeMetricDimensionAvailable(1.0),
+          rhythm: PracticeMetricDimensionAvailable(0.9),
+          direction: PracticeMetricDimensionAvailable(0.8),
+          chord: PracticeMetricDimensionNotApplicable(),
+          overall: PracticeMetricDimensionAvailable(0.85),
+        ),
+        totalTargets: 8,
+        resolvedTargets: 8,
+        scorePoints: 800,
+        maxCombo: 4,
+        meanAbsoluteOffset: const Duration(milliseconds: 25),
+        timingBias: Duration.zero,
+        coachingSummary: [PracticeInsightCode.positiveReinforcement],
+        skillTags: const ['rhythm.quarter_notes'],
+        highestStableTempoBpm: null,
+        detailAttempts: const [],
+      );
+      await pumpResultWithLocale(tester, const Locale('en'), entry);
+      final en =
+          (jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync())
+                  as Map<
+                    String,
+                    dynamic
+                  >)['practiceInsightPositiveReinforcement']
+              as String;
+      expect(find.textContaining(en), findsOneWidget);
+    },
+  );
 }

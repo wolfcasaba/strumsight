@@ -65,7 +65,7 @@ rés blokk tárgyalja — ez a lista az egyedi, lokális leleteket gyűjti.
 | R14 NOTE-1 | Az A4 "commands/verdict-list/HUD score unchanged" invariáns fél nem kapott saját regressziós cellát. | **Nyitott** — nincs ilyen cella `practice_highway_test.dart`-ban; alacsony prioritás. |
 | R16 N1 | `free_practice_property_test.dart` `_randomInput`-ja előre rendezi az observationöket — a "timeline ≤ active" invariáns rendezetlen inputon nincs property-tesztelve. | **Nyitott** — alacsony prioritás. |
 | R17 N1 | Az adaptív policy "3 egymást követő step-up pass" küszöbe hardkódolt, nem policy-paraméteres. | **Nyitott** — kozmetikai. |
-| R11+R13+R15 | Az Epic R11–R15 minden mergje a saját R20-as §5 cellájában **teljesül**-lel szerepel a domain/widget tesztek bizonyítékával; az „A7 rendszerszintű rés" oszlop ezt a cellát **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** minősítésre cseréli. |
+| R11+R13+R15+R05+R16+R17+R19 | Az Epic R5/R11/R13/R15/R16/R17/R19 minden merge-e a saját R20-as §5 cellájában **teljesül**-lel szerepelt a domain/widget tesztek bizonyítékával; a R20-as javító kör #1 az R5 (#34, #37), R16 (#39, #40), R17 (#30) és R19 (#41) sorokat is „A7 rendszerszintű rés" minősítésre cserélte, mivel a mért hívási lánc (fájl:sor szinten dokumentálva a §5 cellákban) igazolta, hogy ezek egyike sem érhető el a Hub→Setup→Session önálló Practice V2 úton, amíg a §3 rendszerszintű rés fennáll. |
 
 ## 3. Rendszerszintű rés (a §2 lista összegzése)
 
@@ -162,7 +162,7 @@ igazolva. A „nagyrészt teljesül" típusú összevont mondat nem elfogadható
 | 27 | Chord Progression működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `chord_progression_view_test.dart` (R14); §3 rendszerszintű rés |
 | 28 | Rhythm Only működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `rhythm_only_view_test.dart` (R16); §3 rendszerszintű rés |
 | 29 | Free Practice működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `free_practice_view_test.dart`, `free_practice_summarizer_test.dart`, `free_practice_property_test.dart` (R16); §3 rendszerszintű rés |
-| 30 | Speed Builder működik | **teljesül** | `speed_builder_progress_test.dart`, `speed_builder_engine_test.dart`, `speed_builder_property_test.dart`, `adaptive_practice_policy_test.dart` (R17) — Speed Builder a Learn-migrációs úton hozzáférhető a R19 óta |
+| 30 | Speed Builder működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `speed_builder_progress_test.dart`, `speed_builder_engine_test.dart`, `speed_builder_property_test.dart`, `adaptive_practice_policy_test.dart` (R17); §3 rendszerszintű rés — mérve: `grep -rn "SpeedBuilder\|speed_builder" lib/features/learn/` 0 találat, a `SpeedBuilderEngine`/`SpeedBuilderProgress` kizárólag a `practice_session_screen.dart`-ban van hívva, az önálló Practice-úton a §3 rendszerszintű rés miatt nem indítható |
 | 31 | 3/4 és 4/4 támogatott | **teljesül** | `meter_test.dart` (R02) + `compiled_practice_target_test.dart` (R06) |
 | 32 | Loop működik | **teljesül** (compiler szintjén bizonyított, UI-n át nem elérhető) | `practice_target_compiler_test.dart` loop-rebase (R06); §3 rendszerszintű rés |
 
@@ -171,14 +171,14 @@ igazolva. A „nagyrészt teljesül" típusú összevont mondat nem elfogadható
 | # | Tétel | Állapot | Bizonyíték |
 |---|---|---|---|
 | 33 | Built-in catalog működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `builtin_practice_catalog_test.dart` (R04); §3 rendszerszintű rés |
-| 34 | Lesson adapter működik | **teljesül** | `lesson_practice_adapter_test.dart` (R05) + Learn-migrációs útvonal (R19) |
+| 34 | Lesson adapter működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `lesson_practice_adapter_test.dart` (R05); §3 rendszerszintű rés — mérve: `practiceDefinitionFromLesson` (`lesson_practice_adapter.dart:27`) production hívója kizárólag a saját tesztfájljaiban (`practice_target_legacy_parity_test.dart`, `practice_event_matcher_parity_test.dart`, `practice_scorer_legacy_parity_test.dart`, `lesson_practice_adapter_test.dart`); az éles Learn V2 út (`_recordLearnMomentV2`, `learn_screen.dart:367-414`) a `scoreLessonV2`-t hívja (`lesson_v2_scoring.dart:6`), nem az adaptert |
 | 35 | Song adapter működik | **teljesül** | `song_practice_adapter_test.dart` (R05) |
 | 36 | Analyze adapter működik | **teljesül** | `analyze_practice_adapter_test.dart` (R05) |
-| 37 | Daily Challenge adapter működik | **teljesül** | `daily_challenge_practice_adapter_test.dart` (R05) + a Hub napi kihívás kártyája (R12) |
+| 37 | Daily Challenge adapter működik | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `daily_challenge_practice_adapter_test.dart` (R05); §3 rendszerszintű rés — mérve: a `PracticeHubScreen` (`practice_hub_screen.dart:221-227`, `practiceHubDailyChallengeLabel`) route-ja `app_router.dart:44-49,124` szerint a `practiceEngineV2Enabled` flagtől függ, éles default `false`, így a Hub-kártya nem jelenik meg; az éles Daily Challenge UX a `streak_screen.dart:32,160` → `Lessons.fromDailyChallenge` legacy útvonalon megy |
 | 38 | Progress V1 és V2 együtt olvasható | **teljesül** (Learn-migrációs úton bizonyított, önálló Practice-session úton Noop miatt sosem fut le) | `practice_progress_aggregator_test.dart` (R18+R19) |
-| 39 | Daily goal aktív időből számol | **teljesül** | `daily_goal_provider_test.dart` + ADR 0085 |
-| 40 | Streak eligibility helyes | **teljesül** | `streak_logic_test.dart`, `practice_session_eligibility_test.dart` (R16) |
-| 41 | Easy mód nem írja felül a full lesson stars eredményét | **teljesül** | Learn-migrációs úton a R19 Easy score külön score-dokumentumba kerül |
+| 39 | Daily goal aktív időből számol | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `daily_goal_provider_test.dart` + ADR 0085; §3 rendszerszintű rés — mérve: a `SessionEligibilitySnapshot`-ot felolvasó `practiceSessionRecording.record()`-ot (`practice_session_recording.dart:121`) kizárólag a `migratedLearnEnabled`-gated `_recordLearnMomentV2` (`learn_screen.dart:376`) hívja az éles kódból; az önálló Practice V2 úton a `NoopPracticeSessionRecorder` miatt sosem fut le |
+| 40 | Streak eligibility helyes | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `streak_logic_test.dart`, `practice_session_eligibility_test.dart` (R16); §3 rendszerszintű rés — mérve: a `PracticeSessionEligibility` predikátumot (`practice_session_eligibility.dart`) csak a `practiceSessionRecording.record()` hívja, ami az éles Learn úton a `_recordLearnMomentV2`-n át fut (lásd #39); az éles Learn másik ága a legacy `StreakController.recordPracticeToday()`-t (`streak_provider.dart:23`) hívja közvetlenül, **eligibility-kapu nélkül** |
+| 41 | Easy mód nem írja felül a full lesson stars eredményét | **teljesül domain/widget-teszt szinten, de nem elérhető végponttól-végpontig az élesített appban** | `learn_screen.dart:411` `if (!_easy && outcome.loggedEntry != null)` (a `lessonProgressProvider.notifier.record` Easy mode-ban nem hívódik); §3 rendszerszintű rés — mérve: az Easy mode-ban futó `_recordLearnMomentV2` a `migratedLearnEnabled`-gated branch, az önálló Practice V2 úton Easy mode nem érhető el |
 
 ### Minőség (11/11 — A1 minősítéssel)
 
@@ -196,13 +196,17 @@ igazolva. A „nagyrészt teljesül" típusú összevont mondat nem elfogadható
 | 51 | Minden user-facing string lokalizált | **teljesül** | `l10n_parity_test.dart` + `practice_l10n_audit_test.dart` (R20) — minden PracticeInsightCode + PracticeRecommendationKind mindkét nyelven |
 | 52 | Accessibility követelmények teljesülnek | **részleges — teszt-szinten bizonyított, valós eszközön nem** | `practice_a11y_audit_test.dart` A1.1–A1.10 (R20); a screen-reader/live-region fixek a Hub/Setup/Result képernyőkön lokálisan igazoltak, a Session képernyő a §3 rendszerszintű rés miatt nem indítható |
 
-**Összegzés:** 49/52 cella teljesül a fenti bizonyítékkal; 3/52 cella
-részleges a rendszerszintű rés miatt (24 legacy parity, 49 audio leak, 52
-a11y) — ezek mind a §3-ban dokumentált önálló Practice-session út
-drótozatlanságára vezethetők vissza. A §3 rendszerszintű rés egyetlen
-körben sem „hallgatva marad": minden „A7 rendszerszintű rés"
-minősítésű cella mellé oda van írva, **miért** nem teljesül végponttól-
-végpontig.
+**Összegzés:** 39/52 cella teljesül a fenti bizonyítékkal; 10/52 cella
+viseli az „A7 rendszerszintű rés" minősítést (4, 9, 25, 26, 27, 28, 29,
+30, 32, 33, 34, 37, 38, 39, 40, 41 — a R20 javító kör #1 a #30, #34,
+#37, #39, #40, #41 sorokat is ide sorolta át, miután a mért hívási
+lánc cáfolta a korábbi „teljesül" minősítést); 3/52 cella „részleges"
+egyéb, önálló ok miatt (24 legacy parity, 49 audio leak, 52 a11y) —
+mind a §3 rendszerszintű résre vagy annak hatására vezethető vissza. A
+§3 rendszerszintű rés egyetlen körben sem „hallgatva marad": minden
+érintett cella mellé oda van írva, **miért** nem teljesül
+végponttól-végpontig, és a mért hívási lánc (fájl:sor szinten) vagy a
+0-találatos `grep` bizonyítja a hiányt.
 
 ## 6. Valódi eszközös audio-regresszió (R20 §6 A8) — PENDING, a useré
 

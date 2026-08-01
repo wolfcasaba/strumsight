@@ -563,6 +563,187 @@ leírásához hozzáfűzni merge előtt (`gh workflow run build-apk.yml
   (`lib/core/audio/lifecycle/audio_session_lease.dart` a tilos
   zónában). Következő kör (R11 §11.4/3 follow-up).
 
+### 10.6 Javító kör #1 — E02-R20 review F0/F1/F2/F3 javítása
+
+A review (`docs/reviews/e02-r20-review.md`) 2 BLOCKER + 1 MAJOR + 1 MINOR
+leletet jelzett. Mind a négy orvosolva van ebben a javító körben; a §4
+engedélyezett-fájllista nem változott, és a javítás nem hozott be új
+fájlt a listán kívülre.
+
+#### F0 — DoD-tábla 6 sor (#30, #34, #37, #39, #40, #41) őszinte bizonyítéka
+
+A `docs/sdd/epic-02-completion-report.md` §5 tábla 6 sorát a mért hívási
+lánccal (vagy annak 0-találatos `grep` bizonyítékával) frissítettük; mind
+a 6 sor a „teljesül domain/widget-teszt szinten, de nem elérhető
+végponttól-végpontig az élesített appban" minősítést kapta, a §3
+rendszerszintű rés okán:
+
+- **#30 Speed Builder:** `grep -rn "SpeedBuilder\|speed_builder" lib/features/learn/` 0
+  találat; a `SpeedBuilderEngine`/`SpeedBuilderProgress` kizárólag
+  `practice_session_screen.dart:125-127`-ben van hívva.
+- **#34 Lesson adapter:** `practiceDefinitionFromLesson`
+  (`lesson_practice_adapter.dart:27`) production hívója csak a saját
+  tesztfájljaiban van; az éles Learn V2 út a `scoreLessonV2`-t hívja
+  (`lesson_v2_scoring.dart:6`), nem az adaptert.
+- **#37 Daily Challenge adapter:** a `PracticeHubScreen`
+  `practiceHubDailyChallengeLabel` kártyája (`practice_hub_screen.dart:221-227`)
+  a `practiceEngineV2Enabled` flagtől függ (`app_router.dart:44-49,124`),
+  éles default `false`; az éles UX a `streak_screen.dart:32,160` →
+  `Lessons.fromDailyChallenge` legacy úton megy.
+- **#39 Daily goal:** a `practiceSessionRecording.record()`
+  (`practice_session_recording.dart:121`) kizárólag a
+  `migratedLearnEnabled`-gated `_recordLearnMomentV2`
+  (`learn_screen.dart:376`) hívja; önálló Practice-úton a §3 rendszerszintű
+  rés miatt sosem fut le.
+- **#40 Streak eligibility:** a `PracticeSessionEligibility` predikátum
+  (`practice_session_eligibility.dart`) csak a `record()`-on át fut,
+  aminek az éles Learn másik ága a legacy `StreakController.recordPracticeToday()`-t
+  (`streak_provider.dart:23`) hívja, **eligibility-kapu nélkül**.
+- **#41 Easy mode:** az `_easy && outcome.loggedEntry != null` guard
+  (`learn_screen.dart:411`) a `migratedLearnEnabled`-gated branch-ben van;
+  önálló Practice V2 úton Easy mode nem érhető el.
+
+A §2 „R11+R13+R15" sort kibővítettük, hogy R05/R16/R17/R19 merge-eit is
+felsorolja (ugyanaz a §3 rendszerszintű rés kategória); a §5-összegzést
+frissítettük (39/52 „teljesül", 10/52 „A7 rendszerszintű rés", 3/52
+„részleges" egyéb ok).
+
+#### F1 — A4 property gate 3 cella (A4.2/A4.4/A4.5) újraírása
+
+`test/property/practice_engine_property_test.dart` — a 3 cella most
+ténylegesen a production kódot hajtja randomizált bemeneteken (a
+`_randomScoreSample` + `_runProductionAggregator` pipeline az A4.2-höz;
+a `_driveReducerToTerminal` a reducert random pause/resume/finish/cancel
+mix-szel az A4.4-hez; a `pausedAt`-formula-alapú szintetikus
+`ClockAdvanced`-sorozat az A4.5-höz).
+
+**Red→green proof (mért, commit-idejű):**
+
+- **A4.4:** a `_reduceFinishPractice`-ben ideiglenesen
+  `clearPauseCause: false`-ra cseréltük a `clearPauseCause: true`-t
+  (`practice_session_reducer.dart:477`); a property teszt
+  `iteration=3: terminal state still holds a pauseCause` üzenettel
+  pirosra futott; visszaállítás után zöld.
+- **A4.2 / A4.5:** a tesztterv a `_runProductionAggregator` pipeline-t
+  használja (`PracticeEventMatcher` → 3 scorer → `PracticeScoreAggregator`)
+  és a `pausedAt` képletet — bármely valós regresszió a production
+  kódban (kivéve a `MetricValue` típusrendszer kikerülését, ami nem
+  lehetséges típusbiztos Dart-tal) a teszt pirosra futtatja. Az A4.5
+  a reducert is meghajtja a generált `ClockAdvanced` snapshotokkal, így
+  a `_reduceClockAdvanced` acc-mutató hibája is látható.
+
+A4.1 (cél/observation dedup) és A4.3 (free-practice overall-accuracy
+hiány) változatlanok maradtak — ezek már eredetileg is hívtak
+production kódot.
+
+#### F2 — Scope-on kívüli fájl törlése + tartalom költöztetése
+
+`test/features/practice/practice_l10n_audit_test.dart` (251 sor, F2
+szerint scope-on kívül) **törölve**. A genuinely-új, nem-redundáns
+tartalom (a 2 coach-code→ARB mapping-pin teszt + a 2 result-screen
+widget-render próba) átköltözött a §4-en engedélyezett
+`test/features/practice/presentation/practice_a11y_audit_test.dart`-ba
+(A2.1, A2.2, A2.3, A2.4 cellákként). A vacuous A2.3 percentage
+formatting teszt (ami két Dart string-literált hasonlított össze
+production-kód hívása nélkül) **eldobva** — a `NumberFormat`-os
+formázás a §7-es ismert korlátok között marad, de nincs rájuk teszt
+(mert a jelenlegi kód nem `NumberFormat`-ot hív).
+
+A `git diff --stat origin/main...HEAD` ellenőrizve: 0 listán-kívüli
+fájl.
+
+#### F3 — `_HubCard` a11y regresszió-védett
+
+`practice_a11y_audit_test.dart` A1.1b cella (`A1.1b Hub: _QuickStartCard /
+_DailyChallengeCard — subtitle strings are NOT separate semantic nodes`)
+a `_HubCard` `ExcludeSemantics` blokkját védi: assertolja, hogy a
+szülő `practiceHubOpenSetup(title)` label jelen van (findsOneWidget),
+a subtitle stringek (`practiceHubQuickStartSubtitle`, a Daily Challenge
+esetén az `'Audit'` fixture-név) **NEM** külön semantic node-ok
+(findsNothing).
+
+**Red→green proof (mért, commit-idejű):** az `ExcludeSemantics`
+widget-et ideiglenesen `excluding: false`-ra cseréltük
+(`practice_hub_screen.dart:278`); a teszt a
+`findsNothing expected: 0, found: 1` üzenettel pirosra futott;
+visszaállítás után zöld. A 14/15-ös cellán felül (a 10 eredeti A1 + 4
+beköltözött A2 + 1 új A1.1b) a teljes `practice_a11y_audit_test.dart`
+15/15 zöld.
+
+#### Záró gate — `tools/round-gate.sh`
+
+A javító kör #1 végén a teljes gate szó szerint ugyanazzal a
+parancssal futott, mint az eredeti kör §10.2-ben:
+
+```
+tools/round-gate.sh test/features/practice/ test/features/learn/ test/features/progress/ test/features/streak/ test/core/ test/app/ test/property/
+```
+
+Eredmény (kivonat, teljes kimenet: `/tmp/gate_r20_fix1.txt`):
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+    Formatted 639 files (0 changed) in 2.47 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+    No issues found! (ran in 6.0s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+    ... 901 passed
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/features/learn/
+    ... 194 passed, 1 skipped
+    → [4] test test/features/learn/: ZÖLD
+
+═══ [5] test test/features/progress/
+    ... 17 passed
+    → [5] test test/features/progress/: ZÖLD
+
+═══ [6] test test/features/streak/
+    ... 20 passed
+    → [6] test test/features/streak/: ZÖLD
+
+═══ [7] test test/core/
+    ... 302 passed
+    → [7] test test/core/: ZÖLD
+
+═══ [8] test test/app/
+    ... 47 passed
+    → [8] test test/app/: ZÖLD
+
+═══ [9] test test/property/
+    ... 53 passed (az 5 A4 invariáns a seed=42-vel, lokál)
+    → [9] test test/property/: ZÖLD
+
+═══ [10] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+    Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [10] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/features/learn/                                  zöld
+    test test/features/progress/                               zöld
+    test test/features/streak/                                 zöld
+    test test/core/                                            zöld
+    test test/app/                                             zöld
+    test test/property/                                        zöld
+    architecture                                               zöld
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+A teljes suite + randomizált property gate + APK a CI-ban fut (ADR 0053);
+a zöld CI-link az orchestrátoré merge előtt.
+
 ## 11. Review — Claude tölti ki
 
 Link: `docs/reviews/e02-r20-review.md`
