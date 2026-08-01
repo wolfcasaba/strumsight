@@ -163,3 +163,51 @@ lehetetlen. Nem blokkol; egy invariancia-cella jó lenne a regresszió ellen.
 Javító kör #1 ugyanazzal a motorral (MiniMax M3), a fenti leletlistával; a MINOR-okat
 is kérjük a körben, ha nem hizlalják érdemben a diffet. A javítás után a review
 frissül és a záró cellák mutációs próbával hitelesülnek.
+
+## 6. Javító kör #1 verifikáció (HEAD `6e81c8e`, gate zöld `GATE_EXIT=0`, izolált klón)
+
+Minden zárást friss `/tmp` klónban, mutációs próbával ellenőriztem.
+
+| Lelet | Állapot | Bizonyíték |
+|---|---|---|
+| MAJOR-1 (A6 négy megjelenítés) | **ZÁRVA** | négy distinct `_OutcomeStyle` (szín+ikon+címke); `insufficientData`/`notApplicable` neutrális, eltérő ikon. **Mutáció:** `notApplicable` → `insufficientData` stílus ⇒ „four … pairwise distinct signals" teszt **PIROS** (`+2 -1`). |
+| MINOR-1 (A7 marker-handle) | **ZÁRVA** | `PracticeTargetMarker` publikus widget; a skálázási teszt `find.byType(PracticeTargetMarker) ≤ 64` cellát is méri. |
+| MINOR-2 (upcoming bar) | **ZÁRVA** | két-akkord-egy-ütem teszt: bar0 = C+G, bar1 = Am; `find.text('Am') findsOneWidget` (upcoming ≠ next=G). |
+| MINOR-3 (A9) | **ZÁRVA** | 320×568 / 412×915 / 915×412 overflow + 200% textScale cellák; `leftHanded` `Transform`-mal alkalmazva. |
+| **MAJOR-2 (A3 tempó-rács)** | **KÓD ZÁRVA, DE A TESZT TAUTOLÓGIA → ÚJRANYITVA** | lásd lent. |
+
+### MAJOR-2 újranyitás — az A3 „bar line x" teszt tautológia
+
+A **kód** helyes: a `_HighwayBackgroundPainter` a beat-rácsot `secPerBeat = 60/bpm`-mel
+számolja, és az ütemvonalakat a `target.barBoundaries`-ból, a markerekével **azonos**
+`xAt` transzformmal rajzolja (`practice_highway.dart:291,311-323`). **De a guardoló
+teszt semmit nem mér a festőből:**
+
+```dart
+final firstEventX      = targetX(targetTime: Duration.zero, playhead: playhead, …);
+final firstBarBoundaryX = targetX(targetTime: Duration.zero, playhead: playhead, …); // ← azonos hívás
+expect(firstBarBoundaryX, firstEventX);              // targetX(0) == targetX(0) — tautológia
+expect(secondBarBoundaryX - firstBarBoundaryX, 2*pps); // szintén tiszta targetX-matek
+```
+
+A teszt pumpolja a widgetet, de **soha nem olvassa ki a festett ütemvonalakat** — csak a
+pure `targetX`-et hívja újra (amit az A1 már fed). **Mutációs bizonyíték:** a festő
+`secPerBeat`-jét visszaírtam `0.5`-re, majd külön az ütemvonal-forrást 120 BPM-es
+drift-re — **mindkét mutáció mellett a teszt ZÖLD maradt** (`All tests passed`). Tehát
+egy jövőbeli painter-regresszió (a pontosan javított hibaosztály) **nem bukna el**.
+
+A brief A3 gépi mércét kíván (a review-alapelv: minden tartalmi előírás mellé gépi
+mérce). A tautologikus teszt = nincs mérce → **A3 érdemben méretlen**.
+
+**Irány (javító kör #2):** mérd a festő tényleges kimenetét — vagy (a) emeld ki az
+ütemvonal-x-eket tiszta függvénybe (`barLineXs(barBoundaries, playhead, visualOffset,
+pps, strikeX)`) és teszteld közvetlenül, vagy (b) rögzítő/mock `Canvas`-szal fogd meg a
+`drawLine` hívásokat és állítsd, hogy a 90 BPM 3/4 ütemvonal-x-ek a `barBoundaries`-ból
+jönnek (a **második** ütemvonal 2 s-ra jobbra), és egy 120 BPM-es feltevés mellett a
+teszt PIROS lenne. Egészítsd ki egy „egy ütemre három ütés" (beat-rács) állítással is,
+hogy a `secPerBeat = 60/bpm` regressziója is bukjon.
+
+**Döntés fix #1 után:** **CHANGES REQUESTED** marad — egyetlen blokkoló: a MAJOR-2 hiteles
+teszt-lezárása. Javító kör #2 ugyanazzal a motorral (MiniMax M3).
+
+## 7. Javító kör #2 verifikáció
