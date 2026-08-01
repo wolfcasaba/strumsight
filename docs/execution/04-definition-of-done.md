@@ -42,6 +42,8 @@
 - [ ] A teljes tracked/untracked/ignored/deleted/symlink scope-audit zöld.
 - [ ] A strukturált router-gate zöld; natív módosításnál a natív gate is zöld.
 - [ ] Provider quota/429/5xx/hálózati hiba nem indított Terra fallbacket.
+- [ ] A MiniMax credential nincs a repóban, Codex TOML-ban, backupban, state-ben
+      vagy naplóban; a provider és az OpenSpace MCP privát runtime helpert használ.
 - [ ] Az M3/Terra nem commitolt, pusholt vagy jelzett közvetlenül; a router-diffet
       az orchestrátor auditálta és commitolta `READY_FOR_REVIEW` után.
 - [ ] A `READY_FOR_REVIEW` jelzés csak `progress`; `done` kizárólag független

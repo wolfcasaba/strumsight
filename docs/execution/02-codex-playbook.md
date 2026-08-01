@@ -172,7 +172,9 @@ python3 tools/model-router.py smoke --profile terra --worktree "$PWD"
 
 A smoke nem módosíthatja a repót. A globális Codex default és a ChatGPT login
 nem változhat. A source credential csak user-owned, nem symlink, `0600` fájl
-lehet; kulcs vagy nyers quota-body nem kerülhet logba.
+lehet; kulcs vagy nyers quota-body nem kerülhet logba vagy TOML-ba. Az installer
+az ugyanilyen, korábbi OpenSpace MCP literal kulcsot privát runtime-wrapperre
+migrálja; ezt idempotencia- és exact-secret scan ellenőrzi.
 
 Az Epic 3 queue-sorok `prepared` állapotban vannak. Ez szándékos: csak az Epic
 2 lezárása és emberi döntés után állítható az első sor `pending`-re; R22 kézi

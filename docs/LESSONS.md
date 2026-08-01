@@ -951,3 +951,19 @@ ha a tényleges headless argv sorrendje hibás. A 0.145.0 CLI-ben az
 **Hogyan alkalmazd.** A router `codex --ask-for-approval never exec ...` argv-listát
 épít shell nélkül. Az execution- és smoke-regresszió a pozíciót is ellenőrzi; a
 telepítés csak valós, stdin-es M3 és Terra smoke után tekinthető késznek.
+
+## L34 — A secret scan a megőrzött globális configra és backupra is terjedjen ki
+
+**Mit mértünk (2026-08-01).** A router providerblokkja helyesen command-backed
+volt, mégis egy exact-secret scan megtalálta ugyanazt a MiniMax credentialt a
+telepítés előtti `openspace-vm` MCP inline environmentjében és az installer által
+készített backupban. A kulcsértéket a diagnosztika egyszer sem írta ki.
+
+**Miért.** Egy szűken helyes új komponens nem teszi tisztává a megőrzött globális
+konfigurációt. A backup biztonsági másolat, de ugyanúgy szivárgási felület.
+
+**Hogyan alkalmazd.** Az installer csak exact credential-egyezésnél migrálja a
+ismert OpenSpace mezőt egy `0700` runtime-wrapperre, újraparsolva ellenőrzi, hogy
+más beállítás nem változott, és a backupot is megtisztítja. A közvetlen üres-stdin
+OpenSpace próba ismert flush-hibával `120` lehet; a mérvadó ellenőrzés a teljes
+Codex M3/Terra smoke, amely valós MCP handshake mellett zöld.
