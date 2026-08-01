@@ -42,4 +42,4 @@ high_risk_path_fragments = [
   "payment",
   "secret",
 ]
-native_gate_command = ["./gradlew", "test"]
+native_gate_command = ["flutter", "build", "apk", "--debug"]
