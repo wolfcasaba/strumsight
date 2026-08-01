@@ -22,4 +22,4 @@ E02-R19	docs/rounds/e02-r19-progress-and-learn-migration.md	codex	0085	done
 # indította, a §0.0 pre-flight döntésekkel (flag-rollout NEM, új ADR NINCS,
 # M3-first router 1 javító körrel → Codex terra). Az ADR-oszlop szándékosan
 # 'nincs': a zárókör nem hoz architekturális döntést.
-E02-R20	docs/rounds/e02-r20-epic-closure.md	minimax	nincs	pending
+E02-R20	docs/rounds/e02-r20-epic-closure.md	minimax	nincs	done
