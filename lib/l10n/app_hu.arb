@@ -526,5 +526,29 @@
   "practiceSessionStatusFinishing": "Befejezés",
   "practiceSessionStatusCompleted": "Kész",
   "practiceSessionStatusCancelled": "Megszakítva",
-  "practiceSessionStatusFailed": "Figyelmet igényel"
+  "practiceSessionStatusFailed": "Figyelmet igényel",
+  "practiceHighwayLabel": "Gyakorló sáv",
+  "practiceHighwayRestMarker": "Szünet",
+  "practiceFeedbackTimingLabel": "Időzítés",
+  "practiceFeedbackNoVerdict": "Várj az első verdiktre…",
+  "practiceFeedbackTimingNotApplicable": "Nincs pontozva",
+  "practiceFeedbackDirectionLabel": "Irány",
+  "practiceFeedbackDirectionCorrect": "Helyes irány",
+  "practiceFeedbackDirectionWrong": "Várt: {direction}",
+  "@practiceFeedbackDirectionWrong": {
+    "placeholders": {
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFeedbackDirectionNone": "Nincs irány-cél",
+  "practiceFeedbackComboLabel": "Legjobb kombó",
+  "practicePatternPreviewLabel": "Minta előnézet",
+  "practicePatternPreviewEmpty": "Nincs esemény ebben az ütemben",
+  "practiceChordLaneLabel": "Akkordmenet",
+  "practiceChordLaneCurrent": "Most",
+  "practiceChordLaneNext": "Következő",
+  "practiceChordLaneUpcomingBar": "Következő ütem",
+  "practiceChordHintNone": "—"
 }
