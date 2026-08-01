@@ -616,5 +616,18 @@
   "practiceChordLaneCurrent": "Now",
   "practiceChordLaneNext": "Next",
   "practiceChordLaneUpcomingBar": "Upcoming bar",
+  "practiceChordLaneOutcomeBadge": "{label}",
+  "@practiceChordLaneOutcomeBadge": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceChordLaneOutcomeCorrect": "Correct",
+  "practiceChordLaneOutcomeWrong": "Wrong",
+  "practiceChordLaneOutcomeInsufficientData": "Not enough signal",
+  "practiceChordLaneOutcomeNotApplicable": "Not scored",
+  "practiceChordLaneOutcomeNoDetection": "No chord detected",
   "practiceChordHintNone": "—"
 }

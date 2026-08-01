@@ -469,6 +469,173 @@ fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
 - A mode-views a `countIn` státuszra is becsatlakoztathatók egy későbbi
   körben (most csak `running` + `paused`).
 
+## 10.1 Javító kör #1 — a review leleteinek zárása (implementer: MiniMax M3)
+
+A review (l. `docs/reviews/e02-r14-review.md`) 2 MAJOR + 3 MINOR leletet
+jegyzett; ebben a körben **mind az ötöt** zárom a §4 listán KÍVÜLI fájl
+érintése nélkül. Az alábbi a leletenkénti bizonyíték.
+
+### MAJOR-1 (A6 négy különböző `ChordOutcome`)
+
+A `_Cell._outcomeStyle` a `_Cell`-ben a négy outcome-hoz négy különböző
+színt, ikont ÉS szöveges címkét rendel — a review-próba által jelzett
+azonos `outline` szín megszűnt:
+
+| Outcome              | Szín                  | Ikon                    | Szöveges címke (`en`)          |
+|----------------------|-----------------------|--------------------------|---------------------------------|
+| `correct`            | `Colors.green`        | `Icons.check_circle`     | "Correct"                       |
+| `wrong`              | `colorScheme.error`   | `Icons.error`            | "Wrong"                         |
+| `insufficientData`   | `colorScheme.outline` | `Icons.help_outline`     | "Not enough signal"             |
+| `notApplicable`      | `colorScheme.onSurfaceVariant` | `Icons.remove_circle_outline` | "Not scored"          |
+| `noDetection`        | `colorScheme.outline` | `Icons.hearing_disabled` | "No chord detected"             |
+
+Az új ARB-kulcsok: `practiceChordLaneOutcomeCorrect`,
+`practiceChordLaneOutcomeWrong`, `practiceChordLaneOutcomeInsufficientData`,
+`practiceChordLaneOutcomeNotApplicable`, `practiceChordLaneOutcomeNoDetection`,
+és a wrapper `practiceChordLaneOutcomeBadge(label)` — en+hu párban.
+
+A "latter two not as error" feltétel: az `insufficientData` sem a `green`
+sem a `colorScheme.error` színt nem kapja, és ugyanez igaz a
+`notApplicable`-re is. A fenti tábla mindkettőnél semleges (outline /
+onSurfaceVariant) színt mutat.
+
+**Záró cella:** `chord_progression_view_test.dart` "four ChordOutcome
+values render with pairwise distinct signals" — enumerálja a 4 outcome
+párjait (6 pár), és minden párra megköveteli, hogy a (color, icon, label)
+hármas közül legalább egy különbözzön. Emellett explicit állítja, hogy a
+két semleges outcome színe **nem** `Colors.red`.
+
+### MAJOR-2 (A3/D7 tempo-érzékeny beat/ütem-rács)
+
+A `_HighwayBackgroundPainter.paint` (`practice_highway.dart`) három
+változtatást kapott:
+
+1. **`secPerBeat = 60 / tempo.bpm`** — a korábbi `const secPerBeat = 0.5`
+   (120 BPM) helyett, és `widget.target.tempo`-ból olvasva.
+2. Az **ütemvonalak** a `target.barBoundaries` időpontjaiból rajzolódnak
+   egy `xAt(Duration)` segédfüggvényen át, ami **ugyanazt** a
+   `strikeX + delta * pixelsPerSecond` képletet használja, mint a
+   `targetX`. Az ütemvonalak és a markerek ezáltal azonos
+   idő→x-konverzión mennek át.
+3. A `_HighwayBackgroundPainter.shouldRepaint` kiegészült a `tempo` és a
+   `barBoundaries` figyelésével (a tempó és az ütemhatárok változása
+   mindig újrafest).
+
+**Záró cella:** `practice_highway_test.dart` A3 group, "non-120-BPM
+(90 BPM 3/4) bar line x equals the first event x" — egy 90 BPM 3/4
+targettel, valódi `barBoundaries`-szal (`[Duration.zero, Duration(seconds: 2)]`)
+és egy playhead-del 1 s-nál. A cella megköveteli, hogy:
+
+- az első barBoundary `targetX`-számolt x-e **bitazonos** az első event
+  markerének `targetX`-számolt x-ével,
+- a második barBoundary pontosan `2 * pixelsPerSecond` távolságra van
+  az elsőtől (90 BPM 3/4 = 2 s/ütem, nem függ a lane méretétől).
+
+### MINOR-1 (`PracticeTargetMarker` handle + built-marker cella)
+
+A `_Marker` osztály `PracticeTargetMarker` néven publikus lett
+(`practice_highway.dart`), és a konstruktora most `(event, x, height)` —
+a `_Candidate` típus kikerült a publikus API-ból, hogy a
+`library_private_types_in_public_api` lint ne jelezzen.
+
+**Záró cella:** `practice_highway_scaling_test.dart` mindhárom
+létező cellája (2000 esemény × 4 s ablak, 100 lépés playhead-mozgás,
+2000 esemény a lista végén) kiegészült a
+`find.byType(PracticeTargetMarker).evaluate().length ≤ 64` állítással,
+a meglévő `lastExaminedRecordCount ≤ 64` MELLETT.
+
+### MINOR-2 (valódi upcoming-bar `barBoundaries`-ból)
+
+A `_upcomingBar(CompiledPracticeTarget, Duration)` (`practice_chord_lane.dart`)
+most a `playheadBar` legközelebbi nagyobb `barBoundary` értékét veszi,
+és az annak `start` idejéhez tartozó expected-chord szegmenst adja vissza
+— nem az első jövőbeli szegmenst.
+
+**Záró cella:** `chord_progression_view_test.dart` "upcoming-bar is the
+chord at the next bar boundary, not the next segment (two-chord-one-bar
+scenario)" — két akkord (C→G) egy ütemben, majd Am a második ütemben,
+a playhead a C-szegmens közepén. A cella a 3 cellát ellenőrzi (current=C,
+next=G, upcoming-bar=Am), és explicit állítja, hogy a `find.text('Am')`
+egyszer fordul elő (csak az upcoming-bar cellában).
+
+### MINOR-3 (A9 leftHanded cella + layout-őr)
+
+Két lépésben:
+
+- **LeftHanded**: a `PracticeHighway.leftHanded` paramétere most már
+  valóban hat: egy `Transform(Matrix4..scaleByDouble(-1.0, 1.0, 1.0, 1.0))`
+  tükrözi a sávot vízszintesen, miközben a `_Marker` ikonjai és a
+  `Semantics` címkék **változatlanok** maradnak (SDD §22.2). Az ikonok
+  és a szemantikai jelentés tehát nem fordul meg.
+- **Layout/textScale őr**: a `chord_progression_view_test.dart` három
+  méret-cellát (320×568, 412×915, 915×412) és egy 200%-os `textScaler`
+  cellát tartalmaz, mind `tester.takeException()`-ra állít (RenderFlex
+  overflow → framework exception).
+
+**Záró cella (leftHanded):** `practice_highway_test.dart` A9 group:
+
+- "leftHanded: true → down event still uses arrow_downward" — explicit
+  ikon-szintű állítás.
+- "leftHanded: false (default) is identical to leftHanded: true for the
+  icon set" — összehasonlítja a két pump által kiadott ikon-halmazt és
+  egyenlőséget követel meg (az ikonok nem változnak, csak a layout
+  tükröződik).
+
+### Záró gate — TÉNYLEGES kimenet (javító kör #1)
+
+```
+$ tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart
+
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+Formatted 580 files (0 changed) in 2.07 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+No issues found! (ran in 3.3s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+…
+00:50 +723: All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/core/l10n_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/l10n_parity_test.dart
+00:00 +3: All tests passed!
+    → [4] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [5] test test/core/screen_size_guard_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/screen_size_guard_test.dart
+00:06 +39: All tests passed!
+    → [5] test test/core/screen_size_guard_test.dart: ZÖLD
+
+═══ [6] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [6] architecture: ZÖLD
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053).
+```
+
+A gyakorlat-teszt-szám 715 → **723** (+8: 2 A3 + 2 A6 + 1 A7 + 1 A9 +
+3 layout/textScale — korrigáltam a `strum_pattern_view_test.dart`-ot nem
+érintettem, az A5-re a §10 eredeti 4 cellája maradt). Az
+`l10n_parity_test` zöld (6 új kulcs mindkét nyelven),
+`screen_size_guard_test` zöld.
+
+### A scope-audit (javító kör)
+
+`git diff --stat main...HEAD` csak a §4 listáján levő fájlokat érinti:
+`lib/features/practice/presentation/widgets/practice_highway.dart`,
+`lib/features/practice/presentation/widgets/practice_chord_lane.dart`,
+`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`, és a három tesztfájl.
+A `lib/features/practice/domain/`, `application/`, `data/`, és
+`lib/features/learn/**` útvonalak **0 sor** változás.
+
 
 ## 11. Review — Claude tölti ki
 

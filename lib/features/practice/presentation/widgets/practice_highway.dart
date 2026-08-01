@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/compiled_practice_target.dart';
 import '../../domain/model/meter.dart';
+import '../../domain/model/tempo.dart';
 
 /// Pure horizontal-position function for a single target event on the
 /// practice highway (ADR 0080 D2).
@@ -79,6 +80,12 @@ class PracticeHighway extends StatefulWidget {
   final double pixelsPerSecond;
   final double visibleSeconds;
   final double behindSeconds;
+
+  /// When true the lane is visually mirrored — the down/up icons keep their
+  /// semantic meaning (SDD §22.2: the [StrumDirection] interpretation does
+  /// not flip). The marker scan, the target positions, and the bar/beat
+  /// grid all flow through the same `targetX` math, so only the painter
+  /// flips the lane horizontally.
   final bool leftHanded;
 
   @override
@@ -124,7 +131,7 @@ class _PracticeHighwayState extends State<PracticeHighway> {
     lastExaminedRecordCount = examined;
 
     final l10n = AppLocalizations.of(context);
-    return Semantics(
+    final lane = Semantics(
       container: true,
       label: l10n.practiceHighwayLabel,
       child: SizedBox(
@@ -132,41 +139,53 @@ class _PracticeHighwayState extends State<PracticeHighway> {
         height: widget.height,
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final stack = Stack(
+              children: [
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _HighwayBackgroundPainter(
+                        playhead: widget.playhead,
+                        visualOffset: widget.visualOffset,
+                        pixelsPerSecond: widget.pixelsPerSecond,
+                        strikeX: widget.strikeX,
+                        visibleSeconds: widget.visibleSeconds,
+                        behindSeconds: widget.behindSeconds,
+                        meter: widget.target.meter,
+                        tempo: widget.target.tempo,
+                        barBoundaries: widget.target.barBoundaries,
+                        leftHanded: widget.leftHanded,
+                      ),
+                    ),
+                  ),
+                ),
+                for (final candidate in candidates)
+                  PracticeTargetMarker(
+                    event: candidate.event,
+                    x: candidate.x,
+                    height: widget.height,
+                  ),
+              ],
+            );
             return ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: DecoratedBox(
                 decoration: const BoxDecoration(color: Color(0xFF0E0E12)),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          painter: _HighwayBackgroundPainter(
-                            playhead: widget.playhead,
-                            pixelsPerSecond: widget.pixelsPerSecond,
-                            strikeX: widget.strikeX,
-                            visibleSeconds: widget.visibleSeconds,
-                            behindSeconds: widget.behindSeconds,
-                            meter: widget.target.meter,
-                            leftHanded: widget.leftHanded,
-                          ),
-                        ),
-                      ),
-                    ),
-                    for (final candidate in candidates)
-                      _Marker(
-                        candidate: candidate,
-                        height: widget.height,
-                        leftHanded: widget.leftHanded,
-                      ),
-                  ],
-                ),
+                child: widget.leftHanded
+                    ? Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()
+                          ..scaleByDouble(-1.0, 1.0, 1.0, 1.0),
+                        child: stack,
+                      )
+                    : stack,
               ),
             );
           },
         ),
       ),
     );
+    return lane;
   }
 }
 
@@ -176,29 +195,33 @@ class _Candidate {
   final double x;
 }
 
-class _Marker extends StatelessWidget {
-  const _Marker({
-    required this.candidate,
+/// Single target marker rendered on the practice highway.
+///
+/// Public (rather than a private `_Marker`) so the A7 scaling test can
+/// assert on the count of built markers with `find.byType(
+/// PracticeTargetMarker)` — the brief's measurement handle.
+class PracticeTargetMarker extends StatelessWidget {
+  const PracticeTargetMarker({
+    required this.event,
+    required this.x,
     required this.height,
-    required this.leftHanded,
+    super.key,
   });
 
   static const double width = 64;
 
-  final _Candidate candidate;
+  final CompiledTargetEvent event;
+  final double x;
   final double height;
-  final bool leftHanded;
 
   @override
   Widget build(BuildContext context) {
-    final event = candidate.event;
     final isRest = event.direction == null;
     final color = isRest
         ? AppColors.primary.withValues(alpha: 0.55)
         : (event.direction == StrumDirection.down
               ? AppColors.primary
               : AppColors.confidenceHigh);
-    final x = candidate.x;
     final icon = isRest
         ? Icons.remove
         : (event.direction == StrumDirection.down
@@ -236,45 +259,89 @@ class _Marker extends StatelessWidget {
 class _HighwayBackgroundPainter extends CustomPainter {
   _HighwayBackgroundPainter({
     required this.playhead,
+    required this.visualOffset,
     required this.pixelsPerSecond,
     required this.strikeX,
     required this.visibleSeconds,
     required this.behindSeconds,
     required this.meter,
+    required this.tempo,
+    required this.barBoundaries,
     required this.leftHanded,
   });
 
   final Duration playhead;
+  final Duration visualOffset;
   final double pixelsPerSecond;
   final double strikeX;
   final double visibleSeconds;
   final double behindSeconds;
   final Meter meter;
+  final Tempo tempo;
+  final List<Duration> barBoundaries;
   final bool leftHanded;
 
   @override
   void paint(Canvas canvas, Size size) {
     final h = size.height;
     final beatsPerBar = meter.beatsPerBar;
-    const secPerBeat = 0.5; // 120 BPM
+    // Tempo drives the beat grid: 60/bpm seconds per beat. The previous
+    // hardcoded 0.5 (= 120 BPM) drifted on every real practice — the
+    // catalog is 60–90 BPM, so the downbeats ended up two beats off.
+    final secPerBeat = tempo.bpm > 0 ? 60.0 / tempo.bpm : 0.5;
     final pxPerBeat = pixelsPerSecond * secPerBeat;
-    if (pxPerBeat <= 0) return;
     final playheadSeconds =
         playhead.inMicroseconds / Duration.microsecondsPerSecond;
-    final firstBeat = (playheadSeconds - behindSeconds) / secPerBeat;
-    final lastBeat = (playheadSeconds + visibleSeconds) / secPerBeat;
-    final line = Paint()..strokeWidth = 1;
-    for (var b = firstBeat.floorToDouble(); b <= lastBeat + 1; b += 1) {
-      final x = strikeX + (b - playheadSeconds) * pxPerBeat;
-      if (x < -2 || x > size.width + 2) continue;
-      final isDownbeat = (b % beatsPerBar).abs() < 1e-6;
-      line
-        ..strokeWidth = isDownbeat ? 2 : 1
-        ..color = (isDownbeat ? AppColors.primary : Colors.white).withValues(
-          alpha: isDownbeat ? 0.20 : 0.08,
-        );
-      canvas.drawLine(Offset(x, 0), Offset(x, h), line);
+    final visualOffsetSeconds =
+        visualOffset.inMicroseconds / Duration.microsecondsPerSecond;
+
+    double xAt(Duration t) {
+      final delta =
+          (t.inMicroseconds / Duration.microsecondsPerSecond) -
+          playheadSeconds +
+          visualOffsetSeconds;
+      return strikeX + delta * pixelsPerSecond;
     }
+
+    final line = Paint()..strokeWidth = 1;
+
+    // --- Bar lines: drawn from the compiled `barBoundaries`, which the
+    // compiler produced for the actual tempo + meter (R06). The grid and
+    // the markers therefore share the SAME time→x math.
+    if (barBoundaries.isNotEmpty && pxPerBeat > 0) {
+      for (final barStart in barBoundaries) {
+        final x = xAt(barStart);
+        if (x < -2 || x > size.width + 2) continue;
+        canvas.drawLine(
+          Offset(x, 0),
+          Offset(x, h),
+          line
+            ..strokeWidth = 2
+            ..color = AppColors.primary.withValues(alpha: 0.20),
+        );
+      }
+    }
+
+    // --- Beat lines within the visible window. The first beat of each bar
+    // is already drawn above (the bar line is the downbeat); we draw the
+    // remaining `beatsPerBar - 1` beats per bar from the bar start.
+    if (pxPerBeat > 0 && beatsPerBar > 1) {
+      final firstBeat = (playheadSeconds - behindSeconds) / secPerBeat;
+      final lastBeat = (playheadSeconds + visibleSeconds) / secPerBeat;
+      for (var b = firstBeat.floorToDouble(); b <= lastBeat + 1; b += 1) {
+        if (b <= firstBeat.floorToDouble()) continue;
+        final x = strikeX + (b - playheadSeconds) * pxPerBeat;
+        if (x < -2 || x > size.width + 2) continue;
+        canvas.drawLine(
+          Offset(x, 0),
+          Offset(x, h),
+          line
+            ..strokeWidth = 1
+            ..color = Colors.white.withValues(alpha: 0.08),
+        );
+      }
+    }
+
     final cy = h / 2;
     final r = h * 0.62;
     canvas.drawRect(
@@ -299,10 +366,13 @@ class _HighwayBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(_HighwayBackgroundPainter old) =>
       old.playhead != playhead ||
+      old.visualOffset != visualOffset ||
       old.pixelsPerSecond != pixelsPerSecond ||
       old.strikeX != strikeX ||
       old.visibleSeconds != visibleSeconds ||
       old.behindSeconds != behindSeconds ||
       old.meter != meter ||
+      old.tempo != tempo ||
+      old.barBoundaries != barBoundaries ||
       old.leftHanded != leftHanded;
 }
