@@ -8,9 +8,13 @@ import '../../../../core/platform/platform_providers.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/mic_permission_banner.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../settings/public.dart';
 import '../../application/practice_session_command.dart';
+import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
 import '../practice_effect_listener.dart';
+import '../views/chord_progression_view.dart';
+import '../views/strum_pattern_view.dart';
 import '../widgets/practice_controls.dart';
 import '../widgets/practice_count_in_overlay.dart';
 import '../widgets/practice_error_panel.dart';
@@ -107,6 +111,10 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
                     state: _state,
                     liveOverallPerMille: host.liveOverallPerMille,
                   ),
+                if ((_state.status == PracticeSessionStatus.running ||
+                        _state.status == PracticeSessionStatus.paused) &&
+                    _state.target != null)
+                  _ModeView(state: _state),
                 if (_state.status == PracticeSessionStatus.failed &&
                     _state.recoverableFailure != null)
                   PracticeErrorPanel(
@@ -234,4 +242,61 @@ class _Unavailable extends StatelessWidget {
       subtitle: AppLocalizations.of(context).practiceSessionUnavailableBody,
     ),
   );
+}
+
+/// Renders the mode-specific view for the active session.
+///
+/// The runtime verdict/metrics are not part of the host boundary (R10) —
+/// construction passes `null` and the live values will be wired in by the
+/// round that wires the host. The widget still renders correctly today
+/// (the highway, the chord lane, and the feedback banner all handle
+/// `null` verdicts / metrics).
+class _ModeView extends ConsumerWidget {
+  const _ModeView({required this.state});
+  final PracticeSessionState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final target = state.target;
+    if (target == null) return const SizedBox.shrink();
+    final definition = state.definition;
+    final mode = definition?.mode ?? PracticeMode.strumPattern;
+    final visualOffset = Duration(
+      milliseconds: ref.watch(visualLatencyProvider),
+    );
+    final constraints = MediaQuery.of(context);
+    final width = constraints.size.width - 32;
+    // The verdict and metrics are part of the runtime feedback that the
+    // host boundary does not yet expose (R10). Their absence is benign
+    // for the layout — the widgets render correctly with null and the
+    // round that wires the host will provide the live values.
+    switch (mode) {
+      case PracticeMode.strumPattern:
+        return StrumPatternView(
+          target: target,
+          playhead: state.timelinePosition,
+          visualOffset: visualOffset,
+          width: width,
+          highwayHeight: 168,
+          lastVerdict: null,
+          metrics: null,
+        );
+      case PracticeMode.chordProgression:
+        return ChordProgressionView(
+          target: target,
+          playhead: state.timelinePosition,
+          visualOffset: visualOffset,
+          width: width,
+          highwayHeight: 168,
+          lastVerdict: null,
+          metrics: null,
+          showChordHint: state.config?.expectedChordHintEnabled ?? true,
+        );
+      case PracticeMode.chordChanges:
+      case PracticeMode.rhythmOnly:
+      case PracticeMode.freePractice:
+        // Modes handled in later rounds (R15, R16).
+        return const SizedBox.shrink();
+    }
+  }
 }

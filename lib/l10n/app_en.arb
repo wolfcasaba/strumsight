@@ -592,5 +592,42 @@
   "practiceSessionStatusFinishing": "Finishing",
   "practiceSessionStatusCompleted": "Complete",
   "practiceSessionStatusCancelled": "Cancelled",
-  "practiceSessionStatusFailed": "Needs attention"
+  "practiceSessionStatusFailed": "Needs attention",
+  "practiceHighwayLabel": "Practice highway",
+  "practiceHighwayRestMarker": "Rest",
+  "practiceFeedbackTimingLabel": "Timing",
+  "practiceFeedbackNoVerdict": "Wait for the first verdict…",
+  "practiceFeedbackTimingNotApplicable": "Not scored",
+  "practiceFeedbackDirectionLabel": "Direction",
+  "practiceFeedbackDirectionCorrect": "Correct direction",
+  "practiceFeedbackDirectionWrong": "Expected {direction}",
+  "@practiceFeedbackDirectionWrong": {
+    "placeholders": {
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFeedbackDirectionNone": "No direction target",
+  "practiceFeedbackComboLabel": "Best combo",
+  "practicePatternPreviewLabel": "Pattern preview",
+  "practicePatternPreviewEmpty": "No events in this bar",
+  "practiceChordLaneLabel": "Chord progression",
+  "practiceChordLaneCurrent": "Now",
+  "practiceChordLaneNext": "Next",
+  "practiceChordLaneUpcomingBar": "Upcoming bar",
+  "practiceChordLaneOutcomeBadge": "{label}",
+  "@practiceChordLaneOutcomeBadge": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceChordLaneOutcomeCorrect": "Correct",
+  "practiceChordLaneOutcomeWrong": "Wrong",
+  "practiceChordLaneOutcomeInsufficientData": "Not enough signal",
+  "practiceChordLaneOutcomeNotApplicable": "Not scored",
+  "practiceChordLaneOutcomeNoDetection": "No chord detected",
+  "practiceChordHintNone": "—"
 }
