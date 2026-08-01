@@ -7,7 +7,8 @@
   (format → analyze → test ×4 → architecture, `flutter gen-l10n` után).
 - **CI:** [run 30688117567](https://github.com/wolfcasaba/strumsight/actions/runs/30688117567)
   **success** a `6414993` HEAD-en (teljes suite + randomizált property + APK).
-- **Verdikt:** **CHANGES REQUESTED** — 2 BLOCKER + 4 MAJOR nyitva.
+- **Verdikt (1. kör):** **CHANGES REQUESTED** — 2 BLOCKER + 4 MAJOR nyitva.
+- **Verdikt (fix#1 után):** **✅ APPROVED** — minden lelet zárva (lásd §Fix#1 lezárás).
 
 > A zöld gate NEM bizonyíték (ADR 0052 / L21). Mindkét BLOCKER zöld CI **és** zöld
 > reviewer-gate mellett csúszott át; eldobható próbatesztek fogták meg őket az
@@ -185,3 +186,31 @@ prózában/handoffban állítva. **Irány:** a két cella pótlása.
 Javító kör **MiniMax M3**-mal (a lánc normál útja), a fenti B1/B2/M2/M3/M4 + m1–m3
 leletlistával; az M1 scope-ot az orchestrátor §0.0 revízióval elfogadja. A B2
 halt-figyelmeztetés kötelező eleme a javító-promptnak.
+
+---
+
+## Fix#1 lezárás — 2026-08-01, commit `30b8b1d` (MiniMax M3)
+
+**Reviewer-gate (friss `/tmp/review-e02r18-fix` klón, HEAD `30b8b1d`):** `GATE_EXIT=0`
+(format → analyze → test ×4 → architecture). **CI:**
+[run 30689227628](https://github.com/wolfcasaba/strumsight/actions/runs/30689227628)
+**success** a `30b8b1d` HEAD-en (teljes suite + randomizált property + APK).
+**Scope-audit:** a fix diff **0** tilos-zóna fájlt érint (nincs controller /
+recorder-interfész / `practice_session_result.dart` / `core/storage` /
+progress/streak/learn / `.github`).
+
+| # | Zárás | Bizonyíték (a hibát PIROSRA fogó teszt a szállított suite-ban) |
+|---|---|---|
+| **B1** | ✅ | A repository közvetlenül a `KeyValueStore.writeString`-gel ír (propagálja a `StorageException`-t), és `Failure(StorageFailure(storageWrite))`-ot ad; a régi `JsonDocumentStore.write` elnyelő útját elkerüli. Új teszt `_RejectingKeyValueStore`-ral (`practice_history_repository_test.dart:235-254`): a `StorageException` írás-hiba **failure**-ként buborékol, a cause megőrzött. |
+| **B2** | ✅ | Honest deferral: a provider `NoopPracticeSessionRecorder`-t ad, amíg a mode/source/definition placeholder — **nincs** write-then-drop. `practice_history_recorder_test.dart` (B2 group): a produkciós wiring `record()`-ja `Success` **írás nélkül**, és a load **0** rekordot ad (nincs eldobható bájt). A valós metaadat-plumbing dokumentáltan **R19**. |
+| **M1** | ✅ | A 3 dekompozíciós fájl a brief §0.0 R1 revíziójával elfogadva. |
+| **M2** | ✅ | Detail-window implementálva: `practice_history_repository_test.dart:147-193` — `N+5` session mentése után a legújabb 20 tartja a `detailAttempts`-ot, a régebbiek summaryre strippelve (a summary megmarad). |
+| **M3** | ✅ | `timing_bias_chart_test.dart` (M3 group): +30 ms → „late", −25 ms → „early", ±15 ms és 0 → „balanced". |
+| **M4** | ✅ | `practice_coach_test.dart`: pozitív `chordPairProblem` cella (`G→D` median-worst, ≥3 mérés) + completion↔direction holtverseny valós `MetricAvailable` directionnel → completion nyer. |
+| **m1** | ✅ | `NotApplicable` már nem „Not scored" sorként renderel. |
+| **m2** | ✅ | Az A1-teszt l10n-címkéket használ. |
+| **m3** | ✅ | A Speed Builder holt ág kezelve. |
+
+**Merge-döntés:** a zöld kapu (ADR 0052) minden eleme zöld a kör-branch **exact
+HEAD**-jén (`30b8b1d`): format + analyze + architecture + teljes CI-suite +
+randomizált property + APK. **Squash-merge engedélyezve.**
