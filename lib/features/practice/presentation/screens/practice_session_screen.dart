@@ -12,19 +12,37 @@ import '../../../settings/public.dart';
 import '../../application/practice_session_command.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
+import '../../domain/model/speed_builder_state.dart';
 import '../practice_effect_listener.dart';
 import '../views/chord_change_view.dart';
 import '../views/chord_progression_view.dart';
 import '../views/free_practice_view.dart';
 import '../views/rhythm_only_view.dart';
 import '../views/strum_pattern_view.dart';
+import '../widgets/adaptive_suggestion_banner.dart';
 import '../widgets/practice_controls.dart';
 import '../widgets/practice_count_in_overlay.dart';
 import '../widgets/practice_error_panel.dart';
 import '../widgets/practice_hud.dart';
+import '../widgets/speed_builder_progress.dart';
 
 class PracticeSessionScreen extends ConsumerStatefulWidget {
-  const PracticeSessionScreen({super.key});
+  const PracticeSessionScreen({
+    this.speedBuilderState,
+    this.adaptiveSuggestion,
+    this.onAcceptAdaptiveSuggestion,
+    this.onDismissAdaptiveSuggestion,
+    this.currentLoop,
+    this.totalLoops,
+    super.key,
+  });
+
+  final SpeedBuilderState? speedBuilderState;
+  final AdaptiveSuggestion? adaptiveSuggestion;
+  final ValueChanged<AdaptiveSuggestion>? onAcceptAdaptiveSuggestion;
+  final VoidCallback? onDismissAdaptiveSuggestion;
+  final int? currentLoop;
+  final int? totalLoops;
 
   @override
   ConsumerState<PracticeSessionScreen> createState() =>
@@ -104,6 +122,20 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
                   const SizedBox(height: 8),
                   Text(_statusLabel(context, _state.status)),
                 ],
+                if (widget.speedBuilderState case final speedBuilderState?)
+                  SpeedBuilderProgress(
+                    state: speedBuilderState,
+                    currentLoop: widget.currentLoop,
+                    totalLoops: widget.totalLoops,
+                  ),
+                if (widget.adaptiveSuggestion case final suggestion?)
+                  if (widget.onAcceptAdaptiveSuggestion != null &&
+                      widget.onDismissAdaptiveSuggestion != null)
+                    AdaptiveSuggestionBanner(
+                      suggestion: suggestion,
+                      onAccept: widget.onAcceptAdaptiveSuggestion!,
+                      onDismiss: widget.onDismissAdaptiveSuggestion!,
+                    ),
                 if (_state.status == PracticeSessionStatus.permissionRequired)
                   const MicPermissionBanner(),
                 if (_state.status == PracticeSessionStatus.countIn)
