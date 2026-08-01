@@ -210,4 +210,38 @@ hogy a `secPerBeat = 60/bpm` regressziója is bukjon.
 **Döntés fix #1 után:** **CHANGES REQUESTED** marad — egyetlen blokkoló: a MAJOR-2 hiteles
 teszt-lezárása. Javító kör #2 ugyanazzal a motorral (MiniMax M3).
 
-## 7. Javító kör #2 verifikáció
+## 7. Javító kör #2 verifikáció (HEAD `6f1c6ea`, gate zöld `GATE_EXIT=0`, izolált klón) → **APPROVED**
+
+A festő ütemvonal-/beat-geometriája **pure függvényekbe** került (`barLineXs`,
+`beatLineXs`, `practice_highway.dart:33,52`), és a festő ezeket hívja (uo. 336, 358) —
+a viselkedés bitre változatlan, de most **közvetlenül mérhető**. Az új A3 cella
+(„90 BPM 3/4 bar and beat lines use the painter geometry") a valós geometriát méri:
+
+- `barLineXs([0 s, 2 s], …)` → két ütemvonal, `bars[1] − bars[0] == 2 * pps` (a 90 BPM
+  3/4 ütem pontosan 2 s);
+- `beatLineXs(Tempo(90), …)` → **pontosan két** belső beat-vonal a downbeatek között
+  (a „egy ütemre három ütés" előírás), egyenként **160 px** (`= 60/90 · 240`) osztással.
+
+**Mutációs verifikáció (reviewer, izolált klón):**
+
+| Mutáció | Eredmény |
+|---|---|
+| `secPerBeat` → `0.5` (120 BPM feltevés a beat-rácsban) | A3 cella **PIROS** (`-1`) |
+| `barLineXs` boundary-forrás 120 BPM-es driftre rontva | A3 cella **PIROS** (`-1`) |
+
+Mindkét, korábban rejtett regresszió most bukik — a MAJOR-2 hitelesen **ZÁRVA**.
+
+### Záró mérleg
+
+| Lelet | Végállapot |
+|---|---|
+| MAJOR-1 (A6 négy megjelenítés) | ZÁRVA (mutáció-igazolt) |
+| MAJOR-2 (A3 tempó-rács + hiteles teszt) | ZÁRVA (mutáció-igazolt, két regresszió) |
+| MINOR-1 (A7 `PracticeTargetMarker`) | ZÁRVA |
+| MINOR-2 (upcoming bar) | ZÁRVA |
+| MINOR-3 (A9 balkezes + layout/textScale) | ZÁRVA |
+
+Izolált gate (fix #2): `format · analyze · test (mind külön) · architecture` — mind
+**zöld**, `GATE_EXIT=0`. Scope tiszta (a fix-diffek a §4 listán belül; motor-réteg 0 sor).
+
+**Verdikt: APPROVED.** Merge a zöld kapu (ADR 0052) CI-igazolása után.
