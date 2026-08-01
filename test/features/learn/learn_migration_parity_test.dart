@@ -18,6 +18,10 @@ typedef _SyntheticStrum = ({Duration at, StrumDirection direction});
 
 enum _ParityShape { perfect, mixed, extraAndMissing }
 
+const _strictlyInsideWindowOffset = Duration(milliseconds: 150);
+const _strictlyOutsideWindowOffset = Duration(milliseconds: 400);
+const _nonZeroInputLatency = Duration(milliseconds: 300);
+
 StrumDirection _opposite(StrumDirection direction) =>
     direction == StrumDirection.down ? StrumDirection.up : StrumDirection.down;
 
@@ -27,6 +31,15 @@ List<_SyntheticStrum> _sharedSequence(Lesson lesson, _ParityShape shape) {
 
   for (var index = 0; index < target.events.length; index++) {
     final event = target.events[index];
+    if (shape == _ParityShape.mixed && index == target.events.length - 1) {
+      // This is deliberately beyond the final target's window. Keeping it on
+      // the final target prevents the late strum from resolving a neighbour.
+      strums.add((
+        at: event.time + _strictlyOutsideWindowOffset,
+        direction: event.direction!,
+      ));
+      continue;
+    }
     switch (shape) {
       case _ParityShape.perfect:
         strums.add((at: event.time, direction: event.direction!));
@@ -40,9 +53,9 @@ List<_SyntheticStrum> _sharedSequence(Lesson lesson, _ParityShape shape) {
               direction: _opposite(event.direction!),
             ));
           case 2:
-            // The target is deliberately left unresolved. The extra strum
-            // below arrives outside every target window, so it cannot hide
-            // this miss by resolving a neighbouring event.
+            // Other misses are deliberately left unresolved. The final target
+            // is instead shifted outside its window above, so P2 measures a
+            // timing miss as well as an omitted event.
             break;
         }
       case _ParityShape.extraAndMissing:
@@ -66,11 +79,17 @@ List<_SyntheticStrum> _sharedSequence(Lesson lesson, _ParityShape shape) {
 }
 
 /// Feeds the exact same synthetic strum series used by the V2 adapter.
-ScoreSnapshot _runLegacy(Lesson lesson, List<_SyntheticStrum> strums) {
+ScoreSnapshot _runLegacy(
+  Lesson lesson,
+  List<_SyntheticStrum> strums, {
+  Duration inputLatency = Duration.zero,
+}) {
   final scorer = LessonScorer(
     lesson,
     countInBeats: lesson.beatsPerBar,
     bpm: lesson.bpm,
+    inputLatencySec:
+        inputLatency.inMicroseconds / Duration.microsecondsPerSecond,
   );
   for (final strum in strums) {
     final elapsedSec = strum.at.inMicroseconds / Duration.microsecondsPerSecond;
@@ -81,16 +100,43 @@ ScoreSnapshot _runLegacy(Lesson lesson, List<_SyntheticStrum> strums) {
   return scorer.snapshot();
 }
 
-double _runV2(Lesson lesson, List<_SyntheticStrum> strums) =>
-    scoreLessonV2(lesson, [
-      for (var index = 0; index < strums.length; index++)
-        StrumObservation(
-          at: strums[index].at,
-          sequence: index,
-          direction: strums[index].direction,
-          confidence: 1,
-        ),
-    ]);
+double _runV2(
+  Lesson lesson,
+  List<_SyntheticStrum> strums, {
+  Duration inputLatency = Duration.zero,
+}) => scoreLessonV2(lesson, [
+  for (var index = 0; index < strums.length; index++)
+    StrumObservation(
+      at: strums[index].at,
+      sequence: index,
+      direction: strums[index].direction,
+      confidence: 1,
+    ),
+], inputLatency: inputLatency);
+
+List<_SyntheticStrum> _withOffset(
+  List<_SyntheticStrum> strums,
+  Duration offset,
+) => [
+  for (final strum in strums)
+    (at: strum.at + offset, direction: strum.direction),
+];
+
+List<_SyntheticStrum> _withOnlyFinalTargetShifted(
+  Lesson lesson,
+  Duration offset,
+) {
+  final target = compileLessonPracticeTarget(lesson);
+  return [
+    for (var index = 0; index < target.events.length; index++)
+      (
+        at:
+            target.events[index].time +
+            (index == target.events.length - 1 ? offset : Duration.zero),
+        direction: target.events[index].direction!,
+      ),
+  ];
+}
 
 /// Pipes the V2 direction result through the real recording path.
 Future<({PracticeEntry? logged, bool streakAdvanced})> _runV2Recording(
@@ -190,6 +236,68 @@ void main() {
     expect(snapshot.hits, greaterThan(0));
     expect(snapshot.wrong, greaterThan(0));
     expect(snapshot.missed, greaterThan(0));
+  });
+
+  test('A7.1 measures strictly inside and outside timing offsets', () {
+    final lesson = Lessons.downUpGroove;
+    final target = compileLessonPracticeTarget(lesson);
+    final insideWindow = <_SyntheticStrum>[
+      (
+        at: target.events.first.time + _strictlyInsideWindowOffset,
+        direction: target.events.first.direction!,
+      ),
+      for (var index = 1; index < target.events.length; index++)
+        (
+          at: target.events[index].time,
+          direction: target.events[index].direction!,
+        ),
+    ];
+    final outsideWindow = _withOnlyFinalTargetShifted(
+      lesson,
+      _strictlyOutsideWindowOffset,
+    );
+    final mixed = _sharedSequence(lesson, _ParityShape.mixed);
+
+    final insideLegacy = _runLegacy(lesson, insideWindow);
+    final insideV2 = _runV2(lesson, insideWindow);
+    final outsideLegacy = _runLegacy(lesson, outsideWindow);
+    final outsideV2 = _runV2(lesson, outsideWindow);
+
+    expect(insideLegacy.hits, insideLegacy.total);
+    expect(insideV2, insideLegacy.accuracy);
+    expect(outsideLegacy.hits, outsideLegacy.total - 1);
+    expect(outsideLegacy.missed, 1);
+    expect(outsideV2, outsideLegacy.accuracy);
+    expect(
+      mixed.any(
+        (strum) =>
+            strum.at == target.events.last.time + _strictlyOutsideWindowOffset,
+      ),
+      isTrue,
+      reason: 'P2 includes a shifted, strictly outside-window miss',
+    );
+  });
+
+  test('A7.1 applies the same non-zero input latency on both paths', () {
+    final lesson = Lessons.downUpGroove;
+    final detectedStrums = _withOffset(
+      _sharedSequence(lesson, _ParityShape.perfect),
+      _nonZeroInputLatency,
+    );
+
+    final legacy = _runLegacy(
+      lesson,
+      detectedStrums,
+      inputLatency: _nonZeroInputLatency,
+    );
+    final v2 = _runV2(
+      lesson,
+      detectedStrums,
+      inputLatency: _nonZeroInputLatency,
+    );
+
+    expect(legacy.hits, legacy.total);
+    expect(v2, legacy.accuracy);
   });
 
   test('A7 — the V2 ON flag production default stays OFF (no rollout)', () {
