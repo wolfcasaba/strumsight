@@ -4,6 +4,25 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — a H4-fix (#48) UTÁNI friss `run` is HALT-ba futott,
+> HARMADIK, a router `reset --task-id` és a Terra-ledger közötti
+> inkonzisztencia miatt: H6.** `python3 tools/model-router.py reset --task-id
+> E02-R21` a task `state.json`-ját törli, de a Terra-hívások naplóját
+> (`~/.local/state/strumsight-ai-router/terra-ledger.json`) NEM — a
+> `reserve_terra()` `task_count` szűrője (`tools/ai_router/state.py:184-188`)
+> a `daily_count`-tal ellentétben **nem nap-alapú**, ezért az E02-R21 task
+> egyetlen (mai, H4-fix ELŐTTI) Terra-foglalása örökre kimeríti a
+> `max_terra_calls_per_task=1` kvótát, akárhányszor `reset`-elik a task-ot.
+> Mérve: friss `run` 2/2 M3-kísérlet után (`NO_CHANGE_1` → `RECOVERED_M3_CALL_2
+> pass`) Terra-hívást próbált, `DEFERRED "task Terra budget is exhausted"`-tel
+> állt meg — a munkapéldány `git status`/`git diff HEAD` mindkettő üres, a
+> Practice V2 production drótozás (a kör tényleges célja) **még mindig el sem
+> kezdődött**. Teljes mérés + két javítási javaslat + reprodukáló parancs:
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md) "Update 3"
+> szakasz, a `codex/e02-r21-practice-production-wiring` ágon (`b1653ef`).
+> **A router-fixek (#46/#47/#48) mindhárom korábbi router-hibát javították —
+> ez egy NEGYEDIK, tőlük eltérő gyökérok.**
+> Előző kör: 2026-08-01
 > (Pipeline E02-R21 — önjavító kör, H4 halt JAVÍTVA.** Mért gyökérok (lásd
 > alább az előző bejegyzésben): a `_terra()` FINAL_GATE ága
 > (`tools/ai_router/router.py:429` körül) és a `TERRA_REVIEW_OR_FIX`
@@ -337,17 +356,20 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 HALT (H4), az önjavító körre vár — a MÁSODIK önjavító
-   kör ugyanezen a task-on.** A self-heal (#46/#47) a H6-ot javította, a
-   task-state friss `run`-nal indult — de a Terra-ág (`_terra()` FINAL_GATE,
-   `router.py:426-432`, és a `TERRA_REVIEW_OR_FIX` resume-ág,
-   `router.py:635-648`) **nem ellenőrzi** `audit.scoped_changed_paths`-t a
-   `READY_FOR_REVIEW` visszaadása előtt (szemben az M3-ág 709-721. sorával),
-   ezért a teljes M3+Terra keret (2/2+1/1) kimerült úgy, hogy a router
-   `READY_FOR_REVIEW`-t jelzett **valódi diff nélkül**
-   (`changed_paths=[]`). Teljes gyökérok + javítási hely + reprodukáló
-   parancs: `docs/reviews/e02-r21-review.md` "Update 2" szakasz a
-   `codex/e02-r21-practice-production-wiring` ágon (`3550e34`). A kör
+0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár — a HARMADIK önjavító
+   kör ugyanezen a task-on.** A self-heal (#48) a H4-et javította, a
+   task-state `reset --task-id E02-R21`-gyel `NOT_STARTED`-re állt, a branch
+   `origin/main`-re rebase-elve (`7bdc175`, tartalmazza `ec81ef8`-at) — de a
+   `reset` csak a task `state.json`-ját törli, a Terra-hívások naplóját
+   (`terra-ledger.json`) NEM, és a napló `task_count` szűrője
+   (`tools/ai_router/state.py:184-188`) **nem nap-alapú** (szemben a
+   `daily_count`-tal) — ezért az E02-R21 task egyetlen, mai (H4-fix ELŐTTI)
+   Terra-foglalása örökre kimeríti a `max_terra_calls_per_task=1` kvótát,
+   akárhányszor `reset`-elik a task-ot. A friss `run` 2/2 M3-kísérlet után
+   Terra-hívást próbált, `DEFERRED "task Terra budget is exhausted"`-tel állt
+   meg — a munkapéldány diffje üres. Teljes gyökérok + két javítási javaslat +
+   reprodukáló parancs: `docs/reviews/e02-r21-review.md` "Update 3" szakasz a
+   `codex/e02-r21-practice-production-wiring` ágon (`b1653ef`). A kör
    brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`) kész és
    változatlan — a Practice V2 tényleges production-drótozása (a kör célja)
    **még mindig el sem kezdődött**, egy sor implementáció sem készült.
