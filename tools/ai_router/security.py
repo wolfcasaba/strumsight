@@ -127,6 +127,9 @@ def audit_scope(
     new_ignored = ignored_now - baseline.ignored_paths
     changed = set(tracked) | set(new_untracked) | set(new_ignored)
     violations: list[str] = []
+    current_head = _git(repo, ["rev-parse", "HEAD"]).decode().strip()
+    if current_head != baseline.baseline_head:
+        violations.append("model-created commit is not allowed: HEAD changed from baseline")
     for path in sorted(changed):
         is_ignored_generated = path in new_ignored and _matches(path, ignored_allow_paths)
         if is_ignored_generated:
