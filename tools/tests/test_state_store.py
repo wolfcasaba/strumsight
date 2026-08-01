@@ -113,6 +113,42 @@ class StateStoreTest(unittest.TestCase):
 
             self.assertEqual(store.load_task("E03-R01"), {})
 
+    def test_reset_task_clears_the_terra_ledger_so_the_task_can_reserve_again(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            reservation = store.reserve_terra("E02-R21", daily_limit=3, task_limit=1)
+            store.mark_terra_started(reservation.reservation_id)
+            store.mark_terra_finished(reservation.reservation_id, "READY_FOR_REVIEW")
+
+            # Reproduces the E02-R21 HALT H6 (2026-08-01): task_count in
+            # reserve_terra is not day-scoped, so this reservation alone
+            # would exhaust the task's Terra budget forever without a
+            # ledger-aware reset.
+            with self.assertRaises(TerraBudgetError):
+                store.reserve_terra("E02-R21", daily_limit=3, task_limit=1)
+
+            store.reset_task("E02-R21")
+
+            second = store.reserve_terra("E02-R21", daily_limit=3, task_limit=1)
+            self.assertEqual(second.status, "reserved")
+            ledger = json.loads((store.root / "terra-ledger.json").read_text())
+            archived = [row for row in ledger["reservations"] if row["status"] == "archived"]
+            self.assertEqual(len(archived), 1)
+            self.assertEqual(archived[0]["reservation_id"], reservation.reservation_id)
+            self.assertIn("archived_at", archived[0])
+
+    def test_reset_task_only_archives_that_tasks_own_reservations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            store.reserve_terra("E02-R22", daily_limit=3, task_limit=1)
+
+            store.reset_task("E02-R21")  # unrelated task, never reserved
+
+            with self.assertRaises(TerraBudgetError):
+                store.reserve_terra("E02-R22", daily_limit=3, task_limit=1)
+            ledger = json.loads((store.root / "terra-ledger.json").read_text())
+            self.assertEqual(ledger["reservations"][0]["status"], "reserved")
+
     def test_reset_task_on_a_never_started_task_is_a_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = self.store(Path(directory) / "state")
