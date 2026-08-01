@@ -320,8 +320,155 @@ APK a CI-ban fut (ADR 0053) — `gh`-t NE hívj.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A10
-pontok teljesülése bizonyítékkal · eltérések és okuk · follow-upok.)*
+### Fájlonkénti összefoglaló
+
+**Új fájlok (a §4 listán):**
+
+- `lib/features/practice/presentation/widgets/practice_highway.dart` — a
+  Practice V2 highway. Pure `targetX(...)` (D2), `targetInVisibilityWindow(...)`,
+  `lowerBoundTime(...)` segédfüggvények. A `PracticeHighway` widget
+  `StatefulWidget` (a vizsgált-rekord-számláló tárolásához, A7).
+  - Binary-search alsó határ + korai-kilépés felső határ — a per-frame
+    `lastExaminedRecordCount` ≤ 64 a 2000-es fixture-rel (A7).
+  - Egyéni `RepaintBoundary`-vel övezett `CustomPaint` a háttér-sávnak
+    (no layout, no sem), a markerek `Stack`-ben vannak.
+  - Markerek: down → `primary`, up → `confidenceHigh`, rest → `outline`
+    ikon, mind `Semantics(label: ...)` címkével (D6).
+- `lib/features/practice/presentation/widgets/practice_feedback.dart` —
+  verdict-vezérelt inline visszajelzés. A `TimingGrade`/`DirectionOutcome`
+  fordítása szöveges címkékre + ikonokra; a kombó a `PracticeMetrics.maxCombo`
+  értékét mutatja (D4, R10).
+- `lib/features/practice/presentation/widgets/practice_pattern_preview.dart`
+  — egy-ütemes pattern-előnézet. Az első bar eseményeit `_Slot`-onként
+  rendereli (down/up/rest), nincs render-dedup (D9).
+- `lib/features/practice/presentation/widgets/practice_chord_lane.dart` —
+  current + next + upcoming-bar cellák, `ChordDiagram`-mal (a megengedett
+  barrel-ből). A `showChordHint=false` azonnal törli a hintet (A6).
+- `lib/features/practice/presentation/views/strum_pattern_view.dart` — a
+  mód-nézet: highway + pattern preview + feedback.
+- `lib/features/practice/presentation/views/chord_progression_view.dart` —
+  a másik mód-nézet: highway + chord lane + feedback.
+
+**Módosított fájlok (a §4 listán):**
+
+- `lib/features/practice/presentation/screens/practice_session_screen.dart`
+  — a `_ModeView` widget becsatolja a futó/szünet mód-nézetet a
+  `state.target` + `state.timelinePosition` + `visualLatencyProvider` alapján.
+  A verdict/metrikus a konstruktor-paraméter (`lastVerdict: null`,
+  `metrics: null`) — a runtime-bekötés a host-kör (R10) feladata.
+- `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — 21 új kulcs (`practiceHighway*`,
+  `practiceFeedback*`, `practicePatternPreview*`, `practiceChordLane*`).
+
+**Új tesztek:**
+
+- `test/features/practice/presentation/practice_highway_test.dart` — A1–A4
+  mátrix a `targetX` pure függvényre + a widget szintű A2 (két down +
+  rest slot) és A3 (3/4 + 6/8).
+- `test/features/practice/presentation/practice_highway_scaling_test.dart`
+  — A7: 2000 esemény × 4 s ablak, 100 lépés playhead-mozgás, végi
+  playhead — mind ≤ 64 examined.
+- `test/features/practice/presentation/strum_pattern_view_test.dart` — A5:
+  pattern preview down/up/rest, perfect/goood/wrong direction, null
+  verdict/metrikus nem dob.
+- `test/features/practice/presentation/chord_progression_view_test.dart` —
+  A6: 3 ChordDiagram cella, `showChordHint=false` töröl, mind a 4
+  `ChordOutcome` érték renderelődik.
+- `test/features/practice/presentation/practice_highway_import_guard_test.dart`
+  — A8: a 6 új fájl forrása nem tartalmazza a `features/learn/`,
+  `LessonScorer`, `LessonEvent`, `Lesson(`, `domain/service/`, `Scorer(`,
+  `Stopwatch`, `Timer(` mintákat.
+
+**Nem nyúltam (A10):** `lib/features/practice/domain/**`,
+`lib/features/practice/application/**`, `lib/features/practice/data/**`,
+`lib/features/learn/**` — `git diff --stat origin/main...HEAD` üres
+rajtuk.
+
+### A1–A10 teljesülése
+
+| Ac | Bizonyíték |
+|---|---|
+| **A1** — pozíció-mátrix | `practice_highway_test.dart` A1 group: 5 teszt, mind a `targetX` pure függvényre. A `target.time == playhead` cella **pontosan** `strikeX` (egzakt egyenlőség, nem `closeTo`). A +4s cella a `strikeX + 4*pps` (= `laneWidth`) értéket adja, a +4s+1µs pedig kívül esik a láthatósági ablakon. |
+| **A2** — rest + azonos irányú szomszédok | `practice_highway_test.dart` A2 group: két down marker (`Icons.arrow_downward`, 2 darab) + rest slot (`Icons.remove`, 1 darab). A rest `direction: null` mellé nem kerül találati elvárás. |
+| **A3** — 3/4 + 4/4 + 6/8 | `practice_highway_test.dart` A3 group: 3/4-es definition tiszta build, 6/8-as definition `beatsPerBar: 6` valid. |
+| **A4** — vizuális latency csak rajz | `practice_highway_test.dart` A4 group: visualOffset ∈ {0, 60ms, 200ms} mátrix — a `targetX` eltolása a `visualOffset * pps` mértékkel. A session-screen nem küld parancsot, nem módosít verdictet; az A4 a widget-szintű tisztaságot méri. |
+| **A5** — Strum Pattern nézet | `strum_pattern_view_test.dart`: 4 teszt — pattern preview (down/up/rest), perfect verdict + combo, wrong direction label, null verdict/metrikus. |
+| **A6** — Chord Progression nézet | `chord_progression_view_test.dart`: 3 teszt — 3 ChordDiagram, `showChordHint=false` törli a 0 ChordDiagram-ot, 4 `ChordOutcome` renderelődik. |
+| **A7** — virtualizáció, MÉRVE | `practice_highway_scaling_test.dart`: 2000 esemény × 4 s ablak → `lastExaminedRecordCount ≤ 64`; 100 lépés playhead-mozgás → kumulatív ≤ 100 × 64; 2000 esemény, playhead a végén → ≤ 64. A `targetX` binary-search alsó határ + korai-kilépés felső határ tartja a keretet. |
+| **A8** — nincs Learn-import / scoring | `practice_highway_import_guard_test.dart`: 5 teszt a 6 új fájl forrásán — egyetlen tiltott minta sem fordul elő. |
+| **A9** — a11y / i18n / layout | Down/up/rest mind `Semantics(label: ...)`, a feedback szöveges címkét hord. 3/4 + 4/4 + 6/8 mind támogatott (külön cella). `l10n_parity_test` zöld (21 új kulcs mindkét nyelven). A `screen_size_guard_test` zöld (a `PracticeSessionScreen` `null host` ágon nem overflow). |
+| **A10** — 0 sor a motor-rétegben | `git diff --stat origin/main...HEAD` üres a `domain/`, `application/`, `data/`, `lib/features/learn/` útvonalakon. |
+
+### Záró gate — TÉNYLEGES kimenet
+
+```
+$ tools/round-gate.sh test/features/practice/ test/core/l10n_parity_test.dart test/core/screen_size_guard_test.dart
+
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+Formatted 580 files (0 changed) in 2.04 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+No issues found! (ran in 2.9s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+…
+00:55 +715: All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/core/l10n_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/l10n_parity_test.dart
+00:00 +3: All tests passed!
+    → [4] test test/core/l10n_parity_test.dart: ZÖLD
+
+═══ [5] test test/core/screen_size_guard_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/core/screen_size_guard_test.dart
+00:06 +39: All tests passed!
+    → [5] test test/core/screen_size_guard_test.dart: ZÖLD
+
+═══ [6] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [6] architecture: ZÖLD
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+### Eltérések a brief-től és okuk
+
+- **PracticeHighway `StatefulWidget`** (a StatelessWidget helyett): a
+  `lastExaminedRecordCount` `int` mező, amit a `build` ír — a
+  `@immutable` öröklődés a `StatelessWidget`-ről ezt warning szinten
+  jelezte. A funkció változatlan: a `targetX` továbbra is pure függvény,
+  a widget továbbra is meghívja azt; a `lastExaminedRecordCount` kizárólag
+  az A7 méréshez kell.
+- **A1 matrix "láthatósági ablak határa" cella** a `laneWidth =
+  strikeX + 4 * pps` képletet feltételezi — ez a tesztkörnyezet, ahol a
+  sáv szélessége pontosan `visibleSeconds` szélességű. A `+1µs` cella
+  ugyanitt méri, hogy a láthatósági ablak túlcsordulása kiszűri.
+- **A session screen most `lastVerdict: null` / `metrics: null`**
+  konstruktor-paraméterrel hívja a mód-nézetet — R10 miatt a host-határ
+  nem ad ki verdictet/metrikát, a tényleges bekötés a host-kör feladata.
+  A widgetek ettől függetlenül helyesen renderelnek (az A5/A6 ezt méri).
+- **`l10n` regen:** az ARB-kulcsok felvétele után a `lib/l10n/app_localizations*.dart`
+  fájlokat a `flutter gen-l10n` (a l10n.yaml-t ideiglenesen félrehúzva)
+  újragenerálta; ezt a `flutter test` automatikusan megteszi a CI-ban.
+
+### Follow-upok
+
+- A `PracticeSessionHost` bővítése a `verdicts`/`metrics` getterekkel
+  (R10 zárása) — külön kör, határ-változás.
+- A `chord_progression` View-ban a `Playhead`/Lane-gewometria
+  finomhangolása valódi session-ön (a brief §3-ban jelzett "V2 először
+  végigjátszható" mérés — a mostani build layout szinten helyes, a
+  tényleges játék-próba a CI-APK-n történik).
+- A mode-views a `countIn` státuszra is becsatlakoztathatók egy későbbi
+  körben (most csak `running` + `paused`).
+
 
 ## 11. Review — Claude tölti ki
 
