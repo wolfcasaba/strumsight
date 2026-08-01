@@ -875,3 +875,65 @@ a write-then-drop nem.
 `30b8b1d`; `json_document_store.dart:103-129` (swallow), `key_value_store.dart:19-21`
 (a szerződés, ami a `StorageException`-t ígéri), `practice_history_serializer.dart:77-86`
 (unknown-enum reject on read).
+
+## L29 — A bwrap hibája környezeti blokk, nem modellkudarc
+
+**Mit mértünk (2026-08-01).** Ugyanabban a user által írható worktree-ben a
+beépített patch sandbox `bwrap: loopback: Failed RTM_NEWADDR` és
+`setting up uid map: Permission denied` hibával már olvasáskor is leállt,
+miközben az explicit, jóváhagyott host-oldali parancs ugyanazt a fájlt olvasta,
+atomikusan írta és a teszteket lefuttatta.
+
+**Miért.** A container user/network namespace hiánya a helyi execution harness
+előfeltétel-hibája. Semmit nem mond arról, hogy M3 vagy Terra képes-e a
+kódfeladat megoldására.
+
+**Hogyan alkalmazd.** A router `ENV_BLOCKED/BLOCKED` állapotot ad és nem indít
+Terra fallbacket. Headless futásnál csak a kijelölt worktree-t író
+`workspace-write` child profilt használjuk; host-oldali feloldást kizárólag az
+orchestrátor/ember adhat. A hibát és a használt jóváhagyást rögzíteni kell.
+
+## L30 — Command-backed MiniMax auth kell; az `env_key` és a helper nem keverhető
+
+**Mit mértünk (2026-08-01).** A Codex 0.145 konfigurációs szerződésének és a
+telepítő temp-home tesztjének összevetése szerint a command-backed credential
+helper stdin nélkül fut és a tokent stdouton adja vissza. A privát
+`~/.mmx/config.json` user-owned, nem symlink, `0600`; az installer az M3/Terra
+profilokat hozzáadja úgy, hogy a globális modell/provider változatlan marad.
+
+**Miért.** Ha ugyanarra a providerre command auth és `env_key` is kerül, két
+hitelesítési forrás versenyez; ha a kulcs literal TOML-ba kerül, mentésbe,
+diffbe vagy diagnosztikába szivároghat.
+
+**Hogyan alkalmazd.** A provider kizárólag abszolút útvonalú command helpert
+használ. A helper ellenőrzi owner/symlink/mode feltételeket, kulcsot nem logol;
+a telepítés után config-key- és permission-audit kötelező.
+
+## L31 — A MiniMax quota válasz százalékos modell-sor; a nyers body nem szerződés
+
+**Mit mértünk (2026-08-01).** A live, redaktált
+`/v1/token_plan/remains` ellenőrzés `general` és `video` modell-sorokat,
+interval/weekly százalékmezőket adott (general interval 100%, weekly 82%). A
+korábbi, abszolút tokenmaradékot feltételező parser ezt téves nullának
+értelmezhette volna; a live-schema regressziós teszt ezt reprodukálta.
+
+**Miért.** A provider válaszformája és entitlementje fiók-/tervfüggő lehet. A
+nyers body naplózása szükségtelen és auth/metaadat-szivárgást kockáztat.
+
+**Hogyan alkalmazd.** Csak ismert, tipizált százalékos mezőket fogadj el;
+ismeretlen 2xx schema fail-closed `invalid_response`. A helper kizárólag
+redaktált státuszt ír, 429/quota pedig DEFERRED — soha nem Terra.
+
+## L32 — A Terra-keretet a hívás ELŐTT kell lefoglalni
+
+**Mit mértünk (2026-08-01).** A state-store crash tesztben a `reserved` vagy
+`started` Terra-esemény processzhalál után is beleszámít a task- és UTC-napi
+limitbe; ugyanaz a reservation nem indítható vagy számolható el még egyszer.
+
+**Miért.** Ha csak sikeres provider-válasz után nőne a számláló, a hívás
+elküldése és a state-írás közötti crash korlátlan ismétlést és kettős
+fogyasztást engedne.
+
+**Hogyan alkalmazd.** Fájllock alatt atomikusan `reserved → started → finished`;
+bizonytalan kimenetnél fail-closed fogyasztás. Resume soha nem törli a ledgert,
+és a napi limitet worktree vagy task-state másolása sem kerülheti meg.

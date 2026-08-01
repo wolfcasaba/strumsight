@@ -25,11 +25,27 @@
 - [ ] Érintett widget/integration/property teszt zöld (lokálisan).
 - [ ] Teljes kötelező Flutter gate zöld — a lokális mérce a
       `tools/round-gate.sh <érintett terület> [további …]` artefaktum
-      (normatív forrás: [`AGENTS.md` §12](../AGENTS.md), részletek
+      (normatív forrás: [`AGENTS.md` §12](../../AGENTS.md), részletek
       `docs/execution/08-round-brief.md` §7), a **teljes suite + property gate a CI-ban**
       ([ADR 0053](../adr/0053-ci-full-test-suite.md)), a bizonyíték a run linkje.
 - [ ] Backend/ML gate zöld, ha releváns.
 - [ ] Valódi device/real-audio gate teljesült vagy explicit release blocker.
+
+## MiniMax-first router (`engine=auto`)
+
+- [ ] A brief pontosan egy valid `ai-router` blokkot tartalmaz; scope-ja és
+      `gate_tests` listája egyezik a brief normatív §4/§7 tartalmával.
+- [ ] A hiteles külső state ugyanahhoz a task ID-hez tartozik; budgetet nem
+      nulláztunk state-törléssel, új ID-val vagy új worktree-vel.
+- [ ] A végső router-result `READY_FOR_REVIEW`; `DEFERRED`, `BLOCKED`,
+      `STOPPED` vagy `INTERNAL_ERROR` nem minősül kész implementációnak.
+- [ ] A teljes tracked/untracked/ignored/deleted/symlink scope-audit zöld.
+- [ ] A strukturált router-gate zöld; natív módosításnál a natív gate is zöld.
+- [ ] Provider quota/429/5xx/hálózati hiba nem indított Terra fallbacket.
+- [ ] Az M3/Terra nem commitolt, pusholt vagy jelzett közvetlenül; a router-diffet
+      az orchestrátor auditálta és commitolta `READY_FOR_REVIEW` után.
+- [ ] A `READY_FOR_REVIEW` jelzés csak `progress`; `done` kizárólag független
+      review + exact-`headSha` CI + merge után született.
 
 ## Adat és migráció
 
