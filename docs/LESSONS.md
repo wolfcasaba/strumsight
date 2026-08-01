@@ -1070,3 +1070,14 @@ ismert OpenSpace mezőt egy `0700` runtime-wrapperre, újraparsolva ellenőrzi, 
 más beállítás nem változott, és a backupot is megtisztítja. A közvetlen üres-stdin
 OpenSpace próba ismert flush-hibával `120` lehet; a mérvadó ellenőrzés a teljes
 Codex M3/Terra smoke, amely valós MCP handshake mellett zöld.
+
+## L35 — A router crash-határaihoz teljes baseline és kétfázisú lezárás kell
+
+**Mit mértünk (2026-08-01).** A pre-existing tracked, untracked és nem generált
+ignored fájlok kikerülhették a későbbi path-delta auditot; providerhiba után
+részleges diff maradhatott; a Terra-ledger és task-state közti szimulált crash
+ellentmondó állapotot hagyhatott.
+
+**Hogyan alkalmazd.** Modell előtt tiszta baseline kötelező. Részleges diffet
+resume előbb auditál és gate-el. Terra esetén a task tartós terminális intentet
+ment, a ledgert idempotensen lezárja, majd a taskot terminálissá teszi.

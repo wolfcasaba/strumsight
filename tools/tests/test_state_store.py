@@ -69,6 +69,22 @@ class StateStoreTest(unittest.TestCase):
             self.assertEqual(ledger["reservations"][0]["status"], "finished")
             self.assertEqual(ledger["reservations"][0]["outcome"], "ready_for_review")
 
+    def test_finishing_a_terra_reservation_is_crash_safe_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            reservation = store.reserve_terra("E03-R01", daily_limit=3)
+
+            # A crash can leave the task in TERRA_CALL before the provider call is
+            # durably marked as started. Fail closed and consume that reservation.
+            store.mark_terra_finished(reservation.reservation_id, "STOPPED")
+            store.mark_terra_finished(reservation.reservation_id, "STOPPED")
+
+            ledger = json.loads((store.root / "terra-ledger.json").read_text())
+            self.assertEqual(ledger["reservations"][0]["status"], "finished")
+            self.assertEqual(ledger["reservations"][0]["outcome"], "STOPPED")
+            with self.assertRaises(StateError):
+                store.mark_terra_finished(reservation.reservation_id, "READY_FOR_REVIEW")
+
     def test_corrupt_state_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = self.store(Path(directory) / "state")

@@ -27,6 +27,13 @@ class CredentialTest(unittest.TestCase):
             with self.assertRaises(CredentialError):
                 read_minimax_api_key(path)
 
+    def test_rejects_special_permission_bits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(Path(directory), mode=0o4600)
+
+            with self.assertRaises(CredentialError):
+                read_minimax_api_key(path)
+
     def test_rejects_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
