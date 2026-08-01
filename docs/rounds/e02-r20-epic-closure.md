@@ -83,6 +83,78 @@ leletként dokumentálja** — a hiány elhallgatása a legrosszabb kimenet.
   `test/app/offline_network_guard_test.dart` (0-request offline garancia),
   `tool/check_architecture.dart`.
 
+### 2.1 Nyitott leletek E02-R01…R19-ből (orchestrátor gyűjtése, 2026-08-01)
+
+Az összes `docs/reviews/e02-r01..19-review.md` NOTE/MINOR/follow-up tétele a
+mai kód ellen mérve. BLOCKER/MAJOR egyik körben sem maradt nyitva merge-ig.
+
+| Forrás | Lelet | Mai állapot |
+|---|---|---|
+| R11 §11.4/1 | `noSignal` a direction/rhythm dimenzióban "unpaired"-et jelent, nem "nem érkezett jel"-t — két scorer-szemantika összemosva (ADR 0077 ismert korlát). | Nincs későbbi javítás. **Nyitott.** |
+| R11 §11.4/2 | `allowedTransitions`-ben van él (`countIn/running → failed`), amit runtime-on egyetlen input sem termel — holt átmenet, nincs gyakorolva. | Nincs későbbi javítás. **Nyitott.** |
+| R11 §11.4/3 | A Practice a **Live** engine mikrofon-leasét (`AudioOwner.live`) használja, nincs saját tulajdonosa. | `lib/core/audio/lifecycle/audio_session_lease.dart` `AudioOwner` enumja ma is `live, tuner, analyzeRecorder, latencyCalibration, diagnostics` — nincs `practice` tag. **Nyitott.** |
+| R11 §11.4/4 | `practiceSessionControllerProvider` nincs éles oldalon bedrótozva. | `lib/features/practice/application/practice_session_providers.dart:182-186` kommentje ma is: *"a Kör 13 pre-flight fogja definiálni"*. R12/R18 review is megerősíti. **Nyitott — ld. lent a rendszerszintű rés.** |
+| R15 NOTE-1 | A chord-change elemzés az éles session-screenen null-drótozott (`analysis: null, latestChange: null`); ígéret: "R18 köti be". | `practice_session_screen.dart:330-336` ma is `null`. R18 briefje ezt nem tartalmazta. **Nyitott, az ígért R18-zárás elmaradt.** |
+| R18 n1 / R19 followup | A Free Practice eredmény-képernyő "strum count" csempéje `attemptsCount`-ot mutat strumszám helyett. | `practice_result_screen.dart:165` ma is `entry.attemptsCount`. R19 scope-auditja szerint a fájlhoz nem is nyúlt. **Nyitott.** |
+| R18 B2 residual | Az éles `practiceSessionRecorderProvider` becsületes Noop lett (nem hamis-siker), de emiatt **egyetlen önálló Practice V2 session sem perzisztálódik**, amíg a valós `mode/source/definitionId` metaadat nincs végigvezetve. | `practice_session_providers.dart:11,71-94` ma is `NoopPracticeSessionRecorder`. R19 csak a Learn-migrációs útvonalat drótozta be, az önálló Hub→Session utat nem. **Nyitott.** |
+| R14 NOTE-1 | Az A4 "commands/verdict-list/HUD score unchanged" invariáns fél nem kapott saját regressziós cellát. | Nincs ilyen cella `practice_highway_test.dart`-ban. **Nyitott, alacsony prioritás.** |
+| R16 N1 | `free_practice_property_test.dart` `_randomInput`-ja előre rendezi az observationöket — a "timeline ≤ active" invariáns rendezetlen inputon nincs property-tesztelve. | Nincs későbbi javítás. **Nyitott, alacsony prioritás.** |
+| R17 N1 | Az adaptív policy "3 egymást követő step-up pass" küszöbe hardkódolt, nem policy-paraméteres. | Nincs későbbi javítás. **Nyitott, kozmetikai.** |
+
+**Rendszerszintű rés (a fenti leletek összegzése, nem önálló review-tétel):**
+a `practiceSessionHostProvider` éles defaultja **`null`**
+(`lib/features/practice/presentation/practice_effect_listener.dart:21-22,64`,
+doc-comment: *"the production default is `null`, which the screen renders as
+a localised 'session unavailable' state"*), és a
+`practicePrepareSinkProvider` éles defaultja is a placeholder logging sink
+(`practice_setup_controller.dart:33-55`, "Kör 13 swaps the..." komment még
+ma is ott van). **Ennek eredőjeként egy valós felhasználó a Practice
+Hub → Setup → Session úton ma NEM tud önálló Practice V2 sessiont futtatni
+az élesített appban** — a domain/application réteg kimerítően tesztelt, de a
+presentation→controller drótozás az önálló (nem Learn-migrációs) útra R12/R13
+óta nyitva maradt, és egyetlen későbbi kör sem zárta. Összhangban áll azzal,
+hogy `practiceEngineV2Enabled` éles defaultja `false`
+(`lib/app/config/feature_flags.dart:15,41`).
+
+**Ez az egyetlen legfontosabb tétel, amit a zárójelentésnek ki KELL mondania**
+— a DoD-tábla (A7) session-lifecycle/gyakorlási-mód/integráció celláinak
+mindegyikét "teljesül domain/widget-teszt szinten, de nem elérhető
+végponttól-végpontig az élesített appban" minősítéssel kell ellátni, nem
+egyszerű "teljesül"-lel. **A drótozás pótlása ebben a körben TILOS** (§3 —
+ez funkció, nem apró javítás, és az érintett fájl
+`practice_session_providers.dart`/`practice_effect_listener.dart` a tilos
+zónában van) — nyitott leletként dokumentálandó, a §11-es review kiemelt
+figyelmet fordít arra, hogy ez a tétel ne halkuljon el a jelentésben.
+
+### 2.2 DoD elő-audit (SDD §28, orchestrátor mérése) — a §6/A7 tábla alapja
+
+A teljes 52 tételes ellenőrzés (Architektúra 1–8, Session lifecycle 9–14,
+Pontozás 15–24, Gyakorlási módok 25–32, Integráció 33–41, Minőség 42–52) az
+implementernek átadva egy külön kutatási jegyzetben; összegzés:
+
+- **teljesül (statikus/teszt-szintű bizonyítékkal):** a legtöbb Architektúra
+  (1–5, 7–8), Pontozás (15–23) és Gyakorlási mód / Integráció tétel — de a
+  2.1 rendszerszintű rés miatt ezek a "teljesül végponttól-végpontig" jelzőt
+  NEM kaphatják meg automatikusan az A7 táblában.
+- **részleges:** #6 (gateway-absztrakció helyes, de sosem éles a rés miatt),
+  #9 (lifecycle unit/integrációs szinten bizonyított, UI-n át nem elérhető),
+  #24 (legacy parity dokumentált, de egy mért mikro-eltéréssel a 280ms
+  határon — R19/b 4.1), #32 (loop a compiler szintjén bizonyított, UI-n át
+  nem), #33/38–41 (recorder/streak/daily-goal a Learn-migrációs úton
+  bizonyított, önálló Practice-session úton Noop miatt sosem fut le), #49
+  (leak-védelem fake gateway-vel bizonyított, valós mikrofonos úton nem
+  gyakorolt), #52 (a11y teszt-szinten bizonyított, valós eszközön nem).
+- **nem teljesül:** #48 (valós eszközös teszt dokumentálva — ez maga R20 A8
+  feladata, ma nem létezik).
+- **nem ellenőrizhető staticusan (a gate/CI futtatja):** #42–45, #47 — minden
+  korábbi kör review-ja zölden futtatta, de ez a pre-flight nem futtatta
+  újra a teljes suite-ot.
+
+Az implementer az A7 táblát **erre a mérésre alapozva** töltse ki, ne
+nulláról; ahol a fenti minősítés "részleges" vagy "nem teljesül", az A7
+cellába a **konkrét okot és a rendszerszintű rés hivatkozását** írja, nem
+összevont "teljesül" szót.
+
 ## 3. Scope
 
 **Benne:** audit + a talált **kis** hiányok javítása + a mérési és
