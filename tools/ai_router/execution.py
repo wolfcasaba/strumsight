@@ -97,8 +97,13 @@ def build_codex_argv(codex_bin: str, profile: str, worktree: Path) -> list[str]:
         profile,
         "--cd",
         os.fspath(worktree.resolve()),
+        # danger-full-access, not workspace-write: workspace-write needs a
+        # bwrap network namespace this container cannot create ("bwrap:
+        # loopback: Failed RTM_NEWADDR: Operation not permitted" — measured,
+        # E02-R21 H4). Isolation comes from the dedicated worktree, same as
+        # tools/codex-round.sh's `-s danger-full-access`.
         "--sandbox",
-        "workspace-write",
+        "danger-full-access",
         "--ephemeral",
         "--json",
         "-",
