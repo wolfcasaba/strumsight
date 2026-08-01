@@ -107,6 +107,38 @@ class RouterHardeningTest(unittest.TestCase):
         self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
         self.assertEqual(model.profiles, ["m3", "m3"])
 
+    def test_m3_repair_prompt_tells_model_to_finish_untouched_allowed_paths(self) -> None:
+        # Mért gyökérok (E02-R21 H4, docs/LESSONS.md): a `_repair_prompt` "do
+        # not perform adjacent refactors" fogalmazása a modellt arra
+        # kényszerítette, hogy a 2. próbán is csak a bukott gate-lépést
+        # javítsa, és SOHA ne nyúljon a brief `allowed_paths` listájának a
+        # 1. próba által érintetlenül hagyott fájljaihoz — így a brief tényleges
+        # magja (a meglévő fájlok szerkesztése) sosem valósult meg, csak az ÚJ
+        # fájlok, hiába volt 2/2 M3 + 1/1 Terra próba.
+        self.brief_path.write_text(
+            "# Task\n\n```ai-router\n"
+            "schema_version = 1\nrisk = \"normal\"\n"
+            'allowed_paths = ["lib/a.dart", "lib/b.dart", "lib/c.dart"]\n'
+            "gate_tests = [\"test/example_test.dart\"]\n"
+            "native_gate = false\n```\n"
+        )
+        self.brief = load_brief(self.brief_path)
+        only_a = ScopeAudit(True, ("lib/a.dart",), (), False, "sha256:diff")
+        router, model = self.router(
+            [codex_ok(), codex_ok()],
+            [gate("pass"), gate("code_failure", "sha256:one"), gate("pass")],
+            audits=[only_a, only_a],
+        )
+
+        result = router.run(self.brief, self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(len(model.prompts), 2)
+        repair_prompt = model.prompts[1]
+        self.assertIn("lib/b.dart", repair_prompt)
+        self.assertIn("lib/c.dart", repair_prompt)
+        self.assertIn("not scope creep", repair_prompt)
+
     def test_resume_from_precheck_repeats_baseline_before_model(self) -> None:
         self.state.save_task(
             self.brief.task_id,

@@ -1557,3 +1557,77 @@ SHA-n. A production task-state (`E02-R21`, `STOPPED`,
 újraindulhat. A `_smoke()` valódi `exec_command`-dal kiegészítése (a fenti
 (2) pont) szándékosan KIMARADT ebből a javításból — a gyökérokot nem
 érinti, külön, tartalmi (nem heal-) kör dolga volna, ha egyáltalán kell.
+
+## L44 — A repair/escalation prompt "minimal fix, no adjacent refactor" fogalmazása szerkezetileg megtiltja a modellnek, hogy egy félbehagyott (nem hibás, hanem BEFEJEZETLEN) implementációt a 2./3. próbán befejezze
+
+**Mit mértünk (2026-08-01, E02-R21, HATODIK halt/önjavító kör ugyanazon a
+taskon, de az ELSŐ, ahol a router teljes infrastruktúrája — sandbox,
+állapotgép, megszakítás-kezelés — mérve hibátlanul futott végig).** A H4-
+sandbox-fix (L43, PR #51) utáni első éles `run` mindhárom próbát (M3×2 +
+Terra×1) végigvitte: `RECOVERED_M3_CALL_1` → `code_failure` (`format`),
+`M3_CALL_2` → `code_failure` (`analyze`), Terra → `code_failure`
+(`test test/features/practice`) → `STOPPED`. A munkapéldány végállapotából
+mérve (`docs/reviews/e02-r21-review.md` "Update 5"): a brief öt engedélyezett
+célfájlja közül **csak a két ÚJ fájl** (A4 gateway provider, A5 teszt) kapott
+tartalmat — mindhárom, egymástól független próba (2 M3 + 1 Terra) ezeket
+hozta létre/javította, de a brief tényleges magja, a **három MEGLÉVŐ
+wiring-célfájl** (`practice_session_providers.dart`,
+`practice_setup_controller.dart`, `practice_effect_listener.dart`), egyik
+próba után sem különbözött a baseline-tól. A Terra próba format+analyze
+gate-je zöld volt (tehát fordítható, formázott kódot adott vissza), csak a
+test bukott — pontosan azért, mert az A5 teszt a host-providertől nem-null
+értéket vár, a baseline (érintetlen) providerek pedig `null`-t adnak.
+
+**Gyökérok — a router SAJÁT prompt-építése, nem a modell(ek) hibája.**
+`tools/ai_router/router.py` `_repair_prompt` (a 2. M3-próba promptja) és
+`tools/ai_router/packet.py` `build_escalation_packet` (a Terra-csomag)
+SZÓ SZERINT ezt mondja minden repair/escalation hívásnak: *"Diagnose the
+concrete failure, apply the minimal fix, and do not perform adjacent
+refactors"* / *"Apply one minimal, targeted repair... do not... widen
+scope."* Ha az 1. próba a brief öt célfájlja közül csak kettőt érintett,
+mielőtt a gate elkapta (format/analyze hiba), ez a fogalmazás a 2./3. próbát
+arra kényszeríti, hogy KIZÁRÓLAG a jelentett gate-hibát javítsa a már
+érintett fájlokban — a brief maradék, még érintetlen célfájljainak
+szerkesztése ebből a szemszögből "adjacent refactor"/"widened scope", tehát
+TILOS. Ez azt jelenti, hogy **egy befejezetlen (nem hibás, csak befejezetlen)
+1. próba után a router szerkezetileg nem tudja a 2./3. próbával befejeztetni
+a brief hátralévő részét** — függetlenül attól, hogy a modell(ek) egyébként
+képesek lennének rá. A `_terra`-hívás `relevant_files` mezője (a
+`state["changed_paths"]`-ből) ezt tovább erősíti: a Terra-csomag "Relevant
+files" szakasza is csak a MÁR érintett fájlokat sorolja fel, semmi jelzés
+nincs arról, mely engedélyezett fájlok maradtak érintetlenül.
+
+**Ez ÁLTALÁNOS router-hiba, nem E02-R21-specifikus.** Bármely jövőbeli
+brief, ahol az 1. (korlátlan) M3-próba a saját lépés-/idő-keretén belül nem
+ér a végére, ugyanebbe a csapdába fut: a 2./3. próba a részleges munkát
+"befejezett, csak hibás" implementációként kezeli, és sosem tér vissza a
+kimaradt részekhez.
+
+**Javítva (önjavító kör, 2026-08-01, heal branch
+`heal/E02-R21-H4-1`).** Mindkét prompt-építő függvény most megkapja/kiszámítja,
+mely `brief.metadata.allowed_paths` maradt érintetlen a router saját,
+perzisztált `state["changed_paths"]` mezője alapján (ez már korábban is
+frissült minden `_scope_or_finish` hívásnál, csak sosem jutott vissza a
+modellhez), és a promptba explicit szakaszként ("Allowed paths with NO
+change yet from any previous attempt") + egy carve-out mondattal kerül:
+*"'minimal fix' means the smallest change that satisfies the brief's
+acceptance criteria, not the smallest change that only silences the reported
+gate failure... finishing the brief is not scope creep, an incomplete
+implementation is not a narrower repair."* Kötelező regressziós teszt, RED a
+javítás előtt / GREEN utána:
+`tools/tests/test_router_hardening.py::test_m3_repair_prompt_tells_model_to_finish_untouched_allowed_paths`
+(a teljes router-hurkon át méri, hogy a 2. M3-próba promptja tartalmazza az
+1. próba által érintetlenül hagyott engedélyezett fájlokat) és
+`tools/tests/test_packet.py::test_packet_names_allowed_paths_untouched_by_any_attempt`
+(közvetlenül a Terra-csomagra). `python3 -m pytest tools/tests -q`: 109
+passed, 33 subtests passed (107→109, a két új teszttel).
+
+**Ami ebből a javításból SZÁNDÉKOSAN kimaradt.** Ez a javítás a router
+prompt-építését korrigálja, NEM a jelenleg `STOPPED` E02-R21 task tartalmi
+munkáját — a Practice V2 production-drótozás (A1/A2/A3) ezután is a
+következő, tartalmi `run`-ra vár. A kimerült task-state-et
+`reset --task-id E02-R21`-lel kell feloldani, hogy egy friss run a javított
+promptokkal próbálkozhasson; ha a mintázat megismétlődik javítás UTÁN is
+(azaz a 2./3. próba a javított prompt mellett is csak A4/A5-öt érinti),
+az már a brief méretére/sorrendjére mutat (Class B), nem a router
+promptjára.
