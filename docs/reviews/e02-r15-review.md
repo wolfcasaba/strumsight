@@ -6,7 +6,22 @@
 - **Reviewer:** Claude (Opus 4.8), READ-ONLY, izolált `/tmp` klón
 - **ADR:** 0081 (pre-flightban írva)
 - **Dátum:** 2026-08-01
-- **Verdikt (1. kör):** **CHANGES REQUESTED** — 1 MAJOR + 1 MINOR (1 NOTE)
+- **Verdikt (1. kör):** CHANGES REQUESTED — 1 MAJOR + 1 MINOR (1 NOTE)
+- **Verdikt (javító kör #1 után, `a2933d6`):** **APPROVED** — MAJOR-1 és MINOR-1
+  lezárva; friss `/tmp` klón gate zöld, CI run
+  [30681908643](https://github.com/wolfcasaba/strumsight/actions/runs/30681908643)
+  **success** (teljes suite + property + APK).
+
+## 0. Javító kör #1 — lezárás (`a2933d6`)
+
+- **MAJOR-1 zárva:** `chord_change_analyzer_test.dart` új „meter boundaries"
+  group — 3/4 (`Meter(beatsPerBar: 3)`) és külön 4/4 cella, bar-boundary
+  váltással → `correct` + mért késés. A §10 handoff A7-sora javítva. A teszt a
+  hiányt PIROSRA fogta volna (ütem-specifikus assert).
+- **MINOR-1 zárva:** 179999 µs→`unstable` és 180001 µs→`correct` él-cellák
+  (`stableDuration` explicit assert-tel) — a `>=` mindkét oldala mérve.
+- Scope tiszta (csak a teszt-fájl + §10 handoff módosult). A reviewer
+  eldobható próbái (`zzz_probe_*`) csak `/tmp` klónban léteztek, törölve.
 
 ## 1. Gate-újrafuttatás (saját kézzel, `/tmp/review-e02r15`)
 
