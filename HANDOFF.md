@@ -4,11 +4,19 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (GOV-03 / ADR 0112 — önjavító pipeline: a HALT-ból a lánc magától indít
-> javító kört; ugyanebben a körben javítva az E02-R21-et és az EGÉSZ Epic 3-at
-> blokkoló router-baseline hiba (`tools/ai_router/security.py` — a Flutter saját
-> generált fájljai)**.
+> (GOV-03 / ADR 0112 önjavító kör, H6 2. előfordulás — a security.py-fix után
+> az E02-R21 task-state a routerben véglegesen BLOCKED maradt, mert
+> `router.py run()` egy nem-RUNNING/DEFERRED terminal state-en `result_path`
+> írás NÉLKÜL tért vissza (a wrapper ezt mindig INTERNAL_ERRORra fordította,
+> elrejtve a valódi okot), és nem volt reset-út egy azóta javított BLOCKED
+> taskhoz. Javítva: `run()` minden terminal-state ágon ír result_path-ot;
+> `model-router.py reset --task-id` + `StateStore.reset_task` törli/
+> re-prechekkeli a stuck task state-et. Lásd `docs/LESSONS.md` L37).**
 > Előző kör: 2026-08-01
+> (GOV-03 / ADR 0112 — önjavító pipeline: a HALT-ból a lánc magától indít
+> javító kört; egy korábbi körben javítva az E02-R21-et és az EGÉSZ Epic 3-at
+> blokkoló router-baseline hiba (`tools/ai_router/security.py` — a Flutter saját
+> generált fájljai)).
 > (E02-R20 epic-zárás lezárva — accessibility mátrix, performance számlálók,
 > property gate, doD-tábla és a device-mátrix kész; a rendszerszintű rés
 > (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva. A

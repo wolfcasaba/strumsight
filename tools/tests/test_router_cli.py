@@ -86,6 +86,62 @@ class RouterCliTest(unittest.TestCase):
         self.assertIn("--ephemeral", args)
         self.assertNotIn("M3_OK", " ".join(args))
 
+    def test_reset_clears_a_stuck_blocked_task_back_to_not_started(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_root = Path(directory) / "state"
+            tasks_dir = state_root / "tasks"
+            tasks_dir.mkdir(parents=True)
+            (tasks_dir / "E02-R21.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "task_id": "E02-R21",
+                        "status": "BLOCKED",
+                        "phase": "BLOCKED",
+                        "reason": "baseline has unsafe ignored files (root cause since fixed)",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            reset_result = subprocess.run(
+                [
+                    "python3",
+                    str(CLI),
+                    "--config",
+                    str(CONFIG),
+                    "--state-root",
+                    str(state_root),
+                    "reset",
+                    "--task-id",
+                    "E02-R21",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(reset_result.returncode, 0, reset_result.stderr)
+
+            status_result = subprocess.run(
+                [
+                    "python3",
+                    str(CLI),
+                    "--config",
+                    str(CONFIG),
+                    "--state-root",
+                    str(state_root),
+                    "status",
+                    "--task-id",
+                    "E02-R21",
+                    "--json",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status_result.returncode, 0, status_result.stderr)
+            self.assertEqual(json.loads(status_result.stdout)["status"], "NOT_STARTED")
+
 
 if __name__ == "__main__":
     unittest.main()

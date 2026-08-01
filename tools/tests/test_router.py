@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -221,6 +222,41 @@ class RouterTest(unittest.TestCase):
 
         self.assertEqual(result.status, RouterStatus.STOPPED)
         self.assertEqual(model.profiles, ["m3", "m3", "terra"])
+
+    def test_terminal_state_run_always_writes_result_path(self) -> None:
+        brief = self.brief()
+        self.state.save_task(
+            brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": brief.task_id,
+                "brief_hash": brief.metadata_hash,
+                "phase": "BLOCKED",
+                "status": "BLOCKED",
+                "reason": "baseline has unsafe ignored files",
+                "m3_attempts": 0,
+                "terra_calls": 0,
+                "gate_history": [],
+            },
+        )
+        router, model, gate_runner = self.router([], [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "result.json"
+
+            result = router.run(brief, self.worktree, result_path=result_path)
+
+            self.assertEqual(result.status, RouterStatus.BLOCKED)
+            self.assertTrue(
+                result_path.exists(),
+                "a terminal-state run() call must persist result_path, "
+                "not only return the in-memory result (E02-R21 / H6)",
+            )
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "BLOCKED")
+            self.assertEqual(payload["reason"], "baseline has unsafe ignored files")
+        self.assertEqual(model.profiles, [])
+        self.assertEqual(gate_runner.calls, 0)
 
     def test_resume_after_crash_runs_gate_before_consuming_another_attempt(self) -> None:
         brief = self.brief()
