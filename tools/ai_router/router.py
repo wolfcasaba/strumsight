@@ -15,7 +15,12 @@ from .execution import CodexResult
 from .models import BriefMetadata, RouterConfig, TaskBrief
 from .packet import build_escalation_packet
 from .quota import QuotaStatus
-from .security import ScopeAudit, WorkspaceManifest, redact_text
+from .security import (
+    ScopeAudit,
+    WorkspaceManifest,
+    redact_text,
+    validate_baseline_manifest,
+)
 from .state import StateStore, TerraBudgetError
 
 
@@ -79,6 +84,7 @@ def _manifest_to_dict(manifest: WorkspaceManifest) -> dict[str, object]:
         "baseline_head": manifest.baseline_head,
         "untracked_paths": sorted(manifest.untracked_paths),
         "ignored_paths": sorted(manifest.ignored_paths),
+        "tracked_paths": sorted(manifest.tracked_paths),
     }
 
 
@@ -88,11 +94,19 @@ def _manifest_from_dict(value: object) -> WorkspaceManifest:
     head = value.get("baseline_head")
     untracked = value.get("untracked_paths")
     ignored = value.get("ignored_paths")
-    if not isinstance(head, str) or not isinstance(untracked, list) or not isinstance(ignored, list):
+    tracked = value.get("tracked_paths", [])
+    if (
+        not isinstance(head, str)
+        or not isinstance(untracked, list)
+        or not isinstance(ignored, list)
+        or not isinstance(tracked, list)
+    ):
         raise ValueError("baseline manifest is invalid")
-    if not all(isinstance(item, str) for item in (*untracked, *ignored)):
+    if not all(isinstance(item, str) for item in (*untracked, *ignored, *tracked)):
         raise ValueError("baseline manifest paths are invalid")
-    return WorkspaceManifest(head, frozenset(untracked), frozenset(ignored))
+    return WorkspaceManifest(
+        head, frozenset(untracked), frozenset(ignored), frozenset(tracked)
+    )
 
 
 def _acceptance(text: str) -> tuple[str, ...]:
@@ -176,6 +190,31 @@ class DevelopmentRouter:
             _atomic_result(result_path, result)
         return result
 
+    def _finish_terra(
+        self,
+        state: dict[str, object],
+        status: RouterStatus,
+        reason: str,
+        result_path: Path | None,
+    ) -> RouterResult:
+        reservation_id = state.get("terra_reservation")
+        if not isinstance(reservation_id, str) or not reservation_id:
+            raise ValueError("Terra reservation is missing from task state")
+        terminal_reason = redact_text(reason)[:1000]
+        pending_status = state.get("terra_terminal_status")
+        if pending_status is not None and pending_status != status.value:
+            raise ValueError("Terra terminal outcome conflicts with persisted intent")
+        if pending_status is None:
+            # Persist terminal intent before crossing into the separately locked
+            # ledger. Resume can complete either side of this two-phase sequence.
+            state["terra_terminal_status"] = status.value
+            state["terra_terminal_reason"] = terminal_reason
+            self.state.save_task(str(state["task_id"]), state)
+        else:
+            terminal_reason = str(state.get("terra_terminal_reason", terminal_reason))
+        self.state.mark_terra_finished(reservation_id, status.value)
+        return self._finish(state, status, terminal_reason, result_path)
+
     @staticmethod
     def _record_gate(state: dict[str, object], phase: str, gate: GateRun) -> None:
         history = state.setdefault("gate_history", [])
@@ -199,6 +238,7 @@ class DevelopmentRouter:
         manifest: WorkspaceManifest,
         state: dict[str, object],
         result_path: Path | None,
+        terra: bool = False,
     ) -> tuple[ScopeAudit | None, RouterResult | None]:
         audit = self.audit_scope(worktree, brief.metadata, manifest)
         state["last_diff_hash"] = audit.diff_hash
@@ -206,7 +246,8 @@ class DevelopmentRouter:
         self.state.save_task(brief.task_id, state)
         if audit.ok:
             return audit, None
-        return None, self._finish(
+        finish = self._finish_terra if terra else self._finish
+        return None, finish(
             state,
             RouterStatus.BLOCKED,
             "; ".join(audit.violations),
@@ -248,21 +289,32 @@ class DevelopmentRouter:
         state: dict[str, object],
         result_path: Path | None,
         terra: bool,
+        failure: FailureClass | None = None,
+        partial_changes: bool = False,
+        resume_phase: str | None = None,
     ) -> RouterResult | None:
-        failure = classify_provider_failure(
+        failure = failure or classify_provider_failure(
             outcome.returncode, outcome.events, outcome.stderr, timed_out=outcome.timed_out
         )
         if failure is FailureClass.PASS:
             return None
         if terra:
-            return self._finish(
+            return self._finish_terra(
                 state, RouterStatus.STOPPED, f"Terra call failed: {failure.value}", result_path
             )
-        # Provider/credential failure is not a completed solution attempt.
-        state["m3_attempts"] = max(0, int(state.get("m3_attempts", 0)) - 1)
+        # A provider failure consumes a solution attempt only when it left a diff.
+        if partial_changes:
+            if resume_phase:
+                state["resume_phase"] = resume_phase
+        else:
+            state["m3_attempts"] = max(0, int(state.get("m3_attempts", 0)) - 1)
         if failure in (FailureClass.PROVIDER_QUOTA, FailureClass.PROVIDER_TRANSIENT):
+            suffix = " with a partial diff" if partial_changes else ""
             return self._finish(
-                state, RouterStatus.DEFERRED, f"MiniMax provider deferred: {failure.value}", result_path
+                state,
+                RouterStatus.DEFERRED,
+                f"MiniMax provider deferred: {failure.value}{suffix}",
+                result_path,
             )
         if failure is FailureClass.CREDENTIAL_BLOCKED:
             return self._finish(
@@ -358,7 +410,6 @@ class DevelopmentRouter:
             outcome=outcome, state=state, result_path=result_path, terra=True
         )
         if decision is not None:
-            self.state.mark_terra_finished(reservation.reservation_id, decision.status.value)
             return decision
         state["phase"] = "TERRA_REVIEW_OR_FIX"
         self.state.save_task(brief.task_id, state)
@@ -368,26 +419,23 @@ class DevelopmentRouter:
             manifest=manifest,
             state=state,
             result_path=result_path,
+            terra=True,
         )
         if decision is not None:
-            self.state.mark_terra_finished(reservation.reservation_id, decision.status.value)
             return decision
         final_gate = self.run_gate(worktree, brief.metadata.gate_tests, brief.metadata.native_gate)
         self._record_gate(state, "FINAL_GATE", final_gate)
         self.state.save_task(brief.task_id, state)
         if final_gate.outcome == "pass":
-            result = self._finish(
+            return self._finish_terra(
                 state, RouterStatus.READY_FOR_REVIEW, "final gate passed", result_path
             )
-        else:
-            result = self._finish(
-                state,
-                RouterStatus.STOPPED,
-                f"final gate failed: {final_gate.outcome}",
-                result_path,
-            )
-        self.state.mark_terra_finished(reservation.reservation_id, result.status.value)
-        return result
+        return self._finish_terra(
+            state,
+            RouterStatus.STOPPED,
+            f"final gate failed: {final_gate.outcome}",
+            result_path,
+        )
 
     def run(
         self,
@@ -401,6 +449,7 @@ class DevelopmentRouter:
         with self.state.task_lock(brief.task_id, blocking=False):
             state = self.state.load_task(brief.task_id)
             needs_precheck = not state
+            quota_recheck = False
             if needs_precheck:
                 state = {
                     "schema_version": 1,
@@ -421,17 +470,47 @@ class DevelopmentRouter:
                     )
                 if state.get("status") == "DEFERRED" and resume:
                     state["status"] = "RUNNING"
+                    quota_recheck = True
                     needs_precheck = "baseline_manifest" not in state
-                    state["phase"] = "PRECHECK" if needs_precheck else "RETRY_PROVIDER"
+                    saved_phase = state.get("resume_phase")
+                    state["phase"] = (
+                        "PRECHECK"
+                        if needs_precheck
+                        else saved_phase
+                        if isinstance(saved_phase, str)
+                        else "RETRY_PROVIDER"
+                    )
                     self.state.save_task(brief.task_id, state)
                 elif state.get("status") != "RUNNING":
                     if not (resume and review_findings and state.get("status") == "READY_FOR_REVIEW"):
                         return self._result(state)
                     state["status"] = "RUNNING"
                     state["phase"] = "RETRY_PROVIDER"
+                    quota_recheck = True
                     self.state.save_task(brief.task_id, state)
 
-            if needs_precheck or state.get("phase") == "RETRY_PROVIDER":
+            pending_terra_status = state.get("terra_terminal_status")
+            if pending_terra_status is not None:
+                try:
+                    terminal_status = RouterStatus(str(pending_terra_status))
+                except ValueError as error:
+                    raise ValueError("persisted Terra terminal status is invalid") from error
+                if terminal_status not in {
+                    RouterStatus.READY_FOR_REVIEW,
+                    RouterStatus.STOPPED,
+                    RouterStatus.BLOCKED,
+                    RouterStatus.INTERNAL_ERROR,
+                }:
+                    raise ValueError("persisted Terra terminal status is not terminal")
+                return self._finish_terra(
+                    state,
+                    terminal_status,
+                    str(state.get("terra_terminal_reason", "Terra call completed")),
+                    result_path,
+                )
+
+            precheck_phase = needs_precheck or state.get("phase") == "PRECHECK"
+            if precheck_phase or quota_recheck or state.get("phase") == "RETRY_PROVIDER":
                 quota = self.check_quota()
                 if quota.status == "credential_blocked":
                     return self._finish(
@@ -444,10 +523,29 @@ class DevelopmentRouter:
                         f"MiniMax quota precheck: {quota.status}",
                         result_path,
                     )
+                if quota_recheck and "resume_phase" in state:
+                    state.pop("resume_phase", None)
+                    self.state.save_task(brief.task_id, state)
 
-            if needs_precheck:
+            if "baseline_manifest" not in state:
+                if not precheck_phase:
+                    raise ValueError("baseline manifest is missing outside PRECHECK")
                 manifest = self.capture_manifest(worktree)
                 state["baseline_manifest"] = _manifest_to_dict(manifest)
+                self.state.save_task(brief.task_id, state)
+            else:
+                manifest = _manifest_from_dict(state.get("baseline_manifest"))
+
+            baseline_violations = validate_baseline_manifest(manifest)
+            if baseline_violations:
+                return self._finish(
+                    state,
+                    RouterStatus.BLOCKED,
+                    "; ".join(baseline_violations),
+                    result_path,
+                )
+
+            if precheck_phase:
                 baseline_gate = self.run_baseline_gate(
                     worktree, brief.metadata.gate_tests, brief.metadata.native_gate
                 )
@@ -461,8 +559,8 @@ class DevelopmentRouter:
                 )
                 if decision is not None:
                     return decision
-            else:
-                manifest = _manifest_from_dict(state.get("baseline_manifest"))
+                state["phase"] = "M3_READY"
+                self.state.save_task(brief.task_id, state)
 
             previous_gate = GateRun("code_failure", "review", 1, None, review_findings)
             phase = str(state.get("phase", ""))
@@ -503,24 +601,42 @@ class DevelopmentRouter:
                         None,
                         "No scoped changes were present after the interrupted model call.",
                     )
+                decision = self._gate_decision(
+                    gate=recovered, state=state, result_path=result_path
+                )
+                if decision is not None:
+                    return decision
                 previous_gate = recovered
             elif phase == "TERRA_CALL":
-                return self._finish(
+                return self._finish_terra(
                     state,
                     RouterStatus.STOPPED,
                     "Terra call was interrupted; automatic retry is forbidden",
                     result_path,
                 )
             elif phase == "TERRA_REVIEW_OR_FIX":
+                _, decision = self._scope_or_finish(
+                    brief=brief,
+                    worktree=worktree,
+                    manifest=manifest,
+                    state=state,
+                    result_path=result_path,
+                    terra=True,
+                )
+                if decision is not None:
+                    return decision
                 final_gate = self.run_gate(
                     worktree, brief.metadata.gate_tests, brief.metadata.native_gate
                 )
                 self._record_gate(state, "RECOVERED_FINAL_GATE", final_gate)
                 if final_gate.outcome == "pass":
-                    return self._finish(
-                        state, RouterStatus.READY_FOR_REVIEW, "recovered final gate passed", result_path
+                    return self._finish_terra(
+                        state,
+                        RouterStatus.READY_FOR_REVIEW,
+                        "recovered final gate passed",
+                        result_path,
                     )
-                return self._finish(
+                return self._finish_terra(
                     state, RouterStatus.STOPPED, "recovered final gate failed", result_path
                 )
 
@@ -535,11 +651,33 @@ class DevelopmentRouter:
                     else self._repair_prompt(brief, previous_gate, review_findings)
                 )
                 outcome = self.run_model(self.config.runtime.m3_profile, worktree, prompt)
-                decision = self._provider_decision(
-                    outcome=outcome, state=state, result_path=result_path, terra=False
+                provider_failure = classify_provider_failure(
+                    outcome.returncode,
+                    outcome.events,
+                    outcome.stderr,
+                    timed_out=outcome.timed_out,
                 )
-                if decision is not None:
-                    return decision
+                if provider_failure is not FailureClass.PASS:
+                    audit, decision = self._scope_or_finish(
+                        brief=brief,
+                        worktree=worktree,
+                        manifest=manifest,
+                        state=state,
+                        result_path=result_path,
+                    )
+                    if decision is not None:
+                        return decision
+                    decision = self._provider_decision(
+                        outcome=outcome,
+                        state=state,
+                        result_path=result_path,
+                        terra=False,
+                        failure=provider_failure,
+                        partial_changes=bool(audit and audit.changed_paths),
+                        resume_phase=f"M3_CALL_{attempt}",
+                    )
+                    if decision is not None:
+                        return decision
                 state["phase"] = f"M3_ATTEMPT_{attempt}"
                 self.state.save_task(brief.task_id, state)
                 audit, decision = self._scope_or_finish(
@@ -562,6 +700,18 @@ class DevelopmentRouter:
                 if decision is not None:
                     return decision
                 if current_gate.outcome == "pass":
+                    if audit is not None and not audit.changed_paths:
+                        current_gate = GateRun(
+                            "code_failure",
+                            "model produced no scoped changes",
+                            1,
+                            None,
+                            "The model returned successfully but produced no scoped changes.",
+                        )
+                        self._record_gate(state, f"NO_CHANGE_{attempt}", current_gate)
+                        self.state.save_task(brief.task_id, state)
+                        previous_gate = current_gate
+                        continue
                     if brief.metadata.risk == "high" or (audit is not None and audit.high_risk):
                         return self._terra(
                             brief=brief,

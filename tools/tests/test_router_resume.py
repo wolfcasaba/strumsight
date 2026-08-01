@@ -6,6 +6,7 @@ from tools.ai_router.brief import load_brief
 from tools.ai_router.config import load_config
 from tools.ai_router.quota import QuotaStatus
 from tools.ai_router.router import DevelopmentRouter, RouterStatus
+from tools.ai_router.security import ScopeAudit
 from tools.ai_router.state import StateStore
 from tools.tests.test_router import FakeGate, FakeModel, FakeScope, codex_error, codex_ok, gate
 
@@ -29,10 +30,10 @@ class RouterResumeTest(unittest.TestCase):
         self.config = load_config(Path(__file__).resolve().parents[2] / ".ai" / "router.toml")
         self.state = StateStore(self.root / "state")
 
-    def make_router(self, models, gates, quotas):
+    def make_router(self, models, gates, quotas, *, audits=None):
         model = FakeModel(models)
         gate_runner = FakeGate(gates)
-        scope = FakeScope()
+        scope = FakeScope(audits)
         quota_values = iter(quotas)
         router = DevelopmentRouter(
             config=self.config,
@@ -63,6 +64,7 @@ class RouterResumeTest(unittest.TestCase):
         self.assertEqual(model.profiles, ["m3"])
 
     def test_provider_429_does_not_consume_an_m3_solution_attempt(self) -> None:
+        empty = ScopeAudit(True, (), (), False, "sha256:empty")
         router, model = self.make_router(
             [codex_error("HTTP 429 quota"), codex_ok()],
             [gate("pass"), gate("pass")],
@@ -70,6 +72,7 @@ class RouterResumeTest(unittest.TestCase):
                 QuotaStatus("ok", True, True, remaining_percent=80),
                 QuotaStatus("ok", True, True, remaining_percent=80),
             ],
+            audits=[empty],
         )
 
         first = router.run(self.brief, self.worktree)
@@ -79,6 +82,29 @@ class RouterResumeTest(unittest.TestCase):
         self.assertEqual(first.status, RouterStatus.DEFERRED)
         self.assertEqual(second.status, RouterStatus.READY_FOR_REVIEW)
         self.assertEqual(model.profiles, ["m3", "m3"])
+        self.assertEqual(self.state.load_task(self.brief.task_id)["m3_attempts"], 1)
+
+
+    def test_provider_failure_with_partial_diff_is_gated_before_retry(self) -> None:
+        changed = ScopeAudit(
+            True, ("lib/example.dart",), (), False, "sha256:partial"
+        )
+        router, model = self.make_router(
+            [codex_error("HTTP 429 quota")],
+            [gate("pass"), gate("pass")],
+            [
+                QuotaStatus("ok", True, True, remaining_percent=80),
+                QuotaStatus("ok", True, True, remaining_percent=80),
+            ],
+            audits=[changed, changed],
+        )
+
+        first = router.run(self.brief, self.worktree)
+        second = router.run(self.brief, self.worktree, resume=True)
+
+        self.assertEqual(first.status, RouterStatus.DEFERRED)
+        self.assertEqual(second.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3"])
         self.assertEqual(self.state.load_task(self.brief.task_id)["m3_attempts"], 1)
 
 

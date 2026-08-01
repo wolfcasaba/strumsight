@@ -4,7 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.ai_router.security import audit_scope, capture_workspace_manifest, redact_text
+from tools.ai_router.security import (
+    audit_scope,
+    capture_workspace_manifest,
+    redact_text,
+    validate_baseline_manifest,
+)
 
 
 class SecurityTest(unittest.TestCase):
@@ -88,6 +93,33 @@ class SecurityTest(unittest.TestCase):
 
         self.assertTrue(audit.ok, audit.violations)
 
+    def test_baseline_validation_rejects_tracked_untracked_and_unsafe_ignored(self) -> None:
+        root = self.make_repo()
+        (root / "lib" / "allowed.dart").write_text("dirty\n")
+        (root / "scratch.txt").write_text("untracked\n")
+        (root / ".cache" / "private.txt").write_text("ignored\n")
+
+        manifest = capture_workspace_manifest(root)
+        violations = validate_baseline_manifest(manifest)
+
+        self.assertTrue(any("tracked changes" in item for item in violations))
+        self.assertTrue(any("untracked files" in item for item in violations))
+        self.assertTrue(any("unsafe ignored" in item for item in violations))
+
+    def test_baseline_validation_allows_known_generated_ignored_files(self) -> None:
+        root = self.make_repo()
+        (root / ".gitignore").write_text(".cache/\n.dart_tool/\n__pycache__/\n")
+        subprocess.run(["git", "add", ".gitignore"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "ignore generated"], cwd=root, check=True)
+        (root / ".cache" / "old").unlink()
+        (root / ".dart_tool").mkdir()
+        (root / ".dart_tool" / "state").write_text("generated\n")
+        (root / "tools" / "__pycache__").mkdir(parents=True)
+        (root / "tools" / "__pycache__" / "router.pyc").write_bytes(b"cache")
+
+        manifest = capture_workspace_manifest(root)
+
+        self.assertEqual(validate_baseline_manifest(manifest), ())
 
     def test_scope_audit_rejects_a_model_created_commit(self) -> None:
         root = self.make_repo()

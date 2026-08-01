@@ -16,11 +16,21 @@ class SecurityError(RuntimeError):
     pass
 
 
+GENERATED_IGNORED_PREFIXES = (
+    ".dart_tool",
+    "build",
+    ".flutter-plugins",
+    ".flutter-plugins-dependencies",
+    ".ai/runs",
+)
+
+
 @dataclass(frozen=True)
 class WorkspaceManifest:
     baseline_head: str
     untracked_paths: frozenset[str]
     ignored_paths: frozenset[str]
+    tracked_paths: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -77,11 +87,47 @@ def capture_workspace_manifest(repo: Path) -> WorkspaceManifest:
         ignored_paths=_paths(
             _git(repo, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
         ),
+        tracked_paths=_paths(_git(repo, ["diff", "--name-only", "-z", "HEAD", "--"])),
     )
 
 
 def _matches(path: str, prefixes: Sequence[str]) -> bool:
     return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in prefixes)
+
+
+def _is_generated_ignored(path: str, prefixes: Sequence[str]) -> bool:
+    parts = PurePosixPath(path).parts
+    return (
+        _matches(path, prefixes)
+        or "__pycache__" in parts
+        or path.endswith(".pyc")
+    )
+
+
+def validate_baseline_manifest(
+    manifest: WorkspaceManifest,
+    *,
+    ignored_allow_paths: Sequence[str] = GENERATED_IGNORED_PREFIXES,
+) -> tuple[str, ...]:
+    violations: list[str] = []
+    if manifest.tracked_paths:
+        violations.append(
+            "baseline has tracked changes: " + ", ".join(sorted(manifest.tracked_paths)[:20])
+        )
+    if manifest.untracked_paths:
+        violations.append(
+            "baseline has untracked files: " + ", ".join(sorted(manifest.untracked_paths)[:20])
+        )
+    unsafe_ignored = sorted(
+        path
+        for path in manifest.ignored_paths
+        if not _is_generated_ignored(path, ignored_allow_paths)
+    )
+    if unsafe_ignored:
+        violations.append(
+            "baseline has unsafe ignored files: " + ", ".join(unsafe_ignored[:20])
+        )
+    return tuple(violations)
 
 
 def _has_symlink_component(repo: Path, relative: str) -> bool:
@@ -102,13 +148,7 @@ def audit_scope(
     allowed_paths: Sequence[str],
     protected_paths: Sequence[str],
     baseline: WorkspaceManifest,
-    ignored_allow_paths: Sequence[str] = (
-        ".dart_tool",
-        "build",
-        ".flutter-plugins",
-        ".flutter-plugins-dependencies",
-        ".ai/runs",
-    ),
+    ignored_allow_paths: Sequence[str] = GENERATED_IGNORED_PREFIXES,
     high_risk_fragments: Sequence[str] = (
         "auth",
         "credential",
@@ -131,7 +171,9 @@ def audit_scope(
     if current_head != baseline.baseline_head:
         violations.append("model-created commit is not allowed: HEAD changed from baseline")
     for path in sorted(changed):
-        is_ignored_generated = path in new_ignored and _matches(path, ignored_allow_paths)
+        is_ignored_generated = path in new_ignored and _is_generated_ignored(
+            path, ignored_allow_paths
+        )
         if is_ignored_generated:
             continue
         if _matches(path, protected_paths):

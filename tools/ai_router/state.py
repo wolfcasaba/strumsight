@@ -188,7 +188,13 @@ class StateStore:
         return TerraReservation(reservation_id, task_id, day, "reserved")
 
     def _transition_reservation(
-        self, reservation_id: str, *, expected: str, status: str, outcome: str | None = None
+        self,
+        reservation_id: str,
+        *,
+        expected: str | tuple[str, ...],
+        status: str,
+        outcome: str | None = None,
+        idempotent: bool = False,
     ) -> None:
         now = self.clock().astimezone(timezone.utc).isoformat()
         with self._ledger_lock():
@@ -201,8 +207,12 @@ class StateStore:
             if len(matches) != 1:
                 raise StateError("Terra reservation was not found uniquely")
             row = matches[0]
-            if row.get("status") != expected:
-                raise StateError(f"invalid Terra transition from {row.get('status')} to {status}")
+            current = row.get("status")
+            if current == status and idempotent and row.get("outcome") == outcome:
+                return
+            expected_statuses = (expected,) if isinstance(expected, str) else expected
+            if current not in expected_statuses:
+                raise StateError(f"invalid Terra transition from {current} to {status}")
             row["status"] = status
             row[f"{status}_at"] = now
             if outcome is not None:
@@ -216,5 +226,9 @@ class StateStore:
         if not outcome:
             raise StateError("Terra outcome is required")
         self._transition_reservation(
-            reservation_id, expected="started", status="finished", outcome=outcome
+            reservation_id,
+            expected=("reserved", "started"),
+            status="finished",
+            outcome=outcome,
+            idempotent=True,
         )
