@@ -29,12 +29,24 @@ class ExecutionTest(unittest.TestCase):
                 "--cd",
                 "/tmp/worktree",
                 "--sandbox",
-                "workspace-write",
+                "danger-full-access",
                 "--ephemeral",
                 "--json",
                 "-",
             ],
         )
+
+    def test_build_codex_argv_uses_danger_full_access_for_terra_too(self) -> None:
+        # E02-R21 H4: `--sandbox workspace-write` needs a bwrap network
+        # namespace this container cannot create (`bwrap --unshare-net`
+        # fails with "Failed RTM_NEWADDR: Operation not permitted"), so
+        # every real (non-smoke) Codex call silently ran zero shell commands.
+        # `tools/codex-round.sh` already uses `danger-full-access` for the
+        # same reason; isolation comes from the dedicated worktree, not bwrap.
+        argv = build_codex_argv("codex", "terra", Path("/tmp/worktree"))
+
+        sandbox_index = argv.index("--sandbox")
+        self.assertEqual(argv[sandbox_index + 1], "danger-full-access")
 
     def test_run_codex_passes_prompt_on_stdin_and_parses_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
