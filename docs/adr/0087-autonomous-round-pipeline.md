@@ -7,6 +7,15 @@
 [ADR 0069](0069-two-engine-implementer-pool.md) (két implementer motor) és
 [ADR 0086](0086-ci-dispatch-only-build-gate.md) (dispatch-only build gate) döntéseire.
 
+> **Módosítás (ADR 0112 önjavító kör, 2026-08-01):** a §2 halt-szerződése és a §7
+> „epic-zárás = halt" pontja **nem** emberi feloldást ír elő többé. A HALT egy
+> külön, friss **önjavító session** bemenete lett
+> ([ADR 0112](0112-self-healing-pipeline.md)), amely az infrastruktúrát is
+> javíthatja, és a változatlan zöld kapun átvive maga oldja fel a láncot. A
+> H1–H8 kódok **megmaradnak** — a jelentésük „ez a kör itt megáll", nem „a lánc
+> emberre vár". Egyetlen kivétel maradt emberi döntésnek: ha a javítás a mércét
+> (tesztek, `round-gate.sh`, `.github/`) gyengítené → `H-GATEGUARD`.
+>
 > **Pontosítás (2026-08-01):** az [ADR 0088](0088-minimax-first-development-router.md)
 > `engine=auto` esetén felülírja a §2/H4 három-MiniMax-plusz-Codex javítási
 > küszöbét és a §6 motorválasztását. Auto tasknál két M3-kör + legfeljebb

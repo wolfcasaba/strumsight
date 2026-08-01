@@ -1081,3 +1081,31 @@ ellentmondó állapotot hagyhatott.
 **Hogyan alkalmazd.** Modell előtt tiszta baseline kötelező. Részleges diffet
 resume előbb auditál és gate-el. Terra esetén a task tartós terminális intentet
 ment, a ledgert idempotensen lezárja, majd a taskot terminálissá teszi.
+
+## L36 — Az őr, ami mindenre igent mond, csak úgy tud nemet mondani, hogy a helyes utat is levágja
+
+**Mit mértünk (2026-08-01, E02-R21 / H6 halt).** A router baseline-őre a
+`GENERATED_IGNORED_PREFIXES` listán kívüli MINDEN ignore-olt fájlt „unsafe"-nek
+minősít. A Flutter viszont a `flutter pub get` / `flutter gen-l10n`
+mellékhatásaként minden friss klónban és worktree-ben létrehoz 15 gitignore-olt,
+de KÖTELEZŐ fájlt (`lib/l10n/app_localizations*.dart`,
+`GeneratedPluginRegistrant.*`, `ios/Flutter/ephemeral/**`,
+`android/local.properties`) — nélkülük az analyze/test el sem indul (a HANDOFF
+dokumentált klón-csapdája). Az őr tehát nem egy hibás kört állított meg, hanem
+**az összeset**: az E02-R21-et és az Epic 3 mind a 21 sorát, 2 óra 45 percig,
+amíg a cron ötpercenként ugyanazt a „megállt" sort írta a naplóba.
+
+**Miért.** A tiltólistás őr az ismeretlent kockázatnak veszi. Ez helyes, amíg az
+„ismert jó" halmaz a rendszer TÉNYLEGES működéséből származik. Itt az őrt a
+router saját fájljaira mérték (`.dart_tool`, `build`, `.ai/runs`), a projekt
+build-rendszerének kötelező kimenete kimaradt — a mércét nem a mért rendszeren
+kalibrálták.
+
+**Hogyan alkalmazd.** (1) Minden „ismert jó" listát a CÉLRENDSZER nyers
+kimenetéből generálj, ne emlékezetből: itt a
+`git ls-files --others --ignored --exclude-standard` egy friss worktree-ben,
+`flutter gen-l10n` után — és ez a nyers lista menjen be a regressziós tesztbe
+fixture-nek (`tools/tests/test_security.py`). (2) Ha egy őr a fő útvonalat
+tiltja, az nem szigor, hanem hibás kalibráció. (3) Rendszerszintű blokkolónál
+mérd meg a hatókört is: „ez a kör áll" vagy „minden kör áll" két különböző
+súlyosság — az utóbbi azonnali javítást érdemel, nem sorbaállást (ADR 0112).

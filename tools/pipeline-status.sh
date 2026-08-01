@@ -2,12 +2,14 @@
 # A kör-pipeline állapotának megtekintése és feloldása (ADR 0087).
 #
 #   tools/pipeline-status.sh              # állapot kiírása
-#   tools/pipeline-status.sh --resume     # a HALT feloldása (EMBERI döntés után)
+#   tools/pipeline-status.sh --resume     # a HALT azonnali feloldása
 #   tools/pipeline-status.sh --halt "ok"  # a lánc kézi megállítása
+#   tools/pipeline-status.sh --heal-reset # az önjavító kísérletszámláló nullázása
 #
-# A `--resume` szándékosan NEM automatizálható: az ADR 0087 §2 halt-feltételei
-# mind emberi döntést kívánnak. A feloldás azt jelenti: "megnéztem, döntöttem,
-# a döntés be van írva a briefbe/ADR-be, mehet tovább".
+# ADR 0112 óta a `--resume` NEM az egyetlen út: haltból a driver magától indít
+# önjavító kört (`PIPELINE_SELFHEAL=0` kapcsolja ki). A `--resume` a gyorsítás
+# és a `H-GATEGUARD` feloldásának eszköze — az utóbbi az egyetlen eset, ahol a
+# lánc kötelezően emberre vár.
 set -uo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -15,6 +17,7 @@ state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
 queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"}
 router_status_file="$state_dir/router-status"
 halt_file="$state_dir/HALTED"
+heal_count_file="$state_dir/selfheal.count"
 chain_log="$state_dir/chain.log"
 
 case "${1:-}" in
@@ -28,9 +31,14 @@ case "${1:-}" in
     echo "-------------------------"
     archive="$state_dir/halted-$(date +%Y%m%dT%H%M%S).txt"
     mv "$halt_file" "$archive"
+    rm -f "$heal_count_file"
     printf '%s  HALT feloldva emberi döntéssel (archívum: %s)\n' \
       "$(date -Is)" "$archive" | tee -a "$chain_log"
     echo "A lánc feloldva. A következő cron-firing viszi a soron következő kört."
+    ;;
+  --heal-reset)
+    rm -f "$heal_count_file"
+    printf '%s  önjavító kísérletszámláló nullázva\n' "$(date -Is)" | tee -a "$chain_log"
     ;;
   --halt)
     reason=${2:?használat: pipeline-status.sh --halt "<ok>"}
@@ -50,11 +58,27 @@ case "${1:-}" in
       echo "!!! A LÁNC ÁLL !!!"
       cat "$halt_file"
       echo
-      echo "Feloldás: tools/pipeline-status.sh --resume"
+      if grep -q '^halt=H-GATEGUARD' "$halt_file"; then
+        echo "MÉRCE-ŐRSZEM (ADR 0112 §3): az önjavítás a gate-hez nyúlt — ezt EMBER dönti el."
+      else
+        echo "Az önjavító kör (ADR 0112) a következő cron-firingen indul."
+      fi
+      echo "Azonnali feloldás: tools/pipeline-status.sh --resume"
     elif [ -f "$state_dir/lock" ] && ! flock -n "$state_dir/lock" true 2>/dev/null; then
       echo "Állapot: FUT egy kör (a zár foglalt)."
     else
       echo "Állapot: tétlen, a következő firing indíthat kört."
+    fi
+    echo
+    echo "--- önjavítás (ADR 0112) ---"
+    if [ "${PIPELINE_SELFHEAL:-1}" != "1" ]; then
+      echo "  KIKAPCSOLVA (PIPELINE_SELFHEAL=0)"
+    elif [ -f "$heal_count_file" ]; then
+      IFS='|' read -r heal_round heal_code heal_n < "$heal_count_file"
+      printf '  %s / %s — %s. kísérlet (max %s)\n' \
+        "$heal_round" "$heal_code" "$heal_n" "${PIPELINE_SELFHEAL_MAX:-3}"
+    else
+      echo "  nincs folyamatban lévő önjavítás"
     fi
     echo
     echo "--- utolsó router-állapot ---"
@@ -81,7 +105,7 @@ case "${1:-}" in
     [ -f "$chain_log" ] && tail -15 "$chain_log" || echo "  (még nincs)"
     ;;
   *)
-    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\"]" >&2
+    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\" | --heal-reset]" >&2
     exit 2
     ;;
 esac

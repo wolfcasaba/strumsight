@@ -8,6 +8,7 @@ import re
 import stat
 import subprocess
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
@@ -22,6 +23,29 @@ GENERATED_IGNORED_PREFIXES = (
     ".flutter-plugins",
     ".flutter-plugins-dependencies",
     ".ai/runs",
+    # A Flutter SAJÁT, gitignore-olt, de KÖTELEZŐ generált artefaktumai. A
+    # `flutter pub get` / `flutter gen-l10n` minden friss klónban és minden
+    # worktree-ben létrehozza őket (a HANDOFF.md dokumentált klón-csapdája:
+    # nélkülük az analyze/test el sem indul). Ha a baseline-őr ezeket
+    # "unsafe ignored"-nak veszi, EGYETLEN Flutter kör sem megy át a
+    # precheck-en — mérve 2026-08-01, E02-R21 (H6 halt).
+    "android/local.properties",
+    "ios/Flutter/Generated.xcconfig",
+    "ios/Flutter/flutter_export_environment.sh",
+    "ios/Flutter/ephemeral",
+    "macos/Flutter/ephemeral",
+    "macos/Flutter/Flutter-Generated.xcconfig",
+    "linux/flutter/ephemeral",
+    "windows/flutter/ephemeral",
+)
+
+# Ugyanaz a kategória, de a fájlnév változó része miatt mintával fogható:
+# a lokalizáció nyelvenként külön fájlt generál (app_localizations_hu.dart),
+# a plugin-registrant pedig platformonként más kiterjesztést kap.
+GENERATED_IGNORED_GLOBS = (
+    "lib/l10n/app_localizations*.dart",
+    "GeneratedPluginRegistrant.*",
+    "*/GeneratedPluginRegistrant.*",
 )
 
 
@@ -95,10 +119,15 @@ def _matches(path: str, prefixes: Sequence[str]) -> bool:
     return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in prefixes)
 
 
-def _is_generated_ignored(path: str, prefixes: Sequence[str]) -> bool:
+def _is_generated_ignored(
+    path: str,
+    prefixes: Sequence[str],
+    globs: Sequence[str] = GENERATED_IGNORED_GLOBS,
+) -> bool:
     parts = PurePosixPath(path).parts
     return (
         _matches(path, prefixes)
+        or any(fnmatch(path, pattern) for pattern in globs)
         or "__pycache__" in parts
         or path.endswith(".pyc")
     )

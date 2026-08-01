@@ -197,6 +197,18 @@ A fenti örökölt (`minimax`/`codex`) eszkalációt tehát soha ne alkalmazd az
 Kétség esetén **halt**. A lánc megállítása olcsó; egy rossz normatív döntés,
 ami több körön át beépül, nem az.
 
+**A halt már NEM a lánc vége (ADR 0112).** A halt-jelzésedet egy külön,
+friss **önjavító session** kapja meg, amelynek tágabb a jogosultsága (az
+infrastruktúrát is javíthatja), és amely feloldja a láncot. Ebből két
+kötelezettséged következik:
+
+- a `summary=` és a `detail=` mező **a javítás bemenete**, nem panasz: írd bele
+  a **mért gyökérokot**, a reprodukáló parancsot és a javítás javasolt helyét
+  (fájl:sor). Ha ezt nem méred ki, az önjavító kör újra elvégzi — a kör
+  költsége a tiéd;
+- attól, hogy valaki utánad javít, a **te határaid nem tágulnak**: te ugyanúgy
+  nem nyúlhatsz a `tools/`-hoz, a gate-hez és a `.github/`-hoz (§4).
+
 ## 3. A zöld kapu nem lazul
 
 format + analyze + architecture + teljes CI-suite + randomizált property + APK
@@ -220,9 +232,10 @@ Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L
 ## 4. Amit ez a session SOHA nem tesz
 
 - nem indít második kört (a láncolás a pipeline dolga);
-- nem módosítja az `ADR 0087`-et, a `tools/round-pipeline.sh`-t, a
-  `tools/round-gate.sh`-t vagy a `.github/`-ot — **a mérce nem módosulhat
-  attól, akit mér**;
+- nem módosítja az `ADR 0087`-et, az `ADR 0112`-t, a `tools/round-pipeline.sh`-t,
+  a `tools/round-gate.sh`-t vagy a `.github/`-ot — **a mérce nem módosulhat
+  attól, akit mér**. Ha az akadály éppen ott van, az **halt**, és az önjavító
+  kör dolga (ADR 0112 §3);
 - nem oszt új ADR-számot merge-elt döntés fölé;
 - nem nyúl a `docs/execution/pipeline-queue.tsv`-hez (azt a driver vezeti).
 

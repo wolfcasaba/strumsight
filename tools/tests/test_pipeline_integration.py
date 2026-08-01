@@ -30,16 +30,18 @@ class PipelineIntegrationTest(unittest.TestCase):
         rejected = self.run_command(["bash", str(script), "--validate-engine", "surprise"])
         self.assertEqual(rejected.returncode, 2)
 
-    def test_queue_prepares_epic3_with_auto_but_keeps_closure_manual(self) -> None:
+    def test_queue_runs_the_whole_epic3_on_auto_including_the_closure_round(self) -> None:
+        # A user 2026-08-01-i döntése: az Epic 3 MIND a 22 sora fut az auto
+        # routeren, folyamatosan. (A korábbi `prepared` + kézi zárókör
+        # elvárását ez a döntés váltotta le — ADR 0087 §7, ADR 0112 §6.)
         queue = (ROOT / "docs" / "execution" / "pipeline-queue.tsv").read_text()
         self.assertIn("auto | minimax | codex", queue)
         rows = [line.split("\t") for line in queue.splitlines() if line and not line.startswith("#")]
         self.assertTrue(all(row[2] in {"auto", "minimax", "codex"} for row in rows))
         epic3 = [row for row in rows if row[0].startswith("E03-")]
-        self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 22)])
-        self.assertTrue(all(row[2] == "auto" and row[4] == "prepared" for row in epic3))
-        self.assertIn("E03-R22", queue)
-        self.assertNotIn("E03-R22\tdocs/", queue)
+        self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 23)])
+        self.assertTrue(all(row[2] == "auto" for row in epic3))
+        self.assertTrue(all(row[4] in {"pending", "running", "done"} for row in epic3))
 
     def test_prompt_has_one_initial_auto_dispatch_and_budget_preserving_resume(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()
@@ -49,6 +51,79 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("független", prompt.lower())
         self.assertIn("review + CI", prompt)
         self.assertIn("örökölt", prompt.lower())
+
+    def test_selfheal_prompt_defines_the_three_outcomes_and_the_gate_boundary(self) -> None:
+        prompt = (ROOT / "docs" / "execution" / "pipeline-selfheal-prompt.md").read_text()
+        for placeholder in ("{{ROUND}}", "{{HALT_CODE}}", "{{ATTEMPT}}", "{{HEAL_STATUS_FILE}}"):
+            self.assertIn(placeholder, prompt)
+        for outcome in ("outcome=fixed", "`retry`", "`escalate`"):
+            self.assertIn(outcome, prompt)
+        # A mérce-határ nem opcionális része a promptnak (ADR 0112 §3).
+        self.assertIn("round-gate.sh", prompt)
+        self.assertIn(".github/workflows/", prompt)
+        self.assertIn("regressziós teszt", prompt)
+
+    def test_halted_chain_starts_selfheal_unless_it_is_switched_off(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
+            env = dict(os.environ)
+            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL="0")
+
+            switched_off = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(switched_off.returncode, 3)
+            self.assertIn("önjavítás kikapcsolva", switched_off.stderr)
+            self.assertTrue((state / "HALTED").exists())
+
+    def test_selfheal_gives_up_after_the_configured_attempt_budget(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
+            (state / "selfheal.count").write_text("E09-R01|H6|2\n")
+            env = dict(os.environ)
+            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL_MAX="2")
+
+            exhausted = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(exhausted.returncode, 3)
+            self.assertIn("KIMERÜLT", exhausted.stderr)
+            # A kimerült keret nem indíthat újabb sessiont, és nem old fel.
+            self.assertNotIn("ÖNJAVÍTÓ KÖR indul", exhausted.stderr)
+            self.assertTrue((state / "HALTED").exists())
+
+    def test_selfheal_attempt_counter_is_scoped_to_round_and_halt_code(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "selfheal.count").write_text("E09-R01|H6|2\n")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+
+            same = self.run_command(["bash", str(script), "--heal-attempts", "E09-R01", "H6"], env=env)
+            other_code = self.run_command(["bash", str(script), "--heal-attempts", "E09-R01", "H5"], env=env)
+            other_round = self.run_command(["bash", str(script), "--heal-attempts", "E09-R02", "H6"], env=env)
+
+            self.assertEqual(same.stdout.strip(), "2")
+            self.assertEqual(other_code.stdout.strip(), "0")
+            self.assertEqual(other_round.stdout.strip(), "0")
+
+    def test_gate_fingerprint_covers_the_test_count_and_the_gate_artifacts(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        fingerprint = self.run_command(["bash", str(script), "--gate-fingerprint"])
+
+        self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
+        count = int(fingerprint.stdout.split("tests=", 1)[1].split()[0])
+        self.assertGreater(count, 100)
+        for artifact in (
+            "tools/round-gate.sh",
+            ".github/workflows/build-apk.yml",
+            ".github/workflows/router-ci.yml",
+        ):
+            self.assertIn(f"{artifact}:", fingerprint.stdout)
+            self.assertNotIn(f"{artifact}:hiányzik", fingerprint.stdout)
 
     def make_fake_worktree(self, directory: Path) -> tuple[Path, Path, Path]:
         worktree = directory / "worktree"

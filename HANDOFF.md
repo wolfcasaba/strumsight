@@ -4,11 +4,16 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (GOV-03 / ADR 0112 — önjavító pipeline: a HALT-ból a lánc magától indít
+> javító kört; ugyanebben a körben javítva az E02-R21-et és az EGÉSZ Epic 3-at
+> blokkoló router-baseline hiba (`tools/ai_router/security.py` — a Flutter saját
+> generált fájljai)**.
+> Előző kör: 2026-08-01
 > (E02-R20 epic-zárás lezárva — accessibility mátrix, performance számlálók,
 > property gate, doD-tábla és a device-mátrix kész; a rendszerszintű rés
 > (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva. A
 > `migratedLearnEnabled` rollout-döntés a useré — a §3 rendszerszintű rés
-> pótlása külön kör)**.
+> pótlása külön kör).
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -311,7 +316,19 @@ hívási láncot mérve fogta meg).
    > javíthatja a kör SAJÁT, még nem merge-elt briefjét/ADR-jét (§0.0
    > revízióval); H1–H8 esetén (merged ADR, lezárt kör viselkedése, tilos zóna,
    > túlélő BLOCKER/MAJOR, 2× piros CI, `blocked`, gate nem zöldíthető,
-   > rebase-konfliktus) a lánc HALT-tal megáll és embert vár.
+   > rebase-konfliktus) a kör HALT-tal megáll.
+   >
+   > **ÖNJAVÍTÁS (ADR 0112, GOV-03, 2026-08-01 — user-döntés):** a HALT már NEM
+   > a lánc vége. A driver a következő firingen friss **önjavító sessiont**
+   > indít (`docs/execution/pipeline-selfheal-prompt.md`), amely az
+   > infrastruktúrát is javíthatja (`tools/**`, merge-elt ADR jelölt
+   > módosítás-blokkal, brief, sor-fájl), kötelező **regressziós teszttel**, a
+   > változatlan zöld kapun át merge-elve — majd feloldja a láncot. Korlátok:
+   > körönként+halt-kódonként max **3** kísérlet (`PIPELINE_SELFHEAL_MAX`), és
+   > a **mércét nem gyengítheti**: ha a teszt-fájlok száma csökken vagy a
+   > `round-gate.sh` / `.github/workflows/` változik, a driver `H-GATEGUARD`
+   > halttal EMBER elé viszi. Kikapcsolás: `PIPELINE_SELFHEAL=0`.
+   > Állapot: `tools/pipeline-status.sh` (önjavítás-blokk + kísérletszámláló).
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
