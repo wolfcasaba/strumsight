@@ -129,6 +129,58 @@ Minden más (A1–A6, A8–A10, §9 gate, tilos zóna maradéka) **változatlanu
 érvényes**, és a `7cf1ca4`-ben már teljesül — de a záró gate-nek a végén is
 zöldnek kell lennie.
 
+## 0.2 Brief-revízió — ezrelék-kvantálás (orchestrátor, 2026-08-01)
+
+**Az implementer `stopped`-ot jelzett, helyesen.** Mért lelet: a
+`down-up-groove` részleges cellán (7 jó irány 24 targetből) a legacy
+`accuracy = 7/24 = 0.2916666666666667`, a V2 `direction` viszont **`0.291`**.
+
+**Ok (mérve, `practice_direction_scorer.dart:129-131`):** a V2 direction-dimenzió
+**ezrelékre kvantál**, a legacy nem:
+
+```dart
+directionPerMille = correctCount * 1000 ~/ applicableCount;   // egész-osztás
+direction = MetricAvailable(directionPerMille / 1000);
+```
+
+Ez **valódi, strukturális eltérés**, nem konfigurációs hiba — a §0.1 táblája a
+számlálót és a nevezőt mérte össze, a záró osztás kvantálását nem. Az A7 négy
+ismert hibaforrása (matchWindow, inputLatency, count-in, `optional`) **nem**
+magyarázza.
+
+**Hatásmérés (orchestrátor, `python3`):** minden `k/n` cellára `n ≤ 63`-ig
+összevetve az egzakt és a csonkított értéket a `0.70 / 0.80 / 0.90` küszöbökön:
+**0 olyan cella van, ahol a csonkítás csillag- vagy pass-határt flippelne.** Ez
+szerkezeti: a küszöbök pontosan 1‰ többszörösei, a csonkítás pedig lefelé
+kerekít 1‰-re, tehát `x >= t ⟺ floor(x·1000)/1000 >= t`. A **felhasználó-látott**
+szemantika (csillag, pass) tehát már most is egzaktul egyezik.
+
+### Döntés — a mércét nem lazítjuk, hanem az adaptert pontosítjuk
+
+**NEM** fogadjuk el a `direction` kvantált értékét accuracy-ként, és **NEM**
+lazítunk tűrésre. Helyette az adapter az **egzakt arányt** számolja a V2 scorer
+**saját per-event kimenetéből**:
+
+1. `lesson_v2_scoring.dart` a `PracticeDirectionScore.events` listából számol:
+   - `applicable` = `outcome != DirectionOutcome.notApplicable` események száma,
+   - `correct` = `outcome == DirectionOutcome.correct` események száma,
+   - `accuracy = applicable == 0 ? 0.0 : correct / applicable`.
+
+   Ez **továbbra is 100%-ban a V2 scorer döntése** arról, melyik ütés helyes —
+   csak a záró osztás nem kvantál. A Döntés 7 („a V2 metrikákból képzi")
+   maradéktalanul teljesül, tautológia nincs.
+2. **Konzisztencia-őr (ÚJ, kötelező — A7.0/5.):** ugyanez a teszt mérje, hogy az
+   egzakt arány **ezrelékre csonkítva** megegyezik a scorer saját
+   `direction` `MetricAvailable` értékével:
+   `(accuracy * 1000).floor() / 1000 == direction.value`. Ez bizonyítja, hogy az
+   adapter nem valami mástól számol, hanem ugyanattól a scorertől.
+3. A `practice_direction_scorer.dart` **változatlan marad** (§4 „olvasandó"
+   lista) — a kvantálás a V2 pontszám-aggregáció sajátja, annak ott helye van.
+
+**Az A7.1 elvárása változatlan: egzakt egyezés**, tűrés nélkül, mind az 51
+cellán. A `DirectionOutcome` a `practice_verdict.dart`-ban él; ha nincs
+exportálva, a `practice/public.dart` (§4 listán) bővíthető export-sorral.
+
 ## 1. Cél
 
 Az új motor **beér a meglévő rendszerekbe**:
@@ -389,6 +441,11 @@ túlszámolás.
 4. **Részleges cella.** `n` targetből pontosan `k` jó irányú, `n-k` fordított,
    azonos időzítéssel → V2 accuracy **egzaktul `k/n`** (legalább két különböző
    `k`-val). Ez zárja ki a „mindig 1.0" és a „mindig legacy" degenerációt.
+5. **Kvantálás-konzisztencia (§0.2 revízió).** Ugyanazon a cellán az egzakt
+   arány **ezrelékre csonkítva** egyezzen a scorer saját `direction`
+   `MetricAvailable` értékével:
+   `(accuracy * 1000).floor() / 1000 == direction.value`. Ez bizonyítja, hogy az
+   adapter ugyanattól a V2 scorertől számol, csak a záró osztásnál nem kvantál.
 
 ***Pirosra fogja:*** a `7cf1ca4` megoldása — az 1. és 2. őr **fordítási/mérési
 szinten** lehetetlenné teszi a legacy-passthrough-t.
