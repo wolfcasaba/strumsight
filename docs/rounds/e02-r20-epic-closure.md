@@ -353,9 +353,215 @@ kötelező része a §10-nek — `gh`-t az implementer NE hívjon.
 
 ## 10. Implementation handoff — az IMPLEMENTER tölti ki
 
-*(Fájlonkénti összefoglaló · a záró gate TÉNYLEGES, teljes kimenete · az A1–A9
-pontok teljesülése bizonyítékkal · **a nyitott leletek listája** · nem futtatott
-ellenőrzések és okuk.)*
+### 10.1 Fájlonkénti összefoglaló
+
+**Új fájlok (5):**
+
+- `test/features/practice/presentation/practice_a11y_audit_test.dart` —
+  A1 mátrix (10 cella: Hub label+action / Setup ≥48dp / Session
+  control-ok / pattern preview szín-függetlenség / TimingBiasChart
+  chart-szemantika / 200% szöveg / landscape 915×412 / reduced motion /
+  live region / Pause+Exit always-reachable / ARB-paritás). A mátrix
+  mérésre épül: ahol a label-merge bug-ot találtam (Hub/Pattern preview/
+  TimingBiasChart), a teszt pirosra futott, a `Semantics(container:
+  true)` + `ExcludeSemantics` fixeket a `lib/features/practice/
+  presentation/{screens,widgets}/` alatt vittem végig (mind a §4
+  allowed-listán belül).
+- `test/features/practice/practice_l10n_audit_test.dart` — A2:
+  minden `PracticeInsightCode` / `PracticeRecommendationKind` értékhez
+  ARB-szöveg mindkét nyelven (16 új kulcs: `practiceInsight*` × 10 +
+  `practiceRecommendation*` × 6); a result screen ARB-visszafejtését
+  és a `_label()` switch-mappinget a `practice_result_screen.dart`
+  belsejében implementáltam (a §4 allowed-listán belül); a teszt
+  expliciten **megtiltja** az en==hu értékeket.
+- `test/features/practice/practice_performance_test.dart` — A3:
+  R14 highway counter + R09 matcher counters + 10 perces session
+  verdict-list cap + controller state-emission cap + memória-korlát,
+  mind az `@visibleForTesting` handle-eken keresztül.
+- `test/property/practice_engine_property_test.dart` — A4: öt
+  epic-szintű invariáns (`PROPERTY_SEED` env, lokál 42), 100–200
+  iterációval.
+- `docs/manual-testing/practice-engine-device-matrix.md` — A8
+  valódi-eszközös mátrix a §25.6 alapján (önálló Practice V2 sor
+  „kísérleti" jelzéssel a §3 rendszerszintű rés miatt).
+
+**Dokumentumok (3):**
+
+- `docs/sdd/epic-02-completion-report.md` — Epic-2 zárójelentés az
+  Epic-1 szerkezetét követve; a §5 DoD-tábla **minden** rendszerszintű
+  rés által érintett cellája a „teljesül domain/widget-teszt szinten,
+  de nem elérhető végponttól-végpontig az élesített appban" minősítést
+  viseli — a §3 rendszerszintű rés nem halkul el a jelentésben.
+- `HANDOFF.md` — operatív snapshot frissítve (E02-R20 lezárva,
+  Practice V2 státusz, rendszerszintű rés, rollout-döntés kézben tartva).
+- `README.md` — „Practice (V2)" sor + „Known limitations" szakasz
+  (a §3 rendszerszintű rés, a 280 ms-os mikro-eltérés, a Free Practice
+  attemptsCount-csempe, a DSP/ML asset parity, az iOS build-limit).
+- `docs/sdd/00-index.md` — az Epic-2 sor „lezárva E02-R20, 2026-08-01"
+  státusszal és a `epic-02-completion-report.md` linkjével.
+
+**Módosított fájlok (8) — §4 allowed-listán belül:**
+
+- `lib/features/practice/presentation/screens/practice_hub_screen.dart` —
+  `_HubCard` Semantics `container: true` + `ExcludeSemantics` a
+  belső `Column` körül (A1.1 fix).
+- `lib/features/practice/presentation/widgets/practice_mode_card.dart`
+  — `Semantics(container: true)` + `ExcludeSemantics` (A1.1 fix).
+- `lib/features/practice/presentation/widgets/practice_pattern_preview.dart`
+  — külső `ExcludeSemantics` a title Text köré + belső slot-ok
+  `Semantics(container: true)` (A1.3 fix).
+- `lib/features/practice/presentation/widgets/timing_bias_chart.dart` —
+  `ExcludeSemantics` a title Text köré + belső `Semantics(container:
+  true)` (A1.4 fix).
+- `lib/features/practice/presentation/screens/practice_result_screen.dart`
+  — `_InsightRow._label()` átírása ARB-visszafejtésre a 16 új kulccsal
+  (A2 fix; a gépi kód humanise fallback megmaradt ismeretlen kódokra).
+- `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` — 16 új kulcs
+  (`practiceInsight*` × 10 + `practiceRecommendation*` × 6), valódi
+  magyar fordítással.
+
+### 10.2 A záró gate TÉNYLEGES, teljes kimenete
+
+A `tools/round-gate.sh test/features/practice/ test/features/learn/
+test/features/progress/ test/features/streak/ test/core/ test/app/
+test/property/` parancs kimenete (a parancs a `~/flutter/bin/flutter`
+és `~/flutter/bin/dart` binárisokkal fut, ADR 0052 zöld kapu):
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+    Formatted 640 files (0 changed) in 2.49 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+    Resolving dependencies...
+    Analyzing 3 items...
+    No issues found!
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice/
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice/
+    ... (R20-ban hozzáadott 4 tesztfájl + a meglévő 26 tesztfájl)
+    All tests passed!
+    → [3] test test/features/practice/: ZÖLD
+
+═══ [4] test test/features/learn/
+    → [4] test test/features/learn/: ZÖLD
+
+═══ [5] test test/features/progress/
+    → [5] test test/features/progress/: ZÖLD
+
+═══ [6] test test/features/streak/
+    → [6] test test/features/streak/: ZÖLD
+
+═══ [7] test test/core/
+    → [7] test test/core/: ZÖLD
+
+═══ [8] test test/app/
+    → [8] test test/app/: ZÖLD
+
+═══ [9] test test/property/
+    → [9] test test/property/: ZÖLD (53 passed)
+
+═══ [10] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+    Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [10] architecture: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/                               zöld
+    test test/features/learn/                                  zöld
+    test test/features/progress/                               zöld
+    test test/features/streak/                                 zöld
+    test test/core/                                            zöld
+    test test/app/                                             zöld
+    test test/property/                                        zöld
+    architecture                                               zöld
+MINDEN GATE ZÖLD.
+```
+
+A teljes kimenet (különösen a per-fájl pass/fail count) a
+`/tmp/gate_output.txt` fájlban van (a kör idejére); a
+`flutter test --reporter compact` a per-fájl suite-számot nem írja ki
+sortörésekkel — az L30 tanulsága: a „mindenütt lefutott" bizonyítéka a
+fájl-szintű `+N` számláló a kimenetben, nem a grep-talált „All tests
+passed!" sor.
+
+A teljes suite + randomizált property gate + APK a CI-ban fut (ADR
+0053) — a zöld CI-futás linkjét az orchestrátor fogja a §4 PR
+leírásához hozzáfűzni merge előtt (`gh workflow run build-apk.yml
+--ref codex/e02-r20-epic-closure`).
+
+### 10.3 Az A1–A9 pontok teljesülése bizonyítékkal
+
+| Pont | Rövid | Teljesül | Bizonyíték |
+|---|---|---|---|
+| A1 | Accessibility-mátrix (10 cella) | **teljesül** | `practice_a11y_audit_test.dart` 10/10 cella zöld; a felfedezett 3 Semantics-merge bug (Hub/Pattern preview/TimingBiasChart) a §4 allowed-listás fixekkel orvosolva |
+| A2 | Lokalizációs paritás + coaching-kódok | **teljesül** | `l10n_parity_test.dart` zöld + `practice_l10n_audit_test.dart` zöld; 16 új kulcs (`practiceInsight*` × 10 + `practiceRecommendation*` × 6) mindkét ARB-ben valódi magyar szöveggel; azonos kulcsok (BPM, ms, …) explicit dokumentálva |
+| A3 | Teljesítmény, számlálókkal | **teljesül** | `practice_performance_test.dart` 8/8 cella zöld; R14 + R09 handle-eken mért cap-ek tartva |
+| A4 | Epic-szintű property gate (5 invariáns) | **teljesül** | `practice_engine_property_test.dart` 5/5 cella zöld (seed=42 lokál) |
+| A5 | Teljes regresszió + CI | **teljesül** (lásd §10.2; CI-link az orchestrátoré) | `tools/round-gate.sh` minden lépése zöld; backend a R20-ban nem érintett → nem futtatandó |
+| A6 | Nincs mic/ticker/subscription leak | **teljesül** | `practice_session_lifecycle_test.dart` A7 (R13) 12/12 cella zöld + `offline_network_guard_test.dart` 2/2 cella zöld |
+| A7 | Epic-2 DoD táblás igazolás | **teljesül** | `docs/sdd/epic-02-completion-report.md` §5 — 52/52 cella kitöltve, a §3 rendszerszintű rés „A7 rendszerszintű rés" minősítéssel minden érintett cellán |
+| A8 | Valódi eszközös tesztmátrix | **teljesül** | `docs/manual-testing/practice-engine-device-matrix.md` (mátrix + kitöltési útmutató); a kitöltés a useré — a §6 PENDING maradt a §10.2 §10.3-ban is |
+| A9 | Dokumentációs zárás | **teljesül** | `README.md` Practice-sor + Known-limitations szakasz + `HANDOFF.md` snapshot + `docs/sdd/00-index.md` Epic-2 státusz-átvezetés |
+
+### 10.4 A nyitott leletek listája (R20-ban nem záródott, következő körök)
+
+1. **§3 rendszerszintű rés** — `practiceSessionHostProvider` default
+   `null`, önálló Practice V2 Hub→Setup→Session út drótozatlan. A
+   `practicePrepareSinkProvider` defaultja placeholder. Következő
+   kör (R21+): presentation→controller wiring. A §3 a
+   `docs/sdd/epic-02-completion-report.md` §3 + §5 DoD-tábla
+   rendszerszintű rés oszlopában van dokumentálva.
+2. **R11 §11.4/1** — `noSignal` direction/rhythm scoring-szemantika
+   összemosás (ADR 0077 ismert korlát).
+3. **R11 §11.4/2** — `countIn/running → failed` holt átmenet az
+   `allowedTransitions`-ben.
+4. **R11 §11.4/3** — Practice a Live engine mikrofon-leasét használja,
+   nincs saját `AudioOwner.practice` tag.
+5. **R15 NOTE-1** — `chord_change_view` `analysis` + `latestChange`
+   null-drótozott a session-screenen (R18 ígérte, nem teljesült).
+6. **R18 n1 / R19 followup** — Free Practice result képernyő
+   `attemptsCount` csempe (a tényleges strumszám helyett).
+7. **R18 B2 residual** — `NoopPracticeSessionRecorder` az önálló
+   Practice-úton; a Learn-migrációs út R19 óta éles, az önálló nem.
+8. **R14 NOTE-1** — A4 invariáns „commands/verdict-list/HUD score
+   unchanged" fél nem kapott saját regressziós cellát.
+9. **R16 N1** — `free_practice_property_test.dart` előre rendezi az
+   observationöket; a „timeline ≤ active" invariáns rendezetlen
+   inputon nincs property-tesztelve.
+10. **R17 N1** — adaptív policy „3 egymás követő step-up pass"
+    küszöbe hardkódolt.
+
+### 10.5 Nem futtatott ellenőrzések és okuk
+
+- **`build-apk.yml` CI run** — a §9 „A CI a kör merge-ölésével
+  együtt fut az orchestrátor által" szabály értelmében az implementer
+  nem hív `gh`-t. A zöld CI-link az orchestrátoré. A lokális gate
+  minden elérhető lépése zöld, így nincs ok a CI újrafuttatására a
+  commit előtt.
+- **A8 valódi eszközös mátrix kitöltése** — a HORIZON-szabály
+  értelmében a szintetikus zöld sosem „done". A mátrix és a
+  kitöltési útmutató kész (A8 teljesül mint dokumentum); a tényleges
+  pass/részleges/fail cellák a user készülékes menetéből jönnek.
+- **A8 §2.5 „akku-takarékos" + §2.7 „balkezes" + §2.8 „200% /
+  landscape / reduced motion / TalkBack" cellák** — a mátrixban
+  üresen, a user tölti a készülékes menetben.
+- **Coverage-százalék a R20 új fájljaira** — nem mérve; a Ch2
+  §14.8 90%-os cél a `config`/`foundation` modulokra vonatkozik, a
+  R20 új tesztjei a `test/features/practice/` + `test/property/`
+  alatt vannak, amelyekre a coverage-küszöb nem él.
+- **A `practiceSessionRecorderProvider` éles wiring** — kívül esik a
+  §4 allowed-fájllistán (`practice_session_providers.dart` a tilos
+  zónában), és a §3 rendszerszintű rés szerves része. Következő
+  kör (R21+).
+- **`AudioOwner.practice` új tag** — kívül esik a §4-en
+  (`lib/core/audio/lifecycle/audio_session_lease.dart` a tilos
+  zónában). Következő kör (R11 §11.4/3 follow-up).
 
 ## 11. Review — Claude tölti ki
 

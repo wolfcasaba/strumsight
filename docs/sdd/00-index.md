@@ -10,12 +10,12 @@ A SDD-t nem egyetlen óriási feladatként kell átadni a Codexnek. Mindig ponto
 
 ## Fejezetek
 
-| Chapter | Cím | Fejlesztési körök | Fő előfeltétel | Fájl |
-|---:|---|---:|---|---|
-| 1 | Architecture & Engineering Principles | — | — | [`01-architecture-engineering-principles.md`](01-architecture-engineering-principles.md) |
-| 2 | Epic 1: Core Platform & Infrastructure | 16 | Chapter 1 | [`02-epic-01-core-platform.md`](02-epic-01-core-platform.md) |
-| 3 | Epic 2: Practice Engine | 20 | Chapter 2 | [`03-epic-02-practice-engine.md`](03-epic-02-practice-engine.md) |
-| 4 | Epic 3: Song Trainer | 22 | Chapter 2; Chapter 3 contractjai | [`04-epic-03-song-trainer.md`](04-epic-03-song-trainer.md) |
+| Chapter | Cím | Fejlesztési körök | Fő előfeltétel | Fájl | Zárójelentés |
+|---:|---|---:|---|---|---|
+| 1 | Architecture & Engineering Principles | — | — | [`01-architecture-engineering-principles.md`](01-architecture-engineering-principles.md) | — |
+| 2 | Epic 1: Core Platform & Infrastructure | 16 | Chapter 1 | [`02-epic-01-core-platform.md`](02-epic-01-core-platform.md) | [`epic-01-completion-report.md`](epic-01-completion-report.md) |
+| 3 | Epic 2: Practice Engine | 20 (lezárva E02-R20, 2026-08-01) | Chapter 2 | [`03-epic-02-practice-engine.md`](03-epic-02-practice-engine.md) | [`epic-02-completion-report.md`](epic-02-completion-report.md) |
+| 4 | Epic 3: Song Trainer | 22 | Chapter 2; Chapter 3 contractjai | [`04-epic-03-song-trainer.md`](04-epic-03-song-trainer.md) | — |
 | 5 | Epic 4: AI Guitar Teacher | 24 | Chapter 2; Chapter 3 és 7 evidenciakontraktusai | [`05-epic-04-ai-guitar-teacher.md`](05-epic-04-ai-guitar-teacher.md) |
 | 6 | Epic 5: Computer Vision | 30 | Chapter 2; kamera spike | [`06-epic-05-computer-vision.md`](06-epic-05-computer-vision.md) |
 | 7 | Epic 6: Audio Analysis 2.0 | 30 | Chapter 2; meglévő Analyze/DSP baseline | [`07-epic-06-audio-analysis-2.md`](07-epic-06-audio-analysis-2.md) |

@@ -31,9 +31,31 @@ chord-detection app leaves out.
 | 🎬 **Analyze** — record a clip, get a chord/strum timeline | ✅ |
 | 📚 **Library** — saved sessions (rename, review) | ✅ |
 | 🎓 **Learn** — lessons with chord audio + metronome · **Songs** · **Progress** · **Streak** | ✅ |
+| 🎯 **Practice (V2)** — Strum Pattern / Chord Changes / Chord Progression / Rhythm Only / Free Practice / Speed Builder · migrated Learn path is live (`migratedLearnEnabled` flag), self-practice Hub→Session path is feature-flagged (see known limitations) | ⚠️ domain tested; rollout flag-gated |
 | ⚙️ **Settings** — theme, language (en/hu), thresholds; cloud-synced when logged in | ✅ |
 | 🔐 **Account** (optional) — email/password JWT login, settings sync only | ✅ opt-in |
 | 🧪 **Lab mode** — on-device diagnostics capture + upload to the Lab backend | ✅ dev-only |
+
+## Known limitations
+
+- **Self-practice Hub → Setup → Session path** is feature-flagged:
+  `practiceSessionHostProvider` defaults to `null` and the production
+  presentation→controller wiring is deferred to a follow-up round. The
+  Practice V2 **domain** (timer, matcher, scorer, history) is fully
+  tested and live behind the migrated Learn path
+  (`migratedLearnEnabled` ON); the standalone self-practice route is
+  blocked at the gate. See
+  [`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md)
+  §3 for the rendszerszintű rés and §5 for the per-cell DoD status.
+- **Legacy Learn parity at the 280 ms window edge** carries one
+  documented micro-divergence between the legacy `LessonScorer` `double`
+  arithmetic and the V2 integer-µs timeline (ADR 0075 §2b, R19 §0.3).
+  Pinpoint cells: `first-strums[0]` and `anthem-drive[5,6]`.
+- **Free Practice result tile** shows `attemptsCount` instead of the
+  raw strum count (R18 n1 follow-up, opened).
+- **DSP and ML asset parity** is locked at the Epic-1 baseline — no DSP
+  parameter change in Epic-2 (AGENTS.md §9).
+- **iOS build** requires a Mac (no Linux toolchain).
 
 ## Architecture
 

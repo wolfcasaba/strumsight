@@ -255,6 +255,7 @@ class _HubCard extends StatelessWidget {
     final color = Theme.of(context).colorScheme.primary;
     final muted = Theme.of(context).colorScheme.outline;
     return Semantics(
+      container: true,
       button: true,
       enabled: enabled,
       label: l10n.practiceHubOpenSetup(title),
@@ -268,32 +269,40 @@ class _HubCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Row(
-              children: [
-                Icon(trailing, size: 24, color: enabled ? color : muted),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+            // ExcludeSemantics blocks the descendant Text widgets from
+            // being merged into the parent Semantics label — otherwise
+            // a screen reader would announce "Open Quick start\nQuick
+            // start\nBegin the first practice in the catalog" instead
+            // of the single label.
+            child: ExcludeSemantics(
+              child: Row(
+                children: [
+                  Icon(trailing, size: 24, color: enabled ? color : muted),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                if (enabled) Icon(Icons.chevron_right, size: 20, color: muted),
-              ],
+                  if (enabled)
+                    Icon(Icons.chevron_right, size: 20, color: muted),
+                ],
+              ),
             ),
           ),
         ),

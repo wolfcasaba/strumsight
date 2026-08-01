@@ -111,6 +111,7 @@ class PracticeModeCard extends StatelessWidget {
     final modeLabel = practiceModeLabel(l10n, definition.mode);
 
     return Semantics(
+      container: true,
       button: true,
       label: l10n.practiceHubOpenSetup(title),
       child: Material(
@@ -123,34 +124,39 @@ class PracticeModeCard extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 56),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  const _CardGlyph(),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
+              // ExcludeSemantics blocks the descendant Text from being
+              // merged into the parent label — see _HubCard for the
+              // full justification.
+              child: ExcludeSemantics(
+                child: Row(
+                  children: [
+                    const _CardGlyph(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          modeLabel,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            modeLabel,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.chevron_right, size: 20),
-                ],
+                    const Icon(Icons.chevron_right, size: 20),
+                  ],
+                ),
               ),
             ),
           ),

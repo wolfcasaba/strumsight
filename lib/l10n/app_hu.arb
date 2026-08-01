@@ -731,5 +731,21 @@
         "type": "String"
       }
     }
-  }
+  },
+  "practiceInsightNoSignal": "Nem érzékeltünk pengetést — a mikrofon legyen közel a gitárhoz.",
+  "practiceInsightLowCompletion": "A session a legtöbb cél előtt ért véget.",
+  "practiceInsightBiasLate": "A pengetések többsége kissé az ütés után érkezett.",
+  "practiceInsightBiasEarly": "A pengetések többsége kissé az ütés előtt érkezett.",
+  "practiceInsightDirectionError": "A le- és felpengetések gyakran összekeveredtek.",
+  "practiceInsightChordError": "Néhány akkord nem egyezett a szándékolttal.",
+  "practiceInsightChordPairProblem": "Egy akkordváltás a többihez képest jóval lassabb volt.",
+  "practiceInsightTempoTooHigh": "A tempó a ritmus-pontosságot a küszöb alá nyomta.",
+  "practiceInsightPositiveReinforcement": "Erős futam — minden elérhető dimenzió átlépte a küszöböt.",
+  "practiceInsightNextDifficulty": "Készen állsz egy nehezebb gyakorlatra.",
+  "practiceRecommendationRetry": "Próbáld újra ezt a gyakorlatot.",
+  "practiceRecommendationReduceTempo": "Vedd le a tempót 10 BPM-mel, és próbáld újra.",
+  "practiceRecommendationEnableMetronome": "A következő próbán kapcsold be a metronómot.",
+  "practiceRecommendationFocusDirection": "Csak az irányra figyelj pár próbán át.",
+  "practiceRecommendationFocusChordChanges": "Futtass egy akkordváltás-gyakorlatot a leglassabb párra.",
+  "practiceRecommendationNextDifficulty": "Lépj a következő nehézségi szintre."
 }
