@@ -1,6 +1,6 @@
 # E02-R15 — Chord Change mód
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pre-flight 2026-08-01, kód újramérve: `main` @ `02b5499`)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 15"** (+ §7.2, §16.5, §21.4)
 - **Branch:** `codex/e02-r15-chord-change-mode`
 - **Előfeltétel:** **E02-R14 merge-ölve** (a közös highway/akkord-sáv onnan jön).
@@ -29,6 +29,28 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélküli kör = bukott kör. `gh`-t NE hívj, ne pusholj, PR-t ne nyiss.
 **STOP-klauzula:** listán kívüli fájl, vagy ellentmondó előírás → `stopped`.
 **A §7 a terved.**
+
+## 0.0 Brief-revízió (pre-flight, 2026-08-01, `02b5499`)
+
+Az E02-R14 merge-e óta (`ce8fbce` → `02b5499`) újramérve. Minden §2/§4/§9
+szimbólum a helyén van, **egy** stale leíró állítással:
+
+- **`ChordOutcome` ma ÖT tagú** (`correct`, `wrong`, `insufficientData`,
+  `notApplicable`, **`noDetection`**) — a `noDetection` R10 (ADR 0076) óta
+  megvan; a §2 „négy értéke" felsorolása ennyiben elavult. **Nem érinti a
+  kört:** ez a cél-eseményenkénti `ChordOutcome` (verdict), NEM a §5.4-beli
+  váltás-kimenet enum, amit az analyzer a **saját** típusaként vezet be
+  (`correct`/`wrongChord`/`noDetection`/`unstable`/`insufficientSignal`).
+  Az implementer NE olvassza egybe a kettőt.
+
+Változatlanul mérve és a helyén: `PracticeMode.chordChanges` +
+`builtin.gToDChanges.v1`/`builtin.emToCChanges.v1` katalógus-bejegyzések;
+`ChordObservation(at, nullable label, confidence)`; stabilitási küszöb 180 ms
+(`PracticeObservationConfig.chordStableDuration`); scorer-ablak `−120/+420 ms`;
+`legacyPracticeChordLabel` (veszteséges leképezés, ADR 0071 §2);
+`chordPair` → 0 találat; `PracticeDefinition` mezőkészlet változatlan;
+`practice_session_screen.dart` `_ModeView` switch a `chordChanges`-t ma a
+placeholder-ágon kezeli (a becsatolás helye). Az **ADR 0081** megírva.
 
 ## 1. Cél
 
