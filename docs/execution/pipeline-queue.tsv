@@ -67,5 +67,9 @@ E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	auto	nincs	pending
 E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	auto	nincs	pending
 E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	auto	nincs	pending
 E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	auto	nincs	pending
-# E03-R22 (ADR 0110, epic-zárás) szándékosan kézi indítású az ADR 0087 §7
-# szerint; ezért nem aktív queue-sor.
+# E03-R22 (epic-zárás) — az ADR 0087 §7 alapból kézi indítást ír elő, mert a
+# zárókör pre-flightja emberi döntéseket kér (az E02-R20-nál ez a flag-rollout
+# és az ADR-kérdés volt). A user 2026-08-01-én EXPLICIT a teljes Epic 3
+# folyamatos futtatását kérte, ezért a sor aktív. Az orchestrátor a
+# pre-flightban KÖTELESEN halttal áll meg, ha eldöntetlen rollout-kérdésbe fut.
+E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	auto	nincs	pending
