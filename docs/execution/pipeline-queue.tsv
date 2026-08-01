@@ -16,7 +16,7 @@ E02-R14	docs/rounds/e02-r14-strum-and-progression-modes.md	minimax	0080	done
 E02-R15	docs/rounds/e02-r15-chord-change-mode.md	minimax	0081	done
 E02-R16	docs/rounds/e02-r16-rhythm-only-and-free-practice.md	minimax	0082	done
 E02-R17	docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md	minimax	0083	done
-E02-R18	docs/rounds/e02-r18-result-coaching-history.md	minimax	0084	pending
+E02-R18	docs/rounds/e02-r18-result-coaching-history.md	minimax	0084	done
 E02-R19	docs/rounds/e02-r19-progress-and-learn-migration.md	minimax	0085	pending
 # E02-R20 (epic-zárás) SZÁNDÉKOSAN nincs a sorban — ADR 0087 §7: a záró kört
 # ember indítja. A driver az R19 után halttal áll meg.
