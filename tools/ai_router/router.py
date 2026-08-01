@@ -242,7 +242,7 @@ class DevelopmentRouter:
     ) -> tuple[ScopeAudit | None, RouterResult | None]:
         audit = self.audit_scope(worktree, brief.metadata, manifest)
         state["last_diff_hash"] = audit.diff_hash
-        state["changed_paths"] = list(audit.changed_paths)
+        state["changed_paths"] = list(audit.scoped_changed_paths)
         self.state.save_task(brief.task_id, state)
         if audit.ok:
             return audit, None
@@ -582,7 +582,11 @@ class DevelopmentRouter:
                 )
                 self._record_gate(state, f"RECOVERED_{phase}", recovered)
                 self.state.save_task(brief.task_id, state)
-                if recovered.outcome == "pass" and audit is not None and audit.changed_paths:
+                if (
+                    recovered.outcome == "pass"
+                    and audit is not None
+                    and audit.scoped_changed_paths
+                ):
                     if brief.metadata.risk == "high":
                         return self._terra(
                             brief=brief,
@@ -676,7 +680,7 @@ class DevelopmentRouter:
                         result_path=result_path,
                         terra=False,
                         failure=provider_failure,
-                        partial_changes=bool(audit and audit.changed_paths),
+                        partial_changes=bool(audit and audit.scoped_changed_paths),
                         resume_phase=f"M3_CALL_{attempt}",
                     )
                     if decision is not None:
@@ -703,7 +707,7 @@ class DevelopmentRouter:
                 if decision is not None:
                     return decision
                 if current_gate.outcome == "pass":
-                    if audit is not None and not audit.changed_paths:
+                    if audit is not None and not audit.scoped_changed_paths:
                         current_gate = GateRun(
                             "code_failure",
                             "model produced no scoped changes",

@@ -154,6 +154,47 @@ class RouterTest(unittest.TestCase):
         state = self.state.load_task("E03-R01")
         self.assertEqual(state["terra_calls"], 1)
 
+    def test_build_cache_churn_alone_does_not_count_as_scoped_change(self) -> None:
+        # Mért reprodukció (E02-R21, H6 halt, 3. eset, L38): a BASELINE_GATE
+        # a PRECHECK-ben lefuttatja a teszteket, ami elsőként hozza létre a
+        # .dart_tool/build fákat egy friss munkapéldányban. Az M3-hívás UTÁNI
+        # audit ezt a saját melléktermékét "M3 diffnek" nézte, és
+        # READY_FOR_REVIEW-t jelzett úgy, hogy egyetlen lib/ vagy test/ fájl
+        # sem változott. A fix előtt ez a teszt az 1. próbálkozás után
+        # READY_FOR_REVIEW-t adott volna vissza (m3_attempts=1); a fix után a
+        # scoped_changed_paths üres, tehát a router egy újabb M3-próbálkozást
+        # indít, és csak a VALÓDI lib/ diff után zár READY_FOR_REVIEW-val.
+        no_scoped_change = ScopeAudit(
+            ok=True,
+            changed_paths=(".dart_tool/flutter_build/dart_plugin_registrant.dart",),
+            violations=(),
+            high_risk=False,
+            diff_hash="sha256:build-cache-only",
+            scoped_changed_paths=(),
+        )
+        real_change = ScopeAudit(
+            ok=True,
+            changed_paths=("lib/example.dart",),
+            violations=(),
+            high_risk=False,
+            diff_hash="sha256:real-change",
+        )
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok()],
+            [gate("pass"), gate("pass"), gate("pass")],
+            audits=[no_scoped_change, real_change],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3", "m3"])
+        state = self.state.load_task("E03-R01")
+        self.assertEqual(state["m3_attempts"], 2)
+        phases = [entry.get("phase") for entry in state["gate_history"]]
+        self.assertIn("NO_CHANGE_1", phases)
+        self.assertEqual(state["changed_paths"], ["lib/example.dart"])
+
     def test_m3_quota_or_service_failure_never_starts_terra(self) -> None:
         router, model, _ = self.router(
             [codex_error("HTTP 429 quota")], [gate("pass")]
