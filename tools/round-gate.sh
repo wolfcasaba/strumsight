@@ -19,6 +19,7 @@ flutter_bin=${FLUTTER_BIN:-$HOME/flutter/bin/flutter}
 dart_bin=${DART_BIN:-$HOME/flutter/bin/dart}
 sleep_seconds=${ROUND_GATE_SLEEP_SECONDS:-2}
 result_file=${ROUND_GATE_RESULT_FILE:-}
+baseline_mode=0
 
 if [ "${1:-}" = "--result-json" ]; then
   if [ "$#" -lt 2 ]; then
@@ -27,6 +28,11 @@ if [ "${1:-}" = "--result-json" ]; then
   fi
   result_file=$2
   shift 2
+fi
+
+if [ "${1:-}" = "--baseline" ]; then
+  baseline_mode=1
+  shift
 fi
 
 write_result() {
@@ -86,7 +92,7 @@ if [ ! -f pubspec.yaml ]; then
   finish_error "environment_failure" 20 \
     "a repó gyökeréből futtasd (nincs pubspec.yaml itt)" "preflight.repository" 2
 fi
-if [ "$#" -eq 0 ]; then
+if [ "$#" -eq 0 ] && [ "$baseline_mode" -ne 1 ]; then
   finish_error "invalid_gate" 30 \
     "legalább egy célzott tesztútvonal kötelező" "preflight.arguments" 2
 fi

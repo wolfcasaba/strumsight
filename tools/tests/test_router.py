@@ -1,0 +1,254 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from tools.ai_router.brief import load_brief
+from tools.ai_router.config import load_config
+from tools.ai_router.execution import CodexResult
+from tools.ai_router.quota import QuotaStatus
+from tools.ai_router.router import DevelopmentRouter, GateRun, RouterStatus
+from tools.ai_router.security import ScopeAudit, WorkspaceManifest
+from tools.ai_router.state import StateStore
+
+
+def codex_ok(message: str = "OK") -> CodexResult:
+    return CodexResult(0, (), (message,), "")
+
+
+def codex_error(stderr: str) -> CodexResult:
+    return CodexResult(1, (), (), stderr)
+
+
+def gate(outcome: str, fingerprint: str = "sha256:error") -> GateRun:
+    return GateRun(
+        outcome=outcome,
+        failed_step=None if outcome == "pass" else "test example",
+        command_exit_code=0 if outcome == "pass" else 1,
+        error_hash=None if outcome == "pass" else fingerprint,
+        log="" if outcome == "pass" else "example failure",
+    )
+
+
+class FakeModel:
+    def __init__(self, outcomes: list[CodexResult]):
+        self.outcomes = outcomes
+        self.profiles: list[str] = []
+        self.prompts: list[str] = []
+
+    def __call__(self, profile: str, worktree: Path, prompt: str) -> CodexResult:
+        self.profiles.append(profile)
+        self.prompts.append(prompt)
+        return self.outcomes.pop(0)
+
+
+class FakeGate:
+    def __init__(self, outcomes: list[GateRun]):
+        self.outcomes = outcomes
+        self.calls = 0
+
+    def __call__(self, worktree: Path, tests: tuple[str, ...], native: bool) -> GateRun:
+        self.calls += 1
+        return self.outcomes.pop(0)
+
+
+class FakeScope:
+    def __init__(self, audits: list[ScopeAudit] | None = None):
+        self.manifest = WorkspaceManifest("baseline", frozenset(), frozenset())
+        self.audits = audits or []
+
+    def capture(self, worktree: Path) -> WorkspaceManifest:
+        return self.manifest
+
+    def audit(self, worktree: Path, metadata: object, baseline: WorkspaceManifest) -> ScopeAudit:
+        if self.audits:
+            return self.audits.pop(0)
+        return ScopeAudit(True, ("lib/example.dart",), (), False, "sha256:diff")
+
+
+class RouterTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.worktree = self.root / "worktree"
+        self.worktree.mkdir()
+        self.config = load_config(Path(__file__).resolve().parents[2] / ".ai" / "router.toml")
+        self.state = StateStore(
+            self.root / "state", id_factory=lambda: "terra-reservation"
+        )
+
+    def brief(self, risk: str = "normal"):
+        path = self.root / "e03-r01-example.md"
+        path.write_text(
+            "# Task\n\n"
+            "```ai-router\n"
+            "schema_version = 1\n"
+            f'risk = "{risk}"\n'
+            'allowed_paths = ["lib/example.dart"]\n'
+            'gate_tests = ["test/example_test.dart"]\n'
+            "native_gate = false\n"
+            "```\n\n"
+            "## 6. Acceptance criteria\n- [ ] Works\n"
+        )
+        return load_brief(path)
+
+    def router(
+        self,
+        models: list[CodexResult],
+        gates: list[GateRun],
+        *,
+        quota: QuotaStatus | None = None,
+        audits: list[ScopeAudit] | None = None,
+    ) -> tuple[DevelopmentRouter, FakeModel, FakeGate]:
+        model = FakeModel(models)
+        gate_runner = FakeGate(gates)
+        scope = FakeScope(audits)
+        router = DevelopmentRouter(
+            config=self.config,
+            state=self.state,
+            run_model=model,
+            run_gate=gate_runner,
+            check_quota=lambda: quota or QuotaStatus("ok", True, True, remaining_percent=80),
+            capture_manifest=scope.capture,
+            audit_scope=scope.audit,
+        )
+        return router, model, gate_runner
+
+    def test_m3_success_returns_ready_for_review_not_done(self) -> None:
+        router, model, _ = self.router([codex_ok()], [gate("pass"), gate("pass")])
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3"])
+        self.assertEqual(self.state.load_task("E03-R01")["m3_attempts"], 1)
+
+    def test_first_code_failure_gets_one_m3_repair(self) -> None:
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok()],
+            [gate("pass"), gate("code_failure", "sha256:one"), gate("pass")],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3", "m3"])
+        self.assertIn("example failure", model.prompts[1])
+
+    def test_two_code_failures_escalate_once_to_terra(self) -> None:
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok(), codex_ok()],
+            [
+                gate("pass"),
+                gate("code_failure", "sha256:same"),
+                gate("code_failure", "sha256:same"),
+                gate("pass"),
+            ],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3", "m3", "terra"])
+        state = self.state.load_task("E03-R01")
+        self.assertEqual(state["terra_calls"], 1)
+
+    def test_m3_quota_or_service_failure_never_starts_terra(self) -> None:
+        router, model, _ = self.router(
+            [codex_error("HTTP 429 quota")], [gate("pass")]
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.DEFERRED)
+        self.assertEqual(model.profiles, ["m3"])
+
+    def test_quota_precheck_defers_before_any_model(self) -> None:
+        router, model, gate_runner = self.router(
+            [], [], quota=QuotaStatus("quota_limited", True, True, remaining_percent=0)
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.DEFERRED)
+        self.assertEqual(model.profiles, [])
+        self.assertEqual(gate_runner.calls, 0)
+
+    def test_baseline_failure_blocks_without_model(self) -> None:
+        router, model, _ = self.router([], [gate("code_failure")])
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.BLOCKED)
+        self.assertEqual(model.profiles, [])
+
+    def test_scope_violation_blocks_before_post_model_gate(self) -> None:
+        violation = ScopeAudit(
+            False,
+            ("forbidden.txt",),
+            ("path outside allowed scope: forbidden.txt",),
+            False,
+            "sha256:bad",
+        )
+        router, model, gate_runner = self.router(
+            [codex_ok()], [gate("pass")], audits=[violation]
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.BLOCKED)
+        self.assertEqual(gate_runner.calls, 1)
+        self.assertEqual(model.profiles, ["m3"])
+
+    def test_high_risk_green_diff_gets_targeted_terra_review(self) -> None:
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok()], [gate("pass"), gate("pass"), gate("pass")]
+        )
+
+        result = router.run(self.brief("high"), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3", "terra"])
+        self.assertIn("quality gate passed", model.prompts[1])
+
+    def test_terra_failure_stops_without_another_model(self) -> None:
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok(), codex_error("unknown Terra failure")],
+            [gate("pass"), gate("code_failure"), gate("code_failure")],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.STOPPED)
+        self.assertEqual(model.profiles, ["m3", "m3", "terra"])
+
+    def test_resume_after_crash_runs_gate_before_consuming_another_attempt(self) -> None:
+        brief = self.brief()
+        self.state.save_task(
+            brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": brief.task_id,
+                "brief_hash": brief.metadata_hash,
+                "phase": "M3_ATTEMPT_1",
+                "status": "RUNNING",
+                "m3_attempts": 1,
+                "terra_calls": 0,
+                "baseline_manifest": {
+                    "baseline_head": "baseline",
+                    "untracked_paths": [],
+                    "ignored_paths": [],
+                },
+                "gate_history": [],
+            },
+        )
+        router, model, _ = self.router([], [gate("pass")])
+
+        result = router.run(brief, self.worktree, resume=True)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

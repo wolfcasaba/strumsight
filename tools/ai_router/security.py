@@ -107,6 +107,7 @@ def audit_scope(
         "build",
         ".flutter-plugins",
         ".flutter-plugins-dependencies",
+        ".ai/runs",
     ),
     high_risk_fragments: Sequence[str] = (
         "auth",

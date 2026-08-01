@@ -72,6 +72,17 @@ class ProcessRunner:
                 stderr=stderr,
                 timed_out=True,
             )
+        except OSError as error:
+            executable = argv[0] if argv else "<empty argv>"
+            return ProcessResult(
+                argv=tuple(argv),
+                returncode=127,
+                stdout="",
+                stderr=(
+                    f"executable unavailable: {executable} "
+                    f"({error.__class__.__name__})"
+                ),
+            )
 
 
 def build_codex_argv(codex_bin: str, profile: str, worktree: Path) -> list[str]:
