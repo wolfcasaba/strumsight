@@ -4,8 +4,9 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (E02-R17 mergelve — Speed Builder + loop + adaptív retry: determinisztikus,
-> pure policy; az autonóm kör-pipeline az E02-R18-cal folytatódik)**.
+> (E02-R18 mergelve — Result-képernyő + PracticeCoach + Practice History V2:
+> mode-specifikus result, mérés-alapú coaching, verziózott/idempotens
+> perzisztencia; az autonóm kör-pipeline az E02-R19-cel folytatódik)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -158,6 +159,30 @@
   ötértékű. **Legacy paritás 51 forgatókönyvön egzakt** (17 lecke × 3 latency,
   nulla kizárt esemény). Hívó nincs → production viselkedés változatlan.
 
+- **Practice V2 result + coaching + history (E02-R18, ADR 0084):** mode-specifikus
+  **result képernyő** (`presentation/screens/practice_result_screen.dart` +
+  `score_breakdown`/`timing_bias_chart`): csak az **alkalmazható** dimenziók
+  látszanak (`MetricNotApplicable` → a blokk nincs a fában; `MetricInsufficientData`
+  → lokalizált „nincs elég adat", **nem** 0%); Free Practice külön layout (nincs
+  overall/pass-fail/combo). **`PracticeCoach`** pure service
+  (`domain/service/practice_coach.dart`): mérésből választott, **bizonyíték-küszöbös**
+  insight-kódok (`practice_insight.dart`), determinisztikus prioritás (SDD §17.3),
+  legalább egy pozitív insight befejezett sessionre. **Practice History V2**
+  (`data/local_practice_history_repository.dart` + `practice_history_serializer.dart`
+  + `practice_history_recorder.dart` + `..._mapper.dart`,
+  `domain/model/practice_history_entry.dart` + `practice_metric_snapshot.dart`): új
+  kulcs `ss.practice.history_v2` (`StorageKeys.all`-ban), verziózott dokumentum,
+  karantén a sérült bájtoknak, jövőbeli `schemaVersion` kihagyva, cap
+  `maxSessions=200`, a per-attempt **detail-window** csak a legújabb **N=20**
+  sessionre, **idempotens** mentés a `sessionId`-re. **A mentési hiba nem néma:** a
+  repository közvetlenül a `KeyValueStore`-ral ír (propagálja a `StorageException`-t)
+  → `AppResult.failure` → a controller `ShowRecoverableError`-t emittál; a session
+  sikeres marad. A V1 `ss.progress.practice_log` **bájtra érintetlen** (egyesítés =
+  R19). A live recorder-wiring valós session-metaadatig (mode/source/definition)
+  **R19-ig halasztva** (placeholder-metaadatnál `Noop`, hogy ne keletkezzen
+  betölthetetlen — write-then-drop — rekord). Flag: `practiceDetailedHistoryEnabled`
+  (non-prod ON) → részletes attempt-adat.
+
 ## 3. Known blockers / risks
 
 - **§16.3/§16.4 készülékes menet PENDING** — az Epic-1 zárás végső elfogadási
@@ -174,11 +199,11 @@
 
 ## 4. Current branch
 
-`main` @ [PR #41](https://github.com/wolfcasaba/strumsight/pull/41) (E02-R17,
-squash-merge `1285f57`), CI run
-[30686234523](https://github.com/wolfcasaba/strumsight/actions/runs/30686234523)
-**success** az **exact HEAD-en** (`2406d33` — teljes suite + randomizált
-property + APK). A merge-elt `main`-en az `analyze` `flutter gen-l10n` után zöld
+`main` @ [PR #42](https://github.com/wolfcasaba/strumsight/pull/42) (E02-R18,
+squash-merge `463446c`), CI run
+[30689633170](https://github.com/wolfcasaba/strumsight/actions/runs/30689633170)
+**success** az **exact HEAD-en** (`1586095` — teljes suite + randomizált
+property + APK). Post-merge `main`-en a reviewer-gate `flutter gen-l10n` után zöld
 (a lenti l10n-csapda: a friss ARB-kulcsok a gitignore-olt generált fájlokban
 regen-ig hiányoznak).
 
@@ -195,40 +220,43 @@ regen-ig hiányoznak).
 
 ## 5. Last completed round
 
-**E02-R17 — Speed Builder, loop és adaptív retry: determinisztikus pure policy**
-([ADR 0083](docs/adr/0083-speed-builder-and-adaptive-policy.md), PR #41, squash
-`1285f57`): a tempóépítés több attemptes, **determinisztikus** workflow. Új
-domain: `SpeedBuilderPolicy` (validáció, stabil kódok, R03-minta), immutable
-`SpeedBuilderState`, pure `SpeedBuilderEngine` `(state, attemptResult) → state`
-(step-up/step-down, `clamp(start,target)` mindkét irány, „legmagasabb stabil
-BPM"), és a pure `AdaptivePracticePolicy` (rendezett prioritás, `attemptActive→
-null`). **A kör kulcsdöntése:** a **step-up pass ≠ plain pass** — a step-up a
-metrikákból számol (`completion≥0.95 ∧ overall≥0.85 ∧ rhythm≥0.80, ha
-alkalmazható`, ADR 0083 §3), **nem** az `outcome==passed`-ből (az 0.85/0.70). A
-„ha alkalmazható" mérten a `MetricNotApplicable` sentinellel dől el. Session-UI
-progress-blokk + adaptív banner (elfogadás/elutasítás, **auto-apply nélkül**),
-ARB en/hu parity-vel, A1–A11 + randomizált property gate. A controller-bekötés
-szándékosan **E02-R18** (a policy tisztán mérhető marad). Implementer:
-**MiniMax M3**, **javító kör nélkül** (első review APPROVED).
+**E02-R18 — Result-képernyő, PracticeCoach és Practice History V2**
+([ADR 0084](docs/adr/0084-practice-history-v2-and-coaching.md), PR #42, squash
+`463446c`): mode-specifikus **result képernyő** (csak alkalmazható dimenziók;
+`MetricNotApplicable` → rejtve, `MetricInsufficientData` → „nincs elég adat",
+nem 0%; Free Practice külön layout), **`PracticeCoach`** pure service
+(mérés-alapú, bizonyíték-küszöbös insight-kódok, determinisztikus prioritás), és
+**Practice History V2** — verziózott/karanténos/capelt (`maxSessions=200`,
+detail-window `N=20`), **idempotens** (`sessionId`) perzisztencia, a V1
+`ss.progress.practice_log` **bájtra érintetlen** hagyásával. Implementer:
+**MiniMax M3**, **egy javító körrel** (első review CHANGES REQUESTED → fix#1
+APPROVED).
 
 **A kör lefolyása a jegyzőkönyvhöz** (részletek:
-[review](docs/reviews/e02-r17-review.md), §10 handoff):
+[review](docs/reviews/e02-r18-review.md), §10 handoff):
 
-- **pre-flight:** ADR 0083 megírása + **§0.0 brief-revízió** — mért ellentmondás
-  feloldva: a brief §5.6 „a step-up küszöb a profilból jön" **félrevezető**, mert
-  a `ScoringProfile` 85/70-et tart (a plain pass), nincs benne 0.95/0.85/0.80 és
-  nincs rhythm-threshold; a step-up predikátum a `PracticeMetrics` `MetricValue`
-  mezőiből számol, egy nevesített konstanshelyről (SDD §16.7). `main` újramérve
-  `caca3a9`-en (SpeedBuilder 0 találat, `Tempo` 30–300, attempt-mezők);
-- **implementer-futás:** stall nélkül `done`, `dirty_files=0`, egyetlen commit
-  (`65bf6ad`), mind a 16 fájl a §4 listán belül, tiltott zóna 0 sor;
-- **review → APPROVED (első körben):** reviewer-gate zöld izolált `/tmp`
-  klónban (`GATE_EXIT=0`, 809 practice + property + l10n + architecture); az
-  **A9 valódi-sértés próba** (auto-apply beszúrása a bannerbe) **mindkét A9
-  tesztet pirosra** fogta → a „javaslat sosem hat magától" garancia él; az
-  engine-teszt külön cellával bizonyítja a **step-up ≠ plain pass**
-  megkülönböztetést; 1 NOTE (a „3 egymást követő step-up pass" küszöb
-  hardkódolt, nem policy-mező — jövőbeli hardening).
+- **pre-flight:** ADR 0084 megírása; a brief §2 mért állításai helytállók. Mért
+  pontosítás: a `recorder.record` **és** a `ShowRecoverableError`-emisszió **már
+  a controllerben** be van kötve (`:493`/`:500`), a controller single-flightot
+  tart — az új repository dolga csak a hiba `failure`-ként való felszínre hozása
+  és a `sessionId`-idempotencia a repository szintjén;
+- **implementer-futás (1. kör):** `done`, `dirty_files=0`, `6414993`; **3
+  dekompozíciós fájl a §4 listán felül** (recorder/mapper/metric-snapshot) —
+  scope MAJOR, az orchestrátor **§0.0 R1 brief-revízióval elfogadta** (egyik sem
+  tilos zóna);
+- **review → CHANGES REQUESTED (2 BLOCKER + 4 MAJOR):** eldobható próbatesztek
+  izolált `/tmp` klónban fogták meg a **zöld CI+gate mellett** átcsúszott
+  BLOCKER-eket: **B1** — a reális `StorageException` írás-hiba a swallowoló
+  `JsonDocumentStore.write`-on át `Success`-t adott (a szállított A9-teszt
+  `StateError`-ral kerülte meg); **B2** — a produkciós recorder `unknown`
+  mode/source kóddal írt, amit a szerializáló olvasáskor **eldob**
+  (write-then-drop, betölthető rekord = 0);
+- **fix#1 (`30b8b1d`) → APPROVED:** B1 a repository közvetlen `KeyValueStore`-írásával
+  (propagáló `StorageException` → `AppResult.failure`); B2 **honest deferral** —
+  placeholder-metaadatnál `Noop` recorder (nincs eldobható rekord), a valós
+  session-metaadat plumbing dokumentáltan **R19**; +detail-window, timing-bias
+  címke, A4 coach-cellák, 3 MINOR — mind teszttel zárva. Reviewer-gate friss
+  `/tmp` klónban `GATE_EXIT=0`; CI success az exact HEAD-en.
 
 ## 6. Exact next task
 
@@ -236,14 +264,15 @@ szándékosan **E02-R18** (a policy tisztán mérhető marad). Implementer:
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
    ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
-2. **~~E02-R17 — Speed Builder + adaptív retry~~ — KÉSZ** (PR #41, `1285f57`,
-   2026-08-01, implementer **MiniMax M3**, review **APPROVED első körben**).
-   A következő kör a sorból: **E02-R18 — Result-képernyő + coaching + history**
-   ([`docs/rounds/e02-r18-result-coaching-history.md`](docs/rounds/e02-r18-result-coaching-history.md),
-   ADR 0084, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel; ez köti
-   be a Speed Builder policyt a controllerbe (R17 szándékos adóssága).
-   (E02-R16 Rhythm-only + Free Practice — KÉSZ: PR #40, `33d89c9`; E02-R15 Chord
-   Change — KÉSZ: PR #39, `f891c76`.)
+2. **~~E02-R18 — Result-képernyő + coaching + history~~ — KÉSZ** (PR #42,
+   `463446c`, 2026-08-01, implementer **MiniMax M3**, review CHANGES REQUESTED →
+   **fix#1 APPROVED**). A következő kör a sorból: **E02-R19 — a két practice-log
+   forrás egyesítése + progress/streak/learn-migráció + a live recorder valós
+   session-metaadat-plumbingje** (a R18 tudatos adóssága: mode/source/definition a
+   `PracticeSessionConfig`-ból a recorderbe, hogy a live rögzítés valós rekordot
+   írjon) — ezt a **pipeline** indítja, nem kézzel.
+   (E02-R17 Speed Builder — KÉSZ: PR #41, `1285f57`; E02-R16 Rhythm-only + Free
+   Practice — KÉSZ: PR #40, `33d89c9`.)
 3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
    a `tools/round-pipeline.sh` viszi, körönként **friss headless
    orchestrátor-sessionben**, cron-ütemezéssel. A sor:

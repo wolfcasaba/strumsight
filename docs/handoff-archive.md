@@ -896,3 +896,20 @@ mért állítás; előjeles felismerési késés (hiányzáskor null); medián �
 MiniMax M3, egy javító körrel (review #1: A7 3/4-ütem MAJOR + A2 él-cella MINOR
 eldobható próbatesztekkel kimérve → javító kör → APPROVED). Részletek:
 [review](reviews/e02-r15-review.md).
+
+## E02-R17 — Speed Builder, loop és adaptív retry: determinisztikus pure policy
+
+([ADR 0083](adr/0083-speed-builder-and-adaptive-policy.md), PR #41, squash
+`1285f57`): a tempóépítés több attemptes, **determinisztikus** workflow. Új
+domain: `SpeedBuilderPolicy` (validáció, stabil kódok, R03-minta), immutable
+`SpeedBuilderState`, pure `SpeedBuilderEngine` `(state, attemptResult) → state`
+(step-up/step-down, `clamp(start,target)` mindkét irány, „legmagasabb stabil
+BPM"), és a pure `AdaptivePracticePolicy` (rendezett prioritás, `attemptActive→
+null`). **A kör kulcsdöntése:** a **step-up pass ≠ plain pass** — a step-up a
+metrikákból számol (`completion≥0.95 ∧ overall≥0.85 ∧ rhythm≥0.80, ha
+alkalmazható`, ADR 0083 §3), **nem** az `outcome==passed`-ből (az 0.85/0.70). A
+controller-bekötés szándékosan E02-R18. Implementer **MiniMax M3**, javító kör
+nélkül (első review APPROVED). Reviewer-gate zöld izolált `/tmp` klónban
+(`GATE_EXIT=0`, 809 practice + property + l10n + architecture); az A9
+valódi-sértés próba (auto-apply beszúrása a bannerbe) mindkét A9 tesztet pirosra
+fogta; 1 NOTE (a „3 egymást követő step-up pass" küszöb hardkódolt).
