@@ -89,5 +89,23 @@ class SecurityTest(unittest.TestCase):
         self.assertTrue(audit.ok, audit.violations)
 
 
+    def test_scope_audit_rejects_a_model_created_commit(self) -> None:
+        root = self.make_repo()
+        baseline = capture_workspace_manifest(root)
+        (root / "lib" / "allowed.dart").write_text("model change\n")
+        subprocess.run(["git", "add", "lib/allowed.dart"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "model must not own Git"], cwd=root, check=True)
+
+        audit = audit_scope(
+            root,
+            allowed_paths=("lib/allowed.dart",),
+            protected_paths=(".git",),
+            baseline=baseline,
+        )
+
+        self.assertFalse(audit.ok)
+        self.assertTrue(any("commit" in violation for violation in audit.violations))
+
+
 if __name__ == "__main__":
     unittest.main()
