@@ -62,6 +62,7 @@ class RouterHardeningTest(unittest.TestCase):
 
         for prompt in (initial, repair, packet):
             self.assertIn("Do not commit", prompt)
+            self.assertIn("Do not run tools/codex-signal.sh", prompt)
 
     def test_interrupted_m3_call_is_audited_and_gated_before_another_model(self) -> None:
         self.state.save_task(
