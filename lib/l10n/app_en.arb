@@ -651,5 +651,84 @@
   "practiceChordChangeMedian": "Median change delay: {ms} ms",
   "practiceChordChangeMappingLimited": "Detector label mapping is limited",
   "practiceChordChangeSlowest": "Slowest measured pair: {pair}",
-  "practiceChordChangePairSemantic": "{pair}, {attempts} attempts, {correct} recognized and stable, median {median}"
+  "practiceChordChangePairSemantic": "{pair}, {attempts} attempts, {correct} recognized and stable, median {median}",
+  "practiceRhythmOnlyTitle": "Rhythm-only practice",
+  "practiceRhythmOnlyBodyWithDirection": "Count-in then keep the rhythm. The chord dimension is not scored; direction is informational.",
+  "practiceRhythmOnlyBodyNoDirection": "Count-in then keep the rhythm. The chord and direction dimensions are not scored here.",
+  "practiceRhythmOnlyRhythmDimension": "Rhythm dimension",
+  "practiceRhythmOnlyRhythmSemantics": "Rhythm-only practice, rhythm dimension not scored",
+  "practiceRhythmOnlyDimensionPending": "Pending",
+  "practiceRhythmOnlyDimensionAvailable": "Being measured",
+  "practiceRhythmOnlyDimensionNotApplicable": "Not applicable for this practice",
+  "practiceRhythmOnlyDimensionInsufficient": "Not enough data yet",
+  "practiceFreePracticeNoSignalTitle": "No strums heard yet",
+  "practiceFreePracticeNoSignalBody": "Play a few strums and the session will show a count of what was heard.",
+  "practiceFreePracticeNoSignalSemantics": "No strums heard yet in this free-practice session",
+  "practiceFreePracticeCountsTitle": "Practice counts",
+  "practiceFreePracticeCountsSemantics": "Free practice counts",
+  "practiceFreePracticeStrumCount": "Strum count",
+  "practiceFreePracticeActiveDuration": "Active time",
+  "practiceFreePracticeDirectionTitle": "Direction (informational)",
+  "practiceFreePracticeDirectionSemantics": "Free practice direction facts",
+  "practiceFreePracticeDirectionRatio": "Down/up ratio",
+  "practiceFreePracticeDirectionNotApplicable": "Direction is not applicable for this practice",
+  "practiceFreePracticeDirectionNotApplicableSemantics": "Direction is not applicable for this practice",
+  "practiceFreePracticeDirectionInsufficientSemantics": "Direction facts not yet available",
+  "practiceFreePracticeDownCount": "Down strums",
+  "practiceFreePracticeUpCount": "Up strums",
+  "practiceFreePracticeDownRatio": "Down ratio",
+  "practiceFreePracticeUpRatio": "Up ratio",
+  "practiceFreePracticePercent": "{percent} percent",
+  "@practiceFreePracticePercent": {
+    "placeholders": {
+      "percent": {
+        "type": "double"
+      }
+    }
+  },
+  "practiceFreePracticeMilliseconds": "{ms} ms",
+  "@practiceFreePracticeMilliseconds": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceFreePracticeTempoStabilityTitle": "Tempo stability",
+  "practiceFreePracticeTempoStabilitySemantics": "Free practice tempo stability",
+  "practiceFreePracticeTempoStability": "Tempo deviation (median absolute)",
+  "practiceFreePracticeTempoStabilityInsufficientSemantics": "Tempo stability not yet available",
+  "practiceFreePracticeChordTimelineTitle": "Chord timeline",
+  "practiceFreePracticeChordTimelineSemantics": "Free practice chord timeline",
+  "practiceFreePracticeChordTimeline": "Chord timeline",
+  "practiceFreePracticeChordTimelineInsufficientSemantics": "Chord timeline not yet available",
+  "practiceFreePracticeChordSegment": "{label}, {duration}",
+  "@practiceFreePracticeChordSegment": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFreePracticeChordSegmentSemantics": "Chord segment {label}, {duration}",
+  "practiceFreePracticeChordNone": "No chord",
+  "practiceFreePracticeBpmSamplesTitle": "Detected BPM samples",
+  "practiceFreePracticeBpmSamplesSemantics": "Free practice detected BPM samples",
+  "practiceFreePracticeBpmSamples": "BPM samples",
+  "practiceFreePracticeBpmSamplesInsufficientSemantics": "BPM samples not yet available",
+  "practiceFreePracticeBpmSample": "{bpm} BPM at {at}",
+  "@practiceFreePracticeBpmSample": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceFreePracticeInsufficientData": "Not enough data yet"
 }
