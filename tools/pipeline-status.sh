@@ -11,8 +11,9 @@
 set -uo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-state_dir="$repo_root/.pipeline"
-queue_file="$repo_root/docs/execution/pipeline-queue.tsv"
+state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
+queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"}
+router_status_file="$state_dir/router-status"
 halt_file="$state_dir/HALTED"
 chain_log="$state_dir/chain.log"
 
@@ -54,6 +55,19 @@ case "${1:-}" in
       echo "Állapot: FUT egy kör (a zár foglalt)."
     else
       echo "Állapot: tétlen, a következő firing indíthat kört."
+    fi
+    echo
+    echo "--- utolsó router-állapot ---"
+    if [ -f "$router_status_file" ]; then
+      while IFS= read -r line; do
+        case "$line" in
+          status=* | router_status=* | summary=* | branch=* | head=* | dirty_files=* | signalled_at=*)
+            printf '  %s\n' "$line"
+            ;;
+        esac
+      done < "$router_status_file"
+    else
+      echo "  (még nincs router-jelzés)"
     fi
     echo
     echo "--- sor ---"
