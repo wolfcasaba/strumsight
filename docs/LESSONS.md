@@ -942,3 +942,39 @@ futtasd újra, és a delta legyen a fájl saját tesztszáma (vagy használj
 
 **Forrás:** E02-R19/b review harmadik passz §4; `flutter test` compact reporter,
 `test/features/learn/` (32 fájl, 194 teszt).
+
+---
+
+## L31 — Zöld gate mellett a DoD-/zárójelentés-tábla bizonyítéka is lehet valótlan: a claim-et hívási lánccal kell mérni, nem elfogadni
+
+**Mit mértem.** Az E02-R20 (Epic-2 zárókör) implementere (MiniMax M3) egy
+52-soros DoD-táblát töltött ki, minden sorhoz teszt- vagy fájl-hivatkozással —
+a gate mind a 10 lépése zöld volt (saját kézzel, izolált klónban is
+reprodukálva). Egy adverzariális verifikáló-subagent és a saját
+hívási-lánc-grep mégis **6 sort talált, amelyek valótlan production-drótozásra
+hivatkoztak**: pl. a #30 "Speed Builder működik… a Learn-migrációs úton
+hozzáférhető a R19 óta" állításra `grep -rn "SpeedBuilder" lib/features/learn/`
+**0 találatot** adott — a Speed Builder sosem volt a Learn-migrációs úton,
+csak a Noop'olt standalone session-úton. A #34/#37/#39/#40/#41 sorok
+hasonlóan idéztek nem létező hívási láncot. Egyik sem szándékos hazugság volt
+— a motor egy KORÁBBI (helyes) minősítést vitt tovább analógiásan anélkül,
+hogy a saját hívási láncot lemérte volna az adott sorra.
+
+**A valóság.** A zöld gate a TESZTEK futását bizonyítja, nem a DoD-tábla
+PRÓZAI állításainak igazságát. Egy `grep -rn <szimbólum> <útvonal>` 0
+találata (vagy egy explicit hívási-lánc-bejárás) minden egyes "X a Y úton
+elérhető" jellegű mondatra **kötelező**, mielőtt a review elfogadja — a teszt
+maga csak azt bizonyítja, hogy a KÓD helyesen viselkedik izoláltan, nem azt,
+hogy egy adott production útvonal ténylegesen hívja.
+
+**Mit csinálunk.** Zárójelentés-/DoD-jellegű köröknél a review minden "X a Y
+úton/módon elérhető" típusú prózai állítást önálló méréssel (grep a hívóra,
+vagy a route-regisztráció/feature-flag ellenőrzése) ellenőriz, nem fogadja el
+azért, mert egy KAPCSOLÓDÓ teszt zöld. Ez ugyanannak az osztálynak a tagja,
+mint az L09/L30 (a kimenet formája/megléte nem a tény) — itt a "van rá teszt"
+forma nem bizonyítja a prózai kapcsolat tényét.
+
+**Forrás:** `docs/reviews/e02-r20-review.md` F0; adverzariális verifikáló
+subagent jelentése; `lesson_practice_adapter.dart:27`,
+`practice_hub_screen.dart:221-227`, `app_router.dart:44-49,124`,
+`streak_provider.dart:23-29`, `learn_screen.dart:367-414`.

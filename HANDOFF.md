@@ -24,10 +24,6 @@
   gate-jei zöldek; a végső elfogadás a user valódi-eszközös §16.3/§16.4 menetén
   áll (HORIZON-szabály: synthetic green ≠ done). Evidencia:
   [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md).
-- **Epic 1 (Core Platform) technikailag kész** — a zárókör (E01-R16) gépi
-  gate-jei zöldek; a végső elfogadás a user valódi-eszközös §16.3/§16.4 menetén
-  áll (HORIZON-szabály: synthetic green ≠ done). Evidencia:
-  [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md).
 - **Epic 2 (Practice Engine) lezárva** — E02-R20 (epic-zárókör) kész; a
   Practice V2 domain és application réteg kimerítően tesztelt, a migrated
   Learn útvonal (`migratedLearnEnabled`) élesíthető. Az önálló Practice V2
@@ -87,7 +83,7 @@
   Hívó továbbra sincs — production viselkedés változatlan, flagek OFF.
 
 - **Practice V2 accessibility-mátrix és performance-számlálók (E02-R20, nincs új ADR — a zárókör nem hoz architekturális döntést):**
-  `test/features/practice/presentation/practice_a11y_audit_test.dart` (A1.1–A1.10) — Hub/Setup/Result képernyőkön a touch-target + label+action + 200%-os szöveg + landscape + reduced motion + chart-szemantika + screen reader + ARB-paritás cellák zöldek, a `_HubCard` / `PracticeModeCard` / `PracticePatternPreview` / `TimingBiasChart` Semantics-merge fixekkel; `test/features/practice/practice_performance_test.dart` (A3) — R14 highway számláló, R09 matcher számlálók, 10 perces szimulált session cap, controller state-emission cap; `test/features/practice/practice_l10n_audit_test.dart` (A2) — minden `PracticeInsightCode` / `PracticeRecommendationKind` értékhez ARB-szöveg mindkét nyelven (a R20-ban hozzáadott 16 kulcs: `practiceInsight*` × 10 + `practiceRecommendation*` × 6); `test/property/practice_engine_property_test.dart` (A4) — öt epic-szintű invariáns (egy target/observation max egyszer, score ∈ [0,1] ∨ NotApplicable, free practice nincs overall accuracy, terminal state tiszta, playing ≤ active ≤ wall). A §3 rendszerszintű rés (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva a §5 DoD-táblában minden érintett cellánál.
+  `test/features/practice/presentation/practice_a11y_audit_test.dart` (A1.1–A1.10) — Hub/Setup/Result képernyőkön a touch-target + label+action + 200%-os szöveg + landscape + reduced motion + chart-szemantika + screen reader + ARB-paritás cellák zöldek, a `_HubCard` / `PracticeModeCard` / `PracticePatternPreview` / `TimingBiasChart` Semantics-merge fixekkel; `test/features/practice/practice_performance_test.dart` (A3) — R14 highway számláló, R09 matcher számlálók, 10 perces szimulált session cap, controller state-emission cap; `practice_a11y_audit_test.dart` A2.1–A2.4 cellái (A2) — minden `PracticeInsightCode` / `PracticeRecommendationKind` értékhez ARB-szöveg mindkét nyelven (a R20-ban hozzáadott 16 kulcs: `practiceInsight*` × 10 + `practiceRecommendation*` × 6; a javító kör #1 az eredetileg különálló `practice_l10n_audit_test.dart`-ot ide olvasztotta, scope-okból); `test/property/practice_engine_property_test.dart` (A4) — öt epic-szintű invariáns (egy target/observation max egyszer, score ∈ [0,1] ∨ NotApplicable, free practice nincs overall accuracy, terminal state tiszta, playing ≤ active ≤ wall). A §3 rendszerszintű rés (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva a §5 DoD-táblában minden érintett cellánál.
 
 - **Practice V2 tartalom (E02-R04, ADR 0070):** `lib/features/practice/data/`
   `BuiltinPracticeCatalog` — tíz beépített gyakorlat (négy/nyolcad strum-minták,
@@ -197,8 +193,22 @@
 
 ## 3. Known blockers / risks
 
+- **Rendszerszintű rés (E02-R20, mérve): a standalone Practice V2 session nem
+  indítható éles buildben.** A `practiceSessionHostProvider` production
+  defaultja `null`, a `practicePrepareSinkProvider` defaultja placeholder —
+  ez R11/R12 óta nyitva van, egyetlen későbbi kör sem drótozta be. A
+  domain/application réteg kimerítően tesztelt, de a Hub→Setup→Session
+  presentation→controller kötés hiányzik. Csak a Learn-migrációs út
+  (`migratedLearnEnabled`, éles default `false`) éri el a valós controllert.
+  Részletek + a DoD-tábla érintett celláinak listája:
+  [`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md)
+  §3/§5. **Ez a következő Practice-kör (E02-R21) jelölt feladata.**
 - **§16.3/§16.4 készülékes menet PENDING** — az Epic-1 zárás végső elfogadási
   kapuja a user valódi-gitáros APK-tesztje; eredménye a completion reportba kerül.
+- **Epic-2 valódi eszközös teszt PENDING** — a Practice Engine device-mátrix
+  ([`docs/manual-testing/practice-engine-device-matrix.md`](docs/manual-testing/practice-engine-device-matrix.md))
+  kész, a user tölti ki (a fenti rendszerszintű rés miatt csak a Learn-
+  migrációs úton tesztelhető, amíg a wiring nincs pótolva).
 - **Login-backend nincs hosztolva** (a :8019-es uvicorn lokális); auth-hiányok:
   nincs jelszó-reset / e-mail-verifikáció / refresh token (14 napos JWT),
   mid-session token-lejárat interceptor szándékosan halasztva.
@@ -211,12 +221,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #43](https://github.com/wolfcasaba/strumsight/pull/43) (E02-R19,
-squash-merge `0bdee7e`), CI run
-[30694250840](https://github.com/wolfcasaba/strumsight/actions/runs/30694250840)
-**success** a `5ab9a37` kód-HEAD-en (teljes suite + randomizált property + APK);
-utána már csak `docs/reviews/**` változott. A reviewer-gate friss izolált
-klónban `GATE_EXIT=0`.
+`main` @ [PR #44](https://github.com/wolfcasaba/strumsight/pull/44) (E02-R20,
+squash-merge `4616aed`), CI run
+[30703886127](https://github.com/wolfcasaba/strumsight/actions/runs/30703886127)
+**success** a `2972ba9` kör-branch-HEAD-en (teljes suite + randomizált property
++ APK) — ez a squash-commit szülője. A reviewer-gate saját kézzel, izolált
+`/tmp` klónban **háromszor** zöld: a kör indítása előtt, a javító kör után, és
+a merge-elt `main`-en még egyszer függetlenül.
 
 > ⚠ **A squash-commit üzenete tévesen a régi, „HALT H3" PR-címet viszi**
 > (`0bdee7e`): a `gh pr edit` a merge előtt a Projects-classic GraphQL
@@ -237,51 +248,38 @@ klónban `GATE_EXIT=0`.
 
 ## 5. Last completed round
 
-**E02-R19 — Progress-egyesítés, streak-jogosultság, daily goal és Learn
-V2-migráció** ([ADR 0085](docs/adr/0085-learn-migration-and-progress-merge.md),
-PR #43, squash `0bdee7e`): a V1 (`PracticeEntry`) és V2 (`PracticeHistoryEntry`)
-store **olvasáskor** egyesül egy pure aggregátorban (dedup a
-`PracticeHistoryEntry.id`-re, hamis adat nélkül); a **streak** az R16
-jogosultsági predikátumához kötve (20 s aktív ‖ 4 cél ‖ 8 pengetés, idempotens
-napi frissítés); a **daily goal kizárólag** a `playingElapsed`-ből számol; és a
-**Learn képernyő a `migratedLearnEnabled` flag mögött a V2 direction-scoringot
-használja**, egzakt paritással a legacy `LessonScorer`-rel. Minden flag OFF —
-a rollout az R20 döntése.
+**E02-R20 — Epic 2 lezárás: a11y/l10n/perf audit, epic-szintű property gate,
+DoD-tábla** (PR [#44](https://github.com/wolfcasaba/strumsight/pull/44),
+squash `4616aed`, ADR: **nincs**): audit-only zárókör, új funkció nélkül.
+Implementer **MiniMax M3**, orchestrátor **Claude Sonnet 5** (a pipeline
+E02-R20-at szándékosan nem viszi, ember indította — ADR 0087 §7).
 
-**A kör lefolyása a jegyzőkönyvhöz** (részletek:
-[review](docs/reviews/e02-r19-review.md) — három passz):
+**Elkészült:** A1 accessibility-mátrix (10 cella) — 4 valódi Semantics-merge
+bug javítva, mind regresszió-védett; A2 lokalizációs audit (16 új ARB-kulcs,
+valódi magyar fordítással); A3 teljesítmény-számlálók; A4 epic-szintű
+property gate (5 invariáns, mind valós production kódot hajt végig
+randomizált bemeneteken); A7
+[`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md)
+(SDD §28 mind az 52 tétele, fájl:sor bizonyítékkal); A8
+[`docs/manual-testing/practice-engine-device-matrix.md`](docs/manual-testing/practice-engine-device-matrix.md).
 
-- **első passz (MiniMax M3, `7cf1ca4`):** a plumbing (A1–A6, A8–A10) valósan
-  elkészült, de a Learn scoring-útja **tautológia** volt — a flag-ON ág a legacy
-  `LessonScorer.accuracy`-t adta tovább `directionAccuracy`-ként, és az A7
-  paritás-teszt ugyanazt az értéket hasonlította önmagához. A hű megvalósítás a
-  §4 listán kívüli fájlokat igényelt → **HALT (H3)**, a lánc emberre várt;
-- **user-döntés: (b) újra-scope.** A brief §4 bővült a V2-scoring felszínnel
-  (`learn/adapter/lesson_practice_target.dart`, `lesson_v2_scoring.dart`,
-  `practice/public.dart`) + egy „olvasandó, de nem módosítható"
-  paritás-referencia listával; az A7 valódi piros→zöld harness lett **öt
-  anti-tautológia őrrel** (típus-zár, gépiesen mért import-tilalom, mutációs
-  cella, részleges cellák, kvantálás-konzisztencia). Motor: **Codex**
-  (`gpt-5.6-terra`, `high` effort — user-döntés: „jó modell, de ne a legerősebb");
-- **két orchestrátor-döntés menet közbeni mért leletre** (ADR 0087 §2, saját nem
-  merge-elt brief): **§0.2** — a `PracticeDirectionScorer` **ezrelékre kvantál**
-  (7/24 → `0.2916̄` vs `0.291`), ezért az adapter a scorer **saját per-event
-  kimenetéből** számol egzakt arányt (nem mércelazítás); **§0.3** — a legacy
-  `d <= 0.28` **double**, a V2 `<= 280000` **egész**, így a pontos ablak-határon
-  eltérnek: dokumentált, elfogadott mikro-eltérés, a paritás minden szigorúan
-  belső/külső offseten kötelező marad. Az implementer mindkét eltérésnél
-  **helyesen `stopped`-ot jelzett** — ezért volt jó választás a Codex;
-- **review → CHANGES REQUESTED (1 MAJOR + 1 MINOR):** az 51 paritás-cella mind
-  `offset = 0`, `latency = 0` volt, tehát a paritás **időzítés-dimenziója
-  mérés nélkül maradt**; eldobható próbateszt izolált klónban meg is találta a
-  határponti eltérést. **fix#1 (`5ab9a37`) → APPROVED:** szigorúan belső
-  (+150 ms → találat), szigorúan külső (+400 ms → miss) és nem-nulla latency
-  (300 ms) cellák, mind **nem-vákuum őrrel** (`hits == total`, `missed == 1`);
-  + a §10 csonkítatlan gate-streamje;
-- **tanulságok:** [L29](docs/LESSONS.md) (a paritás-elemzés a záró aritmetikánál
-  nem ér véget) és [L30](docs/LESSONS.md) (a `flutter test <könyvtár>` compact
-  reportere nem ír sort minden suite-hoz — a „nem futott" grep-következtetés
-  hamis; a futás bizonyítéka a tesztszám-különbség: 194 − 138 = 56).
+**A kör legfontosabb terméke:** a §3 rendszerszintű rés kimondása (ld. fent
+§3) — a standalone Practice Hub→Setup→Session út production-drótozása
+R11/R12 óta hiányzik. A DoD-tábla minden érintett sora ezt a minősítést
+viseli a sima „teljesül" helyett.
+
+**A kör lefolyása** (részletek: [review](docs/reviews/e02-r20-review.md)):
+orchestrátor pre-flight a R01–R19 nyitott leleteiből + egy SDD §28
+elő-auditból hozta felszínre a rendszerszintű rést MÉG A KÖR INDÍTÁSA
+ELŐTT (a briefbe építve) → M3 implementáció → **review: 2 BLOCKER + 1
+MAJOR + 1 MINOR** (a DoD-tábla 6 sora valótlan drótozásra hivatkozott;
+az A4 property gate 3 invariánsa vacuous/nem-randomizált volt; egy
+scope-on kívüli tesztfájl; egy regresszió-védelem nélküli a11y-fix) → **egy
+javító kör (M3) → mind zárva**, red→green próbával → **APPROVED**.
+Reviewer-gate saját kézhez háromszor zöld (indítás előtt, fix után, merge-elt
+`main`-en függetlenül). Tanulság: [L31](docs/LESSONS.md) (zöld gate mellett a
+DoD-tábla bizonyítéka is lehet valótlan — a review a gate-en TÚL, konkrét
+hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
@@ -289,40 +287,42 @@ a rollout az R20 döntése.
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
    ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
-2. **~~E02-R19 — progress/streak/daily-goal + Learn V2-migráció~~ — KÉSZ**
-   (PR #43, `0bdee7e`, 2026-08-01, implementer **Codex** `gpt-5.6-terra`, HALT H3
-   → user-döntés (b) újra-scope → review CHANGES REQUESTED → **fix#1 APPROVED**).
-   **A sor ezzel kiürült.** A következő kör az **E02-R20 (epic-zárás), amit
-   SZÁNDÉKOSAN ember indít** (ADR 0087 §7) — a pipeline nem viszi.
-   **Nyitott a rollout-döntés:** a `migratedLearnEnabled` mindenhol OFF; a
-   bekapcsolása külön user-döntés, amit az R19 paritása készít elő (a §0.3
-   szerint az ablak-határon egy dokumentált mikro-eltérés van).
-   *(A R18 adóssága — valós session-metaadat a live recorderbe — az R19 recording
-   use case-ével rendeződött; a `PracticeSessionConfig` → recorder plumbing
-   maradék részét az R20 zárja.)*
-   (E02-R17 Speed Builder — KÉSZ: PR #41, `1285f57`; E02-R16 Rhythm-only + Free
-   Practice — KÉSZ: PR #40, `33d89c9`.)
-3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
-   a `tools/round-pipeline.sh` viszi, körönként **friss headless
-   orchestrátor-sessionben**, cron-ütemezéssel. A sor:
-   [`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv)
-   (mind MiniMax M3, user-döntés 2026-07-31). Állapot/feloldás:
-   `tools/pipeline-status.sh [--resume|--halt]`.
+2. **~~E02-R20 — Epic 2 lezárás (a11y/l10n/perf audit, DoD-tábla)~~ — KÉSZ**
+   (PR #44, `4616aed`, 2026-08-01, implementer **MiniMax M3**, orchestrátor
+   **Claude Sonnet 5**, egy javító kör → **APPROVED**). **Epic 2 technikailag
+   lezárva.** Két nyitott tétel jelöli a következő lépést:
+   - **A rendszerszintű drótozási rés (§3)** — a standalone Practice V2
+     session presentation→controller kötése hiányzik. **Ez a jelölt
+     E02-R21 feladat**, brief még nincs megírva.
+   - **A `migratedLearnEnabled` rollout-döntés** — mindenhol OFF, a
+     bekapcsolás feltételei (mérföldkövek, monitorozás, visszaállítási
+     útvonal) az R19 paritása alapján még **user-döntésre várnak**
+     (R20 nem hozott ebben döntést, csak dokumentált).
+   (E02-R19 progress/streak/daily-goal + Learn V2-migráció — KÉSZ: PR #43,
+   `0bdee7e`.)
+3. **A pipeline (ADR 0087, GOV-02) E02-R14…R19-et vitte; E02-R20-at
+   SZÁNDÉKOSAN ember indította** (ADR 0087 §7) — a sor
+   ([`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv))
+   ezzel kiürült. **Egy E02-R21 brief megírása + sorba állítása a
+   következő döntési pont** — a driver csak akkor folytatja, ha van
+   `pending` sor.
 
    > **Megállási szerződés (ADR 0087 §2):** az orchestrátor-session önállóan
    > javíthatja a kör SAJÁT, még nem merge-elt briefjét/ADR-jét (§0.0
    > revízióval); H1–H8 esetén (merged ADR, lezárt kör viselkedése, tilos zóna,
    > túlélő BLOCKER/MAJOR, 2× piros CI, `blocked`, gate nem zöldíthető,
    > rebase-konfliktus) a lánc HALT-tal megáll és embert vár.
-   > **E02-R20 (epic-zárás) szándékosan nincs a sorban** — azt ember indítja.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
    erőforrás-előírásnál mérd ki a tényleges hívási láncot (L19).
-   **A javító kör küszöbe HÁROM** (user-döntés 2026-07-31, `679ce4c`); a
-   negyedik javító kört a **Codex** viszi (`16f776f`), H4 halt csak utána.
-   **UI-kör esetén a review-nak kötelező eleme a több-belépéses és a
-   kombinált-státusz próba** — az R13 három MAJOR-ja mind ilyen volt (L22).
+   **A javító kör küszöbe EGY** (user-döntés 2026-08-01, `8e719f1` — a korábbi
+   HÁROM-ról szigorítva); a második javító kört a **Codex** viszi, H4 halt
+   csak utána. **UI-kör esetén a review-nak kötelező eleme a több-belépéses
+   és a kombinált-státusz próba** — az R13 három MAJOR-ja mind ilyen volt
+   (L22). **Zöld gate mellett is mérj konkrét hívási láncot a DoD-/
+   zárójelentés-jellegű állításokra** — az R20 review 6 hamis "teljesül"
+   sort talált egy egyébként teljesen zöld gate mellett (L31).
 5. **Az E02-R08 nyitva maradt follow-upja:** a chord-confidence felvitele a
    `LiveFrame`-be — az Analyze úton is közös, ezért külön kör; addig a Live
    adapter `confidence: 1.0` = „nem mért".

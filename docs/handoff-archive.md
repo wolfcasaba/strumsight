@@ -913,3 +913,72 @@ nélkül (első review APPROVED). Reviewer-gate zöld izolált `/tmp` klónban
 (`GATE_EXIT=0`, 809 practice + property + l10n + architecture); az A9
 valódi-sértés próba (auto-apply beszúrása a bannerbe) mindkét A9 tesztet pirosra
 fogta; 1 NOTE (a „3 egymást követő step-up pass" küszöb hardkódolt).
+
+## E02-R19 — Progress-egyesítés, streak-jogosultság, daily goal és Learn V2-migráció
+
+([ADR 0085](adr/0085-learn-migration-and-progress-merge.md), PR #43, squash
+`0bdee7e`): a V1 (`PracticeEntry`) és V2 (`PracticeHistoryEntry`) store
+**olvasáskor** egyesül egy pure aggregátorban (dedup a
+`PracticeHistoryEntry.id`-re, hamis adat nélkül); a **streak** az R16
+jogosultsági predikátumához kötve (20 s aktív ‖ 4 cél ‖ 8 pengetés, idempotens
+napi frissítés); a **daily goal kizárólag** a `playingElapsed`-ből számol; és a
+**Learn képernyő a `migratedLearnEnabled` flag mögött a V2 direction-scoringot
+használja**, egzakt paritással a legacy `LessonScorer`-rel. Minden flag OFF —
+a rollout az R20 döntése.
+
+**A kör lefolyása:** első passz (MiniMax M3, `7cf1ca4`) a plumbing-ot (A1–A6,
+A8–A10) valósan elkészítette, de a Learn scoring-útja tautológia volt (a
+flag-ON ág a legacy `LessonScorer.accuracy`-t adta tovább
+`directionAccuracy`-ként) → **HALT (H3)**, user-döntés (b) újra-scope →
+implementer **Codex** (`gpt-5.6-terra`) → két orchestrátor-döntés menet
+közbeni mért leletre (ADR 0087 §2): §0.2 a `PracticeDirectionScorer`
+ezrelékre kvantál, ezért az adapter a scorer saját per-event kimenetéből
+számol egzakt arányt; §0.3 a legacy `d <= 0.28` double vs. a V2 `<= 280000`
+egész — dokumentált, elfogadott mikro-eltérés a pontos ablak-határon → review
+CHANGES REQUESTED (1 MAJOR: az 51 paritás-cella időzítés-dimenziója mérés
+nélkül maradt) → **fix#1 (`5ab9a37`) APPROVED** (szigorúan belső/külső +
+nem-nulla latency cellák, nem-vákuum őrrel). Tanulságok: L29, L30. Részletek:
+[review](reviews/e02-r19-review.md).
+
+## E02-R20 — Epic 2 lezárás: a11y/l10n/perf audit, epic-szintű property gate, DoD-tábla
+
+([PR #44](https://github.com/wolfcasaba/strumsight/pull/44), squash
+`4616aed`, ADR: **nincs** — a zárókör nem hoz architekturális döntést):
+audit-only kör, új funkció nélkül. A1 accessibility-mátrix (10 cella,
+Hub/Setup/Session/Result + mód-nézetek) — 4 valódi Semantics-merge bug
+találva és javítva (`practice_hub_screen.dart` `_HubCard`,
+`practice_mode_card.dart`, `practice_pattern_preview.dart`,
+`timing_bias_chart.dart`), mind regresszió-védett. A2 lokalizációs audit — 16
+új ARB-kulcs (`practiceInsight*`×10, `practiceRecommendation*`×6), valódi
+magyar fordítással, coach-kód→ARB mapping pinnelve. A3 teljesítmény-számlálók
+(highway build-hatókör, matcher vizsgálati hatókör, verdict-lista cap,
+controller state-kibocsátás, memória-korlát). A4 epic-szintű property gate —
+5 invariáns, mind a valós production kódot (matcher/scorer/aggregátor/
+reducer) hajtja végig randomizált bemeneteken. A7
+[`docs/sdd/epic-02-completion-report.md`](sdd/epic-02-completion-report.md) —
+az SDD §28 mind az 52 DoD-tétele, fájl:sor bizonyítékkal. A8
+[`docs/manual-testing/practice-engine-device-matrix.md`](manual-testing/practice-engine-device-matrix.md)
+— valódi eszközös tesztmátrix, a user tölti ki.
+
+**A kör legfontosabb terméke:** a §3 rendszerszintű rés kimondása — a
+standalone Practice Hub→Setup→Session út `practiceSessionHostProvider`-e
+production defaultban `null` (R11/R12 óta drótozatlan), így egy valós
+felhasználó ma **nem tud önálló Practice V2 sessiont futtatni** az élesített
+appban, bár a domain/application réteg kimerítően tesztelt. A DoD-tábla
+minden érintett sora ezt a minősítést viseli, nem sima „teljesül"-t.
+
+**A kör lefolyása:** implementer **MiniMax M3** — a pre-flight (orchestrátor,
+Claude Sonnet 5) a R01–R19 review-k nyitott NOTE/MINOR-jait és egy SDD §28
+elő-auditot gyűjtött a brief §2-be, felszínre hozva a rendszerszintű rést
+MÉG A KÖR INDÍTÁSA ELŐTT. Első review (izolált `/tmp` gate-újrafuttatás +
+adverzariális verifikáló-subagent): **2 BLOCKER + 1 MAJOR + 1 MINOR** — a
+DoD-tábla 6 sora (#30/34/37/39/40/41) valótlan production-drótozásra
+hivatkozott (mérve: `grep` 0 találat / rossz hívási lánc); az A4 property
+gate 3 az 5 invariánsából vacuous/nem-randomizált volt (nem hívott
+production kódot). **Egy javító kör (M3) → mind a négy lelet zárva**,
+red→green próbával (A4.4: `clearPauseCause` ideiglenes elrontása → piros →
+visszaállítás → zöld) → **APPROVED**. Reviewer-gate kétszer zöld izolált
+klónban (fix előtt/után), CI zöld a merge-elt SHA-n
+([30703886127](https://github.com/wolfcasaba/strumsight/actions/runs/30703886127)),
+a merge-elt `main` harmadszor is függetlenül zöld. Részletek:
+[review](reviews/e02-r20-review.md).
