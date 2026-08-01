@@ -12,6 +12,32 @@
 - **Implementer motor:** `auto` — ez a **MiniMax-first router első éles köre**
   (ADR 0088). Kicsi, jól körülhatárolt kör, ezért alkalmas első próbának.
 
+## 0.0 Pre-flight revízió (orchestrátor, 2026-08-01)
+
+Kötelező grep-ellenőrzés futott a brief minden hivatkozott szimbólumára és
+fájlnevére (a pipeline-prompt §1 két mérési szabálya) — az alábbi egy pont
+javításra szorult, minden más állítás mérve stimmelt:
+
+- **A §4 táblázat tévesen "meglévő" (`—`) jelöléssel sorolja fel a
+  `test/features/practice/application/practice_session_providers_test.dart`
+  fájlt.** Mérve (`ls`/`grep -rl`): ez a fájl **nem létezik** — a
+  `practice_session_providers.dart`-nak ma nincs dedikált tesztje. A kör ezt
+  **újonnan** hozza létre (jelölése a §4-ben mostantól ÚJ).
+- Ehhez kapcsolódóan: az A9 "layer-purity guard" ma **kizárólag**
+  `practice_session_controller.dart` forrását vizsgálja
+  (`practice_session_controller_test.dart` A9 csoportja) — nem
+  `practice_session_providers.dart`-ot. Az A4 acceptance criteria ("a
+  layer-purity guard zöld marad") ezért csak akkor mérhető ténylegesen a
+  providers fájlra, ha az új `practice_session_providers_test.dart` egy, az
+  A9 mintáját követő forrás-mintaőrt is tartalmaz a §2-ben felsorolt tiltott
+  szimbólum-listával. Ld. [ADR 0111](../adr/0111-practice-production-wiring.md)
+  §2/§3. Ez **kiegészíti** az A4-et, nem tágítja a scope-ot: a §4 engedélyezett
+  fájllistája változatlan (a fájl már szerepelt rajta).
+- Minden más mért állítás (a négy hiányzó provider pontos helye és mai értéke,
+  a feature-flag állapot, a réteg-tisztasági korlát szimbólum-listája a
+  controller fájlon, a három terminal állapot) grep-pel igazolva, változtatás
+  nélkül.
+
 ## 0. Kör-jelzés
 
 `engine=auto`: a kör-jelzést az **orchestrátor** képezi le a router
@@ -161,7 +187,9 @@ enum-kódokkal hívja — a serializer `JsonRecordException`-nel dobja el.
 Provider a `LivePracticeObservationGateway`-hez, a `StrumEngine`, a
 mikrofon-engedély-gateway, az idővonal és a logger valódi forrásaival.
 A layer-purity guard (A9) **zöld marad** — ha nem hozható zöldre a §2 szerinti
-elrendezéssel, az `STOPPED`, nem a guard lazítása.
+elrendezéssel, az `STOPPED`, nem a guard lazítása. **§0.0 revízió:** ez a
+guard a `practice_session_providers.dart`-ra ÚJ (ebben a körben írt) —
+ld. §0.0 és ADR 0111 §3.
 
 ### A5 — A valódi piros→zöld cella
 
