@@ -1,13 +1,46 @@
 # E02-R14 — Strum Pattern és Chord Progression mód
 
-- **Státusz:** **PREPARED** (előre megírva 2026-07-31, kód olvasva: `main` @ `ce8fbce`)
+- **Státusz:** **PLANNING** (pipeline pre-flight 2026-08-01, kód újramérve: `main` @ `7135c56`; eredetileg PREPARED 2026-07-31 @ `ce8fbce`)
 - **SDD-kör:** [`docs/sdd/03-epic-02-practice-engine.md`](../sdd/03-epic-02-practice-engine.md) **„Kör 14"** (+ §7.1, §7.3, §21.4, §24)
 - **Branch:** `codex/e02-r14-strum-progression-modes`
 - **Előfeltétel:** **E02-R13 merge-ölve** (a session shell fogadja a mód-nézetet).
 - **ADR:** **0080** — `docs/adr/0080-practice-highway-rendering.md`, **az
   orchestrátor írja meg a pre-flightban** a §5 tartalmával.
-- **Implementer motor:** a pre-flightban a user dönt. *Ajánlás:* **Codex** —
-  a pozíció-számítás és a virtualizáció mérése ítéletigényes.
+- **Implementer motor:** **MiniMax M3** (pipeline-döntés, `docs/execution/pipeline-queue.tsv`;
+  a brief eredeti Codex-ajánlása felülírva — a pozíció-függvény és a
+  virtualizáció mérése gépi mátrixszal rögzített, l. §6/A1·A7).
+
+## 0.0 Pre-flight revíziós napló (pipeline, 2026-08-01, `main` @ `7135c56`)
+
+Az előre megírt brief mért állításait a kód ellen újramértem. Minden hivatkozott
+enum, mező és metódus grep-elve. **Két mérés ütközött a brief előfeltevésével**,
+mindkettő a §1 szabály-1 („elérhetetlen cél-státusz") mintája — egy
+acceptance-cella olyan értékre hivatkozott, amit egyetlen elérhető bemenet sem
+produkál. Feloldás dokumentált revízióval (ADR 0087 §2, saját nem-merge-elt brief):
+
+1. **R1 — A `PracticeSessionHost` határ nem ad ki verdictet/metrikát.**
+   Mérve `practice_effect_listener.dart:21-27`: a presentation-határ (ADR 0079 §2)
+   `states`/`state`/`effects`/`liveOverallPerMille`/`send` — **nincs verdict-
+   vagy metrika-getter**. A `PracticeSessionState` a `target`-et (események,
+   `barBoundaries`, `expectedChordSegments`) és a lejátszófejet
+   (`timelinePosition`/`activeElapsed`/`musicalPlayhead`) hordozza; verdict-listát
+   és combót **nem**. A `PracticeSessionController.liveScore`/`lastExpectedChord`
+   a határon kívül van, és sem a határ fájlja, sem az `application/` nincs a §4
+   listáján. → **Feloldás (ADR 0080 D10):** a verdict-vezérelt visszajelző és a
+   combo-kijelző az adatát **konstruktor-paraméterként** kapja, a widget-teszt
+   (A4/A5) injektált verdicttel/metrikával hajtja — az R13 mintája (production
+   host `null`). A valós host-bekötés **későbbi kör**; a `PracticeSessionHost`
+   interfészt ez a kör **nem** módosítja. Egyetlen acceptance sem gyengül: az
+   A4/A5 a widget renderelését méri adott bemenetre.
+
+2. **R2 — `PracticeMetrics.currentCombo` nem létezik.** Mérve
+   `practice_metrics.dart:119` + `practice_score_aggregator.dart:137-184`: csak
+   `maxCombo` felszíni érték; az „aktuális combo" privát ciklusváltozó. → **Feloldás:**
+   az A5 combo-kijelzője a **`PracticeMetrics.maxCombo`** értékét mutatja; az
+   „aktuális combo" megfogalmazás törölve (lásd az A5 alábbi revízióját).
+
+A §4 engedélyezett-lista, a §6 mérési eszközök (`PracticeTargetMarker`,
+`@visibleForTesting` számláló) és a §9 gate-hívás **változatlan**.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ)**
 > 1. Olvasd újra az R13 session shell-t: hová illeszkedik a mód-nézet, és mit
@@ -187,8 +220,9 @@ egy ütemre **három** ütés esik. Külön cella 4/4-re.
 - Egy-ütemes pattern-előnézet a definíció `events` alapján (down/up/rest).
 - Találatnál a `TimingGrade` szerinti visszajelzés jelenik meg (perfect / good /
   early / late), rossz iránynál az **elvárt** irány (`expectedDirection`).
-- A combo-kijelző a `PracticeMetrics.maxCombo`/aktuális combo értékét mutatja,
-  **nem** saját számlálót.
+- A combo-kijelző a `PracticeMetrics.maxCombo` értékét mutatja (§0.0 R2: a
+  `currentCombo` nem létező érték), **nem** saját számlálót. A verdict és a
+  metrika a visszajelző/combo widget **explicit paramétere** (§0.0 R1, ADR 0080 D10).
 
 ### A6 — Chord Progression nézet
 
