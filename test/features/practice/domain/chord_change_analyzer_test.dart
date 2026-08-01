@@ -69,6 +69,43 @@ void main() {
       expect(result.changes.single.outcome, ChordChangeOutcome.unstable);
     });
 
+    test('179999 microseconds of stability remains unstable', () {
+      const targetAt = Duration(seconds: 1);
+      const start = Duration(milliseconds: 1100);
+      final result = _analyze(
+        targetAt: targetAt,
+        destination: 'B',
+        verdicts: [_verdict(at: targetAt)],
+        observations: [
+          _chord(at: start, label: 'B'),
+          _chord(at: start + const Duration(microseconds: 179999), label: 'B'),
+        ],
+      );
+
+      final change = result.changes.single;
+      expect(change.outcome, ChordChangeOutcome.unstable);
+      expect(change.stableDuration, const Duration(microseconds: 179999));
+    });
+
+    test('180001 microseconds of stability is correct', () {
+      const targetAt = Duration(seconds: 1);
+      const start = Duration(milliseconds: 1100);
+      final result = _analyze(
+        targetAt: targetAt,
+        destination: 'B',
+        verdicts: [_verdict(at: targetAt)],
+        observations: [
+          _chord(at: start, label: 'B'),
+          _chord(at: start + const Duration(microseconds: 180001), label: 'B'),
+        ],
+      );
+
+      final change = result.changes.single;
+      expect(change.outcome, ChordChangeOutcome.correct);
+      expect(change.recognizedChangeDelay, const Duration(milliseconds: 100));
+      expect(change.stableDuration, const Duration(microseconds: 180001));
+    });
+
     test('separates an empty window and a window without a strum', () {
       final empty = _analyze(targetAt: const Duration(seconds: 1));
       expect(
@@ -86,6 +123,52 @@ void main() {
       expect(
         noStrum.changes.single.outcome,
         ChordChangeOutcome.insufficientSignal,
+      );
+    });
+  });
+
+  group('ChordChangeAnalyzer meter boundaries', () {
+    test('3/4 change on a bar boundary produces correct statistics', () {
+      final sample = _analyzeBarChange(
+        meter: const Meter(beatsPerBar: 3),
+        barDuration: const Duration(seconds: 3),
+      );
+
+      expect(sample.target.meter, const Meter(beatsPerBar: 3));
+      expect(sample.target.barBoundaries, const [
+        Duration.zero,
+        Duration(seconds: 3),
+        Duration(seconds: 6),
+      ]);
+      expect(
+        sample.target.expectedChordSegments[1].start,
+        sample.target.barBoundaries[1],
+      );
+      _expectCorrectBarChange(
+        sample.analysis,
+        targetAt: const Duration(seconds: 3),
+      );
+    });
+
+    test('4/4 change on a bar boundary produces correct statistics', () {
+      final sample = _analyzeBarChange(
+        meter: const Meter(beatsPerBar: 4),
+        barDuration: const Duration(seconds: 4),
+      );
+
+      expect(sample.target.meter, const Meter(beatsPerBar: 4));
+      expect(sample.target.barBoundaries, const [
+        Duration.zero,
+        Duration(seconds: 4),
+        Duration(seconds: 8),
+      ]);
+      expect(
+        sample.target.expectedChordSegments[1].start,
+        sample.target.barBoundaries[1],
+      );
+      _expectCorrectBarChange(
+        sample.analysis,
+        targetAt: const Duration(seconds: 4),
       );
     });
   });
@@ -244,14 +327,60 @@ void main() {
   });
 }
 
+({CompiledPracticeTarget target, ChordChangeAnalysis analysis})
+_analyzeBarChange({required Meter meter, required Duration barDuration}) {
+  final target = _target(
+    [
+      ExpectedChordSegment(chord: 'G', start: Duration.zero, end: barDuration),
+      ExpectedChordSegment(
+        chord: 'D',
+        start: barDuration,
+        end: barDuration + barDuration,
+      ),
+    ],
+    meter: meter,
+    barBoundaries: [Duration.zero, barDuration, barDuration + barDuration],
+  );
+  return (
+    target: target,
+    analysis: ChordChangeAnalyzer().analyze(
+      target: target,
+      verdicts: [_verdict(at: barDuration)],
+      observations: [
+        _chord(at: barDuration + const Duration(milliseconds: 100), label: 'D'),
+        _chord(at: barDuration + const Duration(milliseconds: 280), label: 'D'),
+      ],
+    ),
+  );
+}
+
+void _expectCorrectBarChange(
+  ChordChangeAnalysis analysis, {
+  required Duration targetAt,
+}) {
+  final change = analysis.changes.single;
+  expect(change.pair, const ChordPair(from: 'G', to: 'D'));
+  expect(change.targetAt, targetAt);
+  expect(change.outcome, ChordChangeOutcome.correct);
+  expect(change.recognizedChangeDelay, const Duration(milliseconds: 100));
+
+  final stats = analysis.pairStats.single;
+  expect(stats.pair, const ChordPair(from: 'G', to: 'D'));
+  expect(stats.attempts, 1);
+  expect(stats.correctChanges, 1);
+  expect(stats.recognizedChangeDelays, const [Duration(milliseconds: 100)]);
+}
+
 ChordChangeAnalysis _analyze({
   required Duration targetAt,
+  String destination = 'D',
   List<PracticeVerdict> verdicts = const [],
   List<ChordObservation> observations = const [],
 }) => _analyzeTransitions([
   _transition(
     at: targetAt,
     delay: null,
+    destination: destination,
     autoVerdict: verdicts.isNotEmpty,
     verdicts: verdicts,
     observations: observations,
@@ -421,21 +550,24 @@ PracticeVerdict _verdict({required Duration at}) => PracticeVerdict(
 ChordObservation _chord({required Duration at, required String? label}) =>
     ChordObservation(at: at, label: label, confidence: 1);
 
-CompiledPracticeTarget _target(List<ExpectedChordSegment> segments) =>
-    CompiledPracticeTarget(
-      definitionId: 'chord-change-test',
-      definitionSnapshotVersion: 1,
-      tempo: const Tempo(60),
-      meter: const Meter(beatsPerBar: 4),
-      countInBars: 0,
-      countInDuration: Duration.zero,
-      events: const [],
-      musicalDuration: const Duration(seconds: 30),
-      ringOutDuration: Duration.zero,
-      totalDuration: const Duration(seconds: 30),
-      barBoundaries: const [],
-      loopCount: 1,
-      loopRange: null,
-      expectedChordSegments: segments,
-      scoringApplicable: true,
-    );
+CompiledPracticeTarget _target(
+  List<ExpectedChordSegment> segments, {
+  Meter meter = const Meter(beatsPerBar: 4),
+  List<Duration> barBoundaries = const [],
+}) => CompiledPracticeTarget(
+  definitionId: 'chord-change-test',
+  definitionSnapshotVersion: 1,
+  tempo: const Tempo(60),
+  meter: meter,
+  countInBars: 0,
+  countInDuration: Duration.zero,
+  events: const [],
+  musicalDuration: const Duration(seconds: 30),
+  ringOutDuration: Duration.zero,
+  totalDuration: const Duration(seconds: 30),
+  barBoundaries: barBoundaries,
+  loopCount: 1,
+  loopRange: null,
+  expectedChordSegments: segments,
+  scoringApplicable: true,
+);
