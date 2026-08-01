@@ -1,15 +1,15 @@
 # Autonóm kör-pipeline sora (ADR 0087 §5). Egy sor = egy kör.
 # Oszlopok TAB-bal elválasztva:
 #   round   brief                                  engine   adr    status
-# status: pending | running | done | halted
-# engine: minimax | codex   (ADR 0069 besorolás; kézzel átírható)
+# status: prepared | pending | running | done | halted
+# engine: auto | minimax | codex
+#   auto = MiniMax-first router (2 M3 megoldási kör, szükség esetén 1 Terra)
+#   minimax|codex = örökölt, kézi reprodukciós override
 # A '#'-tel kezdődő sorokat a driver átugorja.
+# A prepared sorokat a driver nem indítja el; az Epic 2 lezárása és emberi
+# jóváhagyás után az első indítható kör státusza kézzel pendingre állítható.
 #
-# MEGJEGYZÉS a motorválasztáshoz: az ADR 0069 szerint az R17–R19 a
-# "ítéletigényes" osztályba esik (adaptív logika, perzisztencia, legacy
-# migráció), ahol a Codex a biztonságosabb default. A user 2026-07-31-i
-# döntése alapján a sor MiniMax M3-mal indul végig; ha egy kör kétszer
-# haltol, ez az oszlop az első hely, amit érdemes átírni.
+# Az E02 sorok motorját nem írjuk át visszamenőleg.
 E02-R12	docs/rounds/e02-r12-practice-hub-and-setup.md	minimax	0078	done
 E02-R13	docs/rounds/e02-r13-session-ui-shell.md	minimax	0079	done
 E02-R14	docs/rounds/e02-r14-strum-and-progression-modes.md	minimax	0080	done
@@ -18,5 +18,30 @@ E02-R16	docs/rounds/e02-r16-rhythm-only-and-free-practice.md	minimax	0082	done
 E02-R17	docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md	minimax	0083	done
 E02-R18	docs/rounds/e02-r18-result-coaching-history.md	minimax	0084	done
 E02-R19	docs/rounds/e02-r19-progress-and-learn-migration.md	minimax	0085	pending
-# E02-R20 (epic-zárás) SZÁNDÉKOSAN nincs a sorban — ADR 0087 §7: a záró kört
-# ember indítja. A driver az R19 után halttal áll meg.
+# E02-R20 (epic-zárás) szándékosan nincs az automatikus sorban — ADR 0087 §7.
+#
+# Epic 3 előkészített sorok. Az ADR 0088 a routeré; a kör-ADR-ek 0089-től
+# sorrendben előre foglaltak. Egyik sor sem indul el prepared állapotban.
+E03-R01	docs/rounds/e03-r01-baseline-and-boundaries.md	auto	0089	prepared
+E03-R02	docs/rounds/e03-r02-song-document-identity-metadata.md	auto	0090	prepared
+E03-R03	docs/rounds/e03-r03-song-structure-and-time-map.md	auto	0091	prepared
+E03-R04	docs/rounds/e03-r04-tracks-events-monophonic-analysis.md	auto	0092	prepared
+E03-R05	docs/rounds/e03-r05-validator-normalizer-capabilities.md	auto	0093	prepared
+E03-R06	docs/rounds/e03-r06-legacy-song-setlist-adapters.md	auto	0094	prepared
+E03-R07	docs/rounds/e03-r07-song-repository-asset-store.md	auto	0095	prepared
+E03-R08	docs/rounds/e03-r08-persistent-v2-migration.md	auto	0096	prepared
+E03-R09	docs/rounds/e03-r09-native-json-import-export.md	auto	0097	prepared
+E03-R10	docs/rounds/e03-r10-import-flow-security-boundary.md	auto	0098	prepared
+E03-R11	docs/rounds/e03-r11-musicxml-mxl-importer.md	auto	0099	prepared
+E03-R12	docs/rounds/e03-r12-midi-importer.md	auto	0100	prepared
+E03-R13	docs/rounds/e03-r13-guitar-pro-feasibility.md	auto	0101	prepared
+E03-R14	docs/rounds/e03-r14-guitar-pro-path.md	auto	0102	prepared
+E03-R15	docs/rounds/e03-r15-song-library-import-ui.md	auto	0103	prepared
+E03-R16	docs/rounds/e03-r16-song-editor-v2.md	auto	0104	prepared
+E03-R17	docs/rounds/e03-r17-overview-track-range-setup.md	auto	0105	prepared
+E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	auto	0106	prepared
+E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	auto	0107	prepared
+E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	auto	0108	prepared
+E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	auto	0109	prepared
+# E03-R22 (ADR 0110, epic-zárás) szándékosan kézi indítású az ADR 0087 §7
+# szerint; ezért nem aktív queue-sor.

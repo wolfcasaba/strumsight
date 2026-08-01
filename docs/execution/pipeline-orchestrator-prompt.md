@@ -28,30 +28,27 @@ E02-R12 első futása pontosan így halt meg jelzés nélkül (H-NOSIGNAL): az
 orchestrátor `run_in_background`-dal várt az implementerre, a session pedig a
 válasz végén kilépett alóla.
 
-Ezért az implementer-várakozás KÖTELEZŐ alakja egy **előtérben futó** ciklus,
-ismételt szinkron hívásokkal:
+`engine=auto` esetén a router adaptert **előtérben, szinkron módon** futtasd;
+nem mehet `setsid`, `&`, `run_in_background` vagy háttér-task mögé. Így maga a
+hosszú modellhívás tartja életben ezt a sessiont. A pontos parancs az 1.1
+szakaszban van.
 
-```bash
-tools/wait-for-round.sh <munkapéldány> 540
-```
-
-Kilépési kód `5` = még fut, de lejárt a várakozási keret → **hívd meg újra**
-(akárhányszor). `0` = done, `3` = stopped, `4` = stalled/timeout/unknown.
-Ugyanígy előtérben fusson a `gh run watch` is.
-
-**SOHA ne futtass `pgrep -f` / `pkill -f` hívást olyan mintával, amely a saját
-promptodban előfordul** (pl. `round-gate.sh`, `flutter analyze`) — az E02-R12
-orchestrátora így ölte meg magát (exit 143), amikor beragadt gate-processzeket
-takarított. Ha processzt kell állítanod, PID-listával dolgozz
-(`pgrep -f <minta> | grep -v $$`), vagy szűkítsd a mintát a munkapéldány
-útvonalára (pl. `pgrep -f "/tmp/r12-review/.*round-gate"`). Az implementert pedig **ne** a
-session háttértaskjaként indítsd (azt a CLI kilépése megöli), hanem a
-sessionről LEVÁLASZTVA, egyetlen azonnal visszatérő Bash-hívással:
+Az explicit `engine=minimax|codex` örökölt útvonalon az implementert a
+sessionről leválasztva indítsd, majd előtérben várj rá:
 
 ```bash
 setsid tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log \
   >/dev/null 2>&1 < /dev/null &
+tools/wait-for-round.sh <munkapéldány> 540
 ```
+
+A `wait-for-round.sh` kilépési kódja `5` = még fut, ezért hívd meg újra;
+`0` = done, `3` = stopped, `4` = stalled/timeout/unknown. A `gh run watch` is
+mindig előtérben fusson.
+
+**SOHA ne futtass `pgrep -f` / `pkill -f` hívást olyan mintával, amely a saját
+promptodban előfordul** (pl. `round-gate.sh`, `flutter analyze`). Ha processzt
+kell állítanod, PID-listával vagy a munkapéldány pontos útvonalával szűrj.
 
 ## 0.2 Örökség-ellenőrzés: egy korábbi halott session hagyhatott munkát
 
@@ -95,6 +92,61 @@ Az E02-R11-ben ez kétszer bukott el, és mindkét hiba ugyanabból a mintából
 Amit nem találsz meg a kódban: dokumentált **§0.0 brief-revízióval** old fel,
 ne lista-tágítással.
 
+## 1.1 Implementer-routing — `{{ENGINE}}`
+
+A pre-flight commit és az izolált munkapéldány létrehozása után az engine-t
+pontosan így kezeld. Ismeretlen értéknél HALT; csendes fallback tilos.
+
+### `auto` — alapértelmezett MiniMax-first router
+
+Az első dispatch pontosan egy, előtérben futó adapterhívás:
+
+```bash
+router_result=<munkapéldány>/.ai/runs/{{ROUND}}/router-result.json
+PIPELINE_ROUTER_STATUS_FILE="{{ROUTER_STATUS_FILE}}" \
+  <munkapéldány>/tools/ai-router-round.sh run \
+  <munkapéldány> "{{BRIEF}}" "$router_result"
+```
+
+A router maga választ M3 és Terra között, kezeli a kvótát, a task-lockot és a
+quality gate-eket. MiniMax 429/quota/5xx/hálózati hiba esetén **nem** indíthatsz
+közvetlen Codex/Terra fallbacket.
+
+A strukturált eredmény leképezése:
+
+| Routerállapot | Kör-jelzés | Teendő |
+|---|---|---|
+| `READY_FOR_REVIEW` | `progress` | ellenőrizd a scope-ot, commitold az engedélyezett diffet, majd indíts független review-t |
+| `STOPPED` | `stopped` | HALT, további modellhívás nélkül |
+| `DEFERRED` | `blocked` | HALT; kvóta/szolgáltatás helyreállása után ugyanaz a task folytatható |
+| `BLOCKED` | `blocked` | HALT; a jelentett előfeltételt ember javítja |
+| `INTERNAL_ERROR` | `blocked` | HALT és diagnosztika |
+
+A router modelljei szándékosan **nem commitolnak**. `READY_FOR_REVIEW` után az
+orchestrátor ellenőrzi, hogy csak a brief `allowed_paths` listája változott,
+majd ő készíti el a kör implementációs commitját. A `.ai/runs` csak redaktált,
+nem hiteles munkapéldány-mirror és gitignore-olt.
+
+Ha a független review BLOCKER/MAJOR leletet talál és a routernek maradt kerete,
+a leleteket fájlban add vissza ugyanannak a tasknak:
+
+```bash
+PIPELINE_ROUTER_STATUS_FILE="{{ROUTER_STATUS_FILE}}" \
+  <munkapéldány>/tools/ai-router-round.sh resume \
+  <munkapéldány> "{{BRIEF}}" "$router_result" <munkapéldány>/<review-findings.md>
+```
+
+A `resume` ugyanazt a külső state-et és a már elfogyasztott M3/Terra keretet
+használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
+`READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
+független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
+
+### `minimax` és `codex` — örökölt kézi override
+
+Ezek reprodukciós/operátori módok. A meglévő `mm-round.sh`, illetve
+`codex-round.sh` + watcher útvonalat használják; az `auto` router szabályait
+nem írják át, és nincs köztük automatikus fallback.
+
 ## 2. Az autonómiád határa (ADR 0087 §2) — EZ A LEGFONTOSABB SZAKASZ
 
 **Önállóan dönthetsz és folytathatod a kört**, ha az ütközés feloldása a kör
@@ -112,22 +164,19 @@ ne lista-tágítással.
 | **H1** | egy **már merge-elt** ADR módosítását kívánná |
 | **H2** | egy **lezárt kör** viselkedésének megváltoztatását kívánná |
 | **H3** | a **tilos zóna** feloldását kívánná (új fájl az engedélyezett listán kívül) |
-| **H4** | **BLOCKER vagy MAJOR** lelet, amely **HÁROM** javító kör után is nyitva van |
+| **H4** | `auto`: a router `STOPPED` eredménye után is nyitott BLOCKER/MAJOR; örökölt motor: három javító kör után is nyitott lelet |
 | **H5** | a **CI kétszer piros** ezen a körön |
 | **H6** | az implementer **`blocked`**-ot jelez, vagy kétszer hal meg `unknown`/`stalled` állapotban |
 | **H7** | a `tools/round-gate.sh` nem hozható zöldre |
 | **H8** | a `main` a dispatch óta mozdult, és a rebase konfliktust ad |
 
-**A javító kör a lánc NORMÁL útja, nem megállási ok** (user-döntés
-2026-07-31): ha a review BLOCKER/MAJOR leletet talál — akár az előző javító
-kör után is —, indítsd a következő javító kört ugyanazzal a motorral,
-a leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
-köröket a kör-branch commitjaiból. **Motor-eszkaláció (user-döntés
-2026-07-31): ha a MiniMax HÁROM javító körrel sem zárja a leleteket, a
-KÖVETKEZŐ javító kört a Codex viszi** (`tools/codex-round.sh` +
-`tools/codex-watch.sh`, külön munkapéldány, ugyanaz a leletlista). H4 halt
-csak akkor, ha a Codex javító köre UTÁN is nyitva marad BLOCKER/MAJOR.
-Minden javító-promptban legyen benne: „a munkádat commitold a branchre".
+**A javító kör a lánc normál útja.** `engine=auto` esetén kizárólag az
+1.1 szerinti `resume` hívás engedett; a router két M3-megoldási körös és egy
+Terra-hívásos task-keretét nem kerülheted meg. `STOPPED` után H4/H6 HALT.
+
+Az explicit `minimax|codex` örökölt útvonalon megmarad a korábbi, legfeljebb
+három javítókörös operátori szabály. Ezt soha ne alkalmazd az `auto` engine-re,
+és MiniMax szolgáltatási hibát ott se tekints modellképességi hibának.
 
 Kétség esetén **halt**. A lánc megállítása olcsó; egy rossz normatív döntés,
 ami több körön át beépül, nem az.
@@ -143,8 +192,9 @@ A review-t **nem hagyhatod ki** azért, mert a gate zöld. A read-only review
 
 Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L21):
 
-- **minden implementer- és javító-promptba írd bele: „a munkádat commitold a
-  branchre"** — enélkül a motor `done`-t jelezhet uncommitted fájlokkal;
+- `auto` esetén a modellek nem commitolnak: `READY_FOR_REVIEW` után az
+  orchestrátor auditálja és commitolja a diffet; az örökölt motor promptja
+  továbbra is kérjen branch-commitot;
 - a `done` jelzés feldolgozásakor **`dirty_files != 0` → vizsgáld ki**, mielőtt
   bármit elfogadsz;
 - **dispatch után vesd össze a run `headSha`-ját a lokális HEAD-del**
