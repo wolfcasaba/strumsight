@@ -4,8 +4,8 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (E02-R16 mergelve — Rhythm-only + Free Practice: pontszám-mentes összegzés;
-> az autonóm kör-pipeline az E02-R17-tel folytatódik)**.
+> (E02-R17 mergelve — Speed Builder + loop + adaptív retry: determinisztikus,
+> pure policy; az autonóm kör-pipeline az E02-R18-cal folytatódik)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -174,10 +174,10 @@
 
 ## 4. Current branch
 
-`main` @ [PR #40](https://github.com/wolfcasaba/strumsight/pull/40) (E02-R16,
-squash-merge `33d89c9`), CI run
-[30684333906](https://github.com/wolfcasaba/strumsight/actions/runs/30684333906)
-**success** az **exact HEAD-en** (`e48e76f` — teljes suite + randomizált
+`main` @ [PR #41](https://github.com/wolfcasaba/strumsight/pull/41) (E02-R17,
+squash-merge `1285f57`), CI run
+[30686234523](https://github.com/wolfcasaba/strumsight/actions/runs/30686234523)
+**success** az **exact HEAD-en** (`2406d33` — teljes suite + randomizált
 property + APK). A merge-elt `main`-en az `analyze` `flutter gen-l10n` után zöld
 (a lenti l10n-csapda: a friss ARB-kulcsok a gitignore-olt generált fájlokban
 regen-ig hiányoznak).
@@ -195,40 +195,40 @@ regen-ig hiányoznak).
 
 ## 5. Last completed round
 
-**E02-R16 — Rhythm-only + Free Practice: pontszám-mentes összegzés**
-([ADR 0082](docs/adr/0082-free-practice-honest-summary.md), PR #40, squash
-`33d89c9`): egy elv — **ne állítsunk többet, mint amit mérünk** (SDD §15). Új
-domain: `FreePracticeSummary` (+ sealed `FreePracticeTempoStability` /
-`FreePracticeDirectionRatio`, nullable-label `FreePracticeChordSegment`) és a
-pure `FreePracticeSummarizer` (megfigyelések → **csak tények**: pengetésszám,
-le/fel arány, akkord-idővonal, BPM-minták, **MAD-alapú** tempó-stabilitás ≥4
-strumtól, aktív jel = `playingElapsed`; nincs óra/IO/random/detektor). A Free
-Practice `overall` bizonyítottan **`MetricNotApplicable`** (üres súlyú
-`freePracticeOpen` profil → aggregátor `availableWeightTotal==0`), `outcome`
-`notScored`. Rhythm-only: chord `NotApplicable`, irány opcionális
-(`NotApplicable`, nem 0). Új pure `PracticeSessionEligibility` predikátum (SDD
-§20.5, `||`, mind `>=`) — **hívó nélkül** (bekötés R19). Két mód-nézet
-(`RhythmOnlyView` / `FreePracticeView`, a session-screen switchbe csatolva),
-ARB en/hu parity-vel, A1–A10 + randomizált property gate. Implementer:
+**E02-R17 — Speed Builder, loop és adaptív retry: determinisztikus pure policy**
+([ADR 0083](docs/adr/0083-speed-builder-and-adaptive-policy.md), PR #41, squash
+`1285f57`): a tempóépítés több attemptes, **determinisztikus** workflow. Új
+domain: `SpeedBuilderPolicy` (validáció, stabil kódok, R03-minta), immutable
+`SpeedBuilderState`, pure `SpeedBuilderEngine` `(state, attemptResult) → state`
+(step-up/step-down, `clamp(start,target)` mindkét irány, „legmagasabb stabil
+BPM"), és a pure `AdaptivePracticePolicy` (rendezett prioritás, `attemptActive→
+null`). **A kör kulcsdöntése:** a **step-up pass ≠ plain pass** — a step-up a
+metrikákból számol (`completion≥0.95 ∧ overall≥0.85 ∧ rhythm≥0.80, ha
+alkalmazható`, ADR 0083 §3), **nem** az `outcome==passed`-ből (az 0.85/0.70). A
+„ha alkalmazható" mérten a `MetricNotApplicable` sentinellel dől el. Session-UI
+progress-blokk + adaptív banner (elfogadás/elutasítás, **auto-apply nélkül**),
+ARB en/hu parity-vel, A1–A11 + randomizált property gate. A controller-bekötés
+szándékosan **E02-R18** (a policy tisztán mérhető marad). Implementer:
 **MiniMax M3**, **javító kör nélkül** (első review APPROVED).
 
 **A kör lefolyása a jegyzőkönyvhöz** (részletek:
-[review](docs/reviews/e02-r16-review.md), §10 handoff):
+[review](docs/reviews/e02-r17-review.md), §10 handoff):
 
-- **pre-flight:** ADR 0082 megírása; minden hivatkozott szimbólum grep-elve
-  (`freePracticeOpen` üres súly → `MetricNotApplicable` overall az aggr:76-81-en;
-  `PracticeMode.freePractice=={}`; `notScored`; `playingElapsed`; `LiveFrame.bpm`;
-  streak-predikátum nem létezett);
-- **implementer-futás:** stall nélkül `done`, `dirty_files=0`, minden §4-fájl
-  commitolva;
+- **pre-flight:** ADR 0083 megírása + **§0.0 brief-revízió** — mért ellentmondás
+  feloldva: a brief §5.6 „a step-up küszöb a profilból jön" **félrevezető**, mert
+  a `ScoringProfile` 85/70-et tart (a plain pass), nincs benne 0.95/0.85/0.80 és
+  nincs rhythm-threshold; a step-up predikátum a `PracticeMetrics` `MetricValue`
+  mezőiből számol, egy nevesített konstanshelyről (SDD §16.7). `main` újramérve
+  `caca3a9`-en (SpeedBuilder 0 találat, `Tempo` 30–300, attempt-mezők);
+- **implementer-futás:** stall nélkül `done`, `dirty_files=0`, egyetlen commit
+  (`65bf6ad`), mind a 16 fájl a §4 listán belül, tiltott zóna 0 sor;
 - **review → APPROVED (első körben):** reviewer-gate zöld izolált `/tmp`
-  klónban (az első `analyze` PIROS **csak** a gitignore-olt generált l10n miatt
-  — `gen-l10n` után „No issues found!"); az **A2 valódi-sértés próba**
-  (aggregátor overall null-ág → `MetricAvailable(0)`) a pre-existing
-  `practice_score_aggregator_test` „free practice has no overall score" celláját
-  **pirosra** fogta → a „nincs hamis score" garancia bizonyítottan él; 1 NOTE
-  (a property-teszt bemenete a summarizer dokumentált rendezettségi
-  előfeltételére szűkített — R17+ hardening).
+  klónban (`GATE_EXIT=0`, 809 practice + property + l10n + architecture); az
+  **A9 valódi-sértés próba** (auto-apply beszúrása a bannerbe) **mindkét A9
+  tesztet pirosra** fogta → a „javaslat sosem hat magától" garancia él; az
+  engine-teszt külön cellával bizonyítja a **step-up ≠ plain pass**
+  megkülönböztetést; 1 NOTE (a „3 egymást követő step-up pass" küszöb
+  hardkódolt, nem policy-mező — jövőbeli hardening).
 
 ## 6. Exact next task
 
@@ -236,13 +236,14 @@ ARB en/hu parity-vel, A1–A10 + randomizált property gate. Implementer:
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
    ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
-2. **~~E02-R16 — Rhythm-only + Free Practice~~ — KÉSZ** (PR #40, `33d89c9`,
+2. **~~E02-R17 — Speed Builder + adaptív retry~~ — KÉSZ** (PR #41, `1285f57`,
    2026-08-01, implementer **MiniMax M3**, review **APPROVED első körben**).
-   A következő kör a sorból: **E02-R17 — Speed Builder + adaptív retry**
-   ([`docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md`](docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md),
-   ADR 0083, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel.
-   (E02-R15 Chord Change — KÉSZ: PR #39, `f891c76`; E02-R14 strum/progression —
-   KÉSZ: PR #38, `92a8291`.)
+   A következő kör a sorból: **E02-R18 — Result-képernyő + coaching + history**
+   ([`docs/rounds/e02-r18-result-coaching-history.md`](docs/rounds/e02-r18-result-coaching-history.md),
+   ADR 0084, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel; ez köti
+   be a Speed Builder policyt a controllerbe (R17 szándékos adóssága).
+   (E02-R16 Rhythm-only + Free Practice — KÉSZ: PR #40, `33d89c9`; E02-R15 Chord
+   Change — KÉSZ: PR #39, `f891c76`.)
 3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
    a `tools/round-pipeline.sh` viszi, körönként **friss headless
    orchestrátor-sessionben**, cron-ütemezéssel. A sor:

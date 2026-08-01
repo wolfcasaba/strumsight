@@ -778,3 +778,60 @@ eldobható marad (revert), nem kör-scope-sértés.
 
 **Forrás:** `docs/reviews/e02-r16-review.md` §3 (A2) és §4; mérve 2026-08-01 a
 `/tmp/review-e02r16` klónon (injektált overall-rontás → piros → revert).
+
+## L26 — „A profilból jön" ≠ a profil-OBJEKTUM: egy SDD-szakaszszám stricter, KÜLÖN predikátumot rögzíthet, amit a naiv implementáció összemos
+
+**Mit mértünk.** Az E02-R17 előre megírt briefje (§5.6) azt írta: „a step-up
+küszöb **a profilból jön** (SDD §16.7)", `completion≥0.95 ∧ overall≥0.85 ∧
+rhythm≥0.80`. A `main` @ `caca3a9` mérése viszont kimutatta: a `ScoringProfile`
+objektum `completionThresholdPercent`/`overallThresholdPercent` mezői **85/70**
+(ez a **plain** scored-practice pass, ami a `PracticeAttemptOutcome.passed`-et
+adja, `practice_score_aggregator.dart:267-270`), és **nincs** benne 0.95/0.85/
+0.80, sem rhythm-threshold. Az SDD §16.7 két KÜLÖN blokkot rögzít: „Alap pass"
+(0.85/0.70) és „Speed Builder step-up" (0.95/0.85/0.80). A „a profilból jön"
+tehát félrevezető: egy **spec-szakaszszám** (§16.7) nem a **config-objektum**
+(`ScoringProfile`). A naiv implementáció, amely `outcome==passed`-ből vagy a
+`ScoringProfile`-ból vezeti le a step-up passt, a kör legfontosabb invariánsát
+(A6 stabil-BPM, A2 léptetés) csendben elrontja, miközben minden teszt zöld
+maradhat.
+
+**Mit csinálunk.** (1) Ha egy előre megírt brief azt állítja, egy küszöb/érték
+„a profilból / a configból jön", a pre-flight **grep-elje ki a config-objektum
+tényleges mezőit** — ha a hivatkozott számok nincsenek benne, a hivatkozás egy
+spec-szakaszra mutat, nem az objektumra (kiegészíti [[L20]]-at: nemcsak a
+cél-státuszt produkáló inputot, hanem a küszöb tényleges TÁROLÁSI helyét is
+mérni kell). (2) Ha egy spec két, névre hasonló predikátumot definiál (itt:
+plain pass vs step-up pass), a §0.0 brief-revízió **mondja ki explicit, hogy a
+kettő KÜLÖN**, és tiltsa meg az egyikből a másik levezetését — az ADR kötött
+döntésébe emelve (ADR 0083 §3). (3) A reviewer a megkülönböztetést **mért
+cellával** kérje számon (itt: `outcome=passed` + sub-threshold metrikák → NEM
+lép; `outcome=failed` + 0.95/0.85 → lép), nem csak a happy-path zöldjével.
+
+**Forrás:** `docs/rounds/e02-r17-speed-builder-and-adaptive-retry.md` §0.0 +
+[ADR 0083](adr/0083-speed-builder-and-adaptive-policy.md) §3; `docs/reviews/e02-r17-review.md`
+§5; mérve 2026-08-01 (`ScoringProfile` 85/70 vs SDD §16.7 0.95/0.85/0.80).
+
+## L27 — Orchestrátor tooling: `mm-round.sh` KLÓNT vár (`.git` könyvtár), nem worktree-t; és a reviewer-klón a COMMITOT tartalmazó forrásból készüljön, ne a stale primary-refből
+
+**Mit mértünk.** Az E02-R17 indításakor `git worktree add`-del készített
+munkapéldány a `tools/mm-round.sh`-t azonnal `exit 2`-vel elbuktatta („a
+munkapéldány nem git-fa"): a wrapper `[ ! -d "$workdir/.git" ]`-t ellenőriz, egy
+**worktree** `.git`-je viszont **fájl**, nem könyvtár. A `setsid … >/dev/null`
+elnyelte a hibát → néma nem-indulás. Külön: a reviewer-klónt előbb a **primary
+munkafából** (`/home/ubuntu/music-theory`) klónoztam, ám a kör-commitot egy
+oldal-klónból (`ss-mm-e02-r17`) pusholtam origin-ra, így a primary lokális
+branch-refje `7ee37ae`-en (a pre-flight commiton) ragadt — a klón a
+SpeedBuilder-kód NÉLKÜL jött létre.
+
+**Mit csinálunk.** (1) MiniMax/Codex implementer-munkapéldány = **teljes klón**
+(`git clone <forrás> <dir>`), nem `git worktree` — a wrapper `.git`-könyvtárat
+vár. (2) A detach-olt indítást (`setsid`) egyszer **hibalátó módban** is futtasd
+(stderr-t ne dobd el), amíg a `.mm-round-pid` + a log meg nem jelenik. (3) A
+reviewer-klón forrása a kör-commitot **igazoltan tartalmazó** fa legyen: az
+origin (`git ls-remote` ground truth) vagy az az oldal-klón, amelyből pusholtál
+— **ne** a primary munkafa, ha onnan nem pusholtál (a lokális branch-ref stale).
+A klón `HEAD`-jét mindig vesd össze a várt SHA-val, mielőtt review-zol.
+
+**Forrás:** E02-R17 orchestrátor-futás, 2026-08-01 (`tools/mm-round.sh:45`
+`.git`-dir-check; `tools/wait-for-round.sh` jelzés-alapú várakozás); mérve a
+`ss-mm-e02-r17` klón + `/tmp/review-e02r17` reklón HEAD-egyeztetésével.
