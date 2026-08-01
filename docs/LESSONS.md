@@ -1109,3 +1109,37 @@ fixture-nek (`tools/tests/test_security.py`). (2) Ha egy őr a fő útvonalat
 tiltja, az nem szigor, hanem hibás kalibráció. (3) Rendszerszintű blokkolónál
 mérd meg a hatókört is: „ez a kör áll" vagy „minden kör áll" két különböző
 súlyosság — az utóbbi azonnali javítást érdemel, nem sorbaállást (ADR 0112).
+
+## L37 — Egy terminal task-state-nek NEM privilégium az, hogy `result_path`-ot ír; a hiányzó reset-út örökre BLOCKED-et fagyaszt
+
+**Mit mértünk (2026-08-01, E02-R21 / H6 halt, 2. előfordulás).** Az [L36](#l36)
+security.py-fixje (`a620442`) után az E02-R21 task-state a routerben
+mégis örökre BLOCKED maradt. Két önálló hiba volt a `tools/ai_router`-ban: (1)
+`router.py:484-490` `run()` — minden nem-RUNNING, nem-DEFERRED, nem-(resume+
+findings+READY_FOR_REVIEW) ágon `self._result(state)`-et adott vissza
+`_finish`/`_atomic_result` (result-json írás) NÉLKÜL, tehát egy BLOCKED taskra
+sem `run`, sem `resume` nem írt `result_path`-ot — a wrapper
+(`tools/ai-router-round.sh:80`) ezt mindig INTERNAL_ERROR-ra (exit 50) fordította,
+elrejtve a valódi BLOCKED okot a hívótól. (2) Nem volt recovery-út: ha a BLOCKED
+indok időközben javítva lett a kódban, a task state a state_dir-ben véglegesen
+BLOCKED maradt — a CLI-ben (`run`/`status`/`resume`/`smoke`) nem volt
+reset/clear parancs.
+
+**Miért.** A `_result(state)` és a `_finish(state, status, reason, result_path)`
+két külön dolgot csinál — az egyik csak leképezi az állapotot egy visszatérési
+értékre, a másik EMELLETT perzisztálja és a hívó felé is kiírja. Az early-return
+ág íróját az vezette félre, hogy egy már-terminál state-en „nincs mit
+menteni" — való igaz, de a hívó szerződése (`result_path` mindig létrejön egy
+`run`/`resume` hívás után) nem a state mutációjáról szól, hanem arról, hogy a
+CLI-folyamat halála után is legyen olvasható bizonyíték. Egy write-only
+state-gép hibát rejt, ha a „nincs változás" ág néma marad.
+
+**Hogyan alkalmazd.** (1) Egy state-gépben minden terminális ág — még a
+„semmi nem változott" ág is — írja ki a kimenetet a hívó szerződése szerint;
+ha a mutáció felesleges, a kiírás akkor sem az. Teszt: minden `run`/`resume`
+hívás UTÁN, függetlenül az ágtól, `result_path.exists()`. (2) Perzisztens
+task/job state-hez explicit `reset`/`clear` út kell A LÉTREHOZÁSKOR, nem csak
+amikor először szükség lesz rá — egy külső gyökérok-javítás (ADR 0112 önjavító
+kör) állandó falba ütközik recovery-parancs nélkül. (3) A regressziós teszt a
+saját mért hibaüzenetből induljon (itt: a HALTED fájl pontos repro-parancsa és
+a router.py sorszáma), ne kitalált tünetből.

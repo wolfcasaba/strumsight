@@ -128,6 +128,21 @@ class StateStore:
             with self.task_lock(task_id):
                 self._write_json(path, state)
 
+    def reset_task(self, task_id: str) -> None:
+        """Clear a persisted task state so the next `run` re-prechecks from scratch.
+
+        Idempotent: resetting a task with no persisted state is a no-op, so a
+        stuck terminal state (e.g. BLOCKED on a since-fixed root cause) can
+        always be cleared without first inspecting whether it exists.
+        """
+        self._validate_task_id(task_id)
+        path = self.root / "tasks" / f"{task_id}.json"
+        if task_id in self._held_tasks:
+            path.unlink(missing_ok=True)
+        else:
+            with self.task_lock(task_id):
+                path.unlink(missing_ok=True)
+
     @contextmanager
     def _ledger_lock(self) -> Iterator[None]:
         path = self.root / "terra-ledger.lock"

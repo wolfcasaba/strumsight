@@ -483,7 +483,10 @@ class DevelopmentRouter:
                     self.state.save_task(brief.task_id, state)
                 elif state.get("status") != "RUNNING":
                     if not (resume and review_findings and state.get("status") == "READY_FOR_REVIEW"):
-                        return self._result(state)
+                        result = self._result(state)
+                        if result_path is not None:
+                            _atomic_result(result_path, result)
+                        return result
                     state["status"] = "RUNNING"
                     state["phase"] = "RETRY_PROVIDER"
                     quota_recheck = True

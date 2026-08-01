@@ -218,6 +218,9 @@ def parser() -> argparse.ArgumentParser:
     status.add_argument("--task-id", required=True)
     status.add_argument("--json", action="store_true")
 
+    reset = commands.add_parser("reset")
+    reset.add_argument("--task-id", required=True)
+
     resume = commands.add_parser("resume")
     resume.add_argument("--task", type=Path, required=True)
     resume.add_argument("--worktree", type=Path, required=True)
@@ -245,6 +248,11 @@ def main() -> int:
                 print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             else:
                 print(f"{args.task_id}: {payload.get('status', 'NOT_STARTED')}")
+            return 0
+        if args.command == "reset":
+            state.reset_task(args.task_id)
+            payload = {"schema_version": 1, "task_id": args.task_id, "status": "NOT_STARTED"}
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0
         brief = load_brief(args.task)
         worktree = args.worktree.resolve()

@@ -95,6 +95,32 @@ class StateStoreTest(unittest.TestCase):
             with self.assertRaises(StateError):
                 store.load_task("E03-R01")
 
+    def test_reset_task_clears_a_stuck_terminal_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            store.save_task(
+                "E03-R01",
+                {
+                    "schema_version": 1,
+                    "task_id": "E03-R01",
+                    "status": "BLOCKED",
+                    "phase": "BLOCKED",
+                    "reason": "root cause since fixed in code",
+                },
+            )
+
+            store.reset_task("E03-R01")
+
+            self.assertEqual(store.load_task("E03-R01"), {})
+
+    def test_reset_task_on_a_never_started_task_is_a_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+
+            store.reset_task("E03-R01")
+
+            self.assertEqual(store.load_task("E03-R01"), {})
+
 
 if __name__ == "__main__":
     unittest.main()
