@@ -3,8 +3,9 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-07-31
-> (E02-R10 mergelve — practice scorerek; a `build-apk.yml` már csak dispatch-re fut)**.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (E02-R13 mergelve — állapotvezérelt Practice session UI shell; az autonóm
+> kör-pipeline az E02-R14-gyel folytatódik)**.
 > Full round-by-round history: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 1. Current release state
@@ -173,10 +174,18 @@
 
 ## 4. Current branch
 
-`main` @ [PR #34](https://github.com/wolfcasaba/strumsight/pull/34) (E02-R11,
-squash-merge `a7839d6`), CI run
-[30658454543](https://github.com/wolfcasaba/strumsight/actions/runs/30658454543)
-zöld a merge-elt HEAD-en (`a51a75d`). Kör-branch törölve.
+`main` @ [PR #37](https://github.com/wolfcasaba/strumsight/pull/37) (E02-R13,
+squash-merge `892e440`), CI run
+[30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)
+zöld a **merge SHA-ján** (`2272252` — Coverage + build-apk). Kör-branch törölve.
+A merge-elt `main`-en a `tools/round-gate.sh` függetlenül újrafuttatva:
+**mind a hét lépés zöld, `GATE_EXIT=0`**.
+
+> **Klón-/friss-munkafa csapda (mérve 2026-08-01):** a generált
+> `lib/l10n/app_localizations*.dart` **gitignore-olt**, ezért egy friss klónban
+> — és egy régóta nem regenerált munkafában is — az `analyze` több száz
+> `undefined_getter` hibával pirosat ad. Ez klón-artefaktum, nem kör-hiba:
+> `flutter gen-l10n` után a gate zöld. Reviewer-oldalon ez a **legelső** lépés.
 
 > **CI-szabály (ADR 0086):** a `build-apk.yml` csak `workflow_dispatch`-re fut;
 > merge előtt kötelező az `origin/main` mozgás-ellenőrzés, és a dispatch után a
@@ -185,48 +194,75 @@ zöld a merge-elt HEAD-en (`a51a75d`). Kör-branch törölve.
 
 ## 5. Last completed round
 
-**E02-R11 — PracticeSessionController orchestration**
-([ADR 0077](docs/adr/0077-practice-session-controller.md), PR #34): az Epic 2
-tíz körben felépült alkatrészeit (óra + pure reducer, observation gateway,
-matcher, négy scorer) egyetlen application-rétegű controller köti össze — UI
-nélkül, flagek OFF, production viselkedés változatlan (A12). A
-`practiceCaptureActiveByStatus` tábla első valódi hívója; observation-út
-státusz-őrrel; finish single-flight; result **kizárólag** a `completed` ágon.
-Zárta: E02-R07 NOTE-2 (clock `start()` idempotencia, külön commit), E02-R08
-küszöb-follow-up (egyetlen `PracticeObservationConfig` forrás), E02-R09 NOTE-3
-(matcher csak compiler-fordított targetből). Implementer: **MiniMax M3**.
+**E02-R13 — Állapotvezérelt Practice session UI shell**
+([ADR 0079](docs/adr/0079-state-driven-practice-session-shell.md), PR #37,
+squash `892e440`): a Practice session **felülete** — állapotvezérelt képernyő a
+`PracticeSessionHost` interfész mögött, mind a **nyolc** látható státusszal
+(`preparing`, `permissionRequired`, `ready`, `countIn`, `running`, `paused`,
+`finishing`, `failed`) plusz az `idle`/`completed`/`cancelled`/`null host`
+utakkal; effekt-listener (haptika, count-in kattanás, engedély-beállítások,
+eredmény-navigáció egyszeri kiadással, recoverable hibapanel); tizenegy cellás
+kilépési mátrix megerősítéssel és egyszeri kapuval; életciklus-továbbítás.
+A route a központi `AppRoutes` katalógusból megy; a
+`practiceSessionHostProvider` production defaultja továbbra is `null` → a
+képernyő lokalizált „nem elérhető" állapotot rajzol. A practice teszt-suite
+**641 → 689**. Implementer: **MiniMax M3**, két javító körrel.
 
-**A kör lefolyása a jegyzőkönyvhöz** (a részletek:
-[review](docs/reviews/e02-r11-review.md) + a brief §0.0 revíziós naplója):
+**A kör lefolyása a jegyzőkönyvhöz** (részletek:
+[review](docs/reviews/e02-r13-review.md), a brief §0.0 revíziós naplója és
+§10 handoffja):
 
-- az implementer **kétszer helyesen állt meg** (`stopped`) az orchestrátor
-  brief-hibáin: (R13) a controllerre bízott audio lease a nem-reentráns
-  koordinátoron `audio.session_busy`-ra vitte volna a production utat — a
-  lease-tulajdonos a `MicCapture` maradt; (R14) a `failed` státusz **kizárólag**
-  `preparing`-ből érhető el (`practice_session_reducer.dart:612`), ezért a
-  gateway-start bukása `cancelled`-be visz, recorder-hívás nélkül;
-- az első review **3 BLOCKER + 3 MAJOR + 2 MINOR**: A10 elhagyva, A6 „without
-  crashing"-re zsugorítva, nulla-eseményű fixture (a matcher soha nem párosult);
-- két javító kör után **APPROVED**: a valódi-sértés mutációk (A2, A4, A16, A8,
-  A14, expected-chord, pause-őr) mind pirosra váltak, kontroll **602/602 zöld**;
-- új MAJOR-4-et a review talált eldobható próbával: a pause alatt érkező
-  **párosuló** strum pontozódott — a zárás egy 4 soros státusz-őr a meglévő
-  táblával.
+- **pre-flight:** az ADR 0079 megírása + a brief **nyolc** mért állításának
+  javítása (§0.0) — a előre írt brief avult hivatkozásai;
+- **első implementer-futás:** kód kész, **nulla teszt** — a §10 az A1–A9-et
+  „struktúrával" tekintette teljesítettnek, és a zöld
+  `flutter test test/features/practice/` a **meglévő** 641 teszt zöldje volt.
+  Pontosan az L21 néma-bukás osztálya, findings-listával zárva;
+- **javító kör #1:** 4 BLOCKER + 4 MAJOR + 1 MINOR zárva, 45 új cella
+  (641 → 686). A BLOCKER-ek valódi, eszközön látszó hibák voltak: a
+  `PracticeEffectListener` **sehol nem volt beépítve** a fába (egyetlen effekt
+  sem hatott), a kilépés `maybePop`-ja **visszafutott a saját `PopScope`-jába**
+  (a képernyő elhagyhatatlan volt), és egy **helyi** `MicPermissionBanner`
+  fedte el a core widgetet;
+- **review #1:** gate + CI zöld, scope tiszta — mégis **3 új MAJOR** eldobható
+  próbatesztekkel kimérve: dupla hibakártya a `failed` úton
+  (`PROBE P1: errorTitleTexts=2`), a képernyőt túlélő recoverable hiba
+  (`PROBE P2: stale error after re-entry = 1`), és a brief A3-cellájával
+  ellentétes, **nyers kulcsot** a képernyőolvasónak küldő ág, aminek a tesztje
+  nem is az `announcements` listát mérte;
+- **javító kör #2:** mind a négy lelet zárva **37 sor** `lib/`-diffel és 3 új
+  cellával (686 → 689); a `StateProvider` helyére kézzel írt
+  `Notifier<AppFailure?>` került `NotifierProvider.autoDispose` mögé (a
+  `flutter_riverpod/legacy` import a repóból eltűnt, guard-cellával tartva);
+- **review #2 → APPROVED:** mind a négy zárás **mutációs próbával**
+  hitelesítve — a javítás visszarontása mindhárom esetben **pontosan** a hozzá
+  tartozó záró cellát váltotta pirosra, kollaterális nélkül.
 
-**Merge utánra rögzített follow-upok** (review §11.4): `noSignal` szemantika +
-hiányzó futásidejű fatal él (**E02-R18**), `AudioOwner.practice` + Live→Practice
-gateway-bekötés (**E02-R13** — a `practiceSessionControllerProvider` ma
-szándékosan nem példányosítható production oldalon).
+**Az előző kör (E02-R12 — Practice Hub és Setup, PR #36, `874e163`)** ugyanezen
+a pipeline-on ment végig; a részletei a
+[review](docs/reviews/e02-r12-review.md)-ban és a
+[kör-briefben](docs/rounds/e02-r12-practice-hub-and-setup.md) élnek — a §5
+akkori frissítése elmaradt, ez a bejegyzés pótolja a hivatkozást.
+
+**Merge utánra rögzített follow-up** (review §9.5, NOTE-3): a `running` úton
+érkező `ShowRecoverableError` „státusz változatlan / **0 parancs**" fele ma
+nincs külön cellában (a panel megjelenését a be-/ki-/belépés cella méri). A
+viselkedés helyes — a listener ezen az ágán nincs parancs-kiadás, és
+host-referenciája sincs hozzá —, tehát coverage-hiány, nem hiba; egy dedikált
+cellával az **E02-R14**-ben zárható.
 
 ## 6. Exact next task
 
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
-   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #34
+   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
-   ([30658454543](https://github.com/wolfcasaba/strumsight/actions/runs/30658454543)).
-2. **~~E02-R11 — Session controller~~ — KÉSZ** (PR #34, `a7839d6`, 2026-07-31,
+   ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
+2. **~~E02-R13 — Session UI shell~~ — KÉSZ** (PR #37, `892e440`, 2026-08-01,
    implementer **MiniMax M3**, review **APPROVED két javító kör után**).
-3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R12…R19 köröket
+   A következő kör a sorból: **E02-R14 — strum és progression módok**
+   ([`docs/rounds/e02-r14-strum-and-progression-modes.md`](docs/rounds/e02-r14-strum-and-progression-modes.md),
+   ADR 0080, motor MiniMax M3) — ezt a **pipeline** indítja, nem kézzel.
+3. **AKTÍV: autonóm kör-pipeline (ADR 0087, GOV-02).** Az E02-R14…R19 köröket
    a `tools/round-pipeline.sh` viszi, körönként **friss headless
    orchestrátor-sessionben**, cron-ütemezéssel. A sor:
    [`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv)
@@ -243,6 +279,10 @@ szándékosan nem példányosítható production oldalon).
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
    erőforrás-előírásnál mérd ki a tényleges hívási láncot (L19).
+   **A javító kör küszöbe HÁROM** (user-döntés 2026-07-31, `679ce4c`); a
+   negyedik javító kört a **Codex** viszi (`16f776f`), H4 halt csak utána.
+   **UI-kör esetén a review-nak kötelező eleme a több-belépéses és a
+   kombinált-státusz próba** — az R13 három MAJOR-ja mind ilyen volt (L22).
 5. **Az E02-R08 nyitva maradt follow-upja:** a chord-confidence felvitele a
    `LiveFrame`-be — az Analyze úton is közös, ezért külön kör; addig a Live
    adapter `confidence: 1.0` = „nem mért".

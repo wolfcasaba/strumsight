@@ -660,3 +660,62 @@ merge-evidencia, ha a kettő egyezik. Az ADR 0087 pipeline-promptja mindkettőt
 tartalmazza.
 
 **Forrás:** `docs/reviews/e02-r11-review.md` §11.5.
+
+## L22 — A UI-kör hibái a CELLÁK KÖZÖTT élnek: kombinált státusz és többszöri belépés
+
+**Mit mértünk.** Az E02-R13-ban a javító kör #1 után a gate, a CI és a
+scope-audit mind zöld volt, a képernyő **minden** státuszára volt teszt — és a
+review mégis **három MAJOR**-t mért ki eldobható próbatesztekkel. Mindhárom
+ugyanabból a vakfoltból jött: a cellák **egyenként** helyesek voltak.
+
+1. **Kombinált forrás.** A `failed` státuszra a **státusz-vezérelt** panel és az
+   **effekt-vezérelt** overlay is renderelt — külön-külön mindkettőnek volt zöld
+   cellája. A reducerben viszont egyetlen hely állít `failed`-et
+   (`practice_session_reducer.dart:612`), és **ugyanaz a tranzíció** adja a
+   `ShowRecoverableError` effektet is: `PROBE P1: PracticeErrorPanel=1
+   errorTitleTexts=2` — a normál hibafolyamban két hibakártya.
+2. **Többszöri belépés.** Az overlay-állapot app-scope-ú `StateProvider` volt,
+   amit senki nem nullázott: `PROBE P2: stale error surfaces after re-entry = 1`.
+   Minden meglévő cella **egyetlen** `pumpWidget`-tel dolgozott, ezért egyik sem
+   láthatta.
+3. **A fake naplóz, a teszt nem nézi.** Az `AnnounceAccessibilityFeedback`
+   cellája a haptikát és a navigációt mérte nullának — a `_RecordingFeedback`
+   `announcements` **listáját nem**. Az ág eközben a nyers gépi kulcsot küldte a
+   képernyőolvasónak, a brief A3 táblájával szemben.
+
+**Mit csinálunk.** (1) UI-kör briefjében a státusz-mátrix mellé **kombinált**
+cella is kell: minden olyan státuszra, amit a reducer effekttel EGYÜTT állít be,
+a záróteszt a státuszt **és** az effektet együtt adja, és a felületet
+**megszámolja** (`findsOneWidget`, nem `findsWidgets`). (2) Minden
+képernyő-scope-ú állapotra kötelező a **be- → ki- → újra-belépés** cella
+ugyanabban a `ProviderScope`-ban. (3) Ha egy cella „0 hívást" ír elő, a
+záróteszt a fake **naplólistáját** mérje, ne egy másik mezőt. (4) A review
+oldalán a zárás hitelesítése **mutációs próba**: a javítás visszarontása
+**pontosan** a hozzá tartozó cellát váltsa pirosra — az R13-ban mindhárom
+mutáció így viselkedett, kollaterális nélkül.
+
+**Forrás:** `docs/reviews/e02-r13-review.md` §5 és §9.3.
+
+## L23 — A generált l10n gitignore-olt: friss klón / régi munkafa `analyze`-e hamisan piros
+
+**Mit mértünk.** Az E02-R13 review-jában a friss `/tmp` klónon a
+`tools/round-gate.sh` **490 hibával** pirosat adott (`undefined_getter`,
+`Target of URI doesn't exist: package:strumsight/l10n/app_localizations.dart`),
+holott a kör kódja hibátlan volt. Ugyanez a merge utáni fő munkafán is
+megismétlődött, 145 hibával — mert a fa hosszú ideje nem regenerált, miközben az
+R12/R13 új ARB-kulcsokat vitt be.
+
+**Mit csinálunk.** A `lib/l10n/app_localizations*.dart` **generált és
+gitignore-olt** (CLAUDE.md), ezért izolált klónban és régóta nem frissített
+munkafában a gate ELSŐ lépése:
+
+```bash
+/home/ubuntu/flutter/bin/flutter gen-l10n
+```
+
+Ez után a gate a valóságot méri. A tünet felismerhető: a hibák **kizárólag**
+`AppLocalizations`-getterek és az `app_localizations.dart` URI-ja — ha bármi más
+is piros, az már valódi lelet.
+
+**Forrás:** `docs/reviews/e02-r13-review.md` §9.1; mérve 2026-08-01, a
+`/tmp/review-e02r13-fix2` klónon és a `main` munkafán.

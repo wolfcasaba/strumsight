@@ -823,3 +823,41 @@ nem bemondásra fogadta el.
 Korábbi körök (E02-R03 részletes története is):
 [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
+
+---
+
+## I) E02-R11 kör-összefoglaló (a 2026-07-31-i HANDOFF §5 teljes tartalma, E02-R13 merge-ekor archiválva)
+
+**E02-R11 — PracticeSessionController orchestration**
+([ADR 0077](docs/adr/0077-practice-session-controller.md), PR #34): az Epic 2
+tíz körben felépült alkatrészeit (óra + pure reducer, observation gateway,
+matcher, négy scorer) egyetlen application-rétegű controller köti össze — UI
+nélkül, flagek OFF, production viselkedés változatlan (A12). A
+`practiceCaptureActiveByStatus` tábla első valódi hívója; observation-út
+státusz-őrrel; finish single-flight; result **kizárólag** a `completed` ágon.
+Zárta: E02-R07 NOTE-2 (clock `start()` idempotencia, külön commit), E02-R08
+küszöb-follow-up (egyetlen `PracticeObservationConfig` forrás), E02-R09 NOTE-3
+(matcher csak compiler-fordított targetből). Implementer: **MiniMax M3**.
+
+**A kör lefolyása a jegyzőkönyvhöz** (a részletek:
+[review](docs/reviews/e02-r11-review.md) + a brief §0.0 revíziós naplója):
+
+- az implementer **kétszer helyesen állt meg** (`stopped`) az orchestrátor
+  brief-hibáin: (R13) a controllerre bízott audio lease a nem-reentráns
+  koordinátoron `audio.session_busy`-ra vitte volna a production utat — a
+  lease-tulajdonos a `MicCapture` maradt; (R14) a `failed` státusz **kizárólag**
+  `preparing`-ből érhető el (`practice_session_reducer.dart:612`), ezért a
+  gateway-start bukása `cancelled`-be visz, recorder-hívás nélkül;
+- az első review **3 BLOCKER + 3 MAJOR + 2 MINOR**: A10 elhagyva, A6 „without
+  crashing"-re zsugorítva, nulla-eseményű fixture (a matcher soha nem párosult);
+- két javító kör után **APPROVED**: a valódi-sértés mutációk (A2, A4, A16, A8,
+  A14, expected-chord, pause-őr) mind pirosra váltak, kontroll **602/602 zöld**;
+- új MAJOR-4-et a review talált eldobható próbával: a pause alatt érkező
+  **párosuló** strum pontozódott — a zárás egy 4 soros státusz-őr a meglévő
+  táblával.
+
+**Merge utánra rögzített follow-upok** (review §11.4): `noSignal` szemantika +
+hiányzó futásidejű fatal él (**E02-R18**), `AudioOwner.practice` + Live→Practice
+gateway-bekötés (**E02-R13** — a `practiceSessionControllerProvider` ma
+szándékosan nem példányosítható production oldalon).
+
