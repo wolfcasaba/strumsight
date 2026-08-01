@@ -3,7 +3,7 @@
 Brief: `docs/rounds/e02-r20-epic-closure.md`
 Diff: `git diff origin/main...codex/e02-r20-epic-closure` (HEAD `5b27ed7`)
 Reviewer: Claude (Sonnet 5, orchestrátor-review) · Dátum: 2026-08-01
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (javító kör #1 után, `714889d`)
 
 ## Összegzés
 
@@ -195,10 +195,46 @@ tesztfájl, `docs/sdd/epic-02-completion-report.md`,
 | test test/features/practice/ + 6 további útvonal | zöld | ✅ mind a 9 teszt-lépés + architecture zöld a saját futtatásban |
 | CI (teljes suite + property + APK) | — | ⏳ az orchestrátor a merge előtt dispatch-eli, ez a review nem várja meg |
 
+## Javító kör #1 után — újra-ellenőrzés (2026-08-01, `714889d`)
+
+Saját kézzel, friss izolált `/tmp/review-e02r20-fix1` klónban
+(`flutter pub get` + `tools/round-gate.sh` a §9 szerinti 7 útvonallal):
+**mind a 10 lépés zöld** (format, analyze, 7×test, architecture).
+
+Leletenként:
+
+- **F0 (BLOCKER) — FIXED.** A DoD-tábla mind a 6 sora (#30/34/37/39/40/41)
+  a §3-mal egyező minősítést kapott, a bizonyíték-oszlopban a konkrét mért
+  hívási lánccal vagy a 0-találatos `grep`-pel (ellenőrizve: a diff idézi
+  a fájl:sor evidenciát, a `SpeedBuilder`/`lesson_practice_adapter`/
+  `daily_challenge` hívási láncok állítása egyezik a review saját mérésével).
+  A §5 összegző mondat frissült (39/52 teljesül, 10/52 rendszerszintű rés).
+- **F1 (BLOCKER) — FIXED.** A4.2/A4.4/A4.5 újraírva: valós
+  `_runProductionAggregator`/`_driveReducerToTerminal`/reducer-hajtott
+  `ClockAdvanced`-sorozat, mind randomizált bemenettel. A4.4-hez piros→zöld
+  próba dokumentálva (`clearPauseCause` ideiglenes elrontása →
+  `iteration=3: terminal state still holds a pauseCause` piros → visszaállítás
+  zöld) — a saját gate-újrafuttatásban a `test/property/` lépés zöld.
+- **F2 (MAJOR) — FIXED.** `practice_l10n_audit_test.dart` törölve; a
+  genuinely-új tartalom (mapping-pin + 2 widget-render próba) átköltözött
+  `practice_a11y_audit_test.dart`-ba (A2.1–A2.4); a vacuous A2.3 cella
+  eldobva (indoklással). Scope-audit a javító kör diffjén: 0 fájl a §4
+  listán kívül.
+- **F3 (MINOR) — FIXED.** Új `A1.1b` cella pinneli a `_HubCard`
+  `ExcludeSemantics`-fixet (`practice_a11y_audit_test.dart`); a cella
+  kommentje szerint a fix reverziójára `findsOneWidget`-re vált a
+  subtitle-label — a saját gate-futásban a widget-teszt lépés zöld.
+- **Egy apró maradék hiba** (nem a review 4 leletének része): a DoD-tábla
+  #51 sora a törölt `practice_l10n_audit_test.dart`-ra hivatkozott —
+  a reviewer ezt közvetlenül javította (1 soros doksi-citáció,
+  `practice_a11y_audit_test.dart A2.1–A2.4`-re), nem igényelt újabb
+  javító kört.
+
+**Nincs nyitott BLOCKER/MAJOR.** A MINOR (F3) és a NOTE (F4) zártak/nem
+blokkolók.
+
 ## Merge-döntés
 
-**Merge TILOS** — 2 nyitott BLOCKER (F0, F1) + 1 nyitott MAJOR (F2).
-
-Router-szemantika (brief §0.0/3, HANDOFF §6/3): az M3 **egy** javító kört
-kap a fenti F0/F1/F2/F3 leletlistával. Ha utána is nyitva marad
-BLOCKER/MAJOR, a következő javító kört a **Codex** viszi.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR →
+**merge engedélyezett**, a CI teljes suite + property + APK zöld futása
+után (az orchestrátor dispatch-eli és linkeli a PR-ben).

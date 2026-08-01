@@ -193,7 +193,7 @@ igazolva. A „nagyrészt teljesül" típusú összevont mondat nem elfogadható
 | 48 | Valós eszközös teszt dokumentálva | **teljesül** | `docs/manual-testing/practice-engine-device-matrix.md` (R20) — a mátrix és a kitöltési útmutató kész, a user tölti ki |
 | 49 | Nincs ismert audio resource leak | **részleges — fake gateway-vel bizonyított, valós mikrofonos úton nem gyakorolt** | `practice_session_lifecycle_test.dart` A7 (R13) + ADR 0074; a §3 rendszerszintű rés miatt a valós mikrofonos session-út nem indult el |
 | 50 | Nincs korlátlan history vagy verdict memória | **teljesül** | `practice_engine_property_test.dart` A4.1 + A3 perf teszt — `retainedTargetRecordCount ≤ targetCount`, history cap `maxSessions=200` (ADR 0084) |
-| 51 | Minden user-facing string lokalizált | **teljesül** | `l10n_parity_test.dart` + `practice_l10n_audit_test.dart` (R20) — minden PracticeInsightCode + PracticeRecommendationKind mindkét nyelven |
+| 51 | Minden user-facing string lokalizált | **teljesül** | `l10n_parity_test.dart` + `practice_a11y_audit_test.dart` A2.1–A2.4 cellák (R20 javító kör #1 — a mapping-pin ide költözött a törölt `practice_l10n_audit_test.dart`-ból) — minden PracticeInsightCode + PracticeRecommendationKind mindkét nyelven |
 | 52 | Accessibility követelmények teljesülnek | **részleges — teszt-szinten bizonyított, valós eszközön nem** | `practice_a11y_audit_test.dart` A1.1–A1.10 (R20); a screen-reader/live-region fixek a Hub/Setup/Result képernyőkön lokálisan igazoltak, a Session képernyő a §3 rendszerszintű rés miatt nem indítható |
 
 **Összegzés:** 39/52 cella teljesül a fenti bizonyítékkal; 10/52 cella
