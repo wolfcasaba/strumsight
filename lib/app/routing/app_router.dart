@@ -15,6 +15,7 @@ import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
+import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -131,6 +132,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceSession,
           builder: (_, _) => const PracticeSessionScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceResult,
+          builder: (_, _) => const PracticeResultFallback(),
         ),
       ],
     ],

@@ -20,6 +20,8 @@ import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
 import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
 import 'package:strumsight/features/practice/domain/model/practice_event.dart';
+import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
+import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
 import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
@@ -27,6 +29,7 @@ import 'package:strumsight/features/practice/domain/model/tempo.dart';
 import 'package:strumsight/features/practice/domain/repository/practice_catalog_repository.dart';
 import 'package:strumsight/features/practice/presentation/practice_route_args.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
@@ -299,6 +302,70 @@ void main() {
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: PracticeSessionScreen(),
+              ),
+            ),
+          );
+          await tester.pump();
+        });
+      });
+
+      testWidgets('Practice result (E02-R18, fallback for empty entry)', (
+        tester,
+      ) async {
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: preferenceOverrides(),
+              child: const MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: PracticeResultFallback(),
+              ),
+            ),
+          );
+          await tester.pump();
+        });
+      });
+
+      testWidgets('Practice result (E02-R18, strum pattern entry)', (
+        tester,
+      ) async {
+        final fixture = PracticeHistoryEntry(
+          id: 'guard.result.v1',
+          modeCode: PracticeMode.strumPattern.code,
+          sourceCode: PracticeSource.builtin.code,
+          createdAt: DateTime(2026, 7, 11, 12, 0),
+          definitionId: 'guard.result',
+          displayTitle: 'Guard fixture',
+          finishReasonCode: 'userFinished',
+          activeDuration: const Duration(seconds: 30),
+          pausedDuration: Duration.zero,
+          attemptsCount: 1,
+          finalMetricSnapshot: const PracticeMetricSnapshot(
+            completion: PracticeMetricDimensionAvailable(0.9),
+            rhythm: PracticeMetricDimensionAvailable(0.85),
+            direction: PracticeMetricDimensionAvailable(0.95),
+            chord: PracticeMetricDimensionNotApplicable(),
+            overall: PracticeMetricDimensionAvailable(0.9),
+          ),
+          totalTargets: 16,
+          resolvedTargets: 14,
+          scorePoints: 800,
+          maxCombo: 12,
+          meanAbsoluteOffset: const Duration(milliseconds: 18),
+          timingBias: const Duration(milliseconds: -2),
+          coachingSummary: const ['practice.coach.late'],
+          skillTags: const ['guard'],
+          highestStableTempoBpm: 100.0,
+        );
+        await atSize(tester, entry.value, () async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: preferenceOverrides(),
+              child: MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: PracticeResultScreen(entry: fixture),
               ),
             ),
           );

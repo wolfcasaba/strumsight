@@ -691,5 +691,45 @@
   "adaptiveSuggestionPositive": "Szép munka — építs tovább erre a próbálkozásra.",
   "adaptiveSuggestionNextDifficulty": "Készen állsz a következő nehézségre.",
   "adaptiveSuggestionApply": "Alkalmazás",
-  "adaptiveSuggestionDismiss": "Elutasítás"
+  "adaptiveSuggestionDismiss": "Elutasítás",
+  "practiceResultTitle": "Gyakorlat eredménye",
+  "practiceResultBreakdownTitle": "Pontszám-bontás",
+  "practiceResultOverall": "Összesített",
+  "practiceResultCompletion": "Teljesítés",
+  "practiceResultRhythm": "Ritmus",
+  "practiceResultDirection": "Irány",
+  "practiceResultChord": "Akkord",
+  "practiceResultChordPair": "Akkordpár",
+  "practiceResultSpeedBuilder": "Speed Builder",
+  "practiceResultNotScored": "Nincs pontozva",
+  "practiceResultInsufficientData": "Nincs elég adat",
+  "practiceResultCoachingTitle": "Coaching",
+  "practiceResultTimingTitle": "Időzítés",
+  "practiceResultTimingBalanced": "Ütemben",
+  "practiceResultTimingEarly": "Sietsz",
+  "practiceResultTimingLate": "Késik",
+  "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
+  "practiceResultFinishTimedOut": "A gyakorlat túllépte az időkeretet",
+  "practiceResultFinishInterrupted": "A gyakorlat megszakadt",
+  "practiceResultUnavailableTitle": "Nincs megjeleníthető eredmény",
+  "practiceResultUnavailableBody": "Futtass le egy gyakorlatot az eredmény megtekintéséhez.",
+  "practiceResultDimensionSemantic": "{label}: {value}",
+  "@practiceResultDimensionSemantic": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultTimingSemantic": "Időzítés: {label}",
+  "@practiceResultTimingSemantic": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

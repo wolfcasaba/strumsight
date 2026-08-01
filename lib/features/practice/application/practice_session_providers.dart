@@ -26,15 +26,21 @@
 // `SharedPreferences`, `dart:ui`, or `DateTime.now(`. The A9 layer-purity
 // guard asserts this.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:meta/meta.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/microphone_permission.dart';
+import '../data/local_practice_history_repository.dart';
+import '../data/practice_history_recorder.dart';
+import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
+import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
@@ -53,11 +59,77 @@ final practiceTickSourceProvider = Provider<PracticeTickSource>(
   (_) => TimerPracticeTickSource(),
 );
 
-/// Default persistence boundary. Kör 18 swaps this for a real repository;
-/// until then the no-op returns `Success` without writing.
-final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>(
-  (_) => const NoopPracticeSessionRecorder(),
+/// Default persistence boundary. Kör 18 ships the real recorder backed by
+/// the versioned [PracticeHistoryRepository]; the controller's finish path
+/// reads through this provider.
+///
+/// The recorder is wired with **placeholder** mode/source/definition codes
+/// today — the controller does not surface the session's
+/// `PracticeSessionConfig`, so the real metadata plumbing belongs to R19.
+/// Until then, the persistence layer MUST NOT write records the serializer
+/// would reject on read (a write-then-drop trap, see brief B2): the provider
+/// resolves to a [NoopPracticeSessionRecorder] whenever the wired codes are
+/// still the placeholders, so a production record() returns `Success` without
+/// writing anything that would be discarded by the reader.
+final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
+  ref,
+) {
+  final repository = ref.watch(practiceHistoryRepositoryProvider);
+  final detailed = ref.watch(
+    appConfigProvider.select((cfg) => cfg.flags.practiceDetailedHistoryEnabled),
+  );
+  const modeCode = 'practice.mode.unknown';
+  const sourceCode = 'practice.source.unknown';
+  const definitionId = 'practice.definition.unknown';
+  if (_isPlaceholderMetadata(
+    modeCode: modeCode,
+    sourceCode: sourceCode,
+    definitionId: definitionId,
+  )) {
+    // R19: real session metadata plumbing — when the controller exposes
+    // `PracticeSessionConfig`, this branch disappears and the real recorder
+    // writes loadable records. Today, the real recorder would emit records
+    // the reader drops (unknown enum code → JsonRecordException), so we
+    // intentionally return the no-op recorder instead.
+    return const NoopPracticeSessionRecorder();
+  }
+  return PracticeHistoryRecorder(
+    repository: repository,
+    mapperFactory: () => PracticeSessionResultHistoryMapper(
+      now: DateTime.now,
+      detailEnabled: detailed,
+      modeCode: modeCode,
+      sourceCode: sourceCode,
+      definitionId: definitionId,
+      displayTitle: '',
+      skillTags: const <String>[],
+    ),
+  );
+});
+
+/// True when the wired session metadata still uses the R18 placeholder
+/// values. Exposed at library scope so the B2 test can prove the wiring is
+/// locked behind the same gate as the live provider.
+@visibleForTesting
+bool isPlaceholderPracticeMetadata({
+  required String modeCode,
+  required String sourceCode,
+  required String definitionId,
+}) => _isPlaceholderMetadata(
+  modeCode: modeCode,
+  sourceCode: sourceCode,
+  definitionId: definitionId,
 );
+
+bool _isPlaceholderMetadata({
+  required String modeCode,
+  required String sourceCode,
+  required String definitionId,
+}) {
+  return modeCode == 'practice.mode.unknown' ||
+      sourceCode == 'practice.source.unknown' ||
+      definitionId == 'practice.definition.unknown';
+}
 
 /// Deterministic-then-monotonic session-id factory. Defaults to a
 /// counter-based factory so production builds get unique ids while tests

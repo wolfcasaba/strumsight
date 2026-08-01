@@ -757,5 +757,45 @@
   "adaptiveSuggestionPositive": "Good work — keep building from this attempt.",
   "adaptiveSuggestionNextDifficulty": "You are ready for the next difficulty.",
   "adaptiveSuggestionApply": "Apply",
-  "adaptiveSuggestionDismiss": "Dismiss"
+  "adaptiveSuggestionDismiss": "Dismiss",
+  "practiceResultTitle": "Practice result",
+  "practiceResultBreakdownTitle": "Score breakdown",
+  "practiceResultOverall": "Overall",
+  "practiceResultCompletion": "Completion",
+  "practiceResultRhythm": "Rhythm",
+  "practiceResultDirection": "Direction",
+  "practiceResultChord": "Chord",
+  "practiceResultChordPair": "Chord pair",
+  "practiceResultSpeedBuilder": "Speed Builder",
+  "practiceResultNotScored": "Not scored",
+  "practiceResultInsufficientData": "Not enough data",
+  "practiceResultCoachingTitle": "Coaching",
+  "practiceResultTimingTitle": "Timing",
+  "practiceResultTimingBalanced": "On the beat",
+  "practiceResultTimingEarly": "Rushing ahead",
+  "practiceResultTimingLate": "Dragging behind",
+  "practiceResultFinishUserFinished": "You finished the session",
+  "practiceResultFinishTimedOut": "Session timed out",
+  "practiceResultFinishInterrupted": "Session was interrupted",
+  "practiceResultUnavailableTitle": "No result to show",
+  "practiceResultUnavailableBody": "Finish a practice session to see the breakdown.",
+  "practiceResultDimensionSemantic": "{label}: {value}",
+  "@practiceResultDimensionSemantic": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultTimingSemantic": "Timing: {label}",
+  "@practiceResultTimingSemantic": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

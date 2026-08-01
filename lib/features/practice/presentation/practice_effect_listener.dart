@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../app/routing/app_route.dart';
+import '../../../../app/routing/app_router.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/platform/app_lifecycle.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -68,7 +70,15 @@ final practiceFeedbackOutputProvider = Provider<PracticeFeedbackOutput>(
 
 typedef PracticeResultNavigationSink = void Function();
 final practiceResultNavigationSinkProvider =
-    Provider<PracticeResultNavigationSink>((_) => () {});
+    Provider<PracticeResultNavigationSink>((ref) {
+      // Default sink — navigates to the result route so the post-session screen
+      // has somewhere to land. Production wires the screen's router-aware
+      // navigation here; tests override with a recording stub.
+      return () {
+        final router = ref.read(routerProvider);
+        router.go(AppRoutes.practiceResult);
+      };
+    });
 
 /// Stores the recoverable failure shown by the active session screen.
 /// Auto-disposal gives every screen entry a fresh overlay state.
