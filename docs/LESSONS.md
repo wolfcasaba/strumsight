@@ -1143,3 +1143,55 @@ amikor először szükség lesz rá — egy külső gyökérok-javítás (ADR 01
 kör) állandó falba ütközik recovery-parancs nélkül. (3) A regressziós teszt a
 saját mért hibaüzenetből induljon (itt: a HALTED fájl pontos repro-parancsa és
 a router.py sorszáma), ne kitalált tünetből.
+
+## L38 — A "csinált-e valamit a modell" ellenőrzés nem ugyanaz, mint a "scope-sértés" ellenőrzés; és a resume-nak nincs biztonságos helye a saját findings-fájljának
+
+**Mit mértünk (2026-08-01, E02-R21, H6 halt, 3. előfordulás, ugyanaz a kör).**
+A router első ÉLES `run` hívása `READY_FOR_REVIEW`-t ("M3 gate passed")
+jelzett, de a munkapéldány `git status`/`git diff HEAD` **teljesen tiszta**
+volt — az M3 egyetlen `lib/`/`test/` fájlt sem módosított. A task-state
+`changed_paths` mezője kizárólag `.dart_tool/**` és `build/**` bejegyzéseket
+tartalmazott. Ezután a lelet `resume`-mal (review-findings fájllal) történő
+visszaadása `BLOCKED`-ba futott: `path outside allowed scope:
+.ai/review-findings-e02-r21.md; …; .codex-round-status` — a router saját
+jelzőfájlját (`.codex-round-status`) és az orchestrátor saját
+review/findings fájljait is scope-sértésnek nézte.
+
+**Miért.** Két önálló, de rokon hiba `tools/ai_router`-ban. (1)
+`router.py:702-703` a „csinált-e valamit az M3" döntést
+(`if audit is not None and not audit.changed_paths: … NO_CHANGE …`)
+ugyanarra a `changed_paths` halmazra alapozza, amit `security.py:190-197`
+`audit_scope` a **scope-sértés** ellenőrzéshez épít — utóbbiban a
+generált/ignorált útvonalak (`_is_generated_ignored`) helyesen ki vannak zárva
+a *violation*-ból, de MEGMARADNAK a `changed_paths` halmazban, amit a hívó a
+„történt-e valódi munka" jelzésére használ. A `BASELINE_GATE` (ami a
+PRECHECK fázisban, MÉG AZ M3-hívás ELŐTT lefuttatja a teszteket) első ízben
+hozza létre a `build/`/`.dart_tool/` fákat egy friss munkapéldányban — ez a
+saját melléktermék az M3 utáni audit szemében "M3 diffnek" tűnik. (2)
+`security.py:20-49` `GENERATED_IGNORED_PREFIXES`/`GLOBS` csak Flutter-generált
+útvonalakat ismer — nincs kivétel sem a router saját `.codex-round-status`
+jelzőfájlára, sem egy dedikált orchestrátor-írta findings-útvonalra. A
+`resume` wrapper (`tools/ai-router-round.sh`) ugyanakkor megköveteli, hogy a
+review-findings fájl A MUNKAPÉLDÁNYON BELÜL legyen — tehát a dokumentált
+munkafolyamat (orchestrátor-prompt §1.1: "a leleteket fájlban add vissza")
+strukturálisan önmagával ütközik: bármelyik fájl, amit az orchestrátor a
+`resume`-hoz a munkapéldányba ír, a következő audit "path outside allowed
+scope" hibájává válik.
+
+**Hogyan alkalmazd.** (1) Egy audit-halmazt, amit KÉT különböző döntéshez
+használsz (történt-e munka / scope-sértés van-e), vagy közös, szigorúbb
+szűréssel építs, vagy két külön mezőbe válaszd szét — itt a fix:
+`audit.changed_paths`-ból zárd ki a generáltakat is (ne csak a
+violations-ból), és a "volt-e munka" checket erre a szűkített halmazra
+futtasd. (2) Egy hosszú-életű ágens-eszköz saját jelzőfájljait (itt:
+`.codex-round-status`) VEGYE FEL a saját ignore/exempt listájára — egy őr,
+ami a saját infrastruktúráját scope-sértésnek nézi, önmagát zárja ki minden
+`resume`-ból. (3) Ha egy workflow explicit megköveteli, hogy az orchestrátor
+egy fájlt a felügyelt munkapéldányba írjon (findings, review), a
+scope-audit tervezésekor ELSŐ osztályú esetként kezeld, ne utólagos
+kivételként — vagy dedikált, mindig-kizárt alkönyvtárral (`.ai/orchestrator/**`),
+vagy a `resume` hívás elfogadjon munkapéldányon KÍVÜLI findings-útvonalat is.
+(4) Regressziós teszt mindkettőre `tools/tests/test_router*.py`-ban, a mért
+reprodukáló állapotból (üres diff + sikeres gate; `.codex-round-status`
+jelenléte + `resume`), mielőtt a `reset --task-id E02-R21` bármit is
+feloldana.

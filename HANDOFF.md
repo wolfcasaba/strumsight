@@ -4,14 +4,24 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
-> (GOV-03 / ADR 0112 önjavító kör, H6 2. előfordulás — a security.py-fix után
-> az E02-R21 task-state a routerben véglegesen BLOCKED maradt, mert
-> `router.py run()` egy nem-RUNNING/DEFERRED terminal state-en `result_path`
-> írás NÉLKÜL tért vissza (a wrapper ezt mindig INTERNAL_ERRORra fordította,
-> elrejtve a valódi okot), és nem volt reset-út egy azóta javított BLOCKED
-> taskhoz. Javítva: `run()` minden terminal-state ágon ír result_path-ot;
-> `model-router.py reset --task-id` + `StateStore.reset_task` törli/
-> re-prechekkeli a stuck task state-et. Lásd `docs/LESSONS.md` L37).**
+> (GOV-03 / ADR 0112 önjavító kör, H6 3. előfordulás, ugyanaz az E02-R21 kör —
+> az L37-fix (reset CLI) UTÁN a router-taskot sikerült feloldani, de az ELSŐ
+> valódi `run` két ÚJ, önálló hibát fedett fel ugyanabban a `tools/ai_router`
+> modulban. (1) A router `READY_FOR_REVIEW`-t ("M3 gate passed") jelzett úgy,
+> hogy az M3 **egyetlen `lib/`/`test/` fájlt sem módosított** — a
+> `changed_paths` (`router.py:702-703`) ugyanazt a halmazt használja a "történt-e
+> munka" döntésre, mint a scope-sértés ellenőrzés, és a BASELINE_GATE saját
+> build-cache melléktermékét (`.dart_tool/`, `build/`) M3-diffnek nézte. (2) A
+> lelet `resume`-mal (review-findings fájllal) történő visszaadása ezután
+> `BLOCKED`-ba futott: a scope-audit a router saját `.codex-round-status`
+> jelzőfájlját és az orchestrátor saját findings/review fájljait is
+> scope-sértésnek jelezte — a dokumentált `resume`+findings munkafolyamat
+> strukturálisan önmagával ütközik. Mindkét M3-kísérlet (2/2) elfogyott, a
+> task-state BLOCKED (terminal). Teljes gyökérok + javítási pontok:
+> `docs/reviews/e02-r21-review.md` a `codex/e02-r21-practice-production-wiring`
+> ágon (`16b8d88`); tanulság: `docs/LESSONS.md` L38. **A Practice V2 production
+> drótozás (a kör tényleges célja) ÉRINTETLEN — nulla sor implementáció
+> készült el.**).**
 > Előző kör: 2026-08-01
 > (GOV-03 / ADR 0112 — önjavító pipeline: a HALT-ból a lánc magától indít
 > javító kört; egy korábbi körben javítva az E02-R21-et és az EGÉSZ Epic 3-at
@@ -296,6 +306,16 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
+0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár.** A router két új
+   hibáját (téves `READY_FOR_REVIEW` valódi diff nélkül + a `resume`
+   önmagával ütköző scope-audit-ja — teljes gyökérok:
+   `docs/reviews/e02-r21-review.md` a `codex/e02-r21-practice-production-wiring`
+   ágon, `16b8d88`; tanulság `docs/LESSONS.md` L38) a `tools/ai_router`-ban
+   kell javítani, kötelező regressziós teszttel, MIELŐTT a
+   `model-router.py reset --task-id E02-R21` bármit is feloldana. A kör
+   brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`) kész és
+   változatlan — a Practice V2 tényleges production-drótozása (a kör célja)
+   **még el sem kezdődött**, egy sor implementáció sem készült.
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
