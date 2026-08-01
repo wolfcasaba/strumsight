@@ -4,6 +4,39 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — a H4-sandbox-fix (PR #51) UTÁNI első ÉLES `run` is HALT-ba
+> futott, de ez az ELSŐ E02-R21 kísérlet, ahol a router teljes infrastruktúrája
+> (sandbox, állapotgép, megszakítás-kezelés) mérve HIBÁTLANUL futott végig — a
+> STOPPED valódi tartalmi gate-kudarcból jön, NEM infra-hibából: H4.** A
+> munkapéldány (`ss-auto-e02-r21`) `origin/main`-re rebase-elve (`294a008`,
+> tartalmazza a H4-sandbox-fixet). Az orchestrátor a §1.1 szerinti
+> `tools/ai-router-round.sh run` hívást futtatta előtérben; a Bash-eszköz 600s
+> plafonja miatt a hívás kétszer SIGTERM-mel megszakadt, mindkétszer helyesen
+> kezelve (H6-fix): az első megszakítás előtt még nem volt diff, a próba nem
+> fogyott; a második megszakítás UTÁN már volt valódi, hatókörön belüli diff,
+> ezért a harmadik hívás nem a modellt hívta újra, hanem a gate-et futtatta.
+> A harmadik hívás lezárta a teljes keretet: `RECOVERED_M3_CALL_1` →
+> `code_failure` (`format`), `M3_CALL_2` → `code_failure` (`analyze`), Terra →
+> `code_failure` (`test test/features/practice`) → `STOPPED`. A router
+> **szándékosan** redaktálja a gate-hiba szövegét (csak kategória + lépésnév +
+> SHA-256 hash marad), ezért a pontos hibaszöveg ebből a sessionből nem volt
+> kinyerhető — de a munkapéldány állapotából mérve: a két ÚJ fájl (A4 gateway
+> provider, A5 piros→zöld teszt) mindhárom próbán túlélte, koherens és a brief
+> §4/§6-nak megfelelő tartalommal, de a **három MEGLÉVŐ wiring-célfájl
+> (`practice_session_providers.dart`, `practice_setup_controller.dart`,
+> `practice_effect_listener.dart`) ma is bitre a baseline-on áll** — egyik
+> próba sem jutott el a kör tényleges magjáig (A1/A2/A3). Teljes mérés +
+> reprodukciós parancsok:
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
+> "Update 5" szakasz, a `codex/e02-r21-practice-production-wiring` ágon
+> (`94c4b9f`). A router task-kerete (2/2 M3 + 1/1 Terra) kimerült — a
+> következő session dolga eldönteni: (a) `reset --task-id E02-R21` + friss
+> `run` ugyanazzal a brieffel, vagy (b) explicit `codex`/`minimax` motor a NEM
+> redaktált logért, hogy a format/analyze/test kudarcok pontos szövege
+> kiderüljön. **A Practice V2 production-drótozás (a kör tényleges célja)
+> továbbra sincs elkezdve a production kódban** — ez a HATODIK halt/önjavító
+> kör ugyanezen a task-on, de az ELSŐ, ahol az ok tartalmi, nem infrastrukturális.
+> Előző kör: 2026-08-01
 > (önjavító kör, E02-R21 H4 JAVÍTVA — PR #51, `6d99820`.** Mért gyökérok
 > (`docs/LESSONS.md` L43): a router valódi (nem-smoke) `codex exec` hívása
 > `tools/ai_router/execution.py`-ban `--sandbox workspace-write`-ot használt,
@@ -503,18 +536,23 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 H4 önjavító kör JAVÍTVA (PR #51, `6d99820`), a lánc
-   szabad — a következő cron-firing `run`-t indít.** `tools/ai_router/
-   execution.py` `build_codex_argv`-jában `"workspace-write"` →
-   `"danger-full-access"` (mindkét profilra), regressziós teszttel
-   (`tools/tests/test_execution.py`, RED/GREEN igazolva), `router-ci.yml`
-   zölden a merge-elt SHA-n, `reset --task-id E02-R21` lefuttatva →
-   `NOT_STARTED`. Részletek: `docs/LESSONS.md` L43 "Javítva" szakasz. A kör
+0. **AZONNALI: E02-R21 HATODIK halt, de ELSŐ tartalmi (nem infra) ok — H4,
+   a router STOPPED-et jelzett valódi gate-kudarcokkal (2026-08-01,
+   `docs/reviews/e02-r21-review.md` "Update 5").** A H4-sandbox-fix (PR #51)
+   után a router infrastruktúrája (sandbox, állapotgép, megszakítás-kezelés)
+   mérve hibátlanul futott — M3×2 + Terra×1 mind `code_failure`-t adott
+   (`format`/`analyze`/`test test/features/practice`), a router task-kerete
+   kimerült. Mérve: a két ÚJ fájl (A4 gateway provider, A5 teszt) túlélte,
+   koherens; a három MEGLÉVŐ wiring-célfájl (`practice_session_providers.dart`,
+   `practice_setup_controller.dart`, `practice_effect_listener.dart`) ma is
+   baseline. A pontos hibaszöveg a router szándékos redakciója miatt nem
+   kinyerhető ebből a sessionből. **A következő session döntsön:**
+   (a) `python3 tools/model-router.py reset --task-id E02-R21` + friss `run`
+   ugyanazzal a brieffel, vagy (b) explicit `codex`/`minimax` motor a NEM
+   redaktált logért (`tools/codex-round.sh`/`tools/mm-round.sh`). A kör
    brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`)
-   változatlan, kész. **A Practice V2 production-drótozása (a kör tényleges
-   célja) még mindig el sem kezdődött** — ez volt az ÖTÖDIK önjavító/halt-kör
-   ugyanezen a task-on; ha a most javított sandbox-fix után is HALT jön,
-   az MÁR egy hatodik, eddig nem látott hibaosztály lenne.
+   változatlan, kész — a leletek NEM a briefben vannak. **A Practice V2
+   production-drótozása (a kör tényleges célja) még mindig el sem kezdődött.**
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
