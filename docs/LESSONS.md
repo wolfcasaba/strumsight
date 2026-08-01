@@ -1344,3 +1344,69 @@ globális Terra-ledger), a reset mindegyiket kezelje egy tranzakcióban, nem
 csak az elsőt, amit valaki megírt. Ha egy számláló nap-alapú a testvérénél
 (itt: `daily_count` vs. `task_count`), az az inkonzisztencia önmagában
 gyanús jel — vagy szándékos (dokumentáld, miért), vagy hiányzó szűrő.
+
+## L42 — `ai-router-round.sh run` órákig futhat egy lassú boxon; a Bash-eszköz 600s-es kemény plafonja a router félbeszakításaként éri, ami elégeti az egyetlen M3/Terra-kísérletet
+
+**Mit mértünk (2026-08-01, E02-R21, NEGYEDIK halt ugyanazon a taskon, a
+router első valódi éles futása a H4/H6 fixek — #48/#49 — után).** A
+pre-flight (ADR 0111, brief) és a router-infrastruktúra ekkor már zöld
+volt (rebase `origin/main`-re tiszta, a `_archive_terra_reservations` fix
+és a Terra FINAL_GATE őr is a munkapéldányban). Az orchestrátor a §1.1
+szerinti pontos parancsot futtatta, DE a Claude Code Bash-eszköz alapértelmezett
+időkorlátja (120000 ms) és kemény felső korlátja (600000 ms) rövidebb, mint
+amennyi ideig `tools/model-router.py run` egyetlen hívása ezen az ARM boxon
+ténylegesen tarthat (BASELINE_GATE + M3-hívás + gate-futtatás). Az első két
+`ai-router-round.sh run` hívást a Bash-eszköz SIGTERM-mel (exit 143) ölte meg,
+mielőtt a router a saját `.codex-round-status`/`codex-signal.sh`-jelzését
+kiírhatta volna — jelzés nélküli halál, kétszer egymás után. A HARMADIK hívás
+(10 perces explicit timeout) a megszakított `M3_CALL_2` fázisból tért vissza:
+a router `run()`-jának `phase.startswith(("M3_ATTEMPT_", "M3_CALL_"))` ága
+(`tools/ai_router/router.py:581-604` körül) a megszakított kísérletet **nem
+ismétli meg**, hanem a jelenlegi (csonka) diffet auditálja, és ha az üres,
+szintetikus `code_failure`-t ("interrupted model produced no scoped
+changes") ír a kísérlet rovására — a Bash-eszköz timeoutja tehát **elfogyaszt
+egy valódi M3-kísérletet anélkül, hogy a modellnek esélye lett volna
+befejezni**. Mivel `max_m3_attempts_per_task=2`, ez a második, csonka
+kísérlet kimerítette az M3-keretet, a router a kötelező Terra-hívásra
+lépett; a Terra-hívás ezúttal TELJES, megszakítás nélküli volt (a harmadik
+orchestrátor-hívás végig lefutott), és önmagában, valódi okból jelzett üres
+diffet (`FINAL_GATE`: "Terra call produced no scoped changes") — ez a rész
+NEM a timeout mérési hibája, hanem egy önmagában mért, tiszta Terra-kudarc.
+Nettó eredmény: a task 2/2 M3 + 1/1 Terra kerete kimerült, `STOPPED`, a
+Practice V2 production-drótozás (a kör tényleges célja) továbbra sincs
+elkezdve — és nem is dönthető el utólag, hogy a második M3-kísérlet
+sikerült volna-e, ha végigfuthat.
+
+**Egy MÁSODIK, ettől független, ugyanekkor mért hiba:** `tools/codex-signal.sh`
+a `root=$(git rev-parse --show-toplevel)` sort a hívó folyamat **öröklött
+cwd-jéből** oldja fel, nem a munkapéldány útvonalából, jóllehet
+`ai-router-round.sh` a szkriptet a munkapéldányon belüli abszolút útvonalon
+(`"$worktree/tools/codex-signal.sh"`) hívja — bash egy abszolút útvonalú
+szkript futtatásakor nem váltja át a cwd-t a szkript könyvtárára. A
+pipeline-prompt §1.1 dokumentált hívási mintája (az orchestrátor a SAJÁT
+`/home/ubuntu/music-theory` checkoutjából hívja a munkapéldány szkriptjét,
+`cd` nélkül) ezért **szisztematikusan** a rossz repót méri: mérve — a
+`.pipeline/router-status` mirror `branch=main head=a81838e`-t írt, miközben
+a tényleges munkapéldány a `codex/e02-r21-practice-production-wiring`
+ágon, `deb4c9a`-n állt. A `status=`/`summary=` mező helyes marad (azt a
+`router-result.json` elemzéséből tölti ki a bash-szkript, cwd-független),
+de a `branch=`/`head=`/`dirty_files=` mezők **nem** — ez pontosan azt a két
+záró-ellenőrzést hiúsítja meg, amit az orchestrátor-prompt §3 kötelezővé
+tesz (`dirty_files != 0` vizsgálat, `headSha` összevetés).
+
+**Hogyan alkalmazd.** (1) Az `auto` motor `ai-router-round.sh run` hívásához
+mindig explicit, a Bash-eszköz kemény plafonjához igazított timeout
+(`timeout: 600000`) kell — sose hagyatkozz az alapértelmezett 120000 ms-ra.
+(2) Egy `SIGTERM`-mel megszakított `run` hívás után a state `m3_attempts`
+számlálója **fogyott, még ha a modell nem is kapott tisztességes esélyt** —
+ismételt kilövés = ismételt, indokolatlan kísérlet-fogyasztás; ha ez a
+mintázat jelentkezik (a `gate_history`-ban egy `M3_CALL_N`-ből visszatérő,
+`"interrupted model produced no scoped changes"` szövegű `code_failure`),
+az a self-heal session dolga eldönteni, hogy a router megszakítás-kezelése
+(retry helyett fogyasztás) hibás-e, vagy csak az orchestrátor timeoutja volt
+elégtelen. (3) A `codex-signal.sh` cwd-függése miatt a `branch=`/`head=`/
+`dirty_files=` mezőket az `auto` úton **ne fogadd el bizonyítéknak** — a
+`router-result.json` `task_id`/`status`/`reason` mezői a hiteles forrás,
+amíg a szkript nem oldja fel a saját útvonalát a munkapéldányhoz képest
+(javítási hely: `tools/codex-signal.sh`, a `root=$(git rev-parse
+--show-toplevel)` sor körül).

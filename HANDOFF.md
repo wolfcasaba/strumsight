@@ -4,6 +4,38 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-01
+> (Pipeline E02-R21 — a H4+H6 fixek (#48/#49) UTÁNI, első valóban éles router-
+> futás is HALT-ba futott, ÚJ, a router-infrastruktúrától FÜGGETLEN okkal:
+> H6.** A munkapéldány rebase-elve `origin/main`-re (mindkét fix benne), a
+> pre-flight (ADR 0111 + brief) változatlanul jó. Az orchestrátor a §1.1
+> parancsot futtatta, de a Bash-eszköz alapértelmezett (120000 ms) és kemény
+> (600000 ms) időkorlátja rövidebb, mint egyetlen `model-router.py run` hívás
+> ezen az ARM boxon — az első két hívást a Bash-eszköz SIGTERM-mel ölte meg
+> (jelzés nélkül, kétszer), mielőtt a router jelezhetett volna. A HARMADIK
+> (10 perces) hívás a megszakított `M3_CALL_2` fázisból tért vissza: a router
+> megszakítás-kezelése (`tools/ai_router/router.py:581-604` körül) a csonka
+> kísérletet **elfogyasztja** (szintetikus `code_failure`), nem ismétli —
+> ezért az M3-keret (2/2) valódi próba nélkül merült ki, és a kötelező,
+> TELJES (megszakítás nélküli) Terra-hívás is önmagában, tisztán üres diffet
+> adott (`FINAL_GATE: "Terra call produced no scoped changes"`). Eredmény:
+> `STOPPED`, a task 2/2 M3 + 1/1 Terra kerete kimerült, a Practice V2
+> production-drótozás (a kör tényleges célja) **még mindig el sem
+> kezdődött** — ez a NEGYEDIK önjavító/halt-kör ugyanezen a taskon, de az
+> ELSŐ, ahol a router-infrastruktúra maga már zöld volt. Egy MÁSODIK, ettől
+> független hibát is mértünk: `tools/codex-signal.sh` a `git rev-parse
+> --show-toplevel`-t a hívó folyamat öröklött cwd-jéből oldja fel, nem a
+> munkapéldányból — a dokumentált orchestrátor-hívási mintával (nincs `cd` a
+> munkapéldányba) ez szisztematikusan a rossz repót méri: a
+> `.pipeline/router-status` mirror `branch=main head=a81838e`-t írt, a
+> tényleges munkapéldány pedig a kör-ágon állt — ez hiúsítja meg a §3
+> kötelező `dirty_files`/`headSha` ellenőrzését az `auto` úton (a `status=`/
+> `summary=` mező marad hiteles, a `branch=`/`head=`/`dirty_files=` nem).
+> Teljes mérés + reprodukció + javítási javaslat: `docs/LESSONS.md` L42.
+> **Az önjavító körnek el kell döntenie**, hogy (a) a router megszakítás-
+> kezelését kell-e retry-ra módosítani (a Bash-eszköz 600s plafonja alatt
+> is biztonságos legyen), és/vagy (b) a `codex-signal.sh` cwd-függését kell
+> javítani, mielőtt a task-ot újra resetelik és futtatják.
+> Előző kör: 2026-08-01
 > (önjavító kör, E02-R21 H6 3. előfordulása JAVÍTVA.** Mért gyökérok
 > (`docs/reviews/e02-r21-review.md` "Update 3"): `StateStore.reset_task`
 > (`tools/ai_router/state.py:131-144`) csak a `tasks/<id>.json`-t törölte,
@@ -379,23 +411,36 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár — a HARMADIK önjavító
-   kör ugyanezen a task-on.** A self-heal (#48) a H4-et javította, a
-   task-state `reset --task-id E02-R21`-gyel `NOT_STARTED`-re állt, a branch
-   `origin/main`-re rebase-elve (`7bdc175`, tartalmazza `ec81ef8`-at) — de a
-   `reset` csak a task `state.json`-ját törli, a Terra-hívások naplóját
-   (`terra-ledger.json`) NEM, és a napló `task_count` szűrője
-   (`tools/ai_router/state.py:184-188`) **nem nap-alapú** (szemben a
-   `daily_count`-tal) — ezért az E02-R21 task egyetlen, mai (H4-fix ELŐTTI)
-   Terra-foglalása örökre kimeríti a `max_terra_calls_per_task=1` kvótát,
-   akárhányszor `reset`-elik a task-ot. A friss `run` 2/2 M3-kísérlet után
-   Terra-hívást próbált, `DEFERRED "task Terra budget is exhausted"`-tel állt
-   meg — a munkapéldány diffje üres. Teljes gyökérok + két javítási javaslat +
-   reprodukáló parancs: `docs/reviews/e02-r21-review.md` "Update 3" szakasz a
-   `codex/e02-r21-practice-production-wiring` ágon (`b1653ef`). A kör
-   brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`) kész és
-   változatlan — a Practice V2 tényleges production-drótozása (a kör célja)
-   **még mindig el sem kezdődött**, egy sor implementáció sem készült.
+0. **AZONNALI: E02-R21 HALT (H6), az önjavító körre vár — a NEGYEDIK halt-kör
+   ugyanezen a task-on, de az ELSŐ, ahol a router-infrastruktúra maga már
+   zöld volt (H4/H6 fixek #48/#49 rebase-elve a munkapéldányba, tiszta
+   rebase).** Az orchestrátor a §1.1 parancsot futtatta, de a Bash-eszköz
+   időkorlátja (alapértelmezett 120000 ms, kemény plafon 600000 ms) rövidebb,
+   mint egyetlen `model-router.py run` hívás ezen a boxon — az első két
+   hívást a Bash-eszköz SIGTERM-mel ölte meg, jelzés nélkül, mielőtt a router
+   jelezhetett volna. A HARMADIK (10 perces) hívás a megszakított `M3_CALL_2`
+   fázisból tért vissza: a router megszakítás-kezelése
+   (`tools/ai_router/router.py:581-604` körül) a csonka kísérletet
+   **elfogyasztja** (szintetikus `code_failure`), nem ismétli — az M3-keret
+   (2/2) így valódi próba nélkül merült ki egy kísérleten, a kötelező,
+   TELJES Terra-hívás pedig önmagában, tisztán üres diffet adott (`FINAL_GATE:
+   "Terra call produced no scoped changes"`). Eredmény: `STOPPED`, a task
+   kerete (2/2 M3 + 1/1 Terra) kimerült, a munkapéldány diffje üres — a
+   Practice V2 production-drótozása (a kör célja) **még mindig el sem
+   kezdődött**. Egy MÁSODIK, független hiba is mérve: `tools/codex-signal.sh`
+   a hívó folyamat öröklött cwd-jéből oldja fel a repo-gyökeret, nem a
+   munkapéldányból — a dokumentált (cd nélküli) orchestrátor-hívási minta
+   mellett ez szisztematikusan rossz `branch=`/`head=`/`dirty_files=` mezőket
+   ír a `.pipeline/router-status` mirror-ba (mérve: `branch=main
+   head=a81838e` a tényleges `codex/e02-r21-practice-production-wiring`@
+   `deb4c9a` helyett), meghiúsítva a §3 kötelező ellenőrzéseket az `auto`
+   úton. Teljes mérés + reprodukció + javítási javaslat: `docs/LESSONS.md`
+   L42. A kör brief-je és ADR-je (`docs/adr/0111-practice-production-wiring.md`)
+   kész és változatlan — nincs teendő rajta. **Az önjavító körnek el kell
+   döntenie**, hogy (a) a router megszakítás-kezelését kell-e retry-ra
+   módosítani, és/vagy (b) a `codex-signal.sh` cwd-függését kell javítani,
+   mielőtt a task-ot újra resetelik és futtatják — a `reset --task-id
+   E02-R21` a H6-fix (#49) óta korrekt, ez **nem** az ok.
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
