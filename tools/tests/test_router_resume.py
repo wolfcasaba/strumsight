@@ -107,6 +107,59 @@ class RouterResumeTest(unittest.TestCase):
         self.assertEqual(model.profiles, ["m3"])
         self.assertEqual(self.state.load_task(self.brief.task_id)["m3_attempts"], 1)
 
+    def test_resume_after_interrupted_m3_call_retries_without_consuming_the_attempt(
+        self,
+    ) -> None:
+        # Mért reprodukció (E02-R21, H6, docs/LESSONS.md L42): a Bash-eszköz
+        # 600s-es kemény plafonja megölte a TELJES router-folyamatot, mielőtt
+        # a `run_model()` hívás visszatérhetett -- a resume-ág ezt tévesen
+        # úgy kezelte, mintha a hívás lezajlott és üres diffet adott volna,
+        # elfogyasztva az egyetlen M3-kísérletet. `M3_CALL_N` csak közvetlenül
+        # a `run_model()` hívás ELŐTT perzisztálódik, ezért ez a fázis
+        # resume-on sosem jelentheti, hogy a hívás lezajlott -- a kísérletet
+        # vissza kell adni és újra kell próbálni, nem elfogyasztani.
+        no_scoped_change = ScopeAudit(
+            ok=True,
+            changed_paths=(),
+            violations=(),
+            high_risk=False,
+            diff_hash="sha256:empty-m3-call-resume-diff",
+            scoped_changed_paths=(),
+        )
+        changed = ScopeAudit(True, ("lib/example.dart",), (), False, "sha256:retry-diff")
+        router, model = self.make_router(
+            [codex_ok()],
+            [gate("pass")],
+            [],
+            audits=[no_scoped_change, changed],
+        )
+        self.state.save_task(
+            self.brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": self.brief.task_id,
+                "brief_hash": self.brief.metadata_hash,
+                "phase": "M3_CALL_1",
+                "status": "RUNNING",
+                "reason": "",
+                "m3_attempts": 1,
+                "terra_calls": 0,
+                "gate_history": [],
+                "baseline_manifest": {
+                    "baseline_head": "baseline",
+                    "untracked_paths": [],
+                    "ignored_paths": [],
+                    "tracked_paths": [],
+                },
+            },
+        )
+
+        result = router.run(self.brief, self.worktree, resume=True)
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["m3"])
+        self.assertEqual(self.state.load_task(self.brief.task_id)["m3_attempts"], 1)
+
     def test_resumed_terra_review_or_fix_with_no_scoped_changes_is_not_ready_for_review(
         self,
     ) -> None:
