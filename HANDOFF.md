@@ -4,6 +4,35 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
+> (önjavító kör, E02-R21 H4 — TIZEDIK önjavító/halt kör ugyanazon a taskon —
+> a gate most a modell TÉNYLEGES tartalmi munkáján mér, nem a mellette futó
+> kozmetikai debrisen, PR #54, `heal/E02-R21-H4-3` → squash `aff19e7`.**
+> Mért gyökérok ([`docs/LESSONS.md` L46](docs/LESSONS.md)): az L45-fix (PR
+> #53) utáni `reset` + friss `run` (lásd "Update 7" lent) MEGERŐSÍTETTE, amit
+> a gate-log most már mérhetővé tett — mindhárom próba (`RECOVERED_M3_CALL_1`,
+> `RECOVERED_M3_CALL_2` `format`-on, Terra `FINAL_GATE` `analyze`-on: 3
+> `unused_import`) a Practice V2 A1/A2/A3 wiring HELYES tartalmával futott, a
+> gate mindhárom kudarca kizárólag mechanikusan javítható debris volt. A
+> router `max_m3_attempts_per_task=2`/`max_terra_calls_per_task=1` fail-closed
+> rögzített (self-heal sem lazíthatja), és minden gate-lépés egyetlen,
+> nem-újrapróbálható hívás — egy kozmetikai hiba ugyanúgy elfogyasztja a
+> keretet, mint egy logikai hiba, mert a router modell-hívás és gate-mérés
+> között semmit nem normalizált. **Javítás:** `tools/model-router.py`
+> `_gate_runner`-je (NEM a védett `tools/round-gate.sh`) mostantól minden
+> NEM-baseline gate-hívás előtt lefuttatja `dart format lib test tool`-t és
+> `dart fix --apply`-t a munkafán; a baseline-mérés érintetlen. Egyetlen
+> gate-küszöböt nem lazít — csak azt biztosítja, hogy a mérés a modell
+> tényleges munkáján történjen. Kötelező regresszió, RED a javítás előtt
+> (a mért `unused_import` túléli a gate-et) / GREEN utána (`git stash`-sel
+> visszamérve): `tools/tests/test_router_gate_normalize.py`. `python3 -m
+> pytest tools/tests -q`: 113 passed, 33 subtests passed (110→113).
+> `router-ci.yml` zölden mind push-, mind workflow_dispatch-triggerrel, a
+> merge-elt SHA-n (`20cb75e` → squash `aff19e7`). **Ez a javítás sem oldja
+> meg a Practice V2 A1/A2/A3 tényleges befejezését/commitolását/review-ját**
+> — az továbbra is a következő rendes kör (nem a self-heal) dolga; a
+> task-state jelenleg is `STOPPED`, a következő session dolga a
+> `reset --task-id E02-R21` + friss `run`.
+> Előző kör: 2026-08-02
 > (Pipeline E02-R21 — a gate_history-fix (PR #53) UTÁNI első friss `run`
 > VÉGRE valódi, tracked A1/A2/A3-diffet termelt, de a keret ismét
 > `STOPPED`-be fogyott egy TRIVIÁLIS hibán: H4, a KILENCEDIK halt/önjavító
@@ -690,26 +719,27 @@ hívási láncot mérve fogta meg).
 
 ## 6. Exact next task
 
-0. **AZONNALI: E02-R21 — a router-prompt-fix (#52) UTÁNI friss `run` is
-   STOPPED-be futott (H4, 2026-08-02), MÁSODSZOR tartalmi okból.** A
-   `gate_history`: `BASELINE_GATE` pass → `RECOVERED_M3_CALL_1`
-   code_failure(`format`) → `GATE_2` code_failure(`analyze`) → Terra
-   code_failure(`test test/core`) — egy lépéssel TOVÁBB, mint az Update 5
-   (ami az ELSŐ, `test/features/practice` csomagon bukott), de az A1/A2/A3
-   wiring még mindig nem készült el. Teljes mérés:
-   [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
-   "Update 6", ág: `codex/e02-r21-practice-production-wiring` (`a3f1f52`).
-   **A következő session dolga, ha `reset --task-id E02-R21` + friss `run`-t
-   választ:** töröld előbb a munkafán maradt egyetlen árva fájlt
-   (`lib/features/practice/data/practice_observation_gateway_provider.dart`)
-   VAGY commitold, mielőtt indítasz — a router fail-closed elutasítja a
-   PRECHECK-et bármilyen tracked/untracked elváltozásnál. **Ha egy HARMADIK
-   `run` is csak STOPPED-et ad A1/A2/A3 nélkül, az már a brief méretére/
-   sorrendjére mutat (Class B) — fontold meg az explicit `codex`/`minimax`
-   motort a nem redaktált logért, vagy a brief implementációs sorrendjének/
-   méretének felülvizsgálatát.** `docs/adr/0111-practice-production-wiring.md`
+0. **AZONNALI: E02-R21 — a task-state `STOPPED` (2/2 M3 + 1/1 Terra
+   elfogyva), a router `_gate_runner` pre-gate normalize fixe (PR #54,
+   [`docs/LESSONS.md` L46](docs/LESSONS.md)) UTÁN.** Az utolsó éles `run`
+   ("Update 7", [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md))
+   VALÓDI, ADR 0111 §1–§4-nek megfelelő A1/A2/A3 tartalmat termelt a
+   `codex/e02-r21-practice-production-wiring` ágon (`2bb61a1`,
+   `ss-auto-e02-r21` munkapéldány) — a gate mindhárom próbán KIZÁRÓLAG
+   mechanikus debrisen (format, 3 unused_import) bukott, amit a most
+   merge-elt fix jövőre nézve megold. **A következő session dolga:**
+   (a) a munkapéldányon maradt 3 tracked + 2 untracked fájl sorsáról
+   dönteni (commit előtt a router PRECHECK-je fail-closed elutasít bármilyen
+   tracked/untracked elváltozást — vagy törlés bizonyítékként, mint az
+   Update 5/6-ban, vagy explicit commit egy manuálisan futtatott gate után),
+   majd `python3 tools/model-router.py reset --task-id E02-R21` + friss
+   `tools/ai-router-round.sh run`. **Ha egy TOVÁBBI `run` A1/A2/A3 nélkül
+   megint csak STOPPED-et ad, az már a brief méretére/sorrendjére mutat
+   (Class B)** — fontold meg az explicit `codex`/`minimax` motort a nem
+   redaktált logért, vagy a brief implementációs sorrendjének/méretének
+   felülvizsgálatát. `docs/adr/0111-practice-production-wiring.md`
    változatlan, kész. **A Practice V2 production-drótozása (a kör tényleges
-   célja) még mindig el sem kezdődött.**
+   célja) még mindig nincs commitolva/review-zva/merge-elve.**
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető

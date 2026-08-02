@@ -1694,3 +1694,52 @@ kimenet a `gate_history[].log` mezőben elő fogja adni a tényleges
 `flutter format`/`flutter analyze`/`flutter test` hibaüzenetet, ami a
 következő self-heal (vagy ember) számára ELSŐ ízben teszi lehetővé a
 tényleges Class A/B döntést mérés alapján, modellhívás nélkül.
+
+## L46 — Az L45-mérés bejött: a következő `reset` + friss `run` valóban format-ra, majd analyze-ra bukott — de a tartalom (A1/A2/A3) mindháromszor jó volt
+
+**Mit mértünk (2026-08-02, E02-R21, KILENCEDIK halt/önjavító kör ugyanazon a
+taskon; a HARMADIK egymást követő, ahol a router infrastruktúrája — sandbox
+[[L43]], állapotgép, prompt-építés [[L44]], gate-log perzisztencia [[L45]] —
+ismét hibátlanul mérve, a halt oka ismét tisztán tartalmi).** Az L45-fix (PR
+#53) utáni `reset --task-id E02-R21` + friss `run` először az L45 által most
+már MÉRHETŐVÉ tett pontossággal mutatta meg a gyökér okot: `RECOVERED_M3_CALL_1`
+és `RECOVERED_M3_CALL_2` mindkettő `code_failure`/`format` volt (a modell
+`dart format`-tal nem konzisztens kódot írt mindkét próbán), a `FINAL_GATE`
+(Terra) pedig `code_failure`/`analyze` — 3 `unused_import` figyelmeztetés a
+Terra által írt tesztfájlban
+(`test/features/practice/application/practice_production_wiring_test.dart:32,42,47`).
+A munkafa (`git diff HEAD`) ugyanakkor ELSŐ ízben mutatta, hogy az ADR 0111
+A1/A2/A3 production-drótozás VALÓDI, helyes tartalommal elkészült mindhárom
+próbán — a gate mindhárom kudarca kizárólag mechanikusan javítható debris
+(formázatlanság, egy korábbi drafthoz tartozó, azóta feleslegessé vált
+import) volt, nem architektúra- vagy logika-hiba.
+
+**Ez a mintázat strukturális, nem egyszeri szerencsétlenség.** A router
+`max_m3_attempts_per_task=2` / `max_terra_calls_per_task=1` szigorúan rögzített
+(`tools/ai_router/config.py` fail-closed séma-ellenőrzése — ezt a self-heal
+sem lazíthatja, ADR 0112 §3), és minden gate-lépés (`format`, `analyze`,
+`test <path>`) EGYETLEN, nem-újrapróbálható `round-gate.sh`-hívás része: egy
+kizárólag kozmetikai hiba (rossz behúzás, egy el nem távolított import) ugyanúgy
+elfogyasztja a teljes fennmaradó keretet, mint egy valódi logikai hiba, mert a
+router modell-hívás és gate-mérés között semmit nem tesz a diff normalizálására.
+
+**Javítva (önjavító kör, 2026-08-02, PR #54, `heal/E02-R21-H4-3`).**
+`tools/model-router.py` `_gate_runner`-je (nem a védett `tools/round-gate.sh`)
+mostantól minden NEM-baseline gate-hívás előtt lefuttatja `dart format lib test
+tool`-t és `dart fix --apply`-t a munkafán — a baseline-mérés (a modell előtti,
+tiszta állapot) érintetlen marad. Ez a gate küszöbét NEM lazítja (a
+`format`/`analyze` lépés utána is szigorúan ugyanazt követeli meg), csak azt
+biztosítja, hogy a mérés a modell TÉNYLEGES tartalmi munkáján történjen, ne a
+mellette futó kozmetikai debrisen. Kötelező regressziós teszt, RED a javítás
+előtt (a mért `unused_import` figyelmeztetés túléli a gate-et,
+`code_failure`/`analyze`) / GREEN utána (`git stash`-sel visszamérve):
+`tools/tests/test_router_gate_normalize.py`. `python3 -m pytest tools/tests
+-q`: 113 passed, 33 subtests passed (110→113).
+
+**Ami ebből is SZÁNDÉKOSAN kimaradt.** Ez a javítás nem garantálja, hogy a
+KÖVETKEZŐ friss `run` áteresztő gate-et kap — csak azt, hogy a format/analyze
+kategóriájú, mechanikusan javítható hibák többé nem fogyasztják el a kimerülő
+2+1 keretet feleslegesen. A Practice V2 A1/A2/A3 tényleges befejezése, commitolása
+és review-ja továbbra is a következő rendes kör (nem a self-heal) dolga —
+a self-heal jogköre ehelyütt is az eszközre korlátozódott (ADR 0112 §2), a kör
+tartalmi munkáját nem vitte előre.
