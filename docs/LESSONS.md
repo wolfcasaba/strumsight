@@ -2161,3 +2161,47 @@ akarsz átadni, **mérd meg a jelzés-szótár egyezését** a `case`-ágakkal
 mielőtt feltételezed az újrahasznosíthatóságot — két, ugyanabba a
 jelzésfájlba író, de eltérő szótárú alrendszer csendes, timeoutig tartó
 hamis-negatívot ad, nem hibaüzenetet.
+
+## L55 — A H-GATEGUARD előtte/utána teljes-main-ujjlenyomat hamis pozitívat ad, ha a heal futása KÖZBEN egy tőle független, jogos commit landol egy őrzött útvonalon; a helyes ellenőrzés a heal SAJÁT PR-diffje, nem a teljes main két időpontbeli állapota
+
+**Mit mértünk (2026-08-02, E03-R05, önjavító kör a H6 heal UTÁN).** A H6
+heal (PR #61, `3b4707f`) zölden, a mérce érintése nélkül merge-elt — a
+saját diffje kizárólag `docs/execution/pipeline-orchestrator-prompt.md`,
+`tools/tests/test_pipeline_integration.py` és az új
+`tools/wait-for-router.sh` fájlokat módosította. Ennek ellenére a driver
+`H-GATEGUARD`-dal állt le: „teszt-fájlok: 351 → 351" (egyenlő, tehát NEM
+a tesztszám-csökkenés ütött), a valódi ok a `gate_artifact_hashes`
+`.github/workflows/router-ci.yml` hash-ének eltérése volt.
+
+A gyökérok: a H6 heal ~07:50–08:08 között futott, ezalatt egy TŐLE
+FÜGGETLEN, jogos commit (`8715773`, ADR 0115 review-motor fallback,
+`Ralph (autonomous)` szerzőségű, direkt main-push) 08:02:18-kor módosította
+a `router-ci.yml`-t. A régi őrszem (`tools/round-pipeline.sh`
+`attempt_selfheal`) a mérce ujjlenyomatát a heal-indítás előtti és a
+heal-zárás utáni **teljes main** állapotán mérte — ez a különbség bármely,
+az ablakban landoló commit-tól eltér, függetlenül attól, hogy a heal
+maga nyúlt-e hozzá. A driver tehát a saját, tiszta munkáját gyanúsította
+egy vele egyidejűleg, de tőle függetlenül érkező módosítás miatt.
+
+**A javítás** (`tools/round-pipeline.sh`, `heal_pr_number` +
+`heal_pr_gate_violation`): a heal branch neve determinisztikus
+(`heal/{{ROUND}}-{{HALT_CODE}}-{{ATTEMPT}}`,
+`docs/execution/pipeline-selfheal-prompt.md`), ezért a hozzá tartozó,
+squash-merge-elt PR visszakereshető (`gh pr list --search
+"head:$branch" --state merged`), és a PR SAJÁT diffje (`mergeCommit^..
+mergeCommit`) közvetlenül megnézhető — ez a merge_sha-tól függ, nem a
+main jelenlegi állapotától, tehát immunis bármely, az ablakban landoló,
+független commitra. Ha nincs megtalálható PR (pl. a heal nem PR-en
+keresztül zárt), az őrszem óvatosságból visszaesik a régi teljes-main
+ujjlenyomatra. Regressziós tesztek (a valódi, mért branch/PR/commit-
+adatokkal — `heal/E03-R05-H6-1` → PR #61 → `3b4707f`, és a valódi
+`round-gate.sh`-t módosító `6d61e23` mint pozitív eset):
+`tools/tests/test_pipeline_integration.py::
+test_heal_pr_number_finds_the_real_h6_heal_pr_by_its_deterministic_branch_name`,
+`::test_heal_pr_gate_violation_ignores_a_concurrent_unrelated_commit_and_catches_a_self_touch`.
+
+**Tanulság:** egy őrszem, ami "mércét gyengített-e a javítás" kérdésre
+válaszol, a JAVÍTÁS SAJÁT DIFFJÉT nézze (PR/commit-hatókör), ne a
+felügyelt ág két időpontbeli, teljes állapotát — az utóbbi bármilyen,
+az időablakban landoló, a javítástól FÜGGETLEN legitim változást a
+javításnak tulajdonít.

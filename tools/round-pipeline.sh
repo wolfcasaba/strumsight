@@ -235,6 +235,42 @@ gate_artifact_hashes() {
   done
 }
 
+# H-GATEGUARD false-positive fix (E03-R05, mért gyökérok): a heal branch neve
+# determinisztikus (`heal/{{ROUND}}-{{HALT_CODE}}-{{ATTEMPT}}`, lásd
+# docs/execution/pipeline-selfheal-prompt.md), ezért a heal SAJÁT diffje
+# közvetlenül lekérdezhető a hozzá tartozó, squash-merge-elt PR-en keresztül —
+# ahelyett, hogy a teljes main-t hasonlítanánk össze két időpontban. Az utóbbi
+# hamis pozitívat ad, ha a heal FUTÁSA ALATT egy független, jogos commit
+# (pl. egy másik ADR bevezetése) landol main-re és éppen egy őrzött útvonalat
+# érint — pontosan ez történt: 8715773 (ADR 0115) a heal 07:50–08:08 közötti
+# futása KÖZBEN módosította a router-ci.yml-t, a heal saját PR-je (#61) viszont
+# egyáltalán nem nyúlt hozzá.
+heal_pr_number() {   # $1=heal branch → a hozzá tartozó, MERGE-ELT PR száma (üres, ha nincs)
+  gh pr list --search "head:$1" --state merged --json number --jq '.[0].number // empty' 2>/dev/null
+}
+
+heal_pr_gate_violation() {   # $1=PR szám → kiírja az okot és 0-val tér vissza, ha a heal SAJÁT diffje gyengítette a mércét; 1, ha nem (vagy nem eldönthető)
+  local pr="$1" merge_sha base_sha files deleted
+  merge_sha=$(gh pr view "$pr" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null)
+  [ -n "$merge_sha" ] || return 1
+  base_sha="${merge_sha}^"
+  git -C "$repo_root" rev-parse "$base_sha" >/dev/null 2>&1 || return 1
+  files=$(git -C "$repo_root" diff --name-only "$base_sha" "$merge_sha" -- \
+    tools/round-gate.sh .github/workflows/build-apk.yml .github/workflows/router-ci.yml 2>/dev/null)
+  if [ -n "$files" ]; then
+    printf 'a heal saját PR-je (#%s) gate-artefaktumot módosított: %s' \
+      "$pr" "$(printf '%s' "$files" | tr '\n' ',' | sed 's/,$//')"
+    return 0
+  fi
+  deleted=$(git -C "$repo_root" diff --name-status "$base_sha" "$merge_sha" -- test tools/tests 2>/dev/null \
+    | grep -c '^D')
+  if [ "${deleted:-0}" -gt 0 ]; then
+    printf 'a heal saját PR-je (#%s) %s teszt-fájlt törölt' "$pr" "$deleted"
+    return 0
+  fi
+  return 1
+}
+
 heal_attempts() {   # $1=kör $2=halt-kód → az eddigi kísérletek száma
   local key="$1|$2" line
   [ -f "$heal_count_file" ] || { echo 0; return; }
@@ -249,6 +285,7 @@ heal_attempts() {   # $1=kör $2=halt-kód → az eddigi kísérletek száma
 attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
   local tests_before hashes_before tests_after hashes_after outcome summary
+  local heal_branch pr_number violation
 
   halt_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
   halt_code=$(grep -m1 '^halt=' "$halt_file" | cut -d= -f2-)
@@ -329,11 +366,27 @@ attempt_selfheal() {
   tests_after=$(gate_test_count)
   hashes_after=$(gate_artifact_hashes)
 
-  if [ "$tests_after" -lt "$tests_before" ] || [ "$hashes_after" != "$hashes_before" ]; then
+  # Az őrszem a heal SAJÁT diffjét vizsgálja (determinisztikus branch-név →
+  # a hozzá tartozó merge-elt PR), NEM a teljes main előtte/utána állapotát —
+  # az utóbbi hamis pozitívat adna egy, a heal futása KÖZBEN landolt, tőle
+  # független commitra (mért eset: E03-R05 H6, lásd docs/LESSONS.md).
+  heal_branch="heal/${halt_round}-${halt_code}-${attempts}"
+  pr_number=$(heal_pr_number "$heal_branch")
+  violation=""
+  if [ -n "$pr_number" ]; then
+    violation=$(heal_pr_gate_violation "$pr_number") || violation=""
+  else
+    log "GATEGUARD: nincs merge-elt PR a(z) $heal_branch branch-hez — a teljes main-ujjlenyomatra esünk vissza"
+    if [ "$tests_after" -lt "$tests_before" ] || [ "$hashes_after" != "$hashes_before" ]; then
+      violation="nem található a heal saját PR-je a determinisztikus branch-néven, és a teljes main-ujjlenyomat is változott (teszt-fájlok: $tests_before → $tests_after)"
+    fi
+  fi
+
+  if [ -n "$violation" ]; then
     {
       echo "round=$halt_round"
       echo "halt=H-GATEGUARD"
-      echo "summary=az önjavítás a MÉRCÉHEZ nyúlt (teszt-fájlok: $tests_before → $tests_after) — emberi jóváhagyás kell"
+      echo "summary=az önjavítás a MÉRCÉHEZ nyúlt — emberi jóváhagyás kell: $violation"
       echo "detail=eredeti halt: $halt_code · javítás: $summary · napló: $heal_log"
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
@@ -360,6 +413,17 @@ case "${1:-}" in
   --gate-fingerprint)
     printf 'tests=%s %s\n' "$(gate_test_count)" "$(gate_artifact_hashes)"
     exit 0
+    ;;
+  --heal-pr-number)   # $2=heal branch → a hozzá tartozó merge-elt PR száma (üres, ha nincs)
+    heal_pr_number "${2:-}"
+    exit 0
+    ;;
+  --heal-pr-gate-violation)   # $2=PR szám → kiírja az okot, exit 0 ha a heal saját diffje gyengítette a mércét, exit 1 ha nem
+    if heal_pr_gate_violation "${2:-}"; then
+      exit 0
+    else
+      exit 1
+    fi
     ;;
   --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115)
     if [ "$fallback_engine" != "none" ] && claude_unavailable_until >/dev/null; then

@@ -229,6 +229,67 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertIn(f"{artifact}:", fingerprint.stdout)
             self.assertNotIn(f"{artifact}:hiányzik", fingerprint.stdout)
 
+    def make_fake_gh(self, directory: Path) -> Path:
+        # A H-GATEGUARD-teszteknek NEM szabad élő hálózati `gh`-hívástól
+        # függenie (a router-ci.yml futtatója nincs `gh auth`-olva) — ezért egy
+        # PATH-on elé tolt stubot adunk, ami a valós `gh pr list`/`gh pr view`
+        # helyett a FAKE_GH_* env-változókat visszhangozza. A git-diffek maguk
+        # a VALÓDI repó VALÓDI, már merge-elt commitjain futnak (lásd lent).
+        fake_gh = directory / "gh"
+        fake_gh.write_text(
+            "#!/usr/bin/env bash\n"
+            "case \"$1 $2\" in\n"
+            "  \"pr list\") printf '%s\\n' \"${FAKE_GH_PR_NUMBER:-}\" ;;\n"
+            "  \"pr view\") printf '%s\\n' \"${FAKE_GH_MERGE_SHA:-}\" ;;\n"
+            "  *) echo \"fake-gh: unsupported invocation: $*\" >&2; exit 1 ;;\n"
+            "esac\n"
+        )
+        fake_gh.chmod(0o755)
+        return directory
+
+    def test_heal_pr_number_finds_the_real_h6_heal_pr_by_its_deterministic_branch_name(self) -> None:
+        # MÉRT adat (E03-R05 H6 heal): a heal branch neve determinisztikus
+        # (heal/{ROUND}-{HALT_CODE}-{ATTEMPT}, docs/execution/pipeline-selfheal
+        # -prompt.md), ezért a hozzá tartozó, merge-elt PR visszakereshető --
+        # ez a H-GATEGUARD hamis-pozitívjának javítási alapja (lásd lent).
+        script = ROOT / "tools" / "round-pipeline.sh"
+
+        found = self.run_command(["bash", str(script), "--heal-pr-number", "heal/E03-R05-H6-1"])
+        self.assertEqual(found.stdout.strip(), "61", found.stdout + found.stderr)
+
+        missing = self.run_command(["bash", str(script), "--heal-pr-number", "heal/does-not-exist-1"])
+        self.assertEqual(missing.stdout.strip(), "", missing.stdout + missing.stderr)
+
+    def test_heal_pr_gate_violation_ignores_a_concurrent_unrelated_commit_and_catches_a_self_touch(self) -> None:
+        # RED-ELŐZMÉNY (E03-R05, a H6 heal UTÁNI H-GATEGUARD halt, mérve
+        # 2026-08-02): a régi őrszem a teljes main előtte/utána ujjlenyomatát
+        # hasonlította össze, ezért hamisan gyanúsította a H6 heal saját,
+        # tiszta PR-jét (#61, d9d9c8d..3b4707f -- valójában csak az
+        # orchestrátor-promptot, egy tesztet és egy ÚJ segédscriptet
+        # módosított), mert a heal FUTÁSA KÖZBEN egy tőle FÜGGETLEN, jogos
+        # commit (8715773, ADR 0115) módosította a router-ci.yml-t.
+        # docs/LESSONS.md L55.
+        #
+        # Az új őrszem a heal SAJÁT PR-diffjét (merge_sha^..merge_sha) nézi,
+        # ezért immunis erre. A negatív esethez a VALÓDI PR #61 merge-commitját
+        # (3b4707f), a pozitív (valódi mércét gyengítő) esethez a VALÓDI,
+        # tools/round-gate.sh-t módosító 6d61e23 commitot (ADR 0088, #45)
+        # használjuk -- mindkettő tényleg a repó történetében van, nem
+        # kitalált fixture.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            bin_dir = self.make_fake_gh(Path(directory_name))
+            env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+
+            env["FAKE_GH_MERGE_SHA"] = "3b4707ff6be589f13eb8aaa04963543c0d99dd10"
+            clean = self.run_command(["bash", str(script), "--heal-pr-gate-violation", "61"], env=env)
+            self.assertEqual(clean.returncode, 1, clean.stdout + clean.stderr)
+
+            env["FAKE_GH_MERGE_SHA"] = "6d61e23ed10838e4181fae7350b390027c8b245a"
+            caught = self.run_command(["bash", str(script), "--heal-pr-gate-violation", "45"], env=env)
+            self.assertEqual(caught.returncode, 0, caught.stdout + caught.stderr)
+            self.assertIn("round-gate.sh", caught.stdout)
+
     def test_orchestrator_falls_back_to_terra_only_while_claude_is_blocked(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
