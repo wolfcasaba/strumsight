@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "fixture": "song_multiple_chords",
+  "provenance": "self-authored, technical content only (no licensed music), produced for the E03-R01 legacy parity baseline",
+  "description": "4/4 song at 100 BPM with 4 chords (C, G, Am, F) and an 8-slot pattern. Discriminates a single-chord/2-chord implementation by checking the chord sequence and per-chord beat groups.",
+  "song": {
+    "id": "song_multi",
+    "name": "Baseline Multi",
+    "chords": ["C", "G", "Am", "F"],
+    "pat": "d-du-ud-",
+    "bpm": 100,
+    "bpb": 4
+  },
+  "expected": {
+    "events": 20,
+    "totalBeats": 16.0,
+    "durationSec": 9.6,
+    "meter": 4,
+    "chordSequence": ["C", "G", "Am", "F"],
+    "directionSequence": ["d", "d", "u", "u", "d", "d", "d", "u", "u", "d", "d", "d", "u", "u", "d", "d", "d", "u", "u", "d"],
+    "perChordBeats": {
+      "C": [0.0, 1.0, 1.5, 2.5, 3.0],
+      "G": [4.0, 5.0, 5.5, 6.5, 7.0],
+      "Am": [8.0, 9.0, 9.5, 10.5, 11.0],
+      "F": [12.0, 13.0, 13.5, 14.5, 15.0]
+    },
+    "downCount": 12,
+    "upCount": 8,
+    "chordSummary": "C · G · Am · F"
+  }
+}

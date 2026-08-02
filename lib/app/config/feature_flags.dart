@@ -15,6 +15,7 @@ final class FeatureFlags {
     this.practiceEngineV2Enabled = false,
     this.migratedLearnEnabled = false,
     this.practiceDetailedHistoryEnabled = false,
+    this.songTrainerV2Enabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -29,6 +30,11 @@ final class FeatureFlags {
   /// - Practice V2 + detailed history are available outside production;
   ///   migrated Learn stays OFF everywhere until the parity rollout decision.
   ///   None of the practice flags has a dart-define override.
+  /// - [songTrainerV2Enabled] is OFF in every environment and is NOT
+  ///   influenced by `nonProd`. It is a hand-rolled rollout boundary for the
+  ///   Epic 3 SongDocument V2 / file+asset storage / importer / Practice
+  ///   Engine integration work; even debug and test builds default OFF so
+  ///   an opt-in must always be explicit (E03-R01 §5.1).
   factory FeatureFlags.forEnvironment(
     AppEnvironment environment, {
     required bool accountEnabled,
@@ -41,6 +47,7 @@ final class FeatureFlags {
       practiceEngineV2Enabled: nonProd,
       migratedLearnEnabled: false,
       practiceDetailedHistoryEnabled: nonProd,
+      songTrainerV2Enabled: false,
     );
   }
 
@@ -63,6 +70,14 @@ final class FeatureFlags {
   /// Whether the versioned, detailed Practice history store may be written.
   final bool practiceDetailedHistoryEnabled;
 
+  /// Whether the parallel Song Trainer V2 (SongDocument V2 + file/asset
+  /// storage + importer + Practice Engine integration) is reachable in this
+  /// build. Defaults to OFF in every environment — including debug and test
+  /// builds — so a rollout must always be an explicit opt-in, never an
+  /// implicit side-effect of running outside production (E03-R01 §5.1,
+  /// SDD Ch4 §3). The flag has no dart-define override.
+  final bool songTrainerV2Enabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -74,7 +89,8 @@ final class FeatureFlags {
       other.labModeAvailable == labModeAvailable &&
       other.practiceEngineV2Enabled == practiceEngineV2Enabled &&
       other.migratedLearnEnabled == migratedLearnEnabled &&
-      other.practiceDetailedHistoryEnabled == practiceDetailedHistoryEnabled;
+      other.practiceDetailedHistoryEnabled == practiceDetailedHistoryEnabled &&
+      other.songTrainerV2Enabled == songTrainerV2Enabled;
 
   @override
   int get hashCode => Object.hash(
@@ -93,5 +109,6 @@ final class FeatureFlags {
       'labModeAvailable: $labModeAvailable, '
       'practiceEngineV2Enabled: $practiceEngineV2Enabled, '
       'migratedLearnEnabled: $migratedLearnEnabled, '
-      'practiceDetailedHistoryEnabled: $practiceDetailedHistoryEnabled)';
+      'practiceDetailedHistoryEnabled: $practiceDetailedHistoryEnabled, '
+      'songTrainerV2Enabled: $songTrainerV2Enabled)';
 }
