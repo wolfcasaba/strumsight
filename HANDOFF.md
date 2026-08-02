@@ -772,14 +772,26 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > MELLETTE élő `.pipeline/HALTED` (a MÉG korlátozott policy alatt,
    > `halted_at=16:58:03Z`-kor kiírva) érintetlen maradt — a driver 2.
    > szakasza ettől függetlenül egy ÚJABB, valódi önjavító sessiont indított
-   > egy már megszűnt okra. Javítás: `terra_clear_stale_halt_for()`
-   > (`tools/round-pipeline.sh`) a hold-törléssel EGYÜTT archiválja a stale
-   > H6/Terra-budget HALTED-et és nullázza a kísérletszámlálót, ha ugyanarra
-   > a körre vonatkozik — a következő firing a kört próbálja újra, nem az
-   > önjavítást. Regressziós teszt:
-   > `test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused`
-   > — RED az 53b9637 ellen, GREEN utána; `tools/tests -q` 149/149 zöld.
-   > PR #73. Részletek: `docs/LESSONS.md` L66.
+   > egy már megszűnt okra (ez a session). **1. javító kör (PR #73):**
+   > `terra_clear_stale_halt_for()` a hold-törléssel EGYÜTT, csak akkor
+   > futva, ha még LÉTEZIK hold-fájl. **MÉRT hiányosság:** élesben a
+   > hold-fájl a HALT előtti firingen már törlődött, tehát PR #73 hívási
+   > pontja SOHA nem futott le a valódi incidensen — csak a driver
+   > `outcome=fixed` standard könyvelése (a `halt_file` archiválása)
+   > oldotta fel EZT a konkrét haltot, nem az új függvény. **2. javító kör
+   > (PR #74, ugyanebben a sessionben):** `terra_clear_stale_halt_for()`
+   > mostantól ÖNÁLLÓAN kérdezi le a Terra-policy-t, és a driver főágában a
+   > hold-fájl létezésétől FÜGGETLENÜL, feltétel nélkül fut — a KÖVETKEZŐ
+   > hasonló esetben már ez fog reagálni, nem egy újabb heal-session. Új
+   > `--terra-clear-stale-halt` teszthorog + 3 regressziós teszt (RED PR #73
+   > állapota ellen, GREEN PR #74 után); `tools/tests -q` 151/151 zöld.
+   > **Biztonsági incidens a saját tesztelés közben:** a tesztek első
+   > verziója egy ismeretlen CLI-flaget hívott a pre-fix scripten, ami a
+   > TELJES driver-folyamatba esett és egy VALÓDI tmux+claude
+   > önjavító sessiont indított — azonnal észlelve és leállítva, állapot-
+   > károsodás nélkül; javítva az attempt-budget-határ biztonsági minta
+   > minden ilyen teszthez való hozzáadásával. Részletek: `docs/LESSONS.md`
+   > L66.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

@@ -2832,23 +2832,63 @@ valódi önjavító sessiont indított (a mostani, 7. E03-R08 H6 előfordulás
 aznap) egy olyan Terra-kimerülésre, ami a saját korábbi javítása óta már
 nem is létezik.
 
-**A javítás (Class A, infrastruktúra).** `terra_clear_stale_halt_for()` a
-hold-törléssel EGYÜTT fut `terra_hold_active_for()`-ban: ha a `.pipeline/
-HALTED` ugyanarra a körre, `halt=H6`-ra és egy Terra-budget-summary-ra
-hivatkozik, archiválja (`healed-<kör>-<stamp>.txt`) és nullázza a
-kísérletszámlálót — a következő firing így a KÖRT próbálja újra, nem indít
-felesleges önjavítást. `tools/round-pipeline.sh`, PR #73.
+**A javítás, 1. kör (Class A, infrastruktúra, PR #73).**
+`terra_clear_stale_halt_for()` a hold-törléssel EGYÜTT, `terra_hold_active_for()`
+"korlátlanra váltott" ágából hívva: ha a `.pipeline/HALTED` ugyanarra a
+körre, `halt=H6`-ra és egy Terra-budget-summary-ra hivatkozik, archiválja
+(`healed-<kör>-<stamp>.txt`) és nullázza a kísérletszámlálót.
 
-**Regressziós teszt.** `test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused`
-(`tools/tests/test_pipeline_integration.py`) — a valódi mért állapotot
-(hold + stale H6 HALTED, mindkettő E03-R08-ra) reprodukálja; RED az 53b9637
-(a [[L65]] commit) ellen, GREEN a javítás után. `python3 -m pytest
-tools/tests -q` → 149 teszt, 53 subtest, mind zöld.
+**MÉRT hiányosság — a javítás 1. köre nem volt elég.** PR #73 GATE-je zöld
+volt, de a hívási pont (`terra_hold_active_for()` "korlátlanra váltott"
+ága) KIZÁRÓLAG akkor fut le, ha még LÉTEZIK egy aktív `terra-budget-hold`
+fájl. Élesben viszont az ELSŐ firing (18:45 UTC) — még a PR #73 mérgét
+megelőzően — már törölte azt a hold-fájlt (l. fent), így a hold onnantól
+NEM LÉTEZETT; a driver saját, valódi (nem-teszt) `.pipeline/HALTED`-je
+tehát pontosan abban az állapotban maradt, amire PR #73-nak a sosem-lefutó
+ágán kellett volna reagálnia. Ugyanaz a hiba-osztály, mint [[L64]]-ben: egy
+javítás helyesen fogja meg a MÉRT jelenséget egy TESZTKÖRNYEZETBEN (hold
+jelen van), de a hívási helyet olyan feltételhez köti, ami az élő
+incidens idősorrendjében már nem teljesül.
 
-**Hogyan alkalmazd.** Egy hold/circuit-breaker LEÁLLÁSÁNAK törlése soha nem
-elég önmagában, ha van egy MÁSIK, tartós jelzőfájl (itt: HALTED) is,
-amit ugyanaz az esemény hozott létre — mindkettőt egyszerre, ugyanabban a
-függvényben kell frissíteni, különben a kettő szétcsúszik, és a "megoldott"
-állapot csendben visszaesik "még mindig megállva"-ba. Lásd [[L64]]-et is:
-ugyanez a minta (egy javítás csak az egyik ágat frissíti) korábban a
-hold-írásnál is előfordult.
+**A javítás, 2. kör (PR #74).** `terra_clear_stale_halt_for()` mostantól
+ÖNÁLLÓAN kérdezi le a Terra-policy-t (nem a hívóra bízza), és a driver
+főágában, a hold-fájl létezésétől FÜGGETLENÜL, feltétel nélkül fut le,
+valahányszor van `active_round`. Új `--terra-clear-stale-halt` teszthorog.
+
+**Regressziós tesztek** (`tools/tests/test_pipeline_integration.py`):
+- `test_stale_h6_halt_is_cleared_once_the_daily_terra_cap_goes_unlimited` —
+  a VALÓS állapotot reprodukálja (nincs hold-fájl, csak a stale HALTED);
+  RED PR #73 merge-elt állapota ellen, GREEN PR #74 után.
+- `test_stale_h6_halt_survives_when_daily_terra_cap_is_still_finite` — a
+  biztonsági ellenpélda (valódi kimerülés esetén a HALTED-nek élnie kell).
+- `test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall` —
+  teljes driver-futtatás.
+
+`python3 -m pytest tools/tests -q` → 151 teszt, 53 subtest, mind zöld.
+
+**BIZTONSÁGI INCIDENS a saját tesztelés közben.** A tesztek első
+verziója a `--terra-clear-stale-halt` hookot hívta egy OLYAN
+scriptváltozat ellen, amiben a hook még nem létezett (a RED-fázis
+szándékos állapota) — de egy ismeretlen CLI-flag a driverben NEM hibát ad,
+hanem átesik a `case` ágon a TELJES pipeline-folyamatba. Mivel az egyik
+teszt nem ültette be a máshol már bevált biztonsági mintát
+(`selfheal.count` a kísérletbüdzsé HATÁRÁN), a RED futás egy VALÓDI
+tmux+claude önjavító sessiont indított ezen a repón — azonnal észlelve és
+leállítva, állapot-károsodás nélkül (a `PIPELINE_STATE_DIR` a teszt teljes
+futása alatt egy ideiglenes könyvtárra mutatott). Javítva: minden
+HALTED-et használó teszt a kísérletbüdzsé határán ülő
+`selfheal.count`-tal fut, ahogy azt a régebbi
+`test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+már ismerte.
+
+**Hogyan alkalmazd.**
+1. Egy hold/circuit-breaker LEÁLLÁSÁNAK törlése soha nem elég önmagában,
+   ha van egy MÁSIK, tartós jelzőfájl (itt: HALTED) is, amit ugyanaz az
+   esemény hozott létre — a törlő logikának FÜGGETLENNEK kell lennie
+   attól, hogy a másik jelzőfájl még létezik-e, különben a kettő
+   szétcsúszik, és a "megoldott" állapot csendben visszaesik "még mindig
+   megállva"-ba.
+2. Egy önjavító driver regressziós tesztje, ami egy MÉG NEM LÉTEZŐ
+   CLI-hookot hív, MINDIG ültesse be az attempt-budget-határ biztonsági
+   mintát — egy ismeretlen flag a shell `case`-ből kieshet a teljes,
+   session-indító folyamatba, nem csak hibával áll meg.
