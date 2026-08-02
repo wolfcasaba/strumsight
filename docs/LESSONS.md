@@ -2015,3 +2015,95 @@ a modell képességében vagy a router logikájában.
 Ez a lépés NEM H4/H6 halt — az ütköző előfeltétel az orchestrátor SAJÁT,
 még nem merge-elt munkamenetének git-kezelése volt, nem a modell képessége
 vagy a router infrastruktúrája; a §2 önálló-döntési kör hatáskörébe esik.
+
+## L52 — Egy start-sorrend szerinti "csak a közvetlen megelőző eseményt hasonlítsd össze" overlap-detekció hamis negatívot ad, ha egy azonos-pitch tie megszakítja a láncot; a helyes minta az aktív-halmaz sweep-line
+
+Az E03-R04 (2026-08-02) `NoteTrackAnalyzer.analyze` első M3-menete a start
+szerint rendezett note-listán csak a KÖZVETLEN megelőző elemhez (`ordered
+[index-1]`) hasonlította az aktuálist, annak SAJÁT végét (`prevEnd`)
+használva — nem egy futó maximum-véget vagy aktív-esemény-halmazt. A gate
+teljesen zöld volt (17+14 teszt), mert az implementer saját teszt-mátrixa
+kizárólag ADJACENS-lánc overlapeket fedett (`n-1` fedi `n-2`-t, `n-2` fedi
+`n-3`-at).
+
+**A hiba matematikailag bizonyítható indoklása:** ha A egy hosszú note, B
+egy AZONOS pitchű, korán beágyazott note (helyesen tie-candidate, nem
+overlap), és C egy KÜLÖNBÖZŐ pitchű, később beágyazott note, amely A-t
+fedi, de B-t NEM — a `(B,C)` szomszédos pár lokálisan valóban nem fedi
+egymást, és az algoritmus soha nem veti össze C-t A-val. Az `isMonophonic`
+hamisan `true`-t ad egy ténylegesen polifón track-re — ez pontosan a §6
+kötelező megkülönböztető mátrix 3. sorát sérti ("end > next start →
+polyphonic overlap"), és egy jövőbeli capability resolvert (SDD §7.3
+"Monophonic Note Trainer csak ellenőrzött monophonic track esetén
+engedélyezhető") téves engedélyezésre vezetne.
+
+**A reviewer adverzariális mutáció-próbája fogta meg**, nem a gate: egy
+kézzel számított, önálló referencia-szcenárió (A: 0–10000ms pitch 60; B:
+100–200ms pitch 60 — tie; C: 5000–5100ms pitch 62 — valódi overlap A-val,
+B-t nem érinti) a javítás előtt `Expected: false / Actual: <true>`-t adott.
+A Terra (Codex) javítás egy `activeNotes` sweep-line-ra cserélte a
+logikát: minden `curr`-nál eltávolítja a már véget ért aktívakat, majd
+`curr`-ot MINDEN megmaradó aktívval összeveti (nem csak a start-sorrend
+szerinti közvetlen megelőzővel), és a reviewer egy plusz, az implementer
+felé SOHA nem közölt negyedik-note szcenárióval (két FÜGGETLEN cross-pitch
+overlap ugyanazon a hosszú note-on) is helyesen validálta.
+
+**Általánosítható minta:** bármely "rendezd az eseményeket, hasonlítsd
+össze a szomszédos párokat" overlap/intervallum-detekciós kódnál a
+review KÖTELEZŐ próbája egy olyan szcenárió, ahol egy köztes esemény a
+"nem érdekes" osztályba esik (itt: azonos-pitch tie) ÉS megszakítja a
+láncot egy távolabbi, valódi találat elől. Az adjacent-pair minta csak
+akkor helyes, ha a "nem-fedés" reláció tranzitív a teljes rendezett
+listán — ez intervallum-overlapnél ÁLTALÁBAN NEM igaz, amint a "fedés"
+osztályozása (itt: tie vs. valódi overlap) nem egységes predikátum.
+
+## L53 — Egy `resume` hívás túl korai megölése (akár tesztelési célból, akár hibából) a router `RECOVERED_M3_CALL_N` heurisztikáján át valódi modellhívás nélkül fogyaszt el egy M3-attemptet; a diff-alapú ellenőrzés (nem a router jelentése) fogja meg
+
+Az E03-R04 (2026-08-02) orchestrátor-session egy `resume` hívást hibásan
+`&`-nal háttérbe küldött (a round §0.1 kifejezetten tiltja ezt — "SOSEM
+háttér-taskkal várj"), majd — a hiba észlelése után — a folyamatot a
+modellhívás megkezdése ELŐTT, néhány másodpercen belül megölte, mielőtt
+bármilyen valódi M3-munka történt volna.
+
+**A router `tools/ai_router/router.py` recovery-logikája
+(`M3_CALL_N`→`RECOVERED_{phase}`, kb. 617–670. sor) ezt tévesen
+"helyreállítható megszakításnak" ítélte:** a `phase` a megszakításkor
+`M3_CALL_2` volt (ez a fázis KÖZVETLENÜL a `run_model()` hívás előtt
+perzisztálódik, és `M3_ATTEMPT_2`-re íródik felül közvetlenül utána — a
+kód kommentje maga is leírja ezt a megkülönböztetést). A resume újra
+lefuttatta a gate-et a WORKTREE JELENLEGI állapotán — ami az ELSŐ
+(kezdeti) M3-menet diffje volt, mivel a második menet sosem jutott el
+odáig, hogy bármit írjon —, a gate zöldre futott, és a router "recovered
+gate passed"-del `READY_FOR_REVIEW`-t adott, `m3_attempts=2`-t könyvelve
+el, ANÉLKÜL, hogy egy második, valódi modellhívás történt volna.
+
+**Ez NEM ismerhető fel a router jelentéséből (`status`/`reason`/
+`m3_attempts`) — csak a TÉNYLEGES diff kézzel történő ellenőrzésével.** A
+reviewer saját független review-je (a review-findings-ben kért javítást
+VÁRTA) azonnal kiderítette: a `note_track_analyzer.dart` bájtra
+AZONOS maradt a "javítás" előtti és utáni állapottal, és egyetlen új
+regressziós teszt sem jelent meg a review-findings szcenáriójára. Ez
+ugyanaz a L51-ben már kimondott elv szigorúbb változata: **a diff a
+bizonyíték, nem a router jelentése** — itt a router jelentése (`READY_FOR
+_REVIEW`, "recovered gate passed") kifejezetten FÉLREVEZETŐ volt, nem
+csak hiányos.
+
+**Szerencsés, protokoll-helyes nettó kimenet:** mivel `max_m3_attempts_
+per_task` szigorúan **2** (`tools/ai_router/config.py` — a konfiguráció
+validátora kikényszeríti, "must be exactly 2"), a hibásan elkönyvelt
+második attempt miatt a router a KÖVETKEZŐ `resume` hívást automatikusan
+Terrára (Codex) irányította — ami éppen egybeesik a round §2
+motor-eszkalációs szabályával (M3 egy javító kör → utána Codex). A
+véletlen könyvelési hiba tehát NEM okozott tényleges protokoll-sértést,
+csak elfogyasztotta M3 keretét egy kör korábban, mint indokolt lett
+volna.
+
+**Következmény jövőbeli körökre:** SOHA ne szakíts meg egy `resume` (vagy
+`run`) hívást, még akkor sem, ha az indítás egyértelműen hibás volt (pl.
+tiltott háttér-futtatással) — ha a hívás MÁR elindult (a folyamatfa
+létrejött), a megszakítás a router state-jét egy nem-triviális, a
+kódban dokumentált, de élben hibás recovery-ágra viheti. Ha egy hibás
+indítást észlelsz AZONNAL (a `ps`-ben a folyamat PID-je még nem
+létezik, vagy a fázisfájl még nem íródott), a megölés biztonságos; ha a
+folyamat már fut, inkább hagyd lefutni és utólag, a diff alapján
+ellenőrizd az eredményt.
