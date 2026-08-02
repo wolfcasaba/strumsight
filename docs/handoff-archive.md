@@ -1981,3 +1981,79 @@ zöld a merge-elt `headSha`-n (`1387bb5`), független post-merge
 gate-ellenőrzés `main`-en szintén zöld.
 
 Review-jelentés: [`docs/reviews/e03-r06-legacy-song-setlist-adapters-review.md`](reviews/e03-r06-legacy-song-setlist-adapters-review.md).
+
+## E03-R07 — Fájlrendszeres Song repository és asset store
+
+**Kör:** E03-R07 · **Brief:** `docs/rounds/e03-r07-song-repository-asset-store.md`
+· **ADR:** [ADR 0090](adr/0090-song-storage-files-and-assets.md) (elfogadva
+E03-R01 pre-flightban, ez a kör csak implementálta — nem kellett új ADR).
+**PR:** [#66](https://github.com/wolfcasaba/strumsight/pull/66), squash
+`b8b7e4e`. **Implementer:** auto MiniMax-first router (M3). **Orchestrátor:**
+Claude Sonnet 5.
+
+**Pre-flight mérés (§0.0):** a pipeline-prompt "nincs kiosztott ADR" állítása
+elavult volt — ADR 0090 már szó szerint formalizálta a kör minden döntését,
+ezért a kör NEM osztott ki új ADR-számot. Egyéb mérés: `path_provider`/`clock`
+csomag csak tranzitívan feloldott (nincs a `pubspec.yaml`-ban), ugyanaz a
+precedens mint az E03-R06 `crypto` importja; a brief feltételezett codec/
+validator/capability-resolver API-i pontosan egyeztek a kóddal; a
+`song_trainer/domain/` purity-t egy önálló, rekurzív teszt-scanner őrzi
+(`test/features/song_trainer/domain/song_document_test.dart`), NEM a
+`tool/check_architecture.dart` (ami csak `practice/domain/`-t szkennel).
+
+**Elkészült (lásd HANDOFF §2 részletesen):** `SongRepository`/
+`SongAssetRepository` domain contract, `FileSongRepository`,
+`FileSongAssetRepository`, `AtomicFileWriter`, `SongRepositoryRecovery`,
+`InMemorySongRepository`, `song_trainer_providers.dart`.
+
+**Folyamat — M3 első próbája scope-ütközésbe futott.** Az M3 két, a §4
+táblán KÍVÜLI teszt-fájlt hozott létre (`atomic_file_writer_test.dart`,
+`song_index_codec_test.dart`); a router scope-audit-ja helyesen `BLOCKED`-ra
+futtatta. Az orchestrátor a fájllista bővítése HELYETT mechanikusan
+áthelyezte mind a 11 tesztesetet a már engedélyezett fájlokba (nem-tartalmi
+javítás), majd — mivel a router `resume` parancsa csak `READY_FOR_REVIEW`
+állapotból működik, egy `BLOCKED` állapotú task pedig `reset`+`run` után is
+azonnal újra BLOCKED-ba fut a perzisztált, elavult baseline-manifest miatt
+— a router SAJÁT kódját (`capture_workspace_manifest`, `StateStore`) hívva
+frissítette a task-state-et egy friss manifestre és `READY_FOR_REVIEW`-ra
+(`docs/LESSONS.md` L60).
+
+**Három független review pass + két javító kör:**
+
+- **Pass 1** (`e8555b6`): 1 BLOCKER + 6 MAJOR — hiányzó mentés-előtti
+  validáció (`SongValidator`/`SongCapabilityResolver` sosem futott),
+  asset-olvasás integritás-ellenőrzés nélkül, uncaught `FormatException`
+  sérült sidecaron, nem-atomikus asset-írás, rossz staging könyvtár (a
+  `temp/` sosem lett használva valódi íráskor), delete-then-rename törte az
+  atomicitást, nem streamelt SHA-256.
+- **Javító kör #1** (M3, router `resume` findings-fájllal): mind a 7
+  BLOCKER/MAJOR + 3 „olcsó" tétel (vacuous reziduum-szűrő, hibás JSON-
+  fixture, halott `Directory.flush()` kód) zárva, nevesített regresszós
+  tesztekkel (`468dae4`).
+- **Pass 2** (`468dae4`): egy MÁSODIK, független review-menet egy ÚJ
+  BLOCKER-t talált, amit a javító kör #1 SAJÁT streamelt-hash javítása
+  vezetett be: `AtomicFileWriter.writeStream` `raf.writeFromSync(bytes,
+  offset, length)`-t hívott, holott a harmadik argumentum kizáró VÉG-
+  index, nem hossz — egy chunknál (64 KiB) nagyobb payload `RangeError`-t
+  dobott volna éles használatban; mind a 66 leszállított teszt sub-chunk
+  fixture volt, ezért a gate zöld maradt.
+- **Javító kör #2 — orchestrátor-írt** (`652fdf6`): mivel M3 kerete (2/2)
+  ÉS a Terra napi automatikus kerete is (mérve, `terra-ledger.json`
+  szerint 3/3 a mai UTC napra) kimerült — ez az AGENTS.md dokumentált
+  kivétele ("a motor-oldal nem elérhető") —, az orchestrátor egyetlen
+  sort javított (`length`→`end`) és egy új, több-chunkos (200 KiB)
+  regressziós tesztet adott hozzá.
+- **Pass 3 / final** (`652fdf6`): egy harmadik független review-menet
+  saját, eltérő méretű próbateszttel (3×64 KiB+partial) igazolta a
+  javítást, végigment minden index/length-hívási helyen a diffben,
+  megerősítette a korábbi 7 lelet zárva maradását és a scope-egyezést →
+  **APPROVED**.
+
+Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/local`
+(67/67, format/analyze/architecture mind zöld — az orchestrátor és mindhárom
+review pass egymástól függetlenül, izolált klónokban futtatta) + CI
+[30750669625](https://github.com/wolfcasaba/strumsight/actions/runs/30750669625)
+zöld a merge-elt `headSha`-n (`652fdf6`), független post-merge gate `main`-en
+(`b8b7e4e`) szintén zöld.
+
+Review-jelentés: [`docs/reviews/e03-r07-song-repository-asset-store-review.md`](reviews/e03-r07-song-repository-asset-store-review.md).

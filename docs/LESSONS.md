@@ -2440,3 +2440,70 @@ is — nem old fel egy MÁSIK, jelenleg futó kör "tilos zóna" szabálya alól
 a helyes válasz a dokumentálás + a hiba érintetlenül hagyása a saját
 körben, a javítást egy külön, arra felhatalmazott (self-heal) kör
 végzi.
+
+## L60 — Egy `auto`-router task BLOCKED állapotból a `resume` néma no-op; a helyes recovery a router SAJÁT kódjával frissített task-state, nem kézi JSON-szerkesztés (E03-R07)
+
+**Mit mértünk (2026-08-02).** M3 első próbája két, a brief §4 listáján
+KÍVÜLI teszt-fájlt hozott létre — a router scope-audit-ja helyesen
+`BLOCKED`-ra futtatta ("path outside allowed scope"). Az orchestrátor a
+két fájl tartalmát mechanikusan (fájllista-bővítés NÉLKÜL) áthelyezte a
+már engedélyezett fájlokba, majd — mivel a `resume` parancs csak
+`status == READY_FOR_REVIEW` esetén csinál bármit (`router.py:531-536`:
+minden más esetben egyszerűen visszaadja a gyorsítótárazott, változatlan
+állapotot) — `reset` + friss `run`-t próbált. Ez viszont AZONNAL újra
+`BLOCKED`-ba futott, most "baseline has tracked/untracked changes"
+üzenettel: a PRECHECK a `baseline_manifest`-et csak AKKOR rögzíti
+frissen, ha `"baseline_manifest" not in state` ÉS `precheck_phase` igaz;
+egyébként a PERZISZTÁLT (és ebben az esetben elavult, a scope-fix ELŐTTI
+állapotot tükröző) manifestet validálja újra, függetlenül attól, hogy a
+munkafa időközben tiszta lett-e.
+
+**A működő recovery:** az orchestrátor a router SAJÁT függvényeit hívta
+(`tools/ai_router/security.py:capture_workspace_manifest`,
+`tools/ai_router/state.py:StateStore`) egy kis Python-szkriptből, hogy
+(1) friss, a JELENLEGI (tiszta, commitolt) munkafát tükröző manifestet
+rögzítsen, és (2) a perzisztált task-state-et `READY_FOR_REVIEW`-ra
+állítsa — ez tette lehetővé, hogy a `resume` hívás a findings-fájlt
+ténylegesen eljuttassa egy új M3-hívásnak. Kézi, ad-hoc JSON-szerkesztés
+helyett a router SAJÁT kódjának hívása garantálja, hogy a manifest
+formátuma/mezői pontosan azt a szerződést teljesítik, amit a router maga
+vár — ez NEM `tools/`-módosítás (a fájlok érintetlenek), kizárólag a
+futásidejű állapotra (`~/.local/state/strumsight-ai-router/`) hatott.
+
+**Második mérés ugyanebben a körben: a Terra napi automatikus kerete
+VALÓS, ellenőrizhető kimerülés, nem találgatás.** A javító kör #1 UTÁN a
+router `DEFERRED`-et jelzett ("automatic Terra daily budget is
+exhausted"); `~/.local/state/strumsight-ai-router/terra-ledger.json`
+kifejezetten megszámolható — a mai UTC napra (`utc_day`) already 3 aktív/
+lezárt (`reserved`/`started`/`finished`, NEM `archived`) foglalás állt
+(`max_automatic_terra_calls_per_utc_day = 3` a `.ai/router.toml`-ban) —
+tehát ez egy VALÓDI, csak UTC nap-váltáskor oldódó kimerülés volt, nem
+egy percek múlva elmúló átmeneti hiba. Egy MÁSODIK független review pass
+eközben egy ÚJ BLOCKER-t talált a javító kör #1 saját streamelt-hash
+javításában (`RandomAccessFile.writeFromSync`'s harmadik argumentuma
+KIZÁRÓ VÉG-index, nem hossz — a kódban `length`-et adtak át; egyetlen
+chunknál `offset=0` miatt `end == length`, ezért "véletlenül működött", és
+mind a 66 leszállított teszt sub-chunk fixture volt). Mivel M3 kerete
+(2/2) ÉS Terra napi kerete (mérve, 3/3) egyaránt kimerült, ez pontosan az
+AGENTS.md dokumentált kivétele ("a motor-oldal nem elérhető") — az
+orchestrátor a pontosan diagnosztizált egysoros javítást (`length`→`end`)
++ egy új, több-chunkos regressziós tesztet maga vitte be, majd egy
+HARMADIK független review pass ezt is APPROVED-dal zárta.
+
+**Tanulság.** (1) `resume` csak `READY_FOR_REVIEW`-ból működik — ha az
+orchestrátor egy `BLOCKED` állapotú `auto`-taskot manuális commit-tal
+old fel, a `resume` előtt a persisztált state-et a router SAJÁT
+`capture_workspace_manifest`/`StateStore` hívásaival kell frissre
+állítani, nem kézi JSON-szerkesztéssel és nem egyszerű `reset`+`run`-nal
+(az utóbbi a stale manifest miatt azonnal újra BLOCKED-ba fut). (2) A
+Terra napi automatikus kerete egy MEGSZÁMOLHATÓ, megosztott erőforrás a
+`terra-ledger.json`-ban — kimerülés-gyanú esetén ELLENŐRIZD, ne
+feltételezd; ha valóban kimerült (nem csak DEFERRED-jel, hanem a ledger
+számlálójával is alátámasztva) és M3 kerete is elfogyott, az
+AGENTS.md motor-oldal-nem-elérhető kivétele jogosan alkalmazható egy
+szűk, pontosan diagnosztizált javításra. (3) `RandomAccessFile
+.writeFromSync(buffer, start, end)` harmadik paramétere KIZÁRÓ VÉG-INDEX,
+nem hossz — egy csak egyetlen chunkos teszt-fixture-készlet ezt a hibát
+sosem fogja el; minden jövőbeli streamelt/chunkolt IO-kódnál (DSP
+audio-buffer streaming is ide tartozhat) explicit multi-chunk,
+nem-kerek-méretű regressziós teszt kell.

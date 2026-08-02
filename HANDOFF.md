@@ -4,8 +4,41 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (Pipeline E03-R06 — Legacy Song/Setlist migration adapter DONE, merged
-> `d20c402`, no fix round.** `LegacySongReader` (JSON DTO boundary +
+> (Pipeline E03-R07 — File-based Song repository and asset store DONE, merged
+> `b8b7e4e` (PR #66), two fix rounds.** Implements
+> [ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) (accepted at
+> E03-R01): `SongRepository`/`SongAssetRepository` domain contracts,
+> `FileSongRepository` (validate→temp-serialize→flush→verify→atomic document
+> rename→temp index→atomic index rename, optimistic `expectedRevision`),
+> `FileSongAssetRepository` (streamed SHA-256 content-hash store, reference
+> counting), `AtomicFileWriter` (temp/flush/verify/rename, staging under the
+> songs-root `temp/` directory), `SongRepositoryRecovery` (non-destructive
+> startup scan: orphan temp, orphan document, corrupt index, orphan asset),
+> `InMemorySongRepository` (fake), `song_trainer_providers.dart` (production
+> Riverpod wiring over `path_provider`'s application-support directory). No
+> SharedPreferences/key-value path carries `SongDocument`/asset content
+> anywhere in the new code. **Three independent review passes + two fix
+> rounds** (`docs/reviews/e03-r07-song-repository-asset-store-review.md`):
+> pass 1 found 1 BLOCKER + 6 MAJOR (missing validation before persist,
+> non-atomic/non-integrity-checked asset I/O, wrong staging directory,
+> delete-then-rename atomicity break, non-streamed hashing); fix round #1
+> (MiniMax M3, via router `resume`) closed all of them; pass 2 found fix
+> round #1's own streamed-hash fix had introduced a NEW BLOCKER
+> (`RandomAccessFile.writeFromSync` called with a length where an exclusive
+> end-index is required — broke for any payload past one 64 KiB chunk, but
+> every shipped test fixture was sub-chunk so the gate stayed green); fix
+> round #2 was **orchestrator-authored** (MiniMax's two router-allotted
+> attempts were exhausted AND Terra's automatic daily budget was verified
+> exhausted via `terra-ledger.json`, not just transiently unavailable — the
+> documented AGENTS.md exception for implementer-side unavailability) — one
+> line + one multi-chunk regression test; pass 3 **APPROVED**.
+> **Process lesson (`docs/LESSONS.md` L60):** an `auto`-router task stuck in
+> `BLOCKED` after the orchestrator manually commits a scope-fix cannot be
+> un-stuck with a plain `reset`+`run` (the stale persisted `baseline_manifest`
+> immediately re-blocks) — the sanctioned recovery calls the router's own
+> `capture_workspace_manifest`/`StateStore` code to refresh the manifest and
+> set `status=READY_FOR_REVIEW`, so `resume` can carry review findings to a
+> fresh M3 attempt. `LegacySongReader` (JSON DTO boundary +
 > canonical SHA-256, no legacy presentation import), `LegacySongAdapter`
 > (legacy `Song` record → `SongDocument`: `ChordTrack` + `StrumTrack` +
 > one `SongSectionKind.custom` "Full Song" section, single microsecond
@@ -68,9 +101,10 @@
   E03-R02 (SongDocument V2 identitás/metaadat domain modell + codec),
   E03-R03 (section/measure struktúra + determinisztikus tempo/meter/key map +
   SongTimeMap), E03-R04 (track/event domain modell + monophonic elemzés),
-  E03-R05 (validator/normalizer/capability resolver) és E03-R06 (legacy
-  Song/Setlist migrációs adapter) kész. A modell flagek mögött, hívó
-  UI/repository nincs — production viselkedés változatlan.
+  E03-R05 (validator/normalizer/capability resolver), E03-R06 (legacy
+  Song/Setlist migrációs adapter) és E03-R07 (fájlrendszeres Song repository
+  és asset store) kész. A modell flagek mögött, hívó UI/import-runner nincs
+  — production viselkedés változatlan.
 
 ## 2. What is working
 
@@ -154,6 +188,31 @@
   `ImportWarning` kiterjesztése, ADR 0116 §Döntés 1). Veszteségmentes,
   determinisztikus, tartós írás vagy legacy törlés nélkül. Hívó
   UI/migration-runner még nincs — production viselkedés változatlan.
+- **Fájlrendszeres Song repository és asset store (E03-R07, ADR 0090):**
+  `lib/features/song_trainer/domain/repositories/` — `SongRepository`
+  (`list`/`get`/`create`/`update`/`moveToTrash`/`restore`/
+  `permanentlyDelete`, optimistic `expectedRevision`), `SongAssetRepository`
+  (`put`/`get`/`summary`/`incrementReference`/`decrementReference`/
+  `permanentlyDelete`). `data/local/` — `FileSongRepository` (validate→
+  temp-serialize→flush→verify→atomic document rename→temp index→atomic
+  index rename, `SongValidator`/`SongCapabilityResolver` a mentés előtt),
+  `FileSongAssetRepository` (streamelt SHA-256 content-hash store,
+  reference count, korrupt sidecar/asset stabil hibakóddal, sosem néma
+  playback), `AtomicFileWriter` (temp/flush/verify/rename, staging a
+  songs-root `temp/` alatt, előzetes törlés nélküli atomikus rename),
+  `SongRepositoryRecovery` (nem-destruktív startup scan: orphan temp,
+  orphan document, corrupt index, orphan asset), `InMemorySongRepository`
+  (fake). `application/song_trainer_providers.dart` — éles Riverpod
+  wiring `path_provider.getApplicationSupportDirectory()` felett
+  (tranzitív import, ugyanaz a precedens, mint az E03-R06 `crypto`
+  használata). Nincs `SongDocument`/asset SharedPreferences-ben. Három
+  független review pass + két javító kör után **APPROVED**
+  ([`docs/reviews/e03-r07-song-repository-asset-store-review.md`](docs/reviews/e03-r07-song-repository-asset-store-review.md)) —
+  a második pass egy, a saját első javító kör bevezette regressziót
+  talált (streamelt-hash `writeFromSync` length/end-index csere,
+  `docs/LESSONS.md` L60), amit az orchestrátor javított (implementer-oldal
+  mérve nem elérhető: M3 kerete + Terra napi kerete egyaránt kimerült).
+  Hívó UI/import-runner még nincs — production viselkedés változatlan.
 - **Detektálás (100% on-device):** Live képernyő (akkord + pengetésirány valós
   időben, DSP + CRNN ML), Analyze (felvett klip elemzése), Tuner, metronóm.
   DSP-igazság: `docs/rag/chunks/` — paraméter csak ADR-rel és ugyanabban a
@@ -339,13 +398,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #65](https://github.com/wolfcasaba/strumsight/pull/65)
-(E03-R06 legacy Song/Setlist migration-adapter round, squash-merge
-`d20c402`), CI run
-[30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)
-**success** on `1387bb5` (the matching `headSha`, full suite + randomized
-property + APK). No fix round — review APPROVED first pass (0
-BLOCKER/MAJOR) — see §5 and `docs/handoff-archive.md` § E03-R06.
+`main` @ [PR #66](https://github.com/wolfcasaba/strumsight/pull/66)
+(E03-R07 file-based Song repository and asset store, squash-merge
+`b8b7e4e`), CI run
+[30750669625](https://github.com/wolfcasaba/strumsight/actions/runs/30750669625)
+**success** on `652fdf6` (the matching `headSha`, full suite + randomized
+property + APK). Two fix rounds, three independent review passes — see §5
+and `docs/reviews/e03-r07-song-repository-asset-store-review.md`.
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -418,45 +477,54 @@ BLOCKER/MAJOR) — see §5 and `docs/handoff-archive.md` § E03-R06.
 
 ## 5. Last completed round
 
-**E03-R06 — Legacy Song és Setlist adapterek** (PR
-[#65](https://github.com/wolfcasaba/strumsight/pull/65), squash `d20c402`,
-[ADR 0116](docs/adr/0116-legacy-song-setlist-migration-boundary.md)).
-Implementer: **auto MiniMax-first router** (ADR 0088), egyetlen M3-attempt,
-gate elsőre zöld. Orchestrátor: **Claude Sonnet 5**.
+**E03-R07 — Fájlrendszeres Song repository és asset store** (PR
+[#66](https://github.com/wolfcasaba/strumsight/pull/66), squash `b8b7e4e`,
+[ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) — elfogadva
+E03-R01-ben, ez a kör csak implementálta, nem kellett új ADR-szám).
+Implementer: **auto MiniMax-first router**. Orchestrátor: **Claude Sonnet 5**.
 
-**Elkészült:** `LegacySongReader`, `LegacySongAdapter`,
-`LegacySetlistAdapter`, `LegacyMigrationReport` (lásd §2 részletesen).
+**Elkészült:** `SongRepository`/`SongAssetRepository`, `FileSongRepository`,
+`FileSongAssetRepository`, `AtomicFileWriter`, `SongRepositoryRecovery`,
+`InMemorySongRepository`, `song_trainer_providers.dart` (lásd §2
+részletesen).
 
-**Pre-flight:** nincs drift a brief baseline-állításaiban; ADR 0116 négy
-döntést formalizált (önálló `LegacyMigrationReport` típus, `Meter`
-denominator mindig 4, közvetlen szorzásos időzítés, `custom` section
-kind) — részletek `docs/handoff-archive.md` § E03-R06.
+**Pre-flight:** ADR 0090 már elfogadott volt és szó szerint fedte a kör
+minden döntését (nincs új ADR); `path_provider`/`clock` csak tranzitívan
+feloldott csomag, ugyanaz a precedens mint az E03-R06 `crypto`-ja; a
+`song_trainer/domain/` purityt egy önálló teszt-scanner őrzi, nem a
+`tool/check_architecture.dart` — részletek `docs/handoff-archive.md`
+§ E03-R07.
 
-**Folyamat:** egy vadonatúj `auto`-router munkapéldány első
-`BASELINE_GATE`-je az L48-ban dokumentált klón-csapdába futott (hiányzó
-`lib/l10n/`), sanctioned `gen-l10n` + `reset` javította — az L48 minta
-tehát szisztematikus, nem egyszeri (`docs/LESSONS.md` L59). Ugyanebben a
-pre-flightban mérve (de EZT a sessiont nem illeti javítani — más kör
-artefaktuma): a `main`-en élő E03-R05 brief TOML `allowed_paths`-a
-tévesen tartalmazza az ADR 0114 utat, ezért piros a Router CI a
-`main`-en — jövőbeli self-heal kör feladata.
+**Folyamat:** M3 első próbája két, a §4 listán kívüli teszt-fájlt hozott
+létre — az orchestrátor mechanikusan (fájllista-bővítés nélkül)
+áthelyezte a teszteseteket a már engedélyezettekbe. Egy `BLOCKED` állapotú
+`auto`-router-task `resume`-mal való feloldásához a router SAJÁT
+kódjával kellett frissre állítani a perzisztált baseline-manifestet
+(`docs/LESSONS.md` L60) — plain `reset`+`run` a stale manifest miatt
+azonnal újra BLOCKED-ba futott volna.
 
-**Review, javító kör nélkül:** izolált `/tmp` klón, saját
-gate-újrafuttatás, scope-audit, mind a négy ADR 0116 döntés forráskód-
-szintű ellenőrzése, 9 eldobható adverzariális próbateszt → **0
-BLOCKER/MAJOR**, 3 MINOR + 1 NOTE, mind follow-up (részletek
-`docs/handoff-archive.md` § E03-R06).
+**Három független review pass + két javító kör:** pass 1 → 1 BLOCKER +
+6 MAJOR (hiányzó mentés-előtti validáció, asset-integritás/atomicitás
+hiányok, rossz staging könyvtár, delete-then-rename atomicitás-sértés,
+nem streamelt hash); javító kör #1 (M3) mind zárta; pass 2 egy ÚJ
+BLOCKER-t talált a saját streamelt-hash javításban (`writeFromSync`
+length/end-index csere — `docs/LESSONS.md` L60); javító kör #2
+**orchestrátor-írt** (M3 kerete + Terra napi automatikus kerete egyaránt
+mérve kimerült — AGENTS.md motor-oldal-nem-elérhető kivétele) egyetlen
+sort + egy multi-chunk regressziós tesztet javított; pass 3 **APPROVED**.
 
-Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer, izolált
-klónokban) + teljes `test/features/songs` (49/49) +
-`setlist_expected_hint_test.dart` regresszió-mentes + CI
-[30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)
-zöld a merge-elt `headSha`-n (`1387bb5`), független post-merge
-gate-ellenőrzés `main`-en szintén zöld. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R06.
+Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/local`
+(67/67, format/analyze/architecture mind zöld) + CI
+[30750669625](https://github.com/wolfcasaba/strumsight/actions/runs/30750669625)
+zöld a merge-elt `headSha`-n (`652fdf6`), független post-merge
+gate-ellenőrzés `main`-en (`b8b7e4e`) szintén zöld. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R07. Review:
+[`docs/reviews/e03-r07-song-repository-asset-store-review.md`](docs/reviews/e03-r07-song-repository-asset-store-review.md).
 
-**Előző körök:** E03-R05 (validator/normalizer/capability resolver, PR
-[#64](https://github.com/wolfcasaba/strumsight/pull/64), `5226127`,
+**Előző körök:** E03-R06 (legacy Song/Setlist migrációs adapter, PR
+[#65](https://github.com/wolfcasaba/strumsight/pull/65), `d20c402`,
+`docs/LESSONS.md` L59) · E03-R05 (validator/normalizer/capability resolver,
+PR [#64](https://github.com/wolfcasaba/strumsight/pull/64), `5226127`,
 `docs/LESSONS.md` L54–L58) · E03-R04 (track/event domain modell +
 monophonic elemzés, PR [#60](https://github.com/wolfcasaba/strumsight/pull/60),
 `5c01149`, `docs/LESSONS.md` L52/L53) · E03-R03 (songstruktúra +
@@ -470,11 +538,12 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 ## 6. Exact next task
 
 0. **~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
-   Validator, normalizer, capabilities~~ és ~~E03-R06 — Legacy Song/Setlist
-   migrációs adapter~~ — KÉSZ, ld. §5.** Következő:
-   **E03-R07 — Fájlrendszeres Song repository és asset store**
-   ([docs/rounds/e03-r07-song-repository-asset-store.md](docs/rounds/e03-r07-song-repository-asset-store.md)).
-   A `docs/execution/pipeline-queue.tsv` E03-R07 sora `pending` — a driver
+   Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
+   migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
+   asset store~~ — KÉSZ, ld. §5.** Következő:
+   **E03-R08 — Legacy adatok tartós V2 migrációja**
+   ([docs/rounds/e03-r08-persistent-v2-migration.md](docs/rounds/e03-r08-persistent-v2-migration.md)).
+   A `docs/execution/pipeline-queue.tsv` E03-R08 sora `pending` — a driver
    automatikusan folytatja (mid-epic round, nincs emberi kapu, ADR 0087 §7).
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
