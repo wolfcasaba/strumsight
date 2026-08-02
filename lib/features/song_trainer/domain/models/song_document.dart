@@ -3,6 +3,7 @@ import 'song_id.dart';
 import 'song_marker.dart';
 import 'song_metadata.dart';
 import 'song_source.dart';
+import 'song_track.dart';
 import 'key_map.dart';
 import 'meter_map.dart';
 import 'song_measure.dart';
@@ -29,6 +30,7 @@ abstract final class SongDocumentValidationCode {
       'songDocument.createdAt.afterUpdatedAt';
   static const String assetsTooMany = 'songDocument.assets.tooMany';
   static const String markersTooMany = 'songDocument.markers.tooMany';
+  static const String tracksTooMany = 'songDocument.tracks.tooMany';
 }
 
 /// Documented upper bound on the number of asset references one document
@@ -39,6 +41,12 @@ const int maxSongDocumentAssetCount = 64;
 
 /// Documented upper bound on the number of markers one document can carry.
 const int maxSongDocumentMarkerCount = 1024;
+
+/// Documented upper bound on the number of tracks one document can
+/// carry. A realistic chord + strum + lead + backing + a couple of
+/// lyric / marker tracks fits comfortably under this; anything
+/// beyond is almost certainly corrupt.
+const int maxSongDocumentTrackCount = 64;
 
 /// The lowest schema version the codec knows how to read.
 ///
@@ -65,6 +73,7 @@ final class SongDocument {
     required this.updatedAt,
     List<SongAssetReference>? assets,
     List<SongMarker>? markers,
+    List<SongTrack>? tracks,
     List<SongSection>? sections,
     List<SongMeasure>? measures,
     TempoMap? tempoMap,
@@ -76,6 +85,7 @@ final class SongDocument {
        markers = List<SongMarker>.unmodifiable(
          markers ?? const <SongMarker>[],
        ) {
+    this.tracks = List<SongTrack>.unmodifiable(tracks ?? const <SongTrack>[]);
     this.sections = List<SongSection>.unmodifiable(
       sections ?? const <SongSection>[],
     );
@@ -112,6 +122,11 @@ final class SongDocument {
         SongDocumentValidationCode.markersTooMany,
       );
     }
+    if (this.tracks.length > maxSongDocumentTrackCount) {
+      throw SongDocumentValidationException._(
+        SongDocumentValidationCode.tracksTooMany,
+      );
+    }
   }
 
   /// Wire-incompatible schema version. Bumped on a breaking change.
@@ -137,6 +152,12 @@ final class SongDocument {
   /// Optional markers. Unmodifiable view — see [List.unmodifiable].
   final List<SongMarker> markers;
 
+  /// Optional tracks. Unmodifiable view — see [List.unmodifiable].
+  /// Late-initialised because the field references [SongTrack], which
+  /// imports event types that are alphabetically grouped near the
+  /// bottom of the model layer.
+  late final List<SongTrack> tracks;
+
   late final List<SongSection> sections;
   late final List<SongMeasure> measures;
   late final TempoMap tempoMap;
@@ -161,6 +182,7 @@ final class SongDocument {
           other.source == source &&
           _listEquals(other.assets, assets) &&
           _listEquals(other.markers, markers) &&
+          _listEquals(other.tracks, tracks) &&
           _listEquals(other.sections, sections) &&
           _listEquals(other.measures, measures) &&
           other.tempoMap == tempoMap &&
@@ -180,6 +202,7 @@ final class SongDocument {
     source,
     Object.hashAll(assets),
     Object.hashAll(markers),
+    Object.hashAll(tracks),
     Object.hashAll(sections),
     Object.hashAll(measures),
     tempoMap,
