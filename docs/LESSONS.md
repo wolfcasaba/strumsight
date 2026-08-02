@@ -2921,3 +2921,33 @@ lett újralétrehozva. Az ancestor-feltétel ezért nem biztonsági garancia, ha
 téves működési előfeltétel volt. A recovery a tiszta régi snapshotot tartja
 meg, majd a JELENLEGI worktree teljes, friss allowlist-auditját követeli meg;
 ez az a kontroll, amely a listán kívüli diffet továbbra is megállítja.
+
+## L68 — A baseline-rebase-nek el kell dobnia a felülírt Terra terminális intentet, különben a `resume` a régi `BLOCKED` választ játssza vissza (E03-R08 H6)
+
+**Mit mértünk (2026-08-02).** Az L67 recovery után az E03-R08 state
+`baseline_manifest.baseline_head` értéke már a jelenlegi worktree headje volt,
+de a korábbi Terra lezárásból megmaradt
+`terra_terminal_status=BLOCKED` és `terra_terminal_reason`. A
+`DevelopmentRouter.run()` ezeket a kétfázisú ledger-lejárás crash-recovery
+intentjeként kezeli, ezért a következő `resume` modellhívás vagy a javított
+migrációs gate előtt azonnal ugyanazt a `BLOCKED` eredményt adta vissza. A
+Terra reservation ekkor már `finished` volt a ledgerben; a gond nem quota vagy
+külső szolgáltatás volt.
+
+**Javítás.** A `rebase_blocked_task_baseline()` csak a sikeres friss
+allowlist-audit UTÁN törli a két felülírt terminal-intent mezőt. A
+`terra_reservation`, `terra_calls`, a baseline snapshot és a scope-audit
+változatlan marad: a ledger audit-története nem vész el, és a rebase nem
+enged meg listán kívüli diffet.
+
+**Regresszió.**
+`RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
+egy befejezett Terra `BLOCKED` intentet tartalmazó state-et hoz létre. RED a
+javítás nélkül (a két mező a `READY_FOR_REVIEW` state-ben marad), GREEN utána;
+a teszt külön ellenőrzi, hogy a reservation megmarad.
+
+**Hogyan alkalmazd.** A kétfázisú tranzakció terminális intentje csak a
+tranzakció félbeszakadásának recovery-jére érvényes. Ha egy explicit,
+zárolt operátori recovery a terminális döntés alapját (itt a baseline-t)
+biztonságosan felülírja, a superseded intentet is atomikusan érvényteleníteni
+kell — a történeti ledger rekord megőrzése mellett.

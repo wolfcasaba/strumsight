@@ -94,6 +94,13 @@ def rebase_blocked_task_baseline(
             raise StateError("rebased baseline still fails scope audit: " + "; ".join(audit.violations))
         task["baseline_manifest"] = _manifest_to_state(refreshed)
         task["changed_paths"] = list(audit.scoped_changed_paths)
+        # The old BLOCKED result was fully committed to the Terra ledger
+        # before this operator-only recovery began. Keeping its two-phase
+        # terminal intent would make `resume` replay that stale result before
+        # it can inspect the rebased baseline. Keep the reservation history
+        # and attempt counters, but clear only the superseded terminal intent.
+        task.pop("terra_terminal_status", None)
+        task.pop("terra_terminal_reason", None)
         task["status"] = RouterStatus.READY_FOR_REVIEW.value
         task["phase"] = "BASELINE_REBASED"
         task["reason"] = (

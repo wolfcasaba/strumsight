@@ -14,7 +14,14 @@
 > cover both the security primitive and the CLI/state transition. **Prior
 > completed product round:** E03-R07 — File-based Song repository and asset
 > store DONE, merged
-> `b8b7e4e` (PR #66), two fix rounds.** Implements
+> `b8b7e4e` (PR #66), two fix rounds.** **Latest self-heal:** E03-R08/H6
+> clears the superseded `terra_terminal_status` and `terra_terminal_reason`
+> after the locked `rebase-baseline` scope audit; the completed Terra
+> reservation and attempt history remain intact, so a later resume evaluates
+> the rebased state rather than replaying an obsolete `BLOCKED` result.
+> Regression coverage is in
+> `RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`.
+> Implements
 > [ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) (accepted at
 > E03-R01): `SongRepository`/`SongAssetRepository` domain contracts,
 > `FileSongRepository` (validate→temp-serialize→flush→verify→atomic document

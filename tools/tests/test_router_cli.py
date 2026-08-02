@@ -188,6 +188,13 @@ class RouterCliTest(unittest.TestCase):
                         "task_id": "E03-R08",
                         "status": "BLOCKED",
                         "phase": "BLOCKED",
+                        # This is a completed Terra terminal intent from the
+                        # stale baseline decision.  A rebase must not replay
+                        # it when the task is subsequently resumed.
+                        "terra_calls": 1,
+                        "terra_reservation": "finished-terra-review",
+                        "terra_terminal_status": "BLOCKED",
+                        "terra_terminal_reason": "stale baseline scope audit",
                         "baseline_manifest": {
                             "baseline_head": baseline,
                             "untracked_paths": [],
@@ -238,6 +245,9 @@ class RouterCliTest(unittest.TestCase):
         self.assertEqual(payload["phase"], "BASELINE_REBASED")
         self.assertEqual(payload["baseline_manifest"]["baseline_head"], preflight)
         self.assertEqual(payload["changed_paths"], ["lib/allowed.dart"])
+        self.assertEqual(payload["terra_reservation"], "finished-terra-review")
+        self.assertNotIn("terra_terminal_status", payload)
+        self.assertNotIn("terra_terminal_reason", payload)
 
     def _terra_status(
         self, state_root: Path, *, config: Path = CONFIG
