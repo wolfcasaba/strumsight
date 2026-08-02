@@ -25,7 +25,6 @@ allowed_paths = [
   "test/features/song_trainer/domain/song_capability_resolver_test.dart",
   "test/property/song_normalizer_property_test.dart",
   "docs/rounds/e03-r05-validator-normalizer-capabilities.md",
-  "docs/adr/0114-song-validator-normalizer-capability-boundary.md",
 ]
 gate_tests = [
   "test/features/song_trainer/domain/song_validator_test.dart",
@@ -97,8 +96,9 @@ erőforrás-tulajdonlás) eredménye:
    szolgáltatások) — a szabály nem alkalmazható, nincs mit mérni.
 
 **ADR 0114 felvéve** (`docs/adr/0114-song-validator-normalizer-capability-boundary.md`,
-§4-be és az `allowed_paths`-ba bekötve) két mért, a briefben implicit hagyott
-döntés formalizálására:
+a §4 emberi táblájába bekötve, az `ai-router` TOML `allowed_paths`-ából
+szándékosan kihagyva) két mért, a briefben implicit hagyott döntés
+formalizálására:
 
 - **Chord-support határ:** az egyetlen ma létező maj/min szótár
   (`lib/features/practice/data/adapters/legacy_chord_label.dart`,
@@ -168,8 +168,8 @@ exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
 Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
 **A pre-flight `docs/adr/0114-song-validator-normalizer-capability-boundary.md`-t
 kivételként felvette a §4 táblába (ld. fent és §0.0) — ez az EGYETLEN
-`docs/adr/**` alatti engedélyezett fájl ebben a körben, az implementer
-tartalmilag NEM módosítja, csak ha a §11 review explicit kéri.**
+`docs/adr/**` alatti pre-flight dokumentum ebben a körben; az implementer
+gépi `allowed_paths` listáján nincs és tartalmilag nem módosítja.**
 
 ## 5. Kötött architekturális döntések
 
