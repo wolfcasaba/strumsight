@@ -2161,3 +2161,76 @@ akarsz átadni, **mérd meg a jelzés-szótár egyezését** a `case`-ágakkal
 mielőtt feltételezed az újrahasznosíthatóságot — két, ugyanabba a
 jelzésfájlba író, de eltérő szótárú alrendszer csendes, timeoutig tartó
 hamis-negatívot ad, nem hibaüzenetet.
+
+## L55 — A H-GATEGUARD előtte/utána teljes-main-ujjlenyomat hamis pozitívat ad, ha a heal futása KÖZBEN egy tőle független, jogos commit landol egy őrzött útvonalon; a helyes ellenőrzés a heal SAJÁT PR-diffje, nem a teljes main két időpontbeli állapota
+
+**Mit mértünk (2026-08-02, E03-R05, önjavító kör a H6 heal UTÁN).** A H6
+heal (PR #61, `3b4707f`) zölden, a mérce érintése nélkül merge-elt — a
+saját diffje kizárólag `docs/execution/pipeline-orchestrator-prompt.md`,
+`tools/tests/test_pipeline_integration.py` és az új
+`tools/wait-for-router.sh` fájlokat módosította. Ennek ellenére a driver
+`H-GATEGUARD`-dal állt le: „teszt-fájlok: 351 → 351" (egyenlő, tehát NEM
+a tesztszám-csökkenés ütött), a valódi ok a `gate_artifact_hashes`
+`.github/workflows/router-ci.yml` hash-ének eltérése volt.
+
+A gyökérok: a H6 heal ~07:50–08:08 között futott, ezalatt egy TŐLE
+FÜGGETLEN, jogos commit (`8715773`, ADR 0115 review-motor fallback,
+`Ralph (autonomous)` szerzőségű, direkt main-push) 08:02:18-kor módosította
+a `router-ci.yml`-t. A régi őrszem (`tools/round-pipeline.sh`
+`attempt_selfheal`) a mérce ujjlenyomatát a heal-indítás előtti és a
+heal-zárás utáni **teljes main** állapotán mérte — ez a különbség bármely,
+az ablakban landoló commit-tól eltér, függetlenül attól, hogy a heal
+maga nyúlt-e hozzá. A driver tehát a saját, tiszta munkáját gyanúsította
+egy vele egyidejűleg, de tőle függetlenül érkező módosítás miatt.
+
+**A javítás** (`tools/round-pipeline.sh`, `heal_pr_number` +
+`heal_pr_gate_violation`): a heal branch neve determinisztikus
+(`heal/{{ROUND}}-{{HALT_CODE}}-{{ATTEMPT}}`,
+`docs/execution/pipeline-selfheal-prompt.md`), ezért a hozzá tartozó,
+squash-merge-elt PR visszakereshető (`gh pr list --search
+"head:$branch" --state merged`), és a PR SAJÁT diffje (`mergeCommit^..
+mergeCommit`) közvetlenül megnézhető — ez a merge_sha-tól függ, nem a
+main jelenlegi állapotától, tehát immunis bármely, az ablakban landoló,
+független commitra. Ha nincs megtalálható PR (pl. a heal nem PR-en
+keresztül zárt), az őrszem óvatosságból visszaesik a régi teljes-main
+ujjlenyomatra.
+
+**Második mérés, útközben (ugyanez a kör):** az első regressziós-teszt
+verzió a VALÓDI `3b4707f`/`6d61e23` commitokra és az élő `gh pr list`-re
+hivatkozott — ez a CI-dispatch első futásán ELBUKOTT (2/125), mert (1) a
+`router-ci.yml` futtatóján `gh` nincs `gh auth`-olva (élő hálózati hívás
+néma üresre fut), és (2) az `actions/checkout@v4` **sekély** klónt hoz
+(`fetch-depth=1`) — a régi, előzmény-commitok (`6d61e23`, `3b4707f^`)
+egyszerűen nincsenek meg a runneren. A javítás: a `gh`-t egy PATH-stub
+váltja (offline, `FAKE_GH_*` env-változókból felel), a `merge_sha`-hoz
+pedig egy VALÓDI, feloldható commit-objektumot építünk plumbing-
+parancsokkal (`git read-tree`/`hash-object`/`write-tree`/`commit-tree`)
+a checkout **jelenlegi, valódi HEAD-je** fölé, privát
+`GIT_INDEX_FILE`-on át — sem a working tree-t, sem a real indexet, sem
+egyetlen ref-et nem érint, és csak a HEAD-re támaszkodik, amit egy
+depth=1 klón is tartalmaz.
+
+**Harmadik mérés, még ugyanezen a CI-dispatch-on:** a `git commit-tree`
+maga is ELBUKOTT (exit 128, "Author identity unknown") a második
+dispatch-on, mert egy friss CI-runneren nincs `user.name`/`user.email`
+git-config (ezen a fejlesztő-gépen VAN, ezért itt helyben zölden futott
+— pont az a hamis biztonságérzet, amire a záró tanulság figyelmeztet).
+Javítás: a fixture-commit explicit
+`GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`/`GIT_COMMITTER_NAME`/
+`GIT_COMMITTER_EMAIL`-t ad a `commit-tree`-nek, nem a környezet globális
+git-configjára támaszkodva. Regressziós tesztek:
+`tools/tests/test_pipeline_integration.py::
+test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list`,
+`::test_heal_pr_gate_violation_ignores_a_clean_diff_and_catches_a_gate_touch`.
+
+**Tanulság:** egy őrszem, ami "mércét gyengített-e a javítás" kérdésre
+válaszol, a JAVÍTÁS SAJÁT DIFFJÉT nézze (PR/commit-hatókör), ne a
+felügyelt ág két időpontbeli, teljes állapotát — az utóbbi bármilyen,
+az időablakban landoló, a javítástól FÜGGETLEN legitim változást a
+javításnak tulajdonít. **Másodlagos tanulság:** egy `tools/tests`
+regressziós teszt, ami élő `gh`-ra vagy régi, előzmény-commitokra
+hivatkozik, csak a helyi (mért gh-auth és teljes klón) gépen zöld — a
+tényleges gate ezt a valós CI-runneren (sekély klón, auth nélküli `gh`)
+futtatja, és csak ott derül ki a hamis biztonságérzet; a PR-t addig nem
+tekintjük zöldnek, amíg a `gh workflow run` + `gh run watch` ezt nem
+igazolja ugyanazon a `headSha`-n.

@@ -229,6 +229,137 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertIn(f"{artifact}:", fingerprint.stdout)
             self.assertNotIn(f"{artifact}:hiányzik", fingerprint.stdout)
 
+    def make_fake_gh(self, directory: Path) -> Path:
+        # A H-GATEGUARD-teszteknek NEM szabad élő hálózati `gh`-hívástól
+        # függenie (a router-ci.yml futtatója nincs `gh auth`-olva) — ezért egy
+        # PATH-on elé tolt stubot adunk, ami a valós `gh pr list`/`gh pr view`
+        # helyett a FAKE_GH_* env-változókat visszhangozza. A git-diffek maguk
+        # a VALÓDI repó VALÓDI, már merge-elt commitjain futnak (lásd lent).
+        fake_gh = directory / "gh"
+        fake_gh.write_text(
+            "#!/usr/bin/env bash\n"
+            "case \"$1 $2\" in\n"
+            "  \"pr list\") printf '%s\\n' \"${FAKE_GH_PR_NUMBER:-}\" ;;\n"
+            "  \"pr view\") printf '%s\\n' \"${FAKE_GH_MERGE_SHA:-}\" ;;\n"
+            "  *) echo \"fake-gh: unsupported invocation: $*\" >&2; exit 1 ;;\n"
+            "esac\n"
+        )
+        fake_gh.chmod(0o755)
+        return directory
+
+    def test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list(self) -> None:
+        # A heal branch neve determinisztikus (heal/{ROUND}-{HALT_CODE}-
+        # {ATTEMPT}, docs/execution/pipeline-selfheal-prompt.md) -- ez a
+        # H-GATEGUARD hamis-pozitívjának javítási alapja (lásd lent). A `gh`
+        # hívást stuboljuk: a router-ci.yml futtatója nincs `gh auth`-olva,
+        # élő hálózati hívástól a teszt nem függhet (mérve: e nélkül a
+        # stub nélkül ez a teszt CI-ban `gh`-hiba miatt üresen bukik, nem a
+        # függvény logikáján). Manuálisan, éles `gh`-val ELLENŐRIZVE (docs/
+        # LESSONS.md L55): `heal/E03-R05-H6-1` valóban a #61 PR-re old fel.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            bin_dir = self.make_fake_gh(Path(directory_name))
+            env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+
+            env["FAKE_GH_PR_NUMBER"] = "61"
+            found = self.run_command(
+                ["bash", str(script), "--heal-pr-number", "heal/E03-R05-H6-1"], env=env
+            )
+            self.assertEqual(found.stdout.strip(), "61", found.stdout + found.stderr)
+
+            env["FAKE_GH_PR_NUMBER"] = ""
+            missing = self.run_command(
+                ["bash", str(script), "--heal-pr-number", "heal/does-not-exist-1"], env=env
+            )
+            self.assertEqual(missing.stdout.strip(), "", missing.stdout + missing.stderr)
+
+    def make_gate_guard_fixture_commit(self, updates: dict[str, str]) -> str:
+        # heal_pr_gate_violation() a `merge_sha^..merge_sha`-t EBBEN a
+        # checkout-ban diffeli (repo_root a szkript saját helyére van
+        # kötve) -- egy külön, ideiglenes git repó tehát nem adna neki
+        # feldolgozható SHA-kat. Ehelyett egy VALÓDI, feloldható commit
+        # OBJEKTUMOT építünk a checkout jelenlegi valódi HEAD-je fölé
+        # plumbing-parancsokkal, egy privát GIT_INDEX_FILE-on át (a valódi
+        # indexet/munkafát és minden ref/branch-et érintetlenül hagyva) --
+        # ez CI shallow (fetch-depth=1) klónjában is működik, mert csak a
+        # HEAD-re van szüksége, nem tetszőleges régi történelemre (a
+        # `6d61e23`/`3b4707f` mért, valódi commitokra hivatkozó korábbi
+        # verzió pont ezért bukott CI-ban: a shallow klón nem tartalmazta
+        # őket — docs/LESSONS.md L55).
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            index_file = Path(scratch_dir) / "index"
+            env = dict(os.environ, GIT_INDEX_FILE=str(index_file))
+            subprocess.run(
+                ["git", "read-tree", "HEAD"], cwd=ROOT, env=env, check=True, capture_output=True
+            )
+            for path, content in updates.items():
+                blob = subprocess.run(
+                    ["git", "hash-object", "-w", "--stdin"],
+                    cwd=ROOT, env=env, input=content, text=True, capture_output=True, check=True,
+                ).stdout.strip()
+                subprocess.run(
+                    ["git", "update-index", "--add", "--cacheinfo", f"100644,{blob},{path}"],
+                    cwd=ROOT, env=env, check=True, capture_output=True,
+                )
+            tree = subprocess.run(
+                ["git", "write-tree"], cwd=ROOT, env=env, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            # `commit-tree` needs an author/committer identity; a fresh CI
+            # runner has no `user.name`/`user.email` configured (mérve: ez a
+            # 2. CI-only bukás, exit 128 "empty ident" a router-ci.yml
+            # runneren), ezért explicit GIT_*_NAME/EMAIL-t adunk, nem a
+            # környezet globális git configjára támaszkodva.
+            commit_env = dict(
+                os.environ,
+                GIT_AUTHOR_NAME="gate-guard-test",
+                GIT_AUTHOR_EMAIL="gate-guard-test@example.invalid",
+                GIT_COMMITTER_NAME="gate-guard-test",
+                GIT_COMMITTER_EMAIL="gate-guard-test@example.invalid",
+            )
+            commit = subprocess.run(
+                ["git", "commit-tree", tree, "-p", "HEAD", "-m", "gate-guard test fixture (not a real round)"],
+                cwd=ROOT, env=commit_env, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            return commit
+
+    def test_heal_pr_gate_violation_ignores_a_clean_diff_and_catches_a_gate_touch(self) -> None:
+        # RED-ELŐZMÉNY (E03-R05, a H6 heal UTÁNI H-GATEGUARD halt, mérve
+        # 2026-08-02): a régi őrszem a teljes main előtte/utána ujjlenyomatát
+        # hasonlította össze, ezért hamisan gyanúsította a H6 heal saját,
+        # tiszta PR-jét (#61 -- valójában csak az orchestrátor-promptot, egy
+        # tesztet és egy ÚJ segédscriptet módosított), mert a heal FUTÁSA
+        # KÖZBEN egy tőle FÜGGETLEN, jogos commit (8715773, ADR 0115)
+        # módosította a router-ci.yml-t. docs/LESSONS.md L55.
+        #
+        # Az új őrszem a heal SAJÁT PR-diffjét (merge_sha^..merge_sha) nézi,
+        # ezért immunis erre. Két szintetikus, de a valós PR-alakot tükröző
+        # fixture-commitot építünk a checkout valódi HEAD-je fölé (lásd
+        # make_gate_guard_fixture_commit): az egyik csak egy saját, ártalmatlan
+        # fájlt érint (mint a heal saját, tiszta PR-je), a másik a VALÓDI
+        # tools/round-gate.sh-t módosítja (mint egy tényleg mércét gyengítő
+        # diff).
+        script = ROOT / "tools" / "round-pipeline.sh"
+        clean_sha = self.make_gate_guard_fixture_commit(
+            {"tools/tests/__gate_guard_fixture_clean__.md": "gate-guard test fixture: a clean heal PR\n"}
+        )
+        real_round_gate = (ROOT / "tools" / "round-gate.sh").read_text()
+        violation_sha = self.make_gate_guard_fixture_commit(
+            {"tools/round-gate.sh": real_round_gate + "\n# gate-guard test fixture touch\n"}
+        )
+
+        with tempfile.TemporaryDirectory() as directory_name:
+            bin_dir = self.make_fake_gh(Path(directory_name))
+            env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+
+            env["FAKE_GH_MERGE_SHA"] = clean_sha
+            clean = self.run_command(["bash", str(script), "--heal-pr-gate-violation", "999"], env=env)
+            self.assertEqual(clean.returncode, 1, clean.stdout + clean.stderr)
+
+            env["FAKE_GH_MERGE_SHA"] = violation_sha
+            caught = self.run_command(["bash", str(script), "--heal-pr-gate-violation", "999"], env=env)
+            self.assertEqual(caught.returncode, 0, caught.stdout + caught.stderr)
+            self.assertIn("round-gate.sh", caught.stdout)
+
     def test_orchestrator_falls_back_to_terra_only_while_claude_is_blocked(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:

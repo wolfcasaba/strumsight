@@ -494,6 +494,20 @@ gate-ellenőrzés `main`-en szintén zöld. Full narrative:
    > router (`tools/ai_router/**`) VÁLTOZATLAN — a szükséges state-alapú
    > állapotlekérdezés már létezett. PR #61, `3b4707f`, `router-ci` zöld.
    > Részletek: docs/LESSONS.md L54.
+   >
+   > **E03-R05 H-GATEGUARD önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:**
+   > a H6 heal (PR #61) UTÁN a driver `H-GATEGUARD`-dal állt le, holott a PR
+   > #61 saját diffje a mércét NEM érintette — a heal ~07:50–08:08 közötti
+   > futása KÖZBEN egy tőle FÜGGETLEN, jogos commit (`8715773`, ADR 0115)
+   > módosította a `router-ci.yml`-t, és a régi őrszem a teljes main
+   > előtte/utána állapotát hasonlította össze, nem a heal SAJÁT diffjét.
+   > Javítás: `heal_pr_number`/`heal_pr_gate_violation` a determinisztikus
+   > `heal/{ROUND}-{HALT_CODE}-{ATTEMPT}` branch-névhez tartozó, merge-elt PR
+   > SAJÁT diffjét nézi (immunis a konkurens, független commitokra); nincs
+   > megtalálható PR esetén óvatosságból a régi teljes-fingerprint marad
+   > fallback. Regressziós tesztek a VALÓDI PR #61/`3b4707f` (negatív eset) és
+   > a VALÓDI, `round-gate.sh`-t módosító `6d61e23` (pozitív eset) adatain.
+   > Részletek: docs/LESSONS.md L55.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
