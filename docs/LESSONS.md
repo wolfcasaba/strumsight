@@ -2974,3 +2974,49 @@ recovery mércéje nem gyengül.
 először a lista-kívüli diffet továbbra is exit 50-nel blokkolja, majd a valódi
 `--task E03-R08` argumentummal elvégzi a legális recoveryt. A resolver nélkül a
 második lépés RED: `brief is unreadable: E03-R08`; utána GREEN.
+
+## L70 — A `SongDocumentCodec` hiányzó strukturális mezői valódi read-back adatvesztésnek minősülnek, nem elfogadható migrációs normalizációnak (E03-R08 H4)
+
+**Mérés (2026-08-02).** A független review a `FileSongRepository` friss
+példányán reprodukálta, hogy az E03-R06 `LegacySongAdapter` által készített
+érvényes `song_alpha` dokumentum `create` után nem value-equal a
+visszaolvasott példánnyal. A H4 előtti új regressziós teszt RED volt:
+`flutter test test/features/song_trainer/data/local/song_document_codec_test.dart`,
+`Round-trip identity preserves the complete structural timeline`. Az ok:
+`SongDocumentCodec._documentToMap` nem serializálta a `sections`, `measures`,
+`tempoMap`, `meterMap`, `keyMap` mezőket, a decoder pedig ezek alapértelmezett
+üres/konstans értékét építette vissza.
+
+**Javítás.** A codec mind az öt strukturális mezőt determinisztikus JSON-ban
+tárolja és típusosan állítja vissza; a már meglévő fájlok hiányzó mezőit a
+régi alapértelmezésekhez kompatibilisen kezeli, de a jelen lévő hibás
+szerkezetet `songDocument.codec.structure.invalid` hibával elutasítja. A
+regressziós teszt a tényleges `song_alpha` inputból adaptált dokumentumot és
+egy többszakaszos/több map-változásos timeline-t is round-tripel. A javítás
+után a célzott gate zöld: `tools/round-gate.sh
+test/features/song_trainer/data/local test/features/song_trainer/data/migration`.
+
+**Tanulság.** A repository `create` sikeres eredménye sosem elég a migráció
+checkpointolásához: a read-back parity őrnek a teljes, domainben megőrzendő
+szerkezetet kell mérnie. Ha egy őr erre hibát jelez, nem szabad a parityt a
+veszteséghez igazítani; a perzisztencia-határt kell kijavítani.
+
+## L71 — A merge-elt self-heal után a STOPPED router-state nem írható vakon újra (E03-R08 H4, 2026-08-02)
+
+**Mérés.** Az eredeti R08 branch célzott migrációs tesztje hét happy-path
+hibával állt meg (`needsResume`, köztük a production wiring `readBackMiss`).
+A H4 strukturális codec-heal `c2707c1` merge-je után ugyanennek a branchnek
+egy eldobható klónban végzett `git merge origin/main`-je és ugyanaz a
+`flutter test test/features/song_trainer/application/migration` futás zöld
+lett (10 teszt + 1 ismert skip). A router state viszont `STOPPED`,
+`m3_attempts=2`, `terra_calls=1` maradt; egy `reset` eltüntette volna az
+audit-ledgert, egy sima `run` pedig a kimerült Terra-keretet játszotta volna
+vissza.
+
+**Javítás.** A `model-router.py recover-stopped-after-heal` kizárólag
+STOPPED state-re, új baseline-manifest + teljes scope-audit és zöld célzott
+gate után ad `READY_FOR_REVIEW`-t. A M3-/Terra-számlálók és a reservation
+megmaradnak, a felülírt terminális intent törlődik, így a következő lépés
+független review — nem új modellhívás és nem scope- vagy gate-bypass.
+
+**Regresszió.** `RouterCliTest.test_heal_recovery_preserves_exhausted_attempts_after_a_green_gate` először ismeretlen CLI-paranccsal RED, a recovery után GREEN; ellenőrzi a zöld structured gate-et, az allowlist-diffet, a megőrzött `2/1` kísérletszámokat és a megőrzött reservationt.

@@ -137,6 +137,51 @@ def rebase_blocked_task_baseline(
     return task
 
 
+def recover_stopped_task_after_heal(
+    *, state: StateStore, brief: object, worktree: Path, config: object, run_gate: object
+) -> dict[str, object]:
+    """Re-open a STOPPED task for review after an independently merged heal.
+
+    This is deliberately narrower than ``reset``: it preserves the completed
+    M3/Terra attempt ledger and accepts no new model call.  The worktree must
+    pass a fresh scope audit and its exact target gate before the task can
+    become reviewable again.
+    """
+    task_id = brief.task_id
+    with state.task_lock(task_id):
+        task = state.load_task(task_id)
+        if task.get("task_id") != task_id:
+            raise StateError("task state has a mismatched task_id")
+        if task.get("status") != RouterStatus.STOPPED.value:
+            raise StateError("only a STOPPED task may recover after a heal")
+        previous = _manifest_from_state(task.get("baseline_manifest"))
+        refreshed = rebase_workspace_manifest(worktree, previous)
+        audit = audit_scope(
+            worktree,
+            allowed_paths=brief.metadata.allowed_paths,
+            protected_paths=config.security.protected_paths,
+            baseline=refreshed,
+            high_risk_fragments=config.security.high_risk_path_fragments,
+        )
+        if not audit.ok:
+            raise StateError("healed worktree still fails scope audit: " + "; ".join(audit.violations))
+        gate = run_gate(worktree, brief.metadata.gate_tests, brief.metadata.native_gate)
+        if gate.outcome != "pass":
+            detail = gate.failed_step or gate.outcome
+            raise StateError(f"healed worktree target gate is not green: {detail}")
+        task["baseline_manifest"] = _manifest_to_state(refreshed)
+        task["changed_paths"] = list(audit.scoped_changed_paths)
+        # The terminal intent belongs to the earlier, now superseded gate
+        # result.  Keep its reservation and all counters as audit evidence.
+        task.pop("terra_terminal_status", None)
+        task.pop("terra_terminal_reason", None)
+        task["status"] = RouterStatus.READY_FOR_REVIEW.value
+        task["phase"] = "HEAL_GATE_PASSED"
+        task["reason"] = "merged self-heal passed the target gate; ready for independent review"
+        state.save_task(task_id, task)
+    return task
+
+
 def _dart_bin() -> str:
     # Same resolution order as tools/round-gate.sh's own `dart_bin` default,
     # so the pre-gate normalize pass and the gate script agree on which
@@ -390,6 +435,10 @@ def parser() -> argparse.ArgumentParser:
     rebase.add_argument("--task", type=Path, required=True)
     rebase.add_argument("--worktree", type=Path, required=True)
 
+    recover = commands.add_parser("recover-stopped-after-heal")
+    recover.add_argument("--task", type=Path, required=True)
+    recover.add_argument("--worktree", type=Path, required=True)
+
     commands.add_parser("terra-status")
 
     resume = commands.add_parser("resume")
@@ -432,6 +481,19 @@ def main() -> int:
                 brief=brief,
                 worktree=args.worktree.resolve(),
                 config=config,
+            )
+            print(json.dumps(task, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.command == "recover-stopped-after-heal":
+            worktree = args.worktree.resolve()
+            brief = load_brief(_rebase_brief_path(args.task, worktree))
+            router = _build_router(args.config, args.state_root, worktree)
+            task = recover_stopped_task_after_heal(
+                state=state,
+                brief=brief,
+                worktree=worktree,
+                config=config,
+                run_gate=router.run_gate,
             )
             print(json.dumps(task, ensure_ascii=False, sort_keys=True))
             return 0

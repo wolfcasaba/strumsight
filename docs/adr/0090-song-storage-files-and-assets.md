@@ -87,3 +87,18 @@ nincs natív binary/asset támogatása.
   content-hash-alapú struktúrára épülhet módosítás nélkül.
 - A recovery-logika teszthez kötelező hibaforgatókönyv-mátrixot igényel
   (orphan temp, hash mismatch, stb.) az implementáló körben (E03-R07).
+
+## Módosítás (ADR 0112 önjavító kör, 2026-08-02)
+
+Az E03-R08/H4 független read-back vizsgálata kimérte, hogy a
+`SongDocumentCodec` a R06 adapter által létrehozott `sections`, `measures`,
+`tempoMap`, `meterMap` és `keyMap` mezőket nem írta a fájldokumentumba. Ez
+nem elfogadható repository-normalizáció, hanem adatvesztés: a sikeres írás
+után visszaolvasott dokumentum nem egyenlő az eredetivel. A 3. döntés
+„visszaolvasás+decode ellenőrzés” lépése ezért ezentúl a teljes strukturális
+timeline megőrzését is jelenti. A jelenlegi sémaverzióban a hiányzó mezők
+továbbra is a korábbi üres/alapértelmezett értékeket jelentik, de minden új
+írás explicit, típusos szerkezeti mezőket tárol; hibásan formált, jelen lévő
+szerkezeti adat fail-closed codec hibát ad. A H4 tényleges `song_alpha`
+legacy rekordjából készített V2 dokumentum és egy többváltozásos timeline
+round-trip regressziós teszt védi ezt a szerződést.
