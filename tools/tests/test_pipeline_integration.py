@@ -221,12 +221,31 @@ class PipelineIntegrationTest(unittest.TestCase):
         # scoped to the blocked round should read as active while its
         # deadline is in the future.
         script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
         with tempfile.TemporaryDirectory() as directory_name:
             state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": false, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
             future = int(time.time()) + 3600
             (state / "terra-budget-hold").write_text(f"round=E03-R08\nhold_until={future}\n")
             env = dict(os.environ)
             env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
 
             active = self.run_command(["bash", str(script), "--terra-hold-active", "E03-R08"], env=env)
             other_round = self.run_command(["bash", str(script), "--terra-hold-active", "E03-R09"], env=env)
@@ -234,6 +253,77 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(active.returncode, 0, active.stderr)
             self.assertIn("felfüggesztés aktív", active.stderr)
             self.assertEqual(other_round.returncode, 1, other_round.stderr)
+
+    def test_unlimited_terra_policy_removes_a_stale_daily_budget_hold(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            hold_file = state / "terra-budget-hold"
+            hold_file.write_text(
+                f"round=E03-R08\nhold_until={int(time.time()) + 3600}\n"
+            )
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-active", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse(hold_file.exists())
+
+    def test_terra_hold_remains_fail_closed_when_policy_status_is_unavailable(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*) exit 50 ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            hold_file = state / "terra-budget-hold"
+            hold_file.write_text(
+                f"round=E03-R08\nhold_until={int(time.time()) + 3600}\n"
+            )
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-active", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(hold_file.exists())
 
     def test_terra_hold_expired_deadline_is_inactive_and_self_clears(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
@@ -271,8 +361,26 @@ class PipelineIntegrationTest(unittest.TestCase):
         # active" post-fix vs. 3 + "KIMERÜLT" pre-fix), which is enough to
         # tell the fix apart without ever risking a live session.
         script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
         with tempfile.TemporaryDirectory() as directory_name:
             state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": false, \"exhausted\": true}'\n"
+                "    exit 1\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
             (state / "HALTED").write_text(
                 "round=E03-R08\nhalt=H6\nsummary=auto-router DEFERRED: Terra daily budget is exhausted\n"
             )
@@ -280,7 +388,11 @@ class PipelineIntegrationTest(unittest.TestCase):
             (state / "terra-budget-hold").write_text(f"round=E03-R08\nhold_until={future}\n")
             (state / "selfheal.count").write_text("E03-R08|H6|3\n")
             env = dict(os.environ)
-            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL_MAX="3")
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL_MAX="3",
+                PATH=f"{stub_bin}:{env['PATH']}",
+            )
 
             held = self.run_command(["bash", str(script)], env=env)
 
@@ -345,6 +457,41 @@ class PipelineIntegrationTest(unittest.TestCase):
             content = hold_file.read_text()
             self.assertIn("round=E03-R08", content)
             self.assertIn(f"hold_until={next_epoch}", content)
+
+    def test_terra_hold_writer_is_a_no_op_under_unlimited_policy(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            stub_bin = directory / "bin"
+            stub_bin.mkdir()
+            next_epoch = int(time.time()) + 3600
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false, "
+                f"\"next_reset_epoch\": {next_epoch}}}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(directory)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-if-exhausted", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((directory / "terra-budget-hold").exists())
 
     def test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry(self) -> None:
         # MÉRT gyökérok (E03-R08 H6, 6. halt ugyanazon a napon, 2026-08-02

@@ -79,21 +79,19 @@ rg -n "3/UTC|legfeljebb 3|max_automatic_terra_calls_per_utc_day" AGENTS.md docs 
 git diff --check
 ```
 
-## Task 4: Verification, commit, and E03-R08 recovery
+## Task 4: Verification, integration, and automatic pipeline handoff
 
 **Files:**
 
 - Verify all files above.
-- Update external state: `~/.local/state/strumsight-ai-router/tasks/E03-R08.json` only after exact precondition validation.
 - Preserve: `/home/ubuntu/ss-router-e03-r08` staged implementation diff.
+- Preserve: E03-R08 task state, `terra-budget-hold`, `HALTED`, and router result.
 
 - [ ] Run all router unit/integration tests; record the already-baselined E03-R05 metadata failure separately and require no new failure.
 - [ ] Run syntax, diff, secret, scope, and status checks.
-- [ ] Commit and push the policy branch without touching `main`.
-- [ ] Validate E03-R08's persisted baseline SHA, diff hash, attempts, zero Terra calls, and `DEFERRED` reason, then atomically set only `resume_phase=M3_ATTEMPT_1`.
-- [ ] Remove the obsolete Terra hold and run `model-router.py resume` from this tested policy worktree against `/home/ubuntu/ss-router-e03-r08`.
-- [ ] Confirm provider history gains no second M3 call and does gain one Terra call; verify the router reaches `READY_FOR_REVIEW` or report the exact provider failure.
-- [ ] Signal the resulting router state to the pipeline and resume orchestration only when the state is review-ready.
+- [ ] Commit, push, and integrate the policy through the repository's normal protected-branch workflow.
+- [ ] Confirm the E03-R08 staged diff and external runtime files were not modified.
+- [ ] Leave continuation to the next automatic pipeline firing; do not invoke the router or signal the pipeline manually.
 
 Commands:
 

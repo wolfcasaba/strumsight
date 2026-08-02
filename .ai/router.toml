@@ -8,7 +8,8 @@ default_model = "MiniMax-M3"
 [limits]
 max_m3_attempts_per_task = 2
 max_terra_calls_per_task = 1
-max_automatic_terra_calls_per_utc_day = 3
+# 0 = korlátlan; pozitív érték = ideiglenes, véges UTC-napi vészkorlát.
+max_automatic_terra_calls_per_utc_day = 0
 terra_reasoning = "medium"
 terra_packet_target_tokens = 40000
 terra_packet_max_bytes = 81920

@@ -282,18 +282,27 @@ heal_attempts() {   # $1=kör $2=halt-kód → az eddigi kísérletek száma
 }
 
 # --- Terra napi-budget felfüggesztés (E03-R08 H6 önjavítás, 2026-08-02) ----
-# MÉRT gyökérok: a Terra napi automatikus budget (.ai/router.toml
-# max_automatic_terra_calls_per_utc_day) kizárólag UTC nap-váltáskor nyílik
-# meg újra (state.py reserve_terra day-scoped daily_count) — egy 5 percenkénti
-# cron-retry ugyanazt a falat éri újra, és percek alatt elhasználja a 3
-# önjavítási kísérletet is, holott a diagnózis már ismert és emberi döntést
-# nem igényel (docs/LESSONS.md). A hold kör-specifikus és időkorlátos: a
+# MÉRT történeti gyökérok: pozitív Terra napi automatikus budget mellett
+# (.ai/router.toml max_automatic_terra_calls_per_utc_day > 0) a keret kizárólag
+# UTC nap-váltáskor nyílik meg újra — egy 5 percenkénti cron-retry ugyanazt a
+# falat éri újra. A 0 érték 2026-08-02 óta korlátlant jelent; a helper ezért
+# a korábbi véges policyből maradt holdot is biztonságosan eltávolítja. A hold
+# kör-specifikus és időkorlátos: a
 # `terra-status` CLI ugyanazt a `daily_terra_count`-ot kérdezi, amit
 # `reserve_terra` is a döntéséhez használ (state.py) — nincs duplikált szabály.
 terra_hold_file() { printf '%s/terra-budget-hold' "$state_dir"; }
 
 terra_status_json() {   # stdout: a terra-status JSON, vagy üres, ha nem lekérdezhető
   python3 "$repo_root/tools/model-router.py" --config "$repo_root/.ai/router.toml" terra-status 2>/dev/null
+}
+
+terra_daily_budget_is_unlimited() {
+  local status_json
+  status_json=$(terra_status_json) || return 1
+  [ -n "$status_json" ] || return 1
+  printf '%s' "$status_json" | python3 -c \
+    'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("unlimited") is True else 1)' \
+    2>/dev/null
 }
 
 terra_hold_if_exhausted() {   # $1=kör — hold-fájlt ír, ha a napi Terra-budget MOST kimerült
@@ -323,6 +332,14 @@ terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébkén
   hold_until=$(grep -m1 '^hold_until=' "$hold_file" | cut -d= -f2-)
   case "$hold_until" in ''|*[!0-9]*) rm -f "$hold_file"; return 1 ;; esac
   if [ "$hold_round" = "$round" ] && [ "$(date +%s)" -lt "$hold_until" ]; then
+    if terra_daily_budget_is_unlimited; then
+      if ! rm -f "$hold_file"; then
+        log "elavult Terra-hold nem törölhető — biztonságosan aktívnak kezeljük"
+        return 0
+      fi
+      log "Terra napi automatikus budget korlátlan — az elavult hold törölve ($round)"
+      return 1
+    fi
     log "Terra napi budget felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"
     return 0
   fi
@@ -544,9 +561,10 @@ if ! flock -n 9; then
 fi
 
 # --- 1.5 Terra napi-budget felfüggesztés (E03-R08 H6 önjavítás) -----------
-# Ha egy korábbi retry MÉRVE találta a napi Terra-budgetet kimerültnek,
-# a hold-fájl UTC éjfélig felfüggeszti a rá vonatkozó (ugyanaz a kör)
-# firing-okat — session és önjavítási kísérlet elfogyasztása nélkül. A hold
+# Ha egy pozitív vészlimit mellett egy korábbi retry MÉRVE találta a napi
+# Terra-budgetet kimerültnek, a hold-fájl UTC éjfélig felfüggeszti a rá
+# vonatkozó firing-okat. Korlátlan policyre váltáskor az elavult hold törlődik.
+# A hold
 # a HALTOLT kör sorára, vagy — ha épp nincs halt — a sorban következő
 # 'pending' körre vonatkozik (ugyanaz a kör, ha a lánc még nem jutott tovább).
 active_round=""

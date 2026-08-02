@@ -64,13 +64,10 @@ If status cannot be queried, the driver keeps the hold fail-closed.
 ## 5. E03-R08 recovery
 
 The existing `/home/ubuntu/ss-router-e03-r08` staged diff and baseline remain
-untouched. Its persisted task state is re-anchored to
-`resume_phase=M3_ATTEMPT_1`, which makes resume audit and gate the existing
-diff before entering the mandatory Terra review. It must not invoke M3 again.
-
-The resumed command uses the tested policy worktree's router and config while
-pointing `--worktree`, `--task` and `--result-json` at E03-R08. Only after the
-policy tests are green are the obsolete hold and `HALTED` signal released.
+untouched. The policy deployment does not edit its task state, hold file,
+`HALTED` signal or router result. Once the unlimited policy is integrated, the
+next normal pipeline firing recognizes and clears the stale finite-policy hold;
+the existing driver/orchestrator remains the sole owner of task resume.
 
 ## 6. Verification
 
@@ -81,7 +78,7 @@ policy tests are green are the obsolete hold and `HALTED` signal released.
 - a stale finite-policy hold self-clears under unlimited policy;
 - all router tests pass except the pre-existing E03-R05 brief metadata failure
   documented in `docs/LESSONS.md` L59;
-- E03-R08 resume shows no additional M3 provider call and reaches Terra review.
+- the E03-R08 runtime state and staged diff are unchanged by this policy change.
 
 ## 7. Out of scope
 

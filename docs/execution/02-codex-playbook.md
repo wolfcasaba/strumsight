@@ -150,16 +150,22 @@ Review findings folytatása — ugyanaz a task és külső state, nincs budget r
 - `READY_FOR_REVIEW` → csak progress; scope-audit után az orchestrátor commitol,
   majd független review + CI következik;
 - `STOPPED` → nincs további automatikus modellhívás;
-- `DEFERRED` → szolgáltatás/kvóta/napi limit után ugyanaz a task resume-olható;
+- `DEFERRED` → szolgáltatás/provider-kvóta vagy pozitív, ideiglenes napi
+  vészlimit után ugyanaz a task resume-olható;
 - `BLOCKED` / `INTERNAL_ERROR` → előfeltétel vagy router-integritás javítandó.
 
 Kézi diagnosztika:
 
 ```bash
 python3 tools/model-router.py status --task-id E03-RNN --json
+python3 tools/model-router.py terra-status
 tools/pipeline-status.sh
 ~/.local/libexec/strumsight-ai/minimax-quota --check-only
 ```
+
+`terra-status` esetén `daily_limit=0` és `unlimited=true` a normál,
+korlátlan napi policy; ilyenkor `exhausted=false`, és nincs következő UTC-reset.
+A taskonkénti egy Terra-hívásos korlát ettől függetlenül változatlan.
 
 Gépi telepítés és read-only smoke:
 

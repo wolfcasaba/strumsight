@@ -14,7 +14,7 @@ NOW = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
 
 class StateStoreTest(unittest.TestCase):
     def store(self, root: Path) -> StateStore:
-        ids = iter(("reservation-1", "reservation-2", "reservation-3"))
+        ids = iter(f"reservation-{index}" for index in range(1, 11))
         return StateStore(root, clock=lambda: NOW, id_factory=lambda: next(ids))
 
     def test_task_state_is_atomic_private_and_round_trips(self) -> None:
@@ -68,6 +68,28 @@ class StateStoreTest(unittest.TestCase):
             ledger = json.loads((store.root / "terra-ledger.json").read_text())
             self.assertEqual(ledger["reservations"][0]["status"], "finished")
             self.assertEqual(ledger["reservations"][0]["outcome"], "ready_for_review")
+
+    def test_zero_daily_limit_is_unlimited_but_task_limit_still_applies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+
+            for task_id in ("E03-R01", "E03-R02", "E03-R03", "E03-R04"):
+                store.reserve_terra(task_id, daily_limit=0, task_limit=1)
+
+            self.assertEqual(store.daily_terra_count(), 4)
+            with self.assertRaisesRegex(TerraBudgetError, "task Terra budget is exhausted"):
+                store.reserve_terra("E03-R01", daily_limit=0, task_limit=1)
+
+    def test_daily_limit_rejects_boolean_and_negative_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+
+            for invalid in (False, -1):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaisesRegex(
+                        StateError, "Terra daily limit must be a non-negative integer"
+                    ):
+                        store.reserve_terra("E03-R01", daily_limit=invalid)
 
     def test_finishing_a_terra_reservation_is_crash_safe_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -2787,3 +2787,33 @@ FŐ útvonal (a HALT ELSŐ, session előtti észlelése) néma vakfolt marad,
 ATTÓL FÜGGETLEN, valódi hibát javít. A védekező hívást a legkorábbi,
 egyetlen kötelező belépési pontra kell tenni (itt: a HALT-felismerés
 maga), nem egy feltételesen futó ág mellékhatásaként.
+
+## L65 — A helyi 3/UTC Terra-korlát a rendelkezésre álló provider-kapacitás mellett is megállította a magas kockázatú kört (E03-R08, 2026-08-02)
+
+**Mit mértünk.** Az E03-R08 M3-diffje elkészült, scope-auditja és célzott
+gate-je zöld volt, de a migrációs útvonal miatt kötelező Terra high-risk
+review előtt `DEFERRED` állapotba került. A privát ledger aznap pontosan három
+aktív foglalást mutatott (`daily_count=3`, `daily_limit=3`: E02-R21, E03-R04,
+E03-R06), miközben a Terra szolgáltatás maga továbbra is elérhető volt. A
+blokkoló tehát nem provider-kvóta, rate limit vagy hálózati hiba, hanem kizárólag
+a router saját, duplikált naptári governance-korlátja volt. A már működő hold
+helyesen várt volna UTC éjfélig, de ezzel körülbelül hét órára állította volna
+meg a fejlesztési láncot rendelkezésre álló kapacitás mellett.
+
+**A javítás.** Explicit user-döntésre
+`max_automatic_terra_calls_per_utc_day = 0` korlátlant jelent. A config a
+negatív értéket továbbra is elutasítja; pozitív értékkel a régi véges
+vészkorlát változatlanul visszakapcsolható. A `StateStore` korlátlan módban is
+foglal és naplóz minden hívást, de a napi összesített szám alapján nem utasítja
+el; a taskonkénti egy Terra-hívásos korlát változatlan. A `terra-status`
+explicit `unlimited=true`, `exhausted=false` és null reset mezőket ad. A
+pipeline csak hiteles, sikeres `unlimited=true` státuszra törli a régi holdot;
+hiányzó vagy hibás státusznál fail-closed megtartja.
+
+**Hogyan alkalmazd.** A provider által ténylegesen elfogadott hívások fölé ne
+tegyél második, fix naptári kapacitásbecslést, ha a cél a folyamatos autonóm
+haladás. A költség- és biztonsági határt ott tartsd meg, ahol a kár
+feladatszinten korlátozható (itt: egy Terra/task, objektív eszkaláció,
+high-risk review), a teljes használatot pedig audit-ledgerrel mérd. Valódi
+provider 429/quota/auth/hálózati hibát továbbra se minősíts modellkudarcnak és
+ne kerülj meg új providerrel; az természetes, fail-closed megállási pont.

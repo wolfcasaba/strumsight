@@ -4,6 +4,12 @@
 **Állapot:** jóváhagyott tervezés, implementáció előtt
 **Hatókör:** StrumSight / music-theory projekt az Oracle ARM Ubuntu szerveren
 
+> **Policy-frissítés (2026-08-02):** a §7.6 véges, napi három hívásos
+> költségkapuját felülírja az [ADR 0088](../../adr/0088-minimax-first-development-router.md)
+> aktuális döntése és a
+> [korlátlan napi policy specifikációja](2026-08-02-unlimited-automatic-terra-daily-budget-design.md).
+> A taskonkénti egy Terra-hívásos korlát változatlan.
+
 ## 1. Cél
 
 A StrumSight fejlesztési körök alapértelmezett implementere a MiniMax M3 legyen.
@@ -226,7 +232,7 @@ default_model = "MiniMax-M3"
 [limits]
 max_m3_attempts_per_task = 2
 max_terra_calls_per_task = 1
-max_automatic_terra_calls_per_utc_day = 3
+max_automatic_terra_calls_per_utc_day = 0
 terra_reasoning = "medium"
 terra_packet_target_tokens = 40000
 terra_packet_max_bytes = 81920
@@ -304,15 +310,17 @@ A Terra nem kap felhatalmazást a teljes funkció újraírására.
 ### 7.6 Terra napi költségkapu
 
 - Egy feladat legfeljebb egy automatikus Terra-hívást fogyaszthat.
-- A projekt UTC-naponként legfeljebb három automatikus Terra-hívást indíthat.
-- A keret worktree-k között közös, gépszintű state fájlban és zárolással él.
+- A `0` napi limit korlátlant jelent; pozitív érték explicit, véges UTC-napi
+  vészkorlátként megtartott.
+- A foglalási ledger worktree-k között közös, gépszintű state fájlban és
+  zárolással él korlátlan módban is.
 - A `.ai/runs` jelentés a számláló eseményét tükrözi, de nem ez az autoritatív
-  keretforrás, mert a modell által írható workspace nem módosíthatja a
-  költségkaput.
-- Kimerült napi keretnél a feladat `NEEDS_TERRA` állapotban megáll, és a branch
-  változatlanul megmarad.
-- Kézi Terra-indítás csak explicit emberi parancs lehet; az automatikus router
-  nem emeli meg saját limitjét.
+  forrás, mert a modell által írható workspace nem módosíthatja a task-limitet
+  vagy a ledger tartalmát.
+- Pozitív vészkorlát kimerülésekor a feladat `DEFERRED` állapotban megáll, és a
+  branch változatlanul megmarad.
+- A router saját maga nem módosíthatja a limitet; a `0` policy explicit
+  user-döntés.
 
 ## 8. Codex-profilok
 
@@ -817,7 +825,8 @@ A MiniMax-first router akkor tekinthető elkészültnek, ha:
 - egy kódhiba után pontosan egy M3-javítás történik;
 - két kódhiba után legfeljebb egy Terra-hívás történik;
 - 429, quota, hálózat, 5xx és dependency hiba nem indít Terrát;
-- a napi három automatikus Terra-hívásos limit worktree-k között is érvényes;
+- a `0 = korlátlan` napi policy, a pozitív véges vészlimit és a közös audit
+  ledger worktree-k között is helyesen működik;
 - magas kockázatú diff célzott Terra-reviewt kap;
 - a gate-et minden esetben a router futtatja;
 - tiltott fájl vagy policy-sértés leállítja a folyamatot;

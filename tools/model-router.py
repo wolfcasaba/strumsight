@@ -231,26 +231,28 @@ def _smoke(profile: str, codex_bin: str, worktree: Path) -> int:
 
 
 def terra_status_payload(config: object, state: StateStore) -> dict[str, object]:
-    """Snapshot of today's automatic Terra daily budget (E03-R08 H6 self-heal).
-
-    A mandatory high-risk Terra review can only DEFER while the shared daily
-    budget is exhausted (state.py's `reserve_terra`) — that clears at UTC
-    midnight, not on any retry cadence, so callers that want to back off
-    instead of busy-retrying need the exhaustion flag and the reset time.
-    """
+    """Snapshot of today's automatic Terra daily policy and audit count."""
     now = datetime.now(timezone.utc)
     day = now.date().isoformat()
     count = state.daily_terra_count(day)
     limit = config.limits.max_automatic_terra_calls_per_utc_day
-    next_reset = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    unlimited = limit == 0
+    next_reset = None
+    if not unlimited:
+        next_reset = datetime.combine(
+            now.date() + timedelta(days=1),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
     return {
         "schema_version": 1,
         "utc_day": day,
         "daily_limit": limit,
         "daily_count": count,
-        "exhausted": count >= limit,
-        "next_reset_utc": next_reset.isoformat(),
-        "next_reset_epoch": int(next_reset.timestamp()),
+        "unlimited": unlimited,
+        "exhausted": not unlimited and count >= limit,
+        "next_reset_utc": next_reset.isoformat() if next_reset is not None else None,
+        "next_reset_epoch": int(next_reset.timestamp()) if next_reset is not None else None,
     }
 
 
