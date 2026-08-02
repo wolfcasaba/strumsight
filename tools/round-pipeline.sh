@@ -324,6 +324,34 @@ terra_hold_if_exhausted() {   # $1=kör — hold-fájlt ír, ha a napi Terra-bud
   log "Terra napi automatikus budget kimerült — $round felfüggesztve $(date -Is -d "@$next_epoch")-ig (a firing-ok addig session és önjavítási kísérlet nélkül kilépnek)"
 }
 
+terra_clear_stale_halt_for() {   # $1=kör — a policy MOST vált korlátlanra: ha a HALTED fájl UGYANERRE a körre és Terra napi-budget kimerülésre hivatkozik (H6), archiválja, hogy a következő firing a KÖRT próbálja újra, ne egy újabb önjavító sessiont indítson egy már megszűnt okra
+  # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 7. előfordulás):
+  # a hold-fájl törlése (fentebb) önmagában nem elég — a HALT-fájl ugyanarra
+  # a Terra-kimerülésre íródott ki (handle_round_halt, a HALT ELSŐ
+  # észlelésekor), és a driver 2. szakasza (`[ -f "$halt_file" ]`) attól
+  # függetlenül önjavítást indít, hogy a hold-ot itt épp most töröltük. MÉRT
+  # eset: PR #72 (a napi Terra-korlát eltávolítása) után az első firing
+  # helyesen törölte az elavult holdot, de utána a stale HALTED fájlra
+  # (halted_at=16:58, még a korlátozott policy alól) mégis egy 7. valódi
+  # heal-sessiont indított — holott a router-taszk immár korlátlan budget
+  # mellett simán lefuthatna.
+  local round="$1" stamp halt_round halt_code halt_summary
+  [ -f "$halt_file" ] || return 0
+  halt_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
+  [ "$halt_round" = "$round" ] || return 0
+  halt_code=$(grep -m1 '^halt=' "$halt_file" | cut -d= -f2-)
+  [ "$halt_code" = "H6" ] || return 0
+  halt_summary=$(grep -m1 '^summary=' "$halt_file" | cut -d= -f2-)
+  case "$halt_summary" in
+    *"Terra"*"budget"*)
+      stamp=$(date +%Y%m%dT%H%M%S)
+      mv "$halt_file" "$state_dir/healed-$round-$stamp.txt"
+      rm -f "$heal_count_file"
+      log "a HALTED jelzés elavult volt (a Terra napi-korlát megszűnt, miközben a HALT rá hivatkozott) — törölve, a(z) $round kör önjavítás nélkül újra sorra kerül"
+      ;;
+  esac
+}
+
 terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébként (lejárt/nincs/másik kör → törli a lejárt/idegen fájlt)
   local round="$1" hold_file hold_round hold_until
   hold_file=$(terra_hold_file)
@@ -338,6 +366,7 @@ terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébkén
         return 0
       fi
       log "Terra napi automatikus budget korlátlan — az elavult hold törölve ($round)"
+      terra_clear_stale_halt_for "$round"
       return 1
     fi
     log "Terra napi budget felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"

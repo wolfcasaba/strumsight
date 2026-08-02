@@ -291,6 +291,79 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertFalse(hold_file.exists())
 
+    def test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused(self) -> None:
+        # MÉRT gyökérok (E03-R08 H6, 7. előfordulás, 2026-08-02 18:45 UTC,
+        # heal-prompt-E03-R08-20260802T184502.md): a napi Terra-korlát
+        # eltávolítása (PR #72, `max_automatic_terra_calls_per_utc_day = 0`
+        # = unlimited) után az ELSŐ firing helyesen törölte az elavult
+        # hold-fájlt (l. `test_unlimited_terra_policy_removes_a_stale_daily_budget_hold`
+        # fentebb) — de a `.pipeline/HALTED` fájl, amit a MÉG korlátozott
+        # policy alatt írt ki `handle_round_halt` ugyanerre a Terra-kimerülésre,
+        # érintetlen maradt. A driver főági 2. szakasza (`[ -f "$halt_file" ]`)
+        # ezt a stale HALTED-et függetlenül a hold állapotától egy ÚJABB,
+        # valódi önjavító sessionnek nézi — élesben ez pontosan megtörtént
+        # (heal-E03-R08-20260802T184502.log, 7. session ugyanarra a napra
+        # már megszűnt okra). A `--terra-hold-active` teszthorog `terra_hold_active_for`-t
+        # hívja, aminek most a hold törlésével EGYÜTT a hozzá tartozó stale
+        # H6 HALTED-et is archiválnia kell (healed-*.txt), hogy a következő
+        # firing a KÖRT próbálja újra, ne egy felesleges önjavítást.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            hold_file = state / "terra-budget-hold"
+            hold_file.write_text(
+                f"round=E03-R08\nhold_until={int(time.time()) + 3600}\n"
+            )
+            halt_file = state / "HALTED"
+            halt_file.write_text(
+                "round=E03-R08\n"
+                "halt=H6\n"
+                "summary=auto router task E03-R08 is DEFERRED — Terra's automatic "
+                "daily budget is genuinely exhausted for utc_day=2026-08-02\n"
+                "halted_at=2026-08-02T16:58:03+00:00\n"
+            )
+            (state / "selfheal.count").write_text("E03-R08|H6|1\n")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-active", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse(hold_file.exists())
+            self.assertFalse(
+                halt_file.exists(),
+                "a stale H6 HALTED fájlnak el kell tűnnie, amikor a napi Terra-korlát "
+                "megszűnik — különben a következő firing felesleges önjavítást indít",
+            )
+            self.assertFalse(
+                (state / "selfheal.count").exists(),
+                "a kísérletszámlálónak nullázódnia kell, mert ez nem egy valódi javítás volt",
+            )
+            healed = list(state.glob("healed-E03-R08-*.txt"))
+            self.assertEqual(len(healed), 1, "a stale halt-ot archiválni kell, nem eldobni")
+            self.assertIn("Terra", healed[0].read_text())
+
     def test_unlimited_terra_policy_keeps_hold_active_when_removal_fails(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         real_python3 = shutil.which("python3")
