@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from tools.ai_router.security import (
+    WorkspaceManifest,
     audit_scope,
     capture_workspace_manifest,
     redact_text,
@@ -220,6 +221,34 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(validate_baseline_manifest(refreshed), ())
         self.assertTrue(refreshed_audit.ok, refreshed_audit.violations)
         self.assertEqual(refreshed_audit.changed_paths, ("lib/allowed.dart",))
+
+    def test_rebased_manifest_accepts_a_clean_snapshot_from_pruned_history(self) -> None:
+        # The actual E03-R08 H6 state retained 8c084268 after the worktree
+        # had been recreated from a different main lineage at f023b89.  A
+        # clean persisted snapshot still gives the later scope audit all the
+        # information it needs; ancestry itself is not a security property.
+        root = self.make_repo()
+        (root / ".cache" / "old").unlink()
+        captured = capture_workspace_manifest(root)
+        stale = WorkspaceManifest(
+            baseline_head="8c08426887ddbbfc08b1487c13f5efe9bc49c10c",
+            untracked_paths=captured.untracked_paths,
+            ignored_paths=captured.ignored_paths,
+            tracked_paths=captured.tracked_paths,
+        )
+        (root / "lib" / "allowed.dart").write_text("model change\n")
+
+        refreshed = rebase_workspace_manifest(root, stale)
+        audit = audit_scope(
+            root,
+            allowed_paths=("lib/allowed.dart",),
+            protected_paths=(".git",),
+            baseline=refreshed,
+        )
+
+        self.assertEqual(validate_baseline_manifest(refreshed), ())
+        self.assertTrue(audit.ok, audit.violations)
+        self.assertEqual(audit.changed_paths, ("lib/allowed.dart",))
 
 
 if __name__ == "__main__":

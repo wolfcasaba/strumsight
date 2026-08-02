@@ -2904,8 +2904,8 @@ engedélyezett útvonalain voltak.
 
 **Javítás.** `model-router.py rebase-baseline --task <brief> --worktree
 <worktree>` kizárólag `BLOCKED` tasknál, a `StateStore` task-lockján belül
-használja a router saját `capture_workspace_manifest()` útját. Csak tiszta,
-ancestor baseline-t enged előrevinni; a korábbi untracked/ignored snapshotot
+használja a router saját `capture_workspace_manifest()` útját. Csak tiszta
+baseline-t enged előrevinni; a korábbi untracked/ignored snapshotot
 megtartja, ezért a már meglévő, nem commitolt modelldiff továbbra is a friss
 headhez viszonyított scope-audit tárgya. Az auditnak a brief allowlistján
 belül kell maradnia, különben az állapot változatlanul BLOCKED marad.
@@ -2914,3 +2914,10 @@ belül kell maradnia, különben az állapot változatlanul BLOCKED marad.
 és `tools/tests/test_router_cli.py::RouterCliTest::test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
 előbb a régi baseline tiltott committed driftjét, utána kizárólag a
 megengedett uncommitted modelldiffet mérik.
+
+**Pontosítás (2026-08-02, H6 futásidejű reprodukció).** A `8c084268` commit
+nem őse a `f023b89` reuse-olt worktree-nek: a branch közben új main lineage-ra
+lett újralétrehozva. Az ancestor-feltétel ezért nem biztonsági garancia, hanem
+téves működési előfeltétel volt. A recovery a tiszta régi snapshotot tartja
+meg, majd a JELENLEGI worktree teljes, friss allowlist-auditját követeli meg;
+ez az a kontroll, amely a listán kívüli diffet továbbra is megállítja.
