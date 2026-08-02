@@ -4,6 +4,42 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
+> (Pipeline E02-R21 — az Update 7 által előre kimért mechanikus javítás
+> (3 unused import törlése) UTÁN a gate ÚJ, valódi teszt-only hibán bukott —
+> a production wiring maga hibátlan, TIZEDIK halt/önjavító kör ugyanazon a
+> taskon.** A pipeline-session törölte a Terra által hagyott 3 használatlan
+> importot a `test/features/practice/application/practice_production_wiring_test.dart`-ban
+> (mérve: `flutter analyze` RED egy `unused_import`-tal / GREEN a törlés
+> után), a munkapéldányt (`ss-auto-e02-r21`) `origin/main`-re rebase-elte
+> (PR #53/#54 self-heal fixek felvéve, konfliktus nélkül), majd lefuttatta a
+> teljes `tools/round-gate.sh`-t. `format`+`analyze`: zöld; `test
+> test/features/practice/`: PIROS — de **egy ÚJ, a wiringtól független
+> okkal**: a kör saját A5-tesztje (`TimeoutException after
+> 0:00:05.000000`) a `preparing → ready|permissionRequired` átmenetre várva
+> bukik. Mért gyökérok: a teszt saját, library-private
+> `_strumEngineProvider`/`_permissionGatewayProvider` placeholdereket override-ol
+> (`practice_production_wiring_test.dart:197-215`), NEM a valódi
+> `strumEngineProvider`-t (`lib/features/live/providers/live_providers.dart:11`)
+> és `microphonePermissionGatewayProvider`-t
+> (`lib/core/audio/audio_providers.dart:14`), amiket a production wiring
+> ténylegesen figyel (`practice_observation_gateway_provider.dart:31-32`,
+> `practice_session_providers.dart:179-181`) — az override sosem lép
+> érvénybe, a kontroller a valódi platform-csatornás gateway-t kapja, ami a
+> `flutter test` host-futásban sosem tér vissza. **A javítás pontos helye
+> mérve** (két provider-csere a nevezett fájlban) —
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md)
+> "Update 8" szakasz. Router `auto` task-állapot változatlanul `STOPPED`,
+> `m3_attempts=2/2`, `terra_calls=1/1` (nulla keret, `resume` nem
+> alkalmazható) — a pipeline-prompt §2 szerint feltétlen H4, és az
+> orchestrátor határa kizárja, hogy maga írja meg a teszt-fájl tartalmi
+> javítását. **A Practice V2 production-drótozás (A1/A2/A3/A4) minden mért
+> ponton HIBÁTLAN — csak a saját tesztje hibás egy provider-cserén.** A
+> committolatlan munkafa-állapot (3 tracked + 2 untracked fájl, import-
+> fixszel) szándékosan a munkapéldányon maradt, nem commitolva. **A
+> következő session dolga:** explicit `codex`/`minimax` javító kör indítása
+> a mért findings-listával (két provider-csere, fájl:sor pontossággal), vagy
+> emberi döntés az `auto` task-keret bővítéséről/reseteléséről.
+> Előző kör: 2026-08-02
 > (önjavító kör, E02-R21 H4 — TIZEDIK önjavító/halt kör ugyanazon a taskon —
 > a gate most a modell TÉNYLEGES tartalmi munkáján mér, nem a mellette futó
 > kozmetikai debrisen, PR #54, `heal/E02-R21-H4-3` → squash `aff19e7`.**
