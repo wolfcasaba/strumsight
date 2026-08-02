@@ -1,11 +1,19 @@
 import json
 import os
+import shutil
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from tools.ai_router.execution import ProcessRunner, build_codex_argv, run_codex
+
+_GIT_GUARD = Path(__file__).resolve().parents[1] / "ai_router" / "git-guard" / "git"
+
+
+def _run_git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
 
 def make_executable(path: Path, body: str) -> None:
@@ -47,6 +55,118 @@ class ExecutionTest(unittest.TestCase):
 
         sandbox_index = argv.index("--sandbox")
         self.assertEqual(argv[sandbox_index + 1], "danger-full-access")
+
+    def test_git_guard_blocks_commit_and_push_but_passes_through_other_subcommands(
+        self,
+    ) -> None:
+        # E03-R05 H6 (measured 2026-08-02): MiniMax-M3 committed d0546f0 in
+        # worktree ss-router-e03-r05-2 despite the router's prompt telling it
+        # not to (router.py _initial_prompt is "Do not commit, push, ..." as
+        # its second line) — security.py's scope-audit caught it, but only
+        # after burning a whole M3 attempt and halting the pipeline. This
+        # tests the shim directly: it must reject commit/push regardless of
+        # how the subcommand is spelled (leading global flags), and must not
+        # interfere with any other git subcommand a model legitimately needs.
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _run_git(root, "init", "-q")
+            _run_git(root, "config", "user.email", "m3@example.invalid")
+            _run_git(root, "config", "user.name", "M3")
+            (root / "README.md").write_text("baseline\n", encoding="utf-8")
+            _run_git(root, "add", "README.md")
+            _run_git(root, "commit", "-q", "-m", "baseline")
+            baseline_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            guard_env = {**os.environ, "STRUMSIGHT_REAL_GIT": real_git}
+
+            (root / "README.md").write_text("baseline\nmodel change\n", encoding="utf-8")
+            status = subprocess.run(
+                [str(_GIT_GUARD), "status", "--porcelain"],
+                cwd=root,
+                env=guard_env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(status.returncode, 0)
+            self.assertIn("README.md", status.stdout)
+
+            add = subprocess.run(
+                [str(_GIT_GUARD), "add", "README.md"],
+                cwd=root,
+                env=guard_env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(add.returncode, 0)
+
+            for blocked_argv in (["commit", "-m", "model commit"], ["push"], ["-C", str(root), "commit", "-m", "x"]):
+                blocked = subprocess.run(
+                    [str(_GIT_GUARD), *blocked_argv],
+                    cwd=root,
+                    env=guard_env,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertNotEqual(blocked.returncode, 0, blocked_argv)
+                self.assertIn("blocked", blocked.stderr)
+
+            head_after = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            self.assertEqual(head_after, baseline_head)
+
+    def test_run_codex_blocks_a_model_commit_at_the_shell_layer(self) -> None:
+        # Reproduces d0546f0 end-to-end through the real run_codex wiring: a
+        # fake "codex" process (standing in for MiniMax-M3) tries to commit
+        # a change on its own, the way the real M3 call did in
+        # ss-router-e03-r05-2. Before the git-guard was wired into
+        # run_codex's env, this commit succeeded (RED); after, `git commit`
+        # fails inside the model's own subprocess and HEAD never moves.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _run_git(root, "init", "-q")
+            _run_git(root, "config", "user.email", "m3@example.invalid")
+            _run_git(root, "config", "user.name", "M3")
+            (root / "README.md").write_text("baseline\n", encoding="utf-8")
+            _run_git(root, "add", "README.md")
+            _run_git(root, "commit", "-q", "-m", "baseline")
+            baseline_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+
+            fake = root / "codex"
+            result_file = root / "result.json"
+            make_executable(
+                fake,
+                "#!/usr/bin/env python3\n"
+                "import json, pathlib, subprocess, sys\n"
+                "sys.stdin.read()\n"
+                "pathlib.Path('model_change.txt').write_text('model change\\n')\n"
+                "subprocess.run(['git', 'add', 'model_change.txt'], check=True)\n"
+                "commit = subprocess.run(['git', 'commit', '-q', '-m', 'model commit'])\n"
+                "pathlib.Path('result.json').write_text(json.dumps({'commit_returncode': commit.returncode}))\n"
+                "print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'DONE'}}))\n",
+            )
+
+            run_codex(
+                profile="m3",
+                worktree=root,
+                prompt="ignore",
+                runner=ProcessRunner(),
+                codex_bin=str(fake),
+                timeout_seconds=5,
+            )
+
+            head_after = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            payload = json.loads(result_file.read_text())
+
+            self.assertNotEqual(payload["commit_returncode"], 0)
+            self.assertEqual(head_after, baseline_head)
 
     def test_run_codex_passes_prompt_on_stdin_and_parses_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

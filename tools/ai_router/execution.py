@@ -4,10 +4,25 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
+
+# ADR 0112 self-heal (E03-R05 H6, measured 2026-08-02): MiniMax-M3 committed
+# d0546f0 in worktree ss-router-e03-r05-2 despite "Do not commit, push, open
+# a PR..." being the first instruction line of every M3/Terra prompt
+# (router.py _initial_prompt/_repair_prompt, packet.py escalation prefix) —
+# security.py's scope-audit correctly hard-BLOCKed on the HEAD mismatch, but
+# only after the attempt was already burned and the pipeline halted. M3/Terra
+# run with --sandbox danger-full-access (workspace-write cannot create a
+# bwrap network namespace here, see build_codex_argv below), so nothing at
+# the process-sandbox layer stops `git commit`/`git push` either — the
+# prompt instruction was the only guard, and it is not reliable. This PATH
+# shim rejects `commit`/`push` at the shell layer as defense in depth;
+# security.py's scope-audit and HEAD check are unchanged.
+_GIT_GUARD_DIR = Path(__file__).resolve().parent / "git-guard"
 
 
 @dataclass(frozen=True)
@@ -85,6 +100,23 @@ class ProcessRunner:
             )
 
 
+def _guarded_env(env: Mapping[str, str] | None) -> dict[str, str]:
+    """Prepend the git-guard shim dir to PATH so a model subprocess's own
+    `git commit`/`git push` fails immediately instead of only being caught
+    (after the fact, one whole attempt later) by security.py's scope-audit.
+    """
+    merged = dict(env) if env is not None else dict(os.environ)
+    real_git = shutil.which("git", path=merged.get("PATH"))
+    if real_git is None:
+        raise RuntimeError("git executable not found; cannot install the router's git-guard")
+    merged["STRUMSIGHT_REAL_GIT"] = real_git
+    existing_path = merged.get("PATH", "")
+    merged["PATH"] = (
+        f"{_GIT_GUARD_DIR}{os.pathsep}{existing_path}" if existing_path else str(_GIT_GUARD_DIR)
+    )
+    return merged
+
+
 def build_codex_argv(codex_bin: str, profile: str, worktree: Path) -> list[str]:
     if profile not in {"m3", "terra"}:
         raise ValueError(f"unsupported Codex profile: {profile}")
@@ -124,7 +156,7 @@ def run_codex(
         build_codex_argv(codex_bin, profile, worktree),
         input_text=prompt,
         cwd=worktree,
-        env=env,
+        env=_guarded_env(env),
         timeout_seconds=timeout_seconds,
     )
     events: list[dict[str, object]] = []
