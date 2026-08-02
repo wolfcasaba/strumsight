@@ -8,6 +8,7 @@ from tools.ai_router.security import (
     audit_scope,
     capture_workspace_manifest,
     redact_text,
+    rebase_workspace_manifest,
     validate_baseline_manifest,
 )
 
@@ -184,6 +185,41 @@ class SecurityTest(unittest.TestCase):
 
         self.assertFalse(audit.ok)
         self.assertTrue(any("commit" in violation for violation in audit.violations))
+
+    def test_rebased_manifest_excludes_committed_preflight_drift_but_keeps_model_diff(self) -> None:
+        # E03-R08 H6 (2026-08-02): the persisted baseline was captured at
+        # 8c084268, while the reused worktree had already committed its
+        # f023b89 pre-flight.  Auditing from the old head falsely attributed
+        # the committed router/pipeline changes to the model.  Rebasing must
+        # preserve the later uncommitted model edit for the normal scope audit.
+        root = self.make_repo()
+        (root / ".cache" / "old").unlink()
+        baseline = capture_workspace_manifest(root)
+        (root / "tools").mkdir()
+        (root / "tools" / "router.py").write_text("preflight infrastructure\n")
+        subprocess.run(["git", "add", "tools/router.py"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "preflight"], cwd=root, check=True)
+        (root / "lib" / "allowed.dart").write_text("model change\n")
+
+        stale_audit = audit_scope(
+            root,
+            allowed_paths=("lib/allowed.dart",),
+            protected_paths=(".git",),
+            baseline=baseline,
+        )
+        refreshed = rebase_workspace_manifest(root, baseline)
+        refreshed_audit = audit_scope(
+            root,
+            allowed_paths=("lib/allowed.dart",),
+            protected_paths=(".git",),
+            baseline=refreshed,
+        )
+
+        self.assertFalse(stale_audit.ok)
+        self.assertTrue(any("tools/router.py" in item for item in stale_audit.violations))
+        self.assertEqual(validate_baseline_manifest(refreshed), ())
+        self.assertTrue(refreshed_audit.ok, refreshed_audit.violations)
+        self.assertEqual(refreshed_audit.changed_paths, ("lib/allowed.dart",))
 
 
 if __name__ == "__main__":

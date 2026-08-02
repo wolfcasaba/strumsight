@@ -150,6 +150,35 @@ def capture_workspace_manifest(repo: Path) -> WorkspaceManifest:
     )
 
 
+def rebase_workspace_manifest(repo: Path, baseline: WorkspaceManifest) -> WorkspaceManifest:
+    """Advance a clean persisted baseline to the current committed worktree head.
+
+    This is an operator-only recovery primitive for a task that was blocked
+    after an orchestrator committed its pre-flight while the task state still
+    pointed at an older main commit.  Existing uncommitted model changes must
+    remain outside the baseline so the regular scope audit still inspects
+    them.  A dirty or non-ancestor source baseline is therefore rejected.
+    """
+    if violations := validate_baseline_manifest(baseline):
+        raise SecurityError("cannot rebase an unsafe baseline: " + "; ".join(violations))
+    current = capture_workspace_manifest(repo)
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", baseline.baseline_head, current.baseline_head],
+        cwd=repo,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if ancestry.returncode != 0:
+        raise SecurityError("baseline head is not an ancestor of the current worktree head")
+    return WorkspaceManifest(
+        baseline_head=current.baseline_head,
+        untracked_paths=baseline.untracked_paths,
+        ignored_paths=baseline.ignored_paths,
+        tracked_paths=baseline.tracked_paths,
+    )
+
+
 def _matches(path: str, prefixes: Sequence[str]) -> bool:
     return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in prefixes)
 

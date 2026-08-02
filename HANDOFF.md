@@ -4,7 +4,16 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (Pipeline E03-R07 — File-based Song repository and asset store DONE, merged
+> (HEAL E03-R08/H6 — stale router baseline recovery verified).** The router now
+> has a locked `rebase-baseline` recovery command for a `BLOCKED` task whose
+> persisted baseline predates its committed pre-flight: it keeps the model's
+> uncommitted diff subject to the normal allowlist audit, rather than treating
+> later, already-merged infrastructure commits as model scope creep. The
+> actual E03-R08 state must be rebased with that command before the pipeline
+> resumes; its implementation diff remains reviewable. Python router tests
+> cover both the security primitive and the CLI/state transition. **Prior
+> completed product round:** E03-R07 — File-based Song repository and asset
+> store DONE, merged
 > `b8b7e4e` (PR #66), two fix rounds.** Implements
 > [ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) (accepted at
 > E03-R01): `SongRepository`/`SongAssetRepository` domain contracts,
