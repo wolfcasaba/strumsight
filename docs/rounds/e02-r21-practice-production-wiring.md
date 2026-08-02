@@ -12,6 +12,70 @@
 - **Implementer motor:** `auto` — ez a **MiniMax-first router első éles köre**
   (ADR 0088). Kicsi, jól körülhatárolt kör, ezért alkalmas első próbának.
 
+## 0.0 Pre-flight revízió (orchestrátor, 2026-08-01)
+
+Kötelező grep-ellenőrzés futott a brief minden hivatkozott szimbólumára és
+fájlnevére (a pipeline-prompt §1 két mérési szabálya) — az alábbi egy pont
+javításra szorult, minden más állítás mérve stimmelt:
+
+- **A §4 táblázat tévesen "meglévő" (`—`) jelöléssel sorolja fel a
+  `test/features/practice/application/practice_session_providers_test.dart`
+  fájlt.** Mérve (`ls`/`grep -rl`): ez a fájl **nem létezik** — a
+  `practice_session_providers.dart`-nak ma nincs dedikált tesztje. A kör ezt
+  **újonnan** hozza létre (jelölése a §4-ben mostantól ÚJ).
+- Ehhez kapcsolódóan: az A9 "layer-purity guard" ma **kizárólag**
+  `practice_session_controller.dart` forrását vizsgálja
+  (`practice_session_controller_test.dart` A9 csoportja) — nem
+  `practice_session_providers.dart`-ot. Az A4 acceptance criteria ("a
+  layer-purity guard zöld marad") ezért csak akkor mérhető ténylegesen a
+  providers fájlra, ha az új `practice_session_providers_test.dart` egy, az
+  A9 mintáját követő forrás-mintaőrt is tartalmaz a §2-ben felsorolt tiltott
+  szimbólum-listával. Ld. [ADR 0111](../adr/0111-practice-production-wiring.md)
+  §2/§3. Ez **kiegészíti** az A4-et, nem tágítja a scope-ot: a §4 engedélyezett
+  fájllistája változatlan (a fájl már szerepelt rajta).
+- Minden más mért állítás (a négy hiányzó provider pontos helye és mai értéke,
+  a feature-flag állapot, a réteg-tisztasági korlát szimbólum-listája a
+  controller fájlon, a három terminal állapot) grep-pel igazolva, változtatás
+  nélkül.
+- **Hiányzó `ai-router` metadata-blokk (a router első futtatási kísérlete
+  fedte fel, exit 50, `"brief must contain exactly one ai-router block"`).**
+  Ez a brief a router (ADR 0088) merge-je ELŐTT íródott, ezért nincs benne a
+  géppel olvasott TOML-blokk, amit `tools/ai_router/brief.py` megkövetel — az
+  Epic 3 briefek (ugyanaz a PR, amely a routert hozta) ezt már tartalmazzák.
+  A blokk alant, a §4 engedélyezett-fájllistával és a §9 záró gate-parancs
+  útvonalaival bitre egyező tartalommal pótolva:
+
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "docs/adr/0111-practice-production-wiring.md",
+  "lib/features/practice/application/practice_session_providers.dart",
+  "lib/features/practice/application/practice_setup_controller.dart",
+  "lib/features/practice/presentation/practice_effect_listener.dart",
+  "lib/features/practice/data/practice_observation_gateway_provider.dart",
+  "lib/features/practice/public.dart",
+  "test/features/practice/application/practice_production_wiring_test.dart",
+  "test/features/practice/application/practice_session_providers_test.dart",
+  "test/features/practice/presentation/practice_effect_listener_test.dart",
+  "docs/rounds/e02-r21-practice-production-wiring.md",
+]
+gate_tests = [
+  "test/features/practice",
+  "test/features/learn",
+  "test/core",
+  "test/app",
+  "test/property",
+]
+native_gate = false
+```
+
+  `risk = "normal"`: a kör provider-drótozás már megírt/tesztelt rétegek
+  között, nem érint autót/tokent/titkot/kriptót/fizetést, nem tárolómigráció
+  és nem publikus interfészt tör (ADR 0088 §2 magas-kockázat listája egyik
+  pontjának sem felel meg) — a mikrofon-lease életciklus kockázatát a §5/§6
+  A6 leak-számlálói mérik, nem a Terra-eszkaláció.
+
 ## 0. Kör-jelzés
 
 `engine=auto`: a kör-jelzést az **orchestrátor** képezi le a router
@@ -161,7 +225,9 @@ enum-kódokkal hívja — a serializer `JsonRecordException`-nel dobja el.
 Provider a `LivePracticeObservationGateway`-hez, a `StrumEngine`, a
 mikrofon-engedély-gateway, az idővonal és a logger valódi forrásaival.
 A layer-purity guard (A9) **zöld marad** — ha nem hozható zöldre a §2 szerinti
-elrendezéssel, az `STOPPED`, nem a guard lazítása.
+elrendezéssel, az `STOPPED`, nem a guard lazítása. **§0.0 revízió:** ez a
+guard a `practice_session_providers.dart`-ra ÚJ (ebben a körben írt) —
+ld. §0.0 és ADR 0111 §3.
 
 ### A5 — A valódi piros→zöld cella
 

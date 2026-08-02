@@ -36,6 +36,7 @@ import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/microphone_permission.dart';
 import '../data/local_practice_history_repository.dart';
 import '../data/practice_history_recorder.dart';
+import '../data/practice_observation_gateway_provider.dart';
 import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_definition.dart';
@@ -45,6 +46,7 @@ import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
 import 'practice_session_clock.dart';
+import 'practice_session_controller.dart';
 import 'practice_tick_source.dart';
 
 /// The clock every practice session starts with. Production uses the
@@ -179,8 +181,100 @@ final practiceMicrophonePermissionProvider =
       (ref) => ref.watch(microphonePermissionGatewayProvider),
     );
 
-// Note: `practiceSessionControllerProvider` itself is **not** defined here.
-// The controller is short-lived — one provider creates, one session runs,
-// then disposed — and parameterised on session inputs that Kör 12/13 will
-// collect. The Kör 13 pre-flight will define the auto-dispose `family`
-// with the configuration parameters wired in. Stay tuned.
+// ---------------------------------------------------------------------------
+// E02-R21 — production controller wiring (ADR 0111 §1–§4)
+// ---------------------------------------------------------------------------
+
+/// The session inputs that parameterise the auto-dispose controller family
+/// (A1, ADR 0111 §1). Two fields — the definition being configured and the
+/// user-edited config — are the complete "session identity" the rest of the
+/// wiring observes.
+///
+/// Records are value-equal in Dart 3; both [PracticeDefinition] and
+/// [PracticeSessionConfig] define their own `==`/`hashCode` so a Riverpod
+/// family keyed on this record treats equivalent inputs as one session.
+typedef PracticeSessionInputs = ({
+  PracticeDefinition definition,
+  PracticeSessionConfig config,
+});
+
+/// The active session identity (A2 host bridge, ADR 0111 §2). The prepare
+/// sink writes here after the Setup dispatches `PreparePractice`; the host
+/// provider reads it to expose the controller to the screen layer.
+///
+/// AutoDispose: when the screen unmounts, the inputs are cleared so a stale
+/// session cannot leak into the next setup.
+class PracticeActiveSessionInputsController
+    extends Notifier<PracticeSessionInputs?> {
+  @override
+  PracticeSessionInputs? build() => null;
+
+  /// Set the active session identity. Called by the prepare sink after the
+  /// Setup dispatches `PreparePractice` through the wired sink.
+  void activate(PracticeSessionInputs inputs) => state = inputs;
+
+  /// Clear the active session identity. Called when the host tears down
+  /// (screen unmount, terminal state cleanup) so a stale session does not
+  /// leak into the next setup.
+  void clear() => state = null;
+}
+
+final practiceActiveSessionInputsProvider =
+    NotifierProvider.autoDispose<
+      PracticeActiveSessionInputsController,
+      PracticeSessionInputs?
+    >(PracticeActiveSessionInputsController.new);
+
+/// The auto-dispose controller family (A1, ADR 0111 §1). One instance per
+/// `(definition, config)` pair — the prepare sink reads the family with the
+/// Setup's `PreparePractice` payload, and the host provider keeps the
+/// controller alive while the screen watches it.
+///
+/// The recorder is built here with the **real** mode/source/definition codes
+/// from the session definition (A3, ADR 0111 §3). The placeholder-gated
+/// provider above still guards direct reads without session context so the
+/// B2 write-then-drop trap stays sealed.
+final practiceSessionControllerProvider = Provider.autoDispose
+    .family<PracticeSessionController, PracticeSessionInputs>((ref, inputs) {
+      final repository = ref.watch(practiceHistoryRepositoryProvider);
+      final detailed = ref.watch(
+        appConfigProvider.select(
+          (cfg) => cfg.flags.practiceDetailedHistoryEnabled,
+        ),
+      );
+      final recorder = PracticeHistoryRecorder(
+        repository: repository,
+        mapperFactory: () => PracticeSessionResultHistoryMapper(
+          now: DateTime.now,
+          detailEnabled: detailed,
+          modeCode: inputs.definition.mode.code,
+          sourceCode: inputs.definition.source.code,
+          definitionId: inputs.definition.id,
+          displayTitle: inputs.definition.displayTitle ?? '',
+          skillTags: inputs.definition.skillTags,
+        ),
+      );
+      final clock = ref.watch(practiceSessionClockProvider);
+      final tickSource = ref.watch(practiceTickSourceProvider);
+      final logger = ref.watch(practiceSessionLoggerProvider);
+      final permissions = ref.watch(practiceMicrophonePermissionProvider);
+      final observationConfig = ref.watch(practiceObservationConfigProvider);
+      final sessionIdFactory = ref.watch(practiceSessionIdFactoryProvider);
+      final compileTarget = ref.watch(practiceCompileTargetProvider);
+      final observationGateway = ref.watch(
+        livePracticeObservationGatewayProvider,
+      );
+      final controller = PracticeSessionController(
+        clock: clock,
+        tickSource: tickSource,
+        recorder: recorder,
+        logger: logger,
+        permissions: permissions,
+        observationConfig: observationConfig,
+        sessionIdFactory: sessionIdFactory,
+        compileTarget: compileTarget,
+        observationGateway: observationGateway,
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
