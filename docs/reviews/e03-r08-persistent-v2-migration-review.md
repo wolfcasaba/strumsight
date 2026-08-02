@@ -1,49 +1,62 @@
 # E03-R08 — Review
 
-Brief: `docs/rounds/e03-r08-persistent-v2-migration.md`  
-Diff: `git diff origin/main...codex/e03-r08-persistent-v2-migration`  
-Reviewer: Codex / GPT-5.6 Terra · Date: 2026-08-02  
-Verdict: CHANGES REQUIRED
+Brief: `docs/rounds/e03-r08-persistent-v2-migration.md`
+Diff: `git diff origin/main...codex/e03-r08-persistent-v2-migration`
+Reviewer: Codex / GPT-5.6 Terra
+Date: 2026-08-02
+Verdict: APPROVED
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
+
+The prior F1 BLOCKER is closed by the merged structural-codec heal
+(`c2707c1`, included in this branch through `origin/main`). The same isolated
+review now exercises the actual `FileSongRepository` read-back path and
+completes normally; the migration parity guard remains strict.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | Üres, egy- és többdalos storage migrálható | ❌ | Az egyrekordos happy path `needsResume` státuszt ad: `song_storage_migrator_test.dart:205`; a normál provider-wiring is ugyanígy bukik: `song_storage_migrator_wiring_test.dart:141`. |
-| 2 | N-edik write/read-back hiba után restart folytatható | ❌ | A teszt ellenőrzőpontig sem jut el: `song_storage_migrator_test.dart:277`, `:338`. |
-| 3 | Corrupt rekord redacted recoveryval kezelhető | ❌ | Az első jó rekord sem checkpointolható: `song_storage_migrator_test.dart:417`. |
-| 4 | Setlist csak teljes song-mapping után indul | ❌ | A hibátlan songbooknál is `needsResume`: `song_storage_migrator_test.dart:471`, `:491`. |
-| 5 | Production wiring friss példányból visszaolvasható | ❌ | Izolált provider-wiring teszt `readBackMiss` loggal és `needsResume` eredménnyel bukik. |
+| 1 | Üres, egy- és többdalos storage determinisztikusan migrálható | ✅ | `song_storage_migrator_test.dart`: empty, single-record and multi-record restart cases; isolated migration tests: 10 pass, 1 explicit skip. |
+| 2 | Write/read-back hiba utáni restart nem veszít és nem duplikál | ✅ | `song_storage_migrator_test.dart`: `mid-run write failure...` and `read-back parity failure...`; persistent checkpoint is re-opened in the restart path. |
+| 3 | Corrupt rekord redacted recoveryt ad, a jó checkpoint megmarad | ✅ | `song_storage_migrator_test.dart`: `corrupt song record redacts recovery and keeps the good checkpoint`. |
+| 4 | Setlist csak teljes song mapping után fut; missing ID unresolved | ✅ | `song_storage_migrator_test.dart`: setlist success, missing reference and failed-song guard cases. |
+| 5 | Production wiring friss példányból visszaolvasható | ✅ | `song_storage_migrator_wiring_test.dart`: production provider → file marker → fresh provider container → completed no-op. |
 
 ## Scope-audit
 
-Az E03-R08 funkcionális diff kizárólag a brief §4-ben engedélyezett hét fájlt érinti. A branch a review előtt `origin/main`-nel merge-elve lett; annak örökölt self-heal fájljai nem a kör funkcionális diffjei.
+The implementation diff is limited to the pre-flight allowlist: ADR 0117,
+the R08 brief, three migration implementation files, provider wiring, and two
+migration tests. This review report is the required independent-review
+artifact. No prohibited feature internals, pipeline files, or CI files change.
 
-## Megállapítások
+## Independent probes
 
-### F1 — BLOCKER — A sikeres fájltárolás után minden normál migráció read-back parity hibára fut
+- Isolated clone: `/tmp/review-e03-r08-6xE3tM`, branch head `a88e447`.
+- A throwaway mutation weakened `_hasStableParity` to compare only song ID and
+  title. The required test
+  `read-back parity rejects an altered document with the same id and title`
+  failed as expected (`expected needsResume`, `actual completed`). The mutation
+  was reverted with no remaining tracked diff.
+- The original F1 scenario was re-run through the production provider and now
+  passes because `SongDocumentCodec` preserves the full structural timeline;
+  parity remains `actual == expected`, rather than accepting normalized loss.
 
-- **Fájl:** `lib/features/song_trainer/application/migration/song_storage_migrator.dart:427-453`
-- **Probléma:** A migrátor a frissen megnyitott repositoryból kiolvasott dokumentumot teljes `SongDocument` value equalityval hasonlítja az adapter által készített dokumentumhoz. A valós `FileSongRepository` + codec útvonalon ez a feltétel már egy normál, egyrekordos mentésnél hamis, ezért a kód `songMigration.song.readBackMiss` logot ad, nem checkpointol, és `needsResume`-mal tér vissza. Ez nem szintetikus fake-probléma: a production-wiring teszt ugyanezt mutatja.
-- **Hatás:** A termék egyetlen érvényes legacy dalt sem tud befejezetten V2-be migrálni. Minden indítás ugyanazt a rekordot próbálja újra, a completion marker sosem íródik ki; a kör fő célja és az összes sikerágas acceptance kritérium sérül.
-- **Kötelező javítás:** A R06 fidelity szerződésnek megfelelő, pontosan definiált read-back parityt vezess be: az adapter által megőrzendő szerkezeti/forrásadatokat hasonlítsa, de csak olyan eltérést fogadjon el, amelyet a R07 repository/codec bizonyíthatóan legitim módon normalizál. Ne a parityt kapcsold ki, és maradjon olyan regressziós teszt, amely egy szerkezeti eltérést (például section vagy track módosítása) ténylegesen `readBackMiss`-re visz. A happy-path és fresh-provider wiring teszteknek javítás után `completed`-del kell zárulniuk.
-- **Ellenőrzés:** `tools/round-gate.sh test/features/song_trainer/application/migration test/features/song_trainer/data/migration test/features/songs` teljesen zöld; az imént bukott hét teszt, különösen a `song_storage_migrator_wiring_test.dart:141`, zöld.
-- **Státusz:** OPEN
+## Gate evidence
 
-## Gate-bizonyíték ellenőrzése
-
-| Gate | Ellenőrizve |
+| Gate | Independent result |
 |---|---|
-| format | ✅ — 706 fájl, 0 módosítás |
-| analyze | ✅ — `flutter analyze lib/ test/ tool/`: No issues found |
-| célzott tesztek | ❌ — `flutter test test/features/song_trainer/application/migration`: 7 bukó, 3 zöld, 1 skip |
-| architecture | ❌ — a gate a célzott tesztfázis első hibáján megállt |
-| CI (teljes suite + property + APK) | ❌ — kódhibás lokális gate mellett dispatch tiltott |
+| format | ✅ `dart format --output=none --set-exit-if-changed lib test tool`: 706 files, 0 changed. |
+| analyze | ✅ `flutter analyze lib/ test/ tool/`: no issues. |
+| targeted tests | ✅ application/migration: 10 pass, 1 explicit skip; data/migration: 33 pass; songs: 49 pass. |
+| architecture | ✅ `dart run tool/check_architecture.dart`: dependencies OK (12 allowlisted deviations). |
+| round gate | ✅ `tools/round-gate.sh --result-json ... test/features/song_trainer/application/migration test/features/song_trainer/data/migration test/features/songs`: structured result `{outcome: pass, exit_code: 0}`. |
+| CI full suite, property, APK | Pending dispatch on the exact review head; merge remains prohibited until green. |
 
-## Merge-döntés
+## Merge decision
 
-Az ADR 0052 szerint merge tilos: F1 BLOCKER nyitott és a kötelező lokális gate piros.
+The review contains no open BLOCKER or MAJOR. Dispatch CI for the exact branch
+head, verify its `headSha`, and merge only after the full suite, randomised
+property gate, and APK build are green.
