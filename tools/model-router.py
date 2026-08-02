@@ -26,6 +26,32 @@ def _expanded(value: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(value)))
 
 
+def _dart_bin() -> str:
+    # Same resolution order as tools/round-gate.sh's own `dart_bin` default,
+    # so the pre-gate normalize pass and the gate script agree on which
+    # toolchain they're running.
+    return os.environ.get("DART_BIN") or os.path.expanduser("~/flutter/bin/dart")
+
+
+def _pre_gate_normalize(process: ProcessRunner, worktree: Path, timeout_seconds: float) -> None:
+    # E02-R21 H4 (Update 7, measured 2026-08-02): two of the M3/Terra attempts
+    # burned their whole budget on `format`/`analyze` failures caused by
+    # mechanically fixable debris (unformatted files, an unused import left
+    # over from an earlier draft) in files the model DID touch correctly —
+    # the round's actual acceptance-criteria work was done, the gate still
+    # STOPPED the task. `dart format`/`dart fix --apply` are deterministic
+    # and safe on an otherwise-clean baseline (measured: `flutter analyze`
+    # is clean before any model call), so running them before the gate lets
+    # the gate measure the model's real content instead of spending a scarce
+    # attempt on cosmetics it could not have retried its way out of anyway
+    # (the M3/Terra budget is fixed at 2+1, not re-triable per gate step).
+    if not (worktree / "pubspec.yaml").exists():
+        return
+    dart_bin = _dart_bin()
+    process.run([dart_bin, "format", "lib", "test", "tool"], cwd=worktree, timeout_seconds=timeout_seconds)
+    process.run([dart_bin, "fix", "--apply"], cwd=worktree, timeout_seconds=timeout_seconds)
+
+
 def _gate_runner(config: object, process: ProcessRunner, *, baseline: bool = False):
     expected_exits = {"pass": 0, "code_failure": 10, "environment_failure": 20, "invalid_gate": 30}
 
@@ -33,6 +59,8 @@ def _gate_runner(config: object, process: ProcessRunner, *, baseline: bool = Fal
         gate_script = worktree / config.runtime.gate_script
         selected_tests = tuple(path for path in tests if not baseline or (worktree / path).exists())
         mode_args = ["--baseline"] if baseline else []
+        if not baseline:
+            _pre_gate_normalize(process, worktree, config.runtime.gate_timeout_seconds)
         with tempfile.TemporaryDirectory(prefix="strumsight-gate-") as directory:
             result_file = Path(directory) / "result.json"
             completed = process.run(
