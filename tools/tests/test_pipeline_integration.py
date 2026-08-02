@@ -304,9 +304,21 @@ class PipelineIntegrationTest(unittest.TestCase):
             tree = subprocess.run(
                 ["git", "write-tree"], cwd=ROOT, env=env, check=True, capture_output=True, text=True,
             ).stdout.strip()
+            # `commit-tree` needs an author/committer identity; a fresh CI
+            # runner has no `user.name`/`user.email` configured (mérve: ez a
+            # 2. CI-only bukás, exit 128 "empty ident" a router-ci.yml
+            # runneren), ezért explicit GIT_*_NAME/EMAIL-t adunk, nem a
+            # környezet globális git configjára támaszkodva.
+            commit_env = dict(
+                os.environ,
+                GIT_AUTHOR_NAME="gate-guard-test",
+                GIT_AUTHOR_EMAIL="gate-guard-test@example.invalid",
+                GIT_COMMITTER_NAME="gate-guard-test",
+                GIT_COMMITTER_EMAIL="gate-guard-test@example.invalid",
+            )
             commit = subprocess.run(
                 ["git", "commit-tree", tree, "-p", "HEAD", "-m", "gate-guard test fixture (not a real round)"],
-                cwd=ROOT, check=True, capture_output=True, text=True,
+                cwd=ROOT, env=commit_env, check=True, capture_output=True, text=True,
             ).stdout.strip()
             return commit
 

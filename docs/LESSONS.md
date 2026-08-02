@@ -2208,7 +2208,17 @@ parancsokkal (`git read-tree`/`hash-object`/`write-tree`/`commit-tree`)
 a checkout **jelenlegi, valódi HEAD-je** fölé, privát
 `GIT_INDEX_FILE`-on át — sem a working tree-t, sem a real indexet, sem
 egyetlen ref-et nem érint, és csak a HEAD-re támaszkodik, amit egy
-depth=1 klón is tartalmaz. Regressziós tesztek:
+depth=1 klón is tartalmaz.
+
+**Harmadik mérés, még ugyanezen a CI-dispatch-on:** a `git commit-tree`
+maga is ELBUKOTT (exit 128, "Author identity unknown") a második
+dispatch-on, mert egy friss CI-runneren nincs `user.name`/`user.email`
+git-config (ezen a fejlesztő-gépen VAN, ezért itt helyben zölden futott
+— pont az a hamis biztonságérzet, amire a záró tanulság figyelmeztet).
+Javítás: a fixture-commit explicit
+`GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`/`GIT_COMMITTER_NAME`/
+`GIT_COMMITTER_EMAIL`-t ad a `commit-tree`-nek, nem a környezet globális
+git-configjára támaszkodva. Regressziós tesztek:
 `tools/tests/test_pipeline_integration.py::
 test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list`,
 `::test_heal_pr_gate_violation_ignores_a_clean_diff_and_catches_a_gate_touch`.
