@@ -1,6 +1,7 @@
 # E03-R01 — Baseline, határok, ADR-témák és feature flag
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-01 PREPARED → 2026-08-02 PLANNING,
+  pre-flight a `main` @ `6a45486`-on futott, ld. §0.0)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 1; §3, §8.3–8.4, §32
 - **Branch:** `codex/e03-r01-baseline-and-boundaries`
 - **Előfeltétel:** E02-R20 merge és friss-main teljes regresszió
@@ -64,6 +65,43 @@ A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
 
+**Pre-flight mérés (2026-08-02, `main` @ `6a45486`, E02-R21 után):**
+
+1. `ls lib/features/song_trainer` → nincs ilyen könyvtár. **Egyezik.**
+2. `rg -n "SharedPreferences" lib/core -l` → `lib/core/storage/shared_preferences_store.dart`
+   implementálja a `KeyValueStore` interfészt; `lib/features/songs/data/songs_repository.dart`
+   és `setlists_repository.dart` a `keyValueStoreProvider`-en (tehát végső
+   soron `SharedPreferences`-en) át, a `StorageKeys.songs`/`StorageKeys.setlists`
+   kulcsokkal perzisztál. A brief szóhasználata ("SharedPreferences-alapú")
+   pontos az implementáció szintjén, csak a `KeyValueStore` absztrakciós
+   rétegen keresztül — nem sérti a §0.0 állítást, revízió nem szükséges.
+3. `rg -n "export" lib/features/practice/public.dart` → 26 export sor, de
+   nincs köztük `PracticeScoreAggregator`, konkrét `PracticeVerdict` osztály,
+   `TimingGrade` vagy `ChordOutcome` — a compiler + result-mapping teljes
+   kontraktja **valóban hiányzik**. **Egyezik, hard gate megerősítve.**
+4. `origin/main` és a lokális HEAD: `6a45486…` (E02-R21 self-heal, PR #55) —
+   egyeznek, nincs rebase-igény.
+5. `ls docs/adr/ | sort -V | tail` → utolsó fájlok `0088-…`,
+   `0111-practice-production-wiring.md`, `0112-self-healing-pipeline.md`. A
+   `0089`–`0092` tartomány **szabad**, nincs ütközés.
+6. `git status --short` és `ls /home/ubuntu/ss-*e03r01* /home/ubuntu/ss-*e03-r01*`
+   → tiszta munkafa, nincs korábbi (halt-olt) session által hagyott
+   munkapéldány ehhez a körhöz.
+7. `docs/sdd/04-epic-03-song-trainer.md` §33 "Kör 1" szakasza (3377–3465. sor)
+   a négy ADR fájlnevét placeholder számmal (`00xx-…`) adja meg — a pre-flight
+   ezeket az exact sorszámokhoz rendeli:
+   - `docs/adr/0089-song-document-v2.md` (SongDocument V2, §9)
+   - `docs/adr/0090-song-storage-files-and-assets.md` (repository/asset store, §18)
+   - `docs/adr/0091-song-import-security-boundary.md` (import biztonsági határ, §13/§15.6/§29)
+   - `docs/adr/0092-song-trainer-practice-engine-integration.md` (Practice integráció, §21)
+
+   Mind a négy ADR-t az orchestrátor írta meg és commitolta ebben a
+   pre-flightban (nem az implementer feladata — a queue és a pipeline-prompt
+   is explicit ezt írja elő). A §4 táblázat lent bővült a négy elérési úttal.
+
+**Eredmény: nincs anyagi drift.** A brief a §3/§4/§5/§6/§7 szerint
+változatlanul PLANNING-re léphet.
+
 ## 1. Cél
 
 A legacy Songs/Setlists bizonyítható baseline-jának rögzítése, a négy Epic-döntés pre-flightban számozandó ADR-témájának lezárása, valamint egy alapértelmezetten kikapcsolt rollout-határ és üres publikus Song Trainer boundary létrehozása viselkedésváltozás nélkül.
@@ -106,11 +144,17 @@ A legacy Songs/Setlists bizonyítható baseline-jának rögzítése, a négy Epi
 | `test/fixtures/song_trainer/legacy/setlist_mixed_bpm.json` | ÚJ | eltérő BPM fixture |
 | `test/features/song_trainer/baseline/legacy_fixture_parity_test.dart` | ÚJ | snapshot és flag mérce |
 | `docs/rounds/e03-r01-baseline-and-boundaries.md` | meglévő | §10 handoff |
+| `docs/adr/0089-song-document-v2.md` | ÚJ (pre-flight írta, orchestrátor) | ADR-téma 1/4 — SongDocument V2 |
+| `docs/adr/0090-song-storage-files-and-assets.md` | ÚJ (pre-flight írta, orchestrátor) | ADR-téma 2/4 — file+asset storage |
+| `docs/adr/0091-song-import-security-boundary.md` | ÚJ (pre-flight írta, orchestrátor) | ADR-téma 3/4 — import security boundary |
+| `docs/adr/0092-song-trainer-practice-engine-integration.md` | ÚJ (pre-flight írta, orchestrátor) | ADR-téma 4/4 — Practice Engine integráció |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
 `.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
-`docs/adr/**`. ADR-fájl csak akkor kivétel, ha a pre-flight ütközésmentes
-exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
+`docs/adr/**` a fenti négy fájlon kívül. A négy ADR-t a pre-flight (nem az
+implementer) írta és commitolta a `PLANNING` átállás részeként; az `auto`
+router `ai-router` TOML `allowed_paths` listája szándékosan NEM tartalmazza
+a `docs/adr/**`-t, mert az implementer-modell ezekhez nem nyúl.
 Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
 
 ## 5. Kötött architekturális döntések
