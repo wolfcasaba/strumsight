@@ -32,7 +32,7 @@ E02-R20	docs/rounds/e02-r20-epic-closure.md	minimax	nincs	done
 # Epic 3 köreire foglalt. A production flag ebben a körben NEM mozdul
 # (user-döntés 2026-08-01): a rollout külön kör, a készülékes teszt UTÁN.
 # Az Epic 3 sorai szándékosan EZ ALATT vannak — ez fut előbb.
-E02-R21	docs/rounds/e02-r21-practice-production-wiring.md	auto	0111	pending
+E02-R21	docs/rounds/e02-r21-practice-production-wiring.md	auto	0111	done
 #
 # Epic 3 — mind a 21 sor (R01-R21) FUT az `auto` routeren (user-döntés
 # 2026-08-01). Az R22 epic-zárót az ADR 0087 §7 szerint EMBER indítja.

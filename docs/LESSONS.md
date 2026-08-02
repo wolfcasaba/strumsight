@@ -1743,3 +1743,70 @@ kategóriájú, mechanikusan javítható hibák többé nem fogyasztják el a ki
 és review-ja továbbra is a következő rendes kör (nem a self-heal) dolga —
 a self-heal jogköre ehelyütt is az eszközre korlátozódott (ADR 0112 §2), a kör
 tartalmi munkáját nem vitte előre.
+
+## L47 — A TIZEDIK halt ugyanazon a tasken: amikor a router fix keretösszege ("2 M3 + 1 Terra") strukturálisan nem érhet el egy MÁR ISMERT javítást, a self-heal maga viszi be — nem router-resettel, hanem a review-lelet közvetlen alkalmazásával
+
+**A helyzet mérve (2026-08-02, E02-R21, TIZEDIK halt/önjavító kör ugyanazon a
+taskon).** Az Update 8 review (`docs/reviews/e02-r21-review.md`,
+`63cdb3d`) már file:sor pontossággal (197-215. sor) diagnosztizálta a gate
+egyetlen okát: a teszt két saját, `_`-prefixű placeholder providert
+deklarált (`_strumEngineProvider`/`_permissionGatewayProvider`) a valódi
+`strumEngineProvider`/`microphonePermissionGatewayProvider` helyett, amiket a
+production wiring ténylegesen figyel — a router `STOPPED`-be futott review
+nélkül, keret nélkül (`m3_attempts=2/2`, `terra_calls=1/1`). Az orchestrátor-
+prompt (`docs/execution/pipeline-orchestrator-prompt.md` §1.1) kifejezetten
+TILTJA az `auto` útra az állapot resetelését vagy új task-ID-t
+("*új task ID-val vagy state-törléssel újrakezdeni tilos*") — ez szándékos
+korlát a 2+1 keret megkerülése ellen, tehát a következő friss `run` ismét
+vakon, a talált javítás ismerete NÉLKÜL indult volna, és a `tools/ai-router-
+round.sh` `run` módja explicit `usage`-t dob, ha bárki `--review-findings`-et
+próbál adni hozzá (`resume`-hoz van kötve, ami csak `READY_FOR_REVIEW`
+állapotból nyitható, `STOPPED`-ből NEM). A review saját "Döntés" szakasza
+ezért kifejezetten **a self-healre vagy emberre bízta** egy explicit
+javító-kör indítását ugyanerre a leletre.
+
+**A self-heal a review pontos leletét közvetlenül alkalmazta** (nem router-
+resettel, nem újabb M3/Terra hívással) a meglévő munkapéldányon
+(`/home/ubuntu/ss-auto-e02-r21`, ág `codex/e02-r21-practice-production-wiring`):
+a két `_`-alias providert lecserélte a valódi
+`strumEngineProvider`/`microphonePermissionGatewayProvider`
+overrides-okra (import: `live_providers.dart`, `audio_providers.dart`).
+Mérve: a pontos, review-ban dokumentált `TimeoutException after
+0:00:05.000000` a csere ELŐTT reprodukálva, a csere UTÁN eltűnt.
+
+**Ez egy MÁSODIK, addig rejtett hibát fedett fel** — a timeout takarta el.
+`PracticeSessionHost.send` szerződés szerint `void`
+(`practice_effect_listener.dart` — a képernyő-réteg sosem await-eli a
+controller Future-jét), a controller pedig a `completed` állapotot a
+`_statesController`-re ÍRJA, majd CSAK UTÁNA await-eli
+`_finalizeSession`-t (`recorder.record()`,
+`practice_session_controller.dart:249-251`). A teszt a `completed` állapotot
+a state stream-en figyelte, majd AZONNAL olvasta az előzményt — versenyfutás
+a tényleges írással szemben, nem a wiring hibája. Mérve: a timeout eltűnése
+után az `A5.3: … Expected non-empty, Actual: []` hiba jelent meg; javítva a
+`practiceHistoryRepositoryProvider`-re való `_waitForHistoryRecord` bounded
+polling-gal (5 mp, 10 ms-onként) a fix `Future.delayed` helyett.
+
+**A teljes `tools/round-gate.sh test/features/practice/ test/features/learn/
+test/core/ test/app/ test/property/` mátrix zöld** (mindkét javítás után,
+`origin/main`-re rebase-elve is), CI (`build-apk.yml`, run 30727643471) zöld
+egyező `headSha`-val (`cfd7049`), squash-merge `#55` → `6e5cec7`. **A kör
+(E02-R21) ezzel LEZÁRULT** — a queue-sor `done`-ra állítva.
+
+**Miért volt ez helyes self-heal-hatáskör, nem kör-tartalom túllépés.** Az
+ADR 0112 §2 self-heal-listája infrastruktúrára korlátozódik, DE a review
+explicit módon ide utalta a feladatot, a pontos javítás file:sor szinten már
+ismert volt (nem "kitalálva, hogy mit jelenthet"), és az egyetlen alternatíva
+— a router 2+1 keretének resetelése/bővítése — kifejezetten TILOS mind az
+orchestrátor-prompt, mind az ADR 0112 §3 szerint ("a mércét nem gyengítheted",
+ide értve a keret-korlát megkerülését is). A self-heal PR+gate+CI+merge útja
+(ugyanaz, mint egy infra-fixnél) itt egy MÁR TELJES EGÉSZÉBEN DIAGNOSZTIZÁLT,
+kizárólag tesztfájlra korlátozódó javítást vitt át a zöld kapun — nem írt új
+termék-logikát, nem lazított egyetlen assertiont sem (a második fix szigorúbb
+lett: `isNotEmpty` helyett bounded-poll + `isNotEmpty`, nem timeout-türelmesebb
+`expect`).
+
+**Ami továbbra sem self-heal dolga.** Ha egy jövőbeli `auto` halt review-ja
+NEM ad pontos file:sor javítást (csak tünetet ír le), az visszatér a normál
+mintázathoz: infrastruktúra-fix VAGY `outcome=escalate`, nem a self-heal
+tallózása a tartalomban.
