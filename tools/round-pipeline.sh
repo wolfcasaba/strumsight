@@ -218,7 +218,7 @@ run_orchestrator_session() {
 
   codex_prompt=$(codex_prompt_file "$prompt_file")
   run_tmux_session "${tmux_session}-fallback" \
-    "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\"" \
+    "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\" < /dev/null" \
     "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)"
 }
 

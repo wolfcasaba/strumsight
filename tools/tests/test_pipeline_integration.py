@@ -198,6 +198,10 @@ class PipelineIntegrationTest(unittest.TestCase):
         # A Terra a saját CODEX_HOME-jában él (ott a default gpt-5.6-terra).
         self.assertIn("CODEX_HOME=$codex_home", driver)
         self.assertIn(".codex-terra", driver)
+        # MÉRVE 2026-08-02: `codex exec` a pane TTY-járól "Reading additional
+        # input from stdin..."-nel VÁRAKOZIK, ha a stdin nyitva marad — a
+        # tmux-ban indított fallback így örökre beragadna.
+        self.assertIn("< /dev/null", driver.split("codex_bin exec", 1)[1][:200])
         # Az implementer-routing (sor `engine` oszlopa + ADR 0088 router) NEM
         # változhat a review-motor fallbackjétől — user-döntés 2026-08-02.
         self.assertIn("validate_engine \"$engine\"", driver)
