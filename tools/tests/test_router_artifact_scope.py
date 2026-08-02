@@ -83,6 +83,42 @@ class RouterArtifactScopeTest(unittest.TestCase):
             self.assertTrue(audit.ok, audit.violations)
             self.assertEqual(audit.scoped_changed_paths, ())
 
+    def test_coverage_lcov_artifact_is_generated_ignored(self) -> None:
+        # Mért reprodukció (E03-R02, H6 halt): a brief §6 elfogadási
+        # kritériuma >=90% sor-lefedettséget ír elő, amit az implementer
+        # `flutter test --coverage`-dzsel mér — ez a StrumSight saját
+        # .gitignore:34 `/coverage/` szabálya miatt gitignore-olt
+        # `coverage/lcov.info`-t hagy a munkapéldányban. A fix előtt a
+        # GENERATED_IGNORED_PREFIXES nem tartalmazta a "coverage"-ot, tehát
+        # EGYETLEN, a briefnek megfelelően lefedettséget mérő kör sem ment
+        # volna át az auditon, egy egyébként tökéletesen scope-tiszta
+        # implementátorral sem.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Router Test"], cwd=root, check=True)
+            (root / ".gitignore").write_text("/coverage/\n")
+            (root / "lib").mkdir()
+            (root / "lib" / "allowed.dart").write_text("baseline\n")
+            subprocess.run(["git", "add", ".gitignore", "lib/allowed.dart"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            baseline = capture_workspace_manifest(root)
+
+            coverage_dir = root / "coverage"
+            coverage_dir.mkdir()
+            (coverage_dir / "lcov.info").write_text("TN:\nend_of_record\n")
+
+            audit = audit_scope(
+                root,
+                allowed_paths=("lib/allowed.dart",),
+                protected_paths=(".git",),
+                baseline=baseline,
+            )
+
+            self.assertTrue(audit.ok, audit.violations)
+            self.assertEqual(audit.scoped_changed_paths, ())
+
 
 if __name__ == "__main__":
     unittest.main()

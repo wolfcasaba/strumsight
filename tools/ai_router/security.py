@@ -45,6 +45,15 @@ GENERATED_IGNORED_PREFIXES = (
     # dokumentált folyamatot. Mérve 2026-08-01, E02-R21 (H6 halt, 3. eset).
     ".codex-round-status",
     "docs/reviews",
+    # A `flutter test --coverage` (a brief §6-hoz hasonló lefedettségi
+    # elfogadási kritériumok mérésének DOKUMENTÁLT módja, l. AGENTS.md
+    # §12/round-brief §7) a StrumSight saját .gitignore:34 `/coverage/`
+    # szabálya miatt gitignore-olt `coverage/lcov.info`-t hagy a
+    # munkapéldányban — enélkül a bejegyzés nélkül EGYETLEN, a briefnek
+    # megfelelően lefedettséget mérő kör sem ment volna át az auditon, egy
+    # egyébként tökéletesen scope-tiszta implementátorral sem. Mérve
+    # 2026-08-02, E03-R02 (H6 halt).
+    "coverage",
 )
 
 # Ugyanaz a kategória, de a fájlnév változó része miatt mintával fogható:
