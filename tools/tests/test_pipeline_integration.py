@@ -291,6 +291,61 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual((state / "selfheal.count").read_text(), "E03-R08|H6|3\n")
             self.assertTrue((state / "HALTED").exists())
 
+    def test_terra_hold_if_exhausted_writes_the_hold_file_when_terra_status_reports_exhausted(self) -> None:
+        # MÉRT gyökérok (E03-R08 H6, 2. önjavítás, 2026-08-02, ugyanaz a halt
+        # 4x egy nap alatt): `terra_hold_if_exhausted()`-ben a
+        # `status_json=$(terra_status_json) || return 0` BÁRMILYEN nemnulla
+        # exit-re kilépett — de a `model-router.py terra-status` a
+        # DOKUMENTÁLT viselkedése szerint (HANDOFF.md) pontosan akkor tér
+        # vissza nemnulla exit-tel, amikor exhausted=true. Emiatt a hold-fájl
+        # SOHA nem íródott ki, holott három korábbi heal-session is azt
+        # hitte (a saját szövegében), hogy a hold aktiválódik. Ez a teszt a
+        # tényleges ÍRÓ függvényt (`terra_hold_if_exhausted`) hívja végig egy
+        # PATH-stub `python3`-mal, ami a `terra-status` valódi mért
+        # viselkedését szimulálja (exhausted JSON, exit 1) — a korábbi
+        # `test_terra_hold_active_test_hook_matches_round_and_future_timestamp`
+        # csak az OLVASÓ függvényt (`terra_hold_active_for`) tesztelte, kézzel
+        # megírt hold-fájllal, ezért nem fogta meg ezt a hibát.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            stub_bin = directory / "bin"
+            stub_bin.mkdir()
+            next_epoch = int(time.time()) + 3600
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                f"    printf '{{\"exhausted\": true, \"next_reset_epoch\": {next_epoch}}}'\n"
+                "    exit 1\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(directory)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-if-exhausted", "E03-R08"], env=env
+            )
+
+            hold_file = directory / "terra-budget-hold"
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(
+                hold_file.exists(),
+                "terra_hold_if_exhausted nem írta ki a hold-fájlt kimerült Terra-budget mellett",
+            )
+            content = hold_file.read_text()
+            self.assertIn("round=E03-R08", content)
+            self.assertIn(f"hold_until={next_epoch}", content)
+
     def test_gate_fingerprint_covers_the_test_count_and_the_gate_artifacts(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         fingerprint = self.run_command(["bash", str(script), "--gate-fingerprint"])

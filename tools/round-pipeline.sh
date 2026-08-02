@@ -298,7 +298,14 @@ terra_status_json() {   # stdout: a terra-status JSON, vagy üres, ha nem lekér
 
 terra_hold_if_exhausted() {   # $1=kör — hold-fájlt ír, ha a napi Terra-budget MOST kimerült
   local round="$1" status_json exhausted next_epoch
-  status_json=$(terra_status_json) || return 0
+  # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 2. javítás):
+  # `terra-status` a dokumentált viselkedése szerint (HANDOFF.md) NEMNULLA
+  # exit-tel tér vissza pontosan akkor, amikor exhausted=true — a korábbi
+  # `|| return 0` ezt az esetet is hibaként kezelte, ezért a hold-fájl SOHA
+  # nem íródott ki (4 egymást követő H6 halt ugyanazon a napon, mielőtt ezt
+  # mérve megtalálták). A tényleges lekérdezési hiba jele az ÜRES kimenet,
+  # amit az alábbi sor már önmagában is véd.
+  status_json=$(terra_status_json)
   [ -n "$status_json" ] || return 0
   exhausted=$(printf '%s' "$status_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('exhausted'))" 2>/dev/null)
   [ "$exhausted" = "True" ] || return 0
@@ -490,6 +497,10 @@ case "${1:-}" in
     else
       exit 1
     fi
+    ;;
+  --terra-hold-if-exhausted)    # $2=kör → teszthorog: meghívja terra_hold_if_exhausted-et (E03-R08 H6 2. javítás)
+    terra_hold_if_exhausted "${2:-}"
+    exit 0
     ;;
 esac
 
