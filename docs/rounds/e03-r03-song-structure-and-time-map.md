@@ -1,6 +1,7 @@
 # E03-R03 — Songstruktúra és determinisztikus időmodell
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-02, orchestrátor:
+  Claude Sonnet 5; tervezési baseline: `main` @ `053376a`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 3; §9.5–10.6
 - **Branch:** `codex/e03-r03-song-structure-and-time-map`
 - **Előfeltétel:** E03-R02 merge
@@ -22,6 +23,7 @@ allowed_paths = [
   "test/features/song_trainer/domain/song_time_map_test.dart",
   "test/property/song_time_map_property_test.dart",
   "docs/rounds/e03-r03-song-structure-and-time-map.md",
+  "docs/adr/0093-song-trainer-local-time-primitives.md",
 ]
 gate_tests = [
   "test/features/song_trainer/domain/song_structure_test.dart",
@@ -56,13 +58,43 @@ acceptance, hiányzó fixture/licence, vagy nem reprodukálható mérce esetén:
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-- R02 document skeleton listái üresek és strukturális típusaik még nincsenek.
-- Chapter 3 publikus BeatPosition/Tempo/Meter contractját pre-flightban újra kell auditálni.
-- Wall clock vagy UI frame nem lehet zenei időforrás.
+**1. R02 document skeleton — megerősítve, nincs drift.** `lib/features/song_trainer/domain/models/song_document.dart`
+(`main` @ `053376a`) csak `schemaVersion`/`id`/`revision`/`metadata`/`source`/
+`assets`/`markers`/`createdAt`/`updatedAt` mezőket tartalmaz; nincs
+`sections`/`measures`/`tracks`/`tempoMap`/`meterMap`/`keyMap`. `SongSectionId`
+és `SongTrackId` viszont **már léteznek** `song_id.dart`-ban (R02, előre
+deklarálva a jövőbeli modellekhez) — a section modell ezeket újrafelhasználja,
+nem definiál új ID-t.
 
-A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
-szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
-Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
+**2. Chapter 3 (`BeatPosition`/`Tempo`/`Meter`) publikus contract audit —
+DRIFT, feloldva ADR 0093-ban.** A brief §10.1 idézete szerint az Epic 3 ezekre
+a Practice Engine-beli (`lib/features/practice/domain/model/`) típusokra
+„épít". Mérve: `test/features/song_trainer/domain/song_document_test.dart`
+Domain purity scannere (`cross-feature import` minta) **kivétel nélkül**
+tiltja a `package:strumsight/features/practice/` importot bármely
+`lib/features/song_trainer/domain/**` fájlból — a `practice/public.dart`
+határon át sem engedett, és ez a teszt NINCS az E03-R03 `allowed_paths`
+listáján (tilos zóna, nem módosítható), de a teljes CI-suite futtatja, tehát
+ténylegesen kikényszerített. ADR 0092 §1/§4 függetlenül megerősíti: a Song
+Trainer ↔ Practice Engine kapcsolat csak egy jövőbeli, application-szintű
+`SongPracticeCompiler` határon (E03-R19) él, nem domain-szintű
+típusmegosztáson. **Feloldás — [ADR 0093](../adr/0093-song-trainer-local-time-primitives.md):**
+a Song Trainer domain saját, lokális (nem Practice-ből importált) tick-alapú
+pozíció- és BPM-alapú tempó-primitíveket definiál a már engedélyezett
+`tempo_map.dart`/`song_time_map.dart` fájlokon belül — nincs szükség
+`allowed_paths` bővítésre. A tervezési ELVEK (egész/racionális köztes
+aritmetika, egyetlen kerekítési pont a mikroszekundum-konverzióban) öröklődnek
+a Chapter 3 precedensből (ADR 0066/0072), a TÍPUSOK nem. `MeterChange` az SDD
+§10.3 szerint measure-index kulcsú (`atMeasure: int`), ezért a meter maphez
+nem kell pozíció-típus.
+
+**3. Wall clock / UI frame nem lehet zenei időforrás — megerősítve, nincs
+drift.** Nincs olyan meglévő song_trainer kód, ami ettől eltérne (a domain
+réteg ma teljesen wall-clock-mentes); ez a kör-implementációra vonatkozó
+kötött szabály marad (§5).
+
+Fenti méréssel a brief az `allowed_paths`/`gate_tests` listát **változatlanul**
+hagyja — a feloldás a meglévő fájlokon belül fér el.
 
 ## 1. Cél
 
@@ -104,6 +136,7 @@ Section, measure, tempo, meter, key és pontos beat↔time konverzió szállít�
 | `test/features/song_trainer/domain/song_time_map_test.dart` | ÚJ | határtesztek |
 | `test/property/song_time_map_property_test.dart` | ÚJ | round-trip/monotonic property |
 | `docs/rounds/e03-r03-song-structure-and-time-map.md` | meglévő | §10 handoff |
+| `docs/adr/0093-song-trainer-local-time-primitives.md` | ÚJ (pre-flight commitolta) | ADR 0093 — lokális idő-primitívek, ld. §0.0 pont 2 |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
 `.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
@@ -117,6 +150,12 @@ exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
 2. Speed view-paraméter, nem módosítja a source mapet.
 3. Tempo/meter change boundary bal/zárt policyje egyértelmű és minden irányban azonos.
 4. Round-trip tolerancia konkrétan mérve és dokumentálva; monotonicitás nem gyengíthető csak rendezett fixturekre.
+5. **Nincs Practice Engine import** ([ADR 0093](../adr/0093-song-trainer-local-time-primitives.md)):
+   a `BeatPosition`/`Tempo`/`Meter` (`lib/features/practice/domain/model/`)
+   sem közvetlenül, sem a `practice/public.dart`-on át nem importálható a
+   song_trainer domainbe — a lokális idő-primitívek a §4 már engedélyezett
+   fájljain belül készülnek. Ha ez lehetetlennek bizonyul: `stopped`, nem
+   scope-tágítás.
 
 E döntések enyhítése nem elfogadható „zöldre javítás”. Valódi ellentmondásnál
 brief-revízió vagy ADR szükséges.
