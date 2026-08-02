@@ -45,9 +45,10 @@ python3 -m unittest tools.tests.test_router_config tools.tests.test_state_store 
 
 - [ ] Add a CLI test proving limit zero reports `unlimited=true`, `exhausted=false`, and null reset fields while retaining the live ledger count.
 - [ ] Add a pipeline integration test proving an existing hold is removed and treated as inactive when `terra-status` reports unlimited.
+- [ ] Add a pipeline integration test proving a hold-removal error keeps the hold active and blocks continuation.
 - [ ] Run both new tests and confirm expected RED failures.
 - [ ] Make `terra_status_payload` emit the unlimited contract and keep finite-limit output unchanged.
-- [ ] Make `terra_hold_active_for` query authoritative status before honoring an existing hold, remove it only for `unlimited=true`, and otherwise remain fail-closed.
+- [ ] Make `terra_hold_active_for` query authoritative status before honoring an existing hold, remove it only for `unlimited=true`, and fail closed when status lookup or hold removal fails.
 - [ ] Re-run the CLI and pipeline tests and confirm they pass.
 - [ ] Run `bash -n tools/round-pipeline.sh`.
 
@@ -87,9 +88,9 @@ git diff --check
 - Preserve: `/home/ubuntu/ss-router-e03-r08` staged implementation diff.
 - Preserve: E03-R08 task state, `terra-budget-hold`, `HALTED`, and router result.
 
-- [ ] Run all router unit/integration tests; record the already-baselined E03-R05 metadata failure separately and require no new failure.
+- [ ] Run all router unit/integration tests and require a fully green result, including E03-R05 metadata validation.
 - [ ] Run syntax, diff, secret, scope, and status checks.
-- [ ] Commit, push, and integrate the policy through the repository's normal protected-branch workflow.
+- [ ] Hand off the verified diff to the authorized orchestrator; only that protected-branch owner may commit, push, and integrate it.
 - [ ] Confirm the E03-R08 staged diff and external runtime files were not modified.
 - [ ] Leave continuation to the next automatic pipeline firing; do not invoke the router or signal the pipeline manually.
 

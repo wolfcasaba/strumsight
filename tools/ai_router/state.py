@@ -217,8 +217,12 @@ class StateStore:
             or daily_limit < 0
         ):
             raise StateError("Terra daily limit must be a non-negative integer")
-        if task_limit < 1:
-            raise StateError("Terra task limit must be positive")
+        if (
+            isinstance(task_limit, bool)
+            or not isinstance(task_limit, int)
+            or task_limit < 1
+        ):
+            raise StateError("Terra task limit must be a positive integer")
         now = self.clock().astimezone(timezone.utc)
         day = now.date().isoformat()
         with self._ledger_lock():

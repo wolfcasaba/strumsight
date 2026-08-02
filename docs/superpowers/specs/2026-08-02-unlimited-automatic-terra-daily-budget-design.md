@@ -59,7 +59,8 @@ continues counting and recording UTC-day reservations even in unlimited mode.
 Unlimited mode never creates a Terra budget hold. If a finite-policy hold file
 already exists when the policy changes, the driver queries `terra-status`,
 recognizes `unlimited=true`, removes the stale hold and continues normally.
-If status cannot be queried, the driver keeps the hold fail-closed.
+If status cannot be queried or the stale hold cannot be removed, the driver
+keeps the hold active and blocks continuation (fail closed).
 
 ## 5. E03-R08 recovery
 
@@ -76,8 +77,8 @@ the existing driver/orchestrator remains the sole owner of task resume.
   still enforcing one Terra call per task;
 - `terra-status` reports unlimited/non-exhausted with null reset fields;
 - a stale finite-policy hold self-clears under unlimited policy;
-- all router tests pass except the pre-existing E03-R05 brief metadata failure
-  documented in `docs/LESSONS.md` L59;
+- a stale hold that cannot be removed stays active and blocks continuation;
+- all router tests pass, including the corrected E03-R05 brief metadata check;
 - the E03-R08 runtime state and staged diff are unchanged by this policy change.
 
 ## 7. Out of scope

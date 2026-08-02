@@ -84,12 +84,25 @@ class StateStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self.store(Path(directory) / "state")
 
-            for invalid in (False, -1):
+            for invalid in (False, True, -1, 1.0):
                 with self.subTest(invalid=invalid):
                     with self.assertRaisesRegex(
                         StateError, "Terra daily limit must be a non-negative integer"
                     ):
                         store.reserve_terra("E03-R01", daily_limit=invalid)
+
+    def test_task_limit_rejects_boolean_non_integer_and_non_positive_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+
+            for invalid in (False, True, 0, -1, 1.5):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaisesRegex(
+                        StateError, "Terra task limit must be a positive integer"
+                    ):
+                        store.reserve_terra(
+                            "E03-R01", daily_limit=0, task_limit=invalid
+                        )
 
     def test_finishing_a_terra_reservation_is_crash_safe_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

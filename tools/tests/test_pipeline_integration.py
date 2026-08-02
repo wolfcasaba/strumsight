@@ -291,6 +291,47 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertFalse(hold_file.exists())
 
+    def test_unlimited_terra_policy_keeps_hold_active_when_removal_fails(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            python_stub = stub_bin / "python3"
+            python_stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            python_stub.chmod(0o755)
+            rm_stub = stub_bin / "rm"
+            rm_stub.write_text("#!/bin/sh\nexit 1\n")
+            rm_stub.chmod(0o755)
+            hold_file = state / "terra-budget-hold"
+            hold_file.write_text(
+                f"round=E03-R08\nhold_until={int(time.time()) + 3600}\n"
+            )
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-active", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("elavult Terra-hold nem törölhető", result.stderr)
+            self.assertTrue(hold_file.exists())
+
     def test_terra_hold_remains_fail_closed_when_policy_status_is_unavailable(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         real_python3 = shutil.which("python3")
