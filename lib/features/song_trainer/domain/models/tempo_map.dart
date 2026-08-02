@@ -58,6 +58,13 @@ final class TempoChange {
   const TempoChange({required this.at, required this.bpm});
   final BeatPosition at;
   final Tempo bpm;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TempoChange && other.at == at && other.bpm == bpm;
+
+  @override
+  int get hashCode => Object.hash(at, bpm);
 }
 
 final class TempoMap {
@@ -78,6 +85,22 @@ final class TempoMap {
   factory TempoMap.constant(Tempo tempo) =>
       TempoMap([TempoChange(at: BeatPosition.zero, bpm: tempo)]);
   final List<TempoChange> changes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TempoMap && _listEquals(other.changes, changes);
+
+  @override
+  int get hashCode => Object.hashAll(changes);
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (a[index] != b[index]) return false;
+    }
+    return true;
+  }
 }
 
 int microsecondsForTicks(int ticks, Tempo tempo, int speedMicros) {

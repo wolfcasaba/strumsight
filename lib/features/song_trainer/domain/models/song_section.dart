@@ -41,4 +41,18 @@ final class SongSection {
   final int endMeasureExclusive;
   final SongSectionKind kind;
   final String? colorKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SongSection &&
+      other.id == id &&
+      other.name == name &&
+      other.startMeasure == startMeasure &&
+      other.endMeasureExclusive == endMeasureExclusive &&
+      other.kind == kind &&
+      other.colorKey == colorKey;
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, startMeasure, endMeasureExclusive, kind, colorKey);
 }

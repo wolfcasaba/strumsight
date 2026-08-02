@@ -22,6 +22,13 @@ final class KeyChange {
   const KeyChange({required this.at, required this.key});
   final BeatPosition at;
   final KeySignature key;
+
+  @override
+  bool operator ==(Object other) =>
+      other is KeyChange && other.at == at && other.key == key;
+
+  @override
+  int get hashCode => Object.hash(at, key);
 }
 
 final class KeyMap {
@@ -38,4 +45,20 @@ final class KeyMap {
   factory KeyMap.constant(KeySignature key) =>
       KeyMap([KeyChange(at: BeatPosition.zero, key: key)]);
   final List<KeyChange> changes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is KeyMap && _listEquals(other.changes, changes);
+
+  @override
+  int get hashCode => Object.hashAll(changes);
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (a[index] != b[index]) return false;
+    }
+    return true;
+  }
 }

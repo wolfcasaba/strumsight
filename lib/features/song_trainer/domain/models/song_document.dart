@@ -161,6 +161,11 @@ final class SongDocument {
           other.source == source &&
           _listEquals(other.assets, assets) &&
           _listEquals(other.markers, markers) &&
+          _listEquals(other.sections, sections) &&
+          _listEquals(other.measures, measures) &&
+          other.tempoMap == tempoMap &&
+          other.meterMap == meterMap &&
+          other.keyMap == keyMap &&
           other.createdAt.toUtc().microsecondsSinceEpoch ==
               createdAt.toUtc().microsecondsSinceEpoch &&
           other.updatedAt.toUtc().microsecondsSinceEpoch ==
@@ -175,6 +180,11 @@ final class SongDocument {
     source,
     Object.hashAll(assets),
     Object.hashAll(markers),
+    Object.hashAll(sections),
+    Object.hashAll(measures),
+    tempoMap,
+    meterMap,
+    keyMap,
     createdAt.toUtc().microsecondsSinceEpoch,
     updatedAt.toUtc().microsecondsSinceEpoch,
   );

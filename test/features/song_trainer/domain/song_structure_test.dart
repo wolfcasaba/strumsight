@@ -52,7 +52,49 @@ void main() {
         isTrue,
       );
       expect(Meter(3, 4).beatsPerMeasure, 3);
+      expect(Meter(4, 4).beatsPerMeasure, 4);
       expect(Meter(6, 8).beatsPerMeasure, 3);
+    });
+
+    test('compares structural fields by value', () {
+      final original = _document(
+        sections: [
+          SongSection(
+            id: SongSectionId('intro'),
+            name: 'Intro',
+            startMeasure: 0,
+            endMeasureExclusive: 2,
+          ),
+        ],
+        tempoMap: TempoMap.constant(Tempo(120)),
+      );
+      final same = _document(
+        sections: [
+          SongSection(
+            id: SongSectionId('intro'),
+            name: 'Intro',
+            startMeasure: 0,
+            endMeasureExclusive: 2,
+          ),
+        ],
+        tempoMap: TempoMap.constant(Tempo(120)),
+      );
+      final changed = _document(
+        sections: [
+          SongSection(
+            id: SongSectionId('outro'),
+            name: 'Outro',
+            startMeasure: 5,
+            endMeasureExclusive: 9,
+          ),
+        ],
+        tempoMap: TempoMap.constant(Tempo(200)),
+      );
+
+      expect(same, equals(original));
+      expect(same.hashCode, original.hashCode);
+      expect(changed, isNot(equals(original)));
+      expect(changed.hashCode, isNot(original.hashCode));
     });
 
     test('rejects invalid ranges and duplicate map boundaries', () {
@@ -75,3 +117,24 @@ void main() {
     });
   });
 }
+
+SongDocument _document({
+  required List<SongSection> sections,
+  required TempoMap tempoMap,
+}) => SongDocument(
+  schemaVersion: songDocumentSchemaVersion,
+  id: SongId('song'),
+  revision: 0,
+  metadata: SongMetadata(title: 'Song'),
+  source: SongSource(
+    type: SongSourceType.createdInApp,
+    originalFileName: 'song.strum',
+    sha256: '0' * 64,
+    importedAt: DateTime.utc(2026),
+    importerVersion: 'test',
+  ),
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+  sections: sections,
+  tempoMap: tempoMap,
+);

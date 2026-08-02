@@ -24,6 +24,15 @@ final class MeterChange {
   const MeterChange({required this.atMeasure, required this.meter});
   final int atMeasure;
   final Meter meter;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MeterChange &&
+      other.atMeasure == atMeasure &&
+      other.meter == meter;
+
+  @override
+  int get hashCode => Object.hash(atMeasure, meter);
 }
 
 final class MeterMap {
@@ -50,4 +59,20 @@ final class MeterMap {
   factory MeterMap.constant(Meter meter) =>
       MeterMap([MeterChange(atMeasure: 0, meter: meter)]);
   final List<MeterChange> changes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MeterMap && _listEquals(other.changes, changes);
+
+  @override
+  int get hashCode => Object.hashAll(changes);
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (a[index] != b[index]) return false;
+    }
+    return true;
+  }
 }

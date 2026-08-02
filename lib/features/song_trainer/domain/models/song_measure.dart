@@ -25,4 +25,26 @@ final class SongMeasure {
   final bool repeatStart;
   final int? repeatEndCount;
   final int? alternateEnding;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SongMeasure &&
+      other.index == index &&
+      other.durationBeats == durationBeats &&
+      other.displayNumber == displayNumber &&
+      other.pickup == pickup &&
+      other.repeatStart == repeatStart &&
+      other.repeatEndCount == repeatEndCount &&
+      other.alternateEnding == alternateEnding;
+
+  @override
+  int get hashCode => Object.hash(
+    index,
+    durationBeats,
+    displayNumber,
+    pickup,
+    repeatStart,
+    repeatEndCount,
+    alternateEnding,
+  );
 }

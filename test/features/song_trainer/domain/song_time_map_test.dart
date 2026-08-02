@@ -35,6 +35,23 @@ void main() {
     );
   });
 
+  test('uses the new tempo from the exact tick boundary', () {
+    final boundary = BeatPosition.fromTicks(4 * BeatPosition.ticksPerBeat);
+    expect(
+      map.timeAt(boundary - const BeatPosition.fromTicks(1)),
+      const Duration(microseconds: 1998958),
+    );
+    expect(map.timeAt(boundary), const Duration(seconds: 2));
+    expect(
+      map.timeAt(boundary + const BeatPosition.fromTicks(1)),
+      const Duration(microseconds: 2002083),
+    );
+    expect(
+      map.durationBetween(boundary, boundary + const BeatPosition.fromTicks(1)),
+      const Duration(microseconds: 2083),
+    );
+  });
+
   test('speed scales duration without mutating source map', () {
     final source = TempoMap.constant(Tempo(120));
     final half = SongTimeMap.fromTempoMap(source, speed: 0.5);
