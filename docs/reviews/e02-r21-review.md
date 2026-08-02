@@ -741,3 +741,98 @@ A committolatlan `practice_observation_gateway_provider.dart` (71 sor,
 router `auto` szerződése szerint csak `READY_FOR_REVIEW` után auditál és
 commitol az orchestrátor; ez a kör STOPPED-be futott, review nélkül), és nem
 töröltem — bizonyítékot hordoz a következő session számára.
+
+## Update 7 (2026-08-02, Pipeline E02-R21 — router-reset + friss `run`, ELSŐ alkalommal `gate_history[].log`-gal, PR #53 UTÁN)
+
+**A pre-flight/munkapéldány örökség-ellenőrzés (§0.2) egy committolatlan,
+jelöletlen fájlt talált** (`practice_observation_gateway_provider.dart`, az
+Update 5/6 óta változatlan) — **eltávolítva**, a munkapéldány `origin/main`-re
+rebase-elve (konfliktus nélkül, `git diff --stat` a `tools/ai_router/`
+alatt csak a PR #53 hatfsoros `gate_history` fixjét mutatta), majd
+`python3 tools/model-router.py reset --task-id E02-R21` → `NOT_STARTED`.
+Friss `python3 tools/model-router.py status --task-id E02-R21 --json` a
+resetet igazolta.
+
+**Friss `tools/ai-router-round.sh run`, előtérben, három hívással** (a Bash-
+eszköz 600s plafonja miatt a router hosszú `M3_CALL_1`/`M3_CALL_2` fázisában
+KÉTSZER megszakadt — mindkétszer helyesen kezelve: az első megszakításkor még
+nem volt scoped diff, a próba nem fogyott (`m3_attempts` változatlan maradt a
+második híváskor mérve); a második megszakítás UTÁN már volt valódi diff, a
+router `RECOVERED_M3_CALL_1`-ként gate-elte, nem hívta újra a modellt).
+
+**Első ízben a `gate_history[].log` a TELJES (redaktált, de nem hash-re
+csonkolt) gate-kimenetet tartalmazza** (PR #53 hatása) — ez az ELSŐ E02-R21
+session, ahol a tartalmi gate-kudarc pontos szövege mérésből, modellhívás
+nélkül olvasható:
+
+| Fázis | Kimenet | `failed_step` | Mérve |
+|---|---|---|---|
+| `BASELINE_GATE` | pass | — | tiszta baseline (mind a 8 gate ZÖLD) |
+| `RECOVERED_M3_CALL_1` | code_failure | `format` | `dart format` 2 fájlt változtatott (`practice_observation_gateway_provider.dart`, `practice_production_wiring_test.dart`) |
+| `RECOVERED_M3_CALL_2` | code_failure | `format` | `dart format` 3 MEGLÉVŐ wiring-célfájlt változtatott (`practice_session_providers.dart`, `practice_setup_controller.dart`, `practice_effect_listener.dart`) |
+| `FINAL_GATE` (Terra) | code_failure | `analyze` | format ZÖLD, de 3 `unused_import` figyelmeztetés `test/features/practice/application/practice_production_wiring_test.dart:32,42,47` |
+
+`m3_attempts=2`, `terra_calls=1` — a teljes keret kimerült, `STOPPED`
+(`signalled: stopped — final gate failed: code_failure`, exit 20).
+
+### Gyökérok — ELŐSZÖR mérve, nem csak következtetve
+
+**A kör tényleges célja (A1/A2/A3 production-drótozás) ebben a próbában
+TÉNYLEGESEN elkészült production kódban**, és ez az első alkalom, hogy ez
+mérhető: a munkafa `git diff HEAD` a három wiring-célfájlon **valódi, ADR
+0111 §1–§4-nek megfelelő tartalmat** mutat, tracked módosításként (nem csak
+egy túlélő untracked fájl, mint az Update 5/6-ban):
+
+- `lib/features/practice/application/practice_session_providers.dart`
+  (+104/-3 sor) — `PracticeSessionInputs` record, `practiceActiveSessionInputsProvider`
+  (auto-dispose `Notifier`), `practiceSessionControllerProvider` auto-dispose
+  `.family` (A1, ADR 0111 §1), a `PracticeHistoryRecorder`-t a session
+  **valódi** mode/source/definition kódjaival építi (A3, ADR 0111 §3).
+- `lib/features/practice/application/practice_setup_controller.dart`
+  (+18/-19 sor) — `_activateSessionSink` a korábbi napló-only
+  `_loggingPrepareSink`-et lecseréli: aktiválja a session-identityt és a
+  valódi controllert dispatcheli (A2, ADR 0111 §2).
+- `lib/features/practice/presentation/practice_effect_listener.dart`
+  (+42/-2 sor) — `_ControllerSessionHost` adapter + `practiceSessionHostProvider`
+  most a `practiceActiveSessionInputsProvider`-t figyeli, a korábbi `(_) =>
+  null` konstans helyett (A2, ADR 0111 §2 — a screen réteg innentől valódi
+  controllert kap, ha van aktív session).
+
+**A blokkoló hiba triviális, tisztán tartalmi, NEM architektúra/scope-kérdés:**
+a Terra által írt `test/features/practice/application/practice_production_wiring_test.dart`
+három importot hagyott használatlanul (`practice_session_providers.dart`,
+`practice_session_config.dart`, `practice_history_repository.dart` — 32., 42.,
+47. sor) — a teszt tartalma nyilván korábbi drafthoz készült, mint a végleges
+assertion-készlet, és a formázás után futó `analyze` ezt jogosan pirosra
+festette. **A javítás pontos helye:** a három `import` sor törlése (vagy
+tényleges felhasználásuk, ha az assertionök hiányosak) a fent nevezett teszt-
+fájlban — reprodukció: `flutter analyze lib/ test/ tool/` a munkafán
+(`/home/ubuntu/ss-auto-e02-r21`, jelenleg 3 tracked módosítással a fenti
+fájlokon + 2 committolatlan új fájl:
+`lib/features/practice/data/practice_observation_gateway_provider.dart`,
+`test/features/practice/application/practice_production_wiring_test.dart`).
+
+### Döntés
+
+**HALT — H4** (`auto` engine, a router `STOPPED`-et jelzett a 2 M3 + 1 Terra
+keret kimerülése után; a pipeline-prompt §1.1/§2 szerint ez feltétlen HALT,
+`resume` csak független review BLOCKER/MAJOR leletére engedett, itt nem
+alkalmazható, mert a keret már nulla — egy `resume` próba `DEFERRED "task
+Terra budget is exhausted"`-et adna, ahogy a korábbi Update 3 mérte). **Ez a
+KILENCEDIK halt/önjavító kör ugyanezen a task-on, de az ELSŐ, ahol a tényleges
+production-drótozás (A1/A2/A3) mérhetően, tracked diffként majdnem teljesen
+elkészült** — a gate-kudarc egyetlen forrása három használatlan import egy
+tesztfájlban, nem a wiring logikája.
+
+**A committolatlan munkafa-állapot (3 tracked + 2 untracked fájl) SZÁNDÉKOSAN
+a munkapéldányon maradt** (`/home/ubuntu/ss-auto-e02-r21`, ág:
+`codex/e02-r21-practice-production-wiring`, `git diff HEAD` a fenti diff) — a
+router `auto` szerződése szerint az orchestrátor csak `READY_FOR_REVIEW` után
+auditál és commitol, ez a kör `STOPPED`-be futott review nélkül. **A
+következő session (self-heal vagy ember) dolga:** a három unused-import sor
+törlése a teszt-fájlban, `tools/round-gate.sh` újrafuttatása a teljes
+mátrixra, majd — ha zöld — az orchestrátor commitolja a diffet, indít egy
+független review-t, és folytatja a normál CI-dispatch + merge útvonalat. Ez
+NEM router-infrastruktúra hiba, tehát a szokásos önjavító-kör infra-fixe
+helyett egy egyszerű tartalmi javító lépés (akár egy rövid javító M3-kör a
+kimerült keret feloldása/bővítése után, akár emberi/self-heal 3-soros patch).
