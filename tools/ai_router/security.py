@@ -157,20 +157,13 @@ def rebase_workspace_manifest(repo: Path, baseline: WorkspaceManifest) -> Worksp
     after an orchestrator committed its pre-flight while the task state still
     pointed at an older main commit.  Existing uncommitted model changes must
     remain outside the baseline so the regular scope audit still inspects
-    them.  A dirty or non-ancestor source baseline is therefore rejected.
+    them.  A dirty source baseline is therefore rejected.  The source commit
+    may have been pruned when a reusable worktree was recreated; the fresh
+    scope audit, rather than Git ancestry, is the security decision.
     """
     if violations := validate_baseline_manifest(baseline):
         raise SecurityError("cannot rebase an unsafe baseline: " + "; ".join(violations))
     current = capture_workspace_manifest(repo)
-    ancestry = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", baseline.baseline_head, current.baseline_head],
-        cwd=repo,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    if ancestry.returncode != 0:
-        raise SecurityError("baseline head is not an ancestor of the current worktree head")
     return WorkspaceManifest(
         baseline_head=current.baseline_head,
         untracked_paths=baseline.untracked_paths,

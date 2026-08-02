@@ -17,9 +17,15 @@ review.
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 The change does not relax a guard or discard a model diff. It permits a
-`BLOCKED` task baseline to advance only when the old baseline was clean and is
-an ancestor of the current committed worktree head. It then re-runs the normal
-scope audit before changing state to `READY_FOR_REVIEW`.
+`BLOCKED` task baseline to advance only when the old baseline was clean. It
+then re-runs the normal scope audit before changing state to
+`READY_FOR_REVIEW`.
+
+> **Runtime correction (2026-08-02):** the first merged version also required
+> the stale head to be an ancestor. The real `8c084268` → `f023b89` recovery
+> showed that a reusable worktree can be recreated on a different lineage.
+> The follow-up removes that non-security condition and adds a pruned-history
+> regression; the complete current-worktree allowlist audit remains mandatory.
 
 ## Acceptance evidence
 
