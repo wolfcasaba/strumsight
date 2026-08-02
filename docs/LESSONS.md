@@ -2668,3 +2668,66 @@ dokumentált és külön felhatalmazású hiba jelenléte nem állítja meg egy
 scope-tiszta self-heal PR zöld-kapus merge-jét, ha a tényleges kaput (a
 gate-fingerprint őrszem + a saját regressziós tesztek) semmi nem
 gyengíti.
+
+## L63 — A [[L62]] hold-mechanizmus SOHA nem írta ki a hold-fájlt, mert az ÍRÓ függvény a saját kimerülés-jelzését hibaként kezelte (E03-R08 H6, 4. halt ugyanazon a napon)
+
+**Mit mértünk (2026-08-02, 14:26–16:19 UTC, 4 egymást követő H6 halt).**
+A [[L62]]-ben leírt `terra-budget-hold` mechanizmus két self-heal körön
+(#68, #69) át MERGE-ELVE volt, mégis a driver percek alatt ÚJRA
+ugyanabba a Terra-budget falba futott — méghozzá NÉGYSZER egy nap alatt
+(14:26, 15:19–15:29, 16:05, 16:15 UTC), holott a hold pontosan ezt lett
+volna hivatva megakadályozni. `find .pipeline -iname '*hold*'` a 4.
+halt idején is ÜRES találatot adott: a hold-fájl SOHA nem jött létre,
+noha mindhárom korábbi heal-session (14:30, 15:20, 16:10) saját szövege
+szerint azt hitte, a `terra_hold_if_exhausted()` megírja. A gyökérok
+`tools/round-pipeline.sh`-ban: `status_json=$(terra_status_json) ||
+return 0` — de `model-router.py terra-status` a DOKUMENTÁLT (HANDOFF.md)
+viselkedése szerint pontosan akkor tér vissza NEMNULLA exit-tel, amikor
+`exhausted=true` (l. [[L62]] (2) pont). A `||` így a kimerülés-jelzést
+magát is lekérdezési hibaként kezelte, és a függvény visszatért, mielőtt
+egyszer is elolvasta volna az `exhausted` mezőt vagy megírta volna a
+fájlt. Egyetlen meglévő regressziós teszt sem fogta meg: a [[L62]]-ben
+felsorolt `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+csak az OLVASÓ függvényt (`terra_hold_active_for`) teszteli, kézzel
+megírt hold-fájllal — sosem hívta meg az ÍRÓ függvényt éles (vagy akár
+stubbolt) `terra-status`-szal szemben.
+
+**A javítás (Class A, infrastruktúra, a [[L62]] mechanizmus saját
+hibája).** `tools/round-pipeline.sh`: a `status_json=$(terra_status_json)
+|| return 0` sorból az `|| return 0` törölve; a már meglévő `[ -n
+"$status_json" ] || return 0` sor önmagában is elég védelem a VALÓDI
+lekérdezési hibára (üres kimenet), a kimerülés-jelzésre (nemnulla exit,
+NEM üres kimenet) pedig most már a függvény a `exhausted` mezőt ténylegesen
+kiolvassa. Regressziós teszt: új `--terra-hold-if-exhausted` teszthorog
+(a meglévő `--terra-hold-active` mintájára) +
+`test_pipeline_integration.py::test_terra_hold_if_exhausted_writes_the_hold_file_when_terra_status_reports_exhausted`,
+ami egy PATH-on előre tolt `python3`-stubbal (a nem-`terra-status`
+hívásokat a valódi interpreterhez továbbengedve) szimulálja a
+`terra-status` MÉRT, valódi viselkedését (exhausted JSON, exit 1) — RED
+a régi sorral, GREEN az újjal (mindkettő kézzel megerősítve, PR #70
+leírásában is rögzítve).
+
+**Fel nem vett, tudatosan meghagyott melléklelet.** Ugyanaz, mint
+[[L62]]-ben: a `python3 -m pytest tools/tests -q` ezen a javításon
+átfutva is az EGYETLEN, [[L59]]-ben dokumentált E03-R05 brief-drift
+sub-teszttel pirosít — mérve azonosan a friss `origin/main`-en, ezen
+javítás nélkül is. `router-ci.yml` (push-only, nem GitHub-required
+check) ezért erre a heal branch-re is pirosat mutatott; a PR #70
+ugyanúgy, ahogy #68/#69, kizárólag a CodeRabbit-checkkel merge-elődött.
+
+**Tanulság.** (1) Egy hold/circuit-breaker mechanizmus, aminek a
+LÉNYEGE egy külső hívás "sikeres kimerülés"-jelzésére reagálni, sosem
+kezelheti azt a jelzést (nemnulla exit) generikus hibaként — a
+"lekérdezés sikertelen" és "a lekérdezés sikeresen kimerülést jelentett"
+két KÜLÖNBÖZŐ eset, és `||`/`set -e`-stílusú rövidzárlat könnyen
+összemossa őket, ha a hívott parancs a döntést az exit kódba kódolja.
+(2) Egy ÍRÓ függvény regressziós tesztje nem helyettesíthető az OLVASÓ
+függvény tesztjével, még akkor sem, ha mindkettő ugyanazt az
+állapotfájlt érinti — a [[L62]] teszt-csomagja három egymást követő
+heal-session számára is zöldnek tűnt, miközben az ÍRÓ ág sosem futott le
+valós (vagy stubbolt) bemenettel. (3) A hold-mechanizmus BEVEZETÉSE
+(PR #68) és annak TÉNYLEGES működése (ez a javítás) két különálló
+mérési pillanat — egy mechanizmus commitolása és zöld gate-je nem
+bizonyítja, hogy a mechanizmus a KIVÁLTÓ feltétel mellett ténylegesen
+lefut; erre külön, a hívott folyamatot szimuláló teszt kell, nem csak a
+kimeneti állapot kézi felvétele.

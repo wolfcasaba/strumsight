@@ -706,6 +706,33 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > dokumentált E03-R05 brief-TOML sub-teszttel pirosít — mérve azonosan a
    > módosítás nélküli `main`-en is, ezen kör hatóköre kívül esik rajta.
    > Részletek: `docs/LESSONS.md` L62.
+   >
+   > **E03-R08 H6 önjavító kör, 3. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** a fenti L62-hold BEVEZETVE volt (PR #68/#69), a
+   > driver mégis NÉGYSZER futott ugyanabba a Terra-budget falba egy nap
+   > alatt (14:26, 15:19–15:29, 16:05, 16:15 UTC) — `find .pipeline
+   > -iname '*hold*'` a 4. haltkor is ÜRES találatot adott. Gyökérok:
+   > `terra_hold_if_exhausted()`-ben `status_json=$(terra_status_json) ||
+   > return 0` — de a `terra-status` a DOKUMENTÁLT viselkedése szerint
+   > pontosan akkor tér vissza NEMNULLA exit-tel, amikor kimerült; a `||`
+   > ezt is lekérdezési hibaként kezelte, a függvény visszatért, mielőtt
+   > egyszer is megírta volna a hold-fájlt. A meglévő
+   > `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+   > csak az OLVASÓ függvényt (`terra_hold_active_for`) tesztelte, kézzel
+   > megírt hold-fájllal — az ÍRÓ ág sosem futott le teszt alatt. Javítás:
+   > az `|| return 0` törölve, a meglévő `[ -n "$status_json" ] || return
+   > 0` marad a valódi lekérdezési hiba (üres kimenet) védelmére. Új
+   > `--terra-hold-if-exhausted` teszthorog (a `--terra-hold-active`
+   > mintájára) + `test_pipeline_integration.py::
+   > test_terra_hold_if_exhausted_writes_the_hold_file_when_terra_status_reports_exhausted`
+   > (PATH-stub `python3`, ami a `terra-status` mért exhausted/exit-1
+   > viselkedését szimulálja) — RED a régi sorral, GREEN az újjal. A
+   > `tools/tests -q` ezen a javításon átfutva is UGYANAZZAL a [[L59]]-ben
+   > dokumentált E03-R05 brief-TOML sub-teszttel pirosít, mérve azonosan a
+   > módosítás nélküli `main`-en is; `router-ci.yml` (push-only, nem
+   > GitHub-required check) ezért erre a heal branch-re is pirosat
+   > mutatott, PR #70 a #68/#69 mintáját követve a CodeRabbit-checkkel
+   > merge-elődött. Részletek: `docs/LESSONS.md` L63.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
