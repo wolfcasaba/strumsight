@@ -281,6 +281,48 @@ heal_attempts() {   # $1=kör $2=halt-kód → az eddigi kísérletek száma
   esac
 }
 
+# --- Terra napi-budget felfüggesztés (E03-R08 H6 önjavítás, 2026-08-02) ----
+# MÉRT gyökérok: a Terra napi automatikus budget (.ai/router.toml
+# max_automatic_terra_calls_per_utc_day) kizárólag UTC nap-váltáskor nyílik
+# meg újra (state.py reserve_terra day-scoped daily_count) — egy 5 percenkénti
+# cron-retry ugyanazt a falat éri újra, és percek alatt elhasználja a 3
+# önjavítási kísérletet is, holott a diagnózis már ismert és emberi döntést
+# nem igényel (docs/LESSONS.md). A hold kör-specifikus és időkorlátos: a
+# `terra-status` CLI ugyanazt a `daily_terra_count`-ot kérdezi, amit
+# `reserve_terra` is a döntéséhez használ (state.py) — nincs duplikált szabály.
+terra_hold_file() { printf '%s/terra-budget-hold' "$state_dir"; }
+
+terra_status_json() {   # stdout: a terra-status JSON, vagy üres, ha nem lekérdezhető
+  python3 "$repo_root/tools/model-router.py" --config "$repo_root/.ai/router.toml" terra-status 2>/dev/null
+}
+
+terra_hold_if_exhausted() {   # $1=kör — hold-fájlt ír, ha a napi Terra-budget MOST kimerült
+  local round="$1" status_json exhausted next_epoch
+  status_json=$(terra_status_json) || return 0
+  [ -n "$status_json" ] || return 0
+  exhausted=$(printf '%s' "$status_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('exhausted'))" 2>/dev/null)
+  [ "$exhausted" = "True" ] || return 0
+  next_epoch=$(printf '%s' "$status_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('next_reset_epoch'))" 2>/dev/null)
+  case "$next_epoch" in ''|*[!0-9]*) return 0 ;; esac
+  printf 'round=%s\nhold_until=%s\n' "$round" "$next_epoch" > "$(terra_hold_file)"
+  log "Terra napi automatikus budget kimerült — $round felfüggesztve $(date -Is -d "@$next_epoch")-ig (a firing-ok addig session és önjavítási kísérlet nélkül kilépnek)"
+}
+
+terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébként (lejárt/nincs/másik kör → törli a lejárt/idegen fájlt)
+  local round="$1" hold_file hold_round hold_until
+  hold_file=$(terra_hold_file)
+  [ -f "$hold_file" ] || return 1
+  hold_round=$(grep -m1 '^round=' "$hold_file" | cut -d= -f2-)
+  hold_until=$(grep -m1 '^hold_until=' "$hold_file" | cut -d= -f2-)
+  case "$hold_until" in ''|*[!0-9]*) rm -f "$hold_file"; return 1 ;; esac
+  if [ "$hold_round" = "$round" ] && [ "$(date +%s)" -lt "$hold_until" ]; then
+    log "Terra napi budget felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"
+    return 0
+  fi
+  rm -f "$hold_file"
+  return 1
+}
+
 # Kimenet: 0 = a halt feloldva, mehet tovább a lánc; 3 = áll, ember kell.
 attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
@@ -351,6 +393,11 @@ attempt_selfheal() {
       mv "$halt_file" "$state_dir/healed-$halt_round-$stamp.txt"
       log "átmeneti akadály volt ($summary) — a lánc feloldva, a kör újra sorra kerül"
       notify "🔁 újrapróbálás: $halt_round" "$summary"
+      case "$summary" in
+        *"Terra daily budget is exhausted"* | *"Terra"*"budget"*)
+          terra_hold_if_exhausted "$halt_round"
+          ;;
+      esac
       return 0
       ;;
     *)
@@ -437,6 +484,13 @@ case "${1:-}" in
     grep -qEi "$CLAUDE_LIMIT_PATTERN" "${2:-/dev/null}" 2>/dev/null
     exit $?
     ;;
+  --terra-hold-active)    # $2=kör → exit 0 ha AKTÍV Terra napi-budget hold van rá, 1 egyébként
+    if terra_hold_active_for "${2:-}"; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
 esac
 
 # --- 1. Zár ---------------------------------------------------------------
@@ -445,6 +499,22 @@ esac
 exec 9>"$lock_file"
 if ! flock -n 9; then
   log "zár foglalt — már fut egy kör, ez a firing kimarad"
+  exit 0
+fi
+
+# --- 1.5 Terra napi-budget felfüggesztés (E03-R08 H6 önjavítás) -----------
+# Ha egy korábbi retry MÉRVE találta a napi Terra-budgetet kimerültnek,
+# a hold-fájl UTC éjfélig felfüggeszti a rá vonatkozó (ugyanaz a kör)
+# firing-okat — session és önjavítási kísérlet elfogyasztása nélkül. A hold
+# a HALTOLT kör sorára, vagy — ha épp nincs halt — a sorban következő
+# 'pending' körre vonatkozik (ugyanaz a kör, ha a lánc még nem jutott tovább).
+active_round=""
+if [ -f "$halt_file" ]; then
+  active_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
+elif [ -f "$queue_file" ]; then
+  active_round=$(grep -v '^[[:space:]]*#' "$queue_file" | grep -P '\tpending$' | head -1 | cut -f1)
+fi
+if [ -n "$active_round" ] && terra_hold_active_for "$active_round"; then
   exit 0
 fi
 

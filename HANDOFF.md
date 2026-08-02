@@ -674,6 +674,38 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > önjavító kört vár, SZÁNDÉKOSAN érintetlen ebben a körben (§2 hatóköre
    > csak a MEGÁLLT — E03-R08 — kör briefjére terjed ki). PR #67, `3725f09`.
    > Részletek: `docs/LESSONS.md` L61.
+   >
+   > **E03-R08 H6 önjavító kör, 2. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** a fenti javítás után a H6 más gyökérokkal két
+   > egymást követő 5 perces cikluson (15:19, 15:29 UTC) belül ismét
+   > lecsapott: a brief `migration`-fragmenst érint, ezért a kötelező Terra
+   > high-risk review (ADR 0088 §2) szükséges, de a napi automatikus
+   > Terra-budget (`.ai/router.toml` `max_automatic_terra_calls_per_utc_day
+   > = 3`) MÉRVE (`terra-ledger.json`, `daily_count=3`) kimerült — ez csak
+   > `2026-08-03T00:00:00Z`-kor nyílik meg újra. C osztályú (külső,
+   > naptár-kapuzott) akadály, de a driver 5 percenkénti retry-ciklusa
+   > ~20-30 percen belül elhasználta volna mind a 3 önjavítási kísérletet
+   > egy olyan haltra, ami emberi döntést nem is igényelt. Javítás:
+   > `tools/round-pipeline.sh` kör-specifikus, időkorlátos "hold" — egy
+   > Terra napi-budget-kimerülésre visszavezetett `retry` után a driver
+   > `terra-budget-hold` fájlt ír (`round`, `hold_until=UTC éjfél`), és
+   > minden firing a zár után, halt-kezelés/kör-indítás ELŐTT ellenőrzi:
+   > ha a soron lévő kör megegyezik, session és önjavítási-kísérlet
+   > fogyasztása NÉLKÜL lép ki. Új, tisztán olvasó
+   > `StateStore.daily_terra_count()` (state.py) + `terra-status`
+   > alparancs (model-router.py, JSON + nemnulla exit kimerülésnél) — a
+   > driver ugyanazt a forrást kérdezi, amit `reserve_terra` a döntéséhez
+   > használ, nincs duplikált szabály. Regressziós tesztek (RED a fix
+   > előtt, GREEN utána): `test_state_store.py::
+   > test_daily_terra_count_matches_the_active_status_rule_reserve_terra_enforces`,
+   > `test_router_cli.py::
+   > test_terra_status_exits_nonzero_and_reports_the_utc_midnight_reset_once_exhausted`,
+   > `test_pipeline_integration.py::
+   > test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`.
+   > A `tools/tests -q` ezen a javításon átfutva is UGYANAZZAL a [[L59]]-ben
+   > dokumentált E03-R05 brief-TOML sub-teszttel pirosít — mérve azonosan a
+   > módosítás nélküli `main`-en is, ezen kör hatóköre kívül esik rajta.
+   > Részletek: `docs/LESSONS.md` L62.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

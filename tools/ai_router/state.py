@@ -188,6 +188,25 @@ class StateStore:
             raise StateError("Terra ledger schema is invalid")
         return ledger
 
+    def daily_terra_count(self, day: str | None = None) -> int:
+        """Count active Terra reservations for a UTC day (default: today).
+
+        Read-only mirror of the `daily_count` rule `reserve_terra` enforces,
+        exposed so callers outside the router (e.g. the pipeline driver) can
+        check whether the automatic daily budget is currently exhausted
+        without duplicating — and risking drifting from — that rule.
+        """
+        if day is None:
+            day = self.clock().astimezone(timezone.utc).date().isoformat()
+        active = {"reserved", "started", "finished"}
+        with self._ledger_lock():
+            reservations = self._load_ledger()["reservations"]
+            return sum(
+                1
+                for row in reservations
+                if isinstance(row, dict) and row.get("utc_day") == day and row.get("status") in active
+            )
+
     def reserve_terra(
         self, task_id: str, *, daily_limit: int, task_limit: int = 1
     ) -> TerraReservation:

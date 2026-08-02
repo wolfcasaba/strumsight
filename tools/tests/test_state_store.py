@@ -157,6 +157,35 @@ class StateStoreTest(unittest.TestCase):
 
             self.assertEqual(store.load_task("E03-R01"), {})
 
+    def test_daily_terra_count_matches_the_active_status_rule_reserve_terra_enforces(self) -> None:
+        # E03-R08 H6 self-heal (2026-08-02): the pipeline driver needs a
+        # read-only way to check whether today's automatic Terra budget is
+        # exhausted, WITHOUT re-deriving the active-status rule separately
+        # (reserved/started/finished count, archived does not) — that would
+        # risk drifting from reserve_terra's own enforcement of it.
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            first = store.reserve_terra("E03-R01", daily_limit=3, task_limit=1)
+            store.reserve_terra("E03-R02", daily_limit=3, task_limit=1)
+
+            self.assertEqual(store.daily_terra_count("2026-08-01"), 2)
+            self.assertEqual(store.daily_terra_count("2026-08-02"), 0)
+
+            store.mark_terra_started(first.reservation_id)
+            store.mark_terra_finished(first.reservation_id, "STOPPED")
+            self.assertEqual(store.daily_terra_count("2026-08-01"), 2)
+
+            store.reset_task("E03-R01")  # archives E03-R01's own reservation
+            self.assertEqual(store.daily_terra_count("2026-08-01"), 1)
+
+    def test_daily_terra_count_defaults_to_the_clocks_current_utc_day(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.store(Path(directory) / "state")
+            store.reserve_terra("E03-R01", daily_limit=3, task_limit=1)
+
+            self.assertEqual(store.daily_terra_count(), 1)
+            self.assertEqual(store.daily_terra_count(), store.daily_terra_count("2026-08-01"))
+
 
 if __name__ == "__main__":
     unittest.main()

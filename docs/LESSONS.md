@@ -2577,3 +2577,94 @@ futhat úgy, hogy az adott self-heal feladathoz nincs köze — a helyes
 mérce a REGRESSZIÓ (a saját fix előtt/után), nem a teljes suite abszolút
 zöldsége, ha egy másik, már dokumentált és külön felhatalmazású hiba is
 jelen van.
+
+## L62 — A Terra napi automatikus budget csak UTC éjfélkor nyílik meg újra; egy 5 percenkénti cron-retry percek alatt elhasználja a 3 önjavítási kísérletet egy olyan halton, ami emberi döntést nem is igényel (E03-R08 H6, 2. önjavító kör)
+
+**Mit mértünk (2026-08-02).** Az E03-R08 H6 haltja UGYANAZZAL a mért
+gyökérokkal jelentkezett kétszer egymás után 9 percen belül (15:19 és
+15:29 UTC): a kötelező Terra high-risk review (ADR 0088 §2, mert a brief
+`migration`-fragmensre illeszkedő útvonalakat érint) a napi automatikus
+Terra-budget (`.ai/router.toml` `max_automatic_terra_calls_per_utc_day
+= 3`) kimerülése miatt `DEFERRED`. Az ELSŐ (15:20-as) önjavító kör
+helyesen azonosította C osztályú (külső, átmeneti) akadálynak, MÉRVE
+(`~/.local/state/strumsight-ai-router/terra-ledger.json`,
+`daily_count=3` vs `daily_limit=3` a `2026-08-02` UTC napra) és
+`outcome=retry`-t adott — ez a driver saját szabálya szerint helyes
+(§5), de a `terra-ledger.json` `utc_day`-alapú számlálása (state.py
+`reserve_terra`) miatt a következő firing (5 perccel később) UGYANAZT a
+falat éri, hiszen a napi budget csak `2026-08-03T00:00:00Z`-kor nyílik
+meg — ~8.5 órával később. A `tools/round-pipeline.sh` driver a haltot a
+kör SAJÁT, normál útján (nem csak self-healen át) is újra próbálja: egy
+retry utáni firing a kört magát indítja újra, ami ugyanúgy `DEFERRED`-be
+fut, ÚJ HALT-ot ír, és a self-heal kísérletszámlálót (`selfheal.count`)
+tovább növeli — a driver konkrét `heal_attempts`/`selfheal_max=3`
+logikája alapján ez a minta ~20-30 percen belül kimerítette volna a
+teljes 3 kísérletet, és `outcome`-tól függetlenül "önjavítás KIMERÜLT"
+emberi eszkalációt váltott volna ki, holott a diagnózis már ISMERT volt
+és emberi döntést nem igényelt (csak várakozást a naptári napváltásig).
+
+**A javítás (Class A, infrastruktúra).** A driver kapott egy kör-
+specifikus, időkorlátos "hold" mechanizmust, ami a Terra napi-budget-
+kimerülés MÉRT, ismételt esetén a soron következő firing-okat session
+és önjavítási-kísérlet-fogyasztás NÉLKÜL engedi ki UTC éjfélig: (1)
+`tools/ai_router/state.py` kapott egy új, tisztán olvasó
+`StateStore.daily_terra_count(day=None)` metódust — a `reserve_terra`
+MÁR MEGLÉVŐ aktív-státusz szabályának (`reserved`/`started`/`finished`
+számít, `archived` nem) tükrözése, NEM újraírása, hogy a driver ne
+duplikálhassa és ne is téveszthesse el ugyanazt a logikát. (2)
+`tools/model-router.py` kapott egy `terra-status` alparancsot, ami ezt
+(és `.ai/router.toml` `max_automatic_terra_calls_per_utc_day`-jét)
+JSON-ban adja vissza (`exhausted`, `next_reset_epoch`), és nemnulla
+kilépőkóddal jelez kimerülést — ugyanaz a forrás, amit `reserve_terra`
+is a döntéséhez használ. (3) `tools/round-pipeline.sh`: a `retry`
+kimenetű self-heal, ha az összegzés Terra napi-budget kimerülésre utal,
+meghívja a `terra-status`-t, és ha AZ IS kimerülést jelez, egy
+`terra-budget-hold` fájlt ír (`round=<kör>`, `hold_until=<epoch>`) — a
+driver a zár megszerzése UTÁN, MINDEN firingen (halt-kezelés ÉS friss
+kör-indítás előtt is) ellenőrzi, hogy a soron lévő (halton lévő, vagy a
+sorban következő `pending`) kör megegyezik-e a hold körével és a
+határidő még jövőben van-e; ha igen, a teljes firing egyetlen log-sorral
+kilép, `selfheal.count` és `HALTED` érintetlen marad. Regressziós
+tesztek (RED a fix előtt, GREEN utána, mind `tools/tests`-ben):
+`test_state_store.py::test_daily_terra_count_matches_the_active_status_rule_reserve_terra_enforces`,
+`test_router_cli.py::test_terra_status_exits_nonzero_and_reports_the_utc_midnight_reset_once_exhausted`,
+és `test_pipeline_integration.py::test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+(HALTED + jövőbeli hold + `selfheal.count=2` → a driver 0-val, session
+nélkül, változatlan `selfheal.count`-tal lép ki — a fix előtt a hiányzó
+`--terra-hold-active` teszthorog miatt a driver a VALÓDI pipeline-ágba
+esett, `git fetch`-et és tényleges elő-feltétel-ellenőrzéseket futtatva,
+amit a piros-előtti méréshez külön izolálni kellett).
+
+**Fel nem vett, tudatosan meghagyott melléklelet.** A `python3 -m
+pytest tools/tests -q` ezen a javításon átfutva is UGYANAZZAL az egy,
+[[L59]]-ben már dokumentált sub-teszttel pirosít
+(`test_epic3_brief_metadata.py::…(round=5, brief='e03-r05-…')`, az
+E03-R05 brief TOML `allowed_paths`-ában maradt `docs/adr/0114-...md`
+drift) — mérve azonosan a friss `origin/main`-en is, ezen javítás
+NÉLKÜL. A H6 halt gyökéroka és ez a drift két különálló hiba; ennek a
+self-heal körnek a jogosultsága nem terjed ki az E03-R05 brief
+tartalmára (§2 csak a MEGÁLLT kör — E03-R08 — briefjét engedi), ezért ez
+a javítás is érintetlenül hagyta — [[L59]] óta még mindig egy külön,
+arra felhatalmazott önjavító kör vár rá. Emiatt a `router-ci.yml`
+push-triggerelt futása erre a heal branch-re is pirosat fog mutatni;
+ez NEM regresszió — a workflow nincs `pull_request` triggeren (csak
+`push`/`workflow_dispatch`), tehát nem GitHub-required check, és a #67
+PR (az előző H6 önjavító kör) is pontosan emiatt merge-elődött zölden
+kizárólag a CodeRabbit-checkkel, a Router CI futása nélkül a PR
+rollup-jában.
+
+**Tanulság.** (1) Egy driver, ami MÉRVE (nem sejtve) tudja, hogy egy
+külső akadály naptár-kapuzott és a legközelebbi retry ELŐRE
+kiszámítható időpontig biztosan ugyanazt a falat éri, ne pörgesse a
+kísérletszámlálót naptári-idejű várakozásra — a hold-mechanizmus a
+LEGKISEBB javítás, ami a driver saját `heal_attempts`/`selfheal_max`
+védelmét ILLESZKEDŐVÉ teszi a tényleges külső korláthoz, anélkül hogy a
+mércét (H-GATEGUARD, teszt-szám, gate-artefaktumok) bármilyen módon
+gyengítené. (2) A napi-budget döntési szabályt (`daily_count` az aktív
+státuszokra) egyetlen helyen (state.py) kell tartani, és onnan
+KIOLVASNI (CLI-n át), nem újraírni bash-ben — két hely, egy szabály
+szét tud csúszni. (3) [[L59]] mintája megismétlődik: egy MÁSIK, már
+dokumentált és külön felhatalmazású hiba jelenléte nem állítja meg egy
+scope-tiszta self-heal PR zöld-kapus merge-jét, ha a tényleges kaput (a
+gate-fingerprint őrszem + a saját regressziós tesztek) semmi nem
+gyengíti.
