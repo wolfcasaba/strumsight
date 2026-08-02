@@ -1468,3 +1468,98 @@ property gate, doD-tábla és a device-mátrix kész; a rendszerszintű rés
 (önálló Practice V2 session-út drótozatlan) nyíltan dokumentálva. A
 `migratedLearnEnabled` rollout-döntés a useré — a §3 rendszerszintű rés
 pótlása külön kör).
+
+## E03-R01 — Song Trainer baseline, ADR-ek és feature flag: Epic 3 kickoff
+
+Pipeline E03-R01 (ADR 0087, `auto` MiniMax-first router, ADR 0088). Első
+Epic 3 kör — a queue `docs/execution/pipeline-queue.tsv` E03-R01 sorát a
+user 2026-08-01-én `pending`-re állította, a többi E03 sor (`R02`-`R21`)
+`prepared` marad, amíg a lánc körönként halad.
+
+**Pre-flight (orchestrátor, Claude Sonnet 5).** `HANDOFF.md`/`AGENTS.md`
+olvasás, `origin/main` == lokális HEAD (`6a45486`, E02-R21 után), a brief
+§0.0 három mért állítását `rg`-vel igazolta (nincs
+`lib/features/song_trainer/`; a legacy Songs/Setlists a `KeyValueStore`
+absztrakción át ténylegesen `SharedPreferences`-re épül; a
+`lib/features/practice/public.dart` valóban nem exportálja a
+compiler/result-mapping teljes kontraktját — 26 export sor, nincs köztük
+`PracticeScoreAggregator`/`PracticeVerdict`/`TimingGrade`/`ChordOutcome`).
+Nincs anyagi drift → nulla ADR-ütközés (`ls docs/adr | sort -V | tail`:
+utolsó 0088/0111/0112, a 0089-0092 tartomány szabad). A pre-flight
+**megírta és a brief PLANNING-re állítása részeként commitolta** a négy
+Epic 3 kickoff ADR-t (a brief §5.2 által előre kiosztott téma, konkrét
+sorszám a pre-flight dolga):
+
+- [ADR 0089](../adr/0089-song-document-v2.md) — SongDocument V2 domain
+  modell (SDD §9): stabil `SongId`, monoton `revision` optimistic
+  concurrency, `SongSource` proveniencia-lánc, explicit section/measure.
+- [ADR 0090](../adr/0090-song-storage-files-and-assets.md) — fájlrendszeres
+  `SongRepository` + content-hash (SHA-256) asset store (SDD §18): a
+  `SongDocument` és a bináris assetek SOSEM `SharedPreferences`-be, atomikus
+  írási lépéssor, két-lépcsős törlés, nem-destruktív recovery.
+- [ADR 0091](../adr/0091-song-import-security-boundary.md) — import
+  biztonsági határ (SDD §13/§15.6/§29): kétfázisú `probe`/`import`, kötött
+  erőforráskorlát-készlet, ZIP/MXL védelem (path traversal, XXE,
+  decompression bomb), log-redakció.
+- [ADR 0092](../adr/0092-song-trainer-practice-engine-integration.md) —
+  Song Trainer × Practice Engine integráció (SDD §21): egyirányú függőség
+  (Song Trainer → Practice Engine, sosem fordítva), `SongPracticeCompiler`
+  fordítási határ, explicit `SongEventReference` forrás-visszamapping.
+
+**Router-futás (két menet, mérve).** Az első `ai-router-round.sh run`
+hívás egy VADONATÚJ izolált klónon (`/home/ubuntu/ss-router-e03-r01`)
+`BLOCKED`-ba futott, `m3_attempts=0` — a HANDOFF.md már dokumentált
+klón-csapda (gitignore-olt `lib/l10n/app_localizations*.dart` hiánya)
+buktatta a router BASELINE_GATE precheckjét, NEM a brief vagy a kód.
+`flutter pub get && flutter gen-l10n` a klónban, majd
+`python3 tools/model-router.py reset --task-id E03-R01` (a sanctioned,
+zéró-fogyasztású precheck-reset, nem tiltott state-törlés — a docstringje
+kifejezetten ezt az esetet célozza) → második `run`: **`READY_FOR_REVIEW`,
+`m3_attempts=1`, a gate elsőre zöld.** Új mérhető lecke: `docs/LESSONS.md`
+L48.
+
+**Implementáció (MiniMax M3, 1 megoldási kör).** Hét ön-készítésű legacy
+fixture (`test/fixtures/song_trainer/legacy/*.json`, mindegyik `provenance`
+mezővel) + `legacy_fixture_parity_test.dart` (9/9 zöld): a `Song.toLesson`/
+`toAnalyzeResult` és a `Setlist.resolve`/`combine` legacy kódját zárolja
+exact/`closeTo(1e-9)` invariánsokkal (event count, totalBeats, chord/
+direction sequence, duration, meter, setlist order). Default-off
+`songTrainerV2Enabled` flag (`FeatureFlags.forEnvironment` mind a három
+környezetre `false`, nincs dart-define override — a flag szándékosan NEM
+követi a `nonProd` mintát, amit a másik három Practice flag használ). Üres
+`lib/features/song_trainer/public.dart` boundary (csak `library;`).
+`docs/baseline/epic-03-song-trainer-start.md` (366 sor) — storage kulcs,
+JSON séma, meter/Builder/Learn/setlist-combine viselkedés, kilenc mért
+öröklött korlát a SongDocument V2 munkára hivatkozva.
+
+**Review (Claude Sonnet 5, izolált `/tmp` klón, saját kézzel).** Gate
+újrafuttatva (zöld), scope-audit `git diff --stat origin/main...HEAD` — 16
+fájl, mind a 4 pre-flight ADR + a 11 engedélyezett implementer-fájl,
+listán kívüli változás nincs. Két önálló mutáció-próba (direction-sequence
+megfordítás, `unresolvedIds` kiürítése) mindkettő PIROS, kiegészítve az
+implementer saját 3 mutáció-tesztjét (durationSec, beat-warp,
+rest-dropping) — összesen öt igazoltan diszkriminatív invariáns. **F1
+(MINOR):** a baseline dokumentum két/három hibás ADR-hivatkozást tartalmaz
+(`0010-storage-migrator.md` nem létezik, a valódi téma feltehetően ADR
+0054 alatt van; `0084-history-v2.md` helyes fájlneve
+`0084-practice-history-v2-and-coaching.md`) — dokumentum-only, nem
+blokkol, follow-up. **F2 (NOTE):** `FeatureFlags.hashCode` szándékosan nem
+veszi fel az új mezőt, hogy ne törje a kör engedélyezett listáján kívül eső
+`test/app/app_config_test.dart:264` rögzített 6-argumentumos hash-t — az
+implementer maga dokumentálta, nem sérti a Dart `==`/`hashCode`
+kontraktust. Verdikt: **APPROVED** (0 BLOCKER/MAJOR).
+
+**Zöld kapu.** `tools/round-gate.sh test/features/songs
+test/features/learn/setlist_expected_hint_test.dart
+test/features/song_trainer/baseline` zöld (orchestrátor ÉS független
+reviewer külön futtatásban). CI dispatch `codex/e03-r01-baseline-and-boundaries`-re
+kétszer (a review-commit miatt a HEAD elmozdult 9abe708→af62d08 között) —
+a végleges run [30729397843](https://github.com/wolfcasaba/strumsight/actions/runs/30729397843)
+zöld, `headSha` egyezik a merge-elt HEAD-del. Squash-merge
+[PR #56](https://github.com/wolfcasaba/strumsight/pull/56) → `d5ef6e5`,
+független post-merge gate-ellenőrzés (friss `/tmp` klón, `origin/main`)
+szintén zöld.
+
+Lessons: `docs/LESSONS.md` L48 (a router első futása egy vadonatúj
+munkapéldányon a klón-csapdába fut, sanctioned fix: `gen-l10n` +
+`model-router.py reset`, nem tiltott state-törlés).

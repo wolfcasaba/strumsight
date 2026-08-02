@@ -1810,3 +1810,44 @@ lett: `isNotEmpty` helyett bounded-poll + `isNotEmpty`, nem timeout-türelmesebb
 NEM ad pontos file:sor javítást (csak tünetet ír le), az visszatér a normál
 mintázathoz: infrastruktúra-fix VAGY `outcome=escalate`, nem a self-heal
 tallózása a tartalomban.
+
+## L48 — Egy VADONATÚJ izolált munkapéldány első `ai-router-round.sh run` hívása a klón-csapda miatt BLOCKED-ba fut, nulla M3-kerettel; a sanctioned javítás `gen-l10n` + a router saját `reset` subparancsa, NEM state-fájl kézi törlése
+
+**A helyzet mérve (2026-08-02, E03-R01, első `auto`-router futás egy frissen
+klónozott munkapéldányon).** Az E03-R01 az első kör, ahol az orchestrátor a
+`tools/mm-round.sh`/`codex-round.sh` örökölt mintája helyett a friss
+`ai-router-round.sh run`-t egy **most létrehozott** `git clone`-ra hívta
+(nem egy korábbi, már `flutter pub get`-elt munkapéldányra). A router
+`BASELINE_GATE` fázisa (`tools/ai_router/router.py` `_gate_runner(...,
+baseline=True)`) `BLOCKED`-ot adott, `m3_attempts=0`, `last_gate_category:
+code_failure`, `failed_step: analyze` — a `flutter analyze` 625 hibával
+bukott, mind a HANDOFF.md-ben már dokumentált klón-csapda tünete
+(`lib/l10n/app_localizations*.dart` gitignore-olt, generálatlan). A `router.py`
+baseline-gate ága a `gate_tests`-ből a NEM létező útvonalakat (pl.
+`test/features/song_trainer/baseline`, amit még az implementer hoz létre)
+már kiszűri (`selected_tests = ... if not baseline or (worktree / path).exists()`)
+— tehát ez NEM a brief hibája, és a `tools/ai_router/security.py`
+`GENERATED_IGNORED_GLOBS` már tartalmazza a `lib/l10n/app_localizations*.dart`
+mintát (az E02-R21 H6 halt óta, lásd a fájl saját megjegyzését) — a
+scope-audit tehát nem akadt volna fenn a generált fájlokon, csak maga a
+`flutter analyze` bukott, mert a fájlok FIZIKAILAG hiányoztak a lemezről.
+
+**Mit csinálunk.** (1) Minden ÚJ izolált munkapéldány létrehozása után, MÉG
+az első `ai-router-round.sh run`/`resume` hívás ELŐTT: `flutter pub get &&
+flutter gen-l10n` a worktree-ben — ez a reviewer-oldali "legelső lépés"
+szabály (HANDOFF.md) most az orchestrátor-oldali pre-dispatch lépéssorba is
+bekerül. (2) Ha ennek ellenére BLOCKED-ba fut egy task, és a
+`gate_history[-1].m3_attempts == 0` (azaz a blokk a modellhívás ELŐTT, a
+saját precheck-ben történt, tehát a fix keret NEM fogyott), a helyes
+javítás a root cause elhárítása UTÁN a router **saját, dedikált**
+`python3 tools/model-router.py reset --task-id <ID>` hívása — ez
+idempotens, archiválja az esetleges Terra-foglalást, és a docstringje
+kifejezetten ezt az esetet ("BLOCKED on a since-fixed root cause") írja le
+céljaként. Ez NEM ütközik az AGENTS.md §15.6 5. pontjának ("tilos törölni,
+másolni vagy task ID cserével keretet nullázni") tilalmával — az a szabály a
+kereten (M3/Terra-fogyasztáson) átment, tartalmi STOPPED/BLOCKED állapot
+kézi megkerülésére vonatkozik, nem az itt sanctioned, zéró-fogyasztású
+precheck-reset workflow-ra. Sima újra-`run` hívás (a `reset` nélkül) a
+cache-elt BLOCKED eredményt adja vissza válasz nélkül újrapróbálkozásra
+(`router.py` `run()` 531-540. sor: `status != "RUNNING"` → visszaadja a
+korábbi terminal résztet, nem indít új precheck-et).

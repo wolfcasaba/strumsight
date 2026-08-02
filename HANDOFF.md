@@ -4,33 +4,43 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (self-heal round, E02-R21 H4, 10th and FINAL halt/self-heal cycle on this
-> task — round DONE, merged `6e5cec7`.** The `auto` router (M3/Terra) had
-> already produced correct A1–A4 Practice V2 production wiring across nine
-> prior halts, but its fixed 2 M3 + 1 Terra budget never had a call left to
-> fix its own A5 test — and the orchestrator contract forbids resetting that
-> budget mid-task. `docs/reviews/e02-r21-review.md` "Update 8" had already
-> diagnosed the exact fix (file:line) for the one remaining bug: the test
-> overrode two library-private placeholder providers instead of the real
-> `strumEngineProvider`/`microphonePermissionGatewayProvider` the production
-> wiring watches. The self-heal round applied that exact fix directly (not a
-> router reset), which surfaced a second, previously-hidden bug once the
-> timeout cleared: the test read history right after observing the
-> `completed` state, racing the controller's fire-and-forget
-> `_applySideEffects`/`recorder.record()` call — fixed with a bounded poll.
-> Full `tools/round-gate.sh` matrix green (before/after rebase onto
-> `origin/main`), CI green on the matching `headSha`
-> ([run 30727643471](https://github.com/wolfcasaba/strumsight/actions/runs/30727643471)),
-> squash-merged [PR #55](https://github.com/wolfcasaba/strumsight/pull/55) →
-> `6e5cec7`. `docs/execution/pipeline-queue.tsv` E02-R21 row set to `done`.
-> **Practice V2's standalone Hub→Setup→Session production wiring (the §3 gap
-> from the E02-R20 closure report) is now complete and merged.** Lessons:
-> `docs/LESSONS.md` L47 (why self-heal applied a content fix this round, not
-> just infrastructure). Full ten-halt saga (self-heal rounds 1-10, router
-> infra fixes PR #46-#54):
-> [`docs/handoff-archive.md`](docs/handoff-archive.md) § E02-R21.
-> **Next:** the pipeline queue has no remaining `pending` row — a new round
-> brief is the next decision point (see §6 below), same as after E02-R20.
+> (Pipeline E03-R01 — Epic 3 kickoff round DONE, merged `d5ef6e5`.** First
+> Epic 3 round: the pre-flight (Claude Sonnet 5) measured the brief's three
+> baseline claims true (no `lib/features/song_trainer/`, legacy Songs/Setlists
+> genuinely `SharedPreferences`-backed via `KeyValueStore`, Practice
+> `public.dart` really missing the compiler/result-mapping contract), found
+> ADR 0089-0092 conflict-free, and wrote all four Epic 3 kickoff ADRs
+> ([0089 SongDocument V2](docs/adr/0089-song-document-v2.md),
+> [0090 storage+assets](docs/adr/0090-song-storage-files-and-assets.md),
+> [0091 import security boundary](docs/adr/0091-song-import-security-boundary.md),
+> [0092 Practice Engine integration](docs/adr/0092-song-trainer-practice-engine-integration.md))
+> before dispatch. The `auto` router's first run on the freshly-cloned
+> isolated worktree hit `BLOCKED` with **zero** M3 attempts consumed — the
+> already-documented clone pitfall (gitignored `lib/l10n/` never generated),
+> not a code or brief problem; `flutter gen-l10n` + the router's own
+> sanctioned `model-router.py reset --task-id` (zero-budget precheck reset,
+> not the forbidden manual state wipe) cleared it, and the retry went
+> `READY_FOR_REVIEW` on the first real M3 attempt. MiniMax M3 delivered the
+> full E03-R01 scope (seven legacy fixtures + parity test, default-off
+> `songTrainerV2Enabled` flag, empty `song_trainer/public.dart` boundary,
+> the Epic 3 baseline doc) with the gate green on the first try — no fix
+> round needed. Independent review (own-hands gate re-run in an isolated
+> `/tmp` clone + two extra mutation probes beyond the implementer's own
+> three): **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR (two broken ADR
+> cross-references in the baseline doc, doc-only), 1 NOTE. CI green on the
+> exact merge `headSha`
+> ([run 30729397843](https://github.com/wolfcasaba/strumsight/actions/runs/30729397843)),
+> squash-merged [PR #56](https://github.com/wolfcasaba/strumsight/pull/56) →
+> `d5ef6e5`, independent post-merge gate re-run on `main` also green.
+> Lessons: `docs/LESSONS.md` L48 (fresh-worktree clone pitfall hits the
+> router's own baseline precheck; `reset` is the sanctioned fix, not manual
+> state deletion). Full narrative:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R01.
+> **Next:** E03-R02 — SongDocument V2 identifiers and metadata (see §6
+> below); the pipeline queue's E03-R02 row is `prepared`, a human sets it
+> `pending` when ready to continue the Epic 3 chain (ADR 0087 §7 — E03-R01
+> was human-dispatched via the pipeline, the driver continues automatically
+> once a `pending` row exists).
 
 ## 1. Current release state
 
@@ -48,9 +58,15 @@
 - **Epic 2 (Practice Engine) lezárva** — E02-R20 (epic-zárókör) kész; a
   Practice V2 domain és application réteg kimerítően tesztelt, a migrated
   Learn útvonal (`migratedLearnEnabled`) élesíthető. Az önálló Practice V2
-  Hub→Setup→Session út **drótozatlan** — a `practiceSessionHostProvider`
-  defaultja `null`; a §3 rendszerszintű rés pótlása külön kör.
+  Hub→Setup→Session út production-drótozása **KÉSZ** (E02-R21, PR #55,
+  `6e5cec7`) — a `practiceSessionHostProvider` élesben él, a §3
+  rendszerszintű rés pótolva.
   Evidencia: [`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md).
+- **Epic 3 (Song Trainer) elkezdve** — E03-R01 (kickoff round) kész: legacy
+  Songs/Setlists mért baseline, ADR 0089-0092, default-off
+  `songTrainerV2Enabled` flag, üres `lib/features/song_trainer/public.dart`
+  boundary. **Nincs production kód még** — a SongDocument V2 implementáció
+  E03-R02-től kezdődik.
 
 ## 2. What is working
 
@@ -239,12 +255,20 @@
 
 ## 4. Current branch
 
-`main` @ [PR #55](https://github.com/wolfcasaba/strumsight/pull/55)
-(E02-R21 self-heal round 10/H4, squash-merge `6e5cec7`), CI run
-[30727643471](https://github.com/wolfcasaba/strumsight/actions/runs/30727643471)
-**success** on `cfd7049` (the matching `headSha`, full suite + randomized
-property + APK). Merged as a self-heal PR, not the normal `auto`-router
-READY_FOR_REVIEW path — see §5 and `docs/LESSONS.md` L47 for why.
+`main` @ [PR #56](https://github.com/wolfcasaba/strumsight/pull/56)
+(E03-R01 baseline round, squash-merge `d5ef6e5`), CI run
+[30729397843](https://github.com/wolfcasaba/strumsight/actions/runs/30729397843)
+**success** on `af62d08` (the matching `headSha`, full suite + randomized
+property + APK). Normal `auto`-router READY_FOR_REVIEW path, first attempt,
+no fix round — see §5.
+
+> **Router baseline-precheck clone pitfall (mérve 2026-08-02, E03-R01):** egy
+> vadonatúj izolált munkapéldány első `ai-router-round.sh run` hívása a lenti
+> klón-csapdába fut, de a router SAJÁT `BASELINE_GATE` precheckjében, `BLOCKED`
+> státusszal és **`m3_attempts=0`**. A javítás: `flutter pub get && flutter
+> gen-l10n` a klónban, majd `python3 tools/model-router.py reset --task-id
+> <ID>` (sanctioned, zéró-fogyasztású reset — NEM a tiltott kézi
+> state-törlés). Részletek: `docs/LESSONS.md` L48.
 
 > ⚠ **A squash-commit üzenete tévesen a régi, „HALT H3" PR-címet viszi**
 > (`0bdee7e`): a `gh pr edit` a merge előtt a Projects-classic GraphQL
@@ -265,48 +289,49 @@ READY_FOR_REVIEW path — see §5 and `docs/LESSONS.md` L47 for why.
 
 ## 5. Last completed round
 
-**E02-R21 — Practice V2 standalone production wiring (ADR 0111, A1-A5) —
-closed by self-heal round 10/H4** (PR
+**E03-R01 — Song Trainer baseline, ADR-ek és feature flag: Epic 3 kickoff**
+(PR [#56](https://github.com/wolfcasaba/strumsight/pull/56), squash `d5ef6e5`,
+ADR: **0089-0092**, mind a négy a pre-flightban íródott). Implementer:
+**auto MiniMax-first router** (ADR 0088), **1 M3 attempt**, gate elsőre
+zöld, javító kör nélkül. Orchestrátor: **Claude Sonnet 5**.
+
+**Elkészült:** hét ön-készítésű legacy Song/Setlist fixture +
+`legacy_fixture_parity_test.dart` (9/9, öt igazoltan diszkriminatív
+invariáns — 3 az implementertől, 2 a review-tól); default-off
+`songTrainerV2Enabled` flag (minden környezetben `false`); üres
+`lib/features/song_trainer/public.dart` boundary;
+`docs/baseline/epic-03-song-trainer-start.md`; a négy Epic 3 kickoff ADR
+(SongDocument V2, storage+asset store, import security boundary, Practice
+Engine integráció). Nincs production-viselkedésváltozás — a legacy
+Song/Setlist kód és tesztek érintetlenek.
+
+**Router-futás mérve:** az első `run` egy vadonatúj izolált munkapéldányon
+`BLOCKED`-ba futott (`m3_attempts=0`, a HANDOFF-ban dokumentált klón-csapda
+a router saját precheckjében, NEM a kód/brief hibája) —
+`gen-l10n` + a router sanctioned `reset --task-id` subparancsa után a
+második `run` `READY_FOR_REVIEW`. Review (izolált `/tmp` klón, saját kézzel
+futtatott gate + scope-audit + 2 mutáció-próba): **APPROVED**, 0
+BLOCKER/MAJOR, 1 MINOR (két hibás ADR-hivatkozás a baseline dokumentumban,
+doc-only follow-up), 1 NOTE (`hashCode` szándékos, dokumentált részleges
+bővítés). Lessons: `docs/LESSONS.md` L48. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R01.
+
+**Előző kör: E02-R21 — Practice V2 standalone production wiring (ADR 0111,
+A1-A5) — closed by self-heal round 10/H4** (PR
 [#55](https://github.com/wolfcasaba/strumsight/pull/55), squash `6e5cec7`).
-Implementer: **auto MiniMax-first router** (M3/Terra, ADR 0088) produced the
-real A1-A4 wiring across nine prior STOPPED halts; **self-heal (Claude Sonnet
-5, ADR 0112) applied the final, already-diagnosed A5 test fix directly** on
-round 10, since the router's fixed 2 M3 + 1 Terra budget had no call left and
-the orchestrator contract forbids resetting it mid-task once STOPPED.
-
-**Elkészült:** A1 auto-dispose controller `.family`; A2 activating prepare
-sink + `PracticeSessionHost` adapter; A3 recorder wired with real
-mode/source/definitionId codes (not the R18 placeholders); A4 platform-edge
-gateway provider; A5 the production-wiring integration test — fixed to
-override the *real* `strumEngineProvider`/`microphonePermissionGatewayProvider`
-(not private test-local aliases) and to poll for the recorder's write
-instead of racing the `completed` state emission against the controller's
-fire-and-forget finalize. Full `docs/reviews/e02-r21-review.md` (10 Updates)
-has the entire ten-halt measurement trail.
-
-**A kör legfontosabb eredménye:** a §3 rendszerszintű rés (E02-R20-ban
-dokumentált — standalone Practice Hub→Setup→Session production-drótozás
-hiánya R11/R12 óta) **pótolva**. Lessons: `docs/LESSONS.md` L39-L47 (router
-infra fixes PR #46-#54, content-fix judgment call L47). Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E02-R21.
-
-**Előző kör: E02-R20 — Epic 2 lezárás: a11y/l10n/perf audit, epic-szintű
-property gate, DoD-tábla** (PR [#44](https://github.com/wolfcasaba/strumsight/pull/44),
-squash `4616aed`, ADR: **nincs**): audit-only zárókör, új funkció nélkül.
-Implementer **MiniMax M3**, orchestrátor **Claude Sonnet 5**. Elkészült: A1
-accessibility-mátrix (10 cella, 4 Semantics-merge bug javítva); A2
-lokalizációs audit (16 új ARB-kulcs); A3 teljesítmény-számlálók; A4
-epic-szintű property gate (5 invariáns); A7
-[`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md);
-A8 [`docs/manual-testing/practice-engine-device-matrix.md`](docs/manual-testing/practice-engine-device-matrix.md).
-Egy javító kör (M3) → **APPROVED**. Tanulság: [L31](docs/LESSONS.md).
+A §3 rendszerszintű rés (standalone Practice Hub→Setup→Session
+production-drótozás) pótolva. Lessons: `docs/LESSONS.md` L39-L47. Full
+narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E02-R21.
 
 ## 6. Exact next task
 
-0. **~~E02-R21 — Practice V2 production wiring~~ — KÉSZ, ld. §5.**
-   `docs/execution/pipeline-queue.tsv` üres (nincs `pending` sor) — **egy új
-   round brief megírása + sorba állítása a következő döntési pont**, ugyanaz
-   a helyzet, mint E02-R20 után.
+0. **~~E03-R01 — Song Trainer baseline, ADR-ek és feature flag~~ — KÉSZ, ld.
+   §5.** Következő: **E03-R02 — SongDocument V2 azonosítók és metaadatok**
+   ([docs/rounds/e03-r02-song-document-identity-metadata.md](docs/rounds/e03-r02-song-document-identity-metadata.md)),
+   ADR 0089 §Döntés 2/3 (stabil `SongId`, `revision`) implementációja. A
+   `docs/execution/pipeline-queue.tsv` E03-R02 sora `prepared` — a driver
+   csak akkor folytatja automatikusan, ha egy ember `pending`-re állítja
+   (ugyanaz a mechanizmus, ami E03-R01-et is elindította).
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
    CI-runjából tölthető
@@ -323,12 +348,13 @@ Egy javító kör (M3) → **APPROVED**. Tanulság: [L31](docs/LESSONS.md).
    (E02-R19 progress/streak/daily-goal + Learn V2-migráció — KÉSZ: PR #43,
    `0bdee7e`.)
 3. **A pipeline (ADR 0087, GOV-02) E02-R14…R19-et és E02-R21-et vitte
-   (utóbbit a self-heal round 10/H4 zárta le); E02-R20-at SZÁNDÉKOSAN ember
-   indította** (ADR 0087 §7) — a sor
+   (utóbbit a self-heal round 10/H4 zárta le); E02-R20-at és E03-R01-et
+   SZÁNDÉKOSAN ember indította** (ADR 0087 §7 — epic-kickoff és epic-zárás
+   emberi döntési pont) — a
    ([`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv))
-   ismét üres (E02-R21 sora `done`). **Egy új round brief megírása + sorba
-   állítása a következő döntési pont** — a driver csak akkor folytatja, ha
-   van `pending` sor.
+   E03-R01 sora `done`, E03-R02…R21 `prepared` marad, amíg a user az elsőt
+   `pending`-re nem állítja — onnantól a driver körönként automatikusan
+   halad, amíg HALT nem éri.
 
    > **Megállási szerződés (ADR 0087 §2):** az orchestrátor-session önállóan
    > javíthatja a kör SAJÁT, még nem merge-elt briefjét/ADR-jét (§0.0
