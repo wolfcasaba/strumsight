@@ -199,20 +199,34 @@ class RouterCliTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            command = [
+                "python3",
+                str(CLI),
+                "--config",
+                str(CONFIG),
+                "--state-root",
+                str(state_root),
+                "rebase-baseline",
+                "--task",
+                str(brief),
+                "--worktree",
+                str(root),
+            ]
+            (root / "lib" / "forbidden.dart").write_text("must remain blocked\n", encoding="utf-8")
+            rejected = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(rejected.returncode, 50)
+            self.assertEqual(
+                json.loads((task_dir / "E03-R08.json").read_text(encoding="utf-8"))["status"],
+                "BLOCKED",
+            )
+            (root / "lib" / "forbidden.dart").unlink()
             result = subprocess.run(
-                [
-                    "python3",
-                    str(CLI),
-                    "--config",
-                    str(CONFIG),
-                    "--state-root",
-                    str(state_root),
-                    "rebase-baseline",
-                    "--task",
-                    str(brief),
-                    "--worktree",
-                    str(root),
-                ],
+                command,
                 text=True,
                 capture_output=True,
                 check=False,
