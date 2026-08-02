@@ -1,12 +1,18 @@
 import 'dart:convert';
 
+import '../../../../core/music/chord.dart';
+import '../../../../core/music/strum.dart';
 import '../../../../core/music/tuning.dart';
 import '../../domain/models/song_asset_reference.dart';
 import '../../domain/models/song_document.dart';
+import '../../domain/models/song_event.dart';
 import '../../domain/models/song_id.dart';
+import '../../domain/models/song_instrument.dart';
 import '../../domain/models/song_marker.dart';
 import '../../domain/models/song_metadata.dart';
+import '../../domain/models/song_note_technique.dart';
 import '../../domain/models/song_source.dart';
+import '../../domain/models/song_track.dart';
 
 /// Stable codec failure on a malformed or unrecognised [SongDocument] JSON
 /// blob. Always carries a machine-readable [code]; never the offending value
@@ -47,6 +53,25 @@ abstract final class SongDocumentCodecErrorCode {
       'songDocument.codec.source.type.unknown';
   static const String assetsNotAList = 'songDocument.codec.assets.notAList';
   static const String markersNotAList = 'songDocument.codec.markers.notAList';
+  static const String tracksNotAList = 'songDocument.codec.tracks.notAList';
+  static const String trackKindMissing =
+      'songDocument.codec.track.kind.missing';
+  static const String trackKindUnknown =
+      'songDocument.codec.track.kind.unknown';
+  static const String trackTypeUnknown =
+      'songDocument.codec.track.type.unknown';
+  static const String eventTypeUnknown =
+      'songDocument.codec.event.type.unknown';
+  static const String eventKindUnknown =
+      'songDocument.codec.event.kind.unknown';
+  static const String eventsNotAList = 'songDocument.codec.events.notAList';
+  static const String techniqueUnknown = 'songDocument.codec.technique.unknown';
+  static const String instrumentMissing =
+      'songDocument.codec.instrument.missing';
+  static const String backingAssetMissing =
+      'songDocument.codec.backing.assetId.missing';
+  static const String backingGridOffsetInvalid =
+      'songDocument.codec.backing.gridOffset.invalid';
 }
 
 /// Maximum number of asset references a single encoded document may carry.
@@ -56,6 +81,13 @@ const int _codecMaxAssetCount = 64;
 
 /// Maximum number of markers a single encoded document may carry.
 const int _codecMaxMarkerCount = 1024;
+
+/// Maximum number of tracks a single encoded document may carry.
+const int _codecMaxTrackCount = 64;
+
+/// Maximum number of events a single encoded track may carry. Matches
+/// [maxSongTrackEventCount] in `song_track.dart`.
+const int _codecMaxTrackEventCount = 1 << 16;
 
 /// Platform-independent, deterministic JSON codec for [SongDocument].
 ///
@@ -70,6 +102,14 @@ const int _codecMaxMarkerCount = 1024;
 ///    (§5 kötött döntések 2); decoded values are flagged as UTC, and a
 ///    future-versioned schema that wants a different policy must bump
 ///    [supportedSchemaVersion] and gate here.
+/// 3. **Canonical event ordering.** Events are persisted in the order
+///    required by §5 kötött döntések 1 (start asc, then track id, then
+///    event id). The encoder canonicalises the list before serialising so
+///    the on-disk form does not depend on caller mutation order.
+/// 4. **Fail-loud on unknown subtypes.** An unrecognised track or event
+///    discriminator is rejected with a stable machine-readable code —
+///    the codec never silently drops or substitutes an unknown entry
+///    (ADR 0113 §Döntés 4).
 class SongDocumentCodec {
   /// Creates a codec. The constructor is parameterless today — the only
   /// configuration knob ([supportedSchemaVersion]) is a `static const` so a
@@ -112,6 +152,7 @@ class SongDocumentCodec {
   // ---------------------------------------------------------------------------
 
   static Map<String, dynamic> _documentToMap(SongDocument document) {
+    final orderedTracks = canonicalizeTracks(document.tracks);
     return <String, dynamic>{
       'schemaVersion': document.schemaVersion,
       'id': document.id.value,
@@ -123,6 +164,9 @@ class SongDocumentCodec {
       ],
       'markers': <Map<String, dynamic>>[
         for (final marker in document.markers) _markerToMap(marker),
+      ],
+      'tracks': <Map<String, dynamic>>[
+        for (final track in orderedTracks) _trackToMap(track),
       ],
       'createdAt': document.createdAt.toUtc().toIso8601String(),
       'updatedAt': document.updatedAt.toUtc().toIso8601String(),
@@ -240,6 +284,28 @@ class SongDocumentCodec {
       );
     }
 
+    final tracksRaw = json['tracks'];
+    final List<SongTrack> tracks;
+    if (tracksRaw is List) {
+      if (tracksRaw.length > _codecMaxTrackCount) {
+        throw SongDocumentCodecException._(
+          SongDocumentCodecErrorCode.tracksNotAList,
+          field: 'tracks',
+        );
+      }
+      tracks = <SongTrack>[
+        for (final entry in tracksRaw)
+          if (entry is Map<String, dynamic>) _trackFromMap(entry),
+      ];
+    } else if (tracksRaw == null) {
+      tracks = const <SongTrack>[];
+    } else {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.tracksNotAList,
+        field: 'tracks',
+      );
+    }
+
     return SongDocument(
       schemaVersion: schemaVersion,
       id: SongId(idValue),
@@ -248,13 +314,12 @@ class SongDocumentCodec {
       source: _sourceFromMap(sourceRaw),
       assets: assets,
       markers: markers,
+      tracks: tracks,
       createdAt: createdAt.toUtc(),
       updatedAt: updatedAt.toUtc(),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // SongId
   // ---------------------------------------------------------------------------
   // Metadata
   // ---------------------------------------------------------------------------
@@ -439,6 +504,580 @@ class SongDocumentCodec {
   }
 
   // ---------------------------------------------------------------------------
+  // Track
+  // ---------------------------------------------------------------------------
+
+  static Map<String, dynamic> _trackEnvelopeToMap(SongTrack track) {
+    return <String, dynamic>{
+      'kind': _trackKindOf(track),
+      'id': track.id.value,
+      'name': track.name,
+      'instrument': _instrumentToMap(track.instrument),
+      'enabled': track.enabled,
+    };
+  }
+
+  static Map<String, dynamic> _trackToMap(SongTrack track) {
+    final base = _trackEnvelopeToMap(track);
+    final self = switch (track) {
+      ChordTrack(:final events) => <String, dynamic>{
+        'events': <Map<String, dynamic>>[
+          for (final event in _canonicalChordEvents(events))
+            _chordEventToMap(event),
+        ],
+      },
+      StrumTrack(:final events) => <String, dynamic>{
+        'events': <Map<String, dynamic>>[
+          for (final event in _canonicalStrumEvents(events))
+            _strumEventToMap(event),
+        ],
+      },
+      NoteTrack(:final events) => <String, dynamic>{
+        'events': <Map<String, dynamic>>[
+          for (final event in _canonicalNoteEvents(events))
+            _noteEventToMap(event),
+        ],
+      },
+      LyricsTrack(:final events) => <String, dynamic>{
+        'events': <Map<String, dynamic>>[
+          for (final event in _canonicalLyricEvents(events))
+            _lyricEventToMap(event),
+        ],
+      },
+      MarkerTrack(:final events) => <String, dynamic>{
+        'events': <Map<String, dynamic>>[
+          for (final event in _canonicalMarkerEvents(events))
+            _markerEventToMap(event),
+        ],
+      },
+      BackingAudioTrack(:final assetId, :final gridOffset, :final gainDb) =>
+        <String, dynamic>{
+          'assetId': assetId.value,
+          'gridOffsetMicros': gridOffset.inMicroseconds,
+          'gainDb': gainDb,
+        },
+    };
+    return <String, dynamic>{...base, ...self};
+  }
+
+  static SongTrack _trackFromMap(Map<String, dynamic> json) {
+    final kindRaw = json['kind'];
+    if (kindRaw is! String) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.trackKindMissing,
+        field: 'kind',
+      );
+    }
+    final kind = _canonicalTrackKind(kindRaw);
+    if (kind == null) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.trackTypeUnknown,
+        field: 'kind',
+      );
+    }
+    final id = SongTrackId(
+      _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+    );
+    final name = _requireString(
+      json,
+      'name',
+      SongDocumentCodecErrorCode.trackKindUnknown,
+    );
+    final instrumentRaw = json['instrument'];
+    if (instrumentRaw is! Map<String, dynamic>) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.instrumentMissing,
+        field: 'instrument',
+      );
+    }
+    final instrument = _instrumentFromMap(instrumentRaw);
+    final enabled = (json['enabled'] as bool?) ?? true;
+
+    switch (kind) {
+      case SongTrackKind.chord:
+        return ChordTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          events: _chordEventsFromList(json['events']),
+        );
+      case SongTrackKind.strum:
+        return StrumTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          events: _strumEventsFromList(json['events']),
+        );
+      case SongTrackKind.note:
+        return NoteTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          events: _noteEventsFromList(json['events']),
+        );
+      case SongTrackKind.lyrics:
+        return LyricsTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          events: _lyricEventsFromList(json['events']),
+        );
+      case SongTrackKind.marker:
+        return MarkerTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          events: _markerEventsFromList(json['events']),
+        );
+      case SongTrackKind.backingAudio:
+        final assetIdValue = _requireString(
+          json,
+          'assetId',
+          SongDocumentCodecErrorCode.backingAssetMissing,
+        );
+        final gridMicrosRaw = json['gridOffsetMicros'];
+        final gridOffsetMicros = gridMicrosRaw is num
+            ? gridMicrosRaw.toInt()
+            : (throw SongDocumentCodecException._(
+                SongDocumentCodecErrorCode.backingGridOffsetInvalid,
+                field: 'gridOffsetMicros',
+              ));
+        return BackingAudioTrack(
+          id: id,
+          name: name,
+          instrument: instrument,
+          enabled: enabled,
+          assetId: SongAssetId(assetIdValue),
+          gridOffset: Duration(microseconds: gridOffsetMicros),
+          gainDb: (json['gainDb'] as num?)?.toDouble() ?? 0,
+        );
+    }
+    // Exhaustiveness check — _canonicalTrackKind returned a non-null
+    // value, so all six cases above must have returned. This throw is
+    // unreachable but satisfies the analyzer's flow analysis.
+    throw SongDocumentCodecException._(
+      SongDocumentCodecErrorCode.trackTypeUnknown,
+      field: 'kind',
+    );
+  }
+
+  static String _trackKindOf(SongTrack track) {
+    return switch (track) {
+      ChordTrack() => SongTrackKind.chord,
+      StrumTrack() => SongTrackKind.strum,
+      NoteTrack() => SongTrackKind.note,
+      LyricsTrack() => SongTrackKind.lyrics,
+      MarkerTrack() => SongTrackKind.marker,
+      BackingAudioTrack() => SongTrackKind.backingAudio,
+    };
+  }
+
+  static String? _canonicalTrackKind(String raw) {
+    switch (raw) {
+      case SongTrackKind.chord:
+      case SongTrackKind.strum:
+      case SongTrackKind.note:
+      case SongTrackKind.lyrics:
+      case SongTrackKind.marker:
+      case SongTrackKind.backingAudio:
+        return raw;
+      default:
+        return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Instrument
+  // ---------------------------------------------------------------------------
+
+  static Map<String, dynamic> _instrumentToMap(SongInstrument instrument) {
+    return <String, dynamic>{
+      'name': instrument.name,
+      if (instrument.tuning != null) 'tuningId': instrument.tuning!.id,
+    };
+  }
+
+  static SongInstrument _instrumentFromMap(Map<String, dynamic> json) {
+    final tuningId = json['tuningId'];
+    return SongInstrument(
+      name: _requireString(
+        json,
+        'name',
+        SongDocumentCodecErrorCode.instrumentMissing,
+      ),
+      tuning: tuningId is String ? Tunings.byId(tuningId) : null,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Events
+  // ---------------------------------------------------------------------------
+
+  static Map<String, dynamic> _chordEventToMap(SongChordEvent event) {
+    return <String, dynamic>{
+      'kind': SongEventKind.chord,
+      'id': event.id.value,
+      'startMicros': event.start.inMicroseconds,
+      'durationMicros': event.duration.inMicroseconds,
+      'symbol': event.symbol.label,
+      if (event.displayText != null) 'displayText': event.displayText,
+    };
+  }
+
+  static SongChordEvent _chordEventFromMap(Map<String, dynamic> json) {
+    _requireEventKind(json, SongEventKind.chord);
+    return SongChordEvent(
+      id: SongEventId(
+        _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+      ),
+      start: _requireDurationMicros(
+        json,
+        'startMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      duration: _requireDurationMicros(
+        json,
+        'durationMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      symbol: Chord(
+        _requireString(
+          json,
+          'symbol',
+          SongDocumentCodecErrorCode.eventTypeUnknown,
+        ),
+      ),
+      displayText: json['displayText'] as String?,
+    );
+  }
+
+  static Map<String, dynamic> _strumEventToMap(SongStrumEvent event) {
+    return <String, dynamic>{
+      'kind': SongEventKind.strum,
+      'id': event.id.value,
+      'atMicros': event.at.inMicroseconds,
+      if (event.direction != null) 'direction': event.direction!.name,
+      'accent': event.accent,
+      'muted': event.muted,
+      if (event.targetChordId != null)
+        'targetChordId': event.targetChordId!.value,
+    };
+  }
+
+  static SongStrumEvent _strumEventFromMap(Map<String, dynamic> json) {
+    _requireEventKind(json, SongEventKind.strum);
+    final directionRaw = json['direction'];
+    final direction = directionRaw is String
+        ? StrumDirection.values.firstWhere(
+            (d) => d.name == directionRaw,
+            orElse: () => throw SongDocumentCodecException._(
+              SongDocumentCodecErrorCode.eventTypeUnknown,
+              field: 'direction',
+            ),
+          )
+        : null;
+    final targetRaw = json['targetChordId'];
+    return SongStrumEvent(
+      id: SongEventId(
+        _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+      ),
+      at: _requireDurationMicros(
+        json,
+        'atMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      direction: direction,
+      accent: (json['accent'] as bool?) ?? false,
+      muted: (json['muted'] as bool?) ?? false,
+      targetChordId: targetRaw is String ? SongEventId(targetRaw) : null,
+    );
+  }
+
+  static Map<String, dynamic> _noteEventToMap(SongNoteEvent event) {
+    final techniques = <Map<String, dynamic>>[
+      for (final technique in event.techniques)
+        <String, dynamic>{
+          if (technique.kind != null) 'kind': technique.kind!.code,
+          'rawCode': technique.rawCode,
+          'displayText': technique.displayText,
+        },
+    ];
+    return <String, dynamic>{
+      'kind': SongEventKind.note,
+      'id': event.id.value,
+      'startMicros': event.start.inMicroseconds,
+      'durationMicros': event.duration.inMicroseconds,
+      'midiPitch': event.midiPitch,
+      if (event.velocity != null) 'velocity': event.velocity,
+      if (event.stringIndex != null) 'stringIndex': event.stringIndex,
+      if (event.fret != null) 'fret': event.fret,
+      if (event.tieGroupId != null) 'tieGroupId': event.tieGroupId,
+      if (techniques.isNotEmpty) 'techniques': techniques,
+    };
+  }
+
+  static SongNoteEvent _noteEventFromMap(Map<String, dynamic> json) {
+    _requireEventKind(json, SongEventKind.note);
+    final techniquesRaw = json['techniques'];
+    final techniques = <SongNoteTechnique>{};
+    if (techniquesRaw is List) {
+      for (final entry in techniquesRaw) {
+        if (entry is Map<String, dynamic>) {
+          techniques.add(_techniqueFromMap(entry));
+        }
+      }
+    }
+    return SongNoteEvent(
+      id: SongEventId(
+        _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+      ),
+      start: _requireDurationMicros(
+        json,
+        'startMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      duration: _requireDurationMicros(
+        json,
+        'durationMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      midiPitch: (json['midiPitch'] as num).toInt(),
+      velocity: (json['velocity'] as num?)?.toInt(),
+      stringIndex: (json['stringIndex'] as num?)?.toInt(),
+      fret: (json['fret'] as num?)?.toInt(),
+      tieGroupId: json['tieGroupId'] as String?,
+      techniques: techniques,
+    );
+  }
+
+  static Map<String, dynamic> _lyricEventToMap(SongLyricEvent event) {
+    return <String, dynamic>{
+      'kind': SongEventKind.lyric,
+      'id': event.id.value,
+      'atMicros': event.at.inMicroseconds,
+      'text': event.text,
+    };
+  }
+
+  static SongLyricEvent _lyricEventFromMap(Map<String, dynamic> json) {
+    _requireEventKind(json, SongEventKind.lyric);
+    return SongLyricEvent(
+      id: SongEventId(
+        _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+      ),
+      at: _requireDurationMicros(
+        json,
+        'atMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      text: _requireString(
+        json,
+        'text',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+    );
+  }
+
+  static Map<String, dynamic> _markerEventToMap(SongMarkerEvent event) {
+    return <String, dynamic>{
+      'kind': SongEventKind.marker,
+      'id': event.id.value,
+      'atMicros': event.at.inMicroseconds,
+      'label': event.label,
+      'kindCode': event.kind,
+      if (event.notes != null) 'notes': event.notes,
+    };
+  }
+
+  static SongMarkerEvent _markerEventFromMap(Map<String, dynamic> json) {
+    _requireEventKind(json, SongEventKind.marker);
+    return SongMarkerEvent(
+      id: SongEventId(
+        _requireString(json, 'id', SongDocumentCodecErrorCode.idMissing),
+      ),
+      at: _requireDurationMicros(
+        json,
+        'atMicros',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      label: _requireString(
+        json,
+        'label',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      kind: _requireString(
+        json,
+        'kindCode',
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+      ),
+      notes: json['notes'] as String?,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Technique
+  // ---------------------------------------------------------------------------
+
+  static SongNoteTechnique _techniqueFromMap(Map<String, dynamic> json) {
+    final rawCode = _requireString(
+      json,
+      'rawCode',
+      SongDocumentCodecErrorCode.techniqueUnknown,
+    );
+    final displayText = _requireString(
+      json,
+      'displayText',
+      SongDocumentCodecErrorCode.techniqueUnknown,
+    );
+    final kindRaw = json['kind'];
+    if (kindRaw is String) {
+      for (final candidate in SongNoteTechniqueKind.values) {
+        if (candidate.code == kindRaw) {
+          return SongNoteTechnique.known(candidate);
+        }
+      }
+    }
+    return SongNoteTechnique.unknown(
+      rawCode: rawCode,
+      displayText: displayText,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Canonical ordering
+  // ---------------------------------------------------------------------------
+
+  /// Returns the given tracks in stable document order (track id asc).
+  /// The input is not mutated.
+  static List<SongTrack> canonicalizeTracks(List<SongTrack> tracks) {
+    final copy = List<SongTrack>.of(tracks)
+      ..sort((a, b) => a.id.value.compareTo(b.id.value));
+    return List<SongTrack>.unmodifiable(copy);
+  }
+
+  static List<SongChordEvent> _canonicalChordEvents(List<SongChordEvent> e) {
+    return _canonicalize(e, (a, b) => a.start.compareTo(b.start));
+  }
+
+  static List<SongStrumEvent> _canonicalStrumEvents(List<SongStrumEvent> e) {
+    return _canonicalize(e, (a, b) => a.at.compareTo(b.at));
+  }
+
+  static List<SongNoteEvent> _canonicalNoteEvents(List<SongNoteEvent> e) {
+    return _canonicalize(e, (a, b) => a.start.compareTo(b.start));
+  }
+
+  static List<SongLyricEvent> _canonicalLyricEvents(List<SongLyricEvent> e) {
+    return _canonicalize(e, (a, b) => a.at.compareTo(b.at));
+  }
+
+  static List<SongMarkerEvent> _canonicalMarkerEvents(List<SongMarkerEvent> e) {
+    return _canonicalize(e, (a, b) => a.at.compareTo(b.at));
+  }
+
+  static List<T> _canonicalize<T>(List<T> events, int Function(T, T) primary) {
+    final copy = List<T>.of(events)
+      ..sort((a, b) {
+        final primaryCompare = primary(a, b);
+        if (primaryCompare != 0) return primaryCompare;
+        // Stable secondary order: rely on the identity-based Dart list sort
+        // (it preserves input order for equal keys), so authors with the
+        // same anchor do not get reordered.
+        return 0;
+      });
+    return List<T>.unmodifiable(copy);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Event-list decoding helpers
+  // ---------------------------------------------------------------------------
+
+  static List<SongChordEvent> _chordEventsFromList(Object? raw) {
+    return _eventListFromList<SongChordEvent>(
+      raw,
+      SongEventKind.chord,
+      _chordEventFromMap,
+    );
+  }
+
+  static List<SongStrumEvent> _strumEventsFromList(Object? raw) {
+    return _eventListFromList<SongStrumEvent>(
+      raw,
+      SongEventKind.strum,
+      _strumEventFromMap,
+    );
+  }
+
+  static List<SongNoteEvent> _noteEventsFromList(Object? raw) {
+    return _eventListFromList<SongNoteEvent>(
+      raw,
+      SongEventKind.note,
+      _noteEventFromMap,
+    );
+  }
+
+  static List<SongLyricEvent> _lyricEventsFromList(Object? raw) {
+    return _eventListFromList<SongLyricEvent>(
+      raw,
+      SongEventKind.lyric,
+      _lyricEventFromMap,
+    );
+  }
+
+  static List<SongMarkerEvent> _markerEventsFromList(Object? raw) {
+    return _eventListFromList<SongMarkerEvent>(
+      raw,
+      SongEventKind.marker,
+      _markerEventFromMap,
+    );
+  }
+
+  static List<T> _eventListFromList<T>(
+    Object? raw,
+    String expectedKind,
+    T Function(Map<String, dynamic>) decode,
+  ) {
+    if (raw == null) return <T>[];
+    if (raw is! List) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.eventsNotAList,
+        field: 'events',
+      );
+    }
+    if (raw.length > _codecMaxTrackEventCount) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.eventsNotAList,
+        field: 'events',
+      );
+    }
+    return <T>[
+      for (final entry in raw)
+        if (entry is Map<String, dynamic>) decode(entry),
+    ];
+  }
+
+  static void _requireEventKind(Map<String, dynamic> json, String expected) {
+    final kind = json['kind'];
+    if (kind is! String) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.eventKindUnknown,
+        field: 'kind',
+      );
+    }
+    if (kind != expected) {
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.eventTypeUnknown,
+        field: 'kind',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Low-level helpers
   // ---------------------------------------------------------------------------
 
@@ -471,5 +1110,17 @@ class SongDocumentCodec {
       throw SongDocumentCodecException._(outOfRangeCode, field: field);
     }
     return asInt;
+  }
+
+  static Duration _requireDurationMicros(
+    Map<String, dynamic> json,
+    String field,
+    String missingCode,
+  ) {
+    final value = json[field];
+    if (value is! num) {
+      throw SongDocumentCodecException._(missingCode, field: field);
+    }
+    return Duration(microseconds: value.toInt());
   }
 }

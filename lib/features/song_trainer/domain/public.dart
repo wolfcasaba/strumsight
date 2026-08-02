@@ -18,15 +18,21 @@
 /// `_isSharedDomain` allowlist — that file is in another round's scope).
 library;
 
-export 'models/song_asset_reference.dart';
-export 'models/song_document.dart';
-export 'models/song_id.dart';
-export 'models/song_marker.dart';
-export 'models/song_metadata.dart';
-export 'models/song_source.dart';
+export 'models/backing_audio_track.dart';
 export 'models/key_map.dart';
 export 'models/meter_map.dart';
+export 'models/song_asset_reference.dart';
+export 'models/song_document.dart';
+export 'models/song_event.dart';
+export 'models/song_id.dart';
+export 'models/song_instrument.dart';
+export 'models/song_marker.dart';
+export 'models/song_metadata.dart';
+export 'models/song_note_technique.dart';
 export 'models/song_measure.dart';
 export 'models/song_section.dart';
+export 'models/song_source.dart';
+export 'models/song_track.dart';
 export 'models/tempo_map.dart';
+export 'services/note_track_analyzer.dart';
 export 'services/song_time_map.dart';

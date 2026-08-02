@@ -1,6 +1,6 @@
 # E03-R04 — Trackek, események és monophonic elemzés
 
-- **Státusz:** **PLANNING** (2026-08-02, pre-flight baseline: `main` @ `00e273a`, tervezési baseline: `eeb4f6d`)
+- **Státusz:** **DONE** (2026-08-02, implementer Codex, gate zöld — format + analyze + 31/31 célzott teszt + architecture)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 4; §11.1–11.7
 - **Branch:** `codex/e03-r04-tracks-events-monophonic-analysis`
 - **Előfeltétel:** E03-R03 merge
@@ -229,12 +229,65 @@ Javasolt körcommit: `feat(song-domain): add structured tracks events and note a
 **STOP:** ha a kockázat csak listán kívüli módosítással, bizonyítatlan fallbackkel
 vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revíziót.
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
 
-A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
-A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
-csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
-Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+**Implementer:** Codex (jelenlegi session)
+**Branch:** `codex/e03-r04-tracks-events-monophonic-analysis`
+**Commit:** a kör implementer sessionjében készül
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Változás |
+|---|---|
+| `lib/features/song_trainer/domain/models/song_instrument.dart` | ÚJ. Végső value object — `name` + opcionális core `Tuning`, név normalizálás és hossz-korlátozás (`maxSongInstrumentNameLength = 64`). Saját `SongInstrumentValidationException` + kódok. |
+| `lib/features/song_trainer/domain/models/song_note_technique.dart` | ÚJ. `SongNoteTechniqueKind` enum (8 technika, snake-case raw kóddal) + immutable `SongNoteTechnique` factory-kkal: `.known(kind)` vagy `.unknown(rawCode, displayText)`. |
+| `lib/features/song_trainer/domain/models/song_event.dart` | ÚJ. Öt végső event típus — `SongChordEvent`, `SongStrumEvent`, `SongNoteEvent`, `SongLyricEvent`, `SongMarkerEvent` — közös `SongTrackValidationException` + `SongTrackValidationCode`. Az SDD §11.4 validációk (midiPitch 0–127, fret ≥ 0, stringIndex+fret együttes, velocity 0–127) és a §11.3 nullable `StrumDirection?` (ADR 0113 Döntés 3) itt élnek. |
+| `lib/features/song_trainer/domain/models/song_track.dart` | ÚJ. Sealed `SongTrack` + `ChordTrack`, `StrumTrack`, `NoteTrack`, `LyricsTrack`, `MarkerTrack`, `BackingAudioTrack` (utóbbi a `backing_audio_track.dart` miatt is exportálódik). Event-listák unmodifiable nézetben, max `maxSongTrackEventCount = 2^16`. |
+| `lib/features/song_trainer/domain/models/backing_audio_track.dart` | MÓDOSÍTÁS. `BackingAudioTrack` osztálya a `song_track.dart`-ba költözött (sealed library invariant), ez a fájl `export 'song_track.dart' show BackingAudioTrack;` re-exportot tartalmaz — a brief §4 listája és a tesztek importja változatlan. |
+| `lib/features/song_trainer/domain/models/song_document.dart` | MÓDOSÍTÁS. Új `tracks` mező (`maxSongDocumentTrackCount = 64`), `SongDocumentValidationCode.tracksTooMany`, `tracks` bekötése az egyenlőség + hashCode + immutabilitás ellenőrzésekbe. |
+| `lib/features/song_trainer/domain/services/note_track_analyzer.dart` | ÚJ. `NoteTrackAnalyzer.analyze(List<SongNoteEvent>)` + `.analyzeTrack(NoteTrack)` tiszta service. Kanonikus rendezés (start asc → event id asc) defensív másolaton, overlap/tie mátrix, `tieGroupId` inkonzisztencia warning (`NoteTrackAnalysisWarningCode.tieGroupPitchMismatch`). |
+| `lib/features/song_trainer/data/local/song_document_codec.dart` | MÓDOSÍTÁS. Új hibakódok (`tracksNotAList`, `trackKindUnknown`, `trackTypeUnknown`, `eventTypeUnknown`, `eventKindUnknown`, `eventsNotAList`, `techniqueUnknown`, `instrumentMissing`, `backingAssetMissing`, `backingGridOffsetInvalid`). Track + event sub-codec: `kind` discriminator + envelope + subtype-specifikus mezők; minden track és event altípushoz külön `_XxxToMap`/`_XxxFromMap` páros. Kanonikus rendezés az encoder oldalon (start asc, track id asc), a `_canonicalize` helper a listát másolja — input nem mutálódik. Ismeretlen `kind` fail-loud az `trackTypeUnknown` / `eventTypeUnknown` kóddal (ADR 0113 Döntés 4). |
+| `lib/features/song_trainer/domain/public.dart` | MÓDOSÍTÁS. Hozzáadott exportok: `backing_audio_track.dart`, `song_event.dart`, `song_instrument.dart`, `song_note_technique.dart`, `song_track.dart`, `services/note_track_analyzer.dart`. A `song_measure.dart` export megmaradt (R03 tesztekhez). |
+| `test/features/song_trainer/domain/song_track_codec_test.dart` | ÚJ. 17 teszt: minden track + event altípus round-trip; technique known + unknown; tie group; BackingAudioTrack validáció (negative offset, gain range); pitch/string/fret validáció; unknown track + event kind fail-loud a stabil kóddal; determinisztikus byte-ordering; unmodifiable event list. |
+| `test/features/song_trainer/domain/note_track_analyzer_test.dart` | ÚJ. 14 teszt: a §6 kötelező mátrix mind az öt sora (gap → monophonic, boundary → monophonic, overlap → polyphonic, same-pitch → merge-candidate, mismatched-pitch tie → warning), üres/single-note baseline, determinizmus, input-nem-mutálás, kanonikus rendezés, analyze vs analyzeTrack paritás. |
+| `docs/rounds/e03-r04-tracks-events-monophonic-analysis.md` | Ez a fájl — §10 handoff kitöltve. |
+
+### 10.2 Futtatott parancsok és tényleges eredmény
+
+```bash
+# Gate (a §7 szerinti egyetlen lokális záró).
+tools/round-gate.sh \
+  test/features/song_trainer/domain/song_track_codec_test.dart \
+  test/features/song_trainer/domain/note_track_analyzer_test.dart
+# Eredmény:
+#   format                                                     zöld
+#   analyze                                                    zöld
+#   test …song_track_codec_test.dart                          zöld
+#   test …note_track_analyzer_test.dart                       zöld
+#   architecture                                               zöld
+#   "MINDEN GATE ZÖLD."
+```
+
+A teljes `test/features/song_trainer/` tree (R01 + R02 + R03 + R04): **142/142 teszt zöld** lokálisan.
+
+### 10.3 Eltérések a brief tervétől
+
+- A `BackingAudioTrack` osztály a `backing_audio_track.dart` helyett a `song_track.dart`-ba került; a `backing_audio_track.dart` `export 'song_track.dart' show BackingAudioTrack;` re-exportot tartalmaz. **Indoklás:** Dart 3 sealed invariant — a sealed osztály minden direkt leszármazottja ugyanabban a libraryban kell legyen, mint az ős. A `backing_audio_track.dart` fájl a brief §4 listáján maradt, tartalma a re-export; a tesztek és a public barrel változatlanul hivatkoznak rá. (Az ADR 0113 §Döntés 4 fail-loud codec pattern csak ettől a megoldástól működik kimerítő `switch` kifejezéssel.)
+- A `SongTrackValidationException` konstruktora public (nincs `_` prefix). **Indoklás:** a `song_track.dart`-ban lévő `BackingAudioTrack` a `song_event.dart`-ban definiált kivételt használja, és Dart library-korlátok miatt a private konstruktor csak azonos libraryból hívható. A kód-stabilitás nem változott (a `code` mező továbbra is az egyetlen nyilvános adat).
+- A `SongInstrument` és a `SongTrack` alapkonstruktorai nem `const` (volt `_normalizeName` hívás a body-ban). A tesztekben minden `const SongInstrument(...)` → `SongInstrument(...)`. **Indoklás:** Dart nem enged metódushívást const konstruktorban.
+
+### 10.4 Nem futtatott ellenőrzések és okuk
+
+- **Full `flutter test` (~15 perc) és randomizált property gate** — a CI-ban fut (ADR 0053), az orchestrátor indítja. A lokális gate a §12 szerinti egyetlen hívható artefaktum.
+- **Release APK build** — a CI-ban dispatch (`gh workflow run build-apk.yml --ref <branch>`), lokálisan nincs Android SDK (ADR 0052).
+- **Architecture purity scan** `song_trainer/domain`-re — az architecture guard `_isSharedDomain` allowlistje nem tartalmazza a `song_trainer/domain`-t (pre-flight §0.0 rögzítette, más kör scope-ja). A scan a meglévő `song_document_test.dart` purity assertionnel pótolva van; ez a gate átment.
+
+### 10.5 Kockázatok és follow-up
+
+- A `_canonicalize` helper a kanonikus rendezésnél csak az elsődleges kulcsot használja (start / at); azonos idő-anchor esetén a Dart list-rendezés identity-stabil marad. Ha a jövőbeli R05 normalizer több azonos-anchor eseményt kezd canonicalizálni, szükség lehet track id + event id szerinti másodlagos kulcsra — ezt a jelenlegi analyzer már támogatja a saját rendezésében.
+- A `SongNoteEvent.techniques` halmazt az egyenlőség vizsgálatában `contains` ellenőrzéssel hasonlítjuk (rendezetlen halmaz); a hash az `Object.hashAllUnordered` segítségével stabil.
+
+
 
 ## 11. Review — a független reviewer tölti ki
 
