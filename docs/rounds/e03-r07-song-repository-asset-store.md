@@ -1,6 +1,7 @@
 # E03-R07 — Fájlrendszeres Song repository és asset store
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-02, pre-flight: Claude Sonnet 5,
+  baseline `main` @ `c31625c`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 7; §18
 - **Branch:** `codex/e03-r07-song-repository-asset-store`
 - **Előfeltétel:** E03-R06 merge
@@ -63,6 +64,89 @@ acceptance, hiányzó fixture/licence, vagy nem reprodukálható mérce esetén:
 A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
+
+**Pre-flight mérés (2026-08-02, Claude Sonnet 5, baseline `main` @ `c31625c`):**
+
+1. **A pipeline-prompt "Előre kiosztott ADR: nincs" állítása elavult — VAN
+   már kiosztott, elfogadott ADR.** [`ADR 0090`](../adr/0090-song-storage-files-and-assets.md)
+   (elfogadva E03-R01 pre-flightban) SZÓ SZERINT formalizálja ennek a
+   körnek minden architekturális döntését: a fájlrendszer-elrendezést
+   (`app_support/songs/{index.json,documents/,assets/,originals/,trash/,
+   temp/}`), a `SongRepository` `AppResult`-kontraktust
+   `expectedRevision`-nel, a kötött atomikus mentési sorrendet, az index
+   csak-metaadat szerepét, a SHA-256 content-hash asset store-t, a
+   kétlépcsős törlést és a nem-destruktív recovery-t. A brief §5 táblája
+   ezt a listát tömöríti — nincs eltérés a kettő között. **Döntés:** ez a
+   kör NEM oszt ki új ADR-számot; `ADR 0090`-et implementálja. Ha
+   implementáció közben olyan döntés merül fel, amit 0090 nem fed le, azt
+   egy ÚJ ADR-ben (következő szabad szám, jelenleg **0117**) kell
+   rögzíteni, `docs/adr/**` a tiltott zóna alól explicit kivétellel, még a
+   `PLANNING` állapot lezárása előtt.
+2. **`path_provider` és `clock` NEM szerepel a `pubspec.yaml` közvetlen
+   `dependencies:` blokkjában, de mindkettő már feloldott tranzitív
+   csomag** (`pubspec.lock`: `path_provider` a `flutter_local_notifications`/
+   `share_plus` láncból, `clock` szintén tranzitív) — pontosan ugyanaz a
+   minta, mint a már merge-elt E03-R06 `legacy_song_reader.dart`, amely
+   `package:crypto/crypto.dart`-ot importál közvetlenül anélkül, hogy a
+   `crypto` a `pubspec.yaml`-ban szerepelne (review APPROVED, 0
+   BLOCKER/MAJOR). **Döntés:** a fájlrendszeres réteg használhatja
+   `package:path_provider/path_provider.dart`-ot (`getApplicationSupportDirectory()`)
+   közvetlen importként a már befogadott precedens alapján — a
+   `pubspec.yaml` NEM kerül az engedélyezett fájllistára, nincs
+   scope-bővítés. A `clock` csomagot viszont NEM kell bevonni: az app
+   egységes konvenciója (`lib/features/practice/application/
+   practice_session_recording.dart:142`) egy egyszerű injektált
+   `DateTime Function() now` — a repository ugyanezt a mintát követi
+   (`DateTime.now` production default, fix `DateTime` teszt-injekcióval).
+3. **A brief feltételezett API-i pontosan egyeznek a kódbázissal** (nincs
+   drift): `SongDocumentCodec.encode(SongDocument) → List<int>` /
+   `.decode(List<int>) → SongDocument`
+   (`lib/features/song_trainer/data/local/song_document_codec.dart:125,133`),
+   `SongId.safeFilename()` determinisztikus fájlnév-vetítés
+   (`domain/models/song_id.dart:55`), `SongDocument.revision` nem-negatív
+   `int` (`domain/models/song_document.dart:69,103`).
+4. **A "validate" mentési lépés konkrét hívási lánca kimérve:**
+   `SongValidator.validate(document) → SongValidationReport`
+   (`domain/services/song_validator.dart:115`) +
+   `SongCapabilityResolver` — bármely `fatal` severity-jű issue
+   `canPersist=false`-ra állítja minden profilban
+   (`domain/services/song_capability_resolver.dart:51`, ADR 0114 §Döntés 2).
+   A repository `create`/`update` a mentés előtt lefuttatja a validátort,
+   és `canPersist=false` esetén stabil, feature-lokális conflict/refusal
+   kóddal utasítja el a perzisztálást — a validáció maga NEM dobhat, a
+   report NEM alakulhat át csendes sikerré.
+5. **A `lib/features/song_trainer/domain/` framework-purity-jét NEM a
+   `tool/check_architecture.dart` őrzi** (az csak
+   `lib/features/practice/domain/`-t szkenneli — 232. sor), **hanem egy
+   önálló, rekurzív teszt-scanner**
+   (`test/features/song_trainer/domain/song_document_test.dart`, „Domain
+   purity" csoport, 292–332. sor) — ez automatikusan lefedi az új
+   `domain/repositories/song_repository.dart` és
+   `song_asset_repository.dart` interfészeket is, mert a teljes
+   `domain/`-t rekurzívan bejárja. Nincs `tool/`-módosítási igény (az is
+   tiltott zóna lenne).
+6. **Nincs meglévő platform-directory absztrakció** (`lib/core/platform/`
+   csak lifecycle/permission/wakelock gateway-eket tartalmaz) — ez a brief
+   §2 állítását megerősíti. A megoldás a §4 táblán belül marad: az „app
+   support directory" felbontása (`getApplicationSupportDirectory()`)
+   injektált `Directory Function()`/`Future<Directory> Function()`
+   paraméterként él a `file_song_repository.dart`/
+   `file_song_asset_repository.dart` konstruktorában, éles drótozás
+   `song_trainer_providers.dart`-ban — NEM önálló, táblán kívüli fájlként.
+7. **Új stabil hibakód-katalógus feature-lokálisan, NEM a megosztott
+   `lib/core/foundation/app_failure.dart`-ban** (az nincs az engedélyezett
+   listán). `AppFailure.code` egy sima `String` (`app_failure.dart:76`,
+   `StorageFailure` bármilyen kódot elfogad, 125–131. sor) — a már
+   bevett minta (`SongDocumentCodecErrorCode`, `SongIdValidationCode`
+   saját, feature-lokális katalógusok) szerint a repository saját
+   `SongRepositoryErrorCode`/`SongAssetRepositoryErrorCode` abstract
+   final class-t definiál a táblán belüli fájlokban (stale revision,
+   hash mismatch, corrupt index/document, orphan asset stb.), és
+   `StorageFailure(code: <saját kód>, ...)`-ot ad vissza — nincs
+   `core/foundation` módosítási igény.
+
+Nincs feloldatlan drift. A brief §3–§9 tartalma változatlan marad, csak ez
+a szakasz (§0.0) és a fejléc bővült.
 
 ## 1. Cél
 
