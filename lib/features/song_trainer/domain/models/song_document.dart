@@ -3,6 +3,11 @@ import 'song_id.dart';
 import 'song_marker.dart';
 import 'song_metadata.dart';
 import 'song_source.dart';
+import 'key_map.dart';
+import 'meter_map.dart';
+import 'song_measure.dart';
+import 'song_section.dart';
+import 'tempo_map.dart';
 
 /// Stable exceptions for [SongDocument] construction.
 class SongDocumentValidationException implements Exception {
@@ -60,12 +65,26 @@ final class SongDocument {
     required this.updatedAt,
     List<SongAssetReference>? assets,
     List<SongMarker>? markers,
+    List<SongSection>? sections,
+    List<SongMeasure>? measures,
+    TempoMap? tempoMap,
+    MeterMap? meterMap,
+    KeyMap? keyMap,
   }) : assets = List<SongAssetReference>.unmodifiable(
          assets ?? const <SongAssetReference>[],
        ),
        markers = List<SongMarker>.unmodifiable(
          markers ?? const <SongMarker>[],
        ) {
+    this.sections = List<SongSection>.unmodifiable(
+      sections ?? const <SongSection>[],
+    );
+    this.measures = List<SongMeasure>.unmodifiable(
+      measures ?? const <SongMeasure>[],
+    );
+    this.tempoMap = tempoMap ?? TempoMap.constant(Tempo(120));
+    this.meterMap = meterMap ?? MeterMap.constant(Meter(4, 4));
+    this.keyMap = keyMap ?? KeyMap.constant(KeySignature(0, KeyMode.major));
     if (schemaVersion < songDocumentSchemaVersion) {
       throw SongDocumentValidationException._(
         SongDocumentValidationCode.schemaVersionOutOfRange,
@@ -118,6 +137,12 @@ final class SongDocument {
   /// Optional markers. Unmodifiable view — see [List.unmodifiable].
   final List<SongMarker> markers;
 
+  late final List<SongSection> sections;
+  late final List<SongMeasure> measures;
+  late final TempoMap tempoMap;
+  late final MeterMap meterMap;
+  late final KeyMap keyMap;
+
   /// Original creation timestamp. Compared in UTC; persisted as UTC ISO-8601
   /// by the codec (SDD §9.4 / §5 kötött döntések 2).
   final DateTime createdAt;
@@ -136,6 +161,11 @@ final class SongDocument {
           other.source == source &&
           _listEquals(other.assets, assets) &&
           _listEquals(other.markers, markers) &&
+          _listEquals(other.sections, sections) &&
+          _listEquals(other.measures, measures) &&
+          other.tempoMap == tempoMap &&
+          other.meterMap == meterMap &&
+          other.keyMap == keyMap &&
           other.createdAt.toUtc().microsecondsSinceEpoch ==
               createdAt.toUtc().microsecondsSinceEpoch &&
           other.updatedAt.toUtc().microsecondsSinceEpoch ==
@@ -150,6 +180,11 @@ final class SongDocument {
     source,
     Object.hashAll(assets),
     Object.hashAll(markers),
+    Object.hashAll(sections),
+    Object.hashAll(measures),
+    tempoMap,
+    meterMap,
+    keyMap,
     createdAt.toUtc().microsecondsSinceEpoch,
     updatedAt.toUtc().microsecondsSinceEpoch,
   );
