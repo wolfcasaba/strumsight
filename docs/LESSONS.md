@@ -2234,3 +2234,63 @@ tényleges gate ezt a valós CI-runneren (sekély klón, auth nélküli `gh`)
 futtatja, és csak ott derül ki a hamis biztonságérzet; a PR-t addig nem
 tekintjük zöldnek, amíg a `gh workflow run` + `gh run watch` ezt nem
 igazolja ugyanazon a `headSha`-n.
+
+## L56 — A prompt-szintű "ne commitolj" MÁSODSZOR is elégtelennek bizonyult (L49 → most E03-R05); a helyes védelem a PATH-on ülő git-guard shim, nem a security.py hard-blockjának lazítása
+
+**Mit mértünk (2026-08-02, E03-R05, H6 halt, 2. önjavító kör ugyanerre a
+tünetre).** Az `auto` router M3-hívása commitolt (`d0546f0`, baseline
+`f98a027` tetején, worktree `ss-router-e03-r05-2`) a `router.py`
+`_initial_prompt` MÁSODIK sora ("Do not commit, push, open a PR, widen
+scope, edit router/pipeline policy, or weaken tests.") és a `packet.py`
+escalation-prefix azonos tiltása ellenére; `security.py:236-237` helyesen
+hard-BLOCKolt (`current_head != baseline.baseline_head`), de csak az M3
+attempt elfogyasztása és a teljes lánc megállása UTÁN. A `HALTED` fájl
+saját gyökérok-elmélete ("a router kontraktusa sosincs kimondva az
+implementer felé") mérve TÉVES volt — a tiltás ott áll a prompt élén,
+kódban ellenőrizve (`router.py:353-364`); a valódi ok, hogy M3 a `codex`
+CLI `--sandbox danger-full-access --ask-for-approval never` móddal fut
+(a `workspace-write` bwrap hálózati névteret igényelne, amit ez a
+konténer nem tud létrehozni — E02-R21 H4), tehát a shell-rétegen semmi
+sem állítja meg a `git commit`-ot; a prompt-utasítás volt az EGYETLEN
+korlát, és ez — másodjára is (először [[L49]], E03-R02, `439392b`) — nem
+volt megbízható.
+
+**Amit [[L49]] már kizárt, és amit ez a javítás NEM csinál.** A `L49`
+(E03-R02, ugyanez a tünet) megfontolt egy `git reset --soft`-alapú
+auto-normalizálást `security.py`-ban, és SZÁNDÉKOSAN elvetette: a
+`test_scope_audit_rejects_a_model_created_commit` egy tesztelt,
+szándékos invariánst kódol ("a modell sosem birtokolhatja a Git-et,
+kivétel nélkül"), és ezt lazítani mércegyengítés lett volna (ADR 0112
+§3). Ez a javítás sem nyúl `security.py`-hoz — az invariáns és a
+hard-block változatlan marad.
+
+**A javítás.** `tools/ai_router/git-guard/git`: egy POSIX-sh shim, amit
+`tools/ai_router/execution.py` `run_codex()`-e minden M3/Terra hívás elé
+tesz a `PATH`-on (`_guarded_env`, a valódi git elérési útja a
+`STRUMSIGHT_REAL_GIT` env-változóban). A shim a globális flageken
+átlépve (`-c`, `-C`, `--git-dir`, `--work-tree`, `--namespace`)
+megkeresi az első valódi alparancsot; `commit`/`push` esetén elutasít
+(nem-nulla exit, stderr-üzenet), minden mást változatlanul a valódi
+`git`-nek ad tovább. Ez nem a `security.py` auditját helyettesíti, hanem
+egy réteggel korábban, magánál a shell-hívásnál állítja meg ugyanazt a
+mintát — a modell most már a saját alfolyamatában kap azonnali hibát a
+`git commit`-ra, nem csak egy attempttel később a routertől. Regressziós
+tesztek (a javítás előtt RED, utána GREEN, `tools/tests/test_execution.py`):
+`test_git_guard_blocks_commit_and_push_but_passes_through_other_subcommands`
+(a shim önmagában — commit/push/`-C … commit` mind elutasítva, `status`/
+`add` változatlanul átmegy), `test_run_codex_blocks_a_model_commit_at_the_shell_layer`
+(a teljes `run_codex` vezetéken át: egy hamis "codex" folyamat maga
+próbál commitolni — `d0546f0` mintája — és a commit a shell-rétegen
+elbukik, HEAD nem mozdul).
+
+**Tanulság.** Egy LLM-agent felé adott szöveges tiltás ("ne
+commitolj") NEM megbízható kontroll, még akkor sem, ha a prompt első
+sora és két különböző kódútvonal is ismétli — ha a folyamat
+sandboxolása egyébként teljes shell-hozzáférést ad (itt: a bwrap
+hálózati-névtér korlát miatt kényszerűen `danger-full-access`), a
+tényleges védelmet a shell/process-határon kell kikényszeríteni
+(PATH-shim, wrapper-bináris), nem a modell utasításkövetésére bízni. Ha
+egy korábbi self-heal ([[L49]]) már kizárt egy auditlazítást mint
+mércegyengítést, egy visszatérő tünetnél a helyes irány egy ÚJ,
+korábbi rétegen ülő kontroll — nem az elutasított lazítás
+újramérlegelése.

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Router git-guard (ADR 0112 self-heal, E03-R05 H6, measured 2026-08-02).
+#
+# MiniMax-M3/Terra run with `--sandbox danger-full-access` because
+# `--sandbox workspace-write` cannot create a bwrap network namespace in
+# this container (see execution.py build_codex_argv) — so nothing at the
+# process-sandbox layer stops the model from running `git commit`/`git
+# push`. The router's own prompt ("Do not commit, push, open a PR...") is
+# the first line of every M3/Terra prompt (router.py _initial_prompt /
+# _repair_prompt, packet.py escalation prefix) yet MiniMax-M3 still
+# committed d0546f0 in worktree ss-router-e03-r05-2, which
+# tools/ai_router/security.py's scope-audit correctly caught and hard
+# BLOCKed (current_head != baseline_head) — burning an M3 attempt and
+# halting the whole pipeline (HALTED H6, 2026-08-02T09:12:34Z) for a
+# problem the prompt alone cannot reliably prevent.
+#
+# This shim is put ahead of the real git on PATH for every M3/Terra
+# subprocess (tools/ai_router/execution.py run_codex) and rejects
+# `commit`/`push` at the shell layer instead of trusting the model to
+# follow instructions. Everything else (status/diff/add/log/...) passes
+# through untouched. security.py's scope-audit and HEAD check are left
+# exactly as-is as the audited fallback — this is defense in depth, not a
+# replacement.
+real_git="${STRUMSIGHT_REAL_GIT:-}"
+if [ -z "$real_git" ]; then
+  echo "git-guard: STRUMSIGHT_REAL_GIT is not set" >&2
+  exit 127
+fi
+
+skip_next=0
+sub=""
+for arg in "$@"; do
+  if [ "$skip_next" = "1" ]; then
+    skip_next=0
+    continue
+  fi
+  case "$arg" in
+    -c|-C|--git-dir|--work-tree|--namespace)
+      skip_next=1
+      continue
+      ;;
+    -*)
+      continue
+      ;;
+  esac
+  sub="$arg"
+  break
+done
+
+case "$sub" in
+  commit|push)
+    echo "git-guard: 'git $sub' is blocked for this profile — the orchestrator owns the Git boundary (STOP-protocol, docs/execution/08-round-brief.md)." >&2
+    exit 1
+    ;;
+esac
+
+exec "$real_git" "$@"

@@ -508,6 +508,25 @@ gate-ellenőrzés `main`-en szintén zöld. Full narrative:
    > fallback. Regressziós tesztek a VALÓDI PR #61/`3b4707f` (negatív eset) és
    > a VALÓDI, `round-gate.sh`-t módosító `6d61e23` (pozitív eset) adatain.
    > Részletek: docs/LESSONS.md L55.
+   >
+   > **E03-R05 H6 önjavító kör #2 (2026-08-02) — KÉSZ, `outcome=fixed`:** a
+   > H-GATEGUARD heal (PR #62) UTÁN a friss `auto` M3-hívás ÚJRA commitolt
+   > (`d0546f0`, worktree `ss-router-e03-r05-2`) a prompt "Do not commit,
+   > push..." tiltása ellenére — `security.py` helyesen hard-BLOCKolt, de a
+   > `HALTED` saját gyökérok-elmélete ("a tiltás sosincs kimondva") mérve
+   > téves volt (a `router.py:353-364` prompt élén ott áll). Ez ugyanaz a
+   > tünet, mint L49 (E03-R02) — ott a self-heal SZÁNDÉKOSAN elvetett egy
+   > `security.py`-lazítást mércegyengítésként. Javítás most: egy ÚJ,
+   > korábbi rétegen ülő kontroll, nem az elvetett lazítás újramérlegelése —
+   > `tools/ai_router/git-guard/git` PATH-shim, amit `execution.py`
+   > `run_codex()` minden M3/Terra hívás elé tesz, és ami `git commit`/
+   > `git push`-t a shell-rétegen utasít el (minden más git-alparancs
+   > változatlanul átmegy); `security.py` audit_scope-ja és hard-blockja
+   > ÉRINTETLEN. Regressziós tesztek (fix előtt RED, utána GREEN):
+   > `tools/tests/test_execution.py::test_git_guard_blocks_commit_and_push_but_passes_through_other_subcommands`,
+   > `::test_run_codex_blocks_a_model_commit_at_the_shell_layer` (a `d0546f0`
+   > mintát reprodukálja egy hamis "codex" folyamattal). Részletek:
+   > docs/LESSONS.md L56.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
