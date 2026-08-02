@@ -346,6 +346,80 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertIn("round=E03-R08", content)
             self.assertIn(f"hold_until={next_epoch}", content)
 
+    def test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry(self) -> None:
+        # MÉRT gyökérok (E03-R08 H6, 6. halt ugyanazon a napon, 2026-08-02
+        # 14:26-16:38 UTC): a Terra napi-hold korábban KIZÁRÓLAG
+        # attempt_selfheal() retry-ágából íródott ki, az önjavító session
+        # LLM-jelentésének SZÖVEGÉRE string-matchelve (`*"Terra"*"budget"*`).
+        # A 16:20-16:30-as heal-kör egy MÁSIK gyökérokot javított (magát a
+        # hold-író `terra_hold_if_exhausted()` függvényt, PR #70) —
+        # `outcome=fixed`, nem `retry` — így ez az ág NEM futott le, a
+        # hold-fájl nem íródott ki, és a 16:35-ös következő firing UGYANAZT
+        # a naptár-korlátozott Terra-falat érte el újra (6. halt 16:38-kor).
+        # Ez a teszt a HALT ELSŐ észlelésének útvonalát (`handle_round_halt`,
+        # a `round-status`-ban `outcome=halted`-öt jelentő ELSŐ futás) hívja
+        # végig egy kimerült Terra-státuszt szimuláló python3-stubbal —
+        # a holdnak MÁR ekkor, bármilyen self-heal session előtt ki kell
+        # íródnia, nem várhat egy retry-klasszifikációra.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            stub_bin = directory / "bin"
+            stub_bin.mkdir()
+            next_epoch = int(time.time()) + 3600
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                f"    printf '{{\"exhausted\": true, \"next_reset_epoch\": {next_epoch}}}'\n"
+                "    exit 1\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            status_file = directory / "round-status"
+            status_file.write_text(
+                "outcome=halted\n"
+                "halt=H6\n"
+                "summary=auto router task still DEFERRED (mandatory Terra high-risk review) "
+                "— Terra's daily budget is genuinely exhausted for utc_day=2026-08-02\n"
+            )
+            session_log = directory / "session-E03-R08-test.log"
+            session_log.write_text("")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(directory)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                [
+                    "bash",
+                    str(script),
+                    "--handle-round-halt",
+                    "E03-R08",
+                    str(status_file),
+                    str(session_log),
+                ],
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((directory / "HALTED").exists())
+            hold_file = directory / "terra-budget-hold"
+            self.assertTrue(
+                hold_file.exists(),
+                "a HALT első észlelése nem írta ki a Terra-holdot — a következő firing "
+                "önjavítási kísérlet elköltése nélkül újra nekifutna ugyanennek a falnak",
+            )
+            content = hold_file.read_text()
+            self.assertIn("round=E03-R08", content)
+            self.assertIn(f"hold_until={next_epoch}", content)
+
     def test_gate_fingerprint_covers_the_test_count_and_the_gate_artifacts(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         fingerprint = self.run_command(["bash", str(script), "--gate-fingerprint"])
