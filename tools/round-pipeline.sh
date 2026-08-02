@@ -324,17 +324,20 @@ terra_hold_if_exhausted() {   # $1=kör — hold-fájlt ír, ha a napi Terra-bud
   log "Terra napi automatikus budget kimerült — $round felfüggesztve $(date -Is -d "@$next_epoch")-ig (a firing-ok addig session és önjavítási kísérlet nélkül kilépnek)"
 }
 
-terra_clear_stale_halt_for() {   # $1=kör — a policy MOST vált korlátlanra: ha a HALTED fájl UGYANERRE a körre és Terra napi-budget kimerülésre hivatkozik (H6), archiválja, hogy a következő firing a KÖRT próbálja újra, ne egy újabb önjavító sessiont indítson egy már megszűnt okra
+terra_clear_stale_halt_for() {   # $1=kör — ha a HALTED fájl UGYANERRE a körre és Terra napi-budget kimerülésre hivatkozik (H6), ÉS a napi budget MOST már korlátlan, archiválja a HALTED-et, hogy a következő firing a KÖRT próbálja újra, ne egy újabb önjavító sessiont indítson egy már megszűnt okra
   # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 7. előfordulás):
-  # a hold-fájl törlése (fentebb) önmagában nem elég — a HALT-fájl ugyanarra
-  # a Terra-kimerülésre íródott ki (handle_round_halt, a HALT ELSŐ
-  # észlelésekor), és a driver 2. szakasza (`[ -f "$halt_file" ]`) attól
-  # függetlenül önjavítást indít, hogy a hold-ot itt épp most töröltük. MÉRT
-  # eset: PR #72 (a napi Terra-korlát eltávolítása) után az első firing
-  # helyesen törölte az elavult holdot, de utána a stale HALTED fájlra
-  # (halted_at=16:58, még a korlátozott policy alól) mégis egy 7. valódi
-  # heal-sessiont indított — holott a router-taszk immár korlátlan budget
-  # mellett simán lefuthatna.
+  # a hold-fájl törlése (`terra_hold_active_for`) önmagában NEM ELÉG — a
+  # HALT-fájlt egy KORÁBBI firing írta ki (`handle_round_halt`, a HALT
+  # ELSŐ észlelésekor), és a driver 2. szakasza (`[ -f "$halt_file" ]`)
+  # attól teljesen függetlenül dönt, hogy létezik-e még hold-fájl. MÉRT
+  # eset (élesben, ebben a repóban): a napi Terra-korlát eltávolítása
+  # (PR #72) utáni ELSŐ firing helyesen törölte az akkor még élő
+  # `terra-budget-hold` fájlt (a hold-fájl ezután nem is létezik többé) —
+  # de a stale HALTED-et (a MÉG korlátozott policy alatt kiírva) ettől
+  # függetlenül otthagyta, és a driver egy 7. valódi heal-sessiont
+  # indított rá. Ezért ez a függvény ÖNÁLLÓAN, a hold-fájl állapotától
+  # FÜGGETLENÜL kérdezi le a policy-t — nem feltételezi, hogy a hívó már
+  # megerősítette a korlátlan állapotot.
   local round="$1" stamp halt_round halt_code halt_summary
   [ -f "$halt_file" ] || return 0
   halt_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
@@ -343,13 +346,14 @@ terra_clear_stale_halt_for() {   # $1=kör — a policy MOST vált korlátlanra:
   [ "$halt_code" = "H6" ] || return 0
   halt_summary=$(grep -m1 '^summary=' "$halt_file" | cut -d= -f2-)
   case "$halt_summary" in
-    *"Terra"*"budget"*)
-      stamp=$(date +%Y%m%dT%H%M%S)
-      mv "$halt_file" "$state_dir/healed-$round-$stamp.txt"
-      rm -f "$heal_count_file"
-      log "a HALTED jelzés elavult volt (a Terra napi-korlát megszűnt, miközben a HALT rá hivatkozott) — törölve, a(z) $round kör önjavítás nélkül újra sorra kerül"
-      ;;
+    *"Terra"*"budget"*) : ;;
+    *) return 0 ;;
   esac
+  terra_daily_budget_is_unlimited || return 0
+  stamp=$(date +%Y%m%dT%H%M%S)
+  mv "$halt_file" "$state_dir/healed-$round-$stamp.txt"
+  rm -f "$heal_count_file"
+  log "a HALTED jelzés elavult volt (a Terra napi-korlát megszűnt, miközben a HALT rá hivatkozott) — törölve, a(z) $round kör önjavítás nélkül újra sorra kerül"
 }
 
 terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébként (lejárt/nincs/másik kör → törli a lejárt/idegen fájlt)
@@ -366,7 +370,6 @@ terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébkén
         return 0
       fi
       log "Terra napi automatikus budget korlátlan — az elavult hold törölve ($round)"
-      terra_clear_stale_halt_for "$round"
       return 1
     fi
     log "Terra napi budget felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"
@@ -578,6 +581,10 @@ case "${1:-}" in
     handle_round_halt "${2:-}" "${3:-}" "${4:-}"
     exit 0
     ;;
+  --terra-clear-stale-halt)    # $2=kör → teszthorog: meghívja terra_clear_stale_halt_for-ot (E03-R08 H6 7. javítás)
+    terra_clear_stale_halt_for "${2:-}"
+    exit 0
+    ;;
 esac
 
 # --- 1. Zár ---------------------------------------------------------------
@@ -605,6 +612,7 @@ fi
 if [ -n "$active_round" ] && terra_hold_active_for "$active_round"; then
   exit 0
 fi
+[ -n "$active_round" ] && terra_clear_stale_halt_for "$active_round"
 
 # --- 2. Halt-állapot → önjavítás (ADR 0112) -------------------------------
 # A halt nem a lánc vége, hanem az önjavító kör bemenete. A driver ugyanezen a
