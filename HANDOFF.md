@@ -759,6 +759,27 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > mutatott ugyanazzal az EGY sub-teszttel, a #68/#69/#70 mintáját
    > követve a CodeRabbit-checkkel merge-elődött. Részletek:
    > `docs/LESSONS.md` L64.
+   >
+   > **A napi Terra-korlát eltávolítása (PR #72, `53b9637`, L65):**
+   > user-döntésre `max_automatic_terra_calls_per_utc_day = 0` mostantól
+   > korlátlant jelent — a `daily_count=3/3` fal maga szűnt meg, nem csak a
+   > driver retry-viselkedése rá. A taskonkénti 1 Terra-hívásos korlát és a
+   > magas kockázatú review kötelezettsége változatlan.
+   >
+   > **E03-R08 H6 önjavító kör, 7. előfordulás (2026-08-02 18:45 UTC) — KÉSZ,
+   > `outcome=fixed`:** a napi korlát megszűnése (fent) után az első
+   > cron-firing helyesen törölte az elavult `terra-budget-hold` fájlt, de a
+   > MELLETTE élő `.pipeline/HALTED` (a MÉG korlátozott policy alatt,
+   > `halted_at=16:58:03Z`-kor kiírva) érintetlen maradt — a driver 2.
+   > szakasza ettől függetlenül egy ÚJABB, valódi önjavító sessiont indított
+   > egy már megszűnt okra. Javítás: `terra_clear_stale_halt_for()`
+   > (`tools/round-pipeline.sh`) a hold-törléssel EGYÜTT archiválja a stale
+   > H6/Terra-budget HALTED-et és nullázza a kísérletszámlálót, ha ugyanarra
+   > a körre vonatkozik — a következő firing a kört próbálja újra, nem az
+   > önjavítást. Regressziós teszt:
+   > `test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused`
+   > — RED az 53b9637 ellen, GREEN utána; `tools/tests -q` 149/149 zöld.
+   > PR #73. Részletek: `docs/LESSONS.md` L66.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

@@ -2817,3 +2817,38 @@ feladatszinten korlátozható (itt: egy Terra/task, objektív eszkaláció,
 high-risk review), a teljes használatot pedig audit-ledgerrel mérd. Valódi
 provider 429/quota/auth/hálózati hibát továbbra se minősíts modellkudarcnak és
 ne kerülj meg új providerrel; az természetes, fail-closed megállási pont.
+
+## L66 — [[L65]] policy-váltása a hold-fájlt törölte, de a hozzá tartozó HALTED jelzést nem — a driver egy már megszűnt okra indított 7. valódi önjavító sessiont (E03-R08 H6, 2026-08-02 18:45 UTC)
+
+**Mit mértünk.** A [[L65]] javítás (napi Terra-korlát → korlátlan, PR #72)
+után az első cron-firing helyesen ismerte fel, hogy a korábbi
+`terra-budget-hold` elavult, és törölte azt (`terra_hold_active_for()`,
+"Terra napi automatikus budget korlátlan — az elavult hold törölve" napló-
+sor). A driver főági 2. szakasza viszont a hold állapotától FÜGGETLENÜL,
+kizárólag a `.pipeline/HALTED` fájl LÉTÉRE kérdez rá — és az a fájl, amit a
+MÉG korlátozott policy alatt írt ki `handle_round_halt` (`halted_at=
+2026-08-02T16:58:03Z`), érintetlenül a lemezen maradt. A driver ezért egy
+valódi önjavító sessiont indított (a mostani, 7. E03-R08 H6 előfordulás
+aznap) egy olyan Terra-kimerülésre, ami a saját korábbi javítása óta már
+nem is létezik.
+
+**A javítás (Class A, infrastruktúra).** `terra_clear_stale_halt_for()` a
+hold-törléssel EGYÜTT fut `terra_hold_active_for()`-ban: ha a `.pipeline/
+HALTED` ugyanarra a körre, `halt=H6`-ra és egy Terra-budget-summary-ra
+hivatkozik, archiválja (`healed-<kör>-<stamp>.txt`) és nullázza a
+kísérletszámlálót — a következő firing így a KÖRT próbálja újra, nem indít
+felesleges önjavítást. `tools/round-pipeline.sh`, PR #73.
+
+**Regressziós teszt.** `test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused`
+(`tools/tests/test_pipeline_integration.py`) — a valódi mért állapotot
+(hold + stale H6 HALTED, mindkettő E03-R08-ra) reprodukálja; RED az 53b9637
+(a [[L65]] commit) ellen, GREEN a javítás után. `python3 -m pytest
+tools/tests -q` → 149 teszt, 53 subtest, mind zöld.
+
+**Hogyan alkalmazd.** Egy hold/circuit-breaker LEÁLLÁSÁNAK törlése soha nem
+elég önmagában, ha van egy MÁSIK, tartós jelzőfájl (itt: HALTED) is,
+amit ugyanaz az esemény hozott létre — mindkettőt egyszerre, ugyanabban a
+függvényben kell frissíteni, különben a kettő szétcsúszik, és a "megoldott"
+állapot csendben visszaesik "még mindig megállva"-ba. Lásd [[L64]]-et is:
+ugyanez a minta (egy javítás csak az egyik ágat frissíti) korábban a
+hold-írásnál is előfordult.
