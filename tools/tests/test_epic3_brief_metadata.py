@@ -42,7 +42,17 @@ class Epic3BriefMetadataTest(unittest.TestCase):
                     re.findall(r"^\| `([^`]+)` \|", section(text, 4), re.MULTILINE)
                 )
                 self.assertTrue(scope_paths)
-                self.assertEqual(brief.metadata.allowed_paths, scope_paths)
+                # A pre-flight által (nem az implementerrel) írt docs/adr/**
+                # útvonalak a §4 emberi táblában dokumentáció céljából
+                # szerepelnek, de az `ai-router` TOML `allowed_paths`-a
+                # SZÁNDÉKOSAN nem tartalmazza őket, mert az implementer-
+                # modell ezekhez sosem nyúl (l. pl.
+                # docs/rounds/e03-r01-baseline-and-boundaries.md §4 záró
+                # bekezdése). Mérve 2026-08-02, E03-R02 H6 önjavító kör.
+                implementer_scope_paths = tuple(
+                    path for path in scope_paths if not path.startswith("docs/adr/")
+                )
+                self.assertEqual(brief.metadata.allowed_paths, implementer_scope_paths)
                 self.assertFalse(any(value in {".", "*", "**"} for value in scope_paths))
 
                 gate_section = section(text, 7)
