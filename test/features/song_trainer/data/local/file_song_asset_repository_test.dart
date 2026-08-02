@@ -325,5 +325,140 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(result.valueOrNull, isNull);
     });
+
+    test(
+      'MAJOR 2 — corrupting on-disk bytes makes get() return corruptAsset',
+      () async {
+        final store = await openStore();
+        final bytes = _bytes([7, 14, 21, 28, 35]);
+        final hash = _hash(bytes);
+        await store.put(
+          SongAssetWriteRequest(
+            bytes: bytes,
+            assetId: SongAssetId('integrity-asset'),
+            extension: 'mp3',
+            expectedSha256: hash,
+          ),
+        );
+        // Bit-rot the asset bytes on disk (simulate partial write or
+        // filesystem corruption). The store must NOT return them
+        // verbatim — the re-hash on read must reject the mismatch.
+        final assetFile = File('${sandbox.path}/songs/assets/$hash.mp3');
+        assetFile.writeAsBytesSync(_bytes([0, 0, 0, 0, 0]));
+        final result = await store.get(hash);
+        expect(result.isFailure, isTrue);
+        expect(
+          result.failureOrNull!.code,
+          SongAssetRepositoryErrorCode.corruptAsset,
+        );
+        // And the bytes are NOT returned.
+        expect(result.valueOrNull, isNull);
+      },
+    );
+  });
+
+  group('FileSongAssetRepository.sidecar integrity', () {
+    test(
+      'MAJOR 3 — corrupt summary JSON returns corruptSidecar on summary()',
+      () async {
+        final store = await openStore();
+        final bytes = _bytes([11, 22, 33]);
+        final hash = _hash(bytes);
+        await store.put(
+          SongAssetWriteRequest(
+            bytes: bytes,
+            assetId: SongAssetId('summary-bad'),
+            extension: 'mp3',
+            expectedSha256: hash,
+          ),
+        );
+        // Hand-corrupt the summary sidecar — invalid JSON.
+        final summaryFile = File(
+          '${sandbox.path}/songs/assets/$hash.summary.json',
+        );
+        summaryFile.writeAsStringSync('this is not json');
+        final result = await store.summary(hash);
+        expect(result.isFailure, isTrue);
+        expect(
+          result.failureOrNull!.code,
+          SongAssetRepositoryErrorCode.corruptSidecar,
+        );
+      },
+    );
+
+    test(
+      'MAJOR 3 — corrupt refs JSON returns corruptSidecar on incrementReference',
+      () async {
+        final store = await openStore();
+        final bytes = _bytes([44, 55, 66]);
+        final hash = _hash(bytes);
+        await store.put(
+          SongAssetWriteRequest(
+            bytes: bytes,
+            assetId: SongAssetId('refs-bad'),
+            extension: 'mp3',
+            expectedSha256: hash,
+          ),
+        );
+        final refsFile = File('${sandbox.path}/songs/assets/$hash.refs.json');
+        refsFile.writeAsStringSync('{not an array');
+        final result = await store.incrementReference(
+          SongAssetHolder.forDocument(
+            sha256: hash,
+            holderId: SongAssetId('doc-1'),
+          ),
+        );
+        expect(result.isFailure, isTrue);
+        expect(
+          result.failureOrNull!.code,
+          SongAssetRepositoryErrorCode.corruptSidecar,
+        );
+      },
+    );
+
+    test(
+      'MAJOR 4 — asset bytes & sidecar writes route through the AtomicFileWriter '
+      '(no .tmp-* residue inside assets/)',
+      () async {
+        final store = await openStore();
+        final bytes = _bytes([77, 88, 99]);
+        final hash = _hash(bytes);
+        await store.put(
+          SongAssetWriteRequest(
+            bytes: bytes,
+            assetId: SongAssetId('atomic-asset'),
+            extension: 'mp3',
+            expectedSha256: hash,
+          ),
+        );
+        // Every temp file MUST live under `<songs>/temp/`, never
+        // next to the asset itself. The recovery scanner only walks
+        // `temp/`, so any residue inside `assets/` would be
+        // classified as an unrecognised file (the previous
+        // implementation left a sibling .tmp-* inside `assets/`).
+        final assetsDir = Directory('${sandbox.path}/songs/assets');
+        final assetsResidue = assetsDir.listSync().whereType<File>().where(
+          (f) => RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path),
+        );
+        expect(
+          assetsResidue,
+          isEmpty,
+          reason: 'no .tmp-<pid>-<counter> residue inside assets/',
+        );
+        // The asset itself IS present and matches the expected hash.
+        final assetFile = File('${sandbox.path}/songs/assets/$hash.mp3');
+        expect(assetFile.existsSync(), isTrue);
+        expect(assetFile.readAsBytesSync(), equals(bytes));
+        // The sidecar files survived the round-trip too.
+        expect(
+          File('${sandbox.path}/songs/assets/$hash.summary.json').existsSync(),
+          isTrue,
+        );
+        expect(
+          File('${sandbox.path}/songs/assets/$hash.refs.json').existsSync(),
+          isTrue,
+        );
+      },
+    );
   });
 }

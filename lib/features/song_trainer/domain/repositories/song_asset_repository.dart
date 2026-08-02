@@ -46,6 +46,20 @@ abstract final class SongAssetRepositoryErrorCode {
   /// it. Triggers a recoverable report (corrupt / orphan reference).
   static const String missingAsset = 'songAssetRepository.missingAsset';
 
+  /// The asset bytes on disk failed to re-hash against the SHA-256 in
+  /// the asset's filename. The asset is treated as corrupted — the
+  /// `get()` call returns a [Failure] with this code rather than
+  /// silently returning the mismatched bytes (ADR 0090 §Döntés 5,
+  /// brief §6 mandatory matrix row "asset hash mismatch").
+  static const String corruptAsset = 'songAssetRepository.corruptAsset';
+
+  /// A per-asset sidecar file (`<sha256>.summary.json` or
+  /// `<sha256>.refs.json`) was structurally invalid: the JSON could not
+  /// be decoded, or a required field carried the wrong type. The
+  /// repository never lets a `FormatException` / `TypeError` escape
+  /// to the caller — it surfaces this stable code instead.
+  static const String corruptSidecar = 'songAssetRepository.corruptSidecar';
+
   /// Generic I/O failure surfaced cleanly. Cause lives inside
   /// `failure.cause` for the logger.
   static const String io = 'songAssetRepository.io';

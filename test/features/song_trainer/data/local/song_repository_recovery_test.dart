@@ -335,6 +335,13 @@ void main() {
     });
 
     test('rejects a summary entry missing revision', () {
+      // The fixture is VALID JSON — only the `revision` field is
+      // missing. The previous version of this test had a stray `"`
+      // and an unclosed array, so it threw at jsonDecode (FormatException
+      // -> rootNotAnObject) instead of exercising the missing-revision
+      // validation branch. The current version proves the codec
+      // refuses a structurally-complete-but-field-incomplete entry
+      // with the documented `summaryEntryIncomplete` code.
       final raw =
           '{"schemaVersion":1,"summaries":[{"documentId":"x",'
               '"title":"a","artist":null,"tags":[],'
@@ -342,14 +349,19 @@ void main() {
               '"lastPracticedAt":"2026-08-02T00:00:00Z",'
               '"capability":null,'
               '"sourceType":"createdInApp",'
-              '"favorite":false,"archived":false,"trashed":false",'
+              '"favorite":false,"archived":false,"trashed":false,'
               '"documentHash":"' +
           _zeroHash() +
-          '"}'
-              '}';
+          '"}]}';
       expect(
         () => codec.decode(utf8.encode(raw)),
-        throwsA(isA<SongIndexCodecException>()),
+        throwsA(
+          isA<SongIndexCodecException>().having(
+            (e) => e.code,
+            'code',
+            SongIndexCodecErrorCode.summaryEntryIncomplete,
+          ),
+        ),
       );
     });
 

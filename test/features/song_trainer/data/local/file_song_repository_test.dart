@@ -21,8 +21,11 @@ import 'package:strumsight/features/song_trainer/data/local/file_song_repository
 import 'package:strumsight/features/song_trainer/data/local/song_document_codec.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_section.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
+import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 
 SongDocument _sample({
@@ -183,6 +186,81 @@ void main() {
       expect(second.isFailure, isTrue);
       expect(second.failureOrNull!.code, SongRepositoryErrorCode.alreadyExists);
     });
+
+    test(
+      'BLOCKER 1 — refuses a fatal validation issue before touching disk',
+      () async {
+        final repo = await openRepository();
+        // The validator raises `sectionRangeExceedsMeasures` (fatal)
+        // when a section's endMeasureExclusive goes past the document's
+        // measure list. The repository MUST refuse the write without
+        // landing any bytes on disk.
+        final stamp = DateTime.utc(2026, 8, 2, 12);
+        final bad = SongDocument(
+          schemaVersion: songDocumentSchemaVersion,
+          id: SongId('fatal-create'),
+          revision: 0,
+          metadata: SongMetadata(title: 'Fatal'),
+          source: SongSource(
+            type: SongSourceType.createdInApp,
+            originalFileName: 'fatal.json',
+            sha256: 'a' * 64,
+            importedAt: stamp,
+            importerVersion: 'test@1',
+          ),
+          createdAt: stamp,
+          updatedAt: stamp,
+          sections: <SongSection>[
+            SongSection(
+              id: SongSectionId('sec-1'),
+              name: 'verse',
+              startMeasure: 0,
+              endMeasureExclusive: 8,
+            ),
+          ],
+          measures: <SongMeasure>[
+            SongMeasure(index: 0, durationBeats: BeatPosition.fromTicks(4096)),
+          ],
+        );
+        final result = await repo.create(bad);
+        expect(result.isFailure, isTrue);
+        expect(
+          result.failureOrNull!.code,
+          SongRepositoryErrorCode.notPersistable,
+        );
+        final documentFile = File(
+          '${sandbox.path}/songs/documents/fatal-create.json',
+        );
+        final indexFile = File('${sandbox.path}/songs/index.json');
+        expect(documentFile.existsSync(), isFalse);
+        expect(indexFile.existsSync(), isFalse);
+        // No `.tmp-*` residue landed in temp/ — the validator short-
+        // circuited BEFORE the staged write (BLOCKER 1 invariant).
+        final tempDir = Directory('${sandbox.path}/songs/temp');
+        if (tempDir.existsSync()) {
+          final residue = tempDir.listSync().whereType<File>().where(
+            (f) => RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path),
+          );
+          expect(residue, isEmpty);
+        }
+      },
+    );
+
+    test('persists the capability summary on a successful create', () async {
+      final repo = await openRepository();
+      final song = _sample(id: SongId('cap-1'));
+      final result = await repo.create(song);
+      expect(result.isSuccess, isTrue);
+      final listResult = await repo.list(
+        const SongQuery(includeTrashed: true, includeArchived: true),
+      );
+      expect(listResult.isSuccess, isTrue);
+      final summary = listResult.valueOrNull!.single;
+      expect(summary.capability, isNotNull);
+      expect(summary.capability!.canPersist, isTrue);
+      expect(summary.capability!.canTrain, isTrue);
+      expect(summary.capability!.canExport, isTrue);
+    });
   });
 
   group('FileSongRepository.update', () {
@@ -251,6 +329,64 @@ void main() {
           fileOnDisk.readAsBytesSync(),
         );
         expect(decoded.revision, 4);
+      },
+    );
+
+    test(
+      'BLOCKER 1 — refuses a fatal validation issue before bumping revision',
+      () async {
+        final repo = await openRepository();
+        final stamp = DateTime.utc(2026, 8, 2);
+        await repo.create(
+          _sample(
+            id: SongId('song-fatal-update'),
+            revision: 0,
+            createdAt: stamp,
+            updatedAt: stamp,
+          ),
+        );
+        // Build the incoming document with the same id but a fatal
+        // validation issue. The repository MUST refuse with
+        // notPersistable AND keep the on-disk revision at 0.
+        final bad = SongDocument(
+          schemaVersion: songDocumentSchemaVersion,
+          id: SongId('song-fatal-update'),
+          revision: 0,
+          metadata: SongMetadata(title: 'Fatal Update'),
+          source: SongSource(
+            type: SongSourceType.createdInApp,
+            originalFileName: 'fatal.json',
+            sha256: 'a' * 64,
+            importedAt: stamp,
+            importerVersion: 'test@1',
+          ),
+          createdAt: stamp,
+          updatedAt: stamp.add(const Duration(hours: 1)),
+          sections: <SongSection>[
+            SongSection(
+              id: SongSectionId('sec-1'),
+              name: 'verse',
+              startMeasure: 0,
+              endMeasureExclusive: 99,
+            ),
+          ],
+          measures: <SongMeasure>[
+            SongMeasure(index: 0, durationBeats: BeatPosition.fromTicks(4096)),
+          ],
+        );
+        final result = await repo.update(bad, expectedRevision: 0);
+        expect(result.isFailure, isTrue);
+        expect(
+          result.failureOrNull!.code,
+          SongRepositoryErrorCode.notPersistable,
+        );
+        final fileOnDisk = File(
+          '${sandbox.path}/songs/documents/song-fatal-update.json',
+        );
+        final decoded = const SongDocumentCodec().decode(
+          fileOnDisk.readAsBytesSync(),
+        );
+        expect(decoded.revision, 0);
       },
     );
   });
@@ -372,15 +508,18 @@ void main() {
       expect(target.existsSync(), isTrue);
       expect(target.readAsBytesSync(), equals(bytes));
       // The temp residue must NOT persist after a successful rename —
-      // the recovery scanner relies on this invariant.
+      // the recovery scanner relies on this invariant. The writer's
+      // real suffix is `.tmp-<pid>-<counter>` (the bare `.tmp` is the
+      // stem the suffix is built from), so the filter must match the
+      // full pattern — otherwise the assertion is vacuous.
       final residue = atomicSandbox
           .listSync(recursive: true)
           .whereType<File>()
-          .where((f) => f.path.endsWith(AtomicFileWriter.tempExtension));
+          .where((f) => RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path));
       expect(
         residue,
         isEmpty,
-        reason: 'no .tmp-* residue after a successful rename',
+        reason: 'no .tmp-<pid>-<counter> residue after a successful rename',
       );
     });
 
@@ -400,11 +539,12 @@ void main() {
       expect(outcome.attempts, greaterThanOrEqualTo(1));
       // Target must still carry the pre-write bytes.
       expect(target.readAsBytesSync(), equals(original));
-      // No stray temp file inside the containing dir.
+      // No stray temp file inside the containing dir — same pattern
+      // match as above, scoped to the verifier-false failure path.
       final leak = atomicSandbox
           .listSync(recursive: true)
           .whereType<File>()
-          .where((f) => f.path.endsWith(AtomicFileWriter.tempExtension));
+          .where((f) => RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path));
       expect(leak, isEmpty, reason: 'temp residue on failed write');
     });
 
@@ -444,5 +584,51 @@ void main() {
       expect(outcome.committed, isTrue);
       expect(verifierCalls, 1);
     });
+
+    test(
+      'BLOCKER 5/MAJOR 5 — staged temp file lives in the stagingDirectory',
+      () {
+        final writer = const AtomicFileWriter();
+        final target = targetFile();
+        final staging = Directory('${atomicSandbox.path}/staging')
+          ..createSync(recursive: true);
+        final bytes = Uint8List.fromList('staged'.codeUnits);
+        final outcome = writer.write(
+          target: target,
+          bytes: bytes,
+          stagingDirectory: staging,
+          verifier: (b) {
+            expect(b, equals(bytes));
+            return true;
+          },
+        );
+        expect(outcome.committed, isTrue);
+        // The target must carry the new bytes.
+        expect(target.existsSync(), isTrue);
+        expect(target.readAsBytesSync(), equals(bytes));
+        // The staging directory must NOT carry a leftover `.tmp-*`
+        // file — the atomic invariant holds regardless of where the
+        // temp lived.
+        final residue = staging.listSync().whereType<File>().where(
+          (f) => RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path),
+        );
+        expect(
+          residue,
+          isEmpty,
+          reason: 'no .tmp-<pid>-<counter> residue inside stagingDirectory',
+        );
+        // The target's sibling dir must NOT carry a `.tmp-*` file —
+        // the temp was staged under `staging/`, not next to the target.
+        final siblingResidue = atomicSandbox
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where(
+              (f) =>
+                  f.path.startsWith('${atomicSandbox.path}/payload.bin') &&
+                  RegExp(r'\.tmp-\d+-\d+$').hasMatch(f.path),
+            );
+        expect(siblingResidue, isEmpty);
+      },
+    );
   });
 }

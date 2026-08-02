@@ -49,10 +49,13 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 
 import '../../../../core/foundation/app_result.dart';
+import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_document.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_source.dart';
 import '../../domain/repositories/song_repository.dart';
+import '../../domain/services/song_capability_resolver.dart';
+import '../../domain/services/song_validator.dart';
 import 'atomic_file_writer.dart';
 import 'song_document_codec.dart';
 import 'song_index_codec.dart';
@@ -93,6 +96,8 @@ final class FileSongRepository implements SongRepository {
     required this.documentCodec,
     required this.indexCodec,
     required this.writer,
+    required this.validator,
+    required this.capabilityResolver,
   }) : _clock = clock;
 
   /// Root of the song-tree on disk.
@@ -107,7 +112,32 @@ final class FileSongRepository implements SongRepository {
   /// Atomic writer for the staged temp + rename sequence.
   final AtomicFileWriter writer;
 
+  /// Validator used by [create] / [update] / [moveToTrash] to refuse
+  /// fatal-severity documents before they touch disk (ADR 0090 §3
+  /// step 1, ADR 0114 §Döntés 2).
+  final SongValidator validator;
+
+  /// Capability resolver used to populate the [SongCapabilitySummary]
+  /// in the index entry on every successful write.
+  final SongCapabilityResolver capabilityResolver;
+
+  /// Lazily-built staging directory inside the songs root's `temp/`
+  /// subdirectory. The atomic writer places its staged temp files here
+  /// so the recovery scanner's `temp/` walk sees real crash residue
+  /// (ADR 0090 §Döntés 1).
+  Directory? _stagingDirectoryCache;
+
   final DateTime Function() _clock;
+
+  Directory _stagingDirectory() {
+    final cached = _stagingDirectoryCache;
+    if (cached != null) return cached;
+    final built = Directory(
+      '${directory.path}/${SongRepositoryLayout.tempDirectory}',
+    );
+    _stagingDirectoryCache = built;
+    return built;
+  }
 
   /// Open a repository against an existing [directory] (which may be
   /// fresh or pre-existing — the constructor creates only the per-feature
@@ -124,6 +154,8 @@ final class FileSongRepository implements SongRepository {
       documentCodec: const SongDocumentCodec(),
       indexCodec: const SongIndexCodec(),
       writer: const AtomicFileWriter(),
+      validator: const SongValidator(),
+      capabilityResolver: const SongCapabilityResolver(),
     );
   }
 
@@ -201,6 +233,14 @@ final class FileSongRepository implements SongRepository {
 
   @override
   Future<AppResult<void>> create(SongDocument document) async {
+    // Step 1 (ADR 0090 §3 / ADR 0114 §Döntés 2): refuse any fatal
+    // validation issue BEFORE touching the filesystem.
+    final capability = _resolveCapability(document);
+    if (!capability.canPersist) {
+      return songRepositoryFailure<void>(
+        SongRepositoryErrorCode.notPersistable,
+      );
+    }
     try {
       final live = _DocumentLocation.live(directory, document.id);
       if (live.file.existsSync()) {
@@ -211,7 +251,7 @@ final class FileSongRepository implements SongRepository {
       final encoded = Uint8List.fromList(documentCodec.encode(document));
       await _writeAtomic(live, encoded);
       await _commitIndex(
-        _buildSummary(document, trashed: false),
+        _buildSummary(document, trashed: false, capability: capability),
         op: _IndexOp.replace,
       );
       return AppResult<void>.success(null);
@@ -243,10 +283,18 @@ final class FileSongRepository implements SongRepository {
         );
       }
       final bumped = _bumpRevision(existingDoc, document);
+      // Step 1 (ADR 0090 §3 / ADR 0114 §Döntés 2): refuse any fatal
+      // validation issue BEFORE bumping the persisted revision.
+      final capability = _resolveCapability(bumped);
+      if (!capability.canPersist) {
+        return songRepositoryFailure<void>(
+          SongRepositoryErrorCode.notPersistable,
+        );
+      }
       final encoded = Uint8List.fromList(documentCodec.encode(bumped));
       await _writeAtomic(live, encoded);
       await _commitIndex(
-        _buildSummary(bumped, trashed: false),
+        _buildSummary(bumped, trashed: false, capability: capability),
         op: _IndexOp.replace,
       );
       return AppResult<void>.success(null);
@@ -275,6 +323,10 @@ final class FileSongRepository implements SongRepository {
         }
         return songRepositoryFailure<void>(SongRepositoryErrorCode.notFound);
       }
+      // Re-validate before the trashed copy lands so a corrupt or
+      // schema-broken document is not silently preserved under a new
+      // path (the recovery scanner reports the original location; the
+      // trash copy would otherwise leak validation failures).
       final bytes = live.file.readAsBytesSync();
       try {
         await _writeAtomic(trashed, bytes);
@@ -380,6 +432,7 @@ final class FileSongRepository implements SongRepository {
     final outcome = writer.write(
       target: file,
       bytes: bytes,
+      stagingDirectory: _stagingDirectory(),
       verifier: (back) {
         // Round-trip the bytes through the appropriate decoder so a
         // future regression to a partial write is caught before the
@@ -414,13 +467,27 @@ final class FileSongRepository implements SongRepository {
     }
   }
 
-  SongSummary _buildSummary(SongDocument document, {required bool trashed}) {
+  SongSummary _buildSummary(
+    SongDocument document, {
+    required bool trashed,
+    SongCapabilityReport? capability,
+  }) {
     final documentUpdatedAt = document.updatedAt.toUtc();
     final metadata = document.metadata;
     // `lastPracticedAt` is denormalised from the document's own
     // updatedAt; the Practice Engine updates this once a real session
     // runs (out of scope for R07 — the field stays `updatedAt` for
     // now and migrates in a follow-up round).
+    final summary = capability == null
+        ? null
+        : SongCapabilitySummary(
+            canPersist: capability.canPersist,
+            canTrain: capability.canTrain,
+            canExport: capability.canExport,
+            chordScoring: capability.chord.scoring,
+            pitchScoring: capability.pitch.scoring,
+            lastValidatedAt: _clock().toUtc(),
+          );
     return SongSummary(
       documentId: document.id,
       title: metadata.title,
@@ -428,13 +495,21 @@ final class FileSongRepository implements SongRepository {
       tags: List<String>.unmodifiable(metadata.tags),
       updatedAt: documentUpdatedAt,
       lastPracticedAt: documentUpdatedAt,
-      capability: null,
+      capability: summary,
       sourceType: document.source.type,
       favorite: false,
       archived: false,
       trashed: trashed,
       revision: document.revision,
       documentHash: _documentHash(documentCodec.encode(document)),
+    );
+  }
+
+  SongCapabilityReport _resolveCapability(SongDocument document) {
+    final report = validator.validate(document);
+    return capabilityResolver.resolve(
+      report: report,
+      profile: SongCapabilityProfile.persist,
     );
   }
 

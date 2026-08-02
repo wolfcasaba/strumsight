@@ -412,6 +412,66 @@ EXIT: 0
   "Domain purity" group fedi le (a `_findPurityViolations` scanner
   az új `repositories/*.dart`-ra is rásimul).
 
+### 10.5 Javító kör #1 (2026-08-02, MiniMax M3, router `resume`)
+
+A független review (`docs/reviews/e03-r07-song-repository-asset-store-review.md`,
+CHANGES REQUESTED — 1 BLOCKER + 6 MAJOR + 5 MINOR/NOTE) leletlistájával
+indított javító kör mind a hét BLOCKER/MAJOR leletet lezárta, mindegyiket
+saját nevesített regresszós teszttel:
+
+- **BLOCKER 1** (hiányzó validáció) — `FileSongRepository` most
+  `SongValidator`/`SongCapabilityResolver`-t hív `create`/`update` előtt;
+  `canPersist=false` esetén a diszk-írás előtt utasítja el (teszt: "BLOCKER
+  1 — refuses a fatal validation issue before touching disk" ×2). Az index
+  `capability` mező is bekötve (a §10.3 korábbi MINOR-ja is zárva).
+- **MAJOR 2** (asset-integritás olvasáskor) — `get()` újra-hasheli a
+  bájtokat, hash-eltérésnél `corruptAsset` kóddal `Failure`-t ad.
+- **MAJOR 3** (uncaught `FormatException` sérült sidecaron) — `_readSummary`/
+  `_readRefs` most elkapja a decode-hibát, `corruptSidecar` kóddal térnek
+  vissza.
+- **MAJOR 4** (nem-atomikus asset-írás) — az asset bájt- és sidecar-írás
+  is az `AtomicFileWriter`-en megy át.
+- **BLOCKER/MAJOR 5** (rossz staging könyvtár) — az `AtomicFileWriter`
+  mostantól elfogad egy opcionális `stagingDirectory`-t; mindkét repository
+  a songs-root `temp/` alá stage-el, így a recovery scanner valódi crash-
+  residue-t lát, nem egy kézzel odahelyezett fixture-t.
+- **BLOCKER 6** (delete-then-rename törte az atomicitást) — a rename most
+  közvetlen `renameSync(staged, target)`, előzetes törlés nélkül (a POSIX
+  `rename(2)` már atomikusan felülír).
+- **MAJOR 7** (nem streamelt SHA-256) — új `AtomicFileWriter.writeStream` +
+  `crypto.sha256.startChunkedConversion`-alapú digest-sink; a `put()` ezt
+  hívja, nem tölti egyben memóriába a teljes payloadot.
+
+A három "olcsó, ugyanabban a fájlban" tétel is zárva: a vacuous `.tmp`
+reziduum-szűrő valódi regex-re cserélve (`\.tmp-\d+-\d+$`), a
+`song_index_codec_test.dart`-ból örökölt hibás JSON-fixture valós, csak a
+`revision` mezőt hiányoló bemenetre javítva, és a nem létező
+`Directory.flush()` halott kódja eltávolítva egy őszinte doc-commenttel a
+platform-korlátról (nincs portábilis `dart:io` directory-fsync primitív) —
+a `pid` mező is explicit dokumentált diagnosztikai sentinel-ként (mindig
+`1`), nem hamis valós-PID állítás.
+
+Zöld kapu a javítás UTÁN: `tools/round-gate.sh
+test/features/song_trainer/data/local` — 66/66 teszt, format/analyze/
+architecture mind zöld (az orchestrátor futtatta, izolált ellenőrzésként).
+
+**Folyamat-megjegyzés (nem tartalmi, a pipeline-mechanikáról):** az `auto`
+router task-állapota a scope-fix miatt (§10.3) BLOCKED-ban ragadt, mert a
+baseline-manifest a m8ár commitolt diffet stale untracked-fájlokként látta.
+Az orchestrátor a router SAJÁT kódját (`capture_workspace_manifest`,
+`StateStore`) hívva frissítette a perzisztált task-state-et egy friss,
+tiszta manifestre és `READY_FOR_REVIEW`-ra, hogy a `resume` hívás a
+findings-fájlt helyesen eljuttassa M3-hoz — a `tools/`, a gate és a
+`.github/` érintetlen maradt, ez kizárólag a router futásidejű
+(`~/.local/state/strumsight-ai-router/`) állapotára hatott (a baseline
+manifest a MÁR commitolt diffet stale untracked-fájlokként látta, ami a
+scope-fix előtti PRECHECK pillanatában készült). A javító kör után a
+router `DEFERRED`-et jelzett ("automatic Terra daily budget is exhausted")
+— ez a router saját M3→Terra eszkalációs kerete, NEM egy tartalmi hiba
+jele; a diff eddigre már kész és zöld volt, ezért az orchestrátor (a
+`READY_FOR_REVIEW` utáni saját felelősségi körben) auditálta a scope-ot és
+commitolta a javítást, Terra hívása nélkül.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review-fájl:

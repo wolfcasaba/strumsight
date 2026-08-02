@@ -25,27 +25,41 @@ import 'dart:convert' show jsonEncode, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 
 import '../../../../core/foundation/app_result.dart';
+import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_document.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/repositories/song_repository.dart';
+import '../../domain/services/song_capability_resolver.dart';
+import '../../domain/services/song_validator.dart';
 
 /// In-memory implementation of [SongRepository]. Stores documents in a
 /// `Map<SongId, SongDocument>` and tracks the trash state in a side
 /// map so the summary reflects the live state of the trash query.
 final class InMemorySongRepository implements SongRepository {
   /// Construct an empty in-memory repository. [clock] lets tests
-  /// pin the summary's `updatedAt` deterministically.
-  InMemorySongRepository({DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now,
-      _documents = <SongId, SongDocument>{},
-      _trashed = <SongId>{},
-      _hashes = <SongId, String>{};
+  /// pin the summary's `updatedAt` deterministically. The fake shares
+  /// the production validator and capability resolver so the contract
+  /// ("the implementation re-runs the validator before writing",
+  /// [SongRepository.create] doc) is honoured end-to-end.
+  InMemorySongRepository({
+    DateTime Function()? clock,
+    SongValidator? validator,
+    SongCapabilityResolver? capabilityResolver,
+  }) : _clock = clock ?? DateTime.now,
+       _documents = <SongId, SongDocument>{},
+       _trashed = <SongId>{},
+       _hashes = <SongId, String>{},
+       _validator = validator ?? const SongValidator(),
+       _capabilityResolver =
+           capabilityResolver ?? const SongCapabilityResolver();
 
   // ignore: unused_field
   final DateTime Function() _clock;
   final Map<SongId, SongDocument> _documents;
   final Set<SongId> _trashed;
   final Map<SongId, String> _hashes;
+  final SongValidator _validator;
+  final SongCapabilityResolver _capabilityResolver;
 
   @override
   Future<AppResult<List<SongSummary>>> list(SongQuery query) async {
@@ -105,6 +119,18 @@ final class InMemorySongRepository implements SongRepository {
 
   @override
   Future<AppResult<void>> create(SongDocument document) async {
+    // Step 1 (ADR 0090 §3 / ADR 0114 §Döntés 2): refuse any fatal
+    // validation issue BEFORE persisting — same gate as the file
+    // repository.
+    final capability = _capabilityResolver.resolve(
+      report: _validator.validate(document),
+      profile: SongCapabilityProfile.persist,
+    );
+    if (!capability.canPersist) {
+      return songRepositoryFailure<void>(
+        SongRepositoryErrorCode.notPersistable,
+      );
+    }
     if (_documents.containsKey(document.id)) {
       return songRepositoryFailure<void>(SongRepositoryErrorCode.alreadyExists);
     }
@@ -125,11 +151,20 @@ final class InMemorySongRepository implements SongRepository {
     if (existing.revision != expectedRevision) {
       return songRepositoryFailure<void>(SongRepositoryErrorCode.staleRevision);
     }
-    _documents[document.id] = _copyWithRevision(
-      document,
-      existing.revision + 1,
+    final bumped = _copyWithRevision(document, existing.revision + 1);
+    // Step 1 (ADR 0090 §3 / ADR 0114 §Döntés 2): refuse any fatal
+    // validation issue BEFORE bumping the persisted revision.
+    final capability = _capabilityResolver.resolve(
+      report: _validator.validate(bumped),
+      profile: SongCapabilityProfile.persist,
     );
-    _hashes[document.id] = _documentHash(_documents[document.id]!);
+    if (!capability.canPersist) {
+      return songRepositoryFailure<void>(
+        SongRepositoryErrorCode.notPersistable,
+      );
+    }
+    _documents[document.id] = bumped;
+    _hashes[document.id] = _documentHash(bumped);
     return AppResult<void>.success(null);
   }
 
