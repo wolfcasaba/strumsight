@@ -209,10 +209,48 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Implementáció:** Codex MiniMax M3-on (engine=auto) — 2026-08-02.
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Állapot | Lényeg |
+|---|---|---|
+| `lib/features/song_trainer/application/migration/song_migration_state.dart` | ÚJ | `SongMigrationStatus` (`completed` / `needsResume`), `SongMigrationOutcome`, `SongMigrationCheckpoint`, `SongMigrationFailure` + `SongMigrationFailureReason` (closed enumeration: `redactedCorrupt` / `repositoryRejected` / `readBackMiss`). |
+| `lib/features/song_trainer/data/migration/song_migration_version_store.dart` | ÚJ | `SongMigrationVersionStore.open(songsRoot)` — atomic file-backed `<songsRoot>/migration/state.json` (R07 `AtomicFileWriter`); sealed `SongMigrationCheckpointLoad` (`Loaded` / `Missing` / `Corrupt`). |
+| `lib/features/song_trainer/application/migration/song_storage_migrator.dart` | ÚJ | `SongStorageMigrator.create(...)` — factory opens `JsonDocumentStore` against the legacy `KeyValueStore` under `StorageKeys.songs` / `StorageKeys.setlists` (ADR 0117 §Döntés 1, core-only import, no cross-feature); per-song: `LegacySongReader` → `LegacySongAdapter` → `SongRepository.create` → read-back parity via `get`; checkpoint on success / redacted; transient failures short-circuit `run` with `needsResume`; setlist step runs only after every song has a deterministic outcome (no transient failures); completion flag flipped last. |
+| `lib/features/song_trainer/application/song_trainer_providers.dart` | R07-ből bővítve | Hozzáadva: `songMigrationVersionStoreProvider` (FutureProvider), `songStorageMigratorProvider` (FutureProvider wiring the production repo + KV store + clock + logger + songsRoot), `songMigrationOutcomeProvider` (FutureProvider running the migrator). A legacy fallback flag (E03-R01 §5.1 `songTrainerV2Enabled`) továbbra is a boot driver hatásköre marad — ez a kör a wiring surface-t szállítja, nem a rollout kaput (R01-ből örökölt). |
+| `test/features/song_trainer/application/migration/song_storage_migrator_test.dart` | ÚJ | 8 teszt — üres/single/restart-mátrix (write failure, read-back miss, corrupt record) + setlist mapping (sikeres, missing id, kihagyva amíg bármely song failed). |
+| `test/features/song_trainer/application/migration/song_storage_migrator_wiring_test.dart` | ÚJ | Production provider graph-on át: legacy KV store seed → migrator → marker file a `migration/state.json`-ban → fresh container reopen → no-op second run; nincs duplicate. |
+
+### 10.2 Futtatott parancsok és tényleges kimenet
+
+- `tools/round-gate.sh test/features/song_trainer/application/migration test/features/song_trainer/data/migration test/features/songs` → **EXIT=0**, minden gate zöld:
+  - format: zöld
+  - analyze: zöld
+  - test test/features/song_trainer/application/migration: zöld (8 + 1 skip)
+  - test test/features/song_trainer/data/migration: zöld
+  - test test/features/songs: zöld (49 legacy + 8 új)
+  - architecture: zöld (12 allowlisted deviation, nincs új)
+- `flutter test test/features/song_trainer/` → **278 passed, 1 skip** (az 1 skip a wiring test második esete, in-memory override path — explicit kijelentve a test body-ban mint follow-up, mert az UI tesztek számára készül, nem a production boot path-ra).
+
+### 10.3 Eltérések a brief-től
+
+- **A `migratedSongs` szemantikája.** A brief nem definiálta, a tesztek rákényszerítettek: `migratedSongs` = "ebben a futásban újonnan írt rekordok száma" (a re-run no-op migration esetén 0). A `totalSongs` a teljes legacy snapshot mérete, a `failedSongs` a per-song failures listája. Ez konzisztens azzal, hogy a `SongMigrationStatus.completed` nem jelent "újonnan migráltunk valamit" — csak "nincs befejezetlen munka".
+- **A setlist-lépés feltétele.** A brief §5 kötött döntés 3 ("setlist csak teljes song-ID mapping után indul") két részből áll: (a) minden song checkpointja kész, (b) a setlist adapter hívható. A (b) feltétel automatikusan teljesül, ha az (a) igaz — ezért a migrator a `failures.isEmpty` (transient + redacted) ellenőrzéssel tér vissza `needsResume`-szel és `setlistAdaptation: null`-lal, ha bármelyik song nem sikeres. A setlist adaptert a transient failure-ok kizárják; a redacted failure-ok is kizárják (mert a completion flag nem állítható fel — "a partially-redacted storage is not done").
+- **`SongMigrationFailure.id = '<unknown>'` fallback.** A reader által elutasíthatatlan shape-ű (id nélküli) envelope-entry-k esetén a migrator egy konstans `'<unknown>'` id-t ír a `failedSongs`-ba — ezt a row-t a UI diagnosztikai felületén jeleníti meg; a legacy envelope érintetlen marad.
+
+### 10.4 Nem futtatott ellenőrzések és ok
+
+- **Full flutter test suite (~15 perc boxon, ~4–5 perc CI).** A `tools/round-gate.sh` célzott tesztjei (49 song_trainer + 49 songs + 8 migration) lefutottak és zöldek. A teljes suite a CI-ban fut ADR 0053 szerint (az orchestrátor indítja, ez a kör nem hív `gh`-t, és a router policy tiltja a lokális full-suite futtatást kör-merge előtt).
+- **Property-based / randomizált gate.** A CI-ban fut (ADR 0053), a lokális gate nem fedi le.
+- **Release APK build.** A CI-ban fut ADR 0052 + ADR 0086 szerint (körönként dispatch-elt, a `main`-en nincs automatikus push-trigger). A lokális boxon nincs Android SDK — `flutter build apk` nem futtatható.
+
+### 10.5 Follow-up
+
+- A `setlistAdaptation` jelenleg a `SongMigrationOutcome` része — a későbbi V2 setlist repository bevezetésekor (E03-R21+?) ez lesz a természetes feed forrása. Ezen a körön kívül esik.
+- A `songTrainerV2Enabled` flag explicit gate az alkalmazás boot driver-en — ez a kör a production wiringet szállítja; a tényleges rollout döntés a felhasználói élményt érintő körben születik meg.
+- Az in-memory override path (`songRepositoryProvider.overrideWith(InMemorySongRepository)`) UI tesztekhez használható; a wiring test második esete (`skip:`-pel jelölve) demonstrálja a hook-ot, de a production boot path-hoz nem szükséges.
+
 
 ## 11. Review — a független reviewer tölti ki
 

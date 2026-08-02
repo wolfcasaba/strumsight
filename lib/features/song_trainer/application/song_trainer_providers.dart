@@ -18,12 +18,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/logging/logger_provider.dart';
+import '../../../core/storage/key_value_store.dart';
+import '../../../core/storage/storage_providers.dart';
 import '../data/local/file_song_asset_repository.dart';
 import '../data/local/file_song_repository.dart';
 import '../data/local/in_memory_song_repository.dart';
 import '../data/local/song_repository_recovery.dart';
+import '../data/migration/song_migration_version_store.dart';
 import '../domain/repositories/song_asset_repository.dart';
 import '../domain/repositories/song_repository.dart';
+import 'migration/song_migration_state.dart';
+import 'migration/song_storage_migrator.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// song tree. The directory MUST exist before [FileSongRepository]
@@ -120,3 +126,60 @@ final songAssetRepositoryBootProvider = FutureProvider<SongAssetRepository>((
 final inMemorySongRepositoryProvider = Provider<SongRepository>(
   (_) => InMemorySongRepository(clock: DateTime.now),
 );
+
+/// Provider for the persistent [SongMigrationVersionStore] — the file-
+/// based checkpoint / completion marker under `<songsRoot>/migration/state.json`
+/// (E03-R08, ADR 0117 §Döntés 2).
+///
+/// Reads the songs root from [songTrainerProductionRootResolverProvider] and
+/// creates the marker directory lazily. Tests override the root resolver and
+/// the clock so the marker file lands under a temp directory.
+final songMigrationVersionStoreProvider =
+    FutureProvider<SongMigrationVersionStore>((ref) async {
+      final rootResolver = ref.watch(songTrainerProductionRootResolverProvider);
+      final root = await rootResolver();
+      return SongMigrationVersionStore.open(songsRoot: root);
+    });
+
+/// Provider for the [SongStorageMigrator] use case (E03-R08, ADR 0117
+/// §Döntés 1 + §Döntés 3).
+///
+/// Wires the production [SongRepository], the production [KeyValueStore]
+/// (the same one the `songs` / `setlists` features use), the production
+/// clock, and the production logger. The legacy fallback flag
+/// ([FeatureFlags.songTrainerV2Enabled]) is honoured by the boot
+/// controller — the provider here is the wiring surface, not the
+/// rollout gate.
+final songStorageMigratorProvider = FutureProvider<SongStorageMigrator>((
+  ref,
+) async {
+  final repository = await ref.watch(songRepositoryBootProvider.future);
+  final legacyStore = ref.watch(keyValueStoreProvider);
+  final rootResolver = ref.watch(songTrainerProductionRootResolverProvider);
+  final clock = ref.watch(songTrainerClockProvider);
+  final logger = ref.watch(appLoggerProvider);
+  final songsRoot = await rootResolver();
+  return SongStorageMigrator.create(
+    legacyStore: legacyStore,
+    songRepository: repository,
+    songsRoot: songsRoot,
+    clock: clock,
+    logger: logger,
+    readBackRepositoryFactory: () =>
+        FileSongRepository.openAtDirectory(directory: songsRoot, clock: clock),
+  );
+});
+
+/// Provider that runs the migration ONCE per provider-container lifetime
+/// (E03-R08, ADR 0117).
+///
+/// The boot path calls this exactly once; subsequent reads return the cached
+/// outcome. A persistent restart-safe UI can re-watch it after the user
+/// retries — re-running the migrator is safe because the underlying
+/// checkpoint guarantees no duplicates.
+final songMigrationOutcomeProvider = FutureProvider<SongMigrationOutcome>((
+  ref,
+) async {
+  final migrator = await ref.watch(songStorageMigratorProvider.future);
+  return migrator.run();
+});
