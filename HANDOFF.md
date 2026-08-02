@@ -467,6 +467,19 @@ gate-ellenőrzés `main`-en szintén zöld. Full narrative:
    > `round-gate.sh` / `.github/workflows/` változik, a driver `H-GATEGUARD`
    > halttal EMBER elé viszi. Kikapcsolás: `PIPELINE_SELFHEAL=0`.
    > Állapot: `tools/pipeline-status.sh` (önjavítás-blokk + kísérletszámláló).
+   >
+   > **REVIEW-MOTOR FALLBACK (ADR 0115, 2026-08-02 — user-döntés):** ha a
+   > **Claude-kvóta** kimerül, a lánc nem áll meg: ugyanazt a kör- vagy
+   > önjavító promptot a **Terra** (`codex exec`, `CODEX_HOME=~/.codex-terra`,
+   > `gpt-5.6-terra`) viszi tovább, a
+   > `docs/execution/pipeline-codex-orchestrator-preamble.md` motor-előszóval.
+   > A váltás kiváltója KIZÁRÓLAG a mért kvóta-minta a session-naplóban —
+   > minden más néma halál marad halt. A zárlat 5 óra
+   > (`.pipeline/claude-blocked-until`), visszaállítás:
+   > `tools/pipeline-status.sh --unblock-claude`; kikapcsolás:
+   > `PIPELINE_FALLBACK_ENGINE=none`. **Az implementer-routing (ADR 0088:
+   > M3 → Terra) ettől FÜGGETLEN és változatlan** — ez csak arról szól, ki
+   > vezényel és ki review-z.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
