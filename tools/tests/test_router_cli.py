@@ -142,6 +142,65 @@ class RouterCliTest(unittest.TestCase):
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertEqual(json.loads(status_result.stdout)["status"], "NOT_STARTED")
 
+    def _terra_status(self, state_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["python3", str(CLI), "--config", str(CONFIG), "--state-root", str(state_root), "terra-status"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_terra_status_reports_not_exhausted_with_zero_reservations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = self._terra_status(Path(directory) / "state")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["daily_count"], 0)
+        self.assertEqual(payload["daily_limit"], 3)
+        self.assertFalse(payload["exhausted"])
+
+    def test_terra_status_exits_nonzero_and_reports_the_utc_midnight_reset_once_exhausted(self) -> None:
+        # E03-R08 H6 self-heal (2026-08-02): the pipeline driver polls this
+        # exit code to decide whether to hold off retrying a round blocked on
+        # the shared daily Terra budget instead of busy-retrying every 5min.
+        with tempfile.TemporaryDirectory() as directory:
+            state_root = Path(directory) / "state"
+            baseline = self._terra_status(state_root)
+            self.assertEqual(baseline.returncode, 0, baseline.stderr)
+            today = json.loads(baseline.stdout)["utc_day"]
+
+            ledger_path = state_root / "terra-ledger.json"
+            ledger_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "reservations": [
+                            {
+                                "reservation_id": f"r{i}",
+                                "task_id": f"E03-R0{i}",
+                                "utc_day": today,
+                                "status": "finished",
+                            }
+                            for i in range(1, 4)
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self._terra_status(state_root)
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["daily_count"], 3)
+        self.assertTrue(payload["exhausted"])
+        import datetime as _dt
+
+        reset = _dt.datetime.fromisoformat(payload["next_reset_utc"])
+        self.assertEqual((reset.date() - _dt.date.fromisoformat(today)).days, 1)
+        self.assertEqual(payload["next_reset_epoch"], int(reset.timestamp()))
+
 
 if __name__ == "__main__":
     unittest.main()

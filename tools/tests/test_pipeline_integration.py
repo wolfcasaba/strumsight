@@ -214,6 +214,68 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(other_code.stdout.strip(), "0")
             self.assertEqual(other_round.stdout.strip(), "0")
 
+    def test_terra_hold_active_test_hook_matches_round_and_future_timestamp(self) -> None:
+        # E03-R08 H6 self-heal (2026-08-02): the shared daily Terra budget
+        # (.ai/router.toml max_automatic_terra_calls_per_utc_day) only
+        # resets at UTC midnight, not on any retry cadence — a hold file
+        # scoped to the blocked round should read as active while its
+        # deadline is in the future.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            future = int(time.time()) + 3600
+            (state / "terra-budget-hold").write_text(f"round=E03-R08\nhold_until={future}\n")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+
+            active = self.run_command(["bash", str(script), "--terra-hold-active", "E03-R08"], env=env)
+            other_round = self.run_command(["bash", str(script), "--terra-hold-active", "E03-R09"], env=env)
+
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn("felfüggesztés aktív", active.stderr)
+            self.assertEqual(other_round.returncode, 1, other_round.stderr)
+
+    def test_terra_hold_expired_deadline_is_inactive_and_self_clears(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            past = int(time.time()) - 60
+            hold_file = state / "terra-budget-hold"
+            hold_file.write_text(f"round=E03-R08\nhold_until={past}\n")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+
+            expired = self.run_command(["bash", str(script), "--terra-hold-active", "E03-R08"], env=env)
+
+            self.assertEqual(expired.returncode, 1, expired.stderr)
+            self.assertFalse(hold_file.exists())
+
+    def test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt(self) -> None:
+        # The end-to-end regression: a HALT on the round the hold names must
+        # make the WHOLE driver invocation a cheap no-op (no selfheal
+        # session, no attempt-counter burn) while the hold is in the future
+        # — this is what stops the retry loop from exhausting the 3-attempt
+        # self-heal budget minutes into an 8+ hour calendar-gated wait.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "HALTED").write_text(
+                "round=E03-R08\nhalt=H6\nsummary=auto-router DEFERRED: Terra daily budget is exhausted\n"
+            )
+            future = int(time.time()) + 3600
+            (state / "terra-budget-hold").write_text(f"round=E03-R08\nhold_until={future}\n")
+            (state / "selfheal.count").write_text("E03-R08|H6|2\n")
+            env = dict(os.environ)
+            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL_MAX="3")
+
+            held = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(held.returncode, 0, held.stderr)
+            self.assertIn("felfüggesztés aktív", held.stderr)
+            self.assertNotIn("ÖNJAVÍTÓ KÖR indul", held.stderr)
+            self.assertEqual((state / "selfheal.count").read_text(), "E03-R08|H6|2\n")
+            self.assertTrue((state / "HALTED").exists())
+
     def test_gate_fingerprint_covers_the_test_count_and_the_gate_artifacts(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         fingerprint = self.run_command(["bash", str(script), "--gate-fingerprint"])

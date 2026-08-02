@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import fields
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ai_router.brief import BriefMetadataError, load_brief
@@ -229,6 +230,30 @@ def _smoke(profile: str, codex_bin: str, worktree: Path) -> int:
     return 1
 
 
+def terra_status_payload(config: object, state: StateStore) -> dict[str, object]:
+    """Snapshot of today's automatic Terra daily budget (E03-R08 H6 self-heal).
+
+    A mandatory high-risk Terra review can only DEFER while the shared daily
+    budget is exhausted (state.py's `reserve_terra`) — that clears at UTC
+    midnight, not on any retry cadence, so callers that want to back off
+    instead of busy-retrying need the exhaustion flag and the reset time.
+    """
+    now = datetime.now(timezone.utc)
+    day = now.date().isoformat()
+    count = state.daily_terra_count(day)
+    limit = config.limits.max_automatic_terra_calls_per_utc_day
+    next_reset = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    return {
+        "schema_version": 1,
+        "utc_day": day,
+        "daily_limit": limit,
+        "daily_count": count,
+        "exhausted": count >= limit,
+        "next_reset_utc": next_reset.isoformat(),
+        "next_reset_epoch": int(next_reset.timestamp()),
+    }
+
+
 def parser() -> argparse.ArgumentParser:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[1] / ".ai" / "router.toml")
@@ -248,6 +273,8 @@ def parser() -> argparse.ArgumentParser:
 
     reset = commands.add_parser("reset")
     reset.add_argument("--task-id", required=True)
+
+    commands.add_parser("terra-status")
 
     resume = commands.add_parser("resume")
     resume.add_argument("--task", type=Path, required=True)
@@ -282,6 +309,10 @@ def main() -> int:
             payload = {"schema_version": 1, "task_id": args.task_id, "status": "NOT_STARTED"}
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0
+        if args.command == "terra-status":
+            payload = terra_status_payload(config, state)
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            return 1 if payload["exhausted"] else 0
         brief = load_brief(args.task)
         worktree = args.worktree.resolve()
         findings = ""
