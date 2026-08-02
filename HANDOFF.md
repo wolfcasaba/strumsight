@@ -4,6 +4,44 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
+> (Pipeline E02-R21 — a gate_history-fix (PR #53) UTÁNI első friss `run`
+> VÉGRE valódi, tracked A1/A2/A3-diffet termelt, de a keret ismét
+> `STOPPED`-be fogyott egy TRIVIÁLIS hibán: H4, a KILENCEDIK halt/önjavító
+> kör ugyanazon a taskon, de az ELSŐ, ahol a production-drótozás mérhetően
+> majdnem kész.** A munkapéldányon (`ss-auto-e02-r21`) egy korábbi session
+> jelöletlen, committolatlan fájlját (`practice_observation_gateway_provider.dart`)
+> eltávolítottam, a branchet `origin/main`-re rebase-eltem (PR #53 benne,
+> konfliktus nélkül), majd `python3 tools/model-router.py reset --task-id
+> E02-R21` → `NOT_STARTED`. A friss `tools/ai-router-round.sh run` a
+> Bash-eszköz 600s plafonja miatt kétszer megszakadt `M3_CALL_1`/`M3_CALL_2`
+> közben (mindkétszer helyesen kezelve, próba nem veszett), a HARMADIK hívás
+> jutott `STOPPED`-ig. **Első alkalommal a `gate_history[].log` a TELJES
+> gate-kimenetet tartalmazta** (PR #53 hatása) — ez fedte fel, hogy mindhárom
+> próba ÉRDEMI munkát végzett: `RECOVERED_M3_CALL_1`/`RECOVERED_M3_CALL_2`
+> `format`-on bukott (a modell módosította, de nem formázta a három MEGLÉVŐ
+> wiring-célfájlt), a `FINAL_GATE` (Terra) a formázást megoldotta, de
+> `analyze`-on bukott: 3 `unused_import` figyelmeztetés a Terra írta
+> `test/features/practice/application/practice_production_wiring_test.dart`
+> 32./42./47. sorában. A munkafa `git diff HEAD` **ELSŐ ízben mutat valódi,
+> tracked tartalmat mindhárom wiring-célfájlon** (`practice_session_providers.dart`
+> +104/-3, `practice_setup_controller.dart` +18/-19, `practice_effect_listener.dart`
+> +42/-2) — ADR 0111 §1–§4-nek megfelelő auto-dispose controller `.family`
+> (A1), aktiváló prepare-sink + `PracticeSessionHost` adapter (A2), valódi
+> mode/source/definition kódokkal épített recorder (A3). **A blokkoló hiba
+> NEM architektúra/scope-kérdés, hanem három felesleges import-sor törlése** a
+> nevezett teszt-fájlban. A 2 M3 + 1 Terra keret kimerült, `resume` itt nem
+> alkalmazható (a keret nulla) — a pipeline-prompt §1.1/§2 szerint `STOPPED`
+> `auto`-n feltétlen HALT. A committolatlan diff (3 tracked + 2 untracked
+> fájl) SZÁNDÉKOSAN a munkapéldányon maradt bizonyítéknak — nem commitoltam
+> (a router csak `READY_FOR_REVIEW` után auditáltatna commitot, ez a kör
+> review nélkül `STOPPED`-be futott). Teljes mérés:
+> [`docs/reviews/e02-r21-review.md`](docs/reviews/e02-r21-review.md) "Update 7"
+> szakasz, a `codex/e02-r21-practice-production-wiring` ágon (`2bb61a1`).
+> **A következő session dolga:** a három unused-import sor törlése a
+> teszt-fájlban, `tools/round-gate.sh` újrafuttatása a teljes mátrixra, majd —
+> ha zöld — commit + független review + CI-dispatch + merge. Ez tisztán
+> tartalmi javítás, NEM router-infrastruktúra hiba.
+> Előző kör: 2026-08-02
 > (önjavító kör, E02-R21 H4 — NYOLCADIK önjavító/halt kör ugyanazon a
 > taskon — a gate_history mostantól a teljes gate-logot is megőrzi, PR #53,
 > `60ff5c4`.** Mért gyökérok ([`docs/LESSONS.md` L45](docs/LESSONS.md)): a
