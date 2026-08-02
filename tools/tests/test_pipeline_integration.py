@@ -256,6 +256,20 @@ class PipelineIntegrationTest(unittest.TestCase):
         # session, no attempt-counter burn) while the hold is in the future
         # — this is what stops the retry loop from exhausting the 3-attempt
         # self-heal budget minutes into an 8+ hour calendar-gated wait.
+        #
+        # SAFETY (measured the hard way, E03-R08 H6 2nd heal, 2026-08-02):
+        # selfheal.count is seeded AT the attempt budget (3), matching the
+        # already-safe `test_selfheal_gives_up_after_the_configured_attempt_budget`
+        # pattern above — NOT one below it. Without this driver's hold gate
+        # (e.g. reverted for a RED check), a below-budget counter lets
+        # `attempt_selfheal()` run for real and spawn an ACTUAL tmux+claude
+        # self-heal session with --permission-mode bypassPermissions against
+        # this real repo (confirmed: it happened, branch heal/E03-R08-H6-3,
+        # had to be killed by hand). At-budget keeps every code path —
+        # pre-fix AND post-fix — inside the exhausted-budget short-circuit,
+        # which spawns nothing; only the exit code/message differ (0 + "hold
+        # active" post-fix vs. 3 + "KIMERÜLT" pre-fix), which is enough to
+        # tell the fix apart without ever risking a live session.
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
             state = Path(directory_name)
@@ -264,7 +278,7 @@ class PipelineIntegrationTest(unittest.TestCase):
             )
             future = int(time.time()) + 3600
             (state / "terra-budget-hold").write_text(f"round=E03-R08\nhold_until={future}\n")
-            (state / "selfheal.count").write_text("E03-R08|H6|2\n")
+            (state / "selfheal.count").write_text("E03-R08|H6|3\n")
             env = dict(os.environ)
             env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL_MAX="3")
 
@@ -273,7 +287,8 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(held.returncode, 0, held.stderr)
             self.assertIn("felfüggesztés aktív", held.stderr)
             self.assertNotIn("ÖNJAVÍTÓ KÖR indul", held.stderr)
-            self.assertEqual((state / "selfheal.count").read_text(), "E03-R08|H6|2\n")
+            self.assertNotIn("KIMERÜLT", held.stderr)
+            self.assertEqual((state / "selfheal.count").read_text(), "E03-R08|H6|3\n")
             self.assertTrue((state / "HALTED").exists())
 
     def test_gate_fingerprint_covers_the_test_count_and_the_gate_artifacts(self) -> None:
