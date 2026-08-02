@@ -14,13 +14,12 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/logging/app_logger.dart';
-import '../../../core/logging/logger_provider.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
 import '../domain/model/practice_validation.dart';
 import '../domain/model/tempo.dart';
 import 'practice_session_command.dart';
+import 'practice_session_providers.dart';
 
 /// One boundary call from the Setup UI to the session runtime.
 ///
@@ -30,30 +29,30 @@ import 'practice_session_command.dart';
 /// the auto-dispose session controller.
 typedef PracticePrepareSink = void Function(PreparePractice command);
 
-/// Production-default [`PracticePrepareSink`] — writes a structured log line
-/// (Kör 13's integration test will swap this for the real controller and
-/// assert the same fields). NOT a no-op: a Start tap leaves evidence.
-PracticePrepareSink _loggingPrepareSink(AppLogger logger) {
+/// Production [`PracticePrepareSink`] (E02-R21, ADR 0111 §2). The Setup
+/// screen hands the validated [PreparePractice] command to this sink; the
+/// sink activates the auto-dispose controller family for the matching
+/// `(definition, config)` pair and dispatches the command through it.
+///
+/// The activation writes to [practiceActiveSessionInputsProvider] so the
+/// presentation layer's [practiceSessionHostProvider] can publish the
+/// controller as a [PracticeSessionHost]. Both writes are non-async — the
+/// reducer transitions `idle → preparing` synchronously on `PreparePractice`,
+/// so the host observable in the next microtask already carries a non-idle
+/// status.
+PracticePrepareSink _activateSessionSink(Ref ref) {
   return (command) {
-    logger.info(
-      'practice.prepare',
-      fields: <String, Object?>{
-        'definitionId': command.definition.id,
-        'definitionSchemaVersion': command.definition.schemaVersion,
-        'tempoBpm': command.config.effectiveTempo.bpm,
-        'countInBars': command.config.countInBars,
-        'loopCount': command.config.loopCount,
-        'metronomeEnabled': command.config.metronomeEnabled,
-        'scoringProfileId': command.config.scoringProfileId,
-      },
-    );
+    final inputs = (definition: command.definition, config: command.config);
+    ref.read(practiceActiveSessionInputsProvider.notifier).activate(inputs);
+    final controller = ref.read(practiceSessionControllerProvider(inputs));
+    controller.dispatch(command);
   };
 }
 
 /// The shared [`PracticePrepareSink`]. Override in tests with a recording
 /// fake to assert what the Setup screen sent.
 final practicePrepareSinkProvider = Provider<PracticePrepareSink>((ref) {
-  return _loggingPrepareSink(ref.watch(appLoggerProvider));
+  return _activateSessionSink(ref);
 });
 
 /// The mutable Setup state for one [PracticeDefinition]. Holds the

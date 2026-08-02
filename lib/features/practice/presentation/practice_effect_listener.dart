@@ -14,6 +14,8 @@ import '../../../../core/platform/app_lifecycle.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../application/practice_session_command.dart';
 import '../application/practice_session_effect.dart';
+import '../application/practice_session_controller.dart';
+import '../application/practice_session_providers.dart';
 import '../domain/model/practice_session_state.dart';
 
 /// Presentation-side boundary the V2 session screen reads through
@@ -61,7 +63,45 @@ final class PlatformPracticeFeedbackOutput implements PracticeFeedbackOutput {
   void openPermissionSettings() => openAppSettings();
 }
 
-final practiceSessionHostProvider = Provider<PracticeSessionHost?>((_) => null);
+/// Adapts the active [PracticeSessionController] to the [PracticeSessionHost]
+/// the presentation layer consumes (E02-R21, ADR 0111 §2). The host is the
+/// `send/states/state/effects/liveScore` projection of the controller — no
+/// behaviour change, only the shape the screen already understands.
+class _ControllerSessionHost implements PracticeSessionHost {
+  const _ControllerSessionHost(this._controller);
+
+  final PracticeSessionController _controller;
+
+  @override
+  Stream<PracticeSessionState> get states => _controller.states;
+
+  @override
+  PracticeSessionState get state => _controller.state;
+
+  @override
+  Stream<PracticeSessionEffect> get effects => _controller.effects;
+
+  @override
+  int? get liveOverallPerMille => _controller.liveScore?.overallPerMille;
+
+  @override
+  void send(PracticeSessionCommand command) {
+    _controller.dispatch(command);
+  }
+}
+
+/// The production [PracticeSessionHost] (E02-R21, ADR 0111 §2). Watches the
+/// active session inputs written by the prepare sink; when present, it
+/// publishes the matching controller from the auto-dispose family. When the
+/// active session is cleared (flag OFF, terminal cleanup, screen unmount),
+/// the host falls back to `null` so the screen can render its localised
+/// "session unavailable" state (brief A2).
+final practiceSessionHostProvider = Provider<PracticeSessionHost?>((ref) {
+  final inputs = ref.watch(practiceActiveSessionInputsProvider);
+  if (inputs == null) return null;
+  final controller = ref.watch(practiceSessionControllerProvider(inputs));
+  return _ControllerSessionHost(controller);
+});
 final practiceHapticsEnabledProvider = Provider<bool>((_) => true);
 
 final practiceFeedbackOutputProvider = Provider<PracticeFeedbackOutput>(
