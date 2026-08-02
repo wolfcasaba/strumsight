@@ -1,10 +1,13 @@
 # E03-R05 — Validator, normalizer és capability resolver
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-02, pre-flight: orchestrátor Claude
+  Sonnet 5, tervezési baseline: `main` @ `d37aa1c`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 5; §7, §12
 - **Branch:** `codex/e03-r05-validator-normalizer-capabilities`
 - **Előfeltétel:** E03-R04 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
+- **ADR:** [0114](../adr/0114-song-validator-normalizer-capability-boundary.md)
+  (a pre-flight írta, ld. §0.0)
 
 ```ai-router
 schema_version = 1
@@ -22,6 +25,7 @@ allowed_paths = [
   "test/features/song_trainer/domain/song_capability_resolver_test.dart",
   "test/property/song_normalizer_property_test.dart",
   "docs/rounds/e03-r05-validator-normalizer-capabilities.md",
+  "docs/adr/0114-song-validator-normalizer-capability-boundary.md",
 ]
 gate_tests = [
   "test/features/song_trainer/domain/song_validator_test.dart",
@@ -65,6 +69,55 @@ A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
 
+**Pre-flight mérés (2026-08-02, baseline `main` @ `d37aa1c`):** a fenti három
+állítás a tényleges kóddal egyezik — nincs drift, a scope/fájllista
+változatlan marad. A két kötelező mérési szabály (elérhetetlen cél-státusz,
+erőforrás-tulajdonlás) eredménye:
+
+1. **Cél-státuszok, INPUT-tal igazolva:**
+   - `NoteTrack` „polyphonic" — `NoteTrackAnalyzer.analyze` (E03-R04,
+     `lib/features/song_trainer/domain/services/note_track_analyzer.dart:182`)
+     `isMonophonic = overlapCount == 0`; az inputot egy sweep-line állítja
+     elő két különböző pitch-ű, időben átfedő `SongNoteEvent`-ből — VALÓDI,
+     mért producer, a kör capability resolvere ezt közvetlenül fogyaszthatja.
+   - „fatal range/map" — `SongSection` (`song_section.dart:30-36`) ÉS
+     `SongDocument` (`song_document.dart:98-129`) ma **csak önmagát**
+     validálja (pl. `startMeasure < endMeasureExclusive`), **nem** a
+     testvér kollekciók ellen (egy `SongSection.endMeasureExclusive` a
+     dokumentum tényleges `measures.length`-én túlra mutathat úgy, hogy
+     egyik konstruktor sem bukik el ma) — ez egy VALÓS, elérhető, ma
+     detektálatlan input, tehát a dokumentum-szintű validátornak van mit
+     ellenőriznie (nem üres célállapot).
+   - „unknown chord" — a `Chord` (`core/music/chord.dart`) validálatlan
+     `label`-wrapper, tehát a „support" fogalmat ennek a körnek KELL
+     bevezetnie; nincs előzetes producer, mert nincs előzetes definíció —
+     ld. ADR 0114 Döntés 1.
+2. **Erőforrás-tulajdonlás:** ennek a körnek nincs lease/lock/handle/
+   subscription jellegű erőforrása (tiszta value-in/value-out domain
+   szolgáltatások) — a szabály nem alkalmazható, nincs mit mérni.
+
+**ADR 0114 felvéve** (`docs/adr/0114-song-validator-normalizer-capability-boundary.md`,
+§4-be és az `allowed_paths`-ba bekötve) két mért, a briefben implicit hagyott
+döntés formalizálására:
+
+- **Chord-support határ:** az egyetlen ma létező maj/min szótár
+  (`lib/features/practice/data/adapters/legacy_chord_label.dart`,
+  `legacyPracticeChordLabel`) a `practice` feature alatt él, és a
+  domain-purity scanner (`test/features/song_trainer/domain/song_document_test.dart`
+  `_forbiddenPatterns['cross-feature import']`) a `practice` importot
+  explicit tiltja — ráadásul nincs is az `allowed_paths` listán (H3). A
+  capability resolver „támogatott akkord" fogalma tehát **önálló,
+  domain-lokális grammatika**, nem a practice-dictionary importja vagy
+  másolata (ADR 0114 Döntés 1).
+- **Severity → capability szerződés:** `fatal` ⇒ `persist = false`;
+  capability (display/scoring, dimenziónkénti) önálló tengely, sosem vonható
+  össze a severity-vel — a §6 „Kötelező megkülönböztető mátrix" négy
+  kombinációja (pl. unknown chord: persistálható ÉS scoring-tiltott) csak
+  így fejezhető ki (ADR 0114 Döntés 2/3).
+
+Nincs más eltérés; a scope, az engedélyezett fájllista (az ADR-en kívül) és
+az acceptance criteria változatlan.
+
 ## 1. Cél
 
 A persistálhatóság, importpreview és trainer alkalmasság stabil reportjai, idempotens normalizálás és őszinte display/scoring capability szállítása.
@@ -106,12 +159,17 @@ A persistálhatóság, importpreview és trainer alkalmasság stabil reportjai, 
 | `test/features/song_trainer/domain/song_capability_resolver_test.dart` | ÚJ | display/scoring mátrix |
 | `test/property/song_normalizer_property_test.dart` | ÚJ | idempotencia/property |
 | `docs/rounds/e03-r05-validator-normalizer-capabilities.md` | meglévő | §10 handoff |
+| `docs/adr/0114-song-validator-normalizer-capability-boundary.md` | ÚJ, pre-flight írta | chord-support határ + severity→capability szerződés (§0.0) |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
 `.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
 `docs/adr/**`. ADR-fájl csak akkor kivétel, ha a pre-flight ütközésmentes
 exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
 Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
+**A pre-flight `docs/adr/0114-song-validator-normalizer-capability-boundary.md`-t
+kivételként felvette a §4 táblába (ld. fent és §0.0) — ez az EGYETLEN
+`docs/adr/**` alatti engedélyezett fájl ebben a körben, az implementer
+tartalmilag NEM módosítja, csak ha a §11 review explicit kéri.**
 
 ## 5. Kötött architekturális döntések
 
