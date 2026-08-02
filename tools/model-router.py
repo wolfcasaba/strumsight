@@ -19,12 +19,90 @@ from ai_router.config import ConfigError, load_config
 from ai_router.execution import CodexResult, ProcessRunner, run_codex
 from ai_router.quota import QuotaStatus
 from ai_router.router import DevelopmentRouter, GateRun, RouterStatus
-from ai_router.security import audit_scope, capture_workspace_manifest, redact_text
+from ai_router.security import (
+    WorkspaceManifest,
+    audit_scope,
+    capture_workspace_manifest,
+    rebase_workspace_manifest,
+    redact_text,
+)
 from ai_router.state import StateError, StateStore
 
 
 def _expanded(value: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(value)))
+
+
+def _manifest_from_state(value: object) -> WorkspaceManifest:
+    if not isinstance(value, dict):
+        raise StateError("task has no baseline manifest")
+    head = value.get("baseline_head")
+    untracked = value.get("untracked_paths")
+    ignored = value.get("ignored_paths")
+    tracked = value.get("tracked_paths", [])
+    if (
+        not isinstance(head, str)
+        or not isinstance(untracked, list)
+        or not isinstance(ignored, list)
+        or not isinstance(tracked, list)
+        or not all(isinstance(path, str) for path in (*untracked, *ignored, *tracked))
+    ):
+        raise StateError("task baseline manifest is invalid")
+    return WorkspaceManifest(
+        baseline_head=head,
+        untracked_paths=frozenset(untracked),
+        ignored_paths=frozenset(ignored),
+        tracked_paths=frozenset(tracked),
+    )
+
+
+def _manifest_to_state(manifest: WorkspaceManifest) -> dict[str, object]:
+    return {
+        "baseline_head": manifest.baseline_head,
+        "untracked_paths": sorted(manifest.untracked_paths),
+        "ignored_paths": sorted(manifest.ignored_paths),
+        "tracked_paths": sorted(manifest.tracked_paths),
+    }
+
+
+def rebase_blocked_task_baseline(
+    *, state: StateStore, brief: object, worktree: Path, config: object
+) -> dict[str, object]:
+    """Safely advance a stale BLOCKED task baseline to its pre-flight head.
+
+    The persisted state remains the source of truth.  This intentionally does
+    not reset attempts or discard any model diff: it verifies that the current
+    diff is still within the brief before returning it for independent review.
+    """
+    task_id = brief.task_id
+    with state.task_lock(task_id):
+        task = state.load_task(task_id)
+        if task.get("task_id") != task_id:
+            raise StateError("task state has a mismatched task_id")
+        if task.get("status") != RouterStatus.BLOCKED.value:
+            raise StateError("only a BLOCKED task baseline may be rebased")
+        previous = _manifest_from_state(task.get("baseline_manifest"))
+        refreshed = rebase_workspace_manifest(worktree, previous)
+        audit = audit_scope(
+            worktree,
+            allowed_paths=brief.metadata.allowed_paths,
+            protected_paths=config.security.protected_paths,
+            baseline=refreshed,
+            high_risk_fragments=config.security.high_risk_path_fragments,
+        )
+        if not audit.ok:
+            raise StateError("rebased baseline still fails scope audit: " + "; ".join(audit.violations))
+        task["baseline_manifest"] = _manifest_to_state(refreshed)
+        task["changed_paths"] = list(audit.scoped_changed_paths)
+        task["status"] = RouterStatus.READY_FOR_REVIEW.value
+        task["phase"] = "BASELINE_REBASED"
+        task["reason"] = (
+            "stale baseline rebased from "
+            f"{previous.baseline_head[:12]} to {refreshed.baseline_head[:12]}; "
+            "existing scoped diff preserved for review"
+        )
+        state.save_task(task_id, task)
+    return task
 
 
 def _dart_bin() -> str:
@@ -276,6 +354,10 @@ def parser() -> argparse.ArgumentParser:
     reset = commands.add_parser("reset")
     reset.add_argument("--task-id", required=True)
 
+    rebase = commands.add_parser("rebase-baseline")
+    rebase.add_argument("--task", type=Path, required=True)
+    rebase.add_argument("--worktree", type=Path, required=True)
+
     commands.add_parser("terra-status")
 
     resume = commands.add_parser("resume")
@@ -310,6 +392,16 @@ def main() -> int:
             state.reset_task(args.task_id)
             payload = {"schema_version": 1, "task_id": args.task_id, "status": "NOT_STARTED"}
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.command == "rebase-baseline":
+            brief = load_brief(args.task)
+            task = rebase_blocked_task_baseline(
+                state=state,
+                brief=brief,
+                worktree=args.worktree.resolve(),
+                config=config,
+            )
+            print(json.dumps(task, ensure_ascii=False, sort_keys=True))
             return 0
         if args.command == "terra-status":
             payload = terra_status_payload(config, state)

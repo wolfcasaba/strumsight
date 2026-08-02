@@ -142,6 +142,103 @@ class RouterCliTest(unittest.TestCase):
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertEqual(json.loads(status_result.stdout)["status"], "NOT_STARTED")
 
+    def test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit(self) -> None:
+        # E03-R08 H6: task state had baseline 8c084268 while the reused
+        # worktree was at pre-flight f023b89.  The command must advance only
+        # the committed baseline and leave the model's uncommitted allowed
+        # change visible for the scope audit and later review.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "worktree"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Router Test"], cwd=root, check=True)
+            (root / "lib").mkdir()
+            (root / "lib" / "allowed.dart").write_text("baseline\n", encoding="utf-8")
+            subprocess.run(["git", "add", "lib/allowed.dart"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            baseline = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            (root / "tools").mkdir()
+            (root / "tools" / "router.py").write_text("preflight\n", encoding="utf-8")
+            (root / "docs").mkdir()
+            brief = root / "docs" / "e03-r08.md"
+            brief.write_text(
+                "# Task\n\n```ai-router\n"
+                "schema_version = 1\nrisk = \"normal\"\n"
+                "allowed_paths = [\"lib/allowed.dart\", \"docs/e03-r08.md\"]\n"
+                "gate_tests = [\"test/example_test.dart\"]\n"
+                "native_gate = false\n```\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "tools/router.py", "docs/e03-r08.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "preflight"], cwd=root, check=True)
+            preflight = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            (root / "lib" / "allowed.dart").write_text("model change\n", encoding="utf-8")
+            state_root = Path(directory) / "state"
+            task_dir = state_root / "tasks"
+            task_dir.mkdir(parents=True)
+            (task_dir / "E03-R08.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "task_id": "E03-R08",
+                        "status": "BLOCKED",
+                        "phase": "BLOCKED",
+                        "baseline_manifest": {
+                            "baseline_head": baseline,
+                            "untracked_paths": [],
+                            "ignored_paths": [],
+                            "tracked_paths": [],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            command = [
+                "python3",
+                str(CLI),
+                "--config",
+                str(CONFIG),
+                "--state-root",
+                str(state_root),
+                "rebase-baseline",
+                "--task",
+                str(brief),
+                "--worktree",
+                str(root),
+            ]
+            (root / "lib" / "forbidden.dart").write_text("must remain blocked\n", encoding="utf-8")
+            rejected = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(rejected.returncode, 50)
+            self.assertEqual(
+                json.loads((task_dir / "E03-R08.json").read_text(encoding="utf-8"))["status"],
+                "BLOCKED",
+            )
+            (root / "lib" / "forbidden.dart").unlink()
+            result = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "READY_FOR_REVIEW")
+        self.assertEqual(payload["phase"], "BASELINE_REBASED")
+        self.assertEqual(payload["baseline_manifest"]["baseline_head"], preflight)
+        self.assertEqual(payload["changed_paths"], ["lib/allowed.dart"])
+
     def _terra_status(
         self, state_root: Path, *, config: Path = CONFIG
     ) -> subprocess.CompletedProcess:

@@ -2892,3 +2892,32 @@ már ismerte.
    CLI-hookot hív, MINDIG ültesse be az attempt-budget-határ biztonsági
    mintát — egy ismeretlen flag a shell `case`-ből kieshet a teljes,
    session-indító folyamatba, nem csak hibával áll meg.
+
+## L67 — A perzisztált router-baseline csak a feladat legelső indításakor rögzült, ezért egy később commitolt pre-flight teljes main-diffje modell-scope-sértésnek látszott (E03-R08 H6, 2026-08-02)
+
+**Mérés.** Az E03-R08 task-state `baseline_manifest.baseline_head` értéke
+`8c084268` volt, míg a reuse-olt worktree tiszta pre-flight commitja
+`f023b89`. A `audit_scope()` a régi headből számolt diffbe így a már merge-elt
+router/pipeline infrastruktúrát is beemelte, majd a modelldiffhez rendelte.
+A tényleges E03-R08 változások a `f023b89`-hez képest kizárólag a brief
+engedélyezett útvonalain voltak.
+
+**Javítás.** `model-router.py rebase-baseline --task <brief> --worktree
+<worktree>` kizárólag `BLOCKED` tasknál, a `StateStore` task-lockján belül
+használja a router saját `capture_workspace_manifest()` útját. Csak tiszta
+baseline-t enged előrevinni; a korábbi untracked/ignored snapshotot
+megtartja, ezért a már meglévő, nem commitolt modelldiff továbbra is a friss
+headhez viszonyított scope-audit tárgya. Az auditnak a brief allowlistján
+belül kell maradnia, különben az állapot változatlanul BLOCKED marad.
+
+**Regresszió.** `tools/tests/test_security.py::SecurityTest::test_rebased_manifest_excludes_committed_preflight_drift_but_keeps_model_diff`
+és `tools/tests/test_router_cli.py::RouterCliTest::test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
+előbb a régi baseline tiltott committed driftjét, utána kizárólag a
+megengedett uncommitted modelldiffet mérik.
+
+**Pontosítás (2026-08-02, H6 futásidejű reprodukció).** A `8c084268` commit
+nem őse a `f023b89` reuse-olt worktree-nek: a branch közben új main lineage-ra
+lett újralétrehozva. Az ancestor-feltétel ezért nem biztonsági garancia, hanem
+téves működési előfeltétel volt. A recovery a tiszta régi snapshotot tartja
+meg, majd a JELENLEGI worktree teljes, friss allowlist-auditját követeli meg;
+ez az a kontroll, amely a listán kívüli diffet továbbra is megállítja.
