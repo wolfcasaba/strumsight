@@ -48,7 +48,7 @@ E02-R21	docs/rounds/e02-r21-practice-production-wiring.md	auto	0111	done
 # ADR-t igényel, az orchestrátor 0113-tól oszt, ütközésvizsgálattal (a 0112 az
 # önjavító pipeline döntése — ADR 0112).
 E03-R01	docs/rounds/e03-r01-baseline-and-boundaries.md	auto	0089-0092	done
-E03-R02	docs/rounds/e03-r02-song-document-identity-metadata.md	auto	nincs	pending
+E03-R02	docs/rounds/e03-r02-song-document-identity-metadata.md	auto	nincs	done
 E03-R03	docs/rounds/e03-r03-song-structure-and-time-map.md	auto	nincs	pending
 E03-R04	docs/rounds/e03-r04-tracks-events-monophonic-analysis.md	auto	nincs	pending
 E03-R05	docs/rounds/e03-r05-validator-normalizer-capabilities.md	auto	nincs	pending
