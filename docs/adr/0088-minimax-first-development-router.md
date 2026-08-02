@@ -1,6 +1,7 @@
 # ADR 0088 — MiniMax-first fejlesztési router a Codex execution harnessben
 
-**Státusz:** elfogadva (explicit user-döntés, 2026-08-01).
+**Státusz:** elfogadva (explicit user-döntés, 2026-08-01; napi policy
+módosítva explicit user-döntéssel, 2026-08-02).
 Pontosítja az [ADR 0069](0069-two-engine-implementer-pool.md) motorválasztását és
 az [ADR 0087](0087-autonomous-round-pipeline.md) implementer/javítókör ágát. Az
 [ADR 0052](0052-ci-apk-automerge-session-per-round.md) független review-, CI- és
@@ -36,9 +37,11 @@ router a Codex CLI Responses API execution harnessén keresztül futtatja:
 5. végső scope-audit és gate.
 
 A limitek taskonként: pontosan **2 befejezett M3-megoldási kísérlet**, legfeljebb
-**1 Terra-hívás**. Az automatikus Terra-hívások globális korlátja **3/UTC nap**.
-A task- és napi keretet review-javítás, resume, új worktree vagy processzhalál
-nem nullázhatja.
+**1 Terra-hívás**. A `max_automatic_terra_calls_per_utc_day = 0` érték
+**korlátlan UTC-napi összesített policyt** jelent; pozitív érték megtartott,
+explicit vészkorlát. A task-keretet review-javítás, resume, új worktree vagy
+processzhalál nem nullázhatja. A Terra-ledger korlátlan módban is minden
+foglalást megőriz audit- és crash-safety célból.
 
 ### 2. Objektív eszkaláció és providerhibák
 
@@ -146,12 +149,13 @@ felülírt**; legacy reprodukcióhoz tovább él.
 ## Következmények
 
 - A feladatok nagy része MiniMaxon marad, a Terra-fogyasztás objektív és
-  crash-safe korlátot kap.
+  crash-safe task-korlátot, valamint teljes audit-ledgert kap.
 - Providerhiba nem égeti automatikusan a ChatGPT/Codex keretet.
 - A gépi scope/gate eredmény reprodukálható, de nem helyettesíti a szemantikailag
   független review-t.
-- A magas kockázatú zöld diff is fogyaszthat egy Terra-reviewt; a napi limit
-  ezért tudatosan DEFERRED állapotot okozhat.
+- A magas kockázatú zöld diff is fogyaszthat egy Terra-reviewt. A helyi napi
+  összesített policy nem állítja meg; tényleges provider-kvóta, rate limit,
+  auth- vagy hálózati hiba továbbra is fail-closed állapotot okoz.
 - A `prepared` queue miatt a telepítés és smoke nem indít el fejlesztési kört.
 
 ## Elutasított alternatívák

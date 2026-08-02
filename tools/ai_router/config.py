@@ -117,7 +117,7 @@ def load_config(path: Path) -> RouterConfig:
             max_m3_attempts_per_task=2,
             max_terra_calls_per_task=1,
             max_automatic_terra_calls_per_utc_day=_integer(
-                limits, "max_automatic_terra_calls_per_utc_day"
+                limits, "max_automatic_terra_calls_per_utc_day", minimum=0
             ),
             terra_reasoning="medium",
             terra_packet_target_tokens=_integer(limits, "terra_packet_target_tokens"),

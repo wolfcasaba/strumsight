@@ -64,6 +64,28 @@ class RouterConfigTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             self.load(VALID.replace("max_m3_attempts_per_task = 2", "max_m3_attempts_per_task = 3"))
 
+    def test_accepts_zero_as_unlimited_automatic_terra_daily_budget(self) -> None:
+        config = self.load(
+            VALID.replace(
+                "max_automatic_terra_calls_per_utc_day = 3",
+                "max_automatic_terra_calls_per_utc_day = 0",
+            )
+        )
+
+        self.assertEqual(config.limits.max_automatic_terra_calls_per_utc_day, 0)
+
+    def test_rejects_negative_automatic_terra_daily_budget(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "max_automatic_terra_calls_per_utc_day must be an integer >= 0",
+        ):
+            self.load(
+                VALID.replace(
+                    "max_automatic_terra_calls_per_utc_day = 3",
+                    "max_automatic_terra_calls_per_utc_day = -1",
+                )
+            )
+
     def test_rejects_unsupported_engine_or_schema(self) -> None:
         with self.assertRaises(ConfigError):
             self.load(VALID.replace('default_engine = "auto"', 'default_engine = "random"'))

@@ -142,31 +142,89 @@ class RouterCliTest(unittest.TestCase):
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertEqual(json.loads(status_result.stdout)["status"], "NOT_STARTED")
 
-    def _terra_status(self, state_root: Path) -> subprocess.CompletedProcess:
+    def _terra_status(
+        self, state_root: Path, *, config: Path = CONFIG
+    ) -> subprocess.CompletedProcess:
         return subprocess.run(
-            ["python3", str(CLI), "--config", str(CONFIG), "--state-root", str(state_root), "terra-status"],
+            ["python3", str(CLI), "--config", str(config), "--state-root", str(state_root), "terra-status"],
             text=True,
             capture_output=True,
             check=False,
         )
 
-    def test_terra_status_reports_not_exhausted_with_zero_reservations(self) -> None:
+    def _config_with_daily_limit(self, directory: Path, limit: int) -> Path:
+        config = directory / "router.toml"
+        source = CONFIG.read_text(encoding="utf-8")
+        current = "max_automatic_terra_calls_per_utc_day = 0"
+        self.assertIn(current, source)
+        config.write_text(
+            source.replace(
+                current,
+                f"max_automatic_terra_calls_per_utc_day = {limit}",
+            ),
+            encoding="utf-8",
+        )
+        return config
+
+    def test_terra_status_reports_not_exhausted_with_finite_budget(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            result = self._terra_status(Path(directory) / "state")
+            root = Path(directory)
+            result = self._terra_status(
+                root / "state", config=self._config_with_daily_limit(root, 3)
+            )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["daily_count"], 0)
         self.assertEqual(payload["daily_limit"], 3)
+        self.assertFalse(payload["unlimited"])
         self.assertFalse(payload["exhausted"])
+
+    def test_terra_status_reports_unlimited_and_retains_the_audit_count(self) -> None:
+        import datetime as _dt
+
+        with tempfile.TemporaryDirectory() as directory:
+            state_root = Path(directory) / "state"
+            state_root.mkdir(parents=True)
+            today = _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+            (state_root / "terra-ledger.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "reservations": [
+                            {
+                                "reservation_id": f"r{i}",
+                                "task_id": f"E03-R0{i}",
+                                "utc_day": today,
+                                "status": "finished",
+                            }
+                            for i in range(1, 4)
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self._terra_status(state_root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["daily_limit"], 0)
+        self.assertEqual(payload["daily_count"], 3)
+        self.assertTrue(payload["unlimited"])
+        self.assertFalse(payload["exhausted"])
+        self.assertIsNone(payload["next_reset_utc"])
+        self.assertIsNone(payload["next_reset_epoch"])
 
     def test_terra_status_exits_nonzero_and_reports_the_utc_midnight_reset_once_exhausted(self) -> None:
         # E03-R08 H6 self-heal (2026-08-02): the pipeline driver polls this
         # exit code to decide whether to hold off retrying a round blocked on
         # the shared daily Terra budget instead of busy-retrying every 5min.
         with tempfile.TemporaryDirectory() as directory:
-            state_root = Path(directory) / "state"
-            baseline = self._terra_status(state_root)
+            root = Path(directory)
+            state_root = root / "state"
+            config = self._config_with_daily_limit(root, 3)
+            baseline = self._terra_status(state_root, config=config)
             self.assertEqual(baseline.returncode, 0, baseline.stderr)
             today = json.loads(baseline.stdout)["utc_day"]
 
@@ -189,11 +247,12 @@ class RouterCliTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = self._terra_status(state_root)
+            result = self._terra_status(state_root, config=config)
 
         self.assertEqual(result.returncode, 1, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["daily_count"], 3)
+        self.assertFalse(payload["unlimited"])
         self.assertTrue(payload["exhausted"])
         import datetime as _dt
 

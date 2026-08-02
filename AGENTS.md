@@ -429,7 +429,9 @@ Review-javításkor ugyanaz a task/state folytatódik:
 Kötött router-szabályok:
 
 1. MiniMax M3 az elsődleges; legfeljebb **két befejezett M3 megoldási kör**.
-2. Taskonként legfeljebb **egy Terra**, automatikusan legfeljebb **3/UTC nap**.
+2. Taskonként legfeljebb **egy Terra**. Az UTC-napi összesített limit
+   alapértelmezetten **korlátlan** (`0`); pozitív config-érték csak explicit
+   vészkorlátként használható.
 3. Terra csak két kódhibás gate után vagy magas kockázatú diff célzott
    reviewjára indul.
 4. 429/quota/5xx/hálózat/timeout, hiányzó dependency és sandbox/jogosultság

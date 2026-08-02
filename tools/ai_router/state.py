@@ -211,8 +211,18 @@ class StateStore:
         self, task_id: str, *, daily_limit: int, task_limit: int = 1
     ) -> TerraReservation:
         self._validate_task_id(task_id)
-        if daily_limit < 1 or task_limit < 1:
-            raise StateError("Terra limits must be positive")
+        if (
+            isinstance(daily_limit, bool)
+            or not isinstance(daily_limit, int)
+            or daily_limit < 0
+        ):
+            raise StateError("Terra daily limit must be a non-negative integer")
+        if (
+            isinstance(task_limit, bool)
+            or not isinstance(task_limit, int)
+            or task_limit < 1
+        ):
+            raise StateError("Terra task limit must be a positive integer")
         now = self.clock().astimezone(timezone.utc)
         day = now.date().isoformat()
         with self._ledger_lock():
@@ -229,7 +239,7 @@ class StateStore:
                 for row in reservations
                 if isinstance(row, dict) and row.get("task_id") == task_id and row.get("status") in active
             )
-            if daily_count >= daily_limit:
+            if daily_limit > 0 and daily_count >= daily_limit:
                 raise TerraBudgetError("automatic Terra daily budget is exhausted")
             if task_count >= task_limit:
                 raise TerraBudgetError("task Terra budget is exhausted")
