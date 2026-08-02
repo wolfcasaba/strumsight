@@ -480,6 +480,20 @@ gate-ellenőrzés `main`-en szintén zöld. Full narrative:
    > `PIPELINE_FALLBACK_ENGINE=none`. **Az implementer-routing (ADR 0088:
    > M3 → Terra) ettől FÜGGETLEN és változatlan** — ez csak arról szól, ki
    > vezényel és ki review-z.
+   >
+   > **E03-R05 H6 önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:** a
+   > `router_result` egyetlen szinkron `ai-router-round.sh run` hívása a
+   > Bash-eszköz 600s-es kemény plafonjánál tovább tartó MiniMax-hívásoknál
+   > (`model_timeout_seconds=7200`) jelzés nélküli SIGTERM-mel halt meg —
+   > docs/LESSONS.md L42 pontos ismétlődése, most az `engine=auto` úton.
+   > Javítás: `engine=auto` is a már szentesített leválaszt-és-előtérben-várj
+   > mintát követi (`setsid ... & ; tools/wait-for-router.sh`); az örökölt
+   > `wait-for-round.sh` a router `progress`/`blocked` jelzéseit nem ismeri
+   > fel terminálisnak (mérve, regressziós teszttel dokumentálva), ezért egy
+   > ÚJ, dedikált poller kellett. `tools/ai-router-round.sh` és a Python
+   > router (`tools/ai_router/**`) VÁLTOZATLAN — a szükséges state-alapú
+   > állapotlekérdezés már létezett. PR #61, `3b4707f`, `router-ci` zöld.
+   > Részletek: docs/LESSONS.md L54.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

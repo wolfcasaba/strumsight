@@ -2107,3 +2107,57 @@ indítást észlelsz AZONNAL (a `ps`-ben a folyamat PID-je még nem
 létezik, vagy a fázisfájl még nem íródott), a megölés biztonságos; ha a
 folyamat már fut, inkább hagyd lefutni és utólag, a diff alapján
 ellenőrizd az eredményt.
+
+## L54 — `engine=auto` szinkron router-dispatch: a Bash-eszköz 600s-es kemény plafonja rövidebb egy MiniMax-hívásnál, és az örökölt `wait-for-round.sh` a router jelzés-szótárát nem ismeri fel terminálisnak
+
+**Mit mértünk (2026-08-02, E03-R05, H6, önjavító kör).** A
+`docs/execution/pipeline-orchestrator-prompt.md` §0.1/§1.1 korábban
+kifejezetten előírta, hogy `engine=auto` esetén az
+`tools/ai-router-round.sh run` hívás **szinkron, előtérben** fusson —
+indoklás: „maga a hosszú modellhívás tartja életben a sessiont". Ez a
+feltételezés hamis volt: a Claude Code Bash-eszköz saját, mért kemény
+felső korlátja **600s**, míg a `.ai/router.toml`
+`model_timeout_seconds=7200` — egy MiniMax-hívás, ami ennél tovább tart
+(BASELINE_GATE + a modellhívás maga), **elkerülhetetlenül SIGTERM-mel hal
+meg** a Bash-eszköz oldaláról, mielőtt a router a saját
+`codex-signal.sh`-jelzését kiírhatná. Az E03-R05-ön két egymást követő
+ilyen hívás mindkétszer jelzés nélkül halt meg `phase=M3_CALL_1/status=
+RUNNING` közben — `docs/LESSONS.md` **L42 pontos ismétlődése**, most az
+`auto` úton (L42 az örökölt `minimax`/`codex` út egy korábbi, más okból
+menetrendszerűen ismétlődő változata volt).
+
+A `minimax`/`codex` út erre már megoldást adott: `setsid ... &` indítás +
+`tools/wait-for-round.sh` előtérbeli, ismételt várakozás — ez tartja a
+sessiont élve anélkül, hogy egyetlen Bash-hívás túllépné a plafont
+(docs/LESSONS.md L12). Ezt a mintát **nem lehetett változtatás nélkül
+átvenni** az `auto` útra: a `wait-for-round.sh` `case`-ága kizárólag az
+implementer-ágens jelzés-szótárát ismeri
+(`done|stopped|stalled|timeout|unknown`). A router-út viszont MÁS
+szótárral ír ugyanabba a `.codex-round-status` fájlba
+(`tools/codex-signal.sh`, router-ág): `status=progress|stopped|blocked` +
+egy `router_status=READY_FOR_REVIEW|STOPPED|DEFERRED|BLOCKED|
+INTERNAL_ERROR` mező. A `progress` és a `blocked` érték egyik `case`-ágra
+sem illeszkedik, tehát a `wait-for-round.sh` ezekre **üresen pörögne a
+`max_wait` leteltéig** — mérve és regressziós teszttel rögzítve
+(`tools/tests/test_pipeline_integration.py::
+test_wait_for_round_does_not_recognize_router_terminal_signals`).
+
+**A javítás** (PR #61, `3b4707f`): egy ÚJ, dedikált `tools/wait-for-
+router.sh`, ami ugyanazt a `.codex-round-status` fájlt figyeli, de a
+`router_status=` mező JELENLÉTÉRE vár — ez a mező a router-úton MINDIG
+terminális, mert `ai-router-round.sh` a `codex-signal.sh`-t PONTOSAN
+EGYSZER hívja, a blokkoló `model-router.py` hívás UTÁN
+(`tools/ai-router-round.sh:~95`). A `docs/execution/pipeline-
+orchestrator-prompt.md` §0.1/§1.1 `auto`-ágát erre a leválaszt-és-várj
+mintára állítottuk át (jelölve: „Módosítás (ADR 0112 önjavító kör,
+2026-08-02)"). `tools/ai-router-round.sh` és a Python router
+(`tools/ai_router/**`) **változatlan** maradt: a szükséges, fázisonkénti
+állapot-perzisztálás (`StateStore.save_task`, `model-router.py status
+--task-id --json`) már létezett, csak eddig nem volt rá fájl-alapú,
+gyors pollozó szerződés.
+
+**Tanulság:** ha egy meglévő „leválaszt-és-várj" mintát egy ÚJ hívónak
+akarsz átadni, **mérd meg a jelzés-szótár egyezését** a `case`-ágakkal
+mielőtt feltételezed az újrahasznosíthatóságot — két, ugyanabba a
+jelzésfájlba író, de eltérő szótárú alrendszer csendes, timeoutig tartó
+hamis-negatívot ad, nem hibaüzenetet.
