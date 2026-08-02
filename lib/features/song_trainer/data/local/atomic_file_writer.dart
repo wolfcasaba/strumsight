@@ -271,8 +271,13 @@ final class AtomicFileWriter {
         final end = offset + chunkSize > bytes.length
             ? bytes.length
             : offset + chunkSize;
-        final length = end - offset;
-        raf.writeFromSync(bytes, offset, length);
+        // `RandomAccessFile.writeFromSync`'s third argument is an
+        // EXCLUSIVE END INDEX into `buffer`, not a length — passing a
+        // length here made every call after the first chunk fail with
+        // `start > end` (or, for a payload exactly one chunk long,
+        // silently "work" because `end` and `length` happen to
+        // coincide when `offset == 0`). E03-R07 review fix-round #2.
+        raf.writeFromSync(bytes, offset, end);
         // The chunked-conversion sink takes the same view we just
         // handed the OS — no extra copy.
         writeSink.add(bytes.sublist(offset, end));

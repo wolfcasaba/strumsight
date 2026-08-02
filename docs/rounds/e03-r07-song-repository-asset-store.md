@@ -457,20 +457,53 @@ architecture mind zöld (az orchestrátor futtatta, izolált ellenőrzésként).
 
 **Folyamat-megjegyzés (nem tartalmi, a pipeline-mechanikáról):** az `auto`
 router task-állapota a scope-fix miatt (§10.3) BLOCKED-ban ragadt, mert a
-baseline-manifest a m8ár commitolt diffet stale untracked-fájlokként látta.
-Az orchestrátor a router SAJÁT kódját (`capture_workspace_manifest`,
+perzisztált baseline-manifest a MÁR commitolt diffet stale untracked-
+fájlokként látta (a manifest a scope-fix előtti PRECHECK pillanatában
+készült). Az orchestrátor a router SAJÁT kódját (`capture_workspace_manifest`,
 `StateStore`) hívva frissítette a perzisztált task-state-et egy friss,
 tiszta manifestre és `READY_FOR_REVIEW`-ra, hogy a `resume` hívás a
 findings-fájlt helyesen eljuttassa M3-hoz — a `tools/`, a gate és a
 `.github/` érintetlen maradt, ez kizárólag a router futásidejű
-(`~/.local/state/strumsight-ai-router/`) állapotára hatott (a baseline
-manifest a MÁR commitolt diffet stale untracked-fájlokként látta, ami a
-scope-fix előtti PRECHECK pillanatában készült). A javító kör után a
-router `DEFERRED`-et jelzett ("automatic Terra daily budget is exhausted")
-— ez a router saját M3→Terra eszkalációs kerete, NEM egy tartalmi hiba
-jele; a diff eddigre már kész és zöld volt, ezért az orchestrátor (a
-`READY_FOR_REVIEW` utáni saját felelősségi körben) auditálta a scope-ot és
-commitolta a javítást, Terra hívása nélkül.
+(`~/.local/state/strumsight-ai-router/`) állapotára hatott. A javító kör
+után a router `DEFERRED`-et jelzett ("automatic Terra daily budget is
+exhausted") — ez a router saját M3→Terra eszkalációs kerete, NEM egy
+tartalmi hiba jele; a diff eddigre már kész és zöld volt, ezért az
+orchestrátor (a `READY_FOR_REVIEW` utáni saját felelősségi körben)
+auditálta a scope-ot és commitolta a javítást, Terra hívása nélkül.
+
+### 10.6 Javító kör #2 (2026-08-02, orchestrátor-írt, motor-oldal nem elérhető)
+
+A javító kör #1 friss commitját (`468dae4`) egy MÁSODIK, független review-
+menet mérte (nem a §10.5-öt jelentő ágens, egy másik agent-instance), és
+egy ÚJ BLOCKER-t talált, amit maga a javító kör #1 vezetett be: a MAJOR 7
+javítása (streamelt SHA-256, `AtomicFileWriter.writeStream`)
+`raf.writeFromSync(bytes, offset, length)`-t hívott, holott a
+`RandomAccessFile.writeFromSync` harmadik paramétere egy **kizáró VÉG-
+index**, nem hossz. Egy chunk-nál nagyobb payloadnál (`offset > 0`) ez
+`start > end` miatt `RangeError`-t dob — a leszállított 66 teszt mind
+sub-chunk fixture-t használt, ezért a gate zöld maradt, miközben a
+funkció pontosan a nagy backing-audio asseteknél tört volna el, amikért
+bevezették.
+
+**Miért az orchestrátor javította, nem egy újabb motor-kör.** A router
+`m3_attempts` mezője a javító kör #1 után **2** (M3 a keretezett két
+próbáját elhasználta), a router ezért Terra-hívást kísérelt, de
+**valódi, mért kvóta-kimerülésbe ütközött**: a Terra napi automatikus
+keret (`.ai/router.toml` `max_automatic_terra_calls_per_utc_day = 3`) a
+`~/.local/state/strumsight-ai-router/terra-ledger.json` szerint már
+HÁROM aktív/lezárt foglalást mutatott a mai UTC napra (E02-R21, E03-R04,
+E03-R06) — a limit pontosan betelt, ez nem átmeneti hiba, a keret csak
+UTC nap-váltáskor nyílik újra. Ez szó szerint az AGENTS.md §11 kivétele
+("a motor-oldal nem elérhető") a "Claude nem ír production kódot" szabály
+alól. A javítás egyetlen sort érintett
+(`lib/features/song_trainer/data/local/atomic_file_writer.dart` — a
+harmadik `writeFromSync`-argumentum `length`→`end`), plusz egy új,
+több-chunkos regressziós teszt
+(`test/features/song_trainer/data/local/file_song_asset_repository_test.dart`,
+"fix-round #2" — 200 KiB-os payload, byte-azonos round-trip + helyes
+hash). Zöld kapu utána: `tools/round-gate.sh
+test/features/song_trainer/data/local` — 67/67, format/analyze/
+architecture mind zöld.
 
 ## 11. Review — a független reviewer tölti ki
 

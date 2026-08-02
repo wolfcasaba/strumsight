@@ -187,6 +187,40 @@ void main() {
         SongAssetRepositoryErrorCode.assetTooLarge,
       );
     });
+
+    test('fix-round #2 — a payload spanning several stream chunks round-trips '
+        'byte-identically and hashes correctly', () async {
+      // AtomicFileWriter.defaultChunkSize is 64 KiB; a payload well past
+      // three chunks exercises the loop in `writeStream` more than once.
+      // Before the fix-round #2 correction, `writeFromSync` was called
+      // with a LENGTH where it needs an EXCLUSIVE END INDEX — a single
+      // chunk happened to work by coincidence (offset 0, so end ==
+      // length), but any payload requiring a second chunk hit
+      // `RangeError: start > end` inside `writeStream`.
+      final store = await openStore();
+      final bytes = Uint8List(200 * 1024);
+      for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = i % 256;
+      }
+      final hash = _hash(bytes);
+
+      final result = await store.put(
+        SongAssetWriteRequest(
+          bytes: bytes,
+          assetId: SongAssetId('multi-chunk'),
+          extension: 'bin',
+          expectedSha256: hash,
+        ),
+      );
+
+      expect(result.isSuccess, isTrue);
+      final receipt = result.valueOrNull!;
+      expect(receipt.sha256, hash);
+
+      final getResult = await store.get(hash);
+      expect(getResult.isSuccess, isTrue);
+      expect(getResult.valueOrNull, equals(bytes));
+    });
   });
 
   group('FileSongAssetRepository.reference counts', () {
