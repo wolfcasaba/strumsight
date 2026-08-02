@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "fixture": "song_44",
+  "provenance": "self-authored, technical content only (no licensed music), produced for the E03-R01 legacy parity baseline",
+  "description": "4/4 song at 96 BPM, 2 bars, 8-slot pattern [d, -, d, u, -, u, d, -]. Discriminates a hard-coded 4/4-only implementation by reading beatsPerBar and totalBeats from the document, not from a 4 constant.",
+  "song": {
+    "id": "song_44",
+    "name": "Baseline 4/4",
+    "chords": ["C", "G"],
+    "pat": "d-du-ud-",
+    "bpm": 96,
+    "bpb": 4
+  },
+  "expected": {
+    "events": 10,
+    "totalBeats": 8.0,
+    "durationSec": 5.0,
+    "meter": 4,
+    "chordSequence": ["C", "G"],
+    "directionSequence": ["d", "d", "u", "u", "d", "d", "d", "u", "u", "d"],
+    "downCount": 6,
+    "upCount": 4,
+    "chordSummary": "C · G"
+  }
+}

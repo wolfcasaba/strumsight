@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "fixture": "song_34",
+  "provenance": "self-authored, technical content only (no licensed music), produced for the E03-R01 legacy parity baseline",
+  "description": "3/4 song at 76 BPM, 2 bars, 6-slot pattern [d, -, u, -, u, -]. Discriminates a 4/4-only timeline by proving beatsPerBar=3 and a 6-slot pattern still expand to the right number of events per bar.",
+  "song": {
+    "id": "song_34",
+    "name": "Baseline 3/4",
+    "chords": ["Am", "Em"],
+    "pat": "d-u-u-",
+    "bpm": 76,
+    "bpb": 3
+  },
+  "expected": {
+    "events": 6,
+    "totalBeats": 6.0,
+    "durationSec": 4.7368421052631575,
+    "meter": 3,
+    "chordSequence": ["Am", "Em"],
+    "directionSequence": ["d", "u", "u", "d", "u", "u"],
+    "downCount": 2,
+    "upCount": 4,
+    "chordSummary": "Am · Em"
+  }
+}

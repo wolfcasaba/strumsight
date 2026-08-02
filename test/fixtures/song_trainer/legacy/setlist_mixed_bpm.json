@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "fixture": "setlist_mixed_bpm",
+  "provenance": "self-authored, technical content only (no licensed music), produced for the E03-R01 legacy parity baseline",
+  "description": "Setlist of two songs at different tempos (100 BPM, 120 BPM). Discriminates a flatten-to-common-BPM implementation by asserting each song keeps its own per-second duration and the combined lesson warps the second song's beats into the first song's reference tempo.",
+  "songbook": [
+    {
+      "id": "song_a",
+      "name": "Song A",
+      "chords": ["C", "G"],
+      "pat": "d-d-d-d-",
+      "bpm": 100,
+      "bpb": 4
+    },
+    {
+      "id": "song_b",
+      "name": "Song B",
+      "chords": ["Am"],
+      "pat": "d-d-d-d-",
+      "bpm": 120,
+      "bpb": 4
+    }
+  ],
+  "setlist": {
+    "id": "set_mixed",
+    "name": "Mixed",
+    "songs": ["song_a", "song_b"]
+  },
+  "expected": {
+    "resolvedOrder": ["song_a", "song_b"],
+    "events": 12,
+    "totalBeats": 11.333333333333334,
+    "bpm": 100.0,
+    "meter": 4,
+    "chordSequence": ["C", "G", "Am"],
+    "directionSequence": ["d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d"],
+    "beatSequence": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 8.833333333333334, 9.666666666666666, 10.5],
+    "perSongDurationSec": {
+      "song_a": 4.8,
+      "song_b": 2.0
+    }
+  }
+}

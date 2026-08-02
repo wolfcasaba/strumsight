@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "fixture": "setlist_missing_song",
+  "provenance": "self-authored, technical content only (no licensed music), produced for the E03-R01 legacy parity baseline",
+  "description": "Setlist that references a song id that is not in the current songbook. Discriminates a silent-drop-or-error implementation by asserting the ghost id is skipped and the surviving entries keep their original positions.",
+  "songbook": [
+    {
+      "id": "song_a",
+      "name": "Song A",
+      "chords": ["C", "G"],
+      "pat": "d-d-d-d-",
+      "bpm": 100,
+      "bpb": 4
+    }
+  ],
+  "setlist": {
+    "id": "set_missing",
+    "name": "Missing",
+    "songs": ["song_a", "ghost", "song_a"]
+  },
+  "expected": {
+    "resolvedOrder": ["song_a", "song_a"],
+    "unresolvedIds": ["ghost"],
+    "events": 16,
+    "totalBeats": 16.0,
+    "bpm": 100.0,
+    "meter": 4,
+    "chordSequence": ["C", "G", "C", "G"],
+    "directionSequence": ["d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d"],
+    "beatSequence": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+  }
+}
