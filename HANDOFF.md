@@ -649,6 +649,31 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > `::test_run_codex_blocks_a_model_commit_at_the_shell_layer` (a `d0546f0`
    > mintát reprodukálja egy hamis "codex" folyamattal). Részletek:
    > docs/LESSONS.md L56.
+   >
+   > **E03-R08 H6 önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:** az
+   > auto-router M3 1. próbálkozása `changed_paths=0` mellett terminális
+   > `STOPPED`-ot adott vissza; `classification.py`'s catch-all-ja futott,
+   > mert egyik ismert minta (quota/429/timeout/network/credential/env) sem
+   > talált — a `HALTED` fájl innen csak ezt az egy szót tudta jelenteni,
+   > mert `execution.py`'s `run_codex()` a MiniMax CLI nyers `stdout`-ját
+   > sorról sorra JSON-ra próbálta parse-olni, és minden NEM-JSON sort
+   > (pont ahol egy szöveges self-halt üzenet állna) némán eldobott — a
+   > `CodexResult`-nak nem is volt `stdout` mezője. Class A gyökérok (a
+   > router SAJÁT diagnosztikai csatornája hiányos, nem a MiniMax-hívás
+   > tartalma). Javítás: `CodexResult.stdout` mező (az `events`/
+   > `agent_messages` MELLETT) + `router.py`'s új `_record_provider_call()`
+   > (az `_record_gate()` mintája) minden M3-/Terra-hívás után a task-state
+   > `provider_calls`-listájába teszi a nyers (20000 karakterre vágott)
+   > `stdout`/`stderr`-t, a `FailureClass`-szal együtt. Regressziós tesztek
+   > (RED a fix előtt, GREEN utána):
+   > `test_execution.py::test_run_codex_preserves_raw_stdout_for_non_jsonl_output`,
+   > `test_router.py::test_provider_call_history_persists_raw_stdout_for_stopped_diagnosis`.
+   > A `tools/tests -q` egy MÁSIK, ehhez a halthoz nem tartozó sub-teszttel
+   > (`test_epic3_brief_metadata.py`, E03-R05 brief TOML-drift) továbbra is
+   > pirosít — ez az [[L59]]-ben már dokumentált, önálló felhatalmazású
+   > önjavító kört vár, SZÁNDÉKOSAN érintetlen ebben a körben (§2 hatóköre
+   > csak a MEGÁLLT — E03-R08 — kör briefjére terjed ki). Részletek:
+   > `docs/LESSONS.md` L61.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

@@ -198,6 +198,45 @@ class ExecutionTest(unittest.TestCase):
             self.assertEqual(stdin_file.read_text(), prompt)
             self.assertNotIn(prompt, " ".join(json.loads(argv_file.read_text())))
 
+    def test_run_codex_preserves_raw_stdout_for_non_jsonl_output(self) -> None:
+        # Measured (E03-R08 H6 self-heal): the real MiniMax-M3 CLI exited
+        # nonzero with changed_paths=0 and no JSON event matched any known
+        # failure pattern (quota/429/timeout/network/credential/env), so
+        # router.py's classify_provider_failure() fell through to the
+        # STOPPED catch-all. The state file only ever held that catch-all
+        # string — CodexResult never captured process.stdout, only the
+        # subset of lines that happened to parse as JSON (run_codex's
+        # `except json.JSONDecodeError: continue` silently drops anything
+        # else), so a plain-text self-halt line the CLI prints before a
+        # non-JSON exit is unrecoverable after the fact. This reproduces
+        # that shape directly: a fake CLI that prints one non-JSON
+        # diagnostic line, then exits nonzero.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake = root / "codex"
+            make_executable(
+                fake,
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "sys.stdin.read()\n"
+                "print('fatal: MiniMax CLI self-halted before producing a diff')\n"
+                "sys.exit(1)\n",
+            )
+            result = run_codex(
+                profile="m3",
+                worktree=root,
+                prompt="ignore",
+                runner=ProcessRunner(),
+                codex_bin=str(fake),
+                timeout_seconds=5,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.events, ())
+            self.assertIn(
+                "fatal: MiniMax CLI self-halted before producing a diff", result.stdout
+            )
+
     def test_runner_reports_timeout_without_shell(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fake = Path(directory) / "slow"

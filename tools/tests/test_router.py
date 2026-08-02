@@ -20,6 +20,12 @@ def codex_error(stderr: str) -> CodexResult:
     return CodexResult(1, (), (), stderr)
 
 
+def codex_stopped(stdout: str) -> CodexResult:
+    # No known failure pattern (quota/429/timeout/network/credential/env) in
+    # events or stderr -> classify_provider_failure falls through to STOPPED.
+    return CodexResult(1, (), (), "", stdout=stdout)
+
+
 def gate(outcome: str, fingerprint: str = "sha256:error") -> GateRun:
     return GateRun(
         outcome=outcome,
@@ -230,6 +236,34 @@ class RouterTest(unittest.TestCase):
 
         self.assertEqual(result.status, RouterStatus.DEFERRED)
         self.assertEqual(model.profiles, ["m3"])
+
+    def test_provider_call_history_persists_raw_stdout_for_stopped_diagnosis(self) -> None:
+        # Measured (E03-R08 H6 self-heal, 2026-08-02): a real M3 call
+        # returned nonzero with zero JSON events and no pattern stderr, so
+        # classify_provider_failure() fell through to the STOPPED catch-all
+        # (classification.py:58). The router persisted nothing beyond that
+        # catch-all string in state["reason"] — the CLI's own raw stdout
+        # (where the actual self-halt message would live, see
+        # execution.py's CodexResult.stdout) was discarded the moment
+        # run_codex() returned. Mirrors the gate_history precedent
+        # (test_gate_history_persists_the_full_gate_log_for_diagnosis): the
+        # fix keeps a provider_calls history in task state with the raw
+        # stdout/stderr of every M3/Terra call, not just its classification.
+        router, model, _ = self.router(
+            [codex_stopped("fatal: MiniMax CLI self-halted before producing a diff")],
+            [gate("pass")],
+        )
+
+        result = router.run(self.brief(), self.worktree)
+
+        self.assertEqual(result.status, RouterStatus.STOPPED)
+        state = self.state.load_task("E03-R01")
+        calls = state["provider_calls"]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["failure"], "stopped")
+        self.assertIn(
+            "fatal: MiniMax CLI self-halted before producing a diff", calls[0]["stdout"]
+        )
 
     def test_quota_precheck_defers_before_any_model(self) -> None:
         router, model, gate_runner = self.router(
