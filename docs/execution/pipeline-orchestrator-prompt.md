@@ -28,13 +28,20 @@ E02-R12 első futása pontosan így halt meg jelzés nélkül (H-NOSIGNAL): az
 orchestrátor `run_in_background`-dal várt az implementerre, a session pedig a
 válasz végén kilépett alóla.
 
-`engine=auto` esetén a router adaptert **előtérben, szinkron módon** futtasd;
-nem mehet `setsid`, `&`, `run_in_background` vagy háttér-task mögé. Így maga a
-hosszú modellhívás tartja életben ezt a sessiont. A pontos parancs az 1.1
-szakaszban van.
+**Minden motor — `engine=auto` is — ugyanazt a leválaszt-és-előtérben-várj
+mintát követi.** (Módosítás — ADR 0112 önjavító kör, 2026-08-02, E03-R05 H6:
+a korábbi szabály itt azt írta elő, hogy `auto` esetén a router adaptert
+**szinkron** futtasd, `setsid` nélkül, mert „maga a hosszú modellhívás tartja
+életben ezt a sessiont" — ez a feltételezés hamisnak bizonyult. A Bash-eszköz
+saját, mért kemény plafonja (600s) rövidebb, mint egy
+`model_timeout_seconds=7200`-as MiniMax-hívás (`.ai/router.toml`,
+docs/LESSONS.md L42), ezért egy szinkron router-adapter hívás
+elkerülhetetlenül SIGTERM-mel hal meg, ha a modellhívás a Bash-hívásnál tovább
+tart — pontosan ez okozta az E03-R05 H6 haltot: két egymást követő szinkron
+hívás, mindkettő jelzés nélkül, `M3_CALL_1/RUNNING` fázisban. NE állítsd
+vissza a szinkron változatot.)
 
-Az explicit `engine=minimax|codex` örökölt útvonalon az implementert a
-sessionről leválasztva indítsd, majd előtérben várj rá:
+Az implementert a sessionről leválasztva indítsd, majd előtérben várj rá:
 
 ```bash
 setsid tools/mm-round.sh <munkapéldány> <prompt>.md /tmp/mm-<kör>.log \
@@ -43,8 +50,12 @@ tools/wait-for-round.sh <munkapéldány> 540
 ```
 
 A `wait-for-round.sh` kilépési kódja `5` = még fut, ezért hívd meg újra;
-`0` = done, `3` = stopped, `4` = stalled/timeout/unknown. A `gh run watch` is
-mindig előtérben fusson.
+`0` = done, `3` = stopped, `4` = stalled/timeout/unknown. `engine=auto` esetén
+ugyanez a minta, de a router SAJÁT jelzés-szótárát értő
+`tools/wait-for-router.sh`-sal (1.1. szakasz, pontos parancs ott) — a
+`wait-for-round.sh` a router `progress`/`blocked` jelzéseit NEM ismeri fel
+terminálisnak, tehát azokra üresen pörögne a `max_wait` leteltéig. A
+`gh run watch` is mindig előtérben fusson.
 
 **SOHA ne futtass `pgrep -f` / `pkill -f` hívást olyan mintával, amely a saját
 promptodban előfordul** (pl. `round-gate.sh`, `flutter analyze`). Ha processzt
@@ -99,14 +110,25 @@ pontosan így kezeld. Ismeretlen értéknél HALT; csendes fallback tilos.
 
 ### `auto` — alapértelmezett MiniMax-first router
 
-Az első dispatch pontosan egy, előtérben futó adapterhívás:
+Az első dispatch pontosan egy, leválasztott adapterhívás + előtérben futó
+várakozás (0.1. szakasz — Módosítás ADR 0112 önjavító kör, 2026-08-02, E03-R05
+H6: korábban ez a hívás szinkron volt, ami a Bash-eszköz 600s-es plafonjánál
+hosszabb MiniMax-hívásoknál jelzés nélküli SIGTERM-halált okozott):
 
 ```bash
 router_result=<munkapéldány>/.ai/runs/{{ROUND}}/router-result.json
 PIPELINE_ROUTER_STATUS_FILE="{{ROUTER_STATUS_FILE}}" \
-  <munkapéldány>/tools/ai-router-round.sh run \
-  <munkapéldány> "{{BRIEF}}" "$router_result"
+  setsid <munkapéldány>/tools/ai-router-round.sh run \
+  <munkapéldány> "{{BRIEF}}" "$router_result" \
+  >/dev/null 2>&1 </dev/null &
+<munkapéldány>/tools/wait-for-router.sh <munkapéldány> 540
 ```
+
+A `wait-for-router.sh` kilépési kódja `5` = a router még fut — hívd meg ÚJRA
+CSAK a `wait-for-router.sh`-t (a `setsid`-es indítást NE ismételd, a router
+saját task-lockja amúgy is elutasítaná a párhuzamos második futást); `0` =
+terminális router-jelzés, a teljes `.codex-round-status` a stdout-ra kerül —
+ebből olvasd ki a `router_status=` mezőt és az alábbi táblázat szerint dönts.
 
 A router maga választ M3 és Terra között, kezeli a kvótát, a task-lockot és a
 quality gate-eket. MiniMax 429/quota/5xx/hálózati hiba esetén **nem** indíthatsz
@@ -128,12 +150,15 @@ majd ő készíti el a kör implementációs commitját. A `.ai/runs` csak redak
 nem hiteles munkapéldány-mirror és gitignore-olt.
 
 Ha a független review BLOCKER/MAJOR leletet talál és a routernek maradt kerete,
-a leleteket fájlban add vissza ugyanannak a tasknak:
+a leleteket fájlban add vissza ugyanannak a tasknak — ugyanazzal a
+leválaszt-és-várj mintával:
 
 ```bash
 PIPELINE_ROUTER_STATUS_FILE="{{ROUTER_STATUS_FILE}}" \
-  <munkapéldány>/tools/ai-router-round.sh resume \
-  <munkapéldány> "{{BRIEF}}" "$router_result" <munkapéldány>/<review-findings.md>
+  setsid <munkapéldány>/tools/ai-router-round.sh resume \
+  <munkapéldány> "{{BRIEF}}" "$router_result" <munkapéldány>/<review-findings.md> \
+  >/dev/null 2>&1 </dev/null &
+<munkapéldány>/tools/wait-for-router.sh <munkapéldány> 540
 ```
 
 A `resume` ugyanazt a külső state-et és a már elfogyasztott M3/Terra keretet
