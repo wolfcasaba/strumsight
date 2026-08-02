@@ -1,6 +1,6 @@
 # E03-R04 — Trackek, események és monophonic elemzés
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-02, pre-flight baseline: `main` @ `00e273a`, tervezési baseline: `eeb4f6d`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 4; §11.1–11.7
 - **Branch:** `codex/e03-r04-tracks-events-monophonic-analysis`
 - **Előfeltétel:** E03-R03 merge
@@ -62,6 +62,64 @@ acceptance, hiányzó fixture/licence, vagy nem reprodukálható mérce esetén:
 A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
+
+**Pre-flight mérés (2026-08-02, orchestrátor: Claude Sonnet 5, baseline
+`main` @ `00e273a`, 51 commit-tal a brief eredeti `eeb4f6d` tervezési
+baseline-ja után — E03-R02, E03-R03 és több self-heal kör; a kör-tartalmi
+állítások alább mind érvényben maradtak):**
+
+1. **Track/event tartalom hiánya — MEGERŐSÍTVE.**
+   `lib/features/song_trainer/domain/models/song_document.dart` ma
+   `sections`/`measures`/`tempoMap`/`meterMap`/`keyMap` mezőket hordoz
+   (R03), de nincs `tracks`/`events` mező — a brief állítása pontos.
+   `SongTrackId` és `SongEventId` már deklarált (R02,
+   `song_id.dart:95-103`, kifejezetten „declared ahead of the track/event
+   model (E03-R04)" kommenttel) — az `allowed_paths` listán szereplő új
+   fájlok ezekre építhetnek módosítás nélkül.
+2. **Core chord/strum/tuning auditált import — MEGERŐSÍTVE, egy ponton
+   PONTOSÍTVA.** `test/features/song_trainer/domain/song_document_test.dart`
+   `_forbiddenPatterns` scannere nem tiltja a `core/` importot (csak
+   Flutter/Riverpod/Dio/SharedPreferences/l10n/felsorolt feature-öket) —
+   `core/music/chord.dart` és `core/music/tuning.dart` már ma használatban
+   van (`song_metadata.dart` `defaultTuning`, `song_document_codec.dart`).
+   **Pontosítás:** `core/music/strum.dart` `StrumDirection` enumja csak
+   `down`/`up` értéket hordoz, az SDD §11.3 viszont egy harmadik `unknown`
+   állapotot is előír a `SongStrumEvent.direction`-höz, és a fájl NINCS az
+   `allowed_paths` listán (bővítése tilos zóna, H3). Feloldás: [ADR
+   0113](../adr/0113-song-track-event-model.md) — `SongStrumEvent.direction`
+   típusa `StrumDirection?` (nullable core enum), `null` = `unknown`, nincs
+   szükség core-fájl módosításra vagy párhuzamos enumra.
+3. **Backing asset reference — MEGERŐSÍTVE.**
+   `SongAssetReference` (R02) tipizált `SongAssetId`-t, SHA-256-ot,
+   kiterjesztést és byte-hosszt tárol, platform path mezőt nem — az SDD
+   §11.7 `BackingAudioTrack.assetId: SongAssetId` mintája közvetlenül erre
+   épül, nincs ütközés.
+4. **§9 kockázat 1 (tuning duplikáció) — feloldva.** Az egyetlen canonical
+   tuning contract a core `Tuning`/`Tunings`; a bevezetendő
+   `SongInstrument` ezt hordozza opcionális mezőként, nem definiál
+   saját típust. Részletek: [ADR 0113](../adr/0113-song-track-event-model.md)
+   Döntés 2.
+5. **§9 kockázat 2 (ismeretlen sealed subtype) — feloldva.** A codec a
+   már ma is használt fail-loud mintát követi (analóg
+   `SongDocumentCodecErrorCode.sourceTypeUnknown`-nal): ismeretlen
+   track/event altípus dekódoláskor stabil kóddal dobó kivétel, nem néma
+   eldobás vagy alapértelmezett fallback. Részletek: [ADR
+   0113](../adr/0113-song-track-event-model.md) Döntés 4.
+6. **Chord symbol típus.** `SongChordEvent.symbol` a core `Chord`
+   (validálatlan label-wrapper) típusát viseli — [ADR
+   0113](../adr/0113-song-track-event-model.md) Döntés 1; a §11.2
+   „unsupported chord megőrzi az eredeti display textet" a különálló
+   `displayText` mezőn keresztül teljesül, nem a `Chord` validációján.
+7. **Fájllista és scope — drift nélkül.** A §4 engedélyezett fájllista
+   minden útvonala vagy ÚJ (nem létezik még), vagy a brief szerinti
+   korábbi körből származik (`song_document.dart`, `song_document_codec.dart`,
+   `public.dart` — mindhárom megerősítve létező, a leírt állapotban). Nincs
+   listán kívüli szimbólum- vagy útvonal-igény.
+
+Drift a fenti 6 tervezési tényállításban (§0.0 eredeti 3 sora + §9 2
+kockázata) nem merült fel a track/event tartalmi kérdésekben; az egyetlen
+mért eltérés (`StrumDirection` enum hiányzó `unknown` értéke) ADR 0113-mal
+feloldva, fájllista-bővítés nélkül. A brief §3–§8 változatlanul érvényes.
 
 ## 1. Cél
 
