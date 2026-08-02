@@ -136,6 +136,32 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(model.profiles, ["m3", "m3"])
         self.assertIn("example failure", model.prompts[1])
 
+    def test_gate_history_persists_the_full_gate_log_for_diagnosis(self) -> None:
+        # Mért gyökérok (E02-R21, H4 halt, Update 5/6, L?): a router
+        # gate_history-ja csak outcome/failed_step/error_hash-t tárolt a
+        # perzisztens task-state-ben, a tényleges round-gate.sh
+        # format/analyze/test kimenetét (GateRun.log) csak a repair/
+        # escalation promptba illesztette, majd eldobta. Két egymást követő
+        # tartalmi gate-kudarcnál (2 M3 + 1 Terra, mind STOPPED) ez azt
+        # jelentette, hogy SEMMILYEN diagnosztikai adat nem maradt a
+        # `python3 tools/model-router.py status --task-id <ID> --json`
+        # (a felülvizsgálatok saját, dokumentált reprodukciós parancsa)
+        # kimenetében arról, MIÉRT bukott a format/analyze/test lépés — csak
+        # egy hash, ami semmit nem árul el. A fix a teljes (redaktált) logot
+        # is elteszi minden gate_history bejegyzésben.
+        router, model, _ = self.router(
+            [codex_ok(), codex_ok()],
+            [gate("pass"), gate("code_failure", "sha256:one"), gate("pass")],
+        )
+
+        router.run(self.brief(), self.worktree)
+
+        state = self.state.load_task("E03-R01")
+        failed_entry = next(
+            entry for entry in state["gate_history"] if entry.get("outcome") == "code_failure"
+        )
+        self.assertEqual(failed_entry["log"], "example failure")
+
     def test_two_code_failures_escalate_once_to_terra(self) -> None:
         router, model, _ = self.router(
             [codex_ok(), codex_ok(), codex_ok()],
