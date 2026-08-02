@@ -2,8 +2,14 @@
 
 Brief: `docs/rounds/e02-r21-practice-production-wiring.md`
 Diff: `git diff origin/main...codex/e02-r21-practice-production-wiring` (HEAD `4381be8`, rebase-elve `f27651a`-ra)
-Reviewer: Claude (Sonnet 5, orchestrátor-review) · Dátum: 2026-08-01
-Verdikt: **HALT (H4)** — lásd "Update 4": az ÖTÖDIK futás, az ÖSSZES korábbi
+Reviewer: Claude (Sonnet 5, orchestrátor-review) · Dátum: 2026-08-02
+Verdikt: **HALT (H4)** — lásd "Update 8": a pipeline-session törölte a három
+használatlan importot (Update 7 utasítása), de a `tools/round-gate.sh` a
+`test test/features/practice/` lépésen ÚJRA pirosra futott — ezúttal egy
+VALÓDI, a wiringtól független teszthibával: a saját A5 teszt timeoutol
+(részletek "Update 8" alatt). Az előző verdikt-összegzés ("Update 4") alább,
+változatlanul, történeti okból marad.
+Korábbi verdikt: **HALT (H4)** — lásd "Update 4": az ÖTÖDIK futás, az ÖSSZES korábbi
 router-infra fix (#46/#47/#48/#49/#50) UTÁN, a router állapotgépe hibátlanul
 lefutott, de mind a 2 M3-kísérlet és az 1 Terra-hívás **valódi diff nélkül**
 `STOPPED`-be futott — a gyökérok a `codex exec --sandbox workspace-write`
@@ -836,3 +842,127 @@ független review-t, és folytatja a normál CI-dispatch + merge útvonalat. Ez
 NEM router-infrastruktúra hiba, tehát a szokásos önjavító-kör infra-fixe
 helyett egy egyszerű tartalmi javító lépés (akár egy rövid javító M3-kör a
 kimerült keret feloldása/bővítése után, akár emberi/self-heal 3-soros patch).
+
+## Update 8 (2026-08-02, Pipeline E02-R21 — az Update 7 utasítása szerinti unused-import törlés UTÁN a gate ÚJ, valódi teszthibán bukott, TIZEDIK halt/önjavító kör ugyanezen a taskon)
+
+**A pipeline-session (Claude Sonnet 5, orchestrátor) végrehajtotta az Update 7
+által kért mechanikus javítást** — a három használatlan import törölve a
+`test/features/practice/application/practice_production_wiring_test.dart`
+fájlból (32./42./47. sor: `practice_session_providers.dart`,
+`practice_session_config.dart`, `practice_history_repository.dart`), mérve
+`flutter analyze` a törlés előtt (3 `unused_import`) és után (`No issues
+found!`) — a törlés helyes volt, mindhárom szimbólum ténylegesen elérhető
+tranzitív importon keresztül (`practiceSessionHostProvider` a
+`practice_effect_listener.dart` importból, `practiceHistoryRepositoryProvider`
+a `local_practice_history_repository.dart` importból; a `PracticeSessionConfig`
+típus nevesítve sosem szerepel a teszt törzsében).
+
+A munkapéldány ezután `origin/main`-re rebase-elve (konfliktus nélkül, a PR
+#53/#54 self-heal fixek felvéve), majd a teljes
+`tools/round-gate.sh test/features/practice/ test/features/learn/ test/core/
+test/app/ test/property/` lefuttatva. **`format`: zöld, `analyze`: zöld,
+`test test/features/practice/`: PIROS** — de ezúttal **nem** import-hiba,
+hanem a saját A5-teszt `TimeoutException after 0:00:05.000000: Future not
+completed` hibával bukik (a `_driveToCompleted` helper `_waitForStatus`
+hívása, amely a `preparing → ready|permissionRequired` átmenetre vár).
+
+### Gyökérok (mért, nem feltételezett)
+
+A teszt (`test/features/practice/application/practice_production_wiring_test.dart:197-215`)
+két **saját, library-private** placeholder providert deklarál kizárólag a
+végén futó asszerciókhoz:
+
+```dart
+final _strumEngineProvider = Provider<FakeStrumEngine>((ref) {...});
+final _permissionGatewayProvider = Provider<FakeMicrophonePermissionGateway>((ref) {...});
+...
+overrides: [
+  ...
+  _strumEngineProvider.overrideWithValue(engine),
+  _permissionGatewayProvider.overrideWithValue(permissions),
+  ...
+]
+```
+
+Ezek a `_`-prefixű providerek **nem azonosak** a valódi platform-határ
+providerekkel, amiket a production wiring ténylegesen figyel:
+
+- `lib/features/practice/data/practice_observation_gateway_provider.dart:31-32`
+  — `livePracticeObservationGatewayProvider` a **`strumEngineProvider`**-t
+  (`lib/features/live/providers/live_providers.dart:11`) és a
+  **`microphonePermissionGatewayProvider`**-t
+  (`lib/core/audio/audio_providers.dart:14`) figyeli (`ref.watch`);
+- `lib/features/practice/application/practice_session_providers.dart:179-181`
+  — `practiceMicrophonePermissionProvider` szintén a valódi
+  `microphonePermissionGatewayProvider`-t figyeli.
+
+A teszt overrides-listája **sosem érinti** ezt a két valódi providert — a
+kontroller (`PracticeSessionController._onPreparePractice`,
+`lib/features/practice/application/practice_session_controller.dart:364-368`)
+tehát a **valódi, platform-csatornás** `MicrophonePermissionGateway`
+implementációját kapja `ref.watch(practiceMicrophonePermissionProvider)`-en
+keresztül, és `await permissions.currentState()` a `flutter test` host-futás
+alatt (nincs valódi platform-csatorna) sosem tér vissza — ez a mért
+`TimeoutException after 0:00:05.000000` forrása.
+
+**Reprodukció (a jelenlegi munkafán, `/home/ubuntu/ss-auto-e02-r21`,
+`codex/e02-r21-practice-production-wiring` ág, HEAD `50a7f63` origin/main-re
+rebase-elve, `git diff HEAD` a mért 3 tracked + 2 untracked fájlon, az
+import-törlés is benne):**
+
+```
+flutter test test/features/practice/application/practice_production_wiring_test.dart
+```
+
+→ egyetlen teszt, `TimeoutException after 0:00:05.000000: Future not
+completed` az `_waitForStatus` hívásban.
+
+### A javítás pontos helye (mérve, nem a self-heal dolga kitalálni)
+
+`test/features/practice/application/practice_production_wiring_test.dart:197-215`
+— a két `_strumEngineProvider`/`_permissionGatewayProvider` deklarációt és az
+`overrides` két bejegyzését a valódi providerekre kell cserélni:
+
+```dart
+strumEngineProvider.overrideWithValue(engine),
+microphonePermissionGatewayProvider.overrideWithValue(permissions),
+```
+
+(import: `package:strumsight/features/live/providers/live_providers.dart`,
+`package:strumsight/core/audio/audio_providers.dart`), a záró asszerciók
+(173-174. sor) pedig ugyanezekről a valódi providerekről olvassanak vissza
+(vagy a `_buildContainer()` adja vissza az `engine`/`permissions` fake-eket
+közvetlenül, hogy ne kelljen újra `container.read`-elni egy típusos
+providerről). **Ez tisztán a teszt-fájl saját hibája — a production wiring
+(`practice_session_providers.dart`, `practice_setup_controller.dart`,
+`practice_effect_listener.dart`, `practice_observation_gateway_provider.dart`)
+egyetlen mért ponton sem hibás**, a `_ControllerSessionHost` adapter és az
+auto-dispose `practiceSessionControllerProvider` family helyesen kötik össze
+a Setup → Session útvonalat (a `hostBefore == null` és a `host != null`
+utáni assertion már a jelenlegi fixek nélkül is lefutott a timeoutig).
+
+### Döntés
+
+**HALT — H4.** A router (`auto`) task-állapota változatlanul `STOPPED`,
+`m3_attempts=2/2`, `terra_calls=1/1` (mérve:
+`python3 tools/model-router.py status --task-id E02-R21 --json`) — a keret
+nulla, `resume` nem alkalmazható. A pipeline-prompt §2 szerint `auto`-n
+`STOPPED` után nyitva maradó BLOCKER/MAJOR feltétlen H4, és az orchestrátor
+határa (§2, §4) kizárja, hogy maga írja meg a teszt-fájl tartalmi javítását
+(ez az implementer motor dolga egy javító körben, nem az orchestrátoré) — a
+mechanikus, Update 7-ben előre kimért és jóváhagyott import-törlésen túl.
+**Ez a TIZEDIK halt/önjavító kör ugyanezen a taskon, de az ELSŐ, ahol a
+gate-kudarc mérve egyetlen, pontosan lokalizált teszt-fájl-hibára szűkült
+(két konkrét provider-csere, fájl:sor pontossággal) — a production wiring
+(A1/A2/A3/A4) minden mért ponton hibátlan.**
+
+**A committolatlan munkafa-állapot (3 tracked + 2 untracked fájl, az
+import-törléssel frissítve) SZÁNDÉKOSAN a munkapéldányon maradt**
+(`/home/ubuntu/ss-auto-e02-r21`), nem commitolva — a router `auto`
+szerződése szerint az orchestrátor csak `READY_FOR_REVIEW` után auditál és
+commitol, ez a kör review nélkül halt. **A következő session (self-heal vagy
+ember) dolga:** vagy (a) egy explicit `codex`/`minimax` javító kör indítása
+ugyanerre a findings-listára (a fenti pontos fájl:sor javítással a
+promptban), vagy (b) emberi döntés a task-keret bővítéséről/reseteléséről az
+`auto` úton. A Practice V2 production-drótozás (A1/A2/A3) tartalma
+továbbra is helyesnek mérve — csak a saját tesztje hibás.
