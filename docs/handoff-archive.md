@@ -1563,3 +1563,101 @@ szintén zöld.
 Lessons: `docs/LESSONS.md` L48 (a router első futása egy vadonatúj
 munkapéldányon a klón-csapdába fut, sanctioned fix: `gen-l10n` +
 `model-router.py reset`, nem tiltott state-törlés).
+
+## E03-R02 — SongDocument V2 azonosítók és metaadatok
+
+Pipeline E03-R02 (ADR 0087, `auto` MiniMax-first router). Második Epic 3
+kör, a user már `pending`-re állította a queue-sort. Az orchestrátor
+(Claude Sonnet 5) egy KORÁBBI, halt-olt session örökségét vette át — lásd
+lent — nem egy vadonatúj dispatch-csel indult.
+
+**Örökség-ellenőrzés (§0.2).** A `/home/ubuntu/ss-router-e03-r02`
+munkapéldány már létezett: a `codex/e03-r02-song-document-identity-metadata`
+branch két commitot tartalmazott — `99cdf6d` (pre-flight, PLANNING
+revízió: a §0.0-ba négy mért drift dokumentálva, mind ADR 0089 keretein
+belül feloldva, nincs új ADR) és `439392b` (M3 teljes implementációja,
+93/93 teszt, gate zöld a router saját BASELINE_GATE mérésében). A router
+állapota **`BLOCKED`** volt (`m3_attempts=1`), ok:
+`"model-created commit is not allowed: HEAD changed from baseline; path
+outside allowed scope: coverage/lcov.info"`.
+
+**Root cause (mérve, a self-heal saját elemzése, PR #57/`6db1170`, L49).**
+Két ok: (1) a `coverage/lcov.info` — a brief §7 saját elfogadási
+kritériuma miatt legitim `flutter test --coverage` melléktermék — nem
+szerepelt a scope-audit `GENERATED_IGNORED_PREFIXES` listáján, tehát
+MINDEN, a briefnek megfelelően lefedettséget mérő M3-diff blokkolva lett
+volna, egy egyébként tökéletesen scope-tiszta diff mellett is; (2) M3 saját
+maga commitolt, megszegve a "modell sosem tulajdonolja a Git-et"
+invariánst (`tools/tests/test_security.py::
+test_scope_audit_rejects_a_model_created_commit`). Egy korábbi,
+halt-olt session H6-tal állt meg; egy self-heal kör (más session) az (1)
+hibát javította a `tools/ai_router/security.py`-ban, a (2)-t
+SZÁNDÉKOSAN nem lazította (tesztelt security invariáns), és a
+commit-üzenetében rögzítette: a konkrét megrekedt task "a worktree kézi
+resetjével" oldható fel, nem router-policy módosítással.
+
+**Recovery (ez a session mérte ki és hajtotta végre — L50).** A
+`model-router.py run` state-gépe egy `status="BLOCKED"` taskra puszta
+`run`-nal újra-audit nélkül visszaadja a cache-elt eredményt (se
+`DEFERRED`, se `READY_FOR_REVIEW`+review-findings ág nem illik rá). Az
+egyetlen sanctioned kiút, a `reset --task-id`, a JELENLEGI worktree
+tartalmát kapná új baseline manifestként — ha a diff még ott van, azonnal
+újra `BLOCKED`-ba fut ("baseline has untracked files"); ha pristine-re
+tisztítanád előbb, egy felesleges, ismételt M3-attempt-et fizetnél a már
+kész, 3071 soros, gate-zöld munkáért. A helyes út — amit ez a session
+végrehajtott — kizárólag git-szintű és NEM érinti a `tools/`-t vagy a
+router task state-et: `git fetch origin`, a `codex/e03-r02-…` branchen
+`git reset --soft 99cdf6d` (M3 saját commitját uncommitted diffre bontja
+vissza), `git stash push -u`, `git rebase origin/main` (a pre-flight
+commit a healed `main` — `2c8bcdc` — tetejére kerül), `git stash pop`,
+scope-audit ellenőrzés (`git diff --name-only 793f8ec` — mind a 11 kódfájl
++ a brief §10 handoff pontosan a brief §4 `allowed_paths` listáján, a
+router saját `changed_paths` mérése ugyanezt mutatta), saját kézzel
+gate-futtatás (zöld), majd az orchestrátor **saját authorship-szel**
+commitolta a diffet (`019e9dd`) — pontosan a normál
+READY_FOR_REVIEW→orchestrátor-commit szerződés szerint, csak a router
+állapotgépe helyett kézzel végrehajtva. **M3 diffje byte-azonos maradt** a
+recovery alatt — a commit-üzenet és a HANDOFF/LESSONS a teljes láncot
+dokumentálja.
+
+**Review (Claude Sonnet 5, izolált `/tmp` klón, saját kézzel).** Gate
+újrafuttatva (93/93, zöld), scope-audit `git diff --stat
+origin/main...HEAD` — 12 fájl, mind a brief §4 listáján, listán kívüli
+változás nincs. **Valódi-sértés mutáció-próba** a domain-purity guardra:
+ideiglenesen beszúrva `import 'package:flutter/widgets.dart';` a
+`song_id.dart`-ba → a "Domain purity" teszt PIROS lett, pontos
+hibaüzenettel; visszaállítás után ismét ZÖLD. Független
+boundary/UTC/fail-closed próbák (eldobható `_review_probe_test.dart`,
+törölve): `SongId` 127/128 accept, 129 reject; üres/whitespace reject;
+ismeretlen source-type tamper → `SongDocumentCodecException`; `+05:00`
+offset timestamp → azonos UTC instant, `isUtc=true`; populált dokumentum
+két egymást követő encode-ja byte-azonos. Coverage independently
+regenerálva (`flutter test --coverage`), a hat domain fájl pontos LF/LH
+száma egyezik az implementer §10.3 táblájával (mind ≥90%). **F1 (MINOR):**
+`SongMetadata._validateText` az `*Empty` kódot a "túl hosszú" ágra dobja,
+nem tényleges emptiness-ellenőrzésre — az implementer maga dokumentálta,
+nincs futásidejű hatás, egyik acceptance criterion sem függ tőle. **F2/F3
+(NOTE):** ADR 0089 §Döntés 1 `domain/model/` (egyes szám) vs. a brief és a
+kód `domain/models/` (többes szám) — doc-only, a merge-elt ADR ebben a
+körben nem javítható; `SongId.safeFilename` a vezető kötőjeleket nem vágja
+le a komment ellenére — pinned, nem-előírt viselkedés. Verdikt:
+**APPROVED** (0 BLOCKER/MAJOR).
+
+**Zöld kapu.** `tools/round-gate.sh test/features/song_trainer/domain/
+song_id_test.dart test/features/song_trainer/domain/song_document_test.dart
+test/features/song_trainer/data/local/song_document_codec_test.dart` zöld
+(orchestrátor ÉS független reviewer külön futtatásban, mindkétszer
+izolált klónban). CI dispatch a
+`codex/e03-r02-song-document-identity-metadata`-ra kétszer (a
+review-riport-commit miatt a HEAD elmozdult `019e9dd`→`826cf0a` között) —
+a végleges run
+[30732700929](https://github.com/wolfcasaba/strumsight/actions/runs/30732700929)
+zöld, `headSha` egyezik a merge-elt HEAD-del. Squash-merge
+[PR #58](https://github.com/wolfcasaba/strumsight/pull/58) → `a5b0b55`,
+független post-merge gate-ellenőrzés (friss `/tmp` klón, `origin/main`)
+szintén zöld.
+
+Lessons: `docs/LESSONS.md` L50 (`BLOCKED`→`READY_FOR_REVIEW` nincs
+sanctioned automatikus útja, ha `m3_attempts >= 1`; kézi worktree-recovery
+orchestrátor-authorship alatt a helyes válasz, ha a self-heal már
+bizonyította a diff scope-tisztaságát).

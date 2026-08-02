@@ -1911,3 +1911,39 @@ E03-R02 orchestrátor-session pre-flightjának feladata (mint az E03-R01
 pre-flight §0.0 6. pontja is korábbi halt-olt worktree-t ellenőrzött) — a
 self-heal hatásköre a router-eszköz javítása, nem a kör tartalmi
 végrehajtásának átvétele.
+
+## L50 — `BLOCKED`-ból nincs sanctioned automatikus visszatérés `READY_FOR_REVIEW`-ba; a "worktree-t reseteld" self-heal-instrukció kézi végrehajtást jelent, nem `reset --task-id` + friss M3-attempt-et
+
+A pipeline E03-R02 következő futása (2026-08-02, ez a session) mérte ki, mit
+jelent pontosan az L49 self-heal commit "unblocked by manually resetting
+that one worktree" mondata. A `model-router.py run` state-gépe (lásd
+`tools/ai_router/router.py:531`) egy `status="BLOCKED"` taskra a puszta
+`run`-t azonnal, újra-audit NÉLKÜL visszaadja (nem `DEFERRED`, nem
+`READY_FOR_REVIEW` review-findings-szel — egyik ág sem illik rá). Az
+egyetlen sanctioned kilépés a `model-router.py reset --task-id` (törli a
+teljes task state-et, `m3_attempts` nullázódik), DE ez a `run` PRECHECK
+ágán a **jelenlegi worktree tartalmát** kapja új baseline manifestként
+(`capture_manifest` → `validate_baseline_manifest`) — ha a worktree-ben ott
+maradnak M3 untracked fájljai, a precheck AZONNAL újra `BLOCKED`-ba fut
+("baseline has untracked files"), tehát a reset előtt a worktree-t
+pristine-re kellene tisztítani, ami eldobná a már elkészült (és a self-heal
+saját elemzése szerint scope-tiszta) implementációt egy felesleges, ismételt
+M3-attempt-re.
+
+**A helyes, ténylegesen alkalmazott kézi recovery** (nem érinti a
+`tools/`-t, nem kerüli meg a "modell sosem commitol" invariánst — az
+orchestrátor commitol, nem a modell): a worktree branchén
+`git reset --soft <pre-flight commit>` (visszaállítja az M3 diffet
+uncommitted állapotba), a pre-flight commit `git rebase origin/main`-nel a
+healed baseline-ra téve, a diff scope-audit-ellenőrzés után (minden
+megváltozott útvonal a brief §4 listáján) az orchestrátor saját
+authorship-szel commitolja, majd a normál READY_FOR_REVIEW → review → CI →
+merge útvonal folytatódik. A router task state-hez (`~/.local/state/
+strumsight-ai-router/tasks/<ID>.json`) ilyenkor NEM kell nyúlni — a
+`BLOCKED` bejegyzés egyszerűen elévül, amint a branch mergelve van.
+
+**Mikor helyes mégis a `reset --task-id` + friss `run`:** ha a `BLOCKED`
+a `BASELINE_GATE` fázisban (`m3_attempts=0`, még nem volt valódi M3-munka —
+lásd L48, E03-R01 klón-csapda) történt, VAGY ha a meglévő diff okkal
+eldobható (pl. időközben elavult brief-revízió miatt). Ha `m3_attempts>=1`
+és a diff scope-tiszta, a kézi worktree-recovery olcsóbb és biztonságosabb.
