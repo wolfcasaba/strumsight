@@ -104,3 +104,12 @@ elérhető** a jelenlegi, gate-kikényszerített szerződések mellett:
   határán (ADR 0092 §2) — ez már ismert munka, nem új felfedezés.
 - Ha egy jövőbeli kör a konszolidáció mellett dönt, mindkét feature oldalán
   migrációs kört igényel; ez az ADR nem előlegezi meg azt a döntést.
+
+## E03-R03 mérési eredmény
+
+Az első implementáció 480 tick/beat egész reprezentációt használ. A
+mikroszekundum-konverzió után a reverse lookup legfeljebb egy tick eltérést
+okoz; ezt 500 seedelt, rendezett mintán futó round-trip property teszt méri.
+120 BPM mellett a beat 0, 1 és 4 rendre 0, 0,5 és 2 másodperc; a 0,5/1/2
+speed rendre kétszeres/paritás/felére skálázza a durationt. A tolerancia
+szándékosan tick-alapú, nem wall-clock vagy frame-alapú.

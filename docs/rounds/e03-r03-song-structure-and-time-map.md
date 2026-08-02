@@ -211,10 +211,44 @@ vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revízió
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
-A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
-csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
-Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+### Megvalósítás
+
+- A section és measure modellek validált, immutable alapértékek; a measure
+  explicit `durationBeats` értéke pickupot és csonka ütemet is reprezentál.
+- A tempo, meter és key map lokális value objecteket használ, kötelező nulla
+  boundaryval és rendezett, duplikációmentes változásokkal.
+- A `SongTimeMap` 480 PPQ tickekkel, egész mikroszekundum-racionalizált
+  szegmensszámítással és egyetlen kerekítési ponttal számol. A reverse lookup
+  kerekítése legfeljebb egy tick eltérést enged; a property ezt 500 rendezett,
+  seedelt mintával ellenőrzi.
+- A speed view-paraméter milliomodokra kvantált, a source `TempoMap` változatlan
+  marad; a document új strukturális mezői üres/default mapekkel visszafelé
+  kompatibilisek a korábbi codec-hívókkal.
+
+### Módosított fájlok
+
+`lib/features/song_trainer/domain/models/song_section.dart`,
+`lib/features/song_trainer/domain/models/song_measure.dart`,
+`lib/features/song_trainer/domain/models/tempo_map.dart`,
+`lib/features/song_trainer/domain/models/meter_map.dart`,
+`lib/features/song_trainer/domain/models/key_map.dart`,
+`lib/features/song_trainer/domain/models/song_document.dart`,
+`lib/features/song_trainer/domain/services/song_time_map.dart`,
+`lib/features/song_trainer/domain/public.dart`, valamint a három, körben
+engedélyezett célteszt.
+
+### Ellenőrzés
+
+Futtatott mérce: `tools/round-gate.sh
+test/features/song_trainer/domain/song_structure_test.dart
+test/features/song_trainer/domain/song_time_map_test.dart
+test/property/song_time_map_property_test.dart` — format, analyze, mindhárom
+célzott teszt és architecture zöld. Az adjacent `song_document_test.dart`
+külön futtatása és a CI teljes suite/APK ellenőrzése ebben a munkamenetben nem
+történt; ezeket az orchestrátor végzi.
+
+Terveltérés nincs. A CI build és teljes regressziós suite follow-up az
+orchestrátor kötelező kapuja.
 
 ## 11. Review — a független reviewer tölti ki
 
