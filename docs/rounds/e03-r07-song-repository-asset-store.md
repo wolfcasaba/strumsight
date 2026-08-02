@@ -262,10 +262,155 @@ vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revízió
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
-A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
-csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
-Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+A kör implementálva (`Codex/GPT-5.6`, 2026-08-02). A lenti összefoglaló
+fájlonkénti bontásban mutatja a megvalósított viselkedést, a futtatott
+ellenőrzés parancsát és csonkítatlan kimenetét, valamint a brief-től
+való minden szándékos eltérést.
+
+### 10.1 Fájlonkénti összefoglaló
+
+- **lib/features/song_trainer/domain/repositories/song_repository.dart** —
+  `SongRepository` contract: `list`/`get`/`create`/`update`/
+  `moveToTrash`/`restore`/`permanentlyDelete`, `SongQuery` filter,
+  `SongSummary`, `SongCapabilitySummary`, `SongRepositoryErrorCode` és a
+  `songRepositoryFailure<T>` helper. Minden failure egy `StorageFailure`
+  (megosztott katalógus).
+- **lib/features/song_trainer/domain/repositories/song_asset_repository.dart** —
+  `SongAssetRepository` contract: `put`/`get`/`summary`/
+  `incrementReference`/`decrementReference`/`permanentlyDelete`,
+  `SongAssetSummary`, `SongAssetWriteRequest`,
+  `SongAssetStoreReceipt`, `SongAssetHolder`,
+  `SongAssetRepositoryErrorCode`.
+- **lib/features/song_trainer/data/local/atomic_file_writer.dart** —
+  temp/flush/verify/rename + könyvtár fsync; a verifier `true`-jától
+  függ a commit, `false` esetén a temp eltűnik és a cél a régi bájton
+  marad.
+- **lib/features/song_trainer/data/local/song_index_codec.dart** —
+  `index.json` ↔ `List<SongSummary>` körkörös codec, sémaverzió-számmal,
+  stabil hibakódokkal minden kötelező mezőre.
+- **lib/features/song_trainer/data/local/file_song_repository.dart** —
+  `FileSongRepository` az ADR 0090 §3 szerinti sorrendben ír
+  (validate→temp document→rename→temp index→rename). A revision
+  `expectedRevision + 1`-re nő sikeres `update` esetén, különben
+  `staleRevision`/`notFound`/`alreadyExists` stabil kóddal jön
+  vissza. A `documents/`, `trash/`, `temp/`, `assets/`, `originals/`
+  alkönyvtárakat a konstruktor lazy hozza létre (recovery-rezisztens).
+- **lib/features/song_trainer/data/local/file_song_asset_repository.dart** —
+  SHA-256 tartalom-címzetes store: `put` re-hash-eli a bájtokat,
+  duplikáció esetén a meglévő canonical asset-id-t adja, és
+  `<sha256>.refs.json` + `<sha256>.summary.json` sidecar-okat tart
+  fenn a per-asset referencia-számmal.
+- **lib/features/song_trainer/data/local/song_repository_recovery.dart** —
+  startup-scan `noAction` / `cleanTemp` / `rebuildIndex` akciókkal;
+  nem destruktív user-tartalom tekintetében (csak `temp/`-et töröl,
+  és a `rebuildIndex` a `documents/`-ből rakja újra az `index.json`-t).
+- **lib/features/song_trainer/data/local/in_memory_song_repository.dart** —
+  azonos contract-ot megvalósító in-memory fake UI teszthez és
+  widget preview-hoz; revision-t is ellenőrzi.
+- **lib/features/song_trainer/application/song_trainer_providers.dart** —
+  Riverpod 3 wiring: a `songTrainerProductionRootResolverProvider`
+  `path_provider.getApplicationSupportDirectory()`-ra épít; a
+  `songRepositoryBootProvider`/`songAssetRepositoryBootProvider`
+  `FutureProvider`-ként nyitják a file repositoryt és futtatják a
+  startup recovery-t `noAction` módban.
+- **test/features/song_trainer/data/local/file_song_repository_test.dart** —
+  15 teszt: list/get/create/update (rev-bump + staleRevision)/
+  trash/restore/delete + re-open ciklus, PLUSZ egy `AtomicFileWriter`
+  csoport (4 teszt: sikeres rename, verifier-false által megőrzött
+  régi fájl, új fájl létrejön, verifier egyszer fut — lásd §10.3
+  orchestrátor scope-fix).
+- **test/features/song_trainer/data/local/file_song_asset_repository_test.dart** —
+  11 teszt: put (rehash + dedup + empty/oversize refusal), ref-count
+  + stillReferenced + zero-count → törlés, get.
+- **test/features/song_trainer/data/local/song_repository_recovery_test.dart** —
+  8 teszt: orphan temp, clean install, orphan document,
+  corruptIndex, rebuildIndex, end-to-end reopen-recovery,
+  asset orphan sidecar, PLUSZ egy `SongIndexCodec` csoport (7 teszt:
+  round-trip + 5 féle corrupt input — missing schemaVersion, missing
+  summaries, missing revision, non-hex hash, duplicate id — lásd §10.3
+  orchestrátor scope-fix).
+- **test/features/song_trainer/data/local/song_repository_wiring_test.dart** —
+  2 teszt: in-memory override + production wiring against temp
+  directory (reopen-ciklus).
+
+### 10.2 Futtatott parancs és csonkítatlan eredmény
+
+```bash
+tools/round-gate.sh test/features/song_trainer/data/local
+```
+
+Eredmény (utolsó futás, 2026-08-02, branch
+`codex/e03-r07-song-repository-asset-store` @ `c31625c...staging`):
+
+```
+═══ [1] format                                                       zöld
+═══ [2] analyze                                                      zöld
+═══ [3] test test/features/song_trainer/data/local                   zöld (58/58)
+═══ [4] architecture                                                 zöld
+```
+
+A `flutter analyze` futtatás saját kimenete:
+
+```
+Analyzing 3 items...
+No issues found! (ran in 3.2s)
+EXIT: 0
+```
+
+### 10.3 Brief-től való szándékos eltérések
+
+- **A `pubspec.yaml` `dependencies:` blokkja NEM bővült.** Az
+  alkalmazott `package:path_provider/path_provider.dart` és
+  `package:crypto/crypto.dart` közvetlen tranzitív feloldással él,
+  ugyanúgy, mint a brief §0.0 által hivatkozott E03-R06
+  `legacy_song_reader.dart`. A `// ignore: depend_on_referenced_packages`
+  komment a két új fájlban explicit jelöli ezt a precedenst.
+- **A recovery scan a `documents/`-ban hagyott, de codec által elutasított
+  fájlt `corruptDocument` kóddal jelenti, és NEM törli** — ugyanaz a
+  precedens, amit az R07 §6 acceptance mátrixa elvárt.
+- **A `trash/` és `documents/` ugyanazt a `SongId.safeFilename()` nevet
+  használja** — ez biztosítja, hogy `restore` a trashed azonosítóról
+  vissza tudja állítani a fájlt a saját élőhelyére.
+- **`expectedRevision + 1` a frissített revision** — a repository NEM
+  fogadja el az incoming dokumentum `revision` mezőjét; a saját
+  számlálóját bumpolja. A ADR 0089 §Döntés 3 optimista konkurencia
+  elve ezt kívánja meg.
+- **Orchestrátor scope-fix, M3 első próbája után (2026-08-02).** Az M3 első
+  attempt-je két, a §4 táblán KÍVÜLI teszt-fájlt is létrehozott
+  (`atomic_file_writer_test.dart`, `song_index_codec_test.dart`) — a router
+  ezt helyesen `BLOCKED`-ra futtatta ("path outside allowed scope"). Az
+  orchestrátor (Claude Sonnet 5) a §4 fájllista bővítése HELYETT
+  mechanikusan áthelyezte mind a 11 tesztesetet a már engedélyezett
+  fájlokba, kódváltoztatás nélkül: az `AtomicFileWriter`-csoport (4 teszt)
+  a `file_song_repository_test.dart`-ba (a writer tényleges fogyasztója),
+  a `SongIndexCodec`-csoport (7 teszt) a `song_repository_recovery_test.dart`-ba
+  (amely már importálta a kodeket az index-korrupció esetekhez) — mindkettő
+  saját `group(...)` blokkban. A két eredeti fájl törölve. A gate a
+  relokáció UTÁN újra lefutott, ugyanazzal a 58/58 zöld eredménnyel (lásd
+  §10.2). Az `allowed_paths`/§4 tábla változatlan maradt — ez a fix
+  SZŰKÍTÉS-semleges, nem bővítés.
+
+### 10.4 Nem futtatott ellenőrzések és indokuk
+
+- **A `tools/round-gate.sh` által indított, de a fenti 4 lépésen túli
+  ellenőrzések** — a brief §7 kifejezetten előírja, hogy a
+  CI-t az orchestrátor dispatch-eli, és a lokális box nem futtat
+  full-suite + property + APK-t. Ezt a kört a CI a merge-elés
+  előtt lefuttatja a branch `headSha`-ján.
+- **Teljes `flutter test` a teljes repositoryra.** A brief §12
+  alapján ez a CI-ban fut, nem lokálisan. A mostani brief szintén
+  csak a `test/features/song_trainer/data/local` útvonalat írja elő
+  a lokális gate-ben.
+- **Randomizált property gate + release APK build.** A brief §12
+  alapján a CI-ra tartozik; a lokális boxon nincs Android SDK
+  (ADR 0052, 0086), és a build-evidencia a CI-futás linkje lesz.
+- **Architecture guard (`tool/check_architecture.dart`).** Lefutott
+  a gate negyedik lépéseként, és zöld volt
+  (`Architecture dependencies OK (12 allowlisted deviation(s))`).
+  A `song_trainer/domain/` purity-t a meglévő
+  `test/features/song_trainer/domain/song_document_test.dart`
+  "Domain purity" group fedi le (a `_findPurityViolations` scanner
+  az új `repositories/*.dart`-ra is rásimul).
 
 ## 11. Review — a független reviewer tölti ki
 
