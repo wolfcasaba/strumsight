@@ -2294,3 +2294,96 @@ egy korábbi self-heal ([[L49]]) már kizárt egy auditlazítást mint
 mércegyengítést, egy visszatérő tünetnél a helyes irány egy ÚJ,
 korábbi rétegen ülő kontroll — nem az elutasított lazítás
 újramérlegelése.
+
+## L57 — Cross-collection validátor `document.tracks` ITERÁCIÓS SORRENDJÉTŐL függő volt egy egylépéses halmazgyűjtéssel (E03-R05, review-találat, FIXED)
+
+**Mit mértünk (2026-08-02, E03-R05 review).** `SongValidator._validateTracks`
+egyetlen lineáris menetben dolgozta fel `document.tracks`-ot: a
+`ChordTrack` ág UTÓLAG, ugyanabban a menetben töltötte a `chordEventIds`
+halmazt, miközben a `StrumTrack` ág — ha KORÁBBAN futott le a listában —
+már ez ellen a MÉG HIÁNYOS halmaz ellen validált. `SongDocument.tracks`
+semmilyen sorrendi szerződést nem ad (a kanonikus rendezés a normalizer
+külön, KÉSŐBBI lépése, ADR 0114 §Döntés 2 szerint is), ezért egy
+`StrumTrack` a célzott `ChordTrack` előtt egy TÉNYLEGESEN LÉTEZŐ célra is
+`strumTargetChordMissing` HAMIS fatal issue-t adott — a dokumentum
+tévesen nem-persistálhatóként jelent meg, holott minden esemény valid
+volt (megszegte a brief §6 acceptance 3. sorát). A gate 100%-ban zöld
+volt eközben — a beküldött tesztkészletben a `targetChordId` egyetlen
+tesztelt esete a HIÁNYZÓ cél volt, a pozitív eset (létező cél, bármely
+sorrendben) egyáltalán nem szerepelt.
+
+**Hogyan bukott le.** Reviewer-oldali adverzariális próba (nem a
+tesztkészlet olvasása, hanem egy KÜLÖN, eldobható teszt írása): egy
+dokumentum két trackkel, `StrumTrack` ELŐBB a listában egy létező célra
+mutatva — RED a fix előtt (`hasFatalIssue == true` egy valid
+dokumentumra), GREEN utána.
+
+**A javítás.** Két lépéses algoritmus: 1. menet minden `ChordTrack`
+chord-event ID-jét összegyűjti egy teljes, önálló előzetes menetben,
+sorrendtől függetlenül; 2. menet csak EZUTÁN validálja a `StrumTrack`
+eseményeket a TELJES halmaz ellen. A végeredmény bitre azonos,
+függetlenül a `tracks` lista sorrendjétől. 3 permanens regressziós teszt
+(`song_validator_test.dart`): StrumTrack előbb, ChordTrack előbb, és a
+két report egyenlősége.
+
+**Tanulság.** Egy document-szintű, cross-collection validátornak MAGÁNAK
+kell sorrend-függetlennek lennie, ha a validált gyűjtemény (itt:
+`document.tracks`) nem ad sorrendi szerződést — egy egylépéses
+"gyűjtés közben validálok" algoritmus pontosan azért törik el, mert a
+ma még hiányos részleges állapotot végleges állapotnak nézi. Egy
+pozitív próbateszt (létező cél, mindkét sorrendben) hiánya — nem csak a
+negatív (hiányzó cél) eset — pontosan az a vakfolt, amit egy zöld gate
+sosem old meg: `docs/execution/09-review-report.md` saját elve
+("bemásolt zöld kimenet önmagában nem evidencia") itt szó szerint
+igazolódott.
+
+## L58 — A router `resume` PRECHECK-je minden untracked fájlt blokkol, függetlenül a `GENERATED_IGNORED_PREFIXES` whitelisttől — a `.ai/review-findings-*.md` csak az `audit_scope` utólagos diffjénél számít mentességnek
+
+**Mit mértünk (2026-08-02, E03-R05 javító kör dispatch-kísérlete).** A
+`.ai/review-findings-*.md` minta szerepel a `security.py`
+`GENERATED_IGNORED_PREFIXES` listáján (a kommentár szerint szándékosan,
+"az orchestrátor-prompt §1.1 hívóválasztása"), de ez a mentesség
+KIZÁRÓLAG `audit_scope`-ban él (a modellhívás UTÁNI diff-ellenőrzésnél,
+`security.py:242-247`, ahol `new_untracked`/`new_ignored` útvonalakat
+szűri `_is_generated_ignored`-del). A `validate_baseline_manifest`
+függvény — amit a `router.py:589` a PRECHECK fázisban hív, azaz egy
+`reset --task-id` utáni FRISS baseline-felvételkor — az
+`untracked_paths`-ra egy feltétel NÉLKÜLI ellenőrzést futtat
+(`if manifest.untracked_paths: violations.append(...)`), az
+`ignored_allow_paths` paramétert csak az `unsafe_ignored` (git-ignore-olt
+fájlok) ágnál olvassa ki. Eredmény: egy frissen resetelt task-on egy
+review-findings fájl megléte a worktree-ben — még ha a névmintája
+egyébként whitelistelt is — feltétlenül `BLOCKED`-ba futtatja a PRECHECK-et
+("baseline has untracked files: ...").
+
+**Miért futottunk bele.** A task korábbi `BLOCKED` állapota (egy M3
+saját-commit incidensből, L56 szerint már lezárva a gyökérokban) nem
+`READY_FOR_REVIEW` volt, ezért a `resume` findings-fájllal a
+`router.py:531-540` logika szerint egyszerűen visszaadta a meglévő
+`BLOCKED` eredményt (no-op) — `reset --task-id` nélkül a fix-kör
+egyáltalán nem indult volna el. `reset` UTÁN viszont a KÖVETKEZŐ
+`resume`-hívás `needs_precheck = not state` miatt friss PRECHECK-et
+futtatott, ami — mivel a findings-fájlnak a bash wrapper `realpath -e`
+ellenőrzése miatt MÁR léteznie kellett a worktree-ben a hívás
+pillanatában — mindig untracked állapotban találta azt, és blokkolt.
+
+**A workaround (NEM a gyökérok-javítás — `tools/ai_router/**` tiltott
+zóna ebben a körben).** A javító kört a legacy `tools/mm-round.sh`
+manuális motor-útvonalon vittük le M3-mal (ADR 0087 §2 saját-kör
+javító-kör felhatalmazása), a `tools/ai_router` state-gépet megkerülve.
+Ehhez egy MÁSIK, apró, ugyanabban a körben mért hibát is meg kellett
+kerülni: `mm-round.sh` a munkapéldányt `[ -d "$workdir/.git" ]`-vel
+ellenőrzi, ami egy `git worktree add`-del létrehozott fán (ahol `.git`
+FÁJL, nem könyvtár) hamisan bukik — a workaround egy KIZÁRÓLAG
+scratchpadban tartott másolat volt, egyetlen karakterosztály-cserével
+(`-d` → `-e`); a valódi `tools/mm-round.sh` érintetlen maradt.
+
+**Tanulság.** Egy whitelist, ami csak a POST-hoc diff-auditban él, nem
+old fel egy PRE-check-nél futó feltétlen tisztasági ellenőrzést — a két
+ellenőrzés más ponton fut, és egy útvonal mindkettőn átmehet csak akkor,
+ha VALÓBAN mindkettő tiszteli. Egy jövőbeli javítás
+(`tools/ai_router/security.py` `validate_baseline_manifest`) adhatná át
+az `ignored_allow_paths`-t az untracked-ágnak is — ez az orchestrátor
+hatáskörén kívül esik ebben a körben (tiltott zóna), de egy jövőbeli
+önjavító/heal kör számára dokumentált, konkrét, reprodukálható javítási
+cél.

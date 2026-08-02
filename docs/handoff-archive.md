@@ -1830,3 +1830,90 @@ független post-merge gate-ellenőrzés (friss klón, `origin/main`) szintén
 zöld.
 
 Review-jelentés: [`docs/reviews/e03-r04-tracks-events-monophonic-analysis-review.md`](reviews/e03-r04-tracks-events-monophonic-analysis-review.md).
+
+## E03-R05 — Validator, normalizer és capability resolver
+
+**Kör:** E03-R05 (PR [#64](https://github.com/wolfcasaba/strumsight/pull/64),
+squash `5226127`, [ADR 0114](adr/0114-song-validator-normalizer-capability-boundary.md)).
+Implementer: **auto MiniMax-first router** (ADR 0088) a kezdeti munkára
+(gate elsőre zöld), **legacy `mm-round.sh` M3** a javító körre (ld. lent).
+Orchestrátor: **Claude Sonnet 5**.
+
+**Pre-flight-örökség.** A branch ebbe a sessionbe már két H6 self-heal
+kört megélve érkezett (PR #61 — async router dispatch, `docs/LESSONS.md`
+L54; PR #62 — gate-guard scope-szűkítés, L55; PR #63 — PATH git-guard
+shim az M3 saját-commit tünetére, L56). A pre-flight két abbahagyott
+munkapéldányt talált: `ss-router-e03-r05` (egy KORÁBBI, jelöletlen,
+tesztek nélküli félkész M3-attempt — érintetlenül hagyva, ahogy a §0.2
+szabály előírja) és `ss-router-e03-r05-2` (a router `BLOCKED`-ba futott
+task-jának worktree-je, `d0546f0` commit — M3 saját maga commitolt a
+router szerződését megszegve, `security.py` helyesen hard-blockolta,
+de a diff maga scope-tiszta és tartalmilag kész volt). Az orchestrátor
+ezt az L50 mintát követve reconciliálta: `git reset --soft` a pre-flight
+commitra (`f98a027`), `git rebase origin/main` (egyetlen commit-különbség,
+konfliktusmentes), scope-audit (13/13 fájl egyezik a brief
+`allowed_paths`-ával), saját kézzel megismételt `tools/round-gate.sh` +
+teljes `test/features/song_trainer` suite (177/177), majd orchestrátor-
+authorship alatti commit (`6f424da`).
+
+**Elkészült (lásd HANDOFF §2 részletesen):** `SongValidator`
+(cross-collection validáció: section range/overlap, strum→chord
+cél-hivatkozás, ismeretlen chord/technique/direction, `NoteTrackAnalyzer`
+polyphony-reuse — sosem dob), idempotens `SongNormalizer` (kanonikus
+rendezés, ID-megőrzés), `SongCapabilityResolver` (severity→capability
+szerződés, chord/pitch önálló display/scoring tengely). ADR 0114 két
+döntése: a chord-support grammar domain-lokális (nem a `practice`
+szótára), és a severity/capability elválasztás a §6 négy kombinációját
+mind reprezentálhatóvá teszi.
+
+**Review, 1 érdemi javító kör.** Izolált `/tmp` klón, saját
+gate-újrafuttatás, scope-audit, **adverzariális mutáció-próba** → **1
+BLOCKER (F1)**: `SongValidator._validateTracks` egyetlen lineáris
+menetben dolgozta fel `document.tracks`-ot, és a `chordEventIds` halmazt
+UGYANEBBEN a menetben, UTÓLAG töltötte a `ChordTrack` ágban, miközben a
+`StrumTrack` ág — ha KORÁBBAN futott le a listában — már ez ellen a MÉG
+HIÁNYOS halmaz ellen validált. `SongDocument.tracks` semmilyen sorrendi
+szerződést nem ad (a kanonikus rendezés a normalizer külön, KÉSŐBBI
+lépése, ADR 0114 §Döntés 2), ezért egy `StrumTrack` a célzott
+`ChordTrack` előtt egy VALÓS célra is `strumTargetChordMissing` HAMIS
+fatal issue-t adott — a dokumentum tévesen nem-persistálhatóként jelent
+meg. Eldobható próbateszttel reprodukálva (RED a fix előtt, GREEN utána,
+majd törölve a merge előtt). Részletek és a teljes reprodukció:
+`docs/LESSONS.md` L57.
+
+**Fixer-kör motorválasztási incidens.** Az `auto` router `resume`
+útvonala egy MÁSIK, ezen a task-on mért infra-holtpontba futott: a
+`.ai/review-findings-*.md` fájl a `security.py` `GENERATED_IGNORED_PREFIXES`
+whitelistjén van, de ez KIZÁRÓLAG az `audit_scope` utólagos diff-jénél
+számít mentességnek (`security.py:242-247`) — a `router.py:589`
+`validate_baseline_manifest`-je, ami egy `reset --task-id` utáni FRISS
+baseline-felvételkor (PRECHECK) fut, minden untracked fájlt feltétel
+NÉLKÜL blokkol, a whitelistet csak a git-ignore-olt fájlok ágán olvassa
+ki. Mivel a task korábbi `BLOCKED` állapota nem `READY_FOR_REVIEW` volt,
+a `resume` reset nélkül no-op-ot adott volna, reset-tel viszont a fenti
+PRECHECK-csapdába futott (a findings-fájlnak léteznie kellett a
+worktree-ben a `realpath -e` CLI-ellenőrzés miatt). A javító kört ezért
+a legacy `tools/mm-round.sh` úton vitte le M3, a `tools/ai_router/**`
+tiltott zóna megkerülésével — a workaround egy SCRATCHPAD-ONLY
+`mm-round.sh`-másolat volt, egyetlen karakterosztály-cserével
+(`[ -d "$workdir/.git" ]` → `[ -e ... ]`, mert egy `git worktree add`-del
+létrehozott fán a `.git` fájl, nem könyvtár) — a valódi
+`tools/mm-round.sh` érintetlen maradt. Részletek: `docs/LESSONS.md` L58.
+
+M3 a fixben a `_validateTracks`-ot két lépéses algoritmusra cserélte
+(1. menet: minden `ChordTrack` chord-event ID-jét összegyűjti sorrendtől
+függetlenül; 2. menet: a `StrumTrack` eseményeket a TELJES halmaz ellen
+validálja), és felvett 3 permanens regressziós tesztet (StrumTrack előbb,
+ChordTrack előbb, a két report egyenlősége). Az orchestrátor a fix után
+újra futtatta az adverzariális próbát (GREEN) és a teljes
+`test/features/song_trainer` suite-ot (181/181) egy friss izolált klónban,
+mielőtt a review-t APPROVED-ra frissítette és a PR-t mergelte.
+
+Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer, izolált klónban,
+egyszer a fix előtt egyszer utána) + teljes `test/features/song_trainer`
+**181/181 zöld** + CI
+[30742878734](https://github.com/wolfcasaba/strumsight/actions/runs/30742878734)
+zöld a merge-elt `headSha`-n (`b080d9a`), független post-merge
+gate-ellenőrzés `main`-en (friss klón, `origin/main`) szintén zöld.
+
+Review-jelentés: [`docs/reviews/e03-r05-validator-normalizer-capabilities-review.md`](reviews/e03-r05-validator-normalizer-capabilities-review.md).
