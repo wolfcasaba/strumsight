@@ -243,6 +243,12 @@ class DevelopmentRouter:
                 "failed_step": gate.failed_step,
                 "command_exit_code": gate.command_exit_code,
                 "error_hash": gate.error_hash,
+                # E02-R21 H4 (Update 5/6): a korábbi mezők önmagukban nem
+                # diagnosztizálhatók — a tényleges round-gate.sh kimenetet is
+                # el kell tenni, különben egy tartalmi gate-kudarc után a
+                # `status --json` csak egy hash-t ad vissza, a hibaüzenetet
+                # nem.
+                "log": gate.log[-20000:],
             }
         )
 
