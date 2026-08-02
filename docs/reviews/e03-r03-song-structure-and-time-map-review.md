@@ -1,13 +1,32 @@
 # E03-R03 — Review
 
 Brief: `docs/rounds/e03-r03-song-structure-and-time-map.md`
-Diff: `git diff 053376a...72eea92` (PR [#59](https://github.com/wolfcasaba/strumsight/pull/59), branch `codex/e03-r03-song-structure-and-time-map`)
+Diff: `git diff 053376a...7433c0e` (PR [#59](https://github.com/wolfcasaba/strumsight/pull/59), branch `codex/e03-r03-song-structure-and-time-map`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-02
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED** (javító kör #1 után, `7433c0e`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 2 · NOTE: 2
+Első menet: BLOCKER 0 · MAJOR 1 (F1) · MINOR 2 (F2/F3) · NOTE 2 (F4/F5).
+Javító kör #1 (M3, `7433c0e`) után: **F1/F2/F3 FIXED, ellenőrizve.** F4/F5
+nyitva maradnak nem-blokkoló follow-upként (ld. lent). BLOCKER: 0 · MAJOR: 0
+nyitott · MINOR: 0 nyitott · NOTE: 2 nyitott (nem blokkol).
+
+**Folyamat-megjegyzés (nem M3 hibája — orchestrátor-oldali eljárási hiba,
+utólag dokumentálva a lessons-nek):** a javító kör első `resume` hívása a
+router saját scope-audit-jában `BLOCKED`-ba futott, mert az orchestrátor a
+READY_FOR_REVIEW diffet ÉS a review-jelentést commitolta a `resume` hívás
+ELŐTT (HEAD elmozdult a router által rögzített baseline-tól), és egy
+`review-findings-fix1.md` fájl track-eletlenül maradt a munkapéldányban. A
+router emiatt jelzett `blocked`-ot — de a `.ai/runs/E03-R03/router-result.json`
+és a munkapéldány git-státusza szerint M3 a hívás során ténylegesen lefutott
+(`m3_attempts: 2`) és PONTOSAN a kért javításokat készítette el, hibátlanul,
+scope-tisztán. Az orchestrátor a diffet kézzel auditálta (tartalom, scope,
+gate, purity — mind zöld) és `7433c0e` alatt saját authorship-szel commitolta
+— ugyanaz a minta, mint a `docs/LESSONS.md` L50 (E03-R02 H6): a diff a
+bizonyíték, nem az őt előállító hívási útvonal. Ez NEM H4/H6 halt-ok — az
+ütköző előfeltétel az orchestrátor SAJÁT, még nem merge-elt munkamenetének
+git-kezelése volt, nem a modell képessége vagy a router infrastruktúrája.
 
 Implementer: **auto MiniMax-first router** (ADR 0088), 1 M3 attempt,
 `READY_FOR_REVIEW`. Orchestrator (Claude Sonnet 5) audited scope, ran the
@@ -26,7 +45,7 @@ under its own authorship (`72eea92`), opened PR #59, dispatched CI.
 
 ## Scope-audit
 
-Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376a..72eea92` pontosan a brief §4 13 útvonalát érinti (a pre-flight által hozzáadott `docs/adr/0093-...md`-vel együtt), egy fájllal sem többet vagy kevesebbet. A modell nem committolt — az orchestrátor commitolta a diffet saját authorship alatt (`72eea92`), a router `.codex-round-status` szerint `dirty_files=14` (13 tartalmi fájl + a router saját státuszfájlja), egyezik a ténylegesen látott változással.
+Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376a..7433c0e` 14 fájlt érint: a brief §4 pontosan 13 útvonala (a pre-flight-hozzáadott `docs/adr/0093-...md`-vel együtt) + `docs/reviews/e03-r03-song-structure-and-time-map-review.md` — utóbbi a review-folyamat saját, a `docs/execution/09-review-report.md` szabálya szerinti artefaktuma (merge előtt commitolva, ugyanaz a minta, mint az E03-R02 review-jé). A modell egyik kör (kezdeti vagy javító) alatt sem committolt — mindkét tartalmi commitot (`72eea92`, `7433c0e`) az orchestrátor auditálta és commitolta saját authorship alatt.
 
 ## Megállapítások
 
@@ -38,7 +57,7 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376
 - **Bizonyíték (eldobható próba, futtatva, PIROS a jelenlegi kódon, törölve a review után):** két dokumentum, amely kizárólag `tempoMap`-ben (120 vs 200 BPM) és `sections`-ben (Intro 0-2 vs Outro 5-9) tér el, mindkettő `revision: 1` és egyébként azonos mezőkkel — `expect(a, isNot(equals(b)))` **elbukik**: `a == b` igaz, és (bár külön nem loggoltam) az `Object.hash` bemenete is azonos, tehát `a.hashCode == b.hashCode` szintén igaz. Reprodukció: `test/features/song_trainer/domain/song_document_equality_probe_test.dart` (a review jelentéssel együtt mellékelve, NEM része a végleges diffnek).
 - **Kötelező javítás:** `operator==` és `hashCode` bővítése a hiányzó öt mezővel (`sections`/`measures` lista-egyenlőséggel — a meglévő `_listEquals` mintát követve vagy `SongSection`/`SongMeasure`-ön `==` hozzáadásával, amennyiben azok maguk még nem value-equal; `tempoMap`/`meterMap`/`keyMap`-hoz hasonlóan value-equality kell a saját osztályaikon, amik jelenleg SEM definiálnak `==`/`hashCode`-ot — ld. `tempo_map.dart`, `meter_map.dart`, `key_map.dart`: `TempoMap`/`MeterMap`/`KeyMap`/`TempoChange`/`MeterChange`/`KeyChange` egyike sem override-olja az `Object` alapértelmezett identity-equalityt, tehát MA két, tartalmilag azonos de külön példányosított `TempoMap` sem egyenlő egymással — ezt is javítani kell, különben az öt mező hozzáadása a `SongDocument`-en nem old meg semmit).
 - **Ellenőrzés:** a mellékelt reprodukciós teszt (vagy azzal ekvivalens, a `test/features/song_trainer/domain/song_structure_test.dart`-ba felvett eset) PIROSBÓL ZÖLDRE váltása, plusz egy pozitív eset (két, mezőnként azonos tartalmú, de külön példányosított dokumentum/map egyenlő marad és azonos hash-t ad).
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`7433c0e`) — `SongSection`/`SongMeasure`/`TempoChange`+`TempoMap`/`MeterChange`+`MeterMap`/`KeyChange`+`KeyMap` mind kaptak value-equal `operator==`/`hashCode`-ot, a `SongDocument` equality/hash az öt új mezővel bővült. Reprodukciós teszt felvéve `song_structure_test.dart` "compares structural fields by value" néven — pozitív (egyenlő tartalom → egyenlő + azonos hash) ÉS negatív (eltérő `sections`/`tempoMap` → nem egyenlő + eltérő hash) esettel. Reviewer újra futtatta friss `/tmp` klónban: zöld.
 
 ### F2 — MINOR — `Meter(4,4)` nincs közvetlenül tesztelve a kör saját suite-jában
 
@@ -47,7 +66,7 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376
 - **Hatás:** alacsony (az implementáció maga helyes, reviewer-próbával igazolva), de egy jövőbeli regresszió a `beatsPerMeasure` számításban (`numerator * 4 ~/ denominator`) 4/4-en a kör saját gate-je mellett észrevétlen maradhatna.
 - **Kötelező javítás:** egy `expect(Meter(4, 4).beatsPerMeasure, 4)` sor a meglévő "supports pickup and common meters" teszthez.
 - **Ellenőrzés:** a kiegészített teszt fut és zöld.
-- **Státusz:** OPEN (a diffet érdemben nem hizlalja, körön belül javítható)
+- **Státusz:** **FIXED** (`7433c0e`) — `expect(Meter(4, 4).beatsPerMeasure, 4)` felvéve.
 
 ### F3 — MINOR — a brief §6 kötelező megkülönböztető mátrix "tempo change −ε/pontosan/+ε" sora nincs tick-pontosan lefedve a kör saját suite-jában
 
@@ -56,7 +75,7 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376
 - **Hatás:** alacsony (a reviewer független referencia-formulával igazolta, hogy a viselkedés helyes és a left-closed policy konzisztens mindkét irányban, ÉS hogy a `_tempoIndex` egy off-by-one hiba esetén is önkorrigál a fő ciklus szerkezete miatt — ez utóbbi robusztusság dokumentálásra érdemes, nem hiba), de a brief §6 kifejezetten "kötelező" mátrixcellaként nevezi meg ezt, és a kör saját gate-je ma nem bizonyítja.
 - **Kötelező javítás:** legalább egy tick-pontos −1/pontosan/+1 eset felvétele `song_time_map_test.dart`-ba (timeAt-tal), és egy `durationBetween`-hívás nem-nulla, határponton lévő kezdőpozícióval.
 - **Ellenőrzés:** a kiegészített tesztek futnak és zöldek.
-- **Státusz:** OPEN (a diffet érdemben nem hizlalja, körön belül javítható)
+- **Státusz:** **FIXED** (`7433c0e`) — új "uses the new tempo from the exact tick boundary" teszt: tick −1/pontosan/+1 a `timeAt`-tal (1998958 µs / 2 s / 2002083 µs, egyezik a reviewer független referencia-számításával), plusz `durationBetween(boundary, boundary+1tick)` nem-nulla, határponton lévő kezdőponttal (2083 µs).
 
 ### F4 — NOTE — SDD §9.5 section/measure kereszt-határ szabálya nincs kikényszerítve
 
@@ -74,17 +93,17 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 053376
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| format | zöld (implementer + orchestrátor) | ✅ (saját `/tmp/review-e03-r03` klónban újrafuttatva) |
+| format | zöld | ✅ (friss `/tmp/review-e03-r03-fix1` klónban, `7433c0e`-n újrafuttatva) |
 | analyze | zöld | ✅ |
-| célzott tesztek (3 fájl, §7) | zöld | ✅ (saját klónban újrafuttatva) |
+| célzott tesztek (3 fájl, §7) | zöld | ✅ (friss klónban újrafuttatva) |
 | architecture | zöld (12 allowlisted deviation, változatlan) | ✅ |
-| domain purity (`song_document_test.dart`, kör-scope-on kívüli, de a teljes suite futtatja) | zöld | ✅ (saját klónban külön futtatva) |
-| CI (teljes suite + property + APK) | dispatch alatt | ⏳ run [30734125478](https://github.com/wolfcasaba/strumsight/actions/runs/30734125478) — PENDING, a javító kör után újra kell dispatchelni úgyis (kódváltozás miatt a concurrency eldobja) |
+| domain purity (`song_document_test.dart`, kör-scope-on kívüli, de a teljes suite futtatja) | zöld | ✅ (friss klónban külön futtatva) |
+| CI (teljes suite + property + APK) | dispatch alatt (`7433c0e`-re újradispatchelve a javító kör miatt) | ⏳ — az orchestrátor a merge ELŐTT ellenőrzi a run `headSha`-ját a lokális HEAD-del |
 
 ## Merge-döntés
 
-**Merge TILOS.** F1 (MAJOR) nyitva — az ADR 0052 zöld kapuja megköveteli, hogy
-ne legyen nyitott BLOCKER/MAJOR. A javító kört a router `resume` útvonala viszi
-(ADR 0087 §1.1 motor-eszkaláció: ez az M3 ELSŐ javító köre ezen a task-on).
-F2/F3/F5 a javító körbe belefér, ha nem hizlalja érdemben a diffet; F4 külön
-follow-up.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
+F1/F2/F3 zárva, ellenőrizve. Merge feltétele: a CI (teljes suite + randomizált
+property + APK) zöld legyen PONTOSAN a `7433c0e` SHA-n — ezt az orchestrátor a
+merge előtt `gh run list --json headSha` ↔ `git rev-parse HEAD` összevetéssel
+igazolja (AGENTS.md §3 kötelező ellenőrzés, L21).
