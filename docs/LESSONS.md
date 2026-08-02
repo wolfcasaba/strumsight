@@ -2974,3 +2974,29 @@ recovery mércéje nem gyengül.
 először a lista-kívüli diffet továbbra is exit 50-nel blokkolja, majd a valódi
 `--task E03-R08` argumentummal elvégzi a legális recoveryt. A resolver nélkül a
 második lépés RED: `brief is unreadable: E03-R08`; utána GREEN.
+
+## L70 — A `SongDocumentCodec` hiányzó strukturális mezői valódi read-back adatvesztésnek minősülnek, nem elfogadható migrációs normalizációnak (E03-R08 H4)
+
+**Mérés (2026-08-02).** A független review a `FileSongRepository` friss
+példányán reprodukálta, hogy az E03-R06 `LegacySongAdapter` által készített
+érvényes `song_alpha` dokumentum `create` után nem value-equal a
+visszaolvasott példánnyal. A H4 előtti új regressziós teszt RED volt:
+`flutter test test/features/song_trainer/data/local/song_document_codec_test.dart`,
+`Round-trip identity preserves the complete structural timeline`. Az ok:
+`SongDocumentCodec._documentToMap` nem serializálta a `sections`, `measures`,
+`tempoMap`, `meterMap`, `keyMap` mezőket, a decoder pedig ezek alapértelmezett
+üres/konstans értékét építette vissza.
+
+**Javítás.** A codec mind az öt strukturális mezőt determinisztikus JSON-ban
+tárolja és típusosan állítja vissza; a már meglévő fájlok hiányzó mezőit a
+régi alapértelmezésekhez kompatibilisen kezeli, de a jelen lévő hibás
+szerkezetet `songDocument.codec.structure.invalid` hibával elutasítja. A
+regressziós teszt a tényleges `song_alpha` inputból adaptált dokumentumot és
+egy többszakaszos/több map-változásos timeline-t is round-tripel. A javítás
+után a célzott gate zöld: `tools/round-gate.sh
+test/features/song_trainer/data/local test/features/song_trainer/data/migration`.
+
+**Tanulság.** A repository `create` sikeres eredménye sosem elég a migráció
+checkpointolásához: a read-back parity őrnek a teljes, domainben megőrzendő
+szerkezetet kell mérnie. Ha egy őr erre hibát jelez, nem szabad a parityt a
+veszteséghez igazítani; a perzisztencia-határt kell kijavítani.

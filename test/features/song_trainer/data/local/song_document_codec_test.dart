@@ -2,12 +2,19 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/song_trainer/data/local/song_document_codec.dart';
+import 'package:strumsight/features/song_trainer/data/migration/legacy_song_adapter.dart';
+import 'package:strumsight/features/song_trainer/data/migration/legacy_song_reader.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
+import 'package:strumsight/features/song_trainer/domain/models/key_map.dart';
+import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_marker.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_section.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
+import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 
 const _codec = SongDocumentCodec();
 
@@ -61,6 +68,75 @@ void main() {
       final decoded = codec.decode(encoded);
       expect(decoded.assets, equals(original.assets));
       expect(decoded.markers, equals(original.markers));
+    });
+
+    test('preserves the complete structural timeline', () {
+      final original = _sample(
+        sections: <SongSection>[
+          SongSection(
+            id: SongSectionId('section-verse'),
+            name: 'Verse',
+            startMeasure: 0,
+            endMeasureExclusive: 2,
+            kind: SongSectionKind.verse,
+            colorKey: 'blue',
+          ),
+        ],
+        measures: <SongMeasure>[
+          SongMeasure(
+            index: 0,
+            durationBeats: BeatPosition.fromBeats(4),
+            displayNumber: 1,
+            repeatStart: true,
+          ),
+          SongMeasure(
+            index: 1,
+            durationBeats: BeatPosition.fromBeats(3),
+            displayNumber: 2,
+            pickup: true,
+            repeatEndCount: 2,
+            alternateEnding: 1,
+          ),
+        ],
+        tempoMap: TempoMap(<TempoChange>[
+          TempoChange(at: BeatPosition.zero, bpm: Tempo(120)),
+          TempoChange(at: BeatPosition.fromBeats(4), bpm: Tempo(90)),
+        ]),
+        meterMap: MeterMap(<MeterChange>[
+          MeterChange(atMeasure: 0, meter: Meter(4, 4)),
+          MeterChange(atMeasure: 1, meter: Meter(3, 4)),
+        ]),
+        keyMap: KeyMap(<KeyChange>[
+          KeyChange(at: BeatPosition.zero, key: KeySignature(0, KeyMode.major)),
+          KeyChange(
+            at: BeatPosition.fromBeats(4),
+            key: KeySignature(9, KeyMode.minor),
+          ),
+        ]),
+      );
+
+      final decoded = codec.decode(codec.encode(original));
+
+      expect(decoded, equals(original));
+    });
+
+    test('H4 regression: preserves the measured legacy migration document', () {
+      final legacy = const LegacySongReader().readSong(<String, dynamic>{
+        'id': 'song_alpha',
+        'name': 'Alpha',
+        'chords': <String>['C', 'G'],
+        'pat': 'd-du-ud-',
+        'bpm': 96,
+        'bpb': 4,
+      });
+      final adapted = const LegacySongAdapter().adapt(
+        legacy,
+        importedAt: DateTime.utc(2026, 8, 2, 13),
+      );
+
+      final decoded = codec.decode(codec.encode(adapted.document));
+
+      expect(decoded, equals(adapted.document));
     });
   });
 
@@ -145,6 +221,23 @@ void main() {
         throwsA(isA<SongDocumentCodecException>()),
       );
     });
+
+    test('decode rejects a malformed present structural field', () {
+      final raw = _encodeRawJson(_sample());
+      final json = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
+      json['sections'] = <Object?>['not-a-section'];
+
+      expect(
+        () => codec.decode(utf8.encode(jsonEncode(json))),
+        throwsA(
+          isA<SongDocumentCodecException>().having(
+            (error) => error.code,
+            'code',
+            SongDocumentCodecErrorCode.structureInvalid,
+          ),
+        ),
+      );
+    });
   });
 
   group('Source provenance integrity', () {
@@ -181,6 +274,11 @@ SongDocument _sample({
   SongSource? source,
   List<SongAssetReference>? assets,
   List<SongMarker>? markers,
+  List<SongSection>? sections,
+  List<SongMeasure>? measures,
+  TempoMap? tempoMap,
+  MeterMap? meterMap,
+  KeyMap? keyMap,
   DateTime? createdAt,
   DateTime? updatedAt,
 }) {
@@ -194,6 +292,11 @@ SongDocument _sample({
     source: source ?? _sampleSource(),
     assets: assets ?? const <SongAssetReference>[],
     markers: markers ?? const <SongMarker>[],
+    sections: sections,
+    measures: measures,
+    tempoMap: tempoMap,
+    meterMap: meterMap,
+    keyMap: keyMap,
     createdAt: created,
     updatedAt: updated,
   );

@@ -4,12 +4,16 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (HEAL E03-R08/H6 — task-ID baseline recovery).** `model-router.py
-> rebase-baseline` now accepts either its canonical brief path or an
-> unambiguous `E##-R##` task ID, resolving the latter only under the supplied
-> worktree's `docs/rounds/`. This fixes the measured `brief is unreadable:
-> E03-R08` halt without bypassing the parsed brief, baseline scope audit, or
-> task lock. The regression uses the exact failed `--task E03-R08` input.
+> (HEAL E03-R08/H4 — SongDocument structural codec round-trip).** The
+> independent R08 review correctly rejected a `readBackMiss`: the existing
+> codec silently omitted sections, measures and tempo/meter/key maps from the
+> file payload, so a valid legacy migration would lose structure. The heal
+> persists and strictly decodes all five fields, with backward-compatible
+> defaults only for older files where the fields are absent. The regression
+> covers the measured `song_alpha` legacy-adapter document and a multi-change
+> timeline; the targeted format/analyze/test/architecture gate is green after
+> the documented `flutter gen-l10n` clone prerequisite. ADR 0090 records the
+> decision amendment; E03-R08 can be retried after this heal merges.
 > **Prior
 > completed product round:** E03-R07 — File-based Song repository and asset
 > store DONE, merged
