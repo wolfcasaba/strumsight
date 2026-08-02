@@ -329,6 +329,127 @@ void main() {
     });
   });
 
+  group('SongValidator — order-independent strum → chord cross-reference '
+      '(E03-R05 F1 regression)', () {
+    // A document with one `StrumTrack` whose single event targets a
+    // chord event that genuinely exists on a `ChordTrack`. The two
+    // tracks are semantically equivalent across both orderings — only
+    // the list position changes. The validator must not depend on
+    // `document.tracks` order: canonical ordering is the normalizer's
+    // job, a separate, later step (ADR 0114 §Döntés 2). A previous
+    // single-pass implementation falsely emitted a fatal
+    // `strumTargetChordMissing` when the strum track preceded its
+    // target.
+    SongDocument strumTargetsExistingChord() {
+      return _sample(
+        tracks: <SongTrack>[
+          StrumTrack(
+            id: SongTrackId('s-1'),
+            name: 'Strum',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongStrumEvent>[
+              SongStrumEvent(
+                id: SongEventId('strum-evt-1'),
+                at: Duration.zero,
+                direction: StrumDirection.down,
+                targetChordId: SongEventId('e-1'),
+              ),
+            ],
+          ),
+          ChordTrack(
+            id: SongTrackId('c-1'),
+            name: 'Chords',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongChordEvent>[
+              SongChordEvent(
+                id: SongEventId('e-1'),
+                start: Duration.zero,
+                duration: const Duration(seconds: 4),
+                symbol: const Chord('C'),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    test('StrumTrack before ChordTrack (target exists) ⇒ no fatal issue, '
+        'persistable', () {
+      final validator = const SongValidator();
+      final report = validator.validate(strumTargetsExistingChord());
+      expect(report.hasFatalIssue, isFalse);
+      expect(report.isPersistable, isTrue);
+      expect(
+        report.issues.any(
+          (issue) => issue.code == SongValidationCode.strumTargetChordMissing,
+        ),
+        isFalse,
+        reason:
+            'strumTargetChordMissing must not fire when the target exists, '
+            'regardless of track order',
+      );
+    });
+
+    test('ChordTrack before StrumTrack (target exists) ⇒ no fatal issue, '
+        'persistable', () {
+      final validator = const SongValidator();
+      final document = _sample(
+        tracks: <SongTrack>[
+          ChordTrack(
+            id: SongTrackId('c-1'),
+            name: 'Chords',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongChordEvent>[
+              SongChordEvent(
+                id: SongEventId('e-1'),
+                start: Duration.zero,
+                duration: const Duration(seconds: 4),
+                symbol: const Chord('C'),
+              ),
+            ],
+          ),
+          StrumTrack(
+            id: SongTrackId('s-1'),
+            name: 'Strum',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongStrumEvent>[
+              SongStrumEvent(
+                id: SongEventId('strum-evt-1'),
+                at: Duration.zero,
+                direction: StrumDirection.down,
+                targetChordId: SongEventId('e-1'),
+              ),
+            ],
+          ),
+        ],
+      );
+      final report = validator.validate(document);
+      expect(report.hasFatalIssue, isFalse);
+      expect(report.isPersistable, isTrue);
+      expect(
+        report.issues.any(
+          (issue) => issue.code == SongValidationCode.strumTargetChordMissing,
+        ),
+        isFalse,
+      );
+    });
+
+    test('both orderings produce equal reports (order-invariance)', () {
+      final validator = const SongValidator();
+      // Re-derive the StrumTrack-before-ChordTrack variant by
+      // reordering the same tracks the previous tests already built.
+      final strumFirst = strumTargetsExistingChord();
+      final chordFirst = _sample(
+        tracks: List<SongTrack>.of(strumFirst.tracks).reversed.toList(),
+      );
+      final reportStrumFirst = validator.validate(strumFirst);
+      final reportChordFirst = validator.validate(chordFirst);
+      expect(reportStrumFirst, equals(reportChordFirst));
+      expect(reportStrumFirst.hasFatalIssue, reportChordFirst.hasFatalIssue);
+      expect(reportStrumFirst.isPersistable, reportChordFirst.isPersistable);
+    });
+  });
+
   group('SongValidator — determinism', () {
     test('two validations of the same document produce an equal report', () {
       final validator = const SongValidator();

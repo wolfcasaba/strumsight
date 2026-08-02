@@ -181,12 +181,32 @@ final class SongValidator {
   }
 
   List<SongValidationIssue> _validateTracks(SongDocument document) {
-    final issues = <SongValidationIssue>[];
+    // Two-pass algorithm: the validator must not depend on
+    // `document.tracks` order, because that list has no
+    // ordering contract (canonical ordering is the normalizer's job,
+    // a separate, later step — ADR 0114 §Döntés 2). In a single-pass
+    // implementation, a `StrumTrack` listed before its target
+    // `ChordTrack` would see an empty `chordEventIds` set and falsely
+    // report `strumTargetChordMissing` for a target that genuinely
+    // exists in the document.
+    //
+    // Pass 1 — collect every chord-event identifier the document
+    // actually contains, regardless of the track position. Pass 2 —
+    // validate each track's per-event constraints, looking
+    // `strum.targetChordId` references up against the complete set.
     final chordEventIds = <String>{};
     for (final track in document.tracks) {
       if (track is ChordTrack) {
         for (final event in track.events) {
           chordEventIds.add(event.id.value);
+        }
+      }
+    }
+
+    final issues = <SongValidationIssue>[];
+    for (final track in document.tracks) {
+      if (track is ChordTrack) {
+        for (final event in track.events) {
           if (!songTrainerChordRootIsSupported(event.symbol.label)) {
             issues.add(
               SongValidationIssue(
