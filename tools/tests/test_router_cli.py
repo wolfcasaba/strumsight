@@ -162,17 +162,21 @@ class RouterCliTest(unittest.TestCase):
             ).stdout.strip()
             (root / "tools").mkdir()
             (root / "tools" / "router.py").write_text("preflight\n", encoding="utf-8")
-            (root / "docs").mkdir()
-            brief = root / "docs" / "e03-r08.md"
+            (root / "docs" / "rounds").mkdir(parents=True)
+            brief = root / "docs" / "rounds" / "e03-r08-rebase.md"
             brief.write_text(
                 "# Task\n\n```ai-router\n"
                 "schema_version = 1\nrisk = \"normal\"\n"
-                "allowed_paths = [\"lib/allowed.dart\", \"docs/e03-r08.md\"]\n"
+                "allowed_paths = [\"lib/allowed.dart\", \"docs/rounds/e03-r08-rebase.md\"]\n"
                 "gate_tests = [\"test/example_test.dart\"]\n"
                 "native_gate = false\n```\n",
                 encoding="utf-8",
             )
-            subprocess.run(["git", "add", "tools/router.py", "docs/e03-r08.md"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "add", "tools/router.py", "docs/rounds/e03-r08-rebase.md"],
+                cwd=root,
+                check=True,
+            )
             subprocess.run(["git", "commit", "-qm", "preflight"], cwd=root, check=True)
             preflight = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
@@ -188,6 +192,13 @@ class RouterCliTest(unittest.TestCase):
                         "task_id": "E03-R08",
                         "status": "BLOCKED",
                         "phase": "BLOCKED",
+                        # This is a completed Terra terminal intent from the
+                        # stale baseline decision.  A rebase must not replay
+                        # it when the task is subsequently resumed.
+                        "terra_calls": 1,
+                        "terra_reservation": "finished-terra-review",
+                        "terra_terminal_status": "BLOCKED",
+                        "terra_terminal_reason": "stale baseline scope audit",
                         "baseline_manifest": {
                             "baseline_head": baseline,
                             "untracked_paths": [],
@@ -225,6 +236,7 @@ class RouterCliTest(unittest.TestCase):
                 "BLOCKED",
             )
             (root / "lib" / "forbidden.dart").unlink()
+            command[command.index("--task") + 1] = "E03-R08"
             result = subprocess.run(
                 command,
                 text=True,
@@ -238,6 +250,9 @@ class RouterCliTest(unittest.TestCase):
         self.assertEqual(payload["phase"], "BASELINE_REBASED")
         self.assertEqual(payload["baseline_manifest"]["baseline_head"], preflight)
         self.assertEqual(payload["changed_paths"], ["lib/allowed.dart"])
+        self.assertEqual(payload["terra_reservation"], "finished-terra-review")
+        self.assertNotIn("terra_terminal_status", payload)
+        self.assertNotIn("terra_terminal_reason", payload)
 
     def _terra_status(
         self, state_root: Path, *, config: Path = CONFIG

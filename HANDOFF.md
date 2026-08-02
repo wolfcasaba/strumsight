@@ -4,17 +4,23 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (HEAL E03-R08/H6 — stale router baseline recovery verified).** The router now
-> has a locked `rebase-baseline` recovery command for a `BLOCKED` task whose
-> persisted baseline predates its committed pre-flight: it keeps the model's
-> uncommitted diff subject to the normal allowlist audit, rather than treating
-> later, already-merged infrastructure commits as model scope creep. The
-> actual E03-R08 state must be rebased with that command before the pipeline
-> resumes; its implementation diff remains reviewable. Python router tests
-> cover both the security primitive and the CLI/state transition. **Prior
+> (HEAL E03-R08/H6 — task-ID baseline recovery).** `model-router.py
+> rebase-baseline` now accepts either its canonical brief path or an
+> unambiguous `E##-R##` task ID, resolving the latter only under the supplied
+> worktree's `docs/rounds/`. This fixes the measured `brief is unreadable:
+> E03-R08` halt without bypassing the parsed brief, baseline scope audit, or
+> task lock. The regression uses the exact failed `--task E03-R08` input.
+> **Prior
 > completed product round:** E03-R07 — File-based Song repository and asset
 > store DONE, merged
-> `b8b7e4e` (PR #66), two fix rounds.** Implements
+> `b8b7e4e` (PR #66), two fix rounds.** **Latest self-heal:** E03-R08/H6
+> clears the superseded `terra_terminal_status` and `terra_terminal_reason`
+> after the locked `rebase-baseline` scope audit; the completed Terra
+> reservation and attempt history remain intact, so a later resume evaluates
+> the rebased state rather than replaying an obsolete `BLOCKED` result.
+> Regression coverage is in
+> `RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`.
+> Implements
 > [ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) (accepted at
 > E03-R01): `SongRepository`/`SongAssetRepository` domain contracts,
 > `FileSongRepository` (validate→temp-serialize→flush→verify→atomic document

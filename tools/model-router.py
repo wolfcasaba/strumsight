@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,9 @@ from ai_router.security import (
     redact_text,
 )
 from ai_router.state import StateError, StateStore
+
+
+_TASK_ID = re.compile(r"^E\d{2}-R\d{2}$", re.IGNORECASE)
 
 
 def _expanded(value: str) -> Path:
@@ -65,6 +69,27 @@ def _manifest_to_state(manifest: WorkspaceManifest) -> dict[str, object]:
     }
 
 
+def _rebase_brief_path(task: Path, worktree: Path) -> Path:
+    """Resolve a rebase brief path, including one unambiguous task identifier.
+
+    `rebase-baseline` is an operator recovery command.  Accepting the task ID
+    that appears in the persisted state prevents a path/identifier mix-up from
+    turning a recoverable blocked task into an INTERNAL_ERROR.  The lookup is
+    deliberately constrained to one matching brief inside this worktree.
+    """
+    if task.exists():
+        return task
+    task_id = task.name.upper()
+    if task.parent != Path(".") or not _TASK_ID.fullmatch(task_id):
+        return task
+    matches = sorted((worktree / "docs" / "rounds").glob(f"{task_id.lower()}-*.md"))
+    if len(matches) != 1:
+        raise BriefMetadataError(
+            f"task id must resolve to exactly one brief in docs/rounds: {task_id}"
+        )
+    return matches[0]
+
+
 def rebase_blocked_task_baseline(
     *, state: StateStore, brief: object, worktree: Path, config: object
 ) -> dict[str, object]:
@@ -94,6 +119,13 @@ def rebase_blocked_task_baseline(
             raise StateError("rebased baseline still fails scope audit: " + "; ".join(audit.violations))
         task["baseline_manifest"] = _manifest_to_state(refreshed)
         task["changed_paths"] = list(audit.scoped_changed_paths)
+        # The old BLOCKED result was fully committed to the Terra ledger
+        # before this operator-only recovery began. Keeping its two-phase
+        # terminal intent would make `resume` replay that stale result before
+        # it can inspect the rebased baseline. Keep the reservation history
+        # and attempt counters, but clear only the superseded terminal intent.
+        task.pop("terra_terminal_status", None)
+        task.pop("terra_terminal_reason", None)
         task["status"] = RouterStatus.READY_FOR_REVIEW.value
         task["phase"] = "BASELINE_REBASED"
         task["reason"] = (
@@ -394,7 +426,7 @@ def main() -> int:
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0
         if args.command == "rebase-baseline":
-            brief = load_brief(args.task)
+            brief = load_brief(_rebase_brief_path(args.task, args.worktree.resolve()))
             task = rebase_blocked_task_baseline(
                 state=state,
                 brief=brief,
