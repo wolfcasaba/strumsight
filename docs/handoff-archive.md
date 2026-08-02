@@ -1661,3 +1661,97 @@ Lessons: `docs/LESSONS.md` L50 (`BLOCKED`→`READY_FOR_REVIEW` nincs
 sanctioned automatikus útja, ha `m3_attempts >= 1`; kézi worktree-recovery
 orchestrátor-authorship alatt a helyes válasz, ha a self-heal már
 bizonyította a diff scope-tisztaságát).
+
+## E03-R03 — Songstruktúra és determinisztikus időmodell
+
+**Kör:** E03-R03 (PR [#59](https://github.com/wolfcasaba/strumsight/pull/59),
+squash `47ad6da`, [ADR 0093](adr/0093-song-trainer-local-time-primitives.md),
+nincs RTM-hivatkozás ehhez a körhöz). Implementer: **auto MiniMax-first
+router** (ADR 0088) — kezdeti M3-attempt + 1 M3 javító kör (M3 az összes
+javítást önállóan, Codex-eszkaláció nélkül elvégezte). Orchestrátor:
+**Claude Sonnet 5**.
+
+**Pre-flight mért drift (ADR 0093):** a brief (és az Epic 3 SDD §10.1) szó
+szerint azt írja, hogy a Song Trainer a Practice Engine „Chapter 3"
+`BeatPosition`/`Tempo`/`Meter` értékobjektumaira épül. A pre-flight kimérte,
+hogy ez szó szerint **nem elérhető**: a `song_document_test.dart` Domain
+purity scannere kivétel nélkül tiltja a `package:strumsight/features/
+practice/` importot a song_trainer domainben (a `practice/public.dart`
+határon át sem enged kivételt), ez a teszt nincs a kör `allowed_paths`
+listáján (nem módosítható), és a teljes CI-suite futtatja. ADR 0092
+függetlenül megerősíti: a Song Trainer ↔ Practice Engine kapcsolat csak egy
+jövőbeli (E03-R19) application-szintű `SongPracticeCompiler` határon él,
+nem domain-szintű típusmegosztáson. **Feloldás:** a Song Trainer domain
+saját, lokális tick-alapú idő-primitíveket definiál a már engedélyezett
+fájlokon belül (nincs `allowed_paths`-bővítés) — a Chapter 3 TERVEZÉSI ELVEI
+(egész/racionális köztes aritmetika, egyetlen kerekítési pont a
+mikroszekundum-konverzióban, ADR 0066/0072 precedens) öröklődnek, a TÍPUSOK
+nem.
+
+**Elkészült:** `SongSection` (kind-enum, measure-range validáció),
+`SongMeasure` (index/durationBeats/pickup/repeat-mezők), `TempoMap`
+(BeatPosition/Tempo lokális típusok, első boundary=0, szigorúan rendezett,
+pozitív BPM), `MeterMap` (measure-index kulcsú `MeterChange`, numerator/
+power-of-2-denominator `Meter`), `KeyMap` (locale-független `KeySignature`
+tonic+mode), és a `SongTimeMap` domain service (480 PPQ tick, szegmensenkénti
+egész-mikroszekundum összegzés egyetlen kerekítési ponttal, ≤1 tick
+round-trip tolerancia, speed-multiplier a forrás mutációja nélkül). A
+`SongDocument` (R02) bekötve az öt új mezővel; `domain/public.dart` bővítve.
+
+**Review (1 javító kör):** az első menet independens review-ja (izolált
+`/tmp` klón, saját gate-újrafuttatás, domain-purity re-run, **mutáció-tesztelt**
+próba a tempóhatár-policyre — egy szándékos `<=`→`<` mutáció és egy
+kerekítés-truncate mutáció is helyesen PIROSAT adott, majd visszaállítva
+ZÖLD) **1 MAJOR**-t talált: `SongDocument.operator==`/`hashCode` (és maga
+`TempoMap`/`MeterMap`/`KeyMap`/az elem-típusaik) nem vették figyelembe az
+újonnan bekötött strukturális mezőket — két, kizárólag `tempoMap`/`sections`
+tartalmában eltérő dokumentum `==`-nek és azonos `hashCode`-únak minősült
+(reprodukálva egy eldobható próbateszttel). 2 MINOR (a brief §6 kötelező
+"4/4 teljesen támogatott" és "tempo change −ε/pontosan/+ε" mátrixcellái a kör
+saját suite-jában nem voltak tesztelve — az implementáció maga helyesnek
+bizonyult reviewer-féle független referencia-számítással). 2 NOTE (SDD §9.5
+section/measure kereszt-határ validáció hiánya — nem R03-mérce, follow-up
+jelölve; `KeySignature.tonic` dokumentálatlan tartománya).
+
+**Folyamat-tanulság (mérve, `docs/LESSONS.md` L51):** a javító kör `resume`
+hívása a router saját scope-audit-jában hamis `BLOCKED`-ot adott
+(`model-created commit is not allowed: HEAD changed from baseline; path
+outside allowed scope: review-findings-fix1.md`), mert az orchestrátor a
+READY_FOR_REVIEW diffet ÉS a review-jelentést commitolta a `resume` hívás
+ELŐTT — a router baseline-checkje a HEAD-et az ELSŐ `run`-nál rögzített
+commitra rögzíti, és bármilyen orchestrátor-oldali commit köztes állapotban
+"model-created commit"-ként buktat. A `.ai/runs/E03-R03/router-result.json`
+és a munkapéldány git-státusza szerint M3 a hívás során ténylegesen lefutott
+(`m3_attempts: 2`) és PONTOSAN a kért javításokat készítette el, hibátlanul.
+Az orchestrátor a diffet kézzel auditálta (gate + purity mindkétszer zöld
+friss klónban) és saját authorship alatt commitolta (`7433c0e`) — ugyanaz a
+minta, mint L50 (E03-R02 H6): a diff a bizonyíték, nem az őt előállító
+hívási útvonal. **A javasolt jövőbeli protokoll:** `auto` router módban NE
+commitold a READY_FOR_REVIEW diffet és a review-jelentést a `resume` hívás
+ELŐTT — audit + review-írás történjen a diffen UNCOMMITTED állapotban (vagy
+egy külön `/tmp` klónban), a `resume` findings-fájlját `.ai/review-findings-
+<slug>.md` néven helyezd el (ez a router GENERATED_IGNORED_GLOBS mintája,
+amit az `audit_scope` post-hoc ellenőrzése kizár, de a `validate_baseline_
+manifest` NEM — utóbbi csak akkor nem bukik, ha a fájl a baseline-rögzítéskor
+még nem létezik), és csak a TELJES ciklus (kezdeti + összes javító kör)
+lezárása után, egyetlen véglegesítő lépésben commitold a teljes diffet +
+review-jelentést.
+
+**Zöld kapu.** `tools/round-gate.sh test/features/song_trainer/domain/
+song_structure_test.dart test/features/song_trainer/domain/
+song_time_map_test.dart test/property/song_time_map_property_test.dart`
+zöld (orchestrátor kétszer — kezdeti diff + javított diff —, mindkétszer
+izolált `/tmp` klónban; domain-purity `song_document_test.dart` szintén
+mindkétszer külön futtatva). CI dispatch a
+`codex/e03-r03-song-structure-and-time-map`-re kétszer (a javító kör miatt
+a HEAD elmozdult) — a végleges run
+[30734744599](https://github.com/wolfcasaba/strumsight/actions/runs/30734744599)
+zöld, `headSha` (`0993185`) egyezik a merge-elt HEAD-del. Squash-merge
+[PR #59](https://github.com/wolfcasaba/strumsight/pull/59) → `47ad6da`,
+független post-merge gate-ellenőrzés (friss `/tmp` klón, `origin/main`)
+szintén zöld.
+
+Lessons: `docs/LESSONS.md` L51 (router `resume` hamis `BLOCKED` a
+premature orchestrátor-commit miatt; `.ai/review-findings-*.md` a helyes
+findings-fájl-hely; a diff akkor is bizonyíték, ha a hívási útvonal
+hibázott).

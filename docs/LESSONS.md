@@ -1947,3 +1947,71 @@ a `BASELINE_GATE` fázisban (`m3_attempts=0`, még nem volt valódi M3-munka —
 lásd L48, E03-R01 klón-csapda) történt, VAGY ha a meglévő diff okkal
 eldobható (pl. időközben elavult brief-revízió miatt). Ha `m3_attempts>=1`
 és a diff scope-tiszta, a kézi worktree-recovery olcsóbb és biztonságosabb.
+
+## L51 — `resume` a normál `READY_FOR_REVIEW → javító kör` úton is hamis `BLOCKED`-ot ad, ha az orchestrátor a diffet a `resume` hívás ELŐTT commitolja; a findings-fájl helye is számít
+
+A pipeline E03-R03 (2026-08-02) mérte ki, hogy L50 mintája (baseline-drift a
+`BLOCKED` recovery útján) a **normál**, sikeres `READY_FOR_REVIEW → review →
+javító kör` cikluson is előjön, nem csak a `BLOCKED` self-heal recovery-nél.
+
+A kezdeti `run` `READY_FOR_REVIEW`-t adott; az orchestrátor a szokásos
+protokoll szerint (AGENTS.md §15.6, "a modell sosem commitol") auditálta a
+diffet, majd COMMITOLTA azt saját authorship alatt, ÉS commitolta az
+independens review-jelentést is (1 MAJOR nyitva). Csak EZUTÁN hívta a
+`tools/ai-router-round.sh resume`-ot a javító körhöz, a review-findings
+fájllal a worktree gyökerében.
+
+**A `resume` a saját `audit_scope`-jában (`tools/ai_router/security.py`)
+hamis `BLOCKED`-ot adott:** `current_head != baseline.baseline_head` →
+"model-created commit is not allowed: HEAD changed from baseline" (a
+router baseline-je az ELSŐ `run`-nál rögzített commitra fixált, és a
+`READY_FOR_REVIEW`-ból induló `resume` NEM kap automatikus
+baseline-frissítést — ellentétben azzal, amit a kontraktus sugall). A
+track-eletlen findings-fájl (a worktree gyökerében, nem `.ai/` alatt) egy
+MÁSODIK hibát is adott: "path outside allowed scope: <fájl>" — a
+`GENERATED_IGNORED_GLOBS` tartalmaz egy `.ai/review-findings-*.md` mintát
+pontosan erre a célra, de ez csak az `audit_scope` POST-HOC ellenőrzésében
+(a modell-hívás UTÁN változott fájlok listáján) alkalmazott, path-minta
+alapú kizárás — a `validate_baseline_manifest` (a baseline ROGZÍTÉSEKOR
+lefutó ellenőrzés) `untracked_paths`-tilalma FELTÉTLEN, nem használja ezt a
+mintát, tehát a findings-fájl a `.gitignore`-ban tényleg nem szereplő
+`.ai/`-alatti elhelyezés esetén is bukna, HA a baseline-rögzítés
+pillanatában már létezne.
+
+**Mérve: a `resume` a hamis `BLOCKED` ELLENÉRE ténylegesen lefuttatta M3-at**
+(`router-result.json` `m3_attempts: 2`, és a munkapéldány git-státusza
+pontosan a review-findings-ben kért javításokat mutatta, hibátlanul,
+scope-tisztán) — a hiba KIZÁRÓLAG az orchestrátor git-kezelésében volt, nem
+a modell képességében vagy a router logikájában.
+
+**A helyes protokoll `auto` router módban, minden javító körnél:**
+
+1. A kezdeti `run` UTÁN, `READY_FOR_REVIEW`-nál, **NE commitold** a diffet
+   és a review-jelentést, mielőtt minden várható `resume`-ciklus lezárult
+   volna. Az audit + a review-írás történhet a diffen UNCOMMITTED
+   állapotban (a `git diff`/`git status` közvetlenül a worktree-ben
+   megmutatja, amire szükség van), vagy egy `/tmp` klónban, a
+   review-jelentést egyelőre csak lokálisan (nem a round-branchen) tartva.
+2. A `resume` findings-fájlját `.ai/review-findings-<slug>.md` néven hozd
+   létre (a router saját `GENERATED_IGNORED_GLOBS` mintája) — ez az
+   `audit_scope` post-hoc ellenőrzésében biztosan kizárt, FÜGGETLENÜL attól,
+   hogy a tényleges `.gitignore` lefedi-e.
+3. Csak a TELJES ciklus (kezdeti + minden javító kör) lezárása, azaz a
+   review végleges APPROVED verdikje UTÁN commitold EGYETLEN lépésben (vagy
+   két egymást követő commitban: implementáció, majd review) a teljes
+   diffet.
+4. Ha (mint ebben a körben) a korai commit már megtörtént és a `resume`
+   emiatt hamis `BLOCKED`-ot ad: **NE hívd újra a routert** ezen a task-on
+   (a `resume` "state-törlés / új task ID tilos" szabálya `reset
+   --task-id`-t is kizárja ebben a helyzetben — az M3-keret már
+   elfogyasztva, egy reset veszteséget okozna, nem hozna vissza semmit). A
+   munkapéldány git-státusza és a `.ai/runs/<kör>/router-result.json`
+   `m3_attempts` mezője megmutatja, hogy a modell ténylegesen lefutott-e —
+   ha a diff helyes és scope-tiszta (gate + purity friss klónban
+   újramérve), az orchestrátor kézzel auditálja és saját authorship alatt
+   commitolja (ugyanaz a minta, mint L50: a diff a bizonyíték, nem a
+   hívási útvonal).
+
+Ez a lépés NEM H4/H6 halt — az ütköző előfeltétel az orchestrátor SAJÁT,
+még nem merge-elt munkamenetének git-kezelése volt, nem a modell képessége
+vagy a router infrastruktúrája; a §2 önálló-döntési kör hatáskörébe esik.

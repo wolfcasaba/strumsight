@@ -4,49 +4,46 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (Pipeline E03-R02 — SongDocument V2 identity/metadata DONE, merged
-> `a5b0b55`, recovered from an H6 self-heal.** The router's first attempt
-> (M3, 1 attempt) produced a genuinely scope-clean diff but landed
-> `BLOCKED` on two bugs: `coverage/lcov.info` (a legitimate artifact of the
-> brief's own coverage acceptance criterion) tripped the scope-audit's
-> generated-ignored allowlist, and M3 committed the diff itself, violating
-> the router's "the model never owns Git" invariant. A self-heal round (PR
-> [#57](https://github.com/wolfcasaba/strumsight/pull/57), `6db1170`)
-> fixed the first bug in `tools/ai_router/security.py` and deliberately
-> left the second — a tested security invariant — pointing the next
-> session at a manual worktree recovery instead. This session measured
-> that `BLOCKED` has no sanctioned automatic path back to
-> `READY_FOR_REVIEW` (`reset --task-id` would re-capture the *current*
-> worktree as baseline and immediately re-`BLOCKED` on the untracked new
-> files, or would need a pristine wipe that discards the finished work for
-> a redundant fresh M3 attempt) — so it did the manual recovery the
-> self-heal commit described: `git reset --soft` to undo M3's own commit,
-> rebase the pre-flight commit onto the healed `main`, re-verify the diff
-> is scope-clean against the brief's `allowed_paths`, and commit it under
-> the orchestrator's own authorship (matching the router's normal
-> `READY_FOR_REVIEW` → orchestrator-commits contract). M3's diff itself was
-> **byte-for-byte unchanged** by this recovery. Independent review (own
-> gate re-run in an isolated `/tmp` clone, 93/93 tests; a real mutation
-> probe against the domain-purity guard — injected a forbidden
-> `package:flutter` import, confirmed RED, reverted, confirmed GREEN;
-> independent boundary/UTC/fail-closed probes against the brief's §6
-> discriminating matrix; independently regenerated coverage matching the
-> implementer's own numbers): **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR
-> (a misleadingly-named validation code, self-flagged by the implementer),
-> 2 NOTE (an ADR/code directory-naming drift, doc-only; a
-> comment/behavior mismatch in a non-required filename-safety corner).
-> CI green on the exact merge `headSha`
-> ([run 30732700929](https://github.com/wolfcasaba/strumsight/actions/runs/30732700929)),
-> squash-merged [PR #58](https://github.com/wolfcasaba/strumsight/pull/58) →
-> `a5b0b55`, independent post-merge gate re-run on `main` also green.
-> Lessons: `docs/LESSONS.md` L50 (BLOCKED → READY_FOR_REVIEW has no
-> sanctioned automatic path once `m3_attempts >= 1`; manual worktree
-> recovery under orchestrator authorship is the correct move when the
-> self-heal already proved the diff scope-clean). Full narrative:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R02.
-> **Next:** E03-R03 — Song structure and time map (see §6 below); the
-> pipeline queue's E03-R03 row is `pending` — the driver continues
-> automatically (ADR 0087 §7, mid-epic round).
+> (Pipeline E03-R03 — Song structure and deterministic time maps DONE,
+> merged `47ad6da`, 1 M3 fix round.** `SongSection`/`SongMeasure` structural
+> models, `TempoMap`/`MeterMap`/`KeyMap`, and the `SongTimeMap` beat↔duration
+> conversion service (480 PPQ ticks, single-rounding µs-exact segment
+> arithmetic, ≤1 tick round-trip tolerance), wired into `SongDocument`
+> (E03-R02). **ADR 0093 (pre-flight-measured drift):** the SDD's "Epic 3
+> builds on Chapter 3 (Practice Engine) `BeatPosition`/`Tempo`/`Meter`"
+> statement is unreachable as literal type reuse — the song_trainer domain
+> purity scanner forbids any `package:strumsight/features/practice/` import
+> with no `public.dart` exception, and ADR 0092 independently defers the
+> Song Trainer ↔ Practice Engine boundary to a later application-layer
+> compiler round (E03-R19). Resolved by defining local, tick-based time
+> primitives inside the already-allowed files — the Chapter 3 arithmetic
+> *principles* (ADR 0066/0072 precedent) carry over, the *types* don't.
+> Independent review (isolated `/tmp` clone, own gate re-run, domain-purity
+> re-run, a **mutation-tested** probe on the tempo-boundary policy — two
+> deliberate mutations, both correctly went RED then reverted GREEN) found
+> **1 MAJOR** (F1: `SongDocument.operator==`/`hashCode`, and the map types
+> themselves, didn't cover the newly-wired structural fields — two
+> documents differing only in `tempoMap`/`sections` compared `==` true with
+> a shared `hashCode`) and 2 MINOR (untested-but-correct brief §6 matrix
+> cells: 4/4 meter, tick-exact tempo-boundary ±1). **1 M3 fix round**
+> closed all three with real regression tests; the router's own `resume`
+> scope-audit gave a **false** `BLOCKED` on that fix attempt (an
+> orchestrator process error — committing the reviewed diff before calling
+> `resume` moved HEAD away from the router's recorded baseline; M3's actual
+> diff, visible in the worktree despite the false block, was correct and
+> scope-clean and was salvaged under orchestrator authorship). CI green on
+> the exact merge `headSha`
+> ([run 30734744599](https://github.com/wolfcasaba/strumsight/actions/runs/30734744599)),
+> squash-merged [PR #59](https://github.com/wolfcasaba/strumsight/pull/59) →
+> `47ad6da`, independent post-merge gate re-run on `main` also green.
+> Lessons: `docs/LESSONS.md` L51 (router `resume` false-`BLOCKED` from a
+> premature orchestrator commit; `.ai/review-findings-*.md` is the correct
+> findings-file location; commit only once, after the full review+fix
+> cycle closes). Full narrative:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R03.
+> **Next:** E03-R04 (see §6 below); the pipeline queue's E03-R04 row is
+> `pending` — the driver continues automatically (ADR 0087 §7, mid-epic
+> round).
 
 ## 1. Current release state
 
@@ -68,10 +65,11 @@
   `6e5cec7`) — a `practiceSessionHostProvider` élesben él, a §3
   rendszerszintű rés pótolva.
   Evidencia: [`docs/sdd/epic-02-completion-report.md`](docs/sdd/epic-02-completion-report.md).
-- **Epic 3 (Song Trainer) elkezdve** — E03-R01 (kickoff, baseline+ADR-ek+flag)
-  és E03-R02 (SongDocument V2 identitás/metaadat domain modell + codec) kész.
-  A modell flagek mögött, hívó UI/repository nincs — production viselkedés
-  változatlan.
+- **Epic 3 (Song Trainer) elkezdve** — E03-R01 (kickoff, baseline+ADR-ek+flag),
+  E03-R02 (SongDocument V2 identitás/metaadat domain modell + codec) és
+  E03-R03 (section/measure struktúra + determinisztikus tempo/meter/key map +
+  SongTimeMap) kész. A modell flagek mögött, hívó UI/repository nincs —
+  production viselkedés változatlan.
 
 ## 2. What is working
 
@@ -91,6 +89,21 @@
   Framework-/Riverpod-/storage-mentes (`Domain purity` teszt-scanner őrzi,
   reviewer-oldali valódi-sértés próbával verifikálva). Hívó UI/repository
   még nincs — production viselkedés változatlan.
+- **Songstruktúra és determinisztikus időmodell (E03-R03, ADR 0093):**
+  `lib/features/song_trainer/domain/models/` — `SongSection` (kind-enum,
+  measure-range validáció), `SongMeasure` (index/durationBeats/pickup/
+  repeat-mezők); `TempoMap`/`MeterMap`/`KeyMap` **lokális, tick-alapú**
+  idő-primitívekkel (a Practice Engine `BeatPosition`/`Tempo`/`Meter`
+  importja a domain-purity scanner és ADR 0092 miatt kizárva — csak a
+  tervezési elvek öröklődnek, a típusok nem). `domain/services/
+  song_time_map.dart` — 480 PPQ tick, szegmensenkénti egész-mikroszekundum
+  összegzés egyetlen kerekítési ponttal, **≤1 tick round-trip tolerancia**
+  (500 rendezett, seedelt property-mintán mérve), left-closed tempo/meter
+  boundary policy (reviewer-oldali mutáció-tesztelt próbával verifikálva),
+  speed-multiplier a forrás mapet nem mutálja. `SongDocument` (R02) bekötve
+  az öt új mezővel, **value-equal** `operator==`/`hashCode`-dal minden
+  strukturális mezőn (a review F1 MAJOR leletének javítása). Hívó UI/
+  repository még nincs — production viselkedés változatlan.
 - **Detektálás (100% on-device):** Live képernyő (akkord + pengetésirány valós
   időben, DSP + CRNN ML), Analyze (felvett klip elemzése), Tuner, metronóm.
   DSP-igazság: `docs/rag/chunks/` — paraméter csak ADR-rel és ugyanabban a
@@ -276,14 +289,41 @@
 
 ## 4. Current branch
 
-`main` @ [PR #58](https://github.com/wolfcasaba/strumsight/pull/58)
-(E03-R02 SongDocument V2 identity/metadata round, squash-merge `a5b0b55`), CI run
-[30732700929](https://github.com/wolfcasaba/strumsight/actions/runs/30732700929)
-**success** on `826cf0a` (the matching `headSha`, full suite + randomized
-property + APK). Recovered from an H6 self-heal (router `BLOCKED` on an
-already-fixed scope-audit bug + the model's own illicit commit) via manual
-worktree recovery under orchestrator authorship — see §5 and
-`docs/LESSONS.md` L50.
+`main` @ [PR #59](https://github.com/wolfcasaba/strumsight/pull/59)
+(E03-R03 song structure and deterministic time maps round, squash-merge
+`47ad6da`), CI run
+[30734744599](https://github.com/wolfcasaba/strumsight/actions/runs/30734744599)
+**success** on `0993185` (the matching `headSha`, full suite + randomized
+property + APK). 1 M3 fix round closed a MAJOR equality-contract gap (F1);
+the router's own `resume` scope-audit gave a false `BLOCKED` on that fix
+attempt due to an orchestrator process error (premature commit before
+`resume`) — the model's diff itself was correct and was salvaged under
+orchestrator authorship — see §5 and `docs/LESSONS.md` L51.
+
+> **Router `resume` false-`BLOCKED` from a premature orchestrator commit
+> (mérve 2026-08-02, E03-R03):** ha a kezdeti `run` után az orchestrátor
+> commitolja a READY_FOR_REVIEW diffet ÉS a review-jelentést, MIELŐTT
+> `resume`-ot hívna a javító körhöz, a router `audit_scope`-ja
+> `current_head != baseline.baseline_head` miatt hamis "model-created
+> commit is not allowed" hibát ad — a baseline ugyanis az ELSŐ `run`-nál
+> rögzített commitra van fixálva, és `resume` (a `READY_FOR_REVIEW`
+> útvonalon) NEM kapja meg automatikusan az új baseline-t. Egy
+> track-eletlen findings-fájl (a worktree gyökerében, nem `.ai/` alatt)
+> ugyanekkor "path outside allowed scope"-ot is ad. **A helyes protokoll:**
+> NE commitold a diffet/review-t a `resume` hívás előtt — audit + review
+> UNCOMMITTED állapotban vagy külön `/tmp` klónban; a findings-fájlt
+> `.ai/review-findings-<slug>.md` néven helyezd el (a router
+> `GENERATED_IGNORED_GLOBS` mintája — az `audit_scope` post-hoc
+> ellenőrzésben kizárja, függetlenül a tényleges `.gitignore` tartalmától);
+> csak a TELJES ciklus (kezdeti + minden javító kör) lezárása után,
+> egyetlen lépésben commitold a végleges diffet + review-t. Ha (mint ebben
+> a körben) már megtörtént a korai commit és a `resume` emiatt hamis
+> `BLOCKED`-ot ad: NE hívd újra a routert (a `resume` "state-törlés
+> tilos" szabálya miatt) — a munkapéldány git-státusza és a
+> `.ai/runs/<kör>/router-result.json` `m3_attempts` mezője megmutatja, hogy
+> a modell valójában lefutott-e és mit írt; ha a diff helyes és
+> scope-tiszta, az orchestrátor kézzel auditálja és saját authorship alatt
+> commitolja (ugyanaz a minta, mint L50). Részletek: `docs/LESSONS.md` L51.
 
 > **`BLOCKED`→`READY_FOR_REVIEW` recovery (mérve 2026-08-02, E03-R02):** ha
 > `m3_attempts >= 1` és a self-heal már bizonyította a diff scope-tisztaságát,
@@ -325,52 +365,67 @@ worktree recovery under orchestrator authorship — see §5 and
 
 ## 5. Last completed round
 
-**E03-R02 — SongDocument V2 azonosítók és metaadatok** (PR
+**E03-R03 — Songstruktúra és determinisztikus időmodell** (PR
+[#59](https://github.com/wolfcasaba/strumsight/pull/59), squash `47ad6da`,
+[ADR 0093](docs/adr/0093-song-trainer-local-time-primitives.md)).
+Implementer: **auto MiniMax-first router** (ADR 0088), kezdeti M3-attempt +
+**1 M3 javító kör**. Orchestrátor: **Claude Sonnet 5**.
+
+**Elkészült:** `SongSection`/`SongMeasure` + `TempoMap`/`MeterMap`/`KeyMap`
+(lokális tick-alapú idő-primitívekkel, ADR 0093 — a Practice Engine
+`BeatPosition`/`Tempo`/`Meter` importja kizárva) + a `SongTimeMap`
+beat↔duration konverziós service, bekötve a `SongDocument`-be (lásd §2
+részletesen).
+
+**ADR 0093 (pre-flight-mért drift):** az SDD §10.1 "Epic 3 a Chapter 3
+BeatPosition/Tempo/Meter értékobjektumaira épít" állítása szó szerint nem
+elérhető — a domain-purity scanner kivétel nélkül tiltja a Practice Engine
+importot, ADR 0092 pedig a Song Trainer↔Practice Engine kapcsolatot egy
+jövőbeli (E03-R19) application-szintű compiler-határra teszi. Feloldás:
+lokális idő-primitívek a már engedélyezett fájlokon belül, a Chapter 3
+tervezési elveivel (ADR 0066/0072 precedens), de nem a típusaival.
+
+**Review, 1 javító kör:** az első menet reviewja (izolált `/tmp` klón, saját
+gate + domain-purity re-run + **mutáció-tesztelt** próba a tempóhatár-
+policyre) **1 MAJOR**-t talált (F1: `SongDocument.operator==`/`hashCode` és
+a map-típusok maguk nem vették figyelembe az új strukturális mezőket — két,
+kizárólag `tempoMap`/`sections`-ben eltérő dokumentum `==`-nek minősült) és
+2 MINOR-t (a brief §6 kötelező "4/4" és "tempo change −ε/pontosan/+ε"
+mátrixcellái a kör saját suite-jában nem voltak tesztelve — az
+implementáció maga helyesnek bizonyult reviewer-féle független
+referencia-számítással). Az M3 javító kör mindhármat lezárta valódi
+regressziós tesztekkel.
+
+**Folyamat-tanulság mérve:** a javító kör `resume` hívása a router saját
+scope-audit-jában hamis `BLOCKED`-ot adott, mert az orchestrátor a
+READY_FOR_REVIEW diffet és a review-jelentést a `resume` hívás ELŐTT
+commitolta (a router baseline-checkje az ELSŐ `run`-nál rögzített HEAD-et
+várja). M3 a hívás során ténylegesen lefutott és pontosan a kért javításokat
+készítette el — az orchestrátor kézzel auditálta (gate + purity mindkétszer
+zöld friss klónban) és saját authorship alatt commitolta (`7433c0e`), a
+diff a bizonyíték, nem a hívási útvonal (ugyanaz a minta, mint L50).
+
+Zöld kapu: `tools/round-gate.sh` (kétszer, kezdeti + javított diff, mindkétszer
+izolált klónban) + CI [30734744599](https://github.com/wolfcasaba/strumsight/actions/runs/30734744599)
+zöld a merge-elt `headSha`-n (`0993185`), független post-merge gate-ellenőrzés
+`main`-en szintén zöld. Lessons: `docs/LESSONS.md` L51. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R03.
+
+**Előző kör: E03-R02 — SongDocument V2 azonosítók és metaadatok** (PR
 [#58](https://github.com/wolfcasaba/strumsight/pull/58), squash `a5b0b55`,
-ADR 0089 §Döntés 2/3, nincs új ADR). Implementer: **auto MiniMax-first
-router** (ADR 0088), **1 M3 attempt**. Orchestrátor: **Claude Sonnet 5**.
-
-**Elkészült:** hat típusos ID + `SongMetadata`/`SongSource`/
-`SongAssetReference`/`SongMarker`/minimális `SongDocument` identitás-vázlat
-+ determinisztikus JSON codec (lásd §2 részletesen). 93/93 teszt,
-domain-purity scanner valódi-sértés próbával verifikálva, ≥90% coverage
-minden domain fájlon (reviewer-oldali független újramérés egyezik az
-implementer számaival).
-
-**H6 self-heal recovery mérve:** az első `run` `BLOCKED`-ba futott két hibán
-— a brief saját coverage-kritériuma miatt legitim `coverage/lcov.info`
-kiverte a scope-audit generated-ignored listáját, és M3 saját maga
-commitolt (`439392b`), megszegve a "modell sosem tulajdonolja a Git-et"
-szerződést. Self-heal (PR #57, `6db1170`) az elsőt javította, a másodikat
-szándékosan nem lazította, és a konkrét megrekedt worktree kézi
-helyreállítására utalt a következő session felé. Ez a session mérte ki,
-hogy `BLOCKED`-ból nincs sanctioned automatikus visszatérés
-`READY_FOR_REVIEW`-ba (`reset --task-id` a jelenlegi worktree-t kapná új
-baseline-nak és azonnal újra blokkolna, vagy egy pristine-wipe eldobná a
-kész munkát) — ezért kézzel hajtotta végre: `git reset --soft` az M3
-commitra, rebase a healed `main`-re, scope-audit ellenőrzés, orchestrátor
-authorship-ű commit. M3 diffje **byte-azonos** maradt a recovery alatt.
-Review (izolált `/tmp` klón, saját gate + scope-audit + valódi-sértés
-mutáció-próba a purity guardra + független boundary/UTC/fail-closed próbák
-+ független coverage-újramérés): **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR
-(félrevezető validation-kódnév, az implementer maga is dokumentálta), 2 NOTE
-(ADR/kód könyvtárnév-drift, doc-only; komment/viselkedés eltérés egy
-nem-előírt filename-safety sarokesetben). Lessons: `docs/LESSONS.md` L50.
-Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R02.
-
-**Előző kör: E03-R01 — Song Trainer baseline, ADR-ek és feature flag: Epic 3
-kickoff** (PR [#56](https://github.com/wolfcasaba/strumsight/pull/56), squash
-`d5ef6e5`, ADR 0089-0092). Legacy Songs/Setlists mért baseline, default-off
-`songTrainerV2Enabled` flag, üres `song_trainer/public.dart` boundary.
-Lessons: `docs/LESSONS.md` L48. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R01.
+ADR 0089 §Döntés 2/3). Hat típusos ID + `SongMetadata`/`SongSource`/
+`SongAssetReference`/`SongMarker`/minimális `SongDocument` identitás-vázlat +
+determinisztikus JSON codec; H6 self-heal recovery (kézi worktree-recovery
+orchestrátor-authorship alatt). Lessons: `docs/LESSONS.md` L50. Full
+narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R02.
 
 ## 6. Exact next task
 
-0. **~~E03-R01~~ és ~~E03-R02 — SongDocument V2 azonosítók és metaadatok~~ —
-   KÉSZ, ld. §5.** Következő: **E03-R03 — Song structure and time map**
-   ([docs/rounds/e03-r03-song-structure-and-time-map.md](docs/rounds/e03-r03-song-structure-and-time-map.md)).
-   A `docs/execution/pipeline-queue.tsv` E03-R03 sora `pending` — a driver
+0. **~~E03-R01~~, ~~E03-R02~~ és ~~E03-R03 — Songstruktúra és
+   determinisztikus időmodell~~ — KÉSZ, ld. §5.** Következő: **E03-R04 —
+   Tracks, events, monophonic analysis**
+   ([docs/rounds/e03-r04-tracks-events-monophonic-analysis.md](docs/rounds/e03-r04-tracks-events-monophonic-analysis.md)).
+   A `docs/execution/pipeline-queue.tsv` E03-R04 sora `pending` — a driver
    automatikusan folytatja (mid-epic round, nincs emberi kapu, ADR 0087 §7).
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
@@ -390,13 +445,13 @@ Lessons: `docs/LESSONS.md` L48. Full narrative:
 3. **A pipeline (ADR 0087, GOV-02) E02-R14…R19-et és E02-R21-et vitte
    (utóbbit a self-heal round 10/H4 zárta le); E02-R20-at és E03-R01-et
    SZÁNDÉKOSAN ember indította** (ADR 0087 §7 — epic-kickoff és epic-zárás
-   emberi döntési pont); E03-R02-t a user már `pending`-re állította, a
-   driver ezen a körön keresztül automatikusan folytatta (self-heal L49/L50
-   közbeiktatásával) — a
+   emberi döntési pont); E03-R02-t és E03-R03-at a user már `pending`-re
+   állította, a driver ezeken a körökön keresztül automatikusan folytatta
+   (self-heal L49/L50, majd L51 közbeiktatásával) — a
    ([`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv))
-   E03-R01 sora `done`, E03-R02 sora a fájlban még `pending` (a driver saját
-   könyvelése frissíti `done`-ra a következő firing-en — ez a session nem
-   nyúl a queue-fájlhoz), E03-R03…R21 `pending` — a driver körönként
+   E03-R01/R02 sora `done`, E03-R03 sora a fájlban még `pending` (a driver
+   saját könyvelése frissíti `done`-ra a következő firing-en — ez a session
+   nem nyúl a queue-fájlhoz), E03-R04…R21 `pending` — a driver körönként
    automatikusan halad, amíg HALT nem éri.
 
    > **Megállási szerződés (ADR 0087 §2):** az orchestrátor-session önállóan
