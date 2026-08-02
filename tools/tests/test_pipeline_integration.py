@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -51,6 +52,109 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("független", prompt.lower())
         self.assertIn("review + CI", prompt)
         self.assertIn("örökölt", prompt.lower())
+
+    def test_prompt_auto_dispatch_is_detached_and_polled_not_synchronous(self) -> None:
+        # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R05 H6): a
+        # `engine=auto` dispatch a Bash-eszköz mért 600s-es kemény plafonjánál
+        # rövidebbre volt kényszerítve egy szinkron hívással, miközben
+        # `.ai/router.toml`-ban `model_timeout_seconds=7200` — két egymást
+        # követő hívás mindkétszer SIGTERM-mel halt meg jelzés nélkül
+        # (docs/LESSONS.md L42 pontos ismétlődése). A javítás a már
+        # `minimax`/`codex` úton szentesített leválaszt-és-előtérben-várj
+        # mintát vezeti be `auto`-ra is. Ez a teszt a REGRESSZIÓ ellen véd:
+        # a szinkron parancs visszaállítása ne csússzon be észrevétlenül.
+        prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()
+        auto_section = prompt.split("### `auto`", 1)[1].split("### `minimax`", 1)[0]
+        self.assertIn("setsid", auto_section)
+        self.assertIn("wait-for-router.sh", auto_section)
+        self.assertNotIn("előtérben, szinkron módon", prompt)
+        self.assertTrue((ROOT / "tools" / "wait-for-router.sh").exists())
+
+    def make_router_signal_worktree(self, directory: Path) -> Path:
+        worktree = directory / "signal-worktree"
+        (worktree / "tools").mkdir(parents=True)
+        shutil.copy2(ROOT / "tools" / "codex-signal.sh", worktree / "tools" / "codex-signal.sh")
+        subprocess.run(["git", "init", "-q"], cwd=worktree, check=True)
+        subprocess.run(["git", "config", "user.email", "pipeline@example.invalid"], cwd=worktree, check=True)
+        subprocess.run(["git", "config", "user.name", "Pipeline Test"], cwd=worktree, check=True)
+        (worktree / "readme.txt").write_text("signal fixture\n")
+        subprocess.run(["git", "add", "."], cwd=worktree, check=True)
+        subprocess.run(["git", "commit", "-qm", "baseline"], cwd=worktree, check=True)
+        return worktree
+
+    def test_wait_for_round_does_not_recognize_router_terminal_signals(self) -> None:
+        # A MÉRT gyökérok, ami miatt `wait-for-router.sh` külön szkript kell:
+        # az örökölt `wait-for-round.sh` `case`-ága nem ismeri a router
+        # `progress`/`blocked` állapotait, tehát azokra a `max_wait` leteltéig
+        # üresen pörögne -- ha ezt valaha megoldanák `wait-for-round.sh`
+        # bővítésével, ez a teszt jelezze, mert akkor `wait-for-router.sh`
+        # feleslegessé válhat, de a mostani, MÉRT viselkedés ez. A jelzést a
+        # VÁRAKOZÁS INDULÁSA UTÁN írjuk (Popen), mert a valós futásban is így
+        # történik -- előbb írva a baseline-védelem (L12) takarná el a
+        # `case`-ág hiányát.
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+            env = dict(os.environ, WAIT_POLL_SECONDS="1")
+            process = subprocess.Popen(
+                ["bash", str(ROOT / "tools" / "wait-for-round.sh"), str(worktree), "3"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+            time.sleep(1)
+            script = worktree / "tools" / "codex-signal.sh"
+            self.run_command(["bash", str(script), "READY_FOR_REVIEW", "router done"], cwd=worktree)
+            stdout, stderr = process.communicate(timeout=10)
+
+            self.assertEqual(process.returncode, 5, stdout + stderr)
+            self.assertIn("MÉG FUTHAT", stderr)
+
+    def test_wait_for_router_recognizes_every_terminal_router_status_promptly(self) -> None:
+        for router_status in ("READY_FOR_REVIEW", "STOPPED", "DEFERRED", "BLOCKED", "INTERNAL_ERROR"):
+            with self.subTest(router_status=router_status):
+                with tempfile.TemporaryDirectory() as directory_name:
+                    worktree = self.make_router_signal_worktree(Path(directory_name))
+                    env = dict(os.environ, WAIT_POLL_SECONDS="1")
+                    process = subprocess.Popen(
+                        ["bash", str(ROOT / "tools" / "wait-for-router.sh"), str(worktree), "10"],
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        env=env,
+                    )
+                    time.sleep(1)
+                    script = worktree / "tools" / "codex-signal.sh"
+                    self.run_command(["bash", str(script), router_status, "router terminal"], cwd=worktree)
+                    stdout, stderr = process.communicate(timeout=10)
+
+                    self.assertEqual(process.returncode, 0, stdout + stderr)
+                    self.assertIn(f"router_status={router_status}", stdout)
+
+    def test_wait_for_router_times_out_while_the_router_is_still_running(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+
+            completed = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-router.sh"), str(worktree), "2"],
+            )
+
+            self.assertEqual(completed.returncode, 5, completed.stdout + completed.stderr)
+            self.assertIn("MÉG FUTHAT", completed.stderr)
+
+    def test_wait_for_router_ignores_a_stale_terminal_signal_from_a_previous_round(self) -> None:
+        # Ugyanaz a védelem, mint wait-for-round.sh-nál: egy korábbi kör
+        # bennragadt terminális jelzése ne zárja le azonnal az új várakozást.
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+            script = worktree / "tools" / "codex-signal.sh"
+            self.run_command(["bash", str(script), "STOPPED", "stale from a previous round"], cwd=worktree)
+
+            completed = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-router.sh"), str(worktree), "2"],
+            )
+
+            self.assertEqual(completed.returncode, 5, completed.stdout + completed.stderr)
 
     def test_selfheal_prompt_defines_the_three_outcomes_and_the_gate_boundary(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-selfheal-prompt.md").read_text()
