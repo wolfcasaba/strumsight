@@ -1,10 +1,13 @@
 # E03-R06 — Legacy Song és Setlist adapterek
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-02, pre-flight: orchestrátor Claude
+  Sonnet 5, tervezési baseline: `main` @ `91b9fa9`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 6; §3.2–3.4, §25.5
 - **Branch:** `codex/e03-r06-legacy-song-setlist-adapters`
 - **Előfeltétel:** E03-R05 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
+- **ADR:** [0116](../adr/0116-legacy-song-setlist-migration-boundary.md)
+  (a pre-flight írta, ld. §0.0)
 
 ```ai-router
 schema_version = 1
@@ -60,6 +63,57 @@ A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
 
+**Pre-flight mérés (2026-08-02, baseline `main` @ `91b9fa9`):** a fenti három
+állítás a tényleges kóddal egyezik — nincs drift, a scope/fájllista
+(az ADR-en kívül) változatlan marad. `gh pr list`/`gh run list` nem mutat
+párhuzamos autonóm drivert ezen a körön; nincs örökség-munkapéldány
+(`ls /home/ubuntu/ss-*e03r06*` üres). A két kötelező mérési szabály
+eredménye:
+
+1. **Cél-státuszok, INPUT-tal igazolva:** a mátrix egyetlen cellája sem
+   elérhetetlen célállapot — mindegyik egy VALÓDI legacy inputra
+   visszavezethető:
+   - `SongSourceType.legacyLocal` **már létezik** a kódban
+     (`song_source.dart:49-51`, doksija: „used by the migration adapter
+     only") és MA semmi nem hivatkozik rá — pontosan ez a kör az első
+     valódi producer.
+   - „rest" sor (mátrix) — a `pattern` `-` szlotjai a legacy
+     `Song.toLesson()`/`Lesson._expand` útján ma sem termelnek eseményt
+     (mérve a `song_rests.json` fixtúrán: 8 szlotból csak a 4 nem-rest ad
+     `events: 4`-et) — az adapternek tehát nem KELL, és nem SZABAD
+     StrumEvent-et generálnia rest-szlotra; ez konzisztens a „nincs
+     kitalált chord" elvárással.
+   - `SongChordEvent`/`SongStrumEvent` mezői `Duration`-alapúak
+     (`start`/`duration` a chordnál, **`at`** — nem `start` — a strumnál,
+     `song_event.dart:70-95,137-151`), NEM tick-alapúak; a `TempoMap` viszont
+     tick-alapú (`BeatPosition`, 480 PPQ) — ez a kétféle időbázis valódi,
+     kimért tény, ld. ADR 0116 Döntés 3.
+2. **Erőforrás-tulajdonlás:** ennek a körnek nincs lease/lock/handle/
+   subscription jellegű erőforrása (tiszta érték-transzformáló adapter,
+   írás nélkül) — a szabály nem alkalmazható.
+
+**ADR 0116 felvéve** (`docs/adr/0116-legacy-song-setlist-migration-boundary.md`,
+a lenti §4 táblába bekötve, az `ai-router` TOML `allowed_paths`-ából
+SZÁNDÉKOSAN kihagyva — ld. a §4 alatti megjegyzést és a Router CI
+`test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+szerződését) négy, a briefben implicit hagyott döntés formalizálására:
+
+- **`LegacyMigrationReport` önálló, adapter-lokális report-típus** — nem a
+  `SongValidationReport` (dokumentum-szerkezeti) vagy az `ImportWarning`
+  (UI-célú) kiterjesztése; a `SongSource.warningSummary`-be egy lapos
+  vetület kerül codec round-trip célból (ADR 0116 Döntés 1).
+- **`Meter(beatsPerBar, 4)` mindig** — a legacy modellnek nincs denominator
+  mezője, csak nyolcad-alapú `pattern`-hossz (ADR 0116 Döntés 2).
+- **Esemény-időzítés közvetlen szorzással, nem kumulatív összegzéssel** —
+  ugyanaz az „egyetlen kerekítési pont" elv, mint ADR 0093 §1.1, a
+  wall-clock `Duration` mezőkre alkalmazva (ADR 0116 Döntés 3).
+- **`SongSectionKind.custom`, „Full Song" névvel** a tagolatlan legacy dalra
+  — egyik tagolt kind sem igaz állítás egy section-mentes legacy rekordról
+  (ADR 0116 Döntés 4).
+
+Nincs más eltérés; az acceptance criteria és a §5 kötött döntések
+változatlanok, az ADR ezeket egészíti ki, nem írja felül.
+
 ## 1. Cél
 
 A legacy Song/Setlist rekordok veszteségmentes, determinisztikus V2 domain-adaptálása tartós írás vagy legacy törlés nélkül.
@@ -97,12 +151,22 @@ A legacy Song/Setlist rekordok veszteségmentes, determinisztikus V2 domain-adap
 | `test/features/song_trainer/data/migration/legacy_setlist_adapter_test.dart` | ÚJ | setlist esetek |
 | `test/features/song_trainer/data/migration/legacy_parity_test.dart` | ÚJ | R01 parity mérce |
 | `docs/rounds/e03-r06-legacy-song-setlist-adapters.md` | meglévő | §10 handoff |
+| `docs/adr/0116-legacy-song-setlist-migration-boundary.md` | ÚJ, pre-flight írta | report-boundary + meter/section/timing döntések (§0.0) |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
 `.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
 `docs/adr/**`. ADR-fájl csak akkor kivétel, ha a pre-flight ütközésmentes
 exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
 Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
+**A pre-flight `docs/adr/0116-legacy-song-setlist-migration-boundary.md`-t
+kivételként felvette a §4 táblába (ld. fent és §0.0) — ez az EGYETLEN
+`docs/adr/**` alatti engedélyezett fájl ebben a körben, az implementer
+tartalmilag NEM módosítja, csak ha a §11 review explicit kéri. A fájl
+SZÁNDÉKOSAN NINCS az `ai-router` TOML `allowed_paths` listáján — az
+implementer-modell sosem nyúl hozzá (ld. `docs/rounds/e03-r01-baseline-and-boundaries.md`
+§4 záró bekezdése és a Router CI `test_epic3_brief_metadata.py` szerződése;
+a `main`-en ma élő E03-R05-brief pontosan az ellenkező hiba miatt piros —
+lásd a záró jelentésben).
 
 ## 5. Kötött architekturális döntések
 
