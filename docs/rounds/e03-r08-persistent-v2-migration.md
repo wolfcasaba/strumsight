@@ -1,6 +1,7 @@
 # E03-R08 — Legacy adatok tartós V2 migrációja
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-02, orchestrátor:
+  Claude Sonnet 5, mérési baseline: `main` @ `2ca0b5a`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 8; §3.4, §18
 - **Branch:** `codex/e03-r08-persistent-v2-migration`
 - **Előfeltétel:** E03-R07 merge
@@ -54,6 +55,51 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - A legacy Songs/Setlists továbbra is olvasható és nem törlendő.
 - Migration version csak teljes song+setlist siker után írható.
 
+**Pre-flight (2026-08-02, `main` @ `2ca0b5a`, orchestrátor: Claude Sonnet
+5) — három mért drift, mind [ADR 0117](../adr/0117-song-storage-migrator-boundary.md)-ben
+formalizálva:**
+
+1. **Legacy JSON elérés fájllista-bővítés nélkül (ADR 0117 Döntés 1).**
+   `grep -rn "StorageKeys.songs\|StorageKeys.setlists"` megmutatta, hogy ma
+   a `songs`/`setlists` feature (`lib/features/songs/data/*_repository.dart`)
+   egy `JsonCollectionStore<Song>`/`<Setlist>`-et nyit a
+   `StorageKeys.songs`/`StorageKeys.setlists` kulcsokon, és TÍPUSOS
+   `Song`/`Setlist` objektumot ad — a `LegacySongReader.readSong`/
+   `readSetlist` viszont nyers `Map<String, dynamic>`-et vár (ADR 0116). A
+   `lib/features/songs/public.dart` csak `Song`-ot exportál, `Setlist`-et és
+   a repository interfészt nem, és a `crossFeatureImportsMustUsePublicApi`
+   architektúra-szabály (`tool/check_architecture.dart`) miatt a migrátor
+   nem nyúlhat a `songs` feature belsejébe. A `public.dart` bővítése
+   fájllista-tágítás lenne (tiltott). **Feloldás:** a migrátor egy MÁSODIK,
+   saját `JsonDocumentStore`-példányt nyit ugyanazon a két kulcson —
+   ez `lib/core/storage/**` importot igényel (core, nem feature), a
+   `songs`/`setlists` feature-t és a `public.dart`-ot érintetlenül hagyja.
+   Csak-olvasás, nincs írási ütközés.
+2. **Checkpoint/version marker perzisztencia (ADR 0117 Döntés 2).** A
+   `StorageKeys` (`lib/core/storage/storage_keys.dart`) nincs a §4 listán —
+   új key-value kulcs felvétele tilos zóna, és a R07 HANDOFF-konvenció is
+   kizárja a `SharedPreferences`/`KeyValueStore` útvonalat
+   `SongDocument`-hez kötődő tartalomra. **Feloldás:** a
+   `song_migration_version_store.dart` egy JSON dokumentumot ír a songs-root
+   alá a MEGLÉVŐ (R07) `AtomicFileWriter`-en át — nincs új perzisztencia-
+   primitíva, nincs `StorageKeys` érintés.
+3. **Setlist-lépés hatóköre (ADR 0117 Döntés 3).** Az Epic 3 fájllistájában
+   (`find lib/features/song_trainer -type f`) nincs V2 setlist domain modell
+   vagy repository, és a kör §4 listája sem ad hozzá ilyet. **Feloldás:** a
+   setlist-lépés ebben a körben a MÁR MERGE-ELT `LegacySetlistAdapter.adapt()`
+   futtatása a sikeresen migrált songbook felett, és az eredmény (report +
+   unresolved lista) a migráció completion-summary/state része — nincs V2
+   setlist perzisztencia (konzisztens a §3 "Kívül — V2 Library UI"
+   tilalommal).
+
+Mért, változatlan tény (R06, MÁR MERGE-ELT, ezt a kör nem módosíthatja,
+H2): `LegacySongAdapter.adapt()` a V2 `SongId`-t közvetlenül
+`SongId(record.id)`-ként állítja elő — a legacy song ID és a V2 SongId
+AZONOS. Ez a migrátor idempotencia-kulcsa: restart után ugyanarra a legacy
+ID-ra a `SongRepository.create()` `SongRepositoryErrorCode.alreadyExists`-t
+ad, amit a migrátor "már kész, ellenőrizd read-back parityvel, ne írj
+újra" jelként kezel — nem hiba.
+
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
 
@@ -94,6 +140,7 @@ A legacy rekordok újraindítható, adatvesztésmentes, rekord-szintű migráci�
 | `test/features/song_trainer/application/migration/song_storage_migrator_test.dart` | ÚJ | failure/restart mátrix |
 | `test/features/song_trainer/application/migration/song_storage_migrator_wiring_test.dart` | ÚJ | production provider persistence |
 | `docs/rounds/e03-r08-persistent-v2-migration.md` | meglévő | §10 handoff |
+| `docs/adr/0117-song-storage-migrator-boundary.md` | ÚJ, pre-flight | legacy read path / checkpoint persistence / setlist scope pinning |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
 nem felsorolt `.github/**`, más feature belső fájlja és más kör briefje.
