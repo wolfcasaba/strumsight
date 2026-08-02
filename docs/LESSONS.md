@@ -2193,15 +2193,34 @@ mergeCommit`) közvetlenül megnézhető — ez a merge_sha-tól függ, nem a
 main jelenlegi állapotától, tehát immunis bármely, az ablakban landoló,
 független commitra. Ha nincs megtalálható PR (pl. a heal nem PR-en
 keresztül zárt), az őrszem óvatosságból visszaesik a régi teljes-main
-ujjlenyomatra. Regressziós tesztek (a valódi, mért branch/PR/commit-
-adatokkal — `heal/E03-R05-H6-1` → PR #61 → `3b4707f`, és a valódi
-`round-gate.sh`-t módosító `6d61e23` mint pozitív eset):
+ujjlenyomatra.
+
+**Második mérés, útközben (ugyanez a kör):** az első regressziós-teszt
+verzió a VALÓDI `3b4707f`/`6d61e23` commitokra és az élő `gh pr list`-re
+hivatkozott — ez a CI-dispatch első futásán ELBUKOTT (2/125), mert (1) a
+`router-ci.yml` futtatóján `gh` nincs `gh auth`-olva (élő hálózati hívás
+néma üresre fut), és (2) az `actions/checkout@v4` **sekély** klónt hoz
+(`fetch-depth=1`) — a régi, előzmény-commitok (`6d61e23`, `3b4707f^`)
+egyszerűen nincsenek meg a runneren. A javítás: a `gh`-t egy PATH-stub
+váltja (offline, `FAKE_GH_*` env-változókból felel), a `merge_sha`-hoz
+pedig egy VALÓDI, feloldható commit-objektumot építünk plumbing-
+parancsokkal (`git read-tree`/`hash-object`/`write-tree`/`commit-tree`)
+a checkout **jelenlegi, valódi HEAD-je** fölé, privát
+`GIT_INDEX_FILE`-on át — sem a working tree-t, sem a real indexet, sem
+egyetlen ref-et nem érint, és csak a HEAD-re támaszkodik, amit egy
+depth=1 klón is tartalmaz. Regressziós tesztek:
 `tools/tests/test_pipeline_integration.py::
-test_heal_pr_number_finds_the_real_h6_heal_pr_by_its_deterministic_branch_name`,
-`::test_heal_pr_gate_violation_ignores_a_concurrent_unrelated_commit_and_catches_a_self_touch`.
+test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list`,
+`::test_heal_pr_gate_violation_ignores_a_clean_diff_and_catches_a_gate_touch`.
 
 **Tanulság:** egy őrszem, ami "mércét gyengített-e a javítás" kérdésre
 válaszol, a JAVÍTÁS SAJÁT DIFFJÉT nézze (PR/commit-hatókör), ne a
 felügyelt ág két időpontbeli, teljes állapotát — az utóbbi bármilyen,
 az időablakban landoló, a javítástól FÜGGETLEN legitim változást a
-javításnak tulajdonít.
+javításnak tulajdonít. **Másodlagos tanulság:** egy `tools/tests`
+regressziós teszt, ami élő `gh`-ra vagy régi, előzmény-commitokra
+hivatkozik, csak a helyi (mért gh-auth és teljes klón) gépen zöld — a
+tényleges gate ezt a valós CI-runneren (sekély klón, auth nélküli `gh`)
+futtatja, és csak ott derül ki a hamis biztonságérzet; a PR-t addig nem
+tekintjük zöldnek, amíg a `gh workflow run` + `gh run watch` ezt nem
+igazolja ugyanazon a `headSha`-n.
