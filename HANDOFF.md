@@ -672,8 +672,8 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > (`test_epic3_brief_metadata.py`, E03-R05 brief TOML-drift) továbbra is
    > pirosít — ez az [[L59]]-ben már dokumentált, önálló felhatalmazású
    > önjavító kört vár, SZÁNDÉKOSAN érintetlen ebben a körben (§2 hatóköre
-   > csak a MEGÁLLT — E03-R08 — kör briefjére terjed ki). Részletek:
-   > `docs/LESSONS.md` L61.
+   > csak a MEGÁLLT — E03-R08 — kör briefjére terjed ki). PR #67, `3725f09`.
+   > Részletek: `docs/LESSONS.md` L61.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
