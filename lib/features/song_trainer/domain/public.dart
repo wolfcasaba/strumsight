@@ -19,9 +19,11 @@
 library;
 
 export 'models/backing_audio_track.dart';
+export 'models/import_warning.dart';
 export 'models/key_map.dart';
 export 'models/meter_map.dart';
 export 'models/song_asset_reference.dart';
+export 'models/song_capability.dart';
 export 'models/song_document.dart';
 export 'models/song_event.dart';
 export 'models/song_id.dart';
@@ -33,6 +35,10 @@ export 'models/song_measure.dart';
 export 'models/song_section.dart';
 export 'models/song_source.dart';
 export 'models/song_track.dart';
+export 'models/song_validation_report.dart';
 export 'models/tempo_map.dart';
 export 'services/note_track_analyzer.dart';
+export 'services/song_capability_resolver.dart';
+export 'services/song_normalizer.dart';
 export 'services/song_time_map.dart';
+export 'services/song_validator.dart';

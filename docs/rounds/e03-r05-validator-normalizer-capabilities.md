@@ -233,10 +233,67 @@ vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revízió
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
-A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
-csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
-Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+**Státusz:** `DONE` (2026-08-02, implementer: Codex MiniMax M3, branch
+`codex/e03-r05-validator-normalizer-capabilities-r2` @ `f98a027`+1).
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Útvonal | Változás |
+|---|---|
+| `lib/features/song_trainer/domain/models/import_warning.dart` | ÚJ — `ImportWarning` immutable record + `ImportWarningCode` zárt készlet (`chordUnsupported`, `notePolyphonic`, `techniqueUnknown`, `strumDirectionUnknown`). Locale-független, `library;` dokumentáció, nincs framework import. |
+| `lib/features/song_trainer/domain/models/song_capability.dart` | ÚJ — `SongCapabilityProfile` (4 profil: importPreview/persist/trainer/export), `SongCapability` (display + scoring önálló tengely), `SongChordCapability`, `SongPitchCapability`, `SongCapabilityReport`. A `songCapabilityProfileFromCode` fail-closed helper. |
+| `lib/features/song_trainer/domain/models/song_validation_report.dart` | ÚJ — `SongValidationSeverity` (fatal/warning), `SongValidationCode` zárt készlet, `SongValidationIssue` immutable record, `SongValidationReport` immutable report + `empty` konstans, `hasFatalIssue` / `isPersistable` getterek. Deterministic ordering: severity asc, code asc. |
+| `lib/features/song_trainer/domain/services/song_validator.dart` | ÚJ — `SongValidator` + top-level `songTrainerChordRootIsSupported`. Soha nem dob (acceptance: "Validator ismeretlen/rossz inputnál reportot ad, nem nyers exceptiont"). Cross-collection konzisztenciát nézi: section range vs. `measures.length`, section átfedés, `targetChordId` validáció, polyphonic note track detection (`NoteTrackAnalyzer` collaborator), chord support grammar (ADR 0114 §Döntés 1: önálló, domain-lokális, `Root[m?]` zárt grammatika, sosem a `practice/legacyPracticeChordLabel` szótár), unknown technique, ismeretlen strum direction. |
+| `lib/features/song_trainer/domain/services/song_normalizer.dart` | ÚJ — `SongNormalizer` stateless pure service. Canonical ordering: track-ok `(kind, track.id)`, chord/note események `(start, id)`, strum/lyric/marker `(at, id)`, sections `(startMeasure, id)`, measures `(index)`, markers `(measureIndex, id)`, assets `(id)`. ID-ket soha nem írja újra (acceptance §5 kötött döntés 4). Short-circuit: ha minden kollekció már canonical, a bemeneti `SongDocument` referenciát adja vissza (megfigyelhető a `normalize(x) == x` szerződés). |
+| `lib/features/song_trainer/domain/services/song_capability_resolver.dart` | ÚJ — `SongCapabilityResolver`. Tiszta függvény `(report, profile) → report`. A severity → capability szerződés: `hasFatal` ⇒ minden `canPersist/canImportPreview/canTrain/canExport = false`, a chord/pitch axis-ok `display`/`scoring` mezői is `false`. A warning szintű leletek csak a releváns axis `scoring` mezőjét downgradelik, a `display` és a `canPersist` tengelyek érintetlenek maradnak (acceptance §6 mátrix 4 kombinációja megmarad). |
+| `lib/features/song_trainer/domain/public.dart` | MÓDOSÍTÁS — 6 új export (3 model + 3 service); minden meglévő export változatlan. |
+| `test/features/song_trainer/domain/song_validator_test.dart` | ÚJ — 15 teszt, 4 csoport: empty/well-formed baseline, §6 mátrix (profile × severity), determinism, chord-root grammar. Minden mátrix-sor explicit. |
+| `test/features/song_trainer/domain/song_normalizer_test.dart` | ÚJ — 10 teszt, 3 csoport: idempotencia (a §6 acceptance explicit tesztje), canonical ordering (minden track subtype + minden kollekció), determinism. |
+| `test/features/song_trainer/domain/song_capability_resolver_test.dart` | ÚJ — 9 teszt, 4 csoport: §6 mátrix, per-profile függetlenség (fatal minden profilra kihat, warning egyikre sem), determinism, profile code round-trip. |
+| `test/property/song_normalizer_property_test.dart` | ÚJ — 4 property teszt: idempotencia, track-ID megőrzés, event-identity megőrzés (multiset equality track-azonosítóra szűrve), canonical event ordering monotonitás. `PROPERTY_SEED` env, default 42, CI átadja a run id-t (a többi property gate-tel azonos séma). |
+
+### 10.2 Futtatott parancsok és tényleges eredmények
+
+- `tools/round-gate.sh test/features/song_trainer/domain/song_validator_test.dart test/features/song_trainer/domain/song_normalizer_test.dart test/features/song_trainer/domain/song_capability_resolver_test.dart test/property/song_normalizer_property_test.dart`
+  → kimenet vége:
+
+  ```
+  ═══ Gate-összegzés
+      format                                                     zöld
+      analyze                                                    zöld
+      test test/features/song_trainer/domain/song_validator_test.dart zöld
+      test test/features/song_trainer/domain/song_normalizer_test.dart zöld
+      test test/features/song_trainer/domain/song_capability_resolver_test.dart zöld
+      test test/property/song_normalizer_property_test.dart      zöld
+      architecture                                               zöld
+
+  MINDEN GATE ZÖLD. …
+  ```
+
+- `$HOME/flutter/bin/flutter test test/features/song_trainer/` → `00:13 +177: All tests passed!` (az új 38 teszt + az E01–E03-R01–R04 meglévő 139; a domain purity szkenner ismét zöld).
+- PROPERTY_SEED=1/42/1337/99999 négy seed-del a property tesztek rendre zöldek.
+
+### 10.3 Terv szerinti eltérések
+
+Nincs; a §4 fájllistája, a §5 kötött döntések, a §6 mátrix és a §0.0-ban mért
+pre-flight revízió változatlan. Az implementáció tartalmilag NEM módosítja a
+`docs/adr/0114-…` fájlt (az implementer scope-ján kívül esett, ahogy a §4
+megjegyzése előrevetítette).
+
+### 10.4 Nem futtatott ellenőrzések és ok
+
+- A CI-ban futó teljes `flutter test` suite + release APK build: az
+  outer router / orchestrátor indítja, a lokális boxon nincs Android
+  SDK (AGENTS.md §12); a futás a PR nyitásakor dispatch-elve lesz.
+- A `flutter build apk`: szándékosan nem futtatva lokálisan (ADR 0052
+  + AGENTS.md §12 — "a fejlesztői boxon nincs Android SDK").
+
+### 10.5 Következő kör
+
+- **E03-R06** (szerző: pre-flight a `docs/rounds/e03-r06-…` placeholder
+  alapján). Az importernek a `SongCapabilityReport` UI-oldali
+  leképezését és a persist-gated write path-ot kell megvalósítania —
+  ez a kör a `canPersist` zászló első fogyasztója.
 
 ## 11. Review — a független reviewer tölti ki
 
