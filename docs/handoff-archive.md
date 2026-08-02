@@ -1755,3 +1755,78 @@ Lessons: `docs/LESSONS.md` L51 (router `resume` hamis `BLOCKED` a
 premature orchestrátor-commit miatt; `.ai/review-findings-*.md` a helyes
 findings-fájl-hely; a diff akkor is bizonyíték, ha a hívási útvonal
 hibázott).
+
+## E03-R04 — Trackek, események és monophonic elemzés
+
+**Kör:** E03-R04 (PR [#60](https://github.com/wolfcasaba/strumsight/pull/60),
+squash `5c01149`, [ADR 0113](adr/0113-song-track-event-model.md)).
+Implementer: **auto MiniMax-first router** (ADR 0088) — kezdeti M3-attempt
+(gate elsőre zöld) + **1 érdemi Terra/Codex javító kör** (a BLOCKER-t Codex
+zárta). Orchestrátor: **Claude Sonnet 5**.
+
+**Pre-flight (ADR 0113):** a brief §9 két kockázatot nevezett meg a
+pre-flight hatáskörébe utalva. (1) Tuning-duplikáció: a mérés megerősítette,
+hogy a `song_metadata.dart`/`song_document_codec.dart` már ma a core
+`Tuning`-ot használja — az új `SongInstrument` ugyanezt az egyetlen
+canonical típust hordozza, nem definiál sajátot. (2) Sealed codec
+unknown-subtype: a codec a meglévő `sourceTypeUnknown` fail-loud mintát
+követi track/event szinten is (`trackTypeUnknown`/`eventTypeUnknown`), néma
+eldobás nélkül. Egy harmadik, mért ütközés: a core `StrumDirection` enum
+csak `down`/`up`-ot hordoz, az SDD §11.3 viszont egy `unknown` állapotot is
+előír, és `core/music/strum.dart` nincs az `allowed_paths` listán (H3
+tilos zóna). Feloldás: `SongStrumEvent.direction: StrumDirection?`
+(nullable core enum, `null` = unknown) — nincs core-fájl módosítás, nincs
+párhuzamos enum.
+
+**Elkészült:** sealed `SongTrack`/`SongEvent` hierarchia (chord/strum/note/
+lyrics/marker/backing), `SongInstrument` (opcionális core `Tuning`),
+`SongNoteTechnique` (8 ismert technika + `unknown` escape hatch, raw/display
+megőrzéssel), `NoteTrackAnalyzer` (overlap/tie/monophonic report), codec
+bővítés kanonikus (start asc → track id → event id) sorrenddel és fail-loud
+ismeretlen-altípus kezeléssel, `SongDocument.tracks` mező.
+
+**Review, 1 érdemi javító kör:** az első menet reviewja (izolált `/tmp`
+rsync-klón — a diff a `resume`-ciklus lezárásáig UNCOMMITTED maradt,
+`docs/LESSONS.md` L51 szerint —, saját gate-újrafuttatás, scope-audit,
+**adverzariális mutáció-próba**) **1 BLOCKER**-t talált: a
+`NoteTrackAnalyzer.analyze` overlap-detekciója csak a start-sorrend szerinti
+KÖZVETLEN megelőző eseményt hasonlította össze az aktuálissal (nem futó
+maximumot / aktív-halmazt), ezért egy korai, azonos-pitchű tie (ami helyesen
+`tieCandidateCount`-ba esik, nem overlapbe) megszakíthatta a láncot, és egy
+későbbi, ATTÓL FÜGGETLEN, valódi eltérő-pitch overlap némán kimaradt —
+`isMonophonic` hamisan `true`-t adott egy ténylegesen polifón track-re. Az
+önálló, kézzel számított referencia-szcenárió (A: 0–10000ms pitch 60; B:
+100–200ms pitch 60 — tie A-val; C: 5000–5100ms pitch 62 — valódi overlap
+A-val, B-t nem érinti) a javítás előtt PIROS volt (`Expected: false / Actual:
+<true>`), a javítás után ZÖLD. 1 MINOR (`SongNoteTechnique` normalizálása
+sima `ArgumentError`-t dob a kör saját stabil-kód mintája helyett) és 1 NOTE
+(egy hibakód-elnevezés pontatlan) nyitva maradt follow-upként — egyik sem
+blokkolt, mert nem funkcionális hiba.
+
+**M3-attempt-könyvelési incidens (orchestrátor-hiba, nem model-hiba):** az
+orchestrátor egy `resume` hívást a valódi modellhívás megkezdése ELŐTT,
+gyakorlatilag azonnal megölt (helytelenül `&`-nal háttérbe küldve — a kör
+kifejezetten tiltja a háttér-futtatást). A router saját recovery-logikája
+(`RECOVERED_M3_CALL_2` fázis, `tools/ai_router/router.py`) a megszakított
+hívást tévesen "helyreállíthatónak" ítélte, mert a worktree-ben MÁR volt egy
+scope-tiszta, zöld gate-et adó diff — csakhogy az az ELSŐ (kezdeti) M3-menet
+diffje volt, nem a megszakított második hívásé. Ez elfogyasztotta az M3
+kétkörös keretének mindkét attemptjét anélkül, hogy a második attempt
+valódi modellhívást tartalmazott volna. Nettó hatás: a router a
+KÖVETKEZŐ `resume` hívást egyenesen Terrára (Codex) irányította — ami
+pontosan egybeesik a round §2 motor-eszkalációs szabályával (M3 egy
+javító kör → utána Codex), tehát a végkimenet a protokollnak megfelelő
+maradt, csak a köztes könyvelés forrása nem valódi M3-hiba volt. A
+`tools/ai_router/router.py`-t az orchestrátor NEM módosította (tilos
+zóna); a jelenség dokumentálva a review-jelentésben és itt.
+
+Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer — kezdeti diff +
+javított diff —, mindkétszer izolált klónban) + teljes
+`test/features/song_trainer` regresszió **143/143 zöld**. CI
+[30736717752](https://github.com/wolfcasaba/strumsight/actions/runs/30736717752)
+zöld, `headSha` (`50619db`) egyezik a merge-elt HEAD-del. Squash-merge
+[PR #60](https://github.com/wolfcasaba/strumsight/pull/60) → `5c01149`,
+független post-merge gate-ellenőrzés (friss klón, `origin/main`) szintén
+zöld.
+
+Review-jelentés: [`docs/reviews/e03-r04-tracks-events-monophonic-analysis-review.md`](reviews/e03-r04-tracks-events-monophonic-analysis-review.md).
