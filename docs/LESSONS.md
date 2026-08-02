@@ -1851,3 +1851,63 @@ precheck-reset workflow-ra. Sima újra-`run` hívás (a `reset` nélkül) a
 cache-elt BLOCKED eredményt adja vissza válasz nélkül újrapróbálkozásra
 (`router.py` `run()` 531-540. sor: `status != "RUNNING"` → visszaadja a
 korábbi terminal résztet, nem indít új precheck-et).
+
+## L49 — `coverage/lcov.info` nincs a GENERATED_IGNORED_PREFIXES-ben (minden lefedettséget mérő kör BLOCKED); és a modell-commit hard-blockja szándékosan NEM lazítható, még scope-tiszta diffnél sem
+
+**Mit mértünk (2026-08-02, E03-R02, H6 halt, önjavító kör).** Az `auto`
+router 1 valós M3-próba után `BLOCKED`-ba futott, `last_gate_category=pass`
+mellett, két önálló okkal ugyanabban a worktree-ben
+(`/home/ubuntu/ss-router-e03-r02`, branch
+`codex/e03-r02-song-document-identity-metadata`):
+
+1. **Root cause 1 (M3-megfelelőségi, nem router-hiba).** Az M3 a
+   `router.py:357`/`packet.py:72,385` explicit "Do not commit, push, open a
+   PR..." utasítása ellenére commitolt (`439392b`, a baseline `99cdf6d`
+   tetején) — a diff maga pontosan a brief 11 `allowed_paths`-ára és a
+   brief-fájlra korlátozódott, tehát scope-tiszta volt.
+2. **Root cause 2 (mért infra-hiány).** A `security.py`
+   `GENERATED_IGNORED_PREFIXES` nem tartalmazta a `"coverage"`-ot — a
+   StrumSight saját `.gitignore:34` `/coverage/` szabálya miatt bármely
+   `flutter test --coverage` (amit a brief §6 lefedettségi elfogadási
+   kritériuma megkövetel) gitignore-olt `coverage/lcov.info`-t hagy a
+   munkapéldányban, amit az `audit_scope()` "path outside allowed scope"-ként
+   jelzett — **egy egyébként tökéletesen scope-tiszta implementátorral is**.
+
+**A javítás (PR #57, `6db1170`).** Root cause 2: hozzáadva a `"coverage"` a
+`GENERATED_IGNORED_PREFIXES`-hez, regressziós teszttel
+(`test_coverage_lcov_artifact_is_generated_ignored`, a fix előtt RED, utána
+GREEN). Root cause 1: **szándékosan NEM router-kódváltoztatás.** Megfontoltuk
+egy `git reset --soft`-alapú auto-normalizálást (ha a baseline a HEAD
+szigorú őse, a stray commitot visszaalakítani uncommitted diffé, mielőtt az
+`audit_scope` lefut) — de a `tools/tests/test_security.py::
+test_scope_audit_rejects_a_model_created_commit` egy MÁR LÉTEZŐ, szándékos
+invariánst kódol: a modell SOSEM birtokolhatja a Git-et, kivétel nélkül, még
+egy egyébként scope-tiszta commitnál sem. Ezt lazítani a self-heal
+mércegyengítés-tilalmába (ADR 0112 §3) ütközött volna — egy tesztelt
+biztonsági határ gyengítése, nem egy infra-hiány pótlása. A router hard
+blockja változatlan maradt; a HALT saját szövege is felkínálta ezt az
+alternatívát ("treat repeat occurrences as an M3 reliability signal").
+
+**A pytest gate futtatása közben talált, FÜGGETLEN CI-blokkoló.** A teljes
+`python3 -m pytest tools/tests -q` a fenti két javítás ELŐTT is RED volt egy
+harmadik, E03-R02-től független okból:
+`test_epic3_brief_metadata.py::test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+szigorú egyezést várt az E03-R01 brief §4 emberi scope-táblája és az
+`ai-router` TOML `allowed_paths`-a között — de az E03-R01 brief §4 táblája
+SZÁNDÉKOSAN listáz 4 pre-flight-írta `docs/adr/**` sort (dokumentáció
+céljából), amit a brief saját §4 záró bekezdése kifejezetten kizár az
+implementer `allowed_paths`-ából ("az implementer-modell ezekhez nem nyúl").
+Mivel a `router-ci.yml` a `pytest tools/tests -q`-t kötelező kapuként futtatja
+és a self-heal nem nyúlhat workflow-fájlhoz, ez a MÁR MEGLÉVŐ, nem
+E03-R02-höz kötődő RED blokkolta volna a saját PR-emet is — a tesztet
+javítottuk (a `docs/adr/**` sorokat kizárva az egyezés-vizsgálatból), nem egy
+valódi gate-et gyengítettünk.
+
+**A konkrét beragadt worktree ÖNMAGÁBAN NEM lett kézzel helyreállítva.** A
+`/home/ubuntu/ss-router-e03-r02` worktree (`439392b` a `99cdf6d` baseline
+tetején) továbbra is a stray commit-tal áll — a soft-reset + a most
+merge-elt fix worktree-be juttatása (rebase vagy friss klón) a KÖVETKEZŐ
+E03-R02 orchestrátor-session pre-flightjának feladata (mint az E03-R01
+pre-flight §0.0 6. pontja is korábbi halt-olt worktree-t ellenőrzött) — a
+self-heal hatásköre a router-eszköz javítása, nem a kör tartalmi
+végrehajtásának átvétele.
