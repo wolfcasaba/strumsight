@@ -1,6 +1,8 @@
 # E03-R02 — SongDocument V2 azonosítók és metaadatok
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-02, Claude Sonnet 5;
+  eredeti tervezési baseline: `main` @ `eeb4f6d`; pre-flight mérési baseline:
+  `origin/main` @ `2f607e5`, ld. §0.0)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 2; §9.1–9.4
 - **Branch:** `codex/e03-r02-song-document-identity-metadata`
 - **Előfeltétel:** E03-R01 merge
@@ -56,13 +58,97 @@ acceptance, hiányzó fixture/licence, vagy nem reprodukálható mérce esetén:
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-- R01 után a feature boundary létezik, de V2 domain modell még nincs.
-- A legacy `lib/features/songs/model/song.dart` nem bővíthető V2-vé.
-- A közös core music value object csak public/core importon keresztül használható.
+**Státusz: PLANNING** (pre-flight elvégezve, Claude Sonnet 5, 2026-08-02,
+mérési baseline `origin/main@2f607e5`, E03-R01 mérgeelve `d5ef6e5`-nél).
 
-A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
-szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
-Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
+Mért tények az eredeti három állítás mellett:
+
+1. **`R01 után a feature boundary létezik, de V2 domain modell még nincs`
+   — IGAZ.** `find lib/features/song_trainer` csak az üres
+   `public.dart`-ot adja; `test/features/song_trainer/` csak a baseline
+   parity tesztet tartalmazza (E03-R01 evidencia, nem ez a kör).
+2. **`A legacy Song nem bővíthető V2-vé` — IGAZ, nem érintett** (ez a kör a
+   legacy `lib/features/songs/**`-hoz nem nyúl).
+3. **`A közös core music value object csak public/core importon keresztül
+   használható` — IGAZ, mérve.** `lib/core/music/music.dart` egy tiszta
+   Dart barrel (`export 'tuning.dart'` stb.), a `_isSharedDomain` győz
+   architektúra-őr (lásd 5. pont) `lib/core/music/` alá tartozó fájlokra
+   framework-függetlenséget kényszerít; a Practice V2 domain már ma is
+   közvetlenül importál egyedi `core/music/*.dart` fájlokat (pl.
+   `compiled_practice_target.dart` → `core/music/strum.dart`) — ugyanez a
+   minta követhető a `SongMetadata.defaultTuning` mezőnél (`core/music/
+   tuning.dart` importja megengedett, nem "más feature import").
+
+**Négy új, mért drift, dokumentált feloldással (nem a brief hibája — a
+scope-tábla és az SDD egy-egy pontja között van rés, ahogy a kör §9
+kockázatai előre jelezték):**
+
+4. **SongDocument skeleton mezőkészlet — a §9.1 teljes mezőlistája ebben a
+   körben NEM építhető szó szerint.** Az SDD Kör 2 "Feladatok" 5. pontja
+   ("Hozd létre a minimális SongDocument skeleton modellt üres listákkal")
+   a §9.1 teljes mezőkészletét sugallja (`sections`, `measures`, `tracks`,
+   `tempoMap`, `meterMap`, `keyMap` is), de ezek típusai
+   (`SongSection`, `SongMeasure`, `SongTrack`, `TempoMap`, `MeterMap`,
+   `KeyMap`) **nincsenek** ennek a körnek az engedélyezett-fájllistáján —
+   a Kör 3 (SDD 3542. sor) hozza létre őket, és ez a kör §3 "Kívül" sora
+   kifejezetten kizárja a "section/time map és track/event tartalom"-at.
+   **Feloldás:** a `SongDocument` E03-R02-ben csak az ebben a körben
+   létező típusokra épülő mezőket tartalmazza — `schemaVersion`, `id`,
+   `revision`, `metadata`, `source`, `assets` (`List<SongAssetReference>`),
+   `markers` (`List<SongMarker>`), `createdAt`, `updatedAt`. A `sections`/
+   `measures`/`tracks`/`tempoMap`/`meterMap`/`keyMap` mezők **E03-R03-ban**
+   bővítik a modellt, amikor a típusaik megszületnek — ez a kör §6
+   acceptance-táblája is kizárólag ID/metadata/codec/import-audit
+   kritériumot ír elő, sem section-t, sem track-et nem említ, ami
+   megerősíti ezt az olvasatot. A kör-brief §6 acceptance criteria a
+   mérvadó ezzel a ponttal szemben, nem az SDD Kör 2 feladatlista egy
+   implicit részlete.
+5. **A `tool/check_architecture.dart` `_isSharedDomain` allowlistje ma NEM
+   tartalmazza a `lib/features/song_trainer/domain/`-t** (csak
+   `lib/core/music/`, `lib/core/audio/codec/` és
+   `lib/features/practice/domain/` van benne, mérve
+   `tool/check_architecture.dart:227-230`) — a `tools/round-gate.sh`
+   architecture lépése tehát **nem** fogja gépileg kikényszeríteni a §6
+   negyedik acceptance sorát ("Domain transitív import auditja nem talál
+   Flutter/Riverpod/platform/más feature importot"). A `tool/
+   check_architecture.dart` bővítése **nincs** ennek a körnek az
+   engedélyezett-fájllistáján, és a gate-et futtató infra módosítása
+   ebben a körben tilos zóna (a mérce nem módosulhat attól, akit mér).
+   **Feloldás:** az import-tisztasági audit a már engedélyezett
+   `test/features/song_trainer/domain/song_document_test.dart`-on belüli
+   külön `test(...)` blokként valósul meg, a Practice V2
+   `test/features/practice/domain/domain_purity_test.dart` bevált mintáját
+   követve (a `lib/features/song_trainer/domain/` fájljainak forrás-szintű
+   scan-je `package:flutter`/`riverpod`/`dio`/`shared_preferences`/l10n
+   import és más feature import ellen) — ez a fájl már a listán van, új
+   fájl nem kell hozzá.
+6. **A ≥90%-os line coverage kritériumra nincs gépi küszöb-gate** (a
+   `HANDOFF.md` §3 is rögzíti: "Coverage-küszöb nincs"; a CI
+   `coverage` job csak `flutter test --coverage`-t futtat és feltölti a
+   `lcov.info`-t, számot nem hasonlít össze). **Feloldás:** a handoff
+   dokumentálja a `flutter test --coverage
+   test/features/song_trainer/domain/song_id_test.dart
+   test/features/song_trainer/domain/song_document_test.dart
+   test/features/song_trainer/data/local/song_document_codec_test.dart`
+   tényleges kimenetét és az új domain fájlokra vetített lefedettségi
+   számot a `coverage/lcov.info`-ból (`lcov --list` vagy ekvivalens); a
+   review ugyanígy újraméri.
+7. **Elnevezési drift megerősítve, változatlan feloldással (a kör §9
+   kockázata már jelezte).** Az SDD §8.1 architektúra-fa (619. sor)
+   `asset_reference.dart`-ot ábrázol, de az SDD Kör 2 explicit
+   "Új fájlok" listája (3481. sor) és a kör-brief §4 egyaránt
+   `song_asset_reference.dart`-ot ír elő — ez utóbbi a mérvadó (egyezik a
+   `song_marker.dart`/`song_metadata.dart` prefix-konvencióval), a fa csak
+   illusztráció. Az útvonal (`domain/models/`, többes szám) is egyezik az
+   SDD explicit fájllistájával; az ADR 0089 prózájában szereplő egyes
+   számú `domain/model/` csak szövegbeli pontatlanság, nem irányadó a
+   fájlelnevezésre.
+
+Új ADR-t ez a pre-flight nem oszt ki: mind a négy drift a már elfogadott
+ADR 0089 §Döntés 1/2/4 keretein belül, a kör saját scope-tábláján és a
+gate-infra tilos-zónáján belül oldható fel — nincs olyan feloldás, amely
+egy már merge-elt ADR-t módosítana vagy egy lezárt kör viselkedését
+érintené.
 
 ## 1. Cél
 
