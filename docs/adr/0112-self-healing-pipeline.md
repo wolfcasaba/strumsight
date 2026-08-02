@@ -85,6 +85,21 @@ a lánc áll, és a user dönt.
 Jelzés nélküli önjavító session = a lánc áll (ugyanaz a szabály, mint a
 kör-sessionnél: jelzés nélküli futás = bukott futás).
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-02) — STOPPED feladat visszaállítása kizárólag zöld heal-gate után
+
+Egy önjavítás merge-elhet olyan upstream perzisztencia- vagy infrastruktúra-
+javítást, amely egy már STOPPED állapotú kör meglévő worktree-jének célzott
+gate-jét zöldre váltja. Ilyenkor a `recover-stopped-after-heal` operátori
+út csak akkor teheti a feladatot `READY_FOR_REVIEW` állapotúvá, ha a friss
+worktree-manifest és a teljes allowlist scope-audit zöld, majd ugyanazon a
+worktree-n a kör célzott gate-je is zöld.
+
+Ez **nem reset**: a korábbi M3-/Terra-kísérletszámok és Terra-reservation
+megmaradnak, új modellhívás nem indul. Csak a korábbi, heal által felülírt
+terminális intent törlődik; az eredmény továbbra is független review és a
+szokásos CI-kapu előtt áll. Scope- vagy gate-hiba fail-closed `StateError`,
+tehát a recovery nem gyengítheti a mércét és nem rejthet el piros eredményt.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör

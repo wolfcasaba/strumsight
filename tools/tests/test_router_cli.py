@@ -254,6 +254,109 @@ class RouterCliTest(unittest.TestCase):
         self.assertNotIn("terra_terminal_status", payload)
         self.assertNotIn("terra_terminal_reason", payload)
 
+    def test_heal_recovery_preserves_exhausted_attempts_after_a_green_gate(self) -> None:
+        # E03-R08 H4: a structural codec self-heal landed on main while the
+        # existing round branch still tested the older codec.  Its 2 M3 + 1
+        # Terra budget was legitimately exhausted, so `reset` would erase
+        # audit history.  A clean, allowed worktree may instead re-enter the
+        # independent-review state only after its target gate is green.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "worktree"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Router Test"], cwd=root, check=True)
+            (root / "lib").mkdir()
+            (root / "lib" / "allowed.dart").write_text("baseline\n", encoding="utf-8")
+            subprocess.run(["git", "add", "lib/allowed.dart"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            baseline = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+
+            (root / "tools").mkdir()
+            gate = root / "tools" / "round-gate.sh"
+            gate.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  if [ \"$1\" = \"--result-json\" ]; then result=$2; shift 2; continue; fi\n"
+                "  shift\n"
+                "done\n"
+                "printf '%s\\n' '{\"outcome\":\"pass\",\"command_exit_code\":0}' > \"$result\"\n",
+                encoding="utf-8",
+            )
+            gate.chmod(0o755)
+            (root / "docs" / "rounds").mkdir(parents=True)
+            brief = root / "docs" / "rounds" / "e03-r08-heal.md"
+            brief.write_text(
+                "# Task\n\n```ai-router\n"
+                "schema_version = 1\nrisk = \"normal\"\n"
+                "allowed_paths = [\"lib/allowed.dart\", \"docs/rounds/e03-r08-heal.md\"]\n"
+                "gate_tests = [\"test/example_test.dart\"]\n"
+                "native_gate = false\n```\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "tools/round-gate.sh", "docs/rounds/e03-r08-heal.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "preflight"], cwd=root, check=True)
+            (root / "lib" / "allowed.dart").write_text("healed\n", encoding="utf-8")
+
+            state_root = Path(directory) / "state"
+            task_dir = state_root / "tasks"
+            task_dir.mkdir(parents=True)
+            (task_dir / "E03-R08.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "task_id": "E03-R08",
+                        "status": "STOPPED",
+                        "phase": "STOPPED",
+                        "reason": "task Terra budget is exhausted",
+                        "m3_attempts": 2,
+                        "terra_calls": 1,
+                        "terra_reservation": "finished-terra-review",
+                        "terra_terminal_status": "STOPPED",
+                        "terra_terminal_reason": "old codec gate failed",
+                        "baseline_manifest": {
+                            "baseline_head": baseline,
+                            "untracked_paths": [],
+                            "ignored_paths": [],
+                            "tracked_paths": [],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(CLI),
+                    "--config",
+                    str(CONFIG),
+                    "--state-root",
+                    str(state_root),
+                    "recover-stopped-after-heal",
+                    "--task",
+                    str(brief),
+                    "--worktree",
+                    str(root),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "READY_FOR_REVIEW")
+        self.assertEqual(payload["phase"], "HEAL_GATE_PASSED")
+        self.assertEqual(payload["changed_paths"], ["lib/allowed.dart"])
+        self.assertEqual(payload["m3_attempts"], 2)
+        self.assertEqual(payload["terra_calls"], 1)
+        self.assertEqual(payload["terra_reservation"], "finished-terra-review")
+        self.assertNotIn("terra_terminal_status", payload)
+        self.assertNotIn("terra_terminal_reason", payload)
+
     def _terra_status(
         self, state_root: Path, *, config: Path = CONFIG
     ) -> subprocess.CompletedProcess:
