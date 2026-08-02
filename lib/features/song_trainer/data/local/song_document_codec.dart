@@ -8,11 +8,16 @@ import '../../domain/models/song_document.dart';
 import '../../domain/models/song_event.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_instrument.dart';
+import '../../domain/models/key_map.dart';
+import '../../domain/models/meter_map.dart';
 import '../../domain/models/song_marker.dart';
+import '../../domain/models/song_measure.dart';
 import '../../domain/models/song_metadata.dart';
 import '../../domain/models/song_note_technique.dart';
+import '../../domain/models/song_section.dart';
 import '../../domain/models/song_source.dart';
 import '../../domain/models/song_track.dart';
+import '../../domain/models/tempo_map.dart';
 
 /// Stable codec failure on a malformed or unrecognised [SongDocument] JSON
 /// blob. Always carries a machine-readable [code]; never the offending value
@@ -54,6 +59,7 @@ abstract final class SongDocumentCodecErrorCode {
   static const String assetsNotAList = 'songDocument.codec.assets.notAList';
   static const String markersNotAList = 'songDocument.codec.markers.notAList';
   static const String tracksNotAList = 'songDocument.codec.tracks.notAList';
+  static const String structureInvalid = 'songDocument.codec.structure.invalid';
   static const String trackKindMissing =
       'songDocument.codec.track.kind.missing';
   static const String trackKindUnknown =
@@ -164,6 +170,23 @@ class SongDocumentCodec {
       ],
       'markers': <Map<String, dynamic>>[
         for (final marker in document.markers) _markerToMap(marker),
+      ],
+      'sections': <Map<String, dynamic>>[
+        for (final section in document.sections) _sectionToMap(section),
+      ],
+      'measures': <Map<String, dynamic>>[
+        for (final measure in document.measures) _measureToMap(measure),
+      ],
+      'tempoMap': <Map<String, dynamic>>[
+        for (final change in document.tempoMap.changes)
+          _tempoChangeToMap(change),
+      ],
+      'meterMap': <Map<String, dynamic>>[
+        for (final change in document.meterMap.changes)
+          _meterChangeToMap(change),
+      ],
+      'keyMap': <Map<String, dynamic>>[
+        for (final change in document.keyMap.changes) _keyChangeToMap(change),
       ],
       'tracks': <Map<String, dynamic>>[
         for (final track in orderedTracks) _trackToMap(track),
@@ -306,6 +329,12 @@ class SongDocumentCodec {
       );
     }
 
+    final sections = _sectionsFromRaw(json['sections']);
+    final measures = _measuresFromRaw(json['measures']);
+    final tempoMap = _tempoMapFromRaw(json['tempoMap']);
+    final meterMap = _meterMapFromRaw(json['meterMap']);
+    final keyMap = _keyMapFromRaw(json['keyMap']);
+
     return SongDocument(
       schemaVersion: schemaVersion,
       id: SongId(idValue),
@@ -315,10 +344,184 @@ class SongDocumentCodec {
       assets: assets,
       markers: markers,
       tracks: tracks,
+      sections: sections,
+      measures: measures,
+      tempoMap: tempoMap,
+      meterMap: meterMap,
+      keyMap: keyMap,
       createdAt: createdAt.toUtc(),
       updatedAt: updatedAt.toUtc(),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Structure and timeline
+  // ---------------------------------------------------------------------------
+
+  static Map<String, dynamic> _sectionToMap(SongSection section) =>
+      <String, dynamic>{
+        'id': section.id.value,
+        'name': section.name,
+        'startMeasure': section.startMeasure,
+        'endMeasureExclusive': section.endMeasureExclusive,
+        'kind': section.kind.name,
+        if (section.colorKey != null) 'colorKey': section.colorKey,
+      };
+
+  static Map<String, dynamic> _measureToMap(
+    SongMeasure measure,
+  ) => <String, dynamic>{
+    'index': measure.index,
+    'durationTicks': measure.durationBeats.ticks,
+    if (measure.displayNumber != null) 'displayNumber': measure.displayNumber,
+    'pickup': measure.pickup,
+    'repeatStart': measure.repeatStart,
+    if (measure.repeatEndCount != null)
+      'repeatEndCount': measure.repeatEndCount,
+    if (measure.alternateEnding != null)
+      'alternateEnding': measure.alternateEnding,
+  };
+
+  static Map<String, dynamic> _tempoChangeToMap(TempoChange change) =>
+      <String, dynamic>{'atTicks': change.at.ticks, 'bpm': change.bpm.bpm};
+
+  static Map<String, dynamic> _meterChangeToMap(MeterChange change) =>
+      <String, dynamic>{
+        'atMeasure': change.atMeasure,
+        'numerator': change.meter.numerator,
+        'denominator': change.meter.denominator,
+      };
+
+  static Map<String, dynamic> _keyChangeToMap(KeyChange change) =>
+      <String, dynamic>{
+        'atTicks': change.at.ticks,
+        'tonic': change.key.tonic,
+        'mode': change.key.mode.name,
+      };
+
+  static List<SongSection> _sectionsFromRaw(Object? raw) =>
+      _structureList<SongSection>(raw, (json) {
+        final kind = SongSectionKind.values.where(
+          (candidate) => candidate.name == json['kind'],
+        );
+        if (kind.length != 1) _invalidStructure('sections.kind');
+        return SongSection(
+          id: SongSectionId(_structureString(json, 'id')),
+          name: _structureString(json, 'name'),
+          startMeasure: _structureInt(json, 'startMeasure'),
+          endMeasureExclusive: _structureInt(json, 'endMeasureExclusive'),
+          kind: kind.single,
+          colorKey: json['colorKey'] as String?,
+        );
+      });
+
+  static List<SongMeasure> _measuresFromRaw(Object? raw) =>
+      _structureList<SongMeasure>(
+        raw,
+        (json) => SongMeasure(
+          index: _structureInt(json, 'index'),
+          durationBeats: BeatPosition.fromTicks(
+            _structureInt(json, 'durationTicks'),
+          ),
+          displayNumber: _optionalStructureInt(json, 'displayNumber'),
+          pickup: _optionalStructureBool(json, 'pickup') ?? false,
+          repeatStart: _optionalStructureBool(json, 'repeatStart') ?? false,
+          repeatEndCount: _optionalStructureInt(json, 'repeatEndCount'),
+          alternateEnding: _optionalStructureInt(json, 'alternateEnding'),
+        ),
+      );
+
+  static TempoMap _tempoMapFromRaw(Object? raw) {
+    if (raw == null) return TempoMap.constant(Tempo(120));
+    return TempoMap(
+      _structureList<TempoChange>(
+        raw,
+        (json) => TempoChange(
+          at: BeatPosition.fromTicks(_structureInt(json, 'atTicks')),
+          bpm: Tempo(_structureInt(json, 'bpm')),
+        ),
+      ),
+    );
+  }
+
+  static MeterMap _meterMapFromRaw(Object? raw) {
+    if (raw == null) return MeterMap.constant(Meter(4, 4));
+    return MeterMap(
+      _structureList<MeterChange>(
+        raw,
+        (json) => MeterChange(
+          atMeasure: _structureInt(json, 'atMeasure'),
+          meter: Meter(
+            _structureInt(json, 'numerator'),
+            _structureInt(json, 'denominator'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static KeyMap _keyMapFromRaw(Object? raw) {
+    if (raw == null) return KeyMap.constant(KeySignature(0, KeyMode.major));
+    return KeyMap(
+      _structureList<KeyChange>(raw, (json) {
+        final mode = KeyMode.values.where(
+          (candidate) => candidate.name == json['mode'],
+        );
+        if (mode.length != 1) _invalidStructure('keyMap.mode');
+        return KeyChange(
+          at: BeatPosition.fromTicks(_structureInt(json, 'atTicks')),
+          key: KeySignature(_structureInt(json, 'tonic'), mode.single),
+        );
+      }),
+    );
+  }
+
+  static List<T> _structureList<T>(
+    Object? raw,
+    T Function(Map<String, dynamic>) decode,
+  ) {
+    if (raw == null) return <T>[];
+    if (raw is! List) _invalidStructure('list');
+    return <T>[
+      for (final entry in raw)
+        if (entry is Map<String, dynamic>)
+          decode(entry)
+        else
+          _invalidStructure('entry'),
+    ];
+  }
+
+  static String _structureString(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is! String) _invalidStructure(field);
+    return value;
+  }
+
+  static int _structureInt(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is! int) _invalidStructure(field);
+    return value;
+  }
+
+  static int? _optionalStructureInt(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value == null) return null;
+    if (value is! int) _invalidStructure(field);
+    return value;
+  }
+
+  static bool? _optionalStructureBool(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value == null) return null;
+    if (value is! bool) _invalidStructure(field);
+    return value;
+  }
+
+  static Never _invalidStructure(String field) =>
+      throw SongDocumentCodecException._(
+        SongDocumentCodecErrorCode.structureInvalid,
+        field: field,
+      );
 
   // ---------------------------------------------------------------------------
   // Metadata
