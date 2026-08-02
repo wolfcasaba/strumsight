@@ -252,6 +252,35 @@ class DevelopmentRouter:
             }
         )
 
+    @staticmethod
+    def _record_provider_call(
+        state: dict[str, object],
+        phase: str,
+        profile: str,
+        outcome: CodexResult,
+        failure: FailureClass,
+    ) -> None:
+        # ADR 0112 self-heal (E03-R08 H6): mirrors _record_gate above — a
+        # STOPPED provider call previously left only the FailureClass string
+        # in state["reason"]; the CLI's own stdout/stderr (where the actual
+        # self-halt reason lives) was discarded the moment run_model()
+        # returned, making a repeat halt undiagnosable from state alone.
+        history = state.setdefault("provider_calls", [])
+        if not isinstance(history, list):
+            raise ValueError("provider_calls is invalid")
+        history.append(
+            {
+                "phase": phase,
+                "profile": profile,
+                "returncode": outcome.returncode,
+                "timed_out": outcome.timed_out,
+                "failure": failure.value,
+                "agent_messages": list(outcome.agent_messages),
+                "stderr": outcome.stderr[-20000:],
+                "stdout": outcome.stdout[-20000:],
+            }
+        )
+
     def _scope_or_finish(
         self,
         *,
@@ -452,8 +481,18 @@ class DevelopmentRouter:
         )
         self.state.mark_terra_started(reservation.reservation_id)
         outcome = self.run_model(self.config.runtime.terra_profile, worktree, prompt)
+        terra_failure = classify_provider_failure(
+            outcome.returncode, outcome.events, outcome.stderr, timed_out=outcome.timed_out
+        )
+        self._record_provider_call(
+            state, "TERRA_CALL", self.config.runtime.terra_profile, outcome, terra_failure
+        )
         decision = self._provider_decision(
-            outcome=outcome, state=state, result_path=result_path, terra=True
+            outcome=outcome,
+            state=state,
+            result_path=result_path,
+            terra=True,
+            failure=terra_failure,
         )
         if decision is not None:
             return decision
@@ -737,6 +776,13 @@ class DevelopmentRouter:
                     outcome.events,
                     outcome.stderr,
                     timed_out=outcome.timed_out,
+                )
+                self._record_provider_call(
+                    state,
+                    f"M3_CALL_{attempt}",
+                    self.config.runtime.m3_profile,
+                    outcome,
+                    provider_failure,
                 )
                 if provider_failure is not FailureClass.PASS:
                     audit, decision = self._scope_or_finish(

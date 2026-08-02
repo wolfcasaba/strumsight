@@ -40,6 +40,14 @@ class CodexResult:
     events: tuple[dict[str, object], ...]
     agent_messages: tuple[str, ...]
     stderr: str
+    # ADR 0112 self-heal (E03-R08 H6, measured 2026-08-02): run_codex() used
+    # to keep only the lines of process.stdout that parsed as JSON events —
+    # anything else (a plain-text self-halt message, a CLI crash banner) was
+    # silently dropped via `except json.JSONDecodeError: continue`, so a
+    # STOPPED provider failure with no matching classification pattern left
+    # no way to recover the real cause. Kept alongside `events`, not instead
+    # of it: callers that only need parsed events are unaffected.
+    stdout: str = ""
     timed_out: bool = False
 
 
@@ -182,5 +190,6 @@ def run_codex(
         events=tuple(events),
         agent_messages=tuple(messages),
         stderr=process.stderr,
+        stdout=process.stdout,
         timed_out=process.timed_out,
     )

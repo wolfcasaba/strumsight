@@ -2507,3 +2507,73 @@ nem hossz — egy csak egyetlen chunkos teszt-fixture-készlet ezt a hibát
 sosem fogja el; minden jövőbeli streamelt/chunkolt IO-kódnál (DSP
 audio-buffer streaming is ide tartozhat) explicit multi-chunk,
 nem-kerek-méretű regressziós teszt kell.
+
+## L61 — Egy `STOPPED` provider-hiba a router `run_codex()`-ében diagnosztizálhatatlan volt: a nem-JSON stdout-sorok némán eldobódtak, és semmi sem perzisztálódott a task-state-be (E03-R08 H6, önjavító kör)
+
+**Mit mértünk (2026-08-02).** Az auto-router M3 1. próbálkozása az
+E03-R08 (`e03-r08-persistent-v2-migration`) körön `changed_paths=0`
+mellett terminális `STOPPED`-ot adott vissza. `classification.py:34`
+`classify_provider_failure()`-je sorban végigmegy az ismert mintákon
+(quota/429/timeout/network/credential/env) az `events` + `stderr`
+felett — egyik sem talált, ezért a `STOPPED` catch-all (58. sor) futott.
+A `HALTED` fájl innen csak ezt az egy szót tudta jelenteni: a
+`tools/ai_router/execution.py:run_codex()` a MiniMax CLI `stdout`-ját
+sorról sorra próbálta JSON-ként dekódolni
+(`json.loads(line)`/`except json.JSONDecodeError: continue`), és minden
+NEM-JSON sort — pont ahol egy szöveges self-halt üzenet vagy CLI-crash
+banner állna — némán eldobott. A `CodexResult` dataclass-nak nem is volt
+`stdout` mezője. Emellett a `router.py` a `gate_history`-hoz hasonló
+perzisztenciát (`_record_gate`, teljes `gate.log` minden gate-hívásnál)
+a provider-hívásokra sosem építette ki — egy STOPPED után a task-state-
+ben csak a `classify_provider_failure()` egyszavas eredménye maradt,
+ugyanaz, amit a `HALTED` fájl is jelentett. A gyökérok tehát mérve
+Class A (infrastruktúra): a router SAJÁT diagnosztikai csatornája volt
+hiányos, nem a MiniMax-hívás tartalma.
+
+**A javítás.** (1) `execution.py`: `CodexResult` kapott egy `stdout: str
+= ""` mezőt (az `events`/`agent_messages` MELLETT, nem helyette), és
+`run_codex()` ezt a nyers `process.stdout`-ot is visszaadja. (2)
+`router.py`: új `_record_provider_call()` (az `_record_gate()` pontos
+mintája) minden M3- és Terra-hívás UTÁN a task-state
+`provider_calls`-listájába teszi a fázist, a profilt, a returncode-ot,
+a `timed_out`-ot, a `FailureClass`-t és a (20000 karakterre vágott)
+nyers `stdout`/`stderr`-t — a hívás mindkét call-site-on (`_terra()` és
+az M3-hurok) `_provider_decision()` ELŐTT fut, tehát bármelyik döntési
+ág perzisztálja. Regressziós tesztek (RED a fix előtt, GREEN utána):
+`tools/tests/test_execution.py::test_run_codex_preserves_raw_stdout_for_non_jsonl_output`
+(egy fake CLI, ami egy nem-JSON self-halt sort ír `stdout`-ra, majd
+nemnulla kóddal lép ki — a fix előtt `AttributeError: no attribute
+'stdout'`) és
+`tools/tests/test_router.py::test_provider_call_history_persists_raw_stdout_for_stopped_diagnosis`
+(egy `STOPPED` M3-hívás után a `state["provider_calls"][0]["stdout"]`
+tartalmazza a diagnosztikai üzenetet — a fix előtt `KeyError:
+'provider_calls'`).
+
+**Fel nem vett, tudatosan meghagyott mellékleletek.** A `python3 -m
+pytest tools/tests -q` egy MÁSIK, ehhez a halthoz nem tartozó
+sub-teszttel is pirosít
+(`test_epic3_brief_metadata.py::…(round=5, brief='e03-r05-…')`) — ez az
+[[L59]]-ben már dokumentált, az E03-R05 brief TOML-jának `docs/adr/`
+drift-je, VÁLTOZATLANUL fennáll ezen a javításon átfutva is (mérve: a
+`main` HEAD-en, ezen javítás ELŐTT, UGYANEZ az egy sub-teszt bukik,
+ugyanazzal a diff-fel). A H6 halt gyökéroka és ez a drift két különálló
+hiba; a H6 önjavító kör jogosultsága nem terjed ki az E03-R05 brief
+tartalmára (§2 csak a MEGÁLLT kör — E03-R08 — briefjét engedi), ezért ez
+a javítás érintetlenül hagyta, és a `docs/rounds/e03-r05-…`-t IS érintő,
+külön felhatalmazású önjavító kör vár rá.
+
+**Tanulság.** (1) Egy `FailureClass` catch-all (`STOPPED`,
+`classification.py:58`) csak annyira diagnosztizálható, amennyi
+bizonyítékot a hívó megőriz MIELŐTT a folyamat kimenete elveszik — a
+`gate_history`/`provider_calls` mintát (teljes nyers log minden
+hívásnál, nem csak a hibásoknál) minden jövőbeli külső-folyamat-hívásnál
+alkalmazni kell, nem csak utólag, egy halt UTÁN pótolni. (2) `subprocess`
+kimenetet JSON-eseményekre szűrő kódnál (`except
+json.JSONDecodeError: continue`) a NEM-JSON ág pont ott veszíti el az
+információt, ahol egy hibaüzenet a legvalószínűbb — a nyers kimenetet a
+szűrt/parse-olt változat MELLETT, nem helyette kell megőrizni. (3) A
+`tools/tests -q` teljes suite egy MEGLÉVŐ, más körhöz tartozó pirossal
+futhat úgy, hogy az adott self-heal feladathoz nincs köze — a helyes
+mérce a REGRESSZIÓ (a saját fix előtt/után), nem a teljes suite abszolút
+zöldsége, ha egy másik, már dokumentált és külön felhatalmazású hiba is
+jelen van.
