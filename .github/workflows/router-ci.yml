@@ -20,8 +20,20 @@ on:
       - "tools/openspace-vm-wrapper.py"
       - "tools/tests/**"
       - "tools/round-gate.sh"
+      - "tools/round-pipeline.sh"
+      - "tools/pipeline-status.sh"
       - ".ai/**"
       - ".github/workflows/router-ci.yml"
+      # A tools/tests a kör-briefek és a pipeline-sor metaadatait IS méri
+      # (test_epic3_brief_metadata.py, test_pipeline_integration.py), ezért egy
+      # docs-only kör is pirosra állíthatja a suite-ot anélkül, hogy ez a
+      # workflow lefutna. Mérve 2026-08-02: az E03-R03 briefjének `allowed_paths`
+      # drift-je a merge után négy körön át észrevétlen maradt.
+      - "docs/rounds/**"
+      - "docs/execution/pipeline-queue.tsv"
+      - "docs/execution/pipeline-orchestrator-prompt.md"
+      - "docs/execution/pipeline-selfheal-prompt.md"
+      - "docs/execution/pipeline-codex-orchestrator-preamble.md"
 
 permissions:
   contents: read

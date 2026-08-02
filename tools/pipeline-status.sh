@@ -18,6 +18,7 @@ queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"
 router_status_file="$state_dir/router-status"
 halt_file="$state_dir/HALTED"
 heal_count_file="$state_dir/selfheal.count"
+claude_block_file="$state_dir/claude-blocked-until"
 chain_log="$state_dir/chain.log"
 
 case "${1:-}" in
@@ -39,6 +40,11 @@ case "${1:-}" in
   --heal-reset)
     rm -f "$heal_count_file"
     printf '%s  önjavító kísérletszámláló nullázva\n' "$(date -Is)" | tee -a "$chain_log"
+    ;;
+  --unblock-claude)
+    rm -f "$claude_block_file"
+    printf '%s  Claude-kvótazárlat feloldva — a következő kört újra a Claude viszi\n' \
+      "$(date -Is)" | tee -a "$chain_log"
     ;;
   --halt)
     reason=${2:?használat: pipeline-status.sh --halt "<ok>"}
@@ -68,6 +74,18 @@ case "${1:-}" in
       echo "Állapot: FUT egy kör (a zár foglalt)."
     else
       echo "Állapot: tétlen, a következő firing indíthat kört."
+    fi
+    echo
+    echo "--- review-motor (ADR 0115) ---"
+    if [ "${PIPELINE_FALLBACK_ENGINE:-terra}" = "none" ]; then
+      echo "  Claude (fallback KIKAPCSOLVA)"
+    elif [ -f "$claude_block_file" ] \
+      && [ "$(date +%s)" -lt "$(cat "$claude_block_file" 2>/dev/null || echo 0)" ]; then
+      printf '  Terra (gpt-5.6-terra) — a Claude-kvóta zárlat alatt %s-ig\n' \
+        "$(date -Is -d "@$(cat "$claude_block_file")" 2>/dev/null)"
+      echo "  visszaállítás: tools/pipeline-status.sh --unblock-claude"
+    else
+      echo "  Claude (elsődleges) · kvótakimerülésnél automatikusan Terra veszi át"
     fi
     echo
     echo "--- önjavítás (ADR 0112) ---"
@@ -105,7 +123,7 @@ case "${1:-}" in
     [ -f "$chain_log" ] && tail -15 "$chain_log" || echo "  (még nincs)"
     ;;
   *)
-    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\" | --heal-reset]" >&2
+    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\" | --heal-reset | --unblock-claude]" >&2
     exit 2
     ;;
 esac

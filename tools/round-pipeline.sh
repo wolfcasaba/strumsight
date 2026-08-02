@@ -57,6 +57,7 @@ state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
 queue_file="$repo_root/docs/execution/pipeline-queue.tsv"
 prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
+codex_preamble="$repo_root/docs/execution/pipeline-codex-orchestrator-preamble.md"
 lock_file="$state_dir/lock"
 halt_file="$state_dir/HALTED"
 status_file="$state_dir/round-status"
@@ -74,6 +75,16 @@ claude_bin=${CLAUDE_BIN:-claude}
 # keretből 15% maradt, ezért a legolcsóbb elfogadható reviewer-motor kell —
 # az implementer úgyis MiniMax M3, a Claude dolga a review + a merge-kapu).
 claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
+
+# Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
+# pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
+# CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
+fallback_engine=${PIPELINE_FALLBACK_ENGINE:-terra}   # terra | none
+codex_bin=${CODEX_BIN:-codex}
+codex_home=${PIPELINE_FALLBACK_CODEX_HOME:-$HOME/.codex-terra}
+fallback_label="Terra (gpt-5.6-terra)"
+claude_block_file="$state_dir/claude-blocked-until"
+claude_block_seconds=${PIPELINE_CLAUDE_BLOCK_SECONDS:-18000}   # 5 órás ablak
 
 mkdir -p "$state_dir"
 
@@ -93,22 +104,40 @@ notify() {
 
 die() { log "HIBA: $*"; exit "${2:-4}"; }
 
-# --- Friss headless Claude-session futtatása -------------------------------
+# --- Friss headless orchestrátor-session futtatása -------------------------
 # Az orchestrátor és az önjavító kör ugyanazt a mechanikát használja: tmux-ban
-# INTERAKTÍV `claude` (így látszik a telefonos Code-listában), 30 percenkénti
-# életjel, és a session KÖTELESSÉGE egy jelzésfájlt írni. A visszatérési érték
-# 0, ha a jelzésfájl megszületett; 1, ha nem (időtúllépés vagy néma halál).
-run_claude_session() {
-  local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
+# futó agent (így látszik a telefonos Code-listában), 30 percenkénti életjel, és
+# a session KÖTELESSÉGE egy jelzésfájlt írni. A visszatérési érték 0, ha a
+# jelzésfájl megszületett; 1, ha nem (időtúllépés vagy néma halál).
+#
+# MOTORFÜGGETLEN (ADR 0115): a Claude-kvóta kimerülése nem szakíthatja meg a
+# láncot — akkor ugyanezt a promptot a Codex/Terra viszi tovább.
+
+# A Claude-kvóta kimerülésének MÉRT nyomai a session-naplóban. Szándékosan
+# angol, CLI-specifikus minták: a magyar „kvóta" szó a promptokban is szerepel,
+# arra illeszteni hamis pozitív lenne.
+CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset'
+
+claude_unavailable_until() {   # kiírja a lejárati epoch-ot, ha érvényes zárlat van
+  local until
+  [ -f "$claude_block_file" ] || return 1
+  until=$(cat "$claude_block_file" 2>/dev/null)
+  case "$until" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$(date +%s)" -lt "$until" ] || { rm -f "$claude_block_file"; return 1; }
+  printf '%s\n' "$until"
+}
+
+# A tmux-session felügyelete a jelzésfájlig. Egyetlen paraméterben kapja a
+# héj-parancsot, ezért motorfüggetlen.
+run_tmux_session() {
+  local tmux_session="$1" shell_command="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6"
   local deadline pinger_pid
 
-  rm -f "$signal_file"
   tmux kill-session -t "$tmux_session" 2>/dev/null || true
   tmux new-session -d -s "$tmux_session" bash
   tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
-  tmux send-keys -t "$tmux_session" \
-    "env -u CLAUDE_CONFIG_DIR claude --permission-mode bypassPermissions --model $claude_model 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" Enter
+  tmux send-keys -t "$tmux_session" "$shell_command" Enter
   log "session indult: $tmux_session (látszik a telefon Code-listájában) → $session_log"
 
   (
@@ -140,6 +169,57 @@ run_claude_session() {
   kill "$pinger_pid" 2>/dev/null
 
   [ -f "$signal_file" ]
+}
+
+# A Codex/Terra ugyanazt a prompt-fájlt kapja, egy motor-specifikus előszóval
+# (nincs skill-rendszere, ezért a skill-fájlt fájlként olvassa el).
+codex_prompt_file() {
+  local prompt_file="$1" merged="${prompt_file%.md}-codex.md"
+  {
+    [ -f "$codex_preamble" ] && cat "$codex_preamble"
+    printf '\n---\n\n'
+    cat "$prompt_file"
+  } > "$merged"
+  printf '%s\n' "$merged"
+}
+
+# Egy orchestrátori munkadarab levezénylése: elsőként Claude, kvótazárlat vagy
+# kvótára utaló néma halál esetén Codex/Terra. 0 = van jelzésfájl.
+run_orchestrator_session() {
+  local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
+  local timeout_s="$5" label="$6"
+  local blocked_until codex_prompt
+
+  rm -f "$signal_file"
+
+  if blocked_until=$(claude_unavailable_until); then
+    log "a Claude-kvóta zárlat alatt van $(date -Is -d "@$blocked_until")-ig — a kört a $fallback_label viszi"
+  else
+    run_tmux_session "$tmux_session" \
+      "env -u CLAUDE_CONFIG_DIR $claude_bin --permission-mode bypassPermissions --model $claude_model 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "$session_log" "$signal_file" "$timeout_s" "$label" && return 0
+
+    if ! grep -qEi "$CLAUDE_LIMIT_PATTERN" "$session_log" 2>/dev/null; then
+      return 1   # nem kvóta: valódi hiba, ne égessük rá a Codex-keretet
+    fi
+    # A zárlat a Claude 5 órás ablakához igazodik; a pontos reset-időt nem
+    # parse-oljuk (formátumfüggő lenne), a felső becslés biztonságos: a lánc
+    # addig is halad, csak a másik motoron.
+    printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))" > "$claude_block_file"
+    log "KVÓTA: a Claude-session limitre futott — átadás a $fallback_label motornak"
+    notify "🔁 motorváltás: $label" "a Claude-kvóta kimerült — a $fallback_label veszi át" high
+  fi
+
+  if [ "$fallback_engine" = "none" ]; then
+    log "nincs engedélyezett fallback motor (PIPELINE_FALLBACK_ENGINE=none) — a lánc áll"
+    return 1
+  fi
+  command -v "$codex_bin" >/dev/null || { log "nincs $codex_bin CLI — a fallback nem indítható"; return 1; }
+
+  codex_prompt=$(codex_prompt_file "$prompt_file")
+  run_tmux_session "${tmux_session}-fallback" \
+    "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\"" \
+    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)"
 }
 
 # --- Önjavítás (ADR 0112) --------------------------------------------------
@@ -213,7 +293,7 @@ attempt_selfheal() {
   log "ÖNJAVÍTÓ KÖR indul: $halt_round / $halt_code ($attempts/$selfheal_max)"
   notify "🔧 önjavítás indul: $halt_round" "$halt_code · $attempts/$selfheal_max kísérlet"
 
-  if ! run_claude_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
+  if ! run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
         "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"; then
     log "az önjavító session jelzés nélkül ért véget — a lánc áll"
     notify "⛔ önjavítás jelzés nélkül halt" "$halt_round / $halt_code — kivizsgálás kell" high
@@ -280,6 +360,18 @@ case "${1:-}" in
   --gate-fingerprint)
     printf 'tests=%s %s\n' "$(gate_test_count)" "$(gate_artifact_hashes)"
     exit 0
+    ;;
+  --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115)
+    if [ "$fallback_engine" != "none" ] && claude_unavailable_until >/dev/null; then
+      printf '%s\n' "$fallback_engine"
+    else
+      printf 'claude\n'
+    fi
+    exit 0
+    ;;
+  --claude-limit-check)    # $2=session-napló → 0, ha kvótakimerülés nyoma van
+    grep -qEi "$CLAUDE_LIMIT_PATTERN" "${2:-/dev/null}" 2>/dev/null
+    exit $?
     ;;
 esac
 
@@ -387,7 +479,7 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 # rövid fájl-hivatkozás (az argv-önillesztés — L12 — kizárva); a
 # bypass-disclaimer és az MCP-consent egyszer, kézzel elfogadva 2026-07-31-én.
 session_exit=0
-run_claude_session "pipeline-$round" "$prompt_file" "$session_log" \
+run_orchestrator_session "pipeline-$round" "$prompt_file" "$session_log" \
   "$status_file" "$session_timeout" "$round" || session_exit=124
 
 

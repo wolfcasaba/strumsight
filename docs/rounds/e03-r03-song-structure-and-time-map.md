@@ -23,7 +23,6 @@ allowed_paths = [
   "test/features/song_trainer/domain/song_time_map_test.dart",
   "test/property/song_time_map_property_test.dart",
   "docs/rounds/e03-r03-song-structure-and-time-map.md",
-  "docs/adr/0093-song-trainer-local-time-primitives.md",
 ]
 gate_tests = [
   "test/features/song_trainer/domain/song_structure_test.dart",

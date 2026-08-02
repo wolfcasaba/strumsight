@@ -125,6 +125,84 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertIn(f"{artifact}:", fingerprint.stdout)
             self.assertNotIn(f"{artifact}:hiányzik", fingerprint.stdout)
 
+    def test_orchestrator_falls_back_to_terra_only_while_claude_is_blocked(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            block = state / "claude-blocked-until"
+
+            default = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
+            block.write_text("4102444800\n")   # 2100-01-01: érvényes zárlat
+            blocked = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
+            block.write_text("1000000000\n")   # 2001: lejárt zárlat
+            expired = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
+            expired_file_cleaned = not block.exists()
+            block.write_text("4102444800\n")
+            switched_off = self.run_command(
+                ["bash", str(script), "--orchestrator-engine"],
+                env={**env, "PIPELINE_FALLBACK_ENGINE": "none"},
+            )
+
+            self.assertEqual(default.stdout.strip(), "claude")
+            self.assertEqual(blocked.stdout.strip(), "terra")
+            self.assertEqual(expired.stdout.strip(), "claude")
+            self.assertTrue(expired_file_cleaned, "a lejárt zárlatot a driver takarítja")
+            self.assertEqual(switched_off.stdout.strip(), "claude")
+
+    def test_only_real_quota_messages_trigger_the_engine_switch(self) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        quota_logs = (
+            "Claude usage limit reached. Your limit will reset at 3pm.",
+            "Error: quota exceeded for this organization",
+            "You are out of credits — upgrade to continue",
+        )
+        # Hamis pozitív ellen: a promptok maguk beszélnek kvótáról és limitről.
+        innocent_logs = (
+            "a kvóta helyreállása után ugyanaz a task folytatható",
+            "MiniMax 429/quota/5xx esetén nem indíthatsz közvetlen fallbacket",
+            "Traceback (most recent call last): RuntimeError: gate failed",
+        )
+        with tempfile.TemporaryDirectory() as directory_name:
+            log_file = Path(directory_name) / "session.log"
+            for text in quota_logs:
+                with self.subTest(quota=text):
+                    log_file.write_text(text)
+                    hit = self.run_command(
+                        ["bash", str(script), "--claude-limit-check", str(log_file)]
+                    )
+                    self.assertEqual(hit.returncode, 0)
+            for text in innocent_logs:
+                with self.subTest(innocent=text):
+                    log_file.write_text(text)
+                    miss = self.run_command(
+                        ["bash", str(script), "--claude-limit-check", str(log_file)]
+                    )
+                    self.assertNotEqual(miss.returncode, 0)
+
+    def test_codex_preamble_maps_the_claude_only_concepts(self) -> None:
+        preamble = (
+            ROOT / "docs" / "execution" / "pipeline-codex-orchestrator-preamble.md"
+        ).read_text()
+        # A Codexnek nincs skill-rendszere: a skilleket fájlként kell olvasnia.
+        self.assertIn(".claude/skills/sdd-round-driver/SKILL.md", preamble)
+        self.assertIn(".claude/skills/sdd-round-review/SKILL.md", preamble)
+        self.assertIn("AGENTS.md", preamble)
+        # A kapu és a jelzés-kötelezettség nem lazul a másik motoron sem.
+        self.assertIn("zöld kapu", preamble)
+        self.assertIn("kör-jelzés", preamble)
+
+    def test_fallback_launches_terra_home_and_keeps_implementer_routing(self) -> None:
+        driver = (ROOT / "tools" / "round-pipeline.sh").read_text()
+        # A Terra a saját CODEX_HOME-jában él (ott a default gpt-5.6-terra).
+        self.assertIn("CODEX_HOME=$codex_home", driver)
+        self.assertIn(".codex-terra", driver)
+        # Az implementer-routing (sor `engine` oszlopa + ADR 0088 router) NEM
+        # változhat a review-motor fallbackjétől — user-döntés 2026-08-02.
+        self.assertIn("validate_engine \"$engine\"", driver)
+        self.assertIn("ai-router-round.sh", driver)
+
     def make_fake_worktree(self, directory: Path) -> tuple[Path, Path, Path]:
         worktree = directory / "worktree"
         (worktree / "tools").mkdir(parents=True)
