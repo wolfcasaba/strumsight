@@ -54,7 +54,7 @@ E03-R04	docs/rounds/e03-r04-tracks-events-monophonic-analysis.md	auto	nincs	done
 E03-R05	docs/rounds/e03-r05-validator-normalizer-capabilities.md	auto	nincs	done
 E03-R06	docs/rounds/e03-r06-legacy-song-setlist-adapters.md	auto	nincs	done
 E03-R07	docs/rounds/e03-r07-song-repository-asset-store.md	auto	nincs	done
-E03-R08	docs/rounds/e03-r08-persistent-v2-migration.md	auto	nincs	pending
+E03-R08	docs/rounds/e03-r08-persistent-v2-migration.md	auto	nincs	done
 E03-R09	docs/rounds/e03-r09-native-json-import-export.md	auto	nincs	pending
 E03-R10	docs/rounds/e03-r10-import-flow-security-boundary.md	auto	nincs	pending
 E03-R11	docs/rounds/e03-r11-musicxml-mxl-importer.md	auto	nincs	pending
