@@ -291,22 +291,37 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertFalse(hold_file.exists())
 
-    def test_unlimited_terra_policy_also_clears_the_stale_h6_halt_it_caused(self) -> None:
+    def test_stale_h6_halt_is_cleared_once_the_daily_terra_cap_goes_unlimited(self) -> None:
         # MÉRT gyökérok (E03-R08 H6, 7. előfordulás, 2026-08-02 18:45 UTC,
         # heal-prompt-E03-R08-20260802T184502.md): a napi Terra-korlát
         # eltávolítása (PR #72, `max_automatic_terra_calls_per_utc_day = 0`
-        # = unlimited) után az ELSŐ firing helyesen törölte az elavult
-        # hold-fájlt (l. `test_unlimited_terra_policy_removes_a_stale_daily_budget_hold`
-        # fentebb) — de a `.pipeline/HALTED` fájl, amit a MÉG korlátozott
-        # policy alatt írt ki `handle_round_halt` ugyanerre a Terra-kimerülésre,
-        # érintetlen maradt. A driver főági 2. szakasza (`[ -f "$halt_file" ]`)
-        # ezt a stale HALTED-et függetlenül a hold állapotától egy ÚJABB,
-        # valódi önjavító sessionnek nézi — élesben ez pontosan megtörtént
-        # (heal-E03-R08-20260802T184502.log, 7. session ugyanarra a napra
-        # már megszűnt okra). A `--terra-hold-active` teszthorog `terra_hold_active_for`-t
-        # hívja, aminek most a hold törlésével EGYÜTT a hozzá tartozó stale
-        # H6 HALTED-et is archiválnia kell (healed-*.txt), hogy a következő
-        # firing a KÖRT próbálja újra, ne egy felesleges önjavítást.
+        # = unlimited) után az ELSŐ firing helyesen törölte az akkor még élő
+        # `terra-budget-hold` fájlt (l.
+        # `test_unlimited_terra_policy_removes_a_stale_daily_budget_hold`
+        # fentebb) — attól kezdve a hold-fájl NEM LÉTEZIK többé. A
+        # `.pipeline/HALTED` fájl viszont, amit a MÉG korlátozott policy
+        # alatt írt ki `handle_round_halt` ugyanerre a Terra-kimerülésre,
+        # érintetlen maradt, és a driver főági 2. szakasza (`[ -f
+        # "$halt_file" ]`) ezt — a hold-fájl (nemlétező) állapotától
+        # TELJESEN függetlenül — egy ÚJABB, valódi önjavító sessionnek nézte.
+        # Élesben ez pontosan megtörtént (heal-E03-R08-20260802T184502.log,
+        # 7. heal-session egy már megszűnt okra). Ez a teszt EZT a valós
+        # állapotot reprodukálja: NINCS hold-fájl, csak a stale HALTED —
+        # `terra_clear_stale_halt_for` önállóan, a hold-fájl létezésétől
+        # függetlenül kell hogy lekérdezze a policy-t és archiválja a
+        # HALTED-et.
+        #
+        # SAFETY (mérve, ennek a tesztnek egy korábbi verziója élesen
+        # megtörtént: egy RED futás — a `--terra-clear-stale-halt` hook még
+        # nem létezett — a flag-et ismeretlen argumentumként átengedte a
+        # TELJES driver-folyamatnak, ami a HALTED-re egy VALÓDI
+        # tmux+claude önjavító sessiont indított ezen a repón, kézzel kellett
+        # leállítani). `selfheal.count` ezért a kísérletbüdzsé HATÁRÁN
+        # (3) ül, `PIPELINE_SELFHEAL_MAX=3`-mal együtt — pontosan úgy, mint a
+        # `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+        # mintája: ha a hook hiányzik, a driver a kimerült-büdzsé
+        # rövidzárba fut ("KIMERÜLT", session nélkül), sosem spawnol
+        # valódi sessiont.
         script = ROOT / "tools" / "round-pipeline.sh"
         real_python3 = shutil.which("python3")
         self.assertIsNotNone(real_python3, "python3 kell a teszthez")
@@ -328,10 +343,6 @@ class PipelineIntegrationTest(unittest.TestCase):
                 "esac\n"
             )
             stub.chmod(0o755)
-            hold_file = state / "terra-budget-hold"
-            hold_file.write_text(
-                f"round=E03-R08\nhold_until={int(time.time()) + 3600}\n"
-            )
             halt_file = state / "HALTED"
             halt_file.write_text(
                 "round=E03-R08\n"
@@ -340,17 +351,17 @@ class PipelineIntegrationTest(unittest.TestCase):
                 "daily budget is genuinely exhausted for utc_day=2026-08-02\n"
                 "halted_at=2026-08-02T16:58:03+00:00\n"
             )
-            (state / "selfheal.count").write_text("E03-R08|H6|1\n")
+            (state / "selfheal.count").write_text("E03-R08|H6|3\n")
             env = dict(os.environ)
             env["PIPELINE_STATE_DIR"] = str(state)
+            env["PIPELINE_SELFHEAL_MAX"] = "3"
             env["PATH"] = f"{stub_bin}:{env['PATH']}"
 
             result = self.run_command(
-                ["bash", str(script), "--terra-hold-active", "E03-R08"], env=env
+                ["bash", str(script), "--terra-clear-stale-halt", "E03-R08"], env=env
             )
 
-            self.assertEqual(result.returncode, 1, result.stderr)
-            self.assertFalse(hold_file.exists())
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertFalse(
                 halt_file.exists(),
                 "a stale H6 HALTED fájlnak el kell tűnnie, amikor a napi Terra-korlát "
@@ -363,6 +374,62 @@ class PipelineIntegrationTest(unittest.TestCase):
             healed = list(state.glob("healed-E03-R08-*.txt"))
             self.assertEqual(len(healed), 1, "a stale halt-ot archiválni kell, nem eldobni")
             self.assertIn("Terra", healed[0].read_text())
+
+    def test_stale_h6_halt_survives_when_daily_terra_cap_is_still_finite(self) -> None:
+        # A biztonsági ellenpélda: amíg a napi Terra-korlát ténylegesen
+        # kimerült (nem `unlimited`), a HALTED-nek ÉLNIE kell — ez a
+        # naptár-korlátozott, valódi halt, amit [[L62]]/[[L65]] szándékosan
+        # nem old fel session/heal-kísérlet nélkül.
+        #
+        # SAFETY: ugyanaz az indoklás, mint a fenti
+        # `test_stale_h6_halt_is_cleared_once_the_daily_terra_cap_goes_unlimited`-ben
+        # — `selfheal.count` a büdzsé HATÁRÁN ül, hogy egy hiányzó hook
+        # esetén a driver sose spawnoljon valódi tmux+claude sessiont.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": false, \"exhausted\": true}'\n"
+                "    exit 1\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            halt_file = state / "HALTED"
+            halt_file.write_text(
+                "round=E03-R08\n"
+                "halt=H6\n"
+                "summary=auto router task E03-R08 is DEFERRED — Terra's automatic "
+                "daily budget is genuinely exhausted for utc_day=2026-08-02\n"
+                "halted_at=2026-08-02T16:58:03+00:00\n"
+            )
+            (state / "selfheal.count").write_text("E03-R08|H6|3\n")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PIPELINE_SELFHEAL_MAX"] = "3"
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-clear-stale-halt", "E03-R08"], env=env
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(
+                halt_file.exists(),
+                "amíg a napi Terra-korlát ténylegesen kimerült, a HALTED-et nem "
+                "szabad törölni",
+            )
 
     def test_unlimited_terra_policy_keeps_hold_active_when_removal_fails(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
@@ -516,6 +583,69 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertNotIn("KIMERÜLT", held.stderr)
             self.assertEqual((state / "selfheal.count").read_text(), "E03-R08|H6|3\n")
             self.assertTrue((state / "HALTED").exists())
+
+    def test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall(self) -> None:
+        # The end-to-end regression for the ACTUAL production incident
+        # (E03-R08 H6, 7th occurrence, 2026-08-02 18:45 UTC): by the time
+        # this firing runs, an EARLIER firing already cleared the
+        # `terra-budget-hold` (the daily cap just went unlimited, PR #72) —
+        # so, unlike `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+        # above, there is NO hold file left. Only the stale `.pipeline/HALTED`
+        # (written while the cap was still finite) remains. Pre-fix, the
+        # driver's HALT branch doesn't re-check the condition and launches a
+        # brand new self-heal session for a wall that no longer exists.
+        #
+        # SAFETY (same reasoning as the sibling test above): selfheal.count
+        # is seeded AT the attempt budget (3), so IF the fix regresses and
+        # the old code path is taken, `attempt_selfheal()` hits the
+        # exhausted-budget short-circuit (logs "KIMERÜLT", returns 3) instead
+        # of spawning a real tmux+claude session — this keeps a RED run of
+        # this test safe to execute against this real repo.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            (state / "HALTED").write_text(
+                "round=E03-R08\nhalt=H6\nsummary=auto-router DEFERRED: Terra's automatic "
+                "daily budget is genuinely exhausted for utc_day=2026-08-02\n"
+            )
+            (state / "selfheal.count").write_text("E03-R08|H6|3\n")
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL_MAX="3",
+                PATH=f"{stub_bin}:{env['PATH']}",
+            )
+
+            result = self.run_command(["bash", str(script)], env=env)
+
+            self.assertNotIn("ÖNJAVÍTÓ KÖR indul", result.stderr)
+            self.assertNotIn("KIMERÜLT", result.stderr)
+            self.assertIn("HALTED jelzés elavult volt", result.stderr)
+            self.assertFalse((state / "HALTED").exists())
+            self.assertFalse((state / "selfheal.count").exists())
+            self.assertEqual(
+                len(list(state.glob("healed-E03-R08-*.txt"))),
+                1,
+                "a stale halt-ot archiválni kell, nem eldobni",
+            )
 
     def test_terra_hold_if_exhausted_writes_the_hold_file_when_terra_status_reports_exhausted(self) -> None:
         # MÉRT gyökérok (E03-R08 H6, 2. önjavítás, 2026-08-02, ugyanaz a halt
