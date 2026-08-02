@@ -1631,3 +1631,66 @@ promptokkal próbálkozhasson; ha a mintázat megismétlődik javítás UTÁN is
 (azaz a 2./3. próba a javított prompt mellett is csak A4/A5-öt érinti),
 az már a brief méretére/sorrendjére mutat (Class B), nem a router
 promptjára.
+
+## L45 — A gate_history csak egy hash-t őrzött meg egy tartalmi gate-kudarcból; a tényleges format/analyze/test kimenet minden próba után elveszett
+
+**Mit mértünk (2026-08-02, E02-R21, HETEDIK halt/önjavító kör ugyanazon a
+taskon; a MÁSODIK egymást követő, ahol a router infrastruktúrája — sandbox
+[[L43]], állapotgép, prompt-építés [[L44]] — mérve hibátlan, a halt oka
+tisztán tartalmi gate-kudarc).** Az L44-fix (PR #52) utáni első éles `run`
+`STOPPED`-be futott: `BASELINE_GATE` pass → `RECOVERED_M3_CALL_1`
+`code_failure` (`format`) → `GATE_2` `code_failure` (`analyze`) → Terra
+`code_failure` (`test test/core`). A review (`docs/reviews/e02-r21-review.md`
+"Update 6") megpróbálta rekonstruálni, MIÉRT bukott mindhárom lépés — és nem
+tudta: a munkapéldányból a sikertelen próbák tracked változásait a router
+minden próba UTÁN visszaállítja a baseline manifesthez (csak az újonnan
+létrehozott untracked fájlok élik túl), a `.ai/runs/<task>/router-result.std
+{out,err}.log` csak a redaktált végső JSON-t tartalmazza, `find … -mmin -60`
+más ideiglenes gate-logot nem talált. A minden korábbi review által
+dokumentált reprodukciós parancs (`python3 tools/model-router.py status
+--task-id <ID> --json`) is csak egy `error_hash`-t adott vissza —
+semmilyen szöveges bizonyítékot arról, mit rontott el a format/analyze/test
+lépés.
+
+**Gyökérok (mérve, `tools/model-router.py` `_gate_runner` +
+`tools/ai_router/router.py` `_record_gate`).** A `_gate_runner` closure
+ténylegesen kiszámolja a teljes (redaktált) `round-gate.sh` stdout+stderr-t
+(`log = redact_text(completed.stdout + completed.stderr)`), és ez a szöveg
+a `GateRun.log` mezőn át él is — de KIZÁRÓLAG a router BELSŐ, azonnali
+felhasználására: a `_repair_prompt` és a `build_escalation_packet` ezt
+illeszti a KÖVETKEZŐ modellhívás promptjába (`redact_text(evidence)
+[-16000:]`), majd `_record_gate` a perzisztens task-state-be (`gate_history`)
+csak `outcome/failed_step/command_exit_code/error_hash`-t ír — a `.log`
+mezőt eldobja. A modell(ek) tehát MINDIG látták a valódi hibaüzenetet a
+saját repair-promptjukban, de az ORCHESTRÁTOR/self-heal session, amely a
+`STOPPED` állapot UTÁN vizsgálódik, semmit nem lát belőle — csak azt, hogy
+volt egy hiba, és a hash-ét.
+
+**Ez strukturálisan lehetetlenné tette a Class A/B/C döntést két egymást
+követő halt-nál** (Update 5, Update 6): a self-heal prompt (ADR 0112 §1)
+explicit méréshez köti a besorolást ("Ha nem tudod eldönteni, mérj"), de a
+mérés egyetlen elérhető eszköze — egy újabb modellhívás — épp azt a
+munkát végezné el, amit a self-healnek NEM szabad (a kör tartalmi
+munkájának előrevitele).
+
+**Javítva (önjavító kör, 2026-08-02, PR #53,
+`heal/E02-R21-H4-2`).** `_record_gate` mostantól a `gate_history` minden
+bejegyzésébe elteszi a teljes (már redaktált) logot is,
+`gate.log[-20000:]`-ra csonkolva (ugyanaz a farok-csonkolási konvenció, mint
+a `_repair_prompt` 16000 karakteres evidence-ablaka). Ez tisztán
+megfigyelhetőségi javítás — egyetlen gate-küszöböt, teszt-listát vagy
+kimenetet nem érint. Kötelező regressziós teszt, RED a javítás előtt
+(`KeyError: 'log'`) / GREEN utána:
+`tools/tests/test_router.py::test_gate_history_persists_the_full_gate_log_for_diagnosis`.
+`python3 -m pytest tools/tests -q`: 110 passed, 33 subtests passed
+(109→110).
+
+**Ami ebből a javításból SZÁNDÉKOSAN kimaradt.** Ez a javítás
+MEGFIGYELHETŐVÉ teszi a következő tartalmi gate-kudarcot, de NEM oldja meg
+azt — a Practice V2 A1/A2/A3 wiring továbbra sincs elkezdve, és a
+`reset --task-id E02-R21` utáni következő `run` valószínűleg ismét
+format/analyze/test hibába fut. A különbség: EZUTÁN a `status --json`
+kimenet a `gate_history[].log` mezőben elő fogja adni a tényleges
+`flutter format`/`flutter analyze`/`flutter test` hibaüzenetet, ami a
+következő self-heal (vagy ember) számára ELSŐ ízben teszi lehetővé a
+tényleges Class A/B döntést mérés alapján, modellhívás nélkül.

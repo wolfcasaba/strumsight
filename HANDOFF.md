@@ -4,6 +4,39 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
+> (önjavító kör, E02-R21 H4 — NYOLCADIK önjavító/halt kör ugyanazon a
+> taskon — a gate_history mostantól a teljes gate-logot is megőrzi, PR #53,
+> `60ff5c4`.** Mért gyökérok ([`docs/LESSONS.md` L45](docs/LESSONS.md)): a
+> "Update 6" halt (lásd lent) — és az őt megelőző "Update 5" is — tisztán
+> tartalmi gate-kudarc volt (format/analyze/test), a router infrastruktúrája
+> (sandbox, állapotgép, prompt-építés) mindkétszer mérve hibátlan. DE a
+> tényleges `round-gate.sh` kimenetet (`GateRun.log`) a router csak a
+> KÖVETKEZŐ modellhívás repair/escalation promptjába illesztette, a
+> perzisztens task-state-be (`gate_history`) sosem — `_record_gate` csak
+> `outcome/failed_step/command_exit_code/error_hash`-t írt. Ez azt
+> jelentette, hogy a minden korábbi review dokumentált reprodukciós parancsa
+> (`python3 tools/model-router.py status --task-id <ID> --json`) egy
+> tartalmi gate-kudarc UTÁN csak egy hash-t adott vissza — sem az
+> orchestrátor, sem egy self-heal session nem tudta MÉRÉSSEL eldönteni a
+> Class A/B/C besorolást anélkül, hogy egy újabb (a self-heal jogosultságán
+> kívül eső) modellhívást indítson. **Javítás:** `_record_gate` mostantól a
+> `gate_history` minden bejegyzésébe elteszi a teljes (redaktált) logot is,
+> `gate.log[-20000:]`-ra csonkolva (ugyanaz a konvenció, mint a
+> `_repair_prompt` 16000 karakteres evidence-ablaka) — egyetlen gate-küszöböt
+> vagy teszt-listát nem érint. Kötelező regresszió, RED a javítás előtt
+> (`KeyError: 'log'`) / GREEN utána:
+> `test_router.py::test_gate_history_persists_the_full_gate_log_for_diagnosis`.
+> `python3 -m pytest tools/tests -q`: 110 passed, 33 subtests passed
+> (109→110). `router-ci.yml` zölden mind push-, mind
+> workflow_dispatch-triggerrel, a merge-elt SHA-n (`60ff5c4` → squash
+> `16fc08f`). **Ez a javítás MEGFIGYELHETŐVÉ teszi a következő tartalmi
+> gate-kudarcot, de NEM oldja meg azt** — a Practice V2 A1/A2/A3 wiring
+> továbbra sincs elkezdve; a kimerült task-state `reset --task-id E02-R21`-re
+> vár, és a következő `run` valószínűleg ismét format/analyze/test hibába
+> fut, de EZUTTAL a `gate_history[].log` mezőben a tényleges hibaüzenettel,
+> ami a következő self-heal (vagy ember) számára ELSŐ ízben teszi lehetővé a
+> tényleges Class A/B döntést mérés alapján, modellhívás nélkül.
+> Előző kör: 2026-08-02
 > (Pipeline E02-R21 — a router-prompt-fix (PR #52) UTÁNI első ÉLES `run` ÚJRA
 > HALT-ba futott, tartalmi gate-kudarccal, NYOLCADIK halt/önjavító kör
 > ugyanezen a taskon, de csak a MÁSODIK, ahol a halt tartalmi, nem
