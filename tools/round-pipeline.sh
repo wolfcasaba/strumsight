@@ -330,6 +330,32 @@ terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébkén
   return 1
 }
 
+handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT ELSŐ észlelésekor: halt_file írás + Terra-hold determinisztikus ellenőrzés
+  # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 5. előfordulás,
+  # lásd docs/LESSONS.md L63 folytatása): korábban a Terra napi-hold
+  # KIZÁRÓLAG az önjavítás retry-ágából íródott ki (attempt_selfheal, az
+  # LLM-jelentés szövegére string-matchelve). Ha egy heal-kör egy MÁSIK
+  # gyökérokot javított (pl. magát a hold-író függvényt, PR #70) —
+  # `outcome=fixed`, nem `retry` —, ez az ág soha nem futott le, és a
+  # következő firing UGYANAZT a naptár-korlátozott Terra-falat érte el
+  # újra (4 halt egy napon, 14:26–16:38 UTC). A hívás itt, a HALT ELSŐ
+  # észlelésekor — mielőtt bármilyen self-heal session elindulna —
+  # determinisztikus: az élő terra-status-t kérdezi le, nem az LLM
+  # jelentésének szövegére épül.
+  local round="$1" status_file="$2" session_log="$3" halt_code summary
+  halt_code=$(grep -m1 '^halt=' "$status_file" | cut -d= -f2-)
+  summary=$(grep -m1 '^summary=' "$status_file" | cut -d= -f2-)
+  {
+    cat "$status_file"
+    echo "session_log=$session_log"
+    echo "halted_at=$(date -Is)"
+  } > "$halt_file"
+  terra_hold_if_exhausted "$round"
+  log "HALT ($halt_code) a(z) $round körön — $summary"
+  notify "⛔ HALT ($halt_code): $round" "$summary — az önjavító kör a következő firingen indul" high
+  log "az önjavítás (ADR 0112) a következő cron-firingen indul; kikapcsolva: PIPELINE_SELFHEAL=0"
+}
+
 # Kimenet: 0 = a halt feloldva, mehet tovább a lánc; 3 = áll, ember kell.
 attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
@@ -502,6 +528,10 @@ case "${1:-}" in
     terra_hold_if_exhausted "${2:-}"
     exit 0
     ;;
+  --handle-round-halt)    # $2=kör $3=status-fájl $4=session-napló → teszthorog: a HALT ELSŐ észlelésének útvonala (E03-R08 H6 5. javítás)
+    handle_round_halt "${2:-}" "${3:-}" "${4:-}"
+    exit 0
+    ;;
 esac
 
 # --- 1. Zár ---------------------------------------------------------------
@@ -666,15 +696,7 @@ case "$outcome" in
     ;;
   halted)
     git checkout -q main 2>/dev/null || log "figyelem: a munkafa nem tért vissza mainre"
-    halt_code=$(grep -m1 '^halt=' "$status_file" | cut -d= -f2-)
-    {
-      cat "$status_file"
-      echo "session_log=$session_log"
-      echo "halted_at=$(date -Is)"
-    } > "$halt_file"
-    log "HALT ($halt_code) a(z) $round körön — $summary"
-    notify "⛔ HALT ($halt_code): $round" "$summary — az önjavító kör a következő firingen indul" high
-    log "az önjavítás (ADR 0112) a következő cron-firingen indul; kikapcsolva: PIPELINE_SELFHEAL=0"
+    handle_round_halt "$round" "$status_file" "$session_log"
     exit 3
     ;;
   *)

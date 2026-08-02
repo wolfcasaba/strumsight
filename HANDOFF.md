@@ -733,6 +733,32 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    > GitHub-required check) ezért erre a heal branch-re is pirosat
    > mutatott, PR #70 a #68/#69 mintáját követve a CodeRabbit-checkkel
    > merge-elődött. Részletek: `docs/LESSONS.md` L63.
+   >
+   > **E03-R08 H6 önjavító kör, 4. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** az L63-fix (PR #70, 16:27) UTÁN is jött egy 6.
+   > azonos H6 halt (16:38 UTC) — a hold-fájl megint hiányzott. Gyökérok:
+   > a hold-írás (`terra_hold_if_exhausted`) KIZÁRÓLAG `attempt_selfheal()`
+   > `retry`-ágából íródott ki, sosem a driver `halted)` ágából (a HALT
+   > ELSŐ, session előtti észlelése). A 3. előfordulás heal-köre
+   > (16:20–16:30) maga egy MÁSIK gyökérokra javított (a hold-író saját
+   > hibája) — `outcome=fixed`, nem `retry` —, ezért a `retry`-ág EBBEN a
+   > ciklusban sem futott le, a hold-fájl a fix után is üres maradt.
+   > Javítás: új `handle_round_halt()` (`tools/round-pipeline.sh`) a
+   > `halt_file` írása MELLÉ meghívja `terra_hold_if_exhausted()`-et is —
+   > a HALT ELSŐ észlelésekor, MIELŐTT bármilyen self-heal elindulna,
+   > FÜGGETLENÜL a self-heal későbbi `outcome`-jától. Az
+   > `attempt_selfheal()` retry-ágának hívása változatlanul marad
+   > (idempotens második réteg). Új `--handle-round-halt` teszthorog +
+   > `test_pipeline_integration.py::
+   > test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry`
+   > — RED a hook nélkül (a hívás a case-ágból kiesve a teljes
+   > driver-folyamatba zuhan), GREEN a hookkal. A `tools/tests -q` ezen a
+   > javításon átfutva is UGYANAZZAL a [[L59]]-ben dokumentált E03-R05
+   > brief-TOML sub-teszttel pirosít, mérve azonosan a módosítás nélküli
+   > `main`-en is; `router-ci.yml` ezért erre a heal branch-re is pirosat
+   > mutatott ugyanazzal az EGY sub-teszttel, a #68/#69/#70 mintáját
+   > követve a CodeRabbit-checkkel merge-elődött. Részletek:
+   > `docs/LESSONS.md` L64.
 4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
    minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
    cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden

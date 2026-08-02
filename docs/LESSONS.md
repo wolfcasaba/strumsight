@@ -2731,3 +2731,59 @@ mérési pillanat — egy mechanizmus commitolása és zöld gate-je nem
 bizonyítja, hogy a mechanizmus a KIVÁLTÓ feltétel mellett ténylegesen
 lefut; erre külön, a hívott folyamatot szimuláló teszt kell, nem csak a
 kimeneti állapot kézi felvétele.
+
+## L64 — A [[L62]]/[[L63]] Terra-hold KIZÁRÓLAG az önjavítás retry-ágából íródott ki, sosem a HALT ELSŐ észlelésekor — egy `outcome=fixed` heal (más gyökérokra) csendben átugrotta, és a lánc a 6. azonos H6 haltig pörgött (E03-R08 H6, 2026-08-02)
+
+**Mit mértünk (2026-08-02, 14:26–16:38 UTC, 6 egymást követő H6 halt
+ugyanazon a naptár-korlátozott Terra-falon).** A [[L63]] javítás
+(PR #70, 16:27-kor merge-elve) magát az ÍRÓ függvényt
+(`terra_hold_if_exhausted()`) javította — de a hívása `tools/
+round-pipeline.sh`-ban KIZÁRÓLAG `attempt_selfheal()` `retry`-ágában
+történt (L396-407: az önjavító session jelentés-SZÖVEGÉRE
+string-matchelve `*"Terra"*"budget"*`-re). A 16:20–16:30-as heal-kör
+maga is Terra-halton futott, de a JAVÍTÁSA egy MÁSIK gyökérokra (a hold-
+író függvény saját hibája) vonatkozott — a session jelentése helyesen
+`outcome=fixed`-et írt, NEM `retry`-t —, ezért a `retry`-ág, és vele a
+hold-írás, EBBEN a ciklusban sem futott le. A 16:35-ös következő
+firing ezért — a már javított `terra_hold_if_exhausted()` mellett is —
+üres hold-állapotból indult, és a 16:38-as 6. halt megint a driver saját
+`round-status`-feldolgozó szakaszát (a HALT ELSŐ észlelését, a `halted`)
+ág) futtatta le, amely SOHA nem hívta meg a hold-írót — csak az
+`attempt_selfheal()` retry-ága tette.
+
+**A javítás.** Egy új `handle_round_halt()` függvény (`tools/
+round-pipeline.sh`) fogja össze a `halt_file` írását ÉS a
+`terra_hold_if_exhausted()` hívást a driver `halted)` ágában — azaz a
+HALT ELSŐ észlelésekor, MIELŐTT bármilyen önjavító session elindulna,
+és FÜGGETLENÜL attól, hogy a self-heal végül milyen `outcome`-ot ír. A
+hívás önmagában biztonságos, mert `terra_hold_if_exhausted()` a döntését
+mindig az ÉLŐ `terra-status` lekérdezésből hozza (nem az LLM-jelentés
+szövegéből), tehát csak akkor ír holdot, ha a budget MOST valóban
+kimerült — egy nem-Terra halton no-op. Az `attempt_selfheal()` `retry`-
+ágának meglévő hívása változatlanul marad (idempotens második védelmi
+réteg). Regressziós teszt: új `--handle-round-halt` teszthorog (a
+meglévő `--terra-hold-if-exhausted` mintájára) +
+`test_pipeline_integration.py::
+test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry`
+— a hook hiányában (a javítás előtti kódúton) a hívás a case-ágból
+kiesve a teljes driver-folyamatba zuhan (RED, "a munkafa nem a main-en
+van"), a hook bevezetése után determinisztikusan, self-heal session
+nélkül írja ki a hold-fájlt (GREEN).
+
+**Fel nem vett, tudatosan meghagyott melléklelet.** Ugyanaz, mint
+[[L62]]/[[L63]]: a `python3 -m pytest tools/tests -q` ezen a javításon
+átfutva is az EGYETLEN, [[L59]]-ben dokumentált E03-R05 brief-drift
+sub-teszttel pirosít, azonosan mérve a friss `origin/main`-en is, ezen
+javítás nélkül. `router-ci.yml` (push-only, nem GitHub-required check)
+ezért erre a heal branch-re is pirosat mutatott ugyanazzal az EGY
+sub-teszttel; a PR #68/#69/#70 mintáját követve a merge a CodeRabbit-
+checkkel ment.
+
+**Tanulság.** Egy hold/circuit-breaker BEVEZETÉSE (mint [[L62]]) és
+annak MINDEN triggerelő kódútról való meghívása két különálló
+követelmény — ha a hold-írás csak egy ÖNJAVÍTÁSI ág mellékhatása, a
+FŐ útvonal (a HALT ELSŐ, session előtti észlelése) néma vakfolt marad,
+és pontosan azok a ciklusok ugranak át rajta, amikor az önjavítás egy
+ATTÓL FÜGGETLEN, valódi hibát javít. A védekező hívást a legkorábbi,
+egyetlen kötelező belépési pontra kell tenni (itt: a HALT-felismerés
+maga), nem egy feltételesen futó ág mellékhatásaként.
