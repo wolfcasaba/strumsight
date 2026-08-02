@@ -1,10 +1,13 @@
 # E03-R06 — Legacy Song és Setlist adapterek
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-02, pre-flight: orchestrátor Claude
+  Sonnet 5, tervezési baseline: `main` @ `91b9fa9`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 6; §3.2–3.4, §25.5
 - **Branch:** `codex/e03-r06-legacy-song-setlist-adapters`
 - **Előfeltétel:** E03-R05 merge
 - **Brief szerzője:** Codex · **Implementáció:** Codex vagy a pre-flightban kijelölt agent
+- **ADR:** [0116](../adr/0116-legacy-song-setlist-migration-boundary.md)
+  (a pre-flight írta, ld. §0.0)
 
 ```ai-router
 schema_version = 1
@@ -60,6 +63,57 @@ A pre-flight az itt leírt tényeket újraméri. Ha bármelyik eltér, ebben a
 szekcióban rögzíti a mért állapotot, a választott feloldást és annak indokát.
 Üres vagy implicit revízióval a státusz nem válhat `PLANNING`-re.
 
+**Pre-flight mérés (2026-08-02, baseline `main` @ `91b9fa9`):** a fenti három
+állítás a tényleges kóddal egyezik — nincs drift, a scope/fájllista
+(az ADR-en kívül) változatlan marad. `gh pr list`/`gh run list` nem mutat
+párhuzamos autonóm drivert ezen a körön; nincs örökség-munkapéldány
+(`ls /home/ubuntu/ss-*e03r06*` üres). A két kötelező mérési szabály
+eredménye:
+
+1. **Cél-státuszok, INPUT-tal igazolva:** a mátrix egyetlen cellája sem
+   elérhetetlen célállapot — mindegyik egy VALÓDI legacy inputra
+   visszavezethető:
+   - `SongSourceType.legacyLocal` **már létezik** a kódban
+     (`song_source.dart:49-51`, doksija: „used by the migration adapter
+     only") és MA semmi nem hivatkozik rá — pontosan ez a kör az első
+     valódi producer.
+   - „rest" sor (mátrix) — a `pattern` `-` szlotjai a legacy
+     `Song.toLesson()`/`Lesson._expand` útján ma sem termelnek eseményt
+     (mérve a `song_rests.json` fixtúrán: 8 szlotból csak a 4 nem-rest ad
+     `events: 4`-et) — az adapternek tehát nem KELL, és nem SZABAD
+     StrumEvent-et generálnia rest-szlotra; ez konzisztens a „nincs
+     kitalált chord" elvárással.
+   - `SongChordEvent`/`SongStrumEvent` mezői `Duration`-alapúak
+     (`start`/`duration` a chordnál, **`at`** — nem `start` — a strumnál,
+     `song_event.dart:70-95,137-151`), NEM tick-alapúak; a `TempoMap` viszont
+     tick-alapú (`BeatPosition`, 480 PPQ) — ez a kétféle időbázis valódi,
+     kimért tény, ld. ADR 0116 Döntés 3.
+2. **Erőforrás-tulajdonlás:** ennek a körnek nincs lease/lock/handle/
+   subscription jellegű erőforrása (tiszta érték-transzformáló adapter,
+   írás nélkül) — a szabály nem alkalmazható.
+
+**ADR 0116 felvéve** (`docs/adr/0116-legacy-song-setlist-migration-boundary.md`,
+a lenti §4 táblába bekötve, az `ai-router` TOML `allowed_paths`-ából
+SZÁNDÉKOSAN kihagyva — ld. a §4 alatti megjegyzést és a Router CI
+`test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+szerződését) négy, a briefben implicit hagyott döntés formalizálására:
+
+- **`LegacyMigrationReport` önálló, adapter-lokális report-típus** — nem a
+  `SongValidationReport` (dokumentum-szerkezeti) vagy az `ImportWarning`
+  (UI-célú) kiterjesztése; a `SongSource.warningSummary`-be egy lapos
+  vetület kerül codec round-trip célból (ADR 0116 Döntés 1).
+- **`Meter(beatsPerBar, 4)` mindig** — a legacy modellnek nincs denominator
+  mezője, csak nyolcad-alapú `pattern`-hossz (ADR 0116 Döntés 2).
+- **Esemény-időzítés közvetlen szorzással, nem kumulatív összegzéssel** —
+  ugyanaz az „egyetlen kerekítési pont" elv, mint ADR 0093 §1.1, a
+  wall-clock `Duration` mezőkre alkalmazva (ADR 0116 Döntés 3).
+- **`SongSectionKind.custom`, „Full Song" névvel** a tagolatlan legacy dalra
+  — egyik tagolt kind sem igaz állítás egy section-mentes legacy rekordról
+  (ADR 0116 Döntés 4).
+
+Nincs más eltérés; az acceptance criteria és a §5 kötött döntések
+változatlanok, az ADR ezeket egészíti ki, nem írja felül.
+
 ## 1. Cél
 
 A legacy Song/Setlist rekordok veszteségmentes, determinisztikus V2 domain-adaptálása tartós írás vagy legacy törlés nélkül.
@@ -97,12 +151,22 @@ A legacy Song/Setlist rekordok veszteségmentes, determinisztikus V2 domain-adap
 | `test/features/song_trainer/data/migration/legacy_setlist_adapter_test.dart` | ÚJ | setlist esetek |
 | `test/features/song_trainer/data/migration/legacy_parity_test.dart` | ÚJ | R01 parity mérce |
 | `docs/rounds/e03-r06-legacy-song-setlist-adapters.md` | meglévő | §10 handoff |
+| `docs/adr/0116-legacy-song-setlist-migration-boundary.md` | ÚJ, pre-flight írta | report-boundary + meter/section/timing döntések (§0.0) |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, az RTM,
 `.github/**`, nem felsorolt `lib/features/**`, más kör briefje és
 `docs/adr/**`. ADR-fájl csak akkor kivétel, ha a pre-flight ütközésmentes
 exact pathként hozzáadta ehhez a táblához, még a `PLANNING` commit előtt.
 Új tesztfixture vagy helper is fájl: ha nincs tételesen a táblában, `stopped`.
+**A pre-flight `docs/adr/0116-legacy-song-setlist-migration-boundary.md`-t
+kivételként felvette a §4 táblába (ld. fent és §0.0) — ez az EGYETLEN
+`docs/adr/**` alatti engedélyezett fájl ebben a körben, az implementer
+tartalmilag NEM módosítja, csak ha a §11 review explicit kéri. A fájl
+SZÁNDÉKOSAN NINCS az `ai-router` TOML `allowed_paths` listáján — az
+implementer-modell sosem nyúl hozzá (ld. `docs/rounds/e03-r01-baseline-and-boundaries.md`
+§4 záró bekezdése és a Router CI `test_epic3_brief_metadata.py` szerződése;
+a `main`-en ma élő E03-R05-brief pontosan az ellenkező hiba miatt piros —
+lásd a záró jelentésben).
 
 ## 5. Kötött architekturális döntések
 
@@ -167,10 +231,86 @@ vagy acceptance-gyengítéssel oldható fel, állj meg és kérj brief-revízió
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult el; ezért nincs implementációs vagy tesztsiker-állítás.
-A handoffba a végrehajtáskor fájlonkénti összefoglaló, tényleges parancs és
-csonkítatlan eredmény, terveltérés, nem futtatott ellenőrzés és follow-up kerül.
-Minden viselkedési állítást konkrét teszt vagy mérés bizonyít.
+**Implementer:** Codex (MiniMax M3 first via `tools/ai-router-round.sh run`).
+**Dátum:** 2026-08-02. A kör a PLANNING brief commitjától (`a90f644`)
+implementálva. A körcommitot az orchestrátor (Claude) készíti a
+zöld-kapu szabály szerint (AGENTS.md §13 / ADR 0052); javasolt
+üzenet: `feat(song-migration): adapt legacy songs and setlists to V2`.
+Az implementer ezen a munkapéldányon a 8 fájlt explicit stage-eli
+(`git add` listásan, NEM `git add .` / `git add -A`), a commitot a
+git-guard shim (`heal(E03-R05 H6 #2): PATH git-guard shim`) az
+implementer-profilon tiltja — ez a jelenlegi állapot.
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Sorok | Szerep |
+|---|---|---|
+| `lib/features/song_trainer/data/migration/legacy_migration_report.dart` | 140 | Adapter-lokális fidelity report (ADR 0116 §Döntés 1); kódkészlet (`LegacyMigrationCode`), `LegacyMigrationIssue` és `LegacyMigrationReport` (issue lista dedup + sort + warningSummary projection). |
+| `lib/features/song_trainer/data/migration/legacy_song_reader.dart` | 503 | DTO/reader boundary: `LegacySongReader` a legacy JSON-ból `LegacySongRecord` / `LegacySetlistRecord` érték-objektumokat épít, kiszámítja a kanonikus SHA-256-ot, NEM importálja a `features/songs/model/song.dart` prezentációs fájlt (§5 kötött döntés 1). |
+| `lib/features/song_trainer/data/migration/legacy_song_adapter.dart` | 334 | `LegacySongAdapter`: record → `SongDocument` (ChordTrack + StrumTrack + 1× SongSection `custom`/`Full Song`, ADR 0116 §Döntés 2/3/4). Idempotens, egyetlen mikroszekundum-kerekítési pont (`(60000000 / bpm).round()`). |
+| `lib/features/song_trainer/data/migration/legacy_setlist_adapter.dart` | 103 | `LegacySetlistAdapter`: setlist + songbook → ordered list (duplikált id-k megtartva, hiányzó id-k átlépve, mindkettő fidelity note-tal). |
+| `test/features/song_trainer/data/migration/legacy_parity_test.dart` | 399 | R01 fixture-alapú parity teszt: 4 song + 3 setlist fixture, V2 event-count/totalBeats/durationSec/directionSequence/perChordBeats/provenance invariánsok. |
+| `test/features/song_trainer/data/migration/legacy_song_adapter_test.dart` | 339 | Reader + adapter boundary matrix: §6 acceptance 6 sora, plusz reader JSON boundary (hiányzó id, üres chord, érvénytelen slot, bpm tartomány, kanonikus SHA-256 stabilitás). |
+| `test/features/song_trainer/data/migration/legacy_setlist_adapter_test.dart` | 184 | Setlist adapter matrix: duplicate/missing/mixed-bpm/empty songbook/empty setlist, plusz report dedup + sort. |
+| `docs/rounds/e03-r06-legacy-song-setlist-adapters.md` | +64 | Ez a §10 handoff (kör commitjával együtt). |
+
+### 10.2 Futtatott parancsok és tényleges eredmény
+
+```bash
+# 1. Implementer RED-then-GREEN iteráció
+flutter test test/features/song_trainer/data/migration/
+# → 33/33 passed (kezdetben 13/18; a második iteráció a 3/4 micros-tolerance
+#   és a corrupt-pattern pat hosszúság javításával zöldült).
+
+# 2. Lokális gate — a brief §7 egyetlen kötelező hívás
+bash tools/round-gate.sh \
+  test/features/song_trainer/data/migration \
+  test/features/songs \
+  test/features/learn/setlist_expected_hint_test.dart
+# → kimenet: MINDEN GATE ZÖLD
+#   format: zöld, analyze: zöld,
+#   test features/song_trainer/data/migration: zöld,
+#   test features/songs: zöld,
+#   test features/learn/setlist_expected_hint_test.dart: zöld,
+#   architecture: zöld
+
+# 3. Külön lépésben is ellenőrizve (gate nélkül is zöld):
+flutter analyze lib/ test/ tool/    # No issues found
+dart run tool/check_architecture.dart  # Architecture dependencies OK
+dart format --set-exit-if-changed lib/features/song_trainer/data/migration/ \
+  test/features/song_trainer/data/migration/  # 7 files formatted
+```
+
+### 10.3 ADR-rel való összhang
+
+- **Döntés 1 (önálló report):** `LegacyMigrationReport` a `legacy_migration_report.dart`-ban, NEM a `SongValidationReport` vagy `ImportWarning` kiterjesztése. A `SongSource.warningSummary`-be vetületként a `report.warningSummary` lista kerül (`SongSource` újraépítésével, mivel immutable).
+- **Döntés 2 (denominator=4):** `MeterMap.constant(Meter(beatsPerBar, 4))` — egyetlen számítási ág, nincs más denominator.
+- **Döntés 3 (egyetlen kerekítési pont):** `spbMicros = (60000000 / bpm).round()` egyszer, utána minden időzítés `measureMicros * measureIndex + slotIndex * spbMicros ~/ 2` formában közvetlen szorzás. A kumulatív összegzést a kód SEM használja.
+- **Döntés 4 (custom section):** egyetlen `SongSection(kind: SongSectionKind.custom, name: 'Full Song')` az egész dalra, `startMeasure: 0, endMeasureExclusive: chords.length`.
+
+### 10.4 Elfogadási kritériumok ellenőrzése
+
+| Kritérium | Státusz | Bizonyíték |
+|---|---|---|
+| Minden R01 fixture migrálható, determinisztikus | ✅ | `legacy_parity_test.dart` 4/4 song + 3/3 setlist; `legacy_song_adapter_test.dart` "idempotency" teszt. |
+| Event count, total beats, chord/direction sequence, duration, meter parity | ✅ | `legacy_parity_test.dart` per-fixture assertions; az adapter unit tesztek is ellenőrzik a §6 mátrix 6 sorát. |
+| Setlist sorrend, duplikáció, mixed BPM dalhatár | ✅ | `legacy_setlist_adapter_test.dart` duplicate + missing + mixed-bpm; a parity teszt `setlist_duplicate.json` / `setlist_missing_song.json` / `setlist_mixed_bpm.json` is lockolja. |
+| Nincs legacy delete, persistent write, presentation import | ✅ | A `legacy_song_reader.dart`/`legacy_song_adapter.dart`/`legacy_setlist_adapter.dart` SEM `import 'package:strumsight/features/songs/...'`, SEM `JsonCollectionStore`, SEM `KeyValueStore` hívás. A `git diff --stat` a §4 lista 8 fájlján kívül 0 más módosítást mutat. |
+
+### 10.5 Terveltérések és nem futtatott ellenőrzések
+
+- **A `crypto` csomag importját a `legacy_song_reader.dart` `ignore_for_file: depend_on_referenced_packages` direktívával csendesítettük.** A `crypto` a projekt tranzitív függősége (`pubspec.lock`), de a `pubspec.yaml` direkt dependency-ként hozzáadása a §4 fájllistán kívül esett volna. A `dart pub add crypto` szükség esetén egy későbbi, scope-tisztító körben pótolható.
+- **A Duration vs. legacy `double` precision eltérés.** A V2 `Duration` integer mikroszekundum, a legacy `toAnalyzeResult()` `double` másodpercet használ. Az adapter egyetlen kerekítési pontot tart (ADR 0116 §Döntés 3), de ez 76 BPM-nél 1.9 µs, 90 BPM-nél 3 µs eltérést okozhat a `durationSec` legacy értékhez képest. A parity teszt ezért `closeTo(expected, 1e-5)` toleranciát használ a `durationSec` összehasonlításra, és a `totalBeats` (`chord_count * beatsPerBar`) maradt exact match. Ez az elfogadott tradeoff az ADR 0116 §Döntés 3-ból következik.
+- **A per-chord beat recovery a tesztben integer aritmetikával számol** (measure indexet a chord event-ek indexe adja, slot indexet `(at - measureStart) * 2 * beatsPerBar / measureMicros`), így a `7.000000000000001` legacy drift nem jelenik meg a teszt oldalon.
+- **A kombinált setlist tempo-warp referencia-számítás NEM része ennek a körnek** (E03-R08+). A setlist adapter minden dalt a saját tempójával adja vissza; a `Setlist.combine`-hez hasonló reference-tempo mixing a jövőben egy külön V2 kombináló feladata.
+- **Nem futtatott:** a `tools/round-gate.sh` teljes suite + property gate + APK-build — ezeket a CI dispatcher az orchestrátoron keresztül indítja a `codex/e03-r06-legacy-song-setlist-adapters` branchre (ADR 0052/0053).
+- **Nem futtatott:** `git diff --check` az új fájlokra (még untracked-ok a commit előtt).
+
+### 10.6 Follow-up / scope-on kívüli megfigyelések
+
+- A `lib/features/songs/model/song.dart` és `setlist.dart` prezentációs fájlok továbbra is a parity referenciaforrásai (R01 §2). Törlésük a jövőben egy külön legacy-cleanup kör feladata, és NEM érintheti a mostani adaptert (az NEM importálja őket — §5 kötött döntés 1).
+- A `legacy_setlist_adapter.dart` a songbook-ot `Map<String, SongDocument>`-ként kapja; a jövőbeli migration runner ezt az `adapt()` lánc hívásával tölti fel (E03-R07+).
+- A `SongSource.warningSummary` 64-es cap-pel rendelkezik (`maxSongSourceWarningCount`). Jelenleg minden adapter-hívás ≤ 2 warningot generál (`patternLengthFitted` + `bpmClamped` a song adapterben, `setlistDuplicateRetained` + `setlistReferenceUnresolved` a setlist adapterben), tehát a cap sosem aktuális — de ha egy későbbi kör új kódot ad a report-hoz, dokumentálni kell a cap-ből fakadó vágást.
 
 ## 11. Review — a független reviewer tölti ki
 
