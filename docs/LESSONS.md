@@ -2387,3 +2387,56 @@ az `ignored_allow_paths`-t az untracked-ágnak is — ez az orchestrátor
 hatáskörén kívül esik ebben a körben (tiltott zóna), de egy jövőbeli
 önjavító/heal kör számára dokumentált, konkrét, reprodukálható javítási
 cél.
+
+## L59 — Az L48 klón-csapda egy MÁSODIK `auto`-körön is megismétlődött (E03-R06); és egy MÁR MERGE-ELT kör briefje elronthatja a Router CI-t egy tőle független jövőbeli körön
+
+**Mit mértünk (2026-08-02, E03-R06 első dispatch).** Az `engine=auto`
+router BASELINE_GATE-je egy vadonatúj `ss-router-e03-r06` munkapéldányon
+elsőre `BLOCKED`-ba futott (`code_failure`, `failed_step: analyze`, 625
+`AppLocalizations`-hoz kötődő `undefined_identifier`/`uri_does_not_exist`
+hiba) — pontosan az L48-ban már dokumentált klón-csapda (`lib/l10n/
+app_localizations*.dart` gitignore-olt, egy friss `git worktree add` nem
+hordozza). A sanctioned javítás ugyanaz volt: `flutter pub get && flutter
+gen-l10n` a munkapéldányban, majd `python3 tools/model-router.py reset
+--task-id E03-R06` (zéró-fogyasztású, `m3_attempts` a reset után is 0
+maradt) — újradispatch után a BASELINE_GATE elsőre zöldre futott, M3 egy
+próbán belül `READY_FOR_REVIEW`-t adott. **L48 kiegészítése:** ez a
+csapda NEM egyszeri, minden vadonatúj `auto`-munkapéldány első futtatása
+elé kerül — érdemes lenne a `tools/ai-router-round.sh`/`mm-round.sh`
+elé egy feltétel nélküli `flutter pub get && flutter gen-l10n` lépést
+tenni minden ÚJ munkapéldányon (a `.git` létét, nem a `lib/l10n/`
+tartalmát ellenőrizve) — ez az orchestrátor hatáskörén kívül eső
+`tools/` módosítás, egy jövőbeli önjavító kör konkrét célja.
+
+**Egy MÁSIK, független mérés ugyanebben a pre-flightban:** a Router CI
+(`router-ci.yml`, `tools/tests/test_epic3_brief_metadata.py::
+test_all_twenty_two_briefs_match_their_committed_scope_and_gate`) a
+`main`-en KÉTSZER pirosra futott az E03-R05 zárókör (`91b9fa9`) UTÁN — egy
+MÁR MERGE-ELT kör (E03-R05) briefje
+(`docs/rounds/e03-r05-validator-normalizer-capabilities.md`) az `ai-router`
+TOML `allowed_paths` listájába is felvette a `docs/adr/0114-...md` utat,
+holott a konvenció (E03-R02 H6 óta, ld. `docs/rounds/
+e03-r01-baseline-and-boundaries.md` §4 záró bekezdése) az, hogy az
+ADR-fájl CSAK a §4 emberi táblában szerepel, a TOML-ban SOHA — a teszt
+pontosan ezt a szétválást ellenőrzi (`implementer_scope_paths` a §4
+táblából a `docs/adr/`-eket kiszűri, és ezt veti össze a TOML
+`allowed_paths`-szal). Ez a hiba a `docs/rounds/e03-r05-...md`-t az
+E03-R06 pre-flight `docs/adr/**` "más kör briefje/ADR-je" tilos zónája
+miatt NEM javíthatta ki ez a session — ez a szabály helyesen működött
+(egy MÁS, már lezárt kör artefaktumának módosítása H2-terület lenne), de
+azt is jelenti, hogy egy zöld-kapu-mérce workflow (Router CI) a `main`-en
+tartósan pirosban maradhat egy már lezárt kör mért hibája miatt, amíg egy
+külön önjavító kör nem oldja fel. Az E03-R06 pre-flight a saját ADR-jét
+(0116) explicit CSAK a §4 táblába vette fel (nem a TOML-ba) — ez a
+konvenció betartva, tehát ez a kör NEM ismétli meg a hibát, de a `main`
+Router CI píros státusza E03-R06 merge-je UTÁN is fennáll, amíg egy
+önjavító kör nem javítja az E03-R05 brief TOML-ját.
+
+**Tanulság.** (1) Az L48 mintát tekintsük szisztematikusnak: minden ÚJ
+`auto`-munkapéldány első `run` hívása elé egy feltétel nélküli
+`gen-l10n` lépés kell, nem esetenkénti manuális felismerés. (2) Egy
+lezárt kör briefjének mért hibája — még ha a mérce (Router CI) pirosít
+is — nem old fel egy MÁSIK, jelenleg futó kör "tilos zóna" szabálya alól;
+a helyes válasz a dokumentálás + a hiba érintetlenül hagyása a saját
+körben, a javítást egy külön, arra felhatalmazott (self-heal) kör
+végzi.

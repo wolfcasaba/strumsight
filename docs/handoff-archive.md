@@ -1917,3 +1917,67 @@ zöld a merge-elt `headSha`-n (`b080d9a`), független post-merge
 gate-ellenőrzés `main`-en (friss klón, `origin/main`) szintén zöld.
 
 Review-jelentés: [`docs/reviews/e03-r05-validator-normalizer-capabilities-review.md`](reviews/e03-r05-validator-normalizer-capabilities-review.md).
+
+## E03-R06 — Legacy Song és Setlist adapterek
+
+**Kör:** E03-R06 (PR [#65](https://github.com/wolfcasaba/strumsight/pull/65),
+squash `d20c402`,
+[ADR 0116](adr/0116-legacy-song-setlist-migration-boundary.md)).
+Implementer: **auto MiniMax-first router** (ADR 0088), egyetlen M3-attempt,
+gate elsőre zöld, javító kör nélkül. Orchestrátor: **Claude Sonnet 5**.
+
+**Pre-flight.** Nincs drift a brief baseline-állításaiban a tényleges
+kódhoz képest — `SongSourceType.legacyLocal` már létezett, de eddig
+semmi nem hivatkozott rá; a legacy `pattern` rest-szlotjai (`-`) ma sem
+termelnek eseményt (`song_rests.json` fixtúrán mérve); a
+`SongChordEvent`/`SongStrumEvent` mezői `Duration`-alapúak (wall-clock),
+NEM tick-alapúak, szemben a `TempoMap`/`MeterMap`/`KeyMap` tick-alapú
+primitíváival — ez a két időbázis valódi, kimért tény. ADR 0116 négy
+döntést formalizált: `LegacyMigrationReport` önálló, adapter-lokális
+report-típus (nem a `SongValidationReport`/`ImportWarning` kiterjesztése);
+`Meter(beatsPerBar, 4)` mindig (a legacy modellnek nincs denominator
+mezője); esemény-időzítés közvetlen szorzással, nem kumulatív
+összegzéssel (ADR 0093 §1.1 „egyetlen kerekítési pont" elve a wall-clock
+mezőkre alkalmazva); `SongSectionKind.custom` „Full Song" névvel a
+tagolatlan legacy dalra.
+
+**Folyamat.** Egy vadonatúj `auto`-router munkapéldány első
+`BASELINE_GATE`-je `BLOCKED`-ba futott — az L48-ban már dokumentált
+klón-csapda (a gitignore-olt `lib/l10n/app_localizations*.dart` egy
+friss `git worktree add`-en hiányzik, 625 `AppLocalizations`-hoz kötődő
+analyze-hiba). Sanctioned javítás: `flutter pub get && flutter gen-l10n`
+a munkapéldányban, majd `python3 tools/model-router.py reset --task-id
+E03-R06` (zéró-fogyasztású). Újradispatch után a BASELINE_GATE elsőre
+zöldre futott, M3 egyetlen attempten belül `READY_FOR_REVIEW`-t adott.
+Részletek: `docs/LESSONS.md` L59 (amely azt is dokumentálja, hogy a
+`main`-en élő E03-R05 brief TOML `allowed_paths`-a mért hibával
+tartalmazza a `docs/adr/0114-...md` utat, ezért piros a Router CI a
+`main`-en — ez egy MÁR MERGE-ELT kör artefaktuma, ezt a sessiont a
+tilos zóna szabálya kizárta a javításából, egy jövőbeli self-heal kör
+feladata).
+
+**Elkészült (lásd HANDOFF §2 részletesen):** `LegacySongReader`, `LegacySongAdapter`,
+`LegacySetlistAdapter`, `LegacyMigrationReport`.
+
+**Review, javító kör nélkül.** Izolált `/tmp` klón, saját
+gate-újrafuttatás, scope-audit (9/9 fájl — 7 kód/teszt + brief + ADR —
+egyezik az engedélyezett listával), mind a négy ADR 0116 döntés
+forráskód-szintű ellenőrzése, **9 eldobható adverzariális próbateszt**
+(a kör saját tesztjei által nem fedett éleken: hosszabb corrupt-pattern
+truncation, codec-byte determinizmus, kombinált duplicate+missing
+setlist id, `SongValidator` integráció az adapter kimenetén, független
+referencia-képletes időzítés) → **0 BLOCKER/MAJOR**, 3 MINOR (F1:
+`setlistDuplicateRetained` assertion hiánya a kombinált fixture-ön; F2:
+a kör saját tesztjei sosem futtatják a `SongValidator`-t a migrált
+outputon; F3: `crypto` transzitív import `ignore_for_file`-lal
+némítva) + 1 NOTE (docstring pontatlanság), mind follow-up, egyik sem
+blokkoló.
+
+Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer, izolált
+klónokban) + teljes `test/features/songs` (49/49) +
+`setlist_expected_hint_test.dart` (1/1) regresszió-mentes + CI
+[30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)
+zöld a merge-elt `headSha`-n (`1387bb5`), független post-merge
+gate-ellenőrzés `main`-en szintén zöld.
+
+Review-jelentés: [`docs/reviews/e03-r06-legacy-song-setlist-adapters-review.md`](reviews/e03-r06-legacy-song-setlist-adapters-review.md).

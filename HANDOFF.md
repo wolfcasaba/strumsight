@@ -4,57 +4,43 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
-> (Pipeline E03-R05 — Validator, normalizer and capability resolver DONE,
-> merged `5226127`, 1 fix round.** `SongValidator` (cross-collection
-> validation: section range/overlap, strum→chord target reference,
-> unknown technique/chord/direction, reuses `NoteTrackAnalyzer` for
-> polyphony — never throws, always returns a `SongValidationReport`),
-> idempotent `SongNormalizer` (canonical ordering, ID-preserving), and
-> `SongCapabilityResolver` (severity→capability contract: `fatal` ⇒
-> `canPersist=false` on every profile; chord/pitch display/scoring are
-> independent axes) (ADR 0114). **Pre-flight (ADR 0114):** two decisions
-> formalized — the chord-support grammar is domain-local (never imports
-> the `practice`-feature dictionary, which is both a cross-feature import
-> the domain-purity scanner forbids AND outside `allowed_paths`), and the
-> severity→capability contract (fatal always blocks persist; capability is
-> a separate axis so the brief's four-combination matrix stays
-> representable). **Process:** the branch had already survived two H6
-> self-heal rounds before this session started (PR #61/#62/#63 — M3
-> illegally self-committing its work, hard-blocked by `security.py`, root
-> cause finally closed by a PATH git-guard shim; see `docs/LESSONS.md`
-> L54–L56) — this session's pre-flight found the salvageable, scope-clean
-> M3 diff sitting uncommitted in an abandoned worktree, reconciled it
-> (`git reset --soft` + rebase onto current `main` + independent gate
-> re-run, per the L50 pattern) and committed it under orchestrator
-> authorship. **Independent review** (isolated `/tmp` clone, own gate
-> re-run, scope-audit, an **adversarial mutation probe**) found **1
-> BLOCKER**: `SongValidator._validateTracks` collected `chordEventIds` in
-> the same single pass it validated `StrumTrack.targetChordId` against —
-> `SongDocument.tracks` carries no ordering contract (canonical ordering
-> is the normalizer's separate, later concern), so a `StrumTrack` listed
-> before its target `ChordTrack` produced a false `strumTargetChordMissing`
-> fatal issue on an otherwise fully valid document. Reproduced with a
-> throwaway probe (RED before the fix, GREEN after). **Fixer round:** the
-> `auto` router's `resume` path hit a second, distinct infra dead end on
-> this task (the review-findings file — although present on the router's
-> own `GENERATED_IGNORED_PREFIXES` whitelist — is only exempted in the
-> post-hoc `audit_scope` diff, not in `validate_baseline_manifest`'s
-> unconditional untracked-file check that runs during a fresh PRECHECK
-> after a task reset; see `docs/LESSONS.md` L58), so the fix round ran on
-> the legacy `tools/mm-round.sh` engine path instead (a scratchpad-only
-> copy with one worktree-detection character class widened, `-d` → `-e`,
-> for a `git worktree add` tree where `.git` is a file — the real
-> `tools/mm-round.sh` was left untouched; `tools/ai_router/**` stayed out
-> of scope). M3's fix replaced the single pass with a two-pass algorithm
-> (collect all chord IDs first, then validate) and added 3 permanent
-> regression tests; independently re-verified by the reviewer (181/181
-> `test/features/song_trainer` green, plus the probe itself flipping from
-> RED to GREEN). CI green on the exact merge `headSha`
-> ([run 30742878734](https://github.com/wolfcasaba/strumsight/actions/runs/30742878734)),
-> squash-merged [PR #64](https://github.com/wolfcasaba/strumsight/pull/64) →
-> `5226127`, independent post-merge gate re-run on `main` also green. Full
-> narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R05.
-> **Next:** E03-R06 (see §6 below); the pipeline queue's E03-R06 row is
+> (Pipeline E03-R06 — Legacy Song/Setlist migration adapter DONE, merged
+> `d20c402`, no fix round.** `LegacySongReader` (JSON DTO boundary +
+> canonical SHA-256, no legacy presentation import), `LegacySongAdapter`
+> (legacy `Song` record → `SongDocument`: `ChordTrack` + `StrumTrack` +
+> one `SongSectionKind.custom` "Full Song" section, single microsecond
+> rounding point per event), `LegacySetlistAdapter` (order/duplicate/
+> unresolved-id preserving), `LegacyMigrationReport` (adapter-local
+> fidelity report, kept separate from `SongValidationReport`/
+> `ImportWarning`) (ADR 0116). No persistent write, no legacy deletion.
+> **Pre-flight (ADR 0116):** four decisions formalized —
+> `LegacyMigrationReport` is a standalone type (not a
+> `SongValidationReport`/`ImportWarning` extension), `Meter` denominator is
+> always 4 (legacy has no denominator field), event timing uses direct
+> per-event multiplication (not cumulative summation, mirroring ADR 0093's
+> single-rounding-point philosophy), and section kind is always
+> `SongSectionKind.custom` ("Full Song"). **Process:** a fresh
+> `auto`-router worktree hit the L48 clone-pitfall again on the first
+> dispatch (`lib/l10n/app_localizations*.dart` missing → 625 analyze
+> errors) — fixed with the sanctioned `flutter gen-l10n` + zero-cost
+> `model-router.py reset` recipe, then M3 closed the round in one attempt,
+> gate green first pass (`docs/LESSONS.md` L59). Independent review
+> (isolated `/tmp` clone, own gate re-run, scope-audit, 9 adversarial
+> probe tests covering edges the round's own tests missed) found **0
+> BLOCKER/MAJOR** — 3 MINOR + 1 NOTE, all follow-up items, no fix round
+> needed. CI green on the exact merge `headSha`
+> ([run 30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)),
+> squash-merged [PR #65](https://github.com/wolfcasaba/strumsight/pull/65) →
+> `d20c402`, independent post-merge gate re-run on `main` also green.
+> **Also measured, NOT fixed (out of this round's scope — a closed round's
+> artifact):** `main`'s Router CI (`router-ci.yml`) is red because the
+> already-merged E03-R05 brief's `ai-router` TOML `allowed_paths`
+> incorrectly includes the `docs/adr/0114-...md` path (should be §4-table
+> only, never the TOML — the established post-E03-R02-H6 convention). This
+> round's own ADR 0116 followed the convention correctly. Left for a
+> future self-heal round; details `docs/LESSONS.md` L59. Full narrative:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R06.
+> **Next:** E03-R07 (see §6 below); the pipeline queue's E03-R07 row is
 > `pending` — the driver continues automatically (ADR 0087 §7, mid-epic
 > round).
 
@@ -81,9 +67,10 @@
 - **Epic 3 (Song Trainer) elkezdve** — E03-R01 (kickoff, baseline+ADR-ek+flag),
   E03-R02 (SongDocument V2 identitás/metaadat domain modell + codec),
   E03-R03 (section/measure struktúra + determinisztikus tempo/meter/key map +
-  SongTimeMap), E03-R04 (track/event domain modell + monophonic elemzés) és
-  E03-R05 (validator/normalizer/capability resolver) kész. A modell flagek
-  mögött, hívó UI/repository nincs — production viselkedés változatlan.
+  SongTimeMap), E03-R04 (track/event domain modell + monophonic elemzés),
+  E03-R05 (validator/normalizer/capability resolver) és E03-R06 (legacy
+  Song/Setlist migrációs adapter) kész. A modell flagek mögött, hívó
+  UI/repository nincs — production viselkedés változatlan.
 
 ## 2. What is working
 
@@ -154,6 +141,19 @@
   `practice`-feature szótára (ADR 0114 §Döntés 1 — cross-feature import
   + kívül esik az `allowed_paths`-on). Hívó UI/repository még nincs —
   production viselkedés változatlan.
+- **Legacy Song/Setlist migrációs adapter (E03-R06, ADR 0116):**
+  `lib/features/song_trainer/data/migration/` — `LegacySongReader` (JSON
+  DTO boundary, `LegacySongRecord`/`LegacySetlistRecord`, kanonikus
+  SHA-256, nincs presentation import), `LegacySongAdapter` (legacy
+  `Song` record → `SongDocument`: `ChordTrack`+`StrumTrack`+egy
+  `SongSectionKind.custom` „Full Song" section, egyetlen mikroszekundum-
+  kerekítési pont eseményenként, `Meter` denominator mindig 4),
+  `LegacySetlistAdapter` (sorrend/duplikáció megőrzés, missing id →
+  unresolved report, nincs crash), `LegacyMigrationReport` (önálló,
+  adapter-lokális fidelity report — NEM a `SongValidationReport`/
+  `ImportWarning` kiterjesztése, ADR 0116 §Döntés 1). Veszteségmentes,
+  determinisztikus, tartós írás vagy legacy törlés nélkül. Hívó
+  UI/migration-runner még nincs — production viselkedés változatlan.
 - **Detektálás (100% on-device):** Live képernyő (akkord + pengetésirány valós
   időben, DSP + CRNN ML), Analyze (felvett klip elemzése), Tuner, metronóm.
   DSP-igazság: `docs/rag/chunks/` — paraméter csak ADR-rel és ugyanabban a
@@ -339,25 +339,37 @@
 
 ## 4. Current branch
 
-`main` @ [PR #64](https://github.com/wolfcasaba/strumsight/pull/64)
-(E03-R05 validator/normalizer/capability-resolver round, squash-merge
-`5226127`), CI run
-[30742878734](https://github.com/wolfcasaba/strumsight/actions/runs/30742878734)
-**success** on `b080d9a` (the matching `headSha`, full suite + randomized
-property + APK). 1 fix round (legacy `mm-round.sh` engine, M3) closed a
-BLOCKER in `SongValidator`'s strum→chord cross-reference (F1, order
-dependence on `document.tracks`) — see §5 and `docs/handoff-archive.md`
-§ E03-R05.
+`main` @ [PR #65](https://github.com/wolfcasaba/strumsight/pull/65)
+(E03-R06 legacy Song/Setlist migration-adapter round, squash-merge
+`d20c402`), CI run
+[30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)
+**success** on `1387bb5` (the matching `headSha`, full suite + randomized
+property + APK). No fix round — review APPROVED first pass (0
+BLOCKER/MAJOR) — see §5 and `docs/handoff-archive.md` § E03-R06.
 
-> **Two router infra dead ends closed/documented on this branch before
-> this round's own work started:** the branch had already been through
-> two H6 self-heal cycles (PR #61/#62/#63, `docs/LESSONS.md` L54–L56 —
-> async router dispatch, gate-guard scope, and finally a PATH git-guard
-> shim closing M3's illegal self-commit at the shell layer). This
-> session's pre-flight found the salvageable, scope-clean M3 diff sitting
-> uncommitted in an abandoned worktree and reconciled it (L50 pattern:
-> `git reset --soft` + rebase + independent gate re-run + orchestrator
-> commit) instead of re-running the round from scratch.
+> **L48 clone-pitfall recurred on a fresh `auto`-router worktree
+> (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
+> `BASELINE_GATE` run BLOCKED on 625 `AppLocalizations` analyze errors
+> (gitignored `lib/l10n/app_localizations*.dart` missing from the fresh
+> `git worktree add`). Fix: `flutter pub get && flutter gen-l10n` in the
+> worktree, then `python3 tools/model-router.py reset --task-id <ID>`
+> (sanctioned, zero-cost) — same recipe as L48, now confirmed systemic
+> across `auto`-router worktrees, not a one-off. Also measured in the
+> same pre-flight (NOT this session's to fix — a closed round's
+> artifact): the currently-`main` E03-R05 brief's `ai-router` TOML
+> `allowed_paths` incorrectly includes the ADR 0114 path, which is why
+> Router CI (`router-ci.yml`) is red on `main` right now — left for a
+> future self-heal round. Details: `docs/LESSONS.md` L59.
+
+> **Two router infra dead ends closed/documented on the E03-R05 branch
+> before that round's own work started:** the branch had already been
+> through two H6 self-heal cycles (PR #61/#62/#63, `docs/LESSONS.md`
+> L54–L56 — async router dispatch, gate-guard scope, and finally a PATH
+> git-guard shim closing M3's illegal self-commit at the shell layer).
+> That session's pre-flight found the salvageable, scope-clean M3 diff
+> sitting uncommitted in an abandoned worktree and reconciled it (L50
+> pattern: `git reset --soft` + rebase + independent gate re-run +
+> orchestrator commit) instead of re-running the round from scratch.
 
 > **Router `resume` false-`BLOCKED` from a premature orchestrator commit
 > (mérve 2026-08-02, E03-R03):** teljes leírás `docs/LESSONS.md` L51-ben —
@@ -406,74 +418,63 @@ dependence on `document.tracks`) — see §5 and `docs/handoff-archive.md`
 
 ## 5. Last completed round
 
-**E03-R05 — Validator, normalizer és capability resolver** (PR
-[#64](https://github.com/wolfcasaba/strumsight/pull/64), squash `5226127`,
-[ADR 0114](docs/adr/0114-song-validator-normalizer-capability-boundary.md)).
-Implementer: **auto MiniMax-first router** (ADR 0088) for the initial work
-(gate green first pass), **legacy `mm-round.sh` M3** for the fix round (see
-below). Orchestrátor: **Claude Sonnet 5**.
+**E03-R06 — Legacy Song és Setlist adapterek** (PR
+[#65](https://github.com/wolfcasaba/strumsight/pull/65), squash `d20c402`,
+[ADR 0116](docs/adr/0116-legacy-song-setlist-migration-boundary.md)).
+Implementer: **auto MiniMax-first router** (ADR 0088), egyetlen M3-attempt,
+gate elsőre zöld. Orchestrátor: **Claude Sonnet 5**.
 
-**Elkészült:** `SongValidator`, idempotens `SongNormalizer`,
-`SongCapabilityResolver` (lásd §2 részletesen).
+**Elkészült:** `LegacySongReader`, `LegacySongAdapter`,
+`LegacySetlistAdapter`, `LegacyMigrationReport` (lásd §2 részletesen).
 
-**Pre-flight-örökség:** a branch ebbe a sessionbe már két H6 self-heal
-kört megélve érkezett (PR #61/#62/#63, `docs/LESSONS.md` L54–L56 — M3
-saját maga commitolt, `security.py` hard-blockolta, a gyökérokot végül egy
-PATH git-guard shim zárta). A pre-flight egy abbahagyott munkapéldányban
-megtalálta M3 salvage-elhető, scope-tiszta diffjét (`d0546f0`), és az L50
-mintát követve reconciliálta: `git reset --soft` a pre-flight commitra,
-rebase a jelenlegi `main`-re, scope-audit (13/13 fájl egyezik az
-`allowed_paths`-szal), saját kézzel megismételt gate + teljes
-`test/features/song_trainer` suite, majd orchestrátor-authorship alatt
-commitolva.
+**Pre-flight:** nincs drift a brief baseline-állításaiban; ADR 0116 négy
+döntést formalizált (önálló `LegacyMigrationReport` típus, `Meter`
+denominator mindig 4, közvetlen szorzásos időzítés, `custom` section
+kind) — részletek `docs/handoff-archive.md` § E03-R06.
 
-**Review, 1 érdemi javító kör:** izolált `/tmp` klón, saját
-gate-újrafuttatás, scope-audit, **adverzariális mutáció-próba** → **1
-BLOCKER (F1)**: `SongValidator._validateTracks` a `chordEventIds` halmazt
-ugyanabban az egy menetben gyűjtötte, amiben a `StrumTrack.targetChordId`-t
-validálta ellene — `SongDocument.tracks` nem ad sorrendi szerződést (a
-kanonikus rendezés a normalizer külön, KÉSŐBBI lépése), ezért egy
-`StrumTrack` a célzott `ChordTrack` előtt egy VALÓS célra is hamis
-`strumTargetChordMissing` fatalt adott. Eldobható próbateszttel
-reprodukálva (RED → GREEN a javítás után).
+**Folyamat:** egy vadonatúj `auto`-router munkapéldány első
+`BASELINE_GATE`-je az L48-ban dokumentált klón-csapdába futott (hiányzó
+`lib/l10n/`), sanctioned `gen-l10n` + `reset` javította — az L48 minta
+tehát szisztematikus, nem egyszeri (`docs/LESSONS.md` L59). Ugyanebben a
+pre-flightban mérve (de EZT a sessiont nem illeti javítani — más kör
+artefaktuma): a `main`-en élő E03-R05 brief TOML `allowed_paths`-a
+tévesen tartalmazza az ADR 0114 utat, ezért piros a Router CI a
+`main`-en — jövőbeli self-heal kör feladata.
 
-**Fixer-kör motorválasztási incidens:** az `auto` router `resume`
-útvonala egy MÁSIK, mért infra-holtpontba futott ezen a task-on: a
-`.ai/review-findings-*.md` fájl a `GENERATED_IGNORED_PREFIXES`
-whitelisten van, de ez csak az `audit_scope` UTÓLAGOS diff-jénél számít —
-a `validate_baseline_manifest` PRECHECK-je (ami egy `reset --task-id`
-utáni friss baseline-felvételkor fut) minden untracked fájlt feltétel
-nélkül blokkol (`docs/LESSONS.md` L58). A javító kört ezért a legacy
-`tools/mm-round.sh` úton vitte le M3 — a `tools/ai_router/**` tiltott zóna
-maradt, a workaround egy scratchpad-only `mm-round.sh`-másolat volt
-(`[ -d ... ]` → `[ -e ... ]` a worktree `.git`-fájljára, a valódi script
-érintetlen). M3 két lépéses gyűjtés+validálás algoritmusra cserélte a
-függvényt, 3 permanens regressziós teszttel.
+**Review, javító kör nélkül:** izolált `/tmp` klón, saját
+gate-újrafuttatás, scope-audit, mind a négy ADR 0116 döntés forráskód-
+szintű ellenőrzése, 9 eldobható adverzariális próbateszt → **0
+BLOCKER/MAJOR**, 3 MINOR + 1 NOTE, mind follow-up (részletek
+`docs/handoff-archive.md` § E03-R06).
 
-Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer, izolált klónban) +
-teljes `test/features/song_trainer` **181/181 zöld** + CI
-[30742878734](https://github.com/wolfcasaba/strumsight/actions/runs/30742878734)
-zöld a merge-elt `headSha`-n (`b080d9a`), független post-merge
+Zöld kapu: `tools/round-gate.sh` (orchestrátor kétszer, izolált
+klónokban) + teljes `test/features/songs` (49/49) +
+`setlist_expected_hint_test.dart` regresszió-mentes + CI
+[30745096396](https://github.com/wolfcasaba/strumsight/actions/runs/30745096396)
+zöld a merge-elt `headSha`-n (`1387bb5`), független post-merge
 gate-ellenőrzés `main`-en szintén zöld. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R05.
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R06.
 
-**Előző körök:** E03-R04 (track/event domain modell + monophonic elemzés,
-PR [#60](https://github.com/wolfcasaba/strumsight/pull/60), `5c01149`,
-`docs/LESSONS.md` L52/L53) · E03-R03 (songstruktúra + determinisztikus
-időmodell, PR [#59](https://github.com/wolfcasaba/strumsight/pull/59),
-`47ad6da`, `docs/LESSONS.md` L51) · E03-R02 (SongDocument V2
-azonosítók/metaadatok, PR
-[#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
+**Előző körök:** E03-R05 (validator/normalizer/capability resolver, PR
+[#64](https://github.com/wolfcasaba/strumsight/pull/64), `5226127`,
+`docs/LESSONS.md` L54–L58) · E03-R04 (track/event domain modell +
+monophonic elemzés, PR [#60](https://github.com/wolfcasaba/strumsight/pull/60),
+`5c01149`, `docs/LESSONS.md` L52/L53) · E03-R03 (songstruktúra +
+determinisztikus időmodell, PR
+[#59](https://github.com/wolfcasaba/strumsight/pull/59), `47ad6da`,
+`docs/LESSONS.md` L51) · E03-R02 (SongDocument V2 azonosítók/metaadatok,
+PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 `docs/LESSONS.md` L50) — mind teljes narratívája:
 [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
 ## 6. Exact next task
 
-0. **~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~ és ~~E03-R05 —
-   Validator, normalizer, capabilities~~ — KÉSZ, ld. §5.** Következő:
-   **E03-R06 — Legacy Song V1 és Setlist migrációs adapter**
-   ([docs/rounds/e03-r06-legacy-song-setlist-adapters.md](docs/rounds/e03-r06-legacy-song-setlist-adapters.md)).
-   A `docs/execution/pipeline-queue.tsv` E03-R06 sora `pending` — a driver
+0. **~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
+   Validator, normalizer, capabilities~~ és ~~E03-R06 — Legacy Song/Setlist
+   migrációs adapter~~ — KÉSZ, ld. §5.** Következő:
+   **E03-R07 — Fájlrendszeres Song repository és asset store**
+   ([docs/rounds/e03-r07-song-repository-asset-store.md](docs/rounds/e03-r07-song-repository-asset-store.md)).
+   A `docs/execution/pipeline-queue.tsv` E03-R07 sora `pending` — a driver
    automatikusan folytatja (mid-epic round, nincs emberi kapu, ADR 0087 §7).
 1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
    APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
@@ -497,10 +498,10 @@ azonosítók/metaadatok, PR
    állította, a driver ezeken a körökön keresztül automatikusan folytatta
    (self-heal L49/L50, majd L51 közbeiktatásával) — a
    ([`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv))
-   E03-R01/R02/R03/R04 sora `done`, E03-R05 sora a fájlban még `pending`
-   (a driver saját könyvelése frissíti `done`-ra a következő firing-en —
-   ez a session nem nyúl a queue-fájlhoz), E03-R06…R21 `pending` — a
-   driver körönként automatikusan halad, amíg HALT nem éri.
+   E03-R01/R02/R03/R04/R05 sora `done`, E03-R06 sora a fájlban még
+   `pending` (a driver saját könyvelése frissíti `done`-ra a következő
+   firing-en — ez a session nem nyúl a queue-fájlhoz), E03-R07…R21
+   `pending` — a driver körönként automatikusan halad, amíg HALT nem éri.
 
    > **Megállási szerződés (ADR 0087 §2):** az orchestrátor-session önállóan
    > javíthatja a kör SAJÁT, még nem merge-elt briefjét/ADR-jét (§0.0
