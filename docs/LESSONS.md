@@ -2951,3 +2951,26 @@ tranzakció félbeszakadásának recovery-jére érvényes. Ha egy explicit,
 zárolt operátori recovery a terminális döntés alapját (itt a baseline-t)
 biztonságosan felülírja, a superseded intentet is atomikusan érvényteleníteni
 kell — a történeti ledger rekord megőrzése mellett.
+
+## L69 — A baseline-rebase operátori CLI-je a task ID-t brief-útvonalként olvasta, ezért egy helyes recovery `INTERNAL_ERROR`-ral állt le (E03-R08 H6, 2026-08-02)
+
+**Mérés.** A pipeline halt pontos reprodukciója:
+`tools/model-router.py rebase-baseline --task E03-R08 --worktree
+/home/ubuntu/ss-router-e03-r08` → exit 50,
+`{"status":"INTERNAL_ERROR","reason":"brief is unreadable: E03-R08"}`.
+A tényleges brief eközben létezett ezen a worktree-n:
+`docs/rounds/e03-r08-persistent-v2-migration.md`. Ugyanazzal a state-tel a
+brief relatív útvonalával futtatott recovery zölden `READY_FOR_REVIEW` lett.
+
+**Javítás.** A `rebase-baseline` `--task` argumentuma változatlanul elfogad
+brief-fájlútvonalat, de egy kizárólag `E##-R##` formájú, önálló azonosítót is
+felold a megadott worktree `docs/rounds/<lowercase-id>-*.md` mintájára. Pontosan
+egy találat kötelező; nulla vagy több találat fail-closed hiba. Ezután ugyanaz
+a `load_brief()` parser, task-lock és teljes allowlist scope-audit fut, tehát a
+recovery mércéje nem gyengül.
+
+**Regresszió.**
+`RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
+először a lista-kívüli diffet továbbra is exit 50-nel blokkolja, majd a valódi
+`--task E03-R08` argumentummal elvégzi a legális recoveryt. A resolver nélkül a
+második lépés RED: `brief is unreadable: E03-R08`; utána GREEN.
