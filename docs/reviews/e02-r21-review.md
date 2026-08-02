@@ -625,3 +625,119 @@ szerkesztéséig — ez a kör tényleges célja **továbbra sincs elkezdve** a
 production-kódban. Nem `tools/`-hiba, nem sandbox-hiba: ez tartalmi kör-
 nehézség, amit a self-heal döntsön el (retry azonos brieffel, vagy a brief
 §7 sorrendjének/mérethatárának felülvizsgálata egy emberi/normatív döntéssel).
+
+## Update 6 — a router-prompt fix (#52) UTÁNI első ÉLES `run` ÚJRA STOPPED-be futott, tartalmi gate-kudarccal, de egy lépéssel TOVÁBB jutva, mint az Update 5 (2026-08-02 00:20)
+
+**Pre-flight:** a munkapéldány (`ss-auto-e02-r21`) az Update 5 óta változatlan
+`294a008`-on állt (csak a H4-sandbox-fixet, PR #51-et tartalmazta) — az
+orchestrátor `git stash -u` + `git rebase origin/main` + `git stash pop`
+menettel `ad8286e`-re (a router repair/escalation-prompt fix, PR #52) hozta fel
+konfliktus nélkül.
+
+**Az Update 5-ből örökölt két árva, committolatlan fájl blokkolta az indítást.**
+`tools/ai_router/security.py:162-185` (`validate_baseline_manifest`) **fail-closed
+tiltja** a PRECHECK-et, ha a manifest bármilyen tracked VAGY untracked
+elváltozást talál — mérve: `python3 tools/model-router.py reset --task-id
+E02-R21` után az első `run` hívás azonnal `blocked — baseline has untracked
+files: …` eredményt adott (exit 40), a modellhívás előtt. A két fájl közül az
+A5-teszt (`practice_production_wiring_test.dart`) **`expect(host, isNotNull)`-t
+vár** a `practicePrepareSinkProvider` után — ez a mai (A1/A2/A3 nélküli)
+baseline-on **determinisztikusan bukik** (lásd Update 5), ezért a két fájl
+commitolása most is azonnal piros baseline-t hozott volna létre. Helyette:
+mindkét fájlt **töröltem** (nem `git clean -fd`-vel — tételes `rm` a két
+konkrét útvonalon), mivel a bizonyítékuk már az Update 5 szövegében rögzítve
+van. Ezután **újra** `reset --task-id E02-R21` kellett — mérve, hogy a router
+`run()`-ja egy már lezárt (nem `RUNNING`) state-en a `status`-t **nem
+ellenőrzi újra**, hanem a korábbi (BLOCKED) eredményt adja vissza változatlanul
+(`tools/ai_router/router.py:519-528` — `elif state.get("status") != "RUNNING"`
+ág), így az első `blocked` hívás után egy puszta ismétlés nem elég, kötelező a
+reset.
+
+**A tiszta baseline-t függetlenül is ellenőriztem** (nem csak a router
+BASELINE_GATE-jére hagyatkozva): `flutter analyze lib/ test/ tool/` a tiszta
+munkafán (`git status --short` üres) → **"No issues found!"** — a router
+BASELINE_GATE-je (`outcome: pass`) ezzel egybevág.
+
+**A hívás maga hosszabb, mint a Bash-eszköz 600s kemény plafonja** — két
+egymást követő `run` hívást a SIGTERM ölt meg (`state.phase` mindkétszer
+`M3_CALL_1`-en állt meg, `m3_attempts` a router H6-fixje szerint helyesen NEM
+nőtt üres diffnél), a HARMADIK hívás jutott érdemi eredményhez, mert a második
+megszakítás UTÁN már volt egy valódi, hatókörön belüli új fájl a
+munkafán — ezt a router (helyesen) `RECOVERED_M3_CALL_1`-ként gate-elte, nem
+hívta újra a modellt.
+
+**Végeredmény:** `signalled: stopped — final gate failed: code_failure`
+(exit 20). Teljes `gate_history`:
+
+| Fázis | Kimenet | `failed_step` |
+|---|---|---|
+| `BASELINE_GATE` | pass | — |
+| `RECOVERED_M3_CALL_1` | code_failure | `format` |
+| `GATE_2` (M3 2. friss próba) | code_failure | `analyze` |
+| `FINAL_GATE` (Terra) | code_failure | `test test/core` |
+
+`m3_attempts=2`, `terra_calls=1` — a teljes keret kimerült.
+
+### Gyökérok — amennyire a router szándékos redakciója (ismét) engedi mérni
+
+A `.ai/runs/E02-R21/router-result.std{out,err}.log` ezúttal is csak a
+redaktált JSON-t tartalmazza (nincs nyers `round-gate.sh` kimenet); nem
+található más ideiglenes gate-log a munkafán (`find … -mmin -60` üres a
+redaktált fájlokon kívül) — ez **szándékos**, nem hiba (lásd Update 5).
+
+Amit a jelenlegi worktree-állapotból MÉGIS mérni lehetett: a három sikertelen
+próba UTÁN **egyetlen** committolatlan új fájl él túl
+(`lib/features/practice/data/practice_observation_gateway_provider.dart`,
+71 sor — ugyanaz a tartalom, mint az Update 5-ben, `flutter analyze` erre a
+fájlra önmagában **tisztán zöld**), és **egyetlen tracked fájl sem** mutat
+eltérést (`git diff --stat` üres) — a router minden sikertelen próba UTÁN a
+tracked részt visszaállítja a manifesthez, csak az újonnan létrehozott,
+untracked fájlokat hagyja érintetlenül. Ez azt jelenti, hogy a három tényleges
+(format-, analyze-, illetve test/core-bukó) diff **egyike sem rekonstruálható**
+a worktree-ből — pontosan úgy, ahogy az Update 5 dokumentálta.
+
+**Egy mérhető, ÚJ különbség az Update 5-höz képest:** a `gate_tests` sorrendje
+a brief TOML-jában `["test/features/practice", "test/features/learn",
+"test/core", "test/app", "test/property"]`. Az Update 5 FINAL_GATE-je a
+**listaelső** `test test/features/practice`-en bukott; a mai FINAL_GATE a
+**harmadik** `test test/core`-on — ami azt jelenti, hogy a mai Terra-próba
+diffje **túljutott** a `test/features/practice` ÉS `test/features/learn`
+csomagokon, és csak a `test/core` csomagban okozott regressziót. Ez arra utal,
+hogy a router-prompt fix (#52) **ténylegesen megváltoztatta** a próbák
+viselkedését (nem ismétlődött szó szerint az Update 5 „csak A4/A5" mintázata —
+ezúttal az A5-teszt-fájl sem élte túl egyetlen próbát sem, ami arra utal, hogy
+legalább az egyik próba MÁS sorrendben vagy MÁS tartalommal dolgozott), de a
+kör tényleges magja (A1/A2/A3 wiring) így sem készült el a 2 M3 + 1 Terra
+kereten belül.
+
+### Döntés
+
+**HALT — H4** (`auto` engine, a router `STOPPED`-et jelzett, a pipeline-prompt
+§1.1 táblázata szerint azonnali HALT, további modellhívás tilos ebben a
+sessionben). Ez a HETEDIK halt/önjavító kör ugyanezen a task-on, de csak a
+MÁSODIK, ahol a halt tartalmi gate-kudarcból jön, nem router-infrastruktúrából
+— a router teljes gépezete (sandbox, state machine, baseline-validáció,
+megszakítás-helyreállítás) ismét hibátlanul mérve. **A Practice V2
+production-drótozás (A1/A2/A3, a kör tényleges célja) továbbra sincs
+elkezdve** a production kódban (`git diff HEAD` üres mindhárom
+wiring-célfájlra).
+
+**A következő session számára két, egyaránt modellhívást igénylő út marad**
+(egyiket sem hajtottam végre):
+
+1. **Router-reset + friss `run`** ugyanazzal a brieffel — ha a mintázat
+   (STOPPED, ÚJ diff, de A1/A2/A3-ig nem jut el) egy HARMADIK alkalommal is
+   megismétlődik, az már erősen a brief méretére/sorrendjére mutat (Class B),
+   nem a router promptjára vagy infrastruktúrájára.
+2. **Explicit `codex`/`minimax` motor** (`tools/codex-round.sh` /
+   `tools/mm-round.sh`) ugyanerre a briefre — ez a TELJES, nem redaktált
+   logot írná, ami végre file:sor pontossággal megmondaná, mit ront el a
+   modell a format/analyze/test lépéseken; ez lenne az első adat, ami
+   ELDÖNTI, hogy a probléma a modell képességében, a brief méretében, vagy egy
+   konkrét, javítható kódmintában van.
+
+A committolatlan `practice_observation_gateway_provider.dart` (71 sor,
+`analyze`-tiszta) **szándékosan a munkafán maradt** — nem commitoltam (a
+router `auto` szerződése szerint csak `READY_FOR_REVIEW` után auditál és
+commitol az orchestrátor; ez a kör STOPPED-be futott, review nélkül), és nem
+töröltem — bizonyítékot hordoz a következő session számára.
