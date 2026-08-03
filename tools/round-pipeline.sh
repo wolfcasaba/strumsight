@@ -85,6 +85,7 @@ codex_home=${PIPELINE_FALLBACK_CODEX_HOME:-$HOME/.codex-terra}
 fallback_label="Terra (gpt-5.6-terra)"
 claude_block_file="$state_dir/claude-blocked-until"
 claude_block_seconds=${PIPELINE_CLAUDE_BLOCK_SECONDS:-18000}   # 5 órás ablak
+claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json}
 
 mkdir -p "$state_dir"
 
@@ -127,12 +128,22 @@ claude_unavailable_until() {   # kiírja a lejárati epoch-ot, ha érvényes zá
   printf '%s\n' "$until"
 }
 
+# A Claude CLI a kvótát indításkor távolról ellenőrzi, de ha a saját friss
+# stats-cache-e már a CLI limit-üzenetét tartalmazza, a felesleges tmux-session
+# helyett azonnal a fallbackot indítjuk. Cache hiánya vagy ismeretlen tartalma
+# nem zárlat: ilyen esetben a session-napló marad a bizonyíték.
+claude_stats_cache_unavailable_until() {
+  [ -r "$claude_stats_cache" ] || return 1
+  grep -qEi "$CLAUDE_LIMIT_PATTERN" "$claude_stats_cache" 2>/dev/null || return 1
+  printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))"
+}
+
 # A tmux-session felügyelete a jelzésfájlig. Egyetlen paraméterben kapja a
 # héj-parancsot, ezért motorfüggetlen.
 run_tmux_session() {
   local tmux_session="$1" shell_command="$2" session_log="$3" signal_file="$4"
-  local timeout_s="$5" label="$6"
-  local deadline pinger_pid
+  local timeout_s="$5" label="$6" watch_claude_limit="${7:-0}"
+  local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
 
   tmux kill-session -t "$tmux_session" 2>/dev/null || true
   tmux new-session -d -s "$tmux_session" bash
@@ -153,9 +164,17 @@ run_tmux_session() {
   pinger_pid=$!
 
   deadline=$(( $(date +%s) + timeout_s ))
+  claude_started_at=$(date +%s)
   while [ ! -f "$signal_file" ]; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       log "időkorlát lejárt ($label) — a tmux-sessiont leállítjuk"
+      break
+    fi
+    if [ "$watch_claude_limit" = "1" ] \
+      && tail -n "${PIPELINE_CLAUDE_LIMIT_LOG_LINES:-80}" "$session_log" 2>/dev/null \
+        | grep -qEi "$CLAUDE_LIMIT_PATTERN"; then
+      log "KVÓTA: Claude limit-nyom érkezett a futó session-naplóba — a tmux-sessiont azonnal leállítjuk"
+      claude_limit_seen=1
       break
     fi
     if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
@@ -163,11 +182,23 @@ run_tmux_session() {
       sleep 15
       break
     fi
+    if [ "$watch_claude_limit" = "1" ] \
+      && [ "$(( $(date +%s) - claude_started_at ))" -ge "${PIPELINE_CLAUDE_PROCESS_GRACE_SECONDS:-10}" ]; then
+      pane_tty=$(tmux list-panes -t "$tmux_session" -F '#{pane_tty}' 2>/dev/null | head -n 1)
+      if [ -n "$pane_tty" ] \
+        && ! ps -t "${pane_tty#/dev/pts/}" -o comm= 2>/dev/null | grep -q '[c]laude-code'; then
+        printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))" > "$claude_block_file"
+        log "KVÓTA: a Claude process már nem él a tmux pane-on — a fallback veszi át"
+        claude_limit_seen=1
+        break
+      fi
+    fi
     sleep 30
   done
   tmux kill-session -t "$tmux_session" 2>/dev/null || true
   kill "$pinger_pid" 2>/dev/null
 
+  [ "$claude_limit_seen" = "1" ] && return 0
   [ -f "$signal_file" ]
 }
 
@@ -194,12 +225,19 @@ run_orchestrator_session() {
 
   if blocked_until=$(claude_unavailable_until); then
     log "a Claude-kvóta zárlat alatt van $(date -Is -d "@$blocked_until")-ig — a kört a $fallback_label viszi"
+  elif blocked_until=$(claude_stats_cache_unavailable_until); then
+    printf '%s\n' "$blocked_until" > "$claude_block_file"
+    log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
-    run_tmux_session "$tmux_session" \
+    if run_tmux_session "$tmux_session" \
       "env -u CLAUDE_CONFIG_DIR $claude_bin --permission-mode bypassPermissions --model $claude_model 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
-      "$session_log" "$signal_file" "$timeout_s" "$label" && return 0
+      "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
+      && [ -f "$signal_file" ]; then
+      return 0
+    fi
 
-    if ! grep -qEi "$CLAUDE_LIMIT_PATTERN" "$session_log" 2>/dev/null; then
+    if ! grep -qEi "$CLAUDE_LIMIT_PATTERN" "$session_log" 2>/dev/null \
+      && ! claude_unavailable_until >/dev/null; then
       return 1   # nem kvóta: valódi hiba, ne égessük rá a Codex-keretet
     fi
     # A zárlat a Claude 5 órás ablakához igazodik; a pontos reset-időt nem
@@ -219,7 +257,7 @@ run_orchestrator_session() {
   codex_prompt=$(codex_prompt_file "$prompt_file")
   run_tmux_session "${tmux_session}-fallback" \
     "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\" < /dev/null" \
-    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)"
+    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)" 0
 }
 
 # --- Önjavítás (ADR 0112) --------------------------------------------------
