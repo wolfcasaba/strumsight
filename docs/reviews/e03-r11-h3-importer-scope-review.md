@@ -4,7 +4,7 @@ Brief: `docs/rounds/e03-r11-musicxml-mxl-importer.md`
 Diff: `origin/main...heal/E03-R11-H3-1` @ `745c10e`  
 Reviewer: Terra fallback, isolated `/tmp/review-E03-R11-H3` clone  
 Dátum: 2026-08-03  
-Verdikt: **APPROVED, CI pending**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
@@ -42,9 +42,10 @@ A módosítás csak az eldobható review-klónban történt, a PR-branchet nem �
 |---|---|
 | `python -m pytest tools/tests -q` | ✅ 157 passed, 53 subtests passed (izolált klón) |
 | `git diff --check origin/main...HEAD` | ✅ |
-| Router CI, exact head `745c10e` | ⏳ PR #88 futása kötelező a merge előtt |
+| Router CI, review-előtti exact head `c15afc1` | ✅ [30798970431](https://github.com/wolfcasaba/strumsight/actions/runs/30798970431) |
 
 ## Merge-döntés
 
-A review-ban nincs nyitott BLOCKER vagy MAJOR. Merge csak a PR #88 exact-head
-Router CI sikeres befejezése után engedélyezett.
+A review-ban nincs nyitott BLOCKER vagy MAJOR. A dokumentációs close-out commit
+után új exact-head Router CI szükséges; annak sikere esetén a PR #88
+squash-merge-elhető.

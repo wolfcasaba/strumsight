@@ -4,7 +4,7 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H3 — scope correction awaiting CI/merge).** E03-R10 (PR #86)
+> (HEAL E03-R11/H3 — scope correction ready to merge).** E03-R10 (PR #86)
 > is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
 > application flow, trusted importer registry, bounded operation workspace and
@@ -17,8 +17,9 @@
 > both. The revised brief now allows those owners plus the provider wiring test,
 > and `Epic3BriefMetadataTest.test_r11_scope_includes_measured_production_owners`
 > prevents recurrence. The router test suite is locally green (157 passed,
-> 53 subtests); the heal remains pending exact-head CI and merge before R11 may
-> restart. Historical note:
+> 53 subtests) and exact-head Router CI
+> [30798970431](https://github.com/wolfcasaba/strumsight/actions/runs/30798970431)
+> is green; after squash-merge the pipeline may restart R11. Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
