@@ -573,6 +573,15 @@ class DevelopmentRouter:
                         if result_path is not None:
                             _atomic_result(result_path, result)
                         return result
+                    # A completed first Terra review can leave its two-phase
+                    # terminal intent in task state.  Concrete independent
+                    # review findings deliberately reopen this only for the
+                    # bounded repair call, so that old intent must not replay
+                    # before the repair prompt reaches Terra.  Keep the
+                    # finished reservation and all attempt accounting intact.
+                    if state.get("terra_terminal_status") == RouterStatus.READY_FOR_REVIEW.value:
+                        state.pop("terra_terminal_status", None)
+                        state.pop("terra_terminal_reason", None)
                     state["status"] = "RUNNING"
                     state["phase"] = "RETRY_PROVIDER"
                     quota_recheck = True

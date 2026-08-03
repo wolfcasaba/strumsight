@@ -3316,3 +3316,21 @@ indokolt ignore-jával. Egy friss, izolált checkoutban kizárólag root
 javított exact-head CI [30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
 is zöld lett teljes suite/property/APK evidence-szel. A standalone `dart test`
 változatlanul ellenőrzi a tool saját package-konfigurációját.
+
+## L87 — A review-leletes resume-nak felül kell írnia az első, kész Terra-hívás elavult terminális intentjét (E03-R14 H3, 2026-08-03)
+
+**Mérés.** Az E03-R14 valódi router-state-je `READY_FOR_REVIEW`,
+`terra_calls=1` és `terra_terminal_status=READY_FOR_REVIEW` volt, amikor a
+független review F1 MAJOR lelete megérkezett. A
+`tools/ai-router-round.sh resume ... .ai/review-findings-e03-r14.md` parancs
+előbb a megőrzött intentet játszotta vissza, így `final gate passed`-szal
+kilépett, Terra-profilhívás nélkül. A lelet nem jutott el a korlátos második
+review-javítási hívásig.
+
+**Javítás és regresszió.** Kizárólag a
+`READY_FOR_REVIEW + resume + review_findings` átmenet törli a korábbi
+`READY_FOR_REVIEW` Terra-intentet; a lezárt reservation, az M3-kísérletek és
+a Terra-számláló érintetlen marad. A
+`RouterResumeTest.test_review_findings_get_one_bounded_terra_repair_after_initial_escalation`
+a ténylegesen megmaradt intenttel előbb RED volt (üres model profile-lista),
+majd GREEN: pontosan egy `terra` repair-hívást és `terra_calls=2`-t bizonyít.

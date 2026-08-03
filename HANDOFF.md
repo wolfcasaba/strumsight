@@ -11,6 +11,11 @@
 > and the post-merge local gate are also green. **E03-R13 decision:** use
 > external, user-controlled conversion to existing MusicXML/MXL/MIDI import
 > paths; no production Guitar Pro parser or registry wiring was introduced.
+> **HEAL E03-R14/H3:** a review-findingses router-resume elavult, első
+> `READY_FOR_REVIEW` Terra-terminális intentet játszott vissza, ezért a mért
+> MAJOR lelet nem jutott el a korlátos repair-híváshoz. A heal csak ezen az
+> explicit átmeneten supersede-olja az intentet; a reservation és a
+> kísérlet-könyvelés megmarad. A regresszió a valódi state-alakot szimulálja.
 > The following HEAL E03-R13/H6 notes are historical recovery evidence.
 > E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
 > (`9484a4e`). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)

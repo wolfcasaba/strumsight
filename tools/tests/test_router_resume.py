@@ -266,6 +266,12 @@ class RouterResumeTest(unittest.TestCase):
                     "tracked_paths": [],
                 },
                 "terra_reservation": first.reservation_id,
+                # A Terra ledger has already been finalized, but a crash
+                # before the outer task terminal state was persisted leaves
+                # this intent behind. Review findings must supersede that
+                # stale completion and reach the bounded repair call.
+                "terra_terminal_status": "READY_FOR_REVIEW",
+                "terra_terminal_reason": "final gate passed",
             },
         )
 
