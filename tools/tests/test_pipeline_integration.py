@@ -179,6 +179,14 @@ class PipelineIntegrationTest(unittest.TestCase):
         adr = (ROOT / "docs" / "adr" / "0112-self-healing-pipeline.md").read_text()
         self.assertIn("merge-base --is-ancestor origin/main HEAD", adr)
 
+    def test_selfheal_prompt_recovers_a_stale_h6_baseline_before_router_resume(self) -> None:
+        """H6 regression: merged heal commits must not be audited as model changes."""
+        prompt = (ROOT / "docs" / "execution" / "pipeline-selfheal-prompt.md").read_text()
+        self.assertIn("rebase-baseline --task {{ROUND}} --worktree <kör-worktree>", prompt)
+        self.assertIn("READY_FOR_REVIEW", prompt)
+        self.assertIn("kézi\nJSON-szerkesztés", prompt)
+        self.assertIn("state-reset", prompt)
+
     def test_halted_chain_starts_selfheal_unless_it_is_switched_off(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
