@@ -6,6 +6,29 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E03-R10 — Import application flow és biztonsági keret (2026-08-03)
+
+E03-R10 [PR #86](https://github.com/wolfcasaba/strumsight/pull/86)-ként
+(`93b46db`) merge-elt. [ADR 0119](adr/0119-song-import-application-orchestration.md)
+az application import state machine, az importer-registry probe, az operation
+workspace és a picker-port felelősségeit rögzíti. A megvalósítás egyetlen
+aktív importot enged, minden aszinkron visszahívást operation identityvel
+őröz, cancellationkor lezárja a későn megnyíló workspace-t is, és csak a
+validált, megerősített dokumentumot írja repositoryba. A workspace elutasítja
+a traversal- és symlink-escape-et, és byte-limitet tart; a registry explicit
+source-, parser-idő- és parser-esemény limiteket ad a trusted importereknek.
+
+Az auto router M3 implementációja után a magas kockázatú Terra review-pass is
+lefutott. A független izolált review **APPROVED** (0 BLOCKER/MAJOR); az
+operation-identity guard szándékos eltávolítása a stale-callback tesztet
+pirosra váltotta (`Expected import-2`, `Actual import-1`). A célzott és a
+post-merge gate format/analyze/6 application teszt/3 workspace teszt/
+architecture sorrendben zöld. Exact branch-head CI:
+[30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
+(`d693077`), teljes suite + randomized property + development APK zöld.
+
+---
+
 ## E03-R08 és E03-R09 — későn rögzített merge-zárás (2026-08-03)
 
 **E03-R08** PR #81-ként (`f693170`) merge-elt; a legacy adatokat read-back

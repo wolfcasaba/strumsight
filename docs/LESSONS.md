@@ -3058,3 +3058,21 @@ operatív állapot R08-ra, nem R10-re mutatott.
 branch-head CI és post-merge gate rögzítése, majd HANDOFF/archívum + RTM,
 utána git-note push. A squash-merge és a zöld CI önmagában nem elegendő
 pipeline-továbbítási bizonyíték.
+
+## L74 — Post-merge gate klónnak a kanonikus upstream `main`-t kell checkoutolnia (E03-R10, 2026-08-03)
+
+**Mérés.** A PR #86 (`93b46db`) squash-merge-je után a `/home/ubuntu/music-theory`
+helyi klónból készített `/tmp/postmerge-e03-r10` klón a forrás-klón lokális
+`main` ágát (`7203a81`) checkoutolta, nem annak friss `origin/main` remote
+tracking refjét. Emiatt a post-merge gate célútvonala először hiányzott:
+`flutter test test/features/song_trainer/application/import` → `Does not exist`.
+A `git show 93b46db` már igazolta, hogy a merge-fában a tesztek jelen vannak;
+a kanonikus GitHub remote-ról végzett `git fetch ... main && git checkout
+--detach FETCH_HEAD` `93b46db`-re állította a klónt, ahol ugyanaz a
+`tools/round-gate.sh test/features/song_trainer/application/import test/features/song_trainer/data/importers/import_workspace_test.dart`
+teljesen zöld lett (6 + 3 teszt, architecture is).
+
+**Tanulság.** Post-merge bizonyítékhoz ne klónozz egy potenciálisan elavult
+helyi `main`-ről. A klón HEAD-ját mindig hasonlítsd a GitHub `origin/main`
+SHA-hoz, és eltérésnél a kanonikus remote-ról fetch-eld/checkoutold a pontos
+merge-elt fejet, mielőtt bármely gate-piros eredményt termékhibának tekintesz.
