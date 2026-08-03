@@ -185,6 +185,13 @@ def _is_generated_ignored(
     return (
         _matches(path, prefixes)
         or any(fnmatch(path, pattern) for pattern in globs)
+        # A repository may legitimately contain an isolated Dart package used
+        # for an approved feasibility spike. `dart pub get` generates the
+        # same cache below that package as it does at the workspace root.
+        # Match the path component, rather than only the root prefix, so the
+        # scope audit keeps source files under that tool subject to allowlist
+        # checks while excluding only Dart's generated cache.
+        or ".dart_tool" in parts
         or "__pycache__" in parts
         or path.endswith(".pyc")
     )

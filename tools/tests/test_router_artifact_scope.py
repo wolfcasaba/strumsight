@@ -119,6 +119,39 @@ class RouterArtifactScopeTest(unittest.TestCase):
             self.assertTrue(audit.ok, audit.violations)
             self.assertEqual(audit.scoped_changed_paths, ())
 
+    def test_nested_dart_tool_artifacts_are_generated_ignored(self) -> None:
+        # Measured E03-R13/H6 reproduction: the approved isolated Dart tool
+        # spike runs `dart pub get` below `tool/guitar_pro_feasibility/`.
+        # Its nested .dart_tool files are equivalent to the root Dart
+        # workspace's generated artifacts and must not become a model diff.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Router Test"], cwd=root, check=True)
+            (root / ".gitignore").write_text(".dart_tool/\n")
+            (root / "tool" / "guitar_pro_feasibility").mkdir(parents=True)
+            (root / "lib").mkdir()
+            (root / "lib" / "allowed.dart").write_text("baseline\n")
+            subprocess.run(["git", "add", ".gitignore", "lib/allowed.dart"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            baseline = capture_workspace_manifest(root)
+
+            generated = root / "tool" / "guitar_pro_feasibility" / ".dart_tool"
+            (generated / "pub" / "bin" / "test").mkdir(parents=True)
+            (generated / "package_config.json").write_text("{}\n")
+            (generated / "pub" / "bin" / "test" / "test.snapshot").write_text("generated\n")
+
+            audit = audit_scope(
+                root,
+                allowed_paths=("lib/allowed.dart",),
+                protected_paths=(".git",),
+                baseline=baseline,
+            )
+
+            self.assertTrue(audit.ok, audit.violations)
+            self.assertEqual(audit.scoped_changed_paths, ())
+
 
 if __name__ == "__main__":
     unittest.main()
