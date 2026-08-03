@@ -108,8 +108,10 @@ git -C <kör-worktree> merge --no-ff origin/main
 A merge-konfliktust úgy oldd fel, hogy az aktuális `main` brief-változatát
 őrzöd meg; a superseded `HALTED`/pre-flight szöveg, régi allowlist vagy régi
 handoff nem írhatja felül a merge-elt scope-ot. Ezután `git diff --check`,
-explicit stage, merge-commit és **normál** `git push` következik. A célbranch
-így tartalmazza a friss `main`-t, de a távoli története nem íródik át; az
+explicit stage, merge-commit, majd a kötelező
+`git merge-base --is-ancestor origin/main HEAD` bizonyítás és **normál**
+`git push` következik. A célbranch így bizonyíthatóan tartalmazza a friss
+`main`-t, de a távoli története nem íródik át; az
 eredeti router-task a következő friss kör-sessionben folytatható.
 
 Ha a konfliktus nem kizárólag ez az egy brief, vagy a `main` oldal nem

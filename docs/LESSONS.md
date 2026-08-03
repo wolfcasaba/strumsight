@@ -3203,3 +3203,24 @@ A STOPPED/DEFERRED state resetje és a normál `run` továbbra is tiltott.
 egy már elfogyasztott első Terra-hívás mellett csak explicit review-lelettel
 enged egyetlen második profilt; `RouterConfigTest.test_rejects_invalid_limits`
 az 1-es és 3-as task-limitet is elutasítja.
+
+## L82 — H8-nál a brief-only rebase-konfliktus után a normal merge megőrzi a jóváhagyott scope-ot (E03-R12, 2026-08-03)
+
+**Mérés.** `git -C /home/ubuntu/ss-auto-e03-r12 rebase origin/main` az
+`e8683fd` baseline-ra az első, `4f9e946` pre-flight commitnál megállt:
+`CONFLICT (content): docs/rounds/e03-r12-midi-importer.md`. A nyers unmerged
+lista pontosan egy útvonal volt: `docs/rounds/e03-r12-midi-importer.md`.
+A main a merge-elt H3 MIDI-track-limit scope-ot tartalmazta; az R12 branch a
+későbbi H6 router-boundary javítást is hordozta, amely az ADR-t a §4 emberi
+táblában hagyja, de nem teszi modell-írhatóvá.
+
+**Javítás és regresszió.** A rebase-et megszakítottuk, majd a branchre
+`git merge --no-ff origin/main` futott. Az egyetlen merge-konfliktus két
+független self-heal tanulságbejegyzését érintette; mindkettő megmaradt, a
+brief pedig a H3/H6 jóváhagyott scope-pal került az `e55291b` normal-push
+headbe. `PipelineIntegrationTest.test_selfheal_prompt_preserves_current_main_scope_for_h8_brief_conflicts`
+őrzi a brief-only/non-force eljárást és a kötelező
+`git merge-base --is-ancestor origin/main HEAD` freshness-bizonyítást; az
+`Epic3BriefMetadataTest.test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+őrzi, hogy a H6 alatt is csak a §4 emberi táblában szereplő ADR maradjon ki
+az `ai-router.allowed_paths` listájából.
