@@ -4,7 +4,13 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R14/H7 post-merge Flutter bootstrap).** **HEAL E03-R14/H7:** a
+> (HEAL E03-R15/H3 scope-revízió).** **HEAL E03-R15/H3:** az R15 eredeti
+> UI-only scope-ja nem fogta a production picker-portot, a picker dependency
+> manifesteket vagy az app repository composition rootját, ezért flagelt
+> route nem hajthatta végre a picker→probe→preview→commit utat. ADR 0123 és a
+> brief explicit megnyitja kizárólag ezeket a mért owneröket, két fókuszált
+> tesztet és a kötelező review artefaktumot; a metadata-regresszió RED→GREEN,
+> a teljes routerteszt-sáv green. **HEAL E03-R14/H7:** a
 > R14 merge utáni gate a gitignore-olt, régi `AppLocalizations` outputot mérte,
 > ezért az új Guitar Pro l10n getterek hiányzónak látszottak. A kötelező
 > `tools/prepare-flutter-generated.sh` a post-merge gate előtt `flutter pub

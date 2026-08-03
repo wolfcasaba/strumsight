@@ -1,59 +1,57 @@
 # ADR 0123 — Song Trainer V2 presentation activation boundary
 
-**Status:** accepted for the E03-R15 pre-flight (2026-08-03).
-Builds on [ADR 0090](0090-song-storage-files-and-assets.md),
-[ADR 0091](0091-song-import-security-boundary.md), and
-[ADR 0119](0119-song-import-application-orchestration.md).
+**Státusz:** elfogadva (ADR 0112 önjavító kör, E03-R15/H3, 2026-08-03).
+Épít az [ADR 0090](0090-song-storage-files-and-assets.md),
+[ADR 0091](0091-song-import-security-boundary.md) és
+[ADR 0119](0119-song-import-application-orchestration.md) döntéseire.
 
-## Context
+## Kontextus
 
-The existing import application controller deliberately keeps source files and
-picker objects out of state. It emits `RequestFilePickerEffect` and accepts an
-`ImportSourceFile` only through `selectSource`. The only picker type is the
-`FilePickerAdapter` interface; no production adapter is currently registered.
+Az import application controller a source file-t és a picker objektumot
+szándékosan nem tartja state-ben: `RequestFilePickerEffect`-et bocsát ki, és
+csak a platformfüggetlen `ImportSourceFile`-t fogadja a `selectSource` úton.
+A jelenlegi `FilePickerAdapter` csupán interface, nincs production adapter vagy
+hozzá tartozó függőség.
 
-Likewise, `songRepositoryProvider` is a deliberate bootstrap seam that throws
-unless the app composition root supplies a production repository. The current
-application `ProviderScope` does not supply it. Registering a Song Trainer V2
-route that reads the import or library provider would therefore expose an
-interaction that either cannot obtain a source file or fails before it can use
-the file-backed repository.
+Hasonlóan, a `songRepositoryProvider` tudatos bootstrap seam: override nélkül
+hibát dob. A jelenlegi app `ProviderScope` nem köti be a file-alapú production
+repository-t, ezért egy flagelt V2 route import vagy library providert olvasva
+az első interakciónál nem működő képernyőt adna.
 
-## Decision
+## Döntés
 
-1. An interactive Song Trainer V2 library or import route may be registered
-   only when the composition root supplies a production `SongRepository` and
-   the presentation/application boundary receives a concrete
-   `FilePickerAdapter` through an explicit provider or constructor seam.
-2. A widget must not invoke a platform picker directly, retain a platform
-   picker object in state, or substitute a test fake in production. The picker
-   returns only the existing reopenable `ImportSourceFile` contract to the
-   application controller.
-3. The production implementation must preserve the existing controller
-   lifecycle guarantees: route disposal cancels the operation and closes its
-   workspace; cancellation or probe failure creates no library record.
-4. Every prepared round that requires a mandatory committed review report must
-   list that exact report path in both its human scope table and its router
-   metadata before model dispatch.
+1. Interaktív Song Trainer V2 library vagy import route csak akkor regisztrálható,
+   ha a composition root production `SongRepository`-t szolgáltat, és a
+   presentation/application határ concrete `FilePickerAdapter`-t kap explicit
+   provider- vagy konstruktor-seamen keresztül.
+2. A widget nem hívhat platform pickert közvetlenül, nem tarthat platform
+   picker-objektumot state-ben, és productionben nem helyettesítheti fake-kel.
+   A concrete adapter kizárólag a meglévő, újranyitható `ImportSourceFile`
+   contractot adhatja át a controllernek.
+3. A production megvalósítás megőrzi a controller lifecycle-garanciáit: route
+   dispose cancelálja az operationt és lezárja a workspace-t; cancel vagy probe
+   failure nem hozhat létre library rekordot.
+4. Kötelező, commitolt review reportot igénylő prepared kör a report pontos
+   útvonalát mind a human scope táblában, mind az `ai-router` metadata
+   `allowed_paths` listájában feltünteti a model dispatch előtt.
 
-## Alternatives
+## Elutasított alternatívák
 
-- **Render a static import screen and call it complete:** rejected. It cannot
-  execute the required picker/probe/preview/import flow.
-- **Have the widget import a picker plugin directly:** rejected. It violates
-  the data/platform boundary and prevents a fake adapter from proving the
-  interaction.
-- **Use `InMemorySongRepository` or an implicit fake in production:** rejected.
-  It loses the file-based, restart-safe repository contract from ADR 0090.
-- **Register the route before composition-root wiring exists:** rejected. It
-  makes a feature-flag opt-in lead to the measured provider `StateError`.
+- **Statikus import screen késznek nyilvánítása:** nem hajtja végre a picker →
+  probe → preview → commit folyamatot.
+- **Közvetlen widget-pluginhívás:** megsérti a data/platform határt és a fake
+  adapteres tesztelhetőséget.
+- **`InMemorySongRepository` vagy implicit fake productionben:** elveszíti az
+  ADR 0090 szerinti restart-safe, fájl-alapú repository contractot.
+- **Route regisztráció bootstrap wiring előtt:** feature-flag opt-in után a mért
+  `StateError`-hoz vezet.
 
-## Consequences
+## Következmények
 
-- E03-R15 cannot safely activate its V2 route under its original allowlist.
-  A follow-up pre-flight must explicitly authorize the concrete picker and
-  composition-root owners, their focused tests, and the mandatory review
-  artifact; it must preserve the default-OFF feature flag.
-- This ADR does not add a picker dependency, production route, or new network
-  behavior. Import remains local and subject to ADR 0091's limits and
-  cancellation boundary.
+- E03-R15 eredeti allowlistjével a V2 route nem aktiválható biztonságosan. A
+  scope-revízió explicit felveszi a picker-portot, manifesteket, composition
+  rootot, célzott teszteket és a review artefaktumot; a metadata regresszió
+  védi ezt a minimumot.
+- A feature flag alapértéke OFF marad. Ez az ADR nem vezet be hálózati
+  viselkedést; az import lokális marad, és az ADR 0091 limit-, cancellation- és
+  privacy határai változatlanok.
