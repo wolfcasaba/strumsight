@@ -192,10 +192,50 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Megvalósítva: 2026-08-03.**
+
+### Fájlonkénti összefoglaló
+
+- `song_importer.dart`: platformfüggetlen, újranyitható stream-alapú source,
+  cancellation, probe és in-memory import contract.
+- `native_json_importer.dart`: kötelező root/version/manifest ellenőrzés,
+  deklarált és streamelt 1 MiB limit, stable failure/warning kódok,
+  duplicate-ID ellenőrzés, duplicate-source-hash warning és cancellation safe
+  pointok; nincs repository hívás vagy perzisztens írás.
+- `native_json_exporter.dart`, `export_filename_sanitizer.dart`: determinisztikus
+  v2 envelope, byte-mentes asset-manifest és privacy-scrubbed provenance /
+  hordozható exportfájlnév.
+- `song_document_codec.dart`: az existing canonical codec publikus map
+  belépési/kilépési pontot kapott az exchange adapterhez; a persistált byte
+  contract változatlan.
+- `native_json_importer_test.dart`, `native_json_exporter_test.dart` és a
+  három native fixture: fixture round-trip, root/version/corrupt/manifest /
+  duplicate-ID / limit / cancellation mátrix, valamint determinism és privacy
+  regression coverage.
+
+### TDD és futtatott ellenőrzések
+
+1. RED: `flutter test test/features/song_trainer/data/importers/native_json_importer_test.dart`
+   az új import/export contractok hiányában várt compile failure-rel állt meg.
+2. GREEN: mindkét célzott import/export teszt külön zöld lett; az
+   `flutter test test/features/song_trainer/data/local/song_document_codec_test.dart`
+   is zöld (14 teszt).
+3. Kötelező gate:
+
+   ```bash
+   tools/round-gate.sh test/features/song_trainer/data/importers/native_json_importer_test.dart test/features/song_trainer/data/importers/native_json_exporter_test.dart
+   ```
+
+   Tényleges eredmény: format zöld, analyze zöld, importer 11 teszt zöld,
+   exporter 4 teszt zöld, architecture zöld.
+
+### Eltérés, nem futtatott ellenőrzés, follow-up
+
+- A brief scope-a és az `ai-router.allowed_paths` listája nem bővült; registry,
+  workspace, controller és repository commit továbbra is R10 scope.
+- Full `flutter test`, randomizált property gate, release APK és exact-SHA CI
+  nem futott lokálisan: az ADR 0053 szerinti orchestrátor/CI gate-ek.
+- Nincs ismert follow-up vagy scope-on kívüli módosítás.
 
 ## 11. Review — a független reviewer tölti ki
 
