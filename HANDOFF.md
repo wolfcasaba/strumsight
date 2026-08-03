@@ -4,12 +4,20 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R12 merged).** E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
+> (HEAL E03-R13/H6).** E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
 > (`9484a4e`). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
 > is green for exact pre-merge branch head `a0bb7d3` (full Flutter suite,
 > randomized property/coverage gate and development APK); the independent
-> review and post-merge local gate are also green. The following HEAL notes are
-> historical recovery evidence from before the product merge.
+> review and post-merge local gate are also green. **HEAL E03-R13/H6 (PR
+> #102):** the approved Guitar Pro Dart spike ran `dart pub get` under
+> `tool/guitar_pro_feasibility/`; the router previously recognized only root
+> `.dart_tool` artifacts and incorrectly blocked its nested generated cache as
+> a model scope violation. The generated-artifact classifier now recognizes
+> the `.dart_tool` path component at any Dart package root, with a measured
+> nested-cache regression and isolated mutation review; product source paths
+> remain under the unchanged allowlist/protected-path audit. R13 may resume in
+> a fresh pipeline session after this green-gate heal merges. The following
+> HEAL notes are historical recovery evidence from before the product merge.
 > **HEAL E03-R12/H6 (PR #100):** the R12 review-finding `resume` had retained
 > baseline `ac31e3f` although the branch was refreshed to `f1612af` by the
 > H3/H4/H8 merges. The locked `rebase-baseline` recovery was run on the real
