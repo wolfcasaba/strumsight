@@ -56,7 +56,7 @@ E03-R06	docs/rounds/e03-r06-legacy-song-setlist-adapters.md	auto	nincs	done
 E03-R07	docs/rounds/e03-r07-song-repository-asset-store.md	auto	nincs	done
 E03-R08	docs/rounds/e03-r08-persistent-v2-migration.md	auto	nincs	done
 E03-R09	docs/rounds/e03-r09-native-json-import-export.md	auto	nincs	done
-E03-R10	docs/rounds/e03-r10-import-flow-security-boundary.md	auto	nincs	pending
+E03-R10	docs/rounds/e03-r10-import-flow-security-boundary.md	auto	nincs	done
 E03-R11	docs/rounds/e03-r11-musicxml-mxl-importer.md	auto	nincs	pending
 E03-R12	docs/rounds/e03-r12-midi-importer.md	auto	nincs	pending
 E03-R13	docs/rounds/e03-r13-guitar-pro-feasibility.md	auto	nincs	pending
