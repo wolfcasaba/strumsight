@@ -129,9 +129,14 @@ class SongDocumentCodec {
   /// Encode [document] to a UTF-8 JSON byte sequence. The encoding is
   /// deterministic for a given input — see class doc.
   List<int> encode(SongDocument document) {
-    final map = _documentToMap(document);
+    final map = encodeToMap(document);
     return utf8.encode(jsonEncode(map));
   }
+
+  /// Produces the canonical JSON object used by persistence and native
+  /// exchange adapters. The returned object is freshly allocated.
+  Map<String, dynamic> encodeToMap(SongDocument document) =>
+      _documentToMap(document);
 
   /// Decode [bytes] (UTF-8 JSON) to a [SongDocument]. Throws a
   /// [SongDocumentCodecException] with a stable error code on any
@@ -150,8 +155,12 @@ class SongDocumentCodec {
         SongDocumentCodecErrorCode.notAnObject,
       );
     }
-    return _documentFromMap(raw);
+    return decodeFromMap(raw);
   }
+
+  /// Decodes a JSON object already parsed by a bounded external adapter.
+  SongDocument decodeFromMap(Map<String, dynamic> json) =>
+      _documentFromMap(json);
 
   // ---------------------------------------------------------------------------
   // Document envelope

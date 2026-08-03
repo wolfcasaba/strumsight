@@ -1,6 +1,6 @@
 # E03-R09 — Natív StrumSight JSON import és export
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `main` @ `6070533`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 9; §13–14
 - **Branch:** `codex/e03-r09-native-json-import-export`
 - **Előfeltétel:** E03-R08 merge
@@ -53,12 +53,26 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-- A SongDocument codec és file repository rendelkezésre áll.
-- Formátumfüggetlen importer contract alapját ebben a körben kell a natív adapterhez létrehozni.
-- Import controller és UI csak R10/R15-ben készül.
+**Mérési dátum: 2026-08-03; baseline: `origin/main`/`HEAD` = `6070533`.
+Előfeltétel teljesült:** E03-R08 a mainen `f693170`/PR #81. A korábbi
+`eeb4f6d` baseline elavult. Az eredeti R09-preflight `94809e7` commitja
+érvényben maradt; a #82 (`6070533`) csak a router baseline-gate Flutter
+bootstrapját javítja, és nem módosít Song Trainer contractot vagy e kör
+engedélyezett fájllistáját.
 
-A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
-feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+| Mért tény | Forrás | Feloldás |
+|---|---|---|
+| A belső codec `SongDocumentCodec.supportedSchemaVersion == 1`, és a document rootja `schemaVersion`; külső `format`/`formatVersion` még nincs. | `data/local/song_document_codec.dart:126-150` | A külső boríték nem módosítja a document schema-t: kötelező `format="strumsight-song"`, `formatVersion=2`, majd a meglévő codec saját schema-ellenőrzése. ADR 0118. |
+| Nincs `data/importers/`, `SongImporter`, `ImportSourceFile`, cancellation token vagy importer registry. | `find lib/features/song_trainer/data -maxdepth 2`; `rg` a `lib/` fán | A minimális platformfüggetlen contract és cancellation token `song_importer.dart`-ban, a natív adapterek az új `data/importers/` alatt jönnek létre. Registry, workspace, controller és persistent commit R10-é; a briefből a R09 registry-feladat kikerült. |
+| A SDD §14 külső envelope-ja `format`, `formatVersion`, `document`, `assetManifest`, de a natív JSON-nak nincs bináris magic byte-ja. | `docs/sdd/04-epic-03-song-trainer.md:1432-1479` | A kötelező `format` root mező a tartalmi felismerőjel. A jó content + rossz extension warning; a hibás root/corrupt JSON stable failure. |
+| `SongAssetReference` csak ID/hash/extension/byteLength/metaadat; asset byte vagy path nincs benne. | `domain/models/song_asset_reference.dart:31-152` | Az `assetManifest` a document assets kanonikus, byte-mentes tükre; importkor eltérés failure. Csomagolt asset export nincs. |
+| `SongSource.originalFileName` display-név contract, de külső input nem bízható meg; a repository és az importer még nem kapcsolódik. | `domain/models/song_source.dart:137-177`; nincs importer→repository hívási lánc | Export a path-like source nevet scrubolja; az import csak in-memory eredményt ad. Nincs record, asset ref vagy repository írás failure/cancel esetén. |
+| Az SDD konfigurálható source-size limitet kér, de meglévő limitkonstans nincs. | SDD §13.6; `rg "ImportLimit|import.*limit" lib/` = nincs találat | A R09 natív JSON értéke pontosan 1 MiB (`1_048_576`); deklarált és tényleges streamhosszt is ellenőriz. A globális policy R10-é. |
+
+**Új, kör-owned döntés:** [ADR 0118](../adr/0118-native-json-exchange-contract.md).
+Nem egészül ki az `ai-router` TOML `allowed_paths` listája ADR-rel: az csak a
+modellek implementációs diffjének listája; az ADR és e pre-flight commit a
+router baseline része. A §4 táblázat viszont explicit engedi az ADR-t.
 
 ## 1. Cél
 
@@ -85,6 +99,7 @@ Teljes hűségű, offline, verziózott natív csereformátum probe/import/export
 - MusicXML/MIDI/GP
 - nagy source bytes Riverpod state-ben
 - félig commitolt library rekord
+- importer registry, temporary workspace, controller vagy repository commit
 
 ## 4. Engedélyezett fájlok
 
@@ -100,6 +115,7 @@ Teljes hűségű, offline, verziózott natív csereformátum probe/import/export
 | `test/fixtures/song_trainer/native/full_song.strumsight-song.json` | ÚJ | canonical snapshot |
 | `test/fixtures/song_trainer/native/newer_version.strumsight-song.json` | ÚJ | forward-version failure |
 | `test/fixtures/song_trainer/native/corrupt.strumsight-song.json` | ÚJ | malformed fixture |
+| `docs/adr/0118-native-json-exchange-contract.md` | ÚJ, pre-flight | exchange envelope/policy döntés |
 | `docs/rounds/e03-r09-native-json-import-export.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
@@ -113,6 +129,11 @@ hozzáadta a táblához. Új fixture/helper is fájl; listán kívül → `stopp
 2. Ugyanaz a normalizált document canonical JSON bytes/hash outputot ad.
 3. Exportból abszolút path, temporary path és privacy-sensitive import metadata hiányzik.
 4. Duplicate source hash warning, nem automatikus identity összevonás.
+5. A csereboríték `formatVersion=2`; a belső `document.schemaVersion` ettől
+   függetlenül a `SongDocumentCodec` által támogatott 1. A native source limit
+   1_048_576 byte: a deklarált és tényleges streamhosszt is ellenőrizni kell.
+6. `assetManifest` és `document.assets` exportkor értékazonos, importkor
+   eltérésük stable failure. A JSON nem tartalmaz asset byte-ot vagy pathot.
 
 E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 
@@ -128,7 +149,7 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 
 | Input | Várt probe/import |
 |---|---|
-| valid magic+extension | recognized / success |
+| valid `format` root + extension | recognized / success |
 | valid content, rossz extension | recognized + mismatch warning |
 | rossz root vagy corrupt | stable failure |
 | formatVersion current/current+1 | success/fail-closed |
@@ -154,7 +175,8 @@ orchestrátor indít exact `headSha`-ra.
 
 1. Írd meg a root/version/limit/cancel RED teszteket és canonical fixturet.
 2. Írd meg az export privacy/deterministic round-trip tesztet.
-3. Implementáld az importer contractot, probe-ot és natív adaptert.
+3. Implementáld az importer contractot, probe-ot és natív adaptert; a R10-es
+   registryt vagy persistent commitot ne hozd előre.
 4. Implementáld az exportert és filename sanitizert.
 5. Futtasd a gate-et, a fixture hash-változást review-ban indokold.
 
@@ -170,12 +192,53 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Megvalósítva: 2026-08-03.**
+
+### Fájlonkénti összefoglaló
+
+- `song_importer.dart`: platformfüggetlen, újranyitható stream-alapú source,
+  cancellation, probe és in-memory import contract.
+- `native_json_importer.dart`: kötelező root/version/manifest ellenőrzés,
+  deklarált és streamelt 1 MiB limit, stable failure/warning kódok,
+  duplicate-ID ellenőrzés, duplicate-source-hash warning és cancellation safe
+  pointok; nincs repository hívás vagy perzisztens írás.
+- `native_json_exporter.dart`, `export_filename_sanitizer.dart`: determinisztikus
+  v2 envelope, byte-mentes asset-manifest és privacy-scrubbed provenance /
+  hordozható exportfájlnév.
+- `song_document_codec.dart`: az existing canonical codec publikus map
+  belépési/kilépési pontot kapott az exchange adapterhez; a persistált byte
+  contract változatlan.
+- `native_json_importer_test.dart`, `native_json_exporter_test.dart` és a
+  három native fixture: fixture round-trip, root/version/corrupt/manifest /
+  duplicate-ID / limit / cancellation mátrix, valamint determinism és privacy
+  regression coverage.
+
+### TDD és futtatott ellenőrzések
+
+1. RED: `flutter test test/features/song_trainer/data/importers/native_json_importer_test.dart`
+   az új import/export contractok hiányában várt compile failure-rel állt meg.
+2. GREEN: mindkét célzott import/export teszt külön zöld lett; az
+   `flutter test test/features/song_trainer/data/local/song_document_codec_test.dart`
+   is zöld (14 teszt).
+3. Kötelező gate:
+
+   ```bash
+   tools/round-gate.sh test/features/song_trainer/data/importers/native_json_importer_test.dart test/features/song_trainer/data/importers/native_json_exporter_test.dart
+   ```
+
+   Tényleges eredmény: format zöld, analyze zöld, importer 11 teszt zöld,
+   exporter 4 teszt zöld, architecture zöld.
+
+### Eltérés, nem futtatott ellenőrzés, follow-up
+
+- A brief scope-a és az `ai-router.allowed_paths` listája nem bővült; registry,
+  workspace, controller és repository commit továbbra is R10 scope.
+- Full `flutter test`, randomizált property gate, release APK és exact-SHA CI
+  nem futott lokálisan: az ADR 0053 szerinti orchestrátor/CI gate-ek.
+- Nincs ismert follow-up vagy scope-on kívüli módosítás.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e03-r09-native-json-import-export-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Független review: `docs/reviews/e03-r09-native-json-import-export-review.md` —
+**APPROVED** (0 BLOCKER / 0 MAJOR). Merge csak exact-SHA zöld CI, §4-en belüli
+diff és nulla OPEN BLOCKER/MAJOR után.
