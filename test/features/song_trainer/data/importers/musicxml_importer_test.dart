@@ -53,6 +53,64 @@ void main() {
     ]);
   });
 
+  test('preserves 3/4 and 6/8 meters', () async {
+    final waltz = await File(
+      'test/fixtures/song_trainer/musicxml/waltz_34.musicxml',
+    ).readAsBytes();
+    final compound = await File(
+      'test/fixtures/song_trainer/musicxml/meter_68.musicxml',
+    ).readAsBytes();
+
+    final waltzResult = await importer.import(
+      _source('waltz.musicxml', waltz),
+      const SongImportOptions(),
+      const NeverCancelledToken(),
+    );
+    final compoundResult = await importer.import(
+      _source('compound.musicxml', compound),
+      const SongImportOptions(),
+      const NeverCancelledToken(),
+    );
+
+    expect(
+      waltzResult.valueOrNull!.document.meterMap.changes.single.meter.numerator,
+      3,
+    );
+    expect(
+      waltzResult
+          .valueOrNull!
+          .document
+          .meterMap
+          .changes
+          .single
+          .meter
+          .denominator,
+      4,
+    );
+    expect(
+      compoundResult
+          .valueOrNull!
+          .document
+          .meterMap
+          .changes
+          .single
+          .meter
+          .numerator,
+      6,
+    );
+    expect(
+      compoundResult
+          .valueOrNull!
+          .document
+          .meterMap
+          .changes
+          .single
+          .meter
+          .denominator,
+      8,
+    );
+  });
+
   test('maps tied guitar notes, rests, lyrics and rehearsal markers', () async {
     final bytes = await File(
       'test/fixtures/song_trainer/musicxml/markers_lyrics_repeat.musicxml',
@@ -70,10 +128,88 @@ void main() {
       document.tracks.whereType<LyricsTrack>().single.events.single.text,
       'Hello',
     );
+    final notes = document.tracks.whereType<NoteTrack>().single.events;
+    expect(notes, hasLength(1));
+    expect(notes.single.midiPitch, 64);
+    expect(notes.single.stringIndex, 5);
+    expect(notes.single.fret, 0);
+    expect(notes.single.tieGroupId, isNotNull);
     expect(
       result.valueOrNull!.warnings,
       contains(MusicXmlImportWarningCode.repeatExpanded),
     );
+  });
+
+  test('preserves both chord symbols in their source order', () async {
+    final bytes = await File(
+      'test/fixtures/song_trainer/musicxml/two_chords.musicxml',
+    ).readAsBytes();
+
+    final result = await importer.import(
+      _source('two-chords.musicxml', bytes),
+      const SongImportOptions(),
+      const NeverCancelledToken(),
+    );
+
+    final chords = result.valueOrNull!.document.tracks
+        .whereType<ChordTrack>()
+        .single
+        .events;
+    expect(chords.map((chord) => chord.symbol.label), <String>['C', 'G']);
+  });
+
+  test(
+    'preserves every part and exposes deterministic part previews',
+    () async {
+      final bytes = await File(
+        'test/fixtures/song_trainer/musicxml/multipart_polyphonic.musicxml',
+      ).readAsBytes();
+
+      final probe = await importer.probe(
+        _source('multipart.musicxml', bytes),
+        const NeverCancelledToken(),
+      );
+      final result = await importer.import(
+        _source('multipart.musicxml', bytes),
+        const SongImportOptions(),
+        const NeverCancelledToken(),
+      );
+
+      expect(probe.isRecognized, isTrue);
+      expect(probe.parts, hasLength(2));
+      expect(probe.parts[0].name, 'Guitar');
+      expect(probe.parts[0].noteCount, 2);
+      expect(probe.parts[0].lowestMidiPitch, 64);
+      expect(probe.parts[0].highestMidiPitch, 67);
+      expect(probe.parts[0].isPolyphonic, isTrue);
+      expect(probe.parts[0].hasTablature, isFalse);
+      expect(probe.parts[1].name, 'Bass');
+      expect(probe.parts[1].noteCount, 1);
+      expect(probe.parts[1].lowestMidiPitch, 40);
+      expect(probe.parts[1].highestMidiPitch, 40);
+      expect(probe.parts[1].isPolyphonic, isFalse);
+      expect(probe.parts[1].hasTablature, isFalse);
+      expect(result.valueOrNull!.parts, probe.parts);
+      final noteTracks = result.valueOrNull!.document.tracks
+          .whereType<NoteTrack>();
+      expect(noteTracks.map((track) => track.name), <String>['Guitar', 'Bass']);
+      expect(noteTracks.map((track) => track.events.length), <int>[2, 1]);
+    },
+  );
+
+  test('warns once when safely ignored notation is unsupported', () async {
+    const xml = '''
+<score-partwise><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes><direction><direction-type><words>dolce</words></direction-type></direction><note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><notations><ornaments><trill-mark/></ornaments></notations></note></measure></part></score-partwise>''';
+
+    final result = await importer.import(
+      _source('unsupported.musicxml', xml.codeUnits),
+      const SongImportOptions(),
+      const NeverCancelledToken(),
+    );
+
+    expect(result.valueOrNull!.warnings, <String>[
+      MusicXmlImportWarningCode.unsupportedElement,
+    ]);
   });
 
   test('rejects malformed XML and documents containing a doctype', () async {

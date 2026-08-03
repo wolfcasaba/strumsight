@@ -137,6 +137,38 @@ void main() {
         expect(await harness.workspaceRoot.list().toList(), isEmpty);
       },
     );
+
+    test('passes content-derived part previews into preview state', () async {
+      final importer = _ControlledImporter(
+        probeResult: const ImportProbeResult.recognized(
+          parts: <ImportPartPreview>[
+            ImportPartPreview(
+              id: 'P1',
+              name: 'Guitar',
+              staffCount: 1,
+              noteCount: 2,
+              lowestMidiPitch: 64,
+              highestMidiPitch: 67,
+              isPolyphonic: true,
+              chordSymbolCount: 0,
+              hasTablature: true,
+            ),
+          ],
+        ),
+      );
+      final harness = await _Harness.create(importer: importer);
+      addTearDown(harness.dispose);
+
+      harness.controller.requestSelection();
+      await harness.controller.selectSource(_source('multipart.song'));
+
+      final preview = harness.controller.state.preview!;
+      expect(harness.controller.state.phase, SongImportPhase.preview);
+      expect(preview.parts, hasLength(1));
+      expect(preview.parts.single.noteCount, 2);
+      expect(preview.parts.single.isPolyphonic, isTrue);
+      expect(preview.parts.single.hasTablature, isTrue);
+    });
   });
 }
 

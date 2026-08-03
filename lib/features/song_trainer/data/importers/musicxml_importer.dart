@@ -57,7 +57,10 @@ final class MusicXmlImporter implements SongImporter {
     if (parsed.failureCode != null) {
       return ImportProbeResult.failure(parsed.failureCode!);
     }
-    return ImportProbeResult.recognized(warnings: _warnings(source));
+    return ImportProbeResult.recognized(
+      warnings: _warnings(source),
+      parts: mapper.preview(parsed.document!),
+    );
   }
 
   @override
@@ -85,7 +88,11 @@ final class MusicXmlImporter implements SongImporter {
       );
       final warnings = <String>[...mapped.warnings, ..._warnings(source)];
       return AppResult<SongImportResult>.success(
-        SongImportResult(document: mapped.document, warnings: warnings),
+        SongImportResult(
+          document: mapped.document,
+          warnings: warnings,
+          parts: mapped.parts,
+        ),
       );
     } on FormatException {
       return _failure(MusicXmlImportFailureCode.invalidRoot);
