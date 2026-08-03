@@ -31,10 +31,27 @@ from ai_router.state import StateError, StateStore
 
 
 _TASK_ID = re.compile(r"^E\d{2}-R\d{2}$", re.IGNORECASE)
+_TASK_TERRA_BUDGET_EXHAUSTED = "task Terra budget is exhausted"
 
 
 def _expanded(value: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(value)))
+
+
+def _mark_task_terra_budget_halt(worktree: Path, task_id: str) -> None:
+    """Hand task-local Terra exhaustion to the pipeline self-healer."""
+    status_script = worktree / "tools" / "pipeline-status.sh"
+    completed = subprocess.run(
+        [os.fspath(status_script), "--mark-halt", "H4", _TASK_TERRA_BUDGET_EXHAUSTED],
+        cwd=worktree,
+        env=dict(os.environ, PIPELINE_ROUND=task_id),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = redact_text(completed.stderr or completed.stdout).strip()
+        raise OSError(f"could not mark H4 task budget halt: {detail or completed.returncode}")
 
 
 def _manifest_from_state(value: object) -> WorkspaceManifest:
@@ -547,6 +564,8 @@ def main() -> int:
             resume=args.command == "resume" or bool(getattr(args, "resume", False)),
             review_findings=findings,
         )
+        if result.status is RouterStatus.STOPPED and result.reason == _TASK_TERRA_BUDGET_EXHAUSTED:
+            _mark_task_terra_budget_halt(worktree, result.task_id)
         print(json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True))
         return result.exit_code
     except (BriefMetadataError, ConfigError, StateError, OSError, ValueError) as error:
