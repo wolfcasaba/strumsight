@@ -26,6 +26,8 @@ import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
+import '../data/importers/musicxml_importer.dart';
+import '../data/importers/mxl_importer.dart';
 import '../data/importers/song_importer.dart';
 import '../data/local/file_song_asset_repository.dart';
 import '../data/local/file_song_repository.dart';
@@ -136,8 +138,13 @@ final inMemorySongRepositoryProvider = Provider<SongRepository>(
 /// Registry owned by the import application flow. New format importers are
 /// appended only after their parser and licence feasibility rounds complete.
 final songImporterRegistryProvider = Provider<ImporterRegistry>(
-  (_) =>
-      const ImporterRegistry(importers: <SongImporter>[NativeJsonImporter()]),
+  (_) => const ImporterRegistry(
+    importers: <SongImporter>[
+      NativeJsonImporter(),
+      MusicXmlImporter(),
+      MxlImporter(),
+    ],
+  ),
 );
 
 /// Per-operation temporary root. Its paths never leave the data/application

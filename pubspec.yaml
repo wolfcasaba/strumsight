@@ -40,6 +40,9 @@ dependencies:
   flutter_local_notifications: ^22.0.1 # opt-in daily practice nudge (round 80)
   flutter_timezone: ^5.1.0      # device tz name for the 19:00 wall-time nudge
   timezone: ^0.11.1             # TZDateTime scheduling
+  xml: ^6.6.1                   # MusicXML parser at the data-layer boundary
+  archive: ^4.0.7               # secure MXL container inspection
+  crypto: ^3.0.7                # source SHA-256 provenance
 
 dev_dependencies:
   flutter_test:

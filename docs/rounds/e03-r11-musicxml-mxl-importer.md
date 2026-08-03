@@ -247,10 +247,41 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+Implementáció review-ra kész, commit nélkül az outer router/orchestrátor számára.
+
+- `pubspec.yaml` / `pubspec.lock`: direct `xml`, `archive` és `crypto`
+  data-boundary dependencyk.
+- `musicxml_*`: DOCTYPE előtti fail-closed ellenőrzés, XML package boundary,
+  documented metadata/timing/chord/note/lyric/marker subset mapping és bounded
+  repeat linearization.
+- `mxl_*`: memory-only ZIP entry validation; traversal, absolute path, symlink,
+  canonical duplicate, nested archive, entry-count és extracted-byte limit
+  fail-closed; valid `META-INF/container.xml` rootfile szükséges.
+- `import_limits.dart` és production provider: shared archive policy és valódi
+  MusicXML/MXL registry wiring.
+- Fixturek és tesztek: 4/4, pickup/tempo/meter, tied guitar note/lyrics/repeat,
+  corrupt/DOCTYPE XML, archive path és `max−1/max/max+1` entry/byte határok,
+  valamint provider wiring.
+
+Tényleges ellenőrzések:
+
+```text
+flutter test test/features/song_trainer/data/importers/musicxml_importer_test.dart \
+  test/features/song_trainer/data/importers/mxl_security_test.dart \
+  test/features/song_trainer/application/song_trainer_providers_test.dart
+→ 9 teszt zöld.
+
+tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart \
+  test/features/song_trainer/data/importers/mxl_security_test.dart
+→ format, analyze, mindkét célzott teszt és architecture zöld.
+
+git diff --check
+→ zöld.
+```
+
+Nem futtatott ellenőrzések: teljes Flutter suite, property gate és release APK;
+ezek a brief/AGENTS szerint CI-orchestrátor felelősségei. Nincs scope-eltérés,
+nem módosult tiltott útvonal, és nincs commit/push/PR.
 
 ## 11. Review — a független reviewer tölti ki
 
