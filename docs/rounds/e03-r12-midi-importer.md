@@ -1,6 +1,6 @@
 # E03-R12 — Standard MIDI importer
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `main` @ `99d3adc`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 12; §16
 - **Branch:** `codex/e03-r12-midi-importer`
 - **Előfeltétel:** E03-R11 merge
@@ -10,15 +10,16 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "pubspec.yaml",
-  "pubspec.lock",
+  "docs/adr/0121-midi-import-boundary.md",
   "lib/features/song_trainer/data/importers/midi_importer.dart",
   "lib/features/song_trainer/data/importers/midi_parser_adapter.dart",
   "lib/features/song_trainer/data/importers/midi_timeline_mapper.dart",
   "lib/features/song_trainer/data/importers/midi_track_preview.dart",
-  "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/data/importers/song_importer.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
   "test/features/song_trainer/data/importers/midi_importer_test.dart",
   "test/features/song_trainer/data/importers/midi_malformed_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
   "test/fixtures/song_trainer/midi/format0.mid",
   "test/fixtures/song_trainer/midi/format1_multitrack.mid",
   "test/fixtures/song_trainer/midi/tempo_meter_marker.mid",
@@ -58,9 +59,40 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-- R10 importer pipeline és R05 NoteTrackAnalyzer használható.
-- Parser dependency csak licence/maintenance audit után kerülhet be.
-- Chord inference és SMPTE timing nem kötelező az első verzióban.
+- **Mért baseline (2026-08-03):** E03-R11 merge-e a `main` `99d3adc`
+  commitján van; nincs nyitott PR vagy E03-R12 worktree/branch/review. A
+  production `ImporterRegistry` listát nem `importer_registry.dart`, hanem a
+  `songImporterRegistryProvider` állítja össze a
+  `lib/features/song_trainer/application/song_trainer_providers.dart:140–148`
+  soron. Ezért az előkészített registry-pathot eltávolítottuk, és a tényleges
+  production owner, valamint a közvetlen provider-teszt felkerült az
+  engedélyezett listára.
+- **Mért preview-contract drift:** `ImportPartPreview`
+  (`data/importers/song_importer.dart:65–110`) jelenleg csak id/name/program,
+  noteCount, pitch range és polyphony adatot hordoz; nincs MIDI channel,
+  duration vagy suspected-drum mező. A §6 preview-acceptance ezeket kötelezővé
+  teszi, ezért a szerződés exact ownerét hozzáadtuk. A mezők opcionálisak
+  maradnak, így a korábbi JSON/MusicXML/MXL preview-k érték- és equality
+  contractja nem változik.
+- **Mért erőforrás-owner:** a közös event-limit az
+  `ImportLimits.maxEventCount` (`data/importers/import_limits.dart:16–34`),
+  és az `ImporterRegistry.import` érvényesíti
+  (`data/importers/importer_registry.dart:67–79`). Az R12 nem vezet be
+  privát MIDI-limitet és nem módosítja ezt a már merge-elt policyt; a
+  max−1/max/max+1 esetet a MIDI teszt azonos `ImporterRegistry`-n keresztül
+  méri.
+- **Parser/licence audit:** a vizsgált `dart_midi_pro` 1.0.4+2 pure-Dart,
+  MIT-licencű, de unverified publisherrel, alacsony használattal és a
+  nyilvános csomagoldal szerint kb. 20 hónapja publikált utolsó kiadással
+  rendelkezik. A csomag nem ad auditálható, eseményenkénti cancellation- és
+  limit-határt; ezért az R12 kis, saját, csak SMF 0/1 + PPQ subset byte
+  decoderét használja, új csomag és `pubspec`-változás nélkül. A döntést az
+  új ADR 0121 rögzíti.
+- **Kötött feloldás:** az ADR 0091/0119 közös security- és registry-határait
+  nem módosítjuk. A MIDI adapter minden header/chunk/running-status hibát
+  typed failureként ad vissza; a MIDI parser típusa nem lép ki a data
+  rétegből. SMPTE marad explicit unsupported warning/failure, chord inference
+  nem része a körnek.
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
