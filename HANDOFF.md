@@ -4,21 +4,27 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R11 closeout — MusicXML/MXL importer).**
+> (E03-R12 H8 self-heal — non-force brief-baseline recovery).**
 > E03-R11 is merged as [PR #95](https://github.com/wolfcasaba/strumsight/pull/95)
 > (`47baded`). Its exact pre-merge branch head `c79e9e0` has the identical tree,
 > and [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
 > is green (full suite, randomized property gate and APK). The independent
-> post-merge gate and boundary mutation review are green; E03-R12 is next.
-> **HEAL E03-R12/H4:** the R12 task had already consumed its two M3 attempts
+> post-merge gate and boundary mutation review are green; E03-R12 resumes only
+> in a fresh pipeline session.
+> **HEAL E03-R12/H8:** rebasing the existing R12 branch onto `e8683fd`
+> conflicted only in `docs/rounds/e03-r12-midi-importer.md` while replaying
+> `4f9e946`. The verified non-force recovery aborted that rebase and merged
+> `origin/main` normally; the pushed target head `e55291b` retains the approved
+> H3/H6 scope and keeps the ADR path outside router-owned `allowed_paths`.
+> **HEAL E03-R12/H4 (PR #98):** the R12 task had already consumed its two M3 attempts
 > and first high-risk Terra escalation before the independent review produced
 > actionable MAJOR findings. The old one-call Terra cap therefore stopped the
 > legitimate review-finding `resume` before it could reach the model. ADR 0088
 > now permits exactly one second, review-gated Terra repair call; the config and
 > router resume regression enforce this without resetting attempts, weakening
-> scope/gates, or reopening STOPPED/DEFERRED tasks. The H4 heal branch is
-> `heal/E03-R12-H4-1`; once its green CI evidence merges, R12 resumes on its
-> existing branch with the recorded F1–F4 findings.
+> scope/gates, or reopening STOPPED/DEFERRED tasks. Router CI
+> [30826566480](https://github.com/wolfcasaba/strumsight/actions/runs/30826566480)
+> is green; R12 retains the recorded F1–F4 findings.
 > **HEAL E03-R12/H3 (PR #97):** the R12 review measured that ADR 0091's
 > mandatory MIDI track-count limit requires the shared `import_limits.dart`
 > owner, omitted from the prepared scope. The revision opens only that path,
