@@ -3137,3 +3137,19 @@ meg, majd normál push-sal publikálható. A
 `PipelineIntegrationTest.test_selfheal_prompt_preserves_current_main_scope_for_h8_brief_conflicts`
 előbb RED volt a hiányzó H8 eljárás miatt, majd GREEN; őrzi a brief-only
 feltételt, a non-force merge-parancsot és a current-main scope megőrzését.
+
+## L78 — A scope-audit után a brief-hash-et is az auditált, jóváhagyott metadatahoz kell kötni (E03-R11 H6, 2026-08-03)
+
+**Mérés.** Az E03-R11 H3 self-heal által merge-elt scope-revízió után a
+`python3 tools/model-router.py rebase-baseline --task ... --worktree ...`
+zöld scope-audittal `READY_FOR_REVIEW` állapotot írt, de a következő
+`resume` `BLOCKED: committed brief metadata changed` (exit 40) eredményt
+adott. A tárolt `baseline_manifest` frissült, a tárolt `brief_hash` viszont
+a H3 előtti metadata hash maradt.
+
+**Javítás és regresszió.** A rebase csak a sikeres aktuális-allowlist
+scope-audit után írja át a `brief_hash`-t az auditált brief hashére; a Terra
+reservation és a kísérletszámok változatlanok maradnak. A
+`RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
+előbb RED volt (`resume` exit 40), majd GREEN; azt is bizonyítja, hogy a
+resume `READY_FOR_REVIEW` marad, nem modellhívást vagy state-resetet indít.

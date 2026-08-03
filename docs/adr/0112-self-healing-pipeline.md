@@ -119,6 +119,19 @@ Ez nem enyhíti az ADR 0086 freshness-követelményét: a körbranch a merge ut�
 tartalmazza a dispatch előtti `main`-t, és később ugyanúgy exact-head CI-t,
 független review-t és zöld kaput igényel.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — H6 approved-brief metadata recovery
+
+Mérés: E03-R11 H3 scope-revíziója a merge után megváltoztatta a brief
+kanonikus `brief_hash`-ét. A `rebase-baseline` a friss manifestet és a
+megőrzött diffet már az új, teljes allowlist ellenőrzésével auditálta, de a
+régi hash-et meghagyta. A következő `resume` ezért az audit előtt
+`BLOCKED: committed brief metadata changed` állapotba tért vissza.
+
+A `rebase-baseline` kizárólag sikeres, aktuális-brief szerinti scope-audit
+után a perzisztált `brief_hash`-t is az éppen auditált brief hashére állítja.
+Nem reseteli a kísérletszámokat vagy a Terra reservationt, és nem kerüli meg
+az allowlist- vagy baseline-őrt; scope-hiba továbbra is fail-closed.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör

@@ -4,7 +4,7 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H8 — non-force brief-history recovery).**
+> (HEAL E03-R11/H6 — approved-brief metadata recovery).**
 > E03-R10 (PR #86)
 > is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
@@ -36,6 +36,15 @@
 > current main brief in non-force merge commit `98a87d3`, pushed normally; this
 > heal regression-tests that brief-only recovery procedure. The product round
 > remains unmerged and resumes in a fresh session. Historical note:
+> **HEAL E03-R11/H6.** The H3-approved brief revision changed the persisted
+> router metadata hash after a successful `rebase-baseline` scope audit, so
+> `resume` immediately returned `BLOCKED: committed brief metadata changed`.
+> The recovery now stores the hash of the exact brief it just audited, without
+> resetting attempts or bypassing the baseline/scope guards; the router CLI
+> regression reproduces the prior exit-40 resume and requires
+> `READY_FOR_REVIEW` afterward. The product round remains unmerged and resumes
+> only after this heal's independent review and CI evidence are green.
+> Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
