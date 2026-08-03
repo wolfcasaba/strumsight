@@ -4,6 +4,7 @@
 #   tools/pipeline-status.sh              # állapot kiírása
 #   tools/pipeline-status.sh --resume     # a HALT azonnali feloldása
 #   tools/pipeline-status.sh --halt "ok"  # a lánc kézi megállítása
+#   tools/pipeline-status.sh --mark-halt H4 "ok" # router H4 átadás
 #   tools/pipeline-status.sh --heal-reset # az önjavító kísérletszámláló nullázása
 #
 # ADR 0112 óta a `--resume` NEM az egyetlen út: haltból a driver magától indít
@@ -20,6 +21,19 @@ halt_file="$state_dir/HALTED"
 heal_count_file="$state_dir/selfheal.count"
 claude_block_file="$state_dir/claude-blocked-until"
 chain_log="$state_dir/chain.log"
+
+write_router_halt() {
+  target=$1
+  temporary="$target.tmp.$$"
+  {
+    echo "round=$PIPELINE_ROUND"
+    echo "halt=$halt_code"
+    echo "summary=$halt_summary"
+    echo "halted_at=$(date -Is)"
+  } > "$temporary"
+  chmod 600 "$temporary"
+  mv -f "$temporary" "$target"
+}
 
 case "${1:-}" in
   --resume)
@@ -56,6 +70,39 @@ case "${1:-}" in
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
     echo "A lánc megállítva: $reason"
+    ;;
+  --mark-halt)
+    halt_code=${2:?használat: pipeline-status.sh --mark-halt H4 "<ok>"}
+    halt_summary=${3:?használat: pipeline-status.sh --mark-halt H4 "<ok>"}
+    case "$halt_code" in H[1-8]) ;; *) echo "érvénytelen halt-kód: $halt_code" >&2; exit 2 ;; esac
+    case "${PIPELINE_ROUND:-}" in
+      E[0-9][0-9]-R[0-9][0-9]) ;;
+      *) echo "PIPELINE_ROUND=E##-R## kötelező a router halt átadásához" >&2; exit 2 ;;
+    esac
+    halt_summary=$(printf '%s' "$halt_summary" | python3 -c '
+import re, sys
+value = sys.stdin.read()
+value = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+)\S+", r"\1[REDACTED]", value)
+value = re.sub(r"(?i)\b(MINIMAX_API_KEY|OPENAI_API_KEY|CODEX_API_KEY|API_KEY|TOKEN)\s*=\s*\S+", r"\1=[REDACTED]", value)
+value = re.sub(r"\bsk-[A-Za-z0-9_-]{20,}\b", "[REDACTED]", value)
+print(" ".join(value.split())[:500])
+')
+    [ -n "$halt_summary" ] || halt_summary="[REDACTED]"
+    mkdir -p "$state_dir"
+    write_router_halt "$state_dir/router-halt"
+    write_router_halt "$halt_file"
+    round_status="$state_dir/round-status"
+    temporary="$round_status.tmp.$$"
+    {
+      echo "outcome=halted"
+      echo "round=$PIPELINE_ROUND"
+      echo "halt=$halt_code"
+      echo "summary=$halt_summary"
+    } > "$temporary"
+    chmod 600 "$temporary"
+    mv -f "$temporary" "$round_status"
+    printf '%s  router halt átvéve (%s)\n' "$(date -Is)" "$halt_summary" >> "$chain_log"
+    echo "Router halt átadva: $halt_code — $halt_summary"
     ;;
   ""|--status)
     echo "=== Kör-pipeline állapot (ADR 0087) ==="
@@ -123,7 +170,7 @@ case "${1:-}" in
     [ -f "$chain_log" ] && tail -15 "$chain_log" || echo "  (még nincs)"
     ;;
   *)
-    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\" | --heal-reset | --unblock-claude]" >&2
+    echo "használat: pipeline-status.sh [--status | --resume | --halt \"<ok>\" | --mark-halt H4 \"<ok>\" | --heal-reset | --unblock-claude]" >&2
     exit 2
     ;;
 esac
