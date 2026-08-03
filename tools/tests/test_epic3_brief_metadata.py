@@ -13,6 +13,10 @@ E03_R11_MEASURED_OWNER_PATHS = (
     "lib/features/song_trainer/application/song_trainer_providers.dart",
     "lib/features/song_trainer/data/importers/import_limits.dart",
     "test/features/song_trainer/application/song_trainer_providers_test.dart",
+    "lib/features/song_trainer/data/importers/song_importer.dart",
+    "lib/features/song_trainer/application/import/import_preview.dart",
+    "lib/features/song_trainer/application/import/song_import_controller.dart",
+    "test/features/song_trainer/application/import/song_import_controller_test.dart",
 )
 
 
@@ -29,7 +33,7 @@ def section(text: str, number: int) -> str:
 
 class Epic3BriefMetadataTest(unittest.TestCase):
     def test_r11_scope_includes_measured_production_owners(self) -> None:
-        """H3 regression: R11 must own real registration and MXL-limit paths."""
+        """H3 regression: R11 owns every measured registry, limit and preview contract path."""
         brief = load_brief(BRIEF_DIR / "e03-r11-musicxml-mxl-importer.md")
 
         self.assertEqual(
