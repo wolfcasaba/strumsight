@@ -3334,3 +3334,23 @@ a Terra-számláló érintetlen marad. A
 `RouterResumeTest.test_review_findings_get_one_bounded_terra_repair_after_initial_escalation`
 a ténylegesen megmaradt intenttel előbb RED volt (üres model profile-lista),
 majd GREEN: pontosan egy `terra` repair-hívást és `terra_calls=2`-t bizonyít.
+
+## L88 — A kötelező, commitolt review-artefaktumnak a kör explicit scope-ján is szerepelnie kell (E03-R14 H3, 2026-08-03)
+
+**Mérés.** Az E03-R14 exact-head implementációs és izolált review-gate-je zöld
+volt, de a brief §11 a
+`docs/reviews/e03-r14-guitar-pro-path-review.md` jelentést kötelezővé tette,
+miközben §4 és az `ai-router.allowed_paths` listája csak kilenc product- és
+brief-utat tartalmazott. A `docs/execution/09-review-report.md:6-7` szerint a
+jelentés merge előtt commitolandó, ezért a reviewer a szükséges artefaktum
+létrehozásával automatikusan tiltott scope-eltérést okozott volna.
+
+**Javítás és regresszió.** A self-heal a review-jelentés egyetlen exact pathját
+felvette a R14 emberi táblájába és router-metadatajába, a brief pedig kimondja,
+hogy ezt kizárólag a független reviewer írhatja. A
+`Epic3BriefMetadataTest.test_r14_scope_includes_the_mandatory_review_artifact`
+a régi metadata ellen RED volt, a javítás után GREEN; az izolált review-ben a
+path ideiglenes törlése ismét RED-re fordította. A teljes router-tesztsáv 165
+teszttel és 53 subtesttel, az exact review-head Router CI
+[30846147114](https://github.com/wolfcasaba/strumsight/actions/runs/30846147114)
+zölden zárt. A mérce, a scope-audit és a protected-path védelem változatlan.
