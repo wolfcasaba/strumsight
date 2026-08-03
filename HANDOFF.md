@@ -4,11 +4,11 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R09 close-out).** E03-R08 (PR #81) and E03-R09 (PR #83) are now
-> recorded as merged; the current next product round is E03-R10. R09 added
-> deterministic, privacy-scrubbed native JSON import/export with a bounded,
-> cancellable in-memory importer ([ADR 0118](docs/adr/0118-native-json-exchange-contract.md)).
-> The exact branch-head CI run [30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
+> (E03-R10 close-out).** E03-R10 (PR #86) is merged; the current next product
+> round is E03-R11. R10 added the cancellable, stale-callback-safe import
+> application flow, trusted importer registry, bounded operation workspace and
+> picker port ([ADR 0119](docs/adr/0119-song-import-application-orchestration.md)).
+> Exact branch-head CI [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
 > and the independent post-merge local gate are green. Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
@@ -433,12 +433,12 @@
 
 ## 4. Current branch
 
-`main` @ [PR #83](https://github.com/wolfcasaba/strumsight/pull/83)
-(E03-R09 native StrumSight JSON import/export, squash-merge `48cf3a0`). CI
-run [30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
-**success** on the exact branch `headSha` `c26f426`; it ran the full suite,
+`main` @ [PR #86](https://github.com/wolfcasaba/strumsight/pull/86)
+(E03-R10 import application flow és biztonsági keret, squash-merge `93b46db`).
+CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
+**success** on the exact branch `headSha` `d693077`; it ran the full suite,
 randomized property gate and development APK build. Independent review:
-[`e03-r09-native-json-import-export-review.md`](docs/reviews/e03-r09-native-json-import-export-review.md)
+[`e03-r10-import-flow-security-boundary-review.md`](docs/reviews/e03-r10-import-flow-security-boundary-review.md)
 (APPROVED, 0 BLOCKER/MAJOR); the post-merge local gate is also green.
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
@@ -512,24 +512,24 @@ randomized property gate and development APK build. Independent review:
 
 ## 5. Last completed round
 
-**E03-R09 — Natív StrumSight JSON import és export** (PR
-[#83](https://github.com/wolfcasaba/strumsight/pull/83), squash `48cf3a0`,
-[ADR 0118](docs/adr/0118-native-json-exchange-contract.md)). Implementer:
-**auto router**; independent reviewer: **Codex/Terra**.
+**E03-R10 — Import application flow és biztonsági keret** (PR
+[#86](https://github.com/wolfcasaba/strumsight/pull/86), squash `93b46db`,
+[ADR 0119](docs/adr/0119-song-import-application-orchestration.md)).
+Implementer: **auto router**; independent reviewer: **Codex/Terra**.
 
-**Elkészült:** verziózott `strumsight-song` v2 exchange envelope,
-determinista export, path-scrubbed provenance és hordozható filename,
-1 MiB-on deklarált és streamelt source-limit, cancellation safe point,
-asset-manifest parity és kizárólag in-memory import-result. Sem registry,
-repository-write vagy UI nem került előrehozásra. A review a manifest őr
-eldobható valódi-sértés próbájával pirosra váltott; az őr visszaállítása után
-a célzott gate és a merge utáni gate zöld.
+**Elkészült:** explicit import-fázisgép és effect contract, egyetlen aktív
+művelet/stale-callback védelem, cancel-safe cleanup, trusted registry-probe,
+bounded parser- és workspace-limitek, path- és symlink-escape elutasítás,
+valamint pluginmentes file-picker port. Repository-írás csak a validált,
+megerősített import után történik. Az izolált review az operation-identity őr
+eldobásával valós stale-callback hibát mutatott ki; visszaállítva a célzott és
+a post-merge gate is zöld.
 
-Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/importers/native_json_importer_test.dart test/features/song_trainer/data/importers/native_json_exporter_test.dart`
-(format/analyze/12 importer teszt/4 exporter teszt/architecture zöld) + CI
-[30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
-zöld az exact `c26f426` branch-headen. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R09.
+Zöld kapu: `tools/round-gate.sh test/features/song_trainer/application/import test/features/song_trainer/data/importers/import_workspace_test.dart`
+(format/analyze/6 application teszt/3 workspace teszt/architecture zöld) + CI
+[30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
+zöld az exact `d693077` branch-headen. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R10.
 
 ### Previous completed round
 
@@ -593,10 +593,9 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R10 — Import application flow és biztonsági keret** a következő
-product round; nem része ennek a sessionnek. E03-R08 (PR #81) és E03-R09
-(PR #83) már kész. A queue-fájl állapotát továbbra is kizárólag a pipeline
-driver kezeli.
+0. **E03-R11 — MusicXML és MXL importer** a következő product round; nem
+része ennek a sessionnek. E03-R10 (PR #86) már kész. A queue-fájl állapotát
+továbbra is kizárólag a pipeline driver kezeli.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
