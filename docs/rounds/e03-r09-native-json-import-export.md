@@ -1,6 +1,6 @@
 # E03-R09 — Natív StrumSight JSON import és export
 
-- **Státusz:** **PLANNING** (2026-08-02, pre-flight baseline: `main` @ `94809e7`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `main` @ `6070533`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 9; §13–14
 - **Branch:** `codex/e03-r09-native-json-import-export`
 - **Előfeltétel:** E03-R08 merge
@@ -53,9 +53,12 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**Mérési dátum: 2026-08-02; baseline: `origin/main`/`HEAD` = `94809e7`.
+**Mérési dátum: 2026-08-03; baseline: `origin/main`/`HEAD` = `6070533`.
 Előfeltétel teljesült:** E03-R08 a mainen `f693170`/PR #81. A korábbi
-`eeb4f6d` baseline elavult.
+`eeb4f6d` baseline elavult. Az eredeti R09-preflight `94809e7` commitja
+érvényben maradt; a #82 (`6070533`) csak a router baseline-gate Flutter
+bootstrapját javítja, és nem módosít Song Trainer contractot vagy e kör
+engedélyezett fájllistáját.
 
 | Mért tény | Forrás | Feloldás |
 |---|---|---|
