@@ -92,6 +92,30 @@ protokoll helyes használata.
    hivatkozható forrással; ha normatív döntést hoztál, ADR is. `HANDOFF.md`
    frissítés. Git-notes: `git notes add -m "heal={{ROUND}} halt={{HALT_CODE}} verdict=fixed lesson=<slug>"`.
 
+### H8 — a már merge-elt brief-revízió és a kör saját pre-flightja közti konfliktus
+
+Ha a H8 reprodukciója után `git diff --name-only --diff-filter=U` **pontosan**
+a megállt kör `docs/rounds/eXX-rYY-*.md` briefjét adja, előbb bizonyítsd, hogy
+az `origin/main` oldala tartalmazza a merge-elt self-heal scope-revíziót. Ilyen
+szűk, dokumentációs history-konfliktusnál a rebase helyi eredményét nem szabad
+force-push-sal publikálni:
+
+```bash
+git -C <kör-worktree> rebase --abort
+git -C <kör-worktree> merge --no-ff origin/main
+```
+
+A merge-konfliktust úgy oldd fel, hogy az aktuális `main` brief-változatát
+őrzöd meg; a superseded `HALTED`/pre-flight szöveg, régi allowlist vagy régi
+handoff nem írhatja felül a merge-elt scope-ot. Ezután `git diff --check`,
+explicit stage, merge-commit és **normál** `git push` következik. A célbranch
+így tartalmazza a friss `main`-t, de a távoli története nem íródik át; az
+eredeti router-task a következő friss kör-sessionben folytatható.
+
+Ha a konfliktus nem kizárólag ez az egy brief, vagy a `main` oldal nem
+tartalmazza egyértelműen a szükséges scope-revíziót, ne alkalmazz generikus
+feloldást: `outcome=escalate` a konfliktuslistával és a mért eltéréssel.
+
 ## 5. C osztály: külső, átmeneti akadály
 
 Ne találj ki kódjavítást oda, ahol nincs hiba. Ellenőrizd a szolgáltatás
