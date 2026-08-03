@@ -1,7 +1,7 @@
 # E03-R13 — Guitar Pro feasibility — Review
 
 Brief: `docs/rounds/e03-r13-guitar-pro-feasibility.md`
-Diff: `origin/main...9de47d0`
+Diff: `origin/main...5b7f254`
 Reviewer: Codex / GPT-5.6 Terra
 Date: 2026-08-03
 Verdict: **APPROVED** (the exact-review-head CI evidence is still required before merge).
@@ -15,6 +15,22 @@ release-safe C decision: an external, user-initiated conversion to the already
 audited offline MusicXML/MXL or MIDI paths. The research evaluates the required
 A/B/C candidates, the isolated alphaTab probe reproduces the stated fixture
 matrix, and the ADR contains a concrete R14 activation contract.
+
+## Javító kör
+
+### F1 — MAJOR — Fresh CI could not resolve isolated tool imports
+
+- **Evidence:** Build Android APK run 30838398809 failed at
+  `flutter analyze lib/ test/ tool/`: the root package does not create the
+  nested tool’s package configuration.
+- **Fix:** `5b7f254` replaces the two internal package imports with the
+  scope-local `../lib/gp_spike.dart` import, retaining the standalone tool
+  package for its own `dart test` execution.
+- **Verification:** a second fresh clone ran root `flutter pub get` and
+  `flutter gen-l10n`, deliberately skipped nested `dart pub get`, then passed
+  `flutter analyze lib/ test/ tool/`. Its complete mandatory round gate also
+  passed (format, analyze, 45 importer tests, architecture).
+- **Státusz:** FIXED (`5b7f254`).
 
 ## Acceptance criteria
 
@@ -49,7 +65,7 @@ reviewer-owned merge artefact, not an implementer change.
   this report. This proves the central preserved string/fret invariant is not
   a copied green result.
 - The reviewed fixture SHA-256 values matched the provenance README.
-- `git diff --check origin/main...9de47d0` passed.
+- `git diff --check origin/main...5b7f254` passed.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -60,7 +76,8 @@ reviewer-owned merge artefact, not an implementer change.
 | célzott importer tests | ✅ fresh-clone `tools/round-gate.sh` (45 passed) |
 | architecture | ✅ fresh-clone `tools/round-gate.sh` (12 allowlisted deviations) |
 | isolated alphaTab spike | ✅ 4/4 passed; documented CLI snapshots reproduced |
-| full suite + randomized property + APK CI | ⏳ must run on this review-report commit’s exact SHA before merge |
+| fresh-checkout nested-tool regression | ✅ root analyzer green without nested `dart pub get` |
+| full suite + randomized property + APK CI | ⏳ must run on this updated review-report commit’s exact SHA before merge |
 
 ## Merge-döntés
 
