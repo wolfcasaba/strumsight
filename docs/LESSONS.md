@@ -3020,3 +3020,28 @@ megmaradnak, a felülírt terminális intent törlődik, így a következő lép
 független review — nem új modellhívás és nem scope- vagy gate-bypass.
 
 **Regresszió.** `RouterCliTest.test_heal_recovery_preserves_exhausted_attempts_after_a_green_gate` először ismeretlen CLI-paranccsal RED, a recovery után GREEN; ellenőrzi a zöld structured gate-et, az allowlist-diffet, a megőrzött `2/1` kísérletszámokat és a megőrzött reservationt.
+
+## L72 — A router baseline-kapuja is köteles előállítani a friss Flutter worktree generált l10n-előfeltételeit (E03-R09 H6, 2026-08-03)
+
+**Mérés.** Egy tiszta, `origin/main` @ `94809e7` alapú worktree-ben a
+`tools/round-gate.sh --baseline` formázási lépése zöld volt, az `analyze`
+viszont a hiányzó `lib/l10n/app_localizations*.dart` miatt `625 issues found`
+eredménnyel állt meg. A router `_gate_runner(..., baseline=True)` ága nem
+hívta a Flutter-generálást, miközben a post-model ág csak `dart format` és
+`dart fix --apply` normalizálást végzett. Emiatt a blokk a modell első hívása
+ELŐTT történt (`m3_attempts=0`), és a R09 nem kezdődhetett el.
+
+**Javítás.** A baseline-ág friss Flutter projektnél előbb `flutter pub get`-et,
+majd `l10n.yaml` jelenlétében `flutter gen-l10n`-t futtat. Csak gitignore-olt
+Flutter-eszköz- és lokalizációs output keletkezik; a scope-audit és a
+baseline-őr változatlan. A forráskódot módosító `dart fix --apply` továbbra is
+kizárólag a post-model kapuhoz tartozik, tehát a baseline nem fedhet el
+valódi minőségi hibát.
+
+**Regresszió.**
+`GateNormalizeTest.test_baseline_gate_generates_flutter_l10n_without_normalizing`
+egy friss, `l10n.yaml`-os fake Flutter repót mér: a javítás előtt a baseline
+`analyze` piros és nincs output; utána létrejön
+`lib/l10n/app_localizations.dart`, a gate zöld, és a `dart fix` marker
+továbbra sincs jelen. A valódi worktree baseline-kapuja is zöldre futott és
+ellenőrizhetően létrehozta az outputot.

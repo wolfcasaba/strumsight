@@ -41,6 +41,7 @@ class GateNormalizeTest(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         (root / "pubspec.yaml").write_text("name: fake\n", encoding="utf-8")
+        (root / "l10n.yaml").write_text("arb-dir: lib/l10n\n", encoding="utf-8")
         for name in ("lib", "test", "tool"):
             (root / name).mkdir()
         (root / "tool" / "check_architecture.dart").write_text("void main() {}\n")
@@ -68,8 +69,12 @@ class GateNormalizeTest(unittest.TestCase):
             "import os, pathlib, sys\n"
             "args = sys.argv[1:]\n"
             "marker = pathlib.Path(os.environ['FIX_MARKER'])\n"
+            "l10n_output = pathlib.Path('lib/l10n/app_localizations.dart')\n"
+            "if args[:1] == ['gen-l10n']:\n"
+            "    l10n_output.parent.mkdir(parents=True, exist_ok=True)\n"
+            "    l10n_output.write_text('// generated localization output')\n"
             "if args[:1] == ['analyze']:\n"
-            "    if not marker.exists():\n"
+            "    if not marker.exists() and not l10n_output.exists():\n"
             "        print(\n"
             "            'test/features/practice/application/'\n"
             "            'practice_production_wiring_test.dart:32:8 - '\n"
@@ -123,10 +128,12 @@ class GateNormalizeTest(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 10)
 
-    def test_baseline_gate_is_not_normalized(self) -> None:
-        # The baseline measurement must reflect the untouched worktree, not
-        # a router-side auto-fix -- normalize only applies to post-model
-        # gate calls.
+    def test_baseline_gate_generates_flutter_l10n_without_normalizing(self) -> None:
+        # Measured reproduction (E03-R09/H6, 2026-08-03): a fresh Flutter
+        # worktree had no ignored lib/l10n/app_localizations*.dart output, so
+        # the baseline format passed but analyze emitted 625 errors before a
+        # model call.  The baseline must generate Flutter's required l10n
+        # output, but must not run the post-model dart fix normalizer.
         module = _load_model_router()
         root, env = self.make_repo()
         old_environ = dict(os.environ)
@@ -141,8 +148,8 @@ class GateNormalizeTest(unittest.TestCase):
             os.environ.update(old_environ)
 
         self.assertFalse((root / ".dart_fix_applied").exists())
-        self.assertEqual(result.outcome, "code_failure")
-        self.assertEqual(result.failed_step, "analyze")
+        self.assertTrue((root / "lib/l10n/app_localizations.dart").exists())
+        self.assertEqual(result.outcome, "pass", result.log)
 
 
 if __name__ == "__main__":
