@@ -1,6 +1,6 @@
 # E03-R15 — Song Library V2 és import UI
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PREPARED — H3 scope-revízió** (2026-08-03, baseline: `main` @ `6957702`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 15; §27.1–27.3, §28
 - **Branch:** `codex/e03-r15-song-library-import-ui`
 - **Előfeltétel:** E03-R14 merge
@@ -20,21 +20,30 @@ allowed_paths = [
   "lib/features/song_trainer/presentation/widgets/song_capability_badges.dart",
   "lib/features/song_trainer/presentation/widgets/import_warning_list.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/data/importers/file_picker_adapter.dart",
   "lib/features/song_trainer/public.dart",
+  "lib/main.dart",
   "lib/app/routing/app_route.dart",
   "lib/app/routing/app_router.dart",
   "lib/app/config/feature_flags.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
+  "pubspec.yaml",
+  "pubspec.lock",
   "test/features/song_trainer/application/library/song_library_controller_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
+  "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
   "test/app/routing/app_router_test.dart",
+  "docs/reviews/e03-r15-song-library-import-ui-review.md",
   "docs/rounds/e03-r15-song-library-import-ui.md",
 ]
 gate_tests = [
   "test/features/song_trainer/application/library/song_library_controller_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
+  "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
@@ -73,6 +82,28 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### 2026-08-03 — H3 önjavító scope-revízió
+
+- A `FilePickerAdapter` csak port (`data/importers/file_picker_adapter.dart:7-10`);
+  `rg -n 'FilePickerAdapter|file_picker|pickSongFile' pubspec.yaml pubspec.lock
+  lib test` nem talált production adaptert vagy `file_picker` függőséget.
+  Ezért a port, a függőségi manifestek és a célzott adapterteszt most explicit
+  R15-tulajdonosok; a widget továbbra sem hívhat platform plugint közvetlenül.
+- A `songRepositoryProvider` bootstrap override nélkül szándékosan `StateError`
+  dob (`application/song_trainer_providers.dart:87-93`), miközben a jelenlegi
+  `main.dart` `ProviderScope`-ja nem szolgáltat ilyen override-ot. A flagelt V2
+  route csak production repositoryval lehet interaktív, ezért a composition
+  root és a meglévő provider-wiring teszt is a scope része.
+- A merge előtti, kötelező review pontos útvonala
+  `docs/reviews/e03-r15-song-library-import-ui-review.md`; ezt a human scope és
+  az `ai-router.allowed_paths` is tartalmazza. A `tools/tests/test_epic3_brief_metadata.py`
+  H3-regressziója mind a hét mért activation owner hiányát pirosra fogja.
+
+**Feloldás:** [ADR 0123](../adr/0123-song-trainer-presentation-activation-boundary.md)
+köti az interaktív route aktiválását a concrete picker- és repository-wiringhoz.
+A feature flag defaultja változatlanul OFF; a revision nem módosít gate-et,
+küszöböt vagy tesztet.
 
 ## 1. Cél
 
@@ -114,18 +145,26 @@ Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capab
 | `lib/features/song_trainer/presentation/widgets/song_capability_badges.dart` | ÚJ | capability/source |
 | `lib/features/song_trainer/presentation/widgets/import_warning_list.dart` | ÚJ | warning UI |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | controller wiring |
+| `lib/features/song_trainer/data/importers/file_picker_adapter.dart` | R10-ből | production picker boundary |
 | `lib/features/song_trainer/public.dart` | R01-ből | route/public exports |
+| `lib/main.dart` | meglévő | production repository composition root |
 | `lib/app/routing/app_route.dart` | meglévő | typed routes |
 | `lib/app/routing/app_router.dart` | meglévő | flagelt navigation |
 | `lib/app/config/feature_flags.dart` | R01-ből | rollout guard |
 | `lib/l10n/app_en.arb` | meglévő | EN copy |
 | `lib/l10n/app_hu.arb` | meglévő | HU copy |
+| `pubspec.yaml` | meglévő | picker dependency declaration |
+| `pubspec.lock` | generált, tracked | resolved picker dependency |
 | `test/features/song_trainer/application/library/song_library_controller_test.dart` | ÚJ | query/dedupe/action |
+| `test/features/song_trainer/application/song_trainer_providers_test.dart` | meglévő | production repository wiring |
+| `test/features/song_trainer/data/importers/file_picker_adapter_test.dart` | ÚJ | platform object → ImportSourceFile boundary |
 | `test/features/song_trainer/presentation/song_library_screen_test.dart` | ÚJ | library states |
 | `test/features/song_trainer/presentation/song_import_screen_test.dart` | ÚJ | import state UI |
 | `test/features/song_trainer/presentation/song_import_preview_screen_test.dart` | ÚJ | warning/fatal |
 | `test/app/routing/app_router_test.dart` | meglévő | flag routes |
+| `docs/reviews/e03-r15-song-library-import-ui-review.md` | ÚJ | mandatory independent review artifact |
 | `docs/rounds/e03-r15-song-library-import-ui.md` | meglévő | §10 handoff |
+| `docs/adr/0123-song-trainer-presentation-activation-boundary.md` | ÚJ, self-heal pre-flight | activation boundary decision; never model-owned |
 
 **Tilos zóna:** minden más fájl, más feature belső contractja, más kör briefje
 és nem felsorolt CI/docs artefaktum. Új fixture/helper is fájl; listán kívül
@@ -166,7 +205,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
+tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart test/features/song_trainer/data/importers/file_picker_adapter_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →
