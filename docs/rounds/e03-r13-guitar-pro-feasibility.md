@@ -1,6 +1,6 @@
 # E03-R13 — Guitar Pro feasibility és stratégiai döntés
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `origin/main` @ `315b2b7`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 13; §17
 - **Branch:** `codex/e03-r13-guitar-pro-feasibility`
 - **Előfeltétel:** E03-R12 merge
@@ -19,6 +19,7 @@ allowed_paths = [
   "test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3",
   "test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5",
   "test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx",
+  "docs/adr/0122-guitar-pro-import-strategy.md",
   "docs/rounds/e03-r13-guitar-pro-feasibility.md",
 ]
 gate_tests = [
@@ -54,6 +55,18 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - Nincs jóváhagyott GP parser vagy aktív GP registry extension.
 - MusicXML/MXL és MIDI biztonságos alternatív utak rendelkezésre állnak.
 - Az ADR exact sorszáma az aktív ADR-katalógus pre-flight auditjában dől el.
+
+**2026-08-03 pre-flight revízió (baseline `315b2b7`):** `songImporterRegistryProvider`
+(`lib/features/song_trainer/application/song_trainer_providers.dart:141`) ma
+`NativeJsonImporter`, `MusicXmlImporter`, `MxlImporter` és `MidiImporter`
+példányokat ad az egyetlen production `ImporterRegistry`-nek; Guitar Pro
+importer nem létezik. A `SongSourceType.guitarPro` enum-tag előre lefoglalt
+provenance-kód, nem aktív importképesség. A tényleges owner-mérés ezért nem
+igényel production registry- vagy domain-változást. A következő szabad
+ADR-sorszám az `0122`; a pre-flight az exact
+`docs/adr/0122-guitar-pro-import-strategy.md` utat hozzáadta ehhez a körhöz.
+Az izolált spike kizárólag saját, minimális, provenance-olt technikai
+fixtureket használhat; nem adhat hozzá production dependencyt vagy adaptert.
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
@@ -97,6 +110,7 @@ Bizonyíték-alapú, licence- és platformtudatos A/B/C Guitar Pro stratégia el
 | `test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3` | ÚJ | technikai fixture |
 | `test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5` | ÚJ | technikai fixture |
 | `test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx` | ÚJ | technikai fixture |
+| `docs/adr/0122-guitar-pro-import-strategy.md` | ÚJ | a §5 által előírt stratégiai ADR |
 | `docs/rounds/e03-r13-guitar-pro-feasibility.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
