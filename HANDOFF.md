@@ -11,6 +11,17 @@
 > is green (full suite, randomized property gate and APK). The independent
 > post-merge gate and boundary mutation review are green; E03-R12 resumes only
 > in a fresh pipeline session.
+> **HEAL E03-R12/H6 (PR #100):** the R12 review-finding `resume` had retained
+> baseline `ac31e3f` although the branch was refreshed to `f1612af` by the
+> H3/H4/H8 merges. The locked `rebase-baseline` recovery was run on the real
+> R12 worktree: it returned `READY_FOR_REVIEW`, preserved M3/Terra accounting,
+> and re-audited exactly the five allowed MIDI importer/test paths. The prompt,
+> ADR 0112 and dynamic Router CLI regression now require this recovery before a
+> later review-finding resume; Router CI and exact-head full-suite/property/APK
+> CI [30830977371](https://github.com/wolfcasaba/strumsight/actions/runs/30830977371)
+> / [30831038569](https://github.com/wolfcasaba/strumsight/actions/runs/30831038569)
+> are green. The product R12 branch stays unmerged and resumes only in a fresh
+> pipeline session.
 > **HEAL E03-R12/H8:** rebasing the existing R12 branch onto `e8683fd`
 > conflicted only in `docs/rounds/e03-r12-midi-importer.md` while replaying
 > `4f9e946`. The verified non-force recovery aborted that rebase and merged
