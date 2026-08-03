@@ -3376,3 +3376,21 @@ a hiányzó outputból a tényleges `pub get → gen-l10n` sorrendet, a
 `PipelineIntegrationTest.test_post_merge_gate_bootstraps_ignored_flutter_generated_output`
 pedig az orchestrátor szerződését őrzi. Az előkészített tiszta worktree-n a
 R14 teljes célzott format/analyze/test/architecture gate GREEN.
+
+## L90 — Interaktív import route-hoz a UI-scope-nak a picker-portot és a composition rootot is birtokolnia kell (E03-R15 H3, 2026-08-03)
+
+**Mérés.** Az E03-R15 pre-flight `rg -n 'FilePickerAdapter|file_picker|pickSongFile'
+pubspec.yaml pubspec.lock lib test` parancsa csak a `FilePickerAdapter`
+interface-t találta: concrete adapter és picker dependency nem volt. A
+`songRepositoryProvider` override nélkül mért `StateError`-t dob, miközben a
+`main.dart` `ProviderScope`-ja nem adott production repository override-ot.
+Így az eredeti, kizárólag UI-ra szűkített allowlist nem tehette működőképessé a
+kötelező picker → probe → preview → commit utat.
+
+**Javítás és regresszió.** ADR 0123 és a R15 scope-revízió explicit megnyitja a
+picker-portot, `pubspec` manifesteket, app composition rootot, fókuszált
+adapter/provider teszteket és a kötelező review artefaktumot; a flag alapértéke
+OFF és a security/gate mérce változatlan. A
+`Epic3BriefMetadataTest.test_r15_scope_includes_measured_presentation_activation_owners`
+a hét valóban hiányzó ownerrel RED volt, majd a módosított briefen GREEN; a
+teljes `python -m pytest tools/tests -q` router-sáv is zöld.
