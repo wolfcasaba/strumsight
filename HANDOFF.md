@@ -10,6 +10,15 @@
 > and [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
 > is green (full suite, randomized property gate and APK). The independent
 > post-merge gate and boundary mutation review are green; E03-R12 is next.
+> **HEAL E03-R12/H4:** the R12 task had already consumed its two M3 attempts
+> and first high-risk Terra escalation before the independent review produced
+> actionable MAJOR findings. The old one-call Terra cap therefore stopped the
+> legitimate review-finding `resume` before it could reach the model. ADR 0088
+> now permits exactly one second, review-gated Terra repair call; the config and
+> router resume regression enforce this without resetting attempts, weakening
+> scope/gates, or reopening STOPPED/DEFERRED tasks. The H4 heal branch is
+> `heal/E03-R12-H4-1`; once its green CI evidence merges, R12 resumes on its
+> existing branch with the recorded F1–F4 findings.
 > **HEAL E03-R12/H3 (PR #97):** the R12 review measured that ADR 0091's
 > mandatory MIDI track-count limit requires the shared `import_limits.dart`
 > owner, omitted from the prepared scope. The revision opens only that path,
