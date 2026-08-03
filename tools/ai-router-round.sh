@@ -54,6 +54,12 @@ mkdir -p "$(dirname "$result_path")"
 stdout_log="${result_path%.json}.stdout.log"
 stderr_log="${result_path%.json}.stderr.log"
 
+# The driver passes its router-status mirror to this isolated worktree. Keep
+# an H4 handoff beside that mirror instead of in the worktree's own pipeline.
+if [ -z "${PIPELINE_STATE_DIR:-}" ] && [ -n "${PIPELINE_ROUTER_STATUS_FILE:-}" ]; then
+  export PIPELINE_STATE_DIR="$(dirname "$PIPELINE_ROUTER_STATUS_FILE")"
+fi
+
 command=(python3 "$router" "$mode" --task "$brief_path" --worktree "$worktree" --result-json "$result_path")
 if [ "$mode" = "resume" ] && [ -n "$findings_arg" ]; then
   case "$findings_arg" in
