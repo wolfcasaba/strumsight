@@ -36,6 +36,13 @@ and fidelity for track, tuning, measure, note, string/fret, tempo and meter.
    cancellation and resource-limit proofs required by ADR 0091 before it can
    register with `ImporterRegistry`. Any Dart parser remains data-layer-owned
    and must expose the same observable cancellation and limit boundaries.
+5. **R13 selects C — an explicit external conversion workflow — as the only
+   release-safe path.** `dart_gp_tab_reader` 0.4.0 remains a licence-clear but
+   recent pure-Dart A candidate without release/security-boundary evidence.
+   The isolated alphaTab 1.8.4 probe decodes the controlled GP3, GP5 and GPX
+   fixtures, but alphaTab and TuxGuitar native-adapter routes have no
+   reproducible iOS and worker/isolation evidence. The detailed evidence is in
+   [`epic-03-guitar-pro-feasibility.md`](../research/epic-03-guitar-pro-feasibility.md).
 
 ## Alternatives
 
@@ -44,13 +51,20 @@ and fidelity for track, tuning, measure, note, string/fret, tempo and meter.
 - **B — native parser adapter:** remains conditional; a desktop, Android-only,
   or unisolated library is insufficient for the Android-first / later-iOS
   contract.
+- **Use `dart_gp_tab_reader` immediately as A:** rejected for this release
+  decision because a R14 pre-flight must first evidence its exact-version
+  fixture fidelity, maintenance posture, Android+iOS release integration,
+  measured size, resource limits, cancellation and malformed corpus behaviour.
 - **Write a bespoke binary parser now:** rejected by SDD §17; it would bypass
   the required feasibility, licence and security evidence.
 
 ## Consequences
 
 - R14 is activated only by the report's evidenced A/B/C recommendation and
-  its explicit activation contract. For C, R14 may provide honest conversion
-  guidance but cannot introduce a hidden converter or network request.
+  its explicit activation contract. For the selected C, R14 may provide
+  honest conversion guidance to the existing local MusicXML/MXL or MIDI
+  import routes but cannot introduce a hidden converter, direct GP registry
+  extension or network request. A/B requires the five R14 gates in the
+  research report before its own ADR amendment can replace C.
 - The feasibility artifacts are deliberately outside `lib/`, so the existing
   offline importer behaviour and registry stay unchanged.

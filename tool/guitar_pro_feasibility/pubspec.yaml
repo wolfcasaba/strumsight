@@ -1,0 +1,10 @@
+name: guitar_pro_feasibility
+description: Isolated, non-production Guitar Pro feasibility probe for E03-R13.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.2
+
+dev_dependencies:
+  test: ^1.25.0
