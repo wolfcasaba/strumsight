@@ -468,12 +468,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #89](https://github.com/wolfcasaba/strumsight/pull/89)
-(HEAL E03-R11/H3 multipart preview-contract scope correction, squash-merge
-`dce76e6`). Exact-head Router CI
-[30802455995](https://github.com/wolfcasaba/strumsight/actions/runs/30802455995)
-**success**; the independent post-merge `python -m pytest tools/tests -q`
-router suite is also green.
+`main` @ [PR #92](https://github.com/wolfcasaba/strumsight/pull/92)
+(HEAL E03-R11/H6 approved-brief metadata recovery, squash-merge `b715561`).
+Exact-head Router CI
+[30805614376](https://github.com/wolfcasaba/strumsight/actions/runs/30805614376)
+**success**; the independent isolated-clone router suite and mutation review
+are recorded in
+[`e03-r11-h6-router-metadata-recovery-review.md`](docs/reviews/e03-r11-h6-router-metadata-recovery-review.md).
 The active, unmerged R11 branch `codex/e03-r11-musicxml-mxl-importer` now
 contains `origin/main` through `98a87d3`; no force-push was used.
 CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
