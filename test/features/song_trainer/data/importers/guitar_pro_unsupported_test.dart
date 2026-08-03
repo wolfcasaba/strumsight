@@ -116,6 +116,24 @@ void main() {
   );
 
   test(
+    'a supported source whose display name contains Guitar Pro reaches an importer',
+    () async {
+      final importer = _CountingImporter(
+        probeResult: const ImportProbeResult.recognized(),
+      );
+      final registry = ImporterRegistry(importers: <SongImporter>[importer]);
+
+      final selection = await registry.probe(
+        _source('guitar pro notes.musicxml').source,
+        const NeverCancelledToken(),
+      );
+
+      expect(selection.importer, same(importer));
+      expect(importer.probeCount, 1);
+    },
+  );
+
+  test(
     'the production support list remains exactly the four existing importers',
     () {
       final container = ProviderContainer();
@@ -138,7 +156,14 @@ void main() {
 }
 
 final class _CountingImporter implements SongImporter {
+  _CountingImporter({
+    this.probeResult = const ImportProbeResult.failure(
+      ImportRegistryFailureCode.unsupportedContent,
+    ),
+  });
+
   var probeCount = 0;
+  final ImportProbeResult probeResult;
 
   @override
   Set<String> get supportedExtensions => const <String>{'.song'};
@@ -156,9 +181,7 @@ final class _CountingImporter implements SongImporter {
     CancellationToken cancellationToken,
   ) async {
     probeCount += 1;
-    return const ImportProbeResult.failure(
-      ImportRegistryFailureCode.unsupportedContent,
-    );
+    return probeResult;
   }
 }
 

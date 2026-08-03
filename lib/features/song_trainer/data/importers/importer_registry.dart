@@ -141,9 +141,7 @@ final class ImporterRegistry {
     CancellationToken cancellationToken,
   ) async {
     final displayName = source.displayName.toLowerCase();
-    if (_guitarProExtensions.any(displayName.endsWith) ||
-        displayName.contains('guitar pro') ||
-        displayName.contains('guitar-pro')) {
+    if (_guitarProExtensions.any(displayName.endsWith)) {
       return true;
     }
     if (cancellationToken.isCancelled) {
