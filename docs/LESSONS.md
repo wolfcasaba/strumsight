@@ -3122,3 +3122,18 @@ követelmény briefelésekor a fájlnevek helyett mindig kövesd végig a teljes
 adatutat: probe/result → immutable preview → controller state → a hozzá tartozó
 viselkedési teszt; különben a scope-őr helyesen megállít egy egyébként szükséges
 adatvesztés-javítást.
+
+## L77 — H8 brief-history konfliktusnál a merge-elt main-scope az irányadó, force-push nélkül (E03-R11 H8, 2026-08-03)
+
+**Mérés.** Az `origin/main` @ `cd09dcc`-re futtatott `git rebase origin/main`
+az R11 branch régi `e8579bd` pre-flight commitján csak a
+`docs/rounds/e03-r11-musicxml-mxl-importer.md` fájlban adott content
+konfliktust. A main-oldal már tartalmazta a H3 preview-contract revízióját,
+míg a branch-oldal régi `HALTED` státuszt és hiányos allowlistet hordozott.
+
+**Javítás és regresszió.** A safe recovery a rebase megszakítása után
+`git merge --no-ff origin/main`; a konfliktus az aktuális main-briefet őrzi
+meg, majd normál push-sal publikálható. A
+`PipelineIntegrationTest.test_selfheal_prompt_preserves_current_main_scope_for_h8_brief_conflicts`
+előbb RED volt a hiányzó H8 eljárás miatt, majd GREEN; őrzi a brief-only
+feltételt, a non-force merge-parancsot és a current-main scope megőrzését.

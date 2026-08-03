@@ -167,6 +167,15 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn(".github/workflows/", prompt)
         self.assertIn("regressziós teszt", prompt)
 
+    def test_selfheal_prompt_preserves_current_main_scope_for_h8_brief_conflicts(self) -> None:
+        """H8 regression: a superseded round brief must not require a force-push."""
+        prompt = (ROOT / "docs" / "execution" / "pipeline-selfheal-prompt.md").read_text()
+        self.assertIn("H8", prompt)
+        self.assertIn("rebase --abort", prompt)
+        self.assertIn("merge --no-ff origin/main", prompt)
+        self.assertIn("force-push", prompt)
+        self.assertIn("aktuális `main` brief-változatát", prompt)
+
     def test_halted_chain_starts_selfheal_unless_it_is_switched_off(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
