@@ -189,6 +189,30 @@ def _dart_bin() -> str:
     return os.environ.get("DART_BIN") or os.path.expanduser("~/flutter/bin/dart")
 
 
+def _flutter_bin() -> str:
+    # Keep the bootstrap invocation aligned with round-gate.sh.  A clean
+    # worktree has neither package_config.json nor Flutter's ignored l10n
+    # output, both of which analyze needs before the model may be called.
+    return os.environ.get("FLUTTER_BIN") or os.path.expanduser("~/flutter/bin/flutter")
+
+
+def _prepare_flutter_baseline(
+    process: ProcessRunner, worktree: Path, timeout_seconds: float
+) -> None:
+    """Restore generated Flutter prerequisites without changing source code.
+
+    This is intentionally baseline-only preparation, not the post-model
+    normalizer: pub get and gen-l10n create ignored tool output required by a
+    fresh clone, while dart fix would hide an existing source-quality failure.
+    """
+    if not (worktree / "pubspec.yaml").exists():
+        return
+    flutter_bin = _flutter_bin()
+    process.run([flutter_bin, "pub", "get"], cwd=worktree, timeout_seconds=timeout_seconds)
+    if (worktree / "l10n.yaml").exists():
+        process.run([flutter_bin, "gen-l10n"], cwd=worktree, timeout_seconds=timeout_seconds)
+
+
 def _pre_gate_normalize(process: ProcessRunner, worktree: Path, timeout_seconds: float) -> None:
     # E02-R21 H4 (Update 7, measured 2026-08-02): two of the M3/Terra attempts
     # burned their whole budget on `format`/`analyze` failures caused by
@@ -215,7 +239,9 @@ def _gate_runner(config: object, process: ProcessRunner, *, baseline: bool = Fal
         gate_script = worktree / config.runtime.gate_script
         selected_tests = tuple(path for path in tests if not baseline or (worktree / path).exists())
         mode_args = ["--baseline"] if baseline else []
-        if not baseline:
+        if baseline:
+            _prepare_flutter_baseline(process, worktree, config.runtime.gate_timeout_seconds)
+        else:
             _pre_gate_normalize(process, worktree, config.runtime.gate_timeout_seconds)
         with tempfile.TemporaryDirectory(prefix="strumsight-gate-") as directory:
             result_file = Path(directory) / "result.json"

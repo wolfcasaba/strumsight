@@ -3,7 +3,17 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-02
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
+> (HEAL E03-R09/H6 — router baseline Flutter bootstrap).** A fresh R09
+> worktree reproduced the pre-model failure: `round-gate --baseline` format
+> passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
+> The router now performs `flutter pub get` and, when `l10n.yaml` is present,
+> `flutter gen-l10n` before its baseline gate; it still never runs the
+> post-model `dart fix` normalizer in that phase. Regression:
+> `GateNormalizeTest.test_baseline_gate_generates_flutter_l10n_without_normalizing`.
+> The actual clean worktree baseline gate is green with generated output; full
+> router tests and CI/merge evidence follow before the self-heal is declared
+> complete.** Previous update: 2026-08-02
 > (HEAL E03-R08/H4 — SongDocument structural codec round-trip).** The
 > independent R08 review correctly rejected a `readBackMiss`: the existing
 > codec silently omitted sections, measures and tempo/meter/key maps from the
