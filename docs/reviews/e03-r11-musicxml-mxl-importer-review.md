@@ -89,3 +89,25 @@ Nyitott MAJOR leletek vannak. A normál javító router-kör sem indulhat, mert 
 javításához a brief tiltott zónájába tartozó contract/application utak kellenek.
 ADR 0087 H3 szerint merge tilos és self-heal / új, review-zható brief-revízió
 szükséges.
+
+---
+
+## Post-merge independent addendum (2026-08-03)
+
+Reviewed final tree: `47baded` (PR #95 squash merge), which is tree-identical
+to CI branch head `c79e9e0`. Verdict: **APPROVED — 0 BLOCKER / 0 MAJOR**.
+
+The H3 scope revision authorized the exact result/probe/preview/controller
+owners required by F1. Final `musicxml_importer_test.dart` asserts both real
+fixture parts, their note-count/pitch/polyphony/table values and both resulting
+note tracks; F1 is **FIXED**. It also asserts a single stable unsupported
+notation warning; F2 is **FIXED**.
+
+Independent isolated post-merge gate:
+`tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart test/features/song_trainer/data/importers/mxl_security_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart`
+was green (format, analyze, 8 + 5 + 6 tests, architecture). A disposable
+mutation of `mxl_archive_reader.dart` changed the entry-count boundary from
+`>` to `>=`; `mxl_security_test.dart` failed (including the exact-limit accept
+case). The mutation was reverted and the isolated clone was clean. CI
+[30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
+is success for full suite, randomized property gate and APK.
