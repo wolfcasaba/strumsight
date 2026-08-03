@@ -12,6 +12,7 @@
 // Navigator, BuildContext, or any storage plugin beyond `path_provider`.
 // All other dependencies are owned by the data layer.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,11 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_providers.dart';
+import 'import/song_import_controller.dart';
+import 'import/song_import_state.dart';
+import '../data/importers/importer_registry.dart';
+import '../data/importers/native_json_importer.dart';
+import '../data/importers/song_importer.dart';
 import '../data/local/file_song_asset_repository.dart';
 import '../data/local/file_song_repository.dart';
 import '../data/local/in_memory_song_repository.dart';
@@ -125,6 +131,45 @@ final songAssetRepositoryBootProvider = FutureProvider<SongAssetRepository>((
 /// never assigns to this provider — it is purely a test-helper.
 final inMemorySongRepositoryProvider = Provider<SongRepository>(
   (_) => InMemorySongRepository(clock: DateTime.now),
+);
+
+/// Registry owned by the import application flow. New format importers are
+/// appended only after their parser and licence feasibility rounds complete.
+final songImporterRegistryProvider = Provider<ImporterRegistry>(
+  (_) =>
+      const ImporterRegistry(importers: <SongImporter>[NativeJsonImporter()]),
+);
+
+/// Per-operation temporary root. Its paths never leave the data/application
+/// boundary or enter Riverpod state.
+final songImportWorkspaceRootProvider = Provider<SongTrainerRootResolver>((
+  ref,
+) {
+  final resolveSongsRoot = ref.watch(songTrainerProductionRootResolverProvider);
+  return () async {
+    final songsRoot = await resolveSongsRoot();
+    return Directory('${songsRoot.path}/import-workspace');
+  };
+});
+
+/// Application import flow with a bounded registry and operation-owned cleanup.
+/// The provider is auto-disposed so route exit cancels and closes the workspace.
+final songImportControllerProvider = Provider.autoDispose<SongImportController>(
+  (ref) {
+    final controller = SongImportController(
+      registry: ref.watch(songImporterRegistryProvider),
+      repository: ref.watch(songRepositoryProvider),
+      workspaceRoot: ref.watch(songImportWorkspaceRootProvider),
+    );
+    ref.onDispose(() => unawaited(controller.dispose()));
+    return controller;
+  },
+);
+
+/// Reactive import state for presentation consumers. The state itself contains
+/// only phase, operation ID, preview metadata and a stable failure code.
+final songImportStateProvider = StreamProvider.autoDispose<SongImportState>(
+  (ref) => ref.watch(songImportControllerProvider).states,
 );
 
 /// Provider for the persistent [SongMigrationVersionStore] — the file-

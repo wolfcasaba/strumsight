@@ -1,6 +1,6 @@
 # E03-R10 — Import application flow és security boundary
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `origin/main` @ `7203a81`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 10; §13, §29.3–29.4
 - **Branch:** `codex/e03-r10-import-flow-security-boundary`
 - **Előfeltétel:** E03-R09 merge
@@ -14,7 +14,6 @@ allowed_paths = [
   "lib/features/song_trainer/application/import/song_import_state.dart",
   "lib/features/song_trainer/application/import/song_import_effect.dart",
   "lib/features/song_trainer/application/import/import_preview.dart",
-  "lib/features/song_trainer/application/import/cancellation_token.dart",
   "lib/features/song_trainer/data/importers/importer_registry.dart",
   "lib/features/song_trainer/data/importers/import_limits.dart",
   "lib/features/song_trainer/data/importers/import_workspace.dart",
@@ -24,6 +23,7 @@ allowed_paths = [
   "test/features/song_trainer/application/import/song_import_controller_integration_test.dart",
   "test/features/song_trainer/data/importers/import_workspace_test.dart",
   "docs/rounds/e03-r10-import-flow-security-boundary.md",
+  "docs/adr/0119-song-import-application-orchestration.md",
 ]
 gate_tests = [
   "test/features/song_trainer/application/import",
@@ -60,8 +60,29 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - R07 repository és R05 validator/capability a pipeline végpontjai.
 - A picker platformobjektuma és nagy byte array nem kerülhet domainbe vagy UI state-be.
 
-A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
-feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+- **Mért baseline (2026-08-03):** `origin/main` és a tiszta worktree HEAD-je
+  `7203a81`; E03-R09 squash-merge (`48cf3a0`, PR #83) és annak exact-head
+  APK/full-suite/property CI-je (`30775663270`) merge-elve van. Nincs E03-R10
+  worktree, branch, nyitott PR vagy review, amelyet újra kellene használni.
+- **Mért contract-drift:** R09 már a
+  `data/importers/song_importer.dart` fájlban definiálja az
+  `ImportSourceFile`-t (`displayName`, `byteLength`, újranyitható `openRead`,
+  opcionális MIME) és a minimális `CancellationToken`-t. Ezért az eredeti
+  új `application/import/cancellation_token.dart` listaelem duplikálná a
+  data-contractot. A lista szűkült: az application csak ezt a már meglévő
+  contractot használja; a fájlt nem módosítja.
+- **Mért ownership-lánc:** import oldali `acquire`/lease/lock jelenleg nincs
+  (`rg '\\.acquire\\(' lib/features/song_trainer` csak a core microphone
+  capture lease-ét találja). Az import workspace ownerét ezért az új
+  controller operation birtokolja, és cancel/dispose/terminal útvonalon ő
+  zárja; a repository már saját atomikus `create` tranzakcióját birtokolja.
+- **Mért dependency/licence állapot:** nincs `file_picker` dependency és az
+  R10 nem vesz fel új csomagot. A picker adapter platform-független port,
+  nem plugin-hívó; a későbbi presentation/platform kör választ implementációt
+  licence-audittal. A meglévő R09 `NativeJsonImporter` az első registry-tag.
+- **Döntés:** a fenti operation-, registry-, workspace- és terminal-commit
+  ownershipot az új ADR 0119 rögzíti. A brief `PLANNING` állapotban van; az
+  implementer ezt a §8 tervet követi és a fájllistát nem tágíthatja.
 
 ## 1. Cél
 
@@ -97,7 +118,6 @@ Parserfüggetlen, explicit import state machine, limitrendszer, preview és temp
 | `lib/features/song_trainer/application/import/song_import_state.dart` | ÚJ | immutable state |
 | `lib/features/song_trainer/application/import/song_import_effect.dart` | ÚJ | side-effect contract |
 | `lib/features/song_trainer/application/import/import_preview.dart` | ÚJ | preview/capability |
-| `lib/features/song_trainer/application/import/cancellation_token.dart` | ÚJ | cancel contract |
 | `lib/features/song_trainer/data/importers/importer_registry.dart` | ÚJ | content-aware registry |
 | `lib/features/song_trainer/data/importers/import_limits.dart` | ÚJ | erőforráslimitek |
 | `lib/features/song_trainer/data/importers/import_workspace.dart` | ÚJ | temp lifecycle |
@@ -107,6 +127,7 @@ Parserfüggetlen, explicit import state machine, limitrendszer, preview és temp
 | `test/features/song_trainer/application/import/song_import_controller_integration_test.dart` | ÚJ | atomic flow |
 | `test/features/song_trainer/data/importers/import_workspace_test.dart` | ÚJ | cleanup/traversal |
 | `docs/rounds/e03-r10-import-flow-security-boundary.md` | meglévő | §10 handoff |
+| `docs/adr/0119-song-import-application-orchestration.md` | ÚJ | pre-flight döntés |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
 nem felsorolt `.github/**`, más feature belső fájlja és más kör briefje.
@@ -176,10 +197,52 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+- `application/import/song_import_controller.dart`: operation-ID-val védett,
+  explicit state machine; cancel/retry/dispose minden terminal útja leválasztja
+  az operationt és bezárja a workspace-t a késő callback előtt; a state stream
+  Riverpod fogyasztóknak is csak a biztonságos, kis state payloadot adja át.
+- `application/import/song_import_state.dart`, `song_import_effect.dart` és
+  `import_preview.dart`: immutable, byte/path/platformobjektum-mentes state és
+  külön picker/siker effect contract.
+- `data/importers/importer_registry.dart` és `import_limits.dart`:
+  content-probe alapú választás, source/event/wall-time limitek stabil
+  failure code-okkal; az első regisztrált importer a `NativeJsonImporter`.
+- `data/importers/import_workspace.dart` és `file_picker_adapter.dart`:
+  operation-owned, idempotensen törlődő workspace, relatív-path és symlink
+  escape tiltással, valamint pluginmentes picker porttal.
+- `song_trainer_providers.dart`: auto-dispose controller, registry és a
+  `<songs-root>/import-workspace` production root wiringja.
+- A controller-, integration- és workspace-tesztek mérik a selecting cancelt,
+  stale callbacket, import közbeni cancel cleanupot, unsupported probe-ot,
+  a teljes happy-path phase-sorrendet, native atomikus committot és
+  traversal/byte-limit határokat.
+
+TDD bizonyíték: a workspace RED futásakor a hiányzó `ImportWorkspace` és
+`ImportLimits` importok miatt a teszt compile-time hibával állt meg; a
+minimális implementation után a három workspace-teszt zöld lett. A controller
+RED futásban a nem támogatott probe elvárt `songImport.unsupported` failure
+code-ja helyett `songImport.unsupportedContent` érkezett; a registry az első
+konkrét probe failure code megőrzésével zöldült. Ezután:
+
+```text
+flutter test test/features/song_trainer/application/import \
+  test/features/song_trainer/data/importers/import_workspace_test.dart
+→ 8 tests passed
+
+flutter analyze
+→ No issues found!
+```
+
+Eltérés nincs. Kötelező lokális gate ténylegesen lefutott:
+
+```text
+tools/round-gate.sh test/features/song_trainer/application/import test/features/song_trainer/data/importers/import_workspace_test.dart
+→ format zöld; analyze zöld; application/import 5 test zöld;
+  import_workspace 3 test zöld; architecture zöld.
+```
+
+Nem futtatott ellenőrzés: full suite, property gate és APK CI — ezek az
+orchestrátor exact-head CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
