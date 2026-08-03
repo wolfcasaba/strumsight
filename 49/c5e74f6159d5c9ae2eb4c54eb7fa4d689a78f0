@@ -1,0 +1,1 @@
+round=8 verdict=pass tests=36 lesson=REJECTED-two-attempts:raw-flux-drowns-in-ring-out-beating;lambda-on-log-flux-mathematically-wrong;fix=adaptive-whitening+linear-flux;synth-gotcha=hard-cutoff-clicks-need-release-ramp
