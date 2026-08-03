@@ -4,12 +4,22 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R10 close-out).** E03-R10 (PR #86) is merged; the current next product
+> (HEAL E03-R11/H3 — scope correction ready to merge).** E03-R10 (PR #86)
+> is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
 > application flow, trusted importer registry, bounded operation workspace and
 > picker port ([ADR 0119](docs/adr/0119-song-import-application-orchestration.md)).
 > Exact branch-head CI [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
 > and the independent post-merge local gate are green. Historical note:
+> **HEAL E03-R11/H3.** The R11 pre-flight measured that the production importer
+> list belongs to `song_trainer_providers.dart`, while shared configurable MXL
+> archive budgets belong to `import_limits.dart`; the prepared allowlist lacked
+> both. The revised brief now allows those owners plus the provider wiring test,
+> and `Epic3BriefMetadataTest.test_r11_scope_includes_measured_production_owners`
+> prevents recurrence. The router test suite is locally green (157 passed,
+> 53 subtests) and exact-head Router CI
+> [30798970431](https://github.com/wolfcasaba/strumsight/actions/runs/30798970431)
+> is green; after squash-merge the pipeline may restart R11. Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.

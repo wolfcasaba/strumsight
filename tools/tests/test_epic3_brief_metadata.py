@@ -9,6 +9,11 @@ from tools.ai_router.brief import load_brief
 ROOT = Path(__file__).resolve().parents[2]
 BRIEF_DIR = ROOT / "docs" / "rounds"
 HIGH_RISK_ROUNDS = {6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 20, 21, 22}
+E03_R11_MEASURED_OWNER_PATHS = (
+    "lib/features/song_trainer/application/song_trainer_providers.dart",
+    "lib/features/song_trainer/data/importers/import_limits.dart",
+    "test/features/song_trainer/application/song_trainer_providers_test.dart",
+)
 
 
 def section(text: str, number: int) -> str:
@@ -23,6 +28,19 @@ def section(text: str, number: int) -> str:
 
 
 class Epic3BriefMetadataTest(unittest.TestCase):
+    def test_r11_scope_includes_measured_production_owners(self) -> None:
+        """H3 regression: R11 must own real registration and MXL-limit paths."""
+        brief = load_brief(BRIEF_DIR / "e03-r11-musicxml-mxl-importer.md")
+
+        self.assertEqual(
+            tuple(
+                path
+                for path in E03_R11_MEASURED_OWNER_PATHS
+                if path not in brief.metadata.allowed_paths
+            ),
+            (),
+        )
+
     def test_all_twenty_two_briefs_match_their_committed_scope_and_gate(self) -> None:
         paths = sorted(BRIEF_DIR.glob("e03-r??-*.md"))
         self.assertEqual(len(paths), 22)
