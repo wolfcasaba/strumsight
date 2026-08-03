@@ -68,6 +68,7 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - **Védelem:** `Epic3BriefMetadataTest.test_r14_scope_includes_the_mandatory_review_artifact`
   őrzi, hogy a kötelező merge-evidence később sem kerülhessen vissza a tiltott
   zónába.
+
 **2026-08-03 pre-flight revízió (baseline `origin/main` @ `0c69248`):**
 `docs/adr/0122-guitar-pro-import-strategy.md` Döntés 5 és
 `docs/research/epic-03-guitar-pro-feasibility.md` „Döntés és R14 aktiválási
