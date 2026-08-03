@@ -6,6 +6,22 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E03-R08 és E03-R09 — későn rögzített merge-zárás (2026-08-03)
+
+**E03-R08** PR #81-ként (`f693170`) merge-elt; a legacy adatokat read-back
+parityvel írja V2-be. A structural codec adatvesztését a merge előtti heal
+zárta, a független review APPROVED, a CI exact branch-head runja
+[30772602187](https://github.com/wolfcasaba/strumsight/actions/runs/30772602187).
+
+**E03-R09** PR #83-ként (`48cf3a0`) merge-elt. [ADR 0118](adr/0118-native-json-exchange-contract.md)
+alapján a natív v2 JSON envelope determinisztikus, privacy-scrubbed exportot
+és legfeljebb 1 MiB-os, cancellable, csak memóriabeli importot ad. A
+`assetManifest`/`document.assets` parity fail-closed; a reviewer szándékos
+őreltávolítása a célzott tesztet pirosra váltotta. Exact branch-head CI:
+[30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270),
+utólagos izolált és post-merge gate zöld. A záró dokumentáció és git-note
+eredetileg kimaradt; ez a bejegyzés pótolja a HANDOFF/RTM részt.
+
 ---
 
 ## A) A 2026-07-30-i HANDOFF fejléc- és státuszblokkja (E01-R10…R15 kör-összefoglalókkal)

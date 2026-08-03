@@ -3045,3 +3045,16 @@ egy friss, `l10n.yaml`-os fake Flutter repót mér: a javítás előtt a baselin
 `lib/l10n/app_localizations.dart`, a gate zöld, és a `dart fix` marker
 továbbra sincs jelen. A valódi worktree baseline-kapuja is zöldre futott és
 ellenőrizhetően létrehozta az outputot.
+
+## L73 — A merge nem zárás, amíg a HANDOFF, RTM és git-note is ugyanarra a bizonyítékra mutat (E03-R09, 2026-08-03)
+
+**Mérés.** Az E03-R09 squash-merge `48cf3a0` és a PR #83 exact branch-head
+CI-runja `30775663270` már success volt, mégis a `HANDOFF.md` E03-R07-et
+jelölte utolsó körnek, az RTM E03-R08/R09 sorai `Planned` állapotban maradtak,
+és `git notes show 48cf3a0` nem adott note-ot. Emiatt a következő körre mutató
+operatív állapot R08-ra, nem R10-re mutatott.
+
+**Alkalmazás.** Merge után a záró rituálé sorrendje kötelező: előbb a pontos
+branch-head CI és post-merge gate rögzítése, majd HANDOFF/archívum + RTM,
+utána git-note push. A squash-merge és a zöld CI önmagában nem elegendő
+pipeline-továbbítási bizonyíték.
