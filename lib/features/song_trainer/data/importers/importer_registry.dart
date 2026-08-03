@@ -10,7 +10,40 @@ import 'song_importer.dart';
 /// Stable failures emitted before an importer is permitted to parse content.
 abstract final class ImportRegistryFailureCode {
   static const String unsupportedContent = 'songImport.unsupportedContent';
+  static const String guitarProUnsupported = 'songImport.guitarPro.unsupported';
 }
+
+const Set<String> _guitarProExtensions = <String>{
+  '.gp',
+  '.gp3',
+  '.gp4',
+  '.gp5',
+  '.gp6',
+  '.gp7',
+  '.gp8',
+  '.gpx',
+};
+
+const List<int> _guitarProHeader = <int>[
+  0x46,
+  0x49,
+  0x43,
+  0x48,
+  0x49,
+  0x45,
+  0x52,
+  0x20,
+  0x47,
+  0x55,
+  0x49,
+  0x54,
+  0x41,
+  0x52,
+  0x20,
+  0x50,
+  0x52,
+  0x4f,
+];
 
 /// Selected importer plus the content-derived probe result that chose it.
 final class ImporterSelection {
@@ -36,6 +69,11 @@ final class ImporterRegistry {
     CancellationToken cancellationToken,
   ) async {
     _checkSource(source);
+    if (await _isGuitarProSource(source, cancellationToken)) {
+      throw const ImportRegistryException(
+        ImportRegistryFailureCode.guitarProUnsupported,
+      );
+    }
     String? failureCode;
     for (final importer in importers) {
       if (cancellationToken.isCancelled) {
@@ -95,6 +133,55 @@ final class ImporterRegistry {
       throw const ImportRegistryException(
         ImportLimitFailureCode.sourceBytesExceeded,
       );
+    }
+  }
+
+  Future<bool> _isGuitarProSource(
+    ImportSourceFile source,
+    CancellationToken cancellationToken,
+  ) async {
+    final displayName = source.displayName.toLowerCase();
+    if (_guitarProExtensions.any(displayName.endsWith) ||
+        displayName.contains('guitar pro') ||
+        displayName.contains('guitar-pro')) {
+      return true;
+    }
+    if (cancellationToken.isCancelled) {
+      throw const ImportRegistryException(FailureCode.cancelled);
+    }
+    if (source.byteLength < _guitarProHeader.length) return false;
+
+    StreamIterator<List<int>>? stream;
+    try {
+      stream = StreamIterator<List<int>>(source.openRead());
+      var index = 0;
+      final matchesHeader = () async {
+        while (await stream!.moveNext()) {
+          final chunk = stream.current;
+          if (cancellationToken.isCancelled) {
+            throw const ImportRegistryException(FailureCode.cancelled);
+          }
+          for (final byte in chunk) {
+            if (byte != _guitarProHeader[index]) return false;
+            index += 1;
+            if (index == _guitarProHeader.length) return true;
+          }
+        }
+        return false;
+      }();
+      return await matchesHeader.timeout(
+        limits.maxWallTime,
+        onTimeout: () => throw const ImportRegistryException(
+          ImportLimitFailureCode.wallTimeExceeded,
+        ),
+      );
+    } on ImportRegistryException {
+      rethrow;
+    } catch (_) {
+      // The existing importers retain ownership of generic source-read errors.
+      return false;
+    } finally {
+      await stream?.cancel();
     }
   }
 

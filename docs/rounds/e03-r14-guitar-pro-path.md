@@ -208,10 +208,47 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### Implementáció (2026-08-03)
+
+- `importer_registry.dart`: a GP/GP3–GP8/GPX fájlnév, illetve a legacy
+  `FICHIER GUITAR PRO` header parser indítása nélkül a stabil
+  `songImport.guitarPro.unsupported` hibával áll meg. A négy production
+  importer listája változatlan; dedikált GP ágban nincs selection, parse vagy
+  import/commit út.
+- `guitar_pro_conversion_guidance.dart` és `song_import_screen.dart`: route-ra
+  készen átadható, olvasható, HU/EN lokalizált és saját szemantikai összefoglalót
+  adó conversion-only UI. Nem indít pickert, konvertert vagy hálózati kérést.
+- `app_en.arb`, `app_hu.arb` és `docs/user-guide/guitar-pro-conversion.md`:
+  kizárólag saját fájl, eszközön végzett offline MusicXML/MXL/MIDI konverzió;
+  nincs külső szolgáltató-link vagy GP-fidelity ígéret.
+- A két új teszt a GP extension/header 0 importer-probe, generic unsupported
+  regresszió, négy-importer lista, EN/HU copy és screen-reader összefoglaló
+  celláit méri.
+
+### Tényleges ellenőrzés
+
+```text
+RED: flutter test test/features/song_trainer/data/importers/
+     guitar_pro_unsupported_test.dart
+     → a hiányzó ImportRegistryFailureCode.guitarProUnsupported miatt fordítási
+     hiba (elvárt test-first piros).
+
+RED: flutter test test/features/song_trainer/presentation/
+     guitar_pro_conversion_guidance_test.dart
+     → a hiányzó SongImportScreen és GuitarProConversionGuidance miatt fordítási
+     hiba (elvárt test-first piros).
+
+GREEN: tools/round-gate.sh test/features/song_trainer/data/importers/
+       guitar_pro_unsupported_test.dart test/features/song_trainer/presentation/
+       guitar_pro_conversion_guidance_test.dart
+       → format 745 fájl (0 változás), analyze: No issues found,
+       importer: 4/4, guidance: 2/2, architecture: OK.
+```
+
+`flutter gen-l10n` lefutott az ARB-változás után; a keletkező
+`app_localizations*.dart` fájlok gitignore-olt build-outputok, nem részei a
+diffnek. Full suite, property gate és APK CI nem futott: ezek az orchestrátor
+exact-headSHA CI-feladatai. Eltérés vagy scope-bővítés nincs.
 
 ## 11. Review — a független reviewer tölti ki
 

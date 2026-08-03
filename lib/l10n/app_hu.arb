@@ -747,5 +747,11 @@
   "practiceRecommendationEnableMetronome": "A következő próbán kapcsold be a metronómot.",
   "practiceRecommendationFocusDirection": "Csak az irányra figyelj pár próbán át.",
   "practiceRecommendationFocusChordChanges": "Futtass egy akkordváltás-gyakorlatot a leglassabb párra.",
-  "practiceRecommendationNextDifficulty": "Lépj a következő nehézségi szintre."
+  "practiceRecommendationNextDifficulty": "Lépj a következő nehézségi szintre.",
+  "songImportTitle": "Dal importálása",
+  "songImportGuitarProTitle": "Guitar Pro fájl átalakítása",
+  "songImportGuitarProBody": "A StrumSight nem importál közvetlenül Guitar Pro fájlokat. Tartsd a saját fájlodat az eszközödön, és a StrumSighton kívül alakítsd MusicXML, MXL vagy MIDI formátumba. A StrumSight soha nem tölti fel a forrásfájlt.",
+  "songImportGuitarProStepsTitle": "Offline munkafolyamat",
+  "songImportGuitarProSteps": "1. Saját eszközödön használj offline átalakító eszközt.\n2. Ellenőrizd az átalakított fájlt, mert egyes Guitar Pro-részletek elveszhetnek.\n3. Importáld az eredményül kapott MusicXML-, MXL- vagy MIDI-fájlt.",
+  "songImportGuitarProGuidanceSemantics": "Guitar Pro átalakítási útmutató. A Guitar Pro fájlokat a StrumSight nem importálja közvetlenül. A saját fájlodat a StrumSighton kívül alakítsd MusicXML, MXL vagy MIDI formátumba. Nincs feltöltés."
 }
