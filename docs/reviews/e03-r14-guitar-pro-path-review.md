@@ -1,56 +1,62 @@
-# E03-R14 H3 — Review
+# E03-R14 — Review
 
 Brief: `docs/rounds/e03-r14-guitar-pro-path.md`
-Diff: `git diff origin/main...heal/E03-R14-H3-1-review-scope`
-Reviewer: Terra fallback, isolated clone
-Dátum: 2026-08-03
+Diff: `git diff origin/main...codex/e03-r14-guitar-pro-path`
+Reviewer: Terra fallback, isolated clone · Dátum: 2026-08-03
 Verdikt: APPROVED
 
 ## Összegzés
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-Az E03-R14 megállását a kötelező, merge előtti review-jelentés útvonala és a
-brief explicit allowlistje közötti ellentmondás okozta. A diff kizárólag ezt az
-egyetlen route-ot teszi auditálhatóvá, és regresszióval védi. Termékkód,
-gate-küszöb és router-védelem nem változott.
+Az ADR 0122 szerinti C út marad az egyetlen aktív út: nincs GP parser,
+dependency, registrybeli támogatott extension vagy hálózati konverzió. A
+korábbi F1 MAJOR javítása csak az exact GP-extensionre és a `FICHIER GUITAR
+PRO` headerre korlátozza a dedikált választ; egy támogatott, `Guitar Pro`
+szöveget tartalmazó MusicXML-fájlnév ismét eljut a content importerhez.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | A kötelező R14 review-artefaktum nem tiltott scope-eltérés | ✅ | `docs/rounds/e03-r14-guitar-pro-path.md:12-31, :121-128` |
-| 2 | A visszaesést automatikus teszt védi | ✅ | `tools/tests/test_epic3_brief_metadata.py:24, :61-66`; a mutált clone a path törlésekor 1 hibával piros volt |
-| 3 | A review-artefaktum nem implementer-kimenet | ✅ | brief §0.0 és §4: kizárólag független reviewer írhatja |
-| 4 | Nincs termékkód- vagy mércegyengítés | ✅ | `git diff --name-only origin/main...HEAD` csak a briefet és a metadata tesztet adta |
+| 1 | ADR 0122 C út, félkész GP támogatás nélkül | ✅ | `importer_registry.dart:16-25, :72-76`; nincs parser/dependency diff |
+| 2 | GP input stable unsupported, 0 importer-probe/commit; support-lista négyes | ✅ | `guitar_pro_unsupported_test.dart` 6/6; `song_trainer_providers.dart` provider-lista változatlan |
+| 3 | Guidance HU/EN, screen-readerrel használható és offline | ✅ | `guitar_pro_conversion_guidance_test.dart` 2/2; ARB-k :817-822, illetve :751-756 |
+| 4 | User guide nem automatizál vagy linkel konvertert, fidelityt sem ígér | ✅ | `docs/user-guide/guitar-pro-conversion.md:1-16` |
+| 5 | A/B parser/dependency/fixture nem került a diffbe | ✅ | scope-audit, 9 implementációs/pre-flight útvonal; csak a jelen review-artifact plusz |
 
 ## Scope-audit
 
-Az önjavító kör jogosultságán belüli változások:
-
-- `docs/rounds/e03-r14-guitar-pro-path.md` — a megállt kör dokumentált
-  scope-revíziója;
-- `tools/tests/test_epic3_brief_metadata.py` — a valódi hiányzó review-útvonal
-  regressziója.
-
-A review-jelentés pontos útvonala az R14 módosított, explicit allowlistjén
-szerepel. Más termék- vagy infrastruktúraútvonal nem változott.
+Az engedélyezett fájlokon kívüli változás nincs. A `review`-fájl a brief §0.0,
+§4 és `ai-router.allowed_paths` explicit, reviewer-only kivétele; ezt a
+merge-előtti H3-heal metadata-regressziója is védi.
 
 ## Megállapítások
 
-Nincs nyitott BLOCKER, MAJOR, MINOR vagy NOTE.
+### F1 — MAJOR — filename-substring false positive blocks supported imports
+
+- **Fájl:** `lib/features/song_trainer/data/importers/importer_registry.dart:143-147`
+- **Probléma:** a korábbi változat a `guitar pro`/`guitar-pro` névrészletet is
+  GP-fájlnak vette, ezért egy érvényes MusicXML/MXL/MIDI fájl nem jutott el a
+  content importerhez.
+- **Ellenőrzés:** a review isolated-clone próbája ezt mutatta; a javítás után
+  `a supported source whose display name contains Guitar Pro reaches an importer`
+  zöld, míg a GP extension/header 0-probe cellák változatlanul zöldek.
+- **Státusz:** FIXED (`728d0d0`).
+
+Nincs nyitott BLOCKER vagy MAJOR.
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| célzott regresszió | RED a hiányzó metadata-pathra, majd GREEN | ✅ izolált clone, `Epic3BriefMetadataTest.test_r14_scope_includes_the_mandatory_review_artifact` |
-| Python/router tesztek | 165 passed, 53 subtests passed | ✅ izolált clone, `python -m pytest tools/tests -q` |
-| diff-integritás | `git diff --check` zöld | ✅ izolált clone |
-| Router CI | a review-commit exact HEAD-jére kötelező | függőben |
-| teljes Flutter/property/APK | Dart- vagy workflow-változás nincs; nem indítandó ebben a Python/dokumentációs healben | N/A |
+| format/analyze/célzott test/architecture | `tools/round-gate.sh` az izolált clone-ban zöld | ✅ (format 745 fájl, analyze: No issues found) |
+| célzott tesztek | 8/8 zöld | ✅ saját futás, izolált clone |
+| valódi-sértés próba | GP-extension guard ideiglenes kiiktatása 1/6 teszttel piros, majd visszaállítva | ✅ izolált clone |
+| diff-integritás | `git diff --check reviewer/main...HEAD` zöld | ✅ |
+| CI (teljes suite + property + APK) | exact head dispatch szükséges | függőben |
 
 ## Merge-döntés
 
-Az ADR 0052 szerinti merge akkor engedett, ha a review-commit exact HEAD-jén a
-Router CI zöld. Nyitott BLOCKER/MAJOR nincs.
+Az ADR 0052 szerint a review APPROVED, de merge csak az exact branch-headre
+futott zöld teljes CI-suite, randomizált property gate és APK után engedett.
