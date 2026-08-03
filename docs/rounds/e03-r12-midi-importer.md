@@ -11,6 +11,7 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "docs/adr/0121-midi-import-boundary.md",
+  "lib/features/song_trainer/data/importers/import_limits.dart",
   "lib/features/song_trainer/data/importers/midi_importer.dart",
   "lib/features/song_trainer/data/importers/midi_parser_adapter.dart",
   "lib/features/song_trainer/data/importers/midi_timeline_mapper.dart",
@@ -94,6 +95,29 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
   rétegből. SMPTE marad explicit unsupported warning/failure, chord inference
   nem része a körnek.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03)
+
+- **Mért H3 gyökérok:** az R12 review eldobható invariáns-próbája szerint a
+  parser a header `trackCount` értékét korlát nélkül dolgozza fel. Ez sérti az
+  ADR 0091 §3 MIDI track-count kötelezettségét. Az egyetlen közös,
+  konfigurálható limit- és stabil-failure-code owner a
+  `data/importers/import_limits.dart:1-34`, amely hiányzott a prepared brief
+  emberi scope-táblájából és az `ai-router` `allowed_paths` listájából.
+- **Feloldás:** a scope kizárólag ezt az exact shared-policy ownert nyitja meg.
+  Az R12 a `ImportLimits.maxMidiTrackCount` és
+  `ImportLimitFailureCode.midiTrackCountExceeded` közös contractját használja;
+  a parser a track-loop előtt fail-closed ellenőriz, nem vezet be privát
+  MIDI-limitet. A már engedélyezett `midi_malformed_test.dart` a track-count
+  max−1/max/max+1 mátrixot méri. Az ADR 0091 korlátkövetelménye és a gate nem
+  változik.
+- **Regressziós őr:**
+  `Epic3BriefMetadataTest.test_r12_scope_includes_measured_midi_track_limit_owner`
+  először RED volt e path hiányával; ezután csak e scope-revízióval GREEN.
+
+- R10 importer pipeline és R05 NoteTrackAnalyzer használható.
+- Parser dependency csak licence/maintenance audit után kerülhet be.
+- Chord inference és SMPTE timing nem kötelező az első verzióban.
+
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
 
@@ -114,7 +138,7 @@ SMF format 0/1, PPQ timing, meta- és note-event import stabil track previewval,
 - MIDI parser adapter, header/chunk/running-status validáció
 - PPQ tempo/meter/key/marker/lyric mapping
 - note-on/off pairing, preview, drum/polyphony report
-- event limit és cancellation
+- event- és MIDI track-count limit, cancellation
 
 **Kívül — ebben a körben TILOS:**
 
@@ -127,15 +151,17 @@ SMF format 0/1, PPQ timing, meta- és note-event import stabil track previewval,
 
 | Útvonal | Állapot/ág | Miért |
 |---|---|---|
-| `pubspec.yaml` | meglévő | szükség esetén auditált MIDI dependency |
-| `pubspec.lock` | meglévő | lock |
+| `docs/adr/0121-midi-import-boundary.md` | új, R12 pre-flight | auditált saját SMF subset döntése |
+| `lib/features/song_trainer/data/importers/import_limits.dart` | R10-ből | ADR 0091 közös, konfigurálható MIDI track-count limitje és stabil failure code-ja |
 | `lib/features/song_trainer/data/importers/midi_importer.dart` | ÚJ | probe/import |
 | `lib/features/song_trainer/data/importers/midi_parser_adapter.dart` | ÚJ | package/binary boundary |
 | `lib/features/song_trainer/data/importers/midi_timeline_mapper.dart` | ÚJ | PPQ→beat |
 | `lib/features/song_trainer/data/importers/midi_track_preview.dart` | ÚJ | preview/polyphony |
-| `lib/features/song_trainer/data/importers/importer_registry.dart` | R11-ből | registration |
+| `lib/features/song_trainer/data/importers/song_importer.dart` | R10-ből | MIDI-specifikus nullable preview contract |
+| `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | tényleges production registry owner |
 | `test/features/song_trainer/data/importers/midi_importer_test.dart` | ÚJ | format/timing fixture |
 | `test/features/song_trainer/data/importers/midi_malformed_test.dart` | ÚJ | malformed/limit/cancel |
+| `test/features/song_trainer/application/song_trainer_providers_test.dart` | R10-ből | production registry wiring |
 | `test/fixtures/song_trainer/midi/format0.mid` | ÚJ | SMF0 |
 | `test/fixtures/song_trainer/midi/format1_multitrack.mid` | ÚJ | SMF1 |
 | `test/fixtures/song_trainer/midi/tempo_meter_marker.mid` | ÚJ | meta events |
@@ -162,7 +188,7 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 
 - [ ] Format 0/1, több track, tempo/meter/key/marker/lyric/program és note duration snapshot stabil.
 - [ ] Running status és velocity-0 helyes; dangling/overlap determinisztikus report.
-- [ ] Extreme PPQ, invalid chunk/header/status, event max+1 és cancel nem crash-el és nem commitol.
+- [ ] Extreme PPQ, invalid chunk/header/status, event- és MIDI track-count max+1, valamint cancel nem crash-el és nem commitol.
 - [ ] Preview track/channel/instrument/note count/pitch range/polyphony/duration/drum adatot ad.
 - [ ] Timing nincs implicit nyolcadokra quantizálva; monophonic track felismerhető.
 
@@ -176,6 +202,7 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 | note-on velocity 0 | note-off |
 | dangling note EOF-nál | warning + bounded duration policy |
 | event count max−1/max/max+1 | accept/accept/reject |
+| MIDI track count max−1/max/max+1 | accept/accept/reject (`ImportLimitFailureCode.midiTrackCountExceeded`) |
 | cancel trackek között | cancelled, 0 commit |
 
 A reviewer legalább egy központi invariánst eldobható mutációval vagy független

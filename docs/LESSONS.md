@@ -3166,3 +3166,21 @@ ugyan már megoldotta mindkét MAJOR-t (multipart preview és unsupported-warnin
 **Tanulság.** A squash előtt a reviewer-jelentést a javított SHA-val
 `APPROVED`-ra kell frissíteni, a leletenkénti zárással és a mutation evidence-szel;
 utólag csak audit-addendum pótolhatja, nem helyettesítheti a merge-kaput.
+
+## L80 — A MIDI importer briefjének a shared track-limit ownerét is engedélyeznie kell (E03-R12 H3, 2026-08-03)
+
+**Mérés.** Az E03-R12 független review-ja a parser
+`midi_parser_adapter.dart:52-82` track-loopját és az ADR 0091 §3 kötelező,
+konfigurálható MIDI track-count limitjét vetette össze. A kizárólagos közös
+owner `data/importers/import_limits.dart:1-34` volt, de az R12 prepared brief
+emberi scope-táblájából és router `allowed_paths` listájából egyaránt hiányzott.
+Ezért a következő szabályos javító dispatch scope-sértő lett volna.
+
+**Javítás és regresszió.** A H3 self-heal csak ezt az exact ownert vette fel,
+és az R12-be a `ImportLimits.maxMidiTrackCount`,
+`ImportLimitFailureCode.midiTrackCountExceeded`, valamint a meglévő malformed
+MIDI tesztben mért max−1/max/max+1 mátrix követelményét írta. A
+`Epic3BriefMetadataTest.test_r12_scope_includes_measured_midi_track_limit_owner`
+a revízió előtt RED volt a hiányzó path miatt, majd GREEN. Az izolált reviewer
+mutációja az allowlistből eltávolított path-szal ugyanezt a tesztet újra RED-re
+váltotta, tehát az őr nem csak a dokumentáció állítását ismétli.
