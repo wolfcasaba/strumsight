@@ -272,7 +272,14 @@ Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L
 3. `docs/LESSONS.md` — minden MÉRT tanulság, hivatkozható forrással.
 4. Git-notes: `git notes add -m "round={{ROUND}} verdict=pass tests=<n> lesson=<slug> engine={{ENGINE}}"`,
    majd `git push origin 'refs/notes/*'`.
-5. Viking: `viking_remember` + `viking_session_commit`.
+5. A frissen fetch-elt/resetelt `main` munkafán kötelezően futtasd a
+   `tools/prepare-flutter-generated.sh` scriptet **a post-merge gate előtt**.
+   Csak ezután futtasd a `tools/round-gate.sh` artefaktumot. A script csak a
+   gitignore-olt Flutter package/l10n outputot állítja helyre (`flutter pub get`, majd
+   l10n.yaml mellett `flutter gen-l10n`); sem a gate-et, sem tracked forrást
+   nem módosítja. Így a gate a merge-elt kódot méri, nem egy hiányzó vagy
+   elavult generált előfeltételt.
+6. Viking: `viking_remember` + `viking_session_commit`.
 
 ## 6. A KÖTELEZŐ kör-jelzés — enélkül a futásod bukott
 

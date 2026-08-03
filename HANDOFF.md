@@ -4,7 +4,13 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R14/H3 scope revision merged).**  **HEAL E03-R14/H3 (PR
+> (HEAL E03-R14/H7 post-merge Flutter bootstrap).** **HEAL E03-R14/H7:** a
+> R14 merge utáni gate a gitignore-olt, régi `AppLocalizations` outputot mérte,
+> ezért az új Guitar Pro l10n getterek hiányzónak látszottak. A kötelező
+> `tools/prepare-flutter-generated.sh` a post-merge gate előtt `flutter pub
+> get`-et, majd `flutter gen-l10n`-t futtat; a kapu és a tracked produkciós
+> forrás változatlan. A tiszta checkout RED (632 hiányzó generált import), az
+> előkészítés utáni R14 célzott gate GREEN. **HEAL E03-R14/H3 (PR
 > #105):** the mandatory committed review report was named by the R14 brief
 > but omitted from both its human scope and router `allowed_paths`, so a green
 > review could not be committed without violating the brief. The exact
