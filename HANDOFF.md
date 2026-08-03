@@ -4,7 +4,13 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R09/H6 — router baseline Flutter bootstrap).** A fresh R09
+> (E03-R09 close-out).** E03-R08 (PR #81) and E03-R09 (PR #83) are now
+> recorded as merged; the current next product round is E03-R10. R09 added
+> deterministic, privacy-scrubbed native JSON import/export with a bounded,
+> cancellable in-memory importer ([ADR 0118](docs/adr/0118-native-json-exchange-contract.md)).
+> The exact branch-head CI run [30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
+> and the independent post-merge local gate are green. Historical note:
+> **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
 > The router now performs `flutter pub get` and, when `l10n.yaml` is present,
@@ -427,13 +433,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #66](https://github.com/wolfcasaba/strumsight/pull/66)
-(E03-R07 file-based Song repository and asset store, squash-merge
-`b8b7e4e`), CI run
-[30750669625](https://github.com/wolfcasaba/strumsight/actions/runs/30750669625)
-**success** on `652fdf6` (the matching `headSha`, full suite + randomized
-property + APK). Two fix rounds, three independent review passes — see §5
-and `docs/reviews/e03-r07-song-repository-asset-store-review.md`.
+`main` @ [PR #83](https://github.com/wolfcasaba/strumsight/pull/83)
+(E03-R09 native StrumSight JSON import/export, squash-merge `48cf3a0`). CI
+run [30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
+**success** on the exact branch `headSha` `c26f426`; it ran the full suite,
+randomized property gate and development APK build. Independent review:
+[`e03-r09-native-json-import-export-review.md`](docs/reviews/e03-r09-native-json-import-export-review.md)
+(APPROVED, 0 BLOCKER/MAJOR); the post-merge local gate is also green.
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -506,6 +512,27 @@ and `docs/reviews/e03-r07-song-repository-asset-store-review.md`.
 
 ## 5. Last completed round
 
+**E03-R09 — Natív StrumSight JSON import és export** (PR
+[#83](https://github.com/wolfcasaba/strumsight/pull/83), squash `48cf3a0`,
+[ADR 0118](docs/adr/0118-native-json-exchange-contract.md)). Implementer:
+**auto router**; independent reviewer: **Codex/Terra**.
+
+**Elkészült:** verziózott `strumsight-song` v2 exchange envelope,
+determinista export, path-scrubbed provenance és hordozható filename,
+1 MiB-on deklarált és streamelt source-limit, cancellation safe point,
+asset-manifest parity és kizárólag in-memory import-result. Sem registry,
+repository-write vagy UI nem került előrehozásra. A review a manifest őr
+eldobható valódi-sértés próbájával pirosra váltott; az őr visszaállítása után
+a célzott gate és a merge utáni gate zöld.
+
+Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/importers/native_json_importer_test.dart test/features/song_trainer/data/importers/native_json_exporter_test.dart`
+(format/analyze/12 importer teszt/4 exporter teszt/architecture zöld) + CI
+[30775663270](https://github.com/wolfcasaba/strumsight/actions/runs/30775663270)
+zöld az exact `c26f426` branch-headen. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R09.
+
+### Previous completed round
+
 **E03-R07 — Fájlrendszeres Song repository és asset store** (PR
 [#66](https://github.com/wolfcasaba/strumsight/pull/66), squash `b8b7e4e`,
 [ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) — elfogadva
@@ -566,7 +593,11 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
+0. **E03-R10 — Import application flow és biztonsági keret** a következő
+product round; nem része ennek a sessionnek. E03-R08 (PR #81) és E03-R09
+(PR #83) már kész. A queue-fájl állapotát továbbra is kizárólag a pipeline
+driver kezeli.
+1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
    asset store~~ — KÉSZ, ld. §5.** Következő:
