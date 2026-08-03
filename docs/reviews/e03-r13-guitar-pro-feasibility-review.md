@@ -1,9 +1,9 @@
 # E03-R13 — Guitar Pro feasibility — Review
 
-Brief: `docs/rounds/e03-r13-guitar-pro-feasibility.md`  
-Diff: `origin/main...9de47d0`  
-Reviewer: Codex / GPT-5.6 Terra  
-Date: 2026-08-03  
+Brief: `docs/rounds/e03-r13-guitar-pro-feasibility.md`
+Diff: `origin/main...9de47d0`
+Reviewer: Codex / GPT-5.6 Terra
+Date: 2026-08-03
 Verdict: **APPROVED** (the exact-review-head CI evidence is still required before merge).
 
 ## Összegzés
