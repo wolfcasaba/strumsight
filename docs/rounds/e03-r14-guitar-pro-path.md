@@ -25,6 +25,7 @@ allowed_paths = [
   "lib/l10n/app_hu.arb",
   "docs/user-guide/guitar-pro-conversion.md",
   "docs/rounds/e03-r14-guitar-pro-path.md",
+  "docs/reviews/e03-r14-guitar-pro-path-review.md",
 ]
 gate_tests = [
   "test/features/song_trainer/data/importers/guitar_pro_importer_test.dart",
@@ -59,6 +60,19 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - R13 egyetlen A/B/C stratégiát és exact licence/security feltételeket ad.
 - A PREPARED brief mindkét teljes út fájljait dokumentálja, de nem engedi egyszerre végrehajtani.
 - A pre-flight az inaktív ág minden fájlját törli a §4-ből és explicit tiltott zónává teszi.
+
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03)
+
+- **Mérés:** a független, exact-head review a kötelező
+  `docs/reviews/e03-r14-guitar-pro-path-review.md` artefaktumot írja és a
+  merge előtti commit megköveteli, miközben a korábbi §4 és az `ai-router`
+  `allowed_paths` listája ezt az egyetlen útvonalat tiltottá tette.
+- **Feloldás:** a review-artefaktum azonos, explicit útvonalként §4-be és a
+  router metadatajába került. Csak a független reviewer írhatja; a kör
+  implementere nem gyárt és nem módosít review-jelentést.
+- **Védelem:** `Epic3BriefMetadataTest.test_r14_scope_includes_the_mandatory_review_artifact`
+  őrzi, hogy a kötelező merge-evidence később sem kerülhessen vissza a tiltott
+  zónába.
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
@@ -107,11 +121,13 @@ Az R13 ADR-rel egyező, pontosan egy aktivált Guitar Pro út szállítása: izo
 | `lib/l10n/app_hu.arb` | C ág | magyar copy |
 | `docs/user-guide/guitar-pro-conversion.md` | C ág ÚJ | offline user guide |
 | `docs/rounds/e03-r14-guitar-pro-path.md` | meglévő | §10 handoff |
+| `docs/reviews/e03-r14-guitar-pro-path-review.md` | független review | kötelező, merge előtti APPROVED/CHANGES REQUESTED artefaktum; csak reviewer írja |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
 nem felsorolt `.github/**`, más feature belső fájlja és más kör briefje.
 `docs/adr/**` csak akkor engedett, ha a pre-flight ütközésmentes exact pathként
-hozzáadta a táblához. Új fixture/helper is fájl; listán kívül → `stopped`.
+hozzáadta a táblához. A fent felsorolt review-artefaktum kivétel: azt csak a
+független reviewer írhatja. Új fixture/helper is fájl; listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
