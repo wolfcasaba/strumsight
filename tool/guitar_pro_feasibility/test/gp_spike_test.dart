@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
-import 'package:guitar_pro_feasibility/gp_spike.dart';
+// The tool is also analyzed from the root Flutter package in CI.
+// ignore: avoid_relative_lib_imports
+import '../lib/gp_spike.dart';
 
 void main() {
   final fixtureDirectory = _fixtureDirectory();
