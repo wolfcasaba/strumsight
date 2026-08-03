@@ -53,6 +53,19 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("review + CI", prompt)
         self.assertIn("örökölt", prompt.lower())
 
+    def test_post_merge_gate_bootstraps_ignored_flutter_generated_output(self) -> None:
+        # E03-R14/H7 (2026-08-03): PR #107 merged ARB keys, but the
+        # post-merge gate used the old ignored AppLocalizations output and
+        # reported six missing getters. The bootstrap must precede that gate;
+        # otherwise a clean checkout can fail with hundreds of missing imports.
+        prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()
+        preparation = "tools/prepare-flutter-generated.sh"
+        gate = "tools/round-gate.sh"
+
+        self.assertIn(preparation, prompt)
+        self.assertIn(gate, prompt)
+        self.assertLess(prompt.index(preparation), prompt.rindex(gate))
+
     def test_prompt_auto_dispatch_is_detached_and_polled_not_synchronous(self) -> None:
         # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R05 H6): a
         # `engine=auto` dispatch a Bash-eszköz mért 600s-es kemény plafonjánál

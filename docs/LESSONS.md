@@ -3354,3 +3354,25 @@ path ideiglenes törlése ismét RED-re fordította. A teljes router-tesztsáv 1
 teszttel és 53 subtesttel, az exact review-head Router CI
 [30846147114](https://github.com/wolfcasaba/strumsight/actions/runs/30846147114)
 zölden zárt. A mérce, a scope-audit és a protected-path védelem változatlan.
+
+## L89 — A post-merge Flutter gate előtt a gitignore-olt generált előfeltételeket is helyre kell állítani (E03-R14 H7, 2026-08-03)
+
+**Mérés.** A merge-elt R14 `main`-en futó célzott gate format lépése zöld volt,
+de az analyze a régi `AppLocalizations` output miatt hat pontos
+`undefined_getter` hibát adott a `SongImportScreen` és
+`GuitarProConversionGuidance` új ARB-kulcsaira. Egy tiszta, `origin/main`
+alapú heal-worktree-ben nincs sem package-config, sem
+`lib/l10n/app_localizations*.dart`; ugyanaz a gate így 632 hiányzó import/
+lokalizációs diagnosztikával RED volt. Ez nem product hiba és nem a kapu
+enyhítésével oldható fel.
+
+**Javítás és regresszió.** A post-merge rituálé a változatlan
+`tools/round-gate.sh` előtt kötelezően meghívja a
+`tools/prepare-flutter-generated.sh` scriptet. Az kizárólag `flutter pub get`-
+et, valamint `l10n.yaml` mellett `flutter gen-l10n`-t futtat, ezért nem
+formáz és nem módosít tracked source-ot. A
+`PrepareFlutterGeneratedTest.test_generates_ignored_l10n_output_after_package_resolution`
+a hiányzó outputból a tényleges `pub get → gen-l10n` sorrendet, a
+`PipelineIntegrationTest.test_post_merge_gate_bootstraps_ignored_flutter_generated_output`
+pedig az orchestrátor szerződését őrzi. Az előkészített tiszta worktree-n a
+R14 teljes célzott format/analyze/test/architecture gate GREEN.
