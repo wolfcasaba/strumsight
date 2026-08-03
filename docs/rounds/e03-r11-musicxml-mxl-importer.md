@@ -1,7 +1,7 @@
 # E03-R11 — MusicXML és MXL importer
 
 - **Státusz:** **PLANNING — H3 javítva** (2026-08-03, pre-flight baseline:
-  `origin/main` @ `9639659`)
+  `origin/main` @ `128c78a`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 11; §15
 - **Branch:** `codex/e03-r11-musicxml-mxl-importer`
 - **Előfeltétel:** E03-R10 merge
@@ -37,7 +37,6 @@ allowed_paths = [
   "test/fixtures/song_trainer/mxl/malicious_path.mxl",
   "test/fixtures/song_trainer/mxl/extracted_limit.mxl",
   "docs/rounds/e03-r11-musicxml-mxl-importer.md",
-  "docs/adr/0120-musicxml-mxl-import-boundary.md",
 ]
 gate_tests = [
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
@@ -75,8 +74,9 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - External entity, archive traversal és korlátlan repeat expansion hard security tiltás.
 
 **Mért pre-flight (2026-08-03, `origin/main` @ `9639659`):** E03-R10 (PR #86)
-merge-elve van; nincs korábbi E03-R11 worktree, branch, nyitott PR vagy review,
-amelyet folytatni kellene. A tiszta baseline-on `rg -n "ImporterRegistry\\(" lib
+merge-elve van. A korábbi `e8579bd` R11 pre-flight branch a H3 előtti HALTED
+briefet tartalmazta; a H3 self-heal PR #88 (`128c78a`) elfogadott briefje és
+ADR 0120-a az irányadó. A tiszta baseline-on `rg -n "ImporterRegistry\\(" lib
 test` a production listát a
 `lib/features/song_trainer/application/song_trainer_providers.dart:140`-ban
 találja: `const ImporterRegistry(importers: <SongImporter>[NativeJsonImporter()])`.
@@ -106,6 +106,15 @@ MXL-limit-tulajdonost (`import_limits.dart`) a §4 táblába és az implementer
 pre-flight dokumentáció: a §4 emberi táblában szerepel, de a router TOML-jába
 nem kerül, mert a modell nem írhat normatív ADR-t. A `tools/tests` regresszió
 e három útvonal meglétét ellenőrzi, így a korábbi H3 nem ismétlődhet csendben.
+
+**Aktuális validáció (2026-08-03, `origin/main` @ `128c78a`):** a fenti
+`ImporterRegistry` és `ImportLimits` producer-mérések változatlanul a
+`song_trainer_providers.dart:140`, illetve `import_limits.dart:11–24` helyekre
+mutatnak. `dart pub deps --style=compact` szerint `xml 6.6.1` továbbra is csak
+a `dbus` tranzitív függősége, `archive` nincs a lockban; ezért mindkettő direct
+data-layer dependencyként kerül a kör modell-diffjébe. Az `ai-router`
+allowlist szándékosan nem tartalmaz ADR-utat: az ADR 0120 már merge-elt,
+normatív dokumentum, amelyet a modell nem írhat.
 
 ## 1. Cél
 
