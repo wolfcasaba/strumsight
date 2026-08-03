@@ -239,5 +239,6 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e03-r09-native-json-import-export-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Független review: `docs/reviews/e03-r09-native-json-import-export-review.md` —
+**APPROVED** (0 BLOCKER / 0 MAJOR). Merge csak exact-SHA zöld CI, §4-en belüli
+diff és nulla OPEN BLOCKER/MAJOR után.
