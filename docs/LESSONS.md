@@ -3277,3 +3277,23 @@ után `git diff --check` csak a worktree-változást ellenőrizte; a
 majd újra kell dispatch-elni a CI-t az új exact `headSha`-ra. A range-level
 `git diff --check <base>...HEAD` csak ezután lehet merge-evidence; a worktree
 ellenőrzés nem helyettesíti.
+
+## L85 — Egy izolált Dart tool-spike `.dart_tool` cache-e ugyanúgy generált, mint a workspace-gyökéré, de a scope-őrnek a beágyazott cache-t is fel kell ismernie (E03-R13 H6, 2026-08-03)
+
+**Mérés.** Az E03-R13 engedélyezett Guitar Pro feasibility spike-ja
+`tool/guitar_pro_feasibility/` alatt futtatott `dart pub get` után négy
+gitignore-olt cache-utat hagyott: `.dart_tool/package_config.json`,
+`.dart_tool/package_graph.json`, `.dart_tool/pub/bin/test/...snapshot` és
+`.dart_tool/test/...`. A router a root `.dart_tool` prefixet mentette csak,
+ezért az audit az első és harmadik utat `path outside allowed scope` lelettel
+H6-ként blokkolta, noha a termékdiff a brief allowlistjén belül maradt.
+
+**Javítás és regresszió.** A generált-artifact felismerés a `.dart_tool` path
+komponenst is kezeli, ezért kizárólag a Dart cache marad ki a modell-diffből;
+azonos tool alatti source vagy más ignorált út továbbra is a normál
+allowlist/protected-path döntést kapja. A
+`RouterArtifactScopeTest.test_nested_dart_tool_artifacts_are_generated_ignored`
+a valós nested cache struktúrát építi: a korábbi implementáción RED volt két
+scope-sértéssel, a javítás után GREEN. Az izolált review mutációs próbája a
+felismerés ideiglenes eltávolításával ismét RED-re fordította, majd a
+visszaállított exact diff teljes routerteszt-sávja zöld lett.
