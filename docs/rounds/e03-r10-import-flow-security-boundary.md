@@ -23,7 +23,6 @@ allowed_paths = [
   "test/features/song_trainer/application/import/song_import_controller_integration_test.dart",
   "test/features/song_trainer/data/importers/import_workspace_test.dart",
   "docs/rounds/e03-r10-import-flow-security-boundary.md",
-  "docs/adr/0119-song-import-application-orchestration.md",
 ]
 gate_tests = [
   "test/features/song_trainer/application/import",

@@ -1,6 +1,6 @@
 # E03-R11 — MusicXML és MXL importer
 
-- **Státusz:** **HALTED — H3** (2026-08-03, pre-flight baseline:
+- **Státusz:** **PLANNING — H3 javítva** (2026-08-03, pre-flight baseline:
   `origin/main` @ `9639659`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 11; §15
 - **Branch:** `codex/e03-r11-musicxml-mxl-importer`
@@ -20,8 +20,11 @@ allowed_paths = [
   "lib/features/song_trainer/data/importers/mxl_importer.dart",
   "lib/features/song_trainer/data/importers/mxl_archive_reader.dart",
   "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/data/importers/import_limits.dart",
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
   "test/features/song_trainer/data/importers/mxl_security_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
   "test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml",
   "test/fixtures/song_trainer/musicxml/waltz_34.musicxml",
   "test/fixtures/song_trainer/musicxml/meter_68.musicxml",
@@ -34,7 +37,6 @@ allowed_paths = [
   "test/fixtures/song_trainer/mxl/malicious_path.mxl",
   "test/fixtures/song_trainer/mxl/extracted_limit.mxl",
   "docs/rounds/e03-r11-musicxml-mxl-importer.md",
-  "docs/adr/0120-musicxml-mxl-import-boundary.md",
 ]
 gate_tests = [
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
@@ -95,10 +97,14 @@ konfigurálható limit-követelményét; a fájl szintén nincs a §4 listán.
 archive symlinket, canonical duplicate-ot és nested archive-ot kell rejectálnia
 teszttel. A döntést ADR 0120 rögzíti.
 
-**Feloldás és állapot:** a két tényleges owner felvétele a jelenlegi allowlist
-listabővítése, ezért az autonóm szerződés H3 pontja szerint ez a kör nem
-dispatch-elhető. A briefet nem tágítom csendben; az önjavító kör feladata a
-pontos scope-korrekció és az ahhoz tartozó tesztek review-zható hozzáadása.
+**Módosítás (ADR 0112 önjavító kör, 2026-08-03, E03-R11/H3):** a mért
+production registry-tulajdonost (`song_trainer_providers.dart`) és shared
+MXL-limit-tulajdonost (`import_limits.dart`) a §4 táblába és az implementer
+`allowed_paths`-ába felvettem. A közvetlen provider-wiring teszt
+(`song_trainer_providers_test.dart`) szintén engedélyezett. Az ADR 0120 csak
+pre-flight dokumentáció: a §4 emberi táblában szerepel, de a router TOML-jába
+nem kerül, mert a modell nem írhat normatív ADR-t. A `tools/tests` regresszió
+e három útvonal meglétét ellenőrzi, így a korábbi H3 nem ismétlődhet csendben.
 
 ## 1. Cél
 
@@ -139,8 +145,11 @@ A dokumentált MusicXML subset és MXL container biztonságos, rational timingú
 | `lib/features/song_trainer/data/importers/mxl_importer.dart` | ÚJ | container adapter |
 | `lib/features/song_trainer/data/importers/mxl_archive_reader.dart` | ÚJ | secure extraction |
 | `lib/features/song_trainer/data/importers/importer_registry.dart` | R10-ből | registration |
+| `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | production importer registration |
+| `lib/features/song_trainer/data/importers/import_limits.dart` | R10-ből | shared configurable MXL archive limits |
 | `test/features/song_trainer/data/importers/musicxml_importer_test.dart` | ÚJ | subset snapshot |
 | `test/features/song_trainer/data/importers/mxl_security_test.dart` | ÚJ | archive/XML security |
+| `test/features/song_trainer/application/song_trainer_providers_test.dart` | ÚJ | production registry wiring |
 | `test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml` | ÚJ | 4/4 chord |
 | `test/fixtures/song_trainer/musicxml/waltz_34.musicxml` | ÚJ | 3/4 |
 | `test/fixtures/song_trainer/musicxml/meter_68.musicxml` | ÚJ | 6/8 |

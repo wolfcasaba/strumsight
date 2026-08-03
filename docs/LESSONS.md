@@ -3076,3 +3076,26 @@ teljesen zöld lett (6 + 3 teszt, architecture is).
 helyi `main`-ről. A klón HEAD-ját mindig hasonlítsd a GitHub `origin/main`
 SHA-hoz, és eltérésnél a kanonikus remote-ról fetch-eld/checkoutold a pontos
 merge-elt fejet, mielőtt bármely gate-piros eredményt termékhibának tekintesz.
+
+## L75 — Importer-kör briefje a tényleges production regisztrációt és a közös limit-tulajdonost is engedélyezze (E03-R11 H3, 2026-08-03)
+
+**Mérés.** Az E03-R11 pre-flight a `rg -n "ImporterRegistry\\(" lib test`
+paranccsal a production importer-listát
+`application/song_trainer_providers.dart:140`-ban mérte, nem a már
+engedélyezett `importer_registry.dart`-ban. A `rg -n
+"ImportLimits\\(|maxSourceBytes|maxEventCount|maxWorkspaceBytes|maxWallTime|ImportLimitFailureCode"
+lib test` az MXL archive-entry/extracted-byte limitjeinek egyetlen közös,
+konfigurálható tulajdonosát `data/importers/import_limits.dart:11-24`-ben
+találta. A prepared brief egyik útvonalat sem engedélyezte, így a MusicXML/MXL
+importer adapter-szintű tesztjei mellett is JSON-only maradhatott volna a
+production registry, vagy private MXL-korlát keletkezett volna.
+
+**Javítás és regresszió.** A H3 self-heal pontosan a két owner és a közvetlen
+provider-wiring teszt útvonalát vette fel az R11 human scope-táblájába és
+router `allowed_paths`-ába. A
+`Epic3BriefMetadataTest.test_r11_scope_includes_measured_production_owners`
+először a HALTED-ban megnevezett három hiányzó útvonallal RED volt, majd GREEN.
+A teljes `python -m pytest tools/tests -q` futás 157 passed és 53 subtests
+passed eredménnyel zárult. A normatív ADR-ek a human táblában dokumentálhatók,
+de nem kerülhetnek az implementer allowlistba; az ugyanezzel a futással mért
+R10-eltérést is így javítottuk.
