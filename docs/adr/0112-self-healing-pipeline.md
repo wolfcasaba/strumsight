@@ -119,6 +119,17 @@ Ez nem enyhíti az ADR 0086 freshness-követelményét: a körbranch a merge ut�
 tartalmazza a dispatch előtti `main`-t, és később ugyanúgy exact-head CI-t,
 független review-t és zöld kaput igényel.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — H8 merge utáni gépi freshness-bizonyítás
+
+E03-R12/H8 mérése megmutatta, hogy a non-force merge sikeres kimenete önmagában
+nem elég jól auditálható bizonyíték arra, hogy a célbranch valóban tartalmazza
+az éppen vizsgált `origin/main`-t. A brief-only rebase-konfliktus megszakítása
+és `git merge --no-ff origin/main` után a self-healnek kötelezően futtatnia
+kell a `git merge-base --is-ancestor origin/main HEAD` parancsot; csak a 0-s
+kilépési kód után pusholhat normál módon. Ez nem lazít scope-ot, gate-et vagy
+CI-követelményt, kizárólag a meglévő ADR 0086 freshness-szabály mérhető
+bizonyítékát teszi kötelezővé.
+
 ### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — H6 approved-brief metadata recovery
 
 Mérés: E03-R11 H3 scope-revíziója a merge után megváltoztatta a brief

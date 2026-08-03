@@ -173,8 +173,11 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("H8", prompt)
         self.assertIn("rebase --abort", prompt)
         self.assertIn("merge --no-ff origin/main", prompt)
+        self.assertIn("merge-base --is-ancestor origin/main HEAD", prompt)
         self.assertIn("force-push", prompt)
         self.assertIn("aktuális `main` brief-változatát", prompt)
+        adr = (ROOT / "docs" / "adr" / "0112-self-healing-pipeline.md").read_text()
+        self.assertIn("merge-base --is-ancestor origin/main HEAD", adr)
 
     def test_halted_chain_starts_selfheal_unless_it_is_switched_off(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
