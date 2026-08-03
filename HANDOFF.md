@@ -4,7 +4,15 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R13/H6).** E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
+> (E03-R13 merged).**  E03-R13 is merged as [PR #103](https://github.com/wolfcasaba/strumsight/pull/103)
+> (`83535e5`). [Build Android APK 30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
+> is green for exact pre-merge branch head `ead6f03` (full Flutter suite,
+> randomized property/coverage gate and development APK); independent review
+> and the post-merge local gate are also green. **E03-R13 decision:** use
+> external, user-controlled conversion to existing MusicXML/MXL/MIDI import
+> paths; no production Guitar Pro parser or registry wiring was introduced.
+> The following HEAL E03-R13/H6 notes are historical recovery evidence.
+> E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
 > (`9484a4e`). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
 > is green for exact pre-merge branch head `a0bb7d3` (full Flutter suite,
 > randomized property/coverage gate and development APK); the independent
@@ -514,12 +522,12 @@
 
 ## 4. Current branch
 
-`main` @ [PR #101](https://github.com/wolfcasaba/strumsight/pull/101), squash
-`9484a4e` (E03-R12). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
-is **success** for exact branch `headSha` `a0bb7d3`. It includes the full
+`main` @ [PR #103](https://github.com/wolfcasaba/strumsight/pull/103), squash
+`83535e5` (E03-R13). [Build Android APK 30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
+is **success** for exact branch `headSha` `ead6f03`. It includes the full
 Flutter suite, randomized property/coverage gate and development APK. The
 independent post-merge gate is green, and the final review is **APPROVED** in
-[`e03-r12-midi-importer-review.md`](docs/reviews/e03-r12-midi-importer-review.md).
+[`e03-r13-guitar-pro-feasibility-review.md`](docs/reviews/e03-r13-guitar-pro-feasibility-review.md).
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -592,22 +600,24 @@ independent post-merge gate is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
-**E03-R12 — Standard MIDI importer** (PR
-[#101](https://github.com/wolfcasaba/strumsight/pull/101), squash `9484a4e`,
-[ADR 0121](docs/adr/0121-midi-import-boundary.md)). Implementer: **auto
+**E03-R13 — Guitar Pro feasibility és stratégiai döntés** (PR
+[#103](https://github.com/wolfcasaba/strumsight/pull/103), squash `83535e5`,
+[ADR 0122](docs/adr/0122-guitar-pro-import-strategy.md)). Implementer: **auto
 router**; independent reviewer: **Codex/Terra**.
 
-**Elkészült:** auditálható, pure-Dart SMF format 0/1 + PPQ decoder és production
-registry wiring; raw timing, tempo/meter/key/marker/lyric mapping; velocity-0,
-running-status, dangling/overlap, drum/polyphony preview, fail-closed malformed,
-SMPTE és MIDI track-limit kezelés. A review F1–F4 javítása megőrzi az azonos
-pitchű átfedéseket és minden representálható meter/key változást.
+**Elkészült:** a stratégia C: a Guitar Pro forrásokat az appon kívül, a user
+által választott eszközzel MusicXML/MXL/MIDI-vé kell konvertálni, majd a már
+auditált import útvonalon beolvasni. A külön Dart feasibility spike
+reprodukálható GP3/GP5/GPX probe-ot, fixture-provenanciát és exact output
+snapshotot tartalmaz; nem kerül production parser, dependency, registry vagy
+félkész támogatási állítás a termékbe. A review egy CI-beli nested-tool import
+feloldási MAJOR-t talált; az `F1` javítás relatív library importtal zárult.
 
-Zöld gate: `tools/round-gate.sh test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart`
-(format/analyze/7 + 6 tests/architecture zöld, merge előtt és után is) + CI
-[30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
-zöld az exact `a0bb7d3` branch-headen. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R12.
+Zöld gate: `tools/round-gate.sh test/features/song_trainer/data/importers`
+(format/analyze/45 teszt/architecture zöld, merge előtt és után is) + CI
+[30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
+zöld az exact `ead6f03` branch-headen. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R13.
 
 ### Previous completed round
 
@@ -671,9 +681,11 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R13 — Guitar Pro feasibility és stratégiai döntés** a következő
-product round. E03-R12 (PR #101) kész; a queue-fájl állapotát továbbra is
-kizárólag a pipeline driver kezeli.
+0. **E03-R14 — Jóváhagyott Guitar Pro út** a következő product round:
+az [R13 ADR 0122](docs/adr/0122-guitar-pro-import-strategy.md) szerinti C ág
+előzetes scope-mérése és őszinte MusicXML/MIDI konverziós UX. A `PREPARED`
+briefet a friss pre-flightnak a mai mainhez és az ADR-hez kell szűkítenie;
+a queue-fájl állapotát továbbra is kizárólag a pipeline driver kezeli.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és

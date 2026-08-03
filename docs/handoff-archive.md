@@ -6,6 +6,30 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E03-R13 — Guitar Pro feasibility és stratégiai döntés (2026-08-03)
+
+E03-R13 [PR #103](https://github.com/wolfcasaba/strumsight/pull/103)-ként
+(`83535e5`) merge-elt. [ADR 0122](adr/0122-guitar-pro-import-strategy.md) a
+C stratégiát rögzíti: a Guitar Pro fájl nem kap appbeli parser- vagy registry
+támogatást; a felhasználó a saját, külső eszközével MusicXML/MXL/MIDI-vé
+konvertálja, majd az E03-R11/R12 auditált importútvonalai dolgozzák fel.
+
+A külön `tool/guitar_pro_feasibility` Dart spike GP3, GP5 és GPX fixture-on
+rögzített probe-snapshotot ad, ezért a döntés nem állít dokumentálatlan
+formátum- vagy platformtámogatást. Az izolált review valódi mutációval
+ellenőrizte a parser output-invariánst, majd F1 MAJOR-ként kimérte, hogy a
+root CI-analyzer nem futtat nested `dart pub get`-et. A javítás a tool saját
+libraryját relatív importtal éri el, így a friss checkout root-analyze lépése
+is feloldja; a standalone tool-teszt megmaradt.
+
+A post-merge gate format → analyze → 45 importer teszt → architecture
+sorrendben zöld. Az exact `ead6f03` branch-head CI
+[30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
+a teljes Flutter suite-ot, randomized property/coverage gate-et és fejlesztői
+APK-t is zöldre futtatta.
+
+---
+
 ## E03-R12 — Standard MIDI importer (2026-08-03)
 
 E03-R12 [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)-ként

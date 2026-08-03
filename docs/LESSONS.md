@@ -3297,3 +3297,22 @@ a valós nested cache struktúrát építi: a korábbi implementáción RED volt
 scope-sértéssel, a javítás után GREEN. Az izolált review mutációs próbája a
 felismerés ideiglenes eltávolításával ismét RED-re fordította, majd a
 visszaállított exact diff teljes routerteszt-sávja zöld lett.
+
+## L86 — A root Flutter analyzernek a beágyazott Dart toolból is fel kell oldania a library-importot (E03-R13, 2026-08-03)
+
+**Mérés.** Az első exact-head CI
+[30838398809](https://github.com/wolfcasaba/strumsight/actions/runs/30838398809)
+root `flutter pub get` után `flutter analyze lib/ test/ tool/`-t futtatott,
+de nem futtatott `dart pub get`-et a `tool/guitar_pro_feasibility/` alatt.
+Ezért a tool bin- és tesztfájlának `package:guitar_pro_feasibility/gp_spike.dart`
+importja 14 analyzer-diagnosztikát adott, noha a standalone tool teszt saját
+package-configgal zöld volt.
+
+**Javítás és bizonyíték.** A két belső tool consumer relatív
+`../lib/gp_spike.dart` importot használ, `avoid_relative_lib_imports` szűk,
+indokolt ignore-jával. Egy friss, izolált checkoutban kizárólag root
+`flutter pub get` + `flutter gen-l10n` után a root analyze és a teljes
+`tools/round-gate.sh test/features/song_trainer/data/importers` zöld; a
+javított exact-head CI [30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
+is zöld lett teljes suite/property/APK evidence-szel. A standalone `dart test`
+változatlanul ellenőrzi a tool saját package-konfigurációját.
