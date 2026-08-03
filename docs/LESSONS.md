@@ -3184,3 +3184,22 @@ MIDI tesztben mért max−1/max/max+1 mátrix követelményét írta. A
 a revízió előtt RED volt a hiányzó path miatt, majd GREEN. Az izolált reviewer
 mutációja az allowlistből eltávolított path-szal ugyanezt a tesztet újra RED-re
 váltotta, tehát az őr nem csak a dokumentáció állítását ismétli.
+
+## L81 — A független review utáni javításnak külön, korlátos modellezési hely kell (E03-R12 H4, 2026-08-03)
+
+**Mérés.** E03-R12 router-state-je `m3_attempts=2`, `terra_calls=1` és zöld
+`FINAL_GATE` után `READY_FOR_REVIEW` volt. A független review négy MAJOR
+leletet adott; a scope-heal után a review-leletes `resume` a hívás előtt
+`STOPPED: task Terra budget is exhausted` állapotba jutott. A GitHub API
+kvótája közben 4989/5000 maradt, a Terra-ledgerben pedig az egyetlen foglalás
+`finished` volt — tehát ez nem átmeneti külső kiesés, hanem router-policy rés.
+
+**Javítás.** Az ADR 0088 módosítása a két M3-kísérletet és minden gate-et
+változatlanul hagyja, de egy pontosan második, kizárólag
+`READY_FOR_REVIEW + review_findings` útból elérhető Terra javító hívást ad.
+A STOPPED/DEFERRED state resetje és a normál `run` továbbra is tiltott.
+
+**Regresszió.** `RouterResumeTest.test_review_findings_get_one_bounded_terra_repair_after_initial_escalation`
+egy már elfogyasztott első Terra-hívás mellett csak explicit review-lelettel
+enged egyetlen második profilt; `RouterConfigTest.test_rejects_invalid_limits`
+az 1-es és 3-as task-limitet is elutasítja.

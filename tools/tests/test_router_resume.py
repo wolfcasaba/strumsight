@@ -1,3 +1,4 @@
+from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
@@ -211,6 +212,73 @@ class RouterResumeTest(unittest.TestCase):
 
         self.assertNotEqual(result.status, RouterStatus.READY_FOR_REVIEW)
         self.assertEqual(model.profiles, [])
+
+    def test_review_findings_get_one_bounded_terra_repair_after_initial_escalation(
+        self,
+    ) -> None:
+        """A real post-review repair cannot be mistaken for a fresh task run.
+
+        E03-R12 consumed two M3 attempts and its initial Terra escalation before
+        the independent review found concrete MAJOR findings.  The repair must
+        receive exactly one additional, review-gated Terra call; a plain run
+        still cannot reopen READY_FOR_REVIEW work without findings.
+        """
+        self.config = replace(
+            self.config,
+            limits=replace(self.config.limits, max_terra_calls_per_task=2),
+        )
+        changed = ScopeAudit(
+            True,
+            ("lib/example.dart",),
+            (),
+            False,
+            "sha256:review-repair-diff",
+        )
+        router, model = self.make_router(
+            [codex_ok()],
+            [gate("pass")],
+            [QuotaStatus("ok", True, True, remaining_percent=80)],
+            audits=[changed],
+        )
+        first = self.state.reserve_terra(
+            self.brief.task_id,
+            daily_limit=self.config.limits.max_automatic_terra_calls_per_utc_day,
+            task_limit=self.config.limits.max_terra_calls_per_task,
+        )
+        self.state.mark_terra_started(first.reservation_id)
+        self.state.mark_terra_finished(first.reservation_id, "READY_FOR_REVIEW")
+        self.state.save_task(
+            self.brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": self.brief.task_id,
+                "brief_hash": self.brief.metadata_hash,
+                "phase": "FINAL_GATE",
+                "status": "READY_FOR_REVIEW",
+                "reason": "final gate passed",
+                "m3_attempts": 2,
+                "terra_calls": 1,
+                "gate_history": [],
+                "baseline_manifest": {
+                    "baseline_head": "baseline",
+                    "untracked_paths": [],
+                    "ignored_paths": [],
+                    "tracked_paths": [],
+                },
+                "terra_reservation": first.reservation_id,
+            },
+        )
+
+        result = router.run(
+            self.brief,
+            self.worktree,
+            resume=True,
+            review_findings="F1 — MAJOR — deterministic parser repair required",
+        )
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, ["terra"])
+        self.assertEqual(self.state.load_task(self.brief.task_id)["terra_calls"], 2)
 
 
 if __name__ == "__main__":

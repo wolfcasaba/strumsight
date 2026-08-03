@@ -14,7 +14,7 @@ default_model = "MiniMax-M3"
 
 [limits]
 max_m3_attempts_per_task = 2
-max_terra_calls_per_task = 1
+max_terra_calls_per_task = 2
 max_automatic_terra_calls_per_utc_day = 3
 terra_reasoning = "medium"
 terra_packet_target_tokens = 40000
@@ -49,6 +49,7 @@ class RouterConfigTest(unittest.TestCase):
 
         self.assertEqual(config.routing.default_engine, "auto")
         self.assertEqual(config.limits.max_m3_attempts_per_task, 2)
+        self.assertEqual(config.limits.max_terra_calls_per_task, 2)
         self.assertEqual(config.runtime.m3_profile, "m3")
         self.assertIn(".git", config.security.protected_paths)
 
@@ -63,6 +64,10 @@ class RouterConfigTest(unittest.TestCase):
     def test_rejects_invalid_limits(self) -> None:
         with self.assertRaises(ConfigError):
             self.load(VALID.replace("max_m3_attempts_per_task = 2", "max_m3_attempts_per_task = 3"))
+        with self.assertRaises(ConfigError):
+            self.load(VALID.replace("max_terra_calls_per_task = 2", "max_terra_calls_per_task = 1"))
+        with self.assertRaises(ConfigError):
+            self.load(VALID.replace("max_terra_calls_per_task = 2", "max_terra_calls_per_task = 3"))
 
     def test_accepts_zero_as_unlimited_automatic_terra_daily_budget(self) -> None:
         config = self.load(

@@ -146,6 +146,29 @@ wrapper-útvonalat. Az ADR 0069 előzetes, feladattípus szerinti motorválaszt�
 és a Claude Code MiniMax harness **csak az `auto` alapértelmezésre nézve
 felülírt**; legacy reprodukcióhoz tovább él.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — egy review-gated Terra javítás
+
+**Mérés.** E03-R12-ben a két M3 megoldási kísérlet és a magas-kockázatú diff
+első Terra-eszkalációja zöld router-gate-tel `READY_FOR_REVIEW`-t adott. Az
+izolált független review ezután négy MAJOR leletet mért; a H3 scope-heal csak a
+közös MIDI track-limit ownerét oldotta fel. A következő szabályos
+`resume(review_findings)` a korábbi, taskonkénti egy Terra-hívás miatt még a
+leletek továbbítása előtt `STOPPED: task Terra budget is exhausted` lett.
+
+**Döntés.** A taskonkénti Terra-keret pontosan két hívás: az első a meglévő
+M3→Terra eszkaláció, a második kizárólag egy már `READY_FOR_REVIEW` állapotú
+tasknak, nem üres független review-leletet tartalmazó `resume` útján érhető el.
+Egy sima `run` nem nyithatja újra a terminális review-állapotot, STOPPED vagy
+DEFERRED task továbbra sem kap új hívást, a globális UTC-napi ledger pedig
+mindkét foglalást auditálja. Nem változik a két M3-kísérlet, a scope-audit, a
+gate vagy a CI-kapu; a második Terra csak a reviewer által konkrétan mért
+BLOCKER/MAJOR javítására szolgál.
+
+**Regresszió.** `RouterResumeTest.test_review_findings_get_one_bounded_terra_repair_after_initial_escalation`
+egy megmaradt első Terra-foglalás, két elfogyasztott M3-kísérlet és explicit
+review-lelet mellett pontosan egy második Terra-profilt, majd `terra_calls=2`
+állapotot követel. A config-teszt a 2-n kívüli task-limitet fail-closed elutasítja.
+
 ## Következmények
 
 - A feladatok nagy része MiniMaxon marad, a Terra-fogyasztás objektív és

@@ -102,8 +102,8 @@ def load_config(path: Path) -> RouterConfig:
         raise ConfigError("default_provider must be minimax")
     if _integer(limits, "max_m3_attempts_per_task") != 2:
         raise ConfigError("max_m3_attempts_per_task must be exactly 2")
-    if _integer(limits, "max_terra_calls_per_task") != 1:
-        raise ConfigError("max_terra_calls_per_task must be exactly 1")
+    if _integer(limits, "max_terra_calls_per_task") != 2:
+        raise ConfigError("max_terra_calls_per_task must be exactly 2")
     if _string(limits, "terra_reasoning") != "medium":
         raise ConfigError("terra_reasoning must be medium")
     return RouterConfig(
@@ -115,7 +115,7 @@ def load_config(path: Path) -> RouterConfig:
         ),
         limits=LimitsConfig(
             max_m3_attempts_per_task=2,
-            max_terra_calls_per_task=1,
+            max_terra_calls_per_task=2,
             max_automatic_terra_calls_per_utc_day=_integer(
                 limits, "max_automatic_terra_calls_per_utc_day", minimum=0
             ),
