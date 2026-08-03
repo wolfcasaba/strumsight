@@ -19,7 +19,6 @@ allowed_paths = [
   "test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3",
   "test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5",
   "test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx",
-  "docs/adr/0122-guitar-pro-import-strategy.md",
   "docs/rounds/e03-r13-guitar-pro-feasibility.md",
 ]
 gate_tests = [
@@ -56,7 +55,7 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - MusicXML/MXL és MIDI biztonságos alternatív utak rendelkezésre állnak.
 - Az ADR exact sorszáma az aktív ADR-katalógus pre-flight auditjában dől el.
 
-**2026-08-03 pre-flight revízió (baseline `315b2b7`):** `songImporterRegistryProvider`
+**2026-08-03 pre-flight revízió (baseline `46e2a3d`):** `songImporterRegistryProvider`
 (`lib/features/song_trainer/application/song_trainer_providers.dart:141`) ma
 `NativeJsonImporter`, `MusicXmlImporter`, `MxlImporter` és `MidiImporter`
 példányokat ad az egyetlen production `ImporterRegistry`-nek; Guitar Pro
@@ -64,9 +63,14 @@ importer nem létezik. A `SongSourceType.guitarPro` enum-tag előre lefoglalt
 provenance-kód, nem aktív importképesség. A tényleges owner-mérés ezért nem
 igényel production registry- vagy domain-változást. A következő szabad
 ADR-sorszám az `0122`; a pre-flight az exact
-`docs/adr/0122-guitar-pro-import-strategy.md` utat hozzáadta ehhez a körhöz.
-Az izolált spike kizárólag saját, minimális, provenance-olt technikai
-fixtureket használhat; nem adhat hozzá production dependencyt vagy adaptert.
+`docs/adr/0122-guitar-pro-import-strategy.md` utat a §4 emberi táblájához
+adta, de az implementer `ai-router.allowed_paths` listájából kikerült: az ADR
+pre-flight-artefaktum, nem modell-írható fájl. Az R13/H6 nested-Dart-cache
+heal (`46e2a3d`) a router scope-auditját kifejezetten erre az izolált tool
+cache-re javította; a meglévő, jelzett modelldiff ugyanazzal a task state-tel
+folytatható. Az izolált spike kizárólag saját, minimális, provenance-olt
+technikai fixtureket használhat; nem adhat hozzá production dependencyt vagy
+adaptert.
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
