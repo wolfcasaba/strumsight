@@ -1,6 +1,6 @@
 # E03-R13 — Guitar Pro feasibility és stratégiai döntés
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **IMPLEMENTED** (2026-08-03, pre-flight baseline: `origin/main` @ `315b2b7`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 13; §17
 - **Branch:** `codex/e03-r13-guitar-pro-feasibility`
 - **Előfeltétel:** E03-R12 merge
@@ -55,6 +55,23 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - MusicXML/MXL és MIDI biztonságos alternatív utak rendelkezésre állnak.
 - Az ADR exact sorszáma az aktív ADR-katalógus pre-flight auditjában dől el.
 
+**2026-08-03 pre-flight revízió (baseline `46e2a3d`):** `songImporterRegistryProvider`
+(`lib/features/song_trainer/application/song_trainer_providers.dart:141`) ma
+`NativeJsonImporter`, `MusicXmlImporter`, `MxlImporter` és `MidiImporter`
+példányokat ad az egyetlen production `ImporterRegistry`-nek; Guitar Pro
+importer nem létezik. A `SongSourceType.guitarPro` enum-tag előre lefoglalt
+provenance-kód, nem aktív importképesség. A tényleges owner-mérés ezért nem
+igényel production registry- vagy domain-változást. A következő szabad
+ADR-sorszám az `0122`; a pre-flight az exact
+`docs/adr/0122-guitar-pro-import-strategy.md` utat a §4 emberi táblájához
+adta, de az implementer `ai-router.allowed_paths` listájából kikerült: az ADR
+pre-flight-artefaktum, nem modell-írható fájl. Az R13/H6 nested-Dart-cache
+heal (`46e2a3d`) a router scope-auditját kifejezetten erre az izolált tool
+cache-re javította; a meglévő, jelzett modelldiff ugyanazzal a task state-tel
+folytatható. Az izolált spike kizárólag saját, minimális, provenance-olt
+technikai fixtureket használhat; nem adhat hozzá production dependencyt vagy
+adaptert.
+
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
 
@@ -97,6 +114,7 @@ Bizonyíték-alapú, licence- és platformtudatos A/B/C Guitar Pro stratégia el
 | `test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3` | ÚJ | technikai fixture |
 | `test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5` | ÚJ | technikai fixture |
 | `test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx` | ÚJ | technikai fixture |
+| `docs/adr/0122-guitar-pro-import-strategy.md` | ÚJ | a §5 által előírt stratégiai ADR |
 | `docs/rounds/e03-r13-guitar-pro-feasibility.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
@@ -115,10 +133,10 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 
 ## 6. Acceptance criteria
 
-- [ ] Opciók licence, GP verzió, Android/iOS, offline, build size, fidelity, security, maintenance és effort szerint összevetve.
-- [ ] Spike output reprodukálható; track/tuning/measure/note/string-fret/tempo/meter expected értékekkel összevetett.
-- [ ] Az ADR egyetlen A/B/C döntést ad, rejection rationale és R14 activation contracttal.
-- [ ] Nincs production feature vagy registry módosítás; licence bizonytalanság esetén A/B nem választható.
+- [x] Opciók licence, GP verzió, Android/iOS, offline, build size, fidelity, security, maintenance és effort szerint összevetve.
+- [x] Spike output reprodukálható; track/tuning/measure/note/string-fret/tempo/meter expected értékekkel összevetett.
+- [x] Az ADR egyetlen A/B/C döntést ad, rejection rationale és R14 activation contracttal.
+- [x] Nincs production feature vagy registry módosítás; licence bizonytalanság esetén A/B nem választható.
 
 ### Kötelező megkülönböztető mátrix
 
@@ -165,12 +183,36 @@ Javasolt commit: `research(song-import): decide Guitar Pro import strategy`.
 **STOP:** listán kívüli javítás, bizonyítatlan fallback vagy gyengített mérce
 helyett dokumentált brief-revízió szükséges.
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Módosítások:**
+
+- `tool/guitar_pro_feasibility/`: isolated Dart package, explicit alphaTab
+  runtime path, CLI és four-test probe (GP3/GP5/GPX fidelity + malformed input).
+- `test/fixtures/song_trainer/guitar_pro/`: provenance-olt, hash-elt technical
+  fixturek és expected valuek.
+- `docs/research/epic-03-guitar-pro-feasibility.md`: licence/platform/security
+  matrix és az egyetlen C döntés.
+- `docs/adr/0122-guitar-pro-import-strategy.md`: C decision, rejection
+  rationale és R14 activation contract.
+
+**Tényleges ellenőrzés:**
+
+```text
+RED: dart test tool/guitar_pro_feasibility/test/gp_spike_test.dart
+     → missing gp_spike.dart symbols (expected test-first failure).
+
+GREEN: dart pub get; ALPHATAB_MODULE_PATH=<alphaTab-1.8.4-package> dart test
+     tool/guitar_pro_feasibility/test/gp_spike_test.dart → 4 tests passed.
+     ALPHATAB_MODULE_PATH=<alphaTab-1.8.4-package> dart run
+     tool/guitar_pro_feasibility/bin/run_spike.dart <GP3> <GP5> <GPX>
+     → all three parsed; documented values match the fixture expectations.
+```
+
+`tools/round-gate.sh test/features/song_trainer/data/importers` lefutott:
+format, analyze, 45 importer teszt és architecture mind zöld. A tool saját
+runtime-ja nem kerülhet production `pubspec`-be. Nem futtatott Android/iOS
+release build: helyben nincs Android SDK, a kör pedig nem dispatch-el CI-t.
 
 ## 11. Review — a független reviewer tölti ki
 
