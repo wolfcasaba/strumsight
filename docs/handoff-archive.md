@@ -6,6 +6,33 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E03-R12 — Standard MIDI importer (2026-08-03)
+
+E03-R12 [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)-ként
+(`9484a4e`) merge-elt. [ADR 0121](adr/0121-midi-import-boundary.md) a
+csomagmentes, adat-rétegű SMF 0/1 + PPQ subsetet rögzíti: a decoder a header,
+chunk, VLQ, running status és releváns meta/channel eventeket kontrollált
+failure-ként kezeli; SMPTE explicit unsupported. A production registryben
+`MidiImporter` regisztrált, a preview a MIDI channel/program/duration/drum és
+polyphony adatot adja, raw timing megőrzésével.
+
+A független review kezdetben négy MAJOR leletet mért: format-0 több track,
+azonos pitchű átfedés adatvesztése, későbbi meter/key változások eldobása és a
+közös MIDI track-limit owner hiánya. A scope-heal és a router-review repair
+ezeket lezárta: format-0 pontosan egy MTrk, aktív-note FIFO + warning, teljes
+representálható meter/key map és `ImportLimits.maxMidiTrackCount` stable
+failure code-dal. Az APPROVED review mutációja a format-0 őr eltávolításával a
+regressziós tesztet pirosra váltotta, majd visszaállt.
+
+Mind a merge előtti, izolált clone, mind a post-merge gate format → analyze →
+7 importer teszt → 6 malformed teszt → architecture sorrendben zöld volt.
+Az exact `a0bb7d3` branch-head CI
+[30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
+a teljes Flutter suite-ot, randomized property/coverage gate-et és fejlesztői
+APK-t is zöldre futtatta.
+
+---
+
 ## E03-R11 — MusicXML és MXL importer (2026-08-03)
 
 E03-R11 [PR #95](https://github.com/wolfcasaba/strumsight/pull/95)-ként

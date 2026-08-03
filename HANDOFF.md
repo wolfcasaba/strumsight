@@ -4,13 +4,12 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R12 H8 self-heal — non-force brief-baseline recovery).**
-> E03-R11 is merged as [PR #95](https://github.com/wolfcasaba/strumsight/pull/95)
-> (`47baded`). Its exact pre-merge branch head `c79e9e0` has the identical tree,
-> and [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
-> is green (full suite, randomized property gate and APK). The independent
-> post-merge gate and boundary mutation review are green; E03-R12 resumes only
-> in a fresh pipeline session.
+> (E03-R12 merged).** E03-R12 is merged as [PR #101](https://github.com/wolfcasaba/strumsight/pull/101)
+> (`9484a4e`). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
+> is green for exact pre-merge branch head `a0bb7d3` (full Flutter suite,
+> randomized property/coverage gate and development APK); the independent
+> review and post-merge local gate are also green. The following HEAL notes are
+> historical recovery evidence from before the product merge.
 > **HEAL E03-R12/H6 (PR #100):** the R12 review-finding `resume` had retained
 > baseline `ac31e3f` although the branch was refreshed to `f1612af` by the
 > H3/H4/H8 merges. The locked `rebase-baseline` recovery was run on the real
@@ -507,13 +506,12 @@
 
 ## 4. Current branch
 
-`main` @ [PR #95](https://github.com/wolfcasaba/strumsight/pull/95), squash
-`47baded` (E03-R11). [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
-is **success** for exact branch `headSha` `c79e9e0`; `c79e9e0^{tree}` equals
-`47baded^{tree}`. It includes the full Flutter suite, randomized property gate
-and development APK. The independent post-merge gate is green, and the final
-review addendum is **APPROVED** in
-[`e03-r11-musicxml-mxl-importer-review.md`](docs/reviews/e03-r11-musicxml-mxl-importer-review.md).
+`main` @ [PR #101](https://github.com/wolfcasaba/strumsight/pull/101), squash
+`9484a4e` (E03-R12). [Build Android APK 30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
+is **success** for exact branch `headSha` `a0bb7d3`. It includes the full
+Flutter suite, randomized property/coverage gate and development APK. The
+independent post-merge gate is green, and the final review is **APPROVED** in
+[`e03-r12-midi-importer-review.md`](docs/reviews/e03-r12-midi-importer-review.md).
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -586,23 +584,22 @@ review addendum is **APPROVED** in
 
 ## 5. Last completed round
 
-**E03-R11 — MusicXML és MXL importer** (PR
-[#95](https://github.com/wolfcasaba/strumsight/pull/95), squash `47baded`,
-[ADR 0120](docs/adr/0120-musicxml-mxl-import-boundary.md)). Implementer:
-**auto router**; independent reviewer: **Codex/Terra**.
+**E03-R12 — Standard MIDI importer** (PR
+[#101](https://github.com/wolfcasaba/strumsight/pull/101), squash `9484a4e`,
+[ADR 0121](docs/adr/0121-midi-import-boundary.md)). Implementer: **auto
+router**; independent reviewer: **Codex/Terra**.
 
-**Elkészült:** biztonságos MusicXML és MXL import közvetlen `xml`/`archive`
-adapter-boundaryval; multi-part note-track és immutable part-preview contract;
-deterministic meter/tempo/pickup/chord/tie/lyric/marker mapping; egyszeri
-unsupported-notation warning; valamint path, symlink, duplicate, nested archive,
-container-root és archive budget fail-closed védelem. A production registry
-MusicXML és MXL importert is regisztrál.
+**Elkészült:** auditálható, pure-Dart SMF format 0/1 + PPQ decoder és production
+registry wiring; raw timing, tempo/meter/key/marker/lyric mapping; velocity-0,
+running-status, dangling/overlap, drum/polyphony preview, fail-closed malformed,
+SMPTE és MIDI track-limit kezelés. A review F1–F4 javítása megőrzi az azonos
+pitchű átfedéseket és minden representálható meter/key változást.
 
-Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart test/features/song_trainer/data/importers/mxl_security_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart`
-(format/analyze/8 + 5 + 6 tests/architecture zöld) + CI
-[30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
-zöld az exact `c79e9e0` branch-headen, amelynek fája a squash-mergével azonos.
-Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R11.
+Zöld gate: `tools/round-gate.sh test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart`
+(format/analyze/7 + 6 tests/architecture zöld, merge előtt és után is) + CI
+[30833752720](https://github.com/wolfcasaba/strumsight/actions/runs/30833752720)
+zöld az exact `a0bb7d3` branch-headen. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R12.
 
 ### Previous completed round
 
@@ -666,12 +663,9 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R12 — Standard MIDI importer** a következő product round; nem része
-ennek a sessionnek. E03-R11 (PR #95) kész. Az E03-R12/H3 scope-revízió
-(PR #97) az `import_limits.dart` ownerét és a MIDI track-count határmátrixot
-rögzíti; merge után a pipeline ugyanazt az R12 router-taskot a nyitott F1–F4
-review findingokkal folytatja. A queue-fájl állapotát továbbra is kizárólag a
-pipeline driver kezeli.
+0. **E03-R13 — Guitar Pro feasibility és stratégiai döntés** a következő
+product round. E03-R12 (PR #101) kész; a queue-fájl állapotát továbbra is
+kizárólag a pipeline driver kezeli.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és

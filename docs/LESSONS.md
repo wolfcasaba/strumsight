@@ -3265,3 +3265,15 @@ resume nem fut. Kézi JSON-szerkesztés és state-reset tiltott.
 `PipelineIntegrationTest.test_selfheal_prompt_recovers_a_stale_h6_baseline_before_router_resume`
 a H6 parancsot, a `READY_FOR_REVIEW` állapotot és a tiltott kézi recoveryket
 kötelezővé teszi; a korábbi prompttal RED, ezzel a szerződéssel GREEN.
+
+## L84 — A review-artefaktumot az exact-head CI előtt kell rögzíteni (E03-R12, 2026-08-03)
+
+**Mérés.** Az R12 korábbi `docs/reviews/e03-r12-midi-importer-review.md`
+fájlában négy Markdown hard-break trailing whitespace volt. A review frissítése
+után `git diff --check` csak a worktree-változást ellenőrizte; a
+`git diff --check <base>...HEAD` még a commit előtti, régi review-fát mérte.
+
+**Tanulság.** A jóváhagyó review-t előbb explicit commitban kell rögzíteni,
+majd újra kell dispatch-elni a CI-t az új exact `headSha`-ra. A range-level
+`git diff --check <base>...HEAD` csak ezután lehet merge-evidence; a worktree
+ellenőrzés nem helyettesíti.
