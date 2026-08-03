@@ -1,6 +1,6 @@
 # E03-R15 — Song Library V2 és import UI
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING — H3 pre-flight scope conflict** (2026-08-03, measured `origin/main` @ `6957702`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 15; §27.1–27.3, §28
 - **Branch:** `codex/e03-r15-song-library-import-ui`
 - **Előfeltétel:** E03-R14 merge
@@ -73,6 +73,44 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### 2026-08-03 — measured H3
+
+- `origin/main` és a helyi HEAD egyaránt `6957702`; E03-R14 merge commitja a
+  historyban jelen van (`6957702 chore(pipeline): E03-R14 done`). Nincs korábbi
+  R15 branch, review vagy implementer diff.
+- A mai `SongImportScreen` kizárólag az R14 `GuitarProConversionGuidance`
+  statikus widgetet rendereli
+  (`lib/features/song_trainer/presentation/screens/song_import_screen.dart:1-22`).
+  A SDD szerinti picker → probe → preview → confirm UI ezért nem valósítható
+  meg csupán a screen módosításával.
+- Az import valódi inputját a `FilePickerAdapter.pickSongFile()` absztrakció
+  definiálja (`lib/features/song_trainer/data/importers/file_picker_adapter.dart:7-10`),
+  de a repóban nincs concrete adapter vagy `file_picker` dependency (`rg -n
+  'FilePickerAdapter|file_picker|pickSongFile' pubspec.yaml pubspec.lock lib test`).
+  Ennek production megvalósítása nem kerülhet widgetbe, és ez a data-boundary
+  fájl nincs a §4 listán.
+- A `SongImportController` a `songRepositoryProvider`-t olvassa
+  (`application/song_trainer_providers.dart:166-175`), amely jelenleg
+  szándékosan `StateError`-t dob bootstrap override nélkül
+  (`application/song_trainer_providers.dart:87-93`). A tényleges app
+  `ProviderScope`-ja csak config, key-value store, diagnostics és onboarding
+  override-ot ad (`lib/main.dart:31-42`); a V2 route flagelt bekötése tehát
+  productionben elérhetetlen repositoryt aktiválna. `lib/main.dart` és a
+  bootstrap ownership nincs a §4 listán.
+- A kötelező, merge előtti review artefaktum pontos útvonala
+  `docs/reviews/e03-r15-song-library-import-ui-review.md`, de sem §4, sem az
+  `ai-router.allowed_paths` nem engedi — ez ugyanaz a mért metadata-hiba,
+  amelyet L88 az R14-nél rögzített.
+
+**Feloldás:** ADR 0123 rögzíti, hogy interaktív V2 library/import route csak
+production repository- és picker-boundary-val aktiválható; fake nem válhat
+production fallbackké. A szükséges `data/importers` picker owner, app/bootstrap
+wiring, a kötelező review-útvonal és a hozzájuk tartozó tesztek listán kívüliek.
+Az AGENTS.md §15 autonómia H3 szabálya szerint ez a round nem tágíthatja a
+scope-ot: router dispatch, implementáció, CI és merge nem indul. A következő
+self-heal/pre-flight feladata egy jóváhagyott, tételes scope-revízió és annak
+metadata-regressziója.
 
 ## 1. Cél
 
