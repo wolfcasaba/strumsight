@@ -197,10 +197,52 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+- `application/import/song_import_controller.dart`: operation-ID-val védett,
+  explicit state machine; cancel/retry/dispose minden terminal útja leválasztja
+  az operationt és bezárja a workspace-t a késő callback előtt; a state stream
+  Riverpod fogyasztóknak is csak a biztonságos, kis state payloadot adja át.
+- `application/import/song_import_state.dart`, `song_import_effect.dart` és
+  `import_preview.dart`: immutable, byte/path/platformobjektum-mentes state és
+  külön picker/siker effect contract.
+- `data/importers/importer_registry.dart` és `import_limits.dart`:
+  content-probe alapú választás, source/event/wall-time limitek stabil
+  failure code-okkal; az első regisztrált importer a `NativeJsonImporter`.
+- `data/importers/import_workspace.dart` és `file_picker_adapter.dart`:
+  operation-owned, idempotensen törlődő workspace, relatív-path és symlink
+  escape tiltással, valamint pluginmentes picker porttal.
+- `song_trainer_providers.dart`: auto-dispose controller, registry és a
+  `<songs-root>/import-workspace` production root wiringja.
+- A controller-, integration- és workspace-tesztek mérik a selecting cancelt,
+  stale callbacket, import közbeni cancel cleanupot, unsupported probe-ot,
+  a teljes happy-path phase-sorrendet, native atomikus committot és
+  traversal/byte-limit határokat.
+
+TDD bizonyíték: a workspace RED futásakor a hiányzó `ImportWorkspace` és
+`ImportLimits` importok miatt a teszt compile-time hibával állt meg; a
+minimális implementation után a három workspace-teszt zöld lett. A controller
+RED futásban a nem támogatott probe elvárt `songImport.unsupported` failure
+code-ja helyett `songImport.unsupportedContent` érkezett; a registry az első
+konkrét probe failure code megőrzésével zöldült. Ezután:
+
+```text
+flutter test test/features/song_trainer/application/import \
+  test/features/song_trainer/data/importers/import_workspace_test.dart
+→ 8 tests passed
+
+flutter analyze
+→ No issues found!
+```
+
+Eltérés nincs. Kötelező lokális gate ténylegesen lefutott:
+
+```text
+tools/round-gate.sh test/features/song_trainer/application/import test/features/song_trainer/data/importers/import_workspace_test.dart
+→ format zöld; analyze zöld; application/import 5 test zöld;
+  import_workspace 3 test zöld; architecture zöld.
+```
+
+Nem futtatott ellenőrzés: full suite, property gate és APK CI — ezek az
+orchestrátor exact-head CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
