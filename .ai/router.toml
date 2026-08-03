@@ -7,7 +7,9 @@ default_model = "MiniMax-M3"
 
 [limits]
 max_m3_attempts_per_task = 2
-max_terra_calls_per_task = 1
+# Egy első, magas-kockázatú eszkaláció után a független review konkrét
+# BLOCKER/MAJOR lelete egyetlen, review-gated Terra javító hívást kaphat.
+max_terra_calls_per_task = 2
 # 0 = korlátlan; pozitív érték = ideiglenes, véges UTC-napi vészkorlát.
 max_automatic_terra_calls_per_utc_day = 0
 terra_reasoning = "medium"
