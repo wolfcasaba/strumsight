@@ -3224,3 +3224,25 @@ headbe. `PipelineIntegrationTest.test_selfheal_prompt_preserves_current_main_sco
 `Epic3BriefMetadataTest.test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
 őrzi, hogy a H6 alatt is csak a §4 emberi táblában szereplő ADR maradjon ki
 az `ai-router.allowed_paths` listájából.
+
+## L83 — A merge-elt self-heal driftet a H6 recoverynek kell baseline-ná emelnie, mielőtt újra `resume`-ol (E03-R12, 2026-08-03)
+
+**Mit mértünk.** Az E03-R12 állapotában a tárolt baseline `ac31e3f` maradt,
+míg a H3/H4/H8 merge-ekkel frissített körbranch `f1612af` lett. A következő
+review-findings `resume` ezért `HEAD changed from baseline` mellett a
+`.ai/router.toml`, `tools/ai_router/config.py`, `HANDOFF.md`, `docs/LESSONS.md`
+és a pipeline-dokumentumok változását product-modelldiffként jelentette. A
+valódi, piszkos MIDI importer/test diff a brief allowlistjében volt, de a
+router a korábbi baseline miatt el sem jutott annak újra-auditálásáig.
+
+**Javítás.** A self-heal prompt és ADR 0112 most a megállt kör worktree-jén
+kötelező `rebase-baseline --task <round> --worktree <round-worktree>` sorrendet
+ír elő a review-findings `resume` előtt. A router saját, zárolt recovery-je a
+friss commitolt headet baseline-ná teszi, majd az uncommittolt product diffet
+teljes allowlist/protected-path audit alatt hagyja; `READY_FOR_REVIEW` nélkül a
+resume nem fut. Kézi JSON-szerkesztés és state-reset tiltott.
+
+**Regresszió.**
+`PipelineIntegrationTest.test_selfheal_prompt_recovers_a_stale_h6_baseline_before_router_resume`
+a H6 parancsot, a `READY_FOR_REVIEW` állapotot és a tiltott kézi recoveryket
+kötelezővé teszi; a korábbi prompttal RED, ezzel a szerződéssel GREEN.

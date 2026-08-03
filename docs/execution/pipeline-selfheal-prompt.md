@@ -118,6 +118,30 @@ Ha a konfliktus nem kizárólag ez az egy brief, vagy a `main` oldal nem
 tartalmazza egyértelműen a szükséges scope-revíziót, ne alkalmazz generikus
 feloldást: `outcome=escalate` a konfliktuslistával és a mért eltéréssel.
 
+### H6 — merge-elt self-heal után elavult router baseline
+
+Ha a tényleges router-hiba egyszerre tartalmazza a `HEAD changed from baseline`
+szöveget és a megállt kör **engedélyezetlen/protected** listáján csak olyan,
+közben merge-elt self-heal vagy pipeline-utak szerepelnek, amelyek nem a
+termék-munkafa piszkos diffjéből jönnek, ez nem modell scope-sértés. Előbb
+ellenőrizd `git diff --name-status <tárolt-baseline>..HEAD`-del, hogy ezek
+committolt upstream driftet jelentenek; az uncommittolt product diffnek továbbra
+is a brief allowlistjében kell maradnia.
+
+Ilyenkor kizárólag a router saját, zárolt recovery-jét futtasd a **megállt kör
+munkapéldányán** (nem a heal worktree-n):
+
+```bash
+python3 tools/model-router.py rebase-baseline --task {{ROUND}} --worktree <kör-worktree>
+```
+
+Csak a `READY_FOR_REVIEW` eredmény és a változatlan M3/Terra számlálók után
+hívhatod ugyanazon a kör-worktree-n az `ai-router-round.sh resume` parancsot.
+A `rebase-baseline` a jelenlegi HEAD-re teszi a baseline-t, de az uncommittolt
+product diffet teljes allowlist- és protected-path audit alatt hagyja; kézi
+JSON-szerkesztés vagy state-reset tilos. Ha a recovery scope-auditja nem zöld,
+vagy a driftben nem kizárólag igazolt upstream út szerepel, `outcome=escalate`.
+
 ## 5. C osztály: külső, átmeneti akadály
 
 Ne találj ki kódjavítást oda, ahol nincs hiba. Ellenőrizd a szolgáltatás
