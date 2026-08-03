@@ -4,7 +4,8 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H3 — scope correction ready to merge).** E03-R10 (PR #86)
+> (HEAL E03-R11/H3 — multipart preview-contract scope correction prepared for
+> review).** E03-R10 (PR #86)
 > is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
 > application flow, trusted importer registry, bounded operation workspace and
@@ -19,7 +20,14 @@
 > prevents recurrence. The router test suite is locally green (157 passed,
 > 53 subtests) and exact-head Router CI
 > [30798970431](https://github.com/wolfcasaba/strumsight/actions/runs/30798970431)
-> is green; after squash-merge the pipeline may restart R11. Historical note:
+> is green. **Latest H3 measurement:** the independent R11 review of
+> `multipart_polyphonic.musicxml` found that `parts.first` discarded the second
+> real part and the R10 `SongImportResult` → probe preview → controller
+> contract had no place for the required per-part statistics. The self-heal
+> branch `heal/E03-R11-H3-1` adds only the four measured contract/test paths to
+> the R11 allowlist, with a metadata regression test that was RED before the
+> revision. It remains subject to its own PR and unchanged green gate before
+> the pipeline can restart R11. Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
@@ -443,8 +451,10 @@
 
 ## 4. Current branch
 
-`main` @ [PR #86](https://github.com/wolfcasaba/strumsight/pull/86)
-(E03-R10 import application flow és biztonsági keret, squash-merge `93b46db`).
+`heal/E03-R11-H3-1` @ `128c78a` baseline (HEAL E03-R11/H3 multipart
+preview-contract brief correction; PR még nincs nyitva). A kanonikus `main`
+utolsó merge-e [PR #88](https://github.com/wolfcasaba/strumsight/pull/88),
+`128c78a` (első R11 H3 scope-correction).
 CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
 **success** on the exact branch `headSha` `d693077`; it ran the full suite,
 randomized property gate and development APK build. Independent review:

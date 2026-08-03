@@ -3099,3 +3099,26 @@ A teljes `python -m pytest tools/tests -q` futás 157 passed és 53 subtests
 passed eredménnyel zárult. A normatív ADR-ek a human táblában dokumentálhatók,
 de nem kerülhetnek az implementer allowlistba; az ugyanezzel a futással mért
 R10-eltérést is így javítottuk.
+
+## L76 — A part-preview követelménye a probe-, eredmény- és application-contract ownerét is megnyitja (E03-R11 H3, 2026-08-03)
+
+**Mérés.** Az E03-R11 független review-ja a valós
+`multipart_polyphonic.musicxml` fixture-ben P1 Guitar és P2 Bass partot mért.
+A `musicxml_mapper.dart` a `parts.first` measure-eit dolgozta fel, ezért P2
+elveszett. A mapperen kívül az `SongImportResult`/`ImportProbeResult` owner
+`data/importers/song_importer.dart`, az immutable application preview owner
+`application/import/import_preview.dart`, a probe eredményének állapotba vitele
+pedig `application/import/song_import_controller.dart`; mind a négy hiányzott
+a korábbi R11 allowlistból. A review konkrét F1 MAJOR lelete:
+`docs/reviews/e03-r11-musicxml-mxl-importer-review.md@f4d40f3`.
+
+**Javítás és regresszió.** Az önjavító brief-revízió pontosan ezt a négy
+útvonalat és a `song_import_controller_test.dart` contract-tesztet vette fel,
+de nem nyitotta meg a state/effect/UI fájlokat. Az
+`Epic3BriefMetadataTest.test_r11_scope_includes_measured_production_owners`
+a négy új útvonallal RED volt (`1 failed, 1 passed, 22 subtests passed`), majd
+a revízió után GREEN (`2 passed, 22 subtests passed`). Importer vagy preview
+követelmény briefelésekor a fájlnevek helyett mindig kövesd végig a teljes
+adatutat: probe/result → immutable preview → controller state → a hozzá tartozó
+viselkedési teszt; különben a scope-őr helyesen megállít egy egyébként szükséges
+adatvesztés-javítást.
