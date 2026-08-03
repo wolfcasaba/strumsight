@@ -27,6 +27,7 @@ import 'import/song_import_state.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
 import '../data/importers/musicxml_importer.dart';
+import '../data/importers/midi_importer.dart';
 import '../data/importers/mxl_importer.dart';
 import '../data/importers/song_importer.dart';
 import '../data/local/file_song_asset_repository.dart';
@@ -143,6 +144,7 @@ final songImporterRegistryProvider = Provider<ImporterRegistry>(
       NativeJsonImporter(),
       MusicXmlImporter(),
       MxlImporter(),
+      MidiImporter(),
     ],
   ),
 );

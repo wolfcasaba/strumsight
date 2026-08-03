@@ -213,10 +213,32 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### Implementáció (2026-08-03)
+
+- `midi_parser_adapter.dart`: saját, pure-Dart SMF 0/1 + PPQ byte-decoder;
+  header/chunk, VLQ, channel running status, SysEx és a használt meta-eventek
+  kontrollált typed failurerel térnek vissza. SMPTE explicit unsupported.
+- `midi_importer.dart`, `midi_timeline_mapper.dart`, `midi_track_preview.dart`:
+  note-on/off párosítás (velocity-0 = off), tempóalapú duration, metadata,
+  marker és lyric mapping, track preview/program/channel/drum/polyphony és
+  bounded dangling-note warning. A parser csomag nélküli maradt.
+- `song_importer.dart` és `song_trainer_providers.dart`: a MIDI-specifikus
+  nullable preview mezők és a production `MidiImporter` registry-wiring.
+- A hat binary fixture lefedi a format 0/1, meta-, running-status, drum- és
+  malformed eseteket; a két új importer teszt és provider teszt a szerződést
+  méri.
+
+### Ellenőrzés
+
+- RED: `flutter test test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart`
+  a hiányzó `MidiImporter` importtal elvárt compilation failuret adott.
+- GREEN: ugyanez a három tesztfájl 8 teszttel zöld.
+- `flutter analyze` — `No issues found!`.
+- `tools/round-gate.sh test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart`
+  — format, analyze, mindkét célzott teszt és architecture zöld.
+
+Nem futott: teljes Flutter suite, random property gate és APK CI; ezeket az
+orchestrátor indítja. Commit, push, PR és router-signal nem történt.
 
 ## 11. Review — a független reviewer tölti ki
 
