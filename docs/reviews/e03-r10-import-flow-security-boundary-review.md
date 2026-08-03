@@ -1,8 +1,8 @@
 # E03-R10 — Review
 
-Brief: `docs/rounds/e03-r10-import-flow-security-boundary.md`  
-Diff: `git diff origin/main...codex/e03-r10-import-flow-security-boundary`  
-Reviewer: Codex / Terra (Claude-quota fallback) · Dátum: 2026-08-03  
+Brief: `docs/rounds/e03-r10-import-flow-security-boundary.md`
+Diff: `git diff origin/main...codex/e03-r10-import-flow-security-boundary`
+Reviewer: Codex / Terra (Claude-quota fallback) · Dátum: 2026-08-03
 Verdikt: **APPROVED**
 
 ## Összegzés
