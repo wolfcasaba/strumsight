@@ -21,6 +21,7 @@ E03_R11_MEASURED_OWNER_PATHS = (
 E03_R12_MIDI_TRACK_LIMIT_OWNER_PATH = (
     "lib/features/song_trainer/data/importers/import_limits.dart"
 )
+E03_R14_REVIEW_ARTIFACT_PATH = "docs/reviews/e03-r14-guitar-pro-path-review.md"
 
 
 def section(text: str, number: int) -> str:
@@ -56,6 +57,12 @@ class Epic3BriefMetadataTest(unittest.TestCase):
             E03_R12_MIDI_TRACK_LIMIT_OWNER_PATH,
             brief.metadata.allowed_paths,
         )
+
+    def test_r14_scope_includes_the_mandatory_review_artifact(self) -> None:
+        """H3 regression: R14 must permit its required committed review report."""
+        brief = load_brief(BRIEF_DIR / "e03-r14-guitar-pro-path.md")
+
+        self.assertIn(E03_R14_REVIEW_ARTIFACT_PATH, brief.metadata.allowed_paths)
 
     def test_all_twenty_two_briefs_match_their_committed_scope_and_gate(self) -> None:
         paths = sorted(BRIEF_DIR.glob("e03-r??-*.md"))
