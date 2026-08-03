@@ -26,12 +26,15 @@ abstract final class MidiImportFailureCode {
   static const String sourceTooLarge = 'songImport.midi.sourceTooLarge';
   static const String invalidHeader = MidiParserFailureCode.invalidHeader;
   static const String invalidChunk = MidiParserFailureCode.invalidChunk;
+  static const String unsupportedFormat =
+      MidiParserFailureCode.unsupportedFormat;
   static const String invalidEvent = MidiParserFailureCode.invalidEvent;
   static const String smpteUnsupported = MidiParserFailureCode.smpteUnsupported;
 }
 
 abstract final class MidiImportWarningCode {
   static const String danglingNote = 'songImport.midi.danglingNote';
+  static const String overlappingNote = 'songImport.midi.overlappingNote';
   static const String extensionMismatch = 'songImport.midi.extensionMismatch';
 }
 
@@ -57,11 +60,17 @@ final class MidiImporter implements SongImporter {
     if (parsed.failureCode != null) {
       return ImportProbeResult.failure(parsed.failureCode!);
     }
-    final mapped = _map(parsed.file!, source.displayName, const <int>[]);
-    return ImportProbeResult.recognized(
-      warnings: mapped.warnings,
-      parts: mapped.parts,
-    );
+    try {
+      final mapped = _map(parsed.file!, source.displayName, const <int>[]);
+      return ImportProbeResult.recognized(
+        warnings: mapped.warnings,
+        parts: mapped.parts,
+      );
+    } on ArgumentError {
+      return const ImportProbeResult.failure(
+        MidiImportFailureCode.invalidEvent,
+      );
+    }
   }
 
   @override
@@ -118,7 +127,7 @@ final class MidiImporter implements SongImporter {
       final events = file.tracks[index];
       final name = _text(events, 0x103) ?? 'Track ${index + 1}';
       final notes = <SongNoteEvent>[];
-      final active = <String, MidiEventData>{};
+      final active = <String, List<MidiEventData>>{};
       int? channel;
       int? program;
       var endTick = 0;
@@ -130,18 +139,29 @@ final class MidiImporter implements SongImporter {
         }
         if (event.kind == 0x90 && event.data[1] > 0) {
           channel ??= event.channel;
-          active['${event.channel}-${event.data[0]}'] = event;
+          final samePitch = active.putIfAbsent(
+            '${event.channel}-${event.data[0]}',
+            () => <MidiEventData>[],
+          );
+          if (samePitch.isNotEmpty &&
+              !warnings.contains(MidiImportWarningCode.overlappingNote)) {
+            warnings.add(MidiImportWarningCode.overlappingNote);
+          }
+          samePitch.add(event);
         }
         if (event.kind == 0x80 || (event.kind == 0x90 && event.data[1] == 0)) {
-          final start = active.remove('${event.channel}-${event.data[0]}');
-          if (start != null) {
+          final key = '${event.channel}-${event.data[0]}';
+          final samePitch = active[key];
+          if (samePitch != null && samePitch.isNotEmpty) {
+            final start = samePitch.removeAt(0);
+            if (samePitch.isEmpty) active.remove(key);
             notes.add(_note(index, notes.length, start, event, file, all));
           }
         }
       }
       if (active.isNotEmpty) {
         warnings.add(MidiImportWarningCode.danglingNote);
-        for (final start in active.values) {
+        for (final start in active.values.expand((starts) => starts)) {
           final end = MidiEventData(
             tick: endTick + file.ppq,
             track: index,
@@ -174,8 +194,8 @@ final class MidiImporter implements SongImporter {
       }
     }
     final tempo = _tempo(file, all);
-    final meter = _meter(all);
-    final key = _key(all);
+    final meter = _meter(file, all);
+    final key = _key(file, all);
     final markers = <SongMarker>[
       for (final event in all.where((e) => e.kind == 0x106))
         SongMarker(
@@ -270,36 +290,65 @@ final class MidiImporter implements SongImporter {
     return TempoMap(changes);
   }
 
-  MeterMap _meter(List<MidiEventData> events) {
-    final event = events
-        .where((e) => e.kind == 0x158 && e.data.length >= 2)
-        .firstOrNull;
-    return MeterMap([
-      MeterChange(
-        atMeasure: 0,
-        meter: event == null
-            ? Meter(4, 4)
-            : Meter(event.data[0], 1 << event.data[1]),
-      ),
-    ]);
+  MeterMap _meter(MidiFileData file, List<MidiEventData> events) {
+    var boundaryTick = 0;
+    var boundaryMeasure = 0;
+    var current = Meter(4, 4);
+    final changes = <MeterChange>[
+      MeterChange(atMeasure: boundaryMeasure, meter: current),
+    ];
+    for (final event in events.where(
+      (event) => event.kind == 0x158 && event.data.length >= 2,
+    )) {
+      if (event.data[0] == 0) throw ArgumentError.value(event.data[0]);
+      final numerator = file.ppq * current.numerator * 4;
+      if (numerator % current.denominator != 0) {
+        throw ArgumentError('MIDI meter is not representable in ticks.');
+      }
+      final ticksPerMeasure = numerator ~/ current.denominator;
+      final ticksSinceBoundary = event.tick - boundaryTick;
+      if (ticksSinceBoundary < 0 || ticksSinceBoundary % ticksPerMeasure != 0) {
+        throw ArgumentError('MIDI meter change is not at a measure boundary.');
+      }
+      final atMeasure = boundaryMeasure + ticksSinceBoundary ~/ ticksPerMeasure;
+      final meter = Meter(event.data[0], 1 << event.data[1]);
+      if (atMeasure == changes.last.atMeasure) {
+        changes[changes.length - 1] = MeterChange(
+          atMeasure: atMeasure,
+          meter: meter,
+        );
+      } else {
+        changes.add(MeterChange(atMeasure: atMeasure, meter: meter));
+      }
+      boundaryTick = event.tick;
+      boundaryMeasure = atMeasure;
+      current = meter;
+    }
+    return MeterMap(changes);
   }
 
-  KeyMap _key(List<MidiEventData> events) {
-    final event = events
-        .where((e) => e.kind == 0x159 && e.data.length >= 2)
-        .firstOrNull;
-    final tonic = event == null
-        ? 0
-        : (event.data[0] > 127 ? event.data[0] - 256 : event.data[0]);
-    return KeyMap([
-      KeyChange(
-        at: BeatPosition.zero,
+  KeyMap _key(MidiFileData file, List<MidiEventData> events) {
+    final changes = <KeyChange>[
+      KeyChange(at: BeatPosition.zero, key: KeySignature(0, KeyMode.major)),
+    ];
+    for (final event in events.where(
+      (event) => event.kind == 0x159 && event.data.length >= 2,
+    )) {
+      final tonic = event.data[0] > 127 ? event.data[0] - 256 : event.data[0];
+      final change = KeyChange(
+        at: timeline.beatAt(event.tick, file.ppq),
         key: KeySignature(
           tonic.clamp(-6, 11),
-          event?.data[1] == 1 ? KeyMode.minor : KeyMode.major,
+          event.data[1] == 1 ? KeyMode.minor : KeyMode.major,
         ),
-      ),
-    ]);
+      );
+      if (change.at == changes.last.at) {
+        changes[changes.length - 1] = change;
+      } else {
+        changes.add(change);
+      }
+    }
+    return KeyMap(changes);
   }
 }
 

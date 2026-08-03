@@ -282,6 +282,17 @@ helyett dokumentált brief-revízió szükséges.
 Nem futott: teljes Flutter suite, random property gate és APK CI; ezeket az
 orchestrátor indítja. Commit, push, PR és router-signal nem történt.
 
+### Review-javítás (2026-08-03)
+
+- A review F1–F4 leleteit az engedélyezett shared limit ownerrel együtt
+  javította a router: format 0 pontosan egy MTrk-t követel, az azonos pitchű
+  átfedések megőrződnek és warningot adnak, a meter/key változások teljes
+  timeline-ja megmarad, a MIDI track budget pedig `ImportLimits`-ben,
+  track-parse előtt érvényesül.
+- A router célzottan mindkét MIDI tesztfájlt lefuttatta: 7, illetve 6 teszt
+  zöld; `git diff --check` zöld. A teljes round-gate, a független review és a
+  CI evidence az orchestrátor következő lépése.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e03-r12-midi-importer-review.md`.

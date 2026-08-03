@@ -1,4 +1,5 @@
 import 'song_importer.dart';
+import 'import_limits.dart';
 
 abstract final class MidiParserFailureCode {
   static const String invalidHeader = 'songImport.midi.invalidHeader';
@@ -47,7 +48,9 @@ final class MidiParseResult {
 /// Narrow, observable SMF 0/1 PPQ decoder. It deliberately accepts no other
 /// container or timing variant at the import trust boundary.
 final class MidiParserAdapter {
-  const MidiParserAdapter();
+  const MidiParserAdapter({this.limits = const ImportLimits()});
+
+  final ImportLimits limits;
 
   MidiParseResult parse(List<int> bytes, CancellationToken cancellationToken) {
     try {
@@ -61,9 +64,14 @@ final class MidiParserAdapter {
       final format = _u16(bytes, 8);
       final count = _u16(bytes, 10);
       final division = _u16(bytes, 12);
-      if (format > 1 || count == 0) {
+      if (format > 1 || count == 0 || (format == 0 && count != 1)) {
         return const MidiParseResult.failure(
           MidiParserFailureCode.unsupportedFormat,
+        );
+      }
+      if (count > limits.maxMidiTrackCount) {
+        return const MidiParseResult.failure(
+          ImportLimitFailureCode.midiTrackCountExceeded,
         );
       }
       if (division & 0x8000 != 0) {

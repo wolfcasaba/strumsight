@@ -176,6 +176,35 @@ void main() {
       );
     },
   );
+
+  test('enforces the shared MIDI track budget before parsing tracks', () {
+    const parser = MidiParserAdapter(
+      limits: ImportLimits(maxMidiTrackCount: 2),
+    );
+
+    final belowLimit = parser.parse(
+      _midi(format: 1, tracks: <List<int>>[_endOfTrack]),
+      const NeverCancelledToken(),
+    );
+    final atLimit = parser.parse(
+      _midi(format: 1, tracks: <List<int>>[_endOfTrack, _endOfTrack]),
+      const NeverCancelledToken(),
+    );
+    final aboveLimit = parser.parse(
+      _midi(
+        format: 1,
+        tracks: <List<int>>[_endOfTrack, _endOfTrack, _endOfTrack],
+      ),
+      const NeverCancelledToken(),
+    );
+
+    expect(belowLimit.file, isNotNull);
+    expect(atLimit.file, isNotNull);
+    expect(
+      aboveLimit.failureCode,
+      ImportLimitFailureCode.midiTrackCountExceeded,
+    );
+  });
 }
 
 final class _CancelledToken implements CancellationToken {
@@ -190,3 +219,28 @@ ImportSourceFile _source(String name, List<int> bytes) => ImportSourceFile(
   byteLength: bytes.length,
   openRead: () => Stream<List<int>>.value(bytes),
 );
+
+const List<int> _endOfTrack = <int>[0, 0xff, 0x2f, 0];
+
+List<int> _midi({required int format, required List<List<int>> tracks}) =>
+    <int>[
+      ...'MThd'.codeUnits,
+      0,
+      0,
+      0,
+      6,
+      0,
+      format,
+      0,
+      tracks.length,
+      1,
+      0xe0,
+      for (final track in tracks) ...<int>[
+        ...'MTrk'.codeUnits,
+        0,
+        0,
+        0,
+        track.length,
+        ...track,
+      ],
+    ];
