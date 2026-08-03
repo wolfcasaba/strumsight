@@ -143,6 +143,23 @@ után a perzisztált `brief_hash`-t is az éppen auditált brief hashére állí
 Nem reseteli a kísérletszámokat vagy a Terra reservationt, és nem kerüli meg
 az allowlist- vagy baseline-őrt; scope-hiba továbbra is fail-closed.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — H6 recovery a merge-elt infrastruktúra-drift után
+
+Mérés: E03-R12 review-javító `resume`-ja a perzisztált `ac31e3f` baseline-ról
+futott, miközben a körbranch a H3/H4/H8 self-heal merge-ek után `f1612af`-en
+állt. A `audit_scope` ezért a merge-elt `.ai/router.toml`, pipeline- és router
+utakat modellváltozásként jelölte (`HEAD changed from baseline`), és a valódi,
+engedélyezett MIDI javító diffet sem tudta újra auditálni.
+
+Ilyen mért állapotban az önjavító eljárás előbb a megállt kör worktree-jén
+kötelezően a `model-router.py rebase-baseline --task <round> --worktree
+<round-worktree>` operátori utat használja. Ez a jelenlegi commitolt HEAD-et
+teszi baseline-ná, de a megőrzött uncommittolt termékdiffet teljes allowlist és
+protected-path audit alatt tartja. Csak `READY_FOR_REVIEW` és megőrzött
+attempt/ledger után futtatható újra a review-findings `resume`; kézi state
+szerkesztés vagy reset nem megengedett. A scope-hibás recovery változatlanul
+fail-closed.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
