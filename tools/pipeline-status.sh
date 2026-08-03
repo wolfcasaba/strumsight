@@ -79,7 +79,15 @@ case "${1:-}" in
       E[0-9][0-9]-R[0-9][0-9]) ;;
       *) echo "PIPELINE_ROUND=E##-R## kötelező a router halt átadásához" >&2; exit 2 ;;
     esac
-    case "$halt_summary" in *$'\n'*|*$'\r'*) echo "a halt-összegzés egysoros kell legyen" >&2; exit 2 ;; esac
+    halt_summary=$(printf '%s' "$halt_summary" | python3 -c '
+import re, sys
+value = sys.stdin.read()
+value = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+)\S+", r"\1[REDACTED]", value)
+value = re.sub(r"(?i)\b(MINIMAX_API_KEY|OPENAI_API_KEY|CODEX_API_KEY|API_KEY|TOKEN)\s*=\s*\S+", r"\1=[REDACTED]", value)
+value = re.sub(r"\bsk-[A-Za-z0-9_-]{20,}\b", "[REDACTED]", value)
+print(" ".join(value.split())[:500])
+')
+    [ -n "$halt_summary" ] || halt_summary="[REDACTED]"
     mkdir -p "$state_dir"
     write_router_halt "$state_dir/router-halt"
     write_router_halt "$halt_file"

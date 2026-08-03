@@ -13,6 +13,33 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class RouterH4HandoffTest(unittest.TestCase):
+    def test_mark_halt_redacts_the_persisted_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name) / "pipeline"
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(ROOT / "tools" / "pipeline-status.sh"),
+                    "--mark-halt",
+                    "H4",
+                    "TOKEN=secret-value",
+                ],
+                env={
+                    **os.environ,
+                    "PIPELINE_ROUND": "E03-R11",
+                    "PIPELINE_STATE_DIR": str(state),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            for path in (state / "router-halt", state / "HALTED", state / "round-status"):
+                contents = path.read_text(encoding="utf-8")
+                self.assertIn("TOKEN=[REDACTED]", contents)
+                self.assertNotIn("secret-value", contents)
+
     def test_exhausted_task_budget_marks_h4_before_stopped_signal(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
@@ -22,7 +49,11 @@ class RouterH4HandoffTest(unittest.TestCase):
             (worktree / "docs" / "rounds").mkdir(parents=True)
             for script in ("ai-router-round.sh", "codex-signal.sh", "model-router.py", "pipeline-status.sh"):
                 shutil.copy2(ROOT / "tools" / script, worktree / "tools" / script)
-            shutil.copytree(ROOT / "tools" / "ai_router", worktree / "tools" / "ai_router")
+            shutil.copytree(
+                ROOT / "tools" / "ai_router",
+                worktree / "tools" / "ai_router",
+                ignore=shutil.ignore_patterns("__pycache__"),
+            )
             state_root = directory / "router-state"
             (worktree / ".ai" / "router.toml").write_text(
                 (ROOT / ".ai" / "router.toml")
@@ -45,7 +76,19 @@ class RouterH4HandoffTest(unittest.TestCase):
             subprocess.run(["git", "init", "-q"], cwd=worktree, check=True)
             subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=worktree, check=True)
             subprocess.run(["git", "config", "user.name", "Router Test"], cwd=worktree, check=True)
-            subprocess.run(["git", "add", "."], cwd=worktree, check=True)
+            fixture_paths = [
+                ".ai/router.toml",
+                "docs/rounds/e03-r11.md",
+                "tools/ai-router-round.sh",
+                "tools/codex-signal.sh",
+                "tools/model-router.py",
+                "tools/pipeline-status.sh",
+                *[
+                    str(path.relative_to(worktree))
+                    for path in sorted((worktree / "tools" / "ai_router").glob("*.py"))
+                ],
+            ]
+            subprocess.run(["git", "add", "--", *fixture_paths], cwd=worktree, check=True)
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=worktree, check=True)
 
             brief = load_brief(brief_path)
