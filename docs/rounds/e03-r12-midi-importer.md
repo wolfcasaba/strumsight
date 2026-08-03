@@ -1,6 +1,6 @@
 # E03-R12 — Standard MIDI importer
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (2026-08-03, pre-flight baseline: `main` @ `99d3adc`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 12; §16
 - **Branch:** `codex/e03-r12-midi-importer`
 - **Előfeltétel:** E03-R11 merge
@@ -10,16 +10,16 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "pubspec.yaml",
-  "pubspec.lock",
   "lib/features/song_trainer/data/importers/import_limits.dart",
   "lib/features/song_trainer/data/importers/midi_importer.dart",
   "lib/features/song_trainer/data/importers/midi_parser_adapter.dart",
   "lib/features/song_trainer/data/importers/midi_timeline_mapper.dart",
   "lib/features/song_trainer/data/importers/midi_track_preview.dart",
-  "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/data/importers/song_importer.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
   "test/features/song_trainer/data/importers/midi_importer_test.dart",
   "test/features/song_trainer/data/importers/midi_malformed_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
   "test/fixtures/song_trainer/midi/format0.mid",
   "test/fixtures/song_trainer/midi/format1_multitrack.mid",
   "test/fixtures/song_trainer/midi/tempo_meter_marker.mid",
@@ -59,6 +59,41 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
+- **Mért baseline (2026-08-03):** E03-R11 merge-e a `main` `99d3adc`
+  commitján van; nincs nyitott PR vagy E03-R12 worktree/branch/review. A
+  production `ImporterRegistry` listát nem `importer_registry.dart`, hanem a
+  `songImporterRegistryProvider` állítja össze a
+  `lib/features/song_trainer/application/song_trainer_providers.dart:140–148`
+  soron. Ezért az előkészített registry-pathot eltávolítottuk, és a tényleges
+  production owner, valamint a közvetlen provider-teszt felkerült az
+  engedélyezett listára.
+- **Mért preview-contract drift:** `ImportPartPreview`
+  (`data/importers/song_importer.dart:65–110`) jelenleg csak id/name/program,
+  noteCount, pitch range és polyphony adatot hordoz; nincs MIDI channel,
+  duration vagy suspected-drum mező. A §6 preview-acceptance ezeket kötelezővé
+  teszi, ezért a szerződés exact ownerét hozzáadtuk. A mezők opcionálisak
+  maradnak, így a korábbi JSON/MusicXML/MXL preview-k érték- és equality
+  contractja nem változik.
+- **Mért erőforrás-owner:** a közös event-limit az
+  `ImportLimits.maxEventCount` (`data/importers/import_limits.dart:16–34`),
+  és az `ImporterRegistry.import` érvényesíti
+  (`data/importers/importer_registry.dart:67–79`). Az R12 nem vezet be
+  privát MIDI-limitet és nem módosítja ezt a már merge-elt policyt; a
+  max−1/max/max+1 esetet a MIDI teszt azonos `ImporterRegistry`-n keresztül
+  méri.
+- **Parser/licence audit:** a vizsgált `dart_midi_pro` 1.0.4+2 pure-Dart,
+  MIT-licencű, de unverified publisherrel, alacsony használattal és a
+  nyilvános csomagoldal szerint kb. 20 hónapja publikált utolsó kiadással
+  rendelkezik. A csomag nem ad auditálható, eseményenkénti cancellation- és
+  limit-határt; ezért az R12 kis, saját, csak SMF 0/1 + PPQ subset byte
+  decoderét használja, új csomag és `pubspec`-változás nélkül. A döntést az
+  új ADR 0121 rögzíti.
+- **Kötött feloldás:** az ADR 0091/0119 közös security- és registry-határait
+  nem módosítjuk. A MIDI adapter minden header/chunk/running-status hibát
+  typed failureként ad vissza; a MIDI parser típusa nem lép ki a data
+  rétegből. SMPTE marad explicit unsupported warning/failure, chord inference
+  nem része a körnek.
+
 ### Módosítás (ADR 0112 önjavító kör, 2026-08-03)
 
 - **Mért H3 gyökérok:** az R12 review eldobható invariáns-próbája szerint a
@@ -77,6 +112,22 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - **Regressziós őr:**
   `Epic3BriefMetadataTest.test_r12_scope_includes_measured_midi_track_limit_owner`
   először RED volt e path hiányával; ezután csak e scope-revízióval GREEN.
+
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03, H6)
+
+- **Mért gyökérok:** a H3-scope merge-konfliktusának R12-oldali feloldása az
+  `docs/adr/0121-midi-import-boundary.md` pre-flight dokumentumot is
+  visszaírta az implementer `ai-router.allowed_paths` listájába. Ez sérti az
+  ADR 0088 tulajdonosi határát: az ADR a §4 emberi scope-táblájában marad,
+  de az implementer nem szerkesztheti. A `Router CI` ezt a
+  `Epic3BriefMetadataTest.test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+  valódi hibájával mérte.
+- **Feloldás:** az `allowed_paths` ismét csak a modell által módosítható
+  implementation/test/fixture/brief fájlokat tartalmazza; a §4-table
+  `docs/adr/0121-midi-import-boundary.md` sora változatlan marad. Ez nem
+  szűkíti az emberi pre-flight scope-ot, csak visszaállítja a router
+  szerződését. A rebase-baseline csak e javított, zöld scope-audit után
+  frissítheti a perzisztált brief-hash-et.
 
 - R10 importer pipeline és R05 NoteTrackAnalyzer használható.
 - Parser dependency csak licence/maintenance audit után kerülhet be.
@@ -115,16 +166,17 @@ SMF format 0/1, PPQ timing, meta- és note-event import stabil track previewval,
 
 | Útvonal | Állapot/ág | Miért |
 |---|---|---|
-| `pubspec.yaml` | meglévő | szükség esetén auditált MIDI dependency |
-| `pubspec.lock` | meglévő | lock |
+| `docs/adr/0121-midi-import-boundary.md` | új, R12 pre-flight | auditált saját SMF subset döntése |
 | `lib/features/song_trainer/data/importers/import_limits.dart` | R10-ből | ADR 0091 közös, konfigurálható MIDI track-count limitje és stabil failure code-ja |
 | `lib/features/song_trainer/data/importers/midi_importer.dart` | ÚJ | probe/import |
 | `lib/features/song_trainer/data/importers/midi_parser_adapter.dart` | ÚJ | package/binary boundary |
 | `lib/features/song_trainer/data/importers/midi_timeline_mapper.dart` | ÚJ | PPQ→beat |
 | `lib/features/song_trainer/data/importers/midi_track_preview.dart` | ÚJ | preview/polyphony |
-| `lib/features/song_trainer/data/importers/importer_registry.dart` | R11-ből | registration |
+| `lib/features/song_trainer/data/importers/song_importer.dart` | R10-ből | MIDI-specifikus nullable preview contract |
+| `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | tényleges production registry owner |
 | `test/features/song_trainer/data/importers/midi_importer_test.dart` | ÚJ | format/timing fixture |
 | `test/features/song_trainer/data/importers/midi_malformed_test.dart` | ÚJ | malformed/limit/cancel |
+| `test/features/song_trainer/application/song_trainer_providers_test.dart` | R10-ből | production registry wiring |
 | `test/fixtures/song_trainer/midi/format0.mid` | ÚJ | SMF0 |
 | `test/fixtures/song_trainer/midi/format1_multitrack.mid` | ÚJ | SMF1 |
 | `test/fixtures/song_trainer/midi/tempo_meter_marker.mid` | ÚJ | meta events |
@@ -203,10 +255,43 @@ helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### Implementáció (2026-08-03)
+
+- `midi_parser_adapter.dart`: saját, pure-Dart SMF 0/1 + PPQ byte-decoder;
+  header/chunk, VLQ, channel running status, SysEx és a használt meta-eventek
+  kontrollált typed failurerel térnek vissza. SMPTE explicit unsupported.
+- `midi_importer.dart`, `midi_timeline_mapper.dart`, `midi_track_preview.dart`:
+  note-on/off párosítás (velocity-0 = off), tempóalapú duration, metadata,
+  marker és lyric mapping, track preview/program/channel/drum/polyphony és
+  bounded dangling-note warning. A parser csomag nélküli maradt.
+- `song_importer.dart` és `song_trainer_providers.dart`: a MIDI-specifikus
+  nullable preview mezők és a production `MidiImporter` registry-wiring.
+- A hat binary fixture lefedi a format 0/1, meta-, running-status, drum- és
+  malformed eseteket; a két új importer teszt és provider teszt a szerződést
+  méri.
+
+### Ellenőrzés
+
+- RED: `flutter test test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart`
+  a hiányzó `MidiImporter` importtal elvárt compilation failuret adott.
+- GREEN: ugyanez a három tesztfájl 8 teszttel zöld.
+- `flutter analyze` — `No issues found!`.
+- `tools/round-gate.sh test/features/song_trainer/data/importers/midi_importer_test.dart test/features/song_trainer/data/importers/midi_malformed_test.dart`
+  — format, analyze, mindkét célzott teszt és architecture zöld.
+
+Nem futott: teljes Flutter suite, random property gate és APK CI; ezeket az
+orchestrátor indítja. Commit, push, PR és router-signal nem történt.
+
+### Review-javítás (2026-08-03)
+
+- A review F1–F4 leleteit az engedélyezett shared limit ownerrel együtt
+  javította a router: format 0 pontosan egy MTrk-t követel, az azonos pitchű
+  átfedések megőrződnek és warningot adnak, a meter/key változások teljes
+  timeline-ja megmarad, a MIDI track budget pedig `ImportLimits`-ben,
+  track-parse előtt érvényesül.
+- A router célzottan mindkét MIDI tesztfájlt lefuttatta: 7, illetve 6 teszt
+  zöld; `git diff --check` zöld. A teljes round-gate, a független review és a
+  CI evidence az orchestrátor következő lépése.
 
 ## 11. Review — a független reviewer tölti ki
 

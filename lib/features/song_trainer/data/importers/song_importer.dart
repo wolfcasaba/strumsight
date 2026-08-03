@@ -74,6 +74,10 @@ final class ImportPartPreview {
     this.midiProgram,
     this.lowestMidiPitch,
     this.highestMidiPitch,
+    this.channel,
+    this.duration,
+    this.suspectedDrum,
+    this.isMonophonic,
   });
 
   final String id;
@@ -83,6 +87,10 @@ final class ImportPartPreview {
   final int noteCount;
   final int? lowestMidiPitch;
   final int? highestMidiPitch;
+  final int? channel;
+  final Duration? duration;
+  final bool? suspectedDrum;
+  final bool? isMonophonic;
   final bool isPolyphonic;
   final int chordSymbolCount;
   final bool hasTablature;
@@ -98,6 +106,10 @@ final class ImportPartPreview {
           other.noteCount == noteCount &&
           other.lowestMidiPitch == lowestMidiPitch &&
           other.highestMidiPitch == highestMidiPitch &&
+          other.channel == channel &&
+          other.duration == duration &&
+          other.suspectedDrum == suspectedDrum &&
+          other.isMonophonic == isMonophonic &&
           other.isPolyphonic == isPolyphonic &&
           other.chordSymbolCount == chordSymbolCount &&
           other.hasTablature == hasTablature;
@@ -111,6 +123,10 @@ final class ImportPartPreview {
     noteCount,
     lowestMidiPitch,
     highestMidiPitch,
+    channel,
+    duration,
+    suspectedDrum,
+    isMonophonic,
     isPolyphonic,
     chordSymbolCount,
     hasTablature,

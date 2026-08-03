@@ -3185,6 +3185,25 @@ a revízió előtt RED volt a hiányzó path miatt, majd GREEN. Az izolált revi
 mutációja az allowlistből eltávolított path-szal ugyanezt a tesztet újra RED-re
 váltotta, tehát az őr nem csak a dokumentáció állítását ismétli.
 
+## L81 — A brief-history konfliktus feloldása nem teheti az ADR-pre-flight dokumentumot modell-írhatóvá (E03-R12 H6, 2026-08-03)
+
+**Mérés.** Az E03-R12 `5c99d7c` non-force merge-e a H3 scope-revíziót
+integrálta, de a brief konfliktusfeloldása az
+`docs/adr/0121-midi-import-boundary.md` pathot az `ai-router.allowed_paths`
+listában hagyta. A pontos branch-head Router CI
+(`30823595897`) a
+`Epic3BriefMetadataTest.test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+leletével RED volt: a §4 emberi táblából származtatott implementer-lista nem
+tartalmaz ADR-pathot.
+
+**Javítás és recovery.** Az ADR továbbra is a §4 emberi scope-táblában marad,
+de kikerül a modell allowlistjéből; a meglévő metadata-contract teszt ezzel
+GREEN. Ezután kizárólag a `model-router.py rebase-baseline` szankcionált útja
+frissíti a persistált brief-hash-et és baseline-manifestet. A módszer nem
+reseteli az M3/Terra kísérletszámokat, nem változtatja meg a gate-et és nem
+kerüli meg a scope-auditot.
+
+## L82 — A független review utáni javításnak külön, korlátos modellezési hely kell (E03-R12 H4, 2026-08-03)
 ## L81 — A független review utáni javításnak külön, korlátos modellezési hely kell (E03-R12 H4, 2026-08-03)
 
 **Mérés.** E03-R12 router-state-je `m3_attempts=2`, `terra_calls=1` és zöld
