@@ -100,6 +100,25 @@ terminális intent törlődik; az eredmény továbbra is független review és a
 szokásos CI-kapu előtt áll. Scope- vagy gate-hiba fail-closed `StateError`,
 tehát a recovery nem gyengítheti a mércét és nem rejthet el piros eredményt.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03) — H8 brief-history konfliktus non-force integrációja
+
+Mérés: E03-R11/H8-nál a már merge-elt H3 scope-revízió és ugyanennek a körnek
+régi pre-flight commitja kizárólag az R11 briefben konfliktált (`git rebase
+origin/main` → `CONFLICT (content): docs/rounds/e03-r11-musicxml-mxl-importer.md`).
+A `main` változat már tartalmazta a H3 preview-contract allowlistet; a rebase
+helyi történetének force-push-a viszont tiltott volna.
+
+Ha az unmerged-path lista pontosan a megállt kör briefje, és az `origin/main`
+oldal bizonyíthatóan tartalmazza a merge-elt self-heal scope-revíziót, a H8
+önjavítás a rebase-et megszakítja, majd `git merge --no-ff origin/main`-nel
+integrálja a friss baseline-t. A brief feloldása az aktuális `main` szövegét
+őrzi meg, a branch pedig normál push-sal publikálható. Bármely további
+konfliktus vagy nem egyértelmű scope esetén fail-closed `escalate` marad.
+
+Ez nem enyhíti az ADR 0086 freshness-követelményét: a körbranch a merge után is
+tartalmazza a dispatch előtti `main`-t, és később ugyanúgy exact-head CI-t,
+független review-t és zöld kaput igényel.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
