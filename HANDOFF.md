@@ -4,7 +4,15 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (E03-R13 merged).**  E03-R13 is merged as [PR #103](https://github.com/wolfcasaba/strumsight/pull/103)
+> (HEAL E03-R14/H3 scope revision merged).**  **HEAL E03-R14/H3 (PR
+> #105):** the mandatory committed review report was named by the R14 brief
+> but omitted from both its human scope and router `allowed_paths`, so a green
+> review could not be committed without violating the brief. The exact
+> `docs/reviews/e03-r14-guitar-pro-path-review.md` path is now allowed only for
+> the independent reviewer and guarded by a RED→GREEN metadata regression.
+> [Router CI 30846147114](https://github.com/wolfcasaba/strumsight/actions/runs/30846147114)
+> is green for the exact review head `587eefb`; the product E03-R14 worktree
+> may resume in a fresh pipeline session. E03-R13 is merged as [PR #103](https://github.com/wolfcasaba/strumsight/pull/103)
 > (`83535e5`). [Build Android APK 30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
 > is green for exact pre-merge branch head `ead6f03` (full Flutter suite,
 > randomized property/coverage gate and development APK); independent review
