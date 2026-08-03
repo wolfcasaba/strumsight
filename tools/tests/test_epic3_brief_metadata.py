@@ -18,6 +18,9 @@ E03_R11_MEASURED_OWNER_PATHS = (
     "lib/features/song_trainer/application/import/song_import_controller.dart",
     "test/features/song_trainer/application/import/song_import_controller_test.dart",
 )
+E03_R12_MIDI_TRACK_LIMIT_OWNER_PATH = (
+    "lib/features/song_trainer/data/importers/import_limits.dart"
+)
 
 
 def section(text: str, number: int) -> str:
@@ -43,6 +46,15 @@ class Epic3BriefMetadataTest(unittest.TestCase):
                 if path not in brief.metadata.allowed_paths
             ),
             (),
+        )
+
+    def test_r12_scope_includes_measured_midi_track_limit_owner(self) -> None:
+        """H3 regression: R12 may configure the ADR 0091 MIDI track limit."""
+        brief = load_brief(BRIEF_DIR / "e03-r12-midi-importer.md")
+
+        self.assertIn(
+            E03_R12_MIDI_TRACK_LIMIT_OWNER_PATH,
+            brief.metadata.allowed_paths,
         )
 
     def test_all_twenty_two_briefs_match_their_committed_scope_and_gate(self) -> None:
