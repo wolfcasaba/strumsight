@@ -4,8 +4,8 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H3 — multipart preview-contract scope correction prepared for
-> review).** E03-R10 (PR #86)
+> (HEAL E03-R11/H3 — multipart preview-contract scope correction merged).**
+> E03-R10 (PR #86)
 > is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
 > application flow, trusted importer registry, bounded operation workspace and
@@ -24,10 +24,13 @@
 > `multipart_polyphonic.musicxml` found that `parts.first` discarded the second
 > real part and the R10 `SongImportResult` → probe preview → controller
 > contract had no place for the required per-part statistics. The self-heal
-> branch `heal/E03-R11-H3-1` adds only the four measured contract/test paths to
+> branch `heal/E03-R11-H3-1` added only the four measured contract/test paths to
 > the R11 allowlist, with a metadata regression test that was RED before the
-> revision. It remains subject to its own PR and unchanged green gate before
-> the pipeline can restart R11. Historical note:
+> revision. It squash-merged as [PR #89](https://github.com/wolfcasaba/strumsight/pull/89),
+> `dce76e6`; exact-head Router CI
+> [30802455995](https://github.com/wolfcasaba/strumsight/actions/runs/30802455995)
+> and the independent post-merge router test suite are green, so the pipeline
+> may restart R11. Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
@@ -451,10 +454,12 @@
 
 ## 4. Current branch
 
-`heal/E03-R11-H3-1` @ `128c78a` baseline (HEAL E03-R11/H3 multipart
-preview-contract brief correction; PR még nincs nyitva). A kanonikus `main`
-utolsó merge-e [PR #88](https://github.com/wolfcasaba/strumsight/pull/88),
-`128c78a` (első R11 H3 scope-correction).
+`main` @ [PR #89](https://github.com/wolfcasaba/strumsight/pull/89)
+(HEAL E03-R11/H3 multipart preview-contract scope correction, squash-merge
+`dce76e6`). Exact-head Router CI
+[30802455995](https://github.com/wolfcasaba/strumsight/actions/runs/30802455995)
+**success**; the independent post-merge `python -m pytest tools/tests -q`
+router suite is also green.
 CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
 **success** on the exact branch `headSha` `d693077`; it ran the full suite,
 randomized property gate and development APK build. Independent review:
