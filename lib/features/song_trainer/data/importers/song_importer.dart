@@ -43,18 +43,78 @@ final class ImportProbeResult {
   const ImportProbeResult._({
     required this.isRecognized,
     this.warnings = const <String>[],
+    this.parts = const <ImportPartPreview>[],
     this.failureCode,
   });
 
-  const ImportProbeResult.recognized({List<String> warnings = const <String>[]})
-    : this._(isRecognized: true, warnings: warnings);
+  const ImportProbeResult.recognized({
+    List<String> warnings = const <String>[],
+    List<ImportPartPreview> parts = const <ImportPartPreview>[],
+  }) : this._(isRecognized: true, warnings: warnings, parts: parts);
 
   const ImportProbeResult.failure(String code)
     : this._(isRecognized: false, failureCode: code);
 
   final bool isRecognized;
   final List<String> warnings;
+  final List<ImportPartPreview> parts;
   final String? failureCode;
+}
+
+/// Content-derived summary of a selectable source part, safe for previews.
+final class ImportPartPreview {
+  const ImportPartPreview({
+    required this.id,
+    required this.name,
+    required this.staffCount,
+    required this.noteCount,
+    required this.isPolyphonic,
+    required this.chordSymbolCount,
+    required this.hasTablature,
+    this.midiProgram,
+    this.lowestMidiPitch,
+    this.highestMidiPitch,
+  });
+
+  final String id;
+  final String name;
+  final int? midiProgram;
+  final int staffCount;
+  final int noteCount;
+  final int? lowestMidiPitch;
+  final int? highestMidiPitch;
+  final bool isPolyphonic;
+  final int chordSymbolCount;
+  final bool hasTablature;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImportPartPreview &&
+          other.id == id &&
+          other.name == name &&
+          other.midiProgram == midiProgram &&
+          other.staffCount == staffCount &&
+          other.noteCount == noteCount &&
+          other.lowestMidiPitch == lowestMidiPitch &&
+          other.highestMidiPitch == highestMidiPitch &&
+          other.isPolyphonic == isPolyphonic &&
+          other.chordSymbolCount == chordSymbolCount &&
+          other.hasTablature == hasTablature;
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    midiProgram,
+    staffCount,
+    noteCount,
+    lowestMidiPitch,
+    highestMidiPitch,
+    isPolyphonic,
+    chordSymbolCount,
+    hasTablature,
+  );
 }
 
 /// In-memory import output. Persistence and duplicate-library lookup begin in
@@ -63,10 +123,13 @@ final class SongImportResult {
   SongImportResult({
     required this.document,
     List<String> warnings = const <String>[],
-  }) : warnings = List<String>.unmodifiable(warnings);
+    List<ImportPartPreview> parts = const <ImportPartPreview>[],
+  }) : warnings = List<String>.unmodifiable(warnings),
+       parts = List<ImportPartPreview>.unmodifiable(parts);
 
   final SongDocument document;
   final List<String> warnings;
+  final List<ImportPartPreview> parts;
 }
 
 /// Format adapter contract used by the import application layer.

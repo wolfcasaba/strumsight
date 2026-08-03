@@ -97,6 +97,7 @@ final class SongImportController {
             displayName: source.displayName,
             format: selection.importer.runtimeType.toString(),
             warnings: selection.probe.warnings,
+            parts: selection.probe.parts,
           ),
         ),
       );
