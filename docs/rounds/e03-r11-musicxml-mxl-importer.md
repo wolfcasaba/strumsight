@@ -1,7 +1,7 @@
 # E03-R11 — MusicXML és MXL importer
 
-- **Státusz:** **PLANNING — H3 javítva** (2026-08-03, pre-flight baseline:
-  `origin/main` @ `128c78a`)
+- **Státusz:** **PLANNING — H3 javítva (preview-contract revízió)**
+  (2026-08-03, pre-flight baseline: `origin/main` @ `128c78a`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 11; §15
 - **Branch:** `codex/e03-r11-musicxml-mxl-importer`
 - **Előfeltétel:** E03-R10 merge
@@ -20,11 +20,15 @@ allowed_paths = [
   "lib/features/song_trainer/data/importers/mxl_importer.dart",
   "lib/features/song_trainer/data/importers/mxl_archive_reader.dart",
   "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/data/importers/song_importer.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/application/import/import_preview.dart",
+  "lib/features/song_trainer/application/import/song_import_controller.dart",
   "lib/features/song_trainer/data/importers/import_limits.dart",
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
   "test/features/song_trainer/data/importers/mxl_security_test.dart",
   "test/features/song_trainer/application/song_trainer_providers_test.dart",
+  "test/features/song_trainer/application/import/song_import_controller_test.dart",
   "test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml",
   "test/fixtures/song_trainer/musicxml/waltz_34.musicxml",
   "test/fixtures/song_trainer/musicxml/meter_68.musicxml",
@@ -41,6 +45,7 @@ allowed_paths = [
 gate_tests = [
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
   "test/features/song_trainer/data/importers/mxl_security_test.dart",
+  "test/features/song_trainer/application/import/song_import_controller_test.dart",
 ]
 native_gate = false
 ```
@@ -107,14 +112,21 @@ pre-flight dokumentáció: a §4 emberi táblában szerepel, de a router TOML-j�
 nem kerül, mert a modell nem írhat normatív ADR-t. A `tools/tests` regresszió
 e három útvonal meglétét ellenőrzi, így a korábbi H3 nem ismétlődhet csendben.
 
-**Aktuális validáció (2026-08-03, `origin/main` @ `128c78a`):** a fenti
-`ImporterRegistry` és `ImportLimits` producer-mérések változatlanul a
-`song_trainer_providers.dart:140`, illetve `import_limits.dart:11–24` helyekre
-mutatnak. `dart pub deps --style=compact` szerint `xml 6.6.1` továbbra is csak
-a `dbus` tranzitív függősége, `archive` nincs a lockban; ezért mindkettő direct
-data-layer dependencyként kerül a kör modell-diffjébe. Az `ai-router`
-allowlist szándékosan nem tartalmaz ADR-utat: az ADR 0120 már merge-elt,
-normatív dokumentum, amelyet a modell nem írhat.
+**Módosítás (ADR 0112 önjavító kör, 2026-08-03, E03-R11/H3 — preview
+contract):** a független review a `multipart_polyphonic.musicxml` mindkét
+valódi partján mérte, hogy a `musicxml_mapper.dart` csak `parts.first`
+measure-eit importálja. A szükséges javítás nem állhat meg a mappernél: a
+`SongImportResult`/`ImportProbeResult` a
+`data/importers/song_importer.dart`-ban, a preview adattípus az
+`application/import/import_preview.dart`-ban, a probe→state átvitel pedig a
+`application/import/song_import_controller.dart`-ban a tényleges contract
+owner. A controller szerződésének regressziós tesztje
+`test/features/song_trainer/application/import/song_import_controller_test.dart`.
+E négy útvonal bekerült a §4 táblába és az implementer allowlistbe; a metadata
+regresszió a review által megnevezett mind a négy owner hiányára RED volt a
+revízió előtt. Ez a bővítés kizárólag a §15.3 kötelező multipart part-preview
+és kiválasztási contractot teszi megvalósíthatóvá; a `song_import_state.dart`,
+effectek és UI továbbra is tilosak.
 
 ## 1. Cél
 
@@ -155,11 +167,15 @@ A dokumentált MusicXML subset és MXL container biztonságos, rational timingú
 | `lib/features/song_trainer/data/importers/mxl_importer.dart` | ÚJ | container adapter |
 | `lib/features/song_trainer/data/importers/mxl_archive_reader.dart` | ÚJ | secure extraction |
 | `lib/features/song_trainer/data/importers/importer_registry.dart` | R10-ből | registration |
+| `lib/features/song_trainer/data/importers/song_importer.dart` | R10-ből | MusicXML part-preview import/probe result contract |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | production importer registration |
+| `lib/features/song_trainer/application/import/import_preview.dart` | R10-ből | immutable part-preview application contract |
+| `lib/features/song_trainer/application/import/song_import_controller.dart` | R10-ből | trusted probe preview state átadás |
 | `lib/features/song_trainer/data/importers/import_limits.dart` | R10-ből | shared configurable MXL archive limits |
 | `test/features/song_trainer/data/importers/musicxml_importer_test.dart` | ÚJ | subset snapshot |
 | `test/features/song_trainer/data/importers/mxl_security_test.dart` | ÚJ | archive/XML security |
 | `test/features/song_trainer/application/song_trainer_providers_test.dart` | ÚJ | production registry wiring |
+| `test/features/song_trainer/application/import/song_import_controller_test.dart` | R10-ből | multipart part-preview probe→state contract |
 | `test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml` | ÚJ | 4/4 chord |
 | `test/fixtures/song_trainer/musicxml/waltz_34.musicxml` | ÚJ | 3/4 |
 | `test/fixtures/song_trainer/musicxml/meter_68.musicxml` | ÚJ | 6/8 |
@@ -217,7 +233,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart test/features/song_trainer/data/importers/mxl_security_test.dart
+tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart test/features/song_trainer/data/importers/mxl_security_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart
 ```
 
 A brief pre-flightja a feltételes szöveget egyetlen futtatható
