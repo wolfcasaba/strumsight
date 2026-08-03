@@ -6,6 +6,36 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E03-R11 — MusicXML és MXL importer (2026-08-03)
+
+E03-R11 [PR #95](https://github.com/wolfcasaba/strumsight/pull/95)-ként
+(`47baded`) merge-elt. [ADR 0120](adr/0120-musicxml-mxl-import-boundary.md)
+az `xml` és `archive` adat-rétegű határát, a közös archive-policy ownershipot
+és a tényleges production registry drótozását rögzíti. A kész importer az
+egész MusicXML part-listát megőrzi külön note trackként, és a probe/result/
+immutable preview/controller contracton át rész-statisztikát ad (note count,
+pitch range, polyphony, tablature). Determinisztikusan megtartja a dokumentált
+meter/tempo/pickup/chord/note/tie/rest/lyric/marker subsetet; a biztonságosan
+kihagyható jelölés egyszeri, stabil warningot ad.
+
+Az MXL reader nem bont ki fájlt a workspace-be: minden entry-t a container
+root kiválasztása előtt canonicalizál és validál. Traversal, absolute path,
+symlink, canonical duplicate, nested archive, hibás container/root és a
+konfigurálható entry-/extracted-byte-limit túllépése fail-closed. A H3 review
+valóban mérte a korábbi `parts.first` adatvesztést és a hiányzó preview
+contractot; a self-heal csak a szükséges four owner/test pathot nyitotta meg.
+Az utólagos, izolált reviewer audit a végső fán **APPROVED** (0 BLOCKER/MAJOR):
+a multipart és unsupported-notation regressziók zárják a két MAJOR leletet.
+
+A post-merge gate format → analyze → 8 MusicXML + 5 MXL-security + 6 controller
+test → architecture sorrendben zöld volt. A `maxArchiveEntryCount` central
+invariant valódi-sértés próbája (`>` → `>=`) pirosra váltotta az exact-limit
+elfogadás tesztjét. [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
+zöld a full Flutter suite, randomized property gate és APK builddel az exact
+`c79e9e0` branch headen; annak fája megegyezik a squash-mergével.
+
+---
+
 ## E03-R10 — Import application flow és biztonsági keret (2026-08-03)
 
 E03-R10 [PR #86](https://github.com/wolfcasaba/strumsight/pull/86)-ként

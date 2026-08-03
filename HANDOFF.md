@@ -4,14 +4,13 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H6 — approved-brief metadata recovery).**
-> E03-R10 (PR #86)
-> is merged; the current next product
-> round is E03-R11. R10 added the cancellable, stale-callback-safe import
-> application flow, trusted importer registry, bounded operation workspace and
-> picker port ([ADR 0119](docs/adr/0119-song-import-application-orchestration.md)).
-> Exact branch-head CI [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
-> and the independent post-merge local gate are green. Historical note:
+> (E03-R11 closeout — MusicXML/MXL importer).**
+> E03-R11 is merged as [PR #95](https://github.com/wolfcasaba/strumsight/pull/95)
+> (`47baded`). Its exact pre-merge branch head `c79e9e0` has the identical tree,
+> and [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
+> is green (full suite, randomized property gate and APK). The independent
+> post-merge gate and boundary mutation review are green; E03-R12 is next.
+> The following H3/H8/H6 notes are historical recovery evidence:
 > **HEAL E03-R11/H3.** The R11 pre-flight measured that the production importer
 > list belongs to `song_trainer_providers.dart`, while shared configurable MXL
 > archive budgets belong to `import_limits.dart`; the prepared allowlist lacked
@@ -468,20 +467,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #92](https://github.com/wolfcasaba/strumsight/pull/92)
-(HEAL E03-R11/H6 approved-brief metadata recovery, squash-merge `b715561`).
-Exact-head Router CI
-[30805614376](https://github.com/wolfcasaba/strumsight/actions/runs/30805614376)
-**success**; the independent isolated-clone router suite and mutation review
-are recorded in
-[`e03-r11-h6-router-metadata-recovery-review.md`](docs/reviews/e03-r11-h6-router-metadata-recovery-review.md).
-The active, unmerged R11 branch `codex/e03-r11-musicxml-mxl-importer` now
-contains `origin/main` through `98a87d3`; no force-push was used.
-CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
-**success** on the exact branch `headSha` `d693077`; it ran the full suite,
-randomized property gate and development APK build. Independent review:
-[`e03-r10-import-flow-security-boundary-review.md`](docs/reviews/e03-r10-import-flow-security-boundary-review.md)
-(APPROVED, 0 BLOCKER/MAJOR); the post-merge local gate is also green.
+`main` @ [PR #95](https://github.com/wolfcasaba/strumsight/pull/95), squash
+`47baded` (E03-R11). [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
+is **success** for exact branch `headSha` `c79e9e0`; `c79e9e0^{tree}` equals
+`47baded^{tree}`. It includes the full Flutter suite, randomized property gate
+and development APK. The independent post-merge gate is green, and the final
+review addendum is **APPROVED** in
+[`e03-r11-musicxml-mxl-importer-review.md`](docs/reviews/e03-r11-musicxml-mxl-importer-review.md).
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -554,24 +546,23 @@ randomized property gate and development APK build. Independent review:
 
 ## 5. Last completed round
 
-**E03-R10 — Import application flow és biztonsági keret** (PR
-[#86](https://github.com/wolfcasaba/strumsight/pull/86), squash `93b46db`,
-[ADR 0119](docs/adr/0119-song-import-application-orchestration.md)).
-Implementer: **auto router**; independent reviewer: **Codex/Terra**.
+**E03-R11 — MusicXML és MXL importer** (PR
+[#95](https://github.com/wolfcasaba/strumsight/pull/95), squash `47baded`,
+[ADR 0120](docs/adr/0120-musicxml-mxl-import-boundary.md)). Implementer:
+**auto router**; independent reviewer: **Codex/Terra**.
 
-**Elkészült:** explicit import-fázisgép és effect contract, egyetlen aktív
-művelet/stale-callback védelem, cancel-safe cleanup, trusted registry-probe,
-bounded parser- és workspace-limitek, path- és symlink-escape elutasítás,
-valamint pluginmentes file-picker port. Repository-írás csak a validált,
-megerősített import után történik. Az izolált review az operation-identity őr
-eldobásával valós stale-callback hibát mutatott ki; visszaállítva a célzott és
-a post-merge gate is zöld.
+**Elkészült:** biztonságos MusicXML és MXL import közvetlen `xml`/`archive`
+adapter-boundaryval; multi-part note-track és immutable part-preview contract;
+deterministic meter/tempo/pickup/chord/tie/lyric/marker mapping; egyszeri
+unsupported-notation warning; valamint path, symlink, duplicate, nested archive,
+container-root és archive budget fail-closed védelem. A production registry
+MusicXML és MXL importert is regisztrál.
 
-Zöld kapu: `tools/round-gate.sh test/features/song_trainer/application/import test/features/song_trainer/data/importers/import_workspace_test.dart`
-(format/analyze/6 application teszt/3 workspace teszt/architecture zöld) + CI
-[30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)
-zöld az exact `d693077` branch-headen. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R10.
+Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/importers/musicxml_importer_test.dart test/features/song_trainer/data/importers/mxl_security_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart`
+(format/analyze/8 + 5 + 6 tests/architecture zöld) + CI
+[30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
+zöld az exact `c79e9e0` branch-headen, amelynek fája a squash-mergével azonos.
+Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R11.
 
 ### Previous completed round
 
@@ -635,9 +626,9 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R11 — MusicXML és MXL importer** a következő product round; nem
-része ennek a sessionnek. E03-R10 (PR #86) már kész. A queue-fájl állapotát
-továbbra is kizárólag a pipeline driver kezeli.
+0. **E03-R12 — Standard MIDI importer** a következő product round; nem része
+ennek a sessionnek. E03-R11 (PR #95) kész. A queue-fájl állapotát továbbra is
+kizárólag a pipeline driver kezeli.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és

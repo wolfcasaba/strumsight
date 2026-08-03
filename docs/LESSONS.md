@@ -3153,3 +3153,16 @@ reservation és a kísérletszámok változatlanok maradnak. A
 `RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
 előbb RED volt (`resume` exit 40), majd GREEN; azt is bizonyítja, hogy a
 resume `READY_FOR_REVIEW` marad, nem modellhívást vagy state-resetet indít.
+
+## L79 — A végső review-artefaktumnak a squash előtt APPROVED állapotot kell rögzítenie (E03-R11 closeout, 2026-08-03)
+
+**Mérés.** PR #95 a GitHub szerint `2026-08-03T12:45:08Z`-kor merge-elt, de a
+benne levő `docs/reviews/e03-r11-musicxml-mxl-importer-review.md` csak a korábbi
+H3 előtti `CHANGES REQUIRED` állapotot tartalmazta. A végső `c79e9e0` tree
+ugyan már megoldotta mindkét MAJOR-t (multipart preview és unsupported-warning),
+és a zöld APK CI fája megegyezik a squash-mergével, a review-evidence nem volt
+önmagában olvasható.
+
+**Tanulság.** A squash előtt a reviewer-jelentést a javított SHA-val
+`APPROVED`-ra kell frissíteni, a leletenkénti zárással és a mutation evidence-szel;
+utólag csak audit-addendum pótolhatja, nem helyettesítheti a merge-kaput.
