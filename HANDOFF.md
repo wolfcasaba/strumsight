@@ -10,6 +10,13 @@
 > and [Build Android APK 30814057328](https://github.com/wolfcasaba/strumsight/actions/runs/30814057328)
 > is green (full suite, randomized property gate and APK). The independent
 > post-merge gate and boundary mutation review are green; E03-R12 is next.
+> **HEAL E03-R12/H3 (PR #97):** the R12 review measured that ADR 0091's
+> mandatory MIDI track-count limit requires the shared `import_limits.dart`
+> owner, omitted from the prepared scope. The revision opens only that path,
+> requires the existing malformed-MIDI test to prove max−1/max/max+1, and adds
+> a metadata regression test that was RED before the revision. No product code
+> is in this heal; the halted R12 branch may resume only after this scope
+> revision merges and the router receives the open F1–F4 findings.
 > The following H3/H8/H6 notes are historical recovery evidence:
 > **HEAL E03-R11/H3.** The R11 pre-flight measured that the production importer
 > list belongs to `song_trainer_providers.dart`, while shared configurable MXL
@@ -627,8 +634,11 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 ## 6. Exact next task
 
 0. **E03-R12 — Standard MIDI importer** a következő product round; nem része
-ennek a sessionnek. E03-R11 (PR #95) kész. A queue-fájl állapotát továbbra is
-kizárólag a pipeline driver kezeli.
+ennek a sessionnek. E03-R11 (PR #95) kész. Az E03-R12/H3 scope-revízió
+(PR #97) az `import_limits.dart` ownerét és a MIDI track-count határmátrixot
+rögzíti; merge után a pipeline ugyanazt az R12 router-taskot a nyitott F1–F4
+review findingokkal folytatja. A queue-fájl állapotát továbbra is kizárólag a
+pipeline driver kezeli.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
