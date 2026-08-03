@@ -4,7 +4,7 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R11/H8 — non-force brief-history recovery).**
+> (HEAL E03-R11/H6 — approved-brief metadata recovery).**
 > E03-R10 (PR #86)
 > is merged; the current next product
 > round is E03-R11. R10 added the cancellable, stale-callback-safe import
@@ -36,6 +36,15 @@
 > current main brief in non-force merge commit `98a87d3`, pushed normally; this
 > heal regression-tests that brief-only recovery procedure. The product round
 > remains unmerged and resumes in a fresh session. Historical note:
+> **HEAL E03-R11/H6.** The H3-approved brief revision changed the persisted
+> router metadata hash after a successful `rebase-baseline` scope audit, so
+> `resume` immediately returned `BLOCKED: committed brief metadata changed`.
+> The recovery now stores the hash of the exact brief it just audited, without
+> resetting attempts or bypassing the baseline/scope guards; the router CLI
+> regression reproduces the prior exit-40 resume and requires
+> `READY_FOR_REVIEW` afterward. The product round remains unmerged and resumes
+> only after this heal's independent review and CI evidence are green.
+> Historical note:
 > **HEAL E03-R09/H6 — router baseline Flutter bootstrap.** A fresh R09
 > worktree reproduced the pre-model failure: `round-gate --baseline` format
 > passed but analyze failed with 625 missing `AppLocalizations` diagnostics.
@@ -459,12 +468,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #89](https://github.com/wolfcasaba/strumsight/pull/89)
-(HEAL E03-R11/H3 multipart preview-contract scope correction, squash-merge
-`dce76e6`). Exact-head Router CI
-[30802455995](https://github.com/wolfcasaba/strumsight/actions/runs/30802455995)
-**success**; the independent post-merge `python -m pytest tools/tests -q`
-router suite is also green.
+`main` @ [PR #92](https://github.com/wolfcasaba/strumsight/pull/92)
+(HEAL E03-R11/H6 approved-brief metadata recovery, squash-merge `b715561`).
+Exact-head Router CI
+[30805614376](https://github.com/wolfcasaba/strumsight/actions/runs/30805614376)
+**success**; the independent isolated-clone router suite and mutation review
+are recorded in
+[`e03-r11-h6-router-metadata-recovery-review.md`](docs/reviews/e03-r11-h6-router-metadata-recovery-review.md).
 The active, unmerged R11 branch `codex/e03-r11-musicxml-mxl-importer` now
 contains `origin/main` through `98a87d3`; no force-push was used.
 CI run [30796485080](https://github.com/wolfcasaba/strumsight/actions/runs/30796485080)

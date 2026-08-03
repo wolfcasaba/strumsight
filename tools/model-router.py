@@ -119,6 +119,12 @@ def rebase_blocked_task_baseline(
             raise StateError("rebased baseline still fails scope audit: " + "; ".join(audit.violations))
         task["baseline_manifest"] = _manifest_to_state(refreshed)
         task["changed_paths"] = list(audit.scoped_changed_paths)
+        # This operator-only recovery has just verified the current,
+        # committed brief's exact allowlist against the preserved diff.  The
+        # old hash belongs to the superseded BLOCKED decision; retaining it
+        # would make the next resume reject this approved metadata before it
+        # can inspect the freshly audited baseline.
+        task["brief_hash"] = brief.metadata_hash
         # The old BLOCKED result was fully committed to the Terra ledger
         # before this operator-only recovery began. Keeping its two-phase
         # terminal intent would make `resume` replay that stale result before
