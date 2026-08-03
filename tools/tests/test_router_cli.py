@@ -190,6 +190,10 @@ class RouterCliTest(unittest.TestCase):
                     {
                         "schema_version": 1,
                         "task_id": "E03-R08",
+                        # E03-R11 H6: the operator-approved brief scope
+                        # revision changed this metadata hash after the
+                        # original BLOCKED result was persisted.
+                        "brief_hash": "sha256:stale-approved-brief-metadata",
                         "status": "BLOCKED",
                         "phase": "BLOCKED",
                         # This is a completed Terra terminal intent from the
@@ -243,6 +247,26 @@ class RouterCliTest(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            resume_result = subprocess.run(
+                [
+                    "python3",
+                    str(CLI),
+                    "--config",
+                    str(CONFIG),
+                    "--state-root",
+                    str(state_root),
+                    "resume",
+                    "--task",
+                    str(brief),
+                    "--worktree",
+                    str(root),
+                    "--result-json",
+                    str(root / "resume-result.json"),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
@@ -253,6 +277,8 @@ class RouterCliTest(unittest.TestCase):
         self.assertEqual(payload["terra_reservation"], "finished-terra-review")
         self.assertNotIn("terra_terminal_status", payload)
         self.assertNotIn("terra_terminal_reason", payload)
+        self.assertEqual(resume_result.returncode, 0, resume_result.stderr)
+        self.assertEqual(json.loads(resume_result.stdout)["status"], "READY_FOR_REVIEW")
 
     def test_heal_recovery_preserves_exhausted_attempts_after_a_green_gate(self) -> None:
         # E03-R08 H4: a structural codec self-heal landed on main while the
