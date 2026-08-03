@@ -160,6 +160,16 @@ class RouterCliTest(unittest.TestCase):
             baseline = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
             ).stdout.strip()
+            # E03-R12 H6: the stale baseline was followed by merged heal
+            # infrastructure drift.  These are the measured paths that a
+            # normal scope audit must reject as a model diff, but an explicit
+            # baseline rebase must move behind before auditing the remaining
+            # uncommitted product change.
+            (root / ".ai").mkdir()
+            (root / ".ai" / "router.toml").write_text("heal policy\n", encoding="utf-8")
+            (root / "HANDOFF.md").write_text("heal handoff\n", encoding="utf-8")
+            (root / "docs").mkdir()
+            (root / "docs" / "LESSONS.md").write_text("heal lesson\n", encoding="utf-8")
             (root / "tools").mkdir()
             (root / "tools" / "router.py").write_text("preflight\n", encoding="utf-8")
             (root / "docs" / "rounds").mkdir(parents=True)
@@ -173,7 +183,15 @@ class RouterCliTest(unittest.TestCase):
                 encoding="utf-8",
             )
             subprocess.run(
-                ["git", "add", "tools/router.py", "docs/rounds/e03-r08-rebase.md"],
+                [
+                    "git",
+                    "add",
+                    ".ai/router.toml",
+                    "HANDOFF.md",
+                    "docs/LESSONS.md",
+                    "tools/router.py",
+                    "docs/rounds/e03-r08-rebase.md",
+                ],
                 cwd=root,
                 check=True,
             )
