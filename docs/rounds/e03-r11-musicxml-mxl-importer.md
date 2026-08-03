@@ -1,6 +1,7 @@
 # E03-R11 — MusicXML és MXL importer
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING — H3 javítva** (2026-08-03, pre-flight baseline:
+  `origin/main` @ `9639659`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 11; §15
 - **Branch:** `codex/e03-r11-musicxml-mxl-importer`
 - **Előfeltétel:** E03-R10 merge
@@ -19,8 +20,11 @@ allowed_paths = [
   "lib/features/song_trainer/data/importers/mxl_importer.dart",
   "lib/features/song_trainer/data/importers/mxl_archive_reader.dart",
   "lib/features/song_trainer/data/importers/importer_registry.dart",
+  "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/data/importers/import_limits.dart",
   "test/features/song_trainer/data/importers/musicxml_importer_test.dart",
   "test/features/song_trainer/data/importers/mxl_security_test.dart",
+  "test/features/song_trainer/application/song_trainer_providers_test.dart",
   "test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml",
   "test/fixtures/song_trainer/musicxml/waltz_34.musicxml",
   "test/fixtures/song_trainer/musicxml/meter_68.musicxml",
@@ -69,8 +73,38 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - Parser dependency csak pre-flight licence/maintenance/security audit után választható.
 - External entity, archive traversal és korlátlan repeat expansion hard security tiltás.
 
-A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
-feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+**Mért pre-flight (2026-08-03, `origin/main` @ `9639659`):** E03-R10 (PR #86)
+merge-elve van; nincs korábbi E03-R11 worktree, branch, nyitott PR vagy review,
+amelyet folytatni kellene. A tiszta baseline-on `rg -n "ImporterRegistry\\(" lib
+test` a production listát a
+`lib/features/song_trainer/application/song_trainer_providers.dart:140`-ban
+találja: `const ImporterRegistry(importers: <SongImporter>[NativeJsonImporter()])`.
+Az `importer_registry.dart` csak a beadott listát iterálja, tehát a briefben
+engedélyezett registry-fájl nem tudja önmagában MusicXML/MXL-t productionban
+regisztrálni. A provider nincs a §4 listán.
+
+**Mért policy ownership:** `rg -n "ImportLimits\\(|maxSourceBytes|maxEventCount|maxWorkspaceBytes|maxWallTime|ImportLimitFailureCode" lib test`
+az `import_limits.dart:11–24`-et az egyetlen közös, konfigurálható source,
+event, workspace és wall-time budget/failure ownerként azonosítja. Az MXL
+archive-entry és extracted-byte `max−1/max/max+1` acceptance-mátrixhoz nincs
+mező vagy failure-code. Private parserkonstans sértené az ADR 0091 közös,
+konfigurálható limit-követelményét; a fájl szintén nincs a §4 listán.
+
+**Dependency/security audit:** a lockban csak transitive `xml 6.6.1` van
+(`dart pub deps --style=compact` szerint `dbus` útján); nincs direct `xml` vagy
+`archive`. A pre-flight az MIT-licences, aktív `xml` (DTD-t nem alkalmaz) és
+`archive` csomagot választja, de a kódnak továbbra is explicit `DOCTYPE`-ot,
+archive symlinket, canonical duplicate-ot és nested archive-ot kell rejectálnia
+teszttel. A döntést ADR 0120 rögzíti.
+
+**Módosítás (ADR 0112 önjavító kör, 2026-08-03, E03-R11/H3):** a mért
+production registry-tulajdonost (`song_trainer_providers.dart`) és shared
+MXL-limit-tulajdonost (`import_limits.dart`) a §4 táblába és az implementer
+`allowed_paths`-ába felvettem. A közvetlen provider-wiring teszt
+(`song_trainer_providers_test.dart`) szintén engedélyezett. Az ADR 0120 csak
+pre-flight dokumentáció: a §4 emberi táblában szerepel, de a router TOML-jába
+nem kerül, mert a modell nem írhat normatív ADR-t. A `tools/tests` regresszió
+e három útvonal meglétét ellenőrzi, így a korábbi H3 nem ismétlődhet csendben.
 
 ## 1. Cél
 
@@ -111,8 +145,11 @@ A dokumentált MusicXML subset és MXL container biztonságos, rational timingú
 | `lib/features/song_trainer/data/importers/mxl_importer.dart` | ÚJ | container adapter |
 | `lib/features/song_trainer/data/importers/mxl_archive_reader.dart` | ÚJ | secure extraction |
 | `lib/features/song_trainer/data/importers/importer_registry.dart` | R10-ből | registration |
+| `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | production importer registration |
+| `lib/features/song_trainer/data/importers/import_limits.dart` | R10-ből | shared configurable MXL archive limits |
 | `test/features/song_trainer/data/importers/musicxml_importer_test.dart` | ÚJ | subset snapshot |
 | `test/features/song_trainer/data/importers/mxl_security_test.dart` | ÚJ | archive/XML security |
+| `test/features/song_trainer/application/song_trainer_providers_test.dart` | ÚJ | production registry wiring |
 | `test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml` | ÚJ | 4/4 chord |
 | `test/fixtures/song_trainer/musicxml/waltz_34.musicxml` | ÚJ | 3/4 |
 | `test/fixtures/song_trainer/musicxml/meter_68.musicxml` | ÚJ | 6/8 |
@@ -125,6 +162,7 @@ A dokumentált MusicXML subset és MXL container biztonságos, rational timingú
 | `test/fixtures/song_trainer/mxl/malicious_path.mxl` | ÚJ | traversal |
 | `test/fixtures/song_trainer/mxl/extracted_limit.mxl` | ÚJ | zip expansion limit |
 | `docs/rounds/e03-r11-musicxml-mxl-importer.md` | meglévő | §10 handoff |
+| `docs/adr/0120-musicxml-mxl-import-boundary.md` | új, pre-flight | parser + shared policy ownership döntés |
 
 **Tilos zóna:** minden más fájl, különösen `HANDOFF.md`, RTM,
 nem felsorolt `.github/**`, más feature belső fájlja és más kör briefje.
