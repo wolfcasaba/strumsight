@@ -17,6 +17,13 @@
 > a metadata regression test that was RED before the revision. No product code
 > is in this heal; the halted R12 branch may resume only after this scope
 > revision merges and the router receives the open F1–F4 findings.
+> **HEAL E03-R12/H6:** the R12 branch's non-force H3 merge accidentally put
+> its ADR pre-flight document back into the model-owned `allowed_paths`; Router
+> CI caught the boundary violation. The brief now keeps that ADR only in its
+> human §4 table, the complete router suite is green, and the sanctioned
+> `rebase-baseline` recovery refreshes the state hash without resetting the
+> consumed M3/Terra ledger. R12 remains unmerged and resumes for independent
+> review after the exact branch CI is green.
 > The following H3/H8/H6 notes are historical recovery evidence:
 > **HEAL E03-R11/H3.** The R11 pre-flight measured that the production importer
 > list belongs to `song_trainer_providers.dart`, while shared configurable MXL

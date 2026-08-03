@@ -10,7 +10,6 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "docs/adr/0121-midi-import-boundary.md",
   "lib/features/song_trainer/data/importers/import_limits.dart",
   "lib/features/song_trainer/data/importers/midi_importer.dart",
   "lib/features/song_trainer/data/importers/midi_parser_adapter.dart",
@@ -113,6 +112,22 @@ ellentmondó acceptance, hiányzó fixture vagy nem reprodukálható mérce eset
 - **Regressziós őr:**
   `Epic3BriefMetadataTest.test_r12_scope_includes_measured_midi_track_limit_owner`
   először RED volt e path hiányával; ezután csak e scope-revízióval GREEN.
+
+### Módosítás (ADR 0112 önjavító kör, 2026-08-03, H6)
+
+- **Mért gyökérok:** a H3-scope merge-konfliktusának R12-oldali feloldása az
+  `docs/adr/0121-midi-import-boundary.md` pre-flight dokumentumot is
+  visszaírta az implementer `ai-router.allowed_paths` listájába. Ez sérti az
+  ADR 0088 tulajdonosi határát: az ADR a §4 emberi scope-táblájában marad,
+  de az implementer nem szerkesztheti. A `Router CI` ezt a
+  `Epic3BriefMetadataTest.test_all_twenty_two_briefs_match_their_committed_scope_and_gate`
+  valódi hibájával mérte.
+- **Feloldás:** az `allowed_paths` ismét csak a modell által módosítható
+  implementation/test/fixture/brief fájlokat tartalmazza; a §4-table
+  `docs/adr/0121-midi-import-boundary.md` sora változatlan marad. Ez nem
+  szűkíti az emberi pre-flight scope-ot, csak visszaállítja a router
+  szerződését. A rebase-baseline csak e javított, zöld scope-audit után
+  frissítheti a perzisztált brief-hash-et.
 
 - R10 importer pipeline és R05 NoteTrackAnalyzer használható.
 - Parser dependency csak licence/maintenance audit után kerülhet be.
