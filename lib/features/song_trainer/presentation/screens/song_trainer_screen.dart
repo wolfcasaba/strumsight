@@ -131,10 +131,7 @@ final class SongTrainerScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Song Trainer')),
       body: SafeArea(
-        child: _Mirror(
-          leftHanded: leftHanded,
-          child: body,
-        ),
+        child: _Mirror(leftHanded: leftHanded, child: body),
       ),
     );
   }
@@ -279,12 +276,8 @@ final class _PausedBody extends StatelessWidget {
         const ListTile(
           key: Key('song-trainer-speed-disabled'),
           enabled: false,
-          title: Text(
-            'Speed disabled — backing cannot change rate.',
-          ),
-          subtitle: Text(
-            'Paused: speed resumes when the session restarts.',
-          ),
+          title: Text('Speed disabled — backing cannot change rate.'),
+          subtitle: Text('Paused: speed resumes when the session restarts.'),
         ),
         TransportControls(
           isPlaying: false,

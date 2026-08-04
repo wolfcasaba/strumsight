@@ -213,7 +213,8 @@ void main() {
         final afterTwo = engine.record(afterOne, passedAgain);
         expect(afterTwo.attempts, hasLength(2));
         expect(
-          afterTwo.currentTempo.bpm > 80 || afterTwo.status == SpeedBuilderStatus.completed,
+          afterTwo.currentTempo.bpm > 80 ||
+              afterTwo.status == SpeedBuilderStatus.completed,
           isTrue,
           reason:
               'Speed Builder policy must advance tempo OR mark completed '

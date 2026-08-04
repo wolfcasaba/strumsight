@@ -438,28 +438,24 @@ void main() {
     },
   );
 
-  testWidgets(
-    'A–B range outside the song measure count resolves to null',
-    (tester) async {
-      // Out-of-bounds ranges must be rejected by the resolver so the
-      // controller never starts a loop on a stale selection. The control
-      // case: an unfiltered `resolve` returns the range even when
-      // `endExclusive > measureCount`, which would start a loop on a
-      // nonexistent measure.
-      const sections = <SongSection>[];
-      final outOfBounds = MeasureRange(start: 0, endExclusive: 5);
-      expect(
-        outOfBounds.resolve(measureCount: 2, sections: sections),
-        isNull,
-        reason: 'Range outside measure count must not start a loop',
-      );
-      final inBounds = MeasureRange(start: 0, endExclusive: 2);
-      expect(
-        inBounds.resolve(measureCount: 2, sections: sections),
-        isNotNull,
-      );
-    },
-  );
+  testWidgets('A–B range outside the song measure count resolves to null', (
+    tester,
+  ) async {
+    // Out-of-bounds ranges must be rejected by the resolver so the
+    // controller never starts a loop on a stale selection. The control
+    // case: an unfiltered `resolve` returns the range even when
+    // `endExclusive > measureCount`, which would start a loop on a
+    // nonexistent measure.
+    const sections = <SongSection>[];
+    final outOfBounds = MeasureRange(start: 0, endExclusive: 5);
+    expect(
+      outOfBounds.resolve(measureCount: 2, sections: sections),
+      isNull,
+      reason: 'Range outside measure count must not start a loop',
+    );
+    final inBounds = MeasureRange(start: 0, endExclusive: 2);
+    expect(inBounds.resolve(measureCount: 2, sections: sections), isNotNull);
+  });
 }
 
 final SongAssetReference _asset = SongAssetReference(

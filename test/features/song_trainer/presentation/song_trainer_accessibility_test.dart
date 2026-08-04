@@ -234,58 +234,57 @@ void main() {
     },
   );
 
-  testWidgets(
-    'right-handed preference does not mirror the running body',
-    (tester) async {
-      final harness = _Harness.scored();
-      addTearDown(harness.dispose);
-      final state = const SongTrainerState.initial().copyWith(
-        status: SongTrainerStatus.running,
-        backingRateSupported: true,
-      );
+  testWidgets('right-handed preference does not mirror the running body', (
+    tester,
+  ) async {
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+    final state = const SongTrainerState.initial().copyWith(
+      status: SongTrainerStatus.running,
+      backingRateSupported: true,
+    );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: <Override>[
-            ...preferenceOverrides(<String, Object>{
-              StorageKeys.leftHanded: false,
-            }),
-            songTrainerControllerProvider(
-              SongTrainerControllerInputs(
-                compilation: _scoredCompilation(),
-                backingAsset: _asset,
-              ),
-            ).overrideWith((ref) => harness.controller),
-          ],
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: SongTrainerScreen(state: state),
-          ),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ...preferenceOverrides(<String, Object>{
+            StorageKeys.leftHanded: false,
+          }),
+          songTrainerControllerProvider(
+            SongTrainerControllerInputs(
+              compilation: _scoredCompilation(),
+              backingAsset: _asset,
+            ),
+          ).overrideWith((ref) => harness.controller),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SongTrainerScreen(state: state),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      // Affordances remain mounted (same as left-handed case).
-      expect(find.byKey(const Key('song-trainer-loop-index')), findsOneWidget);
-      expect(find.byKey(const Key('song-trainer-strum-lane')), findsOneWidget);
+    // Affordances remain mounted (same as left-handed case).
+    expect(find.byKey(const Key('song-trainer-loop-index')), findsOneWidget);
+    expect(find.byKey(const Key('song-trainer-strum-lane')), findsOneWidget);
 
-      // No horizontal-flip Transform should be present — flipping the
-      // matrix would change the body to mirror mode. The control case:
-      // removing the left-handed wiring in `song_trainer_screen.dart` and
-      // keeping a Transform in the body unconditionally would still mount
-      // the keys, but the firstWhere below would fail because no
-      // Transform exists with scale(-1, 1, 1).
-      final mirrored = tester
-          .widgetList<Transform>(find.byType(Transform))
-          .any(
-            (transform) =>
-                transform.transform.entry(0, 0) == -1.0 &&
-                transform.transform.entry(1, 1) == 1.0,
-          );
-      expect(mirrored, isFalse);
-    },
-  );
+    // No horizontal-flip Transform should be present — flipping the
+    // matrix would change the body to mirror mode. The control case:
+    // removing the left-handed wiring in `song_trainer_screen.dart` and
+    // keeping a Transform in the body unconditionally would still mount
+    // the keys, but the firstWhere below would fail because no
+    // Transform exists with scale(-1, 1, 1).
+    final mirrored = tester
+        .widgetList<Transform>(find.byType(Transform))
+        .any(
+          (transform) =>
+              transform.transform.entry(0, 0) == -1.0 &&
+              transform.transform.entry(1, 1) == 1.0,
+        );
+    expect(mirrored, isFalse);
+  });
 
   // ─── M2: reader throttling ──────────────────────────────────────────────
   // The §5.3 / §6 acceptance matrix requires the screen-reader live region
@@ -335,7 +334,9 @@ void main() {
       await tester.pump();
 
       // Seed with the first message — surfaces immediately via initState.
-      (hostKey.currentState as _ThrottleHostState).update(messages.sublist(0, 1));
+      (hostKey.currentState as _ThrottleHostState).update(
+        messages.sublist(0, 1),
+      );
       await tester.pump();
       final firstFinder = find.byKey(const Key('song-trainer-loop-feedback'));
       expect(firstFinder, findsOneWidget);
@@ -366,48 +367,47 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a message outside the announce gap replaces the displayed one',
-    (tester) async {
-      // Two messages that ARE outside the throttle gap — both must surface.
-      final origin = DateTime.utc(2026, 8, 4);
-      final first = SongLoopFeedbackMessage(
-        headline: 'First',
-        detail: 'First detail',
-        outcome: SongLoopFeedbackOutcome.pass,
-        announcedAt: origin,
-      );
-      final second = SongLoopFeedbackMessage(
-        headline: 'Second',
-        detail: 'Second detail',
-        outcome: SongLoopFeedbackOutcome.retry,
-        announcedAt: origin.add(const Duration(seconds: 5)),
-      );
+  testWidgets('a message outside the announce gap replaces the displayed one', (
+    tester,
+  ) async {
+    // Two messages that ARE outside the throttle gap — both must surface.
+    final origin = DateTime.utc(2026, 8, 4);
+    final first = SongLoopFeedbackMessage(
+      headline: 'First',
+      detail: 'First detail',
+      outcome: SongLoopFeedbackOutcome.pass,
+      announcedAt: origin,
+    );
+    final second = SongLoopFeedbackMessage(
+      headline: 'Second',
+      detail: 'Second detail',
+      outcome: SongLoopFeedbackOutcome.retry,
+      announcedAt: origin.add(const Duration(seconds: 5)),
+    );
 
-      final hostKey = GlobalKey();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: _ThrottleHost(
-              key: hostKey,
-              messages: <SongLoopFeedbackMessage>[first],
-            ),
+    final hostKey = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _ThrottleHost(
+            key: hostKey,
+            messages: <SongLoopFeedbackMessage>[first],
           ),
         ),
-      );
-      await tester.pump();
-      final finder = find.byKey(const Key('song-trainer-loop-feedback'));
-      expect(tester.getSemantics(finder).label, contains('First'));
+      ),
+    );
+    await tester.pump();
+    final finder = find.byKey(const Key('song-trainer-loop-feedback'));
+    expect(tester.getSemantics(finder).label, contains('First'));
 
-      // The second message is 5 s after the first — the throttle window
-      // has elapsed, so the second one must surface.
-      (hostKey.currentState as _ThrottleHostState).update(
-        <SongLoopFeedbackMessage>[first, second],
-      );
-      await tester.pump();
-      expect(tester.getSemantics(finder).label, contains('Second'));
-    },
-  );
+    // The second message is 5 s after the first — the throttle window
+    // has elapsed, so the second one must surface.
+    (hostKey.currentState as _ThrottleHostState).update(
+      <SongLoopFeedbackMessage>[first, second],
+    );
+    await tester.pump();
+    expect(tester.getSemantics(finder).label, contains('Second'));
+  });
 }
 
 /// Test-only host widget that owns the messages list and rebuilds
