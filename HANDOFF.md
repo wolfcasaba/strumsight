@@ -55,7 +55,13 @@
 > `STOPPED / task Terra budget is exhausted`, 2026-08-04T08:11:38Z). A
 > Claude-kvótazárlat (ADR 0115) kézzel feloldva. Az `auto` útvonal és a
 > router kódja érintetlen — a váltás a queue engine-oszlopán és a
-> `PIPELINE_MODEL` defaulton át történt, bármikor visszaállítható. **HEAL E03-R16/H3:** the prepared R16 brief omitted
+> `PIPELINE_MODEL` defaulton át történt, bármikor visszaállítható.
+> **Keretkímélés (user-döntés 2026-08-04 du.):** a kör-orchestrátor Opus 4.8
+> marad, de `--effort medium` (`PIPELINE_EFFORT`); az önjavító session
+> **Sonnet 5** (`PIPELINE_SELFHEAL_MODEL`, bevezető árazás 2026-08-31-ig).
+> Indoklás: az Opus-vonalon belül a tokenár azonos (a 4.6 nem spórolna,
+> cache-minimuma 4096), a valódi kar az effort + a heal-modell. Mérce:
+> `tools/round-pipeline.sh --session-config round|heal` + regressziós tesztek. **HEAL E03-R16/H3:** the prepared R16 brief omitted
 > the measured canonical route catalogue, Library editor entrypoint, route
 > registration regression and mandatory review artifact, so the editor could
 > not be truthfully reachable within scope. [PR #114](https://github.com/wolfcasaba/strumsight/pull/114)

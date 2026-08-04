@@ -78,6 +78,18 @@ claude_bin=${CLAUDE_BIN:-claude}
 # Korábbi default: claude-sonnet-5 (user-döntés 2026-08-01, kvótaszűke miatt).
 claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
 
+# Keretkímélő beállítások (user-döntés 2026-08-04: „nem akarom, hogy gyorsan
+# elfogyjon a keretem, még sok epic kell"):
+#   - effort=medium a session-default helyett — az Opus-vonalon belül NEM a
+#     modellváltás a spórolás (a teljes Opus-vonal tokenára azonos, a 4.6
+#     ráadásul 4096-os cache-minimumot és gyengébb agentic viselkedést hozna),
+#     hanem az effort-szint;
+#   - az önjavító session Sonnet 5-ön fut (output-oldalon az Opus árának 40%-a,
+#     bevezető árazás 2026-08-31-ig): infrastruktúra-diagnózis, nem termékítélet.
+#     A kör-orchestrátor (terv + review + merge-kapu) marad Opus 4.8.
+claude_effort=${PIPELINE_EFFORT:-medium}
+heal_model=${PIPELINE_SELFHEAL_MODEL:-claude-sonnet-5}
+
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
 # CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
@@ -230,7 +242,7 @@ codex_prompt_file() {
 # kvótára utaló néma halál esetén Codex/Terra. 0 = van jelzésfájl.
 run_orchestrator_session() {
   local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
-  local timeout_s="$5" label="$6"
+  local timeout_s="$5" label="$6" session_model="${7:-$claude_model}"
   local blocked_until codex_prompt
 
   rm -f "$signal_file"
@@ -242,7 +254,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "env -u CLAUDE_CONFIG_DIR $claude_bin --permission-mode bypassPermissions --model $claude_model 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "env -u CLAUDE_CONFIG_DIR $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
@@ -505,7 +517,7 @@ attempt_selfheal() {
   notify "🔧 önjavítás indul: $halt_round" "$halt_code · $attempts/$selfheal_max kísérlet"
 
   if ! run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
-        "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"; then
+        "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"; then
     log "az önjavító session jelzés nélkül ért véget — a lánc áll"
     notify "⛔ önjavítás jelzés nélkül halt" "$halt_round / $halt_code — kivizsgálás kell" high
     return 3
@@ -619,6 +631,14 @@ case "${1:-}" in
   --claude-process-comm-check)    # $2=`ps -o comm=` név → 0, ha ez ÉLŐ Claude process
     printf '%s\n' "${2:-}" | grep -qE "$CLAUDE_PROCESS_COMM_PATTERN"
     exit $?
+    ;;
+  --session-config)    # $2=round|heal → a feloldott modell + effort (teszthorog, user-döntés 2026-08-04)
+    case "${2:-}" in
+      round) printf 'model=%s effort=%s\n' "$claude_model" "$claude_effort" ;;
+      heal)  printf 'model=%s effort=%s\n' "$heal_model" "$claude_effort" ;;
+      *) echo "használat: --session-config round|heal" >&2; exit 2 ;;
+    esac
+    exit 0
     ;;
   --terra-hold-active)    # $2=kör → exit 0 ha AKTÍV Terra napi-budget hold van rá, 1 egyébként
     if terra_hold_active_for "${2:-}"; then

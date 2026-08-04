@@ -95,7 +95,61 @@ class RoundPipelineFallbackTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertLess(elapsed, 2, completed.stdout + completed.stderr)
             self.assertTrue((state_dir / "claude-blocked-until").exists())
-            self.assertIn("pipeline-E03-R09-fallback:", events_file.read_text())
+            events = events_file.read_text()
+            self.assertIn("pipeline-E03-R09-fallback:", events)
+            # Keretkímélés (user-döntés 2026-08-04): a Claude-session indító
+            # parancsa explicit effort-szintet visz — a session-default agentic
+            # munkán a legmagasabb sáv felé húz, ami a heti keretet égeti.
+            claude_launch = next(
+                line for line in events.splitlines() if "fake-claude" in line
+            )
+            self.assertIn("--effort medium", claude_launch)
+
+
+class SessionConfigTest(unittest.TestCase):
+    """A kör- és önjavító session modell/effort-beállítása mérhető szerződés.
+
+    User-döntés 2026-08-04 (keretkímélés): a kör-orchestrátor Opus 4.8 marad
+    (terv + review + merge-kapu), de effort=medium; az önjavító session
+    Sonnet 5 (infrastruktúra-diagnózis, nem termékítélet). Az Opus-vonalon
+    belüli "olcsóbb modell" (4.6) NEM spórolna: azonos tokenár, 4096-os
+    cache-minimum, nincs xhigh — a valódi kar az effort és a heal-modell.
+    """
+
+    def _config(self, kind: str, env: dict | None = None) -> str:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        environment = dict(os.environ)
+        environment.update(env or {})
+        completed = subprocess.run(
+            ["bash", str(script), "--session-config", kind],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        return completed.stdout.strip()
+
+    def test_round_orchestrator_runs_opus_48_at_medium_effort(self) -> None:
+        self.assertEqual(
+            self._config("round", {"PIPELINE_MODEL": "", "PIPELINE_EFFORT": ""}),
+            "model=claude-opus-4-8 effort=medium",
+        )
+
+    def test_selfheal_runs_sonnet_5_at_medium_effort(self) -> None:
+        self.assertEqual(
+            self._config("heal", {"PIPELINE_SELFHEAL_MODEL": "", "PIPELINE_EFFORT": ""}),
+            "model=claude-sonnet-5 effort=medium",
+        )
+
+    def test_env_overrides_stay_operator_controllable(self) -> None:
+        self.assertEqual(
+            self._config(
+                "round", {"PIPELINE_MODEL": "claude-opus-5", "PIPELINE_EFFORT": "high"}
+            ),
+            "model=claude-opus-5 effort=high",
+        )
 
 
 class ClaudeProcessLivenessTest(unittest.TestCase):
