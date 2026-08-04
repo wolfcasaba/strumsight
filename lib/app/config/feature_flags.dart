@@ -16,6 +16,8 @@ final class FeatureFlags {
     this.migratedLearnEnabled = false,
     this.practiceDetailedHistoryEnabled = false,
     this.songTrainerV2Enabled = false,
+    this.aiTutorEnabled = false,
+    this.aiTutorCloudEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -48,6 +50,8 @@ final class FeatureFlags {
       migratedLearnEnabled: false,
       practiceDetailedHistoryEnabled: nonProd,
       songTrainerV2Enabled: false,
+      aiTutorEnabled: false,
+      aiTutorCloudEnabled: false,
     );
   }
 
@@ -78,6 +82,12 @@ final class FeatureFlags {
   /// SDD Ch4 §3). The flag has no dart-define override.
   final bool songTrainerV2Enabled;
 
+  /// Whether the AI Tutor feature is available. Defaults to OFF.
+  final bool aiTutorEnabled;
+
+  /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
+  final bool aiTutorCloudEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -90,7 +100,9 @@ final class FeatureFlags {
       other.practiceEngineV2Enabled == practiceEngineV2Enabled &&
       other.migratedLearnEnabled == migratedLearnEnabled &&
       other.practiceDetailedHistoryEnabled == practiceDetailedHistoryEnabled &&
-      other.songTrainerV2Enabled == songTrainerV2Enabled;
+      other.songTrainerV2Enabled == songTrainerV2Enabled &&
+      other.aiTutorEnabled == aiTutorEnabled &&
+      other.aiTutorCloudEnabled == aiTutorCloudEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -110,5 +122,7 @@ final class FeatureFlags {
       'practiceEngineV2Enabled: $practiceEngineV2Enabled, '
       'migratedLearnEnabled: $migratedLearnEnabled, '
       'practiceDetailedHistoryEnabled: $practiceDetailedHistoryEnabled, '
-      'songTrainerV2Enabled: $songTrainerV2Enabled)';
+      'songTrainerV2Enabled: $songTrainerV2Enabled, '
+      'aiTutorEnabled: $aiTutorEnabled, '
+      'aiTutorCloudEnabled: $aiTutorCloudEnabled)';
 }
