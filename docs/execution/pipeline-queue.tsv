@@ -88,7 +88,7 @@ E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	minimax	nincs	done
 # és az ADR-kérdés volt). A user 2026-08-01-én EXPLICIT a teljes Epic 3
 # folyamatos futtatását kérte, ezért a sor aktív. Az orchestrátor a
 # pre-flightban KÖTELESEN halttal áll meg, ha eldöntetlen rollout-kérdésbe fut.
-E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	codex	nincs	pending
+E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	codex	nincs	done
 # Epic 4 (AI Guitar Teacher) — batch előkészítve 2026-08-04 (docs/rounds/epic-04-batch-index.md).
 # Előfeltétel: E03-R22 (Epic 3 zárás) merge. Motor: ADR 0069 mért szabály (R18/R19 minimax, többi codex).
 # HOLD FELOLDVA (user-go 2026-08-04): az Epic 4 sorai `pending`-en — a lánc E03-R22
