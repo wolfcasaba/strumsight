@@ -3446,3 +3446,21 @@ data boundary azonnal két olvasásra alkalmas `ImportSourceFile`-lá buffereli.
 A meglévő adapterteszt most `XFile`-ból ellenőrzi a név/méret/bájttartalom és
 a két egymást követő read megőrzését; a kötelező exact-head APK futás a
 platform Gradle regresszió bizonyítéka.
+
+## L94 — A szerkesztő-funkció scope-ja a kanonikus route-, belépési- és review-ownert is tartalmazza (E03-R16 H3, 2026-08-04)
+
+**Mérés.** Az E03-R16 pre-flight `AppRoutes` katalógusában csak a Library és
+Import útvonal szerepelt; az `app_router.dart` is csak ezeket regisztrálta,
+és a `SongLibraryScreen` nem nyithatott editor képernyőt. A prepared brief
+ugyanakkor nem engedte az `app_route.dart`, `song_library_screen.dart` és
+`app_router_test.dart` owneröket. A kötelező, commitolt
+`docs/reviews/e03-r16-song-editor-v2-review.md` artefaktum is hiányzott.
+Így az editor nem lehetett volna igazolhatóan elérhető vagy függetlenül
+review-zott scope-on belül.
+
+**Javítás és regresszió.** A self-heal csak e négy mért útvonalat adja hozzá a
+R16 §4/`ai-router.allowed_paths` listájához; a route-regresszió bekerül a
+§7 gate-be, a review-pathot pedig kizárólag a független reviewer írhatja. Az
+`Epic3BriefMetadataTest.test_r16_scope_includes_measured_editor_activation_owners`
+a régi metadata ellen négy hiányzó úttal RED volt, a scope-revízió után GREEN.
+Sem termékkód, sem router-védelem, sem quality gate nem változott.
