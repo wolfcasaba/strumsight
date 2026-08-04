@@ -1,4 +1,4 @@
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 
 import 'song_importer.dart';
 
@@ -26,44 +26,46 @@ final class PlatformFilePickerAdapter implements FilePickerAdapter {
     'midi',
   ];
 
+  static const XTypeGroup _songTypeGroup = XTypeGroup(
+    label: 'StrumSight song files',
+    extensions: supportedExtensions,
+  );
+
   @override
   Future<ImportSourceFile?> pickSongFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: supportedExtensions,
-      withReadStream: true,
+    final file = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[_songTypeGroup],
     );
-    final file = result?.files.singleOrNull;
-    return file == null ? null : await fromPlatformFile(file);
+    return file == null ? null : await fromXFile(file);
   }
 
   /// Converts the plugin value at the data boundary. A readable stream is a
   /// mandatory privacy-preserving contract: paths and plugin objects do not
   /// escape to application or presentation state.
-  static Future<ImportSourceFile> fromPlatformFile(PlatformFile file) async {
-    final bytes = file.bytes == null
-        ? await _readStream(file.readStream)
-        : List<int>.unmodifiable(file.bytes!);
-    if (bytes == null) {
-      throw StateError('filePicker.sourceUnavailable');
-    }
+  static Future<ImportSourceFile> fromXFile(XFile file) async {
+    final bytes = await _readStream(file.openRead());
     return ImportSourceFile(
       displayName: file.name,
-      byteLength: file.size,
-      mimeType: file.extension,
+      byteLength: await file.length(),
+      mimeType: _extensionOf(file.name),
       // This closure belongs to the data boundary. SongImportState receives
       // only preview metadata, never the source payload or PlatformFile.
       openRead: () => Stream<List<int>>.value(bytes),
     );
   }
 
-  static Future<List<int>?> _readStream(Stream<List<int>>? stream) async {
-    if (stream == null) return null;
+  static Future<List<int>> _readStream(Stream<List<int>> stream) async {
     final bytes = <int>[];
     await for (final chunk in stream) {
       bytes.addAll(chunk);
     }
     return List<int>.unmodifiable(bytes);
+  }
+
+  static String? _extensionOf(String name) {
+    final separator = name.lastIndexOf('.');
+    if (separator <= 0 || separator == name.length - 1) return null;
+    return name.substring(separator + 1);
   }
 
   @override

@@ -43,7 +43,7 @@ dependencies:
   xml: ^6.6.1                   # MusicXML parser at the data-layer boundary
   archive: ^4.0.7               # secure MXL container inspection
   crypto: ^3.0.7                # source SHA-256 provenance
-  file_picker: ^3.0.4           # platform file selection behind Song Trainer adapter
+  file_selector: ^1.1.0         # AGP-compatible platform file selection behind Song Trainer adapter
 
 dev_dependencies:
   flutter_test:
