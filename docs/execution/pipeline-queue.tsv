@@ -62,15 +62,19 @@ E03-R12	docs/rounds/e03-r12-midi-importer.md	auto	nincs	done
 E03-R13	docs/rounds/e03-r13-guitar-pro-feasibility.md	auto	nincs	done
 E03-R14	docs/rounds/e03-r14-guitar-pro-path.md	auto	nincs	done
 E03-R15	docs/rounds/e03-r15-song-library-import-ui.md	auto	nincs	done
-E03-R16	docs/rounds/e03-r16-song-editor-v2.md	auto	nincs	pending
-E03-R17	docs/rounds/e03-r17-overview-track-range-setup.md	auto	nincs	pending
-E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	auto	nincs	pending
-E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	auto	nincs	pending
-E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	auto	nincs	pending
-E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	auto	nincs	pending
+# Implementer-motor váltás 2026-08-04 (user-döntés: „a fejlesztő legyen a Terra"):
+# a még NYITOTT E03 sorok engine-je `auto` (MiniMax-first router) helyett `codex` —
+# a tools/codex-round.sh a default CODEX_HOME-ban a gpt-5.6-terra modellt futtatja.
+# Az orchestrátor/reviewer ugyanezzel a döntéssel Claude Opus 4.8 (round-pipeline.sh).
+E03-R16	docs/rounds/e03-r16-song-editor-v2.md	codex	nincs	pending
+E03-R17	docs/rounds/e03-r17-overview-track-range-setup.md	codex	nincs	pending
+E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	codex	nincs	pending
+E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	codex	nincs	pending
+E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	codex	nincs	pending
+E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	codex	nincs	pending
 # E03-R22 (epic-zárás) — az ADR 0087 §7 alapból kézi indítást ír elő, mert a
 # zárókör pre-flightja emberi döntéseket kér (az E02-R20-nál ez a flag-rollout
 # és az ADR-kérdés volt). A user 2026-08-01-én EXPLICIT a teljes Epic 3
 # folyamatos futtatását kérte, ezért a sor aktív. Az orchestrátor a
 # pre-flightban KÖTELESEN halttal áll meg, ha eldöntetlen rollout-kérdésbe fut.
-E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	auto	nincs	pending
+E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	codex	nincs	pending

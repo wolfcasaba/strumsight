@@ -71,10 +71,12 @@ heal_timeout=${PIPELINE_SELFHEAL_TIMEOUT:-10800}     # 3 óra: diagnózis + fix 
 selfheal_enabled=${PIPELINE_SELFHEAL:-1}
 selfheal_max=${PIPELINE_SELFHEAL_MAX:-3}
 claude_bin=${CLAUDE_BIN:-claude}
-# Sonnet 5 az orchestrátor-default (user-döntés 2026-08-01: a Claude heti
-# keretből 15% maradt, ezért a legolcsóbb elfogadható reviewer-motor kell —
-# az implementer úgyis MiniMax M3, a Claude dolga a review + a merge-kapu).
-claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
+# Opus 4.8 az orchestrátor-default (user-döntés 2026-08-04: „kapcsoljuk vissza
+# a Claude-ot Opus 4.8-cal, továbbá a fejlesztő legyen a Terra"). Az implementer
+# ettől a döntéstől Terra (queue engine=codex), a Claude dolga a terv + a review
+# + a merge-kapu — oda a nagyobb ítélőképesség kell.
+# Korábbi default: claude-sonnet-5 (user-döntés 2026-08-01, kvótaszűke miatt).
+claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját

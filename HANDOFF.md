@@ -4,7 +4,20 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (HEAL E03-R16/H6).** **HEAL E03-R16/H3:** the prepared R16 brief omitted
+> (motorváltás + HEAL E03-R16/H6).**
+> **MOTORVÁLTÁS 2026-08-04 (user-döntés, operátori beavatkozás):** az
+> orchestrátor/reviewer újra **Claude, Opus 4.8** (`claude-opus-4-8`,
+> `tools/round-pipeline.sh` default — korábban Sonnet 5), az **implementer
+> pedig a Terra**: minden még nyitott E03 kör (`E03-R16`…`E03-R22`)
+> `engine=codex` a `docs/execution/pipeline-queue.tsv`-ben, azaz
+> `tools/codex-round.sh` + `gpt-5.6-terra` — nem a MiniMax-first `auto`
+> router. Kiváltó mért ok: az R16 auto-router task-keretében az M3
+> megoldási kísérletek és **mindkét Terra-hívás elfogyott**, miközben három
+> független-review MAJOR nyitva maradt (`router-status`:
+> `STOPPED / task Terra budget is exhausted`, 2026-08-04T08:11:38Z). A
+> Claude-kvótazárlat (ADR 0115) kézzel feloldva. Az `auto` útvonal és a
+> router kódja érintetlen — a váltás a queue engine-oszlopán és a
+> `PIPELINE_MODEL` defaulton át történt, bármikor visszaállítható. **HEAL E03-R16/H3:** the prepared R16 brief omitted
 > the measured canonical route catalogue, Library editor entrypoint, route
 > registration regression and mandatory review artifact, so the editor could
 > not be truthfully reachable within scope. [PR #114](https://github.com/wolfcasaba/strumsight/pull/114)

@@ -31,18 +31,23 @@ class PipelineIntegrationTest(unittest.TestCase):
         rejected = self.run_command(["bash", str(script), "--validate-engine", "surprise"])
         self.assertEqual(rejected.returncode, 2)
 
-    def test_queue_runs_the_whole_epic3_on_auto_including_the_closure_round(self) -> None:
-        # A user 2026-08-01-i döntése: az Epic 3 MIND a 22 sora fut az auto
-        # routeren, folyamatosan. (A korábbi `prepared` + kézi zárókör
-        # elvárását ez a döntés váltotta le — ADR 0087 §7, ADR 0112 §6.)
+    def test_queue_runs_the_whole_epic3_continuously_including_the_closure_round(self) -> None:
+        # A user 2026-08-01-i döntése: az Epic 3 MIND a 22 sora fut
+        # folyamatosan, kézi zárókör nélkül. (A korábbi `prepared` + kézi
+        # zárókör elvárását ez váltotta le — ADR 0087 §7, ADR 0112 §6.)
+        #
+        # Módosítás 2026-08-04 (user-döntés: „a fejlesztő legyen a Terra"): a
+        # MÉG NYITOTT sorok implementer-motorja `auto` (MiniMax-first router)
+        # helyett `codex` = gpt-5.6-terra. A lezárt sorok `auto` értéke
+        # történeti tény, nem írjuk át. A folyamatosság elvárása változatlan.
         queue = (ROOT / "docs" / "execution" / "pipeline-queue.tsv").read_text()
         self.assertIn("auto | minimax | codex", queue)
         rows = [line.split("\t") for line in queue.splitlines() if line and not line.startswith("#")]
         self.assertTrue(all(row[2] in {"auto", "minimax", "codex"} for row in rows))
         epic3 = [row for row in rows if row[0].startswith("E03-")]
         self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 23)])
-        self.assertTrue(all(row[2] == "auto" for row in epic3))
         self.assertTrue(all(row[4] in {"pending", "running", "done"} for row in epic3))
+        self.assertTrue(all(row[2] == "codex" for row in epic3 if row[4] != "done"))
 
     def test_prompt_has_one_initial_auto_dispatch_and_budget_preserving_resume(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()

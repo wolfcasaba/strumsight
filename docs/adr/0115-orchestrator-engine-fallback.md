@@ -27,9 +27,15 @@ elméleti: a következő körök közben fogy el.
 A `tools/round-pipeline.sh` minden orchestrátori sessiont (kör-levezénylés ÉS
 önjavító kör) a `run_orchestrator_session` függvényen át indít:
 
-1. **Claude** (`PIPELINE_MODEL`, alap: `claude-sonnet-5`) — az elsődleges;
+1. **Claude** (`PIPELINE_MODEL`, alap: `claude-opus-4-8`) — az elsődleges;
 2. **Terra** (`codex exec`, `CODEX_HOME=~/.codex-terra`, ahol a default modell
    `gpt-5.6-terra`) — a fallback, **ugyanazzal a prompt-fájllal**.
+
+> **Módosítás 2026-08-04 (user-döntés):** a Claude-default `claude-sonnet-5`
+> helyett `claude-opus-4-8`, és az implementer a MiniMax-first `auto` router
+> helyett a Terra (a nyitott sorok `engine=codex`,
+> `docs/execution/pipeline-queue.tsv`). A fallback-mechanika változatlan: a
+> kvóta-kimerülés továbbra is a Terrára adja az orchestrátori munkadarabot.
 
 A fallback nem külön munkafolyamat: a Terra ugyanazt a kör- vagy önjavító
 promptot kapja, elé fűzve a
