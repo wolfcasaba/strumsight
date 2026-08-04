@@ -1,6 +1,7 @@
 # E03-R17 — Song Overview, track/range választás és setup
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-04, tervezési baseline: `main` @ `4c51009`; eredeti PREPARED 2026-08-01 @ `eeb4f6d`)
+- **ADR:** [`0125`](../adr/0125-song-trainer-setup-configuration-boundary.md) — Song Trainer setup configuration boundary (a pre-flightban írva)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 17; §23–24, §27.4, §27.6
 - **Branch:** `codex/e03-r17-overview-track-range-setup`
 - **Előfeltétel:** E03-R16 merge
@@ -21,6 +22,7 @@ allowed_paths = [
   "lib/features/song_trainer/presentation/widgets/song_track_picker.dart",
   "lib/features/song_trainer/presentation/widgets/trainer_range_picker.dart",
   "lib/features/song_trainer/presentation/widgets/tuning_capo_reminder.dart",
+  "lib/app/routing/app_route.dart",
   "lib/app/routing/app_router.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
@@ -70,6 +72,71 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
 
+### Pre-flight revízió (mért 2026-08-04, baseline `main` @ `4c51009`, orchestrátor: Claude/Opus 4.8)
+
+**R1 — Hiányzó route-katalógus owner (scope-javítás).** Az Overview és a
+Trainer Setup képernyő két új GoRouter route-ot igényel. A
+`test/tooling/route_literal_guard_test.dart` gépi őr **minden** route-string-
+literált tilt a `lib/app/routing/app_route.dart` katalóguson kívül; a route-
+konstansok (`AppRoutes`) itt élnek. Az eredeti allowlist csak az
+`app_router.dart` wiringet engedte, a katalógust nem — így a két új route nem
+regisztrálható a `route_literal_guard` pirosra váltása nélkül. **Feloldás:**
+pontosan a mért, architektúra által kényszerített `lib/app/routing/app_route.dart`
+felvétele az `allowed_paths`-ba (ADR 0125 §Következmények). Ez az E03-R14/R15/R16
+pre-flight owner-kiegészítés mintája; lista-tágítás helyett a hiányzó
+kötelező owner pótlása. Az implementer a két konstanst (`songTrainerOverview`,
+`songTrainerSetup`, mindkettő `:songId` path-paraméterrel) az `AppRoutes`
+katalógusba írja, a route-okat a meglévő `if (songTrainerEnabled)` blokkba.
+
+**R2 — Provider-elhelyezés (nincs scope-tágítás).** A song_trainer controller-
+providerek konvenció szerint a `song_trainer_providers.dart`-ban központosulnak
+(`songImportControllerProvider`, `songLibraryControllerProvider`,
+`songEditorControllerProvider`). Mért tény: a `tool/check_architecture.dart` csak
+a core→feature és a cross-feature-public-API szabályt kényszeríti (NEM a
+provider-központosítást), és a presentation már ma is közvetlenül importál
+application-controllert (`song_editor_screen.dart` → `song_editor_controller.dart`).
+**Döntés:** a `songTrainerSetupControllerProvider` a saját, engedélyezett
+`song_trainer_setup_controller.dart`-ban co-located, a repository/resolver
+függőségeket intra-feature importtal olvassa. A `song_trainer_providers.dart`
+NEM módosul — annak szerkesztése listán kívüli → `stopped`.
+
+**R3 — Capability-modell mért alakja (unreachable-status szabály).** A
+`SongCapabilityReport` (ADR 0114) ma **csak** `chord` + `pitch` scoring-tengelyt
+hordoz, plusz `canPersist/canImportPreview/canExport/canTrain`. Nincs rhythm/strum
+scoring-mező és nincs backing playback-rate capability-mező. Következmények a §6
+mátrixra, a mért előállító inputokkal:
+- `chord` oszlop: `report.chord.scoring` — hamis ⟺ `SongValidationCode.chordUnsupported`
+  warning. Enabled ⟺ nincs ilyen warning.
+- `pitch` oszlop mono/poly: `report.pitch.scoring` / `isMonophonic` — hamis ⟺
+  `SongValidationCode.notePolyphonic` warning (polyphonic → `disabled+reason`).
+- „rhythm enabled" (strum/chord/note): **strukturális**, a sealed track-altípus
+  jelenléte (`ChordTrack`/`StrumTrack`/`NoteTrack`) + `canTrain` adja; nincs
+  capability-warning, ami lefokozná. A track-kind olvasása NEM „nyers eventből
+  következtetés" (kötött döntés 1) — a track-altípus explicit szerkezeti jelzés.
+- „backing/speed (playback-rate)" oszlop: a „supported" állapotnak **nincs
+  előállító inputja** R17-ben (backing-rate capability = R18). Ezért minden
+  playback-rate kontroll feltétel nélkül `honest-unavailable/pending`
+  (kötött döntés 3). A cél-speed **érték** (SDD §10.5, **50%–150%**) mint
+  konfig felvehető; a backing tényleges rate-realizációja R18-ig nem
+  hirdethető támogatottként.
+- „missing backing asset": különálló jelzés — feloldatlan `BackingAudioTrack.assetId`
+  a repositoryn; scoringot nem töröl, csak a backing-kontrollt tiltja + a
+  javítási flow belépési pontját adja (teljes repair NEM tágít).
+
+**R4 — Erőforrás-tulajdonlás (rule #2): N/A ebben a körben.** Nincs
+lease/lock/handle/subscription megszerzés — a trainer controller nem indul
+(transport/playback/mic = R18+, scope-on kívül). A setup csak olvas
+(repository) és egyetlen immutábilis `TrainerConfig`-ot ad tovább. Mérve:
+egyetlen R17 rétegre sincs `.acquire(`/mic/transport tulajdonlás rendelve.
+
+**R5 — Range-határok (mért).** `SongSection.startMeasure` /
+`endMeasureExclusive` (end **exclusive**, `endMeasureExclusive > startMeasure`
+validált); `SongMeasure.index ≥ 0`; a measure-szám =
+`SongDocument.measures.length`. A TrainerRange full/section/measure az inkluzív
+UI-kijelölést exclusive domain-végre képezi és `[0, measures.length)` közé
+zárja; az utolsó measure csak `end == measures.length` esetén kerül bele
+(off-by-one a §9 kockázat — explicit mapping-cellák).
+
 ## 1. Cél
 
 A dal és capabilityk érthető áttekintése, valid track/range/config kiválasztás és scoringot őszintén kapuzó Trainer Setup létrehozása.
@@ -111,7 +178,8 @@ A dal és capabilityk érthető áttekintése, valid track/range/config kiválas
 | `lib/features/song_trainer/presentation/widgets/song_track_picker.dart` | ÚJ | track/capability |
 | `lib/features/song_trainer/presentation/widgets/trainer_range_picker.dart` | ÚJ | range |
 | `lib/features/song_trainer/presentation/widgets/tuning_capo_reminder.dart` | ÚJ | reminder |
-| `lib/app/routing/app_router.dart` | meglévő | overview/setup route |
+| `lib/app/routing/app_route.dart` | meglévő | overview/setup route-konstans (`route_literal_guard` kényszer) |
+| `lib/app/routing/app_router.dart` | meglévő | overview/setup route regisztráció |
 | `lib/l10n/app_en.arb` | meglévő | EN copy |
 | `lib/l10n/app_hu.arb` | meglévő | HU copy |
 | `test/features/song_trainer/domain/trainer_range_test.dart` | ÚJ | range invariáns |
