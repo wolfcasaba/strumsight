@@ -117,6 +117,56 @@ feloldások:
 A feloldások egyike sem tágítja az engedélyezett fájllistát; a benchmark-küszöböt
 az implementer méri és a baseline-doc rögzíti (§8 lépés 1, ADR 0126 döntés 5).
 
+### §0.0/b — drift-benchmark metodológia (döntés Codex `stopped` után, 2026-08-04)
+
+Codex az első futáson `stopped`-ot jelzett: *„nincs engedélyezett audio fixture
+vagy playback device a kötelező backing-drift küszöb méréséhez; kitalált vagy
+csak-fake evidencia tilos."* A jelzés helyes abban, hogy fake-only szám vagy
+találomra vett küszöb tilos — de a `stopped` túl konzervatív volt abban, hogy
+**fizikai audio-eszközt** feltételezett a küszöbhöz. Mért döntés (a wait-for-round
+utasítása szerint §0.0-revízióval feloldva, NEM lista-tágítással):
+
+- **Az SDD az INITIAL küszöbökről beszél, adapter-benchmarkból.** SDD §20.4
+  (2118. sor): *„Kezdeti küszöböket benchmark alapján kell beállítani, nem
+  találomra."* A §20.4 modell (monotonic clock = master; a player periodikus
+  position sample-t ad; a rendszer kiszámítja a driftet) szerint a mérendő
+  mennyiség a **player position-sample precizitása/jittere a monoton órához
+  képest**, nem egy valódi-guitar/eszköz felvétel. A `PlaybackCapabilities`
+  szerződés (SDD §20.2, e kör `playback_capabilities.dart`-ja) explicit
+  `positionPrecision` mezőt hordoz — ez a benchmark bemenete.
+
+- **Mért, citálható adapter-tulajdonság (nem fabrikáció).** Az `audioplayers 6.8.0`
+  a position streamet `PositionUpdater`-rel frissíti: alapból
+  `FramePositionUpdater` (render-frame kadencia, ~16,7 ms @ 60 Hz), vagy
+  konfigurálható `TimerPositionUpdater(interval:)`
+  (`~/.pub-cache/.../audioplayers-6.8.0/lib/src/position_updater.dart`,
+  `audioplayer.dart:171`). Tehát a position-sample precizitása a frissítési
+  intervallum nagyságrendjében kötött — ez a `positionPrecision` **dokumentált,
+  forrásból citálható** alapja, nem talált szám.
+
+- **A küszöbök a `positionPrecision` DOKUMENTÁLT FÜGGVÉNYE.** A
+  `docs/baseline/epic-03-backing-drift-benchmark.md` rögzíti: (1) az
+  `audioplayers` position-update mechanizmus citációját; (2) a választott
+  `positionPrecision`-t; (3) a három küszöbcellát (`tolerál` / `boundary-resync`
+  / `hard-resync`) mint a `positionPrecision` explicit, indokolt többszöröseit.
+  A `backing_drift_test.dart` a `threshold−ε / threshold / threshold+ε`
+  cellákat a **fake playerrel ismert `positionPrecision`-nél + fake clockkal**,
+  determinisztikusan méri. Ez „benchmark alapján, nem találomra" — anélkül, hogy
+  fake-only számot állítana igaznak.
+
+- **A valódi-eszköz megerősítés KÜLÖN, pending.** A tényleges on-device
+  position-jitter mérése a user eszköz-kapuja (brief §7: „valódi audio/device
+  mércét CI nem helyettesít"; §8 lépés 5: „device evidence-t jelöld külön"; SDD
+  §20.4 „kezdeti" küszöb). A baseline-doc ezt EXPLICIT módon `pending`-ként
+  jelöli; a kör nem hirdeti a küszöböt eszköz-mértként. Ez összhangban van az
+  ADR 0126 döntés 5-tel (benchmark-eredetű küszöb) és az ADR 0125 §4
+  honest-pending elvvel.
+
+Ez a döntés a kör SAJÁT, még nem merge-elt artefaktumát érinti (brief §0.0 + a
+listán MÁR SZEREPLŐ `docs/baseline/...` doc); nem tágít fájllistát, nem nyúl
+tilos zónához, nem gyengíti a mércét (a küszöb egy mért adapter-tulajdonság
+indokolt függvénye marad). Az implementer ezzel a metodológiával folytatja.
+
 ## 1. Cél
 
 Scoring- és UI-mentes, monotonic, explicit transport state machine és cserélhető backing player adapter lifecycle-safe szinkronnal.
