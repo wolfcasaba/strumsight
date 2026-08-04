@@ -1,6 +1,6 @@
 # E04-R02 — Tutor azonosítók, conversation és message domain
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-04, kód **újramérve**: main @ `dd7712d`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 2; §35
 - **Branch:** `codex/e04-r02-conversation-and-message-domain`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R01 merge**
@@ -49,9 +49,55 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén `s
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott
-ADR (a döntések a R01 0131–0134-et bővítik). A greenfield `ai_tutor` domain az
-R01 boundary alá épül.
+Pre-flight lezárva 2026-08-04, orchestrátor Claude (Opus 4.8). Baseline **újramérve**:
+`main` @ `dd7712d` (E04-R01 merge `814388a` beleértve). Az alábbi mért feloldások
+**KÖTÖTTEK** — az implementer ezeket ne írja felül.
+
+**(1) ADR-reconcile — nincs ÚJ ADR.** A `docs/adr/0131`–`0134` fájlok léteznek és
+elfogadottak (mérve: `ls docs/adr/013{1,2,3,4}-*.md` → provider-boundary /
+privacy-and-consent / tool-confirmation / memory-policy). Ez a kör **greenfield
+domain-modell**, nem hoz új keresztmetsző normatív döntést: a §5 döntései a
+**0131 provider-boundary** (Flutter-/SDK-mentes domain) és a **0132/0134**
+(nincs system-prompt / rejtett reasoning tárolás) **kiterjesztései**. Ezért új
+ADR-számot nem osztunk. (A pipeline-prompt „te írod meg az ADR-t" pontja arra a
+körre vonatkozik, amelyik új döntést hoz; itt a mért helyzet szerint nincs.)
+
+**(2) MÉRT DRIFT — a domain-purity gépi őr NEM fedi az `ai_tutor/domain`-t
+(§1 mérési szabály).** A §2/§5.1/§6 szövege azt sugallja, hogy egy meglévő
+`tool/check_architecture.dart` őr „a `lib/features/*/domain/` alatt" automatikusan
+tiltja a framework-importot, és a „purity-őr zöld" acceptance egy meglévő guard
+kizöldülése. **Ez mérve hamis:**
+
+- `tool/check_architecture.dart` `_isSharedDomain` (232. sor) **csak** ezt a hármat
+  fedi: `lib/core/music/`, `lib/core/audio/codec/`, `lib/features/practice/domain/`.
+  `ai_tutor` **nincs benne**.
+- `test/features/practice/domain/domain_purity_test.dart` a `Directory('lib/features/practice/domain')`-ra van **beégetve** (18. sor).
+
+**KÖTÖTT FELOLDÁS — a song_trainer (E03-R02) precedens:** a feature-domain
+purity-mércéje **kör-lokális teszt-scanner**, NEM a `tool/check_architecture.dart`.
+Lásd `test/features/song_trainer/domain/song_document_test.dart:292`
+(`group('Domain purity')` → `Directory('lib/features/song_trainer/domain')` +
+`_forbiddenPatterns`). Ezt a kör **pontosan ugyanígy** teszi: az `ai_tutor/domain`
+purity-t egy `group('Domain purity')` blokk méri a
+`test/features/ai_tutor/domain/tutor_conversation_test.dart`-ban (a §4 glob
+`test/features/ai_tutor/domain/*` engedi), `Directory('lib/features/ai_tutor/domain')`
+rekurzív szkennelésével és a song_trainer/practice-szel azonos tiltott mintakészlettel:
+framework/riverpod/dio/shared_preferences import, `l10n` import, `DateTime.now(`,
+`Stopwatch(`, `Random(`, `print(`. **A `tool/check_architecture.dart` TILOS ZÓNA**
+(gate/tool-fájl, nincs az engedélyezett listán) — az implementer NEM szerkeszti,
+és NEM az őt mérő guardra hivatkozik a §6 „purity-őr zöld" teljesítésekor.
+
+**(3) Erőforrás-tulajdonlás (§1 mérési szabály 2) — N/A.** Ez tiszta domain-modell
+kör; nincs lease/lock/handle/subscription réteghez rendelve (`grep -rn "\.acquire("`
+az `ai_tutor` alatt üres — greenfield). A mérési szabály 2 nem alkalmazandó.
+
+**(4) Greenfield igazolva.** `lib/features/ai_tutor/` ma csak az R01 üres
+`public.dart`-ot tartalmazza (+ a `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+R01 boundary-teszt, amely NINCS az engedélyezett listán → érintetlen marad).
+A brief-beli enum-készletek (role user/tutor/tool/systemNotice; delivery-state
+pending/streaming/complete/failed/cancelled) ÚJ definíciók — nincs meglévő
+reducer/állapotgép, így „elérhetetlen cél-státusz" kockázat nincs; a §6 megköveteli,
+hogy `cancelled` ÉS `failed` külön reprezentálható legyen és round-trippeljen.
 
 ## 1. Cél
 
@@ -115,7 +161,9 @@ más kör briefje. Listán kívül → `stopped`.
       elfogadható:** néma eldobás vagy csendes crash.
 - [ ] Cancelled és failed delivery-state külön reprezentálható és round-tripel.
 - [ ] UTC timestamp policy; nagy Unicode szöveg round-trip.
-- [ ] Domain Flutter-független (purity-őr zöld); **≥90% line coverage** az új domainen.
+- [ ] Domain Flutter-független — a **kör-lokális** `group('Domain purity')` scanner zöld
+      (§0.0 (2): a song_trainer precedens, a `tool/check_architecture.dart` NEM fedi az
+      `ai_tutor/domain`-t és tilos zóna); **≥90% line coverage** az új domainen.
 
 A reviewer a codec egy központi invariánsát (kulcssorrend VAGY unknown-block ág)
 eldobható mutációval pirosra vált.
