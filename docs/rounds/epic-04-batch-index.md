@@ -8,8 +8,13 @@
 - **User-döntés (2026-08-04):** „készítsd elő az Epic 4 fejlesztési köröket, hogy
   aztán az auto-pipeline-ba mehessenek együtt; **nem kell az utolsó körre human
   review**." → a záró **E04-R24** kör NEM kap ADR 0087 §7 szerinti kézi
-  epic-záró indítást; a queue-ban `pending` (auto), és a briefje úgy készül, hogy
-  a pre-flight NE tartalmazzon eldöntetlen emberi kérdést (lásd §Záró-kör alább).
+  epic-záró indítást; a briefje úgy készül, hogy a pre-flight NE tartalmazzon
+  eldöntetlen emberi kérdést (lásd §Záró-kör alább).
+- **HOLD-döntés (user, 2026-08-04):** az Epic 4 CSAK az Epic 3 teljes befejezése +
+  explicit user-go után indul. Ezért a 24 queue-sor `hold` státuszú (NEM `pending`):
+  a driver átugorja, így a lánc E03-R22 után **megáll az epic-határon**. Go-kor a
+  `hold`→`pending` flip indítja folyamatosan az Epic 4-et (commit `c19b6aa` óta
+  élesítve, majd `hold`-ra állítva).
 
 > ⚠ **Ez az index nem futtatható artefaktum.** A körök egyenkénti briefjei az
 > `e04-rNN-*.md` fájlok. Minden brief `PREPARED`; az élesedéskor a kötelező
@@ -107,7 +112,11 @@ változatlanul Terrán futnak — a queue engine-oszlopa mérvadó indításkor.
 
 ---
 
-## 5. Queue-sorok (az aktiváláskor a `pipeline-queue.tsv` VÉGÉRE, E03-R22 után)
+## 5. Queue-sorok (a `pipeline-queue.tsv` VÉGÉN, E03-R22 után)
+
+> **Élesítve `hold` státusszal** (a driver az `\tpending$` sorokat választja, a
+> `hold`-ot átugorja). Go-kor: `sed -i -E 's/^(E04-R[0-9]+\t.*\t)hold$/\1pending/'`.
+> Alább a rows referenciaként `pending`-gyel — a valós fájlban `hold`.
 
 ```tsv
 # Epic 4 (AI Guitar Teacher) — batch előkészítve 2026-08-04 (docs/rounds/epic-04-batch-index.md).
