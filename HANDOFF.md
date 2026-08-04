@@ -4,7 +4,30 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R17 merged — Song Overview + Trainer Setup).**
+> (E03-R19 merged — Practice compiler & chord/rhythm trainer orchestration).**
+> **E03-R19 KÉSZ (PR [#120](https://github.com/wolfcasaba/strumsight/pull/120),
+> squash `e8dd74e`, [ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)):**
+> `SongPracticeCompiler` (tiszta `SongDocument` track/range → `PracticeDefinition`,
+> reference-tempo normalizált idővonal a tempo/meter-váltásokra), a publikus
+> Practice session-motor orchestrationje `SongTrainerController`-ből (count-in,
+> scoring-only mic lease, playback-only mic 0, idempotens finalize),
+> `PracticeSessionResult` → song-koordinátás `SongTrainerResult` measure/section
+> aggregációval. Implementer **Codex (gpt-5.6-terra)**, orchestrátor/reviewer
+> **Claude Opus 4.8**. Pre-flight §0.0: **R1** additív Practice session-runtime
+> export a `public.dart`-on (nincs Practice-belső edit), **R2** mic-lease a
+> MicCapture/gateway-nél marad (playback-only nem konstruál gateway-t), **R4**
+> Practice-típusú compiler `domain/`→`application/trainer/` (a merge-elt
+> domain-purity guard tiltja a Practice-importot domainben — guard érintetlen),
+> **R5** reference-tempo normalizált idővonal (a Practice pontozás idő-alapú →
+> compiler-only, nincs Practice-modellváltozás), **R6** hat track-profil publikus
+> `PracticeEvent` + `ScoringProfile.weights` encodinggal. **Négy implementer-STOP
+> mind §0.0-revízióval feloldva (egyik sem halt).** Independent review **APPROVED**
+> (3 NOTE follow-up); CI exact head `23180bc`
+> [run 30909553905](https://github.com/wolfcasaba/strumsight/actions/runs/30909553905)
+> zöld (full suite + property + APK); post-merge gate `main`-en zöld. **E03-R18
+> KÉSZ** (PR [#119](https://github.com/wolfcasaba/strumsight/pull/119), `27d45d6`,
+> [ADR 0126](docs/adr/0126-song-transport-backing-playback-boundary.md)):
+> `SongTransport` + backing playback adapter.
 > **E03-R17 KÉSZ (PR [#118](https://github.com/wolfcasaba/strumsight/pull/118),
 > squash `168114a`, [ADR 0125](docs/adr/0125-song-trainer-setup-configuration-boundary.md)):**
 > Song Overview + Trainer Setup képernyők, immutable `TrainerConfig`,
@@ -612,13 +635,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #118](https://github.com/wolfcasaba/strumsight/pull/118), squash
-`168114a` (E03-R17). [Build Android APK 30898416965](https://github.com/wolfcasaba/strumsight/actions/runs/30898416965)
-is **success** for exact branch `headSha` `f026a38` (full Flutter suite,
+`main` @ [PR #120](https://github.com/wolfcasaba/strumsight/pull/120), squash
+`e8dd74e` (E03-R19). [Build Android APK 30909553905](https://github.com/wolfcasaba/strumsight/actions/runs/30909553905)
+is **success** for exact branch `headSha` `23180bc` (full Flutter suite,
 randomized property/coverage gate and development APK). The independent
 post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e03-r17-overview-track-range-setup-review.md`](docs/reviews/e03-r17-overview-track-range-setup-review.md).
-(Előző product-merge: PR #103 / `83535e5`, E03-R13.)
+[`e03-r19-practice-compiler-chord-rhythm-review.md`](docs/reviews/e03-r19-practice-compiler-chord-rhythm-review.md).
+(Előző product-merge-ek: PR #119 / `27d45d6`, E03-R18; PR #118 / `168114a`, E03-R17.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -691,7 +714,31 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
-**E03-R17 — Song Overview, track/range választás és Trainer Setup** (PR
+**E03-R19 — Practice compiler és chord/rhythm trainer orchestration** (PR
+[#120](https://github.com/wolfcasaba/strumsight/pull/120), squash `e8dd74e`,
+[ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)).
+Implementer: **Codex (gpt-5.6-terra)**; orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** `SongPracticeCompiler` (`application/trainer/`, tiszta függvény):
+`SongDocument` track+range → determinisztikus `PracticeDefinition`, a range
+startja local beat 0-ra, minden `PracticeEvent`-hez `SongEventReference`.
+Reference-tempo normalizált idővonal: a tempo/meter-váltó range a start tempóra
+normalizál, minden event a `SongTimeMap` szerinti VALÓS onset-idejére kerül
+(`µs·bpm·480/µsPerMin` tick) — a Practice pontozás idő-alapú, így az onset-idők
+végig hűek. Hat track-profil publikus `PracticeEvent` + `ScoringProfile.weights`
+encodinggal (rhythm-only = `StrumDirection.down` placeholder + rhythm-súlyú
+profil). `SongTrainerController` (A9-tiszta: az injektált publikus
+`PracticeSessionController`-t + `SongTransport`-ot vezényli, sosem éri el direkt
+az AudioSessionCoordinatort/StrumEngine-t): count-in, backing+scoring,
+pause/resume, seek→új attempt, mic-denied, background; idempotens finalize
+(`_operationId`/`_finalizedOperationId`). Playback-only mód nem konstruál Practice
+sessiont → **mic provider call count 0** (strukturálisan + teszttel). `SongResultMapper`:
+`PracticeSessionResult` → `SongTrainerResult`, measure/section aggregáció, fail-closed
+hiányzó referenciára. Négy implementer-STOP mind dokumentált §0.0-revízióval
+feloldva (R1 additív public export, R4 fájl-elhelyezés, R5 tempo-normalizálás,
+R6 encoding-recept) — nem halt. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+### Előző kör (referencia): E03-R17 — Song Overview, track/range választás és Trainer Setup (PR
 [#118](https://github.com/wolfcasaba/strumsight/pull/118), squash `168114a`,
 [ADR 0125](docs/adr/0125-song-trainer-setup-configuration-boundary.md)).
 Implementer: **Codex**; orchestrátor/reviewer: **Claude Opus 4.8**.
@@ -791,13 +838,15 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R18 — SongTransport és backing playback adapter** a következő product
-round ([`docs/rounds/`](docs/rounds/) az indításkor; SDD Kör 18). Ez hozza a
-transport/playback réteget és a backing-audio **playback-rate capabilityt**,
-amit az R17 setup ma őszintén `pending`-ként jelöl — R18 után erősíthető
-támogatottá. A `PREPARED`/prepared briefet a friss pre-flightnak a mai mainhez
-kell mérnie; a `docs/execution/pipeline-queue.tsv` E03-R17 sorát a driver
-`done`-ra írja, a következő kört a pipeline indítja (ez a session nem).
+0. **E03-R20 — Monophonic pitch observation és note scoring** a következő product
+round ([`docs/rounds/e03-r20-pitch-observation-note-scoring.md`](docs/rounds/e03-r20-pitch-observation-note-scoring.md);
+SDD Kör 20). Ez hozza a monophonic pitch megfigyelést és note-scoringot, amit az
+R19 compiler ma szándékosan `playbackOnly`-ra ejt (`TrainerMode.pitch` tiltott a
+scoringban). A `PREPARED` briefet a friss pre-flightnak a mai `main`-hez
+(`e8dd74e`) kell mérnie; a `docs/execution/pipeline-queue.tsv` E03-R19 sorát a
+driver `done`-ra írja, a következő kört a pipeline indítja (ez a session nem).
+E03-R21 (trainer UI/loop/speed/results) és E03-R22 (setlist/progress/epic-zárás,
+kézi kickoff) követik.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és

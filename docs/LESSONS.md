@@ -3534,3 +3534,31 @@ provider-függősége a már létező `songRepositoryProvider`. Tanulság: a bri
 „provider-injektálás" csak akkor írható elő, ha a provider tényleg létezik vagy
 a kör scope-jában létrehozható; tiszta/`const` domain service-nél a co-located
 közvetlen konstrukció a helyes, és ezt a pre-flight mondja ki explicit.
+
+## L99 — Idegen feature konstans-tempójú session-kontraktjára fordításnál a pontozás mérési tengelye dönt, nem a modell látszólagos gazdagsága (E03-R19, 2026-08-04)
+
+**Mérés.** Az E03-R19 compilernek `SongDocument` (TempoMap/MeterMap, azaz
+tempo/meter-VÁLTÁS) track/range-et kellett a Practice motor `PracticeDefinition`
+kontraktjára fordítania, amely EGYETLEN `Tempo` + `Meter` (a `BeatTimeConverter`
+konstans tempón, lineárisan: `ticks·µs/(bpm·480)`). Az implementer (Terra)
+kétszer is `stopped`-ot jelzett „belső Practice modellváltozás kell" indokkal:
+egyszer a tempo/meter-változásra, egyszer a note-onset rhythm-only célra
+(`PracticeEvent.validate()` chord VAGY direction targetet vár). Mindkét premissza
+HAMIS volt — a mért kulcs a **Practice pontozás tengelye**: a `PracticeEventMatcher`
+`Duration` `matchWindow`-t tesz a `target.time` köré, a `PracticeTimingScorer`
+az `offset.abs()`-t osztályozza → a pontozás tisztán IDŐ-alapú, nem metrikus.
+
+**Feloldás (mindkettő compiler-only, nulla Practice-modellváltozás).** (1)
+Tempo/meter-változás: single reference-tempo normalizált idővonal — minden event
+a `SongTimeMap` szerinti valós onset-idejére kerül `T_ref` melletti tickként, így
+a cél-időpontok onset-hűek a tempóváltáson át (a meter-változás csak a
+count-in/metronómot érinti, a scoringot nem). (2) Rhythm-only: a repo MÁR
+enkódolja (`builtin.rhythmOnlyQuarters`: `StrumDirection.down` placeholder +
+`ScoringProfile.rhythmOnlyDefault` `{rhythm:100}`; az aggregátor a súlyozatlan
+dimenziót nem pontozza). **Tanulság:** mielőtt „idegen feature modellváltozás
+kell"-t elfogadsz, mérd ki, MELYIK tengelyen pontoz/működik a cél-kontrakt
+(itt: idő, nem metrika), és keress precedenst a feature saját katalógusában
+(`builtin_practice_catalog.dart`) — a négy STOP-ból három létező precedenssel,
+egy pedig a pontozási tengely megmérésével feloldható volt, mind §0.0-revízióval,
+halt nélkül. Az orchestrátor prescriptív encoding-cookbookja (§0.0 R6) után az
+implementer egy futásra végigvitte a hat track-profilt.
