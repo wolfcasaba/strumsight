@@ -1,6 +1,7 @@
 # E03-R21 — Trainer UI, loop, Speed Builder és result
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight 2026-08-04, baseline: `main` @ `fbe1e82`; eredetileg PREPARED 2026-08-01 @ `eeb4f6d`)
+- **ADR:** [0129](../adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md) (a pre-flightban írva)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 21; §23–24, §27.7–27.10, §28
 - **Branch:** `codex/e03-r21-trainer-ui-loop-speed-results`
 - **Előfeltétel:** E03-R20 merge
@@ -76,6 +77,49 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### Pre-flight revízió (2026-08-04, baseline `main` @ `fbe1e82`)
+
+Baseline frissítve `eeb4f6d` → `fbe1e82` (E03-R20 merge, PR #121). A
+`allowed_paths` és a fájlállapot-tábla mérve helyes: minden „ÚJ" fájl ma
+hiányzik, minden „meglévő/R19-ből/R20-ból" fájl létezik (`find` mérve).
+Implementer motor: **`minimax`** (a pipeline-prompt jelöli ki; a §7-hez az
+örökölt `mm-round.sh` úton). ADR: **0129** (fent). Mért eltérések és
+feloldásuk — **fájllista NEM tágul, csak jelentés-pontosítás**:
+
+1. **Fázis-név → enum leképezés (kötelező pre-flight mérésszabály #1).** A brief
+   §6 és a megkülönböztető mátrix `playing`/`error` fázisnevei NEM enum-értékek.
+   A mért enum `SongTrainerStatus`
+   (`song_trainer_state.dart:8`): `{idle, preparing, permissionRequired, ready,
+   countIn, running, paused, completed, cancelled, failed}`. Leképezés:
+   **`playing` → `running`**, **`error` → `failed`**; `countIn`/`paused`/
+   `completed` egyezik. A „loop 2/5" nem enum — ebben a körben épülő UI-mező a
+   state/controller rétegen (mindkettő scope-on). Az acceptance tesztek a
+   `SongTrainerStatus` VALÓS értékeivel mérjenek, nem `playing`/`error`-ral.
+
+2. **Erőforrás-tulajdonlás (kötelező pre-flight mérésszabály #2).** A mic-lease
+   egyetlen `acquire`-elője a `MicCapture`
+   (`mic_capture.dart:82` → `AudioSessionCoordinator.acquire`). A
+   `SongTrainerController` soha nem `acquire`-el; subscription-öket + gateway/
+   player start-stopot birtokol. A `dispose()` (`song_trainer_controller.dart:214`)
+   minden subscriptiont cancel-el és streamet close-ol. A „route leave/dispose
+   után 0 mic/player/subscription" acceptance a **subscription/gateway/player**
+   rétegen mérendő; a lease a `MicCapture`-nél marad (ADR 0128 §2 analóg).
+
+3. **Speed Builder publikus export.** `SpeedBuilderEngine`
+   (`practice/domain/service/speed_builder_engine.dart:7`), `SpeedBuilderState`/
+   `SpeedBuilderStatus`, `SpeedBuilderPolicy` léteznek, de a
+   `lib/features/practice/public.dart` ma NEM exportálja őket. A publikus-contract
+   előírás a `practice/public.dart` **additív exportját** kéri (a §4 auditált
+   boundary); trainer-saját policy tilos.
+
+4. **Rate capability kapu.** A backing-rate acceptance a
+   `PlaybackCapabilities.supportsRate(double rate)`
+   (`playback_capabilities.dart:26`) metóduson mérendő.
+
+5. **Route flag.** A trainer route a `FeatureFlags.songTrainerV2Enabled`
+   (`feature_flags.dart`, minden környezetben `false`) mögött marad; feature-flag
+   production rollout tilos (§3).
 
 ## 1. Cél
 
