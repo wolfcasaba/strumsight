@@ -4,7 +4,22 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (motorváltás + HEAL E03-R16/H6).**
+> (E03-R17 merged — Song Overview + Trainer Setup).**
+> **E03-R17 KÉSZ (PR [#118](https://github.com/wolfcasaba/strumsight/pull/118),
+> squash `168114a`, [ADR 0125](docs/adr/0125-song-trainer-setup-configuration-boundary.md)):**
+> Song Overview + Trainer Setup képernyők, immutable `TrainerConfig`,
+> capability-driven mode gating (chord/rhythm/pitch), TrainerRange
+> (full/section/measure/bookmark, exclusive end), speed 50–150%,
+> count-in/metronome/loop, tuning/capo reminder, missing-asset entry.
+> Implementer **Codex**, orchestrátor/reviewer **Claude Opus 4.8**. Pre-flight
+> §0.0: R1 `app_route.dart` a scope-ba (route_literal_guard kényszer), R2 setup
+> provider co-located + tiszta capability domain-service (nincs új provider),
+> R3 rhythm strukturális + backing playback-rate honest-pending (R18). Egy
+> implementer-STOP (`36059ad`, félreérthető „resolver provider") §0.0 R2
+> revízióval feloldva. Independent review **APPROVED**; CI exact head `f026a38`
+> [run 30898416965](https://github.com/wolfcasaba/strumsight/actions/runs/30898416965)
+> zöld (full suite + property + APK); post-merge gate `main`-en zöld.
+> **Previous update: 2026-08-04 (motorváltás + HEAL E03-R16/H6).**
 > **MOTORVÁLTÁS 2026-08-04 (user-döntés, operátori beavatkozás):** az
 > orchestrátor/reviewer újra **Claude, Opus 4.8** (`claude-opus-4-8`,
 > `tools/round-pipeline.sh` default — korábban Sonnet 5), az **implementer
@@ -597,12 +612,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #103](https://github.com/wolfcasaba/strumsight/pull/103), squash
-`83535e5` (E03-R13). [Build Android APK 30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
-is **success** for exact branch `headSha` `ead6f03`. It includes the full
-Flutter suite, randomized property/coverage gate and development APK. The
-independent post-merge gate is green, and the final review is **APPROVED** in
-[`e03-r13-guitar-pro-feasibility-review.md`](docs/reviews/e03-r13-guitar-pro-feasibility-review.md).
+`main` @ [PR #118](https://github.com/wolfcasaba/strumsight/pull/118), squash
+`168114a` (E03-R17). [Build Android APK 30898416965](https://github.com/wolfcasaba/strumsight/actions/runs/30898416965)
+is **success** for exact branch `headSha` `f026a38` (full Flutter suite,
+randomized property/coverage gate and development APK). The independent
+post-merge gate on `main` is green, and the final review is **APPROVED** in
+[`e03-r17-overview-track-range-setup-review.md`](docs/reviews/e03-r17-overview-track-range-setup-review.md).
+(Előző product-merge: PR #103 / `83535e5`, E03-R13.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -675,7 +691,26 @@ independent post-merge gate is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
-**E03-R13 — Guitar Pro feasibility és stratégiai döntés** (PR
+**E03-R17 — Song Overview, track/range választás és Trainer Setup** (PR
+[#118](https://github.com/wolfcasaba/strumsight/pull/118), squash `168114a`,
+[ADR 0125](docs/adr/0125-song-trainer-setup-configuration-boundary.md)).
+Implementer: **Codex**; orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** Song Overview + Trainer Setup képernyők. `SongTrainerSetupController`
+(route-scoped, read-only): a `songRepositoryProvider`-ből tölti a `SongDocument`-et,
+tiszta `const SongValidator()`+`const SongCapabilityResolver()` láncon számol
+capabilityt (nincs új provider), és egyetlen immutable `TrainerConfig`-ot ad ki.
+Capability-driven mode gating: chord (`report.chord.scoring`), rhythm
+(strukturális: ChordTrack/StrumTrack/NoteTrack + `canTrain`), pitch
+(`pitch.scoring && isMonophonic`); unsupported mode disabled + indokolt.
+`TrainerRange` full/section/measure(inclusive UI→exclusive domain)/bookmark,
+dalhatáron validálva. Speed 50–150%, count-in/metronome/loop, tuning/capo
+reminder, missing-asset entry, rejtett resume-CTA (R21 producer). A setup a
+`SongDocument`-et sose mutálja. Flag-gated (`songTrainerV2Enabled` OFF).
+Egy implementer-STOP (`36059ad`) §0.0 R2 revízióval feloldva (a capability nem
+provider-injektált). Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+### Korábbi kör (referencia): E03-R13 — Guitar Pro feasibility és stratégiai döntés (PR
 [#103](https://github.com/wolfcasaba/strumsight/pull/103), squash `83535e5`,
 [ADR 0122](docs/adr/0122-guitar-pro-import-strategy.md)). Implementer: **auto
 router**; independent reviewer: **Codex/Terra**.
@@ -756,11 +791,13 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R14 — Jóváhagyott Guitar Pro út** a következő product round:
-az [R13 ADR 0122](docs/adr/0122-guitar-pro-import-strategy.md) szerinti C ág
-előzetes scope-mérése és őszinte MusicXML/MIDI konverziós UX. A `PREPARED`
-briefet a friss pre-flightnak a mai mainhez és az ADR-hez kell szűkítenie;
-a queue-fájl állapotát továbbra is kizárólag a pipeline driver kezeli.
+0. **E03-R18 — SongTransport és backing playback adapter** a következő product
+round ([`docs/rounds/`](docs/rounds/) az indításkor; SDD Kör 18). Ez hozza a
+transport/playback réteget és a backing-audio **playback-rate capabilityt**,
+amit az R17 setup ma őszintén `pending`-ként jelöl — R18 után erősíthető
+támogatottá. A `PREPARED`/prepared briefet a friss pre-flightnak a mai mainhez
+kell mérnie; a `docs/execution/pipeline-queue.tsv` E03-R17 sorát a driver
+`done`-ra írja, a következő kört a pipeline indítja (ez a session nem).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és

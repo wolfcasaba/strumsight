@@ -3502,3 +3502,35 @@ generated workflow-artefaktum; a `.pipeline` prefix és minden más alatta lév�
 `RouterArtifactScopeTest.test_pipeline_runtime_signals_do_not_mask_protected_pipeline_changes`
 előbb a négy valódi névvel RED volt, majd GREEN; ugyanebben a tesztben a
 `.pipeline/model-injected-control` továbbra is protected-path hibát ad.
+
+## L97 — Új route-ot igénylő UI-kör scope-ja tartalmazza a route-katalógus ownert (E03-R17, 2026-08-04)
+
+**Mérés.** Az E03-R17 prepared brief `allowed_paths`-a az `app_router.dart`
+route-wiringet engedte, de a `lib/app/routing/app_route.dart` katalógust nem.
+A `test/tooling/route_literal_guard_test.dart` gépi őr minden GoRouter
+route-string-literált tilt a katalóguson kívül, ezért a két új Overview/Setup
+route nem regisztrálható lett volna a teszt pirosra váltása nélkül — a wiring
+owner katalógus-owner nélkül nem futtatható. Ugyanez a mintázat, mint az
+E03-R14/R15/R16 hiányzó-owner heljein.
+
+**Feloldás.** A pre-flight §0.0 R1 pontosan a mért, architektúra által
+kényszerített `app_route.dart` ownert vette fel az `allowed_paths`-ba
+(lista-tágítás helyett a hiányzó kötelező owner pótlása), a
+`route_literal_guard` teszttel mint gépi bizonyítékkal. Tanulság: minden új
+route-ot igénylő UI-kör pre-flightja a route-wiring MELLÉ a route-katalógus
+ownert (`app_route.dart`) is méri és felveszi.
+
+## L98 — Provider-injektálást előíró brief-szöveg tiszta domain-service esetén implementer-STOP-ot okoz (E03-R17, 2026-08-04)
+
+**Mérés.** Az E03-R17 §0.0 R2 első szövege félreérthetően „resolver providert"
+említett. A `SongCapabilityResolver`/`SongValidator` viszont tiszta,
+`const`-konstruálható domain service — nincs és nem kell hozzá provider —, a
+provider owner (`song_trainer_providers.dart`) pedig scope-on kívüli. A Codex
+helyesen `stopped`-ot jelzett (`36059ad`) néma scope-tágítás helyett.
+
+**Feloldás.** A §0.0 R2 revíziója kimondta: a capability NEM provider-injektált,
+a controller közvetlenül példányosítja a tiszta service-eket, és egyetlen
+provider-függősége a már létező `songRepositoryProvider`. Tanulság: a briefben
+„provider-injektálás" csak akkor írható elő, ha a provider tényleg létezik vagy
+a kör scope-jában létrehozható; tiszta/`const` domain service-nél a co-located
+közvetlen konstrukció a helyes, és ezt a pre-flight mondja ki explicit.
