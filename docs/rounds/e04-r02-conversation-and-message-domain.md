@@ -214,7 +214,35 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Megvalósítás:**
+  - `domain/models/tutor_ids.dart`: trim/üres/max-hossz validált, típusos
+    conversation/message/turn/request/action ID-k.
+  - `domain/models/tutor_conversation.dart`, `tutor_message.dart`,
+    `tutor_turn.dart`, `tutor_response_mode.dart`: immutable, UTC-normalizált
+    value-modellek; a conversation a message-eket sequence szerint stabilan
+    rendezi.
+  - `domain/models/tutor_content_block.dart`: sealed, strukturált block-készlet;
+    ismeretlen type teljes JSON-objektumát immutable placeholderként megőrzi.
+  - `data/local/tutor_conversation_codec.dart`: schema v1, fix kulcssorrendű
+    UTF-8 JSON, UTC timestamp, ismert-block round-trip és ismeretlen-block
+    megőrzés.
+  - A `public.dart` változatlanul csak `library;`; a R01 boundary-teszt
+    változatlan maradt (§0.0 (5)).
+- **Tesztbizonyíték:**
+  - RED: `flutter test test/features/ai_tutor/domain test/features/ai_tutor/data`
+    a még hiányzó domain/codec importokra fordítási hibával állt meg.
+  - GREEN: ugyanaz a célzott tesztfuttatás 39/39 teszttel zöld.
+  - Lefedettség: `flutter test --coverage test/features/ai_tutor/domain
+    test/features/ai_tutor/data`, majd az `coverage/lcov.info` AI Tutor domain
+    szűrése: **246/253, 97,23%**.
+  - Kötelező gate: `tools/round-gate.sh test/features/ai_tutor/domain
+    test/features/ai_tutor/data` → format, analyze, mindkét célzott teszt és
+    architecture: zöld.
+- **Eltérés:** nincs; a §0.0 (5) szerinti public-boundary halasztás változatlan.
+- **Nem futtatott ellenőrzések:** teljes Flutter suite, randomizált property gate
+  és APK/CI dispatch — az orchestrátor feladata; `gh`-t nem hívtam.
+- **Follow-up:** az additív feature-export az első valódi fogyasztó R13/R17+
+  körében esedékes a §0.0 (5) szerint.
 
 ## 11. Review — a független reviewer tölti ki
 
