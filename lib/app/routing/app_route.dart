@@ -26,6 +26,8 @@ abstract final class AppRoutes {
   static const String songTrainerEditor = '/song-trainer/editor/:songId';
   static const String songTrainerOverview = '/song-trainer/overview/:songId';
   static const String songTrainerSetup = '/song-trainer/setup/:songId';
+  static const String songTrainerSession = '/song-trainer/session/:songId';
+  static const String songTrainerResult = '/song-trainer/result/:songId';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[

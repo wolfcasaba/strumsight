@@ -24,8 +24,12 @@ import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
+import '../../features/song_trainer/application/song_trainer_providers.dart';
+import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../config/app_config.dart';
@@ -173,6 +177,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.songTrainerSetup,
           builder: (_, state) =>
               TrainerSetupScreen(songId: state.pathParameters['songId']!),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerSession,
+          builder: (_, state) => SongTrainerScreen(
+            songId: state.pathParameters['songId']!,
+            inputs: state.extra! as SongTrainerControllerInputs,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerResult,
+          builder: (_, state) =>
+              SongResultScreen(result: state.extra! as SongTrainerResult),
         ),
       ],
     ],
