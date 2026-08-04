@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -38,8 +39,10 @@ class PipelineIntegrationTest(unittest.TestCase):
         #
         # Módosítás 2026-08-04 (user-döntés: „a fejlesztő legyen a Terra"): a
         # MÉG NYITOTT sorok implementer-motorja `auto` (MiniMax-first router)
-        # helyett `codex` = gpt-5.6-terra. A lezárt sorok `auto` értéke
-        # történeti tény, nem írjuk át. A folyamatosság elvárása változatlan.
+        # helyett a kétmotoros szabály szerinti Terra/M3 — lásd
+        # test_open_rounds_follow_the_measured_engine_rule. A lezárt sorok
+        # `auto` értéke történeti tény, nem írjuk át. A folyamatosság elvárása
+        # változatlan.
         queue = (ROOT / "docs" / "execution" / "pipeline-queue.tsv").read_text()
         self.assertIn("auto | minimax | codex", queue)
         rows = [line.split("\t") for line in queue.splitlines() if line and not line.startswith("#")]
@@ -47,7 +50,52 @@ class PipelineIntegrationTest(unittest.TestCase):
         epic3 = [row for row in rows if row[0].startswith("E03-")]
         self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 23)])
         self.assertTrue(all(row[4] in {"pending", "running", "done"} for row in epic3))
-        self.assertTrue(all(row[2] == "codex" for row in epic3 if row[4] != "done"))
+        self.assertTrue(all(row[2] in {"codex", "minimax"} for row in epic3 if row[4] != "done"))
+
+    def test_open_rounds_follow_the_measured_engine_rule(self) -> None:
+        """A nyitott körök motorja a brief MÉRT mezőiből számolt, nem becslés.
+
+        User-döntés 2026-08-04: „bizonyos feladatokhoz a MiniMax M3 is
+        beállítható, amikor a Terránál jobban teljesít." A szabály (ADR 0069
+        mért motor-szétosztása alapján):
+
+          risk == "normal"                            → minimax  (volumenkör)
+          risk == "high" ÉS UI/ARB > domain+app+data  → minimax  (UI-dominált)
+          egyébként                                   → codex    (Terra)
+
+        A teszt a queue-t a briefekhez KÖTI, így egy új brief hozzáadásakor a
+        motorválasztás nem maradhat kézi becslés. A védőháló változatlan: a
+        kör-gate, az Opus 4.8 független review és a CI mindkét motorra ugyanaz.
+        """
+        queue_path = ROOT / "docs" / "execution" / "pipeline-queue.tsv"
+        rows = [
+            line.split("\t")
+            for line in queue_path.read_text().splitlines()
+            if line and not line.startswith("#")
+        ]
+        open_rounds = [row for row in rows if row[0].startswith("E03-") and row[4] != "done"]
+        self.assertTrue(open_rounds, "nincs nyitott E03 sor — a szabály mérhetetlen")
+
+        for round_id, brief, engine, _adr, _status in open_rounds:
+            with self.subTest(round=round_id):
+                text = (ROOT / brief).read_text()
+                risk = re.search(r'^risk\s*=\s*"(\w+)"', text, re.M)
+                self.assertIsNotNone(risk, f"{brief}: nincs risk mező")
+                block = re.search(r"allowed_paths\s*=\s*\[(.*?)\]", text, re.S)
+                self.assertIsNotNone(block, f"{brief}: nincs allowed_paths")
+                paths = re.findall(r'"([^"]+)"', block.group(1))
+                ui = sum(1 for p in paths if "/presentation/" in p or p.endswith(".arb"))
+                core = sum(
+                    1
+                    for p in paths
+                    if any(segment in p for segment in ("/domain/", "/application/", "/data/"))
+                )
+                expected = "minimax" if (risk.group(1) == "normal" or ui > core) else "codex"
+                self.assertEqual(
+                    engine,
+                    expected,
+                    f"{round_id}: risk={risk.group(1)} UI/ARB={ui} core={core} → {expected}",
+                )
 
     def test_prompt_has_one_initial_auto_dispatch_and_budget_preserving_resume(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()
