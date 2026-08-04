@@ -34,24 +34,36 @@ final class PlatformFilePickerAdapter implements FilePickerAdapter {
       withReadStream: true,
     );
     final file = result?.files.singleOrNull;
-    return file == null ? null : fromPlatformFile(file);
+    return file == null ? null : await fromPlatformFile(file);
   }
 
   /// Converts the plugin value at the data boundary. A readable stream is a
   /// mandatory privacy-preserving contract: paths and plugin objects do not
   /// escape to application or presentation state.
-  static ImportSourceFile fromPlatformFile(PlatformFile file) {
-    final stream = file.readStream;
-    final bytes = file.bytes;
-    if (stream == null && bytes == null) {
+  static Future<ImportSourceFile> fromPlatformFile(PlatformFile file) async {
+    final bytes = file.bytes == null
+        ? await _readStream(file.readStream)
+        : List<int>.unmodifiable(file.bytes!);
+    if (bytes == null) {
       throw StateError('filePicker.sourceUnavailable');
     }
     return ImportSourceFile(
       displayName: file.name,
       byteLength: file.size,
       mimeType: file.extension,
-      openRead: () => stream ?? Stream<List<int>>.value(bytes!),
+      // This closure belongs to the data boundary. SongImportState receives
+      // only preview metadata, never the source payload or PlatformFile.
+      openRead: () => Stream<List<int>>.value(bytes),
     );
+  }
+
+  static Future<List<int>?> _readStream(Stream<List<int>>? stream) async {
+    if (stream == null) return null;
+    final bytes = <int>[];
+    await for (final chunk in stream) {
+      bytes.addAll(chunk);
+    }
+    return List<int>.unmodifiable(bytes);
   }
 
   @override

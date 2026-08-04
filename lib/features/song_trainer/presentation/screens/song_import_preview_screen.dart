@@ -28,6 +28,8 @@ final class SongImportPreviewScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
+            Text(l10n.songImportFileSize(preview.byteLength)),
+            const SizedBox(height: 8),
             Text('${l10n.songImportFormat}: ${preview.format}'),
             if (preview.parts.isNotEmpty) ...<Widget>[
               const SizedBox(height: 16),

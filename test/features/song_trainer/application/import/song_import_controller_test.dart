@@ -164,6 +164,7 @@ void main() {
 
       final preview = harness.controller.state.preview!;
       expect(harness.controller.state.phase, SongImportPhase.preview);
+      expect(preview.byteLength, 2);
       expect(preview.parts, hasLength(1));
       expect(preview.parts.single.noteCount, 2);
       expect(preview.parts.single.isPolyphonic, isTrue);

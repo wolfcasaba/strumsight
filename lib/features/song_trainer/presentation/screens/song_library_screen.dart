@@ -5,6 +5,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../domain/models/song_source.dart';
 import '../widgets/song_summary_tile.dart';
 import 'song_import_screen.dart';
 
@@ -53,19 +54,91 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: TextField(
-                  onChanged: (text) => controller.setQuery(
-                    SongLibraryQuery(
-                      searchText: text,
-                      sourceType: state.query.sourceType,
-                      favoritesOnly: state.query.favoritesOnly,
-                      sort: state.query.sort,
+                child: Column(
+                  children: <Widget>[
+                    TextField(
+                      onChanged: (text) => controller.setQuery(
+                        SongLibraryQuery(
+                          searchText: text,
+                          sourceType: state.query.sourceType,
+                          favoritesOnly: state.query.favoritesOnly,
+                          sort: state.query.sort,
+                        ),
+                      ),
+                      decoration: InputDecoration(
+                        labelText: l10n.songLibrarySearch,
+                        prefixIcon: const Icon(Icons.search),
+                      ),
                     ),
-                  ),
-                  decoration: InputDecoration(
-                    labelText: l10n.songLibrarySearch,
-                    prefixIcon: const Icon(Icons.search),
-                  ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: DropdownButtonFormField<SongSourceType?>(
+                            key: const Key('song-library-source-filter'),
+                            initialValue: state.query.sourceType,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: l10n.songLibrarySourceFilter,
+                            ),
+                            items: <DropdownMenuItem<SongSourceType?>>[
+                              DropdownMenuItem<SongSourceType?>(
+                                value: null,
+                                child: Text(l10n.songLibraryAllSources),
+                              ),
+                              for (final sourceType in SongSourceType.values)
+                                DropdownMenuItem<SongSourceType?>(
+                                  value: sourceType,
+                                  child: Text(
+                                    _sourceTypeLabel(l10n, sourceType),
+                                  ),
+                                ),
+                            ],
+                            onChanged: (sourceType) => controller.setQuery(
+                              SongLibraryQuery(
+                                searchText: state.query.searchText,
+                                sourceType: sourceType,
+                                favoritesOnly: state.query.favoritesOnly,
+                                sort: state.query.sort,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<SongLibrarySort>(
+                            key: const Key('song-library-sort'),
+                            initialValue: state.query.sort,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: l10n.songLibrarySort,
+                            ),
+                            items: <DropdownMenuItem<SongLibrarySort>>[
+                              DropdownMenuItem<SongLibrarySort>(
+                                value: SongLibrarySort.recent,
+                                child: Text(l10n.songLibrarySortRecent),
+                              ),
+                              DropdownMenuItem<SongLibrarySort>(
+                                value: SongLibrarySort.title,
+                                child: Text(l10n.songLibrarySortTitle),
+                              ),
+                            ],
+                            onChanged: (sort) {
+                              if (sort == null) return;
+                              controller.setQuery(
+                                SongLibraryQuery(
+                                  searchText: state.query.searchText,
+                                  sourceType: state.query.sourceType,
+                                  favoritesOnly: state.query.favoritesOnly,
+                                  sort: sort,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               Expanded(
@@ -124,3 +197,14 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     );
   }
 }
+
+String _sourceTypeLabel(AppLocalizations l10n, SongSourceType sourceType) =>
+    switch (sourceType) {
+      SongSourceType.legacyLocal => l10n.songLibrarySourceLegacy,
+      SongSourceType.createdInApp => l10n.songLibrarySourceCreated,
+      SongSourceType.strumSightJson => l10n.songLibrarySourceNativeJson,
+      SongSourceType.musicXml => l10n.songLibrarySourceMusicXml,
+      SongSourceType.compressedMusicXml => l10n.songLibrarySourceMxl,
+      SongSourceType.midi => l10n.songLibrarySourceMidi,
+      SongSourceType.guitarPro => l10n.songLibrarySourceGuitarPro,
+    };

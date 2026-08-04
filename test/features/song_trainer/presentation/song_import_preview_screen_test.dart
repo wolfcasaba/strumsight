@@ -15,6 +15,7 @@ void main() {
           home: SongImportPreviewScreen(
             preview: ImportPreview(
               displayName: 'bad.mid',
+              byteLength: 3,
               format: 'MIDI',
               warnings: const <String>['fatal.unsupported'],
             ),
@@ -24,6 +25,7 @@ void main() {
     );
 
     expect(find.text('Import song'), findsOneWidget);
+    expect(find.text('File size: 3 bytes'), findsOneWidget);
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
