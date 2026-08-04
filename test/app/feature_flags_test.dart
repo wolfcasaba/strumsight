@@ -1,0 +1,104 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+
+bool _aiTutorEnabled(Object flags) {
+  final dynamic dynamicFlags = flags;
+  return dynamicFlags.aiTutorEnabled as bool;
+}
+
+bool _aiTutorCloudEnabled(Object flags) {
+  final dynamic dynamicFlags = flags;
+  return dynamicFlags.aiTutorCloudEnabled as bool;
+}
+
+FeatureFlags _withAiTutorFlags({
+  required bool aiTutorEnabled,
+  required bool aiTutorCloudEnabled,
+}) {
+  return Function.apply(FeatureFlags.new, const <Object?>[], <Symbol, Object?>{
+        #accountEnabled: false,
+        #diagnosticsEnabled: false,
+        #labModeAvailable: false,
+        #aiTutorEnabled: aiTutorEnabled,
+        #aiTutorCloudEnabled: aiTutorCloudEnabled,
+      })
+      as FeatureFlags;
+}
+
+void _expectAiTutorFlagsOff(Object flags) {
+  expect(
+    () => _aiTutorEnabled(flags),
+    returnsNormally,
+    reason: 'FeatureFlags must expose aiTutorEnabled.',
+  );
+  expect(
+    () => _aiTutorCloudEnabled(flags),
+    returnsNormally,
+    reason: 'FeatureFlags must expose aiTutorCloudEnabled.',
+  );
+  expect(_aiTutorEnabled(flags), isFalse);
+  expect(_aiTutorCloudEnabled(flags), isFalse);
+}
+
+void main() {
+  group('AI Tutor feature flags', () {
+    test('const constructor defaults both flags to off', () {
+      const flags = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+
+      _expectAiTutorFlagsOff(flags);
+    });
+
+    test('forEnvironment leaves both flags off in every environment', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        _expectAiTutorFlagsOff(flags);
+      }
+    });
+
+    test('new flags participate in value semantics but not network use', () {
+      const defaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(
+        () =>
+            _withAiTutorFlags(aiTutorEnabled: true, aiTutorCloudEnabled: false),
+        returnsNormally,
+        reason: 'FeatureFlags must accept both AI Tutor flags.',
+      );
+      final tutorEnabled = _withAiTutorFlags(
+        aiTutorEnabled: true,
+        aiTutorCloudEnabled: false,
+      );
+      final cloudEnabled = _withAiTutorFlags(
+        aiTutorEnabled: false,
+        aiTutorCloudEnabled: true,
+      );
+
+      expect(tutorEnabled, isNot(defaults));
+      expect(cloudEnabled, isNot(defaults));
+      expect(tutorEnabled.usesNetwork, isFalse);
+      expect(cloudEnabled.usesNetwork, isFalse);
+      expect(tutorEnabled.toString(), contains('aiTutorEnabled: true'));
+      expect(cloudEnabled.toString(), contains('aiTutorCloudEnabled: true'));
+      expect(
+        tutorEnabled.hashCode,
+        Object.hash(false, false, false, false, false, false, true, false),
+      );
+      expect(
+        cloudEnabled.hashCode,
+        Object.hash(false, false, false, false, false, false, false, true),
+      );
+    });
+  });
+}

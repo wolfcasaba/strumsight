@@ -220,7 +220,56 @@ belső import helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres — a Codex tölti)_
+### Módosított fájlok
+
+- `lib/app/config/feature_flags.dart`: additív, opcionális
+  `aiTutorEnabled` és `aiTutorCloudEnabled` mező default `false` értékkel;
+  mindkettő része a value semanticsnek. A `usesNetwork` és a meglévő
+  `songTrainerV2Enabled`-hiány a `hashCode`-ban érintetlen.
+- `lib/features/ai_tutor/public.dart`: új, üres (`library;`) feature-boundary.
+- `test/app/feature_flags_test.dart`: mindkét flag const- és minden
+  environment-defaultját, value semanticsét és változatlan network-szemantikát
+  fedi.
+- `test/features/ai_tutor/ai_tutor_boundary_test.dart`: az üres boundary
+  import/export-mentességét védi; így más feature belső rétege sem engedhető be.
+- `docs/baseline/epic-04-ai-tutor-start.md`: adatforrás-leltár, deterministic
+  coaching fixture-snapshot, raw-audio kizárás és rollout/rollback baseline.
+
+### TDD és mutációs evidencia
+
+- RED: `flutter test test/app/feature_flags_test.dart
+  test/features/ai_tutor/ai_tutor_boundary_test.dart` → exit 1. A flag teszt
+  a hiányzó `aiTutorEnabled` getterrel, a boundary teszt a hiányzó
+  `public.dart` fájllal bukott.
+- GREEN: ugyanaz a parancs → exit 0, 4 teszt zöld.
+- Elvetett mutációk: `aiTutorCloudEnabled` constructor-default `true` értékre
+  cserélése → `feature_flags_test.dart` exit 1; Practice-belső import
+  hozzáadása a boundaryhez → `ai_tutor_boundary_test.dart` exit 1. Mindkét
+  mutáció visszaállítva a gate előtt.
+
+### Futtatott záró ellenőrzés
+
+```bash
+tools/prepare-flutter-generated.sh
+tools/round-gate.sh test/features/ai_tutor test/app/feature_flags_test.dart test/app/offline_network_guard_test.dart
+```
+
+- `prepare-flutter-generated.sh` → exit 0; a friss checkoutból hiányzó,
+  gitignore-olt `app_localizations*.dart` outputot állította elő.
+- `round-gate.sh` → exit 0: format zöld; analyze zöld (`No issues found`);
+  `test/features/ai_tutor` 1 teszt zöld; `feature_flags_test.dart` 3 teszt
+  zöld; `offline_network_guard_test.dart` 2 teszt zöld; architecture zöld.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Az első gate a formázási lépésben állt meg (`feature_flags_test.dart`); a
+  célzott `dart format` után újrafuttatva zöld lett.
+- A második gate analyze-lépését a hiányzó generált l10n fájlok blokkolták;
+  ez checkout-előfeltétel volt, nem source-diff. Az előkészítő script után a
+  végső gate zöld.
+- Teljes Flutter suite, property gate, backend suite és APK build nem futott
+  lokálisan: ezek az orchestrátor CI-gate-jei; backend/production wiring nem
+  része ennek a körnek.
 
 ## 11. Review — a független reviewer tölti ki
 
