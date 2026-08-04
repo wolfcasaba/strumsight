@@ -266,28 +266,39 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-**Állapot: STOPPED (2026-08-04).** Production- vagy tesztfájl nem módosult.
+**Állapot: IMPLEMENTED (2026-08-04).**
 
-- **Mért blocker:** a `SongCapabilityResolver`-hez nincs provider sem a
-  `lib/features/song_trainer/application/song_trainer_providers.dart` fájlban,
-  sem máshol a Song Trainer feature-ben. A brief §0.0/R2 és az implementer
-  prompt kötelezően a repository/resolver providerek intra-feature importját
-  írja elő, de a resolver owner hozzáadása tiltott scope-tágítás lenne, mert a
-  provider-fájl nincs az engedélyezett listán és R2 ezt kifejezetten tiltja.
-- **Futtatott mérés:** `rg -n -i 'capabilit.*provider|resolver.*provider'
-  lib/features/song_trainer test/features/song_trainer --glob '*.dart'` — csak
-  a meglévő production root resolver providert találta; capability resolver
-  providert nem.
-- **Kör-jelzés:** `tools/codex-signal.sh stopped "R2 resolver provider
-  hiányzik; a provider owner tiltott a scope-ban"` — exit 0, `stopped`.
-- **Nem futtatott gate:** a `tools/round-gate.sh …` záró gate nem futott,
-  mert a RED tesztekhez szükséges kötelező production contract hiányzik és a
-  STOP-protokoll nem enged implementációt vagy mércegyengítést.
-- **Következő lépés:** a kör-briefet és az allowlistet egy külön pre-flight
-  revízióban kell helyrehozni: vagy explicit, tesztelhető resolver-provider
-  ownerrel bővíteni, vagy a co-located controller közvetlen, tiszta
-  `SongCapabilityResolver` konstrukcióját kimondani. Csak utána indítható új
-  implementer session.
+- **Domain:** `TrainerRange` full/section/measure/bookmark választást kezel;
+  a UI inkluzív vége exclusive domain-véggé alakul, dalhatáron kívüli vagy
+  revízióban elavult bookmark nem fogadható el. `LoopConfig` és
+  `TrainerConfig` egyetlen immutábilis handoff értéket ad, a tuning és capo
+  beállításával együtt.
+- **Application:** a co-located setup controller kizárólag
+  `songRepositoryProvider`-t olvas. A lánc ténylegesen
+  `repository.get(id)` → `SongDocument` → `const SongValidator().validate` →
+  `const SongCapabilityResolver().resolve(...trainer)`; a `SongDocument` nem
+  kerül a state-be és nem módosul. A chord/rhythm/pitch mátrix capability-,
+  illetve explicit track-altípus alapon dönt; backing-rate minden esetben
+  honest `pending`.
+- **Presentation és route:** elkészült az Overview, a Setup, section/track/
+  range/tuning-capo widgetek és a két flag-gated `AppRoutes` route. A missing
+  backing entry csak jelzés + repair CTA; teljes repair és playback nem része
+  a körnek. A Resume CTA producer hiányában rejtett marad.
+- **Localization/accessibility:** minden új UI-copy EN/HU ARB-ból jön;
+  RadioGroup kezeli a fókusz- és billentyűzetes választást, tiltott módok
+  indokot kapnak, a Setup `ListView` 200% text scale mellett scrollozható.
+- **RED bizonyíték:** a kezdeti `trainer_range_test.dart` a hiányzó domain
+  contracttal piros volt; a controller és widget tesztek az akkor még hiányzó
+  model/controller/screen importokkal pirosak voltak. A bookmark revision
+  regresszió a hiányzó `matchesSong` contracttal szintén RED volt.
+- **Futtatott ellenőrzések:** `tools/prepare-flutter-generated.sh`,
+  `flutter gen-l10n`, célzott `flutter test` (8 teszt zöld), `flutter analyze`
+  (No issues found), `git diff --check` (tiszta). A teljes CI/property/APK és
+  az exact-head dispatch az orchestrátor feladata; lokális APK build nem
+  futott (a kör szabálya tiltja).
+- **Záró gate:** a §7 pontos `tools/round-gate.sh …` hívása a végső source/test
+  diffre lefutott: format 787 fájl / 0 változás, analyze `No issues found`, a
+  négy teszt-útvonal zöld, architecture zöld (exit 0).
 
 ## 11. Review — a független reviewer tölti ki
 
