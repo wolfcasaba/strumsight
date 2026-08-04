@@ -82,6 +82,20 @@ void main() {
       }
     });
 
+    test('CI regression seed generates at least one expected chord change', () {
+      const ciSeed = 30881015002;
+      const failingTrial = 90;
+      final run = _randomRun(math.Random(ciSeed + failingTrial * 977));
+
+      expect(
+        _hasExpectedChordChange(run.target.expectedChordSegments),
+        isTrue,
+        reason:
+            'seed=$ciSeed trial=$failingTrial must satisfy the generator '
+            'precondition for the randomized analyzer invariants',
+      );
+    });
+
     test('per-change outcomes sum to the change count', () {
       for (var trial = 0; trial < 160; trial++) {
         final rng = math.Random(seed + 100000 + trial * 991);
@@ -254,8 +268,8 @@ _RandomRun _randomRun(math.Random rng) {
   );
   // Force at least one transition by guaranteeing the first != the second.
   if (chordCount > 1 && chordSequence[0] == chordSequence[1]) {
-    chordSequence[1] =
-        _labels[(chordSequence[1].codeUnitAt(0) + 1) % _labels.length];
+    final duplicateIndex = _labels.indexOf(chordSequence[1]);
+    chordSequence[1] = _labels[(duplicateIndex + 1) % _labels.length];
   }
   final segments = <ExpectedChordSegment>[];
   for (var index = 0; index < chordSequence.length; index++) {
@@ -338,6 +352,13 @@ _RandomRun _randomRun(math.Random rng) {
     verdicts: verdicts,
     observations: observations,
   );
+}
+
+bool _hasExpectedChordChange(List<ExpectedChordSegment> segments) {
+  for (var index = 1; index < segments.length; index++) {
+    if (segments[index - 1].chord != segments[index].chord) return true;
+  }
+  return false;
 }
 
 List<T> _deterministicShuffle<T>(List<T> input, int seed) {
