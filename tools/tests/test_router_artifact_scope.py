@@ -119,6 +119,54 @@ class RouterArtifactScopeTest(unittest.TestCase):
             self.assertTrue(audit.ok, audit.violations)
             self.assertEqual(audit.scoped_changed_paths, ())
 
+    def test_pipeline_runtime_signals_do_not_mask_protected_pipeline_changes(self) -> None:
+        # Mért reprodukció (E03-R16, H6): a self-heal recovery a megállt
+        # worktree-ben ezeket a pipeline által írt, gitignore-olt runtime
+        # jelzőket találta: HALTED, chain.log, round-status és router-halt.
+        # Ezeket a modell nem írja, mégis a teljes `.pipeline` protected
+        # prefix miatt a recovery scope-auditját blokkolták. A felsorolás
+        # szándékosan zárt: egy másik pipeline-fájl továbbra is protected.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "router@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Router Test"], cwd=root, check=True)
+            (root / ".gitignore").write_text(".pipeline/\n")
+            (root / "lib").mkdir()
+            (root / "lib" / "allowed.dart").write_text("baseline\n")
+            subprocess.run(["git", "add", ".gitignore", "lib/allowed.dart"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            baseline = capture_workspace_manifest(root)
+
+            pipeline = root / ".pipeline"
+            pipeline.mkdir()
+            for name in ("HALTED", "chain.log", "round-status", "router-halt"):
+                (pipeline / name).write_text("pipeline runtime signal\n")
+
+            runtime_audit = audit_scope(
+                root,
+                allowed_paths=("lib/allowed.dart",),
+                protected_paths=(".git", ".pipeline"),
+                baseline=baseline,
+            )
+
+            self.assertTrue(runtime_audit.ok, runtime_audit.violations)
+            self.assertEqual(runtime_audit.scoped_changed_paths, ())
+
+            (pipeline / "model-injected-control").write_text("must stay protected\n")
+            protected_audit = audit_scope(
+                root,
+                allowed_paths=("lib/allowed.dart",),
+                protected_paths=(".git", ".pipeline"),
+                baseline=baseline,
+            )
+
+            self.assertFalse(protected_audit.ok)
+            self.assertIn(
+                "protected path changed: .pipeline/model-injected-control",
+                protected_audit.violations,
+            )
+
     def test_nested_dart_tool_artifacts_are_generated_ignored(self) -> None:
         # Measured E03-R13/H6 reproduction: the approved isolated Dart tool
         # spike runs `dart pub get` below `tool/guitar_pro_feasibility/`.

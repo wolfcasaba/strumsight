@@ -63,6 +63,14 @@ GENERATED_IGNORED_GLOBS = (
     "lib/l10n/app_localizations*.dart",
     "GeneratedPluginRegistrant.*",
     "*/GeneratedPluginRegistrant.*",
+    # The autonomous pipeline, not a model, writes these four gitignore-d
+    # runtime signals into every active worktree.  Keep the exception closed
+    # to the measured files: `.pipeline` remains protected for every other
+    # path, including any model-created control input (E03-R16 H6).
+    ".pipeline/HALTED",
+    ".pipeline/chain.log",
+    ".pipeline/round-status",
+    ".pipeline/router-halt",
     # A resume-hoz átadott review-findings fájl neve a hívó választása
     # (orchestrátor-prompt §1.1 "<review-findings.md>"), de mindig ezzel a
     # `.ai/`-alatti előtaggal íródik — lásd a fenti .codex-round-status

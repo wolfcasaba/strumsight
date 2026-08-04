@@ -286,6 +286,75 @@ class RouterResumeTest(unittest.TestCase):
         self.assertEqual(model.profiles, ["terra"])
         self.assertEqual(self.state.load_task(self.brief.task_id)["terra_calls"], 2)
 
+    def test_rebased_baseline_resumes_completed_terra_repair_without_a_third_call(
+        self,
+    ) -> None:
+        """H6 must gate a preserved review repair without spending new Terra budget."""
+        self.config = replace(
+            self.config,
+            limits=replace(self.config.limits, max_terra_calls_per_task=2),
+        )
+        changed = ScopeAudit(
+            True,
+            ("lib/example.dart",),
+            (),
+            False,
+            "sha256:rebased-terra-repair-diff",
+        )
+        router, model = self.make_router(
+            [],
+            [gate("pass")],
+            [QuotaStatus("ok", True, True, remaining_percent=80)],
+            audits=[changed],
+        )
+        first = self.state.reserve_terra(
+            self.brief.task_id,
+            daily_limit=self.config.limits.max_automatic_terra_calls_per_utc_day,
+            task_limit=self.config.limits.max_terra_calls_per_task,
+        )
+        self.state.mark_terra_started(first.reservation_id)
+        self.state.mark_terra_finished(first.reservation_id, "READY_FOR_REVIEW")
+        repair = self.state.reserve_terra(
+            self.brief.task_id,
+            daily_limit=self.config.limits.max_automatic_terra_calls_per_utc_day,
+            task_limit=self.config.limits.max_terra_calls_per_task,
+        )
+        self.state.mark_terra_started(repair.reservation_id)
+        self.state.mark_terra_finished(repair.reservation_id, "BLOCKED")
+        self.state.save_task(
+            self.brief.task_id,
+            {
+                "schema_version": 1,
+                "task_id": self.brief.task_id,
+                "brief_hash": self.brief.metadata_hash,
+                "phase": "BASELINE_REBASED",
+                "resume_phase": "TERRA_REVIEW_OR_FIX",
+                "status": "READY_FOR_REVIEW",
+                "reason": "stale baseline rebased; scoped Terra repair preserved",
+                "m3_attempts": 2,
+                "terra_calls": 2,
+                "gate_history": [],
+                "baseline_manifest": {
+                    "baseline_head": "rebased",
+                    "untracked_paths": [],
+                    "ignored_paths": [],
+                    "tracked_paths": [],
+                },
+                "terra_reservation": repair.reservation_id,
+            },
+        )
+
+        result = router.run(
+            self.brief,
+            self.worktree,
+            resume=True,
+            review_findings="F1 — MAJOR — preserved Terra repair needs final gate",
+        )
+
+        self.assertEqual(result.status, RouterStatus.READY_FOR_REVIEW)
+        self.assertEqual(model.profiles, [])
+        self.assertEqual(self.state.load_task(self.brief.task_id)["terra_calls"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
