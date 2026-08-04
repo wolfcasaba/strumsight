@@ -81,7 +81,7 @@ E03-R16	docs/rounds/e03-r16-song-editor-v2.md	codex	nincs	done
 E03-R17	docs/rounds/e03-r17-overview-track-range-setup.md	codex	nincs	done
 E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	codex	nincs	done
 E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	codex	nincs	done
-E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	codex	nincs	pending
+E03-R20	docs/rounds/e03-r20-pitch-observation-note-scoring.md	codex	nincs	done
 E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	minimax	nincs	pending
 # E03-R22 (epic-zárás) — az ADR 0087 §7 alapból kézi indítást ír elő, mert a
 # zárókör pre-flightja emberi döntéseket kér (az E02-R20-nál ez a flag-rollout
