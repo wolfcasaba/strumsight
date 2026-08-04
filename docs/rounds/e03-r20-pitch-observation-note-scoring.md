@@ -236,10 +236,44 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### 2026-08-04 — implementáció
+
+| Fájl | Változás és mérce |
+|---|---|
+| `lib/core/audio/dsp/yin_pitch_detector.dart` | Közös, pure YIN detector és hangnév-függvény a korábbi defaultokkal; `test/core/audio/dsp/yin_pitch_detector_test.dart` összeveti a legacy kimenettel. |
+| `lib/core/audio/pitch/pitch_observation.dart` | Immutable timestampelt pitch-observation modell. |
+| `lib/core/audio/pitch/pitch_observation_config.dart` | Érvényesített confidence, RMS, frekvencia, stabilitás és latency konfiguráció. |
+| `lib/core/audio/pitch/pitch_observation_gateway.dart` | Platformfüggetlen observation-stream és lifecycle contract. |
+| `lib/features/tuner/engine/dsp/yin_pitch_detector.dart` | Core YIN re-export a meglévő Tuner importútvonal megtartásához. |
+| `lib/features/tuner/engine/dsp/tuner_analyzer.dart` | A core YIN importja; a Tuner regressziós tesztek változatlanul futnak. |
+| `lib/features/song_trainer/domain/models/note_scoring_models.dart` | Pitch/onset grade-ek, targetek, update-ek és determinisztikus eredménymodellek. |
+| `lib/features/song_trainer/domain/services/monophonic_note_scorer.dart` | Latency-kompenzált, monofón target-scoring és coverage-összesítés; a domain teszt rögzített szekvenciákkal ellenőrzi. |
+| `lib/features/song_trainer/data/audio/live_pitch_observation_gateway.dart` | Injektált frame/MicCapture adapter, confidence-gate és idempotens lifecycle; a teszt fake lease-szel ellenőrzi a release-ágakat. |
+| `lib/features/song_trainer/application/trainer/song_trainer_controller.dart` | Opcionális monofón scoring-session, pause/resume/seek/finish leállítás és `midiPitch + capo` target-feloldás; nincs új transposition mező. |
+| `lib/features/song_trainer/presentation/widgets/note_lane.dart` | Minimális, szemantikailag címkézett monofón note-lane szegmensekkel. |
+| `test/core/audio/dsp/yin_pitch_detector_test.dart` | Core–legacy YIN és hangnév bitazonos regresszió. |
+| `test/features/song_trainer/domain/monophonic_note_scorer_test.dart` | Inclusive küszöbök, latency, miss, coverage, extra note, alacsony confidence és determinisztikus replay. |
+| `test/features/song_trainer/data/audio/live_pitch_observation_gateway_test.dart` | Injektált lease/frame forrás start/stop/dispose és latency-határ tesztek. |
+| `test/features/song_trainer/application/trainer/song_note_trainer_test.dart` | Controller lifecycle, capo-target, transposition-hiány és polyphonic no-score, valamint note-lane widget teszt. |
+| `test/fixtures/audio/song_trainer/pitch_fixture_manifest.json` | 20 determinisztikus observation-fixture: nyers timestamp, kompenzált timestamp és várt grade minden felsorolt SDD-kategóriához. |
+| `tool/benchmarks/song_trainer_pitch_benchmark.dart` | Manifest-olvasó referencia-benchmark. |
+| `docs/baseline/epic-03-pitch-observation-benchmark.md` | A manifest küszöbei és a mérés hatóköre. |
+
+Futtatott parancsok és tényleges eredmény:
+
+```text
+dart run tool/benchmarks/song_trainer_pitch_benchmark.dart
+→ 20/20 fixture PASS
+
+tools/round-gate.sh test/core/audio/dsp test/features/tuner test/features/song_trainer/domain/monophonic_note_scorer_test.dart test/features/song_trainer/data/audio test/features/song_trainer/application/trainer/song_note_trainer_test.dart
+→ exit 0: format, analyze, az öt célzott tesztcsoport és architecture zöld
+```
+
+Eltérés nincs: az `AudioOwner`/provider-drótozás változatlan maradt, a production
+UI-bekötés R21-re halasztott. Nem futott a teljes Flutter suite, a randomizált
+property gate és a release APK: ezek CI/orchestrátor-kötelezettségek. Valós
+Android mikrofon+gitár latency-mérés sem futott; a benchmark dokumentáltan
+determininsztikus observation replay, nyers audio nélkül.
 
 ## 11. Review — a független reviewer tölti ki
 

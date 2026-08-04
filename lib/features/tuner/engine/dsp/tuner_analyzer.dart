@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../model/tuner_reading.dart';
-import 'yin_pitch_detector.dart';
+import 'package:strumsight/core/audio/dsp/yin_pitch_detector.dart';
 
 /// PCM buffer → [TunerReading]. Robust against voice/noise the way real tuners
 /// are (McLeod/YIN literature): a note is only shown when the signal is (1) loud
