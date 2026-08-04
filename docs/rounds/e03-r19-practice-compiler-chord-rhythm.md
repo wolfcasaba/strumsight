@@ -1,6 +1,7 @@
 # E03-R19 — Practice compiler és chord/rhythm trainer
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lemérve 2026-08-04, orchestrátor Claude Opus 4.8; tervezési baseline: `main` @ `eeb4f6d`, mai `main` @ `1d3c1ac` — E03-R18 merge-elve)
+- **Előre kiosztott ADR:** [`0127`](../adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md) (a pre-flightban írva)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 19; §21
 - **Branch:** `codex/e03-r19-practice-compiler-chord-rhythm`
 - **Előfeltétel:** E03-R18 merge és stabil Practice public contract
@@ -62,6 +63,74 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### §0.0 Pre-flight revízió (mért, 2026-08-04)
+
+**R1 — Practice public boundary INCOMPLETE a session-runtime orchestrationhöz
+(hard gate, brief §5.1 Kötött döntés 1).** Mérve: `lib/features/practice/public.dart`
+exportálja a definíció/target/config/scorer/metrics felületet
+(`PracticeDefinition`, `PracticeEvent`, `CompiledPracticeTarget`,
+`PracticeSessionConfig`, `ScoringProfile`, `Meter`, `Tempo`, `BeatPosition`,
+`PracticeMode`, `PracticeSource`, `DirectionOutcome`, `StrumObservation`,
+`compilePracticeTarget`, `PracticeEventMatcher`, `PracticeDirectionScorer`),
+DE **nem** a session-runtime felületet:
+`PracticeSessionController` (`application/practice_session_controller.dart`),
+`PracticeSessionInput`/`PracticeSessionCommand`/`PracticeSessionSignal` + a
+konkrét parancsok (`PreparePractice`, `StartPractice`, `PausePractice`,
+`ResumePractice`, `RestartAttempt`, `FinishPractice`, `CancelPractice`,
+`RetryPractice`, `ChangeTempoBeforeAttempt`, `AcceptAdaptiveSuggestion`,
+`GrantPermission`; szignálok: `PreparationSucceeded`, `PreparationFailed`,
+`PermissionDenied`, `ClockAdvanced`) — `application/practice_session_command.dart`;
+`PracticeSessionEffect` + `NavigateToResult`/`PlayCountInClick`/…
+(`application/practice_session_effect.dart`);
+`PracticeSessionState` + `PracticeSessionStatus`/`PauseCause`/`PracticeCountInKind`
+(`domain/model/practice_session_state.dart`);
+`PracticeSessionResult` + `PracticeFinishReason`
+(`domain/model/practice_session_result.dart`);
+`PracticeAttemptResult` + `PracticeAttemptOutcome`
+(`domain/model/practice_attempt_result.dart`);
+`PracticeVerdict` + `TimingGrade`/`ChordOutcome`
+(`domain/model/practice_verdict.dart`);
+a session-provider felület
+(`application/practice_session_providers.dart`), a
+`PracticeObservationGateway` típus
+(`application/practice_observation_gateway.dart`) és a
+`PracticeSessionRecorder` típus
+(`domain/repository/practice_session_recorder.dart`).
+
+**Feloldás (within-round, ADR 0087 §2 autonómia — a `public.dart` már az
+engedélyezett listán „auditált additív public export"-ként):** a `public.dart`
+**additívan** exportálja a fenti session-runtime szimbólumokat. Csak a
+`public.dart` módosul; a re-exportált fájlok forrása változatlan. Az implementer
+**minden** importált szimbólumról `rg`-vel bizonyítja, hogy a `public.dart`-on
+van; ami additív export nélkül nem érhető el (belső Practice-szerkesztést
+kívánna) → **STOP** + bridge brief-revízió, nem néma scope-tágítás. Az
+allowed_paths NEM bővül: minden más Practice fájl változatlan marad, csak
+re-export forrás. Részletes indoklás: [ADR 0127](../adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md) §Döntés 2.
+
+**R2 — Mikrofon/audio-session lease tulajdonlás (mérve, pipeline §1 rule 2).**
+Az `AudioSessionCoordinator.acquire()` egyetlen hívója a `MicCapture`
+(`lib/core/audio/mic_capture.dart:82`). A Practice `PracticeSessionController`
+ADR 0077 §10 szerint kifejezetten NEM birtokolja a lease-t — a
+`PracticeObservationGateway` (production `LivePracticeObservationGateway`,
+`practice/data/`, `strumEngineProvider` + `microphonePermissionGatewayProvider`
+fölött) hajtja a megfigyelést, a lease a live úton folyik. Következmény: a Song
+Trainer **scoring** módja a Practice motoron át (valós observation gateway)
+szerzi a lease-t; a **playback-only** mód NEM konstruál/aktivál scoring
+gateway-t és NEM olvassa a mikrofon-permission providert (acceptance:
+playback-only mic provider call count 0). Az A9 réteg-tisztaság tiltja, hogy a
+`song_trainer/application/trainer/` közvetlenül elérje az
+`AudioSessionCoordinator`-t / `StrumEngine`-t / gateway-t — a controller
+kizárólag a publikus Practice session-felületre + injektált gateway-re épül.
+
+**R3 — Compiler bemeneti típusok igazolva.** `SongTimeMap`
+(`domain/services/song_time_map.dart`, `timeAt`/`durationBetween`/`positionAt`),
+`TrainerConfig`/`TrainerRange`/`MeasureRange`/`TrainerMode {chord,rhythm,pitch}`
+(R17, `domain/models/trainer_config.dart`), `SongTransport` (R18,
+`dispatch`/`states`/`effects`), `TempoMap`/`MeterMap`/`SongTrack`/`SongEvent`/
+`SongSection`/`SongMeasure`/`SongCapability` mind létező. A `pitch` mód
+scoringja ebben a körben TILOS (brief §3). A `PracticeEvent.id` +
+`PracticeDefinition.sourceReference` a source-mapping hordozói.
 
 ## 1. Cél
 
