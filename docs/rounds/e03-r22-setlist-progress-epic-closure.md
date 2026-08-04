@@ -150,6 +150,40 @@ tények és feloldások:
 A revízió a fájllistát nem tágítja: a 2. pont feloldása a már listázott
 `progress/public.dart` additív exportja. A `PLANNING` státusz ezzel megadva.
 
+### Pre-flight revízió — 2. addendum (2026-08-04, implementer-STOP feloldása, orchestrátor: Claude Opus 4.8)
+
+**Kiváltó implementer-STOP (`status=stopped`, head `3f4dabd`):** „a MusicXML/MXL/
+MIDI/native fixtureök provenance/licence metadata nélküliek; a szükséges fixture
+manifest nincs az `allowed_paths` listán." A Codex addigra zölden leszállította a
+V2 domain/data/application/progress szeletet + 14 megkülönböztető tesztet (WIP
+commit `9fa6ed6`), és a fixture-provenance gate-nél állt meg.
+
+**Mért tények (orchestrátor, `main` @ `3a5762a`):**
+
+- Az import fixtureök léteznek `test/fixtures/song_trainer/{musicxml,mxl,midi,guitar_pro,native,legacy}/` alatt (import-körök #95/#101/#103).
+- A **Guitar Pro fixtureök provenance-a MÁR dokumentált**: `test/fixtures/song_trainer/guitar_pro/README.md` tábla — köztük EGY harmadik-feles, **MPL-2.0** licencű fixture (`minimal_gpx.gpx`, alphaTab commit `a186437…`), SHA-256-tal.
+- A musicxml/midi/mxl/native/legacy fixtureökben **nincs beágyazott copyright/composer/rights/creator** (mérve: `grep -riE "copyright|rights|composer|<creator"` → üres) → projekt-szerzőségű szintetikus teszt-fixtureök, harmadik-feles zenei tartalom nélkül.
+
+**Feloldás (NEM scope-tágítás, NEM új fájl):** a fixture-provenance/licence gate
+(`tool/ci/check_song_fixture_licenses.dart` — MÁR az allowed-listán, ÚJ) a
+provenance-manifesztet **inline `const` Dart-adatként hordozza a saját fájljában**;
+külön manifeszt-fájl (JSON) TILOS és felesleges. A gate fixture-önként rögzíti a
+`{provenance, licence, sha256}` hármast, és géppel ellenőrzi:
+(a) minden manifeszt-bejegyzés fixture-e létezik a lemezen;
+(b) minden lemezen lévő import-fixture szerepel a manifesztben (nincs
+provenance nélküli fixture — ez a gate valódi éle);
+(c) minden fixture SHA-256-ja egyezik a manifeszttel (a manifeszt nem sodródhat
+csendben).
+A GP-bejegyzések a README tábláját (az MPL-2.0 gpx-et is) **szó szerint**
+tükrözik; a többi formátum bejegyzése „project-authored synthetic test fixture,
+no third-party musical content" a mért tény alapján. Így a teljes provenance-
+evidencia az engedélyezett fájlokon belül marad — nincs H3 tilos-zóna-feloldás.
+
+A `check_song_schema.dart` schema-snapshot gate szintén inline/tracked
+snapshotra dolgozik az allowed-listás fájlokon belül (nincs listán kívüli
+snapshot-fájl). A folytatás ugyanezen a branchen, ugyanezzel a motorral (Codex)
+megy, a fenti feloldással.
+
 ## 1. Cél
 
 Setlist V2 Practice/Performance, revision-aware Song progress, daily-goal/streak/history integráció, teljes quality/security/performance evidence és tényszerű Epic completion report.
