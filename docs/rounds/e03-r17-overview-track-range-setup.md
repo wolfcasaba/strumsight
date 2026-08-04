@@ -96,9 +96,19 @@ a core→feature és a cross-feature-public-API szabályt kényszeríti (NEM a
 provider-központosítást), és a presentation már ma is közvetlenül importál
 application-controllert (`song_editor_screen.dart` → `song_editor_controller.dart`).
 **Döntés:** a `songTrainerSetupControllerProvider` a saját, engedélyezett
-`song_trainer_setup_controller.dart`-ban co-located, a repository/resolver
-függőségeket intra-feature importtal olvassa. A `song_trainer_providers.dart`
-NEM módosul — annak szerkesztése listán kívüli → `stopped`.
+`song_trainer_setup_controller.dart`-ban co-located. **A capability nem
+provider-injektált** — a `SongValidator` és a `SongCapabilityResolver`
+tiszta, `const`-konstruálható domain service (`const SongValidator()`,
+`const SongCapabilityResolver()`), amelyet a controller **közvetlenül
+példányosít**; ezekhez nincs és nem is kell provider. A controller EGYETLEN
+provider-függősége a **már létező** `songRepositoryProvider`, amelyet
+intra-feature importtal olvas és `repository.get(SongId)`-vel tölti be a
+`SongDocument`-et, majd `SongValidator().validate(doc)` →
+`SongCapabilityResolver().resolve(report:, profile: SongCapabilityProfile.trainer)`
+láncon számol capabilityt. A `song_trainer_providers.dart` NEM módosul — annak
+szerkesztése listán kívüli → `stopped`. (Feloldva az E03-R17 első
+implementer-STOP-ját, `36059ad`: az eredeti R2 megfogalmazás félreérthetően
+„resolver providert" említett; nincs ilyen provider, és nem is kell.)
 
 **R3 — Capability-modell mért alakja (unreachable-status szabály).** A
 `SongCapabilityReport` (ADR 0114) ma **csak** `chord` + `pitch` scoring-tengelyt
