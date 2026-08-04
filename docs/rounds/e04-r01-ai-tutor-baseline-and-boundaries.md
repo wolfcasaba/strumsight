@@ -1,6 +1,6 @@
 # E04-R01 — AI Tutor baseline, ADR-ek és feature flagek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-04, baseline `main` @ `8d70232`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 1; §35
 - **Branch:** `codex/e04-r01-ai-tutor-baseline-and-boundaries`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva
@@ -52,12 +52,54 @@ vagy mércegyengítés.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki** (baseline `main` @
-akkori sha). Előre kiosztott ADR: **0131** (provider-boundary), **0132**
-(privacy-and-consent), **0133** (tool-confirmation), **0134** (memory-policy) —
-mind a NÉGY ADR-fájlt a **Claude/orchestrátor** írja a pre-flightban, NEM
-implementer-diff és NEM a TOML `allowed_paths`-on (a §4 tábla jelöli). Az
-E03-R21/R22 általi ADR-eltolódást a pre-flight kezeli.
+**PLANNING — a mért §0.0-t az élesedő pre-flight töltötte ki** (baseline `main`
+@ `8d70232`, E04-R01 pre-flight 2026-08-04). Előre kiosztott ADR: **0131**
+(provider-boundary), **0132** (privacy-and-consent), **0133** (tool-confirmation),
+**0134** (memory-policy) — mind a NÉGY ADR-fájlt a **Claude/orchestrátor** írta
+a pre-flightban, NEM implementer-diff és NEM a TOML `allowed_paths`-on (a §4
+tábla jelöli).
+
+### Pre-flight mérések (2026-08-04, baseline `main` @ `8d70232`)
+
+1. **ADR-reconcile:** `ls docs/adr/ | sort | tail` → az utolsó ADR **0130**
+   (`0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md`). A next-free
+   **0131**, tehát a batch 0131–0134 kiosztása HELYES — **nincs ADR-eltolás**,
+   az E03-R21/R22 a 0129/0130-at fogyasztotta el, nem a 0131-et. A §5 blokk
+   változatlan.
+
+2. **Greenfield igazolva:** `lib/features/ai_tutor/` nem létezik.
+
+3. **`FeatureFlags` mai mezőkészlete (mérve, `lib/app/config/feature_flags.dart`)
+   — a §2 stale volt:** a valós mezők `accountEnabled`, `diagnosticsEnabled`,
+   **`labModeAvailable`**, **`practiceEngineV2Enabled`**, `migratedLearnEnabled`,
+   `practiceDetailedHistoryEnabled`, **`songTrainerV2Enabled`** (a §2 csak
+   négyet sorolt fel, kimaradt `labModeAvailable`, `practiceEngineV2Enabled`,
+   `songTrainerV2Enabled`). Ez **nem változtat a scope-on**: az `aiTutorEnabled`
+   + `aiTutorCloudEnabled` továbbra is tisztán additív, default OFF, a
+   `const` konstruktor default-jai miatt a hívóhelyek nem törnek. A mezőt hozzá
+   kell adni a `==`, `hashCode` és `toString` implementációhoz is (a meglévő
+   `hashCode` amúgy is kihagyja a `songTrainerV2Enabled`-et — **ezt NEM
+   javítjuk ebben a körben**, tilos zóna; csak az új két mezőt visszük be
+   konzisztensen a `==`-ba és `toString`-be, és a `hashCode`-ba is).
+
+4. **`FeatureFlags(` hívóhelyek (mérve, `rg`):** a `factory forEnvironment`
+   default-tal ad minden nem-kötelező mezőt; a teszt-hívóhelyek (`app_config_test`,
+   `app_bootstrap_test`, `app_router_test`, stb.) named argumentekkel hívnak,
+   így egy új **opcionális, default-OFF** mező egyiket sem töri. Ezek a tesztek
+   **tilos zónában** vannak (nincsenek az `allowed_paths`-on) — nem szabad
+   módosítani őket.
+
+5. **`usesNetwork` (mérve):** `bool get usesNetwork => accountEnabled ||
+   diagnosticsEnabled;` — az `app_config.dart:126` az URL-validációt ehhez köti,
+   és az `app_config_test.dart` (tilos zóna) `isFalse`-t vár bizonyos flag-
+   kombinációkra. **Döntés (ADR 0132):** az `aiTutorCloudEnabled` ebben a körben
+   **NEM** kerül a `usesNetwork`-be — a cloud hálózati wiring R14-re halasztott,
+   a kör tisztán additív, funkcionális változtatás nélkül. Így az `app_config_test`
+   érintetlenül zöld marad.
+
+6. **Offline-garancia (mérve):** `test/app/offline_network_guard_test.dart`
+   létezik és a 0-request offline/kijelentkezett utat őrzi. **NINCS meglévő**
+   `test/app/feature_flags_test.dart` — ez ÚJ fájl.
 
 ## 1. Cél
 
@@ -69,9 +111,12 @@ feature-boundaryjának létrehozása **funkcionális változtatás nélkül**, f
 
 - **Greenfield:** `lib/features/ai_tutor/` nem létezik (mérve — a könyvtár hiányzik).
 - **Flagek:** `lib/app/config/feature_flags.dart` `FeatureFlags` osztálya ma
-  `accountEnabled`, `diagnosticsEnabled`, `migratedLearnEnabled`,
-  `practiceDetailedHistoryEnabled` mezőket hordoz — Epic 4 ide ad additívan
-  `aiTutorEnabled` + `aiTutorCloudEnabled` mezőt, default **OFF**.
+  (mérve, ld. §0.0/3) `accountEnabled`, `diagnosticsEnabled`, `labModeAvailable`,
+  `practiceEngineV2Enabled`, `migratedLearnEnabled`, `practiceDetailedHistoryEnabled`,
+  `songTrainerV2Enabled` mezőket hordoz — Epic 4 ide ad additívan
+  `aiTutorEnabled` + `aiTutorCloudEnabled` mezőt, default **OFF** (a `==`,
+  `hashCode`, `toString` konzisztensen bővül; a meglévő `hashCode`
+  `songTrainerV2Enabled`-hiánya tilos zóna, nem javítjuk).
 - **Újrahasznált public API-k** (a későbbi körök fogyasztják, most csak leltár):
   `lib/features/{practice,song_trainer,analyze,progress,streak,settings,learn,
   library,live}/public.dart`.
