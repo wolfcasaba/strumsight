@@ -25,6 +25,8 @@ import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
+import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
@@ -161,6 +163,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.songTrainerEditor,
           builder: (_, state) =>
               SongEditorScreen(songId: state.pathParameters['songId']!),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerOverview,
+          builder: (_, state) =>
+              SongOverviewScreen(songId: state.pathParameters['songId']!),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerSetup,
+          builder: (_, state) =>
+              TrainerSetupScreen(songId: state.pathParameters['songId']!),
         ),
       ],
     ],
