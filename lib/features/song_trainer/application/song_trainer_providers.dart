@@ -18,6 +18,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
+import 'package:strumsight/features/practice/public.dart';
 
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/platform_providers.dart';
@@ -46,10 +47,13 @@ import '../data/migration/song_migration_version_store.dart';
 import '../domain/repositories/song_asset_repository.dart';
 import '../domain/repositories/song_repository.dart';
 import '../domain/models/song_id.dart';
+import '../domain/models/song_asset_reference.dart';
 import 'migration/song_migration_state.dart';
 import 'migration/song_storage_migrator.dart';
 import 'trainer/song_transport.dart';
 import 'trainer/song_transport_clock.dart';
+import 'trainer/song_practice_compiler.dart';
+import 'trainer/song_trainer_controller.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// song tree. The directory MUST exist before [FileSongRepository]
@@ -309,3 +313,46 @@ final songTransportProvider = Provider.autoDispose<SongTransport>((ref) {
   ref.onDispose(() => unawaited(transport.dispose()));
   return transport;
 });
+
+/// Immutable runtime inputs for one route-scoped Song Trainer controller.
+///
+/// [compilation] decides whether the provider reads the Practice session
+/// family. The playback-only branch must stay before every Practice provider
+/// read: it is the concrete "mic provider calls == 0" ownership boundary.
+final class SongTrainerControllerInputs {
+  const SongTrainerControllerInputs({
+    required this.compilation,
+    this.backingAsset,
+  });
+
+  final SongPracticeCompilation compilation;
+  final SongAssetReference? backingAsset;
+}
+
+/// Production Song Trainer orchestration wiring.
+///
+/// Scored sessions reuse the public Practice controller family, which owns
+/// the live observation gateway and microphone lifecycle. Playback-only
+/// sessions construct no Practice controller at all, so they cannot resolve
+/// the live gateway or microphone-permission provider.
+final songTrainerControllerProvider = Provider.autoDispose
+    .family<SongTrainerController, SongTrainerControllerInputs>((ref, inputs) {
+      final compilation = inputs.compilation;
+      final definition = compilation.definition;
+      final practiceSession = definition == null
+          ? null
+          : ref.watch(
+              practiceSessionControllerProvider((
+                definition: definition,
+                config: compilation.practiceConfig!,
+              )),
+            );
+      final controller = SongTrainerController(
+        transport: ref.watch(songTransportProvider),
+        compilation: compilation,
+        backingAsset: inputs.backingAsset,
+        practiceSession: practiceSession,
+      );
+      ref.onDispose(() => unawaited(controller.dispose()));
+      return controller;
+    });

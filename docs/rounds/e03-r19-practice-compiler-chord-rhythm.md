@@ -359,10 +359,54 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Állapot: kész review-ra (2026-08-04).**
+
+### Módosítások
+
+- `practice/public.dart`: a már létező session-runtime típusok és provider
+  felülete additív, auditált re-exportot kapott; Practice belső fájl nem
+  változott.
+- `song_practice_compiler.dart` és `song_event_reference.dart`: tiszta
+  song→Practice fordítás és revision/track/event/measure/section source-map.
+  A tempo/meter-váltó tartomány SongTimeMap-onsetjeit a range-kezdő
+  reference-tempo tickjeire normalizálja.
+- `song_trainer_result.dart` és `song_result_mapper.dart`: a végső Practice
+  attempt verdictjeit minden targetnél source-maphez köti, majd measure és
+  section szerint aggregálja.
+- `song_trainer_controller.dart` és `song_trainer_state.dart`: count-in után
+  induló backing, scoring session lifecycle, pause/resume, seek új attempt,
+  background pause és operation-ID alapú idempotens finalize.
+- `song_trainer_providers.dart`: scoringnál a publikus Practice session család
+  production wiringja; playback-only ágon nincs Practice controller,
+  observation gateway vagy microphone-permission provider olvasás.
+- Compiler/controller tesztek: 4/4 többakkordos és 3/4, section/range,
+  tempo/meter/speed normalizálás, mind a hat capability-profil, source-map,
+  lifecycle/race, permission denial és playback-only mic-provider mérés.
+
+### Mérések és ellenőrzések
+
+- RED→GREEN: a compiler/result-map és controller/runtime felület hiányára
+  írt tesztek előbb nem fordultak/hiányzó szimbólumra estek, majd a célzott
+  futás 8 teszttel zöld lett.
+- `rg` public-boundary audit: az alkalmazásból importált Practice típusok és
+  provider-ek mind a `practice/public.dart`-on elérhetők; nincs
+  `features/practice/` belső import, és a `trainer/` alatti kód nem hivatkozik
+  `AudioSessionCoordinator`, `StrumEngine`, observation gateway vagy mic
+  provider szimbólumra.
+- `flutter analyze` → `No issues found!`.
+- `tools/round-gate.sh test/features/song_trainer/application/trainer test/features/song_trainer/domain test/features/practice`
+  → format (808 fájl, 0 változás), analyze zöld, mindhárom célzott tesztkör és
+  architecture zöld.
+- `git diff --check` → tiszta.
+
+### Szándékos szűkítések és nem futtatott ellenőrzések
+
+- Pitch scoring, trainer screen/heatmap és a változó-meter metronóm-rács nem
+  része ennek a körnek. Utóbbi a range kezdő meterét használja; a scoring
+  onset-időhű marad a reference-tempo normalizálással.
+- Teljes `flutter test`, property gate és release APK/CI nem futott helyben:
+  ezeket az orchestrátor indítja az exact commit SHA-ra. Nem történt `gh`,
+  push vagy PR-művelet.
 
 ## 11. Review — a független reviewer tölti ki
 
