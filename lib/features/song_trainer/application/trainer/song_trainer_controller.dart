@@ -1,8 +1,15 @@
 import 'dart:async';
 
+import 'package:strumsight/core/audio/pitch/pitch_observation.dart';
+import 'package:strumsight/core/audio/pitch/pitch_observation_config.dart';
+import 'package:strumsight/core/audio/pitch/pitch_observation_gateway.dart';
 import 'package:strumsight/features/practice/public.dart';
 
 import '../../domain/models/song_asset_reference.dart';
+import '../../domain/models/song_capability.dart';
+import '../../domain/models/song_event.dart';
+import '../../domain/models/note_scoring_models.dart';
+import '../../domain/services/monophonic_note_scorer.dart';
 import 'song_practice_compiler.dart';
 import 'song_result_mapper.dart';
 import 'song_trainer_state.dart';
@@ -23,10 +30,17 @@ final class SongTrainerController {
     required this.compilation,
     this.backingAsset,
     PracticeSessionController? practiceSession,
-  }) : _practiceSession = practiceSession {
+    MonophonicPitchSession? pitchSession,
+  }) : _practiceSession = practiceSession,
+       _pitchSession = pitchSession {
     if (compilation.isPlaybackOnly != (practiceSession == null)) {
       throw ArgumentError(
         'Scored compilations require a Practice session; playback-only ones do not.',
+      );
+    }
+    if (practiceSession != null && pitchSession?.isScoringEnabled == true) {
+      throw ArgumentError(
+        'Pitch scoring cannot share a controller with a Practice mic session.',
       );
     }
     _transportSubscription = transport.states.listen(_onTransportState);
@@ -50,14 +64,22 @@ final class SongTrainerController {
   final SongPracticeCompilation compilation;
   final SongAssetReference? backingAsset;
   final PracticeSessionController? _practiceSession;
+  final MonophonicPitchSession? _pitchSession;
   final StreamController<SongTrainerState> _states =
       StreamController<SongTrainerState>.broadcast();
   final StreamController<SongTrainerEffect> _effects =
       StreamController<SongTrainerEffect>.broadcast();
+  final StreamController<NoteScoringUpdate> _noteUpdates =
+      StreamController<NoteScoringUpdate>.broadcast();
+  final StreamController<NoteScoringResult> _noteResults =
+      StreamController<NoteScoringResult>.broadcast();
   late final StreamSubscription<SongTransportState> _transportSubscription;
   late final StreamSubscription _transportEffectsSubscription;
   StreamSubscription<PracticeSessionState>? _practiceSubscription;
   StreamSubscription<PracticeSessionEffect>? _practiceEffectsSubscription;
+  StreamSubscription<PitchObservation>? _pitchSubscription;
+  MonophonicNoteScorer? _pitchScorer;
+  bool _pitchRunning = false;
 
   SongTrainerState _state = const SongTrainerState.initial();
   int _operationId = 0;
@@ -68,6 +90,8 @@ final class SongTrainerController {
 
   Stream<SongTrainerState> get states => _states.stream;
   Stream<SongTrainerEffect> get effects => _effects.stream;
+  Stream<NoteScoringUpdate> get noteUpdates => _noteUpdates.stream;
+  Stream<NoteScoringResult> get noteResults => _noteResults.stream;
   SongTrainerState get state => _state;
   bool get isPlaybackOnly => compilation.isPlaybackOnly;
 
@@ -88,6 +112,7 @@ final class SongTrainerController {
     }
     final practice = _practiceSession;
     if (practice == null) {
+      await _startPitchScoring();
       _emit(_state.copyWith(status: SongTrainerStatus.ready));
       return;
     }
@@ -121,6 +146,7 @@ final class SongTrainerController {
     if (_disposed) return;
     final practice = _practiceSession;
     if (practice == null) {
+      await _startPitchScoring();
       if (transport.state.phase == SongTransportPhase.paused) {
         await transport.dispatch(const ResumeSongTransport());
       }
@@ -153,6 +179,7 @@ final class SongTrainerController {
     }
     if (!_isCurrent(operation)) return;
     if (practice == null) {
+      await _stopPitchScoring();
       _emit(
         _state.copyWith(
           status: SongTrainerStatus.paused,
@@ -173,6 +200,7 @@ final class SongTrainerController {
     if (_disposed) return;
     final practice = _practiceSession;
     if (practice == null) {
+      await _stopPitchScoring(emitResult: true);
       if (transport.state.phase == SongTransportPhase.playing) {
         await transport.dispatch(const FinishSongTransport());
       }
@@ -188,16 +216,20 @@ final class SongTrainerController {
     _disposed = true;
     await _practiceSubscription?.cancel();
     await _practiceEffectsSubscription?.cancel();
+    await _stopPitchScoring(emitResult: true);
     await _transportSubscription.cancel();
     await _transportEffectsSubscription.cancel();
     await _practiceSession?.dispose();
     await _states.close();
     await _effects.close();
+    await _noteUpdates.close();
+    await _noteResults.close();
   }
 
   Future<void> _pause(PauseCause cause) async {
     if (_disposed) return;
     ++_operationId;
+    await _stopPitchScoring();
     final practice = _practiceSession;
     if (practice != null &&
         (practice.state.status == PracticeSessionStatus.countIn ||
@@ -297,6 +329,53 @@ final class SongTrainerController {
     );
   }
 
+  Future<void> _startPitchScoring() async {
+    final pitchSession = _pitchSession;
+    if (_disposed ||
+        _pitchRunning ||
+        pitchSession == null ||
+        !pitchSession.isScoringEnabled) {
+      return;
+    }
+    _pitchScorer = pitchSession.createScorer();
+    _pitchSubscription = pitchSession.gateway.observations.listen(
+      _onPitchObservation,
+      onError: _onPitchObservationError,
+      cancelOnError: false,
+    );
+    final started = await pitchSession.gateway.start(pitchSession.config);
+    if (started.isSuccess) {
+      _pitchRunning = true;
+      return;
+    }
+    await _pitchSubscription?.cancel();
+    _pitchSubscription = null;
+    _pitchScorer = null;
+  }
+
+  Future<void> _stopPitchScoring({bool emitResult = false}) async {
+    final scorer = _pitchScorer;
+    if (emitResult && scorer != null && !_noteResults.isClosed) {
+      _noteResults.add(scorer.finalize());
+    }
+    _pitchScorer = null;
+    await _pitchSubscription?.cancel();
+    _pitchSubscription = null;
+    if (!_pitchRunning) return;
+    _pitchRunning = false;
+    await _pitchSession?.gateway.stop();
+  }
+
+  void _onPitchObservation(PitchObservation observation) {
+    final scorer = _pitchScorer;
+    if (_disposed || scorer == null || _noteUpdates.isClosed) return;
+    _noteUpdates.add(scorer.observe(observation));
+  }
+
+  void _onPitchObservationError(Object error, StackTrace stackTrace) {
+    unawaited(_stopPitchScoring(emitResult: true));
+  }
+
   bool _isCurrent(int operation) => !_disposed && operation == _operationId;
 
   void _emit(SongTrainerState next) {
@@ -324,4 +403,64 @@ final class SongTrainerController {
         PracticeSessionStatus.cancelled => SongTrainerStatus.cancelled,
         PracticeSessionStatus.failed => SongTrainerStatus.failed,
       };
+}
+
+/// A caller-assembled pitch session for an already selected note range.
+final class MonophonicPitchSession {
+  MonophonicPitchSession({
+    required this.gateway,
+    required this.config,
+    required this.capability,
+    required this.startedAt,
+    required List<NoteScoringTarget> targets,
+  }) : targets = List<NoteScoringTarget>.unmodifiable(targets);
+
+  factory MonophonicPitchSession.fromSongNotes({
+    required PitchObservationGateway gateway,
+    required DateTime startedAt,
+    required SongPitchCapability capability,
+    required int capo,
+    required List<SongNoteEvent> notes,
+    PitchObservationConfig config = const PitchObservationConfig(),
+    Duration rangeStart = Duration.zero,
+  }) {
+    if (capo < 0 || capo > 15) {
+      throw ArgumentError.value(capo, 'capo');
+    }
+    final targets =
+        <NoteScoringTarget>[
+          for (final note in notes)
+            NoteScoringTarget(
+              id: note.id.value,
+              midiPitch: note.midiPitch + capo,
+              start: note.start - rangeStart,
+              duration: note.duration,
+            ),
+        ]..sort((a, b) {
+          final byStart = a.start.compareTo(b.start);
+          return byStart != 0 ? byStart : a.id.compareTo(b.id);
+        });
+    if (targets.any((target) => target.start.isNegative)) {
+      throw ArgumentError.value(rangeStart, 'rangeStart');
+    }
+    return MonophonicPitchSession(
+      gateway: gateway,
+      config: config,
+      capability: capability,
+      startedAt: startedAt,
+      targets: targets,
+    );
+  }
+
+  final PitchObservationGateway gateway;
+  final PitchObservationConfig config;
+  final SongPitchCapability capability;
+  final DateTime startedAt;
+  final List<NoteScoringTarget> targets;
+
+  bool get isScoringEnabled =>
+      capability.scoring && capability.isMonophonic && targets.isNotEmpty;
+
+  MonophonicNoteScorer createScorer() =>
+      MonophonicNoteScorer(startedAt: startedAt, targets: targets);
 }

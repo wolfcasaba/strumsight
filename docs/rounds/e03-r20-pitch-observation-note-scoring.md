@@ -1,6 +1,6 @@
 # E03-R20 — Pitch observation és monophonic note scoring
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight mérve 2026-08-04, baseline: `main` @ `bd4bb4a`; korábbi tervezési baseline `eeb4f6d`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 20; §22
 - **Branch:** `codex/e03-r20-pitch-observation-note-scoring`
 - **Előfeltétel:** E03-R19 merge
@@ -65,12 +65,56 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-- YIN a Tuner belső `engine/dsp` fájljában él; Tuner provider/UI import tilos.
-- A thresholdök és observation latency a planning baseline-on nincsenek note-trainer fixture benchmarkkal bizonyítva.
-- R19 controller külön scoring módot tud orchestrálni.
+**Pre-flight mérve 2026-08-04, baseline `main` @ `bd4bb4a` (E03-R19 merge után).
+Előre kiosztott ADR: nincs → [ADR 0128](../adr/0128-shared-pitch-observation-dsp-and-monophonic-note-scoring.md)
+ebben a pre-flightban megírva.** Minden `allowed_paths` útvonal létezés-ellenőrzött
+(a 13 „ÚJ" fájl mérve hiányzik, a 3 „meglévő" mérve létezik), minden hivatkozott
+publikus szimbólum, state producer, resource owner és numerikus cella
+`rg`-vel újramérve. A négy mért drift és feloldása:
 
-A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
-feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+**R1 — Közös YIN DSP extrakció, Tuner-paritás delegálással.** A pure YIN mért
+publikus felülete `lib/features/tuner/engine/dsp/yin_pitch_detector.dart`-ban:
+`class YinPitchDetector({required int sampleRate, int bufferSize = 4096, double
+threshold = 0.12, double minFrequency = 60})`, `double? detect(Float64List)`,
+`double clarity` mező, top-level `noteForFrequency(double f0, {double a4 = 440})`.
+Rajta kívül **egyedül** a `tuner_analyzer.dart` és a
+`test/features/tuner/dsp/yin_test.dart` importálja (mérve; Tuner provider/UI nem).
+Feloldás: a pure DSP a `lib/core/audio/dsp/yin_pitch_detector.dart` alá kerül
+**változatlan algoritmussal + default paraméterekkel**, a tuner-fájl delegál/
+re-exportál → bitre azonos Tuner viselkedés (ADR 0128 D1).
+
+**R2 — A mic-lease tulajdonosa a `MicCapture`, nem a gateway.** Mérve: a lease-t
+egyedül `MicCapture._doStart` szerzi `AudioSessionCoordinator.acquire`-ral
+(`lib/core/audio/mic_capture.dart:82`); a Practice scoring-analóg
+`LivePracticeObservationGateway` **nem** birtokol lease-t, a `StrumEngine`
+`LiveFrame`-jére iratkozik (`AudioOwner.live`). Feloldás: a
+`live_pitch_observation_gateway.dart` **injektált** mic/frame forrásból fogyaszt,
+`acquire`-t soha nem hív; „közös lease" acceptance = injektált fake
+MicCapture/lease idempotens `start`/`stop`/`dispose` életciklusa (ADR 0128 D3).
+
+**R3 — Nincs song-trainer `AudioOwner` érték; a production-drótozás halasztott.**
+Mérve: `AudioOwner` = {`live`, `tuner`, `analyzeRecorder`, `latencyCalibration`,
+`diagnostics`} (`audio_session_lease.dart:5`); sem ez, sem a `createMicCapture`
+gazdája (`audio_providers.dart`) **nincs** az `allowed_paths`-on. Feloldás: új
+`AudioOwner` érték és e két core-fájl szerkesztése **tilos zóna** ebben a körben;
+a production provider-drótozás + bármely új `AudioOwner` a Trainer UI-körre
+(R21) halasztva (R17–R19 „hívó UI/runner még nincs" mintája). Kívül esést az
+implementer `stopped`-dal jelez, nem néma tágítással.
+
+**R4 — Nincs `transposition` forrásmező; sounding-target = `midiPitch`.** Mérve:
+`grep -rniE "transpos"` a domainben csak `Chord` display-transpozíciót ad;
+`SongNoteEvent.midiPitch` (0–127, „canonical scoring input") az írott alap,
+`SongMetadata.capo` (0–15) létezik, `SongInstrument.tuning` opcionális; a
+`ChordEvent` concert pitch-en tárol. Feloldás (a §5 D2-t finomítja): a scorer
+**már feloldott** target MIDI-t kap tiszta függvényként; a
+`written + transposition + capo` feloldás a controller-integrációs rétegé a
+létező mezőkből, `transposition` tag **0** (nincs forrásmező → ebben a körben
+**nem hozunk létre** újat), capo/tuning a §22.6 tab-warning policy szerint
+(ADR 0128 D4). Új tárolt domain-mező tilos.
+
+A fenti négy revízió a kör **saját, még nem merge-elt** briefjét és az ebben a
+pre-flightban írt ADR 0128-at érinti (orchestrátor-autonómia, ADR 0087 §2) —
+merge-elt döntést nem módosít.
 
 ## 1. Cél
 
@@ -122,6 +166,7 @@ Közös audio boundary mögötti, benchmarkolt pitch observation és tiszta, lat
 | `test/features/song_trainer/application/trainer/song_note_trainer_test.dart` | ÚJ | integration |
 | `test/fixtures/audio/song_trainer/pitch_fixture_manifest.json` | ÚJ | provenance/labels |
 | `docs/rounds/e03-r20-pitch-observation-note-scoring.md` | meglévő | §10 handoff |
+| `docs/adr/0128-shared-pitch-observation-dsp-and-monophonic-note-scoring.md` | ÚJ (pre-flight, **orchestrátor** — NEM implementer-diff, NEM a TOML `allowed_paths`-on) | közös DSP/gateway/scorer döntés |
 
 **Tilos zóna:** minden más fájl, más feature belső contractja, más kör briefje
 és nem felsorolt CI/docs artefaktum. Új fixture/helper is fájl; listán kívül
@@ -131,7 +176,7 @@ additív exportjára módosítható, a pre-flight exact symbol auditja után.
 ## 5. Kötött architekturális döntések
 
 1. Közös DSP kiemelés paritást tart; Tuner behavior thresholdja benchmark/ADR nélkül nem változik.
-2. Target sounding pitch = written MIDI + transposition + capo effect; display fret/tuning külön warning policy.
+2. Target sounding pitch = written MIDI + transposition + capo effect; display fret/tuning külön warning policy. **(§0.0 R4 / ADR 0128 D4 finomítás: nincs `transposition` forrásmező a domainben — a `transposition` tag `0`, a scorer már feloldott target MIDI-t kap; új tárolt mező tilos.)**
 3. Polyphonic range hard disable; scorer nem választ hangot overlapből.
 4. Pitch/onset/coverage/extra-note threshold kizárólag fixture benchmarkból, derived boundary matrixszal.
 
@@ -191,10 +236,44 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### 2026-08-04 — implementáció
+
+| Fájl | Változás és mérce |
+|---|---|
+| `lib/core/audio/dsp/yin_pitch_detector.dart` | Közös, pure YIN detector és hangnév-függvény a korábbi defaultokkal; `test/core/audio/dsp/yin_pitch_detector_test.dart` összeveti a legacy kimenettel. |
+| `lib/core/audio/pitch/pitch_observation.dart` | Immutable timestampelt pitch-observation modell. |
+| `lib/core/audio/pitch/pitch_observation_config.dart` | Érvényesített confidence, RMS, frekvencia, stabilitás és latency konfiguráció. |
+| `lib/core/audio/pitch/pitch_observation_gateway.dart` | Platformfüggetlen observation-stream és lifecycle contract. |
+| `lib/features/tuner/engine/dsp/yin_pitch_detector.dart` | Core YIN re-export a meglévő Tuner importútvonal megtartásához. |
+| `lib/features/tuner/engine/dsp/tuner_analyzer.dart` | A core YIN importja; a Tuner regressziós tesztek változatlanul futnak. |
+| `lib/features/song_trainer/domain/models/note_scoring_models.dart` | Pitch/onset grade-ek, targetek, update-ek és determinisztikus eredménymodellek. |
+| `lib/features/song_trainer/domain/services/monophonic_note_scorer.dart` | Latency-kompenzált, monofón target-scoring és coverage-összesítés; a domain teszt rögzített szekvenciákkal ellenőrzi. |
+| `lib/features/song_trainer/data/audio/live_pitch_observation_gateway.dart` | Injektált frame/MicCapture adapter, confidence-gate és idempotens lifecycle; a teszt fake lease-szel ellenőrzi a release-ágakat. |
+| `lib/features/song_trainer/application/trainer/song_trainer_controller.dart` | Opcionális monofón scoring-session, pause/resume/seek/finish leállítás és `midiPitch + capo` target-feloldás; nincs új transposition mező. |
+| `lib/features/song_trainer/presentation/widgets/note_lane.dart` | Minimális, szemantikailag címkézett monofón note-lane szegmensekkel. |
+| `test/core/audio/dsp/yin_pitch_detector_test.dart` | Core–legacy YIN és hangnév bitazonos regresszió. |
+| `test/features/song_trainer/domain/monophonic_note_scorer_test.dart` | Inclusive küszöbök, latency, miss, coverage, extra note, alacsony confidence és determinisztikus replay. |
+| `test/features/song_trainer/data/audio/live_pitch_observation_gateway_test.dart` | Injektált lease/frame forrás start/stop/dispose és latency-határ tesztek. |
+| `test/features/song_trainer/application/trainer/song_note_trainer_test.dart` | Controller lifecycle, capo-target, transposition-hiány és polyphonic no-score, valamint note-lane widget teszt. |
+| `test/fixtures/audio/song_trainer/pitch_fixture_manifest.json` | 20 determinisztikus observation-fixture: nyers timestamp, kompenzált timestamp és várt grade minden felsorolt SDD-kategóriához. |
+| `tool/benchmarks/song_trainer_pitch_benchmark.dart` | Manifest-olvasó referencia-benchmark. |
+| `docs/baseline/epic-03-pitch-observation-benchmark.md` | A manifest küszöbei és a mérés hatóköre. |
+
+Futtatott parancsok és tényleges eredmény:
+
+```text
+dart run tool/benchmarks/song_trainer_pitch_benchmark.dart
+→ 20/20 fixture PASS
+
+tools/round-gate.sh test/core/audio/dsp test/features/tuner test/features/song_trainer/domain/monophonic_note_scorer_test.dart test/features/song_trainer/data/audio test/features/song_trainer/application/trainer/song_note_trainer_test.dart
+→ exit 0: format, analyze, az öt célzott tesztcsoport és architecture zöld
+```
+
+Eltérés nincs: az `AudioOwner`/provider-drótozás változatlan maradt, a production
+UI-bekötés R21-re halasztott. Nem futott a teljes Flutter suite, a randomizált
+property gate és a release APK: ezek CI/orchestrátor-kötelezettségek. Valós
+Android mikrofon+gitár latency-mérés sem futott; a benchmark dokumentáltan
+determininsztikus observation replay, nyers audio nélkül.
 
 ## 11. Review — a független reviewer tölti ki
 
