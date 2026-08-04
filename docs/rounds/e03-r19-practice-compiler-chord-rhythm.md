@@ -1,6 +1,7 @@
 # E03-R19 — Practice compiler és chord/rhythm trainer
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight lemérve 2026-08-04, orchestrátor Claude Opus 4.8; tervezési baseline: `main` @ `eeb4f6d`, mai `main` @ `1d3c1ac` — E03-R18 merge-elve)
+- **Előre kiosztott ADR:** [`0127`](../adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md) (a pre-flightban írva)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 19; §21
 - **Branch:** `codex/e03-r19-practice-compiler-chord-rhythm`
 - **Előfeltétel:** E03-R18 merge és stabil Practice public contract
@@ -11,22 +12,22 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/practice/public.dart",
-  "lib/features/song_trainer/domain/services/song_practice_compiler.dart",
+  "lib/features/song_trainer/application/trainer/song_practice_compiler.dart",
   "lib/features/song_trainer/domain/models/song_event_reference.dart",
-  "lib/features/song_trainer/domain/models/song_trainer_result.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_result.dart",
   "lib/features/song_trainer/application/trainer/song_trainer_controller.dart",
   "lib/features/song_trainer/application/trainer/song_trainer_state.dart",
   "lib/features/song_trainer/application/trainer/song_result_mapper.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
-  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
+  "test/features/song_trainer/application/trainer/song_practice_compiler_test.dart",
   "test/features/song_trainer/application/trainer/song_trainer_controller_test.dart",
   "test/features/song_trainer/application/trainer/song_trainer_integration_test.dart",
   "test/features/practice/presentation/practice_presentation_guard_test.dart",
   "docs/rounds/e03-r19-practice-compiler-chord-rhythm.md",
 ]
 gate_tests = [
-  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
   "test/features/song_trainer/application/trainer",
+  "test/features/song_trainer/domain",
   "test/features/practice",
 ]
 native_gate = false
@@ -63,6 +64,189 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
 
+### §0.0 Pre-flight revízió (mért, 2026-08-04)
+
+**R1 — Practice public boundary INCOMPLETE a session-runtime orchestrationhöz
+(hard gate, brief §5.1 Kötött döntés 1).** Mérve: `lib/features/practice/public.dart`
+exportálja a definíció/target/config/scorer/metrics felületet
+(`PracticeDefinition`, `PracticeEvent`, `CompiledPracticeTarget`,
+`PracticeSessionConfig`, `ScoringProfile`, `Meter`, `Tempo`, `BeatPosition`,
+`PracticeMode`, `PracticeSource`, `DirectionOutcome`, `StrumObservation`,
+`compilePracticeTarget`, `PracticeEventMatcher`, `PracticeDirectionScorer`),
+DE **nem** a session-runtime felületet:
+`PracticeSessionController` (`application/practice_session_controller.dart`),
+`PracticeSessionInput`/`PracticeSessionCommand`/`PracticeSessionSignal` + a
+konkrét parancsok (`PreparePractice`, `StartPractice`, `PausePractice`,
+`ResumePractice`, `RestartAttempt`, `FinishPractice`, `CancelPractice`,
+`RetryPractice`, `ChangeTempoBeforeAttempt`, `AcceptAdaptiveSuggestion`,
+`GrantPermission`; szignálok: `PreparationSucceeded`, `PreparationFailed`,
+`PermissionDenied`, `ClockAdvanced`) — `application/practice_session_command.dart`;
+`PracticeSessionEffect` + `NavigateToResult`/`PlayCountInClick`/…
+(`application/practice_session_effect.dart`);
+`PracticeSessionState` + `PracticeSessionStatus`/`PauseCause`/`PracticeCountInKind`
+(`domain/model/practice_session_state.dart`);
+`PracticeSessionResult` + `PracticeFinishReason`
+(`domain/model/practice_session_result.dart`);
+`PracticeAttemptResult` + `PracticeAttemptOutcome`
+(`domain/model/practice_attempt_result.dart`);
+`PracticeVerdict` + `TimingGrade`/`ChordOutcome`
+(`domain/model/practice_verdict.dart`);
+a session-provider felület
+(`application/practice_session_providers.dart`), a
+`PracticeObservationGateway` típus
+(`application/practice_observation_gateway.dart`) és a
+`PracticeSessionRecorder` típus
+(`domain/repository/practice_session_recorder.dart`).
+
+**Feloldás (within-round, ADR 0087 §2 autonómia — a `public.dart` már az
+engedélyezett listán „auditált additív public export"-ként):** a `public.dart`
+**additívan** exportálja a fenti session-runtime szimbólumokat. Csak a
+`public.dart` módosul; a re-exportált fájlok forrása változatlan. Az implementer
+**minden** importált szimbólumról `rg`-vel bizonyítja, hogy a `public.dart`-on
+van; ami additív export nélkül nem érhető el (belső Practice-szerkesztést
+kívánna) → **STOP** + bridge brief-revízió, nem néma scope-tágítás. Az
+allowed_paths NEM bővül: minden más Practice fájl változatlan marad, csak
+re-export forrás. Részletes indoklás: [ADR 0127](../adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md) §Döntés 2.
+
+**R2 — Mikrofon/audio-session lease tulajdonlás (mérve, pipeline §1 rule 2).**
+Az `AudioSessionCoordinator.acquire()` egyetlen hívója a `MicCapture`
+(`lib/core/audio/mic_capture.dart:82`). A Practice `PracticeSessionController`
+ADR 0077 §10 szerint kifejezetten NEM birtokolja a lease-t — a
+`PracticeObservationGateway` (production `LivePracticeObservationGateway`,
+`practice/data/`, `strumEngineProvider` + `microphonePermissionGatewayProvider`
+fölött) hajtja a megfigyelést, a lease a live úton folyik. Következmény: a Song
+Trainer **scoring** módja a Practice motoron át (valós observation gateway)
+szerzi a lease-t; a **playback-only** mód NEM konstruál/aktivál scoring
+gateway-t és NEM olvassa a mikrofon-permission providert (acceptance:
+playback-only mic provider call count 0). Az A9 réteg-tisztaság tiltja, hogy a
+`song_trainer/application/trainer/` közvetlenül elérje az
+`AudioSessionCoordinator`-t / `StrumEngine`-t / gateway-t — a controller
+kizárólag a publikus Practice session-felületre + injektált gateway-re épül.
+
+**R3 — Compiler bemeneti típusok igazolva.** `SongTimeMap`
+(`domain/services/song_time_map.dart`, `timeAt`/`durationBetween`/`positionAt`),
+`TrainerConfig`/`TrainerRange`/`MeasureRange`/`TrainerMode {chord,rhythm,pitch}`
+(R17, `domain/models/trainer_config.dart`), `SongTransport` (R18,
+`dispatch`/`states`/`effects`), `TempoMap`/`MeterMap`/`SongTrack`/`SongEvent`/
+`SongSection`/`SongMeasure`/`SongCapability` mind létező. A `pitch` mód
+scoringja ebben a körben TILOS (brief §3). A `PracticeEvent.id` +
+`PracticeDefinition.sourceReference` a source-mapping hordozói.
+
+**R4 — Fájl-elhelyezés drift: a compiler NEM lehet a `domain/` rétegben
+(implementer-STOP feloldása, mérve 2026-08-04).** Az első Codex-dispatch
+`stopped`-ot jelzett: *„song_trainer domain guard forbids even Practice
+public.dart import; its test is outside allowed_paths"*. Mérve, a **merge-elt**
+domain-purity guard (`test/features/song_trainer/domain/song_document_test.dart`
+→ `Domain purity` group, `_findPurityViolations`, `'cross-feature import'`
+regex, `song_document_test.dart:705-707`) a teljes
+`lib/features/song_trainer/domain/**` fát végigolvassa (`:296`) és tiltja a
+`import '…features/(?:practice|…)/…'` mintát — **a `practice/public.dart`-ot is**.
+A globális `tool/check_architecture.dart` ezzel szemben az `application/` réteg
+→ `practice/public.dart` cross-feature importot ENGEDI (`:215-218`), és a
+domain-purity Directory-scan CSAK a `domain/`-t fedi (nincs `application/`
+purity guard).
+
+**Feloldás (ADR 0087 §2 autonómia + a brief pre-flight bannerének „javítsd a
+scope/fájllistát" felhatalmazása):** a Song→`PracticeDefinition` compiler egy
+**cross-feature adapter** — a `song_trainer/domain/public.dart` saját doksija
+szerint az adapterek a domain FÖLÖTT élnek és a domainből importálnak. Ezért a
+Practice-típust importáló ÚJ fájlok a `domain/`-ból az `application/trainer/`
+rétegbe kerülnek:
+- `song_practice_compiler.dart`: `domain/services/` → `application/trainer/`;
+- `song_trainer_result.dart`: `domain/models/` → `application/trainer/`;
+- a compiler teszt: `test/.../domain/` → `test/.../application/trainer/`.
+
+A `song_event_reference.dart` a `domain/models/`-ban MARAD, de **tiszta
+song-koordináta** (revision/track/event-id-`String`/measure/section) — Practice-
+típust NEM importálhat (különben a domain-purity guard pirosra vált). A
+**merge-elt guard NEM módosul** (§4: a mérce nem módosulhat attól, akit mér);
+az allowed_paths lateral korrekció ugyanabban a feature-ben, új tiltott fájl
+nélkül. A `gate_tests` és a §7 gate-sor a `domain` + `application/trainer`
+könyvtárakat futtatja, hogy a domain-purity guard is a záró gate része legyen.
+
+**R5 — Tempo/meter-változás compile-szemantika: single reference-tempo
+normalizált idővonal (második implementer-STOP feloldása, mérve 2026-08-04).**
+A második Codex-dispatch `stopped`-ot jelzett: *„Practice has only constant
+tempo/meter session contract; map-aware bridge needs out-of-scope Practice
+model/compiler changes"*. Mérve IGAZ, hogy a Practice idővonala konstans:
+`BeatTimeConverter` (`practice/domain/model/beat_time_converter.dart`) egyetlen
+`tempo`+`meter` mellett lineárisan konvertál (`ticks·µs/(bpm·480)`), és a
+`BeatPosition` egész tick (480 PPQ). A song viszont `TempoMap`/`MeterMap`-et
+hordoz.
+
+**A kulcs-mérés, amely feloldja: a Practice pontozás tisztán IDŐ-alapú, nem
+metrikus.** A `PracticeEventMatcher` a `scoringProfile.matchWindow`
+(`Duration`) ablakot a `playedAt` köré teszi (`minimumTime/maximumTime`,
+`practice_event_matcher.dart:149-151`) és a `target.time`-hoz (`Duration`)
+matchel; a `PracticeTimingScorer` a `offset.inMicroseconds.abs()`-t osztályozza
+`perfect/goodWindow` ellen (`practice_timing_scorer.dart:132-164`). A
+`compilePracticeTarget` a beat-pozíciókat IDŐVÉ süti a `BeatTimeConverter`-rel.
+A pontozás tehát KIZÁRÓLAG a cél-onset **időpontokon** múlik.
+
+**Feloldás (within-round §0.0, compiler-only, NINCS Practice-modellváltozás):**
+a compiler a kiválasztott range-et EGY reference tempóra (`T_ref`,
+determinisztikusan a range kezdő tempója; a `targetSpeed` a `defaultTempo`-t
+skálázza) és a range kezdő meterére normalizálja. Minden song-event valós
+onset-idejét a `SongTimeMap` adja (a TempoMap-en át, tehát a tempóváltásokat
+befedi), és a compiler ezt az időt tick-re konvertálja `T_ref` mellett
+(`ticks_i = round(onsetµs · T_ref.bpm · 480 / 60_000_000)`, azaz
+`BeatTimeConverter(T_ref, meter).positionAt(onset)`). Így a lefordított
+`PracticeDefinition` cél-időpontjai a song VALÓS onset-idejével egyeznek —
+a tempóváltás az event-időzítésbe olvad, a chord/rhythm/direction pontozás
+végig helyes marad. A `BeatTimeConverter` opcionálisan additív exportként
+kérhető a `public.dart`-on (R1), vagy a compiler a fenti aritmetikát maga
+számolja publikus típusokkal.
+
+**Explicit, dokumentált szűkítés:** meter-váltó range esetén a count-in/
+metronóm/bar-grouping a range KEZDŐ meterét használja (egyetlen `meter` a
+definícióban) — a változó-meter metronóm-rács ebben a körben NEM támogatott.
+Ez a pontozást NEM érinti (a scoring idő-alapú), csak a metronóm-megjelenítést,
+és a körben nincs is trainer screen/metronóm-kritikus scoring (brief §3 scope).
+A determinisztikus fordítás acceptance (§6/1) TELJESÜL: a tempo/meter-váltó
+range determinisztikusan, onset-hű időpontokkal fordul. A szemantikát a
+compiler-teszt független reference-számítással (SongTimeMap-alapú várt
+onset-idők) méri, nem bemásolt zöld outputtal.
+
+**R6 — A hat track-profil encoding-receptje publikus típusokkal, NINCS
+Practice-modellváltozás (harmadik implementer-STOP feloldása, mérve
+2026-08-04).** A harmadik dispatch `stopped`-ot jelzett: *„PracticeEvent nem
+képes chord/direction nélküli note-onset rhythm targetre; belső Practice
+modell-bridge kell"*. A premissza **mérve HAMIS**: a repo már ma is
+enkódolja a rhythm-only célt publikus típusokkal. Mért tények:
+`PracticeEvent.validate()` (`practice_event.dart:93-99`) egy nem-marker
+event-től chord VAGY direction targetet vár (`eventScorableMissing`); a
+`PracticeScoreAggregator` (`practice_score_aggregator.dart:62`) minden
+dimenziót a `scoringProfile.weights` alapján kapuz (`if (entry.value <= 0)
+continue`), azaz a súlyozatlan dimenzió NEM pontozódik; és a
+`builtin_practice_catalog.dart:218-238` `rhythmOnlyQuarters` definíciója
+`PracticeEvent(direction: StrumDirection.down)` placeholder-t + a
+`ScoringProfile.rhythmOnlyDefault` (`weights: {rhythm: 100}`) profilt használ →
+kizárólag rhythm pontozódik.
+
+**A hat mátrix-sor encoding-receptje (mind publikus `PracticeEvent` +
+`ScoringProfile.weights`, semmi Practice-belső):**
+
+| Track/range | PracticeEvent mezők | ScoringProfile.weights |
+|---|---|---|
+| chord+direction | `chord: <kanonikus>`, `direction: <StrumDirection>` | `{chord, rhythm, direction}` |
+| chord+unknown direction | `chord: <kanonikus>`, `direction: null` | `{chord, rhythm}` (direction n.a.) |
+| chord-only | `chord: <kanonikus>` | `{chord, rhythm}` |
+| strum-only | `direction: <StrumDirection>` | `{rhythm, direction}` |
+| note-onset | `direction: StrumDirection.down` (placeholder) | `{rhythm}` (mint `rhythmOnlyDefault`) |
+| playback-only | — nincs scored PracticeDefinition/session — | transport-only, mic 0 |
+
+Kikötések: (1) a `chord` KIZÁRÓLAG kanonikus major/minor label lehet
+(`isCanonicalPracticeChordLabel`, `practice_event.dart:78`); nem-kanonikus
+song-chord → kezeld chord-nélküliként vagy dokumentált mappinggel, nem érvénytelen
+label-lel. (2) A placeholder `direction` NEM pontozódik, mert a profil nem
+súlyozza a `direction` dimenziót — ne állíts direction-súlyt note-onsetnél. (3)
+A `StrumDirection` a `core/music/strum.dart` (mindig importálható); a
+`ScoringProfile`/`PracticeEvent`/`PracticeMode` a `practice/public.dart`-on
+(R1). (4) A `PracticeMode` a capabilityhez illeszkedjen (`strumPattern` /
+`chordChanges` / `chordProgression` / `rhythmOnly`), a `pitch` scoring TILOS
+(brief §3). Ez a recept a §6 megkülönböztető mátrixot maradéktalanul lefedi
+Practice-modellváltozás nélkül; a STOP-ok e tengelyen ezzel lezárva.
+
 ## 1. Cél
 
 SongDocument track/range determinisztikus PracticeDefinition fordítása, publikus Practice Engine orchestration és source-referenciás chord/rhythm result mapping.
@@ -94,14 +278,14 @@ SongDocument track/range determinisztikus PracticeDefinition fordítása, publik
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `lib/features/practice/public.dart` | feltételes meglévő | csak auditált additív public export |
-| `lib/features/song_trainer/domain/services/song_practice_compiler.dart` | ÚJ | Song→PracticeDefinition |
-| `lib/features/song_trainer/domain/models/song_event_reference.dart` | ÚJ | source mapping |
-| `lib/features/song_trainer/domain/models/song_trainer_result.dart` | ÚJ | song result |
+| `lib/features/song_trainer/application/trainer/song_practice_compiler.dart` | ÚJ (§0.0 R4: `application/` réteg) | Song→PracticeDefinition — Practice-típust importál, ezért NEM `domain/` |
+| `lib/features/song_trainer/domain/models/song_event_reference.dart` | ÚJ | source mapping — tiszta song-koordináta, Practice-típust NEM importálhat (domain purity guard) |
+| `lib/features/song_trainer/application/trainer/song_trainer_result.dart` | ÚJ (§0.0 R4: `application/` réteg) | song result — Practice result/verdict típust importálhat |
 | `lib/features/song_trainer/application/trainer/song_trainer_controller.dart` | ÚJ | transport+Practice orchestration |
 | `lib/features/song_trainer/application/trainer/song_trainer_state.dart` | ÚJ | session state |
 | `lib/features/song_trainer/application/trainer/song_result_mapper.dart` | ÚJ | measure/section mapping |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R18-ból | production wiring |
-| `test/features/song_trainer/domain/song_practice_compiler_test.dart` | ÚJ | compile matrix |
+| `test/features/song_trainer/application/trainer/song_practice_compiler_test.dart` | ÚJ (§0.0 R4) | compile matrix |
 | `test/features/song_trainer/application/trainer/song_trainer_controller_test.dart` | ÚJ | state/effect/lifecycle |
 | `test/features/song_trainer/application/trainer/song_trainer_integration_test.dart` | ÚJ | Practice integration |
 | `test/features/practice/presentation/practice_presentation_guard_test.dart` | meglévő | cross-feature guard |
@@ -146,7 +330,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/domain/song_practice_compiler_test.dart test/features/song_trainer/application/trainer test/features/practice
+tools/round-gate.sh test/features/song_trainer/application/trainer test/features/song_trainer/domain test/features/practice
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →
@@ -175,10 +359,54 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Állapot: kész review-ra (2026-08-04).**
+
+### Módosítások
+
+- `practice/public.dart`: a már létező session-runtime típusok és provider
+  felülete additív, auditált re-exportot kapott; Practice belső fájl nem
+  változott.
+- `song_practice_compiler.dart` és `song_event_reference.dart`: tiszta
+  song→Practice fordítás és revision/track/event/measure/section source-map.
+  A tempo/meter-váltó tartomány SongTimeMap-onsetjeit a range-kezdő
+  reference-tempo tickjeire normalizálja.
+- `song_trainer_result.dart` és `song_result_mapper.dart`: a végső Practice
+  attempt verdictjeit minden targetnél source-maphez köti, majd measure és
+  section szerint aggregálja.
+- `song_trainer_controller.dart` és `song_trainer_state.dart`: count-in után
+  induló backing, scoring session lifecycle, pause/resume, seek új attempt,
+  background pause és operation-ID alapú idempotens finalize.
+- `song_trainer_providers.dart`: scoringnál a publikus Practice session család
+  production wiringja; playback-only ágon nincs Practice controller,
+  observation gateway vagy microphone-permission provider olvasás.
+- Compiler/controller tesztek: 4/4 többakkordos és 3/4, section/range,
+  tempo/meter/speed normalizálás, mind a hat capability-profil, source-map,
+  lifecycle/race, permission denial és playback-only mic-provider mérés.
+
+### Mérések és ellenőrzések
+
+- RED→GREEN: a compiler/result-map és controller/runtime felület hiányára
+  írt tesztek előbb nem fordultak/hiányzó szimbólumra estek, majd a célzott
+  futás 8 teszttel zöld lett.
+- `rg` public-boundary audit: az alkalmazásból importált Practice típusok és
+  provider-ek mind a `practice/public.dart`-on elérhetők; nincs
+  `features/practice/` belső import, és a `trainer/` alatti kód nem hivatkozik
+  `AudioSessionCoordinator`, `StrumEngine`, observation gateway vagy mic
+  provider szimbólumra.
+- `flutter analyze` → `No issues found!`.
+- `tools/round-gate.sh test/features/song_trainer/application/trainer test/features/song_trainer/domain test/features/practice`
+  → format (808 fájl, 0 változás), analyze zöld, mindhárom célzott tesztkör és
+  architecture zöld.
+- `git diff --check` → tiszta.
+
+### Szándékos szűkítések és nem futtatott ellenőrzések
+
+- Pitch scoring, trainer screen/heatmap és a változó-meter metronóm-rács nem
+  része ennek a körnek. Utóbbi a range kezdő meterét használja; a scoring
+  onset-időhű marad a reference-tempo normalizálással.
+- Teljes `flutter test`, property gate és release APK/CI nem futott helyben:
+  ezeket az orchestrátor indítja az exact commit SHA-ra. Nem történt `gh`,
+  push vagy PR-művelet.
 
 ## 11. Review — a független reviewer tölti ki
 
