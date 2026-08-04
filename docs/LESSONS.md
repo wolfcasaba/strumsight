@@ -3644,3 +3644,25 @@ tesztcsomagokra bontva (<600s/hívás) gond nélkül végigfutott. **Tanulság:*
 lassú boxon az implementer-briefbe kötelező beírni, hogy a teszteket KIS
 csomagokban, egyesével futtassa, és SOHA ne pollingozzon egy 30 perces
 háttér-taskot `block:true`-val; a teljes suite a CI dolga.
+
+## L105 — A box `fs.inotify.max_user_instances` kimerülhet a sok worktree/Flutter-processz mellett; a `round-gate.sh` analyze/test környezeti hibával áll le (E03-R22, 2026-08-04)
+
+**Mérés.** Az E03-R22 Codex-implementer kétszer `stopped`-olt tisztán KÖRNYEZETI
+okból: `round gate analyzer failed ... host inotify instances are exhausted
+(125/128; errno=24)`. A `flutter analyze`/`flutter test` minden futása több
+`inotify` instance-ot nyit (frontend_server + flutter_tester + dart mcp-server);
+a boxon ~40 régi `ss-*` worktree és lezáratlan review-processz mellett a
+default **128**-as `max_user_instances` elfogyott, `inotify_init` → `EMFILE (24)`.
+A `codex-round.sh` wrapper ezt NEM kódhibaként, hanem stallként/stoppként látta.
+
+**Feloldás (orchestrátor, reverzibilis, a mércét NEM módosítja).**
+`sudo sysctl -w fs.inotify.max_user_instances=512` — utána a tényleges használat
+127/512 volt, a `round-gate.sh` egy futásban végigment (format→analyze→4 teszt-út
+→architecture, MINDEN ZÖLD). **Tanulság:** ha az implementer `errno=24`/`inotify`/
+`EMFILE` okból `stopped`-ol az analyze/test lépésnél, az NEM H6/H7 halt és NEM
+kódhiba — emeld a `max_user_instances`-t (env-remediáció, nem a `tools/`/gate
+módosítása, §4-en kívül esik), és futtasd újra a gate-et. A limit ellenőrzése:
+`cat /proc/sys/fs/inotify/max_user_instances`; a tényleges használaté a
+`/proc/*/fd` inotify-symlinkek számolása. Hosszabb távon a lezáratlan
+`flutter_tester`/`frontend_server` processzeket PID szerint (NEM a promptban
+szereplő mintával) érdemes kilőni.

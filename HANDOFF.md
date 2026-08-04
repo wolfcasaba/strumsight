@@ -4,21 +4,30 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R22 implementer handoff — local gate green).**
-> **E03-R22 IMPLEMENTÁLVA, LOCAL GATE ZÖLD, NEM MERGE-ELHETŐ:** a
-> `codex/e03-r22-setlist-progress-epic-closure` branch a Setlist V2/progress
-> slice, a két inline Song CI gate, a hozzáférhető windowolt UI és a mért Epic 3
-> evidence dokumentációjával készen áll független reviewra. A kötelező
-> `tools/round-gate.sh test/features/song_trainer test/features/songs
-> test/features/practice test/property` egy futásban zöld (format, analyze,
-> mind a négy célzott tesztcsomag és architecture). A playback-only Trainer
-> provider csak scored módban oldja fel a Practice History-t használó progress
-> committert; így nem nyit storage/mikrofonfüggő láncot. A schema gate 6
-> forrással, a fixture provenance gate 30 fixture-rel külön zöld. CI, APK,
-> független review és device checklist továbbra sincs: az orchestrátor
-> exact-head evidence-e szükséges. A részletes, nem aspirációs
-> evidence és valamennyi név szerinti release blocker:
+> (E03-R22 merged — Setlist V2, revision-aware progress & Epic 3 closure).**
+> **E03-R22 KÉSZ (PR [#123](https://github.com/wolfcasaba/strumsight/pull/123),
+> squash `3ae368a`, [ADR 0130](docs/adr/0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md),
+> implementer **Codex** (`gpt-5.6-terra`), orchestrátor/reviewer **Claude Opus 4.8**,
+> egy javító kör → APPROVED):** Setlist V2 (Practice/Performance + legacy
+> migration), verziózott `SongPracticeRecord` + measure/section aggregate +
+> revision-aware mapping, daily-goal / streak / Practice-History integráció a
+> valós publikus wiringen (napi cél **additív** `progress/public.dart` exporton,
+> streak-kredit a `recordPracticeToday`-en — playback-only nem hívja, credit 0),
+> két inline Song CI gate (`check_song_schema.dart` 6 forrás; `check_song_fixture_licenses.dart`
+> 30 fixture, SHA-256 verified, incl. MPL-2.0 GP fixture), hozzáférhető windowolt
+> Setlist UI, l10n és tényszerű Epic 3 completion report. A playback-only Trainer
+> provider csak scored módban oldja fel a Practice History committert (nincs
+> storage/mikrofonfüggő lánc — a B1 fix). Pre-flight §0.0 (mérve `main` @ `3a5762a`):
+> daily-goal barrel-drift → additív export; mic-lease owner = `MicCapture`;
+> fixture-provenance STOP feloldva inline const manifeszttel (nincs listán kívüli
+> fájl). Független review → CHANGES REQUESTED (B1 gate RED, M1 non-discriminating
+> streak guard, m1 property seed) → egy Codex javító kör → **APPROVED**
+> (M1 mutáció-verifikált RED). CI exact-SHA `1611a4a`
+> [run 30951815344](https://github.com/wolfcasaba/strumsight/actions/runs/30951815344)
+> zöld (full suite + randomizált property + APK). Nem aspirációs evidence + név
+> szerinti release blockerek:
 > [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
+> **Következő: Epic 4 (AI Guitar Teacher) — a pipeline indítja.**
 > **E03-R21 KÉSZ (PR [#122](https://github.com/wolfcasaba/strumsight/pull/122),
 > squash `b6a5da9`, [ADR 0129](docs/adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md),
 > implementer **MiniMax M3**, orchestrátor **Claude Opus 4.8**, egy javító kör →
