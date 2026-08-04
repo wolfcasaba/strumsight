@@ -1,6 +1,6 @@
 # E03-R22 — Setlist V2, progressintegráció és Epic-zárás
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight mérve 2026-08-04, baseline: `main` @ `3a5762a`; eredeti PREPARED 2026-08-01, `eeb4f6d`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 22; §25–35
 - **Branch:** `codex/e03-r22-setlist-progress-epic-closure`
 - **Előfeltétel:** E03-R21 merge
@@ -90,6 +90,65 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### Pre-flight revízió (mérve 2026-08-04, `main` @ `3a5762a`, orchestrátor: Claude Opus 4.8)
+
+Az orchestrátor `rg`-vel újramérte az összes útvonalat, public szimbólumot,
+state-producert, recorder-inputot, resource-ownert és numerikus cellát. Mért
+tények és feloldások:
+
+1. **Fájllista-egyezés (22/22).** Minden `ÚJ`-nak jelölt allowed-path hiányzik,
+   minden `meglévő`/`R06`/`R21` jelölt jelen van (`legacy_setlist_adapter.dart`,
+   `song_result_screen.dart`, `song_trainer_providers.dart`, a három `public.dart`,
+   `tool/check_architecture.dart`). A `tool/ci/check_song_schema.dart` és
+   `check_song_fixture_licenses.dart` ténylegesen ÚJ. Nincs drift.
+
+2. **DRIFT — `progress/public.dart` a napi cél providert MA NEM exportálja.** A
+   §4 tábla „daily goal public bridge"-nek nevezi, de a barrel (mérve) csak a
+   practice-log contractot exportálja (`practice_entry`, `practice_stats`,
+   `practice_log_provider`). A `dailyGoalProvider` + `dailyGoalActiveSecondsProvider`
+   a `lib/features/progress/providers/daily_goal_provider.dart:33/50`-ben él, a
+   barrelen kívül. **Feloldás:** a §6 „daily goal … a tényleges public wiringen
+   integrált" előírás a `progress/public.dart` **additív** napi-cél exportját
+   igényli (a fájl már az allowed-listán van, §4 „additív export" klauzula alá
+   esik — NINCS scope-tágítás). Trainer-oldali napi-cél másolat és közvetlen
+   `progress/providers/...` import TILOS.
+
+3. **`streak/public.dart` a kredit-belépőt MÁR exportálja.** `StreakController.recordPracticeToday([DateTime? now])`
+   (`providers/streak_provider.dart:23`) a barrelen keresztül elérhető; nincs
+   külön „eligibility" szimbólum → az eligibility **hívó-oldali döntés**:
+   playback-only Performance **nem hívja** (streak credit 0), scored Practice
+   igen. Nincs új export szükséglet, nincs drift.
+
+4. **Resource-owner: a mic-lease egyetlen `.acquire`-elője a `MicCapture`**
+   (`lib/core/audio/mic_capture.dart:82`; az egyetlen `.acquire(` a
+   song_trainer+core/audio úton). A matrix „Practice vs Performance mic policy
+   külön" cellája így mérendő: Performance (playback-only) **nem konstruál
+   scoring gateway-t** → mic 0; Practice a meglévő injektált gateway-en fut (a
+   gateway sosem `acquire`-el). A réteg-diagram alapján feltételezni tilos volt;
+   a mért lánc megerősíti ADR 0128 §2 / 0129 §2 döntését.
+
+5. **State-producer / terminal-commit.** A `SongTrainerStatus` enum
+   (`application/trainer/song_trainer_state.dart:8`) a fázisforrás; a terminal
+   progress-commit idempotenciáját az R21 `SongProgressCommitter` (exactly-once
+   idempotency key, ADR 0129) MÁR adja. A „duplicate terminal callback → egy
+   record/daily/streak/history commit" cella ezen a kulcson mérendő, nem az
+   átmenettáblán.
+
+6. **Legacy adapter perzisztencia.** A `legacy_setlist_adapter.dart` (R06/ADR 0116)
+   doc-commentje szerint MA „never persists anything". R22 a perzisztens V2
+   setlist-mappingre terjeszti ki (`file_setlist_repository` + `setlist_repository`
+   contract), az ADR 0116 lossless order/duplicate/missing-skip contractjának
+   megtartásával.
+
+7. **ADR.** A körnek nem volt előre kiosztott ADR-je; az orchestrátor a
+   pre-flightban megírta az **[ADR 0130](../adr/0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md)**-t
+   (Setlist V2, revision-aware progress, Epic-zárás boundary). Ez orchestrátor
+   pre-flight artefaktum — **NEM implementer-diff, NEM a TOML `allowed_paths`-on**
+   (R20/R21 konvenció).
+
+A revízió a fájllistát nem tágítja: a 2. pont feloldása a már listázott
+`progress/public.dart` additív exportja. A `PLANNING` státusz ezzel megadva.
 
 ## 1. Cél
 
