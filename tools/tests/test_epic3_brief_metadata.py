@@ -31,6 +31,11 @@ E03_R15_PRESENTATION_ACTIVATION_PATHS = (
     "test/features/song_trainer/application/song_trainer_providers_test.dart",
     "docs/reviews/e03-r15-song-library-import-ui-review.md",
 )
+E03_R15_IMPORT_PREVIEW_CONTRACT_PATHS = (
+    "lib/features/song_trainer/application/import/import_preview.dart",
+    "lib/features/song_trainer/application/import/song_import_controller.dart",
+    "test/features/song_trainer/application/import/song_import_controller_test.dart",
+)
 
 
 def section(text: str, number: int) -> str:
@@ -81,6 +86,19 @@ class Epic3BriefMetadataTest(unittest.TestCase):
             tuple(
                 path
                 for path in E03_R15_PRESENTATION_ACTIVATION_PATHS
+                if path not in brief.metadata.allowed_paths
+            ),
+            (),
+        )
+
+    def test_r15_scope_includes_the_import_preview_contract_owners(self) -> None:
+        """H3 regression: R15 owns the measured file-size preview data path."""
+        brief = load_brief(BRIEF_DIR / "e03-r15-song-library-import-ui.md")
+
+        self.assertEqual(
+            tuple(
+                path
+                for path in E03_R15_IMPORT_PREVIEW_CONTRACT_PATHS
                 if path not in brief.metadata.allowed_paths
             ),
             (),

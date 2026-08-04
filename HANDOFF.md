@@ -4,7 +4,14 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
-> (HEAL E03-R15/H3 scope-revízió).** **HEAL E03-R15/H3:** az R15 eredeti
+> (HEAL E03-R15/H3 preview scope-revízió).** **HEAL E03-R15/H3 (2026-08-04):**
+> the independent R15 review measured that SDD §27.3's mandatory file-size
+> preview could not be truthfully rendered: `ImportPreview` had no size field
+> and `SongImportController` did not transfer `ImportSourceFile.byteLength`.
+> The R15 brief now opens only those two application-contract owners and its
+> existing controller test; metadata regression is RED→GREEN on exactly these
+> paths, and no gate, protected path, or feature-flag default changes. **HEAL
+> E03-R15/H3:** az R15 eredeti
 > UI-only scope-ja nem fogta a production picker-portot, a picker dependency
 > manifesteket vagy az app repository composition rootját, ezért flagelt
 > route nem hajthatta végre a picker→probe→preview→commit utat. ADR 0123 és a
