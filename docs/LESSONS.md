@@ -3394,3 +3394,21 @@ OFF és a security/gate mérce változatlan. A
 `Epic3BriefMetadataTest.test_r15_scope_includes_measured_presentation_activation_owners`
 a hét valóban hiányzó ownerrel RED volt, majd a módosított briefen GREEN; a
 teljes `python -m pytest tools/tests -q` router-sáv is zöld.
+
+## L91 — A preview-követelmény scope-ja a state-adatútvonal minden ownerét tartalmazza (E03-R15 H3, 2026-08-04)
+
+**Mérés.** Az E03-R15 független review F3 lelete az SDD §27.3 kötelező
+file-size previewát mérte. A tényleges `ImportSourceFile` rendelkezett
+`byteLength` mezővel, de `ImportPreview` csak a név/formátum/warning/part
+adatokat tartotta, és a `SongImportController.selectSource` nem másolta át a
+méretet. A UI ezért a méretet nem tudta sem megjeleníteni, sem igaz adatból
+származtatni. Mindkét application contract és a célzott controller teszt az
+R15 korábbi human és router allowlistjén kívül volt.
+
+**Javítás és regresszió.** A self-heal kizárólag a két measured contract
+ownert és a már létező controller tesztet vette fel az R15 brief §4/
+`ai-router.allowed_paths`/gate listájába. A
+`Epic3BriefMetadataTest.test_r15_scope_includes_the_import_preview_contract_owners`
+a régi briefen mindhárom hiányzó úttal RED volt, majd a scope-revízió után
+GREEN. A byteLength scalar metadata marad; nyers source byte vagy platform
+picker-objektum nem lép be az application state-be.

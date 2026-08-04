@@ -20,6 +20,8 @@ allowed_paths = [
   "lib/features/song_trainer/presentation/widgets/song_capability_badges.dart",
   "lib/features/song_trainer/presentation/widgets/import_warning_list.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
+  "lib/features/song_trainer/application/import/import_preview.dart",
+  "lib/features/song_trainer/application/import/song_import_controller.dart",
   "lib/features/song_trainer/data/importers/file_picker_adapter.dart",
   "lib/features/song_trainer/public.dart",
   "lib/main.dart",
@@ -32,6 +34,7 @@ allowed_paths = [
   "pubspec.lock",
   "test/features/song_trainer/application/library/song_library_controller_test.dart",
   "test/features/song_trainer/application/song_trainer_providers_test.dart",
+  "test/features/song_trainer/application/import/song_import_controller_test.dart",
   "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
@@ -43,6 +46,7 @@ allowed_paths = [
 gate_tests = [
   "test/features/song_trainer/application/library/song_library_controller_test.dart",
   "test/features/song_trainer/application/song_trainer_providers_test.dart",
+  "test/features/song_trainer/application/import/song_import_controller_test.dart",
   "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
@@ -105,6 +109,24 @@ köti az interaktív route aktiválását a concrete picker- és repository-wiri
 A feature flag defaultja változatlanul OFF; a revision nem módosít gate-et,
 küszöböt vagy tesztet.
 
+### 2026-08-04 — H3 önjavító scope-revízió (preview file-size contract)
+
+- Az SDD §27.3 kötelezően előírja, hogy az import preview a file name mellett
+  a file size-ot is mutassa. A megállt R15 review mérése szerint
+  `ImportPreview` csak `displayName`, `format`, `warnings` és `parts` mezőket
+  tart, a `SongImportController.selectSource` pedig nem másolja át az
+  `ImportSourceFile.byteLength` értékét. A preview screen ezért nem tudott
+  igaz adatot megjeleníteni.
+- Kizárólag e két application-contract owner és a meglévő célzott controller
+  teszt kerül a human scope-ba, az `ai-router.allowed_paths` listába és a
+  célzott gate-be. A módosítás a meglévő, alkalmazásállapotban tárolható
+  kis preview-modellel és az ADR 0091 nyers-byte tiltásával összhangban van:
+  a méret scalar metadata, nem source bytes.
+- A `Epic3BriefMetadataTest.test_r15_scope_includes_the_import_preview_contract_owners`
+  a három, a review által mért ownerrel a korábbi briefen RED, e revízióval
+  GREEN. A feature flag defaultja, az allowlist/protected-path audit és minden
+  gate változatlan marad.
+
 ## 1. Cél
 
 Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capability-őszinte, lokalizált felhasználói felülete trainer nélkül.
@@ -145,6 +167,8 @@ Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capab
 | `lib/features/song_trainer/presentation/widgets/song_capability_badges.dart` | ÚJ | capability/source |
 | `lib/features/song_trainer/presentation/widgets/import_warning_list.dart` | ÚJ | warning UI |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R10-ből | controller wiring |
+| `lib/features/song_trainer/application/import/import_preview.dart` | R10-ből | SDD §27.3 file-size metadata a preview state-ben |
+| `lib/features/song_trainer/application/import/song_import_controller.dart` | R10-ből | source byteLength átadása a preview contractnak |
 | `lib/features/song_trainer/data/importers/file_picker_adapter.dart` | R10-ből | production picker boundary |
 | `lib/features/song_trainer/public.dart` | R01-ből | route/public exports |
 | `lib/main.dart` | meglévő | production repository composition root |
@@ -157,6 +181,7 @@ Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capab
 | `pubspec.lock` | generált, tracked | resolved picker dependency |
 | `test/features/song_trainer/application/library/song_library_controller_test.dart` | ÚJ | query/dedupe/action |
 | `test/features/song_trainer/application/song_trainer_providers_test.dart` | meglévő | production repository wiring |
+| `test/features/song_trainer/application/import/song_import_controller_test.dart` | meglévő | preview source metadata átadása |
 | `test/features/song_trainer/data/importers/file_picker_adapter_test.dart` | ÚJ | platform object → ImportSourceFile boundary |
 | `test/features/song_trainer/presentation/song_library_screen_test.dart` | ÚJ | library states |
 | `test/features/song_trainer/presentation/song_import_screen_test.dart` | ÚJ | import state UI |
@@ -177,6 +202,8 @@ additív exportjára módosítható, a pre-flight exact symbol auditja után.
 2. Legacy/V2 dedupe stabil mapping alapján történik, nem title string alapján.
 3. Warning és fatal vizuálisan/semantikailag külön; unsupported capability aktívnak nem látszhat.
 4. Picker fake adapterrel tesztelhető; platform object nem kerül widget/controller state-be.
+5. A preview az `ImportSourceFile.byteLength` scalar metadataját őrzi meg és
+   jeleníti meg; source byte array vagy platform picker-objektum nem kerül state-be.
 
 E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 
@@ -186,6 +213,8 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 - [ ] Search/filter/favorite és migrated legacy dedupe determinisztikus.
 - [ ] Cancel/probe error/warning/fatal/success/duplicate/delete-undo/missing-asset minden state+effect kombinációja tesztelt.
 - [ ] Natív export action R09 privacy contractot használ; fatal previewn nincs confirm.
+- [ ] A preview a választott fájl nevét és a controller által átadott pontos
+  byteLength méretét mutatja; ezt a controller célzott tesztje rögzíti.
 - [ ] HU/EN, 200% text scale, semantics/fókuszsorrend és route re-entry zöld.
 
 ### Kötelező megkülönböztető mátrix
@@ -205,7 +234,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart test/features/song_trainer/data/importers/file_picker_adapter_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
+tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart test/features/song_trainer/data/importers/file_picker_adapter_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →
