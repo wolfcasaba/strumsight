@@ -4,7 +4,16 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (HEAL E03-R16/H2).** **HEAL E03-R16/H2:** the E03-R15 repair is merged as
+> (HEAL E03-R16/H3).** **HEAL E03-R16/H3:** the prepared R16 brief omitted
+> the measured canonical route catalogue, Library editor entrypoint, route
+> registration regression and mandatory review artifact, so the editor could
+> not be truthfully reachable within scope. [PR #114](https://github.com/wolfcasaba/strumsight/pull/114)
+> adds only those four owners to the human/router scope and the router gate;
+> `Epic3BriefMetadataTest.test_r16_scope_includes_measured_editor_activation_owners`
+> is RED→GREEN, full router tests are 171 passed / 53 subtests, independent
+> mutation review is approved, and Router CI
+> [30885120197](https://github.com/wolfcasaba/strumsight/actions/runs/30885120197)
+> is green. E03-R16 may restart in a fresh pipeline session. **HEAL E03-R16/H2:** the E03-R15 repair is merged as
 > [PR #111](https://github.com/wolfcasaba/strumsight/pull/111) (`5f76879`).
 > The first exact-head CI found a deterministic Epic 2 chord-change property
 > generator defect; [PR #112](https://github.com/wolfcasaba/strumsight/pull/112)
