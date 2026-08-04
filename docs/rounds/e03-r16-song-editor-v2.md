@@ -15,6 +15,7 @@ allowed_paths = [
   "lib/features/song_trainer/application/editor/editor_command.dart",
   "lib/features/song_trainer/application/editor/editor_history.dart",
   "lib/features/song_trainer/presentation/screens/song_editor_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_library_screen.dart",
   "lib/features/song_trainer/presentation/widgets/song_metadata_editor.dart",
   "lib/features/song_trainer/presentation/widgets/song_section_editor.dart",
   "lib/features/song_trainer/presentation/widgets/measure_grid.dart",
@@ -22,6 +23,7 @@ allowed_paths = [
   "lib/features/song_trainer/presentation/widgets/backing_asset_editor.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
   "lib/app/routing/route_guards.dart",
+  "lib/app/routing/app_route.dart",
   "lib/app/routing/app_router.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
@@ -30,13 +32,16 @@ allowed_paths = [
   "test/features/song_trainer/presentation/song_editor_screen_test.dart",
   "test/features/song_trainer/presentation/song_editor_route_guard_test.dart",
   "test/app/routing/route_guards_test.dart",
+  "test/app/routing/app_router_test.dart",
   "docs/rounds/e03-r16-song-editor-v2.md",
+  "docs/reviews/e03-r16-song-editor-v2-review.md",
 ]
 gate_tests = [
   "test/features/song_trainer/application/editor",
   "test/features/song_trainer/presentation/song_editor_screen_test.dart",
   "test/features/song_trainer/presentation/song_editor_route_guard_test.dart",
   "test/app/routing/route_guards_test.dart",
+  "test/app/routing/app_router_test.dart",
 ]
 native_gate = false
 ```
@@ -68,6 +73,17 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 - R15 Libraryből V2 dokumentum nyitható; R07 optimistic revision és R05 validation rendelkezésre áll.
 - A legacy Song Builder flag fallbackként marad.
 - Draft/command/history contract még nincs.
+
+**Módosítás (ADR 0112 önjavító kör, 2026-08-04; E03-R16/H3).** A futtatható
+pre-flight mérése szerint az `AppRoutes` katalogizálja a kanonikus editor
+útvonalat, az `app_router.dart` regisztrálja, a `SongLibraryScreen` pedig a
+Libraryből indítja a dokumentumra célzott megnyitást. E három owner, a route
+regresszió `test/app/routing/app_router_test.dart` fájlja és a kötelező,
+független review-jelentés addig hiányzott a prepared scope-ból. A §4 és az
+`ai-router.allowed_paths` most pontosan ezeket a fájlokat is megnyitja; a
+review artefaktumot kizárólag a független reviewer írhatja. A §7 route
+regressziós gate-je is a `app_router_test.dart`-tal bővül. Ez scope-helyreállítás,
+nem termékkód- vagy mérceváltozás.
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
@@ -107,6 +123,7 @@ Persisted documenttől elkülönített, command-alapú, determinisztikus undo/re
 | `lib/features/song_trainer/application/editor/editor_command.dart` | ÚJ | reversible command |
 | `lib/features/song_trainer/application/editor/editor_history.dart` | ÚJ | bounded undo/redo |
 | `lib/features/song_trainer/presentation/screens/song_editor_screen.dart` | ÚJ | screen shell |
+| `lib/features/song_trainer/presentation/screens/song_library_screen.dart` | meglévő | Libraryből editor megnyitás |
 | `lib/features/song_trainer/presentation/widgets/song_metadata_editor.dart` | ÚJ | metadata |
 | `lib/features/song_trainer/presentation/widgets/song_section_editor.dart` | ÚJ | section |
 | `lib/features/song_trainer/presentation/widgets/measure_grid.dart` | ÚJ | measure grid |
@@ -114,6 +131,7 @@ Persisted documenttől elkülönített, command-alapú, determinisztikus undo/re
 | `lib/features/song_trainer/presentation/widgets/backing_asset_editor.dart` | ÚJ | attach/detach |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R15-ből | wiring |
 | `lib/app/routing/route_guards.dart` | meglévő | unsaved guard |
+| `lib/app/routing/app_route.dart` | meglévő | kanonikus editor route-katalógus |
 | `lib/app/routing/app_router.dart` | meglévő | editor route |
 | `lib/l10n/app_en.arb` | meglévő | EN copy |
 | `lib/l10n/app_hu.arb` | meglévő | HU copy |
@@ -122,7 +140,9 @@ Persisted documenttől elkülönített, command-alapú, determinisztikus undo/re
 | `test/features/song_trainer/presentation/song_editor_screen_test.dart` | ÚJ | widget states |
 | `test/features/song_trainer/presentation/song_editor_route_guard_test.dart` | ÚJ | unsaved flow |
 | `test/app/routing/route_guards_test.dart` | meglévő | route regression |
+| `test/app/routing/app_router_test.dart` | meglévő | editor route-regisztráció |
 | `docs/rounds/e03-r16-song-editor-v2.md` | meglévő | §10 handoff |
+| `docs/reviews/e03-r16-song-editor-v2-review.md` | ÚJ | kötelező, független review artefaktum; csak reviewer írja |
 
 **Tilos zóna:** minden más fájl, más feature belső contractja, más kör briefje
 és nem felsorolt CI/docs artefaktum. Új fixture/helper is fájl; listán kívül
@@ -164,7 +184,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/application/editor test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/song_editor_route_guard_test.dart test/app/routing/route_guards_test.dart
+tools/round-gate.sh test/features/song_trainer/application/editor test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/song_editor_route_guard_test.dart test/app/routing/route_guards_test.dart test/app/routing/app_router_test.dart
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →
