@@ -99,6 +99,25 @@ pending/streaming/complete/failed/cancelled) ÚJ definíciók — nincs meglév�
 reducer/állapotgép, így „elérhetetlen cél-státusz" kockázat nincs; a §6 megköveteli,
 hogy `cancelled` ÉS `failed` külön reprezentálható legyen és round-trippeljen.
 
+**(5) MÉRT ÜTKÖZÉS — `public.dart` export HALASZTVA (implementer STOP feloldása,
+2026-08-04T23:36Z).** Az implementer a kód előtt helyesen `stopped`-ot jelzett:
+a **lezárt E04-R01** `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+tesztje azt méri, hogy a `public.dart` **NULLA** `import`/`export` direktívát
+tartalmaz („empty baseline boundary"), és ez a teszt-fájl **tilos zóna** (nincs
+az engedélyezett listán). Így a §4/§8.4 additív `public.dart` export a listán
+belül nem tehető zölddé.
+
+**KÖTÖTT FELOLDÁS (scope-SZŰKÍTÉS, nem tágítás — ADR 0087 §2 orchestrátor-autonómia):**
+a `public.dart` ebben a körben **üres marad** (az R01 boundary-invariáns
+sérthetetlen, a teszt zöld marad — nem nyúlunk lezárt kör artefaktumához). Az
+additív feature-export az **első valódi fogyasztó köréig halasztva** (UI/gateway/
+repository = R13/R17+, a §3 „Kívül" szerint amúgy is ezen körön kívül). Ez semmit
+nem veszít mérhetőt: a §6 acceptance mind a modelleken + codecen + azok **közvetlen**
+tesztjein mérendő (a tesztek közvetlenül importálják a `domain/models/*` és
+`data/local/*` fájlokat, nem a `public.dart`-on át). A `public.dart` boundary-export
+egy külön, R13/R17+ körben lesz additív, amikor lesz keresztfeature-fogyasztó és a
+boundary-teszt is a fogyasztói szerződéshez igazítható.
+
 ## 1. Cél
 
 A beszélgetés és üzenetek immutable, verziózott, **providerfüggetlen** domain
@@ -136,7 +155,7 @@ tárolása, UI/gateway/repository (R13/R17+), bármely storage-írás.
 | `.../domain/models/tutor_turn.dart` | ÚJ | turn modell |
 | `.../domain/models/tutor_response_mode.dart` | ÚJ | response mode enum |
 | `.../data/local/tutor_conversation_codec.dart` | ÚJ | verziózott JSON-codec |
-| `lib/features/ai_tutor/public.dart` | R01-ből | additív export |
+| `lib/features/ai_tutor/public.dart` | **ÜRES MARAD (§0.0 (5))** | additív export **HALASZTVA** az első fogyasztó köréig (R13/R17+) — a R01 boundary-teszt zölden tartása |
 | `test/features/ai_tutor/domain/*` , `.../data/tutor_conversation_codec_test.dart` | ÚJ | domain + codec tesztek |
 | `docs/rounds/e04-r02-*.md` | meglévő | §10 handoff |
 
@@ -181,7 +200,7 @@ Egyetlen lokális gate, külön processzek, nincs `&&`/pipe/`tail`. CI = orchest
 1. Typed ID-k + RED validációs tesztek.
 2. Content-block + message + conversation + turn modellek.
 3. Verziózott codec + round-trip / unknown-block tesztek.
-4. Additív `public.dart` export; gate.
+4. **`public.dart` ÜRES MARAD** (§0.0 (5) — export halasztva, R01 boundary-teszt zöld); gate.
 
 Javasolt commit: `feat(ai-tutor-domain): add versioned conversations and messages`.
 
