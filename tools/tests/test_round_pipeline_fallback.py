@@ -98,5 +98,39 @@ class RoundPipelineFallbackTest(unittest.TestCase):
             self.assertIn("pipeline-E03-R09-fallback:", events_file.read_text())
 
 
+class ClaudeProcessLivenessTest(unittest.TestCase):
+    """A pane-liveness heurisztika a VALÓDI process-neveket kell hogy ismerje.
+
+    Mért reprodukció (2026-08-04): a PR #84 óta a check a `claude-code` comm-ra
+    illesztett, miközben ezen a boxon a `ps -o comm=` mért értéke `claude`
+    (launcher) vagy `claude.exe` (node bináris). Következmény: a 10s-es türelmi
+    idő után minden ÉLŐ Claude-session „kvótahalálnak" minősült, 5 órás
+    motorzárlattal — `.pipeline/chain.log`-ban 6 hamis pozitív
+    2026-08-03T13:35 és 2026-08-04T08:20 között, azaz a lánc soha nem futott
+    Claude-on, hiába volt kvóta.
+    """
+
+    def _matches(self, comm: str) -> bool:
+        script = ROOT / "tools" / "round-pipeline.sh"
+        completed = subprocess.run(
+            ["bash", str(script), "--claude-process-comm-check", comm],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return completed.returncode == 0
+
+    def test_measured_claude_process_names_count_as_alive(self) -> None:
+        for comm in ("claude", "claude.exe", "claude-code"):
+            with self.subTest(comm=comm):
+                self.assertTrue(self._matches(comm))
+
+    def test_unrelated_processes_do_not_count_as_alive(self) -> None:
+        for comm in ("bash", "node", "codex", "tmux", "claudette", "", "my-claude"):
+            with self.subTest(comm=comm):
+                self.assertFalse(self._matches(comm))
+
+
 if __name__ == "__main__":
     unittest.main()

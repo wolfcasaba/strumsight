@@ -121,6 +121,15 @@ die() { log "HIBA: $*"; exit "${2:-4}"; }
 # arra illeszteni hamis pozitív lenne.
 CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset'
 
+# A tmux pane-on futó Claude process MÉRT neve (`ps -o comm=`) ezen a boxon
+# `claude` (a launcher) vagy `claude.exe` (a node bináris) — SOHA nem
+# `claude-code`. A PR #84 heurisztikája erre az utóbbira illesztett, ezért a
+# 10s-es türelmi idő után MINDEN élő Claude-sessiont „kvótahalálnak" minősített
+# és 5 órára letiltotta a motort (mérve: 6 hamis pozitív 2026-08-03T13:35 óta,
+# `.pipeline/chain.log` „Claude process már nem él"). A minta ezért a valódi
+# neveket fedi, a régi `claude-code` alakot is megtartva.
+CLAUDE_PROCESS_COMM_PATTERN='^claude([.-][A-Za-z0-9_-]+)?$'
+
 claude_unavailable_until() {   # kiírja a lejárati epoch-ot, ha érvényes zárlat van
   local until
   [ -f "$claude_block_file" ] || return 1
@@ -188,7 +197,8 @@ run_tmux_session() {
       && [ "$(( $(date +%s) - claude_started_at ))" -ge "${PIPELINE_CLAUDE_PROCESS_GRACE_SECONDS:-10}" ]; then
       pane_tty=$(tmux list-panes -t "$tmux_session" -F '#{pane_tty}' 2>/dev/null | head -n 1)
       if [ -n "$pane_tty" ] \
-        && ! ps -t "${pane_tty#/dev/pts/}" -o comm= 2>/dev/null | grep -q '[c]laude-code'; then
+        && ! ps -t "${pane_tty#/dev/pts/}" -o comm= 2>/dev/null \
+          | grep -qE "$CLAUDE_PROCESS_COMM_PATTERN"; then
         printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))" > "$claude_block_file"
         log "KVÓTA: a Claude process már nem él a tmux pane-on — a fallback veszi át"
         claude_limit_seen=1
@@ -604,6 +614,10 @@ case "${1:-}" in
     ;;
   --claude-limit-check)    # $2=session-napló → 0, ha kvótakimerülés nyoma van
     grep -qEi "$CLAUDE_LIMIT_PATTERN" "${2:-/dev/null}" 2>/dev/null
+    exit $?
+    ;;
+  --claude-process-comm-check)    # $2=`ps -o comm=` név → 0, ha ez ÉLŐ Claude process
+    printf '%s\n' "${2:-}" | grep -qE "$CLAUDE_PROCESS_COMM_PATTERN"
     exit $?
     ;;
   --terra-hold-active)    # $2=kör → exit 0 ha AKTÍV Terra napi-budget hold van rá, 1 egyébként
