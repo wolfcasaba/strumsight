@@ -26,6 +26,8 @@ import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
 import 'library/song_library_controller.dart';
 import 'library/song_library_state.dart';
+import 'editor/song_editor_controller.dart';
+import 'editor/song_editor_state.dart';
 import '../data/importers/file_picker_adapter.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
@@ -40,6 +42,7 @@ import '../data/local/song_repository_recovery.dart';
 import '../data/migration/song_migration_version_store.dart';
 import '../domain/repositories/song_asset_repository.dart';
 import '../domain/repositories/song_repository.dart';
+import '../domain/models/song_id.dart';
 import 'migration/song_migration_state.dart';
 import 'migration/song_storage_migrator.dart';
 
@@ -207,6 +210,23 @@ final songLibraryControllerProvider =
 final songLibraryStateProvider = StreamProvider.autoDispose<SongLibraryState>(
   (ref) => ref.watch(songLibraryControllerProvider).states,
 );
+
+/// Route-scoped V2 editor controller. It owns the draft until the route is
+/// disposed, at which point history and state streams are released.
+final songEditorControllerProvider = Provider.autoDispose
+    .family<SongEditorController, SongId>((ref, id) {
+      final controller = SongEditorController(
+        repository: ref.watch(songRepositoryProvider),
+        assetRepository: ref.watch(songAssetRepositoryProvider),
+      );
+      ref.onDispose(() => unawaited(controller.dispose()));
+      return controller;
+    });
+
+final songEditorStateProvider = StreamProvider.autoDispose
+    .family<SongEditorState, SongId>(
+      (ref, id) => ref.watch(songEditorControllerProvider(id)).states,
+    );
 
 /// Provider for the persistent [SongMigrationVersionStore] — the file-
 /// based checkpoint / completion marker under `<songsRoot>/migration/state.json`
