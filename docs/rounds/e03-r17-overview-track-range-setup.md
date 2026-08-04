@@ -256,10 +256,28 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Állapot: STOPPED (2026-08-04).** Production- vagy tesztfájl nem módosult.
+
+- **Mért blocker:** a `SongCapabilityResolver`-hez nincs provider sem a
+  `lib/features/song_trainer/application/song_trainer_providers.dart` fájlban,
+  sem máshol a Song Trainer feature-ben. A brief §0.0/R2 és az implementer
+  prompt kötelezően a repository/resolver providerek intra-feature importját
+  írja elő, de a resolver owner hozzáadása tiltott scope-tágítás lenne, mert a
+  provider-fájl nincs az engedélyezett listán és R2 ezt kifejezetten tiltja.
+- **Futtatott mérés:** `rg -n -i 'capabilit.*provider|resolver.*provider'
+  lib/features/song_trainer test/features/song_trainer --glob '*.dart'` — csak
+  a meglévő production root resolver providert találta; capability resolver
+  providert nem.
+- **Kör-jelzés:** `tools/codex-signal.sh stopped "R2 resolver provider
+  hiányzik; a provider owner tiltott a scope-ban"` — exit 0, `stopped`.
+- **Nem futtatott gate:** a `tools/round-gate.sh …` záró gate nem futott,
+  mert a RED tesztekhez szükséges kötelező production contract hiányzik és a
+  STOP-protokoll nem enged implementációt vagy mércegyengítést.
+- **Következő lépés:** a kör-briefet és az allowlistet egy külön pre-flight
+  revízióban kell helyrehozni: vagy explicit, tesztelhető resolver-provider
+  ownerrel bővíteni, vagy a co-located controller közvetlen, tiszta
+  `SongCapabilityResolver` konstrukcióját kimondani. Csak utána indítható új
+  implementer session.
 
 ## 11. Review — a független reviewer tölti ki
 
