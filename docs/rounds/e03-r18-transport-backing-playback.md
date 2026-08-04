@@ -288,10 +288,49 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+### 2026-08-04 — Codex implementation
+
+- `song_transport*.dart`, `song_transport_command.dart` és
+  `transport_effect.dart`: explicit phase-pártábla, soros command feldolgozás,
+  monotonic `Stopwatch`/fake clock, `phasePath`, grid-offset, drift-report és
+  lifecycle-safe disposal. A ready-phase speed deferred konfiguráció, a
+  concrete player rate csak a backing indítása után kapja meg. A `SongTimeMap`
+  csak a monotonic pozícióból képzett beat-pozíciót ad; nem clock-forrás.
+- `data/playback/*`: cserélhető `BackingAudioPlayer` contract, explicit
+  `PlaybackCapabilities`, `audioplayers` bytes-adapter, deterministic fake,
+  late-event elleni subscription cleanup és benchmarkolt drift policy.
+- `song_trainer_providers.dart`: route-scoped adapter és transport wiring a
+  local asset readerrel és az read-only `appLifecycleEventsProvider`-rel. Nincs
+  `AudioSessionCoordinator` vagy `AudioOwner` használat.
+- `docs/baseline/epic-03-backing-drift-benchmark.md`: a `FramePositionUpdater`
+  adapter-bizonyítékából választott 17 ms precision, 51 ms (3×) resync-küszöb,
+  valamint az on-device evidence explicit `pending` státusza.
+- A RED fázis bizonyítéka: `flutter test
+  test/features/song_trainer/application/trainer/song_transport_test.dart`
+  először a még nem létező transport/playback fájlok import-hibájával piros
+  volt; a GREEN fázisban a célzott 18 teszt zöld.
+
+**Futtatott végső gate (zöld):**
+
+```bash
+tools/round-gate.sh test/features/song_trainer/application/trainer/song_transport_test.dart test/features/song_trainer/application/trainer/song_transport_lifecycle_test.dart test/features/song_trainer/data/playback
+```
+
+- format: `Formatted 800 files (0 changed)`;
+- analyze: `No issues found`;
+- transport test: 8/8 zöld;
+- lifecycle test: 3/3 zöld;
+- playback/drift tests: 7/7 zöld;
+- architecture: `Architecture dependencies OK (12 allowlisted deviation(s))`.
+
+**Nem futtatott ellenőrzések:** a teljes suite, randomizált property gate és
+release APK csak CI/orchestrátor-kapu; APK-t lokálisan nem futtattam. A valódi
+eszköz position-jitter/audible-resync mérés a baseline dokumentum szerint
+`pending`, és ezt a kör nem hirdeti teljesítettnek.
+
+**Eltérés/follow-up:** nincs scope-tágítás. Az inicializáló analyzer-style
+eltérések miatt az első gate analyze szakasza piros volt; a stílusjavítás után a
+fenti, friss gate zöld.
 
 ## 11. Review — a független reviewer tölti ki
 

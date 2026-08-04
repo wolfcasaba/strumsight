@@ -20,8 +20,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/logging/logger_provider.dart';
+import '../../../core/platform/platform_providers.dart';
 import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_providers.dart';
+import '../data/playback/backing_audio_player.dart';
+import '../data/playback/local_backing_audio_player.dart';
 import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
 import 'library/song_library_controller.dart';
@@ -45,6 +48,8 @@ import '../domain/repositories/song_repository.dart';
 import '../domain/models/song_id.dart';
 import 'migration/song_migration_state.dart';
 import 'migration/song_storage_migrator.dart';
+import 'trainer/song_transport.dart';
+import 'trainer/song_transport_clock.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// song tree. The directory MUST exist before [FileSongRepository]
@@ -283,4 +288,24 @@ final songMigrationOutcomeProvider = FutureProvider<SongMigrationOutcome>((
 ) async {
   final migrator = await ref.watch(songStorageMigratorProvider.future);
   return migrator.run();
+});
+
+final backingAudioPlayerProvider = Provider.autoDispose<BackingAudioPlayer>((
+  ref,
+) {
+  final player = LocalBackingAudioPlayer(
+    assetReader: ref.watch(songAssetRepositoryProvider).get,
+  );
+  ref.onDispose(() => unawaited(player.dispose()));
+  return player;
+});
+
+final songTransportProvider = Provider.autoDispose<SongTransport>((ref) {
+  final transport = SongTransport(
+    player: ref.watch(backingAudioPlayerProvider),
+    clock: StopwatchSongTransportClock(),
+    lifecycleEvents: ref.watch(appLifecycleEventsProvider),
+  );
+  ref.onDispose(() => unawaited(transport.dispose()));
+  return transport;
 });
