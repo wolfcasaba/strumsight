@@ -5,11 +5,35 @@
 - **Isolated clone:** `/tmp/review-e03r22` (no production file edited except disposable mutations, each reverted)
 - **Date:** 2026-08-04
 
-## Verdict: **CHANGES REQUESTED**
+## Verdict: **CHANGES REQUESTED** → **APPROVED after fix round** (re-verified 2026-08-04, HEAD `46734d0`)
 
-One BLOCKER (red local gate — real test regression) and one MAJOR (non-discriminating
-matrix invariant). Scope, provenance gate, schema gate and completion-report honesty
-are all clean, and every central invariant probed turns RED under a real fault.
+Initial verdict was CHANGES REQUESTED — one BLOCKER (red local gate — real test
+regression) and one MAJOR (non-discriminating matrix invariant). Scope, provenance gate,
+schema gate and completion-report honesty were all clean, and every central invariant
+probed turns RED under a real fault. **The fix round (commits `87becdf`, `46734d0`)
+resolved all three findings; the orchestrator independently re-verified — see
+"Fix-round re-verification" below.**
+
+### Fix-round re-verification (orchestrator, HEAD `46734d0`)
+
+- **B1 → CLOSED.** Fix `87becdf` "isolate playback-only progress dependencies" is entirely
+  within `lib/features/song_trainer/application/song_trainer_providers.dart` (allowed); the
+  out-of-scope test `song_trainer_controller_test.dart` was **NOT modified** (verified via
+  `git diff --name-only origin/main...46734d0`). Full local gate re-run
+  (`tools/round-gate.sh test/features/song_trainer test/features/songs test/features/practice test/property`)
+  is **MINDEN GATE ZÖLD**: format, analyze, all four test paths (song_trainer 466, songs 49,
+  practice 902, property 60), architecture.
+- **M1 → CLOSED.** New production-path test
+  `'production credit recorder skips playback-only streak credit and records scored practice once'`
+  instantiates the production `PracticeSessionSongCreditRecorder` and asserts
+  `recordPracticeTodayCalls == 0` for playback-only. **Mutation-verified by the orchestrator:**
+  removing the production `playbackOnly` guard (`song_progress_aggregator.dart:224-230`) turns
+  this test **RED** (`+2 -1`, failing at line 118); reverted. The invariant is now guarded on
+  the real path, not only on a double.
+- **m1 → CLOSED.** `test/property/song_progress_property_test.dart` now reads
+  `PROPERTY_SEED` (fallback 42); the CI HARD randomization step is live for this test.
+
+Merge bar (ADR 0052) is met pending exact-SHA CI green on `46734d0`.
 
 ---
 
