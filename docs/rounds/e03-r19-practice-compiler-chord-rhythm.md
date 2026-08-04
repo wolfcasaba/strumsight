@@ -12,22 +12,22 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/practice/public.dart",
-  "lib/features/song_trainer/domain/services/song_practice_compiler.dart",
+  "lib/features/song_trainer/application/trainer/song_practice_compiler.dart",
   "lib/features/song_trainer/domain/models/song_event_reference.dart",
-  "lib/features/song_trainer/domain/models/song_trainer_result.dart",
+  "lib/features/song_trainer/application/trainer/song_trainer_result.dart",
   "lib/features/song_trainer/application/trainer/song_trainer_controller.dart",
   "lib/features/song_trainer/application/trainer/song_trainer_state.dart",
   "lib/features/song_trainer/application/trainer/song_result_mapper.dart",
   "lib/features/song_trainer/application/song_trainer_providers.dart",
-  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
+  "test/features/song_trainer/application/trainer/song_practice_compiler_test.dart",
   "test/features/song_trainer/application/trainer/song_trainer_controller_test.dart",
   "test/features/song_trainer/application/trainer/song_trainer_integration_test.dart",
   "test/features/practice/presentation/practice_presentation_guard_test.dart",
   "docs/rounds/e03-r19-practice-compiler-chord-rhythm.md",
 ]
 gate_tests = [
-  "test/features/song_trainer/domain/song_practice_compiler_test.dart",
   "test/features/song_trainer/application/trainer",
+  "test/features/song_trainer/domain",
   "test/features/practice",
 ]
 native_gate = false
@@ -132,6 +132,38 @@ kizárólag a publikus Practice session-felületre + injektált gateway-re épü
 scoringja ebben a körben TILOS (brief §3). A `PracticeEvent.id` +
 `PracticeDefinition.sourceReference` a source-mapping hordozói.
 
+**R4 — Fájl-elhelyezés drift: a compiler NEM lehet a `domain/` rétegben
+(implementer-STOP feloldása, mérve 2026-08-04).** Az első Codex-dispatch
+`stopped`-ot jelzett: *„song_trainer domain guard forbids even Practice
+public.dart import; its test is outside allowed_paths"*. Mérve, a **merge-elt**
+domain-purity guard (`test/features/song_trainer/domain/song_document_test.dart`
+→ `Domain purity` group, `_findPurityViolations`, `'cross-feature import'`
+regex, `song_document_test.dart:705-707`) a teljes
+`lib/features/song_trainer/domain/**` fát végigolvassa (`:296`) és tiltja a
+`import '…features/(?:practice|…)/…'` mintát — **a `practice/public.dart`-ot is**.
+A globális `tool/check_architecture.dart` ezzel szemben az `application/` réteg
+→ `practice/public.dart` cross-feature importot ENGEDI (`:215-218`), és a
+domain-purity Directory-scan CSAK a `domain/`-t fedi (nincs `application/`
+purity guard).
+
+**Feloldás (ADR 0087 §2 autonómia + a brief pre-flight bannerének „javítsd a
+scope/fájllistát" felhatalmazása):** a Song→`PracticeDefinition` compiler egy
+**cross-feature adapter** — a `song_trainer/domain/public.dart` saját doksija
+szerint az adapterek a domain FÖLÖTT élnek és a domainből importálnak. Ezért a
+Practice-típust importáló ÚJ fájlok a `domain/`-ból az `application/trainer/`
+rétegbe kerülnek:
+- `song_practice_compiler.dart`: `domain/services/` → `application/trainer/`;
+- `song_trainer_result.dart`: `domain/models/` → `application/trainer/`;
+- a compiler teszt: `test/.../domain/` → `test/.../application/trainer/`.
+
+A `song_event_reference.dart` a `domain/models/`-ban MARAD, de **tiszta
+song-koordináta** (revision/track/event-id-`String`/measure/section) — Practice-
+típust NEM importálhat (különben a domain-purity guard pirosra vált). A
+**merge-elt guard NEM módosul** (§4: a mérce nem módosulhat attól, akit mér);
+az allowed_paths lateral korrekció ugyanabban a feature-ben, új tiltott fájl
+nélkül. A `gate_tests` és a §7 gate-sor a `domain` + `application/trainer`
+könyvtárakat futtatja, hogy a domain-purity guard is a záró gate része legyen.
+
 ## 1. Cél
 
 SongDocument track/range determinisztikus PracticeDefinition fordítása, publikus Practice Engine orchestration és source-referenciás chord/rhythm result mapping.
@@ -163,14 +195,14 @@ SongDocument track/range determinisztikus PracticeDefinition fordítása, publik
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `lib/features/practice/public.dart` | feltételes meglévő | csak auditált additív public export |
-| `lib/features/song_trainer/domain/services/song_practice_compiler.dart` | ÚJ | Song→PracticeDefinition |
-| `lib/features/song_trainer/domain/models/song_event_reference.dart` | ÚJ | source mapping |
-| `lib/features/song_trainer/domain/models/song_trainer_result.dart` | ÚJ | song result |
+| `lib/features/song_trainer/application/trainer/song_practice_compiler.dart` | ÚJ (§0.0 R4: `application/` réteg) | Song→PracticeDefinition — Practice-típust importál, ezért NEM `domain/` |
+| `lib/features/song_trainer/domain/models/song_event_reference.dart` | ÚJ | source mapping — tiszta song-koordináta, Practice-típust NEM importálhat (domain purity guard) |
+| `lib/features/song_trainer/application/trainer/song_trainer_result.dart` | ÚJ (§0.0 R4: `application/` réteg) | song result — Practice result/verdict típust importálhat |
 | `lib/features/song_trainer/application/trainer/song_trainer_controller.dart` | ÚJ | transport+Practice orchestration |
 | `lib/features/song_trainer/application/trainer/song_trainer_state.dart` | ÚJ | session state |
 | `lib/features/song_trainer/application/trainer/song_result_mapper.dart` | ÚJ | measure/section mapping |
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R18-ból | production wiring |
-| `test/features/song_trainer/domain/song_practice_compiler_test.dart` | ÚJ | compile matrix |
+| `test/features/song_trainer/application/trainer/song_practice_compiler_test.dart` | ÚJ (§0.0 R4) | compile matrix |
 | `test/features/song_trainer/application/trainer/song_trainer_controller_test.dart` | ÚJ | state/effect/lifecycle |
 | `test/features/song_trainer/application/trainer/song_trainer_integration_test.dart` | ÚJ | Practice integration |
 | `test/features/practice/presentation/practice_presentation_guard_test.dart` | meglévő | cross-feature guard |
@@ -215,7 +247,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/domain/song_practice_compiler_test.dart test/features/song_trainer/application/trainer test/features/practice
+tools/round-gate.sh test/features/song_trainer/application/trainer test/features/song_trainer/domain test/features/practice
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →

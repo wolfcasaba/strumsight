@@ -82,6 +82,20 @@ motorhoz.
    call count 0). A Song Trainer controller sosem éri el közvetlenül az
    `AudioSessionCoordinator`-t.
 
+5. **A Practice-típust importáló Song Trainer fájlok az `application/`
+   rétegben élnek, nem a `domain/`-ban (§0.0 R4).** A merge-elt
+   song_trainer domain-purity guard
+   (`test/features/song_trainer/domain/song_document_test.dart`,
+   `_findPurityViolations` `'cross-feature import'` regex) tiltja, hogy
+   bármely `lib/features/song_trainer/domain/**` fájl `features/practice/…`-t
+   importáljon — a `practice/public.dart`-ot is. A `SongPracticeCompiler` és a
+   `SongTrainerResult` cross-feature adapterek (Practice-típust hordoznak),
+   ezért az `application/trainer/` rétegbe kerülnek, ahol a globális
+   architektúra-guard a `public.dart`-célú cross-feature importot engedi. A
+   `SongEventReference` tiszta song-koordináta marad a `domain/models/`-ban,
+   Practice-import nélkül. A merge-elt guard NEM módosul (a mérce nem
+   módosulhat attól, akit mér).
+
 ## Következmények
 
 - A Practice publikus felülete bővül; a bővítés additív és auditált, más
