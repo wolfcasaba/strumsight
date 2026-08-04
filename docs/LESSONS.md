@@ -3412,3 +3412,20 @@ ownert és a már létező controller tesztet vette fel az R15 brief §4/
 a régi briefen mindhárom hiányzó úttal RED volt, majd a scope-revízió után
 GREEN. A byteLength scalar metadata marad; nyers source byte vagy platform
 picker-objektum nem lép be az application state-be.
+
+## L92 — A randomizált property-generator preconditionjét indexszel kell megőrizni, nem string-karakterkóddal (E03-R16 H2, 2026-08-04)
+
+**Mérés.** Az E03-R15-heal exact-head CI property gate-je a
+`PROPERTY_SEED=30881015002` seednél, a chord-change property 90. próbájában
+determinisztikusan RED volt: a teszt legalább egy mért akkordváltást várt, de a
+generator üres `changes` listát adott. A reprodukáló parancs:
+`PROPERTY_SEED=30881015002 flutter test test/property/chord_change_property_test.dart`.
+A generator a duplikált második címkét a címke első Unicode-karakterének
+maradékos indexelésével cserélte, amely nem garantálja a label-listán belüli
+eltérő értéket.
+
+**Javítás és regresszió.** A csere a duplikált címke tényleges `_labels`
+indexét használja, majd annak következő elemét választja. A
+`CI regression seed generates at least one expected chord change` teszt pontosan
+a CI-seed/trial példát rögzíti; a property-gate invariánsai és küszöbei
+változatlanok.
