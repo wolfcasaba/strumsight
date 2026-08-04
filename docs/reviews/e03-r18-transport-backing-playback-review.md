@@ -1,8 +1,8 @@
 # Review — E03-R18 SongTransport és backing playback
 
-- **Verdict:** **CHANGES REQUESTED** (1 MAJOR)
+- **Verdict:** **APPROVED** (1 MAJOR javítva a `2377813` javító körben)
 - **Branch:** `codex/e03-r18-transport-backing-playback`
-- **Reviewed HEAD:** `e573deb`
+- **Reviewed HEAD:** `e573deb` (initial) → `2377813` (fix)
 - **Engine:** codex (gpt-5.6-terra) · **Reviewer:** Claude (Opus 4.8), read-only
 - **Dátum:** 2026-08-04
 - **Brief:** [`docs/rounds/e03-r18-transport-backing-playback.md`](../rounds/e03-r18-transport-backing-playback.md) · **ADR:** [0126](../adr/0126-song-transport-backing-playback-boundary.md)
@@ -97,9 +97,24 @@ coordinator, `AudioOwner` enum, más feature belső contractja): **érintetlen**
 - **NOTE:** a transition-tábla teszt exact pár-halmaz ellen mér (nem tranzitív) — a
   §5.1 kötött döntést pontosan tükrözi.
 
-## 7. Merge-döntés
+## 7. Javító kör — MAJOR-01 zárása (`2377813`)
 
-MAJOR-01 nyitva → **merge TILOS**. Javító kör ugyanezzel a motorral (codex), a
-findings-listával; a fix után a review frissül és a CI újra-dispatchelődik (kód
-változott). A záró zöld kapu (format+analyze+architecture+full CI+property+APK)
-és a nulla OPEN BLOCKER/MAJOR feltétel változatlan.
+Codex 1 javító kört vitt (engine=codex). Diff: `song_transport.dart` +1/−1
+(`_activePositionNow` deltája most `* _state.speed`), `backing_drift_test.dart`
++39 (nem-egységnyi speed guard tesztek). Mindkét fájl a §4 listán.
+
+**Független újra-ellenőrzés (izolált klón `2377813`-on):**
+
+- **Eldobható próba (a MAJOR-01 pontos reprodukciója) → most GREEN:**
+  `activePosition` 0.5×, 1s után **500 ms** (elvárt); szinkron minta → **`tolerate`**
+  (elvárt). Ugyanez a próba a fix ELŐTT RED volt (1000 ms / `hardResync`). A lelet
+  tehát olyan teszttel zárt, amely a hibát pirosra fogta volna.
+- **Teljes gate újrafuttatva** (`prepare-flutter-generated` után):
+  format · analyze · test(×3) · architecture — **mind ZÖLD** (GATE_EXIT=0).
+- **CI (exact-SHA):** `build-apk.yml` run 30903949984, `headSha=2377813`.
+
+## 8. Merge-döntés
+
+Nulla OPEN BLOCKER/MAJOR. A záró zöld kapu (format+analyze+architecture+full CI
+suite+randomizált property+APK) az exact `2377813` SHA-n → **APPROVED, merge
+engedélyezett**, ha a CI-run zöld és az `origin/main` nem mozdult a dispatch óta.
