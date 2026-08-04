@@ -123,6 +123,7 @@ def rebase_blocked_task_baseline(
             raise StateError("task state has a mismatched task_id")
         if task.get("status") != RouterStatus.BLOCKED.value:
             raise StateError("only a BLOCKED task baseline may be rebased")
+        recovery_phase = task.get("phase")
         previous = _manifest_from_state(task.get("baseline_manifest"))
         refreshed = rebase_workspace_manifest(worktree, previous)
         audit = audit_scope(
@@ -149,6 +150,14 @@ def rebase_blocked_task_baseline(
         # and attempt counters, but clear only the superseded terminal intent.
         task.pop("terra_terminal_status", None)
         task.pop("terra_terminal_reason", None)
+        # A review-gated Terra repair may have completed its scoped diff before
+        # the stale baseline blocked its post-model audit.  Preserve only this
+        # no-new-model recovery phase so resume re-audits and gates that diff
+        # instead of requesting an impossible third Terra call.
+        if recovery_phase == "TERRA_REVIEW_OR_FIX":
+            task["resume_phase"] = recovery_phase
+        else:
+            task.pop("resume_phase", None)
         task["status"] = RouterStatus.READY_FOR_REVIEW.value
         task["phase"] = "BASELINE_REBASED"
         task["reason"] = (

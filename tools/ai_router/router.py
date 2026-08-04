@@ -583,8 +583,15 @@ class DevelopmentRouter:
                         state.pop("terra_terminal_status", None)
                         state.pop("terra_terminal_reason", None)
                     state["status"] = "RUNNING"
-                    state["phase"] = "RETRY_PROVIDER"
-                    quota_recheck = True
+                    saved_phase = state.get("resume_phase")
+                    state["phase"] = (
+                        saved_phase if isinstance(saved_phase, str) else "RETRY_PROVIDER"
+                    )
+                    # A preserved review Terra diff is never sent to a model
+                    # again. It only needs the normal scope audit and target
+                    # gate, so an unrelated MiniMax quota result cannot block
+                    # this no-new-call recovery.
+                    quota_recheck = state["phase"] != "TERRA_REVIEW_OR_FIX"
                     self.state.save_task(brief.task_id, state)
 
             pending_terra_status = state.get("terra_terminal_status")
@@ -753,6 +760,24 @@ class DevelopmentRouter:
                 )
                 final_gate = self._terra_final_gate(final_gate, audit)
                 self._record_gate(state, "RECOVERED_FINAL_GATE", final_gate)
+                rebased_review_repair = state.pop("resume_phase", None) == "TERRA_REVIEW_OR_FIX"
+                if rebased_review_repair:
+                    # The completed Terra reservation still truthfully
+                    # records the stale-baseline BLOCKED outcome. Rewriting
+                    # that ledger row would falsify history, while opening a
+                    # new reservation would consume a forbidden third call.
+                    # The fresh scope audit and gate are the only recovery
+                    # work here, so finish the task state alone.
+                    return self._finish(
+                        state,
+                        RouterStatus.READY_FOR_REVIEW
+                        if final_gate.outcome == "pass"
+                        else RouterStatus.STOPPED,
+                        "rebased review repair final gate passed"
+                        if final_gate.outcome == "pass"
+                        else "rebased review repair final gate failed",
+                        result_path,
+                    )
                 if final_gate.outcome == "pass":
                     return self._finish_terra(
                         state,

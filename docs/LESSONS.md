@@ -3464,3 +3464,25 @@ R16 §4/`ai-router.allowed_paths` listájához; a route-regresszió bekerül a
 `Epic3BriefMetadataTest.test_r16_scope_includes_measured_editor_activation_owners`
 a régi metadata ellen négy hiányzó úttal RED volt, a scope-revízió után GREEN.
 Sem termékkód, sem router-védelem, sem quality gate nem változott.
+
+## L95 — A H6 baseline-rebase megőrzi a kész review-Terra recovery fázisát (E03-R16 H6, 2026-08-04)
+
+**Mérés.** Az E03-R16 review-javító router-state-je `BLOCKED` volt a régi
+`cc047bf` baseline-nal, miközben a branch `c037993`-re committolta az
+implementációt és a második, review-gated Terra kör már scope-on belüli,
+piszkos javító diffet hagyott. A zárolt `rebase-baseline` helyesen
+`READY_FOR_REVIEW`-t adott és a baseline-t frissítette, de a következő
+`resume` a `BASELINE_REBASED` fázist `RETRY_PROVIDER`-re cserélte. Így új,
+harmadik Terra-hívást próbált kérni, és determinisztikusan
+`task Terra budget is exhausted`-dal STOPPED lett.
+
+**Javítás és regresszió.** A H6 recovery kizárólag az eredeti
+`TERRA_REVIEW_OR_FIX` fázist viszi tovább `resume_phase`-ként. A resume ezen
+az explicit, már kész Terra-diffen csak allowlist scope-auditot és célzott
+gate-et futtat; nem kér MiniMax-kvótát, nem indít harmadik Terra-hívást és a
+korábbi, BLOCKED ledger-bejegyzést sem írja át. A
+`RouterCliTest.test_rebase_baseline_preserves_a_scoped_model_diff_after_preflight_commit`
+az operátori recovery által tárolt fázist, a
+`RouterResumeTest.test_rebased_baseline_resumes_completed_terra_repair_without_a_third_call`
+pedig a RED→GREEN state-átmenetet, a 0 új modellprofilt és a változatlan
+`terra_calls=2` számlálót bizonyítja.
