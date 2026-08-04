@@ -3605,3 +3605,42 @@ küszöb tág környezetében invariáns, tehát a küszöb pontos értékére n
 diszkriminatív. NOTE-szintű follow-up (az algoritmus bitre azonos + re-export,
 a viselkedés őrzött), de a mintát jegyezd: numerikus küszöb-default → külön,
 a küszöbre érzékeny mérés kell, nem elég a fő-útvonal zöldje.
+
+## L102 — Az implementer önálló teszt-futtatása NEM a `round-gate.sh`; a format-lépés kimarad (E03-R21, 2026-08-04)
+
+**Mérés.** Az E03-R21 implementere (MiniMax M3) a köröket `flutter analyze` és
+egyesével futtatott `flutter test` hívásokkal verifikálta (a full-dir gate
+korábbi deadlockja miatt szándékosan kis csomagokban) — a kód `analyze`-tiszta
+és minden célzott teszt zöld volt, DE a `tools/round-gate.sh` ELSŐ lépése,
+a `dart format --set-exit-if-changed lib test tool`, kimaradt. A CI
+`build-apk.yml` Format gate-je 4 formázatlan fájlon PIROSRA váltott
+([run 30934914839](https://github.com/wolfcasaba/strumsight/actions/runs/30934914839)),
+a teljes suite lefutása előtt. **Tanulság:** ha az implementer a lassú
+full-dir gate helyett darabolt teszteket futtat, a `format` lépést KÜLÖN
+kötelező elvégezni (`dart format lib test tool`) a `done` előtt — az egyesével
+futtatott `analyze`+`test` NEM helyettesíti a gate `format` lépését. Orchestrátor-oldalon
+a formázás mechanikus, viselkedést nem érintő javítás az engedélyezett fájlokon
+(itt az orchestrátor futtatta, commitolta, újra-dispatchelte a CI-t).
+
+## L103 — Git-worktree vs teljes klón: az `mm-round.sh`/`codex-round.sh` `.git` KÖNYVTÁRAT vár (E03-R21, 2026-08-04)
+
+**Mérés.** Az E03-R21 első implementer-indítása azonnal elhalt: `mm-round.sh:
+a munkapéldány nem git-fa`. Ok: a wrapper a `[ ! -d "$workdir/.git" ]`
+ellenőrzést használja, egy `git worktree add`-del készült munkapéldányban
+viszont a `.git` egy FÁJL (gitdir-pointer), nem könyvtár. A korábbi mm-körök
+munkapéldányai teljes `git clone`-ok voltak (`.git` = könyvtár). **Tanulság:**
+az implementer-motor munkapéldányát `git clone <repo> <dir>` + `git checkout
+<branch>` úton hozd létre (a `tools/`-hoz nem nyúlhatsz a §4 szerint), NE `git
+worktree add`-del; ellenőrizd `ls -d <dir>/.git`-tel, hogy könyvtár.
+
+## L104 — Full-dir teszt háttér-taskként `TaskOutput(block:true)` pollinggal deadlockol az implementernél (E03-R21, 2026-08-04)
+
+**Mérés.** Az E03-R21 első MiniMax-futása a 3600s abszolút időkorlátnál halt
+jelzés nélkül: az implementer a teljes `test/features/song_trainer/presentation`
+gate-t (~30 perc a boxon) EGYETLEN háttér-taskként indította, majd 30+ percig
+`TaskOutput(block:true, timeout:600000)`-tel pollingozta — a modell soha nem
+kapta meg a gate-eredményt, a wrapper SIGTERM-elte. A folytató kör kis
+tesztcsomagokra bontva (<600s/hívás) gond nélkül végigfutott. **Tanulság:** a
+lassú boxon az implementer-briefbe kötelező beírni, hogy a teszteket KIS
+csomagokban, egyesével futtassa, és SOHA ne pollingozzon egy 30 perces
+háttér-taskot `block:true`-val; a teljes suite a CI dolga.

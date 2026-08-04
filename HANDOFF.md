@@ -4,7 +4,23 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R20 merged — Pitch observation & monophonic note scoring).**
+> (E03-R21 merged — Trainer UI, loop, Speed Builder & results).**
+> **E03-R21 KÉSZ (PR [#122](https://github.com/wolfcasaba/strumsight/pull/122),
+> squash `b6a5da9`, [ADR 0129](docs/adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md),
+> implementer **MiniMax M3**, orchestrátor **Claude Opus 4.8**, egy javító kör →
+> APPROVED):** windowolt/accessible Song Trainer + result felület, section/A–B
+> loop (invalid-range elutasítás + loop-attempt elkülönülés), publikus Speed
+> Builder export (`practice/public.dart` additív boundary, `PlaybackCapabilities.supportsRate`
+> kapun), measure heatmap (szín + label/icon/text semantics) + problem-retry +
+> next-section, **idempotens `SongProgressCommitter`** (exactly-once idempotency
+> key, mutáció-verifikált) és `SongResumeRepository` checkpoint (revision
+> match/mismatch invalidáció). A fázis-UI a VALÓS `SongTrainerStatus` enumra
+> képződik (nincs `playing`/`error` → `running`/`failed`); a route az
+> `app_route.dart` `songTrainerSession`/`songTrainerResult` konstansaival, a
+> `songTrainerV2Enabled` flag mögött. CI [run 30935633480](https://github.com/wolfcasaba/strumsight/actions/runs/30935633480)
+> zöld (exact-SHA `154ecb9`). **Következő: E03-R22 (setlist/progress/epic-zárás).**
+>
+> <details><summary>E03-R20 — Pitch observation & monophonic note scoring (korábbi)</summary>
 > **E03-R20 KÉSZ (PR [#121](https://github.com/wolfcasaba/strumsight/pull/121),
 > squash `4014f73`, [ADR 0128](docs/adr/0128-shared-pitch-observation-dsp-and-monophonic-note-scoring.md)):**
 > közös pitch-observation DSP boundary + tiszta, latency-kompenzált
@@ -33,6 +49,7 @@
 > [run 30915808410](https://github.com/wolfcasaba/strumsight/actions/runs/30915808410)
 > zöld (full suite + property + APK); post-merge gate `main`-en zöld. Hívó
 > Trainer UI még nincs — production viselkedés flag/hívó nélkül változatlan.
+> </details>
 > **E03-R19 KÉSZ (PR [#120](https://github.com/wolfcasaba/strumsight/pull/120),
 > squash `e8dd74e`, [ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)):**
 > **E03-R19 KÉSZ (PR [#120](https://github.com/wolfcasaba/strumsight/pull/120),
@@ -874,15 +891,18 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R20 — Monophonic pitch observation és note scoring** a következő product
-round ([`docs/rounds/e03-r20-pitch-observation-note-scoring.md`](docs/rounds/e03-r20-pitch-observation-note-scoring.md);
-SDD Kör 20). Ez hozza a monophonic pitch megfigyelést és note-scoringot, amit az
-R19 compiler ma szándékosan `playbackOnly`-ra ejt (`TrainerMode.pitch` tiltott a
-scoringban). A `PREPARED` briefet a friss pre-flightnak a mai `main`-hez
-(`e8dd74e`) kell mérnie; a `docs/execution/pipeline-queue.tsv` E03-R19 sorát a
-driver `done`-ra írja, a következő kört a pipeline indítja (ez a session nem).
-E03-R21 (trainer UI/loop/speed/results) és E03-R22 (setlist/progress/epic-zárás,
-kézi kickoff) követik.
+0. **E03-R22 — Setlist V2 / progress-history / epic-zárás** a következő product
+round (SDD Kör 22; a `docs/rounds/` brief a friss pre-flightnak a mai `main`-hez
+(`b6a5da9`) kell mérnie). Ez zárja az R21 idempotens `SongProgressCommitter`/
+`SongResumeRepository` contractját a végleges repository/Setlist integrációval.
+A `docs/execution/pipeline-queue.tsv` E03-R21 sorát a driver `done`-ra írja, a
+következő kört a pipeline indítja (ez a session nem). **Megjegyzés:** az R21
+post-merge lokális gate a boxon fd-kimerülésbe futott
+(`OS Error: Too many open files` az analysis-serverben — az analyzer maga
+„No issues found"-ot adott); ez box-hygiene (stale worktree/analysis-server
+watcherek), NEM kód-regresszió — a merge-evidencia az exact-SHA `154ecb9` zöld
+CI-run. A box takarításához ld. [[oracle-server-hygiene]].
+   E03-R21 (trainer UI/loop/speed/results) **KÉSZ** (ld. fejléc).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
