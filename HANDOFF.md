@@ -17,7 +17,11 @@
 > R16 implementation discarded the completed review-Terra recovery phase and
 > incorrectly demanded a third Terra call. The bounded recovery now preserves
 > that phase and re-runs only scope audit plus the target gate, retaining the
-> original ledger and task counters. E03-R16 may resume its pending review
+> original ledger and task counters. **HEAL E03-R16/H6 follow-up:** the locked
+> recovery then measured only four pipeline-written runtime signals as false
+> protected-path changes. The router now exempts exactly `HALTED`, `chain.log`,
+> `round-status`, and `router-halt`; every other `.pipeline` path remains
+> protected, with a regression that proves both sides. E03-R16 may resume its pending review
 > repair after the self-heal's green merge. **HEAL E03-R16/H2:** the E03-R15 repair is merged as
 > [PR #111](https://github.com/wolfcasaba/strumsight/pull/111) (`5f76879`).
 > The first exact-head CI found a deterministic Epic 2 chord-change property

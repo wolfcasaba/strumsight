@@ -3486,3 +3486,19 @@ az operátori recovery által tárolt fázist, a
 `RouterResumeTest.test_rebased_baseline_resumes_completed_terra_repair_without_a_third_call`
 pedig a RED→GREEN state-átmenetet, a 0 új modellprofilt és a változatlan
 `terra_calls=2` számlálót bizonyítja.
+
+## L96 — A pipeline saját runtime-jelzései nem lehetnek modell scope-sértések (E03-R16 H6, 2026-08-04)
+
+**Mérés.** A #115 utáni valódi, zárolt
+`recover-stopped-after-heal --task E03-R16 --worktree /home/ubuntu/ss-auto-e03-r16`
+reprodukció `INTERNAL_ERROR`-ral állt meg: a `.pipeline/HALTED`, `chain.log`,
+`round-status` és `router-halt` gitignore-olt, a pipeline által írt állapotát
+a teljes `.pipeline` protected prefix modellmódosításként utasította el. A
+termékdiff és a router ledger nem volt a hiba oka.
+
+**Javítás és regresszió.** Csak ez a négy, név szerint felsorolt runtime-fájl
+generated workflow-artefaktum; a `.pipeline` prefix és minden más alatta lévő
+út változatlanul protected. A
+`RouterArtifactScopeTest.test_pipeline_runtime_signals_do_not_mask_protected_pipeline_changes`
+előbb a négy valódi névvel RED volt, majd GREEN; ugyanebben a tesztben a
+`.pipeline/model-injected-control` továbbra is protected-path hibát ad.
