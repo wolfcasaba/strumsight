@@ -207,6 +207,46 @@ range determinisztikusan, onset-hű időpontokkal fordul. A szemantikát a
 compiler-teszt független reference-számítással (SongTimeMap-alapú várt
 onset-idők) méri, nem bemásolt zöld outputtal.
 
+**R6 — A hat track-profil encoding-receptje publikus típusokkal, NINCS
+Practice-modellváltozás (harmadik implementer-STOP feloldása, mérve
+2026-08-04).** A harmadik dispatch `stopped`-ot jelzett: *„PracticeEvent nem
+képes chord/direction nélküli note-onset rhythm targetre; belső Practice
+modell-bridge kell"*. A premissza **mérve HAMIS**: a repo már ma is
+enkódolja a rhythm-only célt publikus típusokkal. Mért tények:
+`PracticeEvent.validate()` (`practice_event.dart:93-99`) egy nem-marker
+event-től chord VAGY direction targetet vár (`eventScorableMissing`); a
+`PracticeScoreAggregator` (`practice_score_aggregator.dart:62`) minden
+dimenziót a `scoringProfile.weights` alapján kapuz (`if (entry.value <= 0)
+continue`), azaz a súlyozatlan dimenzió NEM pontozódik; és a
+`builtin_practice_catalog.dart:218-238` `rhythmOnlyQuarters` definíciója
+`PracticeEvent(direction: StrumDirection.down)` placeholder-t + a
+`ScoringProfile.rhythmOnlyDefault` (`weights: {rhythm: 100}`) profilt használ →
+kizárólag rhythm pontozódik.
+
+**A hat mátrix-sor encoding-receptje (mind publikus `PracticeEvent` +
+`ScoringProfile.weights`, semmi Practice-belső):**
+
+| Track/range | PracticeEvent mezők | ScoringProfile.weights |
+|---|---|---|
+| chord+direction | `chord: <kanonikus>`, `direction: <StrumDirection>` | `{chord, rhythm, direction}` |
+| chord+unknown direction | `chord: <kanonikus>`, `direction: null` | `{chord, rhythm}` (direction n.a.) |
+| chord-only | `chord: <kanonikus>` | `{chord, rhythm}` |
+| strum-only | `direction: <StrumDirection>` | `{rhythm, direction}` |
+| note-onset | `direction: StrumDirection.down` (placeholder) | `{rhythm}` (mint `rhythmOnlyDefault`) |
+| playback-only | — nincs scored PracticeDefinition/session — | transport-only, mic 0 |
+
+Kikötések: (1) a `chord` KIZÁRÓLAG kanonikus major/minor label lehet
+(`isCanonicalPracticeChordLabel`, `practice_event.dart:78`); nem-kanonikus
+song-chord → kezeld chord-nélküliként vagy dokumentált mappinggel, nem érvénytelen
+label-lel. (2) A placeholder `direction` NEM pontozódik, mert a profil nem
+súlyozza a `direction` dimenziót — ne állíts direction-súlyt note-onsetnél. (3)
+A `StrumDirection` a `core/music/strum.dart` (mindig importálható); a
+`ScoringProfile`/`PracticeEvent`/`PracticeMode` a `practice/public.dart`-on
+(R1). (4) A `PracticeMode` a capabilityhez illeszkedjen (`strumPattern` /
+`chordChanges` / `chordProgression` / `rhythmOnly`), a `pitch` scoring TILOS
+(brief §3). Ez a recept a §6 megkülönböztető mátrixot maradéktalanul lefedi
+Practice-modellváltozás nélkül; a STOP-ok e tengelyen ezzel lezárva.
+
 ## 1. Cél
 
 SongDocument track/range determinisztikus PracticeDefinition fordítása, publikus Practice Engine orchestration és source-referenciás chord/rhythm result mapping.

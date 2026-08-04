@@ -82,6 +82,13 @@ motorhoz.
    call count 0). A Song Trainer controller sosem éri el közvetlenül az
    `AudioSessionCoordinator`-t.
 
+7. **A hat track-profil publikus `PracticeEvent` + `ScoringProfile.weights`
+   encodinggal (§0.0 R6), NINCS Practice-modellváltozás.** A rhythm-only cél a
+   már létező `builtin.rhythmOnlyQuarters` mintát követi: `StrumDirection.down`
+   placeholder az esemény-validáció kielégítésére + `rhythm`-only súlyú profil,
+   mert az aggregátor a súlyozatlan dimenziót nem pontozza. A chord kanonikus
+   major/minor label kell legyen; a `pitch` scoring tilos.
+
 6. **Tempo/meter-változás: single reference-tempo normalizált idővonal
    (§0.0 R5), compiler-only.** A Practice pontozás mérve tisztán idő-alapú
    (`PracticeEventMatcher.matchWindow` `Duration` a `target.time` körül;
