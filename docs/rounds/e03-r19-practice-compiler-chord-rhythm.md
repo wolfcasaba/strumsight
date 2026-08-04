@@ -164,6 +164,49 @@ az allowed_paths lateral korrekció ugyanabban a feature-ben, új tiltott fájl
 nélkül. A `gate_tests` és a §7 gate-sor a `domain` + `application/trainer`
 könyvtárakat futtatja, hogy a domain-purity guard is a záró gate része legyen.
 
+**R5 — Tempo/meter-változás compile-szemantika: single reference-tempo
+normalizált idővonal (második implementer-STOP feloldása, mérve 2026-08-04).**
+A második Codex-dispatch `stopped`-ot jelzett: *„Practice has only constant
+tempo/meter session contract; map-aware bridge needs out-of-scope Practice
+model/compiler changes"*. Mérve IGAZ, hogy a Practice idővonala konstans:
+`BeatTimeConverter` (`practice/domain/model/beat_time_converter.dart`) egyetlen
+`tempo`+`meter` mellett lineárisan konvertál (`ticks·µs/(bpm·480)`), és a
+`BeatPosition` egész tick (480 PPQ). A song viszont `TempoMap`/`MeterMap`-et
+hordoz.
+
+**A kulcs-mérés, amely feloldja: a Practice pontozás tisztán IDŐ-alapú, nem
+metrikus.** A `PracticeEventMatcher` a `scoringProfile.matchWindow`
+(`Duration`) ablakot a `playedAt` köré teszi (`minimumTime/maximumTime`,
+`practice_event_matcher.dart:149-151`) és a `target.time`-hoz (`Duration`)
+matchel; a `PracticeTimingScorer` a `offset.inMicroseconds.abs()`-t osztályozza
+`perfect/goodWindow` ellen (`practice_timing_scorer.dart:132-164`). A
+`compilePracticeTarget` a beat-pozíciókat IDŐVÉ süti a `BeatTimeConverter`-rel.
+A pontozás tehát KIZÁRÓLAG a cél-onset **időpontokon** múlik.
+
+**Feloldás (within-round §0.0, compiler-only, NINCS Practice-modellváltozás):**
+a compiler a kiválasztott range-et EGY reference tempóra (`T_ref`,
+determinisztikusan a range kezdő tempója; a `targetSpeed` a `defaultTempo`-t
+skálázza) és a range kezdő meterére normalizálja. Minden song-event valós
+onset-idejét a `SongTimeMap` adja (a TempoMap-en át, tehát a tempóváltásokat
+befedi), és a compiler ezt az időt tick-re konvertálja `T_ref` mellett
+(`ticks_i = round(onsetµs · T_ref.bpm · 480 / 60_000_000)`, azaz
+`BeatTimeConverter(T_ref, meter).positionAt(onset)`). Így a lefordított
+`PracticeDefinition` cél-időpontjai a song VALÓS onset-idejével egyeznek —
+a tempóváltás az event-időzítésbe olvad, a chord/rhythm/direction pontozás
+végig helyes marad. A `BeatTimeConverter` opcionálisan additív exportként
+kérhető a `public.dart`-on (R1), vagy a compiler a fenti aritmetikát maga
+számolja publikus típusokkal.
+
+**Explicit, dokumentált szűkítés:** meter-váltó range esetén a count-in/
+metronóm/bar-grouping a range KEZDŐ meterét használja (egyetlen `meter` a
+definícióban) — a változó-meter metronóm-rács ebben a körben NEM támogatott.
+Ez a pontozást NEM érinti (a scoring idő-alapú), csak a metronóm-megjelenítést,
+és a körben nincs is trainer screen/metronóm-kritikus scoring (brief §3 scope).
+A determinisztikus fordítás acceptance (§6/1) TELJESÜL: a tempo/meter-váltó
+range determinisztikusan, onset-hű időpontokkal fordul. A szemantikát a
+compiler-teszt független reference-számítással (SongTimeMap-alapú várt
+onset-idők) méri, nem bemásolt zöld outputtal.
+
 ## 1. Cél
 
 SongDocument track/range determinisztikus PracticeDefinition fordítása, publikus Practice Engine orchestration és source-referenciás chord/rhythm result mapping.

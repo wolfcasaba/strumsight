@@ -82,6 +82,17 @@ motorhoz.
    call count 0). A Song Trainer controller sosem éri el közvetlenül az
    `AudioSessionCoordinator`-t.
 
+6. **Tempo/meter-változás: single reference-tempo normalizált idővonal
+   (§0.0 R5), compiler-only.** A Practice pontozás mérve tisztán idő-alapú
+   (`PracticeEventMatcher.matchWindow` `Duration` a `target.time` körül;
+   `PracticeTimingScorer` az `offset.abs()`-t osztályozza). A compiler a
+   range-et egy reference tempóra + kezdő meterre normalizálja, és minden
+   event-et a `SongTimeMap` szerinti VALÓS onset-idejére (a TempoMap-en át)
+   helyez, `T_ref` melletti tick-pozícióként. Így a cél-időpontok onset-hűek a
+   tempóváltáson át is; a pontozás helyes. A változó-meter metronóm-rács
+   ebben a körben nem támogatott (a range kezdő metere; a scoringot nem
+   érinti). NINCS Practice-modell/`compilePracticeTarget` változás.
+
 5. **A Practice-típust importáló Song Trainer fájlok az `application/`
    rétegben élnek, nem a `domain/`-ban (§0.0 R4).** A merge-elt
    song_trainer domain-purity guard
