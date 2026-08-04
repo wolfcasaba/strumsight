@@ -3666,3 +3666,36 @@ módosítása, §4-en kívül esik), és futtasd újra a gate-et. A limit ellen�
 `/proc/*/fd` inotify-symlinkek számolása. Hosszabb távon a lezáratlan
 `flutter_tester`/`frontend_server` processzeket PID szerint (NEM a promptban
 szereplő mintával) érdemes kilőni.
+
+## L106 — Egy value-type `hashCode`-jához mező hozzáadása pirosra válthat egy TILOS ZÓNÁS pontos-hashCode tesztet, amit csak a full-suite CI fog meg (E04-R01, 2026-08-04)
+
+**Mérés.** Az E04-R01-ben a `FeatureFlags`-hez additív, default-OFF
+`aiTutorEnabled` + `aiTutorCloudEnabled` mezőt vittünk be. A pre-flight
+utasítás (§0.0/3) azt írta elő, hogy a mezők a `==`, `hashCode` és `toString`
+része legyen. A `hashCode` `Object.hash(...)` argumentumszáma így 6-ról 8-ra
+nőtt → **minden** `FeatureFlags` példány hashCode-ja megváltozott. A
+`test/app/app_config_test.dart:263-266` (a kör **tilos zónája**, nincs az
+`allowed_paths`-on) a hashCode-ot PONTOS `Object.hash(false×5, true)` (6 mező)
+értékkel rögzíti → CI PIROS (`Expected <418454523> / Actual <373118860>`, run
+`30957776795`). A lokális `round-gate.sh` a brief-célzott tesztlistát futtatja
+(`test/features/ai_tutor`, `feature_flags_test`, `offline_network_guard`) — az
+`app_config_test`-et NEM, ezért a targeted gate ZÖLD volt, a hibát csak a
+full-suite CI fogta meg.
+
+**Feloldás (fix-kör 1, a kör saját artefaktumán, ADR 0087 §2).** A `hashCode`
+marad az eredeti 6-mezős alak; a két új mező csak a `==` + `toString` része. A
+Dart `hashCode`-kontraktus csak azt követeli, hogy egyenlő objektumok
+hashCode-ja egyezzen — az új mezőkön keletkező (benign) ütközés megengedett, a
+value semantics-ot a `==` hordozza. (A meglévő `hashCode` amúgy is szándékosan
+kihagyja a `songTrainerV2Enabled`-et — ez a fájl bevett konvenciója.) A
+`feature_flags_test.dart` az új-flag hashCode-assertjeit value-semantics
+(`==` + equal-copy hashCode) bizonyítékra cserélte.
+
+**Tanulság.** (1) Ha egy value-type `==`/`hashCode`-jához mezőt adsz, a
+pre-flight `rg`-zze ki az ÖSSZES tesztben (a tilos zónában is) a pontos
+`hashCode`/`Object.hash(...)` assert-eket — egy exact-hashCode assert bármely
+mezőbővítésre pirosra vált, és a targeted gate nem futtatja. (2) Ha egy tilos
+zónás teszt a pontos hashCode-ot pinneli, az új rollout-flag maradjon KI a
+`hashCode`-ból; a value semantics a `==`-on elég. (3) A targeted `round-gate.sh`
+nem helyettesíti a full-suite CI-t érték-típus közös mezőinek módosításakor —
+a merge-evidencia a full-suite CI, nem a targeted gate.

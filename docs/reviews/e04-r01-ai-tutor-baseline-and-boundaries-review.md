@@ -126,5 +126,15 @@ A lokális/izolált gate zöld, DE a full-suite CI (run `30957776795`, exact-SHA
 - **Javítás:** `feature_flags.dart` hashCode visszaáll 6-mezősre; `==`/`toString`
   a két új mezővel marad; `feature_flags_test.dart` az új-flag hashCode-assertjeit
   value-semantics (`==`) bizonyítékra cseréli.
-- **Zárás:** _(a fix commit sha-ja + izolált gate + `app_config_test` zöld + új
-  CI-run ide kerül a fix után)_
+- **Zárás (mérve):** fix commit `9380498`. `hashCode` visszaáll a 6-mezős
+  eredetire; `==`/`toString` a két új mezővel marad; a `feature_flags_test`
+  a hashCode-részvétel helyett value-semantics (`==` + equal-copy hashCode)
+  bizonyítékra vált. Izolált `/tmp/review-e04-r01-fix` klón (exact-SHA `9380498`):
+  `round-gate.sh` **MINDEN ZÖLD**; a tilos zónás `flutter test
+  test/app/app_config_test.dart` → **18/18 zöld** (a korábban piros
+  `new constructor fields…` teszt is). Full-suite CI: `build-apk.yml` run
+  **[30958928669](https://github.com/wolfcasaba/strumsight/actions/runs/30958928669)**
+  = **success**, headSha `9380498` (exact tip). **M1 lezárva.**
+- **Verdikt: APPROVED.** Merge: PR **#124**, squash `814388a`, `origin/main`
+  a dispatch óta változatlan (`8d70232`); a post-merge gate a merged `main`-en
+  függetlenül **zöld**.

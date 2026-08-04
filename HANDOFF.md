@@ -4,7 +4,24 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R22 merged — Setlist V2, revision-aware progress & Epic 3 closure).**
+> (E04-R01 merged — AI Tutor baseline, ADR 0131–0134 & safety boundaries; Epic 4 kickoff).**
+>
+> **E04-R01 KÉSZ (PR [#124](https://github.com/wolfcasaba/strumsight/pull/124),
+> squash `814388a`, ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)/[0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)/[0133](docs/adr/0133-ai-tutor-tool-confirmation.md)/[0134](docs/adr/0134-ai-tutor-memory-policy.md),
+> implementer **Codex** (`gpt-5.6-terra`, örökölt kézi override), orchestrátor/reviewer **Claude Opus 4.8**,
+> egy javító kör → APPROVED):** Epic 4 (AI Guitar Teacher) kickoff **funkcionális
+> változtatás nélkül**, flag mögött. Additív `FeatureFlags.aiTutorEnabled` +
+> `aiTutorCloudEnabled` (default **OFF** minden környezetben; `==`+`toString`
+> bővült, a `hashCode` szándékosan 6-mezős maradt — a tilos zónás `app_config_test`
+> pontos hashCode-ját nem törheti, fix 1); üres `lib/features/ai_tutor/public.dart`
+> feature-boundary; `docs/baseline/epic-04-ai-tutor-start.md` adatforrás-leltár
+> (mért tény / aggregátum / UI-only), deterministic coaching fixture-snapshot,
+> „nyers audio nem része a tutor contextnek" kimondás és rollout/rollback terv;
+> flag OFF ⇒ 0 route + 0 hálózati kérés (`offline_network_guard` zöld,
+> `usesNetwork` érintetlen — cloud wiring R14). CI [30958928669](https://github.com/wolfcasaba/strumsight/actions/runs/30958928669)
+> success (exact `9380498`). Részletek → [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> **E03-R22 KÉSZ (PR [#123](https://github.com/wolfcasaba/strumsight/pull/123),
+> squash `3ae368a`):** Setlist V2, revision-aware progress & Epic 3 closure.
 > **E03-R22 KÉSZ (PR [#123](https://github.com/wolfcasaba/strumsight/pull/123),
 > squash `3ae368a`, [ADR 0130](docs/adr/0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md),
 > implementer **Codex** (`gpt-5.6-terra`), orchestrátor/reviewer **Claude Opus 4.8**,
@@ -711,13 +728,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #121](https://github.com/wolfcasaba/strumsight/pull/121), squash
-`4014f73` (E03-R20). [Build Android APK 30915808410](https://github.com/wolfcasaba/strumsight/actions/runs/30915808410)
-is **success** for exact branch `headSha` `5ee8fc4` (full Flutter suite,
+`main` @ [PR #124](https://github.com/wolfcasaba/strumsight/pull/124), squash
+`814388a` (E04-R01). [Build Android APK 30958928669](https://github.com/wolfcasaba/strumsight/actions/runs/30958928669)
+is **success** for exact branch `headSha` `9380498` (full Flutter suite,
 randomized property/coverage gate and development APK). The independent
 post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e03-r20-pitch-observation-note-scoring-review.md`](docs/reviews/e03-r20-pitch-observation-note-scoring-review.md).
-(Előző product-merge-ek: PR #120 / `e8dd74e`, E03-R19; PR #119 / `27d45d6`, E03-R18.)
+[`e04-r01-ai-tutor-baseline-and-boundaries-review.md`](docs/reviews/e04-r01-ai-tutor-baseline-and-boundaries-review.md).
+(Előző product-merge-ek: PR #123 / `3ae368a`, E03-R22; PR #121 / `4014f73`, E03-R20.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -790,6 +807,26 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
+**E04-R01 — AI Tutor baseline, ADR-ek és feature flagek** (PR
+[#124](https://github.com/wolfcasaba/strumsight/pull/124), squash `814388a`,
+ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)/[0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)/[0133](docs/adr/0133-ai-tutor-tool-confirmation.md)/[0134](docs/adr/0134-ai-tutor-memory-policy.md)).
+Implementer: **Codex (gpt-5.6-terra, örökölt kézi override)**; orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** Epic 4 (AI Guitar Teacher) kickoff **funkcionális változtatás
+nélkül**, flag mögött. Additív `FeatureFlags.aiTutorEnabled` + `aiTutorCloudEnabled`
+(default **OFF** minden környezetben; `==`+`toString` bővült, `hashCode` 6-mezős
+maradt — fix 1); üres `lib/features/ai_tutor/public.dart` boundary (nulla
+import/export); négy kötött ADR (provider-boundary / privacy&consent /
+tool-confirmation / memory-policy); `docs/baseline/epic-04-ai-tutor-start.md`
+adatforrás-leltár + coaching fixture-snapshot + raw-audio kizárás + rollout/rollback.
+Flag OFF ⇒ 0 route + 0 hálózati kérés (`offline_network_guard` érintetlen,
+`usesNetwork` változatlan — cloud wiring R14-re halasztott, ADR 0132). **Egy
+javító kör** (MAJOR M1: a `hashCode`-bővítés a tilos zónás `app_config_test`
+pontos 6-mezős hashCode-ját törte a full-suite CI-ban → fix: value semantics a
+`==`-on, `hashCode` változatlan). Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+<details><summary>Korábbi kör: E03-R19 (superseded snapshot)</summary>
+
 **E03-R19 — Practice compiler és chord/rhythm trainer orchestration** (PR
 [#120](https://github.com/wolfcasaba/strumsight/pull/120), squash `e8dd74e`,
 [ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)).
@@ -813,6 +850,8 @@ sessiont → **mic provider call count 0** (strukturálisan + teszttel). `SongRe
 hiányzó referenciára. Négy implementer-STOP mind dokumentált §0.0-revízióval
 feloldva (R1 additív public export, R4 fájl-elhelyezés, R5 tempo-normalizálás,
 R6 encoding-recept) — nem halt. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+</details>
 
 ### Előző kör (referencia): E03-R17 — Song Overview, track/range választás és Trainer Setup (PR
 [#118](https://github.com/wolfcasaba/strumsight/pull/118), squash `168114a`,
@@ -914,10 +953,14 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R22 lezárási lánc — implementer után az orchestrátoré:** független
-   review, exact-head teljes Flutter/property/APK CI és a név szerinti device
-   checklist evidence szükséges a §13 szerinti merge előtt. Nincs új product
-   scope vagy feature-flag enable ebben a folytatásban.
+0. **E04-R02 — Conversation & message domain** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R02` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r02-conversation-and-message-domain.md`). A pipeline
+   (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi
+   el**. Az E04-R01 baseline (flagek default OFF, üres `ai_tutor/public.dart`
+   boundary, ADR 0131–0134) a bemenete; a boundary-invariáns (nulla idegen
+   belső import) és a flag-OFF 0-request garancia nem törhető.
+1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
