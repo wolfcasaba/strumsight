@@ -16,9 +16,10 @@ chord-detection app leaves out.
 > (read at runtime via `package_info_plus` and shown in Settings). Do not restate a version number
 > anywhere else in the docs.
 >
-> **Status:** Epic 1 (Core Platform) complete — see
-> [`docs/sdd/epic-01-completion-report.md`](docs/sdd/epic-01-completion-report.md) for the full
-> evidence-backed Definition-of-Done. Live state snapshot: [`HANDOFF.md`](HANDOFF.md).
+> **Status:** Epic 1 is complete. Epic 3 has an evidence ledger, but its release
+> blockers are still open; see
+> [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
+> Live state snapshot: [`HANDOFF.md`](HANDOFF.md).
 
 ---
 
@@ -32,6 +33,7 @@ chord-detection app leaves out.
 | 📚 **Library** — saved sessions (rename, review) | ✅ |
 | 🎓 **Learn** — lessons with chord audio + metronome · **Songs** · **Progress** · **Streak** | ✅ |
 | 🎯 **Practice (V2)** — Strum Pattern / Chord Changes / Chord Progression / Rhythm Only / Free Practice / Speed Builder · migrated Learn path is live (`migratedLearnEnabled` flag), self-practice Hub→Session path is feature-flagged (see known limitations) | ⚠️ domain tested; rollout flag-gated |
+| 🎼 **Song Trainer (V2)** — local StrumSight JSON, MusicXML/MXL, and SMF 0/1 MIDI import; scoped trainer/result/progress and Setlist V2 components | ⚠️ controlled rollout; no direct Guitar Pro import, Setlist route, device acceptance, or production enable yet |
 | ⚙️ **Settings** — theme, language (en/hu), thresholds; cloud-synced when logged in | ✅ |
 | 🔐 **Account** (optional) — email/password JWT login, settings sync only | ✅ opt-in |
 | 🧪 **Lab mode** — on-device diagnostics capture + upload to the Lab backend | ✅ dev-only |
@@ -55,6 +57,11 @@ chord-detection app leaves out.
   raw strum count (R18 n1 follow-up, opened).
 - **DSP and ML asset parity** is locked at the Epic-1 baseline — no DSP
   parameter change in Epic-2 (AGENTS.md §9).
+- **Song Trainer V2 and Setlist V2 are not release-enabled.** Guitar Pro uses
+  external conversion to MusicXML/MXL/MIDI; the Setlist UI components have no
+  registered app route yet, and the device checklist/CI review evidence remains
+  open. The exact supported subset and each named blocker are in
+  [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
 - **iOS build** requires a Mac (no Linux toolchain).
 
 ## Architecture

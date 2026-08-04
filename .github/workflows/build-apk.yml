@@ -33,6 +33,10 @@ jobs:
           cache: true
       - name: Run Flutter quality gates
         uses: ./.github/actions/flutter-gates
+      - name: Song schema snapshot gate
+        run: dart run tool/ci/check_song_schema.dart
+      - name: Song fixture provenance gate
+        run: dart run tool/ci/check_song_fixture_licenses.dart
       - name: Read APK metadata from pubspec
         id: apk
         shell: bash

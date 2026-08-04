@@ -1,6 +1,6 @@
 # E03-R22 — Setlist V2, progressintegráció és Epic-zárás
 
-- **Státusz:** **PREPARED** (2026-08-01, tervezési baseline: `main` @ `eeb4f6d`)
+- **Státusz:** **PLANNING** (pre-flight mérve 2026-08-04, baseline: `main` @ `3a5762a`; eredeti PREPARED 2026-08-01, `eeb4f6d`)
 - **SDD-kör:** [`docs/sdd/04-epic-03-song-trainer.md`](../sdd/04-epic-03-song-trainer.md) Kör 22; §25–35
 - **Branch:** `codex/e03-r22-setlist-progress-epic-closure`
 - **Előfeltétel:** E03-R21 merge
@@ -90,6 +90,99 @@ ellentmondó acceptance vagy megkülönböztetésre alkalmatlan teszt esetén
 
 A pre-flight minden állítást újramér. Eltérésnél itt rögzíti a mért tényt, a
 feloldást és indokát. Üres vagy implicit revízióval nincs `PLANNING` státusz.
+
+### Pre-flight revízió (mérve 2026-08-04, `main` @ `3a5762a`, orchestrátor: Claude Opus 4.8)
+
+Az orchestrátor `rg`-vel újramérte az összes útvonalat, public szimbólumot,
+state-producert, recorder-inputot, resource-ownert és numerikus cellát. Mért
+tények és feloldások:
+
+1. **Fájllista-egyezés (22/22).** Minden `ÚJ`-nak jelölt allowed-path hiányzik,
+   minden `meglévő`/`R06`/`R21` jelölt jelen van (`legacy_setlist_adapter.dart`,
+   `song_result_screen.dart`, `song_trainer_providers.dart`, a három `public.dart`,
+   `tool/check_architecture.dart`). A `tool/ci/check_song_schema.dart` és
+   `check_song_fixture_licenses.dart` ténylegesen ÚJ. Nincs drift.
+
+2. **DRIFT — `progress/public.dart` a napi cél providert MA NEM exportálja.** A
+   §4 tábla „daily goal public bridge"-nek nevezi, de a barrel (mérve) csak a
+   practice-log contractot exportálja (`practice_entry`, `practice_stats`,
+   `practice_log_provider`). A `dailyGoalProvider` + `dailyGoalActiveSecondsProvider`
+   a `lib/features/progress/providers/daily_goal_provider.dart:33/50`-ben él, a
+   barrelen kívül. **Feloldás:** a §6 „daily goal … a tényleges public wiringen
+   integrált" előírás a `progress/public.dart` **additív** napi-cél exportját
+   igényli (a fájl már az allowed-listán van, §4 „additív export" klauzula alá
+   esik — NINCS scope-tágítás). Trainer-oldali napi-cél másolat és közvetlen
+   `progress/providers/...` import TILOS.
+
+3. **`streak/public.dart` a kredit-belépőt MÁR exportálja.** `StreakController.recordPracticeToday([DateTime? now])`
+   (`providers/streak_provider.dart:23`) a barrelen keresztül elérhető; nincs
+   külön „eligibility" szimbólum → az eligibility **hívó-oldali döntés**:
+   playback-only Performance **nem hívja** (streak credit 0), scored Practice
+   igen. Nincs új export szükséglet, nincs drift.
+
+4. **Resource-owner: a mic-lease egyetlen `.acquire`-elője a `MicCapture`**
+   (`lib/core/audio/mic_capture.dart:82`; az egyetlen `.acquire(` a
+   song_trainer+core/audio úton). A matrix „Practice vs Performance mic policy
+   külön" cellája így mérendő: Performance (playback-only) **nem konstruál
+   scoring gateway-t** → mic 0; Practice a meglévő injektált gateway-en fut (a
+   gateway sosem `acquire`-el). A réteg-diagram alapján feltételezni tilos volt;
+   a mért lánc megerősíti ADR 0128 §2 / 0129 §2 döntését.
+
+5. **State-producer / terminal-commit.** A `SongTrainerStatus` enum
+   (`application/trainer/song_trainer_state.dart:8`) a fázisforrás; a terminal
+   progress-commit idempotenciáját az R21 `SongProgressCommitter` (exactly-once
+   idempotency key, ADR 0129) MÁR adja. A „duplicate terminal callback → egy
+   record/daily/streak/history commit" cella ezen a kulcson mérendő, nem az
+   átmenettáblán.
+
+6. **Legacy adapter perzisztencia.** A `legacy_setlist_adapter.dart` (R06/ADR 0116)
+   doc-commentje szerint MA „never persists anything". R22 a perzisztens V2
+   setlist-mappingre terjeszti ki (`file_setlist_repository` + `setlist_repository`
+   contract), az ADR 0116 lossless order/duplicate/missing-skip contractjának
+   megtartásával.
+
+7. **ADR.** A körnek nem volt előre kiosztott ADR-je; az orchestrátor a
+   pre-flightban megírta az **[ADR 0130](../adr/0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md)**-t
+   (Setlist V2, revision-aware progress, Epic-zárás boundary). Ez orchestrátor
+   pre-flight artefaktum — **NEM implementer-diff, NEM a TOML `allowed_paths`-on**
+   (R20/R21 konvenció).
+
+A revízió a fájllistát nem tágítja: a 2. pont feloldása a már listázott
+`progress/public.dart` additív exportja. A `PLANNING` státusz ezzel megadva.
+
+### Pre-flight revízió — 2. addendum (2026-08-04, implementer-STOP feloldása, orchestrátor: Claude Opus 4.8)
+
+**Kiváltó implementer-STOP (`status=stopped`, head `3f4dabd`):** „a MusicXML/MXL/
+MIDI/native fixtureök provenance/licence metadata nélküliek; a szükséges fixture
+manifest nincs az `allowed_paths` listán." A Codex addigra zölden leszállította a
+V2 domain/data/application/progress szeletet + 14 megkülönböztető tesztet (WIP
+commit `9fa6ed6`), és a fixture-provenance gate-nél állt meg.
+
+**Mért tények (orchestrátor, `main` @ `3a5762a`):**
+
+- Az import fixtureök léteznek `test/fixtures/song_trainer/{musicxml,mxl,midi,guitar_pro,native,legacy}/` alatt (import-körök #95/#101/#103).
+- A **Guitar Pro fixtureök provenance-a MÁR dokumentált**: `test/fixtures/song_trainer/guitar_pro/README.md` tábla — köztük EGY harmadik-feles, **MPL-2.0** licencű fixture (`minimal_gpx.gpx`, alphaTab commit `a186437…`), SHA-256-tal.
+- A musicxml/midi/mxl/native/legacy fixtureökben **nincs beágyazott copyright/composer/rights/creator** (mérve: `grep -riE "copyright|rights|composer|<creator"` → üres) → projekt-szerzőségű szintetikus teszt-fixtureök, harmadik-feles zenei tartalom nélkül.
+
+**Feloldás (NEM scope-tágítás, NEM új fájl):** a fixture-provenance/licence gate
+(`tool/ci/check_song_fixture_licenses.dart` — MÁR az allowed-listán, ÚJ) a
+provenance-manifesztet **inline `const` Dart-adatként hordozza a saját fájljában**;
+külön manifeszt-fájl (JSON) TILOS és felesleges. A gate fixture-önként rögzíti a
+`{provenance, licence, sha256}` hármast, és géppel ellenőrzi:
+(a) minden manifeszt-bejegyzés fixture-e létezik a lemezen;
+(b) minden lemezen lévő import-fixture szerepel a manifesztben (nincs
+provenance nélküli fixture — ez a gate valódi éle);
+(c) minden fixture SHA-256-ja egyezik a manifeszttel (a manifeszt nem sodródhat
+csendben).
+A GP-bejegyzések a README tábláját (az MPL-2.0 gpx-et is) **szó szerint**
+tükrözik; a többi formátum bejegyzése „project-authored synthetic test fixture,
+no third-party musical content" a mért tény alapján. Így a teljes provenance-
+evidencia az engedélyezett fájlokon belül marad — nincs H3 tilos-zóna-feloldás.
+
+A `check_song_schema.dart` schema-snapshot gate szintén inline/tracked
+snapshotra dolgozik az allowed-listás fájlokon belül (nincs listán kívüli
+snapshot-fájl). A folytatás ugyanezen a branchen, ugyanezzel a motorral (Codex)
+megy, a fenti feloldással.
 
 ## 1. Cél
 
@@ -237,12 +330,83 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Állapot: IMPLEMENTED, LOCAL GATE GREEN (2026-08-04).** A host inotify-limit
+feloldása után a kötelező `round-gate.sh` egy futásban zöld. A gate az R21-ből
+maradt playback-only provider regressziót is felfedte: az ág korábban
+feltétlenül feloldotta a Practice History storage-láncát, noha a
+`SongProgressCommitter` csak scored `PracticeSessionResult`-ra vonatkozik. A
+provider ezért csak scored compilationnél olvassa a committert. Ez local-gate
+evidence, nem release- vagy review-approval.
+
+Módosított fájlok és tényleges tartalmuk:
+
+- `application/progress/song_progress_aggregator.dart` és
+  `application/setlists/setlist_session_controller.dart`: a meglévő V2
+  progress/session boundary analyzer-tiszta konstruktor- és hibaág-kezelése.
+- `application/song_trainer_providers.dart`: playback-only compilationnél nem
+  oldja fel a Practice History storage-t igénylő `SongProgressCommitter`-t;
+  scored módban a korábbi terminal commit út változatlan.
+- `data/local/file_setlist_repository.dart` és
+  `data/local/file_song_progress_repository.dart`: az atomikus tároló hibakezelő
+  ágai; a schema-gate által figyelt encode/decode slice változatlan.
+- `presentation/screens/setlist_list_screen_v2.dart`: windowolt Setlist V2 lista
+  és szerkesztő; `setlist_session_screen.dart`: Practice/Performance session
+  felület, ahol Performance nem hívja a lusta scoring-runner factoryt;
+  `song_result_screen.dart`: progress- és setlist-eredménykártyák.
+- `app_en.arb` és `app_hu.arb`: minden új látható szöveg lokalizációja;
+  `flutter gen-l10n` futott.
+- `tool/ci/check_song_schema.dart`: hat persisted schema-source inline hash
+  snapshotja; `tool/ci/check_song_fixture_licenses.dart`: a 30 import-fixture
+  inline provenance/licence/SHA-256 manifestje, a Guitar Pro README szó szerinti
+  MPL-2.0 provenance-szövegével.
+- `.github/workflows/build-apk.yml`: a két új Song CI gate a shared Flutter
+  quality gate után; az architecture guard nem igényelt enyhítést.
+- `setlist_session_controller_test.dart` és
+  `import_security_suite_test.dart`: a megkülönböztető UI/Performance és
+  hibaág regressziók, illetve analyzer-tiszta tesztforma.
+- `README.md`, `docs/sdd/00-index.md`,
+  `docs/sdd/epic-03-completion-report.md`,
+  `docs/execution/06-requirements-traceability-matrix.md`, `HANDOFF.md`: csak
+  mért capability evidence és a nyitott release blockerek.
+
+RED→GREEN mérce: a kibővített session-controller teszt kezdetben a még hiányzó
+Setlist képernyők és result inputok miatt fordítási hibával piros volt; az
+implementáció után az alábbi célzott futás 18 teszttel zöld:
+
+```text
+flutter test test/features/song_trainer/application/setlists/setlist_session_controller_test.dart \
+  test/features/song_trainer/application/progress/song_progress_test.dart \
+  test/features/song_trainer/data/local/file_setlist_repository_test.dart \
+  test/features/song_trainer/integration/legacy_setlist_migration_test.dart \
+  test/features/song_trainer/integration/song_progress_public_integration_test.dart \
+  test/features/song_trainer/data/local/song_progress_wiring_test.dart \
+  test/features/song_trainer/security/import_security_suite_test.dart \
+  test/features/song_trainer/performance/long_song_performance_test.dart \
+  test/property/song_progress_property_test.dart
+```
+
+Tényleges további parancsok és eredmények:
+
+```text
+flutter gen-l10n
+  exit 0
+dart run tool/ci/check_song_schema.dart
+  Song schema snapshot OK (6 persisted schema sources).
+dart run tool/ci/check_song_fixture_licenses.dart
+  Song fixture provenance OK (30 fixtures).
+tools/round-gate.sh test/features/song_trainer test/features/songs test/features/practice test/property
+  format: ZÖLD (862 files, 0 changed)
+  analyze: ZÖLD (No issues found)
+  test test/features/song_trainer: ZÖLD (465 passed, 1 documented skip)
+  test test/features/songs: ZÖLD (49 passed)
+  test test/features/practice: ZÖLD (902 passed, 1 documented skip)
+  test test/property: ZÖLD
+  architecture: ZÖLD (12 allowlisted deviation)
+```
+
+A korábbi két analyzer-futás a mért 125/128 inotify-kimerülés miatt `errno=24`
+hibával állt le; ez a host-limit feloldása után nem ismétlődött. A teljes Flutter
+suite, randomizált property gate, exact-head CI/APK és a valódi device checklist
+nem futott: ezek az orchestrátor feladatai és továbbra is release evidence-ek.
 
 ## 11. Review — a független reviewer tölti ki
-
-Tervezett review: `docs/reviews/e03-r22-setlist-progress-epic-closure-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.

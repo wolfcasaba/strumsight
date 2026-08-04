@@ -11,15 +11,19 @@
 ///   - Missing references are SKIPPED, not thrown, and reported through
 ///     [LegacyMigrationCode.setlistReferenceUnresolved].
 ///
-/// The adapter never persists anything (§3 "Kívül" — no V2 repository
-/// write in this round). It produces a list of [SongDocument]s in the
-/// same order as the legacy setlist, plus a single [LegacyMigrationReport]
-/// summarising the fidelity decisions the adapter took.
+/// [adapt] never persists anything. [persistV2] is the explicit E03-R22
+/// extension that writes the same order and unresolved references to a V2
+/// repository after the lossless projection has been established.
 library;
 
 import 'package:meta/meta.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 
 import '../../domain/models/song_document.dart';
+import '../../domain/models/song_id.dart';
+import '../../domain/models/song_setlist.dart';
+import '../../domain/repositories/setlist_repository.dart';
 import 'legacy_migration_report.dart';
 import 'legacy_song_reader.dart';
 
@@ -101,5 +105,44 @@ final class LegacySetlistAdapter {
       report: LegacyMigrationReport.from(issues),
       unresolvedIds: List<String>.unmodifiable(unresolved),
     );
+  }
+
+  /// Persist a V2 representation without dropping duplicate or unresolved
+  /// legacy entries. A missing source becomes a recoverable V2 item rather
+  /// than a thrown migration failure.
+  Future<AppResult<SongSetlist>> persistV2(
+    LegacySetlistRecord setlist,
+    Map<String, SongDocument> songbook, {
+    required SetlistRepository repository,
+    required DateTime migratedAt,
+  }) async {
+    final setlistId = SongIdValidator.safeFilename(setlist.id);
+    final items = <SongSetlistItem>[
+      for (var index = 0; index < setlist.songIds.length; index++)
+        SongSetlistItem(
+          id: '$setlistId-$index',
+          songId: SongId(setlist.songIds[index]),
+          initialAvailability: songbook.containsKey(setlist.songIds[index])
+              ? SetlistItemAvailability.ready
+              : SetlistItemAvailability.missingSong,
+        ),
+    ];
+    final v2 = SongSetlist(
+      id: setlistId,
+      name: setlist.name,
+      items: items,
+      createdAt: migratedAt.toUtc(),
+      updatedAt: migratedAt.toUtc(),
+    );
+    final saved = await repository.save(v2);
+    if (saved.isFailure) {
+      return AppResult<SongSetlist>.failure(
+        StorageFailure(
+          code: 'legacySetlistAdapter.persist',
+          cause: saved.failureOrNull,
+        ),
+      );
+    }
+    return AppResult<SongSetlist>.success(v2);
   }
 }

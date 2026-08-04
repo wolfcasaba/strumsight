@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
 import 'package:strumsight/features/practice/public.dart';
+import 'package:strumsight/features/progress/public.dart' as progress;
 
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
@@ -43,11 +44,15 @@ import '../data/importers/mxl_importer.dart';
 import '../data/importers/song_importer.dart';
 import '../data/local/file_song_asset_repository.dart';
 import '../data/local/file_song_repository.dart';
+import '../data/local/file_setlist_repository.dart';
+import '../data/local/file_song_progress_repository.dart';
 import '../data/local/in_memory_song_repository.dart';
 import '../data/local/song_repository_recovery.dart';
 import '../data/migration/song_migration_version_store.dart';
 import '../domain/repositories/song_asset_repository.dart';
 import '../domain/repositories/song_repository.dart';
+import '../domain/repositories/setlist_repository.dart';
+import '../domain/repositories/song_progress_repository.dart';
 import '../domain/models/song_id.dart';
 import '../domain/models/song_asset_reference.dart';
 import 'migration/song_migration_state.dart';
@@ -58,11 +63,15 @@ import 'trainer/song_practice_compiler.dart';
 import 'trainer/song_progress_committer.dart';
 import 'trainer/song_resume_repository.dart';
 import 'trainer/song_trainer_controller.dart';
+import 'progress/song_progress_aggregator.dart';
+import 'setlists/setlist_controller.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// song tree. The directory MUST exist before [FileSongRepository]
 /// opens it; the providers below create it lazily.
 const String songTrainerRootDirectoryName = 'songs';
+const String _setlistsDirectoryName = 'setlists';
+const String _songProgressDirectoryName = 'song-progress';
 
 /// Factory that resolves the production `songs/` directory by asking
 /// `path_provider` for the app-support directory. Test code overrides
@@ -130,6 +139,48 @@ final songRepositoryBootProvider = FutureProvider<SongRepository>((ref) async {
   await SongRepositoryRecovery.scan(root);
   return FileSongRepository.openAtDirectory(directory: root, clock: clock);
 });
+
+/// Override point for persistent Setlist V2 storage.
+final setlistRepositoryProvider = Provider<SetlistRepository>((ref) {
+  throw StateError(
+    'setlistRepositoryProvider must be overridden by the bootstrap layer.',
+  );
+});
+
+/// Opens the production Setlist V2 store below the Song Trainer root.
+final setlistRepositoryBootProvider = FutureProvider<SetlistRepository>((
+  ref,
+) async {
+  final root = await ref.watch(songTrainerProductionRootResolverProvider)();
+  return FileSetlistRepository.openAtDirectory(
+    directory: Directory(
+      '${root.path}${Platform.pathSeparator}$_setlistsDirectoryName',
+    ),
+  );
+});
+
+/// Application facade for Setlist list/editor flows.
+final setlistControllerProvider = Provider<SetlistController>((ref) {
+  return SetlistController(ref.watch(setlistRepositoryProvider));
+});
+
+/// Override point for persistent, revision-aware Song progress records.
+final songProgressRepositoryProvider = Provider<SongProgressRepository>((ref) {
+  throw StateError(
+    'songProgressRepositoryProvider must be overridden by the bootstrap layer.',
+  );
+});
+
+/// Opens the production Song progress store below the Song Trainer root.
+final songProgressRepositoryBootProvider =
+    FutureProvider<SongProgressRepository>((ref) async {
+      final root = await ref.watch(songTrainerProductionRootResolverProvider)();
+      return FileSongProgressRepository.openAtDirectory(
+        directory: Directory(
+          '${root.path}${Platform.pathSeparator}$_songProgressDirectoryName',
+        ),
+      );
+    });
 
 /// Provider for the production asset store. Mirrors [songRepositoryProvider].
 final songAssetRepositoryProvider = Provider<SongAssetRepository>((ref) {
@@ -356,7 +407,9 @@ final songTrainerControllerProvider = Provider.autoDispose
         compilation: compilation,
         backingAsset: inputs.backingAsset,
         practiceSession: practiceSession,
-        progressCommitter: ref.watch(songProgressCommitterProvider),
+        progressCommitter: definition == null
+            ? null
+            : ref.watch(songProgressCommitterProvider),
         resumeRepository: ref.watch(songResumeRepositoryProvider),
       );
       ref.onDispose(() => unawaited(controller.dispose()));
@@ -380,9 +433,41 @@ final songResumeRepositoryProvider = Provider<SongResumeRepository>((ref) {
   return _InMemorySongResumeRepository();
 });
 
-final songProgressSessionRecorderProvider = Provider<PracticeSessionRecorder>(
-  (_) => const NoopPracticeSessionRecorder(),
+final songProgressSessionRecorderProvider = Provider<PracticeSessionRecorder>((
+  ref,
+) {
+  return PracticeHistoryRecorder(
+    repository: ref.watch(practiceHistoryRepositoryProvider),
+    mapperFactory: () => PracticeSessionResultHistoryMapper(
+      now: ref.watch(songTrainerClockProvider),
+      detailEnabled: false,
+      modeCode: PracticeMode.chordProgression.code,
+      sourceCode: PracticeSource.song.code,
+      definitionId: 'song-trainer',
+      displayTitle: 'Song Trainer',
+      skillTags: const <String>['song-trainer'],
+    ),
+  );
+});
+
+/// Public daily-goal/streak bridge for scored Song Trainer terminals.
+final songPracticeCreditRecorderProvider = Provider<SongPracticeCreditRecorder>(
+  (ref) => PracticeSessionSongCreditRecorder(
+    recording: ref.watch(practiceSessionRecordingProvider),
+    dailyGoalMinutes: ref.watch(progress.dailyGoalProvider),
+  ),
 );
+
+/// Route-local terminal fan-out. Playback-only callers supply a record marked
+/// `playbackOnly`, which the credit recorder intentionally leaves uncredited.
+final songProgressTerminalIntegratorProvider =
+    Provider<SongProgressTerminalIntegrator>((ref) {
+      return SongProgressTerminalIntegrator(
+        progressRepository: ref.watch(songProgressRepositoryProvider),
+        historyCommitter: ref.watch(songProgressCommitterProvider),
+        creditRecorder: ref.watch(songPracticeCreditRecorderProvider),
+      );
+    });
 
 final class _InMemorySongResumeRepository implements SongResumeRepository {
   final Map<String, SongResumeCheckpoint> _store =

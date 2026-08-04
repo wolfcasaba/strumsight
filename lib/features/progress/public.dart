@@ -7,3 +7,6 @@ export 'model/practice_stats.dart';
 
 /// Append to / read the practice log (Live, Learn, Analyze, Streak).
 export 'providers/practice_log_provider.dart';
+
+/// Daily-goal setting and active-time rollup for feature integrations.
+export 'providers/daily_goal_provider.dart';

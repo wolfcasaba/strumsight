@@ -4,7 +4,21 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R21 merged — Trainer UI, loop, Speed Builder & results).**
+> (E03-R22 implementer handoff — local gate green).**
+> **E03-R22 IMPLEMENTÁLVA, LOCAL GATE ZÖLD, NEM MERGE-ELHETŐ:** a
+> `codex/e03-r22-setlist-progress-epic-closure` branch a Setlist V2/progress
+> slice, a két inline Song CI gate, a hozzáférhető windowolt UI és a mért Epic 3
+> evidence dokumentációjával készen áll független reviewra. A kötelező
+> `tools/round-gate.sh test/features/song_trainer test/features/songs
+> test/features/practice test/property` egy futásban zöld (format, analyze,
+> mind a négy célzott tesztcsomag és architecture). A playback-only Trainer
+> provider csak scored módban oldja fel a Practice History-t használó progress
+> committert; így nem nyit storage/mikrofonfüggő láncot. A schema gate 6
+> forrással, a fixture provenance gate 30 fixture-rel külön zöld. CI, APK,
+> független review és device checklist továbbra sincs: az orchestrátor
+> exact-head evidence-e szükséges. A részletes, nem aspirációs
+> evidence és valamennyi név szerinti release blocker:
+> [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
 > **E03-R21 KÉSZ (PR [#122](https://github.com/wolfcasaba/strumsight/pull/122),
 > squash `b6a5da9`, [ADR 0129](docs/adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md),
 > implementer **MiniMax M3**, orchestrátor **Claude Opus 4.8**, egy javító kör →
@@ -891,18 +905,10 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R22 — Setlist V2 / progress-history / epic-zárás** a következő product
-round (SDD Kör 22; a `docs/rounds/` brief a friss pre-flightnak a mai `main`-hez
-(`b6a5da9`) kell mérnie). Ez zárja az R21 idempotens `SongProgressCommitter`/
-`SongResumeRepository` contractját a végleges repository/Setlist integrációval.
-A `docs/execution/pipeline-queue.tsv` E03-R21 sorát a driver `done`-ra írja, a
-következő kört a pipeline indítja (ez a session nem). **Megjegyzés:** az R21
-post-merge lokális gate a boxon fd-kimerülésbe futott
-(`OS Error: Too many open files` az analysis-serverben — az analyzer maga
-„No issues found"-ot adott); ez box-hygiene (stale worktree/analysis-server
-watcherek), NEM kód-regresszió — a merge-evidencia az exact-SHA `154ecb9` zöld
-CI-run. A box takarításához ld. [[oracle-server-hygiene]].
-   E03-R21 (trainer UI/loop/speed/results) **KÉSZ** (ld. fejléc).
+0. **E03-R22 lezárási lánc — implementer után az orchestrátoré:** független
+   review, exact-head teljes Flutter/property/APK CI és a név szerinti device
+   checklist evidence szükséges a §13 szerinti merge előtt. Nincs új product
+   scope vagy feature-flag enable ebben a folytatásban.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
    migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
