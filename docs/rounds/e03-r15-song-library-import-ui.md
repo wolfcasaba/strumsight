@@ -38,6 +38,7 @@ allowed_paths = [
   "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
+  "test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart",
   "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
   "test/app/routing/app_router_test.dart",
   "docs/reviews/e03-r15-song-library-import-ui-review.md",
@@ -50,6 +51,7 @@ gate_tests = [
   "test/features/song_trainer/data/importers/file_picker_adapter_test.dart",
   "test/features/song_trainer/presentation/song_library_screen_test.dart",
   "test/features/song_trainer/presentation/song_import_screen_test.dart",
+  "test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart",
   "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
   "test/app/routing",
 ]
@@ -127,6 +129,20 @@ küszöböt vagy tesztet.
   GREEN. A feature flag defaultja, az allowlist/protected-path audit és minden
   gate változatlan marad.
 
+### 2026-08-04 — H2 self-heal CI scope-revízió (R14 guidance megőrzése)
+
+- A R15 `SongImportScreen` Consumer-alapú picker-flowra cserélte az R14
+  Guitar Pro offline útmutatásának statikus route-ját. Az exact-head CI mérése
+  szerint emiatt a két R14 guidance-regresszió `No ProviderScope found`
+  hibával elbukott, és a kötelező offline conversion-only UI el is tűnt.
+- Az érintett production screen már R15-engedélyezett. A kizárólagos új teszt
+  owner `test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart`;
+  a revision ezt felveszi a human/Router scope-ba és a célzott gate-be. A teszt
+  production-szerű `ProviderScope`-ot ad, miközben továbbra is a kötelező
+  guidance láthatóságát és szemantikáját méri.
+- A javítás nem változtat feature flaget, import limittet vagy CI-mércét: a
+  korábban zöld R14 követelményt őrzi meg a R15 picker-flow mellett.
+
 ## 1. Cél
 
 Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capability-őszinte, lokalizált felhasználói felülete trainer nélkül.
@@ -185,6 +201,7 @@ Indexalapú, lazy V2 Library és a biztonságos R10 importfolyamat teljes, capab
 | `test/features/song_trainer/data/importers/file_picker_adapter_test.dart` | ÚJ | platform object → ImportSourceFile boundary |
 | `test/features/song_trainer/presentation/song_library_screen_test.dart` | ÚJ | library states |
 | `test/features/song_trainer/presentation/song_import_screen_test.dart` | ÚJ | import state UI |
+| `test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart` | R14-ből | offline conversion-only guidance megőrzése Consumer import screen mellett |
 | `test/features/song_trainer/presentation/song_import_preview_screen_test.dart` | ÚJ | warning/fatal |
 | `test/app/routing/app_router_test.dart` | meglévő | flag routes |
 | `docs/reviews/e03-r15-song-library-import-ui-review.md` | ÚJ | mandatory independent review artifact |
@@ -216,6 +233,8 @@ E döntések nem lazíthatók azért, hogy egy teszt zöld legyen.
 - [ ] A preview a választott fájl nevét és a controller által átadott pontos
   byteLength méretét mutatja; ezt a controller célzott tesztje rögzíti.
 - [ ] HU/EN, 200% text scale, semantics/fókuszsorrend és route re-entry zöld.
+- [ ] Az R14 offline Guitar Pro conversion-only guidance a picker-flow mellett,
+  HU/EN és screen-reader semantic mellett is látható marad.
 
 ### Kötelező megkülönböztető mátrix
 
@@ -234,7 +253,7 @@ reference-számítással pirosra vált; bemásolt zöld output nem önálló evi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart test/features/song_trainer/data/importers/file_picker_adapter_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
+tools/round-gate.sh test/features/song_trainer/application/library/song_library_controller_test.dart test/features/song_trainer/application/song_trainer_providers_test.dart test/features/song_trainer/application/import/song_import_controller_test.dart test/features/song_trainer/data/importers/file_picker_adapter_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/app/routing
 ```
 
 Ez az egyetlen lokális záró gate: format → analyze → célzott test →

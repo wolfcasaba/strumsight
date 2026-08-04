@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/guitar_pro_conversion_guidance.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 void main() {
-  Widget app({Locale locale = const Locale('en')}) => MaterialApp(
-    locale: locale,
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    home: const SongImportScreen(),
+  Widget app({Locale locale = const Locale('en')}) => ProviderScope(
+    overrides: [
+      songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
+    ],
+    child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const SongImportScreen(),
+    ),
   );
 
   testWidgets('English guidance describes the offline conversion-only path', (

@@ -95,6 +95,7 @@ final class SongImportController {
           operationId: operation.id,
           preview: ImportPreview(
             displayName: source.displayName,
+            byteLength: source.byteLength,
             format: selection.importer.runtimeType.toString(),
             warnings: selection.probe.warnings,
             parts: selection.probe.parts,

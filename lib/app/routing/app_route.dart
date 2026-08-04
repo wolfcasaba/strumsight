@@ -20,6 +20,8 @@ abstract final class AppRoutes {
   static const String practiceSetup = '/practice/setup';
   static const String practiceSession = '/practice/session';
   static const String practiceResult = '/practice/result';
+  static const String songTrainerLibrary = '/song-trainer';
+  static const String songTrainerImport = '/song-trainer/import';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[

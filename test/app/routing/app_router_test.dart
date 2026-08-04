@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/analyze/public.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -17,6 +20,9 @@ import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
+import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
@@ -50,6 +56,7 @@ Future<_RouterHarness> _pumpRouter(
   WidgetTester tester, {
   required bool seen,
   bool accountEnabled = false,
+  bool songTrainerEnabled = false,
 }) async {
   final engine = FakeStrumEngine();
   final container = ProviderContainer(
@@ -61,6 +68,22 @@ Future<_RouterHarness> _pumpRouter(
       accountEnabledProvider.overrideWithValue(accountEnabled),
       tokenStoreProvider.overrideWithValue(FakeTokenStore()),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
+      songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: accountEnabled,
+            diagnosticsEnabled: true,
+            labModeAvailable: true,
+            songTrainerV2Enabled: songTrainerEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
     ],
   );
   final router = container.read(routerProvider);
@@ -147,6 +170,22 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(harness.router.state.uri.path, AppRoutes.live);
     expect(find.byType(LiveScreen), findsOneWidget);
+  });
+
+  testWidgets('flagged Song Trainer library route is registered', (
+    tester,
+  ) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      songTrainerEnabled: true,
+    );
+
+    harness.router.go(AppRoutes.songTrainerLibrary);
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, AppRoutes.songTrainerLibrary);
+    expect(find.byType(SongLibraryScreen), findsOneWidget);
   });
 
   testWidgets('successful login pops back to the calling settings screen', (

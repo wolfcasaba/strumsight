@@ -3429,3 +3429,20 @@ indexét használja, majd annak következő elemét választja. A
 `CI regression seed generates at least one expected chord change` teszt pontosan
 a CI-seed/trial példát rögzíti; a property-gate invariánsai és küszöbei
 változatlanok.
+
+## L93 — Android-first pickerhez a Gradle-kompatibilis plugin és a teljes függőségi gráf is contract (E03-R16 H2, 2026-08-04)
+
+**Mérés.** Az R15 javító branch exact-head APK futása
+[`30882632463`](https://github.com/wolfcasaba/strumsight/actions/runs/30882632463)
+a teljes Flutter quality gate után az `assembleRelease` lépésnél RED volt:
+`file_picker 3.0.4` a már eltávolított Gradle `jcenter()` metódust hívta. A
+közvetlen `file_picker 11.0.2` frissítés sem volt telepíthető, mert annak
+`win32 ^5` függősége ütközött a meglévő `wakelock_plus` `win32 ^6` contracttal.
+
+**Javítás és regresszió.** A production adapter az official Flutter
+`file_selector 1.1.0` API-jára váltott; ez Androidon natív single-file picket
+és a Flutter 3.44/Dart 3.12-es AGP-9 implementációt ad, miközben a fájlt a
+data boundary azonnal két olvasásra alkalmas `ImportSourceFile`-lá buffereli.
+A meglévő adapterteszt most `XFile`-ból ellenőrzi a név/méret/bájttartalom és
+a két egymást követő read megőrzését; a kötelező exact-head APK futás a
+platform Gradle regresszió bizonyítéka.

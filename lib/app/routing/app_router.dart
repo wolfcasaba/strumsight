@@ -23,6 +23,7 @@ import '../../features/settings/screens/settings_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
+import '../../features/song_trainer/public.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
@@ -47,6 +48,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .practiceEngineV2Enabled;
+  final songTrainerEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .songTrainerV2Enabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -136,6 +141,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceResult,
           builder: (_, _) => const PracticeResultFallback(),
+        ),
+      ],
+      if (songTrainerEnabled) ...[
+        GoRoute(
+          path: AppRoutes.songTrainerLibrary,
+          builder: (_, _) => const SongLibraryScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerImport,
+          builder: (_, _) => const SongImportScreen(),
         ),
       ],
     ],

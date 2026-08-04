@@ -4,6 +4,7 @@ import '../../data/importers/song_importer.dart';
 final class ImportPreview {
   ImportPreview({
     required this.displayName,
+    required this.byteLength,
     required this.format,
     List<String> warnings = const <String>[],
     List<ImportPartPreview> parts = const <ImportPartPreview>[],
@@ -11,6 +12,7 @@ final class ImportPreview {
        parts = List<ImportPartPreview>.unmodifiable(parts);
 
   final String displayName;
+  final int byteLength;
   final String format;
   final List<String> warnings;
   final List<ImportPartPreview> parts;
@@ -20,6 +22,7 @@ final class ImportPreview {
       identical(this, other) ||
       other is ImportPreview &&
           other.displayName == displayName &&
+          other.byteLength == byteLength &&
           other.format == format &&
           _sameList(other.warnings, warnings) &&
           _sameList(other.parts, parts);
@@ -27,6 +30,7 @@ final class ImportPreview {
   @override
   int get hashCode => Object.hash(
     displayName,
+    byteLength,
     format,
     Object.hashAll(warnings),
     Object.hashAll(parts),
