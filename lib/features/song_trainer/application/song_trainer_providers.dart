@@ -24,6 +24,9 @@ import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_providers.dart';
 import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
+import 'library/song_library_controller.dart';
+import 'library/song_library_state.dart';
+import '../data/importers/file_picker_adapter.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
 import '../data/importers/musicxml_importer.dart';
@@ -175,10 +178,34 @@ final songImportControllerProvider = Provider.autoDispose<SongImportController>(
   },
 );
 
+/// Production picker boundary. Widgets receive this adapter through the
+/// provider instead of calling a platform plugin directly.
+final songFilePickerAdapterProvider = Provider.autoDispose<FilePickerAdapter>((
+  ref,
+) {
+  const adapter = PlatformFilePickerAdapter();
+  ref.onDispose(() => unawaited(adapter.dispose()));
+  return adapter;
+});
+
 /// Reactive import state for presentation consumers. The state itself contains
 /// only phase, operation ID, preview metadata and a stable failure code.
 final songImportStateProvider = StreamProvider.autoDispose<SongImportState>(
   (ref) => ref.watch(songImportControllerProvider).states,
+);
+
+/// V2 Library state is sourced exclusively from repository index summaries.
+final songLibraryControllerProvider =
+    Provider.autoDispose<SongLibraryController>((ref) {
+      final controller = SongLibraryController(
+        ref.watch(songRepositoryProvider),
+      );
+      ref.onDispose(() => unawaited(controller.dispose()));
+      return controller;
+    });
+
+final songLibraryStateProvider = StreamProvider.autoDispose<SongLibraryState>(
+  (ref) => ref.watch(songLibraryControllerProvider).states,
 );
 
 /// Provider for the persistent [SongMigrationVersionStore] — the file-
