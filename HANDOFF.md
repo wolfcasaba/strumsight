@@ -4,7 +4,37 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R19 merged — Practice compiler & chord/rhythm trainer orchestration).**
+> (E03-R20 merged — Pitch observation & monophonic note scoring).**
+> **E03-R20 KÉSZ (PR [#121](https://github.com/wolfcasaba/strumsight/pull/121),
+> squash `4014f73`, [ADR 0128](docs/adr/0128-shared-pitch-observation-dsp-and-monophonic-note-scoring.md)):**
+> közös pitch-observation DSP boundary + tiszta, latency-kompenzált
+> `MonophonicNoteScorer`, a Tuner regressziója és polyphonic false scoring
+> nélkül. A pure `YinPitchDetector` + `noteForFrequency` a
+> `lib/core/audio/dsp/yin_pitch_detector.dart` alá emelve **változatlan
+> algoritmussal + defaultokkal** (4096/0.12/60), a Tuner fájl tiszta `export`-tal
+> delegál (bitre azonos Tuner viselkedés); `lib/core/audio/pitch/` —
+> `PitchObservation`/`PitchObservationConfig`/`PitchObservationGateway`;
+> `note_scoring_models.dart` (pitch/onset grade-ek, target/update/result) +
+> `monophonic_note_scorer.dart` (pure, latency-kompenzált, coverage/miss/extra,
+> polyphonic hard-disable); `live_pitch_observation_gateway.dart` **injektált**
+> mic/frame forrásból (soha nem `acquire`-el, a lease a `MicCapture`-nél marad);
+> `SongTrainerController` opcionális monofón scoring-session (pause/resume/seek/
+> finish leállítás, `midiPitch + capo` target); minimális `note_lane.dart`;
+> 20-fixture provenance-olt benchmark manifest + report. Implementer **Codex
+> (gpt-5.6-terra)**, orchestrátor/reviewer **Claude Opus 4.8**. Pre-flight §0.0
+> (mérve, baseline `bd4bb4a`): **R1** közös YIN + Tuner-paritás delegálással,
+> **R2** mic-lease a `MicCapture`-nél marad (gateway sosem `acquire`-el),
+> **R3** nincs song-trainer `AudioOwner` érték — production wiring R21-re
+> halasztva, `audio_session_lease.dart`/`audio_providers.dart` **tilos zóna**
+> (érintetlen), **R4** nincs `transposition` forrásmező → sounding target =
+> `midiPitch` (transposition tag 0). Nincs implementer-STOP. Independent review
+> **APPROVED** (izolált `/tmp` klón, saját gate exit 0, mutáció-próbák → central
+> invariánsok RED; 3 NOTE + 1 MINOR follow-up), CI exact head `5ee8fc4`
+> [run 30915808410](https://github.com/wolfcasaba/strumsight/actions/runs/30915808410)
+> zöld (full suite + property + APK); post-merge gate `main`-en zöld. Hívó
+> Trainer UI még nincs — production viselkedés flag/hívó nélkül változatlan.
+> **E03-R19 KÉSZ (PR [#120](https://github.com/wolfcasaba/strumsight/pull/120),
+> squash `e8dd74e`, [ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)):**
 > **E03-R19 KÉSZ (PR [#120](https://github.com/wolfcasaba/strumsight/pull/120),
 > squash `e8dd74e`, [ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)):**
 > `SongPracticeCompiler` (tiszta `SongDocument` track/range → `PracticeDefinition`,
@@ -641,13 +671,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #120](https://github.com/wolfcasaba/strumsight/pull/120), squash
-`e8dd74e` (E03-R19). [Build Android APK 30909553905](https://github.com/wolfcasaba/strumsight/actions/runs/30909553905)
-is **success** for exact branch `headSha` `23180bc` (full Flutter suite,
+`main` @ [PR #121](https://github.com/wolfcasaba/strumsight/pull/121), squash
+`4014f73` (E03-R20). [Build Android APK 30915808410](https://github.com/wolfcasaba/strumsight/actions/runs/30915808410)
+is **success** for exact branch `headSha` `5ee8fc4` (full Flutter suite,
 randomized property/coverage gate and development APK). The independent
 post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e03-r19-practice-compiler-chord-rhythm-review.md`](docs/reviews/e03-r19-practice-compiler-chord-rhythm-review.md).
-(Előző product-merge-ek: PR #119 / `27d45d6`, E03-R18; PR #118 / `168114a`, E03-R17.)
+[`e03-r20-pitch-observation-note-scoring-review.md`](docs/reviews/e03-r20-pitch-observation-note-scoring-review.md).
+(Előző product-merge-ek: PR #120 / `e8dd74e`, E03-R19; PR #119 / `27d45d6`, E03-R18.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first

@@ -3562,3 +3562,46 @@ kell"-t elfogadsz, mérd ki, MELYIK tengelyen pontoz/működik a cél-kontrakt
 egy pedig a pontozási tengely megmérésével feloldható volt, mind §0.0-revízióval,
 halt nélkül. Az orchestrátor prescriptív encoding-cookbookja (§0.0 R6) után az
 implementer egy futásra végigvitte a hat track-profilt.
+
+## L100 — Erőforrás-tulajdonlás mérése a tényleges hívási láncon, nem a réteg-diagramból (E03-R20, 2026-08-04)
+
+**Mérés.** Az E03-R20 briefje egy „közös lease-t használó" live pitch
+observation gatewayt írt elő, és a §22.3 SDD-szöveg is „ugyanazt az
+AudioSessionCoordinator lease-t használja". A pre-flight (prompt §1
+erőforrás-tulajdonlási szabály) a TÉNYLEGES hívási láncot mérte ki, nem a
+réteg-diagramot: a lease EGYETLEN megszerzője a `MicCapture._doStart`
+(`AudioSessionCoordinator.acquire`, `mic_capture.dart:82`); a mért analóg
+Practice scoring-út (`LivePracticeObservationGateway`) **nem birtokol** lease-t,
+a `StrumEngine` `LiveFrame`-jére iratkozik, a lease a `RealStrumEngine`
+`AudioOwner.live` MicCapture-jén marad. Ráadásul az `AudioOwner` enumnak
+(`audio_session_lease.dart:5`) NINCS song-trainer/pitch értéke, és sem az enum,
+sem a `createMicCapture` gazdája (`audio_providers.dart`) nem volt az
+`allowed_paths`-on.
+
+**Feloldás (§0.0 R2/R3, ADR 0128 D3).** A gateway **injektált** mic/frame
+forrásból fogyaszt és SOHA nem hív `acquire`-t; a „közös lease" acceptance
+injektált fake MicCapture/lease idempotens `start`/`stop`/`dispose`
+életciklusával igazolt. Új `AudioOwner` érték + a két core-fájl szerkesztése
+**tilos zóna** — a production provider-drótozás a Trainer UI-körre (R21)
+halasztva (R17–R19 „hívó UI/runner még nincs" mintája). **Tanulság:** ha egy
+brief erőforrást (lease/lock/handle) rendel egy réteghez, a `grep -rn "\.acquire("`
+a tényleges owner-láncon dönt; ha a mai owner egy másik réteg és az új réteg
+csak fogyasztó, akkor injektálj és halaszd a provider-drótozást — a réteg-
+diagram alapján hozzáadott új enum-érték/provider-edit csendes scope-tágítás
+lett volna (out-of-scope core fájl). A független review mutáció-próbával
+igazolta: a gateway nem `acquire`-el, a lease egyszeri acquire/egyszeri release.
+
+## L101 — Numerikus default kipinnelése: a tiszta-jelű fixture nem rögzíti a küszöböt (E03-R20, 2026-08-04)
+
+**Mérés.** Az E03-R20 review mutáció-próbája a közös YIN `threshold` defaultját
+0.12→0.20-ra állította, és EGYETLEN teszt sem lett piros — miközben a
+viselkedési paritás (`sampleRate/tauF` → `/(tauF+1)`) két tuner-tesztet
+azonnal pirosra váltott. Ok: a `tuner_analyzer` a defaulttal építi a detektort,
+de minden fixture tiszta tónus, amelynek CMNDF-dipje MINDKÉT küszöb (0.12 és
+0.20) alatt van, így a numerikus default értékét semmi nem rögzíti. **Tanulság:**
+egy „változatlan default" állítást tesztben bizonyítani csak marginális-jelű
+fixture-rel VAGY explicit default-assert-tel lehet; a tiszta-jelű regresszió a
+küszöb tág környezetében invariáns, tehát a küszöb pontos értékére nem
+diszkriminatív. NOTE-szintű follow-up (az algoritmus bitre azonos + re-export,
+a viselkedés őrzött), de a mintát jegyezd: numerikus küszöb-default → külön,
+a küszöbre érzékeny mérés kell, nem elég a fő-útvonal zöldje.
