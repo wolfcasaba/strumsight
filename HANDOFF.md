@@ -3,7 +3,19 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-03
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
+> (HEAL E03-R16/H2).** **HEAL E03-R16/H2:** the E03-R15 repair is merged as
+> [PR #111](https://github.com/wolfcasaba/strumsight/pull/111) (`5f76879`).
+> The first exact-head CI found a deterministic Epic 2 chord-change property
+> generator defect; [PR #112](https://github.com/wolfcasaba/strumsight/pull/112)
+> (`170e408`) fixes its label-index precondition with a pinned CI-seed
+> regression. The refreshed R15 APK then measured the obsolete `file_picker`
+> Gradle `jcenter()` dependency; R15 now uses official `file_selector` while
+> preserving its buffered import boundary. Exact-head CI
+> [30883474691](https://github.com/wolfcasaba/strumsight/actions/runs/30883474691)
+> is green for full Flutter suite, randomized property/coverage gates and APK.
+> E03-R16 may now restart in a fresh pipeline session. **Previous update:
+> 2026-08-03
 > (HEAL E03-R15/H3 preview scope-revízió).** **HEAL E03-R15/H3 (2026-08-04):**
 > the independent R15 review measured that SDD §27.3's mandatory file-size
 > preview could not be truthfully rendered: `ImportPreview` had no size field
