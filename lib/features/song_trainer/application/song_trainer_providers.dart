@@ -20,6 +20,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:strumsight/features/practice/public.dart';
 
+import '../../../core/foundation/app_failure.dart';
+import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/platform_providers.dart';
 import '../../../core/storage/key_value_store.dart';
@@ -53,6 +55,8 @@ import 'migration/song_storage_migrator.dart';
 import 'trainer/song_transport.dart';
 import 'trainer/song_transport_clock.dart';
 import 'trainer/song_practice_compiler.dart';
+import 'trainer/song_progress_committer.dart';
+import 'trainer/song_resume_repository.dart';
 import 'trainer/song_trainer_controller.dart';
 
 /// Sub-directory inside the app-support directory that owns the
@@ -352,7 +356,77 @@ final songTrainerControllerProvider = Provider.autoDispose
         compilation: compilation,
         backingAsset: inputs.backingAsset,
         practiceSession: practiceSession,
+        progressCommitter: ref.watch(songProgressCommitterProvider),
+        resumeRepository: ref.watch(songResumeRepositoryProvider),
       );
       ref.onDispose(() => unawaited(controller.dispose()));
       return controller;
     });
+
+/// Routed session progress committer. The single boundary that turns a
+/// terminal `PracticeSessionResult` into one persisted commit per
+/// (song, attempt) pair, regardless of how many producers race.
+final songProgressCommitterProvider = Provider<SongProgressCommitter>((ref) {
+  final committer = SongProgressCommitter(
+    sessionRecorder: ref.watch(songProgressSessionRecorderProvider),
+  );
+  ref.onDispose(() => unawaited(committer.dispose()));
+  return committer;
+});
+
+/// Resume-checkpoint repository. The in-memory default is replaced by a
+/// file-backed persistence layer in the R22 round.
+final songResumeRepositoryProvider = Provider<SongResumeRepository>((ref) {
+  return _InMemorySongResumeRepository();
+});
+
+final songProgressSessionRecorderProvider = Provider<PracticeSessionRecorder>(
+  (_) => const NoopPracticeSessionRecorder(),
+);
+
+final class _InMemorySongResumeRepository implements SongResumeRepository {
+  final Map<String, SongResumeCheckpoint> _store =
+      <String, SongResumeCheckpoint>{};
+
+  String _key(SongId songId, int revision) => '${songId.value}@$revision';
+
+  @override
+  Future<AppResult<SongResumeCheckpoint>> load({
+    required SongId songId,
+    required int revision,
+  }) async {
+    final exact = _store[_key(songId, revision)];
+    if (exact != null) {
+      return AppResult<SongResumeCheckpoint>.success(exact);
+    }
+    // Song id matches but a different revision was requested — explicit
+    // invalidation rather than a silent noCheckpoint, so the caller can
+    // distinguish "stale" from "never existed".
+    final otherRevision = _store.values
+        .where((checkpoint) => checkpoint.songId == songId)
+        .firstOrNull;
+    if (otherRevision != null) {
+      return AppResult<SongResumeCheckpoint>.failure(
+        const StorageFailure(code: SongResumeFailureCode.revisionMismatch),
+      );
+    }
+    return AppResult<SongResumeCheckpoint>.failure(
+      const StorageFailure(code: SongResumeFailureCode.noCheckpoint),
+    );
+  }
+
+  @override
+  Future<AppResult<void>> save(SongResumeCheckpoint checkpoint) async {
+    _store[_key(checkpoint.songId, checkpoint.songRevision)] = checkpoint;
+    return const AppResult<void>.success(null);
+  }
+
+  @override
+  Future<AppResult<void>> discard({
+    required SongId songId,
+    required int revision,
+  }) async {
+    _store.remove(_key(songId, revision));
+    return const AppResult<void>.success(null);
+  }
+}

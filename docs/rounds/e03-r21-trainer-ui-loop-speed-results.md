@@ -28,6 +28,7 @@ allowed_paths = [
   "lib/features/song_trainer/application/song_trainer_providers.dart",
   "lib/features/practice/public.dart",
   "lib/app/routing/app_router.dart",
+  "lib/app/routing/app_route.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/song_trainer/application/trainer/song_progress_committer_test.dart",
@@ -120,6 +121,22 @@ feloldásuk — **fájllista NEM tágul, csak jelentés-pontosítás**:
 5. **Route flag.** A trainer route a `FeatureFlags.songTrainerV2Enabled`
    (`feature_flags.dart`, minden környezetben `false`) mögött marad; feature-flag
    production rollout tilos (§3).
+
+6. **Route-konstansok — `app_route.dart` additív felvétele az engedélyezett
+   listára.** Mért tény: a route-ok a `GoRoute(path: AppRoutes.<x>, ...)` mintát
+   követik, és minden route-path-konstans az `AppRoutes` osztályban él
+   (`lib/app/routing/app_route.dart`), amelyre az `app_router.dart` hivatkozik.
+   A §4-ben engedélyezett „trainer/result route" bekötése az `app_router.dart`-ban
+   ezért mechanikusan megköveteli a session/result route-path-konstansokat az
+   `app_route.dart`-ban. Ez nem normatív döntés, hanem az EGYIK engedélyezett
+   fájl (`app_router.dart`) által kikényszerített minimális kísérő-módosítás,
+   ezért az orchestrátor a saját (még nem merge-elt) briefjének §0.0 revíziójával
+   felveszi a listára — **kizárólag a trainer session + result route-path
+   konstansok additív hozzáadására** (`songTrainerSession`, `songTrainerResult`);
+   `app_route.dart` minden más módosítása továbbra is tilos. Inline path-literál
+   az `app_router.dart`-ban NEM elfogadható (elrontaná a kódbázis konvencióját).
+   Az engedélyezett lista így egy fájllal bővül:
+   `lib/app/routing/app_route.dart`.
 
 ## 1. Cél
 

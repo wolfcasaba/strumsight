@@ -26,6 +26,10 @@ final class SongTrainerState {
     required this.transportState,
     this.practiceState,
     this.result,
+    this.loopIndex = 1,
+    this.maxLoops = 1,
+    this.backingRateSupported = false,
+    this.speedBuilderState,
   });
 
   const SongTrainerState.initial()
@@ -33,13 +37,33 @@ final class SongTrainerState {
       attemptId = 0,
       transportState = const SongTransportState(),
       practiceState = null,
-      result = null;
+      result = null,
+      loopIndex = 1,
+      maxLoops = 1,
+      backingRateSupported = false,
+      speedBuilderState = null;
 
   final SongTrainerStatus status;
   final int attemptId;
   final SongTransportState transportState;
   final PracticeSessionState? practiceState;
   final SongTrainerResult? result;
+
+  /// 1-based loop index of the currently-running attempt. `2/5` means the
+  /// second iteration of five.
+  final int loopIndex;
+
+  /// Total loop count requested for the session (1 == single pass).
+  final int maxLoops;
+
+  /// Whether the backing playback advertises a [PlaybackCapabilities.supportsRate]
+  /// covering the current speed. When false, the speed control is rendered
+  /// as disabled with a reason.
+  final bool backingRateSupported;
+
+  /// Optional Speed Builder state mirror. `null` when the session does not
+  /// use Speed Builder.
+  final SpeedBuilderState? speedBuilderState;
 
   SongTrainerState copyWith({
     SongTrainerStatus? status,
@@ -48,6 +72,12 @@ final class SongTrainerState {
     PracticeSessionState? practiceState,
     bool clearPracticeState = false,
     SongTrainerResult? result,
+    bool clearResult = false,
+    int? loopIndex,
+    int? maxLoops,
+    bool? backingRateSupported,
+    SpeedBuilderState? speedBuilderState,
+    bool clearSpeedBuilderState = false,
   }) => SongTrainerState(
     status: status ?? this.status,
     attemptId: attemptId ?? this.attemptId,
@@ -55,7 +85,13 @@ final class SongTrainerState {
     practiceState: clearPracticeState
         ? null
         : (practiceState ?? this.practiceState),
-    result: result ?? this.result,
+    result: clearResult ? null : (result ?? this.result),
+    loopIndex: loopIndex ?? this.loopIndex,
+    maxLoops: maxLoops ?? this.maxLoops,
+    backingRateSupported: backingRateSupported ?? this.backingRateSupported,
+    speedBuilderState: clearSpeedBuilderState
+        ? null
+        : (speedBuilderState ?? this.speedBuilderState),
   );
 }
 

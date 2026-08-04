@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:strumsight/core/audio/pitch/pitch_observation.dart';
@@ -8,8 +10,12 @@ import 'package:strumsight/features/practice/public.dart';
 import '../../domain/models/song_asset_reference.dart';
 import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_event.dart';
+import '../../domain/models/song_id.dart';
 import '../../domain/models/note_scoring_models.dart';
+import '../../domain/models/trainer_range.dart';
 import '../../domain/services/monophonic_note_scorer.dart';
+import 'song_progress_committer.dart';
+import 'song_resume_repository.dart';
 import 'song_practice_compiler.dart';
 import 'song_result_mapper.dart';
 import 'song_trainer_state.dart';
@@ -31,8 +37,16 @@ final class SongTrainerController {
     this.backingAsset,
     PracticeSessionController? practiceSession,
     MonophonicPitchSession? pitchSession,
+    SongProgressCommitter? progressCommitter,
+    SongResumeRepository? resumeRepository,
+    int maxLoops = 1,
+    double? targetSpeed,
   }) : _practiceSession = practiceSession,
-       _pitchSession = pitchSession {
+       _pitchSession = pitchSession,
+       _progressCommitter = progressCommitter,
+       _resumeRepository = resumeRepository,
+       _maxLoops = maxLoops < 1 ? 1 : maxLoops,
+       _targetSpeed = targetSpeed {
     if (compilation.isPlaybackOnly != (practiceSession == null)) {
       throw ArgumentError(
         'Scored compilations require a Practice session; playback-only ones do not.',
@@ -58,6 +72,8 @@ final class SongTrainerController {
         status: _statusForPractice(practice.state.status),
       );
     }
+    _refreshBackingRateSupport();
+    _state = _state.copyWith(maxLoops: _maxLoops);
   }
 
   final SongTransport transport;
@@ -65,6 +81,10 @@ final class SongTrainerController {
   final SongAssetReference? backingAsset;
   final PracticeSessionController? _practiceSession;
   final MonophonicPitchSession? _pitchSession;
+  final SongProgressCommitter? _progressCommitter;
+  final SongResumeRepository? _resumeRepository;
+  final int _maxLoops;
+  final double? _targetSpeed;
   final StreamController<SongTrainerState> _states =
       StreamController<SongTrainerState>.broadcast();
   final StreamController<SongTrainerEffect> _effects =
@@ -84,6 +104,7 @@ final class SongTrainerController {
   SongTrainerState _state = const SongTrainerState.initial();
   int _operationId = 0;
   int _attemptId = 0;
+  int _loopIndex = 1;
   int? _finalizedOperationId;
   bool _backingPrepared = false;
   bool _disposed = false;
@@ -94,6 +115,7 @@ final class SongTrainerController {
   Stream<NoteScoringResult> get noteResults => _noteResults.stream;
   SongTrainerState get state => _state;
   bool get isPlaybackOnly => compilation.isPlaybackOnly;
+  int get maxLoops => _maxLoops;
 
   /// Prepares the optional backing transport and the scored Practice session.
   Future<void> prepare({SongAssetReference? backingAsset}) async {
@@ -211,6 +233,49 @@ final class SongTrainerController {
     _syncPracticeState();
   }
 
+  /// Re-enters a paused session using a checkpoint previously saved by the
+  /// resume repository. The attempt counter is rolled forward to the value
+  /// recorded by the checkpoint (subsequent `seek` calls continue to bump it).
+  void hydrateAttempt(SongResumeCheckpoint checkpoint) {
+    if (_disposed) return;
+    _attemptId = checkpoint.attemptCounter;
+    _loopIndex = checkpoint.attemptCounter.clamp(1, _maxLoops);
+    _emit(_state.copyWith(attemptId: _attemptId, loopIndex: _loopIndex));
+  }
+
+  /// Re-applies a saved checkpoint on re-entry. The returned future resolves
+  /// once the relevant state has been rehydrated.
+  Future<void> reenter({required SongId songId, required int revision}) async {
+    final repo = _resumeRepository;
+    if (repo == null) return;
+    final loaded = await repo.load(songId: songId, revision: revision);
+    if (loaded.isFailure || _disposed) return;
+    hydrateAttempt(loaded.valueOrNull!);
+  }
+
+  /// Persists the current attempt counter + resume position to the resume
+  /// repository. Failures are swallowed at the boundary — the caller already
+  /// has a dedicated commit / progress path for the scorer.
+  Future<void> persistResume({
+    required SongId songId,
+    required int revision,
+    required MeasureRange range,
+    required Duration resumedFrom,
+  }) async {
+    final repo = _resumeRepository;
+    if (repo == null || _disposed) return;
+    await repo.save(
+      SongResumeCheckpoint(
+        songId: songId,
+        songRevision: revision,
+        range: range,
+        attemptCounter: _attemptId,
+        resumedFrom: resumedFrom,
+        recordedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
@@ -220,6 +285,7 @@ final class SongTrainerController {
     await _transportSubscription.cancel();
     await _transportEffectsSubscription.cancel();
     await _practiceSession?.dispose();
+    await _progressCommitter?.dispose();
     await _states.close();
     await _effects.close();
     await _noteUpdates.close();
@@ -309,12 +375,38 @@ final class SongTrainerController {
         references: compilation.eventReferences,
       );
       _finalizedOperationId = operation;
+      final idempotencyKey = _progressIdempotencyKey(result);
+      await _progressCommitter?.commit(
+        idempotencyKey: idempotencyKey,
+        sessionResult: result,
+      );
       _emit(
         _state.copyWith(status: SongTrainerStatus.completed, result: mapped),
       );
       _emitEffect(NavigateToSongTrainerResult(mapped));
+      if (_loopIndex < _maxLoops) {
+        _loopIndex++;
+        _attemptId++;
+        _emit(_state.copyWith(loopIndex: _loopIndex, attemptId: _attemptId));
+      }
       return;
     }
+  }
+
+  String _progressIdempotencyKey(PracticeSessionResult sessionResult) {
+    final practiceId = sessionResult.id;
+    final progressAttempt = _attemptId;
+    return 'song|${compilation.eventReferences.values.firstOrNull?.songId.value ?? 'unknown'}'
+        '|attempt|$progressAttempt'
+        '|practice|$practiceId';
+  }
+
+  void _refreshBackingRateSupport() {
+    final speed = _targetSpeed ?? 1.0;
+    final capabilities = transport.player.capabilities;
+    final supported =
+        capabilities.canChangeRate && capabilities.supportsRate(speed);
+    _state = _state.copyWith(backingRateSupported: supported);
   }
 
   void _syncPracticeState() {

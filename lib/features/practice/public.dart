@@ -68,9 +68,21 @@ export 'domain/model/scoring_profile.dart'
 export 'domain/model/tempo.dart' show Tempo;
 export 'domain/model/beat_time_converter.dart' show BeatTimeConverter;
 export 'domain/repository/practice_session_recorder.dart'
-    show PracticeSessionRecorder;
+    show NoopPracticeSessionRecorder, PracticeSessionRecorder;
 export 'domain/service/practice_direction_scorer.dart'
     show PracticeDirectionScorer;
 export 'domain/service/practice_event_matcher.dart' show PracticeEventMatcher;
 export 'domain/service/practice_target_compiler.dart'
     show compilePracticeTarget;
+// E03-R21 — Speed Builder is the Song Trainer's only public contract for
+// step-up tempo policy. The trainer imports these types through this public
+// barrel; a trainer-owned copy is forbidden by the §3 architectural rule.
+export 'domain/model/speed_builder_policy.dart' show SpeedBuilderPolicy;
+export 'domain/model/speed_builder_state.dart'
+    show
+        AdaptiveSuggestion,
+        AdaptiveSuggestionKind,
+        AdaptiveSuggestionReason,
+        SpeedBuilderState,
+        SpeedBuilderStatus;
+export 'domain/service/speed_builder_engine.dart' show SpeedBuilderEngine;
