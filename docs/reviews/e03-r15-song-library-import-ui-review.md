@@ -20,6 +20,13 @@ The clone regenerated Flutter localization output, reran the brief's exact
 Every changed path is in brief §4/`ai-router.allowed_paths`; the merge base
 already contains the H3 scope revision for the two preview-contract owners.
 
+The first exact-head CI run ([30880354404](https://github.com/wolfcasaba/strumsight/actions/runs/30880354404)) exposed a separate merge regression: the R15
+Consumer import screen had replaced R14's mandatory offline Guitar Pro
+guidance. The unchanged R14 test failed twice, first because it needed the
+production `ProviderScope`, then because the guidance itself was absent. The
+H2 §0.0 scope revision authorizes that exact test owner; the repair retains the
+guidance below the picker action and the focused tests are green.
+
 ## Closed findings
 
 | Finding | Status | Evidence |
@@ -27,6 +34,7 @@ already contains the H3 scope revision for the two preview-contract owners.
 | F1 — source must be reopenable | CLOSED | `PlatformFilePickerAdapter.fromPlatformFile` buffers only at the data boundary and exposes a fresh stream per read. The regression feeds a real single-subscription `StreamController` and consumes `openRead()` twice. An isolated mutation replacing the stream factory with `Stream.empty` made that test fail (`Expected: [1, 2, 3]; Actual: []`), then the clean clone passed it. |
 | F2 — source filter and sort controls | CLOSED | Accessible localized source and sort dropdowns update `SongLibraryQuery`. The widget regression filters MIDI to one visible summary, restores all sources, then proves title order with item positions. |
 | F3 — truthful preview file size | CLOSED | `ImportPreview` now retains the source scalar `byteLength`, the controller transfers it, and the preview renders the localized byte count. Controller and preview-widget regressions assert the value. |
+| F4 — preserve R14 Guitar Pro guidance | CLOSED | The exact CI failure was reproduced locally. `SongImportScreen` now retains `GuitarProConversionGuidance` beside the picker flow, and the existing HU/EN semantic regression runs inside an explicit production-style `ProviderScope`. |
 
 ## Acceptance criteria
 
@@ -46,7 +54,7 @@ already contains the H3 scope revision for the two preview-contract owners.
 | Fresh-clone analyze | green |
 | Fresh-clone targeted tests + architecture | green |
 | Scope audit + `git diff --check` | green after this report's whitespace normalization |
-| CI full suite, property gate, APK | pending exact final head dispatch |
+| CI full suite, property gate, APK | first run failed on F4; rerun required for the final repaired head |
 
 ## Merge decision
 

@@ -7,6 +7,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/import/song_import_effect.dart';
 import '../../application/import/song_import_state.dart';
 import '../../application/song_trainer_providers.dart';
+import '../widgets/guitar_pro_conversion_guidance.dart';
 import 'song_import_preview_screen.dart';
 
 /// Presentation owner of the picker effect; the controller retains no plugin
@@ -57,10 +58,11 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.songImportTitle)),
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Center(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 if (active) ...<Widget>[
@@ -81,6 +83,10 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
                     onPressed: controller.cancel,
                     child: Text(l10n.songImportCancel),
                   ),
+                if (!active) ...<Widget>[
+                  const SizedBox(height: 32),
+                  const GuitarProConversionGuidance(),
+                ],
               ],
             ),
           ),
