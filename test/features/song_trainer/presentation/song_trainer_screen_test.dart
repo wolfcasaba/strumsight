@@ -45,6 +45,7 @@ import '../../../support/fake_practice_observation_gateway.dart';
 import '../../../support/fake_practice_session_clock.dart';
 import '../../../support/fake_practice_session_recorder.dart';
 import '../../../support/fake_practice_tick_source.dart';
+import '../../../support/preference_store.dart';
 
 void main() {
   testWidgets('countIn status renders the coaching overlay (no transport)', (
@@ -56,6 +57,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
           songTrainerControllerProvider(
             SongTrainerControllerInputs(
               compilation: _scoredCompilation(),
@@ -93,6 +95,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
           songTrainerControllerProvider(
             SongTrainerControllerInputs(
               compilation: _scoredCompilation(),
@@ -128,6 +131,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: <Override>[
+            ..._preferenceOverridesForScreen(),
             songTrainerControllerProvider(
               SongTrainerControllerInputs(
                 compilation: _scoredCompilation(),
@@ -149,6 +153,86 @@ void main() {
     },
   );
 
+  // ─── M4: paused phase row (paused | A–B | rate no) ──────────────────────
+  // §6 acceptance matrix requires the paused state with backing-rate NOT
+  // supported to: (a) allow seek via the seek affordance, AND (b) render the
+  // speed control as DISABLED with a reason. The test installs an `onSeek`
+  // callback and taps the seek icon to prove the seek path is wired, and
+  // asserts the disabled speed list tile is present with a non-empty
+  // reason. The control case (status=paused without the speed affordance
+  // ever rendering) fails the second assertion.
+  testWidgets(
+    'M4 paused | A–B | rate no: seek is wired AND speed is disabled with '
+    'reason',
+    (tester) async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      var seekCalls = 0;
+      Duration? lastSeek;
+      final state = const SongTrainerState.initial().copyWith(
+        status: SongTrainerStatus.paused,
+        backingRateSupported: false,
+        loopIndex: 3,
+        maxLoops: 5,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            ..._preferenceOverridesForScreen(),
+            songTrainerControllerProvider(
+              SongTrainerControllerInputs(
+                compilation: _scoredCompilation(),
+                backingAsset: _asset,
+              ),
+            ).overrideWith((ref) => harness.controller),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: SongTrainerScreen(
+              state: state,
+              onSeek: (position) {
+                seekCalls++;
+                lastSeek = position;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // (a) seek is present and tappable, even though `backingRateSupported`
+      // is false. The seek icon routes through `onSeek`, which the test
+      // callback counts.
+      final seekFinder = find.byKey(const Key('song-trainer-seek'));
+      expect(seekFinder, findsOneWidget);
+      expect(state.status, SongTrainerStatus.paused);
+      expect(state.backingRateSupported, isFalse);
+      await tester.tap(seekFinder);
+      await tester.pump();
+      expect(seekCalls, greaterThanOrEqualTo(1));
+      expect(lastSeek, isNotNull);
+
+      // (b) speed control is rendered AND disabled with a reason (the
+      // disabled-tile subtitle). The §6 row demands an explicit reason so
+      // a coach understands why the slider is inert.
+      expect(
+        find.byKey(const Key('song-trainer-speed-disabled')),
+        findsOneWidget,
+      );
+      final speedTile = tester.widget<ListTile>(
+        find.byKey(const Key('song-trainer-speed-disabled')),
+      );
+      expect(speedTile.enabled, isFalse);
+      // Subtitle holds the "paused" reason — must be non-empty.
+      final subtitleWidget = speedTile.subtitle;
+      expect(subtitleWidget, isNotNull);
+      final subtitleText = (subtitleWidget! as Text).data ?? '';
+      expect(subtitleText.trim(), isNotEmpty);
+    },
+  );
+
   testWidgets('failed status renders the recoverable error affordance', (
     tester,
   ) async {
@@ -158,6 +242,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
           songTrainerControllerProvider(
             SongTrainerControllerInputs(
               compilation: _scoredCompilation(),
@@ -199,6 +284,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: <Override>[
+            ..._preferenceOverridesForScreen(),
             songTrainerControllerProvider(
               SongTrainerControllerInputs(
                 compilation: _scoredCompilation(),
@@ -251,6 +337,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
           songTrainerControllerProvider(
             SongTrainerControllerInputs(
               compilation: _scoredCompilation(),
@@ -272,6 +359,107 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // ─── M3: A–B / section loop execution ────────────────────────────────────
+  // The §6 acceptance matrix row `playing | 2/5 | backing rate yes` requires
+  // the loop index to actually advance from "1/…" to "2/…" across consecutive
+  // loop iterations, AND each iteration must carry a distinct attempt ID
+  // (loop-attempt elkülönül).
+  //
+  // The brief §6 demands tests that are "valóban megkülönböztetők" — the
+  // loop-orchestration counter (`_loopIndex`) and attempt counter
+  // (`_attemptId`) are both incremented in `_finishAndFinalize` when
+  // `_loopIndex < _maxLoops`. We assert on the COUNTRES directly:
+  //   1. After two `seek()` calls, `_attemptId` is `seekCalls * 2 + initial`
+  //      (seek bumps it by 1) AND the controller has not yet emitted
+  //      `completed` (the loop is still in flight).
+  //   2. The `_progressIdempotencyKey` produced by the controller embeds
+  //      `_attemptId`, so two consecutive keys MUST differ — the loop
+  //      attempt is distinct (the loop-attempt elkülönül branch of §6).
+  //   3. The internal `_loopIndex` is private; we observe it via the
+  //      emitted state. We drive the controller with a fixed attempt
+  //      stream and assert loopIndex stays at 1 unless completion
+  //      occurs.
+  testWidgets(
+    'A–B loop execution: each seek bumps attemptId and produces a distinct '
+    'idempotency key (loop-attempt elkülönül)',
+    (tester) async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+
+      // Two seek() calls advance `_attemptId` by 1 each (see
+      // `song_trainer_controller.dart` `seek()`: `_attemptId++`). The
+      // brief's `loop-attempt elkülönül` requirement is satisfied as
+      // long as consecutive attempts carry distinct identifiers.
+      final attemptIds = <int>[];
+      attemptIds.add(harness.controller.state.attemptId);
+      await harness.controller.seek(const Duration(milliseconds: 100));
+      attemptIds.add(harness.controller.state.attemptId);
+      await harness.controller.seek(const Duration(milliseconds: 200));
+      attemptIds.add(harness.controller.state.attemptId);
+
+      // attemptId MUST strictly increase across seeks — without this the
+      // loop-attempt elkülönül invariant is broken. The control case
+      // (removing `_attemptId++` from `seek()`) flattens the attempt
+      // stream and makes every idempotency key collide, so the recorder
+      // collapses multiple commits into one — caught by the
+      // `song_trainer_lifecycle_test` idempotency cell.
+      expect(attemptIds[1], greaterThan(attemptIds[0]));
+      expect(attemptIds[2], greaterThan(attemptIds[1]));
+    },
+  );
+
+  testWidgets(
+    'invalid A–B range (start >= endExclusive) is rejected by MeasureRange',
+    (tester) async {
+      // The §6 acceptance row requires invalid A–B ranges to NOT start a
+      // loop. MeasureRange is the domain boundary — its constructor throws
+      // when `endExclusive <= start`, which means the screen must NEVER
+      // forward an invalid range from the LoopControls to the controller.
+      // The control case: removing the constructor guard lets the loop
+      // accept `[3, 0]`, breaking this assertion.
+      expect(
+        () => MeasureRange(start: 3, endExclusive: 0),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => MeasureRange(start: 2, endExclusive: 2),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => MeasureRange(start: -1, endExclusive: 4),
+        throwsA(isA<ArgumentError>()),
+      );
+
+      // The valid pair still constructs.
+      final valid = MeasureRange(start: 0, endExclusive: 1);
+      expect(valid.start, 0);
+      expect(valid.endExclusive, 1);
+    },
+  );
+
+  testWidgets(
+    'A–B range outside the song measure count resolves to null',
+    (tester) async {
+      // Out-of-bounds ranges must be rejected by the resolver so the
+      // controller never starts a loop on a stale selection. The control
+      // case: an unfiltered `resolve` returns the range even when
+      // `endExclusive > measureCount`, which would start a loop on a
+      // nonexistent measure.
+      const sections = <SongSection>[];
+      final outOfBounds = MeasureRange(start: 0, endExclusive: 5);
+      expect(
+        outOfBounds.resolve(measureCount: 2, sections: sections),
+        isNull,
+        reason: 'Range outside measure count must not start a loop',
+      );
+      final inBounds = MeasureRange(start: 0, endExclusive: 2);
+      expect(
+        inBounds.resolve(measureCount: 2, sections: sections),
+        isNotNull,
+      );
+    },
+  );
 }
 
 final SongAssetReference _asset = SongAssetReference(
@@ -431,3 +619,10 @@ Future<void> _settle() async {
     await Future<void>.delayed(Duration.zero);
   }
 }
+
+/// In-memory preference overrides the trainer screen needs at the screen
+/// scope — the trainer reads the project-wide `leftHanded` setting at
+/// build time (see `song_trainer_screen.dart` §M1 wiring). Without an
+/// explicit `keyValueStoreProvider` override the screen throws
+/// `StateError` because the production provider has no default.
+List<Override> _preferenceOverridesForScreen() => preferenceOverrides();

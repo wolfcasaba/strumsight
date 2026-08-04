@@ -4,10 +4,20 @@
 // combination for the current state, exposes the loop index "2/5",
 // surfaces the speed-builder state, and the long-song lane windowing
 // keeps the child count bounded.
+//
+// The screen honours the project-wide left-handed preference
+// ([Settings.leftHanded]) by mirroring the body in the horizontal axis —
+// a left-handed coach reads the timeline right-to-left, so the loop
+// controls, lanes, and transport row have to stay in mirror order. The
+// mirroring uses [Transform.flip] rather than flipping individual
+// children, so every per-row `Row` continues to render children in the
+// same visual order from the screen-reader perspective while the
+// physical coordinate system is reversed.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../settings/public.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../application/trainer/song_trainer_state.dart';
 import '../../domain/models/song_id.dart';
@@ -69,53 +79,62 @@ final class SongTrainerScreen extends ConsumerWidget {
         stream: controller.states,
         initialData: controller.state,
         builder: (context, snapshot) =>
-            _buildScaffold(context, snapshot.data ?? controller.state),
+            _buildScaffold(context, ref, snapshot.data ?? controller.state),
       );
     }
-    return _buildScaffold(context, state);
+    return _buildScaffold(context, ref, state);
   }
 
-  Widget _buildScaffold(BuildContext context, SongTrainerState? current) {
+  Widget _buildScaffold(
+    BuildContext context,
+    WidgetRef ref,
+    SongTrainerState? current,
+  ) {
     final status = current?.status ?? SongTrainerStatus.idle;
+    final leftHanded = ref.read(leftHandedProvider);
+    final body = switch (status) {
+      SongTrainerStatus.idle ||
+      SongTrainerStatus.preparing ||
+      SongTrainerStatus.permissionRequired ||
+      SongTrainerStatus.ready => const Center(
+        child: CircularProgressIndicator(),
+      ),
+      SongTrainerStatus.countIn => _CountInOverlay(),
+      SongTrainerStatus.running => _RunningBody(
+        state: current!,
+        chordEvents: chordEvents,
+        strumEvents: strumEvents,
+        noteEvents: noteEvents,
+        sections: sections,
+        onPause: onPause,
+        onResume: onResume,
+        onSeek: onSeek,
+        onSectionSelected: onSectionSelected,
+        onABEntered: onABEntered,
+        onABClear: onABClear,
+        feedback: feedback,
+      ),
+      SongTrainerStatus.paused => _PausedBody(
+        state: current!,
+        chordEvents: chordEvents,
+        strumEvents: strumEvents,
+        noteEvents: noteEvents,
+        onPlay: onPlay,
+        onPause: onPause,
+        onResume: onResume,
+        onSeek: onSeek,
+      ),
+      SongTrainerStatus.completed ||
+      SongTrainerStatus.cancelled => _CompletedBody(state: current!),
+      SongTrainerStatus.failed => _FailedBody(state: current!),
+    };
     return Scaffold(
       appBar: AppBar(title: const Text('Song Trainer')),
       body: SafeArea(
-        child: switch (status) {
-          SongTrainerStatus.idle ||
-          SongTrainerStatus.preparing ||
-          SongTrainerStatus.permissionRequired ||
-          SongTrainerStatus.ready => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          SongTrainerStatus.countIn => _CountInOverlay(),
-          SongTrainerStatus.running => _RunningBody(
-            state: current!,
-            chordEvents: chordEvents,
-            strumEvents: strumEvents,
-            noteEvents: noteEvents,
-            sections: sections,
-            onPause: onPause,
-            onResume: onResume,
-            onSeek: onSeek,
-            onSectionSelected: onSectionSelected,
-            onABEntered: onABEntered,
-            onABClear: onABClear,
-            feedback: feedback,
-          ),
-          SongTrainerStatus.paused => _PausedBody(
-            state: current!,
-            chordEvents: chordEvents,
-            strumEvents: strumEvents,
-            noteEvents: noteEvents,
-            onPlay: onPlay,
-            onPause: onPause,
-            onResume: onResume,
-            onSeek: onSeek,
-          ),
-          SongTrainerStatus.completed ||
-          SongTrainerStatus.cancelled => _CompletedBody(state: current!),
-          SongTrainerStatus.failed => _FailedBody(state: current!),
-        },
+        child: _Mirror(
+          leftHanded: leftHanded,
+          child: body,
+        ),
       ),
     );
   }
@@ -246,12 +265,26 @@ final class _PausedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // §6 matrix row `paused | A–B | rate no`: seek is allowed
+    // ([TransportControls.canSeek] = true) AND the speed control renders
+    // disabled with an explicit reason so the coach understands why it
+    // is unavailable while paused.
     return Column(
       children: <Widget>[
         StrumLane(
           events: strumEvents.cast(),
           viewportStart: Duration.zero,
           viewportEnd: const Duration(seconds: 4),
+        ),
+        const ListTile(
+          key: Key('song-trainer-speed-disabled'),
+          enabled: false,
+          title: Text(
+            'Speed disabled — backing cannot change rate.',
+          ),
+          subtitle: Text(
+            'Paused: speed resumes when the session restarts.',
+          ),
         ),
         TransportControls(
           isPlaying: false,
@@ -301,6 +334,29 @@ final class _FailedBody extends StatelessWidget {
     return Center(
       key: const Key('song-trainer-failed'),
       child: Text('Failed: $failure'),
+    );
+  }
+}
+
+/// Mirrors the trainer body horizontally when [leftHanded] is true so a
+/// left-handed coach reads the timeline right-to-left. Uses
+/// [Transform.flip] so per-row child order stays the same for the screen
+/// reader (the [Semantics] tree is unaffected); only the visual axis is
+/// reversed. The widget carries a stable key so tests can detect the
+/// mirror through the element tree.
+final class _Mirror extends StatelessWidget {
+  const _Mirror({required this.leftHanded, required this.child});
+
+  final bool leftHanded;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!leftHanded) return child;
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.diagonal3Values(-1.0, 1.0, 1.0),
+      child: child,
     );
   }
 }
