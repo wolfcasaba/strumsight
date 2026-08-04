@@ -91,35 +91,34 @@ E03-R21	docs/rounds/e03-r21-trainer-ui-loop-speed-results.md	minimax	nincs	done
 E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	codex	nincs	pending
 # Epic 4 (AI Guitar Teacher) — batch előkészítve 2026-08-04 (docs/rounds/epic-04-batch-index.md).
 # Előfeltétel: E03-R22 (Epic 3 zárás) merge. Motor: ADR 0069 mért szabály (R18/R19 minimax, többi codex).
-# HOLD (user-döntés 2026-08-04): az Epic 4 sorai `hold`-on, NEM `pending` — a driver
-# átugorja őket, így a lánc E03-R22 (Epic 3 zárás) után MEGÁLL az epic-határon, nem lép
-# át magától Epic 4-re. Flip `hold`→`pending`-re CSAK az Epic 3 teljes befejezése +
-# explicit user-go után (akkor indul az Epic 4 folyamatosan).
+# HOLD FELOLDVA (user-go 2026-08-04): az Epic 4 sorai `pending`-en — a lánc E03-R22
+# (Epic 3 zárás) után FOLYAMATOSAN megy tovább Epic 4-re (E04-R01…R24), nem áll meg
+# az epic-határon. Az E03-R22 továbbra is elsőként fut (előrébb a sorban).
 # ZÁRÓ-KÖR WAIVER (user-döntés 2026-08-04): az E04-R24 NEM kap ADR 0087 §7 kézi
 # epic-záró indítást — a briefje pre-decidálja a rollout/flag/ADR kérdéseket, így
 # a pre-flightnak nincs eldöntetlen emberi kérdése; auto fut, az automata Claude
 # független review (ADR 0055) és az exact-SHA CI változatlanul kötelező.
-E04-R01	docs/rounds/e04-r01-ai-tutor-baseline-and-boundaries.md	codex	nincs	hold
-E04-R02	docs/rounds/e04-r02-conversation-and-message-domain.md	codex	nincs	hold
-E04-R03	docs/rounds/e04-r03-student-guitar-profile-goals-consent.md	codex	nincs	hold
-E04-R04	docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md	codex	nincs	hold
-E04-R05	docs/rounds/e04-r05-context-adapters-and-snapshot.md	codex	nincs	hold
-E04-R06	docs/rounds/e04-r06-knowledge-schema-and-content-pack.md	codex	nincs	hold
-E04-R07	docs/rounds/e04-r07-offline-knowledge-index-retrieval.md	codex	nincs	hold
-E04-R08	docs/rounds/e04-r08-deterministic-debrief-coaching.md	codex	nincs	hold
-E04-R09	docs/rounds/e04-r09-practice-plan-draft-validator-compiler.md	codex	nincs	hold
-E04-R10	docs/rounds/e04-r10-tool-contract-and-registry.md	codex	nincs	hold
-E04-R11	docs/rounds/e04-r11-action-proposal-and-confirmation.md	codex	nincs	hold
-E04-R12	docs/rounds/e04-r12-prompts-output-schema-injection-boundary.md	codex	nincs	hold
-E04-R13	docs/rounds/e04-r13-model-gateway-and-fake.md	codex	nincs	hold
-E04-R14	docs/rounds/e04-r14-backend-tutor-proxy-usage-guard.md	codex	nincs	hold
-E04-R15	docs/rounds/e04-r15-streaming-transport.md	codex	nincs	hold
-E04-R16	docs/rounds/e04-r16-orchestration-state-machine.md	codex	nincs	hold
-E04-R17	docs/rounds/e04-r17-conversation-repository-and-memory.md	codex	nincs	hold
-E04-R18	docs/rounds/e04-r18-tutor-home-chat-ui.md	minimax	nincs	hold
-E04-R19	docs/rounds/e04-r19-evidence-source-action-card-ui.md	minimax	nincs	hold
-E04-R20	docs/rounds/e04-r20-practice-analyze-integration.md	codex	nincs	hold
-E04-R21	docs/rounds/e04-r21-song-trainer-debrief-range-actions.md	codex	nincs	hold
-E04-R22	docs/rounds/e04-r22-profile-privacy-data-consent-ui.md	codex	nincs	hold
-E04-R23	docs/rounds/e04-r23-safety-injection-usage-evaluation-gate.md	codex	nincs	hold
-E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	hold
+E04-R01	docs/rounds/e04-r01-ai-tutor-baseline-and-boundaries.md	codex	nincs	pending
+E04-R02	docs/rounds/e04-r02-conversation-and-message-domain.md	codex	nincs	pending
+E04-R03	docs/rounds/e04-r03-student-guitar-profile-goals-consent.md	codex	nincs	pending
+E04-R04	docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md	codex	nincs	pending
+E04-R05	docs/rounds/e04-r05-context-adapters-and-snapshot.md	codex	nincs	pending
+E04-R06	docs/rounds/e04-r06-knowledge-schema-and-content-pack.md	codex	nincs	pending
+E04-R07	docs/rounds/e04-r07-offline-knowledge-index-retrieval.md	codex	nincs	pending
+E04-R08	docs/rounds/e04-r08-deterministic-debrief-coaching.md	codex	nincs	pending
+E04-R09	docs/rounds/e04-r09-practice-plan-draft-validator-compiler.md	codex	nincs	pending
+E04-R10	docs/rounds/e04-r10-tool-contract-and-registry.md	codex	nincs	pending
+E04-R11	docs/rounds/e04-r11-action-proposal-and-confirmation.md	codex	nincs	pending
+E04-R12	docs/rounds/e04-r12-prompts-output-schema-injection-boundary.md	codex	nincs	pending
+E04-R13	docs/rounds/e04-r13-model-gateway-and-fake.md	codex	nincs	pending
+E04-R14	docs/rounds/e04-r14-backend-tutor-proxy-usage-guard.md	codex	nincs	pending
+E04-R15	docs/rounds/e04-r15-streaming-transport.md	codex	nincs	pending
+E04-R16	docs/rounds/e04-r16-orchestration-state-machine.md	codex	nincs	pending
+E04-R17	docs/rounds/e04-r17-conversation-repository-and-memory.md	codex	nincs	pending
+E04-R18	docs/rounds/e04-r18-tutor-home-chat-ui.md	minimax	nincs	pending
+E04-R19	docs/rounds/e04-r19-evidence-source-action-card-ui.md	minimax	nincs	pending
+E04-R20	docs/rounds/e04-r20-practice-analyze-integration.md	codex	nincs	pending
+E04-R21	docs/rounds/e04-r21-song-trainer-debrief-range-actions.md	codex	nincs	pending
+E04-R22	docs/rounds/e04-r22-profile-privacy-data-consent-ui.md	codex	nincs	pending
+E04-R23	docs/rounds/e04-r23-safety-injection-usage-evaluation-gate.md	codex	nincs	pending
+E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	pending
