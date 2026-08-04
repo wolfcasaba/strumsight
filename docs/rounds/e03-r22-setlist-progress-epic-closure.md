@@ -296,10 +296,33 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**Állapot: STOPPED (2026-08-04).** A Codex a kötelező jelzést elküldte:
+`R22 STOP: a MusicXML/MXL/MIDI/native fixtureök provenance/licence metadata
+nélküliek; a szükséges fixture manifest nincs az allowed_paths listán.`
+
+Az addig elkészült, még review/epic-zárás nélküli V2-szelet: Setlist model,
+session mode boundary, atomikus Setlist/progress fájl-repository, revision
+mapper, route-local terminal idempotencia és a public Practice History / daily
+goal bridge. A megkülönböztető RED→GREEN tesztek futottak:
+
+```text
+flutter test test/features/song_trainer/application/setlists/setlist_session_controller_test.dart \
+  test/features/song_trainer/application/progress/song_progress_test.dart \
+  test/features/song_trainer/data/local/file_setlist_repository_test.dart \
+  test/features/song_trainer/integration/legacy_setlist_migration_test.dart \
+  test/features/song_trainer/integration/song_progress_public_integration_test.dart \
+  test/features/song_trainer/data/local/song_progress_wiring_test.dart \
+  test/features/song_trainer/security/import_security_suite_test.dart \
+  test/features/song_trainer/performance/long_song_performance_test.dart \
+  test/property/song_progress_property_test.dart
+```
+
+Eredmény: 14 teszt zöld. A teljes `tools/round-gate.sh ...`, a CI, az APK és a
+valós eszközös checklist szándékosan NEM futott: a fixture-provenance gate
+nem készíthető el hitelesen az engedélyezett fájlokon belül. Következő lépés:
+orchestrátori brief-revízió, amely tételesen engedélyezi a MusicXML/MXL/MIDI/
+native fixtureök provenance-manifesztjét vagy azok megfelelő forrásfájljait;
+csak utána folytatható az R22.
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -30,6 +30,11 @@ export 'application/practice_session_providers.dart'
 // without an allowlist deviation.
 export 'application/practice_session_recording.dart';
 export 'application/practice_progress_providers.dart';
+export 'data/local_practice_history_repository.dart'
+    show practiceHistoryRepositoryProvider;
+export 'data/practice_history_recorder.dart' show PracticeHistoryRecorder;
+export 'data/practice_session_result_history_mapper.dart'
+    show PracticeSessionResultHistoryMapper;
 export 'domain/service/practice_progress_aggregator.dart'
     show AggregatedPracticeEntry, PracticeProgressAggregator;
 export 'domain/service/practice_session_eligibility.dart'
