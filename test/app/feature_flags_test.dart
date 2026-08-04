@@ -84,21 +84,25 @@ void main() {
         aiTutorEnabled: false,
         aiTutorCloudEnabled: true,
       );
+      final tutorEnabledCopy = _withAiTutorFlags(
+        aiTutorEnabled: true,
+        aiTutorCloudEnabled: false,
+      );
+      final cloudEnabledCopy = _withAiTutorFlags(
+        aiTutorEnabled: false,
+        aiTutorCloudEnabled: true,
+      );
 
       expect(tutorEnabled, isNot(defaults));
       expect(cloudEnabled, isNot(defaults));
+      expect(tutorEnabledCopy, tutorEnabled);
+      expect(tutorEnabledCopy.hashCode, tutorEnabled.hashCode);
+      expect(cloudEnabledCopy, cloudEnabled);
+      expect(cloudEnabledCopy.hashCode, cloudEnabled.hashCode);
       expect(tutorEnabled.usesNetwork, isFalse);
       expect(cloudEnabled.usesNetwork, isFalse);
       expect(tutorEnabled.toString(), contains('aiTutorEnabled: true'));
       expect(cloudEnabled.toString(), contains('aiTutorCloudEnabled: true'));
-      expect(
-        tutorEnabled.hashCode,
-        Object.hash(false, false, false, false, false, false, true, false),
-      );
-      expect(
-        cloudEnabled.hashCode,
-        Object.hash(false, false, false, false, false, false, false, true),
-      );
     });
   });
 }

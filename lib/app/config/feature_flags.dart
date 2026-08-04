@@ -112,8 +112,6 @@ final class FeatureFlags {
     practiceEngineV2Enabled,
     migratedLearnEnabled,
     practiceDetailedHistoryEnabled,
-    aiTutorEnabled,
-    aiTutorCloudEnabled,
   );
 
   @override
