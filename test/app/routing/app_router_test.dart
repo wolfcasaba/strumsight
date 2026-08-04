@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,7 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/analyze/public.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -23,6 +26,16 @@ import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
+import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
@@ -46,10 +59,15 @@ class _RouterTestApp extends ConsumerWidget {
 }
 
 class _RouterHarness {
-  const _RouterHarness({required this.container, required this.router});
+  const _RouterHarness({
+    required this.container,
+    required this.router,
+    required this.songRepository,
+  });
 
   final ProviderContainer container;
   final GoRouter router;
+  final InMemorySongRepository songRepository;
 }
 
 Future<_RouterHarness> _pumpRouter(
@@ -59,6 +77,7 @@ Future<_RouterHarness> _pumpRouter(
   bool songTrainerEnabled = false,
 }) async {
   final engine = FakeStrumEngine();
+  final songRepository = InMemorySongRepository();
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
@@ -68,7 +87,10 @@ Future<_RouterHarness> _pumpRouter(
       accountEnabledProvider.overrideWithValue(accountEnabled),
       tokenStoreProvider.overrideWithValue(FakeTokenStore()),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
-      songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
+      songRepositoryProvider.overrideWithValue(songRepository),
+      songAssetRepositoryProvider.overrideWithValue(
+        const _RouterAssetRepository(),
+      ),
       appConfigProvider.overrideWithValue(
         AppConfig(
           environment: AppEnvironment.development,
@@ -101,7 +123,11 @@ Future<_RouterHarness> _pumpRouter(
     ),
   );
   await tester.pumpAndSettle();
-  return _RouterHarness(container: container, router: router);
+  return _RouterHarness(
+    container: container,
+    router: router,
+    songRepository: songRepository,
+  );
 }
 
 void main() {
@@ -188,6 +214,65 @@ void main() {
     expect(find.byType(SongLibraryScreen), findsOneWidget);
   });
 
+  testWidgets('flagged Song Trainer editor route is registered with an id', (
+    tester,
+  ) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      songTrainerEnabled: true,
+    );
+
+    harness.router.go('/song-trainer/editor/router-song');
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, '/song-trainer/editor/router-song');
+    expect(find.byType(SongEditorScreen), findsOneWidget);
+  });
+
+  testWidgets('library editor entry uses the canonical editor route', (
+    tester,
+  ) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      songTrainerEnabled: true,
+    );
+    await harness.songRepository.create(_editorDocument('library-song'));
+
+    harness.router.go(AppRoutes.songTrainerLibrary);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('song-editor-open-library-song')));
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, '/song-trainer/editor/library-song');
+    expect(find.byType(SongEditorScreen), findsOneWidget);
+  });
+
+  testWidgets('library offers a canonical new V2 editor route', (tester) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      songTrainerEnabled: true,
+    );
+
+    harness.router.go(AppRoutes.songTrainerLibrary);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('song-editor-create')));
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, '/song-trainer/editor/new');
+    expect(find.byType(SongEditorScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('song-editor-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      (await harness.songRepository.list(const SongQuery())).valueOrNull,
+      hasLength(1),
+    );
+  });
+
   testWidgets('successful login pops back to the calling settings screen', (
     tester,
   ) async {
@@ -219,4 +304,64 @@ void main() {
 
     expect(() => router.go(AppRoutes.settings), throwsFlutterError);
   });
+}
+
+SongDocument _editorDocument(String id) {
+  final now = DateTime.utc(2026, 8, 4);
+  return SongDocument(
+    schemaVersion: songDocumentSchemaVersion,
+    id: SongId(id),
+    revision: 0,
+    metadata: SongMetadata(title: id),
+    source: SongSource(
+      type: SongSourceType.createdInApp,
+      originalFileName: '$id.song',
+      sha256: 'a' * 64,
+      importedAt: now,
+      importerVersion: 'router-test@1',
+    ),
+    createdAt: now,
+    updatedAt: now,
+    measures: <SongMeasure>[
+      SongMeasure(index: 0, durationBeats: BeatPosition.fromBeats(4)),
+    ],
+    tempoMap: TempoMap.constant(Tempo(120)),
+    meterMap: MeterMap.constant(Meter(4, 4)),
+  );
+}
+
+final class _RouterAssetRepository implements SongAssetRepository {
+  const _RouterAssetRepository();
+
+  @override
+  Future<AppResult<SongAssetStoreReceipt>> put(
+    SongAssetWriteRequest request,
+  ) async => AppResult<SongAssetStoreReceipt>.success(
+    SongAssetStoreReceipt(
+      assetId: request.assetId,
+      sha256: request.expectedSha256,
+      byteLength: request.bytes.length,
+      duplicate: false,
+    ),
+  );
+
+  @override
+  Future<AppResult<Uint8List?>> get(String sha256) async =>
+      const AppResult<Uint8List?>.success(null);
+
+  @override
+  Future<AppResult<SongAssetSummary?>> summary(String sha256) async =>
+      const AppResult<SongAssetSummary?>.success(null);
+
+  @override
+  Future<AppResult<void>> incrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> decrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> permanentlyDelete(String sha256) async =>
+      const AppResult<void>.success(null);
 }
