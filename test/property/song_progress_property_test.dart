@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,8 +7,11 @@ import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_practice_record.dart';
 
 void main() {
+  final seed = int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
+  // ignore: avoid_print
+  print('PROPERTY_SEED=$seed');
+
   test('randomized replay of persisted records is aggregate-idempotent', () {
-    const seed = 20260804;
     final random = Random(seed);
     for (var caseIndex = 0; caseIndex < 100; caseIndex++) {
       final records = <SongPracticeRecord>[

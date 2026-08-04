@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/practice/public.dart';
@@ -6,6 +7,9 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_progre
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_practice_record.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_progress_repository.dart';
+import 'package:strumsight/features/streak/public.dart';
+
+import '../../../support/preference_store.dart';
 
 void main() {
   test(
@@ -89,6 +93,60 @@ void main() {
     expect(outcome.streakCredited, isFalse);
     expect(credits.streakCredits, 0);
   });
+
+  test(
+    'production credit recorder skips playback-only streak credit and records scored practice once',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          preferenceStoreOverride(InMemoryKeyValueStore()),
+          streakProvider.overrideWith(_CountingStreakController.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      final streak =
+          container.read(streakProvider.notifier) as _CountingStreakController;
+      final recorder = PracticeSessionSongCreditRecorder(
+        recording: container.read(practiceSessionRecordingProvider),
+        dailyGoalMinutes: 10,
+      );
+
+      final playbackOutcome = await recorder.record(
+        _creditRecord(id: 'production-playback', playbackOnly: true),
+      );
+
+      expect(playbackOutcome.streakCredited, isFalse);
+      expect(streak.recordPracticeTodayCalls, 0);
+
+      final scoredOutcome = await recorder.record(
+        _creditRecord(id: 'production-scored'),
+      );
+
+      expect(scoredOutcome.streakCredited, isTrue);
+      expect(streak.recordPracticeTodayCalls, 1);
+    },
+  );
+}
+
+SongPracticeRecord _creditRecord({
+  required String id,
+  bool playbackOnly = false,
+}) {
+  return SongPracticeRecord(
+    id: id,
+    songId: SongId('song-a'),
+    songRevision: 1,
+    source: const SongProgressSource(
+      measureId: 'm1',
+      eventId: 'e1',
+      measureIndex: 0,
+    ),
+    activeDuration: const Duration(seconds: 30),
+    completed: true,
+    score: 1,
+    recordedAt: DateTime.utc(2026, 8, 4),
+    playbackOnly: playbackOnly,
+  );
 }
 
 final class _CountingProgressRepository implements SongProgressRepository {
@@ -135,5 +193,15 @@ final class _CountingCreditRecorder implements SongPracticeCreditRecorder {
           ? 0
           : record.activeDuration.inSeconds,
     );
+  }
+}
+
+final class _CountingStreakController extends StreakController {
+  int recordPracticeTodayCalls = 0;
+
+  @override
+  Future<bool> recordPracticeToday([DateTime? now]) {
+    recordPracticeTodayCalls++;
+    return super.recordPracticeToday(now);
   }
 }
