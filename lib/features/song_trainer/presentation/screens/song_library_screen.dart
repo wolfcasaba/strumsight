@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
@@ -31,7 +33,17 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     final controller = ref.read(songLibraryControllerProvider);
     final state = ref.watch(songLibraryStateProvider).value ?? controller.state;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.songLibraryTitle)),
+      appBar: AppBar(
+        title: Text(l10n.songLibraryTitle),
+        actions: <Widget>[
+          IconButton(
+            key: const Key('song-editor-create'),
+            onPressed: () => context.push(AppRoutes.songTrainerNewEditor),
+            icon: const Icon(Icons.add),
+            tooltip: l10n.songLibraryCreate,
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),
@@ -148,44 +160,59 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
                           final summary = state.summaries[index];
-                          return SongSummaryTile(
-                            summary: summary,
-                            isFavorite:
-                                summary.favorite ||
-                                state.favoriteIds.contains(summary.documentId),
-                            onFavorite: () =>
-                                controller.toggleFavorite(summary.documentId),
-                            onExport: () async {
-                              final export = await controller.export(
-                                summary.documentId,
-                              );
-                              if (!context.mounted || export == null) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    l10n.songLibraryExportPrepared(
-                                      export.filename,
+                          return InkWell(
+                            key: ValueKey<String>(
+                              'song-editor-open-${summary.documentId.value}',
+                            ),
+                            onTap: () => context.push(
+                              AppRoutes.songTrainerEditor.replaceFirst(
+                                ':songId',
+                                Uri.encodeComponent(summary.documentId.value),
+                              ),
+                            ),
+                            child: SongSummaryTile(
+                              summary: summary,
+                              isFavorite:
+                                  summary.favorite ||
+                                  state.favoriteIds.contains(
+                                    summary.documentId,
+                                  ),
+                              onFavorite: () =>
+                                  controller.toggleFavorite(summary.documentId),
+                              onExport: () async {
+                                final export = await controller.export(
+                                  summary.documentId,
+                                );
+                                if (!context.mounted || export == null) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      l10n.songLibraryExportPrepared(
+                                        export.filename,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                            onDelete: () async {
-                              await controller.moveToTrash(summary.documentId);
-                              if (!context.mounted ||
-                                  controller.state.undoSongId == null) {
-                                return;
-                              }
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.songLibraryTrashed),
-                                  action: SnackBarAction(
-                                    label: l10n.songLibraryUndo,
-                                    onPressed: controller.undoTrash,
+                                );
+                              },
+                              onDelete: () async {
+                                await controller.moveToTrash(
+                                  summary.documentId,
+                                );
+                                if (!context.mounted ||
+                                    controller.state.undoSongId == null) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.songLibraryTrashed),
+                                    action: SnackBarAction(
+                                      label: l10n.songLibraryUndo,
+                                      onPressed: controller.undoTrash,
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           );
                         },
                       ),

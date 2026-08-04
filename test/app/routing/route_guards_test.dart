@@ -71,4 +71,36 @@ void main() {
       }
     });
   });
+
+  group('mayLeaveEditor', () {
+    test(
+      'requires an explicit discard or successful save for dirty drafts',
+      () {
+        expect(
+          mayLeaveEditor(
+            dirty: true,
+            decision: UnsavedEditorDecision.stay,
+            saveSucceeded: false,
+          ),
+          isFalse,
+        );
+        expect(
+          mayLeaveEditor(
+            dirty: true,
+            decision: UnsavedEditorDecision.save,
+            saveSucceeded: false,
+          ),
+          isFalse,
+        );
+        expect(
+          mayLeaveEditor(
+            dirty: true,
+            decision: UnsavedEditorDecision.discard,
+            saveSucceeded: false,
+          ),
+          isTrue,
+        );
+      },
+    );
+  });
 }
