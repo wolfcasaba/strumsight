@@ -76,11 +76,26 @@ tábla jelöli).
    négyet sorolt fel, kimaradt `labModeAvailable`, `practiceEngineV2Enabled`,
    `songTrainerV2Enabled`). Ez **nem változtat a scope-on**: az `aiTutorEnabled`
    + `aiTutorCloudEnabled` továbbra is tisztán additív, default OFF, a
-   `const` konstruktor default-jai miatt a hívóhelyek nem törnek. A mezőt hozzá
-   kell adni a `==`, `hashCode` és `toString` implementációhoz is (a meglévő
-   `hashCode` amúgy is kihagyja a `songTrainerV2Enabled`-et — **ezt NEM
-   javítjuk ebben a körben**, tilos zóna; csak az új két mezőt visszük be
-   konzisztensen a `==`-ba és `toString`-be, és a `hashCode`-ba is).
+   `const` konstruktor default-jai miatt a hívóhelyek nem törnek. Az új két mező
+   a `==`-ba és `toString`-be **konzisztensen bekerül**.
+
+   **§0.0/3 REVÍZIÓ (fix-kör 1, mért CI-bukás 2026-08-04):** a `hashCode`-hoz
+   **NEM** szabad hozzáadni a két új mezőt. Mért gyökérok: a tilos zónás
+   `test/app/app_config_test.dart:263-266` a `FeatureFlags.hashCode`-ot
+   **pontos `Object.hash(false, false, false, false, false, true)` (6 mező)**
+   értékkel rögzíti; a meglévő `hashCode` szándékosan csak 6 mezőt hashel (a
+   `songTrainerV2Enabled` már ma is kimarad). Ha a két új mezőt bevisszük a
+   `hashCode`-ba, MINDEN `FeatureFlags` hashCode megváltozik → az
+   `app_config_test` `Expected <418454523> / Actual <373118860>` PIROS (CI run
+   `30957776795`). Ez a teszt a **tilos zónában** van (nincs az
+   `allowed_paths`-on), és az engedélyezett-lista **bővítése** H3-halt volna. A
+   Dart `hashCode`-kontraktus csak azt követeli, hogy egyenlő objektumok
+   hashCode-ja egyezzen — az új mezőkön keletkező (benign) ütközés
+   megengedett, és a value semantics-ot a `==` hordozza. Ezért a fix-kör: a két
+   új mező a `==` + `toString` része marad, a `hashCode` **6 mezős** eredeti
+   alakja VÁLTOZATLAN; a `feature_flags_test.dart` új-flag hashCode-assertjei
+   ehhez igazodnak (nem a `hashCode`-részvételt, hanem a `==` value semantics-ot
+   bizonyítják).
 
 4. **`FeatureFlags(` hívóhelyek (mérve, `rg`):** a `factory forEnvironment`
    default-tal ad minden nem-kötelező mezőt; a teszt-hívóhelyek (`app_config_test`,
@@ -114,9 +129,9 @@ feature-boundaryjának létrehozása **funkcionális változtatás nélkül**, f
   (mérve, ld. §0.0/3) `accountEnabled`, `diagnosticsEnabled`, `labModeAvailable`,
   `practiceEngineV2Enabled`, `migratedLearnEnabled`, `practiceDetailedHistoryEnabled`,
   `songTrainerV2Enabled` mezőket hordoz — Epic 4 ide ad additívan
-  `aiTutorEnabled` + `aiTutorCloudEnabled` mezőt, default **OFF** (a `==`,
-  `hashCode`, `toString` konzisztensen bővül; a meglévő `hashCode`
-  `songTrainerV2Enabled`-hiánya tilos zóna, nem javítjuk).
+  `aiTutorEnabled` + `aiTutorCloudEnabled` mezőt, default **OFF** (a `==` és
+  `toString` konzisztensen bővül; a `hashCode` VÁLTOZATLAN marad — ld. §0.0/3
+  revízió, a tilos zónás `app_config_test` pontos 6-mezős hashCode-ot rögzít).
 - **Újrahasznált public API-k** (a későbbi körök fogyasztják, most csak leltár):
   `lib/features/{practice,song_trainer,analyze,progress,streak,settings,learn,
   library,live}/public.dart`.

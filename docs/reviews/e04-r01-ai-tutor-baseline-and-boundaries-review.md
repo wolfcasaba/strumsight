@@ -6,7 +6,13 @@
 - **Pre-flight commit:** `184e503` (ADR 0131–0134 + brief §0.0, orchestrátor)
 - **Reviewer:** Claude (Opus 4.8), független read-only review
 - **Dátum:** 2026-08-04
-- **Verdikt:** **APPROVED** — nincs nyitott BLOCKER/MAJOR/MINOR
+- **Verdikt:** **CHANGES REQUESTED → (fix 1 után) APPROVED** — ld. §9 fix-kör.
+
+> **Frissítés (fix 1, 2026-08-04):** a lokális targeted gate zöld volt, de a
+> full-suite CI (run `30957776795`) EGY tesztet pirosra váltott
+> (`app_config_test.dart` hashCode-assert). MAJOR lelet rögzítve (§7/§9),
+> javító kör lefuttatva. A lenti §2–§6 az EREDETI (295081c) mérés; a fix-kör
+> zárása a §9-ben.
 
 ## 1. Jelzés + handoff
 
@@ -103,12 +109,22 @@ invariánsok valódi mutációt fognak.
 | Osztály | Lelet |
 |---|---|
 | BLOCKER | — |
-| MAJOR | — |
+| MAJOR | **M1 (fix 1-ben javítva):** `feature_flags.dart` `hashCode`-ja a két új mezővel bővült → minden `FeatureFlags` hashCode megváltozott → a **tilos zónás** `app_config_test.dart:263-266` (pontos 6-mezős `Object.hash`) PIROS lett a full-suite CI-ban (run `30957776795`). Az `app_config_test` nem módosítható (tilos zóna), a lista bővítése H3 volna. Fix: a `hashCode` marad 6-mezős; a két új mező csak `==` + `toString` része; a `feature_flags_test` ehhez igazodik. Ld. §9. |
 | MINOR | — |
 | NOTE | (1) A `feature_flags_test` hashCode-assertje a belső `Object.hash`-sorrendtől függ (implementációs részlet), de helyesen bizonyítja az új mezők részvételét — nem kell javítani. (2) A meglévő `hashCode` szándékosan kihagyja a `songTrainerV2Enabled`-et (pre-existing, tilos zóna) — külön follow-up körre hagyva, nem e kör regressziója. |
 
-## 8. Merge-döntés
+## 8. Merge-döntés (fix 1 előtt)
 
-Zöld kapu minden eleme lokálisan/izoláltan zöld; a teljes suite + property +
-APK a `build-apk.yml` CI run `30957533368` (exact-SHA `295081c`) felelőssége.
-**APPROVED** — merge, amint a CI zöld és `origin/main` nem mozdult a dispatch óta.
+A lokális/izolált gate zöld, DE a full-suite CI (run `30957776795`, exact-SHA
+`2e8fb0f`) PIROS → **merge tilos**, javító kör indul (§9).
+
+## 9. Fix-kör 1 (2026-08-04)
+
+- **Bemenet:** `codex-fix-e04-r01.md` findings (M1), motor: Codex (ugyanaz).
+- **Brief-revízió:** §0.0/3 REVÍZIÓ dokumentálva (mért gyökérok + korrigált
+  utasítás: a `hashCode` NEM bővül).
+- **Javítás:** `feature_flags.dart` hashCode visszaáll 6-mezősre; `==`/`toString`
+  a két új mezővel marad; `feature_flags_test.dart` az új-flag hashCode-assertjeit
+  value-semantics (`==`) bizonyítékra cseréli.
+- **Zárás:** _(a fix commit sha-ja + izolált gate + `app_config_test` zöld + új
+  CI-run ide kerül a fix után)_
