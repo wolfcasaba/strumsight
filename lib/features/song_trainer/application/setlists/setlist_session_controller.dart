@@ -16,9 +16,13 @@ final class SetlistSessionController {
     required SetlistAvailabilityResolver availability,
     required SetlistItemRunner practiceRunner,
     required SetlistItemRunner performanceRunner,
-  }) : _availability = availability,
-       _practiceRunner = practiceRunner,
-       _performanceRunner = performanceRunner;
+  }) : this._(availability, practiceRunner, performanceRunner);
+
+  const SetlistSessionController._(
+    this._availability,
+    this._practiceRunner,
+    this._performanceRunner,
+  );
 
   final SetlistAvailabilityResolver _availability;
   final SetlistItemRunner _practiceRunner;

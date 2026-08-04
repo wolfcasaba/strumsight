@@ -30,8 +30,9 @@ final class FileSetlistRepository implements SetlistRepository {
     final file = File(
       '${directory.path}${Platform.pathSeparator}setlists.json',
     );
-    if (!await file.exists())
+    if (!await file.exists()) {
       return FileSetlistRepository._(file, <String, SongSetlist>{});
+    }
     final decoded = _decodeSetlists(await file.readAsString());
     return FileSetlistRepository._(file, <String, SongSetlist>{
       for (final setlist in decoded) setlist.id: setlist,

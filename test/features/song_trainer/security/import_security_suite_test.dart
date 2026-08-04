@@ -30,9 +30,12 @@ void main() {
     );
     final violations = <String>[];
     for (final file in root.listSync(recursive: true).whereType<File>()) {
-      if (!file.path.endsWith('.dart')) continue;
-      if (forbidden.hasMatch(file.readAsStringSync()))
+      if (!file.path.endsWith('.dart')) {
+        continue;
+      }
+      if (forbidden.hasMatch(file.readAsStringSync())) {
         violations.add(file.path);
+      }
     }
 
     expect(violations, isEmpty);

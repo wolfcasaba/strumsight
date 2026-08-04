@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/practice/public.dart';
 
 import '../../domain/models/song_id.dart';
@@ -208,8 +207,13 @@ final class PracticeSessionSongCreditRecorder
     implements SongPracticeCreditRecorder {
   const PracticeSessionSongCreditRecorder({
     required PracticeSessionRecording recording,
-    required this.dailyGoalMinutes,
-  }) : _recording = recording;
+    required int dailyGoalMinutes,
+  }) : this._(recording, dailyGoalMinutes);
+
+  const PracticeSessionSongCreditRecorder._(
+    this._recording,
+    this.dailyGoalMinutes,
+  );
 
   final PracticeSessionRecording _recording;
   final int dailyGoalMinutes;
@@ -254,9 +258,13 @@ final class SongProgressTerminalIntegrator {
     required SongProgressRepository progressRepository,
     required SongProgressCommitter historyCommitter,
     required SongPracticeCreditRecorder creditRecorder,
-  }) : _progressRepository = progressRepository,
-       _historyCommitter = historyCommitter,
-       _creditRecorder = creditRecorder;
+  }) : this._(progressRepository, historyCommitter, creditRecorder);
+
+  SongProgressTerminalIntegrator._(
+    this._progressRepository,
+    this._historyCommitter,
+    this._creditRecorder,
+  );
 
   final SongProgressRepository _progressRepository;
   final SongProgressCommitter _historyCommitter;
@@ -294,11 +302,13 @@ final class SongProgressTerminalIntegrator {
       idempotencyKey: idempotencyKey,
       sessionResult: sessionResult,
     );
-    if (history.isFailure)
+    if (history.isFailure) {
       return const SongProgressTerminalCommitOutcome.failure();
+    }
     final persisted = await _progressRepository.save(record);
-    if (persisted.isFailure)
+    if (persisted.isFailure) {
       return const SongProgressTerminalCommitOutcome.failure();
+    }
     final credit = await _creditRecorder.record(record);
     return SongProgressTerminalCommitOutcome.success(credit: credit);
   }

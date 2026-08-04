@@ -29,8 +29,9 @@ final class FileSongProgressRepository implements SongProgressRepository {
     final file = File(
       '${directory.path}${Platform.pathSeparator}song_progress.json',
     );
-    if (!await file.exists())
+    if (!await file.exists()) {
       return FileSongProgressRepository._(file, <String, SongPracticeRecord>{});
+    }
     final records = _decodeRecords(await file.readAsString());
     return FileSongProgressRepository._(file, <String, SongPracticeRecord>{
       for (final record in records) record.id: record,
