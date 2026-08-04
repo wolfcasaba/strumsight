@@ -213,7 +213,12 @@ class RouterCliTest(unittest.TestCase):
                         # original BLOCKED result was persisted.
                         "brief_hash": "sha256:stale-approved-brief-metadata",
                         "status": "BLOCKED",
-                        "phase": "BLOCKED",
+                        # The review repair completed its diff, then the
+                        # stale baseline blocked its post-model scope audit.
+                        # H6 must retain this recovery route so a later
+                        # resume gates the diff rather than spending Terra
+                        # budget on a third call.
+                        "phase": "TERRA_REVIEW_OR_FIX",
                         # This is a completed Terra terminal intent from the
                         # stale baseline decision.  A rebase must not replay
                         # it when the task is subsequently resumed.
@@ -290,6 +295,7 @@ class RouterCliTest(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["status"], "READY_FOR_REVIEW")
         self.assertEqual(payload["phase"], "BASELINE_REBASED")
+        self.assertEqual(payload["resume_phase"], "TERRA_REVIEW_OR_FIX")
         self.assertEqual(payload["baseline_manifest"]["baseline_head"], preflight)
         self.assertEqual(payload["changed_paths"], ["lib/allowed.dart"])
         self.assertEqual(payload["terra_reservation"], "finished-terra-review")
