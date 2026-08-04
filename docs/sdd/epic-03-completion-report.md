@@ -81,11 +81,6 @@ Evidence: [`long_song_performance_test.dart`](../../test/features/song_trainer/p
    scoring; Setlist Practice; Setlist Performance; 20 perces session; app
    background; storage recovery. Mindegyik önálló release blocker, amíg a
    készülék/módszer/eredmény nincs rögzítve.
-5. A R22 local gate csak akkor tekinthető lezártnak, ha a
-   [`round-gate.sh`](../../tools/round-gate.sh) format → analyze → célzott test
-   → architecture lánca egy futásban zöld. A fejlesztői környezet aktuális
-   inotify-kimerülése nem helyettesíthető szintetikus állítással.
-
 ## R22 gépi evidence
 
 - Distinguishing tests: duplicate sorrend, missing-skip, Practice/Performance
@@ -93,5 +88,8 @@ Evidence: [`long_song_performance_test.dart`](../../test/features/song_trainer/p
   revision archive és randomizált aggregate idempotencia. Evidence:
   [`test/features/song_trainer`](../../test/features/song_trainer) és
   [`song_progress_property_test.dart`](../../test/property/song_progress_property_test.dart).
+- A kötelező local gate 2026-08-04-én egy futásban zöld volt: format, analyzer,
+  Song Trainer, Songs, Practice, property és architecture. A korábbi inotify
+  `errno=24` host-hiba ezért már nem aktuális gate-blocker.
 - CI-ben a shared Flutter gate után külön fut a schema és fixture provenance
   gate. Evidence: [`build-apk.yml`](../../.github/workflows/build-apk.yml).

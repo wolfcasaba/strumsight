@@ -407,7 +407,9 @@ final songTrainerControllerProvider = Provider.autoDispose
         compilation: compilation,
         backingAsset: inputs.backingAsset,
         practiceSession: practiceSession,
-        progressCommitter: ref.watch(songProgressCommitterProvider),
+        progressCommitter: definition == null
+            ? null
+            : ref.watch(songProgressCommitterProvider),
         resumeRepository: ref.watch(songResumeRepositoryProvider),
       );
       ref.onDispose(() => unawaited(controller.dispose()));

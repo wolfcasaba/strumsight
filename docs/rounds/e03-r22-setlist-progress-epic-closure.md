@@ -330,18 +330,22 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-**Állapot: STOPPED (2026-08-04).** A §0.0 2. addendum feloldása után a teljes
-R22 implementation elkészült, de a kötelező local gate analyzer-lépése a box
-globális inotify-limitje miatt nem fut le. A kötelező jelzés elküldve:
-`R22: round gate analyzer failed after code lint fix because host inotify
-instances are exhausted (125/128; errno=24).` Ez nem release- vagy
-review-approval.
+**Állapot: IMPLEMENTED, LOCAL GATE GREEN (2026-08-04).** A host inotify-limit
+feloldása után a kötelező `round-gate.sh` egy futásban zöld. A gate az R21-ből
+maradt playback-only provider regressziót is felfedte: az ág korábban
+feltétlenül feloldotta a Practice History storage-láncát, noha a
+`SongProgressCommitter` csak scored `PracticeSessionResult`-ra vonatkozik. A
+provider ezért csak scored compilationnél olvassa a committert. Ez local-gate
+evidence, nem release- vagy review-approval.
 
 Módosított fájlok és tényleges tartalmuk:
 
 - `application/progress/song_progress_aggregator.dart` és
   `application/setlists/setlist_session_controller.dart`: a meglévő V2
   progress/session boundary analyzer-tiszta konstruktor- és hibaág-kezelése.
+- `application/song_trainer_providers.dart`: playback-only compilationnél nem
+  oldja fel a Practice History storage-t igénylő `SongProgressCommitter`-t;
+  scored módban a korábbi terminal commit út változatlan.
 - `data/local/file_setlist_repository.dart` és
   `data/local/file_song_progress_repository.dart`: az atomikus tároló hibakezelő
   ágai; a schema-gate által figyelt encode/decode slice változatlan.
@@ -392,14 +396,17 @@ dart run tool/ci/check_song_fixture_licenses.dart
   Song fixture provenance OK (30 fixtures).
 tools/round-gate.sh test/features/song_trainer test/features/songs test/features/practice test/property
   format: ZÖLD (862 files, 0 changed)
-  analyze: PIROS (analysis server: OS Error: Too many open files, errno=24)
+  analyze: ZÖLD (No issues found)
+  test test/features/song_trainer: ZÖLD (465 passed, 1 documented skip)
+  test test/features/songs: ZÖLD (49 passed)
+  test test/features/practice: ZÖLD (902 passed, 1 documented skip)
+  test test/property: ZÖLD
+  architecture: ZÖLD (12 allowlisted deviation)
 ```
 
-A round gate második futása a schema-gate `endMarker` lintjének javítása után
-azt írta, hogy `No issues found!`, majd ugyanilyen analysis-server hibával
-exit 1-et adott. A két mért futás közben a host inotify számlálója 125/128 volt.
-A teljes Flutter suite, randomizált property gate, exact-head CI/APK és a valódi
-device checklist nem futott: ezek az orchestrátor feladatai, és a nem-zöld
-local gate mellett nem kérhetők release evidence-ként.
+A korábbi két analyzer-futás a mért 125/128 inotify-kimerülés miatt `errno=24`
+hibával állt le; ez a host-limit feloldása után nem ismétlődött. A teljes Flutter
+suite, randomizált property gate, exact-head CI/APK és a valódi device checklist
+nem futott: ezek az orchestrátor feladatai és továbbra is release evidence-ek.
 
 ## 11. Review — a független reviewer tölti ki

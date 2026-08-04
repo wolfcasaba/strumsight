@@ -4,18 +4,19 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E03-R22 implementer handoff — local gate stopped).**
-> **E03-R22 IMPLEMENTÁLVA, NEM MERGE-ELHETŐ:** a
+> (E03-R22 implementer handoff — local gate green).**
+> **E03-R22 IMPLEMENTÁLVA, LOCAL GATE ZÖLD, NEM MERGE-ELHETŐ:** a
 > `codex/e03-r22-setlist-progress-epic-closure` branch a Setlist V2/progress
 > slice, a két inline Song CI gate, a hozzáférhető windowolt UI és a mért Epic 3
 > evidence dokumentációjával készen áll független reviewra. A kötelező
 > `tools/round-gate.sh test/features/song_trainer test/features/songs
-> test/features/practice test/property` format lépése zöld, az analyzer viszont
-> `OS Error: Too many open files, errno=24` host-hibával exit 1: a mért globális
-> inotify telítettség 125/128. A schema gate 6 forrással, a fixture provenance
-> gate 30 fixture-rel külön zöld; a célzott regresszió 18 teszt zöld. CI, APK,
-> független review és device checklist NINCS: a local gate helyreállítása után
-> az orchestrátor exact-head evidence-e szükséges. A részletes, nem aspirációs
+> test/features/practice test/property` egy futásban zöld (format, analyze,
+> mind a négy célzott tesztcsomag és architecture). A playback-only Trainer
+> provider csak scored módban oldja fel a Practice History-t használó progress
+> committert; így nem nyit storage/mikrofonfüggő láncot. A schema gate 6
+> forrással, a fixture provenance gate 30 fixture-rel külön zöld. CI, APK,
+> független review és device checklist továbbra sincs: az orchestrátor
+> exact-head evidence-e szükséges. A részletes, nem aspirációs
 > evidence és valamennyi név szerinti release blocker:
 > [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
 > **E03-R21 KÉSZ (PR [#122](https://github.com/wolfcasaba/strumsight/pull/122),
@@ -904,12 +905,9 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E03-R22 folytatás — kizárólag host-hygiene után:** szabadítsanak fel
-   inotify instance-okat (mért állapot: 125/128), majd ugyanebben a worktreeben
-   futtassák változatlanul a kötelező `tools/round-gate.sh test/features/song_trainer
-   test/features/songs test/features/practice test/property` parancsot. Csak
-   zöld local gate után: független review, exact-head teljes Flutter/property/APK
-   CI, device checklist evidence, majd a §13 szerinti merge. Nincs új product
+0. **E03-R22 lezárási lánc — implementer után az orchestrátoré:** független
+   review, exact-head teljes Flutter/property/APK CI és a név szerinti device
+   checklist evidence szükséges a §13 szerinti merge előtt. Nincs új product
    scope vagy feature-flag enable ebben a folytatásban.
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
