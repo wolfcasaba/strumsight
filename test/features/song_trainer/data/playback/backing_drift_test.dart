@@ -66,6 +66,45 @@ void main() {
     );
   });
 
+  test(
+    'a non-unit speed scales the active position from the monotonic clock',
+    () async {
+      final player = FakeBackingAudioPlayer(capabilities: capabilities);
+      final clock = FakeSongTransportClock();
+      final transport = SongTransport(player: player, clock: clock);
+      addTearDown(transport.dispose);
+
+      await transport.dispatch(PrepareSongTransport(asset: _asset));
+      await transport.dispatch(const SetSongTransportSpeed(0.5));
+      await transport.dispatch(const StartSongTransport());
+      clock.advance(const Duration(seconds: 1));
+
+      expect(transport.state.activePosition, const Duration(milliseconds: 500));
+    },
+  );
+
+  test(
+    'a synchronized backing sample is tolerated at a non-unit speed',
+    () async {
+      final player = FakeBackingAudioPlayer(capabilities: capabilities);
+      final clock = FakeSongTransportClock();
+      final transport = SongTransport(player: player, clock: clock);
+      addTearDown(transport.dispose);
+
+      await transport.dispatch(PrepareSongTransport(asset: _asset));
+      await transport.dispatch(const SetSongTransportSpeed(0.5));
+      await transport.dispatch(const StartSongTransport());
+      clock.advance(const Duration(seconds: 1));
+      player.emitPosition(const Duration(milliseconds: 500));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        transport.state.lastDriftReport!.action,
+        BackingDriftAction.tolerate,
+      );
+    },
+  );
+
   test('a fake position sample is compared against the fake monotonic clock, '
       'then a hard drift resyncs to master time plus grid offset', () async {
     final player = FakeBackingAudioPlayer(capabilities: capabilities);

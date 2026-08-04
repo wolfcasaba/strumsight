@@ -499,7 +499,7 @@ final class SongTransport {
     if (_state.phase != SongTransportPhase.playing) {
       return _state.activePosition;
     }
-    return _anchorPosition + (clock.elapsed - _anchorElapsed);
+    return _anchorPosition + (clock.elapsed - _anchorElapsed) * _state.speed;
   }
 
   List<SongTransportPhase> _newPath() => <SongTransportPhase>[_state.phase];
