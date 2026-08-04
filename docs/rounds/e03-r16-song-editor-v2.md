@@ -227,10 +227,40 @@ import vagy gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-A kör még nem indult; nincs implementációs vagy tesztsiker-állítás. Végrehajtáskor
-ide kerül a fájlonkénti összefoglaló, tényleges parancs/kimenet, eltérés,
-nem futtatott ellenőrzés és follow-up. Minden viselkedési állításhoz konkrét
-teszt vagy mérés tartozik.
+**E03-R16 review-repair (2026-08-04).**
+
+- `app_route.dart`, `app_router.dart` és `song_library_screen.dart`: flagelt,
+  kanonikus `/song-trainer/editor/new` entrypoint a Libraryből; az új route a
+  `SongEditorScreen.newDocument` flowt indítja.
+- `song_editor_screen.dart`, `backing_asset_editor.dart` és
+  `song_event_editor.dart`: lokális, provider-seamre épülő backing attach;
+  kiválasztott measure-höz kötött chord, strum, basic note, tempo és meter
+  vezérlők. A detach továbbra sem töröl shared assetet.
+- `app_en.arb` és `app_hu.arb`: az új, látható editor- és Library-szövegek
+  lokalizációi.
+- `song_editor_controller_test.dart`: sikeres backing attach és első,
+  valid new-draft save create útjának regressziója a meglévő failure/validation
+  esetek mellett.
+- `song_editor_screen_test.dart`: kiválasztott második measure-ben két chord,
+  tempo, meter, basic note és backing asset put a draftig követve.
+- `app_router_test.dart`: a Library create entry canonical route-ja és az első
+  save utáni repository document.
+
+Futtatott ellenőrzések:
+
+```text
+flutter test test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/application/editor/song_editor_controller_test.dart test/app/routing/app_router_test.dart
+# 20 tests passed
+
+tools/round-gate.sh test/features/song_trainer/application/editor test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/song_editor_route_guard_test.dart test/app/routing/route_guards_test.dart test/app/routing/app_router_test.dart
+# exit 0: format (772 files, 0 changed), analyze (No issues found),
+# target tests and architecture gate green
+```
+
+Nem futtatott ellenőrzések: teljes Flutter suite, randomizált property gate és
+APK CI; ezek az orchestrátor exact-head CI felelősségei. APK-t lokálisan nem
+indítottunk. A review-finding input (`.ai/review-findings-e03-r16.md`) nem
+része a diffnek vagy a commitnak.
 
 ## 11. Review — a független reviewer tölti ki
 

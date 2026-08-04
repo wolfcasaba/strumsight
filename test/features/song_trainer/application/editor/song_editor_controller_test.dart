@@ -14,6 +14,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart
 import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_section.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 
@@ -111,6 +112,16 @@ void main() {
     },
   );
 
+  test('new valid draft saves through repository create', () async {
+    final draft = document('new-draft');
+    controller.startNew(draft);
+
+    await controller.save();
+
+    expect(controller.state.isDirty, isFalse);
+    expect((await repository.get(draft.id)).valueOrNull, isNotNull);
+  });
+
   test(
     'stale revision retains draft and exposes conflict without overwrite',
     () async {
@@ -150,6 +161,30 @@ void main() {
     expect(failing.state.draft!.assets, isEmpty);
     await failing.dispose();
   });
+
+  test(
+    'successful backing attachment updates the draft after asset put',
+    () async {
+      final original = document('asset-success');
+      await repository.create(original);
+      await controller.load(original.id);
+
+      await controller.attachBacking(
+        SongAssetWriteRequest(
+          bytes: Uint8List.fromList(<int>[1]),
+          assetId: SongAssetId('asset-success'),
+          extension: 'mp3',
+          expectedSha256: '0' * 64,
+        ),
+      );
+
+      expect(controller.state.draft!.assets, hasLength(1));
+      expect(
+        controller.state.draft!.tracks.whereType<BackingAudioTrack>(),
+        hasLength(1),
+      );
+    },
+  );
 }
 
 final class _AssetRepository implements SongAssetRepository {

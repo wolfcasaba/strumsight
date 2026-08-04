@@ -33,7 +33,17 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     final controller = ref.read(songLibraryControllerProvider);
     final state = ref.watch(songLibraryStateProvider).value ?? controller.state;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.songLibraryTitle)),
+      appBar: AppBar(
+        title: Text(l10n.songLibraryTitle),
+        actions: <Widget>[
+          IconButton(
+            key: const Key('song-editor-create'),
+            onPressed: () => context.push(AppRoutes.songTrainerNewEditor),
+            icon: const Icon(Icons.add),
+            tooltip: l10n.songLibraryCreate,
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),

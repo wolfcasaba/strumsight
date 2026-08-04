@@ -34,6 +34,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dar
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -246,6 +247,30 @@ void main() {
 
     expect(harness.router.state.uri.path, '/song-trainer/editor/library-song');
     expect(find.byType(SongEditorScreen), findsOneWidget);
+  });
+
+  testWidgets('library offers a canonical new V2 editor route', (tester) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      songTrainerEnabled: true,
+    );
+
+    harness.router.go(AppRoutes.songTrainerLibrary);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('song-editor-create')));
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, '/song-trainer/editor/new');
+    expect(find.byType(SongEditorScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('song-editor-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      (await harness.songRepository.list(const SongQuery())).valueOrNull,
+      hasLength(1),
+    );
   });
 
   testWidgets('successful login pops back to the calling settings screen', (

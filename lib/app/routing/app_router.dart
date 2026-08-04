@@ -154,6 +154,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => const SongImportScreen(),
         ),
         GoRoute(
+          path: AppRoutes.songTrainerNewEditor,
+          builder: (_, _) => const SongEditorScreen.newDocument(),
+        ),
+        GoRoute(
           path: AppRoutes.songTrainerEditor,
           builder: (_, state) =>
               SongEditorScreen(songId: state.pathParameters['songId']!),

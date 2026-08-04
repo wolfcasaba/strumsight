@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
 
-/// Attach is supplied by the platform picker in a later route effect; this
-/// editor deliberately exposes detach without ever deleting shared bytes.
+/// The route supplies attachment while detach never deletes shared bytes.
 final class BackingAssetEditor extends StatelessWidget {
   const BackingAssetEditor({
     required this.hasBacking,
+    required this.onAttach,
     required this.onDetach,
     super.key,
   });
 
   final bool hasBacking;
+  final Future<void> Function() onAttach;
   final VoidCallback onDetach;
 
   @override
@@ -23,6 +24,11 @@ final class BackingAssetEditor extends StatelessWidget {
         Text(
           l10n.songEditorBacking,
           style: Theme.of(context).textTheme.titleMedium,
+        ),
+        OutlinedButton(
+          key: const Key('song-editor-attach-backing'),
+          onPressed: onAttach,
+          child: Text(l10n.songEditorAttachBacking),
         ),
         if (hasBacking)
           TextButton(
