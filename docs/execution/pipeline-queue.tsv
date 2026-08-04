@@ -66,7 +66,7 @@ E03-R15	docs/rounds/e03-r15-song-library-import-ui.md	auto	nincs	done
 # a még NYITOTT E03 sorok engine-je `auto` (MiniMax-first router) helyett `codex` —
 # a tools/codex-round.sh a default CODEX_HOME-ban a gpt-5.6-terra modellt futtatja.
 # Az orchestrátor/reviewer ugyanezzel a döntéssel Claude Opus 4.8 (round-pipeline.sh).
-E03-R16	docs/rounds/e03-r16-song-editor-v2.md	codex	nincs	pending
+E03-R16	docs/rounds/e03-r16-song-editor-v2.md	codex	nincs	done
 E03-R17	docs/rounds/e03-r17-overview-track-range-setup.md	codex	nincs	pending
 E03-R18	docs/rounds/e03-r18-transport-backing-playback.md	codex	nincs	pending
 E03-R19	docs/rounds/e03-r19-practice-compiler-chord-rhythm.md	codex	nincs	pending
