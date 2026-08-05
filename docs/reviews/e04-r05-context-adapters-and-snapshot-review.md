@@ -5,7 +5,18 @@
 - **Reviewed head:** `e5361e0` (impl) a `f08d967` pre-flight fölött, main baseline `ee893da`
 - **Implementer:** Codex (`gpt-5.6-terra`, örökölt kézi override)
 - **Reviewer:** Claude Opus 4.8 (független, read-only)
-- **Verdikt:** **APPROVED** — 0 BLOCKER, 0 MAJOR, 0 MINOR, 1 NOTE
+- **Verdikt:** **CHANGES REQUESTED → (javító kör után) APPROVED** — 1 MAJOR (M1, lezárva), 1 NOTE
+- **M1 (MAJOR, exact-SHA CI-n mérve, `run 30969874174`, head `ac54952`):** a hat
+  adapter import-audit tesztje (`*_context_adapter_test.dart`, „imports only the
+  … public boundary") `Process.run('rg', …)`-gal shell-el ki `ripgrep`-re, ami a
+  CI-runneren NINCS telepítve → `ProcessException: No such file or directory` →
+  6 teszt PIROS (`2645 passed, 6 failed`). Lokálisan zöld volt, mert ezen a boxon
+  van `rg` — környezetfüggő, hordozhatatlan teszt, és épp az AC #1 (nulla
+  source-internal import) bizonyítéka. **Javítás iránya:** a `rg` subprocess
+  helyett tiszta Dart `File(path).readAsStringSync()` + import-sor szkennelés
+  (nincs külső bináris függőség). Csak teszt-fájlok, `allowed_paths`-on belül.
+  **Javító kör:** Codex, findings-listával; utána a review frissül + exact-SHA
+  CI újradispatch.
 - **Review mód:** izolált `/tmp/review-e04-r05` klón, saját gate-futtatás, scope-audit,
   eldobható mutáció-próbák (a klónban, a körbranchre soha nem kerültek).
 
