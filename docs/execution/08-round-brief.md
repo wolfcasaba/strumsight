@@ -145,9 +145,32 @@ lépésnél megáll a helyes kilépési kóddal.
 > tiltotta. A csővezeték elrejti a kilépési kódot, így a „minden gate zöld"
 > jelentés bizonyíthatatlan. A tiltás szövegben nem tartott — artefaktumban igen.
 
-A teljes suite + randomizált property gate + APK a CI-ban
-([ADR 0053](../adr/0053-ci-full-test-suite.md)) — azt az **orchestrátor** indítja
-(`gh workflow run build-apk.yml --ref <kör-branch>`); az implementer `gh`-t nem hív.
+A teljes suite + randomizált property gate a CI-ban
+([ADR 0053](../adr/0053-ci-full-test-suite.md)) — azt az **orchestrátor** indítja;
+az implementer `gh`-t nem hív. Hogy melyik workflow a kapu (`build-apk.yml`, vagy
+az azonos mérce-láncú, Android-build nélküli `full-gate.yml`), azt nem a brief és
+nem az orchestrátor ítéli meg, hanem
+[`tools/round-ci-plan.py`](../../tools/round-ci-plan.py)
+([ADR 0171](../adr/0171-pipeline-throughput-program.md) §3) — a brief dolga csak
+annyi, hogy a `native_gate` mezője IGAZAT mondjon.
+
+### 7.1 Falszifikációs cella minden acceptance-ponthoz (ADR 0171 §4)
+
+Minden acceptance-ponthoz írd oda, **melyik hibás implementációt fogja pirosra**,
+és **melyik őr** méri (konkrét unit-cella vagy property-teszt). Numerikus
+küszöbnél kötelező az **alatta / rajta / fölötte** cellahármas, a cellákat
+`python3 -c`-vel kiszámolva — nem idealizált rácsból.
+
+Miért: a mért javító körök nagy része nem kódhiba, hanem brief-hiba (hiányzó
+falszifikáció, küszöb fölötti cella nélküli mátrix, nem létező `gate_test`).
+A brief lintje ezt gépileg is méri:
+
+```bash
+tools/brief-lint.py --brief docs/rounds/<brief>.md --level strict
+```
+
+A `base` szintű leletek (`B*`) **CI-kapuk** a még nyitott körökre; a `strict`
+leletek (`S*`) a kör pre-flightjának teendői.
 
 ## 8. Implementációs sorrend
 

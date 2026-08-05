@@ -22,6 +22,15 @@ on:
       - "tools/round-gate.sh"
       - "tools/round-pipeline.sh"
       - "tools/pipeline-status.sh"
+      # ADR 0171 áteresztő-képesség eszközei: a CI-terv, a brief-lint, a
+      # slot-tervező és az időmérleg maga is a mérce része (a CI-terv dönti
+      # el, melyik workflow a kapu), ezért ugyanez a sáv méri őket.
+      - "tools/round-ci-plan.py"
+      - "tools/brief-lint.py"
+      - "tools/round-slots.py"
+      - "tools/round-metrics.py"
+      - "tools/round-merge-lock.sh"
+      - ".github/workflows/full-gate.yml"
       - ".ai/**"
       - ".github/workflows/router-ci.yml"
       # A tools/tests a kör-briefek és a pipeline-sor metaadatait IS méri
@@ -58,3 +67,12 @@ jobs:
 
       - name: Router CLI smoke gate
         run: PYTHONPATH=tools python3 tools/model-router.py --help
+
+      # ADR 0171 §4 — a MÉG NYITOTT körök briefjeinek base-szintű lintje.
+      # A hatókör szándékosan a jövő: a merge-elt körök briefje történeti
+      # rekord, azt visszamenőleg nem linteljük. A base szint csak
+      # bizonyítottan hibás alakot tilt (nem elemezhető ai-router blokk, nem
+      # létező gate_test, hiányzó gate-artefaktum, csonkoló parancsalak),
+      # ezért egy piros itt MINDIG valódi drift.
+      - name: Round brief lint gate (open rounds)
+        run: python3 tools/brief-lint.py --open --level base

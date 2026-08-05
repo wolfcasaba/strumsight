@@ -15,6 +15,7 @@ kör adatai:
 | **Brief** | `{{BRIEF}}` |
 | **Implementer motor** | `{{ENGINE}}` |
 | **Előre kiosztott ADR** | `{{ADR}}` — **te írod meg a pre-flightban** |
+| **Brief-lint jelentés** | `{{BRIEF_LINT}}` — a pre-flight teendői (ADR 0171 §4) |
 
 Olvasd el a `HANDOFF.md`-t, az `AGENTS.md`-t és a briefet, mielőtt bármit teszel.
 
@@ -102,6 +103,36 @@ Az E02-R11-ben ez kétszer bukott el, és mindkét hiba ugyanabból a mintából
 
 Amit nem találsz meg a kódban: dokumentált **§0.0 brief-revízióval** old fel,
 ne lista-tágítással.
+
+### 1.0 A brief-lint leletei a pre-flight ELSŐ teendői (ADR 0171 §4)
+
+A `{{BRIEF_LINT}}` fájl (ha nem `nincs`) a brief MÉRT gyengeségeit sorolja. A
+javító körök oka nagyrészt nem kódhiba, hanem brief-hiba, és a javítás a kör
+ELEJÉN a legolcsóbb — a review-ban már egy teljes implementer-futás az ára.
+
+| Kód | Mit vár |
+|---|---|
+| `B*` | **base-lelet: a kör nem indulhat el vele.** Javítsd a briefben (§0.0 revízió), mielőtt bármit dispatch-elsz. |
+| `S1` | STOP-protokoll a scope-ütközésre |
+| `S2` | falszifikációs cella: minden acceptance-ponthoz írd oda, MELYIK hibás implementációt fogja pirosra, és melyik őr (unit-cella vagy property) méri |
+| `S3` | numerikus küszöbhöz alatta/rajta/fölötte cellahármas, a cellákat `python3 -c`-vel kiszámolva |
+| `S4` | kör-jelzés szakasz |
+
+A `strict` leletek javítása **brief-revízió**, tehát a §2 szerint a te
+hatáskörödben van — nem halt-ok, és nem is hagyható ki.
+
+### 1.0.1 ADR-számot a foglalótól kérj, ne `ls`-sel
+
+```bash
+tools/round-slots.py reserve-adr --round {{ROUND}}
+```
+
+MÉRT ütközés (2026-08-05): két párhuzamos munka külön-külön nézte meg a
+„legmagasabb ADR" értéket, és ugyanazt a **0139-es** számot foglalta le;
+mindkét diff átment a saját kapuján, az összegük volt hibás
+(`tools/tests/test_adr_numbering.py`). A foglaló `O_CREAT|O_EXCL` markert ír, a
+lemezen lévő ÉS a már foglalt számok fölé megy, ezért a verseny eldől — az
+`ls docs/adr | tail` alakot **ne** használd sorszám-választásra.
 
 ## 1.1 Implementer-routing — `{{ENGINE}}`
 
@@ -255,9 +286,32 @@ kötelezettséged következik:
 
 ## 3. A zöld kapu nem lazul
 
-format + analyze + architecture + teljes CI-suite + randomizált property + APK
+format + analyze + architecture + teljes CI-suite + randomizált property
 **mind zöld** → squash-merge külön jóváhagyás nélkül (ADR 0052). Bármi piros
 vagy hiányzik → **merge tilos**, és az H5/H7.
+
+### 3.0 MELYIK CI-t dispatch-eld: a tervezőt kérdezd, ne magadtól dönts
+
+```bash
+tools/round-ci-plan.py --brief {{BRIEF}} --base origin/main --head HEAD --format json
+```
+
+A `dispatch` mező mondja meg, mit indíts (ADR 0171 §3):
+
+| Terv | Mit jelent |
+|---|---|
+| `build-apk.yml` | natív/release-érintő diff (`android/`, `ios/`, `assets/`, `pubspec.*`, `.github/actions/**`), `native_gate = true`, vagy **ismeretlen diff** — fail-closed |
+| `full-gate.yml` | tisztán Dart/dokumentum-diff: UGYANAZ a mérce-lánc (format, analyze, architecture, secret, l10n, asset, **teljes** `flutter test`, randomizált property, coverage, song-gate-ek), csak Android-build nélkül |
+
+**Ez nem a mérce lazítása, hanem a drága, oda nem tartozó rész elhagyása:** a
+`full-gate.yml` ugyanazt a `.github/actions/flutter-gates` composite-ot futtatja,
+amit a `build-apk.yml`. A választás **nem a te ítéleted** — a tervezőt futtasd
+le, és a kimenetét kövesd. Kétség, hibás kimenet vagy nem futó tervező esetén:
+`build-apk.yml`.
+
+A merge-kapu ettől függetlenül **exact-SHA**: a dispatch-elt workflow-nak a
+merge SHA-ján kell zöldnek lennie, és ha közben a `main` mozdult, újra kell
+dispatch-elni (ADR 0086 §2).
 
 **A `build-apk` NEM az egyetlen kapu.** Ha a kör diffje bármelyik Router-CI
 trigger-útvonalat érinti (`tools/**`, `docs/rounds/**`,
@@ -295,6 +349,25 @@ Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L
   kör dolga (ADR 0112 §3);
 - nem oszt új ADR-számot merge-elt döntés fölé;
 - nem nyúl a `docs/execution/pipeline-queue.tsv`-hez (azt a driver vezeti).
+
+## 4.1 Ha párhuzamos kör is fut (PIPELINE_SLOTS>1)
+
+A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
+(`tools/round-slots.py inflight-list`). Ha igen, két szabály köt:
+
+1. **A záró rituálékat és a merge-et a merge-záron keresztül futtasd** — a
+   közös dokumentumokat (HANDOFF, RTM, LESSONS, git-notes) nem írhatja két kör
+   egyszerre:
+
+   ```bash
+   tools/round-merge-lock.sh gh pr merge <PR> --squash --delete-branch
+   tools/round-merge-lock.sh bash -c 'git fetch -q origin main && git ...'
+   ```
+
+2. **A másik kör branch-ét, PR-jét, worktree-jét meg ne érintsd** — a te köröd
+   fájlhalmaza a briefed `allowed_paths` listája, és a slot-tervező pontosan
+   azért engedett el, mert ez diszjunkt a másikétól. Átfedést észlelve: HALT
+   (H3), ne „gyorsan rendezd".
 
 ## 5. Záró rituálék merge után (mind, sorrendben)
 

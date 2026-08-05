@@ -106,6 +106,27 @@ for test_path in "$@"; do
   esac
 done
 
+# --- Globális gate-zár (ADR 0171 §1) -------------------------------------
+# A gate ezen a boxon a MEMÓRIA szűk keresztmetszete (docs/LESSONS.md L05: az
+# `analyze && test` lánc OOM-ot okoz). Ha egyszerre több kör fut
+# (PIPELINE_SLOTS>1), a gate-jeik akkor sem futhatnak egyidejűleg.
+#
+# Ez a zár SOROSÍT, nem lazít: egyetlen lépést sem hagy ki, egyetlen küszöböt
+# sem mozdít, csak megvárja a másik gate-futás végét. A mérce változatlan —
+# a párhuzamosság a körök KÖZÖTT van, nem a gate-en belül.
+#
+#   ROUND_GATE_LOCK=none         → kikapcsolva (mérés/teszt)
+#   ROUND_GATE_LOCK_WAIT=<mp>    → felső várakozási korlát (alap: 90 perc)
+gate_lock=${ROUND_GATE_LOCK:-${TMPDIR:-/tmp}/strumsight-round-gate.lock}
+gate_lock_wait=${ROUND_GATE_LOCK_WAIT:-5400}
+if [ "$gate_lock" != "none" ] && [ -w "$(dirname "$gate_lock")" ] && command -v flock >/dev/null 2>&1; then
+  exec 8>"$gate_lock"
+  if ! flock -w "$gate_lock_wait" 8; then
+    finish_error "environment_failure" 20 \
+      "egy másik gate-futás ${gate_lock_wait}s után is tartja a zárat ($gate_lock)" "preflight.lock" 2
+  fi
+fi
+
 step_number=0
 declare -a step_names=()
 declare -a step_results=()

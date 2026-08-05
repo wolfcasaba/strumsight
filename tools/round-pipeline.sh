@@ -73,6 +73,21 @@ heal_status_file="$state_dir/heal-status"
 heal_count_file="$state_dir/selfheal.count"
 router_status_file="$state_dir/router-status"
 chain_log="$state_dir/chain.log"
+inflight_dir="$state_dir/inflight"
+
+# --- Áteresztő-képesség (ADR 0171) ---------------------------------------
+# A kapcsolók alapértelmezése a MAI viselkedés, egyetlen kivétellel: a merge
+# utáni azonnali lánc-folytatás BE van kapcsolva, mert mérve (2026-08-05,
+# `tools/round-metrics.py`) a lánc élettartamának 22,8%-a holtidő, és ennek
+# nagy része a merge és a következő cron-firing közötti puszta várakozás.
+#
+#   PIPELINE_SLOTS=1        — hány kör futhat EGYSZERRE (1 = a mai lánc)
+#   PIPELINE_SELF_CHAIN=1   — merge után azonnal induljon a következő firing
+#   PIPELINE_MIN_FREE_GB_PER_SLOT — RAM-fedezet slotonként (OOM-védelem, L05)
+slots=${PIPELINE_SLOTS:-1}
+self_chain=${PIPELINE_SELF_CHAIN:-1}
+min_free_gb_per_slot=${PIPELINE_MIN_FREE_GB_PER_SLOT:-6}
+slot_index=1
 
 session_timeout=${PIPELINE_SESSION_TIMEOUT:-14400}   # 4 óra: kör + javító kör + CI
 heal_timeout=${PIPELINE_SELFHEAL_TIMEOUT:-10800}     # 3 óra: diagnózis + fix + CI
@@ -129,6 +144,101 @@ notify() {
 }
 
 die() { log "HIBA: $*"; exit "${2:-4}"; }
+
+# --- Slotok, in-flight nyilvántartás, lánc-folytatás (ADR 0171) -----------
+
+available_memory_gb() {   # a MOST elérhető memória GB-ban (0, ha nem mérhető)
+  local kib
+  kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
+  case "$kib" in ''|*[!0-9]*) echo 0; return ;; esac
+  echo $(( kib / 1024 / 1024 ))
+}
+
+# A slotszám MÉRT felső korlátja. A box ismert igazsága, hogy a Flutter-gate a
+# memória szűk keresztmetszete (docs/LESSONS.md L05: az `analyze && test` lánc
+# OOM-ot okoz ezen a gépen), ezért plusz slotot csak valódi RAM-fedezet mellett
+# nyitunk. A gate-ek egymást amúgy is kizárják (a `tools/round-gate.sh` globális
+# zára), ez a korlát a sessionök és a git-műveletek fedezete.
+effective_slots() {
+  local wanted=${1:-$slots} free affordable
+  case "$wanted" in ''|*[!0-9]*) wanted=1 ;; esac
+  [ "$wanted" -lt 1 ] && wanted=1
+  if [ "$wanted" -eq 1 ]; then echo 1; return; fi
+  free=$(available_memory_gb)
+  affordable=$(( free / min_free_gb_per_slot ))
+  [ "$affordable" -lt 1 ] && affordable=1
+  if [ "$affordable" -lt "$wanted" ]; then
+    log "SLOT-KORLÁT: ${wanted} kért slot helyett ${affordable} fér el (${free} GB szabad memória, ${min_free_gb_per_slot} GB/slot)"
+    wanted=$affordable
+  fi
+  echo "$wanted"
+}
+
+# A slot 1 SZÁNDÉKOSAN ugyanaz a `lock` fájl, ami eddig is volt: PIPELINE_SLOTS=1
+# mellett a viselkedés azonos a korábbival, és egy régi, még futó driver zárával
+# is ütközik.
+slot_lock_path() {
+  if [ "${1:-1}" -eq 1 ]; then printf '%s\n' "$lock_file"; else printf '%s.%s\n' "$lock_file" "$1"; fi
+}
+
+inflight_add() {   # $1=kör $2=brief
+  [ -f "$repo_root/tools/round-slots.py" ] || return 0
+  python3 "$repo_root/tools/round-slots.py" --repo "$repo_root" --inflight "$inflight_dir" \
+    inflight-add --round "$1" --brief "$2" --worktree "$repo_root" \
+    --started-at "$(date -Is)" 2>/dev/null || true
+}
+
+inflight_remove() {   # $1=kör
+  [ -f "$repo_root/tools/round-slots.py" ] || return 0
+  python3 "$repo_root/tools/round-slots.py" --repo "$repo_root" --inflight "$inflight_dir" \
+    inflight-remove --round "$1" 2>/dev/null || true
+}
+
+inflight_rounds() { ls "$inflight_dir" 2>/dev/null | grep -E '^[A-Z][0-9]{2}-R[0-9]{2}$' || true; }
+
+# Merge után NE várjunk a következő cron-firingre. A gyerek megvárja, amíg EZ a
+# folyamat elengedi a slot-zárat, és csak utána indul — különben azonnal
+# „zár foglalt"-ra futna, és a lánc-folytatás néma no-op lenne.
+spawn_next_firing() {
+  if [ "$self_chain" != "1" ]; then
+    log "a következő firing viszi a következő kört (PIPELINE_SELF_CHAIN=0)"
+    return 0
+  fi
+  if [ "${PIPELINE_NO_LAUNCH:-0}" = "1" ]; then
+    log "PIPELINE_NO_LAUNCH=1 — a lánc-folytatás NEM indul (teszt-mód)"
+    return 0
+  fi
+  local command=${PIPELINE_SELF_CHAIN_CMD:-"$repo_root/tools/round-pipeline.sh"}
+  local parent=$$
+  log "azonnali lánc-folytatás: a következő kör nem vár cron-firingre"
+  # A TELJES alhéj kimenete a cron-naplóba megy: ha a szülő stdout/stderr-jét
+  # örökölné, egy csővezetéken hívó szülő (pl. a teszt-futó) a gyerek haláláig
+  # blokkolna az EOF-ra várva — mérve: a lánc-folytatás tesztje soha nem tért
+  # vissza, mert a leválasztott gyerek nyitva tartotta a csövet.
+  (
+    exec 9>&-   # a slot-zár nem öröklődhet, különben a gyerek magára várna
+    while kill -0 "$parent" 2>/dev/null; do sleep 1; done
+    setsid bash -c "$command"
+  ) >> "$state_dir/cron.log" 2>&1 < /dev/null &
+  disown 2>/dev/null || true
+}
+
+# A kör pre-flightjának bemenete: a brief MÉRT gyengeségei (ADR 0171 §4).
+# A `strict` szint leletei nem kapuk, hanem teendők — a brief-revízió a §2
+# szerint az orchestrátor saját hatásköre, és a kör ELEJÉN a legolcsóbb.
+write_brief_lint() {   # $1=kör $2=brief → a jelentés útvonala a stdouton
+  local round="$1" brief="$2" report="$state_dir/brief-lint-$1.md"
+  if [ ! -f "$repo_root/tools/brief-lint.py" ]; then printf '%s\n' "nincs"; return 0; fi
+  python3 "$repo_root/tools/brief-lint.py" --repo "$repo_root" --brief "$brief" \
+    --level strict --out "$report" >/dev/null 2>&1
+  local status=$?
+  if [ "$status" -ge 2 ]; then
+    log "BRIEF-LINT: a(z) $round briefje base-szintű leletet ad — a pre-flight első dolga a javítása ($report)"
+  elif [ "$status" -eq 1 ]; then
+    log "brief-lint: $round — strict teendők a pre-flighthoz ($report)"
+  fi
+  [ -f "$report" ] && printf '%s\n' "$report" || printf '%s\n' "nincs"
+}
 
 # --- Friss headless orchestrátor-session futtatása -------------------------
 # Az orchestrátor és az önjavító kör ugyanazt a mechanikát használja: tmux-ban
@@ -731,16 +841,53 @@ case "${1:-}" in
     terra_clear_stale_halt_for "${2:-}"
     exit 0
     ;;
+  --effective-slots)    # $2=kért slotszám → a RAM-fedezet szerinti tényleges (ADR 0171 §1)
+    effective_slots "${2:-$slots}"
+    exit 0
+    ;;
+  --slot-lock-path)    # $2=slot sorszám → a slot zárfájlja (a slot 1 a régi `lock`)
+    slot_lock_path "${2:-1}"
+    exit 0
+    ;;
+  --spawn-next-firing)    # teszthorog: a merge utáni azonnali lánc-folytatás ága
+    # NINCS `wait`: a gyerek SZÁNDÉKOSAN a szülő halálára vár (a slot-zár
+    # elengedésére), tehát a szülő megvárása holtpont lenne.
+    spawn_next_firing
+    exit 0
+    ;;
+  --brief-lint)    # $2=kör $3=brief → a pre-flight lint-jelentés útvonala (ADR 0171 §4)
+    write_brief_lint "${2:-}" "${3:-}"
+    exit 0
+    ;;
 esac
 
-# --- 1. Zár ---------------------------------------------------------------
-# A `flock -n` NEM blokkol: ha egy másik futás tartja a zárat, ez a firing
-# egyszerűen kihagyja magát. Cron-nál pontosan ez a kívánt viselkedés.
-exec 9>"$lock_file"
-if ! flock -n 9; then
-  log "zár foglalt — már fut egy kör, ez a firing kimarad"
+# --- 1. Zár (slot-alapú, ADR 0171) ---------------------------------------
+# A `flock -n` NEM blokkol: ha minden slot foglalt, ez a firing egyszerűen
+# kihagyja magát. Cron-nál pontosan ez a kívánt viselkedés.
+#
+# PIPELINE_SLOTS=1 (alapértelmezés) mellett a slot 1 zára ugyanaz a `lock`
+# fájl, ami eddig is volt — a viselkedés és az üzenet változatlan.
+slots=$(effective_slots "$slots")
+slot_acquired=0
+slot_candidate=1
+while [ "$slot_candidate" -le "$slots" ]; do
+  exec 9>"$(slot_lock_path "$slot_candidate")"
+  if flock -n 9; then
+    slot_index=$slot_candidate
+    slot_acquired=1
+    break
+  fi
+  slot_candidate=$(( slot_candidate + 1 ))
+done
+if [ "$slot_acquired" != "1" ]; then
+  if [ "$slots" -eq 1 ]; then
+    log "zár foglalt — már fut egy kör, ez a firing kimarad"
+  else
+    log "minden slot foglalt ($slots) — ez a firing kimarad"
+  fi
   exit 0
 fi
+[ "$slots" -gt 1 ] && log "slot $slot_index/$slots megszerezve (futó körök: $(inflight_rounds | tr '\n' ' '))"
 
 # --- 1.5 Terra napi-budget felfüggesztés (E03-R08 H6 önjavítás) -----------
 # Ha egy pozitív vészlimit mellett egy korábbi retry MÉRVE találta a napi
@@ -794,16 +941,73 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
 fi
 
 # Párhuzamos autonóm driver ezen a boxon MÉRT jelenség (memória, E02-R01):
-# nyitott PR vagy futó workflow = valaki más visz egy kört.
-open_prs=$(gh pr list --state open --json number --jq 'length' 2>/dev/null || echo "?")
+# nyitott PR vagy futó workflow = valaki más visz egy kört. A SAJÁT, futó
+# köreink branch-ei viszont nem „valaki más" — slot-módban ezeket kiszűrjük.
+inflight_branch_pattern() {   # regex a futó körök kisbetűs azonosítóiból (üres, ha nincs)
+  local pattern="" round lower
+  for round in $(inflight_rounds); do
+    lower=$(printf '%s' "$round" | tr 'A-Z' 'a-z')
+    pattern="${pattern:+$pattern|}$lower"
+  done
+  printf '%s\n' "$pattern"
+}
+own_branches=$(inflight_branch_pattern)
+
+count_foreign() {   # stdin: branch-nevek → a NEM sajátok száma
+  # Kis-nagybetű-független: a kör-branch `codex/e04-r15-…`, az önjavító ág
+  # viszont `heal/E04-R15-H3-1` alakú (mérve 2026-08-05) — ugyanaz a kör.
+  if [ -n "$own_branches" ]; then
+    grep -Evi "$own_branches" | grep -c '[^[:space:]]' || true
+  else
+    grep -c '[^[:space:]]' || true
+  fi
+}
+
+open_pr_branches=$(gh pr list --state open --json headRefName --jq '.[].headRefName' 2>/dev/null) \
+  || open_pr_branches="?"
+[ "$open_pr_branches" = "?" ] && die "a nyitott PR-ek nem kérdezhetők le (gh) — a lánc nem indul vakon"
+open_prs=$(printf '%s\n' "$open_pr_branches" | count_foreign)
 [ "$open_prs" = "0" ] || die "nyitott PR van ($open_prs) — másik kör lehet folyamatban"
 
-running_runs=$(gh run list --limit 20 --json status \
-  --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo "?")
+# A `main`-en FUTÓ workflow a saját merge utáni docs/sor-pushunk CI-ja: az
+# ADR 0086 óta a build-apk nem is indul main-push-ra, a Router CI pedig a
+# dokumentum-diffet méri. Ezt megvárni MÉRT holtidő volt (2026-08-05: a merge
+# és a következő kör indulása között ez adott egy teljes firing-kihagyást),
+# miközben nem védett semmit. Cserébe KEMÉNYEBB kaput kap a lánc: piros main
+# fölé nem indulunk (ezt korábban SEMMI nem ellenőrizte).
+running_branches=$(gh run list --limit 20 --json status,headBranch \
+  --jq '.[] | select(.status != "completed") | .headBranch' 2>/dev/null) || running_branches="?"
+[ "$running_branches" = "?" ] && die "a futó workflow-k nem kérdezhetők le (gh) — a lánc nem indul vakon"
+running_runs=$(printf '%s\n' "$running_branches" | grep -v '^main$' | count_foreign)
 [ "$running_runs" = "0" ] || die "fut egy workflow ($running_runs) — megvárjuk"
 
+main_ci=$(gh run list --workflow router-ci.yml --branch main --limit 1 \
+  --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null) || main_ci="?"
+case "$main_ci" in
+  failure | timed_out | startup_failure | action_required)
+    die "a main utolsó Router CI-ja $main_ci — a lánc nem indul piros main fölé"
+    ;;
+  "?") log "figyelem: a main Router CI-állapota nem kérdezhető le — a lánc a többi kapu alapján indul" ;;
+  *) : ;;
+esac
+
 # --- 4. A következő kör kiválasztása --------------------------------------
-next_line=$(grep -v '^[[:space:]]*#' "$queue_file" | grep -P '\tpending$' | head -1)
+# Egy slot mellett a sor ELEJE következik, változatlanul. Több slot mellett a
+# választás gépi: `tools/round-slots.py` csak olyan kört enged, amely (a) a
+# futókkal fájl-diszjunkt és (b) minden előfeltétele `done`. Az „előfeltétel"
+# konzervatív: az epicen belüli sorrend ÉS a briefben nevesített körök —
+# a futó kör NEM számít teljesítettnek, mert a benne születő API még nem létezik.
+if [ "$slots" -gt 1 ] && [ -f "$repo_root/tools/round-slots.py" ]; then
+  selected_round=$(python3 "$repo_root/tools/round-slots.py" --repo "$repo_root" \
+    --inflight "$inflight_dir" plan --slots "$slots" --limit 1 --format round 2>/dev/null | head -1)
+  if [ -z "$selected_round" ]; then
+    log "nincs a futókkal diszjunkt, előfeltétel-kész kör — ez a firing kimarad"
+    exit 0
+  fi
+  next_line=$(grep -v '^[[:space:]]*#' "$queue_file" | grep -P "^$selected_round\t" | grep -P '\tpending$' | head -1)
+else
+  next_line=$(grep -v '^[[:space:]]*#' "$queue_file" | grep -P '\tpending$' | head -1)
+fi
 if [ -z "$next_line" ]; then
   log "a sorban nincs több 'pending' kör — a lánc végigért"
   exit 0
@@ -869,6 +1073,15 @@ if [ "$dry_run" = "1" ]; then
   exit 0
 fi
 
+# A kör bejegyzése a futók közé. A takarítás EXIT-trapre megy, mert a driver
+# sok ágon lép ki (halt, hiba, merge) — a maradék bejegyzés különben örökre
+# blokkolna egy slotot (a stale maradék MÉRT hibaosztály, memória 2026-08-04).
+active_inflight="$round"
+trap 'inflight_remove "$active_inflight"' EXIT
+inflight_add "$round" "$brief"
+
+brief_lint_report=$(write_brief_lint "$round" "$brief")
+
 # --- 5. Az orchestrátor-prompt összeállítása ------------------------------
 run_stamp=$(date +%Y%m%dT%H%M%S)
 prompt_file="$state_dir/prompt-$round-$run_stamp.md"
@@ -878,6 +1091,7 @@ sed -e "s|{{ROUND}}|$round|g" \
     -e "s|{{BRIEF}}|$brief|g" \
     -e "s|{{ENGINE}}|$engine|g" \
     -e "s|{{ADR}}|$adr|g" \
+    -e "s|{{BRIEF_LINT}}|$brief_lint_report|g" \
     -e "s|{{STATUS_FILE}}|$status_file|g" \
     -e "s|{{ROUTER_STATUS_FILE}}|$router_status_file|g" \
     -e "s|{{HALT_FILE}}|$halt_file|g" \
@@ -932,7 +1146,10 @@ case "$outcome" in
       git commit -q -m "chore(pipeline): $round done (ADR 0087)"
       git push -q origin main || log "FIGYELEM: a sor-fájl push-a nem ment át"
     fi
-    log "a lánc mehet tovább; a következő firing viszi a következő kört"
+    inflight_remove "$round"
+    active_inflight=""
+    log "a lánc mehet tovább"
+    spawn_next_firing
     exit 0
     ;;
   halted)

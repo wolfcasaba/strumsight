@@ -823,6 +823,30 @@
 > `pending` — the driver continues automatically (ADR 0087 §7, mid-epic
 > round).
 
+> ## 🔧 Governance: ADR 0171 — pipeline áteresztő-képesség (2026-08-05)
+>
+> User-döntés („hogyan gyorsítsuk a fejlesztést … biztonságosan, tesztekkel …
+> a kódminőség ne romoljon"). Nem termék-kör: a lánc mérése és gyorsítása, a
+> mérce változatlanul hagyásával. Mért kiindulás (`tools/round-metrics.py`,
+> 41 kör): **medián kör-idő 79 perc, holtidő-arány 22,8%, 9/41 kör önjavítást
+> igényelt.**
+>
+> Új eszközök: `tools/round-ci-plan.py` (melyik CI a kapu — APK csak natív
+> diffre, különben az azonos mérce-láncú `full-gate.yml`), `tools/brief-lint.py`
+> (a javító körök okait a pre-flightban fogja meg; a `base` szint Router-CI
+> kapu a NYITOTT körökre), `tools/round-slots.py` (párhuzamos slotok
+> diszjunktság + előfeltétel szerint, atomi ADR-foglalás),
+> `tools/round-metrics.py` (kör-időmérleg), `tools/round-merge-lock.sh`.
+> Driver: azonnali lánc-folytatás merge után (`PIPELINE_SELF_CHAIN=1`, alap),
+> piros `main` fölé nem indul, slot-mechanika (`PIPELINE_SLOTS=1`, alap).
+> Gate: globális zár, hogy két Flutter-gate soha ne fusson egyszerre (L05).
+>
+> **A mérce nem lazult** — 43 új teszt
+> (`tools/tests/test_pipeline_throughput.py`) őrzi, hogy a gyorsított CI-sáv
+> lépésről lépésre azonos az APK-ssal, hogy natív diff nem csúszhat az olcsó
+> sávba, és hogy a gate egyetlen lépése sem tűnhet el. Részletek:
+> [`docs/adr/0171-pipeline-throughput-program.md`](docs/adr/0171-pipeline-throughput-program.md).
+
 ## 1. Current release state
 
 - **StrumSight** — offline, on-device guitar chord + strum-direction detector
