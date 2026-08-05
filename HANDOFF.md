@@ -4,8 +4,37 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R17 MERGED — Conversation repository, summary & inspectable memory,
-> nincs új ADR / ADR 0134 hatálya; Codex/Terra, exact-SHA zöld kapun át).**
+> (E04-R18 MERGED — Tutor Home, Chat UI & streaming UX, flag-gated fake-gateway
+> presentation layer, nincs új ADR / ADR 0131+0134 hatálya; MiniMax M3,
+> exact-SHA zöld kapun át).**
+>
+> ## ✅ E04-R18 KÉSZ — Tutor Home, Chat UI & streaming UX (2026-08-05)
+>
+> **E04-R18** MERGED (PR [#151](https://github.com/wolfcasaba/strumsight/pull/151),
+> squash `104e685`, **nincs új ADR** — presentation-only, az ADR 0131 (fake gateway)
+> + 0134 (memory) hatálya; implementer **MiniMax M3**, orchestrátor/reviewer
+> **Claude Opus 4.8**). Az AI-tutor első teljes, accessibility-kompatibilis
+> Flutter felülete az `aiTutorEnabled` flag mögött, **fake gatewayre** kötve
+> (valódi cloud = E04-R19): Tutor **Home** + virtualizált **Chat**;
+> content-blockonkénti message-bubble (text/heading/bullet/metric/evidence/source/
+> action/plan/warning/error/**unknown-safe** monospaced, nem futtatható HTML);
+> streaming-batched a11y (screen reader turn-onként, nem tokenenként),
+> scroll-anchoring, stop/retry/copy/feedback, draft-megőrzés; megkülönböztetett
+> offline/consent/rate-limit/error bannerek. Route a flag mögött
+> (`lib/app/routing/app_router.dart` `if (aiTutorEnabled) …[GoRoute]`, typed
+> `AppRoutes.tutorHome/tutorChat` — E02-R12 precedens); flag OFF ⇒ route hiányzik
+> ⇒ Live fallback (mindkét cella tesztelt). **Pre-flight §0.0:** nincs új ADR
+> (mérve); base-korrekció — a brief `lib/app/router/app_route.dart` rossz útját
+> `lib/app/routing/app_route.dart`-ra javítva **és** `app_router.dart` felvéve az
+> `allowed_paths`-ba (a flag-gating cellák enélkül nem teljesíthetők).
+> **Review:** [`docs/reviews/e04-r18-tutor-home-chat-ui-review.md`](docs/reviews/e04-r18-tutor-home-chat-ui-review.md)
+> — **APPROVED javító kör #1 után**: az első implementer-futás a box lassúsága
+> miatt a 3600s abszolút időkorlátot elérte a gate teszt-lépésében (`status=timeout`,
+> `scope_audit=ok`) commit előtt; a scope-tiszta munkát az orchestrátor megmentette,
+> a két valódi teszt-bukást (R18-A4 látható Stop streamingben; R18-A13 új-buborék
+> rebuild) a MiniMax javító köre zöldre vitte. CI exact-SHA `a6165c5`:
+> full-gate [31056115529](https://github.com/wolfcasaba/strumsight/actions/runs/31056115529)
+> + router-ci [31056108608](https://github.com/wolfcasaba/strumsight/actions/runs/31056108608) **success**.
 >
 > ## ✅ E04-R17 KÉSZ — Conversation repository, summary & inspectable memory (2026-08-05)
 >
@@ -575,13 +604,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #148](https://github.com/wolfcasaba/strumsight/pull/148), squash
-`1e9b2db` (E04-R17). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
-írt elő (nincs natív út): full-gate [31050133428](https://github.com/wolfcasaba/strumsight/actions/runs/31050133428)
-+ router-ci [31050123599](https://github.com/wolfcasaba/strumsight/actions/runs/31050123599)
-**success** az exact merge-SHA `41cafd5`-en; a post-merge gate `main`-en zöld, a
-review **APPROVED** (2 MAJOR zárva javító kör #1-ben).
-(Történeti product-merge referenciák: PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
+`main` @ [PR #151](https://github.com/wolfcasaba/strumsight/pull/151), squash
+`104e685` (E04-R18). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
+írt elő (nincs natív út): full-gate [31056115529](https://github.com/wolfcasaba/strumsight/actions/runs/31056115529)
++ router-ci [31056108608](https://github.com/wolfcasaba/strumsight/actions/runs/31056108608)
+**success** az exact merge-SHA `a6165c5`-en; a post-merge gate `main`-en zöld, a
+review **APPROVED** (javító kör #1: box-timeout salvage + 2 teszt-fix).
+(Történeti product-merge referenciák: PR #148 / `1e9b2db`, E04-R17; PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
 E04-R15; PR #140 / `c5b14e5`, E04-R12; PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`,
 E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
@@ -655,6 +684,37 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E04-R18 — Tutor Home, Chat UI & streaming UX** (PR
+[#151](https://github.com/wolfcasaba/strumsight/pull/151), squash `104e685`,
+**nincs új ADR** — presentation-only, ADR 0131+0134 hatálya; implementer
+**MiniMax M3**; orchestrátor/reviewer **Claude Opus 4.8**).
+
+**Elkészült:** az AI-tutor első teljes, accessibility-kompatibilis Flutter
+felülete az `aiTutorEnabled` flag mögött, **fake gatewayre** kötve (valódi cloud
+= R19). Tutor Home (`tutor_home_screen.dart`) + virtualizált Chat
+(`tutor_chat_screen.dart`), content-blockonkénti `tutor_message_bubble.dart`
+(unknown/raw blokk biztonságos, monospaced, nem futtatható HTML),
+`tutor_composer.dart` (input + draft-megőrzés), `tutor_banners.dart`
+(offline≠consent≠rate≠error, distinct semantics label), `tutor_providers.dart`
+(Riverpod wiring a fake gatewayjel + orchestrátor/knowledge/context — csak
+`ai_tutor/` importok, nincs remote/cloud). Route a flag mögött
+`lib/app/routing/app_router.dart`-ban (typed `AppRoutes.tutorHome/tutorChat`);
+flag OFF ⇒ route hiányzik ⇒ Live fallback (R18-R1..R4 mindkét cellát méri).
+20 widget-teszt fake gatewayjel (empty/send/stream/cancel/retry/banner/unknown/
+large-text/semantics/hu-en/scroll-anchoring).
+**Pre-flight §0.0:** nincs új ADR (mérve); base-korrekció — a brief rossz
+`lib/app/router/app_route.dart` útja `routing/`-ra javítva + `app_router.dart`
+felvéve az `allowed_paths`-ba (a flag-gating cellák enélkül nem teljesíthetők).
+Review: [`docs/reviews/e04-r18-tutor-home-chat-ui-review.md`](docs/reviews/e04-r18-tutor-home-chat-ui-review.md)
+— **APPROVED javító kör #1 után**: az első futás a box lassúsága miatt a 3600s
+abszolút időkorlátot elérte a gate teszt-lépésében (`status=timeout`,
+`scope_audit=ok`) commit előtt → az orchestrátor a scope-tiszta munkát megmentette,
+a két valódi teszt-bukást (R18-A4 látható Stop; R18-A13 új-buborék rebuild) a
+MiniMax egy javító körben zöldre vitte. CI exact-SHA `a6165c5`: full-gate +
+router-ci **success**; post-merge gate `main`-en zöld.
+
+---
 
 **E04-R17 — Conversation repository, summary & inspectable memory** (PR
 [#148](https://github.com/wolfcasaba/strumsight/pull/148), squash `1e9b2db`,
@@ -1051,8 +1111,11 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
    meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
    importtal érhetők el, a publikus export a hívó UI-kör (R18/R19) érkezéséig
-   halasztva. **A queue következő `pending` sora: E04-R18 — Tutor home chat UI
-   (implementer: minimax).**
+   halasztva. **A queue következő `pending` sora: E04-R19 (a pipeline indítja
+   új sessionben).**
+   **~~E04-R18 — Tutor Home, Chat UI & streaming UX~~ — KÉSZ** (PR #151, `104e685`,
+   nincs új ADR — ADR 0131+0134 hatálya; implementer MiniMax M3; box-timeout salvage
+   + 2 teszt-fix javító kör #1-ben; ld. fejléc + §5).
    **~~E04-R17 — Conversation repository, summary & inspectable memory~~ — KÉSZ** (PR #148, `1e9b2db`,
    nincs új ADR — ADR 0134 hatálya; implementer Codex; 2 MAJOR zárva javító kör #1-ben; ld. fejléc + §5).
    **~~E04-R16 — Tutor orchestration state machine & output validator~~ — KÉSZ** (PR #147, `df25806`,

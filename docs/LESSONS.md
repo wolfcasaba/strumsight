@@ -4475,3 +4475,30 @@ kivétele a listából a Router CI-t **zölden** hagyta (a `test_pipeline_throug
 csak az R15↔R16 `public.dart`-ütközést drótozza be, R17-et nem), mert a
 merge-SHA-n MÉRTEM a Router CI-t merge előtt (L113). A tanulság nem „sose szűkíts",
 hanem „a szűkítés után MÉRD a Router CI-t a branch-headen" — R17 ezt tette, és zöld volt.
+
+## L131 — Box-lassúság okozta implementer-timeout mentése: a scope-tiszta, commit-előtti munka nem vész el (E04-R18)
+
+**Mérve 2026-08-05, E04-R18 (MiniMax M3, `mm-round.sh`).** Az első implementer-futás
+a `tools/round-gate.sh` teszt-lépésében (a lassú Oracle box `flutter test`-je +
+ismételt iterációk) elérte a wrapper **3600s abszolút időkorlátját**, MIELŐTT
+commitolt volna: a jelzés `status=timeout`, `head=<brief-commit>`, `dirty_files=6`,
+de **`scope_audit=ok`** (12 fájl, mind az `allowed_paths`-on). A munka kész és
+scope-tiszta volt — csak a commit maradt el.
+
+**Szabály (orchestrátor):** timeout ≠ H6 az ELSŐ halálnál (H6 = *kétszer* unknown/
+stalled). A `scope_audit=ok` + teljes, koherens diff esetén a helyes lépés **nem**
+a kör újrakezdése, hanem: (1) a scope-tiszta munka **commitolása** a branchre
+(mechanikus mentés, nem normatív döntés); (2) a `dart format` gate-lépés kézi
+rendezése, ha az akadt el (mechanikus); (3) a **teljes gate független újrafuttatása**
+— ez adja a valódi zöld/piros képet; (4) ha a gate valódi teszt-bukást mutat,
+az a NORMÁL **javító kör** ugyanannak a motornak, a bukások pontos listájával,
+**emelt `MM_ROUND_TIMEOUT`-tal** (7200s) és „iteráció közben CSAK a célzott
+teszt-fájlt futtasd, a teljes gate-et egyszer a végén" utasítással — különben a
+box-lassúság újra timeoutol. E04-R18-ban a javító kör így **egy** menetben zöldre
+vitte a két bukást (R18-A4, R18-A13).
+
+**Amit az orchestrátor NEM tesz (ADR 0055):** nem javítja maga a bukó teszt/impl
+LOGIKÁT — az az implementer dolga; a commit/format/gate-futtatás a megengedett
+mechanikus mentés határa. A `mm-round.sh` egyébként **teljes klónt** vár
+(`.git` KÖNYVTÁR); `git worktree` (`.git` FÁJL) nem megy — a munkapéldány
+`git clone` legyen, ne worktree.
