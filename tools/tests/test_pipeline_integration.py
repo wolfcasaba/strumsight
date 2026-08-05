@@ -266,7 +266,11 @@ class PipelineIntegrationTest(unittest.TestCase):
             state = Path(directory_name)
             (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
             env = dict(os.environ)
-            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL="0")
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL="0",
+                PIPELINE_NO_LAUNCH="1",
+            )
 
             switched_off = self.run_command(["bash", str(script)], env=env)
 
@@ -281,7 +285,11 @@ class PipelineIntegrationTest(unittest.TestCase):
             (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
             (state / "selfheal.count").write_text("E09-R01|H6|2\n")
             env = dict(os.environ)
-            env.update(PIPELINE_STATE_DIR=str(state), PIPELINE_SELFHEAL_MAX="2")
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL_MAX="2",
+                PIPELINE_NO_LAUNCH="1",
+            )
 
             exhausted = self.run_command(["bash", str(script)], env=env)
 
@@ -666,6 +674,10 @@ class PipelineIntegrationTest(unittest.TestCase):
                 PIPELINE_STATE_DIR=str(state),
                 PIPELINE_SELFHEAL_MAX="3",
                 PATH=f"{stub_bin}:{env['PATH']}",
+                # MÉRVE 2026-08-05: e teszt a stale halt archiválása UTÁN
+                # továbbfut a kör-indítási ágra, ahol a VALÓDI queue-t olvassa
+                # — tiszta `main`-ről futtatva éles sessiont indított.
+                PIPELINE_NO_LAUNCH="1",
             )
 
             held = self.run_command(["bash", str(script)], env=env)
@@ -725,6 +737,10 @@ class PipelineIntegrationTest(unittest.TestCase):
                 PIPELINE_STATE_DIR=str(state),
                 PIPELINE_SELFHEAL_MAX="3",
                 PATH=f"{stub_bin}:{env['PATH']}",
+                # MÉRVE 2026-08-05: e teszt a stale halt archiválása UTÁN
+                # továbbfut a kör-indítási ágra, ahol a VALÓDI queue-t olvassa
+                # — tiszta `main`-ről futtatva éles sessiont indított.
+                PIPELINE_NO_LAUNCH="1",
             )
 
             result = self.run_command(["bash", str(script)], env=env)
@@ -1286,6 +1302,54 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("READY_FOR_REVIEW", completed.stdout)
             self.assertNotIn("do not print me", completed.stdout)
+
+
+class NoLaunchGuardTest(unittest.TestCase):
+    """`PIPELINE_NO_LAUNCH=1` must make a session launch impossible.
+
+    MÉRT incidens (2026-08-05, GOV-03): a teljes firinget futtató esetek
+    izolált `PIPELINE_STATE_DIR`-t kapnak, de a kör-indítási ág a VALÓDI
+    `docs/execution/pipeline-queue.tsv`-t olvassa. Tiszta `main`-ről futtatva
+    a suite ÉLES orchestrátor-sessiont és `codex exec`-et indított az
+    E04-R10-re; a félkész implementer-munka elveszett, a kör-branchet újra
+    pre-flightolta és pusholta. A tesztfájl korábbi fejlécei ezt a veszélyt
+    már ismerték, de csak a self-heal ágra védekeztek stub-okkal — a
+    kör-indítási ág védtelen maradt.
+
+    Ezért a védelem nem stub, hanem szerződés a driverben; ez a teszt azt
+    méri, hogy a szerződés a KÓDBAN van, nem a tesztek fegyelmében.
+    """
+
+    def test_the_driver_refuses_to_start_any_session_under_the_switch(self) -> None:
+        source = (ROOT / "tools" / "round-pipeline.sh").read_text(encoding="utf-8")
+
+        # A kapcsolót a KÖZÖS session-indító őrzi, tehát a kör- és az
+        # önjavító ág is fedve van egyetlen ponton.
+        launcher = source.split("run_tmux_session() {", 1)[1]
+        guard_position = launcher.find('PIPELINE_NO_LAUNCH')
+        tmux_position = launcher.find('tmux new-session')
+
+        self.assertNotEqual(guard_position, -1, "hiányzik a PIPELINE_NO_LAUNCH őr")
+        self.assertNotEqual(tmux_position, -1, "nem található a session-indítás")
+        self.assertLess(
+            guard_position,
+            tmux_position,
+            "az őrnek a session-indítás ELŐTT kell visszatérnie",
+        )
+
+    def test_every_full_firing_test_sets_the_switch(self) -> None:
+        # Regressziós őr: ha valaki új teljes-firing esetet ír a kapcsoló
+        # nélkül, ez a teszt elhasal, mielőtt élesben indítana kört.
+        source = (ROOT / "tools" / "tests" / "test_pipeline_integration.py").read_text(
+            encoding="utf-8"
+        )
+        full_firings = source.count('run_command(["bash", str(script)], env=env)')
+
+        self.assertEqual(
+            source.count('PIPELINE_NO_LAUNCH="1"'),
+            full_firings,
+            "minden teljes-firing esetnek PIPELINE_NO_LAUNCH=1-gyel kell futnia",
+        )
 
 
 if __name__ == "__main__":

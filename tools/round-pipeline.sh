@@ -168,6 +168,22 @@ run_tmux_session() {
   local timeout_s="$5" label="$6" watch_claude_limit="${7:-0}"
   local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
 
+  # TESZT-BIZTOSÍTÉK (ADR 0138, MÉRVE 2026-08-05). A `tools/tests/` teljes
+  # firinget futtató esetei izolált `PIPELINE_STATE_DIR`-t kapnak, de a
+  # kör-indítási ág a VALÓDI `docs/execution/pipeline-queue.tsv`-t olvassa —
+  # így egy tiszta `main`-ről futtatott teszt ÉLES orchestrátor-sessiont és
+  # `codex exec`-et indított az E04-R10-re (a félkész implementer-munka
+  # elveszett, a kör-branch újra pre-flightolva lett). A tesztfájl fejlécei
+  # ezt a veszélyt már ismerték ("confirmed: it happened … had to be killed
+  # by hand"), de csak a self-heal ágra védekeztek stub-okkal.
+  #
+  # Ez a kapcsoló nem heurisztika, hanem szerződés: `PIPELINE_NO_LAUNCH=1`
+  # mellett a driver MINDEN egyéb logikája lefut, de sessiont soha nem indít.
+  if [ "${PIPELINE_NO_LAUNCH:-0}" = "1" ]; then
+    log "PIPELINE_NO_LAUNCH=1 — a(z) $label session NEM indul (teszt-mód)"
+    return 90
+  fi
+
   tmux kill-session -t "$tmux_session" 2>/dev/null || true
   tmux new-session -d -s "$tmux_session" bash
   tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
