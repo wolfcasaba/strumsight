@@ -3730,6 +3730,16 @@ a §0.0 (2) szerint bekerült a `tutor_conversation_test.dart`-ba; a review
 mutáció-próbája (flutter-import a domainbe → purity RED) igazolta, hogy valódi
 gépi mérce, nem díszlet.
 
+**Ismétlődés (E04-R09/R10/R11, 2026-08-05).** Ugyanez a minta a batch-előre-írt
+briefekben **rendszerszintű**: mindhárom kör `allowed_paths`-a listázta a
+`public.dart`-ot „additív export" céllal, holott a fagyott `ai_tutor_boundary_test.dart`
+nulla-export invariánsa bármely exporttól RED-re váltana (a boundary-teszt a
+kör scope-ján kívül van). A helyes feloldás minden esetben azonos: **§0.0
+lista-SZŰKÍTÉS** (D2), a `public.dart` üresen marad, a tesztek a domain/application
+fájlokat közvetlenül importálják. A batch-brief-szerzőnek (round-brief-prep) a
+`public.dart`-ot addig NEM kellene engedélyezett-listára tennie, amíg egy valódi
+fogyasztó kör (R16/R19) meg nem érkezik.
+
 ## L108 — CI-dispatch a kör-branchre az implementer LOKÁLIS commitját nem tolja fel; az első run a régi origin-tipre épül — a review-push viszi fel a kódot, és az exact-SHA re-dispatch az egyetlen merge-evidencia (E04-R03, 2026-08-05)
 
 **Mérés.** Az E04-R03-ban a Codex a `feat` commitot (`2e4766e`) a megosztott

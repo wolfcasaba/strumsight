@@ -4,18 +4,33 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R10 MERGED — read-only tutor tool contract & registry).**
+> (E04-R11 MERGED — action proposal, validation & confirmation service).**
 >
-> ## ▶️ E04-R10 KÉSZ (2026-08-05)
+> ## ▶️ E04-R11 KÉSZ (2026-08-05)
 >
-> **E04-R10 — Tutor Tool contract & read-only registry** MERGED (PR
-> [#136](https://github.com/wolfcasaba/strumsight/pull/136), squash `2f7fffc`,
-> **új ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)**). Typed,
-> allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
-> compute** (nincs file/network/code tool). Implementer **Codex (Terra)**,
-> orchestrátor/reviewer **Claude Opus 4.8**, review APPROVED (0 BLOCKER/MAJOR,
-> 1 NOTE). Zöld kapu: build-apk + router-ci `success` exact head `80a7b7b`.
-> **Következő: E04-R11 — action proposal & confirmation (a pipeline indítja).**
+> **E04-R11 — Action proposal, validation & confirmation service** MERGED (PR
+> [#137](https://github.com/wolfcasaba/strumsight/pull/137), squash `479550f`,
+> **új ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)**,
+> implementálja az ADR 0133-at). Kétlépcsős, felhasználó által megerősített
+> action-rendszer — **automatikus write/launch soha**: providerfüggetlen sealed
+> `TutorAction` hierarchia (typed capability, `clientActionId`, opaque
+> revision-token), pure validator (a `confirm` **újrafuttatja**), idempotens
+> confirmation-service (in-flight + completed `clientActionId`), memóriás fake
+> executor — nincs production nav/write, nyers route-string strukturálisan sem
+> érhet el executort. Implementer **Codex (Terra)**, orchestrátor/reviewer
+> **Claude Opus 4.8**, review APPROVED (0 BLOCKER/MAJOR/MINOR, 1 NOTE).
+> Zöld kapu: build-apk + router-ci `success` exact head `66fadfc`, merge-SHA
+> router-ci `479550f` success, post-merge lokális gate zöld.
+> **Következő: E04-R12 (a pipeline indítja új sessionben).**
+>
+> <details><summary>E04-R10 — Tutor Tool contract & read-only registry (2026-08-05) — snapshot</summary>
+>
+> **E04-R10** MERGED (PR [#136](https://github.com/wolfcasaba/strumsight/pull/136),
+> squash `2f7fffc`, **ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)**).
+> Typed, allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
+> compute**. Implementer Codex (Terra), review APPROVED (0 BLOCKER/MAJOR, 1 NOTE);
+> build-apk + router-ci `success` exact head `80a7b7b`.
+> </details>
 >
 > ## ▶️ GOV-03 KÉSZ — a lánc újraindítva (2026-08-05)
 >
@@ -1048,12 +1063,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #130](https://github.com/wolfcasaba/strumsight/pull/130), squash
-`8182204` (E04-R07). [Build Android APK 30975365023](https://github.com/wolfcasaba/strumsight/actions/runs/30975365023)
-is **success** for exact branch `headSha` `2b4bb19` (full Flutter suite,
-randomized property/coverage gate and development APK). The independent
-post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e04-r07-offline-knowledge-index-retrieval-review.md`](docs/reviews/e04-r07-offline-knowledge-index-retrieval-review.md).
+`main` @ [PR #137](https://github.com/wolfcasaba/strumsight/pull/137), squash
+`479550f` (E04-R11). [Build Android APK 30996409067](https://github.com/wolfcasaba/strumsight/actions/runs/30996409067)
+is **success** for exact branch `headSha` `66fadfc` (full Flutter suite,
+randomized property/coverage gate and development APK); Router CI `success` on
+the same head and on the merge SHA `479550f`. The independent post-merge gate on
+`main` is green, and the final review is **APPROVED** in
+[`e04-r11-action-proposal-and-confirmation-review.md`](docs/reviews/e04-r11-action-proposal-and-confirmation-review.md).
 (Előző product-merge-ek: PR #129 / `f3d69ef`, E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04; PR #126 / `06ae3f7`, E04-R03.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
@@ -1127,6 +1143,39 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
+**E04-R11 — Action proposal, validation & confirmation service** (PR
+[#137](https://github.com/wolfcasaba/strumsight/pull/137), squash `479550f`,
+**új ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)** —
+mechanizmus-döntések, implementálja az ADR 0133-at, orchestrátor írta a
+pre-flightban). Implementer: **Codex (Terra, örökölt kézi override)**;
+orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** kétlépcsős, felhasználó által megerősített action-rendszer —
+**automatikus write/launch soha**. Providerfüggetlen sealed `TutorAction`
+hierarchia immutable metadatával (source, expiry [UTC], typed `TutorActionCapability`,
+`clientActionId`, opaque `TutorActionRevisionToken`); typed profile-update /
+plan-save / session-launch action `preview`-vel; explicit `TutorUnknownActionProposal`
+és `TutorRawRouteActionProposal` — **egyik sem `TutorAction`**, így strukturálisan
+sem érhet el executort. Pure `TutorActionValidator` (expiry inkluzív, capability,
+song-revision, source-session), amit a `confirm` **confirm-időben újrafuttat**
+(stale-recheck). `ActionConfirmationService`: csak `pendingConfirmation`-ből
+`execute`, reject után nem, **idempotens `clientActionId`-vel** (in-flight future
+dedup + completed-set); memóriás `FakeTutorActionExecutor`, nincs production
+nav/write. Route-katalógus mérve: `AppRoutes` **String-katalógus, nincs
+route-enum**; a domain **nem** importál `lib/app/routing/*`-ot. **Pre-flight §0.0
+(main @ `fa76d20`):** D1 — új ADR 0139 (0138 volt a legmagasabb); D2 —
+`public.dart` eltávolítva az engedélyezett-listáról (nulla-export boundary
+invariáns, nincs hívó; R12/R16/R19 fogyasztja); erőforrás-tulajdonlás mérve
+(`rg .acquire(` → csak `mic_capture.dart`, az action-réteg lease-mentes). Review
+**APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE) — expiry alatt/rajta/fölötte mátrix
+tesztelve, a raw-route guard **valódi-sértés mutáció-próbával** RED-re váltva
+(izolált `/tmp` klón), sequential-reconfirm idempotencia próbával igazolva. CI:
+build-apk [30996409067](https://github.com/wolfcasaba/strumsight/actions/runs/30996409067)
++ router-ci `success` exact head `66fadfc`, merge-SHA router-ci `479550f` success;
+post-merge gate zöld.
+
+<details><summary>E04-R10 — Tutor Tool contract & read-only registry (PR #136, ADR 0137) — snapshot</summary>
+
 **E04-R10 — Tutor Tool contract & read-only registry** (PR
 [#136](https://github.com/wolfcasaba/strumsight/pull/136), squash `2f7fffc`,
 **új ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)** —
@@ -1151,6 +1200,7 @@ kódokra képződik; D4 — nincs erőforrás-lease (`rg .acquire(` 0 találat).
 **valódi-sértés próbával** igazolva (extra tool a shipped `toolsFor`-ba → 3 teszt
 RED → visszaállítva). CI: build-apk + router-ci `success` exact head `80a7b7b`;
 post-merge gate zöld.
+</details>
 
 <details><summary>E04-R07 — Offline knowledge index & retrieval (PR #130, ADR 0136) — snapshot</summary>
 
@@ -1357,16 +1407,17 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R11 — Action proposal & confirmation** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R11` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r11-action-proposal-and-confirmation.md`). A pipeline
+0. **E04-R12 — (a következő Epic 4 kör)** — a
+   `docs/execution/pipeline-queue.tsv` következő `pending` sora; a pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi el**.
-   Bemenete az E04-R10 read-only tool-rendszer (`TutorToolRegistry`, ADR 0137) +
-   az ADR 0133 kétlépcsős write/launch-megerősítés; a `public.dart` **üres-boundary
-   invariáns** (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R12/R16/R19)
-   nem érkezik meg.
+   Bemenete az E04-R11 action/confirmation-rendszer (`ActionConfirmationService`,
+   `TutorAction`, ADR 0139) + az E04-R10 read-only tool-rendszer (ADR 0137); a
+   `public.dart` **üres-boundary invariáns** (`ai_tutor_boundary_test.dart`)
+   tovább él, amíg a hívó (R16/R19) nem érkezik meg.
+   **~~E04-R11 — Action proposal & confirmation~~ — KÉSZ** (PR #137, `479550f`,
+   ADR 0139, ld. a fejléc-összefoglalót és §5).
    **~~E04-R10 — Tutor Tool contract & read-only registry~~ — KÉSZ** (PR #136, `2f7fffc`,
-   ADR 0137, ld. a fejléc-összefoglalót és §5).
+   ADR 0137, ld. §5 snapshot).
    **~~E04-R08 — Deterministic debrief coaching~~ — KÉSZ** (a queue sora, ld. archívum).
    **~~E04-R07 — Offline knowledge index & retrieval~~ — KÉSZ** (PR #130, `8182204`,
    ADR 0136, ld. a fejléc-összefoglalót és §5).
