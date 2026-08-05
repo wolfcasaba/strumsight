@@ -1,6 +1,6 @@
 # E04-R07 — Offline knowledge index és retrieval
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-05, kód olvasva: main @ `e79a0eb`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 7; §35
 - **Branch:** `codex/e04-r07-offline-knowledge-index-retrieval`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R06 merge**
@@ -15,7 +15,7 @@ allowed_paths = [
   "lib/features/ai_tutor/data/knowledge/asset_knowledge_repository.dart",
   "lib/features/ai_tutor/domain/models/tutor_source_ref.dart",
   "tool/build_tutor_knowledge_index.dart",
-  "lib/features/ai_tutor/public.dart",
+  "docs/adr/0136-tutor-knowledge-retrieval.md",
   "test/features/ai_tutor/data/knowledge_index_test.dart",
   "test/features/ai_tutor/data/knowledge_retriever_test.dart",
   "docs/baseline/epic-04-knowledge-retrieval.md",
@@ -43,7 +43,42 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Mérve az orchestrátor pre-flightjában (main @ `e79a0eb`, E04-R06 merge megvan).**
+
+**ADR:** ÚJ **[ADR 0136](../adr/0136-tutor-knowledge-retrieval.md)** — deterministic
+offline tutor knowledge retrieval (az orchestrátor írta a pre-flightban; 0135 volt a
+legmagasabb merge-elt szám). Az ADR 0135 (merge-elt) **NEM módosul**.
+
+**Mért schema (`lib/features/ai_tutor/data/knowledge/knowledge_document.dart:81–93`):**
+a `KnowledgeDocument` mezői: `schemaVersion`, `id`, `locale`, `skill`
+(`KnowledgeSkill`: rhythm/chord/technique/practice/safety), `difficulty`
+(`KnowledgeDifficulty`: beginner/intermediate/advanced), `license`, `version`,
+`status`, `title`, `body`, `contentHash`. Az asset-JSON-ok (`assets/tutor_knowledge/**`)
+ugyanezek. A `KnowledgeCodec` (`knowledge_codec.dart`) determinisztikus JSON codec +
+bekezdés-chunker → `KnowledgeChunk` (documentId, index, content, contentHash).
+A manifest (`assets/tutor_knowledge/manifest.json`) doc-onként: id/locale/skill/
+difficulty/license/version/contentHash/sourcePath + chunk-lista.
+
+**REVÍZIÓ 1 — mért mezőkészlet (a §3/§6 „topic"/„keywords"/„heading" avult):**
+a schemában **nincs `topic`, `keywords`, `heading` mező** (grep: 0 találat). Ezért:
+- **`topic` ≡ `skill`** — a „topic-filter" a `KnowledgeSkill` enumon szűr.
+- A ranking a **létező szövegen** súlyoz: `title` (nagyobb súly) + chunk
+  `content`/`body` (kisebb súly). Nincs külön keyword/heading dimenzió.
+- Az index **locale + skill + difficulty** aware (mindhárom mező létezik).
+
+**REVÍZIÓ 2 — allowed-list SZŰKÍTÉS (`public.dart` eltávolítva):** a brief eredeti
+listája `lib/features/ai_tutor/public.dart`-ot „additív export"-ként tartalmazta, de
+a `test/features/ai_tutor/ai_tutor_boundary_test.dart` **nulla-import/export
+invariánst** őriz — bármely export a public.dart-ból RED. E körnek **nincs hívója**
+(R12/R16 fogyasztja majd a retrievalt), így az R06-precedens szerint a réteg belső
+marad (`data/knowledge/` + `domain/models/`), a `public.dart` **üres és érintetlen**.
+A `public.dart` az allowed_paths-ből eltávolítva; helyette `docs/adr/0136-…md`. Az
+allowed-lista szűkítése az orchestrátor autonómiájában van (ADR 0087 §2).
+
+**Mért §1 szabályok:** (1) *elérhetetlen cél-státusz* — a min-score/max-result határ
+policy, nem meglévő reducer; az inkluzivitás (`>= minScore`) a kötött szemantika,
+fixture-indexből géppel számítva. (2) *erőforrás-tulajdonlás* — a kör nem rendel
+lease/lock/subscription-t réteghez; N/A.
 
 ## 1. Cél
 
@@ -75,7 +110,7 @@ tétele.
 | `.../data/knowledge/asset_knowledge_repository.dart` | ÚJ | asset-betöltés |
 | `.../domain/models/tutor_source_ref.dart` | ÚJ | forrásjelölés |
 | `tool/build_tutor_knowledge_index.dart` | ÚJ | determinisztikus index-build |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
+| `docs/adr/0136-tutor-knowledge-retrieval.md` | ÚJ | retrieval-kontraktus ADR |
 | `test/features/ai_tutor/data/*` | ÚJ | ranking/collapse/corrupt tesztek |
 | `docs/baseline/epic-04-knowledge-retrieval.md` | ÚJ | latency baseline |
 | `docs/rounds/e04-r07-*.md` | meglévő | §10 handoff |
