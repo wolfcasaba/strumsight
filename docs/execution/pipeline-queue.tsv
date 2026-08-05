@@ -122,3 +122,47 @@ E04-R21	docs/rounds/e04-r21-song-trainer-debrief-range-actions.md	codex	nincs	pe
 E04-R22	docs/rounds/e04-r22-profile-privacy-data-consent-ui.md	minimax	nincs	pending
 E04-R23	docs/rounds/e04-r23-safety-injection-usage-evaluation-gate.md	codex	nincs	pending
 E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	pending
+# Epic 5 (Computer Vision) — batch előkészítve 2026-08-05 (docs/rounds/epic-05-batch-index.md).
+# Előfeltétel: E04-R24 (Epic 4 zárás) merge. A sorok `pending`-en: a lánc az Epic 4
+# után FOLYAMATOSAN megy tovább Epic 5-re (E05-R01…R30), nem áll meg az epic-határon
+# (user-döntés 2026-08-05: „amikor az epic néggyel végez, induljon automatikusan az
+# epic öt is"). Epic-határon való megállításhoz: `pending` → `hold` a 30 soron.
+# Motor: ADR 0069 mért szabály — R08/R11 (UI-dominált) minimax, a többi codex.
+# ADR-blokk: 0161–0170 FENNTARTVA (0142–0160 az Epic 4 hátralévő köreinek és a
+# governance-munkának); ütközéskor a teljes blokk tolódik, lásd a batch-index §3.
+# ZÁRÓ-KÖR WAIVER (az E04-R24 precedense): az E05-R30 NEM kap ADR 0087 §7 kézi
+# epic-záró indítást — a briefje pre-decidálja a rollout/flag/ADR kérdéseket; az
+# automata független review (ADR 0055) és az exact-SHA CI változatlanul kötelező.
+# VALÓS ESZKÖZÖS BIZONYÍTÉK: ezen a boxon nincs Android SDK/kamera — a nem mérhető
+# pontok a docs/manual-testing/vision-device-matrix.md PENDING sorai, NEM merge-kapuk
+# és NEM halt-okok (batch-index §1a).
+E05-R01	docs/rounds/e05-r01-vision-baseline-and-adrs.md	codex	0161-0166	pending
+E05-R02	docs/rounds/e05-r02-camera-technology-decision.md	codex	0167	pending
+E05-R03	docs/rounds/e05-r03-core-camera-contract-and-fake.md	codex	nincs	pending
+E05-R04	docs/rounds/e05-r04-camera-permission-and-platform-declarations.md	codex	nincs	pending
+E05-R05	docs/rounds/e05-r05-camera-session-coordinator-and-lifecycle.md	codex	nincs	pending
+E05-R06	docs/rounds/e05-r06-android-camera-adapter.md	codex	nincs	pending
+E05-R07	docs/rounds/e05-r07-frame-transform-and-overlay-coordinates.md	codex	nincs	pending
+E05-R08	docs/rounds/e05-r08-vision-setup-wizard.md	minimax	nincs	pending
+E05-R09	docs/rounds/e05-r09-frame-quality-assessor.md	codex	nincs	pending
+E05-R10	docs/rounds/e05-r10-calibration-domain-and-store.md	codex	nincs	pending
+E05-R11	docs/rounds/e05-r11-manual-guitar-geometry-calibration-ui.md	minimax	nincs	pending
+E05-R12	docs/rounds/e05-r12-hand-landmark-provider-and-model-manifest.md	codex	0168	pending
+E05-R13	docs/rounds/e05-r13-hand-track-assignment-and-smoothing.md	codex	nincs	pending
+E05-R14	docs/rounds/e05-r14-pose-provider-and-posture-baseline.md	codex	nincs	pending
+E05-R15	docs/rounds/e05-r15-guitar-coordinates-and-homography.md	codex	nincs	pending
+E05-R16	docs/rounds/e05-r16-geometry-tracking-and-calibration-loss.md	codex	nincs	pending
+E05-R17	docs/rounds/e05-r17-auto-guitar-detector-decision.md	codex	0169	pending
+E05-R18	docs/rounds/e05-r18-fretting-hand-metric-engine.md	codex	nincs	pending
+E05-R19	docs/rounds/e05-r19-picking-hand-stroke-metrics.md	codex	nincs	pending
+E05-R20	docs/rounds/e05-r20-posture-metrics-and-safety-policy.md	codex	nincs	pending
+E05-R21	docs/rounds/e05-r21-audio-vision-clock-mapping.md	codex	0170	pending
+E05-R22	docs/rounds/e05-r22-observation-fusion-and-evidence.md	codex	nincs	pending
+E05-R23	docs/rounds/e05-r23-feedback-policy-and-cue-budget.md	codex	nincs	pending
+E05-R24	docs/rounds/e05-r24-vision-session-controller-and-overlay.md	codex	nincs	pending
+E05-R25	docs/rounds/e05-r25-practice-vision-integration.md	codex	nincs	pending
+E05-R26	docs/rounds/e05-r26-song-trainer-vision-integration.md	codex	nincs	pending
+E05-R27	docs/rounds/e05-r27-tutor-analysis-vision-adapters.md	codex	nincs	pending
+E05-R28	docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md	codex	nincs	pending
+E05-R29	docs/rounds/e05-r29-device-tier-performance-thermal.md	codex	nincs	pending
+E05-R30	docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md	codex	nincs	pending
