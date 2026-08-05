@@ -1,0 +1,614 @@
+"""Az áteresztő-képesség programjának őrei (ADR 0171).
+
+A gyorsítás akkor ér valamit, ha a mérce közben NEM lazul. Ez a modul ezért két
+dolgot mér egyszerre:
+
+1. a hat lever mechanikáját (CI-terv, brief-lint, slotok, azonnali
+   lánc-folytatás, időmérleg, gate-zár);
+2. a MÉRCE-ŐRÖKET — azokat az állításokat, amelyek pirosra váltanak, ha valaki
+   később a gyorsítás ürügyén elvenne a mérce-láncból (pl. kihagyna egy lépést
+   a `full-gate.yml`-ből, vagy egy natív útvonalat kivenne az APK-ág alól).
+
+A 2. csoport nélkül ez a program pontosan az a hibaosztály lenne, ami ellen a
+repó egyébként véd: a mércét nem gyengítheti az, akit mér (docs/LESSONS.md).
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import importlib.util
+
+
+def _load(module_name: str, relative: str):
+    """A kötőjeles fájlnevű CLI-k betöltése modulként (nem importálható névvel)."""
+    spec = importlib.util.spec_from_file_location(module_name, ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+ci_plan = _load("round_ci_plan", "tools/round-ci-plan.py")
+brief_lint = _load("brief_lint", "tools/brief-lint.py")
+round_slots = _load("round_slots", "tools/round-slots.py")
+round_metrics = _load("round_metrics", "tools/round-metrics.py")
+
+PIPELINE = ROOT / "tools" / "round-pipeline.sh"
+GATE = ROOT / "tools" / "round-gate.sh"
+
+VALID_BRIEF = """# E09-R01 — Példa kör
+
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/features/example/example.dart",
+  "test/features/example/example_test.dart",
+  "docs/rounds/e09-r01-example.md",
+]
+gate_tests = ["test/features/example"]
+native_gate = false
+```
+
+## 1. Cél
+
+Példa. A gate artefaktuma: `tools/round-gate.sh test/features/example`.
+
+## 8. Acceptance
+
+- A reducer üres bemenetre `idle` állapotot ad. **Pirosra váltja:** az a
+  hibás implementáció, amely a legutóbbi állapotot tartja meg.
+
+**STOP:** scope-ütközésnél dokumentált brief-revízió.
+
+## 9. Kör-jelzés
+
+`done` csak review + CI + merge után.
+"""
+
+
+def write_brief(directory: Path, name: str, text: str) -> Path:
+    path = directory / "docs" / "rounds" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def make_repo(directory: Path) -> Path:
+    """Minimális repó-váz a lint/slot tesztekhez."""
+    (directory / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+    (directory / "docs" / "execution").mkdir(parents=True, exist_ok=True)
+    (directory / "test" / "features" / "example").mkdir(parents=True, exist_ok=True)
+    (directory / "test" / "features" / "example" / "example_test.dart").write_text("", encoding="utf-8")
+    return directory
+
+
+class CiPlanTest(unittest.TestCase):
+    """3. lever — melyik CI a kapu."""
+
+    ROUTER_PATHS = ("docs/rounds/**", "tools/tests/**", ".ai/**")
+
+    def plan(self, **kwargs):
+        base = {
+            "native_gate": False,
+            "changed_files": ("lib/features/a.dart",),
+            "router_ci_paths": self.ROUTER_PATHS,
+        }
+        base.update(kwargs)
+        return ci_plan.plan(**base)
+
+    def test_pure_dart_round_skips_the_android_build(self) -> None:
+        result = self.plan(changed_files=("lib/a.dart", "test/a_test.dart", "docs/rounds/e09-r01.md"))
+        self.assertEqual(result["dispatch"], ["full-gate.yml"])
+        self.assertFalse(result["apk_required"])
+
+    def test_native_gate_forces_the_apk_lane(self) -> None:
+        self.assertEqual(self.plan(native_gate=True)["dispatch"], ["build-apk.yml"])
+
+    def test_native_paths_force_the_apk_lane(self) -> None:
+        for path in (
+            "android/app/build.gradle",
+            "ios/Runner/Info.plist",
+            "pubspec.yaml",
+            "pubspec.lock",
+            "assets/models/hand.tflite",
+            ".github/actions/flutter-gates/action.yml",
+        ):
+            with self.subTest(path=path):
+                result = self.plan(changed_files=("lib/a.dart", path))
+                self.assertEqual(result["dispatch"], ["build-apk.yml"], result["reasons"])
+
+    def test_unknown_diff_is_fail_closed(self) -> None:
+        """Bizonyítatlan eset nem lehet olcsóbb, mint a bizonyított."""
+        result = self.plan(changed_files=())
+        self.assertEqual(result["dispatch"], ["build-apk.yml"])
+        self.assertIn("fail-closed", " ".join(result["reasons"]))
+
+    def test_router_ci_expectation_comes_from_the_real_workflow(self) -> None:
+        text = (ROOT / ".github" / "workflows" / "router-ci.yml").read_text(encoding="utf-8")
+        paths = ci_plan.router_ci_trigger_paths(text)
+        self.assertIn("docs/rounds/**", paths)
+        self.assertIn("tools/tests/**", paths)
+        self.assertTrue(
+            ci_plan.plan(
+                native_gate=False,
+                changed_files=("docs/rounds/e09-r01.md",),
+                router_ci_paths=paths,
+            )["router_ci_expected"]
+        )
+        self.assertFalse(
+            ci_plan.plan(
+                native_gate=False,
+                changed_files=("lib/a.dart",),
+                router_ci_paths=paths,
+            )["router_ci_expected"]
+        )
+
+    def test_cli_rejects_an_unparseable_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "e09-r01-broken.md"
+            path.write_text("# nincs blokk", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "round-ci-plan.py"), "--brief", str(path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout)
+
+
+class GateChainParityTest(unittest.TestCase):
+    """MÉRCE-ŐR: a gyorsított sáv ugyanazt méri, mint az APK-s."""
+
+    def setUp(self) -> None:
+        self.apk = (ROOT / ".github" / "workflows" / "build-apk.yml").read_text(encoding="utf-8")
+        self.full = (ROOT / ".github" / "workflows" / "full-gate.yml").read_text(encoding="utf-8")
+
+    def test_both_lanes_run_the_same_gate_composite(self) -> None:
+        for text, name in ((self.apk, "build-apk.yml"), (self.full, "full-gate.yml")):
+            with self.subTest(workflow=name):
+                self.assertIn("./.github/actions/flutter-gates", text)
+
+    def test_full_gate_keeps_every_non_apk_gate_of_the_apk_lane(self) -> None:
+        """Ha valaki a full-gate-ből kivesz egy mérési lépést, ez pirosra vált."""
+        required = (
+            "dart run tool/ci/check_song_schema.dart",
+            "dart run tool/ci/check_song_fixture_licenses.dart",
+            "flutter test --coverage",
+        )
+        for step in required:
+            with self.subTest(step=step):
+                self.assertIn(step, self.apk, "az APK-sáv referenciája megváltozott")
+                self.assertIn(step, self.full, "a gyorsított sáv elvesztett egy mérési lépést")
+
+    def test_the_gate_composite_still_contains_the_full_test_and_property_gate(self) -> None:
+        action = (ROOT / ".github" / "actions" / "flutter-gates" / "action.yml").read_text(encoding="utf-8")
+        self.assertIn("flutter test", action)
+        self.assertIn("test/property", action)
+        self.assertIn("PROPERTY_SEED", action)
+
+    def test_every_native_directory_of_the_repo_is_covered_by_the_apk_rule(self) -> None:
+        """Új natív könyvtár nem csúszhat némán az olcsó sávba."""
+        native_like = {"android", "ios", "macos", "linux", "windows", "web", "assets"}
+        for entry in ROOT.iterdir():
+            if entry.is_dir() and entry.name in native_like:
+                with self.subTest(directory=entry.name):
+                    self.assertIsNotNone(
+                        ci_plan.matches_any(f"{entry.name}/x", ci_plan.NATIVE_PATH_PATTERNS),
+                        f"a(z) {entry.name}/ nincs lefedve — natív diff kerülné az APK-t",
+                    )
+
+
+class BriefLintTest(unittest.TestCase):
+    """4. lever — a javító körök okait a briefben fogjuk meg."""
+
+    def lint(self, text: str, *, name: str = "e09-r01-example.md", repo: Path | None = None):
+        if repo is None:
+            self.directory = tempfile.TemporaryDirectory()
+            self.addCleanup(self.directory.cleanup)
+            repo = make_repo(Path(self.directory.name))
+        path = write_brief(repo, name, text)
+        return brief_lint.lint_text(text, path=path, repo=repo), repo
+
+    def codes(self, findings) -> set:
+        return {item["code"] for item in findings}
+
+    def test_a_well_formed_brief_has_no_findings(self) -> None:
+        findings, _ = self.lint(VALID_BRIEF)
+        self.assertEqual(self.codes(findings), set(), findings)
+
+    def test_missing_gate_artifact_reference_is_a_base_finding(self) -> None:
+        findings, _ = self.lint(VALID_BRIEF.replace("`tools/round-gate.sh test/features/example`", "a szokásos gate"))
+        self.assertIn("B4", self.codes(findings))
+
+    def test_output_truncating_gate_shape_is_a_base_finding(self) -> None:
+        text = VALID_BRIEF.replace(
+            "## 9. Kör-jelzés",
+            "```bash\ntools/round-gate.sh test/features/example | tail -5\n```\n\n## 9. Kör-jelzés",
+        )
+        findings, _ = self.lint(text)
+        self.assertIn("B5", self.codes(findings))
+
+    def test_analyze_and_test_chain_is_a_base_finding(self) -> None:
+        text = VALID_BRIEF.replace(
+            "## 9. Kör-jelzés",
+            "```bash\nflutter analyze lib/ && flutter test test/\n```\n\n## 9. Kör-jelzés",
+        )
+        findings, _ = self.lint(text)
+        self.assertIn("B5", self.codes(findings))
+
+    def test_brief_must_allow_itself(self) -> None:
+        findings, _ = self.lint(VALID_BRIEF.replace('  "docs/rounds/e09-r01-example.md",\n', ""))
+        self.assertIn("B2", self.codes(findings))
+
+    def test_heading_and_filename_round_id_must_match(self) -> None:
+        findings, _ = self.lint(VALID_BRIEF.replace("# E09-R01 —", "# E09-R02 —"))
+        self.assertIn("B6", self.codes(findings))
+
+    def test_gate_test_nobody_creates_is_a_base_finding(self) -> None:
+        findings, _ = self.lint(VALID_BRIEF.replace('gate_tests = ["test/features/example"]', 'gate_tests = ["test/features/ghost"]'))
+        self.assertIn("B3", self.codes(findings))
+
+    def test_gate_test_created_by_an_earlier_queue_round_is_accepted(self) -> None:
+        """Előre megírt epicnél a könyvtárat egy KORÁBBI kör hozza létre."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        repo = make_repo(Path(directory.name))
+        earlier = VALID_BRIEF.replace("E09-R01", "E09-R00").replace(
+            '  "test/features/example/example_test.dart",',
+            '  "test/features/ghost/ghost_test.dart",',
+        )
+        write_brief(repo, "e09-r00-earlier.md", earlier.replace("e09-r01-example.md", "e09-r00-earlier.md"))
+        (repo / "docs" / "execution" / "pipeline-queue.tsv").write_text(
+            "E09-R00\tdocs/rounds/e09-r00-earlier.md\tcodex\tnincs\tpending\n"
+            "E09-R01\tdocs/rounds/e09-r01-example.md\tcodex\tnincs\tpending\n",
+            encoding="utf-8",
+        )
+        findings, _ = self.lint(
+            VALID_BRIEF.replace('gate_tests = ["test/features/example"]', 'gate_tests = ["test/features/ghost"]'),
+            repo=repo,
+        )
+        self.assertNotIn("B3", self.codes(findings))
+
+    def test_strict_level_asks_for_falsification_and_threshold_matrix(self) -> None:
+        text = VALID_BRIEF.replace(
+            "- A reducer üres bemenetre `idle` állapotot ad. **Pirosra váltja:** az a\n  hibás implementáció, amely a legutóbbi állapotot tartja meg.",
+            "- A reducer üres bemenetre `idle` állapotot ad, ha a timeout küszöb 500 ms.",
+        )
+        findings, _ = self.lint(text)
+        self.assertIn("S2", self.codes(findings))
+        self.assertIn("S3", self.codes(findings))
+
+    def test_every_open_round_brief_passes_the_base_gate(self) -> None:
+        """Ez UGYANAZ az állítás, amit a Router CI kapuja mér."""
+        paths = [ROOT / brief for _round, brief, status in brief_lint.queue_rows(ROOT) if status != "done"]
+        self.assertTrue(paths, "nincs nyitott kör — a kapu mérhetetlen")
+        report, worst = brief_lint.lint_paths(paths, repo=ROOT, level="base")
+        self.assertEqual(worst, 0, json.dumps(report, ensure_ascii=False, indent=2))
+
+
+class SlotPlanningTest(unittest.TestCase):
+    """1. lever — párhuzam CSAK bizonyítottan független körökre."""
+
+    def test_disjoint_and_overlapping_path_sets(self) -> None:
+        left = frozenset({"lib/a/x.dart", "test/a/x_test.dart"})
+        right = frozenset({"lib/b/y.dart"})
+        self.assertEqual(round_slots.paths_conflict(left, right), [])
+        self.assertTrue(round_slots.paths_conflict(left, frozenset({"lib/a"})))
+        self.assertTrue(round_slots.paths_conflict(left, frozenset({"lib/a/x.dart"})))
+
+    def test_shared_ritual_files_do_not_count_as_conflict(self) -> None:
+        """Minden kör hozzájuk ér — ezeket a merge-zár sorosítja, nem a terv."""
+        paths = round_slots.effective_paths(("HANDOFF.md", "docs/LESSONS.md", "lib/a.dart"))
+        self.assertEqual(paths, frozenset({"lib/a.dart"}))
+
+    def test_real_epic_four_rounds_are_correctly_rejected(self) -> None:
+        """Mért helyzet: az Epic 4 körei ugyanazt a public.dart-ot érintik."""
+        left = round_slots.load_paths(ROOT, "docs/rounds/e04-r15-streaming-transport.md")
+        right = round_slots.load_paths(ROOT, "docs/rounds/e04-r16-orchestration-state-machine.md")
+        self.assertTrue(round_slots.paths_conflict(left, right))
+
+    def test_prerequisites_block_a_round_whose_epic_predecessor_is_open(self) -> None:
+        rows = [
+            ("E09-R01", "docs/rounds/e09-r01.md", "codex", "nincs", "pending"),
+            ("E09-R02", "docs/rounds/e09-r02.md", "codex", "nincs", "pending"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            blocking = round_slots.unmet_prerequisites(repo, "E09-R02", "docs/rounds/e09-r02.md", rows)
+            self.assertEqual(blocking, ["E09-R01"])
+
+    def test_declared_prerequisite_of_another_epic_is_honoured(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "docs" / "rounds").mkdir(parents=True)
+            (repo / "docs" / "rounds" / "e10-r01.md").write_text(
+                "- **Előfeltétel:** Epic 9 (**E09-R02**) lezárva\n", encoding="utf-8"
+            )
+            rows = [
+                ("E09-R02", "docs/rounds/e09-r02.md", "codex", "nincs", "pending"),
+                ("E10-R01", "docs/rounds/e10-r01.md", "codex", "nincs", "pending"),
+            ]
+            blocking = round_slots.unmet_prerequisites(repo, "E10-R01", "docs/rounds/e10-r01.md", rows)
+            self.assertIn("E09-R02", blocking)
+
+    def test_adr_reservation_is_atomic_and_above_the_highest_on_disk(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = make_repo(Path(directory))
+            (repo / "docs" / "adr" / "0171-example.md").write_text("", encoding="utf-8")
+            inflight = repo / ".pipeline" / "inflight"
+            first = round_slots.reserve_adr(repo, inflight, "E09-R01")
+            second = round_slots.reserve_adr(repo, inflight, "E09-R02")
+            self.assertEqual(first, 172)
+            self.assertEqual(second, 173, "két párhuzamos kör ugyanazt a számot kapta")
+
+    def test_inflight_registry_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = make_repo(Path(directory))
+            inflight = repo / ".pipeline" / "inflight"
+            script = str(ROOT / "tools" / "round-slots.py")
+            common = [sys.executable, script, "--repo", str(repo), "--inflight", str(inflight)]
+            subprocess.run(
+                common + ["inflight-add", "--round", "E09-R01", "--brief", "docs/rounds/e09-r01.md"],
+                check=True,
+                capture_output=True,
+            )
+            listed = json.loads(subprocess.run(common + ["inflight-list"], capture_output=True, text=True, check=True).stdout)
+            self.assertEqual([entry["round"] for entry in listed], ["E09-R01"])
+            subprocess.run(common + ["inflight-remove", "--round", "E09-R01"], check=True, capture_output=True)
+            listed = json.loads(subprocess.run(common + ["inflight-list"], capture_output=True, text=True, check=True).stdout)
+            self.assertEqual(listed, [])
+
+    def test_inflight_commands_reject_a_malformed_round_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = make_repo(Path(directory))
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools" / "round-slots.py"),
+                    "--repo",
+                    str(repo),
+                    "--inflight",
+                    str(repo / "inflight"),
+                    "inflight-add",
+                    "--round",
+                    "../escape",
+                    "--brief",
+                    "x.md",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+
+
+class DriverThroughputTest(unittest.TestCase):
+    """1–2. lever a driverben — az alapértelmezés a MAI viselkedés."""
+
+    def run_hook(self, *arguments, env=None):
+        environment = dict(os.environ)
+        environment.setdefault("PIPELINE_NO_LAUNCH", "1")
+        if env:
+            environment.update(env)
+        return subprocess.run(
+            ["bash", str(PIPELINE), *arguments],
+            capture_output=True,
+            text=True,
+            env=environment,
+            cwd=str(ROOT),
+        )
+
+    def test_default_slot_count_is_one(self) -> None:
+        result = self.run_hook("--effective-slots", "1")
+        self.assertEqual(result.stdout.strip(), "1", result.stderr)
+
+    def test_slot_one_keeps_the_legacy_lock_file(self) -> None:
+        """Egy régi, még futó driver zárával is ütköznie kell."""
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_hook("--slot-lock-path", "1", env={"PIPELINE_STATE_DIR": directory})
+            self.assertEqual(result.stdout.strip(), str(Path(directory) / "lock"))
+
+    def test_extra_slots_are_clamped_by_available_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_hook(
+                "--effective-slots",
+                "4",
+                env={"PIPELINE_MIN_FREE_GB_PER_SLOT": "100000", "PIPELINE_STATE_DIR": directory},
+            )
+            self.assertEqual(result.stdout.strip().splitlines()[-1], "1")
+            self.assertIn("SLOT-KORLÁT", result.stderr)
+
+    def test_self_chain_starts_the_next_firing_after_the_parent_exits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "marker"
+            result = self.run_hook(
+                "--spawn-next-firing",
+                env={
+                    "PIPELINE_STATE_DIR": directory,
+                    "PIPELINE_NO_LAUNCH": "0",
+                    "PIPELINE_SELF_CHAIN_CMD": f"touch {marker}",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("azonnali lánc-folytatás", result.stderr)
+            deadline = time.time() + 20
+            while time.time() < deadline and not marker.exists():
+                time.sleep(0.5)
+            self.assertTrue(marker.exists(), "a lánc-folytatás nem indult el a szülő kilépése után")
+
+    def test_self_chain_can_be_switched_off(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "marker"
+            result = self.run_hook(
+                "--spawn-next-firing",
+                env={
+                    "PIPELINE_STATE_DIR": directory,
+                    "PIPELINE_NO_LAUNCH": "0",
+                    "PIPELINE_SELF_CHAIN": "0",
+                    "PIPELINE_SELF_CHAIN_CMD": f"touch {marker}",
+                },
+            )
+            time.sleep(2)
+            self.assertFalse(marker.exists())
+            self.assertIn("PIPELINE_SELF_CHAIN=0", result.stderr)
+
+    def test_self_chain_never_launches_in_test_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "marker"
+            result = self.run_hook(
+                "--spawn-next-firing",
+                env={"PIPELINE_STATE_DIR": directory, "PIPELINE_SELF_CHAIN_CMD": f"touch {marker}"},
+            )
+            time.sleep(1)
+            self.assertFalse(marker.exists())
+            self.assertIn("PIPELINE_NO_LAUNCH=1", result.stderr)
+
+    def test_brief_lint_hook_writes_a_report_for_the_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_hook(
+                "--brief-lint",
+                "E04-R15",
+                "docs/rounds/e04-r15-streaming-transport.md",
+                env={"PIPELINE_STATE_DIR": directory},
+            )
+            report = result.stdout.strip()
+            self.assertTrue(report.endswith("brief-lint-E04-R15.md"), result.stdout + result.stderr)
+            self.assertTrue(Path(report).is_file())
+
+    def test_the_orchestrator_prompt_declares_every_placeholder_the_driver_fills(self) -> None:
+        template = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text(encoding="utf-8")
+        driver = PIPELINE.read_text(encoding="utf-8")
+        for placeholder in re.findall(r"\{\{[A-Z_]+\}\}", template):
+            with self.subTest(placeholder=placeholder):
+                self.assertIn(placeholder, driver, "a sablon olyan helyőrzőt kér, amit a driver nem tölt ki")
+
+
+class GateLockTest(unittest.TestCase):
+    """A gate-zár sorosít, de semmit nem hagy ki."""
+
+    def gate_sandbox(self, directory: Path) -> dict:
+        (directory / "pubspec.yaml").write_text("name: sandbox\n", encoding="utf-8")
+        (directory / "test").mkdir(exist_ok=True)
+        environment = dict(os.environ)
+        environment.update(
+            {
+                "FLUTTER_BIN": "/bin/true",
+                "DART_BIN": "/bin/true",
+                "ROUND_GATE_SLEEP_SECONDS": "0",
+            }
+        )
+        return environment
+
+    def test_gate_passes_when_the_lock_is_free(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            environment = self.gate_sandbox(path)
+            environment["ROUND_GATE_LOCK"] = str(path / "gate.lock")
+            result = subprocess.run(
+                ["bash", str(GATE), "test/example"],
+                cwd=str(path),
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_second_gate_waits_and_reports_an_environment_failure(self) -> None:
+        """Két gate SOHA nem futhat egyszerre ezen a boxon (OOM, L05)."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            environment = self.gate_sandbox(path)
+            lock = path / "gate.lock"
+            lock.touch()
+            environment["ROUND_GATE_LOCK"] = str(lock)
+            environment["ROUND_GATE_LOCK_WAIT"] = "1"
+            holder = subprocess.Popen(["flock", str(lock), "sleep", "10"])
+            try:
+                time.sleep(0.5)
+                result_json = path / "result.json"
+                result = subprocess.run(
+                    ["bash", str(GATE), "--result-json", str(result_json), "test/example"],
+                    cwd=str(path),
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 20, result.stdout + result.stderr)
+                payload = json.loads(result_json.read_text(encoding="utf-8"))
+                self.assertEqual(payload["failed_step"], "preflight.lock")
+            finally:
+                holder.kill()
+                holder.wait()
+
+    def test_lock_can_be_disabled_for_measurement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            environment = self.gate_sandbox(path)
+            environment["ROUND_GATE_LOCK"] = "none"
+            result = subprocess.run(
+                ["bash", str(GATE), "test/example"],
+                cwd=str(path),
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_gate_still_runs_every_measured_step(self) -> None:
+        """MÉRCE-ŐR: a zár bevezetése nem vehetett el lépést a gate-ből."""
+        text = GATE.read_text(encoding="utf-8")
+        for step in ('run_step "format"', 'run_step "analyze"', 'run_step "architecture"', 'run_step "secrets"', 'run_step "l10n"'):
+            with self.subTest(step=step):
+                self.assertIn(step, text)
+        self.assertIn('run_step "test $test_path"', text)
+
+
+class RoundMetricsTest(unittest.TestCase):
+    """5. lever — a kör-granularitás döntése MÉRT adaton áll."""
+
+    LOG = """2026-08-05T10:00:00+00:00  orchestrátor-session indul (E09-R01), időkorlát 14400s → /x.log
+2026-08-05T10:05:00+00:00  zár foglalt — már fut egy kör, ez a firing kimarad
+2026-08-05T11:00:00+00:00  E09-R01 MERGE-ELVE — kész
+2026-08-05T11:05:00+00:00  HIBA: piszkos munkafa — a lánc nem indul ismeretlen lokális változás fölé
+2026-08-05T11:30:00+00:00  orchestrátor-session indul (E09-R02), időkorlát 14400s → /y.log
+2026-08-05T11:40:00+00:00  ÖNJAVÍTÓ KÖR indul: E09-R02 / H6 (1/3)
+2026-08-05T12:30:00+00:00  E09-R02 MERGE-ELVE — kész
+2026-08-05T12:35:00+00:00  orchestrátor-session indul (E09-R03), időkorlát 14400s → /z.log
+"""
+
+    def test_round_duration_idle_and_self_heal_are_measured(self) -> None:
+        result = round_metrics.summarize(round_metrics.parse_chain_log(self.LOG))
+        rounds = {item["round"]: item for item in result["rounds"]}
+        self.assertEqual(set(rounds), {"E09-R01", "E09-R02"}, "a be nem fejezett kör nem számít")
+        self.assertEqual(rounds["E09-R01"]["duration_seconds"], 3600)
+        self.assertEqual(rounds["E09-R02"]["duration_seconds"], 3600)
+        self.assertEqual(rounds["E09-R02"]["idle_before_seconds"], 1800)
+        self.assertEqual(rounds["E09-R02"]["blocked_firings_before"], 1)
+        self.assertEqual(rounds["E09-R02"]["self_heal_rounds"], 1)
+
+    def test_summary_reports_the_idle_share(self) -> None:
+        result = round_metrics.summarize(round_metrics.parse_chain_log(self.LOG))
+        self.assertEqual(result["summary"]["rounds_measured"], 2)
+        self.assertAlmostEqual(result["summary"]["idle_share"], 1800 / (3600 + 3600 + 1800), places=6)
+
+    def test_cli_reports_a_missing_log_as_an_error(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "round-metrics.py"), "--chain-log", "/nincs/ilyen.log"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

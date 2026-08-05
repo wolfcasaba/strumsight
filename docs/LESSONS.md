@@ -4256,3 +4256,35 @@ merge-kapuját fogja meg egy tilos-zóna leleten. (2) A merge-kapu piros lehet a
 kör diffjétől FÜGGETLEN, pre-existing, allowed_paths-on kívüli okból is; ilyenkor
 a kör HALT-ja helyes (nem gyengíti a mércét), a feloldás pedig a self-heal
 tágabb infra-jogán át történik, nem a scope tágításával.
+## L125 — A lánc negyede holtidő volt, és ezt csak azért nem tudtuk, mert soha nem mértük (ADR 0171)
+
+**Mit mértünk.** A „mi lassítja a fejlesztést" kérdésre eddig becslés volt a
+válasz („a CI a szűk keresztmetszet" → cáfolva, a CI a kör ~8%-a). A
+`.pipeline/chain.log` viszont MINDEN kör indulását és merge-ét dátummal
+tartalmazza — 41 befejezett körre visszamenőleg kiszámolható:
+
+| Mérőszám | Érték |
+|---|---|
+| medián kör-idő | 79 perc |
+| medián holtidő két kör között | 3 perc |
+| **összes holtidő** | 1545 perc = a lánc élettartamának **22,8%-a** |
+| önjavítást igénylő kör | 9 / 41 |
+
+**A gyökérok nem egy nagy várakozás, hanem a farok.** A medián 3 perc ártalmatlan;
+a 22,8%-ot az adja, hogy minden akadály (piszkos munkafa, nyitott PR, saját
+docs-push CI-ja) a következő 5 perces cron-firingig tolja a láncot, és ezek
+egymásra rakódnak. Mért eset 2026-08-05: merge 14:08 → indulás 14:30, nulla
+munkával.
+
+**Két javítás, ellentétes irányban.** (1) A merge után a driver azonnal indítja a
+következő firinget (`PIPELINE_SELF_CHAIN`), és a `main`-en FUTÓ workflow már nem
+blokkol — az ADR 0086 óta a build-apk nem is indul main-push-ra, tehát az a
+várakozás semmit nem védett. (2) Cserébe egy KEMÉNYEBB kaput kapott a lánc:
+piros `main` fölé nem indul kör (ezt korábban semmi nem ellenőrizte). Egy
+holtidő-csökkentés akkor jó, ha egyszerre szűnik meg a haszontalan várakozás és
+születik meg a hiányzó ellenőrzés.
+
+**Szabály.** Mielőtt bármilyen „gyorsítást" bevezetsz, számold ki a naplóból a
+tényleges időmérleget (`tools/round-metrics.py`), és a gyorsítás mellé tedd oda
+a gépi őrt, ami pirosra vált, ha a gyorsítás a mércéből venne el (ADR 0171
+„Miért nem gyengül ettől a mérce" táblázata).

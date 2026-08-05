@@ -170,6 +170,20 @@ a **property gate** (friss seeddel) és a release APK. A boxon a teljes suite
 nem lokális kimenet. A merge feltétele változatlan: minden gate zöld, a CI-ban
 futó teljes suite is.
 
+**MELYIK CI-workflow a kapu — a tervezőt kérdezd, ne magadtól dönts**
+(ADR 0171 §3):
+
+```bash
+tools/round-ci-plan.py --brief <brief> --base origin/main --head HEAD --format json
+```
+
+Natív/release-érintő diffre (`android/`, `ios/`, `assets/`, `pubspec.*`,
+`.github/actions/**`), `native_gate = true`-ra és **ismeretlen diffre** a terv
+`build-apk.yml`; minden más esetben `full-gate.yml`, amely UGYANAZT a
+mérce-láncot futtatja (ugyanaz a `flutter-gates` composite + song-gate-ek +
+coverage job), csak Android-build nélkül. A gyorsítás tehát a *build*
+elhagyása, nem a mércéé — és a döntés gépi, nem ítélet kérdése.
+
 **APK-build MINDIG CI-vel** (user szabály 2026-07-29, ADR 0052): a fejlesztői
 boxon nincs Android SDK — `flutter build apk`-t ne futtass és ne is próbálj
 lokálisan; a build-evidencia a kör-branchre dispatchelt workflow:

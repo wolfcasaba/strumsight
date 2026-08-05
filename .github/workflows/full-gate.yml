@@ -1,0 +1,66 @@
+name: Full Gate (no APK)
+
+# A TELJES mérce-lánc Android-build NÉLKÜL (ADR 0171 §3).
+#
+# MIÉRT: a `build-apk.yml` két dolgot csinál egyszerre — futtatja a teljes
+# mérce-láncot (`flutter-gates` composite + song-gate-ek + coverage), ÉS épít
+# egy release APK-t. A release-build a drága fele (Java + Gradle + R8, MÉRVE
+# ~11 perc a futás wall-clockjából), miközben a körök többségének diffje
+# egyetlen natív bájtot sem érint.
+#
+# Ez a workflow ugyanazt a mérce-láncot futtatja, ugyanazokkal a lépésekkel és
+# ugyanabból a composite actionből — tehát a mérce NEM gyengül. Ami hiányzik,
+# az kizárólag az APK-artefaktum, és pontosan azért, mert a diff nem érinti.
+# A választás nem az orchestrátoré: `tools/round-ci-plan.py` dönti el a brief
+# `native_gate` mezőjéből + a diff útvonalaiból, fail-closed módon (ismeretlen
+# diff → APK-ág).
+#
+# MIKOR NEM ELÉG: minden natív/release-érintő diff (android/, ios/, assets/,
+# pubspec.*, .github/actions/**) és minden epic-záró kör → `build-apk.yml`.
+# A user valódi gitáros APK-tesztje továbbra is a végső elfogadási feltétel.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: full-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Run Flutter quality gates
+        uses: ./.github/actions/flutter-gates
+      - name: Song schema snapshot gate
+        run: dart run tool/ci/check_song_schema.dart
+      - name: Song fixture provenance gate
+        run: dart run tool/ci/check_song_fixture_licenses.dart
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Test coverage gate
+        run: flutter test --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: strumsight-coverage-${{ github.run_id }}
+          path: coverage/lcov.info
+          if-no-files-found: error

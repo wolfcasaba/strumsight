@@ -146,6 +146,25 @@ print(" ".join(value.split())[:500])
       echo "  nincs folyamatban lévő önjavítás"
     fi
     echo
+    echo "--- áteresztő-képesség (ADR 0171) ---"
+    slots_wanted=${PIPELINE_SLOTS:-1}
+    slots_effective=$(bash "$repo_root/tools/round-pipeline.sh" --effective-slots "$slots_wanted" 2>/dev/null | tail -1)
+    if [ "${PIPELINE_SELF_CHAIN:-1}" = "1" ]; then chain_state="BE"; else chain_state="KI"; fi
+    printf '  slot: %s kért → %s tényleges · azonnali lánc-folytatás: %s\n' \
+      "$slots_wanted" "${slots_effective:-1}" "$chain_state"
+    if [ -d "$state_dir/inflight" ] \
+      && [ -n "$(ls "$state_dir/inflight" 2>/dev/null | grep -E '^[A-Z][0-9]{2}-R[0-9]{2}$' || true)" ]; then
+      printf '  futó körök: %s\n' \
+        "$(ls "$state_dir/inflight" | grep -E '^[A-Z][0-9]{2}-R[0-9]{2}$' | tr '\n' ' ')"
+    else
+      echo "  futó körök: (egy sincs bejegyezve)"
+    fi
+    if [ -f "$chain_log" ] && [ -f "$repo_root/tools/round-metrics.py" ]; then
+      metrics_line=$(python3 "$repo_root/tools/round-metrics.py" \
+        --chain-log "$chain_log" --format summary-line 2>/dev/null)
+      [ -n "$metrics_line" ] && printf '  %s\n' "$metrics_line"
+    fi
+    echo
     echo "--- utolsó router-állapot ---"
     if [ -f "$router_status_file" ]; then
       while IFS= read -r line; do
