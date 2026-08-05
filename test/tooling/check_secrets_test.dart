@@ -172,21 +172,53 @@ const b = 'ghp_abcdefghijklmnopqrstuvwxyz01234567';
     );
   });
 
-  test('the committed repository tree is free of unmarked secrets', () {
+  test('the measured R14 prod-config fixtures need — and get — a marker', () {
     // Regressziós őr (E04-R15 / H3, 2026-08-05). MÉRT gyökérok: az R14 által
-    // bevezetett backend/tests/tutor/test_tutor_proxy.py fake prod-config
-    // fixture-jei (`secret_key`/`tutor_api_key`, sorok 596/611/627/631) a
-    // GOV-03 secret-scan négy leletét adták, ám a fájl az R15 allowed_paths-án
-    // KÍVÜL esett, ezért a build-apk merge-kapu `secrets` lépése nyolc percen
-    // át piros maradt, a kört pedig nem lehetett a körön belül zöldre hozni.
-    // Ez a teszt UGYANAZT futtatja, amit a kapu — a valódi, committolt fát
-    // scanneli —, ezért a jelenség reprodukálhatóan visszatér, ha bárki
-    // titok-alakú literált commitol jelölés nélkül.
-    final repoRoot = Directory.current;
+    // bevezetett backend/tests/tutor/test_tutor_proxy.py prod-misconfig
+    // fail-closed tesztjei fake hitelesítőket adnak át (`secret_key`,
+    // `tutor_api_key`), amelyeket a `credential assigned a long literal` szabály
+    // helyesen felismer. A fájl az R15 allowed_paths-án KÍVÜL esett, ezért a
+    // GOV-03 secret-scan négy lelete (sorok 596/611/627/631) a build-apk
+    // merge-kaput nyolc percen át pirosan tartotta (run 31029321266, SHA
+    // 29ea65f).  A javítás nem a szabály lazítása, hanem a fájl-szintű jelölés:
+    // a fixture-ök bizonyítottan fake-ek, a fájl kivételek fájlja.
+    //
+    // L118 (GOV-03): egy őr-teszt ne a valódi repóra mutasson — az ambiens
+    // állapot némán megfordítja. Ezért ez hermetikus: a MÉRT fixture-alakot
+    // (`test_tutor_proxy.py` szó szerinti sorai) reprodukálja tempdirben. Hogy
+    // a valódi, committolt fa is tiszta marad-e, azt a kapu `secrets` lépése
+    // méri (round-gate + build-apk) — nem duplikáljuk ide a git-fa scannelését.
+    const fixtureBody = '''
+def test_prod_misconfig_blocks_boot():
+    Settings(
+        secret_key="real-prod-secret-key-12345",
+        tutor_api_key="real-prod-tutor-key-12345",
+    )
+''';
 
-    final report = checkSecrets(projectRoot: repoRoot);
+    _track(projectRoot, 'backend/tests/tutor/fixture.py', fixtureBody);
+    final flagged = checkSecrets(projectRoot: projectRoot);
+    expect(
+      flagged.isClean,
+      isFalse,
+      reason:
+          'a mért prod-config fixture-öknek jelölés nélkül lelettel kell '
+          'jönniük — különben a jelölés felesleges volna',
+    );
+    expect(
+      flagged.issues.every(
+        (issue) => issue.kind == SecretIssueKind.credentialAssignment,
+      ),
+      isTrue,
+    );
 
-    expect(report.isClean, isTrue, reason: report.format());
+    _track(
+      projectRoot,
+      'backend/tests/tutor/fixture.py',
+      '# $allowFileMarker fake prod-config fixture\n$fixtureBody',
+    );
+    final marked = checkSecrets(projectRoot: projectRoot);
+    expect(marked.isClean, isTrue, reason: marked.format());
   });
 }
 
