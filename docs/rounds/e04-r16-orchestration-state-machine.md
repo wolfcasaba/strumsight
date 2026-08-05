@@ -15,6 +15,7 @@ allowed_paths = [
   "lib/features/ai_tutor/application/controller/tutor_effect.dart",
   "lib/features/ai_tutor/application/orchestration/tutor_orchestrator.dart",
   "lib/features/ai_tutor/application/orchestration/tutor_output_validator.dart",
+  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/application/tutor_orchestrator_test.dart",
   "test/features/ai_tutor/application/tutor_output_validator_test.dart",
   "docs/rounds/e04-r16-orchestration-state-machine.md",
@@ -110,23 +111,35 @@ inputtal nem produkál** (mérve grep-pel; a brief-lint nem fogta meg):
 Mindkét feloldás **az engedélyezett fájlokon belül** valósul meg — nincs
 lista-tágítás.
 
-### §0.0 REVÍZIÓ — engedélyezett-fájllista SZŰKÍTÉSE (autonómia §2)
+### §0.0 REVÍZIÓ — `public.dart` MARAD a listán, de az export HALASZTVA (R15 precedens)
 
-A `lib/features/ai_tutor/public.dart` **kikerül** az engedélyezett listából, és a
-§4 táblából + §8 4. lépésből törlöm az „additív export"-ot. Mért indok:
+A `lib/features/ai_tutor/public.dart` **benne marad** az engedélyezett listában,
+**de a §8 4. lépés „additív export"-ja R18-ra halasztva** — az implementer **nem
+ad hozzá exportot**, a fájl üresen (`library;`) marad. Mért indok:
 
-- `test/features/ai_tutor/ai_tutor_boundary_test.dart` (a scope-on **KÍVÜL**)
-  invariálja, hogy `public.dart` **nulla import/export** (mérve: aktív a `main`-en).
-  Ha az implementer exportot ad hozzá, ez a listán kívüli teszt pirosra vált, a
-  gate megbukik, a javítás pedig scope-sértés lenne (`stopped`). Pontosan ez a
-  csapda bukott E04-R12-ben (BLOCKER-1, `docs/LESSONS.md` L120) és lett
-  pre-emptálva R13-ban.
-- R16-nak **nincs** publikus fogyasztója: az UI R18, a valódi cloud kint van; az
-  orchestrator a feature-en belül **közvetlen importtal** köti a komponenseket.
-  Az acceptance criteria (§6) nem kér exportot.
+- **Slot-planner konfliktus-detektálás (tilos zóna: `tools/`).** A
+  `tools/tests/test_pipeline_throughput.py::test_real_epic_four_rounds_are_correctly_rejected`
+  (mérve: `main`-en zöld, a Router CI kapu része) HARDKÓDOLTAN elvárja, hogy az
+  **E04-R15 és E04-R16 briefek ütközzenek**, mert mindkettő a `public.dart`-ot
+  érinti („az Epic 4 körei ugyanazt a `public.dart`-ot érintik"). Ha R16
+  kiveszi a `public.dart`-ot, a `paths_conflict` üresre vált, a teszt pirosra —
+  és a javítása `tools/`-módosítás lenne, ami a §4 tilos zóna (a mércét nem
+  módosíthatja, akit mér). A `public.dart` listán tartása tehát **helyes** a
+  slot-planner céljára is: R16 a `public.dart`-ot érintő E04-családba tartozik,
+  nem szabad párhuzamosan ütemezni egy másik `public.dart`-körrel.
+- **A boundary-invariáns így is teljesül.** A
+  `test/features/ai_tutor/ai_tutor_boundary_test.dart` (scope-on kívül) azt
+  invariálja, hogy `public.dart` **üres** — ez zöld marad, mert az implementer a
+  fájlt **nem érinti** (mérve: nincs a diffben; scope_audit=ok). Az `allowed_paths`
+  **engedély-plafon**, nem követelmény: benne lenni és érintetlenül hagyni
+  konzisztens (pontosan az E04-R15 mintája — R15 §0.0: „`public.dart` NEM
+  változott … az üresen hagyás konzisztens a korábbi körökkel").
+- **Miért nem export most:** R16-nak nincs publikus fogyasztója (UI = R18); az
+  orchestrator a feature-en belül **közvetlen importtal** köti a komponenseket
+  (R12/R13 precedens). Az export az első valódi cross-feature hívónál (R18) jön.
 
-Ez tiszta **szűkítés** (tilos zóna tágítása nélkül) → ADR 0087 §2 szerint az
-orchestrátor autonómiájában áll.
+Ez **nem lista-tágítás** az eredetihez képest (a `main`-beli brief is listázta a
+`public.dart`-ot); az egyetlen normatív finomítás az „additív export" halasztása.
 
 ## 1. Cél
 
@@ -157,6 +170,7 @@ request-id korreláció, részletes transition-tesztek a scripted fake-kel.
 | `.../application/controller/tutor_effect.dart` | ÚJ | effect |
 | `.../application/orchestration/tutor_orchestrator.dart` | ÚJ | pipeline |
 | `.../application/orchestration/tutor_output_validator.dart` | ÚJ | claim/action schema |
+| `lib/features/ai_tutor/public.dart` | listán, **érintetlen** | export R18-ra halasztva (§0.0) — üresen marad |
 | `test/features/ai_tutor/application/*` | ÚJ | transition + validator tesztek |
 | `docs/rounds/e04-r16-*.md` | meglévő | §10 handoff |
 
@@ -193,7 +207,7 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI = orchestrátor.
 1. RED transition-mátrix (happy/repair/fallback/cancel/concurrent) tesztek.
 2. state/command/effect.
 3. orchestrator + output-validator.
-4. Gate (a `public.dart` export **halasztva** — §0.0 szűkítés).
+4. Gate (a `public.dart` export **R18-ra halasztva** — §0.0; a fájl üresen marad).
 
 ## 9. Kockázatok
 
