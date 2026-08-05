@@ -1,6 +1,6 @@
 # E04-R10 — Tutor Tool contract és read-only registry
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-05, main @ `acc84d9`; előre megírva 2026-08-04, main @ `fbe1e82`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 10; §35
 - **Branch:** `codex/e04-r10-tool-contract-and-registry`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R02 + E04-R05 merge**
@@ -16,11 +16,13 @@ allowed_paths = [
   "lib/features/ai_tutor/domain/tools/tutor_tool_result.dart",
   "lib/features/ai_tutor/application/tools/read_only_tutor_tools.dart",
   "lib/features/ai_tutor/application/tools/fake_tutor_tool_registry.dart",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/domain/tutor_tool_registry_test.dart",
   "test/features/ai_tutor/application/read_only_tutor_tools_test.dart",
   "docs/rounds/e04-r10-tool-contract-and-registry.md",
 ]
+# §0.0 D2 revízió: `lib/features/ai_tutor/public.dart` ELTÁVOLÍTVA a listáról
+# (a ai_tutor_boundary_test.dart nulla-export invariánsa bármely exporttól
+# RED-re váltana; e körnek nincs hívója — R11/R12/R16/R19 fogyasztja). Üresen marad.
 gate_tests = [
   "test/features/ai_tutor/domain",
   "test/features/ai_tutor/application",
@@ -45,7 +47,43 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Mérve 2026-08-05, main @ `acc84d9`.** Előfeltétel OK: E04-R02 (`db778c4`) és
+E04-R05 (`55d640d`) merge-elve. A `lib/features/ai_tutor/domain/tools/` és
+`application/tools/` üres (greenfield). `AppResult`/`AppFailure` mérve:
+`lib/core/foundation/app_result.dart` (`sealed AppResult<T>` → `Success`/`Failure`,
+`AppResult.success`/`.failure`), `lib/core/foundation/app_failure.dart`
+(`sealed AppFailure` + `ValidationFailure` [`validation.invalid_input`],
+`UnknownFailure` [`unknown`], `ConfigurationFailure`, … ; `FailureCode` kódlista).
+
+- **D1 — ÚJ ADR [0137](../adr/0137-ai-tutor-readonly-tool-contract.md)**
+  (read-only tool contract & registry). A legmagasabb létező 0136 → 0137 szabad.
+  Ez **külön** normatív döntés (typed read-only tool-allowlist, fail-closed,
+  provider-független schema), az ADR 0133 (write/launch **megerősítés**) a
+  komplementer oldal — R10 az olvasó/compute oldalt rögzíti. Az ADR-t az
+  orchestrátor írta és commitolja a pre-flight commitban (nem az implementer
+  fájlja).
+
+- **D2 — engedélyezett-lista SZŰKÍTÉS:** `lib/features/ai_tutor/public.dart`
+  eltávolítva (a `ai_tutor_boundary_test.dart` nulla-import/export invariánsa
+  bármely exporttól RED-re váltana; e körnek nincs hívója). A tesztek a tool-
+  osztályokat **közvetlenül** a domain/application útvonalról importálják, nem a
+  barrelen át. Azonos revízió, mint R07/R08/R09.
+
+- **D3 — `AppFailure`-leképezés meglévő kódokkal:** a `lib/core/foundation/`
+  (`app_failure.dart` + `FailureCode`) a kör scope-ján **kívül** van. A
+  tool-exception → AppFailure a **meglévő** subtypeokat használja:
+  invalid-input / permission-mismatch / unknown-tool → `ValidationFailure`
+  (`validation.invalid_input`); váratlan throw → `UnknownFailure` (`unknown`).
+  A tool-specifikus kimeneti állapotok (oversized-report, timeout, provenance) a
+  tool **saját** `tutor_tool_result.dart` modelljében élnek, **nem** új
+  `FailureCode`-ként. Új `FailureCode` felvétele a core contractot érintené →
+  `stopped`.
+
+- **D4 — §1.2 erőforrás-tulajdonlás N/A:** nincs `.acquire()`/lease/lock/handle
+  a `lib/features/ai_tutor/` alatt (mérve `rg "\.acquire\("`, 0 találat) —
+  greenfield read-only compute, egyetlen input sem szerez erőforrást.
+
+PREPARED→PLANNING, a brief + ADR 0137 commitolva az implementer ELŐTT.
 
 ## 1. Cél
 
@@ -88,11 +126,16 @@ más kör briefje. Listán kívül → `stopped`.
 ## 5. Kötött architekturális döntések
 
 1. **Read-only scope:** a kezdeti tool-készlet kizárólag olvasás/lokális compute;
-   **arbitrary file/network/code tool TILOS** (ADR 0133). **NEM elfogadható:** „csak
+   **arbitrary file/network/code tool TILOS** ([ADR 0137](../adr/0137-ai-tutor-readonly-tool-contract.md),
+   komplementer az ADR 0133 write/launch-megerősítéssel). **NEM elfogadható:** „csak
    egy" hálózati vagy fájl-tool.
 2. Unknown tool **fail-closed**; a model csak **turn-specifikus** allowlistet kap.
 3. Minden output provenance + size-limit report; tool-exception → **AppFailure**
-   (nem nyers throw).
+   (nem nyers throw). **D3 (mérve):** a `lib/core/foundation/` scope-on KÍVÜL —
+   ne adj hozzá `FailureCode`-ot; a meglévő subtypeokat használd: invalid/permission/
+   unknown-tool → `ValidationFailure` (`validation.invalid_input`), váratlan throw →
+   `UnknownFailure` (`unknown`). Az oversized/timeout/provenance a tool SAJÁT
+   `tutor_tool_result.dart` modelljében él, nem globális kódként.
 4. A schema **providerfüggetlen**.
 
 ## 6. Acceptance criteria
