@@ -94,9 +94,7 @@ def encode_sse_frame(frame: dict, *, max_frame_bytes: int = MAX_FRAME_BYTES) -> 
     """
     payload = json.dumps(frame, ensure_ascii=False, separators=(",", ":"))
     if len(payload.encode("utf-8")) > max_frame_bytes:
-        raise FrameTooLargeError(
-            f"frame payload exceeds {max_frame_bytes} bytes"
-        )
+        raise FrameTooLargeError(f"frame payload exceeds {max_frame_bytes} bytes")
     return f"data: {payload}\n\n"
 
 
@@ -151,10 +149,14 @@ async def tutor_stream_frames(
         except asyncio.CancelledError:
             return
         except RequestTooLargeError:
-            yield _failure_frame(seq, "request_too_large", "Request exceeds the size limits")
+            yield _failure_frame(
+                seq, "request_too_large", "Request exceeds the size limits"
+            )
             return
         except RateLimitExceeded:
-            yield _failure_frame(seq, "rate_limited", "Rate limit exceeded — try again shortly")
+            yield _failure_frame(
+                seq, "rate_limited", "Rate limit exceeded — try again shortly"
+            )
             return
         except UsageLimitExceeded:
             yield _failure_frame(seq, "usage_limited", "Daily usage limit exceeded")
@@ -165,7 +167,9 @@ async def tutor_stream_frames(
             )
             return
         except ProviderError:
-            yield _failure_frame(seq, "provider_error", "The AI service returned an error")
+            yield _failure_frame(
+                seq, "provider_error", "The AI service returned an error"
+            )
             return
         except Exception:  # noqa: BLE001 — the stream must end with a terminal frame.
             _logger.exception("Unexpected tutor stream failure (details redacted)")

@@ -49,7 +49,7 @@ def _parse_sse_events(text):
         if not block:
             continue
         assert block.startswith("data: "), f"bad SSE framing: {block!r}"
-        events.append(json.loads(block[len("data: "):]))
+        events.append(json.loads(block[len("data: ") :]))
     return events
 
 
@@ -117,9 +117,7 @@ def test_normal_stream_emits_ordered_frames(tutor_client, tutor_auth_headers):
     assert sum(1 for kind in types if kind in ("complete", "failure")) == 1
 
 
-def test_frames_are_well_formed_and_never_oversized(
-    tutor_client, tutor_auth_headers
-):
+def test_frames_are_well_formed_and_never_oversized(tutor_client, tutor_auth_headers):
     frames = _collect_stream(tutor_client, tutor_auth_headers, _stream_body())
     assert frames
     for frame in frames:
@@ -195,9 +193,7 @@ def test_provider_error_maps_to_failure_frame(
     assert [frame["seq"] for frame in frames] == [0, 1]
 
 
-def test_request_too_large_maps_to_failure_frame(
-    tutor_client, tutor_auth_headers
-):
+def test_request_too_large_maps_to_failure_frame(tutor_client, tutor_auth_headers):
     frames = _collect_stream(
         tutor_client, tutor_auth_headers, _stream_body(message="x" * 200)
     )
@@ -292,9 +288,7 @@ def test_disconnect_cancels_provider_task():
         async def is_disconnected():
             return disconnected.is_set()
 
-        generator = tutor_stream_frames(
-            turn_task, is_disconnected, poll_seconds=0.01
-        )
+        generator = tutor_stream_frames(turn_task, is_disconnected, poll_seconds=0.01)
         first = await asyncio.wait_for(generator.__anext__(), timeout=2)
         first_payload = json.loads(first.removeprefix("data: ").strip())
         assert first_payload == {"type": "started", "seq": 0}
@@ -330,8 +324,7 @@ def test_provider_task_done_after_normal_completion():
         ):
             frames.append(frame)
         types = [
-            json.loads(frame.removeprefix("data: ").strip())["type"]
-            for frame in frames
+            json.loads(frame.removeprefix("data: ").strip())["type"] for frame in frames
         ]
         assert types == ["started", "delta", "usage", "complete"]
         assert turn_task.done()
