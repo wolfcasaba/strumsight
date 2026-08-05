@@ -4,7 +4,43 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R05 merged — context adapters & immutable TutorContextSnapshot).**
+> (E04-R06 merged — curated tutor knowledge schema & first content pack).**
+>
+> **E04-R06 KÉSZ (PR [#129](https://github.com/wolfcasaba/strumsight/pull/129),
+> squash `f3d69ef`, **új ADR [0135](docs/adr/0135-tutor-knowledge-governance.md)**
+> — tutor-knowledge-governance, orchestrátor írta a pre-flightban; implementer
+> **Codex** (`gpt-5.6-terra`, örökölt kézi override), orchestrátor/reviewer
+> **Claude Opus 4.8**):** felhasználói célú, review-zott, verziózott gitároktatási
+> tudásbázis, a fejlesztői `docs/rag` DSP-anyagtól **szigorúan elkülönítve**
+> (AGENTS.md §9, ADR 0135 §1 — automatikus/kézi másolás TILOS). Greenfield,
+> **hívó nélkül** (a `public.dart` **üres marad** — boundary-invariáns; a retrieval
+> R07 fogyasztja majd). `lib/features/ai_tutor/data/knowledge/` —
+> `KnowledgeDocument`/`KnowledgeChunk` immutable value schema (schemaVersion+id+
+> locale+skill+difficulty+license+version+approval-status+SHA-256 contentHash,
+> fail-loud validáció stabil hibakódokkal), `KnowledgeCodec` (determinisztikus
+> kanonikus UTF-8 JSON codec + bekezdés-alapú chunker, sha256, **nincs
+> clock/random/float**). `tool/build_tutor_knowledge_manifest.dart` —
+> determinisztikus, **approved-only** production manifest (`status ==
+> KnowledgeApprovalStatus.approved` erős egyenlőség), négy **külön** hibakód:
+> duplicate ID / missing license / hash mismatch / corrupt content. Első **tíz
+> saját szerzésű, CC0-1.0** dokumentum (`assets/tutor_knowledge/{en,hu}/`) mind az
+> öt témában (rhythm/chord/technique/practice/safety), en+hu; `pubspec.yaml`
+> additív assets-bejegyzés; `crypto ^3.0.7` direkt dep (forrás-SHA provenance).
+> **Pre-flight §0.0 (mérve, main @ `5180d08`):** ADR 0135 szabad (legmagasabb volt
+> 0134); E04-R01 merge megvan; **REVÍZIÓ — engedélyezett-lista szűkítés:**
+> `ai_tutor/public.dart` eltávolítva és ÜRESEN HAGYVA (a `ai_tutor_boundary_test.dart`
+> nulla-export invariánsa bármely exporttól pirosra váltana). Az implementer záró
+> jelzése `stopped` volt — **NEM kód-hiba:** a gitignore-olt generált
+> `lib/l10n/app_localizations.dart` hiánya miatt piros `analyze` a motor
+> worktree-jében (build-előfeltétel, nem scope); az orchestrátor `flutter pub get`
+> + `gen-l10n`-nel helyreállította, a gate mind a négy lépésen zöld. Független
+> review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE): az approved-only szűrő
+> **valódi-sértés próbával** igazolva (`!= rejected` gyengítés → a delivered teszt
+> RED, majd visszaállítva). CI
+> [run 30972626641](https://github.com/wolfcasaba/strumsight/actions/runs/30972626641)
+> **success** exact head `0331573` (analyze + full suite + randomizált property +
+> APK); post-merge gate `main`-en zöld. Production viselkedés változatlan
+> (`ai_tutor/public.dart` üres). **Következő: E04-R07 — a pipeline indítja.**
 >
 > **E04-R05 KÉSZ (PR [#128](https://github.com/wolfcasaba/strumsight/pull/128),
 > squash `55d640d`, **nincs új ADR** — az R01 ADR 0131–0134 realizálása,
@@ -923,28 +959,42 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
-**E04-R04 — Skill taxonomy, evidence & deterministic reducer** (PR
-[#127](https://github.com/wolfcasaba/strumsight/pull/127), squash `0d7ab1b`,
-**nincs új ADR** — az R01 [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
-(provider-boundary, determinisztikus on-device coaching) realizálása).
-Implementer: **Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer:
-**Claude Opus 4.8**.
+**E04-R06 — Curated tutor knowledge schema & first content pack** (PR
+[#129](https://github.com/wolfcasaba/strumsight/pull/129), squash `f3d69ef`,
+**új ADR [0135](docs/adr/0135-tutor-knowledge-governance.md)** —
+tutor-knowledge-governance, orchestrátor írta a pre-flightban). Implementer:
+**Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer: **Claude Opus 4.8**.
 
-**Elkészült:** egységes, provider-független skill graph + készségbizonyíték-modell
-(greenfield, hívó nélkül). `SkillNode`/`SkillTaxonomy` (immutable, verziózott,
-prerequisite-validáció + DFS ciklus-őr, stabil hibakódok, `SkillTaxonomy.initial`
-18-node gráf); `SkillEvidence` (provenance + schema/scorer-verzió **fail-loud**
-validációval, egész forrás-súlyok); `SkillEstimate` (immutable `insufficient`/`trend`,
-külön normalizált confidence, státusz-invariáns kényszerítés); `SkillEvidenceReducer`
-— **pure, determinisztikus, egész-aritmetikás** (ID-idempotencia + konfliktus-reject,
-comparable-group partíció, UTC+lexikális tie-break, 0/1/2-group küszöb, explicit
-trend; nincs óra/véletlen/lebegőpont). **Pre-flight §0.0:** nincs új ADR (ADR 0131
-realizálása); **engedélyezett-lista szűkítve** — `public.dart` eltávolítva és üres
-marad (a lezárt E04-R01 `ai_tutor_boundary_test.dart` nulla-export invariánsa
-bármely exporttól pirosra váltana, R02/R03 precedens). **Nulla javító kör.** Review
-APPROVED — determinizmus 200-permutációs egyenlő-timestamp reviewer-próbával,
-purity real-violation próbával igazolva; coverage **98,68%** (300/304). `public.dart`
-üres. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+**Elkészült:** felhasználói célú, review-zott, verziózott tudásbázis, a fejlesztői
+`docs/rag` DSP-anyagtól **szigorúan elkülönítve** (ADR 0135 §1, AGENTS.md §9 —
+másolás TILOS). Greenfield, **hívó nélkül** (`public.dart` üres → production
+viselkedés változatlan; R07 fogyasztja). `KnowledgeDocument`/`KnowledgeChunk`
+immutable schema (locale+skill+difficulty+license+version+approval-status+SHA-256
+contentHash, fail-loud stabil hibakódok); `KnowledgeCodec` determinisztikus
+kanonikus JSON codec + chunker (sha256, **nincs clock/random/float**);
+`build_tutor_knowledge_manifest.dart` **approved-only** manifest (`status ==
+approved` erős egyenlőség) + négy külön hibakód (duplicate ID / missing license /
+hash mismatch / corrupt content). Első **tíz CC0-1.0** dokumentum
+(`assets/tutor_knowledge/{en,hu}/`) mind az öt témában, en+hu; `crypto ^3.0.7`
+direkt dep. **Pre-flight §0.0 (main @ `5180d08`):** ADR 0135 szabad; E04-R01 merge
+megvan; **engedélyezett-lista szűkítve** — `public.dart` eltávolítva és üres marad
+(nulla-export boundary invariáns, R02–R05 precedens). Az implementer `stopped`
+jelzése a gitignore-olt generált l10n hiánya volt (build-előfeltétel, nem
+kód-hiba); az orchestrátor `pub get`+`gen-l10n`-nel oldotta, gate mind zöld.
+Review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE) — approved-only szűrő
+**valódi-sértés próbával** (`!= rejected` → RED). Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+<details><summary>Korábbi körök: E04-R05 (context adapters), E04-R04 (skill taxonomy/reducer) — snapshot</summary>
+
+**E04-R05** (PR #128, squash `55d640d`, nincs új ADR): provider-free, redakciós,
+provenance-olt tutor context aggregáció immutable `TutorContextSnapshot`-ba (hat
+public-barrel adapter, deny-by-default purpose-allowlist, budget). Review
+APPROVED (1 MAJOR → fix: rg-shell→Dart fájlolvasás, L110).
+
+**E04-R04** (PR #127, squash `0d7ab1b`, nincs új ADR): provider-független skill
+graph + készségbizonyíték-modell, pure determinisztikus reducer. Review APPROVED,
+coverage 98,68%. `public.dart` üres.
 
 <details><summary>Korábbi kör: E04-R03 — Student/guitar profile, goals & consent (superseded snapshot)</summary>
 
@@ -1098,19 +1148,21 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R05 — Context adapters & snapshot** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R05` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r05-context-adapters-and-snapshot.md`). A pipeline
-   (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi
-   el**. Bemenete: az E04-R04 skill taxonomy/evidence/reducer domain (pure,
-   determinisztikus, forrásjelölt), az E04-R03 profil/consent, az E04-R02
-   conversation/message domain és az E04-R01 baseline (flagek default OFF, ADR
-   0131–0134). Az R04 reducer **csak a redaktált, adaptált evidence-t** fogyasztja
-   — a source feature belső típusai TILTOTTAK; a `public.dart` **üres-boundary
-   invariáns** (`ai_tutor_boundary_test.dart`) és a flag-OFF 0-request garancia
-   nem törhető.
-   **~~E04-R04 — Skill taxonomy & evidence reducer~~ — KÉSZ** (PR #127,
-   `0d7ab1b`, ld. a fejléc-összefoglalót és §5).
+0. **E04-R07 — Offline knowledge index & retrieval** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R07` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r07-offline-knowledge-index-retrieval.md`). A pipeline
+   (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi el**.
+   Bemenete az **E04-R06** approved-only, hash-lezárt tutor knowledge manifest
+   (`assets/tutor_knowledge/manifest.json`, `KnowledgeDocument`/`KnowledgeChunk`
+   schema, `KnowledgeCodec` determinisztikus chunk-hashekkel): erre épül az
+   offline lexical/hybrid retrieval index (SDD Ch5 §217). Kötelező: **csak
+   approved** dokumentumot indexeljen; a `docs/rag` DSP-anyag TILOS (ADR 0135 §1);
+   a `public.dart` **üres-boundary invariáns** (`ai_tutor_boundary_test.dart`) nem
+   törhető, greenfield hívó nélkül a mintát követve.
+   **~~E04-R06 — Knowledge schema & content pack~~ — KÉSZ** (PR #129, `f3d69ef`,
+   ADR 0135, ld. a fejléc-összefoglalót és §5).
+   **~~E04-R05 — Context adapters & snapshot~~ — KÉSZ** (PR #128, `55d640d`).
+   **~~E04-R04 — Skill taxonomy & evidence reducer~~ — KÉSZ** (PR #127, `0d7ab1b`).
    **~~E04-R03 — Student/guitar profile, goals & consent~~ — KÉSZ** (PR #126,
    `06ae3f7`).
 1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
