@@ -130,9 +130,15 @@ void main() {
           totalTimeout: const Duration(minutes: 1),
         );
 
-        final future = expectLater(stream, emitsError(isA<TimeoutException>()));
+        final future = expectLater(
+          stream,
+          emitsInOrder(<dynamic>[
+            isA<TutorModelDelta>(),
+            emitsError(isA<TimeoutException>()),
+          ]),
+        );
         clock.advance(const Duration(seconds: 3));
-        await Future<void>.delayed(Duration.zero);
+        await Future.microtask(() {});
         clock.advance(const Duration(seconds: 5));
         await future;
       });
@@ -193,9 +199,15 @@ void main() {
           totalTimeout: const Duration(seconds: 15),
         );
 
-        final future = expectLater(stream, emitsError(isA<TimeoutException>()));
+        final future = expectLater(
+          stream,
+          emitsInOrder(<dynamic>[
+            isA<TutorModelDelta>(),
+            emitsError(isA<TimeoutException>()),
+          ]),
+        );
         clock.advance(const Duration(seconds: 5));
-        await Future<void>.delayed(Duration.zero);
+        await pumpEventQueue();
         clock.advance(const Duration(seconds: 10));
         await future;
       });
