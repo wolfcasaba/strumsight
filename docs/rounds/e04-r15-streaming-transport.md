@@ -176,7 +176,62 @@ brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Motor:** qwen38-max (explicit engine-override). Continuation session: az első
+futás a backend + tesztek megírása után token-limit miatt jelzés nélkül leállt;
+ez a session a hiányzó Flutter-implementációt készítette el és commitolt.
+
+### Fájlonkénti összefoglaló
+
+| Fájl | Változás |
+|---|---|
+| `lib/features/ai_tutor/data/dto/tutor_stream_dto.dart` | ÚJ — `TutorTransportErrorCode` (5 wire-kód: `transport_sequence_gap` / `transport_malformed` / `transport_frame_too_large` / `transport_truncated` / `transport_stream_error`, ADR 0142 D4/D6/D8); `TutorStreamFrame` sealed hierarchia (started/delta/tool_call/usage/complete/failure, közös monoton `seq`); `TutorFrameOutcome` sealed (accepted/rejected/dropped); `TutorStreamFrameParser` — szigorú monoton seq (gap/out-of-order → `sequenceGap` reject és a parser lezárul), pontosan egyező szomszéd-duplikátum → idempotens drop, terminális frame vagy rejection után minden további frame drop; nem-JSON / nem-object / ismeretlen type / hiányzó vagy rossz típusú mező → `malformed`; `maxFrameBytes` felett → `frameTooLarge`; `defaultTutorFrameBytesLimit = 8192` (a backend `MAX_FRAME_BYTES` tükre); `TutorStreamTransport` interfész (`openTurnStream` / `cancelActiveStream` / `health`). |
+| `lib/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart` | ÚJ — `RemoteTutorModelGateway implements TutorModelGateway`, `{required transport, maxFrameBytes = default}`. `start()`: busy-check → `UnknownFailure('tutor.model_gateway.busy')`; transport-open failure átmegy változatlanul; sikeres open után friss parserrel normalizál az R13 hierarchiára (`delta`→`TutorModelDelta`, `tool_call`→`TutorModelToolCall`, `complete`→`TutorModelDone`, `failure`→`TutorModelError` a szerver kódjával/üzenetével; `started`/`usage` kontroll-frame, nem surfacelt). Rejected frame / nyers stream-hiba / terminális frame nélküli lezárás → terminális `TutorModelError(code: transport_*)`. `cancel()` transport-cancel + stream-zárás (újrahívás no-op), `health()` delegál, `isRunning` publikus. |
+| `test/features/ai_tutor/data/remote_tutor_model_gateway_test.dart` | Előző session írta (28 teszt, 14 parser + 14 gateway). EGY javítás e sessionben: a „frame size matrix" frame-jei `seq: 1` → `seq: 0` (ld. Eltérések). |
+| `backend/app/tutor/stream.py` | Előző session munkája (ÚJ, 227 sor) — SSE frame-szintézis, `MAX_FRAME_BYTES = 8192`, task-cancel cleanup. Most commitolva, tartalmához nem nyúltam. |
+| `backend/app/tutor/router.py` | Előző session +7 sora — stream-router mount (additív, alul import a circular import elkerülésére). Diff review-zva: rendben. |
+| `backend/tests/tutor/test_tutor_stream.py` | Előző session munkája (ÚJ, 388 sor). Most commitolva. |
+| `lib/features/ai_tutor/public.dart` | NEM változott — a boundary jelenleg üres (`library;`), R13/R14 sem exportált gateway-contractot, cross-feature fogyasztó még nincs; a teszt közvetlen path-importot használ. Az üresen hagyás konzisztens a korábbi körökkel. |
+
+### Futtatott parancsok és tényleges eredmények
+
+- `flutter test test/features/ai_tutor/data/remote_tutor_model_gateway_test.dart`
+  → **28/28 zöld** (EXIT=0).
+- `tools/round-gate.sh test/features/ai_tutor/data` →
+  format **ZÖLD** (970 fájl, a 3 módosított `dart format`-tálva) ·
+  analyze **ZÖLD** (No issues found) ·
+  test `test/features/ai_tutor/data` **ZÖLD** (97 teszt, EXIT=0) ·
+  architecture **ZÖLD** (12 allowlisted deviation — meglévő) ·
+  secrets **PIROS**: 4 találat — `backend/tests/tutor/test_tutor_proxy.py:596,611,627,631`
+  („credential assigned a long literal"). Ezek az **R14 merge-ben (c1c0a77)
+  commitolt fake `Settings(...)` boot-fixture sorai**, nem e kör diffjéből
+  származnak, és a fájl az engedélyezett listán kívül esik → follow-up F1.
+
+### Eltérések
+
+1. **Méretmátrix-teszt `seq` javítása.** A teszt friss parseren várt
+   elfogadni `seq: 1`-es delta frame-et, miközben a „rejects a gap in the very
+   first frame" teszt ugyanezt `sequenceGap`-re utasítja, és az ADR 0142
+   monoton-szabálya is ezt követeli — a két elvárás egymásnak ellentmondott.
+   A mátrix célja tisztán a mérethatár (alatta/rajta/felette), ezért a
+   frame-ek `seq`-ja `0`-ra javítva (1 számjegy, a méret-matek változatlan);
+   ezután 28/28 zöld. A tesztfájl az engedélyezett listán van.
+2. `public.dart` nem bővült exporttal (indoklás a táblázatban).
+
+### Nem futtatott ellenőrzések és okuk
+
+- `cd backend && ruff check . && pytest -q tests/tutor/test_tutor_stream.py` —
+  a boxon nincs `ruff`/`pytest`/`python` (csak csupasz `python3`), backend venv
+  nincs, **telepítés tiltott**. A backend-oldal bizonyítása a CI-é (F2).
+- Teljes `flutter test` suite, property gate, APK build — orchestrátor/CI
+  feladat (§12, ADR 0052/0053).
+
+### Follow-up (scope-on kívül)
+
+- **F1:** `backend/tests/tutor/test_tutor_proxy.py` 4 fake-fixture sorára
+  `# strumsight:allow-secret <indok>` marker kell, különben a round-gate
+  secrets-lépése minden jövőbeli futásban piros marad. A fájl az E04-R15
+  engedélyezett listáján kívül esik, ezért nem módosult.
+- **F2:** backend ruff/pytest futtatása CI-ben (boxon nincs Python-környezet).
 
 ## 11. Review — a független reviewer tölti ki
 
