@@ -4024,6 +4024,35 @@ azt méri. Ha megtartod a valódi gyökeret, írj mellé egy regressziós állí
 amely elhasal, ha a harness visszaáll — nálunk ez a
 `test_an_ambient_marker_in_the_real_repo_does_not_leak_into_these_tests`.
 
+## L119 — A teszt izolálta az állapotot, de nem a MELLÉKHATÁST: éles kört indított (GOV-03)
+
+**Mérés (2026-08-05).** A GOV-03 merge után, a `main`-en lefuttatott
+`tools/tests` suite **beragadt 5 percre**, majd kiderült: egy éles
+orchestrátor-session (`claude --permission-mode bypassPermissions`) és egy éles
+`codex exec` futott az E04-R10 körre — pedig a cron ki volt kapcsolva, és a
+lánc állt. A teszt a félkész implementer-munkát elveszítette, a kör-branchet
+újra pre-flightolta és pusholta.
+
+**Csapda.** A `test_pipeline_integration` esetei **izolált
+`PIPELINE_STATE_DIR`-t** kapnak, és a fájl fejlécei a veszélyt is ismerték
+(„confirmed: it happened … had to be killed by hand") — de a védekezés csak az
+**önjavító ágra** szólt, stub-okkal és a kísérletszámláló kimerítésével. A
+teljes firing viszont a stale halt archiválása után **továbbmegy a
+kör-indítási ágra**, ahol a driver a VALÓDI `pipeline-queue.tsv`-t olvassa. Az
+állapot izolálva volt; a mellékhatás nem.
+
+**Miért csak most.** Korábban a mérés mindig kör-branchről futott, ahol a
+driver előfeltétele („a lánc csak tiszta main-ről indul") elutasította. A merge
+után, `main`-en, ez az utolsó véletlen védelem is elesett — a teszt évek óta
+egy előfeltétel jóindulatán múlt.
+
+**Szabály.** Ha egy teszt éles vezérlő-scriptet futtat, ne csak az ÁLLAPOTÁT
+izoláld, hanem a **mellékhatás-képességét** is, és a védelem a **futtatott
+kódban** legyen, ne a tesztek fegyelmében: `PIPELINE_NO_LAUNCH=1` a közös
+session-indítóban, plusz regressziós teszt, amely elhasal, ha egy új
+teljes-firing eset a kapcsoló nélkül készül. A stub-alapú védekezés csak addig
+tart, amíg valaki ír egy új esetet.
+
 **Rokon eset ugyanebből a körből:** a `legacy_identifier_guard_test.dart` a
 fájlrendszert járta be, ezért egy **elárvult, gitignore-olt agent-worktree**
 (27 MB, 3 napja) pirosra váltotta a mércét a fő repóban — miközben a körök
