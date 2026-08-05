@@ -26,12 +26,14 @@ void main() {
     expect(adapted.provenance.sourceFeature, ContextSourceFeature.settings);
   });
 
-  test('imports only the Settings public boundary', () async {
+  test('imports only the Settings public boundary', () {
     const path =
         'lib/features/ai_tutor/application/context/adapters/settings_context_adapter.dart';
-    final result = await Process.run('rg', <String>['-n', r'^import ', path]);
-    expect(result.exitCode, 0);
-    final imports = result.stdout as String;
+    final imports = File(path)
+        .readAsStringSync()
+        .split('\n')
+        .where((line) => line.trimLeft().startsWith('import '))
+        .join('\n');
     expect(imports, contains('features/settings/public.dart'));
     expect(imports, isNot(contains('features/settings/providers/')));
   });

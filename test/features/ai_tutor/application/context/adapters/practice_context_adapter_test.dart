@@ -27,18 +27,20 @@ void main() {
     expect(const PracticeContextAdapter().adapt(result), isNull);
   });
 
-  test('imports only the Practice public boundary', () async {
-    await _expectOnlyPublicFeatureImport(
+  test('imports only the Practice public boundary', () {
+    _expectOnlyPublicFeatureImport(
       'lib/features/ai_tutor/application/context/adapters/practice_context_adapter.dart',
       'practice',
     );
   });
 }
 
-Future<void> _expectOnlyPublicFeatureImport(String path, String feature) async {
-  final result = await Process.run('rg', <String>['-n', r'^import ', path]);
-  expect(result.exitCode, 0);
-  final imports = result.stdout as String;
+void _expectOnlyPublicFeatureImport(String path, String feature) {
+  final imports = File(path)
+      .readAsStringSync()
+      .split('\n')
+      .where((line) => line.trimLeft().startsWith('import '))
+      .join('\n');
   expect(imports, contains('features/$feature/public.dart'));
   for (final line in imports.split('\n')) {
     if (line.contains('package:strumsight/features/')) {

@@ -21,12 +21,14 @@ void main() {
     },
   );
 
-  test('imports only the Song Trainer public boundary', () async {
+  test('imports only the Song Trainer public boundary', () {
     const path =
         'lib/features/ai_tutor/application/context/adapters/song_trainer_context_adapter.dart';
-    final result = await Process.run('rg', <String>['-n', r'^import ', path]);
-    expect(result.exitCode, 0);
-    final imports = result.stdout as String;
+    final imports = File(path)
+        .readAsStringSync()
+        .split('\n')
+        .where((line) => line.trimLeft().startsWith('import '))
+        .join('\n');
     expect(imports, contains('features/song_trainer/public.dart'));
     expect(imports, isNot(contains('features/song_trainer/domain/')));
   });
