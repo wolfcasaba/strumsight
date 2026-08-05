@@ -28,6 +28,7 @@ from .routers import settings as settings_router
 
 _DEV_SECRET = Settings.model_fields["secret_key"].default
 _DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
+_DEV_TUTOR_KEY = Settings.model_fields["tutor_api_key"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 _logger = logging.getLogger(__name__)
 
@@ -58,6 +59,13 @@ def _guard_prod(settings: Settings) -> None:
         raise RuntimeError(
             "SQLite in production requires the explicit "
             "STRUMSIGHT_ALLOW_SQLITE=true escape hatch."
+        )
+    if settings.tutor_enabled and (
+        not settings.tutor_api_key.strip() or settings.tutor_api_key == _DEV_TUTOR_KEY
+    ):
+        raise RuntimeError(
+            "Production tutor requires a non-empty, non-development API key — "
+            "set STRUMSIGHT_TUTOR_API_KEY."
         )
 
 
@@ -136,6 +144,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(settings_router.router)
     if settings.diagnostics_enabled:
         app.include_router(diagnostics.router)
+    if settings.tutor_enabled:
+        from .ratelimit import RateLimiter
+        from .tutor.provider_gateway import FakeProviderGateway
+        from .tutor.provider_registry import ProviderRegistry
+        from .tutor.router import router as tutor_router
+        from .tutor.router import set_service
+        from .tutor.service import TutorLimits, TutorService
+        from .tutor.usage import UsageGuard
+
+        registry = ProviderRegistry(
+            allowed=settings.tutor_allowed_providers,
+            provider=settings.tutor_provider,
+            model=settings.tutor_model,
+        )
+        gateway = FakeProviderGateway()
+        usage_guard = UsageGuard(
+            rate_limiter=RateLimiter(
+                max_attempts=settings.tutor_rate_limit_max,
+                window_seconds=settings.tutor_rate_limit_window,
+            ),
+            daily_token_limit=settings.tutor_daily_token_limit,
+        )
+        limits = TutorLimits(
+            max_request_bytes=settings.tutor_max_request_bytes,
+            max_history_messages=settings.tutor_max_history_messages,
+            max_context_bytes=settings.tutor_max_context_bytes,
+            max_output_bytes=settings.tutor_max_output_bytes,
+        )
+        service = TutorService(
+            gateway=gateway,
+            registry=registry,
+            api_key=settings.tutor_api_key,
+            usage_guard=usage_guard,
+            limits=limits,
+            timeout_seconds=settings.tutor_timeout_seconds,
+        )
+        set_service(service)
+        app.include_router(tutor_router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
