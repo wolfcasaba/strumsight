@@ -61,8 +61,7 @@ def _guard_prod(settings: Settings) -> None:
             "STRUMSIGHT_ALLOW_SQLITE=true escape hatch."
         )
     if settings.tutor_enabled and (
-        not settings.tutor_api_key.strip()
-        or settings.tutor_api_key == _DEV_TUTOR_KEY
+        not settings.tutor_api_key.strip() or settings.tutor_api_key == _DEV_TUTOR_KEY
     ):
         raise RuntimeError(
             "Production tutor requires a non-empty, non-development API key — "
@@ -183,7 +182,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         set_service(service)
         app.include_router(tutor_router)
-
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

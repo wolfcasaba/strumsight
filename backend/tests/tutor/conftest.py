@@ -48,7 +48,7 @@ def tutor_client(tutor_settings):
     enable_sqlite_foreign_keys(engine)
     Base.metadata.create_all(bind=engine)
     TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    
+
     # Use sqlite:// to avoid file-based database
     settings_with_sqlite = Settings(
         env=tutor_settings.env,
@@ -76,9 +76,9 @@ def tutor_client(tutor_settings):
         tutor_daily_token_limit=tutor_settings.tutor_daily_token_limit,
         tutor_timeout_seconds=tutor_settings.tutor_timeout_seconds,
     )
-    
+
     app = create_app(settings_with_sqlite)
-    
+
     # Override the database dependency
     def override_get_db():
         db = TestingSession()
@@ -86,9 +86,9 @@ def tutor_client(tutor_settings):
             yield db
         finally:
             db.close()
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Configure the tutor service
     gateway = FakeProviderGateway(response="A" * 40)  # 40 bytes, under 50 limit
     registry = ProviderRegistry(
@@ -117,10 +117,10 @@ def tutor_client(tutor_settings):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         yield client
-    
+
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
     engine.dispose()

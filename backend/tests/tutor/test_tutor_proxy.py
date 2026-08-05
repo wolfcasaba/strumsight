@@ -44,7 +44,7 @@ def tutor_client(tutor_settings):
     from sqlalchemy.pool import StaticPool
 
     from app.database import Base, enable_sqlite_foreign_keys, get_db
-    
+
     # Create a fresh in-memory database for each test
     engine = create_engine(
         "sqlite://",
@@ -54,7 +54,7 @@ def tutor_client(tutor_settings):
     enable_sqlite_foreign_keys(engine)
     Base.metadata.create_all(bind=engine)
     TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    
+
     # Use sqlite:// to avoid file-based database
     settings_with_sqlite = Settings(
         env=tutor_settings.env,
@@ -82,9 +82,9 @@ def tutor_client(tutor_settings):
         tutor_daily_token_limit=tutor_settings.tutor_daily_token_limit,
         tutor_timeout_seconds=tutor_settings.tutor_timeout_seconds,
     )
-    
+
     app = create_app(settings_with_sqlite)
-    
+
     # Override the database dependency
     def override_get_db():
         db = TestingSession()
@@ -92,9 +92,9 @@ def tutor_client(tutor_settings):
             yield db
         finally:
             db.close()
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Configure the tutor service
     gateway = FakeProviderGateway(response="A" * 40)  # 40 bytes, under 50 limit
     registry = ProviderRegistry(
@@ -123,10 +123,10 @@ def tutor_client(tutor_settings):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         yield client
-    
+
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
@@ -149,11 +149,11 @@ def test_flag_off_no_endpoints():
     settings = Settings(tutor_enabled=False)
     app = create_app(settings)
     client = TestClient(app)
-    
+
     # Tutor endpoints should not exist
     response = client.get("/tutor/capability")
     assert response.status_code == 404
-    
+
     response = client.post("/tutor/turn", json={"message": "test"})
     assert response.status_code == 404
 
@@ -208,7 +208,10 @@ def test_request_size_above_limit(tutor_client, tutor_auth_headers):
 def test_history_below_limit(tutor_client, tutor_auth_headers):
     """History below limit is accepted."""
     # 3 messages, limit is 5
-    history = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
+    history = [
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+    ]
     response = tutor_client.post(
         "/tutor/turn",
         json={"message": "test", "history": history, "context": ""},
@@ -323,7 +326,7 @@ def test_output_at_limit(tutor_settings, tutor_auth_headers):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         response = client.post(
             "/tutor/turn",
@@ -366,7 +369,7 @@ def test_output_above_limit(tutor_settings, tutor_auth_headers):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         response = client.post(
             "/tutor/turn",
@@ -454,7 +457,7 @@ def test_provider_timeout_normalized_error(tutor_settings, tutor_auth_headers):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         response = client.post(
             "/tutor/turn",
@@ -495,7 +498,7 @@ def test_provider_error_normalized_error(tutor_settings, tutor_auth_headers):
         limits=limits,
     )
     set_service(service)
-    
+
     with TestClient(app) as client:
         response = client.post(
             "/tutor/turn",
@@ -509,14 +512,14 @@ def test_provider_error_normalized_error(tutor_settings, tutor_auth_headers):
 def test_no_prompt_in_log(tutor_client, tutor_auth_headers, caplog):
     """Log does not contain the prompt or secret."""
     secret_prompt = "secret-prompt-12345-unique-marker"
-    
+
     with caplog.at_level(logging.DEBUG):
         response = tutor_client.post(
             "/tutor/turn",
             json={"message": secret_prompt, "history": [], "context": ""},
             headers=tutor_auth_headers,
         )
-    
+
     assert response.status_code == 200
     # The log should not contain the prompt
     assert secret_prompt not in caplog.text
@@ -551,39 +554,45 @@ def test_capability_endpoint(tutor_client):
 def test_prod_misconfig_blocks_boot():
     """Prod with dev tutor API key blocks boot (fail-closed)."""
     with pytest.raises(RuntimeError, match="TUTOR_API_KEY"):
-        create_app(Settings(
-            env="prod",
-            secret_key="real-prod-secret-key-12345",
-            cors_origins=["https://example.com"],
-        allow_sqlite_in_prod=True,
-            tutor_enabled=True,
-            tutor_api_key="dev-tutor-key",  # Dev default
-        ))
+        create_app(
+            Settings(
+                env="prod",
+                secret_key="real-prod-secret-key-12345",
+                cors_origins=["https://example.com"],
+                allow_sqlite_in_prod=True,
+                tutor_enabled=True,
+                tutor_api_key="dev-tutor-key",  # Dev default
+            )
+        )
 
 
 def test_prod_without_tutor_enabled_boots():
     """Prod without tutor enabled boots successfully."""
     # Should not raise
-    app = create_app(Settings(
-        env="prod",
-        secret_key="real-prod-secret-key-12345",
-        cors_origins=["https://example.com"],
-        allow_sqlite_in_prod=True,
-        tutor_enabled=False,
-        tutor_api_key="dev-tutor-key",  # Doesn't matter if tutor is disabled
-    ))
+    app = create_app(
+        Settings(
+            env="prod",
+            secret_key="real-prod-secret-key-12345",
+            cors_origins=["https://example.com"],
+            allow_sqlite_in_prod=True,
+            tutor_enabled=False,
+            tutor_api_key="dev-tutor-key",  # Doesn't matter if tutor is disabled
+        )
+    )
     assert app is not None
 
 
 def test_prod_with_real_tutor_key_boots():
     """Prod with real tutor API key boots successfully."""
     # Should not raise
-    app = create_app(Settings(
-        env="prod",
-        secret_key="real-prod-secret-key-12345",
-        cors_origins=["https://example.com"],
-        allow_sqlite_in_prod=True,
-        tutor_enabled=True,
-        tutor_api_key="real-prod-tutor-key-12345",
-    ))
+    app = create_app(
+        Settings(
+            env="prod",
+            secret_key="real-prod-secret-key-12345",
+            cors_origins=["https://example.com"],
+            allow_sqlite_in_prod=True,
+            tutor_enabled=True,
+            tutor_api_key="real-prod-tutor-key-12345",
+        )
+    )
     assert app is not None
