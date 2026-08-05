@@ -1,6 +1,6 @@
 # Review — E04-R17 Conversation repository, summary & inspectable memory
 
-- **Verdikt:** CHANGES REQUESTED → (javító kör után frissítendő)
+- **Verdikt:** APPROVED (javító kör #1 után — `6830e63`)
 - **Branch:** `codex/e04-r17-conversation-repository-and-memory`
 - **Implementer commit:** `749c081` (parent / pre-flight base `f4560ba`)
 - **Implementer motor:** Codex (`gpt-5.6-terra`, örökölt kézi override)
@@ -93,6 +93,20 @@ eldobható; a fő branch érintetlen. A guard tehát valódi.
 
 **OPEN: 2 MAJOR (M1, M2).** Javító kör indul ugyanazzal a motorral (Codex).
 A NOTE-ok follow-up jellegűek.
+
+### 7.1 Javító kör #1 — leletek zárása (`6830e63`, scope_audit=ok, 5 fájl)
+
+| # | Zárás | Bizonyíték |
+|---|---|---|
+| **M1** | ZÁRVA | `_isSensitive` telefon-osztálya bővült: `[\d ./()\- ]{6,}` + `(?:^|[^\w])` horgony. Új cellák: `rejects an email candidate` és `rejects a dotted phone candidate` (`555.123.4567` → `Failure`/`ValidationFailure`, `list` üres). A `{6,}` hossz-küszöb megmaradt (rövid szám-tartalom nem vált téves riasztást). |
+| **M2** | ZÁRVA | A top-level `jsonDecode`+`_objectMap`+schemaVersion/items ellenőrzés **try/catch**-be került → bármely hiba `_quarantineDocument(raw)` + üres lista (a memory repo mintája). Új cella: `quarantines an invalid top-level document and recovers with an empty page` (`{not json` → `Success` üres oldal + karantén). Mellékhatásként az N2 (ismeretlen schemaVersion csendes eldobás) is megszűnt: most karanténba kerül. |
+| N1/N3 | follow-up | Rekord-szintű memory-izoláció és atomikus delete-all — nem blokkoló, későbbi kör. |
+
+A javító diff kizárólag a két repo-implt, a két tesztet és a brief §10-et
+érinti; `public.dart` érintetlen. A gate-et friss `/tmp` klónon
+(HEAD `6830e63`) újrafuttattam.
+
+**OPEN BLOCKER/MAJOR/MINOR: nincs.** Verdikt: **APPROVED**.
 
 ## 8. Security/privacy review
 
