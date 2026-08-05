@@ -3902,3 +3902,26 @@ a `router-ci` run a merge SHA-n `success` kell legyen — a `build-apk` zöldje
 (itt a router 179 tesztje), a merge-evidencia NEM egyetlen workflow zöldje —
 minden, a diff által triggerelt workflow zöldjét explicit ellenőrizni kell.
 (Vö. [L108], [L112].)
+
+## L114 — A reviewer izolált `/tmp` klónjának `origin/main`-je a LOKÁLIS repo `main` branchére mutat (nem az igazi originra); ha a kör-branch időközben rebase-elt, a `git diff main...HEAD` scope-audit HAMIS listán-kívüli fájlokat mutat (E04-R08, 2026-08-05)
+
+**Kontextus.** Az E04-R08 review scope-auditjában a `git clone --branch <ág>
+/home/ubuntu/music-theory /tmp/review-e04-r08` + `git fetch origin main` után a
+`git diff --stat origin/main...HEAD` a kör 9 saját fájlján FELÜL hat idegen
+fájlt mutatott (`docs/LESSONS.md`, `pipeline-*`, `tools/tests/…`) — látszatra
+súlyos listán-kívüli scope-sértés.
+
+**Gyökérok.** A klón `origin` remote-ja a LOKÁLIS `/home/ubuntu/music-theory`,
+és annak `main` branch-refje az orchestrátor munkafájában `20da3e2`-n állt (a
+`git fetch origin main` csak a tracking `origin/main`-t frissíti, a lokális
+`main` branch-et nem, hacsak nem vagyunk rajta). A kör-branch viszont időközben
+a valódi `origin/main` `00a0ba3`-ra (PR #131) **rebase-elődött**. Így a klón
+`origin/main` (=20da3e2) és a rebase-elt HEAD közös őse 20da3e2, és a diff a
+rebase-be behúzott #131-es commitok fájljait is „a kör változásának" mutatta.
+
+**Javítás / szabály.** A scope-auditot a **rebase-bázishoz** kell mérni, nem a
+klón `origin/main`-jéhez: `git diff --name-only <rebase-bázis-SHA>...HEAD` (itt
+`00a0ba3...HEAD`), vagy közvetlenül a kör saját commitjaira (`HEAD~N...HEAD`).
+**Tanulság:** rebase-elt kör-branchen a `main...HEAD` merge-base-alapú diff nem
+megbízható scope-mérce, ha a bázis-ref stale; a mérce mindig az a konkrét SHA,
+amire a branch valóban ült. (Vö. [L108].)

@@ -4,7 +4,41 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R07 merged — offline knowledge index & retrieval).**
+> (E04-R08 merged — deterministic debrief & coaching fallback).**
+>
+> **E04-R08 KÉSZ (PR [#132](https://github.com/wolfcasaba/strumsight/pull/132),
+> squash `ddd7674`, **nincs új ADR** — az ADR 0132 (grounding) + ADR 0084 (legacy
+> `PracticeCoach`/`PracticeInsight` parity) + SDD §14/§21 realizálása, implementer
+> **Codex** (`gpt-5.6-terra`, örökölt kézi override), orchestrátor/reviewer
+> **Claude Opus 4.8**):** cloud **nélkül** is megbízható, lokalizált,
+> **bizonyíték-alapú** session-visszajelzés (greenfield, hívó nélkül — R12/R16
+> fogyasztja). `lib/features/ai_tutor/domain/models/` — `DebriefFact`
+> (code/value/provenance/confidence/priority; **grounding-kikényszerítés**: üres
+> `evidenceRefs` → `ArgumentError`, `computedTrend` ≥2 comparable evidence-group)
+> + `CoachingInsight` (SDD §14.3 teljes mezőkészlet: stabil code, title/explanation
+> loc-key, **evidence-refs**, priority, suggested-action template, uncertainty,
+> conflicting-evidence flag; konstruktor-kikényszerített nem-üres evidence).
+> `lib/features/ai_tutor/application/debrief/` — `SessionDebriefBuilder` (session →
+> grounded fact-lista; **egész basis-point aritmetika**, nincs óra/véletlen/float;
+> stabil `(priority↑, code↑)` rendezés) + `DeterministicCoach` (**egy** elsődleges,
+> legmagasabb-prioritású insight; DI-lookupos lokalizált output; low-evidence →
+> uncertainty text, **nem** 0%/hamis állítás). Legacy **parity**: a R01
+> `practice_coach_bias_late_v1` fixture-input → `practice.insight.bias_late`
+> (kereszt-feature import NÉLKÜL, érték-egyezéssel mérve). `app_en.arb`+`app_hu.arb`
+> additív coaching kulcsok. **Pre-flight §0.0 (mérve, main @ `20da3e2`):** nincs ÚJ
+> ADR (legmagasabb 0136; realizációs kör); **REVÍZIÓ — engedélyezett-lista szűkítés:**
+> `public.dart` eltávolítva (a `ai_tutor_boundary_test.dart` nulla-export invariánsa
+> bármely exporttól RED-re váltana; e körnek nincs hívója); §1.2 erőforrás-tulajdonlás
+> N/A (nincs `.acquire()`/lease). Az implementer egy futásban `done` (a `dirty_files=1`
+> a gitignore-olt generált l10n volt, nem tracked). Független review **APPROVED**
+> (0 BLOCKER/MAJOR/MINOR, 1 NOTE): a determinizmus-guard **valódi-sértés próbával**
+> igazolva (tie-break `code.compareTo` neutralizálás → a shuffle-invariáns teszt RED,
+> majd visszaállítva); a grounding-invariáns konstruktor-kikényszerített. A kör a
+> #131 (Router CI required) merge után jött → **rebase** `00a0ba3`-ra + re-dispatch.
+> CI [run 30977904223](https://github.com/wolfcasaba/strumsight/actions/runs/30977904223)
+> **success** exact head `3633e10` (analyze + full suite + randomizált property + APK);
+> Router CI zöld; post-merge gate `main`-en zöld. Production viselkedés változatlan
+> (`ai_tutor/public.dart` üres — nincs hívó). **Következő: E04-R09 — a pipeline indítja.**
 >
 > **E04-R07 KÉSZ (PR [#130](https://github.com/wolfcasaba/strumsight/pull/130),
 > squash `8182204`, **új ADR [0136](docs/adr/0136-tutor-knowledge-retrieval.md)**
