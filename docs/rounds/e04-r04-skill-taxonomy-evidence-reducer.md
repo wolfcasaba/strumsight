@@ -184,7 +184,50 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/ai_tutor/domain/models/skill_node.dart` — immutable, v1-es
+  kezdeti taxonómia (`SkillId`, `SkillNode`, prerequisite-validáció és
+  cycle-őr).
+- `lib/features/ai_tutor/domain/models/skill_evidence.dart` — provenance-os,
+  schema- és scorer-verziót fail-loud módon validáló evidence value object;
+  egész súlyokkal a közvetlen méréshez, self-reporthoz és tutor assessmenthez.
+- `lib/features/ai_tutor/domain/models/skill_estimate.dart` — immutable
+  `insufficient`/`trend` output, külön normalized confidence-szal és stabil
+  value equalityvel.
+- `lib/features/ai_tutor/domain/services/skill_evidence_reducer.dart` — tiszta,
+  integer-aritmetikás reducer: ID-idempotencia, comparable partition/group
+  kiválasztás, UTC + lexikális tie-break, 0/1/2-group küszöb és explicit trend.
+- `test/features/ai_tutor/domain/skill_taxonomy_test.dart` — initial manifest,
+  prerequisite graph/cycle, immutability és a kör-lokális purity scanner.
+- `test/features/ai_tutor/domain/skill_evidence_reducer_test.dart` —
+  version-reject, 0/1/2 matrix, literal tie-break, seedelt shuffle-property,
+  source-weight, duplicate conflict/idempotencia és output-validáció.
+
+`public.dart`, a lezárt boundary-teszt és minden más feature contract érintetlen.
+
+### Futtatott ellenőrzések
+
+- RED: `/home/ubuntu/flutter/bin/flutter test
+  test/features/ai_tutor/domain/skill_taxonomy_test.dart
+  test/features/ai_tutor/domain/skill_evidence_reducer_test.dart` — a négy még
+  nem létező domain-contract importja miatt várt compile failure.
+- GREEN: ugyanez a két tesztfájl — **27 passed**.
+- `/home/ubuntu/flutter/bin/flutter test --coverage
+  test/features/ai_tutor/domain` — **75 passed**; az új domain fájlok összesen
+  **300/304 sor, 98.68%** line coverage.
+- `tools/round-gate.sh test/features/ai_tutor/domain` — **ZÖLD**: format (889
+  fájl, 0 változás), analyze (`No issues found!`), domain tesztek (75 passed),
+  architecture.
+- `/home/ubuntu/flutter/bin/dart run tool/check_architecture.dart` —
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`
+- `git diff --check` — hiba nélkül.
+
+### Nem futtatott ellenőrzések
+
+- A teljes Flutter suite, friss randomizált property gate és release APK a
+  kör-branch CI-dispatchének/orchestrátorának kötelezettsége; implementerként
+  nem futtattam `gh`-t, nem pusholtam és nem nyitottam PR-t.
 
 ## 11. Review — a független reviewer tölti ki
 
