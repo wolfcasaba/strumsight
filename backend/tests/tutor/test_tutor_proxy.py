@@ -1,5 +1,11 @@
 """Tests for the tutor proxy endpoints and service logic."""
 
+# strumsight:allow-secret-file — a prod-misconfig fail-closed teszteknek fake
+# hitelesitokre van szukseguk (secret_key/tutor_api_key fixture-ok); ezek
+# szandekosan titok-alaku, de bizonyithatoan nem valos titkok. A fajl kivetelek
+# fajlja, nem egy kivetelt tartalmazo fajl (ADR 0138, tool/ci/check_secrets.dart
+# soronkenti jelolese torekeny a ruff format ujratordelesevel szemben, L113).
+
 import logging
 
 import pytest
