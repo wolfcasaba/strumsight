@@ -7,6 +7,7 @@ stdin, exit 0 = allow, exit 2 = block, stderr = the message the model sees.
 import json
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -111,6 +112,120 @@ class ProtectFactoryFilesTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 2)
+
+
+class BashWriteTargetTest(unittest.TestCase):
+    """Only the WRITE TARGET counts — mentioning a protected path is not a write.
+
+    Measured 2026-08-05 (docs/LESSONS.md L117): the first version scanned every
+    token, so appending a lesson whose text mentioned the measure, running the
+    guard's own test, and committing the change were all blocked.
+    """
+
+    def run_hook(self, command: str) -> subprocess.CompletedProcess:
+        environment = dict(os.environ)
+        environment["CLAUDE_PROJECT_DIR"] = str(REPO_ROOT)
+        environment.pop("STRUMSIGHT_GATE_EDIT_OK", None)
+        return subprocess.run(
+            ["python3", str(HOOK)],
+            input=json.dumps({"tool_name": "Bash", "tool_input": {"command": command}}),
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+    def assertBlocked(self, command: str) -> None:
+        self.assertEqual(self.run_hook(command).returncode, 2, f"nem blokkolt: {command}")
+
+    def assertAllowed(self, command: str) -> None:
+        result = self.run_hook(command)
+        self.assertEqual(result.returncode, 0, f"tévesen blokkolt: {command}\n{result.stderr}")
+
+    def test_writes_to_the_measure_are_blocked(self) -> None:
+        for command in (
+            "echo x > tools/round-gate.sh",
+            "echo x >tools/round-gate.sh",
+            "echo x >> .github/workflows/build-apk.yml",
+            "sed -i 's/a/b/' tools/round-gate.sh",
+            "cat new.yml | tee .github/actions/flutter-gates/action.yml",
+            "cp /tmp/x.py tools/ai_router/security.py",
+            "mv /tmp/x.py tools/model-router.py",
+            "install /tmp/x.sh tools/round-scope-audit.sh",
+            "rm tools/round-gate.sh",
+            "chmod +x tool/ci/check_assets.dart",
+            # könyvtár-célpont: a fájl-globok önmagukban nem fognák
+            "cp -t .github/workflows /tmp/x.yml",
+            "rm -rf tool/ci",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command)
+
+    def test_merely_mentioning_the_measure_is_allowed(self) -> None:
+        for command in (
+            # A saját dokumentálásunk: a SZÖVEG említi a mércét, az ÍRÁS máshova megy.
+            "cat >> docs/LESSONS.md <<'EOF'\nlásd tools/round-gate.sh\nEOF",
+            "git commit -m 'feat: tools/round-gate.sh mellé új kapu'",
+            "git add tools/ai_router/legacy_scope.py",
+            "grep -rn analyze tools/round-gate.sh",
+            "bash tools/round-scope-audit.sh /tmp/probe abc123 /tmp/probe/.codex-round-status",
+            "python3 -m unittest tools.tests.test_protect_factory_files",
+            "diff /tmp/new.yml .github/workflows/build-apk.yml",
+            "cp .github/workflows/build-apk.yml /tmp/backup.yml",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(command)
+
+    def test_unparseable_command_does_not_crash_the_guard(self) -> None:
+        # Lezáratlan idézőjel: nem elemezhető, de a hook nem hal meg.
+        self.assertIn(self.run_hook("echo 'unterminated > tools/round-gate.sh").returncode, (0, 2))
+
+
+class MarkerEscapeTest(unittest.TestCase):
+    """The human escape must be usable from inside a running session (L117)."""
+
+    def run_hook(self, project: Path, target: Path) -> subprocess.CompletedProcess:
+        environment = dict(os.environ)
+        environment["CLAUDE_PROJECT_DIR"] = str(project)
+        environment.pop("STRUMSIGHT_GATE_EDIT_OK", None)
+        return subprocess.run(
+            ["python3", str(HOOK)],
+            input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": str(target)}}),
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+    def test_marker_file_authorizes_measure_edits_and_names_the_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            project = Path(directory_name)
+            (project / ".claude").mkdir()
+            (project / ".claude" / "gate-edit-authorized").write_text(
+                "GOV-03: user-engedély a factory-hardening kapukhoz\n"
+            )
+
+            result = self.run_hook(project, project / "tools" / "round-gate.sh")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("GOV-03", result.stderr)
+
+    def test_without_the_marker_the_same_edit_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            project = Path(directory_name)
+
+            result = self.run_hook(project, project / "tools" / "round-gate.sh")
+
+            self.assertEqual(result.returncode, 2)
+
+    def test_marker_never_unlocks_secret_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            project = Path(directory_name)
+            (project / ".claude").mkdir()
+            (project / ".claude" / "gate-edit-authorized").write_text("bármi\n")
+
+            result = self.run_hook(project, project / ".env")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("titok", result.stderr)
 
 
 if __name__ == "__main__":
