@@ -3817,3 +3817,32 @@ fájlolvasással + Dart-oldali szűréssel végezz. A lokális `round-gate` zöl
 nem helyettesíti az exact-SHA CI-t: a környezeti eltérés (itt: `ripgrep`
 elérhetőség) csak ott bukik ki. (Vö. [ADR 0053] — a teljes suite + property +
 APK a CI evidencia; a box gate szükséges, de nem elégséges.)
+
+## L111 — Az implementer izolált worktree-jében hiányzó, gitignore-olt generált l10n (`app_localizations.dart`) `analyze`-PIROS-t és FALSE `stopped`-ot okoz; ez build-előfeltétel, nem scope-kérdés — az orchestrátor oldja `flutter pub get`+`gen-l10n`-nel (E04-R06, 2026-08-05)
+
+**Kontextus.** Az E04-R06 Codex-implementer a kód (schema/codec/build-tool/
+tesztek) elkészülte után `stopped`-ot jelzett: `summary=gate analyze piros:
+hiányzik a listán kívüli generált lib/l10n/app_localizations.dart`. A jelzés
+KÉTSZER is így jött (a folytatás-körben is), pedig a kód hibátlan volt.
+
+**Gyökérok.** A `lib/l10n/app_localizations*.dart` **gitignore-olt build-output**
+(`flutter gen-l10n` generálja a `l10n.yaml` + ARB-kből). A friss `git worktree`
+munkapéldány NEM tartalmazza; a `round-gate.sh` `analyze` lépése (`flutter
+analyze lib/ test/ tool/`) a hiányzó generált fájlra ~752 hibát ad. A Codex
+helyesen NEM adta az `allowed_paths`-hoz (tracked forrás nem), és scope-őrből
+`stopped`-ot jelzett — de ez **környezeti előfeltétel**, nem tartalmi elakadás.
+
+**Javítás (orchestrátor).** A munkapéldányban `flutter pub get` + (mivel van
+`l10n.yaml`) `flutter gen-l10n` → a generált l10n helyreáll, az `analyze` és a
+teljes `round-gate` mind a négy lépésen ZÖLD. A merge-elt `main`-en ugyanezt a
+`tools/prepare-flutter-generated.sh` végzi a post-merge gate ELŐTT (pipeline
+záró rituálé §5). A CI (`build-apk.yml`) maga is regenerálja, ezért ott sosem
+jelentkezik.
+
+**Tanulság.** Izolált worktree-vel dolgozó implementernek a dispatch ELŐTT (vagy
+az első `analyze`-piros `stopped` UTÁN) az orchestrátor futtassa a
+`prepare-flutter-generated.sh` ekvivalensét a munkapéldányban, hogy a
+gitignore-olt generált előfeltételek (package_config, l10n) jelen legyenek. A
+generált l10n hiánya miatti `analyze`-piros NEM H6/H7 halt és NEM scope-tágítás
+— build-előfeltétel, amit az orchestrátor old fel, a kör-diff érintése nélkül.
+(Vö. pipeline prompt §5, `tools/prepare-flutter-generated.sh`.)
