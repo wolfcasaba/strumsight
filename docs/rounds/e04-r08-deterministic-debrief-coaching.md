@@ -1,6 +1,6 @@
 # E04-R08 — Deterministic debrief és coaching fallback
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-05, main @ `20da3e2`; lásd §0.0)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 8; §35
 - **Branch:** `codex/e04-r08-deterministic-debrief-coaching`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R04 + E04-R05 merge**
@@ -14,7 +14,6 @@ allowed_paths = [
   "lib/features/ai_tutor/domain/models/coaching_insight.dart",
   "lib/features/ai_tutor/application/debrief/session_debrief_builder.dart",
   "lib/features/ai_tutor/application/debrief/deterministic_coach.dart",
-  "lib/features/ai_tutor/public.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/ai_tutor/application/session_debrief_builder_test.dart",
@@ -45,7 +44,47 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight mérve 2026-08-05, `main` @ `20da3e2` (E04-R07 merge után). Nincs előre kiosztott ADR.**
+
+**D1 — Nincs ÚJ ADR.** A legmagasabb ADR-szám `0136` (mérve: `ls docs/adr/`).
+E kör **realizáció**, nem új normatív döntés: az ADR 0132 (grounding: minden
+insight evidence-ref-et hordoz) + ADR 0084 (a legacy `PracticeCoach`/
+`PracticeInsight` parity-referencia) + SDD §14 (Deterministic coach és debrief)
++ SDD §21 (Claim grounding) realizálása. A R03/R04/R05 precedens szerint
+realizációs körre nem osztunk új ADR-számot (szám-infláció elkerülése).
+
+**D2 — REVÍZIÓ: engedélyezett-lista szűkítés, `public.dart` eltávolítva.** A
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` **nulla import/export
+invariánst** őriz (`public.dart` jelenlegi tartalma csak `library;` + doc-comment,
+mérve). Bármely export onnan pirosra váltaná a lezárt E04-R01 boundary-tesztet;
+egyetlen acceptance sem igényel külső elérhetőséget (a §6 kritériumok mind
+determinisztikus kimenetre / groundingre / parityre vonatkoznak). A debrief
+**belső marad** (`domain/models/` + `application/debrief/`); a hívó/export a
+R12/R16 prompt-kör dolga (R02–R07 precedens).
+
+**D3 — §1.1(1) Elérhetetlen cél-státusz (mért input→státusz).** Az acceptance
+forgatókönyvei (late bias / wrong direction / low chord / first session /
+improvement / non-comparable / low evidence) mind előállíthatók: a legacy
+`PracticeCoach` (`lib/features/practice/domain/service/practice_coach.dart`) a
+mért prioritás-mátrix (noSignal → lowCompletion → biasLate/Early → directionError
+→ chordError → chordPairProblem → tempoTooHigh → positiveReinforcement →
+nextDifficulty; küszöbök: completion<0.5, dir<0.6, chord<0.6, rhythm<0.7 &
+bpm≥120, reinforcement≥0.85, bias ≥8 paired & ≥70% share). A parity-fixture
+`practice_coach_bias_late_v1` **létezik és teljes**
+(`docs/baseline/epic-04-ai-tutor-start.md` §Rögzített deterministic coaching
+fixture-snapshot: input → `code: practice.insight.bias_late`). Nincs parity-STOP.
+
+**D4 — §1.2 Erőforrás-tulajdonlás: N/A.** A kör tiszta domain/application; nincs
+lease/lock/handle/subscription. `grep -rn "\.acquire(" lib/features/ai_tutor` —
+nincs találat az érintett rétegen; a mic-lease változatlanul a `MicCapture`-nél.
+
+**D5 — Modellek/kontraktusok (SDD §14.2/§14.3/§21 mérve).** `DebriefFact`:
+`code, value, provenance, confidence, priority` (SDD §14.2). `CoachingInsight`:
+stabil code, title loc-key, explanation loc-key, **evidence refs**, priority,
+suggested action template, uncertainty, conflicting-evidence flag (SDD §14.3).
+Grounding: minden mért állítás ≥1 session evidence-ref, computedTrend ≥2
+összehasonlítható evidence group (SDD §21.3). Bemenetek adottak: R04
+`SkillEvidence`/`SkillEstimate`, R05 `TutorContextSnapshot` (mérve, léteznek).
 
 ## 1. Cél
 
@@ -78,7 +117,7 @@ source-feature belső import.
 | `.../domain/models/coaching_insight.dart` | ÚJ | insight + evidence-ref |
 | `.../application/debrief/session_debrief_builder.dart` | ÚJ | result→fact |
 | `.../application/debrief/deterministic_coach.dart` | ÚJ | priority + localized output |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
+| ~~`lib/features/ai_tutor/public.dart`~~ | **§0.0 REVÍZIÓ — eltávolítva** | boundary-invariáns: bármely export RED-re vált; e körnek nincs hívója (R12/R16 fogyasztja) |
 | `lib/l10n/app_en.arb`, `app_hu.arb` | meglévő | insight lokalizációs kulcsok (additív) |
 | `test/features/ai_tutor/application/*` | ÚJ | fact/priority/parity tesztek |
 | `docs/rounds/e04-r08-*.md` | meglévő | §10 handoff |
@@ -135,7 +174,45 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `DebriefFact` és `CoachingInsight` immutable, evidence-refet validáló belső
+  modellek; a computed trend legalább két összehasonlítható evidence groupot
+  követel.
+- `SessionDebriefBuilder` csak redaktált primitív session inputból készít stabil
+  prioritású fact-listát. Lefedi a late bias, wrong direction, low chord,
+  section consistency, stable tempo, first evidence, improvement és
+  non-comparable eseteket; Practice feature import nincs.
+- `DeterministicCoach` egyetlen elsődleges insightot választ prioritás + stabil
+  code tie-break alapján, és kizárólag localization keyt, action template-et és
+  evidence refeket ad tovább. A legacy late-bias fixture `practice.insight.bias_late`
+  kódját megtartja.
+- Az angol és magyar ARB-katalógus additív debrief/uncertainty/action kulcsokat
+  kapott. Vizuális vagy kamerás diagnózis nincs.
+
+### Tesztek és ellenőrzések
+
+- RED: az új forrás-contract hiányát jelző tesztek pirosak voltak; a viselkedési
+  RED után a builder/coach `UnimplementedError`-ral vártan pirosra vált.
+- `flutter test test/features/ai_tutor/application/session_debrief_builder_test.dart test/features/ai_tutor/application/deterministic_coach_test.dart`
+  — 15 teszt zöld. Lefedi a parity fixture-t, a 7/8/9 paired-evidence mátrixot,
+  first/improvement/non-comparable eseteket, hu+en ARB-lookupot, grounding
+  mutációt, stabil rendezést és a tiltott vizuális claim-szavakat.
+- `flutter gen-l10n` — sikeres, generált output gitignore-olt.
+- `tools/round-gate.sh test/features/ai_tutor/application` — zöld: format
+  változás nélkül, analyze `No issues found`, application suite `+35` teszt.
+  A kimenet tokenkorlátja után külön ismételt `dart run tool/check_architecture.dart`:
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`
+
+### Nem futtatott ellenőrzések
+
+- Teljes Flutter suite, randomizált property gate és release APK CI nem futott:
+  ezek az orchestrátor exact-SHA CI-feladatai.
+
+### Eltérés vagy nyitott kockázat
+
+- Nincs scope-eltérés; új ADR, public export, cloud hívás és source-feature
+  belső import nem került a diffbe.
 
 ## 11. Review — a független reviewer tölti ki
 
