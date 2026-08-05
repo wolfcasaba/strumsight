@@ -168,7 +168,29 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- Szállítva: providerfüggetlen `TutorAction` sealed hierarchia immutable
+  metadata-val (source, expiry, typed capability, `clientActionId`, opaque
+  revision-token); typed profile-update, plan-save és session-launch action,
+  továbbá explicit unknown/raw-route untrusted proposal elutasítás.
+- Szállítva: pure validator expiry-, capability-, song-revision- és source-session
+  ellenőrzéssel; a `confirm` ugyanezt a validációt újrafuttatja. A confirmation
+  service csak pending proposalból hajt végre, reject után változatlanul nem fut,
+  és in-flight + completed `clientActionId` tárral idempotens.
+- Szállítva: csak memóriás `FakeTutorActionExecutor`, production navigation vagy
+  write-kódút nélkül.
+- Acceptance-bizonyíték: `tutor_action_test.dart` a preview-copyt és typed launch
+  capability-t méri; `action_confirmation_service_test.dart` lefedi a pending
+  confirmationt, profile previewt, unknown/raw-route elutasítást, expiry
+  alatt/rajta/fölötte mátrixot, confirm-idejű song-revision/session/capability
+  stale eseteket, concurrent double-confirm idempotenciát és reject flow-t.
+  A raw-route validator-ág eldobható gyengítése a dedicated tesztet RED-re
+  váltotta (`rawRouteForbidden` hiányzott), majd visszaállítás után a suite zöld.
+- Futtatva: `flutter pub get`, `flutter gen-l10n`; a kötelező
+  `tools/round-gate.sh test/features/ai_tutor/domain test/features/ai_tutor/application`
+  teljesen zöld (format, analyze, mindkét tesztcsoport, architecture, secrets,
+  l10n). A kézi scope audit: `scope_audit=ok`, 6 changed path, base `1ba2b3d`.
+- Nem futtatott: teljes Flutter suite, randomizált property gate és APK build —
+  ADR 0053 szerint CI/orchestrátor-feladat.
 
 ## 11. Review — a független reviewer tölti ki
 
