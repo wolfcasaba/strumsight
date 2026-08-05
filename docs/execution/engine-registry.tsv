@@ -22,7 +22,7 @@ qwen-plus	codex	~/.codex-kilo	qwen/qwen3.7-plus	KILOCODE_API_KEY	~/.kilocode-tok
 qwen-max	codex	~/.codex-kilo	qwen/qwen3.7-max	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	32768	1.25	3.75	5/5; 80.4 SWE-bench Verified; lassú
 qwen38-max	codex	~/.codex-kilo	qwen/qwen3.8-max	KILOCODE_API_KEY	~/.kilocode-token	30	7200	1000000	32768	2.00	6.00	Qwen csúcs (67.7 SWE-bench Pro); NEM mértük, 46 tok/s
 qwen-coder	codex	~/.codex-kilo	qwen/qwen3-coder-next	KILOCODE_API_KEY	~/.kilocode-token	12	3600	262144	32768	0.30	1.50	7/10 de GYORS (4 s) — volumen/mechanikus körre
-qwen-coder-plus	codex	~/.codex-kilo	qwen/qwen3-coder-plus	KILOCODE_API_KEY	~/.kilocode-token	15	3600	1000000	32768	0.65	3.25	Qwen dedikált coder csúcs; NEM mértük
+qwen-coder-plus	codex	~/.codex-kilo	qwen/qwen3-coder-plus	KILOCODE_API_KEY	~/.kilocode-token	15	3600	1000000	32768	0.65	3.25	füst-teszt OK (2026-08-05, 20 s): TÉNYLEG szerkeszt; apply_patch NEM támogatott -> shell-fallback (sed/heredoc)
 qwen-flash	codex	~/.codex-kilo	qwen/qwen3.7-flash	KILOCODE_API_KEY	~/.kilocode-token	20	3600	1000000	32768	0.03	0.13	4/5; a legolcsóbb Qwen; lassabb mint az ára sejtetné
 gptoss	codex	~/.codex-kilo	openai/gpt-oss-120b	KILOCODE_API_KEY	~/.kilocode-token	12	3600	131072	32768	0.03	0.17	9/10 és 5 s — a legjobb ár/érték az egész mezőnyben
 kimi	codex	~/.codex-kilo	moonshotai/kimi-k2.5	KILOCODE_API_KEY	~/.kilocode-token	12	3600	262144	32768	0.60	3.00	4/5 és 7 s — gyors tartalék más családból
