@@ -4,27 +4,33 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R15/H3 self-heal MERGED — build-apk `secrets`-kapu unblockolva egy
-> pre-existing R14 false-positive-on; a lánc újrafuttatja E04-R15-öt).**
+> (E04-R15 MERGED — AI tutor streaming transport, ADR 0142; a H3-blokkoló az
+> R14 secret-scan self-heal (#143) után feloldva, exact-SHA zöld kapun át).**
 >
-> ## 🔧 E04-R15 / H3 önjavítás KÉSZ — a lánc E04-R15-öt újrafuttatja (2026-08-05)
+> ## ✅ E04-R15 KÉSZ — AI tutor streaming transport (2026-08-05)
 >
-> **Nem kör-lezárás, hanem akadály-elhárítás (ADR 0112).** Az E04-R15
-> (streaming transport) kódja review-approved volt, de a `build-apk` merge-kapu
-> `round-gate.sh secrets` lépése PIROS maradt egy **pre-existing R14
-> false-positive** miatt: a `backend/tests/tutor/test_tutor_proxy.py` négy fake
-> prod-config fixture-je (`secret_key`/`tutor_api_key`, sorok 596/611/627/631)
-> a GOV-03 secret-scan leletét adta — a fájl az R15 `allowed_paths`-án KÍVÜL,
-> így a kör önmagában nem volt zöldre hozható. **Javítás:** fájl-szintű
-> `# strumsight:allow-secret-file` jelölés a fájl tetején (self-heal tágabb
-> infra-jog, a mércét NEM gyengíti) + hermetikus regressziós teszt a mért
-> fixture-alakra (`check_secrets_test.dart`, L118). PR
-> [#143](https://github.com/wolfcasaba/strumsight/pull/143), squash `7b3b5b9`,
-> build-apk exact-SHA `a42a4ff`
-> [31032231969](https://github.com/wolfcasaba/strumsight/actions/runs/31032231969)
-> `success`. Mérce: `main`-en a scan 4 lelet → 0 lelet. Tanulság:
-> [`docs/LESSONS.md` L124](docs/LESSONS.md#l124). **Következő:** a lánc E04-R15-öt
-> (queue: `pending`) újrafuttatja, immár tiszta `secrets`-kapuval.
+> **E04-R15 — Backend + Flutter streaming transport** MERGED (PR
+> [#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
+> ADR [0142](docs/adr/0142-ai-tutor-streaming-transport-protocol.md), implementer
+> **qwen38-max** / Terra). Sorrendhelyes, megszakítható, újrapróbálható tutor
+> streaming: monoton event-sequence, started/delta/usage/tool-call/complete/
+> failure frame, gap/out-of-order → **kontrollált** `transport_*` failure (nem
+> néma átugrás), duplicate-frame idempotens, retry nem duplikál user-message-et,
+> disconnect → **nincs árva provider-request** (cleanup + cancellation), body +
+> frame size-limit (alatt/rajta/fölött mátrix). Backend `stream.py` (SSE) +
+> Flutter `TutorStreamDto` parser + `RemoteTutorModelGateway`.
+> Review: [`docs/reviews/e04-r15-streaming-transport-review.md`](docs/reviews/e04-r15-streaming-transport-review.md)
+> — **kód APPROVED**, minden lelet zárva (MAJOR-1 ruff-format, MINOR log-forging).
+>
+> **H3-feloldás (ADR 0112):** az eredeti merge-HALT a `build-apk` secret-scan
+> PIROS-a volt egy **pre-existing R14** fixture-fájlon (`test_tutor_proxy.py`,
+> tilos zóna). A self-heal (#143, `7b3b5b9`) fájl-szintű
+> `# strumsight:allow-secret-file` jelölést tett a fájlra és merge-elt `main`-re;
+> ez a session a branchet a gyógyított `main`-re rebase-elte, így a `secrets`-kapu
+> zöld. CI: `full-gate.yml` + `router-ci.yml` exact-SHA `a7377ed` **success**
+> (ADR 0171 CI-terv: nincs natív út → APK-építés nélkül). Tanulság:
+> [`docs/LESSONS.md` L126](docs/LESSONS.md). **Következő:** E04-R16
+> (orchestration state machine) — a pipeline új sessionben indítja.
 >
 > <details><summary>▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)</summary>
 >
@@ -1248,6 +1254,28 @@ the same head and on the merge SHA `c5b14e5`. The independent post-merge gate on
 
 ## 5. Last completed round
 
+**E04-R15 — Backend + Flutter streaming transport** (PR
+[#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
+ADR [0142](docs/adr/0142-ai-tutor-streaming-transport-protocol.md); implementer
+**qwen38-max** / Terra, ADR 0140 override; orchestrátor/reviewer **Claude Opus 4.8**).
+
+**Elkészült:** sorrendhelyes, megszakítható, újrapróbálható tutor streaming a
+backend (`backend/app/tutor/stream.py`, SSE) és a Flutter kliens
+(`TutorStreamDto` frame-parser + `RemoteTutorModelGateway`) között. Monoton
+event-sequence; started/delta/usage/tool-call/complete/failure frame;
+gap/out-of-order → **kontrollált** `transport_sequence_gap`/`malformed` failure
+(nem néma átugrás); duplicate-frame idempotens; retry nem duplikál
+user-message-et (backend stateless, ADR 0142 D9); disconnect → **nincs árva
+provider-request** (`finally: turn_task.cancel()`, mutáció-öléssel bizonyítva);
+body + frame size-limit (alatt/rajta/fölött mátrix); provider-semleges
+failure-message (nincs secret/prompt-leak); auth-védett `/tutor/stream`.
+Review: [`docs/reviews/e04-r15-streaming-transport-review.md`](docs/reviews/e04-r15-streaming-transport-review.md)
+— kód **APPROVED**, MAJOR-1 (ruff-format) + MINOR (log-forging kontrollkarakter)
+javító körökben zárva. **H3-blokkoló** (build-apk secret-scan az R14
+`test_tutor_proxy.py` tilos-zóna fixture-jén) a self-heal #143 (`7b3b5b9`)
+után feloldva; a branch a gyógyított `main`-re rebase-elve. CI: `full-gate.yml`
++ `router-ci.yml` exact-SHA `a7377ed` **success**.
+
 **E04-R13 — TutorModelGateway és scripted fake** (PR
 [#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
 **nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
@@ -1583,7 +1611,12 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    **ez a session nem kezdi el**. A `public.dart` **üres-boundary invariáns**
    (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
    meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
-   importtal érhetők el, a publikus export R16+-ra halasztva.
+   importtal érhetők el, a publikus export R16+-ra halasztva. **A queue
+   következő `pending` sora: E04-R16 — orchestration state machine.**
+   **~~E04-R15 — Backend + Flutter streaming transport~~ — KÉSZ** (PR #145, `1fe91d2`,
+   ADR 0142; implementer qwen38-max; H3 self-heal #143 után; ld. a fejléc-összefoglalót és §5).
+   **~~E04-R14 — Backend tutor proxy, provider registry & usage guard~~ — KÉSZ** (PR #142, `c1c0a77`,
+   nincs új ADR — ADR 0131 hatálya; implementer qwen-coder-plus; ld. §5 archívum).
    **~~E04-R13 — TutorModelGateway & scripted fake~~ — KÉSZ** (PR #141, `b9d2950`,
    nincs új ADR — ADR 0131 hatálya; implementer qwen-plus; ld. a fejléc-összefoglalót és §5).
    **~~E04-R12 — Prompt templatek, output schema & injection boundary~~ — KÉSZ** (PR #140, `c5b14e5`,

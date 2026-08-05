@@ -4288,3 +4288,29 @@ születik meg a hiányzó ellenőrzés.
 tényleges időmérleget (`tools/round-metrics.py`), és a gyorsítás mellé tedd oda
 a gépi őrt, ami pirosra vált, ha a gyorsítás a mércéből venne el (ADR 0171
 „Miért nem gyengül ettől a mérce" táblázata).
+
+## L126 — Egy H3-halted (tilos-zóna merge-blokkoló) kört a gyógyított `main`-re rebase-eléssel kell BEFEJEZNI, nem újraimplementálni (E04-R15, merge-completion)
+
+**Mérés (2026-08-05, E04-R15 merge-completion session).** Az E04-R15 kódja már
+review-approved volt (minden lelet zárva), és egy korábbi session H3-mal
+megállt: a `build-apk` secret-scan egy PRE-EXISTING R14 tilos-zóna fixture-en
+volt piros (ld. [L124](#l124)). Egy self-heal session (ADR 0112) a `main`-en
+tette fel a fájl-szintű `# strumsight:allow-secret-file` jelölést és merge-elt
+(#143, `7b3b5b9`). A pipeline ezután **nem** újraindította a kört, hanem
+merge-completionként adta át: a review OPEN lelet nélkül zárt, a blokkoló a
+`main`-en már feloldva.
+
+**A helyes lépéssor** (nem re-implementáció, nem scope-sértés): (1) az örökség-
+ellenőrzés (§0.2) felismeri a kész, APPROVED review-t + a merged healt; (2) a
+kör-branchet a gyógyított `origin/main`-re **rebase**-eljük — a branch soha nem
+érinti a tilos-zóna fájlt, a marker a `main`-ből öröklődik, így a `secrets`-kapu
+zöld lesz, scope-sértés nélkül; (3) rebase-konfliktus = H8, itt nem volt;
+(4) `round-ci-plan.py` → `full-gate.yml` (nincs natív út) + `router-ci.yml`
+(docs/rounds hit), exact-SHA `a7377ed` mindkettő `success`; (5) squash-merge
+(#145, `1fe91d2`).
+
+**Szabály.** Ha egy kör H3-mal állt meg egy tilos-zóna merge-blokkolón, és egy
+self-heal a blokkolót a `main`-re javította, a kört a gyógyított `main`-re
+rebase-eléssel FEJEZD BE — az orchestrátor sosem szerkeszti a tilos-zóna fájlt,
+a javítás a `main`-ből érkezik. A halt nem a kód minőségéről szólt; a
+merge-completion a lánc normál útja, nem új kör.
