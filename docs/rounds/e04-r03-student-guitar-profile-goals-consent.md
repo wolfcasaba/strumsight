@@ -177,7 +177,35 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- Létrejött a négy immutable, value-equal domain modell: `StudentProfile`
+  (minden felhasználó által látható mezőhöz típusos provenance), `GuitarProfile`
+  (tuning/string-count/capo validáció), `LearningGoal` (kategória, prioritás,
+  opcionális UTC deadline és active/inactive lifecycle) és `TutorConsent`.
+  A Student- és Guitar-profile `merge` megőrzi az explicit felhasználói értéket
+  inferred jelölttel szemben.
+- A `TutorConsent` kizárólag a három független tengelyt tárolja:
+  `modelUseGranted`, `persistentStorageGranted` és
+  `evaluationWithRedactionGranted`; mindegyikhez önálló immutable grant/revoke
+  transzformáció tartozik. Nincs összevont AI-enabled állapot.
+- Elkészült a `TutorProfileCodec` v1: négy külön, determinisztikus UTF-8 JSON
+  envelope, stabil hibakódokkal. Az ismert envelope-ok ismeretlen mezőit
+  ignorálja, a hiányzó kötelező mezőt elutasítja; ezt teszt rögzíti.
+- Tesztek: a két domain teszt a validációs hibakódokat, value equalityt,
+  collection-immutabilityt, provenance-prioritást, goal lifecycle-t és a három
+  consent-tengely függetlenségét méri. A codec teszteli mind a négy modell
+  round-tripjét és byte-azonos újrakódolását. Két célzott mutáció is RED lett:
+  a model-use grant storage-t is engedélyező változata, illetve az inferred
+  jelöltet előnyben részesítő provenance-feloldás.
+- Lefedettség: a négy új domain fájl együtt **186/198 sor (93.9%)** a
+  `flutter test --coverage test/features/ai_tutor/domain/student_profile_test.dart test/features/ai_tutor/domain/tutor_consent_test.dart`
+  futásból.
+- Kötelező gate (a generált l10n-előfeltétel `tools/prepare-flutter-generated.sh`
+  helyreállítása után):
+  `tools/round-gate.sh test/features/ai_tutor/domain test/features/ai_tutor/data`
+  → format zöld, analyze zöld, domain tesztek zöld (48), data tesztek zöld
+  (16), architecture zöld.
+- Nem futtatott ellenőrzés: teljes Flutter suite, randomizált property gate és
+  APK build — a brief/ADR 0053 szerint ezeket a CI-ban az orchestrátor futtatja.
 
 ## 11. Review — a független reviewer tölti ki
 
