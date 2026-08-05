@@ -1,6 +1,6 @@
 # E04-R12 — Prompt templatek, output schema és injection boundary
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-05, kód mérve: main @ `c1c57db`; ADR 0141 kiosztva)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 12; §35
 - **Branch:** `codex/e04-r12-prompts-output-schema-injection-boundary`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R05 + E04-R07 + E04-R10 merge**
@@ -21,6 +21,7 @@ allowed_paths = [
   "test/features/ai_tutor/prompts/prompt_injection_test.dart",
   "test/features/ai_tutor/prompts/prompt_snapshot_test.dart",
   "docs/rounds/e04-r12-prompts-output-schema-injection-boundary.md",
+  "docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md",
 ]
 gate_tests = [
   "test/features/ai_tutor/prompts",
@@ -44,7 +45,57 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight mérve 2026-08-05 (main @ `c1c57db`), az összes hivatkozott felület grepelve.**
+ADR: a pipeline-prompt szerint a pre-flight osztotta ki → **[ADR 0141](../adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)**
+(a 0131/0132/0137/0139 melletti új, nem-merge-elt döntés; a merge-elt ADR-eket NEM módosítja).
+
+**Mért bemeneti felületek (a builder ezeket fogadja, nem nyers forrást):**
+
+- **R05 redaktált kontextus** = `TutorContextSnapshot`
+  (`lib/features/ai_tutor/application/context/tutor_context_snapshot.dart`): mezők
+  `List<TutorContextField> fields`, `RedactionReport redactionReport`,
+  `String requestId`, `List<TutorContextFieldKey> truncatedFields`,
+  `int estimatedSizeBytes`; szekció-kulcsok az `enum TutorContextFieldKey`.
+  A `InspectableContextView` szándékosan **nem tartalmaz prompt-mezőt** — a
+  prompt-építés ebben a körben épül, nem a context-rétegben.
+- **R07 trusted forrás-ref** = `TutorSourceRef`
+  (`lib/features/ai_tutor/domain/models/tutor_source_ref.dart`): `sourceId`,
+  `title`, `locale`, `topic`, `knowledgeVersion` (int), `chunkIndex` (int),
+  `chunkHash`; származtatott `chunkId => '$sourceId#${chunkIndex + 1}'`.
+- **R10 tool-schema + allowlist** = `TutorToolSchema.toJson()` →
+  `{name, input:{type:'object', properties, required, additionalProperties}}`
+  (`lib/features/ai_tutor/domain/tools/tutor_tool.dart`); permission-enum
+  `TutorToolPermission {readLocal, computeLocal}`.
+- **Válasz-részletesség** = `TutorResponseMode {concise, standard, detailed}`
+  (`lib/features/ai_tutor/domain/models/tutor_response_mode.dart`).
+
+**Mérési szabály #2 — erőforrás-/allowlist-tulajdonlás (pipeline-prompt §1).**
+A tool-allowlistet **NEM** a builder birtokolja: mérve a
+`TutorToolRegistry.schemasForTurn(TutorToolTurnPolicy policy)`
+(`lib/features/ai_tutor/domain/tools/tutor_tool_registry.dart`) már ma is CSAK a
+`policy.allowedToolNames ∩ policy.allowedPermissions` metszetre ad sémát
+(`TutorToolTurnPolicy.allowedToolNames` / `.allowedPermissions`,
+`tutor_tool_request.dart`). **Ezért a builder a `schemasForTurn(policy)` kimenetét
+fűzi be, nem vezet be saját, párhuzamos allowlistet.** Ez a §5.3 pont mérhető alakja.
+
+**Mérési szabály #1 — elérhetetlen cél-státusz:** N/A — a brief acceptance-cellái
+nem írnak elő állapotgép-státuszt, csak prompt-szerkezeti + injection-viselkedési
+invariánsokat.
+
+**Egyéb mért tények:** `pubspec.yaml` `assets:` alatt már van
+`assets/tutor_knowledge/`, az `assets/tutor_prompts/` bejegyzés tehát tisztán additív.
+
+**SCOPE-SZŰKÍTÉS (fixup, 2026-08-05, autonómia ADR 0087 §2 — engedélyezett-lista
+szűkítése):** a `lib/features/ai_tutor/public.dart`-ba tervezett additív export
+**visszavonva** — a fájl ÜRESEN marad (`library;`, nulla import/export directive).
+Mért ok: a **korábbi, merge-elt** körből származó
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` a public boundary-t
+nulla-directive állapotra pinneli; egy export a teljes CI-suite-ban pirosat adott
+(a kör `gate_tests` csak a `test/features/ai_tutor/prompts`-ot méri, ezért lokálisan
+nem bukott — L21 „zöld lokál gate nem bizonyíték"). A `public.dart` export egyetlen
+acceptance-cellához sem szükséges (mind a három prompt-teszt közvetlen
+`application/prompts/…` importtal fut); a publikus export egy későbbi körre halasztott,
+amikor lesz fogyasztója (R13+). A merge-elt boundary-tesztet NEM módosítjuk (az H2 volna).
 
 ## 1. Cél
 
@@ -130,7 +181,33 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Implementáció:** verziózott `PromptVersion`, asset-backed angol
+  `PromptTemplate`, v1 structured `TutorOutputSchema`, valamint csak
+  `TutorContextSnapshot`-ot fogadó `TutorPromptBuilder`. A builder a toolokat
+  közvetlenül a `TutorToolRegistry.schemasForTurn(policy)` eredményéből fűzi
+  be, a trusted source-refeket és a user/import/conversation adatot fix,
+  külön delimitált szakaszokba rendezi. Az untrusted text secret/raw-audio
+  mintára redaktált, a delimiter-karakterek escape-eltek.
+- **Assetek/export:** mind a hat `ContextPurpose` intenthez v1 angol template
+  került `assets/tutor_prompts/` alá, az asset könyvtár `pubspec.yaml`-ban
+  regisztrált, a prompt contractok pedig az AI Tutor `public.dart` boundary-n
+  exportáltak.
+- **Tesztek:** `test/features/ai_tutor/prompts/` — 11 zöld eset: fix layer
+  order, locale, R10 policy-metszet, redacted secret/raw-audio absence,
+  v1 schema, adversarial untrusted delimiter + tool-escalation, és bit-stabil
+  snapshot mind a hat intenthez.
+- **Futtatott parancsok:**
+  - `flutter test test/features/ai_tutor/prompts` — **zöld** (11 teszt).
+  - `dart format …` a nyolc módosított Dart fájlon — **zöld**.
+  - `flutter gen-l10n` — **zöld**; a gitignore-olt hiányzó
+    `lib/l10n/app_localizations.dart` build-előfeltételt állította elő, nem
+    került a kör diffjébe.
+  - `tools/round-gate.sh test/features/ai_tutor/prompts` — **zöld**:
+    format, analyze, 11 prompt-teszt, architecture, secret scan és l10n parity.
+- **Eltérés:** az első gate-analyze a hiányzó generált l10n output miatt állt
+  meg; ezt `blocked` jelzéssel azonnal jelentettem, majd a kizárólag generált,
+  gitignore-olt build-előfeltételt `flutter gen-l10n`-nel pótoltam. A második,
+  változatlan gate teljesen zöld. CI-dispatch nem implementeri lépés.
 
 ## 11. Review — a független reviewer tölti ki
 
