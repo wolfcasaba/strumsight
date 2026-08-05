@@ -4,10 +4,29 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R14 MERGED — backend tutor proxy, provider registry & usage guard;
-> önjavító kör, ADR 0112, H6).**
+> (E04-R15/H3 self-heal MERGED — build-apk `secrets`-kapu unblockolva egy
+> pre-existing R14 false-positive-on; a lánc újrafuttatja E04-R15-öt).**
 >
-> ## ▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)
+> ## 🔧 E04-R15 / H3 önjavítás KÉSZ — a lánc E04-R15-öt újrafuttatja (2026-08-05)
+>
+> **Nem kör-lezárás, hanem akadály-elhárítás (ADR 0112).** Az E04-R15
+> (streaming transport) kódja review-approved volt, de a `build-apk` merge-kapu
+> `round-gate.sh secrets` lépése PIROS maradt egy **pre-existing R14
+> false-positive** miatt: a `backend/tests/tutor/test_tutor_proxy.py` négy fake
+> prod-config fixture-je (`secret_key`/`tutor_api_key`, sorok 596/611/627/631)
+> a GOV-03 secret-scan leletét adta — a fájl az R15 `allowed_paths`-án KÍVÜL,
+> így a kör önmagában nem volt zöldre hozható. **Javítás:** fájl-szintű
+> `# strumsight:allow-secret-file` jelölés a fájl tetején (self-heal tágabb
+> infra-jog, a mércét NEM gyengíti) + hermetikus regressziós teszt a mért
+> fixture-alakra (`check_secrets_test.dart`, L118). PR
+> [#143](https://github.com/wolfcasaba/strumsight/pull/143), squash `7b3b5b9`,
+> build-apk exact-SHA `a42a4ff`
+> [31032231969](https://github.com/wolfcasaba/strumsight/actions/runs/31032231969)
+> `success`. Mérce: `main`-en a scan 4 lelet → 0 lelet. Tanulság:
+> [`docs/LESSONS.md` L124](docs/LESSONS.md#l124). **Következő:** a lánc E04-R15-öt
+> (queue: `pending`) újrafuttatja, immár tiszta `secrets`-kapuval.
+>
+> <details><summary>▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)</summary>
 >
 > **E04-R14 — Backend tutor proxy, provider registry & usage guard** MERGED (PR
 > [#142](https://github.com/wolfcasaba/strumsight/pull/142), squash `c1c0a77`,
@@ -89,6 +108,7 @@
 > Typed, allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
 > compute**. Implementer Codex (Terra), review APPROVED (0 BLOCKER/MAJOR, 1 NOTE);
 > build-apk + router-ci `success` exact head `80a7b7b`.
+> </details>
 > </details>
 > </details>
 > </details>

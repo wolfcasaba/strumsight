@@ -4204,3 +4204,55 @@ DB szétválik. (3) Egy `.gitignore`-olt, leftover állapotfájl (itt:
 gitignore-olt — a CI-nek nincs hozzáférése, a friss checkout a valódi
 mérce. Gyanús egyezés esetén (`rm -f *.db` + újrafuttatás) mérd meg a
 tiszta állapotot, mielőtt zöldnek jelented a gate-et.
+
+
+## L124 — A merge-kapu egy PRE-EXISTING, a kör allowed_paths-án KÍVÜLI false-positive-on bukhat: a javítás csatornája a self-heal tágabb infra-joga, nem a scope-tágítás (E04-R15, önjavító kör, H3)
+
+**Mérés (2026-08-05, E04-R15/H3 önjavító kör, 1. kísérlet).** Az E04-R15
+(streaming transport) kódja kész és review-approved volt (Flutter gate + 113
+backend teszt + security-review mind zöld, scope tiszta), a `build-apk`
+merge-kapu mégis PIROS maradt: a `round-gate.sh` `secrets` lépése
+(`tool/ci/check_secrets.dart`, GOV-03, ADR 0138) **négy leletet** adott —
+mind a `backend/tests/tutor/test_tutor_proxy.py:596/611/627/631` sorokban
+(run [31029321266](https://github.com/wolfcasaba/strumsight/actions/runs/31029321266),
+SHA `29ea65f`; a format/analyze/test/architecture előtte zöld volt). A fájlt az
+**R14** vezette be (`c1c0a77`, #142), a scanner az R14-nél is korábbi
+(`c4de748`); egyik sem az R15 tartalma, és a fájl az R15 `allowed_paths`-án
+**kívül** esett. A kör tehát önmagában nem volt zöldre hozható: a scope-audit
+helyesen tiltotta volna a tilos-zóna fájl szerkesztését.
+
+**Gyökérok.** A `credential assigned a long literal` szabály helyesen felismeri
+a prod-misconfig fail-closed tesztek fake fixture-jeit
+(`secret_key="real-prod-secret-key-12345"`, `tutor_api_key=
+"real-prod-tutor-key-12345"`). A `_placeholder` allowlist a `real`/`prod`
+tokeneket nem tartalmazza (helyesen — ezek valós titokban is előfordulnak),
+ezért ezek a bizonyítottan fake, de „valósághűre" nevezett fixture-ök leletet
+adnak. Az R14 kör nem tette ki a fájl-szintű jelölést, mert a kör LOKÁLIS
+gate-je (`round-gate.sh test/tutor`) a `secrets` lépésen zöld volt akkor — a
+lelet csak azon a fájlon van, amit az R14 vezetett be, tehát a hiba az R14
+merge-ével együtt „öröklődött" a `main`-re, és az első RÁÉPÜLŐ kör
+(R15) merge-kapuját fogta meg.
+
+**Miért nem a kör hibája.** Egy kör a saját diffjéért felel; egy tilos-zóna,
+merge-elt, pre-existing lelet nem a kör scope-sértése, és a mércét sem szabad
+gyengíteni (`skip`, küszöb, scope-tágítás), hogy a kör „átmenjen". Ez pontosan
+az ADR 0112 self-heal tágabb infra-jogának esete: a healer az `.pipeline`/`tools`
+és a tilos-zóna fájl fölött is dolgozhat, ha a gyökérok ott van.
+
+**Javítás.** Fájl-szintű `# strumsight:allow-secret-file` jelölés a
+`test_tutor_proxy.py` tetején (a scanner már támogatja; L113 szerint a
+fájl-szintű jelölés robusztus ott, ahol a soronkénti törékeny a `ruff format`
+újratördelésével szemben). Ez egyszerre unblockolja a `build-apk` kaput R15-re
+és MINDEN R14 utáni körre. Regressziós őr: a `check_secrets_test.dart` hermetikus
+tesztje reprodukálja a MÉRT fixture-alakot (L118: őr-teszt ne a valódi repóra
+mutasson) — a durva RED→GREEN bizonyíték maga a kapu `secrets` lépése
+(`main`: 4 lelet → healer-worktree: 0), amely visszapirosodik, ha a jelölés
+eltűnik.
+
+**Szabály.** (1) Ha egy kör „valósághű" fake hitelesítőket visz be teszt-fixture-be
+(`secret_key`, `api_key`, `token` prod-config próbákhoz), a bevezető kör tegye ki
+ELŐRE a fájl-szintű `allow-secret-file` jelölést — különben az első ráépülő kör
+merge-kapuját fogja meg egy tilos-zóna leleten. (2) A merge-kapu piros lehet a
+kör diffjétől FÜGGETLEN, pre-existing, allowed_paths-on kívüli okból is; ilyenkor
+a kör HALT-ja helyes (nem gyengíti a mércét), a feloldás pedig a self-heal
+tágabb infra-jogán át történik, nem a scope tágításával.
