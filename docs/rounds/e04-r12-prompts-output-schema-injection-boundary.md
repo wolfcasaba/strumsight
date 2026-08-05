@@ -82,10 +82,20 @@ fűzi be, nem vezet be saját, párhuzamos allowlistet.** Ez a §5.3 pont mérhe
 nem írnak elő állapotgép-státuszt, csak prompt-szerkezeti + injection-viselkedési
 invariánsokat.
 
-**Egyéb mért tények:** `lib/features/ai_tutor/public.dart` jelenleg üres (csak
-`library;`) — az additív export tiszta lapról indul; `pubspec.yaml` `assets:`
-alatt már van `assets/tutor_knowledge/`, az `assets/tutor_prompts/` bejegyzés
-tehát tisztán additív.
+**Egyéb mért tények:** `pubspec.yaml` `assets:` alatt már van
+`assets/tutor_knowledge/`, az `assets/tutor_prompts/` bejegyzés tehát tisztán additív.
+
+**SCOPE-SZŰKÍTÉS (fixup, 2026-08-05, autonómia ADR 0087 §2 — engedélyezett-lista
+szűkítése):** a `lib/features/ai_tutor/public.dart`-ba tervezett additív export
+**visszavonva** — a fájl ÜRESEN marad (`library;`, nulla import/export directive).
+Mért ok: a **korábbi, merge-elt** körből származó
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` a public boundary-t
+nulla-directive állapotra pinneli; egy export a teljes CI-suite-ban pirosat adott
+(a kör `gate_tests` csak a `test/features/ai_tutor/prompts`-ot méri, ezért lokálisan
+nem bukott — L21 „zöld lokál gate nem bizonyíték"). A `public.dart` export egyetlen
+acceptance-cellához sem szükséges (mind a három prompt-teszt közvetlen
+`application/prompts/…` importtal fut); a publikus export egy későbbi körre halasztott,
+amikor lesz fogyasztója (R13+). A merge-elt boundary-tesztet NEM módosítjuk (az H2 volna).
 
 ## 1. Cél
 
