@@ -59,10 +59,7 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     final controller = ref.watch(tutorChatControllerProvider);
     final chatState = ref.watch(tutorChatStateProvider).value;
 
-    ref.listen<AsyncValue<TutorChatState>>(tutorChatStateProvider, (
-      _,
-      _,
-    ) {
+    ref.listen<AsyncValue<TutorChatState>>(tutorChatStateProvider, (_, _) {
       // Scroll-anchoring: when a new bubble arrives or the streaming
       // text grows, push the list to the bottom on the next frame.
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -73,8 +70,7 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     final banners = chatState?.banners ?? controller.banners;
     final visibleMessages = chatState?.messages ?? controller.messages;
     final messages = <_ChatBubble>[
-      for (final message in visibleMessages)
-        _ChatBubble.fromMessage(message),
+      for (final message in visibleMessages) _ChatBubble.fromMessage(message),
       if (status == TutorTurnStatus.streaming)
         _ChatBubble.fromStreamingText(
           responseText,

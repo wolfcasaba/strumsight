@@ -394,10 +394,7 @@ void main() {
       await _pump(tester, controller: fake);
 
       expect(find.byType(TutorMessageBubble), findsOneWidget);
-      expect(
-        find.textContaining('<script>alert(1)</script>'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('<script>alert(1)</script>'), findsOneWidget);
     },
   );
 

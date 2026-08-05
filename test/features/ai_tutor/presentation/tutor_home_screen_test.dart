@@ -56,7 +56,8 @@ AppConfig _config({bool aiTutorEnabled = true}) => AppConfig.resolve(
 /// Stub controller — the routing tests never actually exercise chat
 /// behaviour, only the path that the router resolves. Returning a
 /// no-op keeps the chat screen out of the way.
-class _NoopChatController extends ChangeNotifier implements TutorChatController {
+class _NoopChatController extends ChangeNotifier
+    implements TutorChatController {
   @override
   List<TutorMessage> get messages => const <TutorMessage>[];
   @override
