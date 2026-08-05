@@ -35,7 +35,7 @@ set -uo pipefail
 validate_engine() {
   case "${1:-}" in
     auto | minimax | codex) return 0 ;;
-    # Motor-nyilvántartásbeli név (ADR 0139): a queue `engine` oszlopa és az
+    # Motor-nyilvántartásbeli név (ADR 0140): a queue `engine` oszlopa és az
     # `engine-profile.sh use` override is hivatkozhat rá. Fail-closed marad:
     # csak a nyilvántartásban SZEREPLŐ név fogadható el.
     *)
@@ -813,7 +813,7 @@ adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
 
-# --- Motor-override (ADR 0139) -------------------------------------------
+# --- Motor-override (ADR 0140) -------------------------------------------
 # A motorok kvótája külön merül ki (a Terra 9%-on, 2026-08-05). Az override
 # egyetlen gitignore-olt fájl, ezért a váltás visszavonható: törlésével a
 # queue soronkénti `engine` értéke lép vissza életbe, konfiguráció-átírás

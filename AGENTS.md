@@ -501,7 +501,7 @@ szigorítása ezekre továbbra is él, de az `auto` task kereteit nem kerülheti
 Az Epic 3 R01–R21 queue-sorai `auto`, de kezdetben `prepared`; ember állítja az
 első futtatható sort `pending`-re az Epic 2 lezárása után. R22 epic-zárás kézi.
 
-### 15.6.1 Motorváltás — visszakapcsolható profilok ([ADR 0139](docs/adr/0139-switchable-implementer-engine-profiles.md))
+### 15.6.1 Motorváltás — visszakapcsolható profilok ([ADR 0140](docs/adr/0140-switchable-implementer-engine-profiles.md))
 
 A motorok kvótája külön merül ki, ezért a profiljaik **egymás mellett élnek**
 (`~/.codex-terra`, `~/.codex-kilo`, `~/.claude-minimax`), és a váltás egyetlen

@@ -1,4 +1,4 @@
-# ADR 0139 — Visszakapcsolható implementer-motor profilok
+# ADR 0140 — Visszakapcsolható implementer-motor profilok
 
 **Státusz:** elfogadva (2026-08-05, user-döntés: „hozz létre külön konfigurációt
 mindháromnak … később vissza akarom kapcsolni, hogyha visszajönnek a limitek").
