@@ -128,6 +128,17 @@ dokumentált brief-revízióval).
       (orchestrátor dispatch). A 100 start/stop stresszteszt és a valós preview
       a device-mátrix **PENDING** sora — nem merge-kapu.
 
+### 6.1 Mérce-mátrix — melyik hibás implementációt fogja pirosra
+
+| Hibás implementáció | Melyik cella vált PIROSRA |
+|---|---|
+| A `release()` a `try` blokkon belül marad (a catch-ág nem szabadít fel) | buffer-mátrix **„callbackben dobott kivétel"** cellája (a számláló 0) |
+| A `release()` kétszer fut a close alatt érkező frame-re | buffer-mátrix **„close alatti frame"** cellája (a számláló 2 ≠ 1) |
+| A backpressure a **legrégebbi** frame-et adja át | backpressure-teszt (a fogyasztó nem a legfrissebbet kapja) |
+| Az ismeretlen platform-kód default ága sikerre képződik | hiba-mapping mátrix ismeretlen-cellája |
+| A binding elejti a `mirror` metaadatot | round-trip mátrix 8 cellájából a 4 mirror-cella |
+| A `pubspec.yaml` win32 majort emel | a §6 win32-cellája (`rg -n "win32" pubspec.lock`) |
+
 ## 7. Kötelező ellenőrzések
 
 ```bash

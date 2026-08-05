@@ -117,6 +117,17 @@ spike-kód merge-elése, DSP, model-asset.
 - [ ] `git diff --stat` egyetlen `lib/`, `test/`, `android/`, `ios/`,
       `pubspec.yaml` fájlt sem érint.
 
+### 6.1 Mérce-mátrix — melyik hibás kimenet vált PIROSRA
+
+Docs-only kör: a falszifikáció a reviewer eldobható próbája (§11, visszaállítással).
+
+| Próba | Elvárt eredmény |
+|---|---|
+| Az ADR 0167-ből vedd ki a numerikus megdöntési küszöböt (init idő / tartós FPS / close-resource) | a §6 2. cellája PIROS — „megdönthető" állítás szám nélkül nem döntés |
+| A runbook egy `PASS`-feltételéből töröld a számot | a §6 3. cellája PIROS |
+| Hagyj ki egy runbook-mérést a device-mátrixból | a kereszthivatkozás-ellenőrzés PIROS (§6 4. cella) |
+| Tegyél `lib/`/`pubspec.yaml` fájlt a diffbe | scope-audit `VIOLATION` → `stopped` |
+
 ## 7. Kötelező ellenőrzések
 
 ```bash

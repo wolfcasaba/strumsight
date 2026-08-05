@@ -52,7 +52,23 @@ FORBIDDEN_GATE_SHAPES = (
     (re.compile(r"round-gate\.sh[^\n]*\|\s*(tail|head)\b"), "a gate kimenetét csonkító pipe (`| tail`/`| head`)"),
     (re.compile(r"flutter\s+analyze[^\n]*&&[^\n]*flutter\s+test"), "`analyze && test` lánc (OOM ezen a boxon, L05)"),
 )
-FALSIFICATION_MARKERS = ("pirosra", "falszifik", "mérce-mátrix", "melyik hibás implementáció")
+# A falszifikáció ELFOGADOTT alakjai. MÉRVE (2026-08-05): az Epic 5 briefjeinek
+# 25/30-a MÁR tartalmazott valódi falszifikációt („Valódi-sértés próba: az
+# ellenőrzés kiszedése → a teszt PIROS → visszaállítás"), csak a korábbi, szűk
+# markerlista nem ismerte fel — a lint 29 briefre riasztott, tévesen. Egy hamis
+# riasztás rosszabb a hiányzó ellenőrzésnél: leszoktat az olvasásáról.
+FALSIFICATION_PATTERNS = (
+    re.compile(r"(?i)pirosra"),
+    re.compile(r"(?i)falszifik"),
+    re.compile(r"(?i)mérce-mátrix"),
+    re.compile(r"(?i)melyik hibás implementáció"),
+    re.compile(r"(?i)valódi-sértés"),
+    re.compile(r"(?i)eldobható mutáci"),
+    # A nagybetűs PIROS csak akkor számít, ha ELVÁRT KIMENET (nyíl vagy próba
+    # mellett) — a „a CI piros lett" mondat nem falszifikációs cella.
+    re.compile(r"→\s*\**PIROS"),
+    re.compile(r"PIROS.{0,60}(visszaállítás|próba)", re.S),
+)
 STOP_MARKERS = ("**STOP", "STOP:", "STOP-protokoll", "STOP on scope conflict")
 SIGNAL_MARKERS = ("kör-jelzés", "codex-round-status", "round-status", "Kör-jelzés")
 
@@ -177,7 +193,7 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
 
     # S2 — falszifikáció: minden acceptance-ponthoz tartozzon mért állítás
     # arról, MELYIK hibás implementációt fogja pirosra.
-    if not any(marker in text.lower() for marker in FALSIFICATION_MARKERS):
+    if not any(pattern.search(text) for pattern in FALSIFICATION_PATTERNS):
         findings.append(
             Finding(
                 "strict",
@@ -190,7 +206,14 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
     # S3 — küszöb-mátrix: ahol numerikus küszöb van, ott alatta/rajta/fölötte
     # hármas kell (mérve: E02-R08 lag-mátrixából hiányzott a FÖLÖTTE cella).
     has_threshold = re.search(r"(?i)\b(küszöb|threshold|timeout|tolerancia|max(imum)?\s*=)\b", text) is not None
-    has_matrix = re.search(r"(?i)(alatta|below).{0,80}(rajta|at\b).{0,80}(fölötte|felette|above)", text, re.S) is not None
+    # A küszöb-hármas ELFOGADOTT alakjai. A briefek „a küszöb **alatt / rajta /
+    # fölött**" alakot használnak (nem „alatta"), és a degenerált-cellás
+    # („tipikus / határ / degenerált") változat ugyanazt a szigort adja.
+    has_matrix = (
+        re.search(r"(?i)(alatt|below)\w*.{0,160}(rajta|\bat\b).{0,160}(fölött|felett|above)\w*", text, re.S)
+        is not None
+        or re.search(r"(?i)határ.{0,120}(degenerált|két oldal|±)", text, re.S) is not None
+    )
     if has_threshold and not has_matrix:
         findings.append(
             Finding("strict", "S3", "numerikus küszöb szerepel, de nincs alatta/rajta/fölötte cellahármas")

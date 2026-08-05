@@ -154,6 +154,26 @@ nem az orchestrátor ítéli meg, hanem
 ([ADR 0171](../adr/0171-pipeline-throughput-program.md) §3) — a brief dolga csak
 annyi, hogy a `native_gate` mezője IGAZAT mondjon.
 
+### 6.1 Mérce-mátrix — a brief KÖTELEZŐ szakasza (ADR 0171 §4, ADR 0175)
+
+Minden briefben álljon egy `### 6.1 Mérce-mátrix` szakasz, amely
+acceptance-pontonként megmondja, **melyik hibás implementáció melyik cellát
+váltja PIROSRA**. Elfogadott alakok (a `tools/brief-lint.py` mindkettőt ismeri):
+
+```markdown
+### 6.1 Mérce-mátrix — melyik hibás implementációt fogja pirosra
+
+| Hibás implementáció | Melyik cella vált PIROSRA |
+|---|---|
+| A backpressure a legrégebbi frame-et adja át | backpressure-teszt |
+```
+
+vagy guard-tesztnél: **valódi-sértés próba** — `<az őr ideiglenes rontása>` →
+a teszt **PIROS** → visszaállítás (a §10-ben dokumentálva).
+
+Docs-only körnél a falszifikáció a **reviewer eldobható próbája**: melyik
+mondat/oszlop törlése teszi az adott acceptance-cellát bizonyíthatatlanná.
+
 ### 7.1 Falszifikációs cella minden acceptance-ponthoz (ADR 0171 §4)
 
 Minden acceptance-ponthoz írd oda, **melyik hibás implementációt fogja pirosra**,

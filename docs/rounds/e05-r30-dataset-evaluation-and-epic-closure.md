@@ -149,6 +149,20 @@ completion report **nevesíti a hátralévő CI-munkát**. Szintén kívül: bá
 - [ ] **Flag-audit:** mind a 11 vision flag `false` minden környezetben (teszt).
 - [ ] `git diff --stat` **nem** tartalmaz `.github/`, `tool/ci/`, `lib/` fájlt.
 
+### 6.1 Küszöb-mátrix — a false-feedback kapu három cellája
+
+A §2 2. pontja („False feedback gate") dokumentált küszöböt ír elő a
+production-supported metrikákra. A harness mind a három cellát mérje:
+
+| Cella | Mért hamis-negatív arány | Elvárt kimenet |
+|---|---|---|
+| alatt | küszöb − 1 lépés | `PASS` — a metrika **production-supported** marad |
+| rajta | pontosan a küszöb | `PASS` (a határ **inkluzív**) |
+| fölött | küszöb + 1 lépés | a metrika **`experimental`** besorolást kap |
+
+**A küszöb utólagos felemelése a mért értékhez tiltott** (§2 2. pont): a
+megengedett kimenet az `experimental` átsorolás.
+
 ## 7. Kötelező ellenőrzések
 
 ```bash
