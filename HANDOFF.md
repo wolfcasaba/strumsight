@@ -4,9 +4,35 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R13 MERGED — TutorModelGateway & scripted fake).**
+> (E04-R14 MERGED — backend tutor proxy, provider registry & usage guard;
+> önjavító kör, ADR 0112, H6).**
 >
-> ## ▶️ E04-R13 KÉSZ (2026-08-05)
+> ## ▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)
+>
+> **E04-R14 — Backend tutor proxy, provider registry & usage guard** MERGED (PR
+> [#142](https://github.com/wolfcasaba/strumsight/pull/142), squash `c1c0a77`,
+> **nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
+> provider-boundary hatálya). Fail-closed feature-flagged tutor proxy
+> (`/tutor/turn`, `/tutor/capability`): provider-allowlist registry,
+> request/history/context méretkorlátok, rate-limit + napi token usage guard
+> (429, nem nyelődik el), prod-boot guard a dev-default tutor API kulcs ellen.
+>
+> **Önjavító kör (ADR 0112, H6):** az eredeti implementer (`qwen-plus`) kétszer
+> lépett ki záró jelzés nélkül (csak BEJELENTETTE a hátralévő ~5 teszt-fixture
+> javítást, edit nélkül). Motorváltás `qwen-coder-plus`-ra (apply_patch nem
+> támogatott → shell-fallback, imperatív continuation-prompt) fejezte be a
+> munkát. A healer 2 további kört mért/javított: (1) `ruff format` — a lokális
+> gate csak `ruff check`-et futtatott, a CI format-gate-je fogta meg; (2) 4
+> teszt (`test_output_at_limit`, `test_output_above_limit`,
+> `test_provider_timeout_normalized_error`, `test_provider_error_normalized_error`)
+> `401`-re bukott CI-n, mert saját `create_app`-ot építettek a megosztott
+> fájl-alapú SQLite-tal + egy MÁSIK app tokenjével — lásd
+> [`docs/LESSONS.md` L123](docs/LESSONS.md#l123). CI exact-SHA `40d26d4`:
+> backend-ci [31023075064](https://github.com/wolfcasaba/strumsight/actions/runs/31023075064)
+> `success`; merge-SHA `c1c0a77` backend-ci
+> [31023231779](https://github.com/wolfcasaba/strumsight/actions/runs/31023231779) `success`.
+>
+> <details><summary>▶️ E04-R13 KÉSZ (2026-08-05)</summary>
 >
 > **E04-R13 — TutorModelGateway & scripted fake** MERGED (PR
 > [#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
@@ -63,6 +89,7 @@
 > Typed, allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
 > compute**. Implementer Codex (Terra), review APPROVED (0 BLOCKER/MAJOR, 1 NOTE);
 > build-apk + router-ci `success` exact head `80a7b7b`.
+> </details>
 > </details>
 > </details>
 >

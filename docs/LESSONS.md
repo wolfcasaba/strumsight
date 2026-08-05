@@ -4151,3 +4151,56 @@ fordíthatatlanná vált. A `scope_audit_changed=7` a working-tree-t számolta, 
 commitot. **Szabály:** `done`/`unknown` feldolgozásakor a `dirty_files != 0`-t
 mindig vizsgáld ki — vesd össze a commit tartalmát a working-tree-vel
 (`git status --short`), ne csak a scope-audit darabszámát (vö. [L21]).
+
+## L123 — Egy lokálisan zöld teszt-gate mögött egy leftover fájl-alapú SQLite (`sqlite:///./strumsight.db`) rejtett auth-hibát takart, amit csak a friss CI-checkout mért (E04-R14, önjavító kör, H6)
+
+**Mérés (2026-08-05, E04-R14/H6 önjavító kör, 2. kísérlet).** A `qwen-plus`
+implementer két egymást követő futása jelzés nélkül lépett ki ("Javítom a
+teszteket:" bejelentés után, apply_patch-hívás nélkül — a modell csak
+BESZÉLT a javításról). Motorváltás `qwen-coder-plus`-ra (shell-fallback
+szerkesztés, apply_patch nem támogatott) + imperatív, pontos gyökérokú
+continuation-prompt lezárta a hátralévő 4 teszt-fixture hibát + 1 ruff
+import-rendet. A lokális `pytest -q` **99/99 zöld** volt — de a
+`backend-ci` (friss `actions/checkout`) PIROSRA váltott: 4 teszt
+(`test_output_at_limit`, `test_output_above_limit`,
+`test_provider_timeout_normalized_error`, `test_provider_error_normalized_error`)
+`401 Unauthorized`-dal bukott (run
+[31022332548](https://github.com/wolfcasaba/strumsight/actions/runs/31022332548)).
+
+**Gyökérok.** Ez a 4 teszt saját `app = create_app(tutor_settings)`-t épített
+(egyedi `FakeProviderGateway` konfiguráció miatt), de a `tutor_settings`
+fixture NEM írta felül a `database_url`-t — a `Settings` classz defaultja
+`sqlite:///./strumsight.db`, egy **fájl-alapú, a munkakönyvtárban megosztott**
+adatbázis (nem a `tutor_client` fixture explicit `StaticPool`-os
+in-memory `sqlite://`-je). A tesztek emellett a `tutor_auth_headers`
+fixture tokenjét használták — ami a **`tutor_client` fixture KÜLÖN
+app-jának/DB-jének** regisztrált userére szól, nem erre a harmadik
+app-példányra. A `get_current_user` dependency (`app/deps.py`)
+`db.get(User, int(user_id))`-vel néz vissza az adatbázisba — ha a user
+nem létezik ABBAN a konkrét DB-ben, `401`. Lokálisan egy KORÁBBI (a
+megszakadt implementer-futásból maradt, `.gitignore`-olt) `strumsight.db`
+fájlban ÉPPEN létezett egy `id=1` user ugyanazzal az e-maillel, ami
+véletlenül összeillett — ez maszkolta a hibát. A friss CI-checkoutnak
+nincs ilyen fájlja → a lookup legitim módon bukik.
+
+**Javítás.** A 4 tesztet átállítottuk: (1) `tutor_settings.model_copy(update=
+{"database_url": f"sqlite:///{tmp_path / 'test.db'}"})` — pytest beépített
+`tmp_path` fixture-jével per-teszt izolált fájl (NEM in-memory `sqlite://`,
+mert a `create_app` saját motorja nem használ `StaticPool`-t, így egy
+in-memory DB nem éli túl a pool per-connection újracsatlakozásait — csak a
+`tutor_client` fixture explicit, kézzel épített `StaticPool`-os motorja
+teszi ezt biztonságossá); (2) a token helyett MINDEGYIK teszt a SAJÁT
+kliensén regisztrál egy usert (`client.post("/auth/register", ...)`), nem
+kölcsönzi a `tutor_auth_headers`-t egy másik app-példányból.
+
+**Szabály.** (1) Ha egy teszt saját `create_app(settings)`-t épít (nem a
+megosztott fixture-t), a `database_url`-t EXPLICITEN izolálni kell — a
+`Settings` file-alapú defaultja némán megosztott állapotot hoz létre a
+teszt-futások között. (2) Egy auth-tokent csak AHHOZ az app/DB-példányhoz
+szabad felhasználni, amelyik kiállította — cross-app fixture-újrafelhasználás
+(`tutor_auth_headers` egy MÁSIK app kliensén) `401`-hez vezet, amint a két
+DB szétválik. (3) Egy `.gitignore`-olt, leftover állapotfájl (itt:
+`strumsight.db`) HAMIS ZÖLDET adhat lokálisan pontosan azért, mert
+gitignore-olt — a CI-nek nincs hozzáférése, a friss checkout a valódi
+mérce. Gyanús egyezés esetén (`rm -f *.db` + újrafuttatás) mérd meg a
+tiszta állapotot, mielőtt zöldnek jelented a gate-et.

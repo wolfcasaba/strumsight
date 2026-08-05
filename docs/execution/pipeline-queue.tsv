@@ -111,7 +111,7 @@ E04-R10	docs/rounds/e04-r10-tool-contract-and-registry.md	codex	nincs	done
 E04-R11	docs/rounds/e04-r11-action-proposal-and-confirmation.md	codex	nincs	done
 E04-R12	docs/rounds/e04-r12-prompts-output-schema-injection-boundary.md	codex	nincs	done
 E04-R13	docs/rounds/e04-r13-model-gateway-and-fake.md	codex	nincs	done
-E04-R14	docs/rounds/e04-r14-backend-tutor-proxy-usage-guard.md	codex	nincs	pending
+E04-R14	docs/rounds/e04-r14-backend-tutor-proxy-usage-guard.md	codex	nincs	done
 E04-R15	docs/rounds/e04-r15-streaming-transport.md	codex	nincs	pending
 E04-R16	docs/rounds/e04-r16-orchestration-state-machine.md	codex	nincs	pending
 E04-R17	docs/rounds/e04-r17-conversation-repository-and-memory.md	codex	nincs	pending
