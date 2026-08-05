@@ -3,8 +3,38 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-04
-> (E04-R01 merged — AI Tutor baseline, ADR 0131–0134 & safety boundaries; Epic 4 kickoff).**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
+> (E04-R02 merged — versioned, provider-free conversation & message domain).**
+>
+> **E04-R02 KÉSZ (PR [#125](https://github.com/wolfcasaba/strumsight/pull/125),
+> squash `db778c4`, **nincs új ADR** — a 0131/0132/0134 kiterjesztése,
+> implementer **Codex** (`gpt-5.6-terra`, örökölt kézi override),
+> orchestrátor/reviewer **Claude Opus 4.8**, egy implementer-STOP feloldva
+> pre-flight §0.0-val → egy sikeres futás → APPROVED):** immutable, verziózott,
+> **providerfüggetlen** conversation/message domain (Flutter-/SDK-mentes). Typed
+> ID-k (`tutor_ids.dart`, trim/üres/max-128, stabil kódkészlet); `TutorConversation`
+> (stabil sequence-rendezés, UTC-normalizált value-egyenlőség), `TutorMessage`
+> (role user/tutor/tool/systemNotice; delivery pending/streaming/complete/failed/
+> cancelled), `TutorTurn`, `TutorResponseMode` (concise/standard/detailed); sealed
+> `TutorContentBlock` (text/heading/bulletList/metric/evidence/source/action/
+> practicePlan/warning/error) + forward-compat `TutorUnknownContentBlock`
+> (adatmegőrző placeholder, nem néma eldobás); verziózott, determinisztikus
+> kulcssorrendű UTF-8 JSON-codec (schema v1, UTC ISO-8601 `Z`-kényszer, unknown-block
+> megőrzés). **`public.dart` ÜRES MARAD** (pre-flight §0.0 (5): additív feature-export
+> **halasztva** R13/R17+-ig, hogy a lezárt E04-R01 boundary-invariáns — nulla
+> direktíva — zöld maradjon; a boundary-teszt érintetlen). **Pre-flight §0.0 (mérve,
+> main @ `dd7712d`):** (1) nincs új ADR; (2) **mért drift** — a domain-purity a
+> `tool/check_architecture.dart`-ban NEM fedi az `ai_tutor`-t (csak core/music,
+> core/audio/codec, practice/domain) → a mérce **kör-lokális `group('Domain purity')`
+> scanner** a song_trainer (E03-R02) precedens szerint, a `tool/check_architecture.dart`
+> tilos zóna; (3) erőforrás-tulajdonlás N/A; (5) public.dart-halasztás az
+> implementer-STOP feloldásaként. Független review **APPROVED** — 0 BLOCKER/MAJOR,
+> **3 mutáció-próba diszkriminál** (unknown-block adatvesztés → codec RED;
+> flutter-import a domainbe → purity RED; ordering neutralizálás → RED); független
+> coverage **94,88%** (408/430). CI [run 30962515324](https://github.com/wolfcasaba/strumsight/actions/runs/30962515324)
+> **success** exact head `0463372` (full suite + randomizált property + APK);
+> post-merge gate `main`-en zöld. Hívó UI/gateway/repository nincs — production
+> viselkedés változatlan (flag OFF). **Következő: E04-R03 — a pipeline indítja.**
 >
 > **E04-R01 KÉSZ (PR [#124](https://github.com/wolfcasaba/strumsight/pull/124),
 > squash `814388a`, ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)/[0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)/[0133](docs/adr/0133-ai-tutor-tool-confirmation.md)/[0134](docs/adr/0134-ai-tutor-memory-policy.md),
@@ -953,13 +983,16 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R02 — Conversation & message domain** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R02` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r02-conversation-and-message-domain.md`). A pipeline
+0. **E04-R03 — Student guitar profile, goals & consent** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R03` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r03-student-guitar-profile-goals-consent.md`). A pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi
-   el**. Az E04-R01 baseline (flagek default OFF, üres `ai_tutor/public.dart`
-   boundary, ADR 0131–0134) a bemenete; a boundary-invariáns (nulla idegen
-   belső import) és a flag-OFF 0-request garancia nem törhető.
+   el**. Bemenete: az E04-R02 conversation/message domain (verziózott, provider-free,
+   `public.dart` továbbra is üres — az additív export R13/R17+-ra halasztva) és az
+   E04-R01 baseline (flagek default OFF, ADR 0131–0134). A boundary-invariáns
+   (nulla idegen belső import) és a flag-OFF 0-request garancia nem törhető.
+   **~~E04-R02 — Conversation & message domain~~ — KÉSZ** (PR #125, `db778c4`,
+   ld. a fejléc-összefoglalót).
 1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist

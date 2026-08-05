@@ -3699,3 +3699,43 @@ zónás teszt a pontos hashCode-ot pinneli, az új rollout-flag maradjon KI a
 `hashCode`-ból; a value semantics a `==`-on elég. (3) A targeted `round-gate.sh`
 nem helyettesíti a full-suite CI-t érték-típus közös mezőinek módosításakor —
 a merge-evidencia a full-suite CI, nem a targeted gate.
+
+## L107 — Egy új feature domain-purity-je NEM automatikus a `tool/check_architecture.dart`-ból, és egy lezárt kör boundary-tesztje kikényszerítheti a `public.dart`-export halasztását (E04-R02, 2026-08-05)
+
+**Mérés (pre-flight §1 mérési szabály).** Az E04-R02 briefje (§2/§5.1/§6) azt
+állította, hogy a domain-purity gépi őr „a `lib/features/*/domain/` alatt"
+tiltja a framework-importot, és a „purity-őr zöld" acceptance egy meglévő guard
+kizöldülése. **Mérve hamis:** a `tool/check_architecture.dart` `_isSharedDomain`
+(232. sor) CSAK a `lib/core/music/`, `lib/core/audio/codec/` és
+`lib/features/practice/domain/` prefixeket fedi; az `ai_tutor` nincs benne. A
+`test/features/practice/domain/domain_purity_test.dart` a practice-útra van
+beégetve. A song_trainer (E03-R02) precedens szerint a feature-domain purity
+mércéje **kör-lokális teszt-scanner** (`song_document_test.dart:292`,
+`group('Domain purity')` + `Directory('lib/features/song_trainer/domain')` +
+`_forbiddenPatterns`), NEM a `tool/check_architecture.dart`.
+
+**Mérés 2 (implementer-STOP).** Az implementer a kód előtt helyesen
+`stopped`-ot jelzett: a **lezárt E04-R01** `ai_tutor_boundary_test.dart` azt
+méri, hogy a `public.dart` NULLA `import`/`export` direktívát tartalmaz, és ez
+a teszt-fájl tilos zóna. A brief §4/§8.4 additív `public.dart`-export tehát a
+listán belül pirosra váltotta volna a boundary-tesztet.
+
+**Feloldás (ADR 0087 §2 orchestrátor-autonómia — scope-SZŰKÍTÉS, nem tágítás).**
+A §0.0 (5) revízió a `public.dart`-ot ebben a körben **üresen hagyja**; az
+additív feature-export az első valódi fogyasztó köréig (R13/R17+) halasztva.
+Így a lezárt kör artefaktumát nem módosítjuk (nincs H2/H3 halt), a boundary-teszt
+zöld marad, a §6 acceptance mégis teljes (a tesztek a domain/codec fájlokat
+KÖZVETLENÜL importálják, nem a `public.dart`-on át). A kör-lokális purity-scanner
+a §0.0 (2) szerint bekerült a `tutor_conversation_test.dart`-ba; a review
+mutáció-próbája (flutter-import a domainbe → purity RED) igazolta, hogy valódi
+gépi mérce, nem díszlet.
+
+**Tanulság.** (1) Greenfield feature-domainnél a pre-flight MINDIG mérje ki
+`rg`-vel, hogy a purity-mércét mi adja — a `tool/check_architecture.dart`
+allowlistje feature-enumerált, nem `*`-os, tehát új feature-t nem fed; a mérce
+kör-lokális scanner (song_trainer precedens). (2) Egy „üres baseline"
+boundary-teszt egy korábbi körből kikényszerítheti egy additív `public.dart`
+export halasztását; a helyes feloldás scope-SZŰKÍTÉS §0.0-val (az export
+halasztása a fogyasztó köréig), NEM a lezárt teszt allowlistre húzása. (3) A
+brief előre megírt „purity-őr zöld" jellegű acceptance-ét a pre-flight
+mérje meg konkrétan — melyik guard, melyik sor, fedi-e az új utat.
