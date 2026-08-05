@@ -72,3 +72,7 @@ backend/.venv/
 # MiniMax-first router: redacted, non-authoritative workspace mirror + Python cache
 .ai/runs/
 __pycache__/
+
+# Emberi engedély a mérce-őrhöz (ADR 0138). SOHA nem kerülhet a repóba: ha
+# commitolnánk, minden klón és minden autonóm session örökölné a feloldást.
+.claude/gate-edit-authorized

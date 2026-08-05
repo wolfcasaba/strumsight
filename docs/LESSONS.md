@@ -3953,3 +3953,80 @@ importjait grep-pel igazolta: **nulla `song_trainer`-belső import**.
 pre-flightban **grep-eld ki mindkettő `public.dart`-ját** — a belső osztály
 létezése NEM jelenti, hogy publikus a felülete. A hiányzó publikus utat §0.0
 brief-revízióval old fel, a scope-listát ne tágítsd más feature belsejébe.
+
+## L116 — Az ellenőrzéshez szükséges adat megvolt, az ellenőrzés hiányzott (GOV-03)
+
+**Mérés (2026-08-05).** A külső „Autonomous Flutter Factory" starter-csomaggal
+való összevetés kimutatta: az `engine=auto` úton a router MINDEN modell-diffet
+auditál (a router security modulja), a legacy `engine=codex|minimax` úton
+viszont a scope-ot **kizárólag a prompt szövege** védte. Az Epic 4 mind a 24
+köre ezen a legacy úton fut.
+
+**A csapda nem az volt, hogy hiányzott az adat.** Mind a 24 Epic 4 brief
+tartalmaz gépi `allowed_paths` blokkot — a számlálás 24/24-et adott. A blokkot
+a router-út parsere olvasta, a legacy út nem hívta meg. Az ellenőrzés bemenete
+készen állt, csak senki nem kötötte be.
+
+**Szabály.** Ha egy védelem az egyik végrehajtási úton létezik, a másikon
+pedig nem, ne azt kérdezd, „van-e hozzá adat" — hanem futtasd le a meglévő
+ellenőrzőt a másik út ELŐZŐ köreinek artefaktumán. Az E04-R10 leállított
+munkapéldányán az új scope-audit azonnal helyes verdiktet adott (a pre-flight
+commitról mérve tiszta, `origin/main`-ről mérve helyesen jelezte a pre-flight
+ADR-jét) — ez egy perces mérés volt, nem projekt.
+
+**Következmény.** [ADR 0138](adr/0138-factory-hardening-scope-guard-and-independence.md):
+közös scope-audit modul + CLI + a legacy wrapperekbe kötött hook; a verdikt a
+`.codex-round-status` `scope_audit=` kulcsába kerül, sértéskor a jelzés
+`stopped`-ra vált.
+
+## L117 — Az emberi escape-hatch, amit nem lehet beállítani, nem escape-hatch (GOV-03)
+
+**Mérés (2026-08-05).** A PreToolUse mérce-őrhöz `STRUMSIGHT_GATE_EDIT_OK=1`
+környezeti változós emberi engedélyt terveztem. Az őr a beállításfájl
+commitolásakor AZONNAL élesedett — és a következő lépésben **a saját szerzőjét
+állította meg**, aki épp egy új CI-kaput írt volna a védett könyvtárba.
+
+**A csapda.** Egy futó interaktív sessionben a környezeti változó nem
+állítható be utólag: a hook a Claude Code process env-jét örökli. A
+`settings.local.json` `env` blokkja lett volna az út, de azt a harness
+biztonsági osztályozója (helyesen) blokkolta, mert kívülről úgy néz ki, mint
+egy őr kikapcsolása.
+
+**Ugyanez a kör mérte ki a második hibát is:** a Bash-ágon a heurisztika a
+parancs MINDEN tokenjét nézte, ezért egy dokumentum-append is blokkolódott,
+amelynek csak a SZÖVEGE említett védett útvonalat. Egy őr, amely a puszta
+említést büntetti, a saját dokumentálását akadályozza meg.
+
+**Szabály.** Őr tervezésekor két dolgot mérj ki, ne csak a logikát:
+(1) az escape-hatch **futtathatóságát** — írd le a pontos parancssort, amivel
+egy ember MA élni tud vele; ha ez nem létezik, az escape dokumentáció, nem
+mechanizmus; (2) a heurisztika **célpontját** — mutáló parancsnál az írás
+célpontját elemezd (a `>` utáni tokent, a `sed -i` argumentumát), ne a teljes
+parancsszöveget. Fájl-alapú marker sessionből is létrehozható; env-változó nem.
+
+## L118 — Az őr tesztje ne a valódi repóra mutasson: az ambiens engedély némán megfordítja (GOV-03)
+
+**Mérés (2026-08-05).** A mérce-őr tesztjei `CLAUDE_PROJECT_DIR=<repó gyökér>`
+környezettel futtatták a hookot, mert az valósághűnek tűnt. Abban a percben,
+amikor a governance-munkához létrejött a **jogos** `.claude/gate-edit-authorized`
+engedély-marker a repó gyökerében, **20 teszt vált zöldre rossz okból**: a
+„köteles blokkolni" állításokat az escape engedte át. A hiba nem a teszt
+elbukásaként jelentkezett, hanem az ellenkezőjeként — némán.
+
+**Csapda.** A „valósághű" teszt-környezet itt pont az ambiens állapotot húzta
+be. Egy biztonsági őr tesztje akkor ér valamit, ha a *hiányzó engedély* állapotát
+méri; ha ez a környezetből jön, a teszt bármikor megfordulhat anélkül, hogy
+bárki hozzányúlna.
+
+**Szabály.** Jogosultsági/őr-tesztnek **hermetikus** projektkönyvtárat adj
+(üres tempdir), és az engedélyt kizárólag az a teszteset hozza létre, amely épp
+azt méri. Ha megtartod a valódi gyökeret, írj mellé egy regressziós állítást,
+amely elhasal, ha a harness visszaáll — nálunk ez a
+`test_an_ambient_marker_in_the_real_repo_does_not_leak_into_these_tests`.
+
+**Rokon eset ugyanebből a körből:** a `legacy_identifier_guard_test.dart` a
+fájlrendszert járta be, ezért egy **elárvult, gitignore-olt agent-worktree**
+(27 MB, 3 napja) pirosra váltotta a mércét a fő repóban — miközben a körök
+izolált klónban futnak, ahol ez a könyvtár nem létezik, tehát senki nem látta.
+Ha egy ellenőr a munkafát járja, a git által KÖVETETT fájlokra szűkítsd, vagy
+számolj azzal, hogy a szomszéd szemete méri.

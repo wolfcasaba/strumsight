@@ -1,3 +1,5 @@
+# strumsight:allow-secret-file — a redakcio tesztje: a benne levo tokenek
+# szandekosan titok-alakuak, hogy a redaktalas bizonyithato legyen.
 import os
 import subprocess
 import tempfile

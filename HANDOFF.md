@@ -4,7 +4,52 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R09 merged — PracticePlanDraft, validator & compiler).**
+> (GOV-03 — factory hardening; a lánc SZÜNETEL).**
+>
+> ## ⏸️ A KÖR-LÁNC ÁLL — GOV-03 (2026-08-05, user-kérés)
+>
+> A cron-trigger **ki van véve** (`crontab`, az eredeti sor a
+> `.pipeline/crontab.backup-*.txt`-ben). **Nincs `HALTED` fájl**, tehát
+> önjavító kör sem indul. Az **E04-R10 sora `pending`** maradt, tisztán
+> újrafut; a `codex/e04-r10-tool-contract-and-registry` branchen a pre-flight
+> (ADR 0137) fent van, a Codex félkész munkája a `/home/ubuntu/ss-codex-e04-r10`
+> munkapéldányban megőrizve.
+>
+> **Újraindítás:** állítsd vissza a cron-sort a backupból. Ellenőrzés:
+> `tools/pipeline-status.sh --status`.
+>
+> **Mi történt:** egy külső SDD-vezérelt „Autonomous Flutter Factory"
+> starter-csomaggal való összevetés hét valódi hiányt mutatott ki a
+> kör-pipeline-ban; ebből hatot lezártunk
+> ([ADR 0138](docs/adr/0138-factory-hardening-scope-guard-and-independence.md)):
+>
+> 1. **Legacy-út scope-audit** — az `engine=auto` úton a router minden
+>    modell-diffet auditált, a legacy `codex|minimax` úton viszont CSAK a prompt
+>    szövege védte a scope-ot, miközben az **Epic 4 mind a 24 köre** ezen fut.
+>    Új: `tools/scope-audit.py` + `tools/round-scope-audit.sh`, a verdikt a
+>    kör-jelzés `scope_audit=` kulcsába kerül; sértéskor `stopped`.
+>    **Az orchestrátornak `ROUND_BRIEF`-et KELL átadnia** a wrappernek.
+> 2. **`PreToolUse` mérce-őr** (`.claude/hooks/protect_factory_files.py`) — a
+>    H-GATEGUARD eddig csak prózában létezett, most írás közben blokkol.
+> 3. **Reviewer-függetlenség** — mérve: az implementer és az
+>    orchestrátor-fallback ugyanaz a `gpt-5.6-terra`, tehát kvótazárlat alatt a
+>    Terra a saját diffjét review-zta volna. Feloldás: implementer
+>    `codex→minimax`, vagy `H-INDEP` halt.
+> 4. **`H-INDEP` és `H-GATEGUARD` nem önjavítható.**
+> 5. **`security-reviewer` ágens** + prompt-injection szabályok (AGENTS.md §5.1).
+> 6. **Két új determinisztikus kapu:** titok-scan és l10n-paritás
+>    (`tool/ci/check_secrets.dart`, `tool/ci/check_l10n_parity.dart`), bekötve a
+>    `round-gate.sh`-ba és a CI-be.
+>
+> **Nyitott follow-up (ADR 0138 §7):** `auto` + Terra-eszkaláció függetlensége,
+> coverage-küszöb, gépi acceptance-bizonyíték (agent-result séma), a11y +
+> dependency/licenc kapu, hardcoded-string felderítés.
+>
+> **Takarítás:** egy elárvult, gitignore-olt agent-worktree
+> (`.claude/worktrees/agent-af0446a31b789cfd7`, 27 MB, aug. 2.) pirosra váltotta
+> a `legacy_identifier_guard` tesztet a fő repóban — eltávolítva, a nem
+> commitolt diffje elmentve (`.pipeline/archived-agent-*.patch`), a branch
+> megmaradt.
 >
 > **E04-R09 KÉSZ (PR [#133](https://github.com/wolfcasaba/strumsight/pull/133),
 > squash `c487397`, **nincs új ADR** — az ADR 0133 (tool-confirmation:

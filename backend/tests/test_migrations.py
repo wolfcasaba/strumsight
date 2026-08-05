@@ -1,3 +1,4 @@
+# strumsight:allow-secret-file — migracios tesztek kitalalt Settings-fixture-okkel.
 """Database lifecycle and migration contract tests."""
 
 import logging

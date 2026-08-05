@@ -68,6 +68,10 @@ fi
 rm -f "$signal" "$pid_file"
 : > "$log_file"
 
+# A scope-audit (ADR 0138) bázisa: a munkapéldány HEAD-je az indítás
+# pillanatában — lásd a codex-round.sh azonos szakaszának indoklását.
+scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
+
 # A `claude -p`-nek nincs `-C` kapcsolója (mint a `codex exec`-nek), ezért a
 # munkapéldányba alhéjjal lépünk be — így a kör-jelzés `git rev-parse` hívása
 # is a helyes fát látja.
@@ -161,6 +165,12 @@ elif [ ! -f "$signal" ] || ! grep -qE '^status=(done|stopped|blocked)$' "$signal
     echo "signalled_at=$(date -Iseconds)"
   } > "$signal"
 fi
+
+# Scope-audit (ADR 0138) — közös a legacy Codex úttal.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+bash "$script_dir/round-scope-audit.sh" "$workdir" "$scope_base" "$signal"
+scope_exit=$?
+[ "$scope_exit" -eq 1 ] && exit_code=1
 
 echo "--- minimax round finished ---"
 echo "log:    $log_file"

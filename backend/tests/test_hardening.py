@@ -1,3 +1,5 @@
+# strumsight:allow-secret-file — a fajl CELJA a hibas/rogzitett hitelesito
+# adatok elleni vedekezes tesztelese; minden kulcs kitalalt fixture.
 """Round 120 — production hardening: auth rate-limiting + prod-boot guards.
 
 The account backend was dev-grade (documented): no brute-force throttle on

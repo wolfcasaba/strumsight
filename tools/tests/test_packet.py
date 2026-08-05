@@ -1,3 +1,5 @@
+# strumsight:allow-secret-file — a redakcio tesztje: a benne levo tokenek
+# szandekosan titok-alakuak, hogy a redaktalas bizonyithato legyen.
 import unittest
 
 from tools.ai_router.packet import PacketError, build_escalation_packet
