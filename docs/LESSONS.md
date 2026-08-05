@@ -4443,3 +4443,35 @@ jött (754 pre-existing l10n analyze-hiba), NEM kódhibából — ez az orchestr
 `prepare-flutter-generated.sh` teendője (pipeline §5.5), nem H6. A `blocked`-ot
 mérd, ne fogadd el bemondásra: ha a blokk-ok a generált előfeltétel, oldd fel és
 futtasd a gate-et.
+
+## L130 — A gate-őr (`protect_factory_files.py`) egy `rm`/`cp`/`tee` MELLETT ugyanabban a Bash-hívásban futó `tools/round-gate.sh`-t is védett-írásnak látja; a reviewer-gate futtatása külön parancs legyen (E04-R17, review)
+
+**Mérve 2026-08-05 (E04-R17 review).** Az izolált `/tmp`-klón gate-jét egyetlen
+Bash-hívásban indítottam:
+`rm -rf /tmp/review-… ; git clone … ; tools/prepare-flutter-generated.sh > … ; tools/round-gate.sh … > …`.
+A `PreToolUse:Bash` őr (`.claude/hooks/protect_factory_files.py`, H-GATEGUARD,
+ADR 0112/0138) **BLOKKOLTA**: „`tools/round-gate.sh` a MÉRCE része".
+
+**Gyökérok (mérve a hook forrásából):** a `_bash_write_targets` a `rm`-et
+`mode="all"`-lal kezeli, és a `tokens[index+1:]` **teljes maradékot** operandusnak
+veszi — a `shlex.split` nem tekinti terminálisnak a `&&`-et vagy az újsort, így az
+`rm` „célpontjai" közé besöpri a jóval később álló `tools/round-gate.sh` tokent is,
+amit aztán a `PROTECTED_GLOBS` talál el. Nem a gate módosítása váltotta ki, hanem a
+`round-gate.sh` puszta **említése** egy író-parancs (`rm`/`cp`/`mv`/`tee`/`patch`)
+után ugyanabban a stringben.
+
+**Szabály:** a mérce-nevet (`round-gate.sh` és bármely `PROTECTED_GLOBS`-elem)
+tartalmazó parancs SOHA ne osztozzon egy Bash-híváson egy író-paranccsal. A klón-
+előkészítés (`rm`+`clone`+`prepare-flutter-generated.sh`) és a **gate-futtatás**
+külön hívás. A `>logfájl` átirányítás egy `/tmp` célra önmagában rendben van — a
+false-positive forrása kizárólag az író-parancs token-söprése. Az őr a mérce
+legitim FUTTATÁSÁT nem tiltja, csak a szerkesztését — a hiba az elemző túl tág
+`rm`-operandus-halmaza; kerüld, ne kérj emberi engedélyt (`STRUMSIGHT_GATE_EDIT_OK`)
+egy puszta futtatáshoz.
+
+**Mellék-megerősítés az [L129]-hez:** az `allowed_paths` szűkítése
+round-specifikus a slot-planner throughput-tesztre nézve. R17-ben a `public.dart`
+kivétele a listából a Router CI-t **zölden** hagyta (a `test_pipeline_throughput`
+csak az R15↔R16 `public.dart`-ütközést drótozza be, R17-et nem), mert a
+merge-SHA-n MÉRTEM a Router CI-t merge előtt (L113). A tanulság nem „sose szűkíts",
+hanem „a szűkítés után MÉRD a Router CI-t a branch-headen" — R17 ezt tette, és zöld volt.

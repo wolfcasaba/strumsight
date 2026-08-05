@@ -4,8 +4,32 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R16 MERGED — Tutor orchestration state machine & output validator,
-> ADR 0174; Codex/Terra, exact-SHA zöld kapun át).**
+> (E04-R17 MERGED — Conversation repository, summary & inspectable memory,
+> nincs új ADR / ADR 0134 hatálya; Codex/Terra, exact-SHA zöld kapun át).**
+>
+> ## ✅ E04-R17 KÉSZ — Conversation repository, summary & inspectable memory (2026-08-05)
+>
+> **E04-R17** MERGED (PR [#148](https://github.com/wolfcasaba/strumsight/pull/148),
+> squash `1e9b2db`, **nincs új ADR** — ADR [0134](docs/adr/0134-ai-tutor-memory-policy.md)
+> memory-policy hatálya, a tárolási minta ADR 0084/0090, privacy ADR 0132;
+> implementer **Codex** `gpt-5.6-terra`). Lokális, verziózott tutor
+> beszélgetéstárolás + felhasználó által megtekinthető memória: `TutorConversationRepository`
+> / `TutorMemoryRepository` contract + `TutorMemoryFact` modell; `LocalTutorConversationRepository`
+> (verziózott envelope, dokumentum-előbb-index sorrend index-újraépítéssel, lapozás,
+> message-provenance summary, **rekord-szintű korrupt-karantén**, őrzött top-level decode);
+> `LocalTutorMemoryRepository` (candidate-dedup, sensitivity-filter password/secret/token/
+> email/telefon — pont/perjel-szeparátorral is, inspect/edit/delete, retention purge,
+> redaktált export, **delete-all AI data** a teljes `StorageKeys.tutorAiData` + karantén felett).
+> **Silent-no-op tilalom betartva:** minden tár-írási hiba → `AppResult.failure(StorageFailure)`.
+> **Pre-flight (§0.0):** nincs új ADR (mérve); `public.dart` **kivéve** az `allowed_paths`-ból
+> (az additív export az `ai_tutor_boundary_test.dart` üres-boundary invariánsát törte volna —
+> a Router CI throughput-teszt itt NEM ütközött, ellentétben az R16 R15↔R16 esetével).
+> **Review:** [`docs/reviews/e04-r17-conversation-repository-and-memory-review.md`](docs/reviews/e04-r17-conversation-repository-and-memory-review.md)
+> — **APPROVED javító kör #1 után** (`6830e63`): a security-reviewer 2 MAJOR-t talált
+> (M1 telefon-filter pont-formátum bypass; M2 őrizetlen top-level `jsonDecode` → tartós
+> brick + content a cause-ban), mindkettő ZÁRVA hibát-pirosra-fogó regressziós teszttel.
+> CI exact-SHA `41cafd5`: full-gate [31050133428](https://github.com/wolfcasaba/strumsight/actions/runs/31050133428)
+> + router-ci [31050123599](https://github.com/wolfcasaba/strumsight/actions/runs/31050123599) success.
 >
 > ## ✅ E04-R16 KÉSZ — Tutor orchestration state machine & output validator (2026-08-05)
 >
@@ -1253,14 +1277,15 @@
 
 ## 4. Current branch
 
-`main` @ [PR #140](https://github.com/wolfcasaba/strumsight/pull/140), squash
-`c5b14e5` (E04-R12). [Build Android APK 31001924809](https://github.com/wolfcasaba/strumsight/actions/runs/31001924809)
-is **success** for exact branch `headSha` `89a56fe` (full Flutter suite,
-randomized property/coverage gate and development APK); Router CI `success` on
-the same head and on the merge SHA `c5b14e5`. The independent post-merge gate on
-`main` is green, and the final review is **APPROVED (1 fixup)** in
-[`e04-r12-prompts-output-schema-injection-boundary-review.md`](docs/reviews/e04-r12-prompts-output-schema-injection-boundary-review.md).
-(Előző product-merge-ek: PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`, E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
+`main` @ [PR #148](https://github.com/wolfcasaba/strumsight/pull/148), squash
+`1e9b2db` (E04-R17). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
+írt elő (nincs natív út): full-gate [31050133428](https://github.com/wolfcasaba/strumsight/actions/runs/31050133428)
++ router-ci [31050123599](https://github.com/wolfcasaba/strumsight/actions/runs/31050123599)
+**success** az exact merge-SHA `41cafd5`-en; a post-merge gate `main`-en zöld, a
+review **APPROVED** (2 MAJOR zárva javító kör #1-ben).
+(Történeti product-merge referenciák: PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
+E04-R15; PR #140 / `c5b14e5`, E04-R12; PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`,
+E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -1332,6 +1357,43 @@ the same head and on the merge SHA `c5b14e5`. The independent post-merge gate on
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E04-R17 — Conversation repository, summary & inspectable memory** (PR
+[#148](https://github.com/wolfcasaba/strumsight/pull/148), squash `1e9b2db`,
+**nincs új ADR** — ADR [0134](docs/adr/0134-ai-tutor-memory-policy.md) hatálya;
+implementer **Codex** `gpt-5.6-terra`; orchestrátor/reviewer **Claude Opus 4.8**).
+
+**Elkészült:** lokális, verziózott tutor beszélgetéstárolás + megtekinthető
+memória. `TutorConversationRepository`/`TutorMemoryRepository` contract +
+`TutorMemoryFact` modell; `LocalTutorConversationRepository` (verziózott
+document-envelope, dokumentum-előbb-index sorrend → index-újraépítés a
+dokumentumokból, lapozás, message-provenance summary, **rekord-szintű
+korrupt-karantén**, őrzött top-level decode → karantén+reset); a
+`LocalTutorMemoryRepository` (candidate-dedup normalizált fingerprinttel,
+sensitivity-filter [password/secret/token/email/telefon — pont- és
+perjel-szeparátorral is], inspect/edit/delete, retention `purgeExpired`,
+redaktált export, **delete-all AI data** a teljes `StorageKeys.tutorAiData` +
+minden karantén-kulcs felett). Silent-no-op tilalom: minden tár-írási hiba →
+`AppResult.failure(StorageFailure)` (nem néma). `StorageKeys`: három additív
+`ss.tutor.*` kulcs + `tutorAiData` delete-all lista.
+**Pre-flight §0.0:** nincs új ADR (mérve), `public.dart` kivéve az
+`allowed_paths`-ból (üres-boundary invariáns védelme).
+Review: [`docs/reviews/e04-r17-conversation-repository-and-memory-review.md`](docs/reviews/e04-r17-conversation-repository-and-memory-review.md)
+— **APPROVED javító kör #1 (`6830e63`) után**: a security-reviewer 2 MAJOR-t
+talált (M1 telefon-filter pont-formátum bypass; M2 őrizetlen top-level
+`jsonDecode` → tartós brick + content a cause-ban), mindkettő ZÁRVA
+hibát-pirosra-fogó regressziós teszttel; falszifikációs próba (delete-all
+mutáció → 2 cella RED) igazolta a guardokat. CI exact-SHA `41cafd5`:
+full-gate + router-ci **success**; post-merge gate `main`-en zöld.
+
+---
+
+**E04-R16 — Tutor orchestration state machine & output validator** (PR
+[#147](https://github.com/wolfcasaba/strumsight/pull/147), squash `df25806`,
+ADR [0174](docs/adr/0174-ai-tutor-orchestration-state-machine.md); implementer
+**Codex** `gpt-5.6-terra`). Ld. a fejléc-összefoglalót és az RTM-et.
+
+---
 
 **E04-R15 — Backend + Flutter streaming transport** (PR
 [#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
@@ -1690,8 +1752,13 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    **ez a session nem kezdi el**. A `public.dart` **üres-boundary invariáns**
    (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
    meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
-   importtal érhetők el, a publikus export R16+-ra halasztva. **A queue
-   következő `pending` sora: E04-R16 — orchestration state machine.**
+   importtal érhetők el, a publikus export a hívó UI-kör (R18/R19) érkezéséig
+   halasztva. **A queue következő `pending` sora: E04-R18 — Tutor home chat UI
+   (implementer: minimax).**
+   **~~E04-R17 — Conversation repository, summary & inspectable memory~~ — KÉSZ** (PR #148, `1e9b2db`,
+   nincs új ADR — ADR 0134 hatálya; implementer Codex; 2 MAJOR zárva javító kör #1-ben; ld. fejléc + §5).
+   **~~E04-R16 — Tutor orchestration state machine & output validator~~ — KÉSZ** (PR #147, `df25806`,
+   ADR 0174; implementer Codex; ld. fejléc + §5).
    **~~E04-R15 — Backend + Flutter streaming transport~~ — KÉSZ** (PR #145, `1fe91d2`,
    ADR 0142; implementer qwen38-max; H3 self-heal #143 után; ld. a fejléc-összefoglalót és §5).
    **~~E04-R14 — Backend tutor proxy, provider registry & usage guard~~ — KÉSZ** (PR #142, `c1c0a77`,
