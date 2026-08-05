@@ -4,7 +4,46 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R08 merged — deterministic debrief & coaching fallback).**
+> (E04-R09 merged — PracticePlanDraft, validator & compiler).**
+>
+> **E04-R09 KÉSZ (PR [#133](https://github.com/wolfcasaba/strumsight/pull/133),
+> squash `c487397`, **nincs új ADR** — az ADR 0133 (tool-confirmation:
+> „invalid draft nem indíthat sessiont") + SDD §35 realizálása, implementer
+> **Codex** (`gpt-5.6-terra`, örökölt kézi override), orchestrátor/reviewer
+> **Claude Opus 4.8**):** AI által **javasolható**, de teljesen **validált és
+> végrehajtható** gyakorlási terv domain (greenfield, hívó nélkül — a launch R11,
+> az UI R19 fogyasztja). `lib/features/ai_tutor/domain/models/` —
+> `PracticePlanDraft` (immutable, unmodifiable blocks/goalIds, `PracticePlanSource`
+> provenance, **determinisztikus 5/10/20/30-perces template** [1,3,1]/[2,5,3]/
+> [3,7,7,3]/[5,10,10,5], blokk-összeg **egzakt** a kerettel) + `PracticePlanBlock`
+> (zárt `PracticePlanBlockType.supported` allowlist, három adapter-fajta
+> none/practiceTarget/song). `lib/features/ai_tutor/domain/services/` — pure
+> `PracticePlanValidator` **zárt, stabil kód-készlettel** (unsupported block /
+> tempo out-of-range [30–300 BPM] / missing song / missing target / tuning-mismatch
+> / user-avoid / capability / skill / duration-mismatch / non-positive duration);
+> `isValid` ⇔ üres kódlista. `lib/features/ai_tutor/application/planning/` —
+> `PracticePlanCompiler`: **invalid draft → `Failure` (nem fordítható/indítható)**;
+> mindkét block-adapter (practice-target ÉS song) a **közös publikus**
+> `practice/public.dart` → `compilePracticeTarget`-en fordul (**bit-stabil
+> parity**), a song a publikus `songs/public.dart` `Song`-ból épít
+> `PracticeDefinition`-t; `isOfflineRunnable = blocks.every(assetAvailableLocally)`;
+> user-edit → újravalidálás. **Pre-flight §0.0 (mérve, main @ `92fc3ad`):**
+> **D1** — a Song Trainer compilere **source-internal** (`song_trainer/public.dart`
+> = két screen; `SongPracticeCompiler`/`SongDocument`/`TrainerConfig` zárt) →
+> mindkét adapter a **publikus Practice compileren** fordul, a „Song Trainer
+> compiler" NINCS a scope-ban (kívülre esés `stopped`); a publikusan elérhető
+> song a `songs` feature `Song`-ja. **D2** — `ai_tutor/public.dart` **eltávolítva**
+> az engedélyezett listáról (a nulla-export boundary-invariáns bármely exporttól
+> RED-re váltana; e körnek nincs hívója) — üresen marad. **D3** — nincs új ADR
+> (legmagasabb 0136; az ADR 0133 realizálása). Az implementer egy futásban `done`.
+> Független review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 3 NOTE): az invalid-launch
+> kapu ÉS a duration-mismatch invariáns **mutáció-próbával RED-re váltva**
+> (izolált `/tmp` klón); a compiler imports = csak publikus barrelek, **nulla
+> `song_trainer`-belső import**. CI [run 30980931912](https://github.com/wolfcasaba/strumsight/actions/runs/30980931912)
+> **success** exact head `996ebce` (analyze + full suite + randomizált property +
+> APK); Router CI zöld; post-merge gate `main`-en zöld. Production viselkedés
+> változatlan (`ai_tutor/public.dart` üres — nincs hívó). **Következő: E04-R10 —
+> a pipeline indítja.**
 >
 > **E04-R08 KÉSZ (PR [#132](https://github.com/wolfcasaba/strumsight/pull/132),
 > squash `ddd7674`, **nincs új ADR** — az ADR 0132 (grounding) + ADR 0084 (legacy

@@ -3925,3 +3925,31 @@ klón `origin/main`-jéhez: `git diff --name-only <rebase-bázis-SHA>...HEAD` (i
 **Tanulság:** rebase-elt kör-branchen a `main...HEAD` merge-base-alapú diff nem
 megbízható scope-mérce, ha a bázis-ref stale; a mérce mindig az a konkrét SHA,
 amire a branch valóban ült. (Vö. [L108].)
+
+## L115 — „Publikus compiler" ≠ minden feature compilere: mérd a barrel-t (E04-R09)
+
+**Kontextus.** Az E04-R09 előre megírt brief a compilert „Practice **+ Song
+Trainer** compiler-adapter, bit-stabil parity a Practice/**Song** compilerrel"
+felületre írta elő. A pre-flight §1.2 („mérd ki a tényleges hívási láncot")
+mérése kimutatta: `song_trainer/public.dart` **kizárólag két screent** exportál;
+a `SongPracticeCompiler`, `SongDocument`, `TrainerConfig` az `application/trainer/`,
+`domain/models/` alatt **zárt** (source-internal). A Practice viszont teljesen
+publikus (`compilePracticeTarget({PracticeDefinition, PracticeSessionConfig})`).
+
+**Csapda.** A brief szó szerinti követése a Song oldalon **source-belső importot**
+kényszerített volna (a §3 tiltja, `stopped`-ot ér) — vagy az engedélyezett-lista
+tágítását a `song_trainer` belsejére. A „réteg-diagram alapján feltételezés" (a
+brief feltételezte, hogy amiből van internal compiler, annak van publikus felülete
+is) pontosan az a hiba, amit a pre-flight §1.2 tilt.
+
+**Feloldás (nem lista-tágítás).** Dokumentált §0.0 D1 brief-revízió: MINDKÉT
+block-adapter a **közös publikus** `compilePracticeTarget`-en fordul; a
+publikusan elérhető „song" a `songs` feature `Song`-ja (`songs/public.dart`),
+amiből a compiler `PracticeDefinition`-t épít. A parity a Practice-compilerre
+mérve, a `song_trainer`-belső compiler kívül a scope-on. A review a compiler
+importjait grep-pel igazolta: **nulla `song_trainer`-belső import**.
+
+**Szabály.** Ha egy brief két „X + Y compiler/definition" felületet ír elő,
+pre-flightban **grep-eld ki mindkettő `public.dart`-ját** — a belső osztály
+létezése NEM jelenti, hogy publikus a felülete. A hiányzó publikus utat §0.0
+brief-revízióval old fel, a scope-listát ne tágítsd más feature belsejébe.
