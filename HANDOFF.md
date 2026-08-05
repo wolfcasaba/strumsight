@@ -4,7 +4,18 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (GOV-03 — factory hardening; a lánc SZÜNETEL).**
+> (E04-R10 MERGED — read-only tutor tool contract & registry).**
+>
+> ## ▶️ E04-R10 KÉSZ (2026-08-05)
+>
+> **E04-R10 — Tutor Tool contract & read-only registry** MERGED (PR
+> [#136](https://github.com/wolfcasaba/strumsight/pull/136), squash `2f7fffc`,
+> **új ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)**). Typed,
+> allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
+> compute** (nincs file/network/code tool). Implementer **Codex (Terra)**,
+> orchestrátor/reviewer **Claude Opus 4.8**, review APPROVED (0 BLOCKER/MAJOR,
+> 1 NOTE). Zöld kapu: build-apk + router-ci `success` exact head `80a7b7b`.
+> **Következő: E04-R11 — action proposal & confirmation (a pipeline indítja).**
 >
 > ## ▶️ GOV-03 KÉSZ — a lánc újraindítva (2026-08-05)
 >
@@ -1116,6 +1127,33 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
+**E04-R10 — Tutor Tool contract & read-only registry** (PR
+[#136](https://github.com/wolfcasaba/strumsight/pull/136), squash `2f7fffc`,
+**új ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)** —
+read-only tutor tool contract & registry, orchestrátor írta a pre-flightban).
+Implementer: **Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer:
+**Claude Opus 4.8**.
+
+**Elkészült:** typed `TutorTool` contract (permission + providerfüggetlen input-schema),
+verziózott **fail-closed** `TutorToolRegistry` (unknown/nem-engedélyezett tool →
+normalizált `ValidationFailure`, turn-specifikus allowlist), immutable
+request/turn-policy + provenance/timeout/size-report result (méretlimit fölött
+**jelent, nem csonkol**), két kezdeti local tool (`getContextField` read-local,
+`summarizeContext` compute-local), behelyettesíthető `FakeTutorToolRegistry`.
+Kizárólag **read-only + lokális compute** — nincs arbitrary file/network/code tool
+(ADR 0137, komplementer az ADR 0133 write/launch-megerősítéssel). **Pre-flight
+§0.0 (main @ `acc84d9`):** ADR 0137 szabad (0136 volt a legmagasabb); D2 —
+`public.dart` eltávolítva az engedélyezett-listáról (nulla-export boundary
+invariáns, nincs hívó; R11/R12/R16/R19 fogyasztja); D3 — `lib/core/foundation/`
+scope-on kívül, tool-exception a **meglévő** `ValidationFailure`/`UnknownFailure`
+kódokra képződik; D4 — nincs erőforrás-lease (`rg .acquire(` 0 találat). Review
+**APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE) — a security-allowlist guard
+**valódi-sértés próbával** igazolva (extra tool a shipped `toolsFor`-ba → 3 teszt
+RED → visszaállítva). CI: build-apk + router-ci `success` exact head `80a7b7b`;
+post-merge gate zöld.
+
+<details><summary>E04-R07 — Offline knowledge index & retrieval (PR #130, ADR 0136) — snapshot</summary>
+
 **E04-R07 — Offline knowledge index & retrieval** (PR
 [#130](https://github.com/wolfcasaba/strumsight/pull/130), squash `8182204`,
 **új ADR [0136](docs/adr/0136-tutor-knowledge-retrieval.md)** —
@@ -1141,6 +1179,8 @@ R12/R16 fogyasztja), helyette ADR 0136. Review **APPROVED** (0 BLOCKER/MAJOR/MIN
 1 NOTE) — min-score inkluzivitás **valódi-sértés próbával** (`<` → `<=` → RED).
 CI run 30975365023 success exact head `2b4bb19`; post-merge gate zöld. Full
 narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+</details>
 
 <details><summary>E04-R06 — Curated tutor knowledge schema & first content pack (PR #129, ADR 0135) — snapshot</summary>
 
@@ -1317,14 +1357,17 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R08 — Deterministic debrief coaching** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R08` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r08-deterministic-debrief-coaching.md`). A pipeline
+0. **E04-R11 — Action proposal & confirmation** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R11` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r11-action-proposal-and-confirmation.md`). A pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi el**.
-   Bemenete a lezárt E04-R05 context snapshot + E04-R07 retrieval
-   (`KnowledgeRetriever`/`TutorSourceRef`); a `public.dart` **üres-boundary
-   invariáns** (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R12/R16)
-   nem érkezik meg — a pre-flight méri, hogy a retrieval export nélkül belső marad-e.
+   Bemenete az E04-R10 read-only tool-rendszer (`TutorToolRegistry`, ADR 0137) +
+   az ADR 0133 kétlépcsős write/launch-megerősítés; a `public.dart` **üres-boundary
+   invariáns** (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R12/R16/R19)
+   nem érkezik meg.
+   **~~E04-R10 — Tutor Tool contract & read-only registry~~ — KÉSZ** (PR #136, `2f7fffc`,
+   ADR 0137, ld. a fejléc-összefoglalót és §5).
+   **~~E04-R08 — Deterministic debrief coaching~~ — KÉSZ** (a queue sora, ld. archívum).
    **~~E04-R07 — Offline knowledge index & retrieval~~ — KÉSZ** (PR #130, `8182204`,
    ADR 0136, ld. a fejléc-összefoglalót és §5).
    **~~E04-R06 — Knowledge schema & content pack~~ — KÉSZ** (PR #129, `f3d69ef`,

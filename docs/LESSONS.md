@@ -4059,3 +4059,31 @@ fájlrendszert járta be, ezért egy **elárvult, gitignore-olt agent-worktree**
 izolált klónban futnak, ahol ez a könyvtár nem létezik, tehát senki nem látta.
 Ha egy ellenőr a munkafát járja, a git által KÖVETETT fájlokra szűkítsd, vagy
 számolj azzal, hogy a szomszéd szemete méri.
+
+## L120 — Egy allowlist-guardot a SHIPPED készlet mutációjával mérj, ne csak a konstruktor közvetlen hívásával (E04-R10)
+
+**Mérés (2026-08-05).** Az E04-R10 read-only tool-rendszer biztonsági
+követelménye: „nincs arbitrary file/network/code tool; reviewer eldobható
+mutációval (egy network-tool hozzáadása) pirosra váltja". A `TutorTool` egy
+nyílt interfész — az `execute()` bármit tehet, és a permission-enum
+(`readLocal`/`computeLocal`) nem is akadályozza; egy rosszindulatú
+`_DisposableNetworkTool` simán deklarálhat `readLocal` permissiont. A tényleges
+védelem **nem** típusszintű, hanem a `registryFor` a fix `toolsFor()` (2 vetted
+tool) listát köti a `safeToolNames` (2 név) const allowlisthez, és a registry
+konstruktora fail-closed dob, ha `_tools.keys.length != approvedToolNames.length`.
+
+**Csapda.** A shipped `read_only_tutor_tools_test.dart` „security allowlist"
+tesztje csak a **konstruktort** hívta közvetlenül egy extra network-toollal —
+ez a `length`-mismatch guardot bizonyítja, de nem azt, hogy a **valódi**
+kiszállított tool-készlet bővítése is elbukik. A review ezért **valódi-sértés
+próbát** futtatott az izolált klónban: egy plusz toolt szúrt a `toolsFor()`
+listájába → az application suite **3 teszt RED** (a `registryFor`-t hívó minden
+teszt), majd visszaállította. Csak ez zárja le, hogy a guard a **fogyasztói
+úton** (nem csak a demo-konstruktoron) bit.
+
+**Szabály.** Allowlist-/fail-closed guardnál a merge-döntést a **shipped
+belépési pont** (`registryFor`/factory) mutációjával mérd — szúrj be egy tiltott
+elemet a valódi készletbe, futtasd a fogyasztói teszteket, várd a RED-et,
+állítsd vissza, és a próbát a review §-ában rögzítsd. A guard közvetlen
+unit-tesztje szükséges, de nem elég — a támadó a factoryn át jön, nem a
+konstruktoron.
