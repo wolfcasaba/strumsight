@@ -4,8 +4,8 @@
 - **Branch:** `codex/e04-r12-prompts-output-schema-injection-boundary`
 - **Implementer motor:** Codex (Terra, örökölt kézi override, `codex-round.sh`)
 - **Reviewer:** Claude Opus 4.8 (orchestrátor, független read-only)
-- **Diff:** `862dc43..9eaccce` (16 changed path, +969/-1)
-- **Verdikt:** **APPROVED** — 0 BLOCKER, 0 MAJOR, 0 MINOR, 2 NOTE
+- **Diff:** `862dc43..0e902d4` (16 changed path)
+- **Verdikt:** **APPROVED (1 javító kör után)** — 1 BLOCKER *zárva*, 0 MAJOR, 0 MINOR, 2 NOTE
 - **ADR:** [0140](../adr/0140-ai-tutor-prompt-output-schema-injection-boundary.md) (pre-flight)
 
 ## 1. Jelzés + handoff
@@ -66,6 +66,25 @@ védelem **ténylegesen mért**, nem díszlet. A klón törölve.
 | N1 | NOTE | `tutor_prompt_builder.dart:212` | Az untrusted-redakció regex `token`-je tág (over-redaction) — a védelem irányában biztonságos, nem blokkol. |
 | N2 | NOTE | `tutor_output_schema.dart` | A v1 séma az array-elemek belső alakját még nem rögzíti (csak `type:array`) — R13+ finomíthatja, ebben a körben nem elvárt. |
 
+## 8. Javító kör — BLOCKER-1 (a teljes CI-suite fogta meg)
+
+| # | Osztály | Fájl | Leírás | Állapot |
+|---|---|---|---|---|
+| B1 | BLOCKER | `lib/features/ai_tutor/public.dart` | A körben hozzáadott 4 export directive megsértette a **merge-elt** `test/features/ai_tutor/ai_tutor_boundary_test.dart` nulla-directive invariánsát. A kör `gate_tests`-je csak a `prompts/`-ot méri, ezért lokálisan zöld volt — a build-apk teljes suite-je (run 30999971414: 2764 pass, **1 fail**) fogta meg (L21). | **ZÁRVA** |
+
+**Zárás (fixup, head `0e902d4`, engine=codex):** scope-szűkítés (ADR 0087 §2) —
+`public.dart` visszaállítva nulla-directive állapotra; a publikus export R13+-ra
+halasztott (egyetlen acceptance-cellához sem kell). A merge-elt boundary-tesztet
+NEM módosítottuk (az H2 lett volna). **Valódi-sértés zárás:** a bővített
+`tools/round-gate.sh test/features/ai_tutor test/features/ai_tutor/prompts` gate
+(a boundary-tesztet is tartalmazza) izolált klónban **teljes ZÖLD**; a fixup ELŐTT
+ugyanez a teszt pirosat adott — a zárás mért.
+
+**Tanulság (→ LESSONS):** a kör `gate_tests` scope-ja szűkebb volt, mint a kör
+által érintett invariáns hatóköre (public.dart boundary). Ha egy kör a
+`public.dart`-hoz nyúl, a gate-nek a feature boundary-tesztjét (`test/features/<f>`)
+is mérnie kell, nem csak az új alkönyvtárat.
+
 **Nincs nyitott BLOCKER/MAJOR/MINOR. Merge engedélyezett** exact-SHA zöld CI
-(build-apk + router-ci `success` a `9eaccce` head-en) és a merge-SHA router-ci
+(build-apk + router-ci `success` a `0e902d4` head-en) és a merge-SHA router-ci
 sikere után.
