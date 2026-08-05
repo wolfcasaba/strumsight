@@ -1,6 +1,6 @@
 # E04-R06 — Kurált tutor tudásbázis schema és első content pack
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-05, kód olvasva: main @ `5180d08`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 6; §35
 - **Branch:** `codex/e04-r06-knowledge-schema-and-content-pack`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R01 merge**
@@ -16,11 +16,11 @@ allowed_paths = [
   "lib/features/ai_tutor/data/knowledge/knowledge_document.dart",
   "lib/features/ai_tutor/data/knowledge/knowledge_codec.dart",
   "tool/build_tutor_knowledge_manifest.dart",
-  "lib/features/ai_tutor/public.dart",
   "pubspec.yaml",
   "test/features/ai_tutor/data/knowledge_codec_test.dart",
   "test/features/ai_tutor/data/knowledge_manifest_test.dart",
   "docs/rounds/e04-r06-knowledge-schema-and-content-pack.md",
+  "docs/adr/0135-tutor-knowledge-governance.md",
 ]
 gate_tests = [
   "test/features/ai_tutor/data",
@@ -46,9 +46,50 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Előre kiosztott ADR:
-**0135** (tutor-knowledge-governance) — **orchestrátor** írja a pre-flightban, NEM
-implementer-diff, NEM TOML `allowed_paths`.
+**Mérve az orchestrátor pre-flightban, `main` @ `5180d08` (2026-08-05).** Előre
+kiosztott ADR: **0135** (tutor-knowledge-governance) — az orchestrátor írta meg
+(`docs/adr/0135-tutor-knowledge-governance.md`), NEM implementer-diff, NEM TOML
+`allowed_paths`.
+
+**Mért baseline (grep/ls a kódban, nem a tábla):**
+
+1. **ADR-reconcile:** a legmagasabb létező ADR `0134`; `docs/adr/0135*` nem
+   létezett → **0135 szabad**, reconcile nem kellett. Az ADR ebben a
+   pre-flightban megíródott és az engedélyezett listára került.
+2. **E04-R01 merge** megvan (`814388a`, PR #124); Epic 3/E04-R05 lezárva
+   (`main` @ `5180d08`). Előfeltételek teljesülnek.
+3. **`assets/tutor_knowledge/` NEM létezik** (greenfield); a `pubspec.yaml`
+   `assets:` szekció létezik (58. sor) → additív bővítés.
+4. **`lib/features/ai_tutor/data/`** ma csak a `local/` codeceket tartalmazza
+   (`tutor_profile_codec.dart`, `tutor_conversation_codec.dart`); a
+   `data/knowledge/` **új**. A `test/features/ai_tutor/data/` könyvtár
+   **létezik** (codec-tesztek); az új tesztek oda kerülnek.
+
+**REVÍZIÓ — engedélyezett-lista SZŰKÍTÉS (ADR 0087 §2, autonóm):**
+`lib/features/ai_tutor/public.dart` **eltávolítva** az engedélyezett listáról
+és **ÜRES MARAD**. Mért indok: a lezárt `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+egy **nulla-export invariánst** kényszerít a `public.dart`-ra (E04-R02..R05
+precedens, ADR 0131 §2) — bármely `import`/`export` direktíva PIROSRA váltja a
+boundary tesztet. A brief eredeti „additív export" cellája hamis feltételezés
+volt; ez a kör greenfield schema + content + build-tool + teszt, hívó nélkül, a
+fogyasztók a retrieval-körben (R07) jönnek. A `public.dart` érintetlen marad.
+
+**§1 mérési szabályok:**
+
+- **(1) Elérhetetlen cél-státusz — approval lifecycle.** Az acceptance
+  „approved-only build" cellája egy státuszt (`approved`) ír elő. Ez NEM
+  reducer/állapotgép-átmenet: az `approved`/`reviewNeeded`/`rejected` státusz a
+  **dokumentum-forrásfájl saját, szerző által írt mezője**, a build-tool pedig
+  erős egyenlőséggel (`status == approved`) szűr a production manifestbe. Az
+  input, amely az `approved`-ot produkálja, tehát a review után `approved`
+  státuszúra állított content-fájl — a mutációs próba (egy `reviewNeeded`
+  átcsúszik) RED-re vált.
+- **(2) Erőforrás-tulajdonlás.** A kör nem rendel lease/lock/handle/subscription
+  erőforrást egyetlen réteghez sem (tiszta build-tool + immutable value object +
+  asset-fájlok) → **N/A**.
+
+**AGENTS.md §9 megerősítve:** a `docs/rag` fejlesztői DSP/ML anyag, NEM másolható;
+a tutor-tartalom saját/jogtiszta, `license` + `hash` mezővel (ADR 0135 §1–§2).
 
 ## 1. Cél
 
@@ -82,7 +123,6 @@ jogvédett/harmadik-fél tartalom.
 | `.../data/knowledge/knowledge_document.dart` | ÚJ | document/chunk schema |
 | `.../data/knowledge/knowledge_codec.dart` | ÚJ | determinisztikus codec |
 | `tool/build_tutor_knowledge_manifest.dart` | ÚJ | reprodukálható build |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
 | `pubspec.yaml` | meglévő | assets-bejegyzés (csak additív) |
 | `test/features/ai_tutor/data/*` | ÚJ | schema/hash/approved-only tesztek |
 | `docs/rounds/e04-r06-*.md` | meglévő | §10 handoff + review checklist |
