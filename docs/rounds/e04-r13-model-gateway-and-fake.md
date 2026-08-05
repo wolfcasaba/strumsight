@@ -176,11 +176,33 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI = orchestrátor.
 **STOP:** provider-SDK import, nem-determinisztikus cancel vagy mércegyengítés
 helyett dokumentált brief-revízió.
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
 
-_(üres)_
+**Implementer: qwen-plus** (`qwen/qwen3.7-plus`, codex-harness). Kész: 5 új
+production fájl a `lib/features/ai_tutor/data/model_gateway/` alatt + 2 új teszt
+(`test/features/ai_tutor/data/`), összesen 69 zöld teszt a `test/features/ai_tutor/data`
+gate-területen.
 
-## 11. Review — a független reviewer tölti ki
+- `TutorModelGateway` — providerfüggetlen `abstract interface class`
+  (`start(TutorModelRequest) → AppResult<Stream<TutorModelEvent>>`, `cancel()`,
+  `health()`), **nincs Flutter UI / provider-SDK típus** (ADR 0131).
+- `TutorModelRequest` — `@immutable` (requestId/sequence/conversationId/message).
+- `TutorModelEvent` — `sealed`: `TutorModelDelta` / `TutorModelToolCall` /
+  `TutorModelDone` / `TutorModelError`. Duplicate terminal → csak az első jut ki.
+- `FakeTutorModelGateway` — scripted (`FakeGatewayDelay/Delta/ToolCall/Done/Error`),
+  determinisztikus `cancel`, injektált `FakeClock`. A `withTimeouts` teszt-helper
+  first-event/inactivity/total timeoutot ad (below/at/above mátrix).
+- `LocalTutorModelGatewayStub` — capability-unavailable
+  (`'tutor.model_gateway.unavailable'`).
 
-Tervezett review: `docs/reviews/e04-r13-model-gateway-and-fake-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Három javító körön ment át (F1 unused-import, F2 at-threshold mátrix,
+F3 uncommitted production fájlok, F4 async-timing) — részletek a review §8-ban.
+A gateway a feature-en belül **közvetlen importtal** érhető el; publikus export
+R16+-ra halasztva (§0.0 revízió).
+
+## 11. Review
+
+Elkészült: [`docs/reviews/e04-r13-model-gateway-and-fake-review.md`](../reviews/e04-r13-model-gateway-and-fake-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 3 NOTE (follow-up a hívó körökre). A
+provider-boundary/no-secret határt eldobható mutáció (secret + provider-import)
+igazolta pirosra a `secrets`/`analyze` lépésen. Merge exact-SHA zöld CI után.
