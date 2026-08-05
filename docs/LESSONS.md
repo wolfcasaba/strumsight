@@ -4003,3 +4003,30 @@ egy ember MA élni tud vele; ha ez nem létezik, az escape dokumentáció, nem
 mechanizmus; (2) a heurisztika **célpontját** — mutáló parancsnál az írás
 célpontját elemezd (a `>` utáni tokent, a `sed -i` argumentumát), ne a teljes
 parancsszöveget. Fájl-alapú marker sessionből is létrehozható; env-változó nem.
+
+## L118 — Az őr tesztje ne a valódi repóra mutasson: az ambiens engedély némán megfordítja (GOV-03)
+
+**Mérés (2026-08-05).** A mérce-őr tesztjei `CLAUDE_PROJECT_DIR=<repó gyökér>`
+környezettel futtatták a hookot, mert az valósághűnek tűnt. Abban a percben,
+amikor a governance-munkához létrejött a **jogos** `.claude/gate-edit-authorized`
+engedély-marker a repó gyökerében, **20 teszt vált zöldre rossz okból**: a
+„köteles blokkolni" állításokat az escape engedte át. A hiba nem a teszt
+elbukásaként jelentkezett, hanem az ellenkezőjeként — némán.
+
+**Csapda.** A „valósághű" teszt-környezet itt pont az ambiens állapotot húzta
+be. Egy biztonsági őr tesztje akkor ér valamit, ha a *hiányzó engedély* állapotát
+méri; ha ez a környezetből jön, a teszt bármikor megfordulhat anélkül, hogy
+bárki hozzányúlna.
+
+**Szabály.** Jogosultsági/őr-tesztnek **hermetikus** projektkönyvtárat adj
+(üres tempdir), és az engedélyt kizárólag az a teszteset hozza létre, amely épp
+azt méri. Ha megtartod a valódi gyökeret, írj mellé egy regressziós állítást,
+amely elhasal, ha a harness visszaáll — nálunk ez a
+`test_an_ambient_marker_in_the_real_repo_does_not_leak_into_these_tests`.
+
+**Rokon eset ugyanebből a körből:** a `legacy_identifier_guard_test.dart` a
+fájlrendszert járta be, ezért egy **elárvult, gitignore-olt agent-worktree**
+(27 MB, 3 napja) pirosra váltotta a mércét a fő repóban — miközben a körök
+izolált klónban futnak, ahol ez a könyvtár nem létezik, tehát senki nem látta.
+Ha egy ellenőr a munkafát járja, a git által KÖVETETT fájlokra szűkítsd, vagy
+számolj azzal, hogy a szomszéd szemete méri.

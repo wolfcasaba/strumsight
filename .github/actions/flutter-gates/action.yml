@@ -20,6 +20,17 @@ runs:
       shell: bash
       run: dart run tool/check_architecture.dart
 
+    # ADR 0138 — a gépi őr az AGENTS.md §5 titok-határához. Csak a git által
+    # követett fájlokat nézi, és a találat HELYÉT jelenti, az értékét soha.
+    - name: Secret scan gate
+      shell: bash
+      run: dart run tool/ci/check_secrets.dart
+
+    # ADR 0138 — az ARCH-008 mechanikus fele: teljes en→hu ARB paritás.
+    - name: Localization parity gate
+      shell: bash
+      run: dart run tool/ci/check_l10n_parity.dart
+
     - name: Asset gate
       shell: bash
       run: dart run tool/ci/check_assets.dart

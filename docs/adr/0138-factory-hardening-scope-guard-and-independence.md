@@ -167,6 +167,27 @@ tilt. Külön kitérője a prompt injection felület (ADR 0131–0136): külső 
   hoz (az M3 mért gyengéi: `docs/LESSONS.md`), cserébe visszaadja a független
   reviewert.
 
+### 6. Két új determinisztikus kapu
+
+`tool/ci/check_secrets.dart` és `tool/ci/check_l10n_parity.dart`, bekötve a
+`tools/round-gate.sh`-ba és a `.github/actions/flutter-gates`-be.
+
+- **Titok-scan.** Az AGENTS.md §5 „secret nem kerülhet commitba" határa eddig
+  gépi őr nélkül állt. Csak a **git által KÖVETETT** fájlokat nézi: mérve
+  2026-08-05, a fájlrendszer-bejárás 29 leletet adott, ebből 15 a gitignore-olt
+  `backend/.venv`-ből és egy elárvult agent-worktree-ből jött — a kapu kérdése
+  az, hogy *commitoltunk-e* titkot. A maradék 14 mind bizonyított teszt-fixture
+  volt (redakciós tesztek), ezek `// strumsight:allow-secret` jelölést kaptak.
+  A riport a találat HELYÉT adja meg, az értékét soha — egy kapu, amely kiírja
+  a megtalált titkot, épp azt szivárogtatja a CI-logba, amit véd.
+- **L10n-paritás.** Az ARCH-008 **mechanikus** fele: minden `app_en.arb`
+  kulcsnak van nem üres, azonos helyőrzőjű `app_hu.arb` párja (ma 720/720).
+  Azt NEM bizonyítja, hogy az UI minden szöveget ARB-n keresztül vezet — egy
+  bedrótozott literál a widgetben itt láthatatlan, az a reviewer dolga.
+
+Mindkettő élesben, valódi sértéssel próbálva: beszúrt `sk-…` literál → piros
+(exit 1); törölt `micErrorBody` fordítás → piros (exit 1).
+
 ## Ismert, NEM lezárt maradék (§7 follow-up)
 
 Ezek mérési előfeltétel vagy külön kör hiányában maradtak nyitva; egyik sem
@@ -177,11 +198,26 @@ javítható őszintén „menet közben":
    kell, MELYIK modell írta a diffet (`router-result.json`) — külön kör.
 2. **Coverage-küszöb**: ma `flutter test --coverage` fut és az lcov feltöltődik,
    de nincs minimum. Küszöböt mért baseline nélkül felvenni önkényes lenne.
-3. **Titok-scan és l10n-paritás kapu**: megírva, de a mérce-őr miatt emberi
-   engedéllyel kell beilleszteni (`tool/ci/**` védett).
-4. **Gépi acceptance-bizonyíték** (`schemas/agent-result.schema.json`):
+3. **Gépi acceptance-bizonyíték** (`schemas/agent-result.schema.json`):
    protokollváltás, minden brief és prompt érintett — külön kör.
-5. **Accessibility és dependency/licenc audit kapu**: nincs megírva.
+4. **Accessibility és dependency/licenc audit kapu**: nincs megírva.
+5. **A hardcoded string-ek felderítése** (ARCH-008 másik fele): a paritás-kapu
+   nem látja a widgetbe írt literált.
+
+### Az őr bevallott határai
+
+A `protect_factory_files` hook a **projektkönyvtárban** végzett tool-hívásokat
+fedi. NEM fedi a `git` plumbingot és a körök izolált munkapéldányát — mindkettő
+kívül esik a `CLAUDE_PROJECT_DIR`-en vagy megkerüli az író toolokat. Ez
+szándékos: a munkapéldányok auditált kontrollja a `tools/scope-audit.py`, a
+`main`-re jutó tartalomé pedig a független review + a branch CI-futása. Ez a
+védelmi mélység gyors, lokális rétege, nem az egyetlen rétege — és ezt a
+docstring is kimondja, hogy senki ne higgye többnek.
+
+Ugyanezen a körön mérve: a hook első verziója a parancs minden tokenjét nézte,
+ezért a saját dokumentálását, tesztfuttatását és commitját is blokkolta; és az
+env-alapú emberi escape futó sessionben beállíthatatlan volt. Mindkettő
+javítva (L117), a második `.claude/gate-edit-authorized` marker-fájllal.
 
 ## Alternatívák, amiket elvetettünk
 

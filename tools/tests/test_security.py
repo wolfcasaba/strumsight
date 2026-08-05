@@ -19,7 +19,7 @@ class SecurityTest(unittest.TestCase):
         text = (
             "Authorization: Bearer bearer-secret\n"
             "MINIMAX_API_KEY=env-secret\n"
-            "key=sk-abcdefghijklmnopqrstuvwxyz123456\n"
+            "key=sk-abcdefghijklmnopqrstuvwxyz123456\n"  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
             "https://example.test/?token=query-secret\n"
             "exact-value"
         )
@@ -28,7 +28,7 @@ class SecurityTest(unittest.TestCase):
         for secret in (
             "bearer-secret",
             "env-secret",
-            "sk-abcdefghijklmnopqrstuvwxyz123456",
+            "sk-abcdefghijklmnopqrstuvwxyz123456",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
             "query-secret",
             "exact-value",
         ):

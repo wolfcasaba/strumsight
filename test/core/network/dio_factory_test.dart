@@ -337,7 +337,7 @@ void main() {
         decode: (json) => json['ok'] as bool,
       );
       await client.getJson<bool>(
-        '/account?token=query-do-not-log',
+        '/account?token=query-do-not-log', // strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
         decode: (json) => json['ok'] as bool,
       );
       await client.post(

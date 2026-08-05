@@ -173,6 +173,16 @@ done
 run_step "architecture" \
   "$dart_bin" run tool/check_architecture.dart
 
+# Titok-scan (ADR 0138): az AGENTS.md §5 „secret nem kerülhet commitba" határa
+# eddig gépi őr nélkül állt. Csak a git által KÖVETETT fájlokat nézi.
+run_step "secrets" \
+  "$dart_bin" run tool/ci/check_secrets.dart
+
+# Lokalizációs paritás (ADR 0138): az ARCH-008 mechanikus fele — minden
+# sablon-kulcsnak van nem üres, azonos helyőrzőjű fordítása.
+run_step "l10n" \
+  "$dart_bin" run tool/ci/check_l10n_parity.dart
+
 summary
 echo
 echo "MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban"

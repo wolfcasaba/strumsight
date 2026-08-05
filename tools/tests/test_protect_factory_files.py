@@ -15,10 +15,25 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOK = REPO_ROOT / ".claude" / "hooks" / "protect_factory_files.py"
 
 
-class ProtectFactoryFilesTest(unittest.TestCase):
+class GuardTestCase(unittest.TestCase):
+    """Base harness with a HERMETIC project directory.
+
+    Measured 2026-08-05: pointing `CLAUDE_PROJECT_DIR` at the real repository
+    made every "must block" assertion silently invert the moment a developer
+    created a legitimate `.claude/gate-edit-authorized` marker — 20 tests went
+    green for the wrong reason.  A guard test that depends on ambient state is
+    worse than no test, so each case gets an empty temporary project, and the
+    authorization is created explicitly by the cases that test it.
+    """
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.project = Path(temporary.name)
+
     def run_hook(self, payload: dict, *, escape: bool = False) -> subprocess.CompletedProcess:
         environment = dict(os.environ)
-        environment["CLAUDE_PROJECT_DIR"] = str(REPO_ROOT)
+        environment["CLAUDE_PROJECT_DIR"] = str(self.project)
         if escape:
             environment["STRUMSIGHT_GATE_EDIT_OK"] = "1"
         else:
@@ -31,11 +46,13 @@ class ProtectFactoryFilesTest(unittest.TestCase):
             env=environment,
         )
 
-    def edit(self, path: str) -> dict:
-        return {"tool_name": "Edit", "tool_input": {"file_path": path}}
+
+class ProtectFactoryFilesTest(GuardTestCase):
+    def edit(self, relative: str) -> dict:
+        return {"tool_name": "Edit", "tool_input": {"file_path": str(self.project / relative)}}
 
     def test_blocks_the_gate_script(self) -> None:
-        result = self.run_hook(self.edit(str(REPO_ROOT / "tools/round-gate.sh")))
+        result = self.run_hook(self.edit("tools/round-gate.sh"))
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("H-GATEGUARD", result.stderr)
@@ -43,7 +60,7 @@ class ProtectFactoryFilesTest(unittest.TestCase):
     def test_blocks_ci_workflow_and_ci_checker(self) -> None:
         for relative in (".github/workflows/build-apk.yml", "tool/ci/check_assets.dart"):
             with self.subTest(relative=relative):
-                result = self.run_hook(self.edit(str(REPO_ROOT / relative)))
+                result = self.run_hook(self.edit(relative))
                 self.assertEqual(result.returncode, 2, result.stderr)
 
     def test_blocks_the_router_security_module_and_the_hook_itself(self) -> None:
@@ -54,17 +71,17 @@ class ProtectFactoryFilesTest(unittest.TestCase):
             ".claude/settings.json",
         ):
             with self.subTest(relative=relative):
-                result = self.run_hook(self.edit(str(REPO_ROOT / relative)))
+                result = self.run_hook(self.edit(relative))
                 self.assertEqual(result.returncode, 2, result.stderr)
 
     def test_blocks_secret_paths_even_with_the_human_escape(self) -> None:
-        result = self.run_hook(self.edit(str(REPO_ROOT / ".env")), escape=True)
+        result = self.run_hook(self.edit(".env"), escape=True)
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("titok", result.stderr)
 
     def test_human_escape_allows_measure_edits_and_says_so(self) -> None:
-        result = self.run_hook(self.edit(str(REPO_ROOT / "tools/round-gate.sh")), escape=True)
+        result = self.run_hook(self.edit("tools/round-gate.sh"), escape=True)
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("STRUMSIGHT_GATE_EDIT_OK=1", result.stderr)
@@ -81,7 +98,7 @@ class ProtectFactoryFilesTest(unittest.TestCase):
             "test/features/ai_tutor/domain/tutor_tool_registry_test.dart",
         ):
             with self.subTest(relative=relative):
-                result = self.run_hook(self.edit(str(REPO_ROOT / relative)))
+                result = self.run_hook(self.edit(relative))
                 self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_blocks_a_mutating_bash_command_against_the_measure(self) -> None:
@@ -106,15 +123,22 @@ class ProtectFactoryFilesTest(unittest.TestCase):
 
     def test_unreadable_payload_blocks_rather_than_allows(self) -> None:
         environment = dict(os.environ)
-        environment["CLAUDE_PROJECT_DIR"] = str(REPO_ROOT)
+        environment["CLAUDE_PROJECT_DIR"] = str(self.project)
         result = subprocess.run(
             ["python3", str(HOOK)], input="not json", capture_output=True, text=True, env=environment
         )
 
         self.assertEqual(result.returncode, 2)
 
+    def test_an_ambient_marker_in_the_real_repo_does_not_leak_into_these_tests(self) -> None:
+        # Regressziós őr a fenti mérésre: ha valaki visszaállítaná a
+        # CLAUDE_PROJECT_DIR=REPO_ROOT harness-t, ez a teszt bukna, amint egy
+        # fejlesztőnél él a jogos engedély-marker.
+        self.assertNotEqual(self.project, REPO_ROOT)
+        self.assertFalse((self.project / ".claude" / "gate-edit-authorized").exists())
 
-class BashWriteTargetTest(unittest.TestCase):
+
+class BashWriteTargetTest(GuardTestCase):
     """Only the WRITE TARGET counts — mentioning a protected path is not a write.
 
     Measured 2026-08-05 (docs/LESSONS.md L117): the first version scanned every
@@ -123,16 +147,7 @@ class BashWriteTargetTest(unittest.TestCase):
     """
 
     def run_hook(self, command: str) -> subprocess.CompletedProcess:
-        environment = dict(os.environ)
-        environment["CLAUDE_PROJECT_DIR"] = str(REPO_ROOT)
-        environment.pop("STRUMSIGHT_GATE_EDIT_OK", None)
-        return subprocess.run(
-            ["python3", str(HOOK)],
-            input=json.dumps({"tool_name": "Bash", "tool_input": {"command": command}}),
-            capture_output=True,
-            text=True,
-            env=environment,
-        )
+        return super().run_hook({"tool_name": "Bash", "tool_input": {"command": command}})
 
     def assertBlocked(self, command: str) -> None:
         self.assertEqual(self.run_hook(command).returncode, 2, f"nem blokkolt: {command}")
