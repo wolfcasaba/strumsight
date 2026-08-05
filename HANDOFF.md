@@ -4,9 +4,28 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R12 MERGED — prompt templates, output schema & injection boundary).**
+> (E04-R13 MERGED — TutorModelGateway & scripted fake).**
 >
-> ## ▶️ E04-R12 KÉSZ (2026-08-05)
+> ## ▶️ E04-R13 KÉSZ (2026-08-05)
+>
+> **E04-R13 — TutorModelGateway & scripted fake** MERGED (PR
+> [#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
+> **nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
+> provider-boundary hatálya). Implementer: **qwen-plus** (`qwen/qwen3.7-plus`,
+> codex-harness, ADR 0140); orchestrátor/reviewer: **Claude Opus 4.8**.
+> Providerfüggetlen streaming modellkapu (`TutorModelGateway` interface, `sealed
+> TutorModelEvent` delta/tool-call/done/error, duplicate-terminal guard),
+> scripted `FakeTutorModelGateway` (injektált `FakeClock`, first-event/inactivity/
+> total timeout mátrix below/at/above, determinisztikus cancel) + capability-
+> unavailable `LocalTutorModelGatewayStub`. **Nincs Flutter UI / provider-SDK
+> típus** (mutáció-próbával igazolva: secret→`secrets` red, provider-import→
+> `analyze` red). Pre-flight §0.0: `public.dart` kivéve (üres-boundary invariáns
+> R16+-ig). 3 javító kör (F1–F4), review **APPROVED** (0 BLOCKER/MAJOR/MINOR,
+> 3 NOTE). CI exact-SHA `2fe4b60`: build-apk
+> [31012190270](https://github.com/wolfcasaba/strumsight/actions/runs/31012190270)
+> + router-ci `success`; merge-SHA `b9d2950` router-ci `success`; post-merge gate zöld.
+>
+> <details><summary>▶️ E04-R12 KÉSZ (2026-08-05)</summary>
 >
 > **E04-R12 — Prompt templatek, output schema és injection boundary** MERGED (PR
 > [#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
@@ -44,6 +63,7 @@
 > Typed, allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
 > compute**. Implementer Codex (Terra), review APPROVED (0 BLOCKER/MAJOR, 1 NOTE);
 > build-apk + router-ci `success` exact head `80a7b7b`.
+> </details>
 > </details>
 >
 > ## ▶️ GOV-03 KÉSZ — a lánc újraindítva (2026-08-05)
@@ -1157,6 +1177,38 @@ the same head and on the merge SHA `c5b14e5`. The independent post-merge gate on
 
 ## 5. Last completed round
 
+**E04-R13 — TutorModelGateway és scripted fake** (PR
+[#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
+**nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
+provider-boundary hatálya, orchestrátor a pre-flightban dokumentált nem-döntést).
+Implementer: **qwen-plus** (`qwen/qwen3.7-plus`, codex-harness, ADR 0140 első
+éles kör-futása); orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** providerfüggetlen streaming modellkapu teljes contract-tesztkészlettel,
+valódi cloud nélkül. `TutorModelGateway` (`abstract interface class`:
+`start(TutorModelRequest)→AppResult<Stream<TutorModelEvent>>`, `cancel()`,
+`health()`) — **nincs Flutter UI / provider-SDK típus** (ADR 0131). `sealed
+TutorModelEvent`: delta / tool-call / done / error, duplicate-terminal guard
+(csak az első jut ki). Scripted `FakeTutorModelGateway` injektált `FakeClock`-kal:
+delay/delta/tool/error, **determinisztikus** cancel, late-event drop; a
+`withTimeouts` teszt-helper first-event/inactivity/total timeout mátrixa
+below/**at**/above bontásban. `LocalTutorModelGatewayStub` capability-unavailable
+(`'tutor.model_gateway.unavailable'`). **Pre-flight §0.0 (main @ `5d082dc`):**
+`public.dart` **kivéve** az engedélyezett listából — az `ai_tutor_boundary_test`
+üres-boundary invariánsa R16+-ig él (HANDOFF §6), a gateway intra-feature
+importtal érhető el. Review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 3 NOTE);
+a provider-boundary/no-secret határt eldobható mutáció igazolta pirosra
+(hardcoded secret → `secrets` lépés; provider-SDK import → `analyze`). **3 javító
+kör** (qwen kétszer jelzés nélkül `unknown`-ra esett token-kimerülés miatt, de
+commitolt; a hiányokat az orchestrátor mérte ki: F1 unused-import, F2 at-threshold
+mátrix, F3 uncommitted production fájlok, F4 `FakeClock`(szinkron)↔`StreamController`
+(aszinkron) sequencing). CI exact-SHA `2fe4b60`: build-apk
+[31012190270](https://github.com/wolfcasaba/strumsight/actions/runs/31012190270)
++ router-ci `success`; merge-SHA `b9d2950` router-ci `success`; post-merge gate zöld
+(format/analyze/test 69/architecture/secrets/l10n).
+
+<details><summary>E04-R12 — Prompt templates, output schema & injection boundary (PR #140, ADR 0141) — snapshot</summary>
+
 **E04-R12 — Prompt templatek, output schema és injection boundary** (PR
 [#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
 **új ADR [0141](docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)** —
@@ -1185,6 +1237,8 @@ scope-szűkítéssel (export R13+-ra halasztva, boundary-teszt érintetlen — H
 CI: build-apk [31001924809](https://github.com/wolfcasaba/strumsight/actions/runs/31001924809)
 + router-ci `success` exact head `89a56fe`, merge-SHA router-ci `c5b14e5` success;
 post-merge gate zöld.
+
+</details>
 
 <details><summary>E04-R11 — Action proposal, validation & confirmation service (PR #137, ADR 0139) — snapshot</summary>
 
@@ -1453,14 +1507,14 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R13 — (a következő Epic 4 kör)** — a
-   `docs/execution/pipeline-queue.tsv` következő `pending` sora; a pipeline
-   (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi el**.
-   Bemenete az E04-R12 prompt-réteg (`TutorPromptBuilder`, output-schema v1,
-   trusted/untrusted boundary, ADR 0141) + az E04-R11/R10 action/tool-rendszer; a
-   `public.dart` **üres-boundary invariáns** (`ai_tutor_boundary_test.dart`)
-   tovább él, amíg a hívó (R16/R19) nem érkezik meg — az R12 prompt-osztályok a
-   feature-en belül közvetlen importtal érhetők el, a publikus export R13+-ra halasztva.
+0. **A következő Epic 4 kör** — a `docs/execution/pipeline-queue.tsv` következő
+   `pending` sora; a pipeline (ADR 0087) automatikusan indítja új sessionben —
+   **ez a session nem kezdi el**. A `public.dart` **üres-boundary invariáns**
+   (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
+   meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
+   importtal érhetők el, a publikus export R16+-ra halasztva.
+   **~~E04-R13 — TutorModelGateway & scripted fake~~ — KÉSZ** (PR #141, `b9d2950`,
+   nincs új ADR — ADR 0131 hatálya; implementer qwen-plus; ld. a fejléc-összefoglalót és §5).
    **~~E04-R12 — Prompt templatek, output schema & injection boundary~~ — KÉSZ** (PR #140, `c5b14e5`,
    ADR 0141, ld. a fejléc-összefoglalót és §5).
    **~~E04-R11 — Action proposal & confirmation~~ — KÉSZ** (PR #137, `479550f`,

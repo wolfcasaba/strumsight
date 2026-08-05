@@ -4120,3 +4120,34 @@ Pre-flightban grep-eld, mely tesztek hivatkoznak a módosítandó production fá
 (`grep -rl "public.dart" test/`), és vedd fel őket a gate scope-jába. A feloldás itt
 scope-szűkítés volt (az export R13+-ra halasztva); a merge-elt boundary-tesztet
 tilos volt módosítani (H2).
+
+## L122 — Szinkron fake-óra + aszinkron StreamController: a listenerben felfegyverzett timer a rossz `now`-hoz köt (E04-R13)
+
+**Mérés (2026-08-05, E04-R13, implementer qwen-plus).** A `TutorModelGateway`
+timeout-tesztjei egy szinkron `FakeClock`-ot (a `advance()` alatt AZONNAL tüzeli a
+callbackeket) kombináltak egy valódi `StreamController`-rel (az eseményeket
+ASZINKRON, event-loop turnön kézbesíti). A `withTimeouts` wrapper az inaktivitási
+timert a stream-listener**ben** fegyverzi fel: `deadline = clock.now() + inactivityTimeout`.
+Az „inactivity above" teszt két `clock.advance(...)`-ot hívott **közvetlenül
+egymás után**, await nélkül — így mire a listener lefutott (a `await future` alatt),
+a `now` már túllépett a küszöbön, a timer rossz határidőt kapott és **sosem tüzelt**.
+A teszt `emitsError(TimeoutException)` helyett hiba nélkül záruló streamet kapott.
+A gate PIROS volt, holott a production logika helyes.
+
+**Csapda.** Fake-óra + valódi async stream keverékénél a listener által
+(re)fegyverzett timerek NEM léteznek addig, amíg az event-loop turn le nem fut. Két
+egymást követő szinkron `advance()` a köztük felfegyverzendő timert kihagyja.
+
+**Szabály.** Minden olyan lépésnél, ahol egy esemény kibocsátása UTÁN kell az órát a
+timeout-ablakon túllépni, **iktass be egy event-queue ürítést** a két `advance()`
+közé (`await Future<void>.delayed(Duration.zero)` vagy `pumpEventQueue()`), hogy a
+listener a HELYES `now`-hoz fegyverezze a timert. Az assertion is tükrözze a valós
+sorrendet: `emitsInOrder([<első esemény>, emitsError(...)])`, nem csak `emitsError`.
+
+**Kísérő megfigyelés (folyamat).** A codex-harness motor kétszer `unknown`-ra esett
+token-kimerülés miatt, és egyszer CSAK a teszt-fájlokat commitolta — az 5 új
+production fájl `?? lib/.../model_gateway/` **untracked** maradt, a branch
+fordíthatatlanná vált. A `scope_audit_changed=7` a working-tree-t számolta, nem a
+commitot. **Szabály:** `done`/`unknown` feldolgozásakor a `dirty_files != 0`-t
+mindig vizsgáld ki — vesd össze a commit tartalmát a working-tree-vel
+(`git status --short`), ne csak a scope-audit darabszámát (vö. [L21]).
