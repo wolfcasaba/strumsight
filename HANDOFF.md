@@ -4,24 +4,38 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R11 MERGED — action proposal, validation & confirmation service).**
+> (E04-R12 MERGED — prompt templates, output schema & injection boundary).**
 >
-> ## ▶️ E04-R11 KÉSZ (2026-08-05)
+> ## ▶️ E04-R12 KÉSZ (2026-08-05)
 >
-> **E04-R11 — Action proposal, validation & confirmation service** MERGED (PR
-> [#137](https://github.com/wolfcasaba/strumsight/pull/137), squash `479550f`,
-> **új ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)**,
-> implementálja az ADR 0133-at). Kétlépcsős, felhasználó által megerősített
-> action-rendszer — **automatikus write/launch soha**: providerfüggetlen sealed
-> `TutorAction` hierarchia (typed capability, `clientActionId`, opaque
-> revision-token), pure validator (a `confirm` **újrafuttatja**), idempotens
-> confirmation-service (in-flight + completed `clientActionId`), memóriás fake
-> executor — nincs production nav/write, nyers route-string strukturálisan sem
-> érhet el executort. Implementer **Codex (Terra)**, orchestrátor/reviewer
-> **Claude Opus 4.8**, review APPROVED (0 BLOCKER/MAJOR/MINOR, 1 NOTE).
-> Zöld kapu: build-apk + router-ci `success` exact head `66fadfc`, merge-SHA
-> router-ci `479550f` success, post-merge lokális gate zöld.
-> **Következő: E04-R12 (a pipeline indítja új sessionben).**
+> **E04-R12 — Prompt templatek, output schema és injection boundary** MERGED (PR
+> [#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
+> **új ADR [0141](docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)**,
+> bővíti a 0131/0132/0137/0139-et). Verziózott, determinisztikus tutor-prompt-építés
+> kemény **trusted/untrusted** tartalmi határral: `TutorPromptBuilder` **csak
+> redaktált** `TutorContextSnapshot`-ot fogad (nyers audio/token/secret sosem); a
+> trusted (system + `TutorSourceRef` citációk) és untrusted (user/import) szakaszok
+> fizikailag külön, delimiterrel, az untrusted `<`/`>` escape-elve (delimiter-forgery
+> ellen); tool-schema injection a registry-birtokolt allowlisttel
+> (`schemasForTurn(policy)`); strukturált output-schema v1, nincs chain-of-thought;
+> intentenkénti asset-template + bit-stabil snapshot + adversarial injection fixture.
+> Implementer **Codex (Terra)**, orchestrátor/reviewer **Claude Opus 4.8**, review
+> **APPROVED 1 javító kör után** (BLOCKER-1: `public.dart` export törte a merge-elt
+> boundary-tesztet → scope-szűkítés, export R13+-ra halasztva; a teljes CI-suite
+> fogta meg, nem a szűkebb lokál gate — L120). ADR 0140→0141 átszámozva (GOV-04
+> ütközés). Zöld kapu: build-apk + router-ci `success` exact head `89a56fe`,
+> merge-SHA router-ci `c5b14e5` success, post-merge lokális gate zöld.
+> **Következő: E04-R13 (a pipeline indítja új sessionben).**
+>
+> <details><summary>E04-R11 — Action proposal, validation & confirmation service (2026-08-05) — snapshot</summary>
+>
+> **E04-R11** MERGED (PR [#137](https://github.com/wolfcasaba/strumsight/pull/137),
+> squash `479550f`, **ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)**).
+> Kétlépcsős, user-megerősített action-rendszer — automatikus write/launch soha;
+> providerfüggetlen sealed `TutorAction`, pure validator (confirm újrafuttat),
+> idempotens confirmation-service. Review APPROVED (0 BLOCKER/MAJOR/MINOR, 1 NOTE);
+> exact head `66fadfc`, merge-SHA `479550f`.
+> </details>
 >
 > <details><summary>E04-R10 — Tutor Tool contract & read-only registry (2026-08-05) — snapshot</summary>
 >
@@ -1063,14 +1077,14 @@
 
 ## 4. Current branch
 
-`main` @ [PR #137](https://github.com/wolfcasaba/strumsight/pull/137), squash
-`479550f` (E04-R11). [Build Android APK 30996409067](https://github.com/wolfcasaba/strumsight/actions/runs/30996409067)
-is **success** for exact branch `headSha` `66fadfc` (full Flutter suite,
+`main` @ [PR #140](https://github.com/wolfcasaba/strumsight/pull/140), squash
+`c5b14e5` (E04-R12). [Build Android APK 31001924809](https://github.com/wolfcasaba/strumsight/actions/runs/31001924809)
+is **success** for exact branch `headSha` `89a56fe` (full Flutter suite,
 randomized property/coverage gate and development APK); Router CI `success` on
-the same head and on the merge SHA `479550f`. The independent post-merge gate on
-`main` is green, and the final review is **APPROVED** in
-[`e04-r11-action-proposal-and-confirmation-review.md`](docs/reviews/e04-r11-action-proposal-and-confirmation-review.md).
-(Előző product-merge-ek: PR #129 / `f3d69ef`, E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04; PR #126 / `06ae3f7`, E04-R03.)
+the same head and on the merge SHA `c5b14e5`. The independent post-merge gate on
+`main` is green, and the final review is **APPROVED (1 fixup)** in
+[`e04-r12-prompts-output-schema-injection-boundary-review.md`](docs/reviews/e04-r12-prompts-output-schema-injection-boundary-review.md).
+(Előző product-merge-ek: PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`, E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -1143,6 +1157,37 @@ the same head and on the merge SHA `479550f`. The independent post-merge gate on
 
 ## 5. Last completed round
 
+**E04-R12 — Prompt templatek, output schema és injection boundary** (PR
+[#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
+**új ADR [0141](docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)** —
+bővíti a 0131/0132/0137/0139-et, orchestrátor írta a pre-flightban). Implementer:
+**Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** verziózott, determinisztikus tutor-prompt-építés kemény
+trusted/untrusted határral. `TutorPromptBuilder` **csak redaktált**
+`TutorContextSnapshot`-ot fogad (nyers audio/token/secret sosem); rögzített
+layer-sorrend (`PRODUCT_POLICY`→`SAFETY_POLICY`→`TUTOR_PEDAGOGY_POLICY`→
+`TOOL_CONTRACT_SUMMARY`→`STRUCTURED_USER_CONTEXT`→`TRUSTED_KNOWLEDGE`→
+`UNTRUSTED_*`×3→`REQUIRED_OUTPUT_SCHEMA`). Trusted (system-`en` + `TutorSourceRef`
+citációk) és untrusted (user/import) fizikailag külön, delimiterrel; az untrusted
+`<`/`>` escape-elve, `PromptTemplate` elutasít `<<<`/`>>>`-t → **delimiter-forgery
+zárva** (mutáció-próba: az escape eltávolítása RED-re vált). Tool-schema injection a
+registry-birtokolt allowlisttel (`TutorToolRegistry.schemasForTurn(policy)` — a
+builder nem vezet be sajátot). Strukturált output-schema v1, **nincs chain-of-thought**.
+Intentenkénti asset-template (`assets/tutor_prompts/*.json`, 6 `ContextPurpose`),
+bit-stabil snapshot + adversarial injection fixture. **Pre-flight §0.0 (main @
+`c1c57db`):** ADR 0141 kiosztva (0140→0141 átszámozva, GOV-04 ütközés); mérési
+szabály #2 — az allowlist a registryé, nem a builderé. Review **APPROVED 1 javító
+kör után**: BLOCKER-1 — a `public.dart` export törte a merge-elt
+`ai_tutor_boundary_test` nulla-directive invariánsát, amit a **teljes CI-suite**
+fogott meg (a kör `gate_tests` csak `prompts/`-ot mért, L120); feloldás
+scope-szűkítéssel (export R13+-ra halasztva, boundary-teszt érintetlen — H2 elkerülve).
+CI: build-apk [31001924809](https://github.com/wolfcasaba/strumsight/actions/runs/31001924809)
++ router-ci `success` exact head `89a56fe`, merge-SHA router-ci `c5b14e5` success;
+post-merge gate zöld.
+
+<details><summary>E04-R11 — Action proposal, validation & confirmation service (PR #137, ADR 0139) — snapshot</summary>
+
 **E04-R11 — Action proposal, validation & confirmation service** (PR
 [#137](https://github.com/wolfcasaba/strumsight/pull/137), squash `479550f`,
 **új ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)** —
@@ -1173,6 +1218,7 @@ tesztelve, a raw-route guard **valódi-sértés mutáció-próbával** RED-re v�
 build-apk [30996409067](https://github.com/wolfcasaba/strumsight/actions/runs/30996409067)
 + router-ci `success` exact head `66fadfc`, merge-SHA router-ci `479550f` success;
 post-merge gate zöld.
+</details>
 
 <details><summary>E04-R10 — Tutor Tool contract & read-only registry (PR #136, ADR 0137) — snapshot</summary>
 
@@ -1407,15 +1453,18 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R12 — (a következő Epic 4 kör)** — a
+0. **E04-R13 — (a következő Epic 4 kör)** — a
    `docs/execution/pipeline-queue.tsv` következő `pending` sora; a pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi el**.
-   Bemenete az E04-R11 action/confirmation-rendszer (`ActionConfirmationService`,
-   `TutorAction`, ADR 0139) + az E04-R10 read-only tool-rendszer (ADR 0137); a
+   Bemenete az E04-R12 prompt-réteg (`TutorPromptBuilder`, output-schema v1,
+   trusted/untrusted boundary, ADR 0141) + az E04-R11/R10 action/tool-rendszer; a
    `public.dart` **üres-boundary invariáns** (`ai_tutor_boundary_test.dart`)
-   tovább él, amíg a hívó (R16/R19) nem érkezik meg.
+   tovább él, amíg a hívó (R16/R19) nem érkezik meg — az R12 prompt-osztályok a
+   feature-en belül közvetlen importtal érhetők el, a publikus export R13+-ra halasztva.
+   **~~E04-R12 — Prompt templatek, output schema & injection boundary~~ — KÉSZ** (PR #140, `c5b14e5`,
+   ADR 0141, ld. a fejléc-összefoglalót és §5).
    **~~E04-R11 — Action proposal & confirmation~~ — KÉSZ** (PR #137, `479550f`,
-   ADR 0139, ld. a fejléc-összefoglalót és §5).
+   ADR 0139, ld. §5 snapshot).
    **~~E04-R10 — Tutor Tool contract & read-only registry~~ — KÉSZ** (PR #136, `2f7fffc`,
    ADR 0137, ld. §5 snapshot).
    **~~E04-R08 — Deterministic debrief coaching~~ — KÉSZ** (a queue sora, ld. archívum).

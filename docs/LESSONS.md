@@ -4097,3 +4097,26 @@ elemet a valódi készletbe, futtasd a fogyasztói teszteket, várd a RED-et,
 állítsd vissza, és a próbát a review §-ában rögzítsd. A guard közvetlen
 unit-tesztje szükséges, de nem elég — a támadó a factoryn át jön, nem a
 konstruktoron.
+
+## L121 — A kör `gate_tests` scope-ja szűkebb lehet, mint a kör által érintett invariáns hatóköre → a lokál gate zöld, a teljes CI-suite piros (E04-R12)
+
+**Mérés (2026-08-05).** Az E04-R12 brief `gate_tests = ["test/features/ai_tutor/prompts"]`
+volt, és a kör additív exportot tett a `lib/features/ai_tutor/public.dart`-ba. A
+lokális `round-gate.sh test/features/ai_tutor/prompts` **teljesen zöld** volt — de
+a `public.dart`-ot egy **korábbi, merge-elt** körből származó
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` nulla-import/export directive
+állapotra pinneli (a testvér-alkönyvtárban, a `prompts/`-on KÍVÜL). A teljes CI-suite
+(build-apk) így **2764 pass / 1 fail**-lel esett el, egy javító kört kényszerítve.
+
+**Csapda.** A `gate_tests` a kör *saját, új* teszteire fókuszál, de egy production
+fájl (itt: a feature `public.dart` boundary-ja) invariánsát **más alkönyvtárban lakó**
+teszt is őrizheti. A szűk gate-scope elrejti ezt; a lokál zöld hamis biztonságot ad
+(vö. [L21] „a zöld lokál gate nem bizonyíték").
+
+**Szabály.** Ha egy kör a feature **boundary-jához** (`public.dart`) vagy bármely,
+több teszt által megosztott fájlhoz nyúl, a `gate_tests`-nek a **feature teljes
+teszt-gyökerét** (`test/features/<feature>`) mérnie kell, nem csak az új alkönyvtárat.
+Pre-flightban grep-eld, mely tesztek hivatkoznak a módosítandó production fájlra
+(`grep -rl "public.dart" test/`), és vedd fel őket a gate scope-jába. A feloldás itt
+scope-szűkítés volt (az export R13+-ra halasztva); a merge-elt boundary-tesztet
+tilos volt módosítani (H2).
