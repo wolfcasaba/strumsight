@@ -3846,3 +3846,26 @@ gitignore-olt generált előfeltételek (package_config, l10n) jelen legyenek. A
 generált l10n hiánya miatti `analyze`-piros NEM H6/H7 halt és NEM scope-tágítás
 — build-előfeltétel, amit az orchestrátor old fel, a kör-diff érintése nélkül.
 (Vö. pipeline prompt §5, `tools/prepare-flutter-generated.sh`.)
+
+## L112 — A review-report commit is mozgatja a branch HEAD-et: minden előtte dispatch-elt CI-run stale lesz (exact-SHA merge-evidencia), ezért a merge-evidencia CI-t a review-commit UTÁN kell indítani (E04-R07, 2026-08-05)
+
+**Kontextus.** Az E04-R07-ben a skill §5 szerint az implementer `done`-ja UTÁN
+azonnal dispatch-eltem a `build-apk.yml`-t (hogy a ~10 perc a review alatt
+teljen). A CI a friss impl-commit (`056f531`) fölött zöldre futott. Utána a
+független review-t APPROVED-ként **a branchre commitoltam** (`2b4bb19`,
+docs-only), ami a HEAD-et a CI-run SHA-ja fölé mozdította.
+
+**Gyökérok.** Az exact-SHA a merge egyetlen evidenciája (ADR 0086 §2, prompt §3,
+vö. [L108]). A review-jelentés ugyanazon a kör-branchen él, tehát a review-commit
+után a korábbi (impl-SHA-ra futott) CI-run már NEM a merge-elendő HEAD-et méri —
+docs-only diff ide vagy oda. A merge így az L108 exact-SHA szabályt sértette
+volna.
+
+**Javítás.** A `056f531`-es run törölve, ÚJRA-dispatch a végleges `2b4bb19`
+HEAD-re; a merge csak azon zöldült. **Tanulság:** a „dispatch-elj korán, a review
+alatt teljen a CI" (skill §5) optimalizáció csak akkor spórol újra-futást, ha a
+review-report NEM a kör-branchre kerül, VAGY ha tudatosan újra-dispatchelsz a
+review-commit után. Sorrend-recept: (1) impl `done` → push; (2) review-commit →
+push; (3) MOST dispatch a merge-evidencia CI-t a végleges HEAD-re. Egyetlen ~10
+perces CI-futás, exact-SHA. Ha korán dispatchelsz a review alatti kihasználásért,
+számolj a review-commit utáni kötelező re-dispatchcsal. (Vö. [L108].)
