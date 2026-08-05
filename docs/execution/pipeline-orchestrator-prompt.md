@@ -240,6 +240,19 @@ format + analyze + architecture + teljes CI-suite + randomizált property + APK
 **mind zöld** → squash-merge külön jóváhagyás nélkül (ADR 0052). Bármi piros
 vagy hiányzik → **merge tilos**, és az H5/H7.
 
+**A `build-apk` NEM az egyetlen kapu.** Ha a kör diffje bármelyik Router-CI
+trigger-útvonalat érinti (`tools/**`, `docs/rounds/**`,
+`docs/execution/pipeline-*`, `.ai/**`, `.github/workflows/router-ci.yml` —
+lásd a workflow `on.push.paths` listáját), akkor a **`router-ci.yml`** futása is
+a zöld kapu része: a merge SHA-ján `success` kell legyen. **A legtöbb kör
+hozzányúl a `docs/rounds/**`-hoz** (brief-státusz, pre-flight), ezért a Router
+CI szinte mindig lefut — a `build-apk` zöldje önmagában NEM elég. Merge előtt
+kötelező: `gh run list --workflow router-ci.yml --branch <round-branch>
+--json headSha,conclusion` és a merge SHA-n `conclusion=success`; piros vagy
+hiányzó Router-CI run a merge SHA-n → **merge tilos** (H5). Mérve 2026-08-05:
+egy E03-R21 brief-drift nyolc körön át pirosan hagyta a Router CI-t, mert a
+kapu csak a `build-apk`-t nézte (`docs/LESSONS.md` L113).
+
 A review-t **nem hagyhatod ki** azért, mert a gate zöld. A read-only review
 (`sdd-round-review` skill) izolált `/tmp` klónban fut, valódi-sértés próbákkal.
 
