@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "practice-short-loop-hu",
+  "locale": "hu",
+  "skill": "practice",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Dolgozz rövid gyakorlási körökben",
+  "body": "Válassz egy kis feladatot, például négy egyenletes akkordváltást, és ismételd egy rövid, mért blokkban.\n\nMinden blokk után figyelj meg egy részletet, és a következő ismétlésben csak azon változtass.",
+  "contentHash": "c294f4cc9b572876aa8acb5472ec0fbbc93241998c242d75a8bb5a263085f1fb"
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "technique-relaxed-hand-en",
+  "locale": "en",
+  "skill": "technique",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Play with a relaxed picking hand",
+  "body": "Rest the forearm lightly and let the wrist move without locking.\n\nUse the smallest motion that produces a clear note, then pause if tension keeps returning.",
+  "contentHash": "086c04d11b10f9fa23af3fc2da33682283d4be51af65bf27e4c9162abf8f9860"
+}

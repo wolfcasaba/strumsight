@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "safety-pain-hu",
+  "locale": "hu",
+  "skill": "safety",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Állj meg fájdalom esetén",
+  "body": "A szokásos erőfeszítés fárasztó lehet, de az éles fájdalom, zsibbadás vagy a játék után is megmaradó fájdalom jelzés a megállásra.\n\nPihenj, és ha a tünetek fennmaradnak vagy visszatérnek, kérj tanácsot megfelelő egészségügyi szakembertől.",
+  "contentHash": "26b80a11362ee61987c85eeff94e1bd4df627f17bcde5786629af080577a3419"
+}

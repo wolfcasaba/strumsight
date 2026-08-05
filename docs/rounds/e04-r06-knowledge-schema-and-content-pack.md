@@ -181,7 +181,57 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Szállított változtatás
+
+- `KnowledgeDocument` és `KnowledgeChunk` immutable value schema: verzió,
+  locale, skill, difficulty, license, approval-status és SHA-256 content hash
+  validációval; a codec stabil hibakódokkal utasítja el a hibás JSON-t és a
+  hibás enum/mezőértékeket.
+- Determinisztikus, kanonikus UTF-8 JSON codec és bekezdés-alapú chunker;
+  a manifest-builder a forrásokat lexikálisan rendezi, a dokumentum-content
+  hash-t újraszámolja, és kizárólag `status == approved` dokumentumot ír ki.
+- Tíz saját szerzésű, CC0-1.0 license-mezővel ellátott documentum az en+hu
+  packban: rhythm, chord, technique, practice és safety témánként egy-egy.
+  A generált `manifest.json` document- és chunk-hash-eket, valamint source
+  pathot tartalmaz.
+- Additív Flutter asset-bejegyzés a `tutor_knowledge/` könyvtárhoz.
+
+### Content review checklist — alkalmazva mind a 10 dokumentumra
+
+- [x] Saját, rövid oktatási szöveg; nincs átvétel a `docs/rag`-ból, tab-ból,
+  dalszövegből vagy harmadik fél oktatási anyagából.
+- [x] `CC0-1.0` license, schema version, document version és SHA-256 content
+  hash jelen van.
+- [x] A safety szöveg megállást és képzett egészségügyi szakember felkeresését
+  kéri tartós vagy visszatérő tünetnél; nem ad diagnózist.
+- [x] Nincs mérési, DSP- vagy kameraeredményre vonatkozó bizonyítatlan állítás.
+- [x] Mindkét locale mind az öt kötelező topicot fedi.
+
+### Futott ellenőrzések
+
+- RED: `flutter test test/features/ai_tutor/data/knowledge_codec_test.dart test/features/ai_tutor/data/knowledge_manifest_test.dart`
+  a hiányzó schema/codec/builder fájlok miatt várt compile hibával állt meg.
+- ZÖLD: ugyanez a célzott tesztcsomag — **12 teszt passed**. A tesztek a négy
+  külön manifest-hibakódot, approved-only filtert, en+hu coverage-et,
+  reprodukálhatóságot, document- és chunk-hash manifest-lockot fedik.
+- ZÖLD: `dart analyze lib/features/ai_tutor/data/knowledge/knowledge_document.dart lib/features/ai_tutor/data/knowledge/knowledge_codec.dart tool/build_tutor_knowledge_manifest.dart test/features/ai_tutor/data/knowledge_codec_test.dart test/features/ai_tutor/data/knowledge_manifest_test.dart`
+  — `No issues found!`
+- A review mutációs próba a `rhythm-counting-en` státuszát ideiglenesen
+  `reviewNeeded`-re állította; a committed-manifest lock teszt RED lett, majd
+  visszaállítás és manifest-újragenerálás után a 12 teszt ismét zöld.
+- PIROS (scope-on kívüli környezeti előfeltétel):
+  `tools/round-gate.sh test/features/ai_tutor/data` — format zöld
+  (`913 files, 0 changed`), analyze piros (`752 issues`), első hiba:
+  `lib/l10n/app_localizations.dart` nem létezik. A generált localization fájl
+  nincs az allowed pathson, ezért a gate nem jutott test/architecture lépésig.
+  `stopped` kör-jelzés elküldve; nem módosítottam listán kívüli fájlt.
+
+### Nem futtatott ellenőrzések
+
+- CI full suite, property gate és APK: orchestrátor-felelősség, és a lokális
+  round gate piros analyze előfeltétele miatt nem indítható érvényes CI-evidencia.
+- A round-gate test/architecture lépése: az analyze előfeltétel piros volta
+  miatt nem indult el.
 
 ## 11. Review — a független reviewer tölti ki
 

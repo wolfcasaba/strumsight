@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "chord-changes-en",
+  "locale": "en",
+  "skill": "chord",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Build clean chord changes",
+  "body": "Form the first chord, then release only enough pressure to move to the next shape.\n\nPractice the change slowly and let every string ring before increasing the tempo.",
+  "contentHash": "096b2d06f63791528b4cdbb7c213879f8fdc9b369dac14b361ed4a8eab1c252d"
+}

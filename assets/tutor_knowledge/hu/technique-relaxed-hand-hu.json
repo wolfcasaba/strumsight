@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "technique-relaxed-hand-hu",
+  "locale": "hu",
+  "skill": "technique",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Lazán mozgasd a pengető kezedet",
+  "body": "Az alkarod csak könnyedén támaszkodjon, a csuklód pedig ne merevedjen meg.\n\nA tiszta hanghoz szükséges legkisebb mozdulatot keresd, és állj meg, ha a feszültség újra megjelenik.",
+  "contentHash": "fa5dcf2489a2aa96a666c296dd2e03dd95d27f8b08d092890e181efaa2b9ab8f"
+}
