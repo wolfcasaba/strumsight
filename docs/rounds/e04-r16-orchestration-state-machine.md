@@ -205,7 +205,25 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- `controller/tutor_state.dart`, `tutor_command.dart`, `tutor_effect.dart`:
+  immutable turn-state, sealed command/signal és request-id-korrelált effect fa;
+  a repair számláló state-en él.
+- `orchestration/tutor_orchestrator.dart`: pure transition-mátrix + UI-mentes
+  context → retrieval → prompt → gateway → tool → validator bekötés;
+  consent short-circuit, usage-limit leképezés, cancel/late-event no-op és
+  egyaktív-turn elutasítás.
+- `orchestration/tutor_output_validator.dart`: v1 required-array, grounded
+  claim és allowlistelt action-schema, valamint `TutorActionValidator` ellenőrzés.
+- Tesztek: scripted fake gateway transition-mátrix (happy, retrieval-empty,
+  tool, repair-success/fallback, cancel/late, concurrent, consent, usage-limit)
+  és claim/action validator lefedés.
+
+Futtatva: célzott `flutter analyze` zöld; a két új tesztfájl 11 tesztje zöld;
+`git diff --check` zöld. A kötelező `tools/round-gate.sh
+test/features/ai_tutor/application` format-lépése zöld, de analyze lépése a
+munkapéldányból hiányzó, scope-on kívüli generált `lib/l10n/app_localizations.dart`
+miatt piros (a saját source-fájlok célzott analyze-a zöld). Emiatt teljes gate
+és CI-dispatch nem történt.
 
 ## 11. Review — a független reviewer tölti ki
 
