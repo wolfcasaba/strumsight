@@ -123,6 +123,28 @@ Listán kívül → `stopped`.
 - [ ] `git diff --stat` **nem** tartalmaz `lib/`, `test/`, `assets/`,
       `pubspec.yaml` fájlt és **egyetlen bináris fájlt sem**.
 
+### 6.1 Mérce-mátrix — melyik hibás kimenet vált PIROSRA
+
+| Hibás implementáció / kimenet | Elvárt eredmény |
+|---|---|
+| Az `evaluate_geometry_baseline.py` üres bemenetre `NO_DATA` helyett 0-értékű metrikát ír | `--self-test` PIROS (a „nincs adat" nem 0-érték) |
+| A szintetikus IoU-számítás elejti a metszet-korrekciót | `--self-test` PIROS (az ismert bemenet ismert IoU-ja nem jön ki) |
+| Az ADR 0169 döntése szám nélküli („majd megnézzük") | a §6 1. cellája PIROS |
+| A `dataset_manifest.md`-ből kimarad a **tilos források** listája | a §6 2. cellája PIROS |
+| A diffbe kerül bináris (minta-kép/videó) | a §6 utolsó cellája PIROS + scope-audit `VIOLATION` |
+
+### 6.2 Küszöb-mátrix — az átfordítási küszöb három cellája
+
+A §5.2 átfordítási küszöbeit a `--self-test` szintetikus bemenetén kell mérni,
+a küszöb **alatt / pontosan rajta / fölötte** (a cellák értékét `python3 -c`-vel
+kell kiszámolni, nem idealizált rácsból becsülni):
+
+| Cella | Bemenet | Elvárt döntés |
+|---|---|---|
+| alatt | küszöb − 1 lépés | `experimental` |
+| rajta | pontosan a küszöb | `experimental` (a határ a **szigorúbb** oldalhoz tartozik) |
+| fölött | küszöb + 1 lépés | `production-candidate` |
+
 ## 7. Kötelező ellenőrzések
 
 ```bash

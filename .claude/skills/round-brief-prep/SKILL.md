@@ -55,6 +55,42 @@ Stílus-horgony: mindig a legutóbbi kész brief a `docs/rounds/`-ban (jelenleg
   marad az egyetlen kiút; **(3)** paraméteres szerződéshez **mátrixot** írj
   elő, ne egy esetet — a fixture default-ja csendesen kiválaszthat egy olyan
   pontot, ahol a hibás és a helyes implementáció megkülönböztethetetlen.
+- **Kötelező `### 6.1 Mérce-mátrix` szakasz** (ADR 0171 §4 / ADR 0175). Minden
+  briefben legyen egy táblázat, amely acceptance-pontonként megmondja, **melyik
+  hibás implementáció melyik cellát váltja PIROSRA** — nem általánosságban, hanem
+  a kör saját invariánsaira. Két bevált alak (a `tools/brief-lint.py` mindkettőt
+  elfogadja):
+
+  ```markdown
+  ### 6.1 Mérce-mátrix — melyik hibás implementációt fogja pirosra
+
+  | Hibás implementáció | Melyik cella vált PIROSRA |
+  |---|---|
+  | A `release()` a catch-ágból kimarad | buffer-mátrix „kivétel a callbackben" cellája |
+  ```
+
+  vagy guard-tesztnél a **valódi-sértés próba** (`… ideiglenes törlése → a
+  teszt PIROS → visszaállítás`, §10-ben dokumentálva).
+
+  Docs-only körnél (ADR/baseline/döntés) a falszifikáció a **reviewer eldobható
+  próbája** — akkor is konkrétan: melyik mondat/oszlop törlése teszi az adott
+  acceptance-cellát bizonyíthatatlanná.
+
+- **Numerikus küszöbhöz KÖTELEZŐ a három cella:** `alatt` / `pontosan rajta` /
+  `fölött`, és mondd ki, melyik oldalhoz tartozik a határ (inkluzív-e).
+  A cellák értékét `python3 -c`-vel számold ki, ne idealizált rácsból becsüld
+  (mért hiba: E02-R08 — a mátrixból hiányzott a határ FÖLÖTTI cella).
+
+- **A brief elkészülte után futtasd le a lintet, és a leletet javítsd ki:**
+
+  ```bash
+  tools/brief-lint.py --brief docs/rounds/<brief>.md --level strict
+  ```
+
+  A `base` szintű lelet (`B*`) CI-kapu a nyitott körökre; a `strict` (`S*`) a
+  fenti két szabályt méri. Batch-előkészítésnél a `--open` alak az egész sort
+  végigméri egyszerre.
+
 - **Kockázatok**: konkrétak (melyik refaktor mit tör el, melyik teszt-környezeti
   csapda ismert), ne általánosságok.
 - Üres **§10 Implementation handoff** (Codex tölti) és **§11 Review-link**.

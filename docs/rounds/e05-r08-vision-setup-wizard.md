@@ -145,6 +145,18 @@ Listán kívül → `stopped`.
 - [ ] **Flag-teszt:** `visionEnabled=false` esetén a route nem elérhető
       (guard), és a mai route-ok viselkedése változatlan.
 
+### 6.1 Mérce-mátrix — melyik hibás implementációt fogja pirosra
+
+| Hibás implementáció | Melyik cella vált PIROSRA |
+|---|---|
+| A `permanentlyDenied` ág újra-kérés gombot rajzol Settings CTA helyett | permission-mátrix `permanentlyDenied` cellája |
+| Az `unavailable` ág is kérés-gombot ad | permission-mátrix `unavailable` cellája |
+| A Skip útvonal elindítja a kamerát | skip-teszt (a fake `start` számlálója 1 ≠ 0) |
+| A front↔back váltás `open`→`close` sorrendű | camera-switch teszt (két egyidejű lease) |
+| A wizard a profilon és kamerán kívül bármit perzisztál | perzisztencia-teszt (idegen kulcs a store-ban) |
+| A `visionEnabled=false` guard kimarad | flag-teszt (a route elérhető marad) |
+| Új ARB kulcs `hu` fordítás nélkül | `test/core/l10n_parity_test.dart` |
+
 ## 7. Kötelező ellenőrzések
 
 ```bash

@@ -116,6 +116,21 @@ offset, front-preview mirror kezelés úgy, hogy a **modell bemenete NEM tükrö
       áthelyezése a normalized térbe → a property (b) vagy a fixture-mátrix
       PIROS → visszaállítás.
 
+### 6.1 Küszöb-mátrix — a round-trip tolerancia három cellája
+
+A §5 4. pontja dokumentált tolerancia-konstanst ír elő. A teszt mind a három
+cellát mérje (a cellák értékét `python3 -c`-vel számold ki, ne idealizált
+rácsból):
+
+| Cella | Bemenet | Elvárt |
+|---|---|---|
+| alatt | tolerancia − 1 ulp-nyi eltérés | ZÖLD |
+| rajta | pontosan a tolerancia | ZÖLD (a határ **inkluzív**) |
+| fölött | tolerancia + 1 ulp-nyi eltérés | **PIROS** |
+
+A konstans megemelése a mért értékhez tiltott: az a mérce gyengítése, nem
+javítás — ilyenkor dokumentált brief-revízió kell.
+
 ## 7. Kötelező ellenőrzések
 
 ```bash

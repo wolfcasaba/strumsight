@@ -155,6 +155,18 @@ módosítás; DSP-paraméter; model-asset; másik kör briefje; `docs/rag`.
 - [ ] `git diff --stat` **egyetlen** `lib/`, `test/`, `android/`, `ios/`,
       `pubspec.yaml` fájlt sem érint.
 
+### 6.1 Mérce-mátrix — melyik hibás kimenet vált PIROSRA
+
+Ez a kör **docs-only**, gépi teszt nem méri a tartalmát, ezért a falszifikáció a
+reviewer **eldobható próbája** (a §11-ben dokumentálva, visszaállítással):
+
+| Próba | Elvárt eredmény |
+|---|---|
+| Bármelyik ADR-ből töröld a **„NEM elfogadható"** mondatot | a §6 2. cellája bizonyítatlan → review **elutasít** |
+| A baseline egy állítása mellől töröld a forrás-parancsot | az állítás mérhetetlen → review **elutasít** |
+| Tegyél egyetlen `lib/` vagy `test/` fájlt a diffbe | a gépi **scope-audit** (ADR 0138) `VIOLATION` → a kör `stopped` |
+| A metrika-listából vedd ki a `requiredCapability` oszlopot | a §6 3. cellája PIROS (a lista nem kétoszlopos) |
+
 ## 7. Kötelező ellenőrzések
 
 ```bash
