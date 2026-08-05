@@ -37,6 +37,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+LEDGER_RELATIVE = Path(".pipeline") / "cost.tsv"
+REGISTRY_RELATIVE = Path("docs") / "execution" / "engine-registry.tsv"
+
 LINE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+\-]\d{2}:\d{2})\s\s(?P<message>.*)$")
 START = re.compile(r"^orchestrátor-session indul \((?P<round>[A-Z0-9-]+)\)")
 MERGED = re.compile(r"^(?P<round>[A-Z0-9-]+) MERGE-ELVE")
@@ -138,6 +141,119 @@ def summarize(events: list[dict]) -> dict:
     return {"schema_version": 1, "rounds": rounds, "summary": summary}
 
 
+def engine_prices(repo: Path) -> dict[str, tuple[float, float]]:
+    """Motoronkénti (input, output) ár $/1M tokenben a nyilvántartásból."""
+    prices: dict[str, tuple[float, float]] = {}
+    try:
+        text = (repo / REGISTRY_RELATIVE).read_text(encoding="utf-8")
+    except OSError:
+        return prices
+    for line in text.splitlines():
+        if line.startswith("#") or line.startswith("name\t") or not line.strip():
+            continue
+        columns = line.split("\t")
+        if len(columns) < 12:
+            continue
+        try:
+            prices[columns[0]] = (float(columns[10]), float(columns[11]))
+        except ValueError:
+            continue   # "-" = előfizetéses motor, nincs token-ár
+    return prices
+
+
+def summarize_cost(ledger_text: str, prices: dict[str, tuple[float, float]]) -> dict:
+    """Kör- és motor-szintű token/költség kimutatás.
+
+    A napló EGY összesített token-számot ad (a Codex „tokens used" sora), az
+    input/output arányt NEM. Ezért nem találunk ki arányt: alsó becslés = minden
+    token input-áron, felső = minden output-áron. A valóság a kettő között van,
+    és a döntéshez (melyik motor mennyibe kerül egy LEZÁRT körre) ez elég.
+    """
+    runs: list[dict] = []
+    for line in ledger_text.splitlines():
+        if line.startswith("timestamp\t") or not line.strip():
+            continue
+        columns = line.split("\t")
+        if len(columns) < 7:
+            continue
+        try:
+            tokens = int(columns[4])
+        except ValueError:
+            continue
+        engine = columns[2]
+        priced = engine in prices
+        price_in, price_out = prices.get(engine, (0.0, 0.0))
+        runs.append(
+            {
+                "at": columns[0],
+                "round": columns[1],
+                "engine": engine,
+                "model": columns[3],
+                "tokens": tokens,
+                "continuations": columns[5],
+                "status": columns[6],
+                "priced": priced,
+                "cost_low_usd": tokens * price_in / 1_000_000,
+                "cost_high_usd": tokens * price_out / 1_000_000,
+            }
+        )
+
+    by_engine: dict[str, dict] = {}
+    for run in runs:
+        bucket = by_engine.setdefault(
+            run["engine"],
+            {
+                "runs": 0,
+                "rounds": set(),
+                "tokens": 0,
+                "cost_low_usd": 0.0,
+                "cost_high_usd": 0.0,
+                "unfinished": 0,
+                "priced": run["priced"],
+            },
+        )
+        bucket["runs"] += 1
+        bucket["rounds"].add(run["round"])
+        bucket["tokens"] += run["tokens"]
+        bucket["cost_low_usd"] += run["cost_low_usd"]
+        bucket["cost_high_usd"] += run["cost_high_usd"]
+        if run["status"] not in ("done", "stopped"):
+            bucket["unfinished"] += 1
+    for bucket in by_engine.values():
+        rounds = len(bucket.pop("rounds"))
+        bucket["rounds"] = rounds
+        # A LEZÁRT körre vetített ár a döntés alapja: a félbehagyott futások és
+        # a javító körök tokenje is a kör számlájára megy.
+        bucket["usd_per_round_low"] = bucket["cost_low_usd"] / rounds if rounds else None
+        bucket["usd_per_round_high"] = bucket["cost_high_usd"] / rounds if rounds else None
+    return {"schema_version": 1, "runs": runs, "by_engine": by_engine}
+
+
+def render_cost(result: dict) -> str:
+    lines = [
+        f"{'motor':<16} {'futás':>6} {'kör':>5} {'token':>12} {'$/kör (alsó–felső)':>24} {'befejezetlen':>13}",
+        "-" * 82,
+    ]
+    for engine, bucket in sorted(result["by_engine"].items()):
+        low = bucket["usd_per_round_low"]
+        high = bucket["usd_per_round_high"]
+        # Az előfizetéses motor (Terra) tokenje nem számlázódik külön: a
+        # nyilvántartásban `-` az ára. A 0.00 itt félrevezető lenne.
+        if not bucket["priced"]:
+            span = "előfizetés"
+        else:
+            span = "—" if low is None else f"{low:.2f}–{high:.2f}"
+        lines.append(
+            f"{engine:<16} {bucket['runs']:>6} {bucket['rounds']:>5} {bucket['tokens']:>12,} {span:>24} {bucket['unfinished']:>13}"
+        )
+    lines.append("")
+    lines.append(
+        "A napló csak összesített tokent ad, input/output bontást nem — ezért "
+        "alsó becslés = minden token input-áron, felső = output-áron."
+    )
+    return "\n".join(lines) + "\n"
+
+
 def _minutes(value: float | None) -> str:
     return "—" if value is None else f"{value / 60:.0f}p"
 
@@ -173,7 +289,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chain-log", type=Path, default=REPO_ROOT / ".pipeline" / "chain.log")
     parser.add_argument("--last", type=int, default=20, help="hány kör jelenjen meg a táblában")
     parser.add_argument("--format", choices=("table", "json", "summary-line"), default="table")
+    parser.add_argument(
+        "--cost",
+        action="store_true",
+        help="token/költség kimutatás a .pipeline/cost.tsv főkönyvből (ADR 0174)",
+    )
+    parser.add_argument("--ledger", type=Path, default=REPO_ROOT / LEDGER_RELATIVE)
+    parser.add_argument("--repo", type=Path, default=REPO_ROOT)
     arguments = parser.parse_args(argv)
+
+    if arguments.cost:
+        try:
+            ledger_text = arguments.ledger.read_text(encoding="utf-8")
+        except OSError as error:
+            print(f"round-metrics: a költség-főkönyv nem olvasható: {error}", file=sys.stderr)
+            return 2
+        result = summarize_cost(ledger_text, engine_prices(arguments.repo))
+        if not result["runs"]:
+            print("round-metrics: a főkönyvben nincs egyetlen futás sem", file=sys.stderr)
+            return 2
+        if arguments.format == "json":
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
+        else:
+            print(render_cost(result), end="")
+        return 0
 
     try:
         text = arguments.chain_log.read_text(encoding="utf-8", errors="replace")

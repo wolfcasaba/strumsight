@@ -931,7 +931,15 @@ git fetch -q origin main || die "git fetch origin main sikertelen"
 
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$current_branch" != "main" ]; then
-  die "a munkafa nem a main-en van ($current_branch) — a lánc csak tiszta main-ről indul"
+  # MÉRVE 2026-08-05: egy másik session a KÖZÖS munkafát a `gov/03-...` ágon
+  # hagyta, és a lánc emiatt esett ki egy firingre. Tiszta fánál ez maradék,
+  # nem folyamatban lévő munka: a körök külön munkapéldányban dolgoznak.
+  if [ -z "$(git status --porcelain)" ] && git checkout -q main 2>/dev/null; then
+    log "munkafa-helyreállítás: $current_branch → main (tiszta fa, maradék ág)"
+    current_branch=main
+  else
+    die "a munkafa nem a main-en van ($current_branch) és nem tiszta — a lánc csak tiszta main-ről indul"
+  fi
 fi
 if [ -n "$(git status --porcelain)" ]; then
   die "piszkos munkafa — a lánc nem indul ismeretlen lokális változás fölé"
@@ -953,13 +961,25 @@ inflight_branch_pattern() {   # regex a futó körök kisbetűs azonosítóiból
 }
 own_branches=$(inflight_branch_pattern)
 
-count_foreign() {   # stdin: branch-nevek → a NEM sajátok száma
+# Egy branch akkor tartozik KÖRHÖZ, ha a nevében ott a kör-azonosító
+# (`codex/e04-r15-…`, `heal/E04-R15-H3-1`, `minimax/e02-r18-…`). MÉRVE: minden
+# eddigi kör-branch ilyen; a `ops/`, `gov/`, `chore/` ágak governance-munkák.
+#
+# MIÉRT KELL (mérve 2026-08-05): két saját infra-PR miatt a lánc KILENC
+# firinget hagyott ki (~45 perc), pedig azok a PR-ek egyetlen körrel sem
+# versenyeztek. Az őr eredeti célja a párhuzamos KÖR-driver kiszűrése volt.
+ROUND_BRANCH_PATTERN='[eE][0-9]{2}-[rR][0-9]{2}'
+
+count_foreign() {   # stdin: branch-nevek → a NEM sajátok száma (csak kör-branchek)
+  local rounds_only
+  rounds_only=$(grep -E "$ROUND_BRANCH_PATTERN" || true)
+  [ -n "$rounds_only" ] || { echo 0; return; }
   # Kis-nagybetű-független: a kör-branch `codex/e04-r15-…`, az önjavító ág
   # viszont `heal/E04-R15-H3-1` alakú (mérve 2026-08-05) — ugyanaz a kör.
   if [ -n "$own_branches" ]; then
-    grep -Evi "$own_branches" | grep -c '[^[:space:]]' || true
+    printf '%s\n' "$rounds_only" | grep -Evi "$own_branches" | grep -c '[^[:space:]]' || true
   else
-    grep -c '[^[:space:]]' || true
+    printf '%s\n' "$rounds_only" | grep -c '[^[:space:]]' || true
   fi
 }
 
@@ -981,15 +1001,22 @@ running_branches=$(gh run list --limit 20 --json status,headBranch \
 running_runs=$(printf '%s\n' "$running_branches" | grep -v '^main$' | count_foreign)
 [ "$running_runs" = "0" ] || die "fut egy workflow ($running_runs) — megvárjuk"
 
-main_ci=$(gh run list --workflow router-ci.yml --branch main --limit 1 \
-  --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null) || main_ci="?"
-case "$main_ci" in
-  failure | timed_out | startup_failure | action_required)
-    die "a main utolsó Router CI-ja $main_ci — a lánc nem indul piros main fölé"
-    ;;
-  "?") log "figyelem: a main Router CI-állapota nem kérdezhető le — a lánc a többi kapu alapján indul" ;;
-  *) : ;;
-esac
+# A main egészsége MINDKÉT sávon (ADR 0174). MÉRVE: a 2026-08-05-i három
+# önjavító körből egy (E04-R15/H3) pontosan azért kellett, mert a main
+# ÖRÖKÖLT piros gate-tel élt, és ez a KÖVETKEZŐ kör merge-kapuját fogta meg.
+# A Router CI a dokumentum/tooling sávot méri, a full-gate a Flutter-mércét —
+# egyik sem helyettesíti a másikat.
+for main_workflow in router-ci.yml full-gate.yml; do
+  main_ci=$(gh run list --workflow "$main_workflow" --branch main --limit 1 \
+    --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null) || main_ci="?"
+  case "$main_ci" in
+    failure | timed_out | startup_failure | action_required)
+      die "a main utolsó $main_workflow futása $main_ci — a lánc nem indul piros main fölé"
+      ;;
+    "?") log "figyelem: a main $main_workflow állapota nem kérdezhető le — a lánc a többi kapu alapján indul" ;;
+    *) : ;;
+  esac
+done
 
 # --- 4. A következő kör kiválasztása --------------------------------------
 # Egy slot mellett a sor ELEJE következik, változatlanul. Több slot mellett a
@@ -1148,6 +1175,16 @@ case "$outcome" in
     fi
     inflight_remove "$round"
     active_inflight=""
+    # A main mérése a merge UTÁN indul, és a következő körrel PÁRHUZAMOSAN fut:
+    # nem lassítja a láncot, viszont az öröklött piros gate a következő kör
+    # ELŐTT derül ki, nem annak a merge-kapujánál (ADR 0174).
+    if [ "${PIPELINE_MAIN_HEALTH:-1}" = "1" ]; then
+      if gh workflow run full-gate.yml --ref main >/dev/null 2>&1; then
+        log "main-egészség: full-gate dispatch-elve a main-re"
+      else
+        log "figyelem: a main-egészség full-gate dispatch nem ment át"
+      fi
+    fi
     log "a lánc mehet tovább"
     spawn_next_firing
     exit 0
