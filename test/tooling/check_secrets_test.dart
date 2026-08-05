@@ -171,6 +171,23 @@ const b = 'ghp_abcdefghijklmnopqrstuvwxyz01234567';
       reason: 'a bizonyíthatatlan kapu piros, nem zöld',
     );
   });
+
+  test('the committed repository tree is free of unmarked secrets', () {
+    // Regressziós őr (E04-R15 / H3, 2026-08-05). MÉRT gyökérok: az R14 által
+    // bevezetett backend/tests/tutor/test_tutor_proxy.py fake prod-config
+    // fixture-jei (`secret_key`/`tutor_api_key`, sorok 596/611/627/631) a
+    // GOV-03 secret-scan négy leletét adták, ám a fájl az R15 allowed_paths-án
+    // KÍVÜL esett, ezért a build-apk merge-kapu `secrets` lépése nyolc percen
+    // át piros maradt, a kört pedig nem lehetett a körön belül zöldre hozni.
+    // Ez a teszt UGYANAZT futtatja, amit a kapu — a valódi, committolt fát
+    // scanneli —, ezért a jelenség reprodukálhatóan visszatér, ha bárki
+    // titok-alakú literált commitol jelölés nélkül.
+    final repoRoot = Directory.current;
+
+    final report = checkSecrets(projectRoot: repoRoot);
+
+    expect(report.isClean, isTrue, reason: report.format());
+  });
 }
 
 void _initRepository(Directory root) {
