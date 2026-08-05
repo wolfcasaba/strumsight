@@ -56,14 +56,51 @@ class RegistryTest(unittest.TestCase):
 
 
 class SwitcherTest(unittest.TestCase):
+    """Hermetikus HOME-mal fut.
+
+    MÉRT hiba (2026-08-05, CI): az első verzió a fejlesztői gép `~/.codex-kilo`
+    könyvtárára támaszkodott, ezért a runneren elbukott — ugyanaz az
+    ambiens-állapot osztály, mint a docs/LESSONS.md L118. A profilokat és a
+    kulcsfájlokat ezért a teszt maga hozza létre egy ideiglenes HOME-ban.
+    """
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name)
+        for row in registry_rows():
+            config = row[2].replace("~/", "")
+            (self.home / config).mkdir(parents=True, exist_ok=True)
+            auth_file = row[5]
+            if auth_file != "-":
+                key_path = self.home / auth_file.replace("~/", "")
+                key_path.parent.mkdir(parents=True, exist_ok=True)
+                if key_path.suffix == ".json":
+                    key_path.write_text('{"api_key": "fixture-key"}')
+                else:
+                    key_path.write_text("fixture-key\n")
+
     def run_script(self, *arguments, state=None):
         environment = dict(os.environ)
+        environment["HOME"] = str(self.home)
         if state:
             environment["PIPELINE_STATE_DIR"] = str(state)
         return subprocess.run(
             ["bash", str(SCRIPT), *arguments],
             capture_output=True, text=True, env=environment, cwd=ROOT,
         )
+
+    def test_a_missing_profile_is_refused_rather_than_silently_used(self) -> None:
+        # A hiányzó profil NEM állítható be — különben a kör a modellhívásnál
+        # halna meg, órákkal később, a kör közepén.
+        import shutil
+
+        shutil.rmtree(self.home / ".codex-kilo")
+        with tempfile.TemporaryDirectory() as name:
+            result = self.run_script("use", "qwen-plus", state=Path(name))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HIÁNYZIK a profil", result.stderr)
 
     def test_use_then_clear_round_trips_without_touching_any_config(self) -> None:
         with tempfile.TemporaryDirectory() as name:
