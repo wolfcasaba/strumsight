@@ -28,6 +28,8 @@ abstract final class AppRoutes {
   static const String songTrainerSetup = '/song-trainer/setup/:songId';
   static const String songTrainerSession = '/song-trainer/session/:songId';
   static const String songTrainerResult = '/song-trainer/result/:songId';
+  static const String tutorHome = '/tutor/home';
+  static const String tutorChat = '/tutor/chat';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[

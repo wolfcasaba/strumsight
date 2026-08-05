@@ -1,6 +1,6 @@
 # E04-R18 — Tutor Home, Chat UI és streaming UX
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-05, main @ `e125d16`; §0.0 revízió alább)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 18; §35
 - **Branch:** `minimax/e04-r18-tutor-home-chat-ui`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R13, R16, R17 merge**
@@ -16,7 +16,8 @@ allowed_paths = [
   "lib/features/ai_tutor/presentation/widgets/tutor_composer.dart",
   "lib/features/ai_tutor/presentation/widgets/tutor_banners.dart",
   "lib/features/ai_tutor/presentation/providers/tutor_providers.dart",
-  "lib/app/router/app_route.dart",
+  "lib/app/routing/app_route.dart",
+  "lib/app/routing/app_router.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "lib/features/ai_tutor/public.dart",
@@ -52,8 +53,68 @@ kód-kommentben megindokolva** (MiniMax mért hibamódja). Az implementer nem h�
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
 **Motor:** MiniMax M3 — UI/ARB > domain+app+data, a kör UI-dominált (ADR 0069).
+Pre-flight elvégezve 2026-08-05, `main @ e125d16` fölött (E04-R13/R16/R17 MIND
+merge-elve: `b9d2950`/`df25806`/`1e9b2db`). A route flag `aiTutorEnabled`
+mérve: `lib/app/config/feature_flags.dart:19,53,86` (default `false`).
+
+**ADR:** nincs új — ez tisztán presentation-réteg (screens/widgets/providers +
+route + ARB), új architekturális döntés nélkül; a fake-gateway/inspectable
+scope-ot a merge-elt ADR 0131 (TutorModelGateway + scripted fake) és 0134
+(conversation repo) fedi. Új ADR-számot NEM foglaltam (merge-elt döntés fölé
+tilos; nincs önálló új döntés e körben).
+
+### §0.0-REV-1 — route-fájlok mért útvonala (base-korrekció)
+
+A batch-brief `lib/app/router/app_route.dart`-ot listázott; a **mért** útvonal
+`lib/app/routing/app_route.dart` (nincs `lib/app/router/` könyvtár —
+`find lib/app -type f`). Emellett az `app_route.dart` **pusztán string-konstans
+katalógus** (`abstract final class AppRoutes`), nincs benne `GoRoute`. A
+flag-mögötti route-regisztráció a **`lib/app/routing/app_router.dart`**
+`routerProvider`-ében történik, a merge-elt E02-R12 mintát követve:
+
+```dart
+if (aiTutorEnabled) ...[
+  GoRoute(path: AppRoutes.tutorHome, builder: (_, _) => const TutorHomeScreen()),
+  GoRoute(path: AppRoutes.tutorChat, builder: (_, _) => const TutorChatScreen()),
+],
+```
+
+(precedens: `if (practiceEnabled) …[…]`, `app_router.dart` — E02-R12). A brief
+§5.2 + a §6 flag-mátrix (OFF→route hiányzik, ON→elérhető) **kizárólag**
+`app_router.dart` szerkesztésével teljesíthető; az allowed_paths ezt kihagyta —
+ez mért brief-hiány, nem scope-tágítás. Ezért az engedélyezett listát a
+`app_route.dart` út-korrekciójával **és** az `app_router.dart` felvételével
+javítottam (§4 tábla frissítve). Az `aiTutorEnabled` flag maga már létezik,
+NEM kell hozzányúlni a `feature_flags.dart`-hoz (tilos zóna marad).
+
+### §0.0-REV-2 — mért wiring-felület (MiniMax anchorei)
+
+- **State machine (R16):** `TutorOrchestrator` (`application/orchestration/
+  tutor_orchestrator.dart`) — `dispatch(TutorInput)`, `Stream<TutorState> states`,
+  `Stream<TutorEffect> effects`; ctor: `contextAssembler`, `knowledgeRetriever`,
+  `promptBuilder`, `gatewayForAttempt(int)→TutorModelGateway`, `outputValidator`.
+  A **streaming szöveg** a `TutorState.responseText` (String, `TutorTurnStatus.
+  streaming`); a státuszok `application/controller/tutor_state.dart:TutorTurnStatus`
+  (idle…streaming…completed/fallback/consentRevoked/usageLimit/failed/cancelled).
+- **Parancsok/jelek (R16):** `application/controller/tutor_command.dart` —
+  `SendTutorMessage(TutorTurnRequest)`, `CancelTutorTurn(requestId)`;
+  a `TutorTurnRequest` mezői ott (consent, purpose, contextFields, retrievalQuery,
+  responseLocale, responseMode, toolPolicy, actionContext, actionProposals).
+- **Fake gateway (R13):** `data/model_gateway/fake_tutor_model_gateway.dart`
+  (scriptelt `FakeGatewayStep`-ek) — a UI ezzel teljesen tesztelhető.
+- **Content-block model:** `domain/models/tutor_content_block.dart` — sealed
+  `TutorContentBlock` altípusok: text/heading/bulletList/metric/evidence/source/
+  action/practicePlan/warning/error/**unknown** (`TutorUnknownContentBlock`,
+  `originalType`+`rawJson`). A message-bubble content-blockonként renderel; az
+  **unknown/raw** blokk biztonságos, nem futtatható megjelenítés (§5.4).
+- **Üzenet:** `domain/models/tutor_message.dart` — `TutorMessage`
+  (`role`, `deliveryState`, `blocks`, `sequence`); repo felület (R17):
+  `domain/repositories/tutor_conversation_repository.dart`.
+- **Flag-mátrix teszt precedens:** `test/features/practice/presentation/
+  practice_routing_test.dart` (`_configFor(bool)`+`FeatureFlags(…)`,
+  `appConfigProvider.overrideWithValue(…)`, ON→képernyő, OFF→Live fallback);
+  a `FeatureFlags` ctorba add `aiTutorEnabled: <bool>`.
 
 ## 1. Cél
 
@@ -88,7 +149,8 @@ logika, source-belső import.
 | `.../presentation/widgets/tutor_composer.dart` | ÚJ | input + draft |
 | `.../presentation/widgets/tutor_banners.dart` | ÚJ | offline/consent/rate/error |
 | `.../presentation/providers/tutor_providers.dart` | ÚJ | Riverpod wiring (fake gateway) |
-| `lib/app/router/app_route.dart` | meglévő | flag mögötti route (additív) |
+| `lib/app/routing/app_route.dart` | meglévő | route-konstans a katalógusban (additív) |
+| `lib/app/routing/app_router.dart` | meglévő | **flag mögötti `GoRoute` regisztráció** (additív, `if (aiTutorEnabled) …[…]`) |
 | `lib/l10n/app_en.arb`, `app_hu.arb` | meglévő | UI-stringek (additív) |
 | `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
 | `test/features/ai_tutor/presentation/*` | ÚJ | widget-tesztek fake gatewayjel |

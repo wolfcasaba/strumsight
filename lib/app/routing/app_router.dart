@@ -31,6 +31,8 @@ import '../../features/song_trainer/presentation/screens/song_overview_screen.da
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
+import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
+import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
@@ -59,6 +61,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .songTrainerV2Enabled;
+  final aiTutorEnabled = ref.read(appConfigProvider).flags.aiTutorEnabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -189,6 +192,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.songTrainerResult,
           builder: (_, state) =>
               SongResultScreen(result: state.extra! as SongTrainerResult),
+        ),
+      ],
+      if (aiTutorEnabled) ...[
+        GoRoute(
+          path: AppRoutes.tutorHome,
+          builder: (_, _) => const TutorHomeScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.tutorChat,
+          builder: (_, _) => const TutorChatScreen(),
         ),
       ],
     ],
