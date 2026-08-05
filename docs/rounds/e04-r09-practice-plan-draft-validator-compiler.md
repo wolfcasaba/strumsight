@@ -183,7 +183,41 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `practice_plan_draft.dart`: immutable draft és determinisztikus 5/10/20/30
+  perces sablonok, pontos blokk-összeggel.
+- `practice_plan_block.dart`: zárt block-type allowlist, adapter-referencia,
+  capability-, skill-, tuning- és asset-adatok; a domain csak stabil ID-ket és
+  primitív értékeket tart.
+- `practice_plan_validator.dart`: pure, stabil kódos validáció időkeretre,
+  típusra, tempóra, hivatkozott Practice-target/song ID-ra, tuningra,
+  avoid-listára, capabilityre és skillre.
+- `practice_plan_compiler.dart`: application-szintű context feloldja a publikus
+  Practice-targetot és `Song`-ot, majd mindkét adapter a publikus
+  `compilePracticeTarget(...)` híváson fordul. A hibás draftból nincs compiled
+  plan; az asset-hiányos, egyébként valid terv offline jelzője `false`.
+- A két új tesztfájl a duration-mátrixot, stabil validációs kódokat,
+  user-edit utáni revalidációt, invalid-launch kaput, mindkét adapter
+  compiler-parityjét és offline jelzőt méri.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — lefutott; a generált, gitignore-olt l10n fájlok
+  build-előfeltételként készültek.
+- RED: `flutter test test/features/ai_tutor/domain/practice_plan_validator_test.dart test/features/ai_tutor/application/practice_plan_compiler_test.dart`
+  — a még hiányzó contractok miatt piros.
+- GREEN: ugyanez a célzott teszt — `14` teszt zöld.
+- `tools/round-gate.sh test/features/ai_tutor/domain test/features/ai_tutor/application`
+  — exit `0`; format, analyze, domain+application tesztek és architecture zöld.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- A domain-purity gate miatt a más-feature publikus típusainak feloldása az
+  application compilerbe került; a domain nem importál cross-feature contractot.
+  Ez megőrzi a §0.0 D1 közös publikus compiler-hívását.
+- Teljes suite, property gate és APK build nem futott lokálisan: ezek a brief
+  szerint CI/orchestrátor feladatai.
 
 ## 11. Review — a független reviewer tölti ki
 
