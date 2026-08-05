@@ -6,17 +6,24 @@
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
 > (GOV-03 — factory hardening; a lánc SZÜNETEL).**
 >
-> ## ⏸️ A KÖR-LÁNC ÁLL — GOV-03 (2026-08-05, user-kérés)
+> ## ▶️ GOV-03 KÉSZ — a lánc újraindítva (2026-08-05)
 >
-> A cron-trigger **ki van véve** (`crontab`, az eredeti sor a
-> `.pipeline/crontab.backup-*.txt`-ben). **Nincs `HALTED` fájl**, tehát
-> önjavító kör sem indul. Az **E04-R10 sora `pending`** maradt, tisztán
-> újrafut; a `codex/e04-r10-tool-contract-and-registry` branchen a pre-flight
-> (ADR 0137) fent van, a Codex félkész munkája a `/home/ubuntu/ss-codex-e04-r10`
-> munkapéldányban megőrizve.
+> A kör-lánc a GOV-03 munka idejére állt (user-kérés), majd a mérce-őr
+> javítása után **újraindult**. Az **E04-R10 sora `pending`**, tisztán
+> újrafut; a `codex/e04-r10-tool-contract-and-registry` branch a friss `main`
+> tetején pre-flightolva (`8251180`).
 >
-> **Újraindítás:** állítsd vissza a cron-sort a backupból. Ellenőrzés:
-> `tools/pipeline-status.sh --status`.
+> ⚠️ **Egy mért incidens a munka közben:** a merge után a `main`-en futtatott
+> `tools/tests` suite **éles kört indított** (orchestrátor-session + `codex
+> exec` az E04-R10-re), mert a teljes-firing tesztek izolálták az állapotot,
+> de nem a mellékhatást — a kör-indítási ág a VALÓDI queue-t olvasta. A Codex
+> addigi félkész munkája elveszett (a kör újrafut, tartalmi kár nincs).
+> Feloldva: **`PIPELINE_NO_LAUNCH=1`** a közös session-indítóban + két
+> regressziós teszt (PR [#135](https://github.com/wolfcasaba/strumsight/pull/135),
+> `55baebe`, tanulság **L119**).
+>
+> **Leállítás, ha kell:** vedd ki a cron-sort (`crontab -e`); a `--halt` NEM jó
+> erre, mert az ADR 0112 szerint önjavító kört indít.
 >
 > **Mi történt:** egy külső SDD-vezérelt „Autonomous Flutter Factory"
 > starter-csomaggal való összevetés hét valódi hiányt mutatott ki a
