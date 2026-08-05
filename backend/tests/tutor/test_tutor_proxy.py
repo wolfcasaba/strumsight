@@ -295,10 +295,13 @@ def test_output_below_limit(tutor_client, tutor_auth_headers):
     assert len(reply.encode("utf-8")) == 40
 
 
-def test_output_at_limit(tutor_settings, tutor_auth_headers):
+def test_output_at_limit(tutor_settings, tmp_path):
     """Output at limit is not truncated."""
     # Configure gateway to return exactly 50 bytes
-    app = create_app(tutor_settings)
+    settings = tutor_settings.model_copy(
+        update={"database_url": f"sqlite:///{tmp_path / 'test.db'}"}
+    )
+    app = create_app(settings)
     gateway = FakeProviderGateway(response="A" * 50)
     registry = ProviderRegistry(
         allowed=tutor_settings.tutor_allowed_providers,
@@ -328,20 +331,29 @@ def test_output_at_limit(tutor_settings, tutor_auth_headers):
     set_service(service)
 
     with TestClient(app) as client:
+        register = client.post(
+            "/auth/register",
+            json={"email": "player@strumsight.app", "password": "sixstrings"},
+        )
+        assert register.status_code == 201, register.text
+        auth_headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
         response = client.post(
             "/tutor/turn",
             json={"message": "test", "history": [], "context": ""},
-            headers=tutor_auth_headers,
+            headers=auth_headers,
         )
         assert response.status_code == 200
         reply = response.json()["reply"]
         assert len(reply.encode("utf-8")) == 50
 
 
-def test_output_above_limit(tutor_settings, tutor_auth_headers):
+def test_output_above_limit(tutor_settings, tmp_path):
     """Output above limit is truncated."""
     # Configure gateway to return 100 bytes, limit is 50
-    app = create_app(tutor_settings)
+    settings = tutor_settings.model_copy(
+        update={"database_url": f"sqlite:///{tmp_path / 'test.db'}"}
+    )
+    app = create_app(settings)
     gateway = FakeProviderGateway(response="A" * 100)
     registry = ProviderRegistry(
         allowed=tutor_settings.tutor_allowed_providers,
@@ -371,10 +383,16 @@ def test_output_above_limit(tutor_settings, tutor_auth_headers):
     set_service(service)
 
     with TestClient(app) as client:
+        register = client.post(
+            "/auth/register",
+            json={"email": "player@strumsight.app", "password": "sixstrings"},
+        )
+        assert register.status_code == 201, register.text
+        auth_headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
         response = client.post(
             "/tutor/turn",
             json={"message": "test", "history": [], "context": ""},
-            headers=tutor_auth_headers,
+            headers=auth_headers,
         )
         assert response.status_code == 200
         reply = response.json()["reply"]
@@ -427,9 +445,12 @@ def test_secret_not_in_response(tutor_client, tutor_auth_headers):
     assert "test-key" not in response_text
 
 
-def test_provider_timeout_normalized_error(tutor_settings, tutor_auth_headers):
+def test_provider_timeout_normalized_error(tutor_settings, tmp_path):
     """Provider timeout is normalized to 504."""
-    app = create_app(tutor_settings)
+    settings = tutor_settings.model_copy(
+        update={"database_url": f"sqlite:///{tmp_path / 'test.db'}"}
+    )
+    app = create_app(settings)
     gateway = FakeProviderGateway(should_timeout=True)
     registry = ProviderRegistry(
         allowed=tutor_settings.tutor_allowed_providers,
@@ -459,18 +480,27 @@ def test_provider_timeout_normalized_error(tutor_settings, tutor_auth_headers):
     set_service(service)
 
     with TestClient(app) as client:
+        register = client.post(
+            "/auth/register",
+            json={"email": "player@strumsight.app", "password": "sixstrings"},
+        )
+        assert register.status_code == 201, register.text
+        auth_headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
         response = client.post(
             "/tutor/turn",
             json={"message": "test", "history": [], "context": ""},
-            headers=tutor_auth_headers,
+            headers=auth_headers,
         )
         assert response.status_code == 504
         assert "temporarily unavailable" in response.json()["detail"].lower()
 
 
-def test_provider_error_normalized_error(tutor_settings, tutor_auth_headers):
+def test_provider_error_normalized_error(tutor_settings, tmp_path):
     """Provider error is normalized to 502."""
-    app = create_app(tutor_settings)
+    settings = tutor_settings.model_copy(
+        update={"database_url": f"sqlite:///{tmp_path / 'test.db'}"}
+    )
+    app = create_app(settings)
     gateway = FakeProviderGateway(should_error=True)
     registry = ProviderRegistry(
         allowed=tutor_settings.tutor_allowed_providers,
@@ -500,10 +530,16 @@ def test_provider_error_normalized_error(tutor_settings, tutor_auth_headers):
     set_service(service)
 
     with TestClient(app) as client:
+        register = client.post(
+            "/auth/register",
+            json={"email": "player@strumsight.app", "password": "sixstrings"},
+        )
+        assert register.status_code == 201, register.text
+        auth_headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
         response = client.post(
             "/tutor/turn",
             json={"message": "test", "history": [], "context": ""},
-            headers=tutor_auth_headers,
+            headers=auth_headers,
         )
         assert response.status_code == 502
         assert "returned an error" in response.json()["detail"].lower()
