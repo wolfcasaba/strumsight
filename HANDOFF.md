@@ -32,6 +32,20 @@
 > [`docs/LESSONS.md` L126](docs/LESSONS.md). **Következő:** E04-R16
 > (orchestration state machine) — a pipeline új sessionben indítja.
 >
+> ## ♻️ E04-R16 önjavítás (2026-08-05, H6) — motor visszaállítva Terra-ra
+>
+> Az E04-R16 első kísérlete H6-tal állt meg: egy elszivárgott, gitignore-olt
+> `.pipeline/engine-override=qwen38-max` (a párhuzamos `ops/qwen-implementer-
+> hardening` session kísérleti beállítása) MINDEN kört a `qwen38-max`-ra
+> pinnelt, ami kétszer `status=unknown`-nal (bejelent-majd-megáll) lépett ki.
+> Az önjavító kör (ADR 0112) **NEM kódot javított** (a repo queue-értéke már
+> helyes: E04-R16 → `codex`/Terra): `engine-profile.sh clear` visszaállította
+> a queue-tervezett Terra motort, a félkész `codex/e04-r16-…` worktree+branch
+> (local+remote) lezárva, `outcome=retry` — a lánc a KÖVETKEZŐ firingen
+> Terra-val újrafuttatja E04-R16-ot. A „bejelent-majd-megáll" a Kilo-qwen
+> motorok HARNESS-szintű hibája (qwen-plus-t is elvitte E04-R14-en); a mély fix
+> a hardening-session élő munkája. Tanulság: [`docs/LESSONS.md` L127](docs/LESSONS.md).
+>
 > <details><summary>▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)</summary>
 >
 > **E04-R14 — Backend tutor proxy, provider registry & usage guard** MERGED (PR

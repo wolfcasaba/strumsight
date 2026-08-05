@@ -4314,3 +4314,47 @@ self-heal a blokkolót a `main`-re javította, a kört a gyógyított `main`-re
 rebase-eléssel FEJEZD BE — az orchestrátor sosem szerkeszti a tilos-zóna fájlt,
 a javítás a `main`-ből érkezik. A halt nem a kód minőségéről szólt; a
 merge-completion a lánc normál útja, nem új kör.
+
+## L127 — Egy kísérleti, gitignore-olt `engine-override` átszivárgott a kísérleti motor-hardening sessionből az autonóm éles láncba, és kétszer H6-oltatta a kört; a Kilo-qwen motorok „bejelent-majd-megáll" (status=unknown) hibája HARNESS-szintű, nem modell-egyedi (E04-R16, önjavító kör, H6)
+
+**Mérés (2026-08-05, E04-R16 önjavító session).** A lánc az E04-R16-on H6-tal
+állt meg: az implementer `qwen38-max` kétszer egymás után `status=unknown`-nal
+lépett ki — a `codex exec` agentic loop exit 0-val zárt, DE a
+`tools/codex-signal.sh` hívása nélkül; az utolsó asszisztens-üzenet egy
+„következő lépés" bejelentés volt (run2: „Now the core file — orchestrator…"),
+a `tutor_orchestrator.dart` core + a 2 teszt sosem készült el (4/8 fájl, mind
+uncommitted).
+
+**A mért gyökérok NEM a kör kódja, hanem az implementer-motor hozzárendelése.**
+A `.pipeline/engine-override` (gitignore-olt) fájl `qwen38-max`-ra volt állítva,
+ami a queue soronkénti `codex` (Terra) értékét MINDEN körre felülírta. Az
+override-ot egy PÁRHUZAMOSAN futó, elkülönített motor-hardening session
+(`ops/qwen-implementer-hardening`, `/tmp/ss-qwen-tuning`, uncommitted diff a
+`codex-round.sh`/`engine-registry.tsv`/`engine-profile.sh`-on) állította be a
+qwen38-max éles-láncon át tesztelésére — de a közös `~/music-theory/.pipeline/`
+állapoton keresztül átszivárgott az autonóm cron-láncba.
+
+**A hiba HARNESS-szintű, nem modell-egyedi.** Ugyanez a „modell csak BEJELENTI
+a javítást, a codex-exec turn az edit-tool-callok kibocsátása ELŐTT ér véget →
+status=unknown" minta MÉRTEN a `qwen-plus`-t is elvitte az E04-R14-en
+(chain.log 2026-08-05T14:59), és ott is Terra-váltás oldotta fel. A natív
+`gpt-5.6-terra` (`~/.codex-terra`, ChatGPT Pro, NEM Kilo) nem produkálja; Terra
+fejezte be R13/R14/R15-öt. A Terra napi-cap 2026-08-02 óta korlátlan (nincs
+hold) — a queue-tervezett codex/Terra motor elérhető.
+
+**A javítás (self-heal, tágabb jog, C-közeli — a repóban nincs mit
+merge-elni).** (1) `tools/engine-profile.sh clear` — az elszivárgott override
+törlése, a lánc visszaáll a queue-tervezett per-kör motorra (E04-R16 → codex);
+(2) a collidáló félkész `codex/e04-r16-…` worktree + local + remote branch
+(csak egy unreviewed pre-flight commit + 4/8 dirty fájl) lezárása, hogy az
+újrafutás tiszta lapról indítson; (3) `outcome=retry` — a mély motor-fix a
+párhuzamos hardening-session ÉLŐ, uncommitted munkája, azt megpatch-elni =
+race + a szándékosan tág `engine-profile.sh use` funkció megsértése.
+
+**Szabály.** Kísérleti motor-tesztelést SOHA ne az autonóm éles lánccal közös
+`.pipeline/` állapoton át futtass — a `use <motor>` override az egész láncot
+pinneli. A hardening-session izolált `PIPELINE_STATE_DIR`-t (vagy külön repo-
+worktree-t) kapjon. Ha egy override egy Kilo-qwen motorra állva kétszer
+status=unknown-t hoz, az nem a kör kódja: `clear` → queue-motor, és a mély fix a
+motor-tulajdonos session dolga. A Terra a jelenlegi completion-megbízható
+alapmotor.
