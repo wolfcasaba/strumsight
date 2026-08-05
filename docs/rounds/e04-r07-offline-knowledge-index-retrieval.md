@@ -168,7 +168,52 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `knowledge_index.dart`: approved-only, content-hash-ellenőrzött immutable
+  index; dokumentum- és chunk-sorrend determinisztikus.
+- `knowledge_retriever.dart`: lexical backend-interfész, locale/topic
+  (`KnowledgeSkill`)/difficulty filter, skill-boost, inkluzív min-score,
+  max-result limit, duplicate-chunk collapse és `(score desc, documentId asc,
+  chunkIndex asc)` tie-break.
+- `asset_knowledge_repository.dart`: manifest- és chunk-integritás-ellenőrzött
+  asset-betöltés; hibán strukturált log + üres index fallback, crash nélkül.
+- `tutor_source_ref.dart`: query-szöveget nem tároló, immutable forrás-provenance
+  (documentum, locale, topic/skill, verzió, chunk).
+- `build_tutor_knowledge_index.dart`: determinisztikus, approved-only index
+  artefaktum builder. A commitolt pack kétszeri buildje bit-azonos, SHA-256:
+  `ad647ac40121504a6f155e2d76faedef94b490e8fa3ae408c9ea5b16904e6211`.
+- `knowledge_index_test.dart` és `knowledge_retriever_test.dart`: ranking-mátrix,
+  en/hu, topic/skill/difficulty, collapse/tie-break, hash, corrupt-index,
+  source-path, manifest-sealed builder, runtime policy, document-derived chunk
+  és controlled-empty regressziók.
+- `docs/baseline/epic-04-knowledge-retrieval.md`: 10 dokumentum / 20 chunk
+  baseline (load: 36,315 ms; warm query p50: 0,449 ms fejlesztői boxon).
+
+### Acceptance és scope
+
+- A retrieval belső maradt; `public.dart` nem módosult a §0.0 boundary-revízió
+  szerint. A §8 elavult „additív export” sora ezért nem végrehajtandó.
+- A query kizárólag keresési bemenet; a kimenet `TutorSourceRef`, nincs benne
+  user input vagy trusted-content eszkaláció.
+- Az embedding utáni backend a `KnowledgeRetrievalBackend` szerződéshez
+  csatlakozhat.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/ai_tutor/data/knowledge_index_test.dart test/features/ai_tutor/data/knowledge_retriever_test.dart`
+  — a még hiányzó index/retriever/source-ref/tool importokkal elvárt compile
+  failure.
+- Célzott tesztek: ugyanaz a két tesztfájl — 19 teszt zöld.
+- Valós pack builder: `dart run tool/build_tutor_knowledge_index.dart assets/tutor_knowledge /tmp/e04-r07-tutor-knowledge-index.json`
+  — 8 845 bájtos artefaktum; második build `cmp`-vel bit-azonos.
+- Záró gate: `tools/round-gate.sh test/features/ai_tutor/data` — format, analyze,
+  47 data teszt és architecture mind zöld.
+
+### Nem futtatott ellenőrzések
+
+- Teljes Flutter suite, randomizált property gate és release APK: CI/orchestrátor
+  feladata (ADR 0053), lokálisan nem futtatva.
 
 ## 11. Review — a független reviewer tölti ki
 
