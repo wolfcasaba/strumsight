@@ -207,6 +207,30 @@ elif [ ! -f "$signal" ] || ! grep -qE '^status=(done|stopped|blocked)$' "$signal
   } > "$signal"
 fi
 
+# --- Költség-főkönyv (ADR 0174) -------------------------------------------
+# A modell a saját naplójába írja az elhasznált tokent („tokens used\n<szám>"),
+# a motor árát pedig a nyilvántartás tartalmazza — de a kettő eddig SEHOL nem
+# találkozott, ezért a motorválasztás volt a leggyengébben alátámasztott
+# döntésünk. A főkönyv egy sor/futás, és túléli a /tmp naplókat.
+#
+# Fail-open: ha a főkönyv könyvtára nem létezik (teszt, idegen box), néma no-op.
+record_cost() {
+  local ledger=${PIPELINE_COST_LEDGER:-"$HOME/music-theory/.pipeline/cost.tsv"}
+  [ -d "$(dirname "$ledger")" ] || return 0
+  local tokens round status
+  tokens=$(grep -A1 -i '^tokens used' "$log_file" 2>/dev/null | tail -1 | tr -cd '0-9')
+  [ -n "$tokens" ] || tokens=0
+  round=$(printf '%s' "${ROUND_BRIEF:-$(git -C "$workdir" branch --show-current 2>/dev/null)}" \
+    | grep -oiE '[e][0-9]{2}-[r][0-9]{2}' | head -1 | tr 'a-z' 'A-Z')
+  [ -n "$round" ] || round="ismeretlen"
+  status=$(grep -m1 '^status=' "$signal" 2>/dev/null | cut -d= -f2-)
+  [ -f "$ledger" ] || printf 'timestamp\tround\tengine\tmodel\ttokens\tcontinuations\tstatus\n' > "$ledger"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$(date -Is)" "$round" "$round_engine" "${ENGINE_MODEL:-?}" \
+    "$tokens" "$continuations" "${status:-ismeretlen}" >> "$ledger"
+}
+record_cost
+
 # A folytatások száma a REVIEW bemenete (ADR 0173): egy `done`, amelyhez két
 # automatikus folytatás kellett, nem ugyanaz a bizonyíték, mint egy egy
 # fordulóban lezárt kör — a reviewer így látja, hol volt szakadás.
