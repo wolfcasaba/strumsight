@@ -92,11 +92,14 @@ claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
 #     modellváltás a spórolás (a teljes Opus-vonal tokenára azonos, a 4.6
 #     ráadásul 4096-os cache-minimumot és gyengébb agentic viselkedést hozna),
 #     hanem az effort-szint;
-#   - az önjavító session Sonnet 5-ön fut (output-oldalon az Opus árának 40%-a,
-#     bevezető árazás 2026-08-31-ig): infrastruktúra-diagnózis, nem termékítélet.
-#     A kör-orchestrátor (terv + review + merge-kapu) marad Opus 4.8.
+#   - a spórolás az effort-szinten történik, NEM modellváltással.
+# Az önjavító session 2026-08-05 óta szintén Opus 4.8 (user-döntés: „Opus 4.8-at
+# állítottam be orchestrátornak mindenhová"). Korábban Sonnet 5 volt olcsóbb
+# infrastruktúra-diagnózisnak — de a mérés ellene szólt: a heal-kör ítéletet hoz
+# (gyökérok-osztályozás A/B/C, motorválasztás, mércét-nem-gyengítjük határ), és
+# az E04-R14 első kísérlete félbe is maradt. Olcsóbbra vissza: PIPELINE_SELFHEAL_MODEL.
 claude_effort=${PIPELINE_EFFORT:-medium}
-heal_model=${PIPELINE_SELFHEAL_MODEL:-claude-sonnet-5}
+heal_model=${PIPELINE_SELFHEAL_MODEL:-claude-opus-4-8}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját

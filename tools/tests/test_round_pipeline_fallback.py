@@ -137,9 +137,21 @@ class SessionConfigTest(unittest.TestCase):
             "model=claude-opus-4-8 effort=medium",
         )
 
-    def test_selfheal_runs_sonnet_5_at_medium_effort(self) -> None:
+    def test_selfheal_runs_opus_48_at_medium_effort(self) -> None:
+        # User-döntés 2026-08-05: az orchestrátor MINDEN székben Opus 4.8 — a
+        # heal-kör is ítéletet hoz (gyökérok-osztályozás, motorválasztás), nem
+        # csak infrastruktúra-diagnózist.
         self.assertEqual(
             self._config("heal", {"PIPELINE_SELFHEAL_MODEL": "", "PIPELINE_EFFORT": ""}),
+            "model=claude-opus-4-8 effort=medium",
+        )
+
+    def test_selfheal_model_stays_operator_overridable(self) -> None:
+        self.assertEqual(
+            self._config(
+                "heal",
+                {"PIPELINE_SELFHEAL_MODEL": "claude-sonnet-5", "PIPELINE_EFFORT": ""},
+            ),
             "model=claude-sonnet-5 effort=medium",
         )
 
