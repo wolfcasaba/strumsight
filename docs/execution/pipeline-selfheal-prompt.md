@@ -86,6 +86,15 @@ protokoll helyes használata.
    ```
    A dispatch után vesd össze a run `headSha`-ját a lokális HEAD-del — a run
    csak egyező SHA-n bizonyíték.
+   **A Router CI is a kapu része.** Ha a fix bármelyik `router-ci.yml`
+   trigger-útvonalat érinti (`tools/**`, `docs/rounds/**`,
+   `docs/execution/pipeline-*`, `.ai/**`, `.github/workflows/router-ci.yml`),
+   akkor a push automatikusan indítja a `router-ci`-t: merge ELŐTT a merge SHA-n
+   `conclusion=success` kell (`gh run list --workflow router-ci.yml --branch
+   <heal-branch> --json headSha,conclusion`). Router-only fixnél (nincs Dart-
+   változás) ez az EGYETLEN CI-bizonyíték — piros vagy hiányzó run → **nincs
+   merge**. Mérve 2026-08-05: a `build-apk`-csak kapu nyolc körön át elnézte a
+   piros Router CI-t (`docs/LESSONS.md` L113).
 6. **Takarítás**: `git worktree remove`, és ha a megállt kör hagyott nyitott
    PR-t vagy félkész branchet, zárd le (a driver előfeltétele: nincs nyitott PR).
 7. **Dokumentálás** (ez a javítás fele): `docs/LESSONS.md` — mért gyökérok,

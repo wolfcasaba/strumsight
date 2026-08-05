@@ -185,6 +185,7 @@ Windowolt, accessible teljes Song Trainer felület, section/A–B loop, publikus
 | `lib/features/song_trainer/application/song_trainer_providers.dart` | R20-ból | wiring |
 | `lib/features/practice/public.dart` | R19-ből | Speed Builder public contract, auditált |
 | `lib/app/routing/app_router.dart` | meglévő | trainer/result route |
+| `lib/app/routing/app_route.dart` | meglévő | route-konstans (§0.0 6. pont, additív) |
 | `lib/l10n/app_en.arb` | meglévő | EN copy |
 | `lib/l10n/app_hu.arb` | meglévő | HU copy |
 | `test/features/song_trainer/application/trainer/song_progress_committer_test.dart` | ÚJ | idempotency |

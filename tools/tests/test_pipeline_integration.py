@@ -66,6 +66,13 @@ class PipelineIntegrationTest(unittest.TestCase):
         A teszt a queue-t a briefekhez KÖTI, így egy új brief hozzáadásakor a
         motorválasztás nem maradhat kézi becslés. A védőháló változatlan: a
         kör-gate, az Opus 4.8 független review és a CI mindkét motorra ugyanaz.
+
+        A szabály NEM epic-specifikus: minden MÉG NYITOTT sorra érvényes,
+        bármelyik epicből (E03 lezárult 2026-08-04-én, a nyitott sorok azóta
+        E04-esek). A korábbi `E03-` szűrő beragadt: az Epic 3 zárásával a lista
+        kiürült, és a `test_all_twenty_two_briefs...` melletti üres-lista
+        assertion nyolc körön át pirosra állította a Router CI-t (mérve
+        2026-08-05, E04-R07 után). Ezért a filter epic-agnosztikus.
         """
         queue_path = ROOT / "docs" / "execution" / "pipeline-queue.tsv"
         rows = [
@@ -73,8 +80,8 @@ class PipelineIntegrationTest(unittest.TestCase):
             for line in queue_path.read_text().splitlines()
             if line and not line.startswith("#")
         ]
-        open_rounds = [row for row in rows if row[0].startswith("E03-") and row[4] != "done"]
-        self.assertTrue(open_rounds, "nincs nyitott E03 sor — a szabály mérhetetlen")
+        open_rounds = [row for row in rows if row[4] != "done"]
+        self.assertTrue(open_rounds, "nincs egyetlen nyitott sor sem — a szabály mérhetetlen")
 
         for round_id, brief, engine, _adr, _status in open_rounds:
             with self.subTest(round=round_id):
