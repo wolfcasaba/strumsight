@@ -20,6 +20,7 @@ allowed_paths = [
   "backend/app/config.py",
   "backend/app/main.py",
   "backend/tests/tutor/__init__.py",
+  "backend/tests/tutor/conftest.py",
   "backend/tests/tutor/test_tutor_proxy.py",
   "backend/tests/tutor/test_tutor_usage.py",
   "docs/rounds/e04-r14-backend-tutor-proxy-usage-guard.md",
@@ -51,6 +52,16 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 `qwen-plus` = `qwen/qwen3.7-plus`, codex-harness, ADR 0140). Baseline: `main` @
 `7de9361` (E04-R13 MERGED). E04-R13 előfeltétel **teljesül** (PR #141, squash
 `b9d2950`).
+
+**Módosítás (ADR 0112 önjavító kör, 2026-08-05, H6).** A `qwen-plus`
+implementer kétszer lépett ki záró jelzés nélkül (a modul kész volt, ~5
+teszt-fixture/wiring javítás maradt hátra — részletek: `.pipeline/HALTED`).
+Motorváltás `qwen-coder-plus`-ra (apply_patch nem támogatott, shell-fallback
+szerkesztés) zárta le a kört. A befejezéshez egy megosztott
+`backend/tests/tutor/conftest.py` fixture-fájl kellett (a `test_tutor_usage.py`
+a `test_tutor_proxy.py`-ban definiált `tutor_client`/`tutor_auth_headers`-t
+cross-file nem látta) — ez a fájl az `allowed_paths`-ba fel lett véve. Nem
+viselkedés-módosítás, tisztán teszt-infrastruktúra.
 
 **ADR-döntés — NINCS új ADR.** A kör az [ADR 0131](../adr/0131-ai-tutor-provider-boundary.md)
 `Döntés` §-ában már rögzített szerveroldali proxy-t **implementálja**, nem
