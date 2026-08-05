@@ -66,6 +66,32 @@ szekciójába szabad írni.
 Amit a kör NEM tervezhet újra. Új ADR nélkül nem térhet el tőle.
 Előre kiosztott ADR-szám: `00NN`.
 
+### 5.1 Nyitott döntések — előre rögzített feloldással ([ADR 0138](../adr/0138-factory-hardening-scope-guard-and-independence.md))
+
+A brief ne REJTSE el a bizonytalanságot, de ne is állítsa meg vele a láncot.
+Minden olyan kérdéshez, amiről tudod, hogy az implementer bele fog ütközni,
+adj **előre rögzített feloldási politikát** — így a kör nem `stopped`-dal kér
+döntést, hanem a dokumentált default szerint megy tovább.
+
+A mért indok: az E02-R11 **kétszer** állt meg valós, blokkoló ellentmondáson
+(ADR 0087 „Kontextus"), és mindkét feloldás ítélet volt, nem szabályalkalmazás.
+Amit előre el tudsz dönteni, azt előre döntsd el.
+
+```yaml
+open_decisions:
+  - id: OD-01
+    question: A validátor ismeretlen mezőre dobjon, vagy némán hagyja el?
+    blocking: true
+    resolution_policy: use_default     # use_default | stop_and_ask
+    default: fail-closed — ismeretlen mező ValidationFailure
+```
+
+- `resolution_policy: use_default` → az implementer a `default` szerint jár el,
+  és a §10 handoffban rögzíti, hogy élt vele.
+- `resolution_policy: stop_and_ask` → ez tudatosan halt-pont; csak akkor
+  válaszd, ha a rossz döntés több körön át beépülne.
+- **Blocking döntés `resolution_policy` nélkül nem mehet ki a briefben.**
+
 ## 6. Acceptance criteria
 
 - [ ] Mérhető, ellenőrizhető állítások — nem „jól működik".

@@ -172,6 +172,25 @@ Ezek reprodukciós/operátori módok. A meglévő `mm-round.sh`, illetve
 `codex-round.sh` + watcher útvonalat használják; az `auto` router szabályait
 nem írják át, és nincs köztük automatikus fallback.
 
+**KÖTELEZŐ: `ROUND_BRIEF` átadása** (ADR 0138). A legacy wrapper a kilépés után
+gépi **scope-auditot** futtat a brief `allowed_paths` blokkja ellen — de csak
+akkor, ha megkapja a brief útvonalát. `ROUND_BRIEF` nélkül az audit
+`scope_audit=skipped`, azaz a kör scope-ja **bizonyítatlan** marad:
+
+```bash
+ROUND_BRIEF={{BRIEF}} setsid <munkapéldány>/tools/codex-round.sh \
+  <munkapéldány> <prompt>.md /tmp/codex-<kör>.log \
+  >/dev/null 2>&1 </dev/null &
+```
+
+A jelzésfájl `scope_audit=` kulcsát a review ELŐTT olvasd el:
+
+| Érték | Teendő |
+|---|---|
+| `ok` | mehet a független review |
+| `VIOLATION` | a jelzés `stopped`-ra vált; a listán kívüli fájlokat **vissza kell állítani**, vagy H3 halt |
+| `skipped` / `error` | az audit nem futott le — **nem** bizonyíték; futtasd kézzel: `tools/scope-audit.py --repo <munkapéldány> --brief {{BRIEF}} --base <indulási HEAD>` |
+
 ## 2. Az autonómiád határa (ADR 0087 §2) — EZ A LEGFONTOSABB SZAKASZ
 
 **Önállóan dönthetsz és folytathatod a kört**, ha az ütközés feloldása a kör

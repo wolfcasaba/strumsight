@@ -28,6 +28,12 @@ signal="$workdir/.codex-round-status"
 rm -f "$signal"
 : > "$log_file"
 
+# A scope-audit (ADR 0138) BÁZISA: a munkapéldány HEAD-je az indítás
+# pillanatában. Nem az `origin/main`, mert az orchestrátor pre-flight commitja
+# (kör-ADR + brief-revízió) jogosan nyúl az allowed_paths-on kívülre — innen
+# mérve a verdikt az IMPLEMENTER saját munkájára szól.
+scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
+
 codex exec -C "$workdir" -s danger-full-access "$(cat "$prompt_file")" \
   >> "$log_file" 2>&1 &
 codex_pid=$!
@@ -85,6 +91,13 @@ elif [ ! -f "$signal" ] || ! grep -qE '^status=(done|stopped|blocked)$' "$signal
     echo "signalled_at=$(date -Iseconds)"
   } > "$signal"
 fi
+
+# Scope-audit (ADR 0138): a gépi verdikt a jelzésfájlba kerül, mielőtt az
+# orchestrátor bármit olvasna. Sértéskor a jelzés `stopped`-ra vált.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+bash "$script_dir/round-scope-audit.sh" "$workdir" "$scope_base" "$signal"
+scope_exit=$?
+[ "$scope_exit" -eq 1 ] && exit_code=1
 
 echo "--- codex round finished ---"
 echo "log: $log_file"

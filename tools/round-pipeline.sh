@@ -482,6 +482,18 @@ attempt_selfheal() {
     log "önjavítás kikapcsolva (PIPELINE_SELFHEAL=0) — a feloldás emberi: tools/pipeline-status.sh --resume"
     return 3
   fi
+
+  # Nem önjavítható haltok (ADR 0138). Az ADR 0112 egyetlen emberi határa a
+  # MÉRCE gyengítése; ide tartozik minden olyan ok, amit az önjavító session
+  # KÖRBEN oldana fel — a H-INDEP-et például kvótazárlat alatt maga a Terra
+  # javítaná, holott épp az a baj, hogy a Terra vizsgálná a saját munkáját.
+  case "$halt_code" in
+    H-GATEGUARD | H-INDEP)
+      log "a(z) $halt_code önjavítása tilos — emberi döntés kell (tools/pipeline-status.sh --resume)"
+      notify "⛔ $halt_code: $halt_round" "emberi döntés kell, az önjavítás nem indul" high
+      return 3
+      ;;
+  esac
   if [ ! -f "$heal_template" ]; then
     log "hiányzik az önjavító prompt-sablon ($heal_template) — a lánc áll"
     return 3
@@ -593,6 +605,35 @@ attempt_selfheal() {
   return 0
 }
 
+# --- Reviewer-függetlenség (ADR 0138) -------------------------------------
+# MÉRT tény 2026-08-05: az implementer (`codex exec`, `~/.codex`) és az
+# orchestrátor-fallback (`~/.codex-terra`) UGYANAZ a `gpt-5.6-terra` modell.
+# Claude-kvótazárlat alatt tehát a Terra review-zná a SAJÁT diffjét — ez az
+# egyetlen pont, ahol a lánc független bizonyíték nélkül merge-elne
+# (ADR 0055: egy ágens nem hagyhatja jóvá a saját munkáját; a starter-csomag
+# SDD §2.2 is explicit nem-célként nevezi meg).
+#
+# A feloldás NEM halt: az ADR 0115 célja épp az volt, hogy a lánc ne
+# szakadjon meg. Az implementert visszük át a MÁSIK motorra, így a reviewer
+# (Terra) és az implementer (MiniMax) újra elválik. Ha nincs másik motor,
+# H-INDEP halt — az önjavítása tiltott, mert körben oldaná fel.
+#
+# Kiírja: a feloldott motort, vagy `HALT_INDEP`-et.
+resolve_independent_engine() {   # $1=queue-motor
+  local queue_engine=${1:-}
+  if [ "$queue_engine" != "codex" ] \
+     || [ "$fallback_engine" = "none" ] \
+     || ! claude_unavailable_until >/dev/null; then
+    printf '%s\n' "$queue_engine"
+    return 0
+  fi
+  if [ -n "${MINIMAX_API_KEY:-}" ] || [ -f "$HOME/.mmx/config.json" ]; then
+    printf 'minimax\n'
+  else
+    printf 'HALT_INDEP\n'
+  fi
+}
+
 # --- Teszthorgok ----------------------------------------------------------
 # A mérce futtatható artefaktum legyen, ne prompt-szöveg (docs/LESSONS.md):
 # az önjavítás két gépi döntése kívülről is lekérdezhető, ezért tesztelhető.
@@ -615,6 +656,10 @@ case "${1:-}" in
     else
       exit 1
     fi
+    ;;
+  --independent-engine)    # $2=queue-motor → a FÜGGETLENSÉG által feloldott implementer motor, vagy HALT_INDEP (ADR 0138)
+    resolve_independent_engine "${2:-}"
+    exit 0
     ;;
   --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115)
     if [ "$fallback_engine" != "none" ] && claude_unavailable_until >/dev/null; then
@@ -749,6 +794,28 @@ if [ "$engine" = "auto" ]; then
   [ -x "$repo_root/tools/model-router.py" ] || die "hiányzik a model router"
   [ -f "$repo_root/.ai/router.toml" ] || die "hiányzik a router konfiguráció"
 fi
+
+# --- 4.5 Reviewer-függetlenség (ADR 0138) --------------------------------
+independent_engine=$(resolve_independent_engine "$engine")
+case "$independent_engine" in
+  HALT_INDEP)
+    {
+      echo "round=$round"
+      echo "halt=H-INDEP"
+      echo "summary=Claude-kvótazárlat alatt a Terra review-zná a saját diffjét, és nincs elérhető másik implementer motor (MiniMax kulcs hiányzik)"
+      echo "halted_at=$(date -Is)"
+    } > "$halt_file"
+    log "HALT (H-INDEP): nincs független reviewer a(z) $round körhöz"
+    notify "⛔ H-INDEP: $round" "nincs független reviewer — emberi döntés kell" high
+    exit 3
+    ;;
+  "$engine") : ;;
+  *)
+    log "REVIEWER-FÜGGETLENSÉG: Claude-zárlat alatt a review a Terráé, ezért a(z) $round implementere $engine→$independent_engine"
+    notify "🔀 $round: implementer-váltás" "Terra review-zna Terra diffet — az implementer $independent_engine lett"
+    engine=$independent_engine
+    ;;
+esac
 
 log "következő kör: $round · brief=$brief · motor=$engine · ADR=$adr"
 
