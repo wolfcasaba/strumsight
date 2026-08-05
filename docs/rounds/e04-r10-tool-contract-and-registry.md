@@ -172,7 +172,22 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Szállítva:** typed `TutorTool` contract, providerfüggetlen input-schema,
+  immutable request/turn-policy és provenance/timeout/size-report result;
+  versionált, fail-closed registry; két zárt kezdeti local tool
+  (`getContextField`, `summarizeContext`); behelyettesíthető fake registry.
+- **Acceptance → teszt:** `tutor_tool_registry_test.dart` méri a registry
+  verziót, turn-allowlistet, unknown-tool fail-closed viselkedést,
+  invalid-input/permission-mismatch `ValidationFailure`-t, váratlan kivétel
+  `UnknownFailure`-t, timeout resultot és az alatta/rajta/fölötte size-limit
+  mátrixot. `read_only_tutor_tools_test.dart` méri a provenance-t, a
+  secret-redactiont, az input-validációt, a network-tool eldobható mutációját
+  pirosra váltó allowlistet és a fake registry orchestration használatát.
+- **Futtatva:** `flutter test test/features/ai_tutor/domain/tutor_tool_registry_test.dart test/features/ai_tutor/application/read_only_tutor_tools_test.dart`
+  → 12 zöld; `tools/round-gate.sh test/features/ai_tutor/domain test/features/ai_tutor/application`
+  → format, analyze, mindkét célzott test-suite és architecture zöld.
+- **Eltérés / nem futtatott ellenőrzés:** CI teljes `flutter test`, property gate
+  és release APK nem lokális implementer-feladat; az orchestrátor futtatja.
 
 ## 11. Review — a független reviewer tölti ki
 
