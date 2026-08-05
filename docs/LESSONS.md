@@ -4407,3 +4407,39 @@ ugyanolyan bizonyítéknak látna, mint egy egy fordulóban lezártat. (3) Ami
 körönként kézzel újraírt prompt-figyelmeztetés, azt artefaktummá kell tenni
 (`docs/execution/implementer-preamble.md`) — a kézi kompenzáció mérhetetlen és
 felejthető.
+
+## L129
+
+**Kör:** E04-R16 (orchestration state machine) · **Forrás:** PR #147,
+[review](reviews/e04-r16-orchestration-state-machine-review.md) §5,
+`tools/tests/test_pipeline_throughput.py:315-319`, Router CI run 31045604388.
+
+**Mért helyzet.** Egy legitim pre-flight §0.0 SZŰKÍTÉS — a `public.dart` kivétele
+az `allowed_paths`-ból — pirosra váltotta a Router CI-t, holott az implementer
+diffje hibátlan és a szűkítés önmagában helyes szándékú volt (az
+`ai_tutor_boundary_test.dart` üres-boundary invariánsának védelme). A gyökérok:
+a `test_pipeline_throughput.py::test_real_epic_four_rounds_are_correctly_rejected`
+**HARDKÓDOLTAN** elvárja, hogy az E04-R15 és E04-R16 briefek a `public.dart`-on
+ütközzenek (slot-planner konfliktus-detektálás, „az Epic 4 körei ugyanazt a
+`public.dart`-ot érintik"). A `public.dart` kivétele megszüntette a konfliktust
+→ `paths_conflict == []` → a teszt elbukott.
+
+**Kettős tanulság.** (1) **A brief `allowed_paths` nemcsak az implementernek szól
+— a slot-planner is méri.** Egy fájl kivétele nem lokális, „ártalmatlan"
+szűkítés: megváltoztatja, mely körökkel ütközik a kör a párhuzamos ütemezésben.
+Egy `allowed_paths`-módosítás pre-flightja tartalmazza a
+`test_pipeline_throughput`/`round-slots` futtatását is, ne csak a Dart-gate-et.
+(2) **A helyes feloldás sosem a mérce (`tools/`) módosítása** — az a §4 tilos
+zóna (a mércét nem módosíthatja, akit mér). Amikor egy legitim brief-döntés egy
+`tools/` tesztet tör, a döntést kell a mércéhez igazítani (itt: a szűkítés
+visszavonása, `public.dart` a listán marad, export R18-ra halasztva, a fájl
+érintetlen — R15 precedens), nem a tesztet a döntéshez. Az `allowed_paths`
+**engedély-plafon, nem követelmény**: listán lenni és érintetlenül hagyni
+konzisztens, és a boundary-invariáns így is zöld.
+
+**Mellék-mérés (nem-blokkoló):** az implementer `blocked` jelzése a friss
+munkapéldányból hiányzó, gitignore-olt generált `lib/l10n/app_localizations.dart`-ból
+jött (754 pre-existing l10n analyze-hiba), NEM kódhibából — ez az orchestrátor
+`prepare-flutter-generated.sh` teendője (pipeline §5.5), nem H6. A `blocked`-ot
+mérd, ne fogadd el bemondásra: ha a blokk-ok a generált előfeltétel, oldd fel és
+futtasd a gate-et.

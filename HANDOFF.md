@@ -4,10 +4,49 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R15 MERGED — AI tutor streaming transport, ADR 0142; a H3-blokkoló az
-> R14 secret-scan self-heal (#143) után feloldva, exact-SHA zöld kapun át).**
+> (E04-R16 MERGED — Tutor orchestration state machine & output validator,
+> ADR 0174; Codex/Terra, exact-SHA zöld kapun át).**
 >
-> ## ✅ E04-R15 KÉSZ — AI tutor streaming transport (2026-08-05)
+> ## ✅ E04-R16 KÉSZ — Tutor orchestration state machine & output validator (2026-08-05)
+>
+> **E04-R16** MERGED (PR [#147](https://github.com/wolfcasaba/strumsight/pull/147),
+> squash `df25806`, **új ADR [0174](docs/adr/0174-ai-tutor-orchestration-state-machine.md)**,
+> implementer **Codex** `gpt-5.6-terra`). A teljes tutor turn-pipeline
+> determinisztikus, UI-mentes összekötése: `context → retrieval → prompt →
+> gateway → tool → validator`. Sealed `TutorCommand`/`TutorSignal` + `TutorEffect`,
+> pure `reduceTutorTurn` → `TutorTransition{state,effects,isRejected}`, broadcast
+> `states`/`effects` + `dispatch` (Practice-controller precedens). **Kötött
+> döntések:** repair-cap **1** → deterministic fallback; cancel utáni late-event
+> **no-op** (request-id-korreláció); egy aktív turn/conversation; a
+> `TutorOutputValidator` claim- (grounded típus + evidence ∈ trusted sources) ÉS
+> action-schemát (allowlist + `TutorActionValidator`) is ellenőriz.
+> **usage-limit + consent-revoked az orchestration-rétegben** modellezve (a
+> gateway-réteg érintetlen — a `tutor.usage_limit` kód-konstans az orchestrator
+> sajátja). 10 acceptance-scenárió scripted fake-kel determinisztikusan zöld, a
+> repair-cap falszifikációs guarddal (`starts == 2`).
+> Review: [`docs/reviews/e04-r16-orchestration-state-machine-review.md`](docs/reviews/e04-r16-orchestration-state-machine-review.md)
+> — **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR follow-up, 1 NOTE).
+>
+> **Pre-flight tanulságok (mérve):** (1) a `blocked` jelzés a friss munkapéldány
+> hiányzó generált `lib/l10n/`-jából jött, nem kódhiba — `prepare-flutter-generated.sh`
+> oldotta fel (nem H6). (2) A pre-flight §0.0 SZŰKÍTÉS (`public.dart` kivétele az
+> `allowed_paths`-ból) pirosra váltotta a Router CI-t: a
+> `test_pipeline_throughput.py` hardkódoltan elvárja az R15↔R16 `public.dart`-ütközést
+> (slot-planner); a `tools/` tilos zóna, ezért a helyes feloldás a szűkítés
+> visszavonása, nem a teszt módosítása. Tanulságok: [`docs/LESSONS.md` L129](docs/LESSONS.md).
+>
+> **⚠ MINOR follow-up (R18 előtt kötelező):** a `TutorPipelineFailed` terminális
+> út nem szabadítja fel a gateway-subscription-t/gateway-t (a többi terminál
+> igen). Ma fake-only, `dispose()` mitigál; a **valódi gateway bekötése (R18)
+> ELŐTT** javítandó — lásd a review MINOR-1-et.
+>
+> **Zöld kapu (exact-SHA `c9a3834`):** Full Gate (no APK)
+> [31046290808](https://github.com/wolfcasaba/strumsight/actions/runs/31046290808)
+> `success` + Router CI
+> [31046333319](https://github.com/wolfcasaba/strumsight/actions/runs/31046333319)
+> `success`. **Következő:** E04-R17 — a pipeline új sessionben indítja.
+>
+> <details><summary>▶️ E04-R15 KÉSZ — AI tutor streaming transport (2026-08-05)</summary>
 >
 > **E04-R15 — Backend + Flutter streaming transport** MERGED (PR
 > [#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
@@ -32,7 +71,9 @@
 > [`docs/LESSONS.md` L126](docs/LESSONS.md). **Következő:** E04-R16
 > (orchestration state machine) — a pipeline új sessionben indítja.
 >
-> ## ♻️ E04-R16 önjavítás (2026-08-05, H6) — motor visszaállítva Terra-ra
+</details>
+>
+> <details><summary>▶️ E04-R16 első kísérlet önjavítás (2026-08-05, H6) — motor visszaállítva Terra-ra (a végleges futás sikeres, fent)</summary>
 >
 > Az E04-R16 első kísérlete H6-tal állt meg: egy elszivárgott, gitignore-olt
 > `.pipeline/engine-override=qwen38-max` (a párhuzamos `ops/qwen-implementer-
@@ -45,6 +86,8 @@
 > Terra-val újrafuttatja E04-R16-ot. A „bejelent-majd-megáll" a Kilo-qwen
 > motorok HARNESS-szintű hibája (qwen-plus-t is elvitte E04-R14-en); a mély fix
 > a hardening-session élő munkája. Tanulság: [`docs/LESSONS.md` L127](docs/LESSONS.md).
+>
+> </details>
 >
 > <details><summary>▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)</summary>
 >
