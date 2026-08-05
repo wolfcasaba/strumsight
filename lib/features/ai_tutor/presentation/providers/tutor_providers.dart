@@ -16,7 +16,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:meta/meta.dart';
 
 import '../../application/context/context_purpose.dart';
 import '../../application/context/tutor_context_assembler.dart';
@@ -163,7 +162,8 @@ extension TutorTurnStatusActiveX on TutorTurnStatus {
 // single turn maps to a single streaming session.
 // ---------------------------------------------------------------------------
 
-class DefaultTutorChatController implements TutorChatController {
+class DefaultTutorChatController extends ChangeNotifier
+    implements TutorChatController {
   DefaultTutorChatController({
     required this.orchestrator,
     required this.repository,
@@ -220,6 +220,7 @@ class DefaultTutorChatController implements TutorChatController {
     );
     _statesController.add(snapshot);
     onChanged(snapshot);
+    notifyListeners();
   }
 
   void _consume(TutorState next) {
@@ -315,9 +316,11 @@ class DefaultTutorChatController implements TutorChatController {
     );
   }
 
+  @override
   Future<void> dispose() async {
     await _stateSubscription?.cancel();
     await _statesController.close();
+    super.dispose();
   }
 }
 

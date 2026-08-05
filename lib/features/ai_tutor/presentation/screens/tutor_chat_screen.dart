@@ -36,34 +36,53 @@ class TutorChatScreen extends ConsumerStatefulWidget {
 
 class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
   final ScrollController _scrollController = ScrollController();
+  late final TutorChatController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ref.read(tutorChatControllerProvider);
+    // The controller is a `ChangeNotifier`-like seam — when it
+    // notifies (test fakes call `notifyListeners()` after `addMessage`,
+    // and the production controller does the same from `_emit()`),
+    // we rebuild so the freshly appended message renders without
+    // waiting for the `StreamProvider` microtask round-trip.
+    if (_controller is Listenable) {
+      (_controller as Listenable).addListener(_onControllerChanged);
+    }
+  }
 
   @override
   void dispose() {
+    if (_controller is Listenable) {
+      (_controller as Listenable).removeListener(_onControllerChanged);
+    }
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _scrollToBottom() async {
+  void _onControllerChanged() {
+    if (!mounted) return;
+    setState(() {});
+    // Scroll-anchoring: when a new bubble arrives or the streaming
+    // text grows, push the list to the bottom on the next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  }
+
+  void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    await position.animateTo(
-      position.maxScrollExtent,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
+    if (position.maxScrollExtent <= position.pixels) return;
+    position.jumpTo(position.maxScrollExtent);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final controller = ref.watch(tutorChatControllerProvider);
+    final controller = _controller;
     final chatState = ref.watch(tutorChatStateProvider).value;
-
-    ref.listen<AsyncValue<TutorChatState>>(tutorChatStateProvider, (_, _) {
-      // Scroll-anchoring: when a new bubble arrives or the streaming
-      // text grows, push the list to the bottom on the next frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-    });
 
     final status = chatState?.status ?? controller.status;
     final responseText = chatState?.responseText ?? controller.responseText;
@@ -90,10 +109,13 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
           title: Text(l10n.aiTutorChatTitle),
           actions: <Widget>[
             if (status.isActive)
-              IconButton(
-                tooltip: l10n.aiTutorChatCancel,
-                icon: const Icon(Icons.stop_circle_outlined),
-                onPressed: controller.cancel,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: TextButton.icon(
+                  onPressed: controller.cancel,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: Text(l10n.aiTutorChatCancel),
+                ),
               ),
           ],
         ),
