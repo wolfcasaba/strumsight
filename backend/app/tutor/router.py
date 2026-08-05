@@ -72,3 +72,10 @@ async def turn(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI service returned an error",
         ) from exc
+
+
+# Streaming transport (ADR 0142). stream.py imports get_service from this
+# module, so the import stays at the bottom to avoid a circular import.
+from .stream import router as stream_router  # noqa: E402
+
+router.include_router(stream_router)
