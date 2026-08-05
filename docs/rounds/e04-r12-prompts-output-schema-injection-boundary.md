@@ -1,6 +1,6 @@
 # E04-R12 — Prompt templatek, output schema és injection boundary
 
-- **Státusz:** PLANNING (pre-flight 2026-08-05, kód mérve: main @ `c1c57db`; ADR 0140 kiosztva)
+- **Státusz:** PLANNING (pre-flight 2026-08-05, kód mérve: main @ `c1c57db`; ADR 0141 kiosztva)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 12; §35
 - **Branch:** `codex/e04-r12-prompts-output-schema-injection-boundary`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R05 + E04-R07 + E04-R10 merge**
@@ -21,7 +21,7 @@ allowed_paths = [
   "test/features/ai_tutor/prompts/prompt_injection_test.dart",
   "test/features/ai_tutor/prompts/prompt_snapshot_test.dart",
   "docs/rounds/e04-r12-prompts-output-schema-injection-boundary.md",
-  "docs/adr/0140-ai-tutor-prompt-output-schema-injection-boundary.md",
+  "docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md",
 ]
 gate_tests = [
   "test/features/ai_tutor/prompts",
@@ -46,7 +46,7 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **Pre-flight mérve 2026-08-05 (main @ `c1c57db`), az összes hivatkozott felület grepelve.**
-ADR: a pipeline-prompt szerint a pre-flight osztotta ki → **[ADR 0140](../adr/0140-ai-tutor-prompt-output-schema-injection-boundary.md)**
+ADR: a pipeline-prompt szerint a pre-flight osztotta ki → **[ADR 0141](../adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)**
 (a 0131/0132/0137/0139 melletti új, nem-merge-elt döntés; a merge-elt ADR-eket NEM módosítja).
 
 **Mért bemeneti felületek (a builder ezeket fogadja, nem nyers forrást):**

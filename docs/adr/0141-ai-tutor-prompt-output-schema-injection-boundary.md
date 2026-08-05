@@ -1,4 +1,4 @@
-# ADR 0140 — AI Tutor prompt-építés, output-schema és injection boundary
+# ADR 0141 — AI Tutor prompt-építés, output-schema és injection boundary
 
 - **Státusz:** Elfogadva (E04-R12 pre-flight, 2026-08-05)
 - **Kör:** E04-R12 — Prompt templatek, output schema és injection boundary

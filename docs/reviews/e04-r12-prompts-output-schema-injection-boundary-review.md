@@ -6,7 +6,7 @@
 - **Reviewer:** Claude Opus 4.8 (orchestrátor, független read-only)
 - **Diff:** `862dc43..0e902d4` (16 changed path)
 - **Verdikt:** **APPROVED (1 javító kör után)** — 1 BLOCKER *zárva*, 0 MAJOR, 0 MINOR, 2 NOTE
-- **ADR:** [0140](../adr/0140-ai-tutor-prompt-output-schema-injection-boundary.md) (pre-flight)
+- **ADR:** [0141](../adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md) (pre-flight)
 
 ## 1. Jelzés + handoff
 
@@ -53,8 +53,8 @@ védelem **ténylegesen mért**, nem díszlet. A klón törölve.
 - **Redacted-only boundary (ADR 0132):** a builder `TutorContextSnapshot`-ot fogad
   (nem nyers forrás-típust); a `_redactedSnapshot()` teszt bizonyítja, hogy a
   secret/PCM már az assembleren redaktálódik. ✔
-- **Allowlist-tulajdonlás (ADR 0140 D4):** `TutorToolRegistry.schemasForTurn` birtokolja. ✔
-- **Nincs cloud/gateway, nincs UI, nincs CoT** (ADR 0140 D5/D6). ✔
+- **Allowlist-tulajdonlás (ADR 0141 D4):** `TutorToolRegistry.schemasForTurn` birtokolja. ✔
+- **Nincs cloud/gateway, nincs UI, nincs CoT** (ADR 0141 D5/D6). ✔
 - **`public.dart`:** csak a prompt-réteg additív exportja; nincs más feature belső import. ✔
 - **Trusted template guard:** `PromptTemplate` elutasít `<<<`/`>>>`-t tartalmazó
   templatet és a nem-`en` locale-t. ✔
