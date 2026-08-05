@@ -4358,3 +4358,52 @@ worktree-t) kapjon. Ha egy override egy Kilo-qwen motorra állva kétszer
 status=unknown-t hoz, az nem a kör kódja: `clear` → queue-motor, és a mély fix a
 motor-tulajdonos session dolga. A Terra a jelenlegi completion-megbízható
 alapmotor.
+## L128 — A modell nem „képtelen befejezni": a fordulót BEJELENTÉSSEL zárja, és a harness erre kilép (ADR 0173)
+
+**Mérés (2026-08-05, négy kör naplója).** A Qwen-implementer köreinek
+visszatérő vége nem hibaüzenet, hanem egy mondat:
+
+- E04-R15: `First Flutter compile is slow — waiting for the run to finish.`
+- E04-R16 (1. kísérlet): `Now the action confirmation service, fake executors...`
+- E04-R16 (2. kísérlet): `Now the command/signal tree and effects.`
+- E04-R14: bejelentette a hátralévő fixture-javításokat, edit nélkül.
+
+Mind a négy esetben a modell **záró üzenetet** küldött tool-hívás helyett, a
+`codex exec` erre rendben kilépett, a munka félkész maradt, jelzés nem
+született. Eddig ez körönként egy TELJES újraindítás volt (E04-R16-ot kétszer
+kezdtük újra), és az orchestrátorok kézzel írtak figyelmeztetést a promptba —
+ugyanazt a mondatot, körről körre.
+
+**A gyökérok nem képességbeli.** Ugyanaz a modell ugyanabban a session-ben
+zökkenőmentesen folytatja a munkát, ha megkérik rá: a `codex exec resume <id>`
+füst-tesztje megőrizte a kontextust (ismerte az előző forduló fájljait), és a
+kért szerkesztést elvégezte. Vagyis a hiányzó darab nem tudás, hanem
+**folytatási inger**.
+
+**Két mellékmérés ugyanabból a fejlécből.** (1) `reasoning effort: none` — egy
+$2/$6 per 1M tokenes modellt gondolkodási szint nélkül futtattunk, mert a
+profil nem adta át a paramétert (a provider elfogadja: füst-teszt zöld).
+(2) A `ruff format --check` hibák (E04-R15 MAJOR-1) azért jutottak a
+merge-kapuig, mert a lokális gate Dart-only volt.
+
+**Kereszthivatkozás és egy tényszerű pontosítás az [L127]-hez.** Az E04-R16
+önjavító köre ugyanerre a gyökérokra jutott („HARNESS-szintű, nem
+modell-egyedi") — ez a lelet egybevág. Az `.pipeline/engine-override`
+EREDETÉT azonban tévesen a párhuzamos motor-hardening sessionnek tulajdonítja:
+az override-fájl mtime-ja **10:41**, a beállítás a `86ba182 chore(engines):
+qwen38-max mérve — implementer-váltás (user-döntés)` commithoz tartozik, míg a
+hardening-worktree (`/tmp/ss-qwen-tuning`) **19:35-kor** jött létre, és sosem
+hívott `engine-profile.sh use`-t (a füst-tesztjei izolált `/tmp` könyvtárakban,
+explicit `CODEX_HOME`-mal futottak). A szabály ettől függetlenül helyes és
+megtartandó: kísérleti motorválasztást SOHA ne a közös `.pipeline/` állapoton
+át végezz.
+
+**Szabály.** (1) Ha egy motor visszatérően jelzés nélkül, bejelentéssel zár, az
+ellenszer nem szigorúbb prompt-szöveg, hanem **mechanizmus**: automatikus,
+korlátos folytatás ugyanabban a session-ben — de kilövés (stall/timeout) UTÁN
+soha, mert ott a kilövés a tény. (2) A folytatások számát a jelzésfájlba kell
+írni (`continuations=`), különben a review egy szakadásokkal elért `done`-t
+ugyanolyan bizonyítéknak látna, mint egy egy fordulóban lezártat. (3) Ami
+körönként kézzel újraírt prompt-figyelmeztetés, azt artefaktummá kell tenni
+(`docs/execution/implementer-preamble.md`) — a kézi kompenzáció mérhetetlen és
+felejthető.

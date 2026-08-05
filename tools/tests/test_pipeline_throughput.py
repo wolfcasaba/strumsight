@@ -352,6 +352,30 @@ class SlotPlanningTest(unittest.TestCase):
             self.assertEqual(first, 172)
             self.assertEqual(second, 173, "két párhuzamos kör ugyanazt a számot kapta")
 
+    def test_adr_reservation_sees_numbers_taken_on_other_branches(self) -> None:
+        """MÉRT rés (ADR 0173): a futó kör a saját ágán már foglalt egy számot."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = make_repo(Path(directory))
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "t@e.hu"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+            (repo / "docs" / "adr" / "0171-example.md").write_text("", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "main"], cwd=repo, check=True)
+            subprocess.run(["git", "checkout", "-q", "-b", "round"], cwd=repo, check=True)
+            (repo / "docs" / "adr" / "0172-inflight.md").write_text("", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "round adr"], cwd=repo, check=True)
+            subprocess.run(["git", "checkout", "-q", "-"], cwd=repo, check=True)
+            (repo / "docs" / "adr" / "0172-inflight.md").unlink(missing_ok=True)
+
+            self.assertIn(172, round_slots.branch_adr_numbers(repo))
+            self.assertEqual(
+                round_slots.reserve_adr(repo, repo / ".pipeline" / "inflight", "E09-R01"),
+                173,
+                "a foglaló egy másik ágon már kiosztott számot adott ki újra",
+            )
+
     def test_inflight_registry_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = make_repo(Path(directory))

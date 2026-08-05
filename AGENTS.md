@@ -362,6 +362,23 @@ ROUND_BRIEF=docs/rounds/eXX-rYY-<slug>.md \
 tools/codex-watch.sh /home/ubuntu/ss-codex-<kör> /tmp/codex-<kör>.log
 ```
 
+A burkoló 2026-08-05 óta (ADR 0173) három dolgot tesz hozzá minden Codex-harness
+körhöz, amit korábban körönként kézzel kellett pótolni:
+
+1. **implementer-preambulum** (`docs/execution/implementer-preamble.md`) a
+   feladat elé — a MÉRT hibaminták (bejelent-és-kilép, elmaradt commit, kihagyott
+   `ruff format`, kalandozás) tiltása artefaktumként, nem prompt-szövegként;
+2. **automatikus folytatás**: jelzés nélküli forduló-vég után `codex exec resume`
+   UGYANABBAN a session-ben, legfeljebb `CODEX_MAX_CONTINUATIONS` (alap 2)
+   alkalommal, a kör eredeti időkeretén belül; kilövés (stall/timeout) után SOHA;
+3. **gondolkodási szint** a nyilvántartás `reasoning` oszlopából
+   (`-c model_reasoning_effort`), mert a Kilo-profil alatt mérve
+   `reasoning effort: none` volt.
+
+A jelzésfájl ezért új mezőket kap: `continuations=` és `session_id=`. **A review
+nézze meg**: egy két folytatással elért `done` nem ugyanaz a bizonyíték, mint egy
+egy fordulóban lezárt kör.
+
 (A bwrap-sandbox ezen a boxon AppArmor miatt nem tud user namespace-t nyitni,
 ezért a burkoló `-s danger-full-access`-t ad — az izolációt a külön
 munkapéldány adja, nem a sandbox.)

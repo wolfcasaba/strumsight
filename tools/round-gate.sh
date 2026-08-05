@@ -35,6 +35,44 @@ if [ "${1:-}" = "--baseline" ]; then
   shift
 fi
 
+# --- Backend sáv (ADR 0173) ----------------------------------------------
+# MÉRT hiányosság: a gate Dart-only volt, ezért a backendet érintő körök
+# Python-oldali mércéje CSAK a CI-ban futott. Ez körönként egy teljes javító
+# kört jelentett (E04-R15 MAJOR-1: `ruff check` zöld, `ruff format --check`
+# piros → Backend CI piros; E04-R14: pytest-hibák csak a friss CI-checkouton).
+#
+# A sáv MAGÁTÓL kapcsol be, ha a kör hozzáért a `backend/`-hez — nincs
+# kapcsoló a kihagyására, mert az a mérce gyengítése lenne.
+backend_touched() {
+  [ -d backend ] || return 1
+  if [ -n "$(git status --porcelain -- backend 2>/dev/null)" ]; then
+    return 0
+  fi
+  local base
+  base=$(git merge-base HEAD origin/main 2>/dev/null) || return 1
+  [ -n "$base" ] || return 1
+  [ -n "$(git diff --name-only "$base" HEAD -- backend 2>/dev/null)" ]
+}
+
+# A munkapéldányokban nincs saját `backend/.venv` (gitignore-olt), ezért a
+# fő repó venv-je is elfogadott: az interpreter csak a függőségeket hozza, a
+# MÉRT fájlok a munkapéldányból jönnek (cwd elsőbbség a sys.path-on).
+resolve_backend_python() {
+  local candidate
+  for candidate in \
+    "${ROUND_GATE_BACKEND_PYTHON:-}" \
+    "backend/.venv/bin/python" \
+    "$HOME/music-theory/backend/.venv/bin/python"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+if [ "${1:-}" = "--backend-plan" ]; then   # teszthorog: futna-e a backend sáv
+  if backend_touched; then echo run; else echo skip; fi
+  exit 0
+fi
+
 write_result() {
   [ -n "$result_file" ] || return 0
   local outcome=$1 exit_code=$2 failed_step=${3:-} command_exit=${4:-0} error_hash=${5:-}
@@ -203,6 +241,19 @@ run_step "secrets" \
 # sablon-kulcsnak van nem üres, azonos helyőrzőjű fordítása.
 run_step "l10n" \
   "$dart_bin" run tool/ci/check_l10n_parity.dart
+
+# Backend sáv (ADR 0173): ugyanaz a három lépés, amit a Backend CI futtat —
+# csak most a kör VÉGÉN, nem a merge-kapunál derül ki, ha piros.
+if backend_touched; then
+  if ! backend_python=$(resolve_backend_python); then
+    finish_error "environment_failure" 20 \
+      "a kör a backendhez ért, de nincs backend venv (backend/README.md: python3 -m venv backend/.venv && .venv/bin/pip install -r requirements-dev.txt)" \
+      "preflight.backend" 2
+  fi
+  run_step "backend ruff format" "$backend_python" -m ruff format --check backend/app backend/tests
+  run_step "backend ruff check" "$backend_python" -m ruff check backend/app backend/tests
+  run_step "backend pytest" env --chdir=backend "$backend_python" -m pytest -q
+fi
 
 summary
 echo

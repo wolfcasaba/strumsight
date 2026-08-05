@@ -867,6 +867,28 @@
 > sávba, és hogy a gate egyetlen lépése sem tűnhet el. Részletek:
 > [`docs/adr/0171-pipeline-throughput-program.md`](docs/adr/0171-pipeline-throughput-program.md).
 
+> ## 🔧 Governance: ADR 0173 — Qwen implementer megerősítés (2026-08-05)
+>
+> User-kérés: „vizsgáld meg a Qwen fejlesztését az előzmények alapján … hozzuk
+> ki belőle a legjobbat". Négy kör naplójából (E04-R13…R16) három visszatérő,
+> NEM képességbeli hibaminta: (1) a forduló **bejelentéssel** zárul tool-hívás
+> helyett → félkész fa, nincs jelzés; (2) a session fejlécében mérve
+> `reasoning effort: none`; (3) a backend-mérce csak a CI-ban futott
+> (E04-R15 MAJOR-1: `ruff format --check` piros → 2 javító kör).
+>
+> Ellenszerek (mind gépi): a `codex-round.sh` **automatikus folytatása**
+> ugyanabban a session-ben (`codex exec resume`, max 2, kilövés után soha,
+> `continuations=` a jelzésben) · **implementer-preambulum** artefaktumként
+> minden forduló elé · motoronkénti **`reasoning`** oszlop
+> (`qwen38-max = medium`, mérve) · a gate **backend sávja**
+> (`ruff format --check` + `ruff check` + `pytest`, user-engedéllyel, ADR 0173 §4)
+> · az ADR-foglaló mostantól a **futó ágakon** kiosztott számokat is látja.
+>
+> Őrök: `tools/tests/test_qwen_implementer_hardening.py` (13 teszt) + bővített
+> `test_engine_profile.py` / `test_pipeline_throughput.py`. Részletek:
+> [`docs/adr/0173-qwen-implementer-hardening.md`](docs/adr/0173-qwen-implementer-hardening.md),
+> [`docs/LESSONS.md` L126](docs/LESSONS.md).
+
 ## 1. Current release state
 
 - **StrumSight** — offline, on-device guitar chord + strum-direction detector

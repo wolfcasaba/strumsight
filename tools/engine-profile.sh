@@ -74,7 +74,7 @@ case "${1:-list}" in
       [ "$name" = "$active" ] && mark="*"
       printf '%s%-16s %-8s %-24s %-11s %s\n' \
         "$mark" "$name" "$(field "$row" 2)" "$(field "$row" 4)" \
-        "$(availability "$row")" "$(field "$row" 13)"
+        "$(availability "$row")" "$(field "$row" 14)"
     done < <(grep -v '^[[:space:]]*#' "$registry" | grep -v '^name	')
     ;;
 
@@ -123,6 +123,9 @@ case "${1:-list}" in
     printf 'ENGINE_ROUND_TIMEOUT=%s\n' "$(field "$row" 8)"
     printf 'ENGINE_CONTEXT_WINDOW=%s\n' "$(field "$row" 9)"
     printf 'ENGINE_MAX_OUTPUT=%s\n' "$(field "$row" 10)"
+    # Gondolkodási szint (ADR 0173): a burkoló `-c model_reasoning_effort`-ként
+    # adja tovább. "-" = ne adjunk át semmit (a provider defaultja marad).
+    printf 'ENGINE_REASONING=%s\n' "$(field "$row" 13)"
     if [ "$auth_env" != "-" ] && [ "$auth_file" != "-" ]; then
       key_path=$(expand "$auth_file")
       if [ -r "$key_path" ]; then

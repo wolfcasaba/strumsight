@@ -31,7 +31,23 @@ class RegistryTest(unittest.TestCase):
     def test_every_row_has_the_full_column_set(self) -> None:
         for row in registry_rows():
             with self.subTest(engine=row[0]):
-                self.assertEqual(len(row), 13, f"{row[0]}: hibás oszlopszám")
+                self.assertEqual(len(row), 14, f"{row[0]}: hibás oszlopszám")
+
+    def test_reasoning_column_holds_a_supported_effort_or_the_neutral_dash(self) -> None:
+        """ADR 0173: a gondolkodási szint MÉRT érték, nem tetszőleges string.
+
+        A `-` semleges: a burkoló ilyenkor NEM ad át `model_reasoning_effort`-ot,
+        tehát a provider defaultja marad — ez a visszakapcsolás útja is.
+        """
+        for row in registry_rows():
+            with self.subTest(engine=row[0]):
+                self.assertIn(row[12], ("-", "minimal", "low", "medium", "high"))
+
+    def test_the_measured_engine_actually_gets_reasoning(self) -> None:
+        # MÉRVE 2026-08-05: a Kilo-profil alatt a fejléc `reasoning effort: none`
+        # volt; a füst-teszt igazolta, hogy a provider elfogadja a `medium`-ot.
+        by_name = {row[0]: row for row in registry_rows()}
+        self.assertEqual(by_name["qwen38-max"][12], "medium")
 
     def test_harness_is_one_of_the_two_supported_ones(self) -> None:
         for row in registry_rows():
