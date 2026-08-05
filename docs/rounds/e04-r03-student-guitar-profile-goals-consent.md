@@ -1,6 +1,6 @@
 # E04-R03 — Student profile, guitar profile, goals és consent
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-05, kód olvasva: main @ `52bf072`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 3; §35
 - **Branch:** `codex/e04-r03-student-guitar-profile-goals-consent`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R01 merge**
@@ -15,7 +15,6 @@ allowed_paths = [
   "lib/features/ai_tutor/domain/models/learning_goal.dart",
   "lib/features/ai_tutor/domain/models/tutor_consent.dart",
   "lib/features/ai_tutor/data/local/tutor_profile_codec.dart",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/domain/student_profile_test.dart",
   "test/features/ai_tutor/domain/tutor_consent_test.dart",
   "test/features/ai_tutor/data/tutor_profile_codec_test.dart",
@@ -44,10 +43,53 @@ tools/codex-signal.sh stopped "<egy sor>" ; tools/codex-signal.sh blocked "<egy 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract/ellentmondó
 acceptance → `stopped`.
 
-## 0.0 Tervezési baseline és pre-flight revízió
+## 0.0 Tervezési baseline és pre-flight revízió (2026-08-05, orchestrátor)
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott
-ADR (R01 0132/0134 bővítése).
+**Baseline:** `main @ 52bf072` (origin/main == local HEAD). Előfeltétel teljesül:
+E04-R01 (`814388a`, #124) és E04-R02 (`db778c4`, #125) merge-elve.
+
+**ADR-döntés — NINCS új ADR.** Ez a kör az R01-ben elfogadott policyt *realizálja*
+domain-modellként, nem hoz új normatív döntést, ezért új ADR-szám kiosztása
+szám-infláció lenne. A kötő ADR-ek MÉRTEN léteznek és fedik a kört:
+- **ADR 0132** (`docs/adr/0132-…`) §3: a consent **három független tengely** —
+  (a) model-use, (b) tartós szerveroldali tárolás, (c) evaluation redakcióval;
+  „az egyik megadása nem vonja [a másikat]". Ez a §5.1 forrása.
+- **ADR 0134** (`docs/adr/0134-…`): local-first, megtekinthető, szerkeszthető/
+  törölhető memory, dokumentált retention; „nem lazítható azért, hogy egy teszt
+  zöld legyen". A §5.2 (immutable, verziózott) + §9 retention forrása.
+
+**Mért §1.1 (elérhetetlen cél-státusz):** N/A — nincs reducer/állapotgép ebben a
+körben; a `TutorConsent` value-object három **független** tengellyel, a
+grant/revoke tiszta value-transzformáció. A cél-„státuszt" (adott tengely
+engedélyezett/tiltott) közvetlenül az érték produkálja, nincs félrevezető
+átmenettábla.
+
+**Mért §1.2 (erőforrás-tulajdonlás):** N/A — tiszta domain, nincs
+lease/lock/handle/subscription. (`rg "\.acquire\(" lib/features/ai_tutor` = 0.)
+
+**REVÍZIÓ 1 — engedélyezett-lista SZŰKÍTÉSE (`public.dart` eltávolítva).**
+Mérés: az R02 commitolt egy **kényszerített üres-boundary invariánst** —
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` (NINCS az engedélyezett
+listán) azt állítja, hogy `lib/features/ai_tutor/public.dart` **nulla**
+import/export direktívát tartalmaz. „Additív export" hozzáadása ezt a
+scope-on-kívüli tesztet pirosra váltaná (tilos zóna, H3-kockázat), és **egyetlen
+acceptance criterion sem** igényel külső elérhetőséget ebben a körben (a tesztek
+közvetlenül a modellfájlokból importálnak). Ezért a `public.dart` kikerül az
+engedélyezett listáról; a boundary-export a fogyasztót bevezető későbbi kör
+dolga. Ez a §2 (ADR 0087) szerinti autonóm **lista-szűkítés**, nem tágítás.
+
+**REVÍZIÓ 2 — teszt-fájl leképezés rögzítése.** Négy új modell (Student/Guitar/
+Learning/Consent), de az engedélyezett domain-tesztlista csak `student_profile_test.dart`
+és `tutor_consent_test.dart`. A `GuitarProfile` és `LearningGoal` ≥90% coverage-ét
+a `student_profile_test.dart`-ban **csoportosítva** kell elérni; ÚJ tesztfájl
+létrehozása (pl. `guitar_profile_test.dart`) tilos-zóna → `stopped`.
+
+**Mért precedens-készlet (a briefben hivatkozott mai alakok):**
+- ID/validáció-minta: `tutor_ids.dart` — `TutorIdValidationException._(code)`,
+  stabil `TutorIdValidationCode` konstansok, `Object.hash` value-equality.
+- Codec-minta: `tutor_conversation_codec.dart` — `supportedSchemaVersion = 1`,
+  stabil `…CodecErrorCode` konstansok, `schemaVersion.missing/unknown`,
+  `field.missing/invalid` policy, determinisztikus kulcssorrend, UTF-8 JSON.
 
 ## 1. Cél
 
@@ -79,8 +121,10 @@ domainjének létrehozása — a consent szerkezetileg elkülönített tengelyek
 | `.../domain/models/learning_goal.dart` | ÚJ | célmodell |
 | `.../domain/models/tutor_consent.dart` | ÚJ | granular consent |
 | `.../data/local/tutor_profile_codec.dart` | ÚJ | verziózott codec |
-| `lib/features/ai_tutor/public.dart` | R01/R02-ből | additív export |
-| `test/features/ai_tutor/domain/*`, `.../data/tutor_profile_codec_test.dart` | ÚJ | tesztek |
+| ~~`lib/features/ai_tutor/public.dart`~~ | **TÖRÖLVE** (§0.0 Rev.1) | boundary-export ütközik az R02 üres-boundary teszttel |
+| `test/features/ai_tutor/domain/student_profile_test.dart` | ÚJ | profil + GuitarProfile + LearningGoal (grouped) |
+| `test/features/ai_tutor/domain/tutor_consent_test.dart` | ÚJ | consent-tengelyek |
+| `test/features/ai_tutor/data/tutor_profile_codec_test.dart` | ÚJ | codec round-trip |
 | `docs/rounds/e04-r03-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, más feature belső contractja, `docs/rag`,
@@ -119,7 +163,7 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI = orchestrátor.
 
 1. RED consent-tengely + validációs tesztek.
 2. Modellek + codec.
-3. Additív export; gate.
+3. Gate. (NINCS `public.dart` export — §0.0 Rev.1.)
 
 Javasolt commit: `feat(ai-tutor-domain): add student profile goals and granular consent`.
 
@@ -133,7 +177,35 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- Létrejött a négy immutable, value-equal domain modell: `StudentProfile`
+  (minden felhasználó által látható mezőhöz típusos provenance), `GuitarProfile`
+  (tuning/string-count/capo validáció), `LearningGoal` (kategória, prioritás,
+  opcionális UTC deadline és active/inactive lifecycle) és `TutorConsent`.
+  A Student- és Guitar-profile `merge` megőrzi az explicit felhasználói értéket
+  inferred jelölttel szemben.
+- A `TutorConsent` kizárólag a három független tengelyt tárolja:
+  `modelUseGranted`, `persistentStorageGranted` és
+  `evaluationWithRedactionGranted`; mindegyikhez önálló immutable grant/revoke
+  transzformáció tartozik. Nincs összevont AI-enabled állapot.
+- Elkészült a `TutorProfileCodec` v1: négy külön, determinisztikus UTF-8 JSON
+  envelope, stabil hibakódokkal. Az ismert envelope-ok ismeretlen mezőit
+  ignorálja, a hiányzó kötelező mezőt elutasítja; ezt teszt rögzíti.
+- Tesztek: a két domain teszt a validációs hibakódokat, value equalityt,
+  collection-immutabilityt, provenance-prioritást, goal lifecycle-t és a három
+  consent-tengely függetlenségét méri. A codec teszteli mind a négy modell
+  round-tripjét és byte-azonos újrakódolását. Két célzott mutáció is RED lett:
+  a model-use grant storage-t is engedélyező változata, illetve az inferred
+  jelöltet előnyben részesítő provenance-feloldás.
+- Lefedettség: a négy új domain fájl együtt **186/198 sor (93.9%)** a
+  `flutter test --coverage test/features/ai_tutor/domain/student_profile_test.dart test/features/ai_tutor/domain/tutor_consent_test.dart`
+  futásból.
+- Kötelező gate (a generált l10n-előfeltétel `tools/prepare-flutter-generated.sh`
+  helyreállítása után):
+  `tools/round-gate.sh test/features/ai_tutor/domain test/features/ai_tutor/data`
+  → format zöld, analyze zöld, domain tesztek zöld (48), data tesztek zöld
+  (16), architecture zöld.
+- Nem futtatott ellenőrzés: teljes Flutter suite, randomizált property gate és
+  APK build — a brief/ADR 0053 szerint ezeket a CI-ban az orchestrátor futtatja.
 
 ## 11. Review — a független reviewer tölti ki
 
