@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "rhythm-counting-hu",
+  "locale": "hu",
+  "skill": "rhythm",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Számold a lüktetést pengetés előtt",
+  "body": "Mondd ki egyenletesen, hogy egy, kettő, három, négy, mielőtt a gitárt hozzáadod.\n\nKis le-fel mozdulatokkal pengetj, miközben a számolás egyenletes marad. Ha gyorsulsz, csökkentsd a tempót és kezdd újra.",
+  "contentHash": "2be7ba1d0e549e85ddd6b497c4188a8f801d2e2cdd0f84d39386131d82b167d3"
+}

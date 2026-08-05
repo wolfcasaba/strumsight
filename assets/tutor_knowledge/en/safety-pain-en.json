@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "safety-pain-en",
+  "locale": "en",
+  "skill": "safety",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Stop when practice causes pain",
+  "body": "Normal effort can feel tiring, but sharp pain, numbness, or pain that persists after playing is a signal to stop.\n\nRest and seek advice from a qualified health professional if symptoms continue or return.",
+  "contentHash": "b3eb6ada787bfd465a07a8546ff6e18d1098ab85b058dc6a13fd94098bc0b0da"
+}

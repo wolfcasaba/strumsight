@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "chord-changes-hu",
+  "locale": "hu",
+  "skill": "chord",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Válts tisztán az akkordok között",
+  "body": "Fogd le az első akkordot, majd csak annyira engedd fel az ujjaidat, amennyire a következő alakzathoz szükséges.\n\nLassan gyakorold a váltást, és tempóemelés előtt hallgasd meg, hogy minden húr megszólal-e.",
+  "contentHash": "d569f88b43887d88e07c28e646a65fc769a225438af1af1488a5c911a37f4642"
+}

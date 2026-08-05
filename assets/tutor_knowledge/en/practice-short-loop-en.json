@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "practice-short-loop-en",
+  "locale": "en",
+  "skill": "practice",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Use a short practice loop",
+  "body": "Choose one small task, such as four steady chord changes, and repeat it for a short timed block.\n\nNotice one detail after each block and change only that detail in the next repetition.",
+  "contentHash": "d3f0d98e720cdd6f9978156e334e33956460f3f07ce646b4540fff8b771f840f"
+}

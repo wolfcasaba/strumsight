@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "rhythm-counting-en",
+  "locale": "en",
+  "skill": "rhythm",
+  "difficulty": "beginner",
+  "license": "CC0-1.0",
+  "version": 1,
+  "status": "approved",
+  "title": "Count the pulse before you strum",
+  "body": "Say one, two, three, four at a steady pace before adding the guitar.\n\nUse small down-up motions while the count stays even. If the count speeds up, lower the tempo and restart.",
+  "contentHash": "b232230a438018deb81dd41ecaa0caea683e12110b0534b3b04942727376d3c4"
+}

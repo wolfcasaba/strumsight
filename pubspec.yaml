@@ -56,6 +56,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    # Curated, reviewed tutor knowledge documents and their manifest.
+    - assets/tutor_knowledge/
     # Trained strum-direction CRNN weights (pure-Dart inference, round 163).
     - assets/ml/strum_crnn.bin
     # The 70 ms-deadline LIVE variant (round 168; serve-chain 79.8% real).
