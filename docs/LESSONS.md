@@ -3730,6 +3730,27 @@ a §0.0 (2) szerint bekerült a `tutor_conversation_test.dart`-ba; a review
 mutáció-próbája (flutter-import a domainbe → purity RED) igazolta, hogy valódi
 gépi mérce, nem díszlet.
 
+## L108 — CI-dispatch a kör-branchre az implementer LOKÁLIS commitját nem tolja fel; az első run a régi origin-tipre épül — a review-push viszi fel a kódot, és az exact-SHA re-dispatch az egyetlen merge-evidencia (E04-R03, 2026-08-05)
+
+**Mérés.** Az E04-R03-ban a Codex a `feat` commitot (`2e4766e`) a megosztott
+`.git`-ben létrehozta, de **NEM push-olta** — a `codex-round.sh` csak lokálisan
+commitol. Amikor az implementer `done` után azonnal `gh workflow run build-apk.yml
+--ref <branch>`-et dispatcheltem, a GitHub az **origin** branch-tipjét használta,
+ami még a pre-flight commit (`5826067`, implementáció NÉLKÜL) volt — a run
+`headSha`-ja ezt igazolta (`gh run list --json headSha`). A kód csak akkor került
+originra, amikor a review-commitot push-oltam (a `git push` a teljes history-t
+felvitte: `2e4766e` + `af3ddc1`).
+
+**Következmény / szabály.** (1) Az implementer lokális commitja után az
+orchestrátornak **explicit push kell** (vagy a review-commit push-a), MIELŐTT a
+CI-t merge-evidenciának tekinti. (2) A `gh run list --json headSha` ↔
+`git rev-parse origin/<branch>` összevetés (ADR 0086 §2 / L21) itt fogta meg a
+rést: az első run rossz SHA-n futott. (3) Bármi, ami a branch HEAD-et a dispatch
+UTÁN mozdítja (review-doc commit is!), **re-dispatch**-et igényel, mert a
+merge-evidencia csak `run.headSha == merged HEAD` esetén érvényes. Az E04-R03-ban
+a re-dispatch (`af3ddc1`) volt az egyetlen érvényes zöld futás; a régi run
+figyelmen kívül hagyva/cancelve.
+
 **Tanulság.** (1) Greenfield feature-domainnél a pre-flight MINDIG mérje ki
 `rg`-vel, hogy a purity-mércét mi adja — a `tool/check_architecture.dart`
 allowlistje feature-enumerált, nem `*`-os, tehát új feature-t nem fed; a mérce

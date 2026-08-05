@@ -4,7 +4,33 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R02 merged — versioned, provider-free conversation & message domain).**
+> (E04-R03 merged — student/guitar profile, goals & granular consent domain).**
+>
+> **E04-R03 KÉSZ (PR [#126](https://github.com/wolfcasaba/strumsight/pull/126),
+> squash `06ae3f7`, **nincs új ADR** — az R01 [0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)
+> (privacy/consent) + [0134](docs/adr/0134-ai-tutor-memory-policy.md) (memory)
+> realizálása, implementer **Codex** (Terra, örökölt kézi override),
+> orchestrátor/reviewer **Claude Opus 4.8**):** provider-free, verziózott
+> személyre-szabás + adatvédelmi domain. `StudentProfile` (per-mező provenance +
+> explicit>inferred merge, defenzív lista-másolás), `GuitarProfile` (tuning/capo/
+> string-count validáció), `LearningGoal` (kategória/prioritás/UTC-deadline/active-
+> lifecycle); **`TutorConsent` — HÁROM FÜGGETLEN tengely** (model-use / persistent-
+> storage / evaluation-with-redaction, egyik SOHA nem implikálja a másikat, ADR 0132
+> §3); `TutorProfileCodec` verziózott (schema v1), bit-stabil round-trip, unknown-
+> mező ignorál / missing-mező elutasít, stabil hibakód-készlet. **Pre-flight §0.0
+> (mérve, main @ `52bf072`):** (1) nincs új ADR (szám-infláció elkerülése); (2)
+> **REVÍZIÓ — engedélyezett-lista szűkítés**: `public.dart` eltávolítva (az R02
+> `ai_tutor_boundary_test.dart` üres-boundary invariánsa pirosra váltana bármely
+> exporttól, és egy acceptance sem igényel külső elérhetőséget); (3) Guitar/Learning
+> tesztek a `student_profile_test.dart`-ba csoportosítva (nincs új tesztfájl); (4)
+> §1.1/§1.2 mérés N/A (nincs reducer/erőforrás). **`public.dart` TOVÁBBRA IS ÜRES.**
+> Független review **APPROVED** — 0 BLOCKER/MAJOR, 2 NOTE; a consent-függetlenség
+> **valódi-sértés mutációval igazolva** (grantModelUse a storage-tengelyt is állítja
+> → consent-teszt RED); coverage **90,6%** (357/394) az új domainen. CI
+> [run 30965089716](https://github.com/wolfcasaba/strumsight/actions/runs/30965089716)
+> **success** exact head `af3ddc1` (full suite + randomizált property + APK);
+> post-merge gate `main`-en zöld. Hívó UI/gateway/repository nincs — production
+> viselkedés változatlan. **Következő: E04-R04 — a pipeline indítja.**
 >
 > **E04-R02 KÉSZ (PR [#125](https://github.com/wolfcasaba/strumsight/pull/125),
 > squash `db778c4`, **nincs új ADR** — a 0131/0132/0134 kiterjesztése,
@@ -758,13 +784,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #124](https://github.com/wolfcasaba/strumsight/pull/124), squash
-`814388a` (E04-R01). [Build Android APK 30958928669](https://github.com/wolfcasaba/strumsight/actions/runs/30958928669)
-is **success** for exact branch `headSha` `9380498` (full Flutter suite,
+`main` @ [PR #126](https://github.com/wolfcasaba/strumsight/pull/126), squash
+`06ae3f7` (E04-R03). [Build Android APK 30965089716](https://github.com/wolfcasaba/strumsight/actions/runs/30965089716)
+is **success** for exact branch `headSha` `af3ddc1` (full Flutter suite,
 randomized property/coverage gate and development APK). The independent
 post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e04-r01-ai-tutor-baseline-and-boundaries-review.md`](docs/reviews/e04-r01-ai-tutor-baseline-and-boundaries-review.md).
-(Előző product-merge-ek: PR #123 / `3ae368a`, E03-R22; PR #121 / `4014f73`, E03-R20.)
+[`e04-r03-student-guitar-profile-goals-consent-review.md`](docs/reviews/e04-r03-student-guitar-profile-goals-consent-review.md).
+(Előző product-merge-ek: PR #125 / `db778c4`, E04-R02; PR #124 / `814388a`, E04-R01; PR #123 / `3ae368a`, E03-R22.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -837,23 +863,42 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
+**E04-R03 — Student/guitar profile, goals & granular consent** (PR
+[#126](https://github.com/wolfcasaba/strumsight/pull/126), squash `06ae3f7`,
+**nincs új ADR** — az R01 [0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)
+(privacy/consent) + [0134](docs/adr/0134-ai-tutor-memory-policy.md) (memory)
+realizálása). Implementer: **Codex (Terra, örökölt kézi override)**;
+orchestrátor/reviewer: **Claude Opus 4.8**.
+
+**Elkészült:** provider-free, verziózott személyre-szabás + adatvédelmi domain
+(greenfield, hívó nélkül). `StudentProfile` (per-mező `ProfileField<T>` provenance
++ explicit>inferred `merge`, defenzív unmodifiable lista-másolás, stabil hibakód-
+készlet), `GuitarProfile` (string-count 4–12 / tuning-hossz-egyezés / capo 0–24),
+`LearningGoal` (kategória/prioritás/UTC-deadline/active-inactive lifecycle);
+**`TutorConsent` — HÁROM FÜGGETLEN tengely** (model-use / persistent-storage /
+evaluation-with-redaction; egyik grant/revoke SOHA nem érinti a másikat, ADR 0132
+§3); `TutorProfileCodec` verziózott (schema v1, determinisztikus kulcssorrend,
+UTF-8 JSON), **bit-stabil round-trip**, unknown-mező ignorál / missing-mező
+elutasít (`fieldMissing`), unknown schema → `schemaVersionUnknown`. **Pre-flight
+§0.0:** nincs új ADR; **engedélyezett-lista szűkítve** — `public.dart` eltávolítva
+(az R02 `ai_tutor_boundary_test.dart` üres-boundary invariánsa bármely exporttól
+pirosra váltana, és egy acceptance sem igényel külső elérhetőséget); Guitar/Learning
+tesztek `student_profile_test.dart`-ba csoportosítva. **Nulla javító kör.**
+Review APPROVED — consent-függetlenség valódi-sértés mutációval igazolva; coverage
+**90,6%**. `public.dart` **továbbra is üres**. Full narrative:
+[`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+<details><summary>Korábbi kör: E04-R01 — AI Tutor baseline & ADR-ek (superseded snapshot)</summary>
+
 **E04-R01 — AI Tutor baseline, ADR-ek és feature flagek** (PR
 [#124](https://github.com/wolfcasaba/strumsight/pull/124), squash `814388a`,
-ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)/[0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)/[0133](docs/adr/0133-ai-tutor-tool-confirmation.md)/[0134](docs/adr/0134-ai-tutor-memory-policy.md)).
-Implementer: **Codex (gpt-5.6-terra, örökölt kézi override)**; orchestrátor/reviewer: **Claude Opus 4.8**.
+ADR 0131/0132/0133/0134). Epic 4 kickoff funkcionális változtatás nélkül, flag
+mögött (`aiTutorEnabled`/`aiTutorCloudEnabled` default OFF); üres `public.dart`
+boundary; négy kötött ADR; egy javító kör (MAJOR M1: hashCode-bővítés törte az
+`app_config_test` 6-mezős hashCode-ját → fix: value semantics `==`-on).
+Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
-**Elkészült:** Epic 4 (AI Guitar Teacher) kickoff **funkcionális változtatás
-nélkül**, flag mögött. Additív `FeatureFlags.aiTutorEnabled` + `aiTutorCloudEnabled`
-(default **OFF** minden környezetben; `==`+`toString` bővült, `hashCode` 6-mezős
-maradt — fix 1); üres `lib/features/ai_tutor/public.dart` boundary (nulla
-import/export); négy kötött ADR (provider-boundary / privacy&consent /
-tool-confirmation / memory-policy); `docs/baseline/epic-04-ai-tutor-start.md`
-adatforrás-leltár + coaching fixture-snapshot + raw-audio kizárás + rollout/rollback.
-Flag OFF ⇒ 0 route + 0 hálózati kérés (`offline_network_guard` érintetlen,
-`usesNetwork` változatlan — cloud wiring R14-re halasztott, ADR 0132). **Egy
-javító kör** (MAJOR M1: a `hashCode`-bővítés a tilos zónás `app_config_test`
-pontos 6-mezős hashCode-ját törte a full-suite CI-ban → fix: value semantics a
-`==`-on, `hashCode` változatlan). Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+</details>
 
 <details><summary>Korábbi kör: E03-R19 (superseded snapshot)</summary>
 
@@ -983,16 +1028,17 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R03 — Student guitar profile, goals & consent** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R03` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r03-student-guitar-profile-goals-consent.md`). A pipeline
+0. **E04-R04 — Skill taxonomy & evidence reducer** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R04` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md`). A pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi
-   el**. Bemenete: az E04-R02 conversation/message domain (verziózott, provider-free,
-   `public.dart` továbbra is üres — az additív export R13/R17+-ra halasztva) és az
-   E04-R01 baseline (flagek default OFF, ADR 0131–0134). A boundary-invariáns
-   (nulla idegen belső import) és a flag-OFF 0-request garancia nem törhető.
-   **~~E04-R02 — Conversation & message domain~~ — KÉSZ** (PR #125, `db778c4`,
-   ld. a fejléc-összefoglalót).
+   el**. Bemenete: az E04-R03 profil/consent domain (verziózott, provider-free),
+   az E04-R02 conversation/message domain és az E04-R01 baseline (flagek default
+   OFF, ADR 0131–0134). A `public.dart` **üres-boundary invariáns** (nulla idegen
+   belső import, `ai_tutor_boundary_test.dart`) és a flag-OFF 0-request garancia
+   nem törhető.
+   **~~E04-R03 — Student/guitar profile, goals & consent~~ — KÉSZ** (PR #126,
+   `06ae3f7`, ld. a fejléc-összefoglalót és §5).
 1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
