@@ -1,6 +1,6 @@
 # E04-R19 — Evidence, source és action card UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-05, base `e8ae7ee`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 19; §35
 - **Branch:** `minimax/e04-r19-evidence-source-action-card-ui`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R09, R11, R18 merge**
@@ -47,8 +47,47 @@ scope-tágítás és nincs kód-kommentben megindokolt mércegyengítés** (Mini
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
-**Motor:** MiniMax M3 — UI-dominált kör (ADR 0069).
+**Motor:** MiniMax M3 — UI-dominált kör (ADR 0069, örökölt `minimax` override).
+
+**Base:** `main @ e8ae7ee` (E04-R18 merge után; E04-R09/R11/R18 mind merge-elve). Local HEAD = origin/main.
+
+**ADR-döntés (mért): NINCS új ADR.** A kör a már **merge-elt** ADR 0132
+(privacy & consent — a model-label sosem kerüli meg a localizationt/sanitizert)
+és ADR 0133 (tool-confirmation — előnézet + megerősítés + **typed executor**)
+hatálya alá esik; mindkettő E04-R01 baseline-döntés. Új ADR-t merge-elt döntés
+fölé osztani tilos (pipeline-prompt §4), és a közvetlen elődkörök (R13/R14/R17/**R18**)
+mind ADR nélkül, epic-ADR hatállyal zárultak. A `reserve-adr` által kiadott
+0176 markert felszabadítottam.
+
+**Mért pre-flight ellenőrzések (a brief hivatkozott felületei ellen):**
+
+1. **Stale/„nem fut" (elérhetetlen-státusz mérés):** a `stale` UI-állapotot a
+   `tutor_action_validator.dart:71` produkálja — `!metadata.expiresAt.isAfter(context.now)`
+   → `TutorActionValidationIssue.expired` → `ActionConfirmation.blocked([expired])`.
+   Az `ActionConfirmationService._confirmOnce` a `confirm`-nél ÚJRA validál, így a
+   lejárt proposal **soha nem éri el** az `executor.execute`-ot (§5.4 teljesül).
+   Reprodukáló input: bármely action `expiresAt <= now`.
+2. **Typed executor (erőforrás-tulajdonlás mérés):** `TutorActionExecutor.execute(TutorAction)`
+   csak validáció után hívódik; nyers route → `TutorActionValidationIssue.rawRouteForbidden`.
+   A UI kizárólag `ActionConfirmationService`-en át hív — nincs nyers-string/route végrehajtás.
+3. **Idempotens double-tap:** `_confirmedClientActionIds` + `_inFlightConfirmations`
+   (kulcs: `clientActionId`).
+4. **Exact action-preview:** `TutorActionPreview{kind: TutorActionPreviewKind, fields: UnmodifiableMapView}`;
+   `TutorActionPreviewKind {profileUpdate, planSave, sessionLaunch}`.
+5. **Plan-preview + edit:** `PracticePlanDraft.copyWith(blocks: …)` +
+   `PracticePlanSource.userEdited` (R09 felület, nincs új domain-logika).
+6. **Provenance-négyes (measured/trend/knowledge/inference):** nincs egyetlen
+   egyesítő domain-enum; a négy chip a prezentációs réteg új enumja, ami a meglévő
+   domain-fogalmakra képez: `DebriefFactProvenance.measuredFact`→measured,
+   `.computedTrend`→trend, `tutor_source_ref` (knowledgeVersion/chunkIndex)→knowledge,
+   `StudentProfileFieldProvenance.*Inferred`→inference. text+ikon+szín a11y-kontraktus
+   a widgetben mérve.
+7. **public.dart:** ma üres boundary (csak `library;`); a kör additív exportot ad
+   a hívó UI-widgetekhez.
+
+A CI-terv a diff commitolása után újramérve (üres diffnél fail-closed `build-apk.yml`);
+a kör tisztán Dart+ARB+docs → várható `full-gate.yml`, és `docs/rounds/**` érintés
+miatt a Router CI is a kapu része.
 
 ## 1. Cél
 
