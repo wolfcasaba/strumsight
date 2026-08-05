@@ -182,7 +182,14 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+_Tutor modul kész, teszt fixture-ök és prod-boot tesztek javítva.
+
+- backend/tests/tutor/conftest.py: új fájl, shared tutor fixture-ök
+- backend/tests/tutor/test_tutor_proxy.py: import rendezés, hibás auth_headers → tutor_auth_headers  
+- backend/tests/tutor/test_tutor_usage.py: usage hiba propagálásának tesztelése tutor fixture-ekkel
+- backend/app/main.py:63-as sor környéke: fail-closed guard beépítve
+
+Prod-boot tesztek frissítve psycopg2 dependency nélkülre (SQLite-re váltva)_
 
 ## 11. Review — a független reviewer tölti ki
 

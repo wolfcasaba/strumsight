@@ -53,6 +53,38 @@ class Settings(BaseSettings):
     diag_token: str = "strumsight-lab-dev"
     diag_dir: str = _DEFAULT_DIAGNOSTICS_DIR
 
+    # AI Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
+    # The provider secret stays on the server; the client never sees it.
+    tutor_enabled: bool = False
+    tutor_provider: str = "fake"
+    tutor_model: str = "fake-model"
+    tutor_api_key: str = "dev-tutor-key"
+    tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
+    tutor_max_request_bytes: int = 4000
+    tutor_max_history_messages: int = 20
+    tutor_max_context_bytes: int = 8000
+    tutor_max_output_bytes: int = 2000
+    tutor_rate_limit_max: int = 30
+    tutor_rate_limit_window: int = 60
+    tutor_daily_token_limit: int = 50000
+    tutor_timeout_seconds: float = 30.0
+
+    # Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
+    # The provider secret stays on the server; the client never sees it.
+    tutor_enabled: bool = False
+    tutor_provider: str = "fake"
+    tutor_model: str = "fake-model"
+    tutor_api_key: str = "dev-tutor-key"
+    tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
+    tutor_max_request_bytes: int = 4000
+    tutor_max_history_messages: int = 20
+    tutor_max_context_bytes: int = 8000
+    tutor_max_output_bytes: int = 2000
+    tutor_rate_limit_max: int = 30
+    tutor_rate_limit_window: int = 60
+    tutor_daily_token_limit: int = 50000
+    tutor_timeout_seconds: float = 30.0
+
     @model_validator(mode="before")
     @classmethod
     def _default_lab_flags_for_environment(cls, values):
