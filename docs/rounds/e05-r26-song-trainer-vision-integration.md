@@ -12,14 +12,14 @@ risk = "high"
 allowed_paths = [
   "lib/features/vision/domain/integration/vision_song_contract.dart",
   "lib/features/vision/application/vision_cadence_policy.dart",
-  "lib/features/song_trainer/services/song_vision_adapter.dart",
-  "lib/features/song_trainer/models/song_vision_summary.dart",
+  "lib/features/song_trainer/data/vision/song_vision_adapter.dart",
+  "lib/features/song_trainer/domain/models/song_vision_summary.dart",
   "lib/features/song_trainer/public.dart",
   "lib/features/vision/public.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
-  "test/features/song_trainer/song_vision_adapter_test.dart",
-  "test/features/song_trainer/transport_timing_parity_test.dart",
+  "test/features/song_trainer/data/song_vision_adapter_test.dart",
+  "test/features/song_trainer/performance/transport_timing_parity_test.dart",
   "test/features/vision/application/vision_cadence_policy_test.dart",
   "docs/rounds/e05-r26-song-trainer-vision-integration.md",
 ]
@@ -57,9 +57,12 @@ nélkül**.
 
 ## 2. Jelenlegi állapot (mért, `5d082dc`)
 
-- A Song Trainer V2 él (`lib/features/song_trainer/`: `models/`, `services/`,
-  `repositories/`, `public.dart`), backing playbackkel, A–B loopokkal és
-  pitch-alapú pontozással (Epic 3, E03-R17…R22).
+- A Song Trainer V2 él (`lib/features/song_trainer/`: `domain/{models,repositories,
+  services}`, `application/{trainer,library,editor,import,migration,progress,setlists}`,
+  `data/{audio,playback,importers,local,migration}`, `presentation/`, `public.dart`),
+  backing playbackkel, A–B loopokkal és pitch-alapú pontozással (Epic 3,
+  E03-R17…R22). A tesztfa tükrözi ezt:
+  `test/features/song_trainer/{domain,application,data,presentation,performance,integration,security,baseline}`.
 - A `songTrainerV2Enabled` és a `visionSongIntegrationEnabled` flag is OFF.
 - Az R24 adja a vision sessiont; a cadence-szabályozás **még nincs** —
   ez a kör vezeti be (a device tier finomhangolása az R29).
@@ -82,8 +85,8 @@ megváltoztatása, device tier benchmark (R29), persistence (R28), Tutor (R27).
 |---|---|---|
 | `.../vision/domain/integration/vision_song_contract.dart` | ÚJ | szűk vision API |
 | `.../vision/application/vision_cadence_policy.dart` | ÚJ | cadence-szabályozás |
-| `.../song_trainer/services/song_vision_adapter.dart` | ÚJ | fogyasztó-oldali adapter |
-| `.../song_trainer/models/song_vision_summary.dart` | ÚJ | loop/section összegzés |
+| `.../song_trainer/data/vision/song_vision_adapter.dart` | ÚJ | fogyasztó-oldali adapter (az R25 practice-mintája) |
+| `.../song_trainer/domain/models/song_vision_summary.dart` | ÚJ | loop/section összegzés |
 | `lib/features/song_trainer/public.dart`, `lib/features/vision/public.dart` | meglévő | additív export |
 | `lib/l10n/app_*.arb` | meglévő | **csak additív** kulcs |
 | `test/features/song_trainer/*`, `test/features/vision/*` | ÚJ | adapter + parity + cadence |
