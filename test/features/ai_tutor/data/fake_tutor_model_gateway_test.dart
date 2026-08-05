@@ -132,6 +132,7 @@ void main() {
 
         final future = expectLater(stream, emitsError(isA<TimeoutException>()));
         clock.advance(const Duration(seconds: 3));
+        await Future<void>.delayed(Duration.zero);
         clock.advance(const Duration(seconds: 5));
         await future;
       });
@@ -194,6 +195,7 @@ void main() {
 
         final future = expectLater(stream, emitsError(isA<TimeoutException>()));
         clock.advance(const Duration(seconds: 5));
+        await Future<void>.delayed(Duration.zero);
         clock.advance(const Duration(seconds: 10));
         await future;
       });
