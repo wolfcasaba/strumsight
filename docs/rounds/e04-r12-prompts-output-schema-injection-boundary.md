@@ -171,7 +171,33 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Implementáció:** verziózott `PromptVersion`, asset-backed angol
+  `PromptTemplate`, v1 structured `TutorOutputSchema`, valamint csak
+  `TutorContextSnapshot`-ot fogadó `TutorPromptBuilder`. A builder a toolokat
+  közvetlenül a `TutorToolRegistry.schemasForTurn(policy)` eredményéből fűzi
+  be, a trusted source-refeket és a user/import/conversation adatot fix,
+  külön delimitált szakaszokba rendezi. Az untrusted text secret/raw-audio
+  mintára redaktált, a delimiter-karakterek escape-eltek.
+- **Assetek/export:** mind a hat `ContextPurpose` intenthez v1 angol template
+  került `assets/tutor_prompts/` alá, az asset könyvtár `pubspec.yaml`-ban
+  regisztrált, a prompt contractok pedig az AI Tutor `public.dart` boundary-n
+  exportáltak.
+- **Tesztek:** `test/features/ai_tutor/prompts/` — 11 zöld eset: fix layer
+  order, locale, R10 policy-metszet, redacted secret/raw-audio absence,
+  v1 schema, adversarial untrusted delimiter + tool-escalation, és bit-stabil
+  snapshot mind a hat intenthez.
+- **Futtatott parancsok:**
+  - `flutter test test/features/ai_tutor/prompts` — **zöld** (11 teszt).
+  - `dart format …` a nyolc módosított Dart fájlon — **zöld**.
+  - `flutter gen-l10n` — **zöld**; a gitignore-olt hiányzó
+    `lib/l10n/app_localizations.dart` build-előfeltételt állította elő, nem
+    került a kör diffjébe.
+  - `tools/round-gate.sh test/features/ai_tutor/prompts` — **zöld**:
+    format, analyze, 11 prompt-teszt, architecture, secret scan és l10n parity.
+- **Eltérés:** az első gate-analyze a hiányzó generált l10n output miatt állt
+  meg; ezt `blocked` jelzéssel azonnal jelentettem, majd a kizárólag generált,
+  gitignore-olt build-előfeltételt `flutter gen-l10n`-nel pótoltam. A második,
+  változatlan gate teljesen zöld. CI-dispatch nem implementeri lépés.
 
 ## 11. Review — a független reviewer tölti ki
 

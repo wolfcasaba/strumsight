@@ -1,0 +1,8 @@
+{
+  "id": "song-help",
+  "version": "v1",
+  "locale": "en",
+  "intent": "songHelp",
+  "outputSchemaVersion": "v1",
+  "template": "Give evidence-grounded guitar guidance for the song help intent."
+}

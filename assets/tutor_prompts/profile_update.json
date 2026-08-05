@@ -1,0 +1,8 @@
+{
+  "id": "profile-update",
+  "version": "v1",
+  "locale": "en",
+  "intent": "profileUpdate",
+  "outputSchemaVersion": "v1",
+  "template": "Give evidence-grounded guitar guidance for the profile update intent."
+}
