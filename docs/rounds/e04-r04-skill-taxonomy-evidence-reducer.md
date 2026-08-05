@@ -14,7 +14,6 @@ allowed_paths = [
   "lib/features/ai_tutor/domain/models/skill_evidence.dart",
   "lib/features/ai_tutor/domain/models/skill_estimate.dart",
   "lib/features/ai_tutor/domain/services/skill_evidence_reducer.dart",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/domain/skill_taxonomy_test.dart",
   "test/features/ai_tutor/domain/skill_evidence_reducer_test.dart",
   "docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md",
@@ -41,9 +40,62 @@ tools/codex-signal.sh stopped "<egy sor>" ; tools/codex-signal.sh blocked "<egy 
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `stopped`.
 
-## 0.0 Tervezési baseline és pre-flight revízió
+## 0.0 Tervezési baseline és pre-flight revízió (2026-08-05, orchestrátor)
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Baseline:** `main @ 3dc7f5a` (origin/main == local HEAD, mérve). Előfeltétel
+teljesül: E04-R01 (`814388a`, #124), E04-R02 (`db778c4`, #125) és E04-R03
+(`06ae3f7`, #126) merge-elve.
+
+**ADR-döntés — NINCS új ADR.** Ez a kör az E04-R01-ben elfogadott policyt
+*realizálja* domain-modellként, nem hoz új normatív döntést, ezért új ADR-szám
+kiosztása szám-infláció lenne (az R02/R03 precedens szerint). A kötő ADR mérten
+létezik és fedi a kört: **ADR 0131** (`docs/adr/0131-ai-tutor-provider-boundary.md`)
+§Döntés 1–3 — a tutor domain **providerfüggetlen**, determinisztikus on-device
+coachingból dolgozik; a §5.1 (pure, determinisztikus reducer, stable tie-break)
+és a §9 (source-belső import tilalma) forrása.
+
+**Mért §1.1 (elérhetetlen cél-státusz):** a reducer EGY becslés-státuszt produkál
+(`insufficient` vs. redukált trend-becslés). Nincs meglévő állapotgép/átmenettábla
+grep-elni (a `skill_*` fájlok ÚJak; `grep -rn "SkillEstimate\|SkillEvidence" lib/`
+= 0). Az acceptance által kötött input→státusz leképezés: **0 vagy 1** összehasonlítható
+evidence-group → `insufficient`; **≥2** group → trend-becslés. A státuszt tehát
+közvetlenül az input-count produkálja, félrevezető átmeneti-él nélkül. A reviewer
+a 0/1/2-group mátrixszal méri (§6).
+
+**Mért §1.2 (erőforrás-tulajdonlás):** N/A — tiszta domain, nincs
+lease/lock/handle/subscription (`grep -rn "\.acquire(" lib/features/ai_tutor` = 0).
+
+**REVÍZIÓ 1 — engedélyezett-lista SZŰKÍTÉSE (`public.dart` eltávolítva).**
+Mérés: az E04-R01 commitolt egy **kényszerített üres-boundary invariánst** —
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` (LEZÁRT kör, NINCS az
+engedélyezett listán) azt állítja, hogy `lib/features/ai_tutor/public.dart`
+**nulla** import/export direktívát tartalmaz. „Additív export" hozzáadása ezt a
+scope-on-kívüli, lezárt-kör tesztet pirosra váltaná (H2/H3-kockázat), és **egyetlen
+acceptance criterion sem** igényel külső elérhetőséget (a tesztek közvetlenül a
+modell-/service-fájlokból importálnak). Ezért a `public.dart` **kikerül** az
+engedélyezett listáról és **ÜRES MARAD**; a boundary-export a fogyasztót bevezető
+későbbi kör (R05+) dolga. Ez a §2 (ADR 0087) szerinti autonóm **lista-szűkítés**,
+nem tágítás. Az R02/R03 azonos revíziót hozott.
+
+**Az engedélyezett fájllista a §0.0 után (6 írható út):**
+- `lib/features/ai_tutor/domain/models/skill_node.dart` (ÚJ)
+- `lib/features/ai_tutor/domain/models/skill_evidence.dart` (ÚJ)
+- `lib/features/ai_tutor/domain/models/skill_estimate.dart` (ÚJ)
+- `lib/features/ai_tutor/domain/services/skill_evidence_reducer.dart` (ÚJ)
+- `test/features/ai_tutor/domain/skill_taxonomy_test.dart` (ÚJ)
+- `test/features/ai_tutor/domain/skill_evidence_reducer_test.dart` (ÚJ)
+- `docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md` (§10 handoff)
+
+`lib/features/ai_tutor/public.dart` → **tilos zóna** (üres marad). Minden más fájl,
+más feature belső contractja, `tool/check_architecture.dart`, `docs/rag` → tilos.
+
+**Mért precedens-készlet (a briefben hivatkozott mai alakok):**
+- Value-object / stabil hibakód: `tutor_ids.dart` — `…ValidationException._(code)`,
+  `abstract final class …ValidationCode` stabil string-konstansokkal, `Object.hash`
+  value-equality.
+- Domain-purity őr: **kör-lokális** `group('Domain purity')` scanner a tesztben
+  (a song_trainer/E03-R02 + E04-R02 precedens szerint); a `tool/check_architecture.dart`
+  NEM fedi az `ai_tutor`-t és **tilos zóna**.
 
 ## 1. Cél
 
@@ -75,7 +127,7 @@ belső import.
 | `.../domain/models/skill_evidence.dart` | ÚJ | forrásjelölt bizonyíték |
 | `.../domain/models/skill_estimate.dart` | ÚJ | redukált becslés |
 | `.../domain/services/skill_evidence_reducer.dart` | ÚJ | pure reducer |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
+| `lib/features/ai_tutor/public.dart` | ~~additív export~~ **TÖRÖLVE (§0.0 REVÍZIÓ 1)** | üres marad — a lezárt E04-R01 boundary-invariáns pirosra váltana |
 | `test/features/ai_tutor/domain/*` | ÚJ | taxonómia + reducer tesztek |
 | `docs/rounds/e04-r04-*.md` | meglévő | §10 handoff |
 
@@ -132,7 +184,50 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/ai_tutor/domain/models/skill_node.dart` — immutable, v1-es
+  kezdeti taxonómia (`SkillId`, `SkillNode`, prerequisite-validáció és
+  cycle-őr).
+- `lib/features/ai_tutor/domain/models/skill_evidence.dart` — provenance-os,
+  schema- és scorer-verziót fail-loud módon validáló evidence value object;
+  egész súlyokkal a közvetlen méréshez, self-reporthoz és tutor assessmenthez.
+- `lib/features/ai_tutor/domain/models/skill_estimate.dart` — immutable
+  `insufficient`/`trend` output, külön normalized confidence-szal és stabil
+  value equalityvel.
+- `lib/features/ai_tutor/domain/services/skill_evidence_reducer.dart` — tiszta,
+  integer-aritmetikás reducer: ID-idempotencia, comparable partition/group
+  kiválasztás, UTC + lexikális tie-break, 0/1/2-group küszöb és explicit trend.
+- `test/features/ai_tutor/domain/skill_taxonomy_test.dart` — initial manifest,
+  prerequisite graph/cycle, immutability és a kör-lokális purity scanner.
+- `test/features/ai_tutor/domain/skill_evidence_reducer_test.dart` —
+  version-reject, 0/1/2 matrix, literal tie-break, seedelt shuffle-property,
+  source-weight, duplicate conflict/idempotencia és output-validáció.
+
+`public.dart`, a lezárt boundary-teszt és minden más feature contract érintetlen.
+
+### Futtatott ellenőrzések
+
+- RED: `/home/ubuntu/flutter/bin/flutter test
+  test/features/ai_tutor/domain/skill_taxonomy_test.dart
+  test/features/ai_tutor/domain/skill_evidence_reducer_test.dart` — a négy még
+  nem létező domain-contract importja miatt várt compile failure.
+- GREEN: ugyanez a két tesztfájl — **27 passed**.
+- `/home/ubuntu/flutter/bin/flutter test --coverage
+  test/features/ai_tutor/domain` — **75 passed**; az új domain fájlok összesen
+  **300/304 sor, 98.68%** line coverage.
+- `tools/round-gate.sh test/features/ai_tutor/domain` — **ZÖLD**: format (889
+  fájl, 0 változás), analyze (`No issues found!`), domain tesztek (75 passed),
+  architecture.
+- `/home/ubuntu/flutter/bin/dart run tool/check_architecture.dart` —
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`
+- `git diff --check` — hiba nélkül.
+
+### Nem futtatott ellenőrzések
+
+- A teljes Flutter suite, friss randomizált property gate és release APK a
+  kör-branch CI-dispatchének/orchestrátorának kötelezettsége; implementerként
+  nem futtattam `gh`-t, nem pusholtam és nem nyitottam PR-t.
 
 ## 11. Review — a független reviewer tölti ki
 
