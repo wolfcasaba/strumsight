@@ -1,6 +1,6 @@
 # E04-R16 — Tutor orchestration state machine és output validator
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-05, base `main` @ `1f75480`; előre megírva 2026-08-04)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 16; §20; §35
 - **Branch:** `codex/e04-r16-orchestration-state-machine`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R05, R07, R10, R11, R12, R13 merge**
@@ -15,7 +15,6 @@ allowed_paths = [
   "lib/features/ai_tutor/application/controller/tutor_effect.dart",
   "lib/features/ai_tutor/application/orchestration/tutor_orchestrator.dart",
   "lib/features/ai_tutor/application/orchestration/tutor_output_validator.dart",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/application/tutor_orchestrator_test.dart",
   "test/features/ai_tutor/application/tutor_output_validator_test.dart",
   "docs/rounds/e04-r16-orchestration-state-machine.md",
@@ -43,7 +42,91 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight lezárva 2026-08-05, base `main` @ `1f75480`** (E04-R15 merge után;
+az öt+egy előfeltétel-kör — R05, R07, R10, R11, R12, R13 — mind merge-elve az
+`origin/main`-en, mérve). Orchestrátor: Claude (Opus 4.8) · implementer motor:
+**Codex** (`gpt-5.6-terra`, örökölt kézi override, `codex-round.sh`).
+
+### Mért baseline (grep, nem tábla — a wire-elendő publikus felületek)
+
+Minden alábbi típus/metódus a `main`-en mérve (`lib/features/ai_tutor/`):
+
+- **Context (R05):** `TutorContextAssembler.assemble({requiredString requestId,
+  DateTime createdAt, ContextPurpose purpose, Iterable<TutorContextField> fields})`
+  → `TutorContextSnapshot` (**sync**).
+- **Retrieval (R07):** `KnowledgeRetriever.retrieve(KnowledgeRetrievalQuery)` →
+  `List<TutorSourceRef>` (**sync**, **üres lista legális** = retrieval-empty).
+- **Tools (R10):** `TutorToolRegistry.schemasForTurn(TutorToolTurnPolicy)` (sync),
+  `execute(TutorToolRequest)` → `Future<AppResult<TutorToolResult>>`;
+  `ReadOnlyTutorTools.registryFor({snapshot, maxOutputBytes, clock})`.
+- **Actions (R11):** `TutorActionValidator.validate(proposal, context:)` →
+  `TutorActionValidationResult` (sync); `ActionConfirmationService.propose(...)`
+  (sync) / `confirm(...)` (`Future`); sealed `TutorAction`/`TutorActionProposal`.
+- **Prompt (R12):** `TutorPromptBuilder.build(TutorPromptRequest)` →
+  `Future<TutorPrompt>`; `TutorOutputSchema.v1` (`canonicalJson`, `toJson()`).
+- **Gateway (R13/R15):** `TutorModelGateway.start(TutorModelRequest)` →
+  `Future<AppResult<Stream<TutorModelEvent>>>`, `cancel()` (sync); terminális
+  `TutorModelDone`/`TutorModelError({int sequence, String code, String message})`;
+  busy → `UnknownFailure(code: 'tutor.model_gateway.busy')`.
+- **Scripted fake (R13):** `FakeTutorModelGateway({required List<FakeGatewayStep>
+  script, FakeClock? clock})`; lépések: `FakeGatewayDelta/ToolCall/Done/Error/Delay`;
+  `FakeClock.advance(Duration)` hajtja az eseményeket. Ez a kör hajtóműve.
+- **Controller-precedens (E02-R13+):** `lib/features/practice/application/` —
+  sealed `PracticeSessionInput` (`Command | Signal`), sealed
+  `PracticeSessionEffect`, **pure** `reducePracticeSession(state, input)` →
+  `PracticeSessionTransition{state, effects, isRejected}`, controller broadcast
+  `states`/`effects` streamekkel + `dispatch(...)`. A tutor-orchestrator ezt tükrözi.
+- **AppResult:** `AppResult<T>` sealed (`Success`/`Failure`,
+  `lib/core/foundation/app_result.dart`) — a hívás-hibák ezt használják.
+
+### ADR-döntés
+
+**ÚJ ADR: [0174](../adr/0174-ai-tutor-orchestration-state-machine.md)** — AI Tutor
+orchestration state machine és output-validator (a pipeline-prompt „te írod meg a
+pre-flightban" instrukciója szerint). A kör genuin új normatív döntéseket rögzít
+(determinisztikus turn-állapotgép; repair-cap-1 → fallback; cancel utáni
+late-event no-op / request-id-korreláció; validator claim+action-schema;
+usage-limit/consent-revoked orchestration-rétegű modellezése), amelyeket a
+meglévő 0131/0132/0141 nem fed le. Az ADR a 0131/0132/0137/0139/0141/0142
+gyerek-kontextusa.
+
+### §1.1 MÉRT hiányok feloldása (pre-flight, orchestration-rétegben)
+
+Két acceptance-cella olyan státuszt ír elő, amelyet a MAI kód **semmilyen
+inputtal nem produkál** (mérve grep-pel; a brief-lint nem fogta meg):
+
+1. **`usage-limit`** — az `ai_tutor` rétegben **nincs** usage/rate-limit/quota/429
+   fogalom (grep: nulla találat). A modellhiba egyetlen alakja terminális
+   `TutorModelError(code, message)`, transport-kódokkal. **Feloldás (ADR 0174 §5):**
+   az orchestrator egy **saját, orchestration-fájlban élő** kód-konstanst (pl.
+   `tutor.usage_limit`) képez le külön terminális *usage-limit* útra; a scripted
+   fake `FakeGatewayError('tutor.usage_limit', …)`-dzsel állítja elő. **Új
+   gateway-kód/-típus NEM kerül a gateway-rétegbe (tilos zóna).**
+2. **`consent-revoked`** — a `TutorConsent` **nem enum**; a revoked =
+   `modelUseGranted == false` (`grantModelUse()`/`revokeModelUse()`). **Feloldás
+   (ADR 0174 §5):** az orchestrator a `gateway.start(...)` ELŐTT rövidre zár egy
+   terminális *consent-revoked* effektbe, ha a modellhasználat nincs engedélyezve.
+
+Mindkét feloldás **az engedélyezett fájlokon belül** valósul meg — nincs
+lista-tágítás.
+
+### §0.0 REVÍZIÓ — engedélyezett-fájllista SZŰKÍTÉSE (autonómia §2)
+
+A `lib/features/ai_tutor/public.dart` **kikerül** az engedélyezett listából, és a
+§4 táblából + §8 4. lépésből törlöm az „additív export"-ot. Mért indok:
+
+- `test/features/ai_tutor/ai_tutor_boundary_test.dart` (a scope-on **KÍVÜL**)
+  invariálja, hogy `public.dart` **nulla import/export** (mérve: aktív a `main`-en).
+  Ha az implementer exportot ad hozzá, ez a listán kívüli teszt pirosra vált, a
+  gate megbukik, a javítás pedig scope-sértés lenne (`stopped`). Pontosan ez a
+  csapda bukott E04-R12-ben (BLOCKER-1, `docs/LESSONS.md` L120) és lett
+  pre-emptálva R13-ban.
+- R16-nak **nincs** publikus fogyasztója: az UI R18, a valódi cloud kint van; az
+  orchestrator a feature-en belül **közvetlen importtal** köti a komponenseket.
+  Az acceptance criteria (§6) nem kér exportot.
+
+Ez tiszta **szűkítés** (tilos zóna tágítása nélkül) → ADR 0087 §2 szerint az
+orchestrátor autonómiájában áll.
 
 ## 1. Cél
 
@@ -74,7 +157,6 @@ request-id korreláció, részletes transition-tesztek a scripted fake-kel.
 | `.../application/controller/tutor_effect.dart` | ÚJ | effect |
 | `.../application/orchestration/tutor_orchestrator.dart` | ÚJ | pipeline |
 | `.../application/orchestration/tutor_output_validator.dart` | ÚJ | claim/action schema |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
 | `test/features/ai_tutor/application/*` | ÚJ | transition + validator tesztek |
 | `docs/rounds/e04-r16-*.md` | meglévő | §10 handoff |
 
@@ -111,7 +193,7 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI = orchestrátor.
 1. RED transition-mátrix (happy/repair/fallback/cancel/concurrent) tesztek.
 2. state/command/effect.
 3. orchestrator + output-validator.
-4. Additív export; gate.
+4. Gate (a `public.dart` export **halasztva** — §0.0 szűkítés).
 
 ## 9. Kockázatok
 
