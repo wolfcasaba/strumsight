@@ -1,6 +1,6 @@
 # E04-R14 — Backend tutor proxy, provider registry és usage guard
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-05, kód mérve: main @ `7de9361`, E04-R13 merge után)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 14; §35
 - **Branch:** `codex/e04-r14-backend-tutor-proxy-usage-guard`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R13 merge**
@@ -47,7 +47,51 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight mérve 2026-08-05** (orchestrátor: Claude Opus 4.8; implementer motor:
+`qwen-plus` = `qwen/qwen3.7-plus`, codex-harness, ADR 0140). Baseline: `main` @
+`7de9361` (E04-R13 MERGED). E04-R13 előfeltétel **teljesül** (PR #141, squash
+`b9d2950`).
+
+**ADR-döntés — NINCS új ADR.** A kör az [ADR 0131](../adr/0131-ai-tutor-provider-boundary.md)
+`Döntés` §-ában már rögzített szerveroldali proxy-t **implementálja**, nem
+módosít normát: 0131 kimondja, hogy „a cloud-oldal a StrumSight backenden (R14)
+keresztül fut", és hogy „a provider kiválasztása, kvótája és hibakezelése
+backend-oldali, konfigurációval cserélhető döntés". Ez a kör pontosan ezt hozza
+létre. Precedens: E04-R13 szintén 0131 hatálya alatt, új ADR nélkül zárt.
+
+**Mért backend-baseline (a brief állításai a kód ellen ellenőrizve):**
+
+1. **Fail-closed boot mechanizmus — létezik és MÉRT.** `backend/app/main.py`
+   `_guard_prod(settings)` (a `create_app` hívja, `main.py:97`) `env == "prod"`
+   esetén `RuntimeError`-t dob, ha a secret a dev-default (`main.py:40-44`,
+   round 120 / ADR 0060–0062 minta). A tutor prod-secret-guard ezt a fv-t
+   **additívan** bővíti (a `main.py` az engedélyezett listán). A reviewer
+   eldobható mutációja (guard-ág törlése) így méréssel pirosra vált.
+   Az acceptance „prod misconfig blokkolja a bootot" INPUT-ja tehát:
+   `create_app(Settings(env="prod", tutor_enabled=True, <hiányzó provider-secret>))`
+   → `RuntimeError` — nem átmenettábla-él, hanem tényleges kódút.
+2. **Rate-limit erőforrás-tulajdonlás — MÉRT.** A `RateLimiter`
+   (`backend/app/ratelimit.py`) példányait ma **modul-szintű** instance-ok
+   birtokolják a routerben: `login_limiter`, `register_limiter`
+   (`app/routers/auth.py`, a `conftest.py:12` importálja+reseteli). A tutor
+   `usage.py` a SAJÁT limiter-instance-át birtokolja (additív, ugyanez a
+   minta) — nem nyúl a meglévő limiterekhez; a `ratelimit.py` osztályt csak
+   **importálja**. A `ratelimit.py` NINCS az engedélyezett listán → módosítani
+   tilos, csak importálni.
+3. **Config-minta — MÉRT.** `backend/app/config.py` `Settings(BaseSettings)`,
+   `env_prefix="STRUMSIGHT_"`, `@model_validator(mode="before")` a
+   környezet-érzékeny defaultokhoz (`config.py:56-65`). A tutor-flag(ek) és a
+   provider-registry config ehhez a mintához illeszkedve, additívan kerülnek be.
+4. **Router-mount minta — MÉRT.** `main.py` `app.include_router(...)` flag
+   mögött (l. `diagnostics` a `settings.diagnostics_enabled`-nél, `main.py:137`).
+   A tutor-router ugyanígy, `settings.tutor_enabled` mögött.
+5. **Auth-függőség — MÉRT.** `backend/app/deps.py` `CurrentUser` /
+   `DbSession` (`deps.py:35-36`) a hitelesített végpontokhoz — a tutor-turn
+   végpont ezeket használja.
+
+**Nincs lista-tágítás.** Minden fenti bővítés az `allowed_paths` blokkon belül
+van (`config.py`, `main.py`, `backend/app/tutor/*`, `backend/tests/tutor/*`).
+A `ratelimit.py`/`deps.py`/`security.py` csak **import**-forrás, nem szerkesztendő.
 
 ## 1. Cél
 
