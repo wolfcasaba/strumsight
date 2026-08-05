@@ -296,9 +296,65 @@ gyengített mérce helyett dokumentált brief-revízió szükséges.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-- Fájlonkénti összefoglaló + a bizonyító teszt minden viselkedési állításhoz.
-- Futtatott parancsok + TÉNYLEGES kimenet (ne állíts sikert, ami nem futott).
-- Eltérések a tervtől és okuk; nem futott ellenőrzések és okuk; follow-up issue-k.
+**Implementálva: 2026-08-05.**
+
+### Fájlonkénti összefoglaló és bizonyíték
+
+- `tutor_context_snapshot.dart` — immutable, request-ID-hoz kötött,
+  canonical UTF-8-serializálható snapshot; per-mező feature/schema/scorer
+  provenance, defensive deep copy, `estimatedSizeBytes` és
+  `truncatedFields`. Bizonyíték: `tutor_context_assembler_test.dart`.
+- `context_purpose.dart` + `tutor_context_assembler.dart` — a hat explicit
+  purpose deny-by-default mezőmátrixa, rendezett/duplikátum-ellenőrzött
+  összeállítás, redakció, opcionális budget-alkalmazás. Bizonyíték: a teljes
+  purpose×field-mátrix teszt; a reviewer-mutatáció (a `profileUpdate` Settings
+  mezőjének ideiglenes eltávolítása) RED-re váltotta a tesztet.
+- `context_budget.dart` — inclusive `<= B` policy, rögzített alacsony→magas
+  retention-prioritás, determinisztikus csonkolás és auditbejegyzés.
+  Bizonyíték: `context_budget_test.dart`; az independent `python3 -c`
+  referencia a canonical UTF-8 méretre `B=462`-t mért: `463 < B` megtart,
+  `462 == B` megtart, `461 > B` csonkol.
+- `redaction_report.dart` — raw PCM/minta, abszolút path, credential és teljes
+  imported lyrics deny-listes eltávolítása, strukturált omission reporttal.
+  Bizonyíték: `redaction_test.dart`, beleértve az assembler-integrációt.
+- `inspectable_context_view.dart` — csak a `settings/public.dart`
+  `labModeProvider`-én keresztül elérhető Lab view; strukturált snapshot és
+  redaction report, prompt-mező nélkül. Bizonyíték:
+  `inspectable_context_view_test.dart`.
+- `adapters/{practice,song_trainer,analyze,progress,streak,settings}_context_adapter.dart`
+  — kizárólag az adott feature `public.dart` importja; Practice/Analyze/Progress
+  aggregált, version-gated adatot vetít, Streak/Settings a hívó által a publikus
+  providerekből olvasott scalar inputot fogad. Song Trainer scoring-export
+  hiányában üres, `unavailable`, `songTrainer.unavailable.v1` provenance-os
+  szekciót ad. Bizonyíték: a hat adapter-fixture tesztje és mindegyikben
+  `rg`-alapú import-audit.
+- A tíz `test/features/ai_tutor/application/context/**` fájl a fenti
+  viselkedések, a redakció, minden budget-cell, a Lab-kapu és a public-only
+  adapterhatár regressziós tesztje.
+
+### Futtatott ellenőrzések és tényleges eredmények
+
+- `flutter test test/features/ai_tutor/application/context` — **20/20 PASS**
+  (utolsó célzott futás).
+- `python3 -c '…canonical UTF-8 reference…'` — **B=462**, a `< B`, `== B`,
+  `> B` cellák rendre retain / retain / truncate eredményt adtak.
+- `tools/round-gate.sh test/features/ai_tutor/application/context` — **PASS**:
+  format (`911 files, 0 changed`), analyze (`No issues found`), célzott teszt
+  (`20` PASS), architecture (`Architecture dependencies OK`). Az első gate
+  két `prefer_const_constructors_in_immutables` linttel állt meg; a gyökérok
+  egy constként deklarálható `TutorContextField.unavailable` konstruktor volt
+  (javítva), a runtime defensive-copy konstruktorok dokumentált célzott lint
+  ignore-t kapnak. A második gate a fenti eredménnyel zöld.
+
+### Eltérés, nem futtatott ellenőrzés, follow-up
+
+- **Nincs scope-eltérés.** A Song Trainer degradáció a brief §0.0 D1 szerinti
+  kötelező út; belső import vagy public-barrel-bővítés nem történt.
+- Nem futott teljes `flutter test`, randomizált property gate, release APK/CI,
+  push vagy PR — ezek a brief §7 és `AGENTS.md` szerint az orchestrátor
+  feladatai, az implementer nem hív `gh`-t.
+- Follow-up: amikor a Song Trainer nyilvános scoring contractot kap egy külön
+  körben, ez az adapter azon a public felületen keresztül bővíthető.
 
 ## 11. Review — a független reviewer tölti ki
 
