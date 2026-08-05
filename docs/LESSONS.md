@@ -3787,3 +3787,33 @@ izolálja a tie-break utat), nem blokkoló.
 félrevezető (mindig zöld marad); a helyes reviewer-mérce a determinizmus-invariáns
 **tulajdonság-alapú** kikényszerítése a legélesebb bemeneten (egyenlő rendezési
 kulcs, sok permutáció), nem egy-egy sor mutálása.
+
+## L110 — `Process.run('rg', …)` egy tesztben a boxon zöld, de a CI-runneren PIROS (nincs ripgrep); az import-audit fájlolvasás legyen tiszta Dart (E04-R05, 2026-08-05)
+
+**Kontextus.** Az E04-R05 hat adapter „imports only the … public boundary"
+tesztje `Process.run('rg', ['-n', r'^import ', path])`-gal shell-elt ki
+`ripgrep`-re, hogy igazolja: az adapter csak a saját feature `public.dart`-ját
+importálja (AC #1, nulla source-internal import). A **lokális** `round-gate`
+mind a 20 tesztre ZÖLD volt — mert ezen a boxon telepítve van `rg`. Az
+exact-SHA `build-apk.yml` CI viszont PIROS lett: `ProcessException: No such
+file or directory. Command: rg -n ^import …` → `2645 tests passed, 6 failed`.
+A GitHub-runneren nincs `ripgrep`.
+
+**Gyökérok.** A teszt külső bináris jelenlétére támaszkodott, amit a boxon
+mértünk, de a runneren nem. A lokális gate és a CI környezete eltér ebben a
+függőségben — a lokális zöld nem bizonyítja a CI-zöldet.
+
+**Javítás (M1 javító kör, Codex).** A `rg` subprocess helyett tiszta Dart:
+`File(path).readAsStringSync().split('\n').where((l) => l.trimLeft()
+.startsWith('import '))`; az assertion-ök változatlanok (a saját `public.dart`
+SZEREPEL, a source-internal út NEM). A `practice` esetben a helper meg is
+erősödött: MINDEN `package:strumsight/features/` import-sornak a feature
+`public.dart`-jának kell lennie. Nulla külső bináris függőség.
+
+**Tanulság.** Tesztből SOHA ne shell-elj ki olyan bináris eszközre (`rg`,
+`grep`, `jq`), amelynek jelenléte a CI-runneren nem garantált — statikus
+forrás-introspekciót (import-audit, tiltott-minta) tiszta Dart `dart:io`
+fájlolvasással + Dart-oldali szűréssel végezz. A lokális `round-gate` zöldje
+nem helyettesíti az exact-SHA CI-t: a környezeti eltérés (itt: `ripgrep`
+elérhetőség) csak ott bukik ki. (Vö. [ADR 0053] — a teljes suite + property +
+APK a CI evidencia; a box gate szükséges, de nem elégséges.)

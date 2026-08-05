@@ -4,7 +4,40 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R04 merged — skill taxonomy, evidence & deterministic reducer domain).**
+> (E04-R05 merged — context adapters & immutable TutorContextSnapshot).**
+>
+> **E04-R05 KÉSZ (PR [#128](https://github.com/wolfcasaba/strumsight/pull/128),
+> squash `55d640d`, **nincs új ADR** — az R01 ADR 0131–0134 realizálása,
+> implementer **Codex** (`gpt-5.6-terra`, örökölt kézi override),
+> orchestrátor/reviewer **Claude Opus 4.8**, egy javító kör → APPROVED):**
+> provider-free, redakciós, provenance-olt **tutor context** aggregáció a hat
+> forrás-feature **`public.dart`** szerződéséből egy immutable
+> `TutorContextSnapshot`-ba (a későbbi R12/R16 prompt-körök fogyasztják).
+> `lib/features/ai_tutor/application/context/` — `TutorContextSnapshot`
+> (immutable, request-ID-kötött, per-mező `ContextProvenance` forrás+schema/scorer
+> verzióval, mély defenzív freeze, `estimatedSizeBytes`/`truncatedFields` expose),
+> `ContextPurpose` (hat intent, **deny-by-default** per-purpose field-allowlist),
+> `TutorContextAssembler` (determinisztikus key-index rendezés, dup-reject,
+> purpose-szűrés + `missingVersion` kihagyás + redaction + budget), `ContextBudget`
+> (**inkluzív `<= B`** határ, fix `truncationPriority` const-sorrendű determinisztikus
+> csonkolás), `RedactionReport`/`ContextRedactor` (deny: nyers audio/abszolút path/
+> secret/lyrics — a csonkolt lyrics is TILOS), hat public-barrel-only adapter, és a
+> Lab-only `InspectableContextView` (prompt NÉLKÜL, `labModeProvider` kapu). A Song
+> Trainer adapter **degradált** (`unavailable` provenance) — a scoring nincs a public
+> barrelben (§0.0 D1); **nulla source-internal import**. **Pre-flight §0.0a (mérve,
+> main @ `ee893da`):** greenfield 20 fájl HIÁNYZIK; D1/D2/D3 mind VÁLTOZATLAN; nincs
+> új ADR; `ai_tutor/public.dart` ÜRES MARAD (boundary-invariáns). Független review
+> **CHANGES REQUESTED → APPROVED**: 1 MAJOR (M1 — a hat import-audit teszt
+> `Process.run('rg')`-gal shell-elt ki `ripgrep`-re, ami a CI-runneren nincs → 6
+> teszt PIROS, lokálisan zöld; egy Codex javító kör tiszta Dart fájlolvasásra
+> cserélte, `docs/LESSONS.md` L110), 1 NOTE (redactor blocklist = defense-in-depth,
+> a kanonikus kapu az adapter-allowlist); a redaction + budget-`==B` invariáns
+> **mutáció-próbával RED-re váltva**. CI
+> [run 30970539473](https://github.com/wolfcasaba/strumsight/actions/runs/30970539473)
+> **success** exact head `bece64f` (analyze + full suite + randomizált property +
+> APK); post-merge gate `main`-en zöld. Hívó prompt/orchestration nincs (R12/R16) —
+> production viselkedés változatlan (`ai_tutor/public.dart` üres). **Következő:
+> E04-R06 — a pipeline indítja.**
 >
 > **E04-R04 KÉSZ (PR [#127](https://github.com/wolfcasaba/strumsight/pull/127),
 > squash `0d7ab1b`, **nincs új ADR** — az R01 [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
