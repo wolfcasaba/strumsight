@@ -21,9 +21,40 @@ workdir=${1:?használat: codex-round.sh <munkapéldány> <prompt-fájl> [logfáj
 prompt_file=${2:?használat: codex-round.sh <munkapéldány> <prompt-fájl> [logfájl]}
 log_file=${3:-/tmp/codex-$(basename "$workdir").log}
 
-stall_minutes=${CODEX_STALL_MINUTES:-12}
-round_timeout=${CODEX_ROUND_TIMEOUT:-3600}
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+# --- Motor-profil (ADR 0139) ---------------------------------------------
+# A motorok kvótája külön merül ki, ezért a profilok egymás mellett élnek és a
+# váltás egyetlen fájl (`tools/engine-profile.sh use <name>`). Sorrend:
+#   1. ROUND_ENGINE (a hívó explicit döntése)
+#   2. az aktív override (engine-profile.sh use)
+#   3. terra (a történeti alapértelmezés: az ambiens ~/.codex)
+round_engine=${ROUND_ENGINE:-}
+if [ -z "$round_engine" ]; then
+  round_engine=$(bash "$script_dir/engine-profile.sh" show 2>/dev/null)
+  case "$round_engine" in *'<'*|'') round_engine=terra ;; esac
+fi
+
+engine_env=$(bash "$script_dir/engine-profile.sh" env "$round_engine" 2>/dev/null) || {
+  echo "codex-round.sh: ismeretlen motor: $round_engine" >&2
+  exit 2
+}
+while IFS='=' read -r key value; do
+  [ -n "$key" ] && export "$key=$value"
+done <<< "$engine_env"
+
+# Codex-harness kötelező: a claude-harness motorokat a mm-round.sh viszi.
+case "$(grep -m1 "^${round_engine}	" "$script_dir/../docs/execution/engine-registry.tsv" | cut -f2)" in
+  codex) ;;
+  *) echo "codex-round.sh: a(z) $round_engine motor nem Codex-harness — használd az mm-round.sh-t" >&2; exit 2 ;;
+esac
+
+# A LASSÚ motor (pl. Qwen ~95 s/válasz) hamis elakadásnak látszana a 12 perces
+# alapértelmezéssel, ezért a nyilvántartás motoronként adja meg a küszöböket.
+stall_minutes=${CODEX_STALL_MINUTES:-${ENGINE_STALL_MINUTES:-12}}
+round_timeout=${CODEX_ROUND_TIMEOUT:-${ENGINE_ROUND_TIMEOUT:-3600}}
 signal="$workdir/.codex-round-status"
+echo "codex-round.sh: motor=$round_engine modell=${ENGINE_MODEL:-?} stall=${stall_minutes}p timeout=${round_timeout}s" >&2
 
 rm -f "$signal"
 : > "$log_file"
@@ -34,7 +65,19 @@ rm -f "$signal"
 # mérve a verdikt az IMPLEMENTER saját munkájára szól.
 scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
 
-codex exec -C "$workdir" -s danger-full-access "$(cat "$prompt_file")" \
+# A modellt és a kontextus-korlátokat a nyilvántartás adja, nem a profil:
+# egyetlen Kilo-profil (`~/.codex-kilo`) mögött több modell is él, és a
+# Kilo /responses NEM ad model-metaadatot — a túlbecsült ablak
+# kontextus-túlcsordulást okozna.
+codex_model_args=()
+[ -n "${ENGINE_MODEL:-}" ] && codex_model_args+=(-m "$ENGINE_MODEL")
+[ -n "${ENGINE_CONTEXT_WINDOW:-}" ] && codex_model_args+=(-c "model_context_window=$ENGINE_CONTEXT_WINDOW")
+[ -n "${ENGINE_MAX_OUTPUT:-}" ] && codex_model_args+=(-c "model_max_output_tokens=$ENGINE_MAX_OUTPUT")
+
+# `< /dev/null`: enélkül a codex exec a promptot megkapva IS stdin-re vár
+# ("Reading additional input from stdin"), és a kör némán beragad.
+codex exec -C "$workdir" -s danger-full-access \
+  "${codex_model_args[@]}" "$(cat "$prompt_file")" < /dev/null \
   >> "$log_file" 2>&1 &
 codex_pid=$!
 
