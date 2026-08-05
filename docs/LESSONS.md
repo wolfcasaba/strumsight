@@ -3760,3 +3760,30 @@ export halasztását; a helyes feloldás scope-SZŰKÍTÉS §0.0-val (az export
 halasztása a fogyasztó köréig), NEM a lezárt teszt allowlistre húzása. (3) A
 brief előre megírt „purity-őr zöld" jellegű acceptance-ét a pre-flight
 mérje meg konkrétan — melyik guard, melyik sor, fedi-e az új utat.
+
+## L109 — Determinizmus-garanciának több redundáns mechanizmusa lehet (defense-in-depth), amit egyszeres mutáció NEM fog meg; a valós ellenőrzés a legrosszabb eset (egyenlő tie-break-kulcs) sok-permutációs próbája (E04-R04, 2026-08-05)
+
+**Mérés.** Az E04-R04 `SkillEvidenceReducer` determinizmusát két független
+mechanizmus adja: (a) az upstream `_deduplicate()` a bemenetet `_compareEvidence`
+szerint rendezi, (b) a downstream `_selectMostComparablePartition` a
+partíciókat/groupokat/group-on-belüli evidence-t is rendezi UTC+lexikális
+tie-break-kel. Review-próbaként **külön-külön** neutralizáltam mindkettőt
+(a group-tie-break elhagyása; a dedup-sort elhagyása) — **egyik egyszeres mutáns
+sem** váltotta pirosra a committolt tesztsort (18/18 PASS), mert a megmaradó
+mechanizmus önmagában fedte a determinizmust. A committolt shuffle-property teszt
+adatai ráadásul disztinkt group-timestampűek, így a tie-break utat nem is járják.
+
+**Következmény / szabály.** (1) Egy „determinista" reducer review-jánál az
+egyszeres mutáció-próba **nem elég** — a redundáns védelmek elrejtik egymást.
+A diszkriminatív próba a **legrosszabb eset**: egyenlő tie-break-kulcs (itt:
+azonos group-timestamp) + sok seedes permutáció, a kimenet bit-azonosságára.
+Ezt reviewer-próbaként megírtam (200 permut., egyenlő timestamp → bit-azonos
+`declining/4500/[c,d,a,b]`), és a kézi reference-számítás (gA=5000, gB=4000,
+mean=4500) igazolta. (2) A defense-in-depth önmagában NEM hiba — a determinizmus
+valósan teljesül; a lelet csak teszt-izolációs NOTE (a committolt teszt nem
+izolálja a tie-break utat), nem blokkoló.
+
+**Tanulság.** Redundáns invariáns-védelemnél a mutációs-próba önmagában
+félrevezető (mindig zöld marad); a helyes reviewer-mérce a determinizmus-invariáns
+**tulajdonság-alapú** kikényszerítése a legélesebb bemeneten (egyenlő rendezési
+kulcs, sok permutáció), nem egy-egy sor mutálása.

@@ -4,7 +4,34 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R03 merged — student/guitar profile, goals & granular consent domain).**
+> (E04-R04 merged — skill taxonomy, evidence & deterministic reducer domain).**
+>
+> **E04-R04 KÉSZ (PR [#127](https://github.com/wolfcasaba/strumsight/pull/127),
+> squash `0d7ab1b`, **nincs új ADR** — az R01 [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
+> (provider-boundary, determinisztikus on-device coaching) realizálása, implementer
+> **Codex** (Terra, örökölt kézi override), orchestrátor/reviewer **Claude Opus 4.8**):**
+> egységes, provider-független **skill graph** + **készségbizonyíték-modell**, amely a
+> szórt progress-adatot determinisztikus, forrásjelölt becsléssé redukálja (greenfield,
+> hívó nélkül). `SkillNode`/`SkillTaxonomy` (immutable, verziózott taxonómia, prerequisite-
+> validáció + DFS ciklus-őr, stabil hibakódok, `SkillTaxonomy.initial` 18-node rhythm/
+> strum/chord/pitch/song/practice gráf); `SkillEvidence` (provenance + schema/scorer-
+> verziót **fail-loud** validáló forrásjelölt value object, egész súlyok); `SkillEstimate`
+> (immutable `insufficient`/`trend`, külön normalizált confidence, státusz-invariáns
+> kényszerítés); `SkillEvidenceReducer` — **pure, determinisztikus, egész-aritmetikás**
+> reducer (ID-idempotencia + konfliktus-reject, comparable-group partíció, UTC+lexikális
+> tie-break, 0/1/2-group küszöb, explicit trend; nincs óra/véletlen/lebegőpont).
+> **Pre-flight §0.0 (mérve, main @ `3dc7f5a`):** (1) nincs új ADR (az ADR 0131 realizálása);
+> (2) **REVÍZIÓ — engedélyezett-lista szűkítés:** `public.dart` eltávolítva és **ÜRES MARAD**
+> — a lezárt E04-R01 `ai_tutor_boundary_test.dart` nulla-export invariánsa bármely exporttól
+> pirosra váltana (R02/R03 precedens); (3) §1.1 input→státusz: 0/1 group → `insufficient`,
+> ≥2 → trend; §1.2 erőforrás-tulajdonlás N/A. Független review **APPROVED** — 0 BLOCKER/
+> MAJOR/MINOR, 1 NOTE; a determinizmus **200-permutációs, egyenlő group-timestampű reviewer-
+> próbával** igazolva (bit-azonos), a purity-őr **real-violation próbával** (forbidden import
+> → RED); coverage **98.68%** (300/304) az új domainen. CI
+> [run 30967261936](https://github.com/wolfcasaba/strumsight/actions/runs/30967261936)
+> **success** exact head `9152d35` (full suite + randomizált property + APK); post-merge
+> gate `main`-en zöld. Hívó UI/gateway/repository nincs — production viselkedés változatlan
+> (`public.dart` üres). **Következő: E04-R05 — a pipeline indítja.**
 >
 > **E04-R03 KÉSZ (PR [#126](https://github.com/wolfcasaba/strumsight/pull/126),
 > squash `06ae3f7`, **nincs új ADR** — az R01 [0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)
@@ -784,13 +811,13 @@
 
 ## 4. Current branch
 
-`main` @ [PR #126](https://github.com/wolfcasaba/strumsight/pull/126), squash
-`06ae3f7` (E04-R03). [Build Android APK 30965089716](https://github.com/wolfcasaba/strumsight/actions/runs/30965089716)
-is **success** for exact branch `headSha` `af3ddc1` (full Flutter suite,
+`main` @ [PR #127](https://github.com/wolfcasaba/strumsight/pull/127), squash
+`0d7ab1b` (E04-R04). [Build Android APK 30967261936](https://github.com/wolfcasaba/strumsight/actions/runs/30967261936)
+is **success** for exact branch `headSha` `9152d35` (full Flutter suite,
 randomized property/coverage gate and development APK). The independent
 post-merge gate on `main` is green, and the final review is **APPROVED** in
-[`e04-r03-student-guitar-profile-goals-consent-review.md`](docs/reviews/e04-r03-student-guitar-profile-goals-consent-review.md).
-(Előző product-merge-ek: PR #125 / `db778c4`, E04-R02; PR #124 / `814388a`, E04-R01; PR #123 / `3ae368a`, E03-R22.)
+[`e04-r04-skill-taxonomy-evidence-reducer-review.md`](docs/reviews/e04-r04-skill-taxonomy-evidence-reducer-review.md).
+(Előző product-merge-ek: PR #126 / `06ae3f7`, E04-R03; PR #125 / `db778c4`, E04-R02; PR #124 / `814388a`, E04-R01; PR #123 / `3ae368a`, E03-R22.)
 
 > **L48 clone-pitfall recurred on a fresh `auto`-router worktree
 > (mérve 2026-08-02, E03-R06):** a brand-new worktree's first
@@ -863,30 +890,40 @@ post-merge gate on `main` is green, and the final review is **APPROVED** in
 
 ## 5. Last completed round
 
+**E04-R04 — Skill taxonomy, evidence & deterministic reducer** (PR
+[#127](https://github.com/wolfcasaba/strumsight/pull/127), squash `0d7ab1b`,
+**nincs új ADR** — az R01 [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
+(provider-boundary, determinisztikus on-device coaching) realizálása).
+Implementer: **Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer:
+**Claude Opus 4.8**.
+
+**Elkészült:** egységes, provider-független skill graph + készségbizonyíték-modell
+(greenfield, hívó nélkül). `SkillNode`/`SkillTaxonomy` (immutable, verziózott,
+prerequisite-validáció + DFS ciklus-őr, stabil hibakódok, `SkillTaxonomy.initial`
+18-node gráf); `SkillEvidence` (provenance + schema/scorer-verzió **fail-loud**
+validációval, egész forrás-súlyok); `SkillEstimate` (immutable `insufficient`/`trend`,
+külön normalizált confidence, státusz-invariáns kényszerítés); `SkillEvidenceReducer`
+— **pure, determinisztikus, egész-aritmetikás** (ID-idempotencia + konfliktus-reject,
+comparable-group partíció, UTC+lexikális tie-break, 0/1/2-group küszöb, explicit
+trend; nincs óra/véletlen/lebegőpont). **Pre-flight §0.0:** nincs új ADR (ADR 0131
+realizálása); **engedélyezett-lista szűkítve** — `public.dart` eltávolítva és üres
+marad (a lezárt E04-R01 `ai_tutor_boundary_test.dart` nulla-export invariánsa
+bármely exporttól pirosra váltana, R02/R03 precedens). **Nulla javító kör.** Review
+APPROVED — determinizmus 200-permutációs egyenlő-timestamp reviewer-próbával,
+purity real-violation próbával igazolva; coverage **98,68%** (300/304). `public.dart`
+üres. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+
+<details><summary>Korábbi kör: E04-R03 — Student/guitar profile, goals & consent (superseded snapshot)</summary>
+
 **E04-R03 — Student/guitar profile, goals & granular consent** (PR
 [#126](https://github.com/wolfcasaba/strumsight/pull/126), squash `06ae3f7`,
-**nincs új ADR** — az R01 [0132](docs/adr/0132-ai-tutor-privacy-and-consent.md)
-(privacy/consent) + [0134](docs/adr/0134-ai-tutor-memory-policy.md) (memory)
-realizálása). Implementer: **Codex (Terra, örökölt kézi override)**;
-orchestrátor/reviewer: **Claude Opus 4.8**.
+nincs új ADR — az R01 0132/0134 realizálása). `StudentProfile` (per-mező
+`ProfileField<T>` provenance + explicit>inferred `merge`), `GuitarProfile`,
+`LearningGoal`, **`TutorConsent` három független tengely** (ADR 0132 §3);
+`TutorProfileCodec` verziózott, bit-stabil round-trip. Review APPROVED,
+coverage 90,6%. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 
-**Elkészült:** provider-free, verziózott személyre-szabás + adatvédelmi domain
-(greenfield, hívó nélkül). `StudentProfile` (per-mező `ProfileField<T>` provenance
-+ explicit>inferred `merge`, defenzív unmodifiable lista-másolás, stabil hibakód-
-készlet), `GuitarProfile` (string-count 4–12 / tuning-hossz-egyezés / capo 0–24),
-`LearningGoal` (kategória/prioritás/UTC-deadline/active-inactive lifecycle);
-**`TutorConsent` — HÁROM FÜGGETLEN tengely** (model-use / persistent-storage /
-evaluation-with-redaction; egyik grant/revoke SOHA nem érinti a másikat, ADR 0132
-§3); `TutorProfileCodec` verziózott (schema v1, determinisztikus kulcssorrend,
-UTF-8 JSON), **bit-stabil round-trip**, unknown-mező ignorál / missing-mező
-elutasít (`fieldMissing`), unknown schema → `schemaVersionUnknown`. **Pre-flight
-§0.0:** nincs új ADR; **engedélyezett-lista szűkítve** — `public.dart` eltávolítva
-(az R02 `ai_tutor_boundary_test.dart` üres-boundary invariánsa bármely exporttól
-pirosra váltana, és egy acceptance sem igényel külső elérhetőséget); Guitar/Learning
-tesztek `student_profile_test.dart`-ba csoportosítva. **Nulla javító kör.**
-Review APPROVED — consent-függetlenség valódi-sértés mutációval igazolva; coverage
-**90,6%**. `public.dart` **továbbra is üres**. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md).
+</details>
 
 <details><summary>Korábbi kör: E04-R01 — AI Tutor baseline & ADR-ek (superseded snapshot)</summary>
 
@@ -1028,17 +1065,21 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 
 ## 6. Exact next task
 
-0. **E04-R04 — Skill taxonomy & evidence reducer** (a
-   `docs/execution/pipeline-queue.tsv` `E04-R04` sora `pending`, motor **codex**,
-   brief `docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md`). A pipeline
+0. **E04-R05 — Context adapters & snapshot** (a
+   `docs/execution/pipeline-queue.tsv` `E04-R05` sora `pending`, motor **codex**,
+   brief `docs/rounds/e04-r05-context-adapters-and-snapshot.md`). A pipeline
    (ADR 0087) automatikusan indítja új sessionben — **ez a session nem kezdi
-   el**. Bemenete: az E04-R03 profil/consent domain (verziózott, provider-free),
-   az E04-R02 conversation/message domain és az E04-R01 baseline (flagek default
-   OFF, ADR 0131–0134). A `public.dart` **üres-boundary invariáns** (nulla idegen
-   belső import, `ai_tutor_boundary_test.dart`) és a flag-OFF 0-request garancia
+   el**. Bemenete: az E04-R04 skill taxonomy/evidence/reducer domain (pure,
+   determinisztikus, forrásjelölt), az E04-R03 profil/consent, az E04-R02
+   conversation/message domain és az E04-R01 baseline (flagek default OFF, ADR
+   0131–0134). Az R04 reducer **csak a redaktált, adaptált evidence-t** fogyasztja
+   — a source feature belső típusai TILTOTTAK; a `public.dart` **üres-boundary
+   invariáns** (`ai_tutor_boundary_test.dart`) és a flag-OFF 0-request garancia
    nem törhető.
+   **~~E04-R04 — Skill taxonomy & evidence reducer~~ — KÉSZ** (PR #127,
+   `0d7ab1b`, ld. a fejléc-összefoglalót és §5).
    **~~E04-R03 — Student/guitar profile, goals & consent~~ — KÉSZ** (PR #126,
-   `06ae3f7`, ld. a fejléc-összefoglalót és §5).
+   `06ae3f7`).
 1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
 1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
    Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
