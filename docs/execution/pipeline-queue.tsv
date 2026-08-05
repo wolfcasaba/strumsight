@@ -100,7 +100,7 @@ E03-R22	docs/rounds/e03-r22-setlist-progress-epic-closure.md	codex	nincs	done
 # független review (ADR 0055) és az exact-SHA CI változatlanul kötelező.
 E04-R01	docs/rounds/e04-r01-ai-tutor-baseline-and-boundaries.md	codex	nincs	done
 E04-R02	docs/rounds/e04-r02-conversation-and-message-domain.md	codex	nincs	done
-E04-R03	docs/rounds/e04-r03-student-guitar-profile-goals-consent.md	codex	nincs	pending
+E04-R03	docs/rounds/e04-r03-student-guitar-profile-goals-consent.md	codex	nincs	done
 E04-R04	docs/rounds/e04-r04-skill-taxonomy-evidence-reducer.md	codex	nincs	pending
 E04-R05	docs/rounds/e04-r05-context-adapters-and-snapshot.md	codex	nincs	pending
 E04-R06	docs/rounds/e04-r06-knowledge-schema-and-content-pack.md	codex	nincs	pending
