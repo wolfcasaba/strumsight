@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Implementer-motor profilváltó (ADR 0139).
+# Implementer-motor profilváltó (ADR 0140).
 #
 #   tools/engine-profile.sh list            # nyilvántartás + aktív + elérhetőség
 #   tools/engine-profile.sh show            # csak az aktív motor neve
@@ -59,7 +59,7 @@ availability() {
 case "${1:-list}" in
   list)
     active=$(active_engine)
-    printf '=== Implementer-motorok (ADR 0139) ===\n'
+    printf '=== Implementer-motorok (ADR 0140) ===\n'
     if [ -n "$active" ]; then
       printf 'Aktív override: %s — MINDEN kör ezzel megy.\n' "$active"
       printf 'Feloldás: tools/engine-profile.sh clear\n\n'

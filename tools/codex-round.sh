@@ -23,7 +23,7 @@ log_file=${3:-/tmp/codex-$(basename "$workdir").log}
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# --- Motor-profil (ADR 0139) ---------------------------------------------
+# --- Motor-profil (ADR 0140) ---------------------------------------------
 # A motorok kvótája külön merül ki, ezért a profilok egymás mellett élnek és a
 # váltás egyetlen fájl (`tools/engine-profile.sh use <name>`). Sorrend:
 #   1. ROUND_ENGINE (a hívó explicit döntése)

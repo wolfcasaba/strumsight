@@ -1,4 +1,4 @@
-# Implementer-motorok nyilvántartása (ADR 0139). Egy sor = egy választható motor.
+# Implementer-motorok nyilvántartása (ADR 0140). Egy sor = egy választható motor.
 # Oszlopok TAB-bal:
 #   name harness config_dir model auth_env auth_file stall_min timeout_s ctx max_out price_in price_out megjegyzés
 #

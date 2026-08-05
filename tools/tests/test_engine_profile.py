@@ -1,4 +1,4 @@
-"""Engine-profile switcher tests (ADR 0139).
+"""Engine-profile switcher tests (ADR 0140).
 
 Az implementer-motorok kvótája külön-külön merül ki (a Terra 9%-on,
 2026-08-05), ezért a váltásnak azonnalinak ÉS visszavonhatónak kell lennie.
