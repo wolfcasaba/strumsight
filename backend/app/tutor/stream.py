@@ -21,7 +21,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..deps import CurrentUser
 from .provider_gateway import ProviderError, ProviderTimeoutError
@@ -81,6 +81,15 @@ class TutorStreamRequest(BaseModel):
     request_id: str = Field(min_length=1, max_length=_MAX_ID_LENGTH)
     sequence: int = Field(ge=0)
     conversation_id: str = Field(min_length=1, max_length=_MAX_ID_LENGTH)
+
+    @field_validator("request_id", "conversation_id")
+    @classmethod
+    def _reject_control_chars(cls, value: str) -> str:
+        # Log-forging guard: a control character (e.g. `\n`) would let a
+        # client inject fake lines into the server log (security review).
+        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+            raise ValueError("identifier must not contain control characters")
+        return value
 
 
 # --- frame encoding -----------------------------------------------------------

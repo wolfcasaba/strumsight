@@ -236,6 +236,27 @@ def test_invalid_request_body_rejected(tutor_client, tutor_auth_headers):
     assert response.status_code == 422
 
 
+def test_control_chars_in_identifiers_rejected(tutor_client, tutor_auth_headers):
+    # Log-forging guard: a `\n` in an identifier would inject a fake second
+    # line into the server log; the whole C0 range + DEL must be rejected
+    # (security review, MINOR).
+    forged = "abc\n2026-01-01 ERROR admin: forged log line"
+    for field in ("request_id", "conversation_id"):
+        response = tutor_client.post(
+            _STREAM_PATH,
+            json=_stream_body(**{field: forged}),
+            headers=tutor_auth_headers,
+        )
+        assert response.status_code == 422, field
+    for char in ("\r", "\x00", "\x1b", "\x7f"):
+        response = tutor_client.post(
+            _STREAM_PATH,
+            json=_stream_body(request_id=f"req{char}1"),
+            headers=tutor_auth_headers,
+        )
+        assert response.status_code == 422, repr(char)
+
+
 # --- retry idempotency (ADR 0142 D9) ------------------------------------------
 
 
