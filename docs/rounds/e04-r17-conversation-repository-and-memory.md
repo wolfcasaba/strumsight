@@ -193,6 +193,12 @@ dokumentált brief-revízió.
   deklarált tutor-kulcsot (a karanténjával együtt) törlő delete-all.
 - A két új teszt a fenti acceptance-útvonalakat, restartot és a
   `StorageException` → `StorageFailure` nem-néma hibautat méri.
+- Javító kör #1: a sensitivity-filter telefonmintája már a ponttal, perjellel
+  és nem törő szóközzel tagolt formátumokat is elutasítja; e-mail- és
+  pont-tagolt-telefon guard biztosítja, hogy candidate nem perzisztálódik.
+- Javító kör #1: a conversation dokumentum top-level JSON/schema/items parse-a
+  karanténba teszi a sérült raw blobot, majd üres dokumentumlistával áll helyre;
+  a meglévő rekord-szintű izoláció változatlan.
 
 ### Ellenőrzések
 
@@ -205,11 +211,16 @@ dokumentált brief-revízió.
 - `flutter test test/features/ai_tutor/data` — 109 teszt zöld.
 - `flutter analyze` — a `tools/prepare-flutter-generated.sh` előkészítés után
   zöld, nulla lelettel.
-- `tools/round-gate.sh test/features/ai_tutor/data` — format, analyze, 109
+- `tools/round-gate.sh test/features/ai_tutor/data` — format, analyze, 112
   célzott teszt, architecture és secrets: zöld.
 - Eltávolítható mutáció: a `tutorMemoryFacts` törlésének ideiglenes kihagyása
   a delete-all tesztet és a tárolóhiba-tesztet is pirosra váltotta; a változás
   azonnal vissza lett vonva.
+- Javító kör #1 RED: a pont-tagolt telefon candidate a javítás előtt
+  `Success<TutorMemoryFact>` volt; a csonka top-level conversation blob pedig
+  `Failure(storage.read)` eredményt adott. A két dedikált test a javítás után
+  zöld; a teljes kör-gate format, analyze, 112 célzott teszt, architecture és
+  secrets lépése zöld.
 
 ### Eltérés / nem futtatott ellenőrzés
 

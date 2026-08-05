@@ -284,6 +284,7 @@ String _fingerprint(String content) =>
 
 bool _isSensitive(String content) => RegExp(
   r'\b(password|passcode|jelsz[oó]|api[ _-]?key|secret|token)\b|'
-  r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b|\b\+?\d[\d ()-]{6,}\d\b',
+  r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b|'
+  r'(?:^|[^\w])\+?\d[\d ./()\-\u00A0]{6,}\d\b',
   caseSensitive: false,
 ).hasMatch(content);

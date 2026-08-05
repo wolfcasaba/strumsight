@@ -114,6 +114,28 @@ void main() {
     );
 
     test(
+      'quarantines an invalid top-level document and recovers with an empty page',
+      () async {
+        final store = InMemoryKeyValueStore()
+          ..values[StorageKeys.tutorConversationDocuments] = '{not json';
+        final repository = LocalTutorConversationRepository(
+          keyValueStore: store,
+        );
+
+        final result = await repository.list(limit: 10);
+
+        expect(result, isA<Success<TutorConversationPage>>());
+        expect((result as Success<TutorConversationPage>).value.items, isEmpty);
+        expect(
+          store.readString(
+            StorageKeys.quarantineOf(StorageKeys.tutorConversationDocuments),
+          ),
+          '{not json',
+        );
+      },
+    );
+
+    test(
       'returns a storage failure instead of silently accepting a refused save',
       () async {
         final store = InMemoryKeyValueStore()

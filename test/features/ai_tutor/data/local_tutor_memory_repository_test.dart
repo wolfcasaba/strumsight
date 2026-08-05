@@ -64,6 +64,46 @@ void main() {
       );
     });
 
+    test('rejects an email candidate without persisting it', () async {
+      final repository = LocalTutorMemoryRepository(
+        keyValueStore: InMemoryKeyValueStore(),
+      );
+
+      final result = await repository.saveCandidate(
+        _candidate('email', 'Contact me at learner@example.com.'),
+      );
+
+      expect(result, isA<Failure<TutorMemoryFact>>());
+      expect(
+        (result as Failure<TutorMemoryFact>).error,
+        isA<ValidationFailure>(),
+      );
+      expect(
+        (await repository.list() as Success<List<TutorMemoryFact>>).value,
+        isEmpty,
+      );
+    });
+
+    test('rejects a dotted phone candidate without persisting it', () async {
+      final repository = LocalTutorMemoryRepository(
+        keyValueStore: InMemoryKeyValueStore(),
+      );
+
+      final result = await repository.saveCandidate(
+        _candidate('phone', 'Call me on 555.123.4567.'),
+      );
+
+      expect(result, isA<Failure<TutorMemoryFact>>());
+      expect(
+        (result as Failure<TutorMemoryFact>).error,
+        isA<ValidationFailure>(),
+      );
+      expect(
+        (await repository.list() as Success<List<TutorMemoryFact>>).value,
+        isEmpty,
+      );
+    });
+
     test('purges facts whose documented retention has elapsed', () async {
       final repository = LocalTutorMemoryRepository(
         keyValueStore: InMemoryKeyValueStore(),

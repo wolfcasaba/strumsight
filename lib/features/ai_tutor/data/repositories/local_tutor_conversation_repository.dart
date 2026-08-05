@@ -142,12 +142,18 @@ final class LocalTutorConversationRepository
       StorageKeys.tutorConversationDocuments,
     );
     if (raw == null) return const <TutorConversation>[];
-    final envelope = _objectMap(jsonDecode(raw));
-    if (envelope['schemaVersion'] != _schemaVersion) {
-      return const <TutorConversation>[];
-    }
-    final encodedItems = envelope['items'];
-    if (encodedItems is! List) {
+    final List<Object?> encodedItems;
+    try {
+      final envelope = _objectMap(jsonDecode(raw));
+      if (envelope['schemaVersion'] != _schemaVersion) {
+        throw const FormatException();
+      }
+      final items = envelope['items'];
+      if (items is! List) {
+        throw const FormatException();
+      }
+      encodedItems = List<Object?>.from(items);
+    } catch (_) {
       await _quarantineDocument(raw);
       return const <TutorConversation>[];
     }
