@@ -1,6 +1,6 @@
 # E04-R13 — TutorModelGateway és scripted fake
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-05, base main @ `5d082dc`; előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 13; §35
 - **Branch:** `codex/e04-r13-model-gateway-and-fake`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R02 + E04-R12 merge**
@@ -15,7 +15,6 @@ allowed_paths = [
   "lib/features/ai_tutor/data/model_gateway/tutor_model_event.dart",
   "lib/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart",
   "lib/features/ai_tutor/data/model_gateway/local_tutor_model_gateway_stub.dart",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/data/tutor_model_gateway_contract_test.dart",
   "test/features/ai_tutor/data/fake_tutor_model_gateway_test.dart",
   "docs/rounds/e04-r13-model-gateway-and-fake.md",
@@ -43,7 +42,61 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight lezárva 2026-08-05, base `main` @ `5d082dc` (E04-R12 merge után).**
+Orchestrátor: Claude (Opus 4.8) · implementer motor: **qwen-plus**
+(`qwen/qwen3.7-plus`, codex-harness, `~/.codex-kilo`, ADR 0140 nyilvántartás).
+
+### Mért baseline (grep, nem tábla)
+
+- `lib/features/ai_tutor/data/model_gateway/` **nem létezik** (greenfield); a
+  kör öt új `data/model_gateway/*.dart`-ot és két új tesztet hoz.
+- **Gateway/fake/contract-test precedens** (SDD §2 újrahasznosítás):
+  `lib/features/practice/application/practice_observation_gateway.dart`
+  (`abstract interface class` + `@immutable` config `validate()`-tel),
+  `test/support/fake_practice_observation_gateway.dart` (broadcast
+  `StreamController`, `emit`/`emitError`, disposed-guard). A tutor gateway
+  ezt a mintát követi, provider-SDK típus nélkül.
+- **Id/sequence szabályok** már léteznek:
+  `TutorRequestId` (`domain/models/tutor_ids.dart:` `final class TutorRequestId`),
+  és `TutorMessage.sequence` (`int`, `sequenceNegative`
+  validációs kód — `tutor_message.dart:29,44`). A gateway a request-id-t
+  ezekre a meglévő típusokra építi, nem újat vezet be.
+- **Eredmény-alap:** `AppResult<T>` sealed (`Success`/`Failure`,
+  `lib/core/foundation/app_result.dart`) + `AppFailure` — a health/hívás-hibák
+  ezt használják, nem dobott kivételt.
+- **R12 output-schema** jelen alakja: `TutorOutputSchema.v1`
+  (`application/prompts/tutor_output_schema.dart`) — a gateway a nyers
+  streaminget adja, a schema-illesztés NEM ennek a körnek a dolga.
+- **Nincs provider-SDK függőség** a `pubspec.yaml`-ban (mérve: csak `dio` a
+  backend-account réteghez) — a boundary üres, könnyen tartható.
+
+### ADR-döntés
+
+**Nincs ÚJ ADR.** A kör a meglévő **ADR 0131** (AI Tutor provider-boundary)
+hatálya alá esik: a döntés 1. pontja már kimondja, hogy a tutor-domain és a
+kliens soha nem hivatkozhat provider-SDK típusra, a model-hívás a backend-proxyn
+(R14) át történik. A gateway ezt a határt implementálja, nem hoz új normatív
+döntést. A pipeline-prompt „te írod meg a pre-flightban" instrukciója így
+**dokumentált nem-döntés**: nincs új ADR-szám kiosztva.
+
+### §0.0 REVÍZIÓ — engedélyezett-fájllista SZŰKÍTÉSE (autonómia §2)
+
+A `lib/features/ai_tutor/public.dart` **kikerül** az engedélyezett listából, és a
+§8 4. lépéséből törlöm az „additív export"-ot. Mért indok:
+
+- `test/features/ai_tutor/ai_tutor_boundary_test.dart` (a scope-on KÍVÜL) azt
+  invariálja, hogy `public.dart` **nulla import/export** — ha az implementer
+  exportot ad hozzá, ez a listán kívüli teszt pirosra vált, a gate megbukik,
+  a javítás pedig scope-sértés lenne (`stopped`).
+- `HANDOFF.md` §6 kimondja: „a `public.dart` üres-boundary invariáns tovább él,
+  amíg a hívó (R16/R19) nem érkezik meg" — a publikus export **R16+-ra
+  halasztva**.
+- A gateway a feature-en belül **közvetlen importtal** érhető el (a R12
+  prompt-osztályok precedense), publikus export nélkül. Az acceptance criteria
+  (§6) nem is kér exportot.
+
+Ez tiszta **szűkítés** (tilos zóna tágítása nélkül) → ADR 0087 §2 szerint az
+orchestrátor autonómiájában áll.
 
 ## 1. Cél
 
@@ -75,7 +128,7 @@ Flutter UI típus a gatewayben.
 | `.../data/model_gateway/tutor_model_event.dart` | ÚJ | event hierarchia |
 | `.../data/model_gateway/fake_tutor_model_gateway.dart` | ÚJ | scripted fake |
 | `.../data/model_gateway/local_tutor_model_gateway_stub.dart` | ÚJ | local stub |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
+| ~~`lib/features/ai_tutor/public.dart`~~ | **KIVÉVE (§0.0 revízió)** | az üres-boundary invariáns R16+-ig él (HANDOFF §6); intra-feature import |
 | `test/features/ai_tutor/data/*` | ÚJ | contract + fake tesztek |
 | `docs/rounds/e04-r13-*.md` | meglévő | §10 handoff |
 
@@ -113,7 +166,7 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI = orchestrátor.
 1. RED contract + timeout-mátrix + cancel tesztek.
 2. Contract + event + request modellek.
 3. Scripted fake + local stub.
-4. Additív export; gate.
+4. Gate. (Publikus export NINCS — §0.0 revízió; a gateway intra-feature importtal érhető el, `public.dart` érintetlen marad.)
 
 ## 9. Kockázatok
 
