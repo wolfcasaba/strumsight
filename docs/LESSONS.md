@@ -3869,3 +3869,36 @@ review-commit után. Sorrend-recept: (1) impl `done` → push; (2) review-commit
 push; (3) MOST dispatch a merge-evidencia CI-t a végleges HEAD-re. Egyetlen ~10
 perces CI-futás, exact-SHA. Ha korán dispatchelsz a review alatti kihasználásért,
 számolj a review-commit utáni kötelező re-dispatchcsal. (Vö. [L108].)
+
+## L113 — A merge-kapu csak a `build-apk`-t nézte, a különálló `router-ci.yml`-t nem: egy brief-scope drift (E03-R21) NYOLC körön át pirosan hagyta a Router CI-t, észrevétlen (E04-R07 után, 2026-08-05)
+
+**Kontextus.** A user egy CI-failed e-mailt kapott az E04-R07 „done" push után.
+A kör Flutter-kapuja (`build-apk`) végig zöld volt (exact-SHA, teljes suite +
+property + APK), és a kör szabályosan merge-elődött. A piros workflow egy MÁSIK,
+különálló sáv volt: a **Router CI** (`router-ci.yml`, a `tools/tests` 179
+python-tesztje, ADR 0088 mércéje).
+
+**Gyökérok.** Két, egymástól független stale a `tools/tests`-ben, amit a merge-
+kapu sosem nézett: (1) az E03-R21 brief `§4` emberi táblája elmaradt az
+`ai-router` TOML `allowed_paths`-ától egyetlen sorral (`lib/app/routing/
+app_route.dart`) — a pre-flight a TOML-ba beírta, a táblába nem, így a
+`test_epic3_brief_metadata` a kettő eltérését pirosnak látta; (2) a
+`test_open_rounds_follow_the_measured_engine_rule` `E03-`-ra volt drótozva, és az
+Epic 3 zárásával a nyitott-sor lista kiürült → az „üres a mérce" assertion
+elbukott. Egyik sem termékhiba — mindkettő a mércét karbantartó
+dokumentum/queue drift. Mivel MINDEN kör hozzányúl a `docs/rounds/**`-hoz, a
+Router CI körönként lefutott és pirosat adott, de a kör-orchestrátor merge-kapuja
+(prompt §3) csak a `build-apk`-t vette evidenciának — nyolc körön át (E03-R21 →
+E04-R07) senki sem nézte.
+
+**Javítás.** (a) A hiányzó `app_route.dart`-sor pótolva az E03-R21 `§4`
+táblában; (b) a teszt epic-agnosztikussá téve (minden nyitott sor, nem csak
+`E03-`), ami felszínre hozta az E04-R22 (privacy/consent UI) motor-eltérését is:
+a mért szabály `minimax`-ot ír (UI-dominált), a batch `codex`-et — user-döntéssel
+`minimax`-ra javítva a queue-ban; (c) a merge-kapu szabálya kibővítve mindkét
+prompt §-ában: ha a kör-diff bármelyik `router-ci.yml` trigger-útvonalat érinti,
+a `router-ci` run a merge SHA-n `success` kell legyen — a `build-apk` zöldje
+önmagában NEM elég. **Tanulság:** ha egy különálló CI-workflow méri a mércét
+(itt a router 179 tesztje), a merge-evidencia NEM egyetlen workflow zöldje —
+minden, a diff által triggerelt workflow zöldjét explicit ellenőrizni kell.
+(Vö. [L108], [L112].)
