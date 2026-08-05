@@ -174,7 +174,45 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `DebriefFact` és `CoachingInsight` immutable, evidence-refet validáló belső
+  modellek; a computed trend legalább két összehasonlítható evidence groupot
+  követel.
+- `SessionDebriefBuilder` csak redaktált primitív session inputból készít stabil
+  prioritású fact-listát. Lefedi a late bias, wrong direction, low chord,
+  section consistency, stable tempo, first evidence, improvement és
+  non-comparable eseteket; Practice feature import nincs.
+- `DeterministicCoach` egyetlen elsődleges insightot választ prioritás + stabil
+  code tie-break alapján, és kizárólag localization keyt, action template-et és
+  evidence refeket ad tovább. A legacy late-bias fixture `practice.insight.bias_late`
+  kódját megtartja.
+- Az angol és magyar ARB-katalógus additív debrief/uncertainty/action kulcsokat
+  kapott. Vizuális vagy kamerás diagnózis nincs.
+
+### Tesztek és ellenőrzések
+
+- RED: az új forrás-contract hiányát jelző tesztek pirosak voltak; a viselkedési
+  RED után a builder/coach `UnimplementedError`-ral vártan pirosra vált.
+- `flutter test test/features/ai_tutor/application/session_debrief_builder_test.dart test/features/ai_tutor/application/deterministic_coach_test.dart`
+  — 15 teszt zöld. Lefedi a parity fixture-t, a 7/8/9 paired-evidence mátrixot,
+  first/improvement/non-comparable eseteket, hu+en ARB-lookupot, grounding
+  mutációt, stabil rendezést és a tiltott vizuális claim-szavakat.
+- `flutter gen-l10n` — sikeres, generált output gitignore-olt.
+- `tools/round-gate.sh test/features/ai_tutor/application` — zöld: format
+  változás nélkül, analyze `No issues found`, application suite `+35` teszt.
+  A kimenet tokenkorlátja után külön ismételt `dart run tool/check_architecture.dart`:
+  `Architecture dependencies OK (12 allowlisted deviation(s)).`
+
+### Nem futtatott ellenőrzések
+
+- Teljes Flutter suite, randomizált property gate és release APK CI nem futott:
+  ezek az orchestrátor exact-SHA CI-feladatai.
+
+### Eltérés vagy nyitott kockázat
+
+- Nincs scope-eltérés; új ADR, public export, cloud hívás és source-feature
+  belső import nem került a diffbe.
 
 ## 11. Review — a független reviewer tölti ki
 
