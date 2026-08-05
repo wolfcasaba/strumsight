@@ -179,7 +179,41 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `StorageKeys`: három additív `ss.tutor.*` kulcs és a tételes
+  `tutorAiData` delete-all lista; a kulcsok a globális `all` listába is
+  bekerültek.
+- Conversation repository: verziózott dokumentum-envelope, dokumentumokból
+  helyreállítható index, lapozás, message-provenance summary és rekord-szintű
+  karantén. A dokumentum az index előtt íródik, ezért index-írási hiba után a
+  mentett beszélgetés a következő olvasáskor visszanyerhető.
+- Memory repository: candidate-deduplikáció, érzékeny-content elutasítás,
+  inspect/edit/delete, explicit retention purge, redaktált export és minden
+  deklarált tutor-kulcsot (a karanténjával együtt) törlő delete-all.
+- A két új teszt a fenti acceptance-útvonalakat, restartot és a
+  `StorageException` → `StorageFailure` nem-néma hibautat méri.
+
+### Ellenőrzések
+
+- RED: a két új repository-teszt a még nem létező contractok/implementációk
+  miatt fordítási hibával megállt.
+- `flutter test test/features/ai_tutor/data/local_tutor_conversation_repository_test.dart`
+  — 6 teszt zöld.
+- `flutter test test/features/ai_tutor/data/local_tutor_memory_repository_test.dart`
+  — 6 teszt zöld.
+- `flutter test test/features/ai_tutor/data` — 109 teszt zöld.
+- `flutter analyze` — a `tools/prepare-flutter-generated.sh` előkészítés után
+  zöld, nulla lelettel.
+- `tools/round-gate.sh test/features/ai_tutor/data` — format, analyze, 109
+  célzott teszt, architecture és secrets: zöld.
+- Eltávolítható mutáció: a `tutorMemoryFacts` törlésének ideiglenes kihagyása
+  a delete-all tesztet és a tárolóhiba-tesztet is pirosra váltotta; a változás
+  azonnal vissza lett vonva.
+
+### Eltérés / nem futtatott ellenőrzés
+
+- Nincs scope-eltérés. A teljes CI-t és az APK-buildet az orchestrátor indítja.
 
 ## 11. Review — a független reviewer tölti ki
 

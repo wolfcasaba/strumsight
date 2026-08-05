@@ -50,6 +50,21 @@ abstract final class StorageKeys {
   /// round; the two sources will be unified in E02-R19.
   static const String practiceHistoryV2 = 'ss.practice.history_v2';
 
+  // --- AI tutor ------------------------------------------------------------
+  /// Versioned documents, recovery index, and inspectable memory facts.
+  static const String tutorConversationDocuments =
+      'ss.tutor.conversation_documents';
+  static const String tutorConversationIndex = 'ss.tutor.conversation_index';
+  static const String tutorMemoryFacts = 'ss.tutor.memory_facts';
+
+  /// Every local AI tutor document. Delete-all must visit this exact list and
+  /// the quarantine of each key because [KeyValueStore] cannot enumerate keys.
+  static const List<String> tutorAiData = <String>[
+    tutorConversationDocuments,
+    tutorConversationIndex,
+    tutorMemoryFacts,
+  ];
+
   /// Secure-store key for the JWT. Deliberately NOT renamed: the secure store
   /// is not covered by the preference migrator, so a rename would silently log
   /// out every signed-in user.
@@ -91,6 +106,9 @@ abstract final class StorageKeys {
     dailyGoalMinutes,
     streak,
     practiceHistoryV2,
+    tutorConversationDocuments,
+    tutorConversationIndex,
+    tutorMemoryFacts,
   ];
 }
 
