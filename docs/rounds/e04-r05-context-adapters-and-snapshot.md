@@ -1,6 +1,6 @@
 # E04-R05 — Context adapterek és TutorContextSnapshot
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ fbe1e82)
+- **Státusz:** PLANNING (pre-flight újramérve 2026-08-05, main @ `ee893da` — E04-R04 merge óta; a §0.0 D1/D2/D3 mért állításai VÁLTOZATLANOK, lásd §0.0a)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 5
 - **Branch:** `codex/e04-r05-context-adapters-and-snapshot`
 - **Előfeltétel:** E04-R02 (conversation/message domain), E04-R03 (student/guitar profile, goals, consent), E04-R04 (skill taxonomy, evidence, reducer) merge; **Epic 3 (E03-R22) lezárva**
@@ -99,6 +99,41 @@ tartalmazza (csak a strukturált snapshot mezőket + redaction reportot).
 
 A fenti revíziók a kör saját, még nem merge-elt briefjét érintik
 (orchestrátor-autonómia, ADR 0087 §2) — merge-elt döntést nem módosítanak.
+
+## 0.0a Élesítő pre-flight — újramérés main @ `ee893da` (2026-08-05)
+
+A batch-baseline `fbe1e82` óta a `main` az **E04-R04 merge**-dzsel + két
+pipeline-commit-tal mozdult `ee893da`-ra. A brief minden mért állítását
+újramértem ezen a HEAD-en; **egyik sem drift-elt**:
+
+- **Greenfield (§2):** a 20 `lib`/`test` cél-fájl mind HIÁNYZIK
+  (`lib/features/ai_tutor/application/context/` nem létezik); a
+  `docs/rounds/e04-r05-…md` a listázott meglévő fájl. ✓
+- **D1 (Song Trainer public):** `lib/features/song_trainer/public.dart`
+  továbbra is **presentation-only** (csak `song_import_screen.dart` +
+  `song_library_screen.dart`); `note_scoring` export: **0 találat** →
+  a `song_trainer_context_adapter` a mért úton **degradált** (`unavailable`
+  provenance) szekciót ad, internal import nélkül. (§1 „elérhetetlen
+  cél-státusz" mérve az input-oldalon, nem az átmenettáblán.) ✓
+- **D2 (fogyasztott public API-k):** mind a hat forrás-barrel exportja
+  változatlanul jelen: `practice/public.dart` (`PracticeSessionResult`,
+  `PracticeVerdict`, `PracticeMetrics`, `AggregatedPracticeEntry`),
+  `analyze/public.dart` (`AnalyzeResult` a `model/analyze_result.dart`
+  exportján), `progress/public.dart` (`PracticeEntry`, `PracticeStats`),
+  `streak/public.dart` (`streak_logic`/`daily_challenge`/`streak_provider`),
+  `settings/public.dart` (capo/input_latency/lab_mode/left_handed/
+  tuning_reference/visual_latency). ✓
+- **D3 (Lab kapu):** `settings/public.dart` exportálja a
+  `lab_mode_provider.dart`-t. ✓
+- **ADR:** nincs új ADR (a 0131–0134 realizálása); az `ai_tutor/public.dart`
+  **ÜRES MARAD** (nincs az `allowed_paths`-on, a lezárt boundary-invariáns
+  zöld marad — R02/R03/R04 precedens).
+- **§1.2 erőforrás-tulajdonlás:** N/A — a context adapterek tiszta
+  read-only fogyasztók a public barrelekből, semmilyen lease/lock/handle-t
+  nem `acquire`-elnek.
+
+Következmény: a scope, a fájllista és az acceptance változatlan; a kör
+futtatható.
 
 ## 1. Cél
 
