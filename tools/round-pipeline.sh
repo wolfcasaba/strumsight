@@ -35,7 +35,15 @@ set -uo pipefail
 validate_engine() {
   case "${1:-}" in
     auto | minimax | codex) return 0 ;;
-    *) return 1 ;;
+    # Motor-nyilvántartásbeli név (ADR 0139): a queue `engine` oszlopa és az
+    # `engine-profile.sh use` override is hivatkozhat rá. Fail-closed marad:
+    # csak a nyilvántartásban SZEREPLŐ név fogadható el.
+    *)
+      local registry="${BASH_SOURCE[0]%/*}/../docs/execution/engine-registry.tsv"
+      [ -f "$registry" ] || return 1
+      grep -v '^[[:space:]]*#' "$registry" | grep -v '^name	' \
+        | cut -f1 | grep -qx "${1:-}"
+      ;;
   esac
 }
 
@@ -804,7 +812,25 @@ engine=$(printf '%s' "$next_line" | cut -f3)
 adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
-validate_engine "$engine" || die "ismeretlen implementer motor: $engine (auto|minimax|codex)"
+
+# --- Motor-override (ADR 0139) -------------------------------------------
+# A motorok kvótája külön merül ki (a Terra 9%-on, 2026-08-05). Az override
+# egyetlen gitignore-olt fájl, ezért a váltás visszavonható: törlésével a
+# queue soronkénti `engine` értéke lép vissza életbe, konfiguráció-átírás
+# nélkül. `tools/engine-profile.sh use|clear`.
+engine_override_file="$state_dir/engine-override"
+if [ -f "$engine_override_file" ]; then
+  engine_override=$(head -1 "$engine_override_file" | tr -d '[:space:]')
+  if [ -n "$engine_override" ] && validate_engine "$engine_override"; then
+    [ "$engine_override" != "$engine" ] && \
+      log "MOTOR-OVERRIDE: $engine → $engine_override (tools/engine-profile.sh clear old fel)"
+    engine=$engine_override
+  else
+    die "érvénytelen motor-override: $engine_override ($engine_override_file)"
+  fi
+fi
+
+validate_engine "$engine" || die "ismeretlen implementer motor: $engine (auto|minimax|codex vagy a nyilvántartás neve)"
 if [ "$engine" = "auto" ]; then
   [ -x "$repo_root/tools/ai-router-round.sh" ] || die "hiányzik a router adapter"
   [ -x "$repo_root/tools/model-router.py" ] || die "hiányzik a model router"

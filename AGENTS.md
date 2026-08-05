@@ -501,6 +501,25 @@ szigorítása ezekre továbbra is él, de az `auto` task kereteit nem kerülheti
 Az Epic 3 R01–R21 queue-sorai `auto`, de kezdetben `prepared`; ember állítja az
 első futtatható sort `pending`-re az Epic 2 lezárása után. R22 epic-zárás kézi.
 
+### 15.6.1 Motorváltás — visszakapcsolható profilok ([ADR 0139](docs/adr/0139-switchable-implementer-engine-profiles.md))
+
+A motorok kvótája külön merül ki, ezért a profiljaik **egymás mellett élnek**
+(`~/.codex-terra`, `~/.codex-kilo`, `~/.claude-minimax`), és a váltás egyetlen
+visszavonható lépés — konfigurációt nem írunk át, így egyik beállítás sem vész el:
+
+```bash
+tools/engine-profile.sh list           # nyilvántartás + aktív + elérhetőség
+tools/engine-profile.sh use qwen-plus  # MINDEN kör ezzel megy
+tools/engine-profile.sh clear          # vissza a queue soronkénti értékére
+```
+
+A választható motorok forrása: [`docs/execution/engine-registry.tsv`](docs/execution/engine-registry.tsv)
+(harness, modell, auth, elakadás-küszöb, kontextusablak, ár, **mért passz-arány**).
+Új motor = egy új sor, kódváltoztatás nélkül. Ismeretlen név fail-closed.
+
+**Lassú motornál a küszöböket a nyilvántartás adja** — a Qwen ~95 s/válasz, amit
+a 12 perces alapértelmezés hamis elakadásnak látna.
+
 ### 15.7 Reviewer-függetlenség ([ADR 0138](docs/adr/0138-factory-hardening-scope-guard-and-independence.md))
 
 **Egy motor nem hagyhatja jóvá a saját munkáját.** Mérve 2026-08-05: az
