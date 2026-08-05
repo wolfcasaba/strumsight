@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -173,6 +174,30 @@ def _write_entry(directory: Path, round_id: str, values: dict[str, str]) -> Path
     return target
 
 
+def branch_adr_numbers(repo: Path) -> set[int]:
+    """MINDEN ágon (nem csak a main-en) létrehozott ADR-fájlok sorszámai.
+
+    MÉRT rés (2026-08-05): a futó E04-R16 kör a saját branchén már lefoglalta a
+    0172-t, de az a `main`-en még nem létezett — a lemez-alapú foglaló ezért
+    ugyanazt a számot adta volna ki másodszor is. Ez a 0139-es duplikátum
+    hibaosztálya, csak egy fázissal korábban.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo), "log", "--all", "--diff-filter=A", "--name-only", "--format=", "--", "docs/adr"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return set()
+    numbers: set[int] = set()
+    for line in result.stdout.splitlines():
+        match = ADR_NAME.match(Path(line).name)
+        if match:
+            numbers.add(int(match.group(1)))
+    return numbers
+
+
 def reserve_adr(repo: Path, directory: Path, round_id: str) -> int:
     """A következő szabad ADR-szám ATOMI foglalása (O_EXCL marker-fájl).
 
@@ -185,6 +210,7 @@ def reserve_adr(repo: Path, directory: Path, round_id: str) -> int:
         for match in (ADR_NAME.match(path.name) for path in (repo / "docs" / "adr").iterdir() if path.is_file())
         if match
     }
+    used.update(branch_adr_numbers(repo))
     directory.mkdir(parents=True, exist_ok=True)
     reserved_dir = directory / "adr"
     reserved_dir.mkdir(parents=True, exist_ok=True)
