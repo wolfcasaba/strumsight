@@ -1,3 +1,6 @@
+// strumsight:allow-secret-file — a titok-scan SAJÁT tesztje: minden itt
+// szereplő token szándékosan titok-alakú, hogy a felismerés bizonyítható
+// legyen. A fájl kivételek fájlja, nem egy kivételt tartalmazó fájl.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -96,6 +99,36 @@ const e = '****************';
     final report = checkSecrets(projectRoot: projectRoot);
 
     expect(report.isClean, isTrue, reason: report.format());
+  });
+
+  test('honours the file-level allow marker for a redaction test', () {
+    // MÉRT eset (2026-08-05): a soronkénti jelölés törékeny a formázókkal
+    // szemben — a `ruff format` újratördelte a sort, és a jelölés elvált a
+    // fixture-től. Egy redakciós teszt nem egy kivételt tartalmazó fájl,
+    // hanem kivételek fájlja: egyszer, a tetején mondja ki.
+    _track(projectRoot, 'test/redaction_test.dart', '''
+// $allowFileMarker a redakció tesztje
+const a = 'sk-abcdefghijklmnopqrstuvwxyz0123';
+const b = 'ghp_abcdefghijklmnopqrstuvwxyz01234567';
+''');
+
+    final report = checkSecrets(projectRoot: projectRoot);
+
+    expect(report.isClean, isTrue, reason: report.format());
+  });
+
+  test('the file-level marker does not leak to other files', () {
+    _track(projectRoot, 'test/redaction_test.dart', "// $allowFileMarker\n");
+    _track(
+      projectRoot,
+      'lib/config.dart',
+      "const key = 'sk-abcdefghijklmnopqrstuvwxyz0123';\n",
+    );
+
+    final report = checkSecrets(projectRoot: projectRoot);
+
+    expect(report.isClean, isFalse);
+    expect(report.issues.single.path, 'lib/config.dart');
   });
 
   test('ignores untracked and gitignored trees', () {

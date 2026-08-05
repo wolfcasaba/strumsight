@@ -1,3 +1,5 @@
+# strumsight:allow-secret-file — a redakcio tesztje: a benne levo tokenek
+# szandekosan titok-alakuak, hogy a redaktalas bizonyithato legyen.
 import unittest
 
 from tools.ai_router.packet import PacketError, build_escalation_packet
@@ -12,7 +14,7 @@ class PacketTest(unittest.TestCase):
             error_log=("Authorization: Bearer top-secret\n" + "failure line\n" * 500),
             attempts=("M3 changed lib/example.dart", "same test failed"),
             diff_stat="1 file changed",
-            diff_text="+ secret sk-abcdefghijklmnopqrstuvwxyz123456\n" + "+x\n" * 500,  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+            diff_text="+ secret sk-abcdefghijklmnopqrstuvwxyz123456\n" + "+x\n" * 500,
             relevant_files=("lib/example.dart", "test/example_test.dart"),
             max_bytes=1800,
         )
@@ -21,7 +23,7 @@ class PacketTest(unittest.TestCase):
         self.assertIn("<original-task-data>", packet)
         self.assertIn("</original-task-data>", packet)
         self.assertNotIn("top-secret", packet)
-        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", packet)  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", packet)
         self.assertIn("minimal", packet.lower())
 
     def test_packet_names_allowed_paths_untouched_by_any_attempt(self) -> None:

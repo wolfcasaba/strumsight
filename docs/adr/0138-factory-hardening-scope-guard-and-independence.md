@@ -188,6 +188,16 @@ tilt. Külön kitérője a prompt injection felület (ADR 0131–0136): külső 
 Mindkettő élesben, valódi sértéssel próbálva: beszúrt `sk-…` literál → piros
 (exit 1); törölt `micErrorBody` fordítás → piros (exit 1).
 
+**Kétféle jelölés, mért okból.** A soronkénti `// strumsight:allow-secret`
+törékeny a formázókkal szemben: a `ruff format` újratördelte azt a
+`backend/tests` sort, amelyet a hozzáfűzött komment a limit fölé vitt, és a
+jelölés a záró zárójel sorára került, míg a fixture maradt a fölötte lévőn —
+a lelet némán újraéledt. Ezért van fájl-szintű
+`// strumsight:allow-secret-file` is: egy redakciós teszt nem *egy kivételt
+tartalmazó* fájl, hanem *kivételek fájlja*, tehát egyszer, a tetején mondja ki.
+Ellenőrizve, hogy nem szivárog: a jelölt fájl mellé tett, jelöletlen fájlban a
+lelet továbbra is piros.
+
 ## Ismert, NEM lezárt maradék (§7 follow-up)
 
 Ezek mérési előfeltétel vagy külön kör hiányában maradtak nyitva; egyik sem

@@ -1,3 +1,5 @@
+# strumsight:allow-secret-file — a fajl CELJA a hibas/rogzitett hitelesito
+# adatok elleni vedekezes tesztelese; minden kulcs kitalalt fixture.
 """Round 120 — production hardening: auth rate-limiting + prod-boot guards.
 
 The account backend was dev-grade (documented): no brute-force throttle on
@@ -99,7 +101,7 @@ class TestProdBootGuards:
         app = create_app(
             Settings(
                 env="prod",
-                secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+                secret_key="a-real-32-char-production-secret",
                 cors_origins=["https://app.strumsight.app"],
                 allow_sqlite_in_prod=True,
             )
@@ -117,7 +119,7 @@ class TestProdBootGuards:
         app = create_app(
             Settings(
                 env="prod",
-                secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+                secret_key="a-real-32-char-production-secret",
                 cors_origins=["https://app.strumsight.app"],
                 allow_sqlite_in_prod=True,
             )
@@ -139,7 +141,7 @@ class TestProdBootGuards:
     ):
         settings = Settings(
             env="prod",
-            secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+            secret_key="a-real-32-char-production-secret",
             cors_origins=["https://app.strumsight.app"],
             allow_sqlite_in_prod=True,
             diagnostics_enabled=True,
@@ -158,14 +160,14 @@ class TestProdBootGuards:
             create_app(s)
 
     def test_prod_with_wildcard_cors_refuses_to_boot(self):
-        s = Settings(env="prod", secret_key="a-real-32-char-production-secret")  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+        s = Settings(env="prod", secret_key="a-real-32-char-production-secret")
         with pytest.raises(RuntimeError, match="CORS"):
             create_app(s)
 
     def test_prod_with_real_config_boots(self):
         s = Settings(
             env="prod",
-            secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+            secret_key="a-real-32-char-production-secret",
             cors_origins=["https://app.strumsight.app"],
             allow_sqlite_in_prod=True,
         )
@@ -178,7 +180,7 @@ class TestProdBootGuards:
         monkeypatch.delenv("STRUMSIGHT_ALLOW_SQLITE", raising=False)
         s = Settings(
             env="prod",
-            secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+            secret_key="a-real-32-char-production-secret",
             cors_origins=["https://app.strumsight.app"],
         )
         with pytest.raises(RuntimeError, match="SQLite"):
@@ -188,7 +190,7 @@ class TestProdBootGuards:
         monkeypatch.setenv("STRUMSIGHT_ALLOW_SQLITE", "true")
         s = Settings(
             env="prod",
-            secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+            secret_key="a-real-32-char-production-secret",
             cors_origins=["https://app.strumsight.app"],
         )
         assert s.allow_sqlite_in_prod is True

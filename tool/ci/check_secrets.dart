@@ -60,7 +60,9 @@ final class SecretCheckReport {
       ..writeln()
       ..write(
         'A találat HELYE szerepel, az ÉRTÉKE soha. Ha bizonyítottan nem titok '
-        '(teszt-fixture, dokumentált minta), tedd a sor végére: // $allowMarker <indok>',
+        '(teszt-fixture, dokumentált minta), tedd a sor végére: '
+        '// $allowMarker <indok> — ha az EGÉSZ fájl célja a fake hitelesítő '
+        '(pl. redakciós teszt), a fájl tetejére: // $allowFileMarker <indok>',
       );
     return output.toString();
   }
@@ -68,6 +70,16 @@ final class SecretCheckReport {
 
 /// Inline escape for a proven non-secret (test fixture, documented example).
 const String allowMarker = 'strumsight:allow-secret';
+
+/// File-level escape for a file whose whole PURPOSE is fake credentials.
+///
+/// Measured 2026-08-05: a per-line marker is fragile against formatters.
+/// `ruff format` re-wrapped a `backend/tests` line that the appended comment
+/// had pushed over the limit, and the marker landed on the closing-paren line
+/// while the fixture stayed on the line above — silently re-arming the
+/// finding.  A redaction test is not a file with an exception in it; it is a
+/// file of exceptions, so it declares that once, at the top.
+const String allowFileMarker = 'strumsight:allow-secret-file';
 
 /// Directories that never contain reviewable source.
 const Set<String> _skippedDirectories = {
@@ -208,6 +220,7 @@ SecretCheckReport checkSecrets({required Directory projectRoot}) {
       continue; // nem UTF-8 — bináris, nem elemezhető
     }
     scannedFiles++;
+    if (contents.contains(allowFileMarker)) continue;
 
     final lines = contents.split('\n');
     for (var index = 0; index < lines.length; index++) {

@@ -1,3 +1,4 @@
+# strumsight:allow-secret-file — migracios tesztek kitalalt Settings-fixture-okkel.
 """Database lifecycle and migration contract tests."""
 
 import logging
@@ -35,7 +36,7 @@ def _alembic_config() -> Config:
 def _prod_settings(database_url: str) -> Settings:
     return Settings(
         env="prod",
-        secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+        secret_key="a-real-32-char-production-secret",
         cors_origins=["https://app.strumsight.app"],
         database_url=database_url,
         allow_sqlite_in_prod=True,
@@ -206,7 +207,7 @@ def test_unprefixed_sqlite_permission_environment_is_ignored(monkeypatch):
     monkeypatch.setenv("ALLOW_SQLITE_IN_PROD", "true")
     settings = Settings(
         env="prod",
-        secret_key="a-real-32-char-production-secret",  # strumsight:allow-secret teszt-fixture, nem valodi hitelesito adat
+        secret_key="a-real-32-char-production-secret",
         cors_origins=["https://app.strumsight.app"],
     )
 
