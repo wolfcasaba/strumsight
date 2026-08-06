@@ -22,11 +22,11 @@ class RedactionRule:
     _compiled: Pattern = field(init=False, repr=False)
 
     def __init__(self, pattern: str | Pattern, replacement: str) -> None:
-        object.__setattr__(self, 'replacement', replacement)
+        object.__setattr__(self, "replacement", replacement)
         if isinstance(pattern, Pattern):
-            object.__setattr__(self, '_compiled', pattern)
+            object.__setattr__(self, "_compiled", pattern)
         else:
-            object.__setattr__(self, '_compiled', re_compile(pattern))
+            object.__setattr__(self, "_compiled", re_compile(pattern))
 
     @property
     def pattern(self) -> Pattern:
@@ -68,14 +68,14 @@ class ContentSizeGuard:
 
     def __init__(self, max_bytes: int) -> None:
         if max_bytes < 0:
-            raise ValueError('max_bytes must be >= 0')
+            raise ValueError("max_bytes must be >= 0")
         self._max_bytes = max_bytes
 
     def check(self, text: str) -> None:
         """Raise ValueError if text exceeds the size limit."""
-        size = len(text.encode('utf-8'))
+        size = len(text.encode("utf-8"))
         if size > self._max_bytes:
             raise ValueError(
-                f'Content size {size} bytes exceeds size limit of '
-                f'{self._max_bytes} bytes'
+                f"Content size {size} bytes exceeds size limit of "
+                f"{self._max_bytes} bytes"
             )

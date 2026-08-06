@@ -12,6 +12,7 @@ from re import compile as re_compile
 
 class SafetyCategory(Enum):
     """Safety categories ordered by priority (highest first)."""
+
     PROMPT_INJECTION = auto()
     INVENTED_METRIC = auto()
     CREDENTIAL_REQUEST = auto()
@@ -49,9 +50,7 @@ class SafetyVerdict:
     def to_dict(self) -> dict:
         return {
             "is_allowed": self.is_allowed,
-            "blocked_categories": sorted(
-                [c.name for c in self.blocked_categories]
-            ),
+            "blocked_categories": sorted([c.name for c in self.blocked_categories]),
         }
 
 
@@ -64,45 +63,45 @@ class SafetyPolicy:
     """
 
     _PAIN_PATTERN = re_compile(
-        r'\b(I\s+feel\s+pain|it\s+hurts|my\s+circuits|I\s+am\s+suffering|'
-        r'that\s+hurts|you\s+hurt\s+me|I\s+am\s+in\s+pain)\b',
+        r"\b(I\s+feel\s+pain|it\s+hurts|my\s+circuits|I\s+am\s+suffering|"
+        r"that\s+hurts|you\s+hurt\s+me|I\s+am\s+in\s+pain)\b",
         IGNORECASE,
     )
 
     _MEDICAL_PATTERN = re_compile(
-        r'\b(diagnos\w+|medical\s+condition|symptom\w*|'
-        r'carpal\s+tunnel|tendonitis|arthritis|'
-        r'you\s+(have|may\s+have|suffer\s+from)\s+\w+\s+(syndrome|disease|disorder))\b',
+        r"\b(diagnos\w+|medical\s+condition|symptom\w*|"
+        r"carpal\s+tunnel|tendonitis|arthritis|"
+        r"you\s+(have|may\s+have|suffer\s+from)\s+\w+\s+(syndrome|disease|disorder))\b",
         IGNORECASE,
     )
 
     _COPYRIGHT_PATTERN = re_compile(
-        r'\bcopyrighted\b',
+        r"\bcopyrighted\b",
         IGNORECASE,
     )
 
     _CREDENTIAL_PATTERN = re_compile(
-        r'\b(enter\s+your\s+(password|api\s+key|credentials|token)|'
-        r'provide\s+your\s+(password|api\s+key|credentials|token)|'
-        r'what\s+is\s+your\s+(password|api\s+key|credentials)|'
-        r'share\s+your\s+(password|credentials|api\s+key|token)|'
-        r'your\s+password\s*(is|please)|tell\s+me\s+your\s+password)\b',
+        r"\b(enter\s+your\s+(password|api\s+key|credentials|token)|"
+        r"provide\s+your\s+(password|api\s+key|credentials|token)|"
+        r"what\s+is\s+your\s+(password|api\s+key|credentials)|"
+        r"share\s+your\s+(password|credentials|api\s+key|token)|"
+        r"your\s+password\s*(is|please)|tell\s+me\s+your\s+password)\b",
         IGNORECASE,
     )
 
     _UNSAFE_ACTION_PATTERN = re_compile(
-        r'\b(cut\s+(the\s+)?(guitar\s+)?strings?\s+with|'
-        r'apply\s+(excessive\s+)?force\s+to|'
-        r'break\s+the|snap\s+the\s+neck|'
-        r'strike\s+(the\s+)?guitar)\b',
+        r"\b(cut\s+(the\s+)?(guitar\s+)?strings?\s+with|"
+        r"apply\s+(excessive\s+)?force\s+to|"
+        r"break\s+the|snap\s+the\s+neck|"
+        r"strike\s+(the\s+)?guitar)\b",
         IGNORECASE,
     )
 
     _REDACTION_PATTERN = re_compile(
-        r'\b(api\s*[kK]ey\s*[=:]\s*[a-zA-Z0-9\-_]{8,}|'
-        r'secret\s*[=:]\s*[a-zA-Z0-9\-_]{8,}|'
-        r'sk-[a-zA-Z0-9]{8,}|'
-        r'Bearer\s+[A-Za-z0-9\-._~+/]+=*)\b',
+        r"\b(api\s*[kK]ey\s*[=:]\s*[a-zA-Z0-9\-_]{8,}|"
+        r"secret\s*[=:]\s*[a-zA-Z0-9\-_]{8,}|"
+        r"sk-[a-zA-Z0-9]{8,}|"
+        r"Bearer\s+[A-Za-z0-9\-._~+/]+=*)\b",
         IGNORECASE,
     )
 
