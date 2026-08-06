@@ -61,13 +61,13 @@ final class TutorSafetyPolicyRequest {
 
   @override
   int get hashCode => Object.hash(
-        outputText,
-        hasInjection,
-        hasInventedMetric,
-        hasCameraClaim,
-        isRateLimited,
-        isUsageExceeded,
-      );
+    outputText,
+    hasInjection,
+    hasInventedMetric,
+    hasCameraClaim,
+    isRateLimited,
+    isUsageExceeded,
+  );
 
   @override
   String toString() =>

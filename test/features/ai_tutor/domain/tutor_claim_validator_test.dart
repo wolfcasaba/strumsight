@@ -147,18 +147,27 @@ void main() {
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+      );
     });
 
     test('measuredFact with non-trusted evidenceRef is invalid', () {
       final result = validator.validate(
         claims: <TutorClaim>[
-          const TutorClaim(type: 'measuredFact', evidenceRefs: {'untrusted-source#99'}),
+          const TutorClaim(
+            type: 'measuredFact',
+            evidenceRefs: {'untrusted-source#99'},
+          ),
         ],
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+      );
     });
 
     test('computedTrend with empty evidenceRefs is invalid', () {
@@ -169,7 +178,10 @@ void main() {
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+      );
     });
 
     test('knowledgeFact with empty evidenceRefs is invalid', () {
@@ -180,25 +192,37 @@ void main() {
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+      );
     });
 
-    test('invented metric with mixed valid and invalid claims still blocks', () {
-      final result = validator.validate(
-        claims: <TutorClaim>[
-          const TutorClaim(
-            type: 'knowledgeFact',
-            evidenceRefs: {'kb-guitar-v2#1'},
-          ),
-          const TutorClaim(type: 'measuredFact', evidenceRefs: {}),
-          const TutorClaim(type: 'inference', evidenceRefs: {}),
-        ],
-        trustedSourceRefs: trustedSources,
-      );
-      expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
-      expect(result.issues, isNot(contains(TutorClaimValidationIssue.unsupportedClaim)));
-    });
+    test(
+      'invented metric with mixed valid and invalid claims still blocks',
+      () {
+        final result = validator.validate(
+          claims: <TutorClaim>[
+            const TutorClaim(
+              type: 'knowledgeFact',
+              evidenceRefs: {'kb-guitar-v2#1'},
+            ),
+            const TutorClaim(type: 'measuredFact', evidenceRefs: {}),
+            const TutorClaim(type: 'inference', evidenceRefs: {}),
+          ],
+          trustedSourceRefs: trustedSources,
+        );
+        expect(result.isValid, isFalse);
+        expect(
+          result.issues,
+          contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+        );
+        expect(
+          result.issues,
+          isNot(contains(TutorClaimValidationIssue.unsupportedClaim)),
+        );
+      },
+    );
   });
 
   group('TutorClaimValidator — unsupported claim types', () {
@@ -210,18 +234,22 @@ void main() {
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaim));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaim),
+      );
     });
 
     test('empty string type is rejected', () {
       final result = validator.validate(
-        claims: <TutorClaim>[
-          const TutorClaim(type: '', evidenceRefs: {}),
-        ],
+        claims: <TutorClaim>[const TutorClaim(type: '', evidenceRefs: {})],
         trustedSourceRefs: trustedSources,
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaim));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaim),
+      );
     });
   });
 
@@ -239,27 +267,36 @@ void main() {
     test('measuredFact with no trusted sources available is invalid', () {
       final result = validator.validate(
         claims: <TutorClaim>[
-          const TutorClaim(type: 'measuredFact', evidenceRefs: {'kb-guitar-v2#1'}),
+          const TutorClaim(
+            type: 'measuredFact',
+            evidenceRefs: {'kb-guitar-v2#1'},
+          ),
         ],
         trustedSourceRefs: const <TutorSourceRef>[],
       );
       expect(result.isValid, isFalse);
-      expect(result.issues, contains(TutorClaimValidationIssue.unsupportedClaimEvidence));
+      expect(
+        result.issues,
+        contains(TutorClaimValidationIssue.unsupportedClaimEvidence),
+      );
     });
   });
 
   group('TutorClaimValidator — chunkId resolution', () {
-    test('resolves TutorSourceRef.chunkId as the canonical form for matching', () {
-      final src = const TutorSourceRef(
-        sourceId: 'kb-guitar-v2',
-        title: 'KB',
-        locale: 'en',
-        topic: 'chords',
-        knowledgeVersion: 2,
-        chunkIndex: 0,
-        chunkHash: 'abc',
-      );
-      expect(src.chunkId, 'kb-guitar-v2#1');
-    });
+    test(
+      'resolves TutorSourceRef.chunkId as the canonical form for matching',
+      () {
+        final src = const TutorSourceRef(
+          sourceId: 'kb-guitar-v2',
+          title: 'KB',
+          locale: 'en',
+          topic: 'chords',
+          knowledgeVersion: 2,
+          chunkIndex: 0,
+          chunkHash: 'abc',
+        );
+        expect(src.chunkId, 'kb-guitar-v2#1');
+      },
+    );
   });
 }

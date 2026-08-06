@@ -15,10 +15,7 @@ enum TutorClaimValidationIssue {
 /// A single claim to validate, with its type and evidence references.
 @immutable
 final class TutorClaim {
-  const TutorClaim({
-    required this.type,
-    this.evidenceRefs = const <String>{},
-  });
+  const TutorClaim({required this.type, this.evidenceRefs = const <String>{}});
 
   final String type;
   final Set<String> evidenceRefs;
@@ -41,7 +38,9 @@ final class TutorClaim {
 /// Result of claim validation — deterministic and immutable.
 @immutable
 final class TutorClaimValidationResult {
-  const TutorClaimValidationResult({this.issues = const <TutorClaimValidationIssue>[]});
+  const TutorClaimValidationResult({
+    this.issues = const <TutorClaimValidationIssue>[],
+  });
 
   final List<TutorClaimValidationIssue> issues;
 
@@ -103,9 +102,7 @@ final class TutorClaimValidator {
     required Iterable<TutorClaim> claims,
     required Iterable<TutorSourceRef> trustedSourceRefs,
   }) {
-    final trustedIds = trustedSourceRefs
-        .map((ref) => ref.chunkId)
-        .toSet();
+    final trustedIds = trustedSourceRefs.map((ref) => ref.chunkId).toSet();
     final issues = <TutorClaimValidationIssue>[];
 
     for (final claim in claims) {
