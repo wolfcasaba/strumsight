@@ -357,6 +357,34 @@ written because that file is outside the brief's allowed paths. A further brief
 revision must explicitly allow the core contract change and define how crop is
 represented before implementation can continue.
 
+**2026-08-06 — STOPPED after R2 scope revision, before implementation.** The
+R2 revision resolves the closed `CameraFrame` metadata contract: its two
+additive fields can preserve the required mirror and raw pixel-space crop
+metadata without changing either existing caller. A separate, still-unresolved
+architecture conflict prevents the requested production binding. The only
+listed provider integration point is `lib/core/camera/camera_providers.dart`,
+while the required `PluginCameraCapture` belongs to the separately listed
+`lib/features/vision/data/camera/plugin_camera_capture.dart`. Binding that
+concrete adapter from the core provider requires a core-to-feature import,
+which is forbidden by `AGENTS.md` §6 ("Core nem importál feature-t") and by
+the brief's own §5.4 boundary requirement. Moving the provider or creating a
+feature-layer composition root is not permitted by §4's allowed paths, and a
+core-only abstract factory would not bind the production adapter required by
+§3/§5.5.
+
+The required signal was sent immediately after identifying this conflict:
+
+```text
+stopped — E05-R06 scope conflict: core camera_providers cannot import the feature-layer production adapter required for the requested binding
+```
+
+No production, dependency, or test source was changed in this run. The fresh
+R2 revision needs a design/scope decision that either (a) permits a
+feature-layer composition provider to instantiate `PluginCameraCapture`, or
+(b) explicitly reclassifies an approved integration location without allowing
+plugin types to enter `lib/core`. The decision must retain `visionEnabled ==
+false` as a non-instantiating path.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e05-r06-android-camera-adapter-review.md`.
