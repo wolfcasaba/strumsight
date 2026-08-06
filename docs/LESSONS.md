@@ -4502,3 +4502,31 @@ LOGIKÁT — az az implementer dolga; a commit/format/gate-futtatás a megengede
 mechanikus mentés határa. A `mm-round.sh` egyébként **teljes klónt** vár
 (`.git` KÖNYVTÁR); `git worktree` (`.git` FÁJL) nem megy — a munkapéldány
 `git clone` legyen, ne worktree.
+
+## L132 — Commit-ELŐTTI, gate-FUTÁS-előtti implementer-stall mentése: folytató-dispatch ugyanabba a klónba, ne orchestrátor-commit (E04-R19)
+
+**Kontextus:** E04-R19 (MiniMax M3, `minimax` legacy). Az első implementer-futás a
+gate ELŐTT stallolt (log 5 perc néma → `mm-round.sh` kilőtte), `status=stalled`,
+`scope_audit=ok`, `head=<brief-commit>` — a 9 munkafájl a lemezen volt, de
+**commitolatlan**, és a `round-gate.sh` **nem futott le**.
+
+**Különbség L131-hez:** L131 (E04-R18) a *timeout a gate teszt-lépésében* esete
+volt — ott az orchestrátor mechanikus commit + gate-újrafuttatás a helyes salvage.
+Itt a gate MÉG EL SEM INDULT, tehát nincs mit „csak commitolni": a munka zöldsége
+bizonyítatlan. Ekkor a helyes lépés **egy folytató-dispatch ugyanabba a klónba**
+(nem worktree — L131): egy rövid „a fájljaid már itt vannak, futtasd a gate-et,
+javíts a §4-en belül, majd commitolj + jelezz `done`" prompt. Az implementer így
+(1) maga futtatja a mércét (valódi zöld/piros), (2) **ő marad a commit szerzője**
+(ADR 0055 — az orchestrátor nem ír production kódot), (3) a `flutter gen-l10n`-t is
+ő futtatja. E04-R19-ben ez **egy** menetben `done` + gate-zöld lett.
+
+**Szabály:** stall/timeout az ELSŐ halálnál (nem H6) → nézd a jelzést:
+`scope_audit=ok` + **commitolt** diff + a gate lefutott → L131 (orchestrátor-salvage).
+`scope_audit=ok` de **commitolatlan** ÉS a gate nem futott → **folytató-dispatch**
+ugyanabba a klónba (implementer fejezi be, futtatja a gate-et, commitol). Mindkettő
+csak az ELSŐ halálnál; a második unknown/stalled = H6.
+
+**Előfeltétel (mindkét úton):** a klón `git clone` legyen, ne `git worktree`
+(`mm-round.sh` `.git`-**könyvtárat** vár), és a friss klónt a dispatch előtt
+`tools/prepare-flutter-generated.sh`-val primeold (pub deps + l10n), különben az
+implementer első gate-futása a hiányzó generált előfeltételen bukik.

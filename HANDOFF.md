@@ -3,10 +3,36 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-05
-> (E04-R18 MERGED — Tutor Home, Chat UI & streaming UX, flag-gated fake-gateway
-> presentation layer, nincs új ADR / ADR 0131+0134 hatálya; MiniMax M3,
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
+> (E04-R19 MERGED — Evidence/source/action card UI, provenance chip + typed-executor
+> preview + validated plan-edit, nincs új ADR / ADR 0132+0133 hatálya; MiniMax M3,
 > exact-SHA zöld kapun át).**
+>
+> ## ✅ E04-R19 KÉSZ — Evidence, source & action card UI (2026-08-06)
+>
+> **E04-R19** MERGED (PR [#152](https://github.com/wolfcasaba/strumsight/pull/152),
+> squash `f0f74fb`, **nincs új ADR** — az ADR 0132 (privacy/sanitize) + 0133
+> (tool-confirmation/typed-executor) hatálya; implementer **MiniMax M3**,
+> orchestrátor/reviewer **Claude Opus 4.8**). A tutor **állításainak és
+> műveleteinek** átlátható, megerősíthető UI-ja: `TutorEvidenceChip` (prezentációs
+> `TutorEvidenceKind` provenance-négyes — measured/trend/knowledge/inference —
+> **text+ikon+szín**, a11y); `TutorSourceSheet` (+ `sanitizeTutorDisplayText`:
+> control-char/bidi-strip, `<`/`>` semlegesítés; `chunkHash` privát érték sosem
+> renderel); `TutorActionCard` (exact `preview.fields`, confirm/reject/**stale**/
+> failed, idempotens confirm — kizárólag `ActionConfirmationService` typed executor,
+> nyers route/URL/string lehetetlen); `PracticePlanPreviewScreen` (blokk-szerkesztés
+> `copyWith`+`PracticePlanSource.userEdited`, validált save/start). en/hu ARB additív.
+> 14 új widget-cella. **Pre-flight §0.0:** nincs új ADR (mérve — R13/R14/R17/R18
+> precedens); a `stale`-út mérve (`TutorActionValidationIssue.expired` →
+> `blocked`, executor soha). **Első implementer-futás stalled** a végén (log 5 perc
+> néma → kilőve) commit előtt; a scope-tiszta munkát egy folytató dispatch fejezte
+> be ugyanabban a munkapéldányban (nem worktree — mm-round.sh `.git`-**könyvtárat**
+> vár, L131; a folytató-dispatch salvage-minta L132). **Review:**
+> [`docs/reviews/e04-r19-evidence-source-action-card-ui-review.md`](docs/reviews/e04-r19-evidence-source-action-card-ui-review.md)
+> — **APPROVED** (0 BLOCKER/MAJOR/MINOR), falszifikációs próbával igazolt
+> sanitizer-guard, scope `ok`. CI exact-SHA `e447170`:
+> full-gate [31059622555](https://github.com/wolfcasaba/strumsight/actions/runs/31059622555)
+> + router-ci [31059616282](https://github.com/wolfcasaba/strumsight/actions/runs/31059616282) **success**.
 >
 > ## ✅ E04-R18 KÉSZ — Tutor Home, Chat UI & streaming UX (2026-08-05)
 >
@@ -1111,8 +1137,11 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
    meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
    importtal érhetők el, a publikus export a hívó UI-kör (R18/R19) érkezéséig
-   halasztva. **A queue következő `pending` sora: E04-R19 (a pipeline indítja
-   új sessionben).**
+   halasztva. **A queue következő `pending` sora: E04-R20 — Practice/Analyze
+   integráció (a pipeline indítja új sessionben).**
+   **~~E04-R19 — Evidence, source & action card UI~~ — KÉSZ** (PR #152, `f0f74fb`,
+   nincs új ADR — ADR 0132+0133 hatálya; implementer MiniMax M3; első futás stalled →
+   folytató dispatch salvage; ld. fejléc + §5).
    **~~E04-R18 — Tutor Home, Chat UI & streaming UX~~ — KÉSZ** (PR #151, `104e685`,
    nincs új ADR — ADR 0131+0134 hatálya; implementer MiniMax M3; box-timeout salvage
    + 2 teszt-fix javító kör #1-ben; ld. fejléc + §5).
