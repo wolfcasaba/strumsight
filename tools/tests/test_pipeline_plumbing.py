@@ -124,6 +124,37 @@ class MainHealthTest(unittest.TestCase):
         self.assertIn("PIPELINE_MAIN_HEALTH", self.text)
 
 
+class ActionsOutageGuardTest(unittest.TestCase):
+    """Külső kimaradás alatt a lánc VÁR, nem éget keretet (2026-08-06, MÉRT eset).
+
+    A GitHub 15:22-kor nyílt incidenst vezetett az Actionsön („Workflow runs are
+    failing or delayed in starting"). Ilyenkor (a) a main-egészség pirosat lát,
+    pedig a fa jó, és (b) a kör CI-je kétszer piros → H5 halt → önjavító kör
+    indulna egy olyan hibára, amit a repóban nem lehet megjavítani.
+    """
+
+    def setUp(self) -> None:
+        self.text = PIPELINE.read_text(encoding="utf-8")
+
+    def test_the_guard_reads_the_official_status_component(self) -> None:
+        self.assertIn("githubstatus.com/api/v2/components.json", self.text)
+        self.assertIn('"Actions"', self.text)
+        for state in ("major_outage", "partial_outage", "degraded_performance"):
+            with self.subTest(state=state):
+                self.assertIn(state, self.text)
+
+    def test_a_red_main_during_an_outage_waits_instead_of_dying(self) -> None:
+        self.assertIn("GITHUB-INCIDENS alatt keletkezett", self.text)
+
+    def test_self_heal_is_skipped_during_an_outage(self) -> None:
+        """A javító kör külső hibán tiszta keret-égetés."""
+        self.assertIn("az önjavítás KIMARAD: GitHub Actions incidens", self.text)
+
+    def test_the_guard_is_fail_open_and_switchable(self) -> None:
+        self.assertIn('PIPELINE_STATUS_CHECK:-1', self.text)
+        self.assertIn("PIPELINE_STATUS_TIMEOUT", self.text)
+
+
 class CostLedgerTest(unittest.TestCase):
     """Költség-főkönyv — MINIMÁLIS őrzés (user 2026-08-05: „költség nem fontos").
 
