@@ -4,14 +4,71 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R04 MERGED — Camera permission gateway és platform deklarációk: opcionális,
-> fail-closed `CameraPermissionGateway` a mikrofon-precedenst másolva
-> (ismeretlen/hibás állapot mindig `unavailable`, sosem `granted`), Android
-> `CAMERA` permission `uses-feature android:required="false"`-szal (kamera
-> nélküli eszköz is telepítheti), iOS `NSCameraUsageDescription` on-device
-> feldolgozást és nincs-felvétel állítást tartalmazó szöveggel, additív
-> `FailureCode.permissionCameraDenied`; implementer Terra, orchestrátor/reviewer
-> Claude Sonnet 5; javító kör nélkül, exact-SHA zöld kapun át).**
+> (E05-R05 MERGED — CameraSessionCoordinator és lifecycle ownership: exkluzív
+> `CameraSessionCoordinator`/`CameraSessionLease`/`CameraOwner` a mikrofon
+> ADR 0056 mintáját másolva (szinkron check-and-take az első `await` előtt,
+> kontrollált retryable `camera.session_busy`, nem lopás), `CameraLifecycleGuard`
+> (`paused`/`hidden`/`detached` → revoke, `inactive`/`resumed` → semmi, nincs
+> auto-resume), Riverpod providerek app-gyökér mountolás NÉLKÜL (szándékosan
+> R05 scope-on kívül); implementer Terra, orchestrátor/reviewer Claude Sonnet 5;
+> javító kör nélkül, exact-SHA zöld kapun át, dedikált security-reviewer PASS).**
+>
+> ## ✅ E05-R05 KÉSZ — CameraSessionCoordinator és lifecycle ownership (2026-08-06)
+>
+> **E05-R05** MERGED (PR [#167](https://github.com/wolfcasaba/strumsight/pull/167),
+> squash `8f46dd4`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+> orchestrátor/reviewer **Claude Sonnet 5**). Garantálja, hogy egyszerre
+> pontosan egy StrumSight-modul birtokolja a kamerát, és minden kilépési
+> útvonal felszabadítsa: `CameraSessionCoordinator` + `CameraSessionLease` +
+> `CameraOwner` enum (`visionSetup`/`visionPractice`/`songVision`/`labCapture`)
+> — a mikrofon `AudioSessionCoordinator` (ADR 0056) szerkezeti pontos másolata:
+> egy aktív lease, a check-and-take az első `await` **előtt** szinkron fut, a
+> második owner kontrollált, retryable `camera.session_busy`-t kap (nem
+> lopás), revoke sorrendje owner-teardown → `finally`-ben release.
+> `CameraLifecycleGuard`: `paused`/`hidden`/`detached` → revoke; `inactive`
+> (értesítési sáv) és `resumed` → sem revoke, sem auto-start (ADR 0178, mind
+> az öt `AppLifecycleState` külön tesztcellával igazolva). `camera_providers.dart`
+> Riverpod wiring — **szándékosan nincs mountolva** a `StrumSightApp`
+> gyökerében (nincs még UI/adapter, az R06 dolga; a `request()`-halasztás
+> E05-R04 mintáját követi). Strukturált log-események kizárólag
+> owner/reason/timestamp/leaseId mezőkkel, zárt `CameraSessionRevocationReason`
+> enum, hogy tetszőleges szöveg ne kerülhessen a logba. Audio/camera lease
+> teljesen független (ADR 0182) — zéró kereszthivatkozás.
+>
+> **Pre-flight §0.0 (mérve `origin/main` @ `c75f2ba`):** nincs scope-revízió,
+> egy dokumentum-pontosítás — a brief `0161`/`0165` ADR-hivatkozása (fejléc +
+> két inline §5 idézet) az E05-R01 `0161–0166 → 0178–0183` átszámozás előtti,
+> elavult számozás volt; javítva **0178** (privacy-by-default) / **0182**
+> (audio-priority degradation) additív alkalmazására. Nincs ÚJ ADR — a kör az
+> ADR 0056 mintáját alkalmazza egy új erőforrás-típusra, nem új döntés.
+> **Mérve: ez a batch-előírt E05 brief-készlet 20 további, még függő
+> fájlját is érinti** — lásd [`docs/LESSONS.md` L147](docs/LESSONS.md).
+>
+> **Review** ([docs/reviews/e05-r05-…-review.md](docs/reviews/e05-r05-camera-session-coordinator-and-lifecycle-review.md)):
+> **APPROVED** javító kör nélkül (0 BLOCKER/MAJOR/MINOR, 5 NOTE — 2 saját
+> interpretációs megjegyzés a race-mátrix „acquire cancel" és „revoke közbeni
+> frame" celláiról, mindkettő WONTFIX; 3 dedikált security-reviewer
+> hardening-javaslat explicit R06-ra). A reviewer **saját, független**
+> mutáció-kill próbával igazolta a szinkron kritikus szakaszt izolált
+> `/tmp` klónban (a lease-hozzárendelés elé `await`-et szúrva pontosan a
+> race-mátrix (a) cellája ment PIROSRA, semmi más — majd visszaállítva),
+> nem fogadta el bemondásra az implementer §10 önbevallását. Dedikált
+> **security-reviewer** (brief `risk = "high"`): **PASS**, 0 BLOCKER/MAJOR/MINOR,
+> 3 NOTE (mind R06-ra: teardown-timeout, `reason`-mező típus-szűkítés,
+> teszt-support import-higiénia). Scope-audit: 7/7 fájl az `allowed_paths`-on,
+> nulla pre-existing fájl érintve (gépi `scope_audit=ok` + kézi
+> `git diff --stat` egyezik).
+>
+> **Zöld kapu (exact-SHA `9bd7f79`, a review-commit UTÁNI újra-dispatch mindkét
+> workflow-ra):** Full Gate (no APK)
+> [31093889021](https://github.com/wolfcasaba/strumsight/actions/runs/31093889021)
+> **success** + Router CI
+> [31093891050](https://github.com/wolfcasaba/strumsight/actions/runs/31093891050)
+> **success** (mindkettő explicit `workflow_dispatch`-elve a review-commit
+> pontos tip-jére, nem csak az implementer-commitra). Post-merge gate
+> (`tools/round-gate.sh test/core/camera test/core/platform`) a friss
+> `main`-en is zöld. **Következő:** a queue következő Epic 5 sora (E05-R06 —
+> Android camera production adapter), a pipeline új sessionben indítja.
 >
 > ## ✅ E05-R04 KÉSZ — Camera permission gateway és platform deklarációk (2026-08-06)
 >

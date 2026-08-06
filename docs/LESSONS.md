@@ -4935,3 +4935,28 @@ a brief `allowed_paths` ellen, NEM a stale-base wrapper-jelzés. Nem HALT (H3)
 ok — a review ezt a mérési lépést dokumentálja, és a merge a mért, tiszta
 diffre megy. Rokon: [[L143]] (megosztott munkafa, párhuzamos kör), a
 `shared-tree-coordination` auto-memory bejegyzés.
+
+## L147 — Az E05-R01 ADR-átszámozás (0161–0166 → 0178–0183) a TELJES batch-előírt E05 brief-készletben stale hivatkozást hagyott, nem csak az épp futó körében — grep-eld a teljes queue-t, ne csak a sajátod (E05-R05, ADR 0055/0087)
+
+Az E05 brief-eket egy batch-ülésben írta az orchestrátor, MIELŐTT az E05-R01
+lefutott és a tervezett `0161–0166` ADR-blokkot ténylegesen `0178–0183`-ra
+foglalta le (a lemezen már `0177` volt a max, race-mentes foglalóval — L143).
+Emiatt MINDEN batch-ban írt brief, amely a régi számokra hivatkozik, egyformán
+stale — ez már HÁROM körben külön-külön bukkant fel (E05-R04: `0161/0163` a
+fejlécben; E05-R05: `0161/0165` a fejlécben ÉS két inline `(ADR 0161: …)`
+idézet a kötött döntéseknél), és mindegyik saját pre-flightja külön fedezte
+fel és javította ugyanazt a mintát. **Mérve (2026-08-06, E05-R05
+pre-flight):** `grep -rln "ADR 016[1-6]\b\|(016[1-6])\|/016[1-6]-"
+docs/rounds/` **20 fájlt** ad vissza a még függő (`pending`) E05-queue-ban
+(R06, R08–R12, R14–R18, R23–R24, R26–R29) — a minta tehát a hátralévő kör
+NAGY részét érinti, nem kivétel. A pontos leképezés (ADR 0178 saját fejléce
+is megerősíti: „Kontext-ADR-ek: 0166→0183", azaz +17 eltolás egységesen):
+`0161→0178` (privacy-by-default), `0162→0179` (capability-aware feedback),
+`0163→0180` (android-first camera), `0164→0181` (manual calibration
+fallback), `0165→0182` (audio-priority degradation), `0166→0183`
+(no-raw-frame persistence). **Szándékosan NEM javítottam most a 20 függő
+fájlt egyben** — az egy külön, a saját körön kívüli tömeges szerkesztés volna
+(ADR 0087 §2 hatókör-elv), és minden jövőbeli kör pre-flightjának úgyis
+FÜGGETLENÜL kellene mérnie a saját ADR-hivatkozásait (nem csak ezt az egyet)
+— de a fenti grep-parancs és leképezés a következő 17 pre-flight munkáját
+másodpercekre rövidíti a nulláról újra-derítés helyett. Rokon: [[L143]].
