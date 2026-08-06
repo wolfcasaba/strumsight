@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +12,7 @@ import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_timestamp.dart';
 import 'package:strumsight/core/camera/fake_camera_capture.dart';
 import 'package:strumsight/core/camera/plugin_camera_capture.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 
 void main() {
   group('PluginCameraCapture buffer release matrix', () {
@@ -61,30 +61,42 @@ void main() {
       },
     );
 
-    test(
-      'throwing frame callback still releases the platform buffer once',
-      () async {
-        final controller = _FakePlatformCameraController();
-        final capture = PluginCameraCapture(
-          controllerFactory: () async => controller,
-        );
-        final releases = <int>[];
-        final errors = <Object>[];
-        final subscription = runZonedGuarded(
-          () =>
-              capture.frames.listen((_) => throw StateError('consumer failed')),
-          (error, _) => errors.add(error),
-        );
-        addTearDown(subscription!.cancel);
+    test('frame binding failure releases the platform buffer once', () async {
+      final controller = _FakePlatformCameraController();
+      final capture = PluginCameraCapture(
+        controllerFactory: () async => controller,
+      );
+      final releases = <int>[];
+      final errors = <Object>[];
+      final subscription = capture.frames.listen(
+        (_) => fail('An invalid platform frame must not be delivered.'),
+        onError: errors.add,
+      );
+      addTearDown(subscription.cancel);
 
-        await capture.start();
-        controller.emit(_frame(1, releases));
-        await _flushFrameDelivery();
+      await capture.start();
+      controller.emit(
+        PlatformCameraFrame(
+          bytes: Uint8List.fromList(<int>[1]),
+          timestamp: CameraTimestamp(1),
+          width: 0,
+          height: 1,
+          format: CameraPixelFormat.yuv420,
+          orientation: CameraOrientation.portraitUp,
+          mirror: false,
+          crop: null,
+          release: () => releases.add(1),
+        ),
+      );
+      await _flushFrameDelivery();
 
-        expect(errors.single, isA<StateError>());
-        expect(releases, <int>[1]);
-      },
-    );
+      expect(releases, <int>[1]);
+      expect(errors.single, isA<CameraFailure>());
+      expect(
+        (errors.single as CameraFailure).code,
+        FailureCode.cameraFrameFailed,
+      );
+    });
 
     test(
       'close releases an undelivered platform buffer exactly once',
