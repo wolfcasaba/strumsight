@@ -17,7 +17,7 @@ void main() {
 
     String lookup(String key) => key;
 
-    LocalTutorFallback _fallback() => LocalTutorFallback(
+    LocalTutorFallback makeFallback() => LocalTutorFallback(
       coach: coach,
       builder: builder,
       retriever: retriever,
@@ -31,7 +31,7 @@ void main() {
     test(
       'offline with consent revoked produces debrief and honest capability',
       () {
-        final fallback = _fallback();
+        final fallback = makeFallback();
         final result = fallback.resolve(
           status: TutorTurnStatus.consentRevoked,
           consent: const TutorConsent(),
@@ -55,7 +55,7 @@ void main() {
     test(
       'usage limit produces honest limit capability without cloud retry',
       () {
-        final fallback = _fallback();
+        final fallback = makeFallback();
         final result = fallback.resolve(
           status: TutorTurnStatus.usageLimit,
           consent: const TutorConsent(modelUseGranted: true),
@@ -75,7 +75,7 @@ void main() {
     // fallback NEVER touches network / calls gateway
     // Mutation: gateway call → RED
     test('fallback resolve never calls gateway or network', () {
-      final fallback = _fallback();
+      final fallback = makeFallback();
       // The class itself is pure — no async, no I/O, no gateway reference.
       // This test verifies that the constructor accepts no gateway
       // dependency and that resolve() is synchronous.
@@ -124,7 +124,7 @@ void main() {
 
     // ── Online capability when consent and no failure ─────────────────
     test('online state with full consent shows online capability', () {
-      final fallback = _fallback();
+      final fallback = makeFallback();
       final result = fallback.resolve(
         status: TutorTurnStatus.completed,
         consent: const TutorConsent(modelUseGranted: true),
@@ -138,7 +138,7 @@ void main() {
 
     // ── Offline capability from gateway unavailable ───────────────────
     test('gateway unavailable failure code shows offline capability', () {
-      final fallback = _fallback();
+      final fallback = makeFallback();
       final result = fallback.resolve(
         status: TutorTurnStatus.fallback,
         consent: const TutorConsent(modelUseGranted: true),
@@ -151,7 +151,7 @@ void main() {
 
     // ── No debrief input → still produces a minimal debrief ───────────
     test('produces minimal debrief even without debrief input', () {
-      final fallback = _fallback();
+      final fallback = makeFallback();
       final result = fallback.resolve(
         status: TutorTurnStatus.fallback,
         consent: const TutorConsent(modelUseGranted: true),
