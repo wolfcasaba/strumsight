@@ -8,7 +8,19 @@
 > context-adapters + SessionTutorEntryCard, nincs új ADR / ADR 0132 hatálya; Codex
 > (Terra), exact-SHA zöld kapun át).**
 >
-> ## 🔧 E04-R21 ÖNJAVÍTVA (ADR 0112, halt H3, 2026-08-06) — scope-szűkítés, még NEM implementált
+> ## 🔧 E04-R21 ÖNJAVÍTVA ×2 (ADR 0112, halt H3, 2026-08-06) — scope-szűkítés + checker-igazítás, még NEM implementált
+>
+> **2. önjavítás (ADR 0176, halt H3 #2).** A scope-szűkítés után a kör **másodszor
+> is H3-mal halt**: a Song adapter/tool a `song_trainer/domain/public.dart` NESTED
+> barrelt importálta, amit a `tool/check_architecture.dart` cross-feature szabálya
+> tiltott (csak a feature-gyökér `public.dart`-ot fogadta el) — pedig **ADR 0089**
+> pont ezt a nested barrelt jelöli ki cross-feature entry pointnak. Class A
+> (eszköz-hiba, nem modell-scope): a checker mostantól a cél-feature **bármely**
+> `public.dart` barreljét elfogadja (gyökér vagy nested), a nem-`public.dart` belső
+> elérés továbbra is sértés — Dart-regresszió zárolja
+> (`test/core/architecture_dependency_test.dart`, RED→GREEN). PR
+> [#155](https://github.com/wolfcasaba/strumsight/pull/155), ADR 0176. A re-scoped
+> R21 szelet így **brief-változás nélkül** épül ADR 0089 szerint. Lecke: **L135**.
 >
 > Az **E04-R21** brief FANTOM public-bemenetet feltételezett (`SongPracticeResult`
 > + `TrainerRange` + range-fogadó setup-route — **egyik sem publikus**, mérve:
