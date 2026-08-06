@@ -181,20 +181,6 @@ final class FeatureFlags {
     practiceEngineV2Enabled,
     migratedLearnEnabled,
     practiceDetailedHistoryEnabled,
-    songTrainerV2Enabled,
-    aiTutorEnabled,
-    aiTutorCloudEnabled,
-    visionEnabled,
-    visionSetupEnabled,
-    visionHandTrackingEnabled,
-    visionPoseTrackingEnabled,
-    visionGuitarGeometryEnabled,
-    visionPracticeIntegrationEnabled,
-    visionSongIntegrationEnabled,
-    visionTutorIntegrationEnabled,
-    visionAnalysisIntegrationEnabled,
-    visionExperimentalFineFretEnabled,
-    visionLabCaptureEnabled,
   );
 
   @override
