@@ -5038,3 +5038,55 @@ BLOKKON BELÜLRŐL kell jönnie (pl. egy hívott függvény dobása), nem egy
 `.listen()`-nel csatlakoztatott downstream fogyasztóból — az utóbbi a Zone
 hibakezelőjén landol, és soha nem éri el a vizsgált try-blokkot. Rokon:
 [[L145]] (a célzott gate/teszt nem látja, amit állít, hogy lát).
+
+## L151 — Egy brief prózában (§1 Cél) többet ígérhet, mint amit a saját checkbox-acceptance criteria (§6) ténylegesen mérnek — a review-nak a CÉLT is a diff ellen kell mérnie, nem csak a checkboxokat (E05-R07, review F1 MAJOR)
+
+Az E05-R07 brief §1 Célja szó szerint öt teret nevezett meg: „sensor →
+upright → normalized → preview → **overlay**", és az SDD Kör 7 saját
+feladatlistája is explicit „Implementáld a sensor, upright, normalized,
+preview és overlay koordinátatereket" — az overlay tér tehát NEM
+mellékes, hanem a kör névadó, kötelező deliverable-je. A leszállított kód
+mégis megállt a `PreviewPoint`-nál: `OverlayPoint`/
+`CameraCoordinateSpace.overlay` deklarálva volt (egyenlőség/hashCode is
+jár hozzá), de a diffben SEHOL nem szerepelt `CameraTransform<…,
+OverlayPoint>` vagy `…toOverlay()` — egyetlen transzformáció sem érte el.
+Ez **zöld gate mellett csúszott át**: a brief §6 checkbox-acceptance négy
+pontja (fixture-mátrix, property-teszt, letterbox-teszt, valódi-sértés
+próba) egyike sem nevezte meg külön az overlay-mappinget, így egy
+implementáció, ami a négy checkboxot 100%-ban teljesíti, mégis hiányosan
+szállíthatja a brief saját §1/§5.1-ben ígért funkciót. A review csak azért
+fogta meg, mert a reviewer a §1 prózát és az SDD-fejezetet is
+összevetette a diff `grep`-jével (`grep -rn "Overlay" lib/ test/`), nem
+csak a §6 checkboxokat pipálta ki. **Tanulság:** a review ne csak a
+checkbox-listát ellenőrizze tételesen — vesse össze a brief §1 Cél
+prózáját és a hivatkozott SDD-fejezet feladatlistáját is a tényleges
+diffel, mert egy cél-mondat ígérhet olyan deliverable-t, amit a §6 saját
+mérce-mátrixa lefedetlenül hagyott. Brief-szerzői oldalon a megelőzés: a
+§1-ben megnevezett MINDEN entitáshoz (itt: mind az öt tér) legyen legalább
+egy dedikált §6 acceptance-checkbox, ne csak az implicit „a mapping
+elkészül" állítás. Rokon: [[L13]] (a mátrix ne csak a bemeneteket sorolja
+fel, a származtatott mennyiséget is), [[L145]].
+
+## L152 — Az implementer (Codex/Terra) SOHA nem push-ol — a review-klón szinkronizálása előtt MINDIG explicit push kell a munkapéldányból, különben a „független" újra-ellenőrzés a régi commit ellen fut (E05-R07, önkorrekció a review-ban)
+
+Az E05-R07 javító körének (`df5a13b`) függetlenítéséhez a reviewer
+(orchestrátor) `git fetch && git reset --hard origin/<branch>`-et futtatott
+a saját `/tmp` review-klónban — de a fix-commit ekkor MÉG csak a Terra
+munkapéldányán (`/home/ubuntu/ss-codex-<kör>`) létezett lokálisan, mert a
+`codex-round.sh` burkoló (és maga a Codex) SOSEM push-ol, csak lokálisan
+commitol. A fetch+reset ezért csendben NO-OP volt (origin tipje még a
+review-ELŐTTI commit maradt), és az „újra-ellenőrzés" a RÉGI kódot mérte —
+ugyanaz a hiba, mint amit a review épp az implementer önbevallásával
+szemben próbál kizárni, csak most az orchestrátor saját mulasztásából. A
+hibát a tesztszám (66, változatlan a fix ELLENÉRE) árulta el, nem egy
+explicit hibaüzenet — a `git reset --hard` egy érvényes, régi commitra is
+simán lefut. **Tanulság:** minden `codex-round.sh`/`mm-round.sh` forduló
+UTÁN, mielőtt bármilyen független klónt (review, CI-dispatch előfeltétel)
+szinkronizálnál az implementer branch-ére, explicit `git push` a
+munkapéldányból KÖTELEZŐ lépés — nem csak az ELSŐ forduló után, hanem
+MINDEN egyes fordulónál (implementáció, javító kör, gate-only folytatás)
+külön-külön. Egy zöld `git fetch`/`reset` önmagában NEM bizonyíték arra,
+hogy új tartalmat kapott — a tesztszám vagy a commit sha explicit
+összevetése a várttal az egyetlen mérce. Rokon: [[L21]] (dispatch után a
+run `headSha`-ját vesd össze a lokális HEAD-del — ugyanaz a „hallgatólagos
+no-op" mintázat más rétegben).
