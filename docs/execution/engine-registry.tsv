@@ -26,3 +26,4 @@ qwen-coder-plus	codex	~/.codex-kilo	qwen/qwen3-coder-plus	KILOCODE_API_KEY	~/.ki
 qwen-flash	codex	~/.codex-kilo	qwen/qwen3.7-flash	KILOCODE_API_KEY	~/.kilocode-token	20	3600	1000000	32768	0.03	0.13	-	4/5; a legolcsóbb Qwen; lassabb mint az ára sejtetné
 gptoss	codex	~/.codex-kilo	openai/gpt-oss-120b	KILOCODE_API_KEY	~/.kilocode-token	12	3600	131072	32768	0.03	0.17	-	9/10 és 5 s — a legjobb ár/érték az egész mezőnyben
 kimi	codex	~/.codex-kilo	moonshotai/kimi-k2.5	KILOCODE_API_KEY	~/.kilocode-token	12	3600	262144	32768	0.60	3.00	-	4/5 és 7 s — gyors tartalék más családból
+deepseek-pro	codex	~/.codex-kilo	deepseek/deepseek-v4-pro	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	65536	1.60	3.20	medium	user-döntés 2026-08-06: fejlesztő motor; 1.6T MoE, 1M ctx; olcsóbb variáns: deepseek/deepseek-v4-pro:discounted
