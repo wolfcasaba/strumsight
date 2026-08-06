@@ -102,19 +102,19 @@ claude_bin=${CLAUDE_BIN:-claude}
 # Visszakapcsolás egyetlen env-vel: PIPELINE_MODEL=claude-opus-4-8.
 claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 
-# Keretkímélő beállítások (user-döntés 2026-08-04: „nem akarom, hogy gyorsan
-# elfogyjon a keretem, még sok epic kell"):
-#   - effort=medium a session-default helyett — az Opus-vonalon belül NEM a
-#     modellváltás a spórolás (a teljes Opus-vonal tokenára azonos, a 4.6
-#     ráadásul 4096-os cache-minimumot és gyengébb agentic viselkedést hozna),
-#     hanem az effort-szint;
-#   - a spórolás az effort-szinten történik, NEM modellváltással.
+# Effort: MAX (user-döntés 2026-08-06: „az orchestrátor Sonnet 5 legyen, max
+# szinten beállítva"). Ez felülírja a 2026-08-04-i keretkímélő `medium`-ot: a
+# spórolás most a MODELL-szinten történik (Opus 4.8 → Sonnet 5), az ítélet
+# minőségét pedig a maximális effort tartja — az orchestrátor dolga a terv, a
+# review és a merge-kapu, ott a hibás ítélet ára a legnagyobb.
+# A CLI elfogadott szintjei: low | medium | high | xhigh | max (mérve:
+# `claude --help`, 2.1.223). Visszavétel: PIPELINE_EFFORT=medium.
 # Az önjavító session ugyanazt a modellt kapja, mint a kör-orchestrátor — ez a
 # „minden rétegben" követelmény (user-döntés 2026-08-06). A heal-kör ítéletet hoz
 # (gyökérok-osztályozás, motorválasztás, mércét-nem-gyengítjük határ), ezért nem
 # ereszthető lejjebb az orchestrátornál; ha valaha külön kell állítani, arra való
 # a PIPELINE_SELFHEAL_MODEL.
-claude_effort=${PIPELINE_EFFORT:-medium}
+claude_effort=${PIPELINE_EFFORT:-max}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a

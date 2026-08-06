@@ -97,23 +97,25 @@ class RoundPipelineFallbackTest(unittest.TestCase):
             self.assertTrue((state_dir / "claude-blocked-until").exists())
             events = events_file.read_text()
             self.assertIn("pipeline-E03-R09-fallback:", events)
-            # Keretkímélés (user-döntés 2026-08-04): a Claude-session indító
-            # parancsa explicit effort-szintet visz — a session-default agentic
-            # munkán a legmagasabb sáv felé húz, ami a heti keretet égeti.
+            # A Claude-session indító parancsa EXPLICIT effort-szintet visz —
+            # nem a session-defaultra bízzuk. Az érték user-döntés
+            # (2026-08-06: Sonnet 5 + max), a szerződés az, hogy a driver
+            # átadja, és hogy az operátor env-vel felülírhatja.
             claude_launch = next(
                 line for line in events.splitlines() if "fake-claude" in line
             )
-            self.assertIn("--effort medium", claude_launch)
+            self.assertIn("--effort max", claude_launch)
 
 
 class SessionConfigTest(unittest.TestCase):
     """A kör- és önjavító session modell/effort-beállítása mérhető szerződés.
 
-    User-döntés 2026-08-04 (keretkímélés): a kör-orchestrátor Opus 4.8 marad
-    (terv + review + merge-kapu), de effort=medium; az önjavító session
-    Sonnet 5 (infrastruktúra-diagnózis, nem termékítélet). Az Opus-vonalon
-    belüli "olcsóbb modell" (4.6) NEM spórolna: azonos tokenár, 4096-os
-    cache-minimum, nincs xhigh — a valódi kar az effort és a heal-modell.
+    User-döntés 2026-08-06: a kör-orchestrátor **Sonnet 5**, **max** efforton,
+    és az önjavító session ugyanezt ÖRÖKLI (egy env állítja mindkettőt). A
+    spórolás így a modell-szinten történik, az ítélet minőségét a maximális
+    effort tartja — az orchestrátor tervez, review-z és merge-kaput őriz, ott a
+    hibás ítélet ára a legnagyobb. Korábbi állapot: Opus 4.8 + medium
+    (2026-08-04, keretkímélés).
     """
 
     def _config(self, kind: str, env: dict | None = None) -> str:
@@ -131,19 +133,19 @@ class SessionConfigTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         return completed.stdout.strip()
 
-    def test_round_orchestrator_runs_sonnet_5_at_medium_effort(self) -> None:
+    def test_round_orchestrator_runs_sonnet_5_at_max_effort(self) -> None:
         self.assertEqual(
             self._config("round", {"PIPELINE_MODEL": "", "PIPELINE_EFFORT": ""}),
-            "model=claude-sonnet-5 effort=medium",
+            "model=claude-sonnet-5 effort=max",
         )
 
-    def test_selfheal_follows_the_orchestrator_model(self) -> None:
+    def test_selfheal_follows_the_orchestrator_model_and_effort(self) -> None:
         # User-döntés 2026-08-05: az orchestrátor MINDEN székben Opus 4.8 — a
         # heal-kör is ítéletet hoz (gyökérok-osztályozás, motorválasztás), nem
         # csak infrastruktúra-diagnózist.
         self.assertEqual(
             self._config("heal", {"PIPELINE_SELFHEAL_MODEL": "", "PIPELINE_EFFORT": ""}),
-            "model=claude-sonnet-5 effort=medium",
+            "model=claude-sonnet-5 effort=max",
         )
 
     def test_selfheal_model_stays_operator_overridable(self) -> None:
@@ -152,7 +154,7 @@ class SessionConfigTest(unittest.TestCase):
                 "heal",
                 {"PIPELINE_SELFHEAL_MODEL": "claude-sonnet-5", "PIPELINE_EFFORT": ""},
             ),
-            "model=claude-sonnet-5 effort=medium",
+            "model=claude-sonnet-5 effort=max",
         )
 
     def test_env_overrides_stay_operator_controllable(self) -> None:
