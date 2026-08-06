@@ -48,13 +48,16 @@ printf '%s' "$count" > "$counter_file"
 
 # A valódi Codex a fejlécébe írja a session-azonosítót — a folytatás ebből él.
 printf 'OpenAI Codex v0.146.0\\n--------\\nsession id: %s\\n--------\\n' "$FAKE_CODEX_SESSION"
+[ -n "${FAKE_CODEX_EXTRA_LOG:-}" ] && printf '%s\\n' "$FAKE_CODEX_EXTRA_LOG"
 
 case "${FAKE_CODEX_MODE:-signal-first}" in
   signal-first)
+    [ "${FAKE_CODEX_NO_WORK:-0}" = "1" ] || printf 'munka\\n' >> "$FAKE_CODEX_WORKFILE"
     printf 'status=done\\nsummary=kesz\\n' > "$FAKE_CODEX_SIGNAL"
     ;;
   signal-on-continuation)
     if [ "$count" -ge 2 ]; then
+      printf 'munka\\n' >> "$FAKE_CODEX_WORKFILE"
       printf 'status=done\\nsummary=folytatas utan kesz\\n' > "$FAKE_CODEX_SIGNAL"
     else
       printf 'codex\\nNow the action confirmation service, fake executors...\\n'
@@ -126,6 +129,7 @@ class WrapperContinuationTest(unittest.TestCase):
                 "FAKE_CODEX_ARGV": str(argv_log),
                 "FAKE_CODEX_COUNTER": str(base / "counter"),
                 "FAKE_CODEX_SIGNAL": str(workdir / ".codex-round-status"),
+                "FAKE_CODEX_WORKFILE": str(workdir / "munka.txt"),
                 "FAKE_CODEX_SESSION": SESSION_ID,
                 "FAKE_CODEX_MODE": mode,
                 "CODEX_MAX_CONTINUATIONS": "2",
@@ -197,6 +201,35 @@ class WrapperContinuationTest(unittest.TestCase):
 
         _result, _signal, argv_plain, _log = self.run_wrapper("signal-first", engine="qwen-plus")
         self.assertNotIn("model_reasoning_effort", argv_plain)
+
+
+class ClaimGuardTest(WrapperContinuationTest):
+    """Anti-hallucináció őrök (2026-08-06): a jelentést a FA igazolja, nem a szöveg."""
+
+    def test_a_done_signal_without_any_work_is_downgraded(self) -> None:
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-first", extra_env={"FAKE_CODEX_NO_WORK": "1"}
+        )
+        self.assertIn("status=unknown", signal)
+        self.assertIn("NEM mozdult", signal)
+
+    def test_a_done_signal_with_real_work_is_kept(self) -> None:
+        _result, signal, _argv, _log = self.run_wrapper("signal-first")
+        self.assertIn("status=done", signal)
+
+    def test_a_truncated_gate_call_is_reported_in_the_signal(self) -> None:
+        """MÉRT M3-hibaminta: a gate `| tail` mögé futtatása (E02-R07, háromszor)."""
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-first",
+            extra_env={"FAKE_CODEX_EXTRA_LOG": "tools/round-gate.sh test/x | tail -5"},
+        )
+        self.assertIn("gate_shape=VIOLATION", signal)
+
+    def test_a_clean_gate_call_is_reported_as_ok(self) -> None:
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-first", extra_env={"FAKE_CODEX_EXTRA_LOG": "tools/round-gate.sh test/x"}
+        )
+        self.assertIn("gate_shape=ok", signal)
 
 
 class PreambleContentTest(unittest.TestCase):

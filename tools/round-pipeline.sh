@@ -102,10 +102,11 @@ claude_bin=${CLAUDE_BIN:-claude}
 # Visszakapcsolás egyetlen env-vel: PIPELINE_MODEL=claude-opus-4-8.
 claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 
-# Effort: MEDIUM (user-döntés 2026-08-06, második lépés: „a Terra keret 1%-on
-# van — a kódolás is Sonnet 5 legyen medium szinten, és az orchestrátort is
-# állítsd médium szintre"). Ettől kezdve az orchestrátor ÉS az implementer is
-# ugyanazt az előfizetést fogyasztja, ezért a max effort már nem fér bele.
+# Effort: MAX (user-döntés 2026-08-06, harmadik lépés: az implementer visszaáll
+# a MiniMax M3-ra — az UNLIMITED, tehát az előfizetést már csak az orchestrátor
+# terheli, és a legdrágább ítéletek (terv, review, merge-kapu) megkapják a
+# maximumot. Az M3 mért gyengéit gépi őrök fogják, nem az orchestrátor éber-
+# sége (docs/execution/implementer-preamble-minimax.md).
 # A CLI elfogadott szintjei: low | medium | high | xhigh | max (mérve:
 # `claude --help`, 2.1.223). Visszaemelés: PIPELINE_EFFORT=max.
 # Az önjavító session ugyanazt a modellt kapja, mint a kör-orchestrátor — ez a
@@ -113,7 +114,7 @@ claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 # (gyökérok-osztályozás, motorválasztás, mércét-nem-gyengítjük határ), ezért nem
 # ereszthető lejjebb az orchestrátornál; ha valaha külön kell állítani, arra való
 # a PIPELINE_SELFHEAL_MODEL.
-claude_effort=${PIPELINE_EFFORT:-medium}
+claude_effort=${PIPELINE_EFFORT:-max}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a

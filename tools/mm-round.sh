@@ -127,7 +127,10 @@ if [ "$external_endpoint" = "1" ]; then
     ANTHROPIC_AUTH_TOKEN="$api_key"
     CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
   )
-  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash")
+  # A TodoWrite a befejezetlen fa ellen: a listát vezető modell nem felejti
+  # el a hátralévő acceptance-pontokat (a félkész fa a lánc legdrágább
+  # hibaosztálya).
+  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash,TodoWrite")
 else
   # --- Natív Claude-modell (Sonnet 5) sajátosságai -------------------------
   # 1. NINCS auto-compact override: a natív modellnél a CLI ISMERI a valódi
@@ -235,6 +238,42 @@ elif [ ! -f "$signal" ] || ! grep -qE '^status=(done|stopped|blocked)$' "$signal
     echo "signalled_at=$(date -Iseconds)"
   } > "$signal"
 fi
+
+# --- Anti-hallucináció őrök (2026-08-06, MÉRT M3-hibaminták) --------------
+# A szöveges tiltás nála bizonyítottan nem tart (E02-R07: háromszor futtatta a
+# gate-et `| tail` mögé a brief explicit tiltása ellenére), ezért a jelzésbe
+# GÉPI megfigyelés kerül — a reviewer így nem az állítást olvassa, hanem a mért
+# tényt.
+#
+# 1. `done` munka NÉLKÜL: ha a fa nem mozdult az indulás óta (nincs új commit
+#    ÉS nincs diff), a „kész" jelentés hamis állítás — `unknown`-ra váltjuk.
+# 2. Gate-alak: a naplóban keressük a csonkoló/láncoló gate-hívást.
+verify_claim() {
+  local head_now dirty gate_shape
+  head_now=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
+  # A burkoló SAJÁT artefaktumai (jelzésfájl, pid-fájl) nem számítanak munkának
+  # — nélkülük a „piszkos fa" mindig igaz lenne, és az őr sosem sülne el.
+  dirty=$(git -C "$workdir" status --porcelain -- . \
+    ':(exclude).codex-round-status' ':(exclude).mm-round-pid' | wc -l | tr -d " ")
+  if grep -qE '^status=done$' "$signal" 2>/dev/null \
+    && [ "$head_now" = "$scope_base" ] && [ "$dirty" = "0" ]; then
+    {
+      echo "status=unknown"
+      echo "summary=a jelzés done volt, de a munkapéldány NEM mozdult (nincs commit, nincs diff) — a kész jelentés bizonyítatlan"
+      echo "branch=$(git -C "$workdir" branch --show-current)"
+      echo "head=$head_now"
+      echo "dirty_files=0"
+      echo "signalled_at=$(date -Iseconds)"
+    } > "$signal"
+    exit_code=1
+  fi
+  gate_shape=ok
+  if grep -qE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)" "$log_file" 2>/dev/null; then
+    gate_shape=VIOLATION
+  fi
+  grep -q "^gate_shape=" "$signal" 2>/dev/null || printf 'gate_shape=%s\n' "$gate_shape" >> "$signal"
+}
+verify_claim
 
 # Scope-audit (ADR 0138) — közös a legacy Codex úttal.
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
