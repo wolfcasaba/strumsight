@@ -6,6 +6,49 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R02 — Camera technology döntési kapu és mérési runbook (2026-08-06)
+
+**E05-R02** MERGED (PR [#163](https://github.com/wolfcasaba/strumsight/pull/163),
+squash `ed5989a`, **ADR [0184](adr/0184-vision-camera-capture-stack.md)**;
+implementer **Terra** (Codex CLI, `gpt-5.6-terra`), orchestrátor/reviewer
+**Claude Sonnet 5**). A capture-réteg technológiai döntése: **feltételes C1**
+(hivatalos Flutter `camera` plugin, Androidon CameraX-backed) a default, C2
+(saját CameraX platform channel) csak akkor váltja, ha a runbook a
+latest-frame backpressure-t (M05) vagy a monoton timestampet (M10) megbukja;
+C3 (hibrid) csak külön indokkal. **Négy numerikus megdöntési küszöb**: init
+p95 ≤ 2000 ms (M01), tartós FPS ≥ 15.0/30s-ablak (M02), close ≤ 2000 ms +
+`open_clients=0` + post-close RSS ≤ 20 MiB/30s (M06), 1000 frame szigorúan
+monoton timestamp (M10). `docs/baseline/epic-05-camera-stack-evaluation.md`
+a 3 jelölt × 12 kötött kritérium táblázata (mind forrással: hivatalos
+dokumentáció-link vagy `Mxx` runbook-azonosító); `vision-camera-spike-runbook.md`
+parancsonként futtatható, számmal kifejezett PASS-küszöbű valós-eszközös
+mérési lista (M01–M12); `vision-device-matrix.md` §2.8 mind a 12 mérést
+PENDING sorként rögzíti.
+
+**Pre-flight §0.0 (ADR-szám revízió):** a brief 2026-08-05-i előre-kiosztása
+(0167) elavult az E05-R01 hat ADR-je (0178–0183) miatt — a foglaló
+(`tools/round-slots.py reserve-adr`) **0184**-et adta, minden brief-beli
+hivatkozás cserélve; az ADR 0163 (Android-first) pre-flight-hivatkozás is
+javítva a tényleges **0180**-ra.
+
+**Review** ([docs/reviews/e05-r02-…-review.md](reviews/e05-r02-camera-technology-decision-review.md)):
+**APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE). A NOTE: az implementer
+`blocked`-ot jelzett (`analyze PIROS, 871 issue`), de a reviewer izolált
+`/tmp` klónban reprodukálva a valódi analyze **"No issues found!"** volt — a
+gyökérok a boxon majdnem kimerült `fs.inotify.max_user_instances` (509/512,
+elárvult `tail`-processzek régi `codex-watch.sh`/`mm-watch.sh` futásokból)
+volt, nem tartalmi hiba. `sudo sysctl -w fs.inotify.max_user_instances=4096`
+után mindkét munkapéldányban (implementer + reviewer `/tmp` klón) minden gate
+zöld. Scope-audit 0 listán kívüli fájl.
+
+**Zöld kapu (exact-SHA `af1cce8`):** Full Gate (no APK)
+[31083683391](https://github.com/wolfcasaba/strumsight/actions/runs/31083683391) **success**
++ Router CI [31083689860](https://github.com/wolfcasaba/strumsight/actions/runs/31083689860)
+**success**. A CI-terv `full-gate.yml`-t írt elő (docs-only, nincs natív
+út); a `docs/rounds/**` érintés miatt a Router CI is a kapu része, mindkettő
+zöld a merge SHA-n. Post-merge gate (`tools/round-gate.sh test/tooling`) a
+friss `main`-en is zöld.
+
 ## E03-R13 — Guitar Pro feasibility és stratégiai döntés (2026-08-03)
 
 E03-R13 [PR #103](https://github.com/wolfcasaba/strumsight/pull/103)-ként

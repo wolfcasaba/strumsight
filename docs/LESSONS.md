@@ -4884,3 +4884,33 @@ gyorsabb bizonyíték, mint a CI-re várás, és megelőzi a hamis `blocked`/H6 
 jelzést. **Nem takarítottam el az elárvult `tail` processzeket** (megosztott
 box, más session munkája lehet mögöttük) — ez follow-up boxhigiénia, hasonlóan
 az `oracle-server-hygiene` memóriabeli swap-takarításhoz.
+
+## L145 — Egy "megengedett, nem kötelező" mezőkiegészítés (`hashCode`) egy MÁSIK, kör-scope-on kívüli tesztet tört el — a célzott gate ezt nem látja, csak a teljes CI (E05-R03, review F1 MAJOR)
+
+A brief §2 a `feature_flags.dart` hiányos `hashCode`-járól azt írta: "javítása
+megengedett, elhagyása nem hiba" — csak az `==`/`toString` teljességét írta
+elő kötelezőnek. Az implementer (Terra) a vision-mezőkkel EGYÜTT a korábban is
+hiányzó `songTrainerV2Enabled`/`aiTutorEnabled`/`aiTutorCloudEnabled` mezőket
+is bevonta az `Object.hash(...)` hívásba (6→20 argumentum). A
+`lib/app/config/feature_flags.dart` a brief `allowed_paths` listáján volt, a
+módosítás önmagában additívnak és ártalmatlannak tűnt (`==` már korábban is
+teljes volt). A célzott gate
+(`tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart`)
+ZÖLD maradt, mert a sérült teszt egy MÁSIK, a brief scope-jában NEM szereplő
+fájlban volt: `test/app/app_config_test.dart:262` egy kőbe vésett
+6-argumentumos `Object.hash(false, false, false, false, false, true)` értékkel
+hasonlítja össze `FeatureFlags.hashCode`-ot — a Dart `Object.hash` keverési
+függvénye argumentumszám-függő, tehát a bővítés MÁS hash-értéket ad még
+változatlan (`false`) mezőknél is. A regressziót csak a review saját kézzel
+futtatott, **teljes** CI-je (`full-gate.yml` exact-SHA-n) fogta meg — 2997
+passed, 1 failed. **Tanulság:** amikor a brief egy MEGLÉVŐ, megosztott mezőt
+(nem csak a saját ÚJ mezőit) érintő módosítást "megenged", a review-nak a
+célzott gate mellett a TELJES suite-ot is exact-SHA-n kell futtatnia, mielőtt
+"zöld"-nek jelenti — a `docs/LESSONS.md` L143/L20 "erőforrás-tulajdonlást a
+tényleges hívási láncon mérd" elve itt a `hashCode`-ra is vonatkozik: egy
+mező bevonása a hash-be minden LÉTEZŐ, a mezőt ismerő hívót érint, nem csak a
+kör saját fájljait. A javítás (visszaállítás az eredeti 6 mezőre) 1 fájl, 14
+sor törlés volt — a scope-on belüli oldalt kellett a scope-on kívüli,
+változatlanul hagyandó teszthez igazítani, nem fordítva. Rokon: [[L143]]
+(erőforrás-tulajdonlás mérése), [[L51]] (meglévő teszt pirosra váltása
+figyelmeztető jel).

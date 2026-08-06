@@ -4,57 +4,72 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R02 MERGED — Camera technology döntési kapu: ADR 0184 feltételes döntés
-> a hivatalos Flutter `camera`/CameraX plugin mellett, numerikus megdöntési
-> küszöbökkel; futtatható valós-eszközös spike-runbook (M01–M12) + device-mátrix
-> PENDING sorok; implementer Terra, orchestrátor/reviewer Claude Sonnet 5;
-> APPROVED javító kör nélkül; exact-SHA zöld kapun át.
-> **Production kód NEM változott** — docs-only Kör 2).**
+> (E05-R03 MERGED — Core camera contract és fake infrastruktúra: platformfüggetlen
+> `CameraCapture` (start/stop/idempotens close), `CameraFrame` explicit ownership
+> (callback-utáni hozzáférés `StateError`, mutáció-próbával igazolva),
+> determinisztikus `FakeCameraCapture` (öt lifecycle- + öt hiba-mátrix cella),
+> additív camera `FailureCode`-ok, 11 vision feature flag default OFF minden
+> környezetben; implementer Terra, orchestrátor/reviewer Claude Sonnet 5; 1
+> javító kör (F1: `hashCode`-regresszió egy scope-on kívüli tesztre); exact-SHA
+> zöld kapun át. **Első production Epic 5 kód** — `lib/core/camera/` létrejön).**
+>
+> ## ✅ E05-R03 KÉSZ — Core camera contract, fake infrastruktúra és vision feature flagek (2026-08-06)
+>
+> **E05-R03** MERGED (PR [#164](https://github.com/wolfcasaba/strumsight/pull/164),
+> squash `f681a50`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+> orchestrátor/reviewer **Claude Sonnet 5**). Platformfüggetlen `CameraCapture`
+> contract (`start`/`stop`/idempotens `close`), `CameraFrame` explicit
+> ownership modell (a callback szinkron törzse után a buffer-hozzáférés
+> `StateError` — **mutáció-próbával** igazolva: `assertValid()` kiürítve a
+> guard-teszt pirosra vált), `CameraFormat`/`CameraOrientation` enumok,
+> `CameraTimestamp` (monoton, wall-clock-mentes), additív camera
+> `FailureCode`-térkép + `CameraFailure`, determinisztikus `FakeCameraCapture`
+> (öt lifecycle-mátrix cella: start→frame→close, close→close, start-cancel,
+> close-utáni frame, interruption+close; öt hiba-mátrix cella: busy /
+> unavailable / initialization / frame / interrupted), és mind a 11 vision
+> feature flag default OFF minden környezetben (`nonProd`-tól függetlenül,
+> dart-define override nélkül), `usesNetwork` változatlan.
+>
+> **Nincs ÚJ ADR** (a brief előírása szerint, 0161/0163 additív bővítése).
+> Pre-flight mért megerősítés (nem revízió): `audio_capture.dart` precedens,
+> `FailureCode` jelenlegi értékei, `feature_flags.dart` 9 mezője — mind
+> pontosan egyezett a brief §2 állításával.
+>
+> **Javító kör (F1, MAJOR):** a review a célzott gate mellett a **teljes CI**-t
+> is exact-SHA-n futtatta, és az pirosra váltott — az implementer a
+> `hashCode` gettert a vision-mezőkkel EGYÜTT a korábban is hiányzó
+> `songTrainerV2Enabled`/`aiTutorEnabled`/`aiTutorCloudEnabled` mezőkkel is
+> kiegészítette (a brief ezt csak *megengedte*, nem írta elő), ami az
+> `Object.hash` argumentumszám-változása miatt eltörte a **scope-on kívüli**,
+> kör előtti `test/app/app_config_test.dart:262` tesztet (kőbe vésett
+> 6-argumentumos hash-érték). 1 javító kör (Terra): a `hashCode` visszaáll az
+> eredeti 6 mezőre, egyetlen fájl, 14 sor törlés — pontosan a review
+> specifikációja szerint. Tanulság: **a célzott gate nem helyettesíti a
+> teljes suite-ot** egy meglévő fájlt érintő, additívnak tűnő módosításnál
+> sem — lásd `docs/LESSONS.md`.
+>
+> **Review** ([docs/reviews/e05-r03-…-review.md](docs/reviews/e05-r03-core-camera-contract-and-fake-review.md)):
+> **APPROVED** a javító kör után (0 nyitott BLOCKER/MAJOR). Mutáció-kill próba
+> az ownership guardon; scope-audit mindkét körben tiszta (12, majd 1 fájl,
+> mind az `allowed_paths` listáján).
+>
+> **Zöld kapu (exact-SHA `4b1f520`):** Full Gate (no APK)
+> [31087391595](https://github.com/wolfcasaba/strumsight/actions/runs/31087391595) **success**
+> + Router CI [31087396806](https://github.com/wolfcasaba/strumsight/actions/runs/31087396806)
+> **success** (docs/reviews nem router-ci trigger-útvonal, ezért manuálisan
+> `workflow_dispatch`-elve az exact SHA-ra). Post-merge gate
+> (`tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart`) a
+> friss `main`-en is zöld. **Következő:** a queue következő Epic 5 sora
+> (SDD Ch6 Kör 4, camera permission és platform deklarációk), a pipeline új
+> sessionben indítja.
 >
 > ## ✅ E05-R02 KÉSZ — Camera technology döntési kapu és mérési runbook (2026-08-06)
 >
-> **E05-R02** MERGED (PR [#163](https://github.com/wolfcasaba/strumsight/pull/163),
-> squash `ed5989a`, **ADR [0184](docs/adr/0184-vision-camera-capture-stack.md)**;
-> implementer **Terra** (Codex CLI, `gpt-5.6-terra`), orchestrátor/reviewer
-> **Claude Sonnet 5**). A capture-réteg technológiai döntése: **feltételes C1**
-> (hivatalos Flutter `camera` plugin, Androidon CameraX-backed) a default, C2
-> (saját CameraX platform channel) csak akkor váltja, ha a runbook a
-> latest-frame backpressure-t (M05) vagy a monoton timestampet (M10) megbukja;
-> C3 (hibrid) csak külön indokkal. **Négy numerikus megdöntési küszöb**: init
-> p95 ≤ 2000 ms (M01), tartós FPS ≥ 15.0/30s-ablak (M02), close ≤ 2000 ms +
-> `open_clients=0` + post-close RSS ≤ 20 MiB/30s (M06), 1000 frame szigorúan
-> monoton timestamp (M10). `docs/baseline/epic-05-camera-stack-evaluation.md`
-> a 3 jelölt × 12 kötött kritérium táblázata (mind forrással: hivatalos
-> dokumentáció-link vagy `Mxx` runbook-azonosító); `vision-camera-spike-runbook.md`
-> parancsonként futtatható, számmal kifejezett PASS-küszöbű valós-eszközös
-> mérési lista (M01–M12); `vision-device-matrix.md` §2.8 mind a 12 mérést
-> PENDING sorként rögzíti.
->
-> **Pre-flight §0.0 (ADR-szám revízió):** a brief 2026-08-05-i előre-kiosztása
-> (0167) elavult az E05-R01 hat ADR-je (0178–0183) miatt — a foglaló
-> (`tools/round-slots.py reserve-adr`) **0184**-et adott, minden brief-beli
-> hivatkozás cserélve; az ADR 0163 (Android-first) pre-flight-hivatkozás is
-> javítva a tényleges **0180**-ra.
->
-> **Review** ([docs/reviews/e05-r02-…-review.md](docs/reviews/e05-r02-camera-technology-decision-review.md)):
-> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE). A NOTE: az implementer
-> `blocked`-ot jelzett (`analyze PIROS, 871 issue`), de a reviewer izolált
-> `/tmp` klónban reprodukálva a valódi analyze **"No issues found!"** volt — a
-> gyökérok a boxon majdnem kimerült `fs.inotify.max_user_instances` (509/512,
-> elárvult `tail`-processzek régi `codex-watch.sh`/`mm-watch.sh` futásokból)
-> volt, nem tartalmi hiba. `sudo sysctl -w fs.inotify.max_user_instances=4096`
-> után mindkét munkapéldányban (implementer + reviewer `/tmp` klón) minden gate
-> zöld. Scope-audit 0 listán kívüli fájl.
->
-> **Zöld kapu (exact-SHA `af1cce8`):** Full Gate (no APK)
-> [31083683391](https://github.com/wolfcasaba/strumsight/actions/runs/31083683391) **success**
-> + Router CI [31083689860](https://github.com/wolfcasaba/strumsight/actions/runs/31083689860)
-> **success**. A CI-terv `full-gate.yml`-t írt elő (docs-only, nincs natív
-> út); a `docs/rounds/**` érintés miatt a Router CI is a kapu része, mindkettő
-> zöld a merge SHA-n. Post-merge gate (`tools/round-gate.sh test/tooling`) a
-> friss `main`-en is zöld. **Következő:** a queue következő Epic 5 sora
-> (SDD Ch6 Kör 3, `CameraFrame` ownership contract), a pipeline új sessionben
-> indítja.
+> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> ADR [0184](docs/adr/0184-vision-camera-capture-stack.md) — feltételes C1
+> (hivatalos Flutter `camera`/CameraX) döntés, négy numerikus megdöntési
+> küszöb; PR #163, squash `ed5989a`, implementer Terra, APPROVED javító kör
+> nélkül.
 >
 > ## ✅ E05-R01 KÉSZ — Vision baseline, capability audit & hat alapozó ADR (Epic 5 INDUL) (2026-08-06)
 >
