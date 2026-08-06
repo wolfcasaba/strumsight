@@ -5213,3 +5213,45 @@ melléktermékeit (jelzésfájl, pid-fájl, naplók) explicit ki kell zárni:
 ':(exclude).mm-round-pid'`. Általánosabban: minden „valami megváltozott-e"
 ellenőrzésnél írd le, mi a mérés SAJÁT lábnyoma, és vond ki — különben az őr a
 saját nyomát méri, és mindig igazat mond.
+
+## L158 — Egy 4+ órás, „critical" impact GitHub Actions-incidens önmagában H-NOSIGNAL haltot okoz, ÉS a megállt kör nyitva hagyott PR-je csendben, örökre eltorlaszolja a „nincs nyitott PR" előfeltételt — a self-heal `retry` ága ezt NEM takarítja el magától (E05-R09, 2026-08-06)
+
+**Mit mértünk.** Az E05-R09 orchestrátor-session (`terra`, 15:05–19:05 UTC)
+helyesen dolgozott — implementáció kész, 2 review PASS/APPROVED, security PASS,
+a munka egy PR-be került (#175) —, de a GitHub 15:22 UTC-kor kezdődő, critical
+impact, „investigating" Actions+Pages incidense miatt sosem kapott tiszta
+CI-t (élőben mérve `githubstatus.com/api/v2/components.json`-nal: `Actions:
+major_outage` mind a halt idején, mind az önjavítás alatt — egyetlen,
+folytonos incidens, nem kettő). A session emellett — helyesen felismerve az
+okot — egy proaktív infra-fixet is nyitott (#177, `github_actions_degraded()`
+őr a driverbe), de ez ÖNMAGA is CI-outage-blocked maradt. A 4 órás
+`PIPELINE_SESSION_TIMEOUT` lejárt, mielőtt bármelyik PR zöld CI-t kaphatott
+volna → `H-NOSIGNAL` (jelzés nélküli halál).
+
+**A második, rejtett csapda.** Az önjavító kör Class C (`outcome=retry`) ága
+(`tools/round-pipeline.sh` `attempt_selfheal()`) kizárólag a `$halt_file`-t
+archiválja — a megállt kör NYITOTT PR-jéhez nem nyúl. A driver „nincs nyitott
+PR" előfeltétele (`gh pr list --state open` + `ROUND_BRANCH_PATTERN` szűrő)
+viszont MINDEN kör-alakú branch-nevű nyitott PR-t számol, és a halott session
+nem takarította a `.pipeline/inflight/E05-R09` jelzőt — a branch ezért
+„idegen"-nek látszott a driver szemében. Retry UTÁN a KÖVETKEZŐ (és minden
+további) 5 perces cron-firing csendben `die()`-olt volna („nyitott PR van") —
+nincs `notify` ezen az ágon (lásd a mért precedenst is: a driver 969-971.
+sorának kommentje, „két saját infra-PR miatt a lánc KILENC firinget hagyott
+ki") — és ez ÖRÖKRE tartott volna, MÉG a GitHub-incidens elmúlta UTÁN is,
+mert semmi nem tér vissza automatikusan egy megállt kör nyitva hagyott
+PR-jéhez.
+
+**Szabály.** (1) `githubstatus.com/api/v2/components.json` élő lekérdezése a
+helyes, gyors módszer egy CI-halt Class C (külső) besorolásához — ne elégedj
+meg a saját korábbi jelentéssel vagy a PR leírásában talált állítással, mérd
+újra MOST. (2) Egy self-heal `retry` NEM elég, ha a megállt kör nyitott,
+kör-alakú branch-nevű PR-t hagyott hátra: azt explicit le kell zárni
+(`gh pr close`, a branch/commitok/review-k megmaradnak, `gh pr reopen`-nel
+visszahozhatók) — enélkül a `retry` egy LÁTHATATLAN, örök stallra cserél egy
+látható, notify-olt haltot, ami rosszabb. (3) A `docs/execution/pipeline-queue.tsv`
+sorát ilyenkor NEM kell módosítani, ha már `pending` — a lezárt PR
+eltávolítása elég a precondition felszabadításához, a queue már helyesen
+mutat vissza a körre. Rokon: [[L155]] (githubstatus/`gh run view --json jobs`
+a helyes GitHub-infra-flake diagnózis), [[L153]] (review-commit utáni kézi
+CI-dispatch — itt pedig maga a dispatch is outage-blocked volt).
