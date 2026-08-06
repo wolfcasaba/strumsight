@@ -32,7 +32,10 @@ import '../../features/song_trainer/presentation/screens/song_result_screen.dart
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
+import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
+import '../../features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
+import '../../features/ai_tutor/presentation/screens/tutor_profile_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
@@ -202,6 +205,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.tutorChat,
           builder: (_, _) => const TutorChatScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.tutorProfile,
+          builder: (_, _) => const TutorProfileScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.tutorPrivacy,
+          builder: (_, _) => const TutorPrivacyScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.tutorData,
+          builder: (_, _) => const TutorDataScreen(),
         ),
       ],
     ],
