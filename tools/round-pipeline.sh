@@ -94,12 +94,13 @@ heal_timeout=${PIPELINE_SELFHEAL_TIMEOUT:-10800}     # 3 óra: diagnózis + fix 
 selfheal_enabled=${PIPELINE_SELFHEAL:-1}
 selfheal_max=${PIPELINE_SELFHEAL_MAX:-3}
 claude_bin=${CLAUDE_BIN:-claude}
-# Opus 4.8 az orchestrátor-default (user-döntés 2026-08-04: „kapcsoljuk vissza
-# a Claude-ot Opus 4.8-cal, továbbá a fejlesztő legyen a Terra"). Az implementer
-# ettől a döntéstől Terra (queue engine=codex), a Claude dolga a terv + a review
-# + a merge-kapu — oda a nagyobb ítélőképesség kell.
-# Korábbi default: claude-sonnet-5 (user-döntés 2026-08-01, kvótaszűke miatt).
-claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
+# Sonnet 5 az orchestrátor-default (user-döntés 2026-08-06: „állítsd át az
+# orchestrátort MINDEN RÉTEGBEN Sonnet 5 modellre, a fejlesztő agentet pedig
+# állítsd vissza Terrára, mert már nincs DeepSeek kredit"). A Claude dolga a
+# terv + a review + a merge-kapu; az implementer a Terra (motor-override).
+# Korábbi default: claude-opus-4-8 (2026-08-04 … 2026-08-06).
+# Visszakapcsolás egyetlen env-vel: PIPELINE_MODEL=claude-opus-4-8.
+claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 
 # Keretkímélő beállítások (user-döntés 2026-08-04: „nem akarom, hogy gyorsan
 # elfogyjon a keretem, még sok epic kell"):
@@ -108,13 +109,13 @@ claude_model=${PIPELINE_MODEL:-claude-opus-4-8}
 #     ráadásul 4096-os cache-minimumot és gyengébb agentic viselkedést hozna),
 #     hanem az effort-szint;
 #   - a spórolás az effort-szinten történik, NEM modellváltással.
-# Az önjavító session 2026-08-05 óta szintén Opus 4.8 (user-döntés: „Opus 4.8-at
-# állítottam be orchestrátornak mindenhová"). Korábban Sonnet 5 volt olcsóbb
-# infrastruktúra-diagnózisnak — de a mérés ellene szólt: a heal-kör ítéletet hoz
-# (gyökérok-osztályozás A/B/C, motorválasztás, mércét-nem-gyengítjük határ), és
-# az E04-R14 első kísérlete félbe is maradt. Olcsóbbra vissza: PIPELINE_SELFHEAL_MODEL.
+# Az önjavító session ugyanazt a modellt kapja, mint a kör-orchestrátor — ez a
+# „minden rétegben" követelmény (user-döntés 2026-08-06). A heal-kör ítéletet hoz
+# (gyökérok-osztályozás, motorválasztás, mércét-nem-gyengítjük határ), ezért nem
+# ereszthető lejjebb az orchestrátornál; ha valaha külön kell állítani, arra való
+# a PIPELINE_SELFHEAL_MODEL.
 claude_effort=${PIPELINE_EFFORT:-medium}
-heal_model=${PIPELINE_SELFHEAL_MODEL:-claude-opus-4-8}
+heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
