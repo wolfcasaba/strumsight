@@ -4,18 +4,15 @@ Brief: `docs/rounds/e05-r03-core-camera-contract-and-fake.md`
 Diff: `git diff ed1bbe3..ddd2c96` (main pre-flight HEAD → implementer HEAD)
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-06
 Implementer: Terra (Codex CLI, `gpt-5.6-terra`)
-Verdikt: **CHANGES REQUESTED** (1. kör, javító kör szükséges)
+Verdikt: **APPROVED** (1 javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 (javítva) · MINOR: 0 · NOTE: 0
 
-**Frissítés (CI, exact-SHA `b0f678d`, run
-[31085620321](https://github.com/wolfcasaba/strumsight/actions/runs/31085620321)):**
-mindkét job (`Coverage`, `full-gate`) pirosra váltott — 1 regresszió a teljes
-suite-ban, amit a lokálisan futtatott célzott gate (`test/core/camera
-test/app/feature_flags_test.dart`) nem fedett le, mert a sérült teszt más
-fájlban van. Lásd F1.
+**Javító kör (Terra, `7f26739`):** F1 zárva — a `hashCode` getter visszaáll
+az eredeti 6 mezőre, a scope-on kívüli `test/app/app_config_test.dart` zöld,
+a teljes CI (Full Gate + Router CI) zöld az exact-SHA-n. Részletek F1 alatt.
 
 ## Acceptance criteria
 
@@ -70,7 +67,17 @@ változás: **nincs**. `.codex-round-status`: `scope_audit=ok`,
 - **Ellenőrzés:** `flutter test test/app/app_config_test.dart` zöld, majd
   `tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart` és a
   teljes CI (`full-gate.yml`) újrafuttatása az új exact-SHA-n.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`7f26739`) — a javítás pontosan a specifikált
+  visszaállítás (`git diff c36e38f..7f26739` egyetlen fájl, 14 sor törlés,
+  csak a `hashCode` getterben); saját kézzel újrafuttatva izolált klónban:
+  `flutter test test/app/app_config_test.dart` 18/18 zöld,
+  `tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart`
+  minden lépés zöld; CI exact-SHA `7f26739`: Full Gate (no APK) run
+  [31086634181](https://github.com/wolfcasaba/strumsight/actions/runs/31086634181)
+  **success**, Router CI run
+  [31086685694](https://github.com/wolfcasaba/strumsight/actions/runs/31086685694)
+  **success** (manuálisan dispatch-elve az exact SHA-ra, mert a
+  `docs/rounds/**` trigger-útvonalat a javító commit nem érintette).
 
 (N1 törölve — a korábban itt jelzett `hashCode`-teljesség maga bizonyult a
 F1 gyökérokának, lásd fent.)
@@ -90,11 +97,12 @@ munkafán:
 | architecture | zöld, 12 allowlisted deviation (változatlan) | ✅ (saját futás) |
 | secrets | zöld | ✅ (saját futás) |
 | l10n | zöld | ✅ (saját futás) |
-| CI Full Gate (no APK), HEAD `b0f678d` | dispatch [31085620321](https://github.com/wolfcasaba/strumsight/actions/runs/31085620321) | ❌ **PIROS** — `Coverage` és `full-gate` job is: 2997 passed, **1 failed** (F1) |
-| Router CI | `31085432672` **success** (branch push) | ✅ |
+| CI Full Gate (no APK), HEAD `b0f678d` (1. próba) | [31085620321](https://github.com/wolfcasaba/strumsight/actions/runs/31085620321) | ❌ PIROS — 1 failed (F1) |
+| CI Full Gate (no APK), HEAD `7f26739` (javítás után) | [31086634181](https://github.com/wolfcasaba/strumsight/actions/runs/31086634181) | ✅ success |
+| Router CI, HEAD `7f26739` (javítás után) | [31086685694](https://github.com/wolfcasaba/strumsight/actions/runs/31086685694) | ✅ success |
 
 ## Merge-döntés
 
-**Merge TILOS** — 1 nyitott MAJOR (F1) és a CI a merge-jelölt exact-SHA-n
-(`b0f678d`) piros. Javító kör szükséges (1. javító kör, Terra), utána a
-review-t frissítem és a CI-t az új exact-SHA-n újra-dispatch-elem.
+Nulla nyitott BLOCKER/MAJOR (F1 FIXED), scope-audit mindkét körben tiszta,
+Full Gate + Router CI zöld a merge-jelölt exact-SHA-n (`7f26739`) — ADR 0052
+zöld kapuja teljesül. **Merge engedélyezett.**
