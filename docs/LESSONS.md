@@ -4960,3 +4960,81 @@ fájlt egyben** — az egy külön, a saját körön kívüli tömeges szerkeszt
 FÜGGETLENÜL kellene mérnie a saját ADR-hivatkozásait (nem csak ezt az egyet)
 — de a fenti grep-parancs és leképezés a következő 17 pre-flight munkáját
 másodpercekre rövidíti a nulláról újra-derítés helyett. Rokon: [[L143]].
+
+**Utólagos megerősítés (E05-R06):** a jóslat bevált — az E05-R06 brief saját
+fejléce/§0.0/§1/§3 újra a `0167`-et hordozta (a szám maga is elavult: az R01
+hat ADR-je miatt `0167→0184`), a §5.4 pedig külön `0163`-at (`→0180`). A
+pre-flight EZT a lessons-bejegyzést nem olvasta el előre, hanem nulláról
+re-derálta ugyanazt a leképezést — a fenti tábla pontosan stimmelt, csak a
+konzultáció maradt el. **Kiegészítés:** jövőbeli pre-flight ELŐSZÖR
+`grep -n "ADR 016[1-6]"` a SAJÁT brief-jén, és ha talál, ide (L147) nézzen a
+kész leképezésért, ahelyett hogy újra levezetné. Mérve 2026-08-06: a 20 fájlos
+lista azóta sem csökkent (a `pending` R08–R29 mind stale) — a batch-fix
+döntés (ne most, körönként mérve) továbbra is helyes, de minden egyes kör
+ugyanazt a pár másodperces re-derálást fizeti ki, amit egy `grep -n "ADR
+016[1-6]" docs/rounds/eXX-*.md` + ez a tábla azonnal kiváltana.
+
+## L148 — Az SDD domainmodell-szakasza (§9.x) előrébb tarthat, mint a ténylegesen megvalósított kód: a pre-flight a MEGLÉVŐ típus mezőit ÉS az SDD kanonikus modelljét is mérje, ne csak a kódot (E05-R06, §0.0 R2)
+
+A brief §5.3/§6 kötelezte a `mirror`/`crop` metaadat megőrzését a bindingen
+át, de a hivatkozott, MEGLÉVŐ `CameraFrame` (E05-R03-ból) egyiket sem
+ismerte — az implementer (helyesen) `stopped`-ot jelzett. A pre-flight-szabály
+„grep-eld ki a kódból az enum-értéket/mezőt" (jelen dokumentum §1) itt
+ÖNMAGÁBAN nem lett volna elég: a kód state-je azt mutatta volna, hogy a
+mező NEM létezik, ami könnyen „a brief téved, szűkítsd a scope-ot"
+következtetésre vezetett volna. A helyes válasz csak az SDD §9.2
+`CameraFrameMetadata` (a `frameId`/`captureTimestampUs`/`width`/`height`/
+`rotationDegrees`/**`mirrored`**/`pixelFormat`/**`cropRegion`** kanonikus
+domainmodell) elolvasása UTÁN derült ki: a mező hiánya nem szándékos
+korlátozás volt, hanem az E05-R03 RÉSZLEGES megvalósítása egy már korábban
+dokumentált, teljesebb modellnek — tehát additív kiegészítés, nem új döntés.
+**Tanulság:** amikor egy brief egy MEGLÉVŐ típus metaadat-teljességét írja
+elő, a pre-flight ne csak a típus jelenlegi mezőit mérje, hanem az SDD saját
+domainmodell-szakaszát (jelen Epicben: 9. fejezet) is — a kettő közötti rés
+maga a mérce arra, hogy additív kiegészítés (dokumentált §0.0 revízióval
+engedélyezhető) vagy tényleg új architekturális döntés (H2/halt) a helyes
+válasz. Rokon: [[L143]] (mérd, ne feltételezd).
+
+## L149 — Brief-tervezéskor a „feature-first, data-réteg adapter" alapminta téves lehet egy CORE, több feature által osztott képességre — az owner-modell (enum) vagy egy meglévő analóg CORE-modul a helyes teszt, nem a boilerplate (E05-R06, §0.0 R3)
+
+Az E05-R06 brief a `PluginCameraCapture`-t `lib/features/vision/data/camera/`
+alá tervezte, és a CORE `camera_providers.dart`-ot kérte, hogy importálja —
+`AGENTS.md` §6 „Core nem importál feature-t" sértés, amit az implementer
+helyesen `stopped`-dal jelzett. A hiba forrása: a brief-szerző a repóban
+elterjedt „feature-first, repository/data-réteg adapter" mintát alkalmazta
+gondolkodás nélkül, holott a kamera — a mikrofonhoz hasonlóan — ebben az
+architektúrában CORE-szintű, több feature által osztott képesség (l. a
+MEGLÉVŐ `CameraOwner` enum: `visionSetup`/`visionPractice`/`songVision`/
+`labCapture` — HÁROM a négyből nem is „vision"). A helyes minta már ott volt
+a kódbázisban: `lib/core/audio/capture/audio_capture_factory.dart`
+közvetlenül importálja a `package:audio_streamer`-t CORE-ból, pontosan
+ugyanígy. **Tanulság:** mielőtt egy brief egy ÚJ plugin-backed adaptert
+feature-mappába tervez, ellenőrizd (a) van-e a resource-nak MEGLÉVŐ,
+több-fogyasztós owner-enumja vagy hasonló jele annak, hogy CORE-szintű
+képesség, és (b) van-e a kódbázisban analóg, már megépített CORE-adapter
+(itt: audio) — ha igen, azt kövesd, ne a generikus feature-first sablont.
+`AGENTS.md` §6 „domain nem függ plugintól" a DOMAIN rétegre vonatkozik
+(`lib/features/*/domain/`), NEM a core-ra — a core-plugin-függés bevett,
+mért gyakorlat ebben a kódbázisban. Rokon: [[L143]].
+
+## L150 — Egy `sync: true` broadcast `StreamController.add()` listenerének dobott kivétele NEM száll vissza szinkron a hívóhoz — a Dart Zone-hibakezelőn megy át, ezért egy „release kivétel esetén is" tesztnek a szinkron feldolgozó logikán BELÜLRŐL kell dobnia, nem egy downstream listenerből (E05-R06, review F1 MAJOR)
+
+A `PluginCameraCapture._deliverLatestFrame` egy try/catch/**finally**-vel
+garantálja a platform-buffer felszabadítását kivétel esetén is. A checked-in
+teszt („throwing frame callback…") ezt egy `capture.frames.listen((_) =>
+throw StateError(...))` downstream fogyasztóval próbálta bizonyítani,
+`runZonedGuarded`-del elkapva. **Mutáció-kill próbával mérve:** a `finally`-t
+eltávolítva (pontosan a brief §6.1 által leírt hibás implementáció) ez a
+teszt VÁLTOZATLANUL zöld maradt — mert a `sync: true` broadcast controller
+`add()`-ja a listener kivételét a Dart Zone-hibakezelőn keresztül routolja,
+nem szállítja vissza szinkron az `add()` hívási pontjára; a
+`_deliverLatestFrame` try-blokkja emiatt sosem látta a kivételt. Egy MÁSIK
+mutáció (a `CameraFrameBinding.bind()`-ot ténylegesen megbuktató, érvénytelen
+`width: 0` frame) viszont helyesen piroSra váltotta a `finally` nélküli
+kódot — igazolva, hogy a termékkód helyes volt, csak a teszt mért rossz
+hibaforrást. **Tanulság:** amikor egy Dart-tesztnek egy szinkron
+feldolgozó-blokk try/catch/finally-jét kell falszifikálnia, a kivételnek a
+BLOKKON BELÜLRŐL kell jönnie (pl. egy hívott függvény dobása), nem egy
+`.listen()`-nel csatlakoztatott downstream fogyasztóból — az utóbbi a Zone
+hibakezelőjén landol, és soha nem éri el a vizsgált try-blokkot. Rokon:
+[[L145]] (a célzott gate/teszt nem látja, amit állít, hogy lát).
