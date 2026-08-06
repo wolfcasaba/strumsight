@@ -9,6 +9,7 @@ import 'package:strumsight/app/bootstrap/app_bootstrap.dart';
 import 'package:strumsight/app/bootstrap/bootstrap_result.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/app/strumsight_app.dart';
@@ -34,6 +35,7 @@ import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_home_screen.dart';
 
 import '../support/fake_audio.dart';
 import '../support/fake_auth.dart';
@@ -95,6 +97,7 @@ final class _AppHarness {
 Future<_AppHarness> _bootApp(
   WidgetTester tester, {
   required bool accountEnabled,
+  FeatureFlags? flags,
 }) async {
   final store = InMemoryKeyValueStore({StorageKeys.onboardingSeen: true});
   final result = await AppBootstrap.run(
@@ -114,13 +117,24 @@ Future<_AppHarness> _bootApp(
   expect(success.config.flags.diagnosticsEnabled, isFalse);
   expect(success.onboardingSeen, isTrue);
 
+  final config = flags != null
+      ? AppConfig(
+          environment: success.config.environment,
+          apiBaseUrl: success.config.apiBaseUrl,
+          flags: flags,
+          diagnosticsToken: success.config.diagnosticsToken,
+          buildMode: success.config.buildMode,
+          appVersion: success.config.appVersion,
+        )
+      : success.config;
+
   final network = _NetworkProbe();
   final tokenStore = FakeTokenStore();
   final liveEngine = FakeStrumEngine();
   final tunerEngine = FakeTunerEngine();
   final container = ProviderContainer(
     overrides: [
-      appConfigProvider.overrideWithValue(success.config),
+      appConfigProvider.overrideWithValue(config),
       keyValueStoreProvider.overrideWithValue(success.keyValueStore),
       appLoggerProvider.overrideWithValue(const NoopAppLogger()),
       diagnosticsConsentProvider.overrideWith(
@@ -229,6 +243,31 @@ void main() {
       await _buildMainScreens(tester, harness);
 
       expect(harness.tokenStore.reads, 1);
+      _expectNoNetwork(harness);
+    },
+  );
+
+  testWidgets(
+    'aiTutor enabled with cloud OFF: tutor home screen stays offline',
+    (tester) async {
+      final harness = await _bootApp(
+        tester,
+        accountEnabled: false,
+        flags: const FeatureFlags(
+          accountEnabled: false,
+          diagnosticsEnabled: false,
+          labModeAvailable: false,
+          aiTutorEnabled: true,
+          aiTutorCloudEnabled: false,
+        ),
+      );
+
+      // Navigate to tutor home — a plain StatelessWidget with no providers
+      harness.router.go(AppRoutes.tutorHome);
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, AppRoutes.tutorHome);
+      expect(find.byType(TutorHomeScreen), findsOneWidget);
+
       _expectNoNetwork(harness);
     },
   );
