@@ -5143,3 +5143,73 @@ lencseváltás külön, `lib/core/camera/**`-t érintő körre halasztva) — ne
 kellett M4/H3 halt, mert a mérés a dispatch ELŐTT történt. Rokon: [[L148]]
 (a MEGLÉVŐ típus mezőit mérd, ne csak az SDD-modellt), [[L149]] (owner-
 modell vagy analóg CORE-adapter a helyes teszt, nem a feltételezés).
+
+## L155 — A push-trigger MELLETT indított kézi `workflow run` kioltja magát: a két futás `cancelled`/`failure` lesz, és a user telefonjára „All jobs have failed" értesítés megy — pedig a fa zöld (2026-08-06, governance-PR-ek)
+
+**Mit mértünk.** 2026-08-06-án öt governance-PR-nél ugyanaz ismétlődött: a
+`git push` a Router CI trigger-útvonalán (`tools/**`) automatikusan indított egy
+futást, én pedig **emellé** azonnal kiadtam egy `gh workflow run router-ci.yml
+--ref <ág>` parancsot. A két futás ugyanarra a SHA-ra ment, kioltották egymást,
+és a GitHub-értesítés `Router CI: All jobs have failed` alakban ment a user
+telefonjára — miközben a diff hibátlan volt. Az egyik esetben a job **nulla
+lépéssel** zárt (`cancelled`), a másikban a `Set up job` bukott GitHub-infra
+okból (`Failed to resolve action download info: Service Unavailable`, 7m32s).
+
+**A kár nem a CI-percek, hanem a bizalom.** A user jogosan nézi a piros
+értesítéseket; ha a lánc rendszeresen gyárt hamis pirosat, a valódi regresszió
+belevész. (A user 2026-08-06-án emiatt szólt másodszor: „figyeld ezeket is,
+amit a GitHub küld".)
+
+**Szabály.** (1) **Vagy** a push-triggert hagyd futni, **vagy** dispatch-elj —
+soha nem mindkettőt. Push előtt nézd meg: a diff érinti-e a workflow
+`on.push.paths` listáját (`docs/rounds/**`, `tools/**`, `.ai/**`,
+`docs/execution/pipeline-*`)? Ha igen, a push MÁR indít futást; a `gh workflow
+run` fölösleges. Ha nem (pl. `docs/reviews/**`, `.gitignore`), akkor KELL a
+dispatch — lásd L153. (2) Piros futásnál ELŐSZÖR osztályozz, ne javíts:
+`gh run view <id> --json jobs` → nulla lépés + `cancelled` = duplikált
+dispatch; `Set up job` bukás = GitHub-infra flake; ha ugyanazon a `headSha`-n
+van sikeres futás, a fa zöld. (3) A lánc gépi oldala 2026-08-06 óta ugyanezt
+csinálja: a main-egészség a SHA ÖSSZES befejezett futását nézi, és valódi piros
+mainnél ntfy-t is küld.
+
+## L156 — A `.pipeline/` állapotot író eszközök a HÍVÓ munkapéldányába írnak: egy worktree-ből kiadott `engine-profile.sh use <motor>` NEM az éles láncot állítja át (2026-08-06)
+
+**Mit mértünk.** A user kérésére az implementer motort MiniMax M3-ra állítottam:
+`cd /tmp/ss-m3 && tools/engine-profile.sh use minimax` — a parancs vissza is
+igazolta („Aktív implementer-motor: minimax"). A worktree törlése után az ÉLES
+állapot ellenőrzésekor viszont még mindig `sonnet-impl` volt az override: a
+script a `PIPELINE_STATE_DIR` alapértelmezése szerint a **saját repo-gyökeréhez**
+tartozó `.pipeline/`-ba írt, ami a worktree-ben egy külön (és eldobott)
+könyvtár.
+
+**Miért veszélyes.** A visszaigazoló üzenet ilyenkor is „sikert" mond, tehát a
+hibát csak egy FÜGGETLEN ellenőrzés fogja meg — és közben a lánc a régi
+motorral vinné a következő kört (a mi esetünkben az előfizetést terhelő
+Sonnettel az unlimited M3 helyett).
+
+**Szabály.** Minden `.pipeline/` állapotot író művelet (`engine-profile.sh
+use|clear`, `pipeline-status.sh --resume|--halt`, override-fájlok) **a fő
+munkapéldányból** (`/home/ubuntu/music-theory`) menjen, és utána a hatást
+UGYANONNAN ellenőrizd (`cat .pipeline/engine-override`,
+`tools/round-pipeline.sh --session-config round`). Worktree-ből csak akkor, ha
+explicit `PIPELINE_STATE_DIR`-t adsz meg. Ugyanez a hibaosztály, mint amikor egy
+kísérleti override a közös állapoton át beszivárog az éles láncba (L127) — csak
+fordított irányban.
+
+## L157 — A „done munka nélkül" őr a saját jelzésfájljába botlik: a burkoló ARTEFAKTUMAIT ki kell zárni a munka-ellenőrzésből (2026-08-06)
+
+**Mit mértünk.** Az implementer-hallucináció ellen a burkolókba
+(`codex-round.sh`, `mm-round.sh`) egy őr került: ha a jelzés `done`, de a
+munkapéldány nem mozdult (nincs új commit ÉS nincs diff), a jelentés
+bizonyítatlan → `unknown`. Az első verzió `git status --porcelain | wc -l`-lel
+mérte a piszkosságot — csakhogy a burkoló ekkor MÁR kiírta a
+`.codex-round-status` jelzésfájlt a munkapéldányba, ami maga is untracked. Így
+a „van munka" feltétel MINDIG teljesült: az őr soha nem sült volna el, és a
+teszt is zölden hazudott volna (a hamis motor „done"-ja átment).
+
+**Szabály.** Ha egy őr a munkafa állapotát méri, a MÉRŐ ESZKÖZ saját
+melléktermékeit (jelzésfájl, pid-fájl, naplók) explicit ki kell zárni:
+`git status --porcelain -- . ':(exclude).codex-round-status'
+':(exclude).mm-round-pid'`. Általánosabban: minden „valami megváltozott-e"
+ellenőrzésnél írd le, mi a mérés SAJÁT lábnyoma, és vond ki — különben az őr a
+saját nyomát méri, és mindig igazat mond.
