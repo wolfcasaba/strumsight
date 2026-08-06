@@ -7,7 +7,7 @@ Implementer: Terra (Codex CLI, `gpt-5.6-terra`) — 1 fő forduló (`089953e`) +
 gate-only folytatás (üres diff, `scope_audit_changed=0`), a köztes `blocked`
 jelzés oka klón-artefaktum (hiányzó generált `lib/l10n/`), nem kódhiba —
 részletek a Megjegyzések alatt.
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED javító kör #1 után** (`df5a13b`)
 Dedikált security review (kötelező, brief `risk = "high"`):
 [`e05-r07-frame-transform-and-overlay-coordinates-security.md`](e05-r07-frame-transform-and-overlay-coordinates-security.md)
 — **PASS** (0 CRITICAL/BLOCKER; 1 MAJOR + 1 MINOR/NOTE carried forward, nem
@@ -16,7 +16,42 @@ R13/R15/R24 előtt, amikor ez a réteg valós kamera-metaadathoz kötődik).
 
 ## Összegzés
 
-Ez a (funkcionális) review: BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1
+Ez a (funkcionális) review: BLOCKER: 0 · MAJOR: 0 (1 zárva javító körben) · MINOR: 0 (1 zárva javító körben) · NOTE: 1 (nem blokkol)
+
+## Javító kör #1 (`df5a13b`) — zárás soronként
+
+- **F1 (MAJOR) → FIXED.** Új `CameraTransform.previewToOverlay()` statikus
+  factory (`lib/core/camera/camera_transform.dart`), explicit
+  `CameraTransform<PreviewPoint, OverlayPoint>` identitás-transzform,
+  doc-commenttel indokolva (overlay szándékosan preview-val azonos helyi
+  logikai-pixel tér; DPR-átszámítás a presentation host felelőssége, a két
+  helyi tér létrehozása ELŐTT). **Saját `/tmp/review-e05r07` klónban
+  függetlenül újrafuttatva:** az új `the overlay uses the preview local
+  coordinate system explicitly` teszt (`test/core/camera/camera_transform_test.dart`)
+  ténylegesen egy `CameraTransform`-on keresztül állítja elő az
+  `OverlayPoint`-ot (nem csak konstruktorral) — a `test/core/camera` tesztszám
+  66→**67**-re nőtt, a gate mindegyik lépése zöld. Ez zárja a §1 Cél öt-tere
+  láncát és az SDD Kör 7 feladatlistájának „overlay koordinátatér" pontját.
+- **F2 (MINOR) → FIXED.** `test/property/camera_transform_property_test.dart`
+  mostantól `CameraTransform.isRoundTripErrorWithinTolerance(...)`-on keresztül
+  méri a round-trip hibát a nyers hányados-összehasonlítás helyett — a
+  segédfüggvény és a property teszt egy code-path-on van. Saját klónban
+  újrafuttatva: 4/4 property zöld, `PROPERTY_SEED=42`.
+- **F3 (NOTE) → nem blokkol**, változatlan (a `buffer` tér nincs a brief §1
+  öt-tér láncában, csak előre felvett bővítési pont).
+
+**Scope a javító körben:** `git diff --stat a4888a3 df5a13b` (a review-commit
+UTÁNI diff) pontosan 4 fájl: `camera_transform.dart`, a két érintett tesztfájl,
+és a round-brief §10 kiegészítése — mind a §4 engedélyezett listáján belül,
+nincs új fájl.
+
+**Önkorrekció a review-folyamatban:** az első újra-gate-futtatásom TÉVEDÉSBŐL a
+javítás ELŐTTI commit (`a4888a3`) ellen futott — Terra a fix-et csak lokálisan
+commitolta a saját munkapéldányán, push nélkül (ugyanaz a minta, mint az első
+implementációs fordulónál), és ezt elmulasztottam újra pusholni a
+függetlenítés előtt. A tesztszám (66, változatlan) árulta el a hibát; a push
+pótlása és az újrafuttatás után a valódi fix-commit (`df5a13b`) ellen mértem,
+67 teszttel.
 
 ## Acceptance criteria
 
@@ -71,7 +106,7 @@ jelzésben (`scope_audit_changed=7`, majd a gate-only fordulón `=0`).
   `CameraTransform`-on keresztül állít elő (nem csak konstruktorral), plusz a
   fixture-mátrix vagy egy külön overlay-cella ugyanazzal a kézi-levezetési
   fegyelemmel (§10 mintájára).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`df5a13b`) — l. „Javító kör #1" fent
 
 ### F2 — MINOR — `isRoundTripErrorWithinTolerance` és a property teszt függetlenül mérnek
 
@@ -88,7 +123,7 @@ jelzésben (`scope_audit_changed=7`, majd a gate-only fordulón `=0`).
 - **Kötelező javítás:** nem blokkoló — follow-up: a property teszt cserélje a nyers
   hányados-számítást `CameraTransform.isRoundTripErrorWithinTolerance(...)` hívásra.
 - **Ellenőrzés:** a property teszt továbbra is zöld marad a csere után.
-- **Státusz:** OPEN (follow-up, nem blokkolja ezt a kört)
+- **Státusz:** FIXED (`df5a13b`) — l. „Javító kör #1" fent
 
 ### F3 — NOTE — `BufferPoint` / `CameraCoordinateSpace.buffer` szintén felhasználatlan
 
@@ -130,7 +165,10 @@ körben.
 
 ## Merge-döntés
 
-**CHANGES REQUESTED — F1 (MAJOR) nyitva.** Az ADR 0052 szerint minden gate zöld ÉS
-nincs nyitott BLOCKER/MAJOR szükséges a merge-hez; F1 nyitva van, ezért a merge
-jelenleg TILOS. Javító kör indul UGYANAZZAL a motorral (Terra) az F1 (és opcionálisan
-F2) leletlistával. F3 nem blokkol, follow-up.
+**APPROVED.** F1 és F2 zárva a `df5a13b` javító körben, mindkettő saját `/tmp`
+klónban függetlenül újra-ellenőrizve (67/67 `test/core/camera`, 4/4 property,
+mind a 7 gate-lépés zöld). F3 nem blokkol (follow-up). A dedikált security
+review PASS (0 CRITICAL/BLOCKER). Nulla nyitott BLOCKER/MAJOR. Az ADR 0052
+szerinti merge-előfeltétel (minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR)
+lokálisan teljesül — a formális merge-kapu az orchestrátor CI-dispatchére vár
+(exact-SHA zöld `build-apk.yml`/`full-gate.yml` + szükség esetén `router-ci.yml`).
