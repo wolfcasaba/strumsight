@@ -64,6 +64,17 @@ void main() {
       expect(
         VisionQualitySummary.fromFrames(<VisionFrameQuality>[
           _quality(
+            lighting: VisionLighting.tooDark,
+            blur: VisionMetricState.needsImprovement,
+            stability: VisionMetricState.needsImprovement,
+            roiCoverage: VisionMetricState.needsImprovement,
+          ),
+        ]).setupCue,
+        VisionSetupCue.improveLighting,
+      );
+      expect(
+        VisionQualitySummary.fromFrames(<VisionFrameQuality>[
+          _quality(
             blur: VisionMetricState.needsImprovement,
             stability: VisionMetricState.needsImprovement,
             roiCoverage: VisionMetricState.needsImprovement,
