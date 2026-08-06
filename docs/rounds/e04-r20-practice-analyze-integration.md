@@ -1,6 +1,6 @@
 # E04-R20 — Practice és Analyze post-session integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-06, kód mérve: main @ `58a0ca3`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 20; §35
 - **Branch:** `codex/e04-r20-practice-analyze-integration`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R08, R16, R18 merge**
@@ -15,7 +15,6 @@ allowed_paths = [
   "lib/features/ai_tutor/presentation/widgets/session_tutor_entry_card.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/application/practice_result_context_adapter_test.dart",
   "test/features/ai_tutor/application/analyze_result_context_adapter_test.dart",
   "test/features/ai_tutor/presentation/session_tutor_entry_card_test.dart",
@@ -46,7 +45,75 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight mérve 2026-08-06, baseline: `main` @ `58a0ca3` (== `origin/main`).**
+Előfeltételek merge-elve: E04-R08 (`ddd7674`), R16 (`df25806`), R18 (`104e685`).
+Brief-lint (strict): nincs lelet.
+
+**ADR-döntés: nincs ÚJ ADR.** A kör kizárólag már merge-elt döntéseken belül
+mozog — ADR 0132 (deterministic-result-primary + immutable context-snapshot) és
+az R08 debrief. Nincs új normatív döntés; a mintát követi (R18: „no new ADR,
+0131+0134 scope", R19: „0132+0133 scope"). ADR-szám ezért NINCS lefoglalva.
+
+**Mért tények (a briefben hivatkozott utak és tulajdonlás):**
+
+1. **Streak/progress tulajdonlás (§1 rule 2).** A streak-írás KIZÁRÓLAG a
+   deterministic result-úton történik, pontosan két hívási helyen:
+   `lib/features/practice/application/practice_session_recording.dart:183`
+   (`streak.recordPracticeToday(finishedAt)`, practice-completion) és
+   `lib/features/analyze/providers/analyze_providers.dart:226`
+   (`ref.read(streakProvider.notifier).recordPracticeToday()`, analyze-completion).
+   **Egyik sem a chat/tutor út.** A `StreakController.recordPracticeToday` az
+   egyetlen streak-mutáló belépő (`lib/features/streak/providers/streak_provider.dart:23`).
+   ⇒ A tutor-belépő adapter/kártya CSAK a már előállított eredményt olvassa;
+   NEM hívhat `recordPracticeToday`-t, NEM triggerelhet practice/analyze
+   újrafuttatást. A „no streak on chat" acceptance így mért őrrel bír.
+2. **Cél-státuszok elérhetők (§1 rule 1).** A `deleted-result`,
+   `version-mismatch`, `deterministic-fallback` és `capability-aware` NEM
+   elérhetetlen átmenettábla-élek, hanem input-előállítható őr-feltételek:
+   null/elavult result-referencia, ill. null `AnalyzeResult.diagnostics`
+   (`lib/features/analyze/model/analyze_result.dart:24`). Tesztben közvetlenül
+   előállíthatók.
+3. **Provenance-őr.** A `ContextProvenance`/`TutorContextField.available`
+   megköveteli a scorer VAGY schema verziót
+   (`lib/features/ai_tutor/application/context/tutor_context_snapshot.dart:78`);
+   a meglévő `PracticeContextAdapter._hasVersion` ezt már betartja. Az ÚJ
+   `*_result_context_adapter.dart` ugyanezt a guardot vigye.
+
+**Elhatárolás a meglévő adapterektől (anti-duplikáció).** A
+`.../context/adapters/` már tartalmaz `practice_context_adapter.dart` és
+`analyze_context_adapter.dart` fájlokat — ezek a LIVE tutor-context mezőit
+projektálják. Az ÚJ `practice_result_context_adapter.dart` /
+`analyze_result_context_adapter.dart` külön cél: a POST-SESSION belépő-kártya
+kattintásakor rögzített immutable context-snapshot-referenciát + előre kitöltött
+kérdést állítja elő. A reviewer ellenőrizze, hogy az új adapter NEM duplikálja a
+meglévő context-adaptert és NEM módosítja a result-UI-t.
+
+### §0.0-R1 revízió (2026-08-06, implementer STOP nyomán — scope NARROWING)
+
+**Mért ütközés.** A brief §4 eredetileg `lib/features/ai_tutor/public.dart`-ot
+„előző körökből additív export" címen engedélyezte. Ez a mért állítás **avult**:
+a `public.dart` ma ÜRES (csak `library;`), és egy **E04-R01-ben befagyasztott**
+őr-teszt tiltja bármely export/import hozzáadását:
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` — *"the empty baseline
+boundary must not pull in another feature's … internals"* (merge: `814388a`,
+ADR 0131–0134). Az implementer helyesen `stopped`-ot jelzett, mert az export a
+listán-kívüli őr-teszt módosítását igényelte volna.
+
+**Döntés (ADR 0087 §2 — az engedélyezett-lista SZŰKÍTÉSE, nem tágítása):**
+`lib/features/ai_tutor/public.dart` **kikerül** az `allowed_paths`-ból. A kör
+teljes leszállítandója (a két `*_result_context_adapter`, a
+`SessionTutorEntryCard` és a tesztjeik) az `ai_tutor` feature-ön BELÜL él, és a
+`gate_tests` (`test/features/ai_tutor/{application,presentation}`) maradéktalanul
+lefedi — az export a public boundaryn NEM előfeltétele sem a kör
+acceptance-ének, sem a gate-nek.
+
+- A `public.dart` **befagyasztva üres marad**; az E04-R01 boundary-tesztet TILOS
+  módosítani (az egy lezárt kör őre — H2 volna).
+- A belépő-kártya **cross-feature bekötése** a Practice/Analyze result-képernyőkbe
+  (ami az ai_tutor public felületét igényelné) **külön, jövőbeli kör** dolga; az a
+  kör kezeli majd a boundary-teszt együtt-változását a saját scope-jában.
+- A `session_tutor_entry_card_test.dart` a kártyát **közvetlen import**tal
+  példányosítja (nem a public barrelen át), így a teszt zöld lehet export nélkül.
 
 ## 1. Cél
 
@@ -78,8 +145,10 @@ source-belső import, unsupported metric claimbe emelése.
 | `.../application/context/adapters/analyze_result_context_adapter.dart` | ÚJ | Analyze→context |
 | `.../presentation/widgets/session_tutor_entry_card.dart` | ÚJ | belépő kártya |
 | `lib/l10n/app_en.arb`, `app_hu.arb` | meglévő | stringek (additív) |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
 | `test/features/ai_tutor/{application,presentation}/*` | ÚJ | adapter + card tesztek |
+
+> **§0.0-R1:** `lib/features/ai_tutor/public.dart` KIKERÜLT az engedélyezett listáról —
+> a boundary-teszt (E04-R01) befagyasztja üresre; a kör export nélkül teljes.
 | `docs/rounds/e04-r20-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, a Practice/Analyze **belső** contractja + result-UI,
@@ -114,7 +183,8 @@ CI = orchestrátor exact-SHA.
 
 1. RED no-streak-on-chat + deterministic-fallback + version-mismatch tesztek.
 2. Practice/Analyze adapterek (public API).
-3. entry-card + ARB.
+3. entry-card + ARB. (NINCS `ai_tutor/public.dart` export — §0.0-R1; a card-teszt
+   közvetlen importtal példányosít.)
 4. `flutter gen-l10n`; gate.
 
 ## 9. Kockázatok
@@ -127,7 +197,29 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Megvalósítva (2026-08-06).**
+
+- A `PracticeResultContextAdapter` és `AnalyzeResultContextAdapter` kizárólag
+  a megfelelő feature `public.dart` szerződését importálja. A result-azonosító,
+  összesített mért adatok és a provenance kerülnek immutable context-fieldbe;
+  scorer- vagy schema-verzió nélkül nincs available field. Az Analyze adapter
+  csak a diagnosztika elérhetőségét viszi át, a diagnosztikai metrikát nem.
+- A `SessionTutorEntryCard` a változatlan `TutorContextSnapshot`-ot és a
+  szerkeszthető kérdést callbacken adja tovább; consent-off esetén kizárólag a
+  deterministic debrief callback elérhető. Törölt result és version mismatch
+  külön kontrollált állapot. A kártya nem importál streak/progress API-t és
+  nem indít Practice/Analyze újrafuttatást.
+- Additív angol és magyar lokalizáció készült. A §0.0-R1 szerint
+  `lib/features/ai_tutor/public.dart` és a fagyott boundary-teszt változatlan.
+
+**Futtatott ellenőrzések.**
+
+- `flutter gen-l10n` — sikeres (a `l10n.yaml` konfigurációját használta).
+- `flutter test test/features/ai_tutor/application/practice_result_context_adapter_test.dart test/features/ai_tutor/application/analyze_result_context_adapter_test.dart test/features/ai_tutor/presentation/session_tutor_entry_card_test.dart` — 11/11 zöld.
+- `tools/round-gate.sh --result-json /tmp/e04-r20-round-gate.json test/features/ai_tutor/application test/features/ai_tutor/presentation` — pass (`exit_code: 0`): format, analyze, application/presentation tesztek, architecture, secrets és l10n zöld.
+
+**Nem futtatott ellenőrzések.** A teljes Flutter suite, property gate és APK
+build nem lokális implementer-gate; ezek az orchestrátor exact-SHA CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
