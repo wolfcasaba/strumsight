@@ -4,14 +4,74 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R03 MERGED — Core camera contract és fake infrastruktúra: platformfüggetlen
-> `CameraCapture` (start/stop/idempotens close), `CameraFrame` explicit ownership
-> (callback-utáni hozzáférés `StateError`, mutáció-próbával igazolva),
-> determinisztikus `FakeCameraCapture` (öt lifecycle- + öt hiba-mátrix cella),
-> additív camera `FailureCode`-ok, 11 vision feature flag default OFF minden
-> környezetben; implementer Terra, orchestrátor/reviewer Claude Sonnet 5; 1
-> javító kör (F1: `hashCode`-regresszió egy scope-on kívüli tesztre); exact-SHA
-> zöld kapun át. **Első production Epic 5 kód** — `lib/core/camera/` létrejön).**
+> (E05-R04 MERGED — Camera permission gateway és platform deklarációk: opcionális,
+> fail-closed `CameraPermissionGateway` a mikrofon-precedenst másolva
+> (ismeretlen/hibás állapot mindig `unavailable`, sosem `granted`), Android
+> `CAMERA` permission `uses-feature android:required="false"`-szal (kamera
+> nélküli eszköz is telepítheti), iOS `NSCameraUsageDescription` on-device
+> feldolgozást és nincs-felvétel állítást tartalmazó szöveggel, additív
+> `FailureCode.permissionCameraDenied`; implementer Terra, orchestrátor/reviewer
+> Claude Sonnet 5; javító kör nélkül, exact-SHA zöld kapun át).**
+>
+> ## ✅ E05-R04 KÉSZ — Camera permission gateway és platform deklarációk (2026-08-06)
+>
+> **E05-R04** MERGED (PR [#166](https://github.com/wolfcasaba/strumsight/pull/166),
+> squash `559366b`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+> orchestrátor/reviewer **Claude Sonnet 5**). Opcionális, fail-closed
+> kamera-permission gateway: `CameraPermissionState` (granted/denied/
+> permanentlyDenied/restricted/**unavailable**), `CameraPermissionGateway` +
+> `PermissionHandlerCameraGateway` — pontosan a meglévő
+> `microphone_permission.dart` szerződését másolva (plugin-hiba vagy bármilyen
+> váratlan hiba → `unavailable`, sosem `granted`; a `permission_handler`
+> típusa a saját `CameraPermissionPluginState` adapter-enum mögött marad).
+> Android `<uses-permission android:name="android.permission.CAMERA">` **és**
+> `<uses-feature android:name="android.hardware.camera" android:required="false">`
+> (kamera nélküli eszközön is telepíthető marad); iOS
+> `NSCameraUsageDescription` — angolul, on-device feldolgozást és
+> nincs-felvétel-készül állítást tartalmazó, felhő/upload/server szót NEM
+> tartalmazó szöveggel. Additív `FailureCode.permissionCameraDenied`
+> (`permission.camera`). A `request()` sehonnan nem hívódik automatikusan
+> (grep-pel igazolva — sem bootstrap, sem route-build nem érinti); a UI a
+> jövőbeli E05-R08 (setup wizard) kör dolga.
+>
+> **Pre-flight §0.0 (mérve `main` @ `8b58f42`, két mérési korrekció):**
+> (1) ADR-hivatkozás `0161/0163` → **`0178/0180`** (elavult — E05-R01 a
+> `0161–0166` blokkot `0178–0183`-ra számozta át; nincs ÚJ ADR, csak
+> dokumentum-pontosítás); (2) `lib/core/platform/platform_providers.dart`
+> **kikerült** az `allowed_paths`-ból — a brief téves állítással azt írta,
+> hogy ez a fájl tartalmazza a platform-gateway providereket, mérve viszont a
+> mikrofon gateway-provider ténylegesen `lib/core/audio/audio_providers.dart`-
+> ban él; a camera provider ehelyett közvetlenül `camera_permission.dart`-ban
+> kapott helyet. Cserébe `lib/core/foundation/app_failure.dart` additív
+> módosításra bekerült (1 új `FailureCode` konstans — a `PermissionFailure`
+> doc-comment kamera-generikusnak dokumentálja magát, de kamera-specifikus
+> denied-kód korábban nem létezett).
+>
+> **Mért, nem valódi scope-audit VIOLATION jelzés.** A `codex-round.sh`
+> munka-elején futtatott `git pull --rebase origin main` közben a párhuzamos
+> `ops/orchestrator-effort-max` PR (#165) mergelt a `main`-be, és a rebase után
+> a wrapper záró `scope_audit` a REBASE ELŐTTI base commit-hoz hasonlított —
+> ez két `tools/` fájlra (`round-pipeline.sh`,
+> `tools/tests/test_round_pipeline_fallback.py`) hamis VIOLATION-t jelzett.
+> Igazolás: `git diff origin/main -- <a két fájl>` üres (byte-azonosak) — a
+> tényleges diff `origin/main`-hez képest pontosan a §0.0 hét fájlja. Nem
+> BLOCKER; a review ezt dokumentálta és a mérési okot rögzítette.
+>
+> **Review** ([docs/reviews/e05-r04-…-review.md](docs/reviews/e05-r04-camera-permission-and-platform-declarations-review.md)):
+> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE — `limited`/
+> `provisional` → `granted` térképezés, bit-azonos a mikrofon-precedenssel,
+> WONTFIX). Dedikált **security-reviewer** (brief `risk = "high"`): **PASS**,
+> ugyanaz az 1 NOTE. Mutáció-kill próba a reviewer által pótolva (a §10
+> implementer-handoff üresen maradt): az `uses-feature` sor ideiglenes
+> törlése → a deklaráció-őr teszt PIROS → visszaállítás.
+>
+> **Zöld kapu (exact-SHA `791e8d6`, a review-commit UTÁNI újra-dispatch):**
+> Build APK [31090056484](https://github.com/wolfcasaba/strumsight/actions/runs/31090056484)
+> **success**; Router CI korábbi SHA-kon (`85820f6`, `fbf53d3`) **success** —
+> a review-commit `docs/reviews/**`-je nem router-ci trigger-útvonal. Post-merge
+> gate (`tools/round-gate.sh test/core/camera test/core/platform`) a friss
+> `main`-en is zöld. **Következő:** a queue következő Epic 5 sora, a pipeline
+> új sessionben indítja.
 >
 > ## ✅ E05-R03 KÉSZ — Core camera contract, fake infrastruktúra és vision feature flagek (2026-08-06)
 >

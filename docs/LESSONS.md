@@ -4914,3 +4914,24 @@ sor törlés volt — a scope-on belüli oldalt kellett a scope-on kívüli,
 változatlanul hagyandó teszthez igazítani, nem fordítva. Rokon: [[L143]]
 (erőforrás-tulajdonlás mérése), [[L51]] (meglévő teszt pirosra váltása
 figyelmeztető jel).
+
+## L146 — Mid-run `git pull --rebase` a `codex-round.sh`-ban stale-base-szé teheti a záró `scope_audit`-ot: hamis VIOLATION, ha KÖZBEN egy PÁRHUZAMOS kör mergel a `main`-be (E05-R04)
+
+Az implementer-wrapper (`codex-round.sh`) a munka elején `git pull --rebase
+origin main`-t futtat (naprakész `main` a diff alatt). Ha a rebase alatt egy
+PÁRHUZAMOS, ettől a körtől független PR mergel a `main`-be (E05-R04 alatt:
+`ops/orchestrator-effort-max`, PR #165, `tools/round-pipeline.sh` +
+`tools/tests/test_round_pipeline_fallback.py` érintéssel), a rebase a kör
+pre-flight commitját az ÚJ `main`-re replay-eli — a commit SHA-ja megváltozik
+(`85820f6` → `9f824b5`), de a záró `scope_audit` a rebase ELŐTTI base
+commit-hoz (a régi SHA-hoz) hasonlított, ezért a mergelt PR ártalmatlan
+`tools/`-változásait is a kör diffjének könyvelte el —
+`status=stopped scope_audit=VIOLATION`, holott a `tools/` tilos zóna
+ténylegesen érintetlen maradt. **Mérés, ami eldönti:**
+`git diff origin/main -- <az állítólag sértő fájl(ok)>` — ha ÜRES (a fájl
+byte-azonos az AKTUÁLIS `origin/main`-nel), a VIOLATION hamis riasztás, nem
+valódi scope-sértés; a valódi bizonyíték `git diff origin/main...HEAD --stat`
+a brief `allowed_paths` ellen, NEM a stale-base wrapper-jelzés. Nem HALT (H3)
+ok — a review ezt a mérési lépést dokumentálja, és a merge a mért, tiszta
+diffre megy. Rokon: [[L143]] (megosztott munkafa, párhuzamos kör), a
+`shared-tree-coordination` auto-memory bejegyzés.
