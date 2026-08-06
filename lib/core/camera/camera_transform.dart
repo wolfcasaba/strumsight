@@ -199,4 +199,22 @@ final class CameraTransform<From extends CameraPoint, To extends CameraPoint> {
     fromPoint: PreviewPoint.new,
     toPoint: PreviewPoint.new,
   );
+
+  /// Maps preview coordinates to the overlay's local logical-pixel space.
+  ///
+  /// The overlay is intentionally co-located with the preview, so its local
+  /// coordinate system is identical. Device-pixel-ratio conversion belongs to
+  /// the presentation host before either local coordinate system is created;
+  /// keeping this identity transform here makes that mapping explicit.
+  static CameraTransform<PreviewPoint, OverlayPoint> previewToOverlay() =>
+      CameraTransform.affine(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: 1,
+        tx: 0,
+        ty: 0,
+        fromPoint: PreviewPoint.new,
+        toPoint: OverlayPoint.new,
+      );
 }

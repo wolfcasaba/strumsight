@@ -52,12 +52,16 @@ void main() {
 
         final roundTrip = transform.inverse().apply(transform.apply(point));
         expect(
-          (roundTrip.x - point.x).abs() / sensorSize.width,
-          lessThanOrEqualTo(cameraTransformRoundTripTolerance),
+          CameraTransform.isRoundTripErrorWithinTolerance(
+            (roundTrip.x - point.x).abs() / sensorSize.width,
+          ),
+          isTrue,
         );
         expect(
-          (roundTrip.y - point.y).abs() / sensorSize.height,
-          lessThanOrEqualTo(cameraTransformRoundTripTolerance),
+          CameraTransform.isRoundTripErrorWithinTolerance(
+            (roundTrip.y - point.y).abs() / sensorSize.height,
+          ),
+          isTrue,
         );
       }
     },

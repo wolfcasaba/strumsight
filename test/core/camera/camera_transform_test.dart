@@ -22,6 +22,15 @@ void main() {
     expect(preview.space, CameraCoordinateSpace.preview);
   });
 
+  test('the overlay uses the preview local coordinate system explicitly', () {
+    final overlay = CameraTransform.previewToOverlay().apply(
+      const PreviewPoint(2, 6),
+    );
+
+    expect(overlay, const OverlayPoint(2, 6));
+    expect(overlay.space, CameraCoordinateSpace.overlay);
+  });
+
   test('manual 16-cell rotation, mirror, and fit fixture matrix', () {
     // These expected values are independently calculated in the round brief
     // with the recorded python3 command, rather than via CameraTransform.

@@ -186,13 +186,21 @@ lazítása helyett dokumentált brief-revízió.
 - `camera_transform.dart`: generikus, affine `CameraTransform<From, To>`
   `apply`/`compose`/`inverse` műveletekkel; a transzformációk forrás- és
   céltér-típusa fordítási időben kódolt. A round-trip limit a fájl tetején
-  változatlanul `1e-6`.
+  változatlanul `1e-6`. A review F1 döntése: `overlay ≡ preview`, mert az
+  overlay a preview-val azonos helyi, logikai pixel-térben rajzolódik; a
+  device-pixel-ratio átszámítás a presentation host felelőssége, még e két
+  helyi tér létrehozása előtt. Ezt az explicit
+  `CameraTransform<PreviewPoint, OverlayPoint>` identitás-transzform rögzíti,
+  nem egy későbbi widget gyorskorrekciója.
 - `preview_fit.dart`: safe-area offsetet hordozó aspect-fit/fill layout,
   letterbox/content/crop téglalapok, valamint preview-oldali front-mirror.
   A modell bemenete kizárólag az eredeti, nem tükrözött normalized tér.
 - Tesztek: 16-cellás független fixture, letterbox/crop/boundary mátrix, és
   `PROPERTY_SEED`-es randomizált round-trip/mirror/rotation/visible-range
-  propertyk.
+  propertyk. A review F1 javítása a `PreviewPoint → OverlayPoint` transzformon
+  keresztül előállított overlay pontot méri; az F2 javítása a property
+  round-trip hibát a `isRoundTripErrorWithinTolerance` közös segédfüggvényen
+  keresztül ellenőrzi.
 
 ### Független numerikus fixture-levezetés
 
