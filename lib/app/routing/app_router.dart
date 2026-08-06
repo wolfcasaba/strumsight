@@ -37,6 +37,7 @@ import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_profile_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
+import '../../features/vision/public.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
 import 'app_route.dart';
@@ -65,6 +66,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       .flags
       .songTrainerV2Enabled;
   final aiTutorEnabled = ref.read(appConfigProvider).flags.aiTutorEnabled;
+  final visionEnabled = ref.read(appConfigProvider).flags.visionEnabled;
+  final visionSetupEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .visionSetupEnabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -217,6 +223,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.tutorData,
           builder: (_, _) => const TutorDataScreen(),
+        ),
+      ],
+      if (visionEnabled && visionSetupEnabled) ...[
+        GoRoute(
+          path: AppRoutes.visionSetup,
+          builder: (_, _) => const VisionSetupScreen(),
         ),
       ],
     ],
