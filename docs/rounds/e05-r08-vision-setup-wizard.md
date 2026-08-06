@@ -298,7 +298,37 @@ skip-út sérül — dokumentált brief-revízió, nem mércegyengítés.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementálva 2026-08-06 (Codex/Terra).**
+
+- Új Vision setup domain/controller/provider/screen/widget réteg: négy kanonikus
+  profil, felülírható handedness-ajánlás, front/back preferencia, explicit
+  permission-kérés, skip → audio-only út, privacy szöveg és lifecycle-guard.
+  A kamera-váltás a meglévő coordinatoron close→open lease-sorrendet tart;
+  fizikai lencseválasztást nem próbál meg a core contracton kívül bevezetni.
+- `StorageKeys` két additív kulccsal bővült (`ss.vision.setup_profile`,
+  `ss.vision.camera`), a route pedig `visionEnabled && visionSetupEnabled`
+  inline guard mögött regisztrálódik. Az en/hu ARB kulcsok additívak.
+- Tesztek: permission-mátrix mind az öt állapotra, profil-guide mátrix,
+  minden wizard-lépésről Skip, perzisztencia-szűkítés, explicit permission,
+  lease restart és flag-gated route. A TDD RED futás a hiányzó Vision API miatt
+  várt compile hibával bukott, az implementáció utáni célzott futás zöld.
+
+**Futtatott ellenőrzések (tény):**
+
+```text
+flutter gen-l10n                                      → exit 0
+flutter test test/features/vision                     → 13 passed
+tools/round-gate.sh test/features/vision \
+  test/core/l10n_parity_test.dart                     → exit 0
+  format                                               → zöld
+  analyze                                              → zöld, 0 issue
+  test/features/vision                                → 13 passed
+  test/core/l10n_parity_test.dart                     → 3 passed
+  architecture                                         → zöld
+```
+
+**Nem futtatott:** teljes Flutter suite, property gate, CI-dispatch és APK build
+— az orchestrátor kör-feladata; a brief `native_gate = false`.
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -50,6 +50,10 @@ abstract final class StorageKeys {
   /// round; the two sources will be unified in E02-R19.
   static const String practiceHistoryV2 = 'ss.practice.history_v2';
 
+  // --- vision --------------------------------------------------------------
+  static const String visionSetupProfile = 'ss.vision.setup_profile';
+  static const String visionCamera = 'ss.vision.camera';
+
   // --- AI tutor ------------------------------------------------------------
   /// Versioned documents, recovery index, and inspectable memory facts.
   static const String tutorConversationDocuments =
@@ -106,6 +110,8 @@ abstract final class StorageKeys {
     dailyGoalMinutes,
     streak,
     practiceHistoryV2,
+    visionSetupProfile,
+    visionCamera,
     tutorConversationDocuments,
     tutorConversationIndex,
     tutorMemoryFacts,
