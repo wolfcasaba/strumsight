@@ -1,0 +1,308 @@
+/// Tutor Data screen (E04-R22 §3).
+///
+/// User-facing surface for:
+///
+/// * Memory-fact list (`tutorMemoryFactsProvider`) — read/edit/delete
+///   through the repository's `update()` / `delete()`. Editing a fact
+///   invokes the repository's sensitivity filter (R17); a rejected edit
+///   surfaces the localized "sensitive" error.
+/// * Conversation list (`tutorConversationsProvider`) — one row per
+///   conversation with a per-row delete button.
+/// * Redacted export — calls `TutorMemoryRepository.exportRedacted()`,
+///   which the repo guarantees substitutes `'[redacted]'` for every
+///   fact `content` (§6 acceptance).
+/// * Delete-all — the destructive primary action shows the EXACT scope
+///   list inline and, on tap, opens a one-shot confirmation dialog
+///   whose final button calls `deleteAllAiData()`. The dialog also
+///   repeats the scope list so the user cannot miss it.
+///
+/// All write paths funnel through the `tutorMemoryRepositoryProvider`
+/// / `tutorConversationRepositoryProvider` seams so the widgets are
+/// fake-repository testable (R17 + R18 test pattern).
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/foundation/app_result.dart';
+import '../../../../core/storage/storage_keys.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../domain/models/tutor_conversation.dart';
+import '../../domain/models/tutor_memory_fact.dart';
+import '../../domain/repositories/tutor_conversation_repository.dart';
+import '../../domain/repositories/tutor_memory_repository.dart';
+import '../providers/tutor_privacy_providers.dart';
+import '../providers/tutor_providers.dart';
+
+class TutorDataScreen extends ConsumerWidget {
+  const TutorDataScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final memoryFacts = ref.watch(tutorMemoryFactsProvider);
+    final conversations = ref.watch(tutorConversationsProvider);
+    final memoryRepo = ref.read(tutorMemoryRepositoryProvider);
+    final conversationRepo = ref.read(tutorConversationRepositoryProvider);
+
+    Future<void> handleExportRedacted() async {
+      final result = await memoryRepo.exportRedacted();
+      if (!context.mounted) return;
+      switch (result) {
+        case Success<String>(:final value):
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: Text(l10n.tutorDataExportRedactedTitle),
+                content: SingleChildScrollView(child: Text(value)),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Text(l10n.commonClose),
+                  ),
+                ],
+              );
+            },
+          );
+        case Failure<String>():
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.tutorDataExportFailed)));
+      }
+    }
+
+    Future<void> confirmAndDeleteAll() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(l10n.tutorDataDeleteAllTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(l10n.tutorDataDeleteAllBody),
+                  const SizedBox(height: 12),
+                  Text(l10n.tutorDataDeleteAllScopePreserved),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(l10n.tutorDataDeleteAllCancel),
+              ),
+              FilledButton(
+                key: const Key('tutorDataDeleteAllConfirm'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(l10n.tutorDataDeleteAllConfirm),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+      final result = await memoryRepo.deleteAllAiData();
+      if (!context.mounted) return;
+      if (result.isSuccess) {
+        ref.invalidate(tutorMemoryFactsProvider);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.tutorDataDeleteAllDone)));
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.tutorDataDeleteAllFailed)));
+      }
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.tutorDataTitle)),
+      body: SafeArea(
+        child: Semantics(
+          container: true,
+          label: l10n.tutorDataScreenSemantics,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  l10n.tutorDataIntro,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  key: const Key('tutorDataExportRedacted'),
+                  onPressed: handleExportRedacted,
+                  icon: const Icon(Icons.download_outlined),
+                  label: Text(l10n.tutorDataExportRedactedAction),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  l10n.tutorDataMemoryTitle,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                memoryFacts.when(
+                  data: (facts) {
+                    if (facts.isEmpty) {
+                      return Text(l10n.tutorDataMemoryEmpty);
+                    }
+                    return Column(
+                      children: <Widget>[
+                        for (final fact in facts)
+                          _MemoryFactRow(fact: fact, repo: memoryRepo),
+                      ],
+                    );
+                  },
+                  loading: () => const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (_, _) => Text(l10n.tutorDataMemoryLoadFailed),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  l10n.tutorDataConversationsTitle,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                conversations.when(
+                  data: (page) {
+                    if (page.items.isEmpty) {
+                      return Text(l10n.tutorDataConversationsEmpty);
+                    }
+                    return Column(
+                      children: <Widget>[
+                        for (final item in page.items)
+                          _ConversationRow(
+                            conversation: item,
+                            repo: conversationRepo,
+                          ),
+                      ],
+                    );
+                  },
+                  loading: () => const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (_, _) => Text(l10n.tutorDataConversationsLoadFailed),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  l10n.tutorDataDeleteAllScopeTitle,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                for (final key in StorageKeys.tutorAiData)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Text('•'),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(key)),
+                      ],
+                    ),
+                  ),
+                for (final key in StorageKeys.tutorAiData)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Text('•'),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            StorageKeys.quarantineOf(key),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Text(l10n.tutorDataDeleteAllScopePreserved),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const Key('tutorDataDeleteAllTrigger'),
+                  onPressed: confirmAndDeleteAll,
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: Text(l10n.tutorDataDeleteAllAction),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemoryFactRow extends ConsumerWidget {
+  const _MemoryFactRow({required this.fact, required this.repo});
+
+  final TutorMemoryFact fact;
+  final TutorMemoryRepository repo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(fact.content),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(
+                  key: Key('tutorDataMemoryDelete:${fact.id}'),
+                  onPressed: () async {
+                    await repo.delete(fact.id);
+                    ref.invalidate(tutorMemoryFactsProvider);
+                  },
+                  child: Text(l10n.tutorDataMemoryDelete),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationRow extends ConsumerWidget {
+  const _ConversationRow({required this.conversation, required this.repo});
+
+  final TutorConversation conversation;
+  final TutorConversationRepository repo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: ListTile(
+        title: Text(conversation.id.value),
+        trailing: TextButton(
+          key: Key('tutorDataConversationDelete:${conversation.id.value}'),
+          onPressed: () async {
+            await repo.delete(conversation.id);
+            ref.invalidate(tutorConversationsProvider);
+          },
+          child: Text(l10n.tutorDataConversationDelete),
+        ),
+      ),
+    );
+  }
+}

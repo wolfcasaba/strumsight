@@ -30,6 +30,9 @@ abstract final class AppRoutes {
   static const String songTrainerResult = '/song-trainer/result/:songId';
   static const String tutorHome = '/tutor/home';
   static const String tutorChat = '/tutor/chat';
+  static const String tutorProfile = '/tutor/profile';
+  static const String tutorPrivacy = '/tutor/privacy';
+  static const String tutorData = '/tutor/data';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
