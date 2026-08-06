@@ -31,6 +31,7 @@ FAKE_CLAUDE = """#!/usr/bin/env bash
   printf 'ARGS=%s\\n' "$*"
   printf 'PROMPT=%s\\n' "$(printf '%s' "$2" | head -c 4000)"
 } >> "$FAKE_CLAUDE_OUT"
+[ "${FAKE_NO_WORK:-0}" = "1" ] || printf 'munka\\n' >> "$FAKE_WORKFILE"
 printf 'status=done\\nsummary=kesz\\n' > "$FAKE_SIGNAL"
 exit 0
 """
@@ -86,6 +87,7 @@ class WrapperModeTest(unittest.TestCase):
                 "CLAUDE_BIN": str(fake),
                 "FAKE_CLAUDE_OUT": str(out),
                 "FAKE_SIGNAL": str(workdir / ".codex-round-status"),
+                "FAKE_WORKFILE": str(workdir / "munka.txt"),
                 "MM_POLL_SECONDS": "1",
             }
         )
@@ -100,6 +102,7 @@ class WrapperModeTest(unittest.TestCase):
             env=environment,
             cwd=str(ROOT),
         )
+        self.signal_text = (workdir / ".codex-round-status").read_text(encoding="utf-8")
         return out.read_text(encoding="utf-8")
 
     def test_a_native_claude_model_runs_without_an_endpoint_override(self) -> None:
@@ -148,13 +151,32 @@ class WrapperModeTest(unittest.TestCase):
         self.assertIn("COMPACT=<nincs>", captured, "natív modellnél a hamis 1M ablak ártana")
 
     def test_minimax_keeps_the_compact_window_override(self) -> None:
+        """Az M3 sajátja: a hamis 1M-es ablak KELL (az endpoint nem adja meg a
+        valódit). A `TodoWrite` viszont 2026-08-06 óta MINDKÉT sávon ott van —
+        a befejezetlen fa a lánc legdrágább hibaosztálya."""
         captured = self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
         self.assertIn("COMPACT=1000000", captured)
-        self.assertNotIn("TodoWrite", captured)
 
     def test_the_engine_specific_preamble_is_appended_for_sonnet(self) -> None:
         captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
         self.assertIn("Motor-specifikus kiegészítés", captured)
+
+    def test_minimax_gets_the_todo_tool_for_completion_discipline(self) -> None:
+        """A félkész fa a lánc legdrágább hibaosztálya — a listavezetés ellenszer."""
+        captured = self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
+        self.assertIn("TodoWrite", captured)
+
+    def test_the_minimax_specific_preamble_is_appended(self) -> None:
+        captured = self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
+        self.assertIn("Motor-specifikus kiegészítés — MiniMax M3", captured)
+
+    def test_a_done_signal_without_work_is_downgraded_here_too(self) -> None:
+        self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "k", "FAKE_NO_WORK": "1"})
+        self.assertIn("status=unknown", self.signal_text)
+
+    def test_a_done_signal_with_work_survives(self) -> None:
+        self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
+        self.assertIn("status=done", self.signal_text)
 
     def test_a_codex_harness_engine_is_rejected_by_this_wrapper(self) -> None:
         result = subprocess.run(
