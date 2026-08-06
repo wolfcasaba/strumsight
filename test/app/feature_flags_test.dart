@@ -12,6 +12,20 @@ bool _aiTutorCloudEnabled(Object flags) {
   return dynamicFlags.aiTutorCloudEnabled as bool;
 }
 
+List<bool> _visionFlags(FeatureFlags flags) => <bool>[
+  flags.visionEnabled,
+  flags.visionSetupEnabled,
+  flags.visionHandTrackingEnabled,
+  flags.visionPoseTrackingEnabled,
+  flags.visionGuitarGeometryEnabled,
+  flags.visionPracticeIntegrationEnabled,
+  flags.visionSongIntegrationEnabled,
+  flags.visionTutorIntegrationEnabled,
+  flags.visionAnalysisIntegrationEnabled,
+  flags.visionExperimentalFineFretEnabled,
+  flags.visionLabCaptureEnabled,
+];
+
 FeatureFlags _withAiTutorFlags({
   required bool aiTutorEnabled,
   required bool aiTutorCloudEnabled,
@@ -103,6 +117,56 @@ void main() {
       expect(cloudEnabled.usesNetwork, isFalse);
       expect(tutorEnabled.toString(), contains('aiTutorEnabled: true'));
       expect(cloudEnabled.toString(), contains('aiTutorCloudEnabled: true'));
+    });
+  });
+
+  group('Computer Vision feature flags', () {
+    test('all eleven flags default to off in every environment', () {
+      const constructorDefaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(_visionFlags(constructorDefaults), everyElement(isFalse));
+
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        expect(
+          _visionFlags(flags),
+          everyElement(isFalse),
+          reason: '$environment must not implicitly enable Computer Vision.',
+        );
+      }
+    });
+
+    test('vision flags are offline and participate in value semantics', () {
+      const defaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      const enabled = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        visionEnabled: true,
+      );
+      const enabledCopy = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        visionEnabled: true,
+      );
+
+      expect(enabled, isNot(defaults));
+      expect(enabledCopy, enabled);
+      expect(enabledCopy.hashCode, enabled.hashCode);
+      expect(enabled.usesNetwork, isFalse);
+      expect(enabled.toString(), contains('visionEnabled: true'));
     });
   });
 }

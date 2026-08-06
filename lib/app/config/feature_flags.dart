@@ -18,6 +18,17 @@ final class FeatureFlags {
     this.songTrainerV2Enabled = false,
     this.aiTutorEnabled = false,
     this.aiTutorCloudEnabled = false,
+    this.visionEnabled = false,
+    this.visionSetupEnabled = false,
+    this.visionHandTrackingEnabled = false,
+    this.visionPoseTrackingEnabled = false,
+    this.visionGuitarGeometryEnabled = false,
+    this.visionPracticeIntegrationEnabled = false,
+    this.visionSongIntegrationEnabled = false,
+    this.visionTutorIntegrationEnabled = false,
+    this.visionAnalysisIntegrationEnabled = false,
+    this.visionExperimentalFineFretEnabled = false,
+    this.visionLabCaptureEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -52,6 +63,17 @@ final class FeatureFlags {
       songTrainerV2Enabled: false,
       aiTutorEnabled: false,
       aiTutorCloudEnabled: false,
+      visionEnabled: false,
+      visionSetupEnabled: false,
+      visionHandTrackingEnabled: false,
+      visionPoseTrackingEnabled: false,
+      visionGuitarGeometryEnabled: false,
+      visionPracticeIntegrationEnabled: false,
+      visionSongIntegrationEnabled: false,
+      visionTutorIntegrationEnabled: false,
+      visionAnalysisIntegrationEnabled: false,
+      visionExperimentalFineFretEnabled: false,
+      visionLabCaptureEnabled: false,
     );
   }
 
@@ -88,6 +110,39 @@ final class FeatureFlags {
   /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
   final bool aiTutorCloudEnabled;
 
+  /// Whether the offline-first Computer Vision capability is available.
+  final bool visionEnabled;
+
+  /// Whether the vision setup flow is available.
+  final bool visionSetupEnabled;
+
+  /// Whether hand tracking may run locally.
+  final bool visionHandTrackingEnabled;
+
+  /// Whether pose tracking may run locally.
+  final bool visionPoseTrackingEnabled;
+
+  /// Whether guitar geometry may be derived locally.
+  final bool visionGuitarGeometryEnabled;
+
+  /// Whether vision evidence may augment Practice.
+  final bool visionPracticeIntegrationEnabled;
+
+  /// Whether vision evidence may augment Song Trainer.
+  final bool visionSongIntegrationEnabled;
+
+  /// Whether vision evidence may be shown to AI Tutor locally.
+  final bool visionTutorIntegrationEnabled;
+
+  /// Whether vision evidence may augment Analyze.
+  final bool visionAnalysisIntegrationEnabled;
+
+  /// Whether the experimental fine-fret capability is available.
+  final bool visionExperimentalFineFretEnabled;
+
+  /// Whether Lab-only camera capture diagnostics are available.
+  final bool visionLabCaptureEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -102,7 +157,21 @@ final class FeatureFlags {
       other.practiceDetailedHistoryEnabled == practiceDetailedHistoryEnabled &&
       other.songTrainerV2Enabled == songTrainerV2Enabled &&
       other.aiTutorEnabled == aiTutorEnabled &&
-      other.aiTutorCloudEnabled == aiTutorCloudEnabled;
+      other.aiTutorCloudEnabled == aiTutorCloudEnabled &&
+      other.visionEnabled == visionEnabled &&
+      other.visionSetupEnabled == visionSetupEnabled &&
+      other.visionHandTrackingEnabled == visionHandTrackingEnabled &&
+      other.visionPoseTrackingEnabled == visionPoseTrackingEnabled &&
+      other.visionGuitarGeometryEnabled == visionGuitarGeometryEnabled &&
+      other.visionPracticeIntegrationEnabled ==
+          visionPracticeIntegrationEnabled &&
+      other.visionSongIntegrationEnabled == visionSongIntegrationEnabled &&
+      other.visionTutorIntegrationEnabled == visionTutorIntegrationEnabled &&
+      other.visionAnalysisIntegrationEnabled ==
+          visionAnalysisIntegrationEnabled &&
+      other.visionExperimentalFineFretEnabled ==
+          visionExperimentalFineFretEnabled &&
+      other.visionLabCaptureEnabled == visionLabCaptureEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -124,5 +193,17 @@ final class FeatureFlags {
       'practiceDetailedHistoryEnabled: $practiceDetailedHistoryEnabled, '
       'songTrainerV2Enabled: $songTrainerV2Enabled, '
       'aiTutorEnabled: $aiTutorEnabled, '
-      'aiTutorCloudEnabled: $aiTutorCloudEnabled)';
+      'aiTutorCloudEnabled: $aiTutorCloudEnabled, '
+      'visionEnabled: $visionEnabled, '
+      'visionSetupEnabled: $visionSetupEnabled, '
+      'visionHandTrackingEnabled: $visionHandTrackingEnabled, '
+      'visionPoseTrackingEnabled: $visionPoseTrackingEnabled, '
+      'visionGuitarGeometryEnabled: $visionGuitarGeometryEnabled, '
+      'visionPracticeIntegrationEnabled: $visionPracticeIntegrationEnabled, '
+      'visionSongIntegrationEnabled: $visionSongIntegrationEnabled, '
+      'visionTutorIntegrationEnabled: $visionTutorIntegrationEnabled, '
+      'visionAnalysisIntegrationEnabled: $visionAnalysisIntegrationEnabled, '
+      'visionExperimentalFineFretEnabled: '
+      '$visionExperimentalFineFretEnabled, '
+      'visionLabCaptureEnabled: $visionLabCaptureEnabled)';
 }
