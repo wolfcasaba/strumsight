@@ -76,3 +76,8 @@ __pycache__/
 # Emberi engedély a mérce-őrhöz (ADR 0138). SOHA nem kerülhet a repóba: ha
 # commitolnánk, minden klón és minden autonóm session örökölné a feloldást.
 .claude/gate-edit-authorized
+# Ágens-lokális memória (a security-reviewer és társai ide írnak): GÉP-állapot,
+# nem repó-tartalom. MÉRVE 2026-08-06: untracked fájlként megállította az
+# autonóm láncot ("piszkos munkafa — a lánc nem indul ismeretlen lokális
+# változás fölé"), 14:54-től minden firing kiesett.
+.claude/agent-memory/
