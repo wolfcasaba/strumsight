@@ -1,6 +1,6 @@
 # E05-R07 — Frame transform és overlay koordinátarendszer
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`; pre-flight 2026-08-06, mérve: main @ `b6408f0`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 7; §18
 - **Branch:** `codex/e05-r07-frame-transform-and-overlay-coordinates`
 - **Előfeltétel:** **E05-R03, E05-R06 merge**
@@ -42,6 +42,25 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PREPARED.** Nincs előre kiosztott ADR.
+
+**Pre-flight mért megerősítés (2026-08-06, `main` @ `b6408f0`, nem revízió):**
+mindkét előfeltétel (E05-R03, E05-R06) merge-elve, `origin/main` == lokális
+HEAD == `b6408f0`, a brief `5d082dc` baseline-ja ennek ősje (nincs köztes
+kód-diff a camera modulban a batch-írás óta a két függő kör diffjén kívül).
+Nincs új ADR (megerősítve). `lib/core/camera/camera_frame.dart` ténylegesen
+kimérve: a §2 „rotationt hordozza" leírás a típusos `orientation`
+(`CameraOrientation`: `portraitUp`/`landscapeRight`/`portraitDown`/
+`landscapeLeft`) mezőre utal — nincs szó szerinti `rotation` mező. Ez NEM
+scope-ütközés: az `allowed_paths` egyike sem módosítja/importálja a
+`camera_frame.dart`-ot, a §5 architekturális döntései (rotation
+{0,90,180,270} mint a transzformáció saját, `CameraFrame`-től független
+paramétere) és a §6 fixture-mátrix nem függ a szó szerinti mezőnévtől — a
+`CameraOrientation` → e réteg rotation-paraméter leképezés egy KÉSŐBBI kör
+(kézszerep/overlay bekötés) dolga. `test/property/dsp_property_test.dart`
+PROPERTY_SEED mintája (env → `int.tryParse ?? 42`, `math.Random(seed)`,
+`print('PROPERTY_SEED=$seed')`) a HORIZON konvenció szerint reprodukálva.
+Erőforrás-tulajdonlási ellenőrzés (`\.acquire(` grep) **N/A** — ez a kör
+nem allokál lease/lock/handle/subscription-t, pure math réteg.
 
 ## 1. Cél
 
@@ -159,7 +178,124 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `camera_coordinate_space.dart`: a sensor, buffer, upright, normalized,
+  preview és overlay terekhez külön, immutable ponttípusok, továbbá típusos
+  sensor/normalized/preview téglalapok és méretek.
+- `camera_transform.dart`: generikus, affine `CameraTransform<From, To>`
+  `apply`/`compose`/`inverse` műveletekkel; a transzformációk forrás- és
+  céltér-típusa fordítási időben kódolt. A round-trip limit a fájl tetején
+  változatlanul `1e-6`. A review F1 döntése: `overlay ≡ preview`, mert az
+  overlay a preview-val azonos helyi, logikai pixel-térben rajzolódik; a
+  device-pixel-ratio átszámítás a presentation host felelőssége, még e két
+  helyi tér létrehozása előtt. Ezt az explicit
+  `CameraTransform<PreviewPoint, OverlayPoint>` identitás-transzform rögzíti,
+  nem egy későbbi widget gyorskorrekciója.
+- `preview_fit.dart`: safe-area offsetet hordozó aspect-fit/fill layout,
+  letterbox/content/crop téglalapok, valamint preview-oldali front-mirror.
+  A modell bemenete kizárólag az eredeti, nem tükrözött normalized tér.
+- Tesztek: 16-cellás független fixture, letterbox/crop/boundary mátrix, és
+  `PROPERTY_SEED`-es randomizált round-trip/mirror/rotation/visible-range
+  propertyk. A review F1 javítása a `PreviewPoint → OverlayPoint` transzformon
+  keresztül előállított overlay pontot méri; az F2 javítása a property
+  round-trip hibát a `isRoundTripErrorWithinTolerance` közös segédfüggvényen
+  keresztül ellenőrzi.
+
+### Független numerikus fixture-levezetés
+
+A RED teszt megírása előtt futtatott parancs (a képlet a 4×3 sensorból az
+8×8 viewportba, rotation után fit/fill skálázás és végül opcionális
+preview-mirror):
+
+```bash
+python3 -c "from itertools import product
+W,H,V=4.0,3.0,8.0
+pts=[('corner',(0.0,0.0)),('center',(0.5,0.5)),('asym',(0.25,0.75))]
+for rot,mir,mode in product((0,90,180,270),(False,True),('fit','fill')):
+    uw,uh=(W,H) if rot in (0,180) else (H,W)
+    scale=min(V/uw,V/uh) if mode=='fit' else max(V/uw,V/uh)
+    cw,ch=uw*scale,uh*scale
+    left,top=(V-cw)/2,(V-ch)/2
+    out=[]
+    for name,(x,y) in pts:
+        if rot==0: u,v=x,y
+        elif rot==90: u,v=1-y,x
+        elif rot==180: u,v=1-x,1-y
+        else: u,v=y,1-x
+        px,py=left+u*cw,top+v*ch
+        if mir: px=left+cw-(px-left)
+        out.append(f'{name}=({px:.6f},{py:.6f})')
+    print(f'r{rot} mirror={str(mir).lower()} {mode}: ' + ', '.join(out))"
+```
+
+Kimenet (a tesztben kézzel rögzített elvárt értékek):
+
+```text
+r0 mirror=false fit: corner=(0.000000,1.000000), center=(4.000000,4.000000), asym=(2.000000,5.500000)
+r0 mirror=false fill: corner=(-1.333333,0.000000), center=(4.000000,4.000000), asym=(1.333333,6.000000)
+r0 mirror=true fit: corner=(8.000000,1.000000), center=(4.000000,4.000000), asym=(6.000000,5.500000)
+r0 mirror=true fill: corner=(9.333333,0.000000), center=(4.000000,4.000000), asym=(6.666667,6.000000)
+r90 mirror=false fit: corner=(7.000000,0.000000), center=(4.000000,4.000000), asym=(2.500000,2.000000)
+r90 mirror=false fill: corner=(8.000000,-1.333333), center=(4.000000,4.000000), asym=(2.000000,1.333333)
+r90 mirror=true fit: corner=(1.000000,0.000000), center=(4.000000,4.000000), asym=(5.500000,2.000000)
+r90 mirror=true fill: corner=(0.000000,-1.333333), center=(4.000000,4.000000), asym=(6.000000,1.333333)
+r180 mirror=false fit: corner=(8.000000,7.000000), center=(4.000000,4.000000), asym=(6.000000,2.500000)
+r180 mirror=false fill: corner=(9.333333,8.000000), center=(4.000000,4.000000), asym=(6.666667,2.000000)
+r180 mirror=true fit: corner=(0.000000,7.000000), center=(4.000000,4.000000), asym=(2.000000,2.500000)
+r180 mirror=true fill: corner=(-1.333333,8.000000), center=(4.000000,4.000000), asym=(1.333333,2.000000)
+r270 mirror=false fit: corner=(1.000000,8.000000), center=(4.000000,4.000000), asym=(5.500000,6.000000)
+r270 mirror=false fill: corner=(0.000000,9.333333), center=(4.000000,4.000000), asym=(6.000000,6.666667)
+r270 mirror=true fit: corner=(7.000000,8.000000), center=(4.000000,4.000000), asym=(2.500000,6.000000)
+r270 mirror=true fill: corner=(8.000000,9.333333), center=(4.000000,4.000000), asym=(2.000000,6.666667)
+```
+
+A tolerancia-küszöb három cellájának független mérése:
+
+```bash
+python3 -c "import math; tolerance=1e-6; print(f'below={math.nextafter(tolerance, -math.inf):.18g}'); print(f'at={tolerance:.18g}'); print(f'above={math.nextafter(tolerance, math.inf):.18g}')"
+```
+
+```text
+below=9.99999999999999743e-07
+at=9.99999999999999955e-07
+above=1.00000000000000017e-06
+```
+
+`below` és `at` zöld, az `above` a testelt inkluzív küszöbnél piros.
+
+### Valódi-sértés próba
+
+A `PreviewFit.toModelInput()` ideiglenesen a `a: -1, tx: 1` normalized
+mirrorra változott. Ekkor a
+`front preview mirroring cannot alter the model input space` teszt PIROS lett
+(a várt `NormalizedPoint(0.25, 0.75)` helyett tükrözött érték érkezett).
+A helyes `a: 1, tx: 0` modell-input transzformáció visszaállt; a front mirror
+csak `PreviewPoint → PreviewPoint` műveletként maradt meg.
+
+### Futott ellenőrzések
+
+- RED: `flutter test test/core/camera/camera_transform_test.dart` — a három
+  új contract import hiánya miatt várt fordítási hiba.
+- `flutter test test/core/camera/camera_transform_test.dart` — zöld (4 teszt).
+- `flutter test test/core/camera/preview_fit_test.dart` — zöld (6 teszt);
+  a szándékos normalized-mirror mutáció alatt várt piros (1 teszt).
+- `flutter test test/property/camera_transform_property_test.dart` — zöld
+  (`PROPERTY_SEED=42`, 4 property).
+- `dart format` a hat Dart fájlon — zöld.
+- `flutter analyze` kizárólag a hat kör-fájlon — zöld, „No issues found”.
+- `tools/round-gate.sh test/core/camera test/property/camera_transform_property_test.dart`
+  — **blokkolt az analyze lépésben**: format zöld, majd 882, a körön kívüli
+  hiányzó `lib/l10n/app_localizations.dart` importból eredő hiba; ezért a gate
+  test és architecture lépése nem indulhatott el.
+
+### Nem futtatott ellenőrzések
+
+- Valós eszközös/natív kamera és overlay widget golden: nincs ebben a pure
+  Dart körben; az R24 widget overlay, illetve a device-mátrix feladata.
+- A teljes kör-gate zöld lezárása: a scope-on kívüli lokalizáció-generált
+  artefaktum hiánya blokkolja; a fenti célzott analyze és tesztek viszont
+  ténylegesen lefutottak.
 
 ## 11. Review — a független reviewer tölti ki
 
