@@ -127,6 +127,28 @@ dokumentálja, és a következő kör tervét ez alapján frissíti.
 | Fine fret tracking → exact fret position confidence ≥ 0.8 | Landmark confidence, FPS | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Flag OFF → experimental metric nem készül, a production metric változatlan | Metric lista | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 
+### 2.8 Camera-stack decision spike (E05-R02 runbook)
+
+> A sorok a [vision camera spike runbook](vision-camera-spike-runbook.md)
+> `M01`–`M12` méréseinek PENDING rekordjai. A runbook konkrét parancsot,
+> mintaszámot és numerikus PASS-küszöböt ad; ez a mátrix kizárólag a valós
+> eszközön kapott érték helye.
+
+| Teszteset | Mérendő | Eszköz | Android | Kamera | Státusz | Felelős | Mért érték / Megjegyzés |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M01 — 20× preview indítás | p50/p95 first-frame init, sikeres startok | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M02 — 5 perces frame stream | 30 mp ablakonként delivered/processed FPS | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M03 — image format | format, plane count, felbontás | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M04 — rotation metadata | rotation fok, timestamp-folytonosság | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M05 — latest-frame/copy audit | copy/frame, retained queue depth | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M06 — 20× preview stop és resource release | close ms, open client count, post-close RSS | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M07 — front camera mirror | preview/analysis handedness mismatch count | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M08 — portrait/landscape | recovery ms, processed FPS | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M09 — background/foreground | background close ms, explicit restart ms | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M10 — timestamp monotonicity | 1000 timestamp pair, drop-sequence egyezés | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M11 — support/licence record | Android/API, APK/dependency/licence verzió | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| M12 — dependency conflict | resolved win32 major, Gradle resolution | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+
 ---
 
 ## 3. Eszközlista — tervezett
