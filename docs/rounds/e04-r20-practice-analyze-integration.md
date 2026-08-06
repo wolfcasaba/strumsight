@@ -1,6 +1,6 @@
 # E04-R20 — Practice és Analyze post-session integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-06, kód mérve: main @ `58a0ca3`)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 20; §35
 - **Branch:** `codex/e04-r20-practice-analyze-integration`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R08, R16, R18 merge**
@@ -46,7 +46,48 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**Pre-flight mérve 2026-08-06, baseline: `main` @ `58a0ca3` (== `origin/main`).**
+Előfeltételek merge-elve: E04-R08 (`ddd7674`), R16 (`df25806`), R18 (`104e685`).
+Brief-lint (strict): nincs lelet.
+
+**ADR-döntés: nincs ÚJ ADR.** A kör kizárólag már merge-elt döntéseken belül
+mozog — ADR 0132 (deterministic-result-primary + immutable context-snapshot) és
+az R08 debrief. Nincs új normatív döntés; a mintát követi (R18: „no new ADR,
+0131+0134 scope", R19: „0132+0133 scope"). ADR-szám ezért NINCS lefoglalva.
+
+**Mért tények (a briefben hivatkozott utak és tulajdonlás):**
+
+1. **Streak/progress tulajdonlás (§1 rule 2).** A streak-írás KIZÁRÓLAG a
+   deterministic result-úton történik, pontosan két hívási helyen:
+   `lib/features/practice/application/practice_session_recording.dart:183`
+   (`streak.recordPracticeToday(finishedAt)`, practice-completion) és
+   `lib/features/analyze/providers/analyze_providers.dart:226`
+   (`ref.read(streakProvider.notifier).recordPracticeToday()`, analyze-completion).
+   **Egyik sem a chat/tutor út.** A `StreakController.recordPracticeToday` az
+   egyetlen streak-mutáló belépő (`lib/features/streak/providers/streak_provider.dart:23`).
+   ⇒ A tutor-belépő adapter/kártya CSAK a már előállított eredményt olvassa;
+   NEM hívhat `recordPracticeToday`-t, NEM triggerelhet practice/analyze
+   újrafuttatást. A „no streak on chat" acceptance így mért őrrel bír.
+2. **Cél-státuszok elérhetők (§1 rule 1).** A `deleted-result`,
+   `version-mismatch`, `deterministic-fallback` és `capability-aware` NEM
+   elérhetetlen átmenettábla-élek, hanem input-előállítható őr-feltételek:
+   null/elavult result-referencia, ill. null `AnalyzeResult.diagnostics`
+   (`lib/features/analyze/model/analyze_result.dart:24`). Tesztben közvetlenül
+   előállíthatók.
+3. **Provenance-őr.** A `ContextProvenance`/`TutorContextField.available`
+   megköveteli a scorer VAGY schema verziót
+   (`lib/features/ai_tutor/application/context/tutor_context_snapshot.dart:78`);
+   a meglévő `PracticeContextAdapter._hasVersion` ezt már betartja. Az ÚJ
+   `*_result_context_adapter.dart` ugyanezt a guardot vigye.
+
+**Elhatárolás a meglévő adapterektől (anti-duplikáció).** A
+`.../context/adapters/` már tartalmaz `practice_context_adapter.dart` és
+`analyze_context_adapter.dart` fájlokat — ezek a LIVE tutor-context mezőit
+projektálják. Az ÚJ `practice_result_context_adapter.dart` /
+`analyze_result_context_adapter.dart` külön cél: a POST-SESSION belépő-kártya
+kattintásakor rögzített immutable context-snapshot-referenciát + előre kitöltött
+kérdést állítja elő. A reviewer ellenőrizze, hogy az új adapter NEM duplikálja a
+meglévő context-adaptert és NEM módosítja a result-UI-t.
 
 ## 1. Cél
 
