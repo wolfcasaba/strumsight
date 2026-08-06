@@ -51,6 +51,21 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 **PLANNING — mérve 2026-08-06, `main` @ `9ac6d57` (= `origin/main`).** Kiosztott ADR:
 **0177** (`tools/round-slots.py reserve-adr`, O_CREAT|O_EXCL foglaló — nem `ls`).
 
+**§0.0 REVÍZIÓ (2026-08-06, scope-narrowing — pipeline §2 „engedélyezett-fájllista
+szűkítése"): a `public.dart` additív export TÖRÖLVE, a fájl a merge-elt üres
+baseline-en marad.** Mért ütközés: a `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+guard (E04-R01, `814388a`, **merge-elt, lezárt kör**) kipinneli, hogy a `public.dart`
+NEM tartalmazhat import/export direktívát — bármely export a **teljes suite** egyetlen
+piros tesztjét okozza (mérve: full-gate run `31073040073`, „2970 passed, 1 failed";
+`ai_tutor_boundary_test.dart` Expected: empty). A guard a kör allowed_paths-án KÍVÜL
+van, és lezárt kör artefaktuma → módosítása H2/H3, tehát tilos. Az additív export
+egyetlen acceptance-cellát sem szolgál, és **nincs fogyasztója**: a `run_eval.dart` és
+a tesztek a domain service-eket KÖZVETLEN útvonalon importálják, nem a `public.dart`-on
+át (mérve: `grep -rn ai_tutor/public.dart lib test evaluation` → csak a guard-teszt).
+Ezért az export elhagyása veszteségmentes scope-szűkítés. A későbbi kör, amely a
+service-eket ténylegesen a boundary-n át exponálja, az R01 guardot **allowlist**-tá
+alakítja (és felveszi a saját allowed_paths-ába) — ez NEM ennek a körnek a dolga.
+
 **Előfeltételek MÉRVE merge-eltnek:** E04-R12 (`5d082dc`, ADR 0141 prompt/injection),
 E04-R14 (`c1c0a77`, backend proxy + `UsageGuard`), E04-R16 (`df25806`, ADR 0174
 orchestration + output validator), E04-R22 (`faa3f32`, profil/consent UI). Epic 3 zárva.
