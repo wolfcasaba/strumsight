@@ -1,10 +1,10 @@
 # E04-R23 — Safety, prompt injection, usage és evaluation gate
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-06, kód olvasva: main @ `9ac6d57`; ADR 0177)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 23; §35
 - **Branch:** `codex/e04-r23-safety-injection-usage-evaluation-gate`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R12, R14, R16 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** DeepSeek v4 Pro (`deepseek-pro`, Kilo-profil)
 
 ```ai-router
 schema_version = 1
@@ -48,7 +48,45 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**PLANNING — mérve 2026-08-06, `main` @ `9ac6d57` (= `origin/main`).** Kiosztott ADR:
+**0177** (`tools/round-slots.py reserve-adr`, O_CREAT|O_EXCL foglaló — nem `ls`).
+
+**Előfeltételek MÉRVE merge-eltnek:** E04-R12 (`5d082dc`, ADR 0141 prompt/injection),
+E04-R14 (`c1c0a77`, backend proxy + `UsageGuard`), E04-R16 (`df25806`, ADR 0174
+orchestration + output validator), E04-R22 (`faa3f32`, profil/consent UI). Epic 3 zárva.
+
+**Grounding (KÖTÖTT — a review-ban a megsértése BLOCKER):** az R16
+`TutorOutputValidator._groundedClaimTypes` MÁR a grounding-igazság:
+`{measuredFact, computedTrend, knowledgeFact, userProvidedFact, inference,
+recommendation, safetyNotice}`, és a bizonyíték nélküli `measuredFact`/`computedTrend`/
+`knowledgeFact` MÁR `unsupportedClaim`/`unsupportedClaimEvidence` blokk. A
+`tutor_claim_validator.dart` ezt a taxonómiát **újrahasználja, NEM forkolja**;
+az „invented-metric" = bizonyíték nélküli `measuredFact`/`computedTrend`.
+(Forrás: `lib/features/ai_tutor/application/orchestration/tutor_output_validator.dart:47-62`.)
+
+**ADR-hivatkozás korrekció:** a §5 „(ADR 0132 grounding)" és „(ADR 0133)"
+informatív; a tényleges kötött szerződések: **0141** (prompt/output-schema/injection
+boundary), **0174** (output validator grounding), **0132** (privacy/consent →
+content-telemetry csak consenttel), **0133** (tool-confirmation → injection nem emel
+permissiont). Az új kötött döntéseket a kör-ADR **0177** rögzíti.
+
+**Pre-flight mérési szabályok disszpozíciója (pipeline §1):**
+
+1. *Elérhetetlen cél-státusz.* A §6 acceptance „blokk" állapotait a kör által ÚJ-onnan
+   írt `tutor_safety_policy.dart` / `tutor_claim_validator.dart` állítja elő — nincs
+   előzetes reducer, amit félre lehetne mérni. **Falszifikáció (S2 szellemében):**
+   minden safety-kategóriához + az invented-metric és injection-permission cellához
+   kötelező egy kipinnelt unit-cella, amely a PONTOS inputról a block/refuse verdiktre
+   mér; a küszöb-mátrixhoz (schema/action/groundedness/safety) alatta/rajta/fölötte
+   cellahármas, a küszöbök `python3 -c`-vel kiszámolva.
+2. *Erőforrás-tulajdonlás.* A kör scope-jában nincs lease/lock/handle/subscription →
+   **N/A** (a backend `UsageGuard` a meglévő rate-limitert használja, nem szerez új
+   erőforrást).
+
+**Motor-jegyzet:** `deepseek-pro` a Kilo-profil (`~/.codex-kilo`) alatt futó
+**codex-harness** motor (nem `auto`/`minimax`); indítás `ROUND_ENGINE=deepseek-pro`
++ `codex-round.sh`. A Kilo-család „bejelent-majd-megáll" kockázatát (L127) a wrapper
+automatikus folytatása (ADR 0173) + a registry `stall_min=25` enyhíti.
 
 ## 1. Cél
 
