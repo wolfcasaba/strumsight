@@ -1,0 +1,41 @@
+name: Tutor Eval (Safety & Quality Gate)
+
+# E04-R23: Merge-gate for tutor safety, claim-provenance, and evaluation.
+# Runs on dispatch (CI gate) and on pushes that touch tutor evaluation code.
+# Uses ONLY fake/approved providers — NO real cloud secret in the workflow.
+# Four metrics: schema-validity, action-validity, groundedness, safety-coverage.
+# ANY metric below threshold → workflow RED → merge blocked.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'evaluation/tutor/**'
+      - 'lib/features/ai_tutor/domain/services/tutor_safety_policy.dart'
+      - 'lib/features/ai_tutor/domain/services/tutor_claim_validator.dart'
+      - '.github/workflows/tutor-eval.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tutor-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run tutor safety evaluation
+        run: dart run evaluation/tutor/run_eval.dart
+
+      - name: Verify eval exits green
+        run: |
+          echo "Tutor evaluation gate passed — all metrics above thresholds."

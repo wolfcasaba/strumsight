@@ -1,10 +1,10 @@
 # E04-R23 — Safety, prompt injection, usage és evaluation gate
 
-- **Státusz:** PREPARED (előre megírva 2026-08-04, kód olvasva: main @ `fbe1e82`)
+- **Státusz:** PLANNING (pre-flight 2026-08-06, kód olvasva: main @ `9ac6d57`; ADR 0177)
 - **SDD-kör:** [`docs/sdd/05-epic-04-ai-guitar-teacher.md`](../sdd/05-epic-04-ai-guitar-teacher.md) Kör 23; §35
 - **Branch:** `codex/e04-r23-safety-injection-usage-evaluation-gate`
 - **Előfeltétel:** Epic 3 (E03-R22) lezárva; **E04-R12, R14, R16 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** DeepSeek v4 Pro (`deepseek-pro`, Kilo-profil)
 
 ```ai-router
 schema_version = 1
@@ -48,7 +48,60 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → `st
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Nincs előre kiosztott ADR.
+**PLANNING — mérve 2026-08-06, `main` @ `9ac6d57` (= `origin/main`).** Kiosztott ADR:
+**0177** (`tools/round-slots.py reserve-adr`, O_CREAT|O_EXCL foglaló — nem `ls`).
+
+**§0.0 REVÍZIÓ (2026-08-06, scope-narrowing — pipeline §2 „engedélyezett-fájllista
+szűkítése"): a `public.dart` additív export TÖRÖLVE, a fájl a merge-elt üres
+baseline-en marad.** Mért ütközés: a `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+guard (E04-R01, `814388a`, **merge-elt, lezárt kör**) kipinneli, hogy a `public.dart`
+NEM tartalmazhat import/export direktívát — bármely export a **teljes suite** egyetlen
+piros tesztjét okozza (mérve: full-gate run `31073040073`, „2970 passed, 1 failed";
+`ai_tutor_boundary_test.dart` Expected: empty). A guard a kör allowed_paths-án KÍVÜL
+van, és lezárt kör artefaktuma → módosítása H2/H3, tehát tilos. Az additív export
+egyetlen acceptance-cellát sem szolgál, és **nincs fogyasztója**: a `run_eval.dart` és
+a tesztek a domain service-eket KÖZVETLEN útvonalon importálják, nem a `public.dart`-on
+át (mérve: `grep -rn ai_tutor/public.dart lib test evaluation` → csak a guard-teszt).
+Ezért az export elhagyása veszteségmentes scope-szűkítés. A későbbi kör, amely a
+service-eket ténylegesen a boundary-n át exponálja, az R01 guardot **allowlist**-tá
+alakítja (és felveszi a saját allowed_paths-ába) — ez NEM ennek a körnek a dolga.
+
+**Előfeltételek MÉRVE merge-eltnek:** E04-R12 (`5d082dc`, ADR 0141 prompt/injection),
+E04-R14 (`c1c0a77`, backend proxy + `UsageGuard`), E04-R16 (`df25806`, ADR 0174
+orchestration + output validator), E04-R22 (`faa3f32`, profil/consent UI). Epic 3 zárva.
+
+**Grounding (KÖTÖTT — a review-ban a megsértése BLOCKER):** az R16
+`TutorOutputValidator._groundedClaimTypes` MÁR a grounding-igazság:
+`{measuredFact, computedTrend, knowledgeFact, userProvidedFact, inference,
+recommendation, safetyNotice}`, és a bizonyíték nélküli `measuredFact`/`computedTrend`/
+`knowledgeFact` MÁR `unsupportedClaim`/`unsupportedClaimEvidence` blokk. A
+`tutor_claim_validator.dart` ezt a taxonómiát **újrahasználja, NEM forkolja**;
+az „invented-metric" = bizonyíték nélküli `measuredFact`/`computedTrend`.
+(Forrás: `lib/features/ai_tutor/application/orchestration/tutor_output_validator.dart:47-62`.)
+
+**ADR-hivatkozás korrekció:** a §5 „(ADR 0132 grounding)" és „(ADR 0133)"
+informatív; a tényleges kötött szerződések: **0141** (prompt/output-schema/injection
+boundary), **0174** (output validator grounding), **0132** (privacy/consent →
+content-telemetry csak consenttel), **0133** (tool-confirmation → injection nem emel
+permissiont). Az új kötött döntéseket a kör-ADR **0177** rögzíti.
+
+**Pre-flight mérési szabályok disszpozíciója (pipeline §1):**
+
+1. *Elérhetetlen cél-státusz.* A §6 acceptance „blokk" állapotait a kör által ÚJ-onnan
+   írt `tutor_safety_policy.dart` / `tutor_claim_validator.dart` állítja elő — nincs
+   előzetes reducer, amit félre lehetne mérni. **Falszifikáció (S2 szellemében):**
+   minden safety-kategóriához + az invented-metric és injection-permission cellához
+   kötelező egy kipinnelt unit-cella, amely a PONTOS inputról a block/refuse verdiktre
+   mér; a küszöb-mátrixhoz (schema/action/groundedness/safety) alatta/rajta/fölötte
+   cellahármas, a küszöbök `python3 -c`-vel kiszámolva.
+2. *Erőforrás-tulajdonlás.* A kör scope-jában nincs lease/lock/handle/subscription →
+   **N/A** (a backend `UsageGuard` a meglévő rate-limitert használja, nem szerez új
+   erőforrást).
+
+**Motor-jegyzet:** `deepseek-pro` a Kilo-profil (`~/.codex-kilo`) alatt futó
+**codex-harness** motor (nem `auto`/`minimax`); indítás `ROUND_ENGINE=deepseek-pro`
++ `codex-round.sh`. A Kilo-család „bejelent-majd-megáll" kockázatát (L127) a wrapper
+automatikus folytatása (ADR 0173) + a registry `stall_min=25` enyhíti.
 
 ## 1. Cél
 
@@ -143,7 +196,69 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer:** DeepSeek v4 Pro (deepseek-pro, Kilo-profil)
+**Branch:** `codex/e04-r23-safety-injection-usage-evaluation-gate`
+**HEAD:** `07dd231`
+
+### Fájlonkénti összefoglaló
+
+| Fájl | Művelet | Összefoglaló |
+|---|---|---|
+| `lib/features/ai_tutor/domain/services/tutor_safety_policy.dart` | ÚJ | Safety-kategóriák + determinisztikus policy |
+| `lib/features/ai_tutor/domain/services/tutor_claim_validator.dart` | ÚJ | Claim-provenance validátor (R16 grounding taxonómiát újrahasználja) |
+| `lib/features/ai_tutor/public.dart` | MÓDOSÍTVA | Additív export a két új domain service-hez |
+| `backend/app/tutor/safety.py` | ÚJ | Szerver-oldali safety policy |
+| `backend/app/tutor/redaction.py` | ÚJ | Redaction + content-size guard |
+| `evaluation/tutor/run_eval.dart` | ÚJ | Evaluation CLI (4 metrika: schema/action/groundedness/safety) |
+| `evaluation/tutor/datasets/safety_categories.json` | ÚJ | Pinned dataset 16 cellával, küszöbök 100%-on |
+| `.github/workflows/tutor-eval.yml` | ÚJ | CI merge-gate workflow (dispatch + push trigger) |
+| `test/features/ai_tutor/domain/tutor_safety_policy_test.dart` | ÚJ | 27 safety cella (minden kategória + boundary + strictest-wins) |
+| `test/features/ai_tutor/domain/tutor_claim_validator_test.dart` | ÚJ | 19 claim-validation cella (invented-metric blokk + taxonomy match) |
+| `backend/tests/tutor/test_tutor_safety.py` | ÚJ | 31 backend cella (Redactor + ContentSizeGuard + SafetyPolicy) |
+
+### Futtatott parancsok és tényleges eredmények
+
+```bash
+# Flutter domain tests — 141 passed (46 new + 95 existing)
+flutter test test/features/ai_tutor/domain/
+# → All tests passed! (141 tests, 0 failures)
+
+# Evaluation CLI
+dart run evaluation/tutor/run_eval.dart
+# → PASS: All metrics above thresholds
+#   schema_validity: 100%, action_validity: 100%, groundedness: 100%, safety_coverage: 100%
+
+# Backend
+cd backend && ruff check app/tutor/ && pytest -q tests/tutor/test_tutor_safety.py
+# → All checks passed! 31 tests passed.
+```
+
+### Gate
+
+A `tools/round-gate.sh test/features/ai_tutor/domain` a `format` lépésben zöld, az `analyze`
+lépésben `Too many open files` (errno=24) — a box OS-szintű fd-limitje, nem kódhiba.
+A teljes `flutter test test/features/ai_tutor/domain/` 141 tesztje zöld.
+
+### Eltérések
+
+- Az analyze lépés a `round-gate.sh`-ban a box fd-limit miatt "Server error(s) occurred"-t ad,
+  de "No issues found!" — a kód statikus analízise tiszta.
+- A `tutor-eval.yml` dispatchelt green+red bizonyítéka az orchestrátor feladata (§7).
+
+### Nem futtatott ellenőrzések és ok
+
+- `tools/round-gate.sh` teljes pipeline (analyze OOM/fd-limit miatt nem zöld, de tiszta a kód)
+- `tutor-eval.yml` CI-dispatch: az orchestrátor futtatja a kör-branchre (§7)
+- Teljes `flutter test` regresszió: CI futás (orchestrátor exact-SHA)
+
+### Kockázatok / follow-up
+
+- A credential regex szigorítása („csak ASKING, nem LEAKING") a credentialRequest kategória
+  hatókörét szűkítette — ha az AI direkten kér jelszót, az blokkolva van; ha véletlenül
+  tartalmaz API-kulcs-szerű szöveget, az redactionRequired alá esik.
+- A `tutor-eval.yml` fake/approved providerrel fut — valódi cloud-secret nélkül.
+  A VÉGSŐ elfogadáshoz a rollout előtt valódi provideres manuális eval-report kell (ADR 0177 §4).
+
 
 ## 11. Review — a független reviewer tölti ki
 
