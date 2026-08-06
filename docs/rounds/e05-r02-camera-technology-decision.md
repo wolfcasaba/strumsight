@@ -175,7 +175,26 @@ kódot ír — dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Állapot:** implementálva (docs-only; production/natív/plugin fájl nem változott).
+
+| Fájl | Változás |
+| --- | --- |
+| `docs/baseline/epic-05-camera-stack-evaluation.md` | Három jelölt × 12 kötött kritérium összevetése; cellánként hivatalos forrás vagy `M01`–`M12` eszközös mérés. |
+| `docs/manual-testing/vision-camera-spike-runbook.md` | Parancsonként végrehajtható, instrumentációs szerződést és számszerű PASS-küszöböt adó eszközös runbook. |
+| `docs/adr/0184-vision-camera-capture-stack.md` | Feltételes C1-döntés és C2/C3-ra váltó, numerikus falszifikációs küszöbök. |
+| `docs/manual-testing/vision-device-matrix.md` | `M01`–`M12` egy-egy PENDING sora a runbook kereszt-hivatkozásával. |
+| `docs/rounds/e05-r02-camera-technology-decision.md` | Ez a handoff. |
+
+**Futtatott ellenőrzések:** `git diff --stat` — kizárólag a §4 engedélyezett
+dokumentációs fájlokat érinti. `tools/round-gate.sh test/tooling`: `format`
+zöld; `analyze` PIROS (kilépési kód 1) — a munkapéldányban feloldatlan
+`flutter_lints` és hiányzó generált `AppLocalizations` miatt 871 meglévő
+analyzer-issue jelent meg. A gate az első piros lépésnél megállt, ezért a
+`test` és `architecture` lépés nem futott.
+
+**Nem futtatott mérés:** a `M01`–`M12` device-spike mérések PENDING-ek. Ezen a
+boxon nincs Android SDK vagy fizikai kamerás eszköz; a kör nem adhat hozzá
+spike-kódot, plugint vagy permissiont.
 
 ## 11. Review — a független reviewer tölti ki
 
