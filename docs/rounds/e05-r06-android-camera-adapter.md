@@ -10,19 +10,18 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/vision/data/camera/plugin_camera_capture.dart",
-  "lib/features/vision/data/camera/camera_frame_binding.dart",
-  "lib/features/vision/data/camera/camera_error_mapping.dart",
+  "lib/core/camera/plugin_camera_capture.dart",
+  "lib/core/camera/camera_frame_binding.dart",
+  "lib/core/camera/camera_error_mapping.dart",
   "lib/core/camera/camera_providers.dart",
   "pubspec.yaml",
   "pubspec.lock",
   "lib/core/camera/camera_frame.dart",
-  "test/features/vision/data/plugin_camera_capture_test.dart",
-  "test/features/vision/data/camera_error_mapping_test.dart",
+  "test/core/camera/plugin_camera_capture_test.dart",
+  "test/core/camera/camera_error_mapping_test.dart",
   "docs/rounds/e05-r06-android-camera-adapter.md",
 ]
 gate_tests = [
-  "test/features/vision/data",
   "test/core/camera",
 ]
 native_gate = false
@@ -178,6 +177,43 @@ valóban tartalmazza az idézett szabályt („platform-specifikus típus … be
 szivárgása a vision domainbe … NEM elfogadható"). A §5.4 fent már `ADR
 0180`-ra javítva.
 
+**§0.0 revízió (2026-08-06, R3 — post-stop): a három ÚJ fájl áthelyezve
+`lib/features/vision/data/camera/` → `lib/core/camera/` (és a tesztjeik
+`test/features/vision/data/` → `test/core/camera/`).**
+
+Az implementer harmadszor is helyesen `stopped`-ot jelzett: az eredeti terv
+`camera_providers.dart`-ot (CORE) arra kérte, hogy importálja a
+`PluginCameraCapture`-t egy FEATURE-mappából
+(`lib/features/vision/data/camera/`) — ez sérti az `AGENTS.md` §6 „Core nem
+importál feature-t" szabályát. A hiba a brief eredeti tervezésekor csúszott
+be: a „feature-first, data-réteg-adapter" boilerplate mintát követtem
+anélkül, hogy figyelembe vettem volna, hogy a kamera — a mikrofonhoz
+hasonlóan — ebben az architektúrában **CORE-szintű, több feature által
+osztott képesség** (l. a `CameraOwner` enumot: `visionSetup`,
+`visionPractice`, `songVision`, `labCapture` — HÁROM a négyből nem is
+„vision"), nem vision-kizárólagos.
+
+**A helyes minta a már meglévő audio-precedens, amit a §0.0 már idézett:**
+`lib/core/audio/capture/audio_capture_factory.dart` **közvetlenül importálja
+a `package:audio_streamer/audio_streamer.dart` plugint**, és CORE-ban él, nem
+egy feature adatrétegében. Az `AGENTS.md` §6 „Domain nem függ Fluttertől …
+vagy storage plugintól" szabálya a **domainre** vonatkozik
+(`lib/features/vision/domain/`), nem a core-ra — a core direkt
+plugin-függősége ebben a kódbázisban már bevett, mért gyakorlat.
+
+**A módosítás:** a három ÚJ fájl (`plugin_camera_capture.dart`,
+`camera_frame_binding.dart`, `camera_error_mapping.dart`) és a két ÚJ
+tesztfájl célmappája `lib/core/camera/` / `test/core/camera/` (fent az
+allowed_paths-ban és a §4 táblázatban javítva; a `gate_tests` már csak
+`test/core/camera`-t tartalmaz, a most üressé váló `test/features/vision/data`
+bejegyzés törölve). **Ez a kör így SEMMILYEN fájlt nem hoz létre
+`lib/features/vision/` alatt** — az a feature-mappa a jövőbeli, UI-t és
+vision-specifikus domaint építő körök (pl. E05-R08 setup wizard) dolga marad.
+Semmilyen más engedélyezett fájl, tilos zóna vagy §5 tartalmi előírás nem
+változott — a §5.4 szövege pontosított (lásd fent), tartalmilag ugyanaz a
+korlát: a plugin típusa csak ebből a három fájlból látszódhat, sehonnan
+máshonnan.
+
 ## 1. Cél
 
 Az ADR 0184 szerinti production capture-adapter bekötése a **meglévő**
@@ -197,11 +233,12 @@ platform-bufferrel.
 
 ## 3. Scope
 
-**Benne:** a plugin-alapú `CameraCapture` implementáció (`PluginCameraCapture`),
-frame-binding (platform buffer → `CameraFrame`, **mindig** felszabadítva, hiba
-esetén is), platform-hibák (disconnected, in-use, max-cameras-in-use, device
-error) → stabil `FailureCode` mapping, a plugin függőség felvétele, és a
-production adapter bekötése a providerbe **`visionEnabled` flag mögé**.
+**Benne:** a plugin-alapú `CameraCapture` implementáció (`PluginCameraCapture`,
+**`lib/core/camera/`-ban, §0.0 R3** — l. lent), frame-binding (platform buffer
+→ `CameraFrame`, **mindig** felszabadítva, hiba esetén is), platform-hibák
+(disconnected, in-use, max-cameras-in-use, device error) → stabil
+`FailureCode` mapping, a plugin függőség felvétele, és a production adapter
+bekötése a providerbe **`visionEnabled` flag mögé**.
 
 **Kívül — TILOS:** ML inference (R12+), transform (R07), UI, saját Kotlin
 platform-channel **ha az ADR 0184 a plugin-utat választotta** (ha a saját
@@ -212,14 +249,14 @@ dokumentált brief-revízióval).
 
 | Útvonal | Állapot | Miért |
 |---|---|---|
-| `.../data/camera/plugin_camera_capture.dart` | ÚJ | production adapter |
-| `.../data/camera/camera_frame_binding.dart` | ÚJ | buffer → `CameraFrame` |
-| `.../data/camera/camera_error_mapping.dart` | ÚJ | platformhiba → `FailureCode` |
+| `lib/core/camera/plugin_camera_capture.dart` | ÚJ | production adapter (§0.0 R3 — áthelyezve `lib/features/vision/`-ből) |
+| `lib/core/camera/camera_frame_binding.dart` | ÚJ | buffer → `CameraFrame` (§0.0 R3) |
+| `lib/core/camera/camera_error_mapping.dart` | ÚJ | platformhiba → `FailureCode` (§0.0 R3) |
 | `lib/core/camera/camera_providers.dart` | R05-ből | production adapter bekötése |
 | `pubspec.yaml` | meglévő | camera függőség |
 | `pubspec.lock` | meglévő | §0.0 R1 — a függőség-solve mechanikus terméke |
 | `lib/core/camera/camera_frame.dart` | R03-ból | §0.0 R2 — additív `mirror`/`crop` mező, szűk korlátokkal |
-| `test/features/vision/data/*` | ÚJ | adapter + mapping tesztek |
+| `test/core/camera/*_test.dart` (adapter, binding, mapping) | ÚJ | adapter + mapping tesztek (§0.0 R3 — áthelyezve `test/features/vision/`-ből) |
 | `docs/rounds/e05-r06-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más; `docs/rag`; DSP; audio-útvonal. Listán kívül → `stopped`.
@@ -236,9 +273,14 @@ dokumentált brief-revízióval).
 3. **A metaadat nem veszhet el:** capture timestamp (monotonic), rotation,
    mirror state, width/height, crop. **NEM elfogadható** a rotation „majd a
    UI-ban" korrekciója (a transform réteg az R07, és az ehhez a metaadathoz nyúl).
-4. **A plugin típusa nem szivároghat ki** a `lib/core/camera/` contractból
-   (ADR 0180) — a `data/` réteg a határ. **NEM elfogadható** plugin-import a
-   `lib/core/` vagy `lib/features/vision/domain/` alatt.
+4. **A plugin típusa nem szivároghat ki** a `lib/core/camera/` platform-
+   semleges contractjából (`camera_capture.dart`, `camera_frame.dart`,
+   `camera_failure.dart`, …) — a `PluginCameraCapture`/binding/mapping fájlok
+   (§0.0 R3 óta ugyanabban a `lib/core/camera/` mappában, az
+   `AudioStreamerCapture` mintáját követve, l. `lib/core/audio/capture/`)
+   kizárólagosan tartalmazhatják a plugin-importot; máshonnan — a contract
+   többi fájljából, `lib/features/vision/domain/`-ból vagy bármely feature-ből
+   — plugin-import **NEM elfogadható** (ADR 0180).
 5. **A production adapter `visionEnabled == false` mellett nem példányosítható**
    (a provider a flaget nézi) — a mai app viselkedése változatlan.
 6. **Win32-szabály:** ha a plugin version-solve win32 major-ütközést hoz,
@@ -277,7 +319,7 @@ dokumentált brief-revízióval).
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/vision/data test/core/camera
+tools/round-gate.sh test/core/camera
 ```
 
 Külön processzek, nincs `&&`/pipe/`tail`. `native_gate = false`: ezen a boxon
