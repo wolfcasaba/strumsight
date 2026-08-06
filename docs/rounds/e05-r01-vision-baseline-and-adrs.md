@@ -1,6 +1,6 @@
 # E05-R01 — Vision baseline, capability audit és alapozó ADR-ek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight mérve 2026-08-06, base: `origin/main` @ `41a0b29`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 1; §5, §7, §32, §35, §37
 - **Branch:** `codex/e05-r01-vision-baseline-and-adrs`
 - **Előfeltétel:** Epic 4 (**E04-R24**) lezárva
@@ -13,12 +13,12 @@ allowed_paths = [
   "docs/baseline/epic-05-vision-start.md",
   "docs/manual-testing/vision-device-matrix.md",
   "docs/manual-testing/vision-performance-benchmark.md",
-  "docs/adr/0161-vision-privacy-by-default.md",
-  "docs/adr/0162-vision-capability-aware-feedback.md",
-  "docs/adr/0163-vision-android-first-camera-strategy.md",
-  "docs/adr/0164-vision-manual-calibration-fallback.md",
-  "docs/adr/0165-vision-audio-priority-degradation.md",
-  "docs/adr/0166-vision-no-raw-frame-persistence.md",
+  "docs/adr/0178-vision-privacy-by-default.md",
+  "docs/adr/0179-vision-capability-aware-feedback.md",
+  "docs/adr/0180-vision-android-first-camera-strategy.md",
+  "docs/adr/0181-vision-manual-calibration-fallback.md",
+  "docs/adr/0182-vision-audio-priority-degradation.md",
+  "docs/adr/0183-vision-no-raw-frame-persistence.md",
   "docs/rounds/e05-r01-vision-baseline-and-adrs.md",
 ]
 gate_tests = [
@@ -34,6 +34,8 @@ native_gate = false
 > (R13–R24) 0142-től fogyaszthatnak; ütközéskor **told el az egész
 > 0161–0170 blokkot** és javítsd minden E05 brief §5-ét + a batch-indexet.
 > PREPARED→PLANNING, brief commit az implementer indítása ELŐTT.
+> **[FELOLDVA a §0.0-ban]** — a blokk 0178–0183-ra tolva a foglalóval; a fenti
+> `ls`-alapú ADR-választás helyett `tools/round-slots.py reserve-adr` a forrás.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -46,8 +48,29 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED — a mért §0.0-t az élesedő pre-flight tölti ki.** Előre kiosztott
-ADR-ek: **0161, 0162, 0163, 0164, 0165, 0166**.
+**Pre-flight mérve 2026-08-06 (E05-R01 orchestrátor, base `origin/main` @ `41a0b29`).**
+
+1. **ADR-blokk eltolva 0161–0166 → 0178–0183.** Az `origin/main` legmagasabb
+   ADR-je a disken **0177** (`0177-ai-tutor-safety-injection-usage-evaluation-gate.md`);
+   az Epic 4 R13–R24 körei a tervezett 0161–0170 Epic-5 blokk fölé, 0171–0177-re
+   fogyasztottak. A race-mentes forrás a foglaló (`tools/round-slots.py
+   reserve-adr --round E05-R01`, ADR 0138/pipeline-prompt §1.0.1), **nem** az
+   `ls docs/adr | tail`; a foglaló hat egymást követő szabad számot adott:
+   **0178, 0179, 0180, 0181, 0182, 0183**. Minden §5/§4/§9 hivatkozás és az
+   `allowed_paths` erre a hat számra frissült.
+2. **Az ADR-eket az orchestrátor (Claude) írta a pre-flightban** (ADR 0055,
+   pipeline-prompt §2) — a hat ADR (0178–0183) már commitolva van ezen a
+   kör-branchen az implementer indítása ELŐTT. **Az implementer (DeepSeek v4 Pro)
+   hatóköre ezért a maradék három dokumentum:** a mért `docs/baseline/…`,
+   a `docs/manual-testing/vision-device-matrix.md` és a
+   `…/vision-performance-benchmark.md` sablon. Az ADR-fájlok az `allowed_paths`
+   listán maradnak (a kör összdiffje része), de az implementer nem módosítja
+   őket; a scope-audit az implementer base→head diffjét méri, amelyben az ADR-ek
+   már nem jelennek meg.
+3. **Mérés a §2 állításaihoz:** `origin/main` @ `41a0b29`. A `camera*` hiánya, a
+   manifest-permission-lista, a `lib/features/` felsorolás és a KÉSZ audio/
+   permission/model-asset minták a base commit ellen ellenőrizendők (az
+   implementer a baseline dokumentumban a **nyers parancs-kimenettel** rögzíti).
 
 ## 1. Cél
 
@@ -101,32 +124,32 @@ módosítás; DSP-paraméter; model-asset; másik kör briefje; `docs/rag`.
 | `docs/baseline/epic-05-vision-start.md` | ÚJ | mért kiindulási állapot |
 | `docs/manual-testing/vision-device-matrix.md` | ÚJ | valós eszközös mátrix sablon |
 | `docs/manual-testing/vision-performance-benchmark.md` | ÚJ | benchmark sablon |
-| `docs/adr/0161…0166-*.md` | ÚJ | hat alapozó döntés |
+| `docs/adr/0178…0183-*.md` | ÚJ (orchestrátor írta pre-flightban) | hat alapozó döntés |
 | `docs/rounds/e05-r01-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más. Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések (a hat ADR tartalma)
 
-1. **ADR 0161 — privacy by default.** A kamerakép **kizárólag a készüléken**
+1. **ADR 0178 — privacy by default.** A kamerakép **kizárólag a készüléken**
    dolgozódik fel. **NEM elfogadható** gyengítés: „debug buildben feltölthető",
    „opt-in esetén elmenthető a preview" — a raw frame mentése és hálózatra
    küldése *consumer kódban* tiltott, kivétel csak az explicit consentelt Lab
    capture, külön flag mögött (`visionLabCaptureEnabled`, default OFF).
-2. **ADR 0162 — capability-aware feedback.** Minden insighthoz kötelező
+2. **ADR 0179 — capability-aware feedback.** Minden insighthoz kötelező
    `requiredCapability` + `confidence` + `observability` mező. **NEM
    elfogadható:** „ha nincs adat, adjunk általános tanácsot" — hiányzó
    megfigyelhetőség esetén `notObservable`, nem gyengébb ítélet.
-3. **ADR 0163 — Android-first camera strategy.** Az Epic Android-on szállít;
+3. **ADR 0180 — Android-first camera strategy.** Az Epic Android-on szállít;
    az iOS út a contract szintjén készül el, futó adapter nélkül. **NEM
    elfogadható:** platform-specifikus típus a domainben.
-4. **ADR 0164 — manual calibration fallback.** A gitárgeometria **production
+4. **ADR 0181 — manual calibration fallback.** A gitárgeometria **production
    útja a kézi kalibráció**; bármely automatikus detektor csak experimental
    flag mögött és csak a manual fallback megtartásával létezhet.
-5. **ADR 0165 — audio-priority degradation.** Ha az audio deadline romlik, a
+5. **ADR 0182 — audio-priority degradation.** Ha az audio deadline romlik, a
    **vision** degradálódik, sosem az audio. **NEM elfogadható:** az audio
    feldolgozási ablak/hop módosítása vision-teljesítmény miatt (AGENTS.md §9).
-6. **ADR 0166 — no-raw-frame persistence.** A persistence rétegben raw kép és
+6. **ADR 0183 — no-raw-frame persistence.** A persistence rétegben raw kép és
    teljes landmark-idősor alapértelmezetten nem tárolható; a
    `VisionSessionResult` aggregátum + insight + capability + model-verzió.
 7. **Deviáció az SDD §8-tól, itt rögzítve:** a `lib/integrations/` könyvtár
@@ -179,7 +202,9 @@ orchestrátoré — az implementer `gh`-t nem hív.
 ## 8. Implementációs sorrend
 
 1. Mérés (`rg`/`ls`/`sed`) → baseline dokumentum a nyers kimenetekkel.
-2. Hat ADR a §5 szerint.
+2. **A hat ADR (0178–0183) már kész** — az orchestrátor írta a pre-flightban
+   (§0.0), ezen a branchen commitolva. NE módosítsd őket; a baseline és a
+   metrika-lista a §5 döntéseire hivatkozzon a helyes 0178–0183 számokkal.
 3. Device-mátrix + benchmark sablon.
 4. Gate.
 
