@@ -136,7 +136,7 @@ E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	d
 # VALÓS ESZKÖZÖS BIZONYÍTÉK: ezen a boxon nincs Android SDK/kamera — a nem mérhető
 # pontok a docs/manual-testing/vision-device-matrix.md PENDING sorai, NEM merge-kapuk
 # és NEM halt-okok (batch-index §1a).
-E05-R01	docs/rounds/e05-r01-vision-baseline-and-adrs.md	codex	0161-0166	pending
+E05-R01	docs/rounds/e05-r01-vision-baseline-and-adrs.md	codex	0161-0166	done
 E05-R02	docs/rounds/e05-r02-camera-technology-decision.md	codex	0167	pending
 E05-R03	docs/rounds/e05-r03-core-camera-contract-and-fake.md	codex	nincs	pending
 E05-R04	docs/rounds/e05-r04-camera-permission-and-platform-declarations.md	codex	nincs	pending
