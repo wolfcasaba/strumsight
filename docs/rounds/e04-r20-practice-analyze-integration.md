@@ -197,7 +197,29 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Megvalósítva (2026-08-06).**
+
+- A `PracticeResultContextAdapter` és `AnalyzeResultContextAdapter` kizárólag
+  a megfelelő feature `public.dart` szerződését importálja. A result-azonosító,
+  összesített mért adatok és a provenance kerülnek immutable context-fieldbe;
+  scorer- vagy schema-verzió nélkül nincs available field. Az Analyze adapter
+  csak a diagnosztika elérhetőségét viszi át, a diagnosztikai metrikát nem.
+- A `SessionTutorEntryCard` a változatlan `TutorContextSnapshot`-ot és a
+  szerkeszthető kérdést callbacken adja tovább; consent-off esetén kizárólag a
+  deterministic debrief callback elérhető. Törölt result és version mismatch
+  külön kontrollált állapot. A kártya nem importál streak/progress API-t és
+  nem indít Practice/Analyze újrafuttatást.
+- Additív angol és magyar lokalizáció készült. A §0.0-R1 szerint
+  `lib/features/ai_tutor/public.dart` és a fagyott boundary-teszt változatlan.
+
+**Futtatott ellenőrzések.**
+
+- `flutter gen-l10n` — sikeres (a `l10n.yaml` konfigurációját használta).
+- `flutter test test/features/ai_tutor/application/practice_result_context_adapter_test.dart test/features/ai_tutor/application/analyze_result_context_adapter_test.dart test/features/ai_tutor/presentation/session_tutor_entry_card_test.dart` — 11/11 zöld.
+- `tools/round-gate.sh --result-json /tmp/e04-r20-round-gate.json test/features/ai_tutor/application test/features/ai_tutor/presentation` — pass (`exit_code: 0`): format, analyze, application/presentation tesztek, architecture, secrets és l10n zöld.
+
+**Nem futtatott ellenőrzések.** A teljes Flutter suite, property gate és APK
+build nem lokális implementer-gate; ezek az orchestrátor exact-SHA CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
