@@ -200,7 +200,46 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás (2026-08-06)
+
+- `lib/core/camera/camera_permission.dart`: platformfüggetlen kamera
+  permission-state és gateway contract, injektálható plugin-adapter,
+  `permission_handler` production adapter, fail-closed `unavailable` mapping,
+  valamint Riverpod gateway provider.
+- `lib/core/foundation/app_failure.dart`: additív
+  `FailureCode.permissionCameraDenied = 'permission.camera'` konstans.
+- `android/app/src/main/AndroidManifest.xml`: opcionális `CAMERA` permission és
+  `android:required="false"` camera feature declaration.
+- `ios/Runner/Info.plist`: on-device feldolgozást és felvétel hiányát rögzítő,
+  felhőfeltöltést nem állító `NSCameraUsageDescription`.
+- `test/core/camera/camera_permission_test.dart`: fake plugin adapterrel a
+  `currentState()` és `request()` teljes állapotmátrixa, külön
+  `MissingPluginException` és általános hiba fail-closed cellával, valamint a
+  failure/retryability mapping.
+- `test/core/platform/platform_declarations_test.dart`: Android manifest és iOS
+  plist strukturális őr, tiltott upload/cloud/server szavak ellenőrzésével.
+
+### Ellenőrzések
+
+- RED: `flutter test test/core/camera/camera_permission_test.dart
+  test/core/platform/platform_declarations_test.dart` — a még hiányzó gateway,
+  failure code és deklarációk miatt PIROS volt.
+- GREEN: ugyanez az implementáció után — 18 teszt zöld.
+- Mutációs próba: az Android `uses-feature` sor ideiglenes törlése után
+  `flutter test test/core/platform/platform_declarations_test.dart` elvárt módon
+  PIROS volt (`android.hardware.camera` hiányzott); a sort azonnal
+  visszaállítottam.
+- Kötelező gate: `tools/round-gate.sh test/core/camera test/core/platform` —
+  ZÖLD: format, analyze, mindkét tesztcsoport, architecture és secrets.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Az első gate-kísérlet az analyzer `prefer_initializing_formals` infója miatt
+  megállt; a gateway constructor közvetlen field-initializerre javítva, a teljes
+  gate ezt követően zöld.
+- Android manifest-merge, release APK és valós eszközös permission-dialógus nem
+  futott lokálisan: ezek a brief szerint orchestrátor által indított CI/device
+  bizonyítékok.
 
 ## 11. Review — a független reviewer tölti ki
 
