@@ -171,11 +171,20 @@ Egyetlen lokális gate, külön processzek, nincs `&&`/pipe/`tail`. ARB-változ�
 **STOP:** nyers route/URL, nem-előnézett action vagy mércegyengítés helyett dokumentált
 brief-revízió.
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
 
-_(üres)_
+- **Implementer:** MiniMax M3 (`minimax` legacy override). Commit `751f1e0`.
+- **Elkészült:** `TutorEvidenceChip` (prezentációs `TutorEvidenceKind` enum,
+  text+ikon+szín), `TutorSourceSheet` (+ `sanitizeTutorDisplayText`), `TutorActionCard`
+  (exact `preview.fields`, confirm/reject/stale/failed, idempotens confirm),
+  `PracticePlanPreviewScreen` (blokk-szerkesztés `copyWith`+`userEdited`, validált
+  save/start), en/hu ARB additív stringek. 14 új widget-cella.
+- **Gate:** zöld (format/analyze/test/architecture/secrets/l10n), `scope_audit=ok`.
+- **Első futás stalled** a végén (log 5 perc néma → kilőve); egy folytató dispatch
+  ugyanabban a munkapéldányban fejezte be és commitolt.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e04-r19-evidence-source-action-card-ui-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Review: [`docs/reviews/e04-r19-evidence-source-action-card-ui-review.md`](../reviews/e04-r19-evidence-source-action-card-ui-review.md)
+— **APPROVED** (0 BLOCKER / 0 MAJOR / 0 MINOR), falszifikációs próbával igazolt
+sanitizer-guard, scope `ok`. Merge exact-SHA zöld full-gate + Router CI után.
