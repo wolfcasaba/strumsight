@@ -171,7 +171,27 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Szállítva:** `SongResultContextAdapter` a Song Trainer domain publikus
+  struktúrájából section/measure debrief-contextet készít; a capability report
+  alapján csak a ténylegesen score-olható chord/pitch javaslatokat teszi bele.
+  A context és a `getSongSections` read-only tool nem ad át lyrics-, backing
+  audio-, asset-, source- vagy track-event adatot. A `SongTutorEntryCard`
+  strukturális összefoglalót mutat, és a nem score-olható axishez nem renderel
+  actiont.
+- **Acceptance → teszt:** `song_result_context_adapter_test.dart` méri a
+  section/measure-projekciót, a pitch/chord capability gate-et, a lyric/backing
+  redactiont és a kizárólagos public-domain importot. `song_tutor_tools_test.dart`
+  méri a kizárólag strukturális `getSongSections` outputot, az invalid-input
+  elutasítását és a public-domain importot. `song_tutor_entry_card_test.dart`
+  méri a score-olhatatlan actionök hiányát, a támogatott axisek megjelenését és
+  a presentation redactiont.
+- **Futtatva:** `flutter gen-l10n`; a három új célzott teszt együtt → 10 zöld;
+  `tools/round-gate.sh test/features/ai_tutor/application
+  test/features/ai_tutor/presentation` → format, analyze, mindkét célzott
+  test-suite és architecture zöld.
+- **Eltérés / nem futtatott ellenőrzés:** a teljes CI `flutter test`, property
+  gate és exact-SHA CI workflow az orchestrátor feladata. A §0.0-ban halasztott
+  practice-result/range/route/setlist felülethez nem készült implementáció.
 
 ## 11. Review — a független reviewer tölti ki
 
