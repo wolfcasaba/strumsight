@@ -4856,3 +4856,31 @@ zombie-k explicit PID-es kilövése enyhít.) Rokon: [[L05]] (OOM), oracle-serve
    a merged kód analyze-át a **CI méri** (exact-SHA full-gate zöld `7a9d9e0`-n), a
    lokális post-merge gate ezt nem hozza zöldre. Az implementer „analyze pre-existing
    fd issue" jelzését ne fogadd bemondásra — a CI a bizonyíték.
+
+## L144 — A boxon a `flutter analyze` „Too many open files" hibájának MÉRT gyökéroka: `fs.inotify.max_user_instances` kimerülés elárvult `tail` processzektől — sysctl-emeléssel LOKÁLISAN is zöldre hozható, nem csak CI-vel bizonyítható (E05-R02)
+
+A Terra implementer `blocked`-ot jelzett: `analyze PIROS, 871 pre-existing
+package/l10n issues`. A reviewer izolált `/tmp` klónban reprodukálta, DE a
+`flutter analyze` kimenete valójában **"No issues found!"** volt — a piros
+kilépési kódot a Dart analysis-server `OS Error: Too many open files, errno=24`
+hibája okozta. Mérve: `cat /proc/sys/fs/inotify/max_user_instances` → **512**;
+`grep -c "^inotify" /proc/*/fdinfo/* | grep -v ':0' | wc -l` → **509** aktív
+instance, ebből **500+** egyetlen inotify-fd-t tartó, régi `codex-watch.sh`/
+`mm-watch.sh` futásokból visszamaradt, elárvult `tail` processz (`ps -p <pid>
+-o comm=` → `tail`). A rendszer-szintű `fs.file-max`/`fs.file-nr` **nem** volt
+kimerülve (24k/∞) — a szűk keresztmetszet kifejezetten az **per-user
+`max_user_instances`** limit volt.
+
+**Feloldás:** `sudo sysctl -w fs.inotify.max_user_instances=4096` — ez nem
+tracked fájlt, nem `tools/`-t, nem gate-et módosít, tisztán OS-erőforrás-limit.
+Utána a `tools/round-gate.sh test/tooling` **mindkét** munkapéldányban
+(implementer worktree + reviewer `/tmp` klón) teljesen zöldre fordult —
+`analyze` is, nem csak a CI. **Tanulság:** [[L143]] 3. pontja korábban azt
+javasolta, hogy a lokális analyze-piros esetén „a CI a bizonyíték" — ez
+IGAZ marad végső esetben, de ha a tünet `OS Error`/`Too many open files`, a
+gyökérokot ÉRDEMES lokálisan is kimérni (`/proc/sys/fs/inotify/*`,
+`grep -c "^inotify" /proc/*/fdinfo/*`) és a limitet emelni, mert ez olcsóbb és
+gyorsabb bizonyíték, mint a CI-re várás, és megelőzi a hamis `blocked`/H6 halt
+jelzést. **Nem takarítottam el az elárvult `tail` processzeket** (megosztott
+box, más session munkája lehet mögöttük) — ez follow-up boxhigiénia, hasonlóan
+az `oracle-server-hygiene` memóriabeli swap-takarításhoz.

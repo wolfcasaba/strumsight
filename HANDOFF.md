@@ -4,10 +4,57 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R01 MERGED — Epic 5 Computer Vision **INDUL**: vision baseline + hat
-> alapozó ADR (0178–0183) + device-mátrix/benchmark sablon; implementer DeepSeek
-> v4 Pro, ADR-ek orchestrátor-írt pre-flight; APPROVED, javító kör nélkül;
-> exact-SHA zöld kapun át. **Production kód NEM változott** — docs-only Kör 1).**
+> (E05-R02 MERGED — Camera technology döntési kapu: ADR 0184 feltételes döntés
+> a hivatalos Flutter `camera`/CameraX plugin mellett, numerikus megdöntési
+> küszöbökkel; futtatható valós-eszközös spike-runbook (M01–M12) + device-mátrix
+> PENDING sorok; implementer Terra, orchestrátor/reviewer Claude Sonnet 5;
+> APPROVED javító kör nélkül; exact-SHA zöld kapun át.
+> **Production kód NEM változott** — docs-only Kör 2).**
+>
+> ## ✅ E05-R02 KÉSZ — Camera technology döntési kapu és mérési runbook (2026-08-06)
+>
+> **E05-R02** MERGED (PR [#163](https://github.com/wolfcasaba/strumsight/pull/163),
+> squash `ed5989a`, **ADR [0184](docs/adr/0184-vision-camera-capture-stack.md)**;
+> implementer **Terra** (Codex CLI, `gpt-5.6-terra`), orchestrátor/reviewer
+> **Claude Sonnet 5**). A capture-réteg technológiai döntése: **feltételes C1**
+> (hivatalos Flutter `camera` plugin, Androidon CameraX-backed) a default, C2
+> (saját CameraX platform channel) csak akkor váltja, ha a runbook a
+> latest-frame backpressure-t (M05) vagy a monoton timestampet (M10) megbukja;
+> C3 (hibrid) csak külön indokkal. **Négy numerikus megdöntési küszöb**: init
+> p95 ≤ 2000 ms (M01), tartós FPS ≥ 15.0/30s-ablak (M02), close ≤ 2000 ms +
+> `open_clients=0` + post-close RSS ≤ 20 MiB/30s (M06), 1000 frame szigorúan
+> monoton timestamp (M10). `docs/baseline/epic-05-camera-stack-evaluation.md`
+> a 3 jelölt × 12 kötött kritérium táblázata (mind forrással: hivatalos
+> dokumentáció-link vagy `Mxx` runbook-azonosító); `vision-camera-spike-runbook.md`
+> parancsonként futtatható, számmal kifejezett PASS-küszöbű valós-eszközös
+> mérési lista (M01–M12); `vision-device-matrix.md` §2.8 mind a 12 mérést
+> PENDING sorként rögzíti.
+>
+> **Pre-flight §0.0 (ADR-szám revízió):** a brief 2026-08-05-i előre-kiosztása
+> (0167) elavult az E05-R01 hat ADR-je (0178–0183) miatt — a foglaló
+> (`tools/round-slots.py reserve-adr`) **0184**-et adott, minden brief-beli
+> hivatkozás cserélve; az ADR 0163 (Android-first) pre-flight-hivatkozás is
+> javítva a tényleges **0180**-ra.
+>
+> **Review** ([docs/reviews/e05-r02-…-review.md](docs/reviews/e05-r02-camera-technology-decision-review.md)):
+> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE). A NOTE: az implementer
+> `blocked`-ot jelzett (`analyze PIROS, 871 issue`), de a reviewer izolált
+> `/tmp` klónban reprodukálva a valódi analyze **"No issues found!"** volt — a
+> gyökérok a boxon majdnem kimerült `fs.inotify.max_user_instances` (509/512,
+> elárvult `tail`-processzek régi `codex-watch.sh`/`mm-watch.sh` futásokból)
+> volt, nem tartalmi hiba. `sudo sysctl -w fs.inotify.max_user_instances=4096`
+> után mindkét munkapéldányban (implementer + reviewer `/tmp` klón) minden gate
+> zöld. Scope-audit 0 listán kívüli fájl.
+>
+> **Zöld kapu (exact-SHA `af1cce8`):** Full Gate (no APK)
+> [31083683391](https://github.com/wolfcasaba/strumsight/actions/runs/31083683391) **success**
+> + Router CI [31083689860](https://github.com/wolfcasaba/strumsight/actions/runs/31083689860)
+> **success**. A CI-terv `full-gate.yml`-t írt elő (docs-only, nincs natív
+> út); a `docs/rounds/**` érintés miatt a Router CI is a kapu része, mindkettő
+> zöld a merge SHA-n. Post-merge gate (`tools/round-gate.sh test/tooling`) a
+> friss `main`-en is zöld. **Következő:** a queue következő Epic 5 sora
+> (SDD Ch6 Kör 3, `CameraFrame` ownership contract), a pipeline új sessionben
+> indítja.
 >
 > ## ✅ E05-R01 KÉSZ — Vision baseline, capability audit & hat alapozó ADR (Epic 5 INDUL) (2026-08-06)
 >
