@@ -16,6 +16,7 @@ allowed_paths = [
   "lib/core/camera/camera_providers.dart",
   "pubspec.yaml",
   "pubspec.lock",
+  "lib/core/camera/camera_frame.dart",
   "test/features/vision/data/plugin_camera_capture_test.dart",
   "test/features/vision/data/camera_error_mapping_test.dart",
   "docs/rounds/e05-r06-android-camera-adapter.md",
@@ -104,7 +105,78 @@ tartalmazza a `pubspec.lock`-ot (fent). Semmilyen más engedélyezett fájl,
 tilos zóna vagy tartalmi előírás nem változott. Terra jelenlegi mért
 win32-evidenciája (a stop előtti, még változatlan lock alapján): a
 lock ma `win32` `6.3.0`-t old fel — ez a §5.6/§9 win32-ellenőrzés
-kiindulási állapota, nem a `camera` hozzáadása utáni eredmény.
+kiindulási állapota, nem a `camera` hozzáadása utáni eredmény. **Hasznos
+mellékbizonyíték:** a `camera ^0.11.3` egy próba-solve-ban `camera 0.11.4`-re
+oldódott a win32 major érintése nélkül (Terra visszavonta a próbát a §0.0 R2
+ütközés miatt, de az evidencia áll — a win32-kockázat ezzel jelentősen
+csökkent).
+
+**§0.0 revízió (2026-08-06, R2 — post-stop): `lib/core/camera/camera_frame.dart`
+felvéve az allowed_paths-ba, szűken engedélyezett additív mezőkkel; és egy
+második elavult ADR-hivatkozás javítva.**
+
+Az implementer másodszor is helyesen `stopped`-ot jelzett: a §5.3/§6 kötelezi
+a mirror-state és crop megőrzését a bindingen át, de a meglévő (E05-R03-ból
+származó) `CameraFrame` csak `frameId`/`timestamp`/`width`/`height`/`format`/
+`orientation` mezőket ismer — nincs `mirror` és nincs `crop`, és a fájl nem
+volt az engedélyezett listán.
+
+Mérve: ez **nem új architekturális döntés**, hanem az SDD már meglévő,
+kanonikus domainmodelljének (`docs/sdd/06-epic-05-computer-vision.md` §9.2
+`CameraFrameMetadata`: `frameId`, `captureTimestampUs`, `width`, `height`,
+`rotationDegrees`, **`mirrored`**, `pixelFormat`, **`cropRegion`**) és a Kör 6
+saját Feladatok-listájának („Őrizd meg a capture timestampet, rotationt,
+**mirror state-et**, width/heightet és **cropot**.", ugyanaz a fejezet, Kör 6)
+végrehajtása — az E05-R03 egyszerűsített `CameraFrame`-je ennek csak részhal-
+mazát valósította meg. Nincs a `camera_frame.dart`-hoz kötött boundary/frozen
+teszt (`grep -rln camera_frame test/ | xargs grep -l boundary/frozen/guard` →
+nulla találat, szemben az `ai_tutor_boundary_test.dart`-mintával, ahol egy
+ilyen teszt korábban H2/H3-at indokolt R13/R14/R16/R17/R19/R20/R21-ben) — a
+mostani lépés ezért kategorikusan más, mint azok az esetek.
+
+**Szűk engedély, nem szabad kéz:**
+
+1. Két ÚJ, **opcionális, default-értékes** mező a meglévő `CameraFrame`
+   konstruktorán: `mirror` (`bool`, alapérték `false`) és `crop` (nullable,
+   sima Dart érték-típus — pl. rekord vagy kis `final class`
+   `left`/`top`/`width`/`height` pixel-térben —, alapérték `null` = „a
+   platform nem jelentett crop-ot, teljes frame"). **Mindkettő opcionális**,
+   ezért a meglévő két hívóhely (`fake_camera_capture.dart:141`,
+   `test/core/camera/camera_contract_test.dart:48`) fordítási hiba nélkül
+   marad — EZEK A FÁJLOK TOVÁBBRA SEM kerülnek az allowed_paths-ba, és nem is
+   szabad módosítani őket ebben a körben.
+2. **TILOS** ebben a fájlban bármi más: a `CameraTimestamp`/`CameraFormat`/
+   `CameraOrientation` importok, az `assertValid`/`invalidate`/`copyBytes`
+   ownership-mechanika, vagy bármely meglévő mező típusa/neve nem változhat.
+3. **TILOS** normalizált/koordinátatér-tudatos típus (pl. az SDD
+   `NormalizedRect`-je) bevezetése — az a Kör 7 (Frame transform és overlay
+   koordinátarendszer, `docs/sdd/06-epic-05-computer-vision.md` „Kör 7") saját
+   feladata. A `crop` itt **nyers, nem normalizált, pixel-térbeli** érték, csak
+   megőrzés, nem transzformáció (a §3 „Kívül — TILOS: … transform (R07)"
+   sora ettől nem változik).
+4. **TILOS** Flutter/`dart:ui` import a fájlba — a `camera_frame.dart` ma
+   pure Dart (`dart:typed_data` + két helyi import); ez változatlan marad
+   (ADR 0180 3. pont: „A `CameraFrameMetadata` … pure Dart típusok").
+5. **A mérce-bár crop-ra gyengébb, mint mirror-ra**, dokumentáltan: a §6.1
+   mátrix a mirror × rotation 8 cellát méri (kemény, számozott elfogadási
+   kritérium — ezen NEM enyhítünk). A crophoz nincs számozott cella; az
+   elfogadás azt jelenti, hogy HA a plugin/fake crop-ot jelent, a binding azt
+   változatlanul továbbadja a `CameraFrame.crop`-ra (nem néma eldobás); HA a
+   plugin nem jelent crop-ot, a `null` alapérték dokumentált, nem hiba. Ezt a
+   §10 handoffban írd le ténylegesen mérve, ne feltételezve.
+
+Az allowed_paths mostantól tartalmazza a `lib/core/camera/camera_frame.dart`-ot
+(fent) — kizárólag a fenti öt korlát mellett. Minden más engedélyezett fájl,
+tilos zóna vagy §5 kötött döntés változatlan.
+
+**Második ADR-hivatkozás javítás (0163 → 0180).** A §5.4 „ADR 0163"
+hivatkozása is elavult volt (`ls docs/adr/ | grep 0163` → nincs ilyen fájl) —
+ugyanaz az E05-R01 hat-ADR-es eltolás okozta, amit az E05-R04 saját
+pre-flightja már dokumentált a saját brief­jére („ADR-hivatkozás 0161/0163 →
+0178/0180"). Mérve: `docs/adr/0180-vision-android-first-camera-strategy.md`
+valóban tartalmazza az idézett szabályt („platform-specifikus típus … be-
+szivárgása a vision domainbe … NEM elfogadható"). A §5.4 fent már `ADR
+0180`-ra javítva.
 
 ## 1. Cél
 
@@ -145,6 +217,8 @@ dokumentált brief-revízióval).
 | `.../data/camera/camera_error_mapping.dart` | ÚJ | platformhiba → `FailureCode` |
 | `lib/core/camera/camera_providers.dart` | R05-ből | production adapter bekötése |
 | `pubspec.yaml` | meglévő | camera függőség |
+| `pubspec.lock` | meglévő | §0.0 R1 — a függőség-solve mechanikus terméke |
+| `lib/core/camera/camera_frame.dart` | R03-ból | §0.0 R2 — additív `mirror`/`crop` mező, szűk korlátokkal |
 | `test/features/vision/data/*` | ÚJ | adapter + mapping tesztek |
 | `docs/rounds/e05-r06-*.md` | meglévő | §10 handoff |
 
@@ -163,7 +237,7 @@ dokumentált brief-revízióval).
    mirror state, width/height, crop. **NEM elfogadható** a rotation „majd a
    UI-ban" korrekciója (a transform réteg az R07, és az ehhez a metaadathoz nyúl).
 4. **A plugin típusa nem szivároghat ki** a `lib/core/camera/` contractból
-   (ADR 0163) — a `data/` réteg a határ. **NEM elfogadható** plugin-import a
+   (ADR 0180) — a `data/` réteg a határ. **NEM elfogadható** plugin-import a
    `lib/core/` vagy `lib/features/vision/domain/` alatt.
 5. **A production adapter `visionEnabled == false` mellett nem példányosítható**
    (a provider a flaget nézi) — a mai app viselkedése változatlan.
