@@ -1,6 +1,6 @@
 # E05-R07 — Frame transform és overlay koordinátarendszer
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`; pre-flight 2026-08-06, mérve: main @ `b6408f0`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 7; §18
 - **Branch:** `codex/e05-r07-frame-transform-and-overlay-coordinates`
 - **Előfeltétel:** **E05-R03, E05-R06 merge**
@@ -42,6 +42,25 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PREPARED.** Nincs előre kiosztott ADR.
+
+**Pre-flight mért megerősítés (2026-08-06, `main` @ `b6408f0`, nem revízió):**
+mindkét előfeltétel (E05-R03, E05-R06) merge-elve, `origin/main` == lokális
+HEAD == `b6408f0`, a brief `5d082dc` baseline-ja ennek ősje (nincs köztes
+kód-diff a camera modulban a batch-írás óta a két függő kör diffjén kívül).
+Nincs új ADR (megerősítve). `lib/core/camera/camera_frame.dart` ténylegesen
+kimérve: a §2 „rotationt hordozza" leírás a típusos `orientation`
+(`CameraOrientation`: `portraitUp`/`landscapeRight`/`portraitDown`/
+`landscapeLeft`) mezőre utal — nincs szó szerinti `rotation` mező. Ez NEM
+scope-ütközés: az `allowed_paths` egyike sem módosítja/importálja a
+`camera_frame.dart`-ot, a §5 architekturális döntései (rotation
+{0,90,180,270} mint a transzformáció saját, `CameraFrame`-től független
+paramétere) és a §6 fixture-mátrix nem függ a szó szerinti mezőnévtől — a
+`CameraOrientation` → e réteg rotation-paraméter leképezés egy KÉSŐBBI kör
+(kézszerep/overlay bekötés) dolga. `test/property/dsp_property_test.dart`
+PROPERTY_SEED mintája (env → `int.tryParse ?? 42`, `math.Random(seed)`,
+`print('PROPERTY_SEED=$seed')`) a HORIZON konvenció szerint reprodukálva.
+Erőforrás-tulajdonlási ellenőrzés (`\.acquire(` grep) **N/A** — ez a kör
+nem allokál lease/lock/handle/subscription-t, pure math réteg.
 
 ## 1. Cél
 
