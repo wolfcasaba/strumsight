@@ -218,7 +218,7 @@ dokumentált brief-revízió.
   `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
   ekkor PIROS lett: várt `adjustFraming`, tényleges `improveLighting`.
   Visszaállítás után ugyanaz a teszt újra zöld.
-- Célzott GREEN ellenőrzések:
+- Célzott GREEN ellenőrzések az eredeti implementációhoz:
   `flutter test test/features/vision/domain/frame_quality_assessor_test.dart`
   → 6/6 pass;
   `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
@@ -228,15 +228,38 @@ dokumentált brief-revízió.
   utána `notObservable`-t kapott; így megszakadt megfigyelhetőségen nincs
   hamis stabilitás-állítás.
 
+### Javító kör #1 (Terra, review F1/F2 + security S1/S2)
+
+- `vision_quality_summary_test.dart` most az alsó három cue-szint teljes
+  prioritási láncát is méri: blur nyer stability és ROI coverage ellen,
+  stability nyer ROI coverage ellen, majd ROI coverage az utolsó cue.
+  A blur/stability ágak ideiglenes felcserélése erre a tesztre piros volt
+  (`reduceBlur` helyett `stabilizeCamera`), majd visszaállítva.
+- `frame_quality_assessor_test.dart` közvetlenül ellenőrzi, hogy egy nem üres,
+  konstans luminance-frame `notObservable` overallt és kizárólag véges
+  méréseket ad.
+- Az assessor runtime guard-ja nem-véges ROI területből mind a `framing`, mind
+  a `roiCoverage` esetén `notObservable` állapotot képez, és a nem-pozitív
+  `downsampleFactor` még a mintavételező ciklusok előtt `ArgumentError`-t dob.
+  A release-only útvonalat a pure-Dart
+  `frame_quality_assessor_release_mode_check.dart` no-assert ellenőrzése méri; a
+  0-ra gyengített guardnál 5 másodperces timeouttal 124-es kilépést adott,
+  a visszaállított guarddal zöld.
+- Javítás utáni célzott teszt:
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart test/features/vision/domain/frame_quality_assessor_test.dart`
+  → 14/14 pass. A release-mode ellenőrzés
+  `dart --no-enable-asserts run test/fixtures/vision/quality/frame_quality_assessor_release_mode_check.dart`
+  → zöld.
+
 ### Eltérések és nem futtatott ellenőrzések
 
 - A fixture-ök in-memory, determinisztikus grayscale-generátorok; nem tárolunk
   fotót vagy nyers kamera-frame-et. A megengedett fixture-könyvtárban a
   generálási specifikáció és benchmark szerepel.
-- A kötelező `tools/round-gate.sh test/features/vision` a handoff kitöltése
-  után zöld: format, analyze, 23 vision teszt és architecture. A friss,
-  külön megismételt `dart run tool/ci/check_secrets.dart` is zöld: 1838 fájl,
-  0 finding. A teljes CI/property/APK és a low-tier eszközmérés az
+- A kötelező `tools/round-gate.sh test/features/vision` javító kör után zöld:
+  format, analyze, 25 Vision teszt, architecture, secrets (1848 fájl, 0
+  finding) és l10n parity (en → hu, 942 üzenet). A teljes CI/property/APK és
+  a low-tier eszközmérés az
   orchestrátor/CI felelőssége, nem futott lokálisan.
 
 ## 11. Review — a független reviewer tölti ki

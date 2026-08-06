@@ -60,6 +60,34 @@ void main() {
       );
     });
 
+    test('prioritizes each cue over every lower-priority concern', () {
+      expect(
+        VisionQualitySummary.fromFrames(<VisionFrameQuality>[
+          _quality(
+            blur: VisionMetricState.needsImprovement,
+            stability: VisionMetricState.needsImprovement,
+            roiCoverage: VisionMetricState.needsImprovement,
+          ),
+        ]).setupCue,
+        VisionSetupCue.reduceBlur,
+      );
+      expect(
+        VisionQualitySummary.fromFrames(<VisionFrameQuality>[
+          _quality(
+            stability: VisionMetricState.needsImprovement,
+            roiCoverage: VisionMetricState.needsImprovement,
+          ),
+        ]).setupCue,
+        VisionSetupCue.stabilizeCamera,
+      );
+      expect(
+        VisionQualitySummary.fromFrames(<VisionFrameQuality>[
+          _quality(roiCoverage: VisionMetricState.needsImprovement),
+        ]).setupCue,
+        VisionSetupCue.increaseRoiCoverage,
+      );
+    });
+
     test('does not turn unavailable evidence into technical feedback', () {
       final summary = VisionQualitySummary.fromFrames(<VisionFrameQuality>[
         _quality(overall: VisionMetricState.notObservable),

@@ -41,6 +41,13 @@ final class FrameQualityAssessor {
     required VisionSetupProfile profile,
     required NormalizedRect? roi,
   }) {
+    if (thresholds.downsampleFactor <= 0) {
+      throw ArgumentError.value(
+        thresholds.downsampleFactor,
+        'downsampleFactor',
+        'must be greater than zero',
+      );
+    }
     if (!frame.isWellFormed) {
       _previousSamples = null;
       return _notObservable();
@@ -64,6 +71,7 @@ final class FrameQualityAssessor {
     final sharpness = _sharpness(frame);
     final cameraMotion = _cameraMotion(samples);
     final roiCoverageRatio = roi == null ? 0.0 : _area(roi);
+    final hasObservableRoiCoverage = roi != null && roiCoverageRatio.isFinite;
 
     final lighting =
         thresholds.isTooDark(
@@ -77,7 +85,7 @@ final class FrameQualityAssessor {
           )
         ? VisionLighting.overexposed
         : VisionLighting.good;
-    final framing = roi == null
+    final framing = !hasObservableRoiCoverage
         ? VisionMetricState.notObservable
         : roiCoverageRatio >= thresholds.minimumFramingCoverageFor(profile)
         ? VisionMetricState.good
@@ -90,7 +98,7 @@ final class FrameQualityAssessor {
         : thresholds.isUnstable(cameraMotion)
         ? VisionMetricState.needsImprovement
         : VisionMetricState.good;
-    final roiCoverage = roi == null
+    final roiCoverage = !hasObservableRoiCoverage
         ? VisionMetricState.notObservable
         : thresholds.hasInsufficientRoiCoverage(roiCoverageRatio)
         ? VisionMetricState.needsImprovement

@@ -147,6 +147,23 @@ void main() {
       },
     );
 
+    test(
+      'returns notObservable with finite measurements for a constant frame',
+      () {
+        final quality = FrameQualityAssessor(thresholds: thresholds).assess(
+          _frame(width: 8, height: 8, pixels: List<int>.filled(64, 100)),
+          profile: VisionSetupProfile.practiceBalanced,
+          roi: const NormalizedRect.full(),
+        );
+
+        expect(quality.overall, VisionMetricState.notObservable);
+        expect(
+          quality.measurements,
+          everyElement(predicate((double value) => value.isFinite)),
+        );
+      },
+    );
+
     test('partial ROI is a separate frame-quality concern', () {
       final assessor = FrameQualityAssessor(thresholds: thresholds);
       assessor.assess(
