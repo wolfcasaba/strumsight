@@ -1036,8 +1036,28 @@ open_prs=$(printf '%s\n' "$open_pr_branches" | count_foreign)
 # és a következő kör indulása között ez adott egy teljes firing-kihagyást),
 # miközben nem védett semmit. Cserébe KEMÉNYEBB kaput kap a lánc: piros main
 # fölé nem indulunk (ezt korábban SEMMI nem ellenőrizte).
-running_branches=$(gh run list --limit 20 --json status,headBranch \
-  --jq '.[] | select(.status != "completed") | .headBranch' 2>/dev/null) || running_branches="?"
+# A 60 percnél régebben `queued` futás NEM másik kör: a GitHub sosem ütemezte
+# be. MÉRT eset (2026-08-06, Actions major outage): egy 17:32-kor sorba állt
+# `Full Gate` futás 3,5 órán át `queued` maradt, a GitHub sem kilőni
+# („Cannot cancel a workflow run that is completed"), sem törölni (403) nem
+# engedte — és közben MINDEN firinget kiejtett a „fut egy workflow" előfeltétel.
+stale_queued_minutes=${PIPELINE_STALE_QUEUED_MINUTES:-60}
+running_branches=$(gh run list --limit 20 --json status,headBranch,createdAt,databaseId \
+  --jq '.[] | select(.status != "completed") | [.headBranch, .createdAt, (.databaseId|tostring), .status] | @tsv' \
+  2>/dev/null) || running_branches="?"
+if [ "$running_branches" != "?" ] && [ -n "$running_branches" ]; then
+  running_branches=$(
+    printf '%s\n' "$running_branches" | while IFS=$'\t' read -r branch created run_id state; do
+      [ -n "$branch" ] || continue
+      age_minutes=$(( ( $(date +%s) - $(date -d "$created" +%s 2>/dev/null || echo 0) ) / 60 ))
+      if [ "$state" = "queued" ] && [ "$age_minutes" -ge "$stale_queued_minutes" ]; then
+        log "BERAGADT FUTÁS: #$run_id ($branch) ${age_minutes} perce 'queued' — nem számít futó körnek"
+        continue
+      fi
+      printf '%s\n' "$branch"
+    done
+  )
+fi
 [ "$running_branches" = "?" ] && die "a futó workflow-k nem kérdezhetők le (gh) — a lánc nem indul vakon"
 running_runs=$(printf '%s\n' "$running_branches" | grep -v '^main$' | count_foreign)
 [ "$running_runs" = "0" ] || die "fut egy workflow ($running_runs) — megvárjuk"
@@ -1171,6 +1191,44 @@ inflight_add "$round" "$brief"
 
 brief_lint_report=$(write_brief_lint "$round" "$brief")
 
+# Kimaradás-mód (2026-08-06): ha a GitHub Actions incidensben van, a CI-evidencia
+# NEM megszerezhető. Ilyenkor a kör ne várjon órákig egy sosem induló futásra —
+# a merge-kapu a LOKÁLISAN futtatott, UGYANAZ a mérce-lánc.
+ci_note="nincs"
+if github_actions_degraded; then
+  ci_note="$state_dir/ci-note-$round.md"
+  cat > "$ci_note" <<'CINOTE'
+## ⚠ KIMARADÁS-MÓD — a CI-evidencia most nem szerezhető meg
+
+A GitHub Actions **incidensben van** (a lánc a hivatalos státusz-komponensből
+mérte). A futások vagy el sem indulnak, vagy órákig `queued` állapotban ragadnak.
+NE várj `gh run watch`-csal, és NE dispatch-elj újra és újra.
+
+**A merge-kapu ilyenkor a LOKÁLISAN lefuttatott, UGYANAZ a mérce-lánc** — nem
+kevesebb, csak lassabb (a boxon ~20 perc a CI ~9 perce helyett):
+
+```bash
+tools/round-gate.sh <a brief §7 útvonalai>
+$HOME/flutter/bin/flutter test
+PROPERTY_SEED=$(date +%s) $HOME/flutter/bin/flutter test test/property
+$HOME/flutter/bin/dart run tool/ci/check_assets.dart
+$HOME/flutter/bin/dart run tool/ci/check_song_schema.dart
+$HOME/flutter/bin/dart run tool/ci/check_song_fixture_licenses.dart
+```
+
+Kötelező (különben a merge bizonyítatlan):
+
+1. mind a hat parancs kimenetét (csonkítatlanul, kilépési kóddal) idézd a PR
+   törzsébe „lokális teljes mérce — GitHub Actions incidens" cím alatt, a
+   `git rev-parse HEAD` SHA-val együtt;
+2. a PR törzsébe írd bele, hogy a CI-evidencia a helyreállás UTÁN pótlandó
+   (`gh workflow run` a merge SHA-jára), és nyiss rá follow-up sort a HANDOFF-ban;
+3. **natív/release-érintő diffnél (APK-ág) NINCS lokális pótlás** — ott a kör
+   `blocked` jelzéssel álljon meg, mert a boxon nincs Android SDK.
+CINOTE
+  log "KIMARADÁS-MÓD: a $round merge-kapuja a lokális teljes mérce ($ci_note)"
+fi
+
 # --- 5. Az orchestrátor-prompt összeállítása ------------------------------
 run_stamp=$(date +%Y%m%dT%H%M%S)
 prompt_file="$state_dir/prompt-$round-$run_stamp.md"
@@ -1181,6 +1239,7 @@ sed -e "s|{{ROUND}}|$round|g" \
     -e "s|{{ENGINE}}|$engine|g" \
     -e "s|{{ADR}}|$adr|g" \
     -e "s|{{BRIEF_LINT}}|$brief_lint_report|g" \
+    -e "s|{{CI_NOTE}}|$ci_note|g" \
     -e "s|{{STATUS_FILE}}|$status_file|g" \
     -e "s|{{ROUTER_STATUS_FILE}}|$router_status_file|g" \
     -e "s|{{HALT_FILE}}|$halt_file|g" \

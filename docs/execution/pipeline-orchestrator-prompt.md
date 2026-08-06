@@ -16,6 +16,7 @@ kör adatai:
 | **Implementer motor** | `{{ENGINE}}` |
 | **Előre kiosztott ADR** | `{{ADR}}` — **te írod meg a pre-flightban** |
 | **Brief-lint jelentés** | `{{BRIEF_LINT}}` — a pre-flight teendői (ADR 0171 §4) |
+| **CI-jegyzet** | `{{CI_NOTE}}` — ha nem `nincs`, OLVASD EL: kimaradás-mód van érvényben |
 
 Olvasd el a `HANDOFF.md`-t, az `AGENTS.md`-t és a briefet, mielőtt bármit teszel.
 
