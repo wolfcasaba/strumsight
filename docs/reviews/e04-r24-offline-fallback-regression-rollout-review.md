@@ -6,6 +6,7 @@
 - **Diff:** `e5f0696..ded21da`, 7 fájl, scope-audit **ok** (0 listán kívüli).
 - **Pre-flight §0.0-R1:** `public.dart` scope-szűkítve (nincs érintve) — betartva.
 - **Verdikt (1. pass):** **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR.
+- **Verdikt (2. pass, javító kör után `8d3d388`):** **APPROVED** — MAJOR-1 és MINOR-1 zárva (lásd §Re-review).
 
 ## Módszer
 
@@ -76,7 +77,20 @@ debrief" cellája eszerint módosuljon.
   vannak; a completion-report §36-lefedettségét a MAJOR-1 fix után újra kell nézni
   (a „cloud off ⇒ no tutor request" cella evidenciája erősödik).
 
-## Zárás
+## Re-review (javító kör után, `f529e87..8d3d388`, 2 fájl, scope-audit ok)
 
-MAJOR-1 nyitva → **javító kör** (ugyanaz a motor, DeepSeek). A javítás után:
-re-review leletenként, Full Gate újradispatch az új SHA-n, exact-SHA zöld → merge.
+- **MAJOR-1 — ZÁRVA.** A `local_tutor_fallback_test.dart` új
+  `TutorOrchestrator gateway selection` csoportja **valódi turn-úton**, spy
+  `TutorModelGateway`-jel méri a cloud-elérést: consent-revoked → `startCalls == 0`
+  (mutáció: gateway-hívás consent-revokednál → RED), usage-limit → `startCalls == 1`
+  retry NÉLKÜL (mutáció: retry usage-limit után → RED). Ez erősebb bizonyíték a
+  statikus képernyő-rendernél: a reducer consent-kapuját és a usage-limit „nincs
+  repair" ágát falszifikálhatóan őrzi. A §36 „Cloud off ⇒ nincs tutor request"
+  garancia mostantól mért, nem dekoratív.
+- **MINOR-1 — ZÁRVA.** `_buildDebrief` `debriefInput == null` esetén `null`-t ad
+  (a szintetikus `_defaultDebriefInput` törölve); a teszt „returns null debriefOutput
+  when debriefInput is null" cellája ezt őrzi. Nincs többé fabrikált
+  `measuredSession`/`stableTempo` tény nemlétező sessionre.
+
+**Verdikt:** **APPROVED.** 12/12 fallback-teszt zöld, scope ok, nulla OPEN
+BLOCKER/MAJOR. Merge exact-SHA zöld CI-n (Full Gate + Router CI a `8d3d388`/merge SHA-n).
