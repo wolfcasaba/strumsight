@@ -27,8 +27,13 @@ void main() {
   ];
 
   group('TutorClaimValidator — grounded claim type taxonomy', () {
-    test('reuses the R16 grounded claim type set exactly', () {
-      expect(TutorClaimValidator.groundedClaimTypes, <String>{
+    // PINNED: This set MUST match R16 TutorOutputValidator._groundedClaimTypes
+    // exactly. R16's taxonomy is private, so no compile-time link exists —
+    // this test is the only drift-prevention mechanism. If either set changes,
+    // the other MUST change in lockstep; otherwise grounding validation
+    // diverges across the two validators.
+    test('pinned taxonomy matches R16 grounded claim type set exactly', () {
+      const intended = <String>{
         'measuredFact',
         'computedTrend',
         'knowledgeFact',
@@ -36,7 +41,8 @@ void main() {
         'inference',
         'recommendation',
         'safetyNotice',
-      });
+      };
+      expect(TutorClaimValidator.groundedClaimTypes, intended);
     });
   });
 
