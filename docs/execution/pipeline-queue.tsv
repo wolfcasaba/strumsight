@@ -121,7 +121,7 @@ E04-R20	docs/rounds/e04-r20-practice-analyze-integration.md	codex	nincs	done
 E04-R21	docs/rounds/e04-r21-song-trainer-debrief-range-actions.md	codex	nincs	done
 E04-R22	docs/rounds/e04-r22-profile-privacy-data-consent-ui.md	minimax	nincs	done
 E04-R23	docs/rounds/e04-r23-safety-injection-usage-evaluation-gate.md	codex	nincs	done
-E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	pending
+E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	done
 # Epic 5 (Computer Vision) — batch előkészítve 2026-08-05 (docs/rounds/epic-05-batch-index.md).
 # Előfeltétel: E04-R24 (Epic 4 zárás) merge. A sorok `pending`-en: a lánc az Epic 4
 # után FOLYAMATOSAN megy tovább Epic 5-re (E05-R01…R30), nem áll meg az epic-határon
