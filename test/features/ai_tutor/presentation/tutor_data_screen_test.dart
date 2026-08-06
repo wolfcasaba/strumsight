@@ -66,6 +66,7 @@ class _FakeMemoryRepository implements TutorMemoryRepository {
   String? lastExportPayload;
   final List<String> deletedFactIds = <String>[];
   final List<TutorMemoryFact> updatedFacts = <TutorMemoryFact>[];
+  bool rejectSensitiveUpdates = false;
 
   @override
   Future<AppResult<List<TutorMemoryFact>>> list() async =>
@@ -90,6 +91,12 @@ class _FakeMemoryRepository implements TutorMemoryRepository {
 
   @override
   Future<AppResult<void>> update(TutorMemoryFact fact) async {
+    if (rejectSensitiveUpdates &&
+        fact.content.toLowerCase().contains('password')) {
+      return const Failure<void>(
+        ValidationFailure(code: FailureCode.validationInvalidInput),
+      );
+    }
     final index = _facts.indexWhere((item) => item.id == fact.id);
     if (index == -1) {
       return const Failure<void>(
@@ -261,6 +268,13 @@ void main() {
     'R22-F2: delete-all scope list matches StorageKeys.tutorAiData exactly',
     (tester) async {
       await _pump(tester);
+      final scopeList = find.byKey(const Key('tutorDataDeleteAllScopeList'));
+      expect(scopeList, findsOneWidget);
+      expect(
+        find.descendant(of: scopeList, matching: find.byType(Padding)),
+        findsNWidgets(StorageKeys.tutorAiData.length * 2),
+        reason: 'scope rows must include every key and quarantine exactly once',
+      );
       for (final key in StorageKeys.tutorAiData) {
         expect(find.text(key), findsOneWidget, reason: 'missing key $key');
       }
@@ -351,6 +365,51 @@ void main() {
       await tester.tap(find.byKey(const Key('tutorDataMemoryDelete:f-1')));
       await tester.pump();
       expect(memory.deletedFactIds, contains('f-1'));
+    },
+  );
+
+  testWidgets(
+    'R22-DA5b: editing a memory fact updates the repository with new content',
+    (tester) async {
+      final memory = _FakeMemoryRepository(
+        facts: [_fact('f-1', 'Prefers slow warm-ups.')],
+      );
+      await _pump(tester, memory: memory);
+
+      await tester.tap(find.byKey(const Key('tutorDataMemoryEdit:f-1')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('tutorDataMemoryEditField:f-1')),
+        'Prefers gentle warm-ups.',
+      );
+      await tester.tap(find.byKey(const Key('tutorDataMemoryEditSave:f-1')));
+      await tester.pumpAndSettle();
+
+      expect(memory.updatedFacts, hasLength(1));
+      expect(memory.updatedFacts.single.id, 'f-1');
+      expect(memory.updatedFacts.single.content, 'Prefers gentle warm-ups.');
+    },
+  );
+
+  testWidgets(
+    'R22-DA5c: sensitive memory edit surfaces a localized validation error',
+    (tester) async {
+      final memory = _FakeMemoryRepository(
+        facts: [_fact('f-2', 'Prefers slow warm-ups.')],
+      )..rejectSensitiveUpdates = true;
+      await _pump(tester, memory: memory);
+
+      await tester.tap(find.byKey(const Key('tutorDataMemoryEdit:f-2')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('tutorDataMemoryEditField:f-2')),
+        'My password is private.',
+      );
+      await tester.tap(find.byKey(const Key('tutorDataMemoryEditSave:f-2')));
+      await tester.pumpAndSettle();
+
+      expect(memory.updatedFacts, isEmpty);
+      expect(find.text(l10nEn().tutorDataMemoryEditSensitive), findsOneWidget);
     },
   );
 

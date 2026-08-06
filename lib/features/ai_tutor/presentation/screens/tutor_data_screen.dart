@@ -3,18 +3,23 @@
 /// User-facing surface for:
 ///
 /// * Memory-fact list (`tutorMemoryFactsProvider`) — read/edit/delete
-///   through the repository's `update()` / `delete()`. Editing a fact
-///   invokes the repository's sensitivity filter (R17); a rejected edit
-///   surfaces the localized "sensitive" error.
+///   through the repository's `update()` / `delete()`. Each row exposes
+///   an edit button that opens a dialog with a `TextEditingController`;
+///   on save the row calls `repo.update(fact.copyWith(content, updatedAt))`
+///   and surfaces the localized "sensitive" error (`ValidationFailure`
+///   from the repo's sensitivity filter) or a generic edit failure
+///   message, depending on the `AppFailure` subtype returned.
 /// * Conversation list (`tutorConversationsProvider`) — one row per
 ///   conversation with a per-row delete button.
 /// * Redacted export — calls `TutorMemoryRepository.exportRedacted()`,
 ///   which the repo guarantees substitutes `'[redacted]'` for every
 ///   fact `content` (§6 acceptance).
 /// * Delete-all — the destructive primary action shows the EXACT scope
-///   list inline and, on tap, opens a one-shot confirmation dialog
-///   whose final button calls `deleteAllAiData()`. The dialog also
-///   repeats the scope list so the user cannot miss it.
+///   list inline (wrapped in `Key('tutorDataDeleteAllScopeList')` so the
+///   row-count assertion in `R22-F2` detects any scope drift) and, on
+///   tap, opens a one-shot confirmation dialog whose final button calls
+///   `deleteAllAiData()`. The dialog also repeats the scope list so the
+///   user cannot miss it.
 ///
 /// All write paths funnel through the `tutorMemoryRepositoryProvider`
 /// / `tutorConversationRepositoryProvider` seams so the widgets are
@@ -24,6 +29,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/storage/storage_keys.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -198,35 +204,43 @@ class TutorDataScreen extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
-                for (final key in StorageKeys.tutorAiData)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const Text('•'),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(key)),
-                      ],
-                    ),
-                  ),
-                for (final key in StorageKeys.tutorAiData)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const Text('•'),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            StorageKeys.quarantineOf(key),
-                            style: Theme.of(context).textTheme.bodySmall,
+                Container(
+                  key: const Key('tutorDataDeleteAllScopeList'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      for (final key in StorageKeys.tutorAiData)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              const Text('•'),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(key)),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      for (final key in StorageKeys.tutorAiData)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              const Text('•'),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  StorageKeys.quarantineOf(key),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
+                ),
                 const SizedBox(height: 12),
                 Text(l10n.tutorDataDeleteAllScopePreserved),
                 const SizedBox(height: 12),
@@ -266,6 +280,11 @@ class _MemoryFactRow extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
                 TextButton(
+                  key: Key('tutorDataMemoryEdit:${fact.id}'),
+                  onPressed: () => _openEditDialog(context, ref),
+                  child: Text(l10n.tutorDataMemoryEdit),
+                ),
+                TextButton(
                   key: Key('tutorDataMemoryDelete:${fact.id}'),
                   onPressed: () async {
                     await repo.delete(fact.id);
@@ -278,6 +297,19 @@ class _MemoryFactRow extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _openEditDialog(BuildContext context, WidgetRef ref) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _MemoryFactEditDialog(
+          fact: fact,
+          repo: repo,
+          invalidateFacts: () => ref.invalidate(tutorMemoryFactsProvider),
+        );
+      },
     );
   }
 }
@@ -303,6 +335,119 @@ class _ConversationRow extends ConsumerWidget {
           child: Text(l10n.tutorDataConversationDelete),
         ),
       ),
+    );
+  }
+}
+
+class _MemoryFactEditDialog extends StatefulWidget {
+  const _MemoryFactEditDialog({
+    required this.fact,
+    required this.repo,
+    required this.invalidateFacts,
+  });
+
+  final TutorMemoryFact fact;
+  final TutorMemoryRepository repo;
+  final VoidCallback invalidateFacts;
+
+  @override
+  State<_MemoryFactEditDialog> createState() => _MemoryFactEditDialogState();
+}
+
+class _MemoryFactEditDialogState extends State<_MemoryFactEditDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.fact.content);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _showError() async {
+    final message = _errorText;
+    if (message == null) return;
+    final l10n = AppLocalizations.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          key: Key('tutorDataMemoryEditErrorDialog:${widget.fact.id}'),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.commonClose),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    final l10n = AppLocalizations.of(context);
+    final newContent = _controller.text.trim();
+    if (newContent.isEmpty) {
+      setState(() => _errorText = l10n.tutorDataMemoryEditEmpty);
+      await _showError();
+      return;
+    }
+    setState(() => _submitting = true);
+    final updated = widget.fact.copyWith(
+      content: newContent,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    final result = await widget.repo.update(updated);
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    switch (result) {
+      case Success<void>():
+        widget.invalidateFacts();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      case Failure<void>(:final error):
+        setState(() {
+          _errorText = error is ValidationFailure
+              ? l10n.tutorDataMemoryEditSensitive
+              : l10n.tutorDataMemoryEditFailed;
+        });
+        await _showError();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      key: Key('tutorDataMemoryEditDialog:${widget.fact.id}'),
+      title: Text(l10n.tutorDataMemoryEditTitle),
+      content: TextField(
+        key: Key('tutorDataMemoryEditField:${widget.fact.id}'),
+        controller: _controller,
+        autofocus: true,
+        maxLines: 3,
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.tutorDataMemoryEditCancel),
+        ),
+        FilledButton(
+          key: Key('tutorDataMemoryEditSave:${widget.fact.id}'),
+          onPressed: _submitting ? null : _submit,
+          child: Text(l10n.tutorDataMemoryEditSave),
+        ),
+      ],
     );
   }
 }

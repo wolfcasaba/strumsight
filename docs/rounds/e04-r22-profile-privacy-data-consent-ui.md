@@ -260,7 +260,61 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Kör:** E04-R22 (javító kör, MAJOR/MINOR/NOTE) — MiniMax M3.
+
+**Mérce:** `tools/round-gate.sh test/features/ai_tutor/presentation` →
+`format`/`analyze`/`test`/`architecture`/`secrets`/`l10n` mind ZÖLD lokálisan
+(67 teszt, 12 allowlist-deviation, 913 l10n message, 0 secret finding). A teljes
+suite + property + APK a CI-ból jön (orchestrátor dispatch).
+
+**Mit szállítottam (csak az `allowed_paths` körein belül):**
+
+- **`tutor_data_screen.dart`** — `_MemoryFactRow` kapott egy edit-affordanciát
+  (edit + delete gombok, `tutorDataMemoryEdit:<id>` Key), a `_MemoryFactEditDialog`
+  egy saját `StatefulWidget` (`TextEditingController` a saját
+  `initState`/`dispose` lifecycle-ében, így nincs controller-leak), a `submit`
+  `repo.update(fact.copyWith(content, updatedAt: DateTime.now().toUtc()))`-et
+  hív; a `ValidationFailure`-t lokalizált `tutorDataMemoryEditSensitive`
+  üzenettel jeleníti meg (saját `tutorDataMemoryEditErrorDialog:<id>` dialogban),
+  egyéb `AppFailure` ágra a `tutorDataMemoryEditFailed`. Siker esetén
+  `ref.invalidate(tutorMemoryFactsProvider)`. A delete-all scope-lista
+  `Key('tutorDataDeleteAllScopeList')`-be van csomagolva (a pontos sor-számot
+  a R22-F2 most `find.descendant(... Padding)`-szel méri; R22-F2-ben a
+  `findsNWidgets(StorageKeys.tutorAiData.length * 2)` assert zárja a „bővítés"
+  irányt — a B-próba innentől pirosra vált, ha bogus kulcs kerülne a
+  scope-listába).
+- **`tutor_data_screen_test.dart`** — két új cella:
+  `R22-DA5b: editing a memory fact updates the repository with new content`
+  (sikerág: `repo.update()` a módosított `TutorMemoryFact`-tal, `updatedFacts`
+  lista a fake repóban), `R22-DA5c: sensitive memory edit surfaces a localized
+  validation error` (szenzitív-elutasítás: a fake `rejectSensitiveUpdates=true`
+  flagjével a `password`-tartalmú edit `ValidationFailure`-t ad vissza, az UI
+  a `tutorDataMemoryEditSensitive` lokalizált szöveget mutatja); a `R22-F2`
+  a `tutorDataDeleteAllScopeList` kulccsal scope-olt `Padding`-szám-assertet +
+  a `secureAuthToken` / `tutorConsent.profile` `findsNothing` őrét tartja.
+  Mindkét edit-teszt a meglévő `_FakeMemoryRepository` override-on fut.
+- **`app_en.arb` / `app_hu.arb`** — 7-7 új kulcs (mindkét nyelven): 
+  `tutorDataMemoryEdit`, `tutorDataMemoryEditTitle`, `tutorDataMemoryEditSave`,
+  `tutorDataMemoryEditCancel`, `tutorDataMemoryEditEmpty`,
+  `tutorDataMemoryEditSensitive`, `tutorDataMemoryEditFailed`. ARB-generálás
+  (`flutter gen-l10n`) a gate előtt lefutott; l10n-parity zöld
+  (913 message, en→hu nulla eltérés).
+- **Dokumentáció** — ez a §10 handoff szakasz kitöltve (a NOTE #3 zárása).
+
+**Providerek / route-ok:** nem nyúltam (a R22-es payload
+`public.dart` + `app_route.dart` + `app_router.dart` változatlanok; az
+`allowed_paths`-listán belül a memory-edit nem igényel új providert — a
+meglévő `tutorMemoryRepositoryProvider` + `tutorMemoryFactsProvider` fölé
+épül).
+
+**Kiesett (korábban, §0.0 + §3 tilalma):** retention-mező, conversation-export,
+cloud remote-pending, consent-revoke pending-cancel — a R22 brief-állapot
+szerint nincs mögöttük domain-háttér; a javító kör sem épített új
+domain-/perzisztencia-réteget.
+
+**Következő lépés (orchestrátornak):** review-zás → CI-dispatch
+(`gh workflow run build-apk.yml --ref <branch>`) → a §6 összes elfogadási
+kritériumára kiterjedő APPROVED → squash-merge zöld kapuval.
 
 ## 11. Review — a független reviewer tölti ki
 
