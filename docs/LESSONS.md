@@ -4565,3 +4565,44 @@ E04-R20-ban ez `docs(round) §0.0-R1` revízió volt; a kör export nélkül mer
 (PR #153, `3ce4afc`), a widget-teszt a kártyát közvetlen importtal példányosítja.
 Ellentét L-ekkel: itt nincs salvage/timeout — a STOP a HELYES normatív jelzés
 volt, és a legolcsóbb feloldás a kör elején (nem a review-ban) született meg.
+
+## L134 — Előre megírt brief FANTOM public-bemenetet feltételezhet: a `SongPracticeResult`/range/route nem létezett, a feloldás scope-SZŰKÍTÉS a már-publikus szeletre + mért brief↔kód őr-teszt (E04-R21, halt H3, ADR 0112 önjavítás)
+
+**Tünet.** Az E04-R21 (2026-08-04-én előre megírt, `main @ fbe1e82` olvasva)
+brief §2/§3 azt feltételezte, hogy a Song Trainer **public** boundaryja egy
+practice-**result** + range felületet (`SongPracticeResult` capability/revision +
+`TrainerRange`) ad, és a setup-route range-paramot fogad. A kör pre-flightja a
+gyökérokot jelezte és **H3-mal halt** — a feloldás a TILOS zónát (song_trainer
+belső contract + app routing) igényelte volna.
+
+**Mért gyökérok** (saját reprodukció, nem a jelentés):
+`grep -n export lib/features/song_trainer/public.dart
+lib/features/song_trainer/domain/public.dart` → a public boundary **struktúrát +
+capabilityt** exportál (`SongDocument`/`SongSection`/`SongMeasure`/`SongTrack`/
+`SongCapabilityReport`), practice-resultot/range-et **nem**; `grep -rn
+"SongPracticeResult" lib test` → **0 találat** (fantom típus — sehol nem létezik);
+a valódi result/range/setlist (`SongTrainerResult`, `SongPracticeRecord`,
+`TrainerRange`/`MeasureRange`, `SongSetlist`) csak a feature **belsejében** van;
+`grep -rn "songTrainerSetup" lib/app/routing` → a route csak `songId`-t fogad.
+Az `allowed_paths` egyetlen song_trainer fájlt sem enged, tehát a felület
+kitétele nem fér a kör hatókörébe. A §6 9 pontjából 6 nem építhető.
+
+**Szabály.** Ha egy előre megírt brief központi bemenete egy **public boundaryn
+nem létező** típus/route, a helyes önjavítás (ADR 0112) **nem** a TILOS zóna
+megnyitása és **nem** escalate, hanem — amit a brief STOP-sora maga is előír —
+**dokumentált scope-szűkítés a már-publikus, source-belső import nélkül építhető
+szeletre** (itt: struktúra-debrief + capability-gate + redaction), a halasztott
+pontokat **prerekvizit körhöz** kötve (song_trainer-oldali additív export + saját
+ADR). A halt csak akkor nem tér vissza, ha a re-scope-ot **gépi őr rögzíti**:
+`tools/tests/test_r21_brief_public_boundary.py` egyszerre méri, hogy (1) a
+result/range/setlist szimbólumok tényleg **nincsenek** a public export-halmazban,
+és (2) a brief §3 „Benne:" (bemenet-deklaráció) blokkja **egyet sem** nevez meg
+közülük. RED az eredeti briefen (`SongPracticeResult` a Benne-blokkban) → GREEN a
+re-scope után. A §0.0 halasztás-record és a grep-bizonyíték **nevezheti** a
+halasztott típusokat (ez őszinte dokumentáció, nem bemenet-állítás) — ezért az őr
+kizárólag a Benne-blokkra szűkít, nem a teljes fájlra.
+
+Rokon L-ek: [[L133]] (befagyasztott barrel-őr → lista-szűkítés) — ott a barrel
+LÉTEZETT de zárolt volt; itt a felület **nem is létezik** publikusan. Mindkettő
+tanulsága: az előre megírt brief public-boundary feltevését a pre-flightban
+**meg kell mérni**, nem elhinni.

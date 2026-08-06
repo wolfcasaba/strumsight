@@ -8,6 +8,23 @@
 > context-adapters + SessionTutorEntryCard, nincs új ADR / ADR 0132 hatálya; Codex
 > (Terra), exact-SHA zöld kapun át).**
 >
+> ## 🔧 E04-R21 ÖNJAVÍTVA (ADR 0112, halt H3, 2026-08-06) — scope-szűkítés, még NEM implementált
+>
+> Az **E04-R21** brief FANTOM public-bemenetet feltételezett (`SongPracticeResult`
+> + `TrainerRange` + range-fogadó setup-route — **egyik sem publikus**, mérve:
+> `grep export .../song_trainer/domain/public.dart` csak struktúrát+capabilityt ad;
+> `SongPracticeResult` sehol; a route csak `songId`). A pre-flight helyesen
+> **H3-mal halt**. Az önjavító kör (ADR 0112) a brief STOP-sora szerinti
+> **dokumentált scope-szűkítést** végezte: R21 mostantól a **már-publikus
+> struktúra-debrief + capability-gate + lyrics/backing-redaction** szeletre szűkül
+> (§0.0/§2/§3/§6 revideálva). A re-scope-ot mért őr-teszt zárolja
+> (`tools/tests/test_r21_brief_public_boundary.py`, RED→GREEN). **A kör kódja NINCS
+> implementálva** — a lánc újra sorra veszi az R21-et a szűkített brieffel.
+> **Prerekvizit kör kell** (halasztva): a song_trainer public boundary additív
+> result/range/setlist exportja (saját ADR-rel a song_trainer oldalon) — ez nyitja
+> majd újra a measure-range / revision-stale / missing-asset / speed-action /
+> setlist / exact-route pontokat. Lecke: `docs/LESSONS.md` **L134**.
+>
 > ## ✅ E04-R20 KÉSZ — Practice & Analyze post-session tutor integration (2026-08-06)
 >
 > **E04-R20** MERGED (PR [#153](https://github.com/wolfcasaba/strumsight/pull/153),
