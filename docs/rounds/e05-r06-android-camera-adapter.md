@@ -427,6 +427,68 @@ feature-layer composition provider to instantiate `PluginCameraCapture`, or
 plugin types to enter `lib/core`. The decision must retain `visionEnabled ==
 false` as a non-instantiating path.
 
+**2026-08-06 — IMPLEMENTED after R3 scope revision.** The official C1
+`camera ^0.11.4` dependency resolves to `camera 0.11.4` and its endorsed
+CameraX Android implementation. `PluginCameraCapture` lives in
+`lib/core/camera/` and keeps a single pending platform frame: a newer frame
+releases and replaces the pending older one, then a microtask delivers only
+the retained latest frame. The adapter increments `droppedFrameCount` for
+each replacement. A `PlatformCameraFrame.release()` guard gives the fake
+platform layer exactly-once release semantics on processed, dropped,
+consumer-throwing, and close-before-delivery paths.
+
+The official plugin exposes no manual `CameraImage` buffer-release method.
+The adapter therefore synchronously copies its planes before the plugin
+callback returns and the release closure relinquishes only the adapter's
+platform-frame hold. The session timestamp is a monotonic `Stopwatch` value
+(strictly advanced by one microsecond when callbacks share a clock tick),
+rotation derives from the plugin camera's sensor orientation, and front-camera
+frames set `mirror`. The plugin currently does not report a crop, so the
+production binding sends the documented `CameraFrame.crop == null`; the fake
+platform metadata test proves a reported raw pixel crop is forwarded without
+transformation.
+
+`CameraFrame` now has the R2-permitted optional `mirror` and raw pixel-space
+`CameraCrop?` fields. `cameraCaptureProvider` constructs the real adapter only
+when `appConfigProvider.flags.visionEnabled` is true; the false path returns
+`null` without invoking its factory. The only production `package:camera`
+imports are `plugin_camera_capture.dart` and `camera_error_mapping.dart`.
+
+Fresh Win32 evidence after the final solve:
+
+```text
+1237:  win32:
+1240:      name: win32
+1244:    version: "6.3.0"
+```
+
+The major remains 6; no `dependency_overrides`, minSdk, Android manifest, or
+feature-layer file was changed.
+
+Verification actually run:
+
+```text
+flutter pub get
+  + camera 0.11.4
+  + camera_android_camerax 0.6.30
+  + camera_platform_interface 2.13.1
+  (win32 remained 6.3.0)
+
+flutter test test/core/camera
+  56 tests passed
+
+tools/round-gate.sh test/core/camera
+  [1] format: ZÖLD (1046 files, 0 changed)
+  [2] analyze: ZÖLD (No issues found)
+  [3] test test/core/camera: ZÖLD (56 tests passed)
+  [4] architecture: ZÖLD
+  [5] secrets: ZÖLD (1812 files, 0 findings)
+```
+
+Not run locally: Android APK build, device preview, and the 100 start/stop
+stress test; the brief assigns native proof to the orchestrator's exact-SHA CI
+`build-apk.yml` dispatch and leaves the device matrix PENDING.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e05-r06-android-camera-adapter-review.md`.
