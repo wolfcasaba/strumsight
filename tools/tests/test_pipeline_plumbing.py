@@ -108,6 +108,17 @@ class MainHealthTest(unittest.TestCase):
     def test_a_red_main_still_stops_the_chain(self) -> None:
         self.assertIn("a lánc nem indul piros main fölé", self.text)
 
+    def test_a_flaky_red_run_does_not_block_when_the_same_sha_is_green(self) -> None:
+        """MÉRT eset (2026-08-06): duplikált dispatch → `cancelled`, és GitHub-infra
+        hiba → `Set up job` bukás, miközben UGYANAZON a SHA-n van zöld futás.
+        A legutolsó futás önmagában ilyenkor feleslegesen állítaná a láncot."""
+        self.assertIn('select(.headSha == ', self.text)
+        self.assertIn("*success*)", self.text)
+
+    def test_a_genuinely_red_main_still_stops_the_chain_and_notifies(self) -> None:
+        self.assertIn("nem indul piros main fölé", self.text)
+        self.assertIn('notify "⛔ piros main"', self.text)
+
     def test_the_health_run_is_dispatched_after_a_merge(self) -> None:
         self.assertIn("gh workflow run full-gate.yml --ref main", self.text)
         self.assertIn("PIPELINE_MAIN_HEALTH", self.text)
