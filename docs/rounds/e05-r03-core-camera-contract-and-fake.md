@@ -1,6 +1,6 @@
 # E05-R03 — Core camera contract, fake infrastruktúra és vision feature flagek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-06, kód olvasva: main @ `7b3cf05`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 3; §8, §11.1, §36.1
 - **Branch:** `codex/e05-r03-core-camera-contract-and-fake`
 - **Előfeltétel:** **E05-R01, E05-R02 merge**
@@ -47,7 +47,23 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**Pre-flight (2026-08-06, main @ `7b3cf05`) — nincs tartalmi revízió, mért
+megerősítés:**
+
+- `lib/core/audio/capture/audio_capture.dart` precedens megerősítve: interfész
+  `start`/`stop`, `Future<int> start(...)`, dobott hibából `AppFailure` a
+  hívónál — a §2 leírása pontos.
+- `lib/core/foundation/app_failure.dart` `FailureCode` jelenlegi értékei
+  (`audioSessionBusy`, `permissionMicrophoneDenied`, `permissionUnavailable`,
+  …) megerősítve — additív bővítés, ütközés nincs.
+- `lib/app/config/feature_flags.dart` jelenlegi 9 mező (`accountEnabled`,
+  `diagnosticsEnabled`, `labModeAvailable`, `practiceEngineV2Enabled`,
+  `migratedLearnEnabled`, `practiceDetailedHistoryEnabled`,
+  `songTrainerV2Enabled`, `aiTutorEnabled`, `aiTutorCloudEnabled`) megerősítve;
+  `hashCode` valóban csak az első 6-ot hashelja, `==`/`toString` teljes — a §2
+  állítása pontos.
+
+Nincs ÚJ ADR (0161/0163 bővítése).
 
 ## 1. Cél
 
