@@ -4,9 +4,54 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R23 MERGED — Tutor safety, prompt-injection, usage & evaluation merge-gate;
-> ADR 0177; implementer DeepSeek v4 Pro; 1 javító kör + 2 orchestrátor scope-akció
-> után APPROVED; exact-SHA zöld kapun át).**
+> (E04-R24 MERGED — Offline fallback + Epic 4 ZÁRÓ; nincs új ADR; implementer
+> DeepSeek v4 Pro; 1 javító kör után APPROVED; exact-SHA zöld kapun át. **Epic 4
+> (AI Guitar Teacher) gépi gate-jei lezárva** — a végső elfogadás a HORIZON
+> valós-eszközös menet, ami merge UTÁNI termék-elfogadás).**
+>
+> ## ✅ E04-R24 KÉSZ — Offline fallback, teljes regresszió & rollout (EPIC-4 ZÁRÓ) (2026-08-06)
+>
+> **E04-R24** MERGED (PR [#160](https://github.com/wolfcasaba/strumsight/pull/160),
+> squash `0cf6323`, **nincs új ADR** — záró/regressziós kör; implementer **DeepSeek
+> v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo/`codex-round.sh`), orchestrátor/reviewer
+> **Claude Opus 4.8**). Az Epic 4 gépi lezárása: **`LocalTutorFallback`**
+> (`lib/features/ai_tutor/application/offline/`) a MA emittált, de **fogyasztatlan**
+> `TutorDeterministicFallback` effektet determinisztikus, cloud-mentes tartalommá
+> alakítja (`DeterministicCoach` + `SessionDebriefBuilder` + offline
+> `KnowledgeRetriever`); **őszinte** `TutorCapability` (online/offline/consent/limit)
+> resolver — gateway-referencia nélkül, szinkron, I/O-mentes (offline-ban cloud-ígéret
+> lehetetlen). Az „offline ⇒ nincs tutor request" garancia **falszifikálhatóan** mérve:
+> spy `TutorModelGateway` a `TutorOrchestrator` turn-útján (consent-revoked →
+> `startCalls == 0`, usage-limit → 1, retry nélkül; mutáció → RED). Dokumentumok:
+> `epic-04-completion-report.md` (§36 DoD-lefedés), `epic-04-performance.md`
+> (latency baseline), `ai-tutor-rollout.md` (internal→Lab→beta→limited→GA lépcsők,
+> flag-rollback, **GA-flip külön user/termék döntés**). **Flagek OFF maradnak.**
+>
+> **Pre-flight §0.0-R1 (scope-szűkítés):** `public.dart` **kivéve** az allowed_paths-ból
+> — nincs fogyasztó, és az additív export törné a fagyasztott `ai_tutor_boundary_test`
+> üres-boundary invariánsát (kívül a scope-on, H2/H3) — **ötödik** ismétlés
+> (R13/R17/R20/R23 után). Az üres boundary-fájl így is teljesíti a §36 „has a public
+> boundary" cellát; az additív re-export jövőbeli allowlist-kör.
+>
+> **Review** ([docs/reviews/e04-r24-…-review.md](docs/reviews/e04-r24-offline-fallback-regression-rollout-review.md)):
+> 1. pass **CHANGES REQUESTED** — MAJOR-1: az `offline_network_guard` új cellája csak
+> a provider-nélküli statikus `tutorHome`-ot renderelte, és a `_expectNoNetwork` csak
+> az **account** Dio-t méri (a tutor `TutorStreamTransport`-ot nem), így a „cloud-hívás
+> offline" mutáció nem váltotta pirosra — az Epic **fő garanciája** dekoratív volt;
+> MINOR-1: a no-input default debrief hardkódolt 80 bpm-ből `stableTempo`/`measuredSession`
+> tényt fabrikált nemlétező sessionre (§37 sértés). DeepSeek javító köre **mindkettőt
+> zárta** (turn-szintű spy-gateway falszifikáció + `_buildDebrief` → `null` no-inputra);
+> re-review **APPROVED**. Lecke: **L140/L141**.
+>
+> **Zöld kapu (exact-SHA `dd5c0d4`):** Full Gate (no APK)
+> [31078602192](https://github.com/wolfcasaba/strumsight/actions/runs/31078602192)
+> **success** (full-gate + Coverage) + Router CI
+> [31077972974](https://github.com/wolfcasaba/strumsight/actions/runs/31077972974)
+> **success**. Az ELSŐ full-gate futás egy **flaky, körtől független** DSP randomizált
+> property-cellán bukott (`dsp_property_test.dart` 17/20 vs ≥18 küszöb, HARD-seed
+> variancia; a diff nem érint DSP-t) — a HARD-seed újrafuttatás zöld. **Következő:**
+> HORIZON valós-eszközös Epic-4 elfogadás (termék), majd az SDD Epic 5 — a pipeline
+> indítja új sessionben.
 >
 > ## ✅ E04-R23 KÉSZ — Tutor safety, prompt-injection, usage & evaluation gate (2026-08-06)
 >

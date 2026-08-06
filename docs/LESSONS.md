@@ -4772,3 +4772,53 @@ gate-lépésként. Ez a scope-precedens az E04-R20 §0.0-R1 és R16 mintáját f
 
 Rokon L-ek: [[L09]] (gate = futtatható artefaktum), [[L130]] (gate-eszköz mint mérce — a
 hatókör szűkíthető, az eszköz nem módosul), az E04-R20/R16 `public.dart` scope-narrowing precedens.
+
+## L140 — Az „offline ⇒ nincs cloud-hívás" garanciát a TURN-ÚTON, gateway-spy-vel mérd, ne statikus képernyő-renderrel — a régi network-probe VAK a feature saját transportjára (E04-R24, review MAJOR-1)
+
+**Kontextus (mért):** az E04-R24 (Epic-4 záró) az `offline_network_guard_test.dart`-ot
+kiterjesztette a tutor cloud-OFF útra. Az első implementáció csak a `tutorHome`
+route-ra navigált — ami egy **provider nélküli** `StatelessWidget` (semmit nem olvas,
+nem indít turnt) — és újrahasználta a `_expectNoNetwork`-öt, ami KIZÁRÓLAG az **account**
+Dio-factoryt (`accountDioFactoryProvider`) + a diagnostics-klienst méri. A tutor cloud-út
+(`RemoteTutorModelGateway`) egy **külön** `TutorStreamTransport` fölött streamel (ADR 0142),
+amit ez a probe nem lát — és amit a futó app cloud-OFF alatt nem is konstruál.
+
+**Következmény:** egy „offline-ban cloud-hívás" mutáció NEM váltotta pirosra a cellát,
+tehát az Epic **fő biztonsági garanciája** (§36 „Cloud off állapotban nincs tutor network
+request") csak dekoratív őr volt. A brief §6 explicit „mutáció → RED" acceptance-e emiatt
+NEM teljesült — a zöld gate ismét nem bizonyíték ([[L09]]).
+
+**Feloldás (javító kör, scope-on belül):** valódi falszifikáló cella a `TutorOrchestrator`
+turn-útján, **spy** `TutorModelGateway`-jel, ami számolja a `start()` hívásokat:
+consent-revoked → `startCalls == 0` (reducer consent-kapuja), usage-limit → 1, retry NÉLKÜL.
+A mutáció (gateway megnyitása offline-út alatt) pirosra vált. **Tanulság:** a „no network"
+garanciát a valódi döntési úton mérd egy hívás-számláló spy-vel, ne annak a transportnak a
+proxyjával, amelyet a mért feature nem is használ. Rokon: [[L21]] (néma-bukások), [[L09]].
+
+## L141 — Determinisztikus offline fallback: no-input esetén NE szintetizálj mért-eredményt — `null` vagy explicit generikus insight, sose fabrikált evidence-ref (E04-R24, review MINOR-1)
+
+**Mért:** a `LocalTutorFallback._buildDebrief` `debriefInput == null` esetén egy
+hardkódolt `_defaultDebriefInput`-ból (`stableTempoBpm: 80`, `sessionEvidenceRef:
+'session.offline-fallback'`) épített debriefet, amit a `DeterministicCoach` `stableTempo`/
+`measuredSession` insighttá alakított — nemlétező sessionre mutató evidence-reffel. Latens
+volt (nincs élő hívó, flag OFF) és lokalizációs-kulcs alapú (nem konkrét szám), de sérti az
+Epic „soha ne találj ki mért eredményt" alapelvét (§37). **Feloldás:** `debriefInput == null`
+⇒ `debriefOutput = null`; a teszt ezt őrzi. **Tanulság:** a „mindig adjunk vissza valamit"
+kényelmi default a grounding-garanciát csendben kikezdi — a hiányzó bemenet őszinte válasza a
+`null`/generikus, nem a szintetikus mérés. Rokon: [[L140]], grounding-taxonómia (ADR 0177).
+
+## L142 — A HARD-seed randomizált property-gate BOUNDARY-flaky lehet (17/20 vs ≥18 küszöb): a körtől független, kis-mintás DSP-cella egyetlen seedre bukhat — újradispatch, nem halt; a diff-érintettséget MÉRD (E04-R24)
+
+**Mért:** az E04-R24 (csak `ai_tutor` + docs diff) első `full-gate.yml` futása a
+`test/property/dsp_property_test.dart` „random strums — one onset, correct direction
+(20 trials)" celláján bukott: `Expected ≥18, Actual 17` (85% vs 90% küszöb). A HARD lépés
+`PROPERTY_SEED=${github.run_id}`-vel fut, és 20 próbán a ±1 variancia magas — a küszöb-közeli
+seed boundary-flaky. A **ugyanez a kód** `ded21da`-n (a javító kör ELŐTT, szintén DSP-mentes
+diff) zöld volt. **Feloldás:** a diff DSP-érintetlenségét mérve (`git diff --name-only`),
+a full-gate újradispatch (új run_id → új seed) zöld lett — NEM H5 (H5 = a KÖR kétszer piros),
+és a DSP-teszt a scope-on kívül (nem módosítható). **Tanulság:** a randomizált property-gate
+„non-flaky %-küszöb" ígérete kis mintánál (20 trial) nem tartható; a körtől független bukást
+diff-méréssel igazold, majd újrafuttass. (Az inotify `max_user_instances` kimerülés ezen a
+boxon a `flutter analyze` szervert bukatja „Too many open files"-lal — a merged kód analyze-át
+a CI méri, a lokális post-merge gate ezt nem tudja zöldre hozni; a deleted-cwd dart/flutter
+zombie-k explicit PID-es kilövése enyhít.) Rokon: [[L05]] (OOM), oracle-server-hygiene.
