@@ -1,9 +1,9 @@
 # E05-R06 — Android camera production adapter
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`; pre-flight 2026-08-06, mérve: main @ `796978b`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 6; §11.2, §11.4
 - **Branch:** `codex/e05-r06-android-camera-adapter`
-- **Előfeltétel:** **E05-R02 (ADR 0167), E05-R03, E05-R05 merge**
+- **Előfeltétel:** **E05-R02 (ADR 0184), E05-R03, E05-R05 merge**
 - **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
 
 ```ai-router
@@ -27,7 +27,7 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R02/R03/R05 merge; olvasd újra
-> az **ADR 0167** választott stackjét (ha a runbook megdöntötte, EZ a kör követi
+> az **ADR 0184** választott stackjét (ha a runbook megdöntötte, EZ a kör követi
 > a módosított ADR-t), a `pubspec.yaml` mai `dependencies` blokkját és a
 > **win32 gotchát** (CLAUDE.md: ONE win32 major; `flutter_secure_storage` v10 →
 > win32 ^6). Nincs ÚJ ADR. PREPARED→PLANNING, brief commit előbb.
@@ -43,11 +43,57 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR (0167 végrehajtása).
+**PLANNING.** Mérve `origin/main` @ `796978b` (E05-R02/R03/R05 mind merge-elve,
+working tree tiszta). Nincs ÚJ ADR ebben a körben — a §1 döntés a meglévő
+ADR 0184 végrehajtása.
+
+**ADR-hivatkozás javítás (0167 → 0184).** A brief minden `ADR 0167`
+hivatkozása elavult volt. Az E05-R02 saját briefje
+(`docs/rounds/e05-r02-camera-technology-decision.md`, „ADR-szám revízió"
+szakasz) dokumentálja, hogy a 2026-08-05-i előre-kiosztás **0167** volt, de az
+E05-R01 hat ADR-je (0178–0183) miatt a tényleges kiosztott szám **ADR 0184**
+(`docs/adr/0184-vision-camera-capture-stack.md`) lett — a `HANDOFF.md` E05-R02
+bejegyzése is ezt a számot használja. Ez a pre-flight minden `0167`
+előfordulást (fejléc, előfeltétel-sor, pre-flight blockquote, §1, §3) `0184`-re
+javít; a §4 engedélyezett fájllista és a §5–§9 tartalmi előírásai változatlanok.
+
+**A döntés mérve, nem megdöntve.** ADR 0184 3. pontja: C2 (saját CameraX
+platform channel) csak akkor váltja C1-et, ha a device runbook M05
+(latest-frame backpressure) vagy M10 (monoton timestamp) bukását rögzíti.
+Mérve: `docs/manual-testing/vision-device-matrix.md` §2.8 mind a 12 sora
+**PENDING**, és `docs/baseline/epic-05-camera-stack-evaluation.md` M05/M10
+sorai **MÉRENDŐ** (ezen a boxon nincs Android SDK, valós eszközös mérés itt
+nem futtatható) — tehát nincs rögzített C1-bukás. **C1 (hivatalos Flutter
+`camera` plugin, CameraX-backed Androidon) marad az operatív alapértelmezés**,
+ez a kör ezért a plugin-utat implementálja; a §3 „ha az ADR 0184 a plugin-utat
+választotta" feltétele teljesül, a saját Kotlin platform-channel TILOS marad.
+
+**Pre-flight mérési megerősítések (nincs eltérés a brief tartalmi
+előírásaitól, csak a fenti számhiba):**
+
+- `visionEnabled` létezik (`lib/app/config/feature_flags.dart:114`), és ma
+  sehol nem olvassa senki a `lib/`-ben — ez a kör lesz az első fogyasztója;
+  a gate bemenete `lib/app/config/app_config.dart:190`
+  (`appConfigProvider` → `.flags.visionEnabled`).
+- A hat `FailureCode.camera*` konstans (`lib/core/foundation/app_failure.dart:42-48`)
+  szó szerint egyezik a meglévő `CameraFailureMapper`
+  (`lib/core/camera/camera_failure.dart`) hat kimenetével — a hiba-mapping
+  mátrix (§6.1) célértékei ma is elérhetők, nincs hiányzó enum-érték.
+- `CameraSessionCoordinator.acquire()`-nak ma **nulla** hívója van `lib/`-ben
+  (`grep -rn "\.acquire(" lib/` → egyetlen találat, a mikrofon-analóg
+  `mic_capture.dart`) — a lease-fogyasztás valóban R06 scope-on kívül van,
+  ahogy a brief állítja; ez a kör csak a `CameraCapture` adaptert köti be a
+  providerbe, a coordinatort/lease-t nem érinti.
+- Az `AudioCaptureFactory` mintája (`lib/core/audio/capture/audio_capture_factory.dart`)
+  a precedens a `camera_providers.dart` bekötéshez: `typedef … Function()`
+  gyár + valódi plugin-backed implementáció — az implementer ezt a meglévő
+  mintát követi, nem tervez újat.
+
+**§0.0 revízió: nincs allowed_paths változás.**
 
 ## 1. Cél
 
-Az ADR 0167 szerinti production capture-adapter bekötése a **meglévő**
+Az ADR 0184 szerinti production capture-adapter bekötése a **meglévő**
 `CameraCapture` contract mögé: preview + **latest-frame** analysis stream,
 megőrzött timestamp/rotation/mirror metaadattal és **mindig** felszabaduló
 platform-bufferrel.
@@ -71,7 +117,7 @@ error) → stabil `FailureCode` mapping, a plugin függőség felvétele, és a
 production adapter bekötése a providerbe **`visionEnabled` flag mögé**.
 
 **Kívül — TILOS:** ML inference (R12+), transform (R07), UI, saját Kotlin
-platform-channel **ha az ADR 0167 a plugin-utat választotta** (ha a saját
+platform-channel **ha az ADR 0184 a plugin-utat választotta** (ha a saját
 channelt választotta, a Kotlin fájlok a pre-flightban kerülnek a listára,
 dokumentált brief-revízióval).
 
