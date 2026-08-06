@@ -47,7 +47,29 @@ secrets, l10n-parity (en→hu). CI full-gate szintén zöld a `72fdf4d`-en (6m32
 - **Lifecycle:** `ConsumerWidget`-ek; `TextFormField` `initialValue`+`onChanged`
   (nincs saját controller), nincs subscription — nincs mit disposeolni.
 
-## Verdikt: **CHANGES REQUESTED**
+## Verdikt (első kör): CHANGES REQUESTED
 
 MAJOR #1 zárása kötelező (edit + szenzitív-elutasítás implementálása teszttel).
 MINOR #2 és NOTE #3 ugyanabban a javító körben. Minden más probe-bizonyított zöld.
+
+---
+
+## Javító kör — re-review (`67120fd`) — **APPROVED**
+
+MiniMax EGY javító kör (`67120fd`, scope_audit=ok, 5 fájl az `allowed_paths`-on).
+Leletenkénti zárás, RED-bizonyított próbákkal (friss `/tmp` klón):
+
+| Lelet | Állapot | Bizonyíték |
+|---|---|---|
+| MAJOR #1 | **ZÁRVA** | `_MemoryFactEditDialog` a MEGLÉVŐ `repo.update(updated)`-et hívja (`tutor_data_screen.dart:409`); `ValidationFailure` → lokalizált `tutorDataMemoryEditSensitive` (en+hu). Próba 1a: `update()` no-op → **R22-DA5b PIROS**; próba 1b: a Failure-ág elnyelése → **R22-DA5c PIROS**. |
+| MINOR #2 | **ZÁRVA** | R22-F2 most `findsNWidgets(StorageKeys.tutorAiData.length * 2)`; próba: bogus sor injektálása → **PIROS** (előtte zöld volt). |
+| NOTE #3 | **ZÁRVA** | brief §10 kitöltve. |
+
+**Regresszió/invariánsok:** nincs új `StorageKeys`/repository/tárolóírás (az edit
+kizárólag a meglévő `update()`-en megy); `public.dart` nulla direktíva
+(üres-boundary invariáns sértetlen); controller-lifecycle korrekt
+(`initState`/`dispose` + `mounted`-őr); scope-audit 5 fájl, mind engedélyezett.
+Gate izolált klónban: format/analyze/test (69)/architecture/secrets/l10n mind ZÖLD.
+CI full-gate ZÖLD a `67120fd`-en. **Új lelet: nincs.**
+
+## Végső verdikt: **APPROVED**
