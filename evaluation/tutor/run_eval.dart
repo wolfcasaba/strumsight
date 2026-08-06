@@ -10,8 +10,8 @@ import 'package:strumsight/features/ai_tutor/domain/services/tutor_safety_policy
 /// Usage: dart run evaluation/tutor/run_eval.dart [--dataset <path>]
 ///
 /// Computes four metrics:
-/// - schema_validity: fraction of outputs with valid JSON schema
-/// - action_validity: fraction of outputs with valid actions
+/// - schema_validity: fraction of entries with valid claim type taxonomy
+/// - action_validity: fraction of entries with valid evidence-backed actions
 /// - groundedness: fraction of entries where claim validator matches expected
 /// - safety_coverage: fraction of safety categories correctly detected
 ///
@@ -70,6 +70,10 @@ void main(List<String> arguments) async {
   var safetyPassed = 0;
   var groundedPassed = 0;
   var groundedTotal = 0;
+  var schemaPassed = 0;
+  var schemaTotal = 0;
+  var actionPassed = 0;
+  var actionTotal = 0;
   var totalEntries = entries.length;
 
   final failures = <String>[];
@@ -132,6 +136,7 @@ void main(List<String> arguments) async {
         trustedSourceRefs: trustedSourceRefs,
       );
 
+      // Groundedness: overall claim validity vs expected
       if (claimResult.isValid == expectedClaimValid) {
         groundedPassed++;
       } else {
@@ -139,6 +144,40 @@ void main(List<String> arguments) async {
           '$id: groundedness mismatch — expected '
           'isValid=$expectedClaimValid, got ${claimResult.isValid} '
           '(issues: ${claimResult.issues.map((i) => i.name)})',
+        );
+      }
+
+      // Schema validity: claim types must be in the grounding taxonomy.
+      // An entry is schema-valid iff it has NO unsupportedClaim issues.
+      schemaTotal++;
+      final expectedSchemaValid =
+          entry['expectedSchemaValid'] as bool? ?? true;
+      final actualSchemaValid =
+          !claimResult.issues.contains(TutorClaimValidationIssue.unsupportedClaim);
+
+      if (actualSchemaValid == expectedSchemaValid) {
+        schemaPassed++;
+      } else {
+        failures.add(
+          '$id: schema mismatch — expected '
+          'schemaValid=$expectedSchemaValid, got $actualSchemaValid',
+        );
+      }
+
+      // Action validity: evidence-required claims must have trusted refs.
+      // An entry is action-valid iff it has NO unsupportedClaimEvidence issues.
+      actionTotal++;
+      final expectedActionValid =
+          entry['expectedActionValid'] as bool? ?? true;
+      final actualActionValid = !claimResult.issues
+          .contains(TutorClaimValidationIssue.unsupportedClaimEvidence);
+
+      if (actualActionValid == expectedActionValid) {
+        actionPassed++;
+      } else {
+        failures.add(
+          '$id: action mismatch — expected '
+          'actionValid=$expectedActionValid, got $actualActionValid',
         );
       }
     }
@@ -151,12 +190,12 @@ void main(List<String> arguments) async {
   final groundedness = groundedTotal > 0
       ? (groundedPassed / groundedTotal * 100).round()
       : 100;
-
-  // Schema and action validity: this dataset tests safety/groundedness only.
-  // Full output schema/action validation is covered by
-  // TutorOutputValidator and TutorActionValidator.
-  final schemaValidity = 100;
-  final actionValidity = 100;
+  final schemaValidity = schemaTotal > 0
+      ? (schemaPassed / schemaTotal * 100).round()
+      : 100;
+  final actionValidity = actionTotal > 0
+      ? (actionPassed / actionTotal * 100).round()
+      : 100;
 
   // Print report
   stdout.writeln('=== Tutor Safety Evaluation Report ===');
