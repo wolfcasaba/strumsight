@@ -4530,3 +4530,38 @@ csak az ELSŐ halálnál; a második unknown/stalled = H6.
 (`mm-round.sh` `.git`-**könyvtárat** vár), és a friss klónt a dispatch előtt
 `tools/prepare-flutter-generated.sh`-val primeold (pub deps + l10n), különben az
 implementer első gate-futása a hiányzó generált előfeltételen bukik.
+
+## L133 — Előre megírt brief „shared barrel additív export" engedélye avulhat: egy korábbi kör ŐR-TESZTJE üresre fagyaszthatja — a feloldás scope-SZŰKÍTÉS, nem a fagyasztott teszt módosítása (E04-R20, implementer STOP)
+
+**Mérve (E04-R20).** A batch-előre-írt brief §4 az `ai_tutor/public.dart`-ot
+„előző körökből additív export" címen engedélyezte, és az acceptance implicit az
+adapterek/kártya public-barrel exportját feltételezte. A mért valóság ezt
+megcáfolta: a `public.dart` ma ÜRES (`library;`), és egy **E04-R01-ben
+befagyasztott** invariáns-teszt tiltja bármely export/import hozzáadását —
+`test/features/ai_tutor/ai_tutor_boundary_test.dart`: *"the empty baseline
+boundary must not pull in another feature's … internals"* (merge `814388a`).
+Az implementer helyesen **`stopped`**-ot jelzett: az export a listán-KÍVÜLI
+őr-teszt módosítását igényelte volna.
+
+**Miért a table-vs-path minta ismétlődése.** Ugyanaz a gyökér, mint a pipeline
+§1 két mérési szabályánál: a brief a *réteg-diagramot* (van public barrel →
+exportálj rajta) mérte, nem a *tényleges invariánst* (egy őr-teszt üresen
+tartja). A „van-e barrel" nem elég — meg kell mérni, **szabad-e írni bele**.
+
+**Szabály.** Ha egy brief egy megosztott barrelt (`public.dart`, `index.dart`,
+`mod.rs` …) additív-exportra enged, a pre-flightban GREP-eld ki, van-e rá
+invariáns/boundary-teszt, amely a tartalmát rögzíti:
+`grep -rl "public.dart\|baseline boundary\|must not.*export" test/`. Ha van, és
+egy korábbi (merge-elt) kör fagyasztotta be:
+
+- a feloldás **lista-SZŰKÍTÉS** (a barrel kikerül az `allowed_paths`-ból), ha a
+  kör leszállítandója a feature-en BELÜL, közvetlen importtal is teljes és a
+  `gate_tests` lefedi (ADR 0087 §2 — orchestrátor-hatáskör, nem halt);
+- a fagyasztott őr-teszt módosítása **H2** (lezárt kör viselkedése) — TILOS;
+- a cross-feature bekötést (ami tényleg igényelné az exportot) az a jövőbeli kör
+  viszi, amely a boundary-teszt együtt-változását a SAJÁT scope-jában kezeli.
+
+E04-R20-ban ez `docs(round) §0.0-R1` revízió volt; a kör export nélkül merge-elt
+(PR #153, `3ce4afc`), a widget-teszt a kártyát közvetlen importtal példányosítja.
+Ellentét L-ekkel: itt nincs salvage/timeout — a STOP a HELYES normatív jelzés
+volt, és a legolcsóbb feloldás a kör elején (nem a review-ban) született meg.

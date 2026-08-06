@@ -4,9 +4,38 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R19 MERGED — Evidence/source/action card UI, provenance chip + typed-executor
-> preview + validated plan-edit, nincs új ADR / ADR 0132+0133 hatálya; MiniMax M3,
-> exact-SHA zöld kapun át).**
+> (E04-R20 MERGED — Practice & Analyze post-session tutor integration; two result
+> context-adapters + SessionTutorEntryCard, nincs új ADR / ADR 0132 hatálya; Codex
+> (Terra), exact-SHA zöld kapun át).**
+>
+> ## ✅ E04-R20 KÉSZ — Practice & Analyze post-session tutor integration (2026-08-06)
+>
+> **E04-R20** MERGED (PR [#153](https://github.com/wolfcasaba/strumsight/pull/153),
+> squash `3ce4afc`, **nincs új ADR** — az ADR 0132 (deterministic-result-primary +
+> immutable context-snapshot) + R08 debrief hatálya; implementer **Codex (Terra,
+> gpt-5.6-terra)**, orchestrátor/reviewer **Claude Opus 4.8**). Post-session
+> tutor-belépő a Practice/Analyze eredményhez: **`PracticeResultContextAdapter`** +
+> **`AnalyzeResultContextAdapter`** (kizárólag a `features/{practice,analyze}/public.dart`
+> felületet fogyasztják, provenance-guard `_hasVersion`, capability-aware —
+> `mlDiagnosticsAvailable`, unsupported metric sosem claim); **`SessionTutorEntryCard`**
+> (available / deterministic-fallback (consent-off) / deleted-result / version-mismatch
+> állapotok, szerkeszthető előre kitöltött kérdés, immutable `SessionTutorEntryRequest`
+> snapshot-handoff, suggested-practice gomb). **A deterministic result elsődleges** —
+> a belépő additív, a result-UI-t NEM módosítja; **progress/streak chat-nyitástól SOHA**
+> nem változik (a kártya sehol nem hív `recordPracticeToday`-t; statikus őr +
+> reviewer-falszifikáció piros→zöld igazolta). en/hu ARB additív. **Pre-flight §0.0:**
+> nincs új ADR (mérve — R18/R19 precedens); a streak-tulajdonlás kimérve (két
+> result-úti callsite: `practice_session_recording.dart:183`, `analyze_providers.dart:226`).
+> **§0.0-R1 scope-narrowing:** az implementer helyesen `stopped`-ot jelzett — a brief
+> `ai_tutor/public.dart` additív exportja ütközött az **E04-R01-ben befagyasztott**
+> boundary-teszttel (`ai_tutor_boundary_test.dart`, üres public.dart); a public.dart
+> **kikerült** az allowed_paths-ból (ADR 0087 §2 lista-szűkítés; a boundary-teszt lezárt
+> kör őre — módosítása H2 lett volna). A kör export nélkül teljes; a cross-feature
+> bekötés jövőbeli kör dolga. **Review:**
+> [`docs/reviews/e04-r20-practice-analyze-integration-review.md`](docs/reviews/e04-r20-practice-analyze-integration-review.md)
+> — **APPROVED** (0 BLOCKER/MAJOR; 3 MINOR/NOTE teszt-lefedettségi follow-up).
+> CI exact-SHA `6c91396`: build-apk [31061573792](https://github.com/wolfcasaba/strumsight/actions/runs/31061573792)
+> **success**; router-ci `eac1aad` [31061300346](https://github.com/wolfcasaba/strumsight/actions/runs/31061300346) **success**.
 >
 > ## ✅ E04-R19 KÉSZ — Evidence, source & action card UI (2026-08-06)
 >
@@ -1134,11 +1163,15 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
 0. **A következő Epic 4 kör** — a `docs/execution/pipeline-queue.tsv` következő
    `pending` sora; a pipeline (ADR 0087) automatikusan indítja új sessionben —
    **ez a session nem kezdi el**. A `public.dart` **üres-boundary invariáns**
-   (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó (R16/R19) nem érkezik
-   meg — az R12 prompt- és R13 gateway-osztályok a feature-en belül közvetlen
-   importtal érhetők el, a publikus export a hívó UI-kör (R18/R19) érkezéséig
-   halasztva. **A queue következő `pending` sora: E04-R20 — Practice/Analyze
+   (`ai_tutor_boundary_test.dart`) tovább él, amíg a hívó UI-kör nem érkezik
+   meg — az R12/R13 osztályok és (R20-tól) a post-session result-adapterek +
+   `SessionTutorEntryCard` a feature-en belül közvetlen importtal érhetők el, a
+   publikus export a cross-feature bekötő kör érkezéséig halasztva. **A queue
+   következő `pending` sora: E04-R21 — Song Trainer debrief & range action
    integráció (a pipeline indítja új sessionben).**
+   **~~E04-R20 — Practice & Analyze post-session tutor integráció~~ — KÉSZ** (PR #153, `3ce4afc`,
+   nincs új ADR — ADR 0132 hatálya; implementer Codex/Terra; §0.0-R1 public.dart
+   scope-narrowing az E04-R01 boundary-teszt miatt; ld. fejléc + §5).
    **~~E04-R19 — Evidence, source & action card UI~~ — KÉSZ** (PR #152, `f0f74fb`,
    nincs új ADR — ADR 0132+0133 hatálya; implementer MiniMax M3; első futás stalled →
    folytató dispatch salvage; ld. fejléc + §5).
