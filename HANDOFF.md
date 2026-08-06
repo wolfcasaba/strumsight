@@ -4,71 +4,90 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R05 MERGED — CameraSessionCoordinator és lifecycle ownership: exkluzív
-> `CameraSessionCoordinator`/`CameraSessionLease`/`CameraOwner` a mikrofon
-> ADR 0056 mintáját másolva (szinkron check-and-take az első `await` előtt,
-> kontrollált retryable `camera.session_busy`, nem lopás), `CameraLifecycleGuard`
-> (`paused`/`hidden`/`detached` → revoke, `inactive`/`resumed` → semmi, nincs
-> auto-resume), Riverpod providerek app-gyökér mountolás NÉLKÜL (szándékosan
-> R05 scope-on kívül); implementer Terra, orchestrátor/reviewer Claude Sonnet 5;
-> javító kör nélkül, exact-SHA zöld kapun át, dedikált security-reviewer PASS).**
+> (E05-R06 MERGED — Android camera production adapter: `PluginCameraCapture`
+> a hivatalos Flutter `camera` pluginra épülve (CameraX Androidon, ADR 0184
+> C1), latest-frame backpressure + garantált buffer-felszabadítás +
+> mirror/crop metaadat-megőrzés, `visionEnabled` flag mögött; három
+> post-stop brief-revízió (két elavult ADR-hivatkozás, `pubspec.lock`
+> scope-bővítés, core/feature-réteg áthelyezés); implementer Terra,
+> orchestrátor/reviewer Claude Sonnet 5; 1 javító kör (teszt-minőség,
+> mutáció-kill próbával felfedve), exact-SHA zöld kapun át, dedikált
+> security-reviewer PASS).**
+>
+> ## ✅ E05-R06 KÉSZ — Android camera production adapter (2026-08-06)
+>
+> **E05-R06** MERGED (PR [#168](https://github.com/wolfcasaba/strumsight/pull/168),
+> squash `a43f8c1`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+> orchestrátor/reviewer **Claude Sonnet 5**). Az első production Android
+> kamera-capture adapter a meglévő platform-semleges `CameraCapture` contract
+> (E05-R03) mögé: `PluginCameraCapture` a hivatalos Flutter `camera` pluginra
+> épül (`camera ^0.11.4`, CameraX-backed Androidon), latest-frame
+> backpressure (queue-mélység 1, dropped-frame számláló), platform buffer
+> garantáltan felszabadul minden úton (feldolgozott / eldobott / belső-hiba /
+> close-alatti — mind a négy mutáció-kill próbával igazolva), stabil
+> `FailureCode` mapping öt platform-hibakódra, és a bekötés a
+> `cameraCaptureProvider`-be `visionEnabled` flag mögött (off mellett a
+> factory sosem hívódik, mutáció-kill próbával igazolva). A meglévő
+> `CameraFrame` additív, opcionális `mirror`/`crop` mezőt kapott (a két
+> meglévő hívóhely érintetlen maradt).
+>
+> **Pre-flight §0.0 — HÁROM post-stop revízió** (Terra mindhárom alkalommal
+> helyesen `stopped`-ot jelzett, egyiket sem oldotta fel egyoldalúan):
+> (1) két elavult ADR-hivatkozás javítva (`0167→0184`, `0163→0180`, mindkettő
+> az E05-R01 hat-ADR-es eltolásából, az E05-R04 által magára már dokumentált
+> minta szerint); (2) R1: `pubspec.lock` felvéve az `allowed_paths`-ba
+> (mechanikus melléktermék — négy korábbi függőség-felvevő kör ugyanígy
+> tette); (3) R2: `lib/core/camera/camera_frame.dart` felvéve, szűken
+> engedélyezett additív `mirror`/`crop` mezővel (az SDD saját
+> `CameraFrameMetadata` domainmodelljének végrehajtása, nem új döntés); R3:
+> a három ÚJ fájl áthelyezve `lib/features/vision/data/camera/` →
+> `lib/core/camera/` — az eredeti terv a core `camera_providers.dart`-ot egy
+> feature-fájl importálására kérte volna (`AGENTS.md` §6 sértés), a kamera
+> itt core-szintű, több feature által osztott képesség (l. `CameraOwner`),
+> pontosan az `AudioStreamerCapture` (`lib/core/audio/capture/`) precedensét
+> követve. A kör így **nem hoz létre semmit** `lib/features/vision/` alatt.
+>
+> **Review** ([docs/reviews/e05-r06-…-review.md](docs/reviews/e05-r06-android-camera-adapter-review.md)):
+> **APPROVED 1 javító kör után** (F1/MAJOR). Az orchestrátor izolált `/tmp`
+> klónban 4 mutáció-kill próbát futtatott (backpressure-sorrend,
+> `visionEnabled`-kapu, ismeretlen hibakód-mapping, belső `bind()`-hiba) — 3
+> zölden bizonyította a védelmet, 1 (F1) valódi tesztlefedettségi rést talált:
+> a „callbackben dobott kivétel" teszt egy downstream stream-listener
+> kivételét dobta, ami a Dart Zone-hibakezelőn át fut és SOHA nem éri el az
+> adapter saját try/catch/**finally**-jét — a brief §6.1 saját mérce-mátrixa
+> ezt a hibaosztályt ígérte lefedni, és nem tette (a termékkód maga
+> bizonyítottan helyes volt — az orchestrátor egy javított próbateszttel
+> igazolta). Terra javítása (`2c629db`) a tesztet a `CameraFrameBinding.bind()`
+> valódi belső hibájára cserélte; önálló újra-ellenőrzés piros→zöld
+> visszaigazolta. Dedikált **security-reviewer**
+> ([docs/reviews/e05-r06-…-security.md](docs/reviews/e05-r06-android-camera-adapter-security.md),
+> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE
+> (jövőbeli crash-reporter/log-redaction hardening, e körben nincs teendő);
+> az ellátási lánc (`camera`/`camera_android_camerax`/`camera_platform_interface`)
+> élő pub.dev API-val igazolva — mind flutter.dev publisher, a lock sha256
+> pontosan egyezik a pub.dev `archive_sha256`-tal. Scope-audit mindkét
+> review-ban tiszta. **Win32-evidencia:** a solve win32 majort NEM emelte
+> (változatlanul `6.3.0`).
+>
+> **Zöld kapu (exact-SHA `650a8ac`, mindkét review-commit UTÁNI újra-dispatch):**
+> Build APK [31100182194](https://github.com/wolfcasaba/strumsight/actions/runs/31100182194)
+> **success** (13m38s, teljes suite + property gate + song-gate-ek is benne,
+> ADR 0053) + Router CI
+> [31100183872](https://github.com/wolfcasaba/strumsight/actions/runs/31100183872)
+> **success**. Post-merge gate (`tools/round-gate.sh test/core/camera`) a
+> friss `main`-en is zöld. **Következő:** a queue következő Epic 5 sora (SDD
+> Ch6 Kör 7 — Frame transform és overlay koordinátarendszer), a pipeline új
+> sessionben indítja.
 >
 > ## ✅ E05-R05 KÉSZ — CameraSessionCoordinator és lifecycle ownership (2026-08-06)
 >
-> **E05-R05** MERGED (PR [#167](https://github.com/wolfcasaba/strumsight/pull/167),
-> squash `8f46dd4`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
-> orchestrátor/reviewer **Claude Sonnet 5**). Garantálja, hogy egyszerre
-> pontosan egy StrumSight-modul birtokolja a kamerát, és minden kilépési
-> útvonal felszabadítsa: `CameraSessionCoordinator` + `CameraSessionLease` +
-> `CameraOwner` enum (`visionSetup`/`visionPractice`/`songVision`/`labCapture`)
-> — a mikrofon `AudioSessionCoordinator` (ADR 0056) szerkezeti pontos másolata:
-> egy aktív lease, a check-and-take az első `await` **előtt** szinkron fut, a
-> második owner kontrollált, retryable `camera.session_busy`-t kap (nem
-> lopás), revoke sorrendje owner-teardown → `finally`-ben release.
-> `CameraLifecycleGuard`: `paused`/`hidden`/`detached` → revoke; `inactive`
-> (értesítési sáv) és `resumed` → sem revoke, sem auto-start (ADR 0178, mind
-> az öt `AppLifecycleState` külön tesztcellával igazolva). `camera_providers.dart`
-> Riverpod wiring — **szándékosan nincs mountolva** a `StrumSightApp`
-> gyökerében (nincs még UI/adapter, az R06 dolga; a `request()`-halasztás
-> E05-R04 mintáját követi). Strukturált log-események kizárólag
-> owner/reason/timestamp/leaseId mezőkkel, zárt `CameraSessionRevocationReason`
-> enum, hogy tetszőleges szöveg ne kerülhessen a logba. Audio/camera lease
-> teljesen független (ADR 0182) — zéró kereszthivatkozás.
->
-> **Pre-flight §0.0 (mérve `origin/main` @ `c75f2ba`):** nincs scope-revízió,
-> egy dokumentum-pontosítás — a brief `0161`/`0165` ADR-hivatkozása (fejléc +
-> két inline §5 idézet) az E05-R01 `0161–0166 → 0178–0183` átszámozás előtti,
-> elavult számozás volt; javítva **0178** (privacy-by-default) / **0182**
-> (audio-priority degradation) additív alkalmazására. Nincs ÚJ ADR — a kör az
-> ADR 0056 mintáját alkalmazza egy új erőforrás-típusra, nem új döntés.
-> **Mérve: ez a batch-előírt E05 brief-készlet 20 további, még függő
-> fájlját is érinti** — lásd [`docs/LESSONS.md` L147](docs/LESSONS.md).
->
-> **Review** ([docs/reviews/e05-r05-…-review.md](docs/reviews/e05-r05-camera-session-coordinator-and-lifecycle-review.md)):
-> **APPROVED** javító kör nélkül (0 BLOCKER/MAJOR/MINOR, 5 NOTE — 2 saját
-> interpretációs megjegyzés a race-mátrix „acquire cancel" és „revoke közbeni
-> frame" celláiról, mindkettő WONTFIX; 3 dedikált security-reviewer
-> hardening-javaslat explicit R06-ra). A reviewer **saját, független**
-> mutáció-kill próbával igazolta a szinkron kritikus szakaszt izolált
-> `/tmp` klónban (a lease-hozzárendelés elé `await`-et szúrva pontosan a
-> race-mátrix (a) cellája ment PIROSRA, semmi más — majd visszaállítva),
-> nem fogadta el bemondásra az implementer §10 önbevallását. Dedikált
-> **security-reviewer** (brief `risk = "high"`): **PASS**, 0 BLOCKER/MAJOR/MINOR,
-> 3 NOTE (mind R06-ra: teardown-timeout, `reason`-mező típus-szűkítés,
-> teszt-support import-higiénia). Scope-audit: 7/7 fájl az `allowed_paths`-on,
-> nulla pre-existing fájl érintve (gépi `scope_audit=ok` + kézi
-> `git diff --stat` egyezik).
->
-> **Zöld kapu (exact-SHA `9bd7f79`, a review-commit UTÁNI újra-dispatch mindkét
-> workflow-ra):** Full Gate (no APK)
-> [31093889021](https://github.com/wolfcasaba/strumsight/actions/runs/31093889021)
-> **success** + Router CI
-> [31093891050](https://github.com/wolfcasaba/strumsight/actions/runs/31093891050)
-> **success** (mindkettő explicit `workflow_dispatch`-elve a review-commit
-> pontos tip-jére, nem csak az implementer-commitra). Post-merge gate
-> (`tools/round-gate.sh test/core/camera test/core/platform`) a friss
-> `main`-en is zöld. **Következő:** a queue következő Epic 5 sora (E05-R06 —
-> Android camera production adapter), a pipeline új sessionben indítja.
+> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> `CameraSessionCoordinator`/`CameraSessionLease`/`CameraOwner` a mikrofon
+> ADR 0056 mintáját másolva; `CameraLifecycleGuard` (`paused`/`hidden`/
+> `detached` → revoke, `inactive`/`resumed` → semmi). PR
+> [#167](https://github.com/wolfcasaba/strumsight/pull/167), squash `8f46dd4`,
+> implementer Terra, APPROVED javító kör nélkül, dedikált security-reviewer
+> PASS.
 >
 > ## ✅ E05-R04 KÉSZ — Camera permission gateway és platform deklarációk (2026-08-06)
 >
