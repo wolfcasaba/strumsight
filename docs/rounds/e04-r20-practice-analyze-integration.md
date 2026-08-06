@@ -15,7 +15,6 @@ allowed_paths = [
   "lib/features/ai_tutor/presentation/widgets/session_tutor_entry_card.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
-  "lib/features/ai_tutor/public.dart",
   "test/features/ai_tutor/application/practice_result_context_adapter_test.dart",
   "test/features/ai_tutor/application/analyze_result_context_adapter_test.dart",
   "test/features/ai_tutor/presentation/session_tutor_entry_card_test.dart",
@@ -89,6 +88,33 @@ kattintásakor rögzített immutable context-snapshot-referenciát + előre kit�
 kérdést állítja elő. A reviewer ellenőrizze, hogy az új adapter NEM duplikálja a
 meglévő context-adaptert és NEM módosítja a result-UI-t.
 
+### §0.0-R1 revízió (2026-08-06, implementer STOP nyomán — scope NARROWING)
+
+**Mért ütközés.** A brief §4 eredetileg `lib/features/ai_tutor/public.dart`-ot
+„előző körökből additív export" címen engedélyezte. Ez a mért állítás **avult**:
+a `public.dart` ma ÜRES (csak `library;`), és egy **E04-R01-ben befagyasztott**
+őr-teszt tiltja bármely export/import hozzáadását:
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` — *"the empty baseline
+boundary must not pull in another feature's … internals"* (merge: `814388a`,
+ADR 0131–0134). Az implementer helyesen `stopped`-ot jelzett, mert az export a
+listán-kívüli őr-teszt módosítását igényelte volna.
+
+**Döntés (ADR 0087 §2 — az engedélyezett-lista SZŰKÍTÉSE, nem tágítása):**
+`lib/features/ai_tutor/public.dart` **kikerül** az `allowed_paths`-ból. A kör
+teljes leszállítandója (a két `*_result_context_adapter`, a
+`SessionTutorEntryCard` és a tesztjeik) az `ai_tutor` feature-ön BELÜL él, és a
+`gate_tests` (`test/features/ai_tutor/{application,presentation}`) maradéktalanul
+lefedi — az export a public boundaryn NEM előfeltétele sem a kör
+acceptance-ének, sem a gate-nek.
+
+- A `public.dart` **befagyasztva üres marad**; az E04-R01 boundary-tesztet TILOS
+  módosítani (az egy lezárt kör őre — H2 volna).
+- A belépő-kártya **cross-feature bekötése** a Practice/Analyze result-képernyőkbe
+  (ami az ai_tutor public felületét igényelné) **külön, jövőbeli kör** dolga; az a
+  kör kezeli majd a boundary-teszt együtt-változását a saját scope-jában.
+- A `session_tutor_entry_card_test.dart` a kártyát **közvetlen import**tal
+  példányosítja (nem a public barrelen át), így a teszt zöld lehet export nélkül.
+
 ## 1. Cél
 
 A tutor összekötése a Practice/Analyze eredményekkel úgy, hogy a **deterministic
@@ -119,8 +145,10 @@ source-belső import, unsupported metric claimbe emelése.
 | `.../application/context/adapters/analyze_result_context_adapter.dart` | ÚJ | Analyze→context |
 | `.../presentation/widgets/session_tutor_entry_card.dart` | ÚJ | belépő kártya |
 | `lib/l10n/app_en.arb`, `app_hu.arb` | meglévő | stringek (additív) |
-| `lib/features/ai_tutor/public.dart` | előző körökből | additív export |
 | `test/features/ai_tutor/{application,presentation}/*` | ÚJ | adapter + card tesztek |
+
+> **§0.0-R1:** `lib/features/ai_tutor/public.dart` KIKERÜLT az engedélyezett listáról —
+> a boundary-teszt (E04-R01) befagyasztja üresre; a kör export nélkül teljes.
 | `docs/rounds/e04-r20-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más fájl, a Practice/Analyze **belső** contractja + result-UI,
@@ -155,7 +183,8 @@ CI = orchestrátor exact-SHA.
 
 1. RED no-streak-on-chat + deterministic-fallback + version-mismatch tesztek.
 2. Practice/Analyze adapterek (public API).
-3. entry-card + ARB.
+3. entry-card + ARB. (NINCS `ai_tutor/public.dart` export — §0.0-R1; a card-teszt
+   közvetlen importtal példányosít.)
 4. `flutter gen-l10n`; gate.
 
 ## 9. Kockázatok
