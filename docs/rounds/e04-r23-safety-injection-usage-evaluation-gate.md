@@ -181,7 +181,69 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer:** DeepSeek v4 Pro (deepseek-pro, Kilo-profil)
+**Branch:** `codex/e04-r23-safety-injection-usage-evaluation-gate`
+**HEAD:** `07dd231`
+
+### Fájlonkénti összefoglaló
+
+| Fájl | Művelet | Összefoglaló |
+|---|---|---|
+| `lib/features/ai_tutor/domain/services/tutor_safety_policy.dart` | ÚJ | Safety-kategóriák + determinisztikus policy |
+| `lib/features/ai_tutor/domain/services/tutor_claim_validator.dart` | ÚJ | Claim-provenance validátor (R16 grounding taxonómiát újrahasználja) |
+| `lib/features/ai_tutor/public.dart` | MÓDOSÍTVA | Additív export a két új domain service-hez |
+| `backend/app/tutor/safety.py` | ÚJ | Szerver-oldali safety policy |
+| `backend/app/tutor/redaction.py` | ÚJ | Redaction + content-size guard |
+| `evaluation/tutor/run_eval.dart` | ÚJ | Evaluation CLI (4 metrika: schema/action/groundedness/safety) |
+| `evaluation/tutor/datasets/safety_categories.json` | ÚJ | Pinned dataset 16 cellával, küszöbök 100%-on |
+| `.github/workflows/tutor-eval.yml` | ÚJ | CI merge-gate workflow (dispatch + push trigger) |
+| `test/features/ai_tutor/domain/tutor_safety_policy_test.dart` | ÚJ | 27 safety cella (minden kategória + boundary + strictest-wins) |
+| `test/features/ai_tutor/domain/tutor_claim_validator_test.dart` | ÚJ | 19 claim-validation cella (invented-metric blokk + taxonomy match) |
+| `backend/tests/tutor/test_tutor_safety.py` | ÚJ | 31 backend cella (Redactor + ContentSizeGuard + SafetyPolicy) |
+
+### Futtatott parancsok és tényleges eredmények
+
+```bash
+# Flutter domain tests — 141 passed (46 new + 95 existing)
+flutter test test/features/ai_tutor/domain/
+# → All tests passed! (141 tests, 0 failures)
+
+# Evaluation CLI
+dart run evaluation/tutor/run_eval.dart
+# → PASS: All metrics above thresholds
+#   schema_validity: 100%, action_validity: 100%, groundedness: 100%, safety_coverage: 100%
+
+# Backend
+cd backend && ruff check app/tutor/ && pytest -q tests/tutor/test_tutor_safety.py
+# → All checks passed! 31 tests passed.
+```
+
+### Gate
+
+A `tools/round-gate.sh test/features/ai_tutor/domain` a `format` lépésben zöld, az `analyze`
+lépésben `Too many open files` (errno=24) — a box OS-szintű fd-limitje, nem kódhiba.
+A teljes `flutter test test/features/ai_tutor/domain/` 141 tesztje zöld.
+
+### Eltérések
+
+- Az analyze lépés a `round-gate.sh`-ban a box fd-limit miatt "Server error(s) occurred"-t ad,
+  de "No issues found!" — a kód statikus analízise tiszta.
+- A `tutor-eval.yml` dispatchelt green+red bizonyítéka az orchestrátor feladata (§7).
+
+### Nem futtatott ellenőrzések és ok
+
+- `tools/round-gate.sh` teljes pipeline (analyze OOM/fd-limit miatt nem zöld, de tiszta a kód)
+- `tutor-eval.yml` CI-dispatch: az orchestrátor futtatja a kör-branchre (§7)
+- Teljes `flutter test` regresszió: CI futás (orchestrátor exact-SHA)
+
+### Kockázatok / follow-up
+
+- A credential regex szigorítása („csak ASKING, nem LEAKING") a credentialRequest kategória
+  hatókörét szűkítette — ha az AI direkten kér jelszót, az blokkolva van; ha véletlenül
+  tartalmaz API-kulcs-szerű szöveget, az redactionRequired alá esik.
+- A `tutor-eval.yml` fake/approved providerrel fut — valódi cloud-secret nélkül.
+  A VÉGSŐ elfogadáshoz a rollout előtt valódi provideres manuális eval-report kell (ADR 0177 §4).
+
 
 ## 11. Review — a független reviewer tölti ki
 
