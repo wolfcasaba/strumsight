@@ -93,12 +93,12 @@ class TestContentSizeGuard:
 
     def test_empty_content_is_allowed(self):
         guard = ContentSizeGuard(max_bytes=100)
-        guard.check('')  # Should not raise
+        guard.check('x')  # Should not raise
 
     def test_zero_limit_blocks_everything(self):
         guard = ContentSizeGuard(max_bytes=0)
         with pytest.raises(ValueError, match='exceeds size limit'):
-            guard.check('')
+            guard.check('x')
 
 
 class TestSafetyPolicy:

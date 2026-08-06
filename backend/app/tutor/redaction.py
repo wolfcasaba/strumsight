@@ -5,16 +5,33 @@ operates on server-side output before it reaches the client; redaction
 rules are deterministic and stateless.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from re import Pattern
+from re import compile as re_compile
 
 
 @dataclass(frozen=True)
 class RedactionRule:
-    """A single redaction rule: pattern → replacement."""
+    """A single redaction rule: pattern → replacement.
 
-    pattern: Pattern
+    The `pattern` field accepts either a pre-compiled `Pattern` or a raw
+    string which is compiled at initialization time.
+    """
+
     replacement: str
+    _compiled: Pattern = field(init=False, repr=False)
+
+    def __init__(self, pattern: str | Pattern, replacement: str) -> None:
+        object.__setattr__(self, 'replacement', replacement)
+        if isinstance(pattern, Pattern):
+            object.__setattr__(self, '_compiled', pattern)
+        else:
+            object.__setattr__(self, '_compiled', re_compile(pattern))
+
+    @property
+    def pattern(self) -> Pattern:
+        """The compiled regex pattern."""
+        return self._compiled
 
 
 class Redactor:
@@ -39,8 +56,8 @@ class Redactor:
         result = text
         was_redacted = False
         for rule in self._rules:
-            new_result = rule.pattern.sub(rule.replacement, result)
-            if new_result != result:
+            new_result, count = rule.pattern.subn(rule.replacement, result)
+            if count > 0:
                 was_redacted = True
             result = new_result
         return result, was_redacted
