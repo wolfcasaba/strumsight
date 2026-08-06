@@ -152,19 +152,12 @@ final class LocalTutorFallback {
 
   // ── Debrief construction ─────────────────────────────────────────────
 
-  LocalizedCoachingOutput _buildDebrief(SessionDebriefInput? input) {
-    final facts = input != null
-        ? builder.build(input)
-        : builder.build(_defaultDebriefInput());
-
+  LocalizedCoachingOutput? _buildDebrief(SessionDebriefInput? input) {
+    if (input == null) {
+      return null;
+    }
+    final facts = builder.build(input);
     final insight = coach.coach(facts);
     return coach.localize(insight: insight, lookup: localizationLookup);
   }
-
-  static SessionDebriefInput _defaultDebriefInput() => SessionDebriefInput(
-    sessionEvidenceRef: 'session.offline-fallback',
-    comparisonKey: 'offline',
-    pairedEventCount: SessionDebriefBuilder.minimumPairedEvidence,
-    stableTempoBpm: 80,
-  );
 }
