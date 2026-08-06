@@ -142,7 +142,7 @@ E05-R03	docs/rounds/e05-r03-core-camera-contract-and-fake.md	codex	nincs	done
 E05-R04	docs/rounds/e05-r04-camera-permission-and-platform-declarations.md	codex	nincs	done
 E05-R05	docs/rounds/e05-r05-camera-session-coordinator-and-lifecycle.md	codex	nincs	done
 E05-R06	docs/rounds/e05-r06-android-camera-adapter.md	codex	nincs	done
-E05-R07	docs/rounds/e05-r07-frame-transform-and-overlay-coordinates.md	codex	nincs	pending
+E05-R07	docs/rounds/e05-r07-frame-transform-and-overlay-coordinates.md	codex	nincs	done
 E05-R08	docs/rounds/e05-r08-vision-setup-wizard.md	minimax	nincs	pending
 E05-R09	docs/rounds/e05-r09-frame-quality-assessor.md	codex	nincs	pending
 E05-R10	docs/rounds/e05-r10-calibration-domain-and-store.md	codex	nincs	pending
