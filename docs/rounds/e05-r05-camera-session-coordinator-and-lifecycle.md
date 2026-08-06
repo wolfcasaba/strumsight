@@ -197,7 +197,52 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (Codex, 2026-08-06):**
+
+- `camera_session_lease.dart`: a négy megengedett `CameraOwner`, single-use
+  lease contract és véges `CameraSessionRevocationReason`; utóbbi megakadályozza,
+  hogy tetszőleges (esetleg érzékeny) szöveg lifecycle-logba kerüljön.
+- `camera_session_coordinator.dart`: egy aktív lease, az első `await` ELŐTTI
+  check-and-take, retryable `camera.session_busy`, revoke-nál owner teardown
+  majd `finally` release; a strukturált eventek kizárólag `owner`, `reason`,
+  `timestamp`, `leaseId` mezőket írnak.
+- `camera_lifecycle_guard.dart` és `camera_providers.dart`: a `paused`,
+  `hidden`, `detached` lifecycle állapotok revoke-ot indítanak; `inactive` és
+  `resumed` nem. A Riverpod guard provider `ref.onDispose`-szal bont, de az
+  app-gyökérbe **nincs mountolva** (szándékosan E05-R05 scope-on kívül).
+- A két új camera-teszt lefedi a hatcellás race-mátrixot, az öt lifecycle
+  állapotot, fake capture route-leave/frame stream bontást, provider-dispose-t
+  és a log-mezők raw-adatmentességét.
+
+**TDD / valódi-sértés próba:** előbb a hiányzó coordinator/guard importokra
+fordítási hibával PIROS tesztek készültek. Ezután a coordinatorban ideiglenesen
+az `_active = lease` elé került egy `await Future<void>.delayed(Duration.zero)`;
+`camera_session_coordinator_test.dart` PIROS lett: két overlap acquire két
+`Success` eredményt adott a várt egy success + egy busy helyett. Az `await`
+azonnal törölve, a célzott teszt újra zöld.
+
+**Revoke-order RED/GREEN:** a close közben hívott publikus `lease.release()`
+kezdetben túl korán felszabadította a coordinator slotját; a „acquire during
+close” teszt ekkor PIROS lett (`failureOrNull == null`, mert a második owner
+sikerrel foglalt). A lease `release()` revocation alatt most no-op, a belső
+`_finishRelease()` csak az owner teardown `finally` ágában oldja fel a slotot.
+Így a régi stream lezárásáig új capture nem indulhat.
+
+**Futtatott ellenőrzések:**
+
+```text
+flutter test test/core/camera/camera_session_coordinator_test.dart test/core/camera/camera_lifecycle_guard_test.dart
+→ 15 teszt zöld
+flutter test test/core/camera/camera_session_coordinator_test.dart
+  (szándékos mutációval) → piros, várt két Success hiba
+flutter test test/core/audio → 37 teszt zöld
+tools/round-gate.sh test/core/camera → ZÖLD:
+  format; analyze (No issues found); test/core/camera (47 teszt);
+  architecture; secrets
+```
+
+**Nem futtatott ellenőrzés:** valós Android kamera-indikátor — a device-mátrix
+PENDING sora, a brief szerint nem merge-kapu; production adapter még nincs.
 
 ## 11. Review — a független reviewer tölti ki
 
