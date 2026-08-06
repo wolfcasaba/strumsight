@@ -4,11 +4,39 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R22 MERGED — Tutor Profile/Privacy/Data & Consent UI; 3 flag-mögötti képernyő
-> + Riverpod-wiring a meglévő R03 (provider-mentes consent/profil) és R17 (memory/
-> delete-all) domain fölött; NINCS új domain/perzisztencia; nincs új ADR / ADR 0132+0134
-> hatálya; implementer MiniMax M3, 1 javító kör után APPROVED; exact-SHA zöld kapun át,
-> main mozgás miatt rebase + újra-dispatch).**
+> (E04-R23 MERGED — Tutor safety, prompt-injection, usage & evaluation merge-gate;
+> ADR 0177; implementer DeepSeek v4 Pro; 1 javító kör + 2 orchestrátor scope-akció
+> után APPROVED; exact-SHA zöld kapun át).**
+>
+> ## ✅ E04-R23 KÉSZ — Tutor safety, prompt-injection, usage & evaluation gate (2026-08-06)
+>
+> **E04-R23** MERGED (PR [#159](https://github.com/wolfcasaba/strumsight/pull/159),
+> squash `04787fa`, **ADR [0177](docs/adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md)**;
+> implementer **DeepSeek v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo-profil, `codex-round.sh`),
+> orchestrátor/reviewer **Claude Opus 4.8**). A tutor production-rollout **formális
+> biztonsági/minőségi/költség-kapui**: `tutor_safety_policy.dart` (safety-kategória →
+> strictest-wins policy: pain/medical/copyright/credential/**injection**/**invented-metric**/
+> camera/unsafe/usage/redaction), `tutor_claim_validator.dart` (claim-provenance az **R16
+> grounding-taxonómiát ÚJRAHASZNÁLVA**, nem forkolva; invented-metric = bizonyíték nélküli
+> `measuredFact`/`computedTrend` → **hard blokk**), backend `safety.py`+`redaction.py`
+> (stdlib-`re` only, nincs logging/telemetria), `evaluation/tutor/run_eval.dart` + dataset +
+> `tutor-eval.yml` merge-gate **négy géppel számított** metrikára (schema/action/groundedness/
+> safety; bármelyik küszöb alatt → **piros**). Injection SOHA nem emel tool-permissiont
+> (ADR 0141/0133); CI fake/approved provider — nincs cloud-secret.
+>
+> **Javító kör (1, DeepSeek):** review 3 MAJOR — ruff-check red (import-sort+F401), a
+> `run_eval.dart` schema/action metrikák hardcode-olt 100%-a (2/4 metrika sosem tudott
+> pirosra váltani), és a hiányzó dispatchelt piros. Fix: import-fix + a két metrika
+> tényleges dataset-számítása + drift-guard teszt. **Orchestrátor scope-akciók:** (1) a
+> `public.dart` additív exportja a merge-elt **E04-R01** üres-boundary guardot (`ai_tutor_
+> boundary_test.dart`, allowed_paths-on kívül) pirosra vitte a **teljes** suite-ban → a
+> guard módosítása H2/H3, az exportnak nincs fogyasztója (run_eval + tesztek közvetlenül
+> importálnak) → **scope-szűkítés**: `public.dart` vissza az üres baseline-re (§0.0
+> revízió), az additív export halasztva egy jövőbeli allowlist-körre; (2) backend
+> `ruff format` (quote-normalizálás). Re-review **APPROVED**; security review **PASS**.
+> Piros-út bizonyítva: a workflow `dart run … run_eval.dart` lépése küszöb alatti
+> dataseten safety_coverage 94% → `FAIL … below threshold` → exit 1 (kontroll: tiszta
+> dataset 100% → exit 0). Lecke: **L138/L139**.
 >
 > ## ✅ E04-R22 KÉSZ — Tutor Profile, Privacy, Data & Consent UI (2026-08-06)
 >
@@ -787,17 +815,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E04-R22 — Tutor Profile, Privacy, Data & Consent UI** (PR [#157](https://github.com/wolfcasaba/strumsight/pull/157), squash `faa3f32`, **nincs új ADR** — ADR 0132 (privacy/consent) + 0134 (memory policy) hatálya; implementer **MiniMax M3**, orchestrátor/reviewer **Claude Opus 4.8**).
+**E04-R23 — Tutor safety, prompt-injection, usage & evaluation gate** (PR [#159](https://github.com/wolfcasaba/strumsight/pull/159), squash `04787fa`, **ADR [0177](docs/adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md)**; implementer **DeepSeek v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo-profil), orchestrátor/reviewer **Claude Opus 4.8**).
 
-**Elkészült (§0.0 szerint mérve/szűkítve):** 3 flag-mögötti képernyő (`tutor_profile_screen` / `tutor_privacy_screen` / `tutor_data_screen`) + `tutor_privacy_providers.dart` (consent/profil in-memory `Notifier`-állapot + `tutorMemoryRepositoryProvider` a meglévő `TutorMemoryRepository` fölött) + 3 typed `AppRoutes` GoRoute a `lib/app/routing/`-ban a `if (aiTutorEnabled) ...[` blokkban. **Prezentációs UI + wiring csak** — nincs új domain/data/perzisztencia (§3), a `public.dart` üres-boundary invariáns sértetlen.
+**Elkészült:** a tutor production-rollout előtti formális kapui — safety-policy (strictest-wins kategória → verdikt), claim-provenance validator (R16 grounding-taxonómia **újrahasználva**, invented-metric hard blokk), backend safety+redaction+size-guard, evaluation CLI + adversarial/capability dataset + `tutor-eval.yml` merge-gate **négy géppel számított** metrikára (schema/action/groundedness/safety). Injection nem emel tool-permissiont; CI fake/approved provider (nincs cloud-secret).
 
-**Falszifikációs cellák (RED-bizonyítva a review-ban):** delete-all scope-lista = `StorageKeys.tutorAiData` [conversation_documents, conversation_index, memory_facts] + `.corrupt` karantének (szűkítés ÉS bővítés irány), consent-tengely-függetlenség, memory-edit szenzitív-elutasítás lokalizált hibával. A delete-all a MEGLÉVŐ `deleteAllAiData()`-t hívja; consent/profil + auth token megtartva.
+**Falszifikációs cellák (kipinnelve):** minden safety-kategóriához input→block/refuse unit-cella; invented-metric hard blokk (`unsupportedClaimEvidence`); injection-no-permission dataset-cella; a küszöb-mátrix below/at/above hármasa. Piros-út bizonyítva: `dart run … run_eval.dart` küszöb alatti dataseten safety_coverage 94% → exit 1; tiszta dataseten 100% → exit 0.
 
-**Javító kör (1, MiniMax):** az első review 1 MAJOR-t talált (memory-fact EDIT + szenzitív-elutasítás a doc-commentben állítva, de a UI-ból nem hívva); a javító kör (`67120fd`) implementálta az edit-affordanciát (`repo.update()` + lokalizált `tutorDataMemoryEditSensitive`), a scope-sor-szám guardot (`tutorAiData.length*2`), és kitöltötte a §10-et. Re-review **APPROVED** (3/3 lelet zárva, RED-próbákkal).
+**Javító kör (1, DeepSeek) + orchestrátor scope-akciók:** 3 MAJOR zárva — ruff-check red (import-sort+F401, `8ed8db5`), hardcode-olt schema/action metrikák → tényleges dataset-számítás (`aeca3fe`), dispatchelt zöld + reprodukált piros evidencia. Orchestrátor: `public.dart` **scope-szűkítés** vissza az üres baseline-re (a merge-elt E04-R01 boundary-guard miatt, export halasztva; `3d93839`) + backend `ruff format` (`0dd9ed7`). Re-review **APPROVED**; security review **PASS** (0 BLOCKER). Gate zöld a `0dd9ed7` merge-SHA-n: Full Gate ✅ · Router CI ✅ · Backend CI ✅.
 
-**Kiesett (nincs domain-háttér, §3 tiltja az építését — prerekvizit kör):** retention-config (csak per-fact `expiresAt` van), conversation-export (csak redaktált memory-export létezik), cloud remote-pending (nincs cloud-sync/remote állapot), consent-revoke pending-cancel (per-turn reducer-effekt, nincs perzisztens pending request). Az `ai_tutor` feature továbbra is flag-off/preview (nincs valós-app bootstrap wiring; a képernyők widget-teszttel bizonyítva, R18–R21 minta).
+_(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/handoff-archive.md) — E04-R22 és korábbiak; E04-R22 összefoglalója a fejléc ✅-blokkjaiban.)_
 
-_(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/handoff-archive.md) — E04-R21 és korábbiak.)_
+**E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
 
@@ -809,6 +837,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
    `SessionTutorEntryCard` a feature-en belül közvetlen importtal érhetők el, a
    publikus export a cross-feature bekötő kör érkezéséig halasztva. **A queue
    következő `pending` sorát a pipeline indítja új sessionben.**
+   **~~E04-R23 — Tutor safety, injection, usage & evaluation gate~~ — KÉSZ** (PR #159, `04787fa`,
+   ADR 0177; implementer DeepSeek v4 Pro; 1 javító kör + 2 orchestrátor scope-akció; ld. fejléc + §5).
+   **~~E04-R22 — Tutor Profile, Privacy, Data & Consent UI~~ — KÉSZ** (PR #157, `faa3f32`,
+   nincs új ADR — ADR 0132+0134 hatálya; implementer MiniMax M3; ld. fejléc + §5).
    **~~E04-R21 — Song Trainer debrief & range action integráció~~ — KÉSZ** (PR #156, `6000b57`,
    nincs új ADR — ADR 0132+0089 hatálya; implementer Codex/Terra; a re-scoped §0.0
    struktúra+capability+redaction szelet; korábbi H3 BLOCKER-1-et a merge-elt ADR 0176

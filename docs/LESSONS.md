@@ -4724,3 +4724,51 @@ Rokon L-ek: [[L09]] (a gate futtatható artefaktum, nem prompt-szöveg), [[L21]]
 (mért néma-bukások: dirty_files, headSha↔HEAD), [[L59]]/[[L48]] (klón/friss-munkafa
 gen-l10n csapda — más tünet, de szintén munkapéldány-artefaktum), [[L113]]
 (`docs/rounds/**` érintés → a Router CI is a merge-kapu része).
+
+---
+
+## L138 — Új, required GitHub-workflow "dispatchelt piros" bizonyítéka: a brief-branchen NEM dispatchelható névvel, és ad-hoc `tmp/*` branchen nem is fut — a piros utat a workflow SAJÁT parancsával reprodukáld (E04-R23, ADR 0177)
+
+**Tünet.** A kör új required workflow-ja (`.github/workflows/tutor-eval.yml`) a briefben
+"dispatchelt zöld + bizonyított piros" evidenciát írt elő. Két fal jött: (1) `gh workflow run
+tutor-eval.yml --ref <branch>` → **HTTP 404** — a GitHub API csak a **default branch**-en
+létező workflow-kat dispatch-eli névvel, a feature-branchen ÚJ file még nem az; (2) a piros
+út kiváltásához nyitott eldobható `tmp/e04-r23-red-proof` branchre a push **egyetlen**
+workflow-t sem indított (a repo Actions nem fut `tmp/*`-on; a `codex/*` branch push viszont
+triggerelte a `push`-trigger-es workflow-kat).
+
+**Javítás.** A zöld evidencia a **round-branch push-triggerelt** futása (`evaluation/tutor/**`
+path-match). A piros út a workflow "Run … evaluation" lépésének **pontos parancsa** lokálisan,
+küszöb alatti dataseten: `dart run evaluation/tutor/run_eval.dart` → safety_coverage 94% →
+`FAIL … below threshold` → **exit 1**; kontroll a tiszta branch-dataseten → 100% → **exit 0**.
+A runner nem ad hozzá semmit a pass/fail logikához, ezért a reprodukált parancs + a független
+reviewer külön piros-próbája együtt kimeríti a "bizonyított piros út"-at. A merge-kapu
+exact-SHA részét (full-gate + router-ci + backend-ci) a `push`/`workflow_dispatch` úton
+lefuttatott, a merge-SHA-n zöld futások adják; a tutor-eval a `main`-re landolva kap majd
+kanonikus futást.
+
+Rokon L-ek: [[L113]] (`docs/rounds/**` → Router CI is a kapu), [[L21]] (headSha↔HEAD merge-evidencia).
+
+## L139 — A domain-only kör-gate NEM a teljes suite: egy merge-elt, listán kívüli keresztmetsző guard csak a FULL CI-ben bukik — az "additív public export"-ot a boundary-guardhoz MÉRD, és scope-szűkítéssel oldd, ne a merge-elt guard módosításával (E04-R23, ADR 0087 §2)
+
+**Tünet.** A `tools/round-gate.sh test/features/ai_tutor/domain` zöld volt, a review APPROVED,
+de a **teljes** `full-gate.yml` egyetlen piros teszttel bukott (`2970 passed, 1 failed`): a
+merge-elt **E04-R01** `test/features/ai_tutor/ai_tutor_boundary_test.dart` guard kipinneli,
+hogy a `public.dart` NEM tartalmazhat import/export direktívát — az implementer additív
+exportja (amit a brief §4 engedélyezett) ezt pirosra vitte. A guard az allowed_paths-on KÍVÜL,
+lezárt kör artefaktuma → módosítása H2/H3.
+
+**Javítás.** Az additív export egyetlen acceptance-cellát sem szolgált és **nincs fogyasztója**
+(`run_eval.dart` + a tesztek a domain service-eket közvetlen útvonalon importálják, nem a
+`public.dart`-on át — `grep -rn ai_tutor/public.dart` csak a guard-tesztet adta). Ezért
+veszteségmentes **scope-szűkítés** (pipeline §2): `public.dart` vissza az üres merge-elt
+baseline-re, dokumentált §0.0 revízióval; az export egy jövőbeli körre halasztva, amely a
+guardot **allowlist**-tá alakítja (és a saját allowed_paths-ába veszi). Két tanulság-megerősítés:
+(a) az előre megírt brief "additív public export"-ját a **boundary-guard tényleges tesztjéhez**
+mérd a pre-flightban (ez a mérés kimaradt — a brief-lint sem fogta); (b) `ruff check` zöld ≠
+`ruff format` zöld — az implementer csak `check`-et futtatott, a Backend CI a **format**-kapun
+bukott (vö. E04-R15 MAJOR-1), a formázást (deterministic) az orchestrátor futtatta mechanikus
+gate-lépésként. Ez a scope-precedens az E04-R20 §0.0-R1 és R16 mintáját folytatja.
+
+Rokon L-ek: [[L09]] (gate = futtatható artefaktum), [[L130]] (gate-eszköz mint mérce — a
+hatókör szűkíthető, az eszköz nem módosul), az E04-R20/R16 `public.dart` scope-narrowing precedens.
