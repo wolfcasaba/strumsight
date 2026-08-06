@@ -179,7 +179,65 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/vision/domain/quality/quality_thresholds.dart` — verziózott,
+  konfigurálható küszöbök; downsample-faktor és profilfüggő framing-minimum.
+- `lib/features/vision/domain/quality/vision_frame_quality.dart` — immutable
+  frame-quality modell, setup-cue enum és véges numerikus értékek védelme.
+- `lib/features/vision/domain/quality/frame_quality_assessor.dart` — pure-Dart
+  grayscale downsample, luminance/clipping/blur/frame-delta/ROI mérések és
+  degenerált bemenetre `notObservable`.
+- `lib/features/vision/domain/quality/vision_quality_summary.dart` — ablakos,
+  determinisztikus, egyszerre pontosan egy setup-cue-t adó prioritás-policy.
+- `lib/features/vision/public.dart` — additive quality-domain és
+  `NormalizedRect` export.
+- `test/features/vision/domain/frame_quality_assessor_test.dart` — szintetikus
+  fixture-ök, minden küszöb alatt/rajta/fölötte, két blur-felbontás, ROI és
+  NaN/Infinity guard.
+- `test/features/vision/domain/vision_quality_summary_test.dart` — teljes
+  cue-prioritás, determinisztikus azonos súlyú eset és no-feedback-on-unavailable.
+- `test/fixtures/vision/quality/README.md` és
+  `frame_quality_benchmark.dart` — személyes adat nélküli fixture-leírás és
+  reprodukálható Dart benchmark.
+
+### Mért eredmények
+
+- `python3 -c "thresholds = {'mean': 40, 'highlight': .20, 'shadow': .20,
+  'sharpness': 10, 'motion': 12, 'coverage': .20}; print({key: (value - .1,
+  value, value + .1) for key, value in thresholds.items()})"` → minden
+  küszöbhöz a pontos alatt/rajta/fölötte cellák kiszámolva; a tesztek ezeket
+  használják, nem szemre megadott értékeket.
+- `dart run test/fixtures/vision/quality/frame_quality_benchmark.dart` →
+  `frame_quality_640x480_average_us=691.33 iterations=100
+  downsample_factor=4`. Ez 0.691 ms/keret, a 60 FPS 16.67 ms-os frame-budget
+  alatt van ezen a fejlesztői boxon. A low-tier device-mátrix továbbra is
+  PENDING; a lokális mérés azt nem helyettesíti.
+- Valódi-sértés próba: a `vision_quality_summary.dart` policy-ben a lighting
+  ellenőrzése szándékosan a framing elé került. A
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
+  ekkor PIROS lett: várt `adjustFraming`, tényleges `improveLighting`.
+  Visszaállítás után ugyanaz a teszt újra zöld.
+- Célzott GREEN ellenőrzések:
+  `flutter test test/features/vision/domain/frame_quality_assessor_test.dart`
+  → 6/6 pass;
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
+  → 4/4 pass.
+- Kiegészítő RED→GREEN: egy degenerált frame után az előző motion-minta
+  explicit törlődik. A reprodukáló teszt javítás előtt `good` stability-t,
+  utána `notObservable`-t kapott; így megszakadt megfigyelhetőségen nincs
+  hamis stabilitás-állítás.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- A fixture-ök in-memory, determinisztikus grayscale-generátorok; nem tárolunk
+  fotót vagy nyers kamera-frame-et. A megengedett fixture-könyvtárban a
+  generálási specifikáció és benchmark szerepel.
+- A kötelező `tools/round-gate.sh test/features/vision` a handoff kitöltése
+  után zöld: format, analyze, 23 vision teszt és architecture. A friss,
+  külön megismételt `dart run tool/ci/check_secrets.dart` is zöld: 1838 fájl,
+  0 finding. A teljes CI/property/APK és a low-tier eszközmérés az
+  orchestrátor/CI felelőssége, nem futott lokálisan.
 
 ## 11. Review — a független reviewer tölti ki
 
