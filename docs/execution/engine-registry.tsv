@@ -27,3 +27,4 @@ qwen-flash	codex	~/.codex-kilo	qwen/qwen3.7-flash	KILOCODE_API_KEY	~/.kilocode-t
 gptoss	codex	~/.codex-kilo	openai/gpt-oss-120b	KILOCODE_API_KEY	~/.kilocode-token	12	3600	131072	32768	0.03	0.17	-	9/10 és 5 s — a legjobb ár/érték az egész mezőnyben
 kimi	codex	~/.codex-kilo	moonshotai/kimi-k2.5	KILOCODE_API_KEY	~/.kilocode-token	12	3600	262144	32768	0.60	3.00	-	4/5 és 7 s — gyors tartalék más családból
 deepseek-pro	codex	~/.codex-kilo	deepseek/deepseek-v4-pro	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	65536	1.60	3.20	medium	user-döntés 2026-08-06: fejlesztő motor; 1.6T MoE, 1M ctx; olcsóbb variáns: deepseek/deepseek-v4-pro:discounted
+sonnet-impl	claude	~/.claude	claude-sonnet-5	-	-	12	3600	1000000	64000	-	-	medium	user-döntés 2026-08-06 (Terra 1%-on): natív Claude implementer az ELŐFIZETÉSEN, --effort medium; a config dir a fő ~/.claude (auth+trust már beállítva)

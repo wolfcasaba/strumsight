@@ -4,9 +4,18 @@
 #   tools/mm-round.sh <munkapéldány> <prompt-fájl> [logfájl]
 #
 # Ugyanaz a szerződés, mint a tools/codex-round.sh-nál — csak a motor más:
-# a Claude Code harness fut, de a MiniMax `/anthropic` endpointja mögött,
-# IZOLÁLT config dir-rel (CLAUDE_CONFIG_DIR), hogy az orchestrátor Claude saját
-# konfigját és auth-ját ne érintse.
+# a Claude Code harness fut, IZOLÁLT config dir-rel (CLAUDE_CONFIG_DIR), hogy az
+# orchestrátor Claude saját konfigját és auth-ját ne érintse.
+#
+# KÉT ÜZEMMÓD (ADR 0140 nyilvántartás-vezérelt, 2026-08-06):
+#   * külső Anthropic-kompatibilis endpoint (MiniMax M3): a nyilvántartás
+#     `auth_env`/`auth_file` mezője megadja a kulcsot → ANTHROPIC_BASE_URL +
+#     ANTHROPIC_AUTH_TOKEN a MiniMax `/anthropic` endpointjára;
+#   * natív Claude-modell az ELŐFIZETÉSEN (pl. claude-sonnet-5 implementerként):
+#     a nyilvántartásban `auth_env`/`auth_file` = `-`, ilyenkor NINCS
+#     base-url/token override, a config dir saját auth-ja dönt.
+# A modellt, a config dirt és az őr-küszöböket a nyilvántartás adja, ha
+# ROUND_ENGINE be van állítva; enélkül a történeti MiniMax-alapértelmezés él.
 #
 # Három védelmi vonal (user-szabály 2026-07-29: "ne várjunk rá fél napot"):
 #   1. implementer-oldali jelzés      → tools/codex-signal.sh (§15.2, közös)
@@ -47,10 +56,33 @@ if [ ! -d "$workdir/.git" ]; then
   exit 2
 fi
 
-stall_minutes=${MM_STALL_MINUTES:-5}
-round_timeout=${MM_ROUND_TIMEOUT:-3600}
-config_dir=${MM_CONFIG_DIR:-$HOME/.claude-minimax}
-model=${MM_MODEL:-MiniMax-M3[1m]}
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+# --- Motor-profil a nyilvántartásból (ADR 0140) ---------------------------
+# ROUND_ENGINE nélkül a történeti MiniMax-alapértelmezés marad — a régi hívások
+# szó szerint ugyanúgy viselkednek.
+round_engine=${ROUND_ENGINE:-}
+if [ -n "$round_engine" ]; then
+  engine_env=$(bash "$script_dir/engine-profile.sh" env "$round_engine" 2>/dev/null) || {
+    echo "mm-round.sh: ismeretlen motor: $round_engine" >&2
+    exit 2
+  }
+  while IFS='=' read -r key value; do
+    [ -n "$key" ] && export "$key=$value"
+  done <<< "$engine_env"
+  case "$(grep -m1 "^${round_engine}	" "$script_dir/../docs/execution/engine-registry.tsv" | cut -f2)" in
+    claude) ;;
+    *) echo "mm-round.sh: a(z) $round_engine motor nem claude-harness — használd a codex-round.sh-t" >&2; exit 2 ;;
+  esac
+fi
+
+stall_minutes=${MM_STALL_MINUTES:-${ENGINE_STALL_MINUTES:-5}}
+round_timeout=${MM_ROUND_TIMEOUT:-${ENGINE_ROUND_TIMEOUT:-3600}}
+config_dir=${MM_CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude-minimax}}
+model=${MM_MODEL:-${ENGINE_MODEL:-MiniMax-M3[1m]}}
+# Gondolkodási szint (a nyilvántartás `reasoning` oszlopa): a Claude CLI-nél
+# `--effort`, a `-` érték = ne adjunk át semmit.
+effort=${ENGINE_REASONING:-"-"}
 signal="$workdir/.codex-round-status"
 pid_file="$workdir/.mm-round-pid"
 
@@ -60,7 +92,14 @@ api_key=${MINIMAX_API_KEY:-}
 if [ -z "$api_key" ] && [ -f "$HOME/.mmx/config.json" ]; then
   api_key=$(python3 -c "import json;print(json.load(open('$HOME/.mmx/config.json'))['api_key'])")
 fi
-if [ -z "$api_key" ]; then
+# Az ÜZEMMÓDOT a modell dönti el, NEM az ambiens kulcs megléte. (Mérve
+# 2026-08-06: a boxon mindig van `~/.mmx/config.json`, ezért a kulcs-alapú
+# döntés a natív Claude-modellt is a MiniMax endpointra küldte volna.)
+case "$model" in
+  claude-*|sonnet-*|opus-*|haiku-*) external_endpoint=0 ;;
+  *) external_endpoint=1 ;;
+esac
+if [ "$external_endpoint" = "1" ] && [ -z "$api_key" ]; then
   echo "mm-round.sh: nincs MiniMax API kulcs (MINIMAX_API_KEY vagy ~/.mmx/config.json)" >&2
   exit 2
 fi
@@ -75,19 +114,49 @@ scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
 # A `claude -p`-nek nincs `-C` kapcsolója (mint a `codex exec`-nek), ezért a
 # munkapéldányba alhéjjal lépünk be — így a kör-jelzés `git rev-parse` hívása
 # is a helyes fát látja.
+launch_env=(CLAUDE_CONFIG_DIR="$config_dir")
+launch_args=(--model "$model" --permission-mode acceptEdits --strict-mcp-config
+  --output-format stream-json --verbose)
+
+if [ "$external_endpoint" = "1" ]; then
+  # --- MiniMax M3 sajátosságai (VÁLTOZATLANUL, user-kérés 2026-08-06) -------
+  # A `/v1/models` nem ad `context_window`-t, ezért a Claude Code a beépített
+  # 200K-s alapértelmezésre esne vissza és ~167K-nál idő előtt compact-olna.
+  launch_env+=(
+    ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+    ANTHROPIC_AUTH_TOKEN="$api_key"
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
+  )
+  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash")
+else
+  # --- Natív Claude-modell (Sonnet 5) sajátosságai -------------------------
+  # 1. NINCS auto-compact override: a natív modellnél a CLI ISMERI a valódi
+  #    ablakot, egy hamis 1M-s érték csak késleltetné a compact-ot a valódi
+  #    limiten túlra (a MiniMax-nál pont fordítva igaz).
+  # 2. `TodoWrite` a tool-listán: a kör több fájlt érint, és a mért implementer
+  #    hibaminta a „félbehagyott, félkész fa" (ADR 0173) — a listát vezető
+  #    modell nem felejti el a hátralévő fájlokat.
+  # 3. `--effort` a nyilvántartás `reasoning` oszlopából.
+  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash,TodoWrite")
+fi
+[ "$effort" != "-" ] && [ -n "$effort" ] && launch_args+=(--effort "$effort")
+
+# Az implementer-preambulum (ADR 0173) a claude-harness motorra is érvényes: a
+# mért hibaminták tiltása artefaktum, nem körönként újraírt prompt-szöveg.
+# Motor-specifikus kiegészítés: ha van `implementer-preamble-<motor>.md`, az a
+# közös preambulum UTÁN jön — így a motor egyedi erősségeit/gyengeségeit
+# külön lehet kezelni anélkül, hogy a közös szöveg hígulna.
+preamble_file="$script_dir/../docs/execution/implementer-preamble.md"
+engine_preamble="$script_dir/../docs/execution/implementer-preamble-${round_engine:-minimax}.md"
+prompt_text=$(cat "$prompt_file")
+if [ "${CODEX_NO_PREAMBLE:-0}" != "1" ]; then
+  [ -f "$engine_preamble" ] && prompt_text=$(printf '%s\n\n---\n\n%s' "$(cat "$engine_preamble")" "$prompt_text")
+  [ -f "$preamble_file" ] && prompt_text=$(printf '%s\n\n---\n\n%s' "$(cat "$preamble_file")" "$prompt_text")
+fi
+
 (
   cd "$workdir" || exit 2
-  CLAUDE_CONFIG_DIR="$config_dir" \
-  ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic" \
-  ANTHROPIC_AUTH_TOKEN="$api_key" \
-  CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 \
-  claude -p "$(cat "$prompt_file")" \
-    --model "$model" \
-    --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
-    --permission-mode acceptEdits \
-    --strict-mcp-config \
-    --output-format stream-json \
-    --verbose
+  env "${launch_env[@]}" "${CLAUDE_BIN:-claude}" -p "$prompt_text" "${launch_args[@]}"
 ) >> "$log_file" 2>&1 &
 mm_pid=$!
 echo "$mm_pid" > "$pid_file"
@@ -95,8 +164,9 @@ echo "$mm_pid" > "$pid_file"
 started=$(date +%s)
 killed_reason=""
 
+poll_seconds=${MM_POLL_SECONDS:-20}
 while kill -0 "$mm_pid" 2>/dev/null; do
-  sleep 20
+  sleep "$poll_seconds"
   now=$(date +%s)
   log_age=$(( now - $(stat -c %Y "$log_file") ))
 

@@ -197,11 +197,24 @@ használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
 `READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
 független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
 
-### `minimax` és `codex` — örökölt kézi override
+### Nevesített motor a nyilvántartásból (`minimax`, `codex`, `terra`, `sonnet-impl`, …)
 
-Ezek reprodukciós/operátori módok. A meglévő `mm-round.sh`, illetve
-`codex-round.sh` + watcher útvonalat használják; az `auto` router szabályait
-nem írják át, és nincs köztük automatikus fallback.
+A motor **harness**-ét a nyilvántartás mondja meg
+(`docs/execution/engine-registry.tsv`, 2. oszlop) — ebből következik a burkoló:
+
+```bash
+harness=$(grep -m1 "^{{ENGINE}}	" docs/execution/engine-registry.tsv | cut -f2)
+#   codex  → ROUND_ENGINE={{ENGINE}} tools/codex-round.sh  <munkapéldány> <prompt> <log>
+#   claude → ROUND_ENGINE={{ENGINE}} tools/mm-round.sh     <munkapéldány> <prompt> <log>
+```
+
+Mindkét burkoló ugyanazt a szerződést tartja: elakadás-őr, abszolút időkorlát,
+kötelező kör-jelzés, gépi scope-audit, implementer-preambulum. A modellt, a
+config dirt, az őr-küszöböket és a gondolkodási szintet a nyilvántartás adja —
+te nem választasz modellt és nem írsz felül endpointot.
+
+Ezek reprodukciós/operátori módok: az `auto` router szabályait nem írják át, és
+nincs köztük automatikus fallback.
 
 **KÖTELEZŐ: `ROUND_BRIEF` átadása** (ADR 0138). A legacy wrapper a kilépés után
 gépi **scope-auditot** futtat a brief `allowed_paths` blokkja ellen — de csak
