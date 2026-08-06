@@ -4,10 +4,25 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R21 MERGED — Song Trainer struktúra-debrief + capability-gate + lyrics/backing
-> redaction; a korábbi H3 BLOCKER-t a merge-elt ADR 0176 oldotta fel, az implementációt
-> a javított main-re rebase-eltük; nincs új ADR / ADR 0132+0089 hatálya; Codex (Terra),
-> exact-SHA zöld kapun át).**
+> (E04-R22 MERGED — Tutor Profile/Privacy/Data & Consent UI; 3 flag-mögötti képernyő
+> + Riverpod-wiring a meglévő R03 (provider-mentes consent/profil) és R17 (memory/
+> delete-all) domain fölött; NINCS új domain/perzisztencia; nincs új ADR / ADR 0132+0134
+> hatálya; implementer MiniMax M3, 1 javító kör után APPROVED; exact-SHA zöld kapun át,
+> main mozgás miatt rebase + újra-dispatch).**
+>
+> ## ✅ E04-R22 KÉSZ — Tutor Profile, Privacy, Data & Consent UI (2026-08-06)
+>
+> Prezentációs UI a meglévő domain fölött: **profil-editor** (`StudentProfile`/
+> `GuitarProfile`/`LearningGoal` a modellek `copyWith`+validációjával), **consent-képernyő**
+> (a három tengely — model-use/storage/evaluation — külön, a meglévő `TutorConsent.grant*/revoke*`
+> copy-metódusokkal, függetlenség tesztelve), **data-képernyő** (memory-fact lista/edit/delete
+> a `TutorMemoryRepository`-n, redaktált export `exportRedacted()`, **delete-all** a meglévő
+> `deleteAllAiData()`-vel és **pontos scope-listával** = `StorageKeys.tutorAiData`
+> [conversation_documents, conversation_index, memory_facts] + karantének, a consent/profil/
+> auth-token megtartva). Flag-mögötti route-ok a `lib/app/routing/`-ban. Falszifikációs
+> cellák: delete-all scope (szűkítés ÉS bővítés), consent-tengely-függetlenség, memory-edit
+> szenzitív-elutasítás. **Kiesett** (nincs domain-háttér, §3 tiltja): retention-config,
+> conversation-export, cloud remote-pending, consent-revoke pending-cancel — prerekvizit kör.
 >
 > ## ✅ E04-R21 KÉSZ — Song Trainer struktúra-debrief, capability-gate & redaction (2026-08-06)
 >
@@ -687,14 +702,16 @@
 
 ## 4. Current branch
 
-`main` @ [PR #156](https://github.com/wolfcasaba/strumsight/pull/156), squash
-`6000b57` (E04-R21). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
-írt elő (nincs natív út): full-gate [31067033273](https://github.com/wolfcasaba/strumsight/actions/runs/31067033273)
-+ router-ci [31067010493](https://github.com/wolfcasaba/strumsight/actions/runs/31067010493)
-**success** az exact merge-SHA `00e76e1`-en; a post-merge gate `main`-en zöld, a
-review **APPROVED** (a korábbi H3 BLOCKER-1-et a merge-elt ADR 0176 oldotta fel —
-rebase a javított main-re, nincs eszköz-módosítás).
-(Történeti product-merge referenciák: PR #153 / `3ce4afc`, E04-R20; PR #151 / `104e685`, E04-R18;
+`main` @ [PR #157](https://github.com/wolfcasaba/strumsight/pull/157), squash
+`faa3f32` (E04-R22). Tisztán Dart/dokumentum-diff → a CI-terv `full-gate.yml`-t
+írt elő (nincs natív út), és a `docs/rounds/**` érintés miatt a **router-ci** is a
+kapu része: full-gate [31071295264](https://github.com/wolfcasaba/strumsight/actions/runs/31071295264)
++ router-ci [31071295063](https://github.com/wolfcasaba/strumsight/actions/runs/31071295063)
+**success** az exact merge-előtti tip `05c7006`-on; review **APPROVED** 1 javító
+kör után (MiniMax M3). A dispatch óta a `main` mozdult (#158 DeepSeek engine-registry),
+ezért a branchet `origin/main`-re **rebase**-eltem (konfliktus nélkül) és a CI-t
+**újra-dispatcheltem** az `05c7006` tip-en (ADR 0086 §2 / H8).
+(Történeti product-merge referenciák: PR #156 / `6000b57`, E04-R21; PR #153 / `3ce4afc`, E04-R20; PR #151 / `104e685`, E04-R18;
 PR #148 / `1e9b2db`, E04-R17; PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
 E04-R15; PR #140 / `c5b14e5`, E04-R12; PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`,
 E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
@@ -770,447 +787,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E04-R21 — Song Trainer struktúra-debrief, capability-gate & redaction** (PR
-[#156](https://github.com/wolfcasaba/strumsight/pull/156), squash `6000b57`,
-**nincs új ADR** — ADR 0132 + 0089 hatálya; implementer **Codex (Terra, gpt-5.6-terra)**,
-orchestrátor/reviewer **Claude Opus 4.8**).
+**E04-R22 — Tutor Profile, Privacy, Data & Consent UI** (PR [#157](https://github.com/wolfcasaba/strumsight/pull/157), squash `faa3f32`, **nincs új ADR** — ADR 0132 (privacy/consent) + 0134 (memory policy) hatálya; implementer **MiniMax M3**, orchestrátor/reviewer **Claude Opus 4.8**).
 
-**Elkészült (re-scoped §0.0 szelet):** `SongResultContextAdapter` (a publikus
-`SongDocument` struktúrájából section/measure debrief-context, lyrics/backing/asset/
-source/track-event redaktálva), `getSongSections` read-only strukturális tool,
-`SongTutorEntryCard` capability-őszinte belépőkártya (nem score-olható axishez nincs
-action), en/hu ARB. Falszifikáló tesztek: redaction (valódi private tartalom →
-kizárás mérve), pitch/chord capability-gate, public-domain import boundary.
+**Elkészült (§0.0 szerint mérve/szűkítve):** 3 flag-mögötti képernyő (`tutor_profile_screen` / `tutor_privacy_screen` / `tutor_data_screen`) + `tutor_privacy_providers.dart` (consent/profil in-memory `Notifier`-állapot + `tutorMemoryRepositoryProvider` a meglévő `TutorMemoryRepository` fölött) + 3 typed `AppRoutes` GoRoute a `lib/app/routing/`-ban a `if (aiTutorEnabled) ...[` blokkban. **Prezentációs UI + wiring csak** — nincs új domain/data/perzisztencia (§3), a `public.dart` üres-boundary invariáns sértetlen.
 
-**Halt-feloldás (ADR 0112).** A kör kétszer H3-mal halt; a 2. halt egyetlen
-BLOCKER-1-e (`check_architecture.dart` false-positive a nested
-`song_trainer/domain/public.dart` barrelre) **nem kódhiba** volt — a merge-elt
-**ADR 0176** (heal #155) feloldotta. Ez a session az eszközhöz nem nyúlt (§4): a
-változatlan implementációt (`8b3b991`) a javított `main`-re rebase-elte (`818ebcf`),
-architecture-gate zöld. **Halasztva** (prerekvizit kör, §0.0): measure-range/A–B loop,
-revision-stale, missing-asset alternate, speed-action, setlist, exact route-params —
-a song_trainer public boundary additív result/range/setlist exportja után.
-Részletes történet: `docs/handoff-archive.md`.
+**Falszifikációs cellák (RED-bizonyítva a review-ban):** delete-all scope-lista = `StorageKeys.tutorAiData` [conversation_documents, conversation_index, memory_facts] + `.corrupt` karantének (szűkítés ÉS bővítés irány), consent-tengely-függetlenség, memory-edit szenzitív-elutasítás lokalizált hibával. A delete-all a MEGLÉVŐ `deleteAllAiData()`-t hívja; consent/profil + auth token megtartva.
 
-### Korábbi kör (referencia): E04-R18 — Tutor Home, Chat UI & streaming UX
+**Javító kör (1, MiniMax):** az első review 1 MAJOR-t talált (memory-fact EDIT + szenzitív-elutasítás a doc-commentben állítva, de a UI-ból nem hívva); a javító kör (`67120fd`) implementálta az edit-affordanciát (`repo.update()` + lokalizált `tutorDataMemoryEditSensitive`), a scope-sor-szám guardot (`tutorAiData.length*2`), és kitöltötte a §10-et. Re-review **APPROVED** (3/3 lelet zárva, RED-próbákkal).
 
-**E04-R18 — Tutor Home, Chat UI & streaming UX** (PR
-[#151](https://github.com/wolfcasaba/strumsight/pull/151), squash `104e685`,
-**nincs új ADR** — presentation-only, ADR 0131+0134 hatálya; implementer
-**MiniMax M3**; orchestrátor/reviewer **Claude Opus 4.8**).
+**Kiesett (nincs domain-háttér, §3 tiltja az építését — prerekvizit kör):** retention-config (csak per-fact `expiresAt` van), conversation-export (csak redaktált memory-export létezik), cloud remote-pending (nincs cloud-sync/remote állapot), consent-revoke pending-cancel (per-turn reducer-effekt, nincs perzisztens pending request). Az `ai_tutor` feature továbbra is flag-off/preview (nincs valós-app bootstrap wiring; a képernyők widget-teszttel bizonyítva, R18–R21 minta).
 
-**Elkészült:** az AI-tutor első teljes, accessibility-kompatibilis Flutter
-felülete az `aiTutorEnabled` flag mögött, **fake gatewayre** kötve (valódi cloud
-= R19). Tutor Home (`tutor_home_screen.dart`) + virtualizált Chat
-(`tutor_chat_screen.dart`), content-blockonkénti `tutor_message_bubble.dart`
-(unknown/raw blokk biztonságos, monospaced, nem futtatható HTML),
-`tutor_composer.dart` (input + draft-megőrzés), `tutor_banners.dart`
-(offline≠consent≠rate≠error, distinct semantics label), `tutor_providers.dart`
-(Riverpod wiring a fake gatewayjel + orchestrátor/knowledge/context — csak
-`ai_tutor/` importok, nincs remote/cloud). Route a flag mögött
-`lib/app/routing/app_router.dart`-ban (typed `AppRoutes.tutorHome/tutorChat`);
-flag OFF ⇒ route hiányzik ⇒ Live fallback (R18-R1..R4 mindkét cellát méri).
-20 widget-teszt fake gatewayjel (empty/send/stream/cancel/retry/banner/unknown/
-large-text/semantics/hu-en/scroll-anchoring).
-**Pre-flight §0.0:** nincs új ADR (mérve); base-korrekció — a brief rossz
-`lib/app/router/app_route.dart` útja `routing/`-ra javítva + `app_router.dart`
-felvéve az `allowed_paths`-ba (a flag-gating cellák enélkül nem teljesíthetők).
-Review: [`docs/reviews/e04-r18-tutor-home-chat-ui-review.md`](docs/reviews/e04-r18-tutor-home-chat-ui-review.md)
-— **APPROVED javító kör #1 után**: az első futás a box lassúsága miatt a 3600s
-abszolút időkorlátot elérte a gate teszt-lépésében (`status=timeout`,
-`scope_audit=ok`) commit előtt → az orchestrátor a scope-tiszta munkát megmentette,
-a két valódi teszt-bukást (R18-A4 látható Stop; R18-A13 új-buborék rebuild) a
-MiniMax egy javító körben zöldre vitte. CI exact-SHA `a6165c5`: full-gate +
-router-ci **success**; post-merge gate `main`-en zöld.
-
----
-
-**E04-R17 — Conversation repository, summary & inspectable memory** (PR
-[#148](https://github.com/wolfcasaba/strumsight/pull/148), squash `1e9b2db`,
-**nincs új ADR** — ADR [0134](docs/adr/0134-ai-tutor-memory-policy.md) hatálya;
-implementer **Codex** `gpt-5.6-terra`; orchestrátor/reviewer **Claude Opus 4.8**).
-
-**Elkészült:** lokális, verziózott tutor beszélgetéstárolás + megtekinthető
-memória. `TutorConversationRepository`/`TutorMemoryRepository` contract +
-`TutorMemoryFact` modell; `LocalTutorConversationRepository` (verziózott
-document-envelope, dokumentum-előbb-index sorrend → index-újraépítés a
-dokumentumokból, lapozás, message-provenance summary, **rekord-szintű
-korrupt-karantén**, őrzött top-level decode → karantén+reset); a
-`LocalTutorMemoryRepository` (candidate-dedup normalizált fingerprinttel,
-sensitivity-filter [password/secret/token/email/telefon — pont- és
-perjel-szeparátorral is], inspect/edit/delete, retention `purgeExpired`,
-redaktált export, **delete-all AI data** a teljes `StorageKeys.tutorAiData` +
-minden karantén-kulcs felett). Silent-no-op tilalom: minden tár-írási hiba →
-`AppResult.failure(StorageFailure)` (nem néma). `StorageKeys`: három additív
-`ss.tutor.*` kulcs + `tutorAiData` delete-all lista.
-**Pre-flight §0.0:** nincs új ADR (mérve), `public.dart` kivéve az
-`allowed_paths`-ból (üres-boundary invariáns védelme).
-Review: [`docs/reviews/e04-r17-conversation-repository-and-memory-review.md`](docs/reviews/e04-r17-conversation-repository-and-memory-review.md)
-— **APPROVED javító kör #1 (`6830e63`) után**: a security-reviewer 2 MAJOR-t
-talált (M1 telefon-filter pont-formátum bypass; M2 őrizetlen top-level
-`jsonDecode` → tartós brick + content a cause-ban), mindkettő ZÁRVA
-hibát-pirosra-fogó regressziós teszttel; falszifikációs próba (delete-all
-mutáció → 2 cella RED) igazolta a guardokat. CI exact-SHA `41cafd5`:
-full-gate + router-ci **success**; post-merge gate `main`-en zöld.
-
----
-
-**E04-R16 — Tutor orchestration state machine & output validator** (PR
-[#147](https://github.com/wolfcasaba/strumsight/pull/147), squash `df25806`,
-ADR [0174](docs/adr/0174-ai-tutor-orchestration-state-machine.md); implementer
-**Codex** `gpt-5.6-terra`). Ld. a fejléc-összefoglalót és az RTM-et.
-
----
-
-**E04-R15 — Backend + Flutter streaming transport** (PR
-[#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
-ADR [0142](docs/adr/0142-ai-tutor-streaming-transport-protocol.md); implementer
-**qwen38-max** / Terra, ADR 0140 override; orchestrátor/reviewer **Claude Opus 4.8**).
-
-**Elkészült:** sorrendhelyes, megszakítható, újrapróbálható tutor streaming a
-backend (`backend/app/tutor/stream.py`, SSE) és a Flutter kliens
-(`TutorStreamDto` frame-parser + `RemoteTutorModelGateway`) között. Monoton
-event-sequence; started/delta/usage/tool-call/complete/failure frame;
-gap/out-of-order → **kontrollált** `transport_sequence_gap`/`malformed` failure
-(nem néma átugrás); duplicate-frame idempotens; retry nem duplikál
-user-message-et (backend stateless, ADR 0142 D9); disconnect → **nincs árva
-provider-request** (`finally: turn_task.cancel()`, mutáció-öléssel bizonyítva);
-body + frame size-limit (alatt/rajta/fölött mátrix); provider-semleges
-failure-message (nincs secret/prompt-leak); auth-védett `/tutor/stream`.
-Review: [`docs/reviews/e04-r15-streaming-transport-review.md`](docs/reviews/e04-r15-streaming-transport-review.md)
-— kód **APPROVED**, MAJOR-1 (ruff-format) + MINOR (log-forging kontrollkarakter)
-javító körökben zárva. **H3-blokkoló** (build-apk secret-scan az R14
-`test_tutor_proxy.py` tilos-zóna fixture-jén) a self-heal #143 (`7b3b5b9`)
-után feloldva; a branch a gyógyított `main`-re rebase-elve. CI: `full-gate.yml`
-+ `router-ci.yml` exact-SHA `a7377ed` **success**.
-
-**E04-R13 — TutorModelGateway és scripted fake** (PR
-[#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
-**nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
-provider-boundary hatálya, orchestrátor a pre-flightban dokumentált nem-döntést).
-Implementer: **qwen-plus** (`qwen/qwen3.7-plus`, codex-harness, ADR 0140 első
-éles kör-futása); orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** providerfüggetlen streaming modellkapu teljes contract-tesztkészlettel,
-valódi cloud nélkül. `TutorModelGateway` (`abstract interface class`:
-`start(TutorModelRequest)→AppResult<Stream<TutorModelEvent>>`, `cancel()`,
-`health()`) — **nincs Flutter UI / provider-SDK típus** (ADR 0131). `sealed
-TutorModelEvent`: delta / tool-call / done / error, duplicate-terminal guard
-(csak az első jut ki). Scripted `FakeTutorModelGateway` injektált `FakeClock`-kal:
-delay/delta/tool/error, **determinisztikus** cancel, late-event drop; a
-`withTimeouts` teszt-helper first-event/inactivity/total timeout mátrixa
-below/**at**/above bontásban. `LocalTutorModelGatewayStub` capability-unavailable
-(`'tutor.model_gateway.unavailable'`). **Pre-flight §0.0 (main @ `5d082dc`):**
-`public.dart` **kivéve** az engedélyezett listából — az `ai_tutor_boundary_test`
-üres-boundary invariánsa R16+-ig él (HANDOFF §6), a gateway intra-feature
-importtal érhető el. Review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 3 NOTE);
-a provider-boundary/no-secret határt eldobható mutáció igazolta pirosra
-(hardcoded secret → `secrets` lépés; provider-SDK import → `analyze`). **3 javító
-kör** (qwen kétszer jelzés nélkül `unknown`-ra esett token-kimerülés miatt, de
-commitolt; a hiányokat az orchestrátor mérte ki: F1 unused-import, F2 at-threshold
-mátrix, F3 uncommitted production fájlok, F4 `FakeClock`(szinkron)↔`StreamController`
-(aszinkron) sequencing). CI exact-SHA `2fe4b60`: build-apk
-[31012190270](https://github.com/wolfcasaba/strumsight/actions/runs/31012190270)
-+ router-ci `success`; merge-SHA `b9d2950` router-ci `success`; post-merge gate zöld
-(format/analyze/test 69/architecture/secrets/l10n).
-
-<details><summary>E04-R12 — Prompt templates, output schema & injection boundary (PR #140, ADR 0141) — snapshot</summary>
-
-**E04-R12 — Prompt templatek, output schema és injection boundary** (PR
-[#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
-**új ADR [0141](docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)** —
-bővíti a 0131/0132/0137/0139-et, orchestrátor írta a pre-flightban). Implementer:
-**Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** verziózott, determinisztikus tutor-prompt-építés kemény
-trusted/untrusted határral. `TutorPromptBuilder` **csak redaktált**
-`TutorContextSnapshot`-ot fogad (nyers audio/token/secret sosem); rögzített
-layer-sorrend (`PRODUCT_POLICY`→`SAFETY_POLICY`→`TUTOR_PEDAGOGY_POLICY`→
-`TOOL_CONTRACT_SUMMARY`→`STRUCTURED_USER_CONTEXT`→`TRUSTED_KNOWLEDGE`→
-`UNTRUSTED_*`×3→`REQUIRED_OUTPUT_SCHEMA`). Trusted (system-`en` + `TutorSourceRef`
-citációk) és untrusted (user/import) fizikailag külön, delimiterrel; az untrusted
-`<`/`>` escape-elve, `PromptTemplate` elutasít `<<<`/`>>>`-t → **delimiter-forgery
-zárva** (mutáció-próba: az escape eltávolítása RED-re vált). Tool-schema injection a
-registry-birtokolt allowlisttel (`TutorToolRegistry.schemasForTurn(policy)` — a
-builder nem vezet be sajátot). Strukturált output-schema v1, **nincs chain-of-thought**.
-Intentenkénti asset-template (`assets/tutor_prompts/*.json`, 6 `ContextPurpose`),
-bit-stabil snapshot + adversarial injection fixture. **Pre-flight §0.0 (main @
-`c1c57db`):** ADR 0141 kiosztva (0140→0141 átszámozva, GOV-04 ütközés); mérési
-szabály #2 — az allowlist a registryé, nem a builderé. Review **APPROVED 1 javító
-kör után**: BLOCKER-1 — a `public.dart` export törte a merge-elt
-`ai_tutor_boundary_test` nulla-directive invariánsát, amit a **teljes CI-suite**
-fogott meg (a kör `gate_tests` csak `prompts/`-ot mért, L120); feloldás
-scope-szűkítéssel (export R13+-ra halasztva, boundary-teszt érintetlen — H2 elkerülve).
-CI: build-apk [31001924809](https://github.com/wolfcasaba/strumsight/actions/runs/31001924809)
-+ router-ci `success` exact head `89a56fe`, merge-SHA router-ci `c5b14e5` success;
-post-merge gate zöld.
-
-</details>
-
-<details><summary>E04-R11 — Action proposal, validation & confirmation service (PR #137, ADR 0139) — snapshot</summary>
-
-**E04-R11 — Action proposal, validation & confirmation service** (PR
-[#137](https://github.com/wolfcasaba/strumsight/pull/137), squash `479550f`,
-**új ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)** —
-mechanizmus-döntések, implementálja az ADR 0133-at, orchestrátor írta a
-pre-flightban). Implementer: **Codex (Terra, örökölt kézi override)**;
-orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** kétlépcsős, felhasználó által megerősített action-rendszer —
-**automatikus write/launch soha**. Providerfüggetlen sealed `TutorAction`
-hierarchia immutable metadatával (source, expiry [UTC], typed `TutorActionCapability`,
-`clientActionId`, opaque `TutorActionRevisionToken`); typed profile-update /
-plan-save / session-launch action `preview`-vel; explicit `TutorUnknownActionProposal`
-és `TutorRawRouteActionProposal` — **egyik sem `TutorAction`**, így strukturálisan
-sem érhet el executort. Pure `TutorActionValidator` (expiry inkluzív, capability,
-song-revision, source-session), amit a `confirm` **confirm-időben újrafuttat**
-(stale-recheck). `ActionConfirmationService`: csak `pendingConfirmation`-ből
-`execute`, reject után nem, **idempotens `clientActionId`-vel** (in-flight future
-dedup + completed-set); memóriás `FakeTutorActionExecutor`, nincs production
-nav/write. Route-katalógus mérve: `AppRoutes` **String-katalógus, nincs
-route-enum**; a domain **nem** importál `lib/app/routing/*`-ot. **Pre-flight §0.0
-(main @ `fa76d20`):** D1 — új ADR 0139 (0138 volt a legmagasabb); D2 —
-`public.dart` eltávolítva az engedélyezett-listáról (nulla-export boundary
-invariáns, nincs hívó; R12/R16/R19 fogyasztja); erőforrás-tulajdonlás mérve
-(`rg .acquire(` → csak `mic_capture.dart`, az action-réteg lease-mentes). Review
-**APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE) — expiry alatt/rajta/fölötte mátrix
-tesztelve, a raw-route guard **valódi-sértés mutáció-próbával** RED-re váltva
-(izolált `/tmp` klón), sequential-reconfirm idempotencia próbával igazolva. CI:
-build-apk [30996409067](https://github.com/wolfcasaba/strumsight/actions/runs/30996409067)
-+ router-ci `success` exact head `66fadfc`, merge-SHA router-ci `479550f` success;
-post-merge gate zöld.
-</details>
-
-<details><summary>E04-R10 — Tutor Tool contract & read-only registry (PR #136, ADR 0137) — snapshot</summary>
-
-**E04-R10 — Tutor Tool contract & read-only registry** (PR
-[#136](https://github.com/wolfcasaba/strumsight/pull/136), squash `2f7fffc`,
-**új ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)** —
-read-only tutor tool contract & registry, orchestrátor írta a pre-flightban).
-Implementer: **Codex (Terra, örökölt kézi override)**; orchestrátor/reviewer:
-**Claude Opus 4.8**.
-
-**Elkészült:** typed `TutorTool` contract (permission + providerfüggetlen input-schema),
-verziózott **fail-closed** `TutorToolRegistry` (unknown/nem-engedélyezett tool →
-normalizált `ValidationFailure`, turn-specifikus allowlist), immutable
-request/turn-policy + provenance/timeout/size-report result (méretlimit fölött
-**jelent, nem csonkol**), két kezdeti local tool (`getContextField` read-local,
-`summarizeContext` compute-local), behelyettesíthető `FakeTutorToolRegistry`.
-Kizárólag **read-only + lokális compute** — nincs arbitrary file/network/code tool
-(ADR 0137, komplementer az ADR 0133 write/launch-megerősítéssel). **Pre-flight
-§0.0 (main @ `acc84d9`):** ADR 0137 szabad (0136 volt a legmagasabb); D2 —
-`public.dart` eltávolítva az engedélyezett-listáról (nulla-export boundary
-invariáns, nincs hívó; R11/R12/R16/R19 fogyasztja); D3 — `lib/core/foundation/`
-scope-on kívül, tool-exception a **meglévő** `ValidationFailure`/`UnknownFailure`
-kódokra képződik; D4 — nincs erőforrás-lease (`rg .acquire(` 0 találat). Review
-**APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE) — a security-allowlist guard
-**valódi-sértés próbával** igazolva (extra tool a shipped `toolsFor`-ba → 3 teszt
-RED → visszaállítva). CI: build-apk + router-ci `success` exact head `80a7b7b`;
-post-merge gate zöld.
-</details>
-
-<details><summary>E04-R07 — Offline knowledge index & retrieval (PR #130, ADR 0136) — snapshot</summary>
-
-**E04-R07 — Offline knowledge index & retrieval** (PR
-[#130](https://github.com/wolfcasaba/strumsight/pull/130), squash `8182204`,
-**új ADR [0136](docs/adr/0136-tutor-knowledge-retrieval.md)** —
-deterministic offline tutor knowledge retrieval, orchestrátor írta a
-pre-flightban). Implementer: **Codex (Terra, örökölt kézi override)**;
-orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** determinisztikus, **offline** tudásbázis-keresés forrásjelöléssel
-az R06 approved-only, hash-lezárt knowledge pack fölött. `KnowledgeIndex`
-(approved-only, kanonikusan rendezett, hash-verifikált entryk); `KnowledgeRetriever`
-lexical ranking (`title`×2 + chunk-`content`×1 + preferred-skill boost), **inkluzív
-min-score** (`>= minScore`), **stable tie-break** `(score↓, sourceId↑, chunkIndex↑)`
-shuffle-invariáns, duplicate-chunk collapse, max-result cap, `KnowledgeRetrievalBackend`
-embedding-seam nyitva; `AssetKnowledgeRepository` fail-loud **nem-omlasztó** fallback
-(üres index + stabil hibakód + `logger.error`, manifest+chunk hash-verifikáció);
-`TutorSourceRef` provenance-kimenet — a query **soha nem trusted content**.
-`build_tutor_knowledge_index.dart` determinisztikus build; latency baseline
-(`docs/baseline/epic-04-knowledge-retrieval.md`). **Pre-flight §0.0 (main @
-`e79a0eb`):** ADR 0136 szabad (0135 volt a legmagasabb); `KnowledgeDocument`-ben
-**nincs** `topic`/`keywords`/`heading` → **`topic ≡ skill`**; **engedélyezett-lista
-szűkítve** — `public.dart` eltávolítva (nulla-export boundary invariáns, nincs hívó;
-R12/R16 fogyasztja), helyette ADR 0136. Review **APPROVED** (0 BLOCKER/MAJOR/MINOR,
-1 NOTE) — min-score inkluzivitás **valódi-sértés próbával** (`<` → `<=` → RED).
-CI run 30975365023 success exact head `2b4bb19`; post-merge gate zöld. Full
-narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-</details>
-
-<details><summary>E04-R06 — Curated tutor knowledge schema & first content pack (PR #129, ADR 0135) — snapshot</summary>
-
-Felhasználói célú, review-zott, verziózott tudásbázis a fejlesztői `docs/rag`
-DSP-anyagtól **szigorúan elkülönítve** (ADR 0135 §1, AGENTS.md §9). `KnowledgeDocument`/
-`KnowledgeChunk` immutable schema (SHA-256 contentHash, fail-loud); `KnowledgeCodec`
-determinisztikus kanonikus JSON codec + chunker; `build_tutor_knowledge_manifest.dart`
-**approved-only** manifest + négy külön hibakód. Első **tíz CC0-1.0** dokumentum
-(`assets/tutor_knowledge/{en,hu}/`) öt témában. Review APPROVED (valódi-sértés próba:
-`!= rejected` → RED). Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-</details>
-
-<details><summary>Korábbi körök: E04-R05 (context adapters), E04-R04 (skill taxonomy/reducer) — snapshot</summary>
-
-**E04-R05** (PR #128, squash `55d640d`, nincs új ADR): provider-free, redakciós,
-provenance-olt tutor context aggregáció immutable `TutorContextSnapshot`-ba (hat
-public-barrel adapter, deny-by-default purpose-allowlist, budget). Review
-APPROVED (1 MAJOR → fix: rg-shell→Dart fájlolvasás, L110).
-
-**E04-R04** (PR #127, squash `0d7ab1b`, nincs új ADR): provider-független skill
-graph + készségbizonyíték-modell, pure determinisztikus reducer. Review APPROVED,
-coverage 98,68%. `public.dart` üres.
-
-<details><summary>Korábbi kör: E04-R03 — Student/guitar profile, goals & consent (superseded snapshot)</summary>
-
-**E04-R03 — Student/guitar profile, goals & granular consent** (PR
-[#126](https://github.com/wolfcasaba/strumsight/pull/126), squash `06ae3f7`,
-nincs új ADR — az R01 0132/0134 realizálása). `StudentProfile` (per-mező
-`ProfileField<T>` provenance + explicit>inferred `merge`), `GuitarProfile`,
-`LearningGoal`, **`TutorConsent` három független tengely** (ADR 0132 §3);
-`TutorProfileCodec` verziózott, bit-stabil round-trip. Review APPROVED,
-coverage 90,6%. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-</details>
-
-<details><summary>Korábbi kör: E04-R01 — AI Tutor baseline & ADR-ek (superseded snapshot)</summary>
-
-**E04-R01 — AI Tutor baseline, ADR-ek és feature flagek** (PR
-[#124](https://github.com/wolfcasaba/strumsight/pull/124), squash `814388a`,
-ADR 0131/0132/0133/0134). Epic 4 kickoff funkcionális változtatás nélkül, flag
-mögött (`aiTutorEnabled`/`aiTutorCloudEnabled` default OFF); üres `public.dart`
-boundary; négy kötött ADR; egy javító kör (MAJOR M1: hashCode-bővítés törte az
-`app_config_test` 6-mezős hashCode-ját → fix: value semantics `==`-on).
-Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-</details>
-
-<details><summary>Korábbi kör: E03-R19 (superseded snapshot)</summary>
-
-**E03-R19 — Practice compiler és chord/rhythm trainer orchestration** (PR
-[#120](https://github.com/wolfcasaba/strumsight/pull/120), squash `e8dd74e`,
-[ADR 0127](docs/adr/0127-song-practice-compiler-and-practice-engine-orchestration-boundary.md)).
-Implementer: **Codex (gpt-5.6-terra)**; orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** `SongPracticeCompiler` (`application/trainer/`, tiszta függvény):
-`SongDocument` track+range → determinisztikus `PracticeDefinition`, a range
-startja local beat 0-ra, minden `PracticeEvent`-hez `SongEventReference`.
-Reference-tempo normalizált idővonal: a tempo/meter-váltó range a start tempóra
-normalizál, minden event a `SongTimeMap` szerinti VALÓS onset-idejére kerül
-(`µs·bpm·480/µsPerMin` tick) — a Practice pontozás idő-alapú, így az onset-idők
-végig hűek. Hat track-profil publikus `PracticeEvent` + `ScoringProfile.weights`
-encodinggal (rhythm-only = `StrumDirection.down` placeholder + rhythm-súlyú
-profil). `SongTrainerController` (A9-tiszta: az injektált publikus
-`PracticeSessionController`-t + `SongTransport`-ot vezényli, sosem éri el direkt
-az AudioSessionCoordinatort/StrumEngine-t): count-in, backing+scoring,
-pause/resume, seek→új attempt, mic-denied, background; idempotens finalize
-(`_operationId`/`_finalizedOperationId`). Playback-only mód nem konstruál Practice
-sessiont → **mic provider call count 0** (strukturálisan + teszttel). `SongResultMapper`:
-`PracticeSessionResult` → `SongTrainerResult`, measure/section aggregáció, fail-closed
-hiányzó referenciára. Négy implementer-STOP mind dokumentált §0.0-revízióval
-feloldva (R1 additív public export, R4 fájl-elhelyezés, R5 tempo-normalizálás,
-R6 encoding-recept) — nem halt. Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-</details>
-
-### Előző kör (referencia): E03-R17 — Song Overview, track/range választás és Trainer Setup (PR
-[#118](https://github.com/wolfcasaba/strumsight/pull/118), squash `168114a`,
-[ADR 0125](docs/adr/0125-song-trainer-setup-configuration-boundary.md)).
-Implementer: **Codex**; orchestrátor/reviewer: **Claude Opus 4.8**.
-
-**Elkészült:** Song Overview + Trainer Setup képernyők. `SongTrainerSetupController`
-(route-scoped, read-only): a `songRepositoryProvider`-ből tölti a `SongDocument`-et,
-tiszta `const SongValidator()`+`const SongCapabilityResolver()` láncon számol
-capabilityt (nincs új provider), és egyetlen immutable `TrainerConfig`-ot ad ki.
-Capability-driven mode gating: chord (`report.chord.scoring`), rhythm
-(strukturális: ChordTrack/StrumTrack/NoteTrack + `canTrain`), pitch
-(`pitch.scoring && isMonophonic`); unsupported mode disabled + indokolt.
-`TrainerRange` full/section/measure(inclusive UI→exclusive domain)/bookmark,
-dalhatáron validálva. Speed 50–150%, count-in/metronome/loop, tuning/capo
-reminder, missing-asset entry, rejtett resume-CTA (R21 producer). A setup a
-`SongDocument`-et sose mutálja. Flag-gated (`songTrainerV2Enabled` OFF).
-Egy implementer-STOP (`36059ad`) §0.0 R2 revízióval feloldva (a capability nem
-provider-injektált). Full narrative: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-
-### Korábbi kör (referencia): E03-R13 — Guitar Pro feasibility és stratégiai döntés (PR
-[#103](https://github.com/wolfcasaba/strumsight/pull/103), squash `83535e5`,
-[ADR 0122](docs/adr/0122-guitar-pro-import-strategy.md)). Implementer: **auto
-router**; independent reviewer: **Codex/Terra**.
-
-**Elkészült:** a stratégia C: a Guitar Pro forrásokat az appon kívül, a user
-által választott eszközzel MusicXML/MXL/MIDI-vé kell konvertálni, majd a már
-auditált import útvonalon beolvasni. A külön Dart feasibility spike
-reprodukálható GP3/GP5/GPX probe-ot, fixture-provenanciát és exact output
-snapshotot tartalmaz; nem kerül production parser, dependency, registry vagy
-félkész támogatási állítás a termékbe. A review egy CI-beli nested-tool import
-feloldási MAJOR-t talált; az `F1` javítás relatív library importtal zárult.
-
-Zöld gate: `tools/round-gate.sh test/features/song_trainer/data/importers`
-(format/analyze/45 teszt/architecture zöld, merge előtt és után is) + CI
-[30839878617](https://github.com/wolfcasaba/strumsight/actions/runs/30839878617)
-zöld az exact `ead6f03` branch-headen. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R13.
-
-### Previous completed round
-
-**E03-R07 — Fájlrendszeres Song repository és asset store** (PR
-[#66](https://github.com/wolfcasaba/strumsight/pull/66), squash `b8b7e4e`,
-[ADR 0090](docs/adr/0090-song-storage-files-and-assets.md) — elfogadva
-E03-R01-ben, ez a kör csak implementálta, nem kellett új ADR-szám).
-Implementer: **auto MiniMax-first router**. Orchestrátor: **Claude Sonnet 5**.
-
-**Elkészült:** `SongRepository`/`SongAssetRepository`, `FileSongRepository`,
-`FileSongAssetRepository`, `AtomicFileWriter`, `SongRepositoryRecovery`,
-`InMemorySongRepository`, `song_trainer_providers.dart` (lásd §2
-részletesen).
-
-**Pre-flight:** ADR 0090 már elfogadott volt és szó szerint fedte a kör
-minden döntését (nincs új ADR); `path_provider`/`clock` csak tranzitívan
-feloldott csomag, ugyanaz a precedens mint az E03-R06 `crypto`-ja; a
-`song_trainer/domain/` purityt egy önálló teszt-scanner őrzi, nem a
-`tool/check_architecture.dart` — részletek `docs/handoff-archive.md`
-§ E03-R07.
-
-**Folyamat:** M3 első próbája két, a §4 listán kívüli teszt-fájlt hozott
-létre — az orchestrátor mechanikusan (fájllista-bővítés nélkül)
-áthelyezte a teszteseteket a már engedélyezettekbe. Egy `BLOCKED` állapotú
-`auto`-router-task `resume`-mal való feloldásához a router SAJÁT
-kódjával kellett frissre állítani a perzisztált baseline-manifestet
-(`docs/LESSONS.md` L60) — plain `reset`+`run` a stale manifest miatt
-azonnal újra BLOCKED-ba futott volna.
-
-**Három független review pass + két javító kör:** pass 1 → 1 BLOCKER +
-6 MAJOR (hiányzó mentés-előtti validáció, asset-integritás/atomicitás
-hiányok, rossz staging könyvtár, delete-then-rename atomicitás-sértés,
-nem streamelt hash); javító kör #1 (M3) mind zárta; pass 2 egy ÚJ
-BLOCKER-t talált a saját streamelt-hash javításban (`writeFromSync`
-length/end-index csere — `docs/LESSONS.md` L60); javító kör #2
-**orchestrátor-írt** (M3 kerete + Terra napi automatikus kerete egyaránt
-mérve kimerült — AGENTS.md motor-oldal-nem-elérhető kivétele) egyetlen
-sort + egy multi-chunk regressziós tesztet javított; pass 3 **APPROVED**.
-
-Zöld kapu: `tools/round-gate.sh test/features/song_trainer/data/local`
-(67/67, format/analyze/architecture mind zöld) + CI
-[30750669625](https://github.com/wolfcasaba/strumsight/actions/runs/30750669625)
-zöld a merge-elt `headSha`-n (`652fdf6`), független post-merge
-gate-ellenőrzés `main`-en (`b8b7e4e`) szintén zöld. Full narrative:
-[`docs/handoff-archive.md`](docs/handoff-archive.md) § E03-R07. Review:
-[`docs/reviews/e03-r07-song-repository-asset-store-review.md`](docs/reviews/e03-r07-song-repository-asset-store-review.md).
-
-**Előző körök:** E03-R06 (legacy Song/Setlist migrációs adapter, PR
-[#65](https://github.com/wolfcasaba/strumsight/pull/65), `d20c402`,
-`docs/LESSONS.md` L59) · E03-R05 (validator/normalizer/capability resolver,
-PR [#64](https://github.com/wolfcasaba/strumsight/pull/64), `5226127`,
-`docs/LESSONS.md` L54–L58) · E03-R04 (track/event domain modell +
-monophonic elemzés, PR [#60](https://github.com/wolfcasaba/strumsight/pull/60),
-`5c01149`, `docs/LESSONS.md` L52/L53) · E03-R03 (songstruktúra +
-determinisztikus időmodell, PR
-[#59](https://github.com/wolfcasaba/strumsight/pull/59), `47ad6da`,
-`docs/LESSONS.md` L51) · E03-R02 (SongDocument V2 azonosítók/metaadatok,
-PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
-`docs/LESSONS.md` L50) — mind teljes narratívája:
-[`docs/handoff-archive.md`](docs/handoff-archive.md).
+_(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/handoff-archive.md) — E04-R21 és korábbiak.)_
 
 ## 6. Exact next task
 

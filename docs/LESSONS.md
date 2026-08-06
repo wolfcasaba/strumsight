@@ -4682,3 +4682,45 @@ Rokon L-ek: [[L126]] (E04-R15 — ugyanez a rebase-onto-healed-main befejezés,
 tilos-zóna merge-blocker után), [[L124]] (a merge-kapu egy allowed_paths-on kívüli
 false-positive-on bukhat; a csatorna a self-heal infra-joga), [[L135]] (ugyanennek
 a körnek a 2. H3-a és az ADR 0176 eszköz-igazítás).
+
+## L137 — `tools/mm-round.sh` VALÓDI klónt vár, nem git-worktree-t; és az előre megírt brief „a domain kész" premisszáját a pre-flightban MÉRD (E04-R22, ADR 0069/0087)
+
+**Tünet A (factory-gotcha).** Az E04-R22 (`engine=minimax`) munkapéldányt először
+`git worktree add`-del hoztam létre. A `tools/mm-round.sh` azonnal, üres loggal,
+jelzés nélkül kilépett (exit 2): `mm-round.sh: a munkapéldány nem git-fa`. Ok: a
+wrapper `[ ! -d "$workdir/.git" ]`-vel ellenőriz, egy **worktree** `.git`-je
+viszont FÁJL (gitdir-pointer), nem könyvtár. A `tools/codex-round.sh` ezzel szemben
+`git -C "$workdir" rev-parse`-szal ellenőriz, ezért az worktree-t elfogadja — a két
+wrapper NEM egyenértékű a munkapéldány-típus tekintetében.
+
+**Javítás.** `engine=minimax`/`mm-round.sh` esetén a munkapéldány legyen VALÓDI
+klón (`git clone --branch <kör-branch> …`), aminek `.git` KÖNYVTÁRA van. A brief
+pre-flight commitját előbb push-old originra, majd onnan klónozz — így a klón
+origin-ja a GitHub, és az implementer commit + orchestrátor push egyenes. (A
+`tools/`-hoz nem nyúlhatunk — §4 —, tehát a wrapper worktree-elfogadását nem
+„javítjuk", a hívási oldalt igazítjuk.)
+
+**Tünet B (brief-premissza).** A brief §2 azt állította: „R03 granular consent +
+R17 memory/delete-all repo kész — a UI ezek fölé épül." A pre-flight mérés
+(`grep`/olvasás) viszont kimutatta: az **R03 szándékosan „domain, provider-free"**
+(PR #126 címe) — van `TutorConsent`/`StudentProfile`/`GuitarProfile` modell + codec,
+de **nincs** consent/profil repository, provider, StorageKey vagy perzisztencia; az
+`ai_tutor` feature **flag-off/preview** (a repo-providerek override-only, nincs
+valós-app bootstrap wiring). Így a brief §3/§6 több eleme (retention-config,
+conversation-export, cloud remote-pending, consent-revoke pending-cancel) MÖGÖTT
+nincs domain-réteg, és annak hozzáépítése a §3 által tiltott / tilos-zónás lenne.
+
+**Javítás.** NEM halt és NEM néma lista-tágítás: dokumentált **§0.0 brief-revízió**,
+amely (1) a mért domain-anchoröket rögzíti (típus/metódus/StorageKey + fájl:sor),
+(2) a route-drift-et korrigálja (`lib/app/router/app_route.dart` → a valós
+`lib/app/routing/{app_route.dart,app_router.dart}`), (3) az acceptance-t a
+ténylegesen buildelhető, prezentáció-only szeletre szűkíti, a hátország nélküli
+tételeket mért indoklással prerekvizit körbe halasztva. Egy javító kör (MiniMax)
+zárta a review egyetlen MAJOR-ját (memory-edit a doc-commentben állítva, de a
+UI-ból nem hívva) — a „zöld gate ≠ tartalmi hűség" mintát (E02-R04/05) a
+falszifikációs próba (edit `update()` no-op → PIROS) fogta meg.
+
+Rokon L-ek: [[L09]] (a gate futtatható artefaktum, nem prompt-szöveg), [[L21]]
+(mért néma-bukások: dirty_files, headSha↔HEAD), [[L59]]/[[L48]] (klón/friss-munkafa
+gen-l10n csapda — más tünet, de szintén munkapéldány-artefaktum), [[L113]]
+(`docs/rounds/**` érintés → a Router CI is a merge-kapu része).
