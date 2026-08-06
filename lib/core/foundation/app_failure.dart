@@ -25,6 +25,7 @@ abstract final class FailureCode {
 
   // --- permission ----------------------------------------------------------
   static const String permissionMicrophoneDenied = 'permission.microphone';
+  static const String permissionCameraDenied = 'permission.camera';
   static const String permissionUnavailable = 'permission.unavailable';
 
   // --- storage -------------------------------------------------------------

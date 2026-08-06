@@ -4,6 +4,8 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>StrumSight listens to your guitar to show the chord and strum direction in real time. Audio never leaves the device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>StrumSight uses the camera to analyse your guitar technique on your device. Processing stays on your device and no recording is made.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
