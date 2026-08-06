@@ -3,7 +3,7 @@
 Brief: `docs/rounds/e05-r09-frame-quality-assessor.md`
 Diff: `git diff main...codex/e05-r09-frame-quality-assessor` (implementer commit `3671358`, on top of the orchestrátor pre-flight commit `ac03c1f`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-06
-Verdikt: **CHANGES REQUIRED** (javító kör #1 után frissítve — ld. a jelentés végén; F2 ZÁRVA, F1 RÉSZBEN ZÁRVA, 1 lánc-elem még hiányzik)
+Verdikt: **APPROVED** (2 javító kör után — ld. a jelentés végén)
 
 ## Összegzés (eredeti, első pass)
 
@@ -230,3 +230,28 @@ framing jó}` → `improveLighting`. Ez zárja a lánc utolsó nyitott elemét
 (framing↔lighting már az 1. teszttel bizonyított).
 
 **Verdikt marad CHANGES REQUIRED** — 1 nyitott MAJOR (F1, szűkítve).
+
+---
+
+## Javító kör #2 után — 2026-08-06 — APPROVED
+
+Fix commit: `a7f446b` — pontosan a kért egy al-eset
+(`lighting: tooDark, blur/stability/roiCoverage mind rossz → improveLighting`).
+
+Gate újra futtatva SAJÁT kézzel, harmadik friss klónban
+(`/tmp/review3-e05-r09`): mind a hat lépés zöld, 25/25 vision teszt.
+
+**Végső mutáció-visszaellenőrzés:** a `_cue()`-ban a lighting/blur ág-sorrend
+felcserélve (utoljára, ezen a végleges kódon) → `prioritizes each cue over
+every lower-priority concern` PIROSRA váltott, minden más teszt zöld maradt.
+Visszaállítva.
+
+A §5.3 teljes lánca (framing→lighting→blur→stability→roiCoverage) mind a
+négy szomszédos párja immár külön-külön, mért mutációval bizonyítva:
+framing↔{lighting,blur,stability,roiCoverage} (1. teszt), lighting↔blur
+(új), blur↔stability (kör #1), stability↔roiCoverage (kör #1).
+
+**Nyitott BLOCKER/MAJOR: 0.** A security review (2 MINOR, S1/S2) is zárva
+(kör #1). Nincs több nyitott lelet.
+
+**VÉGSŐ VERDIKT: APPROVED.** Mehet a CI-dispatch és a merge.
