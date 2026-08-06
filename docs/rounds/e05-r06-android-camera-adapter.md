@@ -215,7 +215,22 @@ vagy mércegyengítés helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**2026-08-06 — STOPPED before implementation.** The required `camera`
+dependency solve would regenerate the tracked `pubspec.lock`, but §4 permits
+only `pubspec.yaml` and does not permit `pubspec.lock`. Per §0 and §9 this is a
+scope conflict, so no production or dependency file was changed.
+
+Required Win32 evidence from `rg -n "win32" pubspec.lock` before the stop:
+
+```text
+1181:  win32:
+1184:      name: win32
+```
+
+The existing lock resolves `win32` at `6.3.0` (the surrounding lock entry).
+No version solve was run because it would first write the out-of-scope lock
+file. A revised brief must explicitly allow `pubspec.lock` before this round
+can add the plugin and verify the one-major invariant.
 
 ## 11. Review — a független reviewer tölti ki
 
