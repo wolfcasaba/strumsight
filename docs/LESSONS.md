@@ -4646,3 +4646,39 @@ feature-gyökeret ismeri. A pre-flightnak a public felület
 **fogyaszthatóságát** (a checker szabályát) is mérnie kell, nem csak az export
 meglétét. [[L130]] (gate-eszköz mint mérce) — az eszköz javítható, de a hatókörét
 pontosítjuk, a létét nem szüntetjük meg, és regresszió zárolja.
+
+## L136 — Egy checker-false-positive-on H3-halted kör BEFEJEZÉSE: a healelt `main`-re rebase + újra-verifikáció + újra-review, nem újraimplementálás és nem implementer-újradispatch (E04-R21, merge-completion, ADR 0112)
+
+**Tünet.** Az L135 után a `main`-en két self-heal landolt: #154 (brief re-scope)
+és #155 (ADR 0176 — a checker mostantól elfogadja a nested `public.dart` barrelt).
+A kör branchén viszont a régi, H3-review-vel lezárt implementáció állt
+(`8b3b991` → review `90f5142` CHANGES REQUESTED). A pipeline új sessionje ezt a
+kört kapta meg.
+
+**Mért helyzet.** A branch egyetlen BLOCKER-je (cross-feature nested-barrel import)
+**nem kódhiba** volt, és a fixe **már a `main`-en** volt (ADR 0176). A `merge-base`
+`8cabae0`; `main` előrement `135a304`+`542a023`-ig. A helyes befejezés nem az
+implementer újradispatch-e (nincs mit javítania a kódon) és nem újraimplementálás,
+hanem a **változatlan implementáció rebase-e a javított `main`-re**: `git checkout -B
+<branch> origin/main && git cherry-pick 8b3b991` (tiszta, csak a §10-handoff
+brief-hunk auto-merge-elt). Ezután `818ebcf` = `542a023` + implementáció.
+
+**Verifikáció (rebase-elt fa).** `tools/round-gate.sh` → **minden zöld** (a korábban
+piros **architecture** most zöld, mert a healelt checkert örökölte a rebase);
+scope-audit `542a023..818ebcf` → 9 fájl, 0 sértés; a redaction/capability
+falszifikáció változatlan. Merge-SHA `00e76e1`: full-gate [31067033273] +
+router-ci [31067010493] **success** → squash `6000b57` (PR #156). Post-merge gate
+`main`-en zöld.
+
+**Szabály.** Ha egy kör kizárólag azért halt (H3), mert egy mérő-eszköz
+false-positive-olt, és a self-heal ezt az eszközt már a `main`-en javította, az
+orchestrátor **nem** nyúl az eszközhöz (§4) és **nem** dispatch-el implementert
+üres feladatra — a kör saját, változatlan artefaktumát a healelt `main`-re
+rebase-eli, ott újra-verifikál és újra-review-z. Ez az orchestrátor autonómiáján
+belül van (§2: „a kör saját, még nem merge-elt artefaktuma"), és a §0.2 legacy-ág
+javító-kör útjának a triviális (kód-változás nélküli) esete.
+
+Rokon L-ek: [[L126]] (E04-R15 — ugyanez a rebase-onto-healed-main befejezés,
+tilos-zóna merge-blocker után), [[L124]] (a merge-kapu egy allowed_paths-on kívüli
+false-positive-on bukhat; a csatorna a self-heal infra-joga), [[L135]] (ugyanennek
+a körnek a 2. H3-a és az ADR 0176 eszköz-igazítás).

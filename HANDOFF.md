@@ -4,38 +4,37 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R20 MERGED — Practice & Analyze post-session tutor integration; two result
-> context-adapters + SessionTutorEntryCard, nincs új ADR / ADR 0132 hatálya; Codex
-> (Terra), exact-SHA zöld kapun át).**
+> (E04-R21 MERGED — Song Trainer struktúra-debrief + capability-gate + lyrics/backing
+> redaction; a korábbi H3 BLOCKER-t a merge-elt ADR 0176 oldotta fel, az implementációt
+> a javított main-re rebase-eltük; nincs új ADR / ADR 0132+0089 hatálya; Codex (Terra),
+> exact-SHA zöld kapun át).**
 >
-> ## 🔧 E04-R21 ÖNJAVÍTVA ×2 (ADR 0112, halt H3, 2026-08-06) — scope-szűkítés + checker-igazítás, még NEM implementált
+> ## ✅ E04-R21 KÉSZ — Song Trainer struktúra-debrief, capability-gate & redaction (2026-08-06)
 >
-> **2. önjavítás (ADR 0176, halt H3 #2).** A scope-szűkítés után a kör **másodszor
-> is H3-mal halt**: a Song adapter/tool a `song_trainer/domain/public.dart` NESTED
-> barrelt importálta, amit a `tool/check_architecture.dart` cross-feature szabálya
-> tiltott (csak a feature-gyökér `public.dart`-ot fogadta el) — pedig **ADR 0089**
-> pont ezt a nested barrelt jelöli ki cross-feature entry pointnak. Class A
-> (eszköz-hiba, nem modell-scope): a checker mostantól a cél-feature **bármely**
-> `public.dart` barreljét elfogadja (gyökér vagy nested), a nem-`public.dart` belső
-> elérés továbbra is sértés — Dart-regresszió zárolja
-> (`test/core/architecture_dependency_test.dart`, RED→GREEN). PR
-> [#155](https://github.com/wolfcasaba/strumsight/pull/155), ADR 0176. A re-scoped
-> R21 szelet így **brief-változás nélkül** épül ADR 0089 szerint. Lecke: **L135**.
+> **E04-R21** MERGED (PR [#156](https://github.com/wolfcasaba/strumsight/pull/156),
+> squash `6000b57`, **nincs új ADR** — ADR 0132 + 0089 hatálya; implementer **Codex
+> (Terra, gpt-5.6-terra)**, orchestrátor/reviewer **Claude Opus 4.8**). A re-scoped
+> §0.0 szelet: **`SongResultContextAdapter`** a Song Trainer **publikus**
+> `SongDocument` struktúrájából (section/measure) készít tutor-contextet — lyrics /
+> backing-audio / asset / source / track-event **redaktálva**; **`getSongSections`**
+> read-only tool (kizárólag strukturális output); **`SongTutorEntryCard`**
+> capability-őszinte belépőkártya (nem score-olható axishez nincs action). Falszifikáló
+> tesztek: redaction (valódi private tartalom a bemenetben → kizárás mérve),
+> pitch/chord capability-gate, public-domain import boundary.
 >
-> Az **E04-R21** brief FANTOM public-bemenetet feltételezett (`SongPracticeResult`
-> + `TrainerRange` + range-fogadó setup-route — **egyik sem publikus**, mérve:
-> `grep export .../song_trainer/domain/public.dart` csak struktúrát+capabilityt ad;
-> `SongPracticeResult` sehol; a route csak `songId`). A pre-flight helyesen
-> **H3-mal halt**. Az önjavító kör (ADR 0112) a brief STOP-sora szerinti
-> **dokumentált scope-szűkítést** végezte: R21 mostantól a **már-publikus
-> struktúra-debrief + capability-gate + lyrics/backing-redaction** szeletre szűkül
-> (§0.0/§2/§3/§6 revideálva). A re-scope-ot mért őr-teszt zárolja
-> (`tools/tests/test_r21_brief_public_boundary.py`, RED→GREEN). **A kör kódja NINCS
-> implementálva** — a lánc újra sorra veszi az R21-et a szűkített brieffel.
-> **Prerekvizit kör kell** (halasztva): a song_trainer public boundary additív
+> **Halt-feloldás (ADR 0112 pipeline).** A kör korábban **kétszer H3-mal halt**. A
+> 2. halt egyetlen BLOCKER-1-e (`check_architecture.dart` false-positive a nested
+> `song_trainer/domain/public.dart` barrelre) **nem kódhiba** volt — a merge-elt
+> **ADR 0176** (heal [#155](https://github.com/wolfcasaba/strumsight/pull/155))
+> feloldotta. Ez a session a mérő eszközhöz **nem** nyúlt (§4): a változatlan
+> implementációt (`8b3b991`) a javított `main`-re rebase-elte (`818ebcf`), az
+> architecture-gate így zöld. Review: **APPROVED**
+> (`docs/reviews/e04-r21-song-trainer-debrief-range-actions-review.md`). Lecke: **L136**.
+>
+> **Prerekvizit kör kell** (halasztva, §0.0): a song_trainer public boundary additív
 > result/range/setlist exportja (saját ADR-rel a song_trainer oldalon) — ez nyitja
-> majd újra a measure-range / revision-stale / missing-asset / speed-action /
-> setlist / exact-route pontokat. Lecke: `docs/LESSONS.md` **L134**.
+> majd újra a measure-range / A–B loop / revision-stale / missing-asset / speed-action /
+> setlist / exact-route pontokat.
 >
 > ## ✅ E04-R20 KÉSZ — Practice & Analyze post-session tutor integration (2026-08-06)
 >
@@ -688,13 +687,15 @@
 
 ## 4. Current branch
 
-`main` @ [PR #151](https://github.com/wolfcasaba/strumsight/pull/151), squash
-`104e685` (E04-R18). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
-írt elő (nincs natív út): full-gate [31056115529](https://github.com/wolfcasaba/strumsight/actions/runs/31056115529)
-+ router-ci [31056108608](https://github.com/wolfcasaba/strumsight/actions/runs/31056108608)
-**success** az exact merge-SHA `a6165c5`-en; a post-merge gate `main`-en zöld, a
-review **APPROVED** (javító kör #1: box-timeout salvage + 2 teszt-fix).
-(Történeti product-merge referenciák: PR #148 / `1e9b2db`, E04-R17; PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
+`main` @ [PR #156](https://github.com/wolfcasaba/strumsight/pull/156), squash
+`6000b57` (E04-R21). A tisztán Dart/dokumentum-diffhez a CI-terv `full-gate.yml`-t
+írt elő (nincs natív út): full-gate [31067033273](https://github.com/wolfcasaba/strumsight/actions/runs/31067033273)
++ router-ci [31067010493](https://github.com/wolfcasaba/strumsight/actions/runs/31067010493)
+**success** az exact merge-SHA `00e76e1`-en; a post-merge gate `main`-en zöld, a
+review **APPROVED** (a korábbi H3 BLOCKER-1-et a merge-elt ADR 0176 oldotta fel —
+rebase a javított main-re, nincs eszköz-módosítás).
+(Történeti product-merge referenciák: PR #153 / `3ce4afc`, E04-R20; PR #151 / `104e685`, E04-R18;
+PR #148 / `1e9b2db`, E04-R17; PR #147 / `df25806`, E04-R16; PR #145 / `1fe91d2`,
 E04-R15; PR #140 / `c5b14e5`, E04-R12; PR #137 / `479550f`, E04-R11; PR #129 / `f3d69ef`,
 E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
@@ -768,6 +769,30 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E04-R21 — Song Trainer struktúra-debrief, capability-gate & redaction** (PR
+[#156](https://github.com/wolfcasaba/strumsight/pull/156), squash `6000b57`,
+**nincs új ADR** — ADR 0132 + 0089 hatálya; implementer **Codex (Terra, gpt-5.6-terra)**,
+orchestrátor/reviewer **Claude Opus 4.8**).
+
+**Elkészült (re-scoped §0.0 szelet):** `SongResultContextAdapter` (a publikus
+`SongDocument` struktúrájából section/measure debrief-context, lyrics/backing/asset/
+source/track-event redaktálva), `getSongSections` read-only strukturális tool,
+`SongTutorEntryCard` capability-őszinte belépőkártya (nem score-olható axishez nincs
+action), en/hu ARB. Falszifikáló tesztek: redaction (valódi private tartalom →
+kizárás mérve), pitch/chord capability-gate, public-domain import boundary.
+
+**Halt-feloldás (ADR 0112).** A kör kétszer H3-mal halt; a 2. halt egyetlen
+BLOCKER-1-e (`check_architecture.dart` false-positive a nested
+`song_trainer/domain/public.dart` barrelre) **nem kódhiba** volt — a merge-elt
+**ADR 0176** (heal #155) feloldotta. Ez a session az eszközhöz nem nyúlt (§4): a
+változatlan implementációt (`8b3b991`) a javított `main`-re rebase-elte (`818ebcf`),
+architecture-gate zöld. **Halasztva** (prerekvizit kör, §0.0): measure-range/A–B loop,
+revision-stale, missing-asset alternate, speed-action, setlist, exact route-params —
+a song_trainer public boundary additív result/range/setlist exportja után.
+Részletes történet: `docs/handoff-archive.md`.
+
+### Korábbi kör (referencia): E04-R18 — Tutor Home, Chat UI & streaming UX
 
 **E04-R18 — Tutor Home, Chat UI & streaming UX** (PR
 [#151](https://github.com/wolfcasaba/strumsight/pull/151), squash `104e685`,
@@ -1196,8 +1221,12 @@ PR [#58](https://github.com/wolfcasaba/strumsight/pull/58), `a5b0b55`,
    meg — az R12/R13 osztályok és (R20-tól) a post-session result-adapterek +
    `SessionTutorEntryCard` a feature-en belül közvetlen importtal érhetők el, a
    publikus export a cross-feature bekötő kör érkezéséig halasztva. **A queue
-   következő `pending` sora: E04-R21 — Song Trainer debrief & range action
-   integráció (a pipeline indítja új sessionben).**
+   következő `pending` sorát a pipeline indítja új sessionben.**
+   **~~E04-R21 — Song Trainer debrief & range action integráció~~ — KÉSZ** (PR #156, `6000b57`,
+   nincs új ADR — ADR 0132+0089 hatálya; implementer Codex/Terra; a re-scoped §0.0
+   struktúra+capability+redaction szelet; korábbi H3 BLOCKER-1-et a merge-elt ADR 0176
+   oldotta fel — rebase a javított main-re; a halasztott result/range/setlist szelet
+   külön prerekvizit kört igényel; ld. fejléc + §5).
    **~~E04-R20 — Practice & Analyze post-session tutor integráció~~ — KÉSZ** (PR #153, `3ce4afc`,
    nincs új ADR — ADR 0132 hatálya; implementer Codex/Terra; §0.0-R1 public.dart
    scope-narrowing az E04-R01 boundary-teszt miatt; ld. fejléc + §5).
