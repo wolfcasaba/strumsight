@@ -4606,3 +4606,43 @@ Rokon L-ek: [[L133]] (befagyasztott barrel-őr → lista-szűkítés) — ott a 
 LÉTEZETT de zárolt volt; itt a felület **nem is létezik** publikusan. Mindkettő
 tanulsága: az előre megírt brief public-boundary feltevését a pre-flightban
 **meg kell mérni**, nem elhinni.
+
+## L135 — „Már-publikus" ≠ „cross-feature fogyasztható": a struktúra a `song_trainer/domain/public.dart` NESTED barrelben volt, de a checker csak a feature-gyökér `public.dart`-ot fogadta el → 2. H3; a feloldás a MÉRŐ-ESZKÖZ igazítása az ADR 0089 kontrakthoz, nem a mérce gyengítése (E04-R21, halt H3 #2, ADR 0112/0176)
+
+**Tünet.** Az L134 scope-szűkítése után (R21 a „már-publikus struktúra +
+capability + redaction" szeletre szűkült) a kör **másodszor is H3-mal halt**. A
+`round-gate` architecture lépése (és a `full-gate.yml` 31064059711) pirosat adott:
+a Song adapter/tool `lib/features/song_trainer/domain/public.dart`-ot importált,
+amit a `tool/check_architecture.dart` cross-feature szabálya tiltott.
+
+**Mért gyökérok** (saját reprodukció). A checker §214–223 kemény szabálya a
+cross-feature importnál **pontosan** a feature-gyökér
+`lib/features/<f>/public.dart`-ot követelte. De: (a) **ADR 0089** kimondja, hogy a
+`song_trainer/domain/public.dart` „the only entry point the rest of the app is
+allowed to import from" — a szándékolt cross-feature boundary egy **nested**
+barrel; (b) a `domain/public.dart` fejléce maga jelzi, hogy „the architecture
+guard … does not yet cover `song_trainer/domain`"; (c) az L134 saját őr-tesztje
+(`test_r21_brief_public_boundary.py PUBLIC_BARRELS`) **mindkét** barrelt legitim
+publikus felületként kezeli. `grep -rn "song_trainer/domain/public.dart" lib/ |
+grep -v lib/features/song_trainer/` → **0** találat: R21 az ELSŐ cross-feature
+fogyasztó, ezért csak most bukott ki a **checker↔kontrakt ellentmondás**. A kör
+kódja ADR 0089 szerint **helyes** volt; a checker adott false-positive-ot.
+
+**Szabály.** Amikor a halt gyökéroka nem a modell scope-sértése, hanem hogy a
+**mérő eszköz** ellentmond a projekt már merge-elt kontraktjának (itt: ADR 0089),
+az ADR 0112 önjavítás helyes lépése a **class A: eszköz-igazítás**, nem újabb
+scope-szűkítés és nem escalate. A cross-feature audit mostantól a cél-feature
+**bármely** `public.dart` barreljét elfogadja (gyökér **vagy** nested), mert a
+`public.dart` a projekt konvenciója szerint reviewelt publikus felület. **Nem
+gyengítés:** minden nem-`public.dart` belső fájl elérése **továbbra is sértés**,
+és ezt gépi Dart-regresszió zárolja (`test/core/architecture_dependency_test.dart`
+→ „allows nested public.dart barrels but blocks feature internals"): RED a régi
+checkeren (kizárólag EZ a teszt bukik), GREEN az igazítás után. Döntés: ADR 0176.
+
+Rokon L-ek: [[L134]] (ugyanaz a kör, 1. H3: fantom public-bemenet → scope-szűkítés)
+— fontos párhuzam: a scope-szűkítés helyes volt, DE „publikus a domain-barrelben"
+nem jelenti azt, hogy „cross-feature importálható", ha a checker csak a
+feature-gyökeret ismeri. A pre-flightnak a public felület
+**fogyaszthatóságát** (a checker szabályát) is mérnie kell, nem csak az export
+meglétét. [[L130]] (gate-eszköz mint mérce) — az eszköz javítható, de a hatókörét
+pontosítjuk, a létét nem szüntetjük meg, és regresszió zárolja.

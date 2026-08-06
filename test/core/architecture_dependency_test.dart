@@ -273,6 +273,49 @@ import '../../../core/music/chord.dart';
       );
     });
 
+    // Regression for the E04-R21 halt H3 (ADR 0112 self-heal, ADR 0176,
+    // 2026-08-06). ADR 0089 designates `song_trainer/domain/public.dart` as the
+    // cross-feature entry point, but the checker previously accepted ONLY the
+    // feature-root `public.dart`, so the first cross-feature consumer (the
+    // ai_tutor Song adapter/tool) was flagged and the round could not build in
+    // scope. A cross-feature import of a nested `public.dart` barrel must be
+    // allowed; reaching a non-`public.dart` file inside the feature must still
+    // be flagged.
+    test('allows nested public.dart barrels but blocks feature internals', () {
+      _write(
+        project,
+        'lib/features/ai_tutor/application/tools/song_tutor_tools.dart',
+        '''
+import '../../../song_trainer/domain/public.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
+''',
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      // The designated nested barrel is NOT a violation.
+      expect(
+        report.violations.map((violation) => violation.key),
+        isNot(
+          contains(
+            'lib/features/ai_tutor/application/tools/song_tutor_tools.dart -> '
+            'lib/features/song_trainer/domain/public.dart',
+          ),
+        ),
+      );
+      // Reaching a concrete internal model file is still a violation.
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        contains(
+          'lib/features/ai_tutor/application/tools/song_tutor_tools.dart -> '
+          'lib/features/song_trainer/domain/models/song_document.dart',
+        ),
+      );
+    });
+
     test('ignores imports inside comments', () {
       _write(project, 'lib/core/music/commented.dart', '''
 // import 'package:flutter/widgets.dart';

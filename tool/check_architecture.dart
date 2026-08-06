@@ -215,7 +215,7 @@ void _collectViolations({
   if (sourceFeature != null &&
       targetFeature != null &&
       sourceFeature != targetFeature &&
-      targetPath != 'lib/features/$targetFeature/public.dart') {
+      !_isFeaturePublicBarrel(targetPath, targetFeature)) {
     violations.add(
       ArchitectureViolation(
         sourcePath: sourcePath,
@@ -224,6 +224,19 @@ void _collectViolations({
       ),
     );
   }
+}
+
+/// A cross-feature import is legal only when it targets a `public.dart` barrel
+/// of the destination feature. Both the feature-root barrel
+/// (`lib/features/<f>/public.dart`) and any deliberately-authored nested barrel
+/// (e.g. `lib/features/song_trainer/domain/public.dart`, designated by ADR 0089
+/// as *the* cross-feature entry point) are reviewed public surfaces and count.
+/// Reaching any non-`public.dart` file inside the feature remains a violation.
+/// See ADR 0176 (ADR 0112 self-heal, 2026-08-06) for the measured rationale.
+bool _isFeaturePublicBarrel(String? targetPath, String targetFeature) {
+  if (targetPath == null) return false;
+  return targetPath.startsWith('lib/features/$targetFeature/') &&
+      targetPath.endsWith('/public.dart');
 }
 
 bool _isSharedDomain(String sourcePath) =>
