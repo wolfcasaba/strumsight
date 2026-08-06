@@ -6,6 +6,77 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R07 — Frame transform és overlay koordinátarendszer (2026-08-06)
+
+**E05-R07** MERGED (PR [#169](https://github.com/wolfcasaba/strumsight/pull/169),
+squash `b5837d9`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+orchestrátor/reviewer **Claude Sonnet 5**). Pure Dart, platformfüggetlen
+koordináta-transzformáció-réteg a leendő overlay-UI (R24) és a
+kéz-landmark/gitár-homography körök (R13/R15) alá: `CameraCoordinateSpace`
+enum + hat típusos, immutable pont-osztály (`SensorPoint`…`OverlayPoint`,
+tér nélküli `double x,y` API kizárva), komponálható, fordítási időben
+tér-típusos `CameraTransform<From, To>` (`apply`/`compose`/`inverse`,
+`1e-6` dokumentált, ULP-pontosan tesztelt round-trip tolerancia),
+`PreviewFit` aspect-fit/fill layout letterbox/crop téglalapokkal és
+preview-oldali front-mirrorral (a modell bemenete garantáltan nem
+tükrözött — valódi-sértés próbával igazolva). 16-cellás kézzel számolt
+fixture-mátrix (a levezető `python3` parancs és kimenet a brief §10-ében).
+
+**Pre-flight (mérve `origin/main` @ `b6408f0`):** mindkét előfeltétel
+(E05-R03, E05-R06) merge-elve; nincs új ADR (megerősítve). A brief „a
+`CameraFrame` a rotationt hordozza" prózája a ténylegesen kimért típusos
+`orientation: CameraOrientation` mezőre utal, nem szó szerinti `rotation`
+mezőre — nem scope-ütközés, mert az `allowed_paths` egyike sem importálja
+a `camera_frame.dart`-ot.
+
+**Köztes `blocked` jelzés — klón-artefaktum, nem H6 (E04-R16 precedens):**
+az első implementer-forduló (`089953e`) a teljes kört helyesen
+implementálta, de a kötelező `round-gate.sh` az `analyze` fázisban 882,
+**scope-on kívüli** hibával blokkolt — egy friss klón hiányzó, gitignore-olt
+`lib/l10n/app_localizations*.dart` generált fájlja miatt. Az orchestrátor
+`tools/prepare-flutter-generated.sh`-t futtatta, majd egy szűken skótozott,
+nulla kód-diffes gate-only fordulóval zárta a kört.
+
+**Review** ([docs/reviews/e05-r07-…-review.md](docs/reviews/e05-r07-frame-transform-and-overlay-coordinates-review.md)):
+**APPROVED 1 javító kör után** (F1/MAJOR). A brief §1 Célja és az SDD Kör 7
+feladatlistája is öt teret nevez meg (sensor→upright→normalized→preview→
+**overlay**), de az implementáció megállt a `PreviewPoint`-nál —
+`OverlayPoint`/`CameraCoordinateSpace.overlay` deklarálva volt, de egyetlen
+transzformáció sem érte el; zöld gate mellett csúszott át, mert a §6
+checkbox-acceptance egyike sem nevezte meg külön az overlay-mappinget.
+Terra javítása (`df5a13b`) egy explicit, doc-commenttel indokolt
+`CameraTransform.previewToOverlay()` identitás-transzformmal zárta (overlay
+szándékosan preview-val azonos helyi logikai-pixel tér, DPR-konverzió a
+presentation host felelőssége) + egy teszttel, ami ténylegesen a
+transzformon keresztül állítja elő az `OverlayPoint`-ot. F2/MINOR (a
+property teszt a közös `isRoundTripErrorWithinTolerance` helyett nyers
+hányadost hasonlított) szintén zárva. **Önkorrekció a review-folyamatban:**
+az első újra-gate-futtatás tévedésből a javítás ELŐTTI commit ellen futott
+(Terra fix-commitja csak lokális volt push nélkül) — a változatlan
+tesztszám árulta el, a push pótlása után a valódi fix-commit ellen mérve
+66→67 teszt igazolta a zárást. Dedikált **security-reviewer**
+([docs/reviews/e05-r07-…-security.md](docs/reviews/e05-r07-frame-transform-and-overlay-coordinates-security.md),
+brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER — saját, mindkét
+assert-móddal (debug ÉS release/AOT) futtatott reprodukciós harness
+igazolta, hogy a konstruktor-validáció `assert`-alapú (release buildből
+kikerül, NaN/Infinity/tartományon-kívüli input csendben terjed), de ez
+**carry-forward MAJOR, nem blokkolja ezt a kört** — a rétegnek ma nulla
+fogyasztója van, a brief §5 sosem ígért release-túlélő validációt, és
+egyezik a meglévő `CameraFrame`/`CameraTimestamp` konvencióval; **kötelező
+előfeltétel** azon a körön (R13/R15/R24), amelyik ezt a réteget először
+köti valós kamera-metaadathoz.
+
+**Zöld kapu (exact-SHA `9c52d74`, mindkét review-commit UTÁNI
+újra-dispatch):** Full Gate (no APK)
+[31105913601](https://github.com/wolfcasaba/strumsight/actions/runs/31105913601)
+**success** + Router CI
+[31105957563](https://github.com/wolfcasaba/strumsight/actions/runs/31105957563)
+**success** (a CI-terv `full-gate.yml`-t írt elő — nincs natív út — és a
+`docs/rounds/**` érintés miatt a Router CI is a kapu része). Post-merge
+gate (`tools/round-gate.sh test/core/camera
+test/property/camera_transform_property_test.dart`) a friss `main`-en is
+zöld (67 + 4 teszt).
+
 ## E05-R06 — Android camera production adapter (2026-08-06)
 
 **E05-R06** MERGED (PR [#168](https://github.com/wolfcasaba/strumsight/pull/168),

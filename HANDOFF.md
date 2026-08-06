@@ -4,88 +4,94 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E05-R07 MERGED — Frame transform és overlay koordinátarendszer: pure-Dart,
-> platformfüggetlen koordináta-transzformáció a sensor→upright→normalized→
-> preview→overlay terek között, típusos `CameraTransform<From, To>`
-> (`compose`/`inverse`/`apply`), aspect-fit/fill preview-mapping letterbox/crop
-> kezeléssel, preview-oldali front-mirror; implementer Terra,
-> orchestrátor/reviewer Claude Sonnet 5; 1 javító kör (a brief öt-tér
-> céljában ígért, de eredetileg elérhetetlen overlay-mapping pótlása),
-> exact-SHA zöld kapun át, dedikált security-reviewer PASS 1 carry-forward
-> MAJOR-ral R13/R15/R24 elé).**
+> (E05-R08 MERGED — Vision setup wizard, camera profile és permission UX:
+> vezetett, kihagyható, privacy-tudatos kameraelhelyezési flow négy profillal
+> (`leftHandFocus`/`rightHandFocus`/`fullUpperBody`/`practiceBalanced`), mind
+> az öt `CameraPermissionState` külön UI-ággal, front/back kamera-preferencia
+> a coordinator close→open lease-fegyelmével, mindenhol elérhető Skip →
+> audio-only; implementer Terra, orchestrátor/reviewer Claude Sonnet 5; 0
+> javító kör, dedikált security-reviewer PASS, exact-SHA zöld kapun át).**
+>
+> ## ✅ E05-R08 KÉSZ — Vision setup wizard, camera profile és permission UX (2026-08-06)
+>
+> **E05-R08** MERGED (PR [#170](https://github.com/wolfcasaba/strumsight/pull/170),
+> squash `eff1eaf`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`, aktív
+> `.pipeline/engine-override=terra` — a brief eredeti „MiniMax M3" javaslata
+> felülírva), orchestrátor/reviewer **Claude Sonnet 5**). Az E05-R04 camera
+> permission gateway és az E05-R05/R06 coordinator/production-adapter első
+> UI-fogyasztója: négy setup profil (`leftHandFocus`/`rightHandFocus`/
+> `fullUpperBody`/`practiceBalanced`) kézzel korrigálható handedness-
+> ajánlással, permission-panel mind az öt állapotra (denied → explicit
+> kérés-gomb; permanentlyDenied/restricted → Settings CTA, nincs dead
+> retry-gomb; unavailable → magyarázó szöveg, gomb nélkül), front/back
+> kamera-preferencia a `CameraSessionCoordinator` close→open lease-
+> fegyelmével, privacy-panel („helyben dolgozunk fel, nem rögzítünk"),
+> mindenhol elérhető Skip → audio-only CTA, additív `StorageKeys`
+> (`ss.vision.setup_profile`, `ss.vision.camera`), flag-gated route
+> (`visionEnabled && visionSetupEnabled`, inline `app_router.dart` guard).
+>
+> **Pre-flight (mérve `origin/main` @ `78ac3ce`), hat mért revízió (§0.0
+> R1–R6):** (1) ADR-hivatkozás `0161/0162/0164` → **`0178/0179/0181`**
+> (renumbered E05-R01); (2) a flag-gated route **nem** `route_guards.dart`-ban
+> él (az csak két flag-független tiszta függvényt tartalmaz) — a tényleges
+> minta inline `if (flag) ...[GoRoute(...)]` `app_router.dart`-ban, a
+> tutor-precedenst követve; (3) `lib/core/storage/storage_keys.dart`
+> **felvéve** az `allowed_paths`-ba (az app EGYETLEN központi kulcs-
+> katalógusa, additív-only — E04-R18 precedens); (4) **elérhetetlen
+> cél-állapot:** a `CameraCapture` kontraktnak (kontraktus, gyár, production
+> adapter, fake) **sehol nincs facing-paramétere** — a „front/back választás"
+> ezért egy perzisztált preferenciára és a coordinator lease-fegyelmére
+> szűkült, a fizikai lencseváltás jövőbeli, `lib/core/camera/**`-t érintő
+> körre halasztva (L154); (5) az SDD §13.2 hat profilt sorol fel, ez a kör
+> négyet szállít — a negyedik kanonikus neve `practiceBalanced` (nem
+> `balanced`), `songPerformance`/`experimentalFretboard` explicit deferred;
+> (6) megerősítve (nem hiba): mind az öt `CameraPermissionState` valós
+> inputból származtatható, a kamera-coordinatornak (E05-R05) ma nulla
+> fogyasztója volt — ez a kör az ELSŐ valódi hívó (`CameraOwner.visionSetup`).
+>
+> **Review** ([docs/reviews/e05-r08-…-review.md](docs/reviews/e05-r08-vision-setup-wizard-review.md)):
+> **APPROVED javító kör nélkül** (0 BLOCKER/MAJOR). Minden acceptance-cella
+> tesztre/forráskódra hivatkozva ellenőrizve; scope-audit tiszta (15/15 fájl
+> az `allowed_paths`-on). **Mutáció-kill próba** a reviewer saját izolált
+> `/tmp` klónjában: a `permanentlyDenied` ág ideiglenesen retry-gombra
+> rontva → a pontos widget-teszt pirosra váltott, semmi más nem — vissza-
+> állítva, újra zöld. 2 MINOR **WONTFIX** ezen a körön (a `ready`/`audioOnly`
+> terminál-lépéseknek nincs előre-navigációja; a privacy-panel csak két a
+> négy SDD §12.3 pontból mond ki explicit egy helyen) — egyik sem
+> termékhatár-sértés, mindkét flag OFF ma mindenhol. Dedikált
+> **security-reviewer** ([docs/reviews/e05-r08-…-security.md](docs/reviews/e05-r08-vision-setup-wizard-security.md),
+> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR (3 NOTE,
+> egyik sem biztonsági) — mind a 9 kért határ (explicit-tap permission,
+> nincs raw-frame perzisztencia, nincs implicit kamera-indítás, ≤1 aktív
+> lease szivárgás nélkül minden hiba-úton, ARB-only szöveg, helyes
+> Settings-CTA-vs-retry routing, strukturálisan elérhetetlen route flag
+> nélkül, additív-only storage-kulcs, fail-safe preferencia-parse)
+> reprodukálható bizonyítékkal zöld.
+>
+> **Zöld kapu (exact-SHA `8c8f4db`, mindkét review-commit UTÁNI
+> újra-dispatch — a `docs/reviews/**` NEM router-ci trigger-útvonal, ezért a
+> Router CI-t review-commitonként kézzel kellett újra-dispatch-elni, L153):**
+> Full Gate (no APK)
+> [31111595523](https://github.com/wolfcasaba/strumsight/actions/runs/31111595523)
+> **success** + Router CI
+> [31111597358](https://github.com/wolfcasaba/strumsight/actions/runs/31111597358)
+> **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
+> test/core/l10n_parity_test.dart`) a friss `main`-en is zöld (13+3 teszt).
+> **Következő:** E05-R09 — Frame quality assessor (SDD Ch6 Kör 9,
+> engine=codex a queue-ban), a pipeline új sessionben indítja.
 >
 > ## ✅ E05-R07 KÉSZ — Frame transform és overlay koordinátarendszer (2026-08-06)
 >
-> **E05-R07** MERGED (PR [#169](https://github.com/wolfcasaba/strumsight/pull/169),
-> squash `b5837d9`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
-> orchestrátor/reviewer **Claude Sonnet 5**). Pure Dart, platformfüggetlen
-> koordináta-transzformáció-réteg a leendő overlay-UI (R24) és a
-> kéz-landmark/gitár-homography körök (R13/R15) alá: `CameraCoordinateSpace`
-> enum + hat típusos, immutable pont-osztály (`SensorPoint`…`OverlayPoint`,
-> tér nélküli `double x,y` API kizárva), komponálható, fordítási időben
-> tér-típusos `CameraTransform<From, To>` (`apply`/`compose`/`inverse`,
-> `1e-6` dokumentált, ULP-pontosan tesztelt round-trip tolerancia),
-> `PreviewFit` aspect-fit/fill layout letterbox/crop téglalapokkal és
-> preview-oldali front-mirrorral (a modell bemenete garantáltan nem
-> tükrözött — valódi-sértés próbával igazolva). 16-cellás kézzel számolt
-> fixture-mátrix (a levezető `python3` parancs és kimenet a brief §10-ében).
->
-> **Pre-flight (mérve `origin/main` @ `b6408f0`):** mindkét előfeltétel
-> (E05-R03, E05-R06) merge-elve; nincs új ADR (megerősítve). A brief „a
-> `CameraFrame` a rotationt hordozza" prózája a ténylegesen kimért típusos
-> `orientation: CameraOrientation` mezőre utal, nem szó szerinti `rotation`
-> mezőre — nem scope-ütközés, mert az `allowed_paths` egyike sem importálja
-> a `camera_frame.dart`-ot.
->
-> **Köztes `blocked` jelzés — klón-artefaktum, nem H6 (E04-R16 precedens):**
-> az első implementer-forduló (`089953e`) a teljes kört helyesen
-> implementálta, de a kötelező `round-gate.sh` az `analyze` fázisban 882,
-> **scope-on kívüli** hibával blokkolt — egy friss klón hiányzó, gitignore-olt
-> `lib/l10n/app_localizations*.dart` generált fájlja miatt. Az orchestrátor
-> `tools/prepare-flutter-generated.sh`-t futtatta, majd egy szűken skótozott,
-> nulla kód-diffes gate-only fordulóval zárta a kört.
->
-> **Review** ([docs/reviews/e05-r07-…-review.md](docs/reviews/e05-r07-frame-transform-and-overlay-coordinates-review.md)):
-> **APPROVED 1 javító kör után** (F1/MAJOR). A brief §1 Célja és az SDD Kör 7
-> feladatlistája is öt teret nevez meg (sensor→upright→normalized→preview→
-> **overlay**), de az implementáció megállt a `PreviewPoint`-nál —
-> `OverlayPoint`/`CameraCoordinateSpace.overlay` deklarálva volt, de egyetlen
-> transzformáció sem érte el; zöld gate mellett csúszott át, mert a §6
-> checkbox-acceptance egyike sem nevezte meg külön az overlay-mappinget.
-> Terra javítása (`df5a13b`) egy explicit, doc-commenttel indokolt
-> `CameraTransform.previewToOverlay()` identitás-transzformmal zárta (overlay
-> szándékosan preview-val azonos helyi logikai-pixel tér, DPR-konverzió a
-> presentation host felelőssége) + egy teszttel, ami ténylegesen a
-> transzformon keresztül állítja elő az `OverlayPoint`-ot. F2/MINOR (a
-> property teszt a közös `isRoundTripErrorWithinTolerance` helyett nyers
-> hányadost hasonlított) szintén zárva. **Önkorrekció a review-folyamatban:**
-> az első újra-gate-futtatás tévedésből a javítás ELŐTTI commit ellen futott
-> (Terra fix-commitja csak lokális volt push nélkül) — a változatlan
-> tesztszám árulta el, a push pótlása után a valódi fix-commit ellen mérve
-> 66→67 teszt igazolta a zárást. Dedikált **security-reviewer**
-> ([docs/reviews/e05-r07-…-security.md](docs/reviews/e05-r07-frame-transform-and-overlay-coordinates-security.md),
-> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER — saját, mindkét
-> assert-móddal (debug ÉS release/AOT) futtatott reprodukciós harness
-> igazolta, hogy a konstruktor-validáció `assert`-alapú (release buildből
-> kikerül, NaN/Infinity/tartományon-kívüli input csendben terjed), de ez
-> **carry-forward MAJOR, nem blokkolja ezt a kört** — a rétegnek ma nulla
-> fogyasztója van, a brief §5 sosem ígért release-túlélő validációt, és
-> egyezik a meglévő `CameraFrame`/`CameraTimestamp` konvencióval; **kötelező
-> előfeltétel** azon a körön (R13/R15/R24), amelyik ezt a réteget először
-> köti valós kamera-metaadathoz.
->
-> **Zöld kapu (exact-SHA `9c52d74`, mindkét review-commit UTÁNI
-> újra-dispatch):** Full Gate (no APK)
-> [31105913601](https://github.com/wolfcasaba/strumsight/actions/runs/31105913601)
-> **success** + Router CI
-> [31105957563](https://github.com/wolfcasaba/strumsight/actions/runs/31105957563)
-> **success** (a CI-terv `full-gate.yml`-t írt elő — nincs natív út — és a
-> `docs/rounds/**` érintés miatt a Router CI is a kapu része). Post-merge
-> gate (`tools/round-gate.sh test/core/camera
-> test/property/camera_transform_property_test.dart`) a friss `main`-en is
-> zöld (67 + 4 teszt). **Következő:** E05-R08 — Vision setup wizard és
-> camera profile (SDD Ch6 Kör 8, engine=minimax), a pipeline új sessionben
-> indítja.
+> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> Pure Dart koordináta-transzformáció a sensor→upright→normalized→preview→
+> overlay terek között, típusos `CameraTransform<From, To>`
+> (`compose`/`inverse`/`apply`), aspect-fit/fill preview-mapping letterbox/
+> crop kezeléssel és preview-oldali front-mirrorral. PR
+> [#169](https://github.com/wolfcasaba/strumsight/pull/169), squash `b5837d9`,
+> implementer Terra, APPROVED 1 javító kör után (az öt-tér célban ígért, de
+> eredetileg elérhetetlen overlay-mapping pótlása), dedikált
+> security-reviewer PASS (1 carry-forward MAJOR — assert-only validáció —
+> R13/R15/R24 előtt kötelező).
 >
 > ## ✅ E05-R06 KÉSZ — Android camera production adapter (2026-08-06)
 >
