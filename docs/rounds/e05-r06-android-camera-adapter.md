@@ -1,33 +1,34 @@
 # E05-R06 — Android camera production adapter
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`; pre-flight 2026-08-06, mérve: main @ `796978b`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 6; §11.2, §11.4
 - **Branch:** `codex/e05-r06-android-camera-adapter`
-- **Előfeltétel:** **E05-R02 (ADR 0167), E05-R03, E05-R05 merge**
+- **Előfeltétel:** **E05-R02 (ADR 0184), E05-R03, E05-R05 merge**
 - **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/vision/data/camera/plugin_camera_capture.dart",
-  "lib/features/vision/data/camera/camera_frame_binding.dart",
-  "lib/features/vision/data/camera/camera_error_mapping.dart",
+  "lib/core/camera/plugin_camera_capture.dart",
+  "lib/core/camera/camera_frame_binding.dart",
+  "lib/core/camera/camera_error_mapping.dart",
   "lib/core/camera/camera_providers.dart",
   "pubspec.yaml",
-  "test/features/vision/data/plugin_camera_capture_test.dart",
-  "test/features/vision/data/camera_error_mapping_test.dart",
+  "pubspec.lock",
+  "lib/core/camera/camera_frame.dart",
+  "test/core/camera/plugin_camera_capture_test.dart",
+  "test/core/camera/camera_error_mapping_test.dart",
   "docs/rounds/e05-r06-android-camera-adapter.md",
 ]
 gate_tests = [
-  "test/features/vision/data",
   "test/core/camera",
 ]
 native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R02/R03/R05 merge; olvasd újra
-> az **ADR 0167** választott stackjét (ha a runbook megdöntötte, EZ a kör követi
+> az **ADR 0184** választott stackjét (ha a runbook megdöntötte, EZ a kör követi
 > a módosított ADR-t), a `pubspec.yaml` mai `dependencies` blokkját és a
 > **win32 gotchát** (CLAUDE.md: ONE win32 major; `flutter_secure_storage` v10 →
 > win32 ^6). Nincs ÚJ ADR. PREPARED→PLANNING, brief commit előbb.
@@ -43,11 +44,179 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR (0167 végrehajtása).
+**PLANNING.** Mérve `origin/main` @ `796978b` (E05-R02/R03/R05 mind merge-elve,
+working tree tiszta). Nincs ÚJ ADR ebben a körben — a §1 döntés a meglévő
+ADR 0184 végrehajtása.
+
+**ADR-hivatkozás javítás (0167 → 0184).** A brief minden `ADR 0167`
+hivatkozása elavult volt. Az E05-R02 saját briefje
+(`docs/rounds/e05-r02-camera-technology-decision.md`, „ADR-szám revízió"
+szakasz) dokumentálja, hogy a 2026-08-05-i előre-kiosztás **0167** volt, de az
+E05-R01 hat ADR-je (0178–0183) miatt a tényleges kiosztott szám **ADR 0184**
+(`docs/adr/0184-vision-camera-capture-stack.md`) lett — a `HANDOFF.md` E05-R02
+bejegyzése is ezt a számot használja. Ez a pre-flight minden `0167`
+előfordulást (fejléc, előfeltétel-sor, pre-flight blockquote, §1, §3) `0184`-re
+javít; a §4 engedélyezett fájllista és a §5–§9 tartalmi előírásai változatlanok.
+
+**A döntés mérve, nem megdöntve.** ADR 0184 3. pontja: C2 (saját CameraX
+platform channel) csak akkor váltja C1-et, ha a device runbook M05
+(latest-frame backpressure) vagy M10 (monoton timestamp) bukását rögzíti.
+Mérve: `docs/manual-testing/vision-device-matrix.md` §2.8 mind a 12 sora
+**PENDING**, és `docs/baseline/epic-05-camera-stack-evaluation.md` M05/M10
+sorai **MÉRENDŐ** (ezen a boxon nincs Android SDK, valós eszközös mérés itt
+nem futtatható) — tehát nincs rögzített C1-bukás. **C1 (hivatalos Flutter
+`camera` plugin, CameraX-backed Androidon) marad az operatív alapértelmezés**,
+ez a kör ezért a plugin-utat implementálja; a §3 „ha az ADR 0184 a plugin-utat
+választotta" feltétele teljesül, a saját Kotlin platform-channel TILOS marad.
+
+**Pre-flight mérési megerősítések (nincs eltérés a brief tartalmi
+előírásaitól, csak a fenti számhiba):**
+
+- `visionEnabled` létezik (`lib/app/config/feature_flags.dart:114`), és ma
+  sehol nem olvassa senki a `lib/`-ben — ez a kör lesz az első fogyasztója;
+  a gate bemenete `lib/app/config/app_config.dart:190`
+  (`appConfigProvider` → `.flags.visionEnabled`).
+- A hat `FailureCode.camera*` konstans (`lib/core/foundation/app_failure.dart:42-48`)
+  szó szerint egyezik a meglévő `CameraFailureMapper`
+  (`lib/core/camera/camera_failure.dart`) hat kimenetével — a hiba-mapping
+  mátrix (§6.1) célértékei ma is elérhetők, nincs hiányzó enum-érték.
+- `CameraSessionCoordinator.acquire()`-nak ma **nulla** hívója van `lib/`-ben
+  (`grep -rn "\.acquire(" lib/` → egyetlen találat, a mikrofon-analóg
+  `mic_capture.dart`) — a lease-fogyasztás valóban R06 scope-on kívül van,
+  ahogy a brief állítja; ez a kör csak a `CameraCapture` adaptert köti be a
+  providerbe, a coordinatort/lease-t nem érinti.
+- Az `AudioCaptureFactory` mintája (`lib/core/audio/capture/audio_capture_factory.dart`)
+  a precedens a `camera_providers.dart` bekötéshez: `typedef … Function()`
+  gyár + valódi plugin-backed implementáció — az implementer ezt a meglévő
+  mintát követi, nem tervez újat.
+
+**§0.0 revízió (2026-08-06, R1 — post-stop): `pubspec.lock` felvéve az
+allowed_paths-ba.** Az implementer helyesen `stopped`-ot jelzett
+(`0942b97`): a `camera` függőség felvétele szükségképpen frissíti a
+trackelt `pubspec.lock`-ot, de az eredeti lista csak a `pubspec.yaml`-t
+engedte — a §6/§6.1 acceptance criteria ugyanakkor már eredetileg is a
+`pubspec.lock`-ot mérte (`rg -n "win32" pubspec.lock`), tehát a hiány a
+listában belső ellentmondás volt, nem szándékos korlátozás. Négy korábbi
+kör (`e03-r06`, `e03-r07`, `e03-r11`, `e03-r15` — mind függőség-felvétel)
+ugyanígy, explicit `pubspec.lock` allowed_paths-bejegyzéssel oldotta ezt
+meg; ez a revízió ugyanazt a mintát követi. Az allowed_paths mostantól
+tartalmazza a `pubspec.lock`-ot (fent). Semmilyen más engedélyezett fájl,
+tilos zóna vagy tartalmi előírás nem változott. Terra jelenlegi mért
+win32-evidenciája (a stop előtti, még változatlan lock alapján): a
+lock ma `win32` `6.3.0`-t old fel — ez a §5.6/§9 win32-ellenőrzés
+kiindulási állapota, nem a `camera` hozzáadása utáni eredmény. **Hasznos
+mellékbizonyíték:** a `camera ^0.11.3` egy próba-solve-ban `camera 0.11.4`-re
+oldódott a win32 major érintése nélkül (Terra visszavonta a próbát a §0.0 R2
+ütközés miatt, de az evidencia áll — a win32-kockázat ezzel jelentősen
+csökkent).
+
+**§0.0 revízió (2026-08-06, R2 — post-stop): `lib/core/camera/camera_frame.dart`
+felvéve az allowed_paths-ba, szűken engedélyezett additív mezőkkel; és egy
+második elavult ADR-hivatkozás javítva.**
+
+Az implementer másodszor is helyesen `stopped`-ot jelzett: a §5.3/§6 kötelezi
+a mirror-state és crop megőrzését a bindingen át, de a meglévő (E05-R03-ból
+származó) `CameraFrame` csak `frameId`/`timestamp`/`width`/`height`/`format`/
+`orientation` mezőket ismer — nincs `mirror` és nincs `crop`, és a fájl nem
+volt az engedélyezett listán.
+
+Mérve: ez **nem új architekturális döntés**, hanem az SDD már meglévő,
+kanonikus domainmodelljének (`docs/sdd/06-epic-05-computer-vision.md` §9.2
+`CameraFrameMetadata`: `frameId`, `captureTimestampUs`, `width`, `height`,
+`rotationDegrees`, **`mirrored`**, `pixelFormat`, **`cropRegion`**) és a Kör 6
+saját Feladatok-listájának („Őrizd meg a capture timestampet, rotationt,
+**mirror state-et**, width/heightet és **cropot**.", ugyanaz a fejezet, Kör 6)
+végrehajtása — az E05-R03 egyszerűsített `CameraFrame`-je ennek csak részhal-
+mazát valósította meg. Nincs a `camera_frame.dart`-hoz kötött boundary/frozen
+teszt (`grep -rln camera_frame test/ | xargs grep -l boundary/frozen/guard` →
+nulla találat, szemben az `ai_tutor_boundary_test.dart`-mintával, ahol egy
+ilyen teszt korábban H2/H3-at indokolt R13/R14/R16/R17/R19/R20/R21-ben) — a
+mostani lépés ezért kategorikusan más, mint azok az esetek.
+
+**Szűk engedély, nem szabad kéz:**
+
+1. Két ÚJ, **opcionális, default-értékes** mező a meglévő `CameraFrame`
+   konstruktorán: `mirror` (`bool`, alapérték `false`) és `crop` (nullable,
+   sima Dart érték-típus — pl. rekord vagy kis `final class`
+   `left`/`top`/`width`/`height` pixel-térben —, alapérték `null` = „a
+   platform nem jelentett crop-ot, teljes frame"). **Mindkettő opcionális**,
+   ezért a meglévő két hívóhely (`fake_camera_capture.dart:141`,
+   `test/core/camera/camera_contract_test.dart:48`) fordítási hiba nélkül
+   marad — EZEK A FÁJLOK TOVÁBBRA SEM kerülnek az allowed_paths-ba, és nem is
+   szabad módosítani őket ebben a körben.
+2. **TILOS** ebben a fájlban bármi más: a `CameraTimestamp`/`CameraFormat`/
+   `CameraOrientation` importok, az `assertValid`/`invalidate`/`copyBytes`
+   ownership-mechanika, vagy bármely meglévő mező típusa/neve nem változhat.
+3. **TILOS** normalizált/koordinátatér-tudatos típus (pl. az SDD
+   `NormalizedRect`-je) bevezetése — az a Kör 7 (Frame transform és overlay
+   koordinátarendszer, `docs/sdd/06-epic-05-computer-vision.md` „Kör 7") saját
+   feladata. A `crop` itt **nyers, nem normalizált, pixel-térbeli** érték, csak
+   megőrzés, nem transzformáció (a §3 „Kívül — TILOS: … transform (R07)"
+   sora ettől nem változik).
+4. **TILOS** Flutter/`dart:ui` import a fájlba — a `camera_frame.dart` ma
+   pure Dart (`dart:typed_data` + két helyi import); ez változatlan marad
+   (ADR 0180 3. pont: „A `CameraFrameMetadata` … pure Dart típusok").
+5. **A mérce-bár crop-ra gyengébb, mint mirror-ra**, dokumentáltan: a §6.1
+   mátrix a mirror × rotation 8 cellát méri (kemény, számozott elfogadási
+   kritérium — ezen NEM enyhítünk). A crophoz nincs számozott cella; az
+   elfogadás azt jelenti, hogy HA a plugin/fake crop-ot jelent, a binding azt
+   változatlanul továbbadja a `CameraFrame.crop`-ra (nem néma eldobás); HA a
+   plugin nem jelent crop-ot, a `null` alapérték dokumentált, nem hiba. Ezt a
+   §10 handoffban írd le ténylegesen mérve, ne feltételezve.
+
+Az allowed_paths mostantól tartalmazza a `lib/core/camera/camera_frame.dart`-ot
+(fent) — kizárólag a fenti öt korlát mellett. Minden más engedélyezett fájl,
+tilos zóna vagy §5 kötött döntés változatlan.
+
+**Második ADR-hivatkozás javítás (0163 → 0180).** A §5.4 „ADR 0163"
+hivatkozása is elavult volt (`ls docs/adr/ | grep 0163` → nincs ilyen fájl) —
+ugyanaz az E05-R01 hat-ADR-es eltolás okozta, amit az E05-R04 saját
+pre-flightja már dokumentált a saját brief­jére („ADR-hivatkozás 0161/0163 →
+0178/0180"). Mérve: `docs/adr/0180-vision-android-first-camera-strategy.md`
+valóban tartalmazza az idézett szabályt („platform-specifikus típus … be-
+szivárgása a vision domainbe … NEM elfogadható"). A §5.4 fent már `ADR
+0180`-ra javítva.
+
+**§0.0 revízió (2026-08-06, R3 — post-stop): a három ÚJ fájl áthelyezve
+`lib/features/vision/data/camera/` → `lib/core/camera/` (és a tesztjeik
+`test/features/vision/data/` → `test/core/camera/`).**
+
+Az implementer harmadszor is helyesen `stopped`-ot jelzett: az eredeti terv
+`camera_providers.dart`-ot (CORE) arra kérte, hogy importálja a
+`PluginCameraCapture`-t egy FEATURE-mappából
+(`lib/features/vision/data/camera/`) — ez sérti az `AGENTS.md` §6 „Core nem
+importál feature-t" szabályát. A hiba a brief eredeti tervezésekor csúszott
+be: a „feature-first, data-réteg-adapter" boilerplate mintát követtem
+anélkül, hogy figyelembe vettem volna, hogy a kamera — a mikrofonhoz
+hasonlóan — ebben az architektúrában **CORE-szintű, több feature által
+osztott képesség** (l. a `CameraOwner` enumot: `visionSetup`,
+`visionPractice`, `songVision`, `labCapture` — HÁROM a négyből nem is
+„vision"), nem vision-kizárólagos.
+
+**A helyes minta a már meglévő audio-precedens, amit a §0.0 már idézett:**
+`lib/core/audio/capture/audio_capture_factory.dart` **közvetlenül importálja
+a `package:audio_streamer/audio_streamer.dart` plugint**, és CORE-ban él, nem
+egy feature adatrétegében. Az `AGENTS.md` §6 „Domain nem függ Fluttertől …
+vagy storage plugintól" szabálya a **domainre** vonatkozik
+(`lib/features/vision/domain/`), nem a core-ra — a core direkt
+plugin-függősége ebben a kódbázisban már bevett, mért gyakorlat.
+
+**A módosítás:** a három ÚJ fájl (`plugin_camera_capture.dart`,
+`camera_frame_binding.dart`, `camera_error_mapping.dart`) és a két ÚJ
+tesztfájl célmappája `lib/core/camera/` / `test/core/camera/` (fent az
+allowed_paths-ban és a §4 táblázatban javítva; a `gate_tests` már csak
+`test/core/camera`-t tartalmaz, a most üressé váló `test/features/vision/data`
+bejegyzés törölve). **Ez a kör így SEMMILYEN fájlt nem hoz létre
+`lib/features/vision/` alatt** — az a feature-mappa a jövőbeli, UI-t és
+vision-specifikus domaint építő körök (pl. E05-R08 setup wizard) dolga marad.
+Semmilyen más engedélyezett fájl, tilos zóna vagy §5 tartalmi előírás nem
+változott — a §5.4 szövege pontosított (lásd fent), tartalmilag ugyanaz a
+korlát: a plugin típusa csak ebből a három fájlból látszódhat, sehonnan
+máshonnan.
 
 ## 1. Cél
 
-Az ADR 0167 szerinti production capture-adapter bekötése a **meglévő**
+Az ADR 0184 szerinti production capture-adapter bekötése a **meglévő**
 `CameraCapture` contract mögé: preview + **latest-frame** analysis stream,
 megőrzött timestamp/rotation/mirror metaadattal és **mindig** felszabaduló
 platform-bufferrel.
@@ -64,14 +233,15 @@ platform-bufferrel.
 
 ## 3. Scope
 
-**Benne:** a plugin-alapú `CameraCapture` implementáció (`PluginCameraCapture`),
-frame-binding (platform buffer → `CameraFrame`, **mindig** felszabadítva, hiba
-esetén is), platform-hibák (disconnected, in-use, max-cameras-in-use, device
-error) → stabil `FailureCode` mapping, a plugin függőség felvétele, és a
-production adapter bekötése a providerbe **`visionEnabled` flag mögé**.
+**Benne:** a plugin-alapú `CameraCapture` implementáció (`PluginCameraCapture`,
+**`lib/core/camera/`-ban, §0.0 R3** — l. lent), frame-binding (platform buffer
+→ `CameraFrame`, **mindig** felszabadítva, hiba esetén is), platform-hibák
+(disconnected, in-use, max-cameras-in-use, device error) → stabil
+`FailureCode` mapping, a plugin függőség felvétele, és a production adapter
+bekötése a providerbe **`visionEnabled` flag mögé**.
 
 **Kívül — TILOS:** ML inference (R12+), transform (R07), UI, saját Kotlin
-platform-channel **ha az ADR 0167 a plugin-utat választotta** (ha a saját
+platform-channel **ha az ADR 0184 a plugin-utat választotta** (ha a saját
 channelt választotta, a Kotlin fájlok a pre-flightban kerülnek a listára,
 dokumentált brief-revízióval).
 
@@ -79,12 +249,14 @@ dokumentált brief-revízióval).
 
 | Útvonal | Állapot | Miért |
 |---|---|---|
-| `.../data/camera/plugin_camera_capture.dart` | ÚJ | production adapter |
-| `.../data/camera/camera_frame_binding.dart` | ÚJ | buffer → `CameraFrame` |
-| `.../data/camera/camera_error_mapping.dart` | ÚJ | platformhiba → `FailureCode` |
+| `lib/core/camera/plugin_camera_capture.dart` | ÚJ | production adapter (§0.0 R3 — áthelyezve `lib/features/vision/`-ből) |
+| `lib/core/camera/camera_frame_binding.dart` | ÚJ | buffer → `CameraFrame` (§0.0 R3) |
+| `lib/core/camera/camera_error_mapping.dart` | ÚJ | platformhiba → `FailureCode` (§0.0 R3) |
 | `lib/core/camera/camera_providers.dart` | R05-ből | production adapter bekötése |
 | `pubspec.yaml` | meglévő | camera függőség |
-| `test/features/vision/data/*` | ÚJ | adapter + mapping tesztek |
+| `pubspec.lock` | meglévő | §0.0 R1 — a függőség-solve mechanikus terméke |
+| `lib/core/camera/camera_frame.dart` | R03-ból | §0.0 R2 — additív `mirror`/`crop` mező, szűk korlátokkal |
+| `test/core/camera/*_test.dart` (adapter, binding, mapping) | ÚJ | adapter + mapping tesztek (§0.0 R3 — áthelyezve `test/features/vision/`-ből) |
 | `docs/rounds/e05-r06-*.md` | meglévő | §10 handoff |
 
 **Tilos zóna:** minden más; `docs/rag`; DSP; audio-útvonal. Listán kívül → `stopped`.
@@ -101,9 +273,14 @@ dokumentált brief-revízióval).
 3. **A metaadat nem veszhet el:** capture timestamp (monotonic), rotation,
    mirror state, width/height, crop. **NEM elfogadható** a rotation „majd a
    UI-ban" korrekciója (a transform réteg az R07, és az ehhez a metaadathoz nyúl).
-4. **A plugin típusa nem szivároghat ki** a `lib/core/camera/` contractból
-   (ADR 0163) — a `data/` réteg a határ. **NEM elfogadható** plugin-import a
-   `lib/core/` vagy `lib/features/vision/domain/` alatt.
+4. **A plugin típusa nem szivároghat ki** a `lib/core/camera/` platform-
+   semleges contractjából (`camera_capture.dart`, `camera_frame.dart`,
+   `camera_failure.dart`, …) — a `PluginCameraCapture`/binding/mapping fájlok
+   (§0.0 R3 óta ugyanabban a `lib/core/camera/` mappában, az
+   `AudioStreamerCapture` mintáját követve, l. `lib/core/audio/capture/`)
+   kizárólagosan tartalmazhatják a plugin-importot; máshonnan — a contract
+   többi fájljából, `lib/features/vision/domain/`-ból vagy bármely feature-ből
+   — plugin-import **NEM elfogadható** (ADR 0180).
 5. **A production adapter `visionEnabled == false` mellett nem példányosítható**
    (a provider a flaget nézi) — a mai app viselkedése változatlan.
 6. **Win32-szabály:** ha a plugin version-solve win32 major-ütközést hoz,
@@ -142,7 +319,7 @@ dokumentált brief-revízióval).
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/vision/data test/core/camera
+tools/round-gate.sh test/core/camera
 ```
 
 Külön processzek, nincs `&&`/pipe/`tail`. `native_gate = false`: ezen a boxon
@@ -169,7 +346,148 @@ vagy mércegyengítés helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**2026-08-06 — STOPPED before implementation.** The required `camera`
+dependency solve would regenerate the tracked `pubspec.lock`, but §4 permits
+only `pubspec.yaml` and does not permit `pubspec.lock`. Per §0 and §9 this is a
+scope conflict, so no production or dependency file was changed.
+
+Required Win32 evidence from `rg -n "win32" pubspec.lock` before the stop:
+
+```text
+1181:  win32:
+1184:      name: win32
+```
+
+The existing lock resolves `win32` at `6.3.0` (the surrounding lock entry).
+No version solve was run because it would first write the out-of-scope lock
+file. A revised brief must explicitly allow `pubspec.lock` before this round
+can add the plugin and verify the one-major invariant.
+
+**2026-08-06 — STOPPED after R1 scope revision, before implementation.** The
+R1 revision correctly added `pubspec.lock`, and a temporary C1 dependency solve
+resolved `camera ^0.11.3` to `camera 0.11.4` without changing the `win32` major.
+The dependency was then removed again: a required §5.3 / §6 metadata invariant
+cannot be represented by the existing closed core contract. In particular,
+`lib/core/camera/camera_frame.dart` has fields only for `timestamp`, `width`,
+`height`, `format`, and `orientation`; it has no mirror or crop metadata.
+The required round-trip matrix explicitly covers mirror, and §5.3 requires crop
+preservation. Adding either field requires changing that core file, but it is
+not in §4 `allowed_paths`. No adapter-local field can make the data available
+to the existing `CameraCapture.frames` consumer without changing the contract.
+
+The required signal was sent before this detailed audit:
+
+```text
+stopped — E05-R06 scope conflict: CameraFrame lacks required mirror/crop metadata but lib/core/camera/camera_frame.dart is outside allowed_paths
+```
+
+Required fresh Win32 evidence after reverting the temporary solve:
+
+```text
+1181:  win32:
+1184:      name: win32
+```
+
+The surrounding unchanged lock entry remains `win32 6.3.0`. No production or
+test source is retained. The required gate was run exactly as specified:
+`tools/round-gate.sh test/features/vision/data test/core/camera`. Its format
+and analyze stages were green (`Formatted 1041 files (0 changed)`; `No issues
+found!`), then its first test stage stopped red because the intentionally
+uncreated `test/features/vision/data` directory does not exist; consequently
+the artifact did not run `test/core/camera`. No new `docs/LESSONS.md` entry was
+written because that file is outside the brief's allowed paths. A further brief
+revision must explicitly allow the core contract change and define how crop is
+represented before implementation can continue.
+
+**2026-08-06 — STOPPED after R2 scope revision, before implementation.** The
+R2 revision resolves the closed `CameraFrame` metadata contract: its two
+additive fields can preserve the required mirror and raw pixel-space crop
+metadata without changing either existing caller. A separate, still-unresolved
+architecture conflict prevents the requested production binding. The only
+listed provider integration point is `lib/core/camera/camera_providers.dart`,
+while the required `PluginCameraCapture` belongs to the separately listed
+`lib/features/vision/data/camera/plugin_camera_capture.dart`. Binding that
+concrete adapter from the core provider requires a core-to-feature import,
+which is forbidden by `AGENTS.md` §6 ("Core nem importál feature-t") and by
+the brief's own §5.4 boundary requirement. Moving the provider or creating a
+feature-layer composition root is not permitted by §4's allowed paths, and a
+core-only abstract factory would not bind the production adapter required by
+§3/§5.5.
+
+The required signal was sent immediately after identifying this conflict:
+
+```text
+stopped — E05-R06 scope conflict: core camera_providers cannot import the feature-layer production adapter required for the requested binding
+```
+
+No production, dependency, or test source was changed in this run. The fresh
+R2 revision needs a design/scope decision that either (a) permits a
+feature-layer composition provider to instantiate `PluginCameraCapture`, or
+(b) explicitly reclassifies an approved integration location without allowing
+plugin types to enter `lib/core`. The decision must retain `visionEnabled ==
+false` as a non-instantiating path.
+
+**2026-08-06 — IMPLEMENTED after R3 scope revision.** The official C1
+`camera ^0.11.4` dependency resolves to `camera 0.11.4` and its endorsed
+CameraX Android implementation. `PluginCameraCapture` lives in
+`lib/core/camera/` and keeps a single pending platform frame: a newer frame
+releases and replaces the pending older one, then a microtask delivers only
+the retained latest frame. The adapter increments `droppedFrameCount` for
+each replacement. A `PlatformCameraFrame.release()` guard gives the fake
+platform layer exactly-once release semantics on processed, dropped,
+consumer-throwing, and close-before-delivery paths.
+
+The official plugin exposes no manual `CameraImage` buffer-release method.
+The adapter therefore synchronously copies its planes before the plugin
+callback returns and the release closure relinquishes only the adapter's
+platform-frame hold. The session timestamp is a monotonic `Stopwatch` value
+(strictly advanced by one microsecond when callbacks share a clock tick),
+rotation derives from the plugin camera's sensor orientation, and front-camera
+frames set `mirror`. The plugin currently does not report a crop, so the
+production binding sends the documented `CameraFrame.crop == null`; the fake
+platform metadata test proves a reported raw pixel crop is forwarded without
+transformation.
+
+`CameraFrame` now has the R2-permitted optional `mirror` and raw pixel-space
+`CameraCrop?` fields. `cameraCaptureProvider` constructs the real adapter only
+when `appConfigProvider.flags.visionEnabled` is true; the false path returns
+`null` without invoking its factory. The only production `package:camera`
+imports are `plugin_camera_capture.dart` and `camera_error_mapping.dart`.
+
+Fresh Win32 evidence after the final solve:
+
+```text
+1237:  win32:
+1240:      name: win32
+1244:    version: "6.3.0"
+```
+
+The major remains 6; no `dependency_overrides`, minSdk, Android manifest, or
+feature-layer file was changed.
+
+Verification actually run:
+
+```text
+flutter pub get
+  + camera 0.11.4
+  + camera_android_camerax 0.6.30
+  + camera_platform_interface 2.13.1
+  (win32 remained 6.3.0)
+
+flutter test test/core/camera
+  56 tests passed
+
+tools/round-gate.sh test/core/camera
+  [1] format: ZÖLD (1046 files, 0 changed)
+  [2] analyze: ZÖLD (No issues found)
+  [3] test test/core/camera: ZÖLD (56 tests passed)
+  [4] architecture: ZÖLD
+  [5] secrets: ZÖLD (1812 files, 0 findings)
+```
+
+Not run locally: Android APK build, device preview, and the 100 start/stop
+stress test; the brief assigns native proof to the orchestrator's exact-SHA CI
+`build-apk.yml` dispatch and leaves the device matrix PENDING.
 
 ## 11. Review — a független reviewer tölti ki
 
