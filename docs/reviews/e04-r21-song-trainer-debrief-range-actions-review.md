@@ -2,10 +2,42 @@
 
 - **Kör:** E04-R21
 - **Branch:** `codex/e04-r21-song-trainer-debrief-range-actions`
-- **Implementer commit:** `8b3b991` (Codex / Terra, gpt-5.6-terra)
-- **Base:** `fbbb75b` (pre-flight §0.0-R1) — main @ `8cabae0`
+- **Implementer commit:** `8b3b991` (Codex / Terra, gpt-5.6-terra), újrabázisolva `818ebcf` a javított `main`-re
+- **Base:** eredetileg `fbbb75b` (pre-flight §0.0-R1) — javító újra-review base: `542a023` (main, ADR 0176 arch-fix + heal #154/#155 után)
 - **Reviewer:** Claude Opus 4.8 (orchestrátor, read-only review)
-- **Verdikt:** **CHANGES REQUESTED — 1 BLOCKER** → a kör **H3-mal halt** (a javítás a tilos zónán kívül esik, lásd lent)
+- **Verdikt:** **APPROVED** — a korábbi egyetlen BLOCKER-1-et a merge-elt **ADR 0176** (heal #155) feloldotta; lásd „Feloldás" alább.
+
+## Feloldás (2026-08-06, javító újra-review — ADR 0112 pipeline)
+
+A BLOCKER-1 (cross-feature import a `song_trainer/domain/public.dart` **nested**
+barrelre) **nem** kódhiba volt, hanem a `tool/check_architecture.dart` mérő
+false-positive-ja: a checker CSAK a feature-gyökér `public.dart`-ot fogadta el.
+Két önjavító kör landolt a `main`-en:
+
+- **#154** (`8cabae0`) — a brief re-scope-ja a már-publikus struktúra+capability+
+  redaction szeletre (§0.0);
+- **#155** (`135a304`, **ADR 0176**) — `tool/check_architecture.dart`: a
+  cross-feature import bármely `public.dart` barrelt (gyökér VAGY nested)
+  célozhat; nem-`public.dart` belső fájl továbbra is sértés. Regressziós teszt:
+  `test/core/architecture_dependency_test.dart` „allows nested public.dart
+  barrels but blocks feature internals".
+
+Az orchestrátor a változatlan implementációt (`8b3b991`) a javított `main`-re
+újrabázisolta (`818ebcf` = `542a023` + implementáció, cherry-pick tiszta), NEM
+nyúlt a mérő eszközhöz (§4). Újra-verifikáció a rebase-elt fán:
+
+| Ellenőrzés | Eredmény |
+|---|---|
+| `tools/round-gate.sh …/application …/presentation` | **MINDEN ZÖLD** (format, analyze, mindkét test-suite, **architecture**, secrets, l10n) |
+| scope-audit (`542a023..818ebcf`) | **OK** — 9 fájl, 0 sértés |
+| redaction-falszifikáció | változatlanul valódi (private lyric + backing-asset a bemenetben, kizárás mérve) |
+| capability-gate | változatlanul őszinte (pitch/chord scoring=false → nincs axis-action) |
+
+Az egyetlen korábbi PIROS lépés (architecture) most **ZÖLD**. Nincs nyitott
+BLOCKER/MAJOR. A halasztott song_trainer-oldali (result/range/route/setlist)
+felület továbbra is külön prerekvizit kör (§0.0) — ez a kör azt **nem** építi.
+
+### Eredeti (H3) review-verdikt — megőrizve az alábbiakban
 
 ## Összegzés
 
