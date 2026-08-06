@@ -1007,14 +1007,31 @@ running_runs=$(printf '%s\n' "$running_branches" | grep -v '^main$' | count_fore
 # ÖRÖKÖLT piros gate-tel élt, és ez a KÖVETKEZŐ kör merge-kapuját fogta meg.
 # A Router CI a dokumentum/tooling sávot méri, a full-gate a Flutter-mércét —
 # egyik sem helyettesíti a másikat.
+main_head=$(git rev-parse origin/main)
 for main_workflow in router-ci.yml full-gate.yml; do
-  main_ci=$(gh run list --workflow "$main_workflow" --branch main --limit 1 \
-    --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null) || main_ci="?"
-  case "$main_ci" in
-    failure | timed_out | startup_failure | action_required)
-      die "a main utolsó $main_workflow futása $main_ci — a lánc nem indul piros main fölé"
+  # A SHA ÖSSZES futását nézzük, nem csak a legutolsót (user-szabály 2026-08-06:
+  # „figyeld a GitHub-értesítéseket is"). MÉRT okok, amiért a legutolsó futás
+  # önmagában félrevezet:
+  #   * duplikált dispatch → az egyik futás `cancelled`, pedig a fa zöld;
+  #   * GitHub-infra hiba → `Set up job` bukik („Failed to resolve action
+  #     download info: Service Unavailable"), miközben ugyanazon a SHA-n van
+  #     sikeres futás. Ilyenkor a lánc FELESLEGESEN állna.
+  main_runs=$(gh run list --workflow "$main_workflow" --branch main --limit 10 \
+    --json headSha,conclusion,status \
+    --jq "[.[] | select(.headSha == \"$main_head\") | select(.status == \"completed\")] | map(.conclusion) | join(\",\")" \
+    2>/dev/null) || main_runs="?"
+  case "$main_runs" in
+    "?")
+      log "figyelem: a main $main_workflow állapota nem kérdezhető le — a lánc a többi kapu alapján indul"
       ;;
-    "?") log "figyelem: a main $main_workflow állapota nem kérdezhető le — a lánc a többi kapu alapján indul" ;;
+    "")
+      : ;;   # ezen a SHA-n még nem futott le — nincs mit mérni
+    *success*)
+      : ;;   # van sikeres futás a jelenlegi main-en: a fa zöld
+    *failure* | *timed_out* | *startup_failure* | *action_required*)
+      notify "⛔ piros main" "$main_workflow a main ($(git rev-parse --short origin/main)) tetején: $main_runs" high
+      die "a main $main_workflow futása(i) [$main_runs] pirosak a jelenlegi SHA-n — a lánc nem indul piros main fölé"
+      ;;
     *) : ;;
   esac
 done
