@@ -1,13 +1,31 @@
 # E05-R06 — Review
 
 Brief: `docs/rounds/e05-r06-android-camera-adapter.md`
-Diff: `git diff main...codex/e05-r06-android-camera-adapter` (exact head `f2bd8bd`)
+Diff: `git diff main...codex/e05-r06-android-camera-adapter` (kód-review exact head `f2bd8bd`; F1 javító kör után `2c629db`)
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-06
-Verdikt: **CHANGES REQUESTED** (1 MAJOR)
+Verdikt: **APPROVED F1 javító kör után** (0 nyitott BLOCKER/MAJOR/MINOR; a
+dedikált security-reviewer eredménye külön szakaszban, `docs/reviews/e05-r06-android-camera-adapter-security.md`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 0 · NOTE: 2
+
+## Javító kör (F1)
+
+**Commit `2c629db`** (Terra). A „throwing frame callback…" tesztet lecserélte
+egy `PlatformCameraFrame(width: 0, …)`-ra, ami valóban a
+`CameraFrameBinding.bind()` szinkron törzséből (a meglévő `CameraFrame`
+konstruktor `ArgumentError`-ján át) dobja a kivételt — pontosan a review
+javaslata szerint, plusz egy extra, nem kért ellenőrzéssel (`errors.single`
+konkrétan `CameraFailure` és `FailureCode.cameraFrameFailed`, valamint
+`fail(...)` az `onData`-n, ami bizonyítja, hogy érvénytelen frame sosem
+kézbesül sikeresen).
+
+**A review önállóan, friss izolált klónban (`/tmp/review-e05-r06-fix1`,
+törölve) újra-futtatta a gate-et (mind a 6 lépés zöld) és megismételte a
+mutáció-kill próbát**: a `finally`-t ismét eltávolítva a JAVÍTOTT teszt most
+**piros** (`Expected: [1], Actual: []`) — a brief §6.1 „callbackben dobott
+kivétel" cellája most már valóban géppel bizonyított. F1 **Státusz: FIXED**.
 
 Az implementáció tartalmilag helyes és jó minőségű — mind a négy önálló
 mutáció-kill próba, amit a review futtatott, a várt módon viselkedett, KIVÉVE
@@ -107,7 +125,8 @@ ellenőriztem — `scope_audit_changed=10`, egyezik.
   `finally`-t ideiglenesen eltávolítod (a review ezt már elvégezte és
   visszaállította az izolált klónban — a javító kör ismételje meg a saját
   branch-én, hogy a commit mellé kerüljön a piros→zöld bizonyíték).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`2c629db`) — l. „Javító kör (F1)" fent, önálló újra-
+  ellenőrzéssel.
 
 ### N1 — NOTE — a `crop` mező mai értéke mindig `null` production-ban
 
@@ -140,13 +159,18 @@ valós-eszközös teszt más kódot észlel.
 | architecture | zöld | ✅ saját izolált futtatás; a diff nem érinti `tool/**`-t, az allowlist változatlan (ADR 0180 kikötése) |
 | secrets | zöld | ✅ saját izolált futtatás |
 | l10n | zöld | ✅ saját izolált futtatás |
-| CI (teljes suite + property + APK) | — | ⏳ még nem dispatch-elve — az orchestrátor a review lezárása után indítja |
+| CI (teljes suite + property + APK) | — | ⏳ dispatch az F1 javítás UTÁNI exact SHA-ra következik |
+
+**F1 utáni re-run** (`/tmp/review-e05-r06-fix1`, izolált klón, törölve):
+format/analyze/test (56/56)/architecture/secrets/l10n mind zöld, azonos a
+fenti táblával.
 
 ## Merge-döntés
 
-**Merge egyelőre TILOS** (1 nyitott MAJOR — F1). A javítás kicsi (egy
-tesztfájl egyetlen `test()` blokkja), nem igényel új fájlt vagy scope-bővítést
-— az `allowed_paths` `test/core/camera/plugin_camera_capture_test.dart`
-bejegyzése már fedezi. Javasolt: egy javító kör ugyanazzal a motorral
-(Terra), az F1 leletlistával a promptban (ADR 0055 §2 — a javító kör a lánc
-normál útja, nem megállási ok).
+**A kód-review oldala szerint mehet a merge** — 0 nyitott BLOCKER/MAJOR/MINOR
+(F1 FIXED, önállóan újra-ellenőrizve). A brief `risk = "high"`, ezért a
+**dedikált security-reviewer PASS-ja is kötelező feltétel** (AGENTS.md §15.1)
+— ezt az orchestrátor a security-jelentés (`docs/reviews/
+e05-r06-android-camera-adapter-security.md`) alapján zárja le, majd
+dispatch-eli a CI-t (`tools/round-ci-plan.py` szerint `build-apk.yml` +
+`router-ci.yml`) és exact-SHA zöld után merge-el (ADR 0052).
