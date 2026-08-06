@@ -10,7 +10,7 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "docs/adr/0167-vision-camera-capture-stack.md",
+  "docs/adr/0184-vision-camera-capture-stack.md",
   "docs/baseline/epic-05-camera-stack-evaluation.md",
   "docs/manual-testing/vision-camera-spike-runbook.md",
   "docs/manual-testing/vision-device-matrix.md",
@@ -23,9 +23,12 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + **E05-R01 merge**; olvasd újra az
-> ADR 0163-at (Android-first) és a `pubspec.yaml` mai plugin-készletét.
-> **ADR 0167** előre kiosztva — ütközéskor a blokk tolása (lásd E05-R01 §5).
-> PREPARED→PLANNING, brief commit az implementer indítása ELŐTT.
+> ADR 0180-at (Android-first — a brief eredetileg 0163-at írt, de az E05-R01
+> pre-flightban ez 0180-ra lett kiosztva, lásd §0.0) és a `pubspec.yaml` mai
+> plugin-készletét. **ADR 0184** kiosztva a pre-flightban (`tools/round-slots.py
+> reserve-adr`) — a brief eredeti 0167-es előfoglalása az E05-R01 hat ADR-je
+> (0178–0183) miatt elavult, lásd §0.0. PREPARED→PLANNING, brief commit az
+> implementer indítása ELŐTT.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -38,13 +41,30 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0167**.
+**PREPARED → PLANNING (orchestrátor pre-flight, 2026-08-06, `origin/main` @
+`5f36329`).**
+
+- **ADR-szám revízió.** A brief 2026-08-05-i előre-kiosztása **0167** volt;
+  időközben az E05-R01 kör hat ADR-t foglalt (0178–0183, disk max jelenleg
+  `0183-vision-no-raw-frame-persistence.md`). A pre-flight a foglalót hívta
+  (`tools/round-slots.py reserve-adr --round E05-R02`, NEM `ls | tail`) —
+  eredmény: **ADR 0184**. Minden `0167` hivatkozás ebben a briefben (fájlnév,
+  allowed_paths, §1/§6 szövegek) **0184-re cserélve**.
+- **ADR 0163 → 0180.** A brief pre-flight-instrukciója „olvasd újra az ADR
+  0163-at (Android-first)" — ilyen számú ADR nincs a repóban; az E05-R01
+  pre-flight ugyanezt a döntést **0180** néven foglalta
+  (`docs/adr/0180-vision-android-first-camera-strategy.md`). Nem
+  acceptance-cella, csak pre-flight-olvasmány — tartalmi ütközés nincs, a
+  hivatkozást javítottam.
+- **Mért állapot igazolva:** `grep -n camera pubspec.yaml` → nincs találat
+  (a §2 „nincs `camera*` függőség" állítás áll); `docs/manual-testing/
+  vision-device-matrix.md` létezik (E05-R01-ből).
 
 ## 1. Cél
 
 Eldönteni **dokumentált érvek és a repó mért korlátai alapján**, hogy a capture
 réteg a hivatalos Flutter `camera` plugin (CameraX-backed) mögé kerül-e, vagy
-saját platform channel kell. A döntés kimenete: **ADR 0167 + egy futtatható
+saját platform channel kell. A döntés kimenete: **ADR 0184 + egy futtatható
 mérési runbook**, amit a valós eszközön az ember (vagy egy későbbi eszközös kör)
 lefuttat, és amely a döntést **megdöntheti**.
 
@@ -63,7 +83,7 @@ lefuttat, és amely a döntést **megdöntheti**.
 
 **Benne:** a három jelölt (hivatalos `camera` plugin · CameraX-alapú saját
 platform channel · hibrid: plugin preview + saját analysis stream) írásos
-összevetése a §5 kritériumtáblája szerint; **ADR 0167** a választott úttal és a
+összevetése a §5 kritériumtáblája szerint; **ADR 0184** a választott úttal és a
 megdöntési feltételekkel; a `vision-camera-spike-runbook.md` — parancsonként
 reprodukálható, valós eszközön futtatandó mérési lista; a device-mátrix
 bővítése a runbook `PENDING` soraival.
@@ -75,7 +95,7 @@ spike-kód merge-elése, DSP, model-asset.
 
 | Útvonal | Állapot | Miért |
 |---|---|---|
-| `docs/adr/0167-vision-camera-capture-stack.md` | ÚJ | a döntés |
+| `docs/adr/0184-vision-camera-capture-stack.md` | ÚJ | a döntés |
 | `docs/baseline/epic-05-camera-stack-evaluation.md` | ÚJ | kritériumtábla + érvek |
 | `docs/manual-testing/vision-camera-spike-runbook.md` | ÚJ | valós eszközös mérési lista |
 | `docs/manual-testing/vision-device-matrix.md` | E05-R01-ből | PENDING sorok |
@@ -109,7 +129,7 @@ spike-kód merge-elése, DSP, model-asset.
 
 - [ ] A kritériumtábla mind a 3 jelöltre × mind a 12 kritériumra kitöltött;
       minden „MÉRENDŐ" cella megjelenik a runbookban is (kereszthivatkozás).
-- [ ] Az ADR 0167 tartalmaz **numerikus megdöntési küszöböt** legalább háromra:
+- [ ] Az ADR 0184 tartalmaz **numerikus megdöntési küszöböt** legalább háromra:
       init idő, tartós FPS, close utáni resource-felszabadulás.
 - [ ] A runbook tartalmazza a **20× preview start/stop**, a background/foreground
       és a memory-snapshot lépést, és mindegyikhez a `PASS` feltételt számmal.
@@ -123,7 +143,7 @@ Docs-only kör: a falszifikáció a reviewer eldobható próbája (§11, vissza�
 
 | Próba | Elvárt eredmény |
 |---|---|
-| Az ADR 0167-ből vedd ki a numerikus megdöntési küszöböt (init idő / tartós FPS / close-resource) | a §6 2. cellája PIROS — „megdönthető" állítás szám nélkül nem döntés |
+| Az ADR 0184-ből vedd ki a numerikus megdöntési küszöböt (init idő / tartós FPS / close-resource) | a §6 2. cellája PIROS — „megdönthető" állítás szám nélkül nem döntés |
 | A runbook egy `PASS`-feltételéből töröld a számot | a §6 3. cellája PIROS |
 | Hagyj ki egy runbook-mérést a device-mátrixból | a kereszthivatkozás-ellenőrzés PIROS (§6 4. cella) |
 | Tegyél `lib/`/`pubspec.yaml` fájlt a diffbe | scope-audit `VIOLATION` → `stopped` |
@@ -140,7 +160,7 @@ Külön processzek, nincs `&&`/pipe/`tail`. CI-dispatch/PR/merge = orchestrátor
 
 1. Kritériumtábla + források.
 2. Runbook (számmal kifejezett PASS-feltételekkel).
-3. ADR 0167 a feltételes döntéssel.
+3. ADR 0184 a feltételes döntéssel.
 4. Device-mátrix PENDING sorok; gate.
 
 ## 9. Kockázatok
