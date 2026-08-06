@@ -247,6 +247,42 @@ No version solve was run because it would first write the out-of-scope lock
 file. A revised brief must explicitly allow `pubspec.lock` before this round
 can add the plugin and verify the one-major invariant.
 
+**2026-08-06 — STOPPED after R1 scope revision, before implementation.** The
+R1 revision correctly added `pubspec.lock`, and a temporary C1 dependency solve
+resolved `camera ^0.11.3` to `camera 0.11.4` without changing the `win32` major.
+The dependency was then removed again: a required §5.3 / §6 metadata invariant
+cannot be represented by the existing closed core contract. In particular,
+`lib/core/camera/camera_frame.dart` has fields only for `timestamp`, `width`,
+`height`, `format`, and `orientation`; it has no mirror or crop metadata.
+The required round-trip matrix explicitly covers mirror, and §5.3 requires crop
+preservation. Adding either field requires changing that core file, but it is
+not in §4 `allowed_paths`. No adapter-local field can make the data available
+to the existing `CameraCapture.frames` consumer without changing the contract.
+
+The required signal was sent before this detailed audit:
+
+```text
+stopped — E05-R06 scope conflict: CameraFrame lacks required mirror/crop metadata but lib/core/camera/camera_frame.dart is outside allowed_paths
+```
+
+Required fresh Win32 evidence after reverting the temporary solve:
+
+```text
+1181:  win32:
+1184:      name: win32
+```
+
+The surrounding unchanged lock entry remains `win32 6.3.0`. No production or
+test source is retained. The required gate was run exactly as specified:
+`tools/round-gate.sh test/features/vision/data test/core/camera`. Its format
+and analyze stages were green (`Formatted 1041 files (0 changed)`; `No issues
+found!`), then its first test stage stopped red because the intentionally
+uncreated `test/features/vision/data` directory does not exist; consequently
+the artifact did not run `test/core/camera`. No new `docs/LESSONS.md` entry was
+written because that file is outside the brief's allowed paths. A further brief
+revision must explicitly allow the core contract change and define how crop is
+represented before implementation can continue.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e05-r06-android-camera-adapter-review.md`.
