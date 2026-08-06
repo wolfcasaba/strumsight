@@ -6,6 +6,69 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R06 — Android camera production adapter (2026-08-06)
+
+**E05-R06** MERGED (PR [#168](https://github.com/wolfcasaba/strumsight/pull/168),
+squash `a43f8c1`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
+orchestrátor/reviewer **Claude Sonnet 5**). Az első production Android
+kamera-capture adapter a meglévő platform-semleges `CameraCapture` contract
+(E05-R03) mögé: `PluginCameraCapture` a hivatalos Flutter `camera` pluginra
+épül (`camera ^0.11.4`, CameraX-backed Androidon), latest-frame
+backpressure (queue-mélység 1, dropped-frame számláló), platform buffer
+garantáltan felszabadul minden úton (feldolgozott / eldobott / belső-hiba /
+close-alatti — mind a négy mutáció-kill próbával igazolva), stabil
+`FailureCode` mapping öt platform-hibakódra, és a bekötés a
+`cameraCaptureProvider`-be `visionEnabled` flag mögött (off mellett a
+factory sosem hívódik, mutáció-kill próbával igazolva). A meglévő
+`CameraFrame` additív, opcionális `mirror`/`crop` mezőt kapott (a két
+meglévő hívóhely érintetlen maradt).
+
+**Pre-flight §0.0 — HÁROM post-stop revízió** (Terra mindhárom alkalommal
+helyesen `stopped`-ot jelzett, egyiket sem oldotta fel egyoldalúan):
+(1) két elavult ADR-hivatkozás javítva (`0167→0184`, `0163→0180`, mindkettő
+az E05-R01 hat-ADR-es eltolásából, az E05-R04 által magára már dokumentált
+minta szerint); (2) R1: `pubspec.lock` felvéve az `allowed_paths`-ba
+(mechanikus melléktermék — négy korábbi függőség-felvevő kör ugyanígy
+tette); (3) R2: `lib/core/camera/camera_frame.dart` felvéve, szűken
+engedélyezett additív `mirror`/`crop` mezővel (az SDD saját
+`CameraFrameMetadata` domainmodelljének végrehajtása, nem új döntés); R3:
+a három ÚJ fájl áthelyezve `lib/features/vision/data/camera/` →
+`lib/core/camera/` — az eredeti terv a core `camera_providers.dart`-ot egy
+feature-fájl importálására kérte volna (`AGENTS.md` §6 sértés), a kamera
+itt core-szintű, több feature által osztott képesség (l. `CameraOwner`),
+pontosan az `AudioStreamerCapture` (`lib/core/audio/capture/`) precedensét
+követve. A kör így **nem hoz létre semmit** `lib/features/vision/` alatt.
+
+**Review** ([docs/reviews/e05-r06-…-review.md](reviews/e05-r06-android-camera-adapter-review.md)):
+**APPROVED 1 javító kör után** (F1/MAJOR). Az orchestrátor izolált `/tmp`
+klónban 4 mutáció-kill próbát futtatott (backpressure-sorrend,
+`visionEnabled`-kapu, ismeretlen hibakód-mapping, belső `bind()`-hiba) — 3
+zölden bizonyította a védelmet, 1 (F1) valódi tesztlefedettségi rést talált:
+a „callbackben dobott kivétel" teszt egy downstream stream-listener
+kivételét dobta, ami a Dart Zone-hibakezelőn át fut és SOHA nem éri el az
+adapter saját try/catch/**finally**-jét — a brief §6.1 saját mérce-mátrixa
+ezt a hibaosztályt ígérte lefedni, és nem tette (a termékkód maga
+bizonyítottan helyes volt — az orchestrátor egy javított próbateszttel
+igazolta). Terra javítása (`2c629db`) a tesztet a `CameraFrameBinding.bind()`
+valódi belső hibájára cserélte; önálló újra-ellenőrzés piros→zöld
+visszaigazolta. Dedikált **security-reviewer**
+([docs/reviews/e05-r06-…-security.md](reviews/e05-r06-android-camera-adapter-security.md),
+brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE
+(jövőbeli crash-reporter/log-redaction hardening, e körben nincs teendő);
+az ellátási lánc (`camera`/`camera_android_camerax`/`camera_platform_interface`)
+élő pub.dev API-val igazolva — mind flutter.dev publisher, a lock sha256
+pontosan egyezik a pub.dev `archive_sha256`-tal. Scope-audit mindkét
+review-ban tiszta. **Win32-evidencia:** a solve win32 majort NEM emelte
+(változatlanul `6.3.0`).
+
+**Zöld kapu (exact-SHA `650a8ac`, mindkét review-commit UTÁNI újra-dispatch):**
+Build APK [31100182194](https://github.com/wolfcasaba/strumsight/actions/runs/31100182194)
+**success** (13m38s, teljes suite + property gate + song-gate-ek is benne,
+ADR 0053) + Router CI
+[31100183872](https://github.com/wolfcasaba/strumsight/actions/runs/31100183872)
+**success**. Post-merge gate (`tools/round-gate.sh test/core/camera`) a
+friss `main`-en is zöld.
+
 ## E05-R05 — CameraSessionCoordinator és lifecycle ownership (2026-08-06)
 
 **E05-R05** MERGED (PR [#167](https://github.com/wolfcasaba/strumsight/pull/167),
