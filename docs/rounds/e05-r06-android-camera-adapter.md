@@ -15,6 +15,7 @@ allowed_paths = [
   "lib/features/vision/data/camera/camera_error_mapping.dart",
   "lib/core/camera/camera_providers.dart",
   "pubspec.yaml",
+  "pubspec.lock",
   "test/features/vision/data/plugin_camera_capture_test.dart",
   "test/features/vision/data/camera_error_mapping_test.dart",
   "docs/rounds/e05-r06-android-camera-adapter.md",
@@ -89,7 +90,21 @@ előírásaitól, csak a fenti számhiba):**
   gyár + valódi plugin-backed implementáció — az implementer ezt a meglévő
   mintát követi, nem tervez újat.
 
-**§0.0 revízió: nincs allowed_paths változás.**
+**§0.0 revízió (2026-08-06, R1 — post-stop): `pubspec.lock` felvéve az
+allowed_paths-ba.** Az implementer helyesen `stopped`-ot jelzett
+(`0942b97`): a `camera` függőség felvétele szükségképpen frissíti a
+trackelt `pubspec.lock`-ot, de az eredeti lista csak a `pubspec.yaml`-t
+engedte — a §6/§6.1 acceptance criteria ugyanakkor már eredetileg is a
+`pubspec.lock`-ot mérte (`rg -n "win32" pubspec.lock`), tehát a hiány a
+listában belső ellentmondás volt, nem szándékos korlátozás. Négy korábbi
+kör (`e03-r06`, `e03-r07`, `e03-r11`, `e03-r15` — mind függőség-felvétel)
+ugyanígy, explicit `pubspec.lock` allowed_paths-bejegyzéssel oldotta ezt
+meg; ez a revízió ugyanazt a mintát követi. Az allowed_paths mostantól
+tartalmazza a `pubspec.lock`-ot (fent). Semmilyen más engedélyezett fájl,
+tilos zóna vagy tartalmi előírás nem változott. Terra jelenlegi mért
+win32-evidenciája (a stop előtti, még változatlan lock alapján): a
+lock ma `win32` `6.3.0`-t old fel — ez a §5.6/§9 win32-ellenőrzés
+kiindulási állapota, nem a `camera` hozzáadása utáni eredmény.
 
 ## 1. Cél
 
