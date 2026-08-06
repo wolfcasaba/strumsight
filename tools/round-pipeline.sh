@@ -146,6 +146,40 @@ notify() {
 
 die() { log "HIBA: $*"; exit "${2:-4}"; }
 
+# --- GitHub Actions kimaradás-őr (2026-08-06, MÉRT eset) ------------------
+# A GitHub 15:22-kor nyílt incidenst vezetett: „Workflow runs are failing or
+# delayed in starting, and some queued jobs may time out." Következmény a
+# láncra: (a) a main-egészség pirosat lát, pedig a fa jó; (b) a kör CI-je
+# kétszer piros -> H5 halt -> ÖNJAVÍTÓ kör indul egy olyan hibára, amit a
+# repóban nem lehet megjavítani (tiszta keret-égetés).
+#
+# Az őr fail-open: ha a státusz-API nem elérhető vagy nem egyértelmű, a lánc a
+# mai viselkedés szerint dönt. Kikapcsolás: PIPELINE_STATUS_CHECK=0.
+github_actions_degraded() {
+  [ "${PIPELINE_STATUS_CHECK:-1}" = "1" ] || return 1
+  local status
+  status=$(curl -s -m "${PIPELINE_STATUS_TIMEOUT:-10}" \
+    https://www.githubstatus.com/api/v2/components.json 2>/dev/null \
+    | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+for component in data.get("components", []):
+    if component.get("name") == "Actions":
+        print(component.get("status", ""))
+        break
+' 2>/dev/null)
+  case "$status" in
+    major_outage | partial_outage | degraded_performance)
+      log "GITHUB-INCIDENS: az Actions állapota '$status' — a piros/elmaradó futások OKA külső"
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 # --- Slotok, in-flight nyilvántartás, lánc-folytatás (ADR 0171) -----------
 
 available_memory_gb() {   # a MOST elérhető memória GB-ban (0, ha nem mérhető)
@@ -914,6 +948,12 @@ fi
 if [ -f "$halt_file" ]; then
   log "a lánc MEGÁLLT — $halt_file:"
   cat "$halt_file" >&2
+  # Külső kimaradás alatt a javító kör nem tud mit javítani a repóban — a
+  # keretet égetné el egy GitHub-oldali hibára (mérve 2026-08-06).
+  if github_actions_degraded; then
+    log "az önjavítás KIMARAD: GitHub Actions incidens alatt a halt oka külső — a lánc a helyreállás után próbálja újra"
+    exit 3
+  fi
   if attempt_selfheal; then
     log "az önjavítás feloldotta a láncot; a következő firing viszi a kört"
     exit 0
@@ -1029,6 +1069,10 @@ for main_workflow in router-ci.yml full-gate.yml; do
     *success*)
       : ;;   # van sikeres futás a jelenlegi main-en: a fa zöld
     *failure* | *timed_out* | *startup_failure* | *action_required*)
+      if github_actions_degraded; then
+        log "a main $main_workflow [$main_runs] pirosa GITHUB-INCIDENS alatt keletkezett — nem a fa hibája, a lánc vár a helyreállásra"
+        exit 0
+      fi
       notify "⛔ piros main" "$main_workflow a main ($(git rev-parse --short origin/main)) tetején: $main_runs" high
       die "a main $main_workflow futása(i) [$main_runs] pirosak a jelenlegi SHA-n — a lánc nem indul piros main fölé"
       ;;
