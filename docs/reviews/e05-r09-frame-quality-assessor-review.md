@@ -3,9 +3,9 @@
 Brief: `docs/rounds/e05-r09-frame-quality-assessor.md`
 Diff: `git diff main...codex/e05-r09-frame-quality-assessor` (implementer commit `3671358`, on top of the orchestrátor pre-flight commit `ac03c1f`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-06
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **CHANGES REQUIRED** (javító kör #1 után frissítve — ld. a jelentés végén; F2 ZÁRVA, F1 RÉSZBEN ZÁRVA, 1 lánc-elem még hiányzik)
 
-## Összegzés
+## Összegzés (eredeti, első pass)
 
 BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 4
 
@@ -195,3 +195,38 @@ merge. **Jelenleg 2 nyitott MAJOR (F1, F2) → merge TILOS.** Javító kör
 szükséges: ugyanaz a motor (Terra), a fenti két lelet listájával, kizárólag
 a két érintett teszt fájlra szűkítve — produkciós domain-kód módosítása nem
 várt.
+
+---
+
+## Javító kör #1 után — 2026-08-06
+
+Fix commit: `29347c1` (+ a Terra saját, ugyanabban a fordulóban zárt security S1/S2 javítás). Gate újra futtatva SAJÁT kézzel, friss `/tmp/review2-e05-r09` klónban (`tools/prepare-flutter-generated.sh` → `tools/round-gate.sh test/features/vision`): **mind a hat lépés zöld**, 25/25 vision teszt (23→25, +2 új eset).
+
+### F2 — ZÁRVA
+
+Új teszt: `frame_quality_assessor_test.dart` — `returns notObservable with finite measurements for a constant frame`. Közvetlenül asserttál a konstans-kép SAJÁT `overall`/`measurements` mezőire. **Saját mutáció-visszaellenőrzés:** a korábbi (F2-t felfedő) próba a javított kódon már nem alkalmazható változtatás nélkül — az új teszt önmagában PIROSRA vált, ha a konstans-ág korán visszatér, de nem `_notObservable()`-t ad. **Státusz: FIXED (`29347c1`).**
+
+### S1, S2 — ZÁRVA
+
+`frame_quality_assessor.dart` diffje pontosan a kért guardokat adja hozzá:
+- `downsampleFactor <= 0` → `assess()` elején explicit `ArgumentError.value` dobás (assert-mentes, release buildben is fut).
+- Egy új `hasObservableRoiCoverage = roi != null && roiCoverageRatio.isFinite` mindkét `framing` ÉS `roiCoverage` állapotot erre szűkíti a korábbi puszta `roi == null` helyett — a NaN-eset immár mindkét mezőn `notObservable`, nem csak a `framing`-en. Tiszta, minimális, a §5 kötött döntéseket nem érinti. **Státusz: FIXED (`29347c1`).**
+
+### F1 — RÉSZBEN ZÁRVA, egy lánc-elem még nyitva
+
+Új teszt: `vision_quality_summary_test.dart` — `prioritizes each cue over every lower-priority concern`, három al-esettel: `{blur+stability+roiCoverage rossz, lighting jó}` → `reduceBlur`; `{stability+roiCoverage rossz, lighting+blur jó}` → `stabilizeCamera`; `{roiCoverage rossz}` → `increaseRoiCoverage`. Ez **ténylegesen lezárja** a blur↔stability és stability↔roiCoverage párokat (a review eredeti mutáció-próbája — blur/stability csere — most PIROSRA vált, ellenőrizve).
+
+**Egy pár még nyitva: lighting↔blur.** A meglévő tesztek egyike sem állítja
+`lighting`-et rosszra EGYSZERRE bármelyik alacsonyabb dimenzióval (a lánc új
+teszt-ága `lighting`-et mindenhol a default `good`-on hagyja). **Saját mért
+bizonyíték:** a `_cue()`-ban a lighting/blur ág-sorrend felcserélve → a teljes
+`vision_quality_summary_test.dart` (mind az 5 teszt, a javított kóddal együtt)
+**ZÖLD maradt** a hibás sorrenddel is. Mutáció visszaállítva.
+
+**Kötelező javítás (javító kör #2, szűken szigetelve):** egy negyedik al-eset
+a `prioritizes each cue over every lower-priority concern` teszthez:
+`{lighting: tooDark VAGY overexposed, blur/stability/roiCoverage mind rossz,
+framing jó}` → `improveLighting`. Ez zárja a lánc utolsó nyitott elemét
+(framing↔lighting már az 1. teszttel bizonyított).
+
+**Verdikt marad CHANGES REQUIRED** — 1 nyitott MAJOR (F1, szűkítve).
