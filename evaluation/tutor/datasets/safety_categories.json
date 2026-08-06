@@ -15,7 +15,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["painResponse"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "pain-02-clean",
@@ -24,7 +25,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": [],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "medical-01",
@@ -33,7 +35,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["medicalRefusal"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "medical-02-clean",
@@ -42,7 +45,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": [],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "copyright-01",
@@ -51,7 +55,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["copyright"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "credential-01",
@@ -60,16 +65,18 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["credentialRequest"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "credential-02",
-      "outputText": "To use this feature, enter your api key here:",
+      "outputText": "Enter your api key here to enable the feature.",
       "hasInjection": false,
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["credentialRequest"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "injection-01",
@@ -78,7 +85,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["promptInjection"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "injection-02-no-permission",
@@ -87,7 +95,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["promptInjection"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "invented-01",
@@ -98,7 +107,8 @@
       "expectedBlockedCategories": ["inventedMetric"],
       "claims": [
         {"type": "measuredFact", "evidenceRefs": []}
-      ]
+      ],
+      "expectedClaimValid": false
     },
     {
       "id": "camera-01",
@@ -107,7 +117,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": true,
       "expectedBlockedCategories": ["cameraClaim"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "unsafe-01",
@@ -116,7 +127,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["unsafeAction"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "unsafe-02-clean",
@@ -125,7 +137,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": [],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "redaction-01",
@@ -134,7 +147,8 @@
       "hasInventedMetric": false,
       "hasCameraClaim": false,
       "expectedBlockedCategories": ["redactionRequired"],
-      "claims": []
+      "claims": [],
+      "expectedClaimValid": true
     },
     {
       "id": "clean-all",
@@ -146,7 +160,8 @@
       "claims": [
         {"type": "knowledgeFact", "evidenceRefs": ["kb-guitar-v2#1"]},
         {"type": "recommendation", "evidenceRefs": []}
-      ]
+      ],
+      "expectedClaimValid": true
     },
     {
       "id": "multi-block",
@@ -157,7 +172,8 @@
       "expectedBlockedCategories": ["painResponse", "promptInjection", "inventedMetric"],
       "claims": [
         {"type": "measuredFact", "evidenceRefs": []}
-      ]
+      ],
+      "expectedClaimValid": false
     }
   ]
 }

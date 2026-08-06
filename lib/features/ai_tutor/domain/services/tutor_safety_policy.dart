@@ -150,9 +150,11 @@ final class TutorSafetyPolicy {
   );
 
   static final RegExp _credentialPattern = RegExp(
-    r'\b(password|api\s*key|access\s*token|'
-    r'secret\s*key|private\s*key|your\s+credentials|'
-    r'enter\s+your\s+password|provide\s+your\s+password)\b',
+    r'\b(enter\s+your\s+(password|api\s+key|credentials|token)|'
+    r'provide\s+your\s+(password|api\s+key|credentials|token)|'
+    r'what\s+is\s+your\s+(password|api\s+key|credentials)|'
+    r'share\s+your\s+(password|credentials|api\s+key|token)|'
+    r'your\s+password\s*(is|please)|tell\s+me\s+your\s+password)\b',
     caseSensitive: false,
   );
 

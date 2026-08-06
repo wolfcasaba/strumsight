@@ -6,7 +6,8 @@ injection never raises tool permission; the policy only blocks.
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from re import IGNORECASE, compile as re_compile
+from re import IGNORECASE
+from re import compile as re_compile
 
 
 class SafetyCategory(Enum):
@@ -81,9 +82,11 @@ class SafetyPolicy:
     )
 
     _CREDENTIAL_PATTERN = re_compile(
-        r'\b(password|api\s*key|access\s*token|'
-        r'secret\s*key|private\s*key|your\s+credentials|'
-        r'enter\s+your\s+password|provide\s+your\s+password)\b',
+        r'\b(enter\s+your\s+(password|api\s+key|credentials|token)|'
+        r'provide\s+your\s+(password|api\s+key|credentials|token)|'
+        r'what\s+is\s+your\s+(password|api\s+key|credentials)|'
+        r'share\s+your\s+(password|credentials|api\s+key|token)|'
+        r'your\s+password\s*(is|please)|tell\s+me\s+your\s+password)\b',
         IGNORECASE,
     )
 
