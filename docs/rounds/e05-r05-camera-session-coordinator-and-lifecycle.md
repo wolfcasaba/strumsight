@@ -1,6 +1,6 @@
 # E05-R05 — CameraSessionCoordinator és lifecycle ownership
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-06, orchestrátor Claude Sonnet 5; kód olvasva: main @ `c75f2ba`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 5; §10, §11
 - **Branch:** `codex/e05-r05-camera-session-coordinator-and-lifecycle`
 - **Előfeltétel:** **E05-R03, E05-R04 merge**
@@ -28,7 +28,8 @@ native_gate = false
 > `lib/core/audio/lifecycle/audio_session_coordinator.dart`,
 > `audio_session_lease.dart`, `audio_lifecycle_guard.dart` és
 > `lib/core/platform/app_lifecycle.dart` (`isBackgroundLifecycleState`).
-> Nincs ÚJ ADR (ADR 0056 mintája + 0161/0165). PREPARED→PLANNING, brief commit előbb.
+> Nincs ÚJ ADR (ADR 0056 mintája + 0178/0182 — a `0161/0165` elavult
+> számozás, ld. §0.0). PLANNING lezárva, brief commit megtörtént.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -42,6 +43,55 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PREPARED.** Nincs előre kiosztott ADR.
+
+**PLANNING (2026-08-06, orchestrátor Claude Sonnet 5, mérve `origin/main` @
+`c75f2ba`) — nincs scope-revízió, egy dokumentum-pontosítás:**
+
+1. **ADR-hivatkozás frissítve.** A brief `0161`/`0165` hivatkozása elavult
+   számozás — E05-R01 (`19c02eb`) a `0161–0166` blokkot `0178–0183`-ra
+   számozta át (HANDOFF E05-R01; ADR 0178 saját fejléce is rögzíti:
+   „Kontext-ADR-ek: 0166→0183"). A kör ténylegesen **ADR 0178** (vision
+   privacy-by-default — Döntés #3: „App-pause vagy route-leave esetén a
+   kamera azonnal leáll; háttérben kamera nem indulhat", pontosan a §5.3.
+   auto-resume tilalma) és **ADR 0182** (vision audio-priority degradation —
+   Következmények: „A vision pipeline nem birtokolhatja az audio session
+   lease-t; az audio owner változatlan (ADR 0056)", a §5.6 audio/camera
+   függetlenség indoklása) additív alkalmazása. Nincs ÚJ ADR — a lenti §5
+   két inline hivatkozása (3., 5. pont) `0161` → `0178`-ra javítva.
+2. **Minden más mért állítás megerősítve, revízió nélkül:**
+   - `AudioSessionCoordinator`/`AudioSessionLease`/`AudioLifecycleGuard` a
+     §2 leírása szerint pontos (egy `_active` lease, szinkron
+     check-and-take `await` nélkül az `acquire` törzsében, `audioSessionBusy`
+     kontrollált failure, `_revoke()` sorrendje: `onRevoke` előbb,
+     `release()` a `finally`-ben utána).
+   - `isBackgroundLifecycleState`: `paused|hidden|detached`, `inactive`
+     kizárva — pontos egyezés.
+   - `CameraCapture`/`CameraFrame` (E05-R03) contract és ownership-modell
+     (`assertValid`/`invalidate` a szinkron callback után) megerősítve.
+   - `CameraFailureKind.busy → FailureCode.cameraSessionBusy` **már létezik**
+     (E05-R03, `camera_failure.dart`) — a coordinator a meglévő
+     `CameraFailureMapper.map(CameraFailureKind.busy, …)` hívást
+     használhatja, `app_failure.dart` módosítása NEM szükséges (a §4
+     engedélyezett-lista helyesen nem is tartalmazza).
+   - `grep -rn "\.acquire(" lib/` → egyetlen valódi hívó
+     (`lib/core/audio/mic_capture.dart:82`, audio-oldali); kamera-oldalon
+     jelenleg nincs erőforrás-hívó — a coordinator/lease/guard/providerek
+     mind ÚJ fájlok, nincs névütközés (`CameraOwner`, `CameraSessionLease`,
+     `CameraLifecycleGuard`, `CameraSessionCoordinator` grep 0 találat).
+   - **Mért, implementer-eligazító megjegyzés:** az `AudioLifecycleGuard`
+     éles bekötése NEM az `audio_providers.dart`-ban történik, hanem
+     `lib/app/strumsight_app.dart:28`-ban
+     (`ref.watch(audioLifecycleGuardProvider)`, app-gyökér widget). Ez a
+     fájl **nincs** a §4 listán — a `CameraLifecycleGuard` analóg
+     app-gyökér bekötése ezért **ennek a körnek NEM feladata** (a §3
+     „Kívül — TILOS: UI" pontja már kizárja); a `camera_providers.dart`-ban
+     létrehozott provider addig csak tesztelhető, nincs futó-appban
+     mountolva — pontosan az E05-R04 `request()`-halasztás mintája. Ha az
+     implementer emiatt scope-ütközést érezne, ez NEM az: a providert csak
+     létre kell hozni, nem bekötni.
+
+Nincs ÚJ ADR (ADR 0056 mintája + a fent pontosított 0178/0182 additív
+alkalmazása).
 
 ## 1. Cél
 
@@ -94,11 +144,11 @@ inference, transform (R07).
    implementáció, ahol a foglalás `await` után történik.
 3. **Háttérbe kerüléskor (`paused|hidden|detached`) a kamera azonnal bezár**,
    és **resume után NEM indul újra magától** — csak explicit felhasználói
-   folytatásra (ADR 0161: a felhasználó tudja, mikor él a kamera).
+   folytatásra (ADR 0178: a felhasználó tudja, mikor él a kamera).
    **NEM elfogadható:** auto-resume „kényelmi" opcióként.
 4. **Dispose után nincs state-frissítés** (a repó ismert silent-no-op osztálya).
 5. **A log-események mezői:** owner, ok, időbélyeg, lease-id — **tilos** bármi,
-   ami képi vagy személyes tartalom (ADR 0161).
+   ami képi vagy személyes tartalom (ADR 0178).
 6. **Az audio és a camera lease független**: a camera coordinator **nem
    érintheti** az `AudioSessionCoordinator`-t. **NEM elfogadható** közös
    „media lease" bevezetése ebben a körben.
@@ -147,7 +197,52 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (Codex, 2026-08-06):**
+
+- `camera_session_lease.dart`: a négy megengedett `CameraOwner`, single-use
+  lease contract és véges `CameraSessionRevocationReason`; utóbbi megakadályozza,
+  hogy tetszőleges (esetleg érzékeny) szöveg lifecycle-logba kerüljön.
+- `camera_session_coordinator.dart`: egy aktív lease, az első `await` ELŐTTI
+  check-and-take, retryable `camera.session_busy`, revoke-nál owner teardown
+  majd `finally` release; a strukturált eventek kizárólag `owner`, `reason`,
+  `timestamp`, `leaseId` mezőket írnak.
+- `camera_lifecycle_guard.dart` és `camera_providers.dart`: a `paused`,
+  `hidden`, `detached` lifecycle állapotok revoke-ot indítanak; `inactive` és
+  `resumed` nem. A Riverpod guard provider `ref.onDispose`-szal bont, de az
+  app-gyökérbe **nincs mountolva** (szándékosan E05-R05 scope-on kívül).
+- A két új camera-teszt lefedi a hatcellás race-mátrixot, az öt lifecycle
+  állapotot, fake capture route-leave/frame stream bontást, provider-dispose-t
+  és a log-mezők raw-adatmentességét.
+
+**TDD / valódi-sértés próba:** előbb a hiányzó coordinator/guard importokra
+fordítási hibával PIROS tesztek készültek. Ezután a coordinatorban ideiglenesen
+az `_active = lease` elé került egy `await Future<void>.delayed(Duration.zero)`;
+`camera_session_coordinator_test.dart` PIROS lett: két overlap acquire két
+`Success` eredményt adott a várt egy success + egy busy helyett. Az `await`
+azonnal törölve, a célzott teszt újra zöld.
+
+**Revoke-order RED/GREEN:** a close közben hívott publikus `lease.release()`
+kezdetben túl korán felszabadította a coordinator slotját; a „acquire during
+close” teszt ekkor PIROS lett (`failureOrNull == null`, mert a második owner
+sikerrel foglalt). A lease `release()` revocation alatt most no-op, a belső
+`_finishRelease()` csak az owner teardown `finally` ágában oldja fel a slotot.
+Így a régi stream lezárásáig új capture nem indulhat.
+
+**Futtatott ellenőrzések:**
+
+```text
+flutter test test/core/camera/camera_session_coordinator_test.dart test/core/camera/camera_lifecycle_guard_test.dart
+→ 15 teszt zöld
+flutter test test/core/camera/camera_session_coordinator_test.dart
+  (szándékos mutációval) → piros, várt két Success hiba
+flutter test test/core/audio → 37 teszt zöld
+tools/round-gate.sh test/core/camera → ZÖLD:
+  format; analyze (No issues found); test/core/camera (47 teszt);
+  architecture; secrets
+```
+
+**Nem futtatott ellenőrzés:** valós Android kamera-indikátor — a device-mátrix
+PENDING sora, a brief szerint nem merge-kapu; production adapter még nincs.
 
 ## 11. Review — a független reviewer tölti ki
 
