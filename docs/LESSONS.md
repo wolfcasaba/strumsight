@@ -4822,3 +4822,37 @@ diff-méréssel igazold, majd újrafuttass. (Az inotify `max_user_instances` kim
 boxon a `flutter analyze` szervert bukatja „Too many open files"-lal — a merged kód analyze-át
 a CI méri, a lokális post-merge gate ezt nem tudja zöldre hozni; a deleted-cwd dart/flutter
 zombie-k explicit PID-es kilövése enyhít.) Rokon: [[L05]] (OOM), oracle-server-hygiene.
+
+## L143 — Előre kiosztott ADR-blokk sorszáma AVUL: a PREPARED brief 0161–0166-a stale, ha a disken már 0177 a max — a foglaló kimenetét (0178–0183) használd, ne a tervezett blokkot; és MEGOSZTOTT munkafában SOSE `git stash` (E05-R01, ADR 0055/0138)
+
+**Mért (E05-R01, Epic 5 nyitó, docs-only):**
+
+1. **ADR-blokk-avulás.** A batch-írt brief a hat vision ADR-t **0161–0166**-ra
+   tervezte (2026-08-05-ös „Epic 5-re fenntartott" blokk). Pre-flightkor a disk
+   max **0177** volt (az Epic 4 R13–R24 a 0171–0177-et fogyasztotta, átugorva a
+   fenntartott blokkot). `tools/round-slots.py reserve-adr --round E05-R01`
+   (`O_CREAT|O_EXCL` marker, `max(used)+1`) hatszor hívva **0178–0183**-at adott.
+   **Feloldás:** dokumentált §0.0 brief-revízió — a blokkot 0178–0183-ra toltam,
+   minden §4/§5/§9 hivatkozást + `allowed_paths`-t átírtam. **Tanulság:** a
+   „reserved ADR-block" a briefben csak TERV; a race-mentes, hiteles forrás a
+   foglaló, nem az `ls docs/adr | tail` (ADR 0138/pipeline-prompt §1.0.1). Egy
+   előre megírt brief minden sorszámát a pre-flightban a foglalóval erősítsd meg.
+
+2. **Megosztott munkafa + `git stash` = idegen stash felpattintása.** A záráskor
+   a saját (untracked) review-fájlt `git stash`-sel akartam félretenni branch-váltás
+   előtt. A csupasz `git stash` az **untracked** fájlt NEM stashli → no-op; a rá
+   következő `git stash pop` így egy **másik session** korábbi stashét
+   (`stash@{0}: router-ci-fix`) pattintotta a `main`-re, UU-konfliktussal a közös
+   `docs/LESSONS.md`/`pipeline-*` fájlokon. Mivel a pop konfliktált, a stash entry
+   MEGMARADT → `git reset --hard HEAD` visszaállította a tiszta `main`-t, az
+   untracked review-fájl és az idegen stash sértetlen. **Tanulság:** megosztott
+   working tree-ben (shared-tree-coordination) SOHA ne `git stash`/`stash pop` — az
+   idegen session stashe a stack tetején lehet; branch-váltás előtt a saját untracked
+   artefaktumot fizikai másolással (`cp` scratchpadba) tedd félre, vagy dolgozz
+   külön worktree-ben. Rokon: [[L48]]/[[L59]] (fresh-worktree l10n-gap), oracle-server-hygiene.
+
+3. **A docs-only kör-gate `analyze`-e a boxon lokálisan piros lehet** (a friss
+   worktree gitignore-olt l10n-hiánya + inotify/„Too many open files" — [[L142]]):
+   a merged kód analyze-át a **CI méri** (exact-SHA full-gate zöld `7a9d9e0`-n), a
+   lokális post-merge gate ezt nem hozza zöldre. Az implementer „analyze pre-existing
+   fd issue" jelzését ne fogadd bemondásra — a CI a bizonyíték.

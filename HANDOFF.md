@@ -4,10 +4,46 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-06
-> (E04-R24 MERGED — Offline fallback + Epic 4 ZÁRÓ; nincs új ADR; implementer
-> DeepSeek v4 Pro; 1 javító kör után APPROVED; exact-SHA zöld kapun át. **Epic 4
-> (AI Guitar Teacher) gépi gate-jei lezárva** — a végső elfogadás a HORIZON
-> valós-eszközös menet, ami merge UTÁNI termék-elfogadás).**
+> (E05-R01 MERGED — Epic 5 Computer Vision **INDUL**: vision baseline + hat
+> alapozó ADR (0178–0183) + device-mátrix/benchmark sablon; implementer DeepSeek
+> v4 Pro, ADR-ek orchestrátor-írt pre-flight; APPROVED, javító kör nélkül;
+> exact-SHA zöld kapun át. **Production kód NEM változott** — docs-only Kör 1).**
+>
+> ## ✅ E05-R01 KÉSZ — Vision baseline, capability audit & hat alapozó ADR (Epic 5 INDUL) (2026-08-06)
+>
+> **E05-R01** MERGED (PR [#162](https://github.com/wolfcasaba/strumsight/pull/162),
+> squash `cef864c`, **hat új ADR: 0178–0183**; implementer **DeepSeek v4 Pro**
+> (`deepseek/deepseek-v4-pro`, Kilo/`codex-round.sh`), az ADR-eket az orchestrátor
+> (Claude, ADR 0055) írta a pre-flightban; orchestrátor/reviewer **Claude Opus 4.8**).
+> Az Epic 5 (Computer Vision) mérhető kiindulási állapota és kötelező architekturális
+> döntései: **ADR 0178** privacy-by-default (raw frame csak memóriában, kivétel a
+> `visionLabCaptureEnabled`-gated Lab capture), **0179** capability-aware feedback
+> (`requiredCapability`+`confidence`+`observability`; hiányzó megfigyelhetőség →
+> `notObservable`), **0180** android-first camera (domain platform-független), **0181**
+> manual calibration fallback (production út a kézi kalibráció), **0182** audio-priority
+> degradation (audio deadline romlásakor a **vision** degradál, sosem az audio —
+> AGENTS.md §9), **0183** no-raw-frame persistence (csak `VisionSessionResult`
+> aggregátum). `docs/baseline/epic-05-vision-start.md` a §2 méréseket **nyers
+> parancs+kimenettel** rögzíti (nincs `camera*` dep, nincs `CAMERA` permission, nincs
+> `NSCameraUsageDescription`, nincs `lib/features/vision/`) + kétoszlopos metrika-lista
+> (production vs experimental, `requiredCapability`+observability). Device-mátrix és
+> performance-benchmark sablon PENDING sorokkal (HORIZON valós-eszközös elfogadás).
+>
+> **Pre-flight §0.0 (mérve `origin/main` @ `19c02eb`):** ADR-blokk **0161–0166 → 0178–0183**
+> (disk max 0177; foglalóval race-mentes — `tools/round-slots.py reserve-adr`, NEM `ls | tail`);
+> az implementer-scope a baseline + két sablonra szűkítve (az ADR-eket az orchestrátor írta).
+>
+> **Review** ([docs/reviews/e05-r01-…-review.md](docs/reviews/e05-r01-vision-baseline-and-adrs-review.md)):
+> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE: a baseline `41a0b29`-et jelöl
+> forrásként, míg `origin/main` már `19c02eb` — a #161 diff csak `tools/`-ot érint, egyetlen
+> mérés sem függ tőle). Scope-audit 0 listán kívüli fájl.
+>
+> **Zöld kapu (exact-SHA `7a9d9e0`):** Full Gate (no APK)
+> [31081324758](https://github.com/wolfcasaba/strumsight/actions/runs/31081324758) **success**
+> + Router CI [31081495492](https://github.com/wolfcasaba/strumsight/actions/runs/31081495492)
+> **success**. A CI-terv `full-gate.yml`-t írt elő (docs-only, nincs natív út); a `docs/rounds/**`
+> érintés miatt a Router CI is a kapu része. **Következő:** a queue következő Epic 5 `pending` sora,
+> a pipeline új sessionben indítja.
 >
 > ## ✅ E04-R24 KÉSZ — Offline fallback, teljes regresszió & rollout (EPIC-4 ZÁRÓ) (2026-08-06)
 >
@@ -775,7 +811,19 @@
 
 ## 4. Current branch
 
-`main` @ [PR #157](https://github.com/wolfcasaba/strumsight/pull/157), squash
+`main` @ [PR #162](https://github.com/wolfcasaba/strumsight/pull/162), squash
+`cef864c` (E05-R01, Epic 5 INDUL). Docs-only diff → a CI-terv `full-gate.yml`-t
+írt elő (nincs natív út), a `docs/rounds/**` érintés miatt a **router-ci** is a
+kapu része: full-gate [31081324758](https://github.com/wolfcasaba/strumsight/actions/runs/31081324758)
++ router-ci [31081495492](https://github.com/wolfcasaba/strumsight/actions/runs/31081495492)
+**success** az exact merge-előtti tip `7a9d9e0`-n; review **APPROVED** javító kör
+nélkül (DeepSeek v4 Pro implementer; ADR-ek orchestrátor-írt pre-flight). Az
+`origin/main` a dispatch óta **nem mozdult** (`19c02eb` → merge `cef864c`), rebase
+nem kellett (H8 tiszta).
+_(Történeti product-merge referencia: PR #160 / `0cf6323`, E04-R24;
+PR #159 / `04787fa`, E04-R23; PR #157 / `faa3f32`, E04-R22.)_
+
+> **[Superseded ref — E04-R22 branch]:** `main` @ PR #157, squash
 `faa3f32` (E04-R22). Tisztán Dart/dokumentum-diff → a CI-terv `full-gate.yml`-t
 írt elő (nincs natív út), és a `docs/rounds/**` érintés miatt a **router-ci** is a
 kapu része: full-gate [31071295264](https://github.com/wolfcasaba/strumsight/actions/runs/31071295264)
@@ -859,6 +907,8 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R01 — Vision baseline, capability audit & hat alapozó ADR** (PR [#162](https://github.com/wolfcasaba/strumsight/pull/162), squash `cef864c`, **hat új ADR: [0178](docs/adr/0178-vision-privacy-by-default.md)–[0183](docs/adr/0183-vision-no-raw-frame-persistence.md)**; implementer **DeepSeek v4 Pro**, az ADR-eket az orchestrátor (**Claude Opus 4.8**, ADR 0055) írta a pre-flightban). Az Epic 5 (Computer Vision) INDUL: mérhető baseline (nyers parancs+kimenet), kétoszlopos metrika-lista, device-mátrix/benchmark sablon és a hat kötelező vision architekturális döntés. **Production kód NEM változott** (docs-only Kör 1). Review **APPROVED** javító kör nélkül (0 BLOCKER/MAJOR/MINOR, 1 NOTE). Gate zöld a `7a9d9e0` merge-SHA-n: Full Gate ✅ · Router CI ✅. Lecke: **L143**. Részletek: fejléc ✅-blokk + [review](docs/reviews/e05-r01-vision-baseline-and-adrs-review.md).
 
 **E04-R23 — Tutor safety, prompt-injection, usage & evaluation gate** (PR [#159](https://github.com/wolfcasaba/strumsight/pull/159), squash `04787fa`, **ADR [0177](docs/adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md)**; implementer **DeepSeek v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo-profil), orchestrátor/reviewer **Claude Opus 4.8**).
 
