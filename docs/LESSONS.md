@@ -5090,3 +5090,56 @@ hogy új tartalmat kapott — a tesztszám vagy a commit sha explicit
 összevetése a várttal az egyetlen mérce. Rokon: [[L21]] (dispatch után a
 run `headSha`-ját vesd össze a lokális HEAD-del — ugyanaz a „hallgatólagos
 no-op" mintázat más rétegben).
+
+## L153 — A `docs/reviews/**` NEM router-ci trigger-útvonal: egy review-only commit NEM ad új automatikus Router CI futást a régi tippen — minden review-commit UTÁN kézzel újra kell dispatch-elni (E05-R08)
+
+Az E05-R08-ban két review-commit került a branchre a fő review után (a
+dedikált biztonsági review külön commitban). A `push` a `docs/rounds/**`-ot
+érintő implementáció-commitnál (`b20ff23`) automatikusan lefuttatta a
+Router CI-t (sikeresen) — de a KÖVETKEZŐ két push (a review-jelentés, majd
+a security-review-jelentés, mindkettő KIZÁRÓLAG `docs/reviews/**`-et
+érintve) **egyiket sem indította el automatikusan**, mert a
+`router-ci.yml` `on.push.paths` listája `tools/**`, `docs/rounds/**`,
+`docs/execution/pipeline-*`, `.ai/**` mintákat tartalmaz — `docs/reviews/**`
+nincs köztük (ugyanez a tény már az E05-R04 HANDOFF-bejegyzésében
+prózaként megjelent, de eddig nem volt önálló, kereshető L-tétel). Mivel a
+merge-kapu **exact-SHA** követelmény (a branch VÉGSŐ tippjén kell zöldnek
+lennie mindkét workflow-nak — AGENTS.md §12, ADR 0086 §2), és a
+`router-ci.yml`-nek van `workflow_dispatch:` triggere is, a helyes
+eljárás: **minden egyes review-jellegű commit UTÁN** (nemcsak az
+implementer javító körei után) `gh workflow run router-ci.yml --ref
+<branch>`-et kézzel újra kell futtatni a friss tippen, ugyanúgy, mint a
+`full-gate.yml`/`build-apk.yml`-t. Egy régebbi (akár zöld) Router CI futás
+egy KORÁBBI SHA-n **nem bizonyíték** a végső, merge-elendő tartalomra.
+Gyakorlati következmény: a review-fázisban keletkező összes dokumentum-
+commitot (fő review + dedikált security review, ha van) érdemes EGYETLEN
+véglegesítő push-ként kezelni a CI-dispatch előtt, hogy csak egyszer
+kelljen újra-dispatch-elni mindkét workflow-t — különben minden review-
+commit után újabb ~6-10 perces CI-kör indul. Rokon: [[L113]] (a
+`build-apk` zöldje önmagában nem elég, a Router CI külön sáv).
+
+## L154 — Egy „válaszd ki a fizikai erőforrás-változatot" acceptance-cella (pl. kamera front/back) MÉRÉST igényel a teljes capture/adapter kontraktuson, nem csak azon, hogy a UI-oldali enum definiálható — az enum létezése nem bizonyítja, hogy a kiválasztás bárhol el is jut a platformig (E05-R08, §0.0 R4)
+
+A pre-flight `grep`-je (`CameraCapture.start()` szignatúrája,
+`createPlatformCameraCapture()` paraméterlistája, a
+`_PluginCameraController.create()` MINDIG-back-kamerát-választó belső
+logikája, és a `FakeCameraCapture` mezői) egybehangzóan mutatta: a teljes
+kamera-capture rétegnek **sehol nincs facing/lens paramétere** — sem a
+kontraktusban, sem a gyárban, sem a production adapterben, sem a
+teszt-dublőrben. A brief mégis „front/back választás + switch-restart"-ot
+írt elő acceptance criteriumként, mert a UI-oldali domain-enum
+(`VisionCameraPreference.front/back`) triviálisan megírható és
+perzisztálható — ez a mérték azonban öncsalás: egy UI-enum léte nem
+bizonyítja, hogy a választás bárhol ténylegesen befolyásolja a valódi
+platform-hívást. A helyes pre-flight teszt ugyanaz, mint az „elérhetetlen
+cél-státusz" szabály (a pipeline-prompt §1.1 pontja) egy másik alakban:
+**ha egy acceptance-cella két (vagy több) fizikai erőforrás-VÁLTOZAT közötti
+választást ígér, grep-eld végig a teljes hívási láncot a UI-tól a
+platform-adapterig, és keress egy konkrét paramétert, ami a választást
+ténylegesen szállítja** — enum megléte a domain-rétegben nem helyettesíti
+ezt. A feloldás itt dokumentált scope-szűkítés volt (a UI perzisztálja a
+preferenciát + a coordinator lease-fegyelmét bizonyítja, a fizikai
+lencseváltás külön, `lib/core/camera/**`-t érintő körre halasztva) — nem
+kellett M4/H3 halt, mert a mérés a dispatch ELŐTT történt. Rokon: [[L148]]
+(a MEGLÉVŐ típus mezőit mérd, ne csak az SDD-modellt), [[L149]] (owner-
+modell vagy analóg CORE-adapter a helyes teszt, nem a feltételezés).
