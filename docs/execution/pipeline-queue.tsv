@@ -139,7 +139,7 @@ E04-R24	docs/rounds/e04-r24-offline-fallback-regression-rollout.md	codex	nincs	d
 E05-R01	docs/rounds/e05-r01-vision-baseline-and-adrs.md	codex	0161-0166	done
 E05-R02	docs/rounds/e05-r02-camera-technology-decision.md	codex	0167	done
 E05-R03	docs/rounds/e05-r03-core-camera-contract-and-fake.md	codex	nincs	done
-E05-R04	docs/rounds/e05-r04-camera-permission-and-platform-declarations.md	codex	nincs	pending
+E05-R04	docs/rounds/e05-r04-camera-permission-and-platform-declarations.md	codex	nincs	done
 E05-R05	docs/rounds/e05-r05-camera-session-coordinator-and-lifecycle.md	codex	nincs	pending
 E05-R06	docs/rounds/e05-r06-android-camera-adapter.md	codex	nincs	pending
 E05-R07	docs/rounds/e05-r07-frame-transform-and-overlay-coordinates.md	codex	nincs	pending
