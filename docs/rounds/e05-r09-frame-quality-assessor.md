@@ -1,6 +1,6 @@
 # E05-R09 — Frame quality assessor
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight §0.0 lezárva 2026-08-06, kód olvasva: origin/main @ `e16c02c`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 9; §14
 - **Branch:** `codex/e05-r09-frame-quality-assessor`
 - **Előfeltétel:** **E05-R06, E05-R07, E05-R08 merge**
@@ -26,10 +26,14 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R06/R07/R08 merge; olvasd újra
-> a `CameraFrame` pixelformátum-mezőit (R03/R06) és az R08 setup-profilokat
-> (a framing követelmény profilfüggő). Nincs ÚJ ADR (0162 bővítése).
-> PREPARED→PLANNING, brief commit az implementer indítása ELŐTT.
+> ⚠ **Pre-flight LEZÁRVA (§0.0, R1–R2):** `origin/main` @ `e16c02c` (HEAD ==
+> origin/main, nincs drift) + E05-R06/R07/R08 merge megerősítve. A
+> `CameraFrame` pixelformátum-mezői (width/height/format/orientation/mirror/
+> crop — R03/R06) és az R08 négy setup-profilja (`leftHandFocus`/
+> `rightHandFocus`/`fullUpperBody`/`practiceBalanced`, `vision_setup_profile.dart`)
+> mérve, egyeznek a brief állításával. Nincs ÚJ ADR — a bővítés célja
+> [`ADR 0179`](../adr/0179-vision-capability-aware-feedback.md), **nem** a
+> brief eredeti „0162" hivatkozása (E05-R01 óta renumbered). PLANNING→dispatch.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -42,7 +46,31 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**Mérve `origin/main` @ `e16c02c` (E05-R08 után), orchestrátor Claude Sonnet 5,
+2026-08-06.** Előfeltétel (E05-R06/R07/R08 merge) megerősítve, working tree
+tiszta, nincs párhuzamos inflight kör. Két mért tétel — egy javítás, egy
+megerősítés —, egyik sem igényel ÚJ ADR-t.
+
+**R1 — ADR-hivatkozás elavult.** A pre-flight callout és az §5 2. döntése
+„ADR 0162"-re hivatkozott. `ls docs/adr | grep 0162` üres — az E05-R01 az
+eredeti `0161–0166` blokkot `0178–0183`-ra számozta át. A döntés ma
+[`ADR 0179` — „Vision capability-aware feedback"](../adr/0179-vision-capability-aware-feedback.md);
+a 2. döntése szó szerint „Hiányzó megfigyelhetőség ⇒ `notObservable`, nem
+gyengébb ítélet", ami pontosan a brief §5.2 tétele. Mindkét hivatkozás
+javítva `0179`-re; a bővítés célja változatlan, nincs ÚJ ADR.
+
+**R2 — megerősítve (nem hiba).** A `VisionFrameQuality` öt dimenziója
+(framing/lighting/blur/kameramozgás/ROI-lefedettség, brief §5.3) pontosan
+fedi az SDD §14.2 típusdefiníciójának öt mezőjét (`lighting`/`blur`/
+`framing`/`occlusion`/`stability` + `overall`) — nincs kitalált vagy hiányzó
+dimenzió. A §5.3 **sorrendje** nem az SDD §14.3 hét tételes listájának
+egyszerű szűkítése: abból három tétel (kameraengedély, „nincs gitár/kéz a
+frame-ben", alacsony modellconfidence) modellfüggő és e kör scope-ján kívül
+esik (permission = E05-R04; a másik kettő landmark-inferenciát igényelne,
+ami §3 szerint „Kívül — TILOS", R12+). A megmaradó négy tételből a brief
+önálló, kötött architekturális döntést hoz (§5.3) a modell nélküli
+sorrendre — ez a kör saját hatásköre, nem mért hiba, de a review-nak
+érdemes külön mérlegelnie a termék-UX szempontból.
 
 ## 1. Cél
 
@@ -89,7 +117,7 @@ DSP-konstans módosítása, camera adapter.
 1. **A quality assessor modell nélkül működik** és **pure Dart** (a domain
    framework-mentes). **NEM elfogadható** bármely ML-hívás ebben a rétegben.
 2. **Rossz quality mellett nincs technikai feedback** — a kimenet ilyenkor
-   setup-cue, nem gyengébb bizonyosságú technikai ítélet (ADR 0162).
+   setup-cue, nem gyengébb bizonyosságú technikai ítélet (ADR 0179).
    **NEM elfogadható:** „alacsonyabb confidence-szel azért adjunk tanácsot".
 3. **A cue-prioritás determinisztikus és teljes rendezés**: nincs olyan
    bemenet-pár, amelyre két futás más cue-t adna. A sorrend kötött:
