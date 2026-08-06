@@ -37,6 +37,15 @@ abstract final class FailureCode {
   static const String audioUnavailable = 'audio.unavailable';
   static const String audioSessionBusy = 'audio.session_busy';
 
+  // --- camera --------------------------------------------------------------
+  static const String cameraSessionBusy = 'camera.session_busy';
+  static const String cameraUnavailable = 'camera.unavailable';
+  static const String cameraInitializationFailed =
+      'camera.initialization_failed';
+  static const String cameraFrameFailed = 'camera.frame_failed';
+  static const String cameraInterrupted = 'camera.interrupted';
+  static const String cameraClosed = 'camera.closed';
+
   // --- ml ------------------------------------------------------------------
   static const String mlModelLoad = 'ml.model_load';
   static const String mlInference = 'ml.inference';
@@ -135,6 +144,17 @@ final class StorageFailure extends AppFailure {
 final class AudioFailure extends AppFailure {
   const AudioFailure({
     super.code = FailureCode.audioCaptureFailed,
+    super.retryable = true,
+    super.cause,
+    super.stackTrace,
+  });
+}
+
+/// Camera capture / session problem. The precise failure code is supplied by
+/// the platform-neutral camera failure mapper.
+final class CameraFailure extends AppFailure {
+  const CameraFailure({
+    super.code = FailureCode.cameraInitializationFailed,
     super.retryable = true,
     super.cause,
     super.stackTrace,

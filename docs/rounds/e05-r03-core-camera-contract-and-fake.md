@@ -185,7 +185,40 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementálva 2026-08-06 — Codex (Terra)**
+
+- `lib/core/camera/camera_capture.dart`: pluginmentes `CameraCapture`
+  lifecycle contract (`start` / `stop` / idempotens `close`) és borrowed-frame
+  stream dokumentáció.
+- `lib/core/camera/{camera_frame,camera_format,camera_timestamp}.dart`:
+  platformfüggetlen frame-metaadatok, orientáció/pixel-format enumok és
+  callback-utáni hozzáférést `StateError`-ral elutasító ownership modell.
+- `lib/core/camera/{camera_failure,fake_camera_capture}.dart`: stabil
+  `FailureCode`-map, injektálható start/frame hibák, interruption, close-race,
+  determinisztikus frame-id/timestamp és opcionális ütemezett frame fake.
+- `lib/core/foundation/app_failure.dart`: additív camera failure code-ok és a
+  sealed `AppFailure` hierarchiába illeszkedő `CameraFailure` értéktípus.
+- `lib/app/config/feature_flags.dart`: a 11 vision flag default OFF minden
+  környezetben; value semantics teljes, `usesNetwork` változatlan.
+- `test/core/camera/*`, `test/app/feature_flags_test.dart`: lifecycle-,
+  hiba-, ownership- és flag-mátrix regressziós lefedettség.
+
+**Futtatott ellenőrzések (tényleges eredmény):**
+
+```text
+tools/prepare-flutter-generated.sh
+  → Flutter dependencies + gitignore-olt l10n output elkészült.
+
+tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart
+  → format ZÖLD; analyze ZÖLD; test/core/camera 15/15 ZÖLD;
+    test/app/feature_flags_test.dart 5/5 ZÖLD; architecture, secrets és l10n ZÖLD.
+```
+
+**Eltérés / nem futtatott ellenőrzés:** az első célzott fordítás a sealed
+`AppFailure` külső leszármaztatását joggal elutasította; a failure value típus
+ezért az engedélyezett `app_failure.dart`-ba került, a camera mapping pedig
+külön maradt. Teljes suite, property gate és release APK nem futott lokálisan:
+a brief szerint ezek exact-head CI/orchestrátor felelősségei.
 
 ## 11. Review — a független reviewer tölti ki
 
