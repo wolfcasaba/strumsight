@@ -353,6 +353,7 @@ void main() {
         final malformed = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion,
             'camera': 'not-an-object',
             'guitar': {
               'nut': {'x': 0.3, 'y': 0.5},
@@ -367,6 +368,7 @@ void main() {
             },
           },
         });
+        // Current-schema decoder: not_an_object / camera.
         final c = build(initial: {StorageKeys.visionCalibration: malformed});
         final read = c.repository.read();
         // A codec elutasítja → a repository null-t ad, a JsonDocumentStore
@@ -382,6 +384,7 @@ void main() {
         final malformed = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion,
             'camera': {
               'camera': 'back',
               'orientation': 45,
@@ -403,6 +406,7 @@ void main() {
             },
           },
         });
+        // Current-schema decoder: unknown_enum / orientation.
         final c = build(initial: {StorageKeys.visionCalibration: malformed});
         final read = c.repository.read();
         expect(read, isNull);
@@ -416,6 +420,7 @@ void main() {
         final degenerate = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion,
             'camera': {
               'camera': 'back',
               'orientation': 0,
@@ -434,6 +439,7 @@ void main() {
             },
           },
         });
+        // Current-schema decoder: out_of_range / neckPolygon.
         final c = build(initial: {StorageKeys.visionCalibration: degenerate});
         final read = c.repository.read();
         expect(read, isNull);
@@ -558,6 +564,7 @@ void main() {
         final malicious = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion,
             'camera': {
               'camera': 'back',
               'orientation': 0,
@@ -579,6 +586,7 @@ void main() {
             },
           },
         });
+        // Current-schema decoder: out_of_range / x.
         final c = build(initial: {StorageKeys.visionCalibration: malicious});
         final read = c.repository.read();
         // A teljes bundle-t el kell dobni — a pixel-koordináta release
@@ -602,6 +610,7 @@ void main() {
         final malicious = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion,
             'camera': {
               'camera': 'back',
               'orientation': 0,
@@ -622,6 +631,7 @@ void main() {
             },
           },
         });
+        // Current-schema decoder: not_a_number / zoom.
         final c = build(initial: {StorageKeys.visionCalibration: malicious});
         final read = c.repository.read();
         expect(read, isNull);
