@@ -214,10 +214,21 @@ Amíg ez a szakasz itt van:
 - **Az implementer a `minimax`** (`.pipeline/engine-override`). Ha a MiniMax
   nem végez egy körben: **folytatás ugyanazon a motoron** (`resume`), vagy
   `stopped`/`blocked` jelzés — **nem** motorváltás Terrára.
-- Ha egy javítás bizonyítottan csak `codex`-harness-en végezhető el, az
-  **nem eszkaláció**, hanem **megállás**: írd meg a halt-jelzést, és a
-  `codex_usage_limit_hold` mechanizmus (`tools/round-pipeline.sh`) a
-  reset-időig visszatartja a firingeket, önjavítási kísérlet elpazarlása nélkül.
+- Ha egy javítás korábban `codex`-harness-re volt eszkalálva: **próbáld meg
+  MiniMax-szal** (user-döntés 2026-08-07, kifejezetten erre a helyzetre).
+  A már meglévő, review-zott javítás-specifikációt és a félkész munkapéldányt
+  **használd fel** — ne diagnosztizálj újra:
+  - folytatási prompt: `.pipeline/fix-prompt-E05-R15-2-codex-continue.md`
+    (a BLOCKER-1 point-level w-guard pontos kód- és tesztspecifikációja);
+  - munkapéldány: `/home/ubuntu/ss-codex-e05-r15`, branch
+    `minimax/e05-r15-guitar-coordinates-and-homography`, 3 nem commitolt fájllal;
+  - a codex-harness-re írt promptot a MiniMax burkolójához (`tools/mm-round.sh`)
+    kell igazítani — a **tartalmi** spec változatlanul érvényes.
+- **Ha a MiniMax sem boldogul vele:** az **megállás** (halt-jelzés), NEM
+  codex-eszkaláció. A `codex_usage_limit_hold` mechanizmus
+  (`tools/round-pipeline.sh`) a reset-időig visszatartja a firingeket,
+  önjavítási kísérlet elpazarlása nélkül, és a kör a Terra visszatérése után
+  folytatódik ugyanezzel az állapottal.
 - Az automatikus orchestrátor-fallback szintén tiltva:
   `PIPELINE_FALLBACK_ENGINE=none` a crontabban.
 
