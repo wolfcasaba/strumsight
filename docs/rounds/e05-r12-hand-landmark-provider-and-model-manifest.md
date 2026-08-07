@@ -271,7 +271,90 @@ kihagyása vagy provider-típus szivárgása helyett dokumentált brief-revízi�
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Státusz:** kész — 4 lépéses commit, minden kapu zöld.
+
+### Végrehajtott commitok (`minimax/e05-r12-hand-landmark-provider-and-model-manifest`)
+
+1. `d423a64` — domain modell (`HandLandmarkId` 21 elemű enum + `Handedness` +
+   `HandLandmarkPoint` + `HandObservation` + `HandLandmarkObservability` +
+   `HandLandmarkResult`) és a 21-pont topológiát mérő domain-teszt.
+2. `e35e536` — `HandLandmarkProvider` interfekt + `VisionImage` (SDD §15.1,
+   brief §0.0 R4) + `RecordedHandLandmarkProvider` (5 fixture: 0/1/2/>2 kéz
+   + failure) + `MonotonicHandLandmarkProvider` wrapper + a `NativeHandLandmarkProvider`
+   fail-closed unavailable adaptere.
+3. `730d71f` — `lib/core/ml/vision_model_manifest.dart` (saját validátor +
+   reader, `package:crypto`-alapú SHA-256 — a saját inline SHA-256-ot a
+   `crypto` csomag váltja, hogy ne legyenek kézzel beírt konstansok).
+4. `10518c1` — `assets/ml/hand_landmarker_deferred.tflite` 1-byte placeholder
+   + `model_manifest.json` `vision_models` testvér-kulcs (a `models`
+   tömb érintetlen) + `ml/make_manifest.py` izolált `_build_vision_models`
+   + `vision/public.dart` additív export + `ml_asset_manifest_test` 5 új
+   vision-mátrix cella.
+
+### §6 acceptance criteria — mért állapot
+
+- [x] **Mapping-teszt rögzített kimeneten** — a
+      `test/features/vision/data/hand_landmark_provider_test.dart` "every
+      StrumSight landmark ID is queryable from a single-hand result"
+      végigmegy mind a 21 ID-n.
+- [x] **Kéz-szám mátrix** — 0/1/2/>2 cellák a
+      `hand_landmark_provider_test.dart` Hand-count matrix groupban; a
+      `>2` esetben a kimenet `take(2)`-vel vágott, observability `two`,
+      nincs crash.
+- [x] **Timestamp-mátrix** — increasing/equal/decreasing + "decreasing
+      before any accept" cellák a Timestamp matrix groupban; a
+      csökkenő eldobódik, `droppedTimestampCount` számláló méri,
+      `lastAcceptedTimestampUs` nem regresszál.
+- [x] **Manifest-őr** — `missing checksum / wrong checksum / missing
+      license / mismatched output_schema / well-formed` cellák a
+      `ml_asset_manifest_test.dart` VisionModelManifest groupban; a
+      negatív cellák `isClean = false` üzenettel, a pozitív cella
+      `isClean = true`.
+- [x] **Valódi-sértés próba** — a `assets/ml/model_manifest.json`
+      checksum utolsó karaktere `d` → `e` átírva (sed, in-place), a
+      `shipping manifest vision_models entry is well-formed` teszt
+      PIROS lett üzenettel: `vision_models[0] checksum mismatch for
+      assets/ml/hand_landmarker_deferred.tflite: expected ...01e,
+      actual ...01d`. Visszaállítás (`cp /tmp/backup`) → GREEN.
+- [x] **Az ADR 0185 (KÉSZ, pre-flight)** — olvasva, nem módosítva.
+- [x] **Audio modellfájlok bájtra változatlanok** —
+      `git diff --stat HEAD~ -- assets/ml/*.bin` üres, a `chord_crnn.bin`
+      és a `strum_crnn*.bin` SHA-256-jai azonosak a manifestben.
+
+### Gate kimenet
+
+```
+tools/round-gate.sh test/features/vision test/tooling
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/vision                                  zöld
+    test test/tooling                                          zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+### Megjegyzések a reviewer számára
+
+- **A `MonotonicHandLandmarkProvider` a wrapper, nem a kontraktus metódusa.**
+  A provider alatti kontraktus `Future<AppResult<HandLandmarkResult>>
+  infer(VisionImage)` hívásonkénti és stateless; a timestamp-monotonitás
+  szállítási szintű (brief §5.3), így külön wrapper.
+- **A `NativeHandLandmarkProvider` `manifestReader` (nem `_manifest`)
+  mezőnevet használ** a `prefer_initializing_formals` lint miatt — a
+  privát mezőt hívó-barát néven tesszük ki, de a `manifest` paraméter
+  maradt (külső API).
+- **A SHA-256 nem saját implementáció** — a `package:crypto/crypto.dart`
+  `sha256.convert()`-ját használja a `lib/core/ml/vision_model_manifest.dart`
+  (FIPS 180-4-gyel konzisztens, és azonos a tesztben levő
+  `_sha256Hex`-szel). A tesztben továbbra is van saját implementáció
+  (referencia-vektorok: `''`, `'abc'`), mert a teszt a saját maga által
+  használt algoritmust ellenőrzi, nem a library-t.
+- **`prefer_initializing_formals` a `RecordedHandLandmarkProvider` `produce`
+  mezőjén is feloldva** — a paraméter és a mező is `produce`, az
+  inicializáló formális `: this.produce`.
+- **A `tools/codex-signal.sh done "<egy sor>"` jelzés a végén** —
+  lásd lentebb a §0.0-ban.
 
 ## 11. Review — a független reviewer tölti ki
 
