@@ -35,6 +35,35 @@ import 'package:strumsight/core/geometry/polygon2.dart';
 import '../../../../core/camera/camera_coordinate_space.dart';
 import '../calibration/guitar_calibration.dart';
 
+/// Upper bound on the `(u, v)` magnitude we accept at mapper construction
+/// time, measured by sampling [Homography.apply] at the four corners
+/// (`(0,0)`, `(1,0)`, `(0,1)`, `(1,1)`) and the center (`(0.5, 0.5)`) of
+/// the camera-normalized `[0,1]×[0,1]` frame.
+///
+/// Why this exists — the round BLOCKER-1 (review
+/// `docs/reviews/e05-r15-guitar-coordinates-and-homography-review.md`):
+/// `Homography._measureConditionNumber` measures ONLY the 2×2 linear
+/// block, so a matrix whose projective row passes through (or very close
+/// to) the camera frame is built and accepted as "well-conditioned"
+/// (`cond ≈ 1.3`), yet `apply(...)` on a frame-nearby point produces
+/// magnitudes on the order of 10²–10³. The `_conditionPenaltyFor` reads
+/// the same blind cond, so the output confidence stays near 1.0 — the
+/// silent garbage brief §5.2 forbids.
+///
+/// Why 10.0 — the guitar-space definition is `u ∈ [0,1]`, `v ∈ [-1,1]`,
+/// so a sane `(u, v)` magnitude is at most ~`sqrt(1 + 1) ≈ 1.42`. We
+/// pick **10.0** (≈ 7× slack) so any real-world calibration — even with
+/// strong perspective skew or anchor jitter near the corners — stays
+/// well inside the bound; the security-reviewer random sweep (`|uv| > 10`
+/// under `cond ≤ 50`) showed the failing matrices produce
+/// `|uv| ≈ 10²–10⁷`, so 10.0 is orders of magnitude smaller than the
+/// observed garbage and orders of magnitude larger than the legitimate
+/// envelope. The bound is asserted by
+/// `test/features/vision/domain/guitar_landmark_mapper_test.dart` →
+/// `BLOCKER-1: rejects calibration whose homography blows up in the
+/// camera frame`.
+const double guitarSpaceSanityBound = 10.0;
+
 /// Why a [GuitarLandmarkMapper.map] call returned `null`.
 enum GuitarLandmarkMappingFailure {
   /// The input calibration polygon was degenerate.
@@ -83,6 +112,14 @@ enum GuitarLandmarkMapperSetupFailure {
 
   /// The nut and bridge anchors were too close to define a homography.
   anchorsCoincident,
+
+  /// The solved homography's projective row drives the camera-frame
+  /// sample points outside [guitarSpaceSanityBound], even though the
+  /// 2×2 linear block's condition number was accepted. The 2×2-only
+  /// condition metric in `Homography._measureConditionNumber` is blind
+  /// to this — see BLOCKER-1 in the round review
+  /// (`docs/reviews/e05-r15-guitar-coordinates-and-homography-review.md`).
+  unstableMapping,
 }
 
 /// The bridge between camera-space landmarks and the guitar plane.
@@ -167,6 +204,18 @@ final class GuitarLandmarkMapper {
       throw GuitarLandmarkMapperSetupException._fromHomographyError(e.reason);
     }
 
+    // 4. Projective-row sanity guard (BLOCKER-1). The 2×2-only condition
+    //    check above is blind to the projective row, so a homography
+    //    whose `w = h6·x + h7·y + h8` vanishes close to (or inside) the
+    //    camera-normalized `[0,1]×[0,1]` frame is accepted with a tiny
+    //    cond, then `apply()` blows up to 10^2..10^7 on frame-nearby
+    //    landmarks while `_conditionPenaltyFor` keeps the confidence near
+    //    1.0. We sample the four corners and the center of the camera
+    //    frame; any sample with |uv| > guitarSpaceSanityBound rejects
+    //    the mapping. `core/geometry` is space-neutral by design, so this
+    //    domain-aware guard lives here, not in `Homography`.
+    _checkFrameBounded(h);
+
     final penalty = _conditionPenaltyFor(h.conditionNumber);
     return GuitarLandmarkMapper._(h, h.inverse, h.conditionNumber, penalty);
   }
@@ -208,6 +257,31 @@ final class GuitarLandmarkMapper {
 
   /// The condition number of the underlying homography (diagnostic).
   double get conditionNumber => _condition;
+
+  /// Reject a built homography whose projective row drives the camera
+  /// frame's sample points outside [guitarSpaceSanityBound]. This is the
+  /// BLOCKER-1 guard from the round review — `Homography` measures only
+  /// the 2×2 linear block, so a near-vanishing `w` inside the camera
+  /// frame is accepted as "well-conditioned" and silently produces
+  /// 10²–10⁷ magnitudes at `mapPoint` time.
+  static void _checkFrameBounded(Homography h) {
+    final samples = <Point2>[
+      Point2(0.0, 0.0),
+      Point2(1.0, 0.0),
+      Point2(0.0, 1.0),
+      Point2(1.0, 1.0),
+      Point2(0.5, 0.5),
+    ];
+    for (final p in samples) {
+      final uv = h.apply(p);
+      final magnitude = math.sqrt(uv.x * uv.x + uv.y * uv.y);
+      if (!(magnitude.isFinite) || magnitude > guitarSpaceSanityBound) {
+        throw const GuitarLandmarkMapperSetupException(
+          GuitarLandmarkMapperSetupFailure.unstableMapping,
+        );
+      }
+    }
+  }
 
   /// The minimum separation between nut and bridge anchors required
   /// for the mapper to construct. Matches the calibration-validity
