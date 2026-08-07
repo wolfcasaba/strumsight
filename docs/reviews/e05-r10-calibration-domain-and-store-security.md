@@ -5,7 +5,97 @@ Diff reviewed: `539d346..HEAD` (pre-fix tip `c0701db` — F1/F2 general-review
 fixes landed afterward and do not touch the files below)
 Risk header: `risk = "high"` → mandatory standalone security pass
 Reviewer: security-reviewer agent (Claude Sonnet 5) · Dátum: 2026-08-07
-**Verdikt: FAIL** — 1 MAJOR nyitva (merge-blokkoló), 0 BLOCKER/CRITICAL
+**Verdikt: FAIL** — 2 MAJOR nyitva (merge-blokkoló), 0 BLOCKER/CRITICAL
+
+## Javító kör 2 (Codex) — MAJOR-1 termékkód-fixje helyes, DE egy sokkal
+   szélesebb, ÚJ MAJOR-t fedett fel az újra-ellenőrzés
+
+Motor: Codex (a §2 motor-eszkaláció szerint — MiniMax már elhasználta az
+egy javító körét F1/F2-re). Commit `0bc37c9`, 2 fájl (a codec + a teszt).
+A production-fix (`_readOrientation` megosztott helper, explicit
+`switch`-tag a `CameraRotation.fromDegrees` hívás ELŐTT, mindkét hívási
+helyen — aktuális séma ÉS legacy migráció) **helyes** — saját kézzel,
+külön ellenőrizve (lásd lent).
+
+**Első próbálkozásra a Codex-worktree `blocked`-ot jelzett** — a saját
+gate-futása analyze-on pirosra váltott. Kimérve: NEM kódhiba, hanem a friss
+`git clone`-nal létrehozott munkapéldányban elmaradt
+`tools/prepare-flutter-generated.sh` (a hiányzó generált `lib/l10n/`
+gitignore-olt fájlok miatti, dokumentált klón-csapda, `docs/LESSONS.md`
+L48/L59, konkrét precedens: HANDOFF E04-R16 „nem H6"). Az orchestrátor
+saját mulasztása (a munkapéldányt nem prepelte dispatch előtt) — a script
+lefuttatása után a gate ZÖLD, a `blocked` jelzés ezzel feloldva, NEM H6.
+
+**Az újra-ellenőrzés (saját kézzel, mutáció-kill próbával) viszont egy
+SOKKAL nagyobb, addig rejtett problémát fedett fel.** A `_readOrientation`
+fixet ideiglenesen visszaállítva az eredeti (hibás) alakra, a TELJES
+`vision_calibration_repository_test.dart` — beleértve a Codex ÚJ,
+kifejezetten erre a hibára írt celláját — **mind a 19 teszttel változatlanul
+zöld maradt**. Ok (közvetlen diagnosztikával igazolva, lásd MAJOR-2): az új
+teszt (és rajta kívül még NÉGY meglévő, a MiniMax eredeti köréből származó
+teszt) a `data` objektumon belül NEM ad meg explicit `schemaVersion` mezőt,
+ezért a codec `_readShapeVersion` „hiányzó mező → legacy(0)" ága miatt a
+teszt bemenete a **legacy** migrációs útvonalra fut, nem az **aktuális
+séma** dekódolójára — így a teszt egy KORÁBBI, a szándékolttól teljesen
+független ellenőrzésen bukik el (lásd MAJOR-2 részletei).
+
+### MAJOR-2 — ÖT hand-constructed teszt (a „current schema" dekódoló
+    korrupció-/sértés-teszjei) a legacy migrációs ágra fut, nem oda, amit
+    állítanak
+
+- **Fájl:** `test/features/vision/data/vision_calibration_repository_test.dart`,
+  öt cella: „hibás típus — a camera mező nem objektum" (~348), Codex ÚJ
+  „érvénytelen orientation" cellája (~380), „degenerált polygon" (~414),
+  „a pixel-coordinate field bypasses validation" (~552), „a numeric field
+  with a string value is rejected" (~591). Gyökér-mechanizmus:
+  `lib/features/vision/data/persistence/vision_calibration_codec.dart:109-119`
+  (`_readShapeVersion`: `if (raw == null) return legacySchemaVersion;`).
+- **Probléma:** mind az öt teszt `jsonEncode({'schemaVersion': <envelope>,
+  'data': {'camera': {...beágyazott objektum...}, 'guitar': {...}}})` alakú
+  bemenetet ad, de a **belső** `data` objektumnak NINCS saját
+  `'schemaVersion'` kulcsa. A codec ezt a hiányzó mezőt `legacySchemaVersion
+  (0)`-ként értelmezi, tehát `_migrateFromLegacy` fut, ami a `_legacyCamera`
+  helperen keresztül **lapos, string-alapú** mezőket vár (`legacy['camera']`
+  egy STRING-nek kell lennie). Mivel mind az öt teszt `data.camera`-ja egy
+  **beágyazott objektum** (a szándékolt „aktuális séma" alak), a
+  `_readLegacyString(legacy, 'camera')` `raw is! String` ága azonnal
+  `JsonRecordException(not_a_string, field: 'camera')`-t dob — **mielőtt**
+  a teszt által állítólag célzott ellenőrzés (a camera-objektum típusa az
+  AKTUÁLIS sémában, az orientation-fehérlista, a polygon-hosszkorlát, a
+  pixelkoordináta-tartomány, a numerikus-mező-típus) egyáltalán lefutna.
+  Az egyetlen kivétel a „hibás típus" teszt, ahol `data.camera` szándékosan
+  egy STRING (`'not-an-object'`) — ott a `_readLegacyString` átmegy, de a
+  KÖVETKEZŐ lépés (`legacy['orientation']`, ami nincs a lapos tesztadatban)
+  bukik `JsonRecordException(missing, field:'orientation')`-nel.
+- **Mérve (közvetlen diagnosztika, önálló Dart-harness a shippelt codec-en
+  `decodeFromMap`-et közvetlenül hívva):**
+  ```
+  HIBAS_TIPUS_THROWS: JsonRecordException -- JsonRecordException(missing, field: orientation)
+  ORIENTATION_THROWS: JsonRecordException -- JsonRecordException(not_a_string, field: camera)
+  ORIENTATION_WITH_VERSION_THROWS: JsonRecordException -- JsonRecordException(unknown_enum, field: orientation)
+  ```
+  A harmadik sor ugyanaz a bemenet, DE explicit belső
+  `'schemaVersion': VisionCalibrationCodec.currentSchemaVersion`-nel — ez
+  adja a VALÓBAN szándékolt `unknown_enum`/`orientation` hibát, bizonyítva,
+  hogy a `_readOrientation` fix helyes, CSAK a teszt nem éri el.
+- **Hatás:** az acceptance #4 (korrupció-tolerancia) és #7 (valódi-sértés
+  próba) **az aktuális (nem-legacy) séma dekódolójára NINCS bizonyítva** —
+  ez a séma az, amit az app 99%-ban ténylegesen használ (a legacy út
+  egyszeri migráció). Konkrétan: a `_decodeGuitar`/`_decodeProfile`
+  (aktuális séma) SAJÁT `requireDouble(min:0,max:1)` hívásait, a
+  `cameraRaw is! Map` ellenőrzést és a polygon-hossz-korlátot **egyetlen
+  teszt sem méri** — ha ezeket egy jövőbeli refaktor meggyengíti (pl. csak
+  a `_legacyGuitar`-ban marad meg a bound-check), a teljes shippelt suite
+  zöld maradna. Ez pontosan az a mintázat, amit ADR 0181/0183 kizárni
+  próbál, MOST géppel nem bizonyítva a fő (nem-legacy) útra.
+- **Kötelező javítás:** mind az öt hand-constructed teszt `data` mezőjébe
+  vegyél fel egy explicit `'schemaVersion':
+  VisionCalibrationCodec.currentSchemaVersion` kulcsot, hogy ténylegesen az
+  aktuális-séma dekódolót (`_decodeBundle`/`_decodeProfile`/`_decodeGuitar`)
+  érjék el, majd ellenőrizd, hogy mindegyik a SAJÁT állított okára bukik
+  (nem egy máshonnan jövő, véletlen `JsonRecordException`-re) — a pontos
+  `reason`/`field` párra `expect` a `logger.events` mellé, ahol ésszerű.
+- **Státusz:** OPEN.
 
 ## Scope
 
@@ -112,5 +202,10 @@ Az 5 új production fájl (`lib/features/vision/domain/calibration/**`,
 
 ## Merge-döntés
 
-FAIL — MAJOR-1 nyitva. Javító kör szükséges (MAJOR-1 + MINOR-1, ugyanabban a
-körben), utána a security-review frissítve PASS-ra a javító commit SHA-jával.
+FAIL — MAJOR-1 termékkód-szinten FIXED (`0bc37c9`, saját kézzel
+függetlenül igazolva), de a hozzá tartozó teszt nem bizonyít, és emellett
+MAJOR-2 (öt teszt legacy-ágra tévedése) nyitva. Harmadik javító kör
+szükséges (Codex folytatja ugyanabban a munkapéldányban, `0bc37c9`-ről) —
+mind az öt érintett tesztet a fenti MAJOR-2 leírás szerint kell javítani,
+beleértve MAJOR-1 saját regressziós celláját is. Utána a security-review
+frissítve PASS-ra a végső javító commit SHA-jával.
