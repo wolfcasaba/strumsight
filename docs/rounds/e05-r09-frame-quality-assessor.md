@@ -1,6 +1,6 @@
 # E05-R09 — Frame quality assessor
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight §0.0 lezárva 2026-08-06, kód olvasva: origin/main @ `e16c02c`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 9; §14
 - **Branch:** `codex/e05-r09-frame-quality-assessor`
 - **Előfeltétel:** **E05-R06, E05-R07, E05-R08 merge**
@@ -26,10 +26,14 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R06/R07/R08 merge; olvasd újra
-> a `CameraFrame` pixelformátum-mezőit (R03/R06) és az R08 setup-profilokat
-> (a framing követelmény profilfüggő). Nincs ÚJ ADR (0162 bővítése).
-> PREPARED→PLANNING, brief commit az implementer indítása ELŐTT.
+> ⚠ **Pre-flight LEZÁRVA (§0.0, R1–R2):** `origin/main` @ `e16c02c` (HEAD ==
+> origin/main, nincs drift) + E05-R06/R07/R08 merge megerősítve. A
+> `CameraFrame` pixelformátum-mezői (width/height/format/orientation/mirror/
+> crop — R03/R06) és az R08 négy setup-profilja (`leftHandFocus`/
+> `rightHandFocus`/`fullUpperBody`/`practiceBalanced`, `vision_setup_profile.dart`)
+> mérve, egyeznek a brief állításával. Nincs ÚJ ADR — a bővítés célja
+> [`ADR 0179`](../adr/0179-vision-capability-aware-feedback.md), **nem** a
+> brief eredeti „0162" hivatkozása (E05-R01 óta renumbered). PLANNING→dispatch.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -42,7 +46,31 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**Mérve `origin/main` @ `e16c02c` (E05-R08 után), orchestrátor Claude Sonnet 5,
+2026-08-06.** Előfeltétel (E05-R06/R07/R08 merge) megerősítve, working tree
+tiszta, nincs párhuzamos inflight kör. Két mért tétel — egy javítás, egy
+megerősítés —, egyik sem igényel ÚJ ADR-t.
+
+**R1 — ADR-hivatkozás elavult.** A pre-flight callout és az §5 2. döntése
+„ADR 0162"-re hivatkozott. `ls docs/adr | grep 0162` üres — az E05-R01 az
+eredeti `0161–0166` blokkot `0178–0183`-ra számozta át. A döntés ma
+[`ADR 0179` — „Vision capability-aware feedback"](../adr/0179-vision-capability-aware-feedback.md);
+a 2. döntése szó szerint „Hiányzó megfigyelhetőség ⇒ `notObservable`, nem
+gyengébb ítélet", ami pontosan a brief §5.2 tétele. Mindkét hivatkozás
+javítva `0179`-re; a bővítés célja változatlan, nincs ÚJ ADR.
+
+**R2 — megerősítve (nem hiba).** A `VisionFrameQuality` öt dimenziója
+(framing/lighting/blur/kameramozgás/ROI-lefedettség, brief §5.3) pontosan
+fedi az SDD §14.2 típusdefiníciójának öt mezőjét (`lighting`/`blur`/
+`framing`/`occlusion`/`stability` + `overall`) — nincs kitalált vagy hiányzó
+dimenzió. A §5.3 **sorrendje** nem az SDD §14.3 hét tételes listájának
+egyszerű szűkítése: abból három tétel (kameraengedély, „nincs gitár/kéz a
+frame-ben", alacsony modellconfidence) modellfüggő és e kör scope-ján kívül
+esik (permission = E05-R04; a másik kettő landmark-inferenciát igényelne,
+ami §3 szerint „Kívül — TILOS", R12+). A megmaradó négy tételből a brief
+önálló, kötött architekturális döntést hoz (§5.3) a modell nélküli
+sorrendre — ez a kör saját hatásköre, nem mért hiba, de a review-nak
+érdemes külön mérlegelnie a termék-UX szempontból.
 
 ## 1. Cél
 
@@ -89,7 +117,7 @@ DSP-konstans módosítása, camera adapter.
 1. **A quality assessor modell nélkül működik** és **pure Dart** (a domain
    framework-mentes). **NEM elfogadható** bármely ML-hívás ebben a rétegben.
 2. **Rossz quality mellett nincs technikai feedback** — a kimenet ilyenkor
-   setup-cue, nem gyengébb bizonyosságú technikai ítélet (ADR 0162).
+   setup-cue, nem gyengébb bizonyosságú technikai ítélet (ADR 0179).
    **NEM elfogadható:** „alacsonyabb confidence-szel azért adjunk tanácsot".
 3. **A cue-prioritás determinisztikus és teljes rendezés**: nincs olyan
    bemenet-pár, amelyre két futás más cue-t adna. A sorrend kötött:
@@ -151,7 +179,88 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/vision/domain/quality/quality_thresholds.dart` — verziózott,
+  konfigurálható küszöbök; downsample-faktor és profilfüggő framing-minimum.
+- `lib/features/vision/domain/quality/vision_frame_quality.dart` — immutable
+  frame-quality modell, setup-cue enum és véges numerikus értékek védelme.
+- `lib/features/vision/domain/quality/frame_quality_assessor.dart` — pure-Dart
+  grayscale downsample, luminance/clipping/blur/frame-delta/ROI mérések és
+  degenerált bemenetre `notObservable`.
+- `lib/features/vision/domain/quality/vision_quality_summary.dart` — ablakos,
+  determinisztikus, egyszerre pontosan egy setup-cue-t adó prioritás-policy.
+- `lib/features/vision/public.dart` — additive quality-domain és
+  `NormalizedRect` export.
+- `test/features/vision/domain/frame_quality_assessor_test.dart` — szintetikus
+  fixture-ök, minden küszöb alatt/rajta/fölötte, két blur-felbontás, ROI és
+  NaN/Infinity guard.
+- `test/features/vision/domain/vision_quality_summary_test.dart` — teljes
+  cue-prioritás, determinisztikus azonos súlyú eset és no-feedback-on-unavailable.
+- `test/fixtures/vision/quality/README.md` és
+  `frame_quality_benchmark.dart` — személyes adat nélküli fixture-leírás és
+  reprodukálható Dart benchmark.
+
+### Mért eredmények
+
+- `python3 -c "thresholds = {'mean': 40, 'highlight': .20, 'shadow': .20,
+  'sharpness': 10, 'motion': 12, 'coverage': .20}; print({key: (value - .1,
+  value, value + .1) for key, value in thresholds.items()})"` → minden
+  küszöbhöz a pontos alatt/rajta/fölötte cellák kiszámolva; a tesztek ezeket
+  használják, nem szemre megadott értékeket.
+- `dart run test/fixtures/vision/quality/frame_quality_benchmark.dart` →
+  `frame_quality_640x480_average_us=691.33 iterations=100
+  downsample_factor=4`. Ez 0.691 ms/keret, a 60 FPS 16.67 ms-os frame-budget
+  alatt van ezen a fejlesztői boxon. A low-tier device-mátrix továbbra is
+  PENDING; a lokális mérés azt nem helyettesíti.
+- Valódi-sértés próba: a `vision_quality_summary.dart` policy-ben a lighting
+  ellenőrzése szándékosan a framing elé került. A
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
+  ekkor PIROS lett: várt `adjustFraming`, tényleges `improveLighting`.
+  Visszaállítás után ugyanaz a teszt újra zöld.
+- Célzott GREEN ellenőrzések az eredeti implementációhoz:
+  `flutter test test/features/vision/domain/frame_quality_assessor_test.dart`
+  → 6/6 pass;
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart`
+  → 4/4 pass.
+- Kiegészítő RED→GREEN: egy degenerált frame után az előző motion-minta
+  explicit törlődik. A reprodukáló teszt javítás előtt `good` stability-t,
+  utána `notObservable`-t kapott; így megszakadt megfigyelhetőségen nincs
+  hamis stabilitás-állítás.
+
+### Javító kör #1 (Terra, review F1/F2 + security S1/S2)
+
+- `vision_quality_summary_test.dart` most az alsó három cue-szint teljes
+  prioritási láncát is méri: blur nyer stability és ROI coverage ellen,
+  stability nyer ROI coverage ellen, majd ROI coverage az utolsó cue.
+  A blur/stability ágak ideiglenes felcserélése erre a tesztre piros volt
+  (`reduceBlur` helyett `stabilizeCamera`), majd visszaállítva.
+- `frame_quality_assessor_test.dart` közvetlenül ellenőrzi, hogy egy nem üres,
+  konstans luminance-frame `notObservable` overallt és kizárólag véges
+  méréseket ad.
+- Az assessor runtime guard-ja nem-véges ROI területből mind a `framing`, mind
+  a `roiCoverage` esetén `notObservable` állapotot képez, és a nem-pozitív
+  `downsampleFactor` még a mintavételező ciklusok előtt `ArgumentError`-t dob.
+  A release-only útvonalat a pure-Dart
+  `frame_quality_assessor_release_mode_check.dart` no-assert ellenőrzése méri; a
+  0-ra gyengített guardnál 5 másodperces timeouttal 124-es kilépést adott,
+  a visszaállított guarddal zöld.
+- Javítás utáni célzott teszt:
+  `flutter test test/features/vision/domain/vision_quality_summary_test.dart test/features/vision/domain/frame_quality_assessor_test.dart`
+  → 14/14 pass. A release-mode ellenőrzés
+  `dart --no-enable-asserts run test/fixtures/vision/quality/frame_quality_assessor_release_mode_check.dart`
+  → zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- A fixture-ök in-memory, determinisztikus grayscale-generátorok; nem tárolunk
+  fotót vagy nyers kamera-frame-et. A megengedett fixture-könyvtárban a
+  generálási specifikáció és benchmark szerepel.
+- A kötelező `tools/round-gate.sh test/features/vision` javító kör után zöld:
+  format, analyze, 25 Vision teszt, architecture, secrets (1848 fájl, 0
+  finding) és l10n parity (en → hu, 942 üzenet). A teljes CI/property/APK és
+  a low-tier eszközmérés az
+  orchestrátor/CI felelőssége, nem futott lokálisan.
 
 ## 11. Review — a független reviewer tölti ki
 
