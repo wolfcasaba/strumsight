@@ -89,20 +89,25 @@ void main() {
       expect(reason, CalibrationInvalidationReason.orientationChanged);
     });
 
-    test('cell 3 — zoom changed beyond tolerance → zoomChangedBeyondTolerance',
-        () {
-      final stored = profile(zoom: 0.5);
-      final reason = CalibrationValidity.evaluate(
-        profile: stored,
-        guitar: geometry(),
-        currentCamera: stored.camera,
-        currentOrientation: stored.orientation,
-        // 0.5 + 0.5 = 1.0; tolerance 0.1, így az eltérés 0.5 > 0.1.
-        currentZoom: 1.0,
-        now: stored.createdAt.add(const Duration(days: 1)),
-      );
-      expect(reason, CalibrationInvalidationReason.zoomChangedBeyondTolerance);
-    });
+    test(
+      'cell 3 — zoom changed beyond tolerance → zoomChangedBeyondTolerance',
+      () {
+        final stored = profile(zoom: 0.5);
+        final reason = CalibrationValidity.evaluate(
+          profile: stored,
+          guitar: geometry(),
+          currentCamera: stored.camera,
+          currentOrientation: stored.orientation,
+          // 0.5 + 0.5 = 1.0; tolerance 0.1, így az eltérés 0.5 > 0.1.
+          currentZoom: 1.0,
+          now: stored.createdAt.add(const Duration(days: 1)),
+        );
+        expect(
+          reason,
+          CalibrationInvalidationReason.zoomChangedBeyondTolerance,
+        );
+      },
+    );
 
     test('cell 4 — timestamp expired → timestampExpired', () {
       final stored = profile(createdAt: DateTime.utc(2026, 1, 1));
@@ -154,10 +159,7 @@ void main() {
       final stored = profile(camera: VisionCameraPreference.back);
       final reason = CalibrationValidity.evaluate(
         profile: stored,
-        guitar: geometry(
-          nutX: 0.50,
-          bridgeX: 0.51,
-        ),
+        guitar: geometry(nutX: 0.50, bridgeX: 0.51),
         currentCamera: VisionCameraPreference.front,
         currentOrientation: CameraRotation.degrees180,
         currentZoom: 1.0,

@@ -83,10 +83,7 @@ final class VisionCalibrationCodec {
   List<int> encode({
     required CameraCalibrationProfile profile,
     required GuitarCalibration guitar,
-  }) => utf8.encode(jsonEncode(encodeToMap(
-    profile: profile,
-    guitar: guitar,
-  )));
+  }) => utf8.encode(jsonEncode(encodeToMap(profile: profile, guitar: guitar)));
 
   // ---------------------------------------------------------------------------
   // Decode
@@ -113,8 +110,10 @@ final class VisionCalibrationCodec {
     final raw = json['schemaVersion'];
     if (raw == null) return legacySchemaVersion;
     if (raw is! int) {
-      throw JsonRecordException(RecordDecodeReason.notANumber,
-          field: 'schemaVersion');
+      throw JsonRecordException(
+        RecordDecodeReason.notANumber,
+        field: 'schemaVersion',
+      );
     }
     return raw;
   }
@@ -125,8 +124,10 @@ final class VisionCalibrationCodec {
   ) {
     if (shapeVersion == currentSchemaVersion) return json;
     if (shapeVersion == legacySchemaVersion) return _migrateFromLegacy(json);
-    throw JsonRecordException(RecordDecodeReason.unknownEnum,
-        field: 'schemaVersion');
+    throw JsonRecordException(
+      RecordDecodeReason.unknownEnum,
+      field: 'schemaVersion',
+    );
   }
 
   /// The legacy shape is a flat map at the top level of the envelope body:
@@ -145,8 +146,12 @@ final class VisionCalibrationCodec {
 
   CameraCalibrationProfile _legacyCamera(Map<String, dynamic> legacy) {
     final camera = _readLegacyString(legacy, 'camera');
-    final orientationDegrees =
-        requireInt(legacy, 'orientation', min: 0, max: 359);
+    final orientationDegrees = requireInt(
+      legacy,
+      'orientation',
+      min: 0,
+      max: 359,
+    );
     final orientation = CameraRotation.fromDegrees(orientationDegrees);
     final zoom = requireDouble(legacy, 'zoom', min: 0, max: 1);
     final setupName = _readLegacyString(legacy, 'setupProfile');
@@ -171,8 +176,7 @@ final class VisionCalibrationCodec {
     final bridge = _legacyPoint(legacy, 'bridge');
     final polygonRaw = legacy['polygon'];
     if (polygonRaw is! List) {
-      throw JsonRecordException(RecordDecodeReason.notAList,
-          field: 'polygon');
+      throw JsonRecordException(RecordDecodeReason.notAList, field: 'polygon');
     }
     final polygon = <NormalizedPoint>[
       for (final entry in polygonRaw)
@@ -182,12 +186,16 @@ final class VisionCalibrationCodec {
             requireDouble(entry, 'y', min: 0, max: 1),
           )
         else
-          throw JsonRecordException(RecordDecodeReason.notAnObject,
-              field: 'polygon'),
+          throw JsonRecordException(
+            RecordDecodeReason.notAnObject,
+            field: 'polygon',
+          ),
     ];
     if (polygon.length < 3 || polygon.length > 8) {
-      throw JsonRecordException(RecordDecodeReason.outOfRange,
-          field: 'polygon');
+      throw JsonRecordException(
+        RecordDecodeReason.outOfRange,
+        field: 'polygon',
+      );
     }
     return GuitarCalibration(
       nutAnchor: nut,
@@ -240,21 +248,16 @@ final class VisionCalibrationCodec {
         'qualityScore': p.qualityScore,
       };
 
-  static Map<String, dynamic> _encodeGuitar(GuitarCalibration g) =>
-      <String, dynamic>{
-        'nut': <String, dynamic>{
-          'x': g.nutAnchor.x,
-          'y': g.nutAnchor.y,
-        },
-        'bridge': <String, dynamic>{
-          'x': g.bridgeAnchor.x,
-          'y': g.bridgeAnchor.y,
-        },
-        'neckPolygon': <Map<String, dynamic>>[
-          for (final p in g.neckPolygon) <String, dynamic>{'x': p.x, 'y': p.y},
-        ],
-        'createdAt': g.createdAt.toUtc().toIso8601String(),
-      };
+  static Map<String, dynamic> _encodeGuitar(
+    GuitarCalibration g,
+  ) => <String, dynamic>{
+    'nut': <String, dynamic>{'x': g.nutAnchor.x, 'y': g.nutAnchor.y},
+    'bridge': <String, dynamic>{'x': g.bridgeAnchor.x, 'y': g.bridgeAnchor.y},
+    'neckPolygon': <Map<String, dynamic>>[
+      for (final p in g.neckPolygon) <String, dynamic>{'x': p.x, 'y': p.y},
+    ],
+    'createdAt': g.createdAt.toUtc().toIso8601String(),
+  };
 
   // ---------------------------------------------------------------------------
   // Bundle decoding (current schema only — legacy is migrated first)
@@ -264,12 +267,16 @@ final class VisionCalibrationCodec {
     final cameraRaw = json['camera'];
     final guitarRaw = json['guitar'];
     if (cameraRaw is! Map<String, dynamic>) {
-      throw JsonRecordException(RecordDecodeReason.notAnObject,
-          field: 'camera');
+      throw JsonRecordException(
+        RecordDecodeReason.notAnObject,
+        field: 'camera',
+      );
     }
     if (guitarRaw is! Map<String, dynamic>) {
-      throw JsonRecordException(RecordDecodeReason.notAnObject,
-          field: 'guitar');
+      throw JsonRecordException(
+        RecordDecodeReason.notAnObject,
+        field: 'guitar',
+      );
     }
     return (
       profile: _decodeProfile(cameraRaw),
@@ -282,8 +289,12 @@ final class VisionCalibrationCodec {
     final camera = cameraName == VisionCameraPreference.front.storageValue
         ? VisionCameraPreference.front
         : VisionCameraPreference.back;
-    final orientationDegrees =
-        requireInt(json, 'orientation', min: 0, max: 359);
+    final orientationDegrees = requireInt(
+      json,
+      'orientation',
+      min: 0,
+      max: 359,
+    );
     final orientation = CameraRotation.fromDegrees(orientationDegrees);
     final zoom = requireDouble(json, 'zoom', min: 0, max: 1);
     final setupName = requireString(json, 'setupProfile');
@@ -306,8 +317,10 @@ final class VisionCalibrationCodec {
     final bridge = _decodePoint(json, 'bridge');
     final polygonRaw = json['neckPolygon'];
     if (polygonRaw is! List) {
-      throw JsonRecordException(RecordDecodeReason.notAList,
-          field: 'neckPolygon');
+      throw JsonRecordException(
+        RecordDecodeReason.notAList,
+        field: 'neckPolygon',
+      );
     }
     final polygon = <NormalizedPoint>[
       for (final entry in polygonRaw)
@@ -317,12 +330,16 @@ final class VisionCalibrationCodec {
             requireDouble(entry, 'y', min: 0, max: 1),
           )
         else
-          throw JsonRecordException(RecordDecodeReason.notAnObject,
-              field: 'neckPolygon'),
+          throw JsonRecordException(
+            RecordDecodeReason.notAnObject,
+            field: 'neckPolygon',
+          ),
     ];
     if (polygon.length < 3 || polygon.length > 8) {
-      throw JsonRecordException(RecordDecodeReason.outOfRange,
-          field: 'neckPolygon');
+      throw JsonRecordException(
+        RecordDecodeReason.outOfRange,
+        field: 'neckPolygon',
+      );
     }
     return GuitarCalibration(
       nutAnchor: nut,

@@ -59,10 +59,7 @@ final class VisionCalibrationRepository {
     if (body == null) return null;
     try {
       final bundle = codec.decodeFromMap(body);
-      return (
-        profile: bundle.profile,
-        guitar: bundle.guitar,
-      );
+      return (profile: bundle.profile, guitar: bundle.guitar);
     } on Exception catch (e) {
       document.logger.warning(
         'storage.document.record_skipped',
