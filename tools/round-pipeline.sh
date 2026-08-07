@@ -387,7 +387,7 @@ run_tmux_session() {
   tmux new-session -d -s "$tmux_session" bash
   tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
   tmux send-keys -t "$tmux_session" "$shell_command" Enter
-  log "session indult: $tmux_session (látszik a telefon Code-listájában) → $session_log"
+  log "session indult: $tmux_session (mód: $session_mode) → $session_log"
 
   (
     # fd 9 (a lánc-zár) lezárása az alhéjban — különben a pinger örökli, és a
