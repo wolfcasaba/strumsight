@@ -150,10 +150,14 @@ flutter:
       'version': '1.0.0',
       'path': 'assets/ml/hand_landmarker_deferred.tflite',
       'sha256':
-          // SHA-256 of the 1-byte placeholder that `newFixture` writes —
-          // matches the on-disk bytes so the checksum-mismatch branch
-          // (which the other tests exercise) is the only one that fails.
-          _sha256Hex(const [0]),
+          // 64 lowercase hex characters — the validator's format branch
+          // accepts this without consulting the disk (the `deferred`
+          // entry's filesystem/checksum branch is gated on status
+          // == 'active', per the F1 javító kör). The historical
+          // coincidence with the SHA-256 of a 1-byte placeholder is no
+          // longer load-bearing; the file the fixture writes is
+          // intentionally ignored for deferred entries.
+          'a' * 64,
       'status': 'deferred',
       'input_shape': [256, 256, 3],
       'output_schema': 'strumsight.hand_landmarks.v1',
@@ -185,7 +189,14 @@ flutter:
     });
 
     test('wrong checksum → init failure', () {
-      final entry = validVisionModel()..['sha256'] = 'a' * 64;
+      // A `deferred` entry has no real asset on disk (ADR 0185
+      // §Döntés 2), so "wrong checksum" means a format-invalid `sha256`
+      // field — the validator's filesystem/checksum branch is gated on
+      // status == 'active' and exercised by the `active branch` test
+      // added below. 63 lowercase hex characters is the smallest
+      // representative that fails the regex without entangling any
+      // other field.
+      final entry = validVisionModel()..['sha256'] = 'a' * 63;
       final projectRoot = newFixture(
         visionModels: [entry],
         pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
@@ -200,9 +211,12 @@ flutter:
                 )
                 as Map<String, Object?>,
       );
-      // The 1-byte placeholder file's actual checksum != 'aaa...aaa'.
       expect(report.isClean, isFalse);
-      expect(report.issues.join('\n').toLowerCase(), contains('checksum'));
+      expect(
+        report.issues.join('\n').toLowerCase(),
+        contains('sha256'),
+        reason: 'format error must mention sha256',
+      );
     });
 
     test('missing license → init failure', () {
@@ -252,6 +266,46 @@ flutter:
         visionModels: [entry],
         pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
       );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      expect(report.isClean, isTrue, reason: report.issues.join('\n'));
+    });
+
+    // E05-R12 — F1 javító kör: the deferral above removes the disk
+    // branch for `status == "deferred"`, so the activation round's
+    // branch would be left uncovered without this cell. The asset
+    // lives only in the tempdir (the repo intentionally ships no
+    // real binary this round — ADR 0185 §Döntés 2).
+    test('active entry: matching checksum → manifest is clean', () {
+      const assetPath = 'assets/ml/hand_landmarker_active.tflite';
+      const bytes = [10, 20, 30, 40];
+      final entry = <String, Object?>{
+        'model_id': 'hand_landmarker',
+        'version': '1.0.0',
+        'path': assetPath,
+        'sha256': _sha256Hex(bytes),
+        'status': 'active',
+        'input_shape': [256, 256, 3],
+        'output_schema': 'strumsight.hand_landmarks.v1',
+        'license': {'spdx': 'Apache-2.0', 'name': 'MediaPipe Hands'},
+        'minimum_device_tier': 'basic',
+        'evaluation_report': 'docs/eval/vision/hand_landmarker.md',
+      };
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: assetPath,
+      );
+      // The fixture writes a 1-byte placeholder; overwrite with the
+      // actual bytes whose checksum the manifest now claims.
+      _writeBytes(projectRoot, assetPath, bytes);
       final report = validateVisionManifest(
         projectRoot: projectRoot,
         rawDocument:
