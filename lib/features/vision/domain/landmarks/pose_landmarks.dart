@@ -200,7 +200,9 @@ PoseLandmarks mapRawPoseLandmarks({
   for (final candidate in raw) {
     final id = poseLandmarkIdByRawName[candidate.name];
     if (id == null) continue;
-    if (!(candidate.x.isFinite && candidate.y.isFinite && candidate.z.isFinite)) {
+    if (!(candidate.x.isFinite &&
+        candidate.y.isFinite &&
+        candidate.z.isFinite)) {
       continue;
     }
     if (!(candidate.visibility >= 0 && candidate.visibility <= 1)) continue;
