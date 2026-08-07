@@ -439,11 +439,11 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
         )
     )
 
-    # --- §6.2 row 1: mean anchor error = 0.029 -> EXPERIMENTAL. ---
+    # --- §6.2 row 1: mean anchor error = 0.029 -> PRODUCTION_CANDIDATE. ---
     # Build a corpus of 250 frames (>= MIN_CORPUS_FRAMES=200) all guitar,
     # all with anchor error exactly 0.029. p95 = 0.029 (below 0.050 cap),
-    # failure_rate = 0 (below 0.05 cap). Only the mean condition fails
-    # the strict-promotion path (mean < 0.030 required).
+    # failure_rate = 0 (below 0.05 cap). Mean is strictly below the
+    # 0.030 cap so all three axes qualify — decision is PRODUCTION_CANDIDATE.
     samples_029: list[FrameSample] = [
         _synthetic_frame(
             i, has_guitar=True, gt_anchor=(0.5, 0.5), pred_anchor=(0.5, 0.5),
@@ -453,21 +453,23 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
     ]
     metrics_029 = evaluate(samples_029)
     ok = (
-        metrics_029.decision() == "EXPERIMENTAL"
+        metrics_029.decision() == "PRODUCTION_CANDIDATE"
         and metrics_029.mean_anchor_error is not None
         and math.isclose(metrics_029.mean_anchor_error, 0.029, abs_tol=1e-6)
     )
     results.append(
         (
-            "§6.2.mean=0.029-below-threshold-yields-experimental",
+            "§6.2.mean=0.029-below-threshold-yields-production-candidate",
             ok,
             _format_metrics(metrics_029),
         )
     )
 
-    # --- §6.2 row 2: mean anchor error = 0.030 -> EXPERIMENTAL. ---
-    # Boundary belongs to the STRICTER side per brief §6.2 middle cell:
-    # exactly at the threshold is not yet good enough.
+    # --- §6.2 row 2: mean anchor error = 0.030 -> PRODUCTION_CANDIDATE. ---
+    # Boundary belongs to the QUALIFYING side per ADR §Döntés 4: exactly
+    # at the threshold IS good enough, just like the R16
+    # `CalibrationLossMachine.isLost => drift > lostDriftBound` precedent
+    # (the `drift == lostDriftBound` instant is NOT yet `lost`).
     samples_030: list[FrameSample] = [
         _synthetic_frame(
             i, has_guitar=True, gt_anchor=(0.5, 0.5), pred_anchor=(0.5, 0.5),
@@ -477,28 +479,28 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
     ]
     metrics_030 = evaluate(samples_030)
     ok = (
-        metrics_030.decision() == "EXPERIMENTAL"
+        metrics_030.decision() == "PRODUCTION_CANDIDATE"
         and metrics_030.mean_anchor_error is not None
         and math.isclose(metrics_030.mean_anchor_error, 0.030, abs_tol=1e-6)
     )
     results.append(
         (
-            "§6.2.mean=0.030-on-threshold-yields-experimental",
+            "§6.2.mean=0.030-on-threshold-yields-production-candidate-boundary-qualifies",
             ok,
             _format_metrics(metrics_030),
         )
     )
 
-    # --- §6.2 row 3: mean anchor error = 0.031 -> PRODUCTION_CANDIDATE.
-    # The other two conditions (p95, failure_rate) are held at the
-    # passing values: p95 is computed from the same sorted samples, so
-    # it is 0.031 here (below the 0.050 cap); failure_rate is 0 (below
-    # the 0.05 cap). Per brief §6.2 cell 3 literally, mean > 0.030 maps
-    # to PRODUCTION_CANDIDATE — the cell's parenthetical
-    # ("a másik két feltétel ... a self-testben teljesül") records that
-    # the OTHER TWO axes are the gate-able ones the ADR §Döntés 2 fixes
-    # (so an override to EXPERIMENTAL would apply if either were out of
-    # bounds); the mean axis itself is the primary sweep variable.
+    # --- §6.2 row 3: mean anchor error = 0.031 -> EXPERIMENTAL.
+    # The mean axis strictly exceeds its 0.030 cap so the decision is
+    # EXPERIMENTAL regardless of the other two axes (which are held
+    # below their caps here, but cannot rescue a mean-axis failure).
+    # Per ADR §Döntés 4, mean > 0.030 maps to EXPERIMENTAL — the
+    # parenthetical "a másik két feltétel ... a self-testben teljesül"
+    # records that the OTHER TWO axes are the gate-able ones the ADR
+    # §Döntés 2 fixes (an override to EXPERIMENTAL would still apply
+    # if either were out of bounds); the mean axis itself is the
+    # primary sweep variable.
     samples_031: list[FrameSample] = [
         _synthetic_frame(
             i, has_guitar=True, gt_anchor=(0.5, 0.5), pred_anchor=(0.5, 0.5),
@@ -508,7 +510,7 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
     ]
     metrics_031 = evaluate(samples_031)
     ok = (
-        metrics_031.decision() == "PRODUCTION_CANDIDATE"
+        metrics_031.decision() == "EXPERIMENTAL"
         and metrics_031.mean_anchor_error is not None
         and math.isclose(metrics_031.mean_anchor_error, 0.031, abs_tol=1e-6)
         and metrics_031.p95_anchor_error is not None
@@ -518,15 +520,24 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
     )
     results.append(
         (
-            "§6.2.mean=0.031-above-threshold-yields-production-candidate-other-axes-pass",
+            "§6.2.mean=0.031-above-threshold-yields-experimental",
             ok,
             _format_metrics(metrics_031),
         )
     )
 
     # --- §6.2 supplementary: p95-axis-only failure. Mean=0.020 (well
-    # below), but every 10th frame carries a 0.060 outlier so p95 of the
-    # distribution pushes past 0.050. The decision must be EXPERIMENTAL.
+    # below the 0.030 cap), but every 10th frame carries a 0.060
+    # outlier so p95 of the distribution pushes past 0.050. The
+    # decision must be EXPERIMENTAL.
+    #
+    # NOTE: after the ADR §Döntés 4 fix (mean-axis direction reversed),
+    # this test ACTUALLY exercises the p95-branch in `decision()` —
+    # previously the mean-axis check (with the inverted direction) was
+    # false here and the test happened to fall through to the closing
+    # `return "EXPERIMENTAL"` without ever evaluating p95. The expected
+    # label is unchanged (EXPERIMENTAL) but the code path covered is
+    # now the one the test name advertises.
     samples_p95: list[FrameSample] = []
     for i in range(250):
         if i % 10 == 0:
@@ -556,6 +567,14 @@ def _self_test_results() -> list[tuple[str, bool, str]]:
     # --- §6.2 supplementary: failure-rate-axis failure. 6% of guitar
     # frames carry a confidently-wrong prediction (>0.10 anchor error),
     # so failure_rate = 0.06 > 0.05. Decision must be EXPERIMENTAL.
+    #
+    # NOTE: after the ADR §Döntés 4 fix (mean-axis direction reversed),
+    # this test ACTUALLY exercises the failure-rate-branch in
+    # `decision()` — previously the mean-axis check (with the inverted
+    # direction) was false here and the test happened to fall through
+    # to the closing `return "EXPERIMENTAL"` without ever evaluating
+    # failure_rate. The expected label is unchanged (EXPERIMENTAL) but
+    # the code path covered is now the one the test name advertises.
     samples_fr: list[FrameSample] = []
     n = 250
     fail_every = 16  # 1/16 = 0.0625
