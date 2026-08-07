@@ -207,30 +207,33 @@ class Metrics:
     p95_latency_ms: float | None
 
     def decision(self) -> str:
-        """Apply the ADR 0187 Döntés 2 promotion gate AND the brief §6.2
+        """Apply the ADR 0187 Döntés 2 promotion gate AND the ADR Döntés 4
         boundary convention.
 
         Returns one of: NO_DATA, INSUFFICIENT_CORPUS, EXPERIMENTAL,
         PRODUCTION_CANDIDATE.
 
         The boundary convention is uniform across all three axes: the
-        strict bound belongs to the LOWER (≤) side, which maps to
-        "experimental". The brief §6.2 mean-axis cells fix the mean
-        mapping: 0.029 → experimental, 0.030 → experimental (boundary,
-        stricter side), 0.031 → production-candidate. The same
-        convention applies to p95 and failure_rate.
+        boundary belongs to the QUALIFYING (≤) side, which maps to
+        "production-candidate". ADR §Döntés 4 spells this out and ties
+        it to the R16 `CalibrationLossMachine` `isLost => drift >
+        lostDriftBound` precedent (boundary still qualifies). The
+        brief §6.2 mean-axis cells fix the mean mapping: 0.029 →
+        production-candidate, 0.030 → production-candidate (boundary
+        qualifies), 0.031 → experimental. The same convention applies
+        to p95 and failure_rate.
 
         ADR §Döntés 2 requires ALL three conditions to hold for a
-        genuine production promotion. Per the brief §6.2 cell 3
-        parenthetical ("a másik két feltétel ... a self-testben
-        teljesül"), the harness reports "production-candidate" if AND
-        ONLY IF the mean axis is above its threshold AND the other
-        two axes are at or below their thresholds. Any single axis
-        out of bounds OR undefined yields "experimental".
+        genuine production promotion. Per ADR §Döntés 4 ("a másik két
+        feltétel ... a self-testben teljesül"), the harness reports
+        "production-candidate" if AND ONLY IF the mean axis is at or
+        below its threshold AND the other two axes are also at or below
+        their thresholds. Any single axis out of bounds OR undefined
+        yields "experimental".
 
-        This rule passes the brief §6.2 cells verbatim AND respects
-        the ADR §Döntés 2 conditions as a guard against promoting a
-        detector that fails on p95 or failure_rate.
+        This rule passes the ADR Döntés 2 / Döntés 4 cells verbatim
+        AND respects the ADR §Döntés 2 conditions as a guard against
+        promoting a detector that fails on p95 or failure_rate.
         """
         if self.status != "OK":
             return "NO_DATA"
@@ -238,7 +241,7 @@ class Metrics:
             return "INSUFFICIENT_CORPUS"
         if self.mean_anchor_error is None:
             return "EXPERIMENTAL"
-        if self.mean_anchor_error > MEAN_ANCHOR_ERROR_MAX:
+        if self.mean_anchor_error <= MEAN_ANCHOR_ERROR_MAX:
             if (
                 self.p95_anchor_error is not None
                 and self.p95_anchor_error > P95_ANCHOR_ERROR_MAX
