@@ -290,7 +290,112 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer:** MiniMax M3 · **Branch:** `minimax/e05-r14-pose-provider-and-posture-baseline`
+
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Állapot | Mit tartalmaz |
+|---|---|---|
+| `lib/features/vision/domain/landmarks/pose_landmarks.dart` | ÚJ | `PoseLandmarkId` (pontosan a §0.0 R4 / ADR 0186 Döntés 1 szerinti 9 tag), `PoseLandmarkPoint`, `PoseObservability`, `PoseLandmarks` (`byId`/`presentIds`/`count`, `toAuditMap()` a pinnelt audit-felszín, `toString()` csak számokat logol), `RawPoseLandmark` + `mapRawPoseLandmarks()` a `poseLandmarkIdByRawName` allow-listával — minden nem allow-listás nyers név (arc-pontok) itt esik ki, mielőtt domain-objektum keletkezne |
+| `lib/features/vision/domain/landmarks/posture_baseline.dart` | ÚJ | `PostureBaselineConfig` (duration + sample-count + numerikus quality-küszöb + per-landmark visibility + kötelező ID-k), `PostureBaseline` (átlagpontok, sampleCount, durationUs, shoulderSpan), `PostureBaselineCollector` (gate-bukás → ablak RESET, részleges ablakból nincs baseline), `PostureObservation` — NYERS, vállszélességgel normalizált per-pont drift, `maxDrift`/`meanDrift`, semmilyen ítélet/küszöb/coaching (ADR 0186 Döntés 5) |
+| `lib/features/vision/data/landmarks/pose_landmark_provider.dart` | ÚJ | `PoseModelConfig`, `PoseLandmarkProvider` interfész, `defaultPoseCadenceEveryNthFrame = 6`, `CadenceLimitedPoseLandmarkProvider` wrapper (minden N. hívás megy le a delegálthoz; `everyNthFrame` setter azonnal érvényes), `createPoseLandmarkProvider(poseTrackingEnabled:…)` plain factory — kikapcsolt flagnél `null`, a delegált meg sem épül (§0.0 R7). `VisionImage`/`VisionDeviceTier` IMPORTÁLVA a `hand_landmark_provider.dart`-ból (§0.0 R5) |
+| `lib/features/vision/data/landmarks/native_pose_landmark_provider.dart` | ÚJ | Fail-closed production adapter a `NativeHandLandmarkProvider` alakját követve: piszkos manifest / hiányzó bejegyzés / hand-séma a pose bejegyzésen / `status = deferred` → `AppResult.failure(mlModelLoad)`; `infer` init nélkül `mlInference` failure |
+| `lib/features/vision/data/landmarks/recorded_pose_landmark_provider.dart` | ÚJ | CI-fixture adapter. A nyers payload SZÁNDÉKOSAN tartalmaz 7 arc-pontot (`recordedFaceLandmarkNames`), és a `mapRawPoseLandmarks`-on megy át — így a privacy-szűrő a mérce, nem egy külön teszt-ág. Fixture-ök: `fixtureUpperBody({offsetY})`, `fixtureFaceOnly`, `fixtureNoPose`, `fixtureFailure` |
+| `lib/features/vision/public.dart` | meglévő | additív exportok (5 pose-fájl + `poseLandmarksOutputSchema`, `visionModelOutputSchemas`) |
+| `lib/core/ml/vision_model_manifest.dart` | meglévő | §0.0 R3 / ADR 0186 Döntés 2: az `outputSchema != handLandmarksOutputSchema` egysoros ellenőrzés helyett `visionModelOutputSchemas` (`model_id → elvárt output_schema`) regisztráció; regisztrálatlan `model_id` elutasítva. A `hand_landmarker` út és a checksum/licenc/asset-ágak érintetlenek |
+| `ml/make_manifest.py` | meglévő | `_VISION_MODEL_SPECS` második, additív tuple (`pose_landmarker`, `deferred`, placeholder sha256, saját `strumsight.pose_landmarks.v1` séma, `docs/eval/vision/pose_landmarker.md`) |
+| `assets/ml/model_manifest.json` | meglévő | a GENERÁTORRAL újraírva (`python3 ml/make_manifest.py` → „wrote … 4 models, 2 vision models"); a diff tisztán additív: csak a pose bejegyzés 19 sora, a hand bejegyzés és a 4 audio modell bitre változatlan |
+| `test/features/vision/data/pose_privacy_audit_test.dart` | ÚJ | a kör kulcsbizonyítéka (5 teszt) |
+| `test/features/vision/data/pose_landmark_provider_test.dart` | ÚJ | mapping / cadence / kikapcsolás / fail-closed (16 teszt) |
+| `test/features/vision/domain/posture_baseline_test.dart` | ÚJ | 3×3 baseline-mátrix + reset/interrupt + drift (19 teszt) |
+| `test/tooling/ml_asset_manifest_test.dart` | meglévő | `hasLength(1)`→`hasLength(2)` + per-bejegyzés séma-ellenőrzés; három ÚJ cella (hand+pose együtt tiszta; pose örökölt hand-séma → piros; regisztrálatlan `model_id` → piros). A hat meglévő hand-mutáció-cella szövegében egyetlen karakter sem változott |
+
+### 10.2 Acceptance — hol méri melyik teszt
+
+| §6 pont | Mérő teszt |
+|---|---|
+| Mapping-teszt | `pose_landmark_provider_test.dart` → „every retained ID is queryable and face points are dropped"; `pose_privacy_audit_test.dart` → „PoseLandmarkId enum contains exactly the 9 retained points", „the raw-name allow-list maps onto retained IDs only" |
+| Privacy-audit teszt | `pose_privacy_audit_test.dart` → „audit map key set matches the pinned snapshot" (pinnelt top-level + per-pont kulcsok) és „face landmarks … never reach the domain object, its serialized form, or its log form" (tiltott alszavak: eye/nose/mouth/ear/face/lip a JSON-ban ÉS a `toString()`-ben; a teszt külön ellenőrzi, hogy a fixture tényleg adott arc-pontot, tehát nem üresen zöld) |
+| Valódi-sértés próba | Elvégezve — ld. §10.4 |
+| Baseline-mátrix | `posture_baseline_test.dart` → 9 generált cella (quality 0.6/0.7/0.8 × duration 2s/3s/4s), baseline csak a 4 „rajta vagy fölötte" cellában; a többiben `baseline == null` ÉS `observe(...).state == notObservable` |
+| Cadence-teszt | `pose_landmark_provider_test.dart` → „12 frames at 1:6 delegate exactly 2", „12 frames at 1:3 delegate exactly 4", „changing the ratio takes effect on the very next call" (a `before + 1` assert a MÉRŐ állítás az „azonnal érvényesül"-re), „skipped frames return the last accepted pose" |
+| Kikapcsolás-teszt | `pose_landmark_provider_test.dart` → „disabled flag → no pose provider is instantiated at all" (a `built` számláló 0 marad, tehát a delegált sem épül fel), „the disabled pose gate leaves the hand pipeline untouched" |
+| Manifest-teszt | `ml_asset_manifest_test.dart` → „shipping manifest vision_models entries are well-formed" (2 bejegyzés, mindkettő `deferred`, saját sémával, a két séma KÜLÖNBÖZŐ) + a három új mutáció-cella |
+
+### 10.3 Futtatott parancsok, tényleges kimenettel
+
+```
+$ python3 ml/make_manifest.py
+wrote assets/ml/model_manifest.json (4 models, 2 vision models)
+
+$ tools/round-gate.sh test/features/vision test/tooling
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD
+    → [3] test test/features/vision: ZÖLD
+    → [4] test test/tooling: ZÖLD
+    → [5] architecture: ZÖLD
+    → [6] secrets: ZÖLD
+    → [7] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+A gate a brief §7 szerinti alakban futott — nincs `&&` lánc, nincs `| tail`,
+nincs `| head`; a fenti sorok a csonkítatlan gate-kimenet összegző sorai.
+
+### 10.4 Valódi-sértés próba (§6 harmadik pont)
+
+Ideiglenesen `'nose': PoseLandmarkId.neckReference` bejegyzést tettem a
+`poseLandmarkIdByRawName` allow-listára (azaz egy arc-pont átjut a mappingen),
+majd:
+
+```
+$ ~/flutter/bin/flutter test test/features/vision/data/pose_privacy_audit_test.dart
+00:00 +3 -2: Some tests failed.
+Failing tests:
+  …pose_privacy_audit_test.dart: a face-only payload yields notObservable, not a zero-filled body
+  …pose_privacy_audit_test.dart: the raw-name allow-list maps onto retained IDs only
+```
+
+Két független cella váltott pirosra (az allow-lista alakja és a viselkedés is),
+majd `git checkout lib/features/vision/domain/landmarks/pose_landmarks.dart`
+visszaállítás — a fán a próbából semmi nem maradt (`git status` tiszta a fájlra).
+
+### 10.5 Eltérések, döntések és okuk
+
+- **A cadence-arány szemantikája:** „minden N. frame" (fázisszámláló), a
+  0-indexű frame-mel kezdve — 12 frame × N=6 → pontosan 2 delegált hívás. Az
+  `everyNthFrame` setter a fázist NULLÁZZA, ezért az új arány már a következő
+  hívásnál érvényes (a §6.1 „csak újraindítás után hat" hibás implementációt
+  pontosan ez a cella fogja meg).
+- **Kihagyott frame → az utolsó elfogadott pose**, nem failure és nem
+  `notObservable` — a `MonotonicHandLandmarkProvider` mintája (az is az utolsó
+  elfogadott eredményt adja vissza eldobott híváskor). Ha még nincs eredmény,
+  a kihagyott frame `notObservable`, a saját timestampjével — sosem
+  nullákkal töltött álpóz.
+- **A baseline-kapu KÉT quality-feltétel:** a kategorikus
+  `VisionMetricState.good` (R09) ÉS egy numerikus `minimumQualityScore`. A
+  mátrix „küszöb alatt / rajta / fölött" tengelye a numerikus küszöbön mérhető
+  (a kategorikus enumnak nincs „rajta" pontja); a kategorikus ág külön két
+  cellát kapott (`needsImprovement`, `notObservable`).
+- **A drift normalizálása a baseline vállszélességével** történik, hogy a
+  mérték kamera-távolságtól független legyen; ha nincs vállpár a baseline-ban,
+  a skála 1.0 (nyers normalizált-frame egység). Ez NYERS mérték — küszöb,
+  ítélet, cue nincs benne (ADR 0186 Döntés 5, E05-R20 határa).
+- **A `NativePoseLandmarkProvider` a `deferred` ág ELŐTT ellenőrzi az
+  `output_schema`-t** is: így az aktiváló körben sem tud egy hand-sémájú
+  bejegyzés pose-providerként betöltődni.
+
+### 10.6 Nem futtatott ellenőrzések és okuk
+
+- **Teljes `flutter test` suite / property gate / APK:** ADR 0053 szerint
+  CI-ban fut, az orchestrátor indítja (a brief §7 kifejezetten tiltja a
+  `gh` hívást az implementer oldalán).
+- **Valós eszközös pose-latency és thermal mérés:** a brief §7 szerint a
+  device-mátrix PENDING sora; ebben a körben nincs futtatható pose-modell
+  (deferred asset), tehát nem is mérhető.
+- **Backend sáv:** a kör nem ért a `backend/`-hez, a gate backend-sávja ezért
+  helyesen nem futott.
+
 
 ## 11. Review — a független reviewer tölti ki
 
