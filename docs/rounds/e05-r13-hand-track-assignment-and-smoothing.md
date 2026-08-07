@@ -46,7 +46,7 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PLANNING.** Nincs előre kiosztott ADR, és ez a kör nem is hoz létre újat
-(megerősítve, nem hiba). Hét mért megerősítés (a §1 két mérési szabálya
+(megerősítve, nem hiba). Nyolc mért megerősítés (a §1 két mérési szabálya
 lefutott — nincs a kódból hiányzó hivatkozás, tehát nincs tartalmi
 brief-revízió, csak státuszváltás):
 
@@ -90,6 +90,25 @@ brief-revízió, csak státuszváltás):
    nem egy meglévő reducer/állapotgép előírt cél-állapotára — a §1 1. mérési
    szabálya erre a körre szintén nem alkalmazható (nincs mit a kódban
    ellenőrizni, mert a kód még nem létezik).
+8. **A fretting/picking↔physical-hand formula ERRE a körre pontosan
+   levezethető a meglévő kódból, guitar geometry NÉLKÜL.**
+   `VisionSetupProfile.recommendedFor` (`lib/features/vision/domain/
+   vision_setup_profile.dart:24-25`) rögzíti: `leftHanded == false` (jobbkezes
+   gitáros) esetén a fretting-kéz a **bal** fizikai kéz, `leftHanded == true`
+   esetén a **jobb** fizikai kéz (a `leftHandFocus` profil neve = "a
+   fretting-kezet keretezd, ami a bal kéz jobbkezes gitárosnál" —
+   `recommendedFor(leftHanded: false) == leftHandFocus`). A §5 pont 1 szövege
+   a végleges (jövőbeli, R15 utáni) formulát írja le, ami gitárgeometriát IS
+   bevon — de mivel a gitárkoordináta ebben a körben TILOS zóna, a
+   `HandTrackAssigner` ebben a körben **kizárólag** a `leftHanded` bemenetet
+   használja:
+   `frettingHand = leftHanded ? Handedness.right : Handedness.left`,
+   `pickingHand = leftHanded ? Handedness.left : Handedness.right`. Ez NEM
+   hardcode a tiltott "bal kéz = fretting" értelemben (a §5 pont 1 azt a
+   konstans, `leftHanded`-től független leképezést tiltja) — ez a
+   **konfigurálható, mért, egyetlen ma elérhető bemenettől függő** formula, és
+   a §10-nek rögzítenie kell, hogy a gitárgeometria-bemenet hiánya miatt a
+   formula ma erre a két esetre szűkül.
 
 **Egyéb pre-flight ellenőrzés:** brief-lint nulla lelet
 (`.pipeline/brief-lint-E05-R13.md`); nincs inflight párhuzamos kör
