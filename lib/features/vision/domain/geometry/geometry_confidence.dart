@@ -63,16 +63,32 @@ const double trackingConfidenceThreshold = 0.5;
 /// Immutable value type. Construction validates inputs so a corrupt
 /// tracker can never feed the loss machine a NaN/Infinity drift (brief
 /// §5.2 silent-garbage prohibition, `guitar_landmark_mapper` precedent).
+///
+/// **Why a `throw` and not an `assert`** (E05-R16 fix-round F2 MINOR) —
+/// Dart `assert` only fires in debug/test builds; release builds
+/// strip them entirely. The `GeometryConfidence` contract is a
+/// release-load-bearing one (a NaN drift would make
+/// `drift > lostDriftBound` evaluate to `false`, leaving the machine
+/// in `tracking` with `feedbackSuppressed=false` over garbage
+/// geometry). We throw `ArgumentError` unconditionally so the
+/// validation runs in every build mode — mirroring the explicit
+/// `if (!(x.isFinite && …)) return null` pattern already in
+/// `guitar_landmark_mapper.dart`.
 final class GeometryConfidence {
-  GeometryConfidence({required this.confidence, required this.drift})
-    : assert(
-        confidence.isFinite && confidence >= 0 && confidence <= 1,
-        'GeometryConfidence.confidence must be finite and in [0, 1].',
-      ),
-      assert(
-        drift.isFinite && drift >= 0,
-        'GeometryConfidence.drift must be finite and >= 0.',
+  GeometryConfidence({required this.confidence, required this.drift}) {
+    if (!(confidence.isFinite && confidence >= 0 && confidence <= 1)) {
+      throw ArgumentError(
+        'GeometryConfidence.confidence must be finite and in [0, 1], '
+        'got confidence=$confidence.',
       );
+    }
+    if (!(drift.isFinite && drift >= 0)) {
+      throw ArgumentError(
+        'GeometryConfidence.drift must be finite and >= 0, '
+        'got drift=$drift.',
+      );
+    }
+  }
 
   /// Tracker-side reliability in `[0, 1]`. Reduced by the loss machine
   /// across frames; never increased (manual anchor is the ground truth,

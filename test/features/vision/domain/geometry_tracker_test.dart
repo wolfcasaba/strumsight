@@ -1,11 +1,13 @@
 // E05-R16 — GeometryTracker contract + EdgeGeometryTracker adapter.
 //
 // Two layers of assertions:
-//   1. The contract: every implementation must produce a drift equal to
-//      the per-frame translation it observes, and refuse to produce
-//      any observation whose drift exceeds `lostDriftBound` (the
-//      brief §5.1 first line of the "manual anchor nem írható felül"
-//      guard).
+//   1. The contract: every implementation produces a drift equal to
+//      the per-frame translation it observes. The tracker does NOT
+//      refuse large drifts (E05-R16 fix-round F1) — `null` is reserved
+//      for the true "no evidence" case. The drift-bound classification
+//      is owned by `CalibrationLossMachine`, covered by the
+//      integration test in
+//      `calibration_loss_machine_integration_test.dart`.
 //   2. The adapter: `EdgeGeometryTracker` is the only concrete
 //      implementation in this round; it pairs each detected feature
 //      with the nearest manual anchor and reports the median shift.
@@ -13,8 +15,7 @@
 // Tests use the drift-matrix fixture values from
 // `test/fixtures/vision/geometry/geometry_scenarios.dart` — those
 // values were computed in `python3 -c` and pinned verbatim in the
-// brief §10 handoff. Retuning them would invalidate the falsification
-// probe at the bottom of this file.
+// brief §10 handoff.
 library;
 
 import 'dart:math' as math;
@@ -22,7 +23,6 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 import 'package:strumsight/features/vision/data/guitar/edge_geometry_tracker.dart';
-import 'package:strumsight/features/vision/domain/calibration/guitar_calibration.dart';
 import 'package:strumsight/features/vision/domain/geometry/geometry_confidence.dart';
 import 'package:strumsight/features/vision/domain/geometry/geometry_tracker.dart';
 
@@ -62,17 +62,20 @@ void main() {
     });
 
     test('rejects non-finite inputs (silent-garbage prohibition)', () {
+      // Validates in EVERY build mode (release too) via `ArgumentError`,
+      // not the debug-only `AssertionError` — see geometry_confidence.dart
+      // doc-comment (E05-R16 fix-round F2 MINOR).
       expect(
         () => GeometryConfidence(confidence: double.nan, drift: 0.01),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<ArgumentError>()),
       );
       expect(
         () => GeometryConfidence(confidence: 0.5, drift: double.infinity),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<ArgumentError>()),
       );
       expect(
         () => GeometryConfidence(confidence: 1.5, drift: 0.01),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<ArgumentError>()),
       );
     });
   });
@@ -96,30 +99,55 @@ void main() {
       expect(observation.confidence.isLost, isFalse);
     });
 
-    test('cell 2 — drift at the bound → tracker refuses (>= bound)', () {
-      // The tracker refuses at the drift-bound (brief §5.1 "azon túl a
-      // geometria lost"). The state-machine matrix separately classifies
-      // exactly-on-the-bound as `degraded`, but the tracker never
-      // delivers such an observation — it refuses first.
-      final observation = tracker.observe(
-        anchor: anchor,
-        observation: shiftedFeatureObservation(0.10, 0.0),
-      );
-      expect(observation, isNull);
-    });
+    test(
+      'cell 2 — drift at the bound → tracker passes through; machine classifies as degraded',
+      () {
+        // (E05-R16 fix-round F1): the tracker no longer swallows large
+        // drifts into `null` — that path left the machine's own
+        // forward-escalation rule (`drift > lostDriftBound` → `lost`)
+        // dead in the real integration. The tracker now passes the
+        // observation through with the actual drift value; the
+        // downstream `CalibrationLossMachine` classifies drift == 0.10
+        // as `degraded` (brief §6 matrix "rajta" cell).
+        final observation = tracker.observe(
+          anchor: anchor,
+          observation: shiftedFeatureObservation(0.10, 0.0),
+        );
+        expect(
+          observation,
+          isNotNull,
+          reason: 'tracker must pass the observation through to the machine',
+        );
+        expect(
+          observation!.confidence.drift,
+          closeTo(0.10, 1e-9),
+          reason: 'actual computed drift, not swallowed',
+        );
+      },
+    );
 
-    test('cell 3 — drift strictly above bound → tracker refuses (null)', () {
-      // drift = 0.11 > lostDriftBound → tracker refuses
-      final observation = tracker.observe(
-        anchor: anchor,
-        observation: shiftedFeatureObservation(0.11, 0.0),
-      );
-      expect(
-        observation,
-        isNull,
-        reason: 'tracker must refuse beyond the bound',
-      );
-    });
+    test(
+      'cell 3 — drift strictly above bound → tracker passes through; machine classifies as lost',
+      () {
+        // (E05-R16 fix-round F1): drift = 0.11 > lostDriftBound. The
+        // tracker passes it through; `CalibrationLossMachine._nextState`
+        // classifies it as `lost` (forward-escalation priority in EVERY
+        // branch) in a SINGLE frame. The real integration is asserted
+        // by `calibration_loss_machine_integration_test.dart`.
+        final observation = tracker.observe(
+          anchor: anchor,
+          observation: shiftedFeatureObservation(0.11, 0.0),
+        );
+        expect(
+          observation,
+          isNotNull,
+          reason:
+              'tracker must pass the observation through to the machine '
+              '— the machine owns the drift-bound classification',
+        );
+        expect(observation!.confidence.drift, closeTo(0.11, 1e-9));
+      },
+    );
   });
 
   group('EdgeGeometryTracker — proposed calibration shift', () {
@@ -181,57 +209,11 @@ void main() {
     });
   });
 
-  group('EdgeGeometryTracker — drift-bound guard (valódi-sértés próba)', () {
-    // The brief §6 utolsó előtti cella: "a drift-bound eltávolítása → a
-    // (c) szcenárió PIROS → visszaállítás". We simulate the falsification
-    // by constructing a `LostDriftGuardDisabledTracker` that bypasses
-    // the drift-bound check — and confirm that with the guard disabled
-    // the tracker WOULD have let the (c) cumulative-drift scenario
-    // produce unbounded observations, so the guard is the load-bearing
-    // safety.
-    test('without the drift-bound guard, large drifts would propagate', () {
-      final tracker = _NoGuardEdgeGeometryTracker();
-      final anchor = referenceManualAnchor();
-
-      final hugeShift = tracker.observe(
-        anchor: anchor,
-        observation: shiftedFeatureObservation(0.50, 0.50),
-      );
-      expect(
-        hugeShift,
-        isNotNull,
-        reason: 'no-guard tracker accepts any drift',
-      );
-      expect(
-        hugeShift!.confidence.drift,
-        closeTo(math.sqrt(0.5 * 0.5 * 2), 1e-9),
-      );
-    });
-  });
-}
-
-/// Test-only tracker that bypasses the drift-bound guard. Exists
-/// ONLY for the falsification probe — proves that the real
-/// `EdgeGeometryTracker`'s guard is load-bearing, not vacuous.
-class _NoGuardEdgeGeometryTracker implements GeometryTracker {
-  @override
-  String get adapterId => 'no_guard_test_tracker';
-
-  @override
-  GeometryObservation? observe({
-    required GuitarCalibration anchor,
-    required FrameObservation observation,
-  }) {
-    if (observation.detectedFeatures.isEmpty) return null;
-    final f = observation.detectedFeatures.first;
-    // Nearest anchor is the manual nut (0.20, 0.50):
-    final dx = f.x - anchor.nutAnchor.x;
-    final dy = f.y - anchor.nutAnchor.y;
-    final drift = math.sqrt(dx * dx + dy * dy);
-    // Note: NO `if (drift > lostDriftBound) return null` here.
-    return GeometryObservation(
-      proposed: anchor,
-      confidence: GeometryConfidence(confidence: 0.5, drift: drift),
-    );
-  }
+  // The previous "drift-bound guard falsification probe" (with the
+  // `_NoGuardEdgeGeometryTracker` parallel implementation) became
+  // tautological after the F1 fix-round: the real tracker no longer
+  // has a guard, by design — the load-bearing safety is the
+  // `CalibrationLossMachine`'s forward-escalation rule, which is
+  // now covered end-to-end by
+  // `test/features/vision/application/calibration_loss_machine_integration_test.dart`.
 }

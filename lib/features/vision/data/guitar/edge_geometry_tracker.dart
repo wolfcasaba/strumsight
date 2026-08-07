@@ -13,13 +13,19 @@
 ///      the proposed calibration;
 ///   4. reporting the drift = magnitude of the translation.
 ///
-/// **Drift-bound enforcement.** The adapter REFUSES to produce an
-/// observation whose drift exceeds [lostDriftBound] — instead it returns
-/// `null`. This is the first line of the brief §5.1 "tracker nem
-/// írhatja felül korlátlanul a manual anchorokat" guard; the second
-/// line lives in [CalibrationLossMachine] (state-side hysteresis).
-/// Together they make silent drift accumulation impossible: the adapter
-/// says "I refuse", the machine says "I will not silently degrade".
+/// **Drift-bound delegation.** The adapter DELIBERATELY does NOT
+/// refuse observations whose drift exceeds [lostDriftBound]. The `null`
+/// return is reserved for the true "no evidence" case (no detected
+/// features / no nearest anchor). Large-drift observations are passed
+/// through with their actual drift value, so
+/// [CalibrationLossMachine]'s own forward-escalation rule
+/// (`drift > lostDriftBound` → `lost`, EVERY branch, brief §5.1) can
+/// fire in a SINGLE frame. If the tracker swallowed large drifts into
+/// `null`, the machine would only see them after
+/// [CalibrationLossMachine.noObservationLostThreshold] consecutive
+/// `null` frames — a slow path meant for "no features detected
+/// (camera glitch)", NOT for "geometry is certainly bad" (E05-R16
+/// fix-round F1 BLOCKER).
 ///
 /// **Confidence model.** Confidence scales linearly with how many
 /// features the detector produced vs. how many it should have produced
@@ -85,14 +91,10 @@ final class EdgeGeometryTracker implements GeometryTracker {
     final shift = _medianShift(translations);
     final drift = math.sqrt(shift.$1 * shift.$1 + shift.$2 * shift.$2);
 
-    // Drift-bound guard: refuse to produce an observation whose drift
-    // meets or exceeds `lostDriftBound` (brief §5.1 — "azon túl a
-    // geometria lost"). Using `>=` makes the test fixture robust to
-    // floating-point precision (e.g. `sqrt(0.10²) ≈ 0.1000000001`),
-    // and the state machine's "exactly on the bound" matrix cell
-    // classifies the same drift as `degraded`, which is consistent —
-    // the tracker refuses at the bound, the machine classifies it.
-    if (drift >= lostDriftBound) return null;
+    // No drift-bound guard here — see file-level doc-comment. Large
+    // drifts are passed through; the CalibrationLossMachine's own
+    // `drift > lostDriftBound → lost` forward-escalation rule
+    // classifies them in a single frame.
 
     // Confidence: feature-count ratio, clamped to [0, 1].
     final ratio = features.length / expectedFeatureCount;

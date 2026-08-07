@@ -235,14 +235,15 @@ feedback-tiltás lazítása helyett dokumentált brief-revízió.
 
 | Fájl | Állapot | Összefoglaló |
 |---|---|---|
-| `lib/features/vision/domain/geometry/geometry_confidence.dart` | ÚJ (113 sor) | `GeometryConfidence` immutable value class (`confidence` ∈ [0,1], `drift` ≥ 0); validátor-assert a silent-garbage ellen. Fájl-tetején 3 drift-bound + 1 confidence-küszöb `const` (`lostDriftBound=0.10`, `degradedDriftBound=0.05`, `recoveryDriftBound=0.04`, `trackingConfidenceThreshold=0.5`). `isLost` / `isTracked` predikátumok. |
+| `lib/features/vision/domain/geometry/geometry_confidence.dart` | ÚJ (113 sor → fix-round) | `GeometryConfidence` immutable value class (`confidence` ∈ [0,1], `drift` ≥ 0). **Fix-round F2**: a konstruktor `assert`-jeit `throw ArgumentError`-re cseréltük, hogy release buildben IS fusson (Dart `assert` debug-only — a security-reviewer reprodukálta a NaN-drift garanciavesztést `--no-enable-asserts` alatt). Fájl-tetején 3 drift-bound + 1 confidence-küszöb `const` (`lostDriftBound=0.10`, `degradedDriftBound=0.05`, `recoveryDriftBound=0.04`, `trackingConfidenceThreshold=0.5`). `isLost` / `isTracked` predikátumok. |
 | `lib/features/vision/domain/geometry/geometry_tracker.dart` | ÚJ (107 sor) | Domain contract: `GeometryTracker` abstract interface + `FrameObservation` (immutable, `List<NormalizedPoint>`, üres = „no features") + `GeometryObservation` (proposed calibration + GeometryConfidence). A domain csak ezt a contractot ismeri — R17 automatikus detektor flag mögé ide illeszkedne. |
-| `lib/features/vision/application/calibration_loss_machine.dart` | ÚJ (~280 sor) | `CalibrationLossState { tracking, degraded, lost }` + `GeometrySourceKind { manual, tracked }` + `CalibrationLossSummary` (machine saját summary-mezői). Pure state machine, O(1) update. Forward-escalation prioritás MINDEN branch-ban; recovery mindkét irányban `recoveryDriftBound` (szigorúbb, mint a forward). `noObservationLostThreshold=5` consecutive null → `lost`. `@visibleForTesting` annotációval `stateTransition` pure-function ki exportálva. |
-| `lib/features/vision/data/guitar/edge_geometry_tracker.dart` | ÚJ (~140 sor) | Lightweight edge/feature adapter: nearest-anchor pairing (nut + bridge + polygon) → median per-pair shift → proposed calibration + drift. Drift-bound guard `>= lostDriftBound` (FP-biztos, lásd 10.5 eltérések). Confidence = `features.length / expectedFeatureCount` (alapértelmezett 4). NEM ML modell, NEM model-asset. |
+| `lib/features/vision/application/calibration_loss_machine.dart` | ÚJ (~280 sor) | `CalibrationLossState { tracking, degraded, lost }` + `GeometrySourceKind { manual, tracked }` + `CalibrationLossSummary` (machine saját summary-mezői). Pure state machine, O(1) update. Forward-escalation prioritás MINDEN branch-ban; recovery mindkét irányban `recoveryDriftBound` (szigorúbb, mint a forward). `noObservationLostThreshold=5` consecutive null → `lost`. `@visibleForTesting` annotációval `stateTransition` pure-function ki exportálva. **Fix-round F1**: most már valóban megkapja a nagy drift-értékeket a trackertől — a saját forward-escalation logikája ÉLŐ (a review F1 BLOCKER javítva). |
+| `lib/features/vision/data/guitar/edge_geometry_tracker.dart` | ÚJ (~140 sor → fix-round) | Lightweight edge/feature adapter: nearest-anchor pairing (nut + bridge + polygon) → median per-pair shift → proposed calibration + drift. **Fix-round F1**: a `drift >= lostDriftBound → null` ágat TÖRÖLTÜK (ez nyelte el a nagy driftet `null`-lá, halott kódot hagyva a machine forward-escalation logikájából — review F1 BLOCKER). Mostantól MINDEN drift-értéket átad a tényleges `GeometryObservation`-ben; a `null` kizárólag a valódi „nincs evidencia" eset (üres `detectedFeatures` / üres `translations`). Confidence = `features.length / expectedFeatureCount` (alapértelmezett 4). NEM ML modell, NEM model-asset. |
 | `lib/features/vision/public.dart` | meglévő (additív) | 4 új `export` sor: `geometry_confidence`, `geometry_tracker`, `calibration_loss_machine`, `edge_geometry_tracker`. |
 | `test/fixtures/vision/geometry/geometry_scenarios.dart` | ÚJ (~115 sor) | Shared fixture-k: `referenceManualAnchor()`, `shiftedFeatureObservation(dx, dy)`, a drift-mátrix 3 cellájának `const` értékei (`0.04`, `0.10`, `0.11`), a 17-elemű hiszterézis-oszcilláló sequence, és a 3 szcenárió (a)/(b)/(c) paraméterei. |
-| `test/features/vision/domain/geometry_tracker_test.dart` | ÚJ (~180 sor) | `GeometryConfidence` thresholding + `EdgeGeometryTracker` drift-mátrix 3 cella + proposed-calibration shift + drift-magnitude + confidence feature-count + falsification probe (`_NoGuardEdgeGeometryTracker`). |
-| `test/features/vision/application/calibration_loss_machine_test.dart` | ÚJ (~360 sor) | Drift-mátrix 3 cella + hiszterézis (3 teszt) + 3 szcenárió-fixture + feedback-tiltás (4 teszt) + valódi-sértés próba + summary (2 teszt) + pure-function transition table. |
+| `test/features/vision/domain/geometry_tracker_test.dart` | ÚJ (~180 sor → fix-round) | `GeometryConfidence` thresholding + `EdgeGeometryTracker` drift-mátrix 3 cella + proposed-calibration shift + drift-magnitude + confidence feature-count. **Fix-round F1**: a cell 2/cell 3 tesztek most a tracker PASS-THROUGH viselkedését ellenőrzik (`isNotNull` + tényleges drift), nem a korábbi `isNull`-t. **Fix-round F2**: a `rejects non-finite inputs` teszt `throwsA(isA<AssertionError>())` → `throwsA(isA<ArgumentError>())`. A korábbi `_NoGuardEdgeGeometryTracker` falsification probe TÖRÖLVE (tautologikussá vált, miután a tracker valódi guardja megszűnt — a load-bearing safety most a gépen van, az új integrációs teszt lefedi). |
+| `test/features/vision/application/calibration_loss_machine_test.dart` | ÚJ (~360 sor) | Drift-mátrix 3 cella + hiszterézis (3 teszt) + 3 szcenárió-fixture + feedback-tiltás (4 teszt) + valódi-sértés próba + summary (2 teszt) + pure-function transition table. VÁLTOZATLAN — a bypass-helperes unit-tesztek továbbra is a machine önálló viselkedését mérik (az F1 fix a tracker→machine INTEGRÁCIÓS réteget védi, nem a machine izolált logikáját). |
+| `test/features/vision/application/calibration_loss_machine_integration_test.dart` | **ÚJ (fix-round F1)** | A review F1 BLOCKER egyetlen legfontosabb javítása: ez a teszt a `EdgeGeometryTracker.observe()` kimenetét KÖZVETLENÜL a `CalibrationLossMachine.update()`-ba vezeti — NINCS bypass-helper, NINCS `observationFor()` közvetlen `GeometryObservation` építés. 4 teszt: scenario (b) 0.20 shift → LOST EGY frame alatt (`feedbackSuppressed=true`, `recalibrateRequested=true`); scenario (c) 20-lépéses kumulatív sodródás → firstLostStep ∈ {10, 11} (FP-tolerancia, ld. 10.5); scenario (a) 0.02 shift → tracking, manual source; valamint a `null` ág további tiszteletben tartása (5 egymás követő üres features → lost). Ez a regression-net: ha bárki visszahozza a tracker oldali drift-bound refusal-t, vagy eltöri a machine forward-escalation szabályát, ezek a tesztek azonnal pirosra váltanak. |
 | `docs/rounds/e05-r16-geometry-tracking-and-calibration-loss.md` | meglévő | Ez a §10 handoff szakasz. |
 
 ### 10.2 Drift-mátrix `python3 -c` parancsok és TÉNYLEGES kimenet
@@ -330,6 +331,20 @@ $ tools/round-gate.sh test/features/vision
 ═══ [5] secrets   zöld
 ═══ [6] l10n   zöld
 MINDEN GATE ZÖLD.
+
+# 3b. Fix-round re-gate (a review F1+F2 javítása után, 2026-08-07)
+$ tools/round-gate.sh test/features/vision
+═══ [1] format    zöld
+═══ [2] analyze   zöld
+═══ [3] test test/features/vision   zöld (199 teszt; az új
+     `calibration_loss_machine_integration_test.dart` 4 esete:
+     scenario (b) 0.20 shift → LOST egy frame, scenario (c) kumulatív
+     firstLostStep ∈ {10, 11}, scenario (a) tracking+manual source,
+     null-still-respected streak → lost)
+═══ [4] architecture   zöld
+═══ [5] secrets   zöld
+═══ [6] l10n   zöld
+MINDEN GATE ZÖLD.
 ```
 
 ### 10.5 Eltérések és okuk
@@ -359,6 +374,46 @@ MINDEN GATE ZÖLD.
    ellenőrizzük a forward-escalációt (`drift > lostDriftBound → lost`),
    és CSAK a recovery path-ok maradnak branch-specifikusak.
 
+5. **Fix-round F1 — tracker eltávolítja a drift-bound null-refusalt.**
+   Az eredeti `EdgeGeometryTracker.observe()` a `drift >= lostDriftBound`
+   esetben `null`-t adott vissza — ez egy „first line of defence" guard
+   volt a manual anchorok korlátlan felülírása ellen. A review F1
+   BLOCKER kimutatta: ez a guard HALOTT KÓDOT csinált a machine
+   forward-escalation logikájából, mert a `null` a gép számára
+   `noObservationLostThreshold` (5) egymás követő frame-et igényelt a
+   `lost`-hoz (lassú, „nincs detektált feature" útvonal) — a brief §1
+   „elmozdulás esetén biztonságos érvénytelenítés EGYETLEN frame
+   alatt" célja nem teljesült. A javítás: a tracker MINDEN drift-értéket
+   átenged, és CSAK a valódi „nincs evidencia" esetre (`features.isEmpty`
+   / `translations.isEmpty`) tartja fenn a `null`-t. A
+   forward-escalation logika most ÉLŐ a valódi integrációban.
+
+6. **Fix-round F2 — `GeometryConfidence` `assert` → `throw ArgumentError`.**
+   A konstruktor validátora `assert(...)` volt, ami release buildben
+   NEM fut (Dart nyelvi tény). A security-reviewer reprodukálta a
+   NaN-drift garanciavesztést `--no-enable-asserts` alatt:
+   `GeometryConfidence(drift: NaN)` csendben felépül, `isLost` `false`,
+   a gép `tracking`/`feedbackSuppressed=false` állapotot jelentene
+   garbage geometria fölött. Javítva: feltétel nélküli
+   `throw ArgumentError(...)` — a `guitar_landmark_mapper` filozófiáját
+   követve, minden build-módban fut.
+
+7. **Fix-round FP-eltérés a real tracker vs python3 referencia között.**
+   A scenario (c) kumulatív sodródás python3 referenciája
+   `firstLostStep=11`-et ad (`0.01*11=0.1100000000000001 > 0.10`).
+   A valódi `EdgeGeometryTracker` a driftet `sqrt(shift²)`-ként számolja
+   — IEEE 754-ben `0.10*0.10 = 0.010000000000000002`, melynek
+   `sqrt`-je `0.10000000000000002` (one ULP a `0.10` felett). A gép
+   strict-greater szabálya (`drift > lostDriftBound`) ezért a 10.
+   lépésnél már tüzel — a python3 referencia 11.-éhez képest egy
+   lépéssel korábban. A `calibration_loss_machine_integration_test.dart`
+   az elfogadott ±1 lépcsős FP-toleranciát alkalmazza
+   (`firstLostStep ∈ {10, 11}`, `firstDegradedStep ∈ {5, 6}`)
+   dokumentált okkal — a `geometry_scenarios.dart` fixture
+   `scenarioCumulativeDriftFirstLostStep = 11` python3-pinnelt
+   konstansként MARAD (másik teszt használja bypass-helperrel), az
+   integrációs teszt a valódi tracker-számítást méri.
+
 ### 10.6 Nem futtatott ellenőrzések és okuk
 
 - **CI teljes suite + property gate + release APK**: nem futtatjuk
@@ -379,11 +434,20 @@ MINDEN GATE ZÖLD.
 
 ### 10.7 Végrehajtási összegzés
 
-- **6 új production / test / fixture fájl** (4 production + 2 teszt +
-  1 fixture), 1 módosítás (`public.dart`).
+- **Eredeti kör (R16 első menet):** 6 új production / test / fixture
+  fájl (4 production + 2 teszt + 1 fixture), 1 módosítás (`public.dart`).
+  Gate 6/6 zöld, de review F1 BLOCKER-rel CHANGES REQUESTED.
+- **Fix-round:** 1 új integrációs teszt
+  (`calibration_loss_machine_integration_test.dart`), 3 production
+  fájl módosítás (`edge_geometry_tracker.dart` — null-refusal törlés;
+  `geometry_confidence.dart` — `assert` → `ArgumentError`;
+  `geometry_tracker_test.dart` — cell 2/cell 3 + `ArgumentError` + a
+  tautologikussá vált `_NoGuardEdgeGeometryTracker` törlése). Gate
+  6/6 zöld (199 teszt, ld. §10.4).
 - **Implementer-motor**: MiniMax M3 (per branch + brief).
-- **Státusz**: gate zöld (`tools/round-gate.sh test/features/vision`,
-  6/6 lépés); kész a független review-ra és a CI-dispatchre.
+- **Státusz**: javító kör kész — F1 BLOCKER és F2 MINOR lezárva,
+  valódi tracker→machine integráció mostantól regression-teszttel
+  védett; kész a CI-dispatchre (orchestrátor indítja).
 
 ## 11. Review — a független reviewer tölti ki
 
