@@ -148,7 +148,7 @@ E05-R09	docs/rounds/e05-r09-frame-quality-assessor.md	codex	nincs	done
 E05-R10	docs/rounds/e05-r10-calibration-domain-and-store.md	codex	nincs	done
 E05-R11	docs/rounds/e05-r11-manual-guitar-geometry-calibration-ui.md	minimax	nincs	done
 E05-R12	docs/rounds/e05-r12-hand-landmark-provider-and-model-manifest.md	codex	0168	done
-E05-R13	docs/rounds/e05-r13-hand-track-assignment-and-smoothing.md	codex	nincs	pending
+E05-R13	docs/rounds/e05-r13-hand-track-assignment-and-smoothing.md	codex	nincs	done
 E05-R14	docs/rounds/e05-r14-pose-provider-and-posture-baseline.md	codex	nincs	pending
 E05-R15	docs/rounds/e05-r15-guitar-coordinates-and-homography.md	codex	nincs	pending
 E05-R16	docs/rounds/e05-r16-geometry-tracking-and-calibration-loss.md	codex	nincs	pending
