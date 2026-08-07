@@ -3496,6 +3496,8 @@ APPROVED (1 MAJOR → fix: rg-shell→Dart fájlolvasás, L110).
 graph + készségbizonyíték-modell, pure determinisztikus reducer. Review APPROVED,
 coverage 98,68%. `public.dart` üres.
 
+</details>
+
 <details><summary>Korábbi kör: E04-R03 — Student/guitar profile, goals & consent (superseded snapshot)</summary>
 
 **E04-R03 — Student/guitar profile, goals & granular consent** (PR
