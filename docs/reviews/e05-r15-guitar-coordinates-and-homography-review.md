@@ -2,19 +2,23 @@
 
 Brief: `docs/rounds/e05-r15-guitar-coordinates-and-homography.md`
 Diff: `git diff bf3960a..13dc79b` (branch `minimax/e05-r15-guitar-coordinates-and-homography`)
-Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07
+Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07 (frissítve a dedikált
+security-review után, ugyanaznap)
 Verdikt: **CHANGES REQUIRED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 1 · NOTE: 2
+**BLOCKER: 1 · MAJOR: 2 · MINOR: 3 · NOTE: 4**
 
 Az implementer (MiniMax M3) jelzése `done`, „round-gate 8/8 ZÖLD" — ez a saját
 munkapéldányában futott, tehát önmagában nem bizonyíték (AGENTS.md §15.1).
 Egy teljesen friss `/tmp` klónban **függetlenül újrafuttatva a gate 8/8 ZÖLD
-maradt** (lásd lent) — ez a mérce valódi bizonyítéka. A két MAJOR lelet nem a
-gate-en bukik el, hanem tartalmi/lefedettségi hiány, amit a gate szerkezetileg
-nem tud elkapni — pontosan az a mintázat, amit ez a review-lépés keres.
+maradt** (lásd lent) — ez a mérce valódi bizonyítéka. Egyik nyitott lelet sem
+a gate-en bukik el — mind tartalmi/lefedettségi hiány, amit a gate
+szerkezetileg nem tud elkapni. A BLOCKER a dedikált security-review
+(risk=high, AGENTS.md §15.1) során került elő, és a saját, független
+próbámmal más véletlen-paraméterekkel is megerősítve — ez a legsúlyosabb
+lelet, súlyosabb, mint amit a funkcionális pass önmagában talált volna.
 
 ## Acceptance criteria (brief §6)
 
@@ -22,7 +26,7 @@ nem tud elkapni — pontosan az a mintázat, amit ez a review-lépés keres.
 |---|---|---|---|
 | 1 | Szintetikus perspektív fixture-mátrix, 4 nézőpont × 3 méret, python3-számolt | ⚠️ Részleges | `docs/rounds/…§10.1`: csak 2 a 4 névvel megnevezett nézőpont közül (`front`×3 méret, `oblique`×1 méret) — **`oldalról` és `felülről` teljesen hiányzik**. Ld. **F2**. |
 | 2 | Property teszt (`PROPERTY_SEED`): round-trip ≤1e-6, %-küszöb | ✅ | `test/property/homography_property_test.dart` — 500 trial, ≥99% ráta; futtatva: `PROPERTY_SEED=42`, zöld. |
-| 3 | Degenerált-mátrix cellák: kollineáris / nem konvex / nulla terület / kondíció alatt-rajta-fölött | ⚠️ Részleges | Kollineáris ✅ (`homography_test.dart:50`), nem konvex ✅ (`polygon2_test.dart:118`, chevron), nulla terület ✅ (`polygon2_test.dart:18`), kondíció alatt/fölött ✅ — de a „rajta" cella (`homography_test.dart:249`) egy cond≈122 esetet használ, ami NEM közel a tényleges 1e3 küszöbhöz. Ld. **F3**. |
+| 3 | Degenerált-mátrix cellák: kollineáris / nem konvex / nulla terület / kondíció alatt-rajta-fölött; „fölött hibát ad, nem eredményt" | ❌ Nem teljesül a szó szerinti garancia | Kollineáris ✅ (`homography_test.dart:50`), nem konvex ✅ (`polygon2_test.dart:118`, chevron), nulla terület ✅ (`polygon2_test.dart:18`) — DE a „fölött hibát ad" garancia **megsérül** azokra a mátrixokra, amik a küszöb ALATT mérnek, mégis szemetet adnak (a projektív sor vak folt miatt). Ld. **BLOCKER-1**. A „rajta" cella (`homography_test.dart:249`) emellett egy cond≈122 esetet használ, ami NEM közel a tényleges 1e3 küszöbhöz. Ld. **MINOR-1**. |
 | 4 | Confidence-propagáció: output ≤ input, rosszabb kondíciónál szigorúan kisebb | ✅ | `guitar_landmark_mapper_test.dart:156,180` — mindkét irány tesztelve, az utóbbi KÉT valódi (mild vs. skewed) kalibrációt hasonlít össze, nem szintetikus számot. |
 | 5 | NaN/Infinity guard, kimerítő assert | ✅ | `homography_test.dart:187` (200 random pont) + `homography_property_test.dart` (200 trial) + mapper `non-finite input → null` teszt. |
 | 6 | Valódi-sértés próba: kondíció-ellenőrzés kiiktatása → „fölött" cella PIROS → visszaállítás | ⚠️ Implementer nem dokumentálta (§10-ben nincs nyoma) — **a reviewer saját kézzel elvégezte** (lásd „Próbatesztek" lent): a kondíció-guard kiiktatásával PONTOSAN a „cell above threshold" teszt bukott (8/9 zöld maradt), minden más érintetlen. A kritérium TELJESÜL, a bizonyítékot ez a jelentés pótolja. |
@@ -74,7 +78,7 @@ mint mintázat, nem lelet — a mérce a végén tartotta magát.
    négyszögön (`(0.1,0.1),(0.9,0.3),(0.8,0.9),(0.2,0.7)`) egy belső pont
    viszont HELYESEN `true`-t adott — a hiba tehát geometria-függő, nem
    univerzális, ami azért veszélyesebb (alkalmi ellenőrzésen átcsúszhat).
-   Ld. **F1**.
+   Ld. **MAJOR-1**.
 2. **Kondíció-guard valódi-sértés próba.** `/tmp/mutate-e05-r15` klónban
    `lib/core/geometry/homography.dart:145` sorát `if (false && (...))`-ra
    módosítva (a guard tényleges kiiktatása), majd
@@ -83,10 +87,84 @@ mint mintázat, nem lelet — a mérce a végén tartotta magát.
    bukott (8 zöld, 1 piros), minden más teszt változatlanul zöld maradt. A
    guard tehát genuinely load-bearing, nem holt kód. Klón törölve a próba
    után.
+3. **A dedikált security-review (risk=high) MAJOR-1 leletének független
+   megerősítése, MÁS véletlen-paraméterekkel.** A `security-reviewer` ágens
+   198 222 véletlen `GuitarCalibration`-t vizsgálva talált olyan mappert,
+   ami alacsony (~3) kondíciószámot jelent, mégis 10⁷-es nagyságrendű u/v-t
+   ad egy képen-belüli ponton. Egy SAJÁT, tőle független próbában
+   (50 000 véletlen kalibráció, 11×11-es rács minden sikeresen épített
+   mapperen, seed=7, a szállított kódot közvetlenül importálva egy `/tmp`
+   klónban) **49 455 mapper épült sikeresen**; az alacsony/megbízhatónak
+   jelentett (`reportedCond ≤ 50`) mapperek rácspontjai közül **323 340
+   mintapont** adott `|uv| > 10` nagyságrendű kimenetet `> 0.5`
+   confidence-szel. Legrosszabb eset:
+   `reportedCond=2.89`, kamera-pont `(0.9, 1.0)` → `(u,v) =
+   (3 183 316, 2 649 428)`, `confidence=0.884`. Ld. **BLOCKER-1**.
 
 ## Megállapítások
 
-### F1 — MAJOR — `Polygon2.contains` hibás nem tengelyillesztett polygonokra
+### BLOCKER-1 — a kondíciószám-őr vak a projektív sorra: érvényes kalibrációk milliós nagyságrendű, magas-confidence-ű szemetet adnak
+
+- **Fájl:** `lib/core/geometry/homography.dart:379-398` (`_measureConditionNumber`),
+  `:166-172` (`apply`, a `safeW = w == 0 ? 1e-300 : w` szingularitás-elfedő
+  trükk); `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart:180-200`
+  (`mapPoint`), `:225-230` (`_conditionPenaltyFor`).
+- **Probléma:** `_measureConditionNumber` KIZÁRÓLAG a mátrix felső 2×2
+  lineáris blokkját méri (`h[0],h[1],h[3],h[4]`), a projektív sort
+  (`h[6..8]`) figyelmen kívül hagyva — a kódkomment szerint „the projective
+  row only affects points at infinity", ami TÉVES állítás: a projektív sor
+  határozza meg a `w = h6·x + h7·y + h8 = 0` „eltűnő egyenest", és ha ez az
+  egyenes átmegy a `[0,1]×[0,1]` kamera-kereten (ami a ténylegesen használt
+  tartomány), az arra közeli pontok kimenete minden határon túl nő —
+  FÜGGETLENÜL attól, hogy a 2×2 blokk milyen jól kondicionált. Az
+  `apply()`-ban lévő `safeW` trükk csak a PONTOSAN nulla `w`-t védi;
+  egy közel-nulla (de nemnulla) `w` egy nagy, de véges eredményt ad, ami
+  átmegy a `mapPoint` `isFinite` őrén.
+- **Hatás — közvetlen AGENTS.md §5 termékhatár-sértés** („Gyenge confidence
+  nem jelenhet meg biztos állításként"): **mindkét független próba** (a
+  security-reviewer ágens ÉS a reviewer saját, más paraméterekkel futtatott
+  keresése) talált teljesen ÉRVÉNYES, konstruálható `GuitarCalibration`-t
+  (nut/bridge/polygon mind `[0,1]²`-ben, nem degenerált, a mapper sikeresen
+  megépül), aminek a KONDÍCIÓSZÁMA alacsony/megbízhatónak tűnő (a reviewer
+  próbájában `2.89`, jóval a `1e3` küszöb alatt), miközben egy hétköznapi,
+  kereten-belüli landmark-pont (`(0.9, 1.0)`) `(u,v)=(3 183 316,
+  2 649 428)`-ra képeződik **`confidence=0.884`** mellett. Ez PONTOSAN a
+  brief §9 által „a kör legveszélyesebb hibájaként" megnevezett forgatókönyv
+  ténylegesen bekövetkezik, a round saját, egyetlen deklarált őre
+  (kondíciószám-küszöb) mellett is. A hiba jelenleg release-buildben is
+  elérhető, mert a `GuitarCalibration`/`NormalizedPoint` validáló
+  `assert`-jei stripped-ek (a security-review NOTE-d pontja) — bár a mai
+  hívási láncban a bemenet maga (a kalibráció) nem kell legyen sérült, csak
+  „szerencsétlen geometriájú" (lásd a fenti két próba — mindkettő
+  TELJESEN ÉRVÉNYES, korrupció nélküli kalibrációkat generált).
+- **Kötelező javítás:** a `core/geometry` réteg (`Homography`) maradjon
+  tér-semleges, ezért a javítás a domain-tudatos rétegbe
+  (`GuitarLandmarkMapper.fromCalibration`) kerüljön: a homográfia sikeres
+  megépítése UTÁN, még a mapper visszaadása ELŐTT, mintavételezd az
+  `apply()`-t néhány kanonikus, a kamera-normalizált `[0,1]×[0,1]` tartományt
+  lefedő ponton (pl. a 4 sarok + középpont), és ha BÁRMELYIK mintapont
+  `(u,v)` nagysága egy dokumentált, bőkezű határt túllép (pl. a gitártér
+  saját `u∈[0,1]`/`v∈[-1,1]` definíciójához képest nagyságrendekkel nagyobb
+  — egy konkrét, a fájl tetején deklarált konstans, pl.
+  `guitarSpaceSanityBound`), a mapper építése dobjon egy ÚJ, típusos
+  kudarc-okot (pl. `GuitarLandmarkMapperSetupFailure.unstableMapping`),
+  UGYANÚGY, ahogy a kondíciószám-túllépés is teszi ma. (Alternatív, a
+  `core/geometry` rétegben maradó megoldás: a TELJES 3×3 homográfia valódi
+  kondíciószámát mérni SVD-vel, vagy explicit ellenőrizni, hogy a `w=0`
+  egyenes metszi-e a `[0,1]²` tartományt — ez matematikailag pontosabb, de
+  nagyobb implementációs kockázat egy már egyszer numerikusan megcsúszott
+  körben; a kimenet-mintavételezés egyszerűbb és közvetlenül a MEGFIGYELT
+  hibamódot céloz.)
+- **Ellenőrzés:** a fenti két próba (security-reviewer 198k-mintás keresése
+  és a reviewer 50k-mintás keresése) reprodukálhatóként a javítás UTÁN 0
+  találatot kell adjon `|uv|>10 && confidence>0.5` mellett alacsony
+  (`≤50`) jelentett kondíciószámú mapperek között. Adj property-tesztet a
+  `test/property/homography_property_test.dart`-hoz VAGY egy új
+  `guitar_landmark_mapper_test.dart` esethez, ami ezt a random-search mintát
+  intézményesíti (nem csak egyszeri kézi próba marad).
+- **Státusz:** OPEN
+
+### MAJOR-1 — `Polygon2.contains` hibás nem tengelyillesztett polygonokra (funkcionális pass lelete)
 
 - **Fájl:** `lib/core/geometry/polygon2.dart:112-117`
 - **Probléma:** a ray-casting metszéspont-számítás nevezőjében `.abs()`
@@ -119,7 +197,7 @@ mint mintázat, nem lelet — a mérce a végén tartotta magát.
   a meglévő 3 `contains`-teszt bitre változatlanul zöld marad.
 - **Státusz:** OPEN
 
-### F2 — MAJOR — a fixture-mátrix két névvel megnevezett nézőpontot teljesen kihagy
+### MAJOR-2 — a fixture-mátrix két névvel megnevezett nézőpontot teljesen kihagy
 
 - **Fájl:** `docs/rounds/e05-r15-guitar-coordinates-and-homography.md §10.1`
   (és a hozzá tartozó `homography_test.dart` / `guitar_landmark_mapper_test.dart`
@@ -154,7 +232,7 @@ mint mintázat, nem lelet — a mérce a végén tartotta magát.
   `conditionNumberExceeded` reason zöld).
 - **Státusz:** OPEN
 
-### F3 — MINOR — a „kondíció a küszöbön" cella nem a tényleges határt próbálja
+### MINOR-1 — a „kondíció a küszöbön" cella nem a tényleges határt próbálja
 
 - **Fájl:** `test/core/geometry/homography_test.dart:249-275`
 - **Probléma:** a négy kondíció-cellából az „above threshold" (cond≈2400) és
@@ -176,21 +254,64 @@ mint mintázat, nem lelet — a mérce a végén tartotta magát.
   ajánlott önellenőrzés a fix-körben).
 - **Státusz:** OPEN
 
-### F4 — NOTE — a kondíciószám-metrika a 2×2 lineáris blokkra szűkül, nem a teljes 3×3 homográfiára
+**A korábban itt szereplő „2×2 blokk vs. teljes 3×3" NOTE a security-review
+után BLOCKER-1-be olvadt** — az akkor csak elméletinek jelölt kockázat
+mindkét független próbával ténylegesen reprodukálva lett, lásd fent.
 
-`homography.dart:379-398` (`_measureConditionNumber`) csak a mátrix felső
-2×2 lineáris blokkját méri, a projektív sort (`h[6..8]`) figyelmen kívül
-hagyva. A döntés dokumentált és indokolt (a §10.2 python-referencia is
-UGYANEZT az egyszerűsített metrikát futtatja, tehát a kalibráció
-önkonzisztens, de nem független bizonyíték arra, hogy a 2×2-metrika jó proxy
-a teljes projektív mátrix kondíciójára). Elméletileg elképzelhető egy
-mátrix, aminek a lineáris blokkja jól kondicionált, miközben a projektív
-sor extrém — ez a mai küszöb mellett átcsúszna. A jelenlegi kör
-fixture-jein és a property-teszt 500 mintáján nem manifesztálódott
-probléma; follow-up egy jövőbeli körnek (pl. R16 tracking vagy R18+
-metrikák, amikor valós kalibrációs adat kezd átfolyni rajta).
+### MINOR-2 — `GuitarLandmarkMapper.fromCalibration` doksija „null"-t ígér, a kód mindig dob
 
-### F5 — NOTE — normálegyenletek egy egzaktul meghatározott 8×8 rendszerhez
+- **Fájl:** `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart:120-126`
+  (doc-comment) vs. `:132-136`, `:144-148`, `:166-168` (mindhárom hibaág
+  `throw`-ol).
+- **Probléma:** a metódus doksija szó szerint azt írja: „Returns `null`
+  (with a typed reason) when the polygon is degenerate, the anchors
+  coincide, or the solved homography exceeds…", a visszatérési típus
+  nullable (`GuitarLandmarkMapper?`) — de a metódus egyetlen ága sem ad
+  vissza `null`-t, mindegyik `GuitarLandmarkMapperSetupException`-t dob. A
+  kör saját tesztje (`guitar_landmark_mapper_test.dart:63-85`) helyesen
+  `throwsA`-t vár, tehát a KÓD és a TESZT egyetért — csak a doc-comment és a
+  szignatúra téved.
+- **Hatás:** egy jövőbeli hívó, aki a doksit/típust olvassa (nem a tesztet),
+  `if (mapper == null)` mintát írna `try/catch` nélkül — degenerált
+  kalibrációnál (pl. 3 kollineáris/duplikált polygon-csúcs, ami a release-
+  stripped `assert` miatt konstruálható) elkapatlan kivétel omlasztaná a
+  hívó keretet.
+- **Kötelező javítás:** válassz egyet — (a) igazítsd a doksit a tényleges
+  `throw`-viselkedéshez és tedd nem-nullable-lá a visszatérési típust; vagy
+  (b) tényleg adj vissza `null`-t a doksinak megfelelően, a reason-t egy
+  out-paraméterben vagy result-objektumban.
+- **Ellenőrzés:** a meglévő 3 hibaág-teszt (`degeneratePolygon`,
+  `anchorsCoincident`, a homográfia-hibából származtatott ág) változatlanul
+  zöld marad bármelyik választás mellett.
+- **Státusz:** OPEN
+
+### MINOR-3 — `Polygon2.validate`/`isConvex`/`orientation` csendben „érvényesnek" fogad el NaN/Infinity polygont
+
+- **Fájl:** `lib/core/geometry/polygon2.dart:66-75` (`validate`).
+- **Probléma:** `area.abs() <= polygonDegenerateAreaTolerance` — ha `area`
+  `NaN` (mert egy csúcs `NaN`), az IEEE754 szabály szerint `NaN <= bármi`
+  mindig `false`, tehát a degenerált-ág NEM fut le, és a függvény
+  `PolygonValidity.valid()`-ot ad vissza egy nem-véges polygonra. A modul
+  saját doksija (`polygon2.dart:9-13`) kifejezetten ígéri, hogy „the
+  silent-numeric-garbage rule forbids returning 'just false'" — ez a
+  „csendben ÉRVÉNYESNEK" irány ugyanennek az elvnek a megsértése a másik
+  oldalról.
+- **Hatás ebben a körben ma korlátozott:** a `GuitarLandmarkMapper.fromCalibration`
+  hívási láncában a `Polygon2.validate` után közvetlenül következő
+  `Homography.solve` SAJÁT, feltétel nélküli (`assert`-mentes) finiteness-
+  ellenőrzése elkapja a NaN-t, mielőtt bármi szemét kiszivárogna — tehát a
+  MAI mapper-út redundánsan védett, véletlenül, nem tervezetten. DE a
+  `Polygon2` publikus API, `validate`/`isConvex`/`orientation` bármely
+  jövőbeli hívója, aki NEM megy át a `Homography.solve`-on, ezt a védelmet
+  nem kapja meg.
+- **Kötelező javítás:** adj egy explicit `isFinite`-ellenőrzést minden
+  csúcsra `validate` elején (új `PolygonDegenerateReason.nonFinite`, a
+  `tooFewVertices` UTÁN, a `zeroSignedArea` ELŐTT ellenőrizve).
+- **Ellenőrzés:** új teszt egy `NaN`/`Infinity` csúcsú polygonon —
+  `validate(...).isValid == false` és a helyes reason.
+- **Státusz:** OPEN
+
+### NOTE-1 — normálegyenletek egy egzaktul meghatározott 8×8 rendszerhez
 
 `homography.dart:239-262` a DLT-t a normálegyenleteken (`AᵀA·h=Aᵀb`)
 keresztül oldja meg, holott 4 korrespondenciára a rendszer egzaktul
@@ -201,29 +322,72 @@ volna. A Hartley-normalizálás miatt a mért κ(A) ≈1.1-2 tartományban marad
 így κ(A)² is elhanyagolható — a jelenlegi fixture-ökön nincs mérhető hatás.
 Nem blokkoló, csak jó gyakorlat megjegyzés egy jövőbeli refaktorhoz.
 
+### NOTE-2 — `Homography.solve` egy `ArgumentError`-t (nem `Exception`-t) dob rossz korrespondencia-számra
+
+`homography.dart:92-97` `ArgumentError`-t dob, inkonzisztensen a modul saját
+`HomographyError implements Exception`-jével. Egy `on Exception`/
+`on HomographyError` mintát használó hívó (mint a mapper `:166`-on) ezt NEM
+kapná el. Ma ártalmatlan (a mapper fix 4-pontos quadot épít), de a
+`Homography.solve` publikus core API — egy jövőbeli, változó hosszúságú
+hívó elkapatlan crash-t kapna. A kör saját tesztje (`homography_test.dart:19-27`)
+ezt szándékos választásként rögzíti — inkonzisztens, de tudatos.
+
+### NOTE-3 — koordináta-értékek kivétel-üzenetekben
+
+`guitar_space.dart:38-42,90-97,130-136`, `guitar_landmark_mapper.dart:56-62`,
+`homography.dart:432-433` nyers koordináta/confidence-értékeket
+interpolál `ArgumentError`/`toString` szövegekbe. Ezek landmark-SZÁRMAZTATOTT
+számok (nem nyers kamera-frame), és ez a modul sosem logol — tehát ma NEM
+sérül a §5 termékhatár. Defense-in-depth: ha egy jövőbeli hívó logolná ezeket
+a kivételeket, pozíció-adat kerülne logba — vezesd át a redakciós határon,
+és ne tegyél koordinátát perzisztálható üzenetbe.
+
+### NOTE-4 — csendes szemét-útvonalak az inverzen
+
+`mapPointInverse` (`guitar_landmark_mapper.dart:204-207`) `clamp`-eli a
+guitar→camera eredményt `[0,1]`-re, csendben plauzibilis-nek látszó
+`NormalizedPoint`-tá alakítva egy tartományon kívüli inverzet. Ma
+debug/overlay-only (R24). Kapcsolódóan: az inverz homográfia kondíciószámát
+a kód méri, de SOHA nem validálja a küszöb ellen (`homography.dart:159` —
+csak az előre-mátrixot ellenőrzi `:145-147`).
+
 ## Architektúra + termékhatárok
 
 - **Core-tisztaság:** `grep -rn "dart:ui\|package:flutter\|features/" lib/core/geometry/*.dart` — csak doc-comment-hivatkozás, forráskód-import NULLA. `architecture` gate-lépés is zöld.
 - **`public.dart` contract:** két additív export (`guitar_landmark_mapper`,
   `guitar_region`), nincs törölt/módosított meglévő export.
-- **AGENTS.md §5 termékhatárok:** nincs hálózat, storage, mic, secret —
-  a modul tisztán in-memory pure-Dart matematika. (A dedikált
-  security-review — risk=high — külön fájlban készül, ld. lent.)
+- **AGENTS.md §5 termékhatárok:** nincs hálózat, storage, mic, secret — a
+  modul tisztán in-memory pure-Dart matematika (a dedikált security-review
+  ezt függetlenül, grep- és futtatott-harness-szinten megerősítette). **DE
+  a „gyenge confidence nem jelenhet meg biztos állításként" határ MEGSÉRÜL**
+  — ld. BLOCKER-1.
 - **Lifecycle-erőforrás:** nincs `StreamSubscription`/isolate/timer a
   modulban — nem releváns.
 
 ## Dedikált biztonsági review (risk = "high")
 
 A brief `ai-router` blokkja `risk = "high"`-t jelöl, ezért AGENTS.md §15.1
-szerint kötelező a `security-reviewer` ágens független futása. **Folyamatban
-van, a jelentés `docs/reviews/e05-r15-guitar-coordinates-and-homography-security.md`
-néven készül** — ennek a funkcionális review-nak a verdiktje a biztonsági
-jelentés lezárása UTÁN válik véglegessé (a merge mindkettőt megköveteli).
+szerint kötelező a `security-reviewer` ágens független futása. **Lezárva**,
+teljes jelentés: [`docs/reviews/e05-r15-guitar-coordinates-and-homography-security.md`](e05-r15-guitar-coordinates-and-homography-security.md)
+— **FAIL (soft)**, 0 CRITICAL/BLOCKER (a security-reviewer saját
+osztályozásában; a jelentésben MAJOR-1-nek nevezett lelet ebbe a
+funkcionális review-ba **BLOCKER-1**-ként lett felvéve, mert a brief §11
+szabálya szerint „nulla OPEN BLOCKER/MAJOR" a merge feltétele, és a lelet
+ténylegesen megszegi az AGENTS.md §5 nem tárgyalható termékhatárát — ez a
+súlyossági tábla „megszegett termékhatár" sora). A security-reviewer
+verdiktje: a klasszikus adatbiztonsági/privacy dimenzióban a `risk="high"`
+címke túl konzervatív (nincs hálózat/tárolás/secret/AI-hívás/importált
+fájl), de a valós kockázat — numerikus korrektség mint biztonsági kérdés —
+pontosan ott landolt, ahova a brief §9 előre jelezte.
 
 ## Merge-döntés
 
-**Merge TILOS jelenleg** (2 nyitott MAJOR — F1, F2 — az ADR 0052 zöld kapu
-ellenére, mert a gate szerkezetileg nem méri sem a `contains` nem-tengelyes
-esetét, sem a fixture-mátrix teljességét). Javító kör szükséges, ugyanaz a
-motor (MiniMax M3), a fenti F1–F3 leletlistával. A dedikált security-review
-lezárása a merge második, független feltétele.
+**Merge TILOS jelenleg** (1 nyitott BLOCKER, 2 nyitott MAJOR — az ADR 0052
+zöld kapu ellenére, mert a gate szerkezetileg egyik hiányosságot sem tudja
+elkapni: sem a `contains` nem-tengelyes esetét, sem a fixture-mátrix
+teljességét, sem a kondíciószám-őr projektív vakfoltját). Javító kör
+szükséges, ugyanaz a motor (MiniMax M3), a BLOCKER-1/MAJOR-1/MAJOR-2 (és
+lehetőség szerint MINOR-1..3) leletlistával egyetlen körben — a MiniMax
+motor-eszkalációs szabálya (AGENTS.md §15.6, user-döntés 2026-08-01) EGY
+javító kört enged, utána Codexre kell váltani, ezért minden ismert leletet
+egyszerre kell a javító promptba tenni.
