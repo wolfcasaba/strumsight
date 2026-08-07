@@ -659,6 +659,64 @@ terra_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébkén
   return 1
 }
 
+# --- Codex CLI usage-limit felfüggesztés (E05-R15 H6 önjavítás, 2026-08-07) -
+# MÉRT gyökérok: a `terra_hold_if_exhausted` fent a ROUTER saját belső napi
+# hívás-számlálóját kérdezi le (`terra-status`, `.ai/router.toml`
+# `max_automatic_terra_calls_per_utc_day`) — ez teljesen más réteg, mint a
+# Codex CLI ALATT futó fiók (bármelyik motor-profil, ADR 0140) saját, tényleges
+# upstream usage-limitje. Az E05-R15 fix-round-2 ténylegesen ebbe futott bele
+# (`ERROR: You've hit your usage limit... try again at Aug 8th, 2026 7:32 AM`,
+# 3x azonos szöveg, .pipeline/HALTED, 2026-08-07T16:46:20Z), és a halt
+# summary-je NEM illeszkedik a `*Terra*budget*` mintára (nincs benne a
+# "budget" szó) — mérve:
+#   case "Codex/Terra (gpt-5.6-terra) quota exhausted..." in *Terra*budget*)
+#   → NEM illeszkedik.
+# Enélkül egy sima `outcome=retry` UTÁN a lánc a KÖVETKEZŐ 5 perces firingen
+# azonnal újra a kimerült falnak futna (a tényleges reset csak ~15 óra múlva
+# jön), és 3 önjavító kísérlet ~15-20 percen belül elfogyna — miközben a
+# tényleges ok magától megszűnik. A szöveg maga adja a reset-időt, ezért nincs
+# szükség élő API-ra: a Codex CLI hibaszövegéből (halt- VAGY heal-summary)
+# regex-szel vontuk ki.
+codex_usage_limit_hold_file() { printf '%s/codex-usage-limit-hold' "$state_dir"; }
+
+codex_usage_limit_reset_epoch_from_text() {   # $1=szöveg → epoch stdoutra, 1-es kilépés, ha nincs illeszkedő minta
+  local text="$1" phrase
+  phrase=$(printf '%s' "$text" | grep -oE \
+    'try again at [A-Za-z]+ [0-9]{1,2}(st|nd|rd|th)?, [0-9]{4} [0-9]{1,2}:[0-9]{2} ?[AP]M' | head -1)
+  [ -n "$phrase" ] || return 1
+  phrase=${phrase#try again at }
+  # A napi sorszám-utótagot (st/nd/rd/th) a GNU `date -d` nem érti — leválasztjuk.
+  phrase=$(printf '%s' "$phrase" | sed -E 's/([0-9]+)(st|nd|rd|th)/\1/')
+  # A Codex CLI szövege nem ad időzónát; a box és a `.pipeline/HALTED`
+  # `halted_at` mezője is UTC (mérve), ezért a parszolást EXPLICIT UTC-re
+  # kényszerítjük — nem az ambiens $TZ-re (más futtatókörnyezet, pl. a CI
+  # runner rendszer-időzónája eltolná a hold_until-t).
+  TZ=UTC date -d "$phrase" +%s 2>/dev/null
+}
+
+codex_usage_limit_hold_if_detected() {   # $1=kör $2=szöveg (halt- vagy heal-summary)
+  local round="$1" text="$2" epoch
+  epoch=$(codex_usage_limit_reset_epoch_from_text "$text") || return 0
+  [ -n "$epoch" ] || return 0
+  printf 'round=%s\nhold_until=%s\n' "$round" "$epoch" > "$(codex_usage_limit_hold_file)"
+  log "Codex CLI usage-limit kimerült — $round felfüggesztve $(date -Is -d "@$epoch")-ig (a firing-ok addig session és önjavítási kísérlet nélkül kilépnek)"
+}
+
+codex_usage_limit_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébként (lejárt/nincs/másik kör → törli a lejárt/idegen fájlt)
+  local round="$1" hold_file hold_round hold_until
+  hold_file=$(codex_usage_limit_hold_file)
+  [ -f "$hold_file" ] || return 1
+  hold_round=$(grep -m1 '^round=' "$hold_file" | cut -d= -f2-)
+  hold_until=$(grep -m1 '^hold_until=' "$hold_file" | cut -d= -f2-)
+  case "$hold_until" in ''|*[!0-9]*) rm -f "$hold_file"; return 1 ;; esac
+  if [ "$hold_round" = "$round" ] && [ "$(date +%s)" -lt "$hold_until" ]; then
+    log "Codex CLI usage-limit felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"
+    return 0
+  fi
+  rm -f "$hold_file"
+  return 1
+}
+
 handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT ELSŐ észlelésekor: halt_file írás + Terra-hold determinisztikus ellenőrzés
   # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 5. előfordulás,
   # lásd docs/LESSONS.md L63 folytatása): korábban a Terra napi-hold
@@ -680,6 +738,7 @@ handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT E
     echo "halted_at=$(date -Is)"
   } > "$halt_file"
   terra_hold_if_exhausted "$round"
+  codex_usage_limit_hold_if_detected "$round" "$summary"
   log "HALT ($halt_code) a(z) $round körön — $summary"
   notify "⛔ HALT ($halt_code): $round" "$summary — az önjavító kör a következő firingen indul" high
   log "az önjavítás (ADR 0112) a következő cron-firingen indul; kikapcsolva: PIPELINE_SELFHEAL=0"
@@ -772,6 +831,7 @@ attempt_selfheal() {
           terra_hold_if_exhausted "$halt_round"
           ;;
       esac
+      codex_usage_limit_hold_if_detected "$halt_round" "$summary"
       return 0
       ;;
     *)
@@ -914,6 +974,21 @@ case "${1:-}" in
     terra_hold_if_exhausted "${2:-}"
     exit 0
     ;;
+  --codex-usage-limit-hold-active)    # $2=kör → exit 0 ha AKTÍV Codex CLI usage-limit hold van rá, 1 egyébként
+    if codex_usage_limit_hold_active_for "${2:-}"; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
+  --codex-usage-limit-hold-if-detected)    # $2=kör $3=szöveg → teszthorog: meghívja codex_usage_limit_hold_if_detected-et (E05-R15 H6 önjavítás)
+    codex_usage_limit_hold_if_detected "${2:-}" "${3:-}"
+    exit 0
+    ;;
+  --codex-usage-limit-reset-epoch)    # $2=szöveg → teszthorog: a kinyert epoch stdoutra, kilépés 1 illeszkedés nélkül
+    codex_usage_limit_reset_epoch_from_text "${2:-}"
+    exit $?
+    ;;
   --handle-round-halt)    # $2=kör $3=status-fájl $4=session-napló → teszthorog: a HALT ELSŐ észlelésének útvonala (E03-R08 H6 5. javítás)
     handle_round_halt "${2:-}" "${3:-}" "${4:-}"
     exit 0
@@ -984,6 +1059,12 @@ elif [ -f "$queue_file" ]; then
   active_round=$(grep -v '^[[:space:]]*#' "$queue_file" | grep -P '\tpending$' | head -1 | cut -f1)
 fi
 if [ -n "$active_round" ] && terra_hold_active_for "$active_round"; then
+  exit 0
+fi
+# Codex CLI usage-limit hold (E05-R15 H6 önjavítás) — ugyanaz a "csendes
+# kihagyás" elv, más réteg: a Codex CLI ALATT futó fiók (bármelyik
+# motor-profil) tényleges upstream kvótája, nem a router belső számlálója.
+if [ -n "$active_round" ] && codex_usage_limit_hold_active_for "$active_round"; then
   exit 0
 fi
 [ -n "$active_round" ] && terra_clear_stale_halt_for "$active_round"

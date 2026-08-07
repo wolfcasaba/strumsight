@@ -11,6 +11,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# Valódi, mért adat (E05-R15 H6 önjavítás, 2026-08-07T16:46:20Z): a
+# .pipeline/HALTED tényleges `summary=` mezőjének verbatim másolata, a Codex
+# CLI upstream usage-limit falába ütköző fix-round-2 után. A hármas
+# "usage limit... try again at Aug 8th, 2026 7:32 AM" hibaszöveg a
+# /tmp/codex-e05-r15-fix2b.log nyers kimenetéből származik (3x azonos, a
+# kezdő kísérlet + 2 automatikus folytatás).
+REAL_E05_R15_CODEX_USAGE_LIMIT_SUMMARY = (
+    'Codex/Terra (gpt-5.6-terra) quota exhausted mid-fix-round-2 (initial '
+    'attempt + 2 auto-continuations all hit an identical "usage limit... '
+    'try again at Aug 8th, 2026 7:32 AM" error) — not a code defect or '
+    "capability failure. MAJOR-1 and MAJOR-2 are closed and independently "
+    "re-verified; BLOCKER-1's root cause is fully diagnosed with a "
+    "mathematically validated fix (0 false negatives across two independent "
+    "50k-trial adversarial searches) ready to implement, just blocked on "
+    "Codex compute availability."
+)
+# A szövegben ténylegesen kódolt reset-időpont (Aug 8th, 2026 7:32 AM, UTC —
+# a box órája és a HALTED `halted_at` mezője is UTC) epoch-alakban.
+REAL_E05_R15_CODEX_USAGE_LIMIT_RESET_EPOCH = 1786174320
+
 
 class PipelineIntegrationTest(unittest.TestCase):
     def run_command(self, argv, *, cwd=ROOT, env=None):
@@ -1302,6 +1322,213 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("READY_FOR_REVIEW", completed.stdout)
             self.assertNotIn("do not print me", completed.stdout)
+
+    def test_codex_cli_usage_limit_summary_is_not_caught_by_the_terra_daily_budget_hold(
+        self,
+    ) -> None:
+        # MÉRT gyökérok (E05-R15 H6, 2026-08-07T16:46:20Z): a fix-round-2
+        # Codex/Terra dispatch a Codex CLI SAJÁT upstream usage-limitjébe
+        # futott (`ERROR: You've hit your usage limit... try again at Aug
+        # 8th, 2026 7:32 AM`, 3x azonos szöveg, .pipeline/HALTED) — ez
+        # MÁS réteg, mint a `terra_hold_if_exhausted` által lekérdezett
+        # router-belső napi hívás-számláló (`terra-status`,
+        # `.ai/router.toml` `max_automatic_terra_calls_per_utc_day`, 2026-08-02
+        # óta 0 = korlátlan). Ez a teszt a VALÓDI E05-R15 halt-summary-t adja
+        # a meglévő `terra_hold_if_exhausted`-nek, egy a MOST ÉLES,
+        # korlátlan router-policy-t szimuláló python3-stubbal — a régi
+        # mechanizmus emiatt NEM ír holdot, ami a mért H6 gyökérokot
+        # dokumentálja (a hiba nem a hívásban van, hanem abban, hogy erre a
+        # jelre semmilyen hold-mechanizmus nem figyelt, l.
+        # `test_codex_usage_limit_reset_epoch_is_parsed_from_the_real_e05_r15_halt_text`
+        # alább — az ÚJ, kiegészítő mechanizmus ugyanerről a szövegről MÁR ír
+        # holdot).
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(state)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                ["bash", str(script), "--terra-hold-if-exhausted", "E05-R15"], env=env
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(
+                (state / "terra-budget-hold").exists(),
+                "a router napi-budget hold nem véletlenül maradt üres — ez a MÉRT "
+                "bizonyíték arra, hogy a Codex CLI upstream usage-limitje nem ugyanaz "
+                "a jel, mint a router belső napi számlálója",
+            )
+
+    def test_codex_usage_limit_reset_epoch_is_parsed_from_the_real_e05_r15_halt_text(
+        self,
+    ) -> None:
+        script = ROOT / "tools" / "round-pipeline.sh"
+
+        result = self.run_command(
+            [
+                "bash",
+                str(script),
+                "--codex-usage-limit-reset-epoch",
+                REAL_E05_R15_CODEX_USAGE_LIMIT_SUMMARY,
+            ]
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            result.stdout.strip(), str(REAL_E05_R15_CODEX_USAGE_LIMIT_RESET_EPOCH)
+        )
+
+    def test_codex_usage_limit_reset_epoch_from_text_ignores_unrelated_summaries(
+        self,
+    ) -> None:
+        # Őrszem a túl széles illeszkedés ellen: sem egy sima "quota"/"usage
+        # limit" említés dátum nélkül, sem egy teljesen más halt-summary nem
+        # termelhet hold-fájlt.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        for unrelated in (
+            "the CI runner is degraded, GitHub Actions incident",
+            "quota concerns were discussed but nothing is exhausted right now",
+            "usage limit dashboard reviewed, all green",
+        ):
+            with self.subTest(summary=unrelated):
+                result = self.run_command(
+                    ["bash", str(script), "--codex-usage-limit-reset-epoch", unrelated]
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+
+    def test_first_halt_detection_writes_the_codex_usage_limit_hold_without_waiting_for_a_selfheal_retry(
+        self,
+    ) -> None:
+        # Testvér-teszt: `test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry`
+        # ugyanezt a mintát méri a router-belső Terra-holdra. Itt a HALT ELSŐ
+        # észlelése (`handle_round_halt`, mielőtt bármilyen self-heal session
+        # elindulna) a VALÓDI E05-R15 round-status szöveget kapja — a
+        # `codex-usage-limit-hold` fájlnak MÁR ekkor ki kell íródnia, nem
+        # várhat egy retry-klasszifikációra (ugyanaz a mért hiba-osztály, mint
+        # a Terra-holdnál: E03-R08 H6, 5. javítás).
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            stub_bin = directory / "bin"
+            stub_bin.mkdir()
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *model-router.py*terra-status*)\n"
+                "    printf '{\"unlimited\": true, \"exhausted\": false}'\n"
+                "    exit 0\n"
+                "    ;;\n"
+                "  *)\n"
+                f"    exec {real_python3} \"$@\"\n"
+                "    ;;\n"
+                "esac\n"
+            )
+            stub.chmod(0o755)
+            status_file = directory / "round-status"
+            status_file.write_text(
+                "outcome=halted\n"
+                "round=E05-R15\n"
+                "halt=H6\n"
+                f"summary={REAL_E05_R15_CODEX_USAGE_LIMIT_SUMMARY}\n"
+            )
+            session_log = directory / "session-E05-R15-test.log"
+            session_log.write_text("")
+            env = dict(os.environ)
+            env["PIPELINE_STATE_DIR"] = str(directory)
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
+
+            result = self.run_command(
+                [
+                    "bash",
+                    str(script),
+                    "--handle-round-halt",
+                    "E05-R15",
+                    str(status_file),
+                    str(session_log),
+                ],
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((directory / "HALTED").exists())
+            hold_file = directory / "codex-usage-limit-hold"
+            self.assertTrue(
+                hold_file.exists(),
+                "a HALT első észlelése nem írta ki a Codex-usage-limit holdot — a "
+                "következő firing önjavítási kísérlet elköltése nélkül újra "
+                "nekifutna ugyanennek a Codex CLI kvóta-falnak",
+            )
+            content = hold_file.read_text()
+            self.assertIn("round=E05-R15", content)
+            self.assertIn(
+                f"hold_until={REAL_E05_R15_CODEX_USAGE_LIMIT_RESET_EPOCH}", content
+            )
+
+    def test_codex_usage_limit_hold_blocks_a_firing_without_spending_a_selfheal_attempt(
+        self,
+    ) -> None:
+        # Testvér-teszt: `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+        # ugyanezt méri a router-belső Terra-holdra — ugyanaz a
+        # biztonsági indoklás vonatkozik: `selfheal.count` SZÁNDÉKOSAN a
+        # kísérletbüdzsé HATÁRÁN (3) ül, hogy egy esetleges regresszió a már
+        # biztonságos "KIMERÜLT" rövidzárba fusson (session nélkül), SOSEM egy
+        # ÉLES tmux+claude önjavító session indításába ez ellen a valódi
+        # repó ellen.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "HALTED").write_text(
+                "round=E05-R15\n"
+                "halt=H6\n"
+                f"summary={REAL_E05_R15_CODEX_USAGE_LIMIT_SUMMARY}\n"
+            )
+            future = int(time.time()) + 3600
+            (state / "codex-usage-limit-hold").write_text(
+                f"round=E05-R15\nhold_until={future}\n"
+            )
+            (state / "selfheal.count").write_text("E05-R15|H6|3\n")
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL_MAX="3",
+                # MÉRVE (l. a testvér-teszt indoklása): egy tiszta `main`-ről
+                # futtatott teljes firing éles sessiont indítana, ha a hold
+                # valamiért mégsem fogná el a firing-ot.
+                PIPELINE_NO_LAUNCH="1",
+            )
+
+            held = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(held.returncode, 0, held.stderr)
+            self.assertIn("felfüggesztés aktív", held.stderr)
+            self.assertNotIn("ÖNJAVÍTÓ KÖR indul", held.stderr)
+            self.assertNotIn("KIMERÜLT", held.stderr)
+            self.assertEqual((state / "selfheal.count").read_text(), "E05-R15|H6|3\n")
+            self.assertTrue((state / "HALTED").exists())
 
 
 class NoLaunchGuardTest(unittest.TestCase):
