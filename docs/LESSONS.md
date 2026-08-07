@@ -5255,3 +5255,40 @@ eltávolítása elég a precondition felszabadításához, a queue már helyesen
 mutat vissza a körre. Rokon: [[L155]] (githubstatus/`gh run view --json jobs`
 a helyes GitHub-infra-flake diagnózis), [[L153]] (review-commit utáni kézi
 CI-dispatch — itt pedig maga a dispatch is outage-blocked volt).
+
+## L159
+
+**A CLI auto-frissülése kijelentkeztet, és ezzel MEGÖLI az autonóm láncot.**
+Mérve 2026-08-07. A `~/.claude/.last-update-result.json` szerint 04:14:27-kor a
+Claude Code magától frissült `2.1.223 → 2.1.224`. A 03:44-kor indult kör-session
+végig dolgozott; a 04:20-as önjavító session viszont — MINDEN config-dirben, a
+`~/.claude` érvényes `oauthAccount`-ja ellenére — teljes first-run varázslót
+kapott: téma-választó → „Select login method" → OAuth-URL („Paste code here if
+prompted"). A session el sem indult, jelzésfájlt nem írt, a lánc H-NOSIGNAL-lal
+megállt. A 2.1.223-ra visszaállítás önmagában NEM oldotta fel: a 224-es futás
+perzisztens állapotot hagyott, és a CLI-nek nincs onboarding-kihagyó kapcsolója
+(`claude --help` átnézve). A feloldás egyszeri interaktív bejelentkezés volt.
+
+**Miért nem látszott ez korábbi hibaként.** A tünet („a session jelzés nélkül ért
+véget") pontosan úgy néz ki, mint egy kvótahalál vagy egy néma összeomlás, de a
+`CLAUDE_LIMIT_PATTERN` nem illeszkedik rá, így a lánc a Codex-fallbackra sem
+váltott — csak halt, majd három önjavító kísérlet, majd emberi feloldásra várt.
+
+**Szabály.** (1) Az auto-updater KI van kapcsolva három rétegben —
+`~/.claude/settings.json` (`autoUpdates:false` + `env.DISABLE_AUTOUPDATER=1`), a
+kör-session indító parancsa, és a cron-sor —, mert bármelyik réteg kimaradása
+elég a megismétlődéshez. Verziót emelni innentől SZÁNDÉKOS lépés, és számolj
+egyszeri interaktív bejelentkezéssel utána. (2) A kör-session HEADLESS (`-p`)
+módban fut (`PIPELINE_SESSION_MODE`, default `print`): mérve ez az EGYETLEN mód,
+amely dialógus nélkül indul. Az interaktív mód a bejelentkezés után működik és
+tényleg megjelenik a telefonos Code-listában (`/rc active` + `bridgeSessionId` a
+`~/.claude/sessions/<pid>.json`-ban), DE minden induláskor kézi kattintást kér
+(bypass-permissions figyelmeztetés, fullscreen-renderer ajánlat), és minden ilyen
+dialógus megállítja a láncot — user-döntés 2026-08-07: az autonómia előbbre való
+a láthatóságnál. (3) A `session indult: … (látszik a telefon Code-listájában)`
+naplósor 2026-07-31 óta VALÓTLAN volt: a session a híd config-dirjén kívül
+(`~/.claude`) regisztrált, a híd viszont `~/.claude-rc-music`-ban fut és csak a
+sajátját olvassa. Naplóba MÉRT tényt írj, ne szándékot — egy hamis
+megnyugtató sor évekig elrejt egy hiányzó képességet. Rokon: [[L156]] (állapotot
+a fő munkafából), [[L158]] (külső ok ≠ a lánc hibája, de a lánc látható haltot
+kell hagyjon).
