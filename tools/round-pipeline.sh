@@ -126,8 +126,15 @@ heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 # `~/.claude/sessions/`-be került — a híd sosem láthatta. Mérés: a futó
 # E05-R10 session `~/.claude/sessions/644211.json`-ban volt, a telefonról
 # indított session `~/.claude-rc-music/sessions/759682.json`-ban.
-# Ezért a session ezt a dirt kapja EXPLICITEN (nem örökölve, nem törölve).
-pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude-rc-music}
+# A NAIV javítás (a session a híd dirjét kapja) MÉRVE MEGBUKOTT ugyanezen a
+# napon: a `.claude-rc-music` bejelentkezése a híd-processzé, sima CLI-session
+# nem tudja használni — a v2.1.224 first-run folyamata teljes OAuth-ot kért
+# („Paste code here if prompted"), és a heal-session el sem indult. Ugyanez a
+# fal állította meg a 2026-08-05-i `rc-login-mobile` tmux-sessiont is.
+# Ezért a kör-session a SAJÁT, működő bejelentkezésén marad (`~/.claude`), a
+# telefonos láthatóságot pedig egy külön, ERRE a dirre kötött remote-control
+# híd adja (systemd: claude-remote-control-pipeline.service).
+pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude}
 
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
