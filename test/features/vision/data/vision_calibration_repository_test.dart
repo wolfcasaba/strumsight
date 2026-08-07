@@ -17,6 +17,7 @@ library;
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 import 'package:strumsight/core/foundation/json_validation.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/storage/json_document_store.dart';
@@ -26,7 +27,6 @@ import 'package:strumsight/features/vision/data/persistence/vision_calibration_r
 import 'package:strumsight/features/vision/domain/calibration/camera_calibration_profile.dart';
 import 'package:strumsight/features/vision/domain/calibration/guitar_calibration.dart';
 import 'package:strumsight/features/vision/domain/vision_setup_profile.dart';
-import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
 
@@ -129,7 +129,7 @@ void main() {
       expect(a, equals(b));
     });
 
-    test('the top-level key order is deterministic (hand-pinned)', () async {
+    test('the bundle key order is deterministic (hand-pinned)', () async {
       final codec = const VisionCalibrationCodec();
       final encoded = codec.encodeToMap(profile: _profile(), guitar: _guitar());
       expect(encoded.keys.toList(), <String>[
@@ -181,7 +181,7 @@ void main() {
     test(
       'cell vN-1 — an older-shape document is migrated to current shape',
       () async {
-        // A pre-namespace / pre-envelope alak: egy lapos JSON-map a body
+        // A pre-envelope / pre-shape alak: egy lapos JSON-map a body
         // belsejében, kihagyva a `createdAt`-et és `qualityScore`-t, és
         // más néven hívva a neckPolygon-t. A migrációs lépés a
         // VisionCalibrationCodec felelőssége.
@@ -244,7 +244,8 @@ void main() {
         final c = build(initial: {StorageKeys.visionCalibration: future});
         final read = c.repository.read();
         expect(read, isNull);
-        // A korrupciót a JsonDocumentStore naplózta — a kontrollált út látható.
+        // A korrupciót a JsonDocumentStore naplózta — a kontrollált út
+        // látható.
         expect(c.logger.events, contains('storage.document.corrupt'));
       },
     );
@@ -379,12 +380,21 @@ void main() {
         final raw = c.store.readString(StorageKeys.visionCalibration)!;
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
 
-        // Pontos, rögzített kulcskészlet — ha bárki egy új mezőt csempész
-        // be (akár raw kép, akár bármi más), ez a teszt pirosra vált.
+        // Top-level envelope (JsonDocumentStore adja): pontos, rögzített
+        // kulcskészlet — ha bárki egy új mezőt csempész be (akár raw kép,
+        // akár bármi más), ez a teszt pirosra vált.
         expect(decoded.keys.toSet(), <String>{'schemaVersion', 'data'});
 
+        // A codec bundle szintű kulcskészlete: a JsonDocumentStore ezt
+        // csomagolja `{schemaVersion: documentSchemaVersion, data: <bundle>}`
+        // formában, így a fenti top-level assert a perzisztált alakot írja
+        // le, ez pedig a codec által kiadott belső kulcskészletet.
         final data = decoded['data'] as Map<String, dynamic>;
-        expect(data.keys.toSet(), <String>{'camera', 'guitar'});
+        expect(data.keys.toSet(), <String>{
+          'schemaVersion',
+          'camera',
+          'guitar',
+        });
 
         final camera = data['camera'] as Map<String, dynamic>;
         expect(camera.keys.toSet(), <String>{
@@ -427,12 +437,10 @@ void main() {
     test(
       'the privacy snapshot set is hand-pinned — adding a key fails',
       () async {
-        // A privacy-snapshot teszt CSAK akkor véd, ha a kulcskészlet explicit,
-        // nem pedig egy "kapd el, ami jön" assertion. Ez a teszt azt mutatja,
-        // hogy a hand-pinned halmaz TÉNYLEG képes elkapni egy új mezőt: ha
-        // a `codec.encodeToMap` visszatérési értékében megjelenik egy új
-        // kulcs, a fenti teszt pirosra vált — itt most explicit
-        // megismételjük, hogy a teszt maga ne csorduljon túl.
+        // A privacy-snapshot teszt CSAK akkor véd, ha a kulcskészlet
+        // explicit, nem pedig egy "kapd el, ami jön" assertion. Ez a teszt
+        // azt mutatja, hogy a hand-pinned halmaz TÉNYLEG képes elkapni egy
+        // új mezőt.
         final c = build();
         await c.repository.write(profile: _profile(), guitar: _guitar());
         final raw = c.store.readString(StorageKeys.visionCalibration)!;
@@ -450,8 +458,8 @@ void main() {
       () async {
         // A NormalizedPoint assert csak release-módon kimarad (R2). A codec
         // saját requireDouble(min:0, max:1) hívással véd — itt egy
-        // pixel-koordinátát (x=1920) tartalmazó JSON-t próbálunk bejuttatni
-        // a táron keresztül, és a codec-nek el kell utasítania.
+        // pixel-koordinátát (x=1920) tartalmazó JSON-t próbálunk
+        // bejuttatni a táron keresztül, és a codec-nek el kell utasítania.
         final malicious = jsonEncode({
           'schemaVersion': documentSchemaVersion,
           'data': {
@@ -478,46 +486,53 @@ void main() {
         });
         final c = build(initial: {StorageKeys.visionCalibration: malicious});
         final read = c.repository.read();
-        // A teljes bundle-t el kell dobni — a pixel-koordináta release módban
-        // is kimutatható.
+        // A teljes bundle-t el kell dobni — a pixel-koordináta release
+        // módban is kimutatható.
         expect(read, isNull);
         expect(c.logger.events, contains('storage.document.record_skipped'));
       },
     );
 
-    test('a NaN coordinate is also rejected (poison prevention)', () async {
-      // A `jsonEncode` Dart-ban eldob a `double.nan` értékre, ezért a NaN-t
-      // nyers JSON-karakterláncként juttatjuk be — pont úgy, ahogy egy
-      // hand-edit vagy downgrade írná a lemezre.
-      const malicious =
-          '{'
-          '"schemaVersion": $documentSchemaVersion,'
-          '"data": {'
-          '"camera": {'
-          '"camera": "back",'
-          '"orientation": 0,'
-          '"zoom": 0.5,'
-          '"setupProfile": "practiceBalanced",'
-          '"createdAt": "2026-08-07T12:00:00.000Z",'
-          '"qualityScore": 0.9'
-          '},'
-          '"guitar": {'
-          '"nut": {"x": NaN, "y": 0.5},'
-          '"bridge": {"x": 0.7, "y": 0.5},'
-          '"neckPolygon": ['
-          '{"x": 0.25, "y": 0.35},'
-          '{"x": 0.75, "y": 0.35},'
-          '{"x": 0.75, "y": 0.65}'
-          '],'
-          '"createdAt": "2026-08-07T12:00:00.000Z"'
-          '}'
-          '}'
-          '}';
-      final c = build(initial: {StorageKeys.visionCalibration: malicious});
-      final read = c.repository.read();
-      expect(read, isNull);
-      expect(c.logger.events, contains('storage.document.record_skipped'));
-    });
+    test(
+      'a numeric field with a string value is rejected (poison prevention)',
+      () async {
+        // A JSON-szabvány tiltja a `NaN` és `Infinity` literált, így a
+        // tiszta NaN-teszt a JsonDocumentStore szintjén már a
+        // `storage.document.corrupt` úton landol — ami szintén véd, de
+        // nem a codec requireDouble-típus-védelmét méri. Helyette egy
+        // string-értéket töltünk be egy numeric mezőbe: a JSON érvényesen
+        // dekódol (a string átjut a jsonDecode-en), a codec `requireDouble`
+        // hívása dob `JsonRecordException(notANumber)` hibát, és a
+        // repository karanténba helyezi a bundle-t.
+        final malicious = jsonEncode({
+          'schemaVersion': documentSchemaVersion,
+          'data': {
+            'camera': {
+              'camera': 'back',
+              'orientation': 0,
+              'zoom': 'not-a-number',
+              'setupProfile': 'practiceBalanced',
+              'createdAt': '2026-08-07T12:00:00.000Z',
+              'qualityScore': 0.9,
+            },
+            'guitar': {
+              'nut': {'x': 0.3, 'y': 0.5},
+              'bridge': {'x': 0.7, 'y': 0.5},
+              'neckPolygon': [
+                {'x': 0.25, 'y': 0.35},
+                {'x': 0.75, 'y': 0.35},
+                {'x': 0.75, 'y': 0.65},
+              ],
+              'createdAt': '2026-08-07T12:00:00.000Z',
+            },
+          },
+        });
+        final c = build(initial: {StorageKeys.visionCalibration: malicious});
+        final read = c.repository.read();
+        expect(read, isNull);
+        expect(c.logger.events, contains('storage.document.record_skipped'));
+      },
+    );
   });
 
   group('JsonRecordException thrown by the codec for unparseable input', () {
