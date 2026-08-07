@@ -115,6 +115,31 @@
 > negatív alszó-szűrőt — adversarial próbánál a KORÁBBI próbától eltérő
 > mutációt használj).
 >
+> ## ♻️ E05-R15 önjavítás (2026-08-07, H6) — Codex CLI usage-limit hold hozzáadva
+>
+> Az E05-R15 fix-round-2 (Codex/Terra, `gpt-5.6-terra`) a Codex CLI SAJÁT
+> upstream fiók-kvótájába futott (`usage limit... try again at Aug 8th,
+> 2026 7:32 AM`, 3x azonos szöveg, azonos `session_id`). Ez MÁS réteg, mint
+> a router belső napi Terra-számlálója (`terra-status`, jelenleg
+> korlátlan) — a meglévő `terra_hold_if_exhausted()` mért módon NEM fogta
+> volna meg (a halt-summary nem illeszkedik a `*Terra*budget*` mintára), így
+> egy sima `outcome=retry` a láncot 5 percenként újra a falnak futtatta
+> volna, és a 3 önjavító kísérlet ~15-20 percen belül elfogyott volna egy
+> ~15 óra múlva magától megszűnő ok miatt. Az önjavító kör (ADR 0112,
+> PR [#186](https://github.com/wolfcasaba/strumsight/pull/186)) egy
+> testvér-mechanizmust adott a `terra_hold_*` mellé
+> (`codex_usage_limit_hold_*`, `tools/round-pipeline.sh`), ami a Codex CLI
+> hibaszövegéből (nem élő API-ból) vonja ki a reset-időt, és ugyanazt a
+> "csendes kihagyás, önjavítási kísérlet nélkül" mintát adja erre a
+> rétegre is. **NEM** motor-váltás (`tools/engine-profile.sh`) a fix —
+> az a megállt kör tartalmi döntése maradt, nem önjavító infra-munka.
+> `outcome=fixed`, 5 új regressziós teszt a valódi mért halt-szöveggel,
+> teljes `tools/tests` zöld (346 teszt + 387 subtest). Tanulság:
+> [`docs/LESSONS.md` L170](docs/LESSONS.md). A lánc a KÖVETKEZŐ firingen
+> E05-R15-öt futtatja újra; ha ismét ugyanabba a (várhatóan még
+> kimerült) Codex-falba fut, az ÚJ hold ezúttal önjavítási kísérlet
+> nélkül csendben felfüggeszti kb. 2026-08-08 07:32 UTC-ig.
+>
 > ## ✅ E05-R14 KÉSZ — Pose landmark provider és posture baseline (2026-08-07)
 >
 > **E05-R14** MERGED (PR [#185](https://github.com/wolfcasaba/strumsight/pull/185),

@@ -5706,3 +5706,55 @@ korábbi próbától ELTÉRŐ konkrét mutációt (ne ugyanazt a nevet
 injektáld, amit az implementer vagy egy korábbi reviewer már tesztelt) —
 két KÜLÖNBÖZŐ, ugyanarra a mechanizmusra célzó próba erősebb bizonyíték,
 mint ugyanannak a próbának a megismétlése. Rokon: [[L166]].
+
+## L170 — A router belső napi Terra-számlálója és a Codex CLI upstream usage-limitje KÉT KÜLÖNBÖZŐ jel — egy kvóta-hold-mechanizmus csak azt a jelet fogja meg, amit ténylegesen lekérdez (E05-R15, önjavítás H6, 2026-08-07)
+
+**Mit mértünk.** Az E05-R15 fix-round-2 dispatch-a (Codex/Terra,
+`gpt-5.6-terra`) a Codex CLI **saját, upstream fiók-szintű** usage-limitjébe
+futott: a kezdő kísérlet + 2 automatikus folytatás MINDHÁROM ugyanazt a
+szöveget adta (`ERROR: You've hit your usage limit... try again at Aug
+8th, 2026 7:32 AM`, azonos `session_id`, `/tmp/codex-e05-r15-fix2b.log`).
+Ez STRUKTURÁLISAN más réteg, mint a `terra_hold_if_exhausted()` (E03-R08
+H6 önjavítás) által lekérdezett `terra-status` — a router **saját belső**
+napi hívás-számlálója (`.ai/router.toml`
+`max_automatic_terra_calls_per_utc_day`, 2026-08-02 óta 0 = korlátlan).
+Mérve: a valódi halt-summary a meglévő retry-ág `case` mintájára
+(`*"Terra"*"budget"*`) **nem illeszkedett** (nincs benne a "budget" szó),
+és maga `terra_hold_if_exhausted()` a summary szövegét egyáltalán nem
+nézi — kizárólag az élő (és jelenleg korlátlan) `terra-status` API-t. A
+két jel tehát VALÓS, egyidejű, egymástól teljesen független állapotot
+képvisel: a router-oldali napi keret lehet korlátlan, miközben az
+upstream CLI-fiók ténylegesen ki van merülve — vagy fordítva. Hold-fájl
+nélkül egy sima `outcome=retry` a láncot 5 percenként újra pontosan
+ugyanannak a (mérve ~15 órán belül nem múló) falnak futtatta volna, és a
+3 önjavító kísérlet ~15-20 percen belül elfogyott volna, holott a
+tényleges ok magától megszűnik.
+
+**Miért fontos.** Egy "kvóta kimerült" hold-mechanizmus implicit módon azt
+állítja, hogy LÁTJA az összes releváns kvóta-réteget — valójában csak azt
+látja, amit a szerzője explicit bekötött neki. Ez [[L01]] rokon esete
+(zöld/lefedett állapot nem bizonyíték arra, amit NEM mértek): a
+`terra_hold_if_exhausted()` léte és a mellette futó, 7 iteráción át
+finomított E03-R08 H6 apparátus (`terra_clear_stale_halt_for`,
+`handle_round_halt`-beli első-észlelés) könnyen azt a benyomást kelti,
+hogy "a Terra-kvóta már kezelve van" — pedig az csak a ROUTER belső
+számlálójára igaz, nem a mögötte futó, ADR 0140 szerint egymás mellett élő
+motor-profilok (`terra`, `qwen-plus`, `kimi`, `deepseek-pro`, …) egyikének
+sem a tényleges upstream fiók-állapotára. Bármelyik motor upstream
+kvóta-üzenete (nem csak a Terráé) ugyanebbe a résbe eshet, ha a szövege
+nem illeszkedik egyik meglévő mintára sem.
+
+**Szabály.** Ha egy fal/kvóta-hold mechanizmust írsz, kérdezd meg
+KIFEJEZETTEN: ez a jel a mi SAJÁT belső könyvelésünk (élő API, determinisztikus),
+vagy egy KÜLSŐ rendszer szövegesen jelentett állapota (csak akkor ismert,
+ha valaki bekötötte a mintáját)? A kettő nem helyettesíti egymást — külön
+hold-fájl, külön detektor kell mindkettőhöz (l. `codex_usage_limit_hold_*`
+a `terra_hold_*` mellett, `tools/round-pipeline.sh`), és egy ÚJ upstream
+hiba-minta (más motor, más provider, más szövegezés) ugyanígy hiányzó
+lefedettség marad, amíg valaki mérve hozzá nem adja. A regressziós teszt a
+VALÓDI, mért halt-szöveget használja (nem kitalált fixture) — l.
+`tools/tests/test_pipeline_integration.py`
+`test_codex_usage_limit_reset_epoch_is_parsed_from_the_real_e05_r15_halt_text`
+és testvérei. Rokon: a `terra_hold_if_exhausted()` E03-R08 H6 története
+(a router `terra-status` viselkedésének SAJÁT, korábbi mérési hibái —
+más réteg, ugyanaz a "mérd, ne feltételezd" elv).
