@@ -549,6 +549,15 @@
   Workflows:R+W PAT · Hermes-kutatás továbbítása.
 - iOS build Mac nélkül nem lehetséges.
 - Nyitott follow-up lista tételesen: completion report §2.
+- **A `lib/` 43%-a ma elérhetetlen (mérve 2026-08-07):** `song_trainer` V2
+  (25 308 sor), `ai_tutor` (14 091), `vision` (5 132) — mindhárom flagje
+  **hard-kódolt `false`** a `FeatureFlags.forEnvironment`-ben, tehát a CI
+  dev-APK-jában sem elérhető; a Learn ma is a **legacy** ágon fut
+  (`migratedLearnEnabled: false` mindenhol). Ugyanekkor a termék központi
+  állítására egyetlen mért valós-audio szám létezik (CRNN pengetés-irány
+  86,7% vs heurisztika 38,9%, r164 A/B) — akkord-pontosságra valós felvételen
+  nincs. **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez a kettő
+  nincs meg → lásd §6 „Kötelező sorrend".
 
 ## 4. Current branch
 
@@ -724,6 +733,31 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+> ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
+>
+> **„várjuk meg amíg az Epic 5-tel végzünk, majd csináljuk a shipping kört
+> először, majd egy valós audio mérés, és csak ezek után lépjünk az Epic 6-ra."**
+>
+> 1. **Epic 5 befejezése** (E05-R14 … E05-R30) — a queue `pending` sorai.
+> 2. **Az Epic 5 APK-ellenőrzése** a usernél (valós eszköz).
+> 3. **GOV-05 — Shipping rollout kör.** Nem új képesség: a MÁR KÉSZ, de
+>    elérhetetlen 44 531 sor termékké tétele — `songTrainerV2Enabled`,
+>    `aiTutorEnabled`, `visionEnabled` bekapcsolása legalább `lab`
+>    környezetben, a Learn átállítása a Practice V2-re
+>    (`migratedLearnEnabled`), és a hozzá tartozó valós eszközös menet.
+> 4. **GOV-06 — Valós-audio DSP baseline mérés.** A meglévő shipping DSP
+>    pontossága valódi gitárfelvételeken: akkord-pontosság, onset P/R/F1,
+>    BPM-hiba. **Miért ELŐBB, mint az Epic 6:** az Epic 6 harminc köre erre a
+>    DSP-re épít metrika-, confidence- és insight-réteget; ha az alap gyenge,
+>    azt most olcsó megtudni, harminc kör után nem.
+> 5. **Csak ezután Epic 6** — a 30 briefje kész (`epic-06-batch-index.md`),
+>    a queue-sorai `hold`-on. A feloldás EMBERI döntés, a 3. és 4. pont után.
+>
+> A GOV-05/GOV-06 briefje **szándékosan még nincs megírva**: a pre-flightjuk
+> az Epic 5 VÉGSŐ állapotát kell hogy mérje (a vision-flagek és a
+> device-mátrix csak akkor lesznek véglegesek). Az Epic 6 queue-sorai
+> addig is `hold`-on védik a sorrendet.
 
 0. **E05-R14 — Pose landmark provider és posture baseline** (SDD Ch6 Kör 14,
    `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`,

@@ -16,7 +16,28 @@
 
 ---
 
-## 0. Indítás (amikor a user zöld utat ad)
+## 0. Indítás — KÉT ELŐFELTÉTELES KÖR UTÁN (user-döntés, 2026-08-07)
+
+> **„várjuk meg amíg az Epic 5-tel végzünk, majd csináljuk a shipping kört
+> először, majd egy valós audio mérés, és csak ezek után lépjünk az Epic 6-ra."**
+
+A `hold` feloldása előtt **kötelező** sorrend:
+
+1. **Epic 5 lezárva** (E05-R30 merge) + a user **APK-ellenőrzése**.
+2. **GOV-05 — Shipping rollout kör.** A már kész, de elérhetetlen **44 531 sor**
+   termékké tétele: `songTrainerV2Enabled` (25 308 sor), `aiTutorEnabled`
+   (14 091), `visionEnabled` (5 132) bekapcsolása legalább `lab` környezetben,
+   a Learn átállítása Practice V2-re (`migratedLearnEnabled`), valós eszközös
+   menettel. Mérve 2026-08-07: mindhárom flag **hard-kódolt `false`** a
+   `FeatureFlags.forEnvironment`-ben, tehát a CI dev-APK-jában sem elérhető.
+3. **GOV-06 — Valós-audio DSP baseline mérés.** A meglévő shipping DSP
+   pontossága valódi gitárfelvételeken (akkord-pontosság, onset P/R/F1,
+   BPM-hiba). **Miért ELŐBB:** az Epic 6 harminc köre erre a DSP-re épít
+   metrika-, confidence- és insight-réteget; ma egyetlen mért valós-audio szám
+   létezik a repóban (CRNN pengetés-irány 86,7% vs heurisztika 38,9%, r164 A/B),
+   akkord-pontosságra egy sem. Gyenge alapot harminc kör után drága felfedezni.
+
+Csak ezek után, **emberi döntésre**:
 
 ```bash
 sed -i -E 's/^(E06-R[0-9]+\t.*\t)hold$/\1pending/' docs/execution/pipeline-queue.tsv
@@ -24,6 +45,13 @@ sed -i -E 's/^(E06-R[0-9]+\t.*\t)hold$/\1pending/' docs/execution/pipeline-queue
 
 Egyetlen kör indításához elég az adott sort átírni. **Ne** a `--halt`-ot
 használd megállításra (ADR 0112 szerint az önjavító kört indít).
+
+> A GOV-05/GOV-06 briefje szándékosan **még nincs megírva**: a pre-flightjuknak
+> az Epic 5 VÉGSŐ állapotát kell mérnie (vision-flagek, device-mátrix). A
+> GOV-01…GOV-04 már foglalt, ezért a következő két szabad szám a **GOV-05** és
+> a **GOV-06**. A queue-ba csak a briefjükkel EGYÜTT kerülhet sor —
+> brieffájl nélküli nyitott sor a `test_open_rounds_follow_the_measured_engine_rule`
+> őrt PIROSRA váltaná (a teszt beolvassa minden nyitott sor brieffájlját).
 
 ---
 
