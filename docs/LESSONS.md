@@ -5525,3 +5525,75 @@ mehet ugyanazon az úton, függetlenül attól, hogy a JSON-sémában
 validációval, nem egy közös tömb/parser megosztása. Rokon: [[L160]]
 (a manifest-séma törhet egy meglévő őrt, ha a bővítés nem valóban
 additív).
+
+## L165 — Egy küszöb-alapú jump/outlier-rejection szűrő explicit felépülési út nélkül örökre befagy egy valós, tartós változáson (E05-R13, 2026-08-07)
+
+**Mit mértünk.** Az E05-R13 `LandmarkSmoothingFilter`/`HandTrackAssigner`
+jump-rejectionje mindig az UTOLSÓ ELFOGADOTT simított értékhez hasonlította
+az új nyers pontot; elutasításkor ez az összehasonlítási alap SOSEM
+mozdult. Két önálló, futtatott próbateszttel bizonyítva (nem csak
+kódolvasással): ha egy érték ténylegesen és tartósan a küszöbnél
+(`jumpVelocityThreshold=0.30`/frame) távolabbra kerül — akár egy rövid
+occlusion UTÁN, akár occlusion NÉLKÜL, folyamatosan látható bemeneten is —,
+MINDEN további frame ugyanúgy elutasításra került, mert az összehasonlítási
+alap sosem közeledett az új, valódi értékhez. A kimenet a régi pozícióban
+fagyott be ÖRÖKRE, `status=active` mellett, jelzés nélkül a fogyasztó felé.
+A meglévő, brief-specifikált fixture-mátrix (egyetlen oszcilláló fast-strum
++ egy egy-frame-es "blip-vissza-a-régi-pozícióra" teleport) ezt NEM fedte
+le — mindkettő olyan minta, ahol a raw érték vagy sosem lépi át a
+küszöböt, vagy a "felépülés" történetesen visszatérés a MÁR ELFOGADOTT
+régi pozícióra, nem egy ÚJ pozícióra.
+
+**Miért fontos.** A brief saját, kötött architekturális döntése ("a
+jump-rejection nem törölhet valós, gyors mozgást") minden §6
+acceptance-cellán zölden ment át — a hiba csak egy, a szállított
+fixture-mátrix által nem lefedett INTERAKCIÓN bukott meg. Ez ugyanaz a
+mintázat, mint [[L01]] (zöld gate nem bizonyíték), de a hardveres tanulság
+külön rögzítésre érdemes: bármely, jövőbeli kör bevezethet hasonló
+"elutasítás alapján tartja a régi értéket" szűrőt (DSP-oldalon is
+elképzelhető: pl. egy audio-szintű outlier-clamp), és ugyanez a hiba
+ugyanígy elrejtőzhet egy jól kinéző, de szűk fixture-mátrix mögött.
+
+**Szabály.** Minden küszöb-alapú elutasító/klemp szűrőhöz KÖTELEZŐ egy
+fixture, ami egy VALÓDI, TARTÓS (nem visszatérő) változást szimulál a
+küszöbön túl — mind occlusion/gap-pel kombinálva, mind anélkül —, és
+megköveteli, hogy N frame-en belül a kimenet KONVERGÁLJON az új értékhez.
+Ha a szűrő tervezetten "reject and hold" (elutasít és megtart) logikájú,
+legyen explicit BYPASS/catch-up mechanizmusa (pl. rövid gap utáni első
+visszatérésen, vagy N egymást követő elutasítás után) — anélkül a szűrő
+NEM "jump-rejection", hanem egy rejtett, végleges "freeze on divergence"
+csapda. Rokon: [[L166]] (a review-nak pontosan az ilyen, kötött döntés
+elleni, de az acceptance-listán kívüli interakciókat kell célzottan
+próbálnia).
+
+## L166 — A review a brief KÖTÖTT architekturális döntéseit az acceptance-listától FÜGGETLENÜL, célzott interakciós próbákkal ellenőrizze (E05-R13, 2026-08-07)
+
+**Mit mértünk.** Az E05-R13 mind a hat §6 acceptance-cellája zöld volt a
+brief saját, szűken vett fixture-jein — beleértve a §10.5 valódi-sértés
+próbát, amit függetlenül megismételve pontosan ugyanazt a számot adta
+vissza, mint az implementer állítása. A review mégis 1 BLOCKER + 1 MAJOR
+leletet talált ([[L165]] + a `TrackContinuity` latency/jitter halott
+mezői), mindkettőt a brief §5 KÖTÖTT döntésein mérve, NEM az
+acceptance-listán. A dedikált security-review — egymástól teljesen
+független módszerrel (danger-grep + reprodukciós harness, nem
+architektúra-döntés-ellenőrzés) — UGYANARRA a gyökérokra jutott a BLOCKER
+esetében, ami két, egymástól független megközelítés konvergenciájaként
+erős megerősítő bizonyíték.
+
+**Miért fontos.** Egy fixture-mátrix, amit MAGA a brief ír elő, szükségképp
+csak azokat az eseteket fedi, amikre a brief szerzője (vagy az implementer)
+gondolt. A "minden acceptance-cella zöld" állítás ezért soha nem
+helyettesítheti a kötött döntések ÖNÁLLÓ, célzott ellenőrzését — pontosan
+azért, mert egy kötött döntés (pl. "a szűrő nem törölhet valós mozgást")
+sérülhet egy olyan bemeneten, amit egyetlen numerikus acceptance-teszt sem
+fed le, miközben MINDEN numerikus teszt zöld marad.
+
+**Szabály.** A review-jelentésben a brief §5 (kötött architekturális
+döntések) mindegyikéhez tegyél fel a kérdést: "milyen bemeneten
+próbálhatná ki EZT a döntést egy interakció, amit a szállított
+fixture-mátrix NEM konstruált meg?" — és írj hozzá egy eldobható
+próbatesztet, ha a válasz nem triviálisan üres. Két független review-módszer
+(funkcionális architektúra-ellenőrzés + biztonsági danger-grep/harness)
+ugyanarra a gyökérokra jutása ERŐS jelzés arra, hogy a lelet valódi, nem
+egy review-módszer sajátossága — az ilyen egybeesést a jelentésben
+explicit ki kell emelni, nem csak egyszer leírni. Rokon: [[L165]].
