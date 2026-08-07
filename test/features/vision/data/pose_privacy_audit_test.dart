@@ -107,53 +107,53 @@ void main() {
     }
   });
 
-  test(
-    'face landmarks in the raw payload never reach the domain object, its '
-    'serialized form, or its log form',
-    () async {
-      final provider = RecordedPoseLandmarkProvider.fixtureUpperBody();
-      await provider.initialize(const PoseModelConfig());
-      final pose = (await provider.infer(_imageAt(2000))).valueOrNull!;
+  test('face landmarks in the raw payload never reach the domain object, its '
+      'serialized form, or its log form', () async {
+    final provider = RecordedPoseLandmarkProvider.fixtureUpperBody();
+    await provider.initialize(const PoseModelConfig());
+    final pose = (await provider.infer(_imageAt(2000))).valueOrNull!;
 
+    expect(
+      pose.presentIds.map((id) => id.name).toSet(),
+      _expectedLandmarkNames,
+      reason: 'exactly the retained set — no more, no less',
+    );
+    expect(pose.count, 9);
+
+    final serialized = jsonEncode(pose.toAuditMap()).toLowerCase();
+    final logged = pose.toString().toLowerCase();
+    for (final forbidden in _forbiddenSubstrings) {
       expect(
-        pose.presentIds.map((id) => id.name).toSet(),
-        _expectedLandmarkNames,
-        reason: 'exactly the retained set — no more, no less',
+        serialized.contains(forbidden),
+        isFalse,
+        reason: 'serialized pose leaked a "$forbidden" field',
       );
-      expect(pose.count, 9);
+      expect(
+        logged.contains(forbidden),
+        isFalse,
+        reason: 'logged pose leaked a "$forbidden" field',
+      );
+    }
+    // The fixture really did emit face points — otherwise this test
+    // would pass vacuously.
+    expect(recordedFaceLandmarkNames, isNotEmpty);
+    final raw = provider.produceRaw(_imageAt(2000)).map((p) => p.name);
+    expect(raw, containsAll(recordedFaceLandmarkNames));
+  });
 
-      final serialized = jsonEncode(pose.toAuditMap()).toLowerCase();
-      final logged = pose.toString().toLowerCase();
-      for (final forbidden in _forbiddenSubstrings) {
-        expect(
-          serialized.contains(forbidden),
-          isFalse,
-          reason: 'serialized pose leaked a "$forbidden" field',
-        );
-        expect(
-          logged.contains(forbidden),
-          isFalse,
-          reason: 'logged pose leaked a "$forbidden" field',
-        );
+  test(
+    'a face-only payload yields notObservable, not a zero-filled body',
+    () async {
+      final provider = RecordedPoseLandmarkProvider.fixtureFaceOnly();
+      await provider.initialize(const PoseModelConfig());
+      final pose = (await provider.infer(_imageAt(3000))).valueOrNull!;
+
+      expect(pose.observability, PoseObservability.notObservable);
+      expect(pose.count, 0);
+      expect(pose.presentIds, isEmpty);
+      for (final id in PoseLandmarkId.values) {
+        expect(pose.byId(id), isNull);
       }
-      // The fixture really did emit face points — otherwise this test
-      // would pass vacuously.
-      expect(recordedFaceLandmarkNames, isNotEmpty);
-      final raw = provider.produceRaw(_imageAt(2000)).map((p) => p.name);
-      expect(raw, containsAll(recordedFaceLandmarkNames));
     },
   );
-
-  test('a face-only payload yields notObservable, not a zero-filled body', () async {
-    final provider = RecordedPoseLandmarkProvider.fixtureFaceOnly();
-    await provider.initialize(const PoseModelConfig());
-    final pose = (await provider.infer(_imageAt(3000))).valueOrNull!;
-
-    expect(pose.observability, PoseObservability.notObservable);
-    expect(pose.count, 0);
-    expect(pose.presentIds, isEmpty);
-    for (final id in PoseLandmarkId.values) {
-      expect(pose.byId(id), isNull);
-    }
-  });
 }

@@ -85,13 +85,12 @@ final class RecordedPoseLandmarkProvider implements PoseLandmarkProvider {
       );
 
   /// Failure-path cell — `infer` returns `AppResult.failure(<code>)`.
-  factory RecordedPoseLandmarkProvider.fixtureFailure({
-    required String code,
-  }) => RecordedPoseLandmarkProvider(
-    modelId: _defaultModelId,
-    modelVersion: _defaultModelVersion,
-    produceRaw: (image) => const <RawPoseLandmark>[],
-  ).._failureCode = code;
+  factory RecordedPoseLandmarkProvider.fixtureFailure({required String code}) =>
+      RecordedPoseLandmarkProvider(
+        modelId: _defaultModelId,
+        modelVersion: _defaultModelVersion,
+        produceRaw: (image) => const <RawPoseLandmark>[],
+      ).._failureCode = code;
 
   static List<RawPoseLandmark> _upperBodyRaw({
     required double offsetY,
@@ -162,18 +161,17 @@ final class RecordedPoseLandmarkProvider implements PoseLandmarkProvider {
     ),
   ];
 
-  static List<RawPoseLandmark> _faceRaw({required double visibility}) => <
-    RawPoseLandmark
-  >[
-    for (var index = 0; index < recordedFaceLandmarkNames.length; index++)
-      RawPoseLandmark(
-        name: recordedFaceLandmarkNames[index],
-        x: 0.48 + index * 0.01,
-        y: 0.18 + index * 0.005,
-        z: 0,
-        visibility: visibility,
-      ),
-  ];
+  static List<RawPoseLandmark> _faceRaw({required double visibility}) =>
+      <RawPoseLandmark>[
+        for (var index = 0; index < recordedFaceLandmarkNames.length; index++)
+          RawPoseLandmark(
+            name: recordedFaceLandmarkNames[index],
+            x: 0.48 + index * 0.01,
+            y: 0.18 + index * 0.005,
+            z: 0,
+            visibility: visibility,
+          ),
+      ];
 
   @override
   Future<AppResult<void>> initialize(PoseModelConfig config) async {

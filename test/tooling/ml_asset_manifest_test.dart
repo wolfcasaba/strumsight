@@ -107,7 +107,11 @@ flutter:
     // joins `hand_landmarker` — both deferred, each with its OWN schema.
     final entries = (visionModels! as List<Object?>)
         .cast<Map<String, Object?>>();
-    expect(entries, hasLength(2), reason: 'two deferred vision models expected');
+    expect(
+      entries,
+      hasLength(2),
+      reason: 'two deferred vision models expected',
+    );
     expect(
       entries.map((entry) => entry['model_id']),
       containsAll(<String>['hand_landmarker', 'pose_landmarker']),
@@ -125,10 +129,7 @@ flutter:
       );
     }
     expect(
-      entries
-          .map((entry) => entry['output_schema'] as String)
-          .toSet()
-          .length,
+      entries.map((entry) => entry['output_schema'] as String).toSet().length,
       2,
       reason: 'the pose entry must NOT inherit the hand output_schema',
     );

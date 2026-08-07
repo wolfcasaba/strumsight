@@ -60,27 +60,40 @@ VisionModelEntry _poseEntry({
 
 void main() {
   group('RecordedPoseLandmarkProvider — 9-point mapping', () {
-    test('every retained ID is queryable and face points are dropped', () async {
-      final provider = RecordedPoseLandmarkProvider.fixtureUpperBody();
-      expect((await provider.initialize(const PoseModelConfig())).isSuccess, isTrue);
+    test(
+      'every retained ID is queryable and face points are dropped',
+      () async {
+        final provider = RecordedPoseLandmarkProvider.fixtureUpperBody();
+        expect(
+          (await provider.initialize(const PoseModelConfig())).isSuccess,
+          isTrue,
+        );
 
-      final result = await provider.infer(_imageAt(1000));
-      expect(result.isSuccess, isTrue);
-      final pose = result.valueOrNull!;
-      expect(pose.observability, PoseObservability.observed);
-      expect(pose.timestampUs, 1000);
-      for (final id in PoseLandmarkId.values) {
-        expect(pose.byId(id), isNotNull, reason: 'retained ID $id is missing');
-      }
-      expect(pose.count, PoseLandmarkId.values.length);
-    });
+        final result = await provider.infer(_imageAt(1000));
+        expect(result.isSuccess, isTrue);
+        final pose = result.valueOrNull!;
+        expect(pose.observability, PoseObservability.observed);
+        expect(pose.timestampUs, 1000);
+        for (final id in PoseLandmarkId.values) {
+          expect(
+            pose.byId(id),
+            isNotNull,
+            reason: 'retained ID $id is missing',
+          );
+        }
+        expect(pose.count, PoseLandmarkId.values.length);
+      },
+    );
 
     test('an empty payload is notObservable, not a failure', () async {
       final provider = RecordedPoseLandmarkProvider.fixtureNoPose();
       await provider.initialize(const PoseModelConfig());
       final result = await provider.infer(_imageAt(10));
       expect(result.isSuccess, isTrue);
-      expect(result.valueOrNull!.observability, PoseObservability.notObservable);
+      expect(
+        result.valueOrNull!.observability,
+        PoseObservability.notObservable,
+      );
     });
 
     test('the failure fixture surfaces AppResult.failure', () async {
@@ -156,17 +169,20 @@ void main() {
       expect(cadence.delegatedCount, 4);
     });
 
-    test('skipped frames return the last accepted pose, never a failure', () async {
-      final cadence = CadenceLimitedPoseLandmarkProvider(
-        RecordedPoseLandmarkProvider.fixtureUpperBody(),
-        everyNthFrame: 4,
-      );
-      await cadence.initialize(const PoseModelConfig());
-      final first = (await cadence.infer(_imageAt(0))).valueOrNull!;
-      final skipped = (await cadence.infer(_imageAt(1000))).valueOrNull!;
-      expect(skipped.timestampUs, first.timestampUs);
-      expect(cadence.delegatedCount, 1);
-    });
+    test(
+      'skipped frames return the last accepted pose, never a failure',
+      () async {
+        final cadence = CadenceLimitedPoseLandmarkProvider(
+          RecordedPoseLandmarkProvider.fixtureUpperBody(),
+          everyNthFrame: 4,
+        );
+        await cadence.initialize(const PoseModelConfig());
+        final first = (await cadence.infer(_imageAt(0))).valueOrNull!;
+        final skipped = (await cadence.infer(_imageAt(1000))).valueOrNull!;
+        expect(skipped.timestampUs, first.timestampUs);
+        expect(cadence.delegatedCount, 1);
+      },
+    );
 
     test('a cadence below 1 is rejected', () {
       expect(
@@ -211,7 +227,10 @@ void main() {
 
       final hand = RecordedHandLandmarkProvider.fixtureSingleHand();
       final init = await hand.initialize(
-        const HandModelConfig(modelId: 'hand_landmarker', modelVersion: '1.0.0'),
+        const HandModelConfig(
+          modelId: 'hand_landmarker',
+          modelVersion: '1.0.0',
+        ),
       );
       expect(init.isSuccess, isTrue);
       final handResult = await hand.infer(_imageAt(500));
@@ -221,19 +240,22 @@ void main() {
   });
 
   group('NativePoseLandmarkProvider — fail-closed', () {
-    test('deferred manifest entry → initialize fails (capability unavailable)', () async {
-      final provider = NativePoseLandmarkProvider(
-        manifest: _StubManifestReader(
-          VisionModelManifestReport(
-            entries: [_poseEntry(status: VisionModelStatus.deferred)],
-            issues: const [],
+    test(
+      'deferred manifest entry → initialize fails (capability unavailable)',
+      () async {
+        final provider = NativePoseLandmarkProvider(
+          manifest: _StubManifestReader(
+            VisionModelManifestReport(
+              entries: [_poseEntry(status: VisionModelStatus.deferred)],
+              issues: const [],
+            ),
           ),
-        ),
-      );
-      final result = await provider.initialize(const PoseModelConfig());
-      expect(result.isSuccess, isFalse);
-      expect(provider.modelId, 'pose_landmarker');
-    });
+        );
+        final result = await provider.initialize(const PoseModelConfig());
+        expect(result.isSuccess, isFalse);
+        expect(provider.modelId, 'pose_landmarker');
+      },
+    );
 
     test('dirty manifest → initialize fails', () async {
       final provider = NativePoseLandmarkProvider(

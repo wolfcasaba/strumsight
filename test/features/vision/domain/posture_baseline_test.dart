@@ -100,32 +100,29 @@ void main() {
         final expectBaseline =
             quality.value >= _config.minimumQualityScore &&
             duration.value >= _config.minimumVisibleDuration.inMicroseconds;
-        test(
-          'quality ${quality.key} × duration ${duration.key} → '
-          '${expectBaseline ? 'baseline' : 'no baseline'}',
-          () {
-            final collector = _feedWindow(
-              durationUs: duration.value,
-              qualityScore: quality.value,
+        test('quality ${quality.key} × duration ${duration.key} → '
+            '${expectBaseline ? 'baseline' : 'no baseline'}', () {
+          final collector = _feedWindow(
+            durationUs: duration.value,
+            qualityScore: quality.value,
+          );
+          if (expectBaseline) {
+            expect(collector.baseline, isNotNull);
+            expect(collector.baseline!.sampleCount, 2);
+            expect(collector.baseline!.durationUs, duration.value);
+            expect(
+              collector.observe(_poseAt(duration.value)).state,
+              VisionMetricState.good,
             );
-            if (expectBaseline) {
-              expect(collector.baseline, isNotNull);
-              expect(collector.baseline!.sampleCount, 2);
-              expect(collector.baseline!.durationUs, duration.value);
-              expect(
-                collector.observe(_poseAt(duration.value)).state,
-                VisionMetricState.good,
-              );
-            } else {
-              expect(collector.baseline, isNull);
-              expect(
-                collector.observe(_poseAt(duration.value)).state,
-                VisionMetricState.notObservable,
-                reason: 'without a baseline, posture must be notObservable',
-              );
-            }
-          },
-        );
+          } else {
+            expect(collector.baseline, isNull);
+            expect(
+              collector.observe(_poseAt(duration.value)).state,
+              VisionMetricState.notObservable,
+              reason: 'without a baseline, posture must be notObservable',
+            );
+          }
+        });
       }
     }
   });
@@ -225,7 +222,10 @@ void main() {
       final collector = goodCollector();
       final baseline = collector.baseline!;
       expect(baseline.presentIds, hasLength(4));
-      expect(baseline.byId(PoseLandmarkId.leftShoulder)!.x, closeTo(0.40, 1e-9));
+      expect(
+        baseline.byId(PoseLandmarkId.leftShoulder)!.x,
+        closeTo(0.40, 1e-9),
+      );
       expect(baseline.shoulderSpan, closeTo(0.20, 1e-9));
     });
 

@@ -124,9 +124,7 @@ final class PostureObservation {
 /// Any sample failing the gate RESETS the window: a baseline is never built
 /// from a partial or interrupted observation (kör-brief §5.5).
 final class PostureBaselineCollector {
-  PostureBaselineCollector({
-    this.config = const PostureBaselineConfig(),
-  });
+  PostureBaselineCollector({this.config = const PostureBaselineConfig()});
 
   final PostureBaselineConfig config;
 
@@ -236,10 +234,7 @@ final class PostureBaselineCollector {
       for (final id in sample.presentIds) {
         final point = sample.byId(id)!;
         if (point.visibility < config.minimumLandmarkVisibility) continue;
-        final accumulator = sums.putIfAbsent(
-          id,
-          () => <double>[0, 0, 0, 0],
-        );
+        final accumulator = sums.putIfAbsent(id, () => <double>[0, 0, 0, 0]);
         accumulator[0] += point.x;
         accumulator[1] += point.y;
         accumulator[2] += point.z;
