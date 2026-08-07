@@ -280,6 +280,47 @@ A `1e-9` forward tolerancia a 4 sarok-pontra (`homography_test.dart` `front × m
 a fenti python értékekre van horgonyozva; az `1e-6` round-trip tolerancia a
 double pontosságú DLT-re jellemző tolerancia.
 
+#### 10.1.1 Side / top viewpoint fixtures (MAJOR-2, javító kör kiegészítés)
+
+A brief §6 első cellája 4 nézőpontot kért (`szemből`, `oldalról`, `felülről`,
+`ferdén`); az eredeti §10.1-ben csak az első kettő volt jelen. A javító
+kör a hiányzó kettőt pótolta — és mivel ezek a nézetek a gitár nyakát
+közel egy vonalra vetítik (a 2×2 affin blokk kondíciója messze a küszöb
+fölött van), a brief §9 szellemében **szándékosan elutasítandó** nézőpontok.
+A python3 referencia-számítás:
+
+```bash
+python3 - <<'PY'
+import numpy as np
+
+src = np.array([[0,0,1],[1,0,1],[0,1,1],[1,1,1]], dtype=float).T
+# "oldalról" nézet: a nyak közel egy VÍZSZINTES vonalra vetül (v_scale = 0.0005)
+M = np.array([[0.8, 0.0, 0.10], [0.0, 0.0005, 0.40], [0.0, 0.0, 1.0]])
+dst = (M @ src); dst = dst[:2] / dst[2]
+print('side_med dst =', list(map(tuple, dst.T.round(6))))
+print('side_med cond_2x2 =', np.linalg.cond(np.array([[0.8, 0.0], [0.0, 0.0005]])))
+# "felülről" nézet: a nyak közel egy FÜGGŐLEGES vonalra vetül (u_scale = 0.0005)
+M = np.array([[0.0005, 0.0, 0.40], [0.0, 0.8, 0.10], [0.0, 0.0, 1.0]])
+dst = (M @ src); dst = dst[:2] / dst[2]
+print('top_med  dst =', list(map(tuple, dst.T.round(6))))
+print('top_med  cond_2x2 =', np.linalg.cond(np.array([[0.0005, 0.0], [0.0, 0.8]])))
+PY
+```
+
+```
+side_med dst = [(0.1, 0.4), (0.9, 0.4), (0.1, 0.4005), (0.9, 0.4005)]
+side_med cond_2x2 = 1600.0     # > 1e3 → REJECTED (conditionNumberExceeded)
+top_med  dst = [(0.4, 0.1), (0.4005, 0.1), (0.4, 0.9), (0.4005, 0.9)]
+top_med  cond_2x2 = 1600.0     # > 1e3 → REJECTED (conditionNumberExceeded)
+```
+
+Mindkét nézőpontra a `Homography.solve` a `GeometryFailure.conditionNumberExceeded`
+okkal dob — ez a fixture-mátrix 4. és 5. celláját az **elutasítás
+contractjával** tölti ki (lásd MAJOR-2 a `docs/reviews/e05-r15-guitar-
+coordinates-and-homography-review.md` fájlban, ill. a javítási döntés a
+§10.6-ban). A Dart tesztek: `homography_test.dart` `MAJOR-2: side/top
+viewpoint` két új esete.
+
 ### 10.2 Condition-number threshold kalibráció
 
 ```bash
@@ -371,6 +412,12 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
 - `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart` —
   bridge `NormalizedPoint` ↔ `GuitarSpacePoint`, polygon centroid +
   perpendicular offset source quad, condition-penalty confidence.
+  **`GuitarLandmarkMapperSetupFailure` enum (BLOCKER-1 javító kör)**
+  egy új `unstableMapping` tagot kapott, és a `fromCalibration` a
+  `Homography.solve` UTÁN, de a mapper visszaadása ELŐTT mintavételezi
+  a kamera-keret 5 kanonikus pontját (4 sarok + középpont), és ha
+  bármelyik `(u, v)` magnitúdója túllépi a `guitarSpaceSanityBound =
+  10.0` küszöböt, `unstableMapping`-et dob.
 - `lib/features/vision/domain/geometry/guitar_region.dart` —
   `GuitarRegion` enum: neck/body/pickingZone/outsideGuitar, pure
   classifier, default thresholds neckToBodyU=12/22, pickingZoneUSpan=1/3.
@@ -380,16 +427,22 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
   (guitar_landmark_mapper, guitar_region).
 
 **Tesztek (4 új):**
-- `test/core/geometry/homography_test.dart` — 10 eset: ArgumentError,
+- `test/core/geometry/homography_test.dart` — 12 eset: ArgumentError,
   nonFiniteInput, collinear, well-conditioned round-trip 1e-6,
   cond under/at/above threshold, NaN/Inf guard 200 random,
-  inverse ∘ apply 9 mintapont.
-- `test/core/geometry/polygon2_test.dart` — 13 eset (validate,
-  signedArea, orientation, isConvex, contains).
+  inverse ∘ apply 9 mintapont, **MAJOR-2 side/top viewpoint 2 új
+  eset** (a hiányzó két nézőpont a fixture-mátrixból — szándékosan
+  elutasítva `conditionNumberExceeded` okkal).
+- `test/core/geometry/polygon2_test.dart` — 15 eset (validate,
+  signedArea, orientation, isConvex, contains + **MAJOR-1: rombusz
+  + ferde gitárnyak-quad 2 új regressziós teszt**).
 - `test/features/vision/domain/guitar_landmark_mapper_test.dart` —
-  10 eset: fromCalibration, nut/bridge (0,0)/(1,0), bass/treble
+  12 eset: fromCalibration, nut/bridge (0,0)/(1,0), bass/treble
   round-trip, confidence ≤ input (50 random), worse-cond →
-  strict lower, non-finite → null, inverse mapping.
+  strict lower, non-finite → null, inverse mapping + **BLOCKER-1
+  2 új eset** (a review-beli EXAKT reprodukciós kalibráció
+  `unstableMapping` kudarcot dob, és a jól kondicionált
+  `front_medium` 5 mintapontja a küszöb alatt marad).
 - `test/property/homography_property_test.dart` — 3 eset: PROPERTY_SEED
   pattern (default 42), 500/200/200 trial-eloszlás.
 
@@ -423,6 +476,58 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
   meg a mapper source quad-jával. A végleges teszt a round-trip
   invariánst ellenőrzi: `inverse((0.5, ±1)) → S → forward(S) →
   (0.5, ±1)` 1e-6 toleranciával.
+
+- **Side / top nézőpontok szándékosan elutasítva (MAJOR-2, javító
+  kör).** A brief §6 4 nézőpontot kért (`szemből`, `oldalról`,
+  `felülről`, `ferdén`); a javító kör pótolta a hiányzó kettőt, de
+  az `oldalról` és `felülről` nézeteket a konstruktor jogosan
+  elutasítja (`GeometryFailure.conditionNumberExceeded`), mert a
+  gitár nyaka közel egy vonalra vetül (a 2×2 affin blokk kondíciója
+  1600 > 1e3). Ez az elfogadható B-ág a javítási briefben — az
+  elutasítás a round saját kockázat-fókuszát (brief §9) erősíti,
+  nem work-around. A két új fixture és a hozzájuk tartozó Dart
+  tesztek: `homography_test.dart` `MAJOR-2: side/top viewpoint`
+  két esete; python3 referencia: §10.1.1.
+
+- **Polygon2.contains `.abs()` eltávolítva (MAJOR-1, javító kör).**
+  A ray-casting nevezőjében az eredeti kód `(b.y - a.y).abs()`-szal
+  osztott, ami minden olyan élnél megfordította az eredményt, ahol
+  `b.y < a.y`. A megelőző XOR-feltétel már garantálja `a.y ≠ b.y`-t
+  ezen az ágon, tehát az `.abs()`-nak SOHA nincs jogos szerepe. A
+  javítás az előjeles `(b.y - a.y)`-nal oszt, és a `+1e-300` védelmet
+  is elhagyja. Két új regressziós teszt (rombusz + ferde gitárnyak-
+  szerű quad) bizonyítja, hogy a hiba a javítás ELŐTT fennállt
+  volna, a JAVÍTÁS UTÁN nincs jelen. Lásd
+  `test/core/geometry/polygon2_test.dart` `Polygon2.contains`
+  csoport.
+
+- **GuitarLandmarkMapper projektív-sor vakfolt őr (BLOCKER-1,
+  javító kör).** A `Homography._measureConditionNumber` kizárólag a
+  2×2 lineáris blokkot méri, a projektív sort (`h[6..8]`) nem — ez
+  azt jelenti, hogy ha a `w = h6·x + h7·y + h8 = 0` eltűnő egyenes
+  áthalad a kamera-normalizált `[0,1]×[0,1]` tartományon, a
+  konstruktor „kiválónak" jelenti a mátrixot (`cond ≈ 1.3`), miközben
+  `apply(...)` 10²–10⁷ nagyságrendű szemetet ad, magas (≈ 0.88)
+  confidence-szel. A javítás egy új, domain-tudatos őr a
+  `GuitarLandmarkMapper.fromCalibration` végén: a `Homography.solve`
+  sikeres visszatérése UTÁN, de a mapper visszaadása ELŐTT mintavételezi
+  a kamera-keret 5 kanonikus pontját (4 sarok + középpont), és ha
+  bármelyik minta `(u, v)` magnitúdója meghaladja a
+  `guitarSpaceSanityBound = 10.0` küszöböt, dob egy új
+  `GuitarLandmarkMapperSetupFailure.unstableMapping` okot. A
+  küszöb nagyságrendekkel bőkezűbb, mint a gitártér `u ∈ [0,1] /
+  v ∈ [-1,1]` definíciója szerinti `|uv| ≤ sqrt(2) ≈ 1.42` (kb. 7×
+  slack), és nagyságrendekkel kisebb, mint a megfigyelt szemét
+  (10²–10⁷). Az őr a `core/geometry` rétegben nem implementálható
+  (az a réteg tér-semleges, nem tudhat a `[0,1]²` kamera-tartományról);
+  ezért került a feature-oldali mapperbe. Két új regressziós teszt:
+  (a) a review-beli EXAKT reprodukciós kalibráció (jelenleg
+  `cond ≈ 1.31`, `(1, 0.9)` minta `(u, v) ≈ (-236.8, -1022.9)`,
+  `confidence ≈ 0.933` szemetet adna) most `unstableMapping`-et dob;
+  (b) a `front_medium` jól kondicionált fixture 5 mintapontja mind
+  a küszöb alatt marad, tehát az őr NEM eszik legitim kalibrációt.
+  Lásd `test/features/vision/domain/guitar_landmark_mapper_test.dart`
+  `BLOCKER-1` két új esete.
 
 ### 10.7 Nem futtatott / kívül eső
 
