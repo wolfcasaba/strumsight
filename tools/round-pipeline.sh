@@ -143,10 +143,14 @@ pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude}
 # állapotot hagyott. A HEADLESS (-p) mód UGYANAZZAL a bejelentkezéssel viszont
 # működik (mérve: `-p 'Csak ennyit válaszolj: LOGIN-OK'` → LOGIN-OK).
 #
-# Ezért a lánc alapértelmezésben headless módban fut — ez tartja életben a
-# fejlesztést. Az interaktív mód (ami a telefonos Code-listához kellene) EGYSZERI
-# emberi bejelentkezés után kapcsolható vissza: PIPELINE_SESSION_MODE=interactive.
-session_mode=${PIPELINE_SESSION_MODE:-print}
+# FELOLDVA 2026-08-07 04:41-kor: a user elvégezte az egyszeri bejelentkezést a
+# `~/.claude` dirbe (+ workspace-trust elfogadva). Ezután az interaktív session
+# `/rc active`-ot mutat és `bridgeSessionId`-vel regisztrál
+# (`~/.claude/sessions/<pid>.json`) — ettől látszik a telefonos Code-listában,
+# ami a kör követhetőségének a feltétele. Ezért a default újra `interactive`.
+# Ha a láthatóság valaha megint elveszik, a lánc EGY env-vel életben tartható
+# headless módban: PIPELINE_SESSION_MODE=print.
+session_mode=${PIPELINE_SESSION_MODE:-interactive}
 case "$session_mode" in
   print)       session_mode_flag='-p' ;;
   interactive) session_mode_flag='' ;;
