@@ -493,15 +493,38 @@ saját próbájának reprodukálhatósága:
 3. A meglévő `front_medium`-alapú „stays inside the sanity bound" pozitív
    teszt bitre változatlanul zöld maradjon.
 
+## BLOCKER-1 — javító kör 2 közbeni STOP és feloldás (Codex helyesen megállt)
+
+A Codex a fenti 4-sarkos konstrukció-idejű specifikációt implementálva
+`stopped`-ot jelzett: **`front_medium`** (a teljes tesztsuite referencia
+fixture-e) a saját próbájával NEM azonos előjelű a 4 sarkán. Az
+orchestrátor független próbával (`_fourSourcePoints`-replikáció +
+`debugMatrix`, majd finomított pásztázás) **megerősítette**: `front_medium`
+ténylegesen rendelkezik egy korábban észrevétlen, szűk eltűnő-egyenes
+sávval kamera-tér `y≈0,25-0,27` közelében (`apply(0.5,0.26)` magnitúdója
+`5,6`). A 4-sarkos ellenőrzés matematikailag HELYES (ténylegesen felfedezi
+a hibát), de **hatókörben túl szigorú**: egy 95%-ban jó kalibrációt
+egészében elutasítana egyetlen keskeny sáv miatt.
+
+**Feloldás (dokumentálva a brief §0.0.1-ben, ADR 0087 §2 szerint
+önállóan dönthető — a kör saját, még nem merge-elt artefaktumát érinti,
+nem H4 halt):** a védelem KONSTRUKCIÓ-idejű, teljes-kalibrációt-elutasító
+szintről PONT-szintűre tolódik — `mapPoint()` a TÉNYLEGESEN lekérdezett
+ponton számítja a `homogeneousW`-t, és csak AZT az egy landmarket adja
+vissza `null`-ként, ha a küszöb alatt van, nem a teljes kalibrációt utasítja
+el. Ez szigorúbb garancia (a valódi pontot vizsgálja, nem egy véges
+mintavételi proxyt) ÉS nem dobja el a `front_medium`-hoz hasonló, javarészt
+jó kalibrációkat. A pontos kódalak és a BLOCKER-1 repro-teszt átírásának
+iránya a brief §0.0.1-ben. A javító kör 2 ezzel a revideált iránnyal
+folytatódik ugyanabban a munkapéldányban.
+
 ## Merge-döntés
 
-**Merge TILOS jelenleg** (1 nyitott BLOCKER — BLOCKER-1 részlegesen javítva,
-de a rés matematikailag bizonyítottan nyitva maradt — az ADR 0052 zöld kapu
-ellenére, mert a gate szerkezetileg nem méri a kondíciószám-őr projektív
-vakfoltját). **A MiniMax motor-eszkalációs szabálya (AGENTS.md §15.6,
-user-döntés 2026-08-01) kimerült** ezen a leleten (egy javító kör után is
-nyitva) — **a következő javító kört a Codex viszi**, külön munkapéldányban
-(`tools/codex-round.sh` + `tools/codex-watch.sh`), a fenti pontos
-specifikációval. MAJOR-1 és MAJOR-2 zárva, nem kerülnek vissza a javító
-kör 2 promptjába. MINOR-1..3 opcionális, csak ha nem hizlalja érdemben a
-diffet.
+**Merge TILOS jelenleg** (1 nyitott BLOCKER — BLOCKER-1 a javító kör 1 után
+részlegesen javítva, a javító kör 2 folyamatban a fenti revideált,
+pont-szintű iránnyal). **A MiniMax motor-eszkalációs szabálya (AGENTS.md
+§15.6, user-döntés 2026-08-01) kimerült** ezen a leleten (egy javító kör
+után is nyitva) — **a javító kört a Codex viszi**, külön munkapéldányban
+(`tools/codex-round.sh` + `tools/codex-watch.sh`). MAJOR-1 és MAJOR-2 zárva,
+nem kerülnek vissza a javító kör 2 promptjába. MINOR-1..3 opcionális, csak
+ha nem hizlalja érdemben a diffet.

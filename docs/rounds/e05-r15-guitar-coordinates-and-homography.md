@@ -126,6 +126,52 @@ nincs allowed_paths-bővítés, nincs architekturális eltérés.
 brief-lint strict: nincs lelet
 (`/home/ubuntu/music-theory/.pipeline/brief-lint-E05-R15.md`), változatlan.
 
+### 0.0.1 Javító kör 2 közbeni revízió — BLOCKER-1 védelem: pont-szintű, nem konstrukció-szintű elutasítás
+
+**Mérve, a Codex javító kör 2 saját STOP-jelzése nyomán (2026-08-07,
+`ss-codex-e05-r15`, `d9af8bf` alap).** A review „BLOCKER-1 — javító kör 2"
+szakasza egy 4-sarkos, KONSTRUKCIÓ-idejű, azonos-előjel `w`-ellenőrzést
+írt elő. A Codex helyesen jelezte a konfliktust: a **`front_medium`
+fixture** (a TELJES tesztsuite referencia „jó" kalibrációja) tényleges,
+független próbával **NEM azonos előjelű a 4 sarkán**
+(`w(0,0)=1.0, w(1,0)=1.325, w(0,1)=-3.537, w(1,1)=-3.212`), tehát a
+konstrukció-idejű ellenőrzés a `front_medium`-ot ELUTASÍTANÁ — miközben az
+orchestrátor saját próbája (`_fourSourcePoints`-replikáció + `debugMatrix`)
+megerősítette, hogy ez a fixture ténylegesen rendelkezik egy szűk,
+korábban ÉSZREVÉTLEN eltűnő-egyenes sávval kamera-térben `y≈0,25-0,27`
+közelében (mért: `apply(Point2(0.5,0.26))` magnitúdója `5,6`, míg
+`y=0,24`-nél `0,5`, `y=0,30`-nál `1,45` — éles, keskeny csúcs, nem
+tartományszintű probléma).
+
+**Döntés (a kör saját, még nem merge-elt artefaktumát érinti — ADR 0087
+§2 szerint önállóan dönthető, nem H4 halt):** a védelem KONSTRUKCIÓ-idejű
+(a teljes kalibrációt elutasító) szintről PONT-szintűre tolódik:
+
+- a `Homography.homogeneousW(Point2)` (Codex már megírta) MARAD;
+- a konstrukció-idejű 4-sarkos elutasítás **TÖRLŐDIK** — helyette
+  `GuitarLandmarkMapper.mapPoint()` az `apply()` hívás ELŐTT kiszámítja
+  `_homography.homogeneousW(Point2(normalized.x, normalized.y))`-t A
+  TÉNYLEGESEN LEKÉRDEZETT ponton, és ha `|w|` egy dokumentált küszöb
+  (kiindulásként `0.1`, python3-mal vagy saját random-search-csel
+  kalibrálva, hasonlóan a §10.2-höz) alatt van, `mapPoint` **ezt az EGY
+  landmarket** adja vissza `null`-ként — a kalibráció maga NEM kerül
+  elutasításra.
+- Indoklás: a pont-szintű ellenőrzés STRIKTEBB garanciát ad, mint BÁRMELY
+  véges mintavételezés (sarok vagy rács) — a TÉNYLEGESEN lekérdezett
+  pontot vizsgálja, nem egy proxyt —, és nem dobja el a `front_medium`-hoz
+  hasonló, TÖBBSÉGÉBEN jó kalibrációkat egyetlen keskeny sáv miatt. Ez
+  konzisztens a `mapPoint` MEGLÉVŐ mintázatával (már ma is `null`-t ad
+  egyedi, nem véges bemenetre/kimenetre — brief §5.2).
+- A `guitarSpaceSanityBound`/`unstableMapping` és a hozzá tartozó
+  `GuitarLandmarkMapperSetupFailure` érték megmarad, de más szemantikával:
+  ha egy JÖVŐBELI kör (pl. per-frame agregáció) úgy találja, hogy egy
+  kalibráció TÖBBSÉGE instabil, azt külön mérje és külön döntsön —
+  ez a kör csak a per-pont védelemért felel.
+- A meglévő BLOCKER-1 repro-teszt (`fromCalibration` dob) ÁTÍRANDÓ: a
+  repro-kalibráció `fromCalibration`-ja immár SIKERESEN épül (a
+  konstrukció-idejű elutasítás megszűnt), és `mapPoint(normalized:
+  NormalizedPoint(1.0, 0.9), visibility: 0.95)` ad `null`-t.
+
 ## 1. Cél
 
 **Pure Dart** geometriai mag: a kamerából jövő landmarkok stabil, **gitárhoz
