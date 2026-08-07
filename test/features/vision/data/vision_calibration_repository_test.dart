@@ -1,24 +1,25 @@
-/// E05-R10 §6 — repository tesztek.
-///
-/// A `VisionCalibrationRepository` négy tulajdonságát méri, mindegyiket a
-/// saját cellájában (a mérce-mátrix szabály: a hibás és helyes implementáció
-/// nem mosható össze):
-///
-///  * **Round-trip** (bit-stabil, determinisztikus kulcssorrend).
-///  * **Migrációs mátrix** (v0 / vN-1 / vN / vN+1 — mind a négy cella).
-///  * **Idempotencia** (a migráció kétszeri futtatása azonos eredmény).
-///  * **Korrupció-teszt** (csonka JSON / hibás típus / degenerált polygon).
-///  * **Privacy-snapshot** (a szerializált profil kulcskészlete egy rögzített
-///    halmaz, és sehol sincs raw-kép-suspect substring).
-///  * **Valódi-sértés próba** (pixelkoordináta → a codec elutasítja release
-///    módban is).
+// E05-R10 §6 — repository tesztek.
+//
+// A `VisionCalibrationRepository` négy tulajdonságát méri, mindegyiket a
+// saját cellájában (a mérce-mátrix szabály: a hibás és helyes implementáció
+// nem mosható össze):
+//
+//  * **Round-trip** (bit-stabil, determinisztikus kulcssorrend).
+//  * **Migrációs mátrix** (v0 / vN-1 / vN / vN+1 — mind a négy cella).
+//  * **Idempotencia** (a migráció kétszeri futtatása azonos eredmény).
+//  * **Korrupció-teszt** (csonka JSON / hibás típus / degenerált polygon).
+//  * **Privacy-snapshot** (a szerializált profil kulcskészlete egy rögzített
+//    halmaz, és sehol sincs raw-kép-suspect substring).
+//  * **Valódi-sértés próba** (pixelkoordináta → a codec elutasítja release
+//    módban is).
+library;
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/json_validation.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/storage/json_document_store.dart';
-import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/vision/data/persistence/vision_calibration_codec.dart';
 import 'package:strumsight/features/vision/data/persistence/vision_calibration_repository.dart';
@@ -93,26 +94,17 @@ CameraCalibrationProfile _profile({
   qualityScore: 0.85,
 );
 
-GuitarCalibration _guitar() => const GuitarCalibration(
-  nutAnchor: NormalizedPoint(0.20, 0.45),
-  bridgeAnchor: NormalizedPoint(0.80, 0.55),
-  neckPolygon: [
+GuitarCalibration _guitar() => GuitarCalibration(
+  nutAnchor: const NormalizedPoint(0.20, 0.45),
+  bridgeAnchor: const NormalizedPoint(0.80, 0.55),
+  neckPolygon: const [
     NormalizedPoint(0.15, 0.30),
     NormalizedPoint(0.85, 0.30),
     NormalizedPoint(0.85, 0.70),
     NormalizedPoint(0.15, 0.70),
   ],
-  createdAt: null, // ignored in equality, set via copyWith if needed
-)._withCreatedAt(DateTime.utc(2026, 8, 7, 12));
-
-extension on GuitarCalibration {
-  GuitarCalibration _withCreatedAt(DateTime ts) => GuitarCalibration(
-    nutAnchor: nutAnchor,
-    bridgeAnchor: bridgeAnchor,
-    neckPolygon: neckPolygon,
-    createdAt: ts,
-  );
-}
+  createdAt: DateTime.utc(2026, 8, 7, 12),
+);
 
 void main() {
   group('round-trip', () {
@@ -140,10 +132,12 @@ void main() {
     test('the top-level key order is deterministic (hand-pinned)', () async {
       final codec = const VisionCalibrationCodec();
       final encoded = codec.encodeToMap(profile: _profile(), guitar: _guitar());
-      expect(encoded.keys.toList(), <String>['schemaVersion', 'data']);
-      final data = encoded['data'] as Map<String, dynamic>;
-      expect(data.keys.toList(), <String>['camera', 'guitar']);
-      final camera = data['camera'] as Map<String, dynamic>;
+      expect(encoded.keys.toList(), <String>[
+        'schemaVersion',
+        'camera',
+        'guitar',
+      ]);
+      final camera = encoded['camera'] as Map<String, dynamic>;
       expect(camera.keys.toList(), <String>[
         'camera',
         'orientation',
@@ -152,7 +146,7 @@ void main() {
         'createdAt',
         'qualityScore',
       ]);
-      final guitar = data['guitar'] as Map<String, dynamic>;
+      final guitar = encoded['guitar'] as Map<String, dynamic>;
       expect(guitar.keys.toList(), <String>[
         'nut',
         'bridge',
@@ -492,32 +486,37 @@ void main() {
     );
 
     test('a NaN coordinate is also rejected (poison prevention)', () async {
-      final malicious = jsonEncode({
-        'schemaVersion': documentSchemaVersion,
-        'data': {
-          'camera': {
-            'camera': 'back',
-            'orientation': 0,
-            'zoom': 0.5,
-            'setupProfile': 'practiceBalanced',
-            'createdAt': '2026-08-07T12:00:00.000Z',
-            'qualityScore': 0.9,
-          },
-          'guitar': {
-            'nut': {'x': double.nan, 'y': 0.5},
-            'bridge': {'x': 0.7, 'y': 0.5},
-            'neckPolygon': [
-              {'x': 0.25, 'y': 0.35},
-              {'x': 0.75, 'y': 0.35},
-              {'x': 0.75, 'y': 0.65},
-            ],
-            'createdAt': '2026-08-07T12:00:00.000Z',
-          },
-        },
-      });
+      // A `jsonEncode` Dart-ban eldob a `double.nan` értékre, ezért a NaN-t
+      // nyers JSON-karakterláncként juttatjuk be — pont úgy, ahogy egy
+      // hand-edit vagy downgrade írná a lemezre.
+      const malicious =
+          '{'
+          '"schemaVersion": ${documentSchemaVersion},'
+          '"data": {'
+          '"camera": {'
+          '"camera": "back",'
+          '"orientation": 0,'
+          '"zoom": 0.5,'
+          '"setupProfile": "practiceBalanced",'
+          '"createdAt": "2026-08-07T12:00:00.000Z",'
+          '"qualityScore": 0.9'
+          '},'
+          '"guitar": {'
+          '"nut": {"x": NaN, "y": 0.5},'
+          '"bridge": {"x": 0.7, "y": 0.5},'
+          '"neckPolygon": ['
+          '{"x": 0.25, "y": 0.35},'
+          '{"x": 0.75, "y": 0.35},'
+          '{"x": 0.75, "y": 0.65}'
+          '],'
+          '"createdAt": "2026-08-07T12:00:00.000Z"'
+          '}'
+          '}'
+          '}';
       final c = build(initial: {StorageKeys.visionCalibration: malicious});
       final read = c.repository.read();
       expect(read, isNull);
+      expect(c.logger.events, contains('storage.document.record_skipped'));
     });
   });
 

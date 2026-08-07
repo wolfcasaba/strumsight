@@ -1,10 +1,12 @@
-/// E05-R10 §6 — Validity-mátrix: öt cella, mind külön tesztelt.
-///
-/// A `CalibrationValidity.evaluate` a tárolt `CameraCalibrationProfile` és
-/// `GuitarCalibration` felett dönti el, hogy az érvőles a jelenlegi
-/// runtime-kontextusra (currentCamera / currentOrientation / currentZoom / now).
-/// Minden cella ELTÉRŐ invalidation reason-t ad vissza — a tesztek egyenként
-/// rögzítik, hogy a hibaüzenet kiolvasható legyen, és ne legyen átfedés.
+// E05-R10 §6 — Validity-mátrix: öt cella, mind külön tesztelt.
+//
+// A `CalibrationValidity.evaluate` a tárolt `CameraCalibrationProfile` és
+// `GuitarCalibration` felett dönti el, hogy az érvőles a jelenlegi
+// runtime-kontextusra (currentCamera / currentOrientation / currentZoom / now).
+// Minden cella ELTÉRŐ invalidation reason-t ad vissza — a tesztek egyenként
+// rögzítik, hogy a hibaüzenet kiolvasható legyen, és ne legyen átfedés.
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 import 'package:strumsight/features/vision/domain/calibration/calibration_validity.dart';
