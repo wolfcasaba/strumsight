@@ -547,5 +547,17 @@ orchestrátor pre-flightjához).
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e05-r17-auto-guitar-detector-decision-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Review: [`docs/reviews/e05-r17-auto-guitar-detector-decision-review.md`](../reviews/e05-r17-auto-guitar-detector-decision-review.md) —
+**APPROVED** egy javító kör után (`3748821`→`0c3af47`). Első pass: 1
+BLOCKER (`decision()` promóciós logika invertálva — a gyökérok az
+orchestrátor saját pre-flight spec-je volt, nem implementer-hiba) + 1
+MAJOR (dedikált security-review, risk=high: `dataset_manifest.md`
+consent-sémája az SDD §31.2 7 kötelező eleméből 6-ot vitt át). Javító kör
+1 (MiniMax) mindkettőt zárta + egy opcionális kilépési-kód pontosítást;
+az orchestrátor mindhármat FÜGGETLENÜL, egy friss `/tmp/review-e05-r17-fix1`
+klónban (nem az implementer munkapéldányában) ellenőrizte újra — a
+BLOCKER-1 zárását egy a self-test körén KÍVÜLI, frissen generált
+szintetikus JSONL-lel (`--input`) is megismételve. Gate 6/6 zöld,
+scope-audit OK a javító kör saját commit-tartományán. Merge csak
+exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után —
+ez utóbbi kettő teljesül, a CI-dispatch az orchestrátor következő lépése.
