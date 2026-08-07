@@ -289,7 +289,89 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### 10.1 Mért (gate-artefactum)
+
+`tools/round-gate.sh test/features/vision/application/guitar_calibration_controller_test.dart test/features/vision/presentation/guitar_calibration_drag_matrix_test.dart test/core/l10n_parity_test.dart` → minden lépés zöld (format, analyze, mindhárom tesztútvonal külön processz, architecture, secrets, l10n). A teljes suite + randomizált property gate + APK a CI-ban fut (ADR 0053).
+
+### 10.2 §6 cella — „rajta" (min nyakhossz küszöb)
+
+Az R10 `CalibrationValidity.minAnchorSeparation` értéke: **0.25** (normalizált egység). A „rajta" cella: nut=(0.2, 0.2), bridge=(0.45, 0.2), polygon=egészséges négyszög → neckLen = 0.25 = minAnchorSeparation → `evaluate(...) == null` (valid; a tolerancia `<`, nem `≤`).
+
+### 10.3 Változtatott / létrehozott fájlok
+
+| Útvonal | Állapot |
+|---|---|
+| `lib/features/vision/application/guitar_calibration_controller.dart` | ÚJ |
+| `lib/features/vision/presentation/providers/guitar_calibration_providers.dart` | ÚJ |
+| `lib/features/vision/presentation/widgets/guitar_anchor_editor.dart` | ÚJ |
+| `lib/features/vision/presentation/widgets/guitar_geometry_preview.dart` | ÚJ |
+| `lib/features/vision/presentation/screens/guitar_calibration_screen.dart` | ÚJ |
+| `lib/features/vision/public.dart` | additív export |
+| `lib/app/routing/app_route.dart` | +1 sor: `visionGuitarGeometry` útvonal |
+| `lib/app/routing/app_router.dart` | guard `visionEnabled && visionGuitarGeometryEnabled` (§0.0 R7) |
+| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | +22 kulcs, additív |
+| `test/features/vision/application/guitar_calibration_controller_test.dart` | ÚJ (15 teszt) |
+| `test/features/vision/presentation/guitar_calibration_drag_matrix_test.dart` | ÚJ (2 widget teszt) |
+
+### 10.4 §5 kötött döntések — hogyan teljesülnek
+
+1. **Save-kapu = self-comparison (§0.0 R5)** — `_selfEvaluate` szintetikus profilt
+   állít elő, amelynek saját mezői == live context; így a
+   camera/orientation/zoom/timestamp trigger-ek szerkezetileg elérhetetlenek,
+   csak `degenerateGeometry` maradhat. **Mutáció-próba:** a gate kiiktatásakor
+   (`return null` mindig) a `moving anchors to a degenerate config blocks Save`
+   + `saveIfValid blocks when the draft is degenerate` tesztek PIROSRA váltanak
+   → visszaállítás → ZÖLD.
+2. **R07 mapping csak a widgetben** — az editor `fit.toNormalized().apply(...)`
+   egyetlen pontját használja; a `_AnchorHandle._forward` a GestureDetector
+   lokális koordinátáját a `Positioned` anchor-offsethez adja, hogy a
+   `_onPointerMove` editor-stack-térben kapja. Nincs `1 - x`/`swap`/`MediaQuery`
+   a widgetben — a screen kizárólag `MediaQuery.size`-t használ a viewport
+   méretéhez (a R07 transform inverse a mérvadó).
+3. **Precision mód ≠ fájl** — az `_precisionMode` állapot egy `bool`, ami a
+   viewport magasságát 240↔360-ra állítja; a widget fa nem nyúl diszkre
+   sem screenshotot, sem fájlt (ADR 0178 / 0183).
+4. **Clamp + látható jelzés** — a `_onPointerMove` a normalizált koordinátát
+   `[0,1]×[0,1]`-re vágja, és a `accentColor` border minden handle-en
+   `errorContainer`-színű kontúr (a határhoz érve erősebben látszik).
+5. **Reset ≠ Recalibrate** — a `_confirmReset` a draftot veti el (vissza a
+   seedre vagy a `lastSaved*`-ra), a `_confirmRecalibrate` a repository
+   `write({profile, guitar})` hívásával érvénytelenít és új seedet ír; két
+   külön dialógus, két külön megerősítő gomb (kulcsuk a tesztelhetőséghez
+   meg van címkézve).
+6. **ARB-only szövegek** — minden új szöveg az `app_en.arb` / `app_hu.arb`-ben,
+   `l10nParity` zöld.
+
+### 10.5 Riverpod 3.3.2 quirk
+
+A controller `extends Notifier<State>` + konstruktorarg + `NotifierProvider.family<...>(Notifier.new)` mintát követ. A `FamilyNotifier` 3.3.2-ben törölve (CHANGELOG:114).
+
+### 10.6 Szándékosan kihagyott (körön kívüli)
+
+- Élő kamera-preview (§0.0 R2): a canvas absztrakt `PreviewRect`-re épül.
+- Saját koordinátamapping a widgetben: a `Positioned` + `_forward` csak az
+  editor-stack koordinátatérben dolgozik.
+- Polygon vertex editor csak `onIncrease/onDecrease` ±1%-os lépéssel (a11y);
+  pixel-pontos egér-egyengetés kimaradt — a §6 widget-teszt a drag-palettát
+  használja.
+
+### 10.7 Reviewernek
+
+- Acceptance #1 (drag-mátrix): `guitar_calibration_drag_matrix_test.dart`
+  (nut + bridge, mindkettő clamp-tartományban marad).
+- Acceptance #2 (degenerált mátrix): controller tesztek — `isGeometryDegenerate`
+  mind a négy cellát (alatta/rajta/fölötte/kollineáris) ellenőrzi.
+- Acceptance #3 (Save-kapu): controller teszt — a
+  `saveIfValid blocks when the draft is degenerate` + a mutáció-próba
+  bizonyítja, hogy a gate nem no-op.
+- Acceptance #4 (orientation/mirror): a drag-teszt a `PreviewFit.toPreview`
+  R07 mappinget használja — bármilyen mirror/orientation
+  `PreviewFit`-konstruktor-változással itt azonnal elromlik.
+- Acceptance #5 (a11y): `_AnchorHandle` és `_PolygonHandle` `Semantics`-sel
+  és `onIncrease/onDecrease` ±1% nudge-dzsal.
+- Acceptance #6 (l10n paritás): `test/core/l10n_parity_test.dart` zöld.
+- Acceptance #7 (valódi-sértés próba): kiiktatás → 2 teszt RED → visszaállítás
+  → 15 teszt ZÖLD.
 
 ## 11. Review — a független reviewer tölti ki
 
