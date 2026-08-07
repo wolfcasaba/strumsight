@@ -553,13 +553,60 @@ magnitúdójú pontja DEFINÍCIÓ SZERINT elutasításra kerül, mert a guard a
 TÉNYLEGES vizsgált mennyiséget nézi, nem egy áttételes proxyt. Részletek:
 brief `### 0.0.2`.
 
+## Javító kör 2 lezárva (MiniMax M3, második próbálkozás — `4545712`)
+
+**BLOCKER-1 ✅ ZÁRVA.** A brief §0.0.2 közvetlen-`|uv|`-magnitúdó tervét a
+MiniMax pontosan a specifikáció szerint implementálta. Az orchestrátor
+FÜGGETLENÜL, egy harmadik, friss `/tmp` klónban (`/tmp/review-e05-r15`,
+`git clone --local`, NEM a munkapéldány) ellenőrizte, nem csak elfogadta az
+implementer önjelentését:
+
+1. **Kód-átvizsgálás:** a diff pontosan a §0.0.2/prompt szerinti alakot
+   követi — `_checkFrameBounded` és a hozzá tartozó konstrukció-idejű hívás
+   törölve, `unstableMapping` enum-érték törölve (nincs élő hivatkozás rá,
+   `grep -rn "unstableMapping" lib/ test/` nulla találat), `mapPoint()`
+   a tényleges `apply()` kimenet magnitúdóját a MÁR LÉTEZŐ
+   `guitarSpaceSanityBound=10.0`-hoz hasonlítja. Doc-commentek frissítve,
+   nincs a kódtól eltérő állítás bennük.
+2. **Gate — friss klónban, csonkítatlan artefaktumként, KÉTSZER futtatva**
+   (az első futás hamis-piros volt: gitignore-olt l10n hiányzott egy
+   splett-új klónban, `docs/LESSONS.md` L48/L27 mintája —
+   `tools/prepare-flutter-generated.sh` után a második futás
+   **MINDEN GATE ZÖLD** — `format`/`analyze`/mindhárom teszt-scope/
+   `architecture`/`secrets`/`l10n`).
+3. **Valódi-sértés próba (a brief §6 utolsó cellája ezt kifejezetten
+   megköveteli, MOST a BLOCKER-1 guardra alkalmazva, nem a
+   kondíciószám-őrre) — egy NEGYEDIK, önálló, eldobható `/tmp` klónban**
+   (`/tmp/mutation-e05-r15`): a pont-szintű magnitúdó-ellenőrzést
+   `if (false)`-ra mutálva (a guard ténylegesen kikapcsolva) **mindkét
+   releváns teszt azonnal PIROSRA vált** — a BLOCKER-1 repro-teszt
+   (`Expected: null, Actual: <MappedHandLandmark>`) ÉS az adversarial
+   random-search teszt, ami MÁR AZ ELSŐ próbán (`trial=0`) valódi,
+   `>10` magnitúdójú szemetet talál (`(4.146…, 11.170…)`, `|uv|=11.91`).
+   Ez bizonyítja, hogy a tesztek NEM vacuous-an mennek át — ténylegesen
+   diszkriminálnak egy hibás implementáció ellen.
+4. **Scope-audit gépi jelzés `ok`**, 3 fájl változott (a brief
+   `allowed_paths` listáján belül); a review-fájlhoz és a `polygon2`/
+   MAJOR-2 cellákhoz nem nyúlt.
+
+**Két mérési kör vezetett ide, mindkettő egy implementer helyes `stopped`
+jelzésével** (nem hiba, hanem a rendszer működése — ld. §0.0.1 Codex,
+§0.0.2 MiniMax): a konstrukció-idejű 4-sarkos ellenőrzés túl szigorú volt
+(`front_medium`), a pont-szintű `|w|`-proxy pedig matematikailag hézagos
+volt (nincs olyan küszöb, ami mindhárom tesztet kielégítené). A végleges
+megoldás — közvetlen `|uv|`-ellenőrzés a MÁR validált `guitarSpaceSanityBound`
+ellen — egyiket a problémát sem örökli, mert nem proxyt, hanem a tényleges
+korlátozandó mennyiséget nézi.
+
 ## Merge-döntés
 
-**Merge TILOS jelenleg** (1 nyitott BLOCKER — BLOCKER-1 a javító kör 1 után
-részlegesen javítva, a javító kör 2 folyamatban a fenti kétszer-revideált,
-közvetlen-magnitúdó iránnyal). A javító kört — a Codex CLI kvóta-kimerülése
-miatt, user-döntéssel — a MiniMax viszi, ugyanabban a folyamatban (nem
-számít bele a normál egy-javító-kör MiniMax-eszkalációs küszöbbe, mivel ez
-a Codexnek szánt javító kör 2 folytatása, nem egy önálló új MiniMax-kör).
-MAJOR-1 és MAJOR-2 zárva, nem kerülnek vissza a javító kör 2 promptjába.
-MINOR-1..3 opcionális, csak ha nem hizlalja érdemben a diffet.
+**APPROVED — mehet a CI-dispatch és a merge.** Mind a három OPEN lelet
+(BLOCKER-1, MAJOR-1, MAJOR-2) zárva, mindegyik az orchestrátor SAJÁT,
+független próbájával újra-ellenőrizve (nem csak az implementer
+önjelentésére hagyatkozva) — MAJOR-1/2 a javító kör 1 review-jában (fent),
+BLOCKER-1 a fenti „Javító kör 2 lezárva" szakaszban. **MINOR-1..3 és
+NOTE-1..4 NYITVA maradnak** — ezek a review saját szabálya szerint
+opcionálisak, nem blokkolják a merge-et (`docs.execution` motor-eszkalációs
+szabály: „MINOR-1..3 opcionális, csak ha nem hizlalja érdemben a diffet");
+follow-up jegyzendők egy jövőbeli körnek, ha a `Polygon2`/`GuitarLandmarkMapper`
+publikus API-ját más feature ténylegesen importálja.
