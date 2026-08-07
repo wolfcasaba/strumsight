@@ -121,5 +121,26 @@
       },
       "created_at": "2026-07-14T00:38:31Z"
     }
+  ],
+  "vision_models": [
+    {
+      "model_id": "hand_landmarker",
+      "version": "1.0.0",
+      "path": "assets/ml/hand_landmarker_deferred.tflite",
+      "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+      "status": "deferred",
+      "input_shape": [
+        256,
+        256,
+        3
+      ],
+      "output_schema": "strumsight.hand_landmarks.v1",
+      "license": {
+        "spdx": "Apache-2.0",
+        "name": "MediaPipe Hands"
+      },
+      "minimum_device_tier": "basic",
+      "evaluation_report": "docs/eval/vision/hand_landmarker.md"
+    }
   ]
 }

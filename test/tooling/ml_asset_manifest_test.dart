@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/ml/vision_model_manifest.dart';
 
 import '../../tool/ci/check_assets.dart';
 
@@ -86,6 +87,183 @@ flutter:
     final issues = _validateManifest(projectRoot: projectRoot);
 
     expect(issues, isEmpty, reason: issues.join('\n'));
+  });
+
+  // --- E05-R12: vision_models sibling key (additive, §0.0 R3) -----------
+
+  test('shipping manifest vision_models entry is well-formed', () {
+    final projectRoot = _findProjectRoot();
+    final manifestFile = File('${projectRoot.absolute.path}/$_manifestPath');
+    final decoded =
+        jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
+    final visionModels = decoded['vision_models'];
+
+    expect(
+      visionModels,
+      isA<List<Object?>>(),
+      reason: 'vision_models must be a list (sibling of models)',
+    );
+    expect(
+      (visionModels! as List<Object?>),
+      hasLength(1),
+      reason: 'one deferred vision model expected',
+    );
+
+    final result = validateVisionManifest(
+      projectRoot: projectRoot,
+      rawDocument: decoded,
+    );
+    expect(result.isClean, isTrue, reason: result.issues.join('\n'));
+  });
+
+  group('VisionModelManifest — manifest-guard mutations', () {
+    Directory newFixture({
+      required Object? visionModels,
+      required String pubspecAssetPath,
+    }) {
+      final projectRoot = Directory.systemTemp.createTempSync(
+        'strumsight_vision_manifest_',
+      );
+      addTearDown(() => projectRoot.deleteSync(recursive: true));
+      _writeText(
+        projectRoot,
+        _manifestPath,
+        jsonEncode({
+          'schema_version': 1,
+          'models': [],
+          'vision_models': visionModels,
+        }),
+      );
+      _writeText(projectRoot, 'pubspec.yaml', '''
+name: vision_manifest_fixture
+flutter:
+  assets:
+    - $pubspecAssetPath
+''');
+      // A 1-byte placeholder so the asset check is satisfied.
+      _writeBytes(projectRoot, pubspecAssetPath, [0]);
+      return projectRoot;
+    }
+
+    Map<String, Object?> validVisionModel() => <String, Object?>{
+      'model_id': 'hand_landmarker',
+      'version': '1.0.0',
+      'path': 'assets/ml/hand_landmarker_deferred.tflite',
+      'sha256':
+          // SHA-256 of the 1-byte placeholder that `newFixture` writes —
+          // matches the on-disk bytes so the checksum-mismatch branch
+          // (which the other tests exercise) is the only one that fails.
+          _sha256Hex(const [0]),
+      'status': 'deferred',
+      'input_shape': [256, 256, 3],
+      'output_schema': 'strumsight.hand_landmarks.v1',
+      'license': {'spdx': 'Apache-2.0', 'name': 'MediaPipe Hands'},
+      'minimum_device_tier': 'basic',
+      'evaluation_report': 'docs/eval/vision/hand_landmarker.md',
+    };
+
+    test('missing checksum → init failure', () {
+      final entry = validVisionModel()..remove('sha256');
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      expect(report.isClean, isFalse);
+      // Validator emits `...sha256 must be a non-empty string` for the
+      // missing-checksum cell — the field name is the search anchor.
+      expect(report.issues.join('\n').toLowerCase(), contains('sha256'));
+    });
+
+    test('wrong checksum → init failure', () {
+      final entry = validVisionModel()..['sha256'] = 'a' * 64;
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      // The 1-byte placeholder file's actual checksum != 'aaa...aaa'.
+      expect(report.isClean, isFalse);
+      expect(report.issues.join('\n').toLowerCase(), contains('checksum'));
+    });
+
+    test('missing license → init failure', () {
+      final entry = validVisionModel()..remove('license');
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      expect(report.isClean, isFalse);
+      expect(report.issues.join('\n').toLowerCase(), contains('license'));
+    });
+
+    test('mismatched output_schema → init failure', () {
+      final entry = validVisionModel()
+        ..['output_schema'] = 'strumsight.wrong.v9';
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      expect(report.isClean, isFalse);
+      expect(report.issues.join('\n').toLowerCase(), contains('output_schema'));
+    });
+
+    test('well-formed entry → manifest is clean', () {
+      final entry = validVisionModel();
+      final projectRoot = newFixture(
+        visionModels: [entry],
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      final report = validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+      expect(report.isClean, isTrue, reason: report.issues.join('\n'));
+    });
   });
 }
 
