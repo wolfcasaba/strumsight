@@ -491,7 +491,7 @@ void main() {
       // hand-edit vagy downgrade írná a lemezre.
       const malicious =
           '{'
-          '"schemaVersion": ${documentSchemaVersion},'
+          '"schemaVersion": $documentSchemaVersion,'
           '"data": {'
           '"camera": {'
           '"camera": "back",'
