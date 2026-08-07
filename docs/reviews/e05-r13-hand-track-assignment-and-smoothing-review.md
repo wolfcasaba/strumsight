@@ -7,7 +7,19 @@ Verdikt: **CHANGES REQUESTED**
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 0 · NOTE: 2
+BLOCKER: 1 · MAJOR: 1 · MINOR: 1 · NOTE: 3
+
+**Dedikált security-review** (`docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md`,
+brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 3 MINOR + 2 NOTE
+— futott a merge ELŐTT (L162 helyesen alkalmazva ezúttal). Figyelemre méltó:
+a security-review **egymástól függetlenül, más módszerrel** ugyanarra a
+gyökérokra jutott, mint ennek a jelentésnek az F1 BLOCKERje (az ő MINOR-2-je
+== ez az F1) — a security-lencse MINOR-nak minősíti (nincs mai fogyasztó →
+nincs mai kár), a funkcionális/architektúra-lencse BLOCKER-nek (sérti a
+brief §5 pont 4 kötött döntését, függetlenül a fogyasztótól). A
+security-review két ÚJ tétele (visibility-kezelés, kéz-szám korlát)
+lentebb F3/N3 néven be van építve ebbe a jelentésbe is, hogy a javító kör
+egyetlen menetben lássa mindkét review teljes leletlistáját.
 
 Mind a hat §6 acceptance-cella a saját, szűken vett próbáján zöld — beleértve
 a §10.5 valódi-sértés próbát, amit **függetlenül, saját kézzel megismételve**
@@ -63,6 +75,15 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 - **Ellenőrzés:** a fenti próbateszt (vagy annak végleges változata) NEM adhat vissza `0.0`-t egy ismerten zajos bemeneten, ha a mérés valóban be van kötve.
 - **Státusz:** OPEN.
 
+### F3 — MINOR — A simított `visibility` monoton MAX, nem konfidencia-tudatos (dedikált security-review MINOR-1)
+
+- **Fájl:** `lib/features/vision/domain/landmarks/landmark_smoothing.dart:114-119`.
+- **Probléma:** a security-review önállóan mérte: ha egy kéz eleinte tisztán látszik (`visibility=0.95`), majd tartósan gyengén (`visibility=0.10` sok frame-en át), a simított `visibility` a `max(raw, previous)` szabály miatt SOSEM csökken a történelmi max alá — 5 frame gyenge jel után is `0.95`-öt jelent.
+- **Hatás:** ellentmond az SDD §15.4 kifejezetten kötelezőnek jelölt "confidence-aware exponential smoothing" elvárásának és az ADR 0179 capability-aware feedback szellemének — a mező elavult-optimista bizalmi jelzést hordoz. R13-ban nincs fogyasztó (látens), de OLCSÓN javítható most, amíg a fájl úgyis nyitva van az F1 miatt.
+- **Kötelező javítás:** a `visibility` aggregálása NE `max(raw, previous)` legyen — kövesse a raw értéket (vagy kapjon saját, konzervatív EMA-t), hogy egy tartósan gyenge jel a kimeneten is gyengének látsszon.
+- **Ellenőrzés:** egy teszt, ami tartósan alacsony raw visibility-t ad be N frame-en át, és megköveteli, hogy a simított visibility N frame után közel legyen a raw-hoz, ne a korábbi maximumhoz.
+- **Státusz:** OPEN — bundle-özve az F1 javításával (ugyanaz a fájl/függvény).
+
 ### N1 — NOTE — A §10.1 handoff-tábla elavult commit-hash-t idéz
 
 - **Fájl:** `docs/rounds/e05-r13-hand-track-assignment-and-smoothing.md:227`.
@@ -74,6 +95,12 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 - **Fájl:** `lib/features/vision/domain/landmarks/hand_track_assigner.dart:117` (`if (candidate.handedness != obs.handedness) continue;`).
 - **Megfigyelés:** a matching kizárólag a modell handedness-címkéjére hard-constraint-el. Ha egy éles (nem fixture-alapú) provider egy crossing/occlusion közben átmenetileg téves handedness-t jelentene ugyanarra a fizikai kézre, ez az assigner szintjén track-csere (ID-churn) formájában jelentkezne, NEM simulna el a rövid-gap logikával — mert a hard constraint miatt az observáció "unmatched" lesz, és új tracket kap. A brief §0.0 R1 szerint a handedness-t ez a kör bemenetként, adottként kezeli, tehát ez explicit módon NEM ennek a körnek a hatásköre — pusztán egy mérési megfigyelés a jövőbeli, éles providerrel futó köröknek (R14+), amikor a `RecordedHandLandmarkProvider` fixture-alapú, mindig konzisztens handedness-e helyett valódi ML-kimenet kerül a láncba.
 - **Státusz:** follow-up, nem blokkoló.
+
+### N3 — NOTE — Nincs kéz-szám korlát frame-enként (dedikált security-review MINOR-3, itt NOTE-ra süllyesztve)
+
+- **Fájl:** `hand_track_assigner.dart:98,108-134,137-153`.
+- **Megfigyelés:** a security-review mérte: 4000 "kéz" egy frame-ben ~118s-ot vesz igénybe (köbös skálázódás a greedy `matched.contains(...)` List-alapú tagságvizsgálat miatt). R13-ban a bemenet valós on-device ML-ből jön (≤2 kéz), és a hosszkorlát bevezetése a felelős fájl (`hand_landmarks.dart`, `HandLandmarkResult`) NINCS ezen a kör `allowed_paths`-án — a teljes javítás (input-oldali korlát) kívül esik a jelenlegi kör hatáskörén. A `matched` `Set`-re cserélése (O(1) tagság a `List.contains` helyett) VISZONT a jelenlegi fájlokon belül maradna, és olcsó védelem lenne — de mivel nincs untrusted feed ma, ez NEM feltétele a mostani merge-nek.
+- **Státusz:** follow-up (R14+ pipeline-drótozás előtt érdemes megoldani), nem blokkoló ebben a körben.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -90,4 +117,4 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 
 ## Merge-döntés
 
-**Merge tilos amíg nyitva:** 1 BLOCKER (F1) + 1 MAJOR (F2). A javító kört a MiniMax viszi (első javító kör, motor-eszkaláció küszöb: 1) ugyanezen a branchen, a fenti findings-listával. A javítás után a gate-eket és a két eldobható próbatesztet függetlenül újra kell futtatni, majd a jelentést APPROVED-ra frissíteni, mielőtt bármilyen CI-dispatch/merge történne.
+**Merge tilos amíg nyitva:** 1 BLOCKER (F1) + 1 MAJOR (F2) + 1 MINOR (F3, bundle-özve). A javító kört a MiniMax viszi (első javító kör, motor-eszkaláció küszöb: 1) ugyanezen a branchen, a fenti findings-listával (F1+F2+F3, a dedikált security-review MINOR-1/2/3-át is lefedve — lásd az Összegzés kereszthivatkozását). A javítás után a gate-eket és az eldobható próbateszteket függetlenül újra kell futtatni, majd a jelentést APPROVED-ra frissíteni, mielőtt bármilyen CI-dispatch/merge történne. N3 (kéz-szám korlát) és N2 (handedness-flip robusztusság) follow-up, nem feltétele ennek a merge-nek.
