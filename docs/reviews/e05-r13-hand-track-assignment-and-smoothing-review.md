@@ -1,13 +1,78 @@
 # E05-R13 — Review
 
 Brief: `docs/rounds/e05-r13-hand-track-assignment-and-smoothing.md`
-Diff: `git diff origin/main...minimax/e05-r13-hand-track-assignment-and-smoothing` (commit `cd4d49e`)
+Diff (1. kör, review előtt): `git diff origin/main...cd4d49e`
+Diff (javító kör 1 után): `git diff origin/main...2ff9338`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (javító kör 1 után)
+
+## Javító kör 1 — újra-ellenőrzés (2026-08-07, commit `2ff9338`)
+
+MiniMax egy javító körben mindhárom nyitott leletet (F1 BLOCKER, F2 MAJOR,
+F3 MINOR) javította. **Függetlenül újra-ellenőrizve, friss `/tmp` klónban**
+(`/tmp/review-e05-r13-fix1`, nem az implementer önjelentésére hagyatkozva):
+
+- **A gate-eket saját kézzel újrafuttattam**: mind a 7 lépés zöld
+  (`test/features/vision` + `test/property/hand_track_property_test.dart`).
+- **A saját, EREDETI három próbatesztemet (nem az implementerét) újra
+  lefuttattam a javított kódon** — mindhárom PIROS→ZÖLD:
+  - F1a (occlusion + reappear 0.40 távolabb): a régi kódon 27 frame után is
+    `0.30`-on ragadt; a javított kódon **pontosan `0.70`**-re konvergál.
+  - F1b (occlusion NÉLKÜL, tartós áthelyeződés): a régi kódon 50 frame után
+    is `0.30`-on ragadt; a javított kódon **pontosan `0.70`**-re konvergál.
+  - F2 (TrackContinuity zajos bemeneten): a régi kódon `maxJitterNormalized=
+    0.0`/`totalProcessingDuration=0:00:00.000000` FIXEN; a javított kódon
+    **`maxJitterNormalized=0.265`, `totalProcessingDuration=1.562ms`**
+    (valós, nem-nulla mérés).
+  - F3 (tartós alacsony visibility): a régi kódon a simított visibility a
+    történelmi max (`0.95`) maradt 5 gyenge frame után is; a javított kódon
+    **`0.10`**-re esik, követi a raw-t.
+- **Regresszió-ellenőrzés (saját próbateszttel):** az EREDETI egy-frame-es
+  teleport-majd-visszatérés eset (a meglévő `landmark_smoothing_test.dart`
+  cellája) VÁLTOZATLANUL helyesen elutasításra kerül a javítás után is — a
+  bypass-logika (`gapSinceLastMatch`/`consecutiveRejections`) NEM engedi át
+  az egy-frame-es tüskét, csak a ≥2 egymást követő elutasítást vagy a
+  rövid-gap utáni első visszatérést. Nincs regresszió.
+- **A javítás mechanizmusa** (`hand_track_assigner.dart`): a jump-rejection
+  bypass akkor lép életbe, ha (a) a track épp egy `≤ shortGapFrames` hosszú
+  megfigyelhetőségi rés után tér vissza, VAGY (b) már 2 egymást követő
+  frame-en elutasításra került — mindkét esetben a `previousSmoothed`
+  horgony frissül, ahelyett hogy örökre befagyna. Ez pontosan a review F1
+  tételében javasolt (a) irány egy variánsa, plusz egy (c)-szerű
+  catch-up-küszöb az occlusion NÉLKÜLI esetre — mindkét eredeti próbám
+  lefedve.
+- **F2 mechanizmusa:** valódi `Stopwatch` a `process()` törzse körül
+  (`HandTrackFrameState.processingDuration`, additív mező), valódi
+  raw-vs-smoothed wrist-delta a `HandTrack.rawSmoothedDeltaNormalized`
+  (additív mező) — a `TrackContinuity.aggregate` ezekből számol MAX
+  jittert és összeg-időt a korábbi élettelen `0.0`/`Duration.zero` helyett.
+  A doc-comment is javítva, nem állít többé nem létező mechanizmust.
+- **F3 mechanizmusa:** a simított visibility most a raw-t követi (nem
+  `max(raw, previous)`), a legkisebb, legvilágosabb javítás.
+- **Scope-audit tiszta:** 7 fájl, mind a brief `allowed_paths`-án (a wrapper
+  gépi auditja is `scope_audit=ok`-t adott, bázis `e49dcae`, 7 fájl).
+- **Egy apró tesztminőségi észrevétel (nem blokkoló):** a
+  "relocation after a short occlusion" cella második fele ugyanazt a
+  trajektóriát MÉG EGYSZER lefuttatja UGYANAZON a (már állapotos) assigneren
+  — ez a második kör `frameIndex`-e 0-ról indul újra egy már 39-nél járó
+  belső állapotú track mellett (negatív "gap"), ami nem crashel (a
+  `frameIndex` monotonitása nincs validálva — lásd a security-review
+  NOTE-2-jét), de a második ciklus lényegében redundáns, nem ad hozzá valódi
+  bizonyítékot az elsőhöz képest. Nem befolyásolja a fix helyességét (amit
+  a saját, tiszta próbáim függetlenül igazoltak) — stílusjegyzet egy
+  jövőbeli takarításhoz, NEM follow-up tétel.
+
+**Minden korábbi (F1/F2/F3) lelet STÁTUSZA: FIXED (`2ff9338`).** N1
+(kozmetikai commit-hash), N2 (handedness-flip robusztusság) és N3
+(kéz-szám korlát) változatlanul follow-up, nem blokkoló — egyik sem
+igényel brief-revíziót vagy újabb javító kört.
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 1 · NOTE: 3
+**Javító kör 1 UTÁN: BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 3** (mind a
+három nyitott lelet FIXED, függetlenül újra-ellenőrizve — lásd a jelentés
+elején). Eredeti (javítás előtti) állapot referenciaként: BLOCKER: 1 ·
+MAJOR: 1 · MINOR: 1 · NOTE: 3.
 
 **Dedikált security-review** (`docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md`,
 brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 3 MINOR + 2 NOTE
@@ -63,7 +128,7 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
   2. **Occlusion NÉLKÜL, folyamatosan látható kéz:** 10 frame 0.30-nál, majd 50 frame FOLYAMATOSAN látható 0.70-en. Mért kimenet: `frame10=0.3 frame59=0.3` — a hiba occlusiontól FÜGGETLENÜL, önmagában a jump-rejection tervezési hibája.
 - **Kötelező javítás (irány, nem kész patch):** a jump-rejection alapját frissíteni kell, amikor a track state átmenetileg elveszett/recovering volt, vagy amikor több egymást követő frame kerül elutasításra — pl. (a) az első observáció `recovering`→`active` visszaváltáskor bypassolja az ellenőrzést (ugyanaz a minta, mint a meglévő "első frame, nincs previous" bypass a `filter()`-ben), vagy (b) a küszöböt a ténylegesen eltelt gap-hosszal skálázza, vagy (c) egy "N egymást követő elutasítás után catch-up" mechanizmus. Bármelyik irányhoz ÚJ fixture kell (tartós áthelyeződés occlusionnal és anélkül is), mert a meglévő `teleportingTrack` csak egy "blip-vissza-a-régi-pozícióra" mintát fed le, ami pont nem meríti ki ezt az esetet.
 - **Ellenőrzés:** egy új smoothing/assigner teszt, ami egy tartós (nem visszatérő) áthelyeződést szimulál occlusionnal és anélkül is, és megköveteli, hogy N frame-en belül a simított kimenet konvergáljon az új pozícióhoz.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`2ff9338`) — függetlenül újra-ellenőrizve, lásd a jelentés elején.
 
 ### F2 — MAJOR — `TrackContinuity` a két legfontosabb mezőjében (jitter, latency) funkcionálisan üres, ellentmond egy kötött döntésnek, és nulla tesztlefedettsége van
 
@@ -73,7 +138,7 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 - **Bizonyíték (eldobható próbateszt, futtatva és törölve):** `noiseAmplitude=0.30` (szándékosan extrém) `continuousNoisyTrack`-on át `TrackContinuity.aggregate(frames)` → `maxJitterNormalized=0.0`, `totalProcessingDuration=0:00:00.000000`.
 - **Kötelező javítás (irány, nem kész patch):** vagy (a) valódi mérés bekötése — `Stopwatch` a `HandTrackAssigner.process()` törzse köré, az eltelt idő felszínre hozása (pl. `HandTrackFrameState` egy opcionális mezőjén vagy egy injektálható sink-en át), a jitter pedig a `_InternalTrack.observe()`-ban már elérhető nyers-vs-simított delta felhasználásával — PLUSZ egy dedikált tesztcsoport a meglévő két engedélyezett tesztfájl egyikében; vagy (b) ha a halasztás R17/R18-ra tényleg szándékos, ezt egy dokumentált brief-jegyzettel (nem csendes kódkommenttel) kell rögzíteni, és a `totalProcessingDuration`/`maxJitterNormalized` doc-commentjéből törölni a nem létező "assigner reports Stopwatch" állítást.
 - **Ellenőrzés:** a fenti próbateszt (vagy annak végleges változata) NEM adhat vissza `0.0`-t egy ismerten zajos bemeneten, ha a mérés valóban be van kötve.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`2ff9338`) — függetlenül újra-ellenőrizve, lásd a jelentés elején.
 
 ### F3 — MINOR — A simított `visibility` monoton MAX, nem konfidencia-tudatos (dedikált security-review MINOR-1)
 
@@ -82,7 +147,7 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 - **Hatás:** ellentmond az SDD §15.4 kifejezetten kötelezőnek jelölt "confidence-aware exponential smoothing" elvárásának és az ADR 0179 capability-aware feedback szellemének — a mező elavult-optimista bizalmi jelzést hordoz. R13-ban nincs fogyasztó (látens), de OLCSÓN javítható most, amíg a fájl úgyis nyitva van az F1 miatt.
 - **Kötelező javítás:** a `visibility` aggregálása NE `max(raw, previous)` legyen — kövesse a raw értéket (vagy kapjon saját, konzervatív EMA-t), hogy egy tartósan gyenge jel a kimeneten is gyengének látsszon.
 - **Ellenőrzés:** egy teszt, ami tartósan alacsony raw visibility-t ad be N frame-en át, és megköveteli, hogy a simított visibility N frame után közel legyen a raw-hoz, ne a korábbi maximumhoz.
-- **Státusz:** OPEN — bundle-özve az F1 javításával (ugyanaz a fájl/függvény).
+- **Státusz:** FIXED (`2ff9338`) — függetlenül újra-ellenőrizve, lásd a jelentés elején.
 
 ### N1 — NOTE — A §10.1 handoff-tábla elavult commit-hash-t idéz
 
@@ -117,4 +182,12 @@ Engedélyezett fájlokon kívüli változás: **nincs**. `git diff --stat origin
 
 ## Merge-döntés
 
-**Merge tilos amíg nyitva:** 1 BLOCKER (F1) + 1 MAJOR (F2) + 1 MINOR (F3, bundle-özve). A javító kört a MiniMax viszi (első javító kör, motor-eszkaláció küszöb: 1) ugyanezen a branchen, a fenti findings-listával (F1+F2+F3, a dedikált security-review MINOR-1/2/3-át is lefedve — lásd az Összegzés kereszthivatkozását). A javítás után a gate-eket és az eldobható próbateszteket függetlenül újra kell futtatni, majd a jelentést APPROVED-ra frissíteni, mielőtt bármilyen CI-dispatch/merge történne. N3 (kéz-szám korlát) és N2 (handedness-flip robusztusság) follow-up, nem feltétele ennek a merge-nek.
+**APPROVED — mehet a CI-dispatch és a merge.** Mind a három nyitott lelet
+(F1 BLOCKER, F2 MAJOR, F3 MINOR) FIXED a javító kör 1-ben (`2ff9338`),
+függetlenül újra-ellenőrizve friss `/tmp` klónban — saját (nem az
+implementer) próbatesztekkel, a gate teljes újrafuttatásával, és a meglévő
+teleport-rejection viselkedés regressziómentességének igazolásával. A
+dedikált security-review (`risk=high`) PASS, futott a merge ELŐTT. N1
+(kozmetikai), N2 (handedness-flip robusztusság) és N3 (kéz-szám korlát)
+follow-up, nem feltétele ennek a merge-nek. Hátravan: CI-dispatch a javító
+kör fejére (`2ff9338`) exact-SHA-n, majd a squash-merge (ADR 0052).
