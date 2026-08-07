@@ -4,8 +4,45 @@ Round: E05-R10 (camera + guitar calibration domain & versioned store)
 Diff reviewed: `539d346..HEAD` (pre-fix tip `c0701db` — F1/F2 general-review
 fixes landed afterward and do not touch the files below)
 Risk header: `risk = "high"` → mandatory standalone security pass
-Reviewer: security-reviewer agent (Claude Sonnet 5) · Dátum: 2026-08-07
-**Verdikt: FAIL** — 2 MAJOR nyitva (merge-blokkoló), 0 BLOCKER/CRITICAL
+Reviewer: security-reviewer agent (Claude Sonnet 5), újra-ellenőrzés Claude
+Sonnet 5 (orchestrátor) · Dátum: 2026-08-07
+**Verdikt: PASS** — mindkét MAJOR zárva, függetlenül újra-ellenőrizve
+(javító commit `5f76967`), 0 nyitott BLOCKER/MAJOR/MINOR
+
+## Javító kör 3 (Codex) — MAJOR-2 lezárva, függetlenül újra-ellenőrizve
+
+Commit `5f76967`, 1 fájl, 10 sor — mind az öt érintett teszt-cella
+`'data'` mapjébe bekerült az explicit belső
+`'schemaVersion': VisionCalibrationCodec.currentSchemaVersion` kulcs, plusz
+egy dokumentáló komment a várt `reason`/`field` párral.
+
+**Függetlenül újra-ellenőrizve (saját kézzel, NEM az implementer
+önjelentésére hagyatkozva):**
+
+1. **MAJOR-1 mutáció-kill, MÁSODSZOR** — a `_readOrientation` fixet
+   ismét ideiglenesen az eredeti hibás alakra állítva, a TELJES
+   `vision_calibration_repository_test.dart`-ot lefuttatva: ezúttal
+   **pontosan egy** teszt bukott (az „érvénytelen orientation" cella), a
+   másik 18 zöld maradt — és a bukás maga egy VALÓDI, el nem kapott
+   `ArgumentError`-crash volt, a pontos veremmel
+   (`CameraRotation.fromDegrees → _readOrientation → _decodeProfile →
+   _decodeBundle → decodeFromMap → VisionCalibrationRepository.read`),
+   szó szerint az eredeti MAJOR-1 forgatókönyv. A mutáció visszaállítva,
+   a teszt újra zöld.
+2. **A maradék négy cella közvetlen diagnosztikával** (a codec
+   `decodeFromMap`-jét a négy teszt pontos JSON-jával közvetlenül hívva):
+   mind a négy PONTOSAN a Codex által dokumentált `reason`/`field` párt
+   adta —
+   `not_an_object/camera`, `out_of_range/neckPolygon`,
+   `out_of_range/x`, `not_a_number/zoom` — bizonyítva, hogy mind az öt
+   cella immár a SAJÁT állított célját méri, nem egy máshonnan jövő,
+   véletlen kivételt.
+3. **Gate** — `tools/round-gate.sh test/features/vision test/core/storage`
+   a javító commit tipjén (`5f76967`) frissen prepelt munkapéldányban:
+   mind a 7 lépés ZÖLD.
+
+Mindkét MAJOR (MAJOR-1, MAJOR-2) és MINOR-1 lezárva. Lásd az egyes
+leletek frissített „Státusz" sorát lent.
 
 ## Javító kör 2 (Codex) — MAJOR-1 termékkód-fixje helyes, DE egy sokkal
    szélesebb, ÚJ MAJOR-t fedett fel az újra-ellenőrzés
@@ -95,7 +132,11 @@ független ellenőrzésen bukik el (lásd MAJOR-2 részletei).
   érjék el, majd ellenőrizd, hogy mindegyik a SAJÁT állított okára bukik
   (nem egy máshonnan jövő, véletlen `JsonRecordException`-re) — a pontos
   `reason`/`field` párra `expect` a `logger.events` mellé, ahol ésszerű.
-- **Státusz:** OPEN.
+- **Státusz:** **FIXED** (`5f76967`) — mind az öt cella most explicit belső
+  `schemaVersion`-t ad, dokumentáló kommenttel a várt `reason`/`field`
+  párra. Függetlenül újra-ellenőrizve: közvetlen diagnosztika mind a négy
+  nem-orientation cellára (lásd a fejléc utáni „Javító kör 3" szakaszt) a
+  dokumentált párt adta vissza minden esetben.
 
 ## Scope
 
@@ -148,7 +189,13 @@ Az 5 új production fájl (`lib/features/vision/domain/calibration/**`,
   (ami `Exception`, tehát a repository elkapja → karantén → `read()==null`),
   a többi mező `requireX` mintáját követve. Vegyél fel egy korrupció-mátrix
   cellát tartományon-belüli-érvénytelen orientation-re.
-- **Státusz:** OPEN.
+- **Státusz:** **FIXED** (`0bc37c9`) — megosztott `_readOrientation` helper,
+  explicit whitelist-switch a `fromDegrees` hívás ELŐTT, mindkét hívási
+  helyen. Függetlenül újra-ellenőrizve MÁSODSZOR is (miután az első
+  regressziós teszt MAJOR-2 miatt nem érte el a fixet): a mutációt
+  megismételve a javító commit `5f76967` tetején pontosan egy teszt bukott,
+  valódi el nem kapott `ArgumentError` veremmel — a fix és a hozzá tartozó
+  teszt egyaránt bizonyítottan helyes.
 
 ### MINOR-1 — a privacy-snapshot nem száll le a pont-objektum szintjéig; a tiltólista szűk
 
@@ -164,7 +211,12 @@ Az 5 új production fájl (`lib/features/vision/domain/calibration/**`,
   pontokba. Defense-in-depth jövőre nézve.
 - **Kötelező javítás:** pin-eld a pont-objektum kulcskészletét is (vagy
   assertáld, hogy minden levél-érték `is num`), és bővítsd a tiltólistát.
-- **Státusz:** OPEN.
+- **Státusz:** **FIXED** (`0bc37c9`) — a privacy-snapshot teszt most
+  `nut`/`bridge`/minden `neckPolygon` elem kulcskészletét is pin-eli
+  (`{x,y}`), a tiltólista kibővítve mind a 14 javasolt tokennel. Ez a teszt
+  a `write()`-ön (a valódi encoderen) keresztül épül, tehát a MAJOR-2
+  legacy-misrouting hibája nem érinti — függetlenül újrafuttatva a gate
+  részeként, zöld.
 
 ### NOTE-1 — nem szigorú enum-koercíció csendben defaultol ismeretlen perzisztált értékre
 
@@ -202,10 +254,10 @@ Az 5 új production fájl (`lib/features/vision/domain/calibration/**`,
 
 ## Merge-döntés
 
-FAIL — MAJOR-1 termékkód-szinten FIXED (`0bc37c9`, saját kézzel
-függetlenül igazolva), de a hozzá tartozó teszt nem bizonyít, és emellett
-MAJOR-2 (öt teszt legacy-ágra tévedése) nyitva. Harmadik javító kör
-szükséges (Codex folytatja ugyanabban a munkapéldányban, `0bc37c9`-ről) —
-mind az öt érintett tesztet a fenti MAJOR-2 leírás szerint kell javítani,
-beleértve MAJOR-1 saját regressziós celláját is. Utána a security-review
-frissítve PASS-ra a végső javító commit SHA-jával.
+**PASS.** MAJOR-1, MAJOR-2 és MINOR-1 mind FIXED, mindegyik függetlenül
+újra-ellenőrizve (nem az implementer önjelentésére hagyatkozva): saját kézzel
+megismételt mutáció-kill próbák és közvetlen codec-diagnosztika, izolált
+munkapéldányban frissen prepelt gate. 0 nyitott BLOCKER/MAJOR/MINOR (NOTE-1
+megfigyelés marad, nem blokkoló). Végső javító commit: `5f76967`. A hat
+PASS-elt biztonsági ellenőrzés (fenti lista) változatlanul érvényes — a
+javító körök egyike sem érintette azokat a fájlokat/útvonalakat.
