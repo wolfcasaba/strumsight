@@ -445,7 +445,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
