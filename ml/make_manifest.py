@@ -190,6 +190,33 @@ def _load_previous_entries() -> dict[str, dict[str, object]]:
     }
 
 
+# E05-R12 — vision model manifest sibling key. The model asset is
+# `status = "deferred"` in this round (ADR 0185 §Döntés 2): the spec
+# tuple is the single source of truth, and there is no real binary on
+# disk — the `sha256` is a documented placeholder (64 lowercase zeros)
+# so the validator's `sha256 must be 64 lowercase hex characters`
+# format branch has a stable value to exercise. The activation round
+# replaces this with a real entry whose `status == "active"` and whose
+# `sha256` is the measured hash of the shipped binary.
+_DEFERRED_SHA256_PLACEHOLDER = "0" * 64
+_VISION_MODEL_SPECS: tuple[dict[str, object], ...] = (
+    {
+        "model_id": "hand_landmarker",
+        "version": "1.0.0",
+        "path": "assets/ml/hand_landmarker_deferred.tflite",
+        "status": "deferred",
+        # No real asset in this round — placeholder, the activation
+        # round swaps this for a measured hash.
+        "sha256": _DEFERRED_SHA256_PLACEHOLDER,
+        "input_shape": [256, 256, 3],
+        "output_schema": "strumsight.hand_landmarks.v1",
+        "license": {"spdx": "Apache-2.0", "name": "MediaPipe Hands"},
+        "minimum_device_tier": "basic",
+        "evaluation_report": "docs/eval/vision/hand_landmarker.md",
+    },
+)
+
+
 def _utc_now() -> str:
     return (
         datetime.now(timezone.utc)
@@ -257,8 +284,70 @@ def _build_entry(
     }
 
 
+def _build_vision_models(
+    previous: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    """Build the `vision_models` sibling key.
+
+    E05-R12 §0.0 R3: isolated from the audio ``models[]`` path. Only
+    ``status == "active"`` specs consult the disk — for them the
+    generator measures the SHA-256 of the shipped asset and fails
+    fast if the file is missing. ``status == "deferred"`` specs (ADR
+    0185 §Döntés 2 — no real binary this round) emit the spec's
+    documented placeholder sha256 without touching the filesystem, so
+    rerunning the generator never produces a FileNotFoundError for an
+    asset that is intentionally not shipped.
+    """
+    entries: list[dict[str, object]] = []
+    for spec in _VISION_MODEL_SPECS:
+        relative_path = str(spec["path"])
+        status = str(spec["status"])
+        if status == "active":
+            asset_path = REPO_ROOT / relative_path
+            if not asset_path.is_file():
+                raise FileNotFoundError(f"missing vision model asset: {relative_path}")
+            checksum = _sha256(asset_path)
+        else:
+            # Deferred: spec carries the placeholder sha256 directly
+            # (ADR 0185 §Döntés 2 — no real binary this round).
+            checksum = str(spec["sha256"])
+        entries.append(
+            {
+                "model_id": str(spec["model_id"]),
+                "version": str(spec["version"]),
+                "path": relative_path,
+                "sha256": checksum,
+                "status": status,
+                "input_shape": [int(v) for v in spec["input_shape"]],
+                "output_schema": str(spec["output_schema"]),
+                "license": dict(spec["license"]),
+                "minimum_device_tier": str(spec["minimum_device_tier"]),
+                "evaluation_report": str(spec["evaluation_report"]),
+            }
+        )
+    return entries
+
+
+def _load_previous_vision_entries() -> dict[str, dict[str, object]]:
+    if not MANIFEST_PATH.exists():
+        return {}
+    try:
+        document = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read existing manifest: {error}") from error
+    vision_models = document.get("vision_models")
+    if not isinstance(vision_models, list):
+        return {}
+    return {
+        str(entry["path"]): entry
+        for entry in vision_models
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+
+
 def main() -> None:
     previous_entries = _load_previous_entries()
+    previous_vision_entries = _load_previous_vision_entries()
     changed_at = _utc_now()
     models = [
         _build_entry(
@@ -268,15 +357,26 @@ def main() -> None:
         )
         for spec in _MODEL_SPECS
     ]
-    document = {"schema_version": 1, "models": models}
+    vision_models = _build_vision_models(previous_vision_entries)
+    document = {
+        "schema_version": 1,
+        "models": models,
+        "vision_models": vision_models,
+    }
     rendered = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
     relative_manifest = MANIFEST_PATH.relative_to(REPO_ROOT)
     if MANIFEST_PATH.exists() and MANIFEST_PATH.read_text(encoding="utf-8") == rendered:
-        print(f"unchanged {relative_manifest} ({len(models)} models)")
+        print(
+            f"unchanged {relative_manifest} "
+            f"({len(models)} models, {len(vision_models)} vision models)"
+        )
         return
     MANIFEST_PATH.write_text(rendered, encoding="utf-8")
-    print(f"wrote {relative_manifest} ({len(models)} models)")
+    print(
+        f"wrote {relative_manifest} "
+        f"({len(models)} models, {len(vision_models)} vision models)"
+    )
 
 
 if __name__ == "__main__":
