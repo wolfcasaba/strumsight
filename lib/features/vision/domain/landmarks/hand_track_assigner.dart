@@ -95,6 +95,7 @@ final class HandTrackAssigner {
     HandLandmarkResult result, {
     required int frameIndex,
   }) {
+    final stopwatch = Stopwatch()..start();
     final observations = result.hands;
     final now = frameIndex;
 
@@ -147,6 +148,7 @@ final class HandTrackAssigner {
         lastObservation: obs,
         previousSmoothed: _extractLandmarks(obs, filter, now, previous: null),
         jumpVelocityThreshold: jumpVelocityThreshold,
+        shortGapFrames: shortGapFrames,
       );
       _internal.add(newTrack);
       matched.add(newTrack);
@@ -158,6 +160,10 @@ final class HandTrackAssigner {
     for (final track in _internal) {
       if (matched.contains(track)) continue;
       final gap = now - track.lastSeenFrameIndex;
+      track.gapSinceLastMatch = gap;
+      // Reset the rejection budget whenever the hand returns from an
+      // observable gap so the next rejection burst starts fresh.
+      if (gap >= 1) track.consecutiveRejections = 0;
       if (gap > shortGapFrames) {
         lost.add(track);
       }
@@ -185,7 +191,12 @@ final class HandTrackAssigner {
     }
 
     emitted.sort((a, b) => a.id.compareTo(b.id));
-    return HandTrackFrameState(frameIndex: now, tracks: emitted);
+    stopwatch.stop();
+    return HandTrackFrameState(
+      frameIndex: now,
+      tracks: emitted,
+      processingDuration: stopwatch.elapsed,
+    );
   }
 
   /// The guitar role derived from the physical handedness and the player's
@@ -229,6 +240,7 @@ class _InternalTrack {
     required this.lastObservation,
     required this.previousSmoothed,
     required this.jumpVelocityThreshold,
+    required this.shortGapFrames,
   });
 
   final int id;
@@ -240,7 +252,11 @@ class _InternalTrack {
   HandObservation? lastObservation;
   Map<HandLandmarkId, HandLandmarkPoint> previousSmoothed;
   final double jumpVelocityThreshold;
+  final int shortGapFrames;
   TrackStatus status = TrackStatus.active;
+  double rawSmoothedDeltaNormalized = 0;
+  int gapSinceLastMatch = 0;
+  int consecutiveRejections = 0;
 
   void observe(HandObservation obs, int frameIndex) {
     lastSeenFrameIndex = frameIndex;
@@ -257,13 +273,28 @@ class _InternalTrack {
       final p = obs.byId(id);
       if (p != null) raw[id] = p;
     }
-    if (!_isRejected(raw, previousSmoothed)) {
+    rawSmoothedDeltaNormalized = _wristDelta(raw, previousSmoothed);
+    // F1 BLOCKER fix — the comparison anchor becomes stale when the
+    // hand genuinely moves to a new position (either after an occlusion
+    // gap or as a sustained, occlusion-free relocation). Bypass the
+    // jump-rejection once the anchor has been rejected enough times in
+    // a row OR the track just emerged from a short recovery gap, so
+    // the smoother catches up instead of freezing on the old anchor.
+    final isReturningAfterGap =
+        gapSinceLastMatch > 0 && gapSinceLastMatch <= shortGapFrames;
+    final hasHitRejectionBudget = consecutiveRejections >= 2;
+    final shouldBypassJump = isReturningAfterGap || hasHitRejectionBudget;
+    if (shouldBypassJump || !_isRejected(raw, previousSmoothed)) {
       previousSmoothed = filter.filterMap(
         raw: raw,
         previous: previousSmoothed,
         frameIndex: frameIndex,
       );
+      consecutiveRejections = 0;
+    } else {
+      consecutiveRejections++;
     }
+    gapSinceLastMatch = 0;
     status = TrackStatus.active;
   }
 
@@ -282,6 +313,18 @@ class _InternalTrack {
     return false;
   }
 
+  static double _wristDelta(
+    Map<HandLandmarkId, HandLandmarkPoint> raw,
+    Map<HandLandmarkId, HandLandmarkPoint> previous,
+  ) {
+    final r = raw[HandLandmarkId.wrist];
+    final p = previous[HandLandmarkId.wrist];
+    if (r == null || p == null) return 0;
+    final dx = r.x - p.x;
+    final dy = r.y - p.y;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
   HandTrack toHandTrack({required TrackStatus status}) {
     return HandTrack(
       id: id,
@@ -291,6 +334,7 @@ class _InternalTrack {
       smoothedLandmarks: previousSmoothed,
       firstFrameIndex: firstFrameIndex,
       lastSeenFrameIndex: lastSeenFrameIndex,
+      rawSmoothedDeltaNormalized: rawSmoothedDeltaNormalized,
     );
   }
 }

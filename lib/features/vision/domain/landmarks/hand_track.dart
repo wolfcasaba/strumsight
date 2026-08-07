@@ -54,6 +54,7 @@ final class HandTrack {
     required this.smoothedLandmarks,
     required this.firstFrameIndex,
     required this.lastSeenFrameIndex,
+    this.rawSmoothedDeltaNormalized = 0,
   });
 
   /// Stable, monotonic, opaque integer identity. Two frames with the same
@@ -85,6 +86,10 @@ final class HandTrack {
   /// a `recovering` snapshot's `lastSeenFrameIndex` is older than the
   /// current frame by at most `shortGapFrames`).
   final int lastSeenFrameIndex;
+
+  /// Wrist distance between the latest raw observation and the previous
+  /// smoothed value, in normalized coordinates.
+  final double rawSmoothedDeltaNormalized;
 }
 
 /// A per-frame snapshot of every track the assigner emitted.
@@ -96,11 +101,15 @@ final class HandTrackFrameState {
   HandTrackFrameState({
     required this.frameIndex,
     required List<HandTrack> tracks,
+    this.processingDuration = Duration.zero,
   }) : _tracks = List.unmodifiable(tracks);
 
   /// The injected frame index this snapshot belongs to — the deterministic
   /// "clock" the assigner uses instead of `DateTime.now()`.
   final int frameIndex;
+
+  /// Wall-clock time spent producing this frame snapshot.
+  final Duration processingDuration;
 
   final List<HandTrack> _tracks;
 

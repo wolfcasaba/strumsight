@@ -111,11 +111,11 @@ final class LandmarkSmoothingFilter {
     final x = alpha * raw.x + (1 - alpha) * previous.x;
     final y = alpha * raw.y + (1 - alpha) * previous.y;
     final z = alpha * raw.z + (1 - alpha) * previous.z;
-    // Visibility is a 0..1 confidence — keep the MAX of raw and previous
-    // (a smoothed value cannot exceed the highest observed confidence).
-    final visibility = raw.visibility > previous.visibility
-        ? raw.visibility
-        : previous.visibility;
+    // Visibility is a 0..1 confidence — track the raw value directly so
+    // a sustained low-confidence observation can lower the smoothed
+    // confidence (the previous MAX rule produced stale-optimistic
+    // readings, which contradicted §5.5/§15.4).
+    final visibility = raw.visibility;
     return HandLandmarkPoint(x: x, y: y, z: z, visibility: visibility);
   }
 
