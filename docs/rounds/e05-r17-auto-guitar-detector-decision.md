@@ -349,12 +349,12 @@ E05-R17 self-test (§6.1 mérce-mátrix + §6.2 küszöb-mátrix):
           status=NO_DATA n_frames=0 n_guitar_frames=0 mean_iou=undefined mean_anchor_error=undefined p95_anchor_error=undefined failure_rate=undefined mean_latency_ms=undefined p95_latency_ms=undefined decision=NO_DATA
   [PASS] §6.1.iou-correct-on-known-inputs
           full=1.0000 disjoint=0.0000 half=0.5000
-  [PASS] §6.2.mean=0.029-below-threshold-yields-experimental
-          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0290 p95_anchor_error=0.0290 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
-  [PASS] §6.2.mean=0.030-on-threshold-yields-experimental
-          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0300 p95_anchor_error=0.0300 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
-  [PASS] §6.2.mean=0.031-above-threshold-yields-production-candidate-other-axes-pass
-          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0310 p95_anchor_error=0.0310 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=PRODUCTION_CANDIDATE
+  [PASS] §6.2.mean=0.029-below-threshold-yields-production-candidate
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0290 p95_anchor_error=0.0290 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=PRODUCTION_CANDIDATE
+  [PASS] §6.2.mean=0.030-on-threshold-yields-production-candidate-boundary-qualifies
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0300 p95_anchor_error=0.0300 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=PRODUCTION_CANDIDATE
+  [PASS] §6.2.mean=0.031-above-threshold-yields-experimental
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0310 p95_anchor_error=0.0310 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
   [PASS] §6.2.p95-axis-failure-yields-experimental
           status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0240 p95_anchor_error=0.0600 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
   [PASS] §6.2.failure-rate-axis-failure-yields-experimental
@@ -367,6 +367,20 @@ summary: 9/9 passed
 ```
 
 EXIT = 0.
+
+> **Fix-kör 1 (2026-08-07) — `decision()` direction korrekció.** A fenti
+> kimenet a `decision()` irányának javítása UTÁNI tényleges újrafuttatás
+> eredménye (e5450b2→48c0fd8). A korábbi (inverz) implementáció a
+> 0.029/0.030 sorokat `EXPERIMENTAL`-nak, a 0.031 sort
+> `PRODUCTION_CANDIDATE`-nek minősítette — ez a `decision()` és az ADR
+> 0187 Döntés 4 közti ellentmondás volt a review (BLOCKER-1) által
+> jelzett hiba. A javítás után a határ a MINŐSÍTŐ (≤) oldalhoz tartozik
+> (ADR §Döntés 4 + az R16 `CalibrationLossMachine.isLost => drift >
+> lostDriftBound` precedens), a 0.029/0.030 → PRODUCTION_CANDIDATE, a
+> 0.031 → EXPERIMENTAL. A p95-only és failure-rate-only kiegészítő
+> tesztek címkéje változatlan (EXPERIMENTAL), DE a javítás után
+> ténylegesen a p95, ill. failure_rate ágon haladnak át — a tesztek
+> melletti megjegyzés ezt dokumentálja a forrásban.
 
 #### `bash tools/round-gate.sh test/tooling`
 
@@ -418,9 +432,9 @@ check_assets, legacy-identifier guard) — mind zöld.
 | §6.1 mátrix — ADR döntés számokkal | `docs/adr/0187-*.md` Döntés 2 (4 metrika + minimum-korpusz) | pre-flight kész — NEM implementer-scope |
 | §6.1 mátrix — Tiltott források listája NEM maradhat ki | `ml/vision/dataset_manifest.md` §3 (7 tétel) | a §6.1 2. celláját elégíti ki |
 | §6.1 mátrix — NEM kerül bináris a diffbe | `git diff --stat` — minden új fájl `.md` vagy `.py` (pure text) | lásd §10.5 |
-| §6.2 küszöb-mátrix — 0.029 → experimental | `--self-test` 3. sora: `decision=EXPERIMENTAL` | ✓ |
-| §6.2 küszöb-mátrix — 0.030 → experimental (boundary, stricter side) | `--self-test` 4. sora: `decision=EXPERIMENTAL` | ✓ — a `<=` határ a strict oldal |
-| §6.2 küszöb-mátrix — 0.031 → production-candidate (other axes pass) | `--self-test` 5. sora: `decision=PRODUCTION_CANDIDATE` | ✓ — brief §6.2 cell 3 verbatim |
+| §6.2 küszöb-mátrix — 0.029 → production-candidate | `--self-test` 3. sora: `decision=PRODUCTION_CANDIDATE` | ✓ — ADR §Döntés 4: a határ a ≤ (minősítő) oldal |
+| §6.2 küszöb-mátrix — 0.030 → production-candidate (boundary, qualifying side) | `--self-test` 4. sora: `decision=PRODUCTION_CANDIDATE` | ✓ — a határ a minősítő oldalhoz tartozik (R16 `isLost => >` precedens) |
+| §6.2 küszöb-mátrix — 0.031 → experimental | `--self-test` 5. sora: `decision=EXPERIMENTAL` | ✓ — ADR §Döntés 4 verbatim, mean > 0.030 → experimental |
 
 ### 10.4 ADR 0187 ↔ harness konzisztencia
 
@@ -436,9 +450,15 @@ Az implementer a saját harness-ét az ADR 0187 Döntés 2 számai ellen
 | magabiztosan téves küszöb | anchor error > 0.10 | `CONFIDENT_WRONG_DRIFT = 0.10` (= `geometry_confidence.dart` `lostDriftBound`) | ✓ — az ADR indoklásából |
 
 A Döntés 4 (boundary convention) a brief §6.2-vel egyezően a
-`decision()`-ben van kódolva: `mean_anchor_error > 0.030` a
-PRODUCTION_CANDIDATE küszöb, a határ a ≤ oldalhoz tartozik (boundary
-= stricter side).
+`decision()`-ben van kódolva: `mean_anchor_error ≤ 0.030` a
+PRODUCTION_CANDIDATE belépő-küszöb (a belső ág a p95 és failure_rate
+további szigorítása), a határ a ≤ (minősítő) oldalhoz tartozik —
+megegyezésben az R16 `CalibrationLossMachine.isLost => drift >
+lostDriftBound` precedenssel (a `drift == lostDriftBound` pillanat MÉG
+NEM `lost`). A fix-kör 1 előtt ez fordítva volt kódolva (BLOCKER-1,
+lásd a review-t és §10.2 fenti megjegyzését); a javítás a 2c7959f
+commitban van, a self-test a `fe99458` commit utáni új kimenetet
+idézi.
 
 A Döntés 3 (consent) a `dataset_manifest.md` §2 (consent-séma) és §3
 (tiltott források) által teljesül.
@@ -479,27 +499,35 @@ orchestrátor pre-flightjához).
 
 ### 10.7 Lesson / scope-megjegyzések a jövőbeli aktiváló körhöz
 
-1. **Az ADR 0187 §Döntés 2 tábla és a brief §6.2 küszöb-mátrix
-   között látszólagos inverzió van** a `production-candidate` és
-   `experimental` címkék irányában — a Döntés 2 a „≤ 0.030 →
-   promotion-előfeltétel" értelemben használja a címkéket, míg a
-   brief §6.2 a `mean > 0.030` esetén címkézi `production-candidate`-
-   nek az eredményt (a `mean ≤ 0.030` oldal `experimental` marad). Az
-   implementer a brief §6.2 + ADR §Döntés 4 verbatim követte (a két
-   forrás egyezik egymással), és a Döntés 2-t kiegészítő guard-ként
-   kezelte (a másik két tengely strict boundjait is megköveteli a
-   `PRODUCTION_CANDIDATE` eléréséhez). Ha az orchestrátor ezt az
-   inverziót ADR-kiegészítéssel tisztázni akarja, az ADR 0185
-   §Döntés 5 mintája szerint járjon el — az ADR 0187 Döntés 5
-   kimondja, hogy a threshold-újraszámolás csak dokumentált,
-   mért indoklású ADR-kiegészítéssel lehetséges.
+1. **Fix-kör 1 — `decision()` direction korrekció (lezárva).** A
+   korábbi §10.7 1. pont (a mostani számozás előtti „látszólagos
+   inverzió" megjegyzés) a review által azonosított BLOCKER-1
+   forrása volt: a kód a `mean > MEAN_ANCHOR_ERROR_MAX` ágat
+   címkézte `PRODUCTION_CANDIDATE`-nek — ez ellentmondott az ADR
+   §Döntés 4 „a határ a minősítő oldalhoz tartozik" szabályának
+   és az R16 `isLost => drift > lostDriftBound` precedensnek. A
+   fix-kör 1 (commitok `2c7959f` + `fe99458`) megfordította a
+   külső feltételt `≤`-re; a belső ág (p95, failure_rate guard)
+   VÁLTOZATLAN. A `dataset_manifest.md` §2 a MAJOR-1
+   (`annotator_privacy_guideline` hiányzó 7. consent-mező)
+   pótlásával együtt most már mind a 7 SDD §31.2 elemet viszi.
+   Az N2 exit-code javítás (`48c0fd8`) a `raise SystemExit(str)`-et
+   `print(..., file=sys.stderr) + sys.exit(EXIT_BAD_INPUT=3)`-ra
+   cserélte — a tényleges kilépési kód immár egyezik a
+   deklarált/dokumentálttal. A review `gate_shape=VIOLATION`
+   jelzésének semmi nyoma (külön processzek, nincs `| tail`/`&&`).
 2. **A harness `decision()` a mean-tengelyt elsődlegesnek tekinti**
    a brief §6.2 sweep konvenció miatt (a másik két tengely a
    sweep-ben „végig teljesülő értéken tartva" szerepel). Ha egy
    jövőbeli mérés `mean ≤ 0.030` mellett `p95 > 0.050` vagy
    `failure_rate > 0.05` esettel találkozik, a `decision()` azt
    `EXPERIMENTAL`-nak címkézi — az ADR §Döntés 2 „mindeigyi
-   teljesül" guard-ja így érvényesül a brief konvenció felett.
+   teljesül" guard-ja így érvényesül a brief konvenció felett. A
+   fix-kör 1 után a p95-only és failure-rate-only kiegészítő
+   tesztek ténylegesen a saját águkat futják be (korábban a
+   mean-tengely fordított iránya miatt a záró `return "EXPERIMENTAL"`
+   takarta el a p95/failure_rate ágat — az elvárt címke így is
+   helyes volt, de más okból).
 3. **A `--self-test` kilenc cellája a §6.1 + §6.2 minden
    kötelező celláját lefedi** + két kiegészítő egy-tengelyes hiba-
    teszttel (p95-only és failure-rate-only). A kiegészítő cellák
