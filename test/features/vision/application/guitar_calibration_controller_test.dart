@@ -426,6 +426,80 @@ void main() {
     });
   });
 
+  group('GuitarCalibrationRuntimeContextProvider — F3 storage wiring', () {
+    test('reads the saved camera preference from the keyValueStore', () {
+      final store = InMemoryKeyValueStore({
+        StorageKeys.visionCamera: 'front',
+      });
+      final container = ProviderContainer(
+        overrides: [keyValueStoreProvider.overrideWithValue(store)],
+      );
+      addTearDown(container.dispose);
+      final context_ = container.read(
+        guitarCalibrationRuntimeContextProvider,
+      );
+      expect(context_.camera, VisionCameraPreference.front);
+    });
+
+    test('reads the saved setup profile from the keyValueStore', () {
+      final store = InMemoryKeyValueStore({
+        StorageKeys.visionSetupProfile: 'leftHandFocus',
+      });
+      final container = ProviderContainer(
+        overrides: [keyValueStoreProvider.overrideWithValue(store)],
+      );
+      addTearDown(container.dispose);
+      final context_ = container.read(
+        guitarCalibrationRuntimeContextProvider,
+      );
+      expect(context_.setupProfile, VisionSetupProfile.leftHandFocus);
+    });
+
+    test('falls back to back camera + balanced profile when no key set', () {
+      final store = InMemoryKeyValueStore();
+      final container = ProviderContainer(
+        overrides: [keyValueStoreProvider.overrideWithValue(store)],
+      );
+      addTearDown(container.dispose);
+      final context_ = container.read(
+        guitarCalibrationRuntimeContextProvider,
+      );
+      // The fromStorage defaults match the upstream R08 path.
+      expect(context_.camera, VisionCameraPreference.back);
+      expect(context_.setupProfile, isNotNull);
+    });
+
+    test(
+      'saveIfValid persists the saved camera + setup profile, not the hardcoded one',
+      () async {
+        final store = InMemoryKeyValueStore({
+          StorageKeys.visionCamera: 'front',
+          StorageKeys.visionSetupProfile: 'rightHandFocus',
+        });
+        final container = ProviderContainer(
+          overrides: [keyValueStoreProvider.overrideWithValue(store)],
+        );
+        addTearDown(container.dispose);
+        final context_ = container.read(
+          guitarCalibrationRuntimeContextProvider,
+        );
+        final controller = container.read(
+          guitarCalibrationControllerProvider(context_).notifier,
+        );
+        final outcome = await controller.saveIfValid();
+        expect(outcome, GuitarCalibrationSaveOutcome.saved);
+        final state = container.read(
+          guitarCalibrationControllerProvider(context_),
+        );
+        expect(state.lastSavedProfile?.camera, VisionCameraPreference.front);
+        expect(
+          state.lastSavedProfile?.setupProfile,
+          VisionSetupProfile.rightHandFocus,
+        );
+      },
+    );
+  });
+
   group('GuitarCalibrationController — repo write failure', () {
     test('writeFailed surfaces when the underlying store rejects', () async {
       final store = _ThrowingKeyValueStore();

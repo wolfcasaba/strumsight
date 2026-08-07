@@ -48,6 +48,7 @@ class GuitarAnchorEditor extends StatefulWidget {
     required this.onPolygonVertexChanged,
     required this.semanticsNutLabel,
     required this.semanticsBridgeLabel,
+    this.mirrorPreview = false,
   });
 
   /// The fit describing how the normalised-space canvas maps onto the
@@ -64,6 +65,11 @@ class GuitarAnchorEditor extends StatefulWidget {
   final void Function(int index, NormalizedPoint point) onPolygonVertexChanged;
   final String semanticsNutLabel;
   final String semanticsBridgeLabel;
+
+  /// Forwarded to [PreviewFit.toNormalized] / [PreviewFit.toPreview].
+  /// True for the front camera so the user's drag direction matches the
+  /// mirrored preview they see (R07 / mirror parity).
+  final bool mirrorPreview;
 
   @override
   State<GuitarAnchorEditor> createState() => _GuitarAnchorEditorState();
@@ -112,6 +118,7 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
                 vertex: widget.neckPolygon[i],
                 fit: widget.fit,
                 clamped: _clampedHandle == Key('guitar-polygon-vertex-$i'),
+                mirrorPreview: widget.mirrorPreview,
                 onPointerDown: (p) => _onPolygonPointerDown(i, p),
                 onPointerMove: _onPointerMove,
                 onPointerUp: _onPointerUp,
@@ -126,6 +133,7 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
               accentColor: clampColor,
               baseColor: color,
               clamped: _clampedHandle == const Key('guitar-anchor-nut'),
+              mirrorPreview: widget.mirrorPreview,
               onPointerDown: (p) => _onAnchorPointerDown(AnchorRole.nut, p),
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
@@ -140,6 +148,7 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
               accentColor: clampColor,
               baseColor: color,
               clamped: _clampedHandle == const Key('guitar-anchor-bridge'),
+              mirrorPreview: widget.mirrorPreview,
               onPointerDown: (p) => _onAnchorPointerDown(AnchorRole.bridge, p),
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
@@ -164,9 +173,11 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
   void _onPointerMove(Offset localPosition, Size size) {
     final drag = _drag;
     if (drag == null) return;
-    final normalized = widget.fit.toNormalized().apply(
-      PreviewPoint(localPosition.dx, localPosition.dy),
-    );
+    final normalized = widget.fit
+        .toNormalized(mirrorPreview: widget.mirrorPreview)
+        .apply(
+          PreviewPoint(localPosition.dx, localPosition.dy),
+        );
     final clamped = NormalizedPoint(
       normalized.x.clamp(0.0, 1.0).toDouble(),
       normalized.y.clamp(0.0, 1.0).toDouble(),
@@ -238,6 +249,7 @@ class _AnchorHandle extends StatelessWidget {
     required this.accentColor,
     required this.baseColor,
     required this.clamped,
+    required this.mirrorPreview,
     required this.onPointerDown,
     required this.onPointerMove,
     required this.onPointerUp,
@@ -251,6 +263,7 @@ class _AnchorHandle extends StatelessWidget {
   final Color accentColor;
   final Color baseColor;
   final bool clamped;
+  final bool mirrorPreview;
   final ValueChanged<NormalizedPoint> onPointerDown;
   final void Function(Offset, Size) onPointerMove;
   final VoidCallback onPointerUp;
@@ -258,7 +271,7 @@ class _AnchorHandle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = fit.toPreview().apply(point);
+    final preview = fit.toPreview(mirrorPreview: mirrorPreview).apply(point);
     final dx = (preview.x - 16).clamp(0.0, fit.viewport.width - 32).toDouble();
     final dy = (preview.y - 16).clamp(0.0, fit.viewport.height - 32).toDouble();
     // Clamp visibility (§5.4): the border switches to a thicker,
@@ -314,7 +327,7 @@ class _AnchorHandle extends StatelessWidget {
     // `localPosition` is relative to the GestureDetector's 32x32 box. The
     // editor's `_onPointerMove` expects coordinates in the editor's
     // Stack-space, so we add the anchor's own `Positioned` offset.
-    final preview = fit.toPreview().apply(point);
+    final preview = fit.toPreview(mirrorPreview: mirrorPreview).apply(point);
     final anchorDx = (preview.x - 16)
         .clamp(0.0, fit.viewport.width - 32)
         .toDouble();
@@ -336,6 +349,7 @@ class _PolygonHandle extends StatelessWidget {
     required this.vertex,
     required this.fit,
     required this.clamped,
+    required this.mirrorPreview,
     required this.onPointerDown,
     required this.onPointerMove,
     required this.onPointerUp,
@@ -346,6 +360,7 @@ class _PolygonHandle extends StatelessWidget {
   final NormalizedPoint vertex;
   final PreviewFit fit;
   final bool clamped;
+  final bool mirrorPreview;
   final ValueChanged<NormalizedPoint> onPointerDown;
   final void Function(Offset, Size) onPointerMove;
   final VoidCallback onPointerUp;
@@ -354,7 +369,7 @@ class _PolygonHandle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = anchorPainterColor(context);
-    final preview = fit.toPreview().apply(vertex);
+    final preview = fit.toPreview(mirrorPreview: mirrorPreview).apply(vertex);
     final dx = (preview.x - 8).clamp(0.0, fit.viewport.width - 16).toDouble();
     final dy = (preview.y - 8).clamp(0.0, fit.viewport.height - 16).toDouble();
     // Clamp visibility (§5.4): the dashed border surrounds the vertex

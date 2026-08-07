@@ -22,12 +22,17 @@ class GuitarGeometryPreview extends StatelessWidget {
     required this.nut,
     required this.bridge,
     required this.neckPolygon,
+    this.mirrorPreview = false,
   });
 
   final PreviewFit fit;
   final NormalizedPoint nut;
   final NormalizedPoint bridge;
   final List<NormalizedPoint> neckPolygon;
+
+  /// Forwarded to [PreviewFit.toPreview]. True for the front camera so
+  /// the visual preview matches the user's mirrored view (R07).
+  final bool mirrorPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +47,7 @@ class GuitarGeometryPreview extends StatelessWidget {
           bridge: bridge,
           neckPolygon: neckPolygon,
           color: anchorPainterColor(context),
+          mirrorPreview: mirrorPreview,
         ),
       ),
     );
@@ -55,6 +61,7 @@ class _GeometryPainter extends CustomPainter {
     required this.bridge,
     required this.neckPolygon,
     required this.color,
+    required this.mirrorPreview,
   });
 
   final PreviewFit fit;
@@ -62,10 +69,11 @@ class _GeometryPainter extends CustomPainter {
   final NormalizedPoint bridge;
   final List<NormalizedPoint> neckPolygon;
   final Color color;
+  final bool mirrorPreview;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final toPreview = fit.toPreview();
+    final toPreview = fit.toPreview(mirrorPreview: mirrorPreview);
     final fillPaint = Paint()
       ..color = color.withValues(alpha: 0.18)
       ..style = PaintingStyle.fill;
@@ -117,6 +125,7 @@ class _GeometryPainter extends CustomPainter {
       oldDelegate.nut != nut ||
       oldDelegate.bridge != bridge ||
       oldDelegate.color != color ||
+      oldDelegate.mirrorPreview != mirrorPreview ||
       !_listEquals(oldDelegate.neckPolygon, neckPolygon);
 
   static bool _listEquals<T>(List<T> a, List<T> b) {

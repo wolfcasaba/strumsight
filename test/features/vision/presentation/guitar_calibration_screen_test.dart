@@ -33,6 +33,20 @@ GuitarCalibrationContext _context() => GuitarCalibrationContext(
   now: () => DateTime(2026, 1, 1, 12),
 );
 
+/// Test-local copyWith helpers — kept short and grep-able so the
+/// F3 mirror-parity test can build a front-camera context without
+/// touching the production class.
+extension _GuitarCalibrationContextCopy on GuitarCalibrationContext {
+  GuitarCalibrationContext copyWithCamera(VisionCameraPreference camera) =>
+      GuitarCalibrationContext(
+        camera: camera,
+        orientation: orientation,
+        zoom: zoom,
+        setupProfile: setupProfile,
+        now: now,
+      );
+}
+
 VisionCalibrationRepository _emptyRepo() {
   return VisionCalibrationRepository(
     document: JsonDocumentStore(
@@ -206,6 +220,34 @@ void main() {
       final restoredAlpha =
           (restoredBorder.top.color.a * 255).round() & 0xff;
       expect(restoredAlpha, lessThan(afterAlpha));
+    },
+  );
+
+  testWidgets(
+    'f3: front-camera mirror — dragging right decreases normalised x',
+    (tester) async {
+      final ctx = _context().copyWithCamera(VisionCameraPreference.front);
+      final container = await _pumpHarness(
+        tester,
+        repository: _emptyRepo(),
+        context: ctx,
+      );
+      addTearDown(container.dispose);
+
+      final start = container.read(guitarCalibrationControllerProvider(ctx));
+      expect(start.bridgeAnchor.x, 0.6);
+
+      final bridgeFinder = find.byKey(const Key('guitar-anchor-bridge'));
+      final bridgeCenter = tester.getCenter(bridgeFinder);
+      final gesture = await tester.startGesture(bridgeCenter);
+      await gesture.moveBy(const Offset(40, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final state = container.read(guitarCalibrationControllerProvider(ctx));
+      // Front camera mirrors preview space: a rightward drag produces a
+      // decreasing normalised x — the inverse of the back-camera case.
+      expect(state.bridgeAnchor.x, lessThan(0.6));
     },
   );
 }

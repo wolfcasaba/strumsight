@@ -27,6 +27,7 @@ import '../../../../core/camera/camera_coordinate_space.dart';
 import '../../../../core/camera/preview_fit.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/calibration/calibration_validity.dart';
+import '../../domain/vision_setup_profile.dart';
 import '../providers/guitar_calibration_providers.dart';
 import '../widgets/guitar_anchor_editor.dart';
 import '../widgets/guitar_geometry_preview.dart';
@@ -202,6 +203,11 @@ class _GeometryCanvas extends ConsumerWidget {
       viewport: viewport,
       mode: PreviewFitMode.fit,
     );
+    // Mirror parity (R07): the front camera presents a mirrored preview,
+    // so a rightward drag should map to a decreasing normalised x. The
+    // [PreviewFit] handles the math; the editor + preview only need the
+    // boolean.
+    final mirrorPreview = context_.camera == VisionCameraPreference.front;
     return Semantics(
       label: l10n.guitarCalibrationCanvasSemantic,
       child: Stack(
@@ -211,6 +217,7 @@ class _GeometryCanvas extends ConsumerWidget {
             nut: state.nutAnchor,
             bridge: state.bridgeAnchor,
             neckPolygon: state.neckPolygon,
+            mirrorPreview: mirrorPreview,
           ),
           GuitarAnchorEditor(
             fit: fit,
@@ -219,6 +226,7 @@ class _GeometryCanvas extends ConsumerWidget {
             neckPolygon: state.neckPolygon,
             semanticsNutLabel: l10n.guitarCalibrationAnchorNutSemantic,
             semanticsBridgeLabel: l10n.guitarCalibrationAnchorBridgeSemantic,
+            mirrorPreview: mirrorPreview,
             onAnchorChanged: (role, p) {
               controller.moveAnchor(role, p);
             },
