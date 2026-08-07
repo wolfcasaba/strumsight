@@ -1,14 +1,15 @@
 # E05-R12 — Review
 
 Brief: `docs/rounds/e05-r12-hand-landmark-provider-and-model-manifest.md`
-Diff: `git diff 414ea28...e7f6823` (pre-flight commit → implementer HEAD),
+Diff: `git diff 414ea28...727a51c` (pre-flight commit → javító kör 1 HEAD),
 branch `minimax/e05-r12-hand-landmark-provider-and-model-manifest`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (javító kör 1 után)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+**1. pass:** BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+**Javító kör 1 után:** BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (új, N2) · NOTE: 1
 
 Az implementáció tartalmilag erős — a 21-pontos topológia, a hand-count és a
 timestamp mátrix, a manifest-őr négy hibaesete mind valódi, célzott
@@ -125,7 +126,75 @@ dokumentált fallback-je szerint. A 12 másik változott útvonal mind az
   fájl KIZÁRÓLAG a valódi, committolt manifest ellenőrzéséhez kell, a
   mátrix-lefedettséghez nem — tehát a fenti javítás nem csökkenti a valódi
   tesztlefedettséget.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`727a51c`, 6 lépésenkénti commit `eb28ce1..727a51c`)
+  — újra ellenőrizve friss `/tmp/review-e05-r12-fix1` klónban, NEM az
+  implementer önjelentésére hagyatkozva:
+  1. `git rm` megtörtént — `git diff --stat 414ea28..727a51c -- assets/ml/`
+     kizárólag a JSON manifest 21 sorát mutatja, bináris fájlt nem; a
+     working tree-ben nincs `.tflite`.
+  2. `validateVisionManifest` a fájlrendszer+checksum ágat
+     `if (status == VisionModelStatus.active) { … }` mögé zárta (`lib/core/ml/vision_model_manifest.dart:230-243`,
+     saját `git diff` olvasva) — a `deferred` ág csak a `sha256` mező
+     formátumát nézi.
+  3. `ml/make_manifest.py` `_build_vision_models` a `deferred` specekhez
+     a `_DEFERRED_SHA256_PLACEHOLDER = "0" * 64` konstanst adja ki
+     lemezolvasás nélkül; a `FileNotFoundError`/valódi checksum-számítás
+     csak `status == "active"`-ra fut.
+  4. `assets/ml/model_manifest.json` regenerálva, `vision_models[0].sha256`
+     most `"000…000"` (64 nulla) — nem egy fájl checksuma.
+  5. `test/tooling/ml_asset_manifest_test.dart`: a `'wrong checksum'` cella
+     most 63 hex karaktert használ (formátumhiba), az 5 eredeti cella +
+     1 ÚJ `'active entry: matching checksum'` cella (tempdir-only asset,
+     NEM committolva) — 10/10 zöld, `flutter test
+     test/tooling/ml_asset_manifest_test.dart` saját futtatással
+     megerősítve ebben a klónban is.
+  - **Scope-audit véglegesen tiszta:** `python3 tools/scope-audit.py --repo
+    /tmp/review-e05-r12-fix1 --brief docs/rounds/e05-r12-*.md --base 414ea28`
+    → `Legacy scope audit OK (414ea28..727a51c, 13 changed path(s), 1
+    generated/ignored)`. (Az implementer saját `--base e7f6823`
+    futtatása 1 leletet ad — ez a scope-audit tooling ISMERT korlátja: a
+    `git diff` **törlésként** is felsorolja az útvonalat, és az audit nem
+    tesz különbséget hozzáadás/törlés között; a `414ea28` — a tényleges
+    kör-eredet — az egyetlen mérvadó bázis, és arra nézve 0 lelet. Az
+    implementer §10-e ezt önállóan, helyesen fel is ismerte és
+    dokumentálta, mielőtt a review ezt közölte volna vele — független
+    megerősítés.)
+  - **Saját mutáció-próba a fix mélységének igazolására:** a
+    `status == VisionModelStatus.active` feltételt ideiglenesen
+    `false && …`-ra rontva, `flutter test
+    test/tooling/ml_asset_manifest_test.dart` **VÁLTOZATLANUL zöld**
+    maradt mind a 10 cellán — ez felfedte, hogy az új `'active entry'`
+    teszt csak a POZITÍV utat (helyes checksum → clean) bizonyítja, a
+    NEGATÍV utat (hibás/hiányzó asset egy `active` bejegyzésnél → nem
+    clean) nem. Lásd N2.
+
+### N2 — MINOR (ÚJ, javító kör 1 után) — az `active`-ági negatív eset tesztelve nincs
+
+- **Fájl:** `test/tooling/ml_asset_manifest_test.dart` (az F1 javításban
+  hozzáadott `'active entry: matching checksum → manifest is clean'` teszt).
+- **Probléma:** a teszt kizárólag a HELYES esetet fedi (egyező checksum →
+  `isClean == true`). Nincs testvér-teszt egy `status: 'active'`
+  bejegyzésre HIBÁS/hiányzó assettel (`isClean == false` várt) — ezért a
+  `validateVisionManifest` filesystem+checksum ágának tényleges
+  ELUTASÍTÓ-képessége nincs bizonyítva, csak az, hogy jó bemenetre nem
+  dob hamis hibát. **Saját mutáció-próbával igazolva** (lásd F1 alatt): az
+  `if (status == active)` feltétel teljes kikapcsolása mellett is zöld
+  marad mind a 10 teszt.
+- **Hatás:** jelenleg NULLA — ez a kód-ág ma **holt** (a shipped manifest
+  egyetlen `vision_models` bejegyzése `deferred`, `active` sehol nem
+  keletkezik ebben a körben). A hatás egy JÖVŐBELI aktiváló körre
+  korlátozódik, ha az örökli ezt a tesztfájlt módosítás nélkül.
+- **Kötelező javítás:** NINCS ebben a körben (dormant path, nem
+  termékhatár-sértés, nem BLOCKER/MAJOR — ADR 0052/review-sablon szerint a
+  MINOR nem blokkolja a merge-et, és a diff már 6 lépésenkénti commit,
+  további hizlalása nem indokolt egy holt ágért).
+- **Javasolt (nem kötelező, follow-up):** a jövőbeli aktiváló kör (amely
+  ELSŐ ízben ad `status: 'active'` bejegyzést a shipping manifesthez)
+  brief-je kapjon egy explicit sort: adjon hozzá egy negatív
+  `'active entry: mismatched checksum → init failure'` (és/vagy
+  `'active entry: missing asset → init failure'`) cellát a meglévő
+  `newFixture()` mintával, mielőtt bármilyen valódi asset aktiválódik.
+- **Státusz:** OPEN (non-blocking, follow-up egy jövőbeli körre jegyezve)
 
 ### N1 — NOTE — a „decreasing before any accept” teszt neve félrevezető
 
@@ -153,14 +222,16 @@ dokumentált fallback-je szerint. A 12 másik változott útvonal mind az
 | architecture | zöld | ✅ — `dart run tool/check_architecture.dart`, 12 allowlistelt eltérés (a kör nem bővítette) |
 | secrets | zöld | ✅ |
 | l10n | zöld | ✅ |
-| CI (teljes suite + property + APK) | még nem dispatch-elve | ⏳ — a javító kör után, a round-ci-plan.py döntése szerint |
+| CI (teljes suite + property + APK) | még nem dispatch-elve | ⏳ — a `round-ci-plan.py` döntése szerint, a merge előtt |
 
-`gate_shape=ok` a jelzésfájlban (nincs csonkoló `\| tail`/`&&` a naplóban,
-mérve).
+`gate_shape=ok` mindkét jelzésfájlban (nincs csonkoló `\| tail`/`&&` a
+naplóban, mérve). A javító kör 1 gate-je (99+40 teszt) is újra futtatva
+friss `/tmp/review-e05-r12-fix1` klónban, zöld.
 
 ## Merge-döntés
 
-**Merge TILOS amíg F1 nyitva** (ADR 0052 — nyitott BLOCKER). Javító kör
-szükséges, ugyanazon a motoron (MiniMax, ez az 1. javító kör — a
-motor-eszkalációs küszöb 1 javító kör után Codex-re vált, ha még mindig
-nyitott BLOCKER/MAJOR marad).
+**F1 FIXED, 0 nyitott BLOCKER/MAJOR → mehet a CI-dispatch és a merge**
+(ADR 0052). N2 (MINOR) és N1 (NOTE) nem blokkol, follow-upként jegyezve.
+A tényleges merge-hez még kötelező: exact-SHA zöld CI (`build-apk.yml` vagy
+`full-gate.yml`, a `round-ci-plan.py` döntése szerint) + Router CI (a kör
+`docs/rounds/**`-et is érint), a merge SHA-n.
