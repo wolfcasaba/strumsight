@@ -5418,3 +5418,110 @@ helyettesítés. (3) Egy implementer-önjelentés konkrét, ellenőrizhető
 össze a kóddal — a magabiztos részletesség nem bizonyíték. Rokon: [[L160]]
 (ugyanaz a családi hiba: a saját regressziós teszt hazudhat, mert rossz
 dolgot mér), a review-protokoll saját elve („a zöld gate NEM bizonyíték").
+
+## L162 — A `risk = "high"` dedikált security-reviewert kér, de erre nincs gépi őr a láncban (E05-R12, 2026-08-07)
+
+**Mit mértünk.** Az E05-R12 kör brief `ai-router` TOML blokkja
+`risk = "high"`-at deklarált — a `security-reviewer` subagent saját
+triggerleírása ezt önmagában kötelezővé teszi ("… VAGY a kör-brief
+`risk = "high"` értéke"). Az orchestrátor a pre-flightban ezt elolvasta,
+de a review-lépéssorból KIHAGYTA — a szokásos review (`sdd-round-review`)
+lefutott, a javító kör lezárult, a CI zöld lett, a PR **merge-elve lett**
+dedikált security-review NÉLKÜL. A hiányt csak a HANDOFF-írás közben,
+a korábbi E05 körök mintáját összevetve vette észre az orchestrátor —
+utólag, POST-MERGE pótolta (`docs/reviews/e05-r12-…-security.md`), ami
+szerencsére 0 CRITICAL/BLOCKER/MAJORral zárult, de a sorrend (review
+MERGE UTÁN) elvben egy revert-igényű leletet is találhatott volna egy már
+éles `main`-en.
+
+**Miért csúszott át.** A pipeline-prompt §1.1/§2 és a `sdd-round-driver`
+skill NEM tartalmaz egy explicit "ha risk=high, hívd meg a
+security-reviewert" sort a fő lépéssorban — ez a szabály kizárólag a
+`security-reviewer` agent SAJÁT leírásában él, amit az orchestrátornak
+külön kell megjegyeznie/ellenőriznie minden kör pre-flightjában. Nincs
+gépi kapu (pl. a `round-gate.sh` vagy a merge-ellenőrzés) ami blokkolná a
+merge-et egy `risk="high"` kör esetén dedikált security-review
+hivatkozása nélkül a review-jelentésben.
+
+**Szabály.** Minden kör pre-flightjában, MIELŐTT a review-fázist
+lezártnak tekinted: olvasd ki a brief `ai-router` blokk `risk` mezőjét
+(`grep -n 'risk = ' docs/rounds/<kör>.md`). Ha `"high"`, a záró
+review-checklist EGYIK tétele "dedikált security-reviewer lefutott, a
+jelentés `docs/reviews/<kör>-security.md`-ben létezik" — ez ugyanolyan
+kemény merge-előfeltétel, mint a zöld CI, és a HANDOFF-bejegyzésbe ez
+mindig bekerül a rendes review mellett (lásd minden korábbi E05 kör
+mintáját E05-R04 óta). Amíg nincs gépi kapu erre, az orchestrátor saját
+checklistjének kell tartalmaznia — ez a lecke maga az emlékeztető.
+
+## L163 — A scope-audit köztes bázissal hamis VIOLATION-t ad egy javító-kör-beli fájltörlésre (E05-R12, 2026-08-07)
+
+**Mit mértünk.** Az E05-R12 javító körében (F1) az implementer eltávolított
+egy korábban tévesen committolt, listán kívüli bináris fájlt
+(`git rm assets/ml/hand_landmarker_deferred.tflite`). A javító kör saját
+`ROUND_BRIEF`-fel indított automatikus scope-audit-ja (`base = cecd72b`,
+a köztes review-commit, ami a munkapéldány HEAD-je volt a javító kör
+indításakor) **VIOLATION**-t jelzett UGYANARRA a fájlra — annak ellenére,
+hogy a fájl a diff EGYIK oldalán sem létezik, csak TÖRLŐDÖTT. A
+`tools/scope-audit.py`/`legacy_scope.py` a `git diff <base> --name-only`
+kimenetét vizsgálja, ami a törölt útvonalat is "érintett path"-ként
+sorolja fel, és az eszköz nem különbözteti meg a hozzáadást a törléstől
+— egy `allowed_paths`-on kívüli útvonal ÉRINTÉSE (bármilyen irányban)
+VIOLATION-t ad. Az implementer §10 handoffja EZT önállóan felismerte és
+dokumentálta (két `scope-audit.py` futtatással, `--base cecd72b` vs
+`--base 414ea28`), az orchestrátor review-ja pedig függetlenül
+megerősítette ugyanezt a mechanizmust.
+
+**Miért fontos.** Ha az orchestrátor a köztes-bázisú `scope_audit=VIOLATION`
+jelzést szó szerint elfogadta volna, egy VALÓS javítást (a scope-sértés
+megszüntetését) tévesen ÚJABB scope-sértésként értelmezett volna — ez a
+lánc logikája szerint `stopped`/H3 halt-hoz vezetett volna egy olyan
+kör esetén, ami valójában TISZTA volt a teljes kör-eredethez képest.
+
+**Szabály.** A scope-audit EGYETLEN mérvadó bázisa mindig az EREDETI
+pre-flight commit SHA-ja (a kör tényleges kiindulópontja), SOHA nem egy
+köztes dispatch/review-commit. Javító kör utáni scope-ellenőrzésnél MINDIG
+futtasd le kézzel is: `python3 tools/scope-audit.py --repo <munkapéldány>
+--brief docs/rounds/<kör>.md --base <EREDETI pre-flight SHA>` — ha ez 0
+lelettel tér vissza, a köztes-bázisú automatikus jelzés VIOLATION-ja
+figyelmen kívül hagyható (dokumentáld a review-ban, miért). Rokon:
+[[L146]] — a `codex-round.sh`-nál mért, hasonló családi hiba: ott egy
+mid-run `git pull --rebase` tette stale-base-szé a záró scope_audit-ot
+egy PÁRHUZAMOS kör main-merge-e miatt; itt egy javító-kör-dispatch köztes
+HEAD-je okozott ugyanolyan bázis-eltolódást. Mindkettő ugyanarra a
+gyökérokra vezethető vissza: a scope_audit `base` paramétere NEM mindig
+esik egybe a kör tényleges eredetével, és ezt minden felhasználásnál
+explicit ellenőrizni kell, nem feltételezni.
+
+## L164 — „Additív manifest-bővítés" ne feltételezésből, hanem a pinnelt assertion + a bináris-formátum-specifikus generátor grep-eléséből induljon (E05-R12, 2026-08-07)
+
+**Mit mértünk.** Az E05-R12 brief eredeti szövege szerint a vision-modell
+manifest-bejegyzés "additívan bővíti" a meglévő `assets/ml/model_manifest.json`
+sémát. A pre-flight grep két, egymástól független okot talált, amiért ez
+NEM lehet a meglévő `models[]` tömb egy újabb sora: (1)
+`test/tooling/ml_asset_manifest_test.dart` egy tesztje a tömb hosszát
+KŐBE VÉSVE `expectedModelCount: 4`-re rögzíti — egy 5. bejegyzés ezt
+azonnal pirosra vitte volna; (2) `ml/make_manifest.py` `_read_binary_metadata`-ja
+a StrumSight-saját, 4-bájt-magic+tömbszámláló CRNN bináris formátumot
+parse-olja — egy landmark-modell (FlatBuffer-alapú `.tflite`/`.task`)
+ezen `ValueError`-ral azonnal elhasalt volna. A pre-flight §0.0-ban ezt
+dokumentálva, a brief-et egy ÚJ, testvér `vision_models` JSON-kulcsra
+revideálva a kör tisztán, e hiba nélkül futott le.
+
+**Miért fontos.** Ez NEM egy javító körben felfedezett hiba, hanem egy
+pre-flightban MEGELŐZÖTT hiba — a különbség attól van, hogy a "bővíti,
+nem újat épít" kifejezést nem szó szerint fogadtuk el, hanem a TÉNYLEGES
+validátor/generátor kódot mértük (a pipeline-prompt §1 saját mandátuma:
+"grep-eld ki a kódból", ne az átmenettáblát/prózát).
+
+**Szabály.** Amikor egy brief azt állítja, hogy egy változás "additív" egy
+MEGLÉVŐ, tesztelt struktúrához képest: (1) grep-eld ki a struktúrát VÉDŐ
+tesztet, és nézd meg, van-e benne KŐBE VÉSETT szám/hossz/típus-assertion,
+amit egy naiv additív elem sértene; (2) ha van generátor-szkript is,
+nézd meg, hogy a generátor a struktúra ELEMEIT egy KÖZÖS, formátum-
+specifikus kóddal állítja-e elő (itt: bináris-parser) — ha igen, egy
+strukturálisan más elem (más bináris formátum, más mezőszemantika) nem
+mehet ugyanazon az úton, függetlenül attól, hogy a JSON-sémában
+"additívnak" tűnik. A helyes minta egy ÚJ, testvér kulcs/függvény saját
+validációval, nem egy közös tömb/parser megosztása. Rokon: [[L160]]
+(a manifest-séma törhet egy meglévő őrt, ha a bővítés nem valóban
+additív).
