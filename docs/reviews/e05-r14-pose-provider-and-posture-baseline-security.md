@@ -181,7 +181,17 @@ helyett a `poseLandmarkIdByRawName` kulcshalmazának pozitív pinnelése + 1:1
 hosszellenőrzés a `pose_privacy_audit_test.dart`-ban) — production kódot nem
 igényel, és a NOTE-3-at is lezárja.
 
-**Státusz-frissítés (orchestrátor, a javító kör dispatch-elésekor):** MAJOR-1
-OPEN → javító kör 2 dispatch-elve (motor-eszkaláció, ld. a funkcionális
-review). MINOR-2 follow-up-ként bundle-elhető ugyanabba a körbe, ha nem
-hizlalja érdemben a diffet.
+**Státusz-frissítés (orchestrátor, javító kör 2 után):** MAJOR-1 **FIXED**
+(`56146c2`, Codex/Terra — motor-eszkaláció, mert a MiniMax M3 egy javító
+kört már elhasznált a formázási F1-re). A javítás pontosan a javasolt
+irányt követi: `poseLandmarkIdByRawName.keys.toSet()` pinnelve egy explicit,
+pontos 9-elemű snapshotra + `.length == PoseLandmarkId.values.length`
+1:1-kikényszerítés — a meglévő alszó-szűrés megmaradt kiegészítő védelemként.
+Az orchestrátor SAJÁT, HARMADIK, független `/tmp` klónban (`/tmp/review-e05-r14-fix2`)
+megismételte a `'chin': PoseLandmarkId.neckReference` kerülő mutációt: a
+teljes `test/features/vision/` suite-ból pontosan 1 teszt bukik (`the
+raw-name allow-list maps onto retained IDs only`), a másik 154 zöld — a
+korábban észrevétlen kerülés most helyesen elakad. MINOR-2 NEM lett
+javítva ebben a körben (Codex tudatosan kihagyta, mert a brief ezt
+explicit engedte, ha bizonytalan a diff mérete) — E05-R20 follow-up-ként
+dokumentálva a round-brief §10.5-ében, nem blokkolja a merge-öt.

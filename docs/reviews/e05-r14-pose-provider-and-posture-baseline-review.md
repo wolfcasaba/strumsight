@@ -3,15 +3,26 @@
 Brief: `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`
 Diff: `git diff origin/main...minimax/e05-r14-pose-provider-and-posture-baseline`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUIRED** — funkcionális F1 FIXED, de a dedikált
-security-review (`docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md`)
-egy ÚJ, nyitott MAJOR-t talált (security S-MAJOR-1). Javító kör 2
-dispatch-elve (motor-eszkaláció Codexre, ld. lent).
+Verdikt: **APPROVED** — mindkét javító kör után (fix round 1 `67d61bc`
+formázás; fix round 2 `56146c2`, Codex/Terra, security S-MAJOR-1). Nulla
+nyitott BLOCKER/MAJOR.
 
 ## Összegzés
 
 Funkcionális: BLOCKER 0 · MAJOR 1 (FIXED, `67d61bc`) · MINOR 0 · NOTE 1
-Security (külön jelentés): BLOCKER 0 · **MAJOR 1 (OPEN)** · MINOR 1 · NOTE 3
+Security (külön jelentés): BLOCKER 0 · MAJOR 1 (**FIXED, `56146c2`**) · MINOR 1 (follow-up, E05-R20) · NOTE 3
+
+**Security fix (fix round 2, Codex/Terra, motor-eszkaláció) SAJÁT, HARMADIK
+független `/tmp` klónban ellenőrizve** (`/tmp/review-e05-r14-fix2`,
+`56146c2` tip): a teljes gate 7/7 ZÖLD; a security-reviewer eredeti kerülő
+mutációja (`'chin': PoseLandmarkId.neckReference`) SAJÁT kézzel
+megismételve a TELJES `test/features/vision/` suite-on — pontosan 1 teszt
+bukik (`the raw-name allow-list maps onto retained IDs only`), a másik 154
+zöld marad. A fix pontosan azt teszi, amit a security-jelentés javasolt:
+`poseLandmarkIdByRawName.keys.toSet()` pinnelve egy explicit 9-elemű
+snapshotra + `.length == PoseLandmarkId.values.length` 1:1-kikényszerítés.
+Diffje 26 sor, egyetlen fájl (`pose_privacy_audit_test.dart`), nulla
+production-kód-módosítás.
 
 **Funkcionális javító kör után:** friss, izolált `/tmp` klónban
 (`67d61bc`/`94a762b` tip) saját kézzel újrafuttatva a teljes
@@ -176,14 +187,17 @@ Első pass (javítás előtt, `aa6cad4` tip):
 
 ## Dedikált security-review (risk = "high")
 
-A brief §11 megjegyzése szerint kötelező — `security-reviewer` ágenssel,
-`docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md`. Az
-eredmény ebbe a jelentésbe a záró rituálék előtt kerül be, a CRITICAL/BLOCKER
-lelet esetén a merge-döntés e szakasz frissítésével változik.
+Kötelező (brief §11) — `security-reviewer` ágenssel,
+`docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md`.
+Verdikt: PASS a biztonsági lencsén (0 CRITICAL/BLOCKER), 1 MAJOR (S-MAJOR-1),
+1 MINOR (E05-R20 follow-up), 3 NOTE. Az S-MAJOR-1 fix round 2-ben (Codex)
+lezárva, SAJÁT harmadik `/tmp` klónban megismételt próbával megerősítve (ld.
+fent).
 
 ## Merge-döntés
 
-**Javító kör után minden funkcionális gate genuinely ZÖLD** egy MÁSODIK,
-független `/tmp` klónban, patch nélkül — F1 lezárva. A merge-döntés a
-dedikált security-review PASS-ára és a CI (build-apk/full-gate + router-ci)
-zöldjére vár; a funkcionális oldalról nincs nyitott BLOCKER/MAJOR.
+**Mindkét javító kör után minden gate genuinely ZÖLD, mindkét lelet SAJÁT
+kézzel, független `/tmp` klónokban ellenőrizve** (nem az implementer/Codex
+önjelentésére hagyatkozva). Nulla nyitott BLOCKER/MAJOR — sem funkcionális,
+sem security oldalon. Hátra van: CI (build-apk + router-ci) zöld a merge SHA-n
+és a záró rituálék (ADR 0052 zöld-kapu).
