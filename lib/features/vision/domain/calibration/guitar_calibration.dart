@@ -27,13 +27,14 @@ const int minNeckPolygonVertices = 3;
 
 /// Immutable guitar-geometry calibration.
 final class GuitarCalibration {
-  const GuitarCalibration({
+  GuitarCalibration({
     required this.nutAnchor,
     required this.bridgeAnchor,
-    required this.neckPolygon,
+    required List<NormalizedPoint> neckPolygon,
     required this.createdAt,
   }) : assert(neckPolygon.length >= minNeckPolygonVertices),
-       assert(neckPolygon.length <= maxNeckPolygonVertices);
+       assert(neckPolygon.length <= maxNeckPolygonVertices),
+       neckPolygon = List<NormalizedPoint>.unmodifiable(neckPolygon);
 
   /// Normalizált `[0,1]×[0,1]` pont a nut közelében.
   final NormalizedPoint nutAnchor;
