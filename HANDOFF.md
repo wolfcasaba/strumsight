@@ -4,86 +4,117 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-07
-> (E05-R12 MERGED — Hand landmark provider adapter és model manifest:
-> providerfüggetlen kéz-landmark kontraktus (`HandLandmarkProvider`,
-> `VisionImage`, SDD §15.1 `Future`-alapú hívásonkénti `infer()`), stabil
-> 21-pontos StrumSight landmark-topológia (`HandLandmarkId`),
-> `RecordedHandLandmarkProvider` fixture-adapter (ez fut CI-ben) +
-> `MonotonicHandLandmarkProvider` timestamp-gate, `NativeHandLandmarkProvider`
-> EBBEN a körben szándékosan fail-closed `unavailable` (nincs natív inference
-> bekötve, nincs bináris model-asset), `VisionModelManifest` a
-> `model_manifest.json` ÚJ, additív `vision_models` testvér-kulcsán
-> (checksum + licenc + output-schema, `status = "deferred"` bejegyzéssel).
-> **ADR 0185** (orchestrátor írta a pre-flightban): célstack
-> `tflite_flutter` + MediaPipe Hands (Apache-2.0) egy JÖVŐBELI aktiváló
-> körnek — ez a kör NULLA bináris assetet szállít. Implementer MiniMax M3,
+> (E05-R13 MERGED — Hand track assignment és temporal smoothing:** stabil
+> fretting/picking hand-track jitter és rövid takarás ellen — `HandTrack`
+> (monoton ID + `TrackStatus` active/recovering/lost), `HandTrackAssigner`
+> (pozíció + fizikai handedness + előző állapot alapú hozzárendelés — nincs
+> önálló handedness-confidence mező), fizikai kéz ↔ gitáros szerep
+> szétválasztás (`HandRole.fretting/picking`, a `leftHanded` beállításból
+> levezetve a MEGLÉVŐ `VisionSetupProfile.recommendedFor` konvenciójából —
+> guitar-geometria R15, ezen a körön kívül), `LandmarkSmoothingFilter`
+> profilfüggő EMA-val (picking α=0.85, fretting α=0.30) + sebesség-alapú
+> jump-rejection, rövid gap (≤ `shortGapFrames`) → ugyanaz az ID, hosszú
+> gap → explicit `trackLost` + ÚJ ID, `TrackContinuity` metrika (track-szám,
+> ID-csere, jitter, feldolgozási latency). Implementer MiniMax M3,
 > orchestrátor/reviewer Claude Sonnet 5.
 >
-> **Öt mért pre-flight revízió** (§0.0 R1–R5): R1/R2 stale ADR-hivatkozás
-> (`0168`→`0185`, `0163`→`0180` — a 0161–0170 blokk már egyszer eltolódott
-> az E05-R01/R02 körben); **R3 — a legfontosabb: a manifest-bővítés NEM a
-> meglévő `models[]` tömb additív sora, hanem ÚJ testvér top-level kulcs** —
-> mérve a `ml_asset_manifest_test.dart`-ban kőbe vésett
-> `expectedModelCount: 4` assertion ÉS a Python generátor StrumSight-saját
-> CRNN bináris formátumot (nem FlatBuffer-t) parse-oló
-> `_read_binary_metadata`-ja ellen, mindkettő azonnal eltört volna egy
-> naiv additív landmark-bejegyzéstől; R4 `VisionImage` (SDD §15.1
-> paramétertípus) sehol nem létezett a fában; R5 a brief „stream-alapú"
-> szóhasználata pontosítva a ténylegesen Future-alapú SDD-kontraktusra.
+> **Nyolc mért pre-flight megerősítés** (§0.0 R1–R8, nincs tartalmi
+> revízió, csak PREPARED→PLANNING státuszváltás): a legfontosabb, **R8**, a
+> `leftHanded↔fretting/picking` formulát a MEGLÉVŐ
+> `VisionSetupProfile.recommendedFor`-ból vezette le (nem kitalálásból) —
+> a §5 pont 1 végleges szövege guitar-geometriát is említ bemenetként, de
+> az ebben a körben (R15 előtt) nem elérhető; **R1** megerősítette, hogy
+> `HandObservation`-nek nincs önálló handedness-confidence mezője, csak
+> összesített `confidence`; **R2** megerősítette az R07 mirror-invarianciát
+> (a modell bemenete nem tükrözött, a kamera facing nem befolyásolja a
+> szerepet — a §6 4-cellás mátrix ezért egy invariancia-próba).
 >
-> **Egy javító kör** (MiniMax, 1 BLOCKER): F1 — az implementer egy
-> 1-bájtos placeholder binárist (`assets/ml/hand_landmarker_deferred.tflite`)
-> commitolt az `allowed_paths` listán KÍVÜL, ellentmondva az ADR 0185
-> Döntés 2/3-nak (a manifest-validátora és a generátora úgy készült, hogy a
-> `deferred` bejegyzés IS megkövetelt egy valódi fájlt a lemezen). Javítás:
-> a fájlrendszer+checksum ág `status == active`-ra kapuzva, a `deferred`
-> bejegyzés dokumentált placeholder-checksumot kap (`"0"×64`)
-> lemezérintés nélkül. **Függetlenül újra-ellenőrizve** friss `/tmp` klónban
-> (nem az implementer önjelentésére hagyatkozva): a placeholder eltávolítása
-> pontosan 1 tesztet buktatott (a VALÓDI committolt manifestet ellenőrzőt),
-> az 5 tempdir-fixture-alapú mutációs teszt érintetlen maradt — a javítás
-> nem csökkentette a tesztlefedettséget. **Saját mutáció-próba** (az új
-> `active`-ági guard ideiglenes kikapcsolása) felfedte, hogy az új
-> `active`-ági teszt csak a pozitív esetet bizonyítja — **N2 (MINOR,
-> follow-up)**: nincs negatív teszt egy hibás/hiányzó `active` assetre (ma
-> holt kódág, csak deferred bejegyzés szállít).
+> **Egy javító kör** (MiniMax), **két, egymástól független review**
+> (funkcionális + dedikált security, `risk=high`) által talált, **RÉSZBEN
+> UGYANARRA a gyökérokra jutó** leletekkel:
 >
-> **Dedikált security-review (risk=high): PASS**, 0 CRITICAL/BLOCKER/MAJOR
-> — de **POST-MERGE futtatva** (orchestrátor-mulasztás: a review-t a merge
-> ELŐTT kellett volna, minden korábbi E05 kör precedense szerint; a
-> mulasztás felismerése UTÁN azonnal pótolva, lásd Lecke). Egy **MINOR**,
-> saját harnesszel REPRODUKÁLT lelet: a `VisionModelManifest` `path`
-> mezőjének nincs path-traversal védelme (az audio-oldali testvér
-> validátornak van) — ma elérhetetlen (a szállított bejegyzés `deferred`,
-> ága sosem ér fájlrendszerhez; on-device a reader `Directory.current`-
-> alapú, nem éri el az asset-bundle-t sem), de **a jövőbeli aktiváló kör
-> előfeltétele** — MAJOR-ra eszkalálódik, ha az a kör a védelem nélkül
-> merge-el. Három NOTE (release-stripped `assert`, non-functional-de-
-> fail-safe on-device reader, TOCTOU olvasási race) ugyanoda.
+> 1. **F1 — BLOCKER: a jump-rejection nem tudott felépülni egy valódi,
+>    tartós pozícióváltásból.** A jump-rejection mindig az UTOLSÓ
+>    ELFOGADOTT simított értékhez hasonlított; elutasításkor ez az érték
+>    sosem mozdult, ezért egy valós, `jumpVelocityThreshold`-nál (0.30/frame)
+>    távolabbi, TARTÓS áthelyeződés — occlusion UTÁN VAGY occlusion NÉLKÜL
+>    is — minden további frame-en elutasításra került, és a track a régi
+>    pozícióban fagyott be ÖRÖKRE, `status=active` mellett, jelzés nélkül.
+>    Ez pontosan a brief §5 pont 4 kötött döntését sérti ("a jump-rejection
+>    nem törölhet valós, gyors mozgást"), csak nem az egyetlen tesztelt
+>    fixture-ön (oszcilláló fast-strum). **Két önálló, futtatott
+>    próbateszttel bizonyítva** (nem csak kódolvasással, és nem az
+>    implementer tesztjeivel): occlusion+27-frame-nyivel-távolabbi-
+>    reappearance után is a régi pozíción ragadt; occlusion NÉLKÜLI, 50
+>    frame-es tartós áthelyeződés ugyanígy. **A dedikált security-review
+>    egymástól függetlenül, más módszerrel (danger-grep + reprodukciós
+>    harness) ugyanerre a gyökérokra jutott** (a saját MINOR-2 tétele —
+>    security-lencsén MINOR, mert R13-ban nincs fogyasztó, de a
+>    funkcionális/architektúra-lencse BLOCKER-nek minősíti, mert sérti a
+>    kötött döntést). Javítás: a jump-rejection bypassol, ha a track épp
+>    egy `≤ shortGapFrames` hosszú rés után tér vissza, VAGY már 2 egymást
+>    követő frame-en elutasításra került. **Saját próbáim a javított
+>    kódon**: mindkét eset pontosan a várt pozícióra (`0.70`) konvergál; az
+>    EREDETI egy-frame-es teleport-elutasítás VÁLTOZATLANUL helyes, nincs
+>    regresszió.
+> 2. **F2 — MAJOR: a `TrackContinuity` latency/jitter mezői funkcionálisan
+>    üresek voltak, ellentmondva a brief §5 pont 5 kötött döntésének.**
+>    `maxJitterNormalized` egy sosem frissülő `0.0` volt; `totalProcessingDuration`
+>    egy sosem kitöltött külső paraméterre szorult — a doc-comment TÉVESEN
+>    állította, hogy "the assigner reports a Stopwatch.elapsed per call".
+>    Zéró tesztlefedettség a `TrackContinuity`-n. Javítás: valódi
+>    `Stopwatch` a `process()` körül (`HandTrackFrameState.processingDuration`,
+>    additív mező), valódi raw-vs-smoothed wrist-delta
+>    (`HandTrack.rawSmoothedDeltaNormalized`, additív mező) — a
+>    `TrackContinuity.aggregate` ezekből számol MAX jittert és összeg-időt.
+>    **Saját próbám a javított kódon**: zajos bemeneten `maxJitterNormalized
+>    ≈ 0.265`, `totalProcessingDuration ≈ 1.56ms` — valós, nem-nulla mérés.
+> 3. **F3 — MINOR (a dedikált security-review-ból átemelve): a simított
+>    `visibility` monoton MAX volt, nem konfidencia-tudatos** (SDD §15.4
+>    kötelező "confidence-aware" elvárása) — egy tartósan gyenge jel is a
+>    történelmi maximumot mutatta. Javítás: a raw visibility-t követi.
 >
-> **Mellékes takarítás:** a post-merge gate egy ~7 körrel korábbi (E05-R05/
-> R06 idejéből maradt), árva `.claude/worktrees/agent-*` git worktree-t
-> talált, ami a legacy-identifier-guard tesztet buktatta a megosztott fán
-> (a körhöz nincs köze — csak a shared tree-ben, izolált klónokban nem
-> jelentkezett). Igazoltan tartalom nélküli (az egyetlen committolatlan
-> fájlja bájtra egyezett a `main`-en már régen merge-elt végleges
-> változattal) — `git worktree remove --force`-fal eltávolítva.
+> **Mindhárom lelet függetlenül újra-ellenőrizve** friss `/tmp` klónban,
+> SAJÁT (nem az implementer) próbateszttel — nem az önjelentésre hagyatkozva.
+> Scope-audit mindkét körben tiszta (10, majd 7 fájl, mind az
+> `allowed_paths`-on).
 >
-> Zöld kapu (exact-SHA `a49be70`, a `main` egy konkurens Epic-6
-> batch-brief-prep merge-e miatti rebase UTÁNI újra-dispatch): Build APK
-> [31169268243](https://github.com/wolfcasaba/strumsight/actions/runs/31169268243)
+> **Dedikált security-review (risk=high): PASS**, 0 CRITICAL/BLOCKER/MAJOR,
+> 3 MINOR + 2 NOTE — **a merge ELŐTT futtatva** (L162 helyesen alkalmazva —
+> az R12-es mulasztás NEM ismétlődött). Két további MINOR/NOTE follow-up
+> (kéz-szám korlát hiánya → O(N³) worst-case; handedness-flip robusztusság
+> egy jövőbeli éles providerrel) — egyik sem blokkoló, R14+ tárgya.
+>
+> Zöld kapu (exact-SHA `2ef9455`): Full Gate (no APK)
+> [31179087887](https://github.com/wolfcasaba/strumsight/actions/runs/31179087887)
 > **success** + Router CI
-> [31169264638](https://github.com/wolfcasaba/strumsight/actions/runs/31169264638)
+> [31179089579](https://github.com/wolfcasaba/strumsight/actions/runs/31179089579)
 > **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
-> test/tooling`) a friss `main`-en (a worktree-takarítás UTÁN) zöld.
+> test/property/hand_track_property_test.dart`) a friss `main`-en is zöld.
 >
-> Lecke: **L162** (risk=high → security-reviewer KÖTELEZŐ, a queue-ban
-> NINCS gépi őr rá — az orchestrátornak manuálisan kell emlékeznie a
-> pre-flight §1.1 táblázatból), **L163** (a scope-audit egy KÖZTES bázissal
-> [pl. a review-commit] hamis VIOLATION-t ad egy javító-kör-beli
-> TÖRLÉSRE, mert a törölt útvonalat is "érintett path"-nak számolja — a
-> mérvadó bázis mindig az EREDETI pre-flight SHA, nem az utolsó dispatch
-> HEAD-je).)**
+> Lecke: **L165** (threshold-alapú jump/outlier-rejection szűrő explicit
+> felépülési út nélkül örökre befagy egy valós, tartós változáson — a
+> "blip-vissza-a-régire" fixture nem meríti ki a "tartósan új értéken marad"
+> esetet), **L166** (a review-nak a brief §5 KÖTÖTT döntéseit az
+> acceptance-listától FÜGGETLENÜL, célzott interakciós próbákkal kell
+> ellenőriznie — a szállított fixture-mátrix minden acceptance-cellája
+> lehet zöld úgy, hogy egy kötött döntés mégis sérül egy nem-tesztelt
+> interakción).
+>
+> ## ✅ E05-R13 KÉSZ — Hand track assignment és temporal smoothing (2026-08-07)
+>
+> **E05-R13** MERGED (PR [#184](https://github.com/wolfcasaba/strumsight/pull/184),
+> squash `148469c`; implementer **MiniMax M3**, orchestrátor/reviewer
+> **Claude Sonnet 5**). Lásd a fenti "Last updated" blokk a teljes
+> pre-flight/javítókör/review történetért — ez a szakasz csak a rövid
+> hivatkozási pont a korábbi körök mintája szerint. **Nincs új ADR**
+> (megerősítve a pre-flightban, §0.0). Review:
+> [docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md)
+> — **APPROVED** javító kör után. Dedikált security-review:
+> [docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md)
+> — **PASS**. **Következő:** E05-R14 — Pose landmark provider és posture
+> baseline (`docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`), a
+> pipeline új sessionben indítja.
 >
 > ## ✅ E05-R12 KÉSZ — Hand landmark provider adapter és model manifest (2026-08-07)
 >
@@ -188,867 +219,17 @@
 > (E05-R13 — hand track assignment és smoothing), a pipeline új
 > sessionben indítja.
 >
-> ## ✅ E05-R11 KÉSZ — Manual guitar geometry calibration UI (2026-08-07)
->
-> **E05-R11** MERGED (PR [#182](https://github.com/wolfcasaba/strumsight/pull/182),
-> squash `113976a`; implementer **MiniMax M3**, orchestrátor/reviewer
-> **Claude Sonnet 5**). Az R10 `GuitarCalibration`/`CalibrationValidity`
-> production fallbackjének (ADR 0181) kezelőfelülete: touch/drag
-> **anchor-editor** (`GuitarAnchorEditor`) a nut/bridge horgonyra és a
-> neck-polygon csúcsaira, kizárólag az R07 `PreviewFit`/`CameraTransform`
-> mappingjén keresztül; **`GuitarGeometryPreview`** centerline+polygon
-> painter; **`GuitarCalibrationController`** a szerkesztési állapotot és
-> KÉT elkülönült `CalibrationValidity.evaluate` hívást kezel (Save-kapu:
-> draft önmagával, csak `degenerateGeometry` érhető el; Recalibrate-belépő:
-> mentett profil élő kontextussal, mind az öt ok); determinisztikus
-> quality-score formula (neckhossz-margin + polygon-fedettség +
-> vertex-eloszlás, `[0,1]`); Save/Reset/Recalibrate flow külön
-> megerősítéssel a destruktívra; `visionGuitarGeometryEnabled` flag mögötti
-> route (`/vision/guitar-geometry`, default OFF, korábban nulla fogyasztós
-> flag). **Nincs élő kamera-preview a képernyőn** — mérve: nincs
-> `CameraOwner`-érték, `CameraPreview`/`Texture` widget vagy `.acquire()`
-> hívás egyik új fájlban sem; az editor egy absztrakt normalizált
-> `[0,1]×[0,1]` területen dolgozik.
->
-> **Pre-flight — hét mért revízió (§0.0 R1–R7, `docs/rounds/e05-r11-…md`):**
-> (1) stale ADR-hivatkozás 0164/0161/0166 → 0181/0178/0183 (az R08 saját
-> renumbered táblázata alapján); (2) **nincs élő kamerapreview és ez a kör
-> nem is szerez be egyet** — `CameraFrame` bufferje csak a stream-callback
-> szinkron törzsében érvényes, `CameraOwner` négy zárt értéke nem tartalmaz
-> kalibrációs owner-t, még az R08 aktív-lease `ready` lépése sem jelenít meg
-> élő framet; (3) **a quality-score számítása NEM az R10-é** — az R10
-> `qualityScore` mezője csak tárolt `double`, egyetlen számító függvény
-> sincs hozzá sehol; az SDD Kör 11 feladatlistája ezt EXPLICIT erre a
-> körre írja elő, a brief §9-es „a számítás kizárólag az R10-é" kockázata
-> téves feltevésen alapult; (4) az R10 `CalibrationValidity._isDegenerate`
-> kizárólag vertex-számot és nut↔bridge távolságot néz, kollinearitást és
-> polygon-területet NEM — ezt a controller saját, új helpereivel
-> (`neckPolygonArea` shoelace, `neckPolygonIsCollinear` keresztszorzat)
-> kellett pótolni; (5) `CalibrationValidity.evaluate` két, egymást kizáró
-> hívási helye (Save-kapu self-comparison vs. Recalibrate-entry élő
-> kontextussal); (6) a brief §6 „a repository `save` metódusa" szövege
-> elavult név — a tényleges metódus `write()`; (7) megerősítve (nem hiba):
-> a `visionGuitarGeometryEnabled` flag már létezett, R11 az első fogyasztó.
->
-> **Egy javító kör (MiniMax, 3 BLOCKER, mindegyik függetlenül
-> újra-ellenőrizve — nem az implementer önjelentésére hagyatkozva):**
->
-> 1. **F1 — a Save-kapu nem gátolta a kollineáris/nulla-területű
->    polygont.** A §0.0 R4 alatti helperek (`isGeometryDegenerate`,
->    `neckPolygonIsCollinear`, `neckPolygonArea`) helyesen íródtak és
->    izoláltan unit-tesztelve voltak, de a TÉNYLEGES Save-kapu
->    (`_selfEvaluate`) sosem hívta őket — `grep` nulla production
->    hívási helyet adott. **Futtatott, eldobható próbateszttel bizonyítva**
->    (nem csak kódolvasással): egészséges nut/bridge távolság + 4
->    kollineáris polygon-vertex ⇒ `canSave=true` volt (pedig degenerált).
->    Javítás: `_selfEvaluate` most `reason == degenerateGeometry ||
->    isGeometryDegenerate(...)`-et ad vissza. A javított kódon a
->    UGYANAZ a próbateszt megismételve: `canSave=false`.
-> 2. **F2 — a „clamp látható jelzés" holt kód volt, az önjelentés tévesen
->    állította az ellenkezőjét.** `onClamp` callback definiálva, de sosem
->    meghívva; a szülőben számolt `wasClamped` boolean egy üres `if`
->    blokkban veszett el; a handle border-je konstans alpha volt. Az
->    implementer §10.4 önjelentése kifejezetten állította, hogy „a
->    határhoz érve erősebben látszik" — ez a kódban NEM volt igaz (a
->    review-sablon saját BLOCKER-definíciója: „hamis zöld állítás").
->    Javítás: per-handle `_clampedHandle` state, feltételes
->    alpha/border-width, PREVIEW-térbeli (nem normalizált-térbeli)
->    klemp-detektálás.
-> 3. **F3 — a futásidejű kontextus hardkódolt volt.**
->    `guitarCalibrationRuntimeContextProvider` mindig
->    `back`/`degrees0`/`practiceBalanced`-et adott, sosem olvasta az R08
->    által elmentett tényleges preferenciát. Kettős hatás: minden mentés
->    csendben hibás `setupProfile`-t írt, ÉS a front-kamera/mirror-paritás
->    acceptance strukturálisan elérhetetlen volt (a `mirrorPreview` flag
->    sehol nem került `true`-ra). Javítás: a provider
->    `StorageKeys.visionCamera`/`visionSetupProfile`-t olvassa (az R08
->    `VisionSetupController.build()` mintáját követve), a screen
->    `mirrorPreview = camera == front`-ot ad át MIND a previewnek, MIND
->    az editornak. **Őszintén dokumentált, nem blokkoló follow-up (N2):**
->    a device-orientation (landscape cella) forrása nincs az R11
->    allowed_paths-on belül — jövőbeli kör tárgya.
->
-> **Review:** [docs/reviews/e05-r11-…-review.md](docs/reviews/e05-r11-manual-guitar-geometry-calibration-ui-review.md)
-> — **APPROVED** a javító kör után (0 nyitott BLOCKER/MAJOR). Dedikált
-> **security-reviewer** ([docs/reviews/e05-r11-…-security.md](docs/reviews/e05-r11-manual-guitar-geometry-calibration-ui-security.md),
-> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR (2 NOTE,
-> egyik a hardkódolt-kontextus F3 gyökérokát erősíti meg confidence-
-> őszinteségi szemszögből). Scope-audit mindkét körben tiszta (14 fájl,
-> mind a brief `allowed_paths`-án — a widget-teszt eredetileg rossz
-> névvel érkezett, `guitar_calibration_drag_matrix_test.dart` →
-> `guitar_calibration_screen_test.dart`, tartalom-változtatás nélkül
-> átnevezve az orchestrátor által, a review ELŐTT).
->
-> **Zöld kapu (exact-SHA `46d6cff`, a javító kör + review-commit UTÁNI
-> újra-dispatch):** Full Gate (no APK)
-> [31161840283](https://github.com/wolfcasaba/strumsight/actions/runs/31161840283)
-> **success** + Router CI
-> [31161842124](https://github.com/wolfcasaba/strumsight/actions/runs/31161842124)
-> **success** (a `docs/rounds/**` érintés miatt kötelező, kézzel
-> újra-dispatch-elve — a `docs/reviews/**` nem router-ci trigger-útvonal).
-> Post-merge gate (`tools/round-gate.sh test/features/vision
-> test/core/l10n_parity_test.dart`) a friss `main`-en is zöld (78+3 teszt).
-> Lecke: **L161**. **Következő:** a queue következő Epic 5 sora, a
-> pipeline új sessionben indítja.
->
-> ## ✅ E05-R10 KÉSZ — Camera + guitar calibration domain és verziózott tárolás (2026-08-07)
->
-> **E05-R10** MERGED (PR [#181](https://github.com/wolfcasaba/strumsight/pull/181),
-> squash `39d1c29`; implementer **MiniMax M3**, orchestrátor/reviewer
-> **Claude Sonnet 5**). Verziózott, migrálható kalibrációs domain a
-> kamera+gitár geometriájához (`CameraCalibrationProfile`, `GuitarCalibration`,
-> `CalibrationValidity`, `VisionCalibrationCodec`); 3 javító kör (MiniMax 1,
-> Codex 2, az utolsót az orchestrátor saját mutáció-kill újra-ellenőrzése
-> fedte fel); a részletes kör-történet a
-> [`docs/handoff-archive.md`](docs/handoff-archive.md)-ban. Lecke: **L160**.
->
-> ## ✅ E05-R09 KÉSZ — Frame quality assessor (2026-08-06/07)
->
-> **E05-R09** MERGED (PR [#180](https://github.com/wolfcasaba/strumsight/pull/180)).
-> Az 1. kísérlet külső GitHub Actions-incidensbe futott
-> (`H-NOSIGNAL` → önjavító retry, `docs/LESSONS.md` L158); a részletes
-> kör-történet a [`docs/handoff-archive.md`](docs/handoff-archive.md)-ban.
-> _(Az alábbi blokk az akkori, folyamatban-állapotot rögzítő bejegyzés —
-> történeti referenciaként megtartva.)_
->
-> ## ⏳ E05-R09 FOLYAMATBAN — 1. kísérlete külső GitHub-incidensbe futott, retry (2026-08-06)
->
-> Az E05-R09 (Frame quality assessor) implementációja **kész és jóváhagyott**
-> volt (2 review, mindkettő PASS/APPROVED, security PASS) — PR
-> [#175](https://github.com/wolfcasaba/strumsight/pull/175) (branch
-> `codex/e05-r09-frame-quality-assessor`, tipp `de86766`) —, de a GitHub
-> 2026-08-06 15:22 UTC-kor kezdődő, **critical impact**, több órán át
-> „investigating" státuszú Actions+Pages incidense (githubstatus.com) miatt
-> sosem kapott tiszta CI-t. Az orchestrátor-session a 4 órás időkorlátba
-> futott jelzés nélkül (`H-NOSIGNAL`) → önjavító kör (ADR 0112, 1/3 kísérlet)
-> **`outcome=retry`**-vel oldotta fel: a repóban nem volt mit javítani, a
-> gyökérok kizárólag külső (mérve githubstatus API-val élőben, a halt idején
-> és az önjavítás alatt is egyaránt `major_outage`).
->
-> **A PR #175 LEZÁRVA** (nem merge-elve, nem törölve) — a driver
-> (`tools/round-pipeline.sh`) „nincs nyitott PR" előfeltétele minden
-> kör-alakú branch-nevű nyitott PR-t számol, és a halott session nem
-> takarította a `.pipeline/inflight/` jelzőjét, tehát nyitva hagyva örökre
-> (a helyreállás UTÁN is) elakasztotta volna a láncot, csendben. A branch, a
-> commitok és mindkét review megmaradt a lezárt PR-en — újranyitható
-> (`gh pr reopen 175`), vagy a következő E05-R09 session tiszta lappal
-> indulhat. Lásd [`docs/LESSONS.md` L158](docs/LESSONS.md).
->
-> **Egy MÁSODIK, még nyitott PR** ugyanebből a sessionből:
-> [#177](https://github.com/wolfcasaba/strumsight/pull/177) — proaktív
-> `github_actions_degraded()` őr a driverbe (ne induljon önjavító kör /
-> piros-main-halt egy GitHub-incidensre), 17/17 teszt, de maga is
-> CI-outage-blocked. **NEM blokkolja a láncot** (a branch neve
-> `ops/actions-outage-guard`, nem kör-alakú — a `ROUND_BRANCH_PATTERN`
-> kizárja), de emberi vagy jövőbeli-session merge-re vár, amint a Router CI
-> zöldet ad.
->
-> **Következő:** a queue E05-R09 sora változatlanul `pending` — a lánc
-> magától újra elő fogja venni, amint a GitHub Actions incidens rendeződik.
-> Ha ismét `H-NOSIGNAL` jönne ugyanerre az okra, a kísérletszámláló 2/3-nál
-> tart.
->
-> ## ✅ E05-R08 KÉSZ — Vision setup wizard, camera profile és permission UX (2026-08-06)
->
-> **E05-R08** MERGED (PR [#170](https://github.com/wolfcasaba/strumsight/pull/170),
-> squash `eff1eaf`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`, aktív
-> `.pipeline/engine-override=terra` — a brief eredeti „MiniMax M3" javaslata
-> felülírva), orchestrátor/reviewer **Claude Sonnet 5**). Az E05-R04 camera
-> permission gateway és az E05-R05/R06 coordinator/production-adapter első
-> UI-fogyasztója: négy setup profil (`leftHandFocus`/`rightHandFocus`/
-> `fullUpperBody`/`practiceBalanced`) kézzel korrigálható handedness-
-> ajánlással, permission-panel mind az öt állapotra (denied → explicit
-> kérés-gomb; permanentlyDenied/restricted → Settings CTA, nincs dead
-> retry-gomb; unavailable → magyarázó szöveg, gomb nélkül), front/back
-> kamera-preferencia a `CameraSessionCoordinator` close→open lease-
-> fegyelmével, privacy-panel („helyben dolgozunk fel, nem rögzítünk"),
-> mindenhol elérhető Skip → audio-only CTA, additív `StorageKeys`
-> (`ss.vision.setup_profile`, `ss.vision.camera`), flag-gated route
-> (`visionEnabled && visionSetupEnabled`, inline `app_router.dart` guard).
->
-> **Pre-flight (mérve `origin/main` @ `78ac3ce`), hat mért revízió (§0.0
-> R1–R6):** (1) ADR-hivatkozás `0161/0162/0164` → **`0178/0179/0181`**
-> (renumbered E05-R01); (2) a flag-gated route **nem** `route_guards.dart`-ban
-> él (az csak két flag-független tiszta függvényt tartalmaz) — a tényleges
-> minta inline `if (flag) ...[GoRoute(...)]` `app_router.dart`-ban, a
-> tutor-precedenst követve; (3) `lib/core/storage/storage_keys.dart`
-> **felvéve** az `allowed_paths`-ba (az app EGYETLEN központi kulcs-
-> katalógusa, additív-only — E04-R18 precedens); (4) **elérhetetlen
-> cél-állapot:** a `CameraCapture` kontraktnak (kontraktus, gyár, production
-> adapter, fake) **sehol nincs facing-paramétere** — a „front/back választás"
-> ezért egy perzisztált preferenciára és a coordinator lease-fegyelmére
-> szűkült, a fizikai lencseváltás jövőbeli, `lib/core/camera/**`-t érintő
-> körre halasztva (L154); (5) az SDD §13.2 hat profilt sorol fel, ez a kör
-> négyet szállít — a negyedik kanonikus neve `practiceBalanced` (nem
-> `balanced`), `songPerformance`/`experimentalFretboard` explicit deferred;
-> (6) megerősítve (nem hiba): mind az öt `CameraPermissionState` valós
-> inputból származtatható, a kamera-coordinatornak (E05-R05) ma nulla
-> fogyasztója volt — ez a kör az ELSŐ valódi hívó (`CameraOwner.visionSetup`).
->
-> **Review** ([docs/reviews/e05-r08-…-review.md](docs/reviews/e05-r08-vision-setup-wizard-review.md)):
-> **APPROVED javító kör nélkül** (0 BLOCKER/MAJOR). Minden acceptance-cella
-> tesztre/forráskódra hivatkozva ellenőrizve; scope-audit tiszta (15/15 fájl
-> az `allowed_paths`-on). **Mutáció-kill próba** a reviewer saját izolált
-> `/tmp` klónjában: a `permanentlyDenied` ág ideiglenesen retry-gombra
-> rontva → a pontos widget-teszt pirosra váltott, semmi más nem — vissza-
-> állítva, újra zöld. 2 MINOR **WONTFIX** ezen a körön (a `ready`/`audioOnly`
-> terminál-lépéseknek nincs előre-navigációja; a privacy-panel csak két a
-> négy SDD §12.3 pontból mond ki explicit egy helyen) — egyik sem
-> termékhatár-sértés, mindkét flag OFF ma mindenhol. Dedikált
-> **security-reviewer** ([docs/reviews/e05-r08-…-security.md](docs/reviews/e05-r08-vision-setup-wizard-security.md),
-> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR (3 NOTE,
-> egyik sem biztonsági) — mind a 9 kért határ (explicit-tap permission,
-> nincs raw-frame perzisztencia, nincs implicit kamera-indítás, ≤1 aktív
-> lease szivárgás nélkül minden hiba-úton, ARB-only szöveg, helyes
-> Settings-CTA-vs-retry routing, strukturálisan elérhetetlen route flag
-> nélkül, additív-only storage-kulcs, fail-safe preferencia-parse)
-> reprodukálható bizonyítékkal zöld.
->
-> **Zöld kapu (exact-SHA `8c8f4db`, mindkét review-commit UTÁNI
-> újra-dispatch — a `docs/reviews/**` NEM router-ci trigger-útvonal, ezért a
-> Router CI-t review-commitonként kézzel kellett újra-dispatch-elni, L153):**
-> Full Gate (no APK)
-> [31111595523](https://github.com/wolfcasaba/strumsight/actions/runs/31111595523)
-> **success** + Router CI
-> [31111597358](https://github.com/wolfcasaba/strumsight/actions/runs/31111597358)
-> **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
-> test/core/l10n_parity_test.dart`) a friss `main`-en is zöld (13+3 teszt).
-> **Következő:** E05-R09 — Frame quality assessor; 1. kísérlete külső
-> GitHub-incidensbe futott (`H-NOSIGNAL` → retry) — a friss állapot a fájl
-> tetején, az „E05-R09 FOLYAMATBAN" szakaszban.
->
-> ## ✅ E05-R07 KÉSZ — Frame transform és overlay koordinátarendszer (2026-08-06)
->
-> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> Pure Dart koordináta-transzformáció a sensor→upright→normalized→preview→
-> overlay terek között, típusos `CameraTransform<From, To>`
-> (`compose`/`inverse`/`apply`), aspect-fit/fill preview-mapping letterbox/
-> crop kezeléssel és preview-oldali front-mirrorral. PR
-> [#169](https://github.com/wolfcasaba/strumsight/pull/169), squash `b5837d9`,
-> implementer Terra, APPROVED 1 javító kör után (az öt-tér célban ígért, de
-> eredetileg elérhetetlen overlay-mapping pótlása), dedikált
-> security-reviewer PASS (1 carry-forward MAJOR — assert-only validáció —
-> R13/R15/R24 előtt kötelező).
->
-> ## ✅ E05-R06 KÉSZ — Android camera production adapter (2026-08-06)
->
-> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> `PluginCameraCapture` a hivatalos Flutter `camera` pluginra épülve (CameraX
-> Androidon, ADR 0184 C1), latest-frame backpressure + garantált
-> buffer-felszabadítás + mirror/crop metaadat-megőrzés, `visionEnabled` flag
-> mögött. PR [#168](https://github.com/wolfcasaba/strumsight/pull/168),
-> squash `a43f8c1`, implementer Terra, APPROVED 1 javító kör után
-> (teszt-minőség, mutáció-kill próbával felfedve), dedikált security-reviewer
-> PASS.
->
-> ## ✅ E05-R05 KÉSZ — CameraSessionCoordinator és lifecycle ownership (2026-08-06)
->
-> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> `CameraSessionCoordinator`/`CameraSessionLease`/`CameraOwner` a mikrofon
-> ADR 0056 mintáját másolva; `CameraLifecycleGuard` (`paused`/`hidden`/
-> `detached` → revoke, `inactive`/`resumed` → semmi). PR
-> [#167](https://github.com/wolfcasaba/strumsight/pull/167), squash `8f46dd4`,
-> implementer Terra, APPROVED javító kör nélkül, dedikált security-reviewer
-> PASS.
->
-> ## ✅ E05-R04 KÉSZ — Camera permission gateway és platform deklarációk (2026-08-06)
->
-> **E05-R04** MERGED (PR [#166](https://github.com/wolfcasaba/strumsight/pull/166),
-> squash `559366b`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
-> orchestrátor/reviewer **Claude Sonnet 5**). Opcionális, fail-closed
-> kamera-permission gateway: `CameraPermissionState` (granted/denied/
-> permanentlyDenied/restricted/**unavailable**), `CameraPermissionGateway` +
-> `PermissionHandlerCameraGateway` — pontosan a meglévő
-> `microphone_permission.dart` szerződését másolva (plugin-hiba vagy bármilyen
-> váratlan hiba → `unavailable`, sosem `granted`; a `permission_handler`
-> típusa a saját `CameraPermissionPluginState` adapter-enum mögött marad).
-> Android `<uses-permission android:name="android.permission.CAMERA">` **és**
-> `<uses-feature android:name="android.hardware.camera" android:required="false">`
-> (kamera nélküli eszközön is telepíthető marad); iOS
-> `NSCameraUsageDescription` — angolul, on-device feldolgozást és
-> nincs-felvétel-készül állítást tartalmazó, felhő/upload/server szót NEM
-> tartalmazó szöveggel. Additív `FailureCode.permissionCameraDenied`
-> (`permission.camera`). A `request()` sehonnan nem hívódik automatikusan
-> (grep-pel igazolva — sem bootstrap, sem route-build nem érinti); a UI a
-> jövőbeli E05-R08 (setup wizard) kör dolga.
->
-> **Pre-flight §0.0 (mérve `main` @ `8b58f42`, két mérési korrekció):**
-> (1) ADR-hivatkozás `0161/0163` → **`0178/0180`** (elavult — E05-R01 a
-> `0161–0166` blokkot `0178–0183`-ra számozta át; nincs ÚJ ADR, csak
-> dokumentum-pontosítás); (2) `lib/core/platform/platform_providers.dart`
-> **kikerült** az `allowed_paths`-ból — a brief téves állítással azt írta,
-> hogy ez a fájl tartalmazza a platform-gateway providereket, mérve viszont a
-> mikrofon gateway-provider ténylegesen `lib/core/audio/audio_providers.dart`-
-> ban él; a camera provider ehelyett közvetlenül `camera_permission.dart`-ban
-> kapott helyet. Cserébe `lib/core/foundation/app_failure.dart` additív
-> módosításra bekerült (1 új `FailureCode` konstans — a `PermissionFailure`
-> doc-comment kamera-generikusnak dokumentálja magát, de kamera-specifikus
-> denied-kód korábban nem létezett).
->
-> **Mért, nem valódi scope-audit VIOLATION jelzés.** A `codex-round.sh`
-> munka-elején futtatott `git pull --rebase origin main` közben a párhuzamos
-> `ops/orchestrator-effort-max` PR (#165) mergelt a `main`-be, és a rebase után
-> a wrapper záró `scope_audit` a REBASE ELŐTTI base commit-hoz hasonlított —
-> ez két `tools/` fájlra (`round-pipeline.sh`,
-> `tools/tests/test_round_pipeline_fallback.py`) hamis VIOLATION-t jelzett.
-> Igazolás: `git diff origin/main -- <a két fájl>` üres (byte-azonosak) — a
-> tényleges diff `origin/main`-hez képest pontosan a §0.0 hét fájlja. Nem
-> BLOCKER; a review ezt dokumentálta és a mérési okot rögzítette.
->
-> **Review** ([docs/reviews/e05-r04-…-review.md](docs/reviews/e05-r04-camera-permission-and-platform-declarations-review.md)):
-> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE — `limited`/
-> `provisional` → `granted` térképezés, bit-azonos a mikrofon-precedenssel,
-> WONTFIX). Dedikált **security-reviewer** (brief `risk = "high"`): **PASS**,
-> ugyanaz az 1 NOTE. Mutáció-kill próba a reviewer által pótolva (a §10
-> implementer-handoff üresen maradt): az `uses-feature` sor ideiglenes
-> törlése → a deklaráció-őr teszt PIROS → visszaállítás.
->
-> **Zöld kapu (exact-SHA `791e8d6`, a review-commit UTÁNI újra-dispatch):**
-> Build APK [31090056484](https://github.com/wolfcasaba/strumsight/actions/runs/31090056484)
-> **success**; Router CI korábbi SHA-kon (`85820f6`, `fbf53d3`) **success** —
-> a review-commit `docs/reviews/**`-je nem router-ci trigger-útvonal. Post-merge
-> gate (`tools/round-gate.sh test/core/camera test/core/platform`) a friss
-> `main`-en is zöld. **Következő:** a queue következő Epic 5 sora, a pipeline
-> új sessionben indítja.
->
-> ## ✅ E05-R03 KÉSZ — Core camera contract, fake infrastruktúra és vision feature flagek (2026-08-06)
->
-> **E05-R03** MERGED (PR [#164](https://github.com/wolfcasaba/strumsight/pull/164),
-> squash `f681a50`; implementer **Terra** (Codex CLI, `gpt-5.6-terra`),
-> orchestrátor/reviewer **Claude Sonnet 5**). Platformfüggetlen `CameraCapture`
-> contract (`start`/`stop`/idempotens `close`), `CameraFrame` explicit
-> ownership modell (a callback szinkron törzse után a buffer-hozzáférés
-> `StateError` — **mutáció-próbával** igazolva: `assertValid()` kiürítve a
-> guard-teszt pirosra vált), `CameraFormat`/`CameraOrientation` enumok,
-> `CameraTimestamp` (monoton, wall-clock-mentes), additív camera
-> `FailureCode`-térkép + `CameraFailure`, determinisztikus `FakeCameraCapture`
-> (öt lifecycle-mátrix cella: start→frame→close, close→close, start-cancel,
-> close-utáni frame, interruption+close; öt hiba-mátrix cella: busy /
-> unavailable / initialization / frame / interrupted), és mind a 11 vision
-> feature flag default OFF minden környezetben (`nonProd`-tól függetlenül,
-> dart-define override nélkül), `usesNetwork` változatlan.
->
-> **Nincs ÚJ ADR** (a brief előírása szerint, 0161/0163 additív bővítése).
-> Pre-flight mért megerősítés (nem revízió): `audio_capture.dart` precedens,
-> `FailureCode` jelenlegi értékei, `feature_flags.dart` 9 mezője — mind
-> pontosan egyezett a brief §2 állításával.
->
-> **Javító kör (F1, MAJOR):** a review a célzott gate mellett a **teljes CI**-t
-> is exact-SHA-n futtatta, és az pirosra váltott — az implementer a
-> `hashCode` gettert a vision-mezőkkel EGYÜTT a korábban is hiányzó
-> `songTrainerV2Enabled`/`aiTutorEnabled`/`aiTutorCloudEnabled` mezőkkel is
-> kiegészítette (a brief ezt csak *megengedte*, nem írta elő), ami az
-> `Object.hash` argumentumszám-változása miatt eltörte a **scope-on kívüli**,
-> kör előtti `test/app/app_config_test.dart:262` tesztet (kőbe vésett
-> 6-argumentumos hash-érték). 1 javító kör (Terra): a `hashCode` visszaáll az
-> eredeti 6 mezőre, egyetlen fájl, 14 sor törlés — pontosan a review
-> specifikációja szerint. Tanulság: **a célzott gate nem helyettesíti a
-> teljes suite-ot** egy meglévő fájlt érintő, additívnak tűnő módosításnál
-> sem — lásd `docs/LESSONS.md`.
->
-> **Review** ([docs/reviews/e05-r03-…-review.md](docs/reviews/e05-r03-core-camera-contract-and-fake-review.md)):
-> **APPROVED** a javító kör után (0 nyitott BLOCKER/MAJOR). Mutáció-kill próba
-> az ownership guardon; scope-audit mindkét körben tiszta (12, majd 1 fájl,
-> mind az `allowed_paths` listáján).
->
-> **Zöld kapu (exact-SHA `4b1f520`):** Full Gate (no APK)
-> [31087391595](https://github.com/wolfcasaba/strumsight/actions/runs/31087391595) **success**
-> + Router CI [31087396806](https://github.com/wolfcasaba/strumsight/actions/runs/31087396806)
-> **success** (docs/reviews nem router-ci trigger-útvonal, ezért manuálisan
-> `workflow_dispatch`-elve az exact SHA-ra). Post-merge gate
-> (`tools/round-gate.sh test/core/camera test/app/feature_flags_test.dart`) a
-> friss `main`-en is zöld. **Következő:** a queue következő Epic 5 sora
-> (SDD Ch6 Kör 4, camera permission és platform deklarációk), a pipeline új
-> sessionben indítja.
->
-> ## ✅ E05-R02 KÉSZ — Camera technology döntési kapu és mérési runbook (2026-08-06)
->
-> Részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> ADR [0184](docs/adr/0184-vision-camera-capture-stack.md) — feltételes C1
-> (hivatalos Flutter `camera`/CameraX) döntés, négy numerikus megdöntési
-> küszöb; PR #163, squash `ed5989a`, implementer Terra, APPROVED javító kör
-> nélkül.
->
-> ## ✅ E05-R01 KÉSZ — Vision baseline, capability audit & hat alapozó ADR (Epic 5 INDUL) (2026-08-06)
->
-> **E05-R01** MERGED (PR [#162](https://github.com/wolfcasaba/strumsight/pull/162),
-> squash `cef864c`, **hat új ADR: 0178–0183**; implementer **DeepSeek v4 Pro**
-> (`deepseek/deepseek-v4-pro`, Kilo/`codex-round.sh`), az ADR-eket az orchestrátor
-> (Claude, ADR 0055) írta a pre-flightban; orchestrátor/reviewer **Claude Opus 4.8**).
-> Az Epic 5 (Computer Vision) mérhető kiindulási állapota és kötelező architekturális
-> döntései: **ADR 0178** privacy-by-default (raw frame csak memóriában, kivétel a
-> `visionLabCaptureEnabled`-gated Lab capture), **0179** capability-aware feedback
-> (`requiredCapability`+`confidence`+`observability`; hiányzó megfigyelhetőség →
-> `notObservable`), **0180** android-first camera (domain platform-független), **0181**
-> manual calibration fallback (production út a kézi kalibráció), **0182** audio-priority
-> degradation (audio deadline romlásakor a **vision** degradál, sosem az audio —
-> AGENTS.md §9), **0183** no-raw-frame persistence (csak `VisionSessionResult`
-> aggregátum). `docs/baseline/epic-05-vision-start.md` a §2 méréseket **nyers
-> parancs+kimenettel** rögzíti (nincs `camera*` dep, nincs `CAMERA` permission, nincs
-> `NSCameraUsageDescription`, nincs `lib/features/vision/`) + kétoszlopos metrika-lista
-> (production vs experimental, `requiredCapability`+observability). Device-mátrix és
-> performance-benchmark sablon PENDING sorokkal (HORIZON valós-eszközös elfogadás).
->
-> **Pre-flight §0.0 (mérve `origin/main` @ `19c02eb`):** ADR-blokk **0161–0166 → 0178–0183**
-> (disk max 0177; foglalóval race-mentes — `tools/round-slots.py reserve-adr`, NEM `ls | tail`);
-> az implementer-scope a baseline + két sablonra szűkítve (az ADR-eket az orchestrátor írta).
->
-> **Review** ([docs/reviews/e05-r01-…-review.md](docs/reviews/e05-r01-vision-baseline-and-adrs-review.md)):
-> **APPROVED** első körben (0 BLOCKER/MAJOR/MINOR, 1 NOTE: a baseline `41a0b29`-et jelöl
-> forrásként, míg `origin/main` már `19c02eb` — a #161 diff csak `tools/`-ot érint, egyetlen
-> mérés sem függ tőle). Scope-audit 0 listán kívüli fájl.
->
-> **Zöld kapu (exact-SHA `7a9d9e0`):** Full Gate (no APK)
-> [31081324758](https://github.com/wolfcasaba/strumsight/actions/runs/31081324758) **success**
-> + Router CI [31081495492](https://github.com/wolfcasaba/strumsight/actions/runs/31081495492)
-> **success**. A CI-terv `full-gate.yml`-t írt elő (docs-only, nincs natív út); a `docs/rounds/**`
-> érintés miatt a Router CI is a kapu része. **Következő:** a queue következő Epic 5 `pending` sora,
-> a pipeline új sessionben indítja.
->
-> ## ✅ E04-R24 KÉSZ — Offline fallback, teljes regresszió & rollout (EPIC-4 ZÁRÓ) (2026-08-06)
->
-> **E04-R24** MERGED (PR [#160](https://github.com/wolfcasaba/strumsight/pull/160),
-> squash `0cf6323`, **nincs új ADR** — záró/regressziós kör; implementer **DeepSeek
-> v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo/`codex-round.sh`), orchestrátor/reviewer
-> **Claude Opus 4.8**). Az Epic 4 gépi lezárása: **`LocalTutorFallback`**
-> (`lib/features/ai_tutor/application/offline/`) a MA emittált, de **fogyasztatlan**
-> `TutorDeterministicFallback` effektet determinisztikus, cloud-mentes tartalommá
-> alakítja (`DeterministicCoach` + `SessionDebriefBuilder` + offline
-> `KnowledgeRetriever`); **őszinte** `TutorCapability` (online/offline/consent/limit)
-> resolver — gateway-referencia nélkül, szinkron, I/O-mentes (offline-ban cloud-ígéret
-> lehetetlen). Az „offline ⇒ nincs tutor request" garancia **falszifikálhatóan** mérve:
-> spy `TutorModelGateway` a `TutorOrchestrator` turn-útján (consent-revoked →
-> `startCalls == 0`, usage-limit → 1, retry nélkül; mutáció → RED). Dokumentumok:
-> `epic-04-completion-report.md` (§36 DoD-lefedés), `epic-04-performance.md`
-> (latency baseline), `ai-tutor-rollout.md` (internal→Lab→beta→limited→GA lépcsők,
-> flag-rollback, **GA-flip külön user/termék döntés**). **Flagek OFF maradnak.**
->
-> **Pre-flight §0.0-R1 (scope-szűkítés):** `public.dart` **kivéve** az allowed_paths-ból
-> — nincs fogyasztó, és az additív export törné a fagyasztott `ai_tutor_boundary_test`
-> üres-boundary invariánsát (kívül a scope-on, H2/H3) — **ötödik** ismétlés
-> (R13/R17/R20/R23 után). Az üres boundary-fájl így is teljesíti a §36 „has a public
-> boundary" cellát; az additív re-export jövőbeli allowlist-kör.
->
-> **Review** ([docs/reviews/e04-r24-…-review.md](docs/reviews/e04-r24-offline-fallback-regression-rollout-review.md)):
-> 1. pass **CHANGES REQUESTED** — MAJOR-1: az `offline_network_guard` új cellája csak
-> a provider-nélküli statikus `tutorHome`-ot renderelte, és a `_expectNoNetwork` csak
-> az **account** Dio-t méri (a tutor `TutorStreamTransport`-ot nem), így a „cloud-hívás
-> offline" mutáció nem váltotta pirosra — az Epic **fő garanciája** dekoratív volt;
-> MINOR-1: a no-input default debrief hardkódolt 80 bpm-ből `stableTempo`/`measuredSession`
-> tényt fabrikált nemlétező sessionre (§37 sértés). DeepSeek javító köre **mindkettőt
-> zárta** (turn-szintű spy-gateway falszifikáció + `_buildDebrief` → `null` no-inputra);
-> re-review **APPROVED**. Lecke: **L140/L141**.
->
-> **Zöld kapu (exact-SHA `dd5c0d4`):** Full Gate (no APK)
-> [31078602192](https://github.com/wolfcasaba/strumsight/actions/runs/31078602192)
-> **success** (full-gate + Coverage) + Router CI
-> [31077972974](https://github.com/wolfcasaba/strumsight/actions/runs/31077972974)
-> **success**. Az ELSŐ full-gate futás egy **flaky, körtől független** DSP randomizált
-> property-cellán bukott (`dsp_property_test.dart` 17/20 vs ≥18 küszöb, HARD-seed
-> variancia; a diff nem érint DSP-t) — a HARD-seed újrafuttatás zöld. **Következő:**
-> HORIZON valós-eszközös Epic-4 elfogadás (termék), majd az SDD Epic 5 — a pipeline
-> indítja új sessionben.
->
-> ## ✅ E04-R23 KÉSZ — Tutor safety, prompt-injection, usage & evaluation gate (2026-08-06)
->
-> **E04-R23** MERGED (PR [#159](https://github.com/wolfcasaba/strumsight/pull/159),
-> squash `04787fa`, **ADR [0177](docs/adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md)**;
-> implementer **DeepSeek v4 Pro** (`deepseek/deepseek-v4-pro`, Kilo-profil, `codex-round.sh`),
-> orchestrátor/reviewer **Claude Opus 4.8**). A tutor production-rollout **formális
-> biztonsági/minőségi/költség-kapui**: `tutor_safety_policy.dart` (safety-kategória →
-> strictest-wins policy: pain/medical/copyright/credential/**injection**/**invented-metric**/
-> camera/unsafe/usage/redaction), `tutor_claim_validator.dart` (claim-provenance az **R16
-> grounding-taxonómiát ÚJRAHASZNÁLVA**, nem forkolva; invented-metric = bizonyíték nélküli
-> `measuredFact`/`computedTrend` → **hard blokk**), backend `safety.py`+`redaction.py`
-> (stdlib-`re` only, nincs logging/telemetria), `evaluation/tutor/run_eval.dart` + dataset +
-> `tutor-eval.yml` merge-gate **négy géppel számított** metrikára (schema/action/groundedness/
-> safety; bármelyik küszöb alatt → **piros**). Injection SOHA nem emel tool-permissiont
-> (ADR 0141/0133); CI fake/approved provider — nincs cloud-secret.
->
-> **Javító kör (1, DeepSeek):** review 3 MAJOR — ruff-check red (import-sort+F401), a
-> `run_eval.dart` schema/action metrikák hardcode-olt 100%-a (2/4 metrika sosem tudott
-> pirosra váltani), és a hiányzó dispatchelt piros. Fix: import-fix + a két metrika
-> tényleges dataset-számítása + drift-guard teszt. **Orchestrátor scope-akciók:** (1) a
-> `public.dart` additív exportja a merge-elt **E04-R01** üres-boundary guardot (`ai_tutor_
-> boundary_test.dart`, allowed_paths-on kívül) pirosra vitte a **teljes** suite-ban → a
-> guard módosítása H2/H3, az exportnak nincs fogyasztója (run_eval + tesztek közvetlenül
-> importálnak) → **scope-szűkítés**: `public.dart` vissza az üres baseline-re (§0.0
-> revízió), az additív export halasztva egy jövőbeli allowlist-körre; (2) backend
-> `ruff format` (quote-normalizálás). Re-review **APPROVED**; security review **PASS**.
-> Piros-út bizonyítva: a workflow `dart run … run_eval.dart` lépése küszöb alatti
-> dataseten safety_coverage 94% → `FAIL … below threshold` → exit 1 (kontroll: tiszta
-> dataset 100% → exit 0). Lecke: **L138/L139**.
->
-> ## ✅ E04-R22 KÉSZ — Tutor Profile, Privacy, Data & Consent UI (2026-08-06)
->
-> Prezentációs UI a meglévő domain fölött: **profil-editor** (`StudentProfile`/
-> `GuitarProfile`/`LearningGoal` a modellek `copyWith`+validációjával), **consent-képernyő**
-> (a három tengely — model-use/storage/evaluation — külön, a meglévő `TutorConsent.grant*/revoke*`
-> copy-metódusokkal, függetlenség tesztelve), **data-képernyő** (memory-fact lista/edit/delete
-> a `TutorMemoryRepository`-n, redaktált export `exportRedacted()`, **delete-all** a meglévő
-> `deleteAllAiData()`-vel és **pontos scope-listával** = `StorageKeys.tutorAiData`
-> [conversation_documents, conversation_index, memory_facts] + karantének, a consent/profil/
-> auth-token megtartva). Flag-mögötti route-ok a `lib/app/routing/`-ban. Falszifikációs
-> cellák: delete-all scope (szűkítés ÉS bővítés), consent-tengely-függetlenség, memory-edit
-> szenzitív-elutasítás. **Kiesett** (nincs domain-háttér, §3 tiltja): retention-config,
-> conversation-export, cloud remote-pending, consent-revoke pending-cancel — prerekvizit kör.
->
-> ## ✅ E04-R21 KÉSZ — Song Trainer struktúra-debrief, capability-gate & redaction (2026-08-06)
->
-> **E04-R21** MERGED (PR [#156](https://github.com/wolfcasaba/strumsight/pull/156),
-> squash `6000b57`, **nincs új ADR** — ADR 0132 + 0089 hatálya; implementer **Codex
-> (Terra, gpt-5.6-terra)**, orchestrátor/reviewer **Claude Opus 4.8**). A re-scoped
-> §0.0 szelet: **`SongResultContextAdapter`** a Song Trainer **publikus**
-> `SongDocument` struktúrájából (section/measure) készít tutor-contextet — lyrics /
-> backing-audio / asset / source / track-event **redaktálva**; **`getSongSections`**
-> read-only tool (kizárólag strukturális output); **`SongTutorEntryCard`**
-> capability-őszinte belépőkártya (nem score-olható axishez nincs action). Falszifikáló
-> tesztek: redaction (valódi private tartalom a bemenetben → kizárás mérve),
-> pitch/chord capability-gate, public-domain import boundary.
->
-> **Halt-feloldás (ADR 0112 pipeline).** A kör korábban **kétszer H3-mal halt**. A
-> 2. halt egyetlen BLOCKER-1-e (`check_architecture.dart` false-positive a nested
-> `song_trainer/domain/public.dart` barrelre) **nem kódhiba** volt — a merge-elt
-> **ADR 0176** (heal [#155](https://github.com/wolfcasaba/strumsight/pull/155))
-> feloldotta. Ez a session a mérő eszközhöz **nem** nyúlt (§4): a változatlan
-> implementációt (`8b3b991`) a javított `main`-re rebase-elte (`818ebcf`), az
-> architecture-gate így zöld. Review: **APPROVED**
-> (`docs/reviews/e04-r21-song-trainer-debrief-range-actions-review.md`). Lecke: **L136**.
->
-> **Prerekvizit kör kell** (halasztva, §0.0): a song_trainer public boundary additív
-> result/range/setlist exportja (saját ADR-rel a song_trainer oldalon) — ez nyitja
-> majd újra a measure-range / A–B loop / revision-stale / missing-asset / speed-action /
-> setlist / exact-route pontokat.
->
-> ## ✅ E04-R20 KÉSZ — Practice & Analyze post-session tutor integration (2026-08-06)
->
-> **E04-R20** MERGED (PR [#153](https://github.com/wolfcasaba/strumsight/pull/153),
-> squash `3ce4afc`, **nincs új ADR** — az ADR 0132 (deterministic-result-primary +
-> immutable context-snapshot) + R08 debrief hatálya; implementer **Codex (Terra,
-> gpt-5.6-terra)**, orchestrátor/reviewer **Claude Opus 4.8**). Post-session
-> tutor-belépő a Practice/Analyze eredményhez: **`PracticeResultContextAdapter`** +
-> **`AnalyzeResultContextAdapter`** (kizárólag a `features/{practice,analyze}/public.dart`
-> felületet fogyasztják, provenance-guard `_hasVersion`, capability-aware —
-> `mlDiagnosticsAvailable`, unsupported metric sosem claim); **`SessionTutorEntryCard`**
-> (available / deterministic-fallback (consent-off) / deleted-result / version-mismatch
-> állapotok, szerkeszthető előre kitöltött kérdés, immutable `SessionTutorEntryRequest`
-> snapshot-handoff, suggested-practice gomb). **A deterministic result elsődleges** —
-> a belépő additív, a result-UI-t NEM módosítja; **progress/streak chat-nyitástól SOHA**
-> nem változik (a kártya sehol nem hív `recordPracticeToday`-t; statikus őr +
-> reviewer-falszifikáció piros→zöld igazolta). en/hu ARB additív. **Pre-flight §0.0:**
-> nincs új ADR (mérve — R18/R19 precedens); a streak-tulajdonlás kimérve (két
-> result-úti callsite: `practice_session_recording.dart:183`, `analyze_providers.dart:226`).
-> **§0.0-R1 scope-narrowing:** az implementer helyesen `stopped`-ot jelzett — a brief
-> `ai_tutor/public.dart` additív exportja ütközött az **E04-R01-ben befagyasztott**
-> boundary-teszttel (`ai_tutor_boundary_test.dart`, üres public.dart); a public.dart
-> **kikerült** az allowed_paths-ból (ADR 0087 §2 lista-szűkítés; a boundary-teszt lezárt
-> kör őre — módosítása H2 lett volna). A kör export nélkül teljes; a cross-feature
-> bekötés jövőbeli kör dolga. **Review:**
-> [`docs/reviews/e04-r20-practice-analyze-integration-review.md`](docs/reviews/e04-r20-practice-analyze-integration-review.md)
-> — **APPROVED** (0 BLOCKER/MAJOR; 3 MINOR/NOTE teszt-lefedettségi follow-up).
-> CI exact-SHA `6c91396`: build-apk [31061573792](https://github.com/wolfcasaba/strumsight/actions/runs/31061573792)
-> **success**; router-ci `eac1aad` [31061300346](https://github.com/wolfcasaba/strumsight/actions/runs/31061300346) **success**.
->
-> ## ✅ E04-R19 KÉSZ — Evidence, source & action card UI (2026-08-06)
->
-> **E04-R19** MERGED (PR [#152](https://github.com/wolfcasaba/strumsight/pull/152),
-> squash `f0f74fb`, **nincs új ADR** — az ADR 0132 (privacy/sanitize) + 0133
-> (tool-confirmation/typed-executor) hatálya; implementer **MiniMax M3**,
-> orchestrátor/reviewer **Claude Opus 4.8**). A tutor **állításainak és
-> műveleteinek** átlátható, megerősíthető UI-ja: `TutorEvidenceChip` (prezentációs
-> `TutorEvidenceKind` provenance-négyes — measured/trend/knowledge/inference —
-> **text+ikon+szín**, a11y); `TutorSourceSheet` (+ `sanitizeTutorDisplayText`:
-> control-char/bidi-strip, `<`/`>` semlegesítés; `chunkHash` privát érték sosem
-> renderel); `TutorActionCard` (exact `preview.fields`, confirm/reject/**stale**/
-> failed, idempotens confirm — kizárólag `ActionConfirmationService` typed executor,
-> nyers route/URL/string lehetetlen); `PracticePlanPreviewScreen` (blokk-szerkesztés
-> `copyWith`+`PracticePlanSource.userEdited`, validált save/start). en/hu ARB additív.
-> 14 új widget-cella. **Pre-flight §0.0:** nincs új ADR (mérve — R13/R14/R17/R18
-> precedens); a `stale`-út mérve (`TutorActionValidationIssue.expired` →
-> `blocked`, executor soha). **Első implementer-futás stalled** a végén (log 5 perc
-> néma → kilőve) commit előtt; a scope-tiszta munkát egy folytató dispatch fejezte
-> be ugyanabban a munkapéldányban (nem worktree — mm-round.sh `.git`-**könyvtárat**
-> vár, L131; a folytató-dispatch salvage-minta L132). **Review:**
-> [`docs/reviews/e04-r19-evidence-source-action-card-ui-review.md`](docs/reviews/e04-r19-evidence-source-action-card-ui-review.md)
-> — **APPROVED** (0 BLOCKER/MAJOR/MINOR), falszifikációs próbával igazolt
-> sanitizer-guard, scope `ok`. CI exact-SHA `e447170`:
-> full-gate [31059622555](https://github.com/wolfcasaba/strumsight/actions/runs/31059622555)
-> + router-ci [31059616282](https://github.com/wolfcasaba/strumsight/actions/runs/31059616282) **success**.
->
-> ## ✅ E04-R18 KÉSZ — Tutor Home, Chat UI & streaming UX (2026-08-05)
->
-> **E04-R18** MERGED (PR [#151](https://github.com/wolfcasaba/strumsight/pull/151),
-> squash `104e685`, **nincs új ADR** — presentation-only, az ADR 0131 (fake gateway)
-> + 0134 (memory) hatálya; implementer **MiniMax M3**, orchestrátor/reviewer
-> **Claude Opus 4.8**). Az AI-tutor első teljes, accessibility-kompatibilis
-> Flutter felülete az `aiTutorEnabled` flag mögött, **fake gatewayre** kötve
-> (valódi cloud = E04-R19): Tutor **Home** + virtualizált **Chat**;
-> content-blockonkénti message-bubble (text/heading/bullet/metric/evidence/source/
-> action/plan/warning/error/**unknown-safe** monospaced, nem futtatható HTML);
-> streaming-batched a11y (screen reader turn-onként, nem tokenenként),
-> scroll-anchoring, stop/retry/copy/feedback, draft-megőrzés; megkülönböztetett
-> offline/consent/rate-limit/error bannerek. Route a flag mögött
-> (`lib/app/routing/app_router.dart` `if (aiTutorEnabled) …[GoRoute]`, typed
-> `AppRoutes.tutorHome/tutorChat` — E02-R12 precedens); flag OFF ⇒ route hiányzik
-> ⇒ Live fallback (mindkét cella tesztelt). **Pre-flight §0.0:** nincs új ADR
-> (mérve); base-korrekció — a brief `lib/app/router/app_route.dart` rossz útját
-> `lib/app/routing/app_route.dart`-ra javítva **és** `app_router.dart` felvéve az
-> `allowed_paths`-ba (a flag-gating cellák enélkül nem teljesíthetők).
-> **Review:** [`docs/reviews/e04-r18-tutor-home-chat-ui-review.md`](docs/reviews/e04-r18-tutor-home-chat-ui-review.md)
-> — **APPROVED javító kör #1 után**: az első implementer-futás a box lassúsága
-> miatt a 3600s abszolút időkorlátot elérte a gate teszt-lépésében (`status=timeout`,
-> `scope_audit=ok`) commit előtt; a scope-tiszta munkát az orchestrátor megmentette,
-> a két valódi teszt-bukást (R18-A4 látható Stop streamingben; R18-A13 új-buborék
-> rebuild) a MiniMax javító köre zöldre vitte. CI exact-SHA `a6165c5`:
-> full-gate [31056115529](https://github.com/wolfcasaba/strumsight/actions/runs/31056115529)
-> + router-ci [31056108608](https://github.com/wolfcasaba/strumsight/actions/runs/31056108608) **success**.
->
-> ## ✅ E04-R17 KÉSZ — Conversation repository, summary & inspectable memory (2026-08-05)
->
-> **E04-R17** MERGED (PR [#148](https://github.com/wolfcasaba/strumsight/pull/148),
-> squash `1e9b2db`, **nincs új ADR** — ADR [0134](docs/adr/0134-ai-tutor-memory-policy.md)
-> memory-policy hatálya, a tárolási minta ADR 0084/0090, privacy ADR 0132;
-> implementer **Codex** `gpt-5.6-terra`). Lokális, verziózott tutor
-> beszélgetéstárolás + felhasználó által megtekinthető memória: `TutorConversationRepository`
-> / `TutorMemoryRepository` contract + `TutorMemoryFact` modell; `LocalTutorConversationRepository`
-> (verziózott envelope, dokumentum-előbb-index sorrend index-újraépítéssel, lapozás,
-> message-provenance summary, **rekord-szintű korrupt-karantén**, őrzött top-level decode);
-> `LocalTutorMemoryRepository` (candidate-dedup, sensitivity-filter password/secret/token/
-> email/telefon — pont/perjel-szeparátorral is, inspect/edit/delete, retention purge,
-> redaktált export, **delete-all AI data** a teljes `StorageKeys.tutorAiData` + karantén felett).
-> **Silent-no-op tilalom betartva:** minden tár-írási hiba → `AppResult.failure(StorageFailure)`.
-> **Pre-flight (§0.0):** nincs új ADR (mérve); `public.dart` **kivéve** az `allowed_paths`-ból
-> (az additív export az `ai_tutor_boundary_test.dart` üres-boundary invariánsát törte volna —
-> a Router CI throughput-teszt itt NEM ütközött, ellentétben az R16 R15↔R16 esetével).
-> **Review:** [`docs/reviews/e04-r17-conversation-repository-and-memory-review.md`](docs/reviews/e04-r17-conversation-repository-and-memory-review.md)
-> — **APPROVED javító kör #1 után** (`6830e63`): a security-reviewer 2 MAJOR-t talált
-> (M1 telefon-filter pont-formátum bypass; M2 őrizetlen top-level `jsonDecode` → tartós
-> brick + content a cause-ban), mindkettő ZÁRVA hibát-pirosra-fogó regressziós teszttel.
-> CI exact-SHA `41cafd5`: full-gate [31050133428](https://github.com/wolfcasaba/strumsight/actions/runs/31050133428)
-> + router-ci [31050123599](https://github.com/wolfcasaba/strumsight/actions/runs/31050123599) success.
->
-> ## ✅ E04-R16 KÉSZ — Tutor orchestration state machine & output validator (2026-08-05)
->
-> **E04-R16** MERGED (PR [#147](https://github.com/wolfcasaba/strumsight/pull/147),
-> squash `df25806`, **új ADR [0174](docs/adr/0174-ai-tutor-orchestration-state-machine.md)**,
-> implementer **Codex** `gpt-5.6-terra`). A teljes tutor turn-pipeline
-> determinisztikus, UI-mentes összekötése: `context → retrieval → prompt →
-> gateway → tool → validator`. Sealed `TutorCommand`/`TutorSignal` + `TutorEffect`,
-> pure `reduceTutorTurn` → `TutorTransition{state,effects,isRejected}`, broadcast
-> `states`/`effects` + `dispatch` (Practice-controller precedens). **Kötött
-> döntések:** repair-cap **1** → deterministic fallback; cancel utáni late-event
-> **no-op** (request-id-korreláció); egy aktív turn/conversation; a
-> `TutorOutputValidator` claim- (grounded típus + evidence ∈ trusted sources) ÉS
-> action-schemát (allowlist + `TutorActionValidator`) is ellenőriz.
-> **usage-limit + consent-revoked az orchestration-rétegben** modellezve (a
-> gateway-réteg érintetlen — a `tutor.usage_limit` kód-konstans az orchestrator
-> sajátja). 10 acceptance-scenárió scripted fake-kel determinisztikusan zöld, a
-> repair-cap falszifikációs guarddal (`starts == 2`).
-> Review: [`docs/reviews/e04-r16-orchestration-state-machine-review.md`](docs/reviews/e04-r16-orchestration-state-machine-review.md)
-> — **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR follow-up, 1 NOTE).
->
-> **Pre-flight tanulságok (mérve):** (1) a `blocked` jelzés a friss munkapéldány
-> hiányzó generált `lib/l10n/`-jából jött, nem kódhiba — `prepare-flutter-generated.sh`
-> oldotta fel (nem H6). (2) A pre-flight §0.0 SZŰKÍTÉS (`public.dart` kivétele az
-> `allowed_paths`-ból) pirosra váltotta a Router CI-t: a
-> `test_pipeline_throughput.py` hardkódoltan elvárja az R15↔R16 `public.dart`-ütközést
-> (slot-planner); a `tools/` tilos zóna, ezért a helyes feloldás a szűkítés
-> visszavonása, nem a teszt módosítása. Tanulságok: [`docs/LESSONS.md` L129](docs/LESSONS.md).
->
-> **⚠ MINOR follow-up (R18 előtt kötelező):** a `TutorPipelineFailed` terminális
-> út nem szabadítja fel a gateway-subscription-t/gateway-t (a többi terminál
-> igen). Ma fake-only, `dispose()` mitigál; a **valódi gateway bekötése (R18)
-> ELŐTT** javítandó — lásd a review MINOR-1-et.
->
-> **Zöld kapu (exact-SHA `c9a3834`):** Full Gate (no APK)
-> [31046290808](https://github.com/wolfcasaba/strumsight/actions/runs/31046290808)
-> `success` + Router CI
-> [31046333319](https://github.com/wolfcasaba/strumsight/actions/runs/31046333319)
-> `success`. **Következő:** E04-R17 — a pipeline új sessionben indítja.
->
-> <details><summary>▶️ E04-R15 KÉSZ — AI tutor streaming transport (2026-08-05)</summary>
->
-> **E04-R15 — Backend + Flutter streaming transport** MERGED (PR
-> [#145](https://github.com/wolfcasaba/strumsight/pull/145), squash `1fe91d2`,
-> ADR [0142](docs/adr/0142-ai-tutor-streaming-transport-protocol.md), implementer
-> **qwen38-max** / Terra). Sorrendhelyes, megszakítható, újrapróbálható tutor
-> streaming: monoton event-sequence, started/delta/usage/tool-call/complete/
-> failure frame, gap/out-of-order → **kontrollált** `transport_*` failure (nem
-> néma átugrás), duplicate-frame idempotens, retry nem duplikál user-message-et,
-> disconnect → **nincs árva provider-request** (cleanup + cancellation), body +
-> frame size-limit (alatt/rajta/fölött mátrix). Backend `stream.py` (SSE) +
-> Flutter `TutorStreamDto` parser + `RemoteTutorModelGateway`.
-> Review: [`docs/reviews/e04-r15-streaming-transport-review.md`](docs/reviews/e04-r15-streaming-transport-review.md)
-> — **kód APPROVED**, minden lelet zárva (MAJOR-1 ruff-format, MINOR log-forging).
->
-> **H3-feloldás (ADR 0112):** az eredeti merge-HALT a `build-apk` secret-scan
-> PIROS-a volt egy **pre-existing R14** fixture-fájlon (`test_tutor_proxy.py`,
-> tilos zóna). A self-heal (#143, `7b3b5b9`) fájl-szintű
-> `# strumsight:allow-secret-file` jelölést tett a fájlra és merge-elt `main`-re;
-> ez a session a branchet a gyógyított `main`-re rebase-elte, így a `secrets`-kapu
-> zöld. CI: `full-gate.yml` + `router-ci.yml` exact-SHA `a7377ed` **success**
-> (ADR 0171 CI-terv: nincs natív út → APK-építés nélkül). Tanulság:
-> [`docs/LESSONS.md` L126](docs/LESSONS.md). **Következő:** E04-R16
-> (orchestration state machine) — a pipeline új sessionben indítja.
->
-</details>
->
-> <details><summary>▶️ E04-R16 első kísérlet önjavítás (2026-08-05, H6) — motor visszaállítva Terra-ra (a végleges futás sikeres, fent)</summary>
->
-> Az E04-R16 első kísérlete H6-tal állt meg: egy elszivárgott, gitignore-olt
-> `.pipeline/engine-override=qwen38-max` (a párhuzamos `ops/qwen-implementer-
-> hardening` session kísérleti beállítása) MINDEN kört a `qwen38-max`-ra
-> pinnelt, ami kétszer `status=unknown`-nal (bejelent-majd-megáll) lépett ki.
-> Az önjavító kör (ADR 0112) **NEM kódot javított** (a repo queue-értéke már
-> helyes: E04-R16 → `codex`/Terra): `engine-profile.sh clear` visszaállította
-> a queue-tervezett Terra motort, a félkész `codex/e04-r16-…` worktree+branch
-> (local+remote) lezárva, `outcome=retry` — a lánc a KÖVETKEZŐ firingen
-> Terra-val újrafuttatja E04-R16-ot. A „bejelent-majd-megáll" a Kilo-qwen
-> motorok HARNESS-szintű hibája (qwen-plus-t is elvitte E04-R14-en); a mély fix
-> a hardening-session élő munkája. Tanulság: [`docs/LESSONS.md` L127](docs/LESSONS.md).
->
-> </details>
->
-> <details><summary>▶️ E04-R14 KÉSZ — önjavító körrel zárva (2026-08-05)</summary>
->
-> **E04-R14 — Backend tutor proxy, provider registry & usage guard** MERGED (PR
-> [#142](https://github.com/wolfcasaba/strumsight/pull/142), squash `c1c0a77`,
-> **nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
-> provider-boundary hatálya). Fail-closed feature-flagged tutor proxy
-> (`/tutor/turn`, `/tutor/capability`): provider-allowlist registry,
-> request/history/context méretkorlátok, rate-limit + napi token usage guard
-> (429, nem nyelődik el), prod-boot guard a dev-default tutor API kulcs ellen.
->
-> **Önjavító kör (ADR 0112, H6):** az eredeti implementer (`qwen-plus`) kétszer
-> lépett ki záró jelzés nélkül (csak BEJELENTETTE a hátralévő ~5 teszt-fixture
-> javítást, edit nélkül). Motorváltás `qwen-coder-plus`-ra (apply_patch nem
-> támogatott → shell-fallback, imperatív continuation-prompt) fejezte be a
-> munkát. A healer 2 további kört mért/javított: (1) `ruff format` — a lokális
-> gate csak `ruff check`-et futtatott, a CI format-gate-je fogta meg; (2) 4
-> teszt (`test_output_at_limit`, `test_output_above_limit`,
-> `test_provider_timeout_normalized_error`, `test_provider_error_normalized_error`)
-> `401`-re bukott CI-n, mert saját `create_app`-ot építettek a megosztott
-> fájl-alapú SQLite-tal + egy MÁSIK app tokenjével — lásd
-> [`docs/LESSONS.md` L123](docs/LESSONS.md#l123). CI exact-SHA `40d26d4`:
-> backend-ci [31023075064](https://github.com/wolfcasaba/strumsight/actions/runs/31023075064)
-> `success`; merge-SHA `c1c0a77` backend-ci
-> [31023231779](https://github.com/wolfcasaba/strumsight/actions/runs/31023231779) `success`.
->
-> <details><summary>▶️ E04-R13 KÉSZ (2026-08-05)</summary>
->
-> **E04-R13 — TutorModelGateway & scripted fake** MERGED (PR
-> [#141](https://github.com/wolfcasaba/strumsight/pull/141), squash `b9d2950`,
-> **nincs új ADR** — ADR [0131](docs/adr/0131-ai-tutor-provider-boundary.md)
-> provider-boundary hatálya). Implementer: **qwen-plus** (`qwen/qwen3.7-plus`,
-> codex-harness, ADR 0140); orchestrátor/reviewer: **Claude Opus 4.8**.
-> Providerfüggetlen streaming modellkapu (`TutorModelGateway` interface, `sealed
-> TutorModelEvent` delta/tool-call/done/error, duplicate-terminal guard),
-> scripted `FakeTutorModelGateway` (injektált `FakeClock`, first-event/inactivity/
-> total timeout mátrix below/at/above, determinisztikus cancel) + capability-
-> unavailable `LocalTutorModelGatewayStub`. **Nincs Flutter UI / provider-SDK
-> típus** (mutáció-próbával igazolva: secret→`secrets` red, provider-import→
-> `analyze` red). Pre-flight §0.0: `public.dart` kivéve (üres-boundary invariáns
-> R16+-ig). 3 javító kör (F1–F4), review **APPROVED** (0 BLOCKER/MAJOR/MINOR,
-> 3 NOTE). CI exact-SHA `2fe4b60`: build-apk
-> [31012190270](https://github.com/wolfcasaba/strumsight/actions/runs/31012190270)
-> + router-ci `success`; merge-SHA `b9d2950` router-ci `success`; post-merge gate zöld.
->
-> <details><summary>▶️ E04-R12 KÉSZ (2026-08-05)</summary>
->
-> **E04-R12 — Prompt templatek, output schema és injection boundary** MERGED (PR
-> [#140](https://github.com/wolfcasaba/strumsight/pull/140), squash `c5b14e5`,
-> **új ADR [0141](docs/adr/0141-ai-tutor-prompt-output-schema-injection-boundary.md)**,
-> bővíti a 0131/0132/0137/0139-et). Verziózott, determinisztikus tutor-prompt-építés
-> kemény **trusted/untrusted** tartalmi határral: `TutorPromptBuilder` **csak
-> redaktált** `TutorContextSnapshot`-ot fogad (nyers audio/token/secret sosem); a
-> trusted (system + `TutorSourceRef` citációk) és untrusted (user/import) szakaszok
-> fizikailag külön, delimiterrel, az untrusted `<`/`>` escape-elve (delimiter-forgery
-> ellen); tool-schema injection a registry-birtokolt allowlisttel
-> (`schemasForTurn(policy)`); strukturált output-schema v1, nincs chain-of-thought;
-> intentenkénti asset-template + bit-stabil snapshot + adversarial injection fixture.
-> Implementer **Codex (Terra)**, orchestrátor/reviewer **Claude Opus 4.8**, review
-> **APPROVED 1 javító kör után** (BLOCKER-1: `public.dart` export törte a merge-elt
-> boundary-tesztet → scope-szűkítés, export R13+-ra halasztva; a teljes CI-suite
-> fogta meg, nem a szűkebb lokál gate — L120). ADR 0140→0141 átszámozva (GOV-04
-> ütközés). Zöld kapu: build-apk + router-ci `success` exact head `89a56fe`,
-> merge-SHA router-ci `c5b14e5` success, post-merge lokális gate zöld.
-> **Következő: E04-R13 (a pipeline indítja új sessionben).**
->
-> <details><summary>E04-R11 — Action proposal, validation & confirmation service (2026-08-05) — snapshot</summary>
->
-> **E04-R11** MERGED (PR [#137](https://github.com/wolfcasaba/strumsight/pull/137),
-> squash `479550f`, **ADR [0139](docs/adr/0139-ai-tutor-action-proposal-confirmation.md)**).
-> Kétlépcsős, user-megerősített action-rendszer — automatikus write/launch soha;
-> providerfüggetlen sealed `TutorAction`, pure validator (confirm újrafuttat),
-> idempotens confirmation-service. Review APPROVED (0 BLOCKER/MAJOR/MINOR, 1 NOTE);
-> exact head `66fadfc`, merge-SHA `479550f`.
-> </details>
->
-> <details><summary>E04-R10 — Tutor Tool contract & read-only registry (2026-08-05) — snapshot</summary>
->
-> **E04-R10** MERGED (PR [#136](https://github.com/wolfcasaba/strumsight/pull/136),
-> squash `2f7fffc`, **ADR [0137](docs/adr/0137-ai-tutor-readonly-tool-contract.md)**).
-> Typed, allowlistelt, fail-closed tool-rendszer **kizárólag read-only + lokális
-> compute**. Implementer Codex (Terra), review APPROVED (0 BLOCKER/MAJOR, 1 NOTE);
-> build-apk + router-ci `success` exact head `80a7b7b`.
-> </details>
-> </details>
-> </details>
-> </details>
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
-> A GOV-03 és az azt megelőző körök (E03-as epic, E04 első fele) részletes
-> története a [`docs/handoff-archive.md`](docs/handoff-archive.md) fájlban van.
+> A lezárt körök részletes története a
+> [`docs/handoff-archive.md`](docs/handoff-archive.md) fájlban van.
 > MIÉRT: ezt a fájlt MINDEN session és MINDEN kör elolvassa (orchestrátor +
-> implementer), ezért a lezárt körök narratívája itt tiszta kontextus-adó
-> (2026-08-05: 2102 sor). A friss állapot marad itt, a történet ott.
-
-> ## 🔧 Governance: ADR 0171 — pipeline áteresztő-képesség (2026-08-05)
+> implementer), ezért a lezárt körök narratívája itt tiszta kontextus-adó.
 >
-> User-döntés („hogyan gyorsítsuk a fejlesztést … biztonságosan, tesztekkel …
-> a kódminőség ne romoljon"). Nem termék-kör: a lánc mérése és gyorsítása, a
-> mérce változatlanul hagyásával. Mért kiindulás (`tools/round-metrics.py`,
-> 41 kör): **medián kör-idő 79 perc, holtidő-arány 22,8%, 9/41 kör önjavítást
-> igényelt.**
->
-> Új eszközök: `tools/round-ci-plan.py` (melyik CI a kapu — APK csak natív
-> diffre, különben az azonos mérce-láncú `full-gate.yml`), `tools/brief-lint.py`
-> (a javító körök okait a pre-flightban fogja meg; a `base` szint Router-CI
-> kapu a NYITOTT körökre), `tools/round-slots.py` (párhuzamos slotok
-> diszjunktság + előfeltétel szerint, atomi ADR-foglalás),
-> `tools/round-metrics.py` (kör-időmérleg), `tools/round-merge-lock.sh`.
-> Driver: azonnali lánc-folytatás merge után (`PIPELINE_SELF_CHAIN=1`, alap),
-> piros `main` fölé nem indul, slot-mechanika (`PIPELINE_SLOTS=1`, alap).
-> Gate: globális zár, hogy két Flutter-gate soha ne fusson egyszerre (L05).
->
-> **A mérce nem lazult** — 43 új teszt
-> (`tools/tests/test_pipeline_throughput.py`) őrzi, hogy a gyorsított CI-sáv
-> lépésről lépésre azonos az APK-ssal, hogy natív diff nem csúszhat az olcsó
-> sávba, és hogy a gate egyetlen lépése sem tűnhet el. Részletek:
-> [`docs/adr/0171-pipeline-throughput-program.md`](docs/adr/0171-pipeline-throughput-program.md).
-
-> ## 🔧 Governance: ADR 0173 — Qwen implementer megerősítés (2026-08-05)
->
-> User-kérés: „vizsgáld meg a Qwen fejlesztését az előzmények alapján … hozzuk
-> ki belőle a legjobbat". Négy kör naplójából (E04-R13…R16) három visszatérő,
-> NEM képességbeli hibaminta: (1) a forduló **bejelentéssel** zárul tool-hívás
-> helyett → félkész fa, nincs jelzés; (2) a session fejlécében mérve
-> `reasoning effort: none`; (3) a backend-mérce csak a CI-ban futott
-> (E04-R15 MAJOR-1: `ruff format --check` piros → 2 javító kör).
->
-> Ellenszerek (mind gépi): a `codex-round.sh` **automatikus folytatása**
-> ugyanabban a session-ben (`codex exec resume`, max 2, kilövés után soha,
-> `continuations=` a jelzésben) · **implementer-preambulum** artefaktumként
-> minden forduló elé · motoronkénti **`reasoning`** oszlop
-> (`qwen38-max = medium`, mérve) · a gate **backend sávja**
-> (`ruff format --check` + `ruff check` + `pytest`, user-engedéllyel, ADR 0173 §4)
-> · az ADR-foglaló mostantól a **futó ágakon** kiosztott számokat is látja.
->
-> Őrök: `tools/tests/test_qwen_implementer_hardening.py` (13 teszt) + bővített
-> `test_engine_profile.py` / `test_pipeline_throughput.py`. Részletek:
-> [`docs/adr/0173-qwen-implementer-hardening.md`](docs/adr/0173-qwen-implementer-hardening.md),
-> [`docs/LESSONS.md` L126](docs/LESSONS.md).
+> **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
+> kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
+> Mért diéta: 2026-08-05: 2102 → 1400 sor; **2026-08-07: 1946 → 1091 sor**
+> (18 banner archiválva, 5 már archivált duplikátum eldobva).
 
 ## 1. Current release state
 
@@ -1371,25 +552,26 @@
 
 ## 4. Current branch
 
-`main` @ [PR #181](https://github.com/wolfcasaba/strumsight/pull/181), squash
-`39d1c29` (E05-R10, camera + guitar calibration domain és verziózott
-tárolás). Pure Dart/teszt diff, nincs natív út → a CI-terv `full-gate.yml`-t
-írt elő, a `docs/rounds/**` érintés miatt a **router-ci** is a kapu része:
-full-gate [31154416133](https://github.com/wolfcasaba/strumsight/actions/runs/31154416133)
-+ router-ci [31154343985](https://github.com/wolfcasaba/strumsight/actions/runs/31154343985)
-**success** az exact merge-előtti tip `40a3d44`-n (a végső, MAJOR-2-t záró
-javító commit után). Review **APPROVED 3 javító kör után** (MiniMax 1 +
-Codex 2 — lásd fejléc); mindhárom kör az orchestrátor SAJÁT kézzel
-megismételt mutáció-kill próbáival függetlenül újra-ellenőrizve, nem az
-implementer önjelentésére hagyatkozva. Az `origin/main` a dispatch óta
-**kétszer mozdult** (8, majd 1 további, a diffhez nem kapcsolódó
-pipeline-infra commit) — mindkétszer konfliktusmentes **rebase** + CI
-újra-dispatch (H8 tiszta). Post-merge gate
-(`tools/round-gate.sh test/features/vision test/core/storage`) a friss
-`main`-en is zöld.
-_(Történeti product-merge referencia: PR #180 / E05-R09, frame quality
-assessor; PR #169 / `b5837d9`, E05-R07; PR #168 / `a43f8c1`, E05-R06;
-PR #162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`, E04-R24.)_
+`main` @ [PR #184](https://github.com/wolfcasaba/strumsight/pull/184), squash
+`148469c` (E05-R13, hand track assignment és temporal smoothing). Pure
+Dart/teszt diff, nincs natív út → a CI-terv `full-gate.yml`-t írt elő, a
+`docs/rounds/**` érintés miatt a **router-ci** is a kapu része: full-gate
+[31179087887](https://github.com/wolfcasaba/strumsight/actions/runs/31179087887)
++ router-ci [31179089579](https://github.com/wolfcasaba/strumsight/actions/runs/31179089579)
+**success** az exact merge-előtti tip `2ef9455`-n (a javító kör + mindkét
+review-commit UTÁN). Review **APPROVED 1 javító kör után** (MiniMax) —
+mind a három lelet (1 BLOCKER, 1 MAJOR, 1 MINOR) az orchestrátor SAJÁT,
+függetlenül futtatott próbateszteivel újra-ellenőrizve, nem az implementer
+önjelentésére hagyatkozva; dedikált security-review (risk=high) **PASS**,
+futott a merge ELŐTT. Az `origin/main` a dispatch óta **nem mozdult**
+(H8 tiszta, nem kellett rebase). Post-merge gate (`tools/round-gate.sh
+test/features/vision test/property/hand_track_property_test.dart`) a
+friss `main`-en is zöld.
+_(Történeti product-merge referencia: PR #183 / `f39d7b6`, E05-R12; PR #182
+/ `113976a`, E05-R11; PR #181 / `39d1c29`, E05-R10; PR #180 / E05-R09,
+frame quality assessor; PR #169 / `b5837d9`, E05-R07; PR #168 / `a43f8c1`,
+E05-R06; PR #162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`,
+E04-R24.)_
 
 > **[Superseded ref — E05-R07 branch]:** `main` @ PR #169, squash
 `b5837d9` (E05-R07). Pure Dart/teszt diff → full-gate
