@@ -12,6 +12,43 @@
 > audio-only; implementer Terra, orchestrátor/reviewer Claude Sonnet 5; 0
 > javító kör, dedikált security-reviewer PASS, exact-SHA zöld kapun át).**
 >
+> ## ⏳ E05-R09 FOLYAMATBAN — 1. kísérlete külső GitHub-incidensbe futott, retry (2026-08-06)
+>
+> Az E05-R09 (Frame quality assessor) implementációja **kész és jóváhagyott**
+> volt (2 review, mindkettő PASS/APPROVED, security PASS) — PR
+> [#175](https://github.com/wolfcasaba/strumsight/pull/175) (branch
+> `codex/e05-r09-frame-quality-assessor`, tipp `de86766`) —, de a GitHub
+> 2026-08-06 15:22 UTC-kor kezdődő, **critical impact**, több órán át
+> „investigating" státuszú Actions+Pages incidense (githubstatus.com) miatt
+> sosem kapott tiszta CI-t. Az orchestrátor-session a 4 órás időkorlátba
+> futott jelzés nélkül (`H-NOSIGNAL`) → önjavító kör (ADR 0112, 1/3 kísérlet)
+> **`outcome=retry`**-vel oldotta fel: a repóban nem volt mit javítani, a
+> gyökérok kizárólag külső (mérve githubstatus API-val élőben, a halt idején
+> és az önjavítás alatt is egyaránt `major_outage`).
+>
+> **A PR #175 LEZÁRVA** (nem merge-elve, nem törölve) — a driver
+> (`tools/round-pipeline.sh`) „nincs nyitott PR" előfeltétele minden
+> kör-alakú branch-nevű nyitott PR-t számol, és a halott session nem
+> takarította a `.pipeline/inflight/` jelzőjét, tehát nyitva hagyva örökre
+> (a helyreállás UTÁN is) elakasztotta volna a láncot, csendben. A branch, a
+> commitok és mindkét review megmaradt a lezárt PR-en — újranyitható
+> (`gh pr reopen 175`), vagy a következő E05-R09 session tiszta lappal
+> indulhat. Lásd [`docs/LESSONS.md` L158](docs/LESSONS.md).
+>
+> **Egy MÁSODIK, még nyitott PR** ugyanebből a sessionből:
+> [#177](https://github.com/wolfcasaba/strumsight/pull/177) — proaktív
+> `github_actions_degraded()` őr a driverbe (ne induljon önjavító kör /
+> piros-main-halt egy GitHub-incidensre), 17/17 teszt, de maga is
+> CI-outage-blocked. **NEM blokkolja a láncot** (a branch neve
+> `ops/actions-outage-guard`, nem kör-alakú — a `ROUND_BRANCH_PATTERN`
+> kizárja), de emberi vagy jövőbeli-session merge-re vár, amint a Router CI
+> zöldet ad.
+>
+> **Következő:** a queue E05-R09 sora változatlanul `pending` — a lánc
+> magától újra elő fogja venni, amint a GitHub Actions incidens rendeződik.
+> Ha ismét `H-NOSIGNAL` jönne ugyanerre az okra, a kísérletszámláló 2/3-nál
+> tart.
+>
 > ## ✅ E05-R08 KÉSZ — Vision setup wizard, camera profile és permission UX (2026-08-06)
 >
 > **E05-R08** MERGED (PR [#170](https://github.com/wolfcasaba/strumsight/pull/170),
@@ -77,8 +114,9 @@
 > [31111597358](https://github.com/wolfcasaba/strumsight/actions/runs/31111597358)
 > **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
 > test/core/l10n_parity_test.dart`) a friss `main`-en is zöld (13+3 teszt).
-> **Következő:** E05-R09 — Frame quality assessor (SDD Ch6 Kör 9,
-> engine=codex a queue-ban), a pipeline új sessionben indítja.
+> **Következő:** E05-R09 — Frame quality assessor; 1. kísérlete külső
+> GitHub-incidensbe futott (`H-NOSIGNAL` → retry) — a friss állapot a fájl
+> tetején, az „E05-R09 FOLYAMATBAN" szakaszban.
 >
 > ## ✅ E05-R07 KÉSZ — Frame transform és overlay koordinátarendszer (2026-08-06)
 >
