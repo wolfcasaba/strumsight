@@ -666,6 +666,23 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
+**E05-R13 — Hand track assignment és temporal smoothing** (PR
+[#184](https://github.com/wolfcasaba/strumsight/pull/184), squash
+`148469c`, nincs új ADR; implementer **MiniMax M3**, orchestrátor/reviewer
+**Claude Sonnet 5**). Stabil fretting/picking hand-track jitter és rövid
+takarás ellen — lásd a fejléc ✅-blokk a teljes pre-flight/javítókör/review
+történetért. **1 javító kör** (MiniMax), mindhárom lelet (F1 BLOCKER — a
+jump-rejection nem épült fel valós, tartós pozícióváltásból; F2 MAJOR — a
+`TrackContinuity` latency/jitter mezői élettelenek voltak; F3 MINOR — a
+simított visibility monoton MAX volt) az orchestrátor SAJÁT, függetlenül
+futtatott próbateszteivel újra-ellenőrizve, nem az implementer
+önjelentésére hagyatkozva. Dedikált security-review (risk=high) **PASS**,
+futott a merge ELŐTT (L162 helyesen alkalmazva). Gate zöld a `2ef9455`
+merge-előtti SHA-n: Full Gate ✅ · Router CI ✅. Lecke: **L165, L166**.
+Részletek: fejléc ✅-blokk +
+[review](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md) +
+[security](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md).
+
 **E05-R10 — Camera + guitar calibration domain és verziózott tárolás**
 (PR [#181](https://github.com/wolfcasaba/strumsight/pull/181), squash
 `39d1c29`, nincs új ADR; implementer **MiniMax M3**, orchestrátor/reviewer
@@ -708,11 +725,21 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-0. **E05-R11 — Manual guitar geometry calibration UI** (SDD Ch6 Kör 11,
-   `docs/rounds/e05-r11-manual-guitar-geometry-calibration-ui.md`,
-   engine=`minimax` a queue szerint) — a `docs/execution/pipeline-queue.tsv`
-   következő `pending` sora; a pipeline (ADR 0087) automatikusan indítja új
+0. **E05-R14 — Pose landmark provider és posture baseline** (SDD Ch6 Kör 14,
+   `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`,
+   engine a `docs/execution/pipeline-queue.tsv` szerint) — a queue következő
+   `pending` sora; a pipeline (ADR 0087) automatikusan indítja új
    sessionben — **ez a session nem kezdi el.**
+   **~~E05-R13 — Hand track assignment és temporal smoothing~~ — KÉSZ**
+   (PR #184, `148469c`, nincs új ADR; implementer MiniMax M3; 1 javító kör;
+   dedikált security-reviewer PASS, futott a merge előtt; ld. fejléc + §5).
+   **~~E05-R12 — Hand landmark provider adapter és model manifest~~ — KÉSZ**
+   (PR #183, `f39d7b6`, ADR 0185; implementer MiniMax M3; 1 javító kör;
+   dedikált security-reviewer PASS (post-merge, orchestrátor-mulasztás
+   pótolva); ld. fejléc).
+   **~~E05-R11 — Manual guitar geometry calibration UI~~ — KÉSZ** (PR #182,
+   `113976a`, nincs új ADR; implementer MiniMax M3; 1 javító kör (3
+   BLOCKER); dedikált security-reviewer PASS; ld. fejléc + docs/handoff-archive.md).
    **~~E05-R10 — Camera + guitar calibration domain és verziózott tárolás~~ — KÉSZ**
    (PR #181, `39d1c29`, nincs új ADR; implementer MiniMax M3; 3 javító kör
    (MiniMax 1 + Codex 2); dedikált security-reviewer PASS; ld. fejléc + §5).
