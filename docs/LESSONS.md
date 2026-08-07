@@ -5597,3 +5597,112 @@ próbatesztet, ha a válasz nem triviálisan üres. Két független review-móds
 ugyanarra a gyökérokra jutása ERŐS jelzés arra, hogy a lelet valódi, nem
 egy review-módszer sajátossága — az ilyen egybeesést a jelentésben
 explicit ki kell emelni, nem csak egyszer leírni. Rokon: [[L165]].
+
+## L167 — Egy megosztott registry-validátor (és a hozzá tartozó teszt) hallgatólagosan EGYETLEN bejegyzésre íródhat; a pre-flight mérje ki, mielőtt egy második bejegyzést ígér a brief (E05-R14, 2026-08-07)
+
+**Mit mértünk.** Az E05-R14 brief additív `pose_landmarker` bejegyzést írt
+elő a `vision_models` manifest-kulcsba (ugyanaz a kulcs, amit az E05-R12
+hozott létre az ELSŐ, `hand_landmarker` bejegyzéssel). A pre-flightban
+mérve: a validátor (`lib/core/ml/vision_model_manifest.dart:205-211`)
+`if (outputSchema != handLandmarksOutputSchema)` alakban EGYETLEN,
+hardkódolt sémaértéket fogadott el, és a hozzá tartozó teszt
+(`test/tooling/ml_asset_manifest_test.dart:108`, szó szerinti indoklással:
+`"one deferred vision model expected"`) `hasLength(1)`-et várt. Egy második,
+brief-előírt bejegyzés emiatt NEM tudott volna átmenni — sem a validátoron,
+sem a rögzített teszten —, és mindkét fájl KÍVÜL esett az eredeti,
+batch-írt `allowed_paths` listán. Ugyanez a három fájl (a validátor, a
+Python-generátor és a teszt) volt szükséges az ELSŐ bejegyzés
+bevezetéséhez is (E05-R12 `allowed_paths`-a már tartalmazta őket) —
+ugyanaz a minta jelentkezett második alkalommal.
+
+**Miért fontos.** Egy "additív bejegyzés egy meglévő registry-be" brief-
+sor csendben feltételezi, hogy a registry infrastruktúrája (validátor +
+generátor + teszt) MULTI-entry-re lett tervezve. Az ELSŐ bejegyzést
+bevezető kör viszont tipikusan csak AZT az egy esetet teszteli ki
+alaposan — a "több modellt is elfogad" képesség kódkommentben szerepelhet
+szándékként ("a jövőbeli aktiváló kör bővítheti újabb modellekkel"), de a
+tényleges ellenőrző kód (egyenlőség-vizsgálat egyetlen konstanshoz,
+`hasLength(1)`) ennek az ELLENKEZŐJÉT kényszeríti ki, amíg valaki nem
+általánosítja. Ez ugyanaz a hibaosztály, mint amit [[L143]]/[[L147]] az
+ADR-szám-blokkokra mért (a batch-brief a jövőbeli állapotot feltételezi,
+nem méri) — itt a "feltételezett" dolog nem egy szám, hanem egy
+validátor-kód alakja.
+
+**Szabály.** Mielőtt egy kör "additív bejegyzés egy MEGLÉVŐ, megosztott
+registry/manifest-be" feladatot kap, grep-eld ki a registry validátorát és
+a hozzá tartozó tesztet: van-e bennük hardkódolt EGYSZERESSÉGI feltevés
+(egyenlőség egyetlen konstanshoz `!=` helyett halmaz-/registry-tagsággal;
+`hasLength(1)` vagy ezzel ekvivalens darabszám-pin). Ha igen, az
+`allowed_paths` bővítése (a validátor + a generátor + a teszt, additív,
+NEM az első bejegyzés viselkedésének módosításával) dokumentált §0.0
+brief-revízió — nem "lista-tágítás", hanem a mért, tényleges célfájlok
+pótlása egy olyan feladathoz, amit a brief maga már előírt.
+
+## L168 — Egy dedikált „formázd meg" javító-commit nem bizonyítja, hogy MINDEN érintett fájl formázott — a gate-et mindig önállóan, friss klónban kell újrafuttatni (E05-R14, 2026-08-07)
+
+**Mit mértünk.** Az E05-R14 implementer §10.3 handoffja „format: ZÖLD"-öt
+állított, és a branch commit-történetében egy külön, dedikált
+`E05-R14: dart format` commit is szerepelt. A review saját, izolált `/tmp`
+klónjában futtatott `tools/round-gate.sh` mégis PIROSAN állt meg a format
+lépésen: `pose_landmarks.dart:203` egy 82 karakteres sort tartalmazott,
+amit a `dart format --set-exit-if-changed` átformázott volna. A
+`git show <format-commit> --stat` megmutatta, hogy a dedikált
+format-commit HAT MÁSIK fájlt formázott, de `pose_landmarks.dart`-ot NEM
+érintette — a sértő sor tehát változatlanul jelen volt az ELSŐ
+implementációs commit óta, és a „format: ZÖLD" állítás nem lehetett igaz
+abban a pillanatban, amikor leírták.
+
+**Miért fontos.** Egy elkülönült, névre szóló „formázás" commit
+LÁTSZÓLAG erős bizonyíték ("külön lépésben, tudatosan formáztunk"), de
+csak azokra a fájlokra bizonyít bármit, amiket TÉNYLEGESEN megváltoztatott
+— egy fájl, ami már a format-lépés ELŐTT (vagy egy azt KÖVETŐ, nem
+újra-formázott szerkesztésben) formázatlan maradt, jelzés nélkül átcsúszik.
+Ez [[L01]] (zöld gate nem bizonyíték) egy konkrét alesete: a commit-üzenet
+szövege ("dart format") ugyanúgy nem helyettesíti a tényleges,
+újrafuttatott ellenőrzést, mint egy szöveges "minden teszt zöld" állítás.
+
+**Szabály.** A review SOSEM fogadja el a formázás/lint-státuszt a
+commit-történet vagy a handoff szövege alapján — mindig önállóan,
+IZOLÁLT, friss klónban futtatja újra a TELJES gate-et (`tools/round-gate.sh`,
+csonkítatlanul), és csak ennek a friss futásnak a kimenetét tekinti
+bizonyítéknak.
+
+## L169 — Egy privacy/security regressziós őr, amit a brief „az EGYETLEN gépi őrnek" nevez, pozitív, ZÁRT kulcshalmazt pinneljen — egy negatív alszó-szűrő tetszőleges, a mintát elkerülő új bemenettel megkerülhető (E05-R14, 2026-08-07)
+
+**Mit mértünk.** Az E05-R14 `pose_privacy_audit_test.dart` „the raw-name
+allow-list maps onto retained IDs only" cellája két állítást tett: (1) a
+`poseLandmarkIdByRawName` ÉRTÉK-halmaza pontosan a 9 megtartott ID-t
+fedi (halmaz-egyenlőség — egy ÚJ, meglévő ID-ra mutató ALIAS nem rontja
+el), és (2) egyetlen nyers KULCS sem tartalmazhatja a hat tiltott alszó
+(`eye/nose/mouth/ear/face/lip`) egyikét sem. A dedikált security-review
+egy, az implementer és az orchestrátor SAJÁT próbájától (mindkettő
+`'nose'`-t injektált) FÜGGETLEN mutációval demonstrálta a rést:
+`'chin': PoseLandmarkId.neckReference` — a `chin` valódi arc-pont, de a
+hat tiltott alszó egyikét sem tartalmazza — a TELJES 155-tesztes
+vision-suite-ot zölden hagyta, miközben egy arc-koordináta ténylegesen
+bekerült az audit-felszínbe `neckReference` álnéven. A javítás
+(`poseLandmarkIdByRawName.keys.toSet()` pinnelve egy explicit, pontos
+9-elemű snapshotra + `.length == PoseLandmarkId.values.length`
+1:1-kikényszerítés) a security-reviewer SAJÁT `chin`-mutációját
+harmadszor, függetlenül megismételve pontosan a várt cellát buktatta meg
+(154/155 zöld, 1 piros).
+
+**Miért fontos.** Egy alszó-alapú (vagy bármilyen minta-alapú) negatív
+szűrő csak azokat a konkrét szavakat véd, amikre a szerzője gondolt — a
+valós landmark-elnevezési térben tetszőlegesen sok, a mintát elkerülő,
+mégis ténylegesen arc-adatot jelentő név létezhet (`chin`, `jaw`,
+`forehead`, `cheek`, `iris`...). Ez ugyanaz a szerkezeti hiba, mint
+[[L166]] (a szállított fixture-mátrix csak a szerzője által elképzelt
+eseteket fedi) — itt a "fixture" maga a tiltólista.
+
+**Szabály.** Ha egy teszt a brief szövege szerint „az EGYETLEN gépi őr"
+egy privacy/security határra, a review ellenőrizze, hogy a mechanizmus
+POZITÍV, ZÁRT halmaz-pin (a pontos elvárt kulcs-/érték-készlet, plusz egy
+számossági/1:1 kikényszerítés), NEM egy negatív minta-/alszó-szűrő. Egy
+zárt halmaz-pin bármilyen új, nem jóváhagyott bemenetet elutasít, a
+nevétől FÜGGETLENÜL; egy negatív szűrő csak azt utasítja el, amire
+kifejezetten felkészítették. Adversarial verifikációnál használj a
+korábbi próbától ELTÉRŐ konkrét mutációt (ne ugyanazt a nevet
+injektáld, amit az implementer vagy egy korábbi reviewer már tesztelt) —
+két KÜLÖNBÖZŐ, ugyanarra a mechanizmusra célzó próba erősebb bizonyíték,
+mint ugyanannak a próbának a megismétlése. Rokon: [[L166]].
