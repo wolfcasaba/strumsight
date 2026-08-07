@@ -105,12 +105,25 @@ mi a mérce, ami fölött a kísérlet „production-candidate"-nek minősülhet
    összetévesztése pontosan az a hiba, amit a §32.3 false-feedback-gate
    elve kizár. A `--self-test` kapcsoló szintetikus bemeneten bizonyítja a
    metrika-számítást ÉS a fenti táblázat mean-anchor-error határának
-   helyes kezelését a küszöb alatt/rajta/fölötte hármason (kör-brief §6.2):
-   `0.029` → `experimental`, `0.030` → `experimental` (a határ a
-   **szigorúbb** oldalhoz tartozik — pontosan a küszöbön még NEM elég jobb,
-   mint a rendszer saját maga), `0.031` → `production-candidate` (a másik
-   két feltétel — failure_rate és minimum-korpusz — a szintetikus
-   self-test-ben rögzített, teljesülő értéken tartva eközben).
+   helyes kezelését a küszöb alatt/rajta/fölötte hármason (kör-brief §6.2).
+
+   **A táblázat a `≤` relációt rögzíti (1. pont), tehát a HATÁR a
+   MINŐSÍTŐ (jobb/megfelelő) oldalhoz tartozik** — pontosan úgy, ahogy a
+   fenti indoklás alapjául szolgáló R16 `CalibrationLossMachine` a saját
+   határát kezeli (`isLost => drift > lostDriftBound`: a `drift ==
+   lostDriftBound` pillanat MÉG NEM `lost`, a szigorú `>` csak fölötte
+   billen át). Ugyanez itt: `0.029` → a mean-tengely önmagában
+   **megfelel** (`≤ 0.030`), `0.030` → a mean-tengely **pontosan a
+   határon még megfelel** (`0.030 ≤ 0.030`), tehát MINDKETTŐ esetben a
+   döntés `production-candidate`, HA a másik két tengely (p95, failure
+   rate) is a saját küszöbén belül marad a szintetikus self-testben
+   rögzített, megfelelő értéken; `0.031` → a mean-tengely **már NEM felel
+   meg** (`0.031 > 0.030`), a döntés `experimental`, függetlenül a másik
+   két tengelytől. Egy korábbi szövegváltozat ezt megfordítva írta le
+   (a határt a NEM-minősítő oldalhoz kötve) — ez ellentmondott volna a
+   fenti `≤ 0.030` táblázatnak és az R16-precedensnek is; a
+   `decision()` implementációnak ezt a — jelen — irányt kell követnie,
+   nem a korábbi (hibás) leírást.
 
 5. **A hamis geometria kockázata — miért rosszabb, mint ha nincs detektor.**
    A ma szállított útnak van talaja: a manual anchor a FELHASZNÁLÓ saját

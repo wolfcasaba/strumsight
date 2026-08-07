@@ -190,18 +190,27 @@ Listán kívül → `stopped`.
 
 ### 6.2 Küszöb-mátrix — az átfordítási küszöb három cellája
 
+**Javítva (javító kör 1 leletéből, lásd a review BLOCKER-1-jét): az eredeti
+tábla a below/at/above → experimental/experimental/production-candidate
+irányt írta elő, ami egy ERROR-metrikánál (ahol az ALACSONYABB érték a
+JOBB) pont fordítva minősít — a rosszabb (magasabb hibájú) detektort
+jutalmazta volna. Az ADR 0187 Döntés 2 táblája `≤ 0.030`-at ír (a határ a
+MINŐSÍTŐ oldalhoz tartozik, az R16 `isLost => drift > lostDriftBound`
+mintáját követve — lásd az ADR javított Döntés 4. pontját). Az alábbi
+tábla ezt az irányt tükrözi.**
+
 A §5.2 átfordítási küszöbeit a `--self-test` szintetikus bemenetén kell mérni,
 a küszöb **alatt / pontosan rajta / fölötte**. Az ADR 0187 Döntés 2/4. pontja
 a mean anchor error küszöböt **0.030**-ban rögzíti, `step=0.001`-gyel
 (`python3 -c "print(round(0.03-0.001,3)); print(round(0.03+0.001,3))"` →
-`0.029` / `0.031`), a másik két feltételt (failure_rate, minimum-korpusz)
-végig teljesülő értéken tartva a szintetikus sweep alatt:
+`0.029` / `0.031`), a másik két feltételt (p95, failure_rate) végig
+teljesülő (küszöbön belüli) értéken tartva a szintetikus sweep alatt:
 
 | Cella | Bemenet (mean anchor error, normalizált) | Elvárt döntés |
 |---|---|---|
-| alatt | **0.029** | `experimental` |
-| rajta | **0.030** | `experimental` (a határ a **szigorúbb** oldalhoz tartozik — pontosan a küszöbön még nem jobb, mint a rendszer saját maga) |
-| fölött | **0.031** | `production-candidate` (a másik két feltétel — p95 ≤ 0.050, failure_rate ≤ 0.05 — a self-testben teljesül) |
+| alatt | **0.029** | `production-candidate` (a mean-tengely önmagában **megfelel**, `0.029 ≤ 0.030`, és a másik két tengely is a küszöbön belül van a self-testben) |
+| rajta | **0.030** | `production-candidate` (a határ a **minősítő** — `≤` — oldalhoz tartozik: `0.030 ≤ 0.030` MÉG megfelel, az R16 `drift > lostDriftBound` mintájával konzisztensen, ahol a pontos határérték is a „jó" oldalon marad) |
+| fölött | **0.031** | `experimental` (a mean-tengely már NEM felel meg, `0.031 > 0.030`, függetlenül a másik két tengelytől) |
 
 ## 7. Kötelező ellenőrzések
 
