@@ -409,9 +409,7 @@ void main() {
         final calibration = GuitarCalibration(
           nutAnchor: NormalizedPoint(nut.x, nut.y),
           bridgeAnchor: NormalizedPoint(bridge.x, bridge.y),
-          neckPolygon: [
-            for (final p in pts) NormalizedPoint(p.x, p.y),
-          ],
+          neckPolygon: [for (final p in pts) NormalizedPoint(p.x, p.y)],
           createdAt: DateTime.utc(2026, 8, 7),
         );
 
@@ -463,7 +461,8 @@ void main() {
       expect(
         accepted,
         greaterThan(100),
-        reason: 'seed=$seed: only $accepted of $trials trials '
+        reason:
+            'seed=$seed: only $accepted of $trials trials '
             'produced a buildable mapper — too few to assert',
       );
       // Note: the rejected count is not asserted; a healthy sweep
