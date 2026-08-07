@@ -531,6 +531,15 @@ class GuitarCalibrationController extends Notifier<GuitarCalibrationState> {
   /// §0.0 R5 Save gate (self-comparison): draft vs itself. Only
   /// [CalibrationInvalidationReason.degenerateGeometry] can fire — the camera/
   /// orientation/zoom/timestamp triggers are structurally unreachable.
+  ///
+  /// The geometry check is the union of two layers:
+  ///
+  /// 1. [CalibrationValidity.evaluate] → its `_isDegenerate` (R10) only
+  ///    catches vertex count + nut↔bridge separation.
+  /// 2. [isGeometryDegenerate] (this controller, §0.0 R4) adds the
+  ///    collinearity and zero-area polygon checks.
+  ///
+  /// Both must agree the draft is valid for Save to be enabled.
   static CalibrationInvalidationReason? _selfEvaluate(
     NormalizedPoint nut,
     NormalizedPoint bridge,
@@ -561,9 +570,15 @@ class GuitarCalibrationController extends Notifier<GuitarCalibrationState> {
       currentZoom: context.zoom,
       now: now,
     );
+    final extendedGeometryCheck = isGeometryDegenerate(
+      nutAnchor: nut,
+      bridgeAnchor: bridge,
+      neckPolygon: polygon,
+    );
     // Only the geometric reason can survive a self-comparison (R5).
-    if (reason == CalibrationInvalidationReason.degenerateGeometry) {
-      return reason;
+    if (reason == CalibrationInvalidationReason.degenerateGeometry ||
+        extendedGeometryCheck) {
+      return CalibrationInvalidationReason.degenerateGeometry;
     }
     return null;
   }

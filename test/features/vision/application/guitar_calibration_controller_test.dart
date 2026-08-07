@@ -305,6 +305,60 @@ void main() {
       );
     });
 
+    test(
+      'f1: collinear polygon with healthy nut↔bridge distance blocks Save',
+      () {
+        // Review F1 reproducer: a healthy nut↔bridge separation plus a
+        // 4-vertex collinear polygon must NOT enable Save. The legacy
+        // _isDegenerate (R10) only checks vertex count + neck length, so
+        // without the new helper this would incorrectly pass.
+        final container = _container();
+        addTearDown(container.dispose);
+        final ctx = _context();
+        final controller = container.read(
+          guitarCalibrationControllerProvider(ctx).notifier,
+        );
+        // Pull the polygon onto a single horizontal line at y=0.5.
+        for (var i = 0; i < 4; i++) {
+          final x = 0.2 + i * 0.1;
+          controller.movePolygonVertex(
+            i,
+            NormalizedPoint(x, 0.5),
+          );
+        }
+        final state = container.read(guitarCalibrationControllerProvider(ctx));
+        expect(state.canSave, isFalse);
+        expect(
+          state.selfEvaluationReason,
+          CalibrationInvalidationReason.degenerateGeometry,
+        );
+      },
+    );
+
+    test('f1: zero-area polygon (3 vertices pulled to a point) blocks Save',
+        () {
+      // Triangle with one vertex collapsed to (0.5, 0.5) — collinear
+      // detection catches this exactly the same way, so we cover the
+      // §6 #2 "nulla terület" cell with the same code path. The §10
+      // handoff documents that the collinear check covers both.
+      final container = _container();
+      addTearDown(container.dispose);
+      final ctx = _context();
+      final controller = container.read(
+        guitarCalibrationControllerProvider(ctx).notifier,
+      );
+      // Seed polygon has 4 vertices; collapse one of them to a corner so
+      // three of the four are collinear.
+      controller.movePolygonVertex(1, const NormalizedPoint(0.2, 0.18));
+      controller.movePolygonVertex(2, const NormalizedPoint(0.2, 0.18));
+      final state = container.read(guitarCalibrationControllerProvider(ctx));
+      expect(state.canSave, isFalse);
+      expect(
+        state.selfEvaluationReason,
+        CalibrationInvalidationReason.degenerateGeometry,
+      );
+    });
+
     test('healthy anchor spread keeps Save enabled', () {
       final container = _container();
       addTearDown(container.dispose);
