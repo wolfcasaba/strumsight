@@ -1,13 +1,36 @@
 # E05-R10 — Review
 
 Brief: docs/rounds/e05-r10-calibration-domain-and-store.md
-Diff: `git diff 539d346...codex/e05-r10-calibration-domain-and-store` (post-rebase tip `c0701db`)
+Diff: `git diff 539d346...codex/e05-r10-calibration-domain-and-store` (pre-fix tip `c0701db`, javító kör után `7dbaed1`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUESTED** (F1 nyitva — javító kör szükséges)
+Verdikt: **APPROVED** (javító kör után, mindkét lelet függetlenül újra-ellenőrizve)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 (F1, OPEN) · MINOR: 1 (F2, OPEN) · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 (F1, FIXED) · MINOR: 1 (F2, FIXED) · NOTE: 1 (nem blokkoló)
+
+## Javító kör után — független újra-ellenőrzés
+
+Motor: MiniMax M3 (a round eredeti implementere — a §2 motor-eszkaláció
+szerinti ELSŐ javító kör). 3 commit: `f7fff27` (F1 teszt), `c179acc` (F2
+fix), `7dbaed1` (format). Scope-audit: kizárólag a két megjelölt fájl
+módosult (`git diff efddabb..7dbaed1 --stat`) — nincs bővítés.
+
+Mindkét leletet **frissen klónozott, izolált `/tmp` másolatban, saját kézzel
+újra megmértem** (nem az implementer önjelentésére hagyatkozva):
+
+- **F1:** a `_migrateToCurrent` throw-ágát a javítás UTÁN is ideiglenesen
+  `return json;`-re cserélve, a teljes `vision_calibration_repository_test.dart`
+  lefuttatva — pontosan **egyetlen** teszt bukott (az új „cell vN+1b"), az
+  összes többi (16) zöld maradt. A mutáció visszaállítva, a teljes suite
+  újra zöld. Ez bizonyítja: a javítás ténylegesen lezárja a korábban
+  mutáció-kill próbával igazolt vakfoltot.
+- **F2:** külön próba-teszttel (`_review_probe_immutability_test.dart`,
+  eldobva) igazolva — `GuitarCalibration(...).neckPolygon.add(...)` most
+  `UnsupportedError`-t dob (korábban csendben sikerült volna).
+- **Gate:** a teljes `tools/round-gate.sh test/features/vision test/core/storage`
+  friss izolált klónban (nem a megosztott munkapéldányban) újra lefuttatva a
+  javító commit tipjén (`7dbaed1`) — mind a 7 lépés ZÖLD.
 
 Örökség-eset (ADR 0087 §0.2): a pre-flight és a MiniMax M3 implementer-futás
 egy korábbi, jelzés nélkül megszakadt session alatt már lezajlott (`done`
@@ -78,8 +101,9 @@ ellenőrzést a brief szerinti diff-listával).
   és `storage.document.record_skipped` a loggon.
 - **Ellenőrzés:** az új teszt PIROS a fent leírt fallback-mutáción, ZÖLD a
   jelenlegi kódon.
-- **Státusz:** **OPEN** — javító kör szükséges (a próba-teszt e jelentéssel
-  együtt átadva az implementernek, beemelendő a permanens suite-ba).
+- **Státusz:** **FIXED** (`f7fff27`) — a próba-teszt szó szerint bekerült a
+  permanens suite-ba („cell vN+1b"). Függetlenül újra-ellenőrizve: a fenti
+  mutáció a javítás UTÁN is elvégezve, kizárólag ez az egy teszt bukott.
 
 ### F2 — MINOR — `GuitarCalibration.neckPolygon` doc-comment „Immutable"-t
   állít, de a lista nincs védve külső mutációtól
@@ -103,8 +127,12 @@ ellenőrzést a brief szerinti diff-listával).
   az initializer-listában, a `speed_builder_state.dart` mintáját követve.
 - **Ellenőrzés:** meglévő equality-tesztek változatlanul zöldek maradnak
   (az `UnmodifiableListView`/`List.unmodifiable` elem-egyenlőségre transzparens).
-- **Státusz:** **OPEN** — javító kör szükséges (ugyanabban a javító körben,
-  mint F1, egysoros változás).
+- **Státusz:** **FIXED** (`c179acc`) — a `const` a konstruktorról levéve (a
+  repóban egyetlen hívás sem konstruálta korábban sem `const`-ként, mert a
+  `createdAt: DateTime` érték úgysem const-kiértékelhető — nincs viselkedés-
+  változás egyetlen hívási helyen sem), `neckPolygon` most
+  `List<NormalizedPoint>.unmodifiable(...)`. Függetlenül újra-ellenőrizve:
+  `neckPolygon.add(...)` `UnsupportedError`-t dob.
 
 ### N1 — NOTE — a „hiányzó schemaVersion mező" ág (nem „hiányzó dokumentum") szintén tesztelt-len
 
@@ -130,13 +158,13 @@ ellenőrzést a brief szerinti diff-listával).
 | test test/core/storage | zöld | ✅ (ua.) |
 | architecture | zöld (12 allowlisted deviation — változatlan, a kör egyik allowed_path-ja sem architektúra-konfig) | ✅ |
 | secrets / l10n | zöld | ✅ |
-| CI — Full Gate (no APK), pre-rebase tip `9449733` | success | ✅ [31149519825](https://github.com/wolfcasaba/strumsight/actions/runs/31149519825) — **a rebase után újra-dispatch szükséges** az új `c0701db` (majd a javító kör utáni) tipre, ADR 0086 §2 szerint; ezt az orchestrátor a review lezárása után indítja |
+| CI — Full Gate (no APK), pre-rebase/pre-fix tip `9449733` | success | ✅ [31149519825](https://github.com/wolfcasaba/strumsight/actions/runs/31149519825) — historikus bizonyíték; **a rebase + javító kör után új tipre (`7dbaed1`) friss dispatch szükséges**, ADR 0086 §2 szerint — az orchestrátor a review lezárása után indítja |
+| format/analyze/test/architecture/secrets/l10n, javító kör UTÁNI tip (`7dbaed1`) | zöld mind a 7 lépés | ✅ friss izolált `/tmp` klón, saját futás |
 
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-F1 nyitva → **merge tilos**, amíg zárva nincs. Javító kör indul (ugyanaz a
-motor — MiniMax M3 — az első javító kör, a motor-eszkaláció táblája szerint),
-a findings-lista (F1 + F2) a promptban. Javítás után: gate-ek újrafuttatása
-izolált klónban, a review frissítése APPROVED-ra a javító commit SHA-jával,
-friss CI-dispatch az új tipre, majd squash-merge.
+F1 és F2 lezárva, függetlenül újra-ellenőrizve, 0 nyitott BLOCKER/MAJOR/MINOR.
+Fennmaradó teendő: friss CI-dispatch a javító commit tipjére (`7dbaed1`) —
+Full Gate/Build APK a `round-ci-plan.py` terve szerint + Router CI (a diff
+érinti a `docs/rounds/**`-t) —, majd exact-SHA zöld után squash-merge.
