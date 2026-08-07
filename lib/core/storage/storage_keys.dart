@@ -54,6 +54,12 @@ abstract final class StorageKeys {
   static const String visionSetupProfile = 'ss.vision.setup_profile';
   static const String visionCamera = 'ss.vision.camera';
 
+  /// Versioned, normalized-space camera + guitar calibration bundle
+  /// (SDD Ch6 §13.3, E05-R10). Separate from the setup profile / camera
+  /// preference keys above — a calibration is the per-session geometry,
+  /// the setup preferences are the camera framing defaults.
+  static const String visionCalibration = 'ss.vision.calibration';
+
   // --- AI tutor ------------------------------------------------------------
   /// Versioned documents, recovery index, and inspectable memory facts.
   static const String tutorConversationDocuments =
@@ -112,6 +118,7 @@ abstract final class StorageKeys {
     practiceHistoryV2,
     visionSetupProfile,
     visionCamera,
+    visionCalibration,
     tutorConversationDocuments,
     tutorConversationIndex,
     tutorMemoryFacts,
