@@ -356,7 +356,12 @@ def _read_jsonl(path: str) -> list[FrameSample]:
             try:
                 samples.append(parse_frame(line))
             except ValueError as e:
-                raise SystemExit(f"bad input at line {lineno}: {e}") from e
+                # Write to stderr (CLI convention) and exit with the
+                # documented EXIT_BAD_INPUT (3) — NOT the implicit
+                # exit-code-1 from `raise SystemExit("...")`. The
+                # README and the EXIT_* constants advertise 3.
+                print(f"bad input at line {lineno}: {e}", file=sys.stderr)
+                sys.exit(EXIT_BAD_INPUT)
     return samples
 
 
