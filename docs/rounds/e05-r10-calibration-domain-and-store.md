@@ -1,6 +1,6 @@
 # E05-R10 — Camera és guitar calibration domain + verziózott tárolás
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight §0.0 lezárva 2026-08-07, kód olvasva: origin/main @ `539d346`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 10; §13.3–13.4, §28
 - **Branch:** `codex/e05-r10-calibration-domain-and-store`
 - **Előfeltétel:** **E05-R08 merge**
@@ -28,11 +28,10 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R08 merge; olvasd újra
-> `lib/core/storage/storage_keys.dart` (`ss.` névtér, `LegacyStorageKeys`),
-> `storage_migrator.dart` (verziózott envelope + karantén) és egy meglévő
-> verziózott repository-t (`lib/features/practice/data/`). Nincs ÚJ ADR
-> (0164/0166 bővítése). PREPARED→PLANNING, brief commit előbb.
+> ⚠ **Pre-flight LEZÁRVA (§0.0, R1–R6):** `origin/main` @ `539d346` (HEAD ==
+> origin/main, nincs drift, nincs párhuzamos inflight kör) + E05-R08 merge
+> megerősítve. Egy javítás (elavult ADR-hivatkozás) és öt megerősítés/
+> pontosítás — egyik sem igényel ÚJ ADR-t. Részletek §0.0. PLANNING→dispatch.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -45,7 +44,90 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**Mérve `origin/main` @ `539d346` (E05-R09 után), orchestrátor Claude Sonnet 5,
+2026-08-07.** Előfeltétel (E05-R08 merge) megerősítve, working tree tiszta,
+nincs párhuzamos inflight kör (`.pipeline/inflight/` csak ennek a körnek a
+markerét tartalmazza). Hat mért tétel — egy javítás, öt megerősítés/
+pontosítás —, egyik sem igényel ÚJ ADR-t.
+
+**R1 — ADR-hivatkozás elavult (javítva).** A pre-flight callout és az §5.3.
+döntés „ADR 0166"-ra, a fejléc „0164"-re hivatkozott. `ls docs/adr | grep
+'0164\|0166'` üres — az E05-R01 az eredeti `0161–0166` blokkot `0178–0183`-ra
+számozta át. A két döntés ma [`ADR 0181` — „Vision manual calibration
+fallback"](../adr/0181-vision-manual-calibration-fallback.md) (a kézi
+kalibráció a production út — pontosan ennek a körnek az infrastruktúrája) és
+[`ADR 0183` — „Vision no-raw-frame persistence"](../adr/0183-vision-no-raw-frame-persistence.md)
+(nincs raw kép a perzisztált profilban). Mindkét hivatkozás javítva a §5.3-ban
+és a fejlécben; a bővítés célja változatlan, nincs ÚJ ADR.
+
+**R2 — megerősítve, egy release-mód figyelmeztetéssel.** A `NormalizedPoint`
+pontosan úgy létezik, ahogy a brief állítja:
+`lib/core/camera/camera_coordinate_space.dart:73`, `core/camera/`-ban (nem
+feature-kódban), tehát közvetlenül importálható a domainbe. **DE** a
+tartományellenőrzése (`x∈[0,1]`, `y∈[0,1]`) kizárólag `assert`-tel történik
+(`camera_coordinate_space.dart:75-76`), ami **release buildben lefut nélkül
+marad** — azonos osztály, mint az R07 review carried-forward MAJOR-ja
+(`docs/reviews/e05-r07-frame-transform-and-overlay-coordinates-security.md`:
+„assert-only validáció", kötelező R13/R15/R24 előtt). A 6. acceptance-cella
+(degenerált polygon →
+karantén) ezért **nem** támaszkodhat a `NormalizedPoint` konstruktorára: a
+`vision_calibration_codec.dart`-nak a meglévő
+`lib/core/foundation/json_validation.dart` explicit helpereit kell használnia
+(`requireDouble(json, field, min: 0, max: 1)` mintára — lásd a fájl teljes
+API-ját), ugyanúgy, ahogy minden más perzisztált modell teszi
+(`test/core/storage/persisted_record_validation_test.dart` precedens). Ez
+biztosítja, hogy egy tartományon kívüli/degenerált koordináta release
+buildben is `JsonRecordException`-t dobjon, ne csendben építsen érvénytelen
+objektumot.
+
+**R3 — megerősítve: a „jövőbeli verzió" ág precedense már létezik.** A
+migrációs mátrix 4. cellája (vN+1 → kontrollált setup-kérés, nem néma
+félreolvasás) nem új mintát igényel:
+`lib/core/storage/json_document_store.dart:140-144`
+(`JsonDocumentStore._decodeEnvelope`) már pontosan ezt teszi a dokumentum-
+burok szintjén — `version > documentSchemaVersion` → `_markCorrupt(raw,
+'future_version')`, sosem dob és sosem olvas félre. Az új
+`vision_calibration_codec.dart`/`vision_calibration_repository.dart` ugyanezt
+az idiómát kövesse a saját séma-verziójára, ne találjon ki másikat.
+
+**R4 — pontosítás: a „record-szintű karantén" a repó KÉT különböző mintája
+közül melyiket jelenti.** A repóban ma két, egymástól eltérő korrupció-kezelés
+él: (a) **dokumentum-szintű, bájt-megőrző karantén**
+(`JsonDocumentStore._corrupt` → `StorageKeys.quarantineOf(key)`, a teljes
+dokumentum kerül külön kulcs alá, ha a felső szintű JSON nem dekódolható); (b)
+**rekord-szintű, napló-alapú kihagyás** (`JsonCollectionStore.read()`: egy
+rekord, amelynek `fromJson`-ja `JsonRecordException`-t dob, kimarad a listából
+egy `storage.document.record_skipped` logüzenettel, a bájtjai nem
+maradnak meg). A brief 4. acceptance-cellája („csonka JSON / hibás típus /
+degenerált polygon → az érintett rekord karanténba kerül, a többi rekord
+olvasható marad") a **(b) mintát** írja elő rekord-granularitáson — ez a
+meglévő `JsonCollectionStore` + `requireX`-helperek kombinációjával
+közvetlenül megvalósítható (pontosan úgy, ahogy a `practice`/`songs`/
+`setlists` dokumentumok teszik), **nem** igényel új, bájt-megőrző per-record
+quarantine-kulcsot. A „csonka JSON" eset (a teljes dokumentum nem
+dekódolható) az (a) mintán fut — ez a repository két szintje, nem egy.
+
+**R5 — megerősítve: a „setup-profil" mező a meglévő, négyértékű
+`VisionSetupProfile`-ra hivatkozik.**
+`lib/features/vision/domain/vision_setup_profile.dart:6-10` —
+`leftHandFocus`/`rightHandFocus`/`fullUpperBody`/`practiceBalanced`. Az SDD
+§13.2 hat profilt sorol fel; a `songPerformance`/`experimentalFretboard` az
+E05-R08 pre-flight §0.0 (5) pontja szerint explicit deferred. A
+`CameraCalibrationProfile` ezt a meglévő enumot használja változatlanul — új
+érték hozzáadása ebben a körben scope-on kívüli.
+
+**R6 — megerősítve: a Validity-mátrix öt cellája az SDD §13.4 hét
+kiváltójának tudatosan szűkített, ma elérhető részhalmaza.** Az SDD §13.4
+hét invalidation-triggert sorol fel; a brief acceptance #5 öt cellát kér
+(kameraváltás/orientation/zoom/lejárt időbélyeg/degenerált geometria). A
+hiányzó kettő ma nem mérhető: „tracking confidence tartósan alacsony" élő
+sessiont és tracking-et igényel (R16, ebben a körben explicit **TILOS**);
+„felhasználó új hangszert választ" egy `Instrument`-azonosító domain-fogalmat
+igényelne, ami **nem létezik** (`grep -rn "class Instrument\|enum
+Instrument" lib/` üres). A hetedik („app verzió/séma breaking változás") nem
+a `CalibrationValidity` dolga — azt a **migrációs mechanizmus** (acceptance
+#2, R3 fent) fedi, külön rétegen. A brief öt cellája tehát a helyes, ma
+elérhető metszet — nem hiányos mérce.
 
 ## 1. Cél
 
@@ -98,7 +180,7 @@ raw kép/preview mentése, más feature storage-kulcsa.
 2. **Érvénytelen profil nem használható csendben.** A `load` **soha nem ad
    vissza** „majdnem jó" profilt: vagy valid, vagy explicit invalidation
    reasonnel érvénytelen. **NEM elfogadható:** null-visszatérés magyarázat nélkül.
-3. **Nincs raw kép a profilban** (ADR 0166) — sem base64 preview, sem thumbnail.
+3. **Nincs raw kép a profilban** (ADR 0183) — sem base64 preview, sem thumbnail.
    A tesztnek ezt **kimeneti szinten** kell mérnie (a szerializált JSON-ban nincs
    `image`/`png`/`jpeg`/base64-gyanús mező).
 4. **Az anchorok normalizált térben** tárolódnak (R07 `NormalizedPoint`), nem
