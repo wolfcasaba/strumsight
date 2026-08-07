@@ -119,8 +119,7 @@ abstract final class Polygon2 {
       final b = vertices[j];
       final intersects =
           ((a.y > point.y) != (b.y > point.y)) &&
-          (point.x <
-              (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x);
+          (point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x);
       if (intersects) inside = !inside;
     }
     return inside;

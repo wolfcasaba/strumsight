@@ -110,88 +110,79 @@ void main() {
       );
     });
 
-    test(
-      'BLOCKER-1: rejects calibration whose homography blows up in the '
-      'camera frame (projective row blind spot)',
-      () {
-        // Exact reproduction from the round review (security §1.1 +
-        // BLOCKER-1 in the functional review): a completely VALID
-        // calibration — non-degenerate polygon, distinct anchors,
-        // well-formed quad — whose solved homography has a projective
-        // row that vanishes inside the camera-normalized [0,1]×[0,1]
-        // frame. The 2×2-only condition metric reports cond ≈ 1.3
-        // (well below the 1e3 threshold), so without the
-        // `_checkFrameBounded` guard this calibration builds
-        // successfully; then `mapPoint((1, 0.9))` returned
-        // `(u, v) ≈ (-236.8, -1022.9)` with `confidence ≈ 0.933`
-        // — silent garbage, exactly the brief §5.2 prohibition.
-        expect(
-          () => GuitarLandmarkMapper.fromCalibration(
-            GuitarCalibration(
-              nutAnchor: const NormalizedPoint(
-                0.6592590759685811,
-                0.2522051211620375,
-              ),
-              bridgeAnchor: const NormalizedPoint(
-                0.9292477426477258,
-                0.0006300933582047419,
-              ),
-              neckPolygon: const [
-                NormalizedPoint(
-                  0.6773685401937354,
-                  0.2830013442599198,
-                ),
-                NormalizedPoint(0.8922333948140921, 0.0),
-                NormalizedPoint(1.0, 0.4040328877538206),
-                NormalizedPoint(0.3663554067827715, 0.0),
-              ],
-              createdAt: DateTime.utc(2026, 8, 7),
+    test('BLOCKER-1: rejects calibration whose homography blows up in the '
+        'camera frame (projective row blind spot)', () {
+      // Exact reproduction from the round review (security §1.1 +
+      // BLOCKER-1 in the functional review): a completely VALID
+      // calibration — non-degenerate polygon, distinct anchors,
+      // well-formed quad — whose solved homography has a projective
+      // row that vanishes inside the camera-normalized [0,1]×[0,1]
+      // frame. The 2×2-only condition metric reports cond ≈ 1.3
+      // (well below the 1e3 threshold), so without the
+      // `_checkFrameBounded` guard this calibration builds
+      // successfully; then `mapPoint((1, 0.9))` returned
+      // `(u, v) ≈ (-236.8, -1022.9)` with `confidence ≈ 0.933`
+      // — silent garbage, exactly the brief §5.2 prohibition.
+      expect(
+        () => GuitarLandmarkMapper.fromCalibration(
+          GuitarCalibration(
+            nutAnchor: const NormalizedPoint(
+              0.6592590759685811,
+              0.2522051211620375,
             ),
-          ),
-          throwsA(
-            isA<GuitarLandmarkMapperSetupException>().having(
-              (e) => e.reason,
-              'reason',
-              GuitarLandmarkMapperSetupFailure.unstableMapping,
+            bridgeAnchor: const NormalizedPoint(
+              0.9292477426477258,
+              0.0006300933582047419,
             ),
+            neckPolygon: const [
+              NormalizedPoint(0.6773685401937354, 0.2830013442599198),
+              NormalizedPoint(0.8922333948140921, 0.0),
+              NormalizedPoint(1.0, 0.4040328877538206),
+              NormalizedPoint(0.3663554067827715, 0.0),
+            ],
+            createdAt: DateTime.utc(2026, 8, 7),
           ),
-        );
-      },
-    );
+        ),
+        throwsA(
+          isA<GuitarLandmarkMapperSetupException>().having(
+            (e) => e.reason,
+            'reason',
+            GuitarLandmarkMapperSetupFailure.unstableMapping,
+          ),
+        ),
+      );
+    });
 
-    test(
-      'BLOCKER-1: well-conditioned fixture stays inside the sanity bound',
-      () {
-        // Sanity guard for the OTHER direction — the bound
-        // (guitarSpaceSanityBound = 10.0) must NOT eat legitimate
-        // calibrations. The front × medium fixture is the
-        // best-conditioned one in the test corpus; its five sample
-        // points must all map to magnitudes well below 10.0.
-        final mapper = GuitarLandmarkMapper.fromCalibration(
-          frontMediumCalibration(),
-        )!;
-        const samples = <NormalizedPoint>[
-          NormalizedPoint(0.0, 0.0),
-          NormalizedPoint(1.0, 0.0),
-          NormalizedPoint(0.0, 1.0),
-          NormalizedPoint(1.0, 1.0),
-          NormalizedPoint(0.5, 0.5),
-        ];
-        for (final p in samples) {
-          final mapped = mapper.mapPoint(normalized: p, visibility: 0.95)!;
-          final magnitude = math.sqrt(
-            mapped.uv.u * mapped.uv.u + mapped.uv.v * mapped.uv.v,
-          );
-          expect(
-            magnitude,
-            lessThan(guitarSpaceSanityBound),
-            reason:
-                'front × medium sample $p mapped to (${mapped.uv.u}, ${mapped.uv.v}); '
-                'this should be nowhere near the sanity bound',
-          );
-        }
-      },
-    );
+    test('BLOCKER-1: well-conditioned fixture stays inside the sanity bound', () {
+      // Sanity guard for the OTHER direction — the bound
+      // (guitarSpaceSanityBound = 10.0) must NOT eat legitimate
+      // calibrations. The front × medium fixture is the
+      // best-conditioned one in the test corpus; its five sample
+      // points must all map to magnitudes well below 10.0.
+      final mapper = GuitarLandmarkMapper.fromCalibration(
+        frontMediumCalibration(),
+      )!;
+      const samples = <NormalizedPoint>[
+        NormalizedPoint(0.0, 0.0),
+        NormalizedPoint(1.0, 0.0),
+        NormalizedPoint(0.0, 1.0),
+        NormalizedPoint(1.0, 1.0),
+        NormalizedPoint(0.5, 0.5),
+      ];
+      for (final p in samples) {
+        final mapped = mapper.mapPoint(normalized: p, visibility: 0.95)!;
+        final magnitude = math.sqrt(
+          mapped.uv.u * mapped.uv.u + mapped.uv.v * mapped.uv.v,
+        );
+        expect(
+          magnitude,
+          lessThan(guitarSpaceSanityBound),
+          reason:
+              'front × medium sample $p mapped to (${mapped.uv.u}, ${mapped.uv.v}); '
+              'this should be nowhere near the sanity bound',
+        );
+      }
+    });
   });
 
   group('GuitarLandmarkMapper.mapPoint', () {
