@@ -3,17 +3,48 @@
 Brief: `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`
 Diff: `git diff origin/main...minimax/e05-r14-pose-provider-and-posture-baseline`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07
-Verdikt: **APPROVED** javító kör után (fix commit `67d61bc`, handoff-frissítés `94a762b`)
+Verdikt: **CHANGES REQUIRED** — funkcionális F1 FIXED, de a dedikált
+security-review (`docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md`)
+egy ÚJ, nyitott MAJOR-t talált (security S-MAJOR-1). Javító kör 2
+dispatch-elve (motor-eszkaláció Codexre, ld. lent).
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 0 · NOTE: 1
+Funkcionális: BLOCKER 0 · MAJOR 1 (FIXED, `67d61bc`) · MINOR 0 · NOTE 1
+Security (külön jelentés): BLOCKER 0 · **MAJOR 1 (OPEN)** · MINOR 1 · NOTE 3
 
-**Javító kör után:** friss, izolált `/tmp` klónban (`67d61bc`/`94a762b` tip)
-saját kézzel újrafuttatva a teljes `tools/round-gate.sh test/features/vision
-test/tooling` — mind a 7 lépés genuinely ZÖLD, patch/kerülőút nélkül. A fix
-commit (`67d61bc`) diffje pontosan 1 fájl, 3 sor (`dart format`
-tartalom-semleges tördelés) — tartalmi kód nem változott.
+**Funkcionális javító kör után:** friss, izolált `/tmp` klónban
+(`67d61bc`/`94a762b` tip) saját kézzel újrafuttatva a teljes
+`tools/round-gate.sh test/features/vision test/tooling` — mind a 7 lépés
+genuinely ZÖLD, patch/kerülőút nélkül. A fix commit (`67d61bc`) diffje
+pontosan 1 fájl, 3 sor (`dart format` tartalom-semleges tördelés) — tartalmi
+kód nem változott.
+
+**Motor-eszkaláció (AGENTS.md §15.6, pipeline-prompt §2):** a MiniMax M3 egy
+javító kört kapott (fix round 1, a fenti F1-re) — elfogyott. A dedikált
+security-review ÚJ, azelőtt nem ismert MAJOR-t talált (S-MAJOR-1, lásd
+lent) — ez a MÁSODIK javító kör ennek a körnek, tehát a szabály szerint
+Codex viszi (`tools/codex-round.sh`), külön munkapéldányban, ugyanazzal a
+leletlistával. Csak akkor H4 halt, ha a Codex-kör UTÁN is nyitva marad
+BLOCKER/MAJOR.
+
+## Security-review kulcs-lelet (átemelve, a teljes indoklás a security-jelentésben)
+
+**S-MAJOR-1 — a privacy-audit teszt (`test/features/vision/data/pose_privacy_audit_test.dart`)
+egy negatív, hat-alszavas név-szűrőre (`eye/nose/mouth/ear/face/lip`)
+támaszkodik, nem egy pozitív, zárt kulcshalmaz-pinre.** A security-reviewer
+SAJÁT, az implementer és az én próbámtól FÜGGETLEN mutációval (`'chin':
+PoseLandmarkId.neckReference` — a `chin` valódi arc-pont, de egyik tiltott
+alszót sem tartalmazza) demonstrálta, hogy a **teljes 155-tesztes
+vision-suite zöld marad**, miközben egy arc-koordináta ténylegesen bekerül az
+audit-felszínbe `neckReference` álnéven. A MAI szállított allow-lista
+(pontosan 9, helyes bejegyzés) emiatt NEM sérült — ez egy jövőre nézve
+gyenge regressziós őr, amit a brief §9 explicit „az EGYETLEN gépi őr"-nek
+nevez. Javasolt irány (a security-jelentésben): a teszt pinnelje a
+`poseLandmarkIdByRawName` TELJES kulcshalmazát egy explicit snapshotra
+(nem csak a value-halmazt), plusz egy `length`-egyenlőségi állítás az 1:1
+leképezésre. Tisztán teszt-oldali javítás, production kód nem szükséges
+hozzá.
 
 A tartalmi implementáció (privacy-mapping, cadence-wrapper, baseline-gating,
 manifest-általánosítás) minden mért ponton pontosan a brief §0.0/§5/§6 és az
