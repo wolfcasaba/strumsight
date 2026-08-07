@@ -273,5 +273,73 @@ void main() {
       );
       expect(H.conditionNumber, greaterThan(50));
     });
+
+    test('MAJOR-2: side viewpoint → conditionNumberExceeded (degenerate)', () {
+      // Independent python3 reference (§10.1, javító kör kiegészítés):
+      //   M = [[0.8, 0, 0.10], [0, 0.0005, 0.40], [0, 0, 1.0]]
+      //   cond(2x2) = 0.8 / 0.0005 = 1600 > 1e3 → REJECTED.
+      // A side viewpoint a gitár nyakát közel egy VÍZSZINTES vonalra
+      // képezi (v_scale ≈ 0.0005), ezért a 2x2 affin blokk kondíciója
+      // messze a küszöb fölött van — a konstruktor a brief §9 szellemében
+      // elutasítja, nem ad vissza "működőnek látszó" homográfiát.
+      // (Ez a side nézőpont SZÁNDÉKOSAN elfogadhatatlan; a teszt a
+      // rejection contractot rögzíti — nem bug-mentesítés, hanem a
+      // "kondiőr valóban load-bearing" bizonyítéka erre a nézőpontra.)
+      final src = <Point2>[
+        Point2(0.0, 0.0),
+        Point2(1.0, 0.0),
+        Point2(0.0, 1.0),
+        Point2(1.0, 1.0),
+      ];
+      final dst = <Point2>[
+        Point2(0.10, 0.40),
+        Point2(0.90, 0.40),
+        Point2(0.10, 0.4005),
+        Point2(0.90, 0.4005),
+      ];
+      expect(
+        () => Homography.solve(src: src, dst: dst),
+        throwsA(
+          isA<HomographyError>().having(
+            (e) => e.reason,
+            'reason',
+            GeometryFailure.conditionNumberExceeded,
+          ),
+        ),
+      );
+    });
+
+    test('MAJOR-2: top viewpoint → conditionNumberExceeded (degenerate)', () {
+      // Independent python3 reference (§10.1, javító kör kiegészítés):
+      //   M = [[0.0005, 0, 0.40], [0, 0.8, 0.10], [0, 0, 1.0]]
+      //   cond(2x2) = 0.8 / 0.0005 = 1600 > 1e3 → REJECTED.
+      // A top viewpoint a gitár nyakát közel egy FÜGGŐLEGES vonalra
+      // képezi (u_scale ≈ 0.0005), tehát a 2x2 affin blokk kondíciója
+      // messze a küszöb fölött van — ugyanaz a contract, mint a side
+      // nézőpontnál. A kettő együtt immár a 4×3 fixture-mátrix
+      // "oldalról" és "felülről" celláit fedi le.
+      final src = <Point2>[
+        Point2(0.0, 0.0),
+        Point2(1.0, 0.0),
+        Point2(0.0, 1.0),
+        Point2(1.0, 1.0),
+      ];
+      final dst = <Point2>[
+        Point2(0.40, 0.10),
+        Point2(0.4005, 0.10),
+        Point2(0.40, 0.90),
+        Point2(0.4005, 0.90),
+      ];
+      expect(
+        () => Homography.solve(src: src, dst: dst),
+        throwsA(
+          isA<HomographyError>().having(
+            (e) => e.reason,
+            'reason',
+            GeometryFailure.conditionNumberExceeded,
+          ),
+        ),
+      );
+    });
   });
 }
