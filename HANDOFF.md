@@ -4,28 +4,189 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-07
-> (E05-R11 MERGED — Manual guitar geometry calibration UI: touch/drag
-> anchor-editor egy absztrakt normalizált `[0,1]×[0,1]` frame-területen
-> (nincs élő kamera-preview a körben, mérve — R2), centerline + neck-polygon
-> előnézet, determinisztikus quality-score magyarázattal, Save/Reset/
-> Recalibrate flow a `visionGuitarGeometryEnabled` flag mögött (default
-> OFF); implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5.
-> **Hét mért pre-flight revízió** (§0.0 R1–R7 — stale ADR-hivatkozás,
-> nincs élő kamera, a quality-score formula ELSŐ implementációja EZ a kör
-> (nem az R10), R10 degenerált-ellenőrzése nem fedi a kollinearitást/
-> területet, `evaluate()` két külön hívási helye, elavult metódusnév a
-> brief szövegében, megerősített route-flag). **1 javító kör** (MiniMax,
-> 3 BLOCKER): F1 a kollinearitás/terület-helperek megírva de a Save-kapuba
-> sosem bekötve (futtatott próbateszttel bizonyítva: `canSave=true`
-> degenerált polygonra); F2 a „clamp látható" jelzés holt kód volt (sosem
-> hívott callback, eldobott boolean) — az implementer önjelentése tévesen
-> állította, hogy létezik; F3 a futásidejű kontextus hardkódolt volt
-> (mindig back-kamera/practiceBalanced), csendben hibás `setupProfile`-t
-> mentve és a mirror-paritást elérhetetlenné téve. Mindhárom függetlenül
-> újra-ellenőrizve friss klónban (F1 saját próbateszttel, F2/F3 kódolvasással
-> + a kör saját új tesztjeivel), nem az implementer önjelentésére
-> hagyatkozva. Dedikált security-review (risk=high): **PASS**, 0 BLOCKER.
-> Lecke: **L161**.)**
+> (E05-R12 MERGED — Hand landmark provider adapter és model manifest:
+> providerfüggetlen kéz-landmark kontraktus (`HandLandmarkProvider`,
+> `VisionImage`, SDD §15.1 `Future`-alapú hívásonkénti `infer()`), stabil
+> 21-pontos StrumSight landmark-topológia (`HandLandmarkId`),
+> `RecordedHandLandmarkProvider` fixture-adapter (ez fut CI-ben) +
+> `MonotonicHandLandmarkProvider` timestamp-gate, `NativeHandLandmarkProvider`
+> EBBEN a körben szándékosan fail-closed `unavailable` (nincs natív inference
+> bekötve, nincs bináris model-asset), `VisionModelManifest` a
+> `model_manifest.json` ÚJ, additív `vision_models` testvér-kulcsán
+> (checksum + licenc + output-schema, `status = "deferred"` bejegyzéssel).
+> **ADR 0185** (orchestrátor írta a pre-flightban): célstack
+> `tflite_flutter` + MediaPipe Hands (Apache-2.0) egy JÖVŐBELI aktiváló
+> körnek — ez a kör NULLA bináris assetet szállít. Implementer MiniMax M3,
+> orchestrátor/reviewer Claude Sonnet 5.
+>
+> **Öt mért pre-flight revízió** (§0.0 R1–R5): R1/R2 stale ADR-hivatkozás
+> (`0168`→`0185`, `0163`→`0180` — a 0161–0170 blokk már egyszer eltolódott
+> az E05-R01/R02 körben); **R3 — a legfontosabb: a manifest-bővítés NEM a
+> meglévő `models[]` tömb additív sora, hanem ÚJ testvér top-level kulcs** —
+> mérve a `ml_asset_manifest_test.dart`-ban kőbe vésett
+> `expectedModelCount: 4` assertion ÉS a Python generátor StrumSight-saját
+> CRNN bináris formátumot (nem FlatBuffer-t) parse-oló
+> `_read_binary_metadata`-ja ellen, mindkettő azonnal eltört volna egy
+> naiv additív landmark-bejegyzéstől; R4 `VisionImage` (SDD §15.1
+> paramétertípus) sehol nem létezett a fában; R5 a brief „stream-alapú"
+> szóhasználata pontosítva a ténylegesen Future-alapú SDD-kontraktusra.
+>
+> **Egy javító kör** (MiniMax, 1 BLOCKER): F1 — az implementer egy
+> 1-bájtos placeholder binárist (`assets/ml/hand_landmarker_deferred.tflite`)
+> commitolt az `allowed_paths` listán KÍVÜL, ellentmondva az ADR 0185
+> Döntés 2/3-nak (a manifest-validátora és a generátora úgy készült, hogy a
+> `deferred` bejegyzés IS megkövetelt egy valódi fájlt a lemezen). Javítás:
+> a fájlrendszer+checksum ág `status == active`-ra kapuzva, a `deferred`
+> bejegyzés dokumentált placeholder-checksumot kap (`"0"×64`)
+> lemezérintés nélkül. **Függetlenül újra-ellenőrizve** friss `/tmp` klónban
+> (nem az implementer önjelentésére hagyatkozva): a placeholder eltávolítása
+> pontosan 1 tesztet buktatott (a VALÓDI committolt manifestet ellenőrzőt),
+> az 5 tempdir-fixture-alapú mutációs teszt érintetlen maradt — a javítás
+> nem csökkentette a tesztlefedettséget. **Saját mutáció-próba** (az új
+> `active`-ági guard ideiglenes kikapcsolása) felfedte, hogy az új
+> `active`-ági teszt csak a pozitív esetet bizonyítja — **N2 (MINOR,
+> follow-up)**: nincs negatív teszt egy hibás/hiányzó `active` assetre (ma
+> holt kódág, csak deferred bejegyzés szállít).
+>
+> **Dedikált security-review (risk=high): PASS**, 0 CRITICAL/BLOCKER/MAJOR
+> — de **POST-MERGE futtatva** (orchestrátor-mulasztás: a review-t a merge
+> ELŐTT kellett volna, minden korábbi E05 kör precedense szerint; a
+> mulasztás felismerése UTÁN azonnal pótolva, lásd Lecke). Egy **MINOR**,
+> saját harnesszel REPRODUKÁLT lelet: a `VisionModelManifest` `path`
+> mezőjének nincs path-traversal védelme (az audio-oldali testvér
+> validátornak van) — ma elérhetetlen (a szállított bejegyzés `deferred`,
+> ága sosem ér fájlrendszerhez; on-device a reader `Directory.current`-
+> alapú, nem éri el az asset-bundle-t sem), de **a jövőbeli aktiváló kör
+> előfeltétele** — MAJOR-ra eszkalálódik, ha az a kör a védelem nélkül
+> merge-el. Három NOTE (release-stripped `assert`, non-functional-de-
+> fail-safe on-device reader, TOCTOU olvasási race) ugyanoda.
+>
+> **Mellékes takarítás:** a post-merge gate egy ~7 körrel korábbi (E05-R05/
+> R06 idejéből maradt), árva `.claude/worktrees/agent-*` git worktree-t
+> talált, ami a legacy-identifier-guard tesztet buktatta a megosztott fán
+> (a körhöz nincs köze — csak a shared tree-ben, izolált klónokban nem
+> jelentkezett). Igazoltan tartalom nélküli (az egyetlen committolatlan
+> fájlja bájtra egyezett a `main`-en már régen merge-elt végleges
+> változattal) — `git worktree remove --force`-fal eltávolítva.
+>
+> Zöld kapu (exact-SHA `a49be70`, a `main` egy konkurens Epic-6
+> batch-brief-prep merge-e miatti rebase UTÁNI újra-dispatch): Build APK
+> [31169268243](https://github.com/wolfcasaba/strumsight/actions/runs/31169268243)
+> **success** + Router CI
+> [31169264638](https://github.com/wolfcasaba/strumsight/actions/runs/31169264638)
+> **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
+> test/tooling`) a friss `main`-en (a worktree-takarítás UTÁN) zöld.
+>
+> Lecke: **L162** (risk=high → security-reviewer KÖTELEZŐ, a queue-ban
+> NINCS gépi őr rá — az orchestrátornak manuálisan kell emlékeznie a
+> pre-flight §1.1 táblázatból), **L163** (a scope-audit egy KÖZTES bázissal
+> [pl. a review-commit] hamis VIOLATION-t ad egy javító-kör-beli
+> TÖRLÉSRE, mert a törölt útvonalat is "érintett path"-nak számolja — a
+> mérvadó bázis mindig az EREDETI pre-flight SHA, nem az utolsó dispatch
+> HEAD-je).)**
+>
+> ## ✅ E05-R12 KÉSZ — Hand landmark provider adapter és model manifest (2026-08-07)
+>
+> **E05-R12** MERGED (PR [#183](https://github.com/wolfcasaba/strumsight/pull/183),
+> squash `f39d7b6`; implementer **MiniMax M3**, orchestrátor/reviewer
+> **Claude Sonnet 5**). Az Epic 5 hand-landmark pipeline-jának providerfüggetlen
+> kontraktusa és a model-asset nyilvántartás bővítése: `HandLandmarkId`
+> (21 stabil StrumSight ID, MediaPipe Hands topológia alapján, de
+> provider-index-mentes), `HandObservation`/`HandLandmarkResult`
+> (zero-hand output `notObservable`, sosem nullákkal töltött álkimenet),
+> `VisionImage` (SDD §15.1 bemenet-típus, `CameraFrame` pixelbuffer + R07
+> non-mirrored normalized tér fölött), `HandLandmarkProvider` kontraktus
+> (`Future`-alapú hívásonkénti `infer()`, NEM Stream),
+> `MonotonicHandLandmarkProvider` (csökkenő timestamp eldobása, számlálóval),
+> `RecordedHandLandmarkProvider` (0/1/2/>2 kéz fixture-mátrix, CI-adapter),
+> `NativeHandLandmarkProvider` (production adapter, EBBEN a körben
+> szándékosan fail-closed `unavailable`), `VisionModelManifest`
+> (`lib/core/ml/`, a `model_manifest.json` ÚJ `vision_models` testvér-kulcsa,
+> checksum+licenc+output-schema validáció, az audio-oldali `models[]`
+> séma/generátor/teszt érintetlen). **ADR 0185** rögzíti a jövőbeli
+> aktiválás célstackjét (`tflite_flutter` + MediaPipe Hands, Apache-2.0) és
+> a döntést, hogy ez a kör NEM szerez be bináris assetet.
+>
+> **Pre-flight — öt mért revízió (§0.0 R1–R5, `docs/rounds/e05-r12-…md`):**
+> (1) ADR-szám csere `0168`→`0185` (a foglalóval mérve — a 0161–0170 blokk
+> már 0178–0184-re tolódott az E05-R01/R02 körben); (2) stale hivatkozás a
+> §5.1-ben `ADR 0163`→`ADR 0180` (a domain platform-függetlenségi szabály
+> tényleges helye); (3) **a manifest-bővítés ÚJ testvér top-level kulcs,
+> NEM a meglévő `models[]` tömb sora** — mérve: a
+> `ml_asset_manifest_test.dart` kőbe vésett `expectedModelCount: 4`
+> assertionje és a Python generátor StrumSight-saját (nem FlatBuffer)
+> CRNN bináris formátumot parse-oló `_read_binary_metadata`-ja mindkettő
+> azonnal eltört volna egy naiv additív landmark-bejegyzéstől; (4)
+> `VisionImage` sehol nem létezett a fában — ezt a kör vezette be; (5) a
+> brief „stream-alapú" prózája pontosítva az SDD §15.1 tényleges
+> `Future`-alapú kontraktusára.
+>
+> **Egy javító kör (MiniMax, 1 BLOCKER, függetlenül újra-ellenőrizve, nem
+> az implementer önjelentésére hagyatkozva):**
+>
+> 1. **F1 — committolt bináris placeholder a listán kívül, ellentmond az
+>    ADR 0185-nek.** Az implementer egy 1-bájtos
+>    `assets/ml/hand_landmarker_deferred.tflite`-ot committolt (nincs az
+>    `allowed_paths`-on), mert a `vision_model_manifest.dart` validátora és
+>    a `make_manifest.py` `_build_vision_models`-e úgy készült, hogy a
+>    `status = "deferred"` bejegyzés IS megkövetelte egy valódi fájl
+>    létezését a lemezen + a checksum egyezését. **Gépi scope-audittal
+>    mérve** (`tools/scope-audit.py --base <pre-flight-sha>` — 1 lelet).
+>    Javítás: a fájlrendszer+checksum ág `if (status ==
+>    VisionModelStatus.active)` mögé zárva; a `deferred` bejegyzés egy
+>    dokumentált placeholder-checksumot (`"0"×64`) kap közvetlenül a
+>    Python spec tuple-ből, lemezérintés nélkül; a shipped manifest
+>    regenerálva. **Saját, független próba**: a placeholder eltávolítása
+>    UTÁN `flutter test test/tooling/ml_asset_manifest_test.dart` PONTOSAN
+>    1 tesztet buktatott (a valódi committolt manifestet ellenőrzőt), az 5
+>    tempdir-fixture-alapú mutációs teszt változatlanul zöld — a javítás
+>    nem csökkentette a valódi lefedettséget.
+>
+> **N2 (MINOR, saját mutáció-próbával felfedve, follow-up):** a javító kör
+> hozzáadott egy `active`-ági tesztcellát, de csak a POZITÍV esetet
+> (helyes checksum → clean) bizonyítja — a `status == active` guard
+> ideiglenes kikapcsolása mellett is zöld maradt mind a 10 manifest-teszt.
+> Ma holt kódág (csak `deferred` bejegyzés szállít); a jövőbeli aktiváló
+> kör kapjon egy negatív `active`-ági cellát is (hibás/hiányzó asset →
+> init-hiba), mielőtt valódi asset aktiválódik.
+>
+> **Review:** [docs/reviews/e05-r12-…-review.md](docs/reviews/e05-r12-hand-landmark-provider-and-model-manifest-review.md)
+> — **APPROVED** a javító kör után (0 nyitott BLOCKER/MAJOR, N1 NOTE +
+> N2 MINOR follow-upként jegyezve). **Dedikált security-reviewer**
+> ([docs/reviews/e05-r12-…-security.md](docs/reviews/e05-r12-hand-landmark-provider-and-model-manifest-security.md),
+> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR — **POST-MERGE
+> futtatva** (orchestrátor-mulasztás, minden korábbi E05 kör precedense a
+> merge ELŐTTI futtatás volt; a hiányt az orchestrátor saját maga fedezte
+> fel és azonnal pótolta, mielőtt a záró rituálékat befejezte volna). Egy
+> **MINOR, saját harnesszel reprodukált** lelet: a `VisionModelManifest`
+> `path` mezőjének nincs path-traversal védelme (az audio-oldali testvér
+> validátornak van — `_modelPathPattern` + `..`-elutasítás) — ma
+> elérhetetlen (a `deferred` ág sosem ér fájlrendszerhez, on-device a
+> reader nem is éri el az asset-bundle-t), de **MAJOR-ra eszkalálódik**,
+> ha a jövőbeli aktiváló kör a védelem hozzáadása nélkül merge-el. Három
+> NOTE (release-stripped `assert` a testvér `ArgumentError`-okhoz képest,
+> non-functional-de-fail-safe on-device reader, TOCTOU olvasási race)
+> ugyanoda.
+>
+> **Mellékes takarítás:** a post-merge gate egy ~7 körrel korábbi (E05-R05/
+> R06 idejéből maradt), tartalom nélküli árva `.claude/worktrees/agent-*`
+> git worktree-t talált a megosztott fán (a körhöz nincs köze — az izolált
+> `/tmp`-klónokban futó review-gate-ek nem látták, csak a shared tree
+> közvetlen futtatás); `git worktree remove --force`-fal eltávolítva,
+> igazoltan a `main`-en már régen merge-elt tartalom egy elavult
+> duplikátuma volt.
+>
+> **Zöld kapu (exact-SHA `a49be70`):** a `main` egy konkurens Epic-6
+> batch-brief-prep merge miatt (`b80884c`) elmozdult a dispatch óta —
+> tiszta rebase, CI újra-dispatch-elve az új tipen. Build APK
+> [31169268243](https://github.com/wolfcasaba/strumsight/actions/runs/31169268243)
+> **success** + Router CI
+> [31169264638](https://github.com/wolfcasaba/strumsight/actions/runs/31169264638)
+> **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
+> test/tooling`) a friss `main`-en (a worktree-takarítás UTÁN) zöld.
+> Lecke: **L162, L163**. **Következő:** a queue következő Epic 5 sora
+> (E05-R13 — hand track assignment és smoothing), a pipeline új
+> sessionben indítja.
 >
 > ## ✅ E05-R11 KÉSZ — Manual guitar geometry calibration UI (2026-08-07)
 >
