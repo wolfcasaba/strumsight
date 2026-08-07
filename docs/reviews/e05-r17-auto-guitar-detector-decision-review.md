@@ -6,6 +6,8 @@ Diff: `git diff c2ed5ca..882b127` (implementer saját commitjai, branch
 orchestrátor utókorrekció `882b127..e5450b2` (lásd BLOCKER-1 „Státusz").
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-07
 Verdikt (első pass): CHANGES REQUESTED
+Verdikt (javító kör 1 után, `3748821`): **APPROVED** — ld. „Javító kör 1 —
+zárás" szakasz a végén.
 
 ## Összegzés
 
@@ -321,18 +323,50 @@ Pozitív, ellenőrzött megfigyelések:
 MAJOR/CRITICAL összesen: **1** (MAJOR-1, fent részletezve, felvéve a
 fix-kör findings-jébe).
 
-## Javító kör 1 — dispatch (2026-08-07)
+## Javító kör 1 — zárás (2026-08-07)
 
 MiniMax M3 ugyanabban a munkapéldányban (`/home/ubuntu/ss-mm-e05-r17`),
-ugyanazon a branchen javít, `.pipeline`-on kívüli
-`/home/ubuntu/ss-mm-e05-r17-fix1-prompt.md` findings-listával. Findings:
-BLOCKER-1 (kötelező) + MAJOR-1 (kötelező) + N2/security-NOTE-4 (opcionális,
-ugyanaz a fájl).
+ugyanazon a branchen javított, `/home/ubuntu/ss-mm-e05-r17-fix1-prompt.md`
+findings-listával (BLOCKER-1 + MAJOR-1 kötelező, N2 opcionális). Eredmény:
+`status=done`, négy commit (`07ae19c` consent-mező, `48c0fd8` exit-kód,
+`fe99458` self-test-fordítás, `3748821` §10 handoff-frissítés).
+
+- **BLOCKER-1 → FIXED.** `decision()` belépési feltétele `<=`-ra cserélve
+  (`mean_anchor_error <= MEAN_ANCHOR_ERROR_MAX` nyitja a
+  `PRODUCTION_CANDIDATE` ágat), a docstring a helyes irányra frissítve, a
+  három érintett self-test asszerció (0.029/0.030/0.031) átnevezve és
+  megfordítva, a p95-only/failure-rate-only kiegészítő tesztek mostantól
+  ténylegesen a saját águkon haladnak át (nem véletlenül adnak helyes
+  címkét). **Független újra-ellenőrzés** (friss `/tmp/review-e05-r17-fix1`
+  klón, GitHub-ról, NEM az implementer munkapéldánya): `--self-test` 9/9
+  PASS, MINDHÁROM érintett cella a helyes irányban
+  (`mean=0.029`→`PRODUCTION_CANDIDATE`, `mean=0.030`→
+  `PRODUCTION_CANDIDATE` boundary-qualifies, `mean=0.031`→`EXPERIMENTAL`).
+  **Ezen felül** egy a self-testtől teljesen független, frissen generált
+  szintetikus JSONL-lel (`--input`, NEM `--self-test`) is megismételve:
+  egy 200 frame-es „jó" detektor (mean≈0.0098) → `PRODUCTION_CANDIDATE`,
+  egy 200 frame-es „rossz" detektor (mean≈0.0799) → `EXPERIMENTAL` — a
+  BLOCKER zárása MÉRVE, nem a self-test saját köréből, és nem az
+  implementer önjelentéséből feltételezve.
+- **MAJOR-1 → FIXED.** `ml/vision/dataset_manifest.md` §2 táblázata egy
+  9. sorral bővült (`annotator_privacy_guideline`, SDD §31.2 7. elemére
+  hivatkozva) — a séma mind a 7 kötelező SDD-elemet átviszi.
+- **N2 (opcionális) → FIXED.** A hibás-bemenet út mostantól explicit
+  `sys.exit(EXIT_BAD_INPUT)`-ot hív (3), nem az implicit
+  `SystemExit(str)` (1) útvonalat. Független újra-ellenőrzés: `--input
+  /etc/hostname` → kilépési kód **3**.
+- **Scope:** a fix-kör diffje (`f07e779..3748821`, az orchestrátor review-
+  commitja utáni tartomány) `python3 tools/scope-audit.py --base f07e779`
+  szerint **OK** (3 changed path — `dataset_manifest.md`,
+  `evaluate_geometry_baseline.py`, a brief §10 szekciója — mind az
+  engedélyezett listán).
+- **Gate — független újra-futtatás** (friss `/tmp/review-e05-r17-fix1`
+  klón): `tools/round-gate.sh test/tooling` **6/6 ZÖLD**.
 
 ## Merge-döntés
 
-**Merge NEM engedélyezett** — 1 nyitott BLOCKER (kód oldal) + 1 nyitott
-MAJOR (security) a fix-kör dispatch pillanatában. Fix-kör 1 (MiniMax,
-ugyanaz a branch) dispatch-elve mindkét findings-szel egyszerre — a
-jelenlegi motor-tiltás (Terra/Codex ideiglenesen tiltva) miatt különösen
-fontos, hogy EGY fix-körbe fér bele minden nyitott lelet.
+**Merge ENGEDÉLYEZETT** — 0 nyitott BLOCKER/MAJOR. N1 (halott defenzív ág)
+és a security-review N1–N3 dokumentált, nem blokkoló follow-up. Hátravan:
+CI-dispatch (`full-gate.yml` + `router-ci.yml`, `tools/round-ci-plan.py`
+szerint, natív út nincs érintve) és az exact-SHA zöld kapu a merge SHA-ján
+(ADR 0052/0086 §2).
