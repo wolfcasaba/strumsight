@@ -143,16 +143,19 @@ pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude}
 # állapotot hagyott. A HEADLESS (-p) mód UGYANAZZAL a bejelentkezéssel viszont
 # működik (mérve: `-p 'Csak ennyit válaszolj: LOGIN-OK'` → LOGIN-OK).
 #
-# USER-DÖNTÉS 2026-08-07 04:47: „I don't wanna interactive I wanna the pipeline
-# working without me." A default VÉGLEGESEN headless. Az interaktív mód mérve
-# működik (a bejelentkezés után `/rc active` + `bridgeSessionId`, tehát látszik a
-# telefonon), DE minden induláskor kézi kattintást kér — csak 2026-08-07-en a
-# bypass-permissions figyelmeztetést és a fullscreen-renderer ajánlatot is —, és
-# minden ilyen dialógus megállítja a láncot, amíg ember rá nem bök. Az autonómia
-# fontosabb, mint a láthatóság: a kör állapotát a `.pipeline/*.log`, a
-# `tools/pipeline-status.sh` és az ntfy-értesítések adják.
-# Visszakapcsolás, ha valaha mégis kell: PIPELINE_SESSION_MODE=interactive.
-session_mode=${PIPELINE_SESSION_MODE:-print}
+# A default INTERAKTÍV — így a kör egyszerre autonóm ÉS látható a telefonon.
+#
+# 2026-08-07 04:47-kor átmenetileg headless lett („I wanna the pipeline working
+# without me"), mert az interaktív indítás kézi kattintást kért. MÉRVE viszont:
+# mindkét felugró EGYSZERI volt (bypass-permissions figyelmeztetés,
+# fullscreen-renderer ajánlat), és a bejelentkezés utáni elfogadásuk perzisztens.
+# Kétszer, egymás után indított FRISS session bizonyította: a második már
+# egyenesen a promptra megy, `/rc active`-kal, dialógus nélkül.
+#
+# Ha a CLI valaha új egyszeri dialógust vezet be, az elakadt session időkorlátra
+# fut és az önjavítás veszi át — a lánc EGY env-vel azonnal életben tartható
+# dialógusmentes headless módban: PIPELINE_SESSION_MODE=print.
+session_mode=${PIPELINE_SESSION_MODE:-interactive}
 case "$session_mode" in
   print)       session_mode_flag='-p' ;;
   interactive) session_mode_flag='' ;;
