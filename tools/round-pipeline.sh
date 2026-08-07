@@ -143,14 +143,16 @@ pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude}
 # állapotot hagyott. A HEADLESS (-p) mód UGYANAZZAL a bejelentkezéssel viszont
 # működik (mérve: `-p 'Csak ennyit válaszolj: LOGIN-OK'` → LOGIN-OK).
 #
-# FELOLDVA 2026-08-07 04:41-kor: a user elvégezte az egyszeri bejelentkezést a
-# `~/.claude` dirbe (+ workspace-trust elfogadva). Ezután az interaktív session
-# `/rc active`-ot mutat és `bridgeSessionId`-vel regisztrál
-# (`~/.claude/sessions/<pid>.json`) — ettől látszik a telefonos Code-listában,
-# ami a kör követhetőségének a feltétele. Ezért a default újra `interactive`.
-# Ha a láthatóság valaha megint elveszik, a lánc EGY env-vel életben tartható
-# headless módban: PIPELINE_SESSION_MODE=print.
-session_mode=${PIPELINE_SESSION_MODE:-interactive}
+# USER-DÖNTÉS 2026-08-07 04:47: „I don't wanna interactive I wanna the pipeline
+# working without me." A default VÉGLEGESEN headless. Az interaktív mód mérve
+# működik (a bejelentkezés után `/rc active` + `bridgeSessionId`, tehát látszik a
+# telefonon), DE minden induláskor kézi kattintást kér — csak 2026-08-07-en a
+# bypass-permissions figyelmeztetést és a fullscreen-renderer ajánlatot is —, és
+# minden ilyen dialógus megállítja a láncot, amíg ember rá nem bök. Az autonómia
+# fontosabb, mint a láthatóság: a kör állapotát a `.pipeline/*.log`, a
+# `tools/pipeline-status.sh` és az ntfy-értesítések adják.
+# Visszakapcsolás, ha valaha mégis kell: PIPELINE_SESSION_MODE=interactive.
+session_mode=${PIPELINE_SESSION_MODE:-print}
 case "$session_mode" in
   print)       session_mode_flag='-p' ;;
   interactive) session_mode_flag='' ;;
