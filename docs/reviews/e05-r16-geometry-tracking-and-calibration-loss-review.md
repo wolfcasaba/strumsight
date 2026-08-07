@@ -3,7 +3,9 @@
 Brief: `docs/rounds/e05-r16-geometry-tracking-and-calibration-loss.md`
 Diff: `git diff 064b071..2889ade` (branch `minimax/e05-r16-geometry-tracking-and-calibration-loss`, workspace `/home/ubuntu/ss-mm-e05-r16`)
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUESTED**
+Verdikt (első pass): CHANGES REQUESTED
+Verdikt (javító kör 1 után, `8017382`/`6a1c728`): **APPROVED** — ld. „Javító
+kör 1 — zárás" szakasz a végén.
 
 ## Összegzés
 
@@ -124,7 +126,15 @@ maradt — ezt az orchestrátor pótolta kézzel, ld. fent.)
 - **Ellenőrzés:** az új integrációs teszt PIROS a jelenlegi kódon, ZÖLD a
   javítás után; a fenti eldobható próba (vagy ekvivalens) megismételve
   `firstLostStep=11`-et és `stateAfterOneFrame=lost`-ot kell adjon.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8017382`) — a null-refusal ág törölve
+  `edge_geometry_tracker.dart`-ban, ÚJ valódi integrációs teszt
+  (`test/features/vision/application/calibration_loss_machine_integration_test.dart`,
+  orchestrátor-addendummal felvéve az `allowed_paths`-ra, §0.0 R7).
+  Függetlenül újra-ellenőrizve friss `/tmp/review-e05-r16-fix1` klónban: az
+  ÚJ integrációs teszt mind a 4 esetben zöld, ÉS egy saját, a fixtől
+  független eldobható próbateszttel megismételve: `trackerReturnedNull=false,
+  stateAfterOneFrame=lost, feedbackSuppressed=true` — a BLOCKER ténylegesen
+  zárva, nem csak a diff alapján feltételezve.
 
 ### F2 — MINOR — A `GeometryConfidence` validációja csak `assert` — release buildben nem fut, a doc-comment saját magának mond ellent
 
@@ -171,9 +181,14 @@ maradt — ezt az orchestrátor pótolta kézzel, ld. fent.)
 - **Ellenőrzés:** a teszt `flutter test --no-enable-asserts` (vagy
   ekvivalens release-szimuláció) alatt is bizonyítsa a védelmet, ne csak
   debug módban.
-- **Státusz:** OPEN — javítás ebben a javító körben, a security-reviewer
-  saját ajánlása szerint ("fix MINOR-1... in this round if cheap... hard
-  prerequisite before E05-R17"), és mert a fájl már úgyis F1 miatt módosul.
+- **Státusz:** FIXED (`8017382`) — az `assert`-ek feltétel nélküli
+  `throw ArgumentError(...)`-ra cserélve, a hozzá tartozó teszt
+  `throwsA(isA<ArgumentError>())`-ra igazítva. Megjegyzés: `flutter test`
+  nem támogat `--no-enable-asserts` kapcsolót (az `flutter run`/`build`
+  opció, nem `test`) — de ez nem szükséges a bizonyításhoz, mert a javítás
+  szerkezetileg `assert`-mentes: egy feltétel nélküli `throw` minden
+  build-módban lefut, ez nyelvi tény, nem futásidőben mérendő. A meglévő
+  gate-teszt (`throwsA(isA<ArgumentError>())`) elégséges bizonyíték.
 
 ### F3 — MINOR (follow-up, NEM ebben a körben) — `FrameObservation.detectedFeatures` felső korlát nélküli
 
@@ -278,8 +293,43 @@ string-ek: `adapterId = 'edge_geometry_tracker.v1'` és numerikus
 útvonal, secret, token vagy belső state. A `public.dart` diffje 4 additív
 export. Nincs valódi kulcs egyetlen fixture-ben sem.
 
+## Javító kör 1 — zárás (2026-08-07)
+
+MiniMax M3 ugyanabban a munkapéldányban (`/home/ubuntu/ss-mm-e05-r16`),
+ugyanazon a branchen javított, `.pipeline/fix-prompt-E05-R16-1.md`
+findings-listával. Eredmény: `status=done`, két commit
+(`8017382` kód, `6a1c728` orchestrátor `allowed_paths`-addendum §0.0 R7).
+
+- **F1 BLOCKER → FIXED.** A tracker null-refusal ága törölve; a
+  `CalibrationLossMachine` saját forward-escalation logikája most élő a
+  valódi integrációban. ÚJ integrációs teszt-fájl
+  (`calibration_loss_machine_integration_test.dart`) köti össze a két
+  komponenst bypass nélkül — ez zárja a review fő megállapítását (hogy
+  korábban EGYETLEN teszt sem tette ezt).
+- **F2 MINOR → FIXED.** `assert` → feltétel nélküli `throw ArgumentError`.
+- **F3, N1, N2** — státuszuk változatlan (follow-up / nem blokkoló), a
+  javító kör mellékhatásaként N1 ténylegesen javult is (a tautologikus
+  machine-oldali próba törölve, az új valódi integrációs teszt vette át a
+  szerepét) — de ezt nem kértem kötelezően, bónusz.
+- **Scope:** a javító kör diffje ELSŐ scope-audit-futáson egy listán
+  kívüli fájlt talált (`calibration_loss_machine_integration_test.dart`) —
+  ez az orchestrátor saját fix-prompt-jának belső ellentmondása volt (a
+  §1 kért egy új tesztet, a §4 nem vette fel a listára), NEM implementer
+  scope-túllépés. Orvosolva egy dokumentált §0.0 R7 addendummal
+  (ADR 0087 §2 — a kör saját, még nem merge-elt artefaktumát érintő
+  döntés). Scope-audit a bővített listával **OK** (5 changed path).
+- **Független újra-ellenőrzés** (friss `/tmp/review-e05-r16-fix1` klón,
+  NEM a `ss-mm-e05-r16` implementer-munkapéldány): `tools/round-gate.sh
+  test/features/vision` **6/6 ZÖLD**; az ÚJ integrációs teszt-fájl
+  önmagában futtatva mind a 4 esetben zöld; egy a fixtől független,
+  eldobható próbateszttel (nem a MiniMax-é) megismételve a scenario (b)
+  eset: `trackerReturnedNull=false, stateAfterOneFrame=lost,
+  feedbackSuppressed=true` — a BLOCKER zárása MÉRVE, nem a diff
+  elolvasásából feltételezve.
+
 ## Merge-döntés
 
-**Merge TILOS** — 1 nyitott BLOCKER (F1). Javító kör szükséges: MiniMax kapja
-meg ezt a jelentést findings-listaként (ADR 0087 §2, a javító kör a lánc
-normál útja).
+**Merge ENGEDÉLYEZETT** — 0 nyitott BLOCKER/MAJOR. F3 dokumentált follow-up
+(R17 pre-flight), N1/N2 nem blokkolók. Hátravan: CI-dispatch (teljes suite +
+randomizált property + a `tools/round-ci-plan.py` szerinti terv) és az
+exact-SHA zöld kapu a merge SHA-ján (ADR 0052/0086 §2).
