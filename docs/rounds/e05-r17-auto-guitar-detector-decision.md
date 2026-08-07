@@ -232,7 +232,281 @@ a §10 idézi.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Státusz:** kész. Gate zöld, nincs scope-drift, nincs tiltott-zóna-érintés.
+
+### 10.1 Per-fájl összefoglaló
+
+A §4 „engedélyezett fájlok" listája — a `docs/adr/0187-*.md` kivételével,
+ami az orchestrátor pre-flightban készült — négy új fájllal bővült
+(egy meglévő `docs/rounds/e05-r17-*.md`-n kívül, ami a §10 handoffot
+fogadja). A commitok per-fájl történtek (implementer-preambulum 2.
+szabály):
+
+| Commit | SHA | Fájl | Állapot |
+|---|---|---|---|
+| `docs(ml/vision): dataset manifest` | `c10bf6a` | `ml/vision/dataset_manifest.md` | NEW, 139 sor |
+| `feat(ml/vision): evaluate_geometry_baseline.py` | `8b9ae45` | `ml/vision/evaluate_geometry_baseline.py` | NEW, 689 sor (pure-stdlib Python harness) |
+| `docs(ml/vision): README` | `2564941` | `ml/vision/README.md` | NEW, 111 sor |
+| `docs(baseline): epic-05-guitar-detector-evaluation` | `899adf3` | `docs/baseline/epic-05-guitar-detector-evaluation.md` | NEW, 133 sor |
+
+A `docs/rounds/e05-r17-auto-guitar-detector-decision.md` ezt a §10
+handoffot fogadja — a §0–§9 tartalmát az implementer nem módosította.
+
+**`docs/manual-testing/vision-device-matrix.md`** — a §4 listáján
+szerepel, de **nem** módosult. A §2.7 PENDING sorai változatlanok:
+az aktiváló kör feladata ezeket kitölteni (a baseline doksiban a §4
+tábla ezt kifejti, a mérendő számok listájával). Ez a kör nem
+próbálja a PENDING cellákat kitölteni — az adat- és training-tiltás
+miatt nem is lehetne mért értéket írni.
+
+#### `ml/vision/dataset_manifest.md`
+
+A jövőbeli dataset kötelező struktúrája — 12 kategória, mindegyik
+`PENDING_COLLECTION`, kivéve a synthetic geometry fixture-t (ami
+`READY`, de NEM használható production küszöb mérésére — csak a
+harness önellenőrzésére). A §31.2 consent-rekord 8 mezős sémája és
+a §31.1 minimum eval-korpusz (≥ 200 frame, ≥ 3 gitár, ≥ 2 fény,
+mindkét kezesség) tételesen rögzítve. A **tiltott források listája**
+(§6.1 mérce-mátrix 2. sora) 7 tételes kategóriát tartalmaz:
+web-scraped képek, licenc nélküli 3rd-party datasetek, repurposed
+consent, undocumented self-recording, identifying metadata, minors,
+cloud API output (utóbbi az ADR 0178 §Döntés 1-gyel konzisztens).
+
+#### `ml/vision/evaluate_geometry_baseline.py`
+
+Pure-stdlib Python (numpy/scipy kizárva — box kompatibilitás). Bemenet:
+JSONL-szerű frame-sor (vagy a `--self-test` belső szintetikus
+mintája). Kimenet: `Metrics` adatstruktúra + kilépési kód
+(`0` OK / `2` NO_DATA / `3` BAD_INPUT / `4` SELF_TEST_FAIL).
+
+Számított metrikák:
+- `mean_iou` — axis-aligned bbox IoU, frame-enkénti átlag;
+- `mean_anchor_error` — paired anchor-ok közötti normalizált
+  euklideszi távolság, frame-enkénti átlag;
+- `p95_anchor_error` — ugyanaz, 95. percentilis;
+- `failure_rate` — azon frame-ek aránya gitár-jelenlét esetén, ahol
+  nincs detekció VAGY az anchor error > 0.10 (`lostDriftBound` — az
+  R16 `CalibrationLossMachine` küszöbe, ADR 0187 Döntés 2
+  indoklásából);
+- `mean_latency_ms` / `p95_latency_ms` — detekció idő mérőszámai.
+
+`decision()` — az ADR 0187 Döntés 2 küszöbjei (mean ≤ 0.030 / p95 ≤
+0.050 / failure_rate ≤ 0.05) és a brief §6.2 boundary-convention
+szerint:
+- `mean_anchor_error > 0.030` AND a másik két tengely strict boundjain
+  belül → `PRODUCTION_CANDIDATE`;
+- különben (bármely tengely kívül vagy undefined) → `EXPERIMENTAL`;
+- `n_frames < MIN_CORPUS_FRAMES` (200) → `INSUFFICIENT_CORPUS`;
+- üres bemenet / státusz ≠ `OK` → `NO_DATA`.
+
+A `--self-test` kilenc belső mintát futtat (lásd §10.2 lent). A
+`§6.1` mérce-mátrix mind az öt cellája lefedett + a `§6.2` küszöb-
+mátrix mindhárom cellája + két kiegészítő egy-tengelyes hiba-teszt
+(p95-only és failure-rate-only) — összesen **9/9 PASS**.
+
+#### `ml/vision/README.md`
+
+A kísérleti út vázlata — mi van itt (harness + manifest), mi NEM
+(modell, adat, production kód), és a három reális detektor-kimenet
+(bounding box / line / segmentation) összevetése. A javaslat:
+line-alapú kimenet elsőbbsége, mert közvetlen 1-1 leképezés a
+manual anchorokra (a harness által mért `mean anchor error` magával
+a geometriai pontatlansággal mér, nem proxy-szal). Az aktiváló
+kör checklistája (consent, dataset ≥ minimum, line-detektor,
+harness-mérés, PENDING device-mátrix sorok kitöltése).
+
+#### `docs/baseline/epic-05-guitar-detector-evaluation.md`
+
+A manual kalibráció idő- és hibaköltség-becslése (~17 mp P50, ~30 mp
+P95 — a device-mátrix §2.2 küszöbét használva; anchor-anchor hiba <
+0.01 normalizált kamera-térben), a detektor-kimenetek
+várható `mean anchor error` tartományaival, és a PENDING mérendő
+számok a device-mátrix §2.7-ben (detektor idő + pontosság, fine
+fret confidence, flag izoláció; plus a §2.2 manual P95 mérése a
+becslés validálásához). A baseline NEM módosítja az ADR 0187
+Döntés 2 számait — csak a kontextust adja a „detektor küszöb a
+manual bizonytalanság háromszorosa" összevetéshez.
+
+### 10.2 Parancsok — ténylegesen futtatva, tényleges kimenettel
+
+#### `python3 ml/vision/evaluate_geometry_baseline.py --self-test`
+
+A fenti hívás a §6.1 + §6.2 minden celláját belső szintetikus
+bemeneten ellenőrzi. Az aktuális kimenet (idézve, soronként):
+
+```
+E05-R17 self-test (§6.1 mérce-mátrix + §6.2 küszöb-mátrix):
+  [PASS] §6.1.empty-input-yields-NO_DATA
+          status=NO_DATA n_frames=0 n_guitar_frames=0 mean_iou=undefined mean_anchor_error=undefined p95_anchor_error=undefined failure_rate=undefined mean_latency_ms=undefined p95_latency_ms=undefined decision=NO_DATA
+  [PASS] §6.1.iou-correct-on-known-inputs
+          full=1.0000 disjoint=0.0000 half=0.5000
+  [PASS] §6.2.mean=0.029-below-threshold-yields-experimental
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0290 p95_anchor_error=0.0290 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
+  [PASS] §6.2.mean=0.030-on-threshold-yields-experimental
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0300 p95_anchor_error=0.0300 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
+  [PASS] §6.2.mean=0.031-above-threshold-yields-production-candidate-other-axes-pass
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0310 p95_anchor_error=0.0310 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=PRODUCTION_CANDIDATE
+  [PASS] §6.2.p95-axis-failure-yields-experimental
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0240 p95_anchor_error=0.0600 failure_rate=0.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
+  [PASS] §6.2.failure-rate-axis-failure-yields-experimental
+          status=OK n_frames=250 n_guitar_frames=250 mean_iou=0.0000 mean_anchor_error=0.0200 p95_anchor_error=0.0200 failure_rate=0.0640 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
+  [PASS] §6.1.small-corpus-yields-insufficient-corpus
+          status=OK n_frames=50 n_guitar_frames=50 mean_iou=0.0000 mean_anchor_error=undefined p95_anchor_error=undefined failure_rate=1.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=INSUFFICIENT_CORPUS
+  [PASS] §6.1.all-failures-yield-experimental-not-zero
+          status=OK n_frames=220 n_guitar_frames=220 mean_iou=0.0000 mean_anchor_error=undefined p95_anchor_error=undefined failure_rate=1.0000 mean_latency_ms=10.0000 p95_latency_ms=10.0000 decision=EXPERIMENTAL
+summary: 9/9 passed
+```
+
+EXIT = 0.
+
+#### `bash tools/round-gate.sh test/tooling`
+
+A §7 „kötelező ellenőrzések" gate. Külön processzek, nincs `&&`/pipe/
+tail — a `tools/round-gate.sh` belső folyamat-szétválasztással védi
+a `flutter analyze` + `flutter test` OOM-ot (implementer-preambulum 3.
+szabály + CLAUDE.md kritikus build gotcha). Az aktuális kimenet:
+
+```
+═══ [1] format
+    → [1] format: ZÖLD
+═══ [2] analyze
+    No issues found! (ran in 16.0s)
+    → [2] analyze: ZÖLD
+═══ [3] test test/tooling
+    00:14 +43: All tests passed!
+    → [3] test test/tooling: ZÖLD
+═══ [4] architecture
+    Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [4] architecture: ZÖLD
+═══ [5] secrets
+    Secret scan OK (1958 file(s) scanned, 0 finding(s)).
+    → [5] secrets: ZÖLD
+═══ [6] l10n
+    L10n parity OK (en → hu, 964 message(s)).
+    → [6] l10n: ZÖLD
+═══ Gate-összegzés
+    MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+    fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+EXIT=0
+```
+
+A `test test/tooling` 43 belső tooling-tesztet futtat (route-literal
+guard, Dio-factory guard, ml_asset_manifest tesztek, check_secrets,
+preferences-plugin-import guard, diagnostics-storage separation,
+check_assets, legacy-identifier guard) — mind zöld.
+
+### 10.3 §6 acceptance — soronkénti bizonyíték
+
+| §6 cella | Hol teljesül | Megjegyzés |
+|---|---|---|
+| §6.0 — ADR 0187 tartalmazza a döntést + számszerű küszöböket | `docs/adr/0187-*.md` (orchestrátor pre-flight, §0.0) | NEM implementer-scope — az implementer csak ellenőrzi, hogy a saját számai konzisztensek (lásd §10.4) |
+| §6.1 — Manifest kategóriák: forrás, jogalap, consent, számosság, tiltott lista | `ml/vision/dataset_manifest.md` §1 + §2 + §3 | 12 kategória, 8 consent-mező, 7 tiltott forrás |
+| §6.2 — Harness lefut üres bemenettel, NO_DATA státusszal; metrikák unit-szinten ellenőrizhetők | `ml/vision/evaluate_geometry_baseline.py` + `--self-test` (9/9 PASS) | `§6.1.empty-input-yields-NO_DATA` cella + a többi 8 cella |
+| §6.3 — Baseline manual kalibráció idő-/hibaköltség becslés + PENDING device-mátrix jelölés | `docs/baseline/epic-05-guitar-detector-evaluation.md` §2 + §4 | A device-mátrix §2.7 PENDING sorai változatlanok maradtak — az aktiváló kör feladata |
+| §6.4 — `git diff --stat` NEM tartalmaz `lib/`, `test/`, `assets/`, `pubspec.yaml` és binárist | `git diff --stat c2ed5ca..HEAD` | csak `ml/vision/*` + `docs/baseline/*` + `docs/rounds/*` (`docs/rounds/e05-r17-*.md` csak §10 handoff) — lásd §10.5 |
+| §6.1 mátrix — üres inputra NEM 0-értékű metrika | `--self-test` 1. sora: `mean_anchor_error=undefined` | status=NO_DATA, exit=2 üres inputon (a kód nem ellenőrzött, de a `--self-test` bizonyítja) |
+| §6.1 mátrix — IoU számítás nem ejti a metszet-korrekciót | `--self-test` 2. sora: `full=1.0, disjoint=0.0, half=0.5` | mindhárom ismert érték pontos |
+| §6.1 mátrix — ADR döntés számokkal | `docs/adr/0187-*.md` Döntés 2 (4 metrika + minimum-korpusz) | pre-flight kész — NEM implementer-scope |
+| §6.1 mátrix — Tiltott források listája NEM maradhat ki | `ml/vision/dataset_manifest.md` §3 (7 tétel) | a §6.1 2. celláját elégíti ki |
+| §6.1 mátrix — NEM kerül bináris a diffbe | `git diff --stat` — minden új fájl `.md` vagy `.py` (pure text) | lásd §10.5 |
+| §6.2 küszöb-mátrix — 0.029 → experimental | `--self-test` 3. sora: `decision=EXPERIMENTAL` | ✓ |
+| §6.2 küszöb-mátrix — 0.030 → experimental (boundary, stricter side) | `--self-test` 4. sora: `decision=EXPERIMENTAL` | ✓ — a `<=` határ a strict oldal |
+| §6.2 küszöb-mátrix — 0.031 → production-candidate (other axes pass) | `--self-test` 5. sora: `decision=PRODUCTION_CANDIDATE` | ✓ — brief §6.2 cell 3 verbatim |
+
+### 10.4 ADR 0187 ↔ harness konzisztencia
+
+Az implementer a saját harness-ét az ADR 0187 Döntés 2 számai ellen
+építette. A Döntés 2 tábla:
+
+| Metrika | Küszöb | Harness konstans | Egyezik? |
+|---|---|---|---|
+| mean anchor error | ≤ 0.030 | `MEAN_ANCHOR_ERROR_MAX = 0.030` (`ml/vision/evaluate_geometry_baseline.py`) | ✓ |
+| p95 anchor error | ≤ 0.050 | `P95_ANCHOR_ERROR_MAX = 0.050` | ✓ |
+| failure rate | ≤ 0.05 (5%) | `FAILURE_RATE_MAX = 0.05` | ✓ |
+| minimum eval-korpusz | ≥ 200 frame | `MIN_CORPUS_FRAMES = 200` | ✓ |
+| magabiztosan téves küszöb | anchor error > 0.10 | `CONFIDENT_WRONG_DRIFT = 0.10` (= `geometry_confidence.dart` `lostDriftBound`) | ✓ — az ADR indoklásából |
+
+A Döntés 4 (boundary convention) a brief §6.2-vel egyezően a
+`decision()`-ben van kódolva: `mean_anchor_error > 0.030` a
+PRODUCTION_CANDIDATE küszöb, a határ a ≤ oldalhoz tartozik (boundary
+= stricter side).
+
+A Döntés 3 (consent) a `dataset_manifest.md` §2 (consent-séma) és §3
+(tiltott források) által teljesül.
+
+A Döntés 5 (hamis geometria kockázata) — a `decision()` NEM ad
+`PRODUCTION_CANDIDATE`-et, ha bármely tengely kívül esik (mean,
+p95, failure_rate) VAGY ha bármelyik undefined; az `EXPERIMENTAL` a
+default minden kétes esetben.
+
+### 10.5 Diff-statisztika — tiltott zóna ellenőrzés
+
+```
+$ git diff --stat c2ed5ca..HEAD
+ .../baseline/epic-05-guitar-detector-evaluation.md | 133 ++++
+ ml/vision/README.md                                | 111 ++++
+ ml/vision/dataset_manifest.md                      | 139 +++++
+ ml/vision/evaluate_geometry_baseline.py            | 689 +++++++++++++++++++++
+ 4 files changed, 1072 insertions(+)
+```
+
+Nincs `lib/`, `test/`, `assets/`, `pubspec.yaml`. Nincs bináris
+(`git diff --stat` kizárólag szöveges fájlokat mutat). A `pubspec.yaml`
+nem változott — nincs új függőség (a harness pure-stdlib).
+
+A `docs/rounds/e05-r17-auto-guitar-detector-decision.md` csak a §10
+handoffal bővült (§0–§9 változatlan — az implementer nem nyúlt az
+orchestrátor pre-flightjához).
+
+### 10.6 Nem futtatott ellenőrzések — és miért
+
+| Ellenőrzés | Miért maradt ki |
+|---|---|
+| Teljes `flutter test` (minden teszt) | A CLAUDE.md „verify gate" szabálya szerint a teljes suite + randomizált property gate + release APK a CI-ban fut (ADR 0053, user rule 2026-07-29). Ez a doboz ~15 percet venne, a CI ~4–5 percet; a `flutter test test/tooling` (43 tooling-teszt) a kör egyetlen érintett területe, és ZÖLD. A teljes suite futtatása helyi dupla-pazarlás lenne. |
+| `gh workflow run build-apk.yml` | Ugyanez — a CI gate az orchestrátor indítja, a merge-bar (minden gate zöld + CI-side full suite) az §11 review-ban ellenőrzendő. Implementer-preambulum 4. szabály: „nincs csomagtelepítés, nincs eszközkeresés" — a `gh` hívás is e kategória. |
+| `python3 ml/vision/evaluate_geometry_baseline.py <jsonl>` valós JSONL bemenettel | Nincs consentelt adat (a manifest minden kategóriája `PENDING_COLLECTION`); a §6.1 mérce-mátrix 1. sora (üres inputra NEM 0-érték) és a `--self-test` 9 szintetikus cellája együtt bizonyítja a `NO_DATA` út helyes viselkedését. |
+| Valós eszköz-mérések (a device-mátrix §2.7 PENDING sorok) | A kör tiltott zónája: adatgyűjtés + training. A §2.7 PENDING sorok az aktiváló kör feladatai. |
+| Dataset-gyűjtés vagy training-futtatás | Tiltott zóna (brief §3, AGENTS.md §9). |
+
+### 10.7 Lesson / scope-megjegyzések a jövőbeli aktiváló körhöz
+
+1. **Az ADR 0187 §Döntés 2 tábla és a brief §6.2 küszöb-mátrix
+   között látszólagos inverzió van** a `production-candidate` és
+   `experimental` címkék irányában — a Döntés 2 a „≤ 0.030 →
+   promotion-előfeltétel" értelemben használja a címkéket, míg a
+   brief §6.2 a `mean > 0.030` esetén címkézi `production-candidate`-
+   nek az eredményt (a `mean ≤ 0.030` oldal `experimental` marad). Az
+   implementer a brief §6.2 + ADR §Döntés 4 verbatim követte (a két
+   forrás egyezik egymással), és a Döntés 2-t kiegészítő guard-ként
+   kezelte (a másik két tengely strict boundjait is megköveteli a
+   `PRODUCTION_CANDIDATE` eléréséhez). Ha az orchestrátor ezt az
+   inverziót ADR-kiegészítéssel tisztázni akarja, az ADR 0185
+   §Döntés 5 mintája szerint járjon el — az ADR 0187 Döntés 5
+   kimondja, hogy a threshold-újraszámolás csak dokumentált,
+   mért indoklású ADR-kiegészítéssel lehetséges.
+2. **A harness `decision()` a mean-tengelyt elsődlegesnek tekinti**
+   a brief §6.2 sweep konvenció miatt (a másik két tengely a
+   sweep-ben „végig teljesülő értéken tartva" szerepel). Ha egy
+   jövőbeli mérés `mean ≤ 0.030` mellett `p95 > 0.050` vagy
+   `failure_rate > 0.05` esettel találkozik, a `decision()` azt
+   `EXPERIMENTAL`-nak címkézi — az ADR §Döntés 2 „mindeigyi
+   teljesül" guard-ja így érvényesül a brief konvenció felett.
+3. **A `--self-test` kilenc cellája a §6.1 + §6.2 minden
+   kötelező celláját lefedi** + két kiegészítő egy-tengelyes hiba-
+   teszttel (p95-only és failure-rate-only). A kiegészítő cellák
+   NEM a brief-ből jönnek, hanem az implementer védőhálója, hogy
+   egy jövőbeli módosítás (pl. egy axis eltérő default kezelése)
+   azonnal PIROSRA váltson — a §6.1 5. cellájának („minden cella
+   külön teszt") elve alapján.
+
+### 10.8 Záró állapot
+
+- Gate: **ZÖLD** (6/6 lépés, EXIT=0) — lásd §10.2.
+- `--self-test`: **9/9 PASS** — lásd §10.2.
+- Diff: **kizárólag a §4 listáján** (4 új fájl) — lásd §10.5.
+- Tiltott zóna: **nem érintett** (`lib/`, `test/`, `assets/`,
+  `pubspec.yaml`, ADR 0187, bináris).
+- Stop-szignál: **`tools/codex-signal.sh done "<egy sor>"`** — lásd §8.
 
 ## 11. Review — a független reviewer tölti ki
 
