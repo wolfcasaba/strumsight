@@ -214,6 +214,22 @@ _VISION_MODEL_SPECS: tuple[dict[str, object], ...] = (
         "minimum_device_tier": "basic",
         "evaluation_report": "docs/eval/vision/hand_landmarker.md",
     },
+    # E05-R14 — additive pose entry (ADR 0186 §Döntés 2). Same deferred
+    # posture as the hand entry: no binary on disk, documented placeholder
+    # sha256, and its OWN output_schema — reusing the hand schema would be
+    # false manifest metadata.
+    {
+        "model_id": "pose_landmarker",
+        "version": "1.0.0",
+        "path": "assets/ml/pose_landmarker_deferred.tflite",
+        "status": "deferred",
+        "sha256": _DEFERRED_SHA256_PLACEHOLDER,
+        "input_shape": [256, 256, 3],
+        "output_schema": "strumsight.pose_landmarks.v1",
+        "license": {"spdx": "Apache-2.0", "name": "MediaPipe Pose"},
+        "minimum_device_tier": "basic",
+        "evaluation_report": "docs/eval/vision/pose_landmarker.md",
+    },
 )
 
 
