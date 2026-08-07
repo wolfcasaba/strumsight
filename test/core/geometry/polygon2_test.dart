@@ -174,5 +174,38 @@ void main() {
         isFalse,
       );
     });
+
+    test('interior point → true for a 90°-rotated square (rhombus)', () {
+      // A rhombus centered on the origin with vertical axis
+      // `(0,-1),(1,0),(0,1),(-1,0)` — none of its edges is axis-aligned,
+      // so every edge has `b.y < a.y` (or `> a.y` for the other half).
+      // The pre-fix `.abs()` in the ray-casting denominator flipped the
+      // sign on every edge and silently produced `false` for the
+      // trivially-inside origin. Regression guard for MAJOR-1.
+      final rhombus = <Point2>[
+        Point2(0, -1),
+        Point2(1, 0),
+        Point2(0, 1),
+        Point2(-1, 0),
+      ];
+      expect(Polygon2.contains(rhombus, Point2(0, 0)), isTrue);
+      // And a point outside the rhombus still returns false.
+      expect(Polygon2.contains(rhombus, Point2(1.5, 1.5)), isFalse);
+    });
+
+    test('skewed guitar-neck quad → true for interior point', () {
+      // Real-world-shape non-axis-aligned quad (similar to a neck
+      // calibration's convex hull). The interior midpoint must be true;
+      // a point clearly outside must be false. Both directions guard
+      // against the sign-flip reappearing.
+      final neck = <Point2>[
+        Point2(0.1, 0.1),
+        Point2(0.9, 0.3),
+        Point2(0.8, 0.9),
+        Point2(0.2, 0.7),
+      ];
+      expect(Polygon2.contains(neck, Point2(0.5, 0.5)), isTrue);
+      expect(Polygon2.contains(neck, Point2(0.0, 0.5)), isFalse);
+    });
   });
 }

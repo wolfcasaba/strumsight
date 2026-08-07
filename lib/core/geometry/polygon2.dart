@@ -102,6 +102,14 @@ abstract final class Polygon2 {
 
   /// Ray-casting point-in-polygon. Uses the same orientation convention
   /// as [signedArea]: positive ⇒ counter-clockwise winding.
+  ///
+  /// The numerator `(b.x - a.x) * (point.y - a.y) / (b.y - a.y)` is the
+  /// x-coordinate of the ray's intersection with the edge. The denominator
+  /// must be the **signed** `b.y - a.y` — taking `abs()` inverts the sign of
+  /// the result for every edge where `b.y < a.y`, which silently flips the
+  /// inside/outside answer on any non-axis-aligned polygon (a 90°-rotated
+  /// square, a guitar-neck quad, etc.). The leading XOR guard already
+  /// guarantees `b.y != a.y` on this branch, so no `+1e-300` is needed.
   static bool contains(List<Point2> vertices, Point2 point) {
     if (!validate(vertices).isValid) return false;
     var inside = false;
@@ -112,8 +120,7 @@ abstract final class Polygon2 {
       final intersects =
           ((a.y > point.y) != (b.y > point.y)) &&
           (point.x <
-              (b.x - a.x) * (point.y - a.y) / ((b.y - a.y).abs() + 1e-300) +
-                  a.x);
+              (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x);
       if (intersects) inside = !inside;
     }
     return inside;
