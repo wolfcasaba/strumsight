@@ -3,11 +3,15 @@
 Brief: `docs/rounds/e05-r11-manual-guitar-geometry-calibration-ui.md`
 Diff: `git diff origin/main...minimax/e05-r11-manual-guitar-geometry-calibration-ui`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED** (javító kör #1 után, exact-head `38dac1a`)
 
 ## Összegzés
 
-BLOCKER: 3 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+Első pass: BLOCKER 3 · MAJOR 0 · MINOR 0 · NOTE 1. Javító kör #1
+(`38b7a4b`, `c324cd2`, `b286637`, `b69e9aa`, `38dac1a`) mind a három
+BLOCKER-t zárta, **függetlenül újra-ellenőrizve** (nem az implementer
+önjelentésére hagyatkozva — lásd „Javítás igazolása" lent). Nyitva marad
+egyetlen NOTE (N2, follow-up jellegű, nem blokkoló).
 
 Módszer: független `/tmp/review-e05-r11` klón (`tools/prepare-flutter-generated.sh`
 + `tools/round-gate.sh test/features/vision test/core/l10n_parity_test.dart`,
@@ -86,7 +90,17 @@ nem hibaforrás.
 - **Ellenőrzés:** a fenti próbateszt (vagy vele egyenértékű, a brief §6-ba
   felvett) mutassa `canSave == false`-t UGYANERRE a bemenetre; a meglévő
   `isGeometryDegenerate` unit-tesztek változatlanul zöldek maradjanak.
-- **Státusz:** OPEN
+- **Státusz: FIXED (`38b7a4b`).** `_selfEvaluate` mostantól
+  `reason == degenerateGeometry || extendedGeometryCheck`-et ad vissza,
+  ahol `extendedGeometryCheck = isGeometryDegenerate(...)` — pontosan a
+  javasolt alak. **Függetlenül újra-futtatva** a review EREDETI
+  próbatesztje (kollineáris polygon, egészséges nut/bridge távolság) —
+  friss `/tmp` klónban, nem a MiniMax munkapéldányában:
+  `selfEvaluationReason=degenerateGeometry`, `canSave=false` (korábban
+  `null`/`true` volt). Kontroll (nem-regresszió): az eredeti egészséges
+  seed-polygon továbbra is `canSave=true`. Két ÚJ, véglegesített teszt
+  került a controller-teszt fájlba (`f1: collinear polygon…`, `f1:
+  zero-area polygon…`), mindkettő zöld a hivatalos gate-ben.
 
 ### F2 — BLOCKER — A „clamp látható jelzés" nincs bekötve; az önjelentés téves állítást tartalmaz
 
@@ -112,7 +126,18 @@ nem hibaforrás.
 - **Ellenőrzés:** widget-teszt, ami a frame-területen kívülre húz, és
   ellenőrzi, hogy a handle dekorációja (szín/border) ELTÉR a nem-klemp-elt
   állapottól.
-- **Státusz:** OPEN
+- **Státusz: FIXED (`c324cd2`).** Új `_clampedHandle` state a szülő
+  `_GuitarAnchorEditorState`-ben; a klemp-detektálás a PREVIEW-térbeli
+  pointer klemp-elésére épül (nem a normalizált végeredményre —
+  robusztusabb), és a handle-specifikus kulccsal állítja be, MELYIK handle
+  klemp-elt. `_AnchorHandle`: border alpha 0.2→0.95 ÉS width 1→3 a
+  klemp-állapotban; `_PolygonHandle`: border szín surface→error és width
+  1→2. **Kódból ellenőrizve** (nem csak az implementer állítása alapján —
+  a review EREDETI F2 lelete pontosan azért BLOCKER, mert az implementer
+  korábbi önjelentése hasonlót állított, ami a kódban nem volt igaz): a
+  feltételes logika ténylegesen jelen van, nem konstans. Új, véglegesített
+  widget-teszt (`f2: clanp visibility — dragging outside the frame
+  thickens the handle border`) zöld a hivatalos gate-ben.
 
 ### F3 — BLOCKER — A futásidejű kontextus hardkódolt; a mentett `setupProfile` szisztematikusan hibás, a mirror-paritás elérhetetlen
 
@@ -151,9 +176,40 @@ nem hibaforrás.
   'front'`-ot ír egy in-memory store-ba, és ellenőrzi, hogy (a) a mentett
   profil `camera == front`, (b) egy jobbra-húzás a mirrorozott elrendezésben
   a normalizált x-et a nem-mirrorozotthoz képest tükrözve változtatja.
-- **Státusz:** OPEN
+- **Státusz: FIXED (`b286637`, `b69e9aa`).** `guitarCalibrationRuntimeContextProvider`
+  mostantól `keyValueStoreProvider`-en keresztül olvassa
+  `StorageKeys.visionCamera`/`StorageKeys.visionSetupProfile`-t (az R08
+  `VisionSetupController.build()` mintáját követve). `_GeometryCanvas`
+  kiszámolja `mirrorPreview = context.camera == front`-ot, és átadja MIND a
+  `GuitarGeometryPreview`-nak, MIND a `GuitarAnchorEditor`-nak — utóbbi a
+  `toNormalized`/`toPreview` mindkét hívásán átvezeti. Új, véglegesített
+  tesztek: „reads the saved camera preference…", „reads the saved setup
+  profile…", „falls back to back camera + balanced profile when no key
+  set", „saveIfValid persists the saved camera + setup profile, not the
+  hardcoded one", „f3: front-camera mirror — dragging right decreases
+  normalised x" — mind zöld a hivatalos gate-ben.
+  **Részlegesen fedett, ŐSZINTÉN dokumentálva (nem blokkoló, lásd N2):** az
+  `orientation` mező továbbra is `degrees0` fallback — a §10.6 kifejezetten
+  leírja, hogy az R11 engedélyezett fájljain belül nincs elérhető
+  device-orientation forrás, és ez a jelen review saját, előre engedélyezett
+  kimenete („ha nincs egyszerű forrás, dokumentált brief-revízió, nem
+  hallgatólagos kihagyás") — ez PONTOSAN megtörtént.
 
 ## NOTE
+
+### N2 — Landscape-cella follow-up kör (nem blokkoló)
+
+A §6 #4 acceptance négy cellát kér (portrait/landscape × front/back). A
+javító kör a front/back tengelyt teljesen lefedte (mindkettő éles-preferencia-
+alapú és tesztelt). A landscape tengely infrastrukturálisan tesztelhetetlen
+marad — nincs device-orientation forrás az R11 allowed_paths-on belül
+(§10.6 részletesen dokumentálja, miért nem a `camera_session_lease.dart`/
+`camera_capture.dart` pár és miért nem a `MediaQuery.orientation`). Ez
+NEM blokkoló ebben a körben (a §0.0 pre-flight kifejezetten megengedte ezt
+a kimenetet, HA dokumentált — megtörtént), de follow-up kör tárgya: egy
+jövőbeli SDD-kör vezessen be egy device-orientation providert (valószínűleg
+`lib/core/camera/**`-ben, tehát R11 scope-ján kívül), és bővítse ezt a
+képernyőt a landscape cellával.
 
 ### N1 — a §10 implementer-önjelentés fájlneve elavult
 
@@ -164,23 +220,40 @@ Nem blokkoló, csak a következő javító kör frissítse a §10-et a valós
 
 ## Gate-bizonyíték ellenőrzése
 
+**Első pass** (`/tmp/review-e05-r11`, head `549b5fe`): format/analyze/mindkét
+teszt-útvonal/architecture/secrets/l10n mind zöld — de ez ELŐTTE volt a
+három BLOCKER javításának, tehát a Save-kapu/clamp/mirror hibák a zöld gate
+MELLETT álltak fenn (a review-sablon saját elve: „a zöld gate nem
+bizonyíték").
+
+**Javítás utáni pass** (`/tmp/review-e05-r11-fix1`, FRISS klón, head
+`38dac1a`, `tools/prepare-flutter-generated.sh` + `tools/round-gate.sh
+test/features/vision test/core/l10n_parity_test.dart`, csonkítatlan
+kimenet):
+
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| format | zöld | ✅ (`/tmp/review-e05-r11`, teljes futás, csonkítatlan) |
-| analyze | zöld | ✅ (uo., `tools/prepare-flutter-generated.sh` után — enélkül hamis PIROS az l10n-generált fájlok hiánya miatt, ez NEM a kör hibája) |
-| `test/features/vision` | zöld (70/70 ill. 71/71, párhuzamos sorrendtől függő számozás) | ✅ |
+| format | zöld | ✅ |
+| analyze | zöld | ✅ |
+| `test/features/vision` | zöld (78/78, az öt új F1/F2/F3 teszttel együtt) | ✅ |
 | `test/core/l10n_parity_test.dart` | zöld (3/3) | ✅ |
 | architecture | zöld (12 allowlistelt eltérés, változatlan) | ✅ |
-| secrets | zöld (0 lelet) | ✅ |
-| l10n parity (tool) | zöld | ✅ |
-| CI teljes suite + property + APK | Full Gate dispatch folyamatban, Router CI zöld a scope-fix commiton | ⏳ folyamatban a review lezárásakor |
+| secrets | zöld (0 lelet, 1869 fájl) | ✅ |
+| l10n parity (tool) | zöld (964 üzenet) | ✅ |
+| Saját, eldobható próbateszt (F1 re-verify) | `canSave=false` a kollineáris esetre, `canSave=true` az egészséges esetre | ✅ (futtatva, törölve) |
+| Dedikált security-review (risk=high) | PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE (`docs/reviews/e05-r11-…-security.md`) | ✅ |
+| CI teljes suite + property + APK | lásd alant — merge ELŐTT exact-head-en újra-dispatch kötelező | ⏳ |
 
 ## Merge-döntés
 
-**Merge TILOS.** Három nyitott BLOCKER (F1, F2, F3) — mindegyik a brief §5
-kötött architekturális döntéseit és/vagy a §6 acceptance criteriát sérti, F1
-futtatott próbateszttel bizonyítva, F2 az implementer saját, kódból nem
-igazolható állítását tartalmazza. A motor-eszkaláció szabálya szerint
-(AGENTS.md §2/H4, user-döntés 2026-08-01) a MiniMax EGY javító kört kap
-ugyanezzel a leletlistával; ha BLOCKER marad utána, a következő javító kört a
-Codex viszi.
+**Javító kör után: 0 nyitott BLOCKER/MAJOR.** Mindhárom F1/F2/F3 FIXED,
+függetlenül újra-ellenőrizve (saját próbateszt F1-re, kódolvasás + a kör
+saját új tesztjeinek zöldje F2/F3-ra), a dedikált security-review PASS. Az
+egyetlen nyitott pont (N2, landscape-cella) explicit, előre engedélyezett
+kimenet, nem blokkoló.
+
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR →
+merge. A helyi/gate-bizonyíték megvan; **a CI teljes suite + property +
+APK futása a merge előtti utolsó feltétel** — lásd a záró CI-dispatchet a
+kör-jelentésben, exact-head `38dac1a` (vagy az azt követő, ha időközben
+módosul).
