@@ -43,6 +43,22 @@ const _expectedLandmarkNames = <String>{
   'neckReference',
 };
 
+/// The sole raw provider names permitted to reach the retained topology.
+///
+/// This is deliberately a positive snapshot, rather than a face-name
+/// heuristic: any new raw alias must be reviewed explicitly.
+const _expectedRawLandmarkNames = <String>{
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+  'neck',
+};
+
 const _forbiddenSubstrings = <String>[
   'eye',
   'nose',
@@ -71,6 +87,16 @@ void main() {
   });
 
   test('the raw-name allow-list maps onto retained IDs only', () {
+    expect(
+      poseLandmarkIdByRawName.keys.toSet(),
+      _expectedRawLandmarkNames,
+      reason: 'the raw-name allow-list must match the approved snapshot',
+    );
+    expect(
+      poseLandmarkIdByRawName.length,
+      PoseLandmarkId.values.length,
+      reason: 'each retained ID must have exactly one approved raw name',
+    );
     expect(
       poseLandmarkIdByRawName.values.toSet(),
       PoseLandmarkId.values.toSet(),
