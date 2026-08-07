@@ -5839,3 +5839,63 @@ ilyen jelzés ugyanarra a leletre erős jel, hogy a PROBLÉMA MAGA
 (`tools/mm-round.sh` teljes klónt vár, nem worktree-t — MEGERŐSÍTVE ugyanebben
 a körben, egy MiniMax-dispatch `git worktree`-n ismét `exit 2`-vel bukott,
 a javítás VÁLTOZATLANUL a `git clone --local`).
+
+## L172 — Két komponens, mindkettő 100%-ban zöld, izoláltan tesztelve: a valódi integrációjuk mégis megsérti a kör központi biztonsági célját (E05-R16, BLOCKER-1, 2026-08-07)
+
+**Mit mértünk.** Az E05-R16 `GeometryTracker`/`EdgeGeometryTracker` (adapter)
+és `CalibrationLossMachine` (állapotgép) implementációja gate-zöld volt
+(6/6, 196 teszt) — a review mégis egy BLOCKER-t talált, mert **egyetlen
+teszt sem kötötte össze a kettőt**. A `calibration_loss_machine_test.dart`
+egy `observationFor(double drift)` helperrel KÖZVETLENÜL konstruált
+`GeometryObservation`-t, teljesen megkerülve a trackert; a
+`geometry_tracker_test.dart` csak a trackert tesztelte önmagában. Mindkét
+teszt-fájl a SAJÁT komponensét helyesen bizonyította — de a tracker
+`if (drift >= lostDriftBound) return null;` guardja (dokumentáltan „a
+manual anchor korlátlan felülírása elleni első védelmi vonal") a gép
+`_nextState`-jének SAJÁT, helyesen implementált és tesztelt azonnali
+forward-escalation logikáját (`drift > lostDriftBound` → `lost`, MINDEN
+állapotból) HALOTT KÓDDÁ tette a valódi integrációban: a `null` egy MÁSIK,
+lassabb (`noObservationLostThreshold=5` egymást követő frame) útvonalra
+terelte, amit a „nincs detektált feature" esetre szántak, nem a „biztosan
+rossz geometria" esetre. Egy diszpozábilis review-próbateszttel (a kettőt
+ténylegesen összekötve) mérve: a kör §1 célja („elmozdulás esetén
+biztonságos érvénytelenítés EGYETLEN frame alatt") nem teljesült — egy
+0,20 drifttel járó frame UTÁN a gép `tracking` maradt,
+`feedbackSuppressed=false`; a kumulatív-sodródás szcenárió a dokumentált/
+tesztelt 11. lépés helyett a 14.-en érte csak el a `lost`-ot.
+
+**Gyökérok.** A két komponens szerződése (`GeometryObservation?` — a `null`
+kettős jelentésű: „nincs evidencia" ÉS informálisan „a drift túl nagy")
+lehetővé tett egy csendes szemantikai divergenciát: a tracker szerzője úgy
+gondolta, hogy a gép „úgyis osztályoz" a bound körül (a §10.5 eredeti
+deviáció-jegyzete kifejezetten ezt írta: „a tracker refusing first, a
+machine osztályoz") — valójában a gép SOSEM kapja meg a drift-értéket,
+amikor a tracker `null`-t ad, tehát nem tud osztályozni. A bypass-helperes
+egységtesztek (mindkét oldalon jogos, önmagában helyes izolációs minta)
+ezt a divergenciát strukturálisan nem tudták megfogni, mert egyikük sem
+futtatta a TÉNYLEGES hívási láncot.
+
+**Miért fontos.** Amikor egy kör KÉT ÚJ komponenst vezet be, amik egymást
+hívják production-ban (itt: `EdgeGeometryTracker.observe()` →
+`CalibrationLossMachine.update()`), a „zöld gate" bizonyító ereje
+korlátozott, ha a tesztek egyike sem futtatja végig ezt a TÉNYLEGES
+hívási láncot — két izoláltan helyes komponens integrációja attól még
+lehet helytelen. Kötelező őr: legalább EGY teszt kösse össze a valódi
+(nem bypass/helper) production osztályokat a kör központi acceptance-
+szcenárióira (itt a brief §6 (b)/(c) szcenáriói), különben a review saját
+kézzel írt próbateszttel köteles ezt megmérni, mielőtt a review-t
+elfogadja. Rokon [[L09]] (a mérce futtatható artefaktum, nem
+prompt-szöveg) abban az értelemben, hogy itt a hiányzó mérce nem egy
+elrejtett kilépési kód, hanem egy hiányzó TESZT-KAPCSOLAT volt — a gate
+formálisan zöld volt, mert semmi nem mérte a hiányzó élt.
+
+**Másodlagos, operatív lecke.** A javító kör findings-promptja (amit az
+orchestrátor írt) egy ÚJ integrációs teszt-fájlt kért, de a saját „Scope —
+VÁLTOZATLANUL a brief allowed_paths listája" mondata ezt nem vette fel a
+listára — önellentmondás, amit az implementer az ésszerű útválasztással
+oldott fel (a kért tartalmat egy már engedélyezett könyvtárban, ésszerű
+névvel hozta létre), az orchestrátor pedig egy dokumentált §0.0-addendummal
+zárt (nem H3 halt, ADR 0087 §2 — a kör saját, még nem merge-elt
+artefaktumát érintő döntés). **Következő körben:** ha egy fix-prompt új
+fájlt kér, a promptban EGYIDEJŰLEG bővítsd a brief `allowed_paths`
+listáját is — ne hagyatkozz az implementer útválasztására.
