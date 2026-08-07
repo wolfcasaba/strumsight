@@ -24,6 +24,7 @@ allowed_paths = [
   "lib/features/vision/public.dart",
   "test/features/vision/domain/geometry_tracker_test.dart",
   "test/features/vision/application/calibration_loss_machine_test.dart",
+  "test/features/vision/application/calibration_loss_machine_integration_test.dart",
   "test/fixtures/vision/geometry",
   "docs/rounds/e05-r16-geometry-tracking-and-calibration-loss.md",
 ]
@@ -128,6 +129,24 @@ E05-R10/R15 kód létezése előtt.
    hiszterézis-teszt, a cellák a §10-ben python3-mal számolva) MAGUK a
    tervezési szerződés, amit az implementer épít fel — nem egy meglévő
    táblázat, amit auditálni kell.
+7. **R7 — Orchestrátor-addendum a javító kör UTÁN (2026-08-07):
+   `allowed_paths` bővítve EGY fájllal** (ADR 0087 §2 — a kör saját, még
+   nem merge-elt artefaktumát érintő döntés, nem H3 halt). A javító kör
+   findings-promptja (`.pipeline/fix-prompt-E05-R16-1.md` §1) kifejezetten
+   egy ÚJ, valódi integrációs tesztet kért
+   (`EdgeGeometryTracker.observe()` → `CalibrationLossMachine.update()`
+   bypass-helper nélkül) a review F1 BLOCKER lezárásához — de a §4
+   „Scope — VÁLTOZATLANUL a brief allowed_paths listája" mondat ezt nem
+   vette fel a listára. Ez az orchestrátor promptjának belső
+   ellentmondása, nem az implementer scope-túllépése: a MiniMax a kért
+   tartalmat egy ésszerűen elnevezett, a már engedélyezett
+   `test/features/vision/application/` fán belüli fájlba tette
+   (`calibration_loss_machine_integration_test.dart`), pontosan a kért
+   tartalommal (ellenőrizve: a diff nem tartalmaz semmi mást ezen a
+   fájlon kívül, ami ne lett volna már a listán). A fenti `allowed_paths`
+   ezzel az EGY fájllal bővült — a scope-audit ez után újrafutott és
+   tisztán zárt (`tools/scope-audit.py`, 5 changed path, mind a
+   bővített listán belül).
 
 ## 1. Cél
 
