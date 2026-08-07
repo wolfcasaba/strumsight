@@ -173,16 +173,27 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
   void _onPointerMove(Offset localPosition, Size size) {
     final drag = _drag;
     if (drag == null) return;
+    // Clamp the preview-space pointer first; otherwise the R07 inverse
+    // [PreviewFit.toNormalized] builds a `NormalizedPoint` whose
+    // constructor would assert on out-of-frame drags. The transformation
+    // + clamp is single-purpose: clamp to the viewport, then map back to
+    // normalized space (R07 — the only allowed mapping, §5.2).
+    final viewport = widget.fit.viewport;
+    final previewX = localPosition.dx
+        .clamp(viewport.left, viewport.right)
+        .toDouble();
+    final previewY = localPosition.dy
+        .clamp(viewport.top, viewport.bottom)
+        .toDouble();
+    final wasClamped =
+        previewX != localPosition.dx || previewY != localPosition.dy;
     final normalized = widget.fit
         .toNormalized(mirrorPreview: widget.mirrorPreview)
-        .apply(
-          PreviewPoint(localPosition.dx, localPosition.dy),
-        );
+        .apply(PreviewPoint(previewX, previewY));
     final clamped = NormalizedPoint(
       normalized.x.clamp(0.0, 1.0).toDouble(),
       normalized.y.clamp(0.0, 1.0).toDouble(),
     );
-    final wasClamped = clamped.x != normalized.x || clamped.y != normalized.y;
     switch (drag) {
       case _DragHandleAnchor(:final role):
         widget.onAnchorChanged(role, clamped);
