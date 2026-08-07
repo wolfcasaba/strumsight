@@ -4,172 +4,157 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-07
-> (E05-R14 MERGED — Pose landmark provider és posture baseline:**
-> adatminimalizált felsőtest-pose pipeline arcelemzés nélkül — `PoseLandmarkId`
-> (pontosan **9** stabil pont: `leftShoulder`/`rightShoulder`,
-> `leftElbow`/`rightElbow`, `leftWrist`/`rightWrist`, `leftHip`/`rightHip`,
-> `neckReference` — legfeljebb egy semleges nyak-referenciapont; szem/orr/
-> száj/fül ID **nem létezik** az enumban), `mapRawPoseLandmarks` allow-list
-> mapping (minden nem-engedélyezett nyers név — beleértve az arc-pontokat —
-> a domain-objektum létrejötte ELŐTT esik ki), `PoseLandmarkProvider`
-> kontraktus + `CadenceLimitedPoseLandmarkProvider` wrapper (alapértelmezett
-> 1:6 arány a kéz-modellhez képest, az arány módosítása AZONNAL érvényes),
-> `NativePoseLandmarkProvider` (EBBEN a körben szándékosan fail-closed
-> `unavailable`, a `MonotonicHandLandmarkProvider` mintáját követve),
-> `RecordedPoseLandmarkProvider` (CI-fixture, SZÁNDÉKOSAN ad arc-pontokat is
-> a nyers payloadban — a privacy-szűrő így a tényleges mérce, nem egy
-> külön teszt-ág), `createPoseLandmarkProvider` plain factory-kapu
-> (`visionPoseTrackingEnabled=false` → a delegált provider **meg sem épül**),
-> `PostureBaselineCollector` (kategorikus ÉS numerikus quality-küszöb +
-> minimum látható időtartam; BÁRMELY gate-bukó minta az egész ablakot
-> RESETeli — részleges ablakból sosem lesz baseline), `PostureObservation`
-> (nyers, vállszélességgel normalizált drift — semmilyen ítélet/policy, az
-> az E05-R20 dolga). Implementer **MiniMax M3** (kezdeti implementáció +
-> javító kör 1), **motor-eszkaláció Codex/Terra-ra javító kör 2-ben**
-> (AGENTS.md §15.6 — a MiniMax egy javító kört kap, egy MÁSODIK, a
-> dedikált security-review által felfedezett MAJOR ezért Codexhez ment).
-> Orchestrátor/reviewer Claude Sonnet 5.
+> (E05-R15 MERGED — Guitar coordinate system és homography:**
+> **Pure Dart** geometriai mag a kamera-landmarkok gitárhoz relatív `u/v`
+> koordinátába képezéséhez: `lib/core/geometry/` — `Point2`/`Polygon2`
+> (konvexitás, terület, orientation, ray-casting `contains`), `Homography`
+> (DLT solver Hartley-normalizálással + inverz + 2×2 kondíciószám),
+> `GuitarSpace` (`u ∈ [0,1]` nut→bridge, `v` keresztirány előjelesen).
+> `lib/features/vision/domain/geometry/` — `GuitarLandmarkMapper`
+> (kalibráció → homográfia, camera→guitar-space mapping propagált
+> confidence-szel) és `GuitarRegion` (neck/body/picking zone osztályozó).
+> Implementer **MiniMax M3** (kezdeti implementáció + javító kör 1 +
+> **javító kör 2**, az utóbbi user-döntéssel, ld. lent), orchestrátor/
+> reviewer **Claude Sonnet 5**. **Nincs új ADR** (pre-flightban négyszer
+> megerősítve, §0.0 R1-R5).
 >
-> **Hét mért pre-flight revízió** (§0.0 R1–R7, `docs/rounds/e05-r14-…md`):
-> **R1** — a fejléc eredeti „nincs új ADR" terve NEM tartható: a kör egy
-> MÁSODIK, párhuzamos landmark-provider-családot vezet be saját stabil
-> ID-topológiával, ezért **ADR 0186** készült (kiosztva
-> `tools/round-slots.py reserve-adr`-rel), az ADR 0178 (adatminimalizálás)
-> és az ADR 0185 (hand-landmark provider/manifest-minta) kiterjesztéseként.
-> **R2** — minden stale „ADR 0161" hivatkozás cserélve `ADR 0178`-ra (a
-> `docs/LESSONS.md` L147 mért átszámozási térképe szerint). **R3 — a
-> legsúlyosabb mért lelet**: a `vision_models` manifest-validátor
-> (`lib/core/ml/vision_model_manifest.dart`) EGYETLEN, hardkódolt
-> `output_schema`-t fogadott el, és a hozzá tartozó teszt
-> (`test/tooling/ml_asset_manifest_test.dart`) `hasLength(1)`-et várt „one
-> deferred vision model expected" indoklással — a brief saját, additív
-> `pose_landmarker` bejegyzés-előírása emiatt NEM tudott volna átmenni a
-> validátoron. `allowed_paths` ezért három fájllal bővült (a validátor, a
-> `ml/make_manifest.py` generátor, a teszt) — pontosan ugyanaz a három
-> fájl, amit az E05-R12 is igényelt ugyanezért az okért. **R4** — a
-> `PoseLandmarkId` pontos 9 tagú halmaza kimondva (ADR 0186 Döntés 1), nem
-> az implementerre bízva. **R5** — a `VisionImage`/`HandLandmarkTimestamp`/
-> `VisionDeviceTier` típusok a kéz-oldali `hand_landmark_provider.dart`-ból
-> IMPORTÁLTAK, nem újradefiniáltak. **R6** — a posture quality/drift
-> modellek scope-határa kimondva (nyers mérték, NEM safety policy — az
-> E05-R20 dolga). **R7** — a kikapcsolás-teszt plain factory-függvény
-> szinten mérhető, Riverpod-wiring nélkül (az egy KÉSŐBBI kör, E05-R24).
+> **Egy javító kör (funkcionálisan kettő, motor-okokból), egy dedikált
+> security-review, három lezárt lelet:**
 >
-> **Két javító kör, két, egymástól FÜGGETLEN review** (funkcionális +
-> dedikált security, `risk=high`) egyenként EGY MAJOR-ral, mindkettő
-> FIXED és SAJÁT kézzel, független `/tmp` klónokban újra-ellenőrizve:
+> 1. **MAJOR-1 — `Polygon2.contains` előjel-hiba.** A ray-casting metszéspont
+>    nevezőjében jogtalan `.abs()` volt — minden nem-tengelyillesztett élnél
+>    (bármi, ami nem egy tengelyillesztett egységnégyzet, pl. egy valódi
+>    gitárnyak-poligon) megfordította az eredményt; az egyetlen meglévő teszt
+>    tengelyillesztett négyzeten futott, ahol a hiba matematikailag nem tud
+>    megnyilvánulni. Javítás: az `.abs()` törölve, előjeles nevező (`23008c6`,
+>    MiniMax javító kör 1) + nem tengelyillesztett regressziós teszt.
+> 2. **MAJOR-2 — a fixture-mátrix két névvel kért nézőpontot (`oldalról`,
+>    `felülről`) teljesen kihagyott.** Javítás: mindkettő számolva
+>    python3-mal és Dart teszttel lefedve — mindkettő legitim módon
+>    `conditionNumberExceeded`-et dob (`cond(2×2)=1600 ≫ 1e3`), dokumentált
+>    elutasításként, nem hiányzó munkaként (`89f1a9f`, MiniMax javító kör 1).
+> 3. **BLOCKER-1 — a kondíciószám-őr vak a projektív sorra.** A dedikált
+>    security-review (risk=high) talált egy teljesen ÉRVÉNYES, alacsony
+>    kondíciószámú (`cond≈2.89`) kalibrációt, amin egy hétköznapi landmark
+>    `(u,v)=(3 183 316, 2 649 428)`-ra képződött `confidence=0.884`-gyel — a
+>    2×2-only kondíciószám vak a `w=h6·x+h7·y+h8=0` „eltűnő egyenesre". A
+>    végleges javításig **három egymást követő tervezési iteráció** kellett,
+>    mindegyiket egy implementer helyes `stopped` jelzése zárta le (nem
+>    hiba — a rendszer ezért van):
+>    - **Iteráció 1 (MiniMax, javító kör 1, `7ceef3e`):** konstrukció-idejű
+>      5-mintapontos `apply()`-magnitúdó guard — valódi javulás (a review
+>      saját 50k-próbás keresése 323 340 → 95 119 találatra csökkent), de
+>      NEM zárta le a rést (95 119 rácspont-minta továbbra is `|uv|>10`-et
+>      adott — a kimenet nem affin, 5 minta nem garantál semmit közöttük).
+>    - **Iteráció 2 (Codex, javító kör 2):** a review matematikailag TELJES
+>      terve — a homogén nevező (`w`) MAGA affin, tehát egy 4-sarkos,
+>      azonos-előjel konstrukció-idejű ellenőrzés bizonyíthatóan kimerítő.
+>      A Codex implementálta, majd **helyesen `stopped`-ot jelzett**:
+>      `front_medium` (a TELJES tesztsuite referencia „jó" fixture-e) saját
+>      próbájával NEM azonos előjelű a 4 sarkán — egy korábban észrevétlen,
+>      szűk eltűnő-egyenes sáv kamera-tér `y≈0,25-0,27` közelében. A
+>      4-sarkos ellenőrzés matematikailag helyes, de hatókörben túl szigorú
+>      lett volna. **Ekkor a Codex CLI a SAJÁT upstream-kvótájába futott**
+>      (usage-limit, infrastruktúra-kimerülés — ld. lent az önjavítás),
+>      mielőtt a redirect-et implementálhatta volna.
+>    - **Orchestrátor-redirect (§0.0.1, ADR 0087 §2 — a kör saját, még nem
+>      merge-elt artefaktumát érintő döntés, nem H4 halt):** a védelem
+>      KONSTRUKCIÓ-idejűről PONT-szintűre tolva — `mapPoint()` a
+>      TÉNYLEGESEN lekérdezett ponton nézi `|w|`-t.
+>    - **Iteráció 3 (MiniMax, a Codex-kvóta ideiglenes tiltása alatt,
+>      user-döntéssel, folytatásként — nem önálló új MiniMax-kör):** a
+>      pont-szintű `|w|`-t implementálta pontosan a redirect szerint, majd
+>      SAJÁT seed-7 random-search validációval (5000 próba, 11×11 rács)
+>      **helyesen `stopped`-ot jelzett MÁSODSZOR IS**: bebizonyította, hogy
+>      NINCS olyan `wMinBound`, ami egyszerre kielégítené a BLOCKER-1
+>      repro elutasítását (`T>0,058`), a `front_medium` megtartását
+>      (`T<1,0`) és a sweep garbage-ének kiszűrését (`T>7,31`) — `|w|`
+>      korlátozása NEM korlátozza `|uv|=numerator/w`-t, mert a numerator
+>      függetlenül nagyra nőhet.
+>    - **Orchestrátor második redirectje (§0.0.2):** a `|w|`-proxy ELESIK —
+>      pont-szinten úgyis kiszámoljuk a tényleges `apply()` kimenetet, tehát
+>      a TÉNYLEGES `|uv|` magnitúdóját ellenőrizzük közvetlenül a MÁR
+>      validált `guitarSpaceSanityBound=10.0`-hoz, küszöb-kalibráció
+>      nélkül — bizonyíthatóan helyes, nem küszöb-szerencse (a BLOCKER-1
+>      repro már dokumentáltan `|uv|≈1050`-et ad, `front_medium` már
+>      bizonyítottan `<10`).
+>    - **Iteráció 4 (MiniMax, ugyanaz a folytatás):** implementálta a
+>      közvetlen magnitúdó-ellenőrzést, törölte a konstrukció-idejű guardot
+>      és a most-már-halott `unstableMapping` enum-értéket, írt egy ÚJ
+>      adversarial random-search tesztet (seed=7, 5000 próba, 11×11 rács).
+>      `done` jelzés, 5 commit.
 >
-> 1. **F1 — MAJOR (funkcionális review): hamis „format: ZÖLD" önjelentés.**
->    A branch-történetben volt egy DEDIKÁLT „dart format" commit, mégis egy
->    friss, izolált `/tmp` klónban futtatott gate PIROSAN állt meg a
->    format-lépésen — `pose_landmarks.dart:203` egy 82 karakteres sort
->    tartalmazott, amit a dedikált format-commit **nem érintett** (hat MÁSIK
->    fájlt formázott). A sor változatlanul jelen volt az ELSŐ implementációs
->    commit óta. Javítás: `dart format` a fájlra (`67d61bc`, MiniMax javító
->    kör 1) — SAJÁT, MÁSODIK friss `/tmp` klónban a teljes gate mind a 7
->    lépése genuinely zöld, patch nélkül.
-> 2. **S-MAJOR-1 — MAJOR (dedikált security-review): a privacy-audit „az
->    EGYETLEN gépi őr" egy negatív alszó-szűrőre támaszkodott, nem egy
->    pozitív zárt halmaz-pinre.** A security-reviewer az implementer és az
->    orchestrátor SAJÁT próbájától (mindkettő `'nose'`-t injektált)
->    FÜGGETLEN mutációval (`'chin': PoseLandmarkId.neckReference` — valódi
->    arc-pont, de a hat tiltott alszó (`eye/nose/mouth/ear/face/lip`)
->    egyikét sem tartalmazza) demonstrálta: a TELJES 155-tesztes
->    vision-suite zöld maradt, miközben egy arc-koordináta ténylegesen
->    bekerült az audit-felszínbe `neckReference` álnéven. A MAI szállított
->    allow-lista NEM sértett (pontosan 9 helyes bejegyzés) — a gépi őr
->    FEDEZETE volt gyengébb, mint amit a brief §9 ígért. Mivel a MiniMax
->    már elhasználta az egy javító körét (F1-re), a szabály szerint a
->    MÁSODIK javító kört a **Codex (Terra)** vitte, külön munkapéldányban:
->    `poseLandmarkIdByRawName.keys.toSet()` pinnelve egy explicit,
->    pontos 9-elemű snapshotra + `.length == PoseLandmarkId.values.length`
->    1:1-kikényszerítés (`56146c2`). **Az orchestrátor SAJÁT, HARMADIK,
->    független `/tmp` klónban megismételte a security-reviewer `'chin'`
->    mutációját**: a teljes vision-suite-ból pontosan 1 teszt bukik (154/155
->    zöld) — a korábban észrevétlen kerülés most helyesen elakad.
+> **Az orchestrátor MINDHÁROM lezárt leletet FÜGGETLENÜL újra-ellenőrizte**,
+> nem az implementer önjelentésére hagyatkozva: friss `/tmp` klónban a
+> teljes gate 8/8 ZÖLD (az első próba hamis-piros volt — gitignore-olt
+> l10n hiányzott egy vadonatúj klónban, `docs/LESSONS.md` L27/L48 mintája,
+> `tools/prepare-flutter-generated.sh` után zöld), ÉS egy MÁSODIK,
+> eldobható klónban egy **valódi-sértés (falszifikációs) próba**: a
+> BLOCKER-1 guard `if (false)`-ra mutálva a repro-teszt ÉS az adversarial
+> teszt AZONNAL pirosra vált (`trial=0`-nál már `|uv|=11,91`-et talál) —
+> bizonyítva, hogy a tesztek ténylegesen diszkriminálnak, nem csak
+> vacuous-an mennek át. `Polygon2.contains`/`side`+`top` fixture javítások
+> a review saját, független próbájával külön is megerősítve (fix round 1
+> review-jában).
 >
-> **Dedikált security-review (risk=high): PASS a biztonsági lencsén**, 0
-> CRITICAL/BLOCKER, 1 MAJOR (fent, FIXED), 1 MINOR (`PostureObservation.state`
-> mindig `good`, ha ≥1 landmark közös — `needsImprovement`-et sosem termel,
-> mérve `maxDrift=4.257`-nél is `good`; E05-R20 follow-up, R14-ben nincs
-> fogyasztó), 3 NOTE (duplikált allow-list-alias csendes felülírás; a
-> manifest `path`-nak továbbra sincs path-traversal védelme — átvett
-> R12-lelet, NEM rontva; `PostureBaselineConfig` assert-alapú validációja
-> release-ben strippelt, de kihasználhatóság nem igazolt).
+> **♻️ Önjavítás közben (H6, 2026-08-07):** a Codex CLI usage-limit
+> kimerülése (iteráció 2 vége) egy MÁS réteg, mint a router belső napi
+> Terra-számlálója — a meglévő `terra_hold_if_exhausted()` ezt NEM fogta
+> volna meg. Az önjavító kör (ADR 0112, PR
+> [#186](https://github.com/wolfcasaba/strumsight/pull/186)) egy
+> testvér-mechanizmust adott (`codex_usage_limit_hold_*`,
+> `tools/round-pipeline.sh`), ami a Codex CLI hibaszövegéből vonja ki a
+> reset-időt és csendben felfüggeszt önjavítási kísérlet nélkül. Ezután a
+> user explicit döntéssel a Terra-tiltás alatt a MiniMax-ot bízta meg a
+> javító kör 2 folytatásával (iteráció 3-4 fent) — ez NEM számít bele a
+> normál egy-javító-kör MiniMax-eszkalációs küszöbbe, mert a Codexnek
+> szánt kör folytatása, nem önálló új MiniMax-kör.
 >
-> Zöld kapu (exact-SHA `fe9d756`): Build APK
-> [31188472000](https://github.com/wolfcasaba/strumsight/actions/runs/31188472000)
-> **success** (egy korábbi futás egy tranziens pub.dev advisory-fetch 403-on
-> bukott — a diffhez nem kapcsolódó CI-flake, `gh run rerun --failed`-del
-> zölddé vált) + Router CI
-> [31188468099](https://github.com/wolfcasaba/strumsight/actions/runs/31188468099)
-> **success**. Post-merge gate (`tools/round-gate.sh test/features/vision
-> test/tooling`) a friss `main`-en is zöld.
+> Zöld kapu (exact-SHA `6b2f854`): Full Gate
+> [31208166822](https://github.com/wolfcasaba/strumsight/actions/runs/31208166822)
+> **success** + Router CI
+> [31208145749](https://github.com/wolfcasaba/strumsight/actions/runs/31208145749)
+> **success** (natív útvonal nem érintett, `build-apk.yml` nem kellett —
+> `tools/round-ci-plan.py` döntése). Post-merge gate (`tools/round-gate.sh
+> test/core/geometry test/features/vision test/property/homography_property_test.dart`)
+> a friss `main`-en (`a351ad3`) is zöld.
 >
-> Lecke: **L167** (egy megosztott registry-validátor hallgatólagosan
-> EGYETLEN bejegyzésre íródhat — a pre-flight mérje ki, mielőtt egy második
-> bejegyzést ígér a brief), **L168** (egy dedikált „formázd meg" commit nem
-> bizonyítja, hogy MINDEN érintett fájl formázott — a gate-et mindig
-> önállóan, friss klónban kell újrafuttatni), **L169** (egy „EGYETLEN gépi
-> őrnek" nevezett privacy-teszt pozitív, zárt kulcshalmazt pinneljen, ne
-> negatív alszó-szűrőt — adversarial próbánál a KORÁBBI próbától eltérő
-> mutációt használj).
->
-> ## ♻️ E05-R15 önjavítás (2026-08-07, H6) — Codex CLI usage-limit hold hozzáadva
->
-> Az E05-R15 fix-round-2 (Codex/Terra, `gpt-5.6-terra`) a Codex CLI SAJÁT
-> upstream fiók-kvótájába futott (`usage limit... try again at Aug 8th,
-> 2026 7:32 AM`, 3x azonos szöveg, azonos `session_id`). Ez MÁS réteg, mint
-> a router belső napi Terra-számlálója (`terra-status`, jelenleg
-> korlátlan) — a meglévő `terra_hold_if_exhausted()` mért módon NEM fogta
-> volna meg (a halt-summary nem illeszkedik a `*Terra*budget*` mintára), így
-> egy sima `outcome=retry` a láncot 5 percenként újra a falnak futtatta
-> volna, és a 3 önjavító kísérlet ~15-20 percen belül elfogyott volna egy
-> ~15 óra múlva magától megszűnő ok miatt. Az önjavító kör (ADR 0112,
-> PR [#186](https://github.com/wolfcasaba/strumsight/pull/186)) egy
-> testvér-mechanizmust adott a `terra_hold_*` mellé
-> (`codex_usage_limit_hold_*`, `tools/round-pipeline.sh`), ami a Codex CLI
-> hibaszövegéből (nem élő API-ból) vonja ki a reset-időt, és ugyanazt a
-> "csendes kihagyás, önjavítási kísérlet nélkül" mintát adja erre a
-> rétegre is. **NEM** motor-váltás (`tools/engine-profile.sh`) a fix —
-> az a megállt kör tartalmi döntése maradt, nem önjavító infra-munka.
-> `outcome=fixed`, 5 új regressziós teszt a valódi mért halt-szöveggel,
-> teljes `tools/tests` zöld (346 teszt + 387 subtest). Tanulság:
-> [`docs/LESSONS.md` L170](docs/LESSONS.md). A lánc a KÖVETKEZŐ firingen
-> E05-R15-öt futtatja újra; ha ismét ugyanabba a (várhatóan még
-> kimerült) Codex-falba fut, az ÚJ hold ezúttal önjavítási kísérlet
-> nélkül csendben felfüggeszti kb. 2026-08-08 07:32 UTC-ig.
+> Lecke: **L171** (egy `|w|`/homogén-nevező proxy csak KONSTRUKCIÓ-idejű,
+> véges/affin-szélsőérték érvelésre bizonyíthatóan kimerítő — pont-szintű
+> guardnál a proxy helyett a tényleges korlátozandó mennyiséget ellenőrizd
+> közvetlenül, részletek `docs/LESSONS.md`), **L27 megerősítve** (a
+> `tools/mm-round.sh` teljes klónt vár, `git worktree`-n `exit 2` — a
+> MiniMax munkapéldányát mindig `git clone --local`-lal készítsd, ne
+> `git worktree add`-del).
 >
 > ## ✅ E05-R14 KÉSZ — Pose landmark provider és posture baseline (2026-08-07)
 >
 > **E05-R14** MERGED (PR [#185](https://github.com/wolfcasaba/strumsight/pull/185),
 > squash `efa4bbe`; implementer **MiniMax M3** (kezdeti + javító kör 1)
 > → **Codex/Terra** (javító kör 2, motor-eszkaláció), orchestrátor/reviewer
-> **Claude Sonnet 5**). Lásd a fenti "Last updated" blokk a teljes
-> pre-flight/javítókör/review történetért — ez a szakasz csak a rövid
-> hivatkozási pont a korábbi körök mintája szerint. **ADR 0186** (új, az
-> ADR 0178/0185 kiterjesztéseként — ld. fent R1). Review:
+> **Claude Sonnet 5**). Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ADR 0186** (új, az
+> ADR 0178/0185 kiterjesztéseként). Review:
 > [docs/reviews/e05-r14-pose-provider-and-posture-baseline-review.md](docs/reviews/e05-r14-pose-provider-and-posture-baseline-review.md)
 > — **APPROVED** mindkét javító kör után. Dedikált security-review:
 > [docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md](docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md)
-> — **PASS** (S-MAJOR-1 fixed). **Következő:** E05-R15 — Guitar coordinate
-> system és homography (`docs/sdd/06-epic-05-computer-vision.md` Kör 15,
-> nincs még commitolt brief), a pipeline új sessionben indítja.
+> — **PASS** (S-MAJOR-1 fixed).
 >
-> ## ✅ E05-R13 KÉSZ — Hand track assignment és temporal smoothing (2026-08-07)
+> ## ✅ E05-R15 KÉSZ — Guitar coordinate system és homography (2026-08-07)
 >
-> **E05-R13** MERGED (PR [#184](https://github.com/wolfcasaba/strumsight/pull/184),
-> squash `148469c`; implementer **MiniMax M3**, orchestrátor/reviewer
-> **Claude Sonnet 5**). Lásd a fenti "Last updated" blokk a teljes
-> pre-flight/javítókör/review történetért — ez a szakasz csak a rövid
-> hivatkozási pont a korábbi körök mintája szerint. **Nincs új ADR**
-> (megerősítve a pre-flightban, §0.0). Review:
-> [docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md)
-> — **APPROVED** javító kör után. Dedikált security-review:
-> [docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md)
-> — **PASS**. **Következő:** E05-R14 — Pose landmark provider és posture
-> baseline (`docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`), a
-> pipeline új sessionben indítja.
+> **E05-R15** MERGED (PR [#187](https://github.com/wolfcasaba/strumsight/pull/187),
+> squash `a351ad3`; implementer **MiniMax M3** (kezdeti + javító kör 1 +
+> javító kör 2, az utóbbi Codex CLI usage-limit önjavítás után user-döntéssel),
+> orchestrátor/reviewer **Claude Sonnet 5**). Lásd a fenti "Last updated"
+> blokk a teljes pre-flight/javítókör/review történetért — ez a szakasz
+> csak a rövid hivatkozási pont a korábbi körök mintája szerint. **Nincs
+> új ADR**. Review:
+> [docs/reviews/e05-r15-guitar-coordinates-and-homography-review.md](docs/reviews/e05-r15-guitar-coordinates-and-homography-review.md)
+> — **APPROVED** két javító kör után. Dedikált security-review:
+> [docs/reviews/e05-r15-guitar-coordinates-and-homography-security.md](docs/reviews/e05-r15-guitar-coordinates-and-homography-security.md)
+> — a BLOCKER-1 innen indult (risk=high). **Következő:** E05-R16 — Guitar
+> geometry tracking és calibration loss (`docs/sdd/06-epic-05-computer-vision.md`
+> Kör 16, nincs még commitolt brief), a pipeline új sessionben indítja.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -180,9 +165,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-07: E05-R13 részletes narratívája + E05-R12 bannere
-> archiválva (2 banner), E05-R14 részletes narratívája + rövid bannere
-> felkerült.
+> Mért diéta: 2026-08-07: E05-R14 részletes narratívája + az E05-R15
+> önjavítás-banner + E05-R13 rövid bannere archiválva (3 banner), E05-R15
+> részletes narratívája + rövid bannere felkerült (E05-R14 rövid bannere
+> marad a második helyen).
 
 ## 1. Current release state
 
@@ -514,31 +500,29 @@
 
 ## 4. Current branch
 
-`main` @ [PR #185](https://github.com/wolfcasaba/strumsight/pull/185), squash
-`efa4bbe` (E05-R14, pose landmark provider és posture baseline). Az
-`assets/ml/model_manifest.json` érintése miatt a CI-terv `build-apk.yml`-t
-írt elő (assets/**-diff, natív/release-érintő), a `docs/rounds/**` érintés
-miatt a **router-ci** is a kapu része: build-apk
-[31188472000](https://github.com/wolfcasaba/strumsight/actions/runs/31188472000)
-+ router-ci [31188468099](https://github.com/wolfcasaba/strumsight/actions/runs/31188468099)
-**success** az exact merge-előtti tip `fe9d756`-n (mindkét javító kör +
-mindkét review-commit UTÁN; a build-apk első futása egy tranziens pub.dev
-advisory-fetch 403-on bukott, `gh run rerun --failed` után zöld). Review
-**APPROVED 2 javító kör után** — MiniMax (F1, formázás) + motor-eszkalációval
-Codex/Terra (S-MAJOR-1, privacy-audit-fedezet), mindkettő az orchestrátor
-SAJÁT, függetlenül futtatott próbateszteivel újra-ellenőrizve (harmadik
-`/tmp` klón a security-fixhez), nem az implementerek önjelentésére
-hagyatkozva; dedikált security-review (risk=high) **PASS a biztonsági
-lencsén**, 1 MAJOR fixed. Az `origin/main` a dispatch óta **egyszer
-mozdult** (egy párhuzamos governance-kör docs-only commitja, `17ea0ae`) —
-tiszta rebase (H8 nem sérült), CI újra-dispatch-elve az új tipen.
-Post-merge gate (`tools/round-gate.sh test/features/vision test/tooling`)
-a friss `main`-en is zöld.
-_(Történeti product-merge referencia: PR #184 / `148469c`, E05-R13; PR #183
-/ `f39d7b6`, E05-R12; PR #182 / `113976a`, E05-R11; PR #181 / `39d1c29`,
-E05-R10; PR #180 / E05-R09, frame quality assessor; PR #169 / `b5837d9`,
-E05-R07; PR #168 / `a43f8c1`, E05-R06; PR #162 / `cef864c`, E05-R01, Epic 5
-INDUL; PR #160 / `0cf6323`, E04-R24.)_
+`main` @ [PR #187](https://github.com/wolfcasaba/strumsight/pull/187), squash
+`a351ad3` (E05-R15, guitar coordinate system és homography). Tisztán Dart/
+dokumentum-diff → a CI-terv `full-gate.yml`-t írt elő (`tools/round-ci-plan.py`,
+nincs natív út), és a `docs/rounds/**` érintés miatt a **router-ci** is a
+kapu része: full-gate
+[31208166822](https://github.com/wolfcasaba/strumsight/actions/runs/31208166822)
++ router-ci [31208145749](https://github.com/wolfcasaba/strumsight/actions/runs/31208145749)
+**success** az exact merge-előtti tip `6b2f854`-n (mindkét javító kör +
+mindkét review-commit UTÁN). Review **APPROVED 2 javító kör után** —
+MAJOR-1/2 MiniMax javító kör 1-ben, BLOCKER-1 három tervezési iteráción át
+(MiniMax → Codex → MiniMax, ld. fejléc), mindegyik lelet az orchestrátor
+SAJÁT, függetlenül futtatott gate-újrafuttatásával ÉS egy valódi-sértés
+(falszifikációs) mutáció-próbával újra-ellenőrizve, nem az implementer
+önjelentésére hagyatkozva; dedikált security-review (risk=high) — innen
+indult a BLOCKER-1. Az `origin/main` a dispatch óta **nem mozdult**
+(H8 tiszta, nem kellett rebase). Post-merge gate (`tools/round-gate.sh
+test/core/geometry test/features/vision
+test/property/homography_property_test.dart`) a friss `main`-en is zöld.
+_(Történeti product-merge referencia: PR #185 / `efa4bbe`, E05-R14; PR #184
+/ `148469c`, E05-R13; PR #183 / `f39d7b6`, E05-R12; PR #182 / `113976a`,
+E05-R11; PR #181 / `39d1c29`, E05-R10; PR #180 / E05-R09, frame quality
+assessor; PR #169 / `b5837d9`, E05-R07; PR #168 / `a43f8c1`, E05-R06;
+PR #162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`, E04-R24.)_
 
 > **[Superseded ref — E05-R07 branch]:** `main` @ PR #169, squash
 `b5837d9` (E05-R07). Pure Dart/teszt diff → full-gate
@@ -633,6 +617,46 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
+**E05-R15 — Guitar coordinate system és homography** (PR
+[#187](https://github.com/wolfcasaba/strumsight/pull/187), squash
+`a351ad3`, nincs új ADR; implementer **MiniMax M3** teljes egészében —
+javító kör 2 a Codex CLI usage-limit önjavítása után user-döntéssel
+folytatva ugyanazon a leleten —, orchestrátor/reviewer **Claude Sonnet 5**).
+Pure Dart geometriai mag (`Point2`/`Polygon2`/`Homography`/`GuitarSpace`) +
+`GuitarLandmarkMapper`/`GuitarRegion` — lásd a fejléc ✅-blokk a teljes
+pre-flight/javítókör/review történetért. **2 javító kör**: MAJOR-1
+(`Polygon2.contains` előjel-hiba) + MAJOR-2 (hiányzó side/top fixture-ök)
+javító kör 1-ben; BLOCKER-1 (kondíciószám-őr vak a projektív sorra) HÁROM
+tervezési iteráción át javító kör 2-ben, mindegyiket egy implementer
+helyes `stopped` jelzése zárt (nem hiba) — a végleges megoldás közvetlen
+`|uv|`-magnitúdó ellenőrzés, nem küszöb-proxy. Az orchestrátor mindhárom
+lezárt leletet SAJÁT, függetlenül futtatott gate-újrafuttatással ÉS egy
+valódi-sértés (mutáció) próbával újra-ellenőrizte, nem az implementer
+önjelentésére hagyatkozva. Dedikált security-review (risk=high) — innen
+indult a BLOCKER-1. Gate zöld a `6b2f854` merge-előtti SHA-n: Full Gate ✅
+· Router CI ✅. Post-merge gate a friss `main`-en (`a351ad3`) is zöld.
+Lecke: **L171** (`docs/LESSONS.md`), **L27 megerősítve**. Részletek: fejléc
+✅-blokk +
+[review](docs/reviews/e05-r15-guitar-coordinates-and-homography-review.md) +
+[security](docs/reviews/e05-r15-guitar-coordinates-and-homography-security.md).
+
+**E05-R14 — Pose landmark provider és posture baseline** (PR
+[#185](https://github.com/wolfcasaba/strumsight/pull/185), squash
+`efa4bbe`, **ADR 0186** (új, ADR 0178/0185 kiterjesztéseként); implementer
+**MiniMax M3** (kezdeti + javító kör 1) → **Codex/Terra** (javító kör 2,
+motor-eszkaláció), orchestrátor/reviewer **Claude Sonnet 5**).
+Adatminimalizált felsőtest-pose pipeline arcelemzés nélkül — lásd
+[`docs/handoff-archive.md`](docs/handoff-archive.md) a teljes
+pre-flight/javítókör/review történetért. **2 javító kör**: F1 MAJOR
+(hamis „format: ZÖLD" önjelentés) + S-MAJOR-1 MAJOR (privacy-audit gépi
+őr fedezete gyengébb volt, mint ígért), mindkettő az orchestrátor SAJÁT
+próbáival újra-ellenőrizve. Dedikált security-review (risk=high) **PASS**
+(S-MAJOR-1 fixed). Gate zöld a `fe9d756` merge-előtti SHA-n: Build APK ✅
+· Router CI ✅. Lecke: **L167, L168, L169**. Részletek:
+[docs/handoff-archive.md](docs/handoff-archive.md) +
+[review](docs/reviews/e05-r14-pose-provider-and-posture-baseline-review.md) +
+[security](docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md).
+
 **E05-R13 — Hand track assignment és temporal smoothing** (PR
 [#184](https://github.com/wolfcasaba/strumsight/pull/184), squash
 `148469c`, nincs új ADR; implementer **MiniMax M3**, orchestrátor/reviewer
@@ -717,11 +741,16 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > device-mátrix csak akkor lesznek véglegesek). Az Epic 6 queue-sorai
 > addig is `hold`-on védik a sorrendet.
 
-0. **E05-R14 — Pose landmark provider és posture baseline** (SDD Ch6 Kör 14,
-   `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`,
-   engine a `docs/execution/pipeline-queue.tsv` szerint) — a queue következő
-   `pending` sora; a pipeline (ADR 0087) automatikusan indítja új
-   sessionben — **ez a session nem kezdi el.**
+0. **E05-R16 — Guitar geometry tracking és calibration loss** (SDD Ch6
+   Kör 16, `docs/sdd/06-epic-05-computer-vision.md`, nincs még commitolt
+   brief) — a pipeline új sessionben indítja — **ez a session nem kezdi el.**
+   **~~E05-R15 — Guitar coordinate system és homography~~ — KÉSZ**
+   (PR #187, `a351ad3`, nincs új ADR; implementer MiniMax M3 (mindkét
+   javító kör); dedikált security-reviewer risk=high — innen indult
+   BLOCKER-1; ld. fejléc + §5).
+   **~~E05-R14 — Pose landmark provider és posture baseline~~ — KÉSZ**
+   (PR #185, `efa4bbe`, ADR 0186; implementer MiniMax M3 → Codex/Terra
+   (javító kör 2); dedikált security-reviewer PASS; ld. docs/handoff-archive.md + §5).
    **~~E05-R13 — Hand track assignment és temporal smoothing~~ — KÉSZ**
    (PR #184, `148469c`, nincs új ADR; implementer MiniMax M3; 1 javító kör;
    dedikált security-reviewer PASS, futott a merge előtt; ld. fejléc + §5).

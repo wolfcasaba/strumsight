@@ -6,6 +6,150 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R14 — Pose landmark provider és posture baseline, teljes részletes történet (2026-08-07)
+
+Adatminimalizált felsőtest-pose pipeline arcelemzés nélkül — `PoseLandmarkId`
+(pontosan **9** stabil pont: `leftShoulder`/`rightShoulder`,
+`leftElbow`/`rightElbow`, `leftWrist`/`rightWrist`, `leftHip`/`rightHip`,
+`neckReference` — legfeljebb egy semleges nyak-referenciapont; szem/orr/
+száj/fül ID **nem létezik** az enumban), `mapRawPoseLandmarks` allow-list
+mapping (minden nem-engedélyezett nyers név — beleértve az arc-pontokat —
+a domain-objektum létrejötte ELŐTT esik ki), `PoseLandmarkProvider`
+kontraktus + `CadenceLimitedPoseLandmarkProvider` wrapper (alapértelmezett
+1:6 arány a kéz-modellhez képest, az arány módosítása AZONNAL érvényes),
+`NativePoseLandmarkProvider` (EBBEN a körben szándékosan fail-closed
+`unavailable`, a `MonotonicHandLandmarkProvider` mintáját követve),
+`RecordedPoseLandmarkProvider` (CI-fixture, SZÁNDÉKOSAN ad arc-pontokat is
+a nyers payloadban — a privacy-szűrő így a tényleges mérce, nem egy
+külön teszt-ág), `createPoseLandmarkProvider` plain factory-kapu
+(`visionPoseTrackingEnabled=false` → a delegált provider **meg sem épül**),
+`PostureBaselineCollector` (kategorikus ÉS numerikus quality-küszöb +
+minimum látható időtartam; BÁRMELY gate-bukó minta az egész ablakot
+RESETeli — részleges ablakból sosem lesz baseline), `PostureObservation`
+(nyers, vállszélességgel normalizált drift — semmilyen ítélet/policy, az
+az E05-R20 dolga). Implementer **MiniMax M3** (kezdeti implementáció +
+javító kör 1), **motor-eszkaláció Codex/Terra-ra javító kör 2-ben**
+(AGENTS.md §15.6 — a MiniMax egy javító kört kap, egy MÁSODIK, a
+dedikált security-review által felfedezett MAJOR ezért Codexhez ment).
+Orchestrátor/reviewer Claude Sonnet 5.
+
+**Hét mért pre-flight revízió** (§0.0 R1–R7, `docs/rounds/e05-r14-…md`):
+**R1** — a fejléc eredeti „nincs új ADR" terve NEM tartható: a kör egy
+MÁSODIK, párhuzamos landmark-provider-családot vezet be saját stabil
+ID-topológiával, ezért **ADR 0186** készült (kiosztva
+`tools/round-slots.py reserve-adr`-rel), az ADR 0178 (adatminimalizálás)
+és az ADR 0185 (hand-landmark provider/manifest-minta) kiterjesztéseként.
+**R2** — minden stale „ADR 0161" hivatkozás cserélve `ADR 0178`-ra (a
+`docs/LESSONS.md` L147 mért átszámozási térképe szerint). **R3 — a
+legsúlyosabb mért lelet**: a `vision_models` manifest-validátor
+(`lib/core/ml/vision_model_manifest.dart`) EGYETLEN, hardkódolt
+`output_schema`-t fogadott el, és a hozzá tartozó teszt
+(`test/tooling/ml_asset_manifest_test.dart`) `hasLength(1)`-et várt „one
+deferred vision model expected" indoklással — a brief saját, additív
+`pose_landmarker` bejegyzés-előírása emiatt NEM tudott volna átmenni a
+validátoron. `allowed_paths` ezért három fájllal bővült (a validátor, a
+`ml/make_manifest.py` generátor, a teszt) — pontosan ugyanaz a három
+fájl, amit az E05-R12 is igényelt ugyanezért az okért. **R4** — a
+`PoseLandmarkId` pontos 9 tagú halmaza kimondva (ADR 0186 Döntés 1), nem
+az implementerre bízva. **R5** — a `VisionImage`/`HandLandmarkTimestamp`/
+`VisionDeviceTier` típusok a kéz-oldali `hand_landmark_provider.dart`-ból
+IMPORTÁLTAK, nem újradefiniáltak. **R6** — a posture quality/drift
+modellek scope-határa kimondva (nyers mérték, NEM safety policy — az
+E05-R20 dolga). **R7** — a kikapcsolás-teszt plain factory-függvény
+szinten mérhető, Riverpod-wiring nélkül (az egy KÉSŐBBI kör, E05-R24).
+
+**Két javító kör, két, egymástól FÜGGETLEN review** (funkcionális +
+dedikált security, `risk=high`) egyenként EGY MAJOR-ral, mindkettő
+FIXED és SAJÁT kézzel, független `/tmp` klónokban újra-ellenőrizve:
+
+1. **F1 — MAJOR (funkcionális review): hamis „format: ZÖLD" önjelentés.**
+   A branch-történetben volt egy DEDIKÁLT „dart format" commit, mégis egy
+   friss, izolált `/tmp` klónban futtatott gate PIROSAN állt meg a
+   format-lépésen — `pose_landmarks.dart:203` egy 82 karakteres sort
+   tartalmazott, amit a dedikált format-commit **nem érintett** (hat MÁSIK
+   fájlt formázott). A sor változatlanul jelen volt az ELSŐ implementációs
+   commit óta. Javítás: `dart format` a fájlra (`67d61bc`, MiniMax javító
+   kör 1) — SAJÁT, MÁSODIK friss `/tmp` klónban a teljes gate mind a 7
+   lépése genuinely zöld, patch nélkül.
+2. **S-MAJOR-1 — MAJOR (dedikált security-review): a privacy-audit „az
+   EGYETLEN gépi őr" egy negatív alszó-szűrőre támaszkodott, nem egy
+   pozitív zárt halmaz-pinre.** A security-reviewer az implementer és az
+   orchestrátor SAJÁT próbájától (mindkettő `'nose'`-t injektált)
+   FÜGGETLEN mutációval (`'chin': PoseLandmarkId.neckReference` — valódi
+   arc-pont, de a hat tiltott alszó (`eye/nose/mouth/ear/face/lip`)
+   egyikét sem tartalmazza) demonstrálta: a TELJES 155-tesztes
+   vision-suite zöld maradt, miközben egy arc-koordináta ténylegesen
+   bekerült az audit-felszínbe `neckReference` álnéven. A MAI szállított
+   allow-lista NEM sértett (pontosan 9 helyes bejegyzés) — a gépi őr
+   FEDEZETE volt gyengébb, mint amit a brief §9 ígért. Mivel a MiniMax
+   már elhasználta az egy javító körét (F1-re), a szabály szerint a
+   MÁSODIK javító kört a **Codex (Terra)** vitte, külön munkapéldányban:
+   `poseLandmarkIdByRawName.keys.toSet()` pinnelve egy explicit,
+   pontos 9-elemű snapshotra + `.length == PoseLandmarkId.values.length`
+   1:1-kikényszerítés (`56146c2`). **Az orchestrátor SAJÁT, HARMADIK,
+   független `/tmp` klónban megismételte a security-reviewer `'chin'`
+   mutációját**: a teljes vision-suite-ból pontosan 1 teszt bukik (154/155
+   zöld) — a korábban észrevétlen kerülés most helyesen elakad.
+
+**Dedikált security-review (risk=high): PASS a biztonsági lencsén**, 0
+CRITICAL/BLOCKER, 1 MAJOR (fent, FIXED), 1 MINOR (`PostureObservation.state`
+mindig `good`, ha ≥1 landmark közös — `needsImprovement`-et sosem termel,
+mérve `maxDrift=4.257`-nél is `good`; E05-R20 follow-up, R14-ben nincs
+fogyasztó), 3 NOTE (duplikált allow-list-alias csendes felülírás; a
+manifest `path`-nak továbbra sincs path-traversal védelme — átvett
+R12-lelet, NEM rontva; `PostureBaselineConfig` assert-alapú validációja
+release-ben strippelt, de kihasználhatóság nem igazolt).
+
+Zöld kapu (exact-SHA `fe9d756`): Build APK
+[31188472000](https://github.com/wolfcasaba/strumsight/actions/runs/31188472000)
+**success** (egy korábbi futás egy tranziens pub.dev advisory-fetch 403-on
+bukott — a diffhez nem kapcsolódó CI-flake, `gh run rerun --failed`-del
+zölddé vált) + Router CI
+[31188468099](https://github.com/wolfcasaba/strumsight/actions/runs/31188468099)
+**success**. Post-merge gate (`tools/round-gate.sh test/features/vision
+test/tooling`) a friss `main`-en is zöld.
+
+Lecke: **L167** (egy megosztott registry-validátor hallgatólagosan
+EGYETLEN bejegyzésre íródhat — a pre-flight mérje ki, mielőtt egy második
+bejegyzést ígér a brief), **L168** (egy dedikált „formázd meg" commit nem
+bizonyítja, hogy MINDEN érintett fájl formázott — a gate-et mindig
+önállóan, friss klónban kell újrafuttatni), **L169** (egy „EGYETLEN gépi
+őrnek" nevezett privacy-teszt pozitív, zárt kulcshalmazt pinneljen, ne
+negatív alszó-szűrőt — adversarial próbánál a KORÁBBI próbától eltérő
+mutációt használj).
+
+## ♻️ E05-R15 önjavítás (2026-08-07, H6) — Codex CLI usage-limit hold hozzáadva
+
+Az E05-R15 fix-round-2 (Codex/Terra, `gpt-5.6-terra`) a Codex CLI SAJÁT
+upstream fiók-kvótájába futott (`usage limit... try again at Aug 8th,
+2026 7:32 AM`, 3x azonos szöveg, azonos `session_id`). Ez MÁS réteg, mint
+a router belső napi Terra-számlálója (`terra-status`, jelenleg
+korlátlan) — a meglévő `terra_hold_if_exhausted()` mért módon NEM fogta
+volna meg (a halt-summary nem illeszkedik a `*Terra*budget*` mintára), így
+egy sima `outcome=retry` a láncot 5 percenként újra a falnak futtatta
+volna, és a 3 önjavító kísérlet ~15-20 percen belül elfogyott volna egy
+~15 óra múlva magától megszűnő ok miatt. Az önjavító kör (ADR 0112,
+PR [#186](https://github.com/wolfcasaba/strumsight/pull/186)) egy
+testvér-mechanizmust adott a `terra_hold_*` mellé
+(`codex_usage_limit_hold_*`, `tools/round-pipeline.sh`), ami a Codex CLI
+hibaszövegéből (nem élő API-ból) vonja ki a reset-időt, és ugyanazt a
+"csendes kihagyás, önjavítási kísérlet nélkül" mintát adja erre a
+rétegre is. **NEM** motor-váltás (`tools/engine-profile.sh`) a fix —
+az a megállt kör tartalmi döntése maradt, nem önjavító infra-munka.
+`outcome=fixed`, 5 új regressziós teszt a valódi mért halt-szöveggel,
+teljes `tools/tests` zöld (346 teszt + 387 subtest). Tanulság:
+`docs/LESSONS.md` L170.
+
+## E05-R13 — Hand track assignment és temporal smoothing (rövid banner, archiválva 2026-08-07)
+
+**E05-R13** MERGED (PR [#184](https://github.com/wolfcasaba/strumsight/pull/184),
+squash `148469c`; implementer **MiniMax M3**, orchestrátor/reviewer
+**Claude Sonnet 5**). Hand-track jitter/rövid-takarás ellen. **Nincs új ADR**.
+Review: [docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-review.md)
+— **APPROVED** javító kör után. Dedikált security-review:
+[docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md](docs/reviews/e05-r13-hand-track-assignment-and-smoothing-security.md)
+— **PASS**.
+
 ## E05-R13 — Hand track assignment és temporal smoothing, teljes részletes történet (2026-08-07)
 
 Stabil fretting/picking hand-track jitter és rövid takarás ellen —

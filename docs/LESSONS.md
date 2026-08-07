@@ -5758,3 +5758,84 @@ VALÓDI, mért halt-szöveget használja (nem kitalált fixture) — l.
 és testvérei. Rokon: a `terra_hold_if_exhausted()` E03-R08 H6 története
 (a router `terra-status` viselkedésének SAJÁT, korábbi mérési hibái —
 más réteg, ugyanaz a "mérd, ne feltételezd" elv).
+
+## L171 — Egy homogén-nevező (`w`) proxy csak KONSTRUKCIÓ-idejű, véges/affin-szélsőérték érvelésre bizonyíthatóan kimerítő; pont-szintű guardnál a proxy helyett a tényleges korlátozandó mennyiséget ellenőrizd (E05-R15, BLOCKER-1, 2026-08-07)
+
+**Mit mértünk.** Az E05-R15 BLOCKER-1 leletére (`GuitarLandmarkMapper` egy
+projektív-vakfoltos homográfiát épít, ami `|uv|` szemetet ad magas
+confidence-szel) HÁROM egymást követő tervezési iteráció kellett, a
+második és harmadik iterációt is egy-egy implementer **helyes** `stopped`
+jelzése zárta:
+
+1. Konstrukció-idejű 5-mintapontos `apply()`-magnitúdó guard (fix round 1)
+   — valódi, de nem teljes javulás: a review saját 50 000-próbás keresése
+   323 340 → 95 119 találatra csökkent, de nem nullára (a kimenet
+   `numerator/w` NEM affin, 5 véges minta nem garantál semmit a
+   mintapontok KÖZÖTT).
+2. A review matematikailag TELJES terve: mivel `w(x,y)=h6·x+h7·y+h8` MAGA
+   affin, egy 4-sarkos, azonos-előjel, konstrukció-idejű ellenőrzés
+   BIZONYÍTHATÓAN kimerítő (egy affin függvény szélsőértéke egy konvex
+   tartomány fölött mindig a csúcsokon van). A Codex implementálta, majd
+   helyesen `stopped`-ot jelzett: a teljes suite referencia „jó" fixture-e
+   (`front_medium`) saját próbával NEM azonos előjelű a 4 sarkán — egy
+   korábban észrevétlen, szűk eltűnő-egyenes sáv miatt. A 4-sarkos
+   ellenőrzés matematikailag helyes volt, csak **hatókörben** túl szigorú
+   (egy 95%-ban jó kalibrációt egészében eldobott volna egyetlen keskeny
+   sáv miatt).
+3. Az orchestrátor első redirectje: told a védelmet PONT-szintűre —
+   `mapPoint()` a ténylegesen lekérdezett ponton nézze `|w|`-t, ne a teljes
+   kalibrációt utasítsa el. Ez a KONSTRUKCIÓ-idejű affin-szélsőérték
+   érvelést **implicit módon is** magával vitte, holott az az érvelés
+   KIFEJEZETTEN a véges (4-sarkos), konstrukció-idejű kontextushoz kötött
+   volt. A MiniMax implementálta pontosan a specifikáció szerint, majd
+   SAJÁT seed-7 random-search validációval (5000 próba, 11×11 rács)
+   **másodszor is helyesen `stopped`-ot jelzett**: bebizonyította, hogy
+   NINCS olyan `wMinBound`, ami egyszerre kielégítené a BLOCKER-1 repro
+   elutasítását (`T>0,058`), a `front_medium` megtartását (`T<1,0`) ÉS a
+   sweep garbage-ének kiszűrését (`T>7,31`).
+
+**Gyökérok.** `uv = numerator / w`; a `numerator` a lekérdezett ponttól
+FÜGGETLENÜL nagyra nőhet egy pathológiás kalibrációnál (a mérve talált
+eset: `|w|=7,31`-nél `|uv|=41,17` — egy 7-es nagyságrendű nevező mellett
+sem garantált a kis kimenet, ha a számláló nagyságrendekkel nagyobb).
+`|w|` korlátozása tehát NEM korlátozza `|uv|`-t — a `w`-alapú érvelés
+kizárólag azért volt „bizonyíthatóan kimerítő" a KONSTRUKCIÓ-idejű,
+4-sarkos formában, mert ott az affin szélsőérték-tétel a TELJES `[0,1]²`
+tartományra vonatkozó állítást tett `w`-ről (bárhol a tartományban nem
+közelítheti a nullát). Pont-szinten viszont nincs ilyen tartomány-szintű
+garanciára szükség — a hívó AMÚGY IS csak az egyetlen lekérdezett pontot
+nézi —, tehát a proxy indoklása megszűnt, de a proxy MAGA tévesen
+átöröklődött. A végleges javítás ezt oldotta fel: a `mapPoint()` a
+TÉNYLEGES `apply()` kimenet magnitúdóját ellenőrzi közvetlenül a MÁR
+validált `guitarSpaceSanityBound`-hoz — nincs proxy, nincs
+küszöb-kalibráció, bizonyíthatóan helyes (a BLOCKER-1 repro már
+dokumentáltan `|uv|≈1050`-et ad, a `front_medium` már bizonyítottan
+`<10`), és egyszerűbb/olcsóbb is (egy `apply()` hívás, nem kettő).
+
+**Miért fontos.** Egy matematikai érvelés (itt: „a finite corner check az
+affin szélsőérték-tétel miatt kimerítő") gyakran egy KONKRÉT kontextushoz
+(itt: konstrukció-idejű, egész-tartományos ellenőrzés) van kötve — amikor
+a MECHANIZMUS (itt: konstrukció-idejű → pont-szintű) megváltozik, az
+érvelés érvényessége NEM automatikus, akkor sem, ha a proxy-mennyiség
+(`w`) formálisan újrafelhasználható marad. Ez rokon [[L01]]-gyel (zöld/
+mért állapot nem bizonyíték arra, amit nem mértek) egy másik szögből: itt
+nem egy MÉRÉS hiányzott, hanem egy KORÁBBI, más kontextusban helyes
+bizonyítás lett hallgatólagosan új kontextusba emelve.
+
+**Szabály.** Amikor egy guard mechanizmusa KONSTRUKCIÓ-idejű, véges
+mintavételezésről PONT-szintű, minden-hívásos ellenőrzésre vált, kérdezd
+meg explicit: a régi indoklás (véges minta + valamilyen szélsőérték-tétel)
+KIFEJEZETTEN a véges/konstrukció-idejű kontextushoz kötött volt-e? Ha igen,
+ne vidd át a proxyt változatlanul — nézd meg, hogy a pont-szintű
+kontextusban elérhető-e a TÉNYLEGES korlátozandó mennyiség közvetlenül
+(itt: `apply()` kimenete, amit a hívó AMÚGY IS kiszámol), és ha igen, azt
+ellenőrizd, ne egy proxyt. Egy implementer `stopped` jelzése egy „a review/
+brief szerint implementáltam, és matematikailag nem működik" tartalommal
+NEM implementer-hiba — pontosan azt a szerepet tölti be, amire a
+`docs/execution/implementer-preamble-minimax.md` 3. pontja szánja
+(„Az invariánst nem lazítjuk, hogy a teszt zöld legyen"), és a második
+ilyen jelzés ugyanarra a leletre erős jel, hogy a PROBLÉMA MAGA
+(a proxy-mechanizmus), nem az implementáció a hibás. Rokon: [[L27]]
+(`tools/mm-round.sh` teljes klónt vár, nem worktree-t — MEGERŐSÍTVE ugyanebben
+a körben, egy MiniMax-dispatch `git worktree`-n ismét `exit 2`-vel bukott,
+a javítás VÁLTOZATLANUL a `git clone --local`).
