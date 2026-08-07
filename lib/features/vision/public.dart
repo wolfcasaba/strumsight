@@ -12,12 +12,17 @@ export 'domain/landmarks/hand_landmarks.dart';
 export 'domain/landmarks/hand_track.dart';
 export 'domain/landmarks/hand_track_assigner.dart';
 export 'domain/landmarks/landmark_smoothing.dart';
+export 'domain/landmarks/pose_landmarks.dart';
+export 'domain/landmarks/posture_baseline.dart';
 export 'domain/landmarks/track_continuity.dart';
 export 'data/persistence/vision_calibration_codec.dart';
 export 'data/persistence/vision_calibration_repository.dart';
 export 'data/landmarks/hand_landmark_provider.dart';
 export 'data/landmarks/native_hand_landmark_provider.dart';
 export 'data/landmarks/recorded_hand_landmark_provider.dart';
+export 'data/landmarks/pose_landmark_provider.dart';
+export 'data/landmarks/native_pose_landmark_provider.dart';
+export 'data/landmarks/recorded_pose_landmark_provider.dart';
 export '../../core/camera/camera_coordinate_space.dart'
     show NormalizedPoint, NormalizedRect;
 export '../../core/ml/vision_model_manifest.dart'
@@ -27,6 +32,8 @@ export '../../core/ml/vision_model_manifest.dart'
         VisionModelManifestReport,
         VisionModelManifestReader,
         FileVisionModelManifestReader,
-        handLandmarksOutputSchema;
+        handLandmarksOutputSchema,
+        poseLandmarksOutputSchema,
+        visionModelOutputSchemas;
 export 'presentation/screens/vision_setup_screen.dart';
 export 'presentation/screens/guitar_calibration_screen.dart';

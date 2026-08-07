@@ -91,7 +91,7 @@ flutter:
 
   // --- E05-R12: vision_models sibling key (additive, §0.0 R3) -----------
 
-  test('shipping manifest vision_models entry is well-formed', () {
+  test('shipping manifest vision_models entries are well-formed', () {
     final projectRoot = _findProjectRoot();
     final manifestFile = File('${projectRoot.absolute.path}/$_manifestPath');
     final decoded =
@@ -103,10 +103,34 @@ flutter:
       isA<List<Object?>>(),
       reason: 'vision_models must be a list (sibling of models)',
     );
+    // E05-R14 (ADR 0186 §Döntés 2): the additive `pose_landmarker` entry
+    // joins `hand_landmarker` — both deferred, each with its OWN schema.
+    final entries = (visionModels! as List<Object?>)
+        .cast<Map<String, Object?>>();
+    expect(entries, hasLength(2), reason: 'two deferred vision models expected');
     expect(
-      (visionModels! as List<Object?>),
-      hasLength(1),
-      reason: 'one deferred vision model expected',
+      entries.map((entry) => entry['model_id']),
+      containsAll(<String>['hand_landmarker', 'pose_landmarker']),
+    );
+    for (final entry in entries) {
+      expect(
+        entry['status'],
+        'deferred',
+        reason: 'no vision model binary ships in this round',
+      );
+      expect(
+        entry['output_schema'],
+        visionModelOutputSchemas[entry['model_id']],
+        reason: 'each model family declares its own registered schema',
+      );
+    }
+    expect(
+      entries
+          .map((entry) => entry['output_schema'] as String)
+          .toSet()
+          .length,
+      2,
+      reason: 'the pose entry must NOT inherit the hand output_schema',
     );
 
     final result = validateVisionManifest(
@@ -317,6 +341,67 @@ flutter:
                 as Map<String, Object?>,
       );
       expect(report.isClean, isTrue, reason: report.issues.join('\n'));
+    });
+
+    // --- E05-R14: the additive pose family (ADR 0186 §Döntés 2) ---------
+
+    Map<String, Object?> validPoseModel() => <String, Object?>{
+      'model_id': 'pose_landmarker',
+      'version': '1.0.0',
+      'path': 'assets/ml/pose_landmarker_deferred.tflite',
+      'sha256': 'b' * 64,
+      'status': 'deferred',
+      'input_shape': [256, 256, 3],
+      'output_schema': 'strumsight.pose_landmarks.v1',
+      'license': {'spdx': 'Apache-2.0', 'name': 'MediaPipe Pose'},
+      'minimum_device_tier': 'basic',
+      'evaluation_report': 'docs/eval/vision/pose_landmarker.md',
+    };
+
+    VisionModelManifestReport reportFor(List<Object?> visionModels) {
+      final projectRoot = newFixture(
+        visionModels: visionModels,
+        pubspecAssetPath: 'assets/ml/hand_landmarker_deferred.tflite',
+      );
+      return validateVisionManifest(
+        projectRoot: projectRoot,
+        rawDocument:
+            jsonDecode(
+                  File(
+                    '${projectRoot.absolute.path}/$_manifestPath',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>,
+      );
+    }
+
+    test('hand + pose entries side by side → manifest is clean', () {
+      final report = reportFor([validVisionModel(), validPoseModel()]);
+      expect(report.isClean, isTrue, reason: report.issues.join('\n'));
+      expect(report.entries, hasLength(2));
+      expect(
+        report.findById('pose_landmarker')!.outputSchema,
+        poseLandmarksOutputSchema,
+      );
+      expect(
+        report.findById('hand_landmarker')!.outputSchema,
+        handLandmarksOutputSchema,
+      );
+    });
+
+    test('pose entry inheriting the hand output_schema → init failure', () {
+      final entry = validPoseModel()
+        ..['output_schema'] = handLandmarksOutputSchema;
+      final report = reportFor([validVisionModel(), entry]);
+      expect(report.isClean, isFalse);
+      expect(report.issues.join('\n').toLowerCase(), contains('output_schema'));
+    });
+
+    test('unregistered model_id → init failure', () {
+      final entry = validPoseModel()..['model_id'] = 'face_landmarker';
+      final report = reportFor([entry]);
+      expect(report.isClean, isFalse);
+      expect(report.issues.join('\n').toLowerCase(), contains('model_id'));
     });
   });
 }

@@ -27,6 +27,23 @@ import 'package:crypto/crypto.dart';
 /// `HandLandmarkId` enum values (not provider indices).
 const handLandmarksOutputSchema = 'strumsight.hand_landmarks.v1';
 
+/// The canonical output schema for the StrumSight pose-landmark provider.
+///
+/// ADR 0186 §Döntés 1: the provider delivers the privacy-minimized 9-point
+/// upper-body topology addressed by `PoseLandmarkId` enum values.
+const poseLandmarksOutputSchema = 'strumsight.pose_landmarks.v1';
+
+/// The registered `model_id → expected output_schema` pairs.
+///
+/// Generalized in E05-R14 (ADR 0186 §Döntés 2) from the single hardcoded
+/// hand value: the `hand_landmarker` expectation is unchanged, `pose_landmarker`
+/// is additive. An entry whose `model_id` is not registered here is rejected —
+/// an unknown model family may not smuggle in an arbitrary schema.
+const Map<String, String> visionModelOutputSchemas = <String, String>{
+  'hand_landmarker': handLandmarksOutputSchema,
+  'pose_landmarker': poseLandmarksOutputSchema,
+};
+
 /// Activation status of a vision model asset in the manifest.
 enum VisionModelStatus { active, deferred }
 
@@ -202,10 +219,18 @@ VisionModelManifestReport validateVisionManifest({
 
     // The output_schema is the one wire-level promise this provider
     // understands. Mismatch → init failure (brief §5.4).
-    if (outputSchema != handLandmarksOutputSchema) {
+    final expectedSchema = visionModelOutputSchemas[modelId];
+    if (expectedSchema == null) {
+      issues.add(
+        'vision_models[$index].model_id "$modelId" is not a registered '
+        'vision model (no expected output_schema)',
+      );
+      continue;
+    }
+    if (outputSchema != expectedSchema) {
       issues.add(
         'vision_models[$index].output_schema must be '
-        '"$handLandmarksOutputSchema" (got "$outputSchema")',
+        '"$expectedSchema" (got "$outputSchema")',
       );
       continue;
     }
