@@ -5292,3 +5292,71 @@ sajátját olvassa. Naplóba MÉRT tényt írj, ne szándékot — egy hamis
 megnyugtató sor évekig elrejt egy hiányzó képességet. Rokon: [[L156]] (állapotot
 a fő munkafából), [[L158]] (külső ok ≠ a lánc hibája, de a lánc látható haltot
 kell hagyjon).
+
+## L160 — A javító kör saját regressziós tesztje hazudhat: a mutáció-kill próbát a JAVÍTÁS UTÁN is meg kell ismételni, mert egy hibás bemenet-konstrukció a helyes fixet is bizonyítatlanul hagyhatja (E05-R10, 2026-08-07)
+
+**Két, egymást erősítő csapda ugyanabban a fájlban.** Mérve E05-R10-ben, a
+review saját mutáció-kill próbáival (nem az implementer önjelentésére
+hagyatkozva).
+
+**(1) `on Exception catch` nem fog meg egy `Error`-t.** Egy `switch`
+kifejezés `_ => throw ArgumentError.value(...)` alapértelmezett ága (pl.
+`CameraRotation.fromDegrees`) `Error`-t dob, nem `Exception`-t. Egy
+repository-szintű `try { … } on Exception catch (e) { quarantine(); }` minta
+ezt NEM kapja el — a hiba kiszáll a hívóig és crashel, ahelyett hogy
+karanténba kerülne. Ez pontosan az a fajta hiba, ami zöld gate mellett is
+él, mert a happy-path tesztek sosem adnak be tartományon-belüli, de
+whitelist-en kívüli enum-számot. Dart-ban `Error` és `Exception` KÜLÖN
+típusfák (`ArgumentError implements Error`), a `catch (e) on Exception` ezt
+tudatosan szűri — bármely `requireX`-stílusú validáció, ami egy `switch`
+alapértelmezett ágán egy natív `throw ArgumentError`-t hagy állni ahelyett,
+hogy explicit whitelist-tel a saját, `Exception`-alapú
+`JsonRecordException`-jét dobná, ugyanígy megszökik egy „karanténozz minden
+kivételt" mintán.
+
+**(2) Egy hiányzó belső verzió-mező csendben a HIBÁS dekódolóra tereli a
+tesztet — a teszt zöld marad, de nem azt méri, amit állít.** A kalibrációs
+codec KÉT független verziószámot kezel: a megosztott `JsonDocumentStore`
+envelope-verzióját (`documentSchemaVersion`, minden dokumentumra közös) és a
+kalibráció SAJÁT, belső alak-verzióját (`calibrationShapeSchemaVersion`,
+csak ezé a bundle-é). A belső verzió hiányzó mezőjét a kód legacy(0)-nak
+értelmezi (`if (raw == null) return legacySchemaVersion`). Öt kézzel írt
+teszt a `data` objektumot `{'camera': {...beágyazott objektum...}, 'guitar':
+{...}}` alakban adta meg, DE nem adott meg belső `schemaVersion`-t — ezért
+mindegyik a lapos, string-alapú LEGACY migrációs ágra futott, nem az
+AKTUÁLIS séma dekódolójára, amit a nevük/kommentjük állított. Mind az öt
+„sikeresen" karanténba került, de egy KORÁBBI, a teszt által célzott
+ellenőrzéstől teljesen független okra bukva (pl. a pixelkoordináta-elutasító
+teszt sosem érte el a `requireDouble(min:0,max:1)` hívást — a legacy ág
+`_readLegacyString`-je a beágyazott `camera`-objektumon bukott, mielőtt a
+`guitar.nut.x=1920` egyáltalán szóba került volna).
+
+**Miért nem elég a zöld gate, és miért nem elég egyszer mutáció-kill-elni.**
+Az első javító kör (Codex) a valós `_readOrientation` hibát HELYESEN
+javította, és írt is hozzá egy regressziós tesztet. A review a mutáció-kill
+próbát a JAVÍTÁS UTÁN futtatta le — de csak a shippelt tesztfájlon, azt
+feltételezve, hogy egy ÚJ, kifejezetten erre írt teszt biztosan eléri az új
+kódágat. Nem érte el: a fenti (2) csapda miatt a teszt bukott/passzolt egy
+teljesen más okból, és a mutáció NULLA tesztet vitt pirosra. Csak a
+JAVÍTÁS UTÁNI, MÁSODIK mutáció-kill (miután (2)-t is javították) igazolta
+ténylegesen, hogy a fix működik ÉS a teszt méri.
+
+**Szabály.** (1) Egy „karanténozz minden hibát" catch-blokk mellé mindig
+mérd ki: a validáció ELUTASÍTÓ ága explicit, `Exception`-alapú kivételt dob,
+vagy egy natív könyvtári hívásra (`enum.fromX`, `DateTime.parse`, `int.parse`
+stb.) hagyatkozik, ami `Error`-t adhat? Ha az utóbbi, vagy dobj explicit
+`Exception`-t A HÍVÁS ELŐTT egy whitelist/range-ellenőrzéssel, vagy bővítsd a
+catch-et `on Error` is fedő formára — de az előbbi a jobb, mert megőrzi a
+programozói hibák (amiket TÉNYLEG el kell buknia) és a felhasználói-adat
+hibák (amiket karanténba kell tenni) közötti különbséget. (2) Egy verziózott/
+envelope-elt dekódoló tesztjeinél MINDIG add meg explicit az ÖSSZES
+verziószámot minden szinten (nem csak a külsőt) — egy hiányzó belső mező
+csendben az alapértelmezett ágra terelhet, és a teszt attól még zöld marad,
+csak nem azt méri, amit állít. (3) A mutáció-kill próbát a JAVÍTÁS UTÁN
+mindig a TELJES, frissen befejezett tesztfájlon ismételd meg, és nézd meg,
+PONTOSAN melyik teszt bukik — ha nem az, amit vártál (vagy egy sem bukik),
+a „javítás" nincs bizonyítva, akkor sem, ha a gate zöld. Ez a technika
+fedte fel (2)-t is: az (1) fixjének újra-tesztelése közben derült ki, hogy a
+hozzá tartozó ÚJ teszt sem fogja meg a régi hibát. Rokon: [[L09]] (a mérce
+egyetlen futtatható artefaktum, nem prompt-szöveg), a review-protokoll saját
+elve („a zöld gate NEM bizonyíték").
