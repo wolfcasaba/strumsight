@@ -3,11 +3,17 @@
 Brief: `docs/rounds/e05-r14-pose-provider-and-posture-baseline.md`
 Diff: `git diff origin/main...minimax/e05-r14-pose-provider-and-posture-baseline`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07
-Verdikt: **CHANGES REQUIRED** (1 MAJOR, mechanikus javítás)
+Verdikt: **APPROVED** javító kör után (fix commit `67d61bc`, handoff-frissítés `94a762b`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 0 · NOTE: 1
+
+**Javító kör után:** friss, izolált `/tmp` klónban (`67d61bc`/`94a762b` tip)
+saját kézzel újrafuttatva a teljes `tools/round-gate.sh test/features/vision
+test/tooling` — mind a 7 lépés genuinely ZÖLD, patch/kerülőút nélkül. A fix
+commit (`67d61bc`) diffje pontosan 1 fájl, 3 sor (`dart format`
+tartalom-semleges tördelés) — tartalmi kód nem változott.
 
 A tartalmi implementáció (privacy-mapping, cadence-wrapper, baseline-gating,
 manifest-általánosítás) minden mért ponton pontosan a brief §0.0/§5/§6 és az
@@ -72,7 +78,11 @@ lekövettem `git diff --stat`-tal — egyezik).
   TELJES, csonkítatlan kimenettel a §10.3-ba — ne csak az érintett lépést,
   a teljes parancsot újra.
 - **Ellenőrzés:** a gate mind a 7 lépése ZÖLD egy friss `/tmp` klónban.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`67d61bc` — 1 fájl, 3 sor, tisztán `dart format`
+  tördelés; `94a762b` a §10.3 handoffot friss, csonkítatlan gate-kimenettel
+  frissítette). Saját, független újra-futtatás egy MÁSODIK, friss `/tmp`
+  klónban (`/tmp/review-e05-r14-fix1`, patch nélkül): mind a 7 gate-lépés
+  ZÖLD.
 
 ### N1 — NOTE — `dirty_files=1` az implementer önjelentésében, jóindulatú időzítési műtermék
 
@@ -107,6 +117,8 @@ ismert arc-szót — ez erősebb garancia, mint egy név-minta elleni szűrés.
 
 ## Gate-bizonyíték ellenőrzése
 
+Első pass (javítás előtt, `aa6cad4` tip):
+
 | Gate | Állított eredmény (§10.3) | Ellenőrizve (SAJÁT, izolált `/tmp` klón) |
 |---|---|---|
 | format | ZÖLD | ❌ **PIROS** — `pose_landmarks.dart:203`, ld. F1 |
@@ -116,14 +128,31 @@ ismert arc-szót — ez erősebb garancia, mint egy név-minta elleni szűrés.
 | architecture | ZÖLD | ✅ — „Architecture dependencies OK (12 allowlisted deviation(s))" |
 | secrets | ZÖLD | ✅ — „Secret scan OK (1930 file(s) scanned, 0 finding(s))" |
 | l10n | ZÖLD | ✅ — „L10n parity OK (en → hu, 964 message(s))" |
-| CI (teljes suite + property + APK) | — | Még nem dispatch-elve — a javító kör UTÁN, a §5 szerint |
+
+**Második pass, javító kör UTÁN** (`94a762b` tip, MÁSODIK, teljesen friss
+`/tmp/review-e05-r14-fix1` klón, patch/kerülőút NÉLKÜL):
+
+| Gate | Eredmény |
+|---|---|
+| format | ✅ ZÖLD |
+| analyze | ✅ ZÖLD |
+| test test/features/vision | ✅ ZÖLD |
+| test test/tooling | ✅ ZÖLD |
+| architecture | ✅ ZÖLD — „12 allowlisted deviation(s)" (változatlan) |
+| secrets | ✅ ZÖLD — „1931 file(s) scanned, 0 finding(s)" |
+| l10n | ✅ ZÖLD — „964 message(s)" (változatlan) |
+| CI (teljes suite + property + APK) | Dispatch az orchestrátor záró rituáléja — ld. lent |
+
+## Dedikált security-review (risk = "high")
+
+A brief §11 megjegyzése szerint kötelező — `security-reviewer` ágenssel,
+`docs/reviews/e05-r14-pose-provider-and-posture-baseline-security.md`. Az
+eredmény ebbe a jelentésbe a záró rituálék előtt kerül be, a CRITICAL/BLOCKER
+lelet esetén a merge-döntés e szakasz frissítésével változik.
 
 ## Merge-döntés
 
-**Merge TILOS, amíg F1 nyitva.** A javítás mechanikus (`dart format` egyetlen
-fájlon) — javító kör MEGY UGYANAHHOZ a motorhoz (MiniMax), a lánc normál
-útja, nem halt-ok (ADR 0087 §2, pipeline-prompt §2 „a javító kör a lánc
-NORMÁL útja"). A javító kör UTÁN: gate újra-futtatás SAJÁT kézzel egy friss
-`/tmp` klónban, majd CI-dispatch (`tools/round-ci-plan.py`) és a Router CI
-állapotának ellenőrzése (`docs/rounds/**` érintés miatt valószínűleg
-kötelező kapu).
+**Javító kör után minden funkcionális gate genuinely ZÖLD** egy MÁSODIK,
+független `/tmp` klónban, patch nélkül — F1 lezárva. A merge-döntés a
+dedikált security-review PASS-ára és a CI (build-apk/full-gate + router-ci)
+zöldjére vár; a funkcionális oldalról nincs nyitott BLOCKER/MAJOR.
