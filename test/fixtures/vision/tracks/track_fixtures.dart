@@ -239,3 +239,116 @@ List<HandLandmarkResult> teleportingTrack({
   }
   return out;
 }
+
+/// Build a trajectory that holds near `preX` for [settle] frames and then
+/// STAYS at a new, distant `postX` from frame [relocateAt] onwards. Models
+/// a real, sustained relocation (no teleport blip, no occlusion). The
+/// smoother must eventually catch up to the new position; the F1 BLOCKER
+/// is the pre-fix behaviour of freezing on the old anchor.
+List<HandLandmarkResult> persistentRelocationTrack({
+  Handedness handedness = Handedness.right,
+  int frames = 40,
+  int settle = 10,
+  int relocateAt = 10,
+  double preX = 0.30,
+  double preY = 0.50,
+  double postX = 0.70,
+  double postY = 0.50,
+  double noiseAmplitude = 0.001,
+  int seed = 17,
+}) {
+  assert(relocateAt >= settle, 'relocate must come after the settle window');
+  final random = math.Random(seed);
+  HandLandmarkResult build(int i) {
+    final x = i < relocateAt ? preX : postX;
+    final y = i < relocateAt ? preY : postY;
+    final jitter = (random.nextDouble() - 0.5) * noiseAmplitude;
+    return _result(
+      timestampUs: i * 33_333,
+      hands: <HandObservation>[
+        _hand(handedness: handedness, x: x + jitter, y: y + jitter),
+      ],
+    );
+  }
+
+  return <HandLandmarkResult>[for (var i = 0; i < frames; i++) build(i)];
+}
+
+/// Same relocation pattern but the hand briefly disappears (short occlusion)
+/// before reappearing at the new spot. `gapAt` is the first occluded frame
+/// and `gapLength` frames are notObservable after it. The relocated hand
+/// must be tracked as the SAME track ID (short gap rule) and the smoother
+/// must catch up to the new position.
+List<HandLandmarkResult> relocationAfterOcclusionTrack({
+  Handedness handedness = Handedness.right,
+  int frames = 40,
+  int settle = 8,
+  int gapAt = 8,
+  int gapLength = 3,
+  double preX = 0.30,
+  double postX = 0.70,
+  double preY = 0.50,
+  double postY = 0.50,
+  int seed = 21,
+}) {
+  assert(gapAt >= settle, 'gap must come after the settle window');
+  final random = math.Random(seed);
+  final out = <HandLandmarkResult>[];
+  for (var i = 0; i < frames; i++) {
+    final inGap = i >= gapAt && i < gapAt + gapLength;
+    if (inGap) {
+      out.add(
+        _result(timestampUs: i * 33_333, hands: const <HandObservation>[]),
+      );
+      continue;
+    }
+    final x = i < gapAt ? preX : postX;
+    final y = i < gapAt ? preY : postY;
+    final jitter = (random.nextDouble() - 0.5) * 0.001;
+    out.add(
+      _result(
+        timestampUs: i * 33_333,
+        hands: <HandObservation>[
+          _hand(handedness: handedness, x: x + jitter, y: y + jitter),
+        ],
+      ),
+    );
+  }
+  return out;
+}
+
+/// Build a trajectory whose visibility starts high and then drops to a
+/// sustained low value. Used to prove the smoothed visibility follows
+/// the raw (not the historical max).
+List<HandLandmarkResult> lowVisibilityTrack({
+  Handedness handedness = Handedness.right,
+  int frames = 30,
+  double x = 0.30,
+  double y = 0.50,
+  double highVisibility = 0.95,
+  double lowVisibility = 0.10,
+  int dropAt = 5,
+}) {
+  final out = <HandLandmarkResult>[];
+  for (var i = 0; i < frames; i++) {
+    final v = i < dropAt ? highVisibility : lowVisibility;
+    final points = <HandLandmarkId, HandLandmarkPoint>{
+      for (final id in _trackedIds)
+        id: HandLandmarkPoint(x: x, y: y, z: 0, visibility: v),
+    };
+    out.add(
+      HandLandmarkResult(
+        timestampUs: i * 33_333,
+        observability: HandLandmarkObservability.one,
+        hands: <HandObservation>[
+          HandObservation(
+            handedness: handedness,
+            landmarks: points,
+            confidence: v,
+          ),
+        ],
+      ),
+    );
+  }
+  return out;
+}

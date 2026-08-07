@@ -17,6 +17,11 @@
 // soft "should be the same" prose. The `shortGapFrames` value comes from the
 // `HandTrackAssigner` default; a single `python3 -c` calculation in the
 // brief §10 backs the three gap-lengths against it.
+//
+// The fix-round group below adds the F1 (jump-recovery), F2
+// (TrackContinuity) and F3 (visibility smoothing) regression tests. They
+// are colocated here to keep the test count inside the two
+// `allowed_paths` test files (no new test files).
 
 library;
 
@@ -24,6 +29,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/vision/domain/landmarks/hand_landmarks.dart';
 import 'package:strumsight/features/vision/domain/landmarks/hand_track.dart';
 import 'package:strumsight/features/vision/domain/landmarks/hand_track_assigner.dart';
+import 'package:strumsight/features/vision/domain/landmarks/landmark_smoothing.dart';
+import 'package:strumsight/features/vision/domain/landmarks/track_continuity.dart';
 
 import '../../../fixtures/vision/tracks/track_fixtures.dart';
 
@@ -282,6 +289,213 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  group(
+    'Fix round — F1 BLOCKER: jump-rejection recovers from a sustained shift',
+    () {
+      test(
+        'persistent relocation without occlusion converges to the new position',
+        () {
+          final assigner = HandTrackAssigner(
+            leftHanded: false,
+            shortGapFrames: 3,
+          );
+          final trajectory = persistentRelocationTrack(
+            handedness: Handedness.right,
+            frames: 40,
+            settle: 10,
+            relocateAt: 10,
+            preX: 0.30,
+            postX: 0.70,
+          );
+
+          HandLandmarkPoint? lastSmoothed;
+          for (var i = 0; i < trajectory.length; i++) {
+            final state = assigner.process(trajectory[i], frameIndex: i);
+            for (final t in state.tracks) {
+              if (t.status == TrackStatus.active) {
+                lastSmoothed = t.smoothedLandmarks[HandLandmarkId.wrist];
+              }
+            }
+          }
+
+          // After ~30 frames at the new position, the smoother must have
+          // caught up. The pre-fix code froze at ~0.30.
+          expect(
+            lastSmoothed,
+            isNotNull,
+            reason: 'the trajectory must produce at least one active track',
+          );
+          expect(
+            lastSmoothed!.x,
+            greaterThan(0.55),
+            reason:
+                'smoothed wrist x must converge to the new position '
+                '(~0.70); pre-fix froze at the old ~0.30 anchor',
+          );
+        },
+      );
+
+      test('relocation after a short occlusion keeps the same track ID and '
+          'converges to the new position', () {
+        final assigner = HandTrackAssigner(
+          leftHanded: false,
+          shortGapFrames: 3,
+        );
+        final trajectory = relocationAfterOcclusionTrack(
+          handedness: Handedness.right,
+          frames: 40,
+          settle: 8,
+          gapAt: 8,
+          gapLength: 3,
+          preX: 0.30,
+          postX: 0.70,
+        );
+
+        int firstActiveId = -1;
+        HandLandmarkPoint? lastSmoothed;
+        for (var i = 0; i < trajectory.length; i++) {
+          final state = assigner.process(trajectory[i], frameIndex: i);
+          for (final t in state.tracks) {
+            if (firstActiveId == -1 && t.status == TrackStatus.active) {
+              firstActiveId = t.id;
+            }
+            if (t.status == TrackStatus.active) {
+              lastSmoothed = t.smoothedLandmarks[HandLandmarkId.wrist];
+            }
+          }
+        }
+
+        expect(firstActiveId, isNot(-1));
+        // The same track ID must survive the short gap.
+        for (var i = 0; i < trajectory.length; i++) {
+          final state = assigner.process(trajectory[i], frameIndex: i);
+          for (final t in state.tracks) {
+            if (t.status == TrackStatus.active) {
+              expect(
+                t.id,
+                firstActiveId,
+                reason: 'short-gap rule must keep the track ID stable',
+              );
+            }
+          }
+        }
+        expect(
+          lastSmoothed!.x,
+          greaterThan(0.55),
+          reason: 'post-occlusion smoother must converge to the new position',
+        );
+      });
+    },
+  );
+
+  group('Fix round — F2 MAJOR: TrackContinuity latency + jitter are real', () {
+    test('continuous noisy trajectory → maxJitterNormalized > 0', () {
+      final assigner = HandTrackAssigner(leftHanded: false, shortGapFrames: 3);
+      final trajectory = continuousNoisyTrack(
+        handedness: Handedness.right,
+        frames: 30,
+        noiseAmplitude: 0.30,
+        seed: 42,
+      );
+
+      final frames = <HandTrackFrameState>[];
+      for (var i = 0; i < trajectory.length; i++) {
+        frames.add(assigner.process(trajectory[i], frameIndex: i));
+      }
+      final continuity = TrackContinuity.aggregate(frames);
+
+      expect(
+        continuity.maxJitterNormalized,
+        greaterThan(0.0),
+        reason:
+            'jitter is now derived from the per-frame raw/smoothed '
+            'wrist delta exposed by the assigner; a noisy trajectory '
+            'must surface a non-zero max',
+      );
+    });
+
+    test('many frames → totalProcessingDuration > Duration.zero', () {
+      final assigner = HandTrackAssigner(leftHanded: false, shortGapFrames: 3);
+      final trajectory = continuousNoisyTrack(
+        handedness: Handedness.right,
+        frames: 30,
+        seed: 42,
+      );
+
+      final frames = <HandTrackFrameState>[];
+      for (var i = 0; i < trajectory.length; i++) {
+        frames.add(assigner.process(trajectory[i], frameIndex: i));
+      }
+      final continuity = TrackContinuity.aggregate(frames);
+
+      expect(
+        continuity.totalProcessingDuration > Duration.zero,
+        isTrue,
+        reason:
+            'assigner.process wraps a Stopwatch and reports '
+            '`processingDuration` on each frame; the aggregate must '
+            'sum it',
+      );
+      expect(
+        frames.first.processingDuration >= Duration.zero,
+        isTrue,
+        reason: 'frame snapshots must carry a non-negative processing time',
+      );
+    });
+
+    test('trackLost event increments tracksLost and tracksObserved', () {
+      final assigner = HandTrackAssigner(leftHanded: false, shortGapFrames: 3);
+      final trajectory = occludedTrack(
+        handedness: Handedness.right,
+        frames: 30,
+        gapAt: 10,
+        gapLength: 5,
+        seed: 7,
+      );
+      final frames = <HandTrackFrameState>[];
+      for (var i = 0; i < trajectory.length; i++) {
+        frames.add(assigner.process(trajectory[i], frameIndex: i));
+      }
+      final continuity = TrackContinuity.aggregate(frames);
+      expect(continuity.tracksLost, greaterThan(0));
+      expect(continuity.tracksObserved, greaterThan(0));
+    });
+  });
+
+  group('Fix round — F3 MINOR: smoothed visibility follows raw confidence', () {
+    test('sustained low visibility lowers the smoothed visibility', () {
+      final filter = LandmarkSmoothingFilter(profile: SmoothingProfile.picking);
+      final trajectory = lowVisibilityTrack(
+        handedness: Handedness.right,
+        frames: 20,
+        dropAt: 5,
+      );
+      HandLandmarkPoint? previous;
+      final smoothed = <double>[];
+      for (var i = 0; i < trajectory.length; i++) {
+        final out = filter.filter(
+          raw: trajectory[i].hands.single.byId(HandLandmarkId.wrist),
+          previous: previous,
+          frameIndex: i,
+        );
+        smoothed.add(out.visibility);
+        previous = out;
+      }
+
+      // The first frames stay high (~0.95). After the drop, the
+      // smoothed visibility must follow the raw (0.10), not the
+      // historical max — pre-fix it stayed at 0.95.
+      final lateSmoothed = smoothed.last;
+      expect(
+        lateSmoothed,
+        lessThan(0.30),
+        reason:
+            'sustained low visibility must lower the smoothed '
+            'visibility; pre-fix MAX rule held it at 0.95',
+      );
     });
   });
 }
