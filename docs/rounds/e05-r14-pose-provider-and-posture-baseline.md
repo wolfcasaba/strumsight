@@ -329,14 +329,45 @@ $ python3 ml/make_manifest.py
 wrote assets/ml/model_manifest.json (4 models, 2 vision models)
 
 $ tools/round-gate.sh test/features/vision test/tooling
+═══ [1] format
+Formatted 1106 files (0 changed) in 4.32 seconds.
     → [1] format: ZÖLD
+
+═══ [2] analyze
+No issues found!
     → [2] analyze: ZÖLD
+
+═══ [3] test test/features/vision
+00:10 +155: All tests passed!
     → [3] test test/features/vision: ZÖLD
+
+═══ [4] test test/tooling
+00:07 +43: All tests passed!
     → [4] test test/tooling: ZÖLD
+
+═══ [5] architecture
+Architecture dependencies OK (12 allowlisted deviation(s)).
     → [5] architecture: ZÖLD
+
+═══ [6] secrets
+Secret scan OK (1931 file(s) scanned, 0 finding(s)).
     → [6] secrets: ZÖLD
+
+═══ [7] l10n
+L10n parity OK (en → hu, 964 message(s)).
     → [7] l10n: ZÖLD
-MINDEN GATE ZÖLD.
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/vision                                  zöld
+    test test/tooling                                          zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
 ```
 
 A gate a brief §7 szerinti alakban futott — nincs `&&` lánc, nincs `| tail`,
