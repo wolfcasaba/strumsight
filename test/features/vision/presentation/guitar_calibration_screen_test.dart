@@ -207,9 +207,13 @@ void main() {
       final afterAlpha = (afterBorder.top.color.a * 255).round() & 0xff;
       // Clamp visibility: the border becomes opaque while the value
       // is clamped.
-      expect(afterAlpha, greaterThan(beforeAlpha + 100),
-          reason: 'clamped border alpha ($afterAlpha) should be much brighter '
-              'than unclamped ($beforeAlpha)');
+      expect(
+        afterAlpha,
+        greaterThan(beforeAlpha + 100),
+        reason:
+            'clamped border alpha ($afterAlpha) should be much brighter '
+            'than unclamped ($beforeAlpha)',
+      );
       expect(afterBorder.top.width, greaterThan(beforeBorder.top.width));
 
       // Release: the clamp-state decoration should clear.
@@ -217,8 +221,7 @@ void main() {
       await tester.pumpAndSettle();
       final restored = tester.widget<Container>(decorFinder);
       final restoredBorder = (restored.decoration as BoxDecoration).border!;
-      final restoredAlpha =
-          (restoredBorder.top.color.a * 255).round() & 0xff;
+      final restoredAlpha = (restoredBorder.top.color.a * 255).round() & 0xff;
       expect(restoredAlpha, lessThan(afterAlpha));
     },
   );

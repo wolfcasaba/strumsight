@@ -218,9 +218,10 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
   }
 
   Key _keyForDrag(_DragHandle drag) => switch (drag) {
-    _DragHandleAnchor(:final role) => role == AnchorRole.nut
-        ? const Key('guitar-anchor-nut')
-        : const Key('guitar-anchor-bridge'),
+    _DragHandleAnchor(:final role) =>
+      role == AnchorRole.nut
+          ? const Key('guitar-anchor-nut')
+          : const Key('guitar-anchor-bridge'),
     _DragHandlePolygon(:final index) => Key('guitar-polygon-vertex-$index'),
   };
 }
@@ -427,10 +428,7 @@ class _PolygonHandle extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: borderColor,
-                  width: borderWidth,
-                ),
+                border: Border.all(color: borderColor, width: borderWidth),
               ),
             ),
           ),

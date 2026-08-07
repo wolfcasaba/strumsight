@@ -321,10 +321,7 @@ void main() {
         // Pull the polygon onto a single horizontal line at y=0.5.
         for (var i = 0; i < 4; i++) {
           final x = 0.2 + i * 0.1;
-          controller.movePolygonVertex(
-            i,
-            NormalizedPoint(x, 0.5),
-          );
+          controller.movePolygonVertex(i, NormalizedPoint(x, 0.5));
         }
         final state = container.read(guitarCalibrationControllerProvider(ctx));
         expect(state.canSave, isFalse);
@@ -335,29 +332,31 @@ void main() {
       },
     );
 
-    test('f1: zero-area polygon (3 vertices pulled to a point) blocks Save',
-        () {
-      // Triangle with one vertex collapsed to (0.5, 0.5) — collinear
-      // detection catches this exactly the same way, so we cover the
-      // §6 #2 "nulla terület" cell with the same code path. The §10
-      // handoff documents that the collinear check covers both.
-      final container = _container();
-      addTearDown(container.dispose);
-      final ctx = _context();
-      final controller = container.read(
-        guitarCalibrationControllerProvider(ctx).notifier,
-      );
-      // Seed polygon has 4 vertices; collapse one of them to a corner so
-      // three of the four are collinear.
-      controller.movePolygonVertex(1, const NormalizedPoint(0.2, 0.18));
-      controller.movePolygonVertex(2, const NormalizedPoint(0.2, 0.18));
-      final state = container.read(guitarCalibrationControllerProvider(ctx));
-      expect(state.canSave, isFalse);
-      expect(
-        state.selfEvaluationReason,
-        CalibrationInvalidationReason.degenerateGeometry,
-      );
-    });
+    test(
+      'f1: zero-area polygon (3 vertices pulled to a point) blocks Save',
+      () {
+        // Triangle with one vertex collapsed to (0.5, 0.5) — collinear
+        // detection catches this exactly the same way, so we cover the
+        // §6 #2 "nulla terület" cell with the same code path. The §10
+        // handoff documents that the collinear check covers both.
+        final container = _container();
+        addTearDown(container.dispose);
+        final ctx = _context();
+        final controller = container.read(
+          guitarCalibrationControllerProvider(ctx).notifier,
+        );
+        // Seed polygon has 4 vertices; collapse one of them to a corner so
+        // three of the four are collinear.
+        controller.movePolygonVertex(1, const NormalizedPoint(0.2, 0.18));
+        controller.movePolygonVertex(2, const NormalizedPoint(0.2, 0.18));
+        final state = container.read(guitarCalibrationControllerProvider(ctx));
+        expect(state.canSave, isFalse);
+        expect(
+          state.selfEvaluationReason,
+          CalibrationInvalidationReason.degenerateGeometry,
+        );
+      },
+    );
 
     test('healthy anchor spread keeps Save enabled', () {
       final container = _container();
@@ -428,16 +427,12 @@ void main() {
 
   group('GuitarCalibrationRuntimeContextProvider — F3 storage wiring', () {
     test('reads the saved camera preference from the keyValueStore', () {
-      final store = InMemoryKeyValueStore({
-        StorageKeys.visionCamera: 'front',
-      });
+      final store = InMemoryKeyValueStore({StorageKeys.visionCamera: 'front'});
       final container = ProviderContainer(
         overrides: [keyValueStoreProvider.overrideWithValue(store)],
       );
       addTearDown(container.dispose);
-      final context_ = container.read(
-        guitarCalibrationRuntimeContextProvider,
-      );
+      final context_ = container.read(guitarCalibrationRuntimeContextProvider);
       expect(context_.camera, VisionCameraPreference.front);
     });
 
@@ -449,9 +444,7 @@ void main() {
         overrides: [keyValueStoreProvider.overrideWithValue(store)],
       );
       addTearDown(container.dispose);
-      final context_ = container.read(
-        guitarCalibrationRuntimeContextProvider,
-      );
+      final context_ = container.read(guitarCalibrationRuntimeContextProvider);
       expect(context_.setupProfile, VisionSetupProfile.leftHandFocus);
     });
 
@@ -461,9 +454,7 @@ void main() {
         overrides: [keyValueStoreProvider.overrideWithValue(store)],
       );
       addTearDown(container.dispose);
-      final context_ = container.read(
-        guitarCalibrationRuntimeContextProvider,
-      );
+      final context_ = container.read(guitarCalibrationRuntimeContextProvider);
       // The fromStorage defaults match the upstream R08 path.
       expect(context_.camera, VisionCameraPreference.back);
       expect(context_.setupProfile, isNotNull);
