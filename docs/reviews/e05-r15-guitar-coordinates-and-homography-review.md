@@ -518,13 +518,48 @@ jó kalibrációkat. A pontos kódalak és a BLOCKER-1 repro-teszt átírásána
 iránya a brief §0.0.1-ben. A javító kör 2 ezzel a revideált iránnyal
 folytatódik ugyanabban a munkapéldányban.
 
+**Motor-megjegyzés (2026-08-07):** a Codex CLI a fenti feloldás
+implementálása ELŐTT saját upstream-kvótájába futott (`usage limit`,
+infrastruktúra-kimerülés, nem modellhiba) — lásd `HANDOFF.md` „E05-R15
+önjavítás (H6)". User-döntés: amíg a kvóta vissza nem tér, a javító kör 2-t
+a MiniMax próbálja meg, ugyanennek a leletnek a folytatásaként (nem új
+javító kör, nem számít bele a normál MiniMax-eszkalációs küszöbbe).
+
+## BLOCKER-1 — javító kör 2, MiniMax-próbálkozás: a `w`-alapú pont-szintű védelem is hézagos volt (mérve, feloldva — brief §0.0.2)
+
+A fenti pont-szintű `\|w\| < wMinBound` specifikációt a MiniMax implementálta,
+majd **saját, seed-7 random-search validációval helyesen `stopped`-ot
+jelzett**: nincs olyan `wMinBound`, amely egyszerre elégítené ki (1) a
+BLOCKER-1 repro elutasítását (`T > 0,058`), (2) a `front_medium` 5
+mintapontjának megtartását (`T < 1,0`), és (3) a seed-7 sweep összes,
+`\|uv\| > guitarSpaceSanityBound`-ot adó pontjának elutasítását (`T >
+7,31`, mégis ezen T mellett a `front_medium`-feltétel sérülne). Gyökérok:
+`\|w\|` korlátozása NEM korlátozza `\|uv\|`-t, mert `uv = numerator / w`, és
+a `numerator` a seed-7 generátor kevéssé megkötött poligon-elhelyezése
+miatt függetlenül nagyra nőhet — a `w`-proxy csak KONSTRUKCIÓ-idejű, véges
+(4-sarkos, affin-szélsőérték) ellenőrzésre volt bizonyíthatóan kimerítő,
+pont-szinten viszont nincs ok proxyt használni.
+
+**Feloldás (brief §0.0.2, ADR 0087 §2 szerint önállóan dönthető, azonos
+kategória mint a fenti §0.0.1 döntés): a pont-szintű védelem `\|w\|`-ről
+közvetlen `\|uv\|`-magnitúdóra vált, a MÁR LÉTEZŐ `guitarSpaceSanityBound =
+10.0` küszöbbel** — nincs új konstans, a `homogeneousW`/`wMinBound` (a
+`0.0.1` commitolatlan, soha nem mergelt kísérletéből) törlődik. Ez
+bizonyíthatóan helyes küszöb-hangolás nélkül: a BLOCKER-1 repro már
+korábban dokumentáltan `\|uv\| ≈ 1050`-et ad védelem nélkül (≫10 →
+elutasítva), a `front_medium` teszt B már ma is `lessThan(10.0)`-t bizonyít
+az 5 mintapontra (változatlan, zöld), és a seed-7 sweep minden `>10`
+magnitúdójú pontja DEFINÍCIÓ SZERINT elutasításra kerül, mert a guard a
+TÉNYLEGES vizsgált mennyiséget nézi, nem egy áttételes proxyt. Részletek:
+brief `### 0.0.2`.
+
 ## Merge-döntés
 
 **Merge TILOS jelenleg** (1 nyitott BLOCKER — BLOCKER-1 a javító kör 1 után
-részlegesen javítva, a javító kör 2 folyamatban a fenti revideált,
-pont-szintű iránnyal). **A MiniMax motor-eszkalációs szabálya (AGENTS.md
-§15.6, user-döntés 2026-08-01) kimerült** ezen a leleten (egy javító kör
-után is nyitva) — **a javító kört a Codex viszi**, külön munkapéldányban
-(`tools/codex-round.sh` + `tools/codex-watch.sh`). MAJOR-1 és MAJOR-2 zárva,
-nem kerülnek vissza a javító kör 2 promptjába. MINOR-1..3 opcionális, csak
-ha nem hizlalja érdemben a diffet.
+részlegesen javítva, a javító kör 2 folyamatban a fenti kétszer-revideált,
+közvetlen-magnitúdó iránnyal). A javító kört — a Codex CLI kvóta-kimerülése
+miatt, user-döntéssel — a MiniMax viszi, ugyanabban a folyamatban (nem
+számít bele a normál egy-javító-kör MiniMax-eszkalációs küszöbbe, mivel ez
+a Codexnek szánt javító kör 2 folytatása, nem egy önálló új MiniMax-kör).
+MAJOR-1 és MAJOR-2 zárva, nem kerülnek vissza a javító kör 2 promptjába.
+MINOR-1..3 opcionális, csak ha nem hizlalja érdemben a diffet.

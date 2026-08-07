@@ -172,6 +172,98 @@ tartományszintű probléma).
   konstrukció-idejű elutasítás megszűnt), és `mapPoint(normalized:
   NormalizedPoint(1.0, 0.9), visibility: 0.95)` ad `null`-t.
 
+### 0.0.2 Javító kör 2, MiniMax-próbálkozás — a `0.0.1`-beli `w`-küszöb önmagában NEM elégséges (mérve, feloldva)
+
+**Mérve (2026-08-07, `ss-mm-e05-r15-fix2`, a Codex CLI kvóta-kimerülése miatt a
+`### 0.0.1` szakasz implementálásával megbízott MiniMax).** A MiniMax a
+`0.0.1`-ben előírt pont-szintű `|w| < wMinBound` védelmet PONTOSAN a leírtak
+szerint implementálta, majd — a `docs/execution/implementer-preamble-
+minimax.md` 1. pontja szerint futtatva, nem csak elfogadva az örökölt
+kalibrációs kommentet — saját seed-7 random-search validációt futtatott (5000
+próba, 11×11 rács, 4959 elfogadott mapper, ~600k rácspont) és **helyesen
+`stopped`-ot jelzett**: három, egymást kölcsönösen kizáró küszöb-elvárást
+mért ugyanarra a `T = wMinBound` konstansra:
+
+| Elvárás | Szükséges T | Forrás |
+|---|---|---|
+| BLOCKER-1 repro (`mapPoint((1, 0.9))`) elutasítása | T > 0,058 | a repro-pont mért `\|w\|` |
+| `front_medium` 5 mintapontja (§0.0.1 teszt B) NE nullázódjon | T < 1,0 | a mintapontok mért `\|w\| ∈ [1,0; 3,54]` |
+| a seed-7 sweep „sarkon rendben" szemetének kiszűrése | T > 7,31 | egy elfogadott mapper egy pontja `\|w\|=7,31` mellett `\|uv\|=41,17`-et adott |
+
+**Egyetlen `T` sem elégíti ki mind a hármat egyszerre — ez NEM implementer-
+hiba, hanem a `0.0.1` mechanizmus saját matematikai hézaga**, amit az
+orchestrátor (aki a `0.0.1`-et írta) a MiniMax leletéig nem vett észre:
+`uv = numerator / w`, és **`w` korlátozása önmagában nem korlátozza
+`\|uv\|`-t**, mert a `numerator` (ami SZINTÉN a lekérdezett ponttól függ) a
+seed-7 generátor kevéssé megkötött, nut/bridge-anchortól független
+poligon-elhelyezése miatt tetszőlegesen nagyra nőhet — a `w` egy PROXY volt
+arra, amit valójában bizonyítani akartunk (`\|uv\| ≤
+guitarSpaceSanityBound`), és a proxy csak addig volt „matematikailag
+kimerítő", amíg KONSTRUKCIÓ-idejű, véges (4-sarkos) ellenőrzésként szolgált
+(ahol az affin `w` szélsőértéke bizonyíthatóan a sarkokon van — ld. az
+eredeti review-indoklás). A `0.0.1` a védelmet PONT-szintűre tolta, de a
+proxy-jellegű `w`-küszöböt tévesen megtartotta — pont-szinten viszont
+**nincs többé ok proxyt használni**: a lekérdezett pontra AMÚGY IS
+kiszámoljuk a tényleges `apply()` kimenetet, tehát a TÉNYLEGES `\|uv\|`
+magnitúdóját közvetlenül ellenőrizhetjük, küszöb-kalibráció nélkül.
+
+**Feloldás (a kör saját, még nem merge-elt artefaktumát érinti — ADR 0087
+§2 szerint önállóan dönthető, nem H4 halt; ugyanaz a döntési kategória, mint
+a `0.0.1`):** a `mapPoint()` pont-szintű védelme **`\|w\|`-ről közvetlen
+`\|uv\|`-magnitúdóra vált**, a MÁR LÉTEZŐ és MÁR VALIDÁLT
+`guitarSpaceSanityBound = 10.0` küszöbbel (nincs új konstans, nincs
+`wMinBound`, nincs `homogeneousW` — az utóbbi kettő a `0.0.1`
+commitolatlan munkájában létezett, de ezzel a feloldással feleslegessé
+válik és TÖRLENDŐ):
+
+```dart
+final uv = _homography.apply(Point2(normalized.x, normalized.y));
+if (!(uv.x.isFinite && uv.y.isFinite)) {
+  return null;
+}
+final magnitude = math.sqrt(uv.x * uv.x + uv.y * uv.y);
+if (magnitude > guitarSpaceSanityBound) {
+  return null;
+}
+```
+
+**Miért ez bizonyíthatóan helyes, nem csak „egy másik küszöb":**
+
+1. **BLOCKER-1 repro:** a review már korábban, TÖBBSZÖR (security-review,
+   majd a §0.0.1 saját szövege) rögzítette, hogy `mapPoint((1, 0.9))` a
+   védelem NÉLKÜL `(u, v) ≈ (-236,8; -1022,9)`-et ad —
+   `\|uv\| ≈ 1050 ≫ 10` — tehát a közvetlen magnitúdó-ellenőrzés ELUTASÍTJA,
+   küszöb-hangolás nélkül.
+2. **`front_medium` teszt B:** a brief §0.0.1-ben változatlanul hagyott
+   teszt MÁR ma is `lessThan(guitarSpaceSanityBound)`-ot állít mind az 5
+   mintapontra — ez a teszt bizonyítottan ZÖLD (nem a `0.0.2` módosítja),
+   tehát ugyanezek a pontok a közvetlen ellenőrzés mellett is elfogadottak
+   maradnak.
+3. **Seed-7 sweep:** a `\|uv\| > 10` eset (a MiniMax mérése szerint pl.
+   `41,17` vagy `11,2` magnitúdójú pontok) DEFINÍCIÓ SZERINT elutasításra
+   kerül, mert a teszt PONTOSAN azt a mennyiséget vizsgálja, amit a guard
+   PONTOSAN ellenőriz — nincs proxy, nincs áttételes bizonyítás, nincs
+   küszöb-kalibrációs dilemma.
+
+**A `w`-alapú mechanizmus (`homogeneousW`, `_cameraFrameHomogeneousWMinBound`)
+ezzel a döntéssel elesik** — a `homogeneousW` publikus metódus önmagában
+igaz matematikai állítás marad (a `Homography.apply` `w`-je affin, szélső-
+értéke konvex tartomány fölött a csúcsokon van), de EBBEN a körben semmi
+nem hívja, és a projekt „ne tervezz spekulatív jövőbeli igényre" elve
+szerint a `homography.dart` a `0.0.1` előtti, EREDETI állapotára áll
+vissza (a `main`-en/`origin`-on eddig soha nem volt commitolva, tehát ez
+nem törlés, csak egy soha nem merge-elt kísérlet vissza nem vétele).
+
+**A `unstableMapping` enum-érték sorsa változatlan a `0.0.1`
+ajánlásához képest** (törölhető VAGY megtartható frissített doc-commenttel
+— egyik sem kötelező, csak konzisztens legyen a kóddal).
+
+**MiniMax-nak ÍRVA a leletéért:** ez a második eset ebben a körben (az első
+a Codex `front_medium` STOP-ja), hogy egy implementer helyesen jelzett egy
+review/orchestrátor-specifikációs hibát ahelyett, hogy zöldre hamisította
+volna a tesztet — mindkétszer pontosan az `docs/execution/implementer-
+preamble*.md` szándéka szerint.
+
 ## 1. Cél
 
 **Pure Dart** geometriai mag: a kamerából jövő landmarkok stabil, **gitárhoz
