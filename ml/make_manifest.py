@@ -191,15 +191,23 @@ def _load_previous_entries() -> dict[str, dict[str, object]]:
 
 
 # E05-R12 — vision model manifest sibling key. The model asset is
-# `status = "deferred"` in this round (ADR 0185 §Döntés 2): the spec tuple
-# is the single source of truth, and the generator only re-measures the
-# checksum of the placeholder bytes. Real activation adds entries here.
+# `status = "deferred"` in this round (ADR 0185 §Döntés 2): the spec
+# tuple is the single source of truth, and there is no real binary on
+# disk — the `sha256` is a documented placeholder (64 lowercase zeros)
+# so the validator's `sha256 must be 64 lowercase hex characters`
+# format branch has a stable value to exercise. The activation round
+# replaces this with a real entry whose `status == "active"` and whose
+# `sha256` is the measured hash of the shipped binary.
+_DEFERRED_SHA256_PLACEHOLDER = "0" * 64
 _VISION_MODEL_SPECS: tuple[dict[str, object], ...] = (
     {
         "model_id": "hand_landmarker",
         "version": "1.0.0",
         "path": "assets/ml/hand_landmarker_deferred.tflite",
         "status": "deferred",
+        # No real asset in this round — placeholder, the activation
+        # round swaps this for a measured hash.
+        "sha256": _DEFERRED_SHA256_PLACEHOLDER,
         "input_shape": [256, 256, 3],
         "output_schema": "strumsight.hand_landmarks.v1",
         "license": {"spdx": "Apache-2.0", "name": "MediaPipe Hands"},
@@ -281,32 +289,35 @@ def _build_vision_models(
 ) -> list[dict[str, object]]:
     """Build the `vision_models` sibling key.
 
-    E05-R12 §0.0 R3: isolated from the audio `models[]` path — each
-    vision entry is keyed by `path` and reuses its previous sha256 only
-    when the on-disk bytes match. The audio validator and `_MODEL_SPECS`
-    tuple are NOT consulted here.
+    E05-R12 §0.0 R3: isolated from the audio ``models[]`` path. Only
+    ``status == "active"`` specs consult the disk — for them the
+    generator measures the SHA-256 of the shipped asset and fails
+    fast if the file is missing. ``status == "deferred"`` specs (ADR
+    0185 §Döntés 2 — no real binary this round) emit the spec's
+    documented placeholder sha256 without touching the filesystem, so
+    rerunning the generator never produces a FileNotFoundError for an
+    asset that is intentionally not shipped.
     """
     entries: list[dict[str, object]] = []
     for spec in _VISION_MODEL_SPECS:
         relative_path = str(spec["path"])
-        asset_path = REPO_ROOT / relative_path
-        if not asset_path.is_file():
-            raise FileNotFoundError(f"missing vision model asset: {relative_path}")
-        checksum = _sha256(asset_path)
-        previous_entry = previous.get(relative_path)
-        if previous_entry is not None:
-            previous_checksum = previous_entry.get("sha256")
-            if previous_checksum != checksum:
-                # Bytes changed — refresh, otherwise reuse to stay
-                # idempotent like the audio path.
-                pass
+        status = str(spec["status"])
+        if status == "active":
+            asset_path = REPO_ROOT / relative_path
+            if not asset_path.is_file():
+                raise FileNotFoundError(f"missing vision model asset: {relative_path}")
+            checksum = _sha256(asset_path)
+        else:
+            # Deferred: spec carries the placeholder sha256 directly
+            # (ADR 0185 §Döntés 2 — no real binary this round).
+            checksum = str(spec["sha256"])
         entries.append(
             {
                 "model_id": str(spec["model_id"]),
                 "version": str(spec["version"]),
                 "path": relative_path,
                 "sha256": checksum,
-                "status": str(spec["status"]),
+                "status": status,
                 "input_shape": [int(v) for v in spec["input_shape"]],
                 "output_schema": str(spec["output_schema"]),
                 "license": dict(spec["license"]),
