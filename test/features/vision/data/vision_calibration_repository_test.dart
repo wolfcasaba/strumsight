@@ -249,6 +249,46 @@ void main() {
         expect(c.logger.events, contains('storage.document.corrupt'));
       },
     );
+
+    test(
+      'cell vN+1b — inner shape version ahead of codec (envelope OK) is NOT '
+      'misread, returns null',
+      () async {
+        // Az envelope schemaVersion=1 (== documentSchemaVersion, átmegy a
+        // JsonDocumentStore őrén), DE a body SAJÁT belső schemaVersion mezője
+        // 2 — eggyel a VisionCalibrationCodec.currentSchemaVersion (1) fölött.
+        // Ez a codec SAJÁT _migrateToCurrent ágát méri, nem a — más tesztben
+        // már lefedett — envelope-szintű őrt.
+        final future = jsonEncode({
+          'schemaVersion': documentSchemaVersion,
+          'data': {
+            'schemaVersion': VisionCalibrationCodec.currentSchemaVersion + 1,
+            'camera': {
+              'camera': 'back',
+              'orientation': 0,
+              'zoom': 0.5,
+              'setupProfile': 'practiceBalanced',
+              'createdAt': '2026-08-07T12:00:00.000Z',
+              'qualityScore': 0.9,
+            },
+            'guitar': {
+              'nut': {'x': 0.3, 'y': 0.5},
+              'bridge': {'x': 0.7, 'y': 0.5},
+              'neckPolygon': [
+                {'x': 0.25, 'y': 0.35},
+                {'x': 0.75, 'y': 0.35},
+                {'x': 0.75, 'y': 0.65},
+              ],
+              'createdAt': '2026-08-07T12:00:00.000Z',
+            },
+          },
+        });
+        final c = build(initial: {StorageKeys.visionCalibration: future});
+        final read = c.repository.read();
+        expect(read, isNull);
+        expect(c.logger.events, contains('storage.document.record_skipped'));
+      },
+    );
   });
 
   group('idempotence', () {
