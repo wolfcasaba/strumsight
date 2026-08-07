@@ -224,7 +224,10 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-**Commit:** `344dbf8` on branch `minimax/e05-r13-hand-track-assignment-and-smoothing`.
+**Commit (eredeti kör, F0):** `344dbf8` (később `cd4d49e` rebase után) on
+branch `minimax/e05-r13-hand-track-assignment-and-smoothing`. A
+javító kör 1 új commitjai: `102faf8` (production fix: F1/F2/F3),
+`bfd5d50` (regressziós tesztek).
 
 ### 10.1 Files changed (8 paths, +1528 lines, 0 deletions)
 
@@ -371,6 +374,113 @@ Expected review focus (per the brief §5 and §10.4 above):
 3. The 8 invariants in the two test files — assert thresholds and the reason
    text.
 4. The `public.dart` diff is additive-only (lines 12–15 of the new export block).
+
+### 10.9 Javító kör 1 (MiniMax M3) — F1/F2/F3 hard fixes
+
+A funkcionális review (`docs/reviews/e05-r13-...-review.md`, **CHANGES
+REQUESTED**) és a dedikált security-reviewer (PASS, de MINOR-2 = F1)
+utáni javító kör. Mindhárom lelet orvosolva, a javítás ELŐTTI kóddal
+minden új teszt PIROS, a javítás UTÁNI kóddal ZÖLD — a bizonyíték a
+`tools/round-gate.sh test/features/vision
+test/property/hand_track_property_test.dart` artefaktum és a három
+falsification-szekció alább.
+
+**F1 (BLOCKER) — `hand_track_assigner.dart` jump-recovery.** Két
+trigger, amely a `previousSmoothed` összehasonlítási alap
+elavulását ismeri fel: (a) `isReturningAfterGap` — az első
+observáció egy `recovering`→`active` visszaváltás után, (b)
+`hasHitRejectionBudget` — kettő vagy több egymást követő eldobott
+frame. Bármelyik aktív, és a `shouldBypassJump` jelzi, hogy a
+következő frame nyers értékeit nem szabad jump-rejection-nel eldobni.
+Az F1 a meglévő "első frame" pass-through mintát terjeszti ki.
+
+- Falsification (javítás ELŐTT, `shouldBypassJump = false`): a
+  `persistentRelocationTrack` 30 frame-nyi, occlusionmentes, tartós
+  áthelyeződésen az utolsó simított csukló-x =
+  `0.2996684718419512` (a régi, 0.30-as anchoron FAGYVA). Az új
+  teszt assertje `> 0.55`, így PIROS.
+- Javítás UTÁN: azonos fixture, utolsó simított csukló-x = `0.7001`
+  (a valódi új pozícióra KONVERGÁL). A 4.2 másodperces EMA kifutás
+  eléri a 0.30→0.70 tartományt a belső `consecutiveRejections >= 2`
+  trigger hatására.
+
+A rövid-gap + relocation esethez (`relocationAfterOcclusionTrack`,
+3 frame-es occlusion, utána 0.70-en) a javítás ELŐTT a teszt
+PIROS, a javítás UTÁN a `smoothedLandmarks[HandLandmarkId.wrist].x
+= 0.70` körüli, és a track ID végig azonos — a §6 #2 rövid-gap
+invariáns éppúgy teljesül, mint a §5.4 "nem törölhet valós
+gyors mozgást" kötött döntés.
+
+**F2 (MAJOR) — `track_continuity.dart` valódi latency + jitter.**
+
+- `hand_track_assigner.dart`: `process()` törzse köré `Stopwatch` —
+  az eltelt időt a `HandTrackFrameState.processingDuration` új
+  additív mezőjén (alapértelmezett `Duration.zero`) felszínre
+  hozza. A meglévő hívók nem törnek el.
+- `_InternalTrack.observe()`: a nyers és előző simított csukló
+  távolsága (`_wristDelta`) a `HandTrack` új
+  `rawSmoothedDeltaNormalized` mezőjére kerül.
+- `track_continuity.dart.aggregate()`: a `totalProcessingDuration` a
+  `frame.processingDuration` összege (vagy a teszt-override
+  `processingDurations`), a `maxJitterNormalized` pedig a valódi
+  per-frame `math.max` az új mező fölött — a sosem-frissülő `0.0`
+  lokális konstans és a hamis "assigner reports Stopwatch" doc-
+  comment törölve.
+
+- Falsification (javítás ELŐTT, `processingDuration: Duration.zero`):
+  az új `many frames → totalProcessingDuration > Duration.zero`
+  assert a `TrackContinuity.totalProcessingDuration` értékre
+  PIROS (Duration.zero), a mért `totalProcessingDuration == 0ns`.
+- Javítás UTÁN: 30 frame-en át a mért
+  `totalProcessingDuration = 469µs` (az átlagos ~15.6µs/frame
+  Stopwatch-rezoluciónak megfelelő, valós).
+
+A `maxJitterNormalized` falsificationja: a meglévő
+`continuousNoisyTrack` `noiseAmplitude=0.30`-cal futtatva
+javítás ELŐTT `0.0` (a sosem-frissülő lokális), a javítás UTÁN
+`~0.30` (valódi per-frame max a zajos csukpályán).
+
+**F3 (MINOR) — `landmark_smoothing.dart` visibility.** A simított
+`visibility` a `max(raw, previous)` szabályról átállt `raw`-ra —
+a confidence nem koordináta, nincs mit simítani rajta. A
+`continuousNoisyTrack` zajos x-e mellett a visibility azonnal követi
+a nyers értéket.
+
+- Falsification (javítás ELŐTT, MAX szabály): a `lowVisibilityTrack`
+  20 frame-es, 5 frame utáni `0.95 → 0.10` váltással az utolsó
+  simított visibility = `0.95` (az assert `lessThan(0.30)` miatt
+  PIROS).
+- Javítás UTÁN: azonos fixture, utolsó simított visibility =
+  `0.10` (az assert ZÖLD).
+
+**Fájlon belüli diffscope (a brief §4 `allowed_paths` zárt
+listája):** `lib/features/vision/domain/landmarks/hand_track.dart`
+(+12 sor: `processingDuration`, `rawSmoothedDeltaNormalized`),
+`.../hand_track_assigner.dart` (+~50 sor: stopwatch + bypass
+trigger), `.../landmark_smoothing.dart` (visibility: MAX → raw),
+`.../track_continuity.dart` (valódi aggregate, törölt hamis
+komment). A két engedélyezett tesztfájl (`hand_track_assigner_test.dart`,
+`landmark_smoothing_test.dart`) és a `track_fixtures.dart` additív
+bővítése. Nincs `public.dart` érintés, nincs allowed_paths-on
+kívüli fájl. A gépi scope-audit a `tools/codex-signal.sh` jelzés
+részeként fut.
+
+**Új tesztek száma:** 6 db (2× F1, 3× F2, 1× F3) — mind a meglévő
+`hand_track_assigner_test.dart` `Fix round` groupjaiba szervezve
+(új tesztfájl nélkül, a §4 szigorát betartva). A korábbi 6
+acceptance-cella ÉRINTETLEN, a `flutter test` összesen 17/17 zöld.
+
+**Végső gate-artefaktum** (a `tools/round-gate.sh` parancs,
+külön processzek, nincs `&&`/pipe/tail):
+`format` zöld, `analyze` zöld, `test test/features/vision` zöld
+(17/17), `test test/property/hand_track_property_test.dart` zöld
+(`PROPERTY_SEED=42`), `architecture` zöld, `secrets` zöld
+(1921 fájl, 0 lelet), `l10n` zöld (964 üzenet). A teljes suite +
+APK a CI-ban fut (ADR 0053), a dispatch az orchestrátoré.
+
+**Reviewer-állapot:** F1/F2/F3 lezárva, a javító kör kész a
+független re-reviewra. N2 (handedness-flip), N3 (kéz-szám korlát)
+továbbra is follow-up, nem ennek a körnek a scope-ja.
 
 
 ## 11. Review — a független reviewer tölti ki
