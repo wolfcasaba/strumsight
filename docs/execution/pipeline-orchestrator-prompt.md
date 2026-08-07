@@ -198,6 +198,36 @@ használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
 `READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
 független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
 
+### ⛔ IDEIGLENES MOTOR-TILTÁS — `terra` / `codex` harness (2026-08-07, user-döntés)
+
+**A Terra (`gpt-5.6-terra`) kvótája kimerült; a Codex CLI saját hibaszövege
+szerint `2026-08-08 07:32`-ig nem áll rendelkezésre.** User-döntés: *„a MiniMax
+az implementer, most ez maradjon így, és ha több kör kell neki, ne váltson
+Terrára; tiltsd le a Terrát, majd ha a limit visszajött, bekapcsolni."*
+
+Amíg ez a szakasz itt van:
+
+- **NE válaszd** a `terra`-t és semmilyen más `codex`-harness-ű motort
+  (`docs/execution/engine-registry.tsv` 2. oszlopa = `codex`) — sem kör-,
+  sem javító-, sem eszkalációs célra. A dispatch azonnal ugyanabba az
+  `usage limit` hibába futna, és csak keretet égetne.
+- **Az implementer a `minimax`** (`.pipeline/engine-override`). Ha a MiniMax
+  nem végez egy körben: **folytatás ugyanazon a motoron** (`resume`), vagy
+  `stopped`/`blocked` jelzés — **nem** motorváltás Terrára.
+- Ha egy javítás bizonyítottan csak `codex`-harness-en végezhető el, az
+  **nem eszkaláció**, hanem **megállás**: írd meg a halt-jelzést, és a
+  `codex_usage_limit_hold` mechanizmus (`tools/round-pipeline.sh`) a
+  reset-időig visszatartja a firingeket, önjavítási kísérlet elpazarlása nélkül.
+- Az automatikus orchestrátor-fallback szintén tiltva:
+  `PIPELINE_FALLBACK_ENGINE=none` a crontabban.
+
+**VISSZAKAPCSOLÁS** (a limit visszatérése után — ez a szakasz ilyenkor
+törlendő):
+
+```bash
+crontab -l | sed 's/PIPELINE_FALLBACK_ENGINE=none //' | crontab -
+```
+
 ### Nevesített motor a nyilvántartásból (`minimax`, `codex`, `terra`, `sonnet-impl`, …)
 
 A motor **harness**-ét a nyilvántartás mondja meg
