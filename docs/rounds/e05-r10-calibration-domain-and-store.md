@@ -4,7 +4,9 @@
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 10; §13.3–13.4, §28
 - **Branch:** `codex/e05-r10-calibration-domain-and-store`
 - **Előfeltétel:** **E05-R08 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** MiniMax M3 (a
+  pipeline-prompt E05-R10 routing-táblája `minimax`-ot ír elő — a brief eredeti
+  „Codex (Terra)" jelölése felülírva, lásd §0.0 R7)
 
 ```ai-router
 schema_version = 1
@@ -28,10 +30,11 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight LEZÁRVA (§0.0, R1–R6):** `origin/main` @ `539d346` (HEAD ==
+> ⚠ **Pre-flight LEZÁRVA (§0.0, R1–R7):** `origin/main` @ `539d346` (HEAD ==
 > origin/main, nincs drift, nincs párhuzamos inflight kör) + E05-R08 merge
-> megerősítve. Egy javítás (elavult ADR-hivatkozás) és öt megerősítés/
-> pontosítás — egyik sem igényel ÚJ ADR-t. Részletek §0.0. PLANNING→dispatch.
+> megerősítve. Két javítás (elavult ADR-hivatkozás; implementer-motor
+> felülírva `minimax`-ra) és öt megerősítés/pontosítás — egyik sem igényel ÚJ
+> ADR-t. Részletek §0.0. PLANNING→dispatch.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -47,7 +50,7 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 **Mérve `origin/main` @ `539d346` (E05-R09 után), orchestrátor Claude Sonnet 5,
 2026-08-07.** Előfeltétel (E05-R08 merge) megerősítve, working tree tiszta,
 nincs párhuzamos inflight kör (`.pipeline/inflight/` csak ennek a körnek a
-markerét tartalmazza). Hat mért tétel — egy javítás, öt megerősítés/
+markerét tartalmazza). Hét mért tétel — két javítás, öt megerősítés/
 pontosítás —, egyik sem igényel ÚJ ADR-t.
 
 **R1 — ADR-hivatkozás elavult (javítva).** A pre-flight callout és az §5.3.
@@ -128,6 +131,15 @@ Instrument" lib/` üres). A hetedik („app verzió/séma breaking változás") 
 a `CalibrationValidity` dolga — azt a **migrációs mechanizmus** (acceptance
 #2, R3 fent) fedi, külön rétegen. A brief öt cellája tehát a helyes, ma
 elérhető metszet — nem hiányos mérce.
+
+**R7 — implementer-motor felülírva (javítva).** A brief fejléce „Codex
+(Terra)"-t jelölt implementerként. A pipeline-prompt E05-R10 routing-táblája
+(`.pipeline/prompt-E05-R10-20260807T034419.md` §0) explicit `minimax`-ot ír
+elő ehhez a futáshoz — ez a friss, konkrét dispatch-utasítás (AGENTS.md §2
+elsőbbségi lista 1–2. pontja) a brief saját, korábban írt javaslatával szemben.
+A fejléc `MiniMax M3`-ra javítva; a dispatch a §1.1 nevesített-motor útvonalon
+megy (`docs/execution/engine-registry.tsv` → `minimax` → `claude` harness →
+`tools/mm-round.sh`).
 
 ## 1. Cél
 
