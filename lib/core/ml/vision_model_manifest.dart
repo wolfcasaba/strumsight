@@ -219,22 +219,30 @@ VisionModelManifestReport validateVisionManifest({
       continue;
     }
 
-    // The asset must exist on disk and its bytes must match the checksum.
-    // For `status = "deferred"` entries we still ship a 1-byte placeholder
-    // so the test surface is uniform — the checksum is the place the four
-    // mutation cells (brief §6) actually attack.
-    final asset = File('${projectRoot.absolute.path}/$path');
-    if (!asset.existsSync()) {
-      issues.add('vision_models[$index] asset missing: $path');
-      continue;
-    }
-    final actualChecksum = _sha256Hex(asset.readAsBytesSync());
-    if (actualChecksum != sha256) {
-      issues.add(
-        'vision_models[$index] checksum mismatch for $path: '
-        'expected $sha256, actual $actualChecksum',
-      );
-      continue;
+    // For `status = "active"` entries the asset must exist on disk and
+    // its bytes must match the checksum (AGENTS.md §4 model-asset rule,
+    // modeled on the audio-model validator). For `status = "deferred"`
+    // entries (ADR 0185 §Döntés 2 — the asset is not shipped in this
+    // round) the validator only checks the sha256 field format: the
+    // four mutation cells (brief §6 — missing/wrong checksum, missing
+    // license, mismatched output_schema) exercise the format branch
+    // without touching disk, and the activation round that adds the
+    // first `active` spec re-enables the heavier branch by toggling
+    // the status on its own (no validator change required).
+    if (status == VisionModelStatus.active) {
+      final asset = File('${projectRoot.absolute.path}/$path');
+      if (!asset.existsSync()) {
+        issues.add('vision_models[$index] asset missing: $path');
+        continue;
+      }
+      final actualChecksum = _sha256Hex(asset.readAsBytesSync());
+      if (actualChecksum != sha256) {
+        issues.add(
+          'vision_models[$index] checksum mismatch for $path: '
+          'expected $sha256, actual $actualChecksum',
+        );
+        continue;
+      }
     }
 
     entries.add(
