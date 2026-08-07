@@ -64,17 +64,15 @@ const double trackingConfidenceThreshold = 0.5;
 /// tracker can never feed the loss machine a NaN/Infinity drift (brief
 /// §5.2 silent-garbage prohibition, `guitar_landmark_mapper` precedent).
 final class GeometryConfidence {
-  GeometryConfidence({
-    required this.confidence,
-    required this.drift,
-  }) : assert(
-         confidence.isFinite && confidence >= 0 && confidence <= 1,
-         'GeometryConfidence.confidence must be finite and in [0, 1].',
-         ),
-       assert(
-         drift.isFinite && drift >= 0,
-         'GeometryConfidence.drift must be finite and >= 0.',
-       );
+  GeometryConfidence({required this.confidence, required this.drift})
+    : assert(
+        confidence.isFinite && confidence >= 0 && confidence <= 1,
+        'GeometryConfidence.confidence must be finite and in [0, 1].',
+      ),
+      assert(
+        drift.isFinite && drift >= 0,
+        'GeometryConfidence.drift must be finite and >= 0.',
+      );
 
   /// Tracker-side reliability in `[0, 1]`. Reduced by the loss machine
   /// across frames; never increased (manual anchor is the ground truth,

@@ -14,9 +14,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 import 'package:strumsight/features/vision/application/calibration_loss_machine.dart';
-import 'package:strumsight/features/vision/domain/calibration/guitar_calibration.dart';
 import 'package:strumsight/features/vision/domain/geometry/geometry_confidence.dart';
 import 'package:strumsight/features/vision/domain/geometry/geometry_tracker.dart';
 
@@ -123,10 +121,7 @@ void main() {
         initialAnchor: referenceManualAnchor(),
       );
       machine.update(
-        observationFor(
-          scenarioSmallCameraBumpDrift,
-          confidence: 0.9,
-        ),
+        observationFor(scenarioSmallCameraBumpDrift, confidence: 0.9),
       );
       expect(machine.state, CalibrationLossState.tracking);
       expect(machine.geometrySource, GeometrySourceKind.tracked);
@@ -158,7 +153,8 @@ void main() {
               firstDegradedStep == -1) {
             firstDegradedStep = step;
           }
-          if (machine.state == CalibrationLossState.lost && firstLostStep == -1) {
+          if (machine.state == CalibrationLossState.lost &&
+              firstLostStep == -1) {
             firstLostStep = step;
           }
         }
@@ -166,8 +162,7 @@ void main() {
         expect(
           firstDegradedStep,
           equals(scenarioCumulativeDriftFirstDegradedStep),
-          reason:
-              'first crossing at step 5 (drift=0.05) per python3 sweep',
+          reason: 'first crossing at step 5 (drift=0.05) per python3 sweep',
         );
         expect(
           firstLostStep,
@@ -181,14 +176,17 @@ void main() {
   });
 
   group('Feedback-tiltás (a §6 fourth cell)', () {
-    test('lost állapotban feedbackSuppressed=true, recalibrateRequested=true', () {
-      final machine = CalibrationLossMachine(
-        initialAnchor: referenceManualAnchor(),
-      );
-      machine.update(observationFor(0.20));
-      expect(machine.feedbackSuppressed, isTrue);
-      expect(machine.recalibrateRequested, isTrue);
-    });
+    test(
+      'lost állapotban feedbackSuppressed=true, recalibrateRequested=true',
+      () {
+        final machine = CalibrationLossMachine(
+          initialAnchor: referenceManualAnchor(),
+        );
+        machine.update(observationFor(0.20));
+        expect(machine.feedbackSuppressed, isTrue);
+        expect(machine.recalibrateRequested, isTrue);
+      },
+    );
 
     test('tracking állapotban feedbackSuppressed=false', () {
       final machine = CalibrationLossMachine(
@@ -199,23 +197,24 @@ void main() {
       expect(machine.recalibrateRequested, isFalse);
     });
 
-    test(
-      'no-observation streak promotes to lost and suppresses feedback',
-      () {
-        final machine = CalibrationLossMachine(
-          initialAnchor: referenceManualAnchor(),
-        );
-        // 4 frames of null → still tracking (below threshold)
-        for (var i = 0; i < CalibrationLossMachine.noObservationLostThreshold - 1; i++) {
-          machine.update(null);
-        }
-        expect(machine.state, CalibrationLossState.tracking);
-        // 5th consecutive null → lost
+    test('no-observation streak promotes to lost and suppresses feedback', () {
+      final machine = CalibrationLossMachine(
+        initialAnchor: referenceManualAnchor(),
+      );
+      // 4 frames of null → still tracking (below threshold)
+      for (
+        var i = 0;
+        i < CalibrationLossMachine.noObservationLostThreshold - 1;
+        i++
+      ) {
         machine.update(null);
-        expect(machine.state, CalibrationLossState.lost);
-        expect(machine.feedbackSuppressed, isTrue);
-      },
-    );
+      }
+      expect(machine.state, CalibrationLossState.tracking);
+      // 5th consecutive null → lost
+      machine.update(null);
+      expect(machine.state, CalibrationLossState.lost);
+      expect(machine.feedbackSuppressed, isTrue);
+    });
 
     test(
       'negatív insight-út NEM hívódik lost állapotban (hívásszámláló = 0)',
@@ -277,7 +276,8 @@ void main() {
         for (var step = 1; step <= 20; step++) {
           final drift = scenarioCumulativeDriftPerFrame * step;
           machine.update(observationFor(drift));
-          if (machine.state == CalibrationLossState.lost && firstLostStep == -1) {
+          if (machine.state == CalibrationLossState.lost &&
+              firstLostStep == -1) {
             firstLostStep = step;
           }
         }
@@ -300,8 +300,12 @@ void main() {
         initialAnchor: referenceManualAnchor(),
       );
       machine.update(observationFor(0.02, confidence: 0.9)); // tracked
-      machine.update(observationFor(0.07, confidence: 0.9)); // degraded, maxDrift=0.07
-      machine.update(observationFor(0.20, confidence: 0.9)); // lost, maxDrift=0.20
+      machine.update(
+        observationFor(0.07, confidence: 0.9),
+      ); // degraded, maxDrift=0.07
+      machine.update(
+        observationFor(0.20, confidence: 0.9),
+      ); // lost, maxDrift=0.20
 
       final summary = machine.summary;
       expect(summary.geometrySource, GeometrySourceKind.tracked);
@@ -309,26 +313,21 @@ void main() {
       expect(summary.state, CalibrationLossState.lost);
     });
 
-    test(
-      'manual source attribution: low-confidence tracker → manual',
-      () {
-        final machine = CalibrationLossMachine(
-          initialAnchor: referenceManualAnchor(),
-        );
-        // Confidence below trackingConfidenceThreshold → source=manual
-        machine.update(
-          observationFor(0.02, confidence: trackingConfidenceThreshold - 0.01),
-        );
-        expect(machine.geometrySource, GeometrySourceKind.manual);
-      },
-    );
+    test('manual source attribution: low-confidence tracker → manual', () {
+      final machine = CalibrationLossMachine(
+        initialAnchor: referenceManualAnchor(),
+      );
+      // Confidence below trackingConfidenceThreshold → source=manual
+      machine.update(
+        observationFor(0.02, confidence: trackingConfidenceThreshold - 0.01),
+      );
+      expect(machine.geometrySource, GeometrySourceKind.manual);
+    });
   });
 
   group('State machine — pure-function transition table', () {
     test('forward path: tracking → degraded → lost', () {
-      final machine = CalibrationLossMachine(
-        initialAnchor: referenceManualAnchor(),
-      );
+      // tracking + drift below degraded bound → tracking
       expect(
         CalibrationLossMachine.stateTransition(
           drift: 0.04,
@@ -336,6 +335,7 @@ void main() {
         ),
         equals(CalibrationLossState.tracking),
       );
+      // tracking + drift at degraded bound → degraded
       expect(
         CalibrationLossMachine.stateTransition(
           drift: 0.05,
@@ -343,12 +343,22 @@ void main() {
         ),
         equals(CalibrationLossState.degraded),
       );
+      // degraded + drift strictly above lost bound → lost
+      expect(
+        CalibrationLossMachine.stateTransition(
+          drift: 0.11,
+          previous: CalibrationLossState.degraded,
+        ),
+        equals(CalibrationLossState.lost),
+      );
+      // degraded + drift exactly on lost bound → stays degraded
+      // (the matrix's "on the bound" cell, not "above")
       expect(
         CalibrationLossMachine.stateTransition(
           drift: 0.10,
           previous: CalibrationLossState.degraded,
         ),
-        equals(CalibrationLossState.lost),
+        equals(CalibrationLossState.degraded),
       );
     });
 

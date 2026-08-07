@@ -21,7 +21,7 @@
 /// evidencia). A downstream állapotgép ezt a párost olvassa.
 library;
 
-import '../../../core/camera/camera_coordinate_space.dart';
+import '../../../../core/camera/camera_coordinate_space.dart';
 import '../calibration/guitar_calibration.dart';
 import 'geometry_confidence.dart';
 
@@ -34,7 +34,7 @@ import 'geometry_confidence.dart';
 /// The list MAY be empty — that signals "no features detected" and the
 /// tracker is expected to return `null` from [GeometryTracker.observe].
 final class FrameObservation {
-  const FrameObservation({required this.detectedFeatures})
+  FrameObservation({required List<NormalizedPoint> detectedFeatures})
     : _detectedFeatures = List<NormalizedPoint>.unmodifiable(detectedFeatures);
 
   /// Normalized `[0, 1]×[0, 1]` feature points detected this frame.
@@ -46,9 +46,13 @@ final class FrameObservation {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! FrameObservation) return false;
-    if (_detectedFeatures.length != other._detectedFeatures.length) return false;
+    if (_detectedFeatures.length != other._detectedFeatures.length) {
+      return false;
+    }
     for (var i = 0; i < _detectedFeatures.length; i++) {
-      if (_detectedFeatures[i] != other._detectedFeatures[i]) return false;
+      if (_detectedFeatures[i] != other._detectedFeatures[i]) {
+        return false;
+      }
     }
     return true;
   }
@@ -67,10 +71,7 @@ final class FrameObservation {
 /// to attribute [GeometrySourceKind.tracked] or fall back to
 /// [GeometrySourceKind.manual].
 final class GeometryObservation {
-  const GeometryObservation({
-    required this.proposed,
-    required this.confidence,
-  });
+  const GeometryObservation({required this.proposed, required this.confidence});
 
   /// The tracker-estimated calibration, derived from the manual anchor
   /// plus the per-frame shift.

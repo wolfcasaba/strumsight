@@ -68,8 +68,22 @@ const double driftMatrixAbove = 0.11;
 /// the same 1 transition here, but a sequence AROUND the lost-bound
 /// would oscillate freely without hysteresis.
 const List<double> hysteresisOscillatingSequence = [
-  0.07, 0.08, 0.06, 0.09, 0.07, 0.08, 0.06, 0.09,
-  0.07, 0.08, 0.06, 0.09, 0.07, 0.08, 0.06, 0.09,
+  0.07,
+  0.08,
+  0.06,
+  0.09,
+  0.07,
+  0.08,
+  0.06,
+  0.09,
+  0.07,
+  0.08,
+  0.06,
+  0.09,
+  0.07,
+  0.08,
+  0.06,
+  0.09,
   0.07,
 ];
 

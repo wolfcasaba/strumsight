@@ -80,7 +80,9 @@ enum GeometrySourceKind {
 /// with the manual anchor — this matches the brief §13.4 "kalibráció
 /// elmozdul a tolerancián túl" reset-szemantikáját.
 final class CalibrationLossMachine {
+  // ignore: prefer_initializing_formals
   CalibrationLossMachine({required GuitarCalibration initialAnchor})
+    // ignore: prefer_initializing_formals
     : _initialAnchor = initialAnchor,
       _state = CalibrationLossState.tracking,
       _geometrySource = GeometrySourceKind.manual,
@@ -220,19 +222,33 @@ final class CalibrationLossMachine {
   static CalibrationLossState stateTransition({
     required double drift,
     required CalibrationLossState previous,
-  }) =>
-      _nextState(drift, previous);
+  }) => _nextState(drift, previous);
 
   static CalibrationLossState _nextState(
     double drift,
     CalibrationLossState previous,
   ) {
+    // Forward escalation has priority in EVERY branch — even from
+    // `degraded`, a drift above `lostDriftBound` jumps to `lost`
+    // immediately (no further hysteresis on the worse direction).
+    if (drift > lostDriftBound) return CalibrationLossState.lost;
+
+    // Reverse (recovery) — stricter than the forward thresholds,
+    // implements the brief §5.3 hysteresis contract.
     if (previous == CalibrationLossState.lost) {
       return drift <= recoveryDriftBound
           ? CalibrationLossState.tracking
           : CalibrationLossState.lost;
     }
-    if (drift > lostDriftBound) return CalibrationLossState.lost;
+    if (previous == CalibrationLossState.degraded) {
+      // Same stricter bound for the degraded → tracking return —
+      // a drift improvement to e.g. 0.045 (between `recoveryDriftBound`
+      // and `degradedDriftBound`) is NOT enough to escape degraded.
+      return drift <= recoveryDriftBound
+          ? CalibrationLossState.tracking
+          : CalibrationLossState.degraded;
+    }
+    // Forward from `tracking`.
     if (drift >= degradedDriftBound) return CalibrationLossState.degraded;
     return CalibrationLossState.tracking;
   }

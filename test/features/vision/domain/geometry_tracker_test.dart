@@ -31,16 +31,31 @@ import '../../../fixtures/vision/geometry/geometry_scenarios.dart';
 void main() {
   group('GeometryConfidence — drift thresholding', () {
     test('isLost is false at the boundary and true strictly above', () {
-      final atBound = GeometryConfidence(confidence: 0.9, drift: lostDriftBound);
-      final above = GeometryConfidence(confidence: 0.9, drift: lostDriftBound + 1e-6);
+      final atBound = GeometryConfidence(
+        confidence: 0.9,
+        drift: lostDriftBound,
+      );
+      final above = GeometryConfidence(
+        confidence: 0.9,
+        drift: lostDriftBound + 1e-6,
+      );
       expect(atBound.isLost, isFalse, reason: 'at the bound is not lost');
       expect(above.isLost, isTrue, reason: 'strictly above the bound is lost');
     });
 
     test('isTracked uses trackingConfidenceThreshold', () {
-      final below = GeometryConfidence(confidence: trackingConfidenceThreshold - 0.01, drift: 0.01);
-      final at = GeometryConfidence(confidence: trackingConfidenceThreshold, drift: 0.01);
-      final above = GeometryConfidence(confidence: trackingConfidenceThreshold + 0.01, drift: 0.01);
+      final below = GeometryConfidence(
+        confidence: trackingConfidenceThreshold - 0.01,
+        drift: 0.01,
+      );
+      final at = GeometryConfidence(
+        confidence: trackingConfidenceThreshold,
+        drift: 0.01,
+      );
+      final above = GeometryConfidence(
+        confidence: trackingConfidenceThreshold + 0.01,
+        drift: 0.01,
+      );
       expect(below.isTracked, isFalse);
       expect(at.isTracked, isTrue);
       expect(above.isTracked, isTrue);
@@ -72,21 +87,25 @@ void main() {
         anchor: anchor,
         observation: shiftedFeatureObservation(0.04, 0.0),
       );
-      expect(observation, isNotNull, reason: 'tracker must produce an observation');
+      expect(
+        observation,
+        isNotNull,
+        reason: 'tracker must produce an observation',
+      );
       expect(observation!.confidence.drift, closeTo(0.04, 1e-9));
       expect(observation.confidence.isLost, isFalse);
     });
 
-    test('cell 2 — drift exactly on the bound → tracker refuses', () {
-      // drift = 0.10 = lostDriftBound, which is `>` strict, so the
-      // tracker still produces an observation (the bound itself is
-      // the DEGRADED matrix cell, not lost).
+    test('cell 2 — drift at the bound → tracker refuses (>= bound)', () {
+      // The tracker refuses at the drift-bound (brief §5.1 "azon túl a
+      // geometria lost"). The state-machine matrix separately classifies
+      // exactly-on-the-bound as `degraded`, but the tracker never
+      // delivers such an observation — it refuses first.
       final observation = tracker.observe(
         anchor: anchor,
         observation: shiftedFeatureObservation(0.10, 0.0),
       );
-      expect(observation, isNotNull);
-      expect(observation!.confidence.drift, closeTo(0.10, 1e-9));
+      expect(observation, isNull);
     });
 
     test('cell 3 — drift strictly above bound → tracker refuses (null)', () {
@@ -95,7 +114,11 @@ void main() {
         anchor: anchor,
         observation: shiftedFeatureObservation(0.11, 0.0),
       );
-      expect(observation, isNull, reason: 'tracker must refuse beyond the bound');
+      expect(
+        observation,
+        isNull,
+        reason: 'tracker must refuse beyond the bound',
+      );
     });
   });
 

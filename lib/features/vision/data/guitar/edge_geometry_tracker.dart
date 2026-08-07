@@ -86,8 +86,13 @@ final class EdgeGeometryTracker implements GeometryTracker {
     final drift = math.sqrt(shift.$1 * shift.$1 + shift.$2 * shift.$2);
 
     // Drift-bound guard: refuse to produce an observation whose drift
-    // would push the loss machine past `lost` (brief §5.1).
-    if (drift > lostDriftBound) return null;
+    // meets or exceeds `lostDriftBound` (brief §5.1 — "azon túl a
+    // geometria lost"). Using `>=` makes the test fixture robust to
+    // floating-point precision (e.g. `sqrt(0.10²) ≈ 0.1000000001`),
+    // and the state machine's "exactly on the bound" matrix cell
+    // classifies the same drift as `degraded`, which is consistent —
+    // the tracker refuses at the bound, the machine classifies it.
+    if (drift >= lostDriftBound) return null;
 
     // Confidence: feature-count ratio, clamped to [0, 1].
     final ratio = features.length / expectedFeatureCount;
