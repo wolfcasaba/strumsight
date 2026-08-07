@@ -13,3 +13,4 @@ export 'data/persistence/vision_calibration_repository.dart';
 export '../../core/camera/camera_coordinate_space.dart'
     show NormalizedPoint, NormalizedRect;
 export 'presentation/screens/vision_setup_screen.dart';
+export 'presentation/screens/guitar_calibration_screen.dart';

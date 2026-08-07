@@ -71,6 +71,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .visionSetupEnabled;
+  final visionGuitarGeometryEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .visionGuitarGeometryEnabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -229,6 +233,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.visionSetup,
           builder: (_, _) => const VisionSetupScreen(),
+        ),
+      ],
+      if (visionEnabled && visionGuitarGeometryEnabled) ...[
+        GoRoute(
+          path: AppRoutes.visionGuitarGeometry,
+          builder: (_, _) => const GuitarCalibrationScreen(),
         ),
       ],
     ],

@@ -47,11 +47,128 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl/contract → **a
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**PREPARED.** Nincs előre kiosztott ADR — ez a kör NEM hoz új ADR-t (R1
+alább csak egy hivatkozás-javítás).
+
+Mérve `origin/main` @ `a6e3081` (R07/R08/R10 mind mergelve). Hét pontos
+revízió — mindegyik grep-elt forrásreferenciával, nem feltételezésből:
+
+**R1 — Stale ADR-hivatkozás.** A fenti figyelmeztető sor „(0164 végrehajtása)"-t
+ír. Az E05-R08 saját, már rögzített pre-flightja (`HANDOFF.md`, E05-R08
+szakasz) ezt már egyszer átszámozta: „ADR-hivatkozás `0161/0162/0164` →
+`0178/0179/0181`". A fájl is megerősíti:
+`docs/adr/0181-vision-manual-calibration-fallback.md` létezik, a címe pontos
+szemantikai egyezés. **A helyes szám: ADR 0181.** Nincs ÚJ ADR — ez a kör a
+0181 döntést hajtja végre, csak a citáció elavult. Ugyanez a +17-es
+átszámozás (`0161→0178 … 0166→0183`, HANDOFF E05-R01) érinti a §1 „(ADR
+0164)" és a §5.3 „(ADR 0161/0166)" előfordulását is — mindkettő javítva lent
+(0181, illetve 0178/0183).
+
+**R2 — Nincs élő kameraelőnézet, és ez a kör nem is szerez be egyet.** Mérve:
+(a) `CameraFrame` bufferje kizárólag a stream-callback szinkron törzsén belül
+érvényes (`lib/core/camera/camera_frame.dart:51-57,81-83`,
+`assertValid`/`invalidate`) — nincs mögötte hosszú-életű, widgetből olvasható
+kép; (b) `grep -rln "CameraPreview\|Texture(" lib/` **nulla találat** — a
+repóban SEHOL nincs élő kamerakép-renderelő widget; (c) `CameraOwner`
+pontosan négy értékű zárt enum (`lib/core/camera/camera_session_lease.dart:6`:
+`visionSetup, visionPractice, songVision, labCapture`) — nincs kalibrációs
+owner, és ez a fájl **nincs** az engedélyezett listán, tehát nem bővíthető;
+(d) még az R08 `VisionSetupStep.ready` lépése is — pedig OTT ténylegesen
+aktív a kameralease (`vision_setup_controller.dart:157-195`) — nem jelenít
+meg élő framet: az egyetlen kamera-analóg widget a `VisionSetupFrameGuide`,
+aminek a doc-commentje explicit kimondja: „contains no camera preview and
+therefore cannot retain or expose image data"
+(`vision_setup_frame_guide.dart:6`). **Következmény:** az anchor-editor egy
+ABSZTRAKT, normalizált `[0,1]×[0,1]` frame-területen dolgozik (statikus/üres
+hátterű canvas, az R08 `VisionSetupFrameGuide`-precedenst követve) — ÉLŐ
+kamera-lease-t vagy preview-widgetet ez a kör NEM szerez be és NEM rajzol; a
+„érvényes frame-területre korlátozás" (§3) erre az absztrakt téglalapra
+vonatkozó clamp, az R07 `PreviewFit`/`NormalizedRect` gépezetével.
+
+**R3 — A „quality score" számítása NEM az R10-é; ez a kör az első
+implementáció.** Mérve: `CameraCalibrationProfile.qualityScore`
+(`camera_calibration_profile.dart:27,48`) egy **tárolt** `double [0,1]`
+(csak assert-tel határolt, `camera_calibration_profile.dart:29`); a
+`vision_calibration_codec.dart:164,242,299` és a domain fájlok teljes
+grepje (`grep -rln qualityScore lib/`) **egyetlen számító függvényt sem** ad
+— a kódolás/dekódolás csak átmásolja, amit kap. Az SDD forrás is ezt
+erősíti: „Kör 10" feladatlistája csak „Készíts calibration quality
+score-t" (= mezőt/típust), míg **„Kör 11" (EZ a kör) feladatlistája
+explicit: „Számíts calibration qualityt és magyarázd a hibát"**
+(`docs/sdd/06-epic-05-computer-vision.md:2551,2589`). A brief §9 2. kockázata
+(„A számítás kizárólag az R10-é") ezért **téves feltevésen alapul** — nincs
+R10-formula, amit „elhagyva" két igazság keletkezne. **Ez a kör írja meg az
+ELSŐ (és egyetlen) quality-score formulát**, kizárólag a
+`guitar_calibration_controller.dart`-ban (nem a `calibration_validity.dart`-ban,
+az nincs az engedélyezett listán) — determinisztikus, tiszta függvény, csak
+már ismert geometriai jelekből (pl. az R4 alatti margin/vertex-jelek), a UI
+ezt jeleníti meg és magyarázza. §9 2. kockázatát így kell olvasni: nem a
+„két igazság" a veszély, hanem hogy a formula NE kerüljön a widget rétegbe és
+NE duplikálódjon a Save-kapu és a kijelzés között (egy hívás, egy eredmény).
+
+**R4 — A degenerált-geometria mátrix egy része R10-en TÚLI, saját ellenőrzés.**
+Mérve: `CalibrationValidity._isDegenerate` (`calibration_validity.dart:91-98`)
+KIZÁRÓLAG két dolgot néz: `neckPolygon.length < 3`, és a nut↔bridge normalizált
+távolság `< 0.05` (`minAnchorSeparation`, neckhossz-proxy). **Nem néz**
+kollinearitást és nem néz polygon-területet. Az SDD Kör 11 feladatlistája
+viszont explicit ezt is előírja ennek a körnek: „Validáld a minimum
+nyakhosszt, **polygon területet** és degenerált geometriát"
+(`docs/sdd/06-epic-05-computer-vision.md:2587`). Mivel a
+`calibration_validity.dart` NINCS az engedélyezett listán (R10 domain-fájl,
+tilos zóna), ezt a két plusz ellenőrzést (kollinearitás — pl. keresztszorzat
+közel nulla; nulla/közel-nulla polygon-terület — shoelace formula) a
+**controller** (`guitar_calibration_controller.dart`) számolja, saját,
+tiszta helper függvényként — a `grep -rln "collinear\|signedArea\|shoelace"
+lib/ test/` nulla találatot ad, tehát nincs meglévő helper, amit újra
+kellene használni vagy amivel ütközne. A felhasználó felé mindhárom eset
+(rövid nyak / kollineáris / nulla terület) a **meglévő**
+`CalibrationInvalidationReason.degenerateGeometry` lokalizált szövege alá
+tartozik (nem kell új enum-érték); a §10 handoffban dokumentáld, melyik
+al-ok melyik konkrét ARB-szöveget kapja.
+
+**R5 — `evaluate()` két, EGYMÁST KIZÁRÓ hívási helye — csak az egyikben
+érhető el mind az öt ok.** `CalibrationValidity.evaluate(...)`
+(`calibration_validity.dart:65`) egy MENTETT profilt hasonlít egy ÉLŐ
+runtime-kontextushoz. Ha a Save-kapu a still-szerkesztett draftot
+önmagával hasonlítja (a `currentCamera`/`currentOrientation`/`currentZoom`
+paraméterek a draft SAJÁT mezői, mert menteni még nem mentett semmit), akkor
+`cameraDeviceChanged`/`orientationChanged`/`zoomChangedBeyondTolerance`/
+`timestampExpired` **szerkezetileg elérhetetlen** (a draft egyenlő
+önmagával) — **csak** `degenerateGeometry` (R4-gyel bővítve) tud kiváltódni.
+Ez PONTOSAN fedi a §6 acceptance-lista igényét (Drag-mátrix, Degenerált
+geometria mátrix, Save-kapu teszt — mindhárom geometria-alapú, egyik sem
+kamera/zoom/idő-alapú). A másik négy ok a **Recalibrate-belépőnél** él: amikor
+a képernyő egy MEGLÉVŐ, `VisionCalibrationRepository.read()`-del betöltött
+rekorddal nyílik meg, az `evaluate()`-et a MENTETT profil vs. az ÉLŐ
+kamera/orientation/zoom/now hívja — itt lokalizálandó mind az öt ok (§5.1
+„az R10 invalidation reasonje lokalizálva" ide vonatkozik teljes körűen). A
+két hívási hely ne keveredjen: a Save-kapu teszt NE várjon
+cameraDeviceChanged-szerű okot, a Recalibrate-teszt NE hasonlítsa a draftot
+önmagával.
+
+**R6 — Módszernév-javítás a Save-kapu teszthez.** §6 „a repository `save`
+metódusa nem hívódik" szövege elavult névre hivatkozik: a
+`VisionCalibrationRepository`-nak nincs `save` metódusa, csak
+`write({required profile, required guitar})`
+(`vision_calibration_repository.dart:74`) és `read()` (uo. 57. sor). A
+hívásszámláló/spy ezt a **`write()`** hívást számolja.
+
+**R7 (megerősítés, nem hiba) — a route-guard flag.** `feature_flags.dart`
+már tartalmaz egy pontosan erre a célra dedikált, ma nulla fogyasztós
+flaget: `visionGuitarGeometryEnabled` (konstruktor + mező + default `false`
+minden környezetben, doc: „Whether guitar geometry may be derived locally").
+Az `app_router.dart` mintája (R08 precedens, 228-233. sor:
+`if (visionEnabled && visionSetupEnabled) [...]`) ide `if (visionEnabled &&
+visionGuitarGeometryEnabled) [...]`-ra másolandó — **nincs** új flag, a
+`feature_flags.dart` nincs is az engedélyezett listán.
+
+**Nincs allowed_paths-változás.** Mind a hét revízió a meglévő fájllistán
+belül old meg mindent (elsősorban a `guitar_calibration_controller.dart`-ban) —
+nincs új fájl, nincs bővítés, nincs szűkítés.
 
 ## 1. Cél
 
-A **production fallback** (ADR 0164) kezelőfelülete: a felhasználó ujjal jelöli
+A **production fallback** (ADR 0181) kezelőfelülete: a felhasználó ujjal jelöli
 ki a nut és a bridge/body horgonyt, a rendszer centerline-t és neck polygont
 rajzol, validál, quality score-t számol, és **csak explicit Save után** ment.
 
@@ -94,17 +211,23 @@ Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
-1. **Hibás geometria nem menthető.** A Save gomb letiltott, amíg a validitás
-   nem `valid`, és a UI **megmondja, miért** (az R10 invalidation reasonje
-   lokalizálva). **NEM elfogadható:** mentés „figyelmeztetéssel", vagy
-   csendben korrigált polygon.
+1. **Hibás geometria nem menthető.** A Save gomb letiltott, amíg
+   `CalibrationValidity.evaluate(...) != null` (a „valid" állapot a `null`
+   visszatérés — nincs külön `valid` enum-érték), és a UI **megmondja, miért**
+   (az R10 invalidation reasonje, R4-gyel bővítve, lokalizálva — §0.0 R4/R5).
+   A Save-kapu hívása a draftot **önmagával** hasonlítja (§0.0 R5); a
+   Recalibrate-belépő a **mentett** profilt élő kontextussal (uo.).
+   **NEM elfogadható:** mentés „figyelmeztetéssel", vagy csendben korrigált
+   polygon.
 2. **Minden koordináta az R07 mappingjén megy át** — a widgetben nincs saját
    `1 - x`, `swap`, vagy `MediaQuery`-alapú kézi korrekció. **NEM elfogadható**
    ad hoc koordinátamatek (a review ezt BLOCKER-ként kezeli).
 3. **A precision (nagyított) mód nem ment fájlt** és nem készít screenshotot
-   (ADR 0161/0166); nagyítás = transzformáció, nem képmentés.
+   (ADR 0178/0183); nagyítás = transzformáció, nem képmentés.
 4. **A pontok az érvényes frame-területen belülre szorulnak** (clamp), és a
    clamp **látható** a felhasználónak (a pont nem „ragad" magyarázat nélkül).
+   A „frame-terület" egy absztrakt, normalizált téglalap — nincs élő
+   kamera-preview mögötte (§0.0 R2).
 5. **Reset ≠ Recalibrate:** a Reset a jelenlegi szerkesztést dobja el, a
    Recalibrate a **mentett** profilt érvényteleníti — a kettő külön művelet,
    külön megerősítéssel a destruktívra.
@@ -114,12 +237,15 @@ Listán kívül → `stopped`.
 
 - [ ] **Drag-mátrix widget-teszt:** nut és bridge horgony mozgatása; a
       frame-területen **kívülre** húzás → clamp + látható jelzés; két horgony
-      **egybeesése** → invalid; érvényes elrendezés → valid + quality score.
+      **egybeesése** → invalid; érvényes elrendezés → `evaluate(...) == null`
+      (valid) + quality score (§0.0 R3/R5).
 - [ ] **Degenerált geometria mátrix:** kollineáris pontok / nulla területű
       polygon / a minimum nyakhossz **alatt / rajta / fölött** — mind külön
       cella, a „rajta" cella értékét `python3 -c` számolja ki (a §10-ben idézve).
+      A kollinearitás/terület a controller SAJÁT, új helperje (§0.0 R4) — a
+      neckhossz-alatt/fölött cella az R10 `minAnchorSeparation`-jét méri.
 - [ ] **Save-kapu teszt:** invalid állapotban a Save **letiltott**, és a
-      repository `save` metódusa **nem hívódik** (hívásszámláló 0).
+      repository `write` metódusa **nem hívódik** (hívásszámláló 0; §0.0 R6).
 - [ ] **Orientation/mirror paritás:** portrait és landscape, front és back
       kamera esetén ugyanaz a felhasználói pont ugyanoda kerül normalizált
       térben (négy cella).
@@ -149,15 +275,143 @@ kalibrációs élmény a device-mátrix PENDING sora.
 
 - **A widget saját koordinátamatekot vezet be**, mert „egyszerűbb" — ez a kör
   legvalószínűbb hibája; a mirror/orientation paritás-mátrix fogja meg.
-- **A quality score UI-ban újraszámolódik** az R10-től eltérően → két igazság.
-  A számítás **kizárólag** az R10-é.
+- **A quality-score formula két helyen (widget + controller) él és
+  szétcsúszik.** Nincs R10-formula, amit „elhagyva" ütköznénk (§0.0 R3) — a
+  tényleges kockázat, hogy a képernyő és a controller külön-külön számolja.
+  Egyetlen hívás, a controllerben; a widget csak megjeleníti az eredményt.
+- **Az implementer élő kameraelőnézetet próbál bekötni**, mert a „frame-terület"
+  szöveg ezt sugallja — nincs hozzá `CameraOwner`-érték, engedélyezett fájl
+  vagy meglévő preview-widget (§0.0 R2); ez `stopped`-hoz vezetne. Absztrakt
+  normalizált terület, nem élő kép.
 
 **STOP:** domain-szabály módosítása, saját koordinátamatek vagy a Save-kapu
 lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### 10.1 Mért (gate-artefactum)
+
+`tools/round-gate.sh test/features/vision test/core/l10n_parity_test.dart` → minden lépés zöld (format, analyze, mindkét tesztútvonal külön processz, architecture, secrets, l10n). A teljes suite + randomizált property gate + APK a CI-ban fut (ADR 0053).
+
+### 10.2 §6 cella — „rajta" (min nyakhossz küszöb)
+
+Az R10 `CalibrationValidity.minAnchorSeparation` értéke: **0.05** (normalizált egység; a §10.2 eredeti szövege elavult 0.25-öt írt, de a `calibration_validity.dart:52` a mérvadó). A „rajta" cella: nut=(0.2, 0.2), bridge=(0.25, 0.2), polygon=egészséges négyszög → neckLen = 0.05 = minAnchorSeparation → `evaluate(...) == null` (valid; a tolerancia `<`, nem `≤`).
+
+### 10.3 Változtatott / létrehozott fájlok
+
+| Útvonal | Állapot |
+|---|---|
+| `lib/features/vision/application/guitar_calibration_controller.dart` | ÚJ |
+| `lib/features/vision/presentation/providers/guitar_calibration_providers.dart` | ÚJ |
+| `lib/features/vision/presentation/widgets/guitar_anchor_editor.dart` | ÚJ |
+| `lib/features/vision/presentation/widgets/guitar_geometry_preview.dart` | ÚJ |
+| `lib/features/vision/presentation/screens/guitar_calibration_screen.dart` | ÚJ |
+| `lib/features/vision/public.dart` | additív export |
+| `lib/app/routing/app_route.dart` | +1 sor: `visionGuitarGeometry` útvonal |
+| `lib/app/routing/app_router.dart` | guard `visionEnabled && visionGuitarGeometryEnabled` (§0.0 R7) |
+| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | +22 kulcs, additív |
+| `test/features/vision/application/guitar_calibration_controller_test.dart` | ÚJ (19 teszt) |
+| `test/features/vision/presentation/guitar_calibration_screen_test.dart` | ÚJ (4 widget teszt — a korábbi `guitar_calibration_drag_matrix_test.dart` fájlnév a review előtti orchestrator-átnevezés óta ez) |
+
+### 10.4 §5 kötött döntések — hogyan teljesülnek
+
+1. **Save-kapu = self-comparison (§0.0 R5)** — `_selfEvaluate` szintetikus profilt
+   állít elő, amelynek saját mezői == live context; így a
+   camera/orientation/zoom/timestamp trigger-ek szerkezetileg elérhetetlenek,
+   csak `degenerateGeometry` maradhat. **F1 javítás (review által kért):**
+   a `_selfEvaluate` NE csak `CalibrationValidity.evaluate(...)` eredményére
+   hagyatkozzon (az R10 `_isDegenerate` csak vertex-szám + nut↔bridge távolság),
+   hanem a controller SAJÁT `isGeometryDegenerate(...)` helperjét IS hívja
+   (kollineáris + nulla-terület detect). A kettő ÉS-kapcsolata adja a
+   végső döntést — ha bármelyik degeneráltnak mondja, a Save letiltva,
+   `selfEvaluationReason = degenerateGeometry` (ugyanaz a lokalizált szöveg,
+   nincs új enum). **Új tesztek:** `f1: collinear polygon with healthy
+   nut↔bridge distance blocks Save` + `f1: zero-area polygon (3 vertices
+   pulled to a point) blocks Save`. A nulla-terület cella ugyanazt a
+   kódutat járja be (a collinearitás-detect elfogja), ez a §10 dokumentálja.
+2. **R07 mapping csak a widgetben** — az editor `fit.toNormalized(...).apply(...)`
+   egyetlen pontját használja; a `_AnchorHandle._forward` a GestureDetector
+   lokális koordinátáját a `Positioned` anchor-offsethez adja, hogy a
+   `_onPointerMove` editor-stack-térben kapja. Nincs `1 - x`/`swap`/`MediaQuery`
+   a widgetben — a screen kizárólag `MediaQuery.size`-t használ a viewport
+   méretéhez (a R07 transform inverse a mérvadó). **F3 javítás:** a screen
+   `_GeometryCanvas` a `mirrorPreview = context.camera == front` flaget
+   átadja a `GuitarAnchorEditor`-nak és a `GuitarGeometryPreview`-nak,
+   amelyek továbbadják a `PreviewFit.toPreview(mirrorPreview: ...)` és
+   `PreviewFit.toNormalized(mirrorPreview: ...)` hívásoknak.
+3. **Precision mód ≠ fájl** — az `_precisionMode` állapot egy `bool`, ami a
+   viewport magasságát 240↔360-ra állítja; a widget fa nem nyúl diszkre
+   sem screenshotot, sem fájlt (ADR 0178 / 0183).
+4. **Clamp + látható jelzés** — a `_onPointerMove` a normalizált koordinátát
+   `[0,1]×[0,1]`-re vágja, ÉS a szülő `_GuitarAnchorEditorState` per-handle
+   `_clampedHandle` state-ben tárolja, melyik handle van épp klemp-elve.
+   Az `_AnchorHandle` widget a klemp-állapotban a border alpha 0.2 → 0.95-re
+   ÉS a border-width 1 → 3-ra nő (vastag, opaque error-kontúr); a
+   `_PolygonHandle` a border színt surface → error-ra váltja és a border-width
+   1 → 2-re nő. A klemp-állapot ELTŰNIK, amint a visszahúzással a pont
+   visszakerül érvényes tartományba (a `setState`-et a `wasClamped` boolean
+   értéke vezérli, nem egy timer). **F2 javítás (review által kért):**
+   az `onClamp` callback no-op volt — most a state-driven megközelítés
+   biztosítja, hogy a vizuális jelzés TÉNYLEG megjelenjen. **Új teszt:**
+   `f2: clanp visibility — dragging outside the frame thickens the handle border`
+   (az alpha és width összehasonlítása klemp előtt/után, valamint a release
+   utáni visszaállás).
+5. **Reset ≠ Recalibrate** — a `_confirmReset` a draftot veti el (vissza a
+   seedre vagy a `lastSaved*`-ra), a `_confirmRecalibrate` a repository
+   `write({profile, guitar})` hívásával érvénytelenít és új seedet ír; két
+   külön dialógus, két külön megerősítő gomb (kulcsuk a tesztelhetőséghez
+   meg van címkézve).
+6. **ARB-only szövegek** — minden új szöveg az `app_en.arb` / `app_hu.arb`-ben,
+   `l10nParity` zöld.
+
+### 10.5 Riverpod 3.3.2 quirk
+
+A controller `extends Notifier<State>` + konstruktorarg + `NotifierProvider.family<...>(Notifier.new)` mintát követ. A `FamilyNotifier` 3.3.2-ben törölve (CHANGELOG:114).
+
+### 10.6 Szándékosan kihagyott (körön kívüli)
+
+- Élő kamera-preview (§0.0 R2): a canvas absztrakt `PreviewRect`-re épül.
+- Saját koordinátamapping a widgetben: a `Positioned` + `_forward` csak az
+  editor-stack koordinátatérben dolgozik.
+- Polygon vertex editor csak `onIncrease/onDecrease` ±1%-os lépéssel (a11y);
+  pixel-pontos egér-egyengetés kimaradt — a §6 widget-teszt a drag-palettát
+  használja.
+- **Device orientation valós forrása** — a `guitarCalibrationRuntimeContextProvider`
+  `orientation` mezője továbbra is `CameraRotation.degrees0` fallback. Az
+  R11 allowed_paths-on belül nincs elérhető device-orientation provider (a
+  `camera_session_lease.dart`/`camera_capture.dart` páros ezt az információt
+  nem adja vissza a kalibrációs képernyőnek, a `MediaQuery.orientation` a
+  UI-shell-ből jön, nem a tényleges sensor-rotation). A landscape cella
+  tesztelhetetlen marad a jelenlegi infra mellett — ha későbbiekben a
+  SensorRotation-t be kell kötni, az egy új brief-revízió tárgya (a review
+  is kifejezetten rögzíti, hogy ez „hallgatólagos kihagyás" lenne, ha
+  nem lenne dokumentálva).
+
+### 10.7 Reviewernek
+
+- Acceptance #1 (drag-mátrix): `guitar_calibration_screen_test.dart` —
+  `drag on the nut handle moves the controller normalized state` + a
+  `mirror parity: dragging right increases normalised x` (back-camera).
+- Acceptance #2 (degenerált mátrix): controller tesztek — `isGeometryDegenerate`
+  a rövid-nyak, kollineáris, nulla-terület és egészséges cellát is ellenőrzi
+  (a controller test R4 helpers group); a `f1:`-prefix tesztek a
+  Save-gate TÉNYLEGES átengedését bizonyítják.
+- Acceptance #3 (Save-kapu): controller teszt — a
+  `saveIfValid blocks when the draft is degenerate` + a `f1:`-prefix tesztek
+  + a mutáció-próba bizonyítja, hogy a gate nem no-op.
+- Acceptance #4 (orientation/mirror): a `mirror parity: dragging right
+  increases normalised x` (back) + a `f3: front-camera mirror — dragging
+  right decreases normalised x` (front) widget-teszt a `PreviewFit.toPreview`
+  R07 mappinget használja — bármilyen mirror/orientation
+  `PreviewFit`-konstruktor-változással itt azonnal elromlik. A
+  `guitarCalibrationRuntimeContextProvider` az R08 által elmentett
+  `StorageKeys.visionCamera` értéket olvassa (a teszt is ezt bizonyítja).
+  A landscape cella a §10.6-ban dokumentált ok miatt tesztelhetetlen.
+- Acceptance #5 (a11y): `_AnchorHandle` és `_PolygonHandle` `Semantics`-sel
+  és `onIncrease/onDecrease` ±1% nudge-dzsal.
+- Acceptance #6 (l10n paritás): `test/core/l10n_parity_test.dart` zöld.
+- Acceptance #7 (valódi-sértés próba): kiiktatás → a `f1:`-prefix tesztek
+  egyike PIROSRA vált → visszaállítás → minden ZÖLD.
 
 ## 11. Review — a független reviewer tölti ki
 
