@@ -3,8 +3,10 @@
 Brief: `docs/rounds/e05-r15-guitar-coordinates-and-homography.md`
 Diff: `git diff bf3960a..13dc79b` (branch `minimax/e05-r15-guitar-coordinates-and-homography`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-07 (frissítve a dedikált
-security-review után, ugyanaznap)
-Verdikt: **CHANGES REQUIRED**
+security-review után, majd a MiniMax javító kör 1 független
+újra-ellenőrzése után, mindhárom ugyanaznap)
+Verdikt: **CHANGES REQUIRED — javító kör 1 UTÁN is (BLOCKER-1 részlegesen
+nyitva, ld. „Javító kör 1 eredménye" lent); motor-eszkaláció Codexre**
 
 ## Összegzés
 
@@ -19,6 +21,53 @@ szerkezetileg nem tud elkapni. A BLOCKER a dedikált security-review
 (risk=high, AGENTS.md §15.1) során került elő, és a saját, független
 próbámmal más véletlen-paraméterekkel is megerősítve — ez a legsúlyosabb
 lelet, súlyosabb, mint amit a funkcionális pass önmagában talált volna.
+
+## Javító kör 1 eredménye (MiniMax M3, `20a67c1` → `ef6fc57`)
+
+**MAJOR-1 ZÁRVA, MAJOR-2 ZÁRVA, BLOCKER-1 CSAK RÉSZLEGESEN.** Friss `/tmp`
+klón, gate 8/8 ZÖLD (`format`/`analyze`/mindhárom teszt-scope/
+`architecture`/`secrets`/`l10n`, csonkítatlan artefaktumként újrafuttatva).
+
+- **MAJOR-1 ✅ ZÁRVA.** `polygon2.dart:112-117` — az `.abs()` eltávolítva,
+  a nevező előjeles `(b.y - a.y)`. Saját próba (rombusz, fordított
+  csúcssorrend, döntött quad, két triviálisan kívüli pont) mind az öt
+  esetben helyes eredményt ad. A javító kör commitja: `23008c6`.
+- **MAJOR-2 ✅ ZÁRVA.** Két új, python3-referenciával alátámasztott teszt
+  (`side`/`top` nézőpont, mindkettő `cond(2×2)=1600 > 1e3` →
+  `conditionNumberExceeded`) — legitim, dokumentált elutasítás (a brief §9
+  szellemében, nem hiányzó munka). A javító kör commitja: `89f1a9f`.
+- **BLOCKER-1 ⚠️ RÉSZLEGES — ÚJRA NYITOTT.** A javítás (`7ceef3e`) az
+  `apply()` KIMENETI magnitúdóját mintázza 5 kanonikus ponton (4 sarok +
+  középpont) — ez VALÓDI, mérhető javulás (a saját véletlen-keresésem,
+  UGYANAZZAL a seeddel/paraméterekkel mint a security-review előtti próba,
+  323 340 → **95 119** találatra csökkent, és 16 281 kalibrációt most
+  helyesen elutasít), **DE nem zárja le a rést**: 33 174, a guard-ot
+  átjátszó mapper közül **95 119 rácspont-minta** adott továbbra is
+  `|uv|>10` kimenetet `>0,5` confidence mellett, legrosszabb eset
+  `923 643` nagyságrendű `uv`. **Gyökérok:** az `apply()`-KIMENET
+  mintavételezése nem elegendő, mert a kimenet (számláló/`w` hányados) NEM
+  affin függvény — 5 pont bármelyikén lehet kicsi a kimenet, miközben a
+  `w=0` „eltűnő egyenes" a mintapontok KÖZÖTT metszi a `[0,1]²` tartományt.
+
+  **Matematikailag TELJES, saját próbával validált javasolt javítás:** mivel
+  `w(x,y) = h6·x + h7·y + h8` (a homogén nevező) MAGA affin, egy affin
+  függvény értéke bármely belső ponton a sarok-értékek konvex kombinációja
+  — tehát ha a 4 sarkon `w` AZONOS előjelű és egyik sem közel nullához
+  (a `h[8]=1` kanonikus skálához képest), a `[0,1]²` tartomány EGYETLEN
+  pontján sem közelítheti a nullát (a minimum `|w|` a tartomány felett
+  bizonyíthatóan a sarok-minimum). Ezt saját, 50 000 próbás kereséssel
+  (UGYANAZZAL a seeddel) validáltam a jelenlegi guard-ot átjátszó
+  mapperek felett: **0 hamis negatív** (minden talált blowup-esetet a
+  `w`-alapú ellenőrzés is elutasított volna), 9 623 valódi találat, 22 653
+  helyesen átengedett eset, 795 (≈3,4%) enyhén túl-szigorú eset (ami a
+  SAJÁT 11×11-es rács-mintavételem korlátja miatt lehet hamis pozitív is —
+  a valós ráta valószínűleg ennél alacsonyabb). A pontos repro-eset is
+  helyesen elutasítva (`wCheckPasses=false`). **A pontos javasolt kódalak
+  a §„BLOCKER-1 — javító kör 2" szakaszban.**
+
+  Motor-eszkaláció (AGENTS.md §15.6, user-döntés 2026-08-01, küszöb 1): a
+  MiniMax egy javító kört kapott, a BLOCKER-1 utána is nyitva maradt →
+  **a következő javító kört a Codex viszi**, külön munkapéldányban.
 
 ## Acceptance criteria (brief §6)
 
@@ -380,14 +429,79 @@ címke túl konzervatív (nincs hálózat/tárolás/secret/AI-hívás/importált
 fájl), de a valós kockázat — numerikus korrektség mint biztonsági kérdés —
 pontosan ott landolt, ahova a brief §9 előre jelezte.
 
+## BLOCKER-1 — javító kör 2 (Codex), pontos specifikáció
+
+A javító kör 1 (MiniMax) MAJOR-1-et és MAJOR-2-t lezárta, de a BLOCKER-1
+javítása (apply()-kimenet mintavételezése 5 ponton) **matematikailag nem
+teljes** — lásd fent. Az alábbi, saját 50 000-próbás kereséssel validált
+(0 hamis negatív) javítás a **javasolt, konkrét irány** a javító kör 2-höz:
+
+**Hol:** `lib/core/geometry/homography.dart` — adj egy ÚJ publikus metódust
+a `Homography` osztályhoz (a `debugMatrix` „Test/debug only" — ne azt
+használd production kódból):
+
+```dart
+/// The homogeneous denominator `w = h6·x + h7·y + h8` at [point], BEFORE
+/// perspective division. `apply(point) = (numerator_x, numerator_y) / w`;
+/// this is the raw denominator a caller can use to detect where the
+/// projective row drives the mapping toward its vanishing line, without
+/// waiting for the divided-out result to blow up.
+double homogeneousW(Point2 point) => _h[6] * point.x + _h[7] * point.y + _h[8];
+```
+
+**Hol:** `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart` —
+cseréld le a jelenlegi `_checkFrameBounded` (apply()-magnitúdó 5 ponton)
+metódust egy `w`-alapú ellenőrzésre a `[0,1]×[0,1]` tartomány **4 sarkán**
+(a középpont NEM szükséges — egy affin függvény szélsőértéke konvex
+tartomány fölött mindig a csúcsokon van, tehát a 4 sarok KIMERÍTŐ mintavétel,
+matematikailag, nem csak heurisztikusan):
+
+```dart
+static void _checkFrameBounded(Homography h) {
+  const corners = [Point2(0, 0), Point2(1, 0), Point2(0, 1), Point2(1, 1)];
+  final wValues = corners.map(h.homogeneousW).toList();
+  // h[8] == 1.0 mindig (Homography.solve renormalizálja) — ez a kanonikus
+  // referencia-skála, tehát a küszöb dimenzió nélküli.
+  final allSameSign = wValues.every((w) => w.isNegative == wValues.first.isNegative);
+  final allBoundedAway = wValues.every((w) => w.abs() >= wMinBound);
+  if (!allSameSign || !allBoundedAway) {
+    throw const GuitarLandmarkMapperSetupException(
+      GuitarLandmarkMapperSetupFailure.unstableMapping,
+    );
+  }
+}
+```
+
+(A `wMinBound` konkrét értékét python3-mal vagy egy saját random-search
+kalibrációval indokold a §10-ben — a review saját próbája `0.1`-et
+használt, 0 hamis negatívval 50 000 próbán; ez jó kiindulópont, de a
+végső döntés és indoklás a javító kör dolga.)
+
+**Kötelező, hogy a javító kör MEGISMÉTELJE (ne csak elfogadja) az
+adversarial validációt** — ez nem csak stílus kérdése, hanem a review
+saját próbájának reprodukálhatósága:
+
+1. A pontos BLOCKER-1 repro-eset (a §10-ben és a
+   `guitar_landmark_mapper_test.dart`-ban már rögzítve) továbbra is
+   `unstableMapping`-et dobjon.
+2. Írj egy ÚJ property-tesztet vagy egy determinisztikus (fix seedű)
+   random-search tesztet, ami — hasonlóan a review próbájához — sok
+   véletlen kalibrációt épít, és minden olyan mapperre, ami átjut az ÚJ
+   `w`-alapú guard-on, ellenőrzi hogy egy sűrű (pl. 11×11) rácson SEHOL
+   nem ad `|uv| > guitarSpaceSanityBound`-ot. Ez a teszt intézményesíti
+   az adversarial keresést, nem csak egy egyszeri kézi próbaként marad.
+3. A meglévő `front_medium`-alapú „stays inside the sanity bound" pozitív
+   teszt bitre változatlanul zöld maradjon.
+
 ## Merge-döntés
 
-**Merge TILOS jelenleg** (1 nyitott BLOCKER, 2 nyitott MAJOR — az ADR 0052
-zöld kapu ellenére, mert a gate szerkezetileg egyik hiányosságot sem tudja
-elkapni: sem a `contains` nem-tengelyes esetét, sem a fixture-mátrix
-teljességét, sem a kondíciószám-őr projektív vakfoltját). Javító kör
-szükséges, ugyanaz a motor (MiniMax M3), a BLOCKER-1/MAJOR-1/MAJOR-2 (és
-lehetőség szerint MINOR-1..3) leletlistával egyetlen körben — a MiniMax
-motor-eszkalációs szabálya (AGENTS.md §15.6, user-döntés 2026-08-01) EGY
-javító kört enged, utána Codexre kell váltani, ezért minden ismert leletet
-egyszerre kell a javító promptba tenni.
+**Merge TILOS jelenleg** (1 nyitott BLOCKER — BLOCKER-1 részlegesen javítva,
+de a rés matematikailag bizonyítottan nyitva maradt — az ADR 0052 zöld kapu
+ellenére, mert a gate szerkezetileg nem méri a kondíciószám-őr projektív
+vakfoltját). **A MiniMax motor-eszkalációs szabálya (AGENTS.md §15.6,
+user-döntés 2026-08-01) kimerült** ezen a leleten (egy javító kör után is
+nyitva) — **a következő javító kört a Codex viszi**, külön munkapéldányban
+(`tools/codex-round.sh` + `tools/codex-watch.sh`), a fenti pontos
+specifikációval. MAJOR-1 és MAJOR-2 zárva, nem kerülnek vissza a javító
+kör 2 promptjába. MINOR-1..3 opcionális, csak ha nem hizlalja érdemben a
+diffet.
