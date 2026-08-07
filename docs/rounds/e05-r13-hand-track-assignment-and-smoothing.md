@@ -1,6 +1,7 @@
 # E05-R13 — Hand track assignment és temporal smoothing
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`;
+  pre-flight mérve 2026-08-07: main @ `7c9ee09`, E05-R12 merge után)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 13; §15.3–15.4
 - **Branch:** `codex/e05-r13-hand-track-assignment-and-smoothing`
 - **Előfeltétel:** **E05-R12 merge**
@@ -44,7 +45,59 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**PLANNING.** Nincs előre kiosztott ADR, és ez a kör nem is hoz létre újat
+(megerősítve, nem hiba). Hét mért megerősítés (a §1 két mérési szabálya
+lefutott — nincs a kódból hiányzó hivatkozás, tehát nincs tartalmi
+brief-revízió, csak státuszváltás):
+
+1. **Handedness confidence NEM létezik önálló mezőként.** `HandObservation`
+   (`lib/features/vision/domain/landmarks/hand_landmarks.dart:94-125`)
+   kizárólag egy összesített `confidence` mezőt hordoz ("Overall
+   hand-detection confidence in `[0, 1]`") — a handedness-osztályozásnak
+   nincs saját bizalmi értéke. Ezt a §9 kockázat előre jelezte: a
+   track-hozzárendelés tehát **pozíció + előző állapot** alapján megy (az
+   összesített `confidence`-et csak általános minőségi jelzésként
+   felhasználva), és ezt a §10-nek explicit rögzítenie kell.
+2. **R07 mirror-szabály megerősítve.** A `HandLandmarkPoint` dokumentáltan
+   "the model's non-mirrored, resolution-independent normalized frame
+   space"-ben él; a front-kamera preview-mirror (`mirrorPreview = camera ==
+   front`, R08/R11 minta) kizárólag megjelenítési réteg — a landmark-
+   koordináták és a `Handedness` osztályozás nem függ a kamera facing-től
+   (R07 saját property tesztje: "front preview mirroring cannot alter the
+   model input space"). A §6 4-cellás `leftHanded × front/back kamera`
+   mátrix tehát egy **invariancia-próba**: helyes implementáció mellett a
+   front/back tengely NEM változtatja a gitáros szerepet. Az assigner NE
+   vegyen fel kamera-facing paramétert bemenetként; ha egy teszt ezt mégis
+   megkövetelné a helyes eredményhez, az implementációs hiba jele.
+3. **`StorageKeys.leftHanded`** (`ss.settings.left_handed`,
+   `lib/core/storage/storage_keys.dart:19`) megerősítve, meglévő
+   `leftHandedProvider`-rel (`lib/features/settings/providers/
+   left_handed_provider.dart`) olvasható.
+4. **`lib/features/vision/public.dart`** megerősítve additív export
+   mintaként — a meglévő `hand_landmarks.dart` export mellé kerülnek az ÚJ
+   track/assigner/smoothing exportok, a meglévő sorok változatlanok.
+5. **SDD §15.3–15.4 + Kör 13** (`docs/sdd/06-epic-05-computer-vision.md:1123-1151,
+   2652-2687`) megerősítve — a brief hatóköre pontosan lefedi. A §15.3 által
+   említett "gitár orientationtől" és "setup profiltól" függőségi tényezőt a
+   brief tudatosan kizárja ebből a körből (gitár-geometria R15 tárgya; a
+   setup profil kamera-framing ajánlás, nem szerep-hozzárendelési bemenet) —
+   ez NEM hiányzó lefedettség, hanem szándékos hatókör-szűkítés.
+6. **Erőforrás-tulajdonlás:** nincs `.acquire(`/lease/lock hívás ennek a
+   körnek a scope-jában (pure Dart domain, nincs kamera/mikrofon-erőforrás
+   érintve) — a §1 2. mérési szabálya erre a körre nem alkalmazható.
+7. **Elérhetetlen cél-státusz:** a brief acceptance-cellái (`trackLost`,
+   track-ID stabilitás) ÚJ, ebben a körben bevezetett enumokra vonatkoznak,
+   nem egy meglévő reducer/állapotgép előírt cél-állapotára — a §1 1. mérési
+   szabálya erre a körre szintén nem alkalmazható (nincs mit a kódban
+   ellenőrizni, mert a kód még nem létezik).
+
+**Egyéb pre-flight ellenőrzés:** brief-lint nulla lelet
+(`.pipeline/brief-lint-E05-R13.md`); nincs inflight párhuzamos kör
+(`.pipeline/inflight/` csak ezt a kört tartalmazza); `gh pr list` üres;
+motor `minimax` (nyilvántartás: harness=`claude` → `tools/mm-round.sh`).
+`risk = "high"` → dedikált **security-reviewer** review kötelező, és ezúttal
+**a merge ELŐTT** ütemezve (L162 — R12-ben ezt elmulasztottuk, utólag
+pótoltuk; ez a kör előre tervezi, hogy ne ismétlődjön).
 
 ## 1. Cél
 
