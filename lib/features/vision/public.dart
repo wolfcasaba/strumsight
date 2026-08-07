@@ -15,6 +15,8 @@ export 'domain/landmarks/landmark_smoothing.dart';
 export 'domain/landmarks/pose_landmarks.dart';
 export 'domain/landmarks/posture_baseline.dart';
 export 'domain/landmarks/track_continuity.dart';
+export 'domain/geometry/guitar_landmark_mapper.dart';
+export 'domain/geometry/guitar_region.dart';
 export 'data/persistence/vision_calibration_codec.dart';
 export 'data/persistence/vision_calibration_repository.dart';
 export 'data/landmarks/hand_landmark_provider.dart';

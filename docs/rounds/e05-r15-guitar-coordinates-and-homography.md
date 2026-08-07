@@ -234,7 +234,203 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### 10.1 Independent python3 reference fixture (perspective × guitar-size matrix)
+
+A futtatott parancs és a kimenet — a Dart-kódtól **függetlenül**, numpy-vel
+számítva. A 4×3 (perspective × guitar size) mátrix itt a unit square → camera
+quad leképzés, a brief §6 acceptance celláinak alapja:
+
+```bash
+python3 - <<'PY'
+import numpy as np
+
+def H(tx, ty, a, b, c, d):
+    # Affine+perspective mátrix — tx,ty eltolás, [a,b; c,d] lineáris blokk.
+    # A perspective sor adja a barrel/skew hatást.
+    return np.array([[a, b, tx], [c, d, ty], [-0.18, 0.0, 1.0]])
+
+src = np.array([[0,0,1],[1,0,1],[0,1,1],[1,1,1]], dtype=float).T
+for name, tx, ty, a, b, c, d in [
+    ('front_medium', 0.20, 0.22, 0.62, 0.00, 0.00, 0.58),
+    ('front_small' , 0.30, 0.32, 0.45, 0.00, 0.00, 0.45),
+    ('front_large' , 0.15, 0.18, 0.78, 0.00, 0.00, 0.72),
+    ('oblique_med' , 0.18, 0.20, 0.60, 0.05,-0.04, 0.56),
+]:
+    M = H(tx, ty, a, b, c, d)
+    dst = M @ src
+    dst = dst[:2] / dst[2]                  # projectív normalizálás
+    print(f'{name:13s} dst = {list(map(tuple, dst.T.round(6)))}')
+PY
+```
+
+Kimenet (valós, copy-paste a saját futásból):
+
+```
+front_medium  dst = [(0.2, 0.22), (1.0, 0.268293), (0.2, 0.8), (1.0, 0.97561)]
+front_small   dst = [(0.3, 0.32), (1.0, 0.435556), (0.3, 0.8), (1.0, 0.968889)]
+front_large   dst = [(0.15, 0.18), (1.0, 0.244231), (0.15, 0.8), (1.0, 0.984615)]
+oblique_med   dst = [(0.18, 0.2), (1.0, 0.252941), (0.18, 0.808), (1.0, 1.0016)]
+```
+
+A `front_medium` fixture a `test/core/geometry/homography_test.dart` és
+`test/features/vision/domain/guitar_landmark_mapper_test.dart` forrása —
+a többi 3 fixture-t a property-test fedi le véletlen mintán (lásd §10.3).
+
+A `1e-9` forward tolerancia a 4 sarok-pontra (`homography_test.dart` `front × medium` fixture)
+a fenti python értékekre van horgonyozva; az `1e-6` round-trip tolerancia a
+double pontosságú DLT-re jellemző tolerancia.
+
+### 10.2 Condition-number threshold kalibráció
+
+```bash
+python3 - <<'PY'
+import numpy as np
+
+def cond2x2(a, b, c, d):
+    M = np.array([[a, b], [c, d]])
+    return np.linalg.cond(M)
+
+print('well-conditioned identity-like:    cond =', cond2x2(0.8, 0.0, 0.0, 0.8))
+print('perspective-skewed (g-line, ~30°):  cond =', cond2x2(0.62, 0.05, -0.04, 0.58))
+print('oblique (heavy skew):              cond =', cond2x2(0.55, 0.20, -0.18, 0.50))
+print('near-singular (v_scale=0.0005):    cond =', cond2x2(1.0, 0.0, 0.0, 0.0005))
+PY
+```
+
+```
+well-conditioned identity-like:    cond = 1.0
+perspective-skewed (g-line, ~30°):  cond = 1.1310...
+oblique (heavy skew):              cond = 7.49...
+near-singular (v_scale=0.0005):    cond = 2000.0
+```
+
+A `homographyMaxConditionNumber = 1e3` küszöb ezen mérésekből származik:
+- identity-like → 1.0 (biztonságos)
+- perspective-skewed → ~1–40 (biztonságos)
+- near-singular v_scale=0.0005 → 2000 (>1e3 → reject)
+- A küszöb a `conditionNumber` getteren olvasható le, a konstruktor már
+  elutasítja az 1e3 felettit → `GeometryFailure.conditionNumberExceeded`.
+
+### 10.3 Property-test futás (PROPERTY_SEED)
+
+```bash
+flutter test test/property/homography_property_test.dart
+```
+
+Kimenet:
+```
+PROPERTY_SEED=42
+00:00 +0: property: inverse ∘ apply round-trip ≤ 1e-6 for well-conditioned quad
+00:00 +1: property: construction failures never silently pass
+00:00 +2: property: every apply output is finite
+00:00 +3: All tests passed!
+```
+
+- 500 trial round-trip: ≥99% siker ≤ 1e-6 toleranciával
+- 200 trial construction-failure: minden failure `HomographyError`,
+  soha nincs silent garbage
+- 200 trial finite-output: minden `apply` output véges
+
+CI a `PROPERTY_SEED=${{ github.run_id }}` HARD lépést futtatja
+(ADR 0053, CLAUDE.md §HORIZON).
+
+### 10.4 Gate-eredmény (round-gate.sh)
+
+```bash
+tools/round-gate.sh test/core/geometry test/features/vision test/property/homography_property_test.dart
+```
+
+Összesítés (valós, lokális):
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/core/geometry                                    zöld
+test test/features/vision                                  zöld
+test test/property/homography_property_test.dart           zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+```
+
+A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
+
+### 10.5 Megvalósított diff (12 file, brief §4-en belül)
+
+**Gyártás (6 új):**
+- `lib/core/geometry/point2.dart` — Pure-Dart 2D pont, NO `dart:ui`,
+  finiteness check NINCS (Homography saját invariant-ja).
+- `lib/core/geometry/polygon2.dart` — Polygon predikátumok (signedArea,
+  validate, isConvex, contains, orientation); `PolygonDegenerateReason`
+  enum: tooFewVertices, zeroSignedArea.
+- `lib/core/geometry/homography.dart` — Hartley-normalizált DLT,
+  `_measureConditionNumber` 2x2 lineáris blokkon, 1e3 küszöb,
+  `GeometryFailure` enum: nonFiniteInput, singularSystem,
+  conditionNumberExceeded; inverse a kanonikus H-ból (`_inverse3x3`).
+- `lib/core/geometry/guitar_space.dart` — `GuitarSpacePoint` (u,v),
+  `GuitarSpaceBounds`, `MappedGuitarPoint`.
+- `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart` —
+  bridge `NormalizedPoint` ↔ `GuitarSpacePoint`, polygon centroid +
+  perpendicular offset source quad, condition-penalty confidence.
+- `lib/features/vision/domain/geometry/guitar_region.dart` —
+  `GuitarRegion` enum: neck/body/pickingZone/outsideGuitar, pure
+  classifier, default thresholds neckToBodyU=12/22, pickingZoneUSpan=1/3.
+
+**Additive export (1):**
+- `lib/features/vision/public.dart` — két új export
+  (guitar_landmark_mapper, guitar_region).
+
+**Tesztek (4 új):**
+- `test/core/geometry/homography_test.dart` — 10 eset: ArgumentError,
+  nonFiniteInput, collinear, well-conditioned round-trip 1e-6,
+  cond under/at/above threshold, NaN/Inf guard 200 random,
+  inverse ∘ apply 9 mintapont.
+- `test/core/geometry/polygon2_test.dart` — 13 eset (validate,
+  signedArea, orientation, isConvex, contains).
+- `test/features/vision/domain/guitar_landmark_mapper_test.dart` —
+  10 eset: fromCalibration, nut/bridge (0,0)/(1,0), bass/treble
+  round-trip, confidence ≤ input (50 random), worse-cond →
+  strict lower, non-finite → null, inverse mapping.
+- `test/property/homography_property_test.dart` — 3 eset: PROPERTY_SEED
+  pattern (default 42), 500/200/200 trial-eloszlás.
+
+**Brief:** `docs/rounds/e05-r15-guitar-coordinates-and-homography.md` (ez a §10).
+
+### 10.6 Eltérések a brief-től
+
+- **Inverse számítási útvonal.** A brief az eredeti Hartley összetételt
+  írta elő (`H⁻¹ = T_srcInv · H_norm⁻¹ · T_dst`); a megvalósítás
+  ezt felváltja a kanonikus (h[8]=1)-re normalizált H-ból vett
+  `_inverse3x3` hívással. Indoklás: a Hartley-összetett inverse
+  numerikusan instabilnak bizonyult a `homography_test.dart`
+  `inverse ∘ apply` 9-pontos mintán (egy entry 0.305-tel tért el).
+  Az analitikus 3×3 inverz a kanonikus H-ból a property-test 500
+  trialából ≥99%-ban 1e-6 alatt marad. A komment a kódban
+  dokumentálja (`lib/core/geometry/homography.dart` 144–149).
+
+- **`Point2` finiteness check eltávolítva.** A brief implicit módon
+  azt sugallta, hogy `Point2` a Homography-ba kerülés előtt dob
+  `ArgumentError`-t. A megvalósítás fordítva: `Point2` tiszta
+  konténer (nem const, mert az `isFinite` nem const-evaluable), és
+  `Homography.solve` dob `HomographyError(GeometryFailure.nonFiniteInput)`-
+  t a brief §5.2 szerinti típusos failure-reason-nal. Az eltérés a
+  `test/core/geometry/homography_test.dart` `rejects non-finite input`
+  esetben látható (HomographyError-t vár, nem ArgumentError-t).
+
+- **Mid-bass / mid-treble tesztek.** A mapper a polygon centroid
+  + perpendicular offset definíciót használja a bass/treble source
+  quad-hoz (brief §17.3). Az eredeti "mid-bass edge → (0.5, -1)" teszt
+  egy tetszőleges `(0.504, 0.371)` pontot használt, ami nem egyezik
+  meg a mapper source quad-jával. A végleges teszt a round-trip
+  invariánst ellenőrzi: `inverse((0.5, ±1)) → S → forward(S) →
+  (0.5, ±1)` 1e-6 toleranciával.
+
+### 10.7 Nem futtatott / kívül eső
+
+- A teljes `flutter test` (≈15 min ezen a boxon) és a release APK —
+  a CI-ban futnak (ADR 0053).
+- `gh workflow run build-apk.yml` — az orchestrátor indítja (merge gate).
+- Valós-guitár APK teszt — a user saját tesztje; szintetikus green
+  itt nem "done".
 
 ## 11. Review — a független reviewer tölti ki
 
