@@ -550,12 +550,13 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
 - `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart` —
   bridge `NormalizedPoint` ↔ `GuitarSpacePoint`, polygon centroid +
   perpendicular offset source quad, condition-penalty confidence.
-  **`GuitarLandmarkMapperSetupFailure` enum (BLOCKER-1 javító kör)**
-  egy új `unstableMapping` tagot kapott, és a `fromCalibration` a
-  `Homography.solve` UTÁN, de a mapper visszaadása ELŐTT mintavételezi
-  a kamera-keret 5 kanonikus pontját (4 sarok + középpont), és ha
-  bármelyik `(u, v)` magnitúdója túllépi a `guitarSpaceSanityBound =
-  10.0` küszöböt, `unstableMapping`-et dob.
+  **BLOCKER-1 pont-szintű őr (javíró kör 2, brief §0.0.2)** — a
+  `mapPoint()` az `apply()` kimeneti `(u, v)` magnitúdóját közvetlenül
+  ellenőrzi a `guitarSpaceSanityBound = 10.0` küszöbbel, és ha
+  túllépi, `null`-t ad (az adott landmarket, nem a teljes kalibráció).
+  Nincs új konstans, nincs proxy (`w`-küszöb elesett, ld. §10.6), a
+  védelem struktúrális — az `apply()` magnitúdója, amit korlátozni
+  akarunk, eleve ki van számolva.
 - `lib/features/vision/domain/geometry/guitar_region.dart` —
   `GuitarRegion` enum: neck/body/pickingZone/outsideGuitar, pure
   classifier, default thresholds neckToBodyU=12/22, pickingZoneUSpan=1/3.
@@ -575,12 +576,20 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
   signedArea, orientation, isConvex, contains + **MAJOR-1: rombusz
   + ferde gitárnyak-quad 2 új regressziós teszt**).
 - `test/features/vision/domain/guitar_landmark_mapper_test.dart` —
-  12 eset: fromCalibration, nut/bridge (0,0)/(1,0), bass/treble
+  13 eset: fromCalibration, nut/bridge (0,0)/(1,0), bass/treble
   round-trip, confidence ≤ input (50 random), worse-cond →
   strict lower, non-finite → null, inverse mapping + **BLOCKER-1
-  2 új eset** (a review-beli EXAKT reprodukciós kalibráció
-  `unstableMapping` kudarcot dob, és a jól kondicionált
-  `front_medium` 5 mintapontja a küszöb alatt marad).
+  2 új eset** (a review-beli EXAKT reprodukciós kalibrációra a
+  `fromCalibration` sikeresen épül, és a `mapPoint((1, 0.9))`
+  `null`-t ad a pont-szintű |uv| guard miatt; a jól kondicionált
+  `front_medium` 5 mintapontja változatlanul a küszöb alatt
+  marad) + **1 új adversarial eset** (seed=7, 5000 véletlen
+  `GuitarCalibration`, 11×11 rácson minden elfogadott mapperen
+  ellenőrzi `|uv| <= guitarSpaceSanityBound`; a
+  pont-szintű guard strukturális garanciáját intézményesíti,
+  `accepted > 100` sanity-checktel). Futtatás: ~1s a teljes
+  fájl a `flutter test` host-compile után (~5s a cold-cache
+  `pub get` + load).
 - `test/property/homography_property_test.dart` — 3 eset: PROPERTY_SEED
   pattern (default 42), 500/200/200 trial-eloszlás.
 
@@ -640,32 +649,66 @@ A teljes `flutter test` suite + release APK a CI-ban fut (ADR 0053).
   csoport.
 
 - **GuitarLandmarkMapper projektív-sor vakfolt őr (BLOCKER-1,
-  javító kör).** A `Homography._measureConditionNumber` kizárólag a
-  2×2 lineáris blokkot méri, a projektív sort (`h[6..8]`) nem — ez
-  azt jelenti, hogy ha a `w = h6·x + h7·y + h8 = 0` eltűnő egyenes
-  áthalad a kamera-normalizált `[0,1]×[0,1]` tartományon, a
-  konstruktor „kiválónak" jelenti a mátrixot (`cond ≈ 1.3`), miközben
+  javító kör 2, brief §0.0.2 — közvetlen `|uv|`-magnitúdó,
+  NEM `|w|`-proxy).** A `Homography._measureConditionNumber`
+  kizárólag a 2×2 lineáris blokkot méri, a projektív sort
+  (`h[6..8]`) nem — ez azt jelenti, hogy ha a
+  `w = h6·x + h7·y + h8 = 0` eltűnő egyenes áthalad a
+  kamera-normalizált `[0,1]×[0,1]` tartományon, a konstruktor
+  „kiválónak" jelenti a mátrixot (`cond ≈ 1.3`), miközben
   `apply(...)` 10²–10⁷ nagyságrendű szemetet ad, magas (≈ 0.88)
-  confidence-szel. A javítás egy új, domain-tudatos őr a
-  `GuitarLandmarkMapper.fromCalibration` végén: a `Homography.solve`
-  sikeres visszatérése UTÁN, de a mapper visszaadása ELŐTT mintavételezi
-  a kamera-keret 5 kanonikus pontját (4 sarok + középpont), és ha
-  bármelyik minta `(u, v)` magnitúdója meghaladja a
-  `guitarSpaceSanityBound = 10.0` küszöböt, dob egy új
-  `GuitarLandmarkMapperSetupFailure.unstableMapping` okot. A
-  küszöb nagyságrendekkel bőkezűbb, mint a gitártér `u ∈ [0,1] /
-  v ∈ [-1,1]` definíciója szerinti `|uv| ≤ sqrt(2) ≈ 1.42` (kb. 7×
-  slack), és nagyságrendekkel kisebb, mint a megfigyelt szemét
-  (10²–10⁷). Az őr a `core/geometry` rétegben nem implementálható
-  (az a réteg tér-semleges, nem tudhat a `[0,1]²` kamera-tartományról);
-  ezért került a feature-oldali mapperbe. Két új regressziós teszt:
+  confidence-szel. Az őr a `core/geometry` rétegben nem
+  implementálható (az a réteg tér-semleges, nem tudhat a `[0,1]²`
+  kamera-tartományról); ezért került a feature-oldali mapperbe —
+  de PONT-szinten (`mapPoint()`-ban), nem konstrukció-idejűleg.
+
+  **Miért pont-szintű és miért közvetlen `|uv|`, nem `|w|`-proxy:**
+  az előző próbálkozás (`§0.0.1` → Codex `4-sarkos` konstrukció,
+  `§0.0.2` → MiniMax `|w|`-proxy pont-szinten) kimutatta, hogy
+  a `w`-re épülő megoldások KONSTRUKCIÓ-idejű, véges (4-sarkos,
+  affin-szélsőérték) ellenőrzésre voltak csak bizonyíthatóan
+  kimerítők — pont-szinten viszont `uv = numerator / w`, és a
+  `numerator` a lekérdezett ponttól függetlenül nagyra nőhet,
+  tehát `|w|` korlátozása önmagában NEM korlátozza `|uv|`-t (a
+  saját seed-7 random-search `stopped` jelet adott erre). A
+  jelenlegi megoldás: a `mapPoint()`-ban az `apply()` KIMENETI
+  magnitúdóját hasonlítjuk a MÁR LÉTEZŐ `guitarSpaceSanityBound
+  = 10.0` küszöbhöz (nincs új konstans, nincs kalibráció), és
+  ha `|uv| > 10`, az adott landmarketre `null`-t adunk — a
+  kalibráció maga nem kerül elutasításra, így a `front_medium`-
+  hoz hasonló, javarészt jó kalibrációk megmaradnak (csak az
+  egyes, patológiás pontok nullázódnak). A küszöb nagyságrendekkel
+  bőkezűbb, mint a gitártér `u ∈ [0,1] / v ∈ [-1,1]`
+  definíciója szerinti `|uv| ≤ sqrt(2) ≈ 1.42` (kb. 7× slack), és
+  nagyságrendekkel kisebb, mint a megfigyelt szemét (10²–10⁷).
+
+  A korábbi konstrukció-idejű őr (`_checkFrameBounded` 5 mintapont,
+  `unstableMapping` enum-érték) és a `§0.0.1`/`§0.0.2`-beli
+  `|w|`-proxy egyaránt TÖRÖLVE — az előbbi azért, mert egy
+  95%-ban jó kalibrációt egészében eldobott egy keskeny sáv miatt
+  (Codex saját `front_medium` `stopped` jele), az utóbbi azért,
+  mert pont-szinten matematikailag hézagos (MiniMax saját
+  seed-7 `stopped` jele, bizonyítottan nincs minden
+  küszöb-elvárást egyszerre kielégítő `T`). A jelenlegi megoldás
+  strukturális garanciát ad: az `apply()` kimenete eleve
+  kiszámolódik, és a guard PONTOSAN azt a mennyiséget nézi, amit
+  korlátozni akar.
+
+  Három teszt bizonyítja:
   (a) a review-beli EXAKT reprodukciós kalibráció (jelenleg
   `cond ≈ 1.31`, `(1, 0.9)` minta `(u, v) ≈ (-236.8, -1022.9)`,
-  `confidence ≈ 0.933` szemetet adna) most `unstableMapping`-et dob;
-  (b) a `front_medium` jól kondicionált fixture 5 mintapontja mind
-  a küszöb alatt marad, tehát az őr NEM eszik legitim kalibrációt.
+  `confidence ≈ 0.933` szemetet adna) — a `fromCalibration` most
+  SIKERESEN épül, és a `mapPoint((1, 0.9))` `null`-t ad;
+  (b) a `front_medium` jól kondicionált fixture 5 mintapontja
+  mind a küszöb alatt marad, tehát az őr NEM eszik legitim
+  kalibrációt;
+  (c) egy ÚJ adversarial random-search teszt (seed=7, 5000
+  véletlen `GuitarCalibration`, 11×11 rácson minden elfogadott
+  mapperen) — a pont-szintű guard strukturális garanciáját
+  intézményesíti a tesztsuite-ban, és `accepted > 100`
+  sanity-checktel biztosítja, hogy a teszt ne legyen vacuous.
   Lásd `test/features/vision/domain/guitar_landmark_mapper_test.dart`
-  `BLOCKER-1` két új esete.
+  `BLOCKER-1` két esete + `adversarial` csoport.
 
 ### 10.7 Nem futtatott / kívül eső
 
