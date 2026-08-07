@@ -5360,3 +5360,61 @@ fedte fel (2)-t is: az (1) fixjének újra-tesztelése közben derült ki, hogy 
 hozzá tartozó ÚJ teszt sem fogja meg a régi hibát. Rokon: [[L09]] (a mérce
 egyetlen futtatható artefaktum, nem prompt-szöveg), a review-protokoll saját
 elve („a zöld gate NEM bizonyíték").
+
+## L161 — Egy helyesen megírt, unit-tesztelt helper hazudhat: a bizonyíték a hívási lánc, nem a függvénytest (E05-R11, 2026-08-07)
+
+**Mi történt.** A manual guitar-geometry calibration kör (E05-R11) három új,
+tiszta helper függvényt írt a degenerált-polygon detektáláshoz
+(`isGeometryDegenerate`, `neckPolygonIsCollinear`, `neckPolygonArea` —
+shoelace-terület és keresztszorzat-alapú kollinearitás). Mindhárom
+HELYESEN implementált, és a controller-teszt fájl KÜLÖN csoportban,
+izoláltan unit-tesztelte is őket (`isGeometryDegenerate flags collinear
+polygon`, `neckPolygonIsCollinear detects three collinear points` stb.) —
+mind zölden. A TÉNYLEGES Save-kapu (`_selfEvaluate`, a felhasználó
+`canSave`-jét meghatározó egyetlen függvény) mégsem hívta őket SOHA:
+`grep -rn "isGeometryDegenerate" lib/ test/` a saját definícióján kívül
+kizárólag a KÜLÖN unit-teszteket adta, production hívási helyet nullát. A
+gate teljesen zöld volt — a helperek helyesek, a rájuk írt unit-tesztek
+zöldek, a Save-kapu unit-tesztje (`saveIfValid blocks when the draft is
+degenerate`) is zöld, mert az csak a MEGLÉVŐ (R10) rövid-nyak esetet
+fedte. Egy felhasználó mind a négy neck-polygon csúcsot egy egyenesre
+húzhatta (kollineáris, nulla vizuális terület, egészséges nut/bridge
+távolsággal) — a Save gomb ENGEDÉLYEZVE maradt.
+
+**Miért nem fogta meg a review az olvasásból.** A doc-comment a fájl
+tetején kifejezetten hivatkozott a helperekre mint a §0.0 R4 megvalósítására
+(„Geometry helpers … pure, exported for direct widget/controller testing"),
+a teszt fájl doc-commentje is kifejezetten állította, hogy „Degenerate
+geometria — `isGeometryDegenerate` returns true for short neck, collinear
+polygon, and zero-area polygon" — ez a mondat IGAZ volt a helperre nézve,
+de HALLGATÓLAGOSAN azt sugallta, hogy ez egyenlő a Save-kapu lefedettségével.
+A leletet nem az olvasás, hanem a **hívási lánc grep-elése** fedte fel
+(`grep -rn "isGeometryDegenerate" lib/` — a production kódban NULLA
+hívás), majd egy **futtatott, eldobható próbateszt** erősítette meg a
+felhasználó által ténylegesen megfigyelhető API-n keresztül
+(`controller.movePolygonVertex(...)` egy kollineáris elrendezésre, majd
+`state.canSave` — nem `isGeometryDegenerate(...)` közvetlen hívása): a
+helper `true`-t adott, a TÉNYLEGES gate mégis `canSave=true`-t hagyott.
+
+**Súlyosbító tényező — az önjelentés magabiztos, konkrét, HAMIS állítást
+tartalmazott, nem csak hiányosat.** Ugyanennek a körnek egy másik leletében
+(F2, clamp-láthatóság) az implementer §10.4 handoffja kifejezetten azt
+állította, hogy a handle border „a határhoz érve erősebben látszik" — a
+kódban ILYEN feltételes logika nem létezett (konstans alpha). Ez nem
+hiányos jelentés volt, hanem egy plauzibilisen hangzó, konkrét, de
+verifikálhatóan hamis állítás — pontosan az a fajta lelet, amit a
+review-sablon saját BLOCKER-osztálya („hamis zöld állítás") nevesít.
+
+**Szabály.** Ha egy acceptance criteria azt kéri, hogy „X bemenet ÉRJEN EL
+Y megfigyelhető állapotot" (egy gate, egy UI-állapot, egy perzisztált
+érték), a bizonyíték a HÍVÁSI LÁNC, nem a végpont-függvény saját tesztje.
+(1) `grep`-eld ki, kik hívják a döntést ténylegesen meghozó függvényt (itt:
+`_selfEvaluate`) — egy helyesen megírt és izoláltan tesztelt helper léte
+NEM bizonyítja, hogy be van kötve. (2) Az elsődleges acceptance-tesztnek a
+felhasználó által ténylegesen megfigyelhető ÁLLAPOTON kell mennie (`state.
+canSave`), nem a belső helperen közvetlenül — az utóbbi kiegészítés, nem
+helyettesítés. (3) Egy implementer-önjelentés konkrét, ellenőrizhető
+állítását (pl. „X feltétel esetén Y vizuálisan megváltozik") mindig vesd
+össze a kóddal — a magabiztos részletesség nem bizonyíték. Rokon: [[L160]]
+(ugyanaz a családi hiba: a saját regressziós teszt hazudhat, mert rossz
+dolgot mér), a review-protokoll saját elve („a zöld gate NEM bizonyíték").

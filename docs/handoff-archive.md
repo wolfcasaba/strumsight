@@ -6,6 +6,82 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R10 — Camera + guitar calibration domain és verziózott tárolás (2026-08-07)
+
+**E05-R10** MERGED (PR [#181](https://github.com/wolfcasaba/strumsight/pull/181),
+squash `39d1c29`; implementer **MiniMax M3** (pre-flight+impl egy korábbi,
+jelzés nélkül megszakadt sessionből örökölve, ADR 0087 §0.2), orchestrátor/
+reviewer **Claude Sonnet 5**). Verziózott, migrálható kalibrációs domain a
+kamera+gitár geometriájához: `CameraCalibrationProfile` (kamera, orientation,
+normalizált zoom, setup-profil, quality score), `GuitarCalibration`
+(normalizált nut/bridge anchor + 3–8 csúcsú neck-polygon),
+`CalibrationValidity.evaluate` (öt önálló, prioritás-sorrendbe rendezett
+invalidation reason — kamera- > orientation- > zoom- > timestamp- >
+geometriaváltás), `VisionCalibrationCodec` (determinisztikus kulcssorrend,
+legacy→aktuális migráció, record-szintű karantén), új `ss.vision.calibration`
+storage-kulcs. Nincs új ADR (ADR 0181/0183 bővítése).
+
+**Örökség-eset (ADR 0087 §0.2):** a pre-flight (§0.0 revízió: ADR 0164/0166
+→ a renumbered 0181/0183) és a MiniMax implementáció egy korábbi, jelzés
+nélkül megszakadt session alatt már lezajlott és `done` jelzéssel zárult,
+mielőtt a review elkezdődött volna. Ez a session a branchet `origin/main`-re
+rebase-elte (időközben 8, a diffhez nem kapcsolódó pipeline-infra commit
+landolt), és onnan folytatta review-val.
+
+**Három javító kör, mindegyik függetlenül újra-ellenőrizve** (a review saját
+mutáció-kill próbákkal, nem az implementer önjelentésére hagyatkozva):
+
+1. **MiniMax (F1 MAJOR + F2 MINOR, általános review).** F1: a migrációs
+   mátrix „jövőbeli verzió" (vN+1) elfogadási cellája csak a MEGLÉVŐ, korábbi
+   körből örökölt `JsonDocumentStore` envelope-verzió-őrt mérte, a kör SAJÁT,
+   új codec-szintű alak-verzió-őrét (`_migrateToCurrent` `unknownEnum` ága)
+   egyetlen teszt sem — mutáció-kill próbával bizonyítva: az ág ideiglenes
+   eltávolítása mind a 17 akkori tesztet zölden hagyta. F2:
+   `GuitarCalibration.neckPolygon` „Immutable"-t állított a doc-commentben,
+   de a lista védelem nélkül volt tárolva (a repóban van pontos precedens:
+   `speed_builder_state.dart` `List.unmodifiable` initializer-mintája).
+   Mindkettő zárva, a review saját kézzel megismételte mindkét próbát a
+   javítás UTÁN is.
+2. **Codex (MAJOR-1, dedikált security-review — a brief `risk = "high"`).**
+   `VisionCalibrationRepository.read()` `on Exception catch`-e nem fogja el a
+   `CameraRotation.fromDegrees` tartományon-belüli-de-érvénytelen
+   orientationre dobott `ArgumentError`-ját (egy `Error`, nem `Exception`) —
+   crash karantén helyett. Codex megosztott `_readOrientation` helperrel
+   zárta (explicit whitelist-switch a `fromDegrees` hívás ELŐTT, mindkét
+   dekódolási úton).
+3. **Codex (MAJOR-2 — az orchestrátor SAJÁT felfedezése MAJOR-1 javításának
+   újra-ellenőrzése közben).** A MAJOR-1-re írt regressziós teszt
+   mutáció-kill próbája ELSŐRE nem fogott semmit — ez vezetett a
+   gyökérokhoz: öt kézzel összeállított teszt (a MAJOR-1 celláját is
+   beleértve, de négy MÁR a MiniMax eredeti köréből) a `data` objektumon
+   belül nem adott meg explicit `schemaVersion`-t, ezért a codec „hiányzó
+   mező → legacy" ága miatt mindegyik a lapos legacy-migrációs ágra futott,
+   nem az aktuális-séma dekódolóra, amit állítottak — mindegyik egy
+   VÉLETLEN, a teszt állított céljától független okra bukott (pl. a
+   pixelkoordináta-elutasító teszt valójában sosem érte el a `requireDouble`
+   hívást). Ez a jelenség két, korábban acceptance criteria #4/#7 alatt
+   ✅-ként elfogadott tesztcsoportot tett bizonyítatlanná az aktuális
+   (nem-legacy) útra — pontosan azt az utat, amit az app ténylegesen
+   használ. Codex mind az öt cellát a hiányzó mezővel javította; az
+   orchestrátor mind az öt javított cellát közvetlen diagnosztikával (a codec
+   `decodeFromMap`-jét direktben hívva) igazolta a dokumentált `reason`/
+   `field` párra, plusz megismételte a MAJOR-1 mutáció-kill próbát — ezúttal
+   pontosan egy teszt bukott, valódi el nem kapott `ArgumentError`-veremmel.
+
+**Review:** [docs/reviews/e05-r10-…-review.md](docs/reviews/e05-r10-calibration-domain-and-store-review.md)
+— **APPROVED** F1/F2 után. Dedikált **security-reviewer**:
+[docs/reviews/e05-r10-…-security.md](docs/reviews/e05-r10-calibration-domain-and-store-security.md)
+— **PASS** MAJOR-1/MAJOR-2/MINOR-1 után (1 NOTE, nem blokkoló: nem szigorú
+`camera`/`setupProfile` enum-koercíció). Scope-audit mindhárom körben tiszta
+(a diff pontosan a brief 10, majd +2 fájlos `allowed_paths`-ára korlátozódott).
+
+**Zöld kapu (exact-SHA `40a3d44`, a végső javító commit UTÁNI
+újra-dispatch):** Full Gate (no APK)
+[31154416133](https://github.com/wolfcasaba/strumsight/actions/runs/31154416133)
+**success** + Router CI
+[31154343985](https://github.com/wolfcasaba/strumsight/actions/runs/31154343985)
+**success** (a `docs/rounds/**` érintés miatt kötelező). Lecke: **L160**.
+
 ## E05-R07 — Frame transform és overlay koordinátarendszer (2026-08-06)
 
 **E05-R07** MERGED (PR [#169](https://github.com/wolfcasaba/strumsight/pull/169),

@@ -4,106 +4,142 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-07
-> (E05-R10 MERGED — Camera + guitar calibration domain és verziózott
-> tárolás: `CameraCalibrationProfile`/`GuitarCalibration` immutable
-> modellek, `CalibrationValidity` öt-cellás invalidation-mátrix,
-> determinisztikus JSON codec legacy-migrációval és record-szintű
-> karanténnal, `VisionCalibrationRepository`; implementer MiniMax M3
-> (pre-flight+impl egy korábbi, jelzés nélkül megszakadt sessionből
-> örökölve, ADR 0087 §0.2), orchestrátor/reviewer Claude Sonnet 5; **3
-> javító kör** — MiniMax 1 (F1 hiányzó falszifikáció a migrációs mátrix
-> vN+1 cellájában + F2 `neckPolygon` nem valódi immutable), Codex 2
-> (dedikált security-review MAJOR-1: `ArgumentError` megszökik a
-> `read()` `on Exception` őrén korrupt orientationre — crash karantén
-> helyett; MAJOR-2, az orchestrátor SAJÁT mutáció-kill újra-ellenőrzése
-> fedte fel MAJOR-1 javító körének verifikálása közben: öt kézzel írt
-> teszt a `data`-objektum hiányzó belső `schemaVersion` mezője miatt
-> csendben a legacy migrációs ágra tévedt az aktuális-séma dekódoló
-> helyett, mindegyik véletlen okra bukva — lásd a security-review
-> részletes mutáció-kill bizonyítékait). Minden javítást az orchestrátor
-> saját kézzel, függetlenül újra-ellenőrzött, nem az implementer
-> önjelentésére hagyatkozva. Lecke: **L160**.)**
+> (E05-R11 MERGED — Manual guitar geometry calibration UI: touch/drag
+> anchor-editor egy absztrakt normalizált `[0,1]×[0,1]` frame-területen
+> (nincs élő kamera-preview a körben, mérve — R2), centerline + neck-polygon
+> előnézet, determinisztikus quality-score magyarázattal, Save/Reset/
+> Recalibrate flow a `visionGuitarGeometryEnabled` flag mögött (default
+> OFF); implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5.
+> **Hét mért pre-flight revízió** (§0.0 R1–R7 — stale ADR-hivatkozás,
+> nincs élő kamera, a quality-score formula ELSŐ implementációja EZ a kör
+> (nem az R10), R10 degenerált-ellenőrzése nem fedi a kollinearitást/
+> területet, `evaluate()` két külön hívási helye, elavult metódusnév a
+> brief szövegében, megerősített route-flag). **1 javító kör** (MiniMax,
+> 3 BLOCKER): F1 a kollinearitás/terület-helperek megírva de a Save-kapuba
+> sosem bekötve (futtatott próbateszttel bizonyítva: `canSave=true`
+> degenerált polygonra); F2 a „clamp látható" jelzés holt kód volt (sosem
+> hívott callback, eldobott boolean) — az implementer önjelentése tévesen
+> állította, hogy létezik; F3 a futásidejű kontextus hardkódolt volt
+> (mindig back-kamera/practiceBalanced), csendben hibás `setupProfile`-t
+> mentve és a mirror-paritást elérhetetlenné téve. Mindhárom függetlenül
+> újra-ellenőrizve friss klónban (F1 saját próbateszttel, F2/F3 kódolvasással
+> + a kör saját új tesztjeivel), nem az implementer önjelentésére
+> hagyatkozva. Dedikált security-review (risk=high): **PASS**, 0 BLOCKER.
+> Lecke: **L161**.)**
+>
+> ## ✅ E05-R11 KÉSZ — Manual guitar geometry calibration UI (2026-08-07)
+>
+> **E05-R11** MERGED (PR [#182](https://github.com/wolfcasaba/strumsight/pull/182),
+> squash `113976a`; implementer **MiniMax M3**, orchestrátor/reviewer
+> **Claude Sonnet 5**). Az R10 `GuitarCalibration`/`CalibrationValidity`
+> production fallbackjének (ADR 0181) kezelőfelülete: touch/drag
+> **anchor-editor** (`GuitarAnchorEditor`) a nut/bridge horgonyra és a
+> neck-polygon csúcsaira, kizárólag az R07 `PreviewFit`/`CameraTransform`
+> mappingjén keresztül; **`GuitarGeometryPreview`** centerline+polygon
+> painter; **`GuitarCalibrationController`** a szerkesztési állapotot és
+> KÉT elkülönült `CalibrationValidity.evaluate` hívást kezel (Save-kapu:
+> draft önmagával, csak `degenerateGeometry` érhető el; Recalibrate-belépő:
+> mentett profil élő kontextussal, mind az öt ok); determinisztikus
+> quality-score formula (neckhossz-margin + polygon-fedettség +
+> vertex-eloszlás, `[0,1]`); Save/Reset/Recalibrate flow külön
+> megerősítéssel a destruktívra; `visionGuitarGeometryEnabled` flag mögötti
+> route (`/vision/guitar-geometry`, default OFF, korábban nulla fogyasztós
+> flag). **Nincs élő kamera-preview a képernyőn** — mérve: nincs
+> `CameraOwner`-érték, `CameraPreview`/`Texture` widget vagy `.acquire()`
+> hívás egyik új fájlban sem; az editor egy absztrakt normalizált
+> `[0,1]×[0,1]` területen dolgozik.
+>
+> **Pre-flight — hét mért revízió (§0.0 R1–R7, `docs/rounds/e05-r11-…md`):**
+> (1) stale ADR-hivatkozás 0164/0161/0166 → 0181/0178/0183 (az R08 saját
+> renumbered táblázata alapján); (2) **nincs élő kamerapreview és ez a kör
+> nem is szerez be egyet** — `CameraFrame` bufferje csak a stream-callback
+> szinkron törzsében érvényes, `CameraOwner` négy zárt értéke nem tartalmaz
+> kalibrációs owner-t, még az R08 aktív-lease `ready` lépése sem jelenít meg
+> élő framet; (3) **a quality-score számítása NEM az R10-é** — az R10
+> `qualityScore` mezője csak tárolt `double`, egyetlen számító függvény
+> sincs hozzá sehol; az SDD Kör 11 feladatlistája ezt EXPLICIT erre a
+> körre írja elő, a brief §9-es „a számítás kizárólag az R10-é" kockázata
+> téves feltevésen alapult; (4) az R10 `CalibrationValidity._isDegenerate`
+> kizárólag vertex-számot és nut↔bridge távolságot néz, kollinearitást és
+> polygon-területet NEM — ezt a controller saját, új helpereivel
+> (`neckPolygonArea` shoelace, `neckPolygonIsCollinear` keresztszorzat)
+> kellett pótolni; (5) `CalibrationValidity.evaluate` két, egymást kizáró
+> hívási helye (Save-kapu self-comparison vs. Recalibrate-entry élő
+> kontextussal); (6) a brief §6 „a repository `save` metódusa" szövege
+> elavult név — a tényleges metódus `write()`; (7) megerősítve (nem hiba):
+> a `visionGuitarGeometryEnabled` flag már létezett, R11 az első fogyasztó.
+>
+> **Egy javító kör (MiniMax, 3 BLOCKER, mindegyik függetlenül
+> újra-ellenőrizve — nem az implementer önjelentésére hagyatkozva):**
+>
+> 1. **F1 — a Save-kapu nem gátolta a kollineáris/nulla-területű
+>    polygont.** A §0.0 R4 alatti helperek (`isGeometryDegenerate`,
+>    `neckPolygonIsCollinear`, `neckPolygonArea`) helyesen íródtak és
+>    izoláltan unit-tesztelve voltak, de a TÉNYLEGES Save-kapu
+>    (`_selfEvaluate`) sosem hívta őket — `grep` nulla production
+>    hívási helyet adott. **Futtatott, eldobható próbateszttel bizonyítva**
+>    (nem csak kódolvasással): egészséges nut/bridge távolság + 4
+>    kollineáris polygon-vertex ⇒ `canSave=true` volt (pedig degenerált).
+>    Javítás: `_selfEvaluate` most `reason == degenerateGeometry ||
+>    isGeometryDegenerate(...)`-et ad vissza. A javított kódon a
+>    UGYANAZ a próbateszt megismételve: `canSave=false`.
+> 2. **F2 — a „clamp látható jelzés" holt kód volt, az önjelentés tévesen
+>    állította az ellenkezőjét.** `onClamp` callback definiálva, de sosem
+>    meghívva; a szülőben számolt `wasClamped` boolean egy üres `if`
+>    blokkban veszett el; a handle border-je konstans alpha volt. Az
+>    implementer §10.4 önjelentése kifejezetten állította, hogy „a
+>    határhoz érve erősebben látszik" — ez a kódban NEM volt igaz (a
+>    review-sablon saját BLOCKER-definíciója: „hamis zöld állítás").
+>    Javítás: per-handle `_clampedHandle` state, feltételes
+>    alpha/border-width, PREVIEW-térbeli (nem normalizált-térbeli)
+>    klemp-detektálás.
+> 3. **F3 — a futásidejű kontextus hardkódolt volt.**
+>    `guitarCalibrationRuntimeContextProvider` mindig
+>    `back`/`degrees0`/`practiceBalanced`-et adott, sosem olvasta az R08
+>    által elmentett tényleges preferenciát. Kettős hatás: minden mentés
+>    csendben hibás `setupProfile`-t írt, ÉS a front-kamera/mirror-paritás
+>    acceptance strukturálisan elérhetetlen volt (a `mirrorPreview` flag
+>    sehol nem került `true`-ra). Javítás: a provider
+>    `StorageKeys.visionCamera`/`visionSetupProfile`-t olvassa (az R08
+>    `VisionSetupController.build()` mintáját követve), a screen
+>    `mirrorPreview = camera == front`-ot ad át MIND a previewnek, MIND
+>    az editornak. **Őszintén dokumentált, nem blokkoló follow-up (N2):**
+>    a device-orientation (landscape cella) forrása nincs az R11
+>    allowed_paths-on belül — jövőbeli kör tárgya.
+>
+> **Review:** [docs/reviews/e05-r11-…-review.md](docs/reviews/e05-r11-manual-guitar-geometry-calibration-ui-review.md)
+> — **APPROVED** a javító kör után (0 nyitott BLOCKER/MAJOR). Dedikált
+> **security-reviewer** ([docs/reviews/e05-r11-…-security.md](docs/reviews/e05-r11-manual-guitar-geometry-calibration-ui-security.md),
+> brief `risk = "high"`): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR (2 NOTE,
+> egyik a hardkódolt-kontextus F3 gyökérokát erősíti meg confidence-
+> őszinteségi szemszögből). Scope-audit mindkét körben tiszta (14 fájl,
+> mind a brief `allowed_paths`-án — a widget-teszt eredetileg rossz
+> névvel érkezett, `guitar_calibration_drag_matrix_test.dart` →
+> `guitar_calibration_screen_test.dart`, tartalom-változtatás nélkül
+> átnevezve az orchestrátor által, a review ELŐTT).
+>
+> **Zöld kapu (exact-SHA `46d6cff`, a javító kör + review-commit UTÁNI
+> újra-dispatch):** Full Gate (no APK)
+> [31161840283](https://github.com/wolfcasaba/strumsight/actions/runs/31161840283)
+> **success** + Router CI
+> [31161842124](https://github.com/wolfcasaba/strumsight/actions/runs/31161842124)
+> **success** (a `docs/rounds/**` érintés miatt kötelező, kézzel
+> újra-dispatch-elve — a `docs/reviews/**` nem router-ci trigger-útvonal).
+> Post-merge gate (`tools/round-gate.sh test/features/vision
+> test/core/l10n_parity_test.dart`) a friss `main`-en is zöld (78+3 teszt).
+> Lecke: **L161**. **Következő:** a queue következő Epic 5 sora, a
+> pipeline új sessionben indítja.
 >
 > ## ✅ E05-R10 KÉSZ — Camera + guitar calibration domain és verziózott tárolás (2026-08-07)
 >
 > **E05-R10** MERGED (PR [#181](https://github.com/wolfcasaba/strumsight/pull/181),
 > squash `39d1c29`; implementer **MiniMax M3**, orchestrátor/reviewer
 > **Claude Sonnet 5**). Verziózott, migrálható kalibrációs domain a
-> kamera+gitár geometriájához: `CameraCalibrationProfile` (kamera,
-> orientation, normalizált zoom, setup-profil, quality score),
-> `GuitarCalibration` (normalizált nut/bridge anchor + 3–8 csúcsú
-> neck-polygon), `CalibrationValidity.evaluate` (öt önálló, prioritás-sorrendbe
-> rendezett invalidation reason — kamera- > orientation- > zoom- >
-> timestamp- > geometriaváltás), `VisionCalibrationCodec` (determinisztikus
-> kulcssorrend, legacy→aktuális migráció, record-szintű karantén), új
-> `ss.vision.calibration` storage-kulcs. Nincs új ADR (ADR 0181/0183
-> bővítése).
->
-> **Örökség-eset (ADR 0087 §0.2):** a pre-flight (§0.0 revízió: ADR
-> 0164/0166 → a renumbered 0181/0183) és a MiniMax implementáció egy
-> korábbi, jelzés nélkül megszakadt session alatt már lezajlott és `done`
-> jelzéssel zárult, mielőtt a review elkezdődött volna. Ez a session a
-> branchet `origin/main`-re rebase-elte (időközben 8, a diffhez nem
-> kapcsolódó pipeline-infra commit landolt), és onnan folytatta review-val.
->
-> **Három javító kör, mindegyik függetlenül újra-ellenőrizve** (a review
-> saját mutáció-kill próbákkal, nem az implementer önjelentésére
-> hagyatkozva):
->
-> 1. **MiniMax (F1 MAJOR + F2 MINOR, általános review).** F1: a migrációs
->    mátrix „jövőbeli verzió" (vN+1) elfogadási cellája csak a MEGLÉVŐ,
->    korábbi körből örökölt `JsonDocumentStore` envelope-verzió-őrt mérte,
->    a kör SAJÁT, új codec-szintű alak-verzió-őrét (`_migrateToCurrent`
->    `unknownEnum` ága) egyetlen teszt sem — mutáció-kill próbával
->    bizonyítva: az ág ideiglenes eltávolítása mind a 17 akkori tesztet
->    zölden hagyta. F2: `GuitarCalibration.neckPolygon` „Immutable"-t
->    állított a doc-commentben, de a lista védelem nélkül volt tárolva
->    (a repóban van pontos precedens: `speed_builder_state.dart`
->    `List.unmodifiable` initializer-mintája). Mindkettő zárva, a review
->    saját kézzel megismételte mindkét próbát a javítás UTÁN is.
-> 2. **Codex (MAJOR-1, dedikált security-review — a brief `risk = "high"`).**
->    `VisionCalibrationRepository.read()` `on Exception catch`-e nem fogja
->    el a `CameraRotation.fromDegrees` tartományon-belüli-de-érvénytelen
->    orientationre dobott `ArgumentError`-ját (egy `Error`, nem
->    `Exception`) — crash karantén helyett. Codex megosztott
->    `_readOrientation` helperrel zárta (explicit whitelist-switch a
->    `fromDegrees` hívás ELŐTT, mindkét dekódolási úton).
-> 3. **Codex (MAJOR-2 — az orchestrátor SAJÁT felfedezése MAJOR-1
->    javításának újra-ellenőrzése közben).** A MAJOR-1-re írt regressziós
->    teszt mutáció-kill próbája ELSŐRE nem fogott semmit — ez vezetett a
->    gyökérokhoz: öt kézzel összeállított teszt (a MAJOR-1 celláját is
->    beleértve, de négy MÁR a MiniMax eredeti köréből) a `data` objektumon
->    belül nem adott meg explicit `schemaVersion`-t, ezért a codec
->    „hiányzó mező → legacy" ága miatt mindegyik a lapos legacy-migrációs
->    ágra futott, nem az aktuális-séma dekódolóra, amit állítottak —
->    mindegyik egy VÉLETLEN, a teszt állított céljától független okra
->    bukott (pl. a pixelkoordináta-elutasító teszt valójában sosem érte el
->    a `requireDouble` hívást). Ez a jelenség két, korábban acceptance
->    criteria #4/#7 alatt ✅-ként elfogadott tesztcsoportot tett
->    bizonyítatlanná az aktuális (nem-legacy) útra — pontosan azt az utat,
->    amit az app ténylegesen használ. Codex mind az öt cellát a hiányzó
->    mezővel javította; az orchestrátor mind az öt javított cellát
->    közvetlen diagnosztikával (a codec `decodeFromMap`-jét direktben
->    hívva) igazolta a dokumentált `reason`/`field` párra, plusz
->    megismételte a MAJOR-1 mutáció-kill próbát — ezúttal pontosan egy
->    teszt bukott, valódi el nem kapott `ArgumentError`-veremmel.
->
-> **Review:** [docs/reviews/e05-r10-…-review.md](docs/reviews/e05-r10-calibration-domain-and-store-review.md)
-> — **APPROVED** F1/F2 után. Dedikált **security-reviewer**:
-> [docs/reviews/e05-r10-…-security.md](docs/reviews/e05-r10-calibration-domain-and-store-security.md)
-> — **PASS** MAJOR-1/MAJOR-2/MINOR-1 után (1 NOTE, nem blokkoló: nem
-> szigorú `camera`/`setupProfile` enum-koercíció). Scope-audit mindhárom
-> körben tiszta (a diff pontosan a brief 10, majd +2 fájlos
-> `allowed_paths`-ára korlátozódott).
->
-> **Zöld kapu (exact-SHA `40a3d44`, a végső javító commit UTÁNI
-> újra-dispatch):** Full Gate (no APK)
-> [31154416133](https://github.com/wolfcasaba/strumsight/actions/runs/31154416133)
-> **success** + Router CI
-> [31154343985](https://github.com/wolfcasaba/strumsight/actions/runs/31154343985)
-> **success** (a `docs/rounds/**` érintés miatt kötelező). **Következő:**
-> E05-R11 — Manual guitar geometry calibration UI (`docs/rounds/e05-r11-manual-guitar-geometry-calibration-ui.md`,
-> engine=`minimax`), a pipeline indítja új sessionben.
+> kamera+gitár geometriájához (`CameraCalibrationProfile`, `GuitarCalibration`,
+> `CalibrationValidity`, `VisionCalibrationCodec`); 3 javító kör (MiniMax 1,
+> Codex 2, az utolsót az orchestrátor saját mutáció-kill újra-ellenőrzése
+> fedte fel); a részletes kör-történet a
+> [`docs/handoff-archive.md`](docs/handoff-archive.md)-ban. Lecke: **L160**.
 >
 > ## ✅ E05-R09 KÉSZ — Frame quality assessor (2026-08-06/07)
 >
