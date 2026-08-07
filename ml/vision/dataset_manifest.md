@@ -68,6 +68,7 @@ későbbi aktiváló körben jönnek létre):
 | `deletion_procedure` | hogyan törölhető | pl. „egy contributor = egy törlési kulcs, 24 órán belül" |
 | `publication_opt_in` | `true`/`false` | `false` (kutatási anyag nem kerül publikálásra) |
 | `model_training_opt_in` | `true`/`false` | `false` (csak kiértékelés; training külön, későbbi kör) |
+| `annotator_privacy_guideline` | mutató a kötelező annotátor-kezelési/-terjesztési szabályzatra (SDD §31.2 7. elem) | pl. „annotator-handling-v1: nyers frame-eket csak a kijelölt annotátor nézheti, nem másolható, nem továbbítható, a session végén törölve" |
 
 A consent-rekordot az adatgyűjtés **megkezdése előtt** rögzíteni kell;
 utólagos módosítás csak a contributor aláírásával lehetséges.
