@@ -136,6 +136,24 @@ heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 # híd adja (systemd: claude-remote-control-pipeline.service).
 pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude}
 
+# Session-mód. MÉRVE 2026-08-07, a 2.1.224-es auto-frissülés UTÁN: az INTERAKTÍV
+# indítás minden config-dirben belefut a first-run varázslóba, és az OAuth-ot
+# kér („Paste code here if prompted") — a meglévő, érvényes bejelentkezés
+# ellenére. A downgrade 2.1.223-ra sem oldotta fel: a 224-es futás perzisztens
+# állapotot hagyott. A HEADLESS (-p) mód UGYANAZZAL a bejelentkezéssel viszont
+# működik (mérve: `-p 'Csak ennyit válaszolj: LOGIN-OK'` → LOGIN-OK).
+#
+# Ezért a lánc alapértelmezésben headless módban fut — ez tartja életben a
+# fejlesztést. Az interaktív mód (ami a telefonos Code-listához kellene) EGYSZERI
+# emberi bejelentkezés után kapcsolható vissza: PIPELINE_SESSION_MODE=interactive.
+session_mode=${PIPELINE_SESSION_MODE:-print}
+case "$session_mode" in
+  print)       session_mode_flag='-p' ;;
+  interactive) session_mode_flag='' ;;
+  # NEM `die` — az csak a 183. sor körül definiálódik, ez a blokk előbb fut.
+  *) echo "HIBA: ismeretlen PIPELINE_SESSION_MODE: $session_mode (print | interactive)" >&2; exit 4 ;;
+esac
+
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
 # CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
@@ -445,7 +463,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
