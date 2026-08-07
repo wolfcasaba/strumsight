@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_coordinate_space.dart';
 import 'package:strumsight/core/geometry/guitar_space.dart';
 import 'package:strumsight/core/geometry/homography.dart';
+import 'package:strumsight/core/geometry/point2.dart';
 import 'package:strumsight/features/vision/domain/calibration/guitar_calibration.dart';
 import 'package:strumsight/features/vision/domain/geometry/guitar_landmark_mapper.dart';
 
@@ -110,47 +111,43 @@ void main() {
       );
     });
 
-    test('BLOCKER-1: rejects calibration whose homography blows up in the '
-        'camera frame (projective row blind spot)', () {
+    test('BLOCKER-1: point-level guard rejects the mapped magnitude '
+        'outside the camera frame (projective row blind spot)', () {
       // Exact reproduction from the round review (security §1.1 +
       // BLOCKER-1 in the functional review): a completely VALID
       // calibration — non-degenerate polygon, distinct anchors,
       // well-formed quad — whose solved homography has a projective
-      // row that vanishes inside the camera-normalized [0,1]×[0,1]
-      // frame. The 2×2-only condition metric reports cond ≈ 1.3
-      // (well below the 1e3 threshold), so without the
-      // `_checkFrameBounded` guard this calibration builds
-      // successfully; then `mapPoint((1, 0.9))` returned
-      // `(u, v) ≈ (-236.8, -1022.9)` with `confidence ≈ 0.933`
-      // — silent garbage, exactly the brief §5.2 prohibition.
-      expect(
-        () => GuitarLandmarkMapper.fromCalibration(
-          GuitarCalibration(
-            nutAnchor: const NormalizedPoint(
-              0.6592590759685811,
-              0.2522051211620375,
-            ),
-            bridgeAnchor: const NormalizedPoint(
-              0.9292477426477258,
-              0.0006300933582047419,
-            ),
-            neckPolygon: const [
-              NormalizedPoint(0.6773685401937354, 0.2830013442599198),
-              NormalizedPoint(0.8922333948140921, 0.0),
-              NormalizedPoint(1.0, 0.4040328877538206),
-              NormalizedPoint(0.3663554067827715, 0.0),
-            ],
-            createdAt: DateTime.utc(2026, 8, 7),
+      // row that vanishes near this specific queried point. The 2×2-only
+      // condition metric reports cond ≈ 1.3 (well below the 1e3
+      // threshold), so `fromCalibration` builds successfully; without the
+      // point-level guard, `mapPoint((1, 0.9))` returned
+      // `(u, v) ≈ (-236.8, -1022.9)` with `confidence ≈ 0.933` — silent
+      // garbage, exactly the brief §5.2 prohibition.
+      final mapper = GuitarLandmarkMapper.fromCalibration(
+        GuitarCalibration(
+          nutAnchor: const NormalizedPoint(
+            0.6592590759685811,
+            0.2522051211620375,
           ),
-        ),
-        throwsA(
-          isA<GuitarLandmarkMapperSetupException>().having(
-            (e) => e.reason,
-            'reason',
-            GuitarLandmarkMapperSetupFailure.unstableMapping,
+          bridgeAnchor: const NormalizedPoint(
+            0.9292477426477258,
+            0.0006300933582047419,
           ),
+          neckPolygon: const [
+            NormalizedPoint(0.6773685401937354, 0.2830013442599198),
+            NormalizedPoint(0.8922333948140921, 0.0),
+            NormalizedPoint(1.0, 0.4040328877538206),
+            NormalizedPoint(0.3663554067827715, 0.0),
+          ],
+          createdAt: DateTime.utc(2026, 8, 7),
         ),
       );
+      expect(mapper, isNotNull);
+      final mapped = mapper!.mapPoint(
+        normalized: const NormalizedPoint(1.0, 0.9),
+        visibility: 0.95,
+      );
+      expect(mapped, isNull);
     });
 
     test('BLOCKER-1: well-conditioned fixture stays inside the sanity bound', () {
@@ -353,6 +350,125 @@ void main() {
         mapper.mapPointInverse(GuitarSpacePoint(1, 0)).y,
         closeTo(0.2682926829268293, 1e-6),
       );
+    });
+  });
+
+  group('GuitarLandmarkMapper.adversarial', () {
+    // Reproducible randomized search that mirrors the review's own
+    // 50 000-trial sweep — at smaller scale, so it stays under a few
+    // seconds while still institutionalising the invariant. Builds many
+    // random `GuitarCalibration`s with a fixed seed (math.Random(7) —
+    // the same seed the original security-review sweep used), checks
+    // that every successfully-built mapper rejects any queried camera
+    // point whose `|uv|` exceeds `guitarSpaceSanityBound`, and asserts
+    // a sane number of accepted mappers (so the test is meaningful and
+    // not vacuously passing on 0 trials). The point-level guard's
+    // guarantee is structural — the same `apply()` whose magnitude we
+    // want to bound is computed unconditionally, and the guard
+    // compares it directly — so this test cannot regress without
+    // either raising the bound, dropping the guard, or breaking the
+    // comparison direction.
+    test('adversarial: random calibrations never produce mapped '
+        '|uv| > bound (seed=7, 5000 trials, 11x11 grid)', () {
+      const seed = 7;
+      const trials = 5000;
+      const gridSteps = 10; // 11x11 grid (0/10 .. 10/10)
+      const visibility = 0.95;
+
+      final rng = math.Random(seed);
+      var accepted = 0;
+      var rejected = 0;
+      var degenerate = 0;
+
+      for (var t = 0; t < trials; t++) {
+        // Random 4-point polygon inside the normalized [0,1]^2 frame.
+        // Pick a random center and 4 random offsets at independent
+        // angles to (usually) produce a convex quad with non-zero area.
+        final cx = 0.2 + 0.6 * rng.nextDouble();
+        final cy = 0.2 + 0.6 * rng.nextDouble();
+        final radius = 0.1 + 0.25 * rng.nextDouble();
+        final pts = <Point2>[];
+        for (var i = 0; i < 4; i++) {
+          final angle = rng.nextDouble() * 2 * math.pi;
+          final r = radius * (0.7 + 0.6 * rng.nextDouble());
+          final px = cx + r * math.cos(angle);
+          final py = cy + r * math.sin(angle);
+          // Clamp into the [0,1]^2 frame so the NormalizedPoint
+          // constructor's assertion is never tripped.
+          pts.add(Point2(px.clamp(0.0, 1.0), py.clamp(0.0, 1.0)));
+        }
+        // Use two of the vertices as the nut/bridge anchors so the
+        // anchor separation constraint is automatically satisfied
+        // whenever the polygon is non-degenerate.
+        final nutIdx = rng.nextInt(4);
+        var bridgeIdx = rng.nextInt(4);
+        if (bridgeIdx == nutIdx) bridgeIdx = (bridgeIdx + 1) % 4;
+        final nut = pts[nutIdx];
+        final bridge = pts[bridgeIdx];
+
+        final calibration = GuitarCalibration(
+          nutAnchor: NormalizedPoint(nut.x, nut.y),
+          bridgeAnchor: NormalizedPoint(bridge.x, bridge.y),
+          neckPolygon: [
+            for (final p in pts) NormalizedPoint(p.x, p.y),
+          ],
+          createdAt: DateTime.utc(2026, 8, 7),
+        );
+
+        GuitarLandmarkMapper? mapper;
+        try {
+          mapper = GuitarLandmarkMapper.fromCalibration(calibration);
+        } catch (_) {
+          // degeneratePolygon / anchorsCoincident / Homography failure
+          degenerate++;
+          continue;
+        }
+        if (mapper == null) {
+          degenerate++;
+          continue;
+        }
+        accepted++;
+
+        // 11x11 grid over the [0,1]^2 camera frame.
+        for (var x = 0; x <= gridSteps; x++) {
+          for (var y = 0; y <= gridSteps; y++) {
+            final nx = x / gridSteps;
+            final ny = y / gridSteps;
+            final mapped = mapper.mapPoint(
+              normalized: NormalizedPoint(nx, ny),
+              visibility: visibility,
+            );
+            if (mapped == null) {
+              // The point-level guard legitimately rejected this
+              // landmark — that is the contract under test.
+              rejected++;
+              continue;
+            }
+            final magnitude = math.sqrt(
+              mapped.uv.u * mapped.uv.u + mapped.uv.v * mapped.uv.v,
+            );
+            expect(
+              magnitude,
+              lessThanOrEqualTo(guitarSpaceSanityBound),
+              reason:
+                  'seed=$seed trial=$t x=$x y=$y produced '
+                  '(${mapped.uv.u}, ${mapped.uv.v}) with |uv|=$magnitude',
+            );
+          }
+        }
+      }
+
+      // Sanity: the test is only meaningful if it actually exercises
+      // the guard on enough accepted mappers.
+      expect(
+        accepted,
+        greaterThan(100),
+        reason: 'seed=$seed: only $accepted of $trials trials '
+            'produced a buildable mapper — too few to assert',
+      );
+      // Note: the rejected count is not asserted; a healthy sweep
+      // includes both accepted and guard-rejected points across
+      // pathological mappers.
     });
   });
 }
