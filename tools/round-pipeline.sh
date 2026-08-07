@@ -117,6 +117,18 @@ claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 claude_effort=${PIPELINE_EFFORT:-max}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 
+# A telefonos Code-lista MÉRT szabálya (2026-08-07). Egy futó Claude-session
+# akkor és csak akkor jelenik meg a Claude appban, ha a session-regiszterét
+# ANNAK a config-dirnek az írja, amelyikben a remote-control híd fut. A híd
+# szolgáltatása (`claude-remote-control-music.service`) a
+# `/home/ubuntu/.claude-rc-music` dirben él, az orchestrátor-sessiont viszont
+# `env -u CLAUDE_CONFIG_DIR` indította, így a jelenléte a default
+# `~/.claude/sessions/`-be került — a híd sosem láthatta. Mérés: a futó
+# E05-R10 session `~/.claude/sessions/644211.json`-ban volt, a telefonról
+# indított session `~/.claude-rc-music/sessions/759682.json`-ban.
+# Ezért a session ezt a dirt kapja EXPLICITEN (nem örökölve, nem törölve).
+pipeline_claude_config_dir=${PIPELINE_CLAUDE_CONFIG_DIR:-/home/ubuntu/.claude-rc-music}
+
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
 # CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
@@ -426,7 +438,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "env -u CLAUDE_CONFIG_DIR $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir $claude_bin --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
@@ -1251,11 +1263,11 @@ log "orchestrátor-session indul ($round), időkorlát ${session_timeout}s → $
 notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-session"
 
 # Az orchestrátor INTERAKTÍV claude sessionként fut egy tmux-ban (user-döntés
-# 2026-07-31): az interaktív session automatikusan rákapcsolódik a futó
-# remote-control hídra (/rc active), ezért MEGJELENIK a user telefonos
-# Code-listájában — a -p és a --bg mód sehol nem látszott. A bootstrap-prompt
-# rövid fájl-hivatkozás (az argv-önillesztés — L12 — kizárva); a
-# bypass-disclaimer és az MCP-consent egyszer, kézzel elfogadva 2026-07-31-én.
+# 2026-07-31), mert a -p és a --bg mód sehol nem látszott. A telefonos
+# láthatóság feltétele viszont NEM az interaktivitás önmagában, hanem a
+# `$pipeline_claude_config_dir` (lásd ott a mérést): a session-regiszternek a
+# híd config-dirjébe kell kerülnie. A bootstrap-prompt rövid fájl-hivatkozás
+# (az argv-önillesztés — L12 — kizárva).
 session_exit=0
 run_orchestrator_session "pipeline-$round" "$prompt_file" "$session_log" \
   "$status_file" "$session_timeout" "$round" || session_exit=124
