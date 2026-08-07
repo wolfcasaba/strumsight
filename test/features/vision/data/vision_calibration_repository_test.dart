@@ -377,6 +377,40 @@ void main() {
     );
 
     test(
+      'érvénytelen orientation — tartományon belüli érték → record karantén',
+      () async {
+        final malformed = jsonEncode({
+          'schemaVersion': documentSchemaVersion,
+          'data': {
+            'camera': {
+              'camera': 'back',
+              'orientation': 45,
+              'zoom': 0.5,
+              'setupProfile': 'practiceBalanced',
+              'createdAt': '2026-08-07T12:00:00.000Z',
+              'qualityScore': 0.9,
+            },
+            'guitar': {
+              'nut': {'x': 0.3, 'y': 0.5},
+              'bridge': {'x': 0.7, 'y': 0.5},
+              'neckPolygon': [
+                {'x': 0.25, 'y': 0.35},
+                {'x': 0.75, 'y': 0.35},
+                {'x': 0.75, 'y': 0.65},
+                {'x': 0.25, 'y': 0.65},
+              ],
+              'createdAt': '2026-08-07T12:00:00.000Z',
+            },
+          },
+        });
+        final c = build(initial: {StorageKeys.visionCalibration: malformed});
+        final read = c.repository.read();
+        expect(read, isNull);
+        expect(c.logger.events, contains('storage.document.record_skipped'));
+      },
+    );
+
+    test(
       'degenerált polygon — a neckPolygon < 3 csúcs → record karantén',
       () async {
         final degenerate = jsonEncode({
@@ -450,6 +484,15 @@ void main() {
           'neckPolygon',
           'createdAt',
         });
+        final nut = guitar['nut'] as Map<String, dynamic>;
+        final bridge = guitar['bridge'] as Map<String, dynamic>;
+        final neckPolygon = guitar['neckPolygon'] as List<dynamic>;
+        expect(nut.keys.toSet(), <String>{'x', 'y'});
+        expect(bridge.keys.toSet(), <String>{'x', 'y'});
+        for (final point in neckPolygon) {
+          final pointMap = point as Map<String, dynamic>;
+          expect(pointMap.keys.toSet(), <String>{'x', 'y'});
+        }
 
         // Banned substrings: ha valaki egy raw-kép mezőnevet csempészne be,
         // a kulcs-szintű assertion ugyan nem feltétlenül fogja meg (más
@@ -459,7 +502,22 @@ void main() {
           'image',
           'jpeg',
           'png',
+          'jpg',
+          'webp',
+          'heic',
+          'heif',
+          'bmp',
+          'gif',
+          'raw',
+          'frame',
+          'pixel',
+          'bytes',
           'base64',
+          'blob',
+          'yuv',
+          'nv21',
+          'bitmap',
+          'capture',
           'thumbnail',
         ]) {
           expect(

@@ -146,13 +146,7 @@ final class VisionCalibrationCodec {
 
   CameraCalibrationProfile _legacyCamera(Map<String, dynamic> legacy) {
     final camera = _readLegacyString(legacy, 'camera');
-    final orientationDegrees = requireInt(
-      legacy,
-      'orientation',
-      min: 0,
-      max: 359,
-    );
-    final orientation = CameraRotation.fromDegrees(orientationDegrees);
+    final orientation = _readOrientation(legacy);
     final zoom = requireDouble(legacy, 'zoom', min: 0, max: 1);
     final setupName = _readLegacyString(legacy, 'setupProfile');
     final profile = VisionSetupProfile.values.firstWhere(
@@ -289,13 +283,7 @@ final class VisionCalibrationCodec {
     final camera = cameraName == VisionCameraPreference.front.storageValue
         ? VisionCameraPreference.front
         : VisionCameraPreference.back;
-    final orientationDegrees = requireInt(
-      json,
-      'orientation',
-      min: 0,
-      max: 359,
-    );
-    final orientation = CameraRotation.fromDegrees(orientationDegrees);
+    final orientation = _readOrientation(json);
     final zoom = requireDouble(json, 'zoom', min: 0, max: 1);
     final setupName = requireString(json, 'setupProfile');
     final setupProfile = VisionSetupProfile.values.firstWhere(
@@ -357,6 +345,26 @@ final class VisionCalibrationCodec {
     return NormalizedPoint(
       requireDouble(raw, 'x', min: 0, max: 1),
       requireDouble(raw, 'y', min: 0, max: 1),
+    );
+  }
+
+  /// Reads one of the four rotations supported by [CameraRotation].
+  ///
+  /// The explicit membership check is intentionally before
+  /// [CameraRotation.fromDegrees]: that factory throws [ArgumentError], which
+  /// is an [Error] and would bypass the repository's record-quarantine path.
+  CameraRotation _readOrientation(Map<String, dynamic> json) {
+    final degrees = requireInt(json, 'orientation', min: 0, max: 359);
+    switch (degrees) {
+      case 0:
+      case 90:
+      case 180:
+      case 270:
+        return CameraRotation.fromDegrees(degrees);
+    }
+    throw JsonRecordException(
+      RecordDecodeReason.unknownEnum,
+      field: 'orientation',
     );
   }
 }
