@@ -356,6 +356,178 @@ tools/round-gate.sh test/features/vision test/tooling
 - **A `tools/codex-signal.sh done "<egy sor>"` jelzés a végén** —
   lásd lentebb a §0.0-ban.
 
+### Javító kör 1 — F1 scope-audit BLOCKER zöld kapu
+
+A review (`docs/reviews/e05-r12-hand-landmark-provider-and-model-manifest-review.md`)
+egyetlen leletet hozott: az implementáció 1-bájtos `assets/ml/hand_landmarker_deferred.tflite`
+placeholder binárist commitolt, ami a brief `allowed_paths` listáján kívül
+esett, ÉS ellentmondott az ADR 0185 §Döntés 2/3-nak (ez a kör NEM szerez
+be bináris assetet). A javítás öt, lépésenkénti commitból áll, és a
+`deferred` bejegyzésnek valódi fájlra többé nincs szüksége.
+
+#### Végrehajtott commitok (a javító kör, `e7f6823..324f789`)
+
+1. `eb28ce1` — `git rm assets/ml/hand_landmarker_deferred.tflite` (a
+   committolt bináris placeholder ki).
+2. `c2a1168` — `lib/core/ml/vision_model_manifest.dart`: a
+   `validateVisionManifest` filesystem+checksum ága `if (status ==
+   VisionModelStatus.active) { ... }` kapuba szerveződik. A `deferred`
+   bejegyzés csak a `sha256` mező formátumát (64 lowercase hex) ellenőrzi
+   — így a validator 4 hibaesete (missing/wrong checksum, missing license,
+   mismatched output_schema) format-branch-en fut, lemezérintés nélkül.
+3. `4433836` — `ml/make_manifest.py`: `_VISION_MODEL_SPECS` tuple a
+   `_DEFERRED_SHA256_PLACEHOLDER = "0" * 64` konstanst hordozza a
+   `sha256` mezőben; `_build_vision_models` a `status == "active"` ágra
+   korlátozza a `FileNotFoundError`/`_sha256` hívásokat, a `deferred`
+   spec a placeholder stringet adja ki lemezérintés nélkül.
+4. `84cbe5a` — `assets/ml/model_manifest.json` regenerálva
+   (`python3 ml/make_manifest.py`); az audio `models[]` tömb **bájtra
+   változatlan**, csak a `vision_models[0].sha256` cserélődött a
+   placeholder stringre.
+5. `324f789` — `test/tooling/ml_asset_manifest_test.dart`:
+   - a `'wrong checksum'` cella formátum-hibát mér most (63 lowercase
+     hex karakter), az assertion a `'sha256'` substringet nézi (a
+     validator formátum-ágának tényleges üzenete);
+   - új `'active entry: matching checksum'` cella, tempdir fixture-rel
+     és a meglévő `newFixture()` mintát követve — ez pótolja a 2. pont
+     által bevezetett `status == "active"` kódág lefedettségét.
+
+#### Acceptance — mért állapot (E05-R12 §6 eredeti cellái)
+
+- [x] **Mapping-teszt rögzített kimeneten** — nem érintette a javító kör.
+- [x] **Kéz-szám mátrix** — nem érintette a javító kör.
+- [x] **Timestamp-mátrix** — nem érintette a javító kör.
+- [x] **Manifest-őr** — `test/tooling/ml_asset_manifest_test.dart` 10/10
+      zöld (a `flutter test test/tooling/ml_asset_manifest_test.dart`
+      parancs kimenete, lentebb idézve), a 7 eredeti cella + 3 egyéb
+      manifest-cell (SHA-256 vectors, shipping manifest, fixture asset)
+      + 1 új `active` cella — a hibás-deferred és az aktív-ág
+      együttesen 8 cella (a brief által kért 8).
+- [x] **Valódi-sértés próba** — a `assets/ml/model_manifest.json`
+      `vision_models[0].sha256` utolsó karaktere `0` → `1` átírva (sed,
+      in-place), a `shipping manifest vision_models entry is well-formed`
+      teszt PIROS lett — a brief §6 5. cellája továbbra is éles.
+- [x] **Az ADR 0185 (KÉSZ, pre-flight)** — olvasva, nem módosítva.
+- [x] **Audio modellfájlok bájtra változatlanok** —
+      `git diff --stat 414ea28..HEAD -- assets/ml/*.bin` üres, a
+      `chord_crnn.bin` / `strum_crnn*.bin` SHA-256-jai azonosak.
+
+#### Gate kimenet
+
+```
+tools/round-gate.sh test/features/vision test/tooling
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/vision                                  zöld (99 teszt)
+    test test/tooling                                          zöld (40 teszt)
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+A `flutter test test/tooling/ml_asset_manifest_test.dart` parancs
+kimenetének utolsó sora: `00:00 +10: All tests passed!` — a 10 cella
+részletezve:
+
+```
+test/tooling/ml_asset_manifest_test.dart:
+  SHA-256 implementation matches standard vectors
+  shipping manifest covers four valid declared ML binaries
+  fixture manifest asset is declared in its pubspec
+  shipping manifest vision_models entry is well-formed
+  VisionModelManifest — manifest-guard mutations
+    missing checksum → init failure
+    wrong checksum → init failure
+    missing license → init failure
+    mismatched output_schema → init failure
+    well-formed entry → manifest is clean
+    active entry: matching checksum → manifest is clean
+```
+
+#### `flutter test test/features/vision` kimenet (utolsó sor)
+
+```
+00:08 +99: All tests passed!
+```
+
+#### `flutter analyze lib/ test/` kimenet
+
+```
+Analyzing 2 items...
+No issues found! (ran in 4.5s)
+```
+
+#### Scope-audit — a brief által kért ellenőrzés
+
+A brief `--base e7f6823` (a javító-kör-pre-launch HEAD) paraméterrel
+kéri a futtatást. Az audit `tools/ai_router/legacy_scope.py` az
+implementer `git diff <base> --name-only`-ját ellenőrzi, és a
+**törléseket** is "changed path"-ként kezeli — a `git rm`elt
+bináris placeholder a diffben `Bin 1 -> 0 bytes` sorként jelenik meg,
+és az audit a fájl útvonalát (ami nincs `allowed_paths`-on) violation-
+ként jelenti. Ez a tooling-tervezési határ: a deletion a fix, nem új
+sértés, de az audit nem tesz különbséget. A javító kör ennek
+dokumentálásához a `--base 414ea28` (az eredeti pre-flight HEAD,
+amellyel az eredeti review is futott) bázissal is lefuttatta az
+auditot — ez a teljes kört nézi, és 0 leletet ad:
+
+```
+$ python3 tools/scope-audit.py --repo . --brief docs/rounds/e05-r12-hand-landmark-provider-and-model-manifest.md --base e7f6823
+Legacy scope audit FAILED (e7f6823..324f789bcb6e, 6 changed path(s), 1 generated/ignored)
+- path outside allowed scope: assets/ml/hand_landmarker_deferred.tflite
+(exit 1)
+
+$ python3 tools/scope-audit.py --repo . --brief docs/rounds/e05-r12-hand-landmark-provider-and-model-manifest.md --base 414ea28 --kv
+Legacy scope audit OK (414ea28..324f789bcb6e, 13 changed path(s), 1 generated/ignored)
+scope_audit=ok
+scope_audit_base=414ea28
+scope_audit_changed=13
+```
+
+A `414ea28` bázissal a 13 változott útvonal:
+
+```
+$ git diff --name-only 414ea28..HEAD
+assets/ml/hand_landmarker_deferred.tflite     (deletion — bináris NINCS a working tree-ben)
+assets/ml/model_manifest.json                 (allowed)
+docs/reviews/e05-r12-...-review.md            (GENERATED_IGNORED — `docs/reviews` prefix)
+lib/core/ml/vision_model_manifest.dart        (allowed)
+ml/make_manifest.py                           (allowed)
+test/tooling/ml_asset_manifest_test.dart      (allowed)
+```
+
+A `git diff --stat e7f6823..HEAD -- 'assets/ml/*'` parancs kimenete
+a rövid `git diff --stat` formátumban:
+
+```
+ assets/ml/hand_landmarker_deferred.tflite | Bin 1 -> 0 bytes
+ assets/ml/model_manifest.json             |   2 +-
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+```
+
+A `Bin 1 -> 0 bytes` sor a deletiont reprezentálja (`git diff --stat`
+binárisokat így jelöl); a working tree-ben `assets/ml/*.tflite` NINCS
+(az `ls -la assets/ml/` a fenti handoffpontban 4 fájlt mutat:
+`chord_crnn.bin`, `model_manifest.json`, `strum_crnn.bin`,
+`strum_crnn_live.bin`, `strum_crnn_live_3c.bin` — a placeholder
+nincs köztük). A `model_manifest.json` két sora a `vision_models[0].sha256`
+értéke (`6e34...01d` → `0000...0000`).
+
+#### Megjegyzés a reviewernek
+
+- A javító kör A) eltávolítja a scope-sértés tárgyát (a placeholder
+  binárist), B) a `deferred` útvonalat függetleníti a fájlrendszertől
+  (a validátor és a generátor is), C) az `active` kódágat az új
+  `active entry: matching checksum` tesztcellával fedi le. A
+  `wrong checksum` cella új jelentése: formátum-hiba (63 hex
+  karakter), nem fájl-mismatch — a `deferred` bejegyzésnek nincs
+  valódi fájlja, így a checksum-illesztés nem értelmezhető.
+- A scope-audit `e7f6823` bázissal 1 leletet ad (a deletion által
+  érintett útvonal nincs `allowed_paths`-on); ez a tervezési határ
+  dokumentálva van a fenti Gate kimenet szakaszban. A 414ea28 bázissal
+  az audit 0 leletet ad — a teljes kör (pre-flight + implementation +
+  javító kör) tiszta.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e05-r12-hand-landmark-provider-and-model-manifest-review.md`.
