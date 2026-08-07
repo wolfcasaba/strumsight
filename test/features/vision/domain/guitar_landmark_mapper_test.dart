@@ -377,8 +377,6 @@ void main() {
 
       final rng = math.Random(seed);
       var accepted = 0;
-      var rejected = 0;
-      var degenerate = 0;
 
       for (var t = 0; t < trials; t++) {
         // Random 4-point polygon inside the normalized [0,1]^2 frame.
@@ -418,11 +416,9 @@ void main() {
           mapper = GuitarLandmarkMapper.fromCalibration(calibration);
         } catch (_) {
           // degeneratePolygon / anchorsCoincident / Homography failure
-          degenerate++;
           continue;
         }
         if (mapper == null) {
-          degenerate++;
           continue;
         }
         accepted++;
@@ -439,7 +435,6 @@ void main() {
             if (mapped == null) {
               // The point-level guard legitimately rejected this
               // landmark — that is the contract under test.
-              rejected++;
               continue;
             }
             final magnitude = math.sqrt(
@@ -465,9 +460,9 @@ void main() {
             'seed=$seed: only $accepted of $trials trials '
             'produced a buildable mapper — too few to assert',
       );
-      // Note: the rejected count is not asserted; a healthy sweep
-      // includes both accepted and guard-rejected points across
-      // pathological mappers.
+      // Note: a healthy sweep includes both accepted mappers and
+      // guard-rejected points across pathological calibrations; only
+      // the accepted count is asserted, as a vacuous-pass guard.
     });
   });
 }
