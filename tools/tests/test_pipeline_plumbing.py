@@ -155,6 +155,55 @@ class ActionsOutageGuardTest(unittest.TestCase):
         self.assertIn("PIPELINE_STATUS_TIMEOUT", self.text)
 
 
+class StaleQueuedRunTest(unittest.TestCase):
+    """MÉRT eset (2026-08-06): 3,5 órán át `queued` futás állította a láncot."""
+
+    def setUp(self) -> None:
+        self.text = PIPELINE.read_text(encoding="utf-8")
+
+    def test_a_long_queued_run_is_not_counted_as_a_running_round(self) -> None:
+        self.assertIn("PIPELINE_STALE_QUEUED_MINUTES:-60", self.text)
+        self.assertIn("BERAGADT FUTÁS", self.text)
+
+    def test_a_fresh_queued_run_still_blocks(self) -> None:
+        """A friss `queued` futás VALÓBAN másik kör lehet — az őr csak a korra szűr."""
+        self.assertIn('[ "$state" = "queued" ] && [ "$age_minutes" -ge "$stale_queued_minutes" ]', self.text)
+
+
+class OutageWorkModeTest(unittest.TestCase):
+    """Kimaradás alatt a merge-kapu a LOKÁLIS teljes mérce — nem kevesebb."""
+
+    def setUp(self) -> None:
+        self.text = PIPELINE.read_text(encoding="utf-8")
+        self.prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text(encoding="utf-8")
+
+    def test_the_note_is_only_written_during_an_outage(self) -> None:
+        self.assertIn('ci_note="nincs"', self.text)
+        self.assertIn("if github_actions_degraded; then", self.text)
+
+    def test_the_local_substitute_covers_the_full_ci_chain(self) -> None:
+        """Ha ebből bármelyik kimarad, a lokális evidencia KEVESEBB a CI-nél."""
+        for command in (
+            "tools/round-gate.sh",
+            "flutter test",
+            "PROPERTY_SEED=$(date +%s)",
+            "check_assets.dart",
+            "check_song_schema.dart",
+            "check_song_fixture_licenses.dart",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, self.text)
+
+    def test_native_rounds_have_no_local_substitute(self) -> None:
+        self.assertIn("NINCS lokális pótlás", self.text)
+
+    def test_the_ci_evidence_must_be_backfilled_after_recovery(self) -> None:
+        self.assertIn("helyreállás UTÁN pótlandó", self.text)
+
+    def test_the_prompt_template_declares_the_placeholder(self) -> None:
+        self.assertIn("{{CI_NOTE}}", self.prompt)
+
+
 class CostLedgerTest(unittest.TestCase):
     """Költség-főkönyv — MINIMÁLIS őrzés (user 2026-08-05: „költség nem fontos").
 
