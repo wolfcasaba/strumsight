@@ -75,6 +75,11 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
   /// `onPanStart` events without touching the canonical state.
   _DragHandle? _drag;
 
+  /// The currently clamped handle (during an active drag). `null` while
+  /// the drag is at a valid point. Drives the visible clamp decoration
+  /// on the handle (§5.4 — the point must not "stick" silently).
+  Key? _clampedHandle;
+
   @override
   Widget build(BuildContext context) {
     final color = anchorPainterColor(context);
@@ -106,19 +111,11 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
                 index: i,
                 vertex: widget.neckPolygon[i],
                 fit: widget.fit,
+                clamped: _clampedHandle == Key('guitar-polygon-vertex-$i'),
                 onPointerDown: (p) => _onPolygonPointerDown(i, p),
                 onPointerMove: _onPointerMove,
                 onPointerUp: _onPointerUp,
                 onApply: widget.onPolygonVertexChanged,
-                onClamp: () => setState(() {
-                  _drag = _DragHandle.polygon(
-                    i,
-                    NormalizedPoint(
-                      widget.neckPolygon[i].x.clamp(0.0, 1.0).toDouble(),
-                      widget.neckPolygon[i].y.clamp(0.0, 1.0).toDouble(),
-                    ),
-                  );
-                }),
               ),
             _AnchorHandle(
               key: const Key('guitar-anchor-nut'),
@@ -128,19 +125,11 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
               fit: widget.fit,
               accentColor: clampColor,
               baseColor: color,
+              clamped: _clampedHandle == const Key('guitar-anchor-nut'),
               onPointerDown: (p) => _onAnchorPointerDown(AnchorRole.nut, p),
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
               onApply: widget.onAnchorChanged,
-              onClamp: () => setState(() {
-                _drag = _DragHandle.anchor(
-                  AnchorRole.nut,
-                  NormalizedPoint(
-                    widget.nut.x.clamp(0.0, 1.0).toDouble(),
-                    widget.nut.y.clamp(0.0, 1.0).toDouble(),
-                  ),
-                );
-              }),
             ),
             _AnchorHandle(
               key: const Key('guitar-anchor-bridge'),
@@ -150,19 +139,11 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
               fit: widget.fit,
               accentColor: clampColor,
               baseColor: color,
+              clamped: _clampedHandle == const Key('guitar-anchor-bridge'),
               onPointerDown: (p) => _onAnchorPointerDown(AnchorRole.bridge, p),
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
               onApply: widget.onAnchorChanged,
-              onClamp: () => setState(() {
-                _drag = _DragHandle.anchor(
-                  AnchorRole.bridge,
-                  NormalizedPoint(
-                    widget.bridge.x.clamp(0.0, 1.0).toDouble(),
-                    widget.bridge.y.clamp(0.0, 1.0).toDouble(),
-                  ),
-                );
-              }),
             ),
           ],
         ),
@@ -172,10 +153,12 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
 
   void _onAnchorPointerDown(AnchorRole role, NormalizedPoint p) {
     _drag = _DragHandle.anchor(role, p);
+    _clampedHandle = null;
   }
 
   void _onPolygonPointerDown(int index, NormalizedPoint p) {
     _drag = _DragHandle.polygon(index, p);
+    _clampedHandle = null;
   }
 
   void _onPointerMove(Offset localPosition, Size size) {
@@ -195,10 +178,12 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
       case _DragHandlePolygon(:final index):
         widget.onPolygonVertexChanged(index, clamped);
     }
-    if (wasClamped) {
-      // The clamp signal is implicit (the value is clamped); the visual
-      // border on the handles marks the boundary. Kept as an extension
-      // point for higher-level UI feedback.
+    final handleKey = _keyForDrag(drag);
+    final nextClamped = wasClamped ? handleKey : null;
+    if (nextClamped != _clampedHandle) {
+      setState(() {
+        _clampedHandle = nextClamped;
+      });
     }
   }
 
@@ -206,8 +191,16 @@ class _GuitarAnchorEditorState extends State<GuitarAnchorEditor> {
     if (_drag == null) return;
     setState(() {
       _drag = null;
+      _clampedHandle = null;
     });
   }
+
+  Key _keyForDrag(_DragHandle drag) => switch (drag) {
+    _DragHandleAnchor(:final role) => role == AnchorRole.nut
+        ? const Key('guitar-anchor-nut')
+        : const Key('guitar-anchor-bridge'),
+    _DragHandlePolygon(:final index) => Key('guitar-polygon-vertex-$index'),
+  };
 }
 
 /// Which handle is being dragged. Carries enough state to drive the move
@@ -244,11 +237,11 @@ class _AnchorHandle extends StatelessWidget {
     required this.fit,
     required this.accentColor,
     required this.baseColor,
+    required this.clamped,
     required this.onPointerDown,
     required this.onPointerMove,
     required this.onPointerUp,
     required this.onApply,
-    required this.onClamp,
   });
 
   final AnchorRole role;
@@ -257,17 +250,22 @@ class _AnchorHandle extends StatelessWidget {
   final PreviewFit fit;
   final Color accentColor;
   final Color baseColor;
+  final bool clamped;
   final ValueChanged<NormalizedPoint> onPointerDown;
   final void Function(Offset, Size) onPointerMove;
   final VoidCallback onPointerUp;
   final void Function(AnchorRole, NormalizedPoint) onApply;
-  final VoidCallback onClamp;
 
   @override
   Widget build(BuildContext context) {
     final preview = fit.toPreview().apply(point);
     final dx = (preview.x - 16).clamp(0.0, fit.viewport.width - 32).toDouble();
     final dy = (preview.y - 16).clamp(0.0, fit.viewport.height - 32).toDouble();
+    // Clamp visibility (§5.4): the border switches to a thicker,
+    // fully-opaque accent contour while the value is clamped so the
+    // point does not "stick" silently at the boundary.
+    final borderAlpha = clamped ? 0.95 : 0.2;
+    final borderWidth = clamped ? 3.0 : 1.0;
     return Positioned(
       left: dx,
       top: dy,
@@ -286,12 +284,16 @@ class _AnchorHandle extends StatelessWidget {
           child: MouseRegion(
             cursor: SystemMouseCursors.grab,
             child: Container(
+              key: const Key('guitar-anchor-handle-decor'),
               width: 32,
               height: 32,
               decoration: BoxDecoration(
                 color: baseColor,
                 shape: BoxShape.circle,
-                border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: borderAlpha),
+                  width: borderWidth,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.2),
@@ -333,21 +335,21 @@ class _PolygonHandle extends StatelessWidget {
     required this.index,
     required this.vertex,
     required this.fit,
+    required this.clamped,
     required this.onPointerDown,
     required this.onPointerMove,
     required this.onPointerUp,
     required this.onApply,
-    required this.onClamp,
   });
 
   final int index;
   final NormalizedPoint vertex;
   final PreviewFit fit;
+  final bool clamped;
   final ValueChanged<NormalizedPoint> onPointerDown;
   final void Function(Offset, Size) onPointerMove;
   final VoidCallback onPointerUp;
   final void Function(int, NormalizedPoint) onApply;
-  final VoidCallback onClamp;
 
   @override
   Widget build(BuildContext context) {
@@ -355,6 +357,13 @@ class _PolygonHandle extends StatelessWidget {
     final preview = fit.toPreview().apply(vertex);
     final dx = (preview.x - 8).clamp(0.0, fit.viewport.width - 16).toDouble();
     final dy = (preview.y - 8).clamp(0.0, fit.viewport.height - 16).toDouble();
+    // Clamp visibility (§5.4): the dashed border surrounds the vertex
+    // handle while the value is clamped at the boundary.
+    final clampColor = Theme.of(context).colorScheme.error;
+    final borderColor = clamped
+        ? clampColor
+        : Theme.of(context).colorScheme.surface;
+    final borderWidth = clamped ? 2.0 : 1.0;
     return Positioned(
       left: dx,
       top: dy,
@@ -386,13 +395,15 @@ class _PolygonHandle extends StatelessWidget {
           child: MouseRegion(
             cursor: SystemMouseCursors.grab,
             child: Container(
+              key: const Key('guitar-polygon-handle-decor'),
               width: 16,
               height: 16,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: borderColor,
+                  width: borderWidth,
                 ),
               ),
             ),

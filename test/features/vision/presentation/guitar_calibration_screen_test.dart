@@ -144,4 +144,68 @@ void main() {
     // In a normal (non-mirrored) PreviewFit, moving right increases x.
     expect(state.bridgeAnchor.x, greaterThan(0.6));
   });
+
+  testWidgets(
+    'f2: clanp visibility — dragging outside the frame thickens the handle border',
+    (tester) async {
+      final ctx = _context();
+      final container = await _pumpHarness(
+        tester,
+        repository: _emptyRepo(),
+        context: ctx,
+      );
+      addTearDown(container.dispose);
+
+      // Move the polygon vertices out of the nut hit area.
+      container
+          .read(guitarCalibrationControllerProvider(ctx).notifier)
+          .movePolygonVertex(0, const NormalizedPoint(0.2, 0.7));
+      container
+          .read(guitarCalibrationControllerProvider(ctx).notifier)
+          .movePolygonVertex(3, const NormalizedPoint(0.2, 0.7));
+      await tester.pumpAndSettle();
+
+      final decorFinder = find.descendant(
+        of: find.byKey(const Key('guitar-anchor-nut')),
+        matching: find.byKey(const Key('guitar-anchor-handle-decor')),
+      );
+      expect(decorFinder, findsOneWidget);
+
+      // Pre-clamp: read the unclamped border.
+      final before = tester.widget<Container>(decorFinder);
+      final beforeBorder = (before.decoration as BoxDecoration).border!;
+      final beforeAlpha = (beforeBorder.top.color.a * 255).round() & 0xff;
+      // Sanity: pre-clamp alpha is the dim 0.2 value (≈ 51).
+      expect(beforeAlpha, lessThan(128));
+
+      // Drag the nut handle FAR outside the frame — x grows without
+      // bound, the controller must clamp to 1.0, and the visible
+      // decoration must reflect the clamp.
+      final nutCenter = tester.getCenter(
+        find.byKey(const Key('guitar-anchor-nut')),
+      );
+      final gesture = await tester.startGesture(nutCenter);
+      await gesture.moveBy(const Offset(2000, 0));
+      await tester.pumpAndSettle();
+
+      final after = tester.widget<Container>(decorFinder);
+      final afterBorder = (after.decoration as BoxDecoration).border!;
+      final afterAlpha = (afterBorder.top.color.a * 255).round() & 0xff;
+      // Clamp visibility: the border becomes opaque while the value
+      // is clamped.
+      expect(afterAlpha, greaterThan(beforeAlpha + 100)),
+      reason: 'clamped border alpha ($afterAlpha) should be much brighter '
+          'than unclamped ($beforeAlpha)';
+      expect(afterBorder.top.width, greaterThan(beforeBorder.top.width));
+
+      // Release: the clamp-state decoration should clear.
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final restored = tester.widget<Container>(decorFinder);
+      final restoredBorder = (restored.decoration as BoxDecoration).border!;
+      final restoredAlpha =
+          (restoredBorder.top.color.a * 255).round() & 0xff;
+      expect(restoredAlpha, lessThan(afterAlpha));
+    },
+  );
 }
