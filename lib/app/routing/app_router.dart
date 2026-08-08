@@ -241,6 +241,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => const GuitarCalibrationScreen(),
         ),
       ],
+      if (visionEnabled) ...[
+        GoRoute(
+          path: AppRoutes.visionSession,
+          builder: (_, _) => const VisionSessionScreen(),
+        ),
+      ],
     ],
   );
   ref.onDispose(() {
