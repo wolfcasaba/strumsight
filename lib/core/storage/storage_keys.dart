@@ -60,6 +60,22 @@ abstract final class StorageKeys {
   /// the setup preferences are the camera framing defaults.
   static const String visionCalibration = 'ss.vision.calibration';
 
+  /// Privacy-safe, versioned summaries of completed Vision sessions.
+  ///
+  /// This deliberately holds only aggregate session results; raw frames and
+  /// landmark time series have no storage key (ADR 0183).
+  static const String visionSessionHistory = 'ss.vision.session_history';
+
+  /// Every persisted Vision datum that the privacy control can erase.
+  ///
+  /// `visionLabCaptureEnabled` has no persistent capture store in this build,
+  /// so Lab data contributes no key here. If that changes, the new key must be
+  /// added to this list before it can be written.
+  static const List<String> visionData = <String>[
+    visionSessionHistory,
+    visionCalibration,
+  ];
+
   // --- AI tutor ------------------------------------------------------------
   /// Versioned documents, recovery index, and inspectable memory facts.
   static const String tutorConversationDocuments =
@@ -119,6 +135,7 @@ abstract final class StorageKeys {
     visionSetupProfile,
     visionCamera,
     visionCalibration,
+    visionSessionHistory,
     tutorConversationDocuments,
     tutorConversationIndex,
     tutorMemoryFacts,
