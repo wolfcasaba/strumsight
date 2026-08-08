@@ -281,7 +281,54 @@ dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosítások
+
+- `vision_session_codec.dart`: explicit, kanonikus kulcssorrendű DTO codec a
+  `VisionSessionResult` allowlistjéből. A mentett mezők: `sessionId`,
+  `startedAt`, `endedAt`, `endReason`, enum-alapú `quality`
+  (`frameCount`, framing, lighting, blur, stability, roiCoverage, overall,
+  setupCue), `calibrationState`, insightonként `code`, `policyVersion`,
+  csak `evidenceIds`, `confidence`, `priority`, `direction`, `capability`,
+  valamint `observedFrameCount`. Nincs kép, URI, pixel, koordináta vagy
+  landmark-idősor. A shape-verzió dispatch future version esetén
+  `unknownEnum`-mal fail-loud.
+- `vision_session_repository.dart`: helyi `JsonCollectionStore`-wrapper;
+  rekordhibánál a generikus per-record skip/karantén-mechanizmust használja.
+  A `maxItems` cap **100**: ez korlátos helyi retentiont ad az
+  aggregate-only előzményeknek, miközben elég a friss edzés-trendhez. Az
+  egy-session törlés újraírt collectionből hagyja ki a rekordot; a
+  `deleteAllVisionData` a historyt, kalibrációt és minden `.corrupt` shadowt
+  nyers `KeyValueStore.remove`-val eltávolít.
+- `vision_export.dart`: a tárolttal azonos DTO-t és a shape-verziót exportálja;
+  constructora csak `KeyValueStore` + codec, hálózati dependency nélkül.
+- `vision_privacy_control.dart`, `storage_keys.dart`, `vision/public.dart`:
+  explicit retention policy, `ss.vision.session_history`, törölhető Vision
+  kulcslista és additív public contract.
+- `vision_privacy_screen.dart` + ARB: standalone privacy panel explicit
+  key-scope listával, sessionenkénti törléssel, exporttal és confirmált
+  delete-all-lal. Route/settings wiring szándékosan nincs ebben a körben.
+- Tesztek: byte-stabil round-trip, future-version skip, record-hiba melletti
+  olvashatóság, nyers-store delete-mátrix, store/export privacy snapshot,
+  confirm-dialog és Vision route network-spy.
+
+### Futtatott ellenőrzések
+
+- `flutter analyze lib/features/vision/data/persistence lib/features/vision/domain/vision_privacy_control.dart lib/core/storage/storage_keys.dart` — zöld, 0 issue.
+- `flutter test test/features/vision/data/vision_session_repository_test.dart test/features/vision/data/vision_export_privacy_test.dart` — zöld, 6 teszt.
+- `flutter test test/features/settings/vision_privacy_screen_test.dart` — zöld, 1 teszt.
+- `flutter test test/app/offline_network_guard_test.dart` — zöld, 4 teszt.
+- `tools/round-gate.sh test/features/vision test/features/settings test/app/offline_network_guard_test.dart` — zöld (format, analyze, célzott Vision/Settings/offline-network tesztek és architecture). Az első gate-kísérlet analyze-lépése a három új teszt redundáns `public.dart`-importjára jelzett; az importok eltávolítása után a kötelező gate sikeresen lefutott.
+- Valódi-sértés próba: ideiglenesen `landmarkSeries` került a codec DTO-ba;
+  `flutter test test/features/vision/data/vision_export_privacy_test.dart`
+  elvárt módon piros lett (`Actual` kulcslistában `landmarkSeries`), majd a
+  mező vissza lett állítva. A záró gate ezt már a helyreállított állapotban
+  futtatja.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- A briefhez nincs funkcionális eltérés. Valódi korábbi session-shape nem
+  létezik, ezért nincs kitalált legacy migráció.
+- CI-dispatch, PR és merge nem implementer-feladat; nem futtatva.
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -36,6 +36,7 @@ import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_home_screen.dart';
+import 'package:strumsight/features/vision/presentation/screens/vision_session_screen.dart';
 
 import '../support/fake_audio.dart';
 import '../support/fake_auth.dart';
@@ -271,4 +272,24 @@ void main() {
       _expectNoNetwork(harness);
     },
   );
+
+  testWidgets('vision enabled: session route stays offline', (tester) async {
+    final harness = await _bootApp(
+      tester,
+      accountEnabled: false,
+      flags: const FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        visionEnabled: true,
+      ),
+    );
+
+    harness.router.go(AppRoutes.visionSession);
+    await tester.pumpAndSettle();
+
+    expect(harness.router.state.uri.path, AppRoutes.visionSession);
+    expect(find.byType(VisionSessionScreen), findsOneWidget);
+    _expectNoNetwork(harness);
+  });
 }
