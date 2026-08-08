@@ -156,16 +156,19 @@ E05-R17	docs/rounds/e05-r17-auto-guitar-detector-decision.md	codex	0187	done
 E05-R18	docs/rounds/e05-r18-fretting-hand-metric-engine.md	codex	nincs	done
 E05-R19	docs/rounds/e05-r19-picking-hand-stroke-metrics.md	codex	nincs	done
 E05-R20	docs/rounds/e05-r20-posture-metrics-and-safety-policy.md	codex	nincs	pending
-E05-R21	docs/rounds/e05-r21-audio-vision-clock-mapping.md	codex	0170	pending
-E05-R22	docs/rounds/e05-r22-observation-fusion-and-evidence.md	codex	nincs	pending
-E05-R23	docs/rounds/e05-r23-feedback-policy-and-cue-budget.md	codex	nincs	pending
-E05-R24	docs/rounds/e05-r24-vision-session-controller-and-overlay.md	codex	nincs	pending
-E05-R25	docs/rounds/e05-r25-practice-vision-integration.md	codex	nincs	pending
-E05-R26	docs/rounds/e05-r26-song-trainer-vision-integration.md	codex	nincs	pending
-E05-R27	docs/rounds/e05-r27-tutor-analysis-vision-adapters.md	codex	nincs	pending
-E05-R28	docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md	codex	nincs	pending
-E05-R29	docs/rounds/e05-r29-device-tier-performance-thermal.md	codex	nincs	pending
-E05-R30	docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md	codex	nincs	pending
+# ⛔ EMBERI FELFÜGGESZTÉS (2026-08-08, user-döntés): az E05-R20 lezárása UTÁN a lánc megáll.
+#    Az E05-R21..R30 sorok 'hold'-on állnak, amíg a Codex implementer-motor vissza nem tér
+#    (jelenleg engine-override=minimax). Újraindítás: a hold → pending visszaírása ezekben a sorokban.
+E05-R21	docs/rounds/e05-r21-audio-vision-clock-mapping.md	codex	0170	hold
+E05-R22	docs/rounds/e05-r22-observation-fusion-and-evidence.md	codex	nincs	hold
+E05-R23	docs/rounds/e05-r23-feedback-policy-and-cue-budget.md	codex	nincs	hold
+E05-R24	docs/rounds/e05-r24-vision-session-controller-and-overlay.md	codex	nincs	hold
+E05-R25	docs/rounds/e05-r25-practice-vision-integration.md	codex	nincs	hold
+E05-R26	docs/rounds/e05-r26-song-trainer-vision-integration.md	codex	nincs	hold
+E05-R27	docs/rounds/e05-r27-tutor-analysis-vision-adapters.md	codex	nincs	hold
+E05-R28	docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md	codex	nincs	hold
+E05-R29	docs/rounds/e05-r29-device-tier-performance-thermal.md	codex	nincs	hold
+E05-R30	docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md	codex	nincs	hold
 E06-R01	docs/rounds/e06-r01-analyze-v1-baseline-and-adrs.md	codex	0200-0205	hold
 E06-R02	docs/rounds/e06-r02-analysis-document-v2-domain.md	codex	nincs	hold
 E06-R03	docs/rounds/e06-r03-codec-schema-and-legacy-adapter.md	codex	nincs	hold
