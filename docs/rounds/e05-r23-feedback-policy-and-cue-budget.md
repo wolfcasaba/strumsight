@@ -256,7 +256,64 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosítások
+
+- `lib/features/vision/domain/feedback/insight_code.dart` — zárt,
+  lokalizálható `InsightCode` katalógus, immutable `VisionInsight`, és a
+  technikai jelentést nem nyers értékből kitaláló, explicit
+  `FeedbackCandidate` boundary.
+- `lib/features/vision/domain/feedback/feedback_policy.dart` — `e05-r23-v1`
+  verziózott registry; minden kódhoz capability-, confidence-, minimum
+  duration-, cooldown- és prioritás-kapu. A pozitív/negatív küszöb rendre
+  0.70 és 0.85.
+- `lib/features/vision/domain/feedback/cue_budget.dart` — injektált órával
+  működő, egy-cue-s realtime választás; kódonként a cooldown **alatt és
+  pont a határán** elnyom, fölötte újra enged. A session summary
+  determinisztikusan legfeljebb két technikai insightot ad.
+- `lib/features/vision/application/feedback_policy_engine.dart` — a safety
+  guardot production útvonalon, override nélkül futtató evidence→insight
+  engine; nem-megfigyelhető evidence setup-kódot kap, az improvementhez
+  ugyanazt a practice-et, capability-levelt és metrikát követeli.
+- `lib/features/vision/domain/safety/vision_safety_policy.dart` — **11 új**,
+  kizárólag additív katalógus-bejegyzés: 1 `unobservable`, 6
+  `baselineRelative`, 4 `neutralObservation`. A meglévő 9 kulcs és érték,
+  valamint az enum változatlan maradt.
+- `lib/features/vision/public.dart` — a négy új public contract exportja.
+- `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — a 11 `visionInsight*` kulcs
+  additív, en+hu fordítása.
+- `test/features/vision/domain/feedback_policy_test.dart` és
+  `test/features/vision/application/feedback_policy_engine_test.dart` —
+  katalógus/safety/ARB paritás, cooldown, prioritás, 6-cellás
+  confidence-mátrix, maximum-két summary, improvement-comparability,
+  közvetlen experimental evidence és determinisztikus golden-szerű fixture.
+
+### Futtatott parancsok és eredmények
+
+- `flutter gen-l10n` — sikeres (a `l10n.yaml` konfiguráció használatával).
+- `dart format …` — 8 Dart fájl formázva.
+- `flutter test test/features/vision/domain/feedback_policy_test.dart
+  test/features/vision/application/feedback_policy_engine_test.dart` —
+  **11/11 zöld**.
+- Confidence-mátrix számítása:
+
+  ```text
+  $ python3 -c "positive=0.70; negative=0.85; epsilon=0.01; print(f'positive: below={positive-epsilon:.2f}, at={positive:.2f}, above={positive+epsilon:.2f}'); print(f'negative: below={negative-epsilon:.2f}, at={negative:.2f}, above={negative+epsilon:.2f}')"
+  positive: below=0.69, at=0.70, above=0.71
+  negative: below=0.84, at=0.85, above=0.86
+  ```
+
+- Valódi-sértés próba: `negativeConfidenceThreshold: 0.85 → 0.70`
+  ideiglenes módosítása után a célzott teszt **piros** volt
+  (`Invalid argument(s): Feedback policy gates are invalid.`); az érték
+  visszaállítása után a fenti 11/11 célzott teszt újra zöld.
+- `git diff --check` — zöld.
+- `tools/round-gate.sh test/features/vision test/core/l10n_parity_test.dart`
+  — **zöld, exit 0**: format; analyze; `test/features/vision` **378** teszt;
+  `test/core/l10n_parity_test.dart` **3** teszt; architecture; secret; l10n.
+
+### Eltérés és nem futtatott ellenőrzések
+
+Nincs eltérés a brief-től. CI-dispatch/PR/merge az orchestrátor feladata.
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -95,34 +95,49 @@ class VisionSafetyPolicy {
 
   /// The closed catalog. Keys are claim codes; values are the
   /// declared class. The catalog only contains ALLOWED classes.
-  static const Map<String, VisionSafetyClaimClass> catalog =
-      <String, VisionSafetyClaimClass>{
-        // Shoulder asymmetry (SDD §21).
-        'postureShoulderAsymmetryIncreasedVsBaseline':
-            VisionSafetyClaimClass.baselineRelative,
-        'postureShoulderAsymmetryReducedVsBaseline':
-            VisionSafetyClaimClass.baselineRelative,
+  static const Map<String, VisionSafetyClaimClass>
+  catalog = <String, VisionSafetyClaimClass>{
+    // Shoulder asymmetry (SDD §21).
+    'postureShoulderAsymmetryIncreasedVsBaseline':
+        VisionSafetyClaimClass.baselineRelative,
+    'postureShoulderAsymmetryReducedVsBaseline':
+        VisionSafetyClaimClass.baselineRelative,
 
-        // Torso lean (SDD §21).
-        'postureTorsoLeanShiftedVsBaseline':
-            VisionSafetyClaimClass.baselineRelative,
-        'postureTorsoLeanReturnedToBaseline':
-            VisionSafetyClaimClass.baselineRelative,
+    // Torso lean (SDD §21).
+    'postureTorsoLeanShiftedVsBaseline':
+        VisionSafetyClaimClass.baselineRelative,
+    'postureTorsoLeanReturnedToBaseline':
+        VisionSafetyClaimClass.baselineRelative,
 
-        // Elbow drift (SDD §21).
-        'postureElbowDriftObserved': VisionSafetyClaimClass.neutralObservation,
-        'postureElbowDriftReducedVsBaseline':
-            VisionSafetyClaimClass.baselineRelative,
+    // Elbow drift (SDD §21).
+    'postureElbowDriftObserved': VisionSafetyClaimClass.neutralObservation,
+    'postureElbowDriftReducedVsBaseline':
+        VisionSafetyClaimClass.baselineRelative,
 
-        // Neck proxy (SDD §21).
-        'postureNeckProxyShiftedVsBaseline':
-            VisionSafetyClaimClass.baselineRelative,
-        'postureNeckProxyUnavailable': VisionSafetyClaimClass.unobservable,
+    // Neck proxy (SDD §21).
+    'postureNeckProxyShiftedVsBaseline':
+        VisionSafetyClaimClass.baselineRelative,
+    'postureNeckProxyUnavailable': VisionSafetyClaimClass.unobservable,
 
-        // Aggregate, narration-free signposts (R23 / R27 will flesh
-        // out the rendering pipeline).
-        'postureMetricsNotObservable': VisionSafetyClaimClass.unobservable,
-      };
+    // Aggregate, narration-free signposts (R23 / R27 will flesh
+    // out the rendering pipeline).
+    'postureMetricsNotObservable': VisionSafetyClaimClass.unobservable,
+
+    // E05-R23 feedback policy insight catalogue (ADR 0191). These are
+    // stable, rendering-free codes; the localized text belongs in ARB.
+    'visionInsightSetupNotObservable': VisionSafetyClaimClass.unobservable,
+    'visionInsightFrettingStable': VisionSafetyClaimClass.neutralObservation,
+    'visionInsightFrettingFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightFrettingImproved': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPickingStable': VisionSafetyClaimClass.neutralObservation,
+    'visionInsightPickingFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPickingImproved': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPostureStable': VisionSafetyClaimClass.neutralObservation,
+    'visionInsightPostureFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPostureImproved': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightExperimentalObservation':
+        VisionSafetyClaimClass.neutralObservation,
+  };
 
   /// The forbidden-class set is exposed here so the guard and the
   /// catalog-validation tests share a single source of truth.

@@ -1243,5 +1243,16 @@
   "guitarCalibrationEntryOrientation": "A kameraelforgatás megváltozott. Újrakalibrálás szükséges.",
   "guitarCalibrationEntryZoom": "A kamera zoom a tolerancián túl változott. Újrakalibrálás szükséges.",
   "guitarCalibrationEntryTimestamp": "A kalibráció 30 napnál régebbi. Újrakalibrálás szükséges.",
-  "guitarCalibrationEntryGeometry": "A mentett geometria degenerált. Újrakalibrálás szükséges."
+  "guitarCalibrationEntryGeometry": "A mentett geometria degenerált. Újrakalibrálás szükséges.",
+  "visionInsightSetupNotObservable": "Állítsd be a kamerát a vizuális visszajelzés folytatásához.",
+  "visionInsightFrettingStable": "A fogásmintád stabil.",
+  "visionInsightFrettingFocus": "Tartsd egyenletesen a fogásmintát.",
+  "visionInsightFrettingImproved": "A fogásmintád összehasonlítható gyakorlásban javult.",
+  "visionInsightPickingStable": "A pengetési mintád stabil.",
+  "visionInsightPickingFocus": "Tartsd egyenletesen a pengetési mintát.",
+  "visionInsightPickingImproved": "A pengetési mintád összehasonlítható gyakorlásban javult.",
+  "visionInsightPostureStable": "A testtartási mintád stabil.",
+  "visionInsightPostureFocus": "Tartsd egyenletesen a testtartási mintát.",
+  "visionInsightPostureImproved": "A testtartási mintád összehasonlítható gyakorlásban javult.",
+  "visionInsightExperimentalObservation": "Kísérleti vizuális megfigyelés érhető el."
 }

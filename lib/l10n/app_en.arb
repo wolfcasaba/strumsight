@@ -1309,5 +1309,16 @@
   "guitarCalibrationEntryOrientation": "The camera rotation changed. Recalibrate to apply.",
   "guitarCalibrationEntryZoom": "The camera zoom changed beyond the tolerance. Recalibrate to apply.",
   "guitarCalibrationEntryTimestamp": "This calibration is older than 30 days. Recalibrate to refresh.",
-  "guitarCalibrationEntryGeometry": "The saved geometry is degenerate. Recalibrate to start over."
+  "guitarCalibrationEntryGeometry": "The saved geometry is degenerate. Recalibrate to start over.",
+  "visionInsightSetupNotObservable": "Adjust the camera setup to continue visual feedback.",
+  "visionInsightFrettingStable": "Fretting pattern is stable.",
+  "visionInsightFrettingFocus": "Keep the fretting pattern consistent.",
+  "visionInsightFrettingImproved": "Fretting pattern improved in comparable practice.",
+  "visionInsightPickingStable": "Picking pattern is stable.",
+  "visionInsightPickingFocus": "Keep the picking pattern consistent.",
+  "visionInsightPickingImproved": "Picking pattern improved in comparable practice.",
+  "visionInsightPostureStable": "Posture pattern is stable.",
+  "visionInsightPostureFocus": "Keep the posture pattern consistent.",
+  "visionInsightPostureImproved": "Posture pattern improved in comparable practice.",
+  "visionInsightExperimentalObservation": "An experimental visual observation is available."
 }
