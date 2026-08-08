@@ -1,6 +1,8 @@
 library;
 
 export 'domain/vision_setup_profile.dart';
+export 'domain/performance/vision_device_tier.dart';
+export 'domain/performance/vision_performance_summary.dart';
 export 'domain/sync/vision_clock.dart';
 export 'domain/sync/clock_mapping.dart';
 export 'domain/sync/sync_quality.dart';
@@ -35,6 +37,7 @@ export 'domain/geometry/geometry_tracker.dart';
 export 'application/calibration_loss_machine.dart';
 export 'application/vision_session_controller.dart';
 export 'application/vision_session_state.dart';
+export 'application/vision_degradation_policy.dart';
 export 'domain/metrics/fretting_metric_engine.dart';
 export 'domain/metrics/fretting_metrics.dart';
 export 'domain/metrics/metric_definition.dart';
@@ -51,6 +54,8 @@ export 'domain/integration/vision_practice_contract.dart';
 export 'domain/safety/safety_claim_guard.dart';
 export 'domain/safety/vision_safety_policy.dart';
 export 'data/guitar/edge_geometry_tracker.dart';
+export 'data/performance/device_tier_benchmark.dart';
+export 'data/performance/thermal_state_adapter.dart';
 export 'data/persistence/vision_calibration_codec.dart';
 export 'data/persistence/vision_calibration_repository.dart';
 export 'data/persistence/vision_session_codec.dart';

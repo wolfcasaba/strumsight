@@ -64,6 +64,8 @@ A méréshez használt forgatókönyv: nyitott akkordok váltogatása (G–C–D
 | Eszköz-hőmérséklet emelkedése (5 perc alatt) | < 5°C | < 10°C | PENDING | PENDING | PENDING | PENDING |
 | Thermal throttle észlelve? (5 perc alatt) | NEM | NEM | PENDING | PENDING | PENDING | PENDING |
 | Thermal throttle észlelve? (15 perc alatt, soak) | NEM | max 1 enyhe fokozat | PENDING | PENDING | PENDING | PENDING |
+| Thermal throttle észlelve? (10 perc alatt, soak) | PENDING — E05-R29 terv | PENDING | PENDING (Pixel 6a) | PENDING | PENDING | PENDING |
+| Thermal throttle észlelve? (30 perc alatt, soak) | PENDING — E05-R29 terv | PENDING | PENDING (Samsung Galaxy A54) | PENDING | PENDING | PENDING |
 
 ### 2.5 Audio impact (ADR 0182)
 

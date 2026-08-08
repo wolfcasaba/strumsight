@@ -225,7 +225,71 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `lib/features/vision/domain/performance/vision_device_tier.dart` — a már
+  létező, importált `VisionDeviceTier { basic, mid, flagship }` enumra épülő,
+  eszköznév-mentes frame-feldolgozási benchmark. `≤33 ms → flagship`,
+  `34..66 ms → mid`, `≥67 ms → basic`; a profilok rendre `8/8/192/15`,
+  `12/6/256/24`, `15/4/320/30` (hand FPS / pose cadence / input px / overlay
+  FPS).
+- `lib/features/vision/domain/performance/vision_performance_summary.dart` —
+  privacy-safe session-összegzés: tier, alkalmazott lépcsők, dropped-frame
+  arány, freshness minimum/átlag/maximum, degradáció-időbélyegek és a
+  `thermalSource` mező (`platform` vagy `heuristic`). A
+  `VisionPerformanceMonitor` csak a számlálókat és freshness-aggregátumokat
+  tartja; a `unavailable` gyártó benchmarkhibát explicit, önálló eredményként
+  közöl.
+- `lib/features/vision/application/vision_degradation_policy.dart` — ADR 0182
+  szerinti hétlépcsős döntés. A recovery-hiszterézis: hand FPS belépés/kilépés
+  `12/13`, `10/11`, `8/9`, `6/7`, `4/5`; a hand-FPS-csökkentés Pose FPS
+  `5/6`; vision-disabled audio-latency növekmény `15/<12 ms`. Az egy FPS-es,
+  illetve audio esetén 3 ms-es rés megakadályozza a határértéki flappelést;
+  egy kiértékelés legfeljebb egy állapotátmenetet ad.
+- `lib/features/vision/data/performance/device_tier_benchmark.dart` — a hibás
+  benchmarkmintát `unavailable` eredménnyé alakítja.
+- `lib/features/vision/data/performance/thermal_state_adapter.dart` — platform
+  jel esetén azt jelöli `platform` forrásnak, egyébként determinisztikus,
+  0..100-ra korlátos dropped-frame/freshness/feldolgozási-idő heurisztikát
+  használ. Plugin és valós provider-wiring nem került be.
+- `lib/features/vision/public.dart` — az új performance contractok additív
+  exportja.
+- A benchmark-sablon két új, PENDING állapotú 10 és 30 perces soak sort kapott
+  (Pixel 6a, illetve Samsung Galaxy A54); a meglévő 15 perces sor változatlan.
+
+### Mért tesztadatok és ellenőrzések
+
+- Tier-határ cellahármasok:
+
+  ```text
+  $ python3 -c "thresholds=(33,66); print('; '.join(f'{threshold}: {threshold - 1}/{threshold}/{threshold + 1} ms' for threshold in thresholds))"
+  33: 32/33/34 ms; 66: 65/66/67 ms
+  ```
+
+- RED fázis: az új tesztfájlok az implementáció előtt a hiányzó performance
+  contractok miatt fordítási hibával megálltak.
+- Valódi-sértés próba: a policyt ideiglenesen úgy mutáltam, hogy `Hand FPS <
+  12` azonnal `visionDisabled` legyen. `flutter test
+  test/features/vision/application/vision_degradation_policy_test.dart` 11
+  hibával piros lett (a legenyhébb és a köztes lépcsőket váró mátrixsorok
+  ténylegesen `visionDisabled` értéket kaptak). A mutáció visszaállítva.
+- Visszaállítás után: `dart format` az érintett Dart fájlokon → változtatás
+  nélkül kész; `flutter test test/features/vision/domain/vision_device_tier_test.dart
+  test/features/vision/application/vision_degradation_policy_test.dart
+  test/features/vision/data/thermal_state_adapter_test.dart` → **26 teszt
+  zöld**.
+- Kötelező gate: `tools/round-gate.sh --result-json
+  /tmp/e05-r29-gate-result.json test/features/vision` → **pass**
+  (`exit_code: 0`, `format`, `analyze`, teljes `test/features/vision`,
+  architecture, secrets és l10n zöld).
+
+### Eltérések és nem futtatott ellenőrzések
+
+- A landmark providerek és az audio pipeline nem lettek módosítva vagy
+  huzalozva; ez a brief/ADR 0196 által előírt későbbi kör felelőssége.
+- Valós eszközös benchmark, 10/15/30 perces soak és memory-leak mérés nem
+  futott: HORIZON eszközmátrix, a dokumentumba PENDING tervsor került.
+- A kötelező teljes gate a commit előtti végső ellenőrzésként következik.
 
 ## 11. Review — a független reviewer tölti ki
 
