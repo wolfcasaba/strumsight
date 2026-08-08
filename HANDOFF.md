@@ -4,116 +4,136 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R24 MERGED — Vision session controller and realtime overlay:**
-> `VisionSessionController` + immutable `VisionSessionState` állapotgép:
-> explicit permission → setup → calibration → exkluzív `visionPractice` lease
-> → running/paused lifecycle, a frame-listener nem olvas pixel-bufferből és
-> nem ír frame-et state-be. `VisionSession` + raw-media-mentes
-> `VisionSessionResult`: a finalization future-őr Stop/route-leave/
-> app-háttér/hiba/dispose versenyben is egyetlen aggregate-et és
-> listener-emissziót ad; a close sorrend stream → capture → lease, az R05
-> `CameraSessionCoordinator.revokeActive()` revoke-pathját tiszteletben
-> tartva. `VisionPreviewOverlay`: hand/pose/guitar minőség-chip + kizárólag
-> az R23 `CueBudget.selectRealtime` által átadott EGY cue (a UI nem választ/
-> rangsorol); debug landmark réteg alapból OFF (SDD Ch6 §2.2/§24.2 +
-> [ADR 0178](docs/adr/0178-vision-privacy-by-default.md) szellemében); a
-> landmark mapping az R07 `PreviewFit` → `CameraTransform.previewToOverlay`
-> utat használja (NEM az R15 `GuitarLandmarkMapper` guitar-space
-> homographyja). Új `/vision/session` route kizárólag a meglévő
-> `visionEnabled` flag mögött — SZÁNDÉKOSAN nincs új per-feature flag
-> (`feature_flags.dart` nincs az `allowed_paths`-on). **Nincs új ADR** — a
-> brief §5 pont 5 elavult „ADR 0161" hivatkozása a batch-index §3
-> shift-táblája szerint [ADR 0178](docs/adr/0178-vision-privacy-by-default.md)-ra
-> javítva (ugyanaz a minta, mint E05-R10/R11/R16 §0.0 R1-nél). Implementer
-> **Codex (Terra)** (kezdeti forduló + **2 javító kör**), orchesztrátor/
-> reviewer **Claude Sonnet 5**, dedikált **security-reviewer** ágens
-> (`risk = "high"`). PR [#197](https://github.com/wolfcasaba/strumsight/pull/197),
-> squash `e9257f4`.
+> (E05-R25 MERGED — Practice Engine vision integration:** opcionális vision-
+> technika-bizonyíték a Practice Engine-hez, az audio-pontozás bitre
+> változatlanságával. `VisionPracticeContract` (`lib/features/vision/domain/integration/`,
+> a vision oldal szűk, exportált API-ja `vision/public.dart`-on át) — három
+> capability-gated pilot (Small Strum Motion, Down/Up Symmetry, Chord Change
+> Economy), stabil `vision.pilot.*` névtérrel, SZÁNDÉKOSAN nem
+> `BuiltinPracticeCatalog`-bejegyzésként. `PracticeVisionAdapter`
+> (`lib/features/practice/data/vision/`) — a `visionPracticeQualityFor()`
+> determinisztikusan `VisionQualitySummary.overall`-ból származtatja a
+> kontraktus-szintű `unavailable`/`degraded`/`good` hármast
+> (`good→good`, `needsImprovement→degraded`, `notObservable`/hiányzó
+> session `→unavailable`); hiányzó capability vagy nem-`good` minőség
+> mindig `audioOnly` módra esik vissza, a gyakorlat SOSEM letiltott.
+> `PracticeSessionResult` additív, implicit-null `VisionSessionResult?
+> vision` mezőt kap (`operator==`/`hashCode` egyszerű delegálással bővítve —
+> a `VisionSessionResult`-nak nincs érték-egyenlősége, szándékosan); a
+> meglévő 12 hívóhely (1 production + 11 teszt) változatlanul fordul. Új,
+> **önálló** `PracticeVisionDimension` summary-widget — a
+> `practice_result_screen.dart`-ba drótozás SZÁNDÉKOSAN egy következő kör
+> dolga (nulla regressziós kockázat, ugyanaz a minta, mint az Epic 3 Song
+> Trainer sorozatban). **ÚJ ADR [0192](docs/adr/0192-practice-vision-integration-contract.md)**
+> (a brief `nincs` mezője szerint az orchesztrátor írta a pre-flightban).
+> Implementer **Codex (Terra)** (egyetlen implementációs forduló — egy
+> köztes `stopped` megállással, ami NEM az implementer munkájának hibája
+> volt, ld. lent), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+> **security-reviewer** ágens (`risk = "high"`). PR
+> [#199](https://github.com/wolfcasaba/strumsight/pull/199), squash `9b608cf`.
 >
-> **Pre-flight mért tesztútvonal-rés (§0.0 R4) — a scope-audit helyesen
-> `stopped`-ra váltott:** Terra a §6 acceptance criteria szerint
-> implementált, de három eredetileg felsorolt teszt-fájlnév helyett más
-> bontásban adta a lefedettséget (`vision_session_lifecycle_test.dart`
-> helyett a `vision_session_controller_test.dart`-ba olvadt; a „screen test"
-> helyett két célzottabb fájl: `vision_preview_overlay_test.dart` +
-> `vision_session_routing_test.dart`, plusz két golden PNG) — egyik sem volt
-> az `allowed_paths`-on. Pótolva 4 pontos útvonallal (nem könyvtár-prefix),
-> a §6 saját, már elfogadott acceptance-köréhez tartozó fájlokra szűkítve.
+> **Pre-flight mérések (§0.0, 8 pont) — a legfontosabb három:** (1)
+> `PracticeSessionResult`-nak nincs saját JSON-kódja (`grep` nulla találat) —
+> a ténylegesen perzisztált alak `PracticeHistoryEntry`, ami `allowed_paths`-on
+> kívül esik és R28 (persistence) dolga; a brief §6 negyedik cellája
+> („deszerializációs teszt") ezért revideálva három futtatható próbára
+> (konstrukciós kompatibilitás + `vision:null` egyenlőség-regresszió +
+> mapper-érintetlenség — mindhármat a `practice_session_result_vision_test.dart`
+> adja). (2) A `practice → vision/public.dart` cross-feature import
+> mechanikusan legális mindkét gépi őrrel (`_isFeaturePublicBarrel` a
+> `public.dart` célt nézi, nem tranzitív; a domain-purity-scanner csak a
+> fájl saját, közvetlen import-sorát) — nincs allowlist-bővítés (12
+> allowlisted deviation, változatlan a R24 óta). (3) A három pilot
+> gyakorlat NEM a `BuiltinPracticeCatalog`-ba kerül (az a fájl nincs
+> `allowed_paths`-on) — a kör saját új fájljain belüli adat.
 >
-> **Review:** [docs/reviews/e05-r24-vision-session-controller-and-overlay-review.md](docs/reviews/e05-r24-vision-session-controller-and-overlay-review.md)
-> — **APPROVED 2 javító kör után**. Első pass: **F1 BLOCKER** (a `start()`
-> async acquire-ablakában, mielőtt a `_session` létrejön, a stop/leaveRoute/
-> dispose utak csendben nullát adtak vissza, lease-felszabadítás és eredmény
-> nélkül) + **F2 MAJOR** (az állapotgép-mátrix csak EGY invalid-transition
-> cellát ellenőrzött) + **F3 MINOR** (`auditFields` kézzel karbantartott
-> string-literál, nem a tényleges osztálymezőkből származtatva). Javító kör
-> #1 (`3060cef`) mindhármat zárta, de a review saját, kézzel végzett
-> független próbatesztje ekkor egy ÚJ, a javítás SAJÁT regressziójaként
-> bevezetett BLOCKER-t talált (**F4** — a `dispose()` kivétellel elszállt a
-> `start()` async ablakában, mert a javítás a korábbi silent-leak-et
-> megelőző disposed-guardokat is eltávolította). Javító kör #2 (`51572a5`)
-> `ref.mounted` guard mintával (`auth_providers.dart`/`settings_sync.dart`
-> precedens) zárta, 3-szcenáriós próbával (dispose/app-háttér/stop mind a
-> `start()` ablakban) újra-ellenőrizve. A **dedikált security-review**
-> (`risk = "high"` miatt kötelező) függetlenül, más módszerrel
-> (valós-eszköz-időzítés érveléssel, nem konstruált race-próbával) ugyanarra
-> az F1 gyökérokra jutott. Mind a négy lelet SAJÁT kézzel, a shippelt diffen
-> (nem az implementer önjelentésén) megerősítve, izolált `/tmp` klónokban,
-> minden javító kör UTÁN újrafuttatott gate-tel. **Végállapot: 0 nyitott
-> BLOCKER/MAJOR/MINOR.**
+> **Köztes `stopped` a pre-flight SAJÁT hibája miatt, önjavítva dispatch
+> közben:** az első Terra-forduló helyesen állt meg, mert
+> `docs/adr/0192-…md` (az orchesztrátor saját, dispatch előtti
+> pre-flight-commitja) hiányzott a brief `allowed_paths`-listájából — [ADR
+> 0191](docs/adr/0191-feedback-policy-and-cue-budget.md) (E05-R23)
+> precedense szerint a saját ADR-útvonalat is fel kell venni a listára, ez
+> a pre-flightban kimaradt. Terra addigi, uncommitolt munkája (11 fájl, mind
+> az eredeti listán) a megállás pillanatában HIBÁTLANNAK bizonyult —
+> dokumentált §0.0/8 brief-revízióval pótolva a hiányzó útvonalat, a
+> munkapéldány fetch+fast-forward-olva, majd a **folytatás UGYANAZZAL a
+> Terra session-nel** véve fel a fonalat: commit, teljes gate, push, `done`.
 >
-> **Zöld kapu (exact-SHA `e069140`, a H5 self-heal utáni tip):** Full Gate
-> [31260796777](https://github.com/wolfcasaba/strumsight/actions/runs/31260796777)
+> **Mért operatív részlet (klón-alapú dispatch):** az izolált munkapéldány
+> `origin`-je a HELYI fő-repóra mutat (`git clone <fő-repó> <cél>`
+> szerződés), ezért az implementer saját „push"-a a fő-repóba megy, nem
+> közvetlenül GitHubra — az orchesztrátornak a fő-repóból egy MÁSODIK
+> push-szal kell továbbítania a valódi origin-re. Ha ezt kihagyja, a
+> kör-jelzés „push kész" állítása hamis marad annak ellenére, hogy a
+> munkapéldányban a commit valóban megtörtént — mindig `git ls-remote`-tal
+> (vagy `gh api .../commits/<branch>`) ellenőrizd a GitHubon lévő tényleges
+> HEAD-et, ne a jelzésfájl szövegét.
+>
+> **Review:** [docs/reviews/e05-r25-practice-vision-integration-review.md](docs/reviews/e05-r25-practice-vision-integration-review.md)
+> — **APPROVED, 0 javító kör** (0 nyitott BLOCKER/MAJOR, 1 NOTE — egy nem
+> hívott ARB-kulcs, ártalmatlan). Saját izolált `/tmp` klónban futtatott
+> gate + saját falszifikációs próba (a vision-változat `scorePoints`-ját
+> 900→999-re rontva a parity-fixture PIROSRA fordult, majd visszaállítva).
+> A **dedikált security-review**
+> ([docs/reviews/e05-r25-practice-vision-integration-security.md](docs/reviews/e05-r25-practice-vision-integration-security.md))
+> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 1 MINOR + 4 NOTE. A MINOR (nem
+> blokkoló, R26 pre-flight bemenet): a `vision/public.dart` barrel nyers
+> landmark/pose/geometry/koordináta-típusokat és landmark-provider
+> osztályokat is re-exportál az e körben ténylegesen használt aggregát
+> típusok mellett, és egyik gépi őr sem korlátozza, MELYIK szimbólumot
+> importálja a fogyasztó a barrelen át (csak azt nézik, hogy a cél
+> `/public.dart`-ra végződik) — R25 nyitja meg az ELSŐ `practice → vision`
+> élt, MA nincs áthágás (R25 kódja egyetlen nyers típust sem használ,
+> grep-pel megerősítve), de mivel E05-R26 (Song Trainer vision-integráció)
+> ugyanezt a barrelt fogja importálni, a javítás (szimbólum-szintű negatív
+> guard vagy a barrel domain-safe/raw-UI szétválasztása) **az R26
+> pre-flightja előtt** esedékes — ld. §3 „Known blockers/risks". **Végállapot:
+> 0 nyitott BLOCKER/MAJOR.**
+>
+> **Zöld kapu (exact-SHA `fb93cb7`, a review-dokumentumok utáni tip):** Full
+> Gate [31264278473](https://github.com/wolfcasaba/strumsight/actions/runs/31264278473)
 > **success** + Router CI
-> [31260700597](https://github.com/wolfcasaba/strumsight/actions/runs/31260700597)
-> **success**. Squash-merge után a friss `main`-en (`e9257f4`) is zöld:
-> Router CI [31261354113](https://github.com/wolfcasaba/strumsight/actions/runs/31261354113)
-> + izolált klónban újrafuttatott teljes pytest suite (347/347).
->
-> **H5 self-heal (ADR 0112) — a lánc kétszer megállt merge előtt,
-> ÖNJAVÍTVA:** a kör SAJÁT §0.0 R4 pre-flight revíziója (4 test/golden-útvonal
-> az `allowed_paths`-on, ld. fent) UI/ARB=9 fölé tolta a core=6-ot, ami a
-> `tools/tests/test_pipeline_integration.py::test_open_rounds_follow_the_measured_engine_rule`
-> mért motor-szabályát `minimax`-ra váltotta — de `docs/execution/pipeline-queue.tsv`
-> E05-R24 sora még `codex` volt → Router CI kétszer piros (`ffef5d7`,
-> `80dda006`) ugyanarra a subTest-re, a kör review-approved, gate-zöld
-> állapotban is merge-blokkolt maradt. Önjavító kör (1/3 kísérlet)
-> reprodukálta a mért UI/ARB=9/core=6 összetételt, PR
-> [#198](https://github.com/wolfcasaba/strumsight/pull/198) szinkronizálta a
-> queue-t `minimax`-ra (red→green regresszióval bizonyítva, a mérce
-> érintetlen), majd a fixet a kör saját ágába merge-elte, újra zöldre
-> dispatch-elte a CI-t, és a már review-approved PR-t (nem redone review) a
-> szabvány gate-en át merge-elte. Lecke: **L187**.
->
-> ## ✅ E05-R23 KÉSZ — Feedback policy and realtime cue budget (2026-08-08)
->
-> **E05-R23** MERGED (PR [#196](https://github.com/wolfcasaba/strumsight/pull/196),
-> squash `b54490e`; implementer **Codex (Terra)** (kezdeti + 1 javító kör),
-> orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
-> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> **ÚJ ADR 0191** (feedback policy és cue budget). Review:
-> [docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md](docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md)
-> + [security](docs/reviews/e05-r23-feedback-policy-and-cue-budget-security.md)
-> — **APPROVED 1 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR (1 MINOR
-> deferred, follow-up). Lecke: **L185**, **L186**.
+> [31264279440](https://github.com/wolfcasaba/strumsight/actions/runs/31264279440)
+> **success** (mindkettő manuálisan újra-dispatch-elve az exact tipre, mert
+> az utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+> trigger-útvonalán sem — ugyanaz a minta, mint E05-R20/21/22/23-nál).
+> Squash-merge után a friss `main`-en (`9b608cf`) is zöld:
+> `tools/round-gate.sh test/features/practice test/features/vision`
+> izolált-elvű újrafuttatása mind a 7 lépésre (913+522 teszt).
 >
 > ## ✅ E05-R24 KÉSZ — Vision session controller and realtime overlay (2026-08-08)
 >
 > **E05-R24** MERGED (PR [#197](https://github.com/wolfcasaba/strumsight/pull/197),
 > squash `e9257f4`; implementer **Codex (Terra)** (kezdeti + 2 javító kör),
 > orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
-> Lásd a fenti „Last updated" blokk a teljes pre-flight/review/H5-self-heal
-> történetért — ez a szakasz csak a rövid hivatkozási pont a korábbi körök
-> mintája szerint. **Nincs új ADR.** Review:
+> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> **Nincs új ADR.** Review:
 > [docs/reviews/e05-r24-vision-session-controller-and-overlay-review.md](docs/reviews/e05-r24-vision-session-controller-and-overlay-review.md)
 > + [security](docs/reviews/e05-r24-vision-session-controller-and-overlay-security.md)
 > — **APPROVED 2 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR. **H5
 > self-heal** (ADR 0112, PR [#198](https://github.com/wolfcasaba/strumsight/pull/198)):
-> queue engine/brief mért-szabály szinkron — ld. fent. Lecke: **L187**.
+> queue engine/brief mért-szabály szinkron. Lecke: **L187**.
 >
-> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R25**
-> (`practice-vision-integration`) `pending`, engine-override
-> `terra` (`.pipeline/engine-override`) — a lánc fut tovább.
+> ## ✅ E05-R25 KÉSZ — Practice Engine vision integration (2026-08-08)
+>
+> **E05-R25** MERGED (PR [#199](https://github.com/wolfcasaba/strumsight/pull/199),
+> squash `9b608cf`; implementer **Codex (Terra)** (egyetlen forduló, köztes
+> pre-flight-eredetű `stopped` önjavítva), orchesztrátor/reviewer **Claude
+> Sonnet 5**, dedikált security-reviewer). Lásd a fenti „Last updated" blokk
+> a teljes pre-flight/review/security történetért — ez a szakasz csak a
+> rövid hivatkozási pont a korábbi körök mintája szerint. **ÚJ ADR
+> [0192](docs/adr/0192-practice-vision-integration-contract.md).** Review:
+> [docs/reviews/e05-r25-practice-vision-integration-review.md](docs/reviews/e05-r25-practice-vision-integration-review.md)
+> + [security](docs/reviews/e05-r25-practice-vision-integration-security.md)
+> — **APPROVED 0 javító kör után**, 0 nyitott BLOCKER/MAJOR. 1 MINOR
+> (security, barrel-szimbólum-rés) → R26 pre-flight bemenet, ld. fent és §3.
+> Lecke: **L188**, **L189**, **L190**.
+>
+> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R26**
+> (`song-trainer-vision-integration`) `pending`, engine-override
+> `terra` (`.pipeline/engine-override`) — a lánc fut tovább. **R26
+> pre-flightja olvassa el a fenti security-MINOR-t** (barrel-szimbólum-rés)
+> mielőtt a `vision/public.dart`-ot importálja a Song Trainer oldalról.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -124,11 +144,12 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R24 zárása, H5 self-heal utáni close-out):
-> E05-R22 rövid bannere törölve (a részletes E05-R22 történet már korábban
-> archiválva volt); E05-R23 részletes narratívája archiválva
-> (`docs/handoff-archive.md`), rövid bannere megmaradt/frissült; E05-R24
-> részletes narratívája + rövid bannere felkerült.
+> Mért diéta: 2026-08-08 (E05-R25 zárása): E05-R23 rövid bannere törölve (a
+> részletes E05-R23 történet már korábban archiválva volt); E05-R24
+> részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
+> bannere megmaradt/frissült (a „lásd fent" hivatkozás javítva, mivel a
+> részlet már nem a fejlécben él); E05-R25 részletes narratívája + rövid
+> bannere felkerült.
 
 ## 1. Current release state
 
@@ -457,36 +478,46 @@
   86,7% vs heurisztika 38,9%, r164 A/B) — akkord-pontosságra valós felvételen
   nincs. **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez a kettő
   nincs meg → lásd §6 „Kötelező sorrend".
+- **`vision/public.dart` barrel-szimbólum-rés (mérve E05-R25 dedikált
+  security-review, MINOR, nem blokkoló):** a barrel aggregát (privacy-safe)
+  ÉS nyers landmark/pose/geometry/koordináta-típusokat + landmark-provider
+  osztályokat is exportál; sem `tool/check_architecture.dart`, sem
+  `test/features/practice/domain/domain_purity_test.dart` nem korlátozza,
+  MELYIK szimbólumot importálja egy fogyasztó a barrelen át — csak azt
+  nézik, hogy a cél `/public.dart`-ra végződik. E05-R25 (az ELSŐ
+  `practice → vision` él) egyetlen nyers típust sem használ, tehát MA nincs
+  áthágás. **E05-R26 (Song Trainer vision-integráció) pre-flightja ELŐTT
+  javítandó** (szimbólum-szintű negatív guard vagy a barrel domain-safe/
+  raw-UI szétválasztása), mert R26 ugyanezt a barrelt fogja importálni.
+  Részletek: [`docs/reviews/e05-r25-practice-vision-integration-security.md`](docs/reviews/e05-r25-practice-vision-integration-security.md)
+  MINOR-1, [`docs/LESSONS.md`](docs/LESSONS.md) L190.
 
 ## 4. Current branch
 
-`main` @ [PR #196](https://github.com/wolfcasaba/strumsight/pull/196), squash
-`b54490e` (E05-R23, feedback policy and realtime cue budget). Pure Dart
-domain + teszt-diff → Full Gate
-[31255066248](https://github.com/wolfcasaba/strumsight/actions/runs/31255066248)
-+ Router CI [31255087266](https://github.com/wolfcasaba/strumsight/actions/runs/31255087266)
-**success** az exact merge-előtti tip `943be13`-n (mindkettő kézzel
+`main` @ [PR #199](https://github.com/wolfcasaba/strumsight/pull/199), squash
+`9b608cf` (E05-R25, Practice Engine vision integration). Pure Dart
+domain+adapter+widget+teszt diff → Full Gate
+[31264278473](https://github.com/wolfcasaba/strumsight/actions/runs/31264278473)
++ Router CI [31264279440](https://github.com/wolfcasaba/strumsight/actions/runs/31264279440)
+**success** az exact merge-előtti tip `fb93cb7`-n (mindkettő kézzel
 dispatch-elve az exact SHA-ra, mert az utolsó push csak `docs/reviews/`-t
 érintett, ami nincs egyik workflow trigger-útvonalán sem — ugyanaz a minta,
-mint E05-R20/R21/R22-nél). Review **APPROVED 1 javító kör után** — F1
-BLOCKER (a setup-elsőbbség nem tartott a setup cue saját cooldownja alatt; a
-szállított teszt saját `reason`-je a hibás kimenetet dokumentálta elvárásként,
-`211d7a8` javította, a tesztet valós előrehaladó órára írva át) + F2/F3 MAJOR
-(a `comparisonEvidence` observability/confidence-kapun sem ment át, és az
-emittált confidence a beengedő küszöb alá eshetett) + 4 MINOR (`211d7a8`
-mindegyiket zárta). A dedikált security-review (`risk = "high"`) függetlenül,
-valós futtatott próbákkal ugyanezekre a leletekre jutott. Mindhárom
-(BLOCKER+2×MAJOR) és mind a négy MINOR saját kézzel, izolált `/tmp` klónban
-újramérve a javító kör után, nem az implementer önjelentésére hagyatkozva.
-Az `origin/main` a dispatch óta **nem mozdult** (`6afcede`), rebase nem
-kellett (H8 tiszta). Post-merge gate (`tools/round-gate.sh
-test/features/vision test/core/l10n_parity_test.dart`) a friss `main`-en is
-zöld, 387/387 teszt. Lecke: **L185** (egy szállított teszt `reason:`-je a
-HIBÁS viselkedést dokumentálhatja elvárásként), **L186** (a review-klón,
-amit a shared tree-ből a "done" jelzés UTÁN azonnal klónozol, elavult
-branch-tippet kaphat — az ELSŐ review-próbám ebbe futott, felismerve és
-korrigálva).
-_(Történeti product-merge referencia: PR #195 / `997e7be`, E05-R22; PR #194 /
+mint E05-R20–R23-nál). Review **APPROVED 0 javító kör után** — a köztes
+`stopped` (a pre-flight saját ADR-útvonal-hiánya, ld. a fenti „Last updated"
+blokk) NEM igényelt javító kört, mert Terra megállás-kori munkája már
+hibátlan volt; a folytatás ugyanabban a fordulóban zárt. 0 nyitott
+BLOCKER/MAJOR mindkét (tartalmi + dedikált security) review szerint, 1 MINOR
+(security, barrel-szimbólum-rés, ld. §3) → R26 pre-flight bemenet. Az
+`origin/main` a dispatch óta **nem mozdult** (`1d5888f`), rebase nem kellett
+(H8 tiszta). Post-merge gate (`tools/round-gate.sh test/features/practice
+test/features/vision`) a friss `main`-en is zöld, 913+522 teszt. Lecke:
+**L188** (orchesztrátor-saját pre-flight ADR-fájl az `allowed_paths`-on),
+**L189** (klón-alapú dispatchban a push a fő-repóba megy, nem közvetlenül
+GitHubra — mindig ellenőrizd a valódi origin HEAD-jét), **L190** (a
+`public.dart`-szabály a import CÉLJÁT kényszeríti ki, nem a behúzott
+szimbólumokat — vegyes barrel láthatatlan csatorna lehet).
+_(Történeti product-merge referencia: PR #197 / `e9257f4`, E05-R24; PR #196 /
+`b54490e`, E05-R23; PR #195 / `997e7be`, E05-R22; PR #194 /
 `7b11f26`, E05-R21; PR #193 /
 `be38e11`, E05-R20; PR #192 / `a38e0e0`, E05-R19; PR #191 / `75f8766`,
 E05-R18; PR #189 / `e979d41`, E05-R17; PR #188 / `6f9c0e1`, E05-R16; PR #187
@@ -588,6 +619,61 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R25 — Practice Engine vision integration** (PR
+[#199](https://github.com/wolfcasaba/strumsight/pull/199), squash `9b608cf`,
+**ÚJ ADR 0192** practice-vision-integration-contract szerződésre (a brief
+`nincs` mezője szerint az orchesztrátor írta a pre-flightban); implementer
+**Codex (Terra)** (egyetlen forduló, köztes pre-flight-eredetű `stopped`
+önjavítva), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens `risk = "high"` miatt). `VisionPracticeContract`/
+`PracticeVisionAdapter`/additív `PracticeSessionResult.vision`/önálló
+`PracticeVisionDimension` widget — lásd a fejléc ✅-blokk a teljes
+pre-flight/köztes-megállás/review történetért. **Pre-flight (§0.0, 8 pont)**
+mérte, hogy `PracticeSessionResult`-nak nincs saját JSON-kódja (a §6 negyedik
+cellája ezért revideálva), hogy a `practice → vision/public.dart` import
+mindkét gépi őrrel legális, és hogy a három pilot NEM
+`BuiltinPracticeCatalog`-bejegyzés. **0 javító kör**, de egy köztes `stopped`
+a pre-flight SAJÁT hibájából (az ADR 0192 útvonala kimaradt az
+`allowed_paths`-ból) — Terra megállás-kori munkája hibátlannak bizonyult,
+egy §0.0-revízióval és UGYANAZON session folytatásával zárva. Az
+orchesztrátor SAJÁT, izolált `/tmp` klónban futtatott gate-tel ÉS egy saját
+falszifikációs próbával (a vision-változat `scorePoints`-ját 900→999-re
+rontva a parity-fixture PIROSRA fordult, majd visszaállítva) ellenőrizte a
+munkát, függetlenül az implementer önjelentésétől. A dedikált security-review
+1 nem-blokkoló MINOR-t talált (a `vision/public.dart` barrel nyers
+landmark/pose/geometry-típusokat is exportál a ténylegesen használt
+aggregátumok mellett, szimbólum-szintű korlát nélkül) — E05-R26 pre-flight
+bemenetként rögzítve (§3). Gate zöld az `fb93cb7` merge-előtti SHA-n: Full
+Gate ✅ · Router CI ✅ (mindkettő kézzel dispatch-elve, mert az utolsó push
+nem érintett trigger-útvonalat). Post-merge gate a friss `main`-en (`9b608cf`)
+is zöld, 913+522 teszt. Lecke: **L188**, **L189**, **L190**
+(`docs/LESSONS.md`). Részletek:
+[review](docs/reviews/e05-r25-practice-vision-integration-review.md) +
+[security](docs/reviews/e05-r25-practice-vision-integration-security.md).
+
+**E05-R24 — Vision session controller and realtime overlay** (PR
+[#197](https://github.com/wolfcasaba/strumsight/pull/197), squash `e9257f4`,
+**nincs új ADR**; implementer **Codex (Terra)** (kezdeti + **2 javító kör**),
+orchesztrátor/reviewer **Claude Sonnet 5**, dedikált **security-reviewer**
+ágens `risk = "high"` miatt). `VisionSessionController`/`VisionSessionState`/
+`VisionSession`/`VisionSessionResult`/`VisionPreviewOverlay` — teljes
+történet: [`docs/handoff-archive.md`](docs/handoff-archive.md). **2 javító
+kör**: 1. kör zárta F1 BLOCKER-t (silent-null a `start()` async
+acquire-ablakában) + F2 MAJOR-t (hiányos állapotgép-mátrix) + F3 MINOR-t; a
+review saját próbateszttel egy ÚJ, a javítás saját regressziójaként
+bevezetett F4 BLOCKER-t talált (a `dispose()` kivétellel elszállt), amit a
+2. kör zárt. A dedikált security-review függetlenül ugyanarra az F1
+gyökérokra jutott. **H5 self-heal** (ADR 0112, PR
+[#198](https://github.com/wolfcasaba/strumsight/pull/198)): a kör saját
+pre-flight `allowed_paths`-bővítése átbillentette a queue mért-motor
+szabályát, Router CI kétszer pirosra futott, önjavító kör szinkronizálta a
+queue-t. Gate zöld az `e069140` merge-előtti SHA-n (H5 self-heal utáni tip):
+Full Gate ✅ · Router CI ✅. Post-merge gate a friss `main`-en (`e9257f4`) is
+zöld, izolált klónban újrafuttatott teljes pytest suite (347/347). Lecke:
+**L187**. Részletek:
+[review](docs/reviews/e05-r24-vision-session-controller-and-overlay-review.md) +
+[security](docs/reviews/e05-r24-vision-session-controller-and-overlay-security.md).
 
 **E05-R23 — Feedback policy and realtime cue budget** (PR
 [#196](https://github.com/wolfcasaba/strumsight/pull/196), squash `b54490e`,
@@ -901,6 +987,17 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
    megy a queue `engine` oszlopától függetlenül; a korábbi „HOLD E05-R21..R30
    előtt" bejegyzés a `6ae3ec7` commit-tal (`chore(pipeline): resume the
    chain`) elavult — a queue sorai `pending`.
+   **~~E05-R25 — Practice Engine vision integration~~ — KÉSZ**
+   (PR #199, `9b608cf`, **ÚJ ADR 0192** practice-vision-integration-contract
+   szerződésre; implementer Codex/Terra, egyetlen forduló (köztes
+   pre-flight-eredetű `stopped` önjavítva, 0 javító kör); dedikált
+   security-reviewer risk=high PASS, 1 nem-blokkoló MINOR (barrel-szimbólum-
+   rés) → E05-R26 pre-flight bemenet; ld. fejléc + §3 + §5).
+   **~~E05-R24 — Vision session controller and realtime overlay~~ — KÉSZ**
+   (PR #197, `e9257f4`, nincs új ADR; implementer Codex/Terra, 2 javító kör;
+   dedikált security-reviewer risk=high; 1 BLOCKER + 1 MAJOR + 1 MINOR pass 1,
+   1 önjavítás-eredetű BLOCKER pass 2; H5 self-heal PR #198 a queue
+   mért-motor szinkronjára; ld. §5 + `docs/handoff-archive.md`).
    **~~E05-R23 — Feedback policy and realtime cue budget~~ — KÉSZ**
    (PR #196, `b54490e`, **ÚJ ADR 0191** feedback-policy-és-cue-budget
    szerződésre; implementer Codex/Terra, 1 javító kör; dedikált

@@ -6478,3 +6478,122 @@ kört igényelve egy olyan hibára, amit a pre-flight session egyetlen
 számolással elkerülhetett volna. Rokon lecke: **L113** (a `docs/rounds/**`
 is Router CI-trigger-útvonal — egy docs-only kör is pirosra állíthatja a
 láncot anélkül, hogy a build-apk-only kapu ezt észrevenné).
+
+## L188 — Az orchesztrátor SAJÁT pre-flight ADR-fájlja is felkerül az `allowed_paths`-listára — ha kimarad, az implementer helyesen `stopped`-ot jelez, és a köztes munkája a megállás pillanatában menthető (E05-R25, pre-flight önhiba, 2026-08-08)
+
+**Mit mértünk.** Az E05-R25 pre-flightjában megírt `docs/adr/0192-…md`
+fájlt (az orchesztrátor saját, dispatch ELŐTTI pre-flight-commitja, ADR
+0055 szerint) nem vettem fel a brief `allowed_paths`-listájára. Terra az
+első fordulóban a teljes engedélyezett munkát elvégezte (11 fájl,
+`VisionPracticeContract`, adapter, result-mező, widget, tesztek — mind a
+listán), de mielőtt commitolt volna, `tools/codex-signal.sh stopped`-ot
+küldött: „the pre-existing b82259e ADR 0192 change is outside the brief §4
+allowed_paths list." Ez NEM a gépi `round-scope-audit.sh` verdiktje volt
+(az a `scope_base`-t a dispatch-kori HEAD-re állítja, tehát a
+pre-flight-commit STRUKTURÁLISAN kívül esik az általa auditált diffen —
+`scope_audit=ok` volt már az ELSŐ fordulón is), hanem Terra saját,
+szöveges olvasata a brief §4 táblájáról. Az E05-R23 brief-je (ADR 0191)
+precedensként MÁR tartalmazta a saját ADR-útvonalát a listán — a hiány
+mérhetően pre-flight-írási mulasztás volt, nem szándékos szűkítés.
+
+**Miért.** Az `allowed_paths` KÉT különböző fogyasztónak szolgál: (1) a
+gépi `round-scope-audit.sh`, ami csak az IMPLEMENTER saját diffjét méri a
+`scope_base`-től (tehát a pre-flight-commit fájljait sosem látja
+problémásnak), és (2) a brief SZÖVEGES §4 táblája, amit az implementer (és
+később a review) a TELJES PR-diff dokumentációjaként olvas — ez utóbbi
+szempontból egy ott nem szereplő fájl (még ha jogosan, pre-flightban
+került is a branchre) legitim STOP-okot ad. A két nézet nem esik
+automatikusan egybe: a gépi audit megengedő a pre-flight-commitra, a
+szöveges lista viszont csak azt dokumentálja, amit ténylegesen felírtam
+rá.
+
+**Hogyan alkalmazd.** Minden pre-flightban írt ÚJ fájlt (elsősorban az
+ADR-t, de bármi mást is, amit az orchesztrátor a dispatch előtt hozzáad a
+branchhez) VEGYÉL FEL az `allowed_paths` listára ABBAN a pre-flight
+commitban, amelyik létrehozza — ne külön, ne "majd ha panaszkodik".
+Ha mégis kimarad, és az implementer emiatt `stopped`-ot jelez: a
+munkapéldányban ELLENŐRIZD a `git status --short`-ot MIELŐTT bármit
+javítanál — ha az uncommitolt diff pontosan az eredeti (helyes)
+`allowed_paths`-ra korlátozódik, a munka MENTHETŐ (nem kell újraindítani a
+kört): javítsd a listát egy §0.0 brief-revízióval, `git fetch`+
+`fast-forward` a munkapéldányban (a dirty working tree-t ez nem érinti,
+mert a fix egy MÁSIK fájlt módosít), majd egy rövid folytató prompttal
+küldd vissza UGYANAZT a session-t/motort a commit+gate+push+jelzés
+hátralévő lépéseire. Rokon lecke: nincs korábbi pontos megfelelő, de a
+mintázat (gépi audit ≠ szöveges lista teljessége) általánosítható bármely
+jövőbeli pre-flight-eredetű fájlra.
+
+## L189 — Az implementer klón-alapú dispatchban a „push" a HELYI fő-repóba megy, nem közvetlenül GitHubra — a jelzésfájl „push kész" állítása ezért nem bizonyítja, hogy a commit ténylegesen elérte az origin-t (E05-R25, saját mérés, 2026-08-08)
+
+**Mit mértünk.** A `codex-round.sh` szerződése szerint az izolált
+munkapéldányt `git clone <fő-repó> <cél>`-lal hozzuk létre (nem
+`git worktree add`, L175/L179) — ennek következménye, hogy a klón `origin`
+remote-ja a FŐ-REPÓ HELYI útvonalára mutat
+(`/home/ubuntu/music-theory`), NEM a GitHub URL-re. Amikor Terra a
+folytató fordulóban `git push`-t hívott és `tools/codex-signal.sh
+done`-ban „commit és push kész"-t jelentett, ez SZÓ SZERINT igaz volt — de
+a push célja a fő-repó volt, nem GitHub. `git ls-remote
+origin refs/heads/<branch>` (a VALÓDI GitHub origin-en, a fő-repóból
+futtatva) ekkor MÉG a pre-flight-commit SHA-ját mutatta, két perccel a
+"push kész" jelzés UTÁN is — a `gh api repos/…/commits/<branch>` ugyanezt
+erősítette meg. A fő-repó lokális branch-referenciája viszont MÁR
+tartalmazta Terra commitját (a klón push-a oda sikeresen megérkezett).
+
+**Miért.** Ez NEM egy race/timing-hiba (szemben **L186**-tal, ami a
+shared-tree szinkron KÉSÉSÉRŐL szól) — strukturálisan MINDIG így működik:
+a klón `origin`-je sosem GitHub, hanem a fő-repó, ezért egy `git push
+origin <branch>` a klónból DEFINÍCIÓ SZERINT csak a fő-repóig jut el. Az
+implementer (és a wrapper saját jelzése) nem tud különbséget tenni „a
+saját origin-embe pusholtam" és „a valódi GitHubra pusholtam" között — a
+parancs ugyanaz, az eredmény státusza ugyanaz (`0`), a célpont más.
+
+**Hogyan alkalmazd.** Egy `done` jelzés UTÁN, MIELŐTT bármilyen review-
+klónt vagy CI-dispatchot indítanál, ellenőrizd a VALÓDI GitHub-branch
+HEAD-jét (`git ls-remote origin refs/heads/<branch>` a fő-repóból, VAGY
+`gh api repos/<owner>/<repo>/commits/<branch> --jq .sha`), és vesd össze a
+munkapéldány `git rev-parse HEAD`-jével. Ha eltér: a fő-repóból futtatott
+egyetlen `git push origin <branch>` (a fő-repó `origin`-je MÁR a valódi
+GitHub) pótolja a hiányzó hopot — olcsó, biztonságos, nem igényel új
+implementer-fordulót. Rokon lecke: **L186** (a shared-tree-review-klón
+staleness-problémája ugyanebből az architektúrából fakad, más tünettel).
+
+## L190 — A `public.dart`-only cross-feature szabály az import CÉLJÁT kényszeríti ki, sosem a behúzott SZIMBÓLUMOKAT — egy vegyes (aggregát + nyers) barrel láthatatlan csatorna lehet a nyers adatnak (E05-R25, dedikált security-review MINOR, 2026-08-08)
+
+**Mit mértünk.** A security-reviewer agent az E05-R25 diffjét vizsgálva
+(a Practice oldal első `vision/public.dart`-importja) kimutatta: a barrel
+egyszerre exportál aggregát, privacy-safe típusokat (`VisionSessionResult`,
+`VisionQualitySummary`) ÉS nyers landmark/pose/geometry/koordináta
+típusokat + landmark-provider osztályokat (`HandLandmarks`,
+`NormalizedPoint`, `RecordedHandLandmarkProvider` stb.). Sem
+`tool/check_architecture.dart` (`_isFeaturePublicBarrel` csak azt nézi,
+hogy a célfájl neve `/public.dart`-ra végződik), sem
+`test/features/practice/domain/domain_purity_test.dart` (fix
+framework-import-sorokat és ambient IO-t tilt, cross-feature
+szimbólum-használatot nem) nem korlátozza, MELYIK exportált szimbólumra
+hivatkozik a fogyasztó fájl. Az E05-R25 saját kódja egyetlen nyers típust
+sem használ (grep-pel megerősítve mindkét — tartalmi és security —
+review-ban), tehát MA nincs áthágás; a rés LATENS.
+
+**Miért.** A `public.dart`-szabály (ADR 0176) szándékosan az import
+CÉLJÁRA szűkíti az ellenőrzést (fájlnév-mintázat), mert ez olcsón,
+tranzitív feloldás nélkül gépi ellenőrizhető. Ez a tervezési döntés
+implicit feltételezi, hogy egy feature `public.dart`-ja MAGA a jóváhagyott
+szerződés — de semmi nem kényszeríti ki, hogy egy `public.dart` valóban
+CSAK azt exportálja, amit egy külső fogyasztónak szabad látnia. Ha egy
+barrel vegyes (domain-safe ÉS raw/UI export egyszerre — mint a
+`vision/public.dart`, ami képernyőket is exportál, ld. ADR 0192 Döntés 3),
+a fájlnév-alapú guard zöld marad függetlenül attól, MELYIK felét
+importálja a fogyasztó.
+
+**Hogyan alkalmazd.** Amikor egy kör megnyitja egy feature `public.dart`-ja
+felé az ELSŐ cross-feature élt egy másik feature-ből (ahogy E05-R25 tette a
+practice→vision éllel), a pre-flight vagy a review ELLENŐRIZZE a célbarrel
+TELJES export-listáját, nem csak azt, hogy létezik-e. Ha a barrel nyers/
+szenzitív típust is exportál a ténylegesen importált aggregát típusok
+mellett: (a) dokumentáld explicit, hogy a fogyasztó kódja MELY szimbólumokat
+használ (grep-bizonyítékkal, ahogy ez a review tette), és (b) jelöld
+follow-up-ként — lehetőleg a KÖVETKEZŐ, ugyanezt a barrelt importáló kör
+ELŐTT — egy szimbólum-szintű negatív guard vagy a barrel domain-safe/
+raw-UI szétválasztásának bevezetését. Ne várd meg, amíg egy tényleges
+visszaélés történik — a rés attól a pillanattól kezdve latensen fennáll,
+hogy az ELSŐ ilyen import megszentesíti az útvonalat.
