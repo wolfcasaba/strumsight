@@ -97,37 +97,36 @@ class VisionSafetyPolicy {
   /// declared class. The catalog only contains ALLOWED classes.
   static const Map<String, VisionSafetyClaimClass> catalog =
       <String, VisionSafetyClaimClass>{
-    // Shoulder asymmetry (SDD §21).
-    'postureShoulderAsymmetryIncreasedVsBaseline':
-        VisionSafetyClaimClass.baselineRelative,
-    'postureShoulderAsymmetryReducedVsBaseline':
-        VisionSafetyClaimClass.baselineRelative,
+        // Shoulder asymmetry (SDD §21).
+        'postureShoulderAsymmetryIncreasedVsBaseline':
+            VisionSafetyClaimClass.baselineRelative,
+        'postureShoulderAsymmetryReducedVsBaseline':
+            VisionSafetyClaimClass.baselineRelative,
 
-    // Torso lean (SDD §21).
-    'postureTorsoLeanShiftedVsBaseline':
-        VisionSafetyClaimClass.baselineRelative,
-    'postureTorsoLeanReturnedToBaseline':
-        VisionSafetyClaimClass.baselineRelative,
+        // Torso lean (SDD §21).
+        'postureTorsoLeanShiftedVsBaseline':
+            VisionSafetyClaimClass.baselineRelative,
+        'postureTorsoLeanReturnedToBaseline':
+            VisionSafetyClaimClass.baselineRelative,
 
-    // Elbow drift (SDD §21).
-    'postureElbowDriftObserved': VisionSafetyClaimClass.neutralObservation,
-    'postureElbowDriftReducedVsBaseline':
-        VisionSafetyClaimClass.baselineRelative,
+        // Elbow drift (SDD §21).
+        'postureElbowDriftObserved': VisionSafetyClaimClass.neutralObservation,
+        'postureElbowDriftReducedVsBaseline':
+            VisionSafetyClaimClass.baselineRelative,
 
-    // Neck proxy (SDD §21).
-    'postureNeckProxyShiftedVsBaseline':
-        VisionSafetyClaimClass.baselineRelative,
-    'postureNeckProxyUnavailable': VisionSafetyClaimClass.unobservable,
+        // Neck proxy (SDD §21).
+        'postureNeckProxyShiftedVsBaseline':
+            VisionSafetyClaimClass.baselineRelative,
+        'postureNeckProxyUnavailable': VisionSafetyClaimClass.unobservable,
 
-    // Aggregate, narration-free signposts (R23 / R27 will flesh
-    // out the rendering pipeline).
-    'postureMetricsNotObservable': VisionSafetyClaimClass.unobservable,
-  };
+        // Aggregate, narration-free signposts (R23 / R27 will flesh
+        // out the rendering pipeline).
+        'postureMetricsNotObservable': VisionSafetyClaimClass.unobservable,
+      };
 
   /// The forbidden-class set is exposed here so the guard and the
   /// catalog-validation tests share a single source of truth.
-  static const Set<VisionSafetyClaimClass> forbidden =
-      <VisionSafetyClaimClass>{
+  static const Set<VisionSafetyClaimClass> forbidden = <VisionSafetyClaimClass>{
     VisionSafetyClaimClass.diagnosis,
     VisionSafetyClaimClass.injuryPrediction,
     VisionSafetyClaimClass.painExplanation,

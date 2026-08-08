@@ -150,9 +150,7 @@ PostureBaselineCollector _baselineFromPose(
   Set<PoseLandmarkId> missing = const <PoseLandmarkId>{},
   PostureBaselineConfig? config,
 }) {
-  final collector = PostureBaselineCollector(
-    config: config ?? _kConfig,
-  );
+  final collector = PostureBaselineCollector(config: config ?? _kConfig);
   collector.add(
     pose: pose,
     overallQuality: VisionMetricState.good,
@@ -280,7 +278,9 @@ PostureObservation buildShoulderAsymmetryObservation({
 
 /// A torso-lean observation. Both shoulders drift by [shoulderOffsetY]
 /// (positive = lean down, negative = lean up). The hips are stable.
-PostureObservation buildTorsoLeanObservation({required double shoulderOffsetY}) {
+PostureObservation buildTorsoLeanObservation({
+  required double shoulderOffsetY,
+}) {
   return _observe(
     baselineOffsets: const <PoseLandmarkId, double>{},
     observationOffsets: <PoseLandmarkId, double>{

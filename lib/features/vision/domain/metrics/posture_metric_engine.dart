@@ -100,10 +100,7 @@ final class PostureMetricEngine {
       return MetricObservation.notObservable();
     }
 
-    return MetricObservation.observable(
-      value: value,
-      confidence: confidence,
-    );
+    return MetricObservation.observable(value: value, confidence: confidence);
   }
 
   /// Compute the sign-preserved numeric value for [id].

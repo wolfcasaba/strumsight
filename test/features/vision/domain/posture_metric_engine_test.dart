@@ -65,40 +65,45 @@ void main() {
         expect(
           obs.observability,
           MetricObservability.notObservable,
-          reason: 'metric ${id.name} must be notObservable with partial '
+          reason:
+              'metric ${id.name} must be notObservable with partial '
               'baseline (only one shoulder present)',
         );
       }
     });
 
-    test('full baseline + clean pose → every REQUIRED metric is observable', () {
-      final observation = buildCleanFullBaselineObservation();
-      // The clean fixture excludes the neck reference (the brief §3
-      // explicitly marks it optional). The shoulder, torso and elbow
-      // metrics are observable; neckProxy is notObservable because the
-      // neck reference is missing (R8 gate).
-      const requiredForFullBaseline = <PostureMetricId>{
-        PostureMetricId.shoulderAsymmetry,
-        PostureMetricId.torsoLean,
-        PostureMetricId.elbowDrift,
-      };
-      for (final id in requiredForFullBaseline) {
-        final obs = engine.compute(observation: observation, id: id);
-        expect(
-          obs.observability,
-          MetricObservability.observable,
-          reason: 'metric ${id.name} must be observable against a clean '
-              'full baseline',
+    test(
+      'full baseline + clean pose → every REQUIRED metric is observable',
+      () {
+        final observation = buildCleanFullBaselineObservation();
+        // The clean fixture excludes the neck reference (the brief §3
+        // explicitly marks it optional). The shoulder, torso and elbow
+        // metrics are observable; neckProxy is notObservable because the
+        // neck reference is missing (R8 gate).
+        const requiredForFullBaseline = <PostureMetricId>{
+          PostureMetricId.shoulderAsymmetry,
+          PostureMetricId.torsoLean,
+          PostureMetricId.elbowDrift,
+        };
+        for (final id in requiredForFullBaseline) {
+          final obs = engine.compute(observation: observation, id: id);
+          expect(
+            obs.observability,
+            MetricObservability.observable,
+            reason:
+                'metric ${id.name} must be observable against a clean '
+                'full baseline',
+          );
+        }
+        // neckProxy remains notObservable when the neck reference is
+        // absent from the baseline.
+        final neckObs = engine.compute(
+          observation: observation,
+          id: PostureMetricId.neckProxy,
         );
-      }
-      // neckProxy remains notObservable when the neck reference is
-      // absent from the baseline.
-      final neckObs = engine.compute(
-        observation: observation,
-        id: PostureMetricId.neckProxy,
-      );
-      expect(neckObs.observability, MetricObservability.notObservable);
-    });
+        expect(neckObs.observability, MetricObservability.notObservable);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -229,30 +234,21 @@ void main() {
       // torsoLean — needs 2 shoulders + 2 hips → notObservable.
       expect(
         engine
-            .compute(
-              observation: observation,
-              id: PostureMetricId.torsoLean,
-            )
+            .compute(observation: observation, id: PostureMetricId.torsoLean)
             .observability,
         MetricObservability.notObservable,
       );
       // elbowDrift — needs 2 elbows → notObservable.
       expect(
         engine
-            .compute(
-              observation: observation,
-              id: PostureMetricId.elbowDrift,
-            )
+            .compute(observation: observation, id: PostureMetricId.elbowDrift)
             .observability,
         MetricObservability.notObservable,
       );
       // neckProxy — needs neckReference → notObservable.
       expect(
         engine
-            .compute(
-              observation: observation,
-              id: PostureMetricId.neckProxy,
-            )
+            .compute(observation: observation, id: PostureMetricId.neckProxy)
             .observability,
         MetricObservability.notObservable,
       );
@@ -304,10 +300,7 @@ void main() {
       );
       expect(left.observability, MetricObservability.observable);
       expect(right.observability, MetricObservability.observable);
-      expect(
-        left.value,
-        closeTo(right.value!.abs(), 1e-9),
-      );
+      expect(left.value, closeTo(right.value!.abs(), 1e-9));
     });
 
     test('torsoLean magnitude is consistent across lean directions — '
@@ -360,10 +353,7 @@ void main() {
       // torsoLean requires both shoulders + both hips.
       expect(
         engine
-            .compute(
-              observation: observation,
-              id: PostureMetricId.torsoLean,
-            )
+            .compute(observation: observation, id: PostureMetricId.torsoLean)
             .observability,
         MetricObservability.notObservable,
       );
@@ -385,10 +375,7 @@ void main() {
       );
       expect(
         engine
-            .compute(
-              observation: observation,
-              id: PostureMetricId.torsoLean,
-            )
+            .compute(observation: observation, id: PostureMetricId.torsoLean)
             .observability,
         MetricObservability.notObservable,
       );
@@ -421,7 +408,8 @@ void main() {
         expect(
           definition.requiredPoseLandmarkIds,
           isNotEmpty,
-          reason: 'metric ${definition.id.name} must declare at least one '
+          reason:
+              'metric ${definition.id.name} must declare at least one '
               'required landmark (§5 /7 — R8 gate)',
         );
       }

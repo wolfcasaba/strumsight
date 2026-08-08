@@ -44,15 +44,14 @@ void main() {
         expect(
           usedClasses.contains(cls),
           isTrue,
-          reason: 'allowlist class "${cls.name}" must be reachable from the catalog',
+          reason:
+              'allowlist class "${cls.name}" must be reachable from the catalog',
         );
       }
     });
 
     test('an unknown code is rejected (fail-closed)', () {
-      final result = guard.evaluate(
-        'postureSomethingThatDoesNotExist',
-      );
+      final result = guard.evaluate('postureSomethingThatDoesNotExist');
       expect(result.isAllowed, isFalse);
       expect(result.reason, contains('not in catalog'));
     });
@@ -76,11 +75,16 @@ void main() {
     const guard = SafetyClaimGuard();
 
     final forbiddenClassCases = <String, VisionSafetyClaimClass>{
-      'postureShoulderAsymmetryCausesChronicPain': VisionSafetyClaimClass.diagnosis,
-      'postureTorsoLeanWillCauseInjury': VisionSafetyClaimClass.injuryPrediction,
-      'postureElbowDriftExplainsDiscomfort': VisionSafetyClaimClass.painExplanation,
-      'postureNeckStrainRequiresRecovery': VisionSafetyClaimClass.recoveryAdvice,
-      'postureShoulderAsymmetryIsHarmful': VisionSafetyClaimClass.harmfulJudgment,
+      'postureShoulderAsymmetryCausesChronicPain':
+          VisionSafetyClaimClass.diagnosis,
+      'postureTorsoLeanWillCauseInjury':
+          VisionSafetyClaimClass.injuryPrediction,
+      'postureElbowDriftExplainsDiscomfort':
+          VisionSafetyClaimClass.painExplanation,
+      'postureNeckStrainRequiresRecovery':
+          VisionSafetyClaimClass.recoveryAdvice,
+      'postureShoulderAsymmetryIsHarmful':
+          VisionSafetyClaimClass.harmfulJudgment,
     };
 
     for (final entry in forbiddenClassCases.entries) {
@@ -129,17 +133,21 @@ void main() {
         expect(
           VisionSafetyPolicy.forbidden.contains(entry.value),
           isFalse,
-          reason: 'catalog code "${entry.key}" declares forbidden class '
+          reason:
+              'catalog code "${entry.key}" declares forbidden class '
               '"${entry.value.name}"',
         );
       }
     });
 
-    test('all classes in the catalog are valid VisionSafetyClaimClass values', () {
-      for (final cls in VisionSafetyPolicy.catalog.values) {
-        expect(VisionSafetyClaimClass.values, contains(cls));
-      }
-    });
+    test(
+      'all classes in the catalog are valid VisionSafetyClaimClass values',
+      () {
+        for (final cls in VisionSafetyPolicy.catalog.values) {
+          expect(VisionSafetyClaimClass.values, contains(cls));
+        }
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------

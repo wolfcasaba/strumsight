@@ -34,13 +34,10 @@ final class SafetyClaimGuardResult {
 
   /// Allowed evaluation: the code is in the catalog and its class is
   /// not forbidden.
-  const SafetyClaimGuardResult.allowed()
-    : isAllowed = true,
-      reason = 'allowed';
+  const SafetyClaimGuardResult.allowed() : isAllowed = true, reason = 'allowed';
 
   /// Rejected evaluation: the reason is the failure description.
-  const SafetyClaimGuardResult.rejected(String this.reason)
-    : isAllowed = false;
+  const SafetyClaimGuardResult.rejected(String this.reason) : isAllowed = false;
 
   final bool isAllowed;
   final String reason;
@@ -69,9 +66,7 @@ final class SafetyClaimGuard {
     VisionSafetyClaimClass? declaredClass,
   }) {
     if (code.trim().isEmpty) {
-      return const SafetyClaimGuardResult.rejected(
-        'code is empty',
-      );
+      return const SafetyClaimGuardResult.rejected('code is empty');
     }
     // (1) Closed-set membership — every allowed code lives in the
     // catalog.
