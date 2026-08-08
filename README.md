@@ -144,6 +144,10 @@ on a physical device — synthetic green is never "done".
   `test/app/offline_network_guard_test.dart` at the single `DioFactory` seam
   (`test/tooling/dio_factory_guard_test.dart` guarantees no other Dio source exists).
 - Tokens live in `flutter_secure_storage`; logs are redacted (no token/password/raw audio).
+- Vision is optional and currently disabled in every environment. Camera frames stay on-device;
+  raw frames and pixel buffers may not enter Vision persistence or provider state. Any future
+  rollout follows [`docs/runbooks/vision-rollout.md`](docs/runbooks/vision-rollout.md) and requires
+  explicit consent plus device evidence; audio-only flows remain available.
 
 ## Model assets
 
