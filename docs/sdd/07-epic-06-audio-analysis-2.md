@@ -4385,6 +4385,7 @@ docs(analysis): close Audio Analysis 2.0 epic
 - [ ] Practice hotspotból feladat készíthető.
 - [ ] Song target adapter működik.
 - [ ] Tutor csak redaktált facts snapshotot kap.
+- [ ] Vision-hivatkozás csak inferred provenance-szal és közös `SessionTimestamp`-tel kapcsolható az audio evidence-hez.
 - [ ] Practice és Streak credit pontosan egyszer történik.
 
 ## Persistence
