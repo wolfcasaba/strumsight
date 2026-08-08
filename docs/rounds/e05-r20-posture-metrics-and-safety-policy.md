@@ -184,6 +184,35 @@ elfogadása előtt.
    feltételként. Ez §5 pont 7-ként rögzítve lent; nem új ADR, hanem az ADR
    0179 („a capability-státusz a doméné") pontos alkalmazása erre a
    konkrét adatforrásra.
+9. **R9 — Javító kör 1 előtt: a §6 „visibility-mátrix" kritérium mérve
+   újraskálázva.** A review (`docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md`
+   F2) mérve megállapította: a `PostureObservation` (R14, nem módosítható
+   ebben a körben) **nem** exportál per-landmark, GRADUÁLT visibility-t — a
+   `driftById` R14-ben MÁR egy fix, bináris `minimumLandmarkVisibility=0.5`
+   küszöbbel előszűrt (ld. R3/R8 fent). Egy per-metrika `alatt/rajta/fölött`
+   HÁRMAS visibility-küszöb-mátrix emiatt **nem építhető** a mai
+   `PostureObservation`-kontraktusból — `posture_baseline.dart` módosítása
+   nélkül (ami NINCS az `allowed_paths`-on, és egy MERGED, lezárt kör
+   viselkedését módosítaná, H2-kockázat) a kritérium szó szerinti alakja
+   teljesíthetetlen. **A §6 „visibility-mátrix (alatt / rajta / fölött)"
+   cellája ezennel a ténylegesen elérhető jelre szűkül: a landmark
+   JELENLÉT/HIÁNY (bináris) mátrixra, amit a §5 pont 7 / R8 kapu MÁR
+   helyesen implementál és tesztel** (`driftFor(id) != null` minden
+   szükséges landmarkra). Ez ugyanaz a mintázat, mint az E05-R16 §0.0 R5 —
+   amikor egy előírt kritérium egy MÁS réteg (itt: R14) felelősségébe eső,
+   ma nem exportált adatra hivatkozik, a mérce a MA mérhető, saját-rétegbeli
+   jelre szűkül, dokumentáltan.
+   **Ami továbbra is KÖTELEZŐ javítás** (a review F2 fennmaradó fele, NEM
+   rescope-olható, mert a saját réteg hibája): a `confidenceFormula` mező
+   ("mean(minimum landmark visibility)") és a ténylegesen számított
+   `_confidence()` (drift-nagyság inverze) **nem egyezik** — ez dokumentáció-
+   vs-kód ellentmondás, amit a javító körnek zárnia kell (vagy a számítást
+   igazítja egy ténylegesen elérhető, megbízhatóság-jellegű jelhez, vagy a
+   mezőt/leírást igazítja őszintén ahhoz, amit ténylegesen számol — a döntés
+   az implementer joga, de a doc-comment fegyelem [kör-levezénylési prompt
+   §5] nem sérülhet). A `minimumVisibility` mező, ha a végleges tervben
+   kiértékelés nélkül marad, a doc-commentben és a `confidenceFormula`
+   szövegében NEM állíthatja, hogy aktívan kiértékelésre kerül.
 
 ## 1. Cél
 
