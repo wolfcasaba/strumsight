@@ -309,15 +309,17 @@ dokumentált brief-revízió.
   delete-all-lal. Route/settings wiring szándékosan nincs ebben a körben.
 - Tesztek: byte-stabil round-trip, future-version skip, record-hiba melletti
   olvashatóság, nyers-store delete-mátrix, store/export privacy snapshot,
-  confirm-dialog és Vision route network-spy.
+  confirm-dialog és Vision route → session persistence → export network-spy.
 
 ### Futtatott ellenőrzések
 
 - `flutter analyze lib/features/vision/data/persistence lib/features/vision/domain/vision_privacy_control.dart lib/core/storage/storage_keys.dart` — zöld, 0 issue.
 - `flutter test test/features/vision/data/vision_session_repository_test.dart test/features/vision/data/vision_export_privacy_test.dart` — zöld, 6 teszt.
 - `flutter test test/features/settings/vision_privacy_screen_test.dart` — zöld, 1 teszt.
-- `flutter test test/app/offline_network_guard_test.dart` — zöld, 4 teszt.
-- `tools/round-gate.sh test/features/vision test/features/settings test/app/offline_network_guard_test.dart` — zöld (format, analyze, célzott Vision/Settings/offline-network tesztek és architecture). Az első gate-kísérlet analyze-lépése a három új teszt redundáns `public.dart`-importjára jelzett; az importok eltávolítása után a kötelező gate sikeresen lefutott.
+- `flutter test test/app/offline_network_guard_test.dart` — zöld, 4 teszt; a
+  Vision route után egy tényleges local `save` + JSON export is fut, továbbra
+  is 0 hálózati factory/kérés mellett.
+- `tools/round-gate.sh test/features/vision test/features/settings test/app/offline_network_guard_test.dart` — zöld (format, analyze, célzott Vision/Settings/offline-network tesztek és architecture). Az első két gate-kísérlet analyze-lépése redundáns `public.dart`-importokra jelzett; az importok eltávolítása után a kötelező gate sikeresen lefutott.
 - Valódi-sértés próba: ideiglenesen `landmarkSeries` került a codec DTO-ba;
   `flutter test test/features/vision/data/vision_export_privacy_test.dart`
   elvárt módon piros lett (`Actual` kulcslistában `landmarkSeries`), majd a

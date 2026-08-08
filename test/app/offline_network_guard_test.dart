@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -36,7 +37,7 @@ import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_home_screen.dart';
-import 'package:strumsight/features/vision/presentation/screens/vision_session_screen.dart';
+import 'package:strumsight/features/vision/public.dart';
 
 import '../support/fake_audio.dart';
 import '../support/fake_auth.dart';
@@ -290,6 +291,28 @@ void main() {
 
     expect(harness.router.state.uri.path, AppRoutes.visionSession);
     expect(find.byType(VisionSessionScreen), findsOneWidget);
+
+    final store = harness.container.read(keyValueStoreProvider);
+    final repository = VisionSessionRepository(store: store);
+    await repository.save(_offlineVisionResult());
+    final export =
+        jsonDecode(VisionExport(store: store).exportJson())
+            as Map<String, dynamic>;
+    expect(export['sessions'], hasLength(1));
+
     _expectNoNetwork(harness);
   });
 }
+
+VisionSessionResult _offlineVisionResult() => VisionSessionResult(
+  session: VisionSession(
+    id: VisionSessionId.create('offline-network-guard'),
+    startedAt: DateTime.utc(2026, 8, 8),
+  ),
+  endedAt: DateTime.utc(2026, 8, 8, 0, 1),
+  endReason: VisionSessionEndReason.explicitStop,
+  qualitySummary: VisionQualitySummary.fromFrames(const <VisionFrameQuality>[]),
+  calibrationState: CalibrationLossState.tracking,
+  sessionSummary: const <VisionInsight>[],
+  observedFrameCount: 0,
+);
