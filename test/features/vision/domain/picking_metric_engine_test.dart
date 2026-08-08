@@ -218,8 +218,7 @@ void main() {
       }
     });
 
-    test('speed ≈ 9.0 / s for truncated windows (4 samples over 99 ms)',
-        () {
+    test('speed ≈ 9.0 / s for truncated windows (4 samples over 99 ms)', () {
       final fixture = FastToggleStrokes.sixAt130ms();
       final result = engine.compute(
         frames: fixture.frames,
@@ -265,7 +264,7 @@ void main() {
         0.234785322, // window 3
         0.197713860, // window 4
         0.062689111, // window 5 (full window — sinusoidal path far exceeds
-                     // the chord)
+        // the chord)
       ];
       for (var i = 0; i < result.perEvent.length; i++) {
         expect(

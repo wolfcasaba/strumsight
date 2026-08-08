@@ -190,72 +190,21 @@ void main() {
       expect(cuts[1].samples, isEmpty);
     });
 
-    test(
-      'fast-toggle fixture: adjacent windows share NO sample timestamps '
-      '(F1 BLOCKER regression guard)',
-      () {
-        // The review F1 BLOCKER proved that the previous cut (at the
-        // next onset's RAW timestamp) let the `[nextOnset - pre, nextOnset)`
-        // band appear in BOTH adjacent windows' samples lists. The fix
-        // truncates at the next window's REQUESTED start, so the boundary
-        // is a real partition. This test pins that contract with REAL
-        // samples (not empty `frames: []`) and asserts the actual sample
-        // SETS are disjoint for every adjacent pair — the brief §6
-        // "a mintaszám assertálva" requirement.
-        //
-        // The fixture mirrors `FastToggleStrokes.sixAt130ms()`: 6 onsets
-        // 130 ms apart, frames every 33 ms from -100 to 791 (= 27 frames).
-        // Window 0 cover [−100, 30), window 1 [30, 160), …, window 5
-        // [550, 800). Adjacent windows share no timestamp.
-        final frames = [for (var t = -100; t <= 791; t += 33) at(t)];
-        final cuts = windowImpl.cut(
-          frames: frames,
-          onsets: const [
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 0)),
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 130)),
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 260)),
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 390)),
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 520)),
-            PickingOnsetEvent(timestamp: Duration(milliseconds: 650)),
-          ],
-        );
-        expect(cuts.length, 6);
-        // Sanity: adjacent windows have at least one sample each (else
-        // the test would be vacuously true).
-        for (var i = 0; i < cuts.length; i++) {
-          expect(
-            cuts[i].samples,
-            isNotEmpty,
-            reason: 'window $i must have at least one sample for the '
-                'overlap check to be meaningful',
-          );
-        }
-        // The actual F1 regression guard: every adjacent pair has
-        // EMPTY intersection of timestamp SETS.
-        for (var i = 0; i < cuts.length - 1; i++) {
-          final left = cuts[i].samples
-              .map((s) => s.timestamp.inMicroseconds)
-              .toSet();
-          final right = cuts[i + 1].samples
-              .map((s) => s.timestamp.inMicroseconds)
-              .toSet();
-          final overlap = left.intersection(right);
-          expect(
-            overlap,
-            isEmpty,
-            reason:
-                'windows $i and ${i + 1} MUST share no sample timestamps '
-                '(F1 BLOCKER); actually shared: $overlap',
-          );
-        }
-      },
-    );
-
-    test('every sample is included in EXACTLY one window (global partition)',
-        () {
-      // Stronger F1 invariant: across the whole `FastToggleStrokes`
-      // timeline, every frame belongs to exactly one window — no frame
-      // is dropped AND no frame is duplicated.
+    test('fast-toggle fixture: adjacent windows share NO sample timestamps '
+        '(F1 BLOCKER regression guard)', () {
+      // The review F1 BLOCKER proved that the previous cut (at the
+      // next onset's RAW timestamp) let the `[nextOnset - pre, nextOnset)`
+      // band appear in BOTH adjacent windows' samples lists. The fix
+      // truncates at the next window's REQUESTED start, so the boundary
+      // is a real partition. This test pins that contract with REAL
+      // samples (not empty `frames: []`) and asserts the actual sample
+      // SETS are disjoint for every adjacent pair — the brief §6
+      // "a mintaszám assertálva" requirement.
+      //
+      // The fixture mirrors `FastToggleStrokes.sixAt130ms()`: 6 onsets
+      // 130 ms apart, frames every 33 ms from -100 to 791 (= 27 frames).
+      // Window 0 cover [−100, 30), window 1 [30, 160), …, window 5
+      // [550, 800). Adjacent windows share no timestamp.
       final frames = [for (var t = -100; t <= 791; t += 33) at(t)];
       final cuts = windowImpl.cut(
         frames: frames,
@@ -268,22 +217,74 @@ void main() {
           PickingOnsetEvent(timestamp: Duration(milliseconds: 650)),
         ],
       );
-      final allReturned = [
-        for (final cut in cuts) ...cut.samples,
-      ].map((s) => s.timestamp.inMicroseconds).toList();
-      expect(
-        allReturned.length,
-        frames.length,
-        reason: 'every frame must appear in exactly one window — '
-            'no drops, no duplicates',
-      );
-      final returnedSet = allReturned.toSet();
-      expect(
-        returnedSet.length,
-        frames.length,
-        reason: 'no frame may appear in two windows (F1 BLOCKER)',
-      );
+      expect(cuts.length, 6);
+      // Sanity: adjacent windows have at least one sample each (else
+      // the test would be vacuously true).
+      for (var i = 0; i < cuts.length; i++) {
+        expect(
+          cuts[i].samples,
+          isNotEmpty,
+          reason:
+              'window $i must have at least one sample for the '
+              'overlap check to be meaningful',
+        );
+      }
+      // The actual F1 regression guard: every adjacent pair has
+      // EMPTY intersection of timestamp SETS.
+      for (var i = 0; i < cuts.length - 1; i++) {
+        final left = cuts[i].samples
+            .map((s) => s.timestamp.inMicroseconds)
+            .toSet();
+        final right = cuts[i + 1].samples
+            .map((s) => s.timestamp.inMicroseconds)
+            .toSet();
+        final overlap = left.intersection(right);
+        expect(
+          overlap,
+          isEmpty,
+          reason:
+              'windows $i and ${i + 1} MUST share no sample timestamps '
+              '(F1 BLOCKER); actually shared: $overlap',
+        );
+      }
     });
+
+    test(
+      'every sample is included in EXACTLY one window (global partition)',
+      () {
+        // Stronger F1 invariant: across the whole `FastToggleStrokes`
+        // timeline, every frame belongs to exactly one window — no frame
+        // is dropped AND no frame is duplicated.
+        final frames = [for (var t = -100; t <= 791; t += 33) at(t)];
+        final cuts = windowImpl.cut(
+          frames: frames,
+          onsets: const [
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 0)),
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 130)),
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 260)),
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 390)),
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 520)),
+            PickingOnsetEvent(timestamp: Duration(milliseconds: 650)),
+          ],
+        );
+        final allReturned = [
+          for (final cut in cuts) ...cut.samples,
+        ].map((s) => s.timestamp.inMicroseconds).toList();
+        expect(
+          allReturned.length,
+          frames.length,
+          reason:
+              'every frame must appear in exactly one window — '
+              'no drops, no duplicates',
+        );
+        final returnedSet = allReturned.toSet();
+        expect(
+          returnedSet.length,
+          frames.length,
+          reason: 'no frame may appear in two windows (F1 BLOCKER)',
+        );
+      },
+    );
   });
 
   group('default vs overridden window size', () {
