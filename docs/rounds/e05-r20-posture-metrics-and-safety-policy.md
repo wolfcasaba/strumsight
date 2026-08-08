@@ -455,6 +455,61 @@ MINDEN GATE ZÖLD.
 
 A `safety_claim_guard_test.dart` 17 / 17 és a `posture_metric_engine_test.dart` 22 / 22 a `test test/features/vision` lépésben benne van (a 331-es össz-szám része).
 
+### Javító kör #1 — F1/F2/F3 bizonyíték
+
+#### F1 — Lexikai második védvonal (review F1)
+
+- A `SafetyClaimGuard` háromrétegűvé vált: lexikai deny-list → catalog-membership
+  → forbidden-class check. A zárt, dokumentált lexikai halmaz:
+  `pain`, `diagnos`, `injur`, `harm`, `recover`, `treat`, `symptom`,
+  `disease`, `disorder`, `syndrome`. Minden claim-kódra a
+  `code.toLowerCase().contains(lexeme)` ellenőrzés fut, FÜGGETLENÜL a
+  deklarált osztálytól és a katalógus-tagságtól.
+- Regressziós teszt:
+  `safety_claim_guard_test.dart` "medical code is rejected despite an
+  allowed declared class" — a security-reviewer eredeti próbáját
+  reprodukálja, `postureShoulderAsymmetryMayCauseLongTermPain` kódot
+  `baselineRelative` osztállyal, és elvárja, hogy a guard a lexikai
+  rétegen utasítson (`reason` tartalmazza a `'lexeme'` kulcsszót).
+- **Valódi-sértés próba (TÉNYLEGES kimenet):** a `safety_claim_guard.dart`
+  lexikai blokkját ideiglenesen eltávolítva, a fenti próba futtatásával
+  a teszt PIROSRA váltott (`expect(isFalse)` elbukott, mert
+  `isAllowed = true` lett a `declaredClass` útvonalon). A blokk
+  visszaállítása után a teszt ismét ZÖLD. A probe-fájl a commit ELŐTT
+  törölve lett (`test/_probe_no_lexeme_test.dart`).
+
+#### F2 — confidence formula szerződés (review F2)
+
+- A `_confidence()` tényleges számítása a drift-magnitúdó inverze maradt
+  (a `PostureObservation` NEM exportál per-landmark visibility-t — ld.
+  §0.0 R9), de a `PostureMetricDefinition.confidenceFormula` mező a
+  mért számítást írja le: `1 - min(1, absolute mean normalized landmark
+  drift)`. A `minimumVisibility` mező katalógus-metaadatként megmaradt,
+  a doc-comment explicit kimondja, hogy ez a réteg nem értékeli ki,
+  mert az R14 szerződés már a visibility-szűrt driftet exportálja.
+- Regressziós tesztek
+  (`test/features/vision/domain/posture_metric_engine_test.dart`
+  "confidence formula contract" group):
+  - Mind a 4 definition `confidenceFormula` szövege tartalmazza a
+    `drift` kulcsszót és NEM tartalmazza a `visibility`-t.
+  - Két, egyforma landmark-készletű, de eltérő drift-nagyságú
+    `buildFullBaselineObservation` fixture összehasonlítása: kis drift
+    (`0.02`) → magas confidence; nagy drift (`0.40`) → alacsony
+    confidence (`< 0.8`). Ezzel a review F2 saját próbája (`0.95` vs
+    `0.996` confidence) igazából a drift-függést pinnelve, nem
+    a visibility-függést.
+
+#### F3 — `declaredClass` test-only hook (review F3)
+
+- A `declaredClass` paraméter `@visibleForTesting` jelölést kapott. A
+  producton hívó (`posture_metric_engine.dart:97`) nem adja meg; a
+  `@visibleForTesting` analizátor-figyelmeztetéssel védi a jövőbeli
+  producton-hívókat a bypass-tól. A catalog-membership check a
+  producton úton továbbra is kötelező; a `declaredClass` csak a
+  forbidden-class branch közvetlen tesztelésére szolgál
+  (a §10 valódi-sértés próba és a `SafetyClaimGuard — forbidden classes`
+  csoport).
+
 ### Eltérések és okuk
 
 1. **A `posture_fixtures.dart` `_kShoulderSpan` konstansát és `_kBaselineDuration` idempotenssé tettem.** A `dart format` futás során a `_kBaselineDuration` és a `_kShoulderSpan` használatlan lett (a `_baselineFromPose` default 4 másodpercet használ, az offset-ek normalizálása a `_kShoulderSpan` nélkül, relatív egységekben történt). A `flutter analyze` warning-ként jelezte, a `dart format` újrafuttatás előtt eltávolítottam a felesleges deklarációt.
