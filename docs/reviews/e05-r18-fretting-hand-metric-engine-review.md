@@ -3,9 +3,13 @@
 Brief: `docs/rounds/e05-r18-fretting-hand-metric-engine.md`
 Diff: `git diff origin/main...116b63e` (branch `minimax/e05-r18-fretting-hand-metric-engine`, workspace `/home/ubuntu/ss-mm-e05-r18`, review klón `/tmp/review-e05-r18`)
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-08
-Verdikt: **CHANGES REQUESTED**
+Verdikt (első pass): CHANGES REQUESTED
+Verdikt (javító kör 1 után, `f323b64`): **CHANGES REQUESTED (szűkítve)** — ld.
+„Javító kör 1 — záró ellenőrzés" szakasz a jelentés végén; F1/F2/F3/F5/F6/F7
+zárva, F4 újranyitva (a szállított teszt vizsgálhatóan nem bizonyítja, amit
+állít).
 
-## Összegzés
+## Összegzés (első pass)
 
 BLOCKER: 1 · MAJOR: 3 · MINOR: 3 · NOTE: 1
 
@@ -280,3 +284,50 @@ szükséges, ugyanazon a motoron (MiniMax, első javító kör — user-döntés
 2026-08-01 küszöb). A javító kör után a gate-eket friss `/tmp` klónban újra
 lefuttatom, és ezt a jelentést frissítem APPROVED-ra vagy ismételt CHANGES
 REQUESTED-re.
+
+---
+
+## Javító kör 1 — záró ellenőrzés (2026-08-08, commit `f323b64`)
+
+Négy commit (`f703978`, `426e052`, `54695f1`, `f323b64`). Friss klón
+`https://github.com/wolfcasaba/strumsight.git`-ról (`/tmp/review-e05-r18-fix1`,
+GitHub HEAD `f323b64`) — a helyi-fa klón-csapdát (ld. „Klón-forrás" fent) ezúttal
+elkerülve. Gate **6/6 zöld** (225/225 teszt), scope-audit **OK** (9 útvonal,
+1 generated/ignored — a törölt fixture miatt).
+
+| Lelet | Állítás (implementer) | Reviewer-ellenőrzés | Zárás |
+|---|---|---|---|
+| F1 BLOCKER | javítva: `_usable()` bekötve `readyPositionTime`-ba | **Megerősítve** — az EREDETI két próbateszt (picking-role-only, visibility=0.10-only) újrafuttatva a fix-klónban: mindkettő `notObservable`, `value=null` (korábban `observable`, 100000.0 mindkettő). Új regressziós teszt is felvéve (`fretting_metric_engine_test.dart:145-160`). | **FIXED** |
+| F2 MAJOR | javítva: legkorábbi folytonos-szakasz mintát adja vissza | **Megerősítve** — az EREDETI dwell-próbateszt (4 minta, 400ms folytonos zóna-tartózkodás) újrafuttatva: `400000.0` (korábban `200000.0`). Kódolvasás (`fretting_metric_engine.dart:99-131`): a `latestInZone`-tól visszafelé sétáló `while` a folytonos szakasz elejét (`runStart`) keresi — ez pontosan a kért algoritmus. | **FIXED** |
+| F3 MAJOR | 6 határeset (pontosan a küszöbön) + 6 degenerált eset felvéve | Kódolvasás: `fretting_metric_engine_test.dart:198-296`, mind a hat metrikára egy-egy határ- és degenerált teszt, névvel azonosítható (`boundary`/`degenerate` group). A `fingerSpreadProxy` degenerált esete tudatosan `observable(0.0)`-t vár egybeeső ujjheggyel, indokolva (a metrika a Euklideszi távolságot méri, ami degenerált esetben legitim véges 0 — nem NaN). | **FIXED** |
+| F4 MAJOR | 4 cellás mirror/left-handed paritás teszt felvéve | **NEM fogadható el.** `fretting_metric_engine_test.dart:311-331` `parityCells()`: a `trajectory` négy `[]` placeholder elemét `.map((_) => [...])` dobja el, és MIND A NÉGY „cellának" **szó szerint ugyanazt** a három `frame(...)` objektumot adja vissza — a `handedness` paraméter (amit a `frame()` helper e körben kapott) egyetlen hívásban sincs felülírva, végig `Handedness.left` marad. A teszt így azt bizonyítja, hogy „ugyanaz a bemenet ugyanazt az kimenetet adja" — ez determinisztikus pure function esetén triviálisan igaz, FÜGGETLENÜL attól, hogy a mirror-invariancia ténylegesen fennáll-e. A csoport neve és szerkezete (4 „cella", mind a hat metrika ellenőrizve) formailag megfelel a brief §6 checkboxának, tartalmilag NEM bizonyít semmit — pontosan az a „hamis zöld" minta, amiért ez a review lépés létezik. | **ÚJRANYITVA — MAJOR** |
+| F5 MAJOR | §10 handoff kiegészítve a review mutáció-próbájával | Megerősítve — `docs/rounds/e05-r18-fretting-hand-metric-engine.md` új „F5 — Valódi-sértés próba" alszakasza pontosan, hitelesen (a review-nak tulajdonítva, nem sajátjaként) rögzíti a mutációt/bukott tesztet/visszaállítást. | **FIXED** |
+| F6 MINOR (opcionális) | `assert` → feltétel nélküli `throw ArgumentError` | Megerősítve, `metric_definition.dart` diffje a `geometry_confidence.dart` mintáját követi pontosan; a konstruktor emiatt már nem `const` (várt, korrekt következmény). | **FIXED** (bónusz) |
+| F7 MINOR (opcionális) | `_confidence()` a szűrt (`_usable`) mintahalmazon fusson mind a négy érintett metrikánál | Megerősítve kódolvasással: `chordChangeTravel` (83. sor), `readyPositionTime` (134. sor), `positionStability` (156-159. sor), `_guitarSingle`/`handToNeckDistance` (232-235. sor) mind a szűrt `usable` változót adják át. | **FIXED** (bónusz) |
+| N1 NOTE (opcionális) | használaton kívüli fixture + duplikált §10 fejléc | `test/fixtures/vision/fretting/proxy_paths.json` törölve (a `git diff --stat` `-5` sora igazolja); a duplikált „## 10." fejléc a §10 kiegészítés közben eltűnt (egy fejléc maradt). | **FIXED** (bónusz) |
+
+### Miért nem elég a formai megfelelés
+
+A négy "cella" változatlan bemenete azért különösen árulkodó minta, mert
+EBBEN a körben már EGYSZER pontosan ez történt máshol (a hat metrika
+formailag teljes, de tartalmilag hibás `readyPositionTime`-ja) — a gate
+zöldsége itt sem bizonyíték. A reviewer nem tudja MEGÍRNI helyette a
+tesztet (review közben nem production kód), de a mért tényállást
+dokumentálja: a `FrettingMetricEngine` API-ja ma valóban nem fogad
+`leftHanded`/kamera-irány paramétert (a review első passzában is jelzett,
+algebrailag valószínűsíthető tükrözés-invariancia okán), tehát a helyes
+javítás VAGY (a) egy explicit teszt, ami `Handedness.left`/`Handedness.right`
+között variál ÉS/VAGY eltérő `(u,v)` előjelű, de „ugyanazt a fizikai
+mozgást" kódoló bemenetet konstruál, és megmutatja, hogy az eredmény
+egyezik — VAGY (b) a brief §0.0 dokumentált revíziója, ha a szerző (Claude)
+elfogadja, hogy ezen a rétegen a paritás architekturálisan garantált és a
+teszt a `role`/`handedness` szétválasztást ellenőrzi a geometriai érték
+helyett. Erről a döntésről NEM a javító kör dönt egyoldalúan — vagy valódi
+varianciát visz be a tesztbe, vagy `stopped`-ot jelez a döntéshez.
+
+## Merge-döntés (frissítve)
+
+**Merge továbbra is TILOS** — kizárólag F4 miatt (MAJOR, újranyitva). A
+másik 7 lelet (1 BLOCKER + 2 MAJOR + 2 MINOR + 1 NOTE, F1/F2/F3/F5/F6/F7/N1)
+independent re-verifikációval **zárva**. Egy második, szűken skálázott
+javító kör szükséges, kizárólag F4-re fókuszálva.
