@@ -55,7 +55,7 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 **PLANNING.** A pre-flight (Claude Sonnet 5, orchestrátor, 2026-08-08) a
 pipeline-prompt §1 mérési szabálya szerint (grep-eld ki a kódból, ne a táblát
-mérd) a következőket ellenőrizte a `main` @ `a382cf7` állapoton, és négy
+mérd) a következőket ellenőrizte a `main` @ `a382cf7` állapoton, és öt
 ponton talált mért eltérést vagy pontosítandó hiányt a batch-írt szöveghez
 képest:
 
@@ -117,6 +117,29 @@ képest:
    (pl. csak-vízszintes vagy null=ambiguous eset) szükséges a `down`/`up`-on
    túl, az egy KÜLÖN, vision-lokális enum lehet — de a `down`/`up` végítélet
    a meglévő `StrumDirection`-t adja vissza, nem egy duplikált párját.
+5. **„Picking-zóna relatív kategória (R15 régió)" pontatlan hivatkozás —
+   az SDD §20.2 EGY MÁSIK, négyértékű enumot ír elő, nem az R15
+   `GuitarRegion`-t; §6-ban emellett hiányzott a hozzá tartozó acceptance
+   criterion.** `lib/features/vision/domain/geometry/guitar_region.dart`
+   grep-elve: `GuitarRegion { neck, body, pickingZone, outsideGuitar }` egy
+   DURVA, teljes-gitáros besorolás (a `pickingZone` maga is csak a body
+   külső harmada) — ez tipikusan a FRETTING kéz neck/body megkülönböz-
+   tetéséhez való. Az SDD `docs/sdd/06-epic-05-computer-vision.md` §20.2
+   (a brief fejlécének saját hivatkozása) egy MÁSIK, a picking kéz
+   bridge↔neck tengelyen elfoglalt relatív helyzetét leíró négyértékű
+   kategóriát ír elő szó szerint: `nearBridge`, `middleBody`, `nearNeck`,
+   `outsideCalibratedZone` — „hangminőségi ítéletet ne adjon önmagában a
+   zóna alapján" kikötéssel (ugyanaz a semlegességi elv, mint §5/1). A két
+   enum NEM azonos és NEM egymásba képezhető triviálisan (más tengely, más
+   küszöbszemantika). **A kör a saját, új osztályozót írja** — a
+   `GuitarSpacePoint (u, v)` bemenetet és a `GuitarRegionThresholds`/
+   `GuitarRegionClassifier` PATTERN-jét (konfigurálható vágópont, pure,
+   total classifier) követve, de saját `PickingZone`-szerű enummal és saját
+   küszöbökkel (a `GuitarRegion.pickingZone`-t NEM azonosítva az SDD négy
+   értékével). A küszöbök konkrét számát a kör választja és §10-ben
+   dokumentálja, a határ mindkét oldala mérve (ugyanaz a fegyelem, mint az
+   aggregát-minimumnál). §6 alant egy hiányzó acceptance criterion-nal
+   bővítve.
 
 ## 1. Cél
 
@@ -141,7 +164,9 @@ amplitúdó, sebesség, linearitás, le/fel aszimmetria, ütemenkénti konziszte
 
 **Benne:** `StrokeWindow` (esemény előtti/utáni ablak definíció), trajectory
 irány / amplitúdó / sebesség / linearitás, down-up aszimmetria, beat-to-beat
-konzisztencia aggregáció, picking-zóna **relatív** kategória (R15 régió),
+konzisztencia aggregáció, picking-zóna **relatív** kategória (SDD §20.2:
+`nearBridge`/`middleBody`/`nearNeck`/`outsideCalibratedZone` — ÚJ enum, ld.
+§0.0/5, NEM az R15 `GuitarRegion`),
 esemény-szintű vs session-aggregát elválasztás, és a **sync-kapu**: rossz
 szinkron mellett **csak** lassú aggregát metrika érvényes.
 
@@ -205,6 +230,12 @@ Listán kívül → `stopped`.
       igazolva látni, hogy a teszt load-bearing. Ld. §0.0/2.
 - [ ] **Aggregát-minimum:** n < minimum eseményszám → `notObservable`;
       n = minimum → érték (a határ két oldala).
+- [ ] **Picking-zóna kategorizáció (§0.0/5, hiányzott):** mind a négy SDD
+      §20.2 kategória (`nearBridge`/`middleBody`/`nearNeck`/
+      `outsideCalibratedZone`) elérhető megfelelő `(u, v)` bemenettel, a
+      kör saját küszöbei mindkét oldalon mérve, és a zóna önmagában NEM
+      hordoz hangminőségi/helyesség-ítéletet (semleges observation, mint
+      §5/1).
 - [ ] **Valódi-sértés próba (§10):** a sync-kapu eltávolítása → a sync-mátrix
       `poor` cellája PIROS → visszaállítás.
 
