@@ -109,10 +109,10 @@ void main() {
     // Single in-zone sample at t=200 (u=0.4, target u=0.4 → distance 0).
     // The previous sample at t=0 is out of zone, so the contiguous run
     // starts at t=200.
-    final result = engine.readyPositionTime(
-      [frame(0, u: 0.1), frame(200, u: 0.4)],
-      target,
-    );
+    final result = engine.readyPositionTime([
+      frame(0, u: 0.1),
+      frame(200, u: 0.4),
+    ], target);
     expect(result.value, 300000);
   });
 
@@ -142,30 +142,22 @@ void main() {
   // sub-threshold-visibility-only inputs to readyPositionTime.
   // ---------------------------------------------------------------------------
 
-  test(
-    'readyPositionTime rejects picking-role-only input (F1 regression)',
-    () {
-      final result = engine.readyPositionTime(
-        [frame(0, u: 0.4, role: HandRole.picking)],
-        target,
-      );
-      expect(result.observability, MetricObservability.notObservable);
-      expect(result.value, isNull);
-    },
-  );
+  test('readyPositionTime rejects picking-role-only input (F1 regression)', () {
+    final result = engine.readyPositionTime([
+      frame(0, u: 0.4, role: HandRole.picking),
+    ], target);
+    expect(result.observability, MetricObservability.notObservable);
+    expect(result.value, isNull);
+  });
 
-  test(
-    'readyPositionTime rejects sub-threshold-visibility-only input '
-    '(F1 regression)',
-    () {
-      final result = engine.readyPositionTime(
-        [frame(0, u: 0.4, visibility: 0.10)],
-        target,
-      );
-      expect(result.observability, MetricObservability.notObservable);
-      expect(result.value, isNull);
-    },
-  );
+  test('readyPositionTime rejects sub-threshold-visibility-only input '
+      '(F1 regression)', () {
+    final result = engine.readyPositionTime([
+      frame(0, u: 0.4, visibility: 0.10),
+    ], target);
+    expect(result.observability, MetricObservability.notObservable);
+    expect(result.value, isNull);
+  });
 
   // ---------------------------------------------------------------------------
   // F2 MAJOR regressions (review E05-R18 F2) — 4-sample dwell fixture
@@ -173,36 +165,30 @@ void main() {
   // the last-in-zone timestamp.
   // ---------------------------------------------------------------------------
 
-  test(
-    'readyPositionTime returns the entry time of a contiguous dwell '
-    '(F2 regression)',
-    () {
-      // t=0   out of zone (u=0.1 → distance 0.3)
-      // t=100 in  zone (entry — distance 0)
-      // t=200 in  zone
-      // t=300 in  zone
-      // target at t=500 → expected ready time 500 - 100 = 400 000 µs.
-      final result = engine.readyPositionTime([
-        frame(0, u: 0.1),
-        frame(100, u: 0.4),
-        frame(200, u: 0.4),
-        frame(300, u: 0.4),
-      ], target);
-      expect(result.observability, MetricObservability.observable);
-      expect(result.value, 400000);
-    },
-  );
+  test('readyPositionTime returns the entry time of a contiguous dwell '
+      '(F2 regression)', () {
+    // t=0   out of zone (u=0.1 → distance 0.3)
+    // t=100 in  zone (entry — distance 0)
+    // t=200 in  zone
+    // t=300 in  zone
+    // target at t=500 → expected ready time 500 - 100 = 400 000 µs.
+    final result = engine.readyPositionTime([
+      frame(0, u: 0.1),
+      frame(100, u: 0.4),
+      frame(200, u: 0.4),
+      frame(300, u: 0.4),
+    ], target);
+    expect(result.observability, MetricObservability.observable);
+    expect(result.value, 400000);
+  });
 
-  test(
-    'readyPositionTime with no in-zone samples is not observable',
-    () {
-      final result = engine.readyPositionTime(
-        [frame(0, u: 0.9), frame(100, u: 0.9)],
-        target,
-      );
-      expect(result.observability, MetricObservability.notObservable);
-    },
-  );
+  test('readyPositionTime with no in-zone samples is not observable', () {
+    final result = engine.readyPositionTime([
+      frame(0, u: 0.9),
+      frame(100, u: 0.9),
+    ], target);
+    expect(result.observability, MetricObservability.notObservable);
+  });
 
   // ---------------------------------------------------------------------------
   // F3 MAJOR — per-metric boundary (visibility EXACTLY at minimumVisibility)
@@ -216,9 +202,9 @@ void main() {
     });
 
     test('handToNeckDistance at 0.60 is observable', () {
-      final result = engine.handToNeckDistance(
-        [frame(0, v: 0.25, visibility: 0.60)],
-      );
+      final result = engine.handToNeckDistance([
+        frame(0, v: 0.25, visibility: 0.60),
+      ]);
       expect(result.observability, MetricObservability.observable);
       expect(result.value, 0.25);
     });
@@ -232,10 +218,9 @@ void main() {
     });
 
     test('readyPositionTime at 0.65 is observable', () {
-      final result = engine.readyPositionTime(
-        [frame(0, u: 0.4, visibility: 0.65)],
-        target,
-      );
+      final result = engine.readyPositionTime([
+        frame(0, u: 0.4, visibility: 0.65),
+      ], target);
       expect(result.observability, MetricObservability.observable);
     });
 
@@ -292,25 +277,22 @@ void main() {
       expect(result.observability, MetricObservability.notObservable);
     });
 
-    test(
-      'fingerSpreadProxy with coincident indexTip/pinkyTip is observable '
-      'with documented finite value 0',
-      () {
-        // Two tips at the same point ⇒ Euclidean distance exactly 0.
-        // Documented finite degenerate result; notObservable would be
-        // ambiguous (is the hand clenched? or are we blind?).
-        final raw = <HandLandmarkId, HandLandmarkPoint>{
-          HandLandmarkId.wrist: point(0.4, 0.4, 1),
-          HandLandmarkId.middleMcp: point(0.5, 0.4, 1),
-          HandLandmarkId.indexMcp: point(0.5, 0.5, 1),
-          HandLandmarkId.indexTip: point(0.5, 0.5, 1),
-          HandLandmarkId.pinkyTip: point(0.5, 0.5, 1),
-        };
-        final result = engine.fingerSpreadProxy([rawFrame(0, raw)]);
-        expect(result.observability, MetricObservability.observable);
-        expect(result.value, 0.0);
-      },
-    );
+    test('fingerSpreadProxy with coincident indexTip/pinkyTip is observable '
+        'with documented finite value 0', () {
+      // Two tips at the same point ⇒ Euclidean distance exactly 0.
+      // Documented finite degenerate result; notObservable would be
+      // ambiguous (is the hand clenched? or are we blind?).
+      final raw = <HandLandmarkId, HandLandmarkPoint>{
+        HandLandmarkId.wrist: point(0.4, 0.4, 1),
+        HandLandmarkId.middleMcp: point(0.5, 0.4, 1),
+        HandLandmarkId.indexMcp: point(0.5, 0.5, 1),
+        HandLandmarkId.indexTip: point(0.5, 0.5, 1),
+        HandLandmarkId.pinkyTip: point(0.5, 0.5, 1),
+      };
+      final result = engine.fingerSpreadProxy([rawFrame(0, raw)]);
+      expect(result.observability, MetricObservability.observable);
+      expect(result.value, 0.0);
+    });
   });
 
   // ---------------------------------------------------------------------------

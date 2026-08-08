@@ -153,8 +153,10 @@ final class FrettingMetricEngine {
         points.length;
     return _valueWithConfidence(
       math.sqrt(variance),
-      _confidence(_usable(samples, FrettingMetricId.positionStability),
-          FrettingMetricId.positionStability),
+      _confidence(
+        _usable(samples, FrettingMetricId.positionStability),
+        FrettingMetricId.positionStability,
+      ),
     );
   }
 
