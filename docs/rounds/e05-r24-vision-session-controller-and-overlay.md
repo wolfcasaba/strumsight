@@ -24,6 +24,10 @@ allowed_paths = [
   "test/features/vision/application/vision_session_controller_test.dart",
   "test/features/vision/application/vision_session_lifecycle_test.dart",
   "test/features/vision/presentation/vision_session_screen_test.dart",
+  "test/features/vision/presentation/vision_preview_overlay_test.dart",
+  "test/features/vision/presentation/vision_session_routing_test.dart",
+  "test/features/vision/presentation/goldens/vision_preview_portrait.png",
+  "test/features/vision/presentation/goldens/vision_preview_landscape.png",
   "docs/rounds/e05-r24-vision-session-controller-and-overlay.md",
 ]
 gate_tests = [
@@ -51,6 +55,20 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PREPARED.** Nincs előre kiosztott ADR.
+
+> **Módosítás (ADR 0112 önjavító kör, 2026-08-08, H5):** az `allowed_paths` a
+> fenti 4 `test/features/vision/presentation/...` bejegyzéssel (2 teszt-fájl +
+> 2 golden PNG) bővült. A `codex/e05-r24-vision-session-controller-and-overlay`
+> ágon már folyó implementáció (saját pre-flight revíziója, munkapéldány-mérés)
+> ugyanezt a négy pontos útvonalat igényelte a §6 acceptance saját golden-
+> overlay/cue/route-guard teszteihez — emiatt a
+> `tools/tests/test_pipeline_integration.py::test_open_rounds_follow_the_measured_engine_rule`
+> mért összetétele (UI/ARB=9 > core=6) már `minimax`-ot várt, miközben
+> `docs/execution/pipeline-queue.tsv` E05-R24 sora még a `codex` értéket
+> tartotta (Router CI kétszer piros ugyanarra a subTest-re → H5 halt). Ez a
+> self-heal kizárólag ezt a listát hangolja a mérce elé; az implementáció
+> maga (§10 handoff, a teljes pre-flight indoklás) a kör saját branchjén él és
+> azzal érkezik main-re.
 
 ## 1. Cél
 
