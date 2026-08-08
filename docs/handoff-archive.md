@@ -6,6 +6,83 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R17 — Automatic guitar detector go/no-go decision, teljes részletes történet (2026-08-07)
+
+Go/no-go/experimental-only döntési keret egy JÖVŐBELI automatikus
+gitár/nyak-geometria detektorhoz — **ez a kör NEM épít detektort** (nincs
+dataset, nincs modell, nincs tréning, AGENTS.md §9). `ml/vision/dataset_manifest.md`
+— 12 dataset-kategória, 7 mezős consent-séma, 7 tételes tiltott-forrás
+lista; `ml/vision/evaluate_geometry_baseline.py` — pure-stdlib Python
+harness (IoU, mean/p95 anchor error, failure rate, latency,
+determinisztikus `NO_DATA` üres bemenetre); `docs/baseline/epic-05-guitar-detector-evaluation.md`
+— manual-kalibráció költségbecslés (P50≈17s/P95≈30s, anchor-bizonytalanság
+<0.01) + PENDING jelölések a valós-eszközös méréshez; `ml/vision/README.md`
+— bounding-box/line/segmentation output-összehasonlítás. **ADR 0187**
+(új, az orchestrátor írta a pre-flightban, ADR 0179/0181 precedense):
+default `experimental-only`, a manual kalibráció (ADR 0181) marad a
+production út; számszerű átfordítási küszöbök (mean anchor error ≤0.030,
+p95 ≤0.050, failure rate ≤5%, minimum eval-corpus ≥200 frame/≥3
+gitár/≥2 világítás/mindkét kezesség) az R16 `CalibrationLossMachine`
+saját hiszterézis-küszöbeiből származtatva. Implementer **MiniMax M3**
+(kezdeti implementáció + **egy javító kör**), orchestrátor/reviewer
+**Claude Sonnet 5**. PR
+[#189](https://github.com/wolfcasaba/strumsight/pull/189), squash `e979d41`.
+
+**Egy javító kör, egy dedikált security-review, egy lezárt BLOCKER +
+egy lezárt MAJOR:**
+
+1. **BLOCKER-1 — a `decision()` promóciós logika INVERTÁLT volt egy
+   hiba-metrikán.** `ml/vision/evaluate_geometry_baseline.py:209-253`.
+   NEM implementer-hiba: a kör-brief §6.2 küszöb-mátrixa (amit az
+   orchestrátor egy generikus, batch-írt sablonból konkretizált a
+   pre-flightban) és az ADR 0187 SAJÁT Döntés 4. pontja UGYANAZT a rossz
+   irányt írta elő, ellentmondva az ADR SAJÁT, helyesen `≤ 0.030`-at
+   mondó Döntés 2 táblájának. A `mean_anchor_error` HIBA-metrika
+   (alacsonyabb=jobb) volt, a kód mégis a `> MEAN_ANCHOR_ERROR_MAX`
+   esetben adott `PRODUCTION_CANDIDATE`-et — egy rosszabb detektort
+   magasabbra sorolt, mint egy jobbat. Az implementer szó szerint, hűen
+   implementálta a kapott specifikációt, ÉS saját `§10.7`
+   handoff-jegyzetében jelezte a látszólagos ellentmondást — nem
+   csendben találgatott. A `--self-test` 9/9 zöldsége NEM volt
+   bizonyíték (a fixture-ök ugyanazt a rossz irányt feltételezték).
+   **Javítás:** az irány megfordítva, függetlenül újra-ellenőrizve friss,
+   a self-testtől független szintetikus adattal (mean≈0,0098 →
+   `PRODUCTION_CANDIDATE`, mean≈0,0799 → `EXPERIMENTAL`). Lecke **L173**.
+2. **MAJOR-1 — a consent-séma hét kötelező mezőből hatot vitt át.**
+   Dedikált `security-reviewer` (risk=high): az SDD §31.2 hét eleméből
+   az „annotátor privacy guideline" hiányzott a `dataset_manifest.md`
+   §2 táblájából. **Javítás:** új sor a táblázatba, mind a 7 elem
+   lefedve.
+
+**Az orchestrátor mindkét lezárt leletet FÜGGETLENÜL újra-ellenőrizte**,
+friss `/tmp` klónban: gate 6/6 ZÖLD, scope-audit OK mindkét fordulóban,
+a BLOCKER-1 javítását friss, önteszt-fixture-öktől független szintetikus
+adattal megismételve.
+
+Zöld kapu (exact-SHA `8e71e80`): Full Gate
+[31220060205](https://github.com/wolfcasaba/strumsight/actions/runs/31220060205)
+**success** + Router CI
+[31220056578](https://github.com/wolfcasaba/strumsight/actions/runs/31220056578)
+**success**.
+
+Lecke: **L173** (egy hiba-metrikára generikus, magasabb=jobb sablonból
+konkretizált küszöb-tábla csendben megfordíthatja a promóciós döntést —
+részletek `docs/LESSONS.md`).
+
+**Operatív utójegyzet — a bookkeeping H-NOSIGNAL önjavítással zárult.**
+A PR #189 merge (21:38 UTC) UTÁN, a closing-rituálok közben az
+orchestrátor-session „API Error: Server error mid-response"-ba futott;
+az interaktív tmux-session életben maradt, de némán, és a driver csak a
+teljes 4 órás abszolút időkorlátnál (1h24m33s néma várakozás után) vette
+észre — `H-NOSIGNAL`. Az önjavító kör (1/3 kísérlet) két dolgot tett: (1)
+**`PIPELINE_ORCH_STALL_MINUTES`** elakadás-őrt adott a `run_tmux_session`-höz
+(PR [#190](https://github.com/wolfcasaba/strumsight/pull/190), squash
+`a7210bf`, Router CI zöld), hogy egy jövőbeli hasonló hiba ~20 perc alatt,
+ne 4 óra alatt derüljön ki; (2) lezárta EZT a bookkeepinget (ezt a
+HANDOFF-bejegyzést, az RTM sort, git-notes), mivel a kör TARTALMI munkája
+már készen és merge-elve volt — a halt bookkeeping-hiány volt, nem
+tartalmi kudarc. Lecke **L174**.
+
 ## E05-R16 — Guitar geometry tracking és calibration loss, teljes részletes történet (2026-08-07)
 
 A kézzel kalibrált gitárgeometria **rövid távú** frame-to-frame követése,

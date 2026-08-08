@@ -5984,3 +5984,89 @@ branch-mezője) ellenőrzés, mielőtt a healer feltételezné, hogy a kör
 tartalmilag újrafuttatandó. Rokon [[L132]] (implementer-oldali stall
 mentése commit előtt — más réteg, ugyanaz a "ne várd ki néma folyamatra a
 teljes időkorlátot" elv).
+
+## L175 — Az implementer-munkapéldány `git worktree add`-dal NEM egyenértékű egy klónnal: a `.git` fájl (nem könyvtár) a burkoló saját validációját néma `exit 2`-re futtatja, log nélkül (E05-R18, pre-flight/dispatch, 2026-08-08)
+
+**Mért hiba.** Az E05-R18 orchestrátora az izolált implementer-munkapéldányt
+`git worktree add /home/ubuntu/ss-mm-e05-r18 <branch>`-dal hozta létre — a
+korábbi körök mind `git clone`-t használtak (`ss-codex-e05-r09`,
+`ss-mm-e05-r17` stb. mindegyike teljes `.git` könyvtárral rendelkezik,
+mérve `ls -la`-val). A `tools/mm-round.sh` (és a `codex-round.sh`) saját
+validációja `[ ! -d "$workdir/.git" ]`-re épül — egy `git worktree add`
+munkapéldányban a `.git` egy **fájl** (a fő repó `.git/worktrees/<név>`
+könyvtárára mutató pointer), nem könyvtár, tehát ez a feltétel igazra
+értékelődik és a wrapper **`exit 2`-vel azonnal kilép**, MIELŐTT a
+log-fájlt létrehozná (`: > "$log_file"` a validáció UTÁN fut). A
+leválaszt-és-várj mintában (`setsid ... >/dev/null 2>&1 &` + `wait-for-
+round.sh`) ez a hiba **teljesen néma**: nincs log, nincs jelzésfájl, nincs
+folyamat — a `wait-for-round.sh` csak az 540 s-es saját időkorlátjáig vár,
+majd `exit 5`-öt ad („még futhat"), ami a `git worktree`-vel dolgozó
+orchestrátort tévesen egy lassú, de élő kör benyomásába ringatja, miközben
+a dispatch valójában el sem indult.
+
+**Javítás/felismerés.** `ps -ef`-fel nem volt semmilyen `mm-round`/`claude`
+processz — ez volt az első jel, hogy a `[1]+ Done` üzenet (amit a `setsid`
+saját fork-workaroundja ad, ld. a lenti másodlagos megfigyelést) nem a
+tényleges munka befejezését jelentette. A `.git` fájl/könyvtár típusának
+`ls -la`-val való
+összevetése a korábbi, sikeresen dolgozó munkapéldányokkal derítette ki a
+gyökéroket. **Szabály jövőbeli körökhöz:** az implementer-munkapéldányt
+MINDIG `git clone <fő-repó> <cél>`-lal hozd létre, SOHA `git worktree
+add`-dal — még akkor is, ha a worktree olcsóbb (megosztott object
+database) és más kontextusokban (pl. review-klónok NEM implementer-
+dispatchhoz) elfogadható lenne. A CI-hoz hasonlóan, minden dispatch előtt a
+frissen létrehozott munkapéldányban `tools/prepare-flutter-generated.sh`-t
+is futtatni kell (L48 klón-csapda), a `.git`-típus ellenőrzés mellett.
+
+**Másodlagos, operatív megfigyelés — a `setsid cmd &` job-jelentése
+("[1]+ Done") NEM azt jelenti, hogy `cmd` befejeződött.** A `setsid`
+(util-linux) egy már process-group-leader hívó esetén (ami egy bash
+háttér-job mindig az) **fork-ol**: a `setsid` processz maga azonnal kilép
+(ezért jelenik meg a "Done" a backgrounding pillanatában), a TÉNYLEGES
+parancs egy ÚJ, `init`-hez (PPID=1) reparentelt gyermekfolyamatban fut
+tovább, függetlenül. A `[1]+ Done` tehát a `setsid` wrapper saját, azonnali
+exitjét jelzi, nem a becsomagolt parancsét — a tényleges állapotot a
+jelzésfájlon/log-on/`ps`-en keresztül kell mérni, sosem a job-control
+üzeneten. Ez a minta minden `setsid cmd &` dispatchre igaz, nem csak erre a
+körre — a pipeline-prompt headless-mintája emiatt helyesen a jelzésfájlra
+vár, nem a shell job-státuszra.
+
+## L176 — A tartalmi review-nak a paraméterezett teszt BEMENETEIT is ellenőriznie kell, nem csak a nevét/struktúráját: egy "4 cellás" teszt mind a négy cellában azonos bemenettel semmit nem bizonyít (E05-R18, F4 MAJOR, 2026-08-08)
+
+**Mért minta.** A javító kör 1 az F4 (hiányzó mirror/left-handed paritás
+teszt) leletre egy `group('mirror / left-handed parity (4 cells)', ...)`
+tesztet szállított, ami formailag TÖKÉLETESEN megfelelt a brief §6
+checkboxának: helyes csoportnév, négy "cella", mind a hat metrika
+ellenőrizve, `closeTo` toleranciával. A tartalmi vizsgálat (a
+`parityCells()` függvény elolvasása, NEM csak a teszt zöld futásának
+elfogadása) fedte fel, hogy a négy cella egy 4-elemű `[[], [], [], []]`
+placeholder-listából épül `.map((_) => [ugyanaz a három frame()])`-pal — a
+`_` (minden cella saját, állítólag egyedi konfigurációja) figyelmen kívül
+van hagyva, tehát mind a négy "cella" bitre azonos bemenetet kap. Egy
+determinisztikus pure függvényre "ugyanaz a bemenet ugyanazt a kimenetet
+adja" triviálisan igaz — a teszt emiatt SOSEM tudott volna pirosra futni,
+függetlenül attól, hogy a mögöttes invariáns (itt: az engine nem ágazik
+kezességre) ténylegesen fennáll-e.
+
+**Hogyan derült ki, és hogyan zárult.** A review nem fogadta el a zöld
+tesztfutást bizonyítéknak (AGENTS.md alapelve), elolvasta a
+`parityCells()` implementációt, és talált egy `handedness` paramétert a
+`frame()` helperben, ami SOHA nincs felülírva a hívásokban — ez volt a
+konkrét, kód-szintű jele annak, hogy a "4 cella" nem valódi variáció. A
+javító kör 2-ben a helyes fix egy **2 cellás**, ténylegesen variáló
+(`Handedness.left` vs `Handedness.right`, minden más mező bit-azonos)
+tesztre cserélte, EXPLICIT doc-kommenttel arról, mit bizonyít és mit NEM
+(a kamera-tükrözés/`leftHanded` normalizáció felsőbb rétegen történik és
+ott tesztelt — ezen a rétegen nincs is olyan bemeneti tengely, amit
+variálni lehetne). A review a javítást egy SAJÁT mutáció-próbával
+(hamis `handedness`-ágat injektálva az engine-be) igazolta load-bearingnek,
+mielőtt elfogadta.
+
+**Általánosított ellenőrző kérdés jövőbeli review-khoz, paraméterezett/
+mátrix-alakú teszteknél:** „ha a teszt bemeneteit kinyomtatnám cellánként,
+tényleg különböznének egymástól a releváns tengelyen?" — ha a válasz nem
+egyértelmű `igen`, a teszt gyanús, FÜGGETLENÜL attól, hogy hány `expect()`
+hívást tartalmaz vagy mennyire pontosan illeszkedik az acceptance-checkbox
+szövegéhez. Rokon [[L172]] (két izoláltan zöld komponens integrációja
+sértheti a célt — más mechanizmus, ugyanaz a "formai megfelelés ≠ tartalmi
+bizonyíték" tőmondat).

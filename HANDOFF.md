@@ -4,108 +4,112 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R17 MERGED — Automatic guitar detector go/no-go decision:**
-> Go/no-go/experimental-only döntési keret egy JÖVŐBELI automatikus
-> gitár/nyak-geometria detektorhoz — **ez a kör NEM épít detektort** (nincs
-> dataset, nincs modell, nincs tréning, AGENTS.md §9). `ml/vision/dataset_manifest.md`
-> — 12 dataset-kategória, 7 mezős consent-séma, 7 tételes tiltott-forrás
-> lista; `ml/vision/evaluate_geometry_baseline.py` — pure-stdlib Python
-> harness (IoU, mean/p95 anchor error, failure rate, latency,
-> determinisztikus `NO_DATA` üres bemenetre); `docs/baseline/epic-05-guitar-detector-evaluation.md`
-> — manual-kalibráció költségbecslés (P50≈17s/P95≈30s, anchor-bizonytalanság
-> <0.01) + PENDING jelölések a valós-eszközös méréshez; `ml/vision/README.md`
-> — bounding-box/line/segmentation output-összehasonlítás. **ADR 0187**
-> (új, az orchestrátor írta a pre-flightban, ADR 0179/0181 precedense):
-> default `experimental-only`, a manual kalibráció (ADR 0181) marad a
-> production út; számszerű átfordítási küszöbök (mean anchor error ≤0.030,
-> p95 ≤0.050, failure rate ≤5%, minimum eval-corpus ≥200 frame/≥3
-> gitár/≥2 világítás/mindkét kezesség) az R16 `CalibrationLossMachine`
-> saját hiszterézis-küszöbeiből származtatva. Implementer **MiniMax M3**
-> (kezdeti implementáció + **egy javító kör**), orchestrátor/reviewer
-> **Claude Sonnet 5**. PR
-> [#189](https://github.com/wolfcasaba/strumsight/pull/189), squash `e979d41`.
+> (E05-R18 MERGED — Fretting-hand metric engine:** hat megfigyelhető,
+> confidence-aware proxy-metrika pure Dart implementációja a bal kéz
+> fogásának nagyobb-léptékű geometriájára — **wrist deviation**,
+> **hand-to-neck distance**, **chord-change travel**, **ready-position
+> time**, **position stability**, **finger spread**, mind az R13 kéz-track/
+> R15 guitar-space/R16 calibration-loss rétegek fölött, exact fret/string
+> claim nélkül (ADR 0179/0181). `lib/features/vision/domain/metrics/` —
+> `MetricDefinition` (minimum visibility, ablak, confidence-formula,
+> helyi `FrettingCapability`), `MetricObservation` (finite-only,
+> `notObservable` degenerált/alacsony-visibility bemenetre),
+> `FrettingMetricEngine` + a hat metrika katalógusa. **Nincs új ADR**
+> (ADR 0179/0181 végrehajtása — a fejléc eredeti „0162"/„0164" hivatkozása
+> ismét elavult batch-írási placeholder volt, pre-flightban javítva,
+> immár hatodszor mérve ugyanabból a 2026-08-05-i batch-írásból). Implementer
+> **MiniMax M3** (kezdeti implementáció + **két javító kör**),
+> orchestrátor/reviewer **Claude Sonnet 5**. PR
+> [#191](https://github.com/wolfcasaba/strumsight/pull/191), squash `75f8766`.
 >
-> **Egy javító kör, egy dedikált security-review, egy lezárt BLOCKER +
-> egy lezárt MAJOR:**
+> **Két javító kör, egy lezárt BLOCKER + négy lezárt MAJOR + két lezárt
+> MINOR + egy lezárt NOTE — mind a review saját, minden fordulóban
+> friss GitHub-klónon (nem a megosztott fa stale lokális branch-refjén,
+> ld. Lecke L175) függetlenül újrafuttatott gate-jével ÉS eldobható
+> mutáció-próbákkal igazolva, nem az implementer önjelentésére hagyatkozva:**
 >
-> 1. **BLOCKER-1 — a `decision()` promóciós logika INVERTÁLT volt egy
->    hiba-metrikán.** `ml/vision/evaluate_geometry_baseline.py:209-253`.
->    NEM implementer-hiba: a kör-brief §6.2 küszöb-mátrixa (amit az
->    orchestrátor egy generikus, batch-írt sablonból konkretizált a
->    pre-flightban) és az ADR 0187 SAJÁT Döntés 4. pontja UGYANAZT a rossz
->    irányt írta elő, ellentmondva az ADR SAJÁT, helyesen `≤ 0.030`-at
->    mondó Döntés 2 táblájának. A `mean_anchor_error` HIBA-metrika
->    (alacsonyabb=jobb) volt, a kód mégis a `> MEAN_ANCHOR_ERROR_MAX`
->    esetben adott `PRODUCTION_CANDIDATE`-et — egy rosszabb detektort
->    magasabbra sorolt, mint egy jobbat. Az implementer szó szerint, hűen
->    implementálta a kapott specifikációt, ÉS saját `§10.7`
->    handoff-jegyzetében jelezte a látszólagos ellentmondást — nem
->    csendben találgatott. A `--self-test` 9/9 zöldsége NEM volt
->    bizonyíték (a fixture-ök ugyanazt a rossz irányt feltételezték).
->    **Javítás:** az irány megfordítva, függetlenül újra-ellenőrizve friss,
->    a self-testtől független szintetikus adattal (mean≈0,0098 →
->    `PRODUCTION_CANDIDATE`, mean≈0,0799 → `EXPERIMENTAL`). Lecke **L173**.
-> 2. **MAJOR-1 — a consent-séma hét kötelező mezőből hatot vitt át.**
->    Dedikált `security-reviewer` (risk=high): az SDD §31.2 hét eleméből
->    az „annotátor privacy guideline" hiányzott a `dataset_manifest.md`
->    §2 táblájából. **Javítás:** új sor a táblázatba, mind a 7 elem
->    lefedve.
+> 1. **BLOCKER-1/F1 — `readyPositionTime` megkerülte a szerep- és
+>    visibility-kaput.** `fretting_metric_engine.dart:86-110`. A másik öt
+>    metrika mind a közös `_usable()` helperen (role==fretting **és**
+>    minimumVisibility) szűr; ez az egy metrika csak időbélyeg szerint
+>    szűrt — egy KIZÁRÓLAG pengető-kéz (picking-role) vagy KIZÁRÓLAG
+>    küszöb-alatti-visibility mintából álló bemenet is `observable` értéket
+>    adott. A review saját, eldobható próbateszttel bizonyította mindkét
+>    esetet, mielőtt a javítást kérte. **Javítás:** `_usable()` bekötve,
+>    2 regressziós teszt felvéve.
+> 2. **F2 MAJOR — `readyPositionTime` a minta-rést mérte, nem az érkezési
+>    időt.** Ugyanaz a metódus a legutolsó illeszkedő minta és a target
+>    közti (apró) rést adta vissza a valódi zóna-érkezési idő helyett — egy
+>    4 mintás, 400ms-es folytonos zóna-tartózkodású fixture-ön 200000 helyett
+>    400000 µs a helyes érték (mindkettő a review saját próbatesztjével
+>    mérve). **Javítás:** legkésőbbi zónán-belüli mintától visszafelé a
+>    folytonos szakasz elejéig sétáló algoritmus.
+> 3. **F3 MAJOR — hiányzó metrikánkénti határ-/degenerált-teszt mátrix.**
+>    A brief §6 „legalább tipikus/határ/degenerált eset metrikánként"
+>    elvárása csak 1 tipikus esettel teljesült. **Javítás:** 12 új teszt
+>    (6 pontosan-a-küszöbön + 6 geometriai degenerált eset).
+> 4. **F4 MAJOR — a szállított „4 cellás" mirror/left-handed paritás teszt
+>    bitre azonos bemenettel futott mind a négy cellában** — formailag
+>    megfelelt a brief checkboxának, tartalmilag semmit nem bizonyított
+>    (Lecke **L176**). Egy MÁSODIK, szűken skálázott javító körben javítva:
+>    valódi 2-cellás `HandTrack.handedness`-tengely teszt (a réteg egyetlen
+>    ténylegesen variálható input-tengelye — a kamera-irány/`leftHanded`
+>    normalizáció felsőbb rétegen, R13/R15-ben már tesztelt), a review
+>    saját mutáció-próbájával (hamis `handedness`-ág injektálva) load-
+>    bearingnek igazolva.
+> 5. **F5 MAJOR — elmaradt, brief-kötelező valódi-sértés próba
+>    dokumentálása.** A review maga végezte el (visibility-kapu kiiktatva
+>    → PIROS → visszaállítva), az implementer a §10-be másolta be.
+> 6. **F6/F7 MINOR (opcionális, bónuszként javítva) + N1 NOTE:**
+>    `MetricDefinition` konstruktor `assert`→feltétel nélküli
+>    `throw ArgumentError` (release-biztonság, a R16 `GeometryConfidence`
+>    mintáját követve); `_confidence()` hatóköre a szűrt mintahalmazra
+>    igazítva mind a négy érintett metrikánál; a használaton kívüli
+>    `proxy_paths.json` fixture törölve.
 >
-> **Az orchestrátor mindkét lezárt leletet FÜGGETLENÜL újra-ellenőrizte**,
-> friss `/tmp` klónban: gate 6/6 ZÖLD, scope-audit OK mindkét fordulóban,
-> a BLOCKER-1 javítását friss, önteszt-fixture-öktől független szintetikus
-> adattal megismételve.
->
-> Zöld kapu (exact-SHA `8e71e80`): Full Gate
-> [31220060205](https://github.com/wolfcasaba/strumsight/actions/runs/31220060205)
+> Zöld kapu (exact-SHA `77d6ee0`, a második javító kör után): Full Gate
+> [31234500072](https://github.com/wolfcasaba/strumsight/actions/runs/31234500072)
 > **success** + Router CI
-> [31220056578](https://github.com/wolfcasaba/strumsight/actions/runs/31220056578)
-> **success**.
+> [31234524158](https://github.com/wolfcasaba/strumsight/actions/runs/31234524158)
+> **success**. Post-merge gate a friss `main`-en (`75f8766`) is zöld,
+> 225/225 teszt.
 >
-> Lecke: **L173** (egy hiba-metrikára generikus, magasabb=jobb sablonból
-> konkretizált küszöb-tábla csendben megfordíthatja a promóciós döntést —
-> részletek `docs/LESSONS.md`).
->
-> **Operatív utójegyzet — a bookkeeping H-NOSIGNAL önjavítással zárult.**
-> A PR #189 merge (21:38 UTC) UTÁN, a closing-rituálok közben az
-> orchestrátor-session „API Error: Server error mid-response"-ba futott;
-> az interaktív tmux-session életben maradt, de némán, és a driver csak a
-> teljes 4 órás abszolút időkorlátnál (1h24m33s néma várakozás után) vette
-> észre — `H-NOSIGNAL`. Az önjavító kör (1/3 kísérlet) két dolgot tett: (1)
-> **`PIPELINE_ORCH_STALL_MINUTES`** elakadás-őrt adott a `run_tmux_session`-höz
-> (PR [#190](https://github.com/wolfcasaba/strumsight/pull/190), squash
-> `a7210bf`, Router CI zöld), hogy egy jövőbeli hasonló hiba ~20 perc alatt,
-> ne 4 óra alatt derüljön ki; (2) lezárta EZT a bookkeepinget (ezt a
-> HANDOFF-bejegyzést, az RTM sort, git-notes), mivel a kör TARTALMI munkája
-> már készen és merge-elve volt — a halt bookkeeping-hiány volt, nem
-> tartalmi kudarc. Lecke **L174**.
->
-> ## ✅ E05-R16 KÉSZ — Guitar geometry tracking és calibration loss (2026-08-07)
->
-> **E05-R16** MERGED (PR [#188](https://github.com/wolfcasaba/strumsight/pull/188),
-> squash `6f9c0e1`; implementer **MiniMax M3** (kezdeti + egy javító kör),
-> orchestrátor/reviewer **Claude Sonnet 5**). Teljes részletes történet
-> (BLOCKER-1: a tracker null-refusala halott kóddá tette a gép saját
-> forward-escalation logikáját, + MINOR-1: assert-only validáció):
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **Nincs új ADR**
-> (ADR 0179/0181 bővítése). Review:
-> [docs/reviews/e05-r16-geometry-tracking-and-calibration-loss-review.md](docs/reviews/e05-r16-geometry-tracking-and-calibration-loss-review.md)
-> — **APPROVED** egy javító kör után, a dedikált security-review lelete is
-> beleolvasztva. Lecke: **L172**.
+> Lecke: **L175** (implementer-munkapéldány `git worktree add`-dal NEM
+> egyenértékű egy klónnal — a `.git` fájl a burkoló saját validációját
+> néma `exit 2`-re futtatja), **L176** (paraméterezett/mátrix-alakú teszt
+> review-jánál a BEMENETEK tényleges variálását is ellenőrizni kell, nem
+> csak a nevet/struktúrát/`expect()`-számot — részletek `docs/LESSONS.md`).
 >
 > ## ✅ E05-R17 KÉSZ — Automatic guitar detector go/no-go decision (2026-08-07)
 >
 > **E05-R17** MERGED (PR [#189](https://github.com/wolfcasaba/strumsight/pull/189),
 > squash `e979d41`; implementer **MiniMax M3** (kezdeti + egy javító kör),
-> orchestrátor/reviewer **Claude Sonnet 5**). Lásd a fenti „Last updated"
-> blokk a teljes pre-flight/javítókör/review/önjavítás történetért — ez a
-> szakasz csak a rövid hivatkozási pont a korábbi körök mintája szerint.
-> **ADR 0187** (új). Review:
+> orchestrátor/reviewer **Claude Sonnet 5**). Go/no-go/experimental-only
+> döntési keret egy JÖVŐBELI automatikus gitár/nyak-geometria detektorhoz
+> (nem épít detektort). Teljes részletes történet (BLOCKER-1: a
+> `decision()` promóciós logika inverz irányú egy hiba-metrikán +
+> MAJOR-1: consent-séma 6/7 kötelező mező, + a merge utáni H-NOSIGNAL
+> önjavítás):
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ADR 0187** (új).
+> Review:
 > [docs/reviews/e05-r17-auto-guitar-detector-decision-review.md](docs/reviews/e05-r17-auto-guitar-detector-decision-review.md)
 > — **APPROVED** egy javító kör után, a dedikált security-review lelete is
-> beleolvasztva. **Következő:** E05-R18 — Fretting-hand metric engine
-> (`docs/rounds/e05-r18-fretting-hand-metric-engine.md`), a pipeline új
-> sessionben indítja.
+> beleolvasztva. Lecke: **L173**, **L174**.
+>
+> ## ✅ E05-R18 KÉSZ — Fretting-hand metric engine (2026-08-08)
+>
+> **E05-R18** MERGED (PR [#191](https://github.com/wolfcasaba/strumsight/pull/191),
+> squash `75f8766`; implementer **MiniMax M3** (kezdeti + két javító kör),
+> orchestrátor/reviewer **Claude Sonnet 5**). Lásd a fenti „Last updated"
+> blokk a teljes pre-flight/javítókörök/review történetért — ez a szakasz
+> csak a rövid hivatkozási pont a korábbi körök mintája szerint. **Nincs új
+> ADR** (ADR 0179/0181 végrehajtása). Review:
+> [docs/reviews/e05-r18-fretting-hand-metric-engine-review.md](docs/reviews/e05-r18-fretting-hand-metric-engine-review.md)
+> — **APPROVED** két javító kör után. Lecke: **L175**, **L176**.
+> **Következő:** E05-R19 — Jobb kéz (strumming) stroke metric engine
+> (`docs/sdd/06-epic-05-computer-vision.md` „Kör 19"), a pipeline új
+> sessionben indítja, ha van hozzá kör-brief; ha nincs, a brief előkészítés
+> az első teendő.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -116,13 +120,11 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (H-NOSIGNAL önjavítás zárta le, ld. fent):
-> E05-R16 részletes narratívája archiválva (a self-heal PR #190 előtt már
-> elkészült, ld. `docs/handoff-archive.md`); E05-R15 rövid bannere törölve
-> (a részletes E05-R15 történet már korábban archiválva volt, a rövid
-> banner egy duplikált hivatkozás volt, nem újra-archiválva); E05-R17
-> részletes narratívája + rövid bannere felkerült (E05-R16 rövid bannere
-> marad a második helyen, „Következő" pointere R18-ra frissítve).
+> Mért diéta: 2026-08-08 (E05-R18 zárása): E05-R16 rövid bannere törölve (a
+> részletes E05-R16 történet már korábban archiválva volt); E05-R17
+> részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
+> bannere megmaradt/frissült; E05-R18 részletes narratívája + rövid
+> bannere felkerült.
 
 ## 1. Current release state
 
@@ -454,37 +456,33 @@
 
 ## 4. Current branch
 
-`main` @ [PR #189](https://github.com/wolfcasaba/strumsight/pull/189), squash
-`e979d41` (E05-R17, automatic guitar detector go/no-go decision). Docs/Python-only
-diff (`ml/vision/*.py`, `.md`, ADR) → full-gate
-[31220060205](https://github.com/wolfcasaba/strumsight/actions/runs/31220060205)
-+ router-ci [31220056578](https://github.com/wolfcasaba/strumsight/actions/runs/31220056578)
-**success** az exact merge-előtti tip `8e71e80`-n (a javító kör UTÁN).
-Review **APPROVED 1 javító kör után** — BLOCKER-1 (`decision()` promóciós
-logika inverz irányú egy hiba-metrikán, gyökérok az orchestrátor SAJÁT
-pre-flight-specifikációja, nem implementer-hiba) + MAJOR-1 (dedikált
-security-review lelete: consent-séma 6/7 kötelező mező), mindkét lelet az
-orchestrátor SAJÁT, függetlenül futtatott gate-újrafuttatásával ÉS friss,
-önteszt-fixture-öktől független szintetikus adattal újra-ellenőrizve, nem
-az implementer önjelentésére hagyatkozva; dedikált security-review
-(risk=high) — PASS BLOCKER/MAJOR-ra, a MAJOR-1-et adta. Az `origin/main` a
-dispatch óta **nem mozdult**. Post-merge gate
-(`python3 ml/vision/evaluate_geometry_baseline.py --self-test`) a friss
-`main`-en is zöld.
-
-**Operatív utójegyzet:** a merge UTÁNI closing-rituálokat egy „API Error:
-Server error mid-response" szakította meg (session életben, néma
-1h24m33s) → `H-NOSIGNAL` → self-heal PR
-[#190](https://github.com/wolfcasaba/strumsight/pull/190), squash `a7210bf`
-(`PIPELINE_ORCH_STALL_MINUTES` elakadás-őr a `run_tmux_session`-höz, Router
-CI zöld) zárta le ezt a bookkeepinget is. Lecke: **L173** (a round saját
-BLOCKER-1-e), **L174** (a self-heal gyökéroka).
-_(Történeti product-merge referencia: PR #188 / `6f9c0e1`, E05-R16; PR #187
-/ `a351ad3`, E05-R15; PR #185 / `efa4bbe`, E05-R14; PR #184 / `148469c`,
-E05-R13; PR #183 / `f39d7b6`, E05-R12; PR #182 / `113976a`, E05-R11; PR #181
-/ `39d1c29`, E05-R10; PR #180 / E05-R09, frame quality assessor; PR #169 /
-`b5837d9`, E05-R07; PR #168 / `a43f8c1`, E05-R06; PR #162 / `cef864c`,
-E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`, E04-R24.)_
+`main` @ [PR #191](https://github.com/wolfcasaba/strumsight/pull/191), squash
+`75f8766` (E05-R18, fretting-hand metric engine). Pure Dart domain +
+teszt-diff → full-gate
+[31234500072](https://github.com/wolfcasaba/strumsight/actions/runs/31234500072)
++ router-ci [31234524158](https://github.com/wolfcasaba/strumsight/actions/runs/31234524158)
+**success** az exact merge-előtti tip `77d6ee0`-n (a MÁSODIK javító kör
+UTÁN). Review **APPROVED 2 javító kör után** — BLOCKER-1/F1
+(`readyPositionTime` a másik öt metrikával ellentétben nem hívta a közös
+szerep+visibility-kaput) + F2/F3/F5 MAJOR (első javító kör zárta) + F4
+MAJOR (a szállított „4 cellás" paritás teszt bitre azonos bemenettel
+futott mind a négy cellában, semmit nem bizonyítva — külön, szűkre
+skálázott MÁSODIK javító kör zárta), mind a review SAJÁT, minden
+fordulóban friss GitHub-klónon (a megosztott fa lokális branch-refje
+STALE volt — L175) függetlenül futtatott gate-újrafuttatásával ÉS
+eldobható mutáció-próbákkal újra-ellenőrizve, nem az implementer
+önjelentésére hagyatkozva. Az `origin/main` a dispatch óta **nem
+mozdult**. Post-merge gate (`tools/round-gate.sh test/features/vision`) a
+friss `main`-en is zöld, 225/225 teszt. Lecke: **L175** (git-worktree vs.
+klón implementer-munkapéldányhoz), **L176** (paraméterezett teszt
+bemenet-vizsgálata).
+_(Történeti product-merge referencia: PR #189 / `e979d41`, E05-R17; PR #188
+/ `6f9c0e1`, E05-R16; PR #187 / `a351ad3`, E05-R15; PR #185 / `efa4bbe`,
+E05-R14; PR #184 / `148469c`, E05-R13; PR #183 / `f39d7b6`, E05-R12; PR #182
+/ `113976a`, E05-R11; PR #181 / `39d1c29`, E05-R10; PR #180 / E05-R09, frame
+quality assessor; PR #169 / `b5837d9`, E05-R07; PR #168 / `a43f8c1`,
+E05-R06; PR #162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`,
+E04-R24.)_
 
 > **[Superseded ref — E05-R07 branch]:** `main` @ PR #169, squash
 `b5837d9` (E05-R07). Pure Dart/teszt diff → full-gate
@@ -578,6 +576,40 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R18 — Fretting-hand metric engine** (PR
+[#191](https://github.com/wolfcasaba/strumsight/pull/191), squash `75f8766`,
+nincs új ADR (ADR 0179/0181 végrehajtása); implementer **MiniMax M3**
+(kezdeti + **2 javító kör**), orchestrátor/reviewer **Claude Sonnet 5**).
+Hat pure-Dart proxy-metrika (`lib/features/vision/domain/metrics/`) — lásd
+a fejléc ✅-blokk a teljes pre-flight/javítókörök/review történetért.
+**2 javító kör**: 1. kör zárta BLOCKER-1/F1 (`readyPositionTime`
+szerep+visibility-kapu hiánya) + F2/F3/F5 MAJOR; 2. kör (szűkre skálázva)
+zárta F4 MAJOR-t (a szállított „4 cellás" paritás teszt bitre azonos
+bemenettel semmit nem bizonyított). Az orchestrátor mindhárom fordulót
+SAJÁT, minden alkalommal friss GitHub-klónon függetlenül futtatott
+gate-tel ÉS eldobható mutáció-próbákkal (a review saját, nem az
+implementer tesztjei) újra-ellenőrizte. Gate zöld a `77d6ee0`
+merge-előtti SHA-n: Full Gate ✅ · Router CI ✅. Post-merge gate a friss
+`main`-en (`75f8766`) is zöld, 225/225 teszt. Lecke: **L175**, **L176**
+(`docs/LESSONS.md`). Részletek:
+[review](docs/reviews/e05-r18-fretting-hand-metric-engine-review.md).
+
+**E05-R17 — Automatic guitar detector go/no-go decision** (PR
+[#189](https://github.com/wolfcasaba/strumsight/pull/189), squash
+`e979d41`, **ADR 0187** (új); implementer **MiniMax M3** (kezdeti + 1
+javító kör), orchestrátor/reviewer **Claude Sonnet 5**). Go/no-go/
+experimental-only döntési keret egy jövőbeli automatikus gitár/nyak-
+geometria detektorhoz (nem épít detektort) — lásd
+[`docs/handoff-archive.md`](docs/handoff-archive.md) a teljes
+pre-flight/javítókör/review/önjavítás történetért. **1 javító kör**:
+BLOCKER-1 (a `decision()` promóciós logika inverz irányú egy
+hiba-metrikán) + MAJOR-1 (dedikált security-review lelete: consent-séma
+6/7 kötelező mező). Gate zöld a `8e71e80` merge-előtti SHA-n: Full Gate ✅
+· Router CI ✅. A merge utáni closing-rituálokat egy H-NOSIGNAL szakította
+meg, self-heal PR #190 zárta. Lecke: **L173**, **L174**. Részletek:
+[`docs/handoff-archive.md`](docs/handoff-archive.md) +
+[review](docs/reviews/e05-r17-auto-guitar-detector-decision-review.md).
 
 **E05-R16 — Guitar geometry tracking és calibration loss** (PR
 [#188](https://github.com/wolfcasaba/strumsight/pull/188), squash
