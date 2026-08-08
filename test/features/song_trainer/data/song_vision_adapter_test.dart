@@ -29,7 +29,7 @@ void main() {
         loops: <SongVisionLoopObservation>[
           _loop(
             id: 'loop-1',
-            duration: const Duration(seconds: 30),
+            duration: const Duration(seconds: 31),
             quality: VisionMetricState.good,
           ),
           _loop(
