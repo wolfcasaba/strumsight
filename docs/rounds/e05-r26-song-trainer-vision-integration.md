@@ -315,6 +315,26 @@ parity-tolerancia bevezetése helyett dokumentált brief-revízió.
 Eltérés nincs a briefhez képest. A valós eszközös ötperces loop-benchmark
 továbbra is PENDING, a brief §7 szerint nem lokális gate.
 
+### Javító kör #1 — F1 barrel-export szűkítés (2026-08-08)
+
+- `lib/features/vision/domain/integration/public.dart`: a
+  `posture_metrics.dart` blanket exportja `show PostureCapability` szűkítést
+  kapott. Ez az egyetlen ténylegesen szükséges szimbólum; a
+  `PostureMetricDefinition` és a `postureMetricDefinitions` nem érhető el a
+  szűk barrelen át, így a transitív `PoseLandmarkId` értékek sem szivárognak.
+- Fix előtt a független review ideiglenes, csak a szűk barrelt importáló
+  próbája sikerrel olvasta a `postureMetricDefinitions.first`
+  `requiredPoseLandmarkIds` értékeit (`leftShoulder`, `rightShoulder`). Fix
+  után az ugyanilyen, ideiglenes `_fix1_probe_test.dart` elemzése vártan
+  PIROS: `undefined_identifier` — `Undefined name
+  'postureMetricDefinitions'` a 6:12 helyen. A próbafájl törölve, nincs a
+  végső diffben.
+- Ellenőrzések: `flutter analyze lib/features/` — PASS; `flutter test
+  test/features/vision/domain/integration/vision_integration_barrel_boundary_test.dart`
+  — PASS (2 teszt); `tools/round-gate.sh test/features/song_trainer
+  test/features/vision` — PASS (format, analyze, 471 Song Trainer teszt,
+  533 Vision teszt, architecture, secrets, l10n).
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e05-r26-song-trainer-vision-integration-review.md`.

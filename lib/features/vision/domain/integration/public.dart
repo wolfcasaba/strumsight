@@ -9,7 +9,7 @@ export 'vision_song_contract.dart';
 export '../../application/vision_cadence_policy.dart';
 export '../metrics/metric_definition.dart';
 export '../metrics/picking_metrics.dart';
-export '../metrics/posture_metrics.dart';
+export '../metrics/posture_metrics.dart' show PostureCapability;
 export '../quality/vision_frame_quality.dart';
 export '../vision_session_result.dart';
 export '../vision_setup_profile.dart';
