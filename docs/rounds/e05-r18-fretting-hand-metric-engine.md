@@ -1,10 +1,16 @@
 # E05-R18 — Bal kéz (fretting) metric engine
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (pre-flight §0.0 revízióval lezárva 2026-08-08; előre
+  megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 18; §19
-- **Branch:** `codex/e05-r18-fretting-hand-metric-engine`
-- **Előfeltétel:** **E05-R13, E05-R15, E05-R16 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Branch:** `minimax/e05-r18-fretting-hand-metric-engine` (a `codex/` prefix
+  az eredeti Codex/Terra-implementációra épülő batch-írásból maradt; a
+  tényleges motor `minimax` — E05-R15/R16/R17 névkonvenció)
+- **Előfeltétel:** **E05-R13, E05-R15, E05-R16 merge** — mind a három
+  merge-elve (`main` @ `c095916`, E05-R17 az utolsó merge-elt kör)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** MiniMax M3
+  (pipeline-prompt előírás, 2026-08-08 — a Terra/codex-harness ideiglenesen
+  tiltva, ld. pipeline-prompt „⛔ IDEIGLENES MOTOR-TILTÁS")
 
 ```ai-router
 schema_version = 1
@@ -26,10 +32,15 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** `origin/main` + E05-R13/R15/R16 merge; olvasd újra
-> az R15 confidence-propagációs szabályát és az R16 `lost` állapotát (ekkor
-> nincs gitárrelatív metrika). Nincs ÚJ ADR (0162 végrehajtása).
-> PREPARED→PLANNING, brief commit az implementer indítása ELŐTT.
+> ⚠ **Pre-flight (KÖTELEZŐ, ELVÉGEZVE 2026-08-08):** `origin/main` +
+> E05-R13/R15/R16 merge (mind zöld kapuval, `main` @ `c095916`) — az R15
+> confidence-propagációs szabálya és az R16 `lost` állapota a kódban
+> újraolvasva és igazolva. A **„0162"/„0164"** ADR-hivatkozás **elavult
+> batch-írási placeholder** volt (a fájlok nem léteznek) — a helyes pár
+> **ADR 0179**/**ADR 0181**, ugyanaz, amit az R08/R09/R10/R11/R16/R17
+> pre-flightja is függetlenül azonosított. Nincs ÚJ ADR (0179 végrehajtása).
+> PREPARED→PLANNING, brief commit az implementer indítása ELŐTT. Részletek:
+> §0.0.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -42,7 +53,61 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**PLANNING.** A pre-flight (Claude Sonnet 5, orchestrátor, 2026-08-08) a
+pipeline-prompt §1 két mérési szabálya szerint (grep-eld ki a kódból, ne a
+táblát mérd) a következőket ellenőrizte és egy mért eltérést talált:
+
+1. **ADR-hivatkozás javítva: `0162`/`0164` → `0179`/`0181`.**
+   `docs/adr/0162-*.md` és `docs/adr/0164-*.md` **nem léteznek** (`ls docs/adr`
+   nulla találat mindkettőre). A brief minden „(ADR 0162/0164)" hivatkozása a
+   „nincs exact fret/string claim, a metrikák proxyk" állításra mutat — ez
+   ténylegesen **ADR 0179** („Vision capability-aware feedback" —
+   `requiredCapability`/`confidence`/`observability`, hiányzó megfigyelhetőség
+   ⇒ `notObservable`) és **ADR 0181** („Vision manual calibration fallback" —
+   a gitárgeometria production útja a kézi kalibráció, tehát a geometria
+   eleve közelítő) tartalma. Ugyanezt a `0162`/`0164` placeholder-hibát az
+   R08, R09, R10, R11, R16 és R17 pre-flightja is függetlenül megtalálta és
+   javította (`docs/LESSONS.md` a `0161→0178`/`0162→0179`/`0163→0180`/
+   `0164→0181` átszámozási táblát rögzíti) — rendszeres, a 2026-08-05-i
+   batch-írásból örökölt minta, nem egyedi elírás. A törzsben minden
+   „(ADR 0162/0164)" előfordulás javítva „(ADR 0179/0181)"-re (§5 pont 1).
+   **Nincs új ADR** — a kör kizárólag a már elfogadott ADR 0179/0181
+   politikát hajtja végre egy új domain-rétegben (konzisztens az R16
+   „Nincs új ADR (ADR 0179/0181 bővítése)" precedensével), nem hoz új
+   architekturális döntést.
+
+2. **Mért input-ellenőrzés — R16 `lost` állapot elérhetősége.** A
+   pipeline-prompt §1.1 szabálya szerint (ne az átmenettáblát mérd, hanem az
+   inputot) `grep -n "CalibrationLossState.lost" lib/features/vision/` +
+   `calibration_loss_machine.dart` olvasás igazolja: a `lost` állapot KÉT
+   független, injektált inputtal érhető el —
+   `update(observation)` `observation.confidence.drift > lostDriftBound`
+   (0.10) esetén AZONNAL, VAGY `update(null)` (nincs tracker-megfigyelés)
+   `noObservationLostThreshold` (5) egymást követő hívás után. A `state`
+   getter publikus (`CalibrationLossState get state => _state`). Az
+   acceptance §6 „`lost`-geometria teszt" cellája tehát mérhető: egy
+   `CalibrationLossMachine` a fixture-ben 5× `update(null)`-lal (vagy egy
+   `update` `drift > 0.10`-zal) állítható `lost`-ba, és az engine ekkor a
+   gitárrelatív metrikákra `notObservable`-t köteles adni, a számítás
+   lefutása nélkül (a hívásszámláló-teszt erre méri).
+
+3. **Mért kontextus — R15 confidence-propagáció + R13 role-mező.**
+   `lib/features/vision/domain/geometry/guitar_landmark_mapper.dart`
+   `mapPoint()` igazolja a §5 pont 1 „a metrikák proxyk" alapját: a kimeneti
+   `confidence` mindig `≤` a bemeneti `visibility` (`(visibility *
+   _conditionPenalty).clamp(0.0, 1.0)`, `_conditionPenalty <= 1.0`), tehát a
+   metric engine nem kaphat a bemenetnél magasabb bizonyosságú `(u, v)`
+   pontot. `lib/features/vision/domain/landmarks/hand_track.dart` igazolja a
+   §5 pont 5 „gitáros szerep, nem fizikai kéz" alapját: `HandTrack.role` egy
+   önálló `HandRole { fretting, picking }` mező, független a
+   `HandTrack.handedness`-től (`Handedness { left, right }`) — a metrikák a
+   `role == HandRole.fretting` track landmarkjain számolnak, a `leftHanded`
+   beállítás csak a `HandTrackAssigner`-ben (R13, korábbi kör, nem ebben a
+   scope-ban) hat a `role` levezetésére, itt nem fordítható meg semmi.
+
+Az `allowed_paths`, a `gate_tests`, a hat metrika listája és az acceptance
+criteria a batch-írt szöveghez képest változatlan — a fenti három pont
+kizárólag hivatkozás-javítás és mérési megerősítés, nem scope-módosítás.
 
 ## 1. Cél
 
@@ -85,7 +150,7 @@ fusion (R22), Practice integráció (R25), exact fret/string állítás.
 
 ## 5. Kötött architekturális döntések
 
-1. **Nincs exact fret/string claim** (ADR 0162/0164). A metrikák **proxyk**, és
+1. **Nincs exact fret/string claim** (ADR 0179/0181). A metrikák **proxyk**, és
    a nevük is ezt mondja. **NEM elfogadható:** „a 3. bundon van a mutatóujjad"
    típusú kimenet, sem olyan mező, amelyből a UI ezt olvasná ki.
 2. **Minden metrika deklarált szerződéssel jár:** minimum visibility, ablakhossz,
