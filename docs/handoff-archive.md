@@ -6,6 +6,76 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R27 — AI Tutor és Analysis vision evidence adapterek, teljes részletes történet (2026-08-08)
+
+**E05-R27 MERGED — AI Tutor és Analysis vision evidence adapterek:** a
+vision-detektálás eredményeinek minimalizált, privacy-safe, claim-guardolt
+elérhetővé tétele a Tutornak és az Analysisnek — a Tutor **csak valid
+bizonyítékból** beszélhet vizuális megfigyelésekről. `VisionContextSnapshot`
+(`lib/features/vision/domain/integration/vision_context_snapshot.dart`) —
+öt PINNELT kulcs (`sessionId` — típusos `VisionSessionId`, `sessionTimestampUs`,
+`insightCode`, `confidence`, `observationState`), a meglévő E05-R22/R23
+típusokra építve (`InsightCode`, `ObservationState`), **explicit kizárva**
+a nyers `VisionEvidence.value`-t és minden frame/landmark/arcpont/kép-URI
+mezőt — még flag mögött sem. `VisionClaimGuard`
+(`.../vision_claim_guard.dart`) — fail-closed evidence+confidence kapu,
+**irányfüggő küszöb** (0.70 alap / 0.85 a három negatív „Focus" kódra,
+a szállított `FeedbackPolicy` negatív-irányú küszöbével összhangban — ez
+a javító kör #1 fixe), determinisztikus `notObservable`
+fallback. `TutorVisionContextAdapter`
+(`lib/features/ai_tutor/application/context/adapters/`) — valódi
+`TutorContextField`-et állít elő a meglévő redaktált úton (`vision` mint
+ÚJ, additív `TutorContextFieldKey`/`ContextSourceFeature` érték);
+**production viselkedés bitre változatlan**, mert egyetlen
+`ContextPurpose.allowedFields` sem engedélyezi még a mezőt — ezt az
+orchesztrátor ÉS a dedikált security-review egymástól függetlenül,
+a `read_only_tutor_tools.dart` tool-végrehajtási útján át is
+végigkövette (`getContextField(field: "vision")` a diff előtt ÉS után is
+azonos `TutorToolInputException`-t dob). `AnalysisVisionReference`/
+`AnalysisVisionAdapter` (`lib/features/analyze/`) — audio-klip és
+vision-evidence összekapcsolása a közös `SessionTimestamp`-tel (SOHA
+wall-clock), `ObservationState.inferred` provenance-szal.
+
+**ÚJ ADR [0194](docs/adr/0194-tutor-analysis-vision-evidence-adapters.md)**
+(a brief eredetileg „Nincs ÚJ ADR (0161/0162 + 0141 bővítése)"-t írt elő,
+de a „0161"/„0162" sosem létezett fájl volt — ugyanaz a batch-brief-
+hivatkozás elavulási minta, immár ötödször mérve ezen az epicen). A
+pre-flight emellett javított négy hibás fájlútvonalat (a Tutor-adapter és
+két teszt könyvtára), egy hibás barrel-célpontot (wide helyett a
+HANDOFF-mandátumú szűk `vision/domain/integration/public.dart`), pótolt
+egy hiányzó allowed_paths-bejegyzést egy szigorúan additív enum-bővítéshez
+(`tutor_context_snapshot.dart`), és pótolt egy a brief-ből kimaradt SDD
+Kör-27 feladatot (Chapter 5/7 integrációs dokumentáció-jegyzet,
+`docs/sdd/05-epic-04-ai-guitar-teacher.md` + `docs/sdd/07-epic-06-audio-analysis-2.md`).
+Implementer **Codex (Terra)** (1 implementációs forduló + **1 javító
+kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens (`risk = "high"`). PR
+[#201](https://github.com/wolfcasaba/strumsight/pull/201), squash `7e43019`.
+
+**Review:** [docs/reviews/e05-r27-tutor-analysis-vision-adapters-review.md](docs/reviews/e05-r27-tutor-analysis-vision-adapters-review.md)
+— **APPROVED, 0 nyitott BLOCKER/MAJOR/MINOR javító kör #1 után** (0
+BLOCKER/MAJOR az eredeti körben is; 3 MINOR — hiányzó network-spy teszt a
+Tutor-adapterre, a claim-guard küszöbe a szállított `FeedbackPolicy`
+negatív-irányú küszöbe alatt a korrekciós kódokra, típusatlan `sessionId`
+— mindhárom a javító körben zárva, a gate-et az orchesztrátor SAJÁT
+kézzel, izolált `/tmp` klónban futtatta újra KÉTSZER, a fix előtt és
+után). A **dedikált security-review**
+([docs/reviews/e05-r27-tutor-analysis-vision-adapters-security.md](docs/reviews/e05-r27-tutor-analysis-vision-adapters-security.md))
+— **PASS, 0 CRITICAL/BLOCKER/MAJOR**, ugyanaz a 3 MINOR (független
+módszerrel megerősítve, majd zárva), 4 NOTE follow-up nyitva marad.
+
+**Zöld kapu (exact-SHA `8c60418`, a javító kör utáni tip):** Full Gate
+[31272407612](https://github.com/wolfcasaba/strumsight/actions/runs/31272407612)
+**success** + Router CI
+[31272410370](https://github.com/wolfcasaba/strumsight/actions/runs/31272410370)
+**success**. Squash-merge után a friss `main`-en (`7e43019`) is zöld:
+`tools/round-gate.sh test/features/vision test/features/ai_tutor
+test/features/analyze` izolált-elvű újrafuttatása mind a 8 lépésre.
+Lecke: **L194** (batch-brief stale-ADR-hivatkozás, ötödször mérve),
+**L195** (additív enum-érték production-semlegessége a FOGYASZTÓ oldalt is
+igényli, nem csak a deklaráló típust), **L196** (önálló, „azonos alakú"
+biztonsági küszöb minden meglévő rokon küszöbbel szemben validálandó).
+
 ## E05-R26 — Song Trainer vision integration, teljes részletes történet (2026-08-08)
 
 **E05-R26 MERGED — Song Trainer vision integration:** szakasz-/loop-szintű

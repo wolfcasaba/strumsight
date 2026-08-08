@@ -6803,3 +6803,100 @@ kötelezően grep-elnie kell minden hasonló nevű/szerepű MEGLÉVŐ konstanst
 termék más részével divergáló küszöb pontosan azt a fajta „gyenge
 confidence biztos állításként" hibát kockáztatja, amit a kör saját célja
 (AGENTS.md §5 határ 5) tilt.
+
+## L197 — Egy brief-ben felsorolt „mentendő adatkör"-tétel forrás-elérhetőségét a pre-flightban kell kimérni, nem csak a nevét ellenőrizni (E05-R28, ADR 0183, 2026-08-08)
+
+**Mit mértünk.** Az E05-R28 brief §3 Scope-ja öt kategóriát sorolt fel
+mentendő adatként (aggregátum, insight, capability, quality,
+**model-verzió**), és az ADR 0183 Döntés 2 explicit elutasította a
+model-verzió kihagyását. A pre-flight (öt precedens-pontosítás) MÉRTE a
+persistence-konténer alakját, a migrációs mátrixot, a storage-kulcs
+mechanizmust, a delete-mintát és a network-spy horgonyt — de NEM mérte ki,
+hogy mind az öt „mentendő adatkör"-tétel ténylegesen ELÉRHETŐ-E a bemenetül
+kapott `VisionSessionResult`-ból. Az implementer az első fordulóban a
+model-verziót egyszerűen kihagyta, és a §10 handoffban „nincs funkcionális
+eltérés"-t jelentett — ami hamis volt, csak a review kapta el (F1, MAJOR).
+
+**Miért nem kapta el a pre-flight előre.** A pre-flight §1 két kötelező
+mérési szabálya (elérhetetlen cél-státusz; erőforrás-tulajdonlás) egyike sem
+fedte le explicit ezt az esetet: „ha a brief N adatkategóriát sorol fel
+mentendőként, mérd ki mind az N forrását a bemeneti típusban, mielőtt
+elfogadod, hogy mind az N elérhető". A gyökérok végül egy MÁSIK, LEZÁRT kör
+(E05-R24) domain-típusának hiányossága volt — a `VisionSessionResult` sosem
+kapott model-verzió mezőt —, amit a jelen kör `allowed_paths`-a explicit
+kizárt a módosításból.
+
+**Hogyan alkalmazd.** A pre-flight §1 méréshez adj egy HARMADIK rutinszerű
+lépést: minden, a brief §3/§6-ban névvel felsorolt „mentendő”/„szükséges”
+adatkategóriához `grep`-eld ki a PONTOS forrás-mezőt a ténylegesen bemenetül
+kapott típusban (itt: `VisionSessionResult` és transitív mezői) — ha egy
+kategóriának nincs közvetlen forrása, az VAGY egy másik, MEGLÉVŐ, elérhető
+interfészen (itt: `VisionModelManifestReader`, a wide barrel már
+exportálta) keresztül pótolható a kör saját `allowed_paths`-án belül, VAGY
+dokumentált §0.0 scope-revíziót igényel, mielőtt a kör elindul — sosem
+hagyatkozz az implementer „nincs eltérés” önjelentésére ennek bizonyítékaként.
+
+## L198 — Egy opcionális függőség alapértelmezése, ami CI/dev környezetben véletlenül feloldódik, de a célplatformon nem, gate-tel nem fogható hiba (E05-R28, 2026-08-08)
+
+**Mit mértünk.** Az F1 (L197) javításakor az implementer első próbálkozása
+(javító kör #1) egy OPCIONÁLIS `VisionModelManifestReader?` paramétert adott
+a `VisionSessionRepository`-hoz, `FileVisionModelManifestReader()`
+alapértelmezéssel. Ez az osztály `Directory.current`-hez relatív, nyers
+`dart:io File`-olvasással keresi az `assets/ml/model_manifest.json`-t — de
+ez a fájl a `pubspec.yaml` `flutter.assets` listájában SEHOL nincs
+deklarálva (csak egyedi `.bin` fájlok vannak felsorolva, nincs
+könyvtár-wildcard), tehát sosem kerül be az APK/IPA-ba, és egy telepített
+appban a `Directory.current` amúgy sem a repo gyökere. A gate mindkét javító
+körben ZÖLD maradt, mert MINDEN teszt explicit fake readert injektált — az
+alapértelmezést semelyik teszt nem gyakorolta —, és a `flutter test` a repo
+gyökeréből fut, ahol a hallgatólagos alapértelmezés VÉLETLENÜL feloldódna,
+ha bármelyik teszt mégis gyakorolná.
+
+**Miért nem kapta el a gate.** Strukturálisan nem is kaphatta volna el: a
+gate ugyanabból a könyvtárból fut, mint ahol a hibás alapértelmezés
+véletlenül működik. Ez a hibaosztály csak (a) egy MEGLÉVŐ, analóg
+production-osztály mintájával való összevetéssel (itt:
+`NativeHandLandmarkProvider`/`NativePoseLandmarkProvider`, mindkettő
+KÖTELEZŐ, alapértelmezés nélküli paraméterként kéri ugyanezt a
+readert), vagy (b) a `pubspec.yaml` asset-deklarációjának tételes
+ellenőrzésével volt kimérhető — egyik sem a gate, hanem a review feladata.
+
+**Hogyan alkalmazd.** Amikor egy kör egy ÚJ, opcionális/alapértelmezett
+függőséget vezet be egy olyan osztályban, ami majd valódi eszközön fut: (1)
+vesd össze a döntést a kódbázisban MÁR létező, analóg osztályok mintájával —
+ha azok kötelezővé teszik ugyanazt a függőséget alapértelmezés nélkül, az
+eltérés önmagában gyanús; (2) ha az alapértelmezés fájlrendszeri/`dart:io`
+elérést végez, ellenőrizd explicit, hogy az érintett fájl szerepel-e a
+`pubspec.yaml` `flutter.assets` listáján — ha nem, az alapértelmezés csak a
+fejlesztői/CI környezet véletlen egyezése miatt „működik”, éles eszközön
+soha; (3) az egyszerűbb, biztonságosabb megoldás gyakran a függőség teljes
+kiszervezése a hívóhoz (explicit kötelező paraméter a metóduson, nem a
+konstruktoron rejtett, alapértelmezett objektum) — ez fordítás-időben zár ki
+egy elfelejtett wiring-et, nem futásidőben.
+
+## L199 — A `wait-for-round.sh` első terminális jelzése nem mindig végleges: a wrapper-processz élete, nem csak a jelzésfájl tartalma, dönti el, hogy a kör tényleg véget ért-e (E05-R28, 2026-08-08)
+
+**Mit mértünk.** Az E05-R28 három (implementációs + 2 javító) körében
+TÖBBSZÖR mértem, hogy a `wait-for-round.sh` `status=done`-nal tért vissza
+(kilépési kód 0), miközben a `tools/codex-round.sh` wrapper-processz
+(`ps -ef`) MÉG ÉLT — egy esetben (az implementációs kör) a jelzésfájl ezután
+`progress`-re váltott, egy ÚJ, eltérő summary-szöveggel (az implementer
+ténylegesen folytatta a munkát egy korábbi „kész” jelzés UTÁN); két esetben
+(mindkét javító kör) a `status`/`summary`/`head` mezők változatlanok
+maradtak, de a fájl ÚJ mezőkkel bővült (`scope_audit`, `gate_shape`,
+`session_id`, `continuations`) — ez a wrapper SAJÁT, a `done` jelzés UTÁNI
+utófeldolgozása (pl. a scope-audit lefuttatása), ami néhány percig is
+eltarthat, mielőtt a wrapper-processz ténylegesen kilép.
+
+**Miért kockázatos, ha ez elsikkad.** Ha az orchesztrátor az ELSŐ `status=done`
+leolvasása után azonnal review-ba/merge-be kezd, egy még folyamatban lévő
+implementer-munkát vagy egy még be nem fejeződött scope-audit-eredményt
+olvashat félkész állapotban.
+
+**Hogyan alkalmazd.** `wait-for-round.sh` kilépési kód 0 (`done`) UTÁN,
+MIELŐTT bármit elfogadsz, `ps -ef`-fel ellenőrizd, hogy a
+`tools/codex-round.sh`/`codex exec` processz TÉNYLEGESEN kilépett-e. Ha nem:
+hívd meg ÚJRA a `wait-for-round.sh`-t (friss baseline-nal, a jelenlegi
+`signalled_at`-tel indulva) — NE a régi `done` kimenetet fogadd el
+véglegesnek. A processz kilépése az igazi terminális jel, a jelzésfájl
+tartalma csak az utolsó ISMERT állapot.
