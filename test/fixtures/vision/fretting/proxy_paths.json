@@ -1,0 +1,5 @@
+{
+  "description": "Synthetic fretting proxy paths; values are test-only and contain no user data.",
+  "idealized": {"wrist": [0.4, 0.0], "indexTip": [0.45, 0.2], "pinkyTip": [0.45, -0.2]},
+  "noisy": {"wrist": [[0.4, 0.0], [0.41, 0.01], [0.39, -0.01]]}
+}
