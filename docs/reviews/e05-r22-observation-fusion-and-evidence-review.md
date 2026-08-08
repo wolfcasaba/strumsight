@@ -3,15 +3,20 @@
 Brief: `docs/rounds/e05-r22-observation-fusion-and-evidence.md`
 Diff: `git diff origin/main...codex/e05-r22-observation-fusion-and-evidence`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-08
-Verdikt: **APPROVED** javító kör #1 után (`8b5a8f4`) — lásd „Javító kör #1 zárása" lent.
-Javító kör #2 folyamatban F4-re (security MINOR-1, nem merge-blokkoló).
+Verdikt: **APPROVED** (javító kör #1 `8b5a8f4` + javító kör #2 `fbbb749` után,
+mindkettő saját kézzel, izolált klónban újramérve)
 
 ## Összegzés
 
 Első pass: BLOCKER: 0 · MAJOR: 1 (F1) · MINOR: 1 (F2) · NOTE: 1 (F3)
-Javító kör #1 után: **F1 FIXED, F2 FIXED** (`8b5a8f4`, saját újramérve) — 0
-nyitott BLOCKER/MAJOR.
-Security review (külön jelentés) + F4: lásd „Javító kör #1 zárása" lent.
+Javító kör #1 (`8b5a8f4`) után: **F1 FIXED, F2 FIXED** — 0 nyitott
+BLOCKER/MAJOR.
+Security review (külön jelentés, párhuzamosan futtatva): **APPROVED (PASS)**,
+0 BLOCKER/MAJOR, 1 MINOR (F4) + 3 NOTE.
+Javító kör #2 (`fbbb749`) után: **F4 FIXED**.
+**Végállapot: 0 nyitott BLOCKER/MAJOR/MINOR** a funkcionális és a biztonsági
+dimenzióban együtt; F3 + security NOTE-1/NOTE-2 dokumentált, nem-blokkoló
+follow-up.
 
 ## Jelzés + handoff
 
@@ -224,7 +229,32 @@ diffnek van rá pontos, precedens-egyező mintája) alább.
   bájt-azonos mintával a diff testvéreivel.
 - **Ellenőrzés:** teszt `ConfidenceComponents(model: double.nan, …)` →
   `throwsA(isA<ArgumentError>())` (NEM `AssertionError`).
-- **Státusz:** OPEN — javító kör #2 alatt.
+- **Státusz:** **FIXED** (`fbbb749`) — a négy `assert` valódi
+  `if (!(x.isFinite && x >= 0 && x <= 1)) throw ArgumentError.value(...)`-ra
+  cserélve, bájt-azonos stílusban a diff testvéreivel; a konstruktor emiatt
+  helyesen már NEM `const` (a hívó teszt is frissítve). Új teszt:
+  `rejects non-finite confidence components with an argument error` —
+  `throwsA(isA<ArgumentError>())`, ami MÁR ÖNMAGÁBAN bizonyítja, hogy valódi
+  `throw`, nem `assert` (egy assert `AssertionError`-t dobna).
+
+## Javító kör #2 zárása (F4)
+
+Saját kézzel, friss `/tmp/review-e05-r22-final` klónban (a `fbbb749` fix-
+commit tetején):
+
+```bash
+git clone --branch codex/e05-r22-observation-fusion-and-evidence /home/ubuntu/music-theory /tmp/review-e05-r22-final
+cd /tmp/review-e05-r22-final && tools/prepare-flutter-generated.sh
+tools/round-gate.sh test/features/vision
+```
+
+**MINDEN GATE ZÖLD** — format, analyze, `test test/features/vision` (367
+teszt = 366 + 1 új F4 regresszió), architecture (12 allowlistelt, korábbi),
+secrets (2003 fájl, 0 lelet), l10n (964 üzenet). Az új
+`rejects non-finite confidence components with an argument error` teszt zöld
+a normál (assert-ekkel futó) `flutter test` alatt is `ArgumentError`-t kapva
+— ez nyelvi szinten kizárja, hogy még mindig `assert` volna (egy `assert`
+`AssertionError`-t dobna, nem `ArgumentError`-t).
 
 ## Javító kör #1 zárása (F1 + F2)
 
@@ -260,10 +290,10 @@ alapján.
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**0 nyitott BLOCKER/MAJOR** (F1 FIXED+újramérve, F2 FIXED). A security review
-is APPROVED, 0 BLOCKER/MAJOR. Az egyetlen nyitott MINOR (F4) a séma szerint
-NEM merge-blokkoló, de olcsón/precedens-egyezően javítható, ezért egy rövid
-javító kör #2 viszi (F3/NOTE-1/NOTE-2 follow-upnak hagyva — azok NEM ebben a
-körben javítandók). A végső merge a javító kör #2 után, a CI-run
-(exact-SHA) zöldjével együtt történik — lásd a kör-branch legfrissebb
-commitját a mergekor.
+**0 nyitott BLOCKER/MAJOR/MINOR** (F1/F2/F4 mind FIXED, saját kézzel,
+külön-külön izolált klónban újramérve). A security review APPROVED (PASS).
+F3 (value-aggregáció outlier-politika) + security NOTE-1/NOTE-2 dokumentált,
+nem-blokkoló follow-up egy jövőbeli körnek. A helyi gate-bizonyíték a
+`fbbb749` fejen áll — a CI-t (teljes suite + property + APK) az orchestrátor
+erre a SHA-ra (vagy az azóta esetleg mozdult tipre) dispatch-eli, és a
+squash-merge csak az exact-SHA zöld CI-run után történik.
