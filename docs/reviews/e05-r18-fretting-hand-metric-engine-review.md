@@ -4,10 +4,11 @@ Brief: `docs/rounds/e05-r18-fretting-hand-metric-engine.md`
 Diff: `git diff origin/main...116b63e` (branch `minimax/e05-r18-fretting-hand-metric-engine`, workspace `/home/ubuntu/ss-mm-e05-r18`, review klón `/tmp/review-e05-r18`)
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-08
 Verdikt (első pass): CHANGES REQUESTED
-Verdikt (javító kör 1 után, `f323b64`): **CHANGES REQUESTED (szűkítve)** — ld.
-„Javító kör 1 — záró ellenőrzés" szakasz a jelentés végén; F1/F2/F3/F5/F6/F7
-zárva, F4 újranyitva (a szállított teszt vizsgálhatóan nem bizonyítja, amit
-állít).
+Verdikt (javító kör 1 után, `f323b64`): CHANGES REQUESTED (szűkítve) — ld.
+„Javító kör 1 — záró ellenőrzés" szakasz; F1/F2/F3/F5/F6/F7 zárva, F4
+újranyitva (a szállított teszt vizsgálhatóan nem bizonyítja, amit állít).
+Verdikt (javító kör 2 után, `f342c4b`): **APPROVED** — ld. „Javító kör 2 —
+záró ellenőrzés" szakasz a jelentés végén.
 
 ## Összegzés (első pass)
 
@@ -325,9 +326,47 @@ teszt a `role`/`handedness` szétválasztást ellenőrzi a geometriai érték
 helyett. Erről a döntésről NEM a javító kör dönt egyoldalúan — vagy valódi
 varianciát visz be a tesztbe, vagy `stopped`-ot jelez a döntéshez.
 
-## Merge-döntés (frissítve)
+## Merge-döntés (frissítve javító kör 1 után)
 
 **Merge továbbra is TILOS** — kizárólag F4 miatt (MAJOR, újranyitva). A
 másik 7 lelet (1 BLOCKER + 2 MAJOR + 2 MINOR + 1 NOTE, F1/F2/F3/F5/F6/F7/N1)
 independent re-verifikációval **zárva**. Egy második, szűken skálázott
 javító kör szükséges, kizárólag F4-re fókuszálva.
+
+---
+
+## Javító kör 2 — záró ellenőrzés (2026-08-08, commit `f342c4b`)
+
+Egyetlen commit, egyetlen fájl (`test/features/vision/domain/
+fretting_metric_engine_test.dart`, 1 changed path a scope-auditban) — pontosan
+a kért szűk scope. Friss GitHub-klón (`/tmp/review-e05-r18-fix2`), scope-audit
+**OK**, gate **6/6 zöld, 225/225 teszt**.
+
+A `parityCells()`-t egy `mirror / left-handed parity (handedness axis, 2
+cells)` csoport váltotta: két minta-trajektória, byte-azonos `role`/`(u,v)`/
+raw landmark geometriával, KIZÁRÓLAG `HandTrack.handedness`-ben eltérve
+(`left` vs `right`); mind a hat metrika observability+value egyezését várja.
+A doc-komment (299-317. sor) explicit és őszinte a hatókör szűkítéséről: 2
+cella, nem 4, mert a kamera-irány/`leftHanded` tengely ezen a rétegen nem
+létezik (a normalizáció R13/R15 felelőssége, ott tesztelve) — pontosan az
+általam felkínált (b) út.
+
+**Saját, eldobható mutáció-próba** (a review saját kezdeményezése, a brief
+§6 valódi-sértés-elve szerint — nem elég elhinni, hogy a teszt load-bearing):
+`wristDeviationProxy`-ba beillesztve egy hamis `handedness == Handedness.right
+⇒ notObservable` ág. Eredmény: az ÚJ „mirror / left-handed parity" teszt
+azonnal PIROSRA vált (`Expected: observable, Actual: notObservable,
+wristDeviationProxy observability parity across handedness`), a többi 23
+teszt zöld marad. Fájl visszaállítva byte-azonosra (`git diff` üres utána).
+Ez empirikusan igazolja, hogy a teszt TÉNYLEGESEN elkapna egy
+handedness-ágazási regressziót — a review F4-gyel szembeni fő kifogása
+(„formailag megfelel, tartalmilag semmit nem bizonyít") ezzel megszűnt.
+
+F4 **FIXED**, empirikusan megerősítve. A négy javító kör előtti/utáni lelet
+mindegyike zárva: F1 BLOCKER, F2/F3/F4/F5 MAJOR, F6/F7 MINOR, N1 NOTE.
+
+## Merge-döntés (végleges)
+
+**Minden lelet zárva, a gate mindkét javító kör után függetlenül zöld.**
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR →
+merge. **APPROVED.** CI-dispatch és merge az orchestrátor következő lépése.
