@@ -1,6 +1,13 @@
 # E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás (ZÁRÓ)
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`;
+  pre-flight 2026-08-08: minden mért állítás — 12 elemű architektúra-allowlist
+  mind `analyze → live`, 11 vision flag `false` a `FeatureFlags.forEnvironment`
+  EGYETLEN factory-jában (nincs dart-define override), az öt ÚJ fájl
+  ténylegesen hiányzik, a hat meglévő fájl ténylegesen létezik, az SDD §32/35/
+  36/39/40 szakaszok léteznek — a kódnak megfelelőnek bizonyult; §0.0 revízió
+  nem szükséges, ÚJ ADR nem szükséges, a záró-kör waiver [ADR 0087](../adr/0087-autonomous-round-pipeline.md)
+  §7 + [ADR 0112](../adr/0112-self-healing-pipeline.md) alapján érvényes)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 30; §32, §35, §36, §39, §40
 - **Branch:** `codex/e05-r30-dataset-evaluation-and-epic-closure`
 - **Előfeltétel:** **E05-R01…R29 MIND merge-elve**
@@ -47,7 +54,32 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR. **Záró-kör waiver** (lásd §5.7).
+**PLANNING (pre-flight lezárva 2026-08-08).** Nincs előre kiosztott ADR. **Záró-kör
+waiver** (lásd §5.7). A két kötelező mérési szabály (elérhetetlen cél-státusz,
+erőforrás-tulajdonlás) és a §2 összes numerikus/fájl-állítása grep-elve — nulla
+eltérés a kódtól, revízió nem szükséges:
+
+- `tool/check_architecture.dart` allowlist: pontosan **12** bejegyzés, mind
+  `analyze → live` (grep `docs/rounds/...§2` állítása szó szerint egyezik).
+- Vision flag-ek: pontosan **11** (`visionEnabled`, `visionSetupEnabled`,
+  `visionHandTrackingEnabled`, `visionPoseTrackingEnabled`,
+  `visionGuitarGeometryEnabled`, `visionPracticeIntegrationEnabled`,
+  `visionSongIntegrationEnabled`, `visionTutorIntegrationEnabled`,
+  `visionAnalysisIntegrationEnabled`, `visionExperimentalFineFretEnabled`,
+  `visionLabCaptureEnabled`), mind `false` az EGYETLEN
+  `FeatureFlags.forEnvironment` factoryban, dart-define override nélkül — az
+  „elérhetetlen cél-státusz" mérés input-oldala: nincs olyan bemenet, ami
+  igazra tudná állítani ezeket.
+- Az öt ÚJ fájl (`ml/vision/evaluate_vision_metrics.py`,
+  `docs/sdd/epic-05-completion-report.md`, `docs/runbooks/vision-rollout.md`,
+  `test/tooling/vision_model_integrity_test.dart`,
+  `test/features/vision/vision_offline_regression_test.dart`) ténylegesen
+  hiányzik; a hat meglévőként hivatkozott fájl ténylegesen létezik.
+- SDD §32.1–32.5 (incl. §32.3 False feedback gate), §35.1–35.6, §36.1–36.4,
+  §39, §40 mind léteznek `docs/sdd/06-epic-05-computer-vision.md`-ben.
+- Erőforrás-tulajdonlás: a kör nem rendel lease/lock/handle/subscription
+  erőforrást egyetlen réteghez sem (teszt/doksi/harness-only diff) — a
+  szabály nem alkalmazható.
 
 ## 1. Cél
 
