@@ -256,7 +256,62 @@ parity-tolerancia bevezetése helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/vision/domain/integration/vision_song_contract.dart` — a
+  string-alapú session/song/section/loop boundaryhoz tartozó, aggregate-only
+  Song Vision contract; a posture drift minimum szakaszhossza explicit.
+- `lib/features/vision/domain/integration/public.dart` — szűk nested barrel.
+  Pontos exportlista: `vision_practice_contract.dart`,
+  `vision_song_contract.dart`, `vision_cadence_policy.dart`,
+  `metric_definition.dart`, `picking_metrics.dart`, `posture_metrics.dart`,
+  `vision_frame_quality.dart`, `vision_session_result.dart`,
+  `vision_setup_profile.dart`. Tiltott landmark/geometry/provider/UI vagy raw
+  camera-coordinate export nincs.
+- `lib/features/vision/application/vision_cadence_policy.dart` — tiszta
+  policy: `VisionThermalLoad(0..100)` + `supportsVision` bemenet;
+  `VisionCadenceDecision(full|reduced|audioOnly|visionDisabled)` kimenet.
+  Küszöbök: 40 (reduced), 80 (audio-only); a decision nem hiba és nem kér
+  transport-stopot.
+- `lib/features/song_trainer/domain/models/song_vision_summary.dart` —
+  looponként megőrzött, quality-jelölt aggregate summary.
+- `lib/features/song_trainer/data/vision/song_vision_adapter.dart` — kizárólag
+  a szűk nested barrelt importáló adapter. Nem dependál a transportra; elégtelen
+  quality, audio-only és disabled esetben nem állít Vision metrikát; posture
+  csak a contract minimumán vagy fölötte fut.
+- `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — additív,
+  `songVisionLoopQualityUnavailable` result-jelzés.
+- Új tesztek: barrel-boundary, cadence-mátrix, loop-aggregáció és
+  transport-timing parity.
+
+### Mért bizonyíték
+
+- A barrel boundary-teszt tiltott `../geometry/guitar_region.dart` exporttal
+  PIROS volt, majd visszaállítás után zöld.
+- Ugyanez a teszt a `song_vision_adapter.dart` ideiglenes wide
+  `features/vision/public.dart` importjával PIROS volt, majd visszaállítás
+  után zöld.
+- A cadence-mátrixban az audio-only ágat ideiglenesen `full` értékre cserélve
+  a 80 és 100 thermal cella PIROS volt; visszaállítás után zöld.
+- A transport-parity fixture a rögzített prepare/start/advance/pause/resume
+  idővonalat és a `MonophonicNoteScorer` eredményét bitazonosan hasonlítja
+  Vision ON/OFF között. A normal/warm/hot matrix mindhárom cellája assertálja,
+  hogy a transport `playing` marad.
+
+### Futtatott parancsok
+
+- `flutter test test/features/vision/domain/integration/vision_integration_barrel_boundary_test.dart`
+  — PASS (2 teszt).
+- `flutter test test/features/vision/application/vision_cadence_policy_test.dart`
+  — PASS (9 teszt).
+- `flutter test test/features/song_trainer/data/song_vision_adapter_test.dart`
+  — PASS (3 teszt).
+- `flutter test test/features/song_trainer/performance/transport_timing_parity_test.dart`
+  — PASS (2 teszt).
+- `dart run tool/ci/check_l10n_parity.dart` — PASS, `en → hu`, 1002 üzenet.
+
+Eltérés nincs a briefhez képest. A valós eszközös ötperces loop-benchmark
+továbbra is PENDING, a brief §7 szerint nem lokális gate.
 
 ## 11. Review — a független reviewer tölti ki
 
