@@ -4,11 +4,21 @@ Brief: docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md
 Diff: `git diff 1bbcc97..ee154cc` (`origin/main` pre-flight tip → round tip),
 equivalently `git diff origin/main...codex/e05-r28-vision-persistence-privacy-and-deletion`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08
-Verdikt: APPROVED
+Verdikt: CHANGES REQUESTED (1 MAJOR — javító kör dispatch-elve)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+
+**Frissítés (javító kör #1 előtt):** a dedikált security-review (risk=high,
+`docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md`)
+független módszerrel egy tartalmi (nem privacy-sértő) contract-rést talált —
+lásd F1 lent —, amit a security-reviewer MINOR-nak minősített (a privacy-lens
+alapján helyesen: az adat HIÁNYA sosem szivárgás), de ami ennek a fő
+review-nak az architektúra/contract-lencséjéből MAJOR: az ADR 0183 Döntés 2
+egy explicit „Elvetve" alternatívát ír le, és a szállított kód pontosan azt
+teszi. A lelet ÉRDEMBEN javítható R28 saját `allowed_paths`-án belül (nincs
+szükség H2/H3 halt-ra) — lásd F1 „Kötelező javítás".
 
 Independent re-verification in an isolated `/tmp` clone (`/tmp/review-e05-r28`,
 uncontaminated by the implementer's own worktree). Two disposable adversarial
@@ -39,6 +49,17 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 
 ## Megállapítások
 
+### F1 — MAJOR — Model-version is never persisted, contradicting ADR 0183 Döntés 2's explicit rejection of omitting it
+
+- **Fájl:** `lib/features/vision/data/persistence/vision_session_codec.dart:183-214` (the persisted DTO has no model-version key anywhere — not top-level, not per-insight).
+- **Probléma:** the brief's own §3 Scope lists "model-verzió" as one of the five categories in "mentendő adatkör" (aggregátum, insight, capability, quality, **model-verzió**). [ADR 0183](../adr/0183-vision-no-raw-frame-persistence.md) — the very ADR this round's §0.0 pre-flight correction points to as the authoritative source for what the persistence layer may store — states in **Döntés 2**: "A model-verzió a résznek eredetet ad... hogy egy későbbi modellváltás után is értelmezhető maradjon", and explicitly rejects the alternative in **Elutasított alternatívák**: "Model-verzió elhagyása a helytakarékosságért. **Elvetve**: eredet nélkül a tárolt eredmény egy modellváltás után értelmezhetetlenné válik (SDD §30)." The shipped code does exactly the rejected thing: no field in `VisionSessionHistoryEntry`/`VisionInsightSnapshot` carries a model version, and the §10 handoff's "A briefhez nincs funkcionális eltérés" (no functional deviation) claim is therefore inaccurate.
+- **Gyökérok (mérve, nem feltételezve):** `VisionSessionResult` (`vision_session_result.dart`, E05-R24, egy MÁR MERGE-ELT kör típusa, **nincs** R28 `allowed_paths`-án) nem hordoz model-verziót, és a belőle levezetett `VisionInsight` (ami a `sessionSummary`-t alkotja) sem — csak `code`/`policyVersion`/`evidenceIds`/`confidence`/`priority`/`direction`. A tényleges `modelVersion` mező kizárólag `EvidenceProvenance`-on él (`evidence_provenance.dart:33,51`), amit a codec sosem lát (csak az `evidenceIds` ID-string-lista jut el hozzá, nem a teljes `VisionEvidence`/`provenance` lánc).
+- **Hatás:** egy jövőbeli modellváltás után egy régi, tárolt/exportált session-összefoglaló nem köthető ahhoz a modellhez, ami előállította — pontosan az az értelmezhetetlenségi kockázat, amit az ADR 0183 kifejezetten elutasított.
+- **Miért NEM H2/H3 halt, és miért R28 saját hatáskörében javítható:** a hiányzó adat NEM igényli a `vision_session_result.dart` (lezárt E05-R24 kör, R28 tiltott zónája) módosítását. A `core/ml/vision_model_manifest.dart` (MEGLÉVŐ, a wide barrel már exportálja) `VisionModelManifestReader`/`FileVisionModelManifestReader` interfésze (`read() → Future<VisionModelManifestReport>`, `entries: List<VisionModelEntry>`) egy független, injektálható forrás — a `VisionSessionRepository.save()`/`VisionSessionCodec.fromResult()` (MINDKETTŐ R28 saját, ÚJ fájlja, benne van az `allowed_paths`-on) ebből egészítheti ki a rekordot a mentés pillanatában, `VisionSessionResult` érintése nélkül. Ez tisztán R28 saját, még nem merge-elt artefaktumainak (a kör saját codec/repository fájljai) a módosítása — nem tilos zóna feloldása (H3) és nem egy lezárt kör viselkedésének megváltoztatása (H2), mert `vision_session_result.dart` bitre érintetlen marad.
+- **Kötelező javítás:** a `VisionSessionCodec`/`VisionSessionRepository` kapjon egy model-verzió forrást (pl. injektált `VisionModelManifestReader`, vagy a hívó által átadott resolt String — a pontos wiring az implementer döntése), és a persisztált/exportált alak kapjon egy `modelVersion`-mezőt (session-szintű, vagy insight-onkénti, ha több modell egyszerre aktív — a `VisionModelManifestReport.entries` több bejegyzést is tartalmazhat). A privacy-snapshot teszt `_expectedPaths` halmaza bővüljön az új kulccsal/kulcsokkal. Ha az implementer mérve úgy találja, hogy ez GENUINELY nem oldható meg R28 `allowed_paths`-án belül, `stopped`-dal jelezze — ne hallgassa el.
+- **Ellenőrzés:** a privacy-snapshot teszt (`vision_export_privacy_test.dart`) bővített `_expectedPaths`-szal zöld; a delete-mátrix és a network-spy tesztek változatlanul zöldek.
+- **Státusz:** OPEN — javító kör #1-ben dispatch-elve.
+
 ### N1 — NOTE — Cross-feature import goes through the wide `vision/public.dart` barrel, not the narrow `domain/integration/public.dart` one
 
 - **Fájl:** `lib/features/settings/screens/vision_privacy_screen.dart:12`
@@ -59,7 +80,8 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 | architecture | (part of round-gate) | ✅ zöld |
 | secrets | (part of round-gate) | ✅ zöld |
 | l10n | (part of round-gate) | ✅ zöld |
-| CI (teljes suite + property + APK) | nem futtatva (orchestrátor feladata) | pending — dispatch után |
+| Full Gate (no APK) | dispatch-elve az orchestrátor által | ✅ zöld — [31274920630](https://github.com/wolfcasaba/strumsight/actions/runs/31274920630) (PR #202 branch tip `ee154cc`) |
+| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | ✅ zöld — [31274905440](https://github.com/wolfcasaba/strumsight/actions/runs/31274905440) |
 
 **Módszertani jegyzet a gate-újrafuttatásról:** az első saját gate-futtatás
 közben a reviewer PÁRHUZAMOSAN, UGYANABBAN a klónban végezte az AC #2/#3
@@ -72,6 +94,10 @@ eredményt (`/tmp/review-e05-r28-gate.log`, „═══ Gate-összegzés" blokk
 
 ## Merge-döntés
 
-Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge
-mehet, a dedikált security-review (risk=high, folyamatban) lezárása és a
-CI-dispatch (Full Gate / Router CI szükség szerint) zöldje után.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
+A gate-ek (helyi + Full Gate + Router CI) mind zöldek, de **F1 (MAJOR) nyitva
+van** → **merge jelenleg TILOS**. Javító kör #1 dispatch-elve F1
+leletlistával; a review ezután frissül (APPROVED vagy ismételt CHANGES
+REQUESTED), és a CI-t a javító kör commitja után újra kell dispatch-elni
+(a concurrency a jelenlegi zöld futásokat a régi SHA-n hagyja, az új SHA-n
+kell újra zöldnek lennie).
