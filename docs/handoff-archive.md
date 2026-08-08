@@ -6,6 +6,97 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R21 — Audio–vision clock mapping and latency calibration, teljes részletes történet (2026-08-08)
+
+A camera observationök és az audio strum-események közös, monotonic
+session-időre helyezése. `lib/features/vision/domain/sync/` —
+`vision_clock.dart` (`VisionClock`/`AudioClock` boundary — a
+`CameraTimestamp`-et változtatás nélkül fogadja, a `DateTime`-tipusú audio
+timestampet a mapping-aritmetika ELŐTT egyetlen lépésben referencia-relatív
+`SessionTimestamp`-pé alakítja), `clock_mapping.dart` (immutable
+`ClockMapping`: offset µs-ban + opcionális, korlátozott drift ppm-ben +
+confidence; a dokumentált ±500 ppm fölött a mapping explicit `isValid=false`,
+nem extrapolál), `sync_quality.dart` (`poor/acceptable/good/excellent`
+bucketek, benchmark-konfigurálható küszöbökkel). `lib/features/vision/
+application/sync_calibration_controller.dart` — medián-alapú
+outlier-elutasítás, opcionális lineáris drift-fit, RMS-residual
+sync-quality, és **immutable observation-provenance**: recalibráció csak az
+AKTÍV mappinget cseréli, a korábban kiadott `MappedObservation`-ök
+mapping-pillanatképe változatlan marad. **ÚJ ADR:
+[0189](adr/0189-vision-audio-sync-contract.md)** — a brief előre kiosztott
+0170-e a batch-írás óta elavult (negyedik mérése ugyanennek a mintának, ld.
+E05-R09/R16/R18/R20 0162→0179), a `tools/round-slots.py reserve-adr`
+0189-et adott. Implementer **Codex (Terra)** (egyetlen forduló,
+`continuations=0`), orchesztrátor/reviewer **Claude Sonnet 5**. PR
+[#194](https://github.com/wolfcasaba/strumsight/pull/194), squash
+`7b11f26`.
+
+**Pre-flight (§0.0, négy mért pont) — a brief saját kötelező feladata
+(a két időalap mai, tényleges alakjának összevetése) plusz a
+pipeline-prompt §1 mérési szabályai szerint, mind a kódot közvetlenül
+olvasva, nem a briefre hagyatkozva:**
+
+1. **ADR-szám elavult, 0170→0189** (fentebb részletezve).
+2. **A két időalap típusban ÉS garanciában eltér, nem csak nullpontban.**
+   Mérve: vision oldal — `CameraTimestamp.microsecondsSinceSessionStart`,
+   dokumentáltan monotonic, egy Dart-oldali, `initialize()`-kor indított
+   elapsed-clockból (`plugin_camera_capture.dart`) származik, szigorú
+   monoton-őrrel. Audio oldal — `PitchObservation.observedAt` éppen hogy
+   **`DateTime`**, egy injektálható `_now` függvényből (alapértelmezett
+   `DateTime.now`) ered — wall-clock, nincs ma session-relatív vagy
+   monotonic-tipusú audio timestamp a kódban. Következmény: az
+   `AudioClock` határa `DateTime`-ot fogad, de a mapping-aritmetika előtt
+   azonnal referencia-relatív `Duration`-ra alakítja — a „mapping
+   monotonic órát használ" döntés (§5/1) emiatt NEM gyengült, csak a
+   bemeneti alak lett pontosítva (új §5.1 a briefben).
+3. **Sync-quality bucket-nevek keresztellenőrizve az E05-R19 mergelt
+   `PickingSyncQuality`-jével.** A brief `poor/acceptable/good/excellent`
+   négyese **eltér** az SDD §22.4 tervezet-szövegétől
+   (`excellent/good/degraded/unavailable`), de **egyezik** a már szállított
+   R19-fogyasztóval — a brief helyesen a mergelt kódot követi, ez most az
+   ADR 0189-ben is rögzítve, hogy egy jövőbeli kör ne „javítsa vissza" az
+   SDD-szöveg neveire.
+4. **Erőforrás-tulajdonlás mérési szabály: nem releváns** ezen a briefen
+   (nincs lease/lock/handle/subscription-állítás a §5 döntések között) —
+   dokumentálva, nem kihagyva.
+
+**Review:** [reviews/e05-r21-audio-vision-clock-mapping-review.md](reviews/e05-r21-audio-vision-clock-mapping-review.md)
+— **APPROVED elsőre, javító kör nélkül**, 0 BLOCKER/MAJOR, 4 NOTE (mind
+follow-up, nem blokkoló: dokumentálatlan, de indokolt szigorúság-aszimmetria
+a két óra monotonicitás-őre között; hiányzó "provizórikus" jelző a
+drift-határ doc-commentjén; hiányzó teljes-lánc teszt a
+`calibrate(estimateDrift: true)` → túl nagy drift → érvénytelen mapping
+útvonalra; a §10 nem idézi szó szerint a `python3 -c` bucket-számítást).
+Mind a 7 acceptance criteria bizonyítékkal ellenőrizve saját, izolált
+`/tmp` klónban futtatott gate-újrafuttatással (nem az implementer
+önjelentésére hagyatkozva) — beleértve a §6 „valódi-sértés próba"
+KRITÉRIUM saját, független reprodukálását egy harmadik, eldobható klónban
+(`DateTime.now()` az `AudioClock`-ba → pontosan a forrás-guard teszt lett
+piros, semmi más).
+
+**Zöld kapu (exact-SHA `f1bc31a`):** Full Gate
+[31247849134](https://github.com/wolfcasaba/strumsight/actions/runs/31247849134)
+**success** + Router CI
+[31247866364](https://github.com/wolfcasaba/strumsight/actions/runs/31247866364)
+**success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
+utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+trigger-útvonalán sem — ugyanaz a minta, mint E05-R20-nál). A Full Gate
+ELSŐ futása egy `song_import_controller_test.dart`-beli, a kör diffjéhez
+logikailag kapcsolhatatlan teszten pirosra váltott (valós fájlrendszeri
+cleanup-race cancel után); a gyanút a pristine `main`-en 5× izoláltan
+reprodukálva (0/5 bukás) igazoltam kör-független, load-érzékeny
+flake-ként, mielőtt `gh run rerun --failed`-et futtattam — a rerun zöld
+lett, megerősítve, nem helyettesítve a mérést. Post-merge gate a friss
+`main`-en (`7b11f26`) is zöld.
+
+Lecke: **L182** (egy diffhez logikailag kapcsolhatatlan CI-piros a
+pristine `main`-en izoláltan reprodukálva igazolandó, mielőtt rerun vagy
+halt mellett döntenél — a puszta rerun önmagában nem bizonyíték),
+**L183** (a „gh run watch mindig előtérben fusson" szabály a Bash-eszköz
+saját `run_in_background` kapcsolójával is megsérthető, nem csak
+`setsid`-del; a `ScheduleWakeup` kizárólag a `/loop` dinamikus módhoz
+tartozik, nem a `claude --bg` pipeline-session életben tartásához).
+
 ## E05-R20 — Posture metric engine and safety claim guard, teljes részletes történet (2026-08-08)
 
 Baseline-relatív, confidence-aware proxy-metrika a testtartásra —

@@ -4,127 +4,121 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R21 MERGED — Audio–vision clock mapping and latency calibration:**
-> a camera observationök és az audio strum-események közös, monotonic
-> session-időre helyezése. `lib/features/vision/domain/sync/` —
-> `vision_clock.dart` (`VisionClock`/`AudioClock` boundary — a
-> `CameraTimestamp`-et változtatás nélkül fogadja, a `DateTime`-tipusú audio
-> timestampet a mapping-aritmetika ELŐTT egyetlen lépésben referencia-relatív
-> `SessionTimestamp`-pé alakítja), `clock_mapping.dart` (immutable
-> `ClockMapping`: offset µs-ban + opcionális, korlátozott drift ppm-ben +
-> confidence; a dokumentált ±500 ppm fölött a mapping explicit `isValid=false`,
-> nem extrapolál), `sync_quality.dart` (`poor/acceptable/good/excellent`
-> bucketek, benchmark-konfigurálható küszöbökkel). `lib/features/vision/
-> application/sync_calibration_controller.dart` — medián-alapú
-> outlier-elutasítás, opcionális lineáris drift-fit, RMS-residual
-> sync-quality, és **immutable observation-provenance**: recalibráció csak az
-> AKTÍV mappinget cseréli, a korábban kiadott `MappedObservation`-ök
-> mapping-pillanatképe változatlan marad. **ÚJ ADR:
-> [0189](docs/adr/0189-vision-audio-sync-contract.md)** — a brief előre
-> kiosztott 0170-e a batch-írás óta elavult (negyedik mérése ugyanennek a
-> mintának, ld. E05-R09/R16/R18/R20 0162→0179), a `tools/round-slots.py
-> reserve-adr` 0189-et adott. Implementer **Codex (Terra)** (egyetlen
-> forduló, `continuations=0`), orchesztrátor/reviewer **Claude Sonnet 5**.
-> PR [#194](https://github.com/wolfcasaba/strumsight/pull/194), squash
-> `7b11f26`.
+> (E05-R22 MERGED — Vision observation fusion and evidence engine:**
+> a landmark-, geometry-, quality- és sync-adatokból verziózott,
+> visszakövethető `VisionEvidence` előállítása. `lib/features/vision/domain/evidence/`
+> — `vision_observation.dart` (`EvidenceMetric`: a **három élő** metrika-
+> katalógus — fretting/picking/posture — meglévő `.window`/`.minimumVisibility`
+> mezőiből épített, normalizált fúziós-metrika-kulcs, NEM egy párhuzamos
+> ablak-fogalom; `VisionObservation`: timestampelt, model-/quality-/geometry-/
+> sync-inputot hordozó nyers megfigyelés), `vision_evidence.dart`
+> (`ObservationState {observed, inferred, notObservable, experimental}`,
+> determinisztikus FNV-1a evidence ID az ablak-kulcsból + metrikából),
+> `evidence_provenance.dart` (metrika, ablak, model-verzió, geometry-source,
+> sync-bucket, thresholds-verzió — a bizonyíték ebből újraszámolható),
+> `confidence_model.dart` (`ConfidenceComponents`: model·quality·geometry·sync;
+> `ConfidenceModel.combine` **min-alapú**, sosem átlagoló). `lib/features/vision/
+> application/observation_fusion.dart` — ablakos, idempotens, gap-aware fusion
+> pipeline korlátos memóriával (az `add()` metrikánként retention-horizontot
+> kényszerít ki, `fuse()`-tól függetlenül — lásd F1 lent). **ÚJ ADR:
+> [0190](docs/adr/0190-vision-observation-fusion-and-evidence.md)** — a brief
+> előzetes „0162" hivatkozása **sosem lett fájl** (nem elavult foglalás, mint
+> a 0170→0189 minta E05-R21-nél, hanem sosem realizált terv), a
+> `tools/round-slots.py reserve-adr` **0190**-et adott. Implementer
+> **Codex (Terra)** (kezdeti forduló + **2 javító kör**), orchesztrátor/
+> reviewer **Claude Sonnet 5**, dedikált **security-reviewer** ágens
+> (`risk = "high"`). PR [#195](https://github.com/wolfcasaba/strumsight/pull/195),
+> squash `997e7be`.
 >
-> **Pre-flight (§0.0, négy mért pont) — a brief saját kötelező feladata
-> (a két időalap mai, tényleges alakjának összevetése) plusz a
-> pipeline-prompt §1 mérési szabályai szerint, mind a kódot közvetlenül
-> olvasva, nem a briefre hagyatkozva:**
+> **Pre-flight (§0.0, nyolc mért pont) — a brief négy confidence-komponensének
+> (model/quality/geometry/sync) tényleges kód-forrása, a pipeline-prompt §1
+> mérési szabályai szerint:**
 >
-> 1. **ADR-szám elavult, 0170→0189** (fentebb részletezve).
-> 2. **A két időalap típusban ÉS garanciában eltér, nem csak nullpontban.**
->    Mérve: vision oldal — `CameraTimestamp.microsecondsSinceSessionStart`,
->    dokumentáltan monotonic, egy Dart-oldali, `initialize()`-kor indított
->    elapsed-clockból (`plugin_camera_capture.dart`) származik, szigorú
->    monoton-őrrel. Audio oldal — `PitchObservation.observedAt` éppen hogy
->    **`DateTime`**, egy injektálható `_now` függvényből (alapértelmezett
->    `DateTime.now`) ered — wall-clock, nincs ma session-relatív vagy
->    monotonic-tipusú audio timestamp a kódban. Következmény: az
->    `AudioClock` határa `DateTime`-ot fogad, de a mapping-aritmetika előtt
->    azonnal referencia-relatív `Duration`-ra alakítja — a „mapping
->    monotonic órát használ" döntés (§5/1) emiatt NEM gyengült, csak a
->    bemeneti alak lett pontosítva (új §5.1 a briefben).
-> 3. **Sync-quality bucket-nevek keresztellenőrizve az E05-R19 mergelt
->    `PickingSyncQuality`-jével.** A brief `poor/acceptable/good/excellent`
->    négyese **eltér** az SDD §22.4 tervezet-szövegétől
->    (`excellent/good/degraded/unavailable`), de **egyezik** a már szállított
->    R19-fogyasztóval — a brief helyesen a mergelt kódot követi, ez most az
->    ADR 0189-ben is rögzítve, hogy egy jövőbeli kör ne „javítsa vissza" az
->    SDD-szöveg neveire.
-> 4. **Erőforrás-tulajdonlás mérési szabály: nem releváns** ezen a briefen
->    (nincs lease/lock/handle/subscription-állítás a §5 döntések között) —
->    dokumentálva, nem kihagyva.
+> 1. **ADR-szám: „0162" sosem lett fájl** (fentebb részletezve) → 0190.
+> 2. **„model" = `MetricObservation.confidence`** (R18) — motoronként
+>    (fretting/picking/posture) saját formulával már kiszámolva.
+> 3. **„geometry" = `GeometryConfidence.confidence`** (R16) — csak
+>    `guitarRelativeTracking`-et igénylő metrikáknál aktív, egyébként
+>    semleges `1.0`.
+> 4. **„quality" = `VisionFrameQuality`** (R09) — **mérve: egyik metrika-motor
+>    sem fogyasztotta eddig**, ez a kör az első technikai-confidence
+>    fogyasztója; a `VisionQualitySummary` cue-priorizáló kimenete
+>    (setup-only) NEM ez, a fúzió a nyers frame-mérésekre olvas rá.
+> 5. **„sync" = `SyncQuality`** (R21) — **NEM** `PickingSyncQuality` (R19, ma
+>    injektált/be nem kötött); a két, azonos névkészletű enum szándékosan
+>    külön réteg, bekötésük egymásba jövőbeli kör dolga.
+> 6. **`{Fretting,Picking,Posture}MetricDefinition.window`/`.minimumVisibility`
+>    ma HASZNÁLATON KÍVÜLI mezők voltak** — a fúzió adja az első valódi
+>    fogyasztójukat, párhuzamos ablak-fogalom bevezetése nélkül.
+> 7. **„observed/inferred/notObservable/experimental" elérhetetlen
+>    cél-státusz volt** — a brief eredeti szövege nem pinnelte le, MELYIK
+>    bemenet melyiket termeli; a pre-flight pontos szabályt írt (kapacitás-
+>    kapu `experimental`-re, gap/frame-küszöb a többire) az ADR 0190-be.
+> 8. **Erőforrás-tulajdonlás: nem releváns** (nincs lease/lock/handle a
+>    rétegben).
 >
-> **Review:** [docs/reviews/e05-r21-audio-vision-clock-mapping-review.md](docs/reviews/e05-r21-audio-vision-clock-mapping-review.md)
-> — **APPROVED elsőre, javító kör nélkül**, 0 BLOCKER/MAJOR, 4 NOTE (mind
-> follow-up, nem blokkoló: dokumentálatlan, de indokolt szigorúság-aszimmetria
-> a két óra monotonicitás-őre között; hiányzó "provizórikus" jelző a
-> drift-határ doc-commentjén; hiányzó teljes-lánc teszt a
-> `calibrate(estimateDrift: true)` → túl nagy drift → érvénytelen mapping
-> útvonalra; a §10 nem idézi szó szerint a `python3 -c` bucket-számítást).
-> Mind a 7 acceptance criteria bizonyítékkal ellenőrizve saját, izolált
-> `/tmp` klónban futtatott gate-újrafuttatással (nem az implementer
-> önjelentésére hagyatkozva) — beleértve a §6 „valódi-sértés próba"
-> KRITÉRIUM saját, független reprodukálását egy harmadik, eldobható klónban
-> (`DateTime.now()` az `AudioClock`-ba → pontosan a forrás-guard teszt lett
-> piros, semmi más).
+> **Review:** [docs/reviews/e05-r22-observation-fusion-and-evidence-review.md](docs/reviews/e05-r22-observation-fusion-and-evidence-review.md)
+> — **APPROVED 2 javító kör után**. Első pass: **F1 MAJOR** (a memóriakorlát
+> csak `fuse()` mellékhatásaként érvényesült — egy sosem-fuse-olt metrikára
+> saját adverzális próbával **12012** megtartott nyers observationt mértem
+> egy 10 perces/20fps szimulációban) + **F2 MINOR** (a „minimum látható
+> időtartam" ág nincs önállóan tesztelve, bár a kód helyes). Javító kör #1
+> (`8b5a8f4`) mindkettőt zárta — saját kézzel, friss klónban újramérve a
+> memória-próba **12012 → <200**-ra csökkent. A **dedikált security-review**
+> (párhuzamosan futtatva, `risk = "high"` miatt kötelező) **APPROVED (PASS)**,
+> 0 BLOCKER/MAJOR, és **függetlenül, más módszerrel** (release-mód
+> `--no-enable-asserts` reprodukció) ugyanarra a memória-résre jutott
+> (NOTE-3, a `8b5a8f4` már lezárta) — plusz egy saját **MINOR**-t hozott
+> (`ConfidenceComponents` assert-only `[0,1]` határ, release-ben strippelt,
+> a diff testvérei mind valódi `throw`-t használnak — ugyanaz a hibaosztály,
+> amit ez a feature már KÉTSZER javított, R16 F2 és R18 F6). Javító kör #2
+> (`fbbb749`) ezt zárta (`assert` → valódi `if (!cond) throw ArgumentError`).
+> Mindhárom lelet SAJÁT kézzel, izolált `/tmp` klónban újramérve, nem az
+> implementer önjelentésére hagyatkozva. **Végállapot: 0 nyitott
+> BLOCKER/MAJOR/MINOR** a funkcionális és biztonsági dimenzióban együtt.
 >
-> **Zöld kapu (exact-SHA `f1bc31a`):** Full Gate
-> [31247849134](https://github.com/wolfcasaba/strumsight/actions/runs/31247849134)
+> **Zöld kapu (exact-SHA `c63f355`):** Full Gate
+> [31251320525](https://github.com/wolfcasaba/strumsight/actions/runs/31251320525)
 > **success** + Router CI
-> [31247866364](https://github.com/wolfcasaba/strumsight/actions/runs/31247866364)
+> [31251337993](https://github.com/wolfcasaba/strumsight/actions/runs/31251337993)
 > **success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
 > utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
-> trigger-útvonalán sem — ugyanaz a minta, mint E05-R20-nál). A Full Gate
-> ELSŐ futása egy `song_import_controller_test.dart`-beli, a kör diffjéhez
-> logikailag kapcsolhatatlan teszten pirosra váltott (valós fájlrendszeri
-> cleanup-race cancel után); a gyanút a pristine `main`-en 5× izoláltan
-> reprodukálva (0/5 bukás) igazoltam kör-független, load-érzékeny
-> flake-ként, mielőtt `gh run rerun --failed`-et futtattam — a rerun zöld
-> lett, megerősítve, nem helyettesítve a mérést. Post-merge gate a friss
-> `main`-en (`7b11f26`) is zöld.
+> trigger-útvonalán sem — ugyanaz a minta, mint E05-R20/R21-nél). Post-merge
+> gate a friss `main`-en (`997e7be`) is zöld, `test/features/vision`
+> 367/367.
 >
-> Lecke: **L182** (egy diffhez logikailag kapcsolhatatlan CI-piros a
-> pristine `main`-en izoláltan reprodukálva igazolandó, mielőtt rerun vagy
-> halt mellett döntenél — a puszta rerun önmagában nem bizonyíték),
-> **L183** (a „gh run watch mindig előtérben fusson" szabály a Bash-eszköz
-> saját `run_in_background` kapcsolójával is megsérthető, nem csak
-> `setsid`-del; a `ScheduleWakeup` kizárólag a `/loop` dinamikus módhoz
-> tartozik, nem a `claude --bg` pipeline-session életben tartásához).
->
-> ## ✅ E05-R20 KÉSZ — Posture metric engine and safety claim guard (2026-08-08)
->
-> **E05-R20** MERGED (PR [#193](https://github.com/wolfcasaba/strumsight/pull/193),
-> squash `be38e11`; implementer **MiniMax M3** (kezdeti + egy javító kör),
-> orchestrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
-> Baseline-relatív testtartás-metrikák (shoulder/torso/elbow/neck) + fail-closed
-> safety claim guard, lexikai másodvédvonallal. Teljes részletes történet:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ÚJ ADR 0188**
-> (safety claim guard); a posture-metrika réteg ADR 0179 végrehajtása.
-> Review: [docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md](docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md)
-> — **APPROVED** egy javító kör után (2 MAJOR zárva). Lecke: **L179**,
-> **L180**, **L181**.
+> Lecke: **L184** (egy „korlátos memória" garancia, ami csak egy MÁSIK
+> metódus mellékhatásaként érvényesül, adverzális próbával mérendő a hívó
+> azon mintájára, amit a szállított teszt NEM gyakorol — a próba a
+> korlátozó hívás NÉLKÜL/attól eltérő cadenciával hajtja végre a növekedést
+> okozó metódust).
 >
 > ## ✅ E05-R21 KÉSZ — Audio–vision clock mapping and latency calibration (2026-08-08)
 >
 > **E05-R21** MERGED (PR [#194](https://github.com/wolfcasaba/strumsight/pull/194),
 > squash `7b11f26`; implementer **Codex (Terra)**, orchesztrátor/reviewer
-> **Claude Sonnet 5**). Lásd a fenti „Last updated" blokk a teljes
-> pre-flight/review történetért — ez a szakasz csak a rövid hivatkozási pont
-> a korábbi körök mintája szerint. **ÚJ ADR 0189** (audio–vision
-> szinkron-szerződés). Review:
+> **Claude Sonnet 5**). Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ÚJ ADR 0189**
+> (audio–vision szinkron-szerződés). Review:
 > [docs/reviews/e05-r21-audio-vision-clock-mapping-review.md](docs/reviews/e05-r21-audio-vision-clock-mapping-review.md)
 > — **APPROVED elsőre**, 0 BLOCKER/MAJOR, 4 NOTE. Lecke: **L182**, **L183**.
 >
-> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R22**
-> (`observation-fusion-and-evidence`) `pending`, engine-override `terra`
-> (`.pipeline/engine-override`) — a 2026-08-08-i user-döntés (MOTOR-FELÁLLÁS)
-> a 2026-08-07-es Terra-tiltást feloldotta, a lánc fut tovább. (A korábbi
-> „a user megállította E05-R21..R30 előtt" bejegyzés elavult: a láncot a
-> `6ae3ec7` commit visszaállította `pending`-re, miután a Terra-kvóta
-> visszatért.)
+> ## ✅ E05-R22 KÉSZ — Vision observation fusion and evidence engine (2026-08-08)
+>
+> **E05-R22** MERGED (PR [#195](https://github.com/wolfcasaba/strumsight/pull/195),
+> squash `997e7be`; implementer **Codex (Terra)** (kezdeti + 2 javító kör),
+> orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
+> Lásd a fenti „Last updated" blokk a teljes pre-flight/review történetért —
+> ez a szakasz csak a rövid hivatkozási pont a korábbi körök mintája szerint.
+> **ÚJ ADR 0190** (observation fusion és evidence). Review:
+> [docs/reviews/e05-r22-observation-fusion-and-evidence-review.md](docs/reviews/e05-r22-observation-fusion-and-evidence-review.md)
+> + [security](docs/reviews/e05-r22-observation-fusion-and-evidence-security.md)
+> — **APPROVED 2 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR. Lecke:
+> **L184**.
+>
+> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R23**
+> (`feedback-policy-and-cue-budget`) `pending`, engine-override `terra`
+> (`.pipeline/engine-override`) — a lánc fut tovább.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -135,10 +129,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R21 zárása): E05-R19 rövid bannere törölve (a
-> részletes E05-R19 történet már korábban archiválva volt); E05-R20
+> Mért diéta: 2026-08-08 (E05-R22 zárása): E05-R20 rövid bannere törölve (a
+> részletes E05-R20 történet már korábban archiválva volt); E05-R21
 > részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
-> bannere megmaradt/frissült; E05-R21 részletes narratívája + rövid
+> bannere megmaradt/frissült; E05-R22 részletes narratívája + rövid
 > bannere felkerült.
 
 ## 1. Current release state
@@ -471,42 +465,38 @@
 
 ## 4. Current branch
 
-`main` @ [PR #194](https://github.com/wolfcasaba/strumsight/pull/194), squash
-`7b11f26` (E05-R21, audio–vision clock mapping and latency calibration). Pure
+`main` @ [PR #195](https://github.com/wolfcasaba/strumsight/pull/195), squash
+`997e7be` (E05-R22, vision observation fusion and evidence engine). Pure
 Dart domain + teszt-diff → Full Gate
-[31247849134](https://github.com/wolfcasaba/strumsight/actions/runs/31247849134)
-+ Router CI [31247866364](https://github.com/wolfcasaba/strumsight/actions/runs/31247866364)
-**success** az exact merge-előtti tip `f1bc31a`-n (mindkettő kézzel
+[31251320525](https://github.com/wolfcasaba/strumsight/actions/runs/31251320525)
++ Router CI [31251337993](https://github.com/wolfcasaba/strumsight/actions/runs/31251337993)
+**success** az exact merge-előtti tip `c63f355`-n (mindkettő kézzel
 dispatch-elve az exact SHA-ra, mert az utolsó push csak `docs/reviews/`-t
 érintett, ami nincs egyik workflow trigger-útvonalán sem — ugyanaz a minta,
-mint E05-R20-nál). A Full Gate első futása egy a kör diffjéhez logikailag
-kapcsolhatatlan `song_import_controller_test.dart` teszten pirosra váltott
-(valós fájlrendszeri cleanup-race `cancel()` után); a pristine `main`-en 5×
-izoláltan reprodukálva (0/5 bukás) igazoltam kör-független, load-érzékeny
-flake-ként, mielőtt `gh run rerun --failed`-et futtattam — zöld lett.
-Review **APPROVED elsőre, javító kör nélkül** — 0 BLOCKER/MAJOR, 4 NOTE (mind
-follow-up: dokumentálatlan de indokolt szigorúság-aszimmetria a két óra
-monotonicitás-őre között; hiányzó "provizórikus" jelző a drift-határ
-doc-commentjén; hiányzó teljes-lánc teszt a becsült-drift-túllépés útvonalra;
-a §10 nem idézi szó szerint a `python3 -c` bucket-számítást). Mind a 7
-acceptance criteria saját, izolált `/tmp` klónban futtatott
-gate-újrafuttatással ellenőrizve, beleértve a §6 „valódi-sértés próba"
-KRITÉRIUM saját, független reprodukálását egy harmadik, eldobható klónban.
-Az `origin/main` a dispatch óta **nem mozdult** (`6ae3ec7`), rebase nem
-kellett (H8 tiszta). Post-merge gate (`tools/round-gate.sh
-test/features/vision test/property/clock_mapping_property_test.dart`) a
-friss `main`-en is zöld. Lecke: **L182** (kapcsolhatatlan CI-piros pristine
-`main`-en izoláltan reprodukálva igazolandó rerun/halt döntés előtt),
-**L183** (`gh run watch` mindig-előtérben szabály a Bash `run_in_background`
-kapcsolóra is vonatkozik; `ScheduleWakeup` csak `/loop`-hoz).
-_(Történeti product-merge referencia: PR #193 / `be38e11`, E05-R20; PR #192 /
-`a38e0e0`, E05-R19; PR #191 / `75f8766`, E05-R18; PR #189 / `e979d41`,
-E05-R17; PR #188 / `6f9c0e1`, E05-R16; PR #187 / `a351ad3`, E05-R15; PR #185
-/ `efa4bbe`, E05-R14; PR #184 / `148469c`, E05-R13; PR #183 / `f39d7b6`,
-E05-R12; PR #182 / `113976a`, E05-R11; PR #181 / `39d1c29`, E05-R10; PR #180
-/ E05-R09, frame quality assessor; PR #169 / `b5837d9`, E05-R07; PR #168 /
-`a43f8c1`, E05-R06; PR #162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 /
-`0cf6323`, E04-R24.)_
+mint E05-R20/R21-nél). Review **APPROVED 2 javító kör után** — F1 MAJOR
+(memóriakorlát csak `fuse()` mellékhatásaként érvényesült; saját adverzális
+próbával 12012 megtartott observation egy sosem-fuse-olt metrikára 10
+perc/20fps alatt, `8b5a8f4` javította, saját kézzel <200-ra újramérve) + F2
+MINOR (hiányzó duration-only teszt, `8b5a8f4`) + F4 MINOR a dedikált
+security-review-ből (`ConfidenceComponents` assert-only határ, release-ben
+strippelt, `fbbb749` javította). A security review (`risk = "high"`)
+**APPROVED (PASS)**, 0 BLOCKER/MAJOR, függetlenül ugyanarra a memória-résre
+jutott más módszerrel (NOTE-3). Mindhárom lelet saját kézzel, izolált `/tmp`
+klónban újramérve minden javító kör után, nem az implementer önjelentésére
+hagyatkozva. Az `origin/main` a dispatch óta **nem mozdult**
+(`960a346`), rebase nem kellett (H8 tiszta). Post-merge gate
+(`tools/round-gate.sh test/features/vision`) a friss `main`-en is zöld,
+367/367 teszt. Lecke: **L184** (egy „korlátos memória" garancia, ami csak
+egy MÁSIK metódus mellékhatásaként érvényesül, adverzális próbával mérendő a
+hívó azon mintájára, amit a szállított teszt NEM gyakorol).
+_(Történeti product-merge referencia: PR #194 / `7b11f26`, E05-R21; PR #193 /
+`be38e11`, E05-R20; PR #192 / `a38e0e0`, E05-R19; PR #191 / `75f8766`,
+E05-R18; PR #189 / `e979d41`, E05-R17; PR #188 / `6f9c0e1`, E05-R16; PR #187
+/ `a351ad3`, E05-R15; PR #185 / `efa4bbe`, E05-R14; PR #184 / `148469c`,
+E05-R13; PR #183 / `f39d7b6`, E05-R12; PR #182 / `113976a`, E05-R11; PR #181
+/ `39d1c29`, E05-R10; PR #180 / E05-R09, frame quality assessor; PR #169 /
+`b5837d9`, E05-R07; PR #168 / `a43f8c1`, E05-R06; PR #162 / `cef864c`,
+E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`, E04-R24.)_
 
 > **[Superseded ref — E05-R07 branch]:** `main` @ PR #169, squash
 `b5837d9` (E05-R07). Pure Dart/teszt diff → full-gate
@@ -600,6 +590,31 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R22 — Vision observation fusion and evidence engine** (PR
+[#195](https://github.com/wolfcasaba/strumsight/pull/195), squash `997e7be`,
+**ÚJ ADR 0190** observation-fusion-és-evidence szerződésre (a brief előzetes
+„0162" hivatkozása sosem lett fájl); implementer **Codex (Terra)** (kezdeti
++ **2 javító kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens `risk = "high"` miatt). `VisionObservation`/
+`VisionEvidence`/`EvidenceProvenance`/`ConfidenceModel` + `ObservationFusion`
+pipeline — lásd a fejléc ✅-blokk a teljes pre-flight/javítókörök/review
+történetért. **Pre-flight (§0.0, 8 pont)** mérte a négy confidence-komponens
+tényleges kód-forrását és pinnelte le az `ObservationState` gyártási
+szabályát MIELŐTT az implementer elindult volna. **2 javító kör**: 1. kör
+zárta F1 MAJOR-t (memóriakorlát csak `fuse()` mellékhatásaként érvényesült
+— saját adverzális próbával 12012 megtartott observation egy sosem-fuse-olt
+metrikára) + F2 MINOR-t; 2. kör zárta F4 MINOR-t (a dedikált security-review
+saját leletét: `ConfidenceComponents` assert-only határ, release-ben
+strippelt). Az orchesztrátor mindhárom fordulót SAJÁT, minden alkalommal
+friss GitHub-klónon függetlenül futtatott gate-tel ÉS adverzális
+próbatesztekkel (a review saját, nem az implementer tesztjei) újra-
+ellenőrizte. Gate zöld a `c63f355` merge-előtti SHA-n: Full Gate ✅ ·
+Router CI ✅ (mindkettő kézzel dispatch-elve, mert az utolsó push nem
+érintett trigger-útvonalat). Post-merge gate a friss `main`-en (`997e7be`)
+is zöld, 367/367 teszt. Lecke: **L184** (`docs/LESSONS.md`). Részletek:
+[review](docs/reviews/e05-r22-observation-fusion-and-evidence-review.md) +
+[security](docs/reviews/e05-r22-observation-fusion-and-evidence-security.md).
 
 **E05-R21 — Audio–vision clock mapping and latency calibration** (PR
 [#194](https://github.com/wolfcasaba/strumsight/pull/194), squash `7b11f26`,
@@ -862,6 +877,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
    megy a queue `engine` oszlopától függetlenül; a korábbi „HOLD E05-R21..R30
    előtt" bejegyzés a `6ae3ec7` commit-tal (`chore(pipeline): resume the
    chain`) elavult — a queue sorai `pending`.
+   **~~E05-R22 — Vision observation fusion and evidence engine~~ — KÉSZ**
+   (PR #195, `997e7be`, **ÚJ ADR 0190** observation-fusion-és-evidence
+   szerződésre; implementer Codex/Terra, 2 javító kör; dedikált
+   security-reviewer risk=high PASS; 1 MAJOR + 2 MINOR a javító körökben
+   zárva; ld. fejléc + §5).
    **~~E05-R21 — Audio–vision clock mapping and latency calibration~~ — KÉSZ**
    (PR #194, `7b11f26`, **ÚJ ADR 0189** audio–vision szinkron-szerződésre;
    implementer Codex/Terra, egyetlen forduló; APPROVED elsőre, javító kör

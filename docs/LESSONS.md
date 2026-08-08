@@ -6325,3 +6325,38 @@ módhoz tartozik — egy `claude --bg` pipeline-session öngyilkos-kockázatát
 NEM ez a mechanizmus kezeli (azt a leválaszt-és-előtérben-várj minta
 kezeli). A pre-flight §0.1 szabályt szó szerint, a konkrét TOOL-paraméterre
 vetítve kell olvasni, nem csak a shell-szintű mintára.
+
+## L184 — Egy "korlátos memória" garancia, ami csak egy MÁSIK metódus mellékhatásaként érvényesül, adverzális próbával mérendő a hívó azon mintájára, amit a szállított teszt NEM gyakorol (E05-R22, review F1 MAJOR, 2026-08-08)
+
+**Mit mértünk.** Az `ObservationFusion` (`lib/features/vision/application/observation_fusion.dart`)
+a nyers observationöket kizárólag a `fuse()` hívás VÉGÉN, ARRA a metrikára
+vágta, amelyikre a hívás szólt — az `add()` önmagában semmit nem korlátozott.
+A szállított „10 perces memória-teszt" ZÖLD volt, mert a hívási mintája
+minden `add()`-hoz rendszeres `fuse()`-t társított UGYANARRA a metrikára —
+pontosan az a cadencia, ami a rést elrejti. Egy önálló, a review saját
+kezével írt próba (más hívási mintával: két metrika streamelve, csak az
+egyik fuse-olva) `retainedObservationCount=12012`-t mért a sosem-fuse-olt
+metrikánál egy 10 perces/20fps szimulációban
+([`docs/reviews/e05-r22-observation-fusion-and-evidence-review.md`](reviews/e05-r22-observation-fusion-and-evidence-review.md)
+F1). A dedikált security-review **függetlenül, más módszerrel**
+(kód-olvasás + a `fuse()`/`add()` hívások szétválasztásának észrevétele)
+ugyanerre a résre jutott (NOTE-3) — két különböző mérési út ugyanoda futott.
+
+**Miért.** A brief architekturális döntése („a pipeline NEM tarthat meg
+minden nyers observationt") feltétel nélkülinek volt megfogalmazva, de az
+implementáció csak addig tartotta, amíg a hívó MINDEN metrikát rendszeresen
+fuse-olt — ami sem a brief szövegéből, sem a publikus API-ból nem következett
+(egy jövőbeli session-controller, amely csak a kijelzett metrikára fuse-ol,
+miközben mindegyikre streamel, teljesen legitim hívó). A gate zöld maradt,
+mert a szállított teszt hívási mintája véletlenül épp azt a cadenciát
+reprodukálta, ami a pruningot amúgy is kiváltja.
+
+**Hogyan alkalmazd.** Amikor egy brief egy erőforrás-korlátot (memória,
+fájlleíró, kapcsolat) egy pipeline-osztályra ír elő, és a korlátozó kód egy
+adott METÓDUSBA van szerelve (itt: `fuse()`), reviewerként írj egy próbát,
+ami a MÁSIK metódust (itt: `add()`) önmagában, a korlátozó hívás NÉLKÜL vagy
+attól eltérő cadenciával hajtja végre — ez az a hívási minta, amit a
+implementer saját tesztje tipikusan NEM gyakorol, mert a happy-path
+tesztíráskor a két metódust együtt hívja. A kötelező javítás iránya: a
+korlátozás magába a NÖVEKEDÉST okozó metódusba kerüljön, ne a véletlenül
+összekapcsolt másikba.
