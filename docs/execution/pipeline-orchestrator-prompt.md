@@ -198,46 +198,27 @@ használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
 `READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
 független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
 
-### ⛔ IDEIGLENES MOTOR-TILTÁS — `terra` / `codex` harness (2026-08-07, user-döntés)
+### ✅ MOTOR-FELÁLLÁS (2026-08-08, user-döntés — a 2026-08-07-es Terra-tiltás FELOLDVA)
 
-**A Terra (`gpt-5.6-terra`) kvótája kimerült; a Codex CLI saját hibaszövege
-szerint `2026-08-08 07:32`-ig nem áll rendelkezésre.** User-döntés: *„a MiniMax
-az implementer, most ez maradjon így, és ha több kör kell neki, ne váltson
-Terrára; tiltsd le a Terrát, majd ha a limit visszajött, bekapcsolni."*
+A Terra (`gpt-5.6-terra`) kvótája visszatért (élő füst-teszt 2026-08-08 07:4x:
+`codex exec -m gpt-5.6-terra` → `TERRA_OK`), ezért az előző napi ideiglenes
+`terra` / `codex`-harness tiltás **megszűnt**. Az érvényes felállás:
 
-Amíg ez a szakasz itt van:
+- **Implementer: `terra`** (Codex CLI, `~/.codex-terra`, `gpt-5.6-terra`) —
+  `.pipeline/engine-override` = `terra`, tehát a queue `engine` oszlopától
+  függetlenül MINDEN kör ezzel megy.
+- **Javító kör: ugyanaz a `terra`** — nincs motorváltás javításkor, és a
+  MiniMax-ra írt „EGY javító kör, utána Codex-eszkaláció" szabály tárgytalan,
+  amíg a Terra az implementer (ő maga a legmagasabb szint).
+- **Orchestrátor / reviewer / irányító: Sonnet 5** (`claude-sonnet-5`, a
+  `round-pipeline.sh` `PIPELINE_MODEL` defaultja) — ezen NEM változtatunk.
+- **Orchestrátor-fallback (ADR 0115) újra BE:** a crontabból a
+  `PIPELINE_FALLBACK_ENGINE=none` törölve. A fallback csak akkor lép be, ha a
+  Claude-kvóta kimerül — a primer orchestrátor akkor is Sonnet 5.
 
-- **NE válaszd** a `terra`-t és semmilyen más `codex`-harness-ű motort
-  (`docs/execution/engine-registry.tsv` 2. oszlopa = `codex`) — sem kör-,
-  sem javító-, sem eszkalációs célra. A dispatch azonnal ugyanabba az
-  `usage limit` hibába futna, és csak keretet égetne.
-- **Az implementer a `minimax`** (`.pipeline/engine-override`). Ha a MiniMax
-  nem végez egy körben: **folytatás ugyanazon a motoron** (`resume`), vagy
-  `stopped`/`blocked` jelzés — **nem** motorváltás Terrára.
-- Ha egy javítás korábban `codex`-harness-re volt eszkalálva: **próbáld meg
-  MiniMax-szal** (user-döntés 2026-08-07, kifejezetten erre a helyzetre).
-  A már meglévő, review-zott javítás-specifikációt és a félkész munkapéldányt
-  **használd fel** — ne diagnosztizálj újra:
-  - folytatási prompt: `.pipeline/fix-prompt-E05-R15-2-codex-continue.md`
-    (a BLOCKER-1 point-level w-guard pontos kód- és tesztspecifikációja);
-  - munkapéldány: `/home/ubuntu/ss-codex-e05-r15`, branch
-    `minimax/e05-r15-guitar-coordinates-and-homography`, 3 nem commitolt fájllal;
-  - a codex-harness-re írt promptot a MiniMax burkolójához (`tools/mm-round.sh`)
-    kell igazítani — a **tartalmi** spec változatlanul érvényes.
-- **Ha a MiniMax sem boldogul vele:** az **megállás** (halt-jelzés), NEM
-  codex-eszkaláció. A `codex_usage_limit_hold` mechanizmus
-  (`tools/round-pipeline.sh`) a reset-időig visszatartja a firingeket,
-  önjavítási kísérlet elpazarlása nélkül, és a kör a Terra visszatérése után
-  folytatódik ugyanezzel az állapottal.
-- Az automatikus orchestrátor-fallback szintén tiltva:
-  `PIPELINE_FALLBACK_ENGINE=none` a crontabban.
-
-**VISSZAKAPCSOLÁS** (a limit visszatérése után — ez a szakasz ilyenkor
-törlendő):
-
-```bash
-crontab -l | sed 's/PIPELINE_FALLBACK_ENGINE=none //' | crontab -
-```
+Ha a Terra ismét limitre fut, a `codex_usage_limit_hold`
+(`tools/round-pipeline.sh`) tartja vissza a firingeket a reset-időig; a
+motorváltás akkor is **user-döntés**, nem automatikus.
 
 ### Nevesített motor a nyilvántartásból (`minimax`, `codex`, `terra`, `sonnet-impl`, …)
 
