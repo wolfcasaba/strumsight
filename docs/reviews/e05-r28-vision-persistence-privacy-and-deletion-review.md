@@ -130,8 +130,8 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 | architecture | (part of round-gate) | ✅ zöld |
 | secrets | (part of round-gate) | ✅ zöld |
 | l10n | (part of round-gate) | ✅ zöld |
-| Full Gate (no APK) | dispatch-elve az orchestrátor által | pending — dispatch a végleges `1f769a4` tipen |
-| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | pending — dispatch a végleges `1f769a4` tipen |
+| Full Gate (no APK) | dispatch-elve az orchestrátor által | ✅ zöld — [31276986778](https://github.com/wolfcasaba/strumsight/actions/runs/31276986778) a végleges `1f769a4` tipen |
+| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | ✅ zöld — [31276984787](https://github.com/wolfcasaba/strumsight/actions/runs/31276984787) a végleges `1f769a4` tipen |
 
 **Módszertani jegyzet a gate-újrafuttatásokról:** az F1 utáni első saját
 gate-futtatás közben a reviewer PÁRHUZAMOSAN, UGYANABBAN a klónban végezte az
@@ -147,10 +147,11 @@ származik (`/tmp/review-e05-r28-v2-gate.log`, „═══ Gate-összegzés" bl
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
 F1 ÉS F2 lezárva (2 javító kör), 0 nyitott BLOCKER/MAJOR, helyi gate zöld friss
-`/tmp` klónban a végleges `1f769a4` tipen. **Hátralévő, e review hatáskörén
-kívüli lépés:** Full Gate + Router CI újra-dispatch a `1f769a4` SHA-n (az
-orchesztrátor dolga, nem a reviewer-é) — ezek zöldje után a merge mehet, külön
-jóváhagyás nélkül.
+`/tmp` klónban a végleges `1f769a4` tipen, Full Gate + Router CI mindkettő
+zöld ugyanezen a SHA-n (lásd fent). **Minden feltétel teljesült — merge
+mehet, külön jóváhagyás nélkül** (a merge SHA-n való zöldséget az
+orchesztrátor a `main` mozdulása esetén ADR 0086 §2 szerint újra ellenőrzi
+merge előtt).
 
 _(Az alábbi, most már elavult megjegyzés a javító kör #2 dispatch-elése
 ELŐTTI állapotot rögzítette, megőrizve a döntési nyomvonal olvashatóságáért:)_
