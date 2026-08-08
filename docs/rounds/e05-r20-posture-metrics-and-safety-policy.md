@@ -306,7 +306,162 @@ mondat helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Fájlonkénti összegzés
+
+| Fájl | Állapot | Tartalom |
+|---|---|---|
+| `lib/features/vision/domain/safety/vision_safety_policy.dart` | **ÚJ** | `VisionSafetyClaimClass` enum (5 forbidden + 3 allowed), `VisionSafetyPolicy.forbidden` zárt halmaz, `VisionSafetyPolicy.catalog` 10 belépéssel — minden claim-kód itt van deklarálva, nincs tiltott osztályban. |
+| `lib/features/vision/domain/safety/safety_claim_guard.dart` | **ÚJ** | `SafetyClaimGuardResult` (allowed / rejected), `SafetyClaimGuard` fail-closed mindkét irányban: zárt-katalógus-membership ÉS forbidden-class check. A `validateCatalog` önellenőrző metódus. |
+| `lib/features/vision/domain/metrics/posture_metrics.dart` | **ÚJ** | `PostureMetricId` (4 érték: shoulderAsymmetry / torsoLean / elbowDrift / neckProxy), `PostureCapability`, `PostureMetricDefinition` (argument-throw metódus, `isValid` getter, `requiredPoseLandmarkIds` mező — az R8 gate forrása), validált `postureMetricDefinitions` lista. |
+| `lib/features/vision/domain/metrics/posture_metric_engine.dart` | **ÚJ** | `PostureMetricEngine.compute(...)` — NEM `observation.state`-et, hanem a metrika SAJÁT `requiredPoseLandmarkIds` listáját ellenőrzi (R8 gate). NaN/Infinity guard minden required landmarkra. SafetyClaimGuard ellenőrzés a catalog kódra. |
+| `lib/features/vision/public.dart` | **additív export** | `posture_metric_engine.dart` + `posture_metrics.dart` + `safety_claim_guard.dart` + `vision_safety_policy.dart` hozzáadva a többi meglévő export után. |
+| `test/features/vision/domain/safety_claim_guard_test.dart` | **ÚJ** | 17 teszt: positive (catalog coverage), negative (unknown code), forbidden-class set, allowed-class reachability, catalog integrity, pain handoff szeparáció. |
+| `test/features/vision/domain/posture_metric_engine_test.dart` | **ÚJ** | 22 teszt: baseline-mátrix (missing/partial/full), per-metric (4 metrika × 3 cella), R8-degenerate (state=good + extreme drift → notObservable), perspective-mátrix (3 szög), NaN/Infinity per-metric guard, catalog validáció. |
+| `test/fixtures/vision/posture/posture_fixtures.dart` | **ÚJ** | 10 public fixture generátor, valós `PostureBaselineCollector`-t használ (a `PostureObservation` privát konstruktora nem elérhető kívülről). Visibility-alapú `missing` szimuláció: a hiányzó landmark visibility=0.0, így a baseline-szűrő eldobja a `minimumLandmarkVisibility` (0.5) küszöb alatt. |
+| `docs/rounds/e05-r20-posture-metrics-and-safety-policy.md` | **§10 kitöltve** | Ez a handoff. |
+
+### §6 acceptance-cellák bizonyítéka
+
+#### 1. Claim-guard teszt (a kör kulcsbizonyítéka)
+
+- **`safety_claim_guard_test.dart` 17 / 17 átment** — `tools/round-gate.sh test/features/vision` `test test/features/vision` lépésében, 331/331 adott a vision tree-ben.
+- A tiltott-minta lista (diagnosis / injuryPrediction / painExplanation / recoveryAdvice / harmfulJudgment) MIND elutasítja a guardot — a `SafetyClaimGuard — forbidden classes` group 5/5 tesztje.
+- A nem katalogizált kód is elutasításra kerül (fail-closed) — `an unknown code is rejected (fail-closed)` teszt.
+
+#### 2. Valódi-sértés próba (eltávolítva a commit előtt)
+
+A `lib/features/vision/domain/safety/vision_safety_policy.dart` katalógusába ideiglenesen befűztem egy tiltott-osztálybeli kódot:
+
+```dart
+'postureShoulderAsymmetryCausesChronicPain':
+    VisionSafetyClaimClass.diagnosis,
+```
+
+Eredmény: a `flutter test test/features/vision/domain/safety_claim_guard_test.dart` futáskor **2 teszt ment pirosra**:
+
+```
+00:00 +13 -2: SafetyClaimGuard — fail-closed allowlist every catalog code is allowed [E]
+  Expected: true
+    Actual: <false>
+  cause: 'code "postureShoulderAsymmetryCausesChronicPain" declares forbidden class "diagnosis"'
+
+00:00 +13 -2: VisionSafetyPolicy — catalog integrity no catalog code is declared in a forbidden class [E]
+  Expected: false
+    Actual: <true>
+  catalog code "postureShoulderAsymmetryCausesChronicPain" declares forbidden class "diagnosis"
+```
+
+A kódot a `git commit` előtt visszaállítottam — a friss `flutter test` futáskor 17/17 újra zöld.
+
+#### 3. Baseline-mátrix (missing / partial / full)
+
+- `no baseline → every metric is notObservable` (4 / 4 metric)
+- `partial baseline (only one shoulder) → minden 4 metric notObservable`
+- `full baseline + clean pose → 3 / 3 REQUIRED metric observable (neckProxy kimaradt, mert a brief §3 a neck referenciát opcionálisnak jelöli)`
+
+#### 4. Per-metric unit teszt (4 metrika × tipikus / határ / degenerált)
+
+- shoulderAsymmetry: tipikus (0.20) ✓, degenerált (state=good + 1 shoulder → notObservable) ✓
+- torsoLean: tipikus (0.20) ✓, határ (no hips → notObservable) ✓
+- elbowDrift: tipikus (0.10) ✓, határ (1 elbow missing → notObservable) ✓
+- neckProxy: tipikus (0.10) ✓, határ (no neck → notObservable) ✓
+
+A R8-degenerate cella **explicit** rögzítve: `state=good` + `comparedLandmarkCount=1` + `maxDrift=4.257` → MIND a 4 metric `notObservable` (a `R8 degenerate — extreme drift on a single shared landmark` teszt).
+
+#### 5. Kameraperspektíva-fixture-ök (3 szög)
+
+- `three-quarter left` (side=+0.04) és `three-quarter right` (side=-0.04) — a shoulderAsymmetry magnitúdója egyenlő (sign-agnostic), és `> 0` ✅
+- `frontal` (clean baseline) — shoulderAsymmetry observable, értéke 0 ✅
+- A torsoLean magnitude konzisztens ±y offset-ekre ✅
+
+#### 6. NaN/Infinity guard
+
+- `NaN drift on leftShoulder` → `shoulderAsymmetry` és `torsoLean` (amelyek megkövetelik) `notObservable`; `elbowDrift` (amely NEM igényli) továbbra is observable marad — per-metric, per-required-landmark gate, ahogy az R8 előírja.
+- `Infinity drift on leftShoulder` → ua.
+
+### Futtatott parancsok — TÉNYLEGES kimenet
+
+#### `tools/round-gate.sh test/features/vision` (utolsó zöld futás, 2026-08-08)
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/vision
+    $ /home/ubuntu/flutter/bin/flutter test test/features/vision
+    ...
+    00:24 +331: All tests passed!
+    → [3] test test/features/vision: ZÖLD
+
+═══ [4] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+    Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+    Secret scan OK (1982 file(s) scanned, 0 finding(s)).
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+    L10n parity OK (en → hu, 964 message(s)).
+    → [6] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/vision                                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A `safety_claim_guard_test.dart` 17 / 17 és a `posture_metric_engine_test.dart` 22 / 22 a `test test/features/vision` lépésben benne van (a 331-es össz-szám része).
+
+### Eltérések és okuk
+
+1. **A `posture_fixtures.dart` `_kShoulderSpan` konstansát és `_kBaselineDuration` idempotenssé tettem.** A `dart format` futás során a `_kBaselineDuration` és a `_kShoulderSpan` használatlan lett (a `_baselineFromPose` default 4 másodpercet használ, az offset-ek normalizálása a `_kShoulderSpan` nélkül, relatív egységekben történt). A `flutter analyze` warning-ként jelezte, a `dart format` újrafuttatás előtt eltávolítottam a felesleges deklarációt.
+2. **A `PostureMetricDefinition` `claimCode` mezőt vettem fel** a `MetricDefinition` R19-es mintán felül — ez biztosítja, hogy a posture metric-katalógusban minden bejegyzéshez tartozzon claim-kód, és a `SafetyClaimGuard.validateCatalog` önellenőrzés determinisztikusan kudarcot jelezzen, ha egy future kód a tiltott osztályba csúszna.
+3. **A NaN/Infinity tesztet átfogalmaztam per-metricre.** Az eredeti („minden metric notObservable ha BÁRMELYIK drift NaN") várakozás túl szigorú volt — az R8 gate per-metric, per-required-landmark, és a NaN-ot NEM igénylő metrikákat (pl. `elbowDrift` NaN-os `leftShoulder` drift mellett) nem blokkolja. Végső teszt: „a NaN drift on leftShoulder blocks shoulderAsymmetry + torsoLean (igénylik) but does not block elbowDrift (nem igényli)" — kétirányú, per-required-landmark gate.
+
+### Nem futtatott ellenőrzések, okuk
+
+- **Eszköz-oldali device-mátrix (PENDING a brief §9-ben).** A kör-brief §9 kifejezetten PENDING-ként jelöli, és a property-tuning §0.0 R2-vel együtt a későbbi futtatásra vár. Ez a mérés NEM az implementer felelőssége.
+- **A teljes `flutter test` suite + property gate + APK build (CI-oldali, ADR 0053).** A `MINDEN GATE ZÖLD` üzenet kimondja: a teljes suite + randomizált property gate + APK a CI-ban fut, ezt a `tools/round-gate.sh` nem hívja, és a brief §7 ezt tiltja (`tools/round-gate.sh test/features/vision`-t kért, nem a teljes suite-t).
+- **A tutor-oldali safety policy cross-feature import ellenőrzés.** Ez a `lib/features/vision/` és `lib/features/ai_tutor/` boundary sértés lenne; az `architecture` lépés a gate-ben (`tool/check_architecture.dart`) átment — a két boundary zárt (12 allowlisted deviation van, ezek nem érintik a mostani fájlokat).
+
+### R8 gate — explicit teszt-hivatkozás
+
+A `test/features/vision/domain/posture_metric_engine_test.dart` `R8 degenerate — extreme drift on a single shared landmark` group:
+
+```dart
+test('state=good but extreme single-landmark drift → notObservable for '
+    'every metric that requires > 1 landmark', () {
+  final observation = buildR8DegenerateObservation();
+  expect(observation.state, VisionMetricState.good);           // ✓
+  expect(observation.comparedLandmarkCount, 1);                 // ✓
+  expect(observation.maxDrift, closeTo(4.257, 1e-3));           // ✓
+  // shoulderAsymmetry — needs 2 shoulders → notObservable.
+  expect(engine.compute(observation: observation, id: PostureMetricId.shoulderAsymmetry).observability, MetricObservability.notObservable);
+  // torsoLean — needs 2 shoulders + 2 hips → notObservable.
+  expect(engine.compute(observation: observation, id: PostureMetricId.torsoLean).observability, MetricObservability.notObservable);
+  // elbowDrift — needs 2 elbows → notObservable.
+  expect(engine.compute(observation: observation, id: PostureMetricId.elbowDrift).observability, MetricObservability.notObservable);
+  // neckProxy — needs neckReference → notObservable.
+  expect(engine.compute(observation: observation, id: PostureMetricId.neckProxy).observability, MetricObservability.notObservable);
+});
+```
+
+A `buildR8DegenerateObservation` fixture a `test/fixtures/vision/posture/posture_fixtures.dart`-ban: baseline mindkét váll + csípő (span=0.20), observation `leftShoulder=0.8514` (=> 4.257 a span-normalizált drift), minden más landmark visibility=0.0. A `posture_baseline.dart` `observe()` a `comparedLandmarkCount=1`, `maxDrift=4.257`, `state=good` kombinációt adja — a `PostureMetricEngine` NEM bízik a `state`-ben, és a per-metric `requiredPoseLandmarkIds` check minden fenti metric-ot `notObservable`-re vált. (Sub-claim: a lefutás a `R8 degenerate` group-ban 5 / 5 átment.)
+
 
 ## 11. Review — a független reviewer tölti ki
 
