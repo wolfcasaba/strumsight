@@ -33,6 +33,7 @@ allowed_paths = [
   "test/features/practice/data/practice_vision_adapter_test.dart",
   "test/features/practice/domain/practice_session_result_vision_test.dart",
   "test/features/practice/presentation/practice_vision_dimension_test.dart",
+  "docs/adr/0192-practice-vision-integration-contract.md",
   "docs/rounds/e05-r25-practice-vision-integration.md",
 ]
 gate_tests = [
@@ -135,6 +136,24 @@ szakasza — itt csak az összefoglaló és a brief-re gyakorolt hatás.
    egy réteghez; a `PracticeVisionAdapter` tisztán adat-leképezés
    (`VisionSessionResult` → vision-dimenzió + capability-gate döntés), nincs
    `.acquire(`-hívása vagy erőforrás-tulajdonlása.
+8. **Utólagos javítás — az ADR-fájl saját útvonala hiányzott az
+   `allowed_paths`-ból az első pre-flight-commitban, pótolva.** Az implementer
+   (Terra) az első dispatch-en helyesen `stopped`-ot jelzett, mert
+   `docs/adr/0192-practice-vision-integration-contract.md` nem szerepelt a
+   §4 listán, jóllehet a fájl az orchesztrátor SAJÁT, dispatch előtti
+   pre-flight-commitjának része (a gépi scope-audit ezt nem is auditálja —
+   `scope_base` a dispatch-kori HEAD —, de az `allowed_paths` a teljes
+   PR-diffet dokumentálja, és a review is efelé auditál). Precedens:
+   [ADR 0191](../adr/0191-feedback-policy-and-cue-budget.md) brief-je
+   (E05-R23) explicit listázta a saját `docs/adr/0191-…md` útvonalát —
+   ugyanaz a minta most pótolva. **Ez nem lista-tágítás az implementer
+   számára** (nem kap új jogot semmilyen ÚJ fájlhoz), kizárólag egy már
+   ELKÉSZÜLT, saját pre-flight-artefaktum korrekt dokumentálása — a
+   pipeline-prompt §2 „a `nincs` ADR-t, amit ebben a pre-flightban te írtál"
+   és „ezt a kör-briefet (dokumentált §0.0 revízióval)" pontjai alá esik,
+   nem H3. Terra saját, uncommitolt munkája (11 fájl, mind a §4 eredeti
+   listáján) a megállás pillanatában ellenőrizve **helyes és teljes** volt —
+   a folytatás a meglévő munka commitolásával indul, nem újraírással.
 
 ## 1. Cél
 
