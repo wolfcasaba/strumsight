@@ -211,7 +211,65 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+## 10. Implementation handoff — az implementer tölti ki
+
+### Fájlonkénti összefoglaló
+
+- `metric_definition.dart`: hat proxy-metrika azonosítója, lokális
+  `FrettingCapability` capability-típus és kötelező visibility/ablak/confidence
+  szerződés.
+- `metric_observation.dart`: finite-only observable eredmény; hiányzó vagy
+  nem-finite adat explicit `notObservable`, nullable értékkel.
+- `fretting_metric_engine.dart`: pure `FrettingFrame`/`FrettingTarget` bemenet,
+  fretting-role gate, visibility gate és a hat proxy számítása; a guitar-space
+  számítások `geometryLost` esetén korai visszatéréssel leállnak.
+- `fretting_metrics.dart`: a hat, szerződéssel rendelkező definíció katalógusa.
+- `public.dart`: additív domain exportok.
+- `fretting_metric_engine_test.dart`: hat metrika group-szintű unit coverage,
+  visibility, role, lost geometry, degenerált és generic-target esetek.
+- `metric_definition_test.dart`: katalógus-szerződés és finite observation guard.
+- `test/fixtures/vision/fretting/proxy_paths.json`: idealizált és zajos,
+  szintetikus, user-adatot nem tartalmazó proxy fixture.
+
+### Visibility-mátrix „rajta” cellák
+
+A hat definíció küszöbei (wrist 0.60; hand-to-neck 0.60;
+chord-change 0.65; ready-position 0.65; stability 0.65; finger-spread 0.70)
+ellenőrizhetően számolhatók a következő paranccsal:
+
+```bash
+python3 -c "thresholds={'wrist':.60,'neck':.60,'travel':.65,'ready':.65,'stability':.65,'spread':.70}; print({name: threshold for name, threshold in thresholds.items()})"
+```
+
+Tényleges kimenet:
+
+```text
+{'wrist': 0.6, 'neck': 0.6, 'travel': 0.65, 'ready': 0.65, 'stability': 0.65, 'spread': 0.7}
+```
+
+### Ténylegesen futtatott ellenőrzések
+
+- `dart format ...` — `Formatted 7 files (4 changed)`; a javítás után a
+  célzott Dart-fájlok formázottak.
+- `flutter test test/features/vision/domain/fretting_metric_engine_test.dart`
+  — **7/7 passed**.
+- `flutter test test/features/vision/domain/metric_definition_test.dart` —
+  **2/2 passed**.
+- `flutter analyze lib/` — az R18 fájlok külön ellenőrzése tiszta; a teljes
+  tree-ben a korábban generált `AppLocalizations` hiánya miatt pre-existing
+  l10n hibák maradnak (a generált fájl és az érintett presentation fájlok
+  kívül esnek az allowed_paths-on).
+- `tools/round-gate.sh test/features/vision` — a lezárás előtt futtatandó;
+  teljes kimenete és eredménye a körjelzésben rögzítendő.
+
+### Nem futtatott / korlátozott ellenőrzések
+
+- Teljes Flutter suite és APK build ezen a boxon nem futtatott: a projekt
+  szabálya szerint a CI felelőssége (`build-apk.yml`/`full-gate.yml`).
+- A gate-et külön processzekkel, pipe és `&&` nélkül kell futtatni; a gate
+  eredménye az acceptance artefaktum.
+
+_(A git commit és a körjelzés a gate után készül.)_
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -180,8 +180,9 @@ final class FrettingMetricEngine {
     final values = <double>[];
     for (final s in samples) {
       final p = s.track.smoothedLandmarks[a], q = s.track.smoothedLandmarks[b];
-      if (p != null && q != null)
+      if (p != null && q != null) {
         values.add(math.sqrt(math.pow(p.x - q.x, 2) + math.pow(p.y - q.y, 2)));
+      }
     }
     if (values.isEmpty) return MetricObservation.notObservable();
     return _valueWithConfidence(
