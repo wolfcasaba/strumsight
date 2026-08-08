@@ -6,6 +6,83 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R19 — Picking-hand stroke metric engine, teljes részletes történet (2026-08-08)
+
+Hét megfigyelhető, confidence-aware proxy-metrika pure Dart implementációja
+a jobb kéz (picking) mozgáspályájára és konzisztenciájára — audio-onset köré
+rendezett **trajectory irány/amplitúdó/sebesség/linearitás**, **down-up
+aszimmetria**, **beat-to-beat konzisztencia** és **picking-zóna** (SDD §20.2
+négyértékű `nearBridge`/`middleBody`/`nearNeck`/`outsideCalibratedZone`),
+mind az R13 kéz-track/R15 guitar-space rétegek fölött, injektált
+eseménylistával és injektált sync-minőséggel (az éles audio–vision
+óra-illesztés az R21-é). `lib/features/vision/domain/metrics/` —
+`StrokeWindow` (külön pre/post ablakkonstans, csonkolás átfedésnél),
+`picking_metrics.dart` (`PickingMetricId`, `PickingCapability`,
+`PickingSyncQuality`, `PickingZone`, `PickingZoneThresholds`,
+`PickingMetricDefinition` — az R18 `MetricObservation` literálisan
+újrahasznált, a `MetricDefinition` MINTÁJA követve, nem importálva:
+Fretting-specifikus hardcode és kívül esik az `allowed_paths`-on),
+`PickingMetricEngine` (sync-kapu: `poor`/`acceptable` alatt csak az
+aggregát metrikák érvényesek). **Nincs új ADR** (ADR 0179/0181 végrehajtása
+a picking kézre — epic-szintű döntések, nem fretting-specifikusak,
+megerősítve a pre-flightban az ADR-szöveg elolvasásával). Implementer
+**MiniMax M3** (kezdeti implementáció + **egy javító kör**),
+orchestrátor/reviewer **Claude Sonnet 5**. PR
+[#192](https://github.com/wolfcasaba/strumsight/pull/192), squash `a38e0e0`.
+
+**Pre-flight (§0.0, öt mért pont) + egy javító kör, egy lezárt BLOCKER —
+mind a review saját, friss GitHub-klónon függetlenül futtatott gate-jével
+ÉS eldobható mutáció-próbákkal igazolva, nem az implementer önjelentésére
+hagyatkozva:**
+
+1. **Pre-flight §0.0/2 — a brief eredeti „4 cellás" mirror/left-handed
+   paritás kritériuma megismételte volna az E05-R18 F4/L176 hibát.** A
+   batch-írt brief (2026-08-05) még a metric-engine réteg fölötti, nem
+   létező `leftHanded`×front/back input-tengelyt írt elő — a pre-flight
+   ezt a réteg tényleges bemeneti alakja (timestamp+`HandTrack`, se
+   `leftHanded` bool, se kamera-facing mező) alapján **2 cellás,
+   `HandTrack.handedness`-tengelyű** verzióra javította, MIELŐTT az
+   implementer elindult volna — megelőzve egy teljes javító kört.
+2. **Pre-flight §0.0/5 — a „picking-zóna (R15 régió)" hivatkozás téves
+   enumra mutatott.** Az R15 `GuitarRegion.pickingZone` a body külső
+   harmada (durva, teljes-gitáros besorolás); az SDD §20.2 egy MÁSIK, a
+   picking kéz bridge↔neck relatív pozícióját leíró négyértékű enumot ír
+   elő. A pre-flight korrigálta a hivatkozást és pótolt egy hiányzó §6
+   acceptance criteriont (a scope listázta, de a checklist nem tesztelte).
+3. **F1 BLOCKER — `StrokeWindow.cut()` a következő ablakok mintáit
+   duplikálta gyors váltogatásnál.** `stroke_window.dart:104-140`. A
+   csonkolás a következő onset NYERS timestampjéig engedte az ablak végét,
+   de a következő ablak SAJÁT eleje (`nextOnset - pre`) MINDIG korábbi — a
+   `[nextOnset-pre, nextOnset)` sávba eső minták emiatt MINDKÉT szomszédos
+   ablak `samples` listájában szerepeltek, és a `_pathSegments` ezeket
+   duplán számolta az amplitúdóba/sebességbe/linearitásba. A review saját,
+   eldobható próbateszttel reprodukálta a meglévő
+   `FastToggleStrokes.sixAt130ms()` fixture-ön (`window0`/`window1` közös
+   timestampek: `{32, 65, 98}` ms) — pontosan a brief §6 „nagyon gyors
+   váltogatás" forgatókönyvében, amit a dedikált „Átfedő ablak teszt" volt
+   hivatott megfogni, de csak a `truncated` flaget ellenőrizte, sosem a
+   mintaszámot. **Javítás:** a csonkolási határ a következő ablak SAJÁT
+   kért kezdetére mozgatva (`nextRequestStart = nextOnset - pre`), két új
+   regressziós teszt (páronkénti + globális-partíció, VALÓS mintákkal) és
+   a hiányzó fast-toggle érték-cella (irány/amplitúdó/sebesség/linearitás,
+   `python3 -c`-vel számolva). A review a javítás UTÁN saját, a teljes
+   6-onsetes idővonalon megismételt próbateszttel erősítette meg, hogy
+   minden szomszédos ablakpár metszete üres.
+
+Zöld kapu (exact-SHA `79c4f49`, a javító kör után): Full Gate
+[31237713264](https://github.com/wolfcasaba/strumsight/actions/runs/31237713264)
+**success** + Router CI
+[31237741222](https://github.com/wolfcasaba/strumsight/actions/runs/31237741222)
+**success**. Post-merge gate a friss `main`-en (`a38e0e0`) is zöld,
+292/292 teszt.
+
+Lecke: **L177** (`ROUND_BRIEF` beállítása NEM garantálja a `scope_audit=`
+mező megjelenését a jelzésfájlban — a kézi fallback minden fordulóban
+ellenőrizendő), **L178** (csúszóablakos szegmentálás: a csonkolási határ a
+szomszédos ABLAK saját, pre-vel eltolt kezdete legyen, sosem a szomszédos
+ESEMÉNY nyers pozíciója, különben a pre/post aszimmetria automatikusan
+átfedést nyit — részletek `docs/LESSONS.md`).
+
 ## E05-R18 — Fretting-hand metric engine, teljes részletes történet (2026-08-08)
 
 Hat megfigyelhető, confidence-aware proxy-metrika pure Dart implementációja

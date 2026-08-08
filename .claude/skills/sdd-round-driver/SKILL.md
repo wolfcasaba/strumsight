@@ -52,7 +52,18 @@ tesztben bizonyított állítás (`const`, `immutable`)".
 
 ## 3. Indítás (SOHA nem csupasz `codex exec`)
 
-Külön munkapéldányban (`/home/ubuntu/ss-<motor>-<kör>`), KÉT háttér-taskként:
+Külön munkapéldányban (`/home/ubuntu/ss-<motor>-<kör>`), KÉT háttér-taskként.
+**A munkapéldányt MINDIG `git clone <fő-repó> <cél>`-lal hozd létre, SOHA
+`git worktree add`-dal** — a `git worktree add` `.git`-je FÁJL, nem könyvtár,
+és a `tools/mm-round.sh`/`codex-round.sh` saját `[ ! -d "$workdir/.git" ]`
+validációja ezt néma `exit 2`-vel bukja, MIELŐTT a log-fájl létrejönne. A
+leválaszt-és-várj mintában ez teljesen észrevétlen: nincs log, nincs
+jelzésfájl, a `wait-for-round.sh` csak a saját időkorlátjáig vár, majd
+`exit 5`-öt ad („még futhat"), ami élő, lassú körnek tűnik, miközben a
+dispatch el sem indult. Kétszer mérve, ismételten (E05-R18 L175, E05-R20) —
+ha ismét megtörténne: `ps -ef | grep claude` NULLA találat + `stat -c '%F'
+<munkapéldány>/.git` → `regular file` a diagnózis. Részletek:
+`docs/LESSONS.md` L175, L179.
 
 ```bash
 # Codex:

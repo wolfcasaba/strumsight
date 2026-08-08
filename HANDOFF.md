@@ -4,114 +4,126 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R19 MERGED — Picking-hand stroke metric engine:** hét megfigyelhető,
-> confidence-aware proxy-metrika pure Dart implementációja a jobb kéz
-> (picking) mozgáspályájára és konzisztenciájára — audio-onset köré
-> rendezett **trajectory irány/amplitúdó/sebesség/linearitás**,
-> **down-up aszimmetria**, **beat-to-beat konzisztencia** és
-> **picking-zóna** (SDD §20.2 négyértékű `nearBridge`/`middleBody`/
-> `nearNeck`/`outsideCalibratedZone`), mind az R13 kéz-track/R15
-> guitar-space rétegek fölött, injektált eseménylistával és injektált
-> sync-minőséggel (az éles audio–vision óra-illesztés az R21-é).
-> `lib/features/vision/domain/metrics/` — `StrokeWindow` (külön pre/post
-> ablakkonstans, csonkolás átfedésnél), `picking_metrics.dart`
-> (`PickingMetricId`, `PickingCapability`, `PickingSyncQuality`,
-> `PickingZone`, `PickingZoneThresholds`, `PickingMetricDefinition` — az
-> R18 `MetricObservation` literálisan újrahasznált, a `MetricDefinition`
-> MINTÁJA követve, nem importálva: Fretting-specifikus hardcode és kívül
-> esik az `allowed_paths`-on), `PickingMetricEngine` (sync-kapu: `poor`/
-> `acceptable` alatt csak az aggregát metrikák érvényesek). **Nincs új
-> ADR** (ADR 0179/0181 végrehajtása a picking kézre — epic-szintű
-> döntések, nem fretting-specifikusak, megerősítve a pre-flightban az
-> ADR-szöveg elolvasásával). Implementer **MiniMax M3** (kezdeti
-> implementáció + **egy javító kör**), orchestrátor/reviewer
-> **Claude Sonnet 5**. PR
-> [#192](https://github.com/wolfcasaba/strumsight/pull/192), squash `a38e0e0`.
+> (E05-R20 MERGED — Posture metric engine and safety claim guard:**
+> baseline-relatív, confidence-aware proxy-metrika a testtartásra —
+> **shoulder asymmetry**, **torso lean**, **elbow drift**, **neck proxy**
+> (mind az R14 `PostureObservation` fölött, a jelenlét/hiány-alapú R8
+> kapuval, sosem az `observation.state` mezőre hagyatkozva), és egy
+> fail-closed **safety claim guard** (`VisionSafetyPolicy` +
+> `SafetyClaimGuard`): zárt claim-kód katalógus, osztály-alapú allowlist,
+> plusz egy javító körben hozzáadott lexikai másodvédvonal, ami a kód
+> SZÖVEGÉT is vizsgálja, függetlenül a deklarált osztálytól.
+> `lib/features/vision/domain/metrics/` — `posture_metrics.dart`
+> (`PostureMetricId`, `PostureCapability`, `PostureMetricDefinition` — az
+> R18/R19 `MetricObservation` literálisan újrahasznált, a
+> `MetricDefinition` MINTÁJA követve, nem importálva), `posture_metric_engine.dart`.
+> `lib/features/vision/domain/safety/` — `vision_safety_policy.dart`,
+> `safety_claim_guard.dart`. **ÚJ ADR: [0188](docs/adr/0188-vision-safety-claim-guard.md)**
+> a safety-claim-guard döntésre (a hat alapozó vision-ADR egyike sem
+> szabályozza a claim-TARTALOM kérdését; a sibling AI Tutor epic ADR 0177-je
+> a legrelevánsabb precedens, de a brief batch-írásakor, 2026-08-05, még
+> nem létezett — 2026-08-06-án fogadták el). A posture-metrika-számítás fél
+> **nem** kap új ADR-t — ADR 0179 végrehajtása, ugyanaz a mintázat, mint
+> E05-R18/R19. Implementer **MiniMax M3** (kezdeti implementáció + **egy
+> javító kör**), orchestrátor/reviewer **Claude Sonnet 5**, dedikált
+> **security-reviewer** ágens (`risk = "high"`, brief §11 kötelező). PR
+> [#193](https://github.com/wolfcasaba/strumsight/pull/193), squash `be38e11`.
 >
-> **Pre-flight (§0.0, öt mért pont) + egy javító kör, egy lezárt BLOCKER —
-> mind a review saját, friss GitHub-klónon függetlenül futtatott gate-jével
-> ÉS eldobható mutáció-próbákkal igazolva, nem az implementer
-> önjelentésére hagyatkozva:**
+> **Pre-flight (§0.0, kilenc mért pont, egy a javító kör ELŐTT felvéve) +
+> egy javító kör, két lezárt MAJOR — mind a review (saját + dedikált
+> security-reviewer) friss GitHub-klónon függetlenül futtatott gate-jével
+> ÉS eldobható mutáció-próbákkal igazolva, nem az implementer önjelentésére
+> hagyatkozva:**
 >
-> 1. **Pre-flight §0.0/2 — a brief eredeti „4 cellás" mirror/left-handed
->    paritás kritériuma megismételte volna az E05-R18 F4/L176 hibát.**
->    A batch-írt brief (2026-08-05) még a metric-engine réteg fölötti,
->    nem létező `leftHanded`×front/back input-tengelyt írt elő — a
->    pre-flight ezt a réteg tényleges bemeneti alakja (timestamp+
->    `HandTrack`, se `leftHanded` bool, se kamera-facing mező) alapján
->    **2 cellás, `HandTrack.handedness`-tengelyű** verzióra javította,
->    MIELŐTT az implementer elindult volna — megelőzve egy teljes javító
->    kört.
-> 2. **Pre-flight §0.0/5 — a „picking-zóna (R15 régió)" hivatkozás téves
->    enumra mutatott.** Az R15 `GuitarRegion.pickingZone` a body külső
->    harmada (durva, teljes-gitáros besorolás); az SDD §20.2 egy MÁSIK,
->    a picking kéz bridge↔neck relatív pozícióját leíró négyértékű enumot
->    ír elő. A pre-flight korrigálta a hivatkozást és pótolt egy hiányzó
->    §6 acceptance criteriont (a scope listázta, de a checklist nem
->    tesztelte).
-> 3. **F1 BLOCKER — `StrokeWindow.cut()` a következő ablakok mintáit
->    duplikálta gyors váltogatásnál.** `stroke_window.dart:104-140`. A
->    csonkolás a következő onset NYERS timestampjéig engedte az ablak
->    végét, de a következő ablak SAJÁT eleje (`nextOnset - pre`) MINDIG
->    korábbi — a `[nextOnset-pre, nextOnset)` sávba eső minták emiatt
->    MINDKÉT szomszédos ablak `samples` listájában szerepeltek, és a
->    `_pathSegments` ezeket duplán számolta az amplitúdóba/sebességbe/
->    linearitásba. A review saját, eldobható próbateszttel reprodukálta a
->    meglévő `FastToggleStrokes.sixAt130ms()` fixture-ön (`window0`/
->    `window1` közös timestampek: `{32, 65, 98}` ms) — pontosan a brief
->    §6 „nagyon gyors váltogatás" forgatókönyvében, amit a dedikált
->    „Átfedő ablak teszt" volt hivatott megfogni, de csak a `truncated`
->    flaget ellenőrizte, sosem a mintaszámot. **Javítás:** a csonkolási
->    határ a következő ablak SAJÁT kért kezdetére mozgatva
->    (`nextRequestStart = nextOnset - pre`), két új regressziós teszt
->    (páronkénti + globális-partíció, VALÓS mintákkal) és a hiányzó
->    fast-toggle érték-cella (irány/amplitúdó/sebesség/linearitás,
->    `python3 -c`-vel számolva). A review a javítás UTÁN saját, a teljes
->    6-onsetes idővonalon megismételt próbateszttel erősítette meg, hogy
->    minden szomszédos ablakpár metszete üres.
+> 1. **Pre-flight R1/R2 — ADR-helyzet szétválasztva.** A fejléc eredeti
+>    „0162 bővítése" az E05-R01 batch-írás idején fenntartott,
+>    átszámozás előtti placeholder volt (0162→0179, harmadszor mérve
+>    ugyanabból a mintából, E05-R09/R16/R18 után). A posture-metrika-fél
+>    ADR 0179 végrehajtása; a safety-claim-guard fél viszont ÚJ döntés
+>    (ADR 0188) — a hat alapozó vision-ADR egyike sem fedi a
+>    claim-tartalom kérdését, és a projekt konvenciója (ADR 0177 a
+>    tutor-oldalon) szerint ez a döntés-osztály önálló ADR-t kap.
+> 2. **Pre-flight R8 — az E05-R14 security-review egy explicit, erre a
+>    körre hagyott follow-upját a brief szövege nem tartalmazta.**
+>    `PostureObservation.state` MINDIG `good`, ha akár egyetlen landmark
+>    közös a baseline-nal (mérve: `comparedLandmarkCount=1, maxDrift=4.257`
+>    mellett is `good`) — az E05-R14 security-review MINOR-2 leletje ezt
+>    kifejezetten E05-R20-ra hagyta (ADR 0186 Döntés 5), de a batch-írt
+>    brief szövege erről semmit nem mondott. A pre-flight ezt §5 pont
+>    7-ként rögzítette KÖTELEZŐ architekturális korlátként — a
+>    `PostureMetricEngine` sosem `observation.state`-re, hanem
+>    metrikánként a szükséges landmark-ID-k jelenlétére
+>    (`driftFor(id) != null`) gatel.
+> 3. **F1 MAJOR (security-reviewer) — a safety guard a claim-kód
+>    DEKLARÁLT OSZTÁLYÁT ellenőrizte, nem a SZEMANTIKÁJÁT.** Egy
+>    orvosi tartalmú, de tévesen ALLOWED osztályba deklarált kód
+>    (`postureShoulderAsymmetryMayCauseLongTermPain` `baselineRelative`
+>    alatt) a teljes 39-tesztes suite-ot zölden hagyta. **Javítás:** egy
+>    második, a kód STRING-jén futó, a deklarált osztálytól független
+>    lexikai védvonal (10 zárt lexéma), ami MINDIG elsőként fut.
+> 4. **F2 MAJOR (saját lelet) — `confidenceFormula` dokumentált állítása
+>    nem egyezett a tényleges számítással, és a §6 „visibility-mátrix"
+>    kritérium valójában nem volt tesztelve.** Mérve (két független
+>    próba, saját + security-reviewer): azonos landmark-visibility mellett
+>    a `confidence` KIZÁRÓLAG a drift nagyságától függött, nem a
+>    visibility-től. **Javítás:** a `confidenceFormula` mező most a
+>    tényleges számítást írja le; a §6 kritérium egy pre-fix-round
+>    orchestrátor-addendummal (§0.0 R9) dokumentáltan a már meglévő R8
+>    jelenlét/hiány-kapura szűkült (a `PostureObservation` R14-kontraktja
+>    nem exportál graduált visibility-t).
 >
-> Zöld kapu (exact-SHA `79c4f49`, a javító kör után): Full Gate
-> [31237713264](https://github.com/wolfcasaba/strumsight/actions/runs/31237713264)
+> Mindkét MAJOR a fix-round UTÁN saját, friss GitHub-klónon (`/tmp/review-e05-r20-fix1`)
+> újra-ellenőrizve — a kódot közvetlenül olvasva, nem csak a §10 handoffra
+> hagyatkozva. Zöld kapu (exact-SHA `7ad5c49`): Full Gate
+> [31242600233](https://github.com/wolfcasaba/strumsight/actions/runs/31242600233)
 > **success** + Router CI
-> [31237741222](https://github.com/wolfcasaba/strumsight/actions/runs/31237741222)
-> **success**. Post-merge gate a friss `main`-en (`a38e0e0`) is zöld,
-> 292/292 teszt.
+> [31242629823](https://github.com/wolfcasaba/strumsight/actions/runs/31242629823)
+> **success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
+> utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+> trigger-útvonalán sem). Post-merge gate a friss `main`-en (`be38e11`) is
+> zöld, 334/334 teszt.
 >
-> Lecke: **L177** (`ROUND_BRIEF` beállítása NEM garantálja a
-> `scope_audit=` mező megjelenését a jelzésfájlban — a kézi fallback
-> minden fordulóban ellenőrizendő), **L178** (csúszóablakos szegmentálás:
-> a csonkolási határ a szomszédos ABLAK saját, pre-vel eltolt kezdete
-> legyen, sosem a szomszédos ESEMÉNY nyers pozíciója, különben a
-> pre/post aszimmetria automatikusan átfedést nyit — részletek
-> `docs/LESSONS.md`).
->
-> ## ✅ E05-R18 KÉSZ — Fretting-hand metric engine (2026-08-08)
->
-> **E05-R18** MERGED (PR [#191](https://github.com/wolfcasaba/strumsight/pull/191),
-> squash `75f8766`; implementer **MiniMax M3** (kezdeti + két javító kör),
-> orchestrátor/reviewer **Claude Sonnet 5**). Hat megfigyelhető, confidence-
-> aware proxy-metrika a bal kéz (fretting) fogásának geometriájára. Teljes
-> részletes történet (BLOCKER-1/F1 + F2/F3/F5 MAJOR + F4 MAJOR külön javító
-> körben + F6/F7 MINOR + N1 NOTE):
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **Nincs új ADR**
-> (ADR 0179/0181 végrehajtása). Review:
-> [docs/reviews/e05-r18-fretting-hand-metric-engine-review.md](docs/reviews/e05-r18-fretting-hand-metric-engine-review.md)
-> — **APPROVED** két javító kör után. Lecke: **L175**, **L176**.
+> Lecke: **L179** (L175 EGYSZER MÁR dokumentálta a `git worktree add`
+> csapdát, mégis megismétlődött két körrel később, mert egyetlen skill
+> sem hivatkozott rá — a `sdd-round-driver` skill §3 most explicit
+> kimondja: MINDIG `git clone`, SOHA `git worktree add`), **L180** (egy
+> „ellenőrizd az OSZTÁLYT" allowlist nem helyettesíti az „ellenőrizd a
+> TARTALMAT" védelmet — a valódi-sértés próba tervezésekor a kód egy
+> MÁSIK, ENGEDÉLYEZETT osztályba rosszul deklarálva a valódi teszt, nem a
+> saját tiltott osztályába deklarálva), **L181** (egy `MetricDefinition`-
+> mintázat mechanikus átvétele egy MÁS adatforrású rétegre a mezők
+> SZEMANTIKÁJÁT is átviszi, még ha az adatforrás nem is támogatja azt —
+> részletek `docs/LESSONS.md`).
 >
 > ## ✅ E05-R19 KÉSZ — Picking-hand stroke metric engine (2026-08-08)
 >
 > **E05-R19** MERGED (PR [#192](https://github.com/wolfcasaba/strumsight/pull/192),
 > squash `a38e0e0`; implementer **MiniMax M3** (kezdeti + egy javító kör),
-> orchestrátor/reviewer **Claude Sonnet 5**). Lásd a fenti „Last updated"
-> blokk a teljes pre-flight/javítókör/review történetért — ez a szakasz
-> csak a rövid hivatkozási pont a korábbi körök mintája szerint. **Nincs új
-> ADR** (ADR 0179/0181 végrehajtása a picking kézre). Review:
+> orchestrátor/reviewer **Claude Sonnet 5**). Hét megfigyelhető,
+> confidence-aware proxy-metrika a jobb kéz (picking) mozgáspályájára és
+> konzisztenciájára. Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **Nincs új ADR**
+> (ADR 0179/0181 végrehajtása). Review:
 > [docs/reviews/e05-r19-picking-hand-stroke-metrics-review.md](docs/reviews/e05-r19-picking-hand-stroke-metrics-review.md)
 > — **APPROVED** egy javító kör után. Lecke: **L177**, **L178**.
-> **Következő:** E05-R20 — Posture metric engine és safety policy
-> (`docs/sdd/06-epic-05-computer-vision.md` „Kör 20"), a pipeline új
-> sessionben indítja, ha van hozzá kör-brief; ha nincs, a brief előkészítés
-> az első teendő.
+>
+> ## ✅ E05-R20 KÉSZ — Posture metric engine and safety claim guard (2026-08-08)
+>
+> **E05-R20** MERGED (PR [#193](https://github.com/wolfcasaba/strumsight/pull/193),
+> squash `be38e11`; implementer **MiniMax M3** (kezdeti + egy javító kör),
+> orchestrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
+> Lásd a fenti „Last updated" blokk a teljes pre-flight/javítókör/review
+> történetért — ez a szakasz csak a rövid hivatkozási pont a korábbi
+> körök mintája szerint. **ÚJ ADR 0188** (safety claim guard); a
+> posture-metrika réteg ADR 0179 végrehajtása. Review:
+> [docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md](docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md)
+> — **APPROVED** egy javító kör után (2 MAJOR zárva). Lecke: **L179**,
+> **L180**, **L181**.
+>
+> **Következő:** a láncot a user 2026-08-08-án explicit megállította E05-R21..R30
+> előtt (`docs/execution/pipeline-queue.tsv`, commit `2e3e9a6`) — a Terra/
+> codex-harness usage-limitje miatt, amíg az vissza nem tér; a sorok
+> `hold` státuszban maradnak, a driver nem indít újat, amíg ez nem oldódik.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -122,10 +134,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R19 zárása): E05-R17 rövid bannere törölve (a
-> részletes E05-R17 történet már korábban archiválva volt); E05-R18
+> Mért diéta: 2026-08-08 (E05-R20 zárása): E05-R18 rövid bannere törölve (a
+> részletes E05-R18 történet már korábban archiválva volt); E05-R19
 > részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
-> bannere megmaradt/frissült; E05-R19 részletes narratívája + rövid
+> bannere megmaradt/frissült; E05-R20 részletes narratívája + rövid
 > bannere felkerült.
 
 ## 1. Current release state
@@ -458,33 +470,40 @@
 
 ## 4. Current branch
 
-`main` @ [PR #192](https://github.com/wolfcasaba/strumsight/pull/192), squash
-`a38e0e0` (E05-R19, picking-hand stroke metric engine). Pure Dart domain +
-teszt-diff → full-gate
-[31237713264](https://github.com/wolfcasaba/strumsight/actions/runs/31237713264)
-+ router-ci [31237741222](https://github.com/wolfcasaba/strumsight/actions/runs/31237741222)
-**success** az exact merge-előtti tip `79c4f49`-n (a javító kör UTÁN).
-Review **APPROVED 1 javító kör után** — F1 BLOCKER (`StrokeWindow.cut()`
-a következő ablak SAJÁT kért kezdete helyett a következő onset NYERS
-timestampjéig csonkolt, ami miatt szomszédos ablakok mintákat
-duplikáltak gyors váltogatásnál — a review saját, eldobható
-próbateszttel reprodukálta, a javítás UTÁN saját próbateszttel újra
-megerősítette a duplikáció megszűnését), a review SAJÁT, friss
-GitHub-klónon függetlenül futtatott gate-újrafuttatásával ÉS eldobható
-mutáció-próbákkal (mirror/handedness-paritás, sync-kapu) igazolva, nem
-az implementer önjelentésére hagyatkozva. Az `origin/main` a dispatch óta
-**nem mozdult**. Post-merge gate (`tools/round-gate.sh test/features/vision`)
-a friss `main`-en is zöld, 292/292 teszt. Lecke: **L177** (`ROUND_BRIEF`
-nem garantálja a `scope_audit=` mező megjelenését), **L178**
-(csúszóablakos csonkolás a szomszédos ablak saját kezdetéhez igazodjon,
-ne a szomszédos esemény nyers pozíciójához).
-_(Történeti product-merge referencia: PR #191 / `75f8766`, E05-R18; PR #189
-/ `e979d41`, E05-R17; PR #188 / `6f9c0e1`, E05-R16; PR #187 / `a351ad3`,
-E05-R15; PR #185 / `efa4bbe`, E05-R14; PR #184 / `148469c`, E05-R13; PR #183
-/ `f39d7b6`, E05-R12; PR #182 / `113976a`, E05-R11; PR #181 / `39d1c29`,
-E05-R10; PR #180 / E05-R09, frame quality assessor; PR #169 / `b5837d9`,
-E05-R07; PR #168 / `a43f8c1`, E05-R06; PR #162 / `cef864c`, E05-R01, Epic 5
-INDUL; PR #160 / `0cf6323`, E04-R24.)_
+`main` @ [PR #193](https://github.com/wolfcasaba/strumsight/pull/193), squash
+`be38e11` (E05-R20, posture metric engine and safety claim guard). Pure Dart
+domain + teszt-diff → full-gate
+[31242600233](https://github.com/wolfcasaba/strumsight/actions/runs/31242600233)
++ router-ci [31242629823](https://github.com/wolfcasaba/strumsight/actions/runs/31242629823)
+**success** az exact merge-előtti tip `7ad5c49`-n (a javító kör UTÁN;
+mindkettő kézzel dispatch-elve az exact SHA-ra, mert az utolsó push csak
+`docs/reviews/`-t érintett, ami nincs egyik workflow trigger-útvonalán sem).
+Review **APPROVED 1 javító kör után, 2 lezárt MAJOR** — F1 (security-reviewer:
+a safety guard a claim-kód deklarált OSZTÁLYÁT ellenőrizte, nem a
+SZEMANTIKÁJÁT — egy orvosi tartalmú, de ALLOWED osztályba deklarált kód a
+teljes suite-ot zölden hagyta; javítás: lexikai másodvédvonal) + F2 (saját
+lelet: `confidenceFormula` nem egyezett a tényleges számítással, a §6
+„visibility-mátrix" kritérium nem volt tesztelve; javítás: a mező most
+őszinte, a kritérium egy pre-fix-round addendummal dokumentáltan az R8
+jelenlét/hiány-kapura szűkült). Mindkettő a review SAJÁT, a javító kör UTÁN
+friss GitHub-klónon (`/tmp/review-e05-r20-fix1`) függetlenül futtatott
+gate-újrafuttatásával ÉS a kód közvetlen (nem a handoffra hagyatkozó)
+olvasásával igazolva. Az `origin/main` a dispatch óta a pipeline saját
+`hold`-bejegyzésével mozdult (`2e3e9a6`, nem konfliktáló, csak
+`pipeline-queue.tsv`), a merge előtt újraellenőrizve, konfliktus nem volt.
+Post-merge gate (`tools/round-gate.sh test/features/vision`) a friss
+`main`-en is zöld, 334/334 teszt. Lecke: **L179** (a `git worktree add`
+csapda EGYSZER MÁR dokumentálva volt L175-ben, mégis megismétlődött, mert
+a skill nem hivatkozott rá — most már igen), **L180** (osztály-alapú
+allowlist ≠ tartalom-ellenőrzés), **L181** (mintázat-átvétel a mezők
+szemantikáját is átviszi, még ha az adatforrás nem támogatja).
+_(Történeti product-merge referencia: PR #192 / `a38e0e0`, E05-R19; PR #191
+/ `75f8766`, E05-R18; PR #189 / `e979d41`, E05-R17; PR #188 / `6f9c0e1`,
+E05-R16; PR #187 / `a351ad3`, E05-R15; PR #185 / `efa4bbe`, E05-R14; PR #184
+/ `148469c`, E05-R13; PR #183 / `f39d7b6`, E05-R12; PR #182 / `113976a`,
+E05-R11; PR #181 / `39d1c29`, E05-R10; PR #180 / E05-R09, frame quality
+assessor; PR #169 / `b5837d9`, E05-R07; PR #168 / `a43f8c1`, E05-R06; PR
+#162 / `cef864c`, E05-R01, Epic 5 INDUL; PR #160 / `0cf6323`, E04-R24.)_
 
 > **[Superseded ref — E05-R07 branch]:** `main` @ PR #169, squash
 `b5837d9` (E05-R07). Pure Dart/teszt diff → full-gate
@@ -578,6 +597,34 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R20 — Posture metric engine and safety claim guard** (PR
+[#193](https://github.com/wolfcasaba/strumsight/pull/193), squash `be38e11`,
+**ÚJ ADR 0188** safety-claim-guard-ra, posture-metrika réteg ADR 0179
+végrehajtása; implementer **MiniMax M3** (kezdeti + **1 javító kör**),
+orchestrátor/reviewer **Claude Sonnet 5**, dedikált **security-reviewer**
+ágens `risk = "high"` miatt). Négy pure-Dart proxy-metrika
+(`lib/features/vision/domain/metrics/`) + fail-closed safety claim guard
+(`lib/features/vision/domain/safety/`) — lásd a fejléc ✅-blokk a teljes
+pre-flight/javítókör/review történetért. **Pre-flight (§0.0, 9 pont)**
+javította a stale ADR-hivatkozást, írt egy ÚJ ADR-t (0188), és beépített
+egy az E05-R14 lezárt kör security-review-jából KIFEJEZETTEN E05-R20-ra
+hagyott, a brief szövegéből korábban hiányzó follow-upot (R8/§5 pont 7:
+`PostureObservation.state` sosem mérvadó, mert MINDIG `good`, ha akár
+egyetlen landmark közös a baseline-nal). **1 javító kör** zárt 2 MAJOR-t:
+a security-reviewer saját próbája (egy orvosi kód ALLOWED osztályba
+deklarálva átjutott a guardon) és a saját lelet (`confidenceFormula`
+dokumentáció-vs-kód ellentmondás + egy §6 acceptance-kritérium csendesen
+nem teljesült). Az orchestrátor mindkét fordulót SAJÁT, friss
+GitHub-klónon függetlenül futtatott gate-tel ÉS a kód közvetlen
+olvasásával (nem a handoffra hagyatkozva) újra-ellenőrizte. Gate zöld a
+`7ad5c49` merge-előtti SHA-n: Full Gate ✅ · Router CI ✅ (mindkettő kézzel
+dispatch-elve, mert az utolsó push nem érintett trigger-útvonalat).
+Post-merge gate a friss `main`-en (`be38e11`) is zöld, 334/334 teszt.
+Lecke: **L179**, **L180**, **L181** (`docs/LESSONS.md`). A dedikált
+security-reviewer teljes jelentése a review-fájlba integrálva, nem külön
+fájlban. Részletek:
+[review](docs/reviews/e05-r20-posture-metrics-and-safety-policy-review.md).
 
 **E05-R19 — Picking-hand stroke metric engine** (PR
 [#192](https://github.com/wolfcasaba/strumsight/pull/192), squash `a38e0e0`,
@@ -780,9 +827,15 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > device-mátrix csak akkor lesznek véglegesek). Az Epic 6 queue-sorai
 > addig is `hold`-on védik a sorrendet.
 
-0. **E05-R20 — Posture metric engine és safety policy**
-   (`docs/rounds/e05-r20-posture-metrics-and-safety-policy.md`) — a pipeline új
-   sessionben indítja — **ez a session nem kezdi el.**
+0. **A pipeline HOLD-on áll E05-R21..R30 előtt** (user-döntés 2026-08-08,
+   `docs/execution/pipeline-queue.tsv` commit `2e3e9a6`) — a Terra/
+   codex-harness usage-limitje miatt, amíg az vissza nem tér (az engine
+   override jelenleg `minimax`). A driver nem talál `pending` sort a HOLD
+   alatt, tehát nem indít új kört, amíg ez emberi döntéssel fel nem oldódik.
+   **~~E05-R20 — Posture metric engine és safety policy~~ — KÉSZ**
+   (PR #193, `be38e11`, **ÚJ ADR 0188** safety-claim-guard-ra, posture-fél
+   ADR 0179 végrehajtása; implementer MiniMax M3, 1 javító kör; dedikált
+   security-reviewer risk=high, 2 MAJOR a javító körben zárva; ld. fejléc + §5).
    **~~E05-R19 — Picking-hand stroke metric engine~~ — KÉSZ**
    (PR #192, `a38e0e0`, nincs új ADR — ADR 0179/0181 végrehajtása;
    implementer MiniMax M3, 1 javító kör; ld. fejléc + §5).

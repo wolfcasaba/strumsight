@@ -6150,3 +6150,110 @@ különben a `pre`/`post` aszimmetria automatikusan átfedést nyit. A
 review a javítást saját, a teljes 6-onsetes idővonalon minden
 szomszédos párra megismételt próbateszttel erősítette meg (nem
 fogadta el az implementer „292/292 zöld" önjelentését bizonyítékként).
+
+## L179 — L175 EGYSZER MÁR dokumentálta a `git worktree add` csapdát, mégis megismétlődött két körrel később, mert egyetlen skill sem hivatkozott rá (E05-R20, pre-flight/dispatch, 2026-08-08)
+
+**Mért ismétlődés.** Az E05-R20 orchestrátora (ez a session) az izolált
+implementer-munkapéldányt `git worktree add /home/ubuntu/ss-mm-e05-r20
+<branch>`-dal hozta létre — PONTOSAN az [[L175]]-ben (E05-R18,
+2026-08-08, ugyanaznap, két körrel korábban) már egyszer mért, teljes
+részletességgel dokumentált hiba. A `tools/mm-round.sh` dispatch néma
+`exit 2`-vel bukott (a `.git` fájl, nem könyvtár), a `wait-for-round.sh`
+540 s-onként `exit 5`-öt adott — élő, lassú körnek tűnt, miközben a
+dispatch el sem indult. A felismerés ugyanaz a diagnosztikai lépéssor
+volt, mint L175-ben: `ps aux | grep claude` NULLA találat, majd
+`stat -c '%F' <munkapéldány>/.git` → `regular file` (nem `directory`).
+
+**Gyökérok — nem a memória hiánya, hanem a hivatkozás hiánya.** A
+`sdd-round-driver` skill §3 „Indítás" szakasza a mai napig (a javítás
+ELŐTT) csak annyit mondott: „Külön munkapéldányban
+(`/home/ubuntu/ss-<motor>-<kör>`)" — nem specifikálta a LÉTREHOZÁS
+módját (clone vs. worktree), és nem hivatkozott L175-re. Egy friss
+session, amely a skill-t olvassa (de nem grep-eli át előre a teljes
+`docs/LESSONS.md`-t „worktree" kulcsszóra — 6000+ soros fájl,
+nem ésszerű minden pre-flightban végigolvasni), pontosan ugyanabba a
+csapdába esik, amit egy MÁSIK kör már egyszer megmért. **A lecke
+LÉTEZÉSE önmagában nem elég — a lecke csak akkor hat, ha a
+DÖNTÉSI PONTHOZ (itt: a skill §3 lépése) van kötve, nem csak egy
+kereshető archívumban ül.**
+
+**Javítás — a skill maga lett módosítva, nem csak egy újabb lecke
+felvéve.** `.claude/skills/sdd-round-driver/SKILL.md` §3 mostantól
+explicit kimondja: „MINDIG `git clone`, SOHA `git worktree add`", a
+pontos hibamódot és a diagnosztikai parancsot idézve, L175/L179-re
+hivatkozva. **Általánosítható elv:** egy mért, ismétlődő hibaminta
+javítása két lépésből áll — (1) a lecke rögzítése (LESSONS.md, kereshető
+archívum) ÉS (2) a lecke bekötése abba a SKILL/PROMPT szövegbe, amit a
+jövőbeli session ténylegesen elolvas a döntés PILLANATÁBAN. Csak (1) —
+ahogy L175 esetében történt — nem elég; a következő session nem fogja
+tudni, hogy keresnie kellene.
+
+## L180 — Egy fail-closed allowlist, ami a DEKLARÁLT OSZTÁLYT ellenőrzi, nem a kód SZEMANTIKÁJÁT, gyengébb védelmet ad, mint amit a neve sugall (E05-R20, security-review MAJOR, 2026-08-08)
+
+**Mért rés.** `SafetyClaimGuard.evaluate()` (javítás előtti alak) egy
+claim-kódot csak azon az alapon fogadott el, hogy a katalógusban
+deklarált OSZTÁLYA nem szerepel a tiltott halmazban — a kód STRING
+tartalmát sosem vizsgálta. A security-reviewer saját próbája: a
+production katalógusba `'postureShoulderAsymmetryMayCauseLongTermPain':
+VisionSafetyClaimClass.baselineRelative` felvéve (egy ALLOWED osztályba
+deklarálva, de tartalmilag orvosi) → a teljes 39-tesztes szállított
+suite zöld maradt. A guard „fail-closed allowlist"-nek nevezte magát
+(a brief §5/§9 is ezt állította), de a valódi védelem a HELYES
+OSZTÁLYOZÁS emberi/implementer fegyelmén múlt, nem egy gépi tartalmi
+ellenőrzésen.
+
+**Miért nem BLOCKER.** A MA szállított katalógus mind a 10 kódja
+helyesen, nem-orvosi osztályba tartozott, és nincs élő fogyasztó — a
+rés egy JÖVŐBELI katalógus-bővítés (más kör, más implementer) hibájára
+vonatkozott, nem egy jelenlegi határsértésre.
+
+**Javítás és általánosítható elv.** Egy második, a kód STRING-jén
+futó, a deklarált osztálytól FÜGGETLEN lexikai véd­vonal (zárt,
+dokumentált kulcsszólista: `pain`, `diagnos`, `injur`, `harm`,
+`recover`, `treat`, `symptom`, `disease`, `disorder`, `syndrome`),
+ami MINDIG elsőként fut, a katalógus-lookup és az osztály-ellenőrzés
+ELŐTT. **Egy „ellenőrizd az OSZTÁLYT" típusú allowlist nem helyettesíti
+az „ellenőrizd a TARTALMAT" típusú védelmet** — a kettő más
+hibaosztályt fog meg (rossz besorolás vs. rosszul megválasztott
+katalógus-bejegyzés), és egy safety-kritikus guard mindkettőt igényli,
+ha a besorolás emberi/LLM-döntésen (nem gépi levezetésen) alapul. A
+valódi-sértés próba tervezésekor ez a lecke: a próba ne csak azt
+tesztelje, hogy „egy kód a SAJÁT (helyesen tiltott) osztályába
+deklarálva elutasításra kerül" — az triviális és a guard tervezett
+viselkedése —, hanem hogy „egy kód egy MÁSIK, ENGEDÉLYEZETT osztályba
+ROSSZUL deklarálva is elutasításra kerül" — ez az éles, a design
+valódi gyengeségét feltáró teszt.
+
+## L181 — Egy `MetricDefinition`-mintázat mechanikus (szerkezeti) átvétele egy MÁSIK adatforrásra a mezők SZEMANTIKÁJÁT is átviszi, még ha az adatforrás nem is támogatja azt (E05-R20, review F2, 2026-08-08)
+
+**Mért hézag.** Az E05-R20 `PostureMetricDefinition` a `picking_metrics.dart`
+(R19) MINTÁJA szerint épült — helyesen, a brief kifejezett kérésére.
+A minta két mezőt is hordozott: `minimumVisibility` és
+`confidenceFormula` (`'mean(minimum landmark visibility)'`). A
+fretting/picking motorok RAW per-frame landmark-adatot dolgoznak fel,
+ahol ez a két mező ténylegesen kiértékelhető (`_visibility()` valódi
+per-sample landmark-confidence-t olvas). A posture motor viszont a
+`PostureObservation`-t (R14 kimenete) dolgozza fel, ami MÁR egy fix,
+bináris 0,5-ös küszöbbel előszűrt drift-értékeket exportál — nincs
+benne graduált per-landmark visibility. Az implementer a mezőket
+STRUKTURÁLISAN helyesen átvette, de a `confidenceFormula` STRING-jét
+szó szerint másolta, miközben a `_confidence()` implementáció
+kényszerűen egy MÁSIK (drift-magnitúdó inverze) számításra tért át —
+a kettő emiatt ellentmondott egymásnak, mérve két független próbával
+(saját + security-reviewer): azonos 0,95 visibility mellett a
+confidence KIZÁRÓLAG a drift nagyságától függött.
+
+**Általánosítható elv.** Amikor egy kör egy korábbi kör
+MINTÁZATÁT (nem importált kódját) veszi át egy STRUKTURÁLISAN hasonló,
+de ADATFORRÁSÁBAN eltérő rétegre, minden mezőt egyenként kell
+megkérdezni: „ezen a RÉTEGEN ténylegesen kiértékelhető ez az érték,
+vagy csak a forma másolódott át?" — nem elég, hogy a `PostureMetricDefinition`
+konstruktora ugyanazokat az invariánsokat ellenőrzi, mint a
+`PickingMetricDefinition`-é; a MEZŐK TARTALMI IGAZSÁGA (mit ír le a
+`confidenceFormula` string) réteg-specifikus, és a pre-flight/review
+feladata explicit rá kérdezni: „a bemeneti kontraktus (itt:
+`PostureObservation`) valóban hordozza-e azt az adatot, amit ez a mező
+állít, hogy felhasznál?" **Javítás:** vagy a mező ŐSZINTE
+átfogalmazása a ténylegesen elérhető jelre, vagy a mezőt/leírást
+explicit „ezen a rétegen nem kiértékelt" jelöléssel ellátni — sosem a
+forrás-mintázat szövegének változtatás nélküli átvétele.
