@@ -6,6 +6,82 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R16 — Guitar geometry tracking és calibration loss, teljes részletes történet (2026-08-07)
+
+A kézzel kalibrált gitárgeometria **rövid távú** frame-to-frame követése,
+és elmozdulás esetén **biztonságos érvénytelenítés** (negatív technikai
+feedback helyett Recalibrate kérés). `lib/features/vision/domain/geometry/`
+— `GeometryTracker` contract + `GeometryConfidence` (drift + confidence,
+release-módban is futó validáció); `lib/features/vision/data/guitar/`
+— `EdgeGeometryTracker` (könnyű, él-/feature-alapú adapter, NEM ML-modell);
+`lib/features/vision/application/` — `CalibrationLossMachine`
+(`tracking`→`degraded`→`lost` hiszterézises állapotgép: forward küszöbök
+`degradedDriftBound=0.05`/`lostDriftBound=0.10`, szigorúbb visszatérési
+küszöb `recoveryDriftBound=0.04`). Implementer **MiniMax M3** (kezdeti
+implementáció + **egy javító kör**), orchestrátor/reviewer **Claude
+Sonnet 5**. **Nincs új ADR** — a kör két meglévőt bővít (a fejléc eredeti
+„0164"/§5.2 „0162" hivatkozása elavult batch-írási placeholder volt,
+pre-flightban javítva a helyes számokra: **ADR 0181** „manual calibration
+fallback" és **ADR 0179** „capability-aware feedback", ugyanaz a pár,
+amit R10/R11 pre-flightja is függetlenül azonosított). PR
+[#188](https://github.com/wolfcasaba/strumsight/pull/188), squash `6f9c0e1`.
+
+**Egy javító kör, egy dedikált security-review, egy lezárt BLOCKER +
+egy lezárt MINOR:**
+
+1. **BLOCKER-1 — a tracker elnyelte a nagy driftet, a gép sosem látta.**
+   A független review megtalálta, hogy mindkét egységteszt-fájl a két új
+   komponenst (`EdgeGeometryTracker`, `CalibrationLossMachine`)
+   **izoláltan** tesztelte, sosem összekötve — a machine-teszt egy
+   `observationFor()` helperrel közvetlenül konstruált
+   `GeometryObservation`-t, megkerülve a valódi trackert. Az
+   `EdgeGeometryTracker.observe()` a `drift >= lostDriftBound` esetben
+   `null`-t adott vissza ("első védelmi vonal") — ez a gép SAJÁT, helyesen
+   implementált és tesztelt azonnali forward-escalation logikáját
+   (`drift > lostDriftBound` → `lost`, MINDEN állapotból) HALOTT KÓDDÁ
+   tette a valódi integrációban, mert a `null` egy MÁSIK, lassabb
+   útvonalra (`noObservationLostThreshold=5` egymást követő frame)
+   terelte, amit a „nincs detektált feature" esetre szántak. Egy
+   eldobható review-próbateszttel (a kettőt ténylegesen összekötve)
+   empirikusan mérve: a kör §1 célja EGYETLEN frame alatt nem teljesült
+   (egy 0,20 driftű frame UTÁN a gép `tracking` maradt,
+   `feedbackSuppressed=false`), és a kumulatív-sodródás szcenárió a
+   dokumentált 11. lépés helyett a 14.-en érte csak el a `lost`-ot.
+   **Javítás (`8017382`):** a tracker minden driftet átenged, a `null`
+   csak a valódi „nincs evidencia" esetre marad; ÚJ, valódi integrációs
+   teszt-fájl köti össze a két komponenst bypass nélkül. Lecke **L172**.
+2. **MINOR-1 — a `GeometryConfidence` validációja csak `assert` volt.**
+   A dedikált security-review (risk=high) reprodukálta
+   `--no-enable-asserts` alatt: egy NaN drift csendben felépült volna
+   release buildben, `isLost` `false`-t adott volna garbage geometria
+   fölött. **Javítás:** feltétel nélküli `throw ArgumentError(...)`, a
+   `guitar_landmark_mapper.dart` fail-loud mintáját követve.
+
+**Az orchestrátor mindkét lezárt leletet FÜGGETLENÜL újra-ellenőrizte**,
+nem az implementer önjelentésére hagyatkozva: friss `/tmp` klónban a
+teljes gate 6/6 ZÖLD ÉS egy saját, a MiniMax tesztjeitől független
+eldobható próbateszt megismételve — `trackerReturnedNull=false,
+stateAfterOneFrame=lost, feedbackSuppressed=true`.
+
+**Operatív mellékszál:** a javító kör findings-promptja egy ÚJ
+integrációs teszt-fájlt kért, de a saját scope-mondata nem vette fel az
+`allowed_paths`-ra — önellentmondás az orchestrátor promptjában, nem
+implementer scope-túllépés (a MiniMax a kért tartalmat egy ésszerűen
+elnevezett, már engedélyezett könyvtárban hozta létre). Egy dokumentált
+§0.0 R7 brief-addendummal zárva (ADR 0087 §2), nem H3 halt.
+
+Zöld kapu (exact-SHA `43a7bc2`): Full Gate
+[31214106966](https://github.com/wolfcasaba/strumsight/actions/runs/31214106966)
+**success** + Router CI
+[31214105455](https://github.com/wolfcasaba/strumsight/actions/runs/31214105455)
+**success** (natív útvonal nem érintett, `build-apk.yml` nem kellett —
+`tools/round-ci-plan.py` döntése). Post-merge gate (`tools/round-gate.sh
+test/features/vision`) a friss `main`-en (`6f9c0e1`) is zöld.
+
+Lecke: **L172** (két izoláltan zöld komponens integrációja megsértheti a
+kör központi biztonsági célját, ha egyetlen teszt sem futtatja végig a
+TÉNYLEGES hívási láncot — részletek `docs/LESSONS.md`).
+
 ## E05-R15 — Guitar coordinate system és homography, teljes részletes történet (2026-08-07)
 
 Pure Dart geometriai mag a kamera-landmarkok gitárhoz relatív `u/v`

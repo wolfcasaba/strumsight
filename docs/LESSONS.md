@@ -5899,3 +5899,88 @@ zárt (nem H3 halt, ADR 0087 §2 — a kör saját, még nem merge-elt
 artefaktumát érintő döntés). **Következő körben:** ha egy fix-prompt új
 fájlt kér, a promptban EGYIDEJŰLEG bővítsd a brief `allowed_paths`
 listáját is — ne hagyatkozz az implementer útválasztására.
+
+## L173 — Egy hiba-metrikára (alacsonyabb=jobb) generikus, magasabb=jobb sablonból konkretizált küszöb-tábla csendben megfordíthatja a promóciós döntést — a `--self-test` zöldsége ekkor NEM bizonyíték (E05-R17, BLOCKER-1, 2026-08-07)
+
+**Mit mértünk.** Az E05-R17 `evaluate_geometry_baseline.py` `Metrics.decision()`
+függvénye (209-253. sor) a `mean_anchor_error` HIBA-metrikán (alacsonyabb =
+jobb) a `> MEAN_ANCHOR_ERROR_MAX` esetben adott `PRODUCTION_CANDIDATE`-et —
+azaz egy 0,031 (ROSSZABB, küszöb fölötti) mean-hibájú detektort MAGASABBRA
+sorolt, mint egy 0,029/0,030 (JOBB-EGYENLŐ) mean-hibájút, ami
+`EXPERIMENTAL`-ben ragadt. A `--self-test` 9/9 PASS volt — de NEM bizonyíték:
+a self-test fixture-jei ugyanabból a (rossz irányú) specifikációból íródtak,
+tehát a hibás irányt is zölden hagyták. Az inverziót a független review
+fogta meg, egy friss, a self-test-től független szintetikus adatpárral
+(jó detektor mean≈0,0098 → helyesen `PRODUCTION_CANDIDATE`; rossz detektor
+mean≈0,0799 → helyesen `EXPERIMENTAL`).
+
+**Gyökérok.** NEM implementer-hiba. A kör-brief §6.2 küszöb-mátrixát az
+orchestrátor egy generikus, batch-írt sablonból konkretizálta a
+pre-flightban, és az ADR 0187 saját Döntés 4. pontja UGYANAZT a rossz
+irányt írta elő — miközben az ADR SAJÁT Döntés 2 táblája már HELYESEN
+`≤ 0.030`-at írt (a helyes irány). Egyetlen dokumentum belsőleg
+önellentmondó volt, és a pre-flight a két állítás közül a rosszat vitte át
+a végrehajtható specifikációba. A MiniMax az implementer-preambulum 3.
+szabálya szerint járt el: szó szerint, hűen implementálta a kapott
+specifikációt, ÉS saját `§10.7` handoff-jegyzetében EXPLICITEN jelezte,
+hogy ez látszólag ellentmond az ADR Döntés 2 táblájának — tehát jelezte a
+kétértelműséget, nem csendben találgatott. Ez a fajta transzparencia a
+helyes implementer-viselkedés, és segítette a gyors independens
+felderítést.
+
+**Miért fontos.** Amikor a pre-flight egy ÚJ numerikus küszöb-táblát egy
+MEGLÉVŐ táblából/sablonból származtat, a származtatott tábla iránya
+(magasabb=jobb vs. alacsonyabb=jobb) NEM örökölhető automatikusan — egy
+hiba-stílusú metrikára (error, drift, latency) alkalmazott, eredetileg
+pontszám-stílusú metrikára (score, confidence, coverage) tervezett sablon
+csendben megfordul. Kötelező ellenőrzés a pre-flightban: ha egy generált
+küszöb-tábla egy MÁSIK, a SAJÁT dokumentumban (itt: ugyanaz az ADR) már
+meglévő tábla mellé kerül, a kettő IRÁNYÁT explicit kereszt-ellenőrizni
+kell egymással, nem csak mindkettőt önmagában ellenőrizni. Egy zöld
+`--self-test` nem bizonyíték, ha a fixture-öket UGYANABBÓL a (potenciálisan
+rossz irányú) specifikációból írták, mint amit tesztelnek — a független
+review-nek a self-test fixture-jein KÍVÜLI, frissen generált adattal kell
+megismételnie a döntést.
+
+## L174 — Az orchestrátor interaktív tmux-sessionje egy "API Error: Server error mid-response" után ÉLETBEN marad, de némán — a driver csak a teljes abszolút időkorlátnál vette észre (E05-R17, H-NOSIGNAL önjavítás, 2026-08-08)
+
+**Mit mértünk.** Az E05-R17 orchestrátor-session (`session_012XeLCuNLpHT42qaVd3XiW1`)
+sikeresen levezényelte a kört — PR #189 merge-elve `e979d41`-en, Full Gate +
+Router CI zöld az exact merge-SHA-n — majd a post-merge closing-rituálok
+közben `API Error: Server error mid-response`-ba futott. A session-napló
+utolsó módosítása 22:56:45 volt; a `tools/round-pipeline.sh` `run_tmux_session`-je
+csak 00:21:18-kor, a teljes 4 órás `session_timeout` lejártakor vette észre
+— **1h24m33s néma várakozás** egyetlen új sor nélkül, mert a tmux-session ÉS
+a mögötte álló Claude-process ÉLETBEN maradt (az interaktív CLI egy
+végzetes, turn-közbeni API-hiba után visszaesik a promptra, de NEM
+folytatja magától — ebben a felügyelet nélküli pipeline-ban senki nem
+gépeli be a következő "continue"-t). A driver akkori NÉGY ellenőrzése
+(jelzésfájl / kvóta-minta a logban / session-halál / pane-process-halál)
+egyike sem fogta meg ezt — mindegyik "halott/blokkolt" jelre nézett, egyik
+sem "élő, de néma"-ra.
+
+**Gyökérok.** Az implementer-oldal MÁR véd ez ellen (`tools/mm-round.sh`
+`MM_STALL_MINUTES`, log-mtime alapú — a fájl saját fejléce "három védelmi
+vonalat" nevez meg: jelzés / elakadás-őr / abszolút időkorlát). Az
+orchestrátor-oldalnak csak KÉT vonala volt (jelzés + abszolút időkorlát),
+a középső hiányzott. Javítás (`87fd5a5`, PR #190): `run_tmux_session`
+most `PIPELINE_ORCH_STALL_MINUTES` (alap 20 — a projekt saját, már mért
+"gate-et futtató körnél 20 perc" küszöbét újrahasznosítva) percnyi
+log-mtime-csend után kilép, mielőtt a teljes `timeout_s` lejárna — mind a
+elsődleges Claude-session, mind a Codex/Terra fallback ágon, tehát a
+JÖVŐBELI önjavító sessionöket (ezt is beleértve) is védi.
+
+**Másodlagos, operatív lecke — H-NOSIGNAL NEM jelenti automatikusan, hogy
+"semmi sem történt".** Ennek a haltnak a diagnózisakor kiderült, hogy a
+kör TARTALMI munkája teljes egészében KÉSZ volt (PR #189 merge-elve,
+gate-ek zöldek) — csak a bookkeeping (HANDOFF/RTM/LESSONS/git-notes/Viking)
+szakadt meg. Ha a `docs/execution/pipeline-queue.tsv` sort ez a heal nem
+méri és nem javítja `pending`→`done`-ra, a lánc a következő firingen
+ÚJRA nekifutott volna egy MÁR MERGE-ELT kör briefjének — valószínűleg
+azonnal ütközve a már létező ADR-számmal és fájlokkal. **Ajánlás jövőbeli
+H-NOSIGNAL diagnózishoz:** a §0 mérés része legyen egy `gh pr list --head
+<a halt körhöz illő branch-minta> --state merged` (vagy a queue-sor saját
+branch-mezője) ellenőrzés, mielőtt a healer feltételezné, hogy a kör
+tartalmilag újrafuttatandó. Rokon [[L132]] (implementer-oldali stall
+mentése commit előtt — más réteg, ugyanaz a "ne várd ki néma folyamatra a
+teljes időkorlátot" elv).
