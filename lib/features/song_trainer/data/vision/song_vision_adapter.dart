@@ -9,10 +9,9 @@ typedef PostureDriftFor = double? Function(SongVisionLoopObservation loop);
 /// This adapter has no transport dependency: cadence changes only the optional
 /// Vision projection, leaving backing playback and audio scoring untouched.
 final class SongVisionAdapter {
-  const SongVisionAdapter({required PostureDriftFor postureDriftFor})
-    : _postureDriftFor = postureDriftFor;
+  const SongVisionAdapter({required this.postureDriftFor});
 
-  final PostureDriftFor _postureDriftFor;
+  final PostureDriftFor postureDriftFor;
 
   SongVisionSummary aggregate({
     required VisionSongContract contract,
@@ -51,7 +50,7 @@ final class SongVisionAdapter {
     final postureDrift =
         hasSufficientQuality &&
             loop.sectionDuration >= contract.minimumPostureSectionDuration
-        ? _postureDriftFor(loop)
+        ? postureDriftFor(loop)
         : null;
     return SongVisionLoopSummary(
       loopIterationId: loop.loopIterationId,
