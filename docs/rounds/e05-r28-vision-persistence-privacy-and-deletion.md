@@ -308,14 +308,15 @@ dokumentált brief-revízió.
 - `vision_privacy_screen.dart` + ARB: standalone privacy panel explicit
   key-scope listával, sessionenkénti törléssel, exporttal és confirmált
   delete-all-lal. Route/settings wiring szándékosan nincs ebben a körben.
-- Tesztek: byte-stabil round-trip, future-version skip, record-hiba melletti
+- Tesztek: byte-stabil round-trip és visszaolvasott `modelVersions` map,
+  future-version skip, manifest-hiba előtti írásmentesség, record-hiba melletti
   olvashatóság, nyers-store delete-mátrix, store/export privacy snapshot,
   confirm-dialog és Vision route → session persistence → export network-spy.
 
 ### Futtatott ellenőrzések
 
 - `flutter analyze lib/features/vision/data/persistence lib/features/vision/domain/vision_privacy_control.dart lib/core/storage/storage_keys.dart` — zöld, 0 issue.
-- `flutter test test/features/vision/data/vision_session_repository_test.dart test/features/vision/data/vision_export_privacy_test.dart` — zöld, 6 teszt.
+- `flutter test test/features/vision/data/vision_session_repository_test.dart test/features/vision/data/vision_export_privacy_test.dart` — zöld, 7 teszt.
 - `flutter test test/features/settings/vision_privacy_screen_test.dart` — zöld, 1 teszt.
 - `flutter test test/app/offline_network_guard_test.dart` — zöld, 4 teszt; a
   Vision route után egy tényleges local `save` + JSON export is fut, továbbra
