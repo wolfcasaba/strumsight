@@ -32,6 +32,7 @@ void main() {
   test('Song Trainer Vision consumers never import the wide Vision barrel', () {
     final consumers = <File>[
       File('lib/features/song_trainer/data/vision/song_vision_adapter.dart'),
+      File('lib/features/song_trainer/domain/models/song_vision_summary.dart'),
     ];
 
     for (final consumer in consumers.where((file) => file.existsSync())) {
