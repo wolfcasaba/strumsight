@@ -281,7 +281,81 @@ claim-guard lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `vision_context_snapshot.dart`: minimális, szerializálható Vision snapshot
+  (`sessionId`, `SessionTimestamp`, `InsightCode`, confidence,
+  `ObservationState`); a stabil JSON-alak pontosan öt rögzített kulcs.
+- `vision_claim_guard.dart`: saját, zárt Tutor-claim katalógusú, 0.70-es
+  küszöbű fail-closed gate. Hiányzó, `notObservable` vagy küszöb alatti
+  evidence és érvénytelen confidence esetén a determinisztikus
+  `InsightCode.setupNotObservable` fallbackot adja.
+- `vision/domain/integration/public.dart`: kizárólag a két új,
+  domain-safe integrációs contract exportja; a wide barrel érintetlen.
+- `tutor_context_snapshot.dart`: csak a két additív `vision` enum-érték;
+  `tutor_vision_context_adapter.dart`: valódi, verziózott
+  `TutorContextField`-re vetíti a minimális snapshotot.
+- `analysis_vision_reference.dart` és `analysis_vision_adapter.dart`:
+  audio- és vision-evidence ID-ket `SessionTimestamp`-tel kapcsol össze,
+  az eredmény `ObservationState.inferred`; nincs wall-clock vagy transport.
+- A négy új teszt lefedi a minimization, claim-guard, Tutor-adapter és
+  Analysis round-trip/network-spy contractot. A Chapter 5/7 célzott,
+  additív integrációs megjegyzést kapott.
+
+### Acceptance evidence
+
+- **Minimization:** `vision_context_snapshot_test.dart` a pontos, sorrendben
+  rögzített kulcshalmazt ellenőrzi:
+  `sessionId`, `sessionTimestampUs`, `insightCode`, `confidence`,
+  `observationState`.
+- **Tiltott mezők:** ugyanaz a teszt külön ellenőrzi, hogy `frame`,
+  `landmarks`, `facePoints` és `imageUri` nincs a szerializált snapshotban.
+- **Claim-guard mátrix:** a hat cella (evidence nincs/van × confidence
+  0.69/0.70/0.71) tesztelt; csak a jelenlevő evidence 0.70-en és fölötte
+  engedélyezett. Külön teszt blokkolja a `notObservable` és a saját,
+  0.69-es confidence-ű evidence-t akkor is, ha a bemeneti állított
+  confidence magas.
+- **Fallback:** két azonos denied hívás ugyanazt a
+  `InsightCode.setupNotObservable` kódot adja.
+- **Analysis:** 2.5 másodperces klip-eltolás
+  `SessionTimestamp(1_000_000)`-ról `SessionTimestamp(3_500_000)`-ra és
+  vissza round-tripel; a `TimelineChord.startSec` és
+  `TimelineStrum.timeSec` is ugyanarra a közös idővonalra vetül. Az
+  összekapcsolás `inferred`, mindkét evidence ID-t megtartja. A
+  `HttpOverrides` spy klienslétrehozási száma 0.
+- **Valódi-sértés próba:** ideiglenesen a snapshot JSON-jába került
+  `'landmarks': const <Object>[]`; a célzott teszt PIROS lett. A pontos
+  kulcspróba-kimenet: `Actual: ... 'observationState', 'landmarks' ...`
+  és `Which: ... longer than expected`; a tiltott-mező próba pedig
+  `Expected: not contains 'landmarks'`. A probe vissza lett állítva a gate
+  előtt.
+- **SDD-integráció:** Chapter 5 rögzíti a minimalizált, claim-guardolt Tutor
+  utat; Chapter 7 checklistje a közös `SessionTimestamp`-es, inferred
+  Analysis-hivatkozást írja elő.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/vision/domain/integration/vision_context_snapshot_test.dart test/features/vision/domain/integration/vision_claim_guard_test.dart test/features/ai_tutor/application/context/adapters/tutor_vision_context_adapter_test.dart test/features/analyze/analysis_vision_adapter_test.dart`
+  → előbb **18 teszt zöld**, majd a TimelineChord/TimelineStrum RED→GREEN
+  bővítés után a külön Analysis-teszt **5 teszt zöld**.
+- `flutter test test/features/vision/domain/integration/vision_context_snapshot_test.dart`
+  a szándékos landmark-probe alatt → **2 várt hiba**, majd a probe
+  visszaállítva.
+- `tools/round-gate.sh test/features/vision test/features/ai_tutor test/features/analyze`
+  → első futás: az analyzer 5 `unnecessary_import` infót talált; a redundáns
+  tesztimportok eltávolítva, majd teljesen újrafuttatva.
+- `tools/round-gate.sh --result-json /tmp/e05-r27-round-gate-final.json test/features/vision test/features/ai_tutor test/features/analyze`
+  → **pass**, `exit_code: 0`, `failed_step: null`; format, analyze,
+  mindhárom célzott test-rész, architecture, secrets és l10n zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- A brief által engedett `ai_tutor/public.dart` és `analyze/public.dart`
+  exportbővítése nem kellett: nincs élő cross-feature hívó, a szerződés a
+  szűk Vision barrelen keresztül elérhető.
+- Lokális teljes `flutter test`, property gate és APK build nem futott;
+  ezek a kör-branchre dispatchelt CI/orchestrátor kapui. Backend-kód nem
+  változott, ezért backend gate nem releváns.
 
 ## 11. Review — a független reviewer tölti ki
 

@@ -4597,6 +4597,10 @@ Az Epic 4 végére a StrumSight rendelkezik egy teljes, termékbe illesztett AI 
 
 Az Epic 4 lezárása után kezdhető el:
 
+Vision evidence a Tutor felé csak az E05-R27 minimalizált,
+claim-guardolt context-adapterén keresztül érhető el; nyers frame, landmark
+vagy kép-URI nem része a redaktált tutor contextnek.
+
 ```text
 Chapter 6 — Epic 5: Computer Vision
 ```
