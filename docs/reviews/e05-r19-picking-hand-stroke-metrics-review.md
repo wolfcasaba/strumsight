@@ -1,14 +1,19 @@
 # E05-R19 — Review
 
 Brief: `docs/rounds/e05-r19-picking-hand-stroke-metrics.md`
-Diff: `git diff a382cf7...minimax/e05-r19-picking-hand-stroke-metrics` (pre-flight commits `a2d1797`/`12d3748` excluded — implementer diff is `12d3748..78daad1`)
+Diff: `git diff a382cf7...minimax/e05-r19-picking-hand-stroke-metrics` (pre-flight commits `a2d1797`/`12d3748` excluded — implementer diff is `12d3748..78daad1`, fix-round-1 diff `047ccd1..0670bb6`)
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08
 Independent gate: fresh clone `/tmp/review-e05-r19` from `https://github.com/wolfcasaba/strumsight.git` (not the shared tree, not the implementer's own workspace)
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED** (fix-round 1 után, `0670bb6`)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 2
+**Javító kör 1 — záró ellenőrzés.** F1 BLOCKER **FIXED** (`0670bb6`),
+függetlenül újra-ellenőrizve saját reprodukciós próbával a javítás UTÁN is
+(nem csak az implementer önjelentésére hagyatkozva). Eredeti összegzés
+alant, változatlanul, evidenciaként.
+
+BLOCKER: 1 (FIXED) · MAJOR: 0 · MINOR: 0 · NOTE: 2 (nyitva, nem blokkoló)
 
 Egy mért, reprodukált BLOCKER: a `StrokeWindow` csonkolási szabálya
 lehetővé teszi, hogy ugyanaz a fizikai minta KÉT egymást követő ablak
@@ -98,7 +103,34 @@ additív export + a brief maga, §10-hez).
   szomszédos párra a `FastToggleStrokes.sixAt130ms()` fixture-ön), és a
   meglévő csonkolás-flag tesztek (`window.truncated`, `window.end`) a
   megváltozott határ-szemantikával összhangban frissítve/újraellenőrizve.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`0670bb6`). A javítás a csonkolási határt a
+  következő onset NYERS timestampja helyett a következő ablak SAJÁT
+  kért kezdetére (`nextOnset.timestamp - pre`) mozgatja
+  (`stroke_window.dart` `cut()`, `nextRequestStart`). Két új regressziós
+  teszt: (1) `stroke_window_test.dart` "adjacent windows share NO sample
+  timestamps" — páronkénti metszet-üresség VALÓS mintákkal; (2) "every
+  sample is included in EXACTLY one window (global partition)" — erősebb
+  invariáns, a teljes idővonalon minden minta PONTOSAN egy ablakhoz
+  tartozik. A hiányzó "nagyon gyors váltogatás" érték-cella is pótolva:
+  `picking_metric_engine_test.dart` új "stroke fixture matrix — fast
+  toggle" csoport, mind a négy metrika (irány/amplitúdó/sebesség/
+  linearitás) tényleges, `python3 -c`-vel számolt várt értékkel mind a 6
+  ablakra.
+  **Reviewer saját, független megerősítése** (nem az implementer
+  önjelentésére hagyatkozva): a review saját, eldobható próbateszttel
+  (a `FastToggleStrokes.sixAt130ms()` 6-onsetes, teljes idővonalán, MINDEN
+  szomszédos ablakpárra) megismételte az eredeti reprodukciós mérést a
+  javítás UTÁNI kódon — a metszet MINDEN párra üres:
+  ```
+  window0 ∩ window1 = {} (window0=[-100, -67, -34, -1], window1=[32, 65, 98, 131])
+  window1 ∩ window2 = {} (window1=[32, 65, 98, 131], window2=[164, 197, 230, 263])
+  window2 ∩ window3 = {} (window2=[164, 197, 230, 263], window3=[296, 329, 362, 395])
+  window3 ∩ window4 = {} (window3=[296, 329, 362, 395], window4=[428, 461, 494, 527])
+  window4 ∩ window5 = {} (window4=[428, 461, 494, 527], window5=[560, 593, 626, 659, 692, 725, 758, 791])
+  ```
+  A teljes gate friss, független klónon (`/tmp/review-e05-r19`) újra
+  lefuttatva a javítás utáni HEAD-en (`0670bb6`): format/analyze/test
+  (292/292)/architecture/secrets/l10n mind ZÖLD.
 
 ### N1 — NOTE — `Δv > 0 → down` numerikus ±1 kódolás, nem `StrumDirection`
 
@@ -133,11 +165,14 @@ Nem blokkoló, follow-up jelölésre javasolt.
 | l10n | zöld | ✅ (en→hu, 964 üzenet) |
 | Mirror-paritás load-bearing | állítva | ✅ saját mutáció-próba: hamis `handedness`-ág → PIROS → revert → zöld |
 | Sync-kapu load-bearing | állítva, §10.4 | ✅ saját mutáció-próba: `_eventLevelAllowed` → `true` → 5 teszt PIROS → revert → zöld |
-| Átfedő ablak — nincs duplikáció | állítva (csak `truncated` flag tesztelve) | ❌ saját próba: a duplikáció TÉNYLEGESEN bekövetkezik — ld. F1 |
-| CI (teljes suite + property + APK) | — | orchestrátor dispatch-eli a fix-kör után |
+| Átfedő ablak — nincs duplikáció | eredetileg állítva (csak `truncated` flag), javítás UTÁN: valódi partíció | ✅ **fix-round 1 (`0670bb6`) UTÁN**: saját próba, minden szomszédos ablakpár metszete üres (fent idézve) + globális partíció teszt |
+| test test/features/vision (fix-round 1 után) | 292/292 zöld | ✅ saját, friss klónon független futtatással megerősítve |
+| CI (teljes suite + property + APK) | — | orchestrátor dispatch-eli ezután, a `0670bb6` SHA-n |
 
 ## Merge-döntés
 
-**Merge TILOS** — F1 BLOCKER nyitva (ADR 0052). A javító kört a MiniMax
-viszi (első javító kör, motor-eszkaláció küszöbe még nem ért el), a fenti
-"Kötelező javítás" + "Ellenőrzés" szakasz a fix-prompt tartalma.
+**F1 BLOCKER FIXED, nulla nyitott BLOCKER/MAJOR marad.** Az ADR 0052
+szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge. A CI
+(Full Gate + Router CI) dispatch-e és az exact-SHA zöld kapu ellenőrzése
+az orchestrátor következő lépése; a squash-merge azt követően, külön
+jóváhagyás nélkül.
