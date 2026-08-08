@@ -369,6 +369,7 @@ run_tmux_session() {
   local tmux_session="$1" shell_command="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6" watch_claude_limit="${7:-0}"
   local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
+  local stall_seconds log_age
 
   # TESZT-BIZTOSÍTÉK (ADR 0138, MÉRVE 2026-08-05). A `tools/tests/` teljes
   # firinget futtató esetei izolált `PIPELINE_STATE_DIR`-t kapnak, de a
@@ -406,6 +407,7 @@ run_tmux_session() {
 
   deadline=$(( $(date +%s) + timeout_s ))
   claude_started_at=$(date +%s)
+  stall_seconds=${PIPELINE_ORCH_STALL_SECONDS:-$(( ${PIPELINE_ORCH_STALL_MINUTES:-20} * 60 ))}
   while [ ! -f "$signal_file" ]; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       log "időkorlát lejárt ($label) — a tmux-sessiont leállítjuk"
@@ -432,6 +434,22 @@ run_tmux_session() {
         printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))" > "$claude_block_file"
         log "KVÓTA: a Claude process már nem él a tmux pane-on — a fallback veszi át"
         claude_limit_seen=1
+        break
+      fi
+    fi
+    # ELAKADÁS-ŐR (mérve E05-R17 H-NOSIGNAL: egy "API Error: Server error
+    # mid-response" után a tmux-session ÉLETBEN maradt, de a panel 1h24m-ig
+    # néma volt — a fenti ellenőrzések egyike sem kapta el, a driver csak a
+    # 4 órás abszolút időkorlátnál vette észre. Valódi munka alatt a
+    # pane-újrarajzolás (spinner, eltelt-idő számláló) folyamatosan ír, ezért
+    # a session-napló hosszan tartó változatlansága élő session mellett is
+    # megbízhatóan elakadást jelez — ugyanaz a minta, mint az implementer
+    # oldali MM_STALL_MINUTES (tools/mm-round.sh), csak log-mtime alapon,
+    # mert ez a session interaktív (nincs stream-json esemény, ami írna).
+    if [ -f "$session_log" ]; then
+      log_age=$(( $(date +%s) - $(stat -c %Y "$session_log" 2>/dev/null || date +%s) ))
+      if [ "$log_age" -ge "$stall_seconds" ]; then
+        log "ELAKADÁS: a(z) $label session-naplója $(( stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"
         break
       fi
     fi
