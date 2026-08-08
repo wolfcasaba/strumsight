@@ -211,8 +211,6 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-## 10. Implementation handoff — az implementer tölti ki
-
 ### Fájlonkénti összefoglaló
 
 - `metric_definition.dart`: hat proxy-metrika azonosítója, lokális
@@ -268,6 +266,42 @@ Tényleges kimenet:
   szabálya szerint a CI felelőssége (`build-apk.yml`/`full-gate.yml`).
 - A gate-et külön processzekkel, pipe és `&&` nélkül kell futtatni; a gate
   eredménye az acceptance artefaktum.
+
+### F5 — Valódi-sértés próba (review által dokumentálva)
+
+A brief §6 utolsó pontja előírja, hogy a visibility-kapu
+terhelhetőségét közvetlen mutációval is igazoljuk: a kapu kiiktatása
+→ a „visibility a küszöb alatt" cella PIROS → visszaállítás. A
+review ezt a round commit `bf7a4d7` feletti klónban (`/tmp/review-e05-r18`)
+eldobható próbatesztként elvégezte; az implementer itt csak a
+dokumentációt rögzíti.
+
+- **Mutáció:** `lib/features/vision/domain/metrics/fretting_metric_engine.dart:222`
+  sor — a `_usable()` filter
+  `.where((s) => _visibility(s, id) >= definitionFor(id).minimumVisibility)`
+  klauzulája ideiglenesen `.where((s) => true)`-ra cserélve
+  (a role-kapu maradt, kizárólag a visibility-szűrő lett inaktiválva).
+- **Bukott teszt:** `fretting_metric_engine_test.dart` →
+  `visibility below the metric threshold is not observable`
+  (az eredeti `fretting_metric_engine_test.dart:76-80` teszt).
+  **Eredmény:** `Expected: notObservable, Actual: observable` —
+  PIROS, a többi 6 teszt zöld maradt.
+- **Visszaállítás:** a fájl a mutáció előtti byte-azonos állapotra
+  lett visszaállítva (`git diff` üres a próba után); commit nem
+  készült belőle. A reviewer a saját eldobható próbatesztjét (`_probe_*.dart`)
+  szintén törölte a klónból.
+- **Konklúzió:** a `_usable()` filter load-bearing — a
+  visibility-szűrő eltávolítása egy konkrét tesztet azonnal pirosra
+  vált, tehát a kapu TÉNYLEGESEN szűri a megfigyelhetőséget, nem csak
+  dekoratív.
+
+A javító kör (commit `f703978`) a `_usable()`-t a `readyPositionTime`
+útvonalra is ráhúzta (F1), és bővítette a regressziós mátrixot (F3 —
+hat metrika, boundary + degenerate cella). A fenti mutációt a javító
+kör után megismételve mostantól NEM csak az eredeti `visibility below
+threshold` teszt, hanem a teljes F1-regressziós készlet és a hat-metrikás
+boundary-mátrix is pirosra vált — az F1 fix megerősíti, hogy a
+szűrő ténylegesen alkalmazott.
 
 _(A git commit és a körjelzés a gate után készül.)_
 
