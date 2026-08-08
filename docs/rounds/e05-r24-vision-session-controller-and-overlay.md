@@ -1,6 +1,8 @@
 # E05-R24 — Vision session controller és realtime overlay
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`;
+  pre-flight revízió 2026-08-08, kód mérve: `main` @ `b14a753`, E05-R22/R23
+  merge után)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 24; §10, §24
 - **Branch:** `codex/e05-r24-vision-session-controller-and-overlay`
 - **Előfeltétel:** **E05-R05, E05-R08, E05-R11, E05-R16, E05-R22, E05-R23 merge**
@@ -50,7 +52,61 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR.
+**PREPARED → mérve `origin/main` @ `b14a753` (E05-R05/R08/R11/R16/R22/R23
+MERGED — a teljes előfeltétel-lista teljesül), egy javítás (elavult
+ADR-hivatkozás), nulla scope-eltérés.** Az eredeti PREPARED szöveg
+2026-08-05-én íródott, az E05-R22/R23 (observation fusion, feedback policy,
+cue budget) kód létezése előtt.
+
+1. **R1 — Stale ADR-hivatkozás javítva.** A §5 pont 5 „(ADR 0161 szellemében:
+   ...)" a batch-írás idején fenntartott, **átszámozás előtti** szám
+   (`docs/rounds/epic-05-batch-index.md` §3: „0161–0166 → 0178–0183"
+   blokk-eltolás — az Epic 4 hátralévő körei a tervezett 0161–0170 tartomány
+   fölé futottak, ld. E05-R01 §0.0). `ls docs/adr/ | grep 0161` **nulla
+   találat** — a fájl sosem létezett ezen a számon. A batch-index §3 táblája
+   szerint az eredeti „0161 | R01 | Vision privacy by default" tétel a
+   ténylegesen elfogadott [`ADR 0178`](../adr/0178-vision-privacy-by-default.md)
+   ugyanezzel a címmel („Vision privacy by default", elfogadva E05-R01
+   pre-flight, 2026-08-06). Ez a `0161→0178` pár nem esik egybe azzal a
+   `0164→0181`/`0162→0179` párral, amit E05-R10/R11/R16 §0.0 R1 korábban
+   önállóan javított — de ugyanabból a batch-index §3 shift-táblából
+   számolódik, amit az a három független találat már megerősített: a
+   mechanizmus bizonyított, ez az első alkalom, hogy pont ez a sor
+   (`0161`) kerül elő egy §5 hivatkozásban. A skeleton-overlay-alapból-visszafogott állítás szó szerinti
+   forrása egyébként nem is ADR, hanem az **SDD Ch6 §2.2** („Nem a skeleton
+   overlay a termék") és **§24.2** („skeletal overlay alapértelmezetten
+   visszafogott… külön kapcsolható debug landmark mód") — a §5 pont 5 szövege
+   ezt a két SDD-hivatkozást kapja elsődleges forrásként, az ADR 0178-at
+   csak a „szellemében" (privacy-by-default motiváció) másodlagos
+   kontextusként. **Nincs ÚJ ADR** — a hivatkozott ADR már elfogadott, ez a
+   kör annak szellemi kontextusát idézi, nem új döntést hoz (ugyanaz az
+   indoklás, mint az R07 brief saját „Nincs ÚJ ADR" pre-flight jegyzeténél —
+   R07 a szerkezetileg analóg „meglévő kontraktusokat összekötő" kör-típus).
+2. **Mért megerősítések (nem igényeltek javítást):** az R05
+   `CameraSessionCoordinator.revokeActive()` ténylegesen az owner
+   `onRevoke` teardownját futtatja ELŐSZÖR, és csak a `finally`-ban szabadítja
+   fel a lease-t (`_finishRelease()`) — a brief §2 „bontja az ownert, majd a
+   lease-t" állítása pontos (`lib/core/camera/camera_session_coordinator.dart`).
+   A meglévő `CameraLifecycleGuard` (`lib/core/camera/camera_lifecycle_guard.dart`)
+   már ma is pontosan az „app-háttér azonnal zár, nincs auto-resume"
+   szerződést adja (`inactive`/`resumed`-nél szándékosan no-op) — újrahasználható,
+   nem kell újraírni. Az R23 `CueBudget.selectRealtime(...)` egyetlen
+   `VisionInsight?`-ot ad vissza — a brief „a UI nem választ cue-t" állítása
+   pontos. Az R07 „overlay-mapping" a `PreviewFit`/`CameraTransform`
+   screen-fit kontraktusa (`lib/core/camera/preview_fit.dart`) — **nem**
+   azonos az R15 `GuitarLandmarkMapper` guitar-space homographyjával; a
+   brief helyesen az előbbire hivatkozik (golden overlay teszt portrait/
+   landscape = preview-fit, nem guitar-space mapping).
+3. **A route-guard mintája tisztázva (nem brief-hiba, csak explicit jegyzet
+   a kétértelműség elkerülésére):** az `app_router.dart` meglévő mintája
+   (`visionSetup`, `visionGuitarGeometry`) **kettős** flag-gate — a globális
+   `visionEnabled` ÉS egy per-feature flag (`visionSetupEnabled`,
+   `visionGuitarGeometryEnabled`). A §6 acceptance-cella viszont kifejezetten
+   **egyetlen** flaget nevez meg („a route `visionEnabled` guard mögött") —
+   ez SZÁNDÉKOS eltérés az előd-mintától, mert `lib/app/config/feature_flags.dart`
+   **nincs** az `allowed_paths`-on: egy új per-feature flag hozzáadása ezt a
+   fájlt is módosítaná (H3). Az implementer a meglévő globális `visionEnabled`
+   flaget használja, ÚJ flaget nem vezet be.
 
 ## 1. Cél
 
@@ -110,8 +166,11 @@ device tier (R29), új metrika vagy policy, pixelfeldolgozás a UI szálon.
    dispose után.
 5. **Overlay:** alapból csak quality-chipek és az aktuális **egy** cue; a
    részletes skeleton **explicit** kapcsolóval (debug vagy user-toggle),
-   alapértelmezetten kikapcsolva (ADR 0161 szellemében: a felhasználó lássa,
-   mi történik, de a termék ne a skeleton legyen).
+   alapértelmezetten kikapcsolva (SDD Ch6 §2.2 „Nem a skeleton overlay a
+   termék" + §24.2 „skeletal overlay alapértelmezetten visszafogott… külön
+   kapcsolható debug landmark mód", [ADR 0178](../adr/0178-vision-privacy-by-default.md)
+   privacy-by-default szellemében — ld. §0.0 R1: a felhasználó lássa, mi
+   történik, de a termék ne a skeleton legyen).
 6. **A cue megjelenítés az R23 döntését követi** — a UI **nem** választ cue-t,
    nem szűr, nem rangsorol. **NEM elfogadható:** UI-oldali „még egy kis
    kiegészítő tipp".
