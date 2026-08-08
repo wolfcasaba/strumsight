@@ -83,10 +83,10 @@ final class PostureMetricEngine {
     final value = _computeValue(observation: observation, id: id);
     if (value == null) return MetricObservation.notObservable();
 
-    // (4) Confidence — average of the required-landmark drifts
-    // (the drift is normalized-by-shoulder-span, so it is in
-    // roughly [0, ∞); we use 1.0 for the floor because the
-    // observation passes the gate already).
+    // (4) Confidence — the absolute mean of the required-landmark
+    // drifts, transformed as `1 - min(1, abs(mean))`. PostureObservation
+    // exports already visibility-filtered drift values, not raw landmark
+    // visibility, so this layer cannot calculate a visibility mean.
     final driftValues = definition.requiredPoseLandmarkIds
         .map((id) => observation.driftFor(id)!)
         .toList(growable: false);
@@ -165,11 +165,12 @@ final class PostureMetricEngine {
     return obs.driftFor(PoseLandmarkId.neckReference)!.toDouble();
   }
 
-  /// Confidence — the average of the required-landmark drift
-  /// values, clamped to [0, 1]. The drift is normalized by the
-  /// shoulder span, so a value of 0.5 represents a half-shoulder
-  /// drift; the function uses the clamp so absurd drifts do not
-  /// surface as "low confidence" artefacts.
+  /// Confidence — the absolute mean of the required-landmark drift
+  /// values, transformed to `1 - min(1, abs(mean))` and clamped to
+  /// [0, 1]. The drift is normalized by the shoulder span, so a value
+  /// of 0.5 represents a half-shoulder drift. PostureObservation does
+  /// not expose raw landmark visibility, so visibility is not part of
+  /// the formula.
   double _confidence(List<double> values) {
     if (values.isEmpty) return 0.0;
     final mean = values.reduce((a, b) => a + b) / values.length;

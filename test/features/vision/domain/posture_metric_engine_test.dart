@@ -414,4 +414,64 @@ void main() {
       }
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // (7) Confidence formula contract — the catalog string must match what
+  // the engine actually computes (posture_metrics.dart).
+  // ---------------------------------------------------------------------------
+  group('confidence formula contract', () {
+    test('every definition documents the drift-based confidence', () {
+      for (final definition in postureMetricDefinitions) {
+        expect(
+          definition.confidenceFormula,
+          contains('drift'),
+          reason:
+              'metric ${definition.id.name} confidence formula must reflect '
+              'the drift-based engine computation (review F2 fix)',
+        );
+        expect(
+          definition.confidenceFormula,
+          isNot(contains('visibility')),
+          reason:
+              'PostureObservation does not export per-landmark visibility, so '
+              'the formula must not claim to use it',
+        );
+      }
+    });
+
+    test('confidence is governed by drift magnitude, not visibility', () {
+      // Two observations share every required landmark; only the drift
+      // magnitude changes. Visibility would be the same if it were a
+      // signal. The engine must emit a higher confidence for the small
+      // drift and a lower confidence for the large one.
+      final smallDrift = buildFullBaselineObservation(
+        shoulderDrift: 0.02,
+        hipDrift: 0.02,
+        elbowDrift: 0.02,
+        neckDrift: 0.02,
+      );
+      final largeDrift = buildFullBaselineObservation(
+        shoulderDrift: 0.40,
+        hipDrift: 0.40,
+        elbowDrift: 0.40,
+        neckDrift: 0.40,
+      );
+
+      final smallConfidence = engine
+          .compute(
+            observation: smallDrift,
+            id: PostureMetricId.shoulderAsymmetry,
+          )
+          .confidence;
+      final largeConfidence = engine
+          .compute(
+            observation: largeDrift,
+            id: PostureMetricId.shoulderAsymmetry,
+          )
+          .confidence;
+
+      expect(smallConfidence, greaterThan(largeConfidence));
+      expect(largeConfidence, lessThan(0.8));
+    });
+  });
 }

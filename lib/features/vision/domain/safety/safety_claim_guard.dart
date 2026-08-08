@@ -2,21 +2,15 @@
 //
 // The guard is the SINGLE machine-side defence against a posture
 // code silently morphing into a medical/diagnostic statement (brief
-// §9 — primary risk of this round). Two fail-closed checks per
-// code:
+// §9 — primary risk of this round). Three fail-closed checks per code:
 //
 //   1. The code must be in [VisionSafetyPolicy.catalog].
 //   2. Its declared class must not be in the forbidden subset.
+//   3. Its surface form must not contain a forbidden medical lexeme.
 //
-// Both checks must pass for the code to be allowed. The guard
-// never tries to interpret the code's surface form — it is a
-// pure map lookup against the closed catalog. Text-side patterns
-// are the tutor's job (ADR 0177, `TutorSafetyPolicy` regex).
-//
-// The guard is a const-constructible, pure function. The vision
-// layer calls it at code-emission time (every posture metric
-// passes through the guard before it can be returned to a
-// caller). The brief §6 /1 acceptance test holds the invariant.
+// The lexical check is a closed, documented deny-list independent of the
+// declared class, so a misclassified medical code cannot pass merely by
+// being labelled as an allowed observation.
 
 library;
 
@@ -27,8 +21,7 @@ import 'vision_safety_policy.dart';
 /// The deterministic output of [SafetyClaimGuard.evaluate].
 @immutable
 final class SafetyClaimGuardResult {
-  /// Allowed evaluation: the code is in the catalog and its class is
-  /// not forbidden.
+  /// Allowed evaluation: the code is catalogued, non-forbidden, and neutral.
   const SafetyClaimGuardResult.allowed() : isAllowed = true, reason = 'allowed';
 
   /// Rejected evaluation: the reason is the failure description.
@@ -39,53 +32,66 @@ final class SafetyClaimGuardResult {
 }
 
 /// The fail-closed safety claim guard.
-///
-/// The guard accepts a code (and an optional declared class) and
-/// returns a [SafetyClaimGuardResult]. The pattern is intentionally
-/// simple: a map lookup + a forbidden-set check. The guard is
-/// deterministic and pure — no I/O, no side effects.
 @immutable
 final class SafetyClaimGuard {
   const SafetyClaimGuard();
 
+  /// Closed lexical deny-list for medical/diagnostic claim concepts.
+  ///
+  /// Claim codes are stable English identifiers. These conservative stems
+  /// are intentionally closed; additions require a safety-policy review.
+  static const List<String> _forbiddenLexemes = <String>[
+    'pain',
+    'diagnos',
+    'injur',
+    'harm',
+    'recover',
+    'treat',
+    'symptom',
+    'disease',
+    'disorder',
+    'syndrome',
+  ];
+
   /// Evaluate [code] against the [VisionSafetyPolicy] catalog.
   ///
-  /// - If [declaredClass] is provided, the guard checks that the
-  ///   declared class is not in the forbidden subset. This lets a
-  ///   caller with its own classification (e.g. the §10 valódi-sértés
-  ///   próba) exercise the forbidden-class path directly.
-  /// - If [declaredClass] is omitted, the guard looks up the class
-  ///   from the catalog. This is the production path.
+  /// [declaredClass] is a classification override used by catalog
+  /// validation and focused regression tests. Membership and lexical
+  /// checks still apply when it is provided.
   SafetyClaimGuardResult evaluate(
     String code, {
-    VisionSafetyClaimClass? declaredClass,
-  }) {
+      VisionSafetyClaimClass? declaredClass,
+      @visibleForTesting Map<String, VisionSafetyClaimClass>? catalog,
+    }) {
     if (code.trim().isEmpty) {
       return const SafetyClaimGuardResult.rejected('code is empty');
     }
-    // (1) Closed-set membership — every allowed code lives in the
-    // catalog.
-    final declared = declaredClass ?? VisionSafetyPolicy.catalog[code];
-    if (declared == null) {
+    // (1) Closed-set membership applies to every call path.
+    final policyCatalog = catalog ?? VisionSafetyPolicy.catalog;
+    final catalogClass = policyCatalog[code];
+    if (catalogClass == null) {
       return SafetyClaimGuardResult.rejected('code "$code" is not in catalog');
     }
-    // (2) Forbidden-class check — the guard is fail-closed against
-    // ANY declared class on the forbidden list.
+    // (2) Check the explicit class when supplied, otherwise the catalog.
+    final declared = declaredClass ?? catalogClass;
     if (declared.isForbidden) {
       return SafetyClaimGuardResult.rejected(
         'code "$code" declares forbidden class "${declared.name}"',
       );
     }
+    // (3) Independent surface-form defence against misclassification.
+    final normalizedCode = code.toLowerCase();
+    for (final lexeme in _forbiddenLexemes) {
+      if (normalizedCode.contains(lexeme)) {
+        return SafetyClaimGuardResult.rejected(
+          'code "$code" contains forbidden safety lexeme "$lexeme"',
+        );
+      }
+    }
     return const SafetyClaimGuardResult.allowed();
   }
 
-  /// Validate the [VisionSafetyPolicy.catalog] itself. The guard's
-  /// own self-test — every entry passes `evaluate`. Returns the
-  /// first rejection reason, or `null` when the catalog is healthy.
-  ///
-  /// This is invoked by the catalog-integrity test in
-  /// `safety_claim_guard_test.dart` and by the `tools/round-gate.sh`
-  /// architecture check.
+  /// Validate the [VisionSafetyPolicy.catalog] itself.
   static String? validateCatalog() {
     for (final entry in VisionSafetyPolicy.catalog.entries) {
       final result = SafetyClaimGuard().evaluate(

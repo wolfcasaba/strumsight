@@ -56,9 +56,26 @@ void main() {
       expect(result.reason, contains('not in catalog'));
     });
 
-    test('rejected codes carry the reason for the call site', () {
-      final result = guard.evaluate('not_a_real_code');
-      expect(result.reason, isNotEmpty);
+    test('a declared class still requires catalog membership', () {
+      final result = guard.evaluate(
+        'postureCodeThatIsNotCatalogued',
+        declaredClass: VisionSafetyClaimClass.baselineRelative,
+      );
+      expect(result.isAllowed, isFalse);
+      expect(result.reason, contains('not in catalog'));
+    });
+
+    test('medical code is rejected despite an allowed declared class', () {
+      const medicalCode = 'postureShoulderAsymmetryMayCauseLongTermPain';
+      final result = guard.evaluate(
+        medicalCode,
+        declaredClass: VisionSafetyClaimClass.baselineRelative,
+        catalog: <String, VisionSafetyClaimClass>{
+          medicalCode: VisionSafetyClaimClass.baselineRelative,
+        },
+      );
+      expect(result.isAllowed, isFalse);
+      expect(result.reason, contains('pain'));
     });
   });
 

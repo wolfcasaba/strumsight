@@ -114,8 +114,15 @@ final class PostureMetricDefinition {
   }
 
   final PostureMetricId id;
+
+  /// R14 filters landmark visibility before exporting drift values. This
+  /// threshold remains catalog metadata but is not evaluated here because
+  /// [PostureObservation] does not expose raw visibility.
   final double minimumVisibility;
   final Duration window;
+
+  /// Describes the engine's drift-based calculation; visibility is not
+  /// available from the [PostureObservation] contract at this layer.
   final String confidenceFormula;
   final PostureCapability requiredCapability;
 
@@ -151,7 +158,8 @@ final List<PostureMetricDefinition> postureMetricDefinitions =
         id: PostureMetricId.shoulderAsymmetry,
         minimumVisibility: 0.55,
         window: const Duration(milliseconds: 500),
-        confidenceFormula: 'mean(minimum landmark visibility)',
+        confidenceFormula:
+            '1 - min(1, absolute mean normalized landmark drift)',
         requiredCapability: PostureCapability.poseTracking,
         requiredPoseLandmarkIds: <PoseLandmarkId>{
           PoseLandmarkId.leftShoulder,
@@ -163,7 +171,8 @@ final List<PostureMetricDefinition> postureMetricDefinitions =
         id: PostureMetricId.torsoLean,
         minimumVisibility: 0.55,
         window: const Duration(milliseconds: 500),
-        confidenceFormula: 'mean(minimum landmark visibility)',
+        confidenceFormula:
+            '1 - min(1, absolute mean normalized landmark drift)',
         requiredCapability: PostureCapability.poseTracking,
         requiredPoseLandmarkIds: <PoseLandmarkId>{
           PoseLandmarkId.leftShoulder,
@@ -177,7 +186,8 @@ final List<PostureMetricDefinition> postureMetricDefinitions =
         id: PostureMetricId.elbowDrift,
         minimumVisibility: 0.55,
         window: const Duration(milliseconds: 500),
-        confidenceFormula: 'mean(minimum landmark visibility)',
+        confidenceFormula:
+            '1 - min(1, absolute mean normalized landmark drift)',
         requiredCapability: PostureCapability.poseTracking,
         requiredPoseLandmarkIds: <PoseLandmarkId>{
           PoseLandmarkId.leftElbow,
@@ -189,7 +199,8 @@ final List<PostureMetricDefinition> postureMetricDefinitions =
         id: PostureMetricId.neckProxy,
         minimumVisibility: 0.55,
         window: const Duration(milliseconds: 500),
-        confidenceFormula: 'mean(minimum landmark visibility)',
+        confidenceFormula:
+            '1 - min(1, absolute mean normalized landmark drift)',
         requiredCapability: PostureCapability.poseTracking,
         requiredPoseLandmarkIds: <PoseLandmarkId>{PoseLandmarkId.neckReference},
         claimCode: 'postureNeckProxyShiftedVsBaseline',

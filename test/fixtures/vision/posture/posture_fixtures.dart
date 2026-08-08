@@ -273,6 +273,29 @@ PostureObservation buildShoulderAsymmetryObservation({
   );
 }
 
+/// A full-baseline observation with the supplied per-landmark drifts.
+/// Used by the confidence formula contract test to compare the small-
+/// drift and large-drift cases under identical visibility.
+PostureObservation buildFullBaselineObservation({
+  double shoulderDrift = 0.0,
+  double hipDrift = 0.0,
+  double elbowDrift = 0.0,
+  double neckDrift = 0.0,
+}) {
+  return _observe(
+    baselineOffsets: const <PoseLandmarkId, double>{},
+    observationOffsets: <PoseLandmarkId, double>{
+      PoseLandmarkId.leftShoulder: shoulderDrift,
+      PoseLandmarkId.rightShoulder: shoulderDrift,
+      PoseLandmarkId.leftHip: hipDrift,
+      PoseLandmarkId.rightHip: hipDrift,
+      PoseLandmarkId.leftElbow: elbowDrift,
+      PoseLandmarkId.rightElbow: elbowDrift,
+      PoseLandmarkId.neckReference: neckDrift,
+    },
+  );
+}
+
 /// A torso-lean observation. Both shoulders drift by [shoulderOffsetY]
 /// (positive = lean down, negative = lean up). The hips are stable.
 PostureObservation buildTorsoLeanObservation({
