@@ -288,6 +288,29 @@ helyett dokumentált brief-revízió.
    teszt), architecture, secrets és l10n. Strukturált eredmény:
    `{'outcome': 'pass', 'exit_code': 0, 'failed_step': None}`.
 
+### Javító kör #1 — review F1/F2 (2026-08-08)
+
+- `observation_fusion.dart` — az `add()` immár metrikánként a legszélesebb
+  jelenlegi production ablak + a konfigurált `maximumGap` retention-horizont
+  szerint eldobja a régebbi nyers observationöket; ez fuse-hívástól
+  függetlenül korlátot ad. A korábbi `fuse()`-beli célzott pruning változatlan.
+- `observation_fusion_test.dart` — F1 regressziós teszt egy tízperces,
+  kizárólag `add()`-ot használó streamhez; F2 külön cella elegendő számú, de
+  a minimum látható időtartamnál rövidebb observationökhöz.
+
+7. RED (F1): `flutter test test/features/vision/application/observation_fusion_test.dart --plain-name 'bounds raw observations when a metric is never fused'`
+   — a javítás előtt várt bukás: `Expected: a value less than or equal to <13>`;
+   `Actual: <12001>`.
+8. F2 kontroll: `flutter test test/features/vision/application/observation_fusion_test.dart --plain-name 'rejects sufficient observations below the minimum visible duration'`
+   — `00:00 +1: All tests passed!` a domain-logika módosítása nélkül.
+9. `dart format lib/features/vision/application/observation_fusion.dart test/features/vision/application/observation_fusion_test.dart`
+   — `Formatted 2 files (1 changed)`.
+10. GREEN (F1 + célzott evidence-suite): `flutter test test/features/vision/domain/confidence_model_test.dart test/features/vision/application/observation_fusion_test.dart`
+    — `00:00 +13: All tests passed!`.
+11. `tools/round-gate.sh test/features/vision` — exit `0`; format (1157 fájl,
+    0 változás), analyze (`No issues found!`), vision-test, architecture,
+    secrets és l10n lefutottak az artifacton.
+
 ### Eltérés / nem futtatott ellenőrzés
 
 - Eltérés nincs.

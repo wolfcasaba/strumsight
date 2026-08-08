@@ -67,6 +67,23 @@ void main() {
     }
   });
 
+  test(
+    'rejects sufficient observations below the minimum visible duration',
+    () {
+      final fusion = _fusion()
+        ..addAll(<VisionObservation>[
+          _observation(timestampUs: 400000),
+          _observation(timestampUs: 400010),
+          _observation(timestampUs: 400020),
+        ]);
+
+      final evidence = fusion.fuse(metric: _metric, windowEndUs: 500000);
+
+      expect(evidence.observationState, ObservationState.notObservable);
+      expect(evidence.value, isNull);
+    },
+  );
+
   test('short bridgeable gaps are inferred and reduce confidence', () {
     final continuous = _fusion()..addAll(_continuousObservations());
     final gapped = _fusion()
@@ -137,6 +154,19 @@ void main() {
       );
     },
   );
+
+  test('bounds raw observations when a metric is never fused', () {
+    final fusion = _fusion();
+    for (
+      var timestampUs = 0;
+      timestampUs <= const Duration(minutes: 10).inMicroseconds;
+      timestampUs += const Duration(milliseconds: 50).inMicroseconds
+    ) {
+      fusion.add(_observation(timestampUs: timestampUs));
+    }
+
+    expect(fusion.retainedObservationCount, lessThanOrEqualTo(13));
+  });
 
   test('current metric catalog never produces experimental evidence', () {
     for (final catalogMetric in EvidenceMetric.currentCatalog) {

@@ -35,10 +35,17 @@ final class ObservationFusion {
   ObservationFusion({
     required this.thresholds,
     this.confidenceModel = const ConfidenceModel(),
-  });
+  }) : _rawObservationRetentionHorizon =
+           _widestProductionMetricWindow + thresholds.maximumGap;
 
   final FusionThresholds thresholds;
   final ConfidenceModel confidenceModel;
+
+  /// Bounds raw inputs even when callers never request [fuse] for a metric.
+  ///
+  /// Retention covers the widest production metric window plus the configured
+  /// maximum gap, so every current metric can still form its next window.
+  final Duration _rawObservationRetentionHorizon;
   final Map<String, List<VisionObservation>> _observationsByMetric =
       <String, List<VisionObservation>>{};
   final Map<String, VisionEvidence> _evidenceByWindow =
@@ -58,6 +65,7 @@ final class ObservationFusion {
       () => <VisionObservation>[],
     );
     observations.add(observation);
+    _discardObservationsOutsideRetentionHorizon(observations);
   }
 
   void addAll(Iterable<VisionObservation> observations) {
@@ -239,6 +247,19 @@ final class ObservationFusion {
           .length <=
       1;
 
+  void _discardObservationsOutsideRetentionHorizon(
+    List<VisionObservation> observations,
+  ) {
+    final newestTimestampUs = observations
+        .map((observation) => observation.timestampUs)
+        .reduce(_maximum);
+    final oldestRetainedTimestampUs =
+        newestTimestampUs - _rawObservationRetentionHorizon.inMicroseconds;
+    observations.removeWhere(
+      (observation) => observation.timestampUs < oldestRetainedTimestampUs,
+    );
+  }
+
   Duration _visibleDuration(List<VisionObservation> observations) {
     if (observations.length < 2) return Duration.zero;
     return Duration(
@@ -267,6 +288,16 @@ final class ObservationFusion {
           (lowest, quality) => quality.index < lowest.index ? quality : lowest,
         );
   }
+
+  static final Duration _widestProductionMetricWindow = EvidenceMetric
+      .currentCatalog
+      .map((metric) => metric.window)
+      .reduce(_longerDuration);
+
+  static int _maximum(int left, int right) => left > right ? left : right;
+
+  static Duration _longerDuration(Duration left, Duration right) =>
+      left > right ? left : right;
 
   static double _minimum(double left, double right) =>
       right < left ? right : left;
