@@ -2,13 +2,13 @@
 
 Brief: [`docs/rounds/e05-r26-song-trainer-vision-integration.md`](../rounds/e05-r26-song-trainer-vision-integration.md) (§0.0 pre-flight revízió, 2026-08-08)
 ADR: [`docs/adr/0193-song-trainer-vision-integration-contract.md`](../adr/0193-song-trainer-vision-integration-contract.md)
-Diff: `git diff origin/main...codex/e05-r26-song-trainer-vision-integration` (`7c474fa`…`5308958`)
-Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08
-Verdikt: **APPROVED**
+Diff: `git diff origin/main...codex/e05-r26-song-trainer-vision-integration` (`7c474fa`…`d5698e0`, javító kör #1 után)
+Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08 (frissítve javító kör #1 után)
+Verdikt: **APPROVED** (0 nyitott BLOCKER/MAJOR/MINOR — F1 zárva a javító kör #1-ben)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 3
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (**zárva**) · NOTE: 3 (nyitva, follow-up)
 
 Független gate-újrafuttatás izolált `/tmp/review-e05-r26` klónban (`git clone
 --branch codex/e05-r26-song-trainer-vision-integration`, HEAD `5308958`
@@ -162,9 +162,22 @@ diffben; `lib/features/practice/` — nincs találat; `tool/check_architecture.d
   törölve) újra futtatható a `show`-javítás UTÁN — akkor `postureMetricDefinitions`
   többé nem lesz elérhető a szűk barrelen át, a próba analyzer-hibával
   bukna (`postureMetricDefinitions` undefined).
-- **Státusz:** OPEN (nem blokkol — sem BLOCKER, sem MAJOR; körön belül
-  olcsón javítható, vagy explicit WONTFIX-elhető a security-review NOTE-1
-  érvelésére hivatkozva).
+- **Státusz:** **CLOSED — javítva a javító kör #1-ben (`d5698e0`,
+  2026-08-08).** A fix pontosan a javasolt irány: `export '../metrics/
+  posture_metrics.dart' show PostureCapability;` — a `PostureMetricDefinition`/
+  `postureMetricDefinitions` (a tranzitív `PoseLandmarkId`-forrás) többé nem
+  érhető el a szűk barrelen át. **Saját, független verifikáció** (nem csak az
+  implementer állítása): friss `/tmp/review-e05-r26-fix1` klón a fixer-commit
+  SHA-ján; a review saját próbateszt-mintáját (F1 fenti kódrészlete)
+  reprodukáltam `_verify_probe_test.dart` néven (IGNORE-kommentár NÉLKÜL,
+  mert egy első próbálkozásom véletlenül elnyomta volna a hibát) —
+  `flutter analyze` eredmény: `error • Undefined name
+  'postureMetricDefinitions' … • undefined_identifier` — a leak megerősítve
+  zárva. Teljes gate újra lefuttatva ugyanebben a friss klónban: mind a 7
+  lépés ZÖLD (`test test/features/vision` **533** teszt — ez a hiteles szám;
+  a fenti gate-bizonyíték szakasz „338"-as említése ennek a jelentésnek egy
+  korábbi, pontatlan önmérése volt, a verdiktet nem érintette, mert minden
+  lépés akkor is ZÖLD volt).
 
 ### F2 — NOTE — Az új ARB-kulcs egyelőre egyetlen widgetből sem hívott
 
@@ -301,19 +314,39 @@ fent leírtak szerint tér el, de egyik sem blokkoló.
 > tartalom hitelességét érintő probléma; a tartalmat én magam is
 > keresztellenőriztem (F1), és megbízhatónak találtam.
 
+## Javító kör #1 (2026-08-08, F1 zárása)
+
+Egyetlen, szűken kiosztott javító kör (`d5698e0`): `lib/features/vision/
+domain/integration/public.dart` `posture_metrics.dart` exportja `show
+PostureCapability`-ra szűkítve. Saját, független verifikáció fent (F1
+„Státusz" sora) — friss `/tmp/review-e05-r26-fix1` klón, a review saját
+próbatesztje reprodukálva (most már analyzer-hibával bukik), teljes gate
+újrafuttatva, mind a 7 lépés ZÖLD. A javítás nem érintett más fájlt, csak a
+brief §10 handoffját (implementer-oldali dokumentáció). Scope-audit a
+fixer-commitra is tiszta (`scope_audit=ok`, `scope_audit_changed=2` —
+pontosan a barrel-fájl + brief).
+
 ## Végső verdikt
 
-**APPROVED.** Mind a 8 acceptance criterion saját, futtatott bizonyítékkal
-teljesült; a scope-audit tökéletes (13/13 fájl az engedélyezett listán,
-0 kívüli változás); a gate mind a 7 lépése zöld (saját izolált klónban
-újrafuttatva, 3 lépés közvetlen kilépési kóddal is megerősítve); 3 valódi-
-sértés próbát saját kézzel reprodukáltam (2 kért + 1 saját kezdeményezésű,
-ami egy tranzitív típus-elérhetőségi rést tárt fel). Az egyetlen MINOR (F1)
-és a 3 NOTE egyike sem érinti a §6 acceptance-et vagy a mai viselkedést;
-F1-et egy független, dedikált security-review is megvizsgálta és biztonsági
-szempontból nem-blokkolónak (NOTE) minősítette. CI: Full Gate
+**APPROVED, 0 nyitott BLOCKER/MAJOR/MINOR.** Mind a 8 acceptance criterion
+saját, futtatott bizonyítékkal teljesült; a scope-audit tökéletes (13/13
+implementációs fájl + a javító kör 2 fájlja az engedélyezett listán, 0
+kívüli változás); a gate mind a 7 lépése zöld **két külön izolált klónban**
+(az eredeti implementáció után ÉS a javító kör után is újrafuttatva); 3
+valódi-sértés próbát saját kézzel reprodukáltam az eredeti körben (2 kért +
+1 saját kezdeményezésű, ami F1-et feltárta) + 1-et a javító kör után (a
+próba most már analyzer-hibával bukik, bizonyítva a zárást). Az egyetlen
+MINOR (F1) **zárva**; a 3 NOTE egyike sem érinti a §6 acceptance-et vagy a
+mai viselkedést, mindhárom dokumentált follow-up. F1-et egy független,
+dedikált security-review is megvizsgálta és biztonsági szempontból
+nem-blokkolónak (NOTE) minősítette — a security-review a javító kör előtti
+állapotot értékelte, de a NOTE-1 érvelése (statikus, session-független
+katalógus, nincs koordináta-adat) a javítással immár tárgytalanná is vált
+(a szimbólum többé nem érhető el). CI (az eredeti implementáción): Full Gate
 [31266849535](https://github.com/wolfcasaba/strumsight/actions/runs/31266849535)
 **success** (mindkét property-seed móddal) + Router CI **success**, mindkettő
-a pontos merge-előtti tip `5308958`-on. `tool/check_architecture.dart`
-bájtra érintetlen, az allowlist mérete (12) változatlan mind `main`-en, mind
-a branchen. Mehet a squash-merge.
+az akkori tip `5308958`-on — a javító kör `d5698e0` commitja miatt az
+orchestrátor ÚJRA dispatch-eli mindkettőt a pontos merge-előtti tipre
+merge előtt (ADR 0086 §2). `tool/check_architecture.dart` bájtra érintetlen,
+az allowlist mérete (12) változatlan mind `main`-en, mind a branchen. Mehet
+a squash-merge, amint az újra-dispatch-elt CI zöld a `d5698e0` SHA-n.
