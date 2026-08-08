@@ -49,7 +49,7 @@ final class SongVisionAdapter {
     final hasSufficientQuality = loop.quality == VisionMetricState.good;
     final postureDrift =
         hasSufficientQuality &&
-            loop.sectionDuration >= contract.minimumPostureSectionDuration
+            loop.sectionDuration > contract.minimumPostureSectionDuration
         ? postureDriftFor(loop)
         : null;
     return SongVisionLoopSummary(

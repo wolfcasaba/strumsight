@@ -278,7 +278,7 @@ parity-tolerancia bevezetése helyett dokumentált brief-revízió.
 - `lib/features/song_trainer/data/vision/song_vision_adapter.dart` — kizárólag
   a szűk nested barrelt importáló adapter. Nem dependál a transportra; elégtelen
   quality, audio-only és disabled esetben nem állít Vision metrikát; posture
-  csak a contract minimumán vagy fölötte fut.
+  csak a contract minimuma fölött fut.
 - `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — additív,
   `songVisionLoopQualityUnavailable` result-jelzés.
 - Új tesztek: barrel-boundary, cadence-mátrix, loop-aggregáció és

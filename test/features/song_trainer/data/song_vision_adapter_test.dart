@@ -52,35 +52,32 @@ void main() {
     },
   );
 
-  test(
-    'runs posture drift only at and above the documented section threshold',
-    () {
-      var postureCalls = 0;
-      final adapter = SongVisionAdapter(
-        postureDriftFor: (_) {
-          postureCalls++;
-          return 0.2;
-        },
-      );
+  test('runs posture drift only above the documented section threshold', () {
+    var postureCalls = 0;
+    final adapter = SongVisionAdapter(
+      postureDriftFor: (_) {
+        postureCalls++;
+        return 0.2;
+      },
+    );
 
-      final summary = adapter.aggregate(
-        contract: contract,
-        visionSessionId: 'vision-session',
-        songId: 'song-id',
-        cadenceDecision: const VisionCadenceDecision(VisionCadence.full),
-        loops: <SongVisionLoopObservation>[
-          _loop(id: 'below', duration: const Duration(seconds: 29)),
-          _loop(id: 'at', duration: const Duration(seconds: 30)),
-          _loop(id: 'above', duration: const Duration(seconds: 31)),
-        ],
-      );
+    final summary = adapter.aggregate(
+      contract: contract,
+      visionSessionId: 'vision-session',
+      songId: 'song-id',
+      cadenceDecision: const VisionCadenceDecision(VisionCadence.full),
+      loops: <SongVisionLoopObservation>[
+        _loop(id: 'below', duration: const Duration(seconds: 29)),
+        _loop(id: 'at', duration: const Duration(seconds: 30)),
+        _loop(id: 'above', duration: const Duration(seconds: 31)),
+      ],
+    );
 
-      expect(postureCalls, 2);
-      expect(summary.loops[0].postureDrift, isNull);
-      expect(summary.loops[1].postureDrift, 0.2);
-      expect(summary.loops[2].postureDrift, 0.2);
-    },
-  );
+    expect(postureCalls, 1);
+    expect(summary.loops[0].postureDrift, isNull);
+    expect(summary.loops[1].postureDrift, isNull);
+    expect(summary.loops[2].postureDrift, 0.2);
+  });
 
   test(
     'audio-only and disabled decisions retain loops without Vision claims',
