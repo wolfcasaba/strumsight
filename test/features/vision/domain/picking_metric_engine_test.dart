@@ -59,8 +59,7 @@ void main() {
       expect(obs.value, -1.0);
     });
 
-    test('noisy downstroke → direction still +1 (Δv unchanged by jitter)',
-        () {
+    test('noisy downstroke → direction still +1 (Δv unchanged by jitter)', () {
       final obs = engine.strokeDirection(
         downstrokeNoisy(),
         sync: PickingSyncQuality.good,
@@ -142,8 +141,7 @@ void main() {
       expect(obs.value, closeTo(1.0, 1e-9));
     });
 
-    test('noisy downstroke → linearity = 0.75 (wobble reduces linearity)',
-        () {
+    test('noisy downstroke → linearity = 0.75 (wobble reduces linearity)', () {
       // §10 falsification: 0.75 ≠ 1.0 — proves the linearity metric
       // is NOT a constant. The chord stays at 0.60 while the path
       // grows to 0.80, so chord / path = 0.75.
@@ -162,19 +160,19 @@ void main() {
 
   group('sync matrix — event-level gate', () {
     for (final cell in PickingSyncQuality.values) {
-      test('direction under sync=$cell → '
-          '${cell == PickingSyncQuality.poor || cell == PickingSyncQuality.acceptable ? "notObservable" : "observable"}',
-          () {
-        final obs = engine.strokeDirection(
-          downstrokeIdeal(),
-          sync: cell,
-        );
-        final expected = (cell == PickingSyncQuality.poor ||
-                cell == PickingSyncQuality.acceptable)
-            ? MetricObservability.notObservable
-            : MetricObservability.observable;
-        expect(obs.observability, expected, reason: 'sync=$cell');
-      });
+      test(
+        'direction under sync=$cell → '
+        '${cell == PickingSyncQuality.poor || cell == PickingSyncQuality.acceptable ? "notObservable" : "observable"}',
+        () {
+          final obs = engine.strokeDirection(downstrokeIdeal(), sync: cell);
+          final expected =
+              (cell == PickingSyncQuality.poor ||
+                  cell == PickingSyncQuality.acceptable)
+              ? MetricObservability.notObservable
+              : MetricObservability.observable;
+          expect(obs.observability, expected, reason: 'sync=$cell');
+        },
+      );
     }
 
     test('amplitude under poor sync → notObservable', () {
@@ -205,11 +203,13 @@ void main() {
     });
 
     test('speed / linearity gate the same way (poor → notObservable)', () {
-      for (final m in <MetricObservation Function(List<PickingFrame>,
-              PickingSyncQuality)>[
-        (s, q) => engine.strokeSpeed(s, sync: q),
-        (s, q) => engine.strokeLinearity(s, sync: q),
-      ]) {
+      for (final m
+          in <
+            MetricObservation Function(List<PickingFrame>, PickingSyncQuality)
+          >[
+            (s, q) => engine.strokeSpeed(s, sync: q),
+            (s, q) => engine.strokeLinearity(s, sync: q),
+          ]) {
         final obs = m(downstrokeIdeal(), PickingSyncQuality.poor);
         expect(obs.observability, MetricObservability.notObservable);
       }
@@ -229,7 +229,10 @@ void main() {
         sync: PickingSyncQuality.good,
       );
       expect(result.perEvent, isEmpty);
-      expect(result.consistency.observability, MetricObservability.notObservable);
+      expect(
+        result.consistency.observability,
+        MetricObservability.notObservable,
+      );
       expect(result.asymmetry.observability, MetricObservability.notObservable);
     });
 
@@ -243,9 +246,14 @@ void main() {
         sync: PickingSyncQuality.good,
       );
       expect(result.perEvent.length, 1);
-      expect(result.perEvent[0].amplitude.observability,
-          MetricObservability.notObservable);
-      expect(result.consistency.observability, MetricObservability.notObservable);
+      expect(
+        result.perEvent[0].amplitude.observability,
+        MetricObservability.notObservable,
+      );
+      expect(
+        result.consistency.observability,
+        MetricObservability.notObservable,
+      );
       expect(result.asymmetry.observability, MetricObservability.notObservable);
     });
   });
@@ -255,21 +263,26 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('overlapping windows — truncation', () {
-    test('fast-toggle fixture truncates windows 0..4 and preserves window 5',
-        () {
-      final fixture = FastToggleStrokes.sixAt130ms();
-      final result = engine.compute(
-        frames: fixture.frames,
-        onsets: fixture.onsets,
-        sync: PickingSyncQuality.good,
-      );
-      expect(result.perEvent.length, 6);
-      for (var i = 0; i < 5; i++) {
-        expect(result.perEvent[i].truncated, isTrue,
-            reason: 'window $i should be truncated');
-      }
-      expect(result.perEvent[5].truncated, isFalse);
-    });
+    test(
+      'fast-toggle fixture truncates windows 0..4 and preserves window 5',
+      () {
+        final fixture = FastToggleStrokes.sixAt130ms();
+        final result = engine.compute(
+          frames: fixture.frames,
+          onsets: fixture.onsets,
+          sync: PickingSyncQuality.good,
+        );
+        expect(result.perEvent.length, 6);
+        for (var i = 0; i < 5; i++) {
+          expect(
+            result.perEvent[i].truncated,
+            isTrue,
+            reason: 'window $i should be truncated',
+          );
+        }
+        expect(result.perEvent[5].truncated, isFalse);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -288,18 +301,20 @@ void main() {
       expect(result.asymmetry.value, closeTo(0.173913, 1e-6));
     });
 
-    test('asymmetry is observable even under poor sync (session aggregate)',
-        () {
-      // Brief §5/2: "lassú aggregát metrikák maradnak érvényesek"
-      // under poor sync — session aggregates are immune to the gate.
-      final fixture = AlternatingStrokes.standard();
-      final result = engine.compute(
-        frames: fixture.frames,
-        onsets: fixture.onsets,
-        sync: PickingSyncQuality.poor,
-      );
-      expect(result.asymmetry.observability, MetricObservability.observable);
-    });
+    test(
+      'asymmetry is observable even under poor sync (session aggregate)',
+      () {
+        // Brief §5/2: "lassú aggregát metrikák maradnak érvényesek"
+        // under poor sync — session aggregates are immune to the gate.
+        final fixture = AlternatingStrokes.standard();
+        final result = engine.compute(
+          frames: fixture.frames,
+          onsets: fixture.onsets,
+          sync: PickingSyncQuality.poor,
+        );
+        expect(result.asymmetry.observability, MetricObservability.observable);
+      },
+    );
 
     test('one-sided session (down only) → notObservable asymmetry', () {
       // Build a session with only downstrokes.
@@ -307,7 +322,9 @@ void main() {
       final onsets = <PickingOnsetEvent>[];
       for (var i = 0; i < 3; i++) {
         final onsetMs = 500 + i * 1000;
-        onsets.add(PickingOnsetEvent(timestamp: Duration(milliseconds: onsetMs)));
+        onsets.add(
+          PickingOnsetEvent(timestamp: Duration(milliseconds: onsetMs)),
+        );
         frames.addAll([
           _build(
             timestampMs: onsetMs - 100,
@@ -351,7 +368,10 @@ void main() {
         onsets: fixture.onsets,
         sync: PickingSyncQuality.good,
       );
-      expect(result.consistency.observability, MetricObservability.notObservable);
+      expect(
+        result.consistency.observability,
+        MetricObservability.notObservable,
+      );
     });
 
     test('tight 4-stroke fixture → consistency ≈ 0.975452 (§10)', () {
@@ -470,14 +490,8 @@ void main() {
       // The `GuitarSpacePoint` constructor throws ArgumentError on
       // non-finite coordinates, so the classifier never sees NaN /
       // Infinity. We verify the defensive invariant here:
-      expect(
-        () => GuitarSpacePoint(double.nan, 0.0),
-        throwsArgumentError,
-      );
-      expect(
-        () => GuitarSpacePoint(0.5, double.infinity),
-        throwsArgumentError,
-      );
+      expect(() => GuitarSpacePoint(double.nan, 0.0), throwsArgumentError);
+      expect(() => GuitarSpacePoint(0.5, double.infinity), throwsArgumentError);
     });
 
     test('per-event engine result records the onset-anchored zone', () {
@@ -500,8 +514,10 @@ void main() {
         onsets: fixture.onsets,
         sync: PickingSyncQuality.good,
       );
-      final sum = result.zoneDistribution.values
-          .fold<double>(0.0, (a, b) => a + b);
+      final sum = result.zoneDistribution.values.fold<double>(
+        0.0,
+        (a, b) => a + b,
+      );
       expect(sum, closeTo(1.0, 1e-9));
     });
   });
@@ -614,8 +630,7 @@ void main() {
       expect(obs.observability, MetricObservability.notObservable);
     });
 
-    test('sub-threshold visibility (0.10 < minimum 0.55) is filtered out',
-        () {
+    test('sub-threshold visibility (0.10 < minimum 0.55) is filtered out', () {
       final obs = engine.strokeAmplitude(
         downstrokeIdeal(visibility: 0.10),
         sync: PickingSyncQuality.good,
@@ -654,8 +669,10 @@ void main() {
         final def = PickingMetricEngine.definitionFor(id);
         expect(def.id, id);
         expect(def.minimumVisibility, 0.55);
-        expect(def.requiredCapability,
-            PickingCapability.guitarRelativeTracking);
+        expect(
+          def.requiredCapability,
+          PickingCapability.guitarRelativeTracking,
+        );
       }
     });
 

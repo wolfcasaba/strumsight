@@ -105,8 +105,9 @@ final class StrokeWindow {
       final onset = sortedOnsets[i];
       final requestedStart = onset.timestamp - pre;
       final requestedEnd = onset.timestamp + post;
-      final truncatedToNext =
-          i + 1 < sortedOnsets.length ? sortedOnsets[i + 1].timestamp : null;
+      final truncatedToNext = i + 1 < sortedOnsets.length
+          ? sortedOnsets[i + 1].timestamp
+          : null;
       Duration actualEnd;
       bool truncated;
       if (truncatedToNext != null &&

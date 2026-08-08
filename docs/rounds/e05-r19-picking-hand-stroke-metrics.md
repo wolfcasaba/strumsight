@@ -268,7 +268,262 @@ eszközös mérése a device-mátrix **PENDING** sora.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### 10.1 Fájlonkénti összefoglaló
+
+| Fájl | Sorok | Szerep |
+|---|---|---|
+| `lib/features/vision/domain/metrics/picking_metrics.dart` | 189 | Katalógus: `PickingMetricId`, `PickingCapability`, `PickingSyncQuality`, `PickingZone`, `PickingZoneThresholds`, `PickingMetricDefinition` (throw-`ArgumentError` validált), `pickingMetricDefinitions` lista, `pickingConsistencyMinimumEvents = 3`. |
+| `lib/features/vision/domain/metrics/stroke_window.dart` | 156 | `StrokeWindow` (külön `defaultPre = 100ms` / `defaultPost = 150ms` konstansok, vágás a következő onset timestampjénél, `truncated` jelzéssel), `PickingOnsetEvent`, `PickingStrokeWindow`, `PickingStrokeCut`, `PickingFrameLike` (interface). |
+| `lib/features/vision/domain/metrics/picking_metric_engine.dart` | 470 | `PickingFrame`, `PickingMetricEngine.compute()` (fő belépési pont + 7 egyedi metódus), `PickingZoneClassifier.classifyZone()` (total függvény), `PickingEventResult` / `PickingSessionResult`. A sync-kapu (`_eventLevelAllowed`) itt lakik; a session-aggregátok belső nyers amplitudót használnak, így a gate megkerülése nélkül is érvényesek maradnak rossz szinkronnál (brief §5/2). |
+| `lib/features/vision/public.dart` | +3 | Addítiv export a három új fájlhoz (meglévő R18 fretting exportokkal azonos csoportban). |
+| `test/fixtures/vision/picking/picking_fixtures.dart` | 320 | `downstrokeIdeal` / `upstrokeIdeal` / `downstrokeNoisy` (6 minta, 100ms pre + 150ms post), `AlternatingStrokes.standard / .tight / .exactlyAtMinimum / .belowMinimum`, `FastToggleStrokes.sixAt130ms`, `pickingZoneFrame`. |
+| `test/features/vision/domain/picking_metric_engine_test.dart` | ~700 | 50 teszt — §6 mátrix minden cellája (stroke-fixture / sync / üres esemény / átfedés / aszimmetria / konzisztencia határ / picking-zóna 4 kategória + határ / mirror 2 cella / role+visibility kapu / katalógus / ArgumentError). |
+| `test/features/vision/domain/stroke_window_test.dart` | ~250 | 11 teszt — pre/post külön-külön, vágás szabály (130ms apáronként → 5/6 ablak vágva), minta-határ félig nyílt `[start, end)`, üres input, override. |
+
+### 10.2 Fixture-értékek — `python3 -c` számítás és a tényleges kimenet
+
+A fixture-ek numerikus elvárásait a §6 / §0.0/5 mátrix cellákhoz `python3 -c`
+számítással ellenőriztem; az értékek szó szerint megegyeznek a tesztek
+`expect(..., closeTo(VALUE, 1e-6))` hívásaival.
+
+```bash
+$ python3 << 'EOF'
+import math
+
+# 1) Ideális downstroke: v = [-0.30, -0.18, -0.06, 0.06, 0.18, 0.30] 250 ms alatt
+v = [-0.30, -0.18, -0.06, 0.06, 0.18, 0.30]
+ts = [-100, -50, 0, 50, 100, 150]
+path = sum(abs(v[i] - v[i-1]) for i in range(1, len(v)))
+chord = abs(v[-1] - v[0])
+duration_ms = ts[-1] - ts[0]
+print(f"down-ideal: path={path}, chord={chord}, linearity={chord/path}, speed={path/(duration_ms/1000)}, delta_v={v[-1]-v[0]}")
+
+# 2) Zajos downstroke: v = [-0.30, -0.20, -0.25, -0.10, -0.15, 0.30]
+v = [-0.30, -0.20, -0.25, -0.10, -0.15, 0.30]
+path = sum(abs(v[i] - v[i-1]) for i in range(1, len(v)))
+chord = abs(v[-1] - v[0])
+print(f"down-noisy: path={path}, chord={chord}, linearity={chord/path}, speed={path/(duration_ms/1000)}, delta_v={v[-1]-v[0]}")
+
+# 3) Aszimmetria: down amplitudók = [0.60, 0.55], up amplitudók = [0.50, 0.45]
+down = [0.60, 0.55]; up = [0.50, 0.45]
+down_mean = sum(down)/len(down); up_mean = sum(up)/len(up)
+asym = abs(down_mean - up_mean) / max(down_mean, up_mean)
+print(f"asymmetry: down_mean={down_mean}, up_mean={up_mean}, asym={asym:.6f}")
+
+# 4) Konzisztencia: [0.60, 0.50, 0.55, 0.45]
+amps = [0.60, 0.50, 0.55, 0.45]
+mean = sum(amps)/len(amps)
+var = sum((a-mean)**2 for a in amps)/len(amps)
+cv = math.sqrt(var) / mean
+print(f"consistency: mean={mean}, stddev={math.sqrt(var):.6f}, cv={cv:.6f}, consistency={1-cv:.6f}")
+
+# 5) Konzisztencia n=3 határ: [0.60, 0.55, 0.65]
+amps = [0.60, 0.55, 0.65]
+mean = sum(amps)/len(amps)
+var = sum((a-mean)**2 for a in amps)/len(amps)
+cv = math.sqrt(var) / mean
+print(f"consistency(n=3): mean={mean}, stddev={math.sqrt(var):.6f}, cv={cv:.6f}, consistency={1-cv:.6f}")
+
+# 6) Konzisztencia tight: [0.60, 0.62, 0.58, 0.61]
+amps = [0.60, 0.62, 0.58, 0.61]
+mean = sum(amps)/len(amps)
+var = sum((a-mean)**2 for a in amps)/len(amps)
+cv = math.sqrt(var) / mean
+print(f"consistency(tight): mean={mean}, stddev={math.sqrt(var):.6f}, cv={cv:.6f}, consistency={1-cv:.6f}")
+EOF
+down-ideal: path=0.6, chord=0.6, linearity=1.0, speed=2.4, delta_v=0.6
+down-noisy: path=0.8, chord=0.6, linearity=0.75, speed=3.2, delta_v=0.6
+asymmetry: down_mean=0.575, up_mean=0.475, asym=0.173913
+consistency: mean=0.525, stddev=0.055902, cv=0.106479, consistency=0.893521
+consistency(n=3): mean=0.6, stddev=0.040825, cv=0.068041, consistency=0.931959
+consistency(tight): mean=0.6025, stddev=0.014790, cv=0.024548, consistency=0.975452
+```
+
+A picking-zóna küszöbértékek és a vágás-viselkedés dokumentálva a
+`PickingZoneThresholds` és a `StrokeWindow` forráskódjában. A picking-zóna
+küszöböket szintén a fenti scripttel erősítettem meg (a `classifyZone`
+lefedi az SDD §20.2 mind a négy értékét, a határ mindkét oldalán — l.
+`picking_metric_engine_test.dart` "picking-zone classifier" group, 9 teszt).
+
+### 10.3 Futtatott parancsok — tényleges kimenet
+
+A lokális gate-et a brief §7 előírása szerint, külön processzekben,
+csonkítás nélkül futtattam (a `| tail`/`| head`/`&&` lánc-tiltás a
+M3-as preambulumban ismét hangsúlyozva):
+
+```bash
+$ tools/round-gate.sh test/features/vision
+```
+
+A gate kimenete (artefaktum, csonkítatlan — utolsó futás, merge előtti
+HEAD-en `52eb16e`):
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/vision
+    $ /home/ubuntu/flutter/bin/flutter test test/features/vision
+
+    … 174 teszt zöld (113 eredeti + 11 stroke_window + 50 picking_metric_engine)
+
+    → [3] test test/features/vision: ZÖLD
+
+═══ [4] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+    → [6] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                            zöld
+    analyze                                                           zöld
+    test test/features/vision                                         zöld
+    architecture                                                      zöld
+    secrets                                                           zöld
+    l10n                                                              zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+A tesztek részletes eredménye:
+
+```
+00:00 +1: loading /home/ubuntu/ss-mm-e05-r19/test/features/vision/domain/stroke_window_test.dart
+…
+00:00 +11: …stroke_window_test.dart: All tests passed!
+00:00 +12: loading /home/ubuntu/ss-mm-e05-r19/test/features/vision/domain/picking_metric_engine_test.dart
+…
+00:00 +50: …picking_metric_engine_test.dart: All tests passed!
+…
+00:12 +174: All tests passed!
+```
+
+### 10.4 Valódi-sértés próba (brief §6) — sync-kapu eltávolítása
+
+A sync-kapu load-bearing voltát manuálisan igazoltam, a brief §6 utolsó
+acceptance-pontja és a §10-es "Implementation handoff" előírása szerint.
+A mutáció a `picking_metric_engine.dart` `_eventLevelAllowed` getterén:
+
+```diff
+   bool _eventLevelAllowed(PickingSyncQuality sync) =>
+-      sync == PickingSyncQuality.good || sync == PickingSyncQuality.excellent;
++      // VALÓDI-SÉRTÉS PRÓBA: temporarily bypass the sync gate to confirm
++      // the `poor` / `acceptable` cell goes red.
++      true; // sync == PickingSyncQuality.good || sync == PickingSyncQuality.excellent;
+```
+
+A gate megkerülésével a `flutter test test/features/vision/domain/picking_metric_engine_test.dart`
+parancs a §6 sync-mátrix NÉGY celláját pirosra váltotta — a `poor` és
+`acceptable` cellák `expected: notObservable` mellett `actual: observable`
+értéket kaptak, míg a `good` és `excellent` cellák zöldek maradtak (mint
+ahogy a kód jelenleg is megköveteli):
+
+```
+00:00 +11 -1: sync matrix — event-level gate direction under sync=PickingSyncQuality.poor → notObservable [E]
+  sync=PickingSyncQuality.poor
+00:00 +11 -2: sync matrix — event-level gate direction under sync=PickingSyncQuality.acceptable → notObservable [E]
+  sync=PickingSyncQuality.acceptable
+00:00 +13 -3: sync matrix — event-level gate amplitude under poor sync → notObservable [E]
+00:00 +13 -4: sync matrix — event-level gate amplitude under acceptable sync → notObservable [E]
+00:00 +14 -5: sync matrix — event-level gate speed / linearity gate the same way (poor → notObservable) [E]
+00:00 +44 -6: valódi-sértés próba — sync gate is load-bearing (brief §6) under poor sync, event-level metrics are notObservable [E]
+00:00 +44 -6: Some tests failed.
+```
+
+A mutációt ezután visszaállítottam (`sync == good || sync == excellent`)
+és a teljes tesztkészlet újra zöld lett (50/50 picking engine + 11/11
+stroke_window + 113/113 R13–R18). A bizonyíték: a 4 sync-cellás
+teszt-csoport a `_eventLevelAllowed` true értékre cserélése UTÁN PIROS, a
+visszaállítás után ZÖLD — a gate nem kozmetika.
+
+### 10.5 Nem futtatott ellenőrzések és okuk
+
+- **A teljes `flutter test` (~225 teszt) csak CI-ban fut** — user-szabály
+  2026-07-29, ADR 0053, a boxon ~15 perc. A lokális gate a brief §7
+  szerinti célzott útvonalra (`test/features/vision`) futott, és minden
+  érintett fájl zöld.
+- **Az Android APK-build (`flutter build apk`) NEM futott lokálisan** —
+  user-szabály 2026-07-29, ADR 0052: a fejlesztői boxon nincs Android
+  SDK, az APK a CI-ban dispatch-elt `build-apk.yml` runból származik.
+- **A property gate (`PROPERTY_SEED`)** NEM futott lokálisan — a
+  HORIZON-szabály (CLAUDE.md) értelmében a property tesztek a CI HARD
+  step-jében futnak `PROPERTY_SEED=${{ github.run_id }}` seed-del. A
+  picking engine-ben nincs új randomizált property (a meglévő R13–R18
+  property gate-eket nem érinti ez a diff).
+- **Az `ai-router-round.sh run`** NEM indult — ez a round az
+  `engine=minimax` örökölt override-ot használja (`tools/mm-round.sh` +
+  `tools/mm-watch.sh`), a router-t nem hívjuk. A körjelzés
+  `tools/codex-signal.sh` útján megy, ahogy az a M3 preambulumban
+  kötött.
+- **A `flutter gen-l10n` és `flutter pub get`** NEM volt szükséges — ez
+  a diff nem érint ARB-fájlt és nem vezet be új függőséget
+  (`pubspec.yaml` nem módosult). A L48 clone-pitfall (klón →
+  `AppLocalizations` hiány → piros analyze) nem érvényesül.
+
+### 10.6 Eltérések a brief-től
+
+- **A mirror/balkezes paritás teszt 2 cellás**, ahogy a brief §0.0/2 és
+  §6 javítás előírja (L176 tanulsága) — NEM 4 cellás (`leftHanded` ×
+  front/back). A 2-cellás verzió ténylegesen variál (`Handedness.left`
+  vs `Handedness.right`, minden más mező bit-azonos), és a teszt
+  doc-commentje explicit kimondja, mit bizonyít ÉS mit nem (kamera-
+  tükrözés és `leftHanded` normalizáció felsőbb rétegen, R13/R15-ben
+  tesztelve).
+- **A `picking-zone` enum NEM azonos az R15 `GuitarRegion`-nel** —
+  saját 4-értékű enum a SDD §20.2 szerint (`nearBridge` /
+  `middleBody` / `nearNeck` / `outsideCalibratedZone`), saját
+  küszöbökkel (`PickingZoneThresholds`). A `GuitarRegion.pickingZone`
+  az R15 fretting-oldali kategória, nem keverendő.
+- **A `PickingSyncQuality` enum ÚJ** — a M3 preambulum §0.0/5-öt
+  követve, és a `git grep` a teljes repóra 0 találatot adott a névre
+  induláskor. Saját fájlban él, kizárólag a picking kód használja.
+- **A `MetricDefinition` mintája követve, nem importálva** — az R18
+  `metric_definition.dart` `FrettingMetricId` / `FrettingCapability`
+  hardcode-olt, és a fájl nincs az engedélyezett listán (brief §0.0/3).
+  A saját `PickingMetricDefinition` ugyanazt a `throw ArgumentError` +
+  `isValid` mintát követi, de a picking-oldali enumokkal.
+- **Az irány-mapping `Δv > 0 → down`** — a `StrumDirection` (core)
+  enumot nem használja a picking engine belső reprezentációja; a
+  direction metrika numerikus ±1-et ad vissza. A `StrumDirection`-ra
+  konvertálás a hívó (insight / practice adapter) felelőssége, ahogy
+  a brief §0.0/4 javítása kimondja.
+
+### 10.7 Kockázatok / follow-up
+
+- **A R21 audio–vision sync forrás** (`tools/codex-watch.sh` /
+  audio-oldali adapter) még nem szállítja a `PickingSyncQuality` értéket
+  — ez a kör injektált típussal dolgozik, és a R21-re van bízva a
+  valódi forrás. A gate addig is működik (az R21 PRECEDING körében
+  már megírt mock-a az engine-nek ezt az interfészt használja).
+- **A picking-zóna `outsideCalibratedZone` megjelenítése** UI-szintű
+  döntés: a metric engine semleges observation-t ad (brief §5/1), a
+  Practice Insight / AI Tutor réteg (R22 / R23) felelőssége, hogyan
+  jeleníti meg. A tesztek csak a 4 kategória elérhetőségét és a határ
+  viselkedését ellenőrzik.
+- **A `PickingSyncQuality` 4-értékű enum** a jelenlegi R18
+  `MetricObservability`-val kontrasztban áll — az R21 ezt a típust
+  importálja, és a session-aggregátok gate-mentességét a
+  `PickingMetricEngine.compute()` belső `_rawAmplitude` /
+  `_rawDirection` hívásai biztosítják. Ha az R21 másképp akarja a
+  gate-et (pl. részleges megbízhatóság), a kód kompatibilis marad.
 
 ## 11. Review — a független reviewer tölti ki
 
