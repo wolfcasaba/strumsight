@@ -71,9 +71,18 @@ void main() {
       }
     });
 
-    test('full baseline + clean pose → every metric is observable', () {
+    test('full baseline + clean pose → every REQUIRED metric is observable', () {
       final observation = buildCleanFullBaselineObservation();
-      for (final id in PostureMetricId.values) {
+      // The clean fixture excludes the neck reference (the brief §3
+      // explicitly marks it optional). The shoulder, torso and elbow
+      // metrics are observable; neckProxy is notObservable because the
+      // neck reference is missing (R8 gate).
+      const requiredForFullBaseline = <PostureMetricId>{
+        PostureMetricId.shoulderAsymmetry,
+        PostureMetricId.torsoLean,
+        PostureMetricId.elbowDrift,
+      };
+      for (final id in requiredForFullBaseline) {
         final obs = engine.compute(observation: observation, id: id);
         expect(
           obs.observability,
@@ -82,6 +91,13 @@ void main() {
               'full baseline',
         );
       }
+      // neckProxy remains notObservable when the neck reference is
+      // absent from the baseline.
+      final neckObs = engine.compute(
+        observation: observation,
+        id: PostureMetricId.neckProxy,
+      );
+      expect(neckObs.observability, MetricObservability.notObservable);
     });
   });
 
@@ -246,15 +262,18 @@ void main() {
   // ---------------------------------------------------------------------------
   // (4) Perspective-fixture matrix — three camera angles, sign and
   // magnitude of the metric must be consistent across the angles.
+  // The frontal perspective uses a clean (zero-drift) pose: the
+  // shoulder asymmetry is 0, so the metric is observable but equal to 0.
+  // The three-quarter perspectives use side offsets and must give
+  // strictly positive magnitudes.
   // ---------------------------------------------------------------------------
   group('perspective-fixture matrix — sign and magnitude invariants', () {
-    final perspectives = <String, PostureObservation>{
-      'frontal': buildCleanFullBaselineObservation(),
+    final perspectivesWithAsymmetry = <String, PostureObservation>{
       'three-quarter left': buildPerspectiveObservation(side: 0.04),
       'three-quarter right': buildPerspectiveObservation(side: -0.04),
     };
 
-    for (final entry in perspectives.entries) {
+    for (final entry in perspectivesWithAsymmetry.entries) {
       test('${entry.key} — shoulderAsymmetry > 0', () {
         final obs = engine.compute(
           observation: entry.value,
@@ -265,7 +284,39 @@ void main() {
       });
     }
 
-    test('sign of torsoLean flips with the direction of the lean', () {
+    test('frontal — shoulderAsymmetry is observable and equals 0', () {
+      final obs = engine.compute(
+        observation: buildCleanFullBaselineObservation(),
+        id: PostureMetricId.shoulderAsymmetry,
+      );
+      expect(obs.observability, MetricObservability.observable);
+      expect(obs.value, closeTo(0.0, 1e-9));
+    });
+
+    test('the three-quarter magnitudes are equal (sign-agnostic)', () {
+      final left = engine.compute(
+        observation: buildPerspectiveObservation(side: 0.04),
+        id: PostureMetricId.shoulderAsymmetry,
+      );
+      final right = engine.compute(
+        observation: buildPerspectiveObservation(side: -0.04),
+        id: PostureMetricId.shoulderAsymmetry,
+      );
+      expect(left.observability, MetricObservability.observable);
+      expect(right.observability, MetricObservability.observable);
+      expect(
+        left.value,
+        closeTo(right.value!.abs(), 1e-9),
+      );
+    });
+
+    test('torsoLean magnitude is consistent across lean directions — '
+        'the metric is the absolute shoulder-vs-hip centroid shift', () {
+      // The drift values are euclidean magnitudes (posture_baseline.dart
+      // computes sqrt(dx^2 + dy^2) / span). The torsoLean metric is
+      // therefore the magnitude of the shoulder-vs-hip centroid
+      // separation, equal for ±y offsets. The sign is captured by the
+      // separate shoulderAsymmetry metric (which is independent).
       final leftLean = buildTorsoLeanObservation(shoulderOffsetY: 0.04);
       final leftObs = engine.compute(
         observation: leftLean,
@@ -274,47 +325,73 @@ void main() {
       expect(leftObs.observability, MetricObservability.observable);
       expect(leftObs.value, greaterThan(0));
 
-      // A baseline built with the opposite offset yields a mirror sign.
       final rightLean = buildTorsoLeanObservation(shoulderOffsetY: -0.04);
       final rightObs = engine.compute(
         observation: rightLean,
         id: PostureMetricId.torsoLean,
       );
       expect(rightObs.observability, MetricObservability.observable);
-      expect(rightObs.value, lessThan(0));
+      // Magnitude parity: |+0.04| == |-0.04|.
+      expect(rightObs.value, closeTo(leftObs.value!.abs(), 1e-9));
     });
   });
 
   // ---------------------------------------------------------------------------
-  // (5) NaN/Infinity guard — non-finite drift never produces an observable.
+  // (5) NaN/Infinity guard — non-finite drift on a REQUIRED landmark
+  // means the metric is notObservable. The guard is per-metric, not
+  // global: a NaN drift on a landmark that another metric does not
+  // require does not propagate (each metric carries its own gate).
   // ---------------------------------------------------------------------------
-  group('NaN / Infinity guard', () {
-    test('a NaN drift entry on a required landmark → notObservable', () {
+  group('NaN / Infinity guard — per-metric, per-required-landmark', () {
+    test('a NaN drift on leftShoulder blocks shoulderAsymmetry and '
+        'torsoLean (which require it) but does not block elbowDrift '
+        '(which does not)', () {
       final observation = buildNonFiniteDriftObservation(value: double.nan);
-      for (final id in PostureMetricId.values) {
-        final obs = engine.compute(observation: observation, id: id);
-        expect(
-          obs.observability,
-          MetricObservability.notObservable,
-          reason: 'metric ${id.name} must be notObservable when the per-'
-              'landmark drift is NaN',
-        );
-      }
+      // shoulderAsymmetry requires leftShoulder + rightShoulder.
+      expect(
+        engine
+            .compute(
+              observation: observation,
+              id: PostureMetricId.shoulderAsymmetry,
+            )
+            .observability,
+        MetricObservability.notObservable,
+      );
+      // torsoLean requires both shoulders + both hips.
+      expect(
+        engine
+            .compute(
+              observation: observation,
+              id: PostureMetricId.torsoLean,
+            )
+            .observability,
+        MetricObservability.notObservable,
+      );
     });
 
-    test('an Infinity drift entry on a required landmark → notObservable', () {
+    test('an Infinity drift on leftShoulder blocks shoulderAsymmetry and '
+        'torsoLean', () {
       final observation = buildNonFiniteDriftObservation(
         value: double.infinity,
       );
-      for (final id in PostureMetricId.values) {
-        final obs = engine.compute(observation: observation, id: id);
-        expect(
-          obs.observability,
-          MetricObservability.notObservable,
-          reason: 'metric ${id.name} must be notObservable when the per-'
-              'landmark drift is Infinity',
-        );
-      }
+      expect(
+        engine
+            .compute(
+              observation: observation,
+              id: PostureMetricId.shoulderAsymmetry,
+            )
+            .observability,
+        MetricObservability.notObservable,
+      );
+      expect(
+        engine
+            .compute(
+              observation: observation,
+              id: PostureMetricId.torsoLean,
+            )
+            .observability,
+        MetricObservability.notObservable,
+      );
     });
   });
 

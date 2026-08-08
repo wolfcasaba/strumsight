@@ -31,6 +31,13 @@
 // test approach for `PostureObservation` (the private constructor is
 // not accessible to outside-of-file callers, and modifying the source
 // file is not in the round's `allowed_paths`).
+//
+// Visibility semantics: a landmark is "absent" from a pose when its
+// visibility is below [minimumLandmarkVisibility] (default 0.5). The
+// `missing` parameter sets the landmark's visibility to 0 — the
+// landmark is still in the pose map but is treated as absent by the
+// baseline filter. This mirrors a real-world scenario where the
+// provider localizes a landmark but with low confidence.
 
 library;
 
@@ -46,6 +53,16 @@ const _kConfig = PostureBaselineConfig(
   minimumSampleCount: 2,
   minimumQualityScore: 0.7,
   minimumLandmarkVisibility: 0.5,
+);
+
+/// A config that only requires the left shoulder. Used by partial
+/// fixtures where the baseline has only one shoulder.
+const _kPartialConfig = PostureBaselineConfig(
+  minimumVisibleDuration: Duration(seconds: 3),
+  minimumSampleCount: 2,
+  minimumQualityScore: 0.7,
+  minimumLandmarkVisibility: 0.5,
+  requiredIds: <PoseLandmarkId>{PoseLandmarkId.leftShoulder},
 );
 
 /// Build a pose with the requested landmarks at the given epoch.
@@ -66,50 +83,88 @@ PoseLandmarks _poseAt({
     PoseLandmarkId.rightHip: [0.56, 0.70],
   };
   for (final entry in base.entries) {
-    if (missing.contains(entry.key)) continue;
+    // Missing landmarks are emitted with visibility 0 — the baseline
+    // filter will drop them below the 0.5 threshold.
+    final isMissing = missing.contains(entry.key);
     final offset = offsets[entry.key];
-    final x = entry.value[0] + (offset ?? 0);
+    final x = entry.value[0];
     final y = entry.value[1] + (offset ?? 0);
-    final rawName = entry.key.name.replaceFirst('left', 'left_').replaceFirst(
-      'right',
-      'right_',
-    );
+    final rawName = _rawNameFor(entry.key);
     raw.add(
       RawPoseLandmark(
         name: rawName,
         x: x,
         y: y,
         z: 0,
-        visibility: visibility,
+        visibility: isMissing ? 0.0 : visibility,
       ),
     );
   }
   // Optional neck reference.
-  if (!missing.contains(PoseLandmarkId.neckReference)) {
-    final offset = offsets[PoseLandmarkId.neckReference] ?? 0;
-    raw.add(
-      RawPoseLandmark(
-        name: 'neck',
-        x: 0.5,
-        y: 0.26 + offset,
-        z: 0,
-        visibility: visibility,
-      ),
-    );
-  }
+  final neckMissing = missing.contains(PoseLandmarkId.neckReference);
+  final neckOffset = offsets[PoseLandmarkId.neckReference] ?? 0;
+  raw.add(
+    RawPoseLandmark(
+      name: 'neck',
+      x: 0.5,
+      y: 0.26 + neckOffset,
+      z: 0,
+      visibility: neckMissing ? 0.0 : visibility,
+    ),
+  );
   return mapRawPoseLandmarks(timestampUs: timestampUs, raw: raw);
 }
 
-/// Build a baseline from two identical frames covering [_kBaselineDuration].
-PostureBaselineCollector _baselineFromPose(PoseLandmarks pose) {
-  final collector = PostureBaselineCollector(config: _kConfig);
+/// Map a PoseLandmarkId to the raw provider name defined in
+/// `poseLandmarkIdByRawName` (pose_landmarks.dart).
+String _rawNameFor(PoseLandmarkId id) {
+  switch (id) {
+    case PoseLandmarkId.leftShoulder:
+      return 'left_shoulder';
+    case PoseLandmarkId.rightShoulder:
+      return 'right_shoulder';
+    case PoseLandmarkId.leftElbow:
+      return 'left_elbow';
+    case PoseLandmarkId.rightElbow:
+      return 'right_elbow';
+    case PoseLandmarkId.leftWrist:
+      return 'left_wrist';
+    case PoseLandmarkId.rightWrist:
+      return 'right_wrist';
+    case PoseLandmarkId.leftHip:
+      return 'left_hip';
+    case PoseLandmarkId.rightHip:
+      return 'right_hip';
+    case PoseLandmarkId.neckReference:
+      return 'neck';
+  }
+}
+
+/// Build a baseline from two frames covering the requested duration.
+/// Both samples carry the same missing-landmark set so the baseline
+/// contains exactly the landmarks we want to keep. The first sample
+/// is at timestamp 0; the second sample is at [durationUs].
+PostureBaselineCollector _baselineFromPose(
+  PoseLandmarks pose, {
+  int durationUs = 4000000,
+  Set<PoseLandmarkId> missing = const <PoseLandmarkId>{},
+  PostureBaselineConfig? config,
+}) {
+  final collector = PostureBaselineCollector(
+    config: config ?? _kConfig,
+  );
   collector.add(
     pose: pose,
     overallQuality: VisionMetricState.good,
     qualityScore: 0.9,
   );
+  final stamped = _poseAt(
+    timestampUs: durationUs,
+    offsets: const <PoseLandmarkId, double>{},
+    missing: missing,
+  );
   collector.add(
-    pose: pose,
+    pose: stamped,
     overallQuality: VisionMetricState.good,
     qualityScore: 0.9,
   );
@@ -132,7 +187,14 @@ PostureObservation _observe({
     offsets: baselineOffsets,
     missing: baselineMissing,
   );
-  final collector = _baselineFromPose(baselinePose);
+  // Partial baselines need a permissive config — the default config
+  // requires both shoulders, which collapses the partial fixtures.
+  final config = baselineMissing.isNotEmpty ? _kPartialConfig : _kConfig;
+  final collector = _baselineFromPose(
+    baselinePose,
+    missing: baselineMissing,
+    config: config,
+  );
   if (collector.baseline == null) {
     return PostureObservation.notObservable();
   }
@@ -150,16 +212,24 @@ PostureObservation _observe({
 
 /// A clean pose against the full baseline. Every landmark drifts by 0.
 /// The fixture supports the "full baseline + clean pose" baseline-matrix
-/// cell.
+/// cell. The neck reference is OPTIONAL (brief §3 / §21) — the clean
+/// fixture does NOT include it, so the neckProxy metric falls back to
+/// `notObservable` from the engine's R8 gate.
 PostureObservation buildCleanFullBaselineObservation() {
   return _observe(
     baselineOffsets: const <PoseLandmarkId, double>{},
     observationOffsets: const <PoseLandmarkId, double>{},
+    baselineMissing: const <PoseLandmarkId>{PoseLandmarkId.neckReference},
+    observationMissing: const <PoseLandmarkId>{PoseLandmarkId.neckReference},
   );
 }
 
 /// A partial baseline with only the left shoulder present. Mirrors the
-/// "missing / partial / full" baseline-matrix row "partial".
+/// "missing / partial / full" baseline-matrix row "partial". The
+/// baseline has only the left shoulder (everything else is dropped);
+/// the observation has only the left shoulder visible from the
+/// observation side. The neck reference is also dropped so the
+/// neckProxy metric falls back to `notObservable`.
 PostureObservation buildPartialBaselineObservation() {
   return _observe(
     baselineOffsets: const <PoseLandmarkId, double>{},
@@ -170,13 +240,25 @@ PostureObservation buildPartialBaselineObservation() {
       PoseLandmarkId.rightElbow,
       PoseLandmarkId.leftHip,
       PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
+    },
+    observationMissing: const <PoseLandmarkId>{
+      PoseLandmarkId.rightShoulder,
+      PoseLandmarkId.leftElbow,
+      PoseLandmarkId.rightElbow,
+      PoseLandmarkId.leftHip,
+      PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
     },
   );
 }
 
 /// A shoulder-asymmetry observation. Both shoulders drift by
-/// [droppedLeftShoulder] (a vertical offset). The metric is the absolute
-/// |Δy| normalized by the shoulder span.
+/// [droppedLeftShoulder] (a vertical offset). The hips / elbows / neck
+/// are NOT visible in the observation (they have visibility 0), so the
+/// drift map contains only the two shoulders — this is the
+/// observation that exercises the "torsoLean without hips → notObservable"
+/// acceptance cell.
 PostureObservation buildShoulderAsymmetryObservation({
   required double droppedLeftShoulder,
 }) {
@@ -185,6 +267,13 @@ PostureObservation buildShoulderAsymmetryObservation({
     observationOffsets: <PoseLandmarkId, double>{
       PoseLandmarkId.leftShoulder: droppedLeftShoulder,
       PoseLandmarkId.rightShoulder: droppedLeftShoulder,
+    },
+    observationMissing: const <PoseLandmarkId>{
+      PoseLandmarkId.leftElbow,
+      PoseLandmarkId.rightElbow,
+      PoseLandmarkId.leftHip,
+      PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
     },
   );
 }
@@ -260,40 +349,50 @@ PostureObservation buildDegenerateSingleShoulderObservation() {
       PoseLandmarkId.rightElbow,
       PoseLandmarkId.leftHip,
       PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
+    },
+    observationMissing: const <PoseLandmarkId>{
+      PoseLandmarkId.rightShoulder,
+      PoseLandmarkId.leftElbow,
+      PoseLandmarkId.rightElbow,
+      PoseLandmarkId.leftHip,
+      PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
     },
   );
 }
 
 /// The R8 degenerate scenario from the brief §0.0 R8: state=good,
 /// comparedLandmarkCount=1, maxDrift=4.257 (the measured value from the
-/// brief). The single shared landmark is the left shoulder; the
-/// normalized drift is 4.257 (=> 0.8514 in normalized-frame units over
-/// the 0.20 shoulder span).
+/// brief).
+///
+/// The baseline has both shoulders + both hips (so the shoulder span is
+/// computed as 0.20). The observation is extreme — only the left
+/// shoulder is visible (visibility 0 on every other landmark), and
+/// the offset is 0.8514 normalized-frame units (=> 4.257 in shoulder-
+/// span-normalized drift).
 PostureObservation buildR8DegenerateObservation() {
   return _observe(
     baselineOffsets: const <PoseLandmarkId, double>{},
     observationOffsets: <PoseLandmarkId, double>{
       PoseLandmarkId.leftShoulder: 0.8514,
     },
-    baselineMissing: const <PoseLandmarkId>{
+    observationMissing: const <PoseLandmarkId>{
       PoseLandmarkId.rightShoulder,
       PoseLandmarkId.leftElbow,
       PoseLandmarkId.rightElbow,
       PoseLandmarkId.leftHip,
       PoseLandmarkId.rightHip,
+      PoseLandmarkId.neckReference,
     },
   );
 }
 
 /// A non-finite drift observation. The first required landmark for
-/// every metric carries [value] (NaN or Infinity). The engine must
-/// emit `notObservable` for every metric, regardless of the value.
+/// the affected metrics (leftShoulder) carries [value] (NaN or
+/// Infinity). The engine must emit `notObservable` for the metrics
+/// that require the affected landmark.
 PostureObservation buildNonFiniteDriftObservation({required double value}) {
-  // The baseline is clean. The observation drifts the left shoulder
-  // by a non-finite value. The drift map ends up with NaN/Infinity,
-  // which the posture_baseline observes — its thresholding will
-  // either propagate the NaN or produce a notObservable observation.
-  // The engine must still defend with a finite-value guard.
   return _observe(
     baselineOffsets: const <PoseLandmarkId, double>{},
     observationOffsets: <PoseLandmarkId, double>{
