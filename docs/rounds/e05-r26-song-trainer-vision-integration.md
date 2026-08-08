@@ -309,6 +309,8 @@ parity-tolerancia bevezetése helyett dokumentált brief-revízió.
 - `flutter test test/features/song_trainer/performance/transport_timing_parity_test.dart`
   — PASS (2 teszt).
 - `dart run tool/ci/check_l10n_parity.dart` — PASS, `en → hu`, 1002 üzenet.
+- `tools/round-gate.sh test/features/song_trainer test/features/vision` —
+  PASS (format, analyze, mindkét célzott tesztfa és architecture gate).
 
 Eltérés nincs a briefhez képest. A valós eszközös ötperces loop-benchmark
 továbbra is PENDING, a brief §7 szerint nem lokális gate.
