@@ -6433,3 +6433,48 @@ a shared tree-ben), és csak UTÁNA klónozz újra. Egy gate, amely a várt
 darabszámnál (a brief új teszt-fájljainak becsült számával) KEVESEBB tesztet
 futtat, ugyanolyan gyanús, mint egy piros lépés — sose fogadd el csak azért,
 mert "0 hiba, MINDEN GATE ZÖLD" a kimenet.
+
+## L187 — Egy pre-flight scope-bővítés (`allowed_paths`) átbillentheti a queue mért-motor szabályát anélkül, hogy a queue saját `engine`-oszlopa frissülne — a drift csak a KÖVETKEZŐ Router CI-n bukik ki, körökkel a döntés után (E05-R24, H5 self-heal, 2026-08-08)
+
+**Mit mértünk.** Az E05-R24 §0.0 R4 pre-flight revíziója (mérve az
+implementer STOP-jelzéséből) 4 pontos `test/features/vision/presentation/...`
+útvonallal (2 teszt-fájl + 2 golden PNG) bővítette a brief `allowed_paths`-át,
+mert a §6 acceptance criteria (golden overlay teszt, cue-teszt, route-guard
+teszt) ezt ténylegesen igényelte — legitim, szükséges bővítés. Ez a bővítés
+azonban átbillentette a
+`tools/tests/test_pipeline_integration.py::test_open_rounds_follow_the_measured_engine_rule`
+mért összetételét: az UI/ARB (`/presentation/` + `.arb`) útvonalak száma
+5-ről 9-re nőtt, a core (`/domain/`+`/application/`+`/data/`) 6 maradt, és a
+szabály (`risk=="high"` ÉS `UI/ARB > core` → `minimax`) így `codex`-ről
+`minimax`-ra váltott. A `docs/execution/pipeline-queue.tsv` E05-R24 sorának
+`engine` oszlopa viszont NEM változott (a queue-t a driver vezeti, a
+brief-revízió külön commit) — a mismatch csak a KÖVETKEZŐ Router CI futáson
+bukott ki, méghozzá KÉTSZER egymás után (ugyanaz a subTest, két különböző
+commit: `ffef5d7`, `80dda006`), mert a kör implementációja eközben tovább
+haladt (2 javító kör) anélkül, hogy bárki visszanézte volna a queue-t. A kör
+maga review-approved, security-approved, gate-zöld volt — a merge-et
+kizárólag ez a bookkeeping-drift blokkolta, self-heal kört (H5) igényelve.
+
+**Miért.** A mért-motor szabály szándékosan KÖTI a queue `engine`-oszlopát a
+brief `allowed_paths`-ához, hogy a motorválasztás ne maradjon kézi becslés
+(lásd a teszt saját docstringje). Ez a kötés viszont csak akkor véd, ha
+MINDEN `allowed_paths`-változás UGYANABBAN a pillanatban frissíti a queue-t
+is — de a pre-flight revízió (a brief saját ágán, commitolva) és a queue
+(`main`-en, a driver kezelésében) két KÜLÖNBÖZŐ hely, és semmi nem kapcsolja
+össze őket atomikusan. Egy `allowed_paths`-bővítés, ami a UI/core arányt
+átbillenti, ezért STRUKTURÁLISAN néma marad addig, amíg a Router CI le nem
+fut ugyanazon a brief-tartalommal — ami a pre-flight-commit UTÁNI első
+push-kor történik meg, nem a pre-flight-commit pillanatában.
+
+**Hogyan alkalmazd.** Egy pre-flight revízió, ami az `allowed_paths` UI/ARB
+vs. core arányát megváltoztatja (különösen `risk == "high"` briefeknél, ahol
+a küszöb éppen ezen az arányon dől el), SZÁMOLJA ÚJRA helyben a mért
+szabályt (a képlet a teszt docstringjében), és ha az eredmény eltér a queue
+jelenlegi `engine` oszlopától, a pre-flight commit RÉSZEKÉNT (nem külön, nem
+"majd később") jelezze ezt — akár egy explicit §0.0 megjegyzéssel, akár
+közvetlenül a queue-sor frissítésével, ha a session jogosult rá. Enélkül a
+drift csak Router CI-n, potenciálisan több kör múlva bukik ki, self-heal
+kört igényelve egy olyan hibára, amit a pre-flight session egyetlen
+számolással elkerülhetett volna. Rokon lecke: **L113** (a `docs/rounds/**`
+is Router CI-trigger-útvonal — egy docs-only kör is pirosra állíthatja a
+láncot anélkül, hogy a build-apk-only kapu ezt észrevenné).
