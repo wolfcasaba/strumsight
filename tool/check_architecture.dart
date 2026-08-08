@@ -26,6 +26,8 @@ enum ArchitectureRule {
   coreMustNotImportFeatures,
   sharedDomainMustRemainFrameworkIndependent,
   crossFeatureImportsMustUsePublicApi,
+  rawVisionPayloadMustNotPersist,
+  rawVisionPayloadMustNotEnterProviderState,
 }
 
 /// One dependency that violates an [ArchitectureRule].
@@ -147,7 +149,8 @@ ArchitectureReport checkArchitecture({
 
   for (final file in dartFiles) {
     final sourcePath = _projectRelativePath(projectRoot, file);
-    for (final dependency in _directiveUris(file.readAsStringSync())) {
+    final source = file.readAsStringSync();
+    for (final dependency in _directiveUris(source)) {
       final targetPath = _resolveProjectUri(sourcePath, dependency.uri);
       _collectViolations(
         violations: violations,
@@ -167,6 +170,11 @@ ArchitectureReport checkArchitecture({
         );
       }
     }
+    _collectRawVisionPayloadViolations(
+      violations: violations,
+      sourcePath: sourcePath,
+      source: source,
+    );
   }
 
   final uniqueViolations = <String, ArchitectureViolation>{
@@ -179,6 +187,138 @@ ArchitectureReport checkArchitecture({
     return left.rule.index.compareTo(right.rule.index);
   });
   return ArchitectureReport(violations: uniqueViolations, allowlist: allowlist);
+}
+
+const _rawVisionPayloadTypes = <String>{
+  'VisionImage',
+  'GrayscaleFrame',
+  'Uint8List',
+  'ByteData',
+  'ByteBuffer',
+  'VisionPixelFormat',
+};
+
+void _collectRawVisionPayloadViolations({
+  required List<ArchitectureViolation> violations,
+  required String sourcePath,
+  required String source,
+}) {
+  const visionPrefix = 'lib/features/vision/';
+  if (!sourcePath.startsWith(visionPrefix)) return;
+
+  final code = _codeWithoutTrivia(source);
+  if (sourcePath.startsWith('${visionPrefix}data/persistence/')) {
+    for (final type in _rawVisionPayloadTypes) {
+      if (_containsIdentifier(code, type)) {
+        violations.add(
+          ArchitectureViolation(
+            sourcePath: sourcePath,
+            target: 'raw vision payload $type in persistence',
+            rule: ArchitectureRule.rawVisionPayloadMustNotPersist,
+          ),
+        );
+      }
+    }
+  }
+
+  if (!sourcePath.startsWith('${visionPrefix}application/')) return;
+  for (final body in _providerStateBodies(code)) {
+    for (final type in _rawVisionPayloadTypes) {
+      if (_containsIdentifier(body, type)) {
+        violations.add(
+          ArchitectureViolation(
+            sourcePath: sourcePath,
+            target: 'raw vision payload $type in provider state',
+            rule: ArchitectureRule.rawVisionPayloadMustNotEnterProviderState,
+          ),
+        );
+      }
+    }
+  }
+}
+
+bool _containsIdentifier(String source, String identifier) =>
+    RegExp('\\b${RegExp.escape(identifier)}\\b').hasMatch(source);
+
+Iterable<String> _providerStateBodies(String source) sync* {
+  final declarations = RegExp(
+    r'(?:(?:abstract|base|final|interface|sealed)\s+)*class\s+'
+    r'[A-Za-z_$][A-Za-z0-9_$]*State\b',
+  );
+  for (final declaration in declarations.allMatches(source)) {
+    final openingBrace = source.indexOf('{', declaration.end);
+    if (openingBrace < 0) continue;
+    final closingBrace = _matchingBrace(source, openingBrace);
+    if (closingBrace == null) continue;
+    yield source.substring(openingBrace + 1, closingBrace);
+  }
+}
+
+int? _matchingBrace(String source, int openingBrace) {
+  var depth = 0;
+  for (var index = openingBrace; index < source.length; index++) {
+    final character = source.codeUnitAt(index);
+    if (character == _leftBrace) depth++;
+    if (character == _rightBrace) depth--;
+    if (depth == 0) return index;
+  }
+  return null;
+}
+
+String _codeWithoutTrivia(String source) {
+  final output = StringBuffer();
+  var index = 0;
+  while (index < source.length) {
+    final character = source.codeUnitAt(index);
+    if (character == _slash && index + 1 < source.length) {
+      final next = source.codeUnitAt(index + 1);
+      if (next == _slash) {
+        while (index < source.length && source.codeUnitAt(index) != _lineFeed) {
+          output.write(' ');
+          index++;
+        }
+        continue;
+      }
+      if (next == _asterisk) {
+        var depth = 1;
+        output.write('  ');
+        index += 2;
+        while (index < source.length && depth > 0) {
+          if (index + 1 < source.length &&
+              source.codeUnitAt(index) == _slash &&
+              source.codeUnitAt(index + 1) == _asterisk) {
+            depth++;
+            output.write('  ');
+            index += 2;
+          } else if (index + 1 < source.length &&
+              source.codeUnitAt(index) == _asterisk &&
+              source.codeUnitAt(index + 1) == _slash) {
+            depth--;
+            output.write('  ');
+            index += 2;
+          } else {
+            output.write(source.codeUnitAt(index) == _lineFeed ? '\\n' : ' ');
+            index++;
+          }
+        }
+        continue;
+      }
+    }
+    final raw =
+        (character == _lowercaseR || character == _uppercaseR) &&
+        index + 1 < source.length &&
+        _isQuote(source.codeUnitAt(index + 1));
+    if (_isQuote(character) || raw) {
+      final literal = _readString(source, raw ? index + 1 : index, raw: raw);
+      final length = literal.nextIndex - index;
+      output.write(' ' * length);
+      index = literal.nextIndex;
+      continue;
+    }
+    output.writeCharCode(character);
+    index++;
+  }
+  return output.toString();
 }
 
 void _collectViolations({
@@ -595,6 +735,10 @@ String _ruleDescription(ArchitectureRule rule) => switch (rule) {
         'framework-independent',
   ArchitectureRule.crossFeatureImportsMustUsePublicApi =>
     'cross-feature imports must target public.dart',
+  ArchitectureRule.rawVisionPayloadMustNotPersist =>
+    'raw vision payloads must not enter persistence',
+  ArchitectureRule.rawVisionPayloadMustNotEnterProviderState =>
+    'raw vision payloads must not enter provider state',
 };
 
 const _lineFeed = 0x0a;
