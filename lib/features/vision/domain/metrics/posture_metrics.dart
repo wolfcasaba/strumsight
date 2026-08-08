@@ -152,57 +152,53 @@ final class PostureMetricDefinition {
 /// (brief §5 /6 — the catalog is the single source of truth for
 /// emitted codes). The catalog is built eagerly so a regression in
 /// the policy mapping surfaces at import time, not at runtime.
-final List<PostureMetricDefinition> postureMetricDefinitions =
-    List.unmodifiable(<PostureMetricDefinition>[
-      PostureMetricDefinition(
-        id: PostureMetricId.shoulderAsymmetry,
-        minimumVisibility: 0.55,
-        window: const Duration(milliseconds: 500),
-        confidenceFormula:
-            '1 - min(1, absolute mean normalized landmark drift)',
-        requiredCapability: PostureCapability.poseTracking,
-        requiredPoseLandmarkIds: <PoseLandmarkId>{
-          PoseLandmarkId.leftShoulder,
-          PoseLandmarkId.rightShoulder,
-        },
-        claimCode: 'postureShoulderAsymmetryIncreasedVsBaseline',
-      ),
-      PostureMetricDefinition(
-        id: PostureMetricId.torsoLean,
-        minimumVisibility: 0.55,
-        window: const Duration(milliseconds: 500),
-        confidenceFormula:
-            '1 - min(1, absolute mean normalized landmark drift)',
-        requiredCapability: PostureCapability.poseTracking,
-        requiredPoseLandmarkIds: <PoseLandmarkId>{
-          PoseLandmarkId.leftShoulder,
-          PoseLandmarkId.rightShoulder,
-          PoseLandmarkId.leftHip,
-          PoseLandmarkId.rightHip,
-        },
-        claimCode: 'postureTorsoLeanShiftedVsBaseline',
-      ),
-      PostureMetricDefinition(
-        id: PostureMetricId.elbowDrift,
-        minimumVisibility: 0.55,
-        window: const Duration(milliseconds: 500),
-        confidenceFormula:
-            '1 - min(1, absolute mean normalized landmark drift)',
-        requiredCapability: PostureCapability.poseTracking,
-        requiredPoseLandmarkIds: <PoseLandmarkId>{
-          PoseLandmarkId.leftElbow,
-          PoseLandmarkId.rightElbow,
-        },
-        claimCode: 'postureElbowDriftObserved',
-      ),
-      PostureMetricDefinition(
-        id: PostureMetricId.neckProxy,
-        minimumVisibility: 0.55,
-        window: const Duration(milliseconds: 500),
-        confidenceFormula:
-            '1 - min(1, absolute mean normalized landmark drift)',
-        requiredCapability: PostureCapability.poseTracking,
-        requiredPoseLandmarkIds: <PoseLandmarkId>{PoseLandmarkId.neckReference},
-        claimCode: 'postureNeckProxyShiftedVsBaseline',
-      ),
-    ]);
+final List<PostureMetricDefinition>
+postureMetricDefinitions = List.unmodifiable(<PostureMetricDefinition>[
+  PostureMetricDefinition(
+    id: PostureMetricId.shoulderAsymmetry,
+    minimumVisibility: 0.55,
+    window: const Duration(milliseconds: 500),
+    confidenceFormula: '1 - min(1, absolute mean normalized landmark drift)',
+    requiredCapability: PostureCapability.poseTracking,
+    requiredPoseLandmarkIds: <PoseLandmarkId>{
+      PoseLandmarkId.leftShoulder,
+      PoseLandmarkId.rightShoulder,
+    },
+    claimCode: 'postureShoulderAsymmetryIncreasedVsBaseline',
+  ),
+  PostureMetricDefinition(
+    id: PostureMetricId.torsoLean,
+    minimumVisibility: 0.55,
+    window: const Duration(milliseconds: 500),
+    confidenceFormula: '1 - min(1, absolute mean normalized landmark drift)',
+    requiredCapability: PostureCapability.poseTracking,
+    requiredPoseLandmarkIds: <PoseLandmarkId>{
+      PoseLandmarkId.leftShoulder,
+      PoseLandmarkId.rightShoulder,
+      PoseLandmarkId.leftHip,
+      PoseLandmarkId.rightHip,
+    },
+    claimCode: 'postureTorsoLeanShiftedVsBaseline',
+  ),
+  PostureMetricDefinition(
+    id: PostureMetricId.elbowDrift,
+    minimumVisibility: 0.55,
+    window: const Duration(milliseconds: 500),
+    confidenceFormula: '1 - min(1, absolute mean normalized landmark drift)',
+    requiredCapability: PostureCapability.poseTracking,
+    requiredPoseLandmarkIds: <PoseLandmarkId>{
+      PoseLandmarkId.leftElbow,
+      PoseLandmarkId.rightElbow,
+    },
+    claimCode: 'postureElbowDriftObserved',
+  ),
+  PostureMetricDefinition(
+    id: PostureMetricId.neckProxy,
+    minimumVisibility: 0.55,
+    window: const Duration(milliseconds: 500),
+    confidenceFormula: '1 - min(1, absolute mean normalized landmark drift)',
+    requiredCapability: PostureCapability.poseTracking,
+    requiredPoseLandmarkIds: <PoseLandmarkId>{PoseLandmarkId.neckReference},
+    claimCode: 'postureNeckProxyShiftedVsBaseline',
+  ),
+]);

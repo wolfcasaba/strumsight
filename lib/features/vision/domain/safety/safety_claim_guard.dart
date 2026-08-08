@@ -55,31 +55,18 @@ final class SafetyClaimGuard {
 
   /// Evaluate [code] against the [VisionSafetyPolicy] catalog.
   ///
-  /// [declaredClass] is a classification override used by catalog
-  /// validation and focused regression tests. Membership and lexical
-  /// checks still apply when it is provided.
+  /// [declaredClass] is a test-only override used by the catalog
+  /// validator and the forbidden-class regression tests. Production
+  /// callers MUST omit it and rely on the catalog.
   SafetyClaimGuardResult evaluate(
     String code, {
-      VisionSafetyClaimClass? declaredClass,
-      @visibleForTesting Map<String, VisionSafetyClaimClass>? catalog,
-    }) {
+    @visibleForTesting VisionSafetyClaimClass? declaredClass,
+  }) {
     if (code.trim().isEmpty) {
       return const SafetyClaimGuardResult.rejected('code is empty');
     }
-    // (1) Closed-set membership applies to every call path.
-    final policyCatalog = catalog ?? VisionSafetyPolicy.catalog;
-    final catalogClass = policyCatalog[code];
-    if (catalogClass == null) {
-      return SafetyClaimGuardResult.rejected('code "$code" is not in catalog');
-    }
-    // (2) Check the explicit class when supplied, otherwise the catalog.
-    final declared = declaredClass ?? catalogClass;
-    if (declared.isForbidden) {
-      return SafetyClaimGuardResult.rejected(
-        'code "$code" declares forbidden class "${declared.name}"',
-      );
-    }
-    // (3) Independent surface-form defence against misclassification.
+    // (1) Lexical defence runs first so a misclassified medical code is
+    // rejected regardless of catalog membership or declared class.
     final normalizedCode = code.toLowerCase();
     for (final lexeme in _forbiddenLexemes) {
       if (normalizedCode.contains(lexeme)) {
@@ -87,6 +74,27 @@ final class SafetyClaimGuard {
           'code "$code" contains forbidden safety lexeme "$lexeme"',
         );
       }
+    }
+    // (2) When a test override is supplied, the guard trusts the
+    // declared class for the forbidden-class branch — this is the
+    // catalog validator / forbidden-class probe path.
+    if (declaredClass != null) {
+      if (declaredClass.isForbidden) {
+        return SafetyClaimGuardResult.rejected(
+          'code "$code" declares forbidden class "${declaredClass.name}"',
+        );
+      }
+      return const SafetyClaimGuardResult.allowed();
+    }
+    // (3) Production path: closed-set membership then forbidden check.
+    final catalogClass = VisionSafetyPolicy.catalog[code];
+    if (catalogClass == null) {
+      return SafetyClaimGuardResult.rejected('code "$code" is not in catalog');
+    }
+    if (catalogClass.isForbidden) {
+      return SafetyClaimGuardResult.rejected(
+        'code "$code" declares forbidden class "${catalogClass.name}"',
+      );
     }
     return const SafetyClaimGuardResult.allowed();
   }

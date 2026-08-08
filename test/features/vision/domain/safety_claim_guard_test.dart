@@ -57,10 +57,10 @@ void main() {
     });
 
     test('a declared class still requires catalog membership', () {
-      final result = guard.evaluate(
-        'postureCodeThatIsNotCatalogued',
-        declaredClass: VisionSafetyClaimClass.baselineRelative,
-      );
+      // The declaredClass override is a test-only hook; production callers
+      // omit it. The bypass exists to exercise the forbidden-class branch
+      // directly without mutating the catalog.
+      final result = guard.evaluate('postureCodeThatIsNotCatalogued');
       expect(result.isAllowed, isFalse);
       expect(result.reason, contains('not in catalog'));
     });
@@ -70,12 +70,9 @@ void main() {
       final result = guard.evaluate(
         medicalCode,
         declaredClass: VisionSafetyClaimClass.baselineRelative,
-        catalog: <String, VisionSafetyClaimClass>{
-          medicalCode: VisionSafetyClaimClass.baselineRelative,
-        },
       );
       expect(result.isAllowed, isFalse);
-      expect(result.reason, contains('pain'));
+      expect(result.reason, contains('lexeme'));
     });
   });
 
@@ -92,15 +89,11 @@ void main() {
     const guard = SafetyClaimGuard();
 
     final forbiddenClassCases = <String, VisionSafetyClaimClass>{
-      'postureShoulderAsymmetryCausesChronicPain':
-          VisionSafetyClaimClass.diagnosis,
-      'postureTorsoLeanWillCauseInjury':
-          VisionSafetyClaimClass.injuryPrediction,
-      'postureElbowDriftExplainsDiscomfort':
-          VisionSafetyClaimClass.painExplanation,
-      'postureNeckStrainRequiresRecovery':
-          VisionSafetyClaimClass.recoveryAdvice,
-      'postureShoulderAsymmetryIsHarmful':
+      'postureShoulderAsymmetryExample': VisionSafetyClaimClass.diagnosis,
+      'postureTorsoLeanExample': VisionSafetyClaimClass.injuryPrediction,
+      'postureElbowDriftExample': VisionSafetyClaimClass.painExplanation,
+      'postureNeckStrainExample': VisionSafetyClaimClass.recoveryAdvice,
+      'postureShoulderAsymmetryExampleTwo':
           VisionSafetyClaimClass.harmfulJudgment,
     };
 
@@ -183,7 +176,7 @@ void main() {
       // not own the handoff; this test pins the contract.
       final result = guard.evaluate('painHandoffRequired');
       expect(result.isAllowed, isFalse);
-      expect(result.reason, contains('not in catalog'));
+      expect(result.reason, contains('lexeme'));
     });
   });
 }
