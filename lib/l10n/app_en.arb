@@ -1357,5 +1357,6 @@
   "practiceVisionDimensionTitle": "Visual technique",
   "practiceVisionDimensionGood": "Visual observation complete.",
   "practiceVisionDimensionDegraded": "Partial visual observation. Adjust the camera setup for complete feedback.",
-  "practiceVisionDimensionUnavailable": "Visual observation was unavailable. Audio practice is unchanged."
+  "practiceVisionDimensionUnavailable": "Visual observation was unavailable. Audio practice is unchanged.",
+  "songVisionLoopQualityUnavailable": "Visual quality was unavailable for this loop. Audio scoring is unchanged."
 }

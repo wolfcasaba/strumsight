@@ -1280,5 +1280,6 @@
   "practiceVisionDimensionTitle": "Vizuális technika",
   "practiceVisionDimensionGood": "A vizuális megfigyelés teljes.",
   "practiceVisionDimensionDegraded": "Részleges vizuális megfigyelés. A teljes visszajelzéshez igazítsd a kamera beállítását.",
-  "practiceVisionDimensionUnavailable": "A vizuális megfigyelés nem volt elérhető. A hangalapú gyakorlás változatlan."
+  "practiceVisionDimensionUnavailable": "A vizuális megfigyelés nem volt elérhető. A hangalapú gyakorlás változatlan.",
+  "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan."
 }
