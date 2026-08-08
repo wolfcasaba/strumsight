@@ -45,7 +45,6 @@ import 'package:strumsight/features/vision/domain/landmarks/pose_landmarks.dart'
 import 'package:strumsight/features/vision/domain/landmarks/posture_baseline.dart';
 import 'package:strumsight/features/vision/domain/quality/vision_frame_quality.dart';
 
-
 const _kConfig = PostureBaselineConfig(
   minimumVisibleDuration: Duration(seconds: 3),
   minimumSampleCount: 2,
