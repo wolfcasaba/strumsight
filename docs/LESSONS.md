@@ -6257,3 +6257,71 @@ feladata explicit rá kérdezni: „a bemeneti kontraktus (itt:
 átfogalmazása a ténylegesen elérhető jelre, vagy a mezőt/leírást
 explicit „ezen a rétegen nem kiértékelt" jelöléssel ellátni — sosem a
 forrás-mintázat szövegének változtatás nélküli átvétele.
+
+## L182 — Egy diffhez logikailag kapcsolhatatlan CI-piros nem automatikus rerun-ok, hanem a pristine `main`-en izoláltan reprodukálva igazolandó (E05-R21, Full Gate, 2026-08-08)
+
+**Mért incidens.** Az E05-R21 (`lib/features/vision/domain/sync/` +
+`application/sync_calibration_controller.dart`, kizárólag vision-réteg)
+Full Gate futása pirosra váltott: `test/features/song_trainer/application/
+import/song_import_controller_test.dart: cancellation during import closes
+the workspace without a record` — `Expected: empty`, `Actual:
+[_Directory: '/tmp/song-import-controller-<rnd>/import-1']`. A kör diffje
+nem érint semmit a `song_trainer`, a fájlrendszeri import-workspace vagy
+bármely megosztott async/IO primitív alatt — nincs mérhető ok-okozati út.
+
+**Mit NEM tettem meg elsőre.** Nem fogadtam el a "nyilván nem az én
+kódom" következtetést bizonyíték nélkül, és nem indítottam azonnal
+`gh run rerun`-t abban a reményben, hogy másodjára zöld lesz. Előbb a
+gyanút MÉRTEM: a pontos tesztet 5×, izoláltan (`flutter test
+test/.../song_import_controller_test.dart`) lefuttattam egy PRISTINE
+`origin/main` friss klónjában (nem az én branch-emen) — 5/5 zöld. A
+teszt maga (77-93. sor) valódi fájlrendszeri I/O-t végez `cancel()`
+után egy `await harness.workspaceRoot.list().toList()` asserttel — ez
+pontosan az a mintázat (async cancel + valós FS cleanup timing), ami a
+teljes suite egyidejű terhelése alatt (3449 teszt párhuzamosan) máshogy
+ütemeződik, mint elszigetelt futásban.
+
+**Csak EZUTÁN** futtattam `gh run rerun --failed`-et — ami zöldre váltott,
+megerősítve az izolált méréssel már alátámasztott diagnózist (load-érzékeny,
+kör-független, előzetesen létező flake), nem helyettesítve azt.
+
+**Általánosítható elv.** Egy CI-piros, aminek a hibázó tesztje és a kör
+diffje között NINCS mérhető import-/hívási-lánc kapcsolat, két külön
+lépést igényel, ebben a sorrendben: (1) az ok-okozati lehetetlenséget
+konkrétan indokold (fájllista, import-gráf), (2) a gyanút a PRISTINE
+`main`-en, izoláltan reprodukáld (vagy a hiányát mérd) — a puszta
+rerun önmagában NEM bizonyíték, csak egy második mintavétel egy
+ismeretlen alaparányú eloszlásból. A H5 „CI kétszer piros" szabály erre
+az esetre nem vonatkozik (a második futás oka nem ismeretlen), de a
+rerun-t megelőző mérés nélkül a halt/rerun döntés bemondás lett volna.
+
+## L183 — A `gh run watch` mindig-előtérben szabálya a Bash-eszköz saját `run_in_background` kapcsolójával is megsérthető, nem csak `setsid`-del (E05-R21, önkorrekció, 2026-08-08)
+
+**Mért közel-hiba.** A kör-pipeline prompt 0.1. szakasza kimondja: „A `gh
+run watch` is mindig előtérben fusson" — eddig ezt kizárólag a `setsid`-es
+leválasztás kontextusában olvastam. A CI-dispatch lépésnél két `gh run
+watch` hívást a Bash-eszköz OWN `run_in_background: true` paraméterével
+indítottam (nem `setsid`-del, hanem a hívó eszköz saját háttér-mechanizmusával),
+majd — mivel a válaszom úgy tűnt, nincs más előtérben futó munkám — egy
+`ScheduleWakeup`-ot ütemeztem be `<<autonomous-loop-dynamic>>` prompttal,
+ami egy MÁSIK mechanizmus (`/loop` dinamikus mód) a jelen `claude --bg`
+pipeline-sessionhöz, nem alkalmazható rá. Mielőtt a válasz ténylegesen
+lezárult volna, felismertem a hibát: a session §0.1 szerint akkor hal meg,
+ha „nincs előtérben futó munkád" — egy Bash-eszközön belüli
+`run_in_background` task NEM ugyanaz, mint egy ténylegesen az orchestrátor
+folyamatához tartozó előtér-blokkoló hívás, és a task-notification
+mechanizmus nem garantáltan éli túl, ha a KÜLSŐ `claude --bg` session időközben
+megszűnik.
+
+**Javítás:** a `ScheduleWakeup`-ot azonnal visszavontam
+(`stop: true`), majd mindkét `gh run watch` hívást ÚJRA, közönséges
+(nem `run_in_background`) Bash-hívásként futtattam le, blokkolva a választ
+a tényleges befejezésükig.
+
+**Általánosítható elv.** A „X mindig előtérben fusson" szabály a HÍVÓ
+ESZKÖZ paraméterére vonatkozik (Bash `run_in_background`, nem csak a shell
+szintű `setsid`/`&`), és a `ScheduleWakeup` kizárólag a `/loop` dinamikus
+módhoz tartozik — egy `claude --bg` pipeline-session öngyilkos-kockázatát
+NEM ez a mechanizmus kezeli (azt a leválaszt-és-előtérben-várj minta
+kezeli). A pre-flight §0.1 szabályt szó szerint, a konkrét TOOL-paraméterre
+vetítve kell olvasni, nem csak a shell-szintű mintára.

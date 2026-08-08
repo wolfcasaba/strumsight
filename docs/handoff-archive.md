@@ -6,6 +6,98 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R20 — Posture metric engine and safety claim guard, teljes részletes történet (2026-08-08)
+
+Baseline-relatív, confidence-aware proxy-metrika a testtartásra —
+**shoulder asymmetry**, **torso lean**, **elbow drift**, **neck proxy**
+(mind az R14 `PostureObservation` fölött, a jelenlét/hiány-alapú R8
+kapuval, sosem az `observation.state` mezőre hagyatkozva), és egy
+fail-closed **safety claim guard** (`VisionSafetyPolicy` +
+`SafetyClaimGuard`): zárt claim-kód katalógus, osztály-alapú allowlist,
+plusz egy javító körben hozzáadott lexikai másodvédvonal, ami a kód
+SZÖVEGÉT is vizsgálja, függetlenül a deklarált osztálytól.
+`lib/features/vision/domain/metrics/` — `posture_metrics.dart`
+(`PostureMetricId`, `PostureCapability`, `PostureMetricDefinition` — az
+R18/R19 `MetricObservation` literálisan újrahasznált, a
+`MetricDefinition` MINTÁJA követve, nem importálva), `posture_metric_engine.dart`.
+`lib/features/vision/domain/safety/` — `vision_safety_policy.dart`,
+`safety_claim_guard.dart`. **ÚJ ADR: [0188](adr/0188-vision-safety-claim-guard.md)**
+a safety-claim-guard döntésre (a hat alapozó vision-ADR egyike sem
+szabályozza a claim-TARTALOM kérdését; a sibling AI Tutor epic ADR 0177-je
+a legrelevánsabb precedens, de a brief batch-írásakor, 2026-08-05, még
+nem létezett — 2026-08-06-án fogadták el). A posture-metrika-számítás fél
+**nem** kap új ADR-t — ADR 0179 végrehajtása, ugyanaz a mintázat, mint
+E05-R18/R19. Implementer **MiniMax M3** (kezdeti implementáció + **egy
+javító kör**), orchestrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens (`risk = "high"`, brief §11 kötelező). PR
+[#193](https://github.com/wolfcasaba/strumsight/pull/193), squash `be38e11`.
+
+**Pre-flight (§0.0, kilenc mért pont, egy a javító kör ELŐTT felvéve) +
+egy javító kör, két lezárt MAJOR — mind a review (saját + dedikált
+security-reviewer) friss GitHub-klónon függetlenül futtatott gate-jével
+ÉS eldobható mutáció-próbákkal igazolva, nem az implementer önjelentésére
+hagyatkozva:**
+
+1. **Pre-flight R1/R2 — ADR-helyzet szétválasztva.** A fejléc eredeti
+   „0162 bővítése" az E05-R01 batch-írás idején fenntartott,
+   átszámozás előtti placeholder volt (0162→0179, harmadszor mérve
+   ugyanabból a mintából, E05-R09/R16/R18 után). A posture-metrika-fél
+   ADR 0179 végrehajtása; a safety-claim-guard fél viszont ÚJ döntés
+   (ADR 0188) — a hat alapozó vision-ADR egyike sem fedi a
+   claim-tartalom kérdését, és a projekt konvenciója (ADR 0177 a
+   tutor-oldalon) szerint ez a döntés-osztály önálló ADR-t kap.
+2. **Pre-flight R8 — az E05-R14 security-review egy explicit, erre a
+   körre hagyott follow-upját a brief szövege nem tartalmazta.**
+   `PostureObservation.state` MINDIG `good`, ha akár egyetlen landmark
+   közös a baseline-nal (mérve: `comparedLandmarkCount=1, maxDrift=4.257`
+   mellett is `good`) — az E05-R14 security-review MINOR-2 leletje ezt
+   kifejezetten E05-R20-ra hagyta (ADR 0186 Döntés 5), de a batch-írt
+   brief szövege erről semmit nem mondott. A pre-flight ezt §5 pont
+   7-ként rögzítette KÖTELEZŐ architekturális korlátként — a
+   `PostureMetricEngine` sosem `observation.state`-re, hanem
+   metrikánként a szükséges landmark-ID-k jelenlétére
+   (`driftFor(id) != null`) gatel.
+3. **F1 MAJOR (security-reviewer) — a safety guard a claim-kód
+   DEKLARÁLT OSZTÁLYÁT ellenőrizte, nem a SZEMANTIKÁJÁT.** Egy
+   orvosi tartalmú, de tévesen ALLOWED osztályba deklarált kód
+   (`postureShoulderAsymmetryMayCauseLongTermPain` `baselineRelative`
+   alatt) a teljes 39-tesztes suite-ot zölden hagyta. **Javítás:** egy
+   második, a kód STRING-jén futó, a deklarált osztálytól független
+   lexikai védvonal (10 zárt lexéma), ami MINDIG elsőként fut.
+4. **F2 MAJOR (saját lelet) — `confidenceFormula` dokumentált állítása
+   nem egyezett a tényleges számítással, és a §6 „visibility-mátrix"
+   kritérium valójában nem volt tesztelve.** Mérve (két független
+   próba, saját + security-reviewer): azonos landmark-visibility mellett
+   a `confidence` KIZÁRÓLAG a drift nagyságától függött, nem a
+   visibility-től. **Javítás:** a `confidenceFormula` mező most a
+   tényleges számítást írja le; a §6 kritérium egy pre-fix-round
+   orchestrátor-addendummal (§0.0 R9) dokumentáltan a már meglévő R8
+   jelenlét/hiány-kapura szűkült (a `PostureObservation` R14-kontraktja
+   nem exportál graduált visibility-t).
+
+Mindkét MAJOR a fix-round UTÁN saját, friss GitHub-klónon (`/tmp/review-e05-r20-fix1`)
+újra-ellenőrizve — a kódot közvetlenül olvasva, nem csak a §10 handoffra
+hagyatkozva. Zöld kapu (exact-SHA `7ad5c49`): Full Gate
+[31242600233](https://github.com/wolfcasaba/strumsight/actions/runs/31242600233)
+**success** + Router CI
+[31242629823](https://github.com/wolfcasaba/strumsight/actions/runs/31242629823)
+**success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
+utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+trigger-útvonalán sem). Post-merge gate a friss `main`-en (`be38e11`) is
+zöld, 334/334 teszt.
+
+Lecke: **L179** (L175 EGYSZER MÁR dokumentálta a `git worktree add`
+csapdát, mégis megismétlődött két körrel később, mert egyetlen skill
+sem hivatkozott rá — a `sdd-round-driver` skill §3 most explicit
+kimondja: MINDIG `git clone`, SOHA `git worktree add`), **L180** (egy
+„ellenőrizd az OSZTÁLYT" allowlist nem helyettesíti az „ellenőrizd a
+TARTALMAT" védelmet — a valódi-sértés próba tervezésekor a kód egy
+MÁSIK, ENGEDÉLYEZETT osztályba rosszul deklarálva a valódi teszt, nem a
+saját tiltott osztályába deklarálva), **L181** (egy `MetricDefinition`-
+mintázat mechanikus átvétele egy MÁS adatforrású rétegre a mezők
+SZEMANTIKÁJÁT is átviszi, még ha az adatforrás nem is támogatja azt —
+részletek `docs/LESSONS.md`).
+
 ## E05-R19 — Picking-hand stroke metric engine, teljes részletes történet (2026-08-08)
 
 Hét megfigyelhető, confidence-aware proxy-metrika pure Dart implementációja
