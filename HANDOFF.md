@@ -4,101 +4,86 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R28 MERGED — Persistence, privacy control és törlés:** verziózott,
-> privacy-safe helyi tárolás a befejezett Vision-sessionökhöz, teljes
-> felhasználói kontroll a törlés fölött. `VisionSessionCodec`
-> (`lib/features/vision/data/persistence/vision_session_codec.dart`) —
-> explicit, kanonikus kulcssorrendű DTO a `VisionSessionResult`-ból: session
-> id/időzítés/végzés-ok, `quality` (kizárólag enumok, nincs nyers per-frame
-> mérték), `calibrationState`, insightonként kód/policyVersion/evidenceId-k/
-> confidence/priority/direction/**capability** (levezetve
-> `FeedbackPolicies.catalog`-ból), **modelVersions** (modelId→verzió map,
-> ld. lent), `observedFrameCount` — **nincs** kép, URI, pixel, koordináta
-> vagy landmark-idősor. `VisionSessionRepository`
-> (`.../vision_session_repository.dart`) — a meglévő `JsonCollectionStore`
-> konténer fölött (ugyanaz, mint a `practiceHistoryV2`/`librarySessions`),
-> `maxItems=100`, per-rekord karantén KÉSZ mechanizmussal; `deleteSession`/
-> `deleteAllVisionData` **nyers** `KeyValueStore.remove()`-ot hív (tényleges
-> törlés, nem soft-delete, a `.corrupt` árnyékkulcsokat is beleértve).
-> `VisionExport` — ugyanazt a minimalizált DTO-t exportálja, plusz a
-> séma-verziót. `VisionPrivacyScreen`
-> (`lib/features/settings/screens/vision_privacy_screen.dart`) — standalone
-> privacy panel (scope-lista, session-listázás+törlés, JSON-export,
-> destruktív megerősítést kérő delete-all); route/settings-wiring
-> szándékosan nincs ebben a körben.
+> (E05-R29 MERGED — Device tier, performance és thermal hardening:** mérhető
+> **device tier**, tierenkénti profilok, freshness/dropped-frame monitor,
+> thermal adapter és lépcsőzetes, audio-elsőbbségű degradáció a Vision
+> feature-höz. `VisionDeviceTierClassifier`
+> (`lib/features/vision/domain/performance/vision_device_tier.dart`) —
+> determinisztikus frame-feldolgozási-idő → tier leképezés (`≤33ms→flagship`,
+> `34–66ms→mid`, `≥67ms→basic`), a MEGLÉVŐ `VisionDeviceTier{basic,mid,
+> flagship}` enumra építve (importálva a `hand_landmark_provider.dart`-ból,
+> **nem** redefiniálva — ld. lent), plusz tierenkénti profil (hand FPS/pose
+> cadence/input felbontás/overlay FPS). `VisionDegradationPolicy`
+> (`.../application/vision_degradation_policy.dart`) — **hétlépcsős**,
+> hiszterézisű döntés ADR 0182 Döntés 3 sorrendjében (overlay-frekvencia ↓ →
+> pose-pipeline ritkítás → hand-pipeline FPS ↓ → model-input felbontás ↓ →
+> egy kéz követése → csak quality-monitor → vision leállítása, audio
+> megtartása), belépési küszöbök (Hand/Pose FPS 12/10/5/8/6/4, audio-latency
+> 15 ms) a már publikált `docs/manual-testing/vision-performance-benchmark.md`
+> §2.7-ből újrafelhasználva, kilépési küszöbök (1 FPS/3 ms rés) ÚJ, dokumentált
+> munka, legfeljebb egy állapotátmenet kiértékelésenként. `ThermalStateAdapter`
+> (`.../data/performance/thermal_state_adapter.dart`) — platform-jel esetén azt
+> használja, egyébként determinisztikus, 0–100-ra korlátos dropped-frame/
+> freshness/feldolgozási-idő heurisztika, a forrás (`platform`/`heuristic`)
+> mindig jelölve. `VisionPerformanceSummary`
+> (`.../domain/performance/vision_performance_summary.dart`) — privacy-safe
+> session-aggregátum (tier, alkalmazott lépcsők, dropped-frame arány,
+> freshness eloszlás, degradáció-időbélyegek, thermal-forrás) + explicit
+> `unavailable` gyártó a nem-támogatott benchmark esetére. Hívó/landmark-
+> provider-wiring szándékosan nincs ebben a körben (jövőbeli kör dolga).
 >
-> **Két javító kör, mindkettő a review saját, független újra-ellenőrzésén
-> bukott el (nem a gate pirosán) — a zöld gate mindvégig zöld maradt:**
-> **F1 (MAJOR):** az eredeti implementáció kihagyta a model-verziót, holott
-> [ADR 0183](docs/adr/0183-vision-no-raw-frame-persistence.md) Döntés 2
-> explicit ELUTASÍTJA a kihagyását, és a brief §3 is felsorolja. Gyökérok:
-> a `VisionSessionResult` (E05-R24, LEZÁRT kör, e kör tiltott zónája) sosem
-> hordozott model-verziót. Javító kör #1 a `modelVersions` mezőt egy
-> injektált, OPCIONÁLIS `VisionModelManifestReader`-en (alapértelmezés:
-> `FileVisionModelManifestReader()`) keresztül pótolta. **F2 (MAJOR, a
-> javító kör #1 SAJÁT mellékhatása):** a reviewer mérte, hogy
-> `FileVisionModelManifestReader` `Directory.current`-hez relatív, nyers
-> `dart:io` fájlolvasással keres egy fájlt (`assets/ml/model_manifest.json`),
-> ami a `pubspec.yaml` `flutter.assets`-ében SEHOL nincs deklarálva —
-> valódi eszközön SOHA nem oldódna fel, csak a CI/dev környezetben
-> véletlenül, mert a `flutter test` a repo gyökeréből fut. Egyetlen teszt
-> sem gyakorolta az alapértelmezést (mind fake readert injektált), ezért a
-> gate mindvégig zöld maradt. Javító kör #2 a `VisionModelManifestReader`/
-> `dart:io` függőséget TELJESEN kivette a repositoryból; `save()` most
-> **kötelező, explicit** `Map<String, String> modelVersions` paramétert vár
-> (fordítás-idejű garancia, ugyanaz a minta, mint a codec már eddig is
-> használt). Lecke: **L197**, **L198**, **L199**.
+> **Három mért pre-flight-hiba a batch-írt briefben, mind dokumentált §0.0
+> revízióval javítva ÚJ ADR 0196-ban, MIELŐTT bármi dispatch-elődött —
+> zéró javító kör kellett utána:**
+> **(1)** a fejléc/§2/§5 „ADR 0165" hivatkozása nem létező fájlra mutatott; a
+> mért +17 batch-offset (`docs/LESSONS.md` L143/L147) és a tartalmi egyezés
+> [ADR 0182](docs/adr/0182-vision-audio-priority-degradation.md)-re javította
+> (az E05-R26 pre-flightja — [ADR 0193](docs/adr/0193-song-trainer-vision-integration-contract.md)
+> — ugyanezt a hibát ugyanebben a brief-ben már mérte és nyitva hagyta). **(2)**
+> a brief egy ÚJ `VisionDeviceTier(low/mid/high)` típust tervezett — ez egy MÁR
+> LÉTEZŐ, eltérő értékkészletű enummal (`hand_landmark_provider.dart:125`,
+> már a wide `vision/public.dart` barrelen exportálva) ütközött volna
+> (ambiguous export). Javítás: ÚJRAFELHASZNÁLÁS importtal, az ADR 0186/R14
+> „reuse, ne redefine" precedens szerint — ezt a pontos jövőbeli feladatot
+> az E05-R14 brief és az E05-R26 ADR 0193 is előre megnevezte („Kör 29 dolga").
+> **(3)** a brief öt lépcsős degradációs listája ütközött a MÁR ELFOGADOTT
+> ADR 0182 Döntés 3 hét lépcsős sorrendjével és a már publikált benchmark-
+> dokumentum §2.7 konkrét belépési küszöbeivel — javítva a hét lépcsős,
+> újrafelhasznált-küszöbű változatra. Lecke: **L200**, **L201**.
 >
-> **Nincs ÚJ ADR** (a pre-flight §0.0 megerősítette): a brief eredeti „ADR
-> 0161/0166" hivatkozása a mért +17 batch-offset szerint (`docs/LESSONS.md`
-> L143/L147) a MÁR LÉTEZŐ, tartalmilag pontosan illeszkedő
-> [ADR 0178](docs/adr/0178-vision-privacy-by-default.md) (privacy by
-> default) és [ADR 0183](docs/adr/0183-vision-no-raw-frame-persistence.md)
-> (no-raw-frame persistence) ADR-ekre mutat — nem az E05-R27 esete (ahol a
-> hivatkozott szám sosem létezett és a tartalom is genuinely új volt).
-> Implementer **Codex (Terra)** (1 implementációs forduló + **2 javító
-> kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+> Implementer **Codex (Terra)** (1 implementációs forduló, **javító kör
+> nélkül**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
 > **security-reviewer** ágens (`risk = "high"`). PR
-> [#202](https://github.com/wolfcasaba/strumsight/pull/202), squash `a9698557`.
+> [#203](https://github.com/wolfcasaba/strumsight/pull/203), squash `8e7eb6f9`.
 >
-> **Review:** [docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md](docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md)
-> — **APPROVED, 0 nyitott BLOCKER/MAJOR/MINOR 2 javító kör után** (F1+F2
-> mindkettő a reviewer SAJÁT, izolált `/tmp` klónban végzett adversarial
-> mutáció-próbáival megerősítve zárva — nem az implementer önjelentésén). A
-> **dedikált security-review**
-> ([docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md](docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md))
-> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR (ugyanaz a model-verzió
-> tény, más lencséből — privacy-semleges, mert adat HIÁNYA sosem szivárgás;
-> és a wide `vision/public.dart` barrel-importja a privacy-képernyőnek,
-> ugyanaz a MEGLÉVŐ, R10 óta élő precedens), 3 NOTE follow-up.
+> **Review:** [docs/reviews/e05-r29-device-tier-performance-thermal-review.md](docs/reviews/e05-r29-device-tier-performance-thermal-review.md)
+> — **APPROVED, 0 nyitott BLOCKER/MAJOR javító kör nélkül** (1 MINOR — az
+> audio-elsőbbség teszt gyenge proxy valós audio-wiring nélkül, tudatosan
+> halasztva egy jövőbeli integrációs körre —, 4 NOTE). A reviewer SAJÁT,
+> izolált `/tmp` klónokban független gate-újrafuttatással (580/580 teszt
+> zöld), a tier-határok és a hétlépcsős küszöbök `python3 -c`
+> újraszámolásával, az implementer valódi-sértés próbájának SAJÁT
+> megismétlésével (11/17 teszt pirosra vált, visszaállítva) és SAJÁT,
+> eldobható hiszterézis-próbákkal erősítette meg. A **dedikált
+> security-review**
+> ([docs/reviews/e05-r29-device-tier-performance-thermal-security.md](docs/reviews/e05-r29-device-tier-performance-thermal-security.md))
+> — **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 3 NOTE follow-up (nincs
+> hálózat/storage/plugin/logging felszín — tiszta in-memory domain+
+> application addíció).
 >
-> **Zöld kapu (exact-SHA `1f769a4c`, a javító kör #2 utáni tip):** Full Gate
-> [31276986778](https://github.com/wolfcasaba/strumsight/actions/runs/31276986778)
+> **Zöld kapu (exact-SHA `6746de24`, a review-commitok utáni tip):** Full Gate
+> [31279942080](https://github.com/wolfcasaba/strumsight/actions/runs/31279942080)
 > **success** + Router CI
-> [31276984787](https://github.com/wolfcasaba/strumsight/actions/runs/31276984787)
+> [31279934524](https://github.com/wolfcasaba/strumsight/actions/runs/31279934524)
 > **success**.
->
-> ## ✅ E05-R27 KÉSZ — AI Tutor és Analysis vision evidence adapterek (2026-08-08)
->
-> **E05-R27** MERGED (PR [#201](https://github.com/wolfcasaba/strumsight/pull/201),
-> squash `7e43019`; implementer **Codex (Terra)** (1 implementációs forduló
-> + 1 javító kör), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> security-reviewer). Teljes részletes történet:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ÚJ ADR
-> [0194](docs/adr/0194-tutor-analysis-vision-evidence-adapters.md).**
-> Review: [docs/reviews/e05-r27-tutor-analysis-vision-adapters-review.md](docs/reviews/e05-r27-tutor-analysis-vision-adapters-review.md)
-> + [security](docs/reviews/e05-r27-tutor-analysis-vision-adapters-security.md)
-> — **APPROVED 1 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR, 4 NOTE
-> follow-up. Lecke: **L194**, **L195**, **L196**.
 >
 > ## ✅ E05-R28 KÉSZ — Vision persistence, privacy control és törlés (2026-08-08)
 >
 > **E05-R28** MERGED (PR [#202](https://github.com/wolfcasaba/strumsight/pull/202),
 > squash `a9698557`; implementer **Codex (Terra)** (1 implementációs forduló
 > + **2 javító kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> security-reviewer). Lásd a fenti „Last updated" blokk a teljes
-> pre-flight/review/security történetért — ez a szakasz csak a rövid
-> hivatkozási pont a korábbi körök mintája szerint. **Nincs ÚJ ADR**
+> security-reviewer). Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **Nincs ÚJ ADR**
 > (a pre-flight §0.0 a stale „0161/0166" hivatkozást a MÁR LÉTEZŐ
 > [ADR 0178](docs/adr/0178-vision-privacy-by-default.md)/
 > [ADR 0183](docs/adr/0183-vision-no-raw-frame-persistence.md)-ra javította).
@@ -107,11 +92,26 @@
 > — **APPROVED 2 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR, 3 NOTE
 > follow-up. Lecke: **L197**, **L198**, **L199**.
 >
-> **Következő:** `docs/execution/pipeline-queue.tsv` szerint E05-R29
-> ("Device tier, performance és thermal hardening",
-> `docs/rounds/e05-r29-device-tier-performance-thermal.md`,
-> `pending`) a lánc következő tagja; a pontos indítás a pipeline driver
-> dolga.
+> ## ✅ E05-R29 KÉSZ — Device tier, performance és thermal hardening (2026-08-08)
+>
+> **E05-R29** MERGED (PR [#203](https://github.com/wolfcasaba/strumsight/pull/203),
+> squash `8e7eb6f9`; implementer **Codex (Terra)** (1 implementációs forduló,
+> javító kör nélkül), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+> security-reviewer). Lásd a fenti „Last updated" blokk a teljes
+> pre-flight/review/security történetért — ez a szakasz csak a rövid
+> hivatkozási pont a korábbi körök mintája szerint. **ÚJ ADR
+> [0196](docs/adr/0196-vision-device-tier-performance-and-thermal-contract.md)**
+> (a pre-flight írta — nem volt előre kiosztott szám). Review:
+> [docs/reviews/e05-r29-device-tier-performance-thermal-review.md](docs/reviews/e05-r29-device-tier-performance-thermal-review.md)
+> + [security](docs/reviews/e05-r29-device-tier-performance-thermal-security.md)
+> — **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1 MINOR, 4 NOTE
+> follow-up. Lecke: **L200**, **L201**.
+>
+> **Következő:** `docs/execution/pipeline-queue.tsv` szerint E05-R30
+> ("Dataset, evaluation, CI és Epic lezárás",
+> `docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md`,
+> `pending`) a lánc következő tagja — az Epic 5 ZÁRÓKÖRE; a pontos indítás a
+> pipeline driver dolga.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -122,11 +122,11 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R28 zárása): E05-R26 rövid bannere törölve (a
-> részletes E05-R26 történet már korábban archiválva volt); E05-R27
+> Mért diéta: 2026-08-08 (E05-R29 zárása): E05-R27 rövid bannere törölve (a
+> részletes E05-R27 történet már korábban archiválva volt); E05-R28
 > részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
 > bannere megmaradt/frissült (a „lásd fent" hivatkozás javítva, mivel a
-> részlet már nem a fejlécben él); E05-R28 részletes narratívája + rövid
+> részlet már nem a fejlécben él); E05-R29 részletes narratívája + rövid
 > bannere felkerült.
 
 ## 1. Current release state
@@ -486,52 +486,48 @@
 
 ## 4. Current branch
 
-`main` @ [PR #202](https://github.com/wolfcasaba/strumsight/pull/202), squash
-`a9698557` (E05-R28, Vision persistence, privacy control és törlés). Pure
-Dart data+domain+presentation+teszt+doksi diff → Full Gate
-[31276986778](https://github.com/wolfcasaba/strumsight/actions/runs/31276986778)
-+ Router CI [31276984787](https://github.com/wolfcasaba/strumsight/actions/runs/31276984787)
-**success** az exact merge-előtti tip `1f769a4c`-n (a javító kör #2 utáni
-tip). Review **APPROVED 2 javító kör után** — mindkét lelet a reviewer SAJÁT,
-független re-vizsgálatán bukott el, NEM a gate pirosán (a gate mindvégig
-zöld maradt): **F1 (MAJOR)** — az eredeti implementáció kihagyta a
-model-verziót a perzisztált rekordból, holott [ADR 0183](docs/adr/0183-vision-no-raw-frame-persistence.md)
-Döntés 2 explicit elutasítja a kihagyását és a brief §3 is felsorolja;
-javító kör #1 pótolta egy injektált, OPCIONÁLIS `VisionModelManifestReader`
-(alapértelmezés `FileVisionModelManifestReader()`) útján. **F2 (MAJOR, a
-javító kör #1 SAJÁT mellékhatása)** — a reviewer mérte, hogy ez az
-alapértelmezés `Directory.current`-hez relatív, nyers `dart:io`
-fájlolvasással keres egy, a `pubspec.yaml` `flutter.assets`-ében SEHOL nem
-deklarált fájlt: valódi eszközön SOHA nem oldódna fel, csak a CI/dev
-környezetben véletlenül (a `flutter test` a repo gyökeréből fut); minden
-teszt fake readert injektált, egy sem gyakorolta az alapértelmezést, ezért
-a gate ezt strukturálisan nem is kaphatta volna el. Javító kör #2 a
-`VisionModelManifestReader`/`dart:io` függőséget teljesen kivette a
-repositoryból — `save()` most kötelező, explicit `modelVersions` mapet vár
-(fordítás-idejű garancia). Mindkét leletet a reviewer SAJÁT, izolált `/tmp`
-klónban végzett adversarial mutáció-próbákkal (piros→visszaállítva)
-erősítette meg, nem az implementer önjelentésén. A dedikált security-review
-(risk=high) **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR (ugyanaz a
-model-verzió tény más lencséből — privacy-semleges — és a wide
-`vision/public.dart` barrel-import, ugyanaz a MEGLÉVŐ R10 óta élő
-precedens), 3 NOTE follow-up nyitva marad. Az `origin/main` a review alatt
-**többször mozdult** — az orchesztrátor SAJÁT review-jelentés-commitjai
-(`docs/reviews/*.md`), a round branch `allowed_paths`-ával nulla átfedéssel
-—, a PR merge-kor `mergeStateStatus=CLEAN`/`mergeable=MERGEABLE` volt, és
-mindkét CI-t a round branch SAJÁT, végleges `1f769a4c` tipjén dispatch-elve
-ellenőriztem újra a merge előtt (ADR 0086 §2 / H8 szellemének megfelelően,
-konfliktus nélkül). Post-merge gate (`tools/round-gate.sh test/features/vision
-test/features/settings test/app/offline_network_guard_test.dart`) a friss
-`main`-en is zöld mind a 8 lépésre. Lecke: **L197** (egy brief-ben felsorolt
-„mentendő adatkör"-tétel forrás-elérhetőségét a pre-flightban kell kimérni,
-nem csak a nevét ellenőrizni), **L198** (egy opcionális függőség
-alapértelmezése, ami CI/dev környezetben véletlenül feloldódik, de a
-célplatformon nem, gate-tel nem fogható hiba — csak a meglévő analóg
-osztályok mintájával/az asset-deklarációval való összevetéssel), **L199**
-(a `wait-for-round.sh` első terminális jelzése nem mindig végleges — a
-wrapper-processz élete, nem csak a jelzésfájl tartalma, dönti el, hogy a
-kör tényleg véget ért-e).
-_(Történeti product-merge referencia: PR #201 / `7e43019`, E05-R27; PR #200 /
+`main` @ [PR #203](https://github.com/wolfcasaba/strumsight/pull/203), squash
+`8e7eb6f9` (E05-R29, Device tier, performance és thermal hardening). Pure
+Dart domain+application+data+teszt+doksi diff → Full Gate
+[31279942080](https://github.com/wolfcasaba/strumsight/actions/runs/31279942080)
++ Router CI [31279934524](https://github.com/wolfcasaba/strumsight/actions/runs/31279934524)
+**success** az exact merge-előtti tip `6746de24`-n (a két review-commit
+utáni tip). Review **APPROVED javító kör nélkül** — a pre-flight (ADR 0196)
+mind a három mért brief-hibát (ADR-szám, `VisionDeviceTier` név-ütközés,
+öt→hét lépcsős degradációs lánc) a dispatch ELŐTT javította, ezért az
+implementer első fordulója egyből zöld gate-tel és nulla nyitott
+BLOCKER/MAJOR lelettel zárt. A reviewer SAJÁT, két izolált `/tmp` klónban
+(egy a gate-újrafuttatásra, egy a mutáció-próbákra, hogy ne fussanak
+egymásba) mérte újra a kört: `tools/round-gate.sh test/features/vision` →
+**580/580 teszt zöld**; a tier-határokat (33/66 ms) és a hétlépcsős
+belépési küszöböket (12/10/5/8/6/4 FPS, 15 ms audio) `python3 -c`-vel
+függetlenül újraszámolta és a benchmark-dokumentum §2.7 táblájával
+összevetette; az implementer valódi-sértés próbáját (lépcső-átugrás →
+piros) SAJÁT második klónban megismételte (11/17 teszt bukott, egyezik az
+önjelentéssel), majd SAJÁT, eldobható hiszterézis-próbákat írt (degradál→
+dead-band→degradál ciklus, egylépéses-visszaállás kényszerítése) — mindkettő
+zöld maradt a változatlan kódon. 1 MINOR (F1 — az „audio pressure changes
+only the vision decision" teszt gyenge proxy, mert nincs valós
+audio-pipeline wiring ebben a körben; tudatosan halasztva egy jövőbeli
+integrációs körre, ADR 0196 Döntés 5), 4 NOTE (getter-névadás, domain→data
+import iránya — gépi szabállyal igazoltan nem sérti a `sharedDomainMustRemainFrameworkIndependent`
+kört, mert az csak `core/music/`/`core/audio/codec/`/`features/practice/domain/`-t
+fedi —, egy közvetett tesztelésű `ArgumentError`-ág, egy tömörített
+ADR-idézet-hivatkozás pontossága). A dedikált security-review (risk=high)
+**PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 3 NOTE (mind előretekintő —
+korlátlan `unavailableReason` string egy jövőbeli sinkhez, release-stripped
+assertek valódi `ArgumentError`-okkal alátámasztva, ugyanaz a domain→data
+import más lencséből). Az `origin/main` a dispatch és a merge között
+**nem mozdult** (`9b9dccc9` mindvégig), rebase nem kellett (H8 tiszta).
+Post-merge gate (`tools/round-gate.sh test/features/vision`) a friss
+`main`-en is zöld. Lecke: **L200** (egy batch-brief tervezett ÚJ típusneve
+ütközhet egy már létező, eltérő szemantikájú szimbólummal — a pre-flight
+grep-je a tervezett nevekre is terjedjen ki), **L201** (egy brief saját
+prózai újra-előadása egy már elfogadott ADR kötött döntéséről driftelhet az
+ADR forrásszövegétől — a pre-flight az ADR ÉS a belőle levezetett dokumentum
+ellen mérjen, ne csak a brief belső konzisztenciáját).
+_(Történeti product-merge referencia: PR #202 / `a9698557`, E05-R28; PR #201 /
+`7e43019`, E05-R27; PR #200 /
 `242cccb`, E05-R26; PR #199 /
 `9b608cf`, E05-R25; PR #197 /
 `e9257f4`, E05-R24; PR #196 /

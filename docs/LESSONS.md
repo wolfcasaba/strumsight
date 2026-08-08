@@ -6900,3 +6900,107 @@ hívd meg ÚJRA a `wait-for-round.sh`-t (friss baseline-nal, a jelenlegi
 `signalled_at`-tel indulva) — NE a régi `done` kimenetet fogadd el
 véglegesnek. A processz kilépése az igazi terminális jel, a jelzésfájl
 tartalma csak az utolsó ISMERT állapot.
+
+## L200 — Egy batch-írt brief tervezett ÚJ típusneve ütközhet egy már létező, eltérő szemantikájú szimbólummal: a pre-flight grep-je a TERVEZETT nevekre is terjedjen ki, nem csak a hivatkozott meglévőkre (E05-R29, 2026-08-08)
+
+**Mit mértünk.** Az E05-R29 brief (2026-08-05-i batch-írás) a
+`.../domain/performance/vision_device_tier.dart` (ÚJ fájl) tartalmaként egy
+`VisionDeviceTier (low/mid/high)` típust írt elő. A pre-flight grepje
+(`grep -rln "DeviceTier"`) egy MÁR LÉTEZŐ, MÁS értékkészletű szimbólumot
+talált: `enum VisionDeviceTier { basic, mid, flagship }`
+(`lib/features/vision/data/landmarks/hand_landmark_provider.dart:125`),
+amelyet egy KORÁBBI kör (E05-R14, ADR 0186 Döntés — „ÚJRAFELHASZNÁLTAK, nem
+újradefiniáltak") vezetett be, és amely a wide `lib/features/vision/
+public.dart` barrelen keresztül már TELJES fájl-exportként publikus. A
+brief-hivatkozott „ÚJ" típus valójában egy MÁSODIK, azonos nevű enum lett
+volna — ez a `public.dart` barrelen keresztül **ambiguous export** fordítási
+hibát adott volna, amit KIZÁRÓLAG `flutter analyze` kapott volna el, a
+brief-lint (ADR 0171 §4 B/S1–S4 kategóriái) és a scope-audit egyaránt vakok
+rá (egyik sem ismeri a Dart típusnevek névterét). Két FÜGGETLEN korábbi
+forrás már dokumentálta, hogy pontosan EZ a típus EBBEN a körben (R29)
+kap majd „detektort": az E05-R14 brief §0.0 „R5" pontja explicit írja —
+„a cadence a device tier szerint tovább csökkenthető (R29)" —, és az
+E05-R26 pre-flightja (ADR 0193 „Elutasított alternatívák") explicit
+elutasította a valós API-kötést, mert „a `VisionDeviceTier` enum már
+létezik, de detektorja nincs... Kör 29 dolga". A batch-író (aki mindkét
+korábbi brieifet is írta) a saját, korábbi döntését nem vitte át a később
+írt brief szövegébe.
+
+**Miért fontos.** A pipeline-prompt §1 mérési szabálya (1. pont) az
+„elérhetetlen cél-státusz" mintát fedi (egy állapotot, amit egyetlen input
+sem produkál) — ez egy ROKON, de nem azonos hibaosztály: itt nem egy
+állapotgép-élt kell megmérni, hanem egy TERVEZETT, még nem létező
+azonosítót kell összevetni a MEGLÉVŐ kód névterével. A brief-lint és a
+scope-audit egyaránt fájl-ÚTVONAL-szinten dolgoznak (allowed_paths lista),
+nem Dart-szimbólum-szinten — egy `vision_device_tier.dart` (ÚJ, a listán)
+tartalmaként definiált típus névütközését egyik gépi őr sem látja, amíg a
+diff meg nem születik és `flutter analyze` le nem fut. Egy ilyen ütközés a
+dispatch UTÁN, egy teljes implementer-forduló költségén derül ki — vagy,
+rosszabb esetben, ha az implementer véletlenül `hide`/`show`
+kombinátorral elkerüli az exportot anélkül, hogy a KORÁBBI körök által már
+kimondott újrafelhasználási szándékot követné, egy néma, tartalmilag hibás
+párhuzamos típus kerül a kódba, amit a gate zölden enged át.
+
+**Szabály.** Mielőtt egy brief egy „ÚJ" fájlban egy konkrét, névvel
+megnevezett TÍPUST (osztály/enum) ír elő, `grep -rn "<TípusNév>"
+lib/`-tel ellenőrizd, hogy a név MÁR foglalt-e valahol a kódbázisban. Ha
+igen: (a) nézd meg, hivatkozik-e egy KORÁBBI kör brief-je vagy ADR-je
+explicit erre a névre mint „ez a kör detektorát/felhasználóját egy KÉSŐBBI
+kör fogja megírni" — ha igen, ez majdnem biztosan UGYANAZ a típus, amit
+ÚJRA KELL HASZNÁLNI (import, `show` kombinátorral), nem újradefiniálni; (b)
+a §0.0 brief-revízió cserélje ki a tervezett érték-készletet/nevet a
+MEGLÉVŐ szimbólum tényleges tartalmára, és a brief teljes hátralévő
+szövegében (nemcsak a fájllista egy sorában) konzisztensen javítsa a
+hivatkozásokat. Ez a minta [[L143]]/[[L147]] (ADR-szám-blokk avulása) és
+[[L148]] (SDD-modell előrébb tarthat, mint a kód) általánosítása egy
+harmadik felületre: a batch-írt briefek nemcsak SZÁMOKBAN (ADR-sorszám)
+és MEZŐKBEN (domain-modell alak) avulhatnak, hanem TÍPUSNEVEKBEN is, ha egy
+korábbi, ugyanabból a batch-ülésből származó kör időközben lefoglalta azt a
+nevet egy máshol élő, előre-hivatkozott kontraktusnak.
+
+## L201 — Egy brief saját, prózai újra-előadása egy MÁR ELFOGADOTT ADR kötött döntéséről driftelhet az ADR forrásszövegétől: a pre-flight a döntést hordozó számokat/lépéseket az ADR ÉS a belőle már levezetett dokumentum ellen mérje, ne csak a brief belső konzisztenciáját (E05-R29, 2026-08-08)
+
+**Mit mértünk.** Az E05-R29 brief §5 pont 1 („Kötött architekturális
+döntések") a degradációs láncot ÖT lépcsőben sorolta fel (`overlay cadence
+↓ → pose ki → input felbontás ↓ → hand FPS ↓ → vision ki`) és a §6
+acceptance criteria ugyanezt „öt lépcső × (belépési/kilépési küszöb)"-ként
+írta elő. A brief (az ADR-szám javítása UTÁN) helyesen **ADR 0182**-re
+hivatkozott mint a döntés forrására — de az ADR 0182 Döntés 3 szövege
+explicit **HÉT** lépcsőt határoz meg, kötött sorrenddel: *overlay-frekvencia
+↓ → pose-pipeline ritkítás → hand-pipeline FPS ↓ → model-input felbontás ↓ →
+egy kéz követése → csak quality-monitor → vision leállítása (audio
+megtartása)*. A `docs/manual-testing/vision-performance-benchmark.md` §2.7
+tábla (a repóban E05-R01 óta, „ADR 0182 §3" fejléccel) MÁR rögzítette mind a
+hét lépcső nevét ÉS a belépési (entry) FPS-küszöbét (12/10/5/8/6/4) — a
+brief öt lépcsős változata tehát nem csupán az ADR SZÖVEGÉVEL, hanem egy
+MÁR PUBLIKÁLT, konkrét számokat tartalmazó dokumentummal is ütközött.
+
+**Miért fontos.** A brief MAGA konzisztens volt önmagával (a fejléc, a §5 és
+a §6 mind „öt lépcsőt" mondott) — egy tisztán belső-konzisztencia-ellenőrzés
+(pl. „a brief §5 és §6 ugyanazt mondja-e") ezt a hibát NEM kapta volna el,
+mert a hiba nem a brief SAJÁT szövegén belüli ellentmondás, hanem a brief
+és egy KÜLSŐ, már elfogadott forrás közötti drift. Ez azért történhetett
+meg, mert az ADR-hivatkozás maga is javításra szorult (L143/L147 batch-
+eltolás) — a brief eredetileg egy NEM LÉTEZŐ „ADR 0165"-re hivatkozott, és
+amikor a batch-író a lépcsőlistát megírta, valószínűleg egy KORÁBBI,
+kevésbé részletes tervezési állapotot (SDD-vázlat vagy saját emlékezet)
+másolt le, nem az időközben elfogadott ADR 0182 végleges szövegét.
+
+**Szabály.** Ha egy brief egy „Kötött architekturális döntés" szakaszban
+egy MÁR ELFOGADOTT ADR-re hivatkozva SAJÁT SZAVAKKAL ismétli meg annak
+tartalmát (különösen egy sorrendet, egy lépés-számot, vagy egy
+küszöbérték-listát), a pre-flight NE elégedjen meg azzal, hogy az
+ADR-SZÁM helyes — nyisd meg magát a hivatkozott ADR-t, és vesd össze a
+brief prózai újra-előadását az ADR Döntés-szakaszának SZÓ SZERINTI
+tartalmával, elem-számra és sorrendre pontosan. Ha az ADR-ből egy MÁR
+publikált, levezetett dokumentum is létezik (pl. egy benchmark-sablon vagy
+tesztmátrix, amely az ADR döntését konkrét számokra bontja), azt IS vond be
+az összevetésbe — a levezetett dokumentum gyakran pontosabb/frissebb, mint
+a brief saját, kézzel másolt prózája. A javítás iránya mindig a MÁR
+ELFOGADOTT forrás felé mutat (a brief a felülírandó, nem az ADR) — ezt
+dokumentált §0.0 revízióval old fel, és a belépési/küszöb-számokat
+SZÓ SZERINT (nem újraszámolva) vedd át a levezetett dokumentumból. Rokon:
+[[L143]]/[[L147]] (ADR-szám-blokk avulása — ugyanaz a batch-írási
+gyökérok, más felület: ott a HIVATKOZÁS drifteltek, itt a hivatkozott
+TARTALOM újra-előadása), [[L200]] (a batch-brief típusnév-avulása,
+ugyanabban a körben mérve).

@@ -6,6 +6,82 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R28 — Vision persistence, privacy control és törlés, teljes részletes történet (2026-08-08)
+
+**E05-R28 MERGED — Vision persistence, privacy control és törlés:** verziózott,
+privacy-safe helyi tárolás a befejezett Vision-sessionökhöz, teljes
+felhasználói kontroll a törlés fölött. `VisionSessionCodec`
+(`lib/features/vision/data/persistence/vision_session_codec.dart`) —
+explicit, kanonikus kulcssorrendű DTO a `VisionSessionResult`-ból: session
+id/időzítés/végzés-ok, `quality` (kizárólag enumok, nincs nyers per-frame
+mérték), `calibrationState`, insightonként kód/policyVersion/evidenceId-k/
+confidence/priority/direction/**capability** (levezetve
+`FeedbackPolicies.catalog`-ból), **modelVersions** (modelId→verzió map,
+ld. lent), `observedFrameCount` — **nincs** kép, URI, pixel, koordináta
+vagy landmark-idősor. `VisionSessionRepository`
+(`.../vision_session_repository.dart`) — a meglévő `JsonCollectionStore`
+konténer fölött (ugyanaz, mint a `practiceHistoryV2`/`librarySessions`),
+`maxItems=100`, per-rekord karantén KÉSZ mechanizmussal; `deleteSession`/
+`deleteAllVisionData` **nyers** `KeyValueStore.remove()`-ot hív (tényleges
+törlés, nem soft-delete, a `.corrupt` árnyékkulcsokat is beleértve).
+`VisionExport` — ugyanazt a minimalizált DTO-t exportálja, plusz a
+séma-verziót. `VisionPrivacyScreen`
+(`lib/features/settings/screens/vision_privacy_screen.dart`) — standalone
+privacy panel (scope-lista, session-listázás+törlés, JSON-export,
+destruktív megerősítést kérő delete-all); route/settings-wiring
+szándékosan nincs ebben a körben.
+
+**Két javító kör, mindkettő a review saját, független újra-ellenőrzésén
+bukott el (nem a gate pirosán) — a zöld gate mindvégig zöld maradt:**
+**F1 (MAJOR):** az eredeti implementáció kihagyta a model-verziót, holott
+[ADR 0183](adr/0183-vision-no-raw-frame-persistence.md) Döntés 2
+explicit ELUTASÍTJA a kihagyását, és a brief §3 is felsorolja. Gyökérok:
+a `VisionSessionResult` (E05-R24, LEZÁRT kör, e kör tiltott zónája) sosem
+hordozott model-verziót. Javító kör #1 a `modelVersions` mezőt egy
+injektált, OPCIONÁLIS `VisionModelManifestReader`-en (alapértelmezés:
+`FileVisionModelManifestReader()`) keresztül pótolta. **F2 (MAJOR, a
+javító kör #1 SAJÁT mellékhatása):** a reviewer mérte, hogy
+`FileVisionModelManifestReader` `Directory.current`-hez relatív, nyers
+`dart:io` fájlolvasással keres egy fájlt (`assets/ml/model_manifest.json`),
+ami a `pubspec.yaml` `flutter.assets`-ében SEHOL nincs deklarálva —
+valódi eszközön SOHA nem oldódna fel, csak a CI/dev környezetben
+véletlenül, mert a `flutter test` a repo gyökeréből fut. Egyetlen teszt
+sem gyakorolta az alapértelmezést (mind fake readert injektált), ezért a
+gate mindvégig zöld maradt. Javító kör #2 a `VisionModelManifestReader`/
+`dart:io` függőséget TELJESEN kivette a repositoryból; `save()` most
+**kötelező, explicit** `Map<String, String> modelVersions` paramétert vár
+(fordítás-idejű garancia, ugyanaz a minta, mint a codec már eddig is
+használt). Lecke: **L197**, **L198**, **L199**.
+
+**Nincs ÚJ ADR** (a pre-flight §0.0 megerősítette): a brief eredeti „ADR
+0161/0166" hivatkozása a mért +17 batch-offset szerint (`docs/LESSONS.md`
+L143/L147) a MÁR LÉTEZŐ, tartalmilag pontosan illeszkedő
+[ADR 0178](adr/0178-vision-privacy-by-default.md) (privacy by
+default) és [ADR 0183](adr/0183-vision-no-raw-frame-persistence.md)
+(no-raw-frame persistence) ADR-ekre mutat — nem az E05-R27 esete (ahol a
+hivatkozott szám sosem létezett és a tartalom is genuinely új volt).
+Implementer **Codex (Terra)** (1 implementációs forduló + **2 javító
+kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens (`risk = "high"`). PR
+[#202](https://github.com/wolfcasaba/strumsight/pull/202), squash `a9698557`.
+
+**Review:** [docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md](reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md)
+— **APPROVED, 0 nyitott BLOCKER/MAJOR/MINOR 2 javító kör után** (F1+F2
+mindkettő a reviewer SAJÁT, izolált `/tmp` klónban végzett adversarial
+mutáció-próbáival megerősítve zárva — nem az implementer önjelentésén). A
+**dedikált security-review**
+([docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md](reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md))
+— **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR (ugyanaz a model-verzió
+tény, más lencséből — privacy-semleges, mert adat HIÁNYA sosem szivárgás;
+és a wide `vision/public.dart` barrel-importja a privacy-képernyőnek,
+ugyanaz a MEGLÉVŐ, R10 óta élő precedens), 3 NOTE follow-up.
+
+**Zöld kapu (exact-SHA `1f769a4c`, a javító kör #2 utáni tip):** Full Gate
+[31276986778](https://github.com/wolfcasaba/strumsight/actions/runs/31276986778)
+**success** + Router CI
+[31276984787](https://github.com/wolfcasaba/strumsight/actions/runs/31276984787)
+**success**.
+
 ## E05-R27 — AI Tutor és Analysis vision evidence adapterek, teljes részletes történet (2026-08-08)
 
 **E05-R27 MERGED — AI Tutor és Analysis vision evidence adapterek:** a
