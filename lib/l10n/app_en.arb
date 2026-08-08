@@ -1353,5 +1353,9 @@
   "visionSessionGuitarQuality": "Guitar",
   "visionSessionQualityGood": "Tracked",
   "visionSessionQualityAdjust": "Adjust",
-  "visionSessionQualityUnavailable": "Unavailable"
+  "visionSessionQualityUnavailable": "Unavailable",
+  "practiceVisionDimensionTitle": "Visual technique",
+  "practiceVisionDimensionGood": "Visual observation complete.",
+  "practiceVisionDimensionDegraded": "Partial visual observation. Adjust the camera setup for complete feedback.",
+  "practiceVisionDimensionUnavailable": "Visual observation was unavailable. Audio practice is unchanged."
 }

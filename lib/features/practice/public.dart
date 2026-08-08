@@ -35,6 +35,7 @@ export 'data/local_practice_history_repository.dart'
 export 'data/practice_history_recorder.dart' show PracticeHistoryRecorder;
 export 'data/practice_session_result_history_mapper.dart'
     show PracticeSessionResultHistoryMapper;
+export 'data/vision/practice_vision_adapter.dart';
 export 'domain/service/practice_progress_aggregator.dart'
     show AggregatedPracticeEntry, PracticeProgressAggregator;
 export 'domain/service/practice_session_eligibility.dart'
@@ -57,6 +58,7 @@ export 'domain/model/practice_observation.dart' show StrumObservation;
 export 'domain/model/practice_session_config.dart' show PracticeSessionConfig;
 export 'domain/model/practice_session_result.dart'
     show PracticeFinishReason, PracticeSessionResult;
+export 'presentation/widgets/practice_vision_dimension.dart';
 export 'domain/model/practice_session_state.dart'
     show
         PauseCause,

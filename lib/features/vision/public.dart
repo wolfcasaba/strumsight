@@ -46,6 +46,7 @@ export 'domain/metrics/posture_metrics.dart';
 export 'domain/metrics/stroke_window.dart';
 export 'domain/vision_session.dart';
 export 'domain/vision_session_result.dart';
+export 'domain/integration/vision_practice_contract.dart';
 export 'domain/safety/safety_claim_guard.dart';
 export 'domain/safety/vision_safety_policy.dart';
 export 'data/guitar/edge_geometry_tracker.dart';
