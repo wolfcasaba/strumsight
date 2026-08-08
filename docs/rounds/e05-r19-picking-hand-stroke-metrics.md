@@ -345,6 +345,83 @@ küszöböket szintén a fenti scripttel erősítettem meg (a `classifyZone`
 lefedi az SDD §20.2 mind a négy értékét, a határ mindkét oldalán — l.
 `picking_metric_engine_test.dart` "picking-zone classifier" group, 9 teszt).
 
+A §6 "nagyon gyors váltogatás" cella (brief §6 első acceptance-pont, F1
+BLOCKER-rel kiegészítve) numerikus elvárásait az F1 javítás UTÁNI
+`StrokeWindow.cut()` határ-szemantikával (vágás a KÖVETKEZŐ onset kért
+kezdetéig, ld. §10.8) `python3 -c` számítással ellenőriztem; az értékek
+szó szerint megegyeznek a `picking_metric_engine_test.dart` "stroke
+fixture matrix — fast toggle" csoport 4 új tesztjének
+`expect(..., closeTo(VALUE, 1e-6))` hívásaival:
+
+```bash
+$ python3 << 'EOF'
+import math
+
+# Exact replica of the Dart `_sinApprox` from the FastToggleStrokes fixture.
+def sin_approx(x):
+    pi = 3.141592653589793
+    r = x % (2 * pi)
+    if r > pi: r -= 2 * pi
+    if r < -pi: r += 2 * pi
+    r2 = r * r
+    return r - (r * r2) / 6.0 + (r * r2 * r2) / 120.0 - (r * r2 * r2 * r2) / 5040.0
+
+# Generate frames every 33 ms from -100 to 791 (the fixture's loop bound).
+frames = [(t, 0.85, 0.30 * sin_approx((t / 130.0) * 2 * math.pi))
+          for t in range(-100, 802, 33) if t <= 800]
+
+onsets = [0, 130, 260, 390, 520, 650]
+pre, post = 100, 150
+
+# F1 fix: actualEnd = min(requestedEnd, nextOnset - pre)
+for i, onset in enumerate(onsets):
+    rs = onset - pre
+    re = onset + post
+    nrs = onsets[i+1] - pre if i + 1 < len(onsets) else None
+    ae = min(re, nrs) if nrs is not None and nrs < re else re
+    truncated = ae < re
+    samples = [(t, u, v) for (t, u, v) in frames if rs <= t < ae]
+    if len(samples) < 2:
+        print(f"window {i}: degenerate ({len(samples)} samples)")
+        continue
+    ts = [s[0] for s in samples]
+    vs = [s[2] for s in samples]
+    path = sum(abs(vs[j] - vs[j-1]) for j in range(1, len(vs)))
+    chord = abs(vs[-1] - vs[0])
+    duration_ms = ts[-1] - ts[0]
+    speed = path / (duration_ms / 1000.0)
+    linearity = chord / path
+    delta_v = vs[-1] - vs[0]
+    direction = 1.0 if delta_v > 0 else (-1.0 if delta_v < 0 else 0.0)
+    print(f"window {i}: path={path:.9f}, chord={chord:.9f}, "
+          f"speed={speed:.9f}, linearity={linearity:.9f}, "
+          f"direction={direction:+.1f}, truncated={truncated}, "
+          f"n_samples={len(samples)}")
+EOF
+window 0: path=0.881578560, chord=0.312283698, speed=8.904833942, linearity=0.354232410, direction=-1.0, truncated=True, n_samples=4
+window 1: path=0.914108325, chord=0.285377423, speed=9.233417428, linearity=0.312192128, direction=-1.0, truncated=True, n_samples=4
+window 2: path=0.938067528, chord=0.255794730, speed=9.475429580, linearity=0.272682640, direction=-1.0, truncated=True, n_samples=4
+window 3: path=0.953234834, chord=0.223805548, speed=9.628634691, linearity=0.234785322, direction=-1.0, truncated=True, n_samples=4
+window 4: path=0.959465515, chord=0.189699630, speed=9.691570857, linearity=0.197713860, direction=-1.0, truncated=True, n_samples=4
+window 5: path=2.043662081, chord=0.128115360, speed=8.847021997, linearity=0.062689111, direction=-1.0, truncated=False, n_samples=8
+```
+
+A 6 ablak SAMPLE-HALMAZA teljesen partícionált — nincs átfedés:
+
+```
+window 0 timestamps: {-100, -67, -34, -1}        (4 samples)
+window 1 timestamps: {32, 65, 98, 131}           (4 samples)
+window 2 timestamps: {164, 197, 230, 263}        (4 samples)
+window 3 timestamps: {296, 329, 362, 395}        (4 samples)
+window 4 timestamps: {428, 461, 494, 527}        (4 samples)
+window 5 timestamps: {560, 593, 626, 659, 692, 725, 758, 791}  (8 samples)
+
+intersection(window_i, window_i+1) = ∅  ∀ i ∈ [0, 5)
+Σ n_samples = 28 = len(frames) (no drops, no duplicates)
+```
+
+
+
 ### 10.3 Futtatott parancsok — tényleges kimenet
 
 A lokális gate-et a brief §7 előírása szerint, külön processzekben,
@@ -524,6 +601,113 @@ visszaállítás után ZÖLD — a gate nem kozmetika.
   `PickingMetricEngine.compute()` belső `_rawAmplitude` /
   `_rawDirection` hívásai biztosítják. Ha az R21 másképp akarja a
   gate-et (pl. részleges megbízhatóság), a kód kompatibilis marad.
+
+### 10.8 F1 BLOCKER javítás — `StrokeWindow.cut()` nem engedélyez átfedést
+
+Az E05-R19 review (`docs/reviews/e05-r19-picking-hand-stroke-metrics-review.md`)
+egy F1 BLOCKER-t azonosított: a `StrokeWindow.cut()` csonkolási szabálya
+(`actualEnd = nextOnset.timestamp` trunk korig) lehetővé tette, hogy ugyanaz
+a fizikai minta KÉT egymást követő ablak `samples` listájában is
+szerepeljen — a `[nextOnset - pre, nextOnset)` sáv ugyanis a következő
+ablak SAJÁT elejére (`nextOnset - pre`) esett. A `_pathSegments` a
+szomszédos ablakok határán ezeket a mintákat mindkét oldalon
+beszámította, ami a "nagyon gyors váltogatás" forgatókönyvben
+pontosan a brief §6 első pontja által kért cellát torzította.
+
+**A javítás (`commit 07b664f`):** a csonkolási pont a KÖVETKEZŐ onset
+NYERS timestampjéről a KÖVETKEZŐ ablak REQUESTED startjára
+(`nextOnset - pre`) tolódott. A `PickingStrokeWindow.truncated` jelzés
+szemantikája változatlan maradt — továbbra is `true`, ha az ablak a
+szomszédos onset miatt rövidült. A belső invariáns a kör-brief §5/3
+ELFOGADOTT szövegéhez hű marad: "the window MUST NOT extend into the next
+onset's pre-window" — a F1 javítás ezt a szó szerinti tilalmat MOST már
+valóban kikényszeríti.
+
+**Az új határ-szemantika és a tesztek (`commit 881c97e` + `49c3fba` + `d8dfbfd` + `e60f8b6`):**
+
+| Régi érték (F1 előtt) | Új érték (F1 után) | Teszt |
+|---|---|---|
+| `cut(0, 130): end = 130` (next onset raw) | `cut(0, 130): end = 30` (next onset's pre-start) | `overlapping onsets` test |
+| `sixAt130ms: window_i.end == nextOnset (130)` | `sixAt130ms: window_i.end == next_window.start (30 / 160 / …)` | `six-on-130ms toggle` test |
+| `overriding post=100: no truncation` | `overriding post=20: no truncation (post=20 < nextPreStart=30)` | `overriding post shrinks window` test |
+
+**ÚJ no-overlap regressziós tesztek (F1 őr):**
+
+1. `fast-toggle fixture: adjacent windows share NO sample timestamps (F1 BLOCKER regression guard)` — valódi 28 frame-mel ellenőrzi, hogy minden szomszédos ablakpár samples halmazának metszete ÜRES.
+2. `every sample is included in EXACTLY one window (global partition)` — erősebb invariáns: a 28 frame összesen 28-szer szerepel a visszaadott listában, nincs se kihagyás, se duplikáció.
+
+**ÚJ "fast toggle" cella a stroke-fixture-mátrixban (F1-rel kiegészített
+acceptance #1, `commit e60f8b6`):** 4 új teszt a `picking_metric_engine_test.dart`
+"stroke fixture matrix — fast toggle (six onsets @ 130 ms)" csoportban,
+melyek a fenti §10.2-beli `python3 -c` számítás szó szerinti értékeit
+assertálják irány / amplitúdó / sebesség / linearitás dimenziókra. A
+"nagyon gyors váltogatás" cella ezzel VALÓS metrika-értékekkel lefedett —
+a review acceptance-táblája #1 sora RÉSZLEGES → ZÖLD.
+
+**F1 regressziós próba (validálja a tényleges javítást):** az F1
+reprodukáló próba (review §F1) a JAVÍTÁS ELŐTTI kóddal a `{32, 65, 98}`
+mintákat közösen látta a `window0` és `window1` `samples` listájában.
+A JAVÍTÁS UTÁNI kód ezt a halmaz-metszetet üresen hagyja — az új
+`adjacent windows share NO sample timestamps` teszt ezt ténylegesen
+ellenőrzi, és a `every sample is included in EXACTLY one window` teszt
+megerősíti, hogy a 28 frame pontosan 28-szer tér vissza (nincs se drop,
+se duplicate). A fast-toggle cella tesztjei a `python3 -c` számítással
+BIT-AZONOS metrika-értékeket assertálnak — a javítás nélkül ezek a
+minták duplikálódtak volna a szomszédos ablakok `_pathSegments`
+hívásában, és az értékek ELTÉRTEK volna.
+
+**A gate kimenete a javítás UTÁN, csonkítatlan (a §10.3 mintát követve,
+ezúttal az F1 utáni HEAD-en):**
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/vision
+    $ /home/ubuntu/flutter/bin/flutter test test/features/vision
+
+    … 292 teszt zöld (286 eredeti + 2 új no-overlap regressziós + 4 új fast-toggle cella)
+
+    → [3] test test/features/vision: ZÖLD
+
+═══ [4] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+    → [6] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/vision                                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A F1 javítás teljes, dokumentált, és a teszt-szintű bizonyíték
+(volt/van állapot: a duplikáció tényleges reprodukálható az ELŐZETES
+kóddal, a javítás UTÁNi kód az új regressziós tesztekkel szó szerint
+védett) és a `python3 -c` alapú elfogulatlan numerikus ellenőrzés
+egyaránt rendelkezésre áll.
 
 ## 11. Review — a független reviewer tölti ki
 
