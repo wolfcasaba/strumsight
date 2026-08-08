@@ -1,20 +1,29 @@
 # E05-R24 — Review
 
 Brief: `docs/rounds/e05-r24-vision-session-controller-and-overlay.md`
-Diff: `git diff b14a753...ffef5d7` (pre-flight commit `c44f019` + implementer commit `ffef5d7`)
+Diff (1. pass): `git diff b14a753...ffef5d7` (pre-flight `c44f019` + implementer `ffef5d7`)
+Diff (javítások): `3060cef` (javító kör #1: F1/F2/F3), `51572a5` (javító kör #2: F4 — az #1 saját regressziója)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-08
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED 2 javító kör után**
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 1 · NOTE: 0
+**Végállapot: 0 nyitott BLOCKER/MAJOR/MINOR.** 1. pass: BLOCKER 1 (F1) ·
+MAJOR 1 (F2) · MINOR 1 (F3). Javító kör #1 (`3060cef`) mindhármat zárta, de
+saját kézzel végzett független próbateszttel egy ÚJ, a javítás saját
+regressziójaként bevezetett BLOCKER-t találtam (F4 — `dispose()` kivétellel
+elszáll a `start()` async ablakában). Javító kör #2 (`51572a5`) F4-et is
+zárta — mind a négy leletet SAJÁT kézzel, a shippelt diffen (nem az
+implementer önjelentésén) megerősítve, izolált `/tmp` klónokban, minden
+javító kör UTÁN újra lefuttatott gate-tel.
 
 Gate (format, analyze, `test/features/vision`, `test/core/camera`,
-`test/core/l10n_parity_test.dart`, architecture, secrets, l10n) mind **ZÖLD**,
-saját kézzel, izolált `/tmp/review-e05-r24` klónban újrafuttatva. A zöld gate
-azonban — a review-protokoll alapelve szerint — nem bizonyíték a tartalmi
-hűségre: az F1 BLOCKER egy konkrét, eldobható próbateszttel reprodukált,
-gate-en NEM átment hiba (a meglévő suite nem fedi ezt az időzítési ablakot).
+`test/core/l10n_parity_test.dart`, architecture, secrets, l10n) mind **ZÖLD**
+a végállapoton (`51572a5`), saját kézzel, izolált `/tmp/review-e05-r24-fix2`
+klónban újrafuttatva. A zöld gate a review-protokoll alapelve szerint nem
+bizonyíték a tartalmi hűségre — ezért mind a négy leletet (F1 eredetileg, F4
+a javító kör #1 után) SAJÁT, eldobható próbateszttel reprodukáltam, amit a
+commitolt suite nem fedett.
 
 ## Acceptance criteria
 
@@ -53,7 +62,7 @@ kézzel is összevetve (`git diff --stat b14a753..ffef5d7`): 6 módosított +
   Azaz: a `stop()` hívás `null`-t adott vissza (nem `VisionSessionResult`-ot), a session végül mégis `running`-ba került, `results` listája üres maradt, és a kamera-lízing továbbra is a `visionPractice` ownernél van — pontosan az állítás szerint.
 - **Kötelező javítás:** a `start()` async ablakát is védeni kell egy konkurens finalizáció-kéréssel szemben — pl. egy „start in-flight" jelző/`Completer` bevezetése, amit a `stop()`/`leaveRoute()`/dispose ellenőriz: ha `start()` folyamatban van, vagy (a) várja meg annak lezárását és utána azonnal finalizál a már beállt `_session`-nel, vagy (b) állítson be egy cancellation-jelzőt, amit a `start()` az await-ek után ellenőriz, és ha be van állítva, ne lépjen `running`-ba, hanem zárja le azonnal a frissen szerzett capture-t/lízinget és finalizáljon. A pontos megoldást az implementerre bízom; a tesztlefedettségnek tartalmaznia kell legalább egy, a fenti próbához hasonló, kontrollált-időzítésű esetet mind a `stop()`, mind a `leaveRoute()`, mind a dispose útra.
 - **Ellenőrzés:** egy commitolt teszt, amely `FakeCameraCapture(startGate: ...)`-tel kontrolláltan nyitva tartja a `start()` async ablakát, és bizonyítja, hogy egy ezalatt érkező stop/leaveRoute/dispose UTÁN (a gate feloldása és a `start()` lezárása után) a session NEM `running`, a lízing szabad, és pontosan egy `VisionSessionResult` született.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`3060cef`) — `_startSettled` completer + `_finalize()` bevárja a folyamatban lévő `start()`-ot, mielőtt finalizálna; a `_session` a lease-megszerzés UTÁN azonnal létrejön (nem a capture-start után). Terra két commitolt tesztje (`explicit stop/route leave finalizes when capture start is in flight`) zöld; SAJÁT, a fentivel megegyező próbateszttel (stop + leaveRoute + app-háttér mind) újra lefuttatva a `51572a5` végállapoton: mindhárom helyesen finalizál, lízing szabad, `results` hossza 1, a status NEM `running`.
 
 ### F2 — MAJOR — Az állapotgép-mátrix „cellánként assert" kritériuma nincs teljesítve
 
@@ -62,7 +71,7 @@ kézzel is összevetve (`git diff --stat b14a753..ffef5d7`): 6 módosított +
 - **Hatás:** egy jövőbeli, `_allows()`-t megkerülő vagy hibásan bővítő módosítás (pl. egy új action metódus, ami elfelejti meghívni `_allows()`-t) nem bukna el egyetlen célzott teszten sem — csak akkor derülne ki, ha épp az az egy tesztelt cella érintett.
 - **Kötelező javítás:** egy táblázatos/parametrizált teszt, amely az ÖSSZES `(VisionSessionStatus, action)` párra, ahol az action nincs az adott állapotból engedélyezve, ellenőrzi hogy `issue == invalidTransition` lesz és a `status` NEM változik. Nem kell minden egyes párt kézzel felsorolni kódban, ha egy generatív/táblázatos szerkezet olvashatóbb, de a lefedettségnek ki kell terjednie mind a kilenc gated action metódusra (`begin`, `requestPermission`, `beginCalibration`, `start`, `pause`, `resume`, `recalibrate`, `reportQuality`, `reportRealtimeCue`) és a hozzájuk tartozó `_allows()`-halmazokon kívüli állapotokra.
 - **Ellenőrzés:** a bővített teszt zöld, és egy ideiglenes mutáció (pl. egy `_allows()` hívás eltávolítása egy action metódusból) legalább egy új cellán PIROSRA fordítja.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`3060cef`) — `_SeededVisionSessionController` (build()-ben tetszőleges kezdő státuszt vesz fel) + egy `_GatedActionCase` lista mind a kilenc gated action metódusra a saját `_allows()`-halmazával; a suite az ÖSSZES `VisionSessionStatus.values` × action párra, ahol az action nincs engedélyezve, generál egy `test('${status.name} rejects ${action.name}', ...)` esetet, ami `issue == invalidTransition`-t ÉS változatlan státuszt vár. Ez ~100+ egyedi cellateszt; saját kézzel megszámolva és átfutva a gate-logban mind zöld.
 
 ### F3 — MINOR — A provider-state audit kézzel karbantartott stringhalmaz, nem a tényleges mezőkből származik
 
@@ -71,26 +80,43 @@ kézzel is összevetve (`git diff --stat b14a753..ffef5d7`): 6 módosított +
 - **Hatás:** a brief legerősebben hangsúlyozott invariánsa (nincs frame-buffer a state-ben) végső soron egy manuális fegyelmi szabályra támaszkodik, nem egy gépi kényszerre — jelenleg NEM defektus, de regresszió-megelőzési rés.
 - **Kötelező javítás (vagy dokumentált WONTFIX):** vagy egy erősebb, a tényleges mezőkészletből származtatott ellenőrzés (pl. a konstruktor named-paraméter listájának vagy egy `toString()`/`toJson()`-szerű reprezentációnak a `auditFields`-szel való összevetése), vagy — ha ez aránytalanul nagy diffet igényelne — egy explicit doc-comment az `auditFields`-en, ami kimondja, hogy ez egy kézzel karbantartott lista, és minden új mezőhöz kötelező a bővítése.
 - **Ellenőrzés:** ha erősebb ellenőrzés készül, egy próbateszt (ideiglenesen hozzáadott mező az `auditFields` bővítése nélkül) pirosra fordítja.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`3060cef`, könnyű variáns) — doc-comment került az `auditFields`-re: „This is a manually maintained allow-list: every new state field must be added here and reviewed by the provider-state audit." Arányos MINOR-javítás, nem hizlalta a diffet.
+
+### F4 — BLOCKER (a javító kör #1 saját regressziója) — `dispose()` kivétellel elszáll a `start()` async ablakában
+
+- **Fájl:** `lib/features/vision/application/vision_session_controller.dart` (`_startOnce`, a `3060cef` állapotában ~187. sor).
+- **Probléma:** a `3060cef` (F1 javítása) eltávolította a korábbi `if (_disposed) return;` korai kilépéseket a `_startOnce`-ból, azzal az (logikailag helyes, de hiányos) indoklással, hogy a `_finalize(disposed)` a `_startSettled`-en át már megvárja a `start()` lezárását. Ez a MI saját `_dispose()`/`_finalize()` LOGIKAI sorrendjére igaz, de a Riverpod SAJÁT belső disposal-ja (`ref.onDispose` callback + a `state`/`ref` kapacitás azonnali, szinkron érvénytelenítése) FÜGGETLEN ettől — a `_startOnce` egy `await` utáni folytatása, ha a container/autoDispose időközben disposed lett, a `state.copyWith(...)` argumentum kiértékelésekor (a `state` GETTER olvasásakor, MÉG a `_setState` saját őre előtt) kivételt dob.
+- **Reprodukció (saját, eldobható próbateszt, a `3060cef` állapotán):** `FakeCameraCapture(startGate: <Completer>)`-fel nyitva tartott `start()` közben `container.dispose()`-t hívva:
+  ```
+  Cannot use the Ref of NotifierProvider<VisionSessionController, VisionSessionState>#... after it has been disposed.
+    package:riverpod/src/core/ref.dart 240:7    Ref._throwIfInvalidUsage
+    vision_session_controller.dart 187:7        VisionSessionController._startOnce
+  ```
+  Ezt a gate (beleértve Terra saját ÚJ, F1/F2 teszteket is) NEM fedte — mind zöld volt eközben.
+- **Hatás:** a felhasználó visszalép / az útvonal eltűnik (Riverpod `autoDispose`) pontosan a Start utáni async ablakban → az app **összeomlik** (nem csak erőforrás-szivárgás, hanem kivétel) — ez SÚLYOSABB, mint az eredeti F1.
+- **Kötelező javítás:** `ref.mounted` őr minden `await` UTÁN, MIELŐTT `state`-et érintő kód futna.
+- **Ellenőrzés:** commitolt teszt, VALÓDI `container.dispose()`-zal (nem csak `controller.leaveRoute()`), ami bizonyítja: nincs kivétel, a lízing szabad, a capture zárva.
+- **Státusz:** **FIXED** (`51572a5`) — `ref.mounted` őr az összes releváns pontra (`acquire` Failure-ág után, a Success-ág után, `capture.start()` után, a `capture.start()` Failure-ága után) + a `start()` hívási oldalán is (`if (finalizeFailure && ref.mounted)`). Terra új commitolt tesztje (`dispose during capture start avoids disposed Riverpod state access`, VALÓDI `container.dispose()`-zal) zöld. SAJÁT, három próbatesztből álló szuittal (dispose / app-háttér / stop, mind a `start()` async ablakában, VALÓDI Riverpod-disposal-lal a dispose esetben) újra lefuttatva a `51572a5` végállapoton: mindhárom PASS, `activeOwner=null`, `capture.isClosed=true`, `results.length==1`, nincs kivétel.
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| format | zöld (Terra §10 + saját futás) | ✅ |
-| analyze | zöld (Terra §10 + saját futás) | ✅ |
-| test test/features/vision | zöld (saját futás, izolált `/tmp/review-e05-r24` klón) | ✅ |
+| format | zöld (mindhárom pass: `ffef5d7`, `3060cef`, `51572a5`) | ✅ |
+| analyze | zöld (mindhárom pass, saját futás) | ✅ |
+| test test/features/vision | zöld a végállapoton (`51572a5`), saját futás izolált `/tmp/review-e05-r24-fix2` klónban | ✅ |
 | test test/core/camera | zöld (saját futás) | ✅ |
 | test test/core/l10n_parity_test.dart | zöld (saját futás) | ✅ |
 | architecture | zöld, 12 allowlisted deviation (változatlan szám — saját futás) | ✅ |
 | secrets | zöld, 0 lelet (saját futás) | ✅ |
 | l10n parity | zöld, en→hu 997 üzenet (saját futás) | ✅ |
-| CI (teljes suite + property + APK) | dispatch folyamatban a review-val párhuzamosan | ⏳ a review lezárásakor még nem érkezett vissza — lásd a PR-t a run-linkért |
+| CI (teljes suite + property + APK) | a review lezárásakor dispatch-elve, a merge ELŐTT kötelező exact-SHA zöld run | ⏳ merge előtt ellenőrzendő a `51572a5`+ merge SHA-n |
 
 ## Merge-döntés
 
 Az ADR 0052 szerint minden gate-nek zöldnek KELL lennie ÉS nem lehet nyitott
-BLOCKER/MAJOR. Jelenleg **1 BLOCKER + 1 MAJOR nyitva** (F1, F2) — **merge
-TILOS**, amíg ezek nem záródnak. Javító kört indítok ugyanazzal a motorral
-(Terra), a fenti három lelettel a promptban. F3 (MINOR) a javító körben
-javítható, ha nem hizlalja érdemben a diffet; különben follow-up.
+BLOCKER/MAJOR. **Végállapot (`51572a5`): 0 nyitott BLOCKER/MAJOR/MINOR** — a
+lokális gate-mátrix teljes egészében zöld, mind a négy lelet zárva, SAJÁT
+kézzel megerősítve a shippelt diffen. **Merge feltétele: a teljes CI-suite
+(Full Gate + Router CI, ha releváns) zöld az exact merge SHA-n** — ezt a
+CI-run linkjével kell igazolni, nem bemondásra.
