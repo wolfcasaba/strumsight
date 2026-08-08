@@ -73,13 +73,14 @@ final class FrettingMetricEngine {
     if (geometryLost) return MetricObservation.notObservable();
     final points = _points(samples, FrettingMetricId.chordChangeTravel);
     if (points.length < 2) return MetricObservation.notObservable();
+    final usable = _usable(samples, FrettingMetricId.chordChangeTravel);
     var total = 0.0;
     for (var i = 1; i < points.length; i++) {
       total += points[i - 1].distanceTo(points[i]);
     }
     return _valueWithConfidence(
       total,
-      _confidence(samples, FrettingMetricId.chordChangeTravel),
+      _confidence(usable, FrettingMetricId.chordChangeTravel),
     );
   }
 
@@ -92,21 +93,46 @@ final class FrettingMetricEngine {
     if (geometryLost || !radius.isFinite || radius <= 0) {
       return MetricObservation.notObservable();
     }
-    final before = samples
-        .where((s) => s.timestamp <= target.timestamp)
-        .toList();
-    if (before.isEmpty) return MetricObservation.notObservable();
-    for (final sample in before.reversed) {
-      final point = sample.guitarLandmarks[HandLandmarkId.wrist]?.uv;
+    // F1 fix (review E05-R18 F1 BLOCKER): the role + visibility gate
+    // applies here just like for the other five metrics. Without this,
+    // picking-role tracks or sub-threshold visibility samples would
+    // contribute to the proximity scan and surface an observable value
+    // for a hand the rest of the engine has already ruled out.
+    final usable = _usable(
+      samples.where((s) => s.timestamp <= target.timestamp),
+      FrettingMetricId.readyPositionTime,
+    );
+    if (usable.isEmpty) return MetricObservation.notObservable();
+    // F2 fix (review E05-R18 F2 MAJOR): find the latest sample that is in
+    // the target zone, then walk backwards while samples stay CONTINUOUSLY
+    // in-zone, and return the EARLIEST sample of that contiguous run.
+    // The previous loop returned the latest in-zone sample's timestamp,
+    // which measured the sample gap before the target instead of the
+    // actual zone-entry time.
+    var latestInZone = -1;
+    for (var i = usable.length - 1; i >= 0; i--) {
+      final point = usable[i].guitarLandmarks[HandLandmarkId.wrist]?.uv;
       if (point != null && point.distanceTo(target.position) <= radius) {
-        return _valueWithConfidence(
-          (target.timestamp.inMicroseconds - sample.timestamp.inMicroseconds)
-              .toDouble(),
-          _confidence(before, FrettingMetricId.readyPositionTime),
-        );
+        latestInZone = i;
+        break;
       }
     }
-    return MetricObservation.notObservable();
+    if (latestInZone < 0) return MetricObservation.notObservable();
+    var runStart = latestInZone;
+    while (runStart > 0) {
+      final prev =
+          usable[runStart - 1].guitarLandmarks[HandLandmarkId.wrist]?.uv;
+      if (prev != null && prev.distanceTo(target.position) <= radius) {
+        runStart--;
+      } else {
+        break;
+      }
+    }
+    final arrival = usable[runStart].timestamp;
+    return _valueWithConfidence(
+      (target.timestamp.inMicroseconds - arrival.inMicroseconds).toDouble(),
+      _confidence(usable, FrettingMetricId.readyPositionTime),
+    );
   }
 
   MetricObservation positionStability(
@@ -127,7 +153,8 @@ final class FrettingMetricEngine {
         points.length;
     return _valueWithConfidence(
       math.sqrt(variance),
-      _confidence(samples, FrettingMetricId.positionStability),
+      _confidence(_usable(samples, FrettingMetricId.positionStability),
+          FrettingMetricId.positionStability),
     );
   }
 
@@ -200,9 +227,10 @@ final class FrettingMetricEngine {
     if (lost) return MetricObservation.notObservable();
     final points = _points(input, id);
     if (points.isEmpty) return MetricObservation.notObservable();
+    final usable = _usable(input, id);
     return _valueWithConfidence(
       points.map(read).reduce((a, b) => a + b) / points.length,
-      _confidence(input, id),
+      _confidence(usable, id),
     );
   }
 
