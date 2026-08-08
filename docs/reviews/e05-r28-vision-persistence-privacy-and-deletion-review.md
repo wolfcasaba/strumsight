@@ -1,14 +1,23 @@
 # E05-R28 — Review
 
 Brief: docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md
-Diff: `git diff 1bbcc97..ee154cc` (`origin/main` pre-flight tip → round tip),
+Diff: `git diff 1bbcc97..ee154cc` (`origin/main` pre-flight tip → round tip;
+javító kör #1 után: `ee154cc..bd938a3`),
 equivalently `git diff origin/main...codex/e05-r28-vision-persistence-privacy-and-deletion`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08
-Verdikt: CHANGES REQUESTED (1 MAJOR — javító kör dispatch-elve)
+Verdikt: CHANGES REQUESTED (F1 zárva, **F2 MAJOR nyitva** — javító kör #2 dispatch-elve)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 nyitva (F2) + 1 zárva (F1) · MINOR: 0 · NOTE: 1
+
+**Frissítés (javító kör #1 UTÁN, saját independens re-review):** F1 tartalmi
+javítása helyes és teljes (lásd F1 lezárása lent), DE a javítás módja egy ÚJ,
+súlyosabb hibát vezetett be — lásd **F2** —, amit a reviewer saját, a kódot
+a Flutter asset-rendszer és a testvér-osztályok (`NativeHandLandmarkProvider`/
+`NativePoseLandmarkProvider`) ellen mérő vizsgálattal talált, NEM a gate
+pirosából (a gate zöld maradt, mert a teszt-környezet véletlenül elfedi a
+hibát — ld. F2 „Gyökérok").
 
 **Frissítés (javító kör #1 előtt):** a dedikált security-review (risk=high,
 `docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md`)
@@ -58,7 +67,24 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 - **Miért NEM H2/H3 halt, és miért R28 saját hatáskörében javítható:** a hiányzó adat NEM igényli a `vision_session_result.dart` (lezárt E05-R24 kör, R28 tiltott zónája) módosítását. A `core/ml/vision_model_manifest.dart` (MEGLÉVŐ, a wide barrel már exportálja) `VisionModelManifestReader`/`FileVisionModelManifestReader` interfésze (`read() → Future<VisionModelManifestReport>`, `entries: List<VisionModelEntry>`) egy független, injektálható forrás — a `VisionSessionRepository.save()`/`VisionSessionCodec.fromResult()` (MINDKETTŐ R28 saját, ÚJ fájlja, benne van az `allowed_paths`-on) ebből egészítheti ki a rekordot a mentés pillanatában, `VisionSessionResult` érintése nélkül. Ez tisztán R28 saját, még nem merge-elt artefaktumainak (a kör saját codec/repository fájljai) a módosítása — nem tilos zóna feloldása (H3) és nem egy lezárt kör viselkedésének megváltoztatása (H2), mert `vision_session_result.dart` bitre érintetlen marad.
 - **Kötelező javítás:** a `VisionSessionCodec`/`VisionSessionRepository` kapjon egy model-verzió forrást (pl. injektált `VisionModelManifestReader`, vagy a hívó által átadott resolt String — a pontos wiring az implementer döntése), és a persisztált/exportált alak kapjon egy `modelVersion`-mezőt (session-szintű, vagy insight-onkénti, ha több modell egyszerre aktív — a `VisionModelManifestReport.entries` több bejegyzést is tartalmazhat). A privacy-snapshot teszt `_expectedPaths` halmaza bővüljön az új kulccsal/kulcsokkal. Ha az implementer mérve úgy találja, hogy ez GENUINELY nem oldható meg R28 `allowed_paths`-án belül, `stopped`-dal jelezze — ne hallgassa el.
 - **Ellenőrzés:** a privacy-snapshot teszt (`vision_export_privacy_test.dart`) bővített `_expectedPaths`-szal zöld; a delete-mátrix és a network-spy tesztek változatlanul zöldek.
-- **Státusz:** OPEN — javító kör #1-ben dispatch-elve.
+- **Státusz:** **FIXED** (`dd717cd`/`bd938a3`, javító kör #1) — `VisionSessionHistoryEntry.modelVersions: Map<String, String>` (modelId→version, determinisztikus `SplayTreeMap`-rendezéssel, nem-üres validációval), `VisionSessionCodec.fromResult()` explicit `required Map<String, String> modelVersions` paramétert kapott, `_expectedPaths` bővült (`modelVersions`, `modelVersions.hand_landmarker`, `modelVersions.pose_landmarker`), round-trip teszt asszerál a visszaolvasott `modelVersions`-re. Tartalmilag helyes és teljes — de a WIRING módja (a `VisionSessionRepository` konstruktorába rejtett, OPCIONÁLIS, alapértelmezett `FileVisionModelManifestReader()`) egy ÚJ hibát vezetett be → **F2**.
+
+### F2 — MAJOR (ÚJ, javító kör #1 mellékhatása) — `VisionSessionRepository`'s default `manifestReader` cannot resolve on a real device; `save()` would always throw in production
+
+- **Fájl:** `lib/features/vision/data/persistence/vision_session_repository.dart:18-23` — `VisionModelManifestReader? manifestReader` optional constructor param, defaulting to `FileVisionModelManifestReader()` when omitted.
+- **Probléma:** `FileVisionModelManifestReader.read()` (`lib/core/ml/vision_model_manifest.dart:112-148`) looks for `'${Directory.current.absolute.path}/assets/ml/model_manifest.json'` via plain `dart:io File` reads — a **project-directory-relative** lookup. Measured, not assumed:
+  1. `pubspec.yaml`'s `flutter.assets` list (`:6-20`) bundles `assets/ml/*.bin` as **individual files**, and `assets/tutor_knowledge/`/`assets/tutor_prompts/` as **directories** — `assets/ml/model_manifest.json` is declared **nowhere**. It is not packaged into the APK/IPA at all.
+  2. Even if it were declared, Flutter assets are reached via `rootBundle`/`AssetBundle` at runtime, never via a raw `dart:io File` path — `Directory.current` inside an installed app is an arbitrary sandbox path, not the repo root.
+  3. The two EXISTING sibling classes that already consume `VisionModelManifestReader` in production code — `NativeHandLandmarkProvider` (`data/landmarks/native_hand_landmark_provider.dart:34-39`) and `NativePoseLandmarkProvider` (`data/landmarks/native_pose_landmark_provider.dart:22-27`) — both take it as a **required** constructor parameter with **no default**, i.e. the established, reviewed pattern in this codebase is "the caller must supply a working reader", never "fall back to the file-based one". This round's optional default is a **new, unprecedented deviation**.
+- **Miért nem kapta el a gate:** every test added in javító kör #1 explicitly injects a fake `VisionModelManifestReader` (`_ManifestReader`/`_UnreadableManifestReader`) — **none exercises the default**. The gate ran via `flutter test` from the repo root, where `Directory.current` happens to equal the project root, so if the default HAD been exercised there, it would have accidentally succeeded too — CI/dev coincidence masking a production failure, not a genuine proof. This is exactly the "zöld gate NEM bizonyíték" principle this skill opens with.
+- **Hatás:** the moment a future round wires a real caller to `VisionSessionRepository()` without explicitly injecting a reader (an easy, unflagged mistake — the parameter is optional and compiles fine), every `save()` call throws `StateError` on a real device, and **no Vision session ever persists** — the opposite of this round's entire purpose. Silent-until-runtime, unit-untestable-by-construction (the default can only be proven broken on a real device or an environment where `Directory.current` isn't the repo root).
+- **Kötelező javítás:** remove the silent default. Two acceptable directions (implementer choice), either is fine as long as there is **no fallback that can resolve on CI/dev but not on a device**:
+  1. Make `manifestReader` a `required` constructor parameter (matching the `NativeHandLandmarkProvider`/`NativePoseLandmarkProvider` precedent) — forces every future caller to consciously supply one; update `VisionExport`'s internal `VisionSessionRepository(store: store, codec: codec)` construction to also take/thread one (even though export never calls `save()`, so a trivial dummy is technically safe there but a `required` parameter is more honest — implementer's call how to thread it cleanly); or
+  2. **Simpler, no new dependency at all:** drop `VisionModelManifestReader` from the repository entirely — thread `modelVersions: Map<String, String>` as an explicit **required parameter of `save()` itself**, exactly like `VisionSessionCodec.fromResult()` already does. The future caller (session-end wiring, out of this round's scope) resolves the map however is appropriate for its own context. `VisionExport` needs no change at all under this direction (it never calls `save()`).
+  Either way: update the one existing test call site that currently relies on the implicit default without injecting a fake reader —
+  `test/features/settings/vision_privacy_screen_test.dart:16` (`await repository.save(_result());` via a bare `VisionSessionRepository(store: store)`) — so it keeps compiling/passing for the RIGHT reason, not by coincidence.
+- **Ellenőrzés:** grep the final diff for `FileVisionModelManifestReader(` with zero arguments used as a *default value* anywhere reachable without an explicit override — there should be none. `flutter analyze` must show no unused-import warning on `dart:io`/`vision_model_manifest.dart` if direction 2 is taken (the import should be removed from the repository file entirely). All four vision persistence test files green.
+- **Státusz:** OPEN — javító kör #2-ben dispatch-elve.
 
 ### N1 — NOTE — Cross-feature import goes through the wide `vision/public.dart` barrel, not the narrow `domain/integration/public.dart` one
 
@@ -80,8 +106,8 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 | architecture | (part of round-gate) | ✅ zöld |
 | secrets | (part of round-gate) | ✅ zöld |
 | l10n | (part of round-gate) | ✅ zöld |
-| Full Gate (no APK) | dispatch-elve az orchestrátor által | ✅ zöld — [31274920630](https://github.com/wolfcasaba/strumsight/actions/runs/31274920630) (PR #202 branch tip `ee154cc`) |
-| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | ✅ zöld — [31274905440](https://github.com/wolfcasaba/strumsight/actions/runs/31274905440) |
+| Full Gate (no APK) | dispatch-elve az orchestrátor által | ✅ zöld — [31274920630](https://github.com/wolfcasaba/strumsight/actions/runs/31274920630), **de a branch tip azóta `ee154cc`→`bd938a3`→(javító kör #2 után egy új SHA)-ra mozdult — ÚJRA KELL dispatch-elni a merge előtt (ADR 0086 §2)** |
+| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | ✅ zöld — [31274905440](https://github.com/wolfcasaba/strumsight/actions/runs/31274905440), **ugyanaz a SHA-elcsúszási megjegyzés érvényes — újra kell dispatch-elni** |
 
 **Módszertani jegyzet a gate-újrafuttatásról:** az első saját gate-futtatás
 közben a reviewer PÁRHUZAMOSAN, UGYANABBAN a klónban végezte az AC #2/#3
@@ -95,9 +121,10 @@ eredményt (`/tmp/review-e05-r28-gate.log`, „═══ Gate-összegzés" blokk
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-A gate-ek (helyi + Full Gate + Router CI) mind zöldek, de **F1 (MAJOR) nyitva
-van** → **merge jelenleg TILOS**. Javító kör #1 dispatch-elve F1
-leletlistával; a review ezután frissül (APPROVED vagy ismételt CHANGES
-REQUESTED), és a CI-t a javító kör commitja után újra kell dispatch-elni
-(a concurrency a jelenlegi zöld futásokat a régi SHA-n hagyja, az új SHA-n
-kell újra zöldnek lennie).
+F1 lezárva javító kör #1-ben, de a reviewer saját, független re-vizsgálata a
+javítás WIRING-jában egy ÚJ MAJOR-t (F2) talált — **merge jelenleg TILOS**.
+Javító kör #2 dispatch-elve F2 leletlistával; a review ezután frissül
+(APPROVED vagy ismételt CHANGES REQUESTED), és mind a helyi gate-et, mind a
+Full Gate / Router CI workflow-kat újra kell futtatni a javító kör #2
+commitján (a jelenlegi zöld futások a `bd938a3` SHA-n élnek, ami maga sem a
+végleges tip).
