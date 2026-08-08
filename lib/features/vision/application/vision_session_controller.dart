@@ -129,7 +129,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
       }
       startSettled.complete();
     }
-    if (finalizeFailure) {
+    if (finalizeFailure && ref.mounted) {
       _captureFailed();
     }
   }
@@ -161,6 +161,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
       switch (acquired) {
         case Failure<CameraSessionLease>():
           await capture.close();
+          if (!ref.mounted) return false;
           _setState(state.copyWith(status: VisionSessionStatus.cameraBusy));
           return false;
         case Success<CameraSessionLease>(:final value):
@@ -168,11 +169,14 @@ class VisionSessionController extends Notifier<VisionSessionState> {
           _lease = value;
           _session ??= VisionSession(id: _idFactory(), startedAt: _clock());
       }
+      if (!ref.mounted) return false;
     }
 
     final started = await capture.start();
+    if (!ref.mounted) return false;
     if (started case Failure<void>()) {
       await _closeCapture(releaseLease: true);
+      if (!ref.mounted) return false;
       _setState(
         state.copyWith(
           status: VisionSessionStatus.inferenceFailed,

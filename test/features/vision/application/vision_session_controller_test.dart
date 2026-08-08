@@ -372,6 +372,30 @@ void main() {
       },
     );
 
+    test(
+      'dispose during capture start avoids disposed Riverpod state access',
+      () async {
+        final startGate = Completer<void>();
+        final rig = _rig(startGate: startGate.future);
+        await rig.controller.begin();
+        rig.controller.beginCalibration();
+
+        final start = rig.controller.start();
+        await Future<void>.delayed(Duration.zero);
+        expect(rig.capture.startCalls, 1);
+
+        rig.dispose();
+        startGate.complete();
+        await expectLater(start, completes);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(rig.capture.isClosed, isTrue);
+        expect(rig.coordinator.activeOwner, isNull);
+        expect(rig.results, hasLength(1));
+        expect(rig.results.single.endReason, VisionSessionEndReason.disposed);
+      },
+    );
+
     test('stop followed immediately by route leave emits one result', () async {
       final rig = _rig();
       addTearDown(rig.dispose);
