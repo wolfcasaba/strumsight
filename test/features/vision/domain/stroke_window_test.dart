@@ -70,11 +70,16 @@ void main() {
   });
 
   group('overlapping onsets — truncation (brief §6)', () {
-    test('post window of first onset is cut at the next onset timestamp', () {
+    test('post window of first onset is cut at the next onset pre-window '
+        'start', () {
       // Two onsets 130 ms apart, pre=100, post=150. The first window's
-      // requested end is onset_0 + 150 = 150 ms. The next onset at 130 ms
-      // falls inside that interval, so the window is truncated to 130 ms.
-      // `duration = end - start = 130 - (-100) = 230 ms` — strictly less
+      // requested end is onset_0 + 150 = 150 ms. The next onset's REQUESTED
+      // start is onset_1 - pre = 130 - 100 = 30 ms, which is BEFORE the
+      // current window's requested end. The window is therefore truncated
+      // to 30 ms (NOT 130 ms — truncating at the next onset's raw
+      // timestamp would leak the `[30, 130)` band into BOTH adjacent
+      // windows, which is the F1 BLOCKER fixed by this round).
+      // `duration = end - start = 30 - (-100) = 130 ms` — strictly less
       // than the un-truncated 250 ms the same window would have produced
       // if the next onset were further away (the §6 falsification
       // contract).
@@ -86,10 +91,14 @@ void main() {
         ],
       );
       expect(cuts[0].window.truncated, isTrue);
-      expect(cuts[0].window.end, const Duration(milliseconds: 130));
+      expect(
+        cuts[0].window.end,
+        const Duration(milliseconds: 30),
+        reason: 'cut at the next onset\'s pre-window start',
+      );
       expect(
         cuts[0].window.duration,
-        const Duration(milliseconds: 230),
+        const Duration(milliseconds: 130),
         reason: 'cut window is shorter than the full 250 ms pre+post',
       );
       expect(cuts[1].window.truncated, isFalse);
@@ -127,12 +136,18 @@ void main() {
     });
 
     test('six-on-130ms toggle truncates all but the last window', () {
-      // Each onset 130 ms apart — the next onset always falls inside the
-      // current window (post=150, pre=100, full window=250). Truncation
-      // therefore fires for windows 0..4. Only the last window survives
-      // intact. The fast-toggle threshold is determined by the gap to
-      // the next onset vs. the post window (150 ms); any rhythm below
-      // ~150 ms triggers truncation, this fixture pins that contract.
+      // Each onset 130 ms apart — the next onset's pre-window start
+      // (`nextOnset - 100`) always falls inside the current window
+      // (post=150, pre=100, full window=250). Truncation therefore fires
+      // for windows 0..4. Only the last window survives intact. The
+      // fast-toggle threshold is determined by the gap to the next
+      // onset's pre-window start vs. the post window (150 ms); any
+      // rhythm below (post + pre) ≈ 250 ms triggers truncation, this
+      // fixture pins that contract.
+      //
+      // The cut point is the NEXT window's REQUESTED start
+      // (`nextOnset - pre`), NOT the next onset's raw timestamp — so
+      // adjacent windows are guaranteed to share no samples (F1 fix).
       final cuts = windowImpl.cut(
         frames: const <PickingFrameLike>[],
         onsets: const [
@@ -153,8 +168,8 @@ void main() {
         );
         expect(
           cuts[i].window.end,
-          cuts[i + 1].window.onset,
-          reason: 'window $i cut at next onset',
+          cuts[i + 1].window.start,
+          reason: 'window $i cut at next window pre-start (no overlap)',
         );
       }
       expect(cuts[5].window.truncated, isFalse);
