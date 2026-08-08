@@ -296,84 +296,72 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // F4 MAJOR — mirror / left-handed parity (4 cells).
+  // F4 MAJOR — mirror / left-handed parity.
   //
-  // The engine API takes already-normalized `role` / `(u, v)` input — the
-  // R13/R15 pipeline strips camera mirroring and `leftHanded` before this
-  // layer sees the data, so the four configuration combinations (leftHanded
-  // on/off × front/back camera) all encode the SAME physical trajectory
-  // at the engine's API surface. The contract that the engine does NOT
-  // reintroduce a mirror dependency is what this group asserts: every
-  // metric must produce identical output for every cell.
+  // WHAT THIS GROUP PROVES: the engine does not branch on
+  // `HandTrack.handedness` — it may only read `role`. Two sample sequences
+  // with byte-identical `role`, raw landmarks and guitar-space `(u, v)`,
+  // differing ONLY in `handedness` (`left` vs `right`), must yield the same
+  // value and observability for all six metrics. A regression in which the
+  // engine accidentally consults `handedness` instead of / in addition to
+  // `role` turns these assertions red.
+  //
+  // WHAT THIS GROUP DOES NOT PROVE: it does not cover the camera-mirroring
+  // or the `leftHanded` setting path. That normalization is the CALLER's
+  // responsibility (R13 `HandTrackAssigner` supplies the already-resolved
+  // `role`; R15 supplies mirror-free guitar-space `(u, v)`) and is tested at
+  // those layers. There is therefore no front/back-camera axis at this layer
+  // to vary — a "4 cell" matrix here would be two duplicated pairs, not four
+  // independent configurations. Hence 2 cells: the single axis that this
+  // layer can actually observe.
   // ---------------------------------------------------------------------------
 
-  group('mirror / left-handed parity (4 cells)', () {
-    List<List<FrettingFrame>> parityCells() {
-      // Identical role / (u,v) payloads for every cell — the upstream
-      // mapper (R13 hand-role, R15 guitar-space) is what guarantees this.
-      const trajectory = <List<FrettingFrame>>[
-        // (1) leftHanded on  + front camera
-        [],
-        // (2) leftHanded on  + back camera
-        [],
-        // (3) leftHanded off + front camera
-        [],
-        // (4) leftHanded off + back camera
-        [],
-      ];
-      return trajectory.map((_) {
-        return [
-          frame(0, u: 0.1, v: 0),
-          frame(100, u: 0.4, v: 0),
-          frame(200, u: 0.7, v: 0),
-        ];
-      }).toList();
-    }
+  group('mirror / left-handed parity (handedness axis, 2 cells)', () {
+    List<FrettingFrame> trajectory(Handedness handedness) => [
+      frame(0, u: 0.1, v: 0, handedness: handedness),
+      frame(100, u: 0.4, v: 0, handedness: handedness),
+      frame(200, u: 0.7, v: 0, handedness: handedness),
+    ];
 
-    test('all four cells produce identical output for every metric', () {
+    test('metrics are invariant to HandTrack.handedness for identical '
+        'role / geometry', () {
       const tolerance = 1e-5;
-      final cells = parityCells();
+      final left = trajectory(Handedness.left);
+      final right = trajectory(Handedness.right);
       final cellTarget = FrettingTarget(
         timestamp: const Duration(milliseconds: 500),
         position: GuitarSpacePoint(0.4, 0),
       );
 
-      for (final cell in cells) {
-        // Three raw-landmark metrics (camera-mirror invariant by
-        // construction: angles, distances, position variances).
+      final metrics = <String, MetricObservation Function(List<FrettingFrame>)>{
+        'wristDeviationProxy': engine.wristDeviationProxy,
+        'handToNeckDistance': engine.handToNeckDistance,
+        'chordChangeTravel': engine.chordChangeTravel,
+        'positionStability': engine.positionStability,
+        'fingerSpreadProxy': engine.fingerSpreadProxy,
+        'readyPositionTime': (samples) =>
+            engine.readyPositionTime(samples, cellTarget),
+      };
+
+      metrics.forEach((name, compute) {
+        final l = compute(left);
+        final r = compute(right);
         expect(
-          engine.wristDeviationProxy(cell).value!,
-          closeTo(0.785398, tolerance),
-          reason: 'wristDeviationProxy parity',
+          l.observability,
+          MetricObservability.observable,
+          reason: '$name should be observable for the left-handed cell',
         );
         expect(
-          engine.handToNeckDistance(cell).value!,
-          closeTo(0.0, tolerance),
-          reason: 'handToNeckDistance parity',
+          r.observability,
+          l.observability,
+          reason: '$name observability parity across handedness',
         );
         expect(
-          engine.chordChangeTravel(cell).value!,
-          closeTo(0.6, tolerance),
-          reason: 'chordChangeTravel parity',
+          r.value!,
+          closeTo(l.value!, tolerance),
+          reason: '$name value parity across handedness',
         );
-        expect(
-          engine.positionStability(cell).value!,
-          closeTo(0.244949, tolerance),
-          reason: 'positionStability parity',
-        );
-        expect(
-          engine.fingerSpreadProxy(cell).value!,
-          closeTo(0.2, tolerance),
-          reason: 'fingerSpreadProxy parity',
-        );
-        // readyPositionTime: at u=0.1, 0.4, 0.4 with target (0.4, 0),
-        // the contiguous in-zone run starts at t=100 ⇒ 500−100=400 000 µs.
-        expect(
-          engine.readyPositionTime(cell, cellTarget).value!,
-          closeTo(400000.0, tolerance),
-          reason: 'readyPositionTime parity',
-        );
-      }
+      });
     });
   });
 }
