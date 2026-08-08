@@ -1,6 +1,10 @@
 library;
 
 export 'domain/vision_setup_profile.dart';
+export 'domain/sync/vision_clock.dart';
+export 'domain/sync/clock_mapping.dart';
+export 'domain/sync/sync_quality.dart';
+export 'application/sync_calibration_controller.dart';
 export 'domain/quality/frame_quality_assessor.dart';
 export 'domain/quality/quality_thresholds.dart';
 export 'domain/quality/vision_frame_quality.dart';

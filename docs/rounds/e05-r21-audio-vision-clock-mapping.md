@@ -247,7 +247,80 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok és megvalósítás
+
+- `lib/features/vision/domain/sync/vision_clock.dart` — új `VisionClock` és
+  `AudioClock` boundary. A kamera `CameraTimestamp` változatlanul session-µs;
+  az audio `DateTime` egy injektált referencia-időponthoz viszonyított
+  `Duration`-ná, majd `SessionTimestamp`-pé alakul. Visszafelé mozgó audio
+  vagy nem növekvő vision timestamp kontrollált `ClockMappingException`.
+- `lib/features/vision/domain/sync/clock_mapping.dart` — immutable
+  `ClockMapping` (vision → audio offset/drift/confidence), kalibrációs minta,
+  outlier-policy, statisztika és latency-komponensek contractjai. A ±500 ppm
+  feletti drift explicit invalid és mappingkor hibát ad, nem extrapolál.
+- `lib/features/vision/domain/sync/sync_quality.dart` — konfigurálható
+  `poor / acceptable / good / excellent` bucketek; ideiglenes benchmark-váró
+  küszöbök: excellent ≤10 000 µs, good ≤25 000 µs, acceptable ≤50 000 µs,
+  azon túl poor.
+- `lib/features/vision/application/sync_calibration_controller.dart` —
+  medián-alapú outlier-elutasítás, opcionális lineáris drift-fit, confidence,
+  RMS-residual quality és immutable observation provenance. Újramérés csak az
+  aktív mappinget cseréli; korábban kiadott observation mapping-pillanatképe
+  nem változik.
+- `lib/features/vision/public.dart` — additív sync-contract exportok.
+- `test/features/vision/domain/clock_mapping_test.dart` — offset-, outlier-,
+  time-base-, latency-, drift-bound-, bucket- és valódi-sértés source-guard
+  mátrix.
+- `test/features/vision/application/sync_calibration_controller_test.dart` —
+  újramérés provenance- és kalibráció-előtti hiba teszt.
+- `test/property/clock_mapping_property_test.dart` — `PROPERTY_SEED`-es
+  lineáris drift-property: 64 random trial × 11 mapping, a 3 µs-nál nagyobb
+  eltérések aránya ≤1%.
+
+### Futtatott ellenőrzések
+
+```text
+dart format <a nyolc módosított Dart fájl>
+Formatted 8 files (5 changed) in 0.04 seconds.
+
+flutter test test/features/vision/domain/clock_mapping_test.dart \
+  test/features/vision/application/sync_calibration_controller_test.dart \
+  test/property/clock_mapping_property_test.dart
+00:00 +20: All tests passed!
+```
+
+Bucket-mátrix a kötelező, tényleges `python3 -c` számítással:
+
+```text
++9999 us -> excellent
++10000 us -> excellent
++10001 us -> good
+-10001 us -> good
++24999 us -> good
++25000 us -> good
++25001 us -> acceptable
++49999 us -> acceptable
++50000 us -> acceptable
++50001 us -> poor
+```
+
+Valódi-sértés próba: a `vision_clock.dart` `AudioClock.toSessionTime` ágába
+ideiglenesen `DateTime.now()` került, majd
+`flutter test test/features/vision/domain/clock_mapping_test.dart` PIROS lett:
+`mapping-domain sources contain no system wall-clock read` `Expected: not
+contains 'DateTime.now('`. A mutációt azonnal eltávolítottam; a source-guard
+így a normál célzott teszten ismét zöld. A teljes §7 gate eredményét a záráskor
+itt rögzítem: `tools/round-gate.sh test/features/vision
+test/property/clock_mapping_property_test.dart` teljesen ZÖLD — format,
+analyze, `test/features/vision` (353 teszt), a célzott property teszt
+(`PROPERTY_SEED=42`), architecture, secrets és l10n parity.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Eltérés a brieftől: nincs.
+- Valós Android audio+camera benchmark: nem futott; a brief §7/§9 szerint a
+  device-mátrix PENDING sora és egy későbbi bucket-hangoló kör előfeltétele.
+- CI-dispatch és PR/merge: orchesztrátor-feladat, nem implementer-ellenőrzés.
 
 ## 11. Review — a független reviewer tölti ki
 
