@@ -7,7 +7,7 @@ import 'package:strumsight/features/vision/domain/integration/public.dart';
 
 void main() {
   final snapshot = VisionContextSnapshot(
-    sessionId: 'vision-session-1',
+    sessionId: VisionSessionId('vision-session-1'),
     sessionTimestamp: SessionTimestamp(1_250_000),
     insightCode: InsightCode.pickingStable,
     confidence: 0.8,
@@ -31,6 +31,19 @@ void main() {
     expect(const TutorVisionContextAdapter().adapt(snapshot), isNull);
   });
 
+  test('adapter use creates no network client or request', () {
+    final networkSpy = _NetworkSpyOverrides();
+
+    HttpOverrides.runZoned(
+      () => const TutorVisionContextAdapter(
+        schemaVersion: 'vision-context.v1',
+      ).adapt(snapshot),
+      createHttpClient: networkSpy.createHttpClient,
+    );
+
+    expect(networkSpy.clientCreations, 0);
+  });
+
   test('imports only the narrow Vision integration barrel', () {
     const path =
         'lib/features/ai_tutor/application/context/adapters/tutor_vision_context_adapter.dart';
@@ -43,4 +56,13 @@ void main() {
     expect(imports, contains('features/vision/domain/integration/public.dart'));
     expect(imports, isNot(contains('features/vision/public.dart')));
   });
+}
+
+final class _NetworkSpyOverrides {
+  int clientCreations = 0;
+
+  HttpClient createHttpClient(SecurityContext? context) {
+    clientCreations++;
+    throw StateError('The pure adapter must not create a network client.');
+  }
 }

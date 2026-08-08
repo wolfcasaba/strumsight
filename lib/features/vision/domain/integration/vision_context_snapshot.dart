@@ -1,6 +1,7 @@
 import '../evidence/vision_evidence.dart';
 import '../feedback/insight_code.dart';
 import '../sync/vision_clock.dart';
+import '../vision_session.dart';
 
 export '../evidence/vision_evidence.dart' show ObservationState;
 export '../feedback/insight_code.dart' show InsightCode;
@@ -15,7 +16,7 @@ final class VisionContextSnapshot {
     required this.confidence,
     required this.observationState,
   }) {
-    if (sessionId.trim().isEmpty ||
+    if (sessionId.value.trim().isEmpty ||
         !(confidence.isFinite && confidence >= 0 && confidence <= 1)) {
       throw ArgumentError(
         'A session ID and finite [0, 1] confidence are required.',
@@ -23,7 +24,7 @@ final class VisionContextSnapshot {
     }
   }
 
-  final String sessionId;
+  final VisionSessionId sessionId;
   final SessionTimestamp sessionTimestamp;
   final InsightCode insightCode;
   final double confidence;
@@ -31,7 +32,7 @@ final class VisionContextSnapshot {
 
   /// Stable, pinned representation for minimal Tutor context projection.
   Map<String, Object> toJson() => <String, Object>{
-    'sessionId': sessionId,
+    'sessionId': sessionId.value,
     'sessionTimestampUs': sessionTimestamp.microseconds,
     'insightCode': insightCode.name,
     'confidence': confidence,

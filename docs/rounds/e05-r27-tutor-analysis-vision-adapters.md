@@ -348,6 +348,23 @@ claim-guard lazítása helyett dokumentált brief-revízió.
   → **pass**, `exit_code: 0`, `failed_step: null`; format, analyze,
   mindhárom célzott test-rész, architecture, secrets és l10n zöld.
 
+### Javító kör #1 — F1/F2/F3 (Terra, 2026-08-08)
+
+- **F1:** `adapter use creates no network client or request` a
+  `tutor_vision_context_adapter_test.dart` fájlban `HttpOverrides.runZoned`
+  alatt hívja az adaptálót; a `clientCreations` számláló **0**.
+- **F2:** a `VisionClaimGuard` a három negatív `*Focus` kódhoz 0.85-ös
+  küszöböt használ mind az evidence-, mind a hívó confidence-értéknél. Az
+  új `negative-direction confidence threshold` cellahármasban a
+  `postureFocus` **0.84 → blocked**, **0.85 → allowed**, **0.86 → allowed**.
+- **F3:** a snapshot `sessionId` típusa `VisionSessionId`; a JSON továbbra is
+  a `.value` stringet tartalmazza, és a szűk Vision integration barrel csak
+  ezt az ID-t exportálja a `vision_session.dart` fájlból.
+- RED bizonyíték: a javítás előtti célzott futás a típusos `sessionId`
+  argumentumokra fordítási hibát, illetve a 0.84-es negatív cellára
+  `Expected: <false>; Actual: <true>` hibát adott. GREEN bizonyíték:
+  ugyanaz a három célzott tesztfájl **18 teszttel zöld** lett.
+
 ### Eltérések és nem futtatott ellenőrzések
 
 - A brief által engedett `ai_tutor/public.dart` és `analyze/public.dart`

@@ -20,6 +20,7 @@ final class VisionClaimGuard {
   const VisionClaimGuard();
 
   static const double _minimumConfidence = 0.70;
+  static const double _minimumNegativeConfidence = 0.85;
 
   static const Set<InsightCode> _catalog = <InsightCode>{
     InsightCode.frettingStable,
@@ -34,18 +35,28 @@ final class VisionClaimGuard {
     InsightCode.experimentalObservation,
   };
 
+  static const Set<InsightCode> _negativeClaims = <InsightCode>{
+    InsightCode.frettingFocus,
+    InsightCode.pickingFocus,
+    InsightCode.postureFocus,
+  };
+
   /// Allows a claim only when its catalog entry has evidence at the threshold.
   VisionClaimGuardResult evaluate({
     required InsightCode claim,
     required VisionEvidence? evidence,
     required double confidence,
   }) {
+    final minimumConfidence = _negativeClaims.contains(claim)
+        ? _minimumNegativeConfidence
+        : _minimumConfidence;
+
     if (!_catalog.contains(claim) ||
         evidence == null ||
         evidence.observationState == ObservationState.notObservable ||
-        evidence.confidence < _minimumConfidence ||
+        evidence.confidence < minimumConfidence ||
         !confidence.isFinite ||
-        confidence < _minimumConfidence) {
+        confidence < minimumConfidence) {
       return const VisionClaimGuardResult.notObservable();
     }
     return VisionClaimGuardResult.allowed(claim);

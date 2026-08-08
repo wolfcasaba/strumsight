@@ -74,6 +74,42 @@ void main() {
     }
   });
 
+  group('negative-direction confidence threshold', () {
+    const negativeClaim = InsightCode.postureFocus;
+
+    for (final row in <({String name, double confidence, bool allowed})>[
+      (
+        name: 'blocks evidence below the negative threshold',
+        confidence: 0.84,
+        allowed: false,
+      ),
+      (
+        name: 'allows evidence at the negative threshold',
+        confidence: 0.85,
+        allowed: true,
+      ),
+      (
+        name: 'allows evidence above the negative threshold',
+        confidence: 0.86,
+        allowed: true,
+      ),
+    ]) {
+      test(row.name, () {
+        final result = guard.evaluate(
+          claim: negativeClaim,
+          evidence: _evidence(confidence: row.confidence),
+          confidence: row.confidence,
+        );
+
+        expect(result.isAllowed, row.allowed);
+        expect(
+          result.code,
+          row.allowed ? negativeClaim : InsightCode.setupNotObservable,
+        );
+      });
+    }
+  });
+
   test('returns the same not-observable fallback for repeated denials', () {
     final first = guard.evaluate(claim: claim, evidence: null, confidence: 0.9);
     final second = guard.evaluate(
