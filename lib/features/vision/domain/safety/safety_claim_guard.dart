@@ -27,17 +27,12 @@ import 'vision_safety_policy.dart';
 /// The deterministic output of [SafetyClaimGuard.evaluate].
 @immutable
 final class SafetyClaimGuardResult {
-  const SafetyClaimGuardResult._({
-    required this.isAllowed,
-    required this.reason,
-  });
-
   /// Allowed evaluation: the code is in the catalog and its class is
   /// not forbidden.
   const SafetyClaimGuardResult.allowed() : isAllowed = true, reason = 'allowed';
 
   /// Rejected evaluation: the reason is the failure description.
-  const SafetyClaimGuardResult.rejected(String this.reason) : isAllowed = false;
+  const SafetyClaimGuardResult.rejected(this.reason) : isAllowed = false;
 
   final bool isAllowed;
   final String reason;

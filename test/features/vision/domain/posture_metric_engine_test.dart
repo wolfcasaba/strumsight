@@ -24,7 +24,6 @@
 // `observation.state == good`.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/vision/domain/landmarks/pose_landmarks.dart';
 import 'package:strumsight/features/vision/domain/landmarks/posture_baseline.dart';
 import 'package:strumsight/features/vision/domain/metrics/metric_observation.dart';
 import 'package:strumsight/features/vision/domain/metrics/posture_metric_engine.dart';
