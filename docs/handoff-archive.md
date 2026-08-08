@@ -6,6 +6,83 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R18 — Fretting-hand metric engine, teljes részletes történet (2026-08-08)
+
+Hat megfigyelhető, confidence-aware proxy-metrika pure Dart implementációja
+a bal kéz fogásának nagyobb-léptékű geometriájára — **wrist deviation**,
+**hand-to-neck distance**, **chord-change travel**, **ready-position
+time**, **position stability**, **finger spread**, mind az R13 kéz-track/
+R15 guitar-space/R16 calibration-loss rétegek fölött, exact fret/string
+claim nélkül (ADR 0179/0181). `lib/features/vision/domain/metrics/` —
+`MetricDefinition` (minimum visibility, ablak, confidence-formula,
+helyi `FrettingCapability`), `MetricObservation` (finite-only,
+`notObservable` degenerált/alacsony-visibility bemenetre),
+`FrettingMetricEngine` + a hat metrika katalógusa. **Nincs új ADR**
+(ADR 0179/0181 végrehajtása — a fejléc eredeti „0162"/„0164" hivatkozása
+ismét elavult batch-írási placeholder volt, pre-flightban javítva,
+immár hatodszor mérve ugyanabból a 2026-08-05-i batch-írásból). Implementer
+**MiniMax M3** (kezdeti implementáció + **két javító kör**),
+orchestrátor/reviewer **Claude Sonnet 5**. PR
+[#191](https://github.com/wolfcasaba/strumsight/pull/191), squash `75f8766`.
+
+**Két javító kör, egy lezárt BLOCKER + négy lezárt MAJOR + két lezárt
+MINOR + egy lezárt NOTE — mind a review saját, minden fordulóban
+friss GitHub-klónon (nem a megosztott fa stale lokális branch-refjén,
+ld. Lecke L175) függetlenül újrafuttatott gate-jével ÉS eldobható
+mutáció-próbákkal igazolva, nem az implementer önjelentésére hagyatkozva:**
+
+1. **BLOCKER-1/F1 — `readyPositionTime` megkerülte a szerep- és
+   visibility-kaput.** `fretting_metric_engine.dart:86-110`. A másik öt
+   metrika mind a közös `_usable()` helperen (role==fretting **és**
+   minimumVisibility) szűr; ez az egy metrika csak időbélyeg szerint
+   szűrt — egy KIZÁRÓLAG pengető-kéz (picking-role) vagy KIZÁRÓLAG
+   küszöb-alatti-visibility mintából álló bemenet is `observable` értéket
+   adott. A review saját, eldobható próbateszttel bizonyította mindkét
+   esetet, mielőtt a javítást kérte. **Javítás:** `_usable()` bekötve,
+   2 regressziós teszt felvéve.
+2. **F2 MAJOR — `readyPositionTime` a minta-rést mérte, nem az érkezési
+   időt.** Ugyanaz a metódus a legutolsó illeszkedő minta és a target
+   közti (apró) rést adta vissza a valódi zóna-érkezési idő helyett — egy
+   4 mintás, 400ms-es folytonos zóna-tartózkodású fixture-ön 200000 helyett
+   400000 µs a helyes érték (mindkettő a review saját próbatesztjével
+   mérve). **Javítás:** legkésőbbi zónán-belüli mintától visszafelé a
+   folytonos szakasz elejéig sétáló algoritmus.
+3. **F3 MAJOR — hiányzó metrikánkénti határ-/degenerált-teszt mátrix.**
+   A brief §6 „legalább tipikus/határ/degenerált eset metrikánként"
+   elvárása csak 1 tipikus esettel teljesült. **Javítás:** 12 új teszt
+   (6 pontosan-a-küszöbön + 6 geometriai degenerált eset).
+4. **F4 MAJOR — a szállított „4 cellás" mirror/left-handed paritás teszt
+   bitre azonos bemenettel futott mind a négy cellában** — formailag
+   megfelelt a brief checkboxának, tartalmilag semmit nem bizonyított
+   (Lecke **L176**). Egy MÁSODIK, szűken skálázott javító körben javítva:
+   valódi 2-cellás `HandTrack.handedness`-tengely teszt (a réteg egyetlen
+   ténylegesen variálható input-tengelye — a kamera-irány/`leftHanded`
+   normalizáció felsőbb rétegen, R13/R15-ben már tesztelt), a review
+   saját mutáció-próbájával (hamis `handedness`-ág injektálva) load-
+   bearingnek igazolva.
+5. **F5 MAJOR — elmaradt, brief-kötelező valódi-sértés próba
+   dokumentálása.** A review maga végezte el (visibility-kapu kiiktatva
+   → PIROS → visszaállítva), az implementer a §10-be másolta be.
+6. **F6/F7 MINOR (opcionális, bónuszként javítva) + N1 NOTE:**
+   `MetricDefinition` konstruktor `assert`→feltétel nélküli
+   `throw ArgumentError` (release-biztonság, a R16 `GeometryConfidence`
+   mintáját követve); `_confidence()` hatóköre a szűrt mintahalmazra
+   igazítva mind a négy érintett metrikánál; a használaton kívüli
+   `proxy_paths.json` fixture törölve.
+
+Zöld kapu (exact-SHA `77d6ee0`, a második javító kör után): Full Gate
+[31234500072](https://github.com/wolfcasaba/strumsight/actions/runs/31234500072)
+**success** + Router CI
+[31234524158](https://github.com/wolfcasaba/strumsight/actions/runs/31234524158)
+**success**. Post-merge gate a friss `main`-en (`75f8766`) is zöld,
+225/225 teszt.
+
+Lecke: **L175** (implementer-munkapéldány `git worktree add`-dal NEM
+egyenértékű egy klónnal — a `.git` fájl a burkoló saját validációját
+néma `exit 2`-re futtatja), **L176** (paraméterezett/mátrix-alakú teszt
+review-jánál a BEMENETEK tényleges variálását is ellenőrizni kell, nem
+csak a nevet/struktúrát/`expect()`-számot).
+
 ## E05-R17 — Automatic guitar detector go/no-go decision, teljes részletes történet (2026-08-07)
 
 Go/no-go/experimental-only döntési keret egy JÖVŐBELI automatikus

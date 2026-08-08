@@ -6070,3 +6070,83 @@ hívást tartalmaz vagy mennyire pontosan illeszkedik az acceptance-checkbox
 szövegéhez. Rokon [[L172]] (két izoláltan zöld komponens integrációja
 sértheti a célt — más mechanizmus, ugyanaz a "formai megfelelés ≠ tartalmi
 bizonyíték" tőmondat).
+
+## L177 — `ROUND_BRIEF` beállítása NEM garantálja a `scope_audit=` mező megjelenését a jelzésfájlban — a kézi fallback minden fordulóban ellenőrizendő, nem csak `skipped` esetén (E05-R19, kezdeti + fix-round, 2026-08-08)
+
+**Mit mértünk.** Az E05-R19 kezdeti dispatch-a `ROUND_BRIEF` NÉLKÜL ment
+(a pipeline-prompt §0.1 headless-mintája nem tartalmazza, csak a §1.1
+„Nevesített motor" szakasz külön, könnyen figyelmen kívül hagyható
+sora) — a `.codex-round-status` ekkor korrekt módon
+`scope_audit=skipped` / `scope_audit_reason=ROUND_BRIEF nincs beállítva`
+párt írt, a dokumentált szerződés szerint. A JAVÍTÓ kör dispatch-a MÁR
+`ROUND_BRIEF=docs/rounds/e05-r19-picking-hand-stroke-metrics.md`-vel
+ment — és a jelzésfájlban **egyáltalán nem jelent meg** `scope_audit=`
+kulcs (sem `ok`, sem `skipped`, sem `error`). A `tools/round-scope-
+audit.sh` scriptet a `tools/mm-round.sh` feltétel nélkül hívja minden
+kilépési úton (`verify_claim` UTÁN, a végső `cat "$signal"` ELŐTT), és a
+script minden ismert ágán ír `scope_audit=`-ot — a hiányzó mező
+gyökéroka ezen a körön nem lett tovább diagnosztizálva (a kézi
+fallback futtatása olcsóbb volt, mint a wrapper belső hibakeresése).
+
+**Következmény és szabály.** A `scope_audit=` mező jelenléte a
+jelzésfájlban **NEM garantált** pusztán attól, hogy a dispatch
+`ROUND_BRIEF`-fel ment — a hiányzó mezőt UGYANÚGY kézzel kell pótolni,
+mint a dokumentált `skipped`/`error` esetet:
+```bash
+python3 tools/scope-audit.py --repo <munkapéldány> \
+  --brief docs/rounds/<kör>.md --base <a kör-branch előző, releváns HEAD-je>
+```
+(a `--base` a JAVÍTÓ körnél a review-commit SHA-ja, NEM az eredeti
+pre-flight baseline — különben a diffbe belekeveredik a MÁR jóváhagyott
+implementációs commitok halmaza is). Mindkét E05-R19 fordulóban ez a
+kézi parancs adta az egyetlen bizonyítékot; mindkétszer `OK` eredménnyel
+zárt (8, majd 4 megváltozott útvonal, 0 generated/ignored).
+
+## L178 — Ablak-alapú csonkolásnál a határ a KÖVETKEZŐ ablak SAJÁT kért kezdete legyen, nem a következő esemény nyers timestampja — különben szomszédos ablakok mintát duplikálnak (E05-R19, F1 BLOCKER, 2026-08-08)
+
+**Mit mértünk.** Az E05-R19 `StrokeWindow.cut()` az ablak végét a
+KÖVETKEZŐ onset NYERS timestampjéig csonkolta (`actualEnd =
+nextOnset.timestamp`), a brief §5/3 „az ablak nem nyúlhat át a
+következő eseményre" szövegét szó szerint követve. A hiba: a KÖVETKEZŐ
+ablak SAJÁT eleje `nextOnset.timestamp - pre` — ami a `pre > 0` miatt
+MINDIG korábbi, mint `nextOnset.timestamp` maga. A `[nextOnset - pre,
+nextOnset)` sávba eső minták emiatt MINDKÉT szomszédos ablak `samples`
+listájában szerepeltek egyszerre. A review saját, eldobható
+próbateszttel (nem a szállított tesztkészletre hagyatkozva) reprodukálta
+a meglévő `FastToggleStrokes.sixAt130ms()` fixture-ön (onset 0=0ms,
+onset 1=130ms, `pre`=100ms/`post`=150ms alapértelmezéssel): `window0`
+mintái `[-100,-67,-34,-1,32,65,98]`, `window1` mintái
+`[32,65,98,131,164,197,230]` — a `{32,65,98}` ms timestampek MINDKÉT
+listában szerepeltek. Mivel a metrika-számítás (`_pathSegments`) a
+saját `samples` listáján belüli EGYMÁS UTÁNI mintapárokat összegzi, a
+`(32→65)` és `(65→98)` szegmensek TÉNYLEGESEN duplán adódtak mindkét
+ablak amplitúdójához/sebességéhez/linearitásához — ez torzította
+PONTOSAN azt a metrikakört, amit a brief a leginkább aggódik, és
+PONTOSAN abban a forgatókönyvben (gyors le-fel váltogatás), amit a
+brief §6 első acceptance-pontja explicit megkövetelt.
+
+**Miért nem fogta meg a szállított tesztkészlet.** A meglévő
+„overlapping windows" teszt-csoport a csonkolás-jelzőt (`truncated`
+boolean) ellenőrizte, SOHA a mintaszámot/mintaazonosságot — és a
+„six-on-130ms" teszt `frames: <PickingFrameLike>[]` ÜRES listával
+futott, ami a duplikációt szerkezetileg lehetetlenné tette megfigyelni
+(nincs minta, ami duplikálódhatna). A brief saját „a mintaszám
+assertálva" szó szerinti előírása pontosan ezt a hiányt hivatott
+megfogni — de a szállított teszt formailag megfelelt a csoportnévnek
+(„Átfedő ablak — fast-toggle truncation") anélkül, hogy a tartalmi
+követelményt teljesítette volna. Rokon [[L176]] (formai megfelelés ≠
+tartalmi bizonyíték, ugyanaz a tőmondat, más mechanizmus: ott a
+bemenet-variálás hiányzott, itt a mintaszám-ellenőrzés).
+
+**Javítás és általánosítható szabály.** A csonkolási határ a KÖVETKEZŐ
+ablak SAJÁT kért kezdetére (`nextOnset.timestamp - nextPre`) mozgatva —
+ez garantálja, hogy a partíció valódi: minden timestamp legfeljebb egy
+ablak `samples` listájában szerepel. **Általánosítható elv bármilyen
+csúszóablakos/esemény-köré-rendezett szegmentálásnál:** ha egy ablak
+`[esemény - pre, esemény + post)` alakú, a szomszédos ablakok közti
+csonkolási határ SOSEM lehet a szomszédos ESEMÉNY nyers pozíciója —
+mindig a szomszédos ABLAK saját, `pre`-vel eltolt kért kezdete/vége,
+különben a `pre`/`post` aszimmetria automatikusan átfedést nyit. A
+review a javítást saját, a teljes 6-onsetes idővonalon minden
+szomszédos párra megismételt próbateszttel erősítette meg (nem
+fogadta el az implementer „292/292 zöld" önjelentését bizonyítékként).
