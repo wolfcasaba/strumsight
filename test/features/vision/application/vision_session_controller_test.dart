@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_permission.dart';
@@ -43,8 +45,11 @@ final class _Rig {
   void dispose() => container.dispose();
 }
 
-_Rig _rig({CameraPermissionState permission = CameraPermissionState.granted}) {
-  final capture = FakeCameraCapture();
+_Rig _rig({
+  CameraPermissionState permission = CameraPermissionState.granted,
+  Future<void>? startGate,
+}) {
+  final capture = FakeCameraCapture(startGate: startGate);
   final coordinator = CameraSessionCoordinator();
   final results = <VisionSessionResult>[];
   final container = ProviderContainer(
@@ -75,7 +80,99 @@ Future<void> _startToRunning(_Rig rig) async {
   expect(rig.state.status, VisionSessionStatus.running);
 }
 
+typedef _GatedAction = FutureOr<void> Function(VisionSessionController);
+
+final class _GatedActionCase {
+  const _GatedActionCase(this.name, this.allowed, this.invoke);
+
+  final String name;
+  final Set<VisionSessionStatus> allowed;
+  final _GatedAction invoke;
+}
+
+final class _SeededVisionSessionController extends VisionSessionController {
+  _SeededVisionSessionController(this.initialStatus);
+
+  final VisionSessionStatus initialStatus;
+
+  @override
+  VisionSessionState build() =>
+      VisionSessionState.idle().copyWith(status: initialStatus);
+}
+
+Future<void> _expectInvalidTransitionCell(
+  VisionSessionStatus status,
+  _GatedActionCase action,
+) async {
+  final container = ProviderContainer(
+    overrides: [
+      visionSessionControllerProvider.overrideWith(
+        () => _SeededVisionSessionController(status),
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+  container.listen(visionSessionControllerProvider, (_, _) {});
+
+  final controller = container.read(visionSessionControllerProvider.notifier);
+  final before = container.read(visionSessionControllerProvider);
+
+  await action.invoke(controller);
+
+  final after = container.read(visionSessionControllerProvider);
+  expect(after.status, before.status);
+  expect(after.issue, VisionSessionIssue.invalidTransition);
+}
+
 void main() {
+  final gatedActions = <_GatedActionCase>[
+    _GatedActionCase('begin', const <VisionSessionStatus>{
+      VisionSessionStatus.idle,
+      VisionSessionStatus.completed,
+      VisionSessionStatus.cancelled,
+    }, (controller) => controller.begin()),
+    _GatedActionCase('requestPermission', const <VisionSessionStatus>{
+      VisionSessionStatus.permissionDenied,
+      VisionSessionStatus.permissionPermanentlyDenied,
+      VisionSessionStatus.cameraUnavailable,
+    }, (controller) => controller.requestPermission()),
+    _GatedActionCase('beginCalibration', const <VisionSessionStatus>{
+      VisionSessionStatus.setup,
+    }, (controller) => controller.beginCalibration()),
+    _GatedActionCase('start', const <VisionSessionStatus>{
+      VisionSessionStatus.calibrating,
+    }, (controller) => controller.start()),
+    _GatedActionCase('pause', const <VisionSessionStatus>{
+      VisionSessionStatus.running,
+    }, (controller) => controller.pause()),
+    _GatedActionCase('resume', const <VisionSessionStatus>{
+      VisionSessionStatus.paused,
+    }, (controller) => controller.resume()),
+    _GatedActionCase('recalibrate', const <VisionSessionStatus>{
+      VisionSessionStatus.running,
+      VisionSessionStatus.paused,
+      VisionSessionStatus.calibrationLost,
+    }, (controller) => controller.recalibrate()),
+    _GatedActionCase(
+      'reportQuality',
+      const <VisionSessionStatus>{
+        VisionSessionStatus.running,
+        VisionSessionStatus.paused,
+      },
+      (controller) => controller.reportQuality(
+        summary: VisionQualitySummary.fromFrames(const <VisionFrameQuality>[]),
+        hand: VisionMetricState.notObservable,
+        pose: VisionMetricState.notObservable,
+        guitar: CalibrationLossState.tracking,
+      ),
+    ),
+    _GatedActionCase('reportRealtimeCue', const <VisionSessionStatus>{
+      VisionSessionStatus.running,
+      VisionSessionStatus.paused,
+      VisionSessionStatus.calibrationLost,
+    }, (controller) => controller.reportRealtimeCue(null)),
+  ];
+
   group('VisionSessionController state machine', () {
     test(
       'moves through idle, setup, calibrating, running, paused and completed',
@@ -118,6 +215,16 @@ void main() {
       },
     );
 
+    for (final action in gatedActions) {
+      for (final status in VisionSessionStatus.values) {
+        if (!action.allowed.contains(status)) {
+          test('${status.name} rejects ${action.name}', () async {
+            await _expectInvalidTransitionCell(status, action);
+          });
+        }
+      }
+    }
+
     test('state audit has a fixed summary-only key set', () {
       final rig = _rig();
       addTearDown(rig.dispose);
@@ -158,6 +265,47 @@ void main() {
   });
 
   group('VisionSessionController exit matrix', () {
+    Future<void> expectFinalizedDuringStart(
+      Future<VisionSessionResult?> Function(VisionSessionController) exit,
+      VisionSessionEndReason reason,
+    ) async {
+      final startGate = Completer<void>();
+      final rig = _rig(startGate: startGate.future);
+      addTearDown(rig.dispose);
+      await rig.controller.begin();
+      rig.controller.beginCalibration();
+
+      final start = rig.controller.start();
+      await Future<void>.delayed(Duration.zero);
+      expect(rig.capture.startCalls, 1);
+
+      final finalization = exit(rig.controller);
+      startGate.complete();
+      await start;
+      final result = await finalization;
+
+      expect(rig.state.status, VisionSessionStatus.completed);
+      expect(rig.capture.isClosed, isTrue);
+      expect(rig.coordinator.activeOwner, isNull);
+      expect(rig.results, hasLength(1));
+      expect(result, same(rig.results.single));
+      expect(result!.endReason, reason);
+    }
+
+    test('explicit stop finalizes when capture start is in flight', () {
+      return expectFinalizedDuringStart(
+        (controller) => controller.stop(),
+        VisionSessionEndReason.explicitStop,
+      );
+    });
+
+    test('route leave finalizes when capture start is in flight', () {
+      return expectFinalizedDuringStart(
+        (controller) => controller.leaveRoute(),
+        VisionSessionEndReason.routeLeave,
+      );
+    });
+
     Future<void> expectReleased(
       Future<void> Function(_Rig rig) exit,
       VisionSessionEndReason reason,

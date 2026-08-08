@@ -98,6 +98,9 @@ final class VisionSessionState {
   final VisionSessionResult? result;
 
   /// Stable primitive-only field names for the no-frame provider-state audit.
+  ///
+  /// This is a manually maintained allow-list: every new state field must be
+  /// added here and reviewed by the provider-state audit.
   Set<String> get auditFields => const <String>{
     'status',
     'qualitySummary',

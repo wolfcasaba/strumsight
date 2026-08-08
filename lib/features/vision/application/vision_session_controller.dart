@@ -49,6 +49,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
   CameraSessionLease? _lease;
   StreamSubscription<Object?>? _frames;
   VisionSession? _session;
+  Future<void>? _startSettled;
   Future<VisionSessionResult?>? _finalization;
   bool _disposed = false;
   int _observedFrameCount = 0;
@@ -117,10 +118,37 @@ class VisionSessionController extends Notifier<VisionSessionState> {
     })) {
       return;
     }
+    final startSettled = Completer<void>();
+    _startSettled = startSettled.future;
+    var finalizeFailure = false;
+    try {
+      finalizeFailure = await _startOnce();
+    } finally {
+      if (identical(_startSettled, startSettled.future)) {
+        _startSettled = null;
+      }
+      startSettled.complete();
+    }
+    if (finalizeFailure) {
+      _captureFailed();
+    }
+  }
+
+  /// Starts capture and reports whether its failed start needs finalization.
+  ///
+  /// A finalization request may arrive while this method awaits acquisition or
+  /// capture startup. It waits for [_startSettled], so this method must finish
+  /// installing the capture, lease, and session before that finalization runs.
+  Future<bool> _startOnce() async {
     final coordinator = _coordinator;
     if (coordinator == null) {
-      _captureFailed();
-      return;
+      _setState(
+        state.copyWith(
+          status: VisionSessionStatus.inferenceFailed,
+          issue: VisionSessionIssue.captureFailure,
+        ),
+      );
+      return true;
     }
 
     var capture = _capture;
@@ -130,33 +158,30 @@ class VisionSessionController extends Notifier<VisionSessionState> {
         CameraOwner.visionPractice,
         onRevoke: () => _finalize(VisionSessionEndReason.appBackground),
       );
-      if (_disposed) {
-        await capture.close();
-        if (acquired case Success<CameraSessionLease>(:final value)) {
-          await value.release();
-        }
-        return;
-      }
       switch (acquired) {
         case Failure<CameraSessionLease>():
           await capture.close();
           _setState(state.copyWith(status: VisionSessionStatus.cameraBusy));
-          return;
+          return false;
         case Success<CameraSessionLease>(:final value):
           _capture = capture;
           _lease = value;
+          _session ??= VisionSession(id: _idFactory(), startedAt: _clock());
       }
     }
 
     final started = await capture.start();
-    if (_disposed) return;
     if (started case Failure<void>()) {
       await _closeCapture(releaseLease: true);
-      _captureFailed();
-      return;
+      _setState(
+        state.copyWith(
+          status: VisionSessionStatus.inferenceFailed,
+          issue: VisionSessionIssue.captureFailure,
+        ),
+      );
+      return true;
     }
 
-    _session ??= VisionSession(id: _idFactory(), startedAt: _clock());
     _frames ??= capture.frames.listen(_onFrame, onError: _onFrameError);
     _setState(
       state.copyWith(
@@ -165,6 +190,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
         clearIssue: true,
       ),
     );
+    return false;
   }
 
   Future<void> pause() async {
@@ -343,9 +369,20 @@ class VisionSessionController extends Notifier<VisionSessionState> {
   Future<VisionSessionResult?> _finalize(VisionSessionEndReason reason) {
     final inFlight = _finalization;
     if (inFlight != null) return inFlight;
-    final operation = _finalizeOnce(reason);
+    final startSettled = _startSettled;
+    final operation = startSettled == null
+        ? _finalizeOnce(reason)
+        : _finalizeAfterStart(startSettled, reason);
     _finalization = operation;
     return operation;
+  }
+
+  Future<VisionSessionResult?> _finalizeAfterStart(
+    Future<void> startSettled,
+    VisionSessionEndReason reason,
+  ) async {
+    await startSettled;
+    return _finalizeOnce(reason);
   }
 
   Future<VisionSessionResult?> _finalizeOnce(
