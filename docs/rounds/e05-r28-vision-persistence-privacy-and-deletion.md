@@ -289,7 +289,8 @@ dokumentált brief-revízió.
   (`frameCount`, framing, lighting, blur, stability, roiCoverage, overall,
   setupCue), `calibrationState`, insightonként `code`, `policyVersion`,
   csak `evidenceIds`, `confidence`, `priority`, `direction`, `capability`,
-  valamint `observedFrameCount`. Nincs kép, URI, pixel, koordináta vagy
+  valamint a manifestből a mentéskor kiolvasott `modelVersions`
+  (`modelId → version`) és `observedFrameCount`. Nincs kép, URI, pixel, koordináta vagy
   landmark-idősor. A shape-verzió dispatch future version esetén
   `unknownEnum`-mal fail-loud.
 - `vision_session_repository.dart`: helyi `JsonCollectionStore`-wrapper;
@@ -328,8 +329,12 @@ dokumentált brief-revízió.
 
 ### Eltérések és nem futtatott ellenőrzések
 
-- A briefhez nincs funkcionális eltérés. Valódi korábbi session-shape nem
-  létezik, ezért nincs kitalált legacy migráció.
+- A manifestből mentéskor kiolvasott, érvényes bejegyzések teljes
+  `modelId → version` mapje kerül a rekordba: a map megőrzi a modellazonosítót
+  akkor is, ha egy session több modellt használ. Hibás, üres vagy nem olvasható
+  manifest esetén a mentés írás nélkül hibázik; modellverzió nélküli rekord nem
+  készül. Valódi korábbi session-shape nem létezik, ezért nincs kitalált legacy
+  migráció.
 - CI-dispatch, PR és merge nem implementer-feladat; nem futtatva.
 
 ## 11. Review — a független reviewer tölti ki

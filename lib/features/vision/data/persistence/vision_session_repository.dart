@@ -2,6 +2,7 @@
 library;
 
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/ml/vision_model_manifest.dart';
 import '../../../../core/storage/json_document_store.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../../../core/storage/storage_keys.dart';
@@ -17,6 +18,7 @@ final class VisionSessionRepository {
   VisionSessionRepository({
     required KeyValueStore store,
     this.codec = const VisionSessionCodec(),
+    VisionModelManifestReader? manifestReader,
   }) : _sessions = JsonCollectionStore<VisionSessionHistoryEntry>(
          document: JsonDocumentStore(
            store: store,
@@ -31,22 +33,49 @@ final class VisionSessionRepository {
          toJson: codec.encodeToMap,
          maxItems: VisionPrivacyControl.maxStoredSessions,
        ),
-       _store = store;
+       _store = store,
+       _manifestReader = manifestReader ?? FileVisionModelManifestReader();
 
   final KeyValueStore _store;
   final VisionSessionCodec codec;
   final JsonCollectionStore<VisionSessionHistoryEntry> _sessions;
+  final VisionModelManifestReader _manifestReader;
 
   List<VisionSessionHistoryEntry> list() => _sessions.read();
 
   Future<void> save(VisionSessionResult result) async {
-    final entry = codec.fromResult(result);
+    final entry = codec.fromResult(
+      result,
+      modelVersions: await _readModelVersions(),
+    );
     final current = list();
     await _sessions.write(<VisionSessionHistoryEntry>[
       entry,
       for (final existing in current)
         if (existing.sessionId != entry.sessionId) existing,
     ]);
+  }
+
+  /// Reads model IDs and versions before writing so a stored summary remains
+  /// attributable after a later model update.
+  ///
+  /// A map preserves model identity when one session uses several models. An
+  /// unreadable, invalid, or empty manifest fails the save before history is
+  /// changed, rather than creating a record without provenance.
+  Future<Map<String, String>> _readModelVersions() async {
+    final report = await _manifestReader.read();
+    if (!report.isClean || report.entries.isEmpty) {
+      throw StateError('Vision model manifest cannot supply model versions.');
+    }
+
+    final versions = <String, String>{};
+    for (final entry in report.entries) {
+      if (versions.containsKey(entry.modelId)) {
+        throw StateError('Vision model manifest contains duplicate model IDs.');
+      }
+      versions[entry.modelId] = entry.version;
+    }
+    return versions;
   }
 
   Future<void> deleteSession(String sessionId) async {

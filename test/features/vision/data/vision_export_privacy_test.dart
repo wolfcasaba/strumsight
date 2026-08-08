@@ -9,7 +9,10 @@ import '../../../core/storage/in_memory_key_value_store.dart';
 void main() {
   test('store and export pin the exact same privacy-safe DTO keys', () async {
     final store = InMemoryKeyValueStore();
-    await VisionSessionRepository(store: store).save(_result());
+    await VisionSessionRepository(
+      store: store,
+      manifestReader: _ManifestReader(),
+    ).save(_result());
 
     final storedEnvelope =
         jsonDecode(store.readString(StorageKeys.visionSessionHistory)!)
@@ -54,6 +57,9 @@ const Set<String> _expectedPaths = <String>{
   'insights.priority',
   'insights.direction',
   'insights.capability',
+  'modelVersions',
+  'modelVersions.hand_landmarker',
+  'modelVersions.pose_landmarker',
   'observedFrameCount',
 };
 
@@ -89,3 +95,40 @@ VisionSessionResult _result() => VisionSessionResult(
   ],
   observedFrameCount: 0,
 );
+
+final class _ManifestReader implements VisionModelManifestReader {
+  @override
+  Future<VisionModelManifestReport> read() async => VisionModelManifestReport(
+    entries: const <VisionModelEntry>[
+      VisionModelEntry(
+        modelId: 'hand_landmarker',
+        version: '1.2.3',
+        path: 'assets/ml/hand_landmarker.tflite',
+        sha256:
+            '0000000000000000000000000000000000000000000000000000000000000000',
+        status: VisionModelStatus.active,
+        inputShape: <int>[1, 1, 1],
+        outputSchema: handLandmarksOutputSchema,
+        licenseSpdx: 'Apache-2.0',
+        licenseName: 'Apache License 2.0',
+        minimumDeviceTier: 'low',
+        evaluationReport: 'test',
+      ),
+      VisionModelEntry(
+        modelId: 'pose_landmarker',
+        version: '4.5.6',
+        path: 'assets/ml/pose_landmarker.tflite',
+        sha256:
+            '0000000000000000000000000000000000000000000000000000000000000000',
+        status: VisionModelStatus.active,
+        inputShape: <int>[1, 1, 1],
+        outputSchema: poseLandmarksOutputSchema,
+        licenseSpdx: 'Apache-2.0',
+        licenseName: 'Apache License 2.0',
+        minimumDeviceTier: 'low',
+        evaluationReport: 'test',
+      ),
+    ],
+    issues: const <String>[],
+  );
+}

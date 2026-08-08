@@ -12,7 +12,14 @@ void main() {
       'vN round-trip is byte-stable and retains only aggregate fields',
       () async {
         final codec = const VisionSessionCodec();
-        final entry = codec.fromResult(_result('one'));
+        const modelVersions = <String, String>{
+          'hand_landmarker': '1.2.3',
+          'pose_landmarker': '4.5.6',
+        };
+        final entry = codec.fromResult(
+          _result('one'),
+          modelVersions: modelVersions,
+        );
 
         expect(
           codec.encode(entry),
@@ -20,7 +27,11 @@ void main() {
         );
 
         final store = InMemoryKeyValueStore();
-        final repository = VisionSessionRepository(store: store, codec: codec);
+        final repository = VisionSessionRepository(
+          store: store,
+          codec: codec,
+          manifestReader: _ManifestReader(modelVersions),
+        );
         await repository.save(_result('one'));
 
         final restored = repository.list().single;
@@ -31,6 +42,7 @@ void main() {
           FeedbackCapability.fretting,
         );
         expect(restored.observedFrameCount, 12);
+        expect(restored.modelVersions, modelVersions);
       },
     );
 
@@ -52,7 +64,12 @@ void main() {
       'one malformed record is skipped while a valid session remains readable',
       () async {
         final codec = const VisionSessionCodec();
-        final valid = codec.encodeToMap(codec.fromResult(_result('kept')));
+        final valid = codec.encodeToMap(
+          codec.fromResult(
+            _result('kept'),
+            modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+          ),
+        );
         final store = InMemoryKeyValueStore(<String, Object>{
           StorageKeys.visionSessionHistory: jsonEncode(<String, Object>{
             'schemaVersion': 1,
@@ -73,6 +90,24 @@ void main() {
             jsonDecode(store.readString(StorageKeys.visionSessionHistory)!)
                 as Map<String, dynamic>;
         expect(raw['items'], isEmpty);
+      },
+    );
+
+    test(
+      'an unreadable manifest fails before a history record is written',
+      () async {
+        final store = InMemoryKeyValueStore();
+        final repository = VisionSessionRepository(
+          store: store,
+          manifestReader: const _UnreadableManifestReader(),
+        );
+
+        await expectLater(
+          repository.save(_result('unattributed')),
+          throwsStateError,
+        );
+
+        expect(store.readString(StorageKeys.visionSessionHistory), isNull);
       },
     );
 
@@ -159,3 +194,40 @@ VisionSessionResult _result(String id) => VisionSessionResult(
   ],
   observedFrameCount: 12,
 );
+
+final class _ManifestReader implements VisionModelManifestReader {
+  const _ManifestReader(this._versions);
+
+  final Map<String, String> _versions;
+
+  @override
+  Future<VisionModelManifestReport> read() async => VisionModelManifestReport(
+    entries: <VisionModelEntry>[
+      for (final entry in _versions.entries)
+        VisionModelEntry(
+          modelId: entry.key,
+          version: entry.value,
+          path: 'assets/ml/${entry.key}.tflite',
+          sha256: '0' * 64,
+          status: VisionModelStatus.active,
+          inputShape: const <int>[1, 1, 1],
+          outputSchema: handLandmarksOutputSchema,
+          licenseSpdx: 'Apache-2.0',
+          licenseName: 'Apache License 2.0',
+          minimumDeviceTier: 'low',
+          evaluationReport: 'test',
+        ),
+    ],
+    issues: const <String>[],
+  );
+}
+
+final class _UnreadableManifestReader implements VisionModelManifestReader {
+  const _UnreadableManifestReader();
+
+  @override
+  Future<VisionModelManifestReport> read() async => VisionModelManifestReport(
+    entries: const <VisionModelEntry>[],
+    issues: const <String>['manifest unavailable'],
+  );
+}

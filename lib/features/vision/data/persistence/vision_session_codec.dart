@@ -6,6 +6,7 @@
 /// explicit allowlist is changed and its privacy-snapshot test is updated.
 library;
 
+import 'dart:collection';
 import 'dart:convert';
 
 import '../../../../core/foundation/json_validation.dart';
@@ -28,13 +29,22 @@ final class VisionSessionHistoryEntry {
     required this.quality,
     required this.calibrationState,
     required List<VisionInsightSnapshot> insights,
+    required Map<String, String> modelVersions,
     required this.observedFrameCount,
   }) : startedAt = startedAt.toUtc(),
        endedAt = endedAt.toUtc(),
-       insights = List<VisionInsightSnapshot>.unmodifiable(insights) {
-    if (sessionId.trim().isEmpty || observedFrameCount < 0) {
+       insights = List<VisionInsightSnapshot>.unmodifiable(insights),
+       modelVersions = Map<String, String>.unmodifiable(
+         SplayTreeMap<String, String>.from(modelVersions),
+       ) {
+    if (sessionId.trim().isEmpty ||
+        observedFrameCount < 0 ||
+        modelVersions.isEmpty ||
+        modelVersions.entries.any(
+          (entry) => entry.key.trim().isEmpty || entry.value.trim().isEmpty,
+        )) {
       throw ArgumentError(
-        'A session id and non-negative frame count are required.',
+        'A session id, model versions, and non-negative frame count are required.',
       );
     }
   }
@@ -46,6 +56,7 @@ final class VisionSessionHistoryEntry {
   final VisionQualitySnapshot quality;
   final CalibrationLossState calibrationState;
   final List<VisionInsightSnapshot> insights;
+  final Map<String, String> modelVersions;
   final int observedFrameCount;
 }
 
@@ -107,39 +118,42 @@ final class VisionSessionCodec {
 
   static const int currentSchemaVersion = visionSessionShapeSchemaVersion;
 
-  VisionSessionHistoryEntry fromResult(VisionSessionResult result) =>
-      VisionSessionHistoryEntry(
-        sessionId: result.session.id.value,
-        startedAt: result.session.startedAt,
-        endedAt: result.endedAt,
-        endReason: result.endReason,
-        quality: VisionQualitySnapshot(
-          frameCount: result.qualitySummary.frameCount,
-          framing: result.qualitySummary.framing,
-          lighting: result.qualitySummary.lighting,
-          blur: result.qualitySummary.blur,
-          stability: result.qualitySummary.stability,
-          roiCoverage: result.qualitySummary.roiCoverage,
-          overall: result.qualitySummary.overall,
-          setupCue: result.qualitySummary.setupCue,
-        ),
-        calibrationState: result.calibrationState,
-        insights: result.sessionSummary
-            .map(
-              (insight) => VisionInsightSnapshot(
-                code: insight.code,
-                policyVersion: insight.policyVersion,
-                evidenceIds: insight.evidenceIds,
-                confidence: insight.confidence,
-                priority: insight.priority,
-                direction: insight.direction,
-                capability:
-                    FeedbackPolicies.catalog[insight.code]!.requiredCapability,
-              ),
-            )
-            .toList(growable: false),
-        observedFrameCount: result.observedFrameCount,
-      );
+  VisionSessionHistoryEntry fromResult(
+    VisionSessionResult result, {
+    required Map<String, String> modelVersions,
+  }) => VisionSessionHistoryEntry(
+    sessionId: result.session.id.value,
+    startedAt: result.session.startedAt,
+    endedAt: result.endedAt,
+    endReason: result.endReason,
+    quality: VisionQualitySnapshot(
+      frameCount: result.qualitySummary.frameCount,
+      framing: result.qualitySummary.framing,
+      lighting: result.qualitySummary.lighting,
+      blur: result.qualitySummary.blur,
+      stability: result.qualitySummary.stability,
+      roiCoverage: result.qualitySummary.roiCoverage,
+      overall: result.qualitySummary.overall,
+      setupCue: result.qualitySummary.setupCue,
+    ),
+    calibrationState: result.calibrationState,
+    insights: result.sessionSummary
+        .map(
+          (insight) => VisionInsightSnapshot(
+            code: insight.code,
+            policyVersion: insight.policyVersion,
+            evidenceIds: insight.evidenceIds,
+            confidence: insight.confidence,
+            priority: insight.priority,
+            direction: insight.direction,
+            capability:
+                FeedbackPolicies.catalog[insight.code]!.requiredCapability,
+          ),
+        )
+        .toList(growable: false),
+    modelVersions: modelVersions,
+    observedFrameCount: result.observedFrameCount,
+  );
 
   /// JSON-ready map with canonical insertion order.
   Map<String, dynamic> encodeToMap(VisionSessionHistoryEntry entry) =>
@@ -210,6 +224,7 @@ final class VisionSessionCodec {
               'capability': insight.capability.name,
             },
         ],
+        'modelVersions': entry.modelVersions,
         'observedFrameCount': entry.observedFrameCount,
       };
 
@@ -274,6 +289,7 @@ final class VisionSessionCodec {
       insights: <VisionInsightSnapshot>[
         for (final item in insights) _decodeInsight(requireObject(item)),
       ],
+      modelVersions: _decodeModelVersions(json['modelVersions']),
       observedFrameCount: requireInt(json, 'observedFrameCount', min: 0),
     );
   }
@@ -307,6 +323,30 @@ final class VisionSessionCodec {
         'capability',
       ),
     );
+  }
+
+  static Map<String, String> _decodeModelVersions(Object? value) {
+    final raw = requireObject(value);
+    if (raw.isEmpty) {
+      throw JsonRecordException(
+        RecordDecodeReason.unknownEnum,
+        field: 'modelVersions',
+      );
+    }
+    return <String, String>{
+      for (final entry in raw.entries)
+        entry.key: _requireModelVersion(entry.key, entry.value),
+    };
+  }
+
+  static String _requireModelVersion(String modelId, Object? value) {
+    if (modelId.trim().isEmpty || value is! String || value.trim().isEmpty) {
+      throw JsonRecordException(
+        RecordDecodeReason.notAString,
+        field: 'modelVersions',
+      );
+    }
+    return value;
   }
 
   static T _enumByName<T extends Enum>(
