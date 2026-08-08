@@ -154,6 +154,129 @@ void main() {
     });
   });
 
+  // The "nagyon gyors váltogatás" cell (brief §6 first row) — the
+  // FastToggleStrokes.sixAt130ms() fixture drives the truncation rule.
+  // Numeric values were computed via `python3 -c` mirroring the exact
+  // Taylor series approximation `_sinApprox()` and the new cut boundary
+  // (at next onset's pre-window start, post F1 BLOCKER fix). See §10.
+  group('stroke fixture matrix — fast toggle (six onsets @ 130 ms)', () {
+    test('direction = -1.0 for every truncated window (Δv < 0 across the '
+        'sinusoidal stroke)', () {
+      final fixture = FastToggleStrokes.sixAt130ms();
+      final result = engine.compute(
+        frames: fixture.frames,
+        onsets: fixture.onsets,
+        sync: PickingSyncQuality.good,
+      );
+      expect(result.perEvent.length, 6);
+      for (var i = 0; i < result.perEvent.length; i++) {
+        expect(
+          result.perEvent[i].direction.observability,
+          MetricObservability.observable,
+          reason: 'window $i direction must be observable under good sync',
+        );
+        expect(
+          result.perEvent[i].direction.value,
+          -1.0,
+          reason: 'window $i Δv < 0 → direction = -1.0',
+        );
+      }
+    });
+
+    test('amplitude = path length, increases across the truncated windows '
+        'as the sine wave bends', () {
+      final fixture = FastToggleStrokes.sixAt130ms();
+      final result = engine.compute(
+        frames: fixture.frames,
+        onsets: fixture.onsets,
+        sync: PickingSyncQuality.good,
+      );
+      // Values computed via `python3 -c` (§10) — path is the sum of
+      // |Δv| segment lengths (u is constant at 0.85). The increasing
+      // path is a real signal: the truncated windows capture the
+      // steepest part of the sinusoid where consecutive samples are
+      // far apart.
+      const expected = <double>[
+        0.881578560, // window 0 — 4 samples
+        0.914108325, // window 1 — 4 samples
+        0.938067528, // window 2 — 4 samples
+        0.953234834, // window 3 — 4 samples
+        0.959465515, // window 4 — 4 samples
+        2.043662081, // window 5 — 8 samples (full un-truncated window)
+      ];
+      for (var i = 0; i < result.perEvent.length; i++) {
+        expect(
+          result.perEvent[i].amplitude.observability,
+          MetricObservability.observable,
+          reason: 'window $i amplitude must be observable under good sync',
+        );
+        expect(
+          result.perEvent[i].amplitude.value,
+          closeTo(expected[i], 1e-6),
+          reason: 'window $i path length',
+        );
+      }
+    });
+
+    test('speed ≈ 9.0 / s for truncated windows (4 samples over 99 ms)',
+        () {
+      final fixture = FastToggleStrokes.sixAt130ms();
+      final result = engine.compute(
+        frames: fixture.frames,
+        onsets: fixture.onsets,
+        sync: PickingSyncQuality.good,
+      );
+      // Windows 0..4 are truncated to 99 ms with 4 samples covering the
+      // steepest part of the sine wave; window 5 is the un-truncated
+      // 250 ms window (8 samples).
+      const expectedSpeed = <double>[
+        8.904833942, // window 0
+        9.233417428, // window 1
+        9.475429580, // window 2
+        9.628634691, // window 3
+        9.691570857, // window 4
+        8.847021997, // window 5 (full window)
+      ];
+      for (var i = 0; i < result.perEvent.length; i++) {
+        expect(
+          result.perEvent[i].speed.value,
+          closeTo(expectedSpeed[i], 1e-6),
+          reason: 'window $i speed',
+        );
+      }
+    });
+
+    test('linearity decreases across truncated windows (chord shrinks '
+        'faster than path)', () {
+      final fixture = FastToggleStrokes.sixAt130ms();
+      final result = engine.compute(
+        frames: fixture.frames,
+        onsets: fixture.onsets,
+        sync: PickingSyncQuality.good,
+      );
+      // Linearitiy = chord / path. The truncated windows capture the
+      // peak → trough portion of the sine wave where consecutive samples
+      // cross zero, so the chord is much shorter than the path —
+      // proof that the metric is NOT a constant.
+      const expected = <double>[
+        0.354232410, // window 0
+        0.312192128, // window 1
+        0.272682640, // window 2
+        0.234785322, // window 3
+        0.197713860, // window 4
+        0.062689111, // window 5 (full window — sinusoidal path far exceeds
+                     // the chord)
+      ];
+      for (var i = 0; i < result.perEvent.length; i++) {
+        expect(
+          result.perEvent[i].linearity.value,
+          closeTo(expected[i], 1e-6),
+          reason: 'window $i linearity',
+        );
+      }
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // (2) Sync matrix (brief §6) — event-level metrics gate on sync quality.
   // ---------------------------------------------------------------------------
