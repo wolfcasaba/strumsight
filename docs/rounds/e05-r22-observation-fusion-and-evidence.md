@@ -247,7 +247,52 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `lib/features/vision/domain/evidence/vision_observation.dart` — a három
+  élő metrika-katalógus definícióiból felépített `EvidenceMetric`, valamint a
+  timestampelt, modell-/quality-/geometry-/sync-inputot hordozó
+  `VisionObservation`.
+- `lib/features/vision/domain/evidence/{evidence_provenance,vision_evidence}.dart`
+  — reprodukálható window/provenance, kimerítő `ObservationState`, és kizárólag
+  ablak+metrika alapú FNV-1a evidence ID.
+- `lib/features/vision/domain/evidence/confidence_model.dart` — dokumentált
+  minimum-operátoros confidence policy; a quality a nyers
+  `VisionFrameQuality` komponenseiből, a sync a `SyncQuality`-ből jön.
+- `lib/features/vision/application/observation_fusion.dart` — metrika-definíció
+  `window`-ját fogyasztó, idempotens, gap-aware és korlátos-memóriájú fusion.
+- `lib/features/vision/public.dart` — additív evidence/fusion exportok.
+- `test/features/vision/{domain/confidence_model_test.dart,application/observation_fusion_test.dart}`
+  és `test/fixtures/vision/evidence/observed_wrist_deviation.json` — golden,
+  12-cellás confidence, minimum-frame, gap, idempotencia, memória és
+  experimental-kizárás tesztek.
+
+### Futtatott ellenőrzések
+
+1. RED: `flutter test test/features/vision/domain/confidence_model_test.dart test/features/vision/application/observation_fusion_test.dart`
+   — a még hiányzó evidence-contract fájlok miatt várt fordítási hibával
+   leállt.
+2. `dart format lib/features/vision/domain/evidence lib/features/vision/application/observation_fusion.dart lib/features/vision/public.dart test/features/vision/domain/confidence_model_test.dart test/features/vision/application/observation_fusion_test.dart`
+   — `Formatted 8 files (5 changed)`.
+3. `flutter test test/features/vision/domain/confidence_model_test.dart test/features/vision/application/observation_fusion_test.dart`
+   — `00:00 +11: All tests passed!` (a golden fixture, 12 cella,
+   minimum/gap/idempotencia/memória/experimental cellákkal).
+4. Valódi-sértés próba: a `ConfidenceModel.combine` ideiglenesen átlagot
+   számolt; `flutter test test/features/vision/domain/confidence_model_test.dart`
+   — a két releváns teszt PIROS (`Expected 0.25, Actual 0.8125`, illetve
+   `model=0.9` cellán `Actual 0.975`). A minimum-operátor visszaállítva.
+5. `python3 -c "components=('model','quality','geometry','sync'); values=(('good',1.0),('boundary',0.5),('poor',0.1)); print(' ; '.join(f'{component}:{label}=>{min(value, 1.0, 1.0, 1.0):.1f}' for component in components for label, value in values))"`
+   — `model:good=>1.0 ; model:boundary=>0.5 ; model:poor=>0.1 ; quality:good=>1.0 ; quality:boundary=>0.5 ; quality:poor=>0.1 ; geometry:good=>1.0 ; geometry:boundary=>0.5 ; geometry:poor=>0.1 ; sync:good=>1.0 ; sync:boundary=>0.5 ; sync:poor=>0.1`.
+6. `tools/round-gate.sh --result-json /tmp/e05-r22-round-gate.json test/features/vision`
+   — **MINDEN GATE ZÖLD**: format, analyze, `test/features/vision` (364
+   teszt), architecture, secrets és l10n. Strukturált eredmény:
+   `{'outcome': 'pass', 'exit_code': 0, 'failed_step': None}`.
+
+### Eltérés / nem futtatott ellenőrzés
+
+- Eltérés nincs.
+- A CI teljes suite/property/APK evidence-et az orchestrátor futtatja; lokálisan
+  nem indítottam CI-t vagy APK-buildet.
 
 ## 11. Review — a független reviewer tölti ki
 
