@@ -57,9 +57,11 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 ## 0.0 Tervezési baseline és pre-flight revízió
 
 **PLANNING → mérve `origin/main` @ `ece9bf5` (E05-R19 MERGED), egy ÚJ ADR
-(0188) + két javítás (elavult ADR-hivatkozás; implementer-motor placeholder),
-nulla scope-eltérés.** Az eredeti PREPARED szöveg 2026-08-05-én íródott, az
-E05-R14/R18/R19 kód létezése és az ADR 0177 elfogadása előtt.
+(0188), egy explicit E05-R14-ről örökölt follow-up beépítve (§5 új pont 7) +
+két adminisztratív javítás (elavult ADR-hivatkozás; implementer-motor
+placeholder), nulla `allowed_paths`-eltérés.** Az eredeti PREPARED szöveg
+2026-08-05-én íródott, az E05-R14/R18/R19 kód létezése és az ADR 0177
+elfogadása előtt.
 
 1. **R1 — Stale ADR-hivatkozás a posture-metrika félre javítva, mérve.** A
    fejléc-callout eredeti „0162 bővítése" az E05-R01 batch-írás idején
@@ -154,6 +156,34 @@ E05-R14/R18/R19 kód létezése és az ADR 0177 elfogadása előtt.
    `75f8766`) és E05-R19 (PR #192, squash `a38e0e0`) nagyszülője — mindkét
    utódkör MERGED, a `PostureBaseline`/`PostureObservation` kód a mai
    `main`-en él (R3 fent).
+8. **R8 — Explicit E05-R20-ra hagyott follow-up a kódban mérve, a brief
+   szövege eddig nem tartalmazta.** A dedikált E05-R14
+   [security-review](../reviews/e05-r14-pose-provider-and-posture-baseline-security.md)
+   MINOR-2 lelete (`posture_baseline.dart:199-204`) és az R14 brief §10.5
+   handoffja (802–806. sor) egyaránt rögzíti: `PostureObservation.state`
+   **MINDIG** `VisionMetricState.good`, ha akár egyetlen landmark közös a
+   baseline-nal — a hármas enum
+   (`vision_frame_quality.dart:5`: `good`/`needsImprovement`/`notObservable`)
+   `needsImprovement` értékét ez az osztály **sosem** állítja elő. Mérve
+   (security-reviewer saját próbája): `comparedLandmarkCount=1, maxDrift=4.257`
+   (a vállszélesség 4,2-szerese — extrém elmozdulás egyetlen gyenge pontból)
+   → `state=good`. Mindkét dokumentum kifejezetten **ide**, E05-R20-ra
+   halasztja a döntést (ADR 0186 Döntés 5: „az ítélet a fogyasztó dolga").
+   **Feloldás — nem érinti `posture_baseline.dart`-ot** (a fájl NINCS az
+   `allowed_paths`-on; egy MERGED, lezárt kör viselkedésének módosítása H2
+   halt-ot kockáztatna, ld. pipeline-prompt §2). A helyes, hatókörön belüli
+   megoldás pontosan a security-review saját második javaslata: a `state`
+   mezőt a fogyasztó (ez a kör) **nem tekinti mérvadónak** — a
+   `PostureMetricEngine` a saját, metrikánkénti megbízhatósági kaput a
+   `PostureObservation` már publikus, nyers felületéből építi: minden
+   metrika a SAJÁT szükséges landmark-ID-jaira `driftFor(id) != null`
+   ellenőrzést végez (a `driftById` R14-ben MÁR csak a
+   `minimumLandmarkVisibility`-t átlépő pontokat tartalmazza — ld. R3 fent),
+   a fretting/picking minta `_requiredRaw`/`_usable`-jellegű gate-jével
+   analóg módon — **sosem** `observation.state == good` egyedüli
+   feltételként. Ez §5 pont 7-ként rögzítve lent; nem új ADR, hanem az ADR
+   0179 („a capability-státusz a doméné") pontos alkalmazása erre a
+   konkrét adatforrásra.
 
 ## 1. Cél
 
@@ -218,6 +248,15 @@ orvosi tartalom, diagnózis.
 6. **A guard mindkét irányban őriz:** a policy-katalógus **minden** kódját
    ellenőrzi, hogy engedélyezett osztályba esik-e, ÉS elutasít minden nem
    katalogizált kódot (fail-closed allowlist).
+7. **A `PostureObservation.state` nem mérvadó a metric engine-nek** (§0.0 R8,
+   mérve: `posture_baseline.dart` MINDIG `good`-ot ad, ha akár egyetlen
+   landmark közös a baseline-nal — `needsImprovement` sosem keletkezik).
+   A `PostureMetricEngine` a saját megbízhatósági kapuját a
+   `PostureObservation` nyers felületéből (`driftFor(id)`,
+   `comparedLandmarkCount`) építi, metrikánként a szükséges landmark-ID-k
+   jelenlétét ellenőrizve — **NEM** `observation.state == good` alapján dönt.
+   **NEM elfogadható:** a `state` mező egyedüli feltételként való
+   felhasználása egy metrika observable/notObservable eldöntésére.
 
 ## 6. Acceptance criteria
 
@@ -230,7 +269,11 @@ orvosi tartalom, diagnózis.
 - [ ] **Baseline-mátrix:** baseline hiányzik / részleges / teljes — az első
       kettőnél `notObservable`, a harmadiknál baseline-relatív érték.
 - [ ] **Metrikánkénti unit teszt** (4 metrika) tipikus / határ / degenerált
-      esettel, és **visibility-mátrix** (alatt / rajta / fölött).
+      esettel, és **visibility-mátrix** (alatt / rajta / fölött). A
+      degenerált eset KÖTELEZŐEN fedi a §0.0 R8 mérve dokumentált esetet is:
+      egyetlen, a metrika által igényelt landmark-halmazból hiányzó pont →
+      `notObservable`, `PostureObservation.state` értékétől függetlenül
+      (`state=good` mellett is).
 - [ ] **Kameraperspektíva-fixture-ök:** legalább 3 nézőpont; a metrikák
       előjele és nagyságrendje konzisztens (a perspektíva nem fordítja meg).
 - [ ] **NaN/Infinity guard** a teljes fixture-mátrixon.
