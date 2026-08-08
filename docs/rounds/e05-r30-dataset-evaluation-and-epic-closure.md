@@ -228,7 +228,70 @@ eredmény állítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `tool/check_architecture.dart`, `test/core/architecture_dependency_test.dart`:
+  raw Vision payload tiltás persistence/provider-state-ben; a meglévő
+  cross-feature `public.dart` szabály változatlan, az allowlist 12 elemű.
+- `test/tooling/vision_model_integrity_test.dart`: jó manifest, rossz checksum,
+  rossz schema és hiányzó licenc mutation gate.
+- `test/features/vision/vision_offline_regression_test.dart`: 11 flag OFF audit
+  és bit-egzakt Practice/Song/Analyze/Tutor fixture.
+- `ml/vision/evaluate_vision_metrics.py`, `ml/vision/dataset_manifest.md`:
+  stdlib JSONL harness, `NO_DATA`, false-negative-cue gate és consent határ.
+- `docs/sdd/epic-05-completion-report.md`, `docs/runbooks/vision-rollout.md`,
+  `README.md`, valamint a két manual matrix: záró evidence, rollout/rollback,
+  privacy és tételes PENDING accounting.
+
+### False-feedback küszöb
+
+Küszöb: **0.01 (1%)**, inkluzív. A benchmark célértéke továbbra is 0; a
+nemnulla, szigorú cap azért szükséges, hogy a §6.1 kért alatta/rajta/fölötte
+mátrix nemnegatív rátákkal mérhető legyen. 100 fixture-nél ez legfeljebb egy
+hamis negatív cue; fölötte a metric `experimental`, nem a küszöb emelhető.
+
+```text
+$ python3 -c 'threshold=0.01; step=0.01; print(f"below={threshold-step:.2f} at={threshold:.2f} above={threshold+step:.2f}")'
+below=0.00 at=0.01 above=0.02
+```
+
+### Futtatott ellenőrzések
+
+```text
+$ flutter test test/core/architecture_dependency_test.dart
+All tests passed! (15)
+
+$ dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+$ flutter test test/tooling/vision_model_integrity_test.dart
+All tests passed! (4)
+
+$ flutter test test/features/vision/vision_offline_regression_test.dart
+All tests passed! (2)
+
+$ python3 ml/vision/evaluate_vision_metrics.py --self-test
+no-data, below-threshold (0.00), inclusive-threshold (0.01) és
+above-threshold (0.02): mind passed=True.
+
+$ python3 ml/vision/evaluate_vision_metrics.py --input /dev/null
+status=NO_DATA (exit 2, elvárt)
+```
+
+`tools/round-gate.sh test/features/vision test/core test/tooling` első futása
+az analyzerben PIROS volt egyetlen unused import miatt; eltávolítás után a
+format és analyze ZÖLD volt, majd a wrapper által futtatott célzott tesztek
+lefutottak. A wrapper kimenet-csatolása a tesztfázis utáni összegzést nem adta
+vissza ehhez a sessionhöz, ezért ezt az implementer nem állítja teljes
+bizonyítéknak; az orchestrátor futtasson friss gate-et/review-t exact SHA-n.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Nincs funkcionális eltérés a brieftől; flaget, production `lib/`-et,
+  `.github/`-ot és `tool/ci/`-t nem módosítottam.
+- Teljes Flutter suite, property gate, exact-SHA CI és APK: orchestrátor/CI
+  feladat, ebben a körben lokálisan nem futott.
+- Backend ellenőrzés: nem futott, mert a diff nem érinti a backendet.
 
 ## 11. Review — a független reviewer tölti ki
 

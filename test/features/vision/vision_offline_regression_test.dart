@@ -18,7 +18,6 @@ import 'package:strumsight/features/practice/domain/model/tempo.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_clock.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_command.dart';
-import 'package:strumsight/features/song_trainer/application/trainer/song_transport_state.dart';
 import 'package:strumsight/features/song_trainer/data/playback/fake_backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/domain/models/note_scoring_models.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
