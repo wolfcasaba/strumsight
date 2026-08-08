@@ -6,6 +6,107 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R25 — Practice Engine vision integration, teljes részletes történet (2026-08-08)
+
+**E05-R25 MERGED — Practice Engine vision integration:** opcionális vision-
+technika-bizonyíték a Practice Engine-hez, az audio-pontozás bitre
+változatlanságával. `VisionPracticeContract` (`lib/features/vision/domain/integration/`,
+a vision oldal szűk, exportált API-ja `vision/public.dart`-on át) — három
+capability-gated pilot (Small Strum Motion, Down/Up Symmetry, Chord Change
+Economy), stabil `vision.pilot.*` névtérrel, SZÁNDÉKOSAN nem
+`BuiltinPracticeCatalog`-bejegyzésként. `PracticeVisionAdapter`
+(`lib/features/practice/data/vision/`) — a `visionPracticeQualityFor()`
+determinisztikusan `VisionQualitySummary.overall`-ból származtatja a
+kontraktus-szintű `unavailable`/`degraded`/`good` hármast
+(`good→good`, `needsImprovement→degraded`, `notObservable`/hiányzó
+session `→unavailable`); hiányzó capability vagy nem-`good` minőség
+mindig `audioOnly` módra esik vissza, a gyakorlat SOSEM letiltott.
+`PracticeSessionResult` additív, implicit-null `VisionSessionResult?
+vision` mezőt kap (`operator==`/`hashCode` egyszerű delegálással bővítve —
+a `VisionSessionResult`-nak nincs érték-egyenlősége, szándékosan); a
+meglévő 12 hívóhely (1 production + 11 teszt) változatlanul fordul. Új,
+**önálló** `PracticeVisionDimension` summary-widget — a
+`practice_result_screen.dart`-ba drótozás SZÁNDÉKOSAN egy következő kör
+dolga (nulla regressziós kockázat, ugyanaz a minta, mint az Epic 3 Song
+Trainer sorozatban). **ÚJ ADR [0192](docs/adr/0192-practice-vision-integration-contract.md)**
+(a brief `nincs` mezője szerint az orchesztrátor írta a pre-flightban).
+Implementer **Codex (Terra)** (egyetlen implementációs forduló — egy
+köztes `stopped` megállással, ami NEM az implementer munkájának hibája
+volt, ld. lent), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens (`risk = "high"`). PR
+[#199](https://github.com/wolfcasaba/strumsight/pull/199), squash `9b608cf`.
+
+**Pre-flight mérések (§0.0, 8 pont) — a legfontosabb három:** (1)
+`PracticeSessionResult`-nak nincs saját JSON-kódja (`grep` nulla találat) —
+a ténylegesen perzisztált alak `PracticeHistoryEntry`, ami `allowed_paths`-on
+kívül esik és R28 (persistence) dolga; a brief §6 negyedik cellája
+(„deszerializációs teszt") ezért revideálva három futtatható próbára
+(konstrukciós kompatibilitás + `vision:null` egyenlőség-regresszió +
+mapper-érintetlenség — mindhármat a `practice_session_result_vision_test.dart`
+adja). (2) A `practice → vision/public.dart` cross-feature import
+mechanikusan legális mindkét gépi őrrel (`_isFeaturePublicBarrel` a
+`public.dart` célt nézi, nem tranzitív; a domain-purity-scanner csak a
+fájl saját, közvetlen import-sorát) — nincs allowlist-bővítés (12
+allowlisted deviation, változatlan a R24 óta). (3) A három pilot
+gyakorlat NEM a `BuiltinPracticeCatalog`-ba kerül (az a fájl nincs
+`allowed_paths`-on) — a kör saját új fájljain belüli adat.
+
+**Köztes `stopped` a pre-flight SAJÁT hibája miatt, önjavítva dispatch
+közben:** az első Terra-forduló helyesen állt meg, mert
+`docs/adr/0192-…md` (az orchesztrátor saját, dispatch előtti
+pre-flight-commitja) hiányzott a brief `allowed_paths`-listájából — [ADR
+0191](docs/adr/0191-feedback-policy-and-cue-budget.md) (E05-R23)
+precedense szerint a saját ADR-útvonalat is fel kell venni a listára, ez
+a pre-flightban kimaradt. Terra addigi, uncommitolt munkája (11 fájl, mind
+az eredeti listán) a megállás pillanatában HIBÁTLANNAK bizonyult —
+dokumentált §0.0/8 brief-revízióval pótolva a hiányzó útvonalat, a
+munkapéldány fetch+fast-forward-olva, majd a **folytatás UGYANAZZAL a
+Terra session-nel** véve fel a fonalat: commit, teljes gate, push, `done`.
+
+**Mért operatív részlet (klón-alapú dispatch):** az izolált munkapéldány
+`origin`-je a HELYI fő-repóra mutat (`git clone <fő-repó> <cél>`
+szerződés), ezért az implementer saját „push"-a a fő-repóba megy, nem
+közvetlenül GitHubra — az orchesztrátornak a fő-repóból egy MÁSODIK
+push-szal kell továbbítania a valódi origin-re. Ha ezt kihagyja, a
+kör-jelzés „push kész" állítása hamis marad annak ellenére, hogy a
+munkapéldányban a commit valóban megtörtént — mindig `git ls-remote`-tal
+(vagy `gh api .../commits/<branch>`) ellenőrizd a GitHubon lévő tényleges
+HEAD-et, ne a jelzésfájl szövegét.
+
+**Review:** [docs/reviews/e05-r25-practice-vision-integration-review.md](docs/reviews/e05-r25-practice-vision-integration-review.md)
+— **APPROVED, 0 javító kör** (0 nyitott BLOCKER/MAJOR, 1 NOTE — egy nem
+hívott ARB-kulcs, ártalmatlan). Saját izolált `/tmp` klónban futtatott
+gate + saját falszifikációs próba (a vision-változat `scorePoints`-ját
+900→999-re rontva a parity-fixture PIROSRA fordult, majd visszaállítva).
+A **dedikált security-review**
+([docs/reviews/e05-r25-practice-vision-integration-security.md](docs/reviews/e05-r25-practice-vision-integration-security.md))
+— **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 1 MINOR + 4 NOTE. A MINOR (nem
+blokkoló, R26 pre-flight bemenet): a `vision/public.dart` barrel nyers
+landmark/pose/geometry/koordináta-típusokat és landmark-provider
+osztályokat is re-exportál az e körben ténylegesen használt aggregát
+típusok mellett, és egyik gépi őr sem korlátozza, MELYIK szimbólumot
+importálja a fogyasztó a barrelen át (csak azt nézik, hogy a cél
+`/public.dart`-ra végződik) — R25 nyitja meg az ELSŐ `practice → vision`
+élt, MA nincs áthágás (R25 kódja egyetlen nyers típust sem használ,
+grep-pel megerősítve), de mivel E05-R26 (Song Trainer vision-integráció)
+ugyanezt a barrelt fogja importálni, a javítás (szimbólum-szintű negatív
+guard vagy a barrel domain-safe/raw-UI szétválasztása) **az R26
+pre-flightja előtt** esedékes volt — **E05-R26 ezt zárta** (ÚJ, szűk
+nested barrel `vision/domain/integration/public.dart`, ADR 0193 Döntés
+4–7 — ld. az E05-R26 archív bejegyzést lent). **Végállapot: 0 nyitott
+BLOCKER/MAJOR.**
+
+**Zöld kapu (exact-SHA `fb93cb7`, a review-dokumentumok utáni tip):** Full
+Gate [31264278473](https://github.com/wolfcasaba/strumsight/actions/runs/31264278473)
+**success** + Router CI
+[31264279440](https://github.com/wolfcasaba/strumsight/actions/runs/31264279440)
+**success** (mindkettő manuálisan újra-dispatch-elve az exact tipre, mert
+az utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+trigger-útvonalán sem — ugyanaz a minta, mint E05-R20/21/22/23-nál).
+Squash-merge után a friss `main`-en (`9b608cf`) is zöld:
+`tools/round-gate.sh test/features/practice test/features/vision`
+izolált-elvű újrafuttatása mind a 7 lépésre (913+522 teszt).
+
 ## E05-R24 — Vision session controller and realtime overlay, teljes részletes történet (2026-08-08)
 
 **E05-R24 MERGED — Vision session controller and realtime overlay:**
