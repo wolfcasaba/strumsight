@@ -4,13 +4,18 @@ Brief: `docs/rounds/e05-r23-feedback-policy-and-cue-budget.md`
 ADR-ek: [0191](../adr/0191-feedback-policy-and-cue-budget.md) (ez a kör),
 [0188](../adr/0188-vision-safety-claim-guard.md) (safety guard, R20),
 [0190](../adr/0190-vision-observation-fusion-and-evidence.md) (evidence, R22)
-Diff: `git diff origin/main...codex/e05-r23-feedback-policy-and-cue-budget` (base `6afcede`, tip `307246e`)
+Diff (1. pass): `git diff origin/main...codex/e05-r23-feedback-policy-and-cue-budget` (base `6afcede`, tip `307246e`)
+Diff (javító kör #1): tip `307246e` → `211d7a8`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-08
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED** (javító kör #1, `211d7a8` után — lásd „Javító kör #1 zárás" alant)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 2 · MINOR: 5 · NOTE: 4
+**Végállapot javító kör után: 0 nyitott BLOCKER/MAJOR/MINOR.** Az 1. pass
+leletei: BLOCKER: 1 · MAJOR: 2 · MINOR: 5 · NOTE: 4 — mind a 7 blokkoló/
+javítandó (F1–F7) zárva `211d7a8`-ban, saját kézzel a shippelt diffen
+megerősítve (nem az implementer önjelentésére hagyatkozva). F8 szándékosan
+DEFERRED (külön kör, lásd lent).
 
 A dedikált security-review (`docs/reviews/e05-r23-feedback-policy-and-cue-budget-security.md`,
 `risk = "high"` miatt kötelező, AGENTS.md §15.1) minden lelet mögé **futtatott**
@@ -27,14 +32,14 @@ megerősítés" sorát.
 |---|---|---|---|
 | 1 | Katalógus-teszt: minden `InsightCode` → policy + en/hu ARB + safety guard | ✅ | `feedback_policy_test.dart:19-39` `InsightCode.values` felett iterál, mind a 3 dimenzióra; security-próba `[probe2]`: mind a 11 kód `allowed=true` a production ágon |
 | 2 | Cooldown-teszt injektált órával (alatt/rajta/fölött) | ✅ | `feedback_policy_test.dart:53-65`, három cella, `>` szigorú határ önmagában helyes |
-| 3 | Prioritás-teszt: setup+technikai → csak setup; azonos prioritásnál determinisztikus | ❌ **NEM** (lásd B1) | `feedback_policy_engine_test.dart:35-51` csak az ELSŐ hívásra igaz; a `111-133`-as teszt saját `reason`-je dokumentálja, hogy a MÁSODIK kiértékelésen a technikai kód nyer, amíg a setup cooldownja tart. A tie-break maga determinisztikus (✅ az al-kritérium), de az irány véletlenszerűen a negatívnak kedvez (MI5). |
-| 4 | Confidence-mátrix: 6 cella, negatív szigorúbb (assert) | ✅ *a tesztelt alakra*, ⚠ lásd M2 | `feedback_policy_engine_test.dart:13-33` 6 cella zöld; a `FeedbackPolicy` konstruktor kikényszeríti `negative > positive`-t. **De** a 6-cellás teszt nem csatol `comparisonEvidence`-t — az a kombináció, ahol M2 szerint a kapun átment insight kimenő confidence-e a küszöb ALÁ esik, kívül esik ezen a tesztmátrixon. |
-| 5 | Session-summary korlát: ≥5 jelölt → ≤2, determinisztikus | ✅ | `feedback_policy_test.dart:67-89`, forward+reversed input azonos eredmény |
-| 6 | Golden summary fixture: bit-stabil két futás közt | ✅ *mechanikusan*, ⚠ lásd B1 | `feedback_policy_engine_test.dart:111-133` — a két futás egymással konzisztens (ismételhető), de a PINNELT viselkedés maga a B1 hiba; a fixture-t a javító kör kell átírja a helyes viselkedésre |
-| 7 | Lokalizációs paritás zöld | ✅ | gate `[7] l10n`: „L10n parity OK (en → hu, 975 message(s))"; `test/core/l10n_parity_test.dart` 3/3 |
-| 8 | Valódi-sértés próba: negatív küszöb → pozitívéra → PIROS → visszaállítás | ✅ | Implementer §10: a `FeedbackPolicy` konstruktor `ArgumentError`-t dob egyenlő küszöbre (`negativeConfidenceThreshold <= positiveConfidenceThreshold` invariáns, `feedback_policy.dart:19-25` — magam is elolvastam, a throw feltétele helyes és teszteletlen ág nélküli) |
+| 3 | Prioritás-teszt: setup+technikai → csak setup; azonos prioritásnál determinisztikus | ✅ **JAVÍTVA** (F1 zárva) | `cue_budget.dart`: a `selectRealtime` a setup-irányú jelölteket a cooldown-szűrés ELŐTT, önállóan választja — cooldowntól függetlenül mindig ők nyernek, ha van setup-jelölt. `feedback_policy_engine_test.dart` átírt tesztje (`'keeps setup priority during its cooldown with an advancing clock'`) valós, 500 ms-mal előrehaladó órával mindkét kiértékelésen `setupNotObservable`-t vár — magam futtattam a gate-et, 387/387 zöld. A tie-break iránya is javítva (F6). |
+| 4 | Confidence-mátrix: 6 cella, negatív szigorúbb (assert) | ✅ **TELJES** (M2/F3 zárva) | A 6-cellás teszt változatlanul zöld; ÚJ invariáns-teszt (`'emits only insights at or above their policy confidence threshold'`) és regressziós teszt (`'rejects a technical insight below its output confidence threshold'`, a security [C]-próba pontos reprodukciója: 0.95 primer + 0.02 comparison → most `decision.insights` üres) — a kapu most az AGGREGÁLT confidence-et is méri (`_emittedConfidence(candidate) < policy.confidenceThreshold`), nem csak a primert. |
+| 5 | Session-summary korlát: ≥5 jelölt → ≤2, determinisztikus | ✅ | Változatlanul teljesül; a determinisztikus VÁLASZTÁS iránya a tie-break-javítással most `[pickingStable, postureStable]` (pozitív irány nyer egyenlő prioritásnál/confidence-nél), nem a korábbi `[frettingFocus, pickingFocus]` — a korlát maga (≤2, determinisztikus) mindkét verzióban állt. |
+| 6 | Golden summary fixture: bit-stabil két futás közt | ✅ **JAVÍTVA** (F1 zárva) | Az átírt teszt most a HELYES, nem a hibás viselkedést pinneli — lásd #3. |
+| 7 | Lokalizációs paritás zöld | ✅ | gate `[7] l10n`: „L10n parity OK (en → hu, 975 message(s))"; `test/core/l10n_parity_test.dart` 3/3, változatlanul zöld a javító kör után is. |
+| 8 | Valódi-sértés próba: negatív küszöb → pozitívéra → PIROS → visszaállítás | ✅ | Változatlanul áll, a `FeedbackPolicy` konstruktor nem módosult ezen az invarianson. |
 
-**5/8 teljes, 2/8 részleges (a tesztelt alakra igen, a teljes kontraktra nem), 1/8 bukott.**
+**8/8 teljes a javító kör után** (1. passban: 5/8 teljes, 2/8 részleges, 1/8 bukott).
 
 ## Scope-audit
 
@@ -83,7 +88,15 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
 - **Ellenőrzés:** új/módosított teszt, amely egy setup-jelöltet a SAJÁT
   cooldownja alatt, egy egyidejű technikai jelölttel együtt kiértékel, és
   `realtimeCue` `null`-t vagy a setup kódot várja, `frettingFocus`-t sosem.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`211d7a8`). A `selectRealtime` a rendezett
+  jelöltek közül ELŐSZÖR a setup-irányúak közül választ (`cue_budget.dart:11-23`),
+  cooldowntól függetlenül; technikai jelölt csak setup-jelölt HIÁNYÁBAN
+  kerülhet realtime cue-ba. A `feedback_policy_engine_test.dart:111-133`
+  tesztet átnevezték (`'keeps setup priority during its cooldown with an
+  advancing clock'`) és valós, 500 ms-mal előrehaladó órával most a HELYES
+  kimenetet (`setupNotObservable` mindkét kiértékelésen) várja. Saját kézzel
+  ellenőrizve: a diffet elolvastam (a `setup.isNotEmpty` ág feltétlen korai
+  return-je), és a gate-et friss `/tmp` klónban újrafuttattam — 387/387 zöld.
 
 ### F2 — MAJOR — a `comparisonEvidence` egyetlen kapun sem megy át
 
@@ -109,7 +122,14 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
 - **Ellenőrzés:** teszt egy `notObservable` és egy near-zero-confidence
   comparisonEvidence-re — mindkettő `_accepts=false`-t kell adjon
   improvement-kódra.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`211d7a8`). Új `_acceptsComparison` kapu
+  (`feedback_policy_engine.dart`): `comparisonEvidence` csak akkor engedett,
+  ha `observed`/`inferred` ÉS `confidence >= policy.confidenceThreshold` ÉS
+  `id != primary.id` ÉS a comparison-ablak `endUs` szigorúan a primer
+  `startUs` előtt van. Négy dedikált regressziós teszt (notObservable,
+  near-zero confidence, nem-korábbi ablak, azonos ID) — mind a négyet
+  elolvastam, a várt `decision.insights`-üresség a kapu logikájából
+  közvetlenül következik. Gate újrafuttatva, zöld.
 
 ### F3 — MAJOR — az emittált confidence a beengedő küszöb alá eshet
 
@@ -131,7 +151,17 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
   nem-improvement kódoknál.
 - **Ellenőrzés:** invariáns-teszt minden emittált `VisionInsight`-ra:
   `insight.confidence >= FeedbackPolicies.catalog[insight.code]!.confidenceThreshold`.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`211d7a8`). `_accepts` most az AGGREGÁLT
+  `_emittedConfidence(candidate)` (primer és comparison minimuma) értéket is
+  a `policy.confidenceThreshold` ellen méri, a primer melletti F2-kapukkal
+  együtt — a security [C]-próba pontos forgatókönyve (0.95 primer + 0.02
+  comparison `frettingFocus`-ra) most `decision.insights`-üres. Dedikált
+  invariáns-teszt (`'emits only insights at or above their policy confidence
+  threshold'`) minden emittált insightra ellenőrzi
+  `confidence >= catalog[code]!.confidenceThreshold`-t. Elolvastam a
+  `_emittedConfidence`/`_acceptsComparison` együtthatását — a kettős kapu
+  (F2 a comparisonra, F3 az aggregátumra) matematikailag lehetetlenné teszi
+  a küszöb alatti emissziót. Gate újrafuttatva, zöld.
 
 ### F4 — MINOR — a `*Focus` kódok `baselineRelative`-nak deklaráltak, de nincs baseline
 
@@ -140,7 +170,11 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
   evidence-ben nem hasonlít baseline-hoz; `neutralObservation` (mint a
   `*Stable` kódoknál) a pontos osztály, vagy a `*Focus` ág kapja meg a
   `hasComparable…` szerkezetet.
-- **Státusz:** OPEN (javítás a fix-körben, ugyanaz a fájl már scope-ban)
+- **Státusz:** **FIXED** (`211d7a8`). A három `*Focus` bejegyzés
+  `neutralObservation`-re változott; a meglévő 9 posture-bejegyzés, a 8 másik
+  R23-kód és a `VisionSafetyClaimClass` enum érintetlen (diffelve
+  megerősítve). Dedikált teszt (`'focus insight codes are neutral
+  observations'`).
 
 ### F5 — MINOR — a publikus `VisionInsight`/`CueBudget` felület megkerülheti a guardot
 
@@ -151,8 +185,13 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
   szabad paraméter a konstruktoron. Mérve: ma nincs production hívó (R24
   pending), tehát nem felhasználóig érő ma, de a `public.dart` már kiadja a
   megkerülő utat.
-- **Státusz:** OPEN (javítás javasolt ugyanebben a körben, mert a réteg
-  tulajdonosa épp most dolgozik a fájlokon)
+- **Státusz:** **FIXED** (`211d7a8`). A `VisionInsight` konstruktor többé
+  nem fogad `priority`/`direction` paramétert — mindkettőt a privát
+  `_policyFor(code)` vezeti le a `FeedbackPolicies.catalog`-ból, fail-closed
+  `ArgumentError`-ral ismeretlen kódra. A publikus felület már nem tud
+  policy-t megkerülő insightot építeni. Dedikált teszt (`'VisionInsight
+  derives priority and direction from its policy code'`); a két meglévő
+  test-helper (`_insight` mindkét fájlban) frissült az új szignatúrára.
 
 ### F6 — MINOR — azonos prioritású döntetlen a negatív irányt részesíti előnyben
 
@@ -161,14 +200,29 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
   a `*Focus` (negatív) kódoknak kedvez a `*Stable`/`*Improved` (pozitív) felett
   ábécé-sorrend miatt. Determinisztikus (a §6 betű szerint teljesül), de az
   irány véletlen melléktermék, szemben az aszimmetrikus-küszöb szándékával.
-- **Státusz:** OPEN (javítás javasolt: explicit, dokumentált tie-break — pl.
-  magasabb confidence előbb, majd stabil kód-sorrend)
+- **Státusz:** **FIXED** (`211d7a8`), a javasoltnál erősebb formában. Az új
+  tie-break sorrend mindkét komparátorban (`cue_budget.dart`,
+  `feedback_policy_engine.dart`): prioritás → magasabb confidence → **pozitív
+  irány a negatív előtt** → stabil kód-sorrend. A `_directionTieRank`
+  explicit dokumentálja a szándékot. Dedikált teszt (`'uses confidence before
+  direction to break equal-priority choices'`); a meglévő
+  `'selects an equal-priority candidate deterministically'` teszt elvárása
+  `frettingFocus`-ról `frettingStable`-re változott (azonos confidence-nél a
+  pozitív most nyer), és a session-summary teszt eredménye
+  `[pickingStable, postureStable]`-re változott — mindkettőt elolvastam, a
+  változás pontosan a dokumentált tie-break-irányból következik.
 
 ### F7 — MINOR — 11 új ARB-kulcs `@description` nélkül
 
 - **Fájl:** `lib/l10n/app_en.arb:1313-1323`.
 - Lásd security-report MI4. Olcsó, additív javítás (a fájl már scope-ban).
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`211d7a8`). Mind a 11 kulcs kapott
+  `@description`-t („Non-diagnostic, non-predictive […] observation; see ADR
+  0188."). A katalógus-teszt kibővült: minden `InsightCode.safetyCode`-hoz
+  kötelezővé tette az en ARB `@`-metaadat + `description` mező meglétét — ez
+  jövőbeli kódokra is kikényszeríti a hardening-et, nem csak a mai 11-re.
+  `app_hu.arb` helyesen ÉRINTETLEN (nincs `@`-konvenció a fájlban, a diff
+  megerősíti) — nem vezettek be egyoldalú konvenciót.
 
 ### F8 — MINOR (follow-up, NEM ebben a körben) — a lexikai deny-list nem fedi az ergonómiai szókincset
 
@@ -198,33 +252,41 @@ enum és a `safety_claim_guard.dart` teljes egészében érintetlen.
   újrafuttatva** (az első próbám a pre-flight-commitra futott véletlenül,
   0 új teszttel — felismerve és korrigálva, lásd alább):
 
-| Gate | Állított eredmény (implementer) | Ellenőrizve |
-|---|---|---|
-| format | zöld | ✅ (1163 fájl, 0 changed) |
-| analyze | zöld | ✅ (No issues found) |
-| test test/features/vision | zöld, 378 teszt | ✅ 378/378, "All tests passed!" |
-| test test/core/l10n_parity_test.dart | zöld, 3 teszt | ✅ 3/3 |
-| architecture | zöld | ✅ |
-| secrets | zöld | ✅ (2010 fájl, 0 finding) |
-| l10n | zöld | ✅ (975 kulcs, en→hu teljes) |
-| CI (teljes suite + property + APK) | — | nincs dispatch-elve — a B1/M1/M2 miatt a javító kör UTÁN jön |
+| Gate | 1. pass (implementer, `307246e`) | Javító kör (`211d7a8`) | Ellenőrizve |
+|---|---|---|---|
+| format | zöld | zöld | ✅ (1163 fájl, 0 changed) |
+| analyze | zöld | zöld | ✅ (No issues found) |
+| test test/features/vision | 378 teszt | **387 teszt** (+9) | ✅ 387/387, "All tests passed!", saját kézzel friss `/tmp/review-e05-r23-fix1` klónban |
+| test test/core/l10n_parity_test.dart | 3 teszt | 3 teszt | ✅ 3/3 |
+| architecture | zöld | zöld | ✅ |
+| secrets | zöld | zöld | ✅ (2012 fájl, 0 finding) |
+| l10n | zöld | zöld | ✅ (975 kulcs, en→hu teljes) |
+| CI (teljes suite + property + APK) | — | — | orchestrátor dispatcheli a merge előtt, ezután a záró kapu |
 
-A zöld gate — ahogy B1 is mutatja — **nem bizonyítja** a §5/2 setup-elsőbbség
-kontraktot, mert a shippelt teszt maga pinnelte a hibás viselkedést. A többi
-hét gate-lépés (format/analyze/architecture/secrets/l10n/a másik hat
-acceptance-kritérium) valódi, független bizonyíték.
+Az 1. passban a zöld gate — ahogy B1 mutatta — nem bizonyította a §5/2
+setup-elsőbbség kontraktot, mert a shippelt teszt maga pinnelte a hibás
+viselkedést. A javító kör UTÁN a gate-bizonyíték már a HELYES viselkedést
+méri (lásd az egyes F1–F7 „Státusz" sorát) — a 9 új/módosított teszt
+pontosan a korábban hiányzó élt fedi.
+
+## Javító kör #1 zárás
+
+`307246e` → `211d7a8`. Mind a hét nyitott lelet (F1 BLOCKER, F2/F3 MAJOR,
+F4/F5/F6/F7 MINOR) zárva, saját kézzel a shippelt diffen (nem az implementer
+`§10` önjelentésén) megerősítve — lásd az egyes leletek „Státusz: FIXED"
+sorát fent. A gate-et két KÜLÖNBÖZŐ, egymást követő, friss `/tmp` klónban
+futtattam le (1. pass: `/tmp/review-e05-r23`, javító kör:
+`/tmp/review-e05-r23-fix1`), mindkétszer a helyes commitra ellenőrizve a
+`git log` tippet dispatch előtt (az 1. passban egyszer véletlenül a saját
+pre-flight-commitomra futtattam a gate-et — felismertem és korrigáltam,
+lásd a fenti táblázat lábjegyzete helyett itt: a hiba nem az implementer
+munkájában volt, a saját review-eljárásomban).
 
 ## Merge-döntés
 
-**Merge TILOS.** 1 BLOCKER (F1/B1) + 2 MAJOR (F2/M1, F3/M2) nyitva
-(`09-review-report.md` tábla: BLOCKER/MAJOR → "Merge tilos, amíg nyitva van").
-Javító kör szükséges, UGYANAZZAL a motorral (Terra), a §2 önjavítási szabály
-szerint (user-döntés 2026-07-31: a javító kör a lánc normál útja). A javító
-körnek a `feedback_policy_engine_test.dart:111-133` téves `reason`-jét is
-korrigálnia kell, különben a következő review ugyanezt a hamis-zöld mintát
-találja.
-
-Javasolt a fix-körben egyszerre zárni: F1 (BLOCKER), F2, F3 (MAJOR), és — mivel
-ugyanazok a fájlok már módosulnak — F4, F5, F6, F7 (MINOR). F8 (MI3, a
-lexikai deny-list) **kimarad**: `safety_claim_guard.dart` nincs az
-`allowed_paths`-on, és a security-review is önálló körnek jelöli.
+**Merge engedélyezett.** 0 nyitott BLOCKER/MAJOR/MINOR. F8 (a security-report
+MI3, lexikai deny-list bővítés) szándékosan DEFERRED — `safety_claim_guard.dart`
+nincs az `allowed_paths`-on, önálló, jövőbeli kör dolga; nem blokkoló
+(`docs/execution/09-review-report.md` tábla: NOTE/follow-up szintű, mert a
+mai 11 kód mind tiszta, a rés csak JÖVŐBELI bővítésre vonatkozik). CI-dispatch
+és exact-SHA zöld run szükséges még a squash-merge előtt (ADR 0052/0086).

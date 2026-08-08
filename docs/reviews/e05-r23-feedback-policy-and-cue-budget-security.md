@@ -1,12 +1,28 @@
 # E05-R23 — Dedikált biztonsági review (risk = "high")
 
+> ✅ **ORCHESTRÁTOR-ZÁRÁS (Claude Sonnet 5, 2026-08-08, `211d7a8`).** B1, M1,
+> M2 és MI1/MI2/MI4/MI5 mind **FIXED** — lásd
+> [`e05-r23-feedback-policy-and-cue-budget-review.md`](e05-r23-feedback-policy-and-cue-budget-review.md)
+> „Javító kör #1 zárás" szakaszát a soronkénti bizonyítékért (fájl:sor a
+> javított kódban, az érintett dedikált regressziós teszt neve). A zárás
+> módja: saját kézzel elolvastam a `307246e`→`211d7a8` diffet minden egyes
+> lelet ellen (nem az implementer önjelentésére hagyatkozva), és a
+> `tools/round-gate.sh`-t egy friss `/tmp` klónban újrafuttattam (387/387
+> teszt, minden lépés zöld). MI3 (a lexikai deny-list) szándékosan
+> **DEFERRED** marad — a `safety_claim_guard.dart` nincs ennek a körnek az
+> `allowed_paths`-án, önálló, jövőbeli kör dolga. Az alábbi, eredeti jelentés
+> **változatlanul** a lelet-felfedezés időpontjának (`307246e`) állapotát
+> rögzíti — ne a "Verdikt" sort olvasd a végállapotnak, azt a fenti
+> hivatkozott review-fájl adja.
+
 Brief: `docs/rounds/e05-r23-feedback-policy-and-cue-budget.md`
 ADR-ek: `docs/adr/0188-vision-safety-claim-guard.md`, `docs/adr/0191-feedback-policy-and-cue-budget.md`
 Diff: `git diff origin/main HEAD` — branch `codex/e05-r23-feedback-policy-and-cue-budget`,
 HEAD `307246e` (`feat(vision): add feedback policy cue budget`), base `origin/main` `6afcede`
 Reviewer: `security-reviewer` ágens · Dátum: 2026-08-08
-Verdikt: **FAIL / CHANGES REQUIRED** — **1 BLOCKER**, 2 MAJOR, 5 MINOR, 4 NOTE.
-0 CRITICAL. **A BLOCKER nyitva tartja a merge-et.**
+Verdikt (a `307246e` időpontjában — lásd a fenti zárás a végállapotért):
+**FAIL / CHANGES REQUIRED** — **1 BLOCKER**, 2 MAJOR, 5 MINOR, 4 NOTE.
+0 CRITICAL.
 
 > Az `AGENTS.md` §15.1 szerint kötelező dedikált biztonsági pass (a brief
 > `ai-router` blokkja `risk = "high"`). A kimenet READ-ONLY: jelentés, nem
