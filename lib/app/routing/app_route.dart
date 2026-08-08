@@ -35,6 +35,7 @@ abstract final class AppRoutes {
   static const String tutorData = '/tutor/data';
   static const String visionSetup = '/vision/setup';
   static const String visionGuitarGeometry = '/vision/guitar-geometry';
+  static const String visionSession = '/vision/session';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[

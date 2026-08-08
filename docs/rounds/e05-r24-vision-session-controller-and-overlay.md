@@ -26,6 +26,10 @@ allowed_paths = [
   "test/features/vision/application/vision_session_controller_test.dart",
   "test/features/vision/application/vision_session_lifecycle_test.dart",
   "test/features/vision/presentation/vision_session_screen_test.dart",
+  "test/features/vision/presentation/vision_preview_overlay_test.dart",
+  "test/features/vision/presentation/vision_session_routing_test.dart",
+  "test/features/vision/presentation/goldens/vision_preview_portrait.png",
+  "test/features/vision/presentation/goldens/vision_preview_landscape.png",
   "docs/rounds/e05-r24-vision-session-controller-and-overlay.md",
 ]
 gate_tests = [
@@ -107,6 +111,33 @@ cue budget) kód létezése előtt.
    **nincs** az `allowed_paths`-on: egy új per-feature flag hozzáadása ezt a
    fájlt is módosítaná (H3). Az implementer a meglévő globális `visionEnabled`
    flaget használja, ÚJ flaget nem vezet be.
+4. **R4 — Tesztútvonal-rés pótolva, mérve az implementer STOP-jelzéséből
+   (2026-08-08 12:21 UTC).** Terra a §6 acceptance criteria szerint (Cue-teszt,
+   Golden overlay teszt portrait/landscape, Lokalizációs paritás + route-guard)
+   implementált, de a három eredetileg felsorolt teszt-fájlnév helyett a
+   tényleges lefedettséget más bontásban adta: a lifecycle-mátrix a
+   `vision_session_controller_test.dart`-ba olvadt (a külön
+   `vision_session_lifecycle_test.dart` nem jött létre — az eredeti bejegyzés
+   a listán marad, felhasználatlanul, ártalmatlan), a „screen test" helyett
+   pedig két célzottabb fájl: `vision_preview_overlay_test.dart` (chip/cue/
+   skeleton-toggle + golden) és `vision_session_routing_test.dart`
+   (`visionEnabled`-only guard, a §0.0 R3 pontosan ezt várta el). A
+   golden-tesztekhez két PNG-fixture is kellett. Egyik sem volt az
+   `allowed_paths`-on — a scope-audit helyesen `stopped`-ra váltott, commit
+   nem történt (a leállás pillanatában 6 módosított + 11 új fájl állt a
+   working tree-ben, mind a §4 táblán belül a most pótolt 4 kivétellel). A
+   négy hiányzó pontos útvonal (nem könyvtár-prefix, hogy a scope-audit
+   tovább is szűk maradjon) felkerült a fenti `allowed_paths` tömbre:
+   `test/features/vision/presentation/vision_preview_overlay_test.dart`,
+   `test/features/vision/presentation/vision_session_routing_test.dart`,
+   `test/features/vision/presentation/goldens/vision_preview_portrait.png`,
+   `test/features/vision/presentation/goldens/vision_preview_landscape.png`.
+   Ez a §2 „engedélyezett-fájllista szűkítését" bullet testvér-esete
+   (bővítés, nem szűkítés), de a kör SAJÁT, még nem merge-elt allowed_paths-át
+   érinti, ezért nem H3 — a fájlok tartalmilag a §6 saját, már elfogadott
+   acceptance-köréhez tartoznak (golden overlay teszt, cue-teszt, route-guard
+   teszt), nem új funkció. A munkapéldányban a stop óta semmi nem lett
+   commitolva — a teljes diff a working tree-ben ül, veszteség nélkül.
 
 ## 1. Cél
 
@@ -225,7 +256,41 @@ egyszeresség-őrének lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosítások
+
+- `VisionSessionController` + immutable `VisionSessionState`: explicit
+  permission → setup → calibration → exclusive `visionPractice` lease →
+  running/paused lifecycle. A frame-listener nem olvas pixel-bufferből és nem
+  ír frame-et state-be; csak a sessionen belüli számlálót tartja.
+- `VisionSession` és raw-media-mentes `VisionSessionResult`: a finalization
+  future-őr Stop/route-leave/app-háttér/hiba/dispose versenyben is egyetlen
+  aggregate-et és listener-emissziót ad. A close sorrend stream → capture →
+  lease, az R05 revoke-pathját tiszteletben tartva.
+- `VisionPreviewOverlay`: hand/pose/guitar minőség-chip + kizárólag az R23
+  által átadott egy cue; debug landmark réteg default OFF. A landmark mapping
+  az R07 `PreviewFit` → `CameraTransform.previewToOverlay` utat használja.
+- Új `/vision/session` route, kizárólag a meglévő `visionEnabled` flag mögött,
+  valamint additív en/hu szövegek és `public.dart` exportok.
+
+### Bizonyíték
+
+- `flutter test test/features/vision/application/vision_session_controller_test.dart`
+  → **10/10 PASS**: állapotgép, summary-only state audit, Stop/route-leave/
+  app-háttér/stream-hiba/dispose exit-mátrix és dupla-finalizáció.
+- `flutter test test/features/vision/presentation/vision_preview_overlay_test.dart`
+  → **3 PASS, 2 skip** (golden-ek normál futásban host-policy szerint opt-in);
+  `GOLDENS=1 flutter test --update-goldens ...` → **5/5 PASS**, portrait és
+  landscape golden-ek generálva.
+- `flutter test test/features/vision/presentation/vision_session_routing_test.dart`
+  → **2/2 PASS**: `visionEnabled` az egyetlen route guard.
+- Valódi-sértés próba: a `_finalization` in-flight őr ideiglenes kiiktatása
+  után a „Stop + route leave” teszt **PIROS** volt (2 resultot mért); az őr
+  visszaállítása után a célzott suite ismét zöld.
+
+### Nem futtatott ellenőrzés
+
+- A kötelező teljes kör-gate még futtatásra vár; a valós készülékes
+  jank/profilozás továbbra is a brief szerinti device-mátrix PENDING sora.
 
 ## 11. Review — a független reviewer tölti ki
 
