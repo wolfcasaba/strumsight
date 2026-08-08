@@ -4,121 +4,116 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R22 MERGED — Vision observation fusion and evidence engine:**
-> a landmark-, geometry-, quality- és sync-adatokból verziózott,
-> visszakövethető `VisionEvidence` előállítása. `lib/features/vision/domain/evidence/`
-> — `vision_observation.dart` (`EvidenceMetric`: a **három élő** metrika-
-> katalógus — fretting/picking/posture — meglévő `.window`/`.minimumVisibility`
-> mezőiből épített, normalizált fúziós-metrika-kulcs, NEM egy párhuzamos
-> ablak-fogalom; `VisionObservation`: timestampelt, model-/quality-/geometry-/
-> sync-inputot hordozó nyers megfigyelés), `vision_evidence.dart`
-> (`ObservationState {observed, inferred, notObservable, experimental}`,
-> determinisztikus FNV-1a evidence ID az ablak-kulcsból + metrikából),
-> `evidence_provenance.dart` (metrika, ablak, model-verzió, geometry-source,
-> sync-bucket, thresholds-verzió — a bizonyíték ebből újraszámolható),
-> `confidence_model.dart` (`ConfidenceComponents`: model·quality·geometry·sync;
-> `ConfidenceModel.combine` **min-alapú**, sosem átlagoló). `lib/features/vision/
-> application/observation_fusion.dart` — ablakos, idempotens, gap-aware fusion
-> pipeline korlátos memóriával (az `add()` metrikánként retention-horizontot
-> kényszerít ki, `fuse()`-tól függetlenül — lásd F1 lent). **ÚJ ADR:
-> [0190](docs/adr/0190-vision-observation-fusion-and-evidence.md)** — a brief
-> előzetes „0162" hivatkozása **sosem lett fájl** (nem elavult foglalás, mint
-> a 0170→0189 minta E05-R21-nél, hanem sosem realizált terv), a
-> `tools/round-slots.py reserve-adr` **0190**-et adott. Implementer
-> **Codex (Terra)** (kezdeti forduló + **2 javító kör**), orchesztrátor/
-> reviewer **Claude Sonnet 5**, dedikált **security-reviewer** ágens
-> (`risk = "high"`). PR [#195](https://github.com/wolfcasaba/strumsight/pull/195),
-> squash `997e7be`.
+> (E05-R23 MERGED — Feedback policy and realtime cue budget:**
+> `VisionEvidence` → korlátozott, stabil, lokalizálható `VisionInsight` réteg.
+> `lib/features/vision/domain/feedback/` — `insight_code.dart` (zárt
+> `InsightCode` enum, 11 kód: setup/experimental + fretting/picking/posture ×
+> stable/focus/improved; `VisionInsight` a `FeedbackPolicies.catalog`-ból
+> vezeti le a `priority`/`direction`-t, NEM szabad paraméterként kapja),
+> `feedback_policy.dart` (kódonkénti capability/confidence/duration/cooldown/
+> prioritás kapu, `negativeConfidenceThreshold > positiveConfidenceThreshold`
+> konstruktor-szintű invariáns), `cue_budget.dart` (egyszerre egy aktív
+> realtime cue, ≤2 session-summary fókusz, determinisztikus tie-break:
+> prioritás → confidence → pozitív irány a negatív előtt → stabil kódsorrend).
+> `lib/features/vision/application/feedback_policy_engine.dart` — evidence→
+> insight engine, a `comparisonEvidence`-t (improvement-kódokhoz) a primerrel
+> egyenértékű kapun (observability+confidence+azonosság+idősorrend) engedi
+> át, és az AGGREGÁLT (min) confidence-et is a policy küszöbe ellen méri. A
+> biztonsági katalógus (`vision_safety_policy.dart`, R20) additív módon
+> bővült 11 új bejegyzéssel — a meglévő 9 és a `VisionSafetyClaimClass` enum
+> kulcs/érték szinten változatlan. **ÚJ ADR:
+> [0191](docs/adr/0191-feedback-policy-and-cue-budget.md)** — a brief
+> előzetes „0162" hivatkozása **sosem lett fájl** (ugyanaz a minta, mint
+> E05-R21/R22-nél), a `tools/round-slots.py reserve-adr` **0191**-et adott.
+> Implementer **Codex (Terra)** (kezdeti forduló + **1 javító kör**),
+> orchesztrátor/reviewer **Claude Sonnet 5**, dedikált **security-reviewer**
+> ágens (`risk = "high"`). PR [#196](https://github.com/wolfcasaba/strumsight/pull/196),
+> squash `b54490e`.
 >
-> **Pre-flight (§0.0, nyolc mért pont) — a brief négy confidence-komponensének
-> (model/quality/geometry/sync) tényleges kód-forrása, a pipeline-prompt §1
-> mérési szabályai szerint:**
+> **Pre-flight mért scope-rés — a `vision_safety_policy.dart` hiányzott az
+> eredeti `allowed_paths`-ból:** a katalógus egy zárt `Map` volt kilenc,
+> kizárólag posture-kóddal; a fretting/picking családnak nulla bejegyzése
+> volt, miközben a brief §5/6 és a §6 első acceptance-cellája minden
+> insight-kód safety-guard-áteresztését követelte. A fájl saját doc-commentje
+> („A future posture metric (R23 / R27) extends this map") és [ADR
+> 0188](docs/adr/0188-vision-safety-claim-guard.md) §Következmények 3. pontja
+> explicit ezt a kört nevezte meg a bővítés végrehajtójaként — a hiány
+> mérhetően brief-írási mulasztás volt. Pótolva additív-only korláttal (a
+> meglévő 9 bejegyzés és az enum nem módosulhat).
 >
-> 1. **ADR-szám: „0162" sosem lett fájl** (fentebb részletezve) → 0190.
-> 2. **„model" = `MetricObservation.confidence`** (R18) — motoronként
->    (fretting/picking/posture) saját formulával már kiszámolva.
-> 3. **„geometry" = `GeometryConfidence.confidence`** (R16) — csak
->    `guitarRelativeTracking`-et igénylő metrikáknál aktív, egyébként
->    semleges `1.0`.
-> 4. **„quality" = `VisionFrameQuality`** (R09) — **mérve: egyik metrika-motor
->    sem fogyasztotta eddig**, ez a kör az első technikai-confidence
->    fogyasztója; a `VisionQualitySummary` cue-priorizáló kimenete
->    (setup-only) NEM ez, a fúzió a nyers frame-mérésekre olvas rá.
-> 5. **„sync" = `SyncQuality`** (R21) — **NEM** `PickingSyncQuality` (R19, ma
->    injektált/be nem kötött); a két, azonos névkészletű enum szándékosan
->    külön réteg, bekötésük egymásba jövőbeli kör dolga.
-> 6. **`{Fretting,Picking,Posture}MetricDefinition.window`/`.minimumVisibility`
->    ma HASZNÁLATON KÍVÜLI mezők voltak** — a fúzió adja az első valódi
->    fogyasztójukat, párhuzamos ablak-fogalom bevezetése nélkül.
-> 7. **„observed/inferred/notObservable/experimental" elérhetetlen
->    cél-státusz volt** — a brief eredeti szövege nem pinnelte le, MELYIK
->    bemenet melyiket termeli; a pre-flight pontos szabályt írt (kapacitás-
->    kapu `experimental`-re, gap/frame-küszöb a többire) az ADR 0190-be.
-> 8. **Erőforrás-tulajdonlás: nem releváns** (nincs lease/lock/handle a
->    rétegben).
+> **Review:** [docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md](docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md)
+> — **APPROVED 1 javító kör után**. Első pass: **F1 BLOCKER** (a
+> setup-elsőbbség NEM abszolút: a setup cue saját 2 másodperces cooldownja
+> alatt egy technikai jelölt átvette a realtime cue-slotot — a szállított
+> teszt saját `reason`-je EZT a hibás viselkedést dokumentálta elvárásként,
+> lásd **L185**) + **F2/F3 MAJOR** (a `comparisonEvidence` egyetlen
+> observability/confidence-kapun sem ment át, és az emittált confidence a
+> beengedő küszöb ALÁ eshetett egy alacsony-confidence-ű comparisonEvidence
+> csatolásával) + 4 MINOR (helytelen `baselineRelative` osztály a `*Focus`
+> kódokon, policy-t megkerülő `VisionInsight` konstruktor, negatív irányt
+> favorizáló tie-break, hiányzó ARB `@description`). A **dedikált
+> security-review** (`risk = "high"` miatt kötelező, párhuzamosan futtatva)
+> **függetlenül, VALÓS futtatott próbákkal** (nem csak kódolvasással) ugyanazt
+> a BLOCKER-t + MAJOR-okat mérte, plusz egy VALÓS, előrehaladó órás (2,5 mp)
+> B1-reprodukciót adott. Javító kör #1 (`211d7a8`) mindegyiket zárta: a
+> `selectRealtime` a setup-irányú jelölteket a cooldown-szűrés ELŐTT,
+> önállóan választja; a `comparisonEvidence`-re a primerrel egyenértékű
+> kapuk; a policy-katalógus lett a `VisionInsight.priority`/`.direction`
+> egyetlen forrása. Mindhárom (BLOCKER+2×MAJOR) és mind a négy MINOR SAJÁT
+> kézzel, a shippelt diffen (nem az implementer önjelentésén) megerősítve —
+> a gate-et két különböző, egymást követő `/tmp` klónban futtattam újra
+> (378→**387/387** vision teszt a javító kör után, +9 új/módosított
+> regressziós teszt pontosan a hiányzó élekre — az ELSŐ review-próbám
+> véletlenül egy elavult, a saját pre-flight-commitomra álló klónon futott,
+> 0 új teszttel; felismerve és korrigálva, lásd **L186**). **Végállapot: 0
+> nyitott BLOCKER/MAJOR/MINOR**, 1 MINOR (a security-review MI3, lexikai
+> deny-list ergonómiai szókincsre) szándékosan DEFERRED —
+> `safety_claim_guard.dart` nincs ennek a körnek az `allowed_paths`-án.
 >
-> **Review:** [docs/reviews/e05-r22-observation-fusion-and-evidence-review.md](docs/reviews/e05-r22-observation-fusion-and-evidence-review.md)
-> — **APPROVED 2 javító kör után**. Első pass: **F1 MAJOR** (a memóriakorlát
-> csak `fuse()` mellékhatásaként érvényesült — egy sosem-fuse-olt metrikára
-> saját adverzális próbával **12012** megtartott nyers observationt mértem
-> egy 10 perces/20fps szimulációban) + **F2 MINOR** (a „minimum látható
-> időtartam" ág nincs önállóan tesztelve, bár a kód helyes). Javító kör #1
-> (`8b5a8f4`) mindkettőt zárta — saját kézzel, friss klónban újramérve a
-> memória-próba **12012 → <200**-ra csökkent. A **dedikált security-review**
-> (párhuzamosan futtatva, `risk = "high"` miatt kötelező) **APPROVED (PASS)**,
-> 0 BLOCKER/MAJOR, és **függetlenül, más módszerrel** (release-mód
-> `--no-enable-asserts` reprodukció) ugyanarra a memória-résre jutott
-> (NOTE-3, a `8b5a8f4` már lezárta) — plusz egy saját **MINOR**-t hozott
-> (`ConfidenceComponents` assert-only `[0,1]` határ, release-ben strippelt,
-> a diff testvérei mind valódi `throw`-t használnak — ugyanaz a hibaosztály,
-> amit ez a feature már KÉTSZER javított, R16 F2 és R18 F6). Javító kör #2
-> (`fbbb749`) ezt zárta (`assert` → valódi `if (!cond) throw ArgumentError`).
-> Mindhárom lelet SAJÁT kézzel, izolált `/tmp` klónban újramérve, nem az
-> implementer önjelentésére hagyatkozva. **Végállapot: 0 nyitott
-> BLOCKER/MAJOR/MINOR** a funkcionális és biztonsági dimenzióban együtt.
->
-> **Zöld kapu (exact-SHA `c63f355`):** Full Gate
-> [31251320525](https://github.com/wolfcasaba/strumsight/actions/runs/31251320525)
+> **Zöld kapu (exact-SHA `943be13`):** Full Gate
+> [31255066248](https://github.com/wolfcasaba/strumsight/actions/runs/31255066248)
 > **success** + Router CI
-> [31251337993](https://github.com/wolfcasaba/strumsight/actions/runs/31251337993)
+> [31255087266](https://github.com/wolfcasaba/strumsight/actions/runs/31255087266)
 > **success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
-> utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
-> trigger-útvonalán sem — ugyanaz a minta, mint E05-R20/R21-nél). Post-merge
-> gate a friss `main`-en (`997e7be`) is zöld, `test/features/vision`
-> 367/367.
+> utolsó push csak `docs/reviews/`-t érintett — ugyanaz a minta, mint
+> E05-R20/R21/R22-nél). Post-merge gate a friss `main`-en (`b54490e`) is
+> zöld, `test/features/vision` 387/387.
 >
-> Lecke: **L184** (egy „korlátos memória" garancia, ami csak egy MÁSIK
-> metódus mellékhatásaként érvényesül, adverzális próbával mérendő a hívó
-> azon mintájára, amit a szállított teszt NEM gyakorol — a próba a
-> korlátozó hívás NÉLKÜL/attól eltérő cadenciával hajtja végre a növekedést
-> okozó metódust).
->
-> ## ✅ E05-R21 KÉSZ — Audio–vision clock mapping and latency calibration (2026-08-08)
->
-> **E05-R21** MERGED (PR [#194](https://github.com/wolfcasaba/strumsight/pull/194),
-> squash `7b11f26`; implementer **Codex (Terra)**, orchesztrátor/reviewer
-> **Claude Sonnet 5**). Teljes részletes történet:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ÚJ ADR 0189**
-> (audio–vision szinkron-szerződés). Review:
-> [docs/reviews/e05-r21-audio-vision-clock-mapping-review.md](docs/reviews/e05-r21-audio-vision-clock-mapping-review.md)
-> — **APPROVED elsőre**, 0 BLOCKER/MAJOR, 4 NOTE. Lecke: **L182**, **L183**.
+> Lecke: **L185** (egy szállított teszt `reason:`-je a HIBÁS viselkedést
+> dokumentálhatja elvárásként — a review a teszt állítását vesse össze a
+> brief szó szerinti invariánsával, ne a zöld futással/névvel), **L186**
+> (a review-klón, amit a shared tree-ből a "done" jelzés UTÁN azonnal
+> klónozol, elavult branch-tippet kaphat — ellenőrizd a klón `git log`-ját a
+> `head=` mező ellen, mielőtt a gate-et elindítanád).
 >
 > ## ✅ E05-R22 KÉSZ — Vision observation fusion and evidence engine (2026-08-08)
 >
 > **E05-R22** MERGED (PR [#195](https://github.com/wolfcasaba/strumsight/pull/195),
 > squash `997e7be`; implementer **Codex (Terra)** (kezdeti + 2 javító kör),
 > orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
-> Lásd a fenti „Last updated" blokk a teljes pre-flight/review történetért —
-> ez a szakasz csak a rövid hivatkozási pont a korábbi körök mintája szerint.
+> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 > **ÚJ ADR 0190** (observation fusion és evidence). Review:
 > [docs/reviews/e05-r22-observation-fusion-and-evidence-review.md](docs/reviews/e05-r22-observation-fusion-and-evidence-review.md)
 > + [security](docs/reviews/e05-r22-observation-fusion-and-evidence-security.md)
 > — **APPROVED 2 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR. Lecke:
 > **L184**.
 >
-> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R23**
-> (`feedback-policy-and-cue-budget`) `pending`, engine-override `terra`
-> (`.pipeline/engine-override`) — a lánc fut tovább.
+> ## ✅ E05-R23 KÉSZ — Feedback policy and realtime cue budget (2026-08-08)
+>
+> **E05-R23** MERGED (PR [#196](https://github.com/wolfcasaba/strumsight/pull/196),
+> squash `b54490e`; implementer **Codex (Terra)** (kezdeti + 1 javító kör),
+> orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
+> Lásd a fenti „Last updated" blokk a teljes pre-flight/review történetért —
+> ez a szakasz csak a rövid hivatkozási pont a korábbi körök mintája szerint.
+> **ÚJ ADR 0191** (feedback policy és cue budget). Review:
+> [docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md](docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md)
+> + [security](docs/reviews/e05-r23-feedback-policy-and-cue-budget-security.md)
+> — **APPROVED 1 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR (1 MINOR
+> deferred, follow-up). Lecke: **L185**, **L186**.
+>
+> **Következő:** `docs/execution/pipeline-queue.tsv` szerint **E05-R24**
+> (`vision-session-controller-and-overlay`) `pending`, engine-override
+> `terra` (`.pipeline/engine-override`) — a lánc fut tovább.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -129,10 +124,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R22 zárása): E05-R20 rövid bannere törölve (a
-> részletes E05-R20 történet már korábban archiválva volt); E05-R21
+> Mért diéta: 2026-08-08 (E05-R23 zárása): E05-R21 rövid bannere törölve (a
+> részletes E05-R21 történet már korábban archiválva volt); E05-R22
 > részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
-> bannere megmaradt/frissült; E05-R22 részletes narratívája + rövid
+> bannere megmaradt/frissült; E05-R23 részletes narratívája + rövid
 > bannere felkerült.
 
 ## 1. Current release state
@@ -465,31 +460,34 @@
 
 ## 4. Current branch
 
-`main` @ [PR #195](https://github.com/wolfcasaba/strumsight/pull/195), squash
-`997e7be` (E05-R22, vision observation fusion and evidence engine). Pure
-Dart domain + teszt-diff → Full Gate
-[31251320525](https://github.com/wolfcasaba/strumsight/actions/runs/31251320525)
-+ Router CI [31251337993](https://github.com/wolfcasaba/strumsight/actions/runs/31251337993)
-**success** az exact merge-előtti tip `c63f355`-n (mindkettő kézzel
+`main` @ [PR #196](https://github.com/wolfcasaba/strumsight/pull/196), squash
+`b54490e` (E05-R23, feedback policy and realtime cue budget). Pure Dart
+domain + teszt-diff → Full Gate
+[31255066248](https://github.com/wolfcasaba/strumsight/actions/runs/31255066248)
++ Router CI [31255087266](https://github.com/wolfcasaba/strumsight/actions/runs/31255087266)
+**success** az exact merge-előtti tip `943be13`-n (mindkettő kézzel
 dispatch-elve az exact SHA-ra, mert az utolsó push csak `docs/reviews/`-t
 érintett, ami nincs egyik workflow trigger-útvonalán sem — ugyanaz a minta,
-mint E05-R20/R21-nél). Review **APPROVED 2 javító kör után** — F1 MAJOR
-(memóriakorlát csak `fuse()` mellékhatásaként érvényesült; saját adverzális
-próbával 12012 megtartott observation egy sosem-fuse-olt metrikára 10
-perc/20fps alatt, `8b5a8f4` javította, saját kézzel <200-ra újramérve) + F2
-MINOR (hiányzó duration-only teszt, `8b5a8f4`) + F4 MINOR a dedikált
-security-review-ből (`ConfidenceComponents` assert-only határ, release-ben
-strippelt, `fbbb749` javította). A security review (`risk = "high"`)
-**APPROVED (PASS)**, 0 BLOCKER/MAJOR, függetlenül ugyanarra a memória-résre
-jutott más módszerrel (NOTE-3). Mindhárom lelet saját kézzel, izolált `/tmp`
-klónban újramérve minden javító kör után, nem az implementer önjelentésére
-hagyatkozva. Az `origin/main` a dispatch óta **nem mozdult**
-(`960a346`), rebase nem kellett (H8 tiszta). Post-merge gate
-(`tools/round-gate.sh test/features/vision`) a friss `main`-en is zöld,
-367/367 teszt. Lecke: **L184** (egy „korlátos memória" garancia, ami csak
-egy MÁSIK metódus mellékhatásaként érvényesül, adverzális próbával mérendő a
-hívó azon mintájára, amit a szállított teszt NEM gyakorol).
-_(Történeti product-merge referencia: PR #194 / `7b11f26`, E05-R21; PR #193 /
+mint E05-R20/R21/R22-nél). Review **APPROVED 1 javító kör után** — F1
+BLOCKER (a setup-elsőbbség nem tartott a setup cue saját cooldownja alatt; a
+szállított teszt saját `reason`-je a hibás kimenetet dokumentálta elvárásként,
+`211d7a8` javította, a tesztet valós előrehaladó órára írva át) + F2/F3 MAJOR
+(a `comparisonEvidence` observability/confidence-kapun sem ment át, és az
+emittált confidence a beengedő küszöb alá eshetett) + 4 MINOR (`211d7a8`
+mindegyiket zárta). A dedikált security-review (`risk = "high"`) függetlenül,
+valós futtatott próbákkal ugyanezekre a leletekre jutott. Mindhárom
+(BLOCKER+2×MAJOR) és mind a négy MINOR saját kézzel, izolált `/tmp` klónban
+újramérve a javító kör után, nem az implementer önjelentésére hagyatkozva.
+Az `origin/main` a dispatch óta **nem mozdult** (`6afcede`), rebase nem
+kellett (H8 tiszta). Post-merge gate (`tools/round-gate.sh
+test/features/vision test/core/l10n_parity_test.dart`) a friss `main`-en is
+zöld, 387/387 teszt. Lecke: **L185** (egy szállított teszt `reason:`-je a
+HIBÁS viselkedést dokumentálhatja elvárásként), **L186** (a review-klón,
+amit a shared tree-ből a "done" jelzés UTÁN azonnal klónozol, elavult
+branch-tippet kaphat — az ELSŐ review-próbám ebbe futott, felismerve és
+korrigálva).
+_(Történeti product-merge referencia: PR #195 / `997e7be`, E05-R22; PR #194 /
+`7b11f26`, E05-R21; PR #193 /
 `be38e11`, E05-R20; PR #192 / `a38e0e0`, E05-R19; PR #191 / `75f8766`,
 E05-R18; PR #189 / `e979d41`, E05-R17; PR #188 / `6f9c0e1`, E05-R16; PR #187
 / `a351ad3`, E05-R15; PR #185 / `efa4bbe`, E05-R14; PR #184 / `148469c`,
@@ -590,6 +588,32 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E05-R23 — Feedback policy and realtime cue budget** (PR
+[#196](https://github.com/wolfcasaba/strumsight/pull/196), squash `b54490e`,
+**ÚJ ADR 0191** feedback-policy-és-cue-budget szerződésre (a brief előzetes
+„0162" hivatkozása sosem lett fájl); implementer **Codex (Terra)** (kezdeti
++ **1 javító kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens `risk = "high"` miatt). `InsightCode`/
+`FeedbackPolicy`/`CueBudget`/`FeedbackPolicyEngine` — lásd a fejléc ✅-blokk a
+teljes pre-flight/javítókör/review történetért. **Pre-flight** mért egy
+scope-rést (a safety-katalógus fájl hiányzott az `allowed_paths`-ból, a
+saját doc-commentje és ADR 0188 §Következmények explicit ezt a kört nevezte
+meg a bővítés végrehajtójaként) és reserválta az ADR 0191-et. **1 javító
+kör**: F1 BLOCKER-t (a setup-elsőbbség nem tartott a saját cooldown alatt —
+a szállított teszt saját `reason`-je a hibás viselkedést pinnelte
+elvárásként) + F2/F3 MAJOR-t (a `comparisonEvidence` ungated volt; az
+emittált confidence a küszöb alá eshetett) + 4 MINOR-t zárt egyszerre.
+Az orchesztrátor mindkét fordulót SAJÁT, minden alkalommal friss klónon
+függetlenül futtatott gate-tel ellenőrizte — az ELSŐ próba véletlenül egy
+elavult (a saját pre-flight-commitra álló) klónon futott 0 új teszttel,
+felismerve és korrigálva (L186). Gate zöld a `943be13` merge-előtti SHA-n:
+Full Gate ✅ · Router CI ✅ (mindkettő kézzel dispatch-elve, mert az utolsó
+push nem érintett trigger-útvonalat). Post-merge gate a friss `main`-en
+(`b54490e`) is zöld, 387/387 teszt. Lecke: **L185**, **L186**
+(`docs/LESSONS.md`). Részletek:
+[review](docs/reviews/e05-r23-feedback-policy-and-cue-budget-review.md) +
+[security](docs/reviews/e05-r23-feedback-policy-and-cue-budget-security.md).
 
 **E05-R22 — Vision observation fusion and evidence engine** (PR
 [#195](https://github.com/wolfcasaba/strumsight/pull/195), squash `997e7be`,
@@ -877,6 +901,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
    megy a queue `engine` oszlopától függetlenül; a korábbi „HOLD E05-R21..R30
    előtt" bejegyzés a `6ae3ec7` commit-tal (`chore(pipeline): resume the
    chain`) elavult — a queue sorai `pending`.
+   **~~E05-R23 — Feedback policy and realtime cue budget~~ — KÉSZ**
+   (PR #196, `b54490e`, **ÚJ ADR 0191** feedback-policy-és-cue-budget
+   szerződésre; implementer Codex/Terra, 1 javító kör; dedikált
+   security-reviewer risk=high; 1 BLOCKER + 2 MAJOR + 4 MINOR a javító
+   körben zárva; ld. fejléc + §5).
    **~~E05-R22 — Vision observation fusion and evidence engine~~ — KÉSZ**
    (PR #195, `997e7be`, **ÚJ ADR 0190** observation-fusion-és-evidence
    szerződésre; implementer Codex/Terra, 2 javító kör; dedikált

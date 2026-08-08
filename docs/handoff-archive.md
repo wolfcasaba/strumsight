@@ -6,6 +6,97 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R22 — Vision observation fusion and evidence engine, teljes részletes történet (2026-08-08)
+
+**E05-R22 MERGED — Vision observation fusion and evidence engine:**
+a landmark-, geometry-, quality- és sync-adatokból verziózott,
+visszakövethető `VisionEvidence` előállítása. `lib/features/vision/domain/evidence/`
+— `vision_observation.dart` (`EvidenceMetric`: a **három élő** metrika-
+katalógus — fretting/picking/posture — meglévő `.window`/`.minimumVisibility`
+mezőiből épített, normalizált fúziós-metrika-kulcs, NEM egy párhuzamos
+ablak-fogalom; `VisionObservation`: timestampelt, model-/quality-/geometry-/
+sync-inputot hordozó nyers megfigyelés), `vision_evidence.dart`
+(`ObservationState {observed, inferred, notObservable, experimental}`,
+determinisztikus FNV-1a evidence ID az ablak-kulcsból + metrikából),
+`evidence_provenance.dart` (metrika, ablak, model-verzió, geometry-source,
+sync-bucket, thresholds-verzió — a bizonyíték ebből újraszámolható),
+`confidence_model.dart` (`ConfidenceComponents`: model·quality·geometry·sync;
+`ConfidenceModel.combine` **min-alapú**, sosem átlagoló). `lib/features/vision/
+application/observation_fusion.dart` — ablakos, idempotens, gap-aware fusion
+pipeline korlátos memóriával (az `add()` metrikánként retention-horizontot
+kényszerít ki, `fuse()`-tól függetlenül — lásd F1 lent). **ÚJ ADR:
+[0190](adr/0190-vision-observation-fusion-and-evidence.md)** — a brief
+előzetes „0162" hivatkozása **sosem lett fájl** (nem elavult foglalás, mint
+a 0170→0189 minta E05-R21-nél, hanem sosem realizált terv), a
+`tools/round-slots.py reserve-adr` **0190**-et adott. Implementer
+**Codex (Terra)** (kezdeti forduló + **2 javító kör**), orchesztrátor/
+reviewer **Claude Sonnet 5**, dedikált **security-reviewer** ágens
+(`risk = "high"`). PR [#195](https://github.com/wolfcasaba/strumsight/pull/195),
+squash `997e7be`.
+
+**Pre-flight (§0.0, nyolc mért pont) — a brief négy confidence-komponensének
+(model/quality/geometry/sync) tényleges kód-forrása, a pipeline-prompt §1
+mérési szabályai szerint:**
+
+1. **ADR-szám: „0162" sosem lett fájl** (fentebb részletezve) → 0190.
+2. **„model" = `MetricObservation.confidence`** (R18) — motoronként
+   (fretting/picking/posture) saját formulával már kiszámolva.
+3. **„geometry" = `GeometryConfidence.confidence`** (R16) — csak
+   `guitarRelativeTracking`-et igénylő metrikáknál aktív, egyébként
+   semleges `1.0`.
+4. **„quality" = `VisionFrameQuality`** (R09) — **mérve: egyik metrika-motor
+   sem fogyasztotta eddig**, ez a kör az első technikai-confidence
+   fogyasztója; a `VisionQualitySummary` cue-priorizáló kimenete
+   (setup-only) NEM ez, a fúzió a nyers frame-mérésekre olvas rá.
+5. **„sync" = `SyncQuality`** (R21) — **NEM** `PickingSyncQuality` (R19, ma
+   injektált/be nem kötött); a két, azonos névkészletű enum szándékosan
+   külön réteg, bekötésük egymásba jövőbeli kör dolga.
+6. **`{Fretting,Picking,Posture}MetricDefinition.window`/`.minimumVisibility`
+   ma HASZNÁLATON KÍVÜLI mezők voltak** — a fúzió adja az első valódi
+   fogyasztójukat, párhuzamos ablak-fogalom bevezetése nélkül.
+7. **„observed/inferred/notObservable/experimental" elérhetetlen
+   cél-státusz volt** — a brief eredeti szövege nem pinnelte le, MELYIK
+   bemenet melyiket termeli; a pre-flight pontos szabályt írt (kapacitás-
+   kapu `experimental`-re, gap/frame-küszöb a többire) az ADR 0190-be.
+8. **Erőforrás-tulajdonlás: nem releváns** (nincs lease/lock/handle a
+   rétegben).
+
+**Review:** [docs/reviews/e05-r22-observation-fusion-and-evidence-review.md](../docs/reviews/e05-r22-observation-fusion-and-evidence-review.md)
+— **APPROVED 2 javító kör után**. Első pass: **F1 MAJOR** (a memóriakorlát
+csak `fuse()` mellékhatásaként érvényesült — egy sosem-fuse-olt metrikára
+saját adverzális próbával **12012** megtartott nyers observationt mértem
+egy 10 perces/20fps szimulációban) + **F2 MINOR** (a „minimum látható
+időtartam" ág nincs önállóan tesztelve, bár a kód helyes). Javító kör #1
+(`8b5a8f4`) mindkettőt zárta — saját kézzel, friss klónban újramérve a
+memória-próba **12012 → <200**-ra csökkent. A **dedikált security-review**
+(párhuzamosan futtatva, `risk = "high"` miatt kötelező) **APPROVED (PASS)**,
+0 BLOCKER/MAJOR, és **függetlenül, más módszerrel** (release-mód
+`--no-enable-asserts` reprodukció) ugyanarra a memória-résre jutott
+(NOTE-3, a `8b5a8f4` már lezárta) — plusz egy saját **MINOR**-t hozott
+(`ConfidenceComponents` assert-only `[0,1]` határ, release-ben strippelt,
+a diff testvérei mind valódi `throw`-t használnak — ugyanaz a hibaosztály,
+amit ez a feature már KÉTSZER javított, R16 F2 és R18 F6). Javító kör #2
+(`fbbb749`) ezt zárta (`assert` → valódi `if (!cond) throw ArgumentError`).
+Mindhárom lelet SAJÁT kézzel, izolált `/tmp` klónban újramérve, nem az
+implementer önjelentésére hagyatkozva. **Végállapot: 0 nyitott
+BLOCKER/MAJOR/MINOR** a funkcionális és biztonsági dimenzióban együtt.
+
+**Zöld kapu (exact-SHA `c63f355`):** Full Gate
+[31251320525](https://github.com/wolfcasaba/strumsight/actions/runs/31251320525)
+**success** + Router CI
+[31251337993](https://github.com/wolfcasaba/strumsight/actions/runs/31251337993)
+**success** (mindkettő kézzel dispatch-elve az exact SHA-ra, mert az
+utolsó push csak `docs/reviews/`-t érintett, ami nincs egyik workflow
+trigger-útvonalán sem — ugyanaz a minta, mint E05-R20/R21-nél). Post-merge
+gate a friss `main`-en (`997e7be`) is zöld, `test/features/vision`
+367/367.
+
+Lecke: **L184** (egy „korlátos memória" garancia, ami csak egy MÁSIK
+metódus mellékhatásaként érvényesül, adverzális próbával mérendő a hívó
+azon mintájára, amit a szállított teszt NEM gyakorol — a próba a
+korlátozó hívás NÉLKÜL/attól eltérő cadenciával hajtja végre a növekedést
+okozó metódust).
+
 ## E05-R21 — Audio–vision clock mapping and latency calibration, teljes részletes történet (2026-08-08)
 
 A camera observationök és az audio strum-események közös, monotonic

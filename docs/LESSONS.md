@@ -6360,3 +6360,76 @@ implementer saját tesztje tipikusan NEM gyakorol, mert a happy-path
 tesztíráskor a két metódust együtt hívja. A kötelező javítás iránya: a
 korlátozás magába a NÖVEKEDÉST okozó metódusba kerüljön, ne a véletlenül
 összekapcsolt másikba.
+
+## L185 — A szállított teszt a `reason:` szövegével a HIBÁS viselkedést dokumentálhatja elvárásként — a review a teszt ÁLLÍTÁSÁT vesse össze a brief szó szerinti invariánsával, ne a teszt nevével/zöld futásával (E05-R23, review B1 BLOCKER, 2026-08-08)
+
+**Mit mértünk.** A `CueBudget.selectRealtime` a cooldown-szűrést minden
+jelöltre — a setup-irányúra is — egyformán, a prioritás-rendezés ELŐTT
+futtatta. A brief §5/2 és az ADR 0191 Döntés 4 szerint a setup/observability
+cue **abszolút** elsőbbséget kap a technikai kritika előtt ("sosem technikai
+kritikát ugyanarra az ablakra"), de a kód csak addig adta ezt, amíg a
+setup-jelölt éppen NEM volt cooldownon — a saját 2 másodperces cooldownja
+alatt egy technikai jelölt átvette a helyét. A szállított
+`feedback_policy_engine_test.dart` `'is bit-stable for a fixed evidence
+fixture'` teszt ZÖLD volt, mert **a hibás kimenetet várta el**:
+`expect(second.realtimeCue!.code, InsightCode.frettingFocus, reason: 'the
+setup code is cooling down, so the next ranked code wins')`. A teszt neve
+("bit-stabil") és a determinisztikus futása semmit nem mond a viselkedés
+HELYESSÉGÉRŐL — csak azt, hogy kétszer lefuttatva ugyanazt (rossz) eredményt
+adja. A dedikált security-review egy VALÓS, előrehaladó órával (2,5
+másodpercen át) függetlenül reprodukálta ugyanazt a rést, mielőtt a
+funkcionális review saját kézzel elolvasta a teszt `reason` szövegét.
+
+**Miért.** Egy `reason:` paraméter arra való, hogy egy teszt-olvasó
+megértse, MIÉRT az az elvárt érték — de semmi nem védi attól, hogy az
+implementer egy MÉRT, de a brieffel ütköző viselkedést írjon bele indoklásként
+egy tesztbe, ha az adott pillanatban éppen az a viselkedés a tényleges kód
+kimenete. Egy felületes review ("a teszt zöld, a neve golden/bit-stable
+fixture-nek hangzik, a §6 acceptance checkboxa kipipálható") így egy hamis
+zöldet fogadna el bizonyítéknak — pontosan azért, mert a teszt saját maga
+"megmagyarázza", miért helyes a hibás kimenet.
+
+**Hogyan alkalmazd.** Golden/bit-stabilitási/regressziós teszteknél a review
+ne csak azt nézze, hogy a teszt zöld és a neve/csoportja megfelel egy
+acceptance-cellának — OLVASSA EL A `reason:`/kommentár szövegét és vesse
+össze a brief SZÓ SZERINTI invariánsával ("sosem", "mindig", "abszolút"
+jellegű kikötésekkel). Ha a `reason` egy olyan viselkedést ír le, ami a
+briefben "NEM elfogadható"-ként szerepel, az BLOCKER — függetlenül attól,
+hogy a teszt egyébként determinisztikus/zöld. A javító kör kötelező része a
+teszt ÁTÍRÁSA a helyes viselkedésre (lehetőleg valós, előrehaladó órával/
+bemenettel, ne csak a hibát rejtő degenerált fixture-rel), különben a
+következő review ugyanazt a hamis-zöld mintát találja meg újra.
+
+## L186 — A review-klón, amit a shared tree-ből azonnal a `wait-for-round.sh` "done" jelzése UTÁN klónozol, elavult branch-tippet kaphat — a szinkron az implementer-workdir és a shared tree között NEM szinkron a "done" jelzéssel (E05-R23, saját review-hiba, 2026-08-08)
+
+**Mit mértünk.** Az implementer (`/home/ubuntu/ss-terra-e05-r23`) `origin`-je
+a shared tree (`/home/ubuntu/music-theory`) útvonalára mutat — az
+implementer ODA nem pusholt automatikusan a `done` jelzéskor. A review-lépésben
+`git clone --branch codex/e05-r23-... /home/ubuntu/music-theory
+/tmp/review-e05-r23` egy olyan pillanatban futott, amikor a shared tree
+lokális branch-referenciája MÉG a saját pre-flight-commitomon állt
+(`05d975f`), nem az implementer valódi munkáján (`307246e`) — valamilyen
+külső (pipeline-oldali) szinkron mechanizmus a reflog szerint néhány perccel
+KÉSŐBB fast-forwardolta a referenciát. A gate ezen az elavult klónon
+lefutott, ZÖLDET adott, és a teszt-számláló (367) tökéletesen megegyezett az
+ELŐZŐ kör (E05-R22) záró számával — semmilyen hibaüzenet, semmilyen piros
+lépés nem jelezte a problémát. Csak a teszt-lista SORAINAK manuális
+átvizsgálása (a két új `feedback_policy*_test.dart` fájl hiánya a
+kimenetből) fedte fel, hogy a "gate" valójában nulla új kódot mért.
+
+**Miért.** A `wait-for-round.sh`/`codex-round.sh` szerződése az implementer
+WORKDIR-jének állapotára szól (`.codex-round-status`, `scope_audit_base`
+stb.) — nem garantálja, hogy a SHARED TREE (amiből a review-klón származik)
+már tartalmazza a legfrissebb commitot. Egy `git clone --branch X` HALLGATVA
+sikeres akkor is, ha `X` egy régebbi commitra mutat a forrásban — nincs
+hibaüzenet, csak egy csendben rövidebb diff.
+
+**Hogyan alkalmazd.** Minden review-klón létrehozása UTÁN, MIELŐTT a gate-et
+elindítanád: `git log --oneline -3` a klónban, és vesd össze a legfelső
+sort a `.codex-round-status` `head=` mezőjével (vagy az implementer-workdir
+`git rev-parse HEAD`-jével). Ha nem egyezik, előbb szinkronizáld a forrást
+(`git push` az implementer-workdirből a shared tree-be, vagy fetch+update-ref
+a shared tree-ben), és csak UTÁNA klónozz újra. Egy gate, amely a várt
+darabszámnál (a brief új teszt-fájljainak becsült számával) KEVESEBB tesztet
+futtat, ugyanolyan gyanús, mint egy piros lépés — sose fogadd el csak azért,
+mert "0 hiba, MINDEN GATE ZÖLD" a kimenet.
