@@ -3,15 +3,37 @@ import '../sync/sync_quality.dart';
 
 /// The independently measured confidence components of a fused evidence item.
 final class ConfidenceComponents {
-  const ConfidenceComponents({
+  ConfidenceComponents({
     required this.model,
     required this.quality,
     required this.geometry,
     required this.sync,
-  }) : assert(model >= 0 && model <= 1),
-       assert(quality >= 0 && quality <= 1),
-       assert(geometry >= 0 && geometry <= 1),
-       assert(sync >= 0 && sync <= 1);
+  }) {
+    if (!(model.isFinite && model >= 0 && model <= 1)) {
+      throw ArgumentError.value(
+        model,
+        'model',
+        'Must be finite and in [0, 1].',
+      );
+    }
+    if (!(quality.isFinite && quality >= 0 && quality <= 1)) {
+      throw ArgumentError.value(
+        quality,
+        'quality',
+        'Must be finite and in [0, 1].',
+      );
+    }
+    if (!(geometry.isFinite && geometry >= 0 && geometry <= 1)) {
+      throw ArgumentError.value(
+        geometry,
+        'geometry',
+        'Must be finite and in [0, 1].',
+      );
+    }
+    if (!(sync.isFinite && sync >= 0 && sync <= 1)) {
+      throw ArgumentError.value(sync, 'sync', 'Must be finite and in [0, 1].');
+    }
+  }
 
   final double model;
   final double quality;

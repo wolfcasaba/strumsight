@@ -9,19 +9,26 @@ void main() {
     test('uses the weakest component instead of averaging it away', () {
       expect(
         model.combine(
-          const ConfidenceComponents(
-            model: 1,
-            quality: 1,
-            geometry: 1,
-            sync: 0.25,
-          ),
+          ConfidenceComponents(model: 1, quality: 1, geometry: 1, sync: 0.25),
         ),
         0.25,
       );
     });
 
+    test('rejects non-finite confidence components with an argument error', () {
+      expect(
+        () => ConfidenceComponents(
+          model: double.nan,
+          quality: 1,
+          geometry: 1,
+          sync: 1,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
     test('propagates good, boundary and poor values for every component', () {
-      const good = ConfidenceComponents(
+      final good = ConfidenceComponents(
         model: 1,
         quality: 1,
         geometry: 1,

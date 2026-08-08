@@ -311,6 +311,32 @@ helyett dokumentált brief-revízió.
     0 változás), analyze (`No issues found!`), vision-test, architecture,
     secrets és l10n lefutottak az artifacton.
 
+### Javító kör #2 — review F4 / security MINOR-1 (2026-08-08)
+
+- `lib/features/vision/domain/evidence/confidence_model.dart` — a
+  `ConfidenceComponents` négy assert-only `[0, 1]` őre release-ben is futó,
+  véges-értéket is ellenőrző `ArgumentError.value` validációra cserélve. A
+  konstruktor ezért nem `const`; a módosítás kizárólag a value-type runtime
+  szerződését keményíti, a confidence-kombináció változatlan.
+- `test/features/vision/domain/confidence_model_test.dart` — regressziós cella:
+  `model: double.nan` → `ArgumentError`; az egyetlen korábbi `const`
+  konstrukció a futásidejű validációhoz igazított `final` érték.
+
+12. RED: `flutter test test/features/vision/domain/confidence_model_test.dart`
+    — várt exit `1`: a hozzáadott cella `ArgumentError` helyett
+    `_AssertionError`-t kapott a korábbi assert-only konstruktortól.
+13. `dart format lib/features/vision/domain/evidence/confidence_model.dart test/features/vision/domain/confidence_model_test.dart`
+    — `Formatted 2 files (2 changed)`.
+14. GREEN: `flutter test test/features/vision/domain/confidence_model_test.dart`
+    — `00:00 +4: All tests passed!`; a NaN cella valódi `ArgumentError`-t
+    kapott. A `flutter test --help` nem kínál `--no-enable-asserts` kapcsolót,
+    ezért ez a hibatípus-assert a release-ben is végrehajtott `if`/`throw`
+    szerződést bizonyítja (az assert út `AssertionError` lenne).
+15. `tools/round-gate.sh test/features/vision` — exit `0`: format (1157 fájl,
+    0 változás), analyze (`No issues found!`), `test/features/vision` (367
+    teszt), architecture, secrets (2003 fájl, 0 finding) és l10n (964 üzenet)
+    mind zöld.
+
 ### Eltérés / nem futtatott ellenőrzés
 
 - Eltérés nincs.
