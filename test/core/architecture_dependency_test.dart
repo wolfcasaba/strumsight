@@ -316,6 +316,64 @@ import 'package:strumsight/features/song_trainer/domain/models/song_document.dar
       );
     });
 
+    test('rejects raw frame payloads from vision persistence', () {
+      _write(
+        project,
+        'lib/features/vision/data/persistence/vision_session_repository.dart',
+        '''
+import '../landmarks/hand_landmark_provider.dart';
+
+final class VisionSessionRepository {
+  const VisionSessionRepository(this.image);
+
+  final VisionImage image;
+}
+''',
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        contains(
+          'lib/features/vision/data/persistence/vision_session_repository.dart '
+          '-> raw vision payload VisionImage in persistence',
+        ),
+      );
+    });
+
+    test('rejects raw pixel buffers from vision provider state', () {
+      _write(
+        project,
+        'lib/features/vision/application/vision_session_state.dart',
+        '''
+import 'dart:typed_data';
+
+final class VisionSessionState {
+  const VisionSessionState(this.pixels);
+
+  final Uint8List pixels;
+}
+''',
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        contains(
+          'lib/features/vision/application/vision_session_state.dart '
+          '-> raw vision payload Uint8List in provider state',
+        ),
+      );
+    });
+
     test('ignores imports inside comments', () {
       _write(project, 'lib/core/music/commented.dart', '''
 // import 'package:flutter/widgets.dart';

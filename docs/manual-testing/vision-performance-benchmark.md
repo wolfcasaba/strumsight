@@ -9,6 +9,8 @@
 > ⚠ **HORIZON-szabály:** a merge-kapu a `tools/round-gate.sh` + exact-SHA zöld
 > CI; a valós eszközös teljesítménymérés a merge UTÁNI termék-elfogadás
 > (HORIZON). A táblázatok PENDING sorai **nem merge-blokkolók**.
+> E05-R30 nem ír be szintetikus számot valós eszközös eredmény helyett; minden
+> alábbi PENDING mérés változatlanul a HORIZON elfogadás része.
 
 ## 1. Módszertan
 

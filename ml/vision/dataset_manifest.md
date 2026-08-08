@@ -1,6 +1,6 @@
 # Dataset manifest — vision guitar/neck detection
 
-**Státusz:** tervezet (E05-R17, 2026-08-07). Nincs a repóban consentelt
+**Státusz:** véglegesített governance-manifest (E05-R30, 2026-08-08). Nincs a repóban consentelt
 gitárkép-adat, és ez a kör nem is gyűjt — a manifest a jövőbeli dataset
 kötelező kategória-szerkezetét és consent-szabályait rögzíti, hogy egy
 későbbi aktiváló kör ([ADR 0187](../adr/0187-vision-automatic-guitar-geometry-detection.md)
@@ -138,3 +138,61 @@ rögzíti, hogy a későbbi aktiváló kör a struktúrát örökölhesse.
   feldolgozás kizárólag on-device;
 - SDD Ch6 §31 ([`docs/sdd/06-epic-05-computer-vision.md`](../../docs/sdd/06-epic-05-computer-vision.md))
   — a kategória-lista és a consent-mezők forrása.
+
+## 6. Evaluation-harness szerződés (E05-R30)
+
+Az [`evaluate_vision_metrics.py`](evaluate_vision_metrics.py) kizárólag
+privacy-safe fixture-összefoglalókat olvas JSONL formátumban. Nem olvas,
+nem ír és nem logol raw frame-et, képet, videót vagy biometrikus landmark
+idősort. Egy rekord szerződése:
+
+```json
+{
+  "fixture_id": "quality-low-light-001",
+  "metric": "quality",
+  "expected": true,
+  "observed": true,
+  "negative_cue_expected": false,
+  "negative_cue_emitted": false
+}
+```
+
+Az engedélyezett `metric` értékek: `hand_tracking`, `quality`, `geometry` és
+`metric_policy`. Az `expected`/`observed` a fixture ground-truth és a
+kiértékelt lokális eredmény boolean összefoglalója. A két `negative_cue_*`
+mező vagy együtt szerepel, vagy egyik sem; a *hamis negatív cue* olyan sor,
+ahol a cue ki lett adva, de a ground-truth szerint nem volt indokolt.
+
+### 6.1 False-feedback küszöb és besorolás
+
+Az E05-R30 production-safety küszöb **1%** (`0.01`), a határ inkluzív. A
+valós eszközös benchmark célértéke ettől függetlenül továbbra is **0**
+(`docs/manual-testing/vision-performance-benchmark.md` §2.8): a 1% nem
+teljesítménycél, hanem a legszigorúbb nemnulla kiadási korlát, amelyen a
+kötelező 0%/1%/2% matrica értelmezhető. Száz, függetlenül review-zott
+fixture-ben ez legfeljebb egy hamis cue.
+
+| Mért arány | Kimenet |
+|---:|---|
+| 0.00 | `production-supported` |
+| 0.01 | `production-supported` (inkluzív határ) |
+| 0.02 | `experimental` |
+
+Az `experimental` besorolás a megengedett fail-closed kimenet. A küszöböt
+utólag, egy mért érték kedvéért felemelni tilos. Üres bemenet vagy olyan
+korpusz, amely nem tartalmaz cue-lehetőséget, `NO_DATA`/`experimental`;
+semmilyen szintetikus self-test nem promotál valós termékképességet.
+
+### 6.2 Futtatás és evidence-határ
+
+```bash
+python3 ml/vision/evaluate_vision_metrics.py --self-test
+python3 ml/vision/evaluate_vision_metrics.py --input /path/to/fixture-summaries.jsonl
+```
+
+A `--self-test` a `NO_DATA`, 0%, 1% és 2% cellákat bizonyítja. Production
+besoroláshoz ezen felül a §1.1 minimum-korpusz, a §2 consent-rekord, a SDD
+§32.3 kézi review-ja és a device matrix valós mérési evidence-e is kell.
+Mivel E05-R30-ban nincs consentelt korpusz, a manifest minden nemszintetikus
+kategóriája változatlanul `PENDING_COLLECTION`, és egyik capability sem válik
+ettől a harness-től élessé.

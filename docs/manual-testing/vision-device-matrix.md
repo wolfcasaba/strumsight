@@ -10,6 +10,8 @@
 > ⚠ **HORIZON-szabály:** a merge-kapu a `tools/round-gate.sh` + exact-SHA zöld
 > CI; a valós eszközös elfogadás a merge UTÁNI termék-elfogadás (HORIZON).
 > A mátrix PENDING sorai **nem merge-blokkolók** — a státusz rögzítése a cél.
+> E05-R30 ezt a listát újramérte dokumentációs baseline-ként: nincs valós
+> eszközös eredmény, ezért minden alábbi sor változatlanul PENDING.
 
 ## 1. Kitöltési útmutató
 

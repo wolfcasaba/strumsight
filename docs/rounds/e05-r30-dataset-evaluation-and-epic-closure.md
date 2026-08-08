@@ -1,6 +1,13 @@
 # E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás (ZÁRÓ)
 
-- **Státusz:** PREPARED (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`)
+- **Státusz:** PLANNING (előre megírva 2026-08-05, kód olvasva: main @ `5d082dc`;
+  pre-flight 2026-08-08: minden mért állítás — 12 elemű architektúra-allowlist
+  mind `analyze → live`, 11 vision flag `false` a `FeatureFlags.forEnvironment`
+  EGYETLEN factory-jában (nincs dart-define override), az öt ÚJ fájl
+  ténylegesen hiányzik, a hat meglévő fájl ténylegesen létezik, az SDD §32/35/
+  36/39/40 szakaszok léteznek — a kódnak megfelelőnek bizonyult; §0.0 revízió
+  nem szükséges, ÚJ ADR nem szükséges, a záró-kör waiver [ADR 0087](../adr/0087-autonomous-round-pipeline.md)
+  §7 + [ADR 0112](../adr/0112-self-healing-pipeline.md) alapján érvényes)
 - **SDD-kör:** [`docs/sdd/06-epic-05-computer-vision.md`](../sdd/06-epic-05-computer-vision.md) Kör 30; §32, §35, §36, §39, §40
 - **Branch:** `codex/e05-r30-dataset-evaluation-and-epic-closure`
 - **Előfeltétel:** **E05-R01…R29 MIND merge-elve**
@@ -47,7 +54,32 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Nincs előre kiosztott ADR. **Záró-kör waiver** (lásd §5.7).
+**PLANNING (pre-flight lezárva 2026-08-08).** Nincs előre kiosztott ADR. **Záró-kör
+waiver** (lásd §5.7). A két kötelező mérési szabály (elérhetetlen cél-státusz,
+erőforrás-tulajdonlás) és a §2 összes numerikus/fájl-állítása grep-elve — nulla
+eltérés a kódtól, revízió nem szükséges:
+
+- `tool/check_architecture.dart` allowlist: pontosan **12** bejegyzés, mind
+  `analyze → live` (grep `docs/rounds/...§2` állítása szó szerint egyezik).
+- Vision flag-ek: pontosan **11** (`visionEnabled`, `visionSetupEnabled`,
+  `visionHandTrackingEnabled`, `visionPoseTrackingEnabled`,
+  `visionGuitarGeometryEnabled`, `visionPracticeIntegrationEnabled`,
+  `visionSongIntegrationEnabled`, `visionTutorIntegrationEnabled`,
+  `visionAnalysisIntegrationEnabled`, `visionExperimentalFineFretEnabled`,
+  `visionLabCaptureEnabled`), mind `false` az EGYETLEN
+  `FeatureFlags.forEnvironment` factoryban, dart-define override nélkül — az
+  „elérhetetlen cél-státusz" mérés input-oldala: nincs olyan bemenet, ami
+  igazra tudná állítani ezeket.
+- Az öt ÚJ fájl (`ml/vision/evaluate_vision_metrics.py`,
+  `docs/sdd/epic-05-completion-report.md`, `docs/runbooks/vision-rollout.md`,
+  `test/tooling/vision_model_integrity_test.dart`,
+  `test/features/vision/vision_offline_regression_test.dart`) ténylegesen
+  hiányzik; a hat meglévőként hivatkozott fájl ténylegesen létezik.
+- SDD §32.1–32.5 (incl. §32.3 False feedback gate), §35.1–35.6, §36.1–36.4,
+  §39, §40 mind léteznek `docs/sdd/06-epic-05-computer-vision.md`-ben.
+- Erőforrás-tulajdonlás: a kör nem rendel lease/lock/handle/subscription
+  erőforrást egyetlen réteghez sem (teszt/doksi/harness-only diff) — a
+  szabály nem alkalmazható.
 
 ## 1. Cél
 
@@ -196,7 +228,70 @@ eredmény állítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosított fájlok
+
+- `tool/check_architecture.dart`, `test/core/architecture_dependency_test.dart`:
+  raw Vision payload tiltás persistence/provider-state-ben; a meglévő
+  cross-feature `public.dart` szabály változatlan, az allowlist 12 elemű.
+- `test/tooling/vision_model_integrity_test.dart`: jó manifest, rossz checksum,
+  rossz schema és hiányzó licenc mutation gate.
+- `test/features/vision/vision_offline_regression_test.dart`: 11 flag OFF audit
+  és bit-egzakt Practice/Song/Analyze/Tutor fixture.
+- `ml/vision/evaluate_vision_metrics.py`, `ml/vision/dataset_manifest.md`:
+  stdlib JSONL harness, `NO_DATA`, false-negative-cue gate és consent határ.
+- `docs/sdd/epic-05-completion-report.md`, `docs/runbooks/vision-rollout.md`,
+  `README.md`, valamint a két manual matrix: záró evidence, rollout/rollback,
+  privacy és tételes PENDING accounting.
+
+### False-feedback küszöb
+
+Küszöb: **0.01 (1%)**, inkluzív. A benchmark célértéke továbbra is 0; a
+nemnulla, szigorú cap azért szükséges, hogy a §6.1 kért alatta/rajta/fölötte
+mátrix nemnegatív rátákkal mérhető legyen. 100 fixture-nél ez legfeljebb egy
+hamis negatív cue; fölötte a metric `experimental`, nem a küszöb emelhető.
+
+```text
+$ python3 -c 'threshold=0.01; step=0.01; print(f"below={threshold-step:.2f} at={threshold:.2f} above={threshold+step:.2f}")'
+below=0.00 at=0.01 above=0.02
+```
+
+### Futtatott ellenőrzések
+
+```text
+$ flutter test test/core/architecture_dependency_test.dart
+All tests passed! (15)
+
+$ dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+$ flutter test test/tooling/vision_model_integrity_test.dart
+All tests passed! (4)
+
+$ flutter test test/features/vision/vision_offline_regression_test.dart
+All tests passed! (2)
+
+$ python3 ml/vision/evaluate_vision_metrics.py --self-test
+no-data, below-threshold (0.00), inclusive-threshold (0.01) és
+above-threshold (0.02): mind passed=True.
+
+$ python3 ml/vision/evaluate_vision_metrics.py --input /dev/null
+status=NO_DATA (exit 2, elvárt)
+```
+
+`tools/round-gate.sh test/features/vision test/core test/tooling` első futása
+az analyzerben PIROS volt egyetlen unused import miatt; eltávolítás után a
+format és analyze ZÖLD volt, majd a wrapper által futtatott célzott tesztek
+lefutottak. A wrapper kimenet-csatolása a tesztfázis utáni összegzést nem adta
+vissza ehhez a sessionhöz, ezért ezt az implementer nem állítja teljes
+bizonyítéknak; az orchestrátor futtasson friss gate-et/review-t exact SHA-n.
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Nincs funkcionális eltérés a brieftől; flaget, production `lib/`-et,
+  `.github/`-ot és `tool/ci/`-t nem módosítottam.
+- Teljes Flutter suite, property gate, exact-SHA CI és APK: orchestrátor/CI
+  feladat, ebben a körben lokálisan nem futott.
+- Backend ellenőrzés: nem futott, mert a diff nem érinti a backendet.
 
 ## 11. Review — a független reviewer tölti ki
 
