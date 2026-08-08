@@ -3,11 +3,15 @@
 Brief: `docs/rounds/e05-r22-observation-fusion-and-evidence.md`
 Diff: `git diff origin/main...codex/e05-r22-observation-fusion-and-evidence`
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-08
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** javító kör #1 után (`8b5a8f4`) — lásd „Javító kör #1 zárása" lent.
+Javító kör #2 folyamatban F4-re (security MINOR-1, nem merge-blokkoló).
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1
+Első pass: BLOCKER: 0 · MAJOR: 1 (F1) · MINOR: 1 (F2) · NOTE: 1 (F3)
+Javító kör #1 után: **F1 FIXED, F2 FIXED** (`8b5a8f4`, saját újramérve) — 0
+nyitott BLOCKER/MAJOR.
+Security review (külön jelentés) + F4: lásd „Javító kör #1 zárása" lent.
 
 ## Jelzés + handoff
 
@@ -135,7 +139,15 @@ diffjébe, csak az orchestrátoréba).
   kiegészítésként, de a garanciát nem szabad hozzá kötni.
 - **Ellenőrzés (javításhoz):** a fenti próbateszt (vagy ezzel ekvivalens) a
   round saját, commitolt suite-jába kerüljön, és zöldre váltson a javítással.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`8b5a8f4`) — `add()` immár egy per-metrika retention-
+  horizontot (`legszélesebb production metrika-ablak + maximumGap`) kényszerít
+  ki minden hívásnál, `fuse()`-tól függetlenül. Commitolt regressziós teszt:
+  `observation_fusion_test.dart: bounds raw observations when a metric is
+  never fused` (10 perc, KIZÁRÓLAG `add()`, `fuse()` sosem) →
+  `retainedObservationCount <= 13`. **Saját, független re-mérés** (friss
+  `/tmp/review-e05-r22-fix1` klónban, a review EREDETI két-metrikás
+  próbájával megismételve): a sosem-fuse-olt metrika `retainedObservationCount`
+  **12012 → < 200** (a próba `lessThan(200)` asserttel zöld).
 
 ### F2 — MINOR — A „minimum látható időtartam" ág nincs önállóan tesztelve
 
@@ -157,7 +169,12 @@ diffjébe, csak az orchestrátoréba).
 - **Kötelező javítás:** egy külön teszteset: szám-elegendő ÉS
   időtartam-elégtelen bemenet → `notObservable`.
 - **Ellenőrzés:** az új teszt fut és zöld.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`8b5a8f4`) — `observation_fusion_test.dart: rejects
+  sufficient observations below the minimum visible duration` (3 megfigyelés
+  20 µs-on belül, `minimumObservationCount=2` teljesül,
+  `minimumVisibleDuration=100ms` nem) → `notObservable`, `value: null`.
+  Teszt-only, domain-logika változatlan (a review saját várakozásának
+  megfelelően).
 
 ### F3 — NOTE — Az evidence `value` aggregáció (számtani átlag) outlier-politika nélkül
 
@@ -177,9 +194,56 @@ diffjébe, csak az orchestrátoréba).
 ## Biztonsági review
 
 A brief `risk = "high"` — AGENTS.md §15.1 szerint kötelező dedikált
-security-reviewer pass. Külön dispatch-elve, a jelentés
-`docs/reviews/e05-r22-observation-fusion-and-evidence-security.md` — lásd
-ott a verdiktet; ez a szakasz csak hivatkozás, nem duplikálja a tartalmat.
+security-reviewer pass. Külön dispatch-elve (a funkcionális review-val
+párhuzamosan, a `7e9bd17` állapoton), a jelentés
+`docs/reviews/e05-r22-observation-fusion-and-evidence-security.md`.
+**Verdikt: APPROVED (PASS)** — 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 3 NOTE. A
+security-reviewer **függetlenül, más módszerrel** (release-mód reprodukció
+`--no-enable-asserts`-szel) ugyanazt a memóriakorlát-rést mérte ki, amit a
+funkcionális review F1-ként vitt javító körre (ott NOTE-3) — a két mérés
+egymást erősíti, és a `8b5a8f4` mindkettőt lezárja. A security review 1
+nyitva maradt MINOR-je (F4-ként idehozva, mert olcsón javítható és a
+diffnek van rá pontos, precedens-egyező mintája) alább.
+
+### F4 — MINOR (security MINOR-1) — `ConfidenceComponents` assert-only `[0,1]` határ, release-ben strippelt
+
+- **Fájl:** `lib/features/vision/domain/evidence/confidence_model.dart:11-14`
+  (4× `assert(x >= 0 && x <= 1)`), exportálva a `public.dart`-on.
+- **Probléma:** a repó SAJÁT, kimondott „miért `throw` és nem `assert`"
+  release-load-bearing szerződését (`geometry_confidence.dart`, R16 F2
+  precedens; `metric_definition.dart`, R18 F6 precedens) ez az EGY típus
+  nem követi — a diff testvérei (`VisionEvidence`, `EvidenceProvenance`,
+  `VisionObservation`) mind valódi `if (!cond) throw ArgumentError` mintát
+  használnak, `ConfidenceComponents` viszont assert-et.
+- **Reprodukálva** (security-reviewer, `--enable-asserts` vs
+  `--no-enable-asserts`): release-módban `ConfidenceComponents(model: NaN, …)`
+  létrejön, `combine()` NaN-t ad. A `fuse()` úton NEM elérhető ma (minden
+  komponens forrása őrzött), tehát latens — de a típus publikus export.
+- **Kötelező javítás:** a négy `assert` cseréje valódi
+  `if (!(x.isFinite && x >= 0 && x <= 1)) throw ArgumentError(...)`-ra,
+  bájt-azonos mintával a diff testvéreivel.
+- **Ellenőrzés:** teszt `ConfidenceComponents(model: double.nan, …)` →
+  `throwsA(isA<ArgumentError>())` (NEM `AssertionError`).
+- **Státusz:** OPEN — javító kör #2 alatt.
+
+## Javító kör #1 zárása (F1 + F2)
+
+Saját kézzel, friss `/tmp/review-e05-r22-fix1` klónban (a `8b5a8f4` fix-
+commit tetején):
+
+```bash
+git clone --branch codex/e05-r22-observation-fusion-and-evidence /home/ubuntu/music-theory /tmp/review-e05-r22-fix1
+cd /tmp/review-e05-r22-fix1 && tools/prepare-flutter-generated.sh
+tools/round-gate.sh test/features/vision
+```
+
+**MINDEN GATE ZÖLD** — `test test/features/vision`: **366** teszt (364 + 2
+új F1/F2 regresszió), `00:21 +366: All tests passed!`; format/analyze/
+architecture (12 allowlistelt, korábbi)/secrets (2002 fájl)/l10n mind zöld.
+A review saját F1-próbáját (két metrika, az egyik sosem fuse-olva) újra
+lefuttatva a fixelt kódon: `retainedObservationCount < 200` (korábban
+12012) — ✅ FIXED, saját kézzel megerősítve, nem csak a commitolt teszt
+alapján.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -196,8 +260,10 @@ ott a verdiktet; ez a szakasz csak hivatkozás, nem duplikálja a tartalmat.
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**Jelenleg 1 nyitott MAJOR (F1) → merge TILOS.** Javító kör szükséges,
-ugyanaz a motor (Terra), F1 (kötelező) + F2 (kötelező, olcsó) + F3
-(opcionális, csak ha nem hizlalja érdemben a diffet) a leletlistával. A
-javítás után a gate-eket és a memória-próbát újra, saját kézzel futtatom, és
-a jelentést frissítem.
+**0 nyitott BLOCKER/MAJOR** (F1 FIXED+újramérve, F2 FIXED). A security review
+is APPROVED, 0 BLOCKER/MAJOR. Az egyetlen nyitott MINOR (F4) a séma szerint
+NEM merge-blokkoló, de olcsón/precedens-egyezően javítható, ezért egy rövid
+javító kör #2 viszi (F3/NOTE-1/NOTE-2 follow-upnak hagyva — azok NEM ebben a
+körben javítandók). A végső merge a javító kör #2 után, a CI-run
+(exact-SHA) zöldjével együtt történik — lásd a kör-branch legfrissebb
+commitját a mergekor.
