@@ -6,6 +6,81 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E05-R29 — Device tier, performance és thermal hardening, teljes részletes történet (2026-08-08)
+
+**E05-R29 MERGED — Device tier, performance és thermal hardening:** mérhető
+**device tier**, tierenkénti profilok, freshness/dropped-frame monitor,
+thermal adapter és lépcsőzetes, audio-elsőbbségű degradáció a Vision
+feature-höz. `VisionDeviceTierClassifier`
+(`lib/features/vision/domain/performance/vision_device_tier.dart`) —
+determinisztikus frame-feldolgozási-idő → tier leképezés (`≤33ms→flagship`,
+`34–66ms→mid`, `≥67ms→basic`), a MEGLÉVŐ `VisionDeviceTier{basic,mid,
+flagship}` enumra építve (importálva a `hand_landmark_provider.dart`-ból,
+**nem** redefiniálva — ld. lent), plusz tierenkénti profil (hand FPS/pose
+cadence/input felbontás/overlay FPS). `VisionDegradationPolicy`
+(`.../application/vision_degradation_policy.dart`) — **hétlépcsős**,
+hiszterézisű döntés ADR 0182 Döntés 3 sorrendjében (overlay-frekvencia ↓ →
+pose-pipeline ritkítás → hand-pipeline FPS ↓ → model-input felbontás ↓ →
+egy kéz követése → csak quality-monitor → vision leállítása, audio
+megtartása), belépési küszöbök (Hand/Pose FPS 12/10/5/8/6/4, audio-latency
+15 ms) a már publikált `docs/manual-testing/vision-performance-benchmark.md`
+§2.7-ből újrafelhasználva, kilépési küszöbök (1 FPS/3 ms rés) ÚJ, dokumentált
+munka, legfeljebb egy állapotátmenet kiértékelésenként. `ThermalStateAdapter`
+(`.../data/performance/thermal_state_adapter.dart`) — platform-jel esetén azt
+használja, egyébként determinisztikus, 0–100-ra korlátos dropped-frame/
+freshness/feldolgozási-idő heurisztika, a forrás (`platform`/`heuristic`)
+mindig jelölve. `VisionPerformanceSummary`
+(`.../domain/performance/vision_performance_summary.dart`) — privacy-safe
+session-aggregátum (tier, alkalmazott lépcsők, dropped-frame arány,
+freshness eloszlás, degradáció-időbélyegek, thermal-forrás) + explicit
+`unavailable` gyártó a nem-támogatott benchmark esetére. Hívó/landmark-
+provider-wiring szándékosan nincs ebben a körben (jövőbeli kör dolga).
+
+**Három mért pre-flight-hiba a batch-írt briefben, mind dokumentált §0.0
+revízióval javítva ÚJ ADR 0196-ban, MIELŐTT bármi dispatch-elődött —
+zéró javító kör kellett utána:**
+**(1)** a fejléc/§2/§5 „ADR 0165" hivatkozása nem létező fájlra mutatott; a
+mért +17 batch-offset (`docs/LESSONS.md` L143/L147) és a tartalmi egyezés
+[ADR 0182](adr/0182-vision-audio-priority-degradation.md)-re javította
+(az E05-R26 pre-flightja — [ADR 0193](adr/0193-song-trainer-vision-integration-contract.md)
+— ugyanezt a hibát ugyanebben a brief-ben már mérte és nyitva hagyta). **(2)**
+a brief egy ÚJ `VisionDeviceTier(low/mid/high)` típust tervezett — ez egy MÁR
+LÉTEZŐ, eltérő értékkészletű enummal (`hand_landmark_provider.dart:125`,
+már a wide `vision/public.dart` barrelen exportálva) ütközött volna
+(ambiguous export). Javítás: ÚJRAFELHASZNÁLÁS importtal, az ADR 0186/R14
+„reuse, ne redefine" precedens szerint — ezt a pontos jövőbeli feladatot
+az E05-R14 brief és az E05-R26 ADR 0193 is előre megnevezte („Kör 29 dolga").
+**(3)** a brief öt lépcsős degradációs listája ütközött a MÁR ELFOGADOTT
+ADR 0182 Döntés 3 hét lépcsős sorrendjével és a már publikált benchmark-
+dokumentum §2.7 konkrét belépési küszöbeivel — javítva a hét lépcsős,
+újrafelhasznált-küszöbű változatra. Lecke: **L200**, **L201**.
+
+Implementer **Codex (Terra)** (1 implementációs forduló, **javító kör
+nélkül**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+**security-reviewer** ágens (`risk = "high"`). PR
+[#203](https://github.com/wolfcasaba/strumsight/pull/203), squash `8e7eb6f9`.
+
+**Review:** [docs/reviews/e05-r29-device-tier-performance-thermal-review.md](reviews/e05-r29-device-tier-performance-thermal-review.md)
+— **APPROVED, 0 nyitott BLOCKER/MAJOR javító kör nélkül** (1 MINOR — az
+audio-elsőbbség teszt gyenge proxy valós audio-wiring nélkül, tudatosan
+halasztva egy jövőbeli integrációs körre —, 4 NOTE). A reviewer SAJÁT,
+izolált `/tmp` klónokban független gate-újrafuttatással (580/580 teszt
+zöld), a tier-határok és a hétlépcsős küszöbök `python3 -c`
+újraszámolásával, az implementer valódi-sértés próbájának SAJÁT
+megismétlésével (11/17 teszt pirosra vált, visszaállítva) és SAJÁT,
+eldobható hiszterézis-próbákkal erősítette meg. A **dedikált
+security-review**
+([docs/reviews/e05-r29-device-tier-performance-thermal-security.md](reviews/e05-r29-device-tier-performance-thermal-security.md))
+— **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 3 NOTE follow-up (nincs
+hálózat/storage/plugin/logging felszín — tiszta in-memory domain+
+application addíció).
+
+**Zöld kapu (exact-SHA `6746de24`, a review-commitok utáni tip):** Full Gate
+[31279942080](https://github.com/wolfcasaba/strumsight/actions/runs/31279942080)
+**success** + Router CI
+[31279934524](https://github.com/wolfcasaba/strumsight/actions/runs/31279934524)
+**success**.
+
 ## E05-R28 — Vision persistence, privacy control és törlés, teljes részletes történet (2026-08-08)
 
 **E05-R28 MERGED — Vision persistence, privacy control és törlés:** verziózott,

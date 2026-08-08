@@ -6557,6 +6557,20 @@ GitHub) pótolja a hiányzó hopot — olcsó, biztonságos, nem igényel új
 implementer-fordulót. Rokon lecke: **L186** (a shared-tree-review-klón
 staleness-problémája ugyanebből az architektúrából fakad, más tünettel).
 
+**Kiegészítés (E05-R30, 2026-08-08): ugyanez az ORCHESTRÁTOR saját
+pre-flight-lépésén is bekövetkezik, nem csak az implementer folytató
+fordulóján.** Az E05-R30 pre-flightjában az orchestrátor saját maga hozta
+létre a kör-branchet a friss klónban, commitolta a §0.0 revíziót, és
+`git push origin <branch>`-et futtatott a klónból — ugyanaz a séma, mint
+fent, csak az implementer dispatch-a ELŐTT, nem utána. A hiba ugyanúgy néma
+volt (`git push` sikeres kimenettel tért vissza), és csak akkor derült ki,
+amikor a `gh workflow run` `HTTP 422: No ref found` hibát adott a
+branch-re. **Általánosított szabály:** minden `git push origin <branch>`
+hívás, amit egy `ss-*` munkapéldányból futtatsz — akár az orchesztrátor
+pre-flightja, akár az implementer saját commitja —, csak a fő-repóig jut.
+A GitHubra-jutáshoz **mindig** egy MÁSODIK push kell a fő-repóból
+(`/home/ubuntu/music-theory`), akármelyik szereplő futtatta az elsőt.
+
 ## L190 — A `public.dart`-only cross-feature szabály az import CÉLJÁT kényszeríti ki, sosem a behúzott SZIMBÓLUMOKAT — egy vegyes (aggregát + nyers) barrel láthatatlan csatorna lehet a nyers adatnak (E05-R25, dedikált security-review MINOR, 2026-08-08)
 
 **Mit mértünk.** A security-reviewer agent az E05-R25 diffjét vizsgálva
@@ -7004,3 +7018,50 @@ SZÓ SZERINT (nem újraszámolva) vedd át a levezetett dokumentumból. Rokon:
 gyökérok, más felület: ott a HIVATKOZÁS drifteltek, itt a hivatkozott
 TARTALOM újra-előadása), [[L200]] (a batch-brief típusnév-avulása,
 ugyanabban a körben mérve).
+
+## L202 — Egy acceptance-criteria konkrét, nevesített próba-forgatókönyve (pl. „practice → vision belső fájl") NEM tekinthető teljesítettnek attól, hogy a mögöttes szabály generikus és MÁS feature-párokkal már tesztelt — a reviewer a NEVEZETT párra futtasson saját, eldobható próbát, mielőtt súlyosságot állapít (E05-R30, 2026-08-08)
+
+**Mit mértünk.** Az E05-R30 brief §6 acceptance criteria szó szerint egy
+`practice → vision belső fájl` importtal futtatott valódi-sértés próbát írt
+elő az architektúra-guard-ra. Az implementer diffje ezt a KONKRÉT
+feature-párt nem tesztelte — csak az ÚJ raw-frame szabályra adott két
+próbát. A mögöttes cross-feature-import szabály (`crossFeatureImportsMustUsePublicApi`)
+maga már régóta létezik és tesztelt, de MÁS feature-párokkal
+(`analyze`/`live`/`tuner`, `ai_tutor`/`song_trainer`) — a `vision`/`practice`
+pár konkrétan sosem szerepelt egyetlen létező tesztben sem. Első ránézésre
+ez egy nyitott acceptance-rés (potenciálisan MAJOR: „a brief egy kötelező
+próbát ír elő, ami nincs a diffben"). A reviewer ahelyett, hogy ebből
+súlyossági következtetést vont volna le puszta olvasással, egy saját,
+eldobható tesztet írt PONTOSAN a nevezett párra (`practice` fixture-fájl,
+ami importál egy `vision` belső — nem `public.dart` — fájlt), lefuttatta a
+meglévő `checkArchitecture`-rel egy `/tmp` klónban, és a védelem ZÖLDEN
+elkapta a szintetikus sértést — vagyis a generikus szabály ténylegesen
+lefedi a nevezett esetet, csak a diff nem tartalmaz erről EXPLICIT
+bizonyítékot ezzel a két konkrét névvel.
+
+**Miért fontos.** Ha a reviewer megállt volna a „nincs a diffben ilyen nevű
+teszt" megfigyelésnél, a lelet vagy hamis MAJOR-ként blokkolta volna a
+merge-et (feleslegesen egy javító kört indítva egy ténylegesen már működő
+védelemre), vagy — rosszabb esetben — ha a reviewer feltételezte volna,
+hogy „a generikus szabály biztos működik" bizonyíték nélkül, egy VALÓDI rést
+(pl. ha a `vision` feature valamiért ki lett volna véve a generikus
+ellenőrzés alól egy korábbi körben) észrevétlenül hagyott volna. A saját,
+konkrét-párú próba mindkét hibát elkerüli: sem túl szigorú (felesleges
+javító kör), sem túl megengedő (átcsúszó valódi rés) nem lesz az ítélet.
+
+**Szabály.** Ha egy brief acceptance criteria egy KONKRÉT, nevesített
+forgatókönyvet ír elő (két konkrét feature-, típus- vagy értéknévvel) egy
+olyan szabályra, ami MÁR LÉTEZIK és MÁS példákkal már tesztelt, a reviewer
+NE fogadja el a generikus lefedettséget automatikus helyettesítő
+bizonyítéknak, és NE minősítsen súlyosságot (MAJOR vs MINOR vs NOTE) pusztán
+a hiány MÉRETE vagy a mechanizmus ELVI működése alapján. Írjon egy saját,
+olcsó, eldobható próbát PONTOSAN a nevezett forgatókönyvre (ugyanazt a
+mintát követve, amit a kódbázis már használ az adott ellenőrzésre), és a
+súlyosságot a próba TÉNYLEGES eredménye alapján állapítsa meg: ha a próba
+zöld (a védelem működik), a lelet legfeljebb MINOR („hiányzó explicit
+acceptance-bizonyíték", nem blokkoló); ha a próba piros (a védelem nem
+működik a nevezett esetre), a lelet BLOCKER/MAJOR marad. Rokon: [[L179]]
+(a reviewer saját próbateszttel, ne csak olvasással ellenőrizzen), a
+sablon-szabály (`docs/execution/09-review-report.md` §5) általánosítása
+arra az esetre, amikor a próba ELVÉGZÉSE maga dönti el a súlyossági
+besorolást, nem csak megerősíti azt.

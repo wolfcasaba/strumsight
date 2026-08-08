@@ -4,102 +4,83 @@
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > structure since E01-R16). Update after every round (see
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R29 MERGED — Device tier, performance és thermal hardening:** mérhető
-> **device tier**, tierenkénti profilok, freshness/dropped-frame monitor,
-> thermal adapter és lépcsőzetes, audio-elsőbbségű degradáció a Vision
-> feature-höz. `VisionDeviceTierClassifier`
-> (`lib/features/vision/domain/performance/vision_device_tier.dart`) —
-> determinisztikus frame-feldolgozási-idő → tier leképezés (`≤33ms→flagship`,
-> `34–66ms→mid`, `≥67ms→basic`), a MEGLÉVŐ `VisionDeviceTier{basic,mid,
-> flagship}` enumra építve (importálva a `hand_landmark_provider.dart`-ból,
-> **nem** redefiniálva — ld. lent), plusz tierenkénti profil (hand FPS/pose
-> cadence/input felbontás/overlay FPS). `VisionDegradationPolicy`
-> (`.../application/vision_degradation_policy.dart`) — **hétlépcsős**,
-> hiszterézisű döntés ADR 0182 Döntés 3 sorrendjében (overlay-frekvencia ↓ →
-> pose-pipeline ritkítás → hand-pipeline FPS ↓ → model-input felbontás ↓ →
-> egy kéz követése → csak quality-monitor → vision leállítása, audio
-> megtartása), belépési küszöbök (Hand/Pose FPS 12/10/5/8/6/4, audio-latency
-> 15 ms) a már publikált `docs/manual-testing/vision-performance-benchmark.md`
-> §2.7-ből újrafelhasználva, kilépési küszöbök (1 FPS/3 ms rés) ÚJ, dokumentált
-> munka, legfeljebb egy állapotátmenet kiértékelésenként. `ThermalStateAdapter`
-> (`.../data/performance/thermal_state_adapter.dart`) — platform-jel esetén azt
-> használja, egyébként determinisztikus, 0–100-ra korlátos dropped-frame/
-> freshness/feldolgozási-idő heurisztika, a forrás (`platform`/`heuristic`)
-> mindig jelölve. `VisionPerformanceSummary`
-> (`.../domain/performance/vision_performance_summary.dart`) — privacy-safe
-> session-aggregátum (tier, alkalmazott lépcsők, dropped-frame arány,
-> freshness eloszlás, degradáció-időbélyegek, thermal-forrás) + explicit
-> `unavailable` gyártó a nem-támogatott benchmark esetére. Hívó/landmark-
-> provider-wiring szándékosan nincs ebben a körben (jövőbeli kör dolga).
+> (E05-R30 MERGED — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás,
+> ZÁRÓ KÖR:** az Epic 5 (Computer Vision) mind a 30 köre kész. Ez a kör
+> **architektúra-guard bővítés**-t adott (`tool/check_architecture.dart`):
+> (a) raw vision frame/pixel típus (`VisionImage`, `GrayscaleFrame`,
+> `Uint8List`, `ByteData`, `ByteBuffer`, `VisionPixelFormat`) tiltása a
+> `lib/features/vision/data/persistence/` és `application/*State` fájlokban,
+> gépi őrrel véve az ADR 0183 „no raw frame persistence" döntést; az
+> allowlist **változatlan** 12 elemű (a meglévő `analyze → live` kivételek —
+> a guard-bővítés NEM adott hozzá egyet sem). **Model-integritás teszt**
+> (`test/tooling/vision_model_integrity_test.dart`, ÚJ) — checksum/output
+> schema/licenc mutation gate a MEGLÉVŐ `VisionModelManifest`-re (E05-R12).
+> **Vision-off paritás regressziós fixture**
+> (`test/features/vision/vision_offline_regression_test.dart`, ÚJ) — mind a
+> 11 vision flag `false` minden környezetben (`AppEnvironment.values`, nincs
+> dart-define override), Practice audio score / Song Trainer timing /
+> Analyze / Tutor kimenet **bitre azonos** pinned JSON-fixtúrával. **Stdlib-
+> only false-feedback evaluation harness**
+> (`ml/vision/evaluate_vision_metrics.py`, ÚJ) — JSONL fixture-összefoglalókat
+> olvas (nem kamerát), `--self-test` a `NO_DATA`/0%/1%/2% cellamátrixot
+> igazolja, **1%-os inkluzív production-safety cap** (a benchmark-cél
+> továbbra is 0%, a küszöb utólagos emelése tiltott — a megengedett kimenet
+> a metrika `experimental` átsorolása). Dataset manifest véglegesítés
+> (`ml/vision/dataset_manifest.md` §6, harness-szerződés), Epic 5
+> **completion report** (`docs/sdd/epic-05-completion-report.md`, ÚJ — a 86
+> PENDING előfordulás [81 sor + 5 magyarázó] tételesen elszámolva, egyik
+> Vision-képesség sem production-supported, a hátralévő CI-oldali
+> model-gate governance-körnek nevesítve), **rollout/rollback runbook**
+> (`docs/runbooks/vision-rollout.md`, ÚJ), README privacy-frissítés. Minden
+> vision flag `false` MARAD — nincs képesség bekapcsolva.
 >
-> **Három mért pre-flight-hiba a batch-írt briefben, mind dokumentált §0.0
-> revízióval javítva ÚJ ADR 0196-ban, MIELŐTT bármi dispatch-elődött —
-> zéró javító kör kellett utána:**
-> **(1)** a fejléc/§2/§5 „ADR 0165" hivatkozása nem létező fájlra mutatott; a
-> mért +17 batch-offset (`docs/LESSONS.md` L143/L147) és a tartalmi egyezés
-> [ADR 0182](docs/adr/0182-vision-audio-priority-degradation.md)-re javította
-> (az E05-R26 pre-flightja — [ADR 0193](docs/adr/0193-song-trainer-vision-integration-contract.md)
-> — ugyanezt a hibát ugyanebben a brief-ben már mérte és nyitva hagyta). **(2)**
-> a brief egy ÚJ `VisionDeviceTier(low/mid/high)` típust tervezett — ez egy MÁR
-> LÉTEZŐ, eltérő értékkészletű enummal (`hand_landmark_provider.dart:125`,
-> már a wide `vision/public.dart` barrelen exportálva) ütközött volna
-> (ambiguous export). Javítás: ÚJRAFELHASZNÁLÁS importtal, az ADR 0186/R14
-> „reuse, ne redefine" precedens szerint — ezt a pontos jövőbeli feladatot
-> az E05-R14 brief és az E05-R26 ADR 0193 is előre megnevezte („Kör 29 dolga").
-> **(3)** a brief öt lépcsős degradációs listája ütközött a MÁR ELFOGADOTT
-> ADR 0182 Döntés 3 hét lépcsős sorrendjével és a már publikált benchmark-
-> dokumentum §2.7 konkrét belépési küszöbeivel — javítva a hét lépcsős,
-> újrafelhasznált-küszöbű változatra. Lecke: **L200**, **L201**.
+> **Nincs ÚJ ADR** (záró-kör waiver, [ADR 0087](docs/adr/0087-autonomous-round-pipeline.md)
+> §7 / [ADR 0112](docs/adr/0112-self-healing-pipeline.md) — a brief előre
+> eldöntötte a rollout/flag/ADR kérdéscsoportot). **Pre-flight (2026-08-08):**
+> a brief minden mért §2 állítása (12 elemű allowlist, 11 flag, öt hiányzó/hat
+> meglévő fájl, SDD §32/35/36/39/40 megléte) grep-elve — **nulla eltérés** a
+> kódtól, csak egy státuszfrissítő §0.0 revízió (PREPARED→PLANNING) kellett.
 >
 > Implementer **Codex (Terra)** (1 implementációs forduló, **javító kör
 > nélkül**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
 > **security-reviewer** ágens (`risk = "high"`). PR
-> [#203](https://github.com/wolfcasaba/strumsight/pull/203), squash `8e7eb6f9`.
+> [#204](https://github.com/wolfcasaba/strumsight/pull/204), squash `d3b2caf9`.
 >
-> **Review:** [docs/reviews/e05-r29-device-tier-performance-thermal-review.md](docs/reviews/e05-r29-device-tier-performance-thermal-review.md)
-> — **APPROVED, 0 nyitott BLOCKER/MAJOR javító kör nélkül** (1 MINOR — az
-> audio-elsőbbség teszt gyenge proxy valós audio-wiring nélkül, tudatosan
-> halasztva egy jövőbeli integrációs körre —, 4 NOTE). A reviewer SAJÁT,
-> izolált `/tmp` klónokban független gate-újrafuttatással (580/580 teszt
-> zöld), a tier-határok és a hétlépcsős küszöbök `python3 -c`
-> újraszámolásával, az implementer valódi-sértés próbájának SAJÁT
-> megismétlésével (11/17 teszt pirosra vált, visszaállítva) és SAJÁT,
-> eldobható hiszterézis-próbákkal erősítette meg. A **dedikált
-> security-review**
-> ([docs/reviews/e05-r29-device-tier-performance-thermal-security.md](docs/reviews/e05-r29-device-tier-performance-thermal-security.md))
-> — **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 3 NOTE follow-up (nincs
-> hálózat/storage/plugin/logging felszín — tiszta in-memory domain+
-> application addíció).
+> **Review:** [docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md)
+> — **APPROVED, 0 nyitott BLOCKER/MAJOR** (1 MINOR — a brief egy konkrét
+> `practice → vision belső fájl` valódi-sértés próbát nevesített, ami nem
+> szerepelt a diffben; a reviewer SAJÁT, eldobható próbája igazolta, hogy a
+> MEGLÉVŐ generikus cross-feature-import szabály ezt a konkrét párt is
+> helyesen elkapja — a hiány pusztán acceptance-bizonyíték, nem védelmi rés
+> —, 3 NOTE). A reviewer SAJÁT, izolált `/tmp` klónban független
+> gate-újrafuttatással (8/8 lépés zöld), a completion report 86 PENDING
+> elszámolásának SAJÁT `grep -c`-vel való visszamérésével, és a fenti
+> gyakorlati próbateszttel erősítette meg. A **dedikált security-review**
+> ([docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md))
+> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR (mindkettő előretekintő: az
+> új raw-payload guard azonosító-egyezéses lint, típusalias-szal
+> megkerülhető; az ÚJ integritás-teszt csak a formátum-ágat éri el, mert
+> mindkét vision-modell-bejegyzés ma `status: deferred`, a valódi
+> SHA-256-összevetés csak `active` bejegyzésnél fut — egyik sem e kör
+> hibája, a validátor ezt a szétválasztást már E05-R12 óta dokumentálja),
+> 4 NOTE.
 >
-> **Zöld kapu (exact-SHA `6746de24`, a review-commitok utáni tip):** Full Gate
-> [31279942080](https://github.com/wolfcasaba/strumsight/actions/runs/31279942080)
+> **Zöld kapu (exact-SHA `bbb23079`, a review-commitok utáni tip):** Full Gate
+> [31282481824](https://github.com/wolfcasaba/strumsight/actions/runs/31282481824)
 > **success** + Router CI
-> [31279934524](https://github.com/wolfcasaba/strumsight/actions/runs/31279934524)
-> **success**.
->
-> ## ✅ E05-R28 KÉSZ — Vision persistence, privacy control és törlés (2026-08-08)
->
-> **E05-R28** MERGED (PR [#202](https://github.com/wolfcasaba/strumsight/pull/202),
-> squash `a9698557`; implementer **Codex (Terra)** (1 implementációs forduló
-> + **2 javító kör**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> security-reviewer). Teljes részletes történet:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). **Nincs ÚJ ADR**
-> (a pre-flight §0.0 a stale „0161/0166" hivatkozást a MÁR LÉTEZŐ
-> [ADR 0178](docs/adr/0178-vision-privacy-by-default.md)/
-> [ADR 0183](docs/adr/0183-vision-no-raw-frame-persistence.md)-ra javította).
-> Review: [docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md](docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-review.md)
-> + [security](docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md)
-> — **APPROVED 2 javító kör után**, 0 nyitott BLOCKER/MAJOR/MINOR, 3 NOTE
-> follow-up. Lecke: **L197**, **L198**, **L199**.
+> [31282482794](https://github.com/wolfcasaba/strumsight/actions/runs/31282482794)
+> **success**. Post-merge gate a friss `main`-en (`d3b2caf9`) is zöld:
+> 582+2skip (`test/features/vision`) + 401 (`test/core`) + 47 (`test/tooling`)
+> teszt, architecture (12 allowlisted, 0 unexpected) + secrets (2084 fájl,
+> 0 lelet) + l10n mind zöld.
 >
 > ## ✅ E05-R29 KÉSZ — Device tier, performance és thermal hardening (2026-08-08)
 >
 > **E05-R29** MERGED (PR [#203](https://github.com/wolfcasaba/strumsight/pull/203),
 > squash `8e7eb6f9`; implementer **Codex (Terra)** (1 implementációs forduló,
 > javító kör nélkül), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> security-reviewer). Lásd a fenti „Last updated" blokk a teljes
-> pre-flight/review/security történetért — ez a szakasz csak a rövid
-> hivatkozási pont a korábbi körök mintája szerint. **ÚJ ADR
+> security-reviewer). Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). **ÚJ ADR
 > [0196](docs/adr/0196-vision-device-tier-performance-and-thermal-contract.md)**
 > (a pre-flight írta — nem volt előre kiosztott szám). Review:
 > [docs/reviews/e05-r29-device-tier-performance-thermal-review.md](docs/reviews/e05-r29-device-tier-performance-thermal-review.md)
@@ -107,11 +88,28 @@
 > — **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1 MINOR, 4 NOTE
 > follow-up. Lecke: **L200**, **L201**.
 >
-> **Következő:** `docs/execution/pipeline-queue.tsv` szerint E05-R30
-> ("Dataset, evaluation, CI és Epic lezárás",
-> `docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md`,
-> `pending`) a lánc következő tagja — az Epic 5 ZÁRÓKÖRE; a pontos indítás a
-> pipeline driver dolga.
+> ## ✅ E05-R30 KÉSZ — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás (2026-08-08)
+>
+> **E05-R30** MERGED (PR [#204](https://github.com/wolfcasaba/strumsight/pull/204),
+> squash `d3b2caf9`; implementer **Codex (Terra)** (1 implementációs forduló,
+> javító kör nélkül), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
+> security-reviewer). Lásd a fenti „Last updated" blokk a teljes
+> pre-flight/review/security történetért — ez a szakasz csak a rövid
+> hivatkozási pont a korábbi körök mintája szerint. **Nincs ÚJ ADR**
+> (záró-kör waiver). Review:
+> [docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md)
+> + [security](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md)
+> — **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1+2 MINOR
+> (mind forward-looking/lezárva), 7 NOTE follow-up. Lecke: **L202**.
+>
+> **Következő:** az Epic 5 pipeline-sorai (E05-R01…R30) MIND `done`. A queue
+> egyetlen fennmaradó sora (`E06-R29`, `E06-R30`) **`hold`**-on van — a
+> pipeline-nek NINCS következő automatikusan indítható köre. A `HANDOFF.md`
+> §6 „Kötelező sorrend" (user-döntés, 2026-08-07) szerinti következő lépés
+> **emberi**: (2) az Epic 5 valós-eszközös APK-ellenőrzése a usernél, majd
+> (3) GOV-05 shipping rollout kör, (4) GOV-06 valós-audio DSP baseline mérés
+> — a GOV-05/GOV-06 briefje szándékosan még nincs megírva, csak a 3–4. pont
+> UTÁN, mert a pre-flightjuk az Epic 5 VÉGSŐ állapotát kell hogy mérje.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -122,12 +120,12 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-08 (E05-R29 zárása): E05-R27 rövid bannere törölve (a
-> részletes E05-R27 történet már korábban archiválva volt); E05-R28
-> részletes narratívája archiválva (`docs/handoff-archive.md`), rövid
-> bannere megmaradt/frissült (a „lásd fent" hivatkozás javítva, mivel a
-> részlet már nem a fejlécben él); E05-R29 részletes narratívája + rövid
-> bannere felkerült.
+> Mért diéta: 2026-08-08 (E05-R30 zárása — az Epic 5 ZÁRÓKÖRE): E05-R28
+> rövid bannere törölve (a részletes E05-R28 történet már korábban
+> archiválva volt); E05-R29 részletes narratívája archiválva
+> (`docs/handoff-archive.md`), rövid bannere megmaradt/frissült (a „lásd
+> fent" hivatkozás javítva, mivel a részlet már nem a fejlécben él); E05-R30
+> részletes narratívája + rövid bannere felkerült.
 
 ## 1. Current release state
 
@@ -157,6 +155,17 @@
   Song/Setlist migrációs adapter) és E03-R07 (fájlrendszeres Song repository
   és asset store) kész. A modell flagek mögött, hívó UI/import-runner nincs
   — production viselkedés változatlan.
+- **Epic 5 (Computer Vision) implementáció TELJES** — E05-R01…R30 mind
+  merge-elve: capability audit + hat alapozó ADR, hand/pose landmark
+  provider, guitar geometry, metric engine, feedback policy, session
+  controller, audio–vision szinkron, observation fusion, posture safety,
+  Practice/Song Trainer/AI Tutor/Analyze integráció, device tier + thermal
+  hardening, és a záró minőségi kapuk (architektúra-guard, model-integritás,
+  vision-off paritás, evaluation harness, completion report, rollout
+  runbook). **Mind a 11 vision flag `false` marad minden környezetben** — a
+  végső elfogadási kapu a user valódi-eszközös HORIZON-menete (§6 „Kötelező
+  sorrend"), nem a technikai készenlét. Evidencia:
+  [`docs/sdd/epic-05-completion-report.md`](docs/sdd/epic-05-completion-report.md).
 
 ## 2. What is working
 
@@ -486,47 +495,53 @@
 
 ## 4. Current branch
 
-`main` @ [PR #203](https://github.com/wolfcasaba/strumsight/pull/203), squash
-`8e7eb6f9` (E05-R29, Device tier, performance és thermal hardening). Pure
-Dart domain+application+data+teszt+doksi diff → Full Gate
-[31279942080](https://github.com/wolfcasaba/strumsight/actions/runs/31279942080)
-+ Router CI [31279934524](https://github.com/wolfcasaba/strumsight/actions/runs/31279934524)
-**success** az exact merge-előtti tip `6746de24`-n (a két review-commit
-utáni tip). Review **APPROVED javító kör nélkül** — a pre-flight (ADR 0196)
-mind a három mért brief-hibát (ADR-szám, `VisionDeviceTier` név-ütközés,
-öt→hét lépcsős degradációs lánc) a dispatch ELŐTT javította, ezért az
-implementer első fordulója egyből zöld gate-tel és nulla nyitott
-BLOCKER/MAJOR lelettel zárt. A reviewer SAJÁT, két izolált `/tmp` klónban
-(egy a gate-újrafuttatásra, egy a mutáció-próbákra, hogy ne fussanak
-egymásba) mérte újra a kört: `tools/round-gate.sh test/features/vision` →
-**580/580 teszt zöld**; a tier-határokat (33/66 ms) és a hétlépcsős
-belépési küszöböket (12/10/5/8/6/4 FPS, 15 ms audio) `python3 -c`-vel
-függetlenül újraszámolta és a benchmark-dokumentum §2.7 táblájával
-összevetette; az implementer valódi-sértés próbáját (lépcső-átugrás →
-piros) SAJÁT második klónban megismételte (11/17 teszt bukott, egyezik az
-önjelentéssel), majd SAJÁT, eldobható hiszterézis-próbákat írt (degradál→
-dead-band→degradál ciklus, egylépéses-visszaállás kényszerítése) — mindkettő
-zöld maradt a változatlan kódon. 1 MINOR (F1 — az „audio pressure changes
-only the vision decision" teszt gyenge proxy, mert nincs valós
-audio-pipeline wiring ebben a körben; tudatosan halasztva egy jövőbeli
-integrációs körre, ADR 0196 Döntés 5), 4 NOTE (getter-névadás, domain→data
-import iránya — gépi szabállyal igazoltan nem sérti a `sharedDomainMustRemainFrameworkIndependent`
-kört, mert az csak `core/music/`/`core/audio/codec/`/`features/practice/domain/`-t
-fedi —, egy közvetett tesztelésű `ArgumentError`-ág, egy tömörített
-ADR-idézet-hivatkozás pontossága). A dedikált security-review (risk=high)
-**PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 3 NOTE (mind előretekintő —
-korlátlan `unavailableReason` string egy jövőbeli sinkhez, release-stripped
-assertek valódi `ArgumentError`-okkal alátámasztva, ugyanaz a domain→data
-import más lencséből). Az `origin/main` a dispatch és a merge között
-**nem mozdult** (`9b9dccc9` mindvégig), rebase nem kellett (H8 tiszta).
-Post-merge gate (`tools/round-gate.sh test/features/vision`) a friss
-`main`-en is zöld. Lecke: **L200** (egy batch-brief tervezett ÚJ típusneve
-ütközhet egy már létező, eltérő szemantikájú szimbólummal — a pre-flight
-grep-je a tervezett nevekre is terjedjen ki), **L201** (egy brief saját
-prózai újra-előadása egy már elfogadott ADR kötött döntéséről driftelhet az
-ADR forrásszövegétől — a pre-flight az ADR ÉS a belőle levezetett dokumentum
-ellen mérjen, ne csak a brief belső konzisztenciáját).
-_(Történeti product-merge referencia: PR #202 / `a9698557`, E05-R28; PR #201 /
+`main` @ [PR #204](https://github.com/wolfcasaba/strumsight/pull/204), squash
+`d3b2caf9` (E05-R30, Dataset, evaluation, minőségi kapuk és Epic 5 lezárás —
+ZÁRÓ KÖR). Pure teszt+ML-script(Python stdlib)+doksi diff (nincs `lib/`) →
+Full Gate
+[31282481824](https://github.com/wolfcasaba/strumsight/actions/runs/31282481824)
++ Router CI [31282482794](https://github.com/wolfcasaba/strumsight/actions/runs/31282482794)
+**success** az exact merge-előtti tip `bbb23079`-n (két review-commit —
+tartalmi + biztonsági — utáni tip; mindkét workflow háromszor lett
+dispatch-elve, mert a review-jelentések commitjai kétszer mozdították a
+branch tip-jét a kezdeti CI-dispatch után). Review **APPROVED javító kör
+nélkül** — a pre-flight (2026-08-08) minden mért §2 állítást (12 elemű
+allowlist, 11 flag, öt hiányzó/hat meglévő fájl, SDD §32/35/36/39/40) a
+kódhoz mérve nulla eltéréssel talált, ezért az implementer első fordulója
+egyből zöld gate-tel zárt. A reviewer SAJÁT, izolált `/tmp` klónban mérte
+újra: `tools/round-gate.sh test/features/vision test/core test/tooling` →
+**8/8 lépés zöld** (format/analyze/3×test/architecture/secrets/l10n); a
+completion report 86 PENDING-elszámolását SAJÁT `grep -c`-vel
+visszamérte (44+42=86, egyezik); és egy SAJÁT, eldobható próbateszttel
+(`practice` fixture importál egy `vision` belső fájlt) igazolta, hogy a
+brief által nevesített, de a diffben nem szereplő „practice → vision"
+valódi-sértés forgatókönyvet a MEGLÉVŐ generikus cross-feature-import
+szabály helyesen elkapja — 1 MINOR (F1, ezzel lezárva), 3 NOTE. A dedikált
+security-review (risk=high) **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR
+(mindkettő előretekintő: a raw-payload architektúra-guard azonosító-
+egyezéses lint, típusalias-szal elvileg megkerülhető; az ÚJ model-
+integritás teszt csak a formátum-ellenőrzési ágat éri el, mert mindkét
+vision-modell-bejegyzés ma `status: deferred` — a valódi SHA-256-
+összevetés csak `active` bejegyzésnél fut, ez E05-R12 óta szándékos,
+dokumentált szétválasztás, nem e kör hibája), 4 NOTE. Az `origin/main` a
+dispatch és a merge között **nem mozdult** (`bbb57fd8` mindvégig), rebase
+nem kellett (H8 tiszta). Post-merge gate (`tools/round-gate.sh
+test/features/vision test/core test/tooling`) a friss `main`-en is zöld:
+582+2skip/401/47 teszt + architecture (12 allowlisted, 0 unexpected) +
+secrets (2084 fájl, 0 lelet) + l10n mind zöld. Lecke: **L202** (egy
+acceptance criteria nevesített próba-forgatókönyve nem tekinthető
+teljesítettnek attól, hogy a mögöttes szabály generikus és más
+feature-párokkal már tesztelt — a reviewer a nevezett párra futtasson saját
+próbát, mielőtt súlyosságot állapít), és **L189 kiegészítve** (a
+klón-`origin`-a-fő-repóba-mutat csapda az orchesztrátor SAJÁT pre-flight
+branch-push lépésén is bekövetkezik, nem csak az implementer folytató
+fordulóján — a `gh workflow run` `HTTP 422` volt a jelzés).
+
+**Az Epic 5 (Computer Vision) MIND A 30 KÖRE kész.** A pipeline queue
+egyetlen fennmaradó sora (`E06-R29`/`E06-R30`) `hold`-on van — nincs
+automatikusan indítható következő kör. Lásd §6.
+_(Történeti product-merge referencia: PR #203 / `8e7eb6f9`, E05-R29; PR #202 /
+`a9698557`, E05-R28; PR #201 /
 `7e43019`, E05-R27; PR #200 /
 `242cccb`, E05-R26; PR #199 /
 `9b608cf`, E05-R25; PR #197 /
@@ -995,12 +1010,26 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > device-mátrix csak akkor lesznek véglegesek). Az Epic 6 queue-sorai
 > addig is `hold`-on védik a sorrendet.
 
-0. **A pipeline FUT** (user-döntés 2026-08-08, MOTOR-FELÁLLÁS: a 2026-08-07-es
-   Terra-tiltás feloldva, a Terra-kvóta visszatért — élő füst-teszt
-   `TERRA_OK`). `.pipeline/engine-override` = `terra`, tehát MINDEN kör ezzel
-   megy a queue `engine` oszlopától függetlenül; a korábbi „HOLD E05-R21..R30
-   előtt" bejegyzés a `6ae3ec7` commit-tal (`chore(pipeline): resume the
-   chain`) elavult — a queue sorai `pending`.
+0. **A pipeline MEGÁLLT — nincs következő automatikusan indítható kör**
+   (2026-08-08, E05-R30 zárása után). `docs/execution/pipeline-queue.tsv`
+   minden E05-sora `done`; az egyetlen fennmaradó sorpár (`E06-R29`,
+   `E06-R30`) **`hold`**-on van, mert a fejléc §6 „Kötelező sorrend"
+   (user-döntés 2026-08-07) az Epic 6 előtt a user valós-eszközös Epic 5
+   APK-ellenőrzését és a GOV-05/GOV-06 köröket írja elő, amiknek a briefje
+   szándékosan még nincs megírva. A `.pipeline/engine-override` = `terra`
+   beállítás változatlan (a 2026-08-07-es Terra-tiltás feloldva, a
+   Terra-kvóta visszatért — élő füst-teszt `TERRA_OK`), a KÖVETKEZŐ pipeline
+   session (akár E06, akár egy GOV-kör) is ezt fogja használni, ha a
+   sorrend feloldódik.
+   **~~E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás~~ — KÉSZ**
+   (PR #204, `d3b2caf9`, nincs új ADR — záró-kör waiver; implementer
+   Codex/Terra, egyetlen forduló, javító kör nélkül; dedikált
+   security-reviewer risk=high PASS; 1+2 MINOR mind forward-looking/lezárva,
+   7 NOTE; ld. fejléc + §4 + §5).
+   **~~E05-R29 — Device tier, performance és thermal hardening~~ — KÉSZ**
+   (PR #203, `8e7eb6f9`, **ÚJ ADR 0196**; implementer Codex/Terra, egyetlen
+   forduló, javító kör nélkül; dedikált security-reviewer risk=high PASS;
+   1 MINOR + 4 NOTE; ld. `docs/handoff-archive.md`).
    **~~E05-R25 — Practice Engine vision integration~~ — KÉSZ**
    (PR #199, `9b608cf`, **ÚJ ADR 0192** practice-vision-integration-contract
    szerződésre; implementer Codex/Terra, egyetlen forduló (köztes
