@@ -127,13 +127,13 @@ class VisionSafetyPolicy {
     // stable, rendering-free codes; the localized text belongs in ARB.
     'visionInsightSetupNotObservable': VisionSafetyClaimClass.unobservable,
     'visionInsightFrettingStable': VisionSafetyClaimClass.neutralObservation,
-    'visionInsightFrettingFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightFrettingFocus': VisionSafetyClaimClass.neutralObservation,
     'visionInsightFrettingImproved': VisionSafetyClaimClass.baselineRelative,
     'visionInsightPickingStable': VisionSafetyClaimClass.neutralObservation,
-    'visionInsightPickingFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPickingFocus': VisionSafetyClaimClass.neutralObservation,
     'visionInsightPickingImproved': VisionSafetyClaimClass.baselineRelative,
     'visionInsightPostureStable': VisionSafetyClaimClass.neutralObservation,
-    'visionInsightPostureFocus': VisionSafetyClaimClass.baselineRelative,
+    'visionInsightPostureFocus': VisionSafetyClaimClass.neutralObservation,
     'visionInsightPostureImproved': VisionSafetyClaimClass.baselineRelative,
     'visionInsightExperimentalObservation':
         VisionSafetyClaimClass.neutralObservation,

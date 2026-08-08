@@ -10,11 +10,19 @@ final class CueBudget {
 
   VisionInsight? selectRealtime(Iterable<VisionInsight> insights) {
     final timestamp = now().toUtc();
-    final eligible =
-        insights
-            .where((insight) => _isCooldownComplete(insight, timestamp))
-            .toList()
-          ..sort(_compareInsights);
+    final candidates = insights.toList()..sort(_compareInsights);
+    final setup = candidates
+        .where((insight) => insight.direction == InsightDirection.setup)
+        .toList();
+    if (setup.isNotEmpty) {
+      final selected = setup.first;
+      _lastEmittedAt[selected.code] = timestamp;
+      return selected;
+    }
+
+    final eligible = candidates
+        .where((insight) => _isCooldownComplete(insight, timestamp))
+        .toList();
     if (eligible.isEmpty) return null;
 
     final selected = eligible.first;
@@ -39,8 +47,23 @@ final class CueBudget {
   }
 
   static int _compareInsights(VisionInsight first, VisionInsight second) {
+    // Intentional, direction-safe order: priority, confidence, positive before
+    // negative, then code for a stable final key.
     final priority = second.priority.compareTo(first.priority);
     if (priority != 0) return priority;
+    final confidence = second.confidence.compareTo(first.confidence);
+    if (confidence != 0) return confidence;
+    final direction = _directionTieRank(
+      first.direction,
+    ).compareTo(_directionTieRank(second.direction));
+    if (direction != 0) return direction;
     return first.code.safetyCode.compareTo(second.code.safetyCode);
   }
+
+  static int _directionTieRank(InsightDirection direction) =>
+      switch (direction) {
+        InsightDirection.setup => 0,
+        InsightDirection.positive => 1,
+        InsightDirection.negative => 2,
+      };
 }

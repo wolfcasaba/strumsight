@@ -49,47 +49,76 @@ final class FeedbackPolicyEngine {
             policy.minimumDuration) {
       return false;
     }
-    if (candidate.code == InsightCode.setupNotObservable) {
-      return candidate.evidence.observationState ==
-          ObservationState.notObservable;
-    }
-    if (candidate.code == InsightCode.experimentalObservation) {
-      return candidate.evidence.observationState ==
-              ObservationState.experimental &&
-          candidate.evidence.confidence >= policy.confidenceThreshold;
-    }
-    if (candidate.evidence.observationState == ObservationState.notObservable ||
-        candidate.evidence.observationState == ObservationState.experimental ||
-        candidate.evidence.confidence < policy.confidenceThreshold) {
+    final acceptsPrimary = switch (candidate.code) {
+      InsightCode.setupNotObservable =>
+        candidate.evidence.observationState == ObservationState.notObservable,
+      InsightCode.experimentalObservation =>
+        candidate.evidence.observationState == ObservationState.experimental,
+      _ => _isObservedOrInferred(candidate.evidence),
+    };
+    if (!acceptsPrimary ||
+        candidate.evidence.confidence < policy.confidenceThreshold ||
+        !_acceptsComparison(candidate, policy) ||
+        _emittedConfidence(candidate) < policy.confidenceThreshold) {
       return false;
     }
     return !candidate.code.isImprovement || candidate.hasComparableImprovement;
   }
 
+  bool _acceptsComparison(FeedbackCandidate candidate, FeedbackPolicy policy) {
+    final comparison = candidate.comparisonEvidence;
+    if (comparison == null) return true;
+    return _isObservedOrInferred(comparison) &&
+        comparison.confidence >= policy.confidenceThreshold &&
+        comparison.id != candidate.evidence.id &&
+        comparison.provenance.window.endUs <
+            candidate.evidence.provenance.window.startUs;
+  }
+
+  static bool _isObservedOrInferred(VisionEvidence evidence) =>
+      evidence.observationState == ObservationState.observed ||
+      evidence.observationState == ObservationState.inferred;
+
+  static double _emittedConfidence(FeedbackCandidate candidate) {
+    final comparison = candidate.comparisonEvidence;
+    if (comparison == null) return candidate.evidence.confidence;
+    return candidate.evidence.confidence < comparison.confidence
+        ? candidate.evidence.confidence
+        : comparison.confidence;
+  }
+
   VisionInsight _toInsight(FeedbackCandidate candidate) {
-    final policy = FeedbackPolicies.catalog[candidate.code]!;
     final evidence = <VisionEvidence>[
       candidate.evidence,
       if (candidate.comparisonEvidence != null) candidate.comparisonEvidence!,
     ]..sort((first, second) => first.id.compareTo(second.id));
-    final confidence = evidence
-        .map((item) => item.confidence)
-        .reduce((first, second) => first < second ? first : second);
     return VisionInsight(
       code: candidate.code,
       policyVersion: FeedbackPolicies.policyVersion,
       evidenceIds: evidence.map((item) => item.id).toList(growable: false),
-      confidence: confidence,
-      priority: policy.priority,
-      direction: policy.direction,
+      confidence: _emittedConfidence(candidate),
     );
   }
 
   static int _compareInsights(VisionInsight first, VisionInsight second) {
+    // Match CueBudget's direction-safe deterministic ordering.
     final priority = second.priority.compareTo(first.priority);
     if (priority != 0) return priority;
+    final confidence = second.confidence.compareTo(first.confidence);
+    if (confidence != 0) return confidence;
+    final direction = _directionTieRank(
+      first.direction,
+    ).compareTo(_directionTieRank(second.direction));
+    if (direction != 0) return direction;
     final code = first.code.safetyCode.compareTo(second.code.safetyCode);
     if (code != 0) return code;
     return first.evidenceIds.join(',').compareTo(second.evidenceIds.join(','));
   }
+
+  static int _directionTieRank(InsightDirection direction) =>
+      switch (direction) {
+        InsightDirection.setup => 0,
+        InsightDirection.positive => 1,
+        InsightDirection.negative => 2,
+      };
 }

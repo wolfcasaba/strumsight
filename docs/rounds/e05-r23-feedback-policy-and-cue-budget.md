@@ -256,6 +256,56 @@ lazítása helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Javító kör #1 (2026-08-08)
+
+#### Módosítások
+
+- `lib/features/vision/domain/feedback/cue_budget.dart` — a setup-jelölt
+  abszolút realtime-elsőbbséget kap a saját cooldownja alatt is; technikai
+  cue csak setup-jelölt hiányában választható. A determinisztikus döntetlen
+  dokumentált sorrendje: prioritás, magasabb confidence, pozitív irány a
+  negatív előtt, majd stabil kódsorrend.
+- `lib/features/vision/application/feedback_policy_engine.dart` és
+  `.../insight_code.dart` — a comparison evidence csak megfigyelhető vagy
+  inferált, küszöb feletti, külön ID-jú és szigorúan korábbi ablakból
+  fogadható el. Az emission az aggregált confidence-et is kapuzza, ezért
+  minden kibocsátott insight eléri a saját policy-küszöbét.
+- `lib/features/vision/domain/feedback/insight_code.dart` — a nyilvános
+  `VisionInsight` többé nem fogad priority/direction paramétert: ezeket a
+  zárt `FeedbackPolicies.catalog` kódja vezeti le.
+- `lib/features/vision/domain/safety/vision_safety_policy.dart` — a három
+  `*Focus` bejegyzés `neutralObservation`; a kilenc korábbi bejegyzés és az
+  enum változatlan.
+- `lib/l10n/app_en.arb` — mind a 11 `visionInsight*` üzenethez additív,
+  nem diagnosztikus és nem prediktív jellegét rögzítő `@description`.
+- `test/features/vision/application/feedback_policy_engine_test.dart` és
+  `.../domain/feedback_policy_test.dart` — comparison-state/confidence/ID/
+  időrend regressziók, emissziós-confidence invariáns, direction-safe
+  tie-break, safety-class és ARB-metaadat tesztek.
+
+#### A hibás golden-szerű teszt átírása
+
+`feedback_policy_engine_test.dart` korábbi 111–133-as, fix órás
+`'is bit-stable for a fixed evidence fixture'` tesztje azt várta, hogy a
+setup cue cooldownja alatt `frettingFocus` nyerjen. Az új
+`'keeps setup priority during its cooldown with an advancing clock'` teszt
+500 ms-szal előreléptetett injektált órát használ, és a második
+kiértékelésben is `setupNotObservable`-t vár: setup-jelölt jelenlétében
+technikai realtime cue sosem jelenhet meg.
+
+#### Futtatott parancsok és eredmények
+
+- `flutter test test/features/vision/domain/feedback_policy_test.dart test/features/vision/application/feedback_policy_engine_test.dart` — **20/20 zöld**.
+- `dart format lib/features/vision/domain/feedback/insight_code.dart lib/features/vision/domain/feedback/cue_budget.dart lib/features/vision/application/feedback_policy_engine.dart lib/features/vision/domain/safety/vision_safety_policy.dart test/features/vision/domain/feedback_policy_test.dart test/features/vision/application/feedback_policy_engine_test.dart` — **6 fájl formázva, 3 módosult**; a kör-gate format lépése utólag **0 változást** jelzett.
+- `tools/round-gate.sh test/features/vision test/core/l10n_parity_test.dart` — **exit 0**: format 1163/0 változás; analyze tiszta; `test/features/vision` **387/387**; l10n-parity **3/3**; architecture, secret scan és l10n parity zöld.
+
+#### Nem futtatott ellenőrzések és kockázat
+
+CI-dispatch, teljes suite/property gate és APK az orchestrátor feladata.
+F8/MI3 (ergonómiai lexikai deny-list) szándékosan változatlan: a
+`safety_claim_guard.dart` nincs az allowed paths listán, ezért külön kör
+follow-upja marad.
+
 ### Módosítások
 
 - `lib/features/vision/domain/feedback/insight_code.dart` — zárt,

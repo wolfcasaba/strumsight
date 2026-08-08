@@ -1,4 +1,5 @@
 import '../evidence/vision_evidence.dart';
+import 'feedback_policy.dart';
 
 /// Closed, localizable feedback codes emitted by the deterministic policy.
 enum InsightCode {
@@ -41,15 +42,18 @@ enum InsightCode {
 enum InsightDirection { setup, positive, negative }
 
 /// Immutable, rendering-free outcome of the feedback policy.
+///
+/// Priority and direction come from the closed policy catalog so public
+/// callers cannot forge cue ordering or safety direction.
 final class VisionInsight {
   VisionInsight({
     required this.code,
     required this.policyVersion,
     required List<String> evidenceIds,
     required this.confidence,
-    required this.priority,
-    required this.direction,
-  }) : evidenceIds = List<String>.unmodifiable(evidenceIds) {
+  }) : evidenceIds = List<String>.unmodifiable(evidenceIds),
+       priority = _policyFor(code).priority,
+       direction = _policyFor(code).direction {
     if (policyVersion.trim().isEmpty ||
         evidenceIds.isEmpty ||
         !(confidence.isFinite && confidence >= 0 && confidence <= 1)) {
@@ -65,6 +69,14 @@ final class VisionInsight {
   final double confidence;
   final int priority;
   final InsightDirection direction;
+
+  static FeedbackPolicy _policyFor(InsightCode code) {
+    final policy = FeedbackPolicies.catalog[code];
+    if (policy == null) {
+      throw ArgumentError.value(code, 'code', 'Missing feedback policy.');
+    }
+    return policy;
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -126,5 +138,8 @@ final class FeedbackCandidate {
       comparisonEvidence != null &&
       comparisonPracticeId == practiceId &&
       comparisonCapabilityLevel == capabilityLevel &&
-      comparisonEvidence!.metric.key == evidence.metric.key;
+      comparisonEvidence!.metric.key == evidence.metric.key &&
+      comparisonEvidence!.id != evidence.id &&
+      comparisonEvidence!.provenance.window.endUs <
+          evidence.provenance.window.startUs;
 }
