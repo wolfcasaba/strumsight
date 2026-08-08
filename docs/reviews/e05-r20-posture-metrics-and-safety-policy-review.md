@@ -5,9 +5,60 @@ Diff: `git diff origin/main...minimax/e05-r20-posture-metrics-and-safety-policy`
 (exact SHA reviewed: `4a53832`)
 Reviewer: Claude Sonnet 5 (orchestrator) + dedicated `security-reviewer` agent
 (brief §11 mandatory, `risk = "high"`) · Dátum: 2026-08-08
-Verdikt: **CHANGES REQUIRED**
+Verdikt (első kör): **CHANGES REQUIRED**
 
-## Összegzés
+## Frissítés — javító kör #1 után (2026-08-08)
+
+**Verdikt: APPROVED.** Javító commit-tartomány: `6eb713c..1ae9738`
+(`7c59865`, `ce4d581`, `1ae9738`). Mindhárom leletet SAJÁT, friss GitHub-klónon
+(`/tmp/review-e05-r20-fix1`) függetlenül újra-ellenőriztem, a gate-et
+csővezeték nélkül, teljes kimenettel újrafuttatva: **MINDEN GATE ZÖLD,
+334/334 teszt** (`format`/`analyze`/`test`/`architecture`/`secrets`/`l10n`).
+
+- **F1 FIXED.** A guard háromrétegűvé vált: lexikai deny-list (10 zárt lexéma,
+  `code.toLowerCase().contains(lexeme)`, a deklarált osztálytól ÉS a
+  katalógus-tagságtól függetlenül, MINDIG elsőként fut) → catalog-membership
+  → forbidden-class. Saját olvasással megerősítve
+  (`safety_claim_guard.dart:68-77`): a security-reviewer PONTOS reprodukciós
+  stringje (`postureShoulderAsymmetryMayCauseLongTermPain`, `baselineRelative`
+  osztállyal) a `safety_claim_guard_test.dart` „medical code is rejected
+  despite an allowed declared class" tesztben van pinnelve, a `reason`
+  mezőben a `lexeme` kulcsszóval. A meglévő 9 katalógus-kód egyike sem
+  ütközik az új lexikai szűrővel (a `validateCatalog` teszt zöld maradt).
+- **F2 FIXED (dokumentációs/szerződéses irányban, review-ben felkínált (b)
+  opció).** A `_confidence()` tényleges számítása VÁLTOZATLAN maradt (a
+  `PostureObservation` R14-kontraktusa ma sem exportál per-landmark
+  visibility-t — ld. az orchestrátor §0.0 R9 addenduma, ami ezt a tényt
+  MÉG a javító kör előtt dokumentálta és a §6 „visibility-mátrix"
+  kritériumot a már meglévő R8 jelenlét/hiány-kapura szűkítette). A
+  `confidenceFormula` mező viszont MOST már őszintén írja le a tényleges
+  számítást (`'1 - min(1, absolute mean normalized landmark drift)'`), és a
+  `minimumVisibility` mező doc-commentje explicit kimondja, hogy ez a réteg
+  nem értékeli ki. Ez lezárja a review F2 dokumentáció-vs-kód ellentmondás
+  felét; a szemantikai „nagy, megbízhatóan mért drift = alacsonyabb
+  confidence" jelleg MOST MÁR őszintén dokumentált, nem rejtett csapda — a
+  döntés a jövőbeli R23 fogyasztóra hárul, ahogy a review is jelezte
+  elfogadható irányként.
+- **F3 FIXED.** `declaredClass` paraméter `@visibleForTesting`. Az egyetlen
+  production hívó (`posture_metric_engine.dart:98`) nem adja meg — saját
+  olvasással megerősítve. Emellett a lexikai réteg (F1) MOST már a
+  `declaredClass` ágon is fut, tehát a bypass gyakorlati kockázata tovább
+  csökkent.
+- **F4 — a gate-futtatási fegyelem javult.** A javító kör naplójában (13
+  `round-gate.sh` hívás) EGYETLEN piped/csonkolt forma sincs — mindegyik
+  `> fájl 2>&1; echo "EXIT=$?"` mintát követ, a teljes kimenet fájlba
+  megy, a valódi kilépési kód külön van elmentve, a `grep` csak UTÓLAG, a
+  MENTETT fájlon fut az összefoglaló kiemeléséhez. Ez NEM a tiltott minta.
+- **F5/F6 NOTE** — nem lettek javítva ebben a körben (opcionálisak voltak),
+  follow-up-ként megmaradnak a jövőbeli R23-kör figyelmébe.
+
+Scope a javító körben is tiszta (csak a brief `allowed_paths`-listáján
+szereplő fájlok + a §10 handoff, saját `git diff --stat origin/main...HEAD`
+ellenőrzéssel).
+
+## Eredeti review (első kör)
+
+### Összegzés
 
 BLOCKER: 0 · MAJOR: 2 · MINOR: 2 · NOTE: 2
 
@@ -56,7 +107,7 @@ függetlenül megerősítve.
   (allowed osztály, de a §5 pont 1 saját tiltott-példamondatával szemantikailag megegyező tartalom) → a teljes szállított suite (`safety_claim_guard_test.dart` + `posture_metric_engine_test.dart`, 39 teszt) **zöld maradt**. Visszaállítva, fa tiszta.
 - **Miért MAJOR és nem BLOCKER:** a MA szállított 10 katalógus-kód mind helyesen, nem-orvosi osztályba tartozik (a security-reviewer ellenőrizte); nincs élő fogyasztó/sink (R23/R27 még nem épült) — orvosi tartalom MA nem hagyhatja el a rendszert. A kockázat egy jövőbeli, e körön kívüli hibára vonatkozik, nem egy jelenlegi határsértésre.
 - **Javasolt irány (nem patch):** a kód STRINGJÉN is fusson egy lexikai/kulcsszó-alapú védelem (pain/injury/diagnos/harm/recovery-jellegű minták), FÜGGETLENÜL a deklarált osztálytól — plusz egy teszt, ami egy orvosi-jellegű kód-stringet `baselineRelative` osztályba deklarálva is elutasít. Másodlagosan érdemes az ADR 0188 / brief §5 pont 1 szövegét pontosítani, hogy a garancia ma „osztály-alapú", ne keltsen erősebb benyomást.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`7c59865`) — lexikai deny-list, MINDIG elsőként fut, függetlenül a deklarált osztálytól/katalógus-tagságtól; a security-reviewer pontos reprodukciós stringje regressziós tesztként pinnelve. Saját, friss klónos gate-újrafuttatással megerősítve.
 
 ### F2 — MAJOR — `confidenceFormula` dokumentált állítása ("mean landmark visibility") nem egyezik a tényleges számítással; a `minimumVisibility` mező sosem kerül kiértékelésre; a §6 "visibility-mátrix" acceptance-kritérium valójában nincs tesztelve
 
@@ -72,14 +123,14 @@ függetlenül megerősítve.
 - **Hatás:** ha egy jövőbeli kör (R23 feedback policy) a `confidence`-t priorizáláshoz/elnyomáshoz használná, ez PONT FORDÍTVA viselkedne: a legnagyobb, legmegbízhatóbban mért testtartás-eltéréseket „alacsony bizalmú"-ként, a jelentéktelen eltéréseket „magas bizalmú"-ként jelentené.
 - **Miért MAJOR:** ellentétben egy tisztán biztonsági-kockázati besorolással (ahol a fogyasztó hiánya miatt ez latensnek/MINORnak számítana — ld. a security-review saját, szűkebb „m-2 MINOR" besorolását ugyanerre a jelenségre), ez a kör SAJÁT, explicit §6 checklist-pontjának **csendes, dokumentálatlan** elmulasztása — a `done` jelzés és a §10 handoff „minden acceptance-cella teljesült" narratívát állít, ami erre a pontra nézve NEM igaz.
 - **Javasolt irány (nem patch):** mivel a `PostureObservation` ma nem exportál per-landmark visibility-t (R14 kontraktja, nincs az `allowed_paths`-on, nem módosítható ebben a körben), a reális javítás VAGY (a) a `confidence`/`confidenceFormula` szemantikájának ŐSZINTE átfogalmazása egy ténylegesen elérhető, megbízhatóság-jellegű jelre (pl. konstans, vagy `comparedLandmarkCount`/`requiredPoseLandmarkIds.length` fedettségi arány — NEM drift-alapú), VAGY (b) a brief §6 "visibility-mátrix" kritériumának dokumentált, mért indoklású újraskálázása arra, amit a mai `PostureObservation`-kontraktus ténylegesen mérhetővé tesz (a jelenlét/hiány R8-kapu, ami MÁR helyesen implementált és tesztelt). A választás és a §0.0 dokumentálása az orchestrátor/implementer közös döntése a javító körben.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (orchestrátor §0.0 R9 addendum `6eb713c` + implementer `7c59865`) — (b) irány: a §6 kritérium rescope-olva a meglévő R8 jelenlét/hiány-kapura (dokumentált, mért indoklással); a `confidenceFormula` mező MOST a tényleges számítást írja le, a `minimumVisibility` doc-comment explicit kimondja, hogy nincs kiértékelve.
 
 ### F3 — MINOR — `SafetyClaimGuard.evaluate(code, declaredClass:)` megkerüli a katalógus-tagság ellenőrzést azon az ágon
 
 - **Fájl:** `safety_claim_guard.dart:68` — `declaredClass` megadásakor a katalógus-lookup (és vele a „nem katalogizált kód elutasítva" fail-closed fél) teljesen kimarad, csak a forbidden-class check fut.
 - **Miért MINOR, nem MAJOR:** az EGYETLEN production hívó (`posture_metric_engine.dart:98`) `declaredClass` NÉLKÜL hívja (`evaluate(definition.claimCode)`), tehát a mai adatfolyamban mindkét fail-closed irány érvényesül. A rés egy jövőbeli hívó (R23/R27) számára látens API-csapda.
 - **Javasolt irány:** `declaredClass` megadásakor is követeljük meg `catalog.containsKey(code)`-ot (vagy `@visibleForTesting` jelöléssel zárjuk production-hívásból).
-- **Státusz:** OPEN (follow-up-ként is elfogadható, ha a diffet nem hizlalja érdemben)
+- **Státusz:** FIXED (`7c59865`) — `@visibleForTesting` jelölés; a lexikai réteg (F1) emellett a `declaredClass` ágon is fut, tovább csökkentve a bypass gyakorlati kockázatát.
 
 ### F4 — MINOR — a gate mind a négy önellenőrző futtatása `| tail` mögé volt írva, a brief és a bundled preambulum kifejezett tiltása ellenére
 
@@ -87,7 +138,7 @@ függetlenül megerősítve.
 - **Probléma:** a prompt §6 és a bundled implementer-preambulum is explicit, névre szóló (E02-R07) precedenssel tiltja ezt — a `| tail` elrejti a valódi kilépési kódot és csonkolja a kimenetet. A wrapper gépi ellenőrzése (`gate_shape=VIOLATION`) ezt helyesen jelezte.
 - **Hatás:** a mai esetben NEM okozott hamis „zöld" állítást — a saját, csővezeték nélküli, friss klónban futtatott gate ugyanazt a MINDEN GATE ZÖLD / 331 tesztet adta vissza —, de a fegyelmezetlenség önmagában ismétlődő, névre szóló hibaminta.
 - **Javasolt irány:** nincs kód-javítás; a javító kör promptjában ismételten, explicit módon meg kell erősíteni a szabályt.
-- **Státusz:** OPEN (megjegyzésként a javító körben, nem önálló ok a javításra)
+- **Státusz:** FIXED (viselkedés, nem kód) — a javító kör 13 gate-hívása mind `> fájl 2>&1; echo "EXIT=$?"` mintát követett, csővezeték/csonkítás nélkül.
 
 ### F5 — NOTE — a `VisionSafetyClaimClass` osztálytaxonómia deny-by-exception
 
