@@ -289,11 +289,15 @@ void main() {
 
   group('default vs overridden window size', () {
     test('overriding post shrinks the window and may avoid truncation', () {
-      // Same 130-ms-apart onsets as above, but with post=100 so window 1
-      // ends at 100, which is BEFORE the next onset (130). No truncation.
+      // Same 130-ms-apart onsets as above, but with post=20 so window 0
+      // ends at 20, which is BEFORE the next onset's pre-window start
+      // (130 - pre = 130 - 100 = 30). No truncation — the small `post`
+      // keeps the window above the partition boundary. With the
+      // default post=150 the window would extend to 150 and the cut
+      // would land at 30 (the F1 fix boundary).
       final overrides = const StrokeWindow(
         defaultPre: Duration(milliseconds: 100),
-        defaultPost: Duration(milliseconds: 100),
+        defaultPost: Duration(milliseconds: 20),
       );
       final cuts = overrides.cut(
         frames: const <PickingFrameLike>[],
@@ -303,7 +307,7 @@ void main() {
         ],
       );
       expect(cuts[0].window.truncated, isFalse);
-      expect(cuts[0].window.duration, const Duration(milliseconds: 200));
+      expect(cuts[0].window.duration, const Duration(milliseconds: 120));
     });
 
     test('overriding pre widens the window without violating the post cap', () {
