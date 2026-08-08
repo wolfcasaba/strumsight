@@ -79,7 +79,7 @@ extension VisionSafetyClaimClassBoundary on VisionSafetyClaimClass {
   /// True when the class is in the forbidden short list (brief §5
   /// /1). A claim declared in any of these classes is rejected by
   /// the guard, even if the code is in the catalog.
-  bool get isForbidden => VisionSafetyClaimClass.forbidden.contains(this);
+  bool get isForbidden => VisionSafetyPolicy.forbidden.contains(this);
 }
 
 /// The static catalog of allowed vision claim codes, each mapped to

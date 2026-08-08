@@ -35,11 +35,12 @@ void main() {
     });
 
     test('every allowed class is reachable from the catalog', () {
-      // Belt-and-braces: the catalog must COVER every class we say is
-      // allowed. A class with zero catalog codes is the same as a class
-      // that does not exist.
+      // Belt-and-braces: the catalog must COVER every ALLOWED class
+      // (not the forbidden ones — the brief §5 /1 explicitly forbids
+      // them, so they MUST NOT appear in the catalog).
       final usedClasses = VisionSafetyPolicy.catalog.values.toSet();
       for (final cls in VisionSafetyClaimClass.values) {
+        if (cls.isForbidden) continue;
         expect(
           usedClasses.contains(cls),
           isTrue,
@@ -126,7 +127,7 @@ void main() {
     test('no catalog code is declared in a forbidden class', () {
       for (final entry in VisionSafetyPolicy.catalog.entries) {
         expect(
-          VisionSafetyClaimClass.forbidden.contains(entry.value),
+          VisionSafetyPolicy.forbidden.contains(entry.value),
           isFalse,
           reason: 'catalog code "${entry.key}" declares forbidden class '
               '"${entry.value.name}"',
