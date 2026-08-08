@@ -289,7 +289,7 @@ dokumentált brief-revízió.
   (`frameCount`, framing, lighting, blur, stability, roiCoverage, overall,
   setupCue), `calibrationState`, insightonként `code`, `policyVersion`,
   csak `evidenceIds`, `confidence`, `priority`, `direction`, `capability`,
-  valamint a manifestből a mentéskor kiolvasott `modelVersions`
+  valamint a mentés hívója által explicit átadott `modelVersions`
   (`modelId → version`) és `observedFrameCount`. Nincs kép, URI, pixel, koordináta vagy
   landmark-idősor. A shape-verzió dispatch future version esetén
   `unknownEnum`-mal fail-loud.
@@ -309,9 +309,17 @@ dokumentált brief-revízió.
   key-scope listával, sessionenkénti törléssel, exporttal és confirmált
   delete-all-lal. Route/settings wiring szándékosan nincs ebben a körben.
 - Tesztek: byte-stabil round-trip és visszaolvasott `modelVersions` map,
-  future-version skip, manifest-hiba előtti írásmentesség, record-hiba melletti
+  future-version skip, explicit hívó-provenance, record-hiba melletti
   olvashatóság, nyers-store delete-mátrix, store/export privacy snapshot,
   confirm-dialog és Vision route → session persistence → export network-spy.
+
+### F2 javítás (Terra)
+
+- **B irány:** `VisionSessionRepository.save()` kötelező, explicit
+  `modelVersions` mapet kap. A repositoryból kikerült a
+  `VisionModelManifestReader` és minden fájlrendszeres alapértelmezés, ezért
+  nem kísérelhet meg eszközön projekt-relatív asset-feloldást. A jövőbeli
+  hívó a saját runtime-környezetében oldja fel és adja át a provenance-t.
 
 ### Futtatott ellenőrzések
 
@@ -330,12 +338,10 @@ dokumentált brief-revízió.
 
 ### Eltérések és nem futtatott ellenőrzések
 
-- A manifestből mentéskor kiolvasott, érvényes bejegyzések teljes
-  `modelId → version` mapje kerül a rekordba: a map megőrzi a modellazonosítót
-  akkor is, ha egy session több modellt használ. Hibás, üres vagy nem olvasható
-  manifest esetén a mentés írás nélkül hibázik; modellverzió nélküli rekord nem
-  készül. Valódi korábbi session-shape nem létezik, ezért nincs kitalált legacy
-  migráció.
+- A mentés hívója kötelezően adja át a teljes `modelId → version` mapet; a map
+  megőrzi a modellazonosítót akkor is, ha egy session több modellt használ. A
+  storage-only repository nem olvas manifestet vagy assetet. Valódi korábbi
+  session-shape nem létezik, ezért nincs kitalált legacy migráció.
 - CI-dispatch, PR és merge nem implementer-feladat; nem futtatva.
 
 ## 11. Review — a független reviewer tölti ki

@@ -13,7 +13,10 @@ void main() {
     (tester) async {
       final store = InMemoryKeyValueStore();
       final repository = VisionSessionRepository(store: store);
-      await repository.save(_result());
+      await repository.save(
+        _result(),
+        modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+      );
       store.writeLog.clear();
 
       await tester.pumpWidget(

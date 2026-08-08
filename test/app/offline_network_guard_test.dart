@@ -294,7 +294,10 @@ void main() {
 
     final store = harness.container.read(keyValueStoreProvider);
     final repository = VisionSessionRepository(store: store);
-    await repository.save(_offlineVisionResult());
+    await repository.save(
+      _offlineVisionResult(),
+      modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+    );
     final export =
         jsonDecode(VisionExport(store: store).exportJson())
             as Map<String, dynamic>;

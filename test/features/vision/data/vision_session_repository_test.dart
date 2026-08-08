@@ -27,12 +27,8 @@ void main() {
         );
 
         final store = InMemoryKeyValueStore();
-        final repository = VisionSessionRepository(
-          store: store,
-          codec: codec,
-          manifestReader: _ManifestReader(modelVersions),
-        );
-        await repository.save(_result('one'));
+        final repository = VisionSessionRepository(store: store, codec: codec);
+        await repository.save(_result('one'), modelVersions: modelVersions);
 
         final restored = repository.list().single;
         expect(restored.sessionId, 'one');
@@ -94,20 +90,18 @@ void main() {
     );
 
     test(
-      'an unreadable manifest fails before a history record is written',
+      'save persists the caller-supplied model versions without a reader',
       () async {
         final store = InMemoryKeyValueStore();
-        final repository = VisionSessionRepository(
-          store: store,
-          manifestReader: const _UnreadableManifestReader(),
+        final repository = VisionSessionRepository(store: store);
+        const modelVersions = <String, String>{'hand_landmarker': '1.2.3'};
+
+        await repository.save(
+          _result('attributed'),
+          modelVersions: modelVersions,
         );
 
-        await expectLater(
-          repository.save(_result('unattributed')),
-          throwsStateError,
-        );
-
-        expect(store.readString(StorageKeys.visionSessionHistory), isNull);
+        expect(repository.list().single.modelVersions, modelVersions);
       },
     );
 
@@ -116,8 +110,14 @@ void main() {
       () async {
         final store = InMemoryKeyValueStore();
         final repository = VisionSessionRepository(store: store);
-        await repository.save(_result('delete-me'));
-        await repository.save(_result('keep-me'));
+        await repository.save(
+          _result('delete-me'),
+          modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+        );
+        await repository.save(
+          _result('keep-me'),
+          modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+        );
 
         await repository.deleteSession('delete-me');
 
@@ -194,40 +194,3 @@ VisionSessionResult _result(String id) => VisionSessionResult(
   ],
   observedFrameCount: 12,
 );
-
-final class _ManifestReader implements VisionModelManifestReader {
-  const _ManifestReader(this._versions);
-
-  final Map<String, String> _versions;
-
-  @override
-  Future<VisionModelManifestReport> read() async => VisionModelManifestReport(
-    entries: <VisionModelEntry>[
-      for (final entry in _versions.entries)
-        VisionModelEntry(
-          modelId: entry.key,
-          version: entry.value,
-          path: 'assets/ml/${entry.key}.tflite',
-          sha256: '0' * 64,
-          status: VisionModelStatus.active,
-          inputShape: const <int>[1, 1, 1],
-          outputSchema: handLandmarksOutputSchema,
-          licenseSpdx: 'Apache-2.0',
-          licenseName: 'Apache License 2.0',
-          minimumDeviceTier: 'low',
-          evaluationReport: 'test',
-        ),
-    ],
-    issues: const <String>[],
-  );
-}
-
-final class _UnreadableManifestReader implements VisionModelManifestReader {
-  const _UnreadableManifestReader();
-
-  @override
-  Future<VisionModelManifestReport> read() async => VisionModelManifestReport(
-    entries: const <VisionModelEntry>[],
-    issues: const <String>['manifest unavailable'],
-  );
-}
