@@ -1,23 +1,36 @@
 # E05-R28 — Review
 
 Brief: docs/rounds/e05-r28-vision-persistence-privacy-and-deletion.md
-Diff: `git diff 1bbcc97..ee154cc` (`origin/main` pre-flight tip → round tip;
-javító kör #1 után: `ee154cc..bd938a3`),
+Diff: `git diff 1bbcc97..1f769a4` (`origin/main` pre-flight tip → végleges round
+tip; javító kör #1: `ee154cc..bd938a3`; javító kör #2: `bd938a3..1f769a4`),
 equivalently `git diff origin/main...codex/e05-r28-vision-persistence-privacy-and-deletion`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-08
-Verdikt: CHANGES REQUESTED (F1 zárva, **F2 MAJOR nyitva** — javító kör #2 dispatch-elve)
+Verdikt: **APPROVED** (F1 + F2 zárva, 2 javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 nyitva (F2) + 1 zárva (F1) · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 nyitva (2 zárva: F1, F2) · MINOR: 0 · NOTE: 1
 
-**Frissítés (javító kör #1 UTÁN, saját independens re-review):** F1 tartalmi
-javítása helyes és teljes (lásd F1 lezárása lent), DE a javítás módja egy ÚJ,
-súlyosabb hibát vezetett be — lásd **F2** —, amit a reviewer saját, a kódot
-a Flutter asset-rendszer és a testvér-osztályok (`NativeHandLandmarkProvider`/
-`NativePoseLandmarkProvider`) ellen mérő vizsgálattal talált, NEM a gate
-pirosából (a gate zöld maradt, mert a teszt-környezet véletlenül elfedi a
-hibát — ld. F2 „Gyökérok").
+**Végső frissítés (javító kör #2 UTÁN, saját independens re-review):** F2
+javítása (`1f769a4`) helyes és teljes — a `VisionModelManifestReader`/
+`dart:io` függőség TELJESEN kikerült a `vision_session_repository.dart`-ból
+(`grep -rn "FileVisionModelManifestReader|dart:io|VisionModelManifestReader"
+lib/features/vision/data/persistence/` → 0 találat), a `save()` most
+kötelező, explicit `Map<String, String> modelVersions` paramétert vár —
+fordítás-idejű garancia, nem futásidejű teszt, hogy egy jövőbeli hívó nem
+felejtheti el. Friss, izolált `/tmp` klónban (`/tmp/review-e05-r28-v2`)
+teljes gate újra lefuttatva zöld, és egy ÚJ adversarial próba (a
+`modelVersions` mező kivétele az encode-ból → piros → visszaállítva)
+megerősítette, hogy a mező load-bearing, nem díszítő. Lásd F1/F2 lezárása
+lent.
+
+**Frissítés (javító kör #1 UTÁN, javító kör #2 ELŐTT — történeti, már
+lezárva):** F1 tartalmi javítása helyes és teljes volt, DE a javítás módja
+egy ÚJ, súlyosabb hibát vezetett be — lásd **F2** —, amit a reviewer saját, a
+kódot a Flutter asset-rendszer és a testvér-osztályok
+(`NativeHandLandmarkProvider`/`NativePoseLandmarkProvider`) ellen mérő
+vizsgálattal talált, NEM a gate pirosából (a gate zöld maradt, mert a
+teszt-környezet véletlenül elfedi a hibát — ld. F2 „Gyökérok").
 
 **Frissítés (javító kör #1 előtt):** a dedikált security-review (risk=high,
 `docs/reviews/e05-r28-vision-persistence-privacy-and-deletion-security.md`)
@@ -84,7 +97,18 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
   Either way: update the one existing test call site that currently relies on the implicit default without injecting a fake reader —
   `test/features/settings/vision_privacy_screen_test.dart:16` (`await repository.save(_result());` via a bare `VisionSessionRepository(store: store)`) — so it keeps compiling/passing for the RIGHT reason, not by coincidence.
 - **Ellenőrzés:** grep the final diff for `FileVisionModelManifestReader(` with zero arguments used as a *default value* anywhere reachable without an explicit override — there should be none. `flutter analyze` must show no unused-import warning on `dart:io`/`vision_model_manifest.dart` if direction 2 is taken (the import should be removed from the repository file entirely). All four vision persistence test files green.
-- **Státusz:** OPEN — javító kör #2-ben dispatch-elve.
+- **Státusz:** **FIXED** (`1f769a4`, javító kör #2, B irány) — a
+  `VisionSessionRepository`-ból teljesen kikerült a `VisionModelManifestReader`/
+  `dart:io` függőség; `save()` most `required Map<String, String> modelVersions`
+  paramétert vár (ugyanaz a minta, mint a `VisionSessionCodec.fromResult()`
+  már eddig is használt). A két meglévő hívó-teszt
+  (`test/app/offline_network_guard_test.dart`,
+  `test/features/settings/vision_privacy_screen_test.dart`) frissítve, hogy
+  explicit map-et adjon át — egyik sem támaszkodik többé egy hallgatólagos
+  alapértelmezésre. Reviewer saját ellenőrzése: `grep` 0 találat a tiltott
+  szimbólumokra a persistence-rétegben; friss `/tmp` klónban teljes gate zöld;
+  adversarial próba (a `modelVersions` mező kivétele az encode-ból) piros lett,
+  majd visszaállítva.
 
 ### N1 — NOTE — Cross-feature import goes through the wide `vision/public.dart` barrel, not the narrow `domain/integration/public.dart` one
 
@@ -96,33 +120,40 @@ Engedélyezett fájlokon kívüli változás: **nincs.**
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Állított eredmény (implementer §10) | Ellenőrizve (reviewer, saját futtatás izolált `/tmp` klónban) |
+| Gate | Állított eredmény (implementer §10, javító kör #2 után) | Ellenőrizve (reviewer, saját futtatás izolált `/tmp` klónban, `1f769a4`) |
 |---|---|---|
 | format | zöld | ✅ zöld |
 | analyze | zöld, 0 issue | ✅ zöld |
-| test test/features/vision | zöld | ✅ zöld (after excluding the reviewer's own transient mutation-probe collision — see below) |
-| test test/features/settings | zöld | ✅ zöld |
+| test test/features/vision | zöld, 7 teszt | ✅ zöld |
+| test test/features/settings | zöld, 1 teszt | ✅ zöld |
 | test test/app/offline_network_guard_test.dart | zöld, 4 teszt | ✅ zöld |
 | architecture | (part of round-gate) | ✅ zöld |
 | secrets | (part of round-gate) | ✅ zöld |
 | l10n | (part of round-gate) | ✅ zöld |
-| Full Gate (no APK) | dispatch-elve az orchestrátor által | ✅ zöld — [31274920630](https://github.com/wolfcasaba/strumsight/actions/runs/31274920630), **de a branch tip azóta `ee154cc`→`bd938a3`→(javító kör #2 után egy új SHA)-ra mozdult — ÚJRA KELL dispatch-elni a merge előtt (ADR 0086 §2)** |
-| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | ✅ zöld — [31274905440](https://github.com/wolfcasaba/strumsight/actions/runs/31274905440), **ugyanaz a SHA-elcsúszási megjegyzés érvényes — újra kell dispatch-elni** |
+| Full Gate (no APK) | dispatch-elve az orchestrátor által | pending — dispatch a végleges `1f769a4` tipen |
+| Router CI | dispatch-elve az orchestrátor által (`docs/rounds/**` diff miatt kötelező) | pending — dispatch a végleges `1f769a4` tipen |
 
-**Módszertani jegyzet a gate-újrafuttatásról:** az első saját gate-futtatás
-közben a reviewer PÁRHUZAMOSAN, UGYANABBAN a klónban végezte az AC #2/#3
+**Módszertani jegyzet a gate-újrafuttatásokról:** az F1 utáni első saját
+gate-futtatás közben a reviewer PÁRHUZAMOSAN, UGYANABBAN a klónban végezte az
 adversarial próbáit, ami egy valódi (de a reviewer saját ideiglenes
 mutációjából eredő, nem az implementer kódjából eredő) piros találatot
-okozott a `test/features/vision` lépésben. A klón tisztaságát (`git status
---short` üres) megerősítve a gate-et TELJESEN ÚJRA, a próbák befejezése UTÁN,
-érintetlen fán futtattam — ez adta a fenti, végleges "minden gate zöld"
-eredményt (`/tmp/review-e05-r28-gate.log`, „═══ Gate-összegzés" blokk).
+okozott — a klón tisztaságát megerősítve a gate-et TELJESEN ÚJRA, érintetlen
+fán futtattam. Az F2 utáni végső ellenőrzésnél ezt a hibát elkerülve a
+próbákat SZEKVENCIÁLISAN, a gate teljes befejezése UTÁN végeztem, egy
+teljesen friss klónban (`/tmp/review-e05-r28-v2`) — a fenti eredmény ebből
+származik (`/tmp/review-e05-r28-v2-gate.log`, „═══ Gate-összegzés" blokk).
 
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-F1 lezárva javító kör #1-ben, de a reviewer saját, független re-vizsgálata a
-javítás WIRING-jában egy ÚJ MAJOR-t (F2) talált — **merge jelenleg TILOS**.
+F1 ÉS F2 lezárva (2 javító kör), 0 nyitott BLOCKER/MAJOR, helyi gate zöld friss
+`/tmp` klónban a végleges `1f769a4` tipen. **Hátralévő, e review hatáskörén
+kívüli lépés:** Full Gate + Router CI újra-dispatch a `1f769a4` SHA-n (az
+orchesztrátor dolga, nem a reviewer-é) — ezek zöldje után a merge mehet, külön
+jóváhagyás nélkül.
+
+_(Az alábbi, most már elavult megjegyzés a javító kör #2 dispatch-elése
+ELŐTTI állapotot rögzítette, megőrizve a döntési nyomvonal olvashatóságáért:)_
 Javító kör #2 dispatch-elve F2 leletlistával; a review ezután frissül
 (APPROVED vagy ismételt CHANGES REQUESTED), és mind a helyi gate-et, mind a
 Full Gate / Router CI workflow-kat újra kell futtatni a javító kör #2
