@@ -293,7 +293,59 @@ helyett dokumentált brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Implementáció
+
+- `lib/features/vision/domain/integration/vision_practice_contract.dart` —
+  `VisionPracticeContract` és a három, `vision.pilot.*` azonosítójú pilot;
+  a `requiredCapabilities` pontos alakja `VisionPracticeCapabilities`, amely
+  külön `Set<FrettingCapability>`, `Set<PickingCapability>` és
+  `Set<PostureCapability>` mezőkben tartja meg a meglévő Vision-enumokat.
+  A `VisionPracticeContracts.pilots` nem érinti a `BuiltinPracticeCatalog`-ot.
+- `lib/features/practice/data/vision/practice_vision_adapter.dart` — a
+  capability-hiány mindig elérhető, `audioOnly` gyakorlatot ad; egyébként a
+  `visionPracticeQualityFor(session)` eredményét használja, és csak `good`
+  állapotban választ `audioAndVision` módot.
+- `lib/features/practice/domain/model/practice_session_result.dart` —
+  additív, implicit-null `VisionSessionResult? vision` mező; az
+  `operator==` és a `hashCode` a meglévő Vision-session identitás-szemantikát
+  delegálja. Audio mező vagy történeti mapper nem változott.
+- `lib/features/practice/presentation/widgets/practice_vision_dimension.dart`
+  — önálló summary-widget: `unavailable` esetén nincs dimenzió,
+  `degraded` részleges megfigyelés + kamera-igazítási magyarázat, `good`
+  teljes megfigyelés. A `practice_result_screen.dart` érintetlen.
+- `lib/features/practice/public.dart`, `lib/features/vision/public.dart` és
+  az angol/magyar ARB-k — kizárólag additív exportok és lokalizált szövegek.
+- A három új teszt a determinisztikus `VisionQualitySummary.overall`
+  leképezést, a capability-gate audio-only fallbackjét, a null-vision
+  egyenlőségi kompatibilitását, a history-mapper/audio-paritást és a widget
+  három állapotát fedi le.
+
+### Valódi-sértés próba
+
+„a doubled `scorePoints` próba helyesen pirosra fordította a parity fixture-t,
+majd visszaálltál”
+
+### Futtatott ellenőrzések
+
+- `git status --short` — pontosan a folytatási promptban felsorolt 11
+  engedélyezett módosítás; listán kívüli fájl nincs.
+- `git diff --check` — kilépési kód 0, kimenet nélkül.
+- `tools/round-gate.sh test/features/practice test/features/vision` — első
+  futás: a `format` zöld, az `analyze` 2 unused-import figyelmeztetéssel
+  piros volt; a scope-on belüli importok eltávolítása után a teljes gate újra
+  futott és kilépési kód 0-val zárult:
+  - `format`: `Formatted 1178 files (0 changed)`;
+  - `analyze`: `No issues found!`;
+  - `test test/features/practice`: `All tests passed!`;
+  - `test test/features/vision`: `All tests passed!`;
+  - `architecture`: `Architecture dependencies OK (12 allowlisted deviation(s)).`;
+  - `secrets`: `Secret scan OK (2024 file(s) scanned, 0 finding(s)).`;
+  - `l10n`: `L10n parity OK (en → hu, 1001 message(s)).`.
+
+### Eltérés a brieftől
+
+Nincs tartalmi eltérés. A két nem használt import eltávolítása a gate által
+jelzett, scope-on belüli statikus ellenőrzési javítás volt.
 
 ## 11. Review — a független reviewer tölti ki
 

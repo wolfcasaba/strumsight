@@ -1276,5 +1276,9 @@
   "visionSessionGuitarQuality": "Gitár",
   "visionSessionQualityGood": "Követve",
   "visionSessionQualityAdjust": "Igazítás",
-  "visionSessionQualityUnavailable": "Nem elérhető"
+  "visionSessionQualityUnavailable": "Nem elérhető",
+  "practiceVisionDimensionTitle": "Vizuális technika",
+  "practiceVisionDimensionGood": "A vizuális megfigyelés teljes.",
+  "practiceVisionDimensionDegraded": "Részleges vizuális megfigyelés. A teljes visszajelzéshez igazítsd a kamera beállítását.",
+  "practiceVisionDimensionUnavailable": "A vizuális megfigyelés nem volt elérhető. A hangalapú gyakorlás változatlan."
 }

@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:strumsight/features/vision/public.dart';
 
 import 'practice_attempt_result.dart';
 import 'practice_metrics.dart';
@@ -44,6 +45,7 @@ final class PracticeSessionResult {
     required this.finishReason,
     required this.highestStableTempo,
     required this.coachingSummary,
+    this.vision,
   });
 
   final String id;
@@ -59,6 +61,9 @@ final class PracticeSessionResult {
 
   /// Read-only canonical coaching codes summarizing the session.
   final List<String> coachingSummary;
+
+  /// Optional raw-media-free Vision evidence, separate from audio scores.
+  final VisionSessionResult? vision;
 
   /// The attempt with the greatest index, or null when there are no attempts.
   PracticeAttemptResult? get finalAttempt {
@@ -161,7 +166,8 @@ final class PracticeSessionResult {
           listEquals(other.attempts, attempts) &&
           other.finishReason == finishReason &&
           other.highestStableTempo == highestStableTempo &&
-          listEquals(other.coachingSummary, coachingSummary);
+          listEquals(other.coachingSummary, coachingSummary) &&
+          other.vision == vision;
 
   @override
   int get hashCode => Object.hash(
@@ -172,5 +178,6 @@ final class PracticeSessionResult {
     finishReason,
     highestStableTempo,
     listHash(coachingSummary),
+    vision,
   );
 }
