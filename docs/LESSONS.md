@@ -6702,3 +6702,104 @@ E05-R26 review-kban) — egy re-exportált „biztonságos" fájl saját publiku
 mezői is hordozhatnak tiltott típust; ezt csak a teljes gráf végigolvasásával
 (vagy egy jövőbeli, dedikált körben a checker tranzitív bővítésével) lehet
 kizárni.
+
+## L194 — A batch-brief stale-ADR-hivatkozás mintája ötödször mérve: a pipeline-prompt saját „nincs" táblája a helyes válasz, ne a brief fejléce (E05-R27, ADR 0194, 2026-08-08)
+
+**Mit mértünk.** Az E05-R27 brief (2026-08-05, batch-írás) fejléce „Nincs ÚJ
+ADR (0161/0162 + 0141 bővítése)"-t írt elő — de `ls docs/adr | grep -E
+'^01(61|62)'` **0 találatot** adott: a „0161" és „0162" sosem lettek fájlok.
+Ez a batch-brief-írás és a tényleges végrehajtás közé eső köztes körök
+(itt: R21–R26, kilenc új ADR) miatti számelavulás immár **ötödször** mért
+esete ugyanazon az epicen: 0170→0189 (E05-R21, [[L191]]-hez kapcsolódó
+kontextus), „0162"→0190 (E05-R22), „ADR 0165"→0182 (E05-R25/R26, [[L193]]).
+A pipeline-prompt §0 saját táblája ugyanakkor MINDEN esetben helyesen
+`nincs`-et adott át ADR-mezőként, „te írod meg a pre-flightban" kitétellel —
+a driver-szintű állapot tehát a hiteles forrás, nem a brief 5 nappal
+korábban írt fejléce.
+
+**Miért ismétlődik.** A batch-brief-írás (Claude, egy ülésben sok jövőbeli
+kör briefjét írja meg) a pillanatnyi `docs/adr/` legmagasabb sorszámából
+extrapolál egy jövőbeli ADR-számot minden olyan körre, ami majd ADR-t fog
+igényelni. Mivel a köztes körök (amik a batch-írás UTÁN, de a kérdéses kör
+ELŐTT futnak le) is foglalnak ADR-számokat, a batch-írás idején extrapolált
+szám a végrehajtás időpontjára szinte garantáltan elavul — ez nem egyszeri
+hiba, hanem a batch-write-then-sequential-execute modell strukturális
+következménye, tehát MINDEN jövőbeli batch-írt brief ADR-hivatkozását
+gyanúsnak kell tekinteni, nem kivételnek.
+
+**Hogyan alkalmazd.** Ne a brief fejlécének „Nincs ÚJ ADR" állítását vedd
+készpénznek — mindig `ls docs/adr | grep`-eld ki a brief által hivatkozott
+konkrét számokat a pre-flightban (pipeline-prompt §1, 1. mérési szabály
+kiterjesztése ADR-hivatkozásokra is). Ha a hivatkozott szám nem létezik: a
+pipeline-prompt driver-táblájának `nincs`/„te írod meg" utasítása az
+irányadó, függetlenül attól, mit mond a brief fejléce — foglalj számot
+(`tools/round-slots.py reserve-adr`) és írd meg az ADR-t, dokumentálva a
+brief §0.0-jában a pontos elavulási mintát (melyik szám, honnan, miért).
+
+## L195 — Egy additív enum-érték production-semlegessége nem elég, ha csak a deklaráló típust nézzük — a FOGYASZTÓ oldal (itt: egy Tutor-facing tool-végrehajtási út) is végigkövetendő (E05-R27, ADR 0194, 2026-08-08)
+
+**Mit mértünk.** Az E05-R27 egy új `TutorContextFieldKey.vision` (és
+`ContextSourceFeature.vision`) enum-értéket adott a meglévő
+`tutor_context_snapshot.dart`-hoz, KIZÁRÓLAG additív módon. A biztonsági
+érvelés első lépése („egyetlen `ContextPurpose.allowedFields` sem
+engedélyezi még a mezőt, tehát a `TutorContextAssembler` mindig kihagyja")
+IGAZ, de ÖNMAGÁBAN NEM ELÉG bizonyíték a „production viselkedés bitre
+változatlan" állításhoz — mert a Tutor egy MÁSIK, a snapshot-típustól
+független útvonalon (`read_only_tutor_tools.dart`, a
+`getContextField(field: String)` LLM-hívható tool) is FOGYASZTJA az enumot:
+`TutorContextFieldKey.values.where((key) => key.name == fieldName)`. Az
+orchesztrátor ÉS a dedikált security-review egymástól függetlenül
+végigkövette ezt a MÁSODIK utat is: a `field: "vision"` hívás a diff előtt
+az ELSŐ (enum-lookup) lépésnél bukott el, utána a MÁSODIK (snapshot-mező
+jelenlét) lépésnél — de a kívülről megfigyelhető kimenet (egy üres,
+`const` `TutorToolInputException`) mindkét esetben bitre azonos, tehát
+tényleg nincs regresszió, de ezt csak a MÁSODIK út explicit végigkövetése
+bizonyította, nem az első.
+
+**Miért fontos.** Egy zárt enum minden ÉRTÉKÉT potenciálisan több,
+egymástól független kódágban FOGYASZTJÁK (itt: a redaktált-snapshot-építő
+lánc ÉS egy LLM-hívható tool-végrehajtó). Egy „csak additív, tehát biztonságos"
+érvelés, ami csak az ELSŐ (legkézenfekvőbb, leginkább dokumentált) fogyasztó
+oldalt nézi végig, hamis biztonságérzetet adhat — különösen egy olyan
+körben, ahol a MÁSIK fogyasztó egy KÜLSŐ, nem-determinisztikus szereplő
+(egy LLM) által hívható felület.
+
+**Hogyan alkalmazd.** Mielőtt egy „additív, tehát nulla production-hatású"
+állítást leírsz egy megosztott enum bővítéséről, `grep`-eld ki az enum
+MINDEN felhasználási helyét (`EnumType.values`, `EnumType.name ==`, exhaustive
+`switch`), ne csak a deklaráló típust és a legnyilvánvalóbb fogyasztót.
+Kockázat=high körben ezt a review-nak (és lehetőleg egy MÁSODIK, független
+módszerrel is, ahogy itt a security-review megtette) kötelezően meg kell
+ismételnie, nem elég a pre-flight saját állítására hagyatkozni.
+
+## L196 — Egy önálló, „azonos alakú" biztonsági küszöb minden meglévő, rokon küszöbbel szemben validálandó, nem csak a saját katalógusán belül konzisztens (E05-R27, ADR 0194, 2026-08-08)
+
+**Mit mértünk.** Az E05-R27 `VisionClaimGuard`-ja egy ÚJ, önálló, a meglévő
+`FeedbackPolicy`-val „azonos alakú" (fail-closed, confidence-küszöb-alapú)
+kaput vezetett be, de EGYETLEN, iránytól független 0.70-es küszöbbel. A
+dedikált security-review (majd a saját kereszt-ellenőrzésem) feltárta, hogy
+a szállított, LEZÁRT `FeedbackPolicies` (E05-R23) katalógus a HÁROM
+negatív-irányú (korrekciós, „Focus") kódra MÁR 0.85-ös küszöböt ír elő — a
+guard saját katalógusán BELÜL semmilyen teszt nem bukott (a 6-cellás mátrix
+belsőleg konzisztens volt), a divergencia csak egy MÁSIK, MEGLÉVŐ fájllal
+(`feedback_policy.dart`) való kereszthivatkozással vált láthatóvá.
+
+**Miért nem kapta el a pre-flight előre.** A pre-flight (§5.1 „Mért
+alaptípusok" tábla) helyesen azonosította, hogy a `VisionClaimGuard`-nak a
+`FeedbackPolicy` ALAKJÁT kell követnie („AZONOS ALAKÚ... saját küszöbbel"),
+de nem írta elő explicit, hogy a KONKRÉT SZÁMÉRTÉKEKET (nem csak a
+mechanizmust) is validálni kell a meglévő, lezárt policy-hoz képest — az
+implementer így egy plauzibilis, de a termék egy MÁSIK, már döntött
+szemantikájával ütköző egyetlen küszöböt választott.
+
+**Hogyan alkalmazd.** Amikor egy kör egy ÚJ, „X mintáját követő, de önálló"
+biztonsági/policy-kaput vezet be, a brief/pre-flight ne csak a mechanizmus
+(shape) egyezését írja elő, hanem SOROLJA FEL explicit, mely KONKRÉT
+számértékeket (küszöb, timeout, limit) kell a meglévő X-hez validálni —
+vagy dokumentálja explicit, MIÉRT térhet el tudatosan. A review-nak
+kötelezően grep-elnie kell minden hasonló nevű/szerepű MEGLÉVŐ konstanst
+(itt: `grep -rn "onfidenceThreshold" lib/features/vision/`) és
+összevetnie az ÚJ kapu értékeivel — egy önmagában konzisztens, de a
+termék más részével divergáló küszöb pontosan azt a fajta „gyenge
+confidence biztos állításként" hibát kockáztatja, amit a kör saját célja
+(AGENTS.md §5 határ 5) tilt.
