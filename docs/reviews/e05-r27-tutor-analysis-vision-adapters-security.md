@@ -4,7 +4,8 @@
 - **Diff:** `7570416..6ba827c` (14 fájl, +642/−1)
 - **Reviewer:** `security-reviewer` ágens (READ-ONLY, AGENTS.md §15.1 — kötelező, `risk=high`)
 - **Referencia-kontraktus:** `docs/rounds/e05-r27-tutor-analysis-vision-adapters.md`, `docs/adr/0194-tutor-analysis-vision-evidence-adapters.md`, AGENTS.md §5 / §5.1
-- **Verdikt:** **PASS — nincs CRITICAL, nincs BLOCKER, nincs MAJOR.** 3 × MINOR (mind LATENS: nulla éles hívó, mindkét feature-flag `false`), 4 × NOTE. A biztonsági oldal a merge-et **nem blokkolja**. Az orchesztrátor a 3 MINOR-t egy javító körben zárja a merge előtt (a fő review-jelentés, `e05-r27-tutor-analysis-vision-adapters-review.md`, dönt a pontos hatályról).
+- **Verdikt:** **PASS — nincs CRITICAL, nincs BLOCKER, nincs MAJOR.** 3 × MINOR (mind LATENS: nulla éles hívó, mindkét feature-flag `false`), 4 × NOTE. A biztonsági oldal a merge-et **nem blokkolja**.
+- **UPDATE (2026-08-08, javító kör #1 után, `101b855`):** mindhárom MINOR FIXED — irányfüggő 0.85-ös küszöb a negatív `*Focus` kódokra (MINOR-1), `sessionId` típusosítva `VisionSessionId`-ként (MINOR-2), network-spy teszt a Tutor-adapterre (MINOR-3). Részletek és független ellenőrzés: `e05-r27-tutor-analysis-vision-adapters-review.md` §„Javító kör #1 ellenőrzése". A 4 NOTE változatlanul nyitott follow-up marad (nem blokkoló).
 
 ## Osztályozás
 
