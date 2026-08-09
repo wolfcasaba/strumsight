@@ -6,6 +6,67 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E99-R03 (GOV-05c) — Learn migráció a Practice Engine V2-re, teljes részletes történet (2026-08-09)
+
+**E99-R03 / GOV-05c MERGED — Learn migráció a Practice Engine V2-re:** a §6
+„Kötelező sorrend" 3. pontjának HARMADIK, utolsó darabja. A Learn eddig
+minden környezetben a **legacy** motoron futott — ez a kör átállította
+`production`-ön kívül a Practice Engine V2-re, egyetlen flag-sorral.
+
+**A pre-flight MÉRTE a sugarat, nem becsülte.** Egy `/tmp` próba-klónban a
+flaget `nonProd`-ra billentve, az L203 szerinti KÉT réteg unióját futtatva
+(a flag 4 hívója + a `LearnScreen` mind a 14 teszt-pumpolója, öt
+könyvtárban): `test/features/learn`+`test/app` **260-ból 4 bukás** (1
+skip), `test/core`+`test/features/live`+`test/features/songs`
+**610/610 zöld** — és mind a négy bukás flag-kikötő állítás volt, nulla
+viselkedési regresszió. Ez lett a kör mérce-mátrixa is: a 13 nem-kikötött
+Learn-képernyő-teszt zöld maradása gépi bizonyíték, nem bemondás.
+
+**Változás:** `migratedLearnEnabled: false` → **`nonProd`** (`development`/
+`lab` ON, **`production` OFF**) — ugyanaz az alak, mint a
+`practiceEngineV2Enabled`/`songTrainerV2Enabled`. A default konstruktor
+változatlanul `false`. **Zéró UI-változás** (ADR 0198 Döntés 4): a Learn
+képernyő öt meglévő elágazása (187/253/303/313/326. sor) vált élessé —
+ugyanaz a Learn, más motorral. Mind a négy meglévő őr
+(`app_config_test.dart` rollout-tábla, `feature_flags_test.dart` A1,
+`learn_migration_parity_test.dart` A7, `learn_rollback_test.dart` A8) a
+production-határra **átirányítva**, egyik sem törölve; az A7 teszt neve és
+mérése (eddig `development`-et mért „production default" néven) most már
+egyezik. Új `AppConfig.resolve` „problems-mentes mindhárom környezetben"
+állítás (A5). A device-mátrix §2.3 migrated-Learn szakasza PENDING
+készülékes cellákra frissült.
+
+**ADR [0198](adr/0198-learn-migration-rollout-boundary.md)** (az
+orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** — **1
+forduló, javító kör nélkül**: a gate elsőre zöld lett, mert a pre-flight
+mérése pontosan a szállított módosítás alakját írta le. PR
+[#206](https://github.com/wolfcasaba/strumsight/pull/206), squash
+`0e9d211c`.
+
+**Review:** [reviews/e99-r03-gov-05c-learn-migration-rollout-review.md](reviews/e99-r03-gov-05c-learn-migration-rollout-review.md)
+— **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 1 NOTE (időzítési megfigyelés). A
+reviewer SAJÁT, izolált `/tmp` klónban futtatta újra a teljes kijelölt
+gate-et (10/10 zöld) ÉS SAJÁT valódi-sértés próbát: a factoryban
+`migratedLearnEnabled: true`-ra rontva **kizárólag** az A1 production-cella
+bukott (10 másik teszt zöld maradt), majd visszaállítva a fa újra tiszta —
+az implementer önjelentésétől függetlenül reprodukálva. A **dedikált
+security-review** ([reviews/e99-r03-gov-05c-learn-migration-rollout-security.md](reviews/e99-r03-gov-05c-learn-migration-rollout-security.md),
+kötelező: `risk = "high"`) — **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**: az
+egyetlen élessé váló perzisztens sink (`practiceLogProvider`) már ma is élő
+testvér-flageken át fut, azonos `PracticeEntry` alakkal (nincs PII/nyers
+audio), a hálózat-consent felület (`usesNetwork`) bizonyítottan független a
+flagtől, és a V2 út a mikrofont **korábban** engedi el pause/finish előtt
+(pozitív megfigyelés). 2 forward-looking NOTE.
+
+**Zöld kapu (exact-SHA `87ca3f54`, a review-commit utáni tip):** Build APK
+[31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
+**success**; Router CI
+[31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
+**success** (kézzel dispatch-elve, mert a review-commit `docs/reviews/**`
+útvonala nem router-ci trigger-útvonal). A merge előtt ellenőrizve: az
+`origin/main` a dispatch óta nem mozdult (`69ecc661` mindvégig), rebase nem
+kellett (H8 tiszta).
+
 ## E99-R01 (GOV-05a) — Practice V2 + Song Trainer V2 shipping rollout, teljes részletes történet (2026-08-09)
 
 **E99-R01 / GOV-05a MERGED — Practice V2 + Song Trainer V2 shipping

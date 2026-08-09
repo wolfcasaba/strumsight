@@ -7155,3 +7155,112 @@ MIELŐTT a merge-kapu-ellenőrzést elvégeznéd:
 Rokon: [[L113]] (a Router CI-t a merge-kapu figyelmen kívül hagyta, mert a
 kapu csak a `build-apk`-t nézte — ugyanaz a „a workflow csendben nem fut le"
 hibaosztály, itt a path-szűrő, ott a kapu-definíció volt a vakfolt).
+
+## L205 — Szimlink egy git-ignore-olt külső adatkönyvtárra az izolált munkapéldányban ÁLNEGATÍV scope-sértést válthat ki — valódi másolat kell, nem szimlink (E99-R04 / GOV-06, 2026-08-09, orchesztrátor-hiba, dispatch előtt elhárítva)
+
+**A csapda.** A GOV-06 harnessnek hozzáférnie kellett a 423 MB-os,
+git-ignore-olt (`ml/data/`), CSAK a fő munkafán létező korpuszhoz
+(`ml/data/klangio/`) az implementer izolált munkapéldányában
+(`/home/ubuntu/ss-codex-e99-r04`, `git clone`-nal létrehozva — a korpusz
+untracked, tehát a klón NEM hozza magával). A gyors megoldásnak tűnő
+`ln -s /home/ubuntu/music-theory/ml/data ml/data` **majdnem** észrevétlen
+scope-sértést okozott volna.
+
+**Mit mértem.** Dispatch UTÁN, de a scope-audit lefutása ELŐTT
+`git status --porcelain` a munkapéldányban `?? ml/data`-t mutatott —
+**untracked**, NEM ignored, holott a `.gitignore` `ml/data/` sora (trailing
+`/`, könyvtár-csak minta) elvileg fedné. A gyökérok: a szimlink NEM könyvtár
+(hanem szimlink-típusú fájl, még ha könyvtárra is mutat), és git a
+trailing-slash mintát csak valódi könyvtárra alkalmazza — egy szimlinkre
+sosem. A `tools/ai_router/legacy_scope.py::collect_changed_paths` pontosan
+ezt a `git ls-files --others --exclude-standard`-ot használja untracked
+fájlok gyűjtésére, tehát a szimlink bekerült volna a `changed_paths`-be.
+**Súlyosbítás:** ugyanaz a modul `_has_symlink_component()`-je MINDEN
+`changed_paths`-elemre **feltétel nélkül** violation-t ad, ha bármelyik
+útvonal-komponense szimlink — függetlenül attól, hogy a cél maga
+engedélyezett-e (ADR 0138 szándékos hardening: szimlinkkel scope-ot
+kikerülni ne lehessen). A `scope_audit=VIOLATION` a kör-jelzést
+`stopped`-ra váltotta volna, holott a diff maga tiszta volt.
+
+**A javítás.** A dispatch UTÁN, MIELŐTT az implementer a szimlinket
+használva olvasni kezdte volna a korpuszt (illetve útközben, futás alatt is
+biztonságosan elvégezhető: lásd lent), a szimlinket **valódi másolatra**
+cseréltem: `cp -r` egy staging névre, majd `rm <szimlink> && mv <staging>
+<végleges név>` — ez a két utolsó lépés ugyanazon a fájlrendszeren
+metaadat-műveletek (rename/unlink), gyakorlatilag atomi, tehát egy
+FOLYAMATBAN LÉVŐ olvasási sorozatot (az implementer épp a korpuszon futó
+mérése) sem szakított meg (a már megnyitott fájlleírók a régi inode-ra
+mutatnak tovább; az ÚJ megnyitások az immár helyben lévő, bájtra azonos
+másolatot találják). A `cp -r` maga **0,16 másodperc** volt 423 MB-ra (a
+mérési fájlrendszer COW-t vagy meleg lapgyorsítótárat használt) — a
+„másolat drága, szimlink olcsó” megérzés ezen a boxon nem állta meg a
+helyét. Utána `git status --porcelain` tisztán mutatta a fát, a
+scope-audit végül `scope_audit=ok, scope_audit_changed=4` (pontosan a
+négy engedélyezett fájl) eredménnyel zárt.
+
+**Szabály.** Ha egy izolált munkapéldánynak hozzáférést kell adni egy
+git-ignore-olt, NAGY, a fő munkafán élő külső adatkönyvtárhoz (korpusz,
+dataset, modell-bináris-gyűjtemény): **mindig valódi másolatot készíts**
+(`cp -r`, vagy COW-fájlrendszeren `cp --reflink=auto`), **soha szimlinket**
+— a gitignore könyvtár-csak mintázása és a scope-audit szimlink-tiltása
+(ADR 0138) együtt álnegatívot ad egy egyébként ártalmatlan orchesztrátor-
+lépésre, és a hiba csak a kör LEZÁRÁSAKOR (a scope-audit futásakor) derülne
+ki, amikor a javítás már drágább. Ellenőrzés dispatch UTÁN, a implementer
+munkájának megzavarása nélkül: `git -C <munkapéldány> status --porcelain`
+— minden `??` sor, ami NEM a briefben engedélyezett útvonal, azonnali
+vizsgálatot igényel, mielőtt a kör lezárulna.
+
+## L206 — Egy `tool/benchmarks/*.dart` mérőeszköz, ami a `lib/`-ből Flutter-réteget importál (pl. `ClipAnalyzer`), `dart run`-nal NEM futtatható a tranzitív `dart:ui` import miatt — a brief parancssorát ELŐRE `flutter test --dart-define=...`-ra kell írni (E99-R04 / GOV-06, 2026-08-09)
+
+**A csapda.** A GOV-06 brief §7 a meglévő precedens
+(`tool/benchmarks/song_trainer_pitch_benchmark.dart`, tisztán Dart,
+Flutter-import nélkül) mintájára `~/flutter/bin/dart run
+tool/benchmarks/real_audio_dsp_baseline.dart ml/data/klangio`-t írt elő. A
+GOV-06 harness viszont a VALÓDI `ClipAnalyzer`-t importálja
+(`lib/features/analyze/engine/clip_analyzer.dart`), ami tranzitívan
+Fluttert (és azon át `dart:ui`-t) importál — ez a sima Dart VM-en
+(`dart run`) nem tölthető be: `Dart library 'dart:ui' is not available on
+this platform.`
+
+**A megoldás, amit az implementer talált, és a review függetlenül
+igazolt.** `~/flutter/bin/flutter test
+--dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio
+tool/benchmarks/real_audio_dsp_baseline.dart` — a Flutter-tesztrunner
+betölti a Flutter engine-t (`dart:ui` elérhetővé válik), és lefuttatja a
+fájl sima `void main()`-jét EGYETLEN scriptként (nem kellett `test()`
+blokkba csomagolni); a korpusz-útvonalat parancssori argumentum helyett
+`String.fromEnvironment(...)`-tel a `--dart-define` adja át. **A `lib/`
+egyetlen sora sem változott** — ez a `dart run` platform-korlátja, nem a
+harness tervezési hibája.
+
+**Mellékhatás, ami NEM hiba.** A futás végén „No tests ran. / No tests were
+found.” jelenik meg, és a shell kilépési kódja NEM NULLA (a review saját,
+független futtatásán mérve: 79) — mert a tesztrunner szemszögéből nulla
+`test()` regisztrálódott, FÜGGETLENÜL attól, hogy a script maga hibátlanul
+lefutott és a teljes JSON-kimenet helyesen megjelent. Ez a `flutter test`
+keretrendszer saját konvenciója, NEM a mérőeszköz saját, eredmény-alapú
+kapuja (a harness `exitCode`-ja a forráskódban csak usage-hibára és
+hiányzó corpus-könyvtárra áll, sosem a mért számra) — egy jövőbeli, a
+parancsot kézzel újrafuttató személy a nem-nulla kilépési kódot tévesen
+hibának hihetné, ha csak azt nézi, nem a stdout JSON-t.
+
+**Determinizmus független bizonyítéka.** A review egy TELJESEN FÜGGETLEN
+`/tmp` klónban, saját `flutter test`-hívással a mind a 82 felvételre,
+mind a 11 767 eseményre **bájtra egyező** eredményt kapott (minden
+tizedesjegyig), ami kizárja, hogy a `flutter test`-en át futtatás bármilyen
+mérési torzítást vezetne be a sima `dart run`-hoz képest ezen a
+determinisztikus, tisztán-függvény DSP-n.
+
+**Szabály.** Ha egy jövőbeli `tool/benchmarks/*.dart` a `lib/`-ből olyasmit
+importál, ami tranzitívan Fluttert/`dart:ui`-t használ (nem tiszta Dart
+domain-kód, mint a meglévő pitch-benchmark precedens), a brief-írás
+pillanatában NEM garantált, hogy `dart run` működni fog. A pre-flight mérje
+fel a célosztály importláncát (pl. `grep -rn "^import 'package:flutter"
+<célfájl.dart>`, illetve a tranzitív függőségeket a `dart_ui`/`flutter`
+csomagra), és ha Flutter-függés van, a brief §7 parancsát ELEVE `flutter
+test --dart-define=<NÉV>=<érték> <fájl>` alakra írja, ne `dart run`-ra — a
+felfedezés így nem az implementer futásidejét fogyasztja egy útközben
+kiderülő paranccsal. Rokon: [[L203]] (a felmérésnek a MÓDOSÍTOTT/ÉRINTETT
+felület TÉNYLEGES futásidejű függőségeit kell követnie — ott a
+teszt-fogyasztói kör, itt a célosztály runtime-igénye volt az elmaradt
+mérés).

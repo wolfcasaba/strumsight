@@ -3,97 +3,79 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-09
-> (E99-R03 / GOV-05c MERGED — Learn migráció a Practice Engine V2-re:** a §6
-> „Kötelező sorrend" 3. pontjának HARMADIK, utolsó darabja. A Learn eddig
-> minden környezetben a **legacy** motoron futott — ez a kör átállította
-> `production`-ön kívül a Practice Engine V2-re, egyetlen flag-sorral.
+> (E99-R04 / GOV-06 MERGED — Valós-audio DSP baseline mérés:** a §6
+> „Kötelező sorrend" 4. pontja. **MÉRÉSI kör** — a szállított, változatlan
+> `const ClipAnalyzer()`-t futtatta 82 valódi telefonos gitárfelvételen; a DSP
+> egyetlen sora sem változott (`lib/` diff üres, A1 gépi mérce).
 >
-> **A pre-flight MÉRTE a sugarat, nem becsülte.** Egy `/tmp` próba-klónban a
-> flaget `nonProd`-ra billentve, az L203 szerinti KÉT réteg unióját futtatva
-> (a flag 4 hívója + a `LearnScreen` mind a 14 teszt-pumpolója, öt
-> könyvtárban): `test/features/learn`+`test/app` **260-ból 4 bukás** (1
-> skip), `test/core`+`test/features/live`+`test/features/songs`
-> **610/610 zöld** — és mind a négy bukás flag-kikötő állítás volt, nulla
-> viselkedési regresszió. Ez lett a kör mérce-mátrixa is: a 13 nem-kikötött
-> Learn-képernyő-teszt zöld maradása gépi bizonyíték, nem bemondás.
+> **Mért eredmény:** akkord-pontosság **67,069%** (7892/11767) a **18,832%**-os
+> többségi-osztály baseline (G-major, 2216/11767) fölött; moll-részhalmaz (222
+> esemény) **83,333%** (185/222). Onset P/R/F1 25/50/100 ms-nál: 40,427% /
+> **67,391%** / 85,201%. Származtatott BPM-MAE **45,067 BPM** (0 kizárt
+> felvétel a rács-szabálytalanság miatt). 82/82 felvétel feldolgozva, 0
+> kihagyott/hibás. A korpusz (`ml/data/klangio/`, 82 WAV + 82 `.strums`,
+> 11 767 esemény, SHA-256 `4880fac…5827`) **NINCS verziókövetve** — a mérés a
+> boxon kívül ma nem reprodukálható (ADR 0199 Döntés 8), ezért a riport
+> elkötelezett dokumentum, **nem CI-kapu** (nincs küszöb, nincs bevezetett
+> kilépési kód a mért számra). Teljes riport:
+> [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
 >
-> **Változás:** `migratedLearnEnabled: false` → **`nonProd`** (`development`/
-> `lab` ON, **`production` OFF**) — ugyanaz az alak, mint a
-> `practiceEngineV2Enabled`/`songTrainerV2Enabled`. A default konstruktor
-> változatlanul `false`. **Zéró UI-változás** (ADR 0198 Döntés 4): a Learn
-> képernyő öt meglévő elágazása (187/253/303/313/326. sor) vált élessé —
-> ugyanaz a Learn, más motorral. Mind a négy meglévő őr
-> (`app_config_test.dart` rollout-tábla, `feature_flags_test.dart` A1,
-> `learn_migration_parity_test.dart` A7, `learn_rollback_test.dart` A8) a
-> production-határra **átirányítva**, egyik sem törölve; az A7 teszt neve és
-> mérése (eddig `development`-et mért „production default" néven) most már
-> egyezik. Új `AppConfig.resolve` „problems-mentes mindhárom környezetben"
-> állítás (A5). A device-mátrix §2.3 migrated-Learn szakasza PENDING
-> készülékes cellákra frissült.
+> **A review SAJÁT, izolált `/tmp` klónban bájtra egyező eredménnyel
+> reprodukálta a teljes 82 felvételes mérést** (minden ellenőrzött mező —
+> akkord-pontosság, baseline, moll-részhalmaz, mindhárom onset-F1, BPM-MAE,
+> korpusz-checksum — digitre egyezett egy teljesen független futtatásban) ÉS
+> a brief §6.1 valódi-sértés próbáját (a `<=`→`<` mutáció pontosan az
+> 50000 µs cellát váltotta pirosra, visszaállítás után zöld) — a szám nem
+> bemondás. Dedikált security-review (risk=high a brief `ai-router` blokkja
+> szerint): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR.
 >
-> **ADR [0198](docs/adr/0198-learn-migration-rollout-boundary.md)** (az
-> orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** — **1
-> forduló, javító kör nélkül**: a gate elsőre zöld lett, mert a pre-flight
-> mérése pontosan a szállított módosítás alakját írta le. PR
-> [#206](https://github.com/wolfcasaba/strumsight/pull/206), squash
-> `0e9d211c`.
+> **ADR [0199](docs/adr/0199-real-audio-dsp-baseline-measurement-contract.md)**
+> (az orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** — **1
+> forduló, javító kör nélkül**. PR
+> [#207](https://github.com/wolfcasaba/strumsight/pull/207), squash
+> `5ceed22d`.
 >
-> **Review:** [docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md](docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md)
-> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 1 NOTE (időzítési megfigyelés). A
-> reviewer SAJÁT, izolált `/tmp` klónban futtatta újra a teljes kijelölt
-> gate-et (10/10 zöld) ÉS SAJÁT valódi-sértés próbát: a factoryban
-> `migratedLearnEnabled: true`-ra rontva **kizárólag** az A1 production-cella
-> bukott (10 másik teszt zöld maradt), majd visszaállítva a fa újra tiszta —
-> az implementer önjelentésétől függetlenül reprodukálva. A **dedikált
-> security-review** ([docs/reviews/e99-r03-gov-05c-learn-migration-rollout-security.md](docs/reviews/e99-r03-gov-05c-learn-migration-rollout-security.md),
-> kötelező: `risk = "high"`) — **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**: az
-> egyetlen élessé váló perzisztens sink (`practiceLogProvider`) már ma is élő
-> testvér-flageken át fut, azonos `PracticeEntry` alakkal (nincs PII/nyers
-> audio), a hálózat-consent felület (`usesNetwork`) bizonyítottan független a
-> flagtől, és a V2 út a mikrofont **korábban** engedi el pause/finish előtt
-> (pozitív megfigyelés). 2 forward-looking NOTE.
+> **Review:** [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md)
+> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 4 NOTE (mind nem blokkoló): a brief
+> szó szerint előírt `dart run` parancsa nem futtatható, mert a `ClipAnalyzer`
+> tranzitívan `dart:ui`-t importál (nincs sima Dart VM-en) — a dokumentált
+> `flutter test --dart-define=...`-helyettesítés a fenti bájtra-egyező
+> független reprodukcióval igazoltan ártalmatlan; +1 NOTE a helyettesítés
+> nem-nulla kilépési kódjáról (framework-műtermék, nem eredmény-alapú kapu);
+> 2 hygiene-NOTE a security-review-ból átvéve (lokális build-útvonal a nyers
+> kimenetben; elvi skip-error-visszhang egy jövőbeli malformed korpuszon).
+> Security: [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-security.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-security.md)
+> — **PASS**.
 >
-> **Zöld kapu (exact-SHA `87ca3f54`, a review-commit utáni tip):** Build APK
-> [31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
+> **Zöld kapu (exact-SHA `ab4024a6`, a review-commit tipje):** Full Gate
+> [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
 > **success**; Router CI
-> [31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
-> **success** (kézzel dispatch-elve, mert a review-commit `docs/reviews/**`
-> útvonala nem router-ci trigger-útvonal). A merge előtt ellenőrizve: az
-> `origin/main` a dispatch óta nem mozdult (`69ecc661` mindvégig), rebase nem
-> kellett (H8 tiszta).
+> [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
+> **success** (automatikus push-trigger, mert a diff `docs/rounds/**`-t
+> érint). A merge előtt ellenőrizve: az `origin/main` a dispatch óta nem
+> mozdult (`dc201524` mindvégig), rebase nem kellett (H8 tiszta). Post-merge
+> gate a friss `main`-en (`5ceed22d`) is önállóan újrafuttatva: mind a 7 lépés
+> (format/analyze/2×teszt/architecture/secrets/l10n) zöld.
 >
-> **A GOV-05 shipping rollout hármas ezzel lezárult:** GOV-05a ✅ (E99-R01),
-> GOV-05b ⛔ user-döntéssel elhalasztva (mért blokkolón áll, §3), GOV-05c ✅
-> (E99-R03, ez a kör). Következő a §6 sorrend 4. pontja: **GOV-06**
-> (valós-audio DSP baseline) — pre-flight DRAFT már készül
-> (`docs/rounds/e99-r04-gov-06-real-audio-dsp-baseline.md`, még nem kész
-> brief, még nem queue-sor).
+> **A §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult** (GOV-05 shipping
+> hármas + GOV-06 mérés). **Nincs automatikusan indítható következő kör:** az
+> Epic 6 feloldása és a GOV-05b (AI Tutor) sorsa emberi döntés — lásd §6.
 >
-> ## ✅ E99-R01 (GOV-05a) KÉSZ — Practice V2 + Song Trainer V2 shipping rollout (2026-08-09)
+> ## ✅ E99-R03 (GOV-05c) KÉSZ — Learn migráció a Practice Engine V2-re (2026-08-09)
 >
-> **E99-R01** MERGED (PR [#205](https://github.com/wolfcasaba/strumsight/pull/205),
-> squash `d958b75e`; **ÚJ ADR 0197**; implementer **Codex (Terra)**, 1
-> implementációs + **1 javító forduló** — az első fordulóban helyes `stopped`
-> scope-jelzés, dokumentált §0.0 R1 brief-revízióval feloldva, mércelazítás
-> nélkül; orchesztrátor/reviewer **Claude Opus 5**). `songTrainerV2Enabled:
-> false → nonProd` + két flag-gated belépési kártya a Learn fülön
-> (`learn-entry-practice-hub`, `learn-entry-song-trainer`), nulla új string.
-> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> Review: [docs/reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md](docs/reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md)
-> — **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR, 3 NOTE. Zöld kapu exact-SHA
-> `46c5cbda`: Build APK [31291078662](https://github.com/wolfcasaba/strumsight/actions/runs/31291078662)
-> + Router CI [31290836396](https://github.com/wolfcasaba/strumsight/actions/runs/31290836396)
+> **E99-R03** MERGED (PR [#206](https://github.com/wolfcasaba/strumsight/pull/206),
+> squash `0e9d211c`; **ÚJ ADR 0198**; implementer **Codex (Terra)**, 1
+> forduló, javító kör nélkül; orchesztrátor/reviewer **Claude Sonnet 5**).
+> `migratedLearnEnabled: false → nonProd` (`development`/`lab` ON,
+> `production` OFF) — a Learn a Practice Engine V2-n fut `production`-ön
+> kívül, **zéró UI-változás** (ADR 0198 Döntés 4). Teljes részletes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). Review:
+> [docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md](docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md)
+> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 1 NOTE. Dedikált security-review
+> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**. Zöld kapu exact-SHA `87ca3f54`:
+> Build APK [31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
+> + Router CI [31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
 > mindkettő **success**.
->
-> **Következő:** a §6 „Kötelező sorrend" 3. pontja (GOV-05 shipping rollout)
-> **lezárult**: GOV-05a ✅, GOV-05b ⛔ user-döntéssel elhalasztva (mért
-> blokkolón áll, §3), GOV-05c ✅ (E99-R03, ez a kör). Következő lépés a §6
-> sorrend 4. pontja: **GOV-06** (valós-audio DSP baseline mérés) — pre-flight
-> DRAFT már készül (`docs/rounds/e99-r04-gov-06-real-audio-dsp-baseline.md`),
-> de még nem kész brief és nem queue-sor. A **vision rollout mért blokkolón
-> áll** (GOV-05d, lásd §3) — a modell-binárisok nincsenek a repóban. A
-> pipeline-sor minden E05 sora `done`, minden E06 sora `hold`; a láncnak
-> NINCS automatikusan indítható köre.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -454,11 +436,19 @@
   - `vision` (5 132 sor) — flagje `false`, és **BLOKKOLT**: nem
     flag-kérdés, hanem hiányzó modell-bináris → **GOV-05d**, lásd a
     következő pontot.
-  Ugyanekkor a termék központi állítására egyetlen mért valós-audio szám
-  létezik (CRNN pengetés-irány 86,7% vs heurisztika 38,9%, r164 A/B) —
-  akkord-pontosságra valós felvételen nincs → **GOV-06**.
-  **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg →
-  lásd §6 „Kötelező sorrend".
+  A termék központi állítására eddig egyetlen mért valós-audio szám létezett
+  (CRNN pengetés-irány 86,7% vs heurisztika 38,9%, r164 A/B) — akkord-
+  pontosságra, onsetre és BPM-re valós felvételen nem volt szám.
+  **JAVÍTVA (GOV-06, E99-R04, 2026-08-09):** a szállított, változatlan
+  `ClipAnalyzer` mérve 82 valódi telefonos felvételen — akkord-pontosság
+  **67,069%** (18,832%-os többségi-osztály baseline fölött), onset F1@50ms
+  **67,391%**, BPM-MAE **45,067** (származtatott). Teljes riport:
+  [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
+  A korpusz nincs verziókövetve (external, csak ezen a boxon), a mérés ezért
+  elkötelezett riport, nem CI-kapu — a verziókövetés nevesített follow-up.
+  **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg — a
+  §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult; az Epic 6 feloldása
+  MOST emberi döntésre vár, lásd §6.
 - **Az AI Tutor rollout BLOKKOLT — hiányzó production-drótozás ÉS hiányzó
   modell-átjáró (mérve 2026-08-09, GOV-05b pre-flight):** az `aiTutorEnabled`
   bekapcsolása MA **crash**-t okozna, nem degradált élményt.
@@ -539,26 +529,41 @@
 
 ## 4. Current branch
 
-`main` @ [PR #206](https://github.com/wolfcasaba/strumsight/pull/206), squash
-`0e9d211c` (E99-R03, GOV-05c — Learn migráció a Practice Engine V2-re; lásd a
-fejléc ✅-blokk a teljes pre-flight/review/security történetért). Flag+teszt+
-doksi diff (nincs `lib/features/**`, kizárólag `lib/app/config/feature_flags.dart`)
-→ Build APK [31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
-+ Router CI [31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
-mindkettő **success** az exact merge-előtti tip `87ca3f54`-n (a review-commit
-utáni tip; mindkét workflow kézzel lett dispatch-elve, mert a review-commit
-`docs/reviews/**` útvonala nem router-ci trigger). Review **APPROVED, 1
-forduló, javító kör nélkül** — a pre-flight (2026-08-09) mérte a sugarat
-(`/tmp` próba-klón, 260-ból 4 bukás mind flag-kikötő), ezért az implementer
-első fordulója egyből zöld gate-tel zárt. A reviewer SAJÁT, izolált `/tmp`
-klónban mérte újra: `tools/round-gate.sh test/app test/features/learn
-test/core test/features/live test/features/songs` → **10/10 lépés zöld**,
-ÉS egy SAJÁT valódi-sértés próbával (`migratedLearnEnabled: true` a
-factoryban → kizárólag az A1 production-cella bukott) függetlenül
-reprodukálta az implementer állítását. A dedikált security-review
-(risk=high) **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az
-`origin/main` a dispatch és a merge között **nem mozdult** (`69ecc661`
-mindvégig), rebase nem kellett (H8 tiszta).
+`main` @ [PR #207](https://github.com/wolfcasaba/strumsight/pull/207), squash
+`5ceed22d` (E99-R04, GOV-06 — Valós-audio DSP baseline mérés; lásd a fejléc
+✅-blokk a teljes pre-flight/review/security történetért). Mérési kör, `lib/`
+diff üres (A1) — kizárólag `tool/benchmarks/real_audio_dsp_baseline.dart`
+(ÚJ), `test/tooling/real_audio_dsp_baseline_test.dart` (ÚJ),
+`docs/eval/real-audio-dsp-baseline.md` (ÚJ) és a brief §10 handoffja → Full
+Gate [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
++ Router CI [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
+mindkettő **success** az exact merge-előtti tip `ab4024a6`-n (a review-commit
+utáni tip; a Router CI automatikus push-trigger, mert a diff `docs/rounds/**`-t
+érint; a Full Gate kézzel dispatch-elve, a CI-terv `full-gate.yml`-t írt elő,
+`native_gate=false`). Review **APPROVED, 1 forduló, javító kör nélkül** — a
+reviewer SAJÁT, izolált `/tmp` klónban NEMCSAK a gate-et futtatta újra
+(7/7 zöld), hanem a TELJES 82 felvételes mérést is megismételte: **bájtra
+egyező** eredmény minden ellenőrzött mezőn (akkord-pontosság, baseline,
+moll-részhalmaz, mindhárom onset-F1, BPM-MAE, korpusz-checksum) egy
+teljesen független futtatásban, ÉS önállóan megismételte a brief §6.1
+valódi-sértés próbáját (`<=`→`<` mutáció → az 50000 µs cella pirosra vált,
+visszaállítás után zöld). A dedikált security-review (risk=high) **PASS, 0
+CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a dispatch és a
+merge között **nem mozdult** (`dc201524` mindvégig), rebase nem kellett (H8
+tiszta). Post-merge gate a friss `main`-en (`5ceed22d`) is önállóan
+újrafuttatva: mind a 7 lépés zöld.
+
+> **[Superseded ref — E99-R03 branch]:** `main` @ PR #206, squash `0e9d211c`
+> (E99-R03, GOV-05c — Learn migráció a Practice Engine V2-re). Flag+teszt+
+> doksi diff (nincs `lib/features/**`, kizárólag
+> `lib/app/config/feature_flags.dart`) → Build APK
+> [31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
+> + Router CI [31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
+> mindkettő **success** az exact merge-előtti tip `87ca3f54`-n. Review
+> **APPROVED, 1 forduló, javító kör nélkül**; dedikált security-review
+> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a
+> dispatch és a merge között **nem mozdult** (`69ecc661` mindvégig), rebase
+> nem kellett (H8 tiszta). Teljes történet: `docs/handoff-archive.md`.
 
 > **[Superseded ref — E05-R30 branch]:** `main` @ PR #204, squash `d3b2caf9`
 > (E05-R30, Dataset, evaluation, minőségi kapuk és Epic 5 lezárás — ZÁRÓ
@@ -1057,14 +1062,16 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 >    `deferred` bejegyzésre `AppResult.failure`-t ad, tehát a `visionEnabled`
 >    bekapcsolása egy zsákutcába futó setup-folyamatot tenne láthatóvá. A
 >    flag-flip előfeltétele a modell-binárisok beszerzése + licenc-átvezetés.
-> 4. **GOV-06 — Valós-audio DSP baseline mérés.** A meglévő shipping DSP
->    pontossága valódi gitárfelvételeken: akkord-pontosság, onset P/R/F1,
->    BPM-hiba. **Miért ELŐBB, mint az Epic 6:** az Epic 6 harminc köre erre a
->    DSP-re épít metrika-, confidence- és insight-réteget; ha az alap gyenge,
->    azt most olcsó megtudni, harminc kör után nem. Nyitott kérdés a briefhez:
->    honnan jön a konszenzuált valós-gitár korpusz.
+> 4. ~~**GOV-06 — Valós-audio DSP baseline mérés.**~~ — ✅ **KÉSZ** (E99-R04,
+>    `5ceed22d`). A meglévő shipping DSP pontossága valódi gitárfelvételeken:
+>    akkord-pontosság **67,069%** (18,832%-os baseline fölött), onset
+>    F1@50ms **67,391%**, BPM-MAE **45,067** (származtatott). A korpusz
+>    (`ml/data/klangio/`, 82 felvétel) NEM verziókövetett — a mérés
+>    elkötelezett riport, nem CI-kapu; a verziókövetés nevesített follow-up.
+>    Teljes riport: [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
 > 5. **Csak ezután Epic 6** — a 30 briefje kész (`epic-06-batch-index.md`),
->    a queue-sorai `hold`-on. A feloldás EMBERI döntés, a 3. és 4. pont után.
+>    a queue-sorai `hold`-on. A 3. ÉS 4. pont is lezárult (2026-08-09) — a
+>    feloldás MOST EMBERI döntésre vár.
 >
 > A GOV-05b/GOV-05c/GOV-06 briefje **szándékosan még nincs megírva**: mindegyik
 > pre-flightjának az ELŐZŐ kör utáni állapotot kell mérnie (mind ugyanazt a
@@ -1077,23 +1084,27 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A KÖVETKEZŐ KÖR: GOV-06 (munkacím `E99-R04`) — Valós-audio DSP baseline
-   mérés.** A §6 sorrend 3. pontja (GOV-05 shipping rollout hármas) EZZEL
-   LEZÁRULT: GOV-05a ✅, GOV-05b ⛔ elhalasztva, GOV-05c ✅. A GOV-06 brief
-   **DRAFT** állapotban van
-   (`docs/rounds/e99-r04-gov-06-real-audio-dsp-baseline.md`, egy korábbi
-   pre-flight mért megállapításai — **NEM kész brief, NEM queue-sor**); a
-   következő session feladata a véglegesítés + a queue-ba állítás (a
-   konszenzuált valós-gitár korpusz kérdése még nyitott, lásd a draftot).
+0. **NINCS automatikusan indítható következő kör.** A §6 sorrend 3. pontja
+   (GOV-05 shipping rollout hármas) ÉS 4. pontja (GOV-06 valós-audio DSP
+   baseline) is LEZÁRULT: GOV-05a ✅, GOV-05b ⛔ elhalasztva, GOV-05c ✅,
+   GOV-06 ✅ (E99-R04, `5ceed22d`, 2026-08-09). A sorrend 5. pontja (Epic 6
+   indítása) EMBERI döntésre vár — a 30 Epic-6 brief kész
+   (`epic-06-batch-index.md`), a queue-sorai `hold`-on maradnak, amíg a
+   döntés meg nem születik.
 
    A GOV-05b (AI Tutor) továbbra is **kimarad a sorból** (user-döntés
    2026-08-09: „halasszuk el"), mert mért blokkolón áll (§3 „Az AI Tutor
-   rollout BLOKKOLT"). Ha a döntés megszületik, a queue-ba állítás a GOV-06
-   után/mellett is mehet.
+   rollout BLOKKOLT"). Ha a döntés megszületik, a queue-ba állítás bármikor
+   mehet, függetlenül az Epic 6 sorsától.
 
-   **A pipeline-lánc továbbra is TÉTLEN:** `docs/execution/pipeline-queue.tsv`
-   minden E05-sora `done`, minden E06-sora **`hold`** — a cron nem indít
-   semmit magától, és ez így helyes, amíg a §6 sorrend le nem fut.
+   **A pipeline-lánc TÉTLEN:** `docs/execution/pipeline-queue.tsv` minden
+   E05-sora `done`, minden E06-sora **`hold`** — a cron nem indít semmit
+   magától, és ez így helyes, amíg a §6 sorrend 5. pontjának emberi döntése
+   meg nem születik.
+
+   **~~E99-R04 (GOV-06) — Valós-audio DSP baseline mérés~~ — KÉSZ** (PR
+   #207, `5ceed22d`, **ÚJ ADR 0199**; implementer Codex/Terra, 1 forduló,
+   javító kör nélkül; lásd a fejléc ✅-blokk a teljes történetért).
 
    **~~E99-R03 (GOV-05c) — Learn migráció a Practice Engine V2-re~~ — KÉSZ**
    (PR #206, `0e9d211c`, **ÚJ ADR 0198**; implementer Codex/Terra, 1
