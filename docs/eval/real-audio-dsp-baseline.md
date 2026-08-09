@@ -1,4 +1,4 @@
-# Valós-audio DSP baseline — GOV-06 / E99-R04
+# Valós-audio DSP baseline — GOV-06 / E99-R04, javítva GOV-06b / E99-R05-ben
 
 ## Eredmény
 
@@ -17,22 +17,44 @@ toleranceUs`), eredménye:
 | 50 000 µs | 64,233% | 70,876% | 67,391% |
 | 100 000 µs | 81,208% | 89,607% | 85,201% |
 
-A BPM ground truth **származtatott**: `60 / medián pozitív ground-truth
-inter-onset intervallum`. A felvételenkénti rács-szabályossági érték a pozitív
-IOI-k populációs szórása / medián IOI. Nem történt automatikus szabálytalanrács-
-kizárás: a kritérium „nincs kizárás; minden sikeresen elemzett, legalább két
-pozitív IOI-t tartalmazó felvétel aggregálódik”, a kizártak száma **0**. Az így
-származtatott BPM átlagos abszolút hibája **45,067 BPM**.
+## BPM-mérce — GOV-06b javítás
+
+A GOV-06-ban közölt **45,067 BPM** átlagos abszolút különbség **visszavonva**.
+Nem DSP-tempóhibát mért: a jóslatot és a `.strums` eseményekből származtatott
+pengetés-sűrűséget hasonlította össze. A `.strums` események pengetések, nem
+validált ütem-annotációk; a régi mérce 82 felvétel közül 20-ra 200 BPM fölötti,
+legfeljebb 369,1 BPM-es „ground truth”-ot adott.
+
+Az E99-R05 a WAV-ból, `librosa.beat.beat_track`-kel (librosa **0.11.0**) készített
+független beat-tracker referenciát. A 82/82 referencia elkészült, kimaradt
+felvétel: **0** (`[]`). Az integer-ezrelékes, inkluzív ±40 ezrelékes mérés:
+
+| Metrika | Eredmény |
+|---|---:|
+| Szigorú tempó-egyezés (librosa referencia) | **11/82 = 13,415%** |
+| Metrikai-szint toleráns tempó-egyezés (1/3, 1/2, 2/3, 1, 3/2, 2, 3) | **32/82 = 39,024%** |
+| **Pengetés-sűrűség egyezés** (NEM tempó; a korábbi `.strums`-alapú összevetés) | **45,067 BPM** átlagos abszolút különbség, 82/82 |
+
+Ez nem érvényesít abszolút tempóminőségi állítást: a referencia is automatikus
+beat-tracker, nem kézzel annotált igazság. **A BPM ezen a korpuszon nem mérhető,
+mert nincs validált tempó-annotáció.** A következő szükséges bizonyíték kézi
+tempó-annotáció egy reprezentatív részhalmazon; a DSP-t ez a mérési kör nem
+hangolta és nem változtatta meg.
 
 ## Reprodukálhatóság és korlátok
 
-- Futtatott mérési parancs: `~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio tool/benchmarks/real_audio_dsp_baseline.dart`.
+- Futtatott referencia-parancs: `~/audio-venv/bin/python ml/chords/tempo_reference.py ml/data/klangio --out /tmp/tempo_reference.json`.
+- Futtatott mérési parancs: `~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart`.
 - A briefben előírt `~/flutter/bin/dart run tool/benchmarks/real_audio_dsp_baseline.dart ml/data/klangio` ténylegesen nem indítható: a valós `ClipAnalyzer` tranzitívan `dart:ui`-t importál, ami a sima Dart VM-ben nem elérhető. A Flutter-tesztrunner ugyanazt a változatlan publikus `ClipAnalyzer`-t futtatta.
 - Korpusz: 82 WAV, 82 `.strums`, 11 767 esemény; SHA-256: `4880faceab27217640701f1b93db477606d5fb3aa2c4434574040b6590315827`.
-- A korpusz nincs verziókövetve, ezért a mérés ma ezen a boxon kívül nem reprodukálható. A 423 MB-os adatforrás egyetlen, 98%-ban dúr telefonos felvételi disztribúció; az eredmények erre érvényesek, nem általános zenei állítások.
+- A korpusz és a `~/audio-venv` sem verziókövetett, ezért a mérés ma ezen a boxon kívül nem reprodukálható. A 423 MB-os adatforrás egyetlen, 98%-ban dúr telefonos felvételi disztribúció; az eredmények erre érvényesek, nem általános zenei állítások.
 - Hibás/kihagyott felvételek: **nincs** (82/82 feldolgozva).
 
-## Csonkítatlan mérési kimenet
+## GOV-06 eredeti, visszavont BPM-mérési kimenete
+
+Az alábbi megőrzött GOV-06 nyers kimenet történeti bizonyíték: a benne szereplő
+`meanAbsoluteErrorBpm` nem tempóminőségi állítás. A GOV-06b futtatás a fenti
+független referencia-parancsot és a két új egyezési számot használta.
 
 ```text
 Resolving dependencies...

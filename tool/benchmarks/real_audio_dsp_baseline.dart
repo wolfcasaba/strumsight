@@ -8,6 +8,16 @@ import 'package:strumsight/features/analyze/model/analyze_result.dart';
 
 const int microsecondsPerSecond = 1000000;
 const List<int> onsetTolerancesUs = [25000, 50000, 100000];
+const int tempoTolerancePerMille = 40;
+const List<double> metricLevelTempoRatios = [
+  1 / 3,
+  1 / 2,
+  2 / 3,
+  1,
+  3 / 2,
+  2,
+  3,
+];
 
 /// One labeled strum event from a Klangio `.strums` file.
 class GroundTruthEvent {
@@ -87,6 +97,90 @@ OnsetMetrics matchOnsetsUs(
     falsePositives: falsePositives,
     falseNegatives: falseNegatives,
   );
+}
+
+/// Difference from a reference tempo, rounded to an integer per mille.
+int tempoDeviationPerMille(double predictedBpm, double referenceBpm) =>
+    (((predictedBpm / referenceBpm - 1).abs()) * 1000).round();
+
+/// Strict tempo agreement with the independent beat-tracker reference.
+bool temposMatch(
+  double predictedBpm,
+  double referenceBpm, {
+  int tolerancePerMille = tempoTolerancePerMille,
+}) => tempoDeviationPerMille(predictedBpm, referenceBpm) <= tolerancePerMille;
+
+/// Tempo agreement that accepts only the pinned metrical-level ratios.
+bool metricLevelTemposMatch(
+  double predictedBpm,
+  double referenceBpm, {
+  int tolerancePerMille = tempoTolerancePerMille,
+}) => metricLevelTempoRatios.any(
+  (ratio) => temposMatch(
+    predictedBpm,
+    referenceBpm * ratio,
+    tolerancePerMille: tolerancePerMille,
+  ),
+);
+
+/// Summarizes tempo only when an independent reference is supplied.
+Map<String, Object?> buildTempoSummary(
+  Map<String, double> predictedByRecording,
+  Map<String, double>? referenceByRecording, {
+  Iterable<String> referenceExpectedRecordings = const [],
+}) {
+  if (referenceByRecording == null) {
+    return const {
+      'status': 'notRun',
+      'reason': 'independent tempo reference JSON is missing',
+    };
+  }
+
+  final expected = referenceExpectedRecordings.toSet();
+  final missingReferenceRecordings = [
+    for (final recording in expected)
+      if (!referenceByRecording.containsKey(recording)) recording,
+  ]..sort();
+  var strictMatches = 0;
+  var metricLevelMatches = 0;
+  var eligibleRecordings = 0;
+  final records = <Map<String, Object>>[];
+  for (final entry in predictedByRecording.entries) {
+    final referenceBpm = referenceByRecording[entry.key];
+    if (referenceBpm == null) continue;
+    final strictMatch = temposMatch(entry.value, referenceBpm);
+    final metricLevelMatch = metricLevelTemposMatch(entry.value, referenceBpm);
+    eligibleRecordings++;
+    if (strictMatch) strictMatches++;
+    if (metricLevelMatch) metricLevelMatches++;
+    records.add({
+      'recording': entry.key,
+      'referenceBpm': referenceBpm,
+      'predictedBpm': entry.value,
+      'strictMatch': strictMatch,
+      'metricLevelMatch': metricLevelMatch,
+    });
+  }
+  records.sort(
+    (left, right) =>
+        (left['recording']! as String).compareTo(right['recording']! as String),
+  );
+  return {
+    'status': 'measured',
+    'referenceMethod': 'librosa.beat.beat_track',
+    'tolerancePerMille': tempoTolerancePerMille,
+    'strictTempoMatch': {
+      'matched': strictMatches,
+      'eligible': eligibleRecordings,
+    },
+    'metricLevelTempoMatch': {
+      'matched': metricLevelMatches,
+      'eligible': eligibleRecordings,
+      'ratios': metricLevelTempoRatios,
+    },
+    'missingReferenceRecordings': missingReferenceRecordings,
+    'records': records,
+  };
 }
 
 class PerLabelMetrics {
@@ -295,44 +389,35 @@ double _median(List<double> values) {
       : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-_BpmGroundTruth _deriveBpm(List<GroundTruthEvent> events) {
+double? _deriveStrumDensityBpm(List<GroundTruthEvent> events) {
   final intervalsUs = <double>[
     for (var index = 1; index < events.length; index++)
       (events[index].timeUs - events[index - 1].timeUs).toDouble(),
   ].where((intervalUs) => intervalUs > 0).toList();
-  if (intervalsUs.isEmpty) return const _BpmGroundTruth.empty();
+  if (intervalsUs.isEmpty) return null;
   final medianUs = _median(intervalsUs);
-  final variance =
-      intervalsUs
-          .map(
-            (intervalUs) => (intervalUs - medianUs) * (intervalUs - medianUs),
-          )
-          .reduce((sum, squared) => sum + squared) /
-      intervalsUs.length;
-  final regularity = variance <= 0 ? 0.0 : variance.sqrt() / medianUs;
-  return _BpmGroundTruth(
-    bpm: 60 * microsecondsPerSecond / medianUs,
-    regularity: regularity,
+  return 60 * microsecondsPerSecond / medianUs;
+}
+
+Map<String, double>? _readTempoReference() {
+  const referencePath = String.fromEnvironment(
+    'REAL_AUDIO_DSP_TEMPO_REFERENCE',
   );
-}
-
-class _BpmGroundTruth {
-  const _BpmGroundTruth({required this.bpm, required this.regularity});
-  const _BpmGroundTruth.empty() : bpm = null, regularity = null;
-
-  final double? bpm;
-  final double? regularity;
-}
-
-extension on double {
-  double sqrt() {
-    if (this <= 0) return 0;
-    var estimate = this;
-    for (var index = 0; index < 24; index++) {
-      estimate = (estimate + this / estimate) / 2;
-    }
-    return estimate;
+  if (referencePath.isEmpty) return null;
+  final file = File(referencePath);
+  if (!file.existsSync()) return null;
+  final decoded = jsonDecode(file.readAsStringSync());
+  if (decoded is! Map<String, Object?>) {
+    throw const FormatException('tempo reference JSON must be an object');
   }
+  final reference = <String, double>{};
+  for (final entry in decoded.entries) {
+    if (entry.value is! num || (entry.value as num) <= 0) {
+      throw FormatException('invalid tempo reference for ${entry.key}');
+    }
+    reference[entry.key] = (entry.value as num).toDouble();
+  }
+  return reference;
 }
 
 String _corpusChecksum(List<File> files) {
@@ -394,7 +479,9 @@ void main([List<String> arguments = const []]) {
   if (arguments.length > 1 || (arguments.isEmpty && corpusFromDefine.isEmpty)) {
     stderr.writeln(
       'usage: dart run tool/benchmarks/real_audio_dsp_baseline.dart <corpus-directory>\n'
-      'or: flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=<corpus-directory> tool/benchmarks/real_audio_dsp_baseline.dart',
+      'or: flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=<corpus-directory> '
+      '--dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=<reference.json> '
+      'tool/benchmarks/real_audio_dsp_baseline.dart',
     );
     exitCode = 64;
     return;
@@ -476,7 +563,9 @@ void main([List<String> arguments = const []]) {
         falseNegatives: 0,
       ),
   };
-  final bpmRecords = <Map<String, Object?>>[];
+  final predictedTempoByRecording = <String, double>{};
+  final strumDensityRecords = <Map<String, Object?>>[];
+  final tempoReference = _readTempoReference();
   final analyzer = const ClipAnalyzer();
 
   for (var index = 0; index < recordings.length; index++) {
@@ -512,16 +601,16 @@ void main([List<String> arguments = const []]) {
           ),
         );
       }
-      final bpm = _deriveBpm(recording.events);
-      bpmRecords.add({
-        'recording': recording.stem,
-        'groundTruthBpm': bpm.bpm,
-        'predictedBpm': result.bpm,
-        'absoluteErrorBpm': bpm.bpm == null
-            ? null
-            : (result.bpm - bpm.bpm!).abs(),
-        'ioiStddevOverMedian': bpm.regularity,
-      });
+      predictedTempoByRecording[recording.stem] = result.bpm;
+      final strumDensityBpm = _deriveStrumDensityBpm(recording.events);
+      if (strumDensityBpm != null) {
+        strumDensityRecords.add({
+          'recording': recording.stem,
+          'strumDensityBpm': strumDensityBpm,
+          'predictedBpm': result.bpm,
+          'absoluteDifferenceBpm': (result.bpm - strumDensityBpm).abs(),
+        });
+      }
     } on Object catch (error) {
       skipped.add(
         _SkippedRecording(
@@ -540,11 +629,16 @@ void main([List<String> arguments = const []]) {
     minorEvents,
     labelsByCanonical,
   );
-  final bpmErrors = bpmRecords
-      .map((record) => record['absoluteErrorBpm'])
+  final tempoSummary = buildTempoSummary(
+    predictedTempoByRecording,
+    tempoReference,
+    referenceExpectedRecordings: recordings.map((recording) => recording.stem),
+  );
+  final strumDensityDifferences = strumDensityRecords
+      .map((record) => record['absoluteDifferenceBpm'])
       .whereType<double>()
       .toList();
-  final report = <String, Object>{
+  final report = <String, Object?>{
     'corpus': {
       'path': corpus.path,
       'wavCount': wavFiles.length,
@@ -563,17 +657,16 @@ void main([List<String> arguments = const []]) {
         '$toleranceUs': onsetMetrics[toleranceUs]!.toJson(),
     },
     'bpm': {
-      'groundTruthMethod':
-          '60 / median positive ground-truth inter-onset interval',
-      'regularityMethod':
-          'population standard deviation of positive IOIs / median IOI',
-      'exclusionCriterion':
-          'none; all successfully analyzed recordings with at least two positive IOIs are aggregated',
-      'excludedForIrregularGrid': 0,
-      'meanAbsoluteErrorBpm': bpmErrors.isEmpty
-          ? null
-          : bpmErrors.reduce((sum, value) => sum + value) / bpmErrors.length,
-      'recordings': bpmRecords,
+      ...tempoSummary,
+      'strumDensityAgreement': {
+        'method': '60 / median positive .strums inter-onset interval',
+        'recordings': strumDensityRecords.length,
+        'meanAbsoluteDifferenceBpm': strumDensityDifferences.isEmpty
+            ? null
+            : strumDensityDifferences.reduce((sum, value) => sum + value) /
+                  strumDensityDifferences.length,
+        'records': strumDensityRecords,
+      },
     },
   };
   stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
