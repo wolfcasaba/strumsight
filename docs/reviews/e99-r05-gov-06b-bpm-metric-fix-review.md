@@ -2,13 +2,28 @@
 
 Brief: `docs/rounds/e99-r05-gov-06b-bpm-metric-fix.md`
 ADR: `docs/adr/0212-bpm-baseline-metric-invalidation-and-independent-tempo-reference.md`
-Diff: `git diff origin/main...codex/e99-r05-gov-06b-bpm-metric-fix` (commit `a3f54bc7`)
+Diff: `git diff origin/main...codex/e99-r05-gov-06b-bpm-metric-fix` (commit `a3f54bc7`, javítva `cd7d7ca9`-ig)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-09
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (1 javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 nyitott (1 javítva) · MINOR: 0 · NOTE: 2
+
+**Frissítés (javító kör #1 után, commit `cd7d7ca9`):** F1 **FIXED**. A
+`docs/rounds/e99-r05-gov-06b-bpm-metric-fix.md` §10-je most a két mérési
+parancs teljes, csonkítatlan stdout-ját tartalmazza (a `tempo_reference.py`
+teljes kimenete + a `flutter test` teljes JSON-je, a `bpm` szakasz mind a 82
+rekordjával). Tételesen ellenőrizve: `"strictTempoMatch": {"matched": 11,
+"eligible": 82}`, `"metricLevelTempoMatch": {"matched": 32, "eligible": 82}`,
+`"missingReferenceRecordings": []` — mind szó szerint jelen van; a
+beillesztett kimenetben összesen 164 `"recording":` bejegyzés (82 a `bpm.records`-ban
++ 82 a megőrzött `strumDensityAgreement.records`-ban). A javító kör **kizárólag**
+a `docs/rounds/e99-r05-gov-06b-bpm-metric-fix.md`-t módosította (`git diff --stat
+58521ec3..cd7d7ca9` → 1 fájl); a Dart/Python kód és a teszt bitre változatlan
+maradt, ahogy a fix-prompt kérte. Gate **saját kézzel újrafuttatva, friss
+`/tmp` klónban a fix után is**: 7/7 zöld. `scope_audit=ok` a jelzésfájlban
+(`scope_audit_changed=1`).
 
 Minden gate zöld egy saját, izolált `/tmp/review-e99-r05` klónban
 (független újrafuttatás, nem a implementer állítása). A kör mind a 10
@@ -108,7 +123,8 @@ gépi scope-audit is `scope_audit=ok`, `scope_audit_changed=5` — egyezik.
   `"metricLevelTempoMatch": {"matched": 32, "eligible": 82}` mezőket
   tartalmazza szó szerint, és `grep -c '"recording":' <handoff-szakasz>` 82
   körüli találatot ad (a `records` tömb mérete).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`cd7d7ca9`) — tételesen ellenőrizve, lásd az
+  Összegzés-frissítést fent.
 
 ### N1 — NOTE — A brief §6 checkbox-lista nincs kipipálva
 
@@ -152,8 +168,6 @@ review kötelező. Folyamatban, külön jelentés:
 
 ## Merge-döntés
 
-**Merge tilos, amíg az F1 (MAJOR) nyitva van** (ADR 0052 + a review-sablon
-súlyossági táblája). A tartalmi/numerikus munka minden mért ponton
-hibátlan és függetlenül reprodukálva — az F1 egy dokumentációs-
-teljességi hiány, nem számítási hiba, és egy kis diffű javító körrel
-zárható (ugyanaz a motor, `terra`, findings-listával).
+Nincs nyitott BLOCKER/MAJOR, minden gate zöld (helyi + a CI-dispatch még
+hátra van) → **ADR 0052 szerint mehet a squash-merge**, amint a CI-dispatch
+(teljes suite + property + build) is zöldet ad a merge SHA-n.
