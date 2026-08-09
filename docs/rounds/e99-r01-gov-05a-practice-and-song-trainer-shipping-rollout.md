@@ -638,12 +638,13 @@ indítja; az implementer `gh`-t nem hív.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-### Állapot: STOPPED — OD-05
+### Állapot: IMPLEMENTÁLVA — review-ra kész
 
-Az implementáció a §8 1–8. lépéséig jutott, de a záró gate a nem engedélyezett
-`test/features/learn/continue_card_test.dart` fájlban talált hibát. A brief
-OD-05 szabálya miatt ezt a tesztet nem módosítottam és a kört `stopped`
-jelzéssel zártam.
+Az R1 brief-revízió megnyitotta a `continue_card_test.dart`-ot. A `_pump`
+most explicit tesztkonfigurációval rögzíti mindkét V2 flaget `false`-ra, ezért
+a Continue kártya saját, viewport-érzékeny állítása ismét pontosan a saját
+tárgyát méri. A mérce egyetlen `expect`-je, a `reason:` szöveg, a viewport és
+a belépési kártyák változatlanok.
 
 ### Fájlonkénti összefoglaló
 
@@ -659,6 +660,9 @@ jelzéssel zártam.
   pinnelt kulcsú Learn-belépőkártya, `context.push` a megfelelő route-ra.
 - `test/features/learn/lesson_list_screen_test.dart`: A5 mind a négy cellája,
   A6 két GoRouter-útvonala és A7 production-factory cellája.
+- `test/features/learn/continue_card_test.dart`: az `_pump` provider
+  override-ja a `practiceEngineV2Enabled` és `songTrainerV2Enabled` flaget is
+  `false`-ra rögzíti; a Continue card minden meglévő assertionje változatlan.
 - `lib/features/practice/presentation/practice_effect_listener.dart`: csak a
   23. sori avult doc-comment javult.
 - `docs/manual-testing/practice-engine-device-matrix.md`: a már megvalósult
@@ -666,37 +670,42 @@ jelzéssel zártam.
 
 ### Acceptance-bizonyíték és futtatott parancsok
 
-- A1/A4: `/home/ubuntu/flutter/bin/flutter test test/app/feature_flags_test.dart`
-  → `+9: All tests passed!` A három külön cella development=`true`, lab=`true`,
-  production=`false`; a kerítés mindhárom környezetben false értékeket mér.
-- A2/A3: `/home/ubuntu/flutter/bin/flutter test test/features/song_trainer/baseline/legacy_fixture_parity_test.dart`
-  → `+9: All tests passed!`; az E03-R01 csoport production `isFalse`-ot mér,
-  a default-konstruktor tesztje változatlan.
-- A5/A6/A7: `/home/ubuntu/flutter/bin/flutter test test/features/learn/lesson_list_screen_test.dart`
-  → `+9: All tests passed!`; a 2×2 cellák, mindkét route-assert és a production
-  factoryból épített rejtési cella zöld.
-- A8: a diff nem érint `lib/l10n/` fájlt.
-- A9: a doc-commentből kikerült a production-null állítás; a device-mátrix
-  Practice útvonala elérhetőként, a Song Trainer sorok PENDING-ként szerepelnek.
-- A10: nem teljesült. A kötelező gate a következő, listán kívüli teszten állt meg:
-
-  ```text
-  test/features/learn/continue_card_test.dart:
-  recording a pass MOVES the card — the list rebuilds on progress change
-
-  Expected: exactly 2 matching candidates
-    Actual: Found 1 widget with text "Two-Chord Change"
-  the Continue card must follow the new progress
-  ```
-
-  A gate addigi tényleges eredménye: `format` zöld (1214 fájl, 0 változás),
-  `analyze` zöld (`No issues found!`), `test test/app` zöld (`+63: All tests
-  passed!`), majd `test test/features/learn` piros, kizárólag a fenti teszt.
+- A1: `flutter test test/app/feature_flags_test.dart` → `+9: All tests
+  passed!`; három külön expectation: development=`true`, lab=`true`,
+  production=`false`.
+- A2: `legacy_fixture_parity_test.dart` változatlan default-konstruktor
+  assertionje `songTrainerV2Enabled == false`; célzott futás → `+9: All tests
+  passed!`.
+- A3: ugyanennek a célzott futásnak az `E03-R01 rollout guard` csoportja
+  productionon `isFalse`-ot mér, `skip` nélkül.
+- A4: `feature_flags_test.dart` a három környezetben külön ellenőrzi az
+  `aiTutorEnabled`, `aiTutorCloudEnabled`, `migratedLearnEnabled` és
+  `visionEnabled` false értékét; a célzott futás zöld.
+- A5: `lesson_list_screen_test.dart` négy külön 2×2 flag-cella tesztje
+  (false/false, true/false, false/true, true/true) → `+9: All tests passed!`.
+- A6: ugyanitt a Practice Hub → `/practice` és Song Trainer →
+  `/song-trainer` valódi `GoRouter` assertionjei zöldek.
+- A7: ugyanitt a production factoryból képzett flagekkel mindkét belépési
+  kulcs `findsNothing`; zöld.
+- A8: a `bb8b91c4..HEAD` diff nem érint `lib/l10n/` fájlt.
+- A9: a Practice host doc-comment a tényleges controller-backed hostot írja;
+  a device-mátrix Practice útvonala elérhető, Song Trainer sorai PENDING-ek.
+- A10: `tools/round-gate.sh test/app test/features/learn
+  test/features/song_trainer/baseline test/features/auth test/features/settings
+  test/features/vision/vision_offline_regression_test.dart` → **exit 0**.
+  A gate eredményartefaktuma az összes lépés zöld lezárását igazolta: format,
+  analyze, a hat külön célzott tesztútvonal, architecture, secrets és l10n.
+- A11: `/home/ubuntu/flutter/bin/flutter test
+  test/features/learn/continue_card_test.dart` → `+5: All tests passed!`.
+  A fájl diffje csak importot, `_flags`/`_config` segédeket és a `_pump`
+  override-ját érinti; a `findsNWidgets(2)`, `reason:` és minden `expect`
+  változatlan.
 
 ### Valódi-sértés próba (§6.1)
 
 Ideiglenesen `songTrainerV2Enabled: nonProd` helyett
-`songTrainerV2Enabled: true` szerepelt a factoryban. Ezután:
+`songTrainerV2Enabled: true` szerepelt a factoryban. A célzott A1 production
+cellának a tényleges, csonkítatlan kimenete:
 
 ```text
 /home/ubuntu/flutter/bin/flutter test test/app/feature_flags_test.dart --name "remains disabled in production"
@@ -711,17 +720,16 @@ teljes `test/app/feature_flags_test.dart` futás ismét `+9: All tests passed!`.
 
 ### OD-k, eltérés, nem futtatott ellenőrzések és follow-up
 
-- OD-01/OD-02/OD-03/OD-04: a brief defaultjait követtem: két külön Learn-kártya
-  a lista tetején, kizárólag saját flaggel, a Song Trainer device-sorok PENDING-ek.
-- OD-05: alkalmazva. A `continue_card_test.dart` nincs az allowed_paths listán,
-  ezért nincs javítás vagy mérce-lazítás.
-- Eltérés: nincs szándékos eltérés; a scope a nyolc megengedett fájlon belül maradt.
-- Nem futtatott: a gate hátralévő tesztútvonalai és az architecture lépése a
-  `test/features/learn` első piros tesztje miatt nem indulhattak el. CI/APK-t
-  az orchestrátor indít, és megállított körhöz nem indítandó.
-- Follow-up: a briefet bővíteni kell a `test/features/learn/continue_card_test.dart`
-  fájllal, vagy product döntéssel meg kell erősíteni az új kártyák és a Continue
-  card viewport-szerződését; csak ezután folytatható a javítás.
+- OD-01…OD-04: a brief defaultjait követtem: két külön Learn-kártya a lista
+  tetején, kizárólag a saját flagjükkel, a Song Trainer device-sorok PENDING-ek.
+- OD-05: az R1 által engedélyezett kilencedik fájlban javítva, mércelazítás
+  nélkül.
+- Eltérés: nincs. A diff kizárólag a kilenc `allowed_paths` elemet érinti.
+- Nem futtatott: teljes Flutter suite, randomizált property gate és release APK
+  lokálisan nem futott; ezek CI/orchesztrátor feladatai. Backend check nem
+  alkalmazható, mert a kör nem érint `backend/` fájlt.
+- Follow-up: a Song Trainer V2 és Practice V2 készülékes PENDING-mátrixát a
+  user tölti ki; ez nem a merge lokális gate-je.
 
 > Minden viselkedési állításhoz add meg a tesztet, ami bizonyítja. Állítás
 > teszt nélkül = bemondás.
