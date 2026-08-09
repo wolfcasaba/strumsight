@@ -446,8 +446,9 @@
   **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg — a
   §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult; az Epic 6 feloldása
   MOST emberi döntésre vár, lásd §6.
-- **Az AI Tutor rollout — a drótozási blokkoló FELOLDVA, az átjáró még
-  hiányzik (frissítve 2026-08-09, GOV-05b-1 merge után).**
+- **Az AI Tutor rollout — a drótozási blokkoló ÉS a backend-adapter FELOLDVA,
+  a bekötés és az üzemeltetés hiányzik (frissítve 2026-08-09, GOV-05b-2 /
+  E99-R07 merge után).**
   1. ~~Három provider `throw UnimplementedError`-ral indul~~ — ✅ **MEGOLDVA**
      az **E99-R06** (GOV-05b-1, PR #209, `23fdf30a`, ADR 0213) körrel: a
      `tutorOrchestratorProvider`, a `tutorConversationRepositoryProvider` és a
@@ -463,20 +464,45 @@
      a parse és a `seq`-sorrendezés a `RemoteTutorModelGateway` dolga).
      A kliens–backend szerződést a review kézzel összevetette a
      `TutorStreamRequest` `extra="forbid"` sémájával — illeszkedik.
-  3. **MÉG HIÁNYZIK — a valódi modell-átjáró.** A backend `ProviderGateway`
-     egyetlen konkrét implementációja a `FakeProviderGateway`
-     (`script`-tel hajtott teszt-duplikátum). A user 2026-08-09-én **OpenAI**-t
-     választott; az adapter briefje és az **ADR 0214** kész, a kör
-     (**E99-R07**) a sorban. A `FakeTutorModelGateway` **NINCS és nem is
-     kerülhet** production-drótozásba — a production alapértelmezés a
-     `LocalTutorModelGatewayStub`, ami kontrollált
-     `tutor.model_gateway.unavailable` hibát ad.
-  4. **MÉG HIÁNYZIK — üzemeltetés.** Hosztolt backend + OpenAI API-kulcs; ez
+  3. ~~MÉG HIÁNYZIK — a valódi modell-átjáró~~ — ✅ **MEGOLDVA** (**E99-R07**,
+     GOV-05b-2, PR [#210](https://github.com/wolfcasaba/strumsight/pull/210),
+     squash `f1d57c69`, **ADR 0214**, implementer **Codex (Terra)** 1
+     forduló, javító kör nélkül): `OpenAiProviderGateway`
+     (`backend/app/tutor/provider_gateway.py`) nyers `httpx`-szel
+     implementálja a `ProviderGateway` szerződést — mind a hét hibaágra
+     (timeout, 4xx/5xx, kapcsolati hiba, nem-JSON, hiányzó/nem-string
+     `content`) normalizált, szivárgásmentes kivétellel (13 új teszt,
+     `httpx.MockTransport`, nulla valós hálózat). Review **APPROVED, 0
+     BLOCKER/MAJOR/MINOR, 2 NOTE** (reviewer SAJÁT izolált klónban
+     újrafuttatott 9/9 zöld gate-tel ÉS a §6.1 valódi-sértés próba KÉTSZERI
+     független megismétlésével — a brief mutációja + egy saját
+     kulcs-szivárgásra célzó mutáció, mindkettő a várt cellát buktatta meg).
+     Dedikált security-review (risk=high) **PASS, 0
+     CRITICAL/BLOCKER/MAJOR/MINOR, 4 NOTE** (mind a bekötő körre szóló
+     előre-mutató follow-up: `exc.__context__` defense-in-depth,
+     `tutor_openai_base_url` validáció, `AsyncClient` lifecycle, válasz-méret
+     korlát) — a security-reviewer a kör saját `str(exc)` tesztjén túlmenve a
+     teljes traceback + valós `logging.exception()` szintjén is megmérte mind
+     a 7 hibaágat szándékosan beültetett titokkal, 7/7 tiszta. **A
+     `FakeProviderGateway` érintetlen** (a diffje üres), **a `main.py`
+     bekötése ebben a körben TUDATOSAN NEM történt meg** (ADR 0214 Döntés
+     2/OD-04): `tutor_provider` marad `"fake"`, `tutor_enabled` marad
+     `False`. Zöld kapu exact-SHA `19002611`: Full Gate + Router CI +
+     Backend CI mindhárom **success**. Melléktermék: a pre-flight mért egy
+     pre-létező, byte-azonos duplikátumot a `config.py` `tutor_*`
+     blokkjában (E04-R14 eredetű, `c1c0a771`) — összevonva, viselkedés
+     változatlan.
+  4. **MÉG HIÁNYZIK — a bekötés.** A backend `main.py`-ban a registry/gateway
+     kiválasztás (ma kizárólag `FakeProviderGateway`-t épít, `main.py:147–184`)
+     bekötése az OpenAI-adapterre. Külön kör — a briefje **szándékosan még
+     nincs megírva**, a pre-flightjának az E99-R07 utáni állapotot kell
+     mérnie.
+  5. **MÉG HIÁNYZIK — üzemeltetés.** Hosztolt backend + OpenAI API-kulcs; ez
      **user-feladat**. A `/tutor/stream` **JWT-t vár** (`CurrentUser`), tehát a
      `RemoteTutorModelGateway`-t élesítő körnek **authentikált `Dio`-t** kell
      átadnia a transportnak (E99-R06 review NOTE-1).
   **A flagek változatlanul `false` minden környezetben** — az `aiTutorEnabled`
-  bekapcsolása a 3. és 4. pont után, külön körben.
+  bekapcsolása a 4. és 5. pont után, külön körben.
 - **A vision rollout BLOKKOLT — hiányzó modell-binárisok (mérve 2026-08-09,
   GOV-05a pre-flight; ez NEM flag-kérdés):** az
   `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
@@ -1098,25 +1124,31 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A KÖVETKEZŐ KÖR: E99-R07 (GOV-05b-2) — OpenAI provider-adapter.**
-   A sor `pending`, a lánc indítja, motor **Terra** (a motor-szabály itt
-   `codex`-et számol: ui=0, core=0). Brief + **ADR 0214** kész.
+0. **A KÖVETKEZŐ KÖR: a GOV-05b bekötő köre — a backend `main.py` bekötése az
+   OpenAI-adapterre (briefje még nincs megírva).** A backend adapter
+   (E99-R07) és a Dart-oldali transport+provider-bedrótozás (E99-R06) is
+   kész; ami hátravan, a `main.py` registry/gateway-kiválasztásának bekötése
+   az `OpenAiProviderGateway`-re (ma kizárólag `FakeProviderGateway`-t épít),
+   a `RemoteTutorModelGateway` Dart-oldali élesítése (authentikált
+   `Dio`-val — a `/tutor/stream` JWT-t vár, E99-R06 review NOTE-1) és a
+   flag-rollout. A pre-flightnek az E99-R07 utáni állapotot kell mérnie.
 
    **A user 2026-08-09-én újranyitotta a GOV-05b-t** („a négy konkrét darab is
-   csináljuk meg", provider: „open ai legyen"), tehát a korábbi „halasszuk el"
-   már NEM érvényes. A négy darabból:
+   csináljuk meg", provider: „open ai legyen"). A négy darabból:
 
    | # | Darab | Állapot |
    |---|---|---|
-   | 1 | Backend OpenAI provider-adapter | **E99-R07, sorban** (ADR 0214) |
+   | 1 | Backend OpenAI provider-adapter | ✅ **KÉSZ** (E99-R07, PR #210, ADR 0214) |
    | 2 | Dart konkrét `TutorStreamTransport` | ✅ **KÉSZ** (E99-R06, PR #209) |
    | 3 | A három provider bedrótozása | ✅ **KÉSZ** (E99-R06, PR #209) |
    | 4 | Hosztolás + OpenAI API-kulcs | **user-feladat** |
 
-   Utána még kell egy **bekötő kör**: a `RemoteTutorModelGateway` élesítése
-   (authentikált `Dio`-val — a `/tutor/stream` JWT-t vár, E99-R06 review
-   NOTE-1) és a flag-rollout. A briefje **szándékosan még nincs megírva**: a
-   pre-flightjának az E99-R07 utáni állapotot kell mérnie.
+   Mind a négy darab elkészült vagy user-feladatra vár — de az adapter (#1)
+   MÉG NINCS bekötve a `main.py` bootjába (E99-R07 tudatosan nem tette, ADR
+   0214 Döntés 2/OD-04): `tutor_provider` alapértéke `"fake"` marad, az
+   `aiTutorEnabled` bekapcsolása változatlanul crash-mentes, de valódi
+   OpenAI-hívás még nem érhető el éles úton. Ez a bekötés a fenti következő
+   kör dolga.
 
    **A §6 sorrend 3. és 4. pontja LEZÁRULT** (GOV-05a ✅, GOV-05c ✅,
    GOV-06 ✅ + GOV-06b ✅). Az **5. pont (Epic 6) EMBERI döntésre vár** — a 30
