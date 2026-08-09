@@ -7210,6 +7210,89 @@ munkájának megzavarása nélkül: `git -C <munkapéldány> status --porcelain`
 — minden `??` sor, ami NEM a briefben engedélyezett útvonal, azonnali
 vizsgálatot igényel, mielőtt a kör lezárulna.
 
+## L207 — [[L205]] szimlink-csapdája elkerülhető, ha a szimlink a git-ignore-olt szülőkönyvtáron BELÜL, nem AZON a néven ül — a szülő valódi könyvtár marad, a gitignore könyvtár-mintája így pruningol, mielőtt a szimlink látszana (E99-R05 / GOV-06b, 2026-08-09)
+
+**A különbség L205-höz képest.** A GOV-06 (E99-R04) a teljes `ml/data`
+útvonalat cserélte szimlinkre (`ln -s .../ml/data ml/data`) — ez törte a
+`.gitignore` `ml/data/` (trailing-slash, könyvtár-csak) mintáját, mert a
+szimlink NEM könyvtár git szemében, és a scope-audit `_has_symlink_component()`-je
+feltétel nélkül `VIOLATION`-t adott volna. A GOV-06b (E99-R05) ugyanahhoz a
+423 MB-os korpuszhoz kellett hozzáférést adjon két izolált munkapéldányban
+(implementer + reviewer `/tmp` klón), és **eggyel mélyebben** szimlinkelt:
+
+```bash
+mkdir -p <munkapéldány>/ml/data              # VALÓDI könyvtár, nem szimlink
+ln -s /home/ubuntu/music-theory/ml/data/klangio <munkapéldány>/ml/data/klangio
+```
+
+**Mit mértem.** `git -C <munkapéldány> status --porcelain --ignored=matching --
+ml/` → `!! ml/data/` (ignorált, NEM `??` untracked). `git check-ignore -v
+ml/data` → a `ml/data/` minta magára a VALÓDI könyvtárra illeszkedik.
+`git ls-files --others --exclude-standard -- ml/` → **üres** — a `klangio`
+szimlink egyáltalán nem kerül a `changed_paths` halmazba, mert git a
+gitignore-olt VALÓDI könyvtárba be sem néz (directory-pruning), függetlenül
+attól, hogy mi van benne. `stat` megerősítette: `ml/data` = `directory`,
+`ml/data/klangio` = `symbolic link`. Két független scope-audit (implementer
+kör + javító kör) mindkétszer `scope_audit=ok`-kal zárt, a pontos
+engedélyezett fájlszámmal (`scope_audit_changed=5`, majd `=1`) — a szimlink
+egyszer sem jelent meg leletként.
+
+**Szabály.** Ha egy izolált munkapéldánynak git-ignore-olt, NAGY külső
+adatkönyvtárhoz kell hozzáférést adni, és a `cp -r` (L205 alapértelmezett
+ajánlása) valamiért nem kívánatos (pl. sok párhuzamos munkapéldány/klón
+esetén a lemezterület összeadódik, még ha egy `cp` gyors is): **hozz létre
+egy VALÓDI könyvtárat a gitignore-mintát viselő útvonalon, és a szimlinket
+csak EGGYEL BELJEBB tedd** (a mintázott könyvtáron belüli alkönyvtárra,
+nem magára a mintázott névre). A biztonság nem a szimlink hiányán múlik,
+hanem azon, hogy a gitignore könyvtár-csak mintája egy VALÓDI könyvtár-
+bejegyzésen álljon, hogy git a pruningot elvégezze, mielőtt a szimlinkig
+érne. Ellenőrzés dispatch UTÁN, ugyanúgy mint L205-nél:
+`git -C <munkapéldány> status --porcelain --ignored=matching -- <útvonal>`
+— `!!` sor, nem `??`.
+
+## L208 — Egy származtatott mérce-szám validitása nem azonos a mérés végrehajtásának helyességével: a KIMONDOTT feltételezés (amire a metrika épül) önmagában NEM validált feltételezés, és a pre-flight/brief-írás pillanatában mérni kell, mielőtt egy körnek mérce-szerepet adunk (E99-R05 / GOV-06b, 2026-08-09, orchesztrátor-hiba egy KORÁBBI körben, javítva)
+
+**A hiba gyökere.** A GOV-06 (E99-R04) brief-je és ADR 0199 Döntés 6-a
+**kimondta**, hogy a BPM ground truth-ot a `.strums` pengetés-események
+inter-onset-intervallumaiból származtatja, **kimondott** feltételezéssel
+(„a pengetések egyenletes rácson ülnek"). Az implementáció ezt a
+specifikációt hibátlanul követte, a mérés determinisztikus és
+reprodukálható volt, a gate zöld, a review APPROVED — **minden gépi mérce
+zöldet adott**, és a szám mégis érvénytelen volt: a 82 felvételből
+származtatott „ground truth" mediánja 161,5 BPM, 20 felvételre 200 BPM
+fölötti, egyre 369,1 BPM — akusztikus gitárgyakorláson nem plauzibilis.
+**A `.strums` események pengetések voltak, nem ütem-annotációk** — a
+metrika pengetés-sűrűséget mért, nem tempót, és ezt SOHA senki nem
+validálta a brief megírásakor.
+
+**Miért nem fogta meg egyik meglévő gépi mérce sem.** A gate (format/
+analyze/test/architecture) a KÓD helyességét méri a SPECIFIKÁCIÓHOZ képest.
+A review a SPECIFIKÁCIÓ betartását méri és a számok reprodukálhatóságát.
+**Egyik sem méri a SPECIFIKÁCIÓ ALAPJÁUL szolgáló feltételezés valódiságát**
+— ha a brief kimond egy ground-truth-definíciót, sem a gate, sem a
+szokásos review nem kérdezi meg: „ez a definíció maga plauzibilis-e a
+tartományban?". Ez egy strukturális vakfolt: a mérce a specifikációnak
+való megfelelést ellenőrzi, nem a specifikáció saját érvényességét.
+
+**A javítás mintája.** A GOV-06b (E99-R05) egy **független** mérési útvonalat
+vezetett be (librosa beat-tracker, közvetlenül a WAV-ból, nem a `.strums`
+eseményekből), és a régi számot **nem törölte, hanem visszavontként,
+kimondott okkal megőrizte** — a törlés elfedné, hogy a hibás feltételezés
+egyszer be lett építve a mércébe.
+
+**Szabály.** Ha egy kör brief-je vagy ADR-je egy metrika ground-truth-ját
+egy MEGLÉVŐ adatforrásból **származtatja** (nem közvetlenül mér vagy kézzel
+annotál), a pre-flight KÖTELEZŐEN futtasson egy gyors plauzibilitás-próbát
+a származtatott értékeken (medián, percentilisek, szélsőértékek) **MIELŐTT**
+a kör brief-je a származtatást szerződésként rögzíti — pl. `python3 -c`
+egy egysoros statisztikával a valós korpuszon. Ha az érték a domain
+plauzibilis tartományán kívül esik (itt: BPM > ~250 akusztikus
+gitárgyakorlásra), az NEM a mérési kör dolga utólag felfedezni — a
+brief-írás pillanatában kiderül, ha valaki megkérdezi. Rokon: [[L200]],
+[[L201]] (a pre-flightnak a TERVEZETT/HIVATKOZOTT tartalmat kell mérnie,
+nem csak a brief belső konzisztenciáját) — itt a „tartalom" maga a
+metrika-definíció plauzibilitása volt.
+
 ## L206 — Egy `tool/benchmarks/*.dart` mérőeszköz, ami a `lib/`-ből Flutter-réteget importál (pl. `ClipAnalyzer`), `dart run`-nal NEM futtatható a tranzitív `dart:ui` import miatt — a brief parancssorát ELŐRE `flutter test --dart-define=...`-ra kell írni (E99-R04 / GOV-06, 2026-08-09)
 
 **A csapda.** A GOV-06 brief §7 a meglévő precedens
