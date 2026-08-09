@@ -466,6 +466,40 @@
   akkord-pontosságra valós felvételen nincs → **GOV-06**.
   **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg →
   lásd §6 „Kötelező sorrend".
+- **Az AI Tutor rollout BLOKKOLT — hiányzó production-drótozás ÉS hiányzó
+  modell-átjáró (mérve 2026-08-09, GOV-05b pre-flight):** az `aiTutorEnabled`
+  bekapcsolása MA **crash**-t okozna, nem degradált élményt.
+  1. **Három provider `throw UnimplementedError`-ral indul, és a production
+     boot EGYIKET SEM írja felül:** `tutorOrchestratorProvider`,
+     `tutorConversationRepositoryProvider`
+     (`presentation/providers/tutor_providers.dart`),
+     `tutorMemoryRepositoryProvider` (`tutor_privacy_providers.dart`). A
+     doc-comment „production boot wires it via `tutorMain()`"-t ígér, de a
+     **`tutorMain()` nem létezik** (`grep -rn "tutorMain" lib/` → csak maga a
+     doc-comment), és a `lib/main.dart` ProviderScope override-listája nem
+     tartalmazza őket. Következmény: a `TutorChatScreen` (→
+     `tutorChatControllerProvider`) és a `TutorDataScreen` megnyitása dobna.
+     A `TutorHomeScreen` stateless, az működne. Ugyanaz a hibaosztály, mint az
+     E02 „Practice V2 hiányzó éles providerek" rése, amit az E02-R21 pótolt.
+  2. **A konkrét implementációk LÉTEZNEK** (`LocalTutorConversationRepository`,
+     `LocalTutorMemoryRepository`, `TutorOrchestrator`), tehát az 1. pont
+     mechanikusan pótolható — **de** a `TutorOrchestrator` minden fordulóhoz
+     KÖTELEZŐEN igényel egy `TutorModelGateway`-t (`gatewayForAttempt`
+     required), és a három elérhető átjáró egyike sem használható éles
+     beszélgetésre: a `LocalTutorModelGatewayStub` **mindig**
+     `tutor.model_gateway.unavailable` hibát ad; a `FakeTutorModelGateway`
+     egy `script`-tel hajtott **teszt-duplikátum** (előre megírt lépéssor, nem
+     válaszgeneráló); a `RemoteTutorModelGateway` hosztolt backend-proxyt és
+     provider API-kulcsot igényel, ami nincs (ld. „Login-backend nincs
+     hosztolva").
+  **A döntés, ami emberi:** (a) a Tutor shell élesítése úgy, hogy a chat
+  lokalizált „nem elérhető" állapotot mutat (a Profile / Privacy / Data
+  képernyők valódiak és működnek), (b) a scripted fake átjáró szállítása
+  lab-ban (a runbook 1. lépcsője ezt írja — de a mérés szerint az egy
+  teszt-duplikátum, nem használható élmény), vagy (c) a GOV-05b elhalasztása,
+  amíg valódi átjáró (hosztolt proxy vagy on-device modell) nincs. **Amíg
+  nincs döntés, a GOV-05b nem indítható.** A `GOV-05c` (Learn migráció) és a
+  `GOV-06` ettől FÜGGETLENÜL indítható.
 - **A vision rollout BLOKKOLT — hiányzó modell-binárisok (mérve 2026-08-09,
   GOV-05a pre-flight; ez NEM flag-kérdés):** az
   `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
@@ -1017,11 +1051,9 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 >    döntés 2026-08-09; mért indok a 3.0 pontban):
 >    - **GOV-05a** = `E99-R01` — Practice V2 + Song Trainer V2 → ✅ **KÉSZ**
 >      (PR #205, `d958b75e`, ADR 0197).
->    - **GOV-05b** = `E99-R02` — **AI Tutor internal rollout**:
->      `aiTutorEnabled` ON `development`/`lab`-ban a
->      [`docs/runbooks/ai-tutor-rollout.md`](docs/runbooks/ai-tutor-rollout.md)
->      1. lépcsője szerint, belépési pont + consent/privacy kapu.
->      Nyitott kérdés a briefhez: `aiTutorCloudEnabled` (fake gateway vagy OFF).
+>    - **GOV-05b** = `E99-R02` — **AI Tutor internal rollout → ⛔ BLOKKOLT,
+>      EMBERI DÖNTÉST IGÉNYEL** (mérve 2026-08-09, lásd §3 „AI Tutor
+>      production-drótozás"). NEM indítható, amíg a döntés nincs meg.
 >    - **GOV-05c** = `E99-R03` — **Learn migráció** (`migratedLearnEnabled`).
 >      A legkockázatosabb: egy MÁR szállított feature mögött cseréli a motort.
 >      Meglévő őrök: `test/features/learn/learn_migration_parity_test.dart`,
@@ -1062,7 +1094,18 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A KÖVETKEZŐ KÖR: GOV-05b (`E99-R02`) — AI Tutor internal rollout.**
+0. **A KÖVETKEZŐ KÖR: GOV-05c (`E99-R03`) — Learn migráció a Practice V2-re.**
+   A GOV-05b (AI Tutor) **kimarad a sorból**, mert mért blokkolón áll és
+   emberi döntést igényel (§3 „Az AI Tutor rollout BLOKKOLT"). A GOV-05c
+   ettől független: a `migratedLearnEnabled` flag mögötti út MÁR be van
+   drótozva (E02-R19/R21), és két meglévő őr méri
+   (`test/features/learn/learn_migration_parity_test.dart`,
+   `learn_rollback_test.dart`); az `AppConfig.resolve:115` már kényszeríti a
+   `practiceEngineV2Enabled` függőséget. Ez a HÁROM közül a legkockázatosabb
+   kör — egy MÁR szállított feature mögött cseréli a motort —, ezért kapott
+   önálló kört.
+
+   **A régi 0. pont (GOV-05b) szövege, amíg a döntés meg nem születik:**
    Kézi orchesztrálás, a queue-n kívül (a GOV-körök nem queue-sorok — lásd a
    fenti „Governance-kör azonosítás" dobozt). Implementer **Terra**
    (`.pipeline/engine-override` = `terra`, mérve élő a GOV-05a-n
