@@ -22,7 +22,9 @@ _MODEL = "configured-model"
 _MAX_OUTPUT_BYTES = 2000
 
 
-def _gateway(handler: Callable[[httpx.Request], httpx.Response]) -> OpenAiProviderGateway:
+def _gateway(
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> OpenAiProviderGateway:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     return OpenAiProviderGateway(
         client=client,
