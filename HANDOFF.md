@@ -446,40 +446,37 @@
   **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg — a
   §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult; az Epic 6 feloldása
   MOST emberi döntésre vár, lásd §6.
-- **Az AI Tutor rollout BLOKKOLT — hiányzó production-drótozás ÉS hiányzó
-  modell-átjáró (mérve 2026-08-09, GOV-05b pre-flight):** az `aiTutorEnabled`
-  bekapcsolása MA **crash**-t okozna, nem degradált élményt.
-  1. **Három provider `throw UnimplementedError`-ral indul, és a production
-     boot EGYIKET SEM írja felül:** `tutorOrchestratorProvider`,
-     `tutorConversationRepositoryProvider`
-     (`presentation/providers/tutor_providers.dart`),
-     `tutorMemoryRepositoryProvider` (`tutor_privacy_providers.dart`). A
-     doc-comment „production boot wires it via `tutorMain()`"-t ígér, de a
-     **`tutorMain()` nem létezik** (`grep -rn "tutorMain" lib/` → csak maga a
-     doc-comment), és a `lib/main.dart` ProviderScope override-listája nem
-     tartalmazza őket. Következmény: a `TutorChatScreen` (→
-     `tutorChatControllerProvider`) és a `TutorDataScreen` megnyitása dobna.
-     A `TutorHomeScreen` stateless, az működne. Ugyanaz a hibaosztály, mint az
-     E02 „Practice V2 hiányzó éles providerek" rése, amit az E02-R21 pótolt.
-  2. **A konkrét implementációk LÉTEZNEK** (`LocalTutorConversationRepository`,
-     `LocalTutorMemoryRepository`, `TutorOrchestrator`), tehát az 1. pont
-     mechanikusan pótolható — **de** a `TutorOrchestrator` minden fordulóhoz
-     KÖTELEZŐEN igényel egy `TutorModelGateway`-t (`gatewayForAttempt`
-     required), és a három elérhető átjáró egyike sem használható éles
-     beszélgetésre: a `LocalTutorModelGatewayStub` **mindig**
-     `tutor.model_gateway.unavailable` hibát ad; a `FakeTutorModelGateway`
-     egy `script`-tel hajtott **teszt-duplikátum** (előre megírt lépéssor, nem
-     válaszgeneráló); a `RemoteTutorModelGateway` hosztolt backend-proxyt és
-     provider API-kulcsot igényel, ami nincs (ld. „Login-backend nincs
-     hosztolva").
-  **A döntés, ami emberi:** (a) a Tutor shell élesítése úgy, hogy a chat
-  lokalizált „nem elérhető" állapotot mutat (a Profile / Privacy / Data
-  képernyők valódiak és működnek), (b) a scripted fake átjáró szállítása
-  lab-ban (a runbook 1. lépcsője ezt írja — de a mérés szerint az egy
-  teszt-duplikátum, nem használható élmény), vagy (c) a GOV-05b elhalasztása,
-  amíg valódi átjáró (hosztolt proxy vagy on-device modell) nincs. **Amíg
-  nincs döntés, a GOV-05b nem indítható.** A `GOV-05c` (Learn migráció) és a
-  `GOV-06` ettől FÜGGETLENÜL indítható.
+- **Az AI Tutor rollout — a drótozási blokkoló FELOLDVA, az átjáró még
+  hiányzik (frissítve 2026-08-09, GOV-05b-1 merge után).**
+  1. ~~Három provider `throw UnimplementedError`-ral indul~~ — ✅ **MEGOLDVA**
+     az **E99-R06** (GOV-05b-1, PR #209, `23fdf30a`, ADR 0213) körrel: a
+     `tutorOrchestratorProvider`, a `tutorConversationRepositoryProvider` és a
+     `tutorMemoryRepositoryProvider` a `lib/main.dart`
+     `buildTutorProductionOverrides` függvényén át kap éles implementációt
+     (`LocalTutorConversationRepository`, `LocalTutorMemoryRepository`,
+     `TutorOrchestrator`). Az avult `tutorMain()` doc-comment-ígéret törölve
+     (`grep -rn "tutorMain" lib/` → 0). **Az `aiTutorEnabled` bekapcsolása
+     többé nem crash.**
+  2. ~~Nincs konkrét `TutorStreamTransport`~~ — ✅ **MEGOLDVA** ugyanabban a
+     körben: `HttpTutorStreamTransport` (Dio `ResponseType.stream` a
+     `POST /tutor/stream` SSE végpontra, nyers `data:` payloadokat ad tovább;
+     a parse és a `seq`-sorrendezés a `RemoteTutorModelGateway` dolga).
+     A kliens–backend szerződést a review kézzel összevetette a
+     `TutorStreamRequest` `extra="forbid"` sémájával — illeszkedik.
+  3. **MÉG HIÁNYZIK — a valódi modell-átjáró.** A backend `ProviderGateway`
+     egyetlen konkrét implementációja a `FakeProviderGateway`
+     (`script`-tel hajtott teszt-duplikátum). A user 2026-08-09-én **OpenAI**-t
+     választott; az adapter briefje és az **ADR 0214** kész, a kör
+     (**E99-R07**) a sorban. A `FakeTutorModelGateway` **NINCS és nem is
+     kerülhet** production-drótozásba — a production alapértelmezés a
+     `LocalTutorModelGatewayStub`, ami kontrollált
+     `tutor.model_gateway.unavailable` hibát ad.
+  4. **MÉG HIÁNYZIK — üzemeltetés.** Hosztolt backend + OpenAI API-kulcs; ez
+     **user-feladat**. A `/tutor/stream` **JWT-t vár** (`CurrentUser`), tehát a
+     `RemoteTutorModelGateway`-t élesítő körnek **authentikált `Dio`-t** kell
+     átadnia a transportnak (E99-R06 review NOTE-1).
+  **A flagek változatlanul `false` minden környezetben** — az `aiTutorEnabled`
+  bekapcsolása a 3. és 4. pont után, külön körben.
 - **A vision rollout BLOKKOLT — hiányzó modell-binárisok (mérve 2026-08-09,
   GOV-05a pre-flight; ez NEM flag-kérdés):** az
   `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
@@ -1101,18 +1098,30 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **NINCS automatikusan indítható következő kör.** A §6 sorrend 3. pontja
-   (GOV-05 shipping rollout hármas) ÉS 4. pontja (GOV-06 valós-audio DSP
-   baseline) is LEZÁRULT: GOV-05a ✅, GOV-05b ⛔ elhalasztva, GOV-05c ✅,
-   GOV-06 ✅ (E99-R04, `5ceed22d`, 2026-08-09). A sorrend 5. pontja (Epic 6
-   indítása) EMBERI döntésre vár — a 30 Epic-6 brief kész
-   (`epic-06-batch-index.md`), a queue-sorai `hold`-on maradnak, amíg a
-   döntés meg nem születik.
+0. **A KÖVETKEZŐ KÖR: E99-R07 (GOV-05b-2) — OpenAI provider-adapter.**
+   A sor `pending`, a lánc indítja, motor **Terra** (a motor-szabály itt
+   `codex`-et számol: ui=0, core=0). Brief + **ADR 0214** kész.
 
-   A GOV-05b (AI Tutor) továbbra is **kimarad a sorból** (user-döntés
-   2026-08-09: „halasszuk el"), mert mért blokkolón áll (§3 „Az AI Tutor
-   rollout BLOKKOLT"). Ha a döntés megszületik, a queue-ba állítás bármikor
-   mehet, függetlenül az Epic 6 sorsától.
+   **A user 2026-08-09-én újranyitotta a GOV-05b-t** („a négy konkrét darab is
+   csináljuk meg", provider: „open ai legyen"), tehát a korábbi „halasszuk el"
+   már NEM érvényes. A négy darabból:
+
+   | # | Darab | Állapot |
+   |---|---|---|
+   | 1 | Backend OpenAI provider-adapter | **E99-R07, sorban** (ADR 0214) |
+   | 2 | Dart konkrét `TutorStreamTransport` | ✅ **KÉSZ** (E99-R06, PR #209) |
+   | 3 | A három provider bedrótozása | ✅ **KÉSZ** (E99-R06, PR #209) |
+   | 4 | Hosztolás + OpenAI API-kulcs | **user-feladat** |
+
+   Utána még kell egy **bekötő kör**: a `RemoteTutorModelGateway` élesítése
+   (authentikált `Dio`-val — a `/tutor/stream` JWT-t vár, E99-R06 review
+   NOTE-1) és a flag-rollout. A briefje **szándékosan még nincs megírva**: a
+   pre-flightjának az E99-R07 utáni állapotot kell mérnie.
+
+   **A §6 sorrend 3. és 4. pontja LEZÁRULT** (GOV-05a ✅, GOV-05c ✅,
+   GOV-06 ✅ + GOV-06b ✅). Az **5. pont (Epic 6) EMBERI döntésre vár** — a 30
+   brief kész (`epic-06-batch-index.md`), a queue-sorai `hold`-on. A GOV-05b
+   lánca ettől FÜGGETLENÜL fut.
 
    **A pipeline-lánc TÉTLEN:** `docs/execution/pipeline-queue.tsv` minden
    E05-sora `done`, minden E06-sora **`hold`** — a cron nem indít semmit
