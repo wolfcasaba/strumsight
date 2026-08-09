@@ -385,17 +385,37 @@ kézi láncolása OOM-ot ad (L05).
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + **TÉNYLEGES, csonkítatlan** kimenet (mindkét
-  mérési parancs).
-- A §6.1 valódi-sértés próba nyers kimenete + a visszaállítás igazolása.
-- Az **A1** bizonyítéka: a `git diff --name-only ... | grep '^lib/'`
-  tényleges (üres) kimenete.
-- Az **A7** bizonyítéka: az akkord/onset számok az újrafuttatásból,
-  összevetve a §2.1 táblával.
-- Hány felvételre nem adott a librosa tempót, és melyekre (OD-03).
-- **A mért számok, szépítés nélkül** (OD-04).
-- Eltérések és okuk; nem futtatott ellenőrzések és okuk; follow-upok.
+- **Módosított fájlok:** `ml/chords/tempo_reference.py` librosa 0.11.0
+  `beat_track`-referenciát és stem→BPM JSON-kimenetet ad; a benchmark integer
+  ezrelékes, inkluzív szigorú és metrikai-szint egyezést számol, hiányzó JSON-nál
+  `notRun`-t ad, a régi összevetést pengetés-sűrűségként tartja meg; a teszt A2,
+  A3 és A6 szintetikus cellákat ad; a riport a mért értékekkel frissült.
+- **Futtatott parancsok:**
+  - `~/audio-venv/bin/python ml/chords/tempo_reference.py ml/data/klangio --out /tmp/tempo_reference.json`
+    → `librosa version: 0.11.0`; `tempo references written: 82/82 ->
+    /tmp/tempo_reference.json`; `recordings without tempo (0): []`.
+  - `~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart`
+    → 82/82 feldolgozva, 0 kihagyott; szigorú egyezés 11/82, metrikai-szint
+    egyezés 32/82, pengetés-sűrűség átlagos abszolút különbség
+    45.06716069579421 BPM. A teljes JSON-kimenet a riport mérési szakaszának
+    forrása volt.
+- **§6.1 valódi-sértés próba:** a `<=` ideiglenes `<`-re cserélése után a
+  célzott teszt PIROS: `Expected: <true> Actual: <false> predicted=104.0`,
+  `test/tooling/real_audio_dsp_baseline_test.dart 92:9`; a többi 7 teszt lefutott,
+  majd a `<=` visszaállítása után a célzott teszt `00:00 +8: All tests passed!`.
+- **A1 bizonyíték:** `git diff --name-only origin/main...HEAD | grep '^lib/'`
+  kimenete üres volt; a kör nem módosít `lib/` fájlt.
+- **A7 bizonyíték:** újrafuttatva változatlan: akkord 7892/11767 =
+  67.069%, moll 185/222 = 83.333%; onset F1: 40.427% / 67.391% / 85.201%.
+- **OD-03:** librosa minden felvételre adott tempót; kimaradt: 0, lista `[]`.
+- **OD-04:** a mért szigorú egyezés 13.415%, metrikai-szint egyezés 39.024%;
+  nincs validált, kézi tempó-annotáció, ezért a BPM ezen a korpuszon nem
+  mérhető. DSP-hangolás nem történt.
+- **Eltérés / nem futtatott ellenőrzés:** az audio-venvben nincs `ruff`, ezért a
+  Python-fájl ruff-formázása nem futott; csomagtelepítés scope-on kívüli volt.
+  A Dart-format, analyze és célzott tesztek a gate-ben futnak. Follow-up: kézi
+  tempó-annotáció reprezentatív részhalmazon, majd külön DSP-javítási kör, ha
+  érvényes mérce ezt indokolja.
 
 > Szám, amit nem futtattál, hazugság.
 

@@ -79,5 +79,47 @@ void main() {
       expect(baseline.total, 5);
       expect(baseline.accuracy, 0.6);
     });
+
+    test('tempo tolerance uses inclusive integer-per-mille boundary cells', () {
+      final cells = <(double, int, bool)>[
+        (103.9, 39, true),
+        (104, 40, true),
+        (104.1, 41, false),
+      ];
+
+      for (final cell in cells) {
+        expect(tempoDeviationPerMille(cell.$1, 100), cell.$2);
+        expect(
+          temposMatch(cell.$1, 100),
+          cell.$3,
+          reason: 'predicted=${cell.$1}',
+        );
+      }
+    });
+
+    test('metric-level tempo tolerance accepts only pinned ratios', () {
+      final cells = <(double, bool, bool)>[
+        (100 / 3, false, true),
+        (200 / 3, false, true),
+        (100, true, true),
+        (200, false, true),
+        (50, false, true),
+        (150, false, true),
+        (300, false, true),
+        (137, false, false),
+      ];
+
+      for (final cell in cells) {
+        expect(temposMatch(cell.$1, 100), cell.$2);
+        expect(metricLevelTemposMatch(cell.$1, 100), cell.$3);
+      }
+    });
+
+    test('missing tempo reference marks the tempo section not run', () {
+      final summary = buildTempoSummary(const {'recording_1001': 100}, null);
+
+      expect(summary['status'], 'notRun');
+      expect(summary.containsKey('strictTempoMatch'), isFalse);
+    });
   });
 }
