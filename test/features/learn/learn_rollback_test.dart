@@ -131,16 +131,14 @@ void main() {
   );
 
   test(
-    'A8 — FeatureFlags.migratedLearnEnabled default is OFF in every env',
+    'A8 — FeatureFlags.migratedLearnEnabled production default stays OFF',
     () {
-      for (final env in AppEnvironment.values) {
-        final flags = FeatureFlags.forEnvironment(env, accountEnabled: false);
-        expect(
-          flags.migratedLearnEnabled,
-          isFalse,
-          reason: '$env must keep migratedLearn OFF by default',
-        );
-      }
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(flags.migratedLearnEnabled, isFalse);
     },
   );
 }

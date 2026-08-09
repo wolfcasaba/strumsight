@@ -40,9 +40,8 @@ final class FeatureFlags {
   ///   OFF in production. There is deliberately NO define to force them on in
   ///   production ("a diagnosztika nem kapcsolható be véletlenül") — a
   ///   diagnostics-capable device build is what [AppEnvironment.lab] is for.
-  /// - Practice V2 + detailed history are available outside production;
-  ///   migrated Learn stays OFF everywhere until the parity rollout decision.
-  ///   None of the practice flags has a dart-define override.
+  /// - Practice V2, detailed history, and migrated Learn are available outside
+  ///   production. None of the practice flags has a dart-define override.
   /// - [songTrainerV2Enabled] is available outside production through the
   ///   same `nonProd` rollout boundary as Practice V2. The default constructor
   ///   remains OFF, so manually created flags still require an explicit opt-in.
@@ -56,7 +55,7 @@ final class FeatureFlags {
       diagnosticsEnabled: nonProd,
       labModeAvailable: nonProd,
       practiceEngineV2Enabled: nonProd,
-      migratedLearnEnabled: false,
+      migratedLearnEnabled: nonProd,
       practiceDetailedHistoryEnabled: nonProd,
       songTrainerV2Enabled: nonProd,
       aiTutorEnabled: false,
@@ -89,6 +88,8 @@ final class FeatureFlags {
   final bool practiceEngineV2Enabled;
 
   /// Whether Learn is served by Practice Engine V2 instead of the legacy path.
+  /// [forEnvironment] enables it outside production; the default constructor
+  /// remains OFF for explicitly constructed flag sets.
   final bool migratedLearnEnabled;
 
   /// Whether the versioned, detailed Practice history store may be written.

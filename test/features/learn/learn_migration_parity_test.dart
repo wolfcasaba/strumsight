@@ -302,7 +302,7 @@ void main() {
 
   test('A7 — the V2 ON flag production default stays OFF (no rollout)', () {
     final flags = FeatureFlags.forEnvironment(
-      AppEnvironment.development,
+      AppEnvironment.production,
       accountEnabled: false,
     );
     expect(flags.migratedLearnEnabled, isFalse);

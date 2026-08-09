@@ -93,9 +93,37 @@ void main() {
 
         expect(flags.aiTutorEnabled, isFalse);
         expect(flags.aiTutorCloudEnabled, isFalse);
-        expect(flags.migratedLearnEnabled, isFalse);
         expect(flags.visionEnabled, isFalse);
       }
+    });
+  });
+
+  group('Migrated Learn rollout boundary', () {
+    test('is enabled in development', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+
+      expect(flags.migratedLearnEnabled, isTrue);
+    });
+
+    test('is enabled in lab', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.lab,
+        accountEnabled: false,
+      );
+
+      expect(flags.migratedLearnEnabled, isTrue);
+    });
+
+    test('remains disabled in production', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(flags.migratedLearnEnabled, isFalse);
     });
   });
 
