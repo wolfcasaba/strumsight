@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -23,6 +24,7 @@ class LessonListScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final daily = Lessons.fromDailyChallenge(DailyChallenge.forDay(today));
+    final flags = ref.watch(appConfigProvider).flags;
     // Watch the STATE (not just the notifier) so a pass recorded behind a
     // pushed route re-renders the unlock states and the Continue card.
     ref.watch(lessonProgressProvider);
@@ -49,6 +51,24 @@ class LessonListScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
+            if (flags.practiceEngineV2Enabled) ...[
+              _V2EntryCard(
+                key: const Key('learn-entry-practice-hub'),
+                icon: Icons.play_circle_outline,
+                title: l10n.practiceHubTitle,
+                onTap: () => context.push(AppRoutes.practiceHub),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (flags.songTrainerV2Enabled) ...[
+              _V2EntryCard(
+                key: const Key('learn-entry-song-trainer'),
+                icon: Icons.library_music_outlined,
+                title: l10n.songTrainerTitle,
+                onTap: () => context.push(AppRoutes.songTrainerLibrary),
+              ),
+              const SizedBox(height: 12),
+            ],
             // Where to pick up (round 93): the first unlocked, not-yet-passed
             // lesson, one tap away. Hidden once the whole curriculum is passed.
             if (continueLesson != null) ...[
@@ -89,6 +109,41 @@ class LessonListScreen extends ConsumerWidget {
         letterSpacing: 1.2,
         color: AppColors.primary,
       ),
+    ),
+  );
+}
+
+class _V2EntryCard extends StatelessWidget {
+  const _V2EntryCard({
+    required super.key,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: CircleAvatar(
+        backgroundColor: AppColors.primary.withValues(alpha: 0.14),
+        child: Icon(icon, color: AppColors.primary),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Montserrat',
+          fontSize: 16,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     ),
   );
 }

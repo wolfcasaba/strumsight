@@ -242,19 +242,17 @@ void main() {
   });
 
   group('E03-R01 rollout guard', () {
-    test('songTrainerV2Enabled defaults to false in every environment', () {
-      // E03-R01 §5.1: the flag MUST NOT be flipped on implicitly by
-      // running outside production. A debug or test build that "happens
-      // to enable" the Song Trainer V2 would ship the boundary to anyone
-      // who installs a non-prod artifact.
-      for (final env in AppEnvironment.values) {
-        final flags = FeatureFlags.forEnvironment(env, accountEnabled: false);
-        expect(
-          flags.songTrainerV2Enabled,
-          isFalse,
-          reason: 'flag must be OFF in $env',
-        );
-      }
+    test('songTrainerV2Enabled remains off in production', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(
+        flags.songTrainerV2Enabled,
+        isFalse,
+        reason: 'the production rollout boundary must remain closed',
+      );
     });
 
     test('the default constructor keeps the new flag OFF as well', () {

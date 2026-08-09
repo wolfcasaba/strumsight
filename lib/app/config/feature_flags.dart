@@ -43,11 +43,9 @@ final class FeatureFlags {
   /// - Practice V2 + detailed history are available outside production;
   ///   migrated Learn stays OFF everywhere until the parity rollout decision.
   ///   None of the practice flags has a dart-define override.
-  /// - [songTrainerV2Enabled] is OFF in every environment and is NOT
-  ///   influenced by `nonProd`. It is a hand-rolled rollout boundary for the
-  ///   Epic 3 SongDocument V2 / file+asset storage / importer / Practice
-  ///   Engine integration work; even debug and test builds default OFF so
-  ///   an opt-in must always be explicit (E03-R01 §5.1).
+  /// - [songTrainerV2Enabled] is available outside production through the
+  ///   same `nonProd` rollout boundary as Practice V2. The default constructor
+  ///   remains OFF, so manually created flags still require an explicit opt-in.
   factory FeatureFlags.forEnvironment(
     AppEnvironment environment, {
     required bool accountEnabled,
@@ -60,7 +58,7 @@ final class FeatureFlags {
       practiceEngineV2Enabled: nonProd,
       migratedLearnEnabled: false,
       practiceDetailedHistoryEnabled: nonProd,
-      songTrainerV2Enabled: false,
+      songTrainerV2Enabled: nonProd,
       aiTutorEnabled: false,
       aiTutorCloudEnabled: false,
       visionEnabled: false,
@@ -98,10 +96,8 @@ final class FeatureFlags {
 
   /// Whether the parallel Song Trainer V2 (SongDocument V2 + file/asset
   /// storage + importer + Practice Engine integration) is reachable in this
-  /// build. Defaults to OFF in every environment — including debug and test
-  /// builds — so a rollout must always be an explicit opt-in, never an
-  /// implicit side-effect of running outside production (E03-R01 §5.1,
-  /// SDD Ch4 §3). The flag has no dart-define override.
+  /// build. It is enabled by [forEnvironment] outside production, while the
+  /// default constructor stays OFF. The flag has no dart-define override.
   final bool songTrainerV2Enabled;
 
   /// Whether the AI Tutor feature is available. Defaults to OFF.

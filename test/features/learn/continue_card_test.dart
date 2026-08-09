@@ -1,13 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
-import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/preference_store.dart';
+
+FeatureFlags _flags() => const FeatureFlags(
+  accountEnabled: false,
+  diagnosticsEnabled: false,
+  labModeAvailable: false,
+);
+
+AppConfig _config(FeatureFlags flags) => AppConfig(
+  environment: AppEnvironment.development,
+  apiBaseUrl: AppConfig.devApiBaseUrl,
+  flags: flags,
+  diagnosticsToken: AppConfig.devDiagnosticsToken,
+  buildMode: 'test',
+  appVersion: 'test',
+);
 
 /// Round 93 — the list-side half of the retention loop: a "Continue" hero
 /// card at the top of the Learn home deep-links to the first unlocked,
@@ -18,7 +36,10 @@ import '../../support/preference_store.dart';
 Future<void> _pump(WidgetTester tester, [Map<String, Object>? stored]) =>
     tester.pumpWidget(
       ProviderScope(
-        overrides: preferenceOverrides(stored),
+        overrides: [
+          ...preferenceOverrides(stored),
+          appConfigProvider.overrideWithValue(_config(_flags())),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

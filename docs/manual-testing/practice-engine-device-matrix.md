@@ -6,13 +6,12 @@ APK-tesztje. Ez a mátrix a teszteseteket és a kitöltési útmutatót tartalma
 **a felhasználó tölti ki** a „pass / részleges / fail" és a szabad szöveges
 megjegyzés mezőket minden cellára.
 
-> ⚠ **Az Epic-2 rendszerszintű rés (R20 brief §2.1).** A `practiceEngineV2Enabled`
-> és a `migratedLearnEnabled` mindkét flag OFF — a **migrated Learn útvonal**
-> (R19-től) élesíthető a flag-ON ágon, az **önálló Practice V2 Hub→Setup→Session
-> út** viszont a `practiceSessionHostProvider` `null` defaultja miatt az
-> élesített appban ma NEM indítható. A mátrix „Self-practice (Hub→Setup→Session)"
-> sora ezért **kísérleti** (a §3 rendszerszintű rés elhallgatása nélkül): a
-> kitöltés csak akkor releváns, ha az R21+ köre(k) a §3-as rést pótolják.
+> **Practice V2 elérhetőség (E02-R21, GOV-05a).** A
+> `practiceSessionHostProvider` az aktív session inputokból állítja elő a
+> controller-backed hostot; csak aktív input hiányában `null`. A Practice Hub
+> → Setup → Session út ezért a `practiceEngineV2Enabled` flaggel elérhető
+> lab buildben. A következő cellák készülékes bizonyítéka továbbra is a user
+> menetéhez tartozik.
 
 ## 1. Kitöltési útmutató
 
@@ -65,13 +64,11 @@ frissíti.
 |---|---|---|---|---|
 | 2.1.1 | (user tölti) | (user tölti) | | |
 
-### 2.2 Self-practice (Hub → Setup → Session) — **kísérleti, lásd a dobozt**
+### 2.2 Self-practice (Hub → Setup → Session) — **PENDING készülékes ellenőrzés**
 
-A R20 §3 rendszerszintű rés értelmében ez a sor jelenleg **csak akkor
-tölthető, ha a `practiceEngineV2Enabled` ON ágon a §3-as drótozás
-megtörtént**. A mátrix kitöltése előtt a usernek ellenőriznie kell a
-`lib/features/practice/presentation/practice_effect_listener.dart:64`
-sort (`final practiceSessionHostProvider = Provider<PracticeSessionHost?>((_) => null);`).
+A GOV-05a rollout után ez az út a Learn fül Practice Hub belépési pontjáról
+indul a `practiceEngineV2Enabled` ON ágon. A következő sorok PENDING-ek,
+amíg a user valós eszközön ki nem tölti őket.
 
 | # | Mód | Tempó | Zaj | Hangkeltés | Eredmény | Pass/Fail |
 |---|---|---|---|---|---|---|
@@ -153,6 +150,18 @@ tehát **mindig** kitölthető (függetlenül a §3 rendszerszintű rés
 | 2.8.3 | Reduced motion ON + Session | nincs animáció, az információ megmarad | | |
 | 2.8.4 | TalkBack ON + Hub | minden kártya felolvasható, „Open <title>" formátumban | | |
 
+### 2.9 Song Trainer V2 (Learn → Song Trainer) — **PENDING készülékes ellenőrzés**
+
+A GOV-05a rollout után a Song Trainer könyvtár a Learn fülről a
+`songTrainerV2Enabled` ON ágon érhető el. Minden sora PENDING, amíg a user
+valós eszközön nem rögzíti az eredményt.
+
+| # | Menet | Elvárás | Eredmény | Pass/Fail |
+|---|---|---|---|---|
+| 2.9.1 | Learn → Song Trainer | a könyvtár megnyílik crash nélkül | PENDING | PENDING |
+| 2.9.2 | Song Trainer → új dal | az editor megnyílik és menthető dokumentumot ad | PENDING | PENDING |
+| 2.9.3 | Song Trainer → import | az import belépési pont elérhető, hiba esetén érthető visszajelzést ad | PENDING | PENDING |
+
 ---
 
 ## 3. A készülékes menet eredményének visszacsatolása
@@ -168,9 +177,9 @@ A fájl kötelező mezői:
 
 - Dátum és futtatott build (SHA)
 - A 4 kötelező cella (2.1 §1.3) eredménye
-- Az önálló Practice V2 §2.2 cellák eredménye (vagy „nem releváns — §3
-  rendszerszintű rés miatt")
+- Az önálló Practice V2 §2.2 cellák eredménye
 - A migrated Learn §2.3 cellák eredménye
+- A Song Trainer V2 §2.9 PENDING celláinak eredménye
 - Az akkumulátor-takarékos mód §2.7 cellák eredménye
 - A screen reader / TalkBack §2.8 cellák eredménye
 - Összesítés: hány pass / részleges / fail cella van

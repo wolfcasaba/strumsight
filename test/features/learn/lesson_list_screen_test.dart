@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
@@ -8,15 +13,66 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/preference_store.dart';
 
-Future<void> _pump(WidgetTester tester) => tester.pumpWidget(
+FeatureFlags _flags({
+  bool practiceEngineV2Enabled = false,
+  bool songTrainerV2Enabled = false,
+}) => FeatureFlags(
+  accountEnabled: false,
+  diagnosticsEnabled: false,
+  labModeAvailable: false,
+  practiceEngineV2Enabled: practiceEngineV2Enabled,
+  songTrainerV2Enabled: songTrainerV2Enabled,
+);
+
+AppConfig _config(FeatureFlags flags) => AppConfig(
+  environment: AppEnvironment.development,
+  apiBaseUrl: AppConfig.devApiBaseUrl,
+  flags: flags,
+  diagnosticsToken: AppConfig.devDiagnosticsToken,
+  buildMode: 'test',
+  appVersion: 'test',
+);
+
+Future<void> _pump(
+  WidgetTester tester, {
+  FeatureFlags? flags,
+  GoRouter? router,
+}) => tester.pumpWidget(
   ProviderScope(
-    overrides: preferenceOverrides(),
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: LessonListScreen(now: DateTime(2026, 7, 9)),
-    ),
+    overrides: [
+      ...preferenceOverrides(),
+      appConfigProvider.overrideWithValue(_config(flags ?? _flags())),
+    ],
+    child: router == null
+        ? MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: LessonListScreen(now: DateTime(2026, 7, 9)),
+          )
+        : MaterialApp.router(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
   ),
+);
+
+GoRouter _router() => GoRouter(
+  initialLocation: AppRoutes.learn,
+  routes: [
+    GoRoute(
+      path: AppRoutes.learn,
+      builder: (_, _) => LessonListScreen(now: DateTime(2026, 7, 9)),
+    ),
+    GoRoute(
+      path: AppRoutes.practiceHub,
+      builder: (_, _) => const Scaffold(body: SizedBox()),
+    ),
+    GoRoute(
+      path: AppRoutes.songTrainerLibrary,
+      builder: (_, _) => const Scaffold(body: SizedBox()),
+    ),
+  ],
 );
 
 void main() {
@@ -46,7 +102,10 @@ void main() {
     final tier = Lessons.byDifficulty(Difficulty.beginner);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: preferenceOverrides(),
+        overrides: [
+          ...preferenceOverrides(),
+          appConfigProvider.overrideWithValue(_config(_flags())),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             // Pre-pass the first beginner lesson.
@@ -71,5 +130,85 @@ void main() {
     // lesson show somewhere in the list.
     expect(find.text(tier[1].name), findsNWidgets(2));
     expect(find.byIcon(Icons.star), findsWidgets); // first lesson earned stars
+  });
+
+  for (final cell in const [
+    (practice: false, songTrainer: false),
+    (practice: true, songTrainer: false),
+    (practice: false, songTrainer: true),
+    (practice: true, songTrainer: true),
+  ]) {
+    testWidgets(
+      'V2 entries follow practice=${cell.practice}, songTrainer=${cell.songTrainer}',
+      (tester) async {
+        await _pump(
+          tester,
+          flags: _flags(
+            practiceEngineV2Enabled: cell.practice,
+            songTrainerV2Enabled: cell.songTrainer,
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const Key('learn-entry-practice-hub')),
+          cell.practice ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.byKey(const Key('learn-entry-song-trainer')),
+          cell.songTrainer ? findsOneWidget : findsNothing,
+        );
+      },
+    );
+  }
+
+  testWidgets('production factory flags hide both V2 entries', (tester) async {
+    await _pump(
+      tester,
+      flags: FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('learn-entry-practice-hub')), findsNothing);
+    expect(find.byKey(const Key('learn-entry-song-trainer')), findsNothing);
+  });
+
+  testWidgets('Practice Hub entry pushes the Practice Hub route', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    await _pump(
+      tester,
+      flags: _flags(practiceEngineV2Enabled: true, songTrainerV2Enabled: true),
+      router: router,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('learn-entry-practice-hub')));
+    await tester.pumpAndSettle();
+
+    expect(router.state.uri.path, AppRoutes.practiceHub);
+  });
+
+  testWidgets('Song Trainer entry pushes the Song Trainer route', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    await _pump(
+      tester,
+      flags: _flags(practiceEngineV2Enabled: true, songTrainerV2Enabled: true),
+      router: router,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('learn-entry-song-trainer')));
+    await tester.pumpAndSettle();
+
+    expect(router.state.uri.path, AppRoutes.songTrainerLibrary);
   });
 }

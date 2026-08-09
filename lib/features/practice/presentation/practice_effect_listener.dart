@@ -19,9 +19,9 @@ import '../application/practice_session_providers.dart';
 import '../domain/model/practice_session_state.dart';
 
 /// Presentation-side boundary the V2 session screen reads through
-/// (ADR 0079 §2). The real implementation is wired in the next round;
-/// the production default of [practiceSessionHostProvider] is `null`,
-/// which the screen renders as a localised "session unavailable" state.
+/// (ADR 0079 §2). [practiceSessionHostProvider] exposes the active session's
+/// controller-backed host and yields `null` only when no session inputs are
+/// active, so the screen can render its localised unavailable state.
 abstract interface class PracticeSessionHost {
   Stream<PracticeSessionState> get states;
   PracticeSessionState get state;
