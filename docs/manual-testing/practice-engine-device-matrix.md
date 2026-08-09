@@ -82,22 +82,21 @@ amíg a user valós eszközön ki nem tölti őket.
 | 2.2.8 | Free practice | szabad | csendes | akusztikus gitár | | |
 | 2.2.9 | Free practice | szabad | mérsékelt háttérzaj | akusztikus gitár | | |
 
-### 2.3 Migrated Learn (Learn képernyő, `migratedLearnEnabled` ON)
+### 2.3 Migrated Learn (Learn képernyő, `migratedLearnEnabled` ON) — **PENDING készülékes ellenőrzés**
 
-A R19 óta élesíthető a migrated Learn útvonal — a user ezt a build-ci
-flag-gel tudja bekapcsolni a készüléken futó APK-ra. Ez a mátrix
-tehát **mindig** kitölthető (függetlenül a §3 rendszerszintű rés
-állapotától).
+A GOV-05c rollout után a migrated Learn útvonal alapértelmezetten elérhető
+development és lab buildben; productionben továbbra is kikapcsolt. A következő
+sorok PENDING-ek, amíg a user valós eszközön nem tölti ki őket.
 
 | # | Lecke | Tempó | Zaj | Hangkeltés | Eredmény | Pass/Fail |
 |---|---|---|---|---|---|---|
-| 2.3.1 | Első lecke (4/4, downstrokes) | default | csendes | akusztikus gitár | | |
-| 2.3.2 | 3/4 lecke (waltz) | default | csendes | akusztikus gitár | | |
-| 2.3.3 | Akkordváltás lecke (G↔D) | default | csendes | akusztikus gitár | | |
-| 2.3.4 | Easy mód aktiválva | default | csendes | akusztikus gitár | | |
-| 2.3.5 | 50% speed | 50% | csendes | akusztikus gitár | | |
-| 2.3.6 | 75% speed | 75% | csendes | akusztikus gitár | | |
-| 2.3.7 | 100% speed | 100% | csendes | akusztikus gitár | | |
+| 2.3.1 | Első lecke (4/4, downstrokes) | default | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.2 | 3/4 lecke (waltz) | default | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.3 | Akkordváltás lecke (G↔D) | default | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.4 | Easy mód aktiválva | default | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.5 | 50% speed | 50% | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.6 | 75% speed | 75% | csendes | akusztikus gitár | PENDING | PENDING |
+| 2.3.7 | 100% speed | 100% | csendes | akusztikus gitár | PENDING | PENDING |
 
 ### 2.4 Hangkeltési mátrix (self-practice és migrated Learn fölött)
 

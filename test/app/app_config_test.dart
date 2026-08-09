@@ -199,7 +199,7 @@ void main() {
         accountEnabled: false,
       );
       expect(development.practiceEngineV2Enabled, isTrue);
-      expect(development.migratedLearnEnabled, isFalse);
+      expect(development.migratedLearnEnabled, isTrue);
       expect(development.practiceDetailedHistoryEnabled, isTrue);
 
       final lab = FeatureFlags.forEnvironment(
@@ -207,7 +207,7 @@ void main() {
         accountEnabled: false,
       );
       expect(lab.practiceEngineV2Enabled, isTrue);
-      expect(lab.migratedLearnEnabled, isFalse);
+      expect(lab.migratedLearnEnabled, isTrue);
       expect(lab.practiceDetailedHistoryEnabled, isTrue);
 
       final production = FeatureFlags.forEnvironment(
@@ -218,6 +218,19 @@ void main() {
       expect(production.migratedLearnEnabled, isFalse);
       expect(production.practiceDetailedHistoryEnabled, isFalse);
     });
+
+    test(
+      'rollout defaults resolve without configuration problems in every environment',
+      () {
+        for (final environment in AppEnvironment.values) {
+          expect(
+            () => _resolve(environment: environment),
+            returnsNormally,
+            reason: '$environment rollout defaults must form a valid config',
+          );
+        }
+      },
+    );
 
     test('new constructor fields are optional and part of value semantics', () {
       const defaults = FeatureFlags(
