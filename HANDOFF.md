@@ -3,78 +3,64 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-09
-> (E99-R04 / GOV-06 MERGED — Valós-audio DSP baseline mérés:** a §6
-> „Kötelező sorrend" 4. pontja. **MÉRÉSI kör** — a szállított, változatlan
-> `const ClipAnalyzer()`-t futtatta 82 valódi telefonos gitárfelvételen; a DSP
-> egyetlen sora sem változott (`lib/` diff üres, A1 gépi mérce).
+> (E99-R05 / GOV-06b MERGED — a GOV-06 BPM-metrikájának javítása).**
 >
-> **Mért eredmény:** akkord-pontosság **67,069%** (7892/11767) a **18,832%**-os
-> többségi-osztály baseline (G-major, 2216/11767) fölött; moll-részhalmaz (222
-> esemény) **83,333%** (185/222). Onset P/R/F1 25/50/100 ms-nál: 40,427% /
-> **67,391%** / 85,201%. Származtatott BPM-MAE **45,067 BPM** (0 kizárt
-> felvétel a rács-szabálytalanság miatt). 82/82 felvétel feldolgozva, 0
-> kihagyott/hibás. A korpusz (`ml/data/klangio/`, 82 WAV + 82 `.strums`,
-> 11 767 esemény, SHA-256 `4880fac…5827`) **NINCS verziókövetve** — a mérés a
-> boxon kívül ma nem reprodukálható (ADR 0199 Döntés 8), ezért a riport
-> elkötelezett dokumentum, **nem CI-kapu** (nincs küszöb, nincs bevezetett
-> kilépési kód a mért számra). Teljes riport:
-> [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
+> ## ✅ E99-R05 (GOV-06b) KÉSZ — a valós-audio BPM-metrika visszavonása és javítása (2026-08-09)
 >
-> **A review SAJÁT, izolált `/tmp` klónban bájtra egyező eredménnyel
-> reprodukálta a teljes 82 felvételes mérést** (minden ellenőrzött mező —
-> akkord-pontosság, baseline, moll-részhalmaz, mindhárom onset-F1, BPM-MAE,
-> korpusz-checksum — digitre egyezett egy teljesen független futtatásban) ÉS
-> a brief §6.1 valódi-sértés próbáját (a `<=`→`<` mutáció pontosan az
-> 50000 µs cellát váltotta pirosra, visszaállítás után zöld) — a szám nem
-> bemondás. Dedikált security-review (risk=high a brief `ai-router` blokkja
-> szerint): **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR.
+> A GOV-06 (E99-R04) három mért száma közül kettő (akkord-pontosság
+> **67,069%**, onset F1@50ms **67,391%**) érvényes maradt; a harmadik
+> (BPM-MAE **45,067**) **érvénytelennek bizonyult** — nem DSP-tempóhibát
+> mért, hanem két pengetés-sűrűség-becslés egyezetlenségét (a `.strums`
+> események pengetések, nem validált ütem-annotációk). **Orchesztrátor-hiba
+> volt, nem implementer-hiba.** Javítás: új, **független** librosa
+> beat-tracker referencia (`ml/chords/tempo_reference.py`) közvetlenül a
+> WAV-ból. A BPM-szakasz mostantól három számot közöl: szigorú tempó-egyezés
+> **11/82 = 13,415%**, metrikai-szint toleráns egyezés **32/82 = 39,024%**,
+> és a régi szám **pengetés-sűrűség egyezésként** átcímkézve (NEM tempóként),
+> `visszavonva` jelöléssel megőrizve. **A BPM ezen a korpuszon nem mérhető,
+> mert nincs validált kézi tempó-annotáció** — kimondott, elfogadott kimenet
+> (ADR 0212 Döntés 4), nem szépített szám. Akkord/onset számok újramérve
+> bitre változatlanok; `lib/` alatt nulla változás.
 >
-> **ADR [0199](docs/adr/0199-real-audio-dsp-baseline-measurement-contract.md)**
-> (az orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** — **1
-> forduló, javító kör nélkül**. PR
-> [#207](https://github.com/wolfcasaba/strumsight/pull/207), squash
-> `5ceed22d`.
+> **ADR [0212](docs/adr/0212-bpm-baseline-metric-invalidation-and-independent-tempo-reference.md)**
+> (felülírja az ADR 0199 Döntés 6-ot). Implementer **Codex (Terra)** — **2
+> forduló** (1 impl. + 1 javító kör, F1: hiányzó nyers mérési kimenet a §10
+> handoffban — javítva, tételesen ellenőrizve). PR
+> [#208](https://github.com/wolfcasaba/strumsight/pull/208), squash
+> `c4ce2cc0`. Review:
+> [docs/reviews/e99-r05-gov-06b-bpm-metric-fix-review.md](docs/reviews/e99-r05-gov-06b-bpm-metric-fix-review.md)
+> — **APPROVED, 0 nyitott BLOCKER/MAJOR**, 2 NOTE — a reviewer SAJÁT, izolált
+> `/tmp` klónban bájtra egyező eredménnyel **kétszer** (javítás előtt/után)
+> megismételte a teljes 82 felvételes mérést ÉS a §6.1 valódi-sértés próbát.
+> Dedikált security-review: **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE.
+> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
 >
-> **Review:** [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md)
-> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 4 NOTE (mind nem blokkoló): a brief
-> szó szerint előírt `dart run` parancsa nem futtatható, mert a `ClipAnalyzer`
-> tranzitívan `dart:ui`-t importál (nincs sima Dart VM-en) — a dokumentált
-> `flutter test --dart-define=...`-helyettesítés a fenti bájtra-egyező
-> független reprodukcióval igazoltan ártalmatlan; +1 NOTE a helyettesítés
-> nem-nulla kilépési kódjáról (framework-műtermék, nem eredmény-alapú kapu);
-> 2 hygiene-NOTE a security-review-ból átvéve (lokális build-útvonal a nyers
-> kimenetben; elvi skip-error-visszhang egy jövőbeli malformed korpuszon).
-> Security: [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-security.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-security.md)
-> — **PASS**.
+> **Zöld kapu (exact-SHA `94fb2f6f`):** Full Gate
+> [31325609456](https://github.com/wolfcasaba/strumsight/actions/runs/31325609456)
+> + Router CI [31325597238](https://github.com/wolfcasaba/strumsight/actions/runs/31325597238)
+> mindkettő **success**. Az `origin/main` a dispatch óta nem mozdult
+> (`caa7751e` mindvégig, H8 tiszta). Post-merge gate a friss `main`-en
+> (`c4ce2cc0`) önállóan újrafuttatva: mind a 7 lépés zöld.
 >
-> **Zöld kapu (exact-SHA `ab4024a6`, a review-commit tipje):** Full Gate
-> [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
-> **success**; Router CI
-> [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
-> **success** (automatikus push-trigger, mert a diff `docs/rounds/**`-t
-> érint). A merge előtt ellenőrizve: az `origin/main` a dispatch óta nem
-> mozdult (`dc201524` mindvégig), rebase nem kellett (H8 tiszta). Post-merge
-> gate a friss `main`-en (`5ceed22d`) is önállóan újrafuttatva: mind a 7 lépés
-> (format/analyze/2×teszt/architecture/secrets/l10n) zöld.
+> **A §6 „Kötelező sorrend" 3. ÉS 4. pontja továbbra is lezárva** (GOV-05
+> shipping hármas + GOV-06/GOV-06b mérés, most már érvényes BPM-metrikával).
+> **Nincs automatikusan indítható következő kör:** az Epic 6 feloldása és a
+> GOV-05b (AI Tutor) sorsa emberi döntés — lásd §6.
 >
-> **A §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult** (GOV-05 shipping
-> hármas + GOV-06 mérés). **Nincs automatikusan indítható következő kör:** az
-> Epic 6 feloldása és a GOV-05b (AI Tutor) sorsa emberi döntés — lásd §6.
+> ## ✅ E99-R04 (GOV-06) KÉSZ — Valós-audio DSP baseline mérés (2026-08-09)
 >
-> ## ✅ E99-R03 (GOV-05c) KÉSZ — Learn migráció a Practice Engine V2-re (2026-08-09)
->
-> **E99-R03** MERGED (PR [#206](https://github.com/wolfcasaba/strumsight/pull/206),
-> squash `0e9d211c`; **ÚJ ADR 0198**; implementer **Codex (Terra)**, 1
-> forduló, javító kör nélkül; orchesztrátor/reviewer **Claude Sonnet 5**).
-> `migratedLearnEnabled: false → nonProd` (`development`/`lab` ON,
-> `production` OFF) — a Learn a Practice Engine V2-n fut `production`-ön
-> kívül, **zéró UI-változás** (ADR 0198 Döntés 4). Teljes részletes történet:
-> [`docs/handoff-archive.md`](docs/handoff-archive.md). Review:
-> [docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md](docs/reviews/e99-r03-gov-05c-learn-migration-rollout-review.md)
-> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 1 NOTE. Dedikált security-review
-> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**. Zöld kapu exact-SHA `87ca3f54`:
-> Build APK [31298706423](https://github.com/wolfcasaba/strumsight/actions/runs/31298706423)
-> + Router CI [31298707173](https://github.com/wolfcasaba/strumsight/actions/runs/31298707173)
+> **E99-R04** MERGED (PR [#207](https://github.com/wolfcasaba/strumsight/pull/207),
+> squash `5ceed22d`; **ÚJ ADR 0199**; implementer **Codex (Terra)**, 1
+> forduló, javító kör nélkül). A szállított, változatlan `const
+> ClipAnalyzer()` mérve 82 valódi telefonos felvételen: akkord-pontosság
+> **67,069%** (18,832%-os baseline fölött), onset F1@50ms **67,391%**. (A
+> harmadik szám, BPM-MAE 45,067, azóta **visszavonva** — lásd fent, GOV-06b.)
+> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
+> Review: [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md)
+> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 4 NOTE. Dedikált security-review
+> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**. Zöld kapu exact-SHA `ab4024a6`:
+> Full Gate [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
+> + Router CI [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
 > mindkettő **success**.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
@@ -86,12 +72,11 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-09 (E99-R03/GOV-05c zárása): E99-R01/GOV-05a részletes
+> Mért diéta: 2026-08-09 (E99-R05/GOV-06b zárása): E99-R04/GOV-06 teljes
 > fejléc-narratívája archiválva (`docs/handoff-archive.md`), rövid bannere
-> felkerült (fent); E05-R29 és E05-R30 rövid bannerei törölve — mindkettő
-> részletes története már az archívumban él (E05-R30-é ezzel a körrel
-> pótolva, mert a korábbi „Teljes történet" hivatkozás pontatlan volt: a
-> fájl akkor még nem tartalmazta).
+> felkerült (fent, a BPM-visszavonásra mutató jegyzettel); E99-R03/GOV-05c
+> rövid bannere törölve — részletes története már az archívumban él, a
+> fejléc-ablakból kikerült, mert immár a harmadik legutóbbi kör.
 
 ## 1. Current release state
 
@@ -442,10 +427,22 @@
   **JAVÍTVA (GOV-06, E99-R04, 2026-08-09):** a szállított, változatlan
   `ClipAnalyzer` mérve 82 valódi telefonos felvételen — akkord-pontosság
   **67,069%** (18,832%-os többségi-osztály baseline fölött), onset F1@50ms
-  **67,391%**, BPM-MAE **45,067** (származtatott). Teljes riport:
+  **67,391%**. Teljes riport:
   [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
   A korpusz nincs verziókövetve (external, csak ezen a boxon), a mérés ezért
   elkötelezett riport, nem CI-kapu — a verziókövetés nevesített follow-up.
+  **A GOV-06 harmadik száma (BPM-MAE 45,067) ÉRVÉNYTELEN volt — VISSZAVONVA
+  ÉS JAVÍTVA (GOV-06b, E99-R05, 2026-08-09, ADR 0212, PR #208):** a szám nem
+  DSP-tempóhibát mért, hanem a `.strums` pengetés-eseményekből (nem
+  ütem-annotációkból) származtatott „ground truth" ellen — két pengetés-
+  sűrűség-becslés egyezetlensége volt, nem tempóé. Független
+  librosa-beat-tracker referenciával újramérve: szigorú tempó-egyezés
+  **11/82 = 13,415%**, metrikai-szint toleráns egyezés (1/3·1/2·2/3·1·3/2·2·3
+  szorzók) **32/82 = 39,024%**; a régi szám megőrizve `visszavonva`
+  jelöléssel, pengetés-sűrűségként átcímkézve. **A BPM ezen a korpuszon nem
+  mérhető, mert nincs validált (kézi) tempó-annotáció** — ez kimondott,
+  elfogadott kimenet, nem hiba. Új eszköz: `ml/chords/tempo_reference.py`.
+  Az akkord-pontosság és onset F1 (fent) újramérve bitre változatlan.
   **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg — a
   §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult; az Epic 6 feloldása
   MOST emberi döntésre vár, lásd §6.
@@ -529,29 +526,44 @@
 
 ## 4. Current branch
 
-`main` @ [PR #207](https://github.com/wolfcasaba/strumsight/pull/207), squash
-`5ceed22d` (E99-R04, GOV-06 — Valós-audio DSP baseline mérés; lásd a fejléc
-✅-blokk a teljes pre-flight/review/security történetért). Mérési kör, `lib/`
-diff üres (A1) — kizárólag `tool/benchmarks/real_audio_dsp_baseline.dart`
-(ÚJ), `test/tooling/real_audio_dsp_baseline_test.dart` (ÚJ),
-`docs/eval/real-audio-dsp-baseline.md` (ÚJ) és a brief §10 handoffja → Full
-Gate [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
-+ Router CI [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
-mindkettő **success** az exact merge-előtti tip `ab4024a6`-n (a review-commit
-utáni tip; a Router CI automatikus push-trigger, mert a diff `docs/rounds/**`-t
-érint; a Full Gate kézzel dispatch-elve, a CI-terv `full-gate.yml`-t írt elő,
-`native_gate=false`). Review **APPROVED, 1 forduló, javító kör nélkül** — a
+`main` @ [PR #208](https://github.com/wolfcasaba/strumsight/pull/208), squash
+`c4ce2cc0` (E99-R05, GOV-06b — a GOV-06 BPM-metrikájának javítása; lásd a
+fejléc ✅-blokk a teljes pre-flight/review/security történetért). Mérce-javító
+kör, `lib/` diff üres (ADR 0212 Döntés 6) — `ml/chords/tempo_reference.py`
+(ÚJ), `tool/benchmarks/real_audio_dsp_baseline.dart` (BPM-szakasz átírva),
+`test/tooling/real_audio_dsp_baseline_test.dart` (ÚJ BPM-cellák),
+`docs/eval/real-audio-dsp-baseline.md` (BPM-szakasz átírva) és a brief §10
+handoffja → Full Gate
+[31325609456](https://github.com/wolfcasaba/strumsight/actions/runs/31325609456)
++ Router CI [31325597238](https://github.com/wolfcasaba/strumsight/actions/runs/31325597238)
+mindkettő **success** az exact merge-előtti tip `94fb2f6f`-n (a Router CI
+automatikus push-trigger, mert a diff `docs/rounds/**`-t érint; a Full Gate
+kézzel dispatch-elve, a CI-terv `full-gate.yml`-t írt elő, `native_gate=false`).
+Review **APPROVED, 2 forduló** (1 impl. + 1 javító kör: F1 MAJOR, a §10
+handoff hiányzó nyers mérési kimenete, javítva és tételesen ellenőrizve) — a
 reviewer SAJÁT, izolált `/tmp` klónban NEMCSAK a gate-et futtatta újra
-(7/7 zöld), hanem a TELJES 82 felvételes mérést is megismételte: **bájtra
-egyező** eredmény minden ellenőrzött mezőn (akkord-pontosság, baseline,
-moll-részhalmaz, mindhárom onset-F1, BPM-MAE, korpusz-checksum) egy
-teljesen független futtatásban, ÉS önállóan megismételte a brief §6.1
-valódi-sértés próbáját (`<=`→`<` mutáció → az 50000 µs cella pirosra vált,
-visszaállítás után zöld). A dedikált security-review (risk=high) **PASS, 0
-CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a dispatch és a
-merge között **nem mozdult** (`dc201524` mindvégig), rebase nem kellett (H8
-tiszta). Post-merge gate a friss `main`-en (`5ceed22d`) is önállóan
+(7/7 zöld, javítás előtt ÉS után), hanem a TELJES 82 felvételes mérést is
+**kétszer** megismételte: **bájtra egyező** eredmény minden ellenőrzött
+mezőn egy teljesen független futtatásban, ÉS önállóan megismételte a brief
+§6.1 valódi-sértés próbáját (`<=`→`<` mutáció → a 40 ezrelékes cella pirosra
+vált, `predicted=104.0`, visszaállítás után zöld). A dedikált
+security-review (risk=high) **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2
+NOTE. Az `origin/main` a dispatch és a merge között **nem mozdult**
+(`caa7751e` mindvégig), rebase nem kellett (H8 tiszta — a köztes
+`E99-R07 ideiglenes hold` és `GOV-05b-2` pre-flight commitok diszjunktak
+ettől a körtől). Post-merge gate a friss `main`-en (`c4ce2cc0`) is önállóan
 újrafuttatva: mind a 7 lépés zöld.
+
+> **[Superseded ref — E99-R04 branch]:** `main` @ PR #207, squash `5ceed22d`
+> (E99-R04, GOV-06 — Valós-audio DSP baseline mérés). Mérési kör, `lib/` diff
+> üres (A1) → Full Gate [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
+> + Router CI [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
+> mindkettő **success** az exact merge-előtti tip `ab4024a6`-n. Review
+> **APPROVED, 1 forduló, javító kör nélkül**; dedikált security-review
+> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a
+> dispatch és a merge között **nem mozdult** (`dc201524` mindvégig), rebase
+> nem kellett (H8 tiszta). A BPM-MAE szám azóta **visszavonva** — lásd fent,
+> GOV-06b. Teljes történet: `docs/handoff-archive.md`.
 
 > **[Superseded ref — E99-R03 branch]:** `main` @ PR #206, squash `0e9d211c`
 > (E99-R03, GOV-05c — Learn migráció a Practice Engine V2-re). Flag+teszt+
@@ -1063,9 +1075,14 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 >    bekapcsolása egy zsákutcába futó setup-folyamatot tenne láthatóvá. A
 >    flag-flip előfeltétele a modell-binárisok beszerzése + licenc-átvezetés.
 > 4. ~~**GOV-06 — Valós-audio DSP baseline mérés.**~~ — ✅ **KÉSZ** (E99-R04,
->    `5ceed22d`). A meglévő shipping DSP pontossága valódi gitárfelvételeken:
->    akkord-pontosság **67,069%** (18,832%-os baseline fölött), onset
->    F1@50ms **67,391%**, BPM-MAE **45,067** (származtatott). A korpusz
+>    `5ceed22d`; BPM-metrikája javítva **GOV-06b, E99-R05, `c4ce2cc0`**). A
+>    meglévő shipping DSP pontossága valódi gitárfelvételeken: akkord-
+>    pontosság **67,069%** (18,832%-os baseline fölött), onset F1@50ms
+>    **67,391%**. A harmadik szám (a GOV-06 eredeti, `.strums`-alapú
+>    „BPM-MAE 45,067") **érvénytelennek bizonyult és visszavonva** (GOV-06b) —
+>    a helyette mért független (librosa) tempó-egyezés **11/82 = 13,415%**
+>    szigorú / **32/82 = 39,024%** metrikai-szint toleráns; a BPM ezen a
+>    korpuszon validált kézi annotáció híján **nem mérhető**. A korpusz
 >    (`ml/data/klangio/`, 82 felvétel) NEM verziókövetett — a mérés
 >    elkötelezett riport, nem CI-kapu; a verziókövetés nevesített follow-up.
 >    Teljes riport: [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
