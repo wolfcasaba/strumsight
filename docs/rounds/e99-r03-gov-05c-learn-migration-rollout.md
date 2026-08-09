@@ -1,7 +1,7 @@
 # E99-R03 (GOV-05c) — Learn migráció a Practice Engine V2-re
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-09, kód olvasva:
-  `main @ 458eddc6`; a sugár **mérve** egy `/tmp` próba-klónban, nem becsülve)
+- **Státusz:** IMPLEMENTED (2026-08-09; review és CI az orchestrátor következő
+  lépése)
 - **Típus:** **governance-kör** (nem SDD-fejezet) — a `HANDOFF.md` §6
   „Kötelező sorrend" 3. pontjának harmadik harmada
 - **Kör-azonosító:** `E99-R03`. Az `E99` a governance-körök fenntartott
@@ -401,17 +401,112 @@ A teljes suite + randomizált property gate + APK a CI-ban (ADR 0053) — azt az
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + **TÉNYLEGES, csonkítatlan** kimenet.
-- A §6.1 valódi-sértés próba: mit írtál át, melyik cella lett piros (nyers
-  kimenet), és a visszaállítás igazolása.
-- Az **A8** bizonyítéka: a `git diff --name-only origin/main...HEAD | grep '^lib/'`
-  tényleges kimenete.
-- Melyik OD-t használtad, és hogyan.
-- Eltérések a tervtől és okuk; nem futtatott ellenőrzések és okuk; follow-upok.
+**Implementáció:** `8cc9eccf feat(learn): roll out V2 outside production`.
 
-> Minden viselkedési állításhoz add meg a tesztet, ami bizonyítja. Állítás
-> teszt nélkül = bemondás.
+### Fájlonkénti összefoglaló
+
+- `lib/app/config/feature_flags.dart` — `migratedLearnEnabled` a factoryban
+  `nonProd`; az avult rollout-doc-comment a jelenlegi, tesztelt határra
+  frissült. A kézzel létrehozott `FeatureFlags` konstruktor-defaultja
+  változatlanul `false`.
+- `test/app/app_config_test.dart` — development/lab `true`, production
+  `false`; hozzáadott validációs állítás mindhárom környezeti default
+  konfigurációra.
+- `test/app/feature_flags_test.dart` — a migrated Learn saját, három külön
+  cellás A1-mátrixot kapott; az AI Tutor/Vision kerítésből kikerült, amely
+  egyébként változatlan.
+- `test/features/learn/learn_migration_parity_test.dart` — az A7 production
+  nevű őr ténylegesen `AppEnvironment.production`-t mér.
+- `test/features/learn/learn_rollback_test.dart` — kizárólag az A8
+  flag-határ tesztet irányítottam productionre; a két flag-OFF
+  viselkedés-teszt érintetlen.
+- `docs/manual-testing/practice-engine-device-matrix.md` — a migrated Learn
+  development/lab alapértelmezését és a hét PENDING készülékes cellát rögzíti.
+
+### Acceptance-bizonyíték
+
+- **A1:** `feature_flags_test.dart` külön `development → isTrue`, `lab →
+  isTrue`, `production → isFalse` tesztjei; a célzott futásban mindhárom zöld.
+- **A2:** az `app_config_test.dart` meglévő „new constructor fields are
+  optional” állítása változatlanul `defaults.migratedLearnEnabled == false`.
+- **A3:** a production `isFalse` őr mind a négy helyen megmaradt:
+  `app_config_test.dart` rollout-tábla, `feature_flags_test.dart` A1
+  production cella, `learn_migration_parity_test.dart` A7, és
+  `learn_rollback_test.dart` A8.
+- **A4:** az A7 teszt neve production-defaultot mond, és a törzse most
+  `AppEnvironment.production`-t ad a factorynak (OD-03 alapértelmezett
+  feloldása).
+- **A5:** a hozzáadott „rollout defaults resolve without configuration
+  problems in every environment” teszt `development`, `lab` és `production`
+  esetén `returnsNormally` eredményt várt; zöld.
+- **A6:** a meglévő Song Trainer kerítés továbbra is mindhárom környezetben
+  `aiTutorEnabled`, `aiTutorCloudEnabled` és `visionEnabled` értékét
+  `false`-nak méri; a Song Trainer külön nonProd-mátrixa változatlanul zöld.
+- **A7:** a `learn_rollback_test.dart` diffje kizárólag az A8 flag-határ
+  tesztet módosítja; a két flag-OFF viselkedés-teszt `expect`-je változatlan.
+- **A8:** a tényleges parancskimenet:
+
+  ```text
+  $ git diff --name-only origin/main...HEAD | grep '^lib/'
+  lib/app/config/feature_flags.dart
+  ```
+
+- **A9:** a device-mátrix §2.3 címe PENDING készülékes ellenőrzést jelöl, és
+  mind a hét eredmény/pass-fail cella `PENDING`.
+- **A10:** a teljes gate strukturált eredménye:
+
+  ```text
+  {"command_exit_code": 0, "error_hash": null, "exit_code": 0, "failed_step": null, "outcome": "pass", "schema_version": 1}
+  ```
+
+### Futtatott ellenőrzések
+
+```text
+$ tools/round-gate.sh test/app test/features/learn test/core test/features/live test/features/songs
+format: ZÖLD (1214 fájl, 0 változás)
+analyze: ZÖLD (No issues found)
+test/app, test/features/learn, test/core, test/features/live, test/features/songs,
+architecture, secrets, l10n: zöld; strukturált eredmény: outcome=pass, exit_code=0.
+
+$ flutter test test/app/feature_flags_test.dart test/app/app_config_test.dart test/features/learn/learn_migration_parity_test.dart test/features/learn/learn_rollback_test.dart
+00:03 +90: All tests passed!
+```
+
+### Valódi-sértés próba
+
+Ideiglenesen `migratedLearnEnabled: nonProd` helyett
+`migratedLearnEnabled: true` szerepelt a factoryban. Az A1 production-cella
+nyers kimenete:
+
+```text
+00:00 +0: Migrated Learn rollout boundary remains disabled in production
+00:00 +1 -1: Migrated Learn rollout boundary remains disabled in production [E]
+  Expected: false
+    Actual: <true>
+
+  test/app/feature_flags_test.dart 126:7 main.<fn>.<fn>
+
+00:00 +1 -1: Some tests failed.
+```
+
+Ezután a factory visszaállt `migratedLearnEnabled: nonProd`-ra; a fenti
+90 tesztes célzott futás és a teljes gate is zöld.
+
+### Nyitott döntések, eltérések, nem futtatott ellenőrzések
+
+- **OD-01:** az előírt alapértelmezést alkalmaztam: a device-mátrix minden
+  migrated-Learn cellája PENDING. Nem merge-kapu; valódi készülékes user
+  bizonyíték szükséges.
+- **OD-02:** nem aktiválódott: a széles gate nem adott Learn-képernyő
+  regressziót, ezért listán kívüli tesztfájlhoz nem nyúltam.
+- **OD-03:** az előírt alapértelmezést alkalmaztam: a törzset igazítottam a
+  helyes production nevű teszthez.
+- Eltérés nincs; a hét engedélyezett útvonalon kívül nincs módosítás.
+- A teljes suite, randomizált property gate, release APK, CI-dispatch,
+  független review és merge nem az implementer feladata; az orchestrátor
+  futtatja/vezeti őket. Nincs kód-follow-up.
+
+> Minden viselkedési állításhoz megvan a fenti teszt- vagy diff-bizonyíték.
 
 ## 11. Review — a Claude tölti ki
 
