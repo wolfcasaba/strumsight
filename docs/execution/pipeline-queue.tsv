@@ -196,3 +196,15 @@ E06-R27	docs/rounds/e06-r27-export-share-and-privacy-controls.md	codex	nincs	hol
 E06-R28	docs/rounds/e06-r28-cache-performance-and-model-lifecycle.md	codex	0210	hold
 E06-R29	docs/rounds/e06-r29-evaluation-harness-and-calibration.md	codex	0211	hold
 E06-R30	docs/rounds/e06-r30-shadow-rollout-migration-and-epic-closure.md	codex	nincs	hold
+#
+# Governance-körök (GOV) — E99 pszeudo-epic. NEM valódi epic: a
+# tools/ai_router/brief.py:19 (?i)(e\d{2}-r\d{2}) és a round-pipeline.sh:278
+# ^[A-Z][0-9]{2}-R[0-9]{2}$ mintája miatt a "GOV-05c" alakú azonosító kiesne a
+# gépi kapukból (brief-lint, ai-router, CI-terv, scope-audit, inflight-őr).
+# A GOV-05a (E99-R01) még a queue-n KÍVÜL futott, kézi orchesztrálással; a
+# sorba illesztés innentől az autonóm lánc dolga.
+#
+# E99-R02 (GOV-05b, AI Tutor) SZÁNDÉKOSAN NINCS a sorban: mért blokkolón áll
+# (hiányzó production-drótozás + nincs használható modell-átjáró), és emberi
+# döntést igényel — ld. HANDOFF.md §3 "Az AI Tutor rollout BLOKKOLT".
+E99-R03	docs/rounds/e99-r03-gov-05c-learn-migration-rollout.md	codex	0198	pending

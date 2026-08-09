@@ -1094,16 +1094,27 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A KÖVETKEZŐ KÖR: GOV-05c (`E99-R03`) — Learn migráció a Practice V2-re.**
-   A GOV-05b (AI Tutor) **kimarad a sorból**, mert mért blokkolón áll és
-   emberi döntést igényel (§3 „Az AI Tutor rollout BLOKKOLT"). A GOV-05c
-   ettől független: a `migratedLearnEnabled` flag mögötti út MÁR be van
-   drótozva (E02-R19/R21), és két meglévő őr méri
-   (`test/features/learn/learn_migration_parity_test.dart`,
-   `learn_rollback_test.dart`); az `AppConfig.resolve:115` már kényszeríti a
-   `practiceEngineV2Enabled` függőséget. Ez a HÁROM közül a legkockázatosabb
-   kör — egy MÁR szállított feature mögött cseréli a motort —, ezért kapott
-   önálló kört.
+0. **A KÖVETKEZŐ KÖR: GOV-05c (`E99-R03`) — Learn migráció a Practice V2-re.
+   A brief + ADR 0198 KÉSZ, és a sor `pending` — az autonóm lánc indítja.**
+   A GOV-05b (AI Tutor) **kimarad a sorból** (user-döntés 2026-08-09:
+   „halasszuk el"), mert mért blokkolón áll (§3 „Az AI Tutor rollout
+   BLOKKOLT").
+
+   **Ez az ELSŐ governance-kör a queue-ban** — a GOV-05a még kézi
+   orchesztrálással futott. A `E99` pszeudo-epic azonosító pont ezt teszi
+   lehetővé; a `tools/tests/test_pipeline_integration.py` mind a 46 tesztje
+   zöld a sorral (a motor-szabály `codex`-et számol: `risk="high"`, ui=0,
+   core=0 → `ui > core` hamis).
+
+   **A GOV-05c pre-flightja MÉRVE** (nem becsülve): egy `/tmp` próba-klónban
+   átbillentettem a flaget, és az L203 szerinti KÉT réteg unióját futtattam
+   (a flag 4 hívója + a `LearnScreen` 14 teszt-pumpolója, öt könyvtárban).
+   Eredmény: `test/features/learn`+`test/app` **260-ból 4 bukás**,
+   `test/core`+`test/features/live`+`test/features/songs` **610/610 zöld**.
+   Mind a négy bukás **flag-kikötő állítás**, nulla viselkedési regresszió —
+   a 13 nem-kikötött Learn-képernyő-teszt a V2 motoron is zöld. Nincs
+   drótozási rés (`grep -rn "UnimplementedError" lib/features/practice/
+   lib/features/learn/` → 0 találat).
 
    **A régi 0. pont (GOV-05b) szövege, amíg a döntés meg nem születik:**
    Kézi orchesztrálás, a queue-n kívül (a GOV-körök nem queue-sorok — lásd a
