@@ -55,27 +55,14 @@ class Settings(BaseSettings):
 
     # AI Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
     # The provider secret stays on the server; the client never sees it.
+    # Production may extend the allowlist with an "openai" provider and its
+    # configured model IDs; the default remains fail-closed for that provider.
     tutor_enabled: bool = False
     tutor_provider: str = "fake"
     tutor_model: str = "fake-model"
     tutor_api_key: str = "dev-tutor-key"
     tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
-    tutor_max_request_bytes: int = 4000
-    tutor_max_history_messages: int = 20
-    tutor_max_context_bytes: int = 8000
-    tutor_max_output_bytes: int = 2000
-    tutor_rate_limit_max: int = 30
-    tutor_rate_limit_window: int = 60
-    tutor_daily_token_limit: int = 50000
-    tutor_timeout_seconds: float = 30.0
-
-    # Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
-    # The provider secret stays on the server; the client never sees it.
-    tutor_enabled: bool = False
-    tutor_provider: str = "fake"
-    tutor_model: str = "fake-model"
-    tutor_api_key: str = "dev-tutor-key"
-    tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
+    tutor_openai_base_url: str = "https://api.openai.com/v1"
     tutor_max_request_bytes: int = 4000
     tutor_max_history_messages: int = 20
     tutor_max_context_bytes: int = 8000

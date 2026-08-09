@@ -5,6 +5,11 @@ Errors are normalized to provider-neutral exceptions — no provider details
 leak into logs or responses.
 """
 
+import httpx
+
+_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+_BYTES_PER_TOKEN_ESTIMATE = 4
+
 
 class ProviderError(Exception):
     """Provider-neutral error (redacted, no provider details)."""
@@ -59,3 +64,57 @@ class FakeProviderGateway(ProviderGateway):
         if self._should_error:
             raise ProviderError("Provider error")
         return self._response
+
+
+class OpenAiProviderGateway(ProviderGateway):
+    """Chat Completions adapter with provider-neutral failure handling."""
+
+    def __init__(
+        self,
+        max_output_bytes: int,
+        client: httpx.AsyncClient | None = None,
+        base_url: str = _DEFAULT_BASE_URL,
+    ) -> None:
+        if max_output_bytes <= 0:
+            raise ValueError("max_output_bytes must be positive")
+
+        self._client = client or httpx.AsyncClient()
+        self._base_url = base_url.rstrip("/")
+        self._max_tokens = max(1, max_output_bytes // _BYTES_PER_TOKEN_ESTIMATE)
+
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        api_key: str,
+        timeout_seconds: float,
+    ) -> str:
+        """Return response text while normalizing transport and schema failures."""
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": self._max_tokens,
+                },
+                timeout=timeout_seconds,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError("Provider request timed out") from None
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
+            raise ProviderError("Provider request failed") from None
+
+        if not isinstance(content, str):
+            raise ProviderError("Provider response was invalid")
+        return content
+
+    async def aclose(self) -> None:
+        """Release the owned or injected HTTP client after its final use."""
+        await self._client.aclose()

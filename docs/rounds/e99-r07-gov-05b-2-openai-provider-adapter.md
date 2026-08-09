@@ -402,15 +402,104 @@ processzként. **Tilos** `| tail`, `| head`, `&&`-lánc vagy bármilyen szűrés
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + **TÉNYLEGES, csonkítatlan** kimenet (a
-  backend-sávval együtt).
-- A §6.1 valódi-sértés próba nyers kimenete + visszaállítás.
-- Az **A5/A9/A10** gépi mércéinek tényleges kimenete.
-- Melyik OD-t használtad; eltérések és okuk; nem futtatott ellenőrzések és
-  okuk; follow-upok.
+### Codex handoff — 2026-08-09
 
-> Állítás teszt nélkül = bemondás.
+#### Fájlonkénti összefoglaló
+
+- `backend/app/tutor/provider_gateway.py` — az új `OpenAiProviderGateway`
+  injektálható `httpx.AsyncClient`-tel küldi a Chat Completions kérést. A
+  kapott modellnevet használja, a meglévő kimeneti bájthatárból származtatja
+  a `max_tokens` értékét, timeoutot változtatás nélkül továbbítja, és minden
+  transport-, HTTP- és válaszsémahibát redacted `ProviderError` vagy
+  `ProviderTimeoutError` kivétellé alakít. A kivételláncok `from None`
+  elnyomása tracebackből is kizárja a nyers provider-részleteket. A fake
+  gateway érintetlen.
+- `backend/app/config.py` — a byte-azonos második tutor settings-blokk
+  eltávolítva a §0.0 szerint; a megmaradó blokkban dokumentált OpenAI
+  allowlist-bővítési példa és `tutor_openai_base_url` (`https://api.openai.com/v1`)
+  szerepel. `tutor_enabled=False` és `tutor_provider="fake"` változatlan.
+- `backend/requirements.txt` — production `httpx>=0.27,<0.29`, a dev
+  requirements-szel azonos major-pinneléssel.
+- `backend/tests/tutor/test_openai_provider_gateway.py` — `MockTransport`
+  alapú A1, hétcellás A2/A3, sikeres+hibás A4 és háromértékes A12 tesztek;
+  valódi hálózatot nem indít.
+
+#### Futtatott ellenőrzések
+
+```text
+$ /home/ubuntu/music-theory/backend/.venv/bin/python -m pytest backend/tests/tutor/test_openai_provider_gateway.py -q
+RED: ImportError: cannot import name 'OpenAiProviderGateway' from
+     'app.tutor.provider_gateway'
+
+$ /home/ubuntu/music-theory/backend/.venv/bin/python -m pytest backend/tests/tutor/test_openai_provider_gateway.py -q
+.............                                                            [100%]
+
+$ /home/ubuntu/music-theory/backend/.venv/bin/python -m ruff format backend/app backend/tests
+1 file reformatted, 36 files left unchanged
+
+$ tools/round-gate.sh test/app
+format: ZÖLD (1219 fájl, 0 változás)
+analyze: ZÖLD (No issues found)
+test test/app: ZÖLD (67 teszt)
+architecture: ZÖLD
+secrets: ZÖLD (2112 fájl, 0 finding)
+l10n: ZÖLD (en → hu, 1019 üzenet)
+backend ruff format: ZÖLD (37 files already formatted)
+backend ruff check: ZÖLD (All checks passed!)
+backend pytest: ZÖLD (157 passed)
+MINDEN GATE ZÖLD.
+```
+
+Az első teljes gate ugyanitt a backend `ruff check` I001 importblokk-rendezési
+hibáján állt meg; a kizárólag a saját adapterfájlt érintő automatikus rendezés
+után a fenti teljes gate ismétlése zöld lett.
+
+#### Valódi-sértés próba (§6.1)
+
+Ideiglenesen eltávolítottam az `httpx.TimeoutException` külön ágát, ezért a
+timeout az általános `ProviderError` ágban végződött. Az A2 timeout-cella nyers
+kimenetének döntő része:
+
+```text
+______ test_complete_normalizes_failures_without_leaking_details[timeout] ______
+E   app.tutor.provider_gateway.ProviderError: Provider request failed
+=========================== short test summary info ============================
+FAILED backend/tests/tutor/test_openai_provider_gateway.py::test_complete_normalizes_failures_without_leaking_details[timeout]
+```
+
+Az `httpx.TimeoutException` → `ProviderTimeoutError` ágát visszaállítottam;
+utána a célzott teszt ismét 13/13 zöld.
+
+#### Döntések, mércék és maradékok
+
+- **OD-01:** az alapértelmezett allowlist csak `fake`; a konfigurációs
+  megjegyzés dokumentálja az `openai` provider üzemeltetői felvételét, így az
+  üres/hiányzó modelllista fail-closed marad.
+- **OD-02:** új Settings-mező nélkül a gateway konstruktora a meglévő
+  `tutor_max_output_bytes` értékét várja, és azt 4 bájt/token becsléssel
+  `max_tokens`-szé alakítja. A következő, bekötő kör ezt a meglévő Settings
+  értéket adja át.
+- **OD-03:** `tutor_openai_base_url` a dokumentált alapértékkel bekerült.
+- **A5/A9/A10 gépi mércék tényleges kimenete:**
+
+  ```text
+  $ grep -nE "gpt|o[0-9]|chatgpt" backend/app/tutor/provider_gateway.py
+  (nincs találat; grep kilépési kód: 1)
+
+  $ git diff --name-only origin/main...HEAD
+  backend/app/config.py
+  backend/app/tutor/provider_gateway.py
+  backend/requirements.txt
+  backend/tests/tutor/test_openai_provider_gateway.py
+  ```
+
+  A felsorolásban nincs `backend/app/main.py`, `lib/`, `test/` vagy `tool/`
+  útvonal; a handoff dokumentum ekkor még nem volt commitolva.
+- **Nem futtatott ellenőrzés:** CI teljes Flutter suite, property gate és
+  release APK — ezek az orchestrátor CI-kapujának részei; implementerként nem
+  indítottam `gh` workflow-t.
+- **Follow-up:** az adapter bekötése a `main.py`-ba, a gateway lifecycle és az
+  éles provider költségkorlátainak mérése külön kör feladata.
 
 ## 11. Review — a Claude tölti ki
 
