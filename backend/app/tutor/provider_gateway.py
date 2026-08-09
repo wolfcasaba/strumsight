@@ -7,7 +7,6 @@ leak into logs or responses.
 
 import httpx
 
-
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _BYTES_PER_TOKEN_ESTIMATE = 4
 
