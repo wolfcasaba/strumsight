@@ -470,10 +470,10 @@ handoffba. 82 felvétel elemzése eltarthat — ez várható, nem hiba.
    `tool/benchmarks/real_audio_dsp_baseline.dart` és metrika API-k. Ez a
    várt RED állapot volt.
 2. A contract-teszt implementáció után: `00:00 +5: All tests passed!`.
-3. `tools/round-gate.sh test/tooling test/features/analyze`: format zöld,
-   analyze zöld, `test/tooling` 52 zöld teszt; a `test/features/analyze`
-   szakasz és az architecture-guard is befejeződött. A végső gate újra fut a
-   dokumentációs handoff után.
+3. `tools/round-gate.sh --result-json /tmp/e99-r04-final-round-gate.json test/tooling test/features/analyze`:
+   format zöld, analyze zöld, `test/tooling` 52 zöld teszt,
+   `test/features/analyze` és architecture-guard zöld. A gépi artefaktum:
+   `{"command_exit_code": 0, "exit_code": 0, "failed_step": null, "outcome": "pass"}`.
 4. Az előírt `~/flutter/bin/dart run tool/benchmarks/real_audio_dsp_baseline.dart ml/data/klangio`
    a sima Dart VM-en piros lett: `Dart library 'dart:ui' is not available on
    this platform.` A `ClipAnalyzer` tranzitívan Fluttert importál; production
@@ -512,6 +512,8 @@ teljes contract-teszt nyers lezárása: `00:00 +5: All tests passed!`.
   riport teljes nyers kimenetében szerepel.
 - A1: `git diff --name-only origin/main...HEAD` tényleges kimenete nem
   tartalmaz `lib/` utat; a kör nem módosította a szállított DSP-t.
+- Scope-audit: `scope_audit=ok`, base `dc201524`, 4 módosított útvonal,
+  0 generated/ignored útvonal.
 
 ### Eltérés, nem futtatott ellenőrzések és follow-up
 
