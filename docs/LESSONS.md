@@ -7065,3 +7065,45 @@ működik a nevezett esetre), a lelet BLOCKER/MAJOR marad. Rokon: [[L179]]
 sablon-szabály (`docs/execution/09-review-report.md` §5) általánosítása
 arra az esetre, amikor a próba ELVÉGZÉSE maga dönti el a súlyossági
 besorolást, nem csak megerősíti azt.
+
+## L203
+
+**A felmérés a MÓDOSÍTOTT FELÜLET fogyasztóira menjen, ne csak a módosított
+adatforrás hívóira** (E99-R01 / GOV-05a, 2026-08-09, orchesztrátor-hiba —
+review MINOR-1).
+
+**Mit mértem, és mit nem.** A GOV-05a brief `gate_tests` listáját a
+`FeatureFlags.forEnvironment` **hívóinak** felmérésére alapoztam
+(`grep -rln "FeatureFlags.forEnvironment" test/` → 8 fájl), mert a kör magja
+egy flag-érték megváltoztatása volt. A kör azonban EGY KÉPERNYŐT is
+módosított (`lesson_list_screen.dart`: két új kártya a lista tetején), és a
+képernyő fogyasztóit **nem** mértem fel (`grep -rln "LessonListScreen" test/`
+→ 4 fájl). A két halmaz metszete mindössze egy fájl volt.
+
+**Mi lett a következménye.** Két, egymástól független teszt esett kívül a
+gate-en, mindkettő pontosan azt a hibaosztályt méri, amit egy lista tetejére
+kerülő UI-elem okoz:
+
+- `test/features/learn/continue_card_test.dart` — **PIROS lett**. Az új
+  kártyák ~180 px-szel lejjebb tolták a listát, egy listaelem kicsúszott a
+  teszt-viewportból, és a `findsNWidgets(2)` már csak egyet talált. Ezt az
+  implementer fogta meg `stopped` jelzéssel (a mérce ott volt a gate-ben, csak
+  a fájl nem volt engedélyezve) → egy teljes javító forduló ára.
+- `test/core/screen_size_guard_test.dart` — **zöld maradt**, de ezt csak a
+  review-ban, utólag mértem meg. Ez a fájl landscape (915×412) és kis
+  kijelzős overflow-cellákat futtat a `LessonListScreen`-re; ha a két kártya
+  overflow-t okozott volna, azt **sem a lokális gate, sem az implementer nem
+  látta volna** — csak a CI teljes suite-ja, azaz merge-jelölt állapotban.
+
+**Szabály.** A brief `gate_tests` listájának felméréséhez **minden módosított
+felülethez külön grep kell**, és a greppek uniója a lista:
+
+- adatforrás/konfiguráció változik → `grep -rln "<Szimbólum>" test/`
+- **képernyő/widget változik → `grep -rln "<ScreenName>" test/`** ← ez maradt ki
+- barrel/export változik → az importálók
+- doksi/mátrix változik → a rá hivatkozó tesztek
+
+Egyetlen grep-alak sosem elég, ha a kör több RÉTEGET érint. Rokon: [[L18]]
+(a felmérő grep alakja dönti el a scope-ot — ott a parancsalak hossza volt a
+vakfolt, itt a réteg), [[L09]] (a zöld gate nem bizonyíték, ha a gate nem a
+helyes halmazt futtatja).
