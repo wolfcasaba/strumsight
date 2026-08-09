@@ -34,6 +34,45 @@ native_gate = false
 > és `pytest` külön processzként fut. A `gate_tests` Dart-oldali listája
 > ezért minimális: a kör egyetlen Dart sort sem ír.
 
+## 0.0 Pre-flight revízió (mérve 2026-08-09, a kör indítása előtt)
+
+**Talált: a `tutor_*` settings blokk duplikálva a `config.py`-ban —
+előfeltétel-kockázat, nem a kör hibája.**
+
+Mérve: `git blame -L 56,86 backend/app/config.py` → a `tutor_enabled`…
+`tutor_timeout_seconds` mezőcsoport **kétszer** szerepel (56–70. és 72–86.
+sor), **byte-azonos** tartalommal, egyetlen commitból (`c1c0a7716`, E04-R14,
+2026-08-05 — ZÁRT kör, ezért ez a duplikáció H2 alá esne, HA a viselkedést
+módosítanánk; a puszta törlés nem teszi, lásd lent). Python osztálytörzsben
+egy attribútum második definíciója felülírja az elsőt — a ténylegesen
+érvényes érték tehát a MÁSODIK (72–86. sorbeli) blokké, bár a két blokk ma
+byte-azonos, ezért nincs tényleges viselkedéskülönbség.
+
+**Kockázat, ha figyelmen kívül marad:** a brief §2.2 a mezőket
+`config.py:58–70` címkével hivatkozza. Ha az implementer az OD-01 OpenAI
+allowlist-bejegyzést (vagy az OD-03 végpont-URL mezőt) **csak** ebbe az
+(első) blokkba írja be, a változás **némán hatástalan marad**, mert a 72–86.
+sor felülírja — az A1/A5/A7 tesztek megmagyarázatlanul pirosra futnának.
+
+**Feloldás (a kör hatáskörében, §2 szerinti önálló döntés — a `config.py`
+már engedélyezett fájl ebben a körben, és a duplikátum törlése nem
+változtatja meg egyetlen lezárt kör viselkedését, mert a két blokk
+byte-azonos):** a `config.py` módosításakor az implementer ELŐSZÖR törölje a
+**második** (72–86. sor) duplikátum-blokkot — a brief §2.2 sor-hivatkozása
+így is stabil marad —, majd az OD-01/OD-03 bővítést az egyetlen megmaradó
+(56–70. sor) blokkba írja.
+
+**Az A8 mérce pontosítása erre az esetre:** az A8 („a `config.py` diffjében
+[a `tutor_enabled`/`tutor_provider` sor] nem változik") az ÉRTÉKRE
+vonatkozik, nem a sorok puszta jelenlétére. A duplikátum-blokk törlése miatt
+a diff mutatni fogja a második (holt) `tutor_enabled: bool = False` /
+`tutor_provider: str = "fake"` sor törlését is — ez **elfogadott és várt**,
+amíg az egyetlen megmaradó blokk értéke változatlanul `False`/`"fake"` marad.
+
+Fenti méréssel a brief az `allowed_paths`/`gate_tests` listát **változatlanul**
+hagyja — a feloldás a már engedélyezett `config.py` fájlon belül fér el,
+csak annak belső tartalmára ad pontosabb utasítást.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
