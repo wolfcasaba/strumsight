@@ -32,6 +32,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_result.dart';
+import '../../../../core/storage/key_value_store.dart';
+import '../../data/repositories/local_tutor_memory_repository.dart';
 import '../../domain/models/guitar_profile.dart';
 import '../../domain/models/learning_goal.dart';
 import '../../domain/models/student_profile.dart';
@@ -309,6 +311,10 @@ final tutorLearningGoalControllerProvider =
 /// Overridable seam for the memory repository (R17). Tests inject a
 /// `TutorMemoryRepository` fake; production wires `LocalTutorMemoryRepository`
 /// from the boot layer.
+TutorMemoryRepository createProductionTutorMemoryRepository({
+  required KeyValueStore keyValueStore,
+}) => LocalTutorMemoryRepository(keyValueStore: keyValueStore);
+
 final tutorMemoryRepositoryProvider = Provider<TutorMemoryRepository>((ref) {
   throw UnimplementedError(
     'tutorMemoryRepositoryProvider must be overridden in tests; '

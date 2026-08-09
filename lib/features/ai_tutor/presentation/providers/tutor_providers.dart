@@ -15,8 +15,10 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/storage/key_value_store.dart';
 import '../../application/context/context_purpose.dart';
 import '../../application/context/tutor_context_assembler.dart';
 import '../../application/context/tutor_context_snapshot.dart';
@@ -24,8 +26,12 @@ import '../../application/controller/tutor_command.dart';
 import '../../application/controller/tutor_state.dart';
 import '../../application/orchestration/tutor_action_validator.dart';
 import '../../application/orchestration/tutor_orchestrator.dart';
+import '../../application/prompts/prompt_template.dart';
+import '../../application/prompts/tutor_prompt_builder.dart';
 import '../../data/knowledge/knowledge_index.dart';
 import '../../data/knowledge/knowledge_retriever.dart';
+import '../../data/model_gateway/local_tutor_model_gateway_stub.dart';
+import '../../data/repositories/local_tutor_conversation_repository.dart';
 import '../../domain/models/tutor_action.dart';
 import '../../domain/models/tutor_consent.dart';
 import '../../domain/models/tutor_content_block.dart';
@@ -157,9 +163,9 @@ extension TutorTurnStatusActiveX on TutorTurnStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Production controller — owns a TutorOrchestrator bound to a fake
-// gateway. The orchestrator is shared with the gateway factory so a
-// single turn maps to a single streaming session.
+// Production controller — owns a TutorOrchestrator supplied by the boot
+// overrides. The orchestrator is shared with the gateway factory so a single
+// turn maps to a single streaming session.
 // ---------------------------------------------------------------------------
 
 class DefaultTutorChatController extends ChangeNotifier
@@ -328,12 +334,29 @@ class DefaultTutorChatController extends ChangeNotifier
 // Provider wiring
 // ---------------------------------------------------------------------------
 
-/// Production orchestrator factory. The fake gateway is wired here so
-/// every screen is fully testable with the real reducer pipeline.
+/// Constructs the production tutor orchestrator for the boot composition.
 ///
-/// The default throws — production boot wires it via `tutorMain()`
-/// (E04-R19 brings the cloud gateway). Tests override the provider
-/// with their own `FakeController`.
+/// The local model gateway stub is intentional: it reports a controlled
+/// unavailable error until the real provider adapter is shipped. Tests can
+/// still override the provider with their own controller or orchestrator.
+TutorOrchestrator createProductionTutorOrchestrator({
+  required KnowledgeRetriever knowledgeRetriever,
+}) => TutorOrchestrator(
+  contextAssembler: const TutorContextAssembler(),
+  knowledgeRetriever: knowledgeRetriever,
+  promptBuilder: TutorPromptBuilder(
+    templateLoader: AssetPromptTemplateLoader(assetBundle: rootBundle),
+  ),
+  gatewayForAttempt: (_) => LocalTutorModelGatewayStub(),
+);
+
+/// Constructs the production local conversation repository.
+TutorConversationRepository createProductionTutorConversationRepository({
+  required KeyValueStore keyValueStore,
+}) => LocalTutorConversationRepository(keyValueStore: keyValueStore);
+
+/// Overridable production seam. The app boot injects the concrete instance;
+/// tests override it with their own controller or orchestrator.
 final tutorOrchestratorProvider = Provider<TutorOrchestrator>((ref) {
   throw UnimplementedError(
     'tutorOrchestratorProvider must be overridden in tests; '
@@ -341,7 +364,8 @@ final tutorOrchestratorProvider = Provider<TutorOrchestrator>((ref) {
   );
 });
 
-/// Repository for the conversation list — Home screen reads from this.
+/// Overridable repository seam for the conversation list — Home screen reads
+/// from this. Production boot injects a local repository.
 final tutorConversationRepositoryProvider =
     Provider<TutorConversationRepository>((ref) {
       throw UnimplementedError(

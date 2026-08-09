@@ -388,6 +388,63 @@ láncolása OOM-ot ad (L05).
 
 > Állítás teszt nélkül = bemondás.
 
+### Codex handoff — 2026-08-09
+
+- `lib/features/ai_tutor/data/model_gateway/http_tutor_stream_transport.dart`:
+  új Dio SSE transport; `POST /tutor/stream` `ResponseType.stream`-mel,
+  a `data:` sorok nyers payloadjai, explicit cancellation és kontrollált
+  hálózati `AppResult.failure` ágak.
+- `tutor_providers.dart` és `tutor_privacy_providers.dart`: explicit
+  production factory-k a `LocalTutorConversationRepository`,
+  `LocalTutorMemoryRepository`, az asset-alapú prompt builder és a
+  szándékos `LocalTutorModelGatewayStub` számára; nincs fake gateway.
+- `lib/main.dart`: exportált `buildTutorProductionOverrides`, amely a
+  tudás-indexet a manifestből tölti (hibánál a meglévő naplózott üres-index
+  fallback), és mindhárom Tutor seamet a boot `ProviderScope`-jába injektálja.
+- `http_tutor_stream_transport_test.dart`: A4/A5 SSE payload- és
+  hibaág-mátrix. `tutor_production_wiring_test.dart`: A1/A2/A3, a három
+  override és a stub `tutor.model_gateway.unavailable` eredménye.
+
+Futtatott ellenőrzések:
+
+```text
+flutter test test/features/ai_tutor/data/http_tutor_stream_transport_test.dart
+  RED: a hiányzó HttpTutorStreamTransport miatt nem fordult.
+  GREEN: 5 teszt zöld.
+
+flutter test test/features/ai_tutor/presentation/tutor_production_wiring_test.dart \
+  test/features/ai_tutor/data/http_tutor_stream_transport_test.dart \
+  test/app/feature_flags_test.dart
+  GREEN: 18 teszt zöld.
+
+flutter analyze
+  GREEN: No issues found! (a konstruktor-lint javítása után).
+
+Valódi-sértés próba:
+  createProductionTutorOrchestrator ideiglenesen
+  throw UnimplementedError('A1 mutation probe')
+  → tutor_production_wiring_test PIROS: UnimplementedError: A1 mutation probe
+  → az eredeti factory visszaállítva.
+```
+
+- A6/A7 bizonyíték: `feature_flags_test.dart` a három environmentben mindkét
+  flag OFF állapotát zölden mérte; a diff nem érint `feature_flags.dart`,
+  `lib/l10n/`, `lib/app/routing/`, `screens/` vagy `widgets/` útvonalat.
+- A3 kerítés: `grep -c "FakeTutorModelGateway" lib/main.dart
+  lib/features/ai_tutor/presentation/providers/tutor_providers.dart
+  lib/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart`
+  → mindhárom fájlra `0`; a meglévő, változatlan teszt-duplikátum külön
+  `data/model_gateway/fake_tutor_model_gateway.dart` fájlban maradt.
+- OD-01 alkalmazva: `AssetKnowledgeRepository.fromRootBundle()` a meglévő
+  manifest-loader. A `flutter test` `build/unit_test_assets/AssetManifest.bin`
+  artefaktuma csak `assets/tutor_knowledge/manifest.json`-t tartalmazza, a
+  beágyazott `en/`/`hu/` dokumentumokat nem; ezért a tesztben a dokumentált
+  `tutorKnowledge.indexLoad.assetReadFailure` üres-index fallback aktív. A
+  hiányzó rekurzív asset-deklaráció `pubspec.yaml`-t érintene, ami ebben a
+  körben tilos zóna; follow-up szükséges a valódi tudásindex betöltéséhez.
+- Nem futtatott ellenőrzés: CI teljes suite/property/release APK; ez a
+  Claude-oldali CI-dispatch és merge-kapu feladata.
+
 ## 11. Review — a Claude tölti ki
 
 Link: `docs/reviews/e99-r06-gov-05b-1-tutor-production-wiring-review.md`
