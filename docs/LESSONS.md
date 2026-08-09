@@ -7388,3 +7388,90 @@ a VÁRT kimenetet is. Ha a mérce a mai kódon már a „hibás" eredményt adja
 mérce rossz, nem a kód. Rokon: [[L203]] (a felmérő grep rétegei), [[L18]]
 (a grep alakja dönti el a scope-ot), [[L09]] (a zöld gate nem bizonyíték, ha
 nem a helyes halmazt méri).
+
+## L205
+
+**Grep-eld ki, hányszor szerepel egy brief-hivatkozott mező a FÁJL EGÉSZÉBEN
+— last-definition-wins nyelvekben (Python osztálytörzs, JS objektum-literál)
+a MÁSODIK definíció csendben felülírja az elsőt** (E99-R07 / GOV-05b-2,
+2026-08-09, pre-flight mérés — nem vált hibává, mert a pre-flight kifogta).
+
+**Mit mért a brief.** A §2.2 „Jelenlegi állapot" szakasz a
+`tutor_enabled`/`tutor_provider`/... mezőcsoportot `backend/app/config.py:58–70`
+címkével hivatkozta — a sortartomány önmagában HELYES volt, egyetlen blokkot
+feltételezve.
+
+**Mit talált a pre-flight.** `git blame -L 56,86 backend/app/config.py` a
+teljes `tutor_*` mezőcsoportot **kétszer** mutatta (56–70. ÉS 72–86. sor),
+byte-azonos tartalommal, egyetlen korábbi, LEZÁRT kör commitjából (`c1c0a771`,
+E04-R14, 2026-08-05) — feltehetően másolás-beillesztés hiba, amit sem a gate,
+sem egyetlen review nem fogott ki azóta, mert a két blokk értéke mindig
+megegyezett (nulla viselkedéskülönbség — a `ruff`/`pytest`-osztályú eszközök
+nem jeleznek duplikált attribútum-hozzárendelést egy osztálytörzsben, csak
+import-szintű duplikációt).
+
+**Miért lett volna kár, ha a pre-flight nem méri ki.** Python osztálytörzsben
+egy attribútum MÁSODIK definíciója felülírja az elsőt — a ténylegesen
+érvényes érték tehát a 72–86. sorbeli (második) blokké volt. Ha az
+implementer a brief §2.2 sor-hivatkozását követve CSAK az első (56–70.)
+blokkba írja be az új OpenAI allowlist-bejegyzést, a változás **némán
+hatástalan maradt volna** — a második blokk felülírja —, és a kapcsolódó
+tesztek megmagyarázhatatlanul pirosra futottak volna, egy teljes javító kört
+fogyasztva a valódi gyökérok (nem a teszt, nem az adapter, hanem egy
+ELŐFELTÉTEL-hiba a konfigurációs fájlban) megtalálására.
+
+**Szabály.** Ha egy brief egy fájl bizonyos mezőit/metódusait sor-
+hivatkozással nevezi meg, a pre-flight ne csak azt ellenőrizze, hogy a
+hivatkozott sorokon valóban ott vannak-e (ez a brief §2.2 esetében igaz
+volt!) — hanem azt is, hogy a mező/metódus/osztály NEVE hányszor fordul elő
+a FÁJL EGÉSZÉBEN (`grep -c <mezőnév> <fájl>`). Egynél több találat esetén a
+brief-nek KÖTELEZŐ egy §0.0 revízióval megmondania, MELYIK példányt kell
+módosítani (és javasolt a felesleges duplikátum törlése is, ha bizonyíthatóan
+viselkedés-semleges), különben a szövegesen helyes, pontos sor-hivatkozás a
+gyakorlatban hatástalan diffet eredményez. Rokon: [[L204]] (a brief mércéjét
+futtasd le írás közben), [[L09]] (a zöld gate nem bizonyíték, ha nem a
+helyes halmazt méri).
+
+## L206
+
+**Review-doc commit vagy `main`-rebase UTÁN a `paths:`-szűrős workflow-k
+(`router-ci.yml`, `backend-ci.yml`) NEM tüzelnek újra automatikusan, ha az
+új push nem érinti a saját figyelt útvonalaikat — dispatch-eld őket KÉZZEL
+is, különben az „exact-SHA" merge-bizonyíték hiányos marad** (E99-R07 /
+GOV-05b-2, 2026-08-09, orchesztrátor-eljárás — nem vált hibává, csak plusz
+munkává, mert a rést a merge ELŐTT vettem észre).
+
+**A helyzet.** A független review-jelentések (`docs/reviews/*.md`)
+commitolása a saját branch-re ÚJ tip-et hozott létre, amit az implementer
+eredeti tip-jén (amin a Full Gate/Router CI/Backend CI már zöld volt) még
+nem futtatott CI validált. A `router-ci.yml`/`backend-ci.yml` `on.push.paths`
+szűrője `docs/reviews/**`-et NEM tartalmazza (csak `docs/rounds/**`-et,
+illetve `backend/**`-et) — a review-commit push-ja tehát **nem** indított új
+Router CI / Backend CI futást, csendben. Ugyanez megismétlődött, amikor egy
+PÁRHUZAMOS (más session általi, `docs/manual-testing/**`-be író) `main`
+mozdulás miatt rebase-elnem kellett — a rebase is új tip-et hozott létre.
+
+**Miért kockázatos, ha figyelmen kívül marad.** Az ADR 0086 „exact-SHA"
+szabálya szerint minden kapunak a merge SHA-ján kell zöldnek lennie. Ha a
+merge a review-commit (vagy rebase) UTÁNI tip-en történik, de a legutóbbi
+Router CI/Backend CI futás headSha-ja a RÉGI tip — ez formálisan NEM „a
+merge SHA-n zöld", még ha a köztes commit maga tartalmilag nem is érintett
+gate-releváns fájlt.
+
+**A megoldás, amit alkalmaztam.** Mindhárom workflow (`full-gate.yml`,
+`router-ci.yml`, `backend-ci.yml`) a `push.paths` mellett `workflow_dispatch`-
+et is támogat — minden egyes alkalommal, amikor a branch tip-je változott
+(review-commit, majd a rebase), mindhármat KÉZZEL újra-dispatch-eltem az
+ÚJ tip-re, és `gh run list --json databaseId,name,headSha,conclusion`-nal
+ellenőriztem, hogy MINDHÁROM run headSha-ja pontosan egyezik a
+`git rev-parse HEAD`-del, mielőtt mergeltem.
+
+**Szabály.** Ha egy post-implementer, pre-merge commit (review-jelentés,
+rebase) a branch tip-jét megváltoztatja, NE feltételezd, hogy a korábbi,
+path-filtert használó CI-futások továbbra is „a merge SHA-n" számítanak —
+dispatch-eld KÉZZEL újra MINDEGYIK gate-releváns workflow-t
+(`gh workflow run <name>.yml --ref <branch>`) az ÚJ tip-re, és a
+merge-előtti ellenőrzésnél minden egyes gate headSha-ja külön-külön egyezzen
+az éppen aktuális HEAD-del — nem elég, hogy VALAMELYIK korábbi futás zöld
+volt. Rokon: [[L113]] (a Router CI-t ellenőrizni kell, nem csak a
+build-apk-t — ugyanaz a „path-filtert használó gate csendben kimarad" mintázat).
