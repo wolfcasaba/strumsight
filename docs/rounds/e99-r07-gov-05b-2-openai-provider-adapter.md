@@ -411,7 +411,9 @@ processzként. **Tilos** `| tail`, `| head`, `&&`-lánc vagy bármilyen szűrés
   kapott modellnevet használja, a meglévő kimeneti bájthatárból származtatja
   a `max_tokens` értékét, timeoutot változtatás nélkül továbbítja, és minden
   transport-, HTTP- és válaszsémahibát redacted `ProviderError` vagy
-  `ProviderTimeoutError` kivétellé alakít. A fake gateway érintetlen.
+  `ProviderTimeoutError` kivétellé alakít. A kivételláncok `from None`
+  elnyomása tracebackből is kizárja a nyers provider-részleteket. A fake
+  gateway érintetlen.
 - `backend/app/config.py` — a byte-azonos második tutor settings-blokk
   eltávolítva a §0.0 szerint; a megmaradó blokkban dokumentált OpenAI
   allowlist-bővítési példa és `tutor_openai_base_url` (`https://api.openai.com/v1`)
