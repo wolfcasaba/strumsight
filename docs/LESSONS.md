@@ -7107,3 +7107,51 @@ Egyetlen grep-alak sosem elég, ha a kör több RÉTEGET érint. Rokon: [[L18]]
 (a felmérő grep alakja dönti el a scope-ot — ott a parancsalak hossza volt a
 vakfolt, itt a réteg), [[L09]] (a zöld gate nem bizonyíték, ha a gate nem a
 helyes halmazt futtatja).
+
+## L204 — A review-commit (`docs/reviews/**`) NEM router-ci trigger-útvonal: a review után dispatch-elt CI-t MINDIG a review-commit UTÁNI HEAD-en kell újra-dispatch-elni, kézzel a router-ci.yml-t is (E99-R03 / GOV-05c, 2026-08-09)
+
+**A csapda.** A `.github/workflows/router-ci.yml` `on.push.paths` szűrője
+tételesen felsorolja a trigger-útvonalakat (`tools/ai_router/**`,
+`docs/rounds/**`, `.ai/**`, stb.) — és **`docs/reviews/**` nincs köztük**.
+A review-jelentés (`docs/reviews/eXX-rYY-review.md` +
+`...-security.md`) commitolása és push-a tehát **nem** indít automatikus
+router-ci futást, még akkor sem, ha a kör korábbi (implementer-commit utáni)
+push-a igen — mert AZ a push más útvonalat érintett (jellemzően a brief
+saját `docs/rounds/eXX-rYY-....md` §10 handoff-frissítését).
+
+**Mi történt.** Az E99-R03-ban az implementer push-a (`42f54b33`) helyesen
+triggerelte mindkét workflow-t (Build APK kézi dispatch + Router CI
+automatikus, mert a diff tartalmazta a `docs/rounds/e99-r03-...md` §10
+handoff-frissítést). Utána az orchesztrátor review-commitot adott a
+branchhez (`87ca3f54`, kizárólag `docs/reviews/*.md`) — ez a push **csendben
+NEM indított új router-ci futást**. Ha az orchesztrátor csak a Build APK-t
+dispatch-eli újra (mert ARRA emlékezett, hogy „CI-t a review után újra kell
+futtatni"), és a régi, `42f54b33`-on zöld router-ci futásra hagyatkozik, a
+merge-kori exact-SHA ellenőrzés (`gh run list --workflow router-ci.yml
+--json headSha` a merge SHA-n) **hiányzó** router-ci-t találna a TÉNYLEGES
+merge tip-en (`87ca3f54`) — ami H5 szerint merge-tiltó, nem csak formai hiba.
+
+**A felismerés és a javítás.** A dispatch előtt `grep -n "^on:" -A 45
+.github/workflows/router-ci.yml` megmutatta a pontos path-listát; mivel
+`docs/reviews/**` nincs rajta, a review-commit után **mindkét** workflow-t
+kézzel (`workflow_dispatch`) újra kellett indítani a review-commit utáni
+HEAD-en (`87ca3f54`), nem csak a Build APK-t.
+
+**Szabály.** Minden review-commit (tartalmi ÉS/VAGY security review) UTÁN,
+MIELŐTT a merge-kapu-ellenőrzést elvégeznéd:
+
+1. `git rev-parse HEAD` — ez az ÚJ célpont.
+2. Nézd meg, a review-commit diffje metszi-e a router-ci.yml `on.push.paths`
+   listáját (`docs/reviews/**` tipikusan NEM, `docs/rounds/**` IGEN, ha a
+   review a briefet is módosítja).
+3. Ha NEM metszi: a router-ci `push` esemény nem fut le a review-commit
+   HEAD-jén — **mindkét** kötelező workflow-t (nem csak a natív/build-et)
+   kézzel `workflow_dispatch`-csel kell újraindítani az ÚJ HEAD-en.
+4. A `gh run list --workflow=<...> --branch <kör-branch> --json
+   headSha,conclusion` kimenetét vesd össze a 1. pontban mért HEAD-del,
+   mielőtt mergelsz — ne az „utolsó futás" legyen a mérce, hanem az „utolsó
+   futás A JELENLEGI HEAD-en".
+
+Rokon: [[L113]] (a Router CI-t a merge-kapu figyelmen kívül hagyta, mert a
+kapu csak a `build-apk`-t nézte — ugyanaz a „a workflow csendben nem fut le"
+hibaosztály, itt a path-szűrő, ott a kapu-definíció volt a vakfolt).

@@ -6,6 +6,94 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E99-R01 (GOV-05a) — Practice V2 + Song Trainer V2 shipping rollout, teljes részletes történet (2026-08-09)
+
+**E99-R01 / GOV-05a MERGED — Practice V2 + Song Trainer V2 shipping
+rollout:** az Epic 5 lezárása utáni ELSŐ kör a §6 „Kötelező sorrend" 3.
+pontjából. **Governance-kör**, nem SDD-fejezet; azonosítója `E99-R01`, mert
+az `E99` fenntartott governance pszeudo-epic kód — a
+`tools/ai_router/brief.py:19` `(?i)(e\d{2}-r\d{2})` és a
+`tools/round-pipeline.sh:278` `^[A-Z][0-9]{2}-R[0-9]{2}$` mintája miatt egy
+„GOV-05a" fájlnév kiesne a gépi kapukból (brief-lint, ai-router, CI-terv,
+scope-audit, inflight-őr).
+
+**A mérés, ami a kör alakját eldöntötte.** A flag-flip önmagában NEM lett
+volna rollout: mérve `main @ bbc95187`-en, a flag-gated route-okra a `lib/`
+fában **nulla belépési pont** mutatott (`practiceHub` 1 találat = belső
+`context.go` a setupról visszafelé; `songTrainerLibrary`, `tutorHome`,
+`visionSetup`, `visionSession` mind **0**). A `practiceEngineV2Enabled`
+tehát MÁR `true` volt dev/lab-ban, a feature mégis elérhetetlen. Ezért a kör
+két elválaszthatatlan mozdulat: **flag ÉS belépési pont**.
+
+**Változás:** `songTrainerV2Enabled: false` → **`nonProd`**
+(`development`/`lab` ON, **`production` OFF**); a default konstruktor
+változatlanul `false`. Két flag-gated belépési kártya a Learn fül tetején,
+pinnelt kulcsokkal (`learn-entry-practice-hub`, `learn-entry-song-trainer`),
+a MEGLÉVŐ `practiceHubTitle` / `songTrainerTitle` ARB-kulcsokkal — **nulla
+új string**, `lib/l10n/` érintetlen. Az E03-R01 rollout-őr **átirányítva** a
+production-határra (NEM törölve). Két avult doc-állítás javítva: a
+`practiceSessionHostProvider` doc-commentje (E02-R21 óta él az éles
+provider) és a device-mátrix ezt ismétlő figyelmeztetése; a mátrix ÚJ §2.9
+Song Trainer V2 sorokat kapott PENDING státusszal.
+
+**Egyetlen más flag sem mozdult** — `aiTutorEnabled`, `aiTutorCloudEnabled`,
+`migratedLearnEnabled` és mind a 11 `vision*` marad `false`.
+
+**ÚJ ADR [0197](adr/0197-song-trainer-shipping-rollout-boundary.md)** (az
+orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** — 1
+implementációs + **1 javító forduló**: az első fordulóban HELYESEN
+`stopped`-dal jelzett, amikor a flag-flip egy listán kívüli tesztet pirosra
+váltott, ahelyett hogy tágította volna a listát. A feloldás dokumentált
+**§0.0 R1 brief-revízió** (egy fájl,
+`test/features/learn/continue_card_test.dart`), mércelazítás nélkül.
+Orchesztrátor/reviewer **Claude Opus 5**. PR
+[#205](https://github.com/wolfcasaba/strumsight/pull/205), squash
+`d958b75e`.
+
+**Review:** [reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md](reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md)
+— **APPROVED, 0 BLOCKER/MAJOR**, 1 MINOR, 3 NOTE. A reviewer SAJÁT, izolált
+`/tmp` klónban futtatta újra a teljes gate-et (11/11 zöld) és **két
+valódi-sértés próbát**: (1) `nonProd` → `true` a factoryban → PONTOSAN az A1
+production cella és az átirányított A3 őr lett piros; (2) a két külön `if`
+→ összevont `||` predikátum → PONTOSAN az A5 két KÖZÉPSŐ cellája lett piros.
+A mérce tehát bizonyítottan mér. A **MINOR-1 az orchesztrátor saját hibája**:
+a brief `gate_tests` listájából kimaradt a
+`test/core/screen_size_guard_test.dart`, pedig az is pumpolja a
+`LessonListScreen`-t és pont az overflow-t méri; utólag külön futtatva
+45/45 zöld, tehát nem blokkolt. Tanulság: ha egy kör KÉPERNYŐT módosít, a
+felmérés a képernyő ÖSSZES teszt-pumpolójára menjen, ne csak a módosított
+adatforrás hívóira.
+
+**Zöld kapu (exact-SHA `46c5cbda`, a review-commit utáni tip):** Build APK
+[31291078662](https://github.com/wolfcasaba/strumsight/actions/runs/31291078662)
+**success**; Router CI a kód-tipen (`9b31544b`)
+[31290836396](https://github.com/wolfcasaba/strumsight/actions/runs/31290836396)
+**success**. A merge előtt ellenőrizve: az `origin/main` a dispatch óta nem
+mozdult (`bb8b91c4`).
+
+## E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás, teljes részletes történet (2026-08-08)
+
+**E05-R30** MERGED (PR [#204](https://github.com/wolfcasaba/strumsight/pull/204),
+squash `d3b2caf9`; implementer **Codex (Terra)**, javító kör nélkül,
+orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
+**Az Epic 5 (Computer Vision) mind a 30 köre kész.** Architektúra-guard
+bővítés (raw vision frame/pixel típusok tiltása a persistence/state
+rétegben), model-integritás teszt, vision-off paritás regressziós fixture
+(mind a 11 flag `false` minden környezetben, bitre azonos kimenet),
+stdlib-only false-feedback evaluation harness (1%-os inkluzív cap), Epic 5
+completion report, rollout/rollback runbook. **Nincs ÚJ ADR** (záró-kör
+waiver). Review:
+[reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md](reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md)
++ [security](reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md)
+— **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1+2 MINOR, 7
+NOTE. Zöld kapu exact-SHA `bbb23079`: Full Gate
+[31282481824](https://github.com/wolfcasaba/strumsight/actions/runs/31282481824)
++ Router CI
+[31282482794](https://github.com/wolfcasaba/strumsight/actions/runs/31282482794)
+mindkettő **success**. Post-merge gate a friss `main`-en is zöld:
+582+2skip/401/47 teszt + architecture (12 allowlisted) + secrets (2084
+fájl, 0 lelet) + l10n mind zöld. Lecke: **L202**.
+
 ## E05-R29 — Device tier, performance és thermal hardening, teljes részletes történet (2026-08-08)
 
 **E05-R29 MERGED — Device tier, performance és thermal hardening:** mérhető
