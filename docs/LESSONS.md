@@ -7347,3 +7347,44 @@ kiderülő paranccsal. Rokon: [[L203]] (a felmérésnek a MÓDOSÍTOTT/ÉRINTETT
 felület TÉNYLEGES futásidejű függőségeit kell követnie — ott a
 teszt-fogyasztói kör, itt a célosztály runtime-igénye volt az elmaradt
 mérés).
+
+## L204
+
+**A brief gépi mércéjét FUTTASD LE a brief írásakor — a leírt `grep` nem
+mérce, amíg nem láttad a kimenetét** (E99-R06 / GOV-05b-1, 2026-08-09,
+orchesztrátor-hiba — review MINOR-1).
+
+**Mit írtam elő.** A brief A3 acceptance-pontja gépi kerítést adott a
+„a `FakeTutorModelGateway` nem kerülhet production-drótozásba" tiltáshoz:
+
+```
+grep -c "FakeTutorModelGateway" lib/   →   0
+```
+
+**Miért teljesíthetetlen.** Az osztály maga a
+`lib/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart`-ban
+él, tehát a név **szükségszerűen** szerepel a `lib/` fában (mérve: 2 találat a
+saját definíciós fájljában). A mérce nulla implementációval sem teljesülhetett
+volna — a „helyes" kód is pirosra váltotta volna.
+
+**A helyes mérce**, amit a review futtatott:
+
+```
+grep -rn "FakeTutorModelGateway" lib/ | grep -v fake_tutor_model_gateway.dart
+```
+
+azaz a **definíciós fájlon KÍVÜLI** hivatkozás hiánya. Az implementáció ezt
+teljesítette.
+
+**Miért nem okozott kárt, és miért lelet mégis.** Az implementer a tiltás
+SZÁNDÉKÁT teljesítette (a stub a production alapértelmezés), nem a betűjét,
+tehát a kör jó lett. De ha egy implementer szó szerint veszi a mércét, két
+rossz kimenet van: vagy `stopped`-ol egy teljesíthetetlen ponton (elveszett
+forduló), vagy „megoldja" a fájl átnevezésével/áthelyezésével (kár).
+
+**Szabály.** Minden briefbe írt gépi mércét (`grep`, `git diff --name-only`,
+darabszám) **futtasd le a brief írásakor a JELENLEGI kódon**, és írd a briefbe
+a VÁRT kimenetet is. Ha a mérce a mai kódon már a „hibás" eredményt adja, a
+mérce rossz, nem a kód. Rokon: [[L203]] (a felmérő grep rétegei), [[L18]]
+(a grep alakja dönti el a scope-ot), [[L09]] (a zöld gate nem bizonyíték, ha
+nem a helyes halmazt méri).
