@@ -449,15 +449,81 @@ handoffba. 82 felvétel elemzése eltarthat — ez várható, nem hiba.
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok + **TÉNYLEGES, csonkítatlan** kimenet, beleértve a
-  82 felvételes mérést.
-- A §6.1 valódi-sértés próba nyers kimenete és a visszaállítás igazolása.
-- Az **A1** bizonyítéka: a `git diff --name-only origin/main...HEAD | grep '^lib/'`
-  tényleges (üres) kimenete.
-- Hány felvétel maradt ki és miért (OD-02).
-- **A mért számok, szépítés nélkül** (OD-04).
-- Eltérések és okuk; nem futtatott ellenőrzések és okuk; follow-upok.
+- `test/tooling/real_audio_dsp_baseline_test.dart`: szintetikus contract-teszt
+  az inclusive 49 999 / 50 000 / 50 001 µs onset-cellákra, a predikció
+  újrafelhasználásának tiltására, fedetlen chord-eseményre, a hatcellás
+  címke-normalizálásra és a származtatott többségi baseline-ra. A teszt nem
+  hivatkozik a korpuszra.
+- `tool/benchmarks/real_audio_dsp_baseline.dart`: WAV → valódi, változatlan
+  `const ClipAnalyzer()` → chord/onset/BPM metrika. Integer µs-párosítást,
+  enharmonikus, de minőséget megőrző normalizálást, korpusz-SHA-256-ot és
+  felvételenkénti IOI-szabályosságot ad ki. A jelentés a korpusz eredeti
+  12 címkéjét őrzi meg (például `Bb-major`), az enharmonikus forma csak belső
+  összevetés.
+- `docs/eval/real-audio-dsp-baseline.md`: elkötelezett baseline-riport, benne
+  a teljes, csonkítatlan 82-fájlos futási kimenet.
+
+### Futtatott parancsok és tényleges eredmények
+
+1. RED: `~/flutter/bin/flutter test test/tooling/real_audio_dsp_baseline_test.dart`
+   a harness létrehozása előtt: compilation failure, hiányzó
+   `tool/benchmarks/real_audio_dsp_baseline.dart` és metrika API-k. Ez a
+   várt RED állapot volt.
+2. A contract-teszt implementáció után: `00:00 +5: All tests passed!`.
+3. `tools/round-gate.sh test/tooling test/features/analyze`: format zöld,
+   analyze zöld, `test/tooling` 52 zöld teszt; a `test/features/analyze`
+   szakasz és az architecture-guard is befejeződött. A végső gate újra fut a
+   dokumentációs handoff után.
+4. Az előírt `~/flutter/bin/dart run tool/benchmarks/real_audio_dsp_baseline.dart ml/data/klangio`
+   a sima Dart VM-en piros lett: `Dart library 'dart:ui' is not available on
+   this platform.` A `ClipAnalyzer` tranzitívan Fluttert importál; production
+   fájl módosítása nélkül a valódi API Flutter-tesztrunnerben futott:
+   `~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio tool/benchmarks/real_audio_dsp_baseline.dart`.
+   A teljes, csonkítatlan kimenet a
+   [`docs/eval/real-audio-dsp-baseline.md`](../eval/real-audio-dsp-baseline.md)
+   dokumentumban van.
+
+### Valódi-sértés próba (§6.1)
+
+Az onset-feltételt ideiglenesen `deltaUs <= toleranceUs`-ról
+`deltaUs < toleranceUs`-ra rontottam. A nyers célteszt-kimenet releváns sora:
+
+```
+Expected: <1>
+  Actual: <0>
+deltaUs=50000
+```
+
+Ugyanez a futás az újrafelhasználás-cellát is pirosra váltotta, mert az a
+teszt szintén a pontos küszöbértéket használja. A `<=` visszaállítása után a
+teljes contract-teszt nyers lezárása: `00:00 +5: All tests passed!`.
+
+### Mért eredmény és bizonyíték
+
+- 82 / 82 felvétel feldolgozva, kihagyott vagy hibás felvétel: **0**.
+- Korpusz: 82 WAV / 82 `.strums` / 11 767 esemény;
+  SHA-256 `4880faceab27217640701f1b93db477606d5fb3aa2c4434574040b6590315827`.
+- Akkord: 7 892 / 11 767 = **67,069%**; többségi baseline: G-major,
+  2 216 / 11 767 = **18,832%**; moll-részhalmaz: 185 / 222 = **83,333%**.
+- Onset P/R/F1 25 / 50 / 100 ms-nál rendre: 38,532 / 42,517 / **40,427%**;
+  64,233 / 70,876 / **67,391%**; 81,208 / 89,607 / **85,201%**.
+- Származtatott BPM-MAE: **45,067 BPM**. Nincs automatikus
+  rács-szabálytalanság miatti kizárás (0); a felvételenkénti IOI-mérőszám a
+  riport teljes nyers kimenetében szerepel.
+- A1: `git diff --name-only origin/main...HEAD` tényleges kimenete nem
+  tartalmaz `lib/` utat; a kör nem módosította a szállított DSP-t.
+
+### Eltérés, nem futtatott ellenőrzések és follow-up
+
+- Eltérés: a briefben adott sima `dart run` parancs nem futtat Fluttert
+  igénylő `ClipAnalyzer`-t. A Flutter-tesztrunneres alternatíva ugyanazt a
+  változatlan osztályt hívta; a korlát a riportban is dokumentált.
+- A korpusz nincs verziókövetve, így a mérés nem CI-kapu és a boxon kívül nem
+  reprodukálható. Follow-up: verziózott, licencelt corpus-provenance megoldás
+  (LFS vagy külön adat-repozitórium), majd CI-ben reprodukálható baseline.
+- Teljes Flutter-suite, property-gate és CI-workflow nem futott lokálisan:
+  ezek az orchestrátor merge-előtti CI-felelősségei. Android APK-t a lokális
+  kör szándékosan nem épített.
 
 > Minden viselkedési állításhoz add meg a tesztet, ami bizonyítja. Állítás
 > teszt nélkül = bemondás. **Szám, amit nem futtattál, hazugság.**
