@@ -2,77 +2,66 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> structure since E01-R16). Update after every round (see
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-08
-> (E05-R30 MERGED — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás,
-> ZÁRÓ KÖR:** az Epic 5 (Computer Vision) mind a 30 köre kész. Ez a kör
-> **architektúra-guard bővítés**-t adott (`tool/check_architecture.dart`):
-> (a) raw vision frame/pixel típus (`VisionImage`, `GrayscaleFrame`,
-> `Uint8List`, `ByteData`, `ByteBuffer`, `VisionPixelFormat`) tiltása a
-> `lib/features/vision/data/persistence/` és `application/*State` fájlokban,
-> gépi őrrel véve az ADR 0183 „no raw frame persistence" döntést; az
-> allowlist **változatlan** 12 elemű (a meglévő `analyze → live` kivételek —
-> a guard-bővítés NEM adott hozzá egyet sem). **Model-integritás teszt**
-> (`test/tooling/vision_model_integrity_test.dart`, ÚJ) — checksum/output
-> schema/licenc mutation gate a MEGLÉVŐ `VisionModelManifest`-re (E05-R12).
-> **Vision-off paritás regressziós fixture**
-> (`test/features/vision/vision_offline_regression_test.dart`, ÚJ) — mind a
-> 11 vision flag `false` minden környezetben (`AppEnvironment.values`, nincs
-> dart-define override), Practice audio score / Song Trainer timing /
-> Analyze / Tutor kimenet **bitre azonos** pinned JSON-fixtúrával. **Stdlib-
-> only false-feedback evaluation harness**
-> (`ml/vision/evaluate_vision_metrics.py`, ÚJ) — JSONL fixture-összefoglalókat
-> olvas (nem kamerát), `--self-test` a `NO_DATA`/0%/1%/2% cellamátrixot
-> igazolja, **1%-os inkluzív production-safety cap** (a benchmark-cél
-> továbbra is 0%, a küszöb utólagos emelése tiltott — a megengedett kimenet
-> a metrika `experimental` átsorolása). Dataset manifest véglegesítés
-> (`ml/vision/dataset_manifest.md` §6, harness-szerződés), Epic 5
-> **completion report** (`docs/sdd/epic-05-completion-report.md`, ÚJ — a 86
-> PENDING előfordulás [81 sor + 5 magyarázó] tételesen elszámolva, egyik
-> Vision-képesség sem production-supported, a hátralévő CI-oldali
-> model-gate governance-körnek nevesítve), **rollout/rollback runbook**
-> (`docs/runbooks/vision-rollout.md`, ÚJ), README privacy-frissítés. Minden
-> vision flag `false` MARAD — nincs képesség bekapcsolva.
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-09
+> (E99-R01 / GOV-05a MERGED — Practice V2 + Song Trainer V2 shipping rollout:**
+> az Epic 5 lezárása utáni ELSŐ kör a §6 „Kötelező sorrend" 3. pontjából.
+> **Governance-kör**, nem SDD-fejezet; azonosítója `E99-R01`, mert az `E99`
+> fenntartott governance pszeudo-epic kód — a `tools/ai_router/brief.py:19`
+> `(?i)(e\d{2}-r\d{2})` és a `tools/round-pipeline.sh:278`
+> `^[A-Z][0-9]{2}-R[0-9]{2}$` mintája miatt egy „GOV-05a" fájlnév kiesne a
+> gépi kapukból (brief-lint, ai-router, CI-terv, scope-audit, inflight-őr).
 >
-> **Nincs ÚJ ADR** (záró-kör waiver, [ADR 0087](docs/adr/0087-autonomous-round-pipeline.md)
-> §7 / [ADR 0112](docs/adr/0112-self-healing-pipeline.md) — a brief előre
-> eldöntötte a rollout/flag/ADR kérdéscsoportot). **Pre-flight (2026-08-08):**
-> a brief minden mért §2 állítása (12 elemű allowlist, 11 flag, öt hiányzó/hat
-> meglévő fájl, SDD §32/35/36/39/40 megléte) grep-elve — **nulla eltérés** a
-> kódtól, csak egy státuszfrissítő §0.0 revízió (PREPARED→PLANNING) kellett.
+> **A mérés, ami a kör alakját eldöntötte.** A flag-flip önmagában NEM lett
+> volna rollout: mérve `main @ bbc95187`-en, a flag-gated route-okra a `lib/`
+> fában **nulla belépési pont** mutatott (`practiceHub` 1 találat = belső
+> `context.go` a setupról visszafelé; `songTrainerLibrary`, `tutorHome`,
+> `visionSetup`, `visionSession` mind **0**). A `practiceEngineV2Enabled`
+> tehát MÁR `true` volt dev/lab-ban, a feature mégis elérhetetlen. Ezért a kör
+> két elválaszthatatlan mozdulat: **flag ÉS belépési pont**.
 >
-> Implementer **Codex (Terra)** (1 implementációs forduló, **javító kör
-> nélkül**), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> **security-reviewer** ágens (`risk = "high"`). PR
-> [#204](https://github.com/wolfcasaba/strumsight/pull/204), squash `d3b2caf9`.
+> **Változás:** `songTrainerV2Enabled: false` → **`nonProd`**
+> (`development`/`lab` ON, **`production` OFF**); a default konstruktor
+> változatlanul `false`. Két flag-gated belépési kártya a Learn fül tetején,
+> pinnelt kulcsokkal (`learn-entry-practice-hub`, `learn-entry-song-trainer`),
+> a MEGLÉVŐ `practiceHubTitle` / `songTrainerTitle` ARB-kulcsokkal —
+> **nulla új string**, `lib/l10n/` érintetlen. Az E03-R01 rollout-őr
+> **átirányítva** a production-határra (NEM törölve). Két avult doc-állítás
+> javítva: a `practiceSessionHostProvider` doc-commentje (E02-R21 óta él az
+> éles provider) és a device-mátrix ezt ismétlő figyelmeztetése; a mátrix ÚJ
+> §2.9 Song Trainer V2 sorokat kapott PENDING státusszal.
 >
-> **Review:** [docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md)
-> — **APPROVED, 0 nyitott BLOCKER/MAJOR** (1 MINOR — a brief egy konkrét
-> `practice → vision belső fájl` valódi-sértés próbát nevesített, ami nem
-> szerepelt a diffben; a reviewer SAJÁT, eldobható próbája igazolta, hogy a
-> MEGLÉVŐ generikus cross-feature-import szabály ezt a konkrét párt is
-> helyesen elkapja — a hiány pusztán acceptance-bizonyíték, nem védelmi rés
-> —, 3 NOTE). A reviewer SAJÁT, izolált `/tmp` klónban független
-> gate-újrafuttatással (8/8 lépés zöld), a completion report 86 PENDING
-> elszámolásának SAJÁT `grep -c`-vel való visszamérésével, és a fenti
-> gyakorlati próbateszttel erősítette meg. A **dedikált security-review**
-> ([docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md))
-> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR (mindkettő előretekintő: az
-> új raw-payload guard azonosító-egyezéses lint, típusalias-szal
-> megkerülhető; az ÚJ integritás-teszt csak a formátum-ágat éri el, mert
-> mindkét vision-modell-bejegyzés ma `status: deferred`, a valódi
-> SHA-256-összevetés csak `active` bejegyzésnél fut — egyik sem e kör
-> hibája, a validátor ezt a szétválasztást már E05-R12 óta dokumentálja),
-> 4 NOTE.
+> **Egyetlen más flag sem mozdult** — `aiTutorEnabled`, `aiTutorCloudEnabled`,
+> `migratedLearnEnabled` és mind a 11 `vision*` marad `false`.
 >
-> **Zöld kapu (exact-SHA `bbb23079`, a review-commitok utáni tip):** Full Gate
-> [31282481824](https://github.com/wolfcasaba/strumsight/actions/runs/31282481824)
-> **success** + Router CI
-> [31282482794](https://github.com/wolfcasaba/strumsight/actions/runs/31282482794)
-> **success**. Post-merge gate a friss `main`-en (`d3b2caf9`) is zöld:
-> 582+2skip (`test/features/vision`) + 401 (`test/core`) + 47 (`test/tooling`)
-> teszt, architecture (12 allowlisted, 0 unexpected) + secrets (2084 fájl,
-> 0 lelet) + l10n mind zöld.
+> **ÚJ ADR [0197](docs/adr/0197-song-trainer-shipping-rollout-boundary.md)**
+> (az orchesztrátor írta a pre-flightban). Implementer **Codex (Terra)** —
+> 1 implementációs + **1 javító forduló**: az első fordulóban HELYESEN
+> `stopped`-dal jelzett, amikor a flag-flip egy listán kívüli tesztet pirosra
+> váltott, ahelyett hogy tágította volna a listát. A feloldás dokumentált
+> **§0.0 R1 brief-revízió** (egy fájl, `test/features/learn/continue_card_test.dart`),
+> mércelazítás nélkül. Orchesztrátor/reviewer **Claude Opus 5**.
+> PR [#205](https://github.com/wolfcasaba/strumsight/pull/205), squash `d958b75e`.
+>
+> **Review:** [docs/reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md](docs/reviews/e99-r01-gov-05a-practice-and-song-trainer-shipping-rollout-review.md)
+> — **APPROVED, 0 BLOCKER/MAJOR**, 1 MINOR, 3 NOTE. A reviewer SAJÁT, izolált
+> `/tmp` klónban futtatta újra a teljes gate-et (11/11 zöld) és **két
+> valódi-sértés próbát**: (1) `nonProd` → `true` a factoryban → PONTOSAN az A1
+> production cella és az átirányított A3 őr lett piros; (2) a két külön `if`
+> → összevont `||` predikátum → PONTOSAN az A5 két KÖZÉPSŐ cellája lett piros.
+> A mérce tehát bizonyítottan mér. A **MINOR-1 az orchesztrátor saját hibája**:
+> a brief `gate_tests` listájából kimaradt a
+> `test/core/screen_size_guard_test.dart`, pedig az is pumpolja a
+> `LessonListScreen`-t és pont az overflow-t méri; utólag külön futtatva
+> 45/45 zöld, tehát nem blokkolt. Tanulság: ha egy kör KÉPERNYŐT módosít, a
+> felmérés a képernyő ÖSSZES teszt-pumpolójára menjen, ne csak a módosított
+> adatforrás hívóira.
+>
+> **Zöld kapu (exact-SHA `46c5cbda`, a review-commit utáni tip):** Build APK
+> [31291078662](https://github.com/wolfcasaba/strumsight/actions/runs/31291078662)
+> **success**; Router CI a kód-tipen (`9b31544b`)
+> [31290836396](https://github.com/wolfcasaba/strumsight/actions/runs/31290836396)
+> **success**. A merge előtt ellenőrizve: az `origin/main` a dispatch óta nem
+> mozdult (`bb8b91c4`).
 >
 > ## ✅ E05-R29 KÉSZ — Device tier, performance és thermal hardening (2026-08-08)
 >
@@ -91,25 +80,29 @@
 > ## ✅ E05-R30 KÉSZ — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás (2026-08-08)
 >
 > **E05-R30** MERGED (PR [#204](https://github.com/wolfcasaba/strumsight/pull/204),
-> squash `d3b2caf9`; implementer **Codex (Terra)** (1 implementációs forduló,
-> javító kör nélkül), orchesztrátor/reviewer **Claude Sonnet 5**, dedikált
-> security-reviewer). Lásd a fenti „Last updated" blokk a teljes
-> pre-flight/review/security történetért — ez a szakasz csak a rövid
-> hivatkozási pont a korábbi körök mintája szerint. **Nincs ÚJ ADR**
-> (záró-kör waiver). Review:
+> squash `d3b2caf9`; implementer **Codex (Terra)**, javító kör nélkül,
+> orchesztrátor/reviewer **Claude Sonnet 5**, dedikált security-reviewer).
+> **Az Epic 5 (Computer Vision) mind a 30 köre kész.** Architektúra-guard
+> bővítés (raw vision frame/pixel típusok tiltása a persistence/state
+> rétegben), model-integritás teszt, vision-off paritás regressziós fixture
+> (mind a 11 flag `false` minden környezetben, bitre azonos kimenet),
+> stdlib-only false-feedback evaluation harness (1%-os inkluzív cap),
+> Epic 5 completion report, rollout/rollback runbook. **Nincs ÚJ ADR**
+> (záró-kör waiver). Teljes történet:
+> [`docs/handoff-archive.md`](docs/handoff-archive.md). Review:
 > [docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-review.md)
 > + [security](docs/reviews/e05-r30-dataset-evaluation-and-epic-closure-security.md)
-> — **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1+2 MINOR
-> (mind forward-looking/lezárva), 7 NOTE follow-up. Lecke: **L202**.
+> — **APPROVED javító kör nélkül**, 0 nyitott BLOCKER/MAJOR, 1+2 MINOR, 7 NOTE.
+> Lecke: **L202**.
 >
-> **Következő:** az Epic 5 pipeline-sorai (E05-R01…R30) MIND `done`. A queue
-> egyetlen fennmaradó sora (`E06-R29`, `E06-R30`) **`hold`**-on van — a
-> pipeline-nek NINCS következő automatikusan indítható köre. A `HANDOFF.md`
-> §6 „Kötelező sorrend" (user-döntés, 2026-08-07) szerinti következő lépés
-> **emberi**: (2) az Epic 5 valós-eszközös APK-ellenőrzése a usernél, majd
-> (3) GOV-05 shipping rollout kör, (4) GOV-06 valós-audio DSP baseline mérés
-> — a GOV-05/GOV-06 briefje szándékosan még nincs megírva, csak a 3–4. pont
-> UTÁN, mert a pre-flightjuk az Epic 5 VÉGSŐ állapotát kell hogy mérje.
+> **Következő:** a §6 „Kötelező sorrend" 3. pontja **három körre bomlott**
+> (orchesztrátor-döntés 2026-08-09, mért indokkal — lásd §6): GOV-05a
+> ✅ **KÉSZ**, utána **GOV-05b** (AI Tutor internal rollout), **GOV-05c**
+> (Learn migráció a Practice V2-re), majd **GOV-06** (valós-audio DSP
+> baseline), és CSAK ezután Epic 6. A **vision rollout mért blokkolón áll**
+> (GOV-05d, lásd §3) — a modell-binárisok nincsenek a repóban. A pipeline-sor
+> minden E05 sora `done`, minden E06 sora `hold`; a láncnak NINCS
+> automatikusan indítható köre.
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -456,15 +449,39 @@
   Workflows:R+W PAT · Hermes-kutatás továbbítása.
 - iOS build Mac nélkül nem lehetséges.
 - Nyitott follow-up lista tételesen: completion report §2.
-- **A `lib/` 43%-a ma elérhetetlen (mérve 2026-08-07):** `song_trainer` V2
-  (25 308 sor), `ai_tutor` (14 091), `vision` (5 132) — mindhárom flagje
-  **hard-kódolt `false`** a `FeatureFlags.forEnvironment`-ben, tehát a CI
-  dev-APK-jában sem elérhető; a Learn ma is a **legacy** ágon fut
-  (`migratedLearnEnabled: false` mindenhol). Ugyanekkor a termék központi
-  állítására egyetlen mért valós-audio szám létezik (CRNN pengetés-irány
-  86,7% vs heurisztika 38,9%, r164 A/B) — akkord-pontosságra valós felvételen
-  nincs. **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez a kettő
-  nincs meg → lásd §6 „Kötelező sorrend".
+- **~~A `lib/` 43%-a elérhetetlen~~ — RÉSZBEN FELOLDVA (GOV-05a, 2026-08-09).**
+  Eredeti mérés (2026-08-07): `song_trainer` V2 (25 308 sor), `ai_tutor`
+  (14 091), `vision` (5 132) mind hard-kódolt `false` mögött.
+  **Ma:** a `song_trainer` V2 `development`/`lab`-ban ON, és a Learn fülről
+  belépési ponttal elérhető (a Practice V2 szintén — a flagje eddig is ON
+  volt, csak belépési pont nem vezetett hozzá). **Hátra van:**
+  - `ai_tutor` (14 091 sor) — flagje `false` mindenhol → **GOV-05b**;
+  - `migratedLearnEnabled` `false` mindenhol, a Learn ma is a **legacy**
+    ágon fut → **GOV-05c**;
+  - `vision` (5 132 sor) — flagje `false`, és **BLOKKOLT**: nem
+    flag-kérdés, hanem hiányzó modell-bináris → **GOV-05d**, lásd a
+    következő pontot.
+  Ugyanekkor a termék központi állítására egyetlen mért valós-audio szám
+  létezik (CRNN pengetés-irány 86,7% vs heurisztika 38,9%, r164 A/B) —
+  akkord-pontosságra valós felvételen nincs → **GOV-06**.
+  **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg →
+  lásd §6 „Kötelező sorrend".
+- **A vision rollout BLOKKOLT — hiányzó modell-binárisok (mérve 2026-08-09,
+  GOV-05a pre-flight; ez NEM flag-kérdés):** az
+  `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
+  (`hand_landmarker` 1.0.0, `pose_landmarker` 1.0.0) `status: "deferred"`,
+  `sha256` csupa nulla, és a hivatkozott
+  `hand_landmarker_deferred.tflite` / `pose_landmarker_deferred.tflite`
+  fájlok **nincsenek a repóban** (`ls assets/ml/` → négy audio `.bin` + a
+  manifest). A `NativeHandLandmarkProvider:77` és a
+  `NativePoseLandmarkProvider:76` `deferred` bejegyzésre `AppResult.failure`-t
+  ad. Következmény: a `visionEnabled` bekapcsolása MA egy zsákutcába futó
+  setup-folyamatot tenne láthatóvá — az Epic 5 mind a 30 köre kész, de
+  készüléken egyetlen vision-képesség sem tud futni. **Előfeltétel a
+  rollouthoz:** a modell-binárisok beszerzése, licenc- és checksum-átvezetés
+  a manifestbe (a `test/tooling/vision_model_integrity_test.dart` valódi
+  SHA-256-ellenőrzése csak `active` bejegyzésnél fut) → külön **GOV-05d** kör,
+  a döntés emberi.
 - **`vision/public.dart` wide-barrel szimbólum-rés — a KONKRÉT R26-eset
   zárva, az ÁLTALÁNOS enforcement-rés nyitva (mérve E05-R25 security-review
   MINOR-1 + E05-R26, nem blokkoló):** a wide barrel máig aggregát
@@ -990,37 +1007,85 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > **„várjuk meg amíg az Epic 5-tel végzünk, majd csináljuk a shipping kört
 > először, majd egy valós audio mérés, és csak ezek után lépjünk az Epic 6-ra."**
 >
-> 1. **Epic 5 befejezése** (E05-R14 … E05-R30) — a queue `pending` sorai.
-> 2. **Az Epic 5 APK-ellenőrzése** a usernél (valós eszköz).
-> 3. **GOV-05 — Shipping rollout kör.** Nem új képesség: a MÁR KÉSZ, de
->    elérhetetlen 44 531 sor termékké tétele — `songTrainerV2Enabled`,
->    `aiTutorEnabled`, `visionEnabled` bekapcsolása legalább `lab`
->    környezetben, a Learn átállítása a Practice V2-re
->    (`migratedLearnEnabled`), és a hozzá tartozó valós eszközös menet.
+> 1. ~~**Epic 5 befejezése**~~ — ✅ **KÉSZ** (E05-R30, `d3b2caf9`).
+> 2. ~~**Az Epic 5 APK-ellenőrzése** a usernél~~ — **KIHAGYVA, user-döntés
+>    2026-08-09** („mehet a 3. 4. pont"). Mért indok: a 11 vision flag
+>    hard-kódolt `false` volt minden környezetben, tehát egy akkori APK-menet
+>    csak regressziót tudott volna mérni, a vision-t nem. A készülékes
+>    bizonyíték a GOV-05a/b/c rollout-körök device-mátrix sorain gyűlik.
+> 3. **GOV-05 — Shipping rollout.** **HÁROM körre bomlott** (orchesztrátor-
+>    döntés 2026-08-09; mért indok a 3.0 pontban):
+>    - **GOV-05a** = `E99-R01` — Practice V2 + Song Trainer V2 → ✅ **KÉSZ**
+>      (PR #205, `d958b75e`, ADR 0197).
+>    - **GOV-05b** = `E99-R02` — **AI Tutor internal rollout**:
+>      `aiTutorEnabled` ON `development`/`lab`-ban a
+>      [`docs/runbooks/ai-tutor-rollout.md`](docs/runbooks/ai-tutor-rollout.md)
+>      1. lépcsője szerint, belépési pont + consent/privacy kapu.
+>      Nyitott kérdés a briefhez: `aiTutorCloudEnabled` (fake gateway vagy OFF).
+>    - **GOV-05c** = `E99-R03` — **Learn migráció** (`migratedLearnEnabled`).
+>      A legkockázatosabb: egy MÁR szállított feature mögött cseréli a motort.
+>      Meglévő őrök: `test/features/learn/learn_migration_parity_test.dart`,
+>      `learn_rollback_test.dart`; az `AppConfig.resolve` már kényszeríti a
+>      `practiceEngineV2Enabled` függőséget.
+> 3.0 **Miért három kör, és miért NEM tartalmazza a vision-t.** Két mérés
+>    döntötte el, mindkettő `main @ bbc95187`-en:
+>    (a) **Belépési pontok:** a flag-gated route-okra **nulla** hivatkozás
+>    mutatott a `lib/`-ben, tehát minden feature-családhoz külön UI-mozdulat
+>    kell — három család egyszerre nem lenne review-zható, és egy készülékes
+>    hiba nem lenne betudható.
+>    (b) **A vision rollout BLOKKOLT** (→ **GOV-05d**, lásd §3): az
+>    `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
+>    (`hand_landmarker`, `pose_landmarker`) `status: "deferred"`, `sha256`
+>    csupa nulla, és a hivatkozott `.tflite` fájlok **nincsenek a repóban**
+>    (`ls assets/ml/` → négy audio `.bin` + a manifest). A
+>    `NativeHandLandmarkProvider:77` / `NativePoseLandmarkProvider:76`
+>    `deferred` bejegyzésre `AppResult.failure`-t ad, tehát a `visionEnabled`
+>    bekapcsolása egy zsákutcába futó setup-folyamatot tenne láthatóvá. A
+>    flag-flip előfeltétele a modell-binárisok beszerzése + licenc-átvezetés.
 > 4. **GOV-06 — Valós-audio DSP baseline mérés.** A meglévő shipping DSP
 >    pontossága valódi gitárfelvételeken: akkord-pontosság, onset P/R/F1,
 >    BPM-hiba. **Miért ELŐBB, mint az Epic 6:** az Epic 6 harminc köre erre a
 >    DSP-re épít metrika-, confidence- és insight-réteget; ha az alap gyenge,
->    azt most olcsó megtudni, harminc kör után nem.
+>    azt most olcsó megtudni, harminc kör után nem. Nyitott kérdés a briefhez:
+>    honnan jön a konszenzuált valós-gitár korpusz.
 > 5. **Csak ezután Epic 6** — a 30 briefje kész (`epic-06-batch-index.md`),
 >    a queue-sorai `hold`-on. A feloldás EMBERI döntés, a 3. és 4. pont után.
 >
-> A GOV-05/GOV-06 briefje **szándékosan még nincs megírva**: a pre-flightjuk
-> az Epic 5 VÉGSŐ állapotát kell hogy mérje (a vision-flagek és a
-> device-mátrix csak akkor lesznek véglegesek). Az Epic 6 queue-sorai
+> A GOV-05b/GOV-05c/GOV-06 briefje **szándékosan még nincs megírva**: mindegyik
+> pre-flightjának az ELŐZŐ kör utáni állapotot kell mérnie (mind ugyanazt a
+> `feature_flags.dart` / `lesson_list_screen.dart` felületet érinti, tehát az
+> előre írt fájllisták ütköznének és avulnának). Az Epic 6 queue-sorai
 > addig is `hold`-on védik a sorrendet.
+>
+> **Governance-kör azonosítás:** a GOV-körök `E99-RNN` alakot kapnak, mert a
+> `tools/ai_router/brief.py:19` és a `tools/round-pipeline.sh:278` mintája a
+> „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
+> A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A pipeline MEGÁLLT — nincs következő automatikusan indítható kör**
-   (2026-08-08, E05-R30 zárása után). `docs/execution/pipeline-queue.tsv`
-   minden E05-sora `done`; az egyetlen fennmaradó sorpár (`E06-R29`,
-   `E06-R30`) **`hold`**-on van, mert a fejléc §6 „Kötelező sorrend"
-   (user-döntés 2026-08-07) az Epic 6 előtt a user valós-eszközös Epic 5
-   APK-ellenőrzését és a GOV-05/GOV-06 köröket írja elő, amiknek a briefje
-   szándékosan még nincs megírva. A `.pipeline/engine-override` = `terra`
-   beállítás változatlan (a 2026-08-07-es Terra-tiltás feloldva, a
-   Terra-kvóta visszatért — élő füst-teszt `TERRA_OK`), a KÖVETKEZŐ pipeline
-   session (akár E06, akár egy GOV-kör) is ezt fogja használni, ha a
-   sorrend feloldódik.
+0. **A KÖVETKEZŐ KÖR: GOV-05b (`E99-R02`) — AI Tutor internal rollout.**
+   Kézi orchesztrálás, a queue-n kívül (a GOV-körök nem queue-sorok — lásd a
+   fenti „Governance-kör azonosítás" dobozt). Implementer **Terra**
+   (`.pipeline/engine-override` = `terra`, mérve élő a GOV-05a-n
+   2026-08-09-én: `gpt-5.6-terra`, 1 implementációs + 1 javító forduló).
+   A brief pre-flightja a GOV-05a UTÁNI állapotot mérje —
+   `lib/app/config/feature_flags.dart`, `lib/features/learn/screens/lesson_list_screen.dart`
+   (már tartalmaz két belépési kártyát; a Tutoré a harmadik lesz), és a
+   `docs/runbooks/ai-tutor-rollout.md` 1. lépcsője.
+   **Kötelező tanulság a GOV-05a-ból (review MINOR-1):** ha a kör KÉPERNYŐT
+   módosít, a `gate_tests` felmérése a képernyő ÖSSZES teszt-pumpolójára
+   menjen (`grep -rln "<Screen>" test/`), ne csak a módosított adatforrás
+   hívóira — a GOV-05a briefjéből így maradt ki a
+   `test/core/screen_size_guard_test.dart`.
+
+   **A pipeline-lánc továbbra is TÉTLEN:** `docs/execution/pipeline-queue.tsv`
+   minden E05-sora `done`, minden E06-sora **`hold`** — a cron nem indít
+   semmit magától, és ez így helyes, amíg a §6 sorrend le nem fut.
+
+   **~~E99-R01 (GOV-05a) — Practice V2 + Song Trainer V2 shipping rollout~~ — KÉSZ**
+   (PR #205, `d958b75e`, **ÚJ ADR 0197**; implementer Codex/Terra, 1
+   implementációs + 1 javító forduló — az első fordulóban helyes `stopped`
+   scope-jelzés, dokumentált §0.0 R1 revízióval feloldva; review APPROVED,
+   0 BLOCKER/MAJOR, 1 MINOR + 3 NOTE; ld. fejléc).
    **~~E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás~~ — KÉSZ**
    (PR #204, `d3b2caf9`, nincs új ADR — záró-kör waiver; implementer
    Codex/Terra, egyetlen forduló, javító kör nélkül; dedikált
