@@ -106,10 +106,10 @@ class OpenAiProviderGateway(ProviderGateway):
             )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
-        except httpx.TimeoutException as error:
-            raise ProviderTimeoutError("Provider request timed out") from error
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as error:
-            raise ProviderError("Provider request failed") from error
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError("Provider request timed out") from None
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
+            raise ProviderError("Provider request failed") from None
 
         if not isinstance(content, str):
             raise ProviderError("Provider response was invalid")
