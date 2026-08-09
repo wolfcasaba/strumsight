@@ -56,6 +56,49 @@ void _expectAiTutorFlagsOff(Object flags) {
 }
 
 void main() {
+  group('Song Trainer V2 rollout boundary', () {
+    test('is enabled in development', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+
+      expect(flags.songTrainerV2Enabled, isTrue);
+    });
+
+    test('is enabled in lab', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.lab,
+        accountEnabled: false,
+      );
+
+      expect(flags.songTrainerV2Enabled, isTrue);
+    });
+
+    test('remains disabled in production', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(flags.songTrainerV2Enabled, isFalse);
+    });
+
+    test('keeps unrelated rollout flags disabled in every environment', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        expect(flags.aiTutorEnabled, isFalse);
+        expect(flags.aiTutorCloudEnabled, isFalse);
+        expect(flags.migratedLearnEnabled, isFalse);
+        expect(flags.visionEnabled, isFalse);
+      }
+    });
+  });
+
   group('AI Tutor feature flags', () {
     test('const constructor defaults both flags to off', () {
       const flags = FeatureFlags(
