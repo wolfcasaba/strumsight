@@ -1,6 +1,6 @@
 # E06-R07 — Signal quality stage
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-11, main @ `10e2d495`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 7; §11.2–11.6
 - **Branch:** `codex/e06-r07-signal-quality-stage`
 - **Előfeltétel:** **E06-R04, E06-R05 merge**
@@ -18,6 +18,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/signal_quality_math_test.dart",
   "test/property/analysis_signal_quality_property_test.dart",
   "docs/rag/chunks/019-signal-quality-metrics.md",
+  "docs/adr/0223-signal-quality-stage-metric-and-provenance-policy.md",
   "docs/rounds/e06-r07-signal-quality-stage.md",
 ]
 gate_tests = [
@@ -46,10 +47,42 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **DSP-szabály:** ez a kör **új** mérőszámokat vezet
-be (nem retunolja a shipping DSP-t), ezért az AGENTS.md §9 szerint a
-paraméterek forrása a **`docs/rag/chunks/019-signal-quality-metrics.md`**,
-ugyanabban a commitban.
+**R1 — friss mérés, `main` @ `10e2d495` (2026-08-11).** A brief eredeti
+baseline-ja `a6e6f3d` volt; E06-R05 és E06-R06 azóta merge-elt. A R02
+`SignalQualityReport` tényleges, zárt publikus contractja
+(`domain/signal_quality_report.dart:4-42`) kizárólag `overall`, `peakDbfs`,
+`rmsDbfs`, `noiseFloorDbfs`, `clippedSampleRatio`, `silentRatio`,
+`tonalness`, `measured` és `warnings` mezőket ad. Nincs `activeRegionRatio`,
+`spectralFlatness`, külön `degraded` mező vagy szabad provenance-bag; ezért
+ez a kör nem bővíti a domain típust. Az aktív-régió arány csak belső,
+warning-döntési primitív; a rövid klip `tonalness`/noise-floor korlátját egy
+stabil `AnalysisWarningKind.inputQuality` warning jelöli. A
+`QualityThresholds.version` a stage `version` értékével egyezik, így az R04
+pipeline `AnalysisPipelineProvenance.stageVersions` mechanikusan rögzíti az
+eredményt anélkül, hogy új provenance-mezőt vezetnénk be.
+
+**R2 — R04 security MINOR-1.** Az `AnalysisStageContext.publishResult`
+(`engine/analysis_context.dart:89-90`) stage-választotta terminális eseményt
+injektálhat; ez nincs ebben a körben engedélyezve. A `SignalQualityStage`
+soha nem hívhatja ezt a metódust, csak legfeljebb egyszer a saját
+`context.reportProgress()` metódusát. A pipeline marad a terminális állapot
+egyedüli szerzője. A context/pipeline hardening továbbra is a megfelelő
+későbbi kör scope-ja.
+
+**R3 — dokumentációs scope.** A `docs/rag/chunks/` következő szabad száma
+valóban `019`. A korábbi §9 által kért
+`docs/manual-testing/analysis-eval-matrix.md` PENDING-sor a listán kívüli
+fájl lenne; a mérési eredményt az RAG-chunk ideiglenes, E06-R29-ig nem
+kalibrált státusza rögzíti, a manuális mátrix frissítése pedig E06-R29
+feladata. Az engedélyezett lista nem bővül erre a fájlra.
+
+**R4 — ADR.** A foglaló `tools/round-slots.py reserve-adr --round E06-R07`
+futása `0223`-at adott. Az új
+`0223-signal-quality-stage-metric-and-provenance-policy.md` rögzíti a
+mértékegység-, threshold- és provenance-leképezést. **DSP-szabály:** ez a
+kör **új** mérőszámokat vezet be (nem retunolja a shipping DSP-t), ezért az
+AGENTS.md §9 szerint a paraméterek forrása a
+**`docs/rag/chunks/019-signal-quality-metrics.md`**, ugyanabban a commitban.
 
 ## 1. Cél
 
@@ -174,8 +207,9 @@ open_decisions:
       PCM-ekre (köztük csupa 0, csupa ±1, extrém dinamikájú) a riport
       **egyetlen** mezője sem `NaN`/`±Infinity`, és minden arány `[0,1]`-ben,
       minden dBFS `[−120, +6]`-ban van.
-- [ ] **Rövid klip:** a 200 ms-os fixture riportja **elkészül** (nem hiba), de
-      a `tonalness`/noise-floor mezők `degraded` jelölést kapnak — a rövid klip
+- [ ] **Rövid klip:** a 200 ms-os fixture riportja **elkészül** (nem hiba), és
+      a `tonalness`/noise-floor korlátját stabil `inputQuality` warning jelöli
+      (a R02 contractban nincs mezőszintű `degraded` flag) — a rövid klip
       **nem** blokkolja a peak/RMS/clipping mérését.
 - [ ] **Nincs játék-minősítés:** teszt méri, hogy egyetlen warning kulcsa sem
       illeszkedik a `(?i)(bad|poor|wrong|sloppy|rossz|gyenge)_?play` mintára.
@@ -226,8 +260,9 @@ Külön processzek, nincs `&&`/pipe/`tail`.
   tudatosan duplikál egy kis primitívet a cross-feature allowlist tágítása
   helyett; a §10-ben a mért futásidőt rögzíteni kell (30 s-os klipre).
 - **A küszöbök most még nem valós felvételen kalibráltak** — a chunk
-  kimondja, hogy az értékek **ideiglenesek** az E06-R29 evaluation-jéig, és a
-  `docs/manual-testing/analysis-eval-matrix.md` kap egy PENDING sort.
+  kimondja, hogy az értékek **ideiglenesek** az E06-R29 evaluation-jéig; a
+  `docs/manual-testing/analysis-eval-matrix.md` PENDING-sora az E06-R29
+  scope-ja (R3), nem ennek a körnek a listán kívüli módosítása.
 - **A tonalness fogalmi ütközése** a `NnlsChroma.lastTonalness`-szel: a kettő
   **külön** mennyiség, külön néven; a chunk explicit kimondja a különbséget.
 
