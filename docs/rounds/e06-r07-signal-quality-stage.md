@@ -280,7 +280,75 @@ DSP-retune ebben a körben tilos.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `lib/features/audio_analysis/engine/quality/quality_thresholds.dart` — a
+  `signal-quality-v1` néven verziózott dBFS-, clipping-, frame- és grade
+  küszöbök.
+- `lib/features/audio_analysis/engine/quality/signal_quality_math.dart` —
+  tiszta peak/RMS dBFS, clipping-, silent- és active-region arány, 10.
+  percentilis noise-floor, valamint helyi Hann-ablakos radix-2 FFT alapú
+  tonalness proxy; nincs Live DSP import.
+- `lib/features/audio_analysis/engine/quality/signal_quality_stage.dart` —
+  önálló `AnalysisStage<ValidatedPcmAnalysisInput, SignalQualityStageResult>`;
+  a meglévő hétmezős report mellé degraded metrikákat, aktív-régió arányt és
+  threshold-verziót ad. A warningok kizárólag recording-condition kulcsok.
+- `lib/features/audio_analysis/public.dart` — additív quality stage és
+  threshold export.
+- `test/features/audio_analysis/engine/signal_quality_math_test.dart` —
+  dBFS-, inclusive clipping/silence- és noise/tonalness formula-mátrix.
+- `test/features/audio_analysis/engine/signal_quality_stage_test.dart` — a
+  nyolc fixture, teljes report-tartomány, determinisztikusság, rövid-klip és
+  warning-kulcs mátrixa, beleértve a 999/1000/1001 clipped-ratio határt.
+- `test/property/analysis_signal_quality_property_test.dart` —
+  `PROPERTY_SEED`-vezérelt, csupa-0, csupa-±1 és extrém-dinamikájú inputok
+  véges/range property-je.
+- `docs/rag/chunks/019-signal-quality-metrics.md` — képletek, küszöbök,
+  figyelmeztetési és grade-policy, valamint a proxy-határ dokumentációja.
+
+### Valódi-sértés mérések
+
+- A clipped-ratio feltételt ideiglenesen `>=`-ről `>`-re rontva a célzott
+  stage-teszt PIROS lett a pontosan 1000/1 000 000 (`0.001`) cellán; a végleges
+  kód visszaállítva inclusive `>=` viselkedésre.
+- A `silenceFloorDbfs` padló helyett ideiglenesen `-Infinity`-t visszaadva a
+  `flutter test test/property/analysis_signal_quality_property_test.dart`
+  PIROS lett: `Signal measurements must be finite.` A `-120.0` padló
+  visszaállítva.
+
+### Mért futások
+
+- `python3 -c "print(10**(-60.0/20))"` → `0.001`.
+- Célzott RED: a quality fájlok még nem léteztek, ezért a három új teszt
+  import/undefined quality API hibával PIROS lett; ezután készült el az API.
+- `flutter test test/features/audio_analysis/engine/signal_quality_math_test.dart test/features/audio_analysis/engine/signal_quality_stage_test.dart test/property/analysis_signal_quality_property_test.dart`
+  → **10 teszt zöld** (`All tests passed!`).
+- 30 s, 44.1 kHz szinusz stage-futás → `30s_signal_quality_elapsed_ms=963`
+  (helyi box; a saját FFT költségének mért értéke).
+- `git diff --name-only HEAD` + `git ls-files --others --exclude-standard` →
+  csak a §4-ben megengedett quality/public/test/RAG útvonalak; a
+  `lib/features/live/engine/dsp/dsp_config.dart` nem szerepel.
+- `tools/round-gate.sh test/features/audio_analysis test/property test/features/analyze`
+  → **PIROS az analyze lépésben**: format zöld (`1271 files, 0 changed`), de
+  `lib/l10n/app_localizations.dart` hiányzik, emiatt 931 meglévő
+  `AppLocalizations` URI/identifier analyze hiba. A gate a célzott teszt- és
+  architecture-lépésig ezért nem jutott el. A generált l10n-fájl és a
+  generálási konfiguráció a kör engedélyezett útvonalain kívül van; nem
+  módosítottam őket. `blocked` kör-jelzés elküldve.
+- Az acceptance-ben név szerint kért
+  `flutter test test/features/analyze test/property/dsp_property_test.dart`
+  külön futtatása is ugyanerre a hiányzó l10n artefaktumra fordítási hibával
+  állt meg; ez nem állítható zöldnek a scope-on kívüli generálás nélkül.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs DSP-retune, nincs Analyze/Live/asset módosítás.
+- A teljes CI (teljes suite, property friss seeddel és APK) az orchestrátor
+  exact-SHA dispatch/merge feladata; az implementer lokálisan csak a brief
+  szerinti round gate-et futtatja.
+- Következő szükséges előfeltétel: az orchestrátor állítsa helyre vagy
+  generálja a tracked `lib/l10n/app_localizations.dart` artefaktumot, majd az
+  exact gate-et újra kell futtatni a jelen commiton; merge tilos, amíg ez piros.
 
 ## 11. Review — a független reviewer tölti ki
 

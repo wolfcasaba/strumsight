@@ -24,3 +24,5 @@ export 'domain/analysis_warning.dart';
 export 'domain/recording_level.dart';
 export 'domain/signal_quality_report.dart';
 export 'engine/analysis_cancellation.dart';
+export 'engine/quality/quality_thresholds.dart';
+export 'engine/quality/signal_quality_stage.dart';
