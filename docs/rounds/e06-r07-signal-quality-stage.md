@@ -1,6 +1,14 @@
 # E06-R07 — Signal quality stage
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 pre-flight, 2026-08-11; main @ `a4178e48`;
+  R1 két korábbi önjavítás után egy friss orchestrátor-session ÚJRAHASZNOSÍTOTTA
+  ezt a pre-flight commitot a `codex/e06-r07-signal-quality-stage` elhagyott
+  lokális branch-éről (docs/LESSONS.md L219–L221) — minden mért állítás
+  (`SignalQualityReport` mezők, `AnalysisStage<I,O>`/`AnalysisPipeline<T>`
+  szerződés, `ValidatedPcmAnalysisInput`, RAG-chunk 019 szabad száma,
+  `analysis-eval-matrix.md` létezése, brief-lint leletmentes) újra grep-elve
+  egyezett a friss `main @ 52a1acb0`-n; a `lib/features/audio_analysis/**`
+  a4178e48 óta érintetlen)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 7; §11.2–11.6
 - **Branch:** `codex/e06-r07-signal-quality-stage`
 - **Előfeltétel:** **E06-R04, E06-R05 merge**
@@ -18,6 +26,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/signal_quality_math_test.dart",
   "test/property/analysis_signal_quality_property_test.dart",
   "docs/rag/chunks/019-signal-quality-metrics.md",
+  "docs/adr/0224-signal-quality-stage-measurement-boundary.md",
   "docs/rounds/e06-r07-signal-quality-stage.md",
 ]
 gate_tests = [
@@ -46,10 +55,44 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **DSP-szabály:** ez a kör **új** mérőszámokat vezet
-be (nem retunolja a shipping DSP-t), ezért az AGENTS.md §9 szerint a
-paraméterek forrása a **`docs/rag/chunks/019-signal-quality-metrics.md`**,
-ugyanabban a commitban.
+**PREPARED → PLANNING (R1, 2026-08-11, `main` @ `a4178e48`).** A brief-lint
+strict futása leletmentes volt. A `tools/round-slots.py reserve-adr --round
+E06-R07` a **0224** számot foglalta; az új [ADR
+0224](../adr/0224-signal-quality-stage-measurement-boundary.md) ezt a kör saját
+határát rögzíti. Nem módosít már merge-elt ADR-t vagy lezárt kör viselkedését.
+
+Mért tények a friss `main`-en:
+
+- `SignalQualityReport` ténylegesen a hét publikus numerikus mezőt hordozza:
+  `overall`, `peakDbfs`, `rmsDbfs`, `noiseFloorDbfs`,
+  `clippedSampleRatio`, `silentRatio`, `tonalness`; a konstruktor minden
+  dBFS/score értékre `isFinite`, a két arányra `[0,1]` határt kényszerít
+  (`domain/signal_quality_report.dart`). Ezért sem `-Infinity`, sem NaN nem
+  juthat a riportba.
+- Az R04 szerződés az `AnalysisStage<I, O>.run(I, context)` generic interface;
+  a mai `AnalysisPipeline<T>` csak azonos `T → T` stage-eket komponál. A kör
+  ezért **önálló** `AnalysisStage<ValidatedPcmAnalysisInput,
+  SignalQualityStageResult>`-et ad, nem próbál heterogén stage-et a mai
+  pipeline-ba erőltetni. `SignalQualityStageResult` ugyanabban az engedélyezett
+  `signal_quality_stage.dart` fájlban él, és a publikus riport mellett hordozza
+  az `activeRegionRatio`, a rövid-klip degraded jelölőit és a
+  `thresholdsVersion`-t. Így minden R07-ben mért részérték elérhető, miközben
+  az R02 domain-szerződés változatlan marad; a későbbi pipeline-kompozíció
+  saját köre alakítja át a work-state-et.
+- A tényleges bemenet `ValidatedPcmAnalysisInput` → `PcmAnalysisInput`;
+  mintái immutable `List<double>`, sample-rate és eredeti channel-szám
+  rendelkezésre áll (`domain/analysis_input.dart`). A stage nem szerez mic
+  lease-t és nem érint recorder- vagy V1-útvonalat.
+- `docs/rag/chunks/` legmagasabb numerikus fájlja jelenleg `018-...`; a
+  `019-signal-quality-metrics.md` ezért szabad. A korábbi R06 follow-up
+  (köztes chunkba eső rövid tranziens preview-hiánya) a felvételi preview
+  korlátja, nem ennek az egyszer, teljes klipeken futó stage-nek a módosítása.
+
+**DSP-szabály:** ez a kör új mérőszámokat vezet be, nem retunolja a shipping
+DSP-t. A képletek és a küszöbök elsődleges forrása a
+`docs/rag/chunks/019-signal-quality-metrics.md`, ugyanabban a commitban. A
+§9 korábbi `docs/manual-testing/analysis-eval-matrix.md` PENDING-sorát a scope
+nem engedi: ez explicit E06-R29 follow-up, nem rejtett listabővítés.
 
 ## 1. Cél
 
@@ -237,9 +280,81 @@ DSP-retune ebben a körben tilos.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `lib/features/audio_analysis/engine/quality/quality_thresholds.dart` — a
+  `signal-quality-v1` néven verziózott dBFS-, clipping-, frame- és grade
+  küszöbök.
+- `lib/features/audio_analysis/engine/quality/signal_quality_math.dart` —
+  tiszta peak/RMS dBFS, clipping-, silent- és active-region arány, 10.
+  percentilis noise-floor, valamint helyi Hann-ablakos radix-2 FFT alapú
+  tonalness proxy; nincs Live DSP import.
+- `lib/features/audio_analysis/engine/quality/signal_quality_stage.dart` —
+  önálló `AnalysisStage<ValidatedPcmAnalysisInput, SignalQualityStageResult>`;
+  a meglévő hétmezős report mellé degraded metrikákat, aktív-régió arányt és
+  threshold-verziót ad. A warningok kizárólag recording-condition kulcsok.
+- `lib/features/audio_analysis/public.dart` — additív quality stage és
+  threshold export.
+- `test/features/audio_analysis/engine/signal_quality_math_test.dart` —
+  dBFS-, inclusive clipping/silence- és noise/tonalness formula-mátrix.
+- `test/features/audio_analysis/engine/signal_quality_stage_test.dart` — a
+  nyolc fixture, teljes report-tartomány, determinisztikusság, rövid-klip és
+  warning-kulcs mátrixa, beleértve a 999/1000/1001 clipped-ratio határt.
+- `test/property/analysis_signal_quality_property_test.dart` —
+  `PROPERTY_SEED`-vezérelt, csupa-0, csupa-±1 és extrém-dinamikájú inputok
+  véges/range property-je.
+- `docs/rag/chunks/019-signal-quality-metrics.md` — képletek, küszöbök,
+  figyelmeztetési és grade-policy, valamint a proxy-határ dokumentációja.
+
+### Valódi-sértés mérések
+
+- A clipped-ratio feltételt ideiglenesen `>=`-ről `>`-re rontva a célzott
+  stage-teszt PIROS lett a pontosan 1000/1 000 000 (`0.001`) cellán; a végleges
+  kód visszaállítva inclusive `>=` viselkedésre.
+- A `silenceFloorDbfs` padló helyett ideiglenesen `-Infinity`-t visszaadva a
+  `flutter test test/property/analysis_signal_quality_property_test.dart`
+  PIROS lett: `Signal measurements must be finite.` A `-120.0` padló
+  visszaállítva.
+
+### Mért futások
+
+- `python3 -c "print(10**(-60.0/20))"` → `0.001`.
+- Célzott RED: a quality fájlok még nem léteztek, ezért a három új teszt
+  import/undefined quality API hibával PIROS lett; ezután készült el az API.
+- `flutter test test/features/audio_analysis/engine/signal_quality_math_test.dart test/features/audio_analysis/engine/signal_quality_stage_test.dart test/property/analysis_signal_quality_property_test.dart`
+  → **10 teszt zöld** (`All tests passed!`).
+- 30 s, 44.1 kHz szinusz stage-futás → `30s_signal_quality_elapsed_ms=963`
+  (helyi box; a saját FFT költségének mért értéke).
+- `git diff --name-only HEAD` + `git ls-files --others --exclude-standard` →
+  csak a §4-ben megengedett quality/public/test/RAG útvonalak; a
+  `lib/features/live/engine/dsp/dsp_config.dart` nem szerepel.
+- `tools/round-gate.sh test/features/audio_analysis test/property test/features/analyze`
+  → **PIROS az analyze lépésben**: format zöld (`1271 files, 0 changed`), de
+  `lib/l10n/app_localizations.dart` hiányzik, emiatt 931 meglévő
+  `AppLocalizations` URI/identifier analyze hiba. A gate a célzott teszt- és
+  architecture-lépésig ezért nem jutott el. A generált l10n-fájl és a
+  generálási konfiguráció a kör engedélyezett útvonalain kívül van; nem
+  módosítottam őket. `blocked` kör-jelzés elküldve.
+- Az acceptance-ben név szerint kért
+  `flutter test test/features/analyze test/property/dsp_property_test.dart`
+  külön futtatása is ugyanerre a hiányzó l10n artefaktumra fordítási hibával
+  állt meg; ez nem állítható zöldnek a scope-on kívüli generálás nélkül.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Az orchestrátor helyreállította a generált l10n-t; a round gate a `940221fe` commiton zöld.
+- Nincs DSP-retune, nincs Analyze/Live/asset módosítás.
+- A teljes CI (teljes suite, property friss seeddel és APK) az orchestrátor
+  exact-SHA dispatch/merge feladata; az implementer lokálisan csak a brief
+  szerinti round gate-et futtatja.
+- Következő szükséges előfeltétel: az orchestrátor állítsa helyre vagy
+  generálja a tracked `lib/l10n/app_localizations.dart` artefaktumot, majd az
+  exact gate-et újra kell futtatni a jelen commiton; merge tilos, amíg ez piros.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r07-signal-quality-stage-review.md`.
+Review: [docs/reviews/e06-r07-signal-quality-stage-review.md](../reviews/e06-r07-signal-quality-stage-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE.
+Biztonsági review (risk=high): [docs/reviews/e06-r07-signal-quality-stage-security.md](../reviews/e06-r07-signal-quality-stage-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 2 NOTE.
 Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
