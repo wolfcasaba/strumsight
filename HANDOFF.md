@@ -494,6 +494,18 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **~~A Claude 5 órás session-kerete rendszeresen kimerül és H-NOSIGNAL-lal
+  körökbe kerül~~ — MEGOLDVA (ADR 0222, 2026-08-11, user-döntés).** Mért ok: a
+  lánc MINDEN körben a Claude-ot ültette az orchestrátor+reviewer székbe
+  (~85 perc/kör, `--effort max`, szünet nélkül) → egy 5 órás ablakba ~3,5 kör
+  fér. A védőháló (ADR 0115) ráadásul vak volt: a limit-minta egyetlen valós
+  CLI-bannerre sem illeszkedett (11 mérés 90→97%-ig az E06-R05 naplójában), a
+  második detektor pedig nem létező fájlra mutatott. **Ma:** a körök felét a
+  Terra vezényli (`PIPELINE_ORCH_ROTATION=alternate`), ilyenkor a Claude
+  implementál (`sonnet-impl`) — a szerepek cserélnek, a mezőny nem gyengül. A
+  fogyásmérő a banner százalékát olvassa, és 85% fölött nem indít új kört a
+  Claude-dal (futó munkát soha nem szakít meg). Állapot:
+  `tools/pipeline-status.sh`. Tanulság: `docs/LESSONS.md` L215.
 - ~~**Rendszerszintű rés (E02-R20, mérve): a standalone Practice V2 session nem
   indítható éles buildben.**~~ **JAVÍTVA (E02-R21, PR #55, `6e5cec7`).** A
   `practiceSessionHostProvider`/`practicePrepareSinkProvider` production

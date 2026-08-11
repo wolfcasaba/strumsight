@@ -7819,3 +7819,47 @@ sem a brief, sem a fuzz nem sorol fel. Ha mindkét review UGYANAZT a
 leletet hozza egymástól függetlenül, azt a javító kör kötelező
 elsőbbséggel kezelje (ahogy itt is történt) — a konvergencia gyanúját sem
 igényel: önmagában megerősítés.
+
+## L215 — Egy kvóta-védőháló, amit SOHA nem mértek élő bemeneten, hamis biztonságot ad: a Claude limit-mintája egyetlen valós CLI-bannerre sem illeszkedett, miközben a lánc 100%-os kihasználtságon tartotta ugyanazt a motort (ADR 0222, 2026-08-11)
+
+**Mit mértünk.** A lánc minden körben a Claude-ot ültette az orchestrátor+
+reviewer székbe, körönként ~85 perc `--effort max` munkával, az ADR 0171
+azonnali lánc-folytatása miatt szünet nélkül (mérve: hat kör 08:20→17:44
+között). Egy 5 órás keretbe ~3,5 kör fér, tehát a kimerülés nem baleset volt,
+hanem a kiosztás egyenes következménye — a Terra közben csak implementált.
+
+A védőháló (ADR 0115) papíron pontosan erre az esetre készült, de **vak volt**:
+a `CLAUDE_LIMIT_PATTERN` nyolc mintája közül egyik sem illeszkedett a CLI mai
+bannerére — `You've used 97% of your session limit · resets 3:40pm (UTC)` —
+amiből a `session-E06-R05-20260811T134634.log`-ban 11 darab van, 90→97%-ig
+számolva. Ezért nem lépett az átadás: a sessiont a 20 perces elakadás-őr lőtte
+le a CI-dispatch+merge közben, a kör H-NOSIGNAL-t kapott, és két önjavító kör +
+egy leftover PR takarítása kellett a feloldásához (L213). A második detektor
+(`~/.claude/stats-cache.json`) pedig **nem létező fájlra** mutatott, tehát soha
+egyetlen sort nem futtatott le.
+
+Ugyanez a hibaosztály egy latens résben is megvolt: az ADR 0138
+függetlenség-védelme csak a `codex` motornevet nézte, az ADR 0140 óta élő
+`engine-override=terra` mellett viszont a motor neve `terra` — a védelem így
+kvótazárlat alatt sem lépett volna, pedig ugyanaz a modell mindkettő.
+
+**Miért.** Mindhárom hiba közös alakja: **a védelem soha nem látott igazi
+bemenetet**. A minta a kimenet elképzelt alakjára készült, nem egy elmentett
+naplóra; a cache-út egy feltételezett helyre mutatott; a motornév-feltétel egy
+későbbi konfigurációs réteg (override) előtti világot írt le. Mindhárom átment
+a saját tesztjén, mert a teszt ugyanazt a képzelt bemenetet adta vissza, amit a
+kód várt. Egy vak védőháló rosszabb a nincsnél: elhiteti, hogy a hibaosztály
+kezelve van, és elveszi a monitorozás motivációját.
+
+**Hogyan alkalmazd.** (1) Külső eszköz kimenetére illesztő mintát CSAK elmentett,
+ÉLES kimeneten szabad validálni — a teszt fixture-je legyen a valódi napló
+másolata, ANSI-vezérlőkkel együtt (`tools/tests/test_orchestrator_rotation.py`).
+(2) Minden „ha X, akkor védekezz" ágnak legyen olyan horga, amivel kívülről
+lekérdezhető, hogy MOST mit lát (`--claude-session-pct`,
+`--next-orchestrator`) — a nem megfigyelhető ág észrevétlenül hal el.
+(3) Konfigurálható értékre (motornév, útvonal) épülő feltételt a konfigurációs
+réteg bevezetésekor újra kell mérni: az `engine-override` az ADR 0140-nel
+született, a függetlenség-feltétel az ADR 0138-cal — senki nem nézte meg őket
+együtt. (4) A kapacitás-korlátot ne csak elkapni akard, hanem **oszd el**: a
+100%-os kihasználtságú erőforrás előbb-utóbb kifogy, és ilyenkor a legjobb
+detektor is csak a veszteség méretét csökkenti, a veszteséget nem.

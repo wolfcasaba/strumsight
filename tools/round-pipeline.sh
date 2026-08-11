@@ -174,6 +174,30 @@ claude_block_file="$state_dir/claude-blocked-until"
 claude_block_seconds=${PIPELINE_CLAUDE_BLOCK_SECONDS:-18000}   # 5 órás ablak
 claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json}
 
+# --- Orchestrátor-rotáció (ADR 0222, user-döntés 2026-08-11: „használjuk a
+# Terrát is ugyanannyira, mint a Claude-ot") -------------------------------
+# MÉRT ok: a lánc MINDEN körben a Claude-ot ültette az orchestrátor+reviewer
+# székbe (a Terra csak implementált), körönként ~85 perc `--effort max`
+# munkával, `azonnali lánc-folytatás`-sal szünet nélkül. Egy 5 órás ablakba
+# ~3,5 kör fér — a negyedik nekimegy a falnak. Ez nem a Claude hibája, hanem
+# 100%-os kihasználtság: a keret a kiosztás miatt fogy el.
+#
+# A rotáció ezért PROAKTÍV, nem reaktív: a körök felén eleve a Terra vezényel,
+# így egyik motor kerete sem merül ki. A fallback (ADR 0115) megmarad alatta
+# védőhálónak.
+orch_rotation=${PIPELINE_ORCH_ROTATION:-alternate}   # alternate | claude | terra
+orch_last_file="$state_dir/orchestrator-last"
+# Terra-vezényelt körön a Terra NEM implementálhat (ADR 0138: nem review-zheti
+# a saját diffjét), ezért ilyenkor szerepet cserélnek — a Claude implementál.
+# user-döntés 2026-08-11: `sonnet-impl`, mert így a két legjobb motor marad a
+# körben, csak a székeket cserélik.
+orch_swap_engine=${PIPELINE_ORCH_SWAP_ENGINE:-sonnet-impl}
+claude_usage_file="$state_dir/claude-usage"
+claude_session_pct_max=${PIPELINE_CLAUDE_SESSION_PCT_MAX:-85}
+# Melyik motor vigye a SOROS munkadarabot. A kör-indítási ág írja át; az
+# önjavítás Claude-elsőbbséggel indul (ritka, és a zárlatokat így is nézi).
+orchestrator_preference=claude
+
 mkdir -p "$state_dir"
 
 log() { printf '%s  %s\n' "$(date -Is)" "$*" | tee -a "$chain_log" >&2; }
@@ -333,7 +357,24 @@ write_brief_lint() {   # $1=kör $2=brief → a jelentés útvonala a stdouton
 # A Claude-kvóta kimerülésének MÉRT nyomai a session-naplóban. Szándékosan
 # angol, CLI-specifikus minták: a magyar „kvóta" szó a promptokban is szerepel,
 # arra illeszteni hamis pozitív lenne.
-CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset'
+#
+# MÉRVE 2026-08-11 (E06-R05, ADR 0222): a CLI ma NEM ezeket a mondatokat írja,
+# hanem a pane aljára számláló bannert:
+#   „You've used 97% of your session limit · resets 3:40pm (UTC) · /upgrade to k…"
+# A `session-E06-R05-20260811T134634.log`-ban 11 ilyen banner van 90→97%-ig, és
+# a fenti minták EGYIKE SEM illeszkedett rá. Ezért a kvóta-átadás nem lépett, a
+# sessiont a 20 perces elakadás-őr lőtte le a CI-dispatch+merge közben, a kör
+# H-NOSIGNAL-t kapott és két önjavító kör kellett a feloldásához. A vak
+# védőháló rosszabb, mint a nincs: hamis biztonságot adott.
+CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset|you.?ve (hit|reached) your (usage|session) limit|session limit reached|used 100% of your session limit|[0-9]+-hour limit reached'
+
+# A session-keret FOGYÁSMÉRŐJE (nem kimerülés). A bannert a CLI folyamatosan
+# frissíti, ezért belőle a kimerülés ELŐTT megtudható, hogy egy ~85 perces kör
+# elférne-e még a keretben. Külön minta, mert a kettő döntése különbözik: a
+# kimerülés a futó sessiont állítja le, a fogyásmérő csak a KÖVETKEZŐ kör
+# indítását tiltja — futó munkát nem dob el.
+CLAUDE_SESSION_PCT_PATTERN='you.?ve used ([0-9]{1,3})% of your session limit'
+CLAUDE_SESSION_RESET_PATTERN='resets [0-9]{1,2}(:[0-9]{2})?(am|pm)? \(UTC\)'
 
 # A tmux pane-on futó Claude process MÉRT neve (`ps -o comm=`) ezen a boxon
 # `claude` (a launcher) vagy `claude.exe` (a node bináris) — SOHA nem
@@ -361,6 +402,86 @@ claude_stats_cache_unavailable_until() {
   [ -r "$claude_stats_cache" ] || return 1
   grep -qEi "$CLAUDE_LIMIT_PATTERN" "$claude_stats_cache" 2>/dev/null || return 1
   printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))"
+}
+
+# --- Session-keret fogyásmérő (ADR 0222) ----------------------------------
+# A pane-napló ANSI-vezérlőkkel teli, ezért `grep -a` és minta-illesztés, nem
+# sor-alapú feldolgozás: a banner színkódok közé ékelődik.
+claude_session_pct() {   # $1=session-napló → az UTOLSÓ mért százalék
+  local logfile=$1 hit
+  [ -r "$logfile" ] || return 1
+  hit=$(grep -aoEi "$CLAUDE_SESSION_PCT_PATTERN" "$logfile" 2>/dev/null | tail -n 1)
+  [ -n "$hit" ] || return 1
+  printf '%s' "$hit" | grep -oE '[0-9]{1,3}' | head -n 1
+}
+
+# A banner a pontos reset-időt is kiírja (`resets 3:40pm (UTC)`). Ezt használva
+# a zárlat nem vak 5 órás felülbecslés, hanem a tényleges ablakhoz igazodik —
+# a Claude a reset másodpercében újra sorra kerülhet. Ismeretlen alakra üres a
+# kimenet, és marad a régi, biztonságos felülbecslés.
+claude_session_reset_epoch() {   # $1=session-napló → epoch
+  local logfile=$1 raw clock epoch now
+  [ -r "$logfile" ] || return 1
+  raw=$(grep -aoEi "$CLAUDE_SESSION_RESET_PATTERN" "$logfile" 2>/dev/null | tail -n 1)
+  [ -n "$raw" ] || return 1
+  clock=$(printf '%s' "$raw" | sed -E 's/^[Rr]esets //; s/ \(UTC\)$//')
+  epoch=$(date -u -d "today $clock" +%s 2>/dev/null) || return 1
+  [ -n "$epoch" ] || return 1
+  now=$(date +%s)
+  # A kiírt idő a KÖVETKEZŐ resetet jelenti; ha mára már elmúlt, holnapi.
+  [ "$epoch" -le "$now" ] && epoch=$(( epoch + 86400 ))
+  printf '%s\n' "$epoch"
+}
+
+record_claude_usage() {   # $1=session-napló → a mért keret-állás kiírása
+  local logfile=$1 pct reset
+  pct=$(claude_session_pct "$logfile") || return 0
+  reset=$(claude_session_reset_epoch "$logfile" || true)
+  printf 'pct=%s\nreset=%s\nmeasured=%s\nlog=%s\n' \
+    "$pct" "${reset:-}" "$(date +%s)" "$logfile" > "$claude_usage_file"
+  log "Claude session-keret: ${pct}% elhasználva${reset:+ · reset $(date -Is -d "@$reset")}"
+}
+
+# Preemption: egy kör ~85 perc orchestrátor-munka, ezt nem szabad a keret
+# maradék néhány százalékán elindítani. A futó munkát viszont SOHA nem dobjuk
+# el emiatt — ez csak az indítást tiltja.
+claude_usage_block_until() {
+  local pct reset measured
+  [ -r "$claude_usage_file" ] || return 1
+  pct=$(sed -n 's/^pct=//p' "$claude_usage_file" | head -1)
+  case "$pct" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$pct" -ge "$claude_session_pct_max" ] || return 1
+  reset=$(sed -n 's/^reset=//p' "$claude_usage_file" | head -1)
+  case "$reset" in
+    ''|*[!0-9]*)
+      measured=$(sed -n 's/^measured=//p' "$claude_usage_file" | head -1)
+      case "$measured" in ''|*[!0-9]*) return 1 ;; esac
+      reset=$(( measured + claude_block_seconds ))
+      ;;
+  esac
+  [ "$(date +%s)" -lt "$reset" ] || return 1
+  printf '%s\n' "$reset"
+}
+
+# --- Orchestrátor-rotáció (ADR 0222) --------------------------------------
+# Kiírja, MELYIK motor vezényelje a következő kört: `claude` vagy `terra`.
+# A zárlatok felülírják a rotációt (kimerült keretre nem osztunk munkát).
+next_orchestrator() {
+  local last
+  [ "$fallback_engine" != "none" ] || { printf 'claude\n'; return 0; }
+  if claude_unavailable_until >/dev/null || claude_usage_block_until >/dev/null; then
+    printf 'terra\n'
+    return 0
+  fi
+  case "$orch_rotation" in
+    claude) printf 'claude\n' ;;
+    terra)  printf 'terra\n' ;;
+    *)
+      last=''
+      [ -r "$orch_last_file" ] && last=$(head -1 "$orch_last_file" | tr -d '[:space:]')
+      if [ "$last" = "claude" ]; then printf 'terra\n'; else printf 'claude\n'; fi
+      ;;
+  esac
 }
 
 # A tmux-session felügyelete a jelzésfájlig. Egyetlen paraméterben kapja a
@@ -458,6 +579,13 @@ run_tmux_session() {
   tmux kill-session -t "$tmux_session" 2>/dev/null || true
   kill "$pinger_pid" 2>/dev/null
 
+  # A keret-állás kimérése a session naplójából (ADR 0222). Itt, a session
+  # VÉGÉN mérünk, mert a következő kör indítási döntéséhez kell — a futó
+  # munkát a fogyásmérő sosem szakítja meg.
+  if [ "$watch_claude_limit" = "1" ]; then
+    record_claude_usage "$session_log"
+  fi
+
   [ "$claude_limit_seen" = "1" ] && return 0
   [ -f "$signal_file" ]
 }
@@ -483,8 +611,12 @@ run_orchestrator_session() {
 
   rm -f "$signal_file"
 
-  if blocked_until=$(claude_unavailable_until); then
+  if [ "$orchestrator_preference" = "terra" ] && [ "$fallback_engine" != "none" ]; then
+    log "ROTÁCIÓ: ezt a munkadarabot a $fallback_label vezényli (PIPELINE_ORCH_ROTATION=$orch_rotation)"
+  elif blocked_until=$(claude_unavailable_until); then
     log "a Claude-kvóta zárlat alatt van $(date -Is -d "@$blocked_until")-ig — a kört a $fallback_label viszi"
+  elif blocked_until=$(claude_usage_block_until); then
+    log "a Claude session-kerete $(sed -n 's/^pct=//p' "$claude_usage_file" | head -1)%-on áll (küszöb: ${claude_session_pct_max}%) — a kört a $fallback_label viszi $(date -Is -d "@$blocked_until")-ig"
   elif blocked_until=$(claude_stats_cache_unavailable_until); then
     printf '%s\n' "$blocked_until" > "$claude_block_file"
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
@@ -915,12 +1047,50 @@ attempt_selfheal() {
 # H-INDEP halt — az önjavítása tiltott, mert körben oldaná fel.
 #
 # Kiírja: a feloldott motort, vagy `HALT_INDEP`-et.
-resolve_independent_engine() {   # $1=queue-motor
-  local queue_engine=${1:-}
-  if [ "$queue_engine" != "codex" ] \
-     || [ "$fallback_engine" = "none" ] \
-     || ! claude_unavailable_until >/dev/null; then
+#
+# ADR 0222 kiterjesztés: a trigger már NEM csak a Claude-kvótazárlat, hanem
+# minden Terra-vezényelt kör (a rotáció is odaad minden másodikat). A csere-
+# motor alapból a `sonnet-impl` — így a szerepek cserélnek, nem gyengül a
+# mezőny.
+engine_registry_row() {   # $1=motor neve → a nyilvántartás sora
+  local registry="${BASH_SOURCE[0]%/*}/../docs/execution/engine-registry.tsv"
+  [ -r "$registry" ] || return 1
+  grep -v '^[[:space:]]*#' "$registry" | awk -F'\t' -v n="$1" '$1 == n {print; found=1; exit} END {exit !found}'
+}
+
+# 0, ha a motor az ELŐFIZETÉSES Claude-keretet fogyasztja (claude harness ÉS
+# nincs saját API-kulcsa). A `minimax` is claude-harness, de saját kulccsal
+# külső endpointra megy — annak a keretéhez a Claude-zárlatnak semmi köze.
+engine_uses_claude_quota() {   # $1=motor neve
+  local row
+  row=$(engine_registry_row "$1") || return 1
+  [ "$(printf '%s' "$row" | cut -f2)" = "claude" ] || return 1
+  [ "$(printf '%s' "$row" | cut -f5)" = "-" ]
+}
+
+resolve_independent_engine() {   # $1=queue-motor [$2=orchestrátor]
+  local queue_engine=${1:-} orchestrator=${2:-} claude_blocked=0
+  [ -n "$orchestrator" ] || orchestrator=$(next_orchestrator)
+
+  # Csak a Terra-MODELLT futtató implementer ütközik a Terra reviewerrel.
+  # MÉRT hiba (2026-08-11): az eredeti feltétel csak a `codex` nevet nézte, az
+  # ADR 0140 óta élő `.pipeline/engine-override=terra` mellett viszont a motor
+  # neve `terra` — a függetlenség-védelem így NEM lépett volna kvótazárlat
+  # alatt sem, pedig ugyanaz a gpt-5.6-terra modell mindkettő.
+  case "$queue_engine" in codex|terra) ;; *) printf '%s\n' "$queue_engine"; return 0 ;; esac
+
+  if [ "$fallback_engine" = "none" ] || [ "$orchestrator" != "terra" ]; then
     printf '%s\n' "$queue_engine"
+    return 0
+  fi
+
+  claude_unavailable_until >/dev/null && claude_blocked=1
+  claude_usage_block_until >/dev/null && claude_blocked=1
+
+  if [ -n "$orch_swap_engine" ] && [ "$orch_swap_engine" != "$queue_engine" ] \
+     && engine_registry_row "$orch_swap_engine" >/dev/null \
+     && { [ "$claude_blocked" = "0" ] || ! engine_uses_claude_quota "$orch_swap_engine"; }; then
+    printf '%s\n' "$orch_swap_engine"
     return 0
   fi
   if [ -n "${MINIMAX_API_KEY:-}" ] || [ -f "$HOME/.mmx/config.json" ]; then
@@ -953,17 +1123,29 @@ case "${1:-}" in
       exit 1
     fi
     ;;
-  --independent-engine)    # $2=queue-motor → a FÜGGETLENSÉG által feloldott implementer motor, vagy HALT_INDEP (ADR 0138)
-    resolve_independent_engine "${2:-}"
+  --independent-engine)    # $2=queue-motor [$3=orchestrátor] → a FÜGGETLENSÉG által feloldott implementer motor, vagy HALT_INDEP (ADR 0138)
+    resolve_independent_engine "${2:-}" "${3:-}"
     exit 0
     ;;
-  --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115)
-    if [ "$fallback_engine" != "none" ] && claude_unavailable_until >/dev/null; then
+  --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115 + 0222 rotáció)
+    if [ "$(next_orchestrator)" = "terra" ]; then
       printf '%s\n' "$fallback_engine"
     else
       printf 'claude\n'
     fi
     exit 0
+    ;;
+  --next-orchestrator)     # a rotáció döntése: claude | terra (ADR 0222)
+    next_orchestrator
+    exit 0
+    ;;
+  --claude-session-pct)    # $2=session-napló → az utolsó mért keret-százalék
+    claude_session_pct "${2:-/dev/null}"
+    exit $?
+    ;;
+  --claude-session-reset-epoch)   # $2=session-napló → a banner reset-ideje epochban
+    claude_session_reset_epoch "${2:-/dev/null}"
+    exit $?
     ;;
   --claude-limit-check)    # $2=session-napló → 0, ha kvótakimerülés nyoma van
     grep -qEi "$CLAUDE_LIMIT_PATTERN" "${2:-/dev/null}" 2>/dev/null
@@ -1298,14 +1480,15 @@ if [ "$engine" = "auto" ]; then
   [ -f "$repo_root/.ai/router.toml" ] || die "hiányzik a router konfiguráció"
 fi
 
-# --- 4.5 Reviewer-függetlenség (ADR 0138) --------------------------------
-independent_engine=$(resolve_independent_engine "$engine")
+# --- 4.5 Orchestrátor-rotáció (ADR 0222) + reviewer-függetlenség (0138) ---
+orchestrator=$(next_orchestrator)
+independent_engine=$(resolve_independent_engine "$engine" "$orchestrator")
 case "$independent_engine" in
   HALT_INDEP)
     {
       echo "round=$round"
       echo "halt=H-INDEP"
-      echo "summary=Claude-kvótazárlat alatt a Terra review-zná a saját diffjét, és nincs elérhető másik implementer motor (MiniMax kulcs hiányzik)"
+      echo "summary=A kört a Terra vezényelné (rotáció vagy Claude-kvótazárlat), így a saját diffjét review-zná, és nincs elérhető, független implementer motor (a csere-motor $orch_swap_engine nem használható, MiniMax kulcs hiányzik)"
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
     log "HALT (H-INDEP): nincs független reviewer a(z) $round körhöz"
@@ -1314,18 +1497,23 @@ case "$independent_engine" in
     ;;
   "$engine") : ;;
   *)
-    log "REVIEWER-FÜGGETLENSÉG: Claude-zárlat alatt a review a Terráé, ezért a(z) $round implementere $engine→$independent_engine"
-    notify "🔀 $round: implementer-váltás" "Terra review-zna Terra diffet — az implementer $independent_engine lett"
+    log "REVIEWER-FÜGGETLENSÉG: a kört a Terra vezényli (review), ezért a(z) $round implementere $engine→$independent_engine"
+    notify "🔀 $round: szerepcsere" "a Terra review-z, az implementer $independent_engine lett"
     engine=$independent_engine
     ;;
 esac
+[ "$orchestrator" = "terra" ] && orchestrator_preference=terra
 
-log "következő kör: $round · brief=$brief · motor=$engine · ADR=$adr"
+log "következő kör: $round · orchestrátor=$orchestrator · implementer=$engine · brief=$brief · ADR=$adr"
 
 if [ "$dry_run" = "1" ]; then
   log "--dry-run: itt indulna az orchestrátor-session, de nem indul"
   exit 0
 fi
+
+# A rotáció állapota. Az indítás ELŐTT írjuk: ha a kör elhasal és újraindul,
+# a másik motor kapja meg — a bukott motorra nem osztunk újra ugyanannyit.
+printf '%s\n' "$orchestrator" > "$orch_last_file"
 
 # A kör bejegyzése a futók közé. A takarítás EXIT-trapre megy, mert a driver
 # sok ágon lép ki (halt, hiba, merge) — a maradék bejegyzés különben örökre

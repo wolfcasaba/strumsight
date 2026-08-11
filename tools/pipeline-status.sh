@@ -123,16 +123,27 @@ print(" ".join(value.split())[:500])
       echo "Állapot: tétlen, a következő firing indíthat kört."
     fi
     echo
-    echo "--- review-motor (ADR 0115) ---"
+    echo "--- orchestrátor/review-motor (ADR 0222 rotáció + 0115 fallback) ---"
     if [ "${PIPELINE_FALLBACK_ENGINE:-terra}" = "none" ]; then
-      echo "  Claude (fallback KIKAPCSOLVA)"
-    elif [ -f "$claude_block_file" ] \
-      && [ "$(date +%s)" -lt "$(cat "$claude_block_file" 2>/dev/null || echo 0)" ]; then
-      printf '  Terra (gpt-5.6-terra) — a Claude-kvóta zárlat alatt %s-ig\n' \
-        "$(date -Is -d "@$(cat "$claude_block_file")" 2>/dev/null)"
-      echo "  visszaállítás: tools/pipeline-status.sh --unblock-claude"
+      echo "  Claude (fallback KIKAPCSOLVA — nincs kinek rotálni)"
     else
-      echo "  Claude (elsődleges) · kvótakimerülésnél automatikusan Terra veszi át"
+      printf '  következő kört vezényli: %s · rotáció: %s · előző: %s\n' \
+        "$(bash "$repo_root/tools/round-pipeline.sh" --next-orchestrator 2>/dev/null | tail -1)" \
+        "${PIPELINE_ORCH_ROTATION:-alternate}" \
+        "$(head -1 "$state_dir/orchestrator-last" 2>/dev/null || echo '—')"
+      if [ -f "$claude_block_file" ] \
+        && [ "$(date +%s)" -lt "$(cat "$claude_block_file" 2>/dev/null || echo 0)" ]; then
+        printf '  a Claude-kvóta ZÁRLAT alatt %s-ig · visszaállítás: tools/pipeline-status.sh --unblock-claude\n' \
+          "$(date -Is -d "@$(cat "$claude_block_file")" 2>/dev/null)"
+      fi
+      # Session-keret fogyásmérő (ADR 0222): a legutóbbi orchestrátor-session
+      # végén mért állás — ez tiltja a következő kör indítását a küszöb fölött.
+      if [ -r "$state_dir/claude-usage" ]; then
+        printf '  Claude session-keret: %s%% (küszöb %s%%) · mérve %s\n' \
+          "$(sed -n 's/^pct=//p' "$state_dir/claude-usage" | head -1)" \
+          "${PIPELINE_CLAUDE_SESSION_PCT_MAX:-85}" \
+          "$(date -Is -d "@$(sed -n 's/^measured=//p' "$state_dir/claude-usage" | head -1)" 2>/dev/null)"
+      fi
     fi
     echo
     echo "--- önjavítás (ADR 0112) ---"
