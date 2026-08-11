@@ -1,6 +1,6 @@
 # E06-R07 — Signal quality stage
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 pre-flight, 2026-08-11; main @ `a4178e48`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 7; §11.2–11.6
 - **Branch:** `codex/e06-r07-signal-quality-stage`
 - **Előfeltétel:** **E06-R04, E06-R05 merge**
@@ -18,6 +18,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/signal_quality_math_test.dart",
   "test/property/analysis_signal_quality_property_test.dart",
   "docs/rag/chunks/019-signal-quality-metrics.md",
+  "docs/adr/0224-signal-quality-stage-measurement-boundary.md",
   "docs/rounds/e06-r07-signal-quality-stage.md",
 ]
 gate_tests = [
@@ -46,10 +47,44 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **DSP-szabály:** ez a kör **új** mérőszámokat vezet
-be (nem retunolja a shipping DSP-t), ezért az AGENTS.md §9 szerint a
-paraméterek forrása a **`docs/rag/chunks/019-signal-quality-metrics.md`**,
-ugyanabban a commitban.
+**PREPARED → PLANNING (R1, 2026-08-11, `main` @ `a4178e48`).** A brief-lint
+strict futása leletmentes volt. A `tools/round-slots.py reserve-adr --round
+E06-R07` a **0224** számot foglalta; az új [ADR
+0224](../adr/0224-signal-quality-stage-measurement-boundary.md) ezt a kör saját
+határát rögzíti. Nem módosít már merge-elt ADR-t vagy lezárt kör viselkedését.
+
+Mért tények a friss `main`-en:
+
+- `SignalQualityReport` ténylegesen a hét publikus numerikus mezőt hordozza:
+  `overall`, `peakDbfs`, `rmsDbfs`, `noiseFloorDbfs`,
+  `clippedSampleRatio`, `silentRatio`, `tonalness`; a konstruktor minden
+  dBFS/score értékre `isFinite`, a két arányra `[0,1]` határt kényszerít
+  (`domain/signal_quality_report.dart`). Ezért sem `-Infinity`, sem NaN nem
+  juthat a riportba.
+- Az R04 szerződés az `AnalysisStage<I, O>.run(I, context)` generic interface;
+  a mai `AnalysisPipeline<T>` csak azonos `T → T` stage-eket komponál. A kör
+  ezért **önálló** `AnalysisStage<ValidatedPcmAnalysisInput,
+  SignalQualityStageResult>`-et ad, nem próbál heterogén stage-et a mai
+  pipeline-ba erőltetni. `SignalQualityStageResult` ugyanabban az engedélyezett
+  `signal_quality_stage.dart` fájlban él, és a publikus riport mellett hordozza
+  az `activeRegionRatio`, a rövid-klip degraded jelölőit és a
+  `thresholdsVersion`-t. Így minden R07-ben mért részérték elérhető, miközben
+  az R02 domain-szerződés változatlan marad; a későbbi pipeline-kompozíció
+  saját köre alakítja át a work-state-et.
+- A tényleges bemenet `ValidatedPcmAnalysisInput` → `PcmAnalysisInput`;
+  mintái immutable `List<double>`, sample-rate és eredeti channel-szám
+  rendelkezésre áll (`domain/analysis_input.dart`). A stage nem szerez mic
+  lease-t és nem érint recorder- vagy V1-útvonalat.
+- `docs/rag/chunks/` legmagasabb numerikus fájlja jelenleg `018-...`; a
+  `019-signal-quality-metrics.md` ezért szabad. A korábbi R06 follow-up
+  (köztes chunkba eső rövid tranziens preview-hiánya) a felvételi preview
+  korlátja, nem ennek az egyszer, teljes klipeken futó stage-nek a módosítása.
+
+**DSP-szabály:** ez a kör új mérőszámokat vezet be, nem retunolja a shipping
+DSP-t. A képletek és a küszöbök elsődleges forrása a
+`docs/rag/chunks/019-signal-quality-metrics.md`, ugyanabban a commitban. A
+§9 korábbi `docs/manual-testing/analysis-eval-matrix.md` PENDING-sorát a scope
+nem engedi: ez explicit E06-R29 follow-up, nem rejtett listabővítés.
 
 ## 1. Cél
 
