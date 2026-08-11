@@ -32,6 +32,7 @@ final class FeatureFlags {
     this.audioAnalysisV2Enabled = false,
     this.analysisBeatGridEnabled = false,
     this.analysisPitchEnabled = false,
+    this.analysisPreprocessingExperimentalEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -77,6 +78,7 @@ final class FeatureFlags {
       audioAnalysisV2Enabled: false,
       analysisBeatGridEnabled: false,
       analysisPitchEnabled: false,
+      analysisPreprocessingExperimentalEnabled: false,
     );
   }
 
@@ -156,6 +158,10 @@ final class FeatureFlags {
   /// Whether V2 may publish pitch evidence. Defaults to OFF (ADR 0220).
   final bool analysisPitchEnabled;
 
+  /// Whether experimental V2 DC removal and peak normalization may run.
+  /// It remains OFF in every environment until a later production-wiring round.
+  final bool analysisPreprocessingExperimentalEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -187,7 +193,9 @@ final class FeatureFlags {
       other.visionLabCaptureEnabled == visionLabCaptureEnabled &&
       other.audioAnalysisV2Enabled == audioAnalysisV2Enabled &&
       other.analysisBeatGridEnabled == analysisBeatGridEnabled &&
-      other.analysisPitchEnabled == analysisPitchEnabled;
+      other.analysisPitchEnabled == analysisPitchEnabled &&
+      other.analysisPreprocessingExperimentalEnabled ==
+          analysisPreprocessingExperimentalEnabled;
 
   @override
   int get hashCode {
@@ -217,6 +225,7 @@ final class FeatureFlags {
       audioAnalysisV2Enabled,
       analysisBeatGridEnabled,
       analysisPitchEnabled,
+      analysisPreprocessingExperimentalEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -249,5 +258,7 @@ final class FeatureFlags {
       'visionLabCaptureEnabled: $visionLabCaptureEnabled, '
       'audioAnalysisV2Enabled: $audioAnalysisV2Enabled, '
       'analysisBeatGridEnabled: $analysisBeatGridEnabled, '
-      'analysisPitchEnabled: $analysisPitchEnabled)';
+      'analysisPitchEnabled: $analysisPitchEnabled, '
+      'analysisPreprocessingExperimentalEnabled: '
+      '$analysisPreprocessingExperimentalEnabled)';
 }

@@ -1,10 +1,10 @@
 # E06-R08 — Preprocessing context és resampling policy
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-11, main @ `6efa859c`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 8; §12.1–12.4
 - **Branch:** `codex/e06-r08-preprocessing-context-and-resampling`
 - **Előfeltétel:** **E06-R05, E06-R07 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch), Terra-fallback pre-flight · **Implementáció:** Terra (`gpt-5.6-terra`)
 
 ```ai-router
 schema_version = 1
@@ -19,7 +19,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/preprocessing_stage_test.dart",
   "test/features/audio_analysis/domain/preprocessed_audio_test.dart",
   "test/property/analysis_preprocessing_property_test.dart",
-  "docs/adr/0206-analysis-preprocessing-and-resampling-policy.md",
+  "docs/adr/0225-analysis-preprocessing-and-resampling-policy.md",
   "docs/rounds/e06-r08-preprocessing-context-and-resampling.md",
 ]
 gate_tests = [
@@ -31,7 +31,8 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R05/R07 merge.
-> **ADR 0206** előre kiosztva; ütközéskor a 0200–0211 blokk tolása. Olvasd újra
+> **ADR 0225** a `tools/round-slots.py reserve-adr --round E06-R08` foglalásából.
+> Olvasd újra
 > a `lib/core/audio/codec/wav_decoder.dart` **mai** csatorna-átlagolását (a
 > downmix ma ott történik, dekódoláskor) és az R05 adapterét — a kör NEM
 > duplikálhatja a downmixet, hanem **verziózott policy** mögé helyezi.
@@ -49,7 +50,36 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0206** (preprocessing + resampling policy).
+**2026-08-11 pre-flight revízió (Terra-fallback orchestrátor):**
+
+- `git fetch origin main` után `HEAD = origin/main = 6efa859c`; E06-R05 és
+  E06-R07 merge-eltek. Nyitott E06-R08 branch, PR vagy korábbi kör-commit nem
+  volt.
+- A foglaló a brief régi, már foglalt **0206**-a helyett **0225**-öt adott;
+  minden ADR-hivatkozás és az engedélyezett út erre változott.
+- A tényleges V2-bemenet `PcmAnalysisInput.samples`: mono, immutable PCM
+  (`domain/analysis_input.dart:53–65`). A core WAV codec már dekódoláskor
+  csatornaátlagot képez (`core/audio/codec/wav_decoder.dart:76–81`, illetve
+  `90–95`), az R05 adapter pedig csak az eredeti `channelCount` metaadatot
+  őrzi meg (`data/input/wav_decoder_adapter.dart:46–52`). Ezért a jelen stage
+  **nem downmix-elhet újra**. A `MonoDownmix.v1` tiszta, determinisztikus
+  policy-szerződés és tesztmérce a jövőbeli nyers-többcsatornás bemenethez;
+  a stage mono bemenetére nem alkalmazandó. A meglévő codec policy mögé
+  kötése a tiltott `lib/core/audio/codec/**` módosítását kérné, ezért H3 lenne.
+- A V2 Analyze-útban nincs resampling. A teljes repóban viszont van ettől
+  független Live CRNN lineáris resampling
+  (`lib/features/live/engine/ml/live_crnn_classifier.dart:98`); a korábbi
+  „nincs resampling sehol” állítás pontatlan volt, a Live út változatlanul
+  tilos zóna marad.
+- `DspConfig.nnlsWindow = 16384` és `nnlsHop = 4096`
+  (`lib/features/live/engine/dsp/dsp_config.dart:16–17`). A V1 parity-teszt
+  kizárólag a `PreprocessedAudio.canonicalSamples` közvetlen átadásával méri
+  a legacy `ClipAnalyzer` ellen; V1 production-wiring nincs ebben a körben.
+- A korábbi `docs/manual-testing/analysis-eval-matrix.md` PENDING-sor
+  követelménye scope-ütközés volt, mert az út nincs az engedélyezett listán.
+  Ez a kör dokumentált follow-upja; itt nem írható.
+
+Előre kiosztott ADR: **0225** (preprocessing + resampling policy).
 
 ## 1. Cél
 
@@ -58,13 +88,14 @@ szétválasztása, verziózott preprocessing-konfigurációval — hogy a dinami
 metrikák sose egy normalizált másolatból számoljanak, és a sample↔idő leképezés
 reprodukálható legyen.
 
-## 2. Jelenlegi állapot (mért, `a6e6f3d`)
+## 2. Jelenlegi állapot (mért, `6efa859c`)
 
 - **Nincs preprocessing réteg.** A mai út: WAV-dekóder (ott történik a
   stereo→mono **átlagolás**, `wav_decoder.dart`) vagy mikrofon → nyers
   `List<double>` → `ClipAnalyzer.analyze(pcm, sampleRate)`.
-- **Nincs resampling sehol:** a `LivePipeline` és a `NnlsChroma` a kapott
-  `sampleRate`-tel dolgozik (`clip_analyzer.dart` 115, 158). A chord-pass
+- **A V2 Analyze-útban nincs resampling:** a `LivePipeline` és a `NnlsChroma`
+  a kapott `sampleRate`-tel dolgozik (`clip_analyzer.dart` 115, 158). A
+  különálló Live CRNN út resamplingje nem része ennek a körnek. A chord-pass
   ablak/hop a `DspConfig.nnlsWindow`/`nnlsHop` **mintában** kifejezett
   konstansa, tehát a szegmenshatárok időben **sample rate-függők**
   (`centers.add((start + win / 2) / sampleRate)`, 173. sor).
@@ -80,11 +111,11 @@ reprodukálható legyen.
 **Benne:** `PreprocessedAudio` (original metadata + canonical samples +
 sample↔idő mapping + normalization gain + config/verzió); `PreprocessingStage`
 (R04-stage); verziózott `MonoDownmix` policy; `PreprocessingConfig`
-(verzió + kapcsolók); **ADR 0206** a resampling-döntéssel; **egy** új feature
+(verzió + kapcsolók); **ADR 0225** a resampling-döntéssel; **egy** új feature
 flag: `analysisPreprocessingExperimentalEnabled` (DC-offset + normalizáció
 mögé, default OFF).
 
-**Kívül — TILOS:** resampler **implementálása** (az ADR 0206 dönt: a V1
+**Kívül — TILOS:** resampler **implementálása** (az ADR 0225 dönt: a V1
 natív sample rate-en marad), HPSS/chroma-denoise bekapcsolása vagy
 paraméterezése, `DspConfig`, `lib/features/analyze/**`, `lib/features/live/**`.
 
@@ -99,14 +130,14 @@ paraméterezése, `DspConfig`, `lib/features/analyze/**`, `lib/features/live/**`
 | `.../public.dart` | meglévő | `PreprocessedAudio` export |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, default OFF |
 | `test/features/audio_analysis/**`, `test/property/**` | ÚJ | paritás + property |
-| `docs/adr/0206-…md` | ÚJ | resampling/preprocessing döntés |
+| `docs/adr/0225-…md` | ÚJ | resampling/preprocessing döntés |
 
 **Tilos zóna:** `lib/features/live/**`, `lib/features/analyze/**`,
 `lib/core/audio/codec/**`. Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
-1. **ADR 0206 — a V1 NEM resampol.** Minden stage a bemenet **natív** sample
+1. **ADR 0225 — a V1 NEM resampol.** Minden stage a bemenet **natív** sample
    rate-jén fut; a `PreprocessedAudio` a mapping-et **explicit** hordozza
    (`sampleIndexToDuration`, `durationToSampleIndex`). Indok: a mai
    `ClipAnalyzer`/`NnlsChroma` mintában kifejezett ablakai miatt bármely
@@ -125,9 +156,11 @@ paraméterezése, `DspConfig`, `lib/features/analyze/**`, `lib/features/live/**`
    és **paritás-teszttel** védve: bekapcsolva sem változhat az onset-idők és a
    chord-szegmenshatárok dokumentált toleranciáján kívül.
    **NEM elfogadható:** a flag alapértelmezett bekapcsolása „mert jobb".
-4. **A downmix verziózott és determinisztikus:** `v1` = a **mai** viselkedés
-   (csatorna-átlag), a fázis-kioltás kockázata a doc-commentben rögzítve;
-   a downmix **után** clipping-ellenőrzés fut (SDD §12.1).
+4. **A downmix policy verziózott és determinisztikus:** `v1` = a **mai**
+   viselkedés (csatorna-átlag), a fázis-kioltás kockázata a doc-commentben
+   rögzítve; a policy szerinti downmix után clipping-ellenőrzés fut (SDD
+   §12.1). A jelen stage csak már mono `PcmAnalysisInput`-ot kap, ezért ezt
+   nem futtatja újra és nem duplikálja a core codec viselkedését.
    **NEM elfogadható:** „jobb csatorna kiválasztása" a v1-ben.
 5. **A preprocessing bemenetet nem mutál:** az `AnalysisInput` PCM-je bitre
    változatlan marad. **NEM elfogadható:** in-place módosítás.
@@ -186,7 +219,7 @@ open_decisions:
       hogy mindhárom cella előálljon (szintetikus DC-eltolással hangolva).
 - [ ] **Flag-őr:** `analysisPreprocessingExperimentalEnabled` minden
       környezetben `false`.
-- [ ] **ADR 0206** tartalmazza: a döntést (nincs resampling a V1-ben), a
+- [ ] **ADR 0225** tartalmazza: a döntést (nincs resampling a V1-ben), a
       kontextust (mintában kifejezett ablakok), az elutasított alternatívákat
       (44.1→22.05 kHz kanonikus rate; polyphase resampler), és a
       **visszavonás számszerű feltételét**.
@@ -222,7 +255,7 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0206 (a resampling-döntés és a visszavonás feltétele).
+1. ADR 0225 (a resampling-döntés és a visszavonás feltétele).
 2. RED: nulla-másolat, mapping-, downmix-, immutabilitás- és paritás-mátrix.
 3. `preprocessing_config.dart` + `mono_downmix.dart`.
 4. `preprocessed_audio.dart` (két reprezentáció + mapping).
@@ -232,9 +265,9 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 ## 9. Kockázatok
 
 - **A „nincs resampling" döntés később drága lehet** (különböző eszközök
-  eltérő natív rate-je) — ezért az ADR 0206 a **visszavonás feltételét**
-  számszerűen rögzíti, és a `docs/manual-testing/analysis-eval-matrix.md`
-  kap egy PENDING sort a valós eszközös sample rate-ek felmérésére.
+  eltérő natív rate-je) — ezért az ADR 0225 a **visszavonás feltételét**
+  számszerűen rögzíti. A valós eszközös sample-rate felmérés külön follow-up,
+  mert a manual-testing matrix nincs e kör engedélyezett útjai között.
 - **A kétpufferes modell memóriája** hosszú klipen duplázódhat — a §5.1 OD-01
   nulla-másolat szabálya ezt a default úton kizárja; a mért memóriakép az
   E06-R28 dolga.
@@ -246,7 +279,53 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Megvalósítás:**
+  - `PreprocessedAudio` immutable original/canonical PCM reprezentációt,
+    `normalizationGain`-t, preprocessing-verziót és explicit, microsecond
+    floor-roundingos sample↔idő mappinget ad. Default úton a két puffer
+    ugyanaz az immutable referencia.
+  - `PreprocessingConfig.v1` a DC-offset/peak-normalization kapcsolóit és a
+    befagyasztott, inkluzív 5 ms onset-parity küszöböt hordozza;
+    `PreprocessingStage` csak az explicit experimental kapcsoló mellett
+    transzformál, és nem resampol vagy downmix-el újra.
+  - `MonoDownmix.v1` külön, determinisztikus csatornaátlag-policy marad
+    phase-cancellation és clipping evidence-szel; a már mono stage nem hívja.
+  - `FeatureFlags.analysisPreprocessingExperimentalEnabled` minden
+    környezetben `false`; nincs production wiring.
+- **RED bizonyíték:**
+  `flutter test test/features/audio_analysis/domain/preprocessed_audio_test.dart test/features/audio_analysis/engine/preprocessing_stage_test.dart test/property/analysis_preprocessing_property_test.dart`
+  a hiányzó `preprocessed_audio.dart`, preprocessing contractok és flag miatt
+  várt compile-failure-rel állt meg.
+- **Célzott GREEN bizonyíték:** ugyanaz a három tesztfájl utána `+10: All
+  tests passed!`; `PROPERTY_SEED=42`.
+- **F1 javító bizonyíték (2026-08-11):**
+  - A `preprocessing_stage_test.dart` determinisztikus, 10 kHz-es,
+    binárisan pontos DC-offset ramp fixture-je a stage két tényleges
+    `canonicalSamples` kimenetéből származtatja a rising-edge onset időt.
+    A DC-eltávolítás nélküli és `experimentalEnabled: true` +
+    `removeDcOffset: true` kimenet közötti különbség a 49/50/51 mintás
+    cellákban rendre pontosan 4.9/5.0/5.1 ms; az inkluzív 5 ms gate első
+    kettőt elfogadja, a harmadikat elutasítja.
+  - RED mutation: a `PreprocessingStage` DC-eltávolító ágának ideiglenes
+    no-opra cserélése után
+    `flutter test test/features/audio_analysis/engine/preprocessing_stage_test.dart --plain-name 'measures DC-removal canonical PCM onset evidence at the parity boundary'`
+    várt hibával állt meg: a 4.9 ms cella ténylegesen 0 µs volt.
+  - GREEN visszaállítás után ugyanez a célzott parancs `+1: All tests
+    passed!` eredménnyel zárult. A meglévő comparator-egységteszt megmaradt,
+    de már nem az egyetlen paritásbizonyíték.
+  - A javítás utáni kötelező helyi gate
+    `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
+    teljesen zöld: format, analyze, mind a négy tesztcsoport
+    (`PROPERTY_SEED=42`), architecture, secrets és l10n.
+- **Teljes helyi gate:**
+  `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
+  → format, analyze, a négy célzott tesztcsoport, architecture, secrets és
+  l10n mind zöld (`MINDEN GATE ZÖLD`).
+- **Eltérés:** nincs; V1 resampling és production-wiring szándékosan nem
+  készült.
+- **Nem futtatott ellenőrzés:** a teljes `flutter test`, friss random seedes
+  property gate és release APK csak a CI-ban futnak (ADR 0053); dispatch és
+  CI-evidence az orchestrátor feladata.
 
 ## 11. Review — a független reviewer tölti ki
 
