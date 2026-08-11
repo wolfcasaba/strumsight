@@ -77,6 +77,11 @@ class FixWorkspaceOriginTest(unittest.TestCase):
             _git("push", "-q", "-u", "origin", BRANCH, cwd=hub)
 
             _git("clone", "-q", "--branch", BRANCH, str(hub), str(workdir), cwd=root)
+            # A klón SAJÁT, friss .git/config-ot kap — a hub identitása nem
+            # öröklődik, és a CI-futón (ellentétben a dev boxszal) nincs
+            # globális git user.name/email, ezért ezt explicit be kell állítani.
+            _git("config", "user.email", "heal@example.invalid", cwd=workdir)
+            _git("config", "user.name", "Heal Test", cwd=workdir)
             (workdir / "impl.txt").write_text("feat\n", encoding="utf-8")
             _git("add", "impl.txt", cwd=workdir)
             _git("commit", "-q", "-m", "feat: implementer commit", cwd=workdir)
