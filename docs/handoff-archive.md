@@ -6,6 +6,66 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E06-R03 — Codec, schema validation és V1 adapter, teljes részletes történet (2026-08-11)
+
+Determinisztikus, verziózott **`AnalysisDocumentCodec`** (JSON encode/decode,
+fail-closed kötelező mező/enum/schemaVersion, fail-open ismeretlen extra
+mező, bájtazonos encode, NaN/Infinity sosem jut ki VAGY be) és a
+**`LegacyAnalyzeAdapter`/`LegacyViewAdapter`** pár — a mai `AnalyzeResult`/
+`AnalyzedSession` **veszteségmentes** V1↔V2 leképezése, hogy a Library
+minden meglévő mentett sessionje V2-ként is olvasható legyen. `lib/features/
+analyze/**`/`lib/features/library/**` (V1) bitre érintetlen; a codec/adapter
+pár még nincs hívóhoz kötve (repository/UI = R21).
+
+**A brief 2026-08-07-én íródott, MIELŐTT az E06-R02 domain létezett** — a
+pre-flight mérve találta, hogy öt ponton a TÉNYLEGES, már merge-elt domain
+szűkebben zár, mint amit a brief feltételezett (zárt, négyelemű metrika-
+katalógus legacy ID nélkül; nincs `AnalysisInputSource.legacyMigration`;
+nincs cím-mező; nincs metre-mező; a `SignalQualityReport` mind a hét mezője
+kötelező, V1-ből semmi nem táplálja). Feloldás: **[ADR
+0221](adr/0221-legacy-analysis-v2-migration-mapping.md)** (a pre-flight
+saját, új ADR-je — BPM `AnalysisTimeline.tempoPoints`-ban él, nem
+metrikaként; a migráció ténye + a legacy metre egy `AnalysisWarning(kind:
+migration)`-ön; `title`/`customTitle`/Lab-diag egy adapter-lokális kísérő
+típusban az `AnalysisDocument` MELLETT; `SignalQualityReport.measured` új,
+additív bool-mező — az EGYETLEN már-merge-elt R02 domain-fájl, amit a kör
+érintett).
+
+Implementer **Terra (Codex)**, 1 forduló + **1 javító kör**. PR
+[#213](https://github.com/wolfcasaba/strumsight/pull/213), squash
+`592f3241`. Review:
+[docs/reviews/e06-r03-codec-schema-and-legacy-adapter-review.md](reviews/e06-r03-codec-schema-and-legacy-adapter-review.md)
+— **APPROVED a javító kör után**, 0 BLOCKER/MAJOR, 1 MINOR follow-up
+(R21-re: nincs `maxLength`-korlát a codec listáin/mapjein, a V1
+`maxTimelineChords`/`maxTimelineStrums` mintájára — unwired, ma nulla
+hatás), 4 NOTE. **A javító kör egy VALÓDI MAJOR-t zárt**, amit a
+`flutter-devil-advocate` független subagent talált (a fő review és a
+dedikált security review is átsiklott felette): a `LegacyAnalyzeAdapter`
+**eldobott VALÓS, menthető V1 sessionökön** — a `clip_analyzer.dart`
+`_bpmFromStrums()` `<2` használható strumra pontosan `bpm: 0`-t ad, és egy
+ilyen (akkordokkal rendelkező) session simán menthető, de a migráció egy
+érvénytelen `TempoPoint(bpm: 0)`-on összeomlott. Javítás: `bpm <= 0` esetén
+`tempoPoints` üres marad (a `LegacyViewAdapter` már kezelte az üres listát);
+a chord/strum-építés `JsonCollectionStore`-mintás („egy hibás bejegyzést
+kihagy") védelmet kapott a V1 laza decode-kontraktusából elméletileg
+érkező szélsőértékekre is (fordított chord-sorrend, `[0,1]`-en kívüli
+strum-confidence — egyik sem reprodukálható a mai DSP-pipeline-ból, csak
+korrupt adatból, de olcsón zárhatók ugyanabban a mechanizmusban). Dedikált
+biztonsági review (risk=high): **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR
+(egyik a fenti `maxLength`-lelet független megerősítése saját mért
+reprodukcióval — `N=500000` elemű tömb 1.3s alatt sikeresen dekódolva;
+másik: a `decode` nem futtatta a véges-szám-ellenőrzést a `CapabilityReport.
+details` szabad bag-en, csak `encode` — mindkettő a javító körben zárva),
+4 NOTE. **Mindkét javítást a review saját, retroaktív próbával igazolta**:
+az új tesztek a javítás ELŐTTI kódon ténylegesen elbuktak (`Invalid tempo
+point.` / `Success` `Failure` helyett), a javítás UTÁN zöldek.
+
+**Zöld kapu (exact-SHA `af7d6b83`):** Full Gate
+[31490700312](https://github.com/wolfcasaba/strumsight/actions/runs/31490700312)
++ Router CI [31490762082](https://github.com/wolfcasaba/strumsight/actions/runs/31490762082)
+mindkettő **success**. Az `origin/main` a dispatch (`172d2621`) és a merge
+között nem mozdult (H8 tiszta).
+
 ## E06-R04 — Pipeline contract, stage context és progress, teljes részletes történet (2026-08-11)
 
 A moduláris, **megszakítható**, progresszt publikáló elemzési-pipeline

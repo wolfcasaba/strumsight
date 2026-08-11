@@ -3,7 +3,82 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
-> (E06-R04 MERGED — Pipeline contract, stage context és progress).**
+> (E06-R05 MERGED — Input abstraction és biztonságos import).**
+>
+> ## ✅ E06-R05 KÉSZ — Input abstraction és biztonságos import (2026-08-11)
+>
+> A mikrofonos és importált audio **közös, validált boundary** mögé
+> helyezése (SDD Ch7 §6.2, §11.1, §28.2–28.6; [ADR
+> 0217](docs/adr/0217-analysis-raw-audio-retention.md) végrehajtása, új ADR
+> nélkül). Sealed `AnalysisInput` (`PcmAnalysisInput`/`FileAnalysisInput`),
+> a **meglévő** (E06-R02) `AnalysisInputSource`-ra építve; `AudioDecoderGateway`
+> + `WavDecoderAdapter` a **bitre változatlan** `lib/core/audio/codec/wav_decoder.dart`
+> köré — a mai indoklás nélküli `null`-t additív `FailureCode`-ra fordítja
+> (`unsupportedFormat`/`unsupportedBitDepth`/`truncatedChunk`/`invalidRiff`/
+> `chunkSizeOutOfBounds`/`fileTooLarge`/`nonFiniteSample`/`multipleDataChunks`/
+> `emptyInput`/`invalidSampleRate`/`unsupportedChannelCount`/`clipTooShort`/
+> `clipTooLong`), bounds-safety a bájtok átadása ELŐTT (overflow-safe
+> `size > bytes.length - body`, nem `body + size > bytes.length`).
+> `InputLimits` (64 MiB / 250 ms–10 perc / 8–192 kHz / ≤2 csatorna,
+> verziózott, a végleges érték E06-R28 benchmarkból). Fájlnév
+> privacy-redakció (`SourceDisplayName`, `redacted: true`, sosem nyers
+> `toString()`-ben, zéró logger-hívás). NaN/Inf: importált úton elutasítás,
+> mikrofonos úton sanitizálás+warning (szándékos, tesztelt eltérés — a
+> `practiceSession`/`songSession` forrás egyelőre az elutasítás ágán,
+> nyitott spec-kérdésként dokumentálva). 500-esetes `PROPERTY_SEED`-elt fuzz
+> property teszt. `lib/core/audio/codec/**` és `lib/features/analyze/**`
+> bitre érintetlen.
+>
+> **Pre-flight §0.0 (R1–R3):** R1 — a brief `ADR 0202 (raw audio)`
+> placeholdere javítva a valós **[ADR
+> 0217](docs/adr/0217-analysis-raw-audio-retention.md)**-re (ugyanaz a
+> hatos-blokk 0200–0205→0215–0220 átszámozás, 0202 a blokk 3. tagja).
+> R2 — az `AnalysisInputSource` MÁR LÉTEZIK (`domain/analysis_mode.dart`,
+> E06-R02); a brief §3/§4 ezt új típusként sugallta — javítva
+> ÚJRAHASZNÁLÁSRA (a duplikáció `public.dart` ambiguous-export fordítási
+> hibát adott volna; a SDD §9.3 saját `PcmAnalysisInput` literálja is csak
+> HASZNÁLJA, nem deklarálja az enumot, megerősítve az eredeti
+> reuse-szándékot). R3 — a fejléc `gate_tests` tömbje kiegészítve
+> `test/features/analyze`-zel, hogy egyezzen a §7 kanonikus gate-paranccsal.
+>
+> Implementer **Terra (Codex)**, 1 forduló + **1 javító kör**. PR
+> [#216](https://github.com/wolfcasaba/strumsight/pull/216), squash
+> `8d3e602e`. Review:
+> [docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md](docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md)
+> — **APPROVED a javító kör után**, 0 BLOCKER/MAJOR, 2 MINOR (fuzz-seed
+> konvenció + gyengébb mikrofon-NaN fixture, mindkettő zárva a javító
+> körben), 3 NOTE. Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r05-input-abstraction-and-safe-import-security.md](docs/reviews/e06-r05-input-abstraction-and-safe-import-security.md)
+> — **PASS a javító kör után, 0 CRITICAL/BLOCKER/MAJOR**, 2 NOTE. **A két
+> független review (általános + biztonsági) EGYMÁSTÓL FÜGGETLENÜL,
+> különböző próba-módszerrel ugyanazt a MAJOR-t találta meg:** egy második,
+> a `_inspect()` által soha meg nem vizsgált `data` chunk NaN/±Inf float32
+> mintát tudott csendben átcsempészni az importált útra — a fagyasztott
+> core dekóder az UTOLSÓ `data` chunkot dekódolja (`.clamp(-1.0, 1.0)`
+> NaN→1.0-ra alakítva), miközben az `_inspect()` csak az ELSŐN futtatta a
+> finiteness-ellenőrzést, majd rögtön `Success`-t adott — sem az 500-esetes
+> fuzz (gyakorlatilag sosem épít érvényes két-`data`-chunkos RIFF-et véletlen
+> bájtokból), sem az egységtesztek nem fedték. Javítás (`31d76195`): a
+> MÁSODIK `data` chunk `audio.multiple_data_chunks`-szal elutasítva a
+> core-dekóder hívása ELŐTT — a fagyasztott dekódert nem érinti, tehát nem
+> váltja ki a brief §9 STOP-klauzuláját. Az orchesztrátor saját, friss
+> izolált `/tmp` klónban mutáció-próbával megerősítette a zárást (az őr
+> eltávolítása az új regressziós tesztet pirosra fordította, visszaállítás
+> után zöld).
+>
+> **Zöld kapu (exact-SHA `3dcc835b` — a javító kör + review-frissítés UTÁNI
+> végleges HEAD):** Full Gate
+> [31516931160](https://github.com/wolfcasaba/strumsight/actions/runs/31516931160)
+> + Router CI [31517891225](https://github.com/wolfcasaba/strumsight/actions/runs/31517891225)
+> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+> HEAD-en, a Router CI push-triggere a review-commitokra nem tüzelt, mert
+> azok nem érintettek router-trigger útvonalat). Az `origin/main` a dispatch
+> (`a7507a58`) és a merge között nem mozdult (H8 tiszta). Post-merge gate a
+> friss `main`-en (`8d3e602e`) önállóan újrafuttatva: mind a 9 lépés zöld.
+>
+> **Következő kör: E06-R06** (recorder audio session integration,
+> `docs/rounds/e06-r06-recorder-audio-session-integration.md`) — a queue már
+> `pending`.
 >
 > ## ✅ E06-R04 KÉSZ — Pipeline contract, stage context és progress (2026-08-11)
 >
@@ -71,70 +146,6 @@
 > merge között nem mozdult (H8 tiszta). Post-merge gate a friss `main`-en
 > (`43fae1d2`) önállóan újrafuttatva: mind a 8 lépés zöld.
 >
-> **Következő kör: E06-R05** (input abstraction és biztonságos import,
-> `docs/rounds/e06-r05-input-abstraction-and-safe-import.md`) — a queue már
-> `pending`.
->
-> ## ✅ E06-R03 KÉSZ — Codec, schema validation és V1 adapter (2026-08-11)
->
-> Determinisztikus, verziózott **`AnalysisDocumentCodec`** (JSON encode/decode,
-> fail-closed kötelező mező/enum/schemaVersion, fail-open ismeretlen extra
-> mező, bájtazonos encode, NaN/Infinity sosem jut ki VAGY be) és a
-> **`LegacyAnalyzeAdapter`/`LegacyViewAdapter`** pár — a mai `AnalyzeResult`/
-> `AnalyzedSession` **veszteségmentes** V1↔V2 leképezése, hogy a Library
-> minden meglévő mentett sessionje V2-ként is olvasható legyen. `lib/features/
-> analyze/**`/`lib/features/library/**` (V1) bitre érintetlen; a codec/adapter
-> pár még nincs hívóhoz kötve (repository/UI = R21).
->
-> **A brief 2026-08-07-én íródott, MIELŐTT az E06-R02 domain létezett** — a
-> pre-flight mérve találta, hogy öt ponton a TÉNYLEGES, már merge-elt domain
-> szűkebben zár, mint amit a brief feltételezett (zárt, négyelemű metrika-
-> katalógus legacy ID nélkül; nincs `AnalysisInputSource.legacyMigration`;
-> nincs cím-mező; nincs metre-mező; a `SignalQualityReport` mind a hét mezője
-> kötelező, V1-ből semmi nem táplálja). Feloldás: **[ADR
-> 0221](docs/adr/0221-legacy-analysis-v2-migration-mapping.md)** (a pre-flight
-> saját, új ADR-je — BPM `AnalysisTimeline.tempoPoints`-ban él, nem
-> metrikaként; a migráció ténye + a legacy metre egy `AnalysisWarning(kind:
-> migration)`-ön; `title`/`customTitle`/Lab-diag egy adapter-lokális kísérő
-> típusban az `AnalysisDocument` MELLETT; `SignalQualityReport.measured` új,
-> additív bool-mező — az EGYETLEN már-merge-elt R02 domain-fájl, amit a kör
-> érintett).
->
-> Implementer **Terra (Codex)**, 1 forduló + **1 javító kör**. PR
-> [#213](https://github.com/wolfcasaba/strumsight/pull/213), squash
-> `592f3241`. Review:
-> [docs/reviews/e06-r03-codec-schema-and-legacy-adapter-review.md](docs/reviews/e06-r03-codec-schema-and-legacy-adapter-review.md)
-> — **APPROVED a javító kör után**, 0 BLOCKER/MAJOR, 1 MINOR follow-up
-> (R21-re: nincs `maxLength`-korlát a codec listáin/mapjein, a V1
-> `maxTimelineChords`/`maxTimelineStrums` mintájára — unwired, ma nulla
-> hatás), 4 NOTE. **A javító kör egy VALÓDI MAJOR-t zárt**, amit a
-> `flutter-devil-advocate` független subagent talált (a fő review és a
-> dedikált security review is átsiklott felette): a `LegacyAnalyzeAdapter`
-> **eldobott VALÓS, menthető V1 sessionökön** — a `clip_analyzer.dart`
-> `_bpmFromStrums()` `<2` használható strumra pontosan `bpm: 0`-t ad, és egy
-> ilyen (akkordokkal rendelkező) session simán menthető, de a migráció egy
-> érvénytelen `TempoPoint(bpm: 0)`-on összeomlott. Javítás: `bpm <= 0` esetén
-> `tempoPoints` üres marad (a `LegacyViewAdapter` már kezelte az üres listát);
-> a chord/strum-építés `JsonCollectionStore`-mintás („egy hibás bejegyzést
-> kihagy") védelmet kapott a V1 laza decode-kontraktusából elméletileg
-> érkező szélsőértékekre is (fordított chord-sorrend, `[0,1]`-en kívüli
-> strum-confidence — egyik sem reprodukálható a mai DSP-pipeline-ból, csak
-> korrupt adatból, de olcsón zárhatók ugyanabban a mechanizmusban). Dedikált
-> biztonsági review (risk=high): **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 2 MINOR
-> (egyik a fenti `maxLength`-lelet független megerősítése saját mért
-> reprodukcióval — `N=500000` elemű tömb 1.3s alatt sikeresen dekódolva;
-> másik: a `decode` nem futtatta a véges-szám-ellenőrzést a `CapabilityReport.
-> details` szabad bag-en, csak `encode` — mindkettő a javító körben zárva),
-> 4 NOTE. **Mindkét javítást a review saját, retroaktív próbával igazolta**:
-> az új tesztek a javítás ELŐTTI kódon ténylegesen elbuktak (`Invalid tempo
-> point.` / `Success` `Failure` helyett), a javítás UTÁN zöldek.
->
-> **Zöld kapu (exact-SHA `af7d6b83`):** Full Gate
-> [31490700312](https://github.com/wolfcasaba/strumsight/actions/runs/31490700312)
-> + Router CI [31490762082](https://github.com/wolfcasaba/strumsight/actions/runs/31490762082)
-> mindkettő **success**. Az `origin/main` a dispatch (`172d2621`) és a merge
-> között nem mozdult (H8 tiszta).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -144,14 +155,13 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-11 (E06-R04 zárása): E06-R04 teljes bannere felkerült
-> (fent); E06-R03 bannere maradt a második helyen (a stale „Következő kör"
-> mutatója törölve belőle, hiszen E06-R04 időközben elkészült, az új felső
-> banner saját, friss mutatóval zár); E06-R02 bannere törölve a fejlécből,
-> mert immár a harmadik legutóbbi kör — TELJES szövege az archívumban élt
-> már korábban is (az E06-R02 zárókör saját magát is archiválta a saját
-> zárásakor, ld. `docs/handoff-archive.md` tetején), ez a kör csak a
-> fejléc-duplikátumot törölte.
+> Mért diéta: 2026-08-11 (E06-R05 zárása): E06-R05 teljes bannere felkerült
+> (fent); E06-R04 bannere maradt a második helyen (a stale „Következő kör"
+> mutatója törölve belőle, hiszen E06-R05 időközben elkészült, az új felső
+> banner saját, friss mutatóval zár); E06-R03 bannere törölve a fejlécből,
+> mert immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT az
+> archívumba EBBEN a zárásban (E06-R03 saját zárókörében ezt még nem
+> végezte el, mert akkor csak a második helyre került, nem a harmadikra).
 
 ## 1. Current release state
 
@@ -194,24 +204,29 @@
   [`docs/sdd/epic-05-completion-report.md`](docs/sdd/epic-05-completion-report.md).
 - **Epic 6 (Audio Analysis 2.0) elkezdve** — E06-R01 (kickoff: V1 baseline
   mérés + hat kötött ADR: [0215](docs/adr/0215-analysis-document-versioning.md)–[0220](docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)),
-  **E06-R02** (`lib/features/audio_analysis/domain/` — verziózott,
+  E06-R02 (`lib/features/audio_analysis/domain/` — verziózott,
   immutable V2 domainmodell, 14 fájl + `public.dart` barrel; 1 MINOR
-  security follow-up nyitva), **E06-R03** (`lib/features/audio_analysis/data/`
+  security follow-up nyitva), E06-R03 (`lib/features/audio_analysis/data/`
   — determinisztikus `AnalysisDocumentCodec` + `LegacyAnalyzeAdapter`/
   `LegacyViewAdapter` veszteségmentes V1↔V2 migráció, [ADR
   0221](docs/adr/0221-legacy-analysis-v2-migration-mapping.md); 1 MINOR
-  follow-up R21-re) és **E06-R04** (`lib/features/audio_analysis/engine/` +
+  follow-up R21-re), E06-R04 (`lib/features/audio_analysis/engine/` +
   `domain/analysis_progress.dart` — moduláris, megszakítható,
   progresszt publikáló pipeline-szerződés fake stage-ekkel, konkrét DSP
-  nélkül; 1 MINOR follow-up kötelező R07 pre-flight ellenőrzéssel, ld.
-  fenti banner) kész, 26 további kör tervezve
+  nélkül; 1 MINOR follow-up kötelező R07 pre-flight ellenőrzéssel) és
+  **E06-R05** (`lib/features/audio_analysis/data/input/` +
+  `domain/analysis_input.dart` — közös, validált input-boundary a
+  mikrofonos és importált audio köré, [ADR
+  0217](docs/adr/0217-analysis-raw-audio-retention.md) végrehajtása,
+  bounds-safe `WavDecoderAdapter` a bitre változatlan core dekóder körül,
+  ld. fenti banner) kész, 25 további kör tervezve
   (`docs/execution/pipeline-queue.tsv`, `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
-  változatlan (a V2 domain + a codec/adapter pár teljesen bekötetlen).
-  Evidencia:
+  változatlan (a V2 domain + a codec/adapter/input-gateway teljesen
+  bekötetlen). Evidencia:
   [`docs/baseline/epic-06-audio-analysis-start.md`](docs/baseline/epic-06-audio-analysis-start.md),
-  [`docs/reviews/e06-r03-codec-schema-and-legacy-adapter-review.md`](docs/reviews/e06-r03-codec-schema-and-legacy-adapter-review.md).
+  [`docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md`](docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md).
 
 ## 2. What is working
 
@@ -479,15 +494,6 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
-
-- **E06-R05 önjavítás (2026-08-11, H-NOSIGNAL, ADR 0112) — nincs teendő,
-  tájékoztató.** Az orchesztrátor-session a Claude Code session/usage-limitjét
-  érte el a "CI dispatch + merge" lépés közben (a kötelező biztonsági review
-  háttér-agentje lefutott, de eredménye nem lett commitolva). A nyitva
-  maradt **PR #215 le lett zárva** (NEM merge-elve — a self-heal mandátuma
-  nem terjed ki a megállt kör tartalmi lezárására) és a branch törölve; a
-  `pipeline-queue.tsv` E06-R05 sora `pending` maradt, a lánc friss
-  próbálkozást indít. Részletek: `docs/LESSONS.md` **L213**.
 - ~~**Rendszerszintű rés (E02-R20, mérve): a standalone Practice V2 session nem
   indítható éles buildben.**~~ **JAVÍTVA (E02-R21, PR #55, `6e5cec7`).** A
   `practiceSessionHostProvider`/`practicePrepareSinkProvider` production

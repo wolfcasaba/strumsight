@@ -6571,6 +6571,25 @@ pre-flightja, akár az implementer saját commitja —, csak a fő-repóig jut.
 A GitHubra-jutáshoz **mindig** egy MÁSODIK push kell a fő-repóból
 (`/home/ubuntu/music-theory`), akármelyik szereplő futtatta az elsőt.
 
+**Kiegészítés #2 (E06-R05, 2026-08-11): a `remote set-url` a fő-repón át
+történő minden-pushnál TARTÓSABB javítás, DE a „push minden ciklus után"
+fegyelmet ez sem pótolja.** A saját pre-flight branch-push-nál mérve
+ugyanez a csapda ismét lecsapott (`git clone /home/ubuntu/music-theory
+<cél>` → `origin` a helyi útvonalra mutatott). A fenti „push a fő-repóból"
+helyett egy ALTERNATÍV, tartósabb javítást alkalmaztam: `git -C <cél>
+remote set-url origin https://github.com/<owner>/<repo>.git` — ez a klón
+TELJES hátralévő élettartamára megoldja a problémát (minden ezutáni push a
+klónból közvetlenül GitHubra megy, nem kell emlékezni a második hopra).
+**DE** ez a fix csak az „origin rossz célra mutat" osztályt zárja le — a
+„push-ot elfelejtettem futtatni" osztályt nem: UGYANEBBEN a sessionben, a
+remote-fixet KÖVETŐEN, a javító kör (2. implementer-forduló) UTÁN ismét
+elmaradt a push (a review-agentek ezt csak úgy tudták megkerülni, hogy
+közvetlenül a munkapéldányból fetcheltek). **Általánosított szabály #2:**
+minden implementer-jelzés (`done`/`stopped`) UTÁN, MIELŐTT bármilyen
+review-t vagy CI-dispatchot indítanál, a push egy KÜLÖN, explicit,
+kipipálandó lépés — nem elég egyszer, a kör ELSŐ fordulóján megoldani; a
+javító kör(ök) minden egyes új commitja után is meg kell ismételni.
+
 ## L190 — A `public.dart`-only cross-feature szabály az import CÉLJÁT kényszeríti ki, sosem a behúzott SZIMBÓLUMOKAT — egy vegyes (aggregát + nyers) barrel láthatatlan csatorna lehet a nyers adatnak (E05-R25, dedikált security-review MINOR, 2026-08-08)
 
 **Mit mértünk.** A security-reviewer agent az E05-R25 diffjét vizsgálva
@@ -7753,3 +7772,50 @@ jelzővel — de ez a védelem (a "valaki más dolgozik ugyanezen a
 kör-branchen" garancia) gyengítése nélkül nem triviális, ezért ITT
 szándékosan nem nyúltam hozzá ([[shared-tree-coordination]] mintázat:
 ugyanez a fa más session-ökkel is osztott).
+
+## L214 — Két, EGYMÁSTÓL FÜGGETLEN módszertanú review (általános funkcionális + dedikált biztonsági) ugyanazt a review-t megelőzően rejtett MAJOR-t találta meg, egymástól függetlenül, más próba-úton — a konvergencia maga a bizonyíték-erő (E06-R05, risk=high, 2026-08-11)
+
+**Mit mértem.** Az E06-R05 (input-boundary + biztonságos WAV-import) két
+független review-agentet kapott (általános `sdd-round-review` + dedikált
+security-reviewer, risk=high miatt kötelező), egymástól elkülönített
+promptokkal, egymás munkájáról tudomás nélkül, párhuzamosan indítva.
+Mindkettő a gate-et SAJÁT, friss `/tmp` klónban futtatta újra, és
+MINDKETTŐ, egymástól teljesen független próba-módszerrel (az általános
+review egy kézzel írt Dart unit-teszttel, a security-reviewer egy nyers
+`dart run` szkripttel) ugyanarra a hibára bukkant: a
+`WavDecoderAdapter._inspect()` a float32 NaN/Inf-ellenőrzést kizárólag az
+ELSŐ `'data'` chunkon végezte el, de a fagyasztott legacy dekóder az
+UTOLSÓ `'data'` chunkot dekódolja (`.clamp(-1.0, 1.0)` a NaN-t csendben
+véges értékké alakítja) — egy kézzel gyártott, két-`data`-chunkos float32
+WAV így megkerülte a brief §5.6 „importált úton NaN=elutasítás" kötött
+döntését. Sem a kör saját 500-esetes `PROPERTY_SEED`-es fuzzja (ami
+gyakorlatilag sosem épít fel érvényes, két-`data`-chunkos RIFF-et véletlen
+bájtokból), sem az egységtesztek (amik a validátort a WAV-bájt-réteg
+megkerülésével, közvetlen PCM-mel hívták) nem fedték ezt az inputalakot.
+
+**Miért fontos ez, nem csak hogy „a review talált egy hibát".** A hiba
+NEM a fuzz automatikus terméke volt — mindkét reviewer TUDATOSAN,
+KÉZZEL célzott egy olyan bemenet-alakra, amit a brief acceptance-mátrixa
+nem sorolt fel explicit cellaként (a formátum-/malformed-/küszöb-/
+NaN-mátrix egyike sem említ többszörös `data` chunkot). A találat tehát
+nem a brief betűjének gépi végrehajtásából jött, hanem abból, hogy MINDKÉT
+reviewer a kötött architekturális döntés (§5.6) MÖGÖTTES SZÁNDÉKÁT
+("a korrupt/adverzariális importált fájl ne csúszhasson át hamis
+sikerként") vette alapul, és onnan generált saját, a mátrixon kívüli
+próbát. **Két, egymástól izolált ágens ugyanarra az input-alakra jutva —
+más promptból, más eszközzel, más napi kontextusból — sokkal erősebb
+bizonyíték a lelet valódiságára, mint egyetlen review bármilyen alapos
+próbája**, mert kizárja, hogy a találat egy adott review-prompt
+véletlenszerű torzítása (pl. egy szerencsés/szerencsétlen odafigyelés)
+legyen.
+
+**Hogyan alkalmazd.** `risk = "high"` köröknél (fájl-import/decode,
+hálózat, hitelesítés, secret) a dedikált security-review NEM redundáns
+az általános review mellett, MÉG AKKOR SEM, ha mindkettő ugyanazt a
+diffet látja és mindkettő "talált volna valamit" — a metodológiai
+sokféleség (más fókusz, más próba-stílus) önmagában megnöveli a találati
+valószínűséget a mátrixon KÍVÜLI, kézzel-célzott input-alakokra, amiket
+sem a brief, sem a fuzz nem sorol fel. Ha mindkét review UGYANAZT a
+leletet hozza egymástól függetlenül, azt a javító kör kötelező
+elsőbbséggel kezelje (ahogy itt is történt) — a konvergencia gyanúját sem
+igényel: önmagában megerősítés.
