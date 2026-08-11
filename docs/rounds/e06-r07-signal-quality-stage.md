@@ -342,6 +342,7 @@ DSP-retune ebben a körben tilos.
 
 ### Eltérések és nem futtatott ellenőrzések
 
+- Az orchestrátor helyreállította a generált l10n-t; a round gate a `940221fe` commiton zöld.
 - Nincs DSP-retune, nincs Analyze/Live/asset módosítás.
 - A teljes CI (teljes suite, property friss seeddel és APK) az orchestrátor
   exact-SHA dispatch/merge feladata; az implementer lokálisan csak a brief
