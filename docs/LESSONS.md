@@ -7475,3 +7475,56 @@ merge-előtti ellenőrzésnél minden egyes gate headSha-ja külön-külön egye
 az éppen aktuális HEAD-del — nem elég, hogy VALAMELYIK korábbi futás zöld
 volt. Rokon: [[L113]] (a Router CI-t ellenőrizni kell, nem csak a
 build-apk-t — ugyanaz a „path-filtert használó gate csendben kimarad" mintázat).
+
+## L209 — Egy batch-írt kickoff-brief két, EGYMÁSTÓL FÜGGETLEN drift-osztálynak van kitéve — az ADR-szám és a fájl-leltár külön-külön avulhat, és az egyik a másik nélkül is előfordulhat (E06-R01, 2026-08-11)
+
+**Mit mértem.** Az E06-R01 (Epic 6 Kör 1, batch-írva 2026-08-07) pre-flightjában
+KÉT, EGYMÁSTÓL FÜGGETLEN mért drift-et találtam ugyanabban a körben:
+
+1. **ADR-szám ütközés egy „lyuk" alakjában, nem csak eltolódásban.** A brief
+   0200–0205-öt írt elő; a `tools/round-slots.py reserve-adr` (a
+   `docs/adr/` + MINDEN branch + in-flight markerek `max()+1`-e) **0215–0220**-at
+   adott. A köztes ok nem egyszerű „+1 elcsúszás" volt ([[L147]], [[L194]]
+   mintája), hanem hogy HÁROM közbeeső governance-kör (GOV-06b `0212`,
+   GOV-05b-1 `0213`, GOV-05b-2 `0214`) a foglaló SAJÁT logikája szerint
+   ÁTUGROTTA a batch által „foglaltnak" hitt 0200–0211 sávot — mert az a
+   sáv SOHA nem lett ténylegesen lefoglalva (sem fájlként, sem markerként),
+   csak a batch-brief SZÖVEGÉBEN létezett. A sáv így egy „lyukként" marad
+   nyitva a 0199 és 0212 között — a queue többi Epic 6 sora (E06-R08 `0206`,
+   E06-R11 `0207`, E06-R18 `0208`, E06-R21 `0209`, E06-R28 `0210`, E06-R29
+   `0211`) ugyanerre a lyukra hivatkozik, és MIND avult, még ha véletlenül
+   a sorrendjük helyes is maradna.
+2. **Cross-epic fájl-leltár drift, az ADR-sorszámtól teljesen független ok.**
+   A brief §2 „Jelenlegi állapot" 12 fájlt/1866 sort írt elő a
+   `lib/features/analyze/`-hoz (mérve 2026-08-07, `a6e6f3d`). A HEAD-en
+   (2026-08-11) ez **14 fájl/2168 sor** — nem egy Epic 6 kör, hanem az
+   **E05-R27** (Vision/Tutor evidence adapterek, egy MÁSIK epic körének
+   utolsó batch-je) adott két új fájlt (`analysis_vision_reference.dart`,
+   `analysis_vision_adapter.dart`) az `analyze` feature alá, mert a Vision
+   integráció onnan importál. Ez a drift-osztály FÜGGETLEN az ADR-számétól:
+   egy briefnek lehet friss, ütközésmentes ADR-száma, miközben a fájl-leltára
+   már avult, és fordítva.
+
+**Miért fontos külön kezelni a két osztályt.** A pipeline-prompt §1 két
+mérési szabálya (elérhetetlen cél-státusz, erőforrás-tulajdonlás) és a
+[[L194]] ADR-szabálya mindegyike EGY konkrét avulási módot fed le — egyik
+sem helyettesíti a másikat. Egy pre-flight, ami csak az ADR-számot
+ellenőrzi (mert az a „nyilvánvaló" kockázat egy ADR-írós körnél), simán
+átengedhet egy fájl-leltár-driftet, ami a §2 leírás ÉS a §6 acceptance
+("a §2-ben felsorolt N forrásfájl... mind szerepel") mindkettőjét hamissá
+teszi — az acceptance-kritérium SZÁMA is a driftelt adatra épült.
+
+**Szabály.** Egy batch-írt, „mai állapot leltározása" típusú kickoff-brief
+(bármely epic Kör 1-je) pre-flightjában MINDKÉT ellenőrzést külön, explicit
+lépésként végezd el, ne csak azt, ami a brief műfajából „nyilvánvalónak"
+tűnik: (1) `tools/round-slots.py reserve-adr` minden hivatkozott ADR-számra
+— ha a kapott szám eltér, ELVÁRD, hogy a queue TÖBBI, ugyanabból a batch-ből
+származó sora is avult ADR-hivatkozást hordoz, és mondd ki ezt a §0.0
+revízióban (ne javítsd a queue-t — az a driver dolga —, de a jövőbeli
+körök pre-flightjának ezt kell mérnie, nem feltételeznie); (2)
+`git diff --stat <brief mérési commitja> HEAD -- <brief §2-ben leltározott
+útvonalak>` MINDEN olyan könyvtárra, amit a brief zárt leltárként ír le —
+egy pozitív diff (akár egy MÁSIK epic köréből) azt jelenti, hogy a §2 ÉS a
+rá épülő számszerű acceptance-kritériumok is revízióra szorulnak. Rokon:
+[[L137]] (a brief „a domain kész" premisszáját a pre-flightban mérd),
+[[L194]] (ADR-hivatkozás staleness, ugyanezen epic-en belül).
