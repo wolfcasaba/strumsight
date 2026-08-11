@@ -95,6 +95,16 @@ void main() {
       }
     },
   );
+
+  test('rejects non-finite values nested in capability details', () {
+    final source = codec.encode(_document());
+    final corrupt = source.replaceFirst(
+      '"details":{}',
+      '"details":{"x":1e999}',
+    );
+
+    expect(codec.decode(corrupt), isA<Failure<AnalysisDocument>>());
+  });
 }
 
 String _normalized(String value) => jsonEncode(jsonDecode(value));

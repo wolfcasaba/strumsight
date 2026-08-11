@@ -55,6 +55,7 @@ final class AnalysisDocumentCodec {
       };
 
   static AnalysisDocument _documentFromJson(Map<String, Object?> json) {
+    _ensureFiniteJson(json);
     if (_int(json, 'schemaVersion') != schemaVersion) {
       throw const FormatException();
     }

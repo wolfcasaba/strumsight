@@ -25,9 +25,11 @@ final class LegacyAnalyzeAdapter {
   const LegacyAnalyzeAdapter();
 
   static const String _migrationMessageKey = 'analysis.migration.legacy_v1';
+  static const String _droppedTimelineEntriesMessageKey =
+      'analysis.migration.legacy_v1.dropped_timeline_entries';
 
   LegacyAnalysisMigration adapt(AnalyzedSession session) {
-    final warning = AnalysisWarning(
+    final migrationWarning = AnalysisWarning(
       kind: AnalysisWarningKind.migration,
       severity: AnalysisWarningSeverity.info,
       messageKey: _migrationMessageKey,
@@ -35,6 +37,60 @@ final class LegacyAnalyzeAdapter {
         'beatsPerBar': session.result.beatsPerBar.toString(),
       },
     );
+    final chordSegments = <ChordSegment>[];
+    var droppedChords = 0;
+    for (final chord in session.result.chords) {
+      try {
+        chordSegments.add(
+          ChordSegment(
+            start: _duration(chord.startSec),
+            end: _duration(chord.endSec),
+            confidence: 1,
+            label: chord.label,
+          ),
+        );
+      } on ArgumentError {
+        droppedChords++;
+      }
+    }
+    final strumEvents = <AnalysisEvent>[];
+    var droppedStrums = 0;
+    for (final (index, strum) in session.result.strums.indexed) {
+      try {
+        strumEvents.add(
+          StrumEvent(
+            id: 'legacy-strum-$index',
+            time: _duration(strum.timeSec),
+            confidence: strum.confidence.clamp(0, 1).toDouble(),
+            direction: switch (strum.direction.name) {
+              'down' => StrumDirection.down,
+              'up' => StrumDirection.up,
+              _ => throw ArgumentError.value(
+                strum.direction,
+                'strum.direction',
+                'unsupported legacy direction',
+              ),
+            },
+          ),
+        );
+      } on ArgumentError {
+        droppedStrums++;
+      }
+    }
+    final warnings = <AnalysisWarning>[migrationWarning];
+    if (droppedChords > 0 || droppedStrums > 0) {
+      warnings.add(
+        AnalysisWarning(
+          kind: AnalysisWarningKind.migration,
+          severity: AnalysisWarningSeverity.warning,
+          messageKey: _droppedTimelineEntriesMessageKey,
+          messageArgs: <String, String>{
+            'droppedChords': droppedChords.toString(),
+            'droppedStrums': droppedStrums.toString(),
+          },
+        ),
+      );
+    }
     final fingerprint = 'legacy-session:${session.id}';
     return LegacyAnalysisMigration(
       document: AnalysisDocument(
@@ -76,40 +132,18 @@ final class LegacyAnalyzeAdapter {
         capabilities: _capabilities(),
         timeline: AnalysisTimeline(
           duration: _duration(session.result.durationSec),
-          chordSegments: <ChordSegment>[
-            for (final chord in session.result.chords)
-              ChordSegment(
-                start: _duration(chord.startSec),
-                end: _duration(chord.endSec),
-                confidence: 1,
-                label: chord.label,
-              ),
-          ],
-          events: <AnalysisEvent>[
-            for (final (index, strum) in session.result.strums.indexed)
-              StrumEvent(
-                id: 'legacy-strum-$index',
-                time: _duration(strum.timeSec),
-                confidence: strum.confidence,
-                direction: switch (strum.direction.name) {
-                  'down' => StrumDirection.down,
-                  'up' => StrumDirection.up,
-                  _ => throw ArgumentError.value(
-                    strum.direction,
-                    'strum.direction',
-                    'unsupported legacy direction',
-                  ),
-                },
-              ),
-          ],
-          tempoPoints: <TempoPoint>[
-            TempoPoint(time: Duration.zero, bpm: session.result.bpm),
-          ],
+          chordSegments: chordSegments,
+          events: strumEvents,
+          tempoPoints: session.result.bpm <= 0
+              ? const <TempoPoint>[]
+              : <TempoPoint>[
+                  TempoPoint(time: Duration.zero, bpm: session.result.bpm),
+                ],
         ),
         metrics: const <AnalysisMetricResult>[],
         hotspots: const <AnalysisHotspot>[],
         insights: const <AnalysisInsight>[],
-        warnings: <AnalysisWarning>[warning],
+        warnings: warnings,
         completion: AnalysisCompletion(
           status: AnalysisCompletionStatus.complete,
         ),

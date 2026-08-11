@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/music/strum.dart' as legacy_core;
 import 'package:strumsight/features/audio_analysis/public.dart';
+import 'package:strumsight/features/analyze/public.dart' as legacy;
 import 'package:strumsight/features/library/public.dart';
 
 void main() {
@@ -111,6 +113,68 @@ void main() {
 
     expect(warning.messageArgs['beatsPerBar'], '4');
     expect(viewAdapter.toAnalyzeResult(migrated.document).beatsPerBar, 4);
+  });
+
+  test('migrates a zero-BPM session without a synthetic tempo point', () {
+    final session = AnalyzedSession(
+      id: 'zero-bpm',
+      createdAt: DateTime.utc(2026, 8, 11),
+      title: 'One strum',
+      result: const legacy.AnalyzeResult(
+        durationSec: 1,
+        bpm: 0,
+        chords: <legacy.TimelineChord>[
+          legacy.TimelineChord(label: 'C', startSec: 0, endSec: 1),
+        ],
+        strums: <legacy.TimelineStrum>[],
+      ),
+    );
+
+    final migrated = adapter.adapt(session).document;
+
+    expect(migrated.timeline.tempoPoints, isEmpty);
+    expect(viewAdapter.toAnalyzeResult(migrated).bpm, 0);
+  });
+
+  test('drops invalid V1 chords and reports the migration correction', () {
+    final session = AnalyzedSession(
+      id: 'invalid-timeline',
+      createdAt: DateTime.utc(2026, 8, 11),
+      title: 'Corrupt timeline',
+      result: const legacy.AnalyzeResult(
+        durationSec: 1,
+        bpm: 120,
+        chords: <legacy.TimelineChord>[
+          legacy.TimelineChord(label: 'C', startSec: 0, endSec: 1),
+          legacy.TimelineChord(label: 'G', startSec: 1, endSec: 0),
+        ],
+        strums: <legacy.TimelineStrum>[
+          legacy.TimelineStrum(
+            direction: legacy_core.StrumDirection.down,
+            timeSec: .5,
+            confidence: 1.2,
+          ),
+        ],
+      ),
+    );
+
+    final migrated = adapter.adapt(session).document;
+
+    expect(migrated.timeline.chordSegments, hasLength(1));
+    expect(migrated.timeline.events.whereType<StrumEvent>(), hasLength(1));
+    expect(
+      migrated.timeline.events.whereType<StrumEvent>().single.confidence,
+      1,
+    );
+    final warning = migrated.warnings.singleWhere(
+      (value) =>
+          value.messageKey ==
+          'analysis.migration.legacy_v1.dropped_timeline_entries',
+    );
+    expect(warning.messageArgs, <String, String>{
+      'droppedChords': '1',
+      'droppedStrums': '0',
+    });
   });
 }
 
