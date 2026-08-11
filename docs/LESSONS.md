@@ -7579,3 +7579,61 @@ NE töröld — mentsd egy, a tartalommal egyértelműen azonosítható NEVŰ
 branchre, és csak UTÁNA `--force-with-lease` a sajátod visszaállítására.
 Rokon: [[shared-tree-coordination]] (a fájlszintű véd), [[shared-tree-git-stash-hazard]]
 (ugyanennek a fának egy másik megosztott-mutábilis-állapot csapdája).
+
+## L211 — Egy pre-flight ADR csak az EGYIK irányban mérheti a legacy↔V2 eltérést, és a másikat egy adversarial second-opinion fogja meg, nem az elsődleges review (E06-R03, 2026-08-11)
+
+**Mit mértem.** Az E06-R03 pre-flightja (ADR 0221) alapos, öttételes mérést
+végzett arról, hogy a MÁR MERGE-ELT E06-R02 domain hol szűkebb, mint amit a
+2026-08-07-én írt brief feltételezett (zárt metrika-katalógus, hiányzó
+`legacyMigration` input-forrás, hiányzó cím-mező, hiányzó metre-mező,
+kötelező `SignalQualityReport`) — ez az irány: **„a V2 domain mér/követel
+olyat, amit a V1 sosem tárolt", tehát fabrikáció-kockázat**. Az implementáció
+(Terra) és az ELSŐDLEGES review (ugyanez a session) mindkettő erre az
+irányra koncentrált, és mindkettő zöldre értékelte a kört. A dedikált
+`security-reviewer` subagent is ezt az irányt vizsgálta (decode fail-closed,
+titok/PII-szivárgás) — 0 BLOCKER/MAJOR.
+
+A `flutter-devil-advocate` FÜGGETLEN második vélemény viszont a FORDÍTOTT
+irányt mérte: **a V1 decode-kontraktja LAZÁBB, mint a V2 konstruktor-
+invariánsai** — `TimelineStrum.fromJson` `requireDouble('conf')`-ja explicit
+`max` nélkül fut (`json_validation.dart` default `max: double.maxFinite`),
+`TimelineChord.fromJson`-nak nincs sorrend-ellenőrzése, és — a legsúlyosabb,
+VALÓSAN reprodukálható eset — `clip_analyzer.dart` `_bpmFromStrums()`
+pontosan `0`-t ad `<2` használható strumra, egy ilyen (de akkordot
+tartalmazó) session pedig `analyze_screen.dart` `hasContent` szerint simán
+menthető. A V2 `TempoPoint`/`ChordSegment`/`StrumEvent` konstruktorai
+SZIGORÚBBAK, mint amit V1 valaha ellenőrzött — a migrációs adapter ezen
+konstruktorokat feltétel nélkül hívta, tehát VALÓS, menthető V1 sessionökön
+`ArgumentError`-ral összeomlott volna. Sem a pre-flight, sem az elsődleges
+review, sem a security review nem vette észre — mindhárom a „mit KÖVETEL a
+V2, amit a V1 NEM AD" kérdést vizsgálta, egyik sem a „mit ENGED a V1, amit a
+V2 NEM FOGAD EL" kérdést.
+
+**Miért történhetett meg.** A pre-flight ADR és az elsődleges review UGYANAZ
+a session írta — a „legacy adapter helyessége" kérdést abban a keretben
+vizsgálta, amit MAGA a pre-flight már felállított (a megtalált öt réshez
+igazodva), és nem lépett ki abból a keretből egy „mi van, ha a bemenet
+ténylegesen szélesebb tartományú, mint amit a kimenet elfogad" ellenőrző
+kérdéssel. A security review saját fókusza (decode fail-closed, titok/PII)
+strukturálisan sem terjedt volna ki erre — az ADAPTER konstrukciós oldalát
+vizsgálta volna, nem a decode-ot.
+
+**Szabály.** Egy legacy→új-domain migrációs adapter pre-flightja/reviewja
+KÉT KÜLÖN, egymástól független kérdést mérjen, ne csak az egyiket:
+(1) „a régi formátumból hiányzik-e olyan adat, amit az új domain megkövetel"
+(fabrikáció-kockázat — ide néz az ADR 0221 eredeti öt lelete), ÉS
+(2) „a régi formátum megenged-e olyan ÉRTÉKET (nem hiányzó mezőt, hanem
+tartományon kívüli/rendezetlen/szélsőséges meglévő értéket), amit az új
+domain szigorúbb konstruktor-invariánsa elutasít" — ehhez konkrétan
+**futtasd le a régi decode-kód MINDEN `min`/`max`/tartomány-paraméterét**
+(pl. `requireDouble` explicit `min:`/`max:` nélküli hívásai a default
+tartományt öröklik, ami tágabb lehet, mint amit gondolnál), és **kövesd
+vissza minden legacy mezőt addig a FÜGGVÉNYIG, ami ténylegesen kiszámolja**
+(nem csak a decode-validációig) — a `bpm: 0` esetben a hiba nem a JSON
+decode-ban volt, hanem egy teljesen legitim DSP-számítási ágban
+(`_bpmFromStrums`, `<2` strum). Ha a saját review ugyanabból a sessionből jön,
+mint a pre-flight, egy FÜGGETLEN adversarial second opinion (pl.
+`flutter-devil-advocate`) kifejezett feladata legyen ez a második irány —
+ez fogta meg itt, amit három egymást követő, de azonos-keretű ellenőrzés nem.
+Rokon: [[user-strings-through-domain-transforms]] (rokon mintázat: user-
+eredetű érték gépi transzformon átfolyva sérti a célformátum feltevését).
