@@ -4,11 +4,11 @@ Brief: `docs/rounds/e06-r08-preprocessing-context-and-resampling.md`
 Diff: `git diff 72e6676..8671172`  
 Reviewer: Terra-fallback orchestrátor, izolált `/tmp/review-e06-r08` klón  
 Dátum: 2026-08-11  
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 ## Acceptance criteria
 
@@ -18,7 +18,7 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
 | 2 | 44.1/48 kHz floor mapping | ✅ | `preprocessed_audio_test.dart` cellamátrix + property seed 42 |
 | 3 | v1 downmix mátrix | ✅ | `preprocessing_stage_test.dart:124–156`, mutation-próba |
 | 4 | original dynamics megőrzése | ✅ | `preprocessing_stage_test.dart:38–73` |
-| 5 | DC-offset parity 4.9/5.0/5.1 ms fixture | ❌ | F1 — csak a comparator tesztelt |
+| 5 | DC-offset parity 4.9/5.0/5.1 ms fixture | ✅ | `63ba278`, canonical PCM-ből származó fixture-mátrix |
 | 6 | flag minden környezetben OFF | ✅ | `preprocessing_stage_test.dart:162–173` |
 | 7 | ADR 0225 resampling-döntés | ✅ | `docs/adr/0225-analysis-preprocessing-and-resampling-policy.md` |
 | 8 | V1 tiltott útvonalak érintetlenek | ✅ | wrapper + kézi scope-audit, 10 engedélyezett implementer-út |
@@ -50,7 +50,10 @@ Az implementer diffje (`72e6676..8671172`) 10 utat érint; mind a brief
   ellenőrizze, ne csak a tolerancia-comparatort.
 - **Ellenőrzés:** a célzott preprocessing teszt és a brief szerinti teljes
   `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`63ba278`): a 10 kHz-es, determinisztikus DC-offset
+  ramp `PreprocessingStage` valódi canonical PCM-jét méri; a rising-edge
+  evidence 49/50/51 mintája rendre pontosan 4.9/5.0/5.1 ms. A célzott teszt
+  `+7: All tests passed!` eredménnyel újrafutott.
 
 ## Valódi-sértés próbák
 
@@ -74,5 +77,5 @@ Az izolált klónban végzett, majd `apply_patch`-csel visszaállított próbák
 
 ## Merge-döntés
 
-Nyitott MAJOR (F1) miatt merge tilos. A javító körnek ezt a jelentést kell
-lezárnia, majd friss izolált review, exact-HEAD CI és zöld kapu következik.
+F1 lezárt. Az exact-HEAD CI még kötelező; csak annak zöld eredménye után
+merge-elhető.
