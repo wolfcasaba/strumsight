@@ -7528,3 +7528,54 @@ egy pozitív diff (akár egy MÁSIK epic köréből) azt jelenti, hogy a §2 ÉS
 rá épülő számszerű acceptance-kritériumok is revízióra szorulnak. Rokon:
 [[L137]] (a brief „a domain kész" premisszáját a pre-flightban mérd),
 [[L194]] (ADR-hivatkozás staleness, ugyanezen epic-en belül).
+
+## L210 — A megosztott munkafán az orchesztrátor pre-flight/review-commitjai átcsúszhatnak egy PÁRHUZAMOSAN futó, más körön dolgozó session felé, ha a checkout hosszú ideig nem-`main` branchen marad (E06-R02, 2026-08-11)
+
+**Mit mértem.** Az E06-R02 review-lépésében a saját review-jelentésemet a
+megosztott munkafán (`/home/ubuntu/music-theory`, nem az izolált
+munkapéldány) commitoltam, a kör branchére (`codex/e06-r02-...`) checkoutolva.
+A commit és a push között (kb. 5 perc, amíg a gate-et néztem) egy MÁSIK,
+egyidejűleg futó session (Epic 7 batch-brief-előkészítés, `round-brief-prep`
+minta) ÍRT egy fájlt (`docs/rounds/e07-r01-planner-baseline-and-adrs.md`) a
+megosztott munkafára, majd commitolt — de mivel a fa AKKOR épp az én
+`codex/e06-r02-...` branchemen állt (ő nem ellenőrizte/váltotta explicit a
+sajátjára), a commitja **az ÉN branchemre** került, nem a sajátjára. A
+`.pipeline/inflight/` könyvtár ezt NEM jelezte (csak a saját `E06-R02`
+markerem volt ott) — a másik session más mechanizmuson (batch-prep, nem
+`round-pipeline.sh`) futott, tehát a §4.1 „párhuzamos kör" ellenőrzés nem
+fogta meg. Csak a push UTÁNI `git diff --stat origin/main...<branch>`
+fájllista-újraszámolás (24 fájl a várt 22 helyett, egy idegen
+`docs/rounds/e07-r01-...` fájllal) buktatta le — a `round-ci-plan.py`
+kimenete is átvette a szennyezést (`router_ci_paths_hit` két brief-fájlt
+mutatott). Javítás: az idegen commit tartalmát egy ÚJ, a fájlnévvel egyező
+branchre (`codex/e07-r01-planner-baseline-and-adrs`) mentettem, majd
+`git branch -f` + `git push --force-with-lease` az én branchemet
+visszaállította a saját, tiszta tippemre.
+
+**Miért történhetett meg.** Az ok NEM a `git commit` maga (azt tételes
+fájlnévvel, `git add <fájl> <fájl>` hívtam, sosem `git add -A`/`.` — a
+[[shared-tree-coordination]] memória-szabály szerint), hanem hogy a
+checkoutolt branch ÁLLAPOTA megosztott, globális mutábilis állapot ezen a
+fán: amíg az én review-munkám miatt a fa a kör-branchemen állt, BÁRMELY
+másik, a fát ugyanígy használó folyamat commitja — ha az explicit
+branch-ellenőrzést kihagyja — az ÉN branchemre kerül, függetlenül attól,
+hogy én magam fájlnév szerint tételesen stage-eltem-e a sajátomat. A
+tételes staging a SAJÁT ismeretlen fájlok belógása ellen véd
+([[shared-tree-coordination]]); a checkoutolt branch hosszú ideig
+nem-`main` állapota egy MÁSIK folyamat commitjának téves célpontja ellen
+NEM.
+
+**Szabály.** A megosztott munkafán (`/home/ubuntu/music-theory`, ha a kör
+briefje nem izolált munkapéldányt ír elő az orchesztrátor saját
+commitjaihoz is): (1) a kör-branchre checkoutolást a LEHETŐ
+legszűkebb ablakra korlátozd — commitold azonnal, amint a fájl(ok)
+készen állnak, és RÖGTÖN válts vissza `main`-re, ne hagyd a checkoutot
+„nyitva" a gate-várakozás vagy egyéb hosszú művelet alatt; (2) push UTÁN
+mindig futtasd újra a fájllista-diffet (`git diff --stat
+origin/main...<branch>`) a brief `allowed_paths`/kiegészített listája
+ellen, MÉG AKKOR IS, ha a scope-audit korábban zöldet adott — az audit egy
+korábbi, még tiszta HEAD-en mérhetett; (3) ha idegen tartalmat találsz,
+NE töröld — mentsd egy, a tartalommal egyértelműen azonosítható NEVŰ
+branchre, és csak UTÁNA `--force-with-lease` a sajátod visszaállítására.
+Rokon: [[shared-tree-coordination]] (a fájlszintű véd), [[shared-tree-git-stash-hazard]]
+(ugyanennek a fának egy másik megosztott-mutábilis-állapot csapdája).
