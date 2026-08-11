@@ -211,29 +211,29 @@ open_decisions:
 
 ## 6. Acceptance criteria
 
-- [ ] **Domain-purity őr:** `dart run tool/check_architecture.dart` zöld, és
+- [x] **Domain-purity őr:** `dart run tool/check_architecture.dart` zöld, és
       egyetlen új `domain/` fájl sem importál `package:flutter`-t
       (a gate `architecture` lépése méri).
-- [ ] **Validációs mátrix — `AnalysisDocument`:** minden sor saját teszt-cella:
+- [x] **Validációs mátrix — `AnalysisDocument`:** minden sor saját teszt-cella:
       `durationUs` **−1 / 0 / +1**; confidence **−0.0001 / 0.0 / 0.5 / 1.0 /
       1.0001**; duplikált metric ID **0 / 1 / 2** előfordulással; szegmens
       `start > end`, `start == end`, `start < end`.
-- [ ] **Confidence-küszöb hármas:** a `[0,1]` tartomány mindkét határa
+- [x] **Confidence-küszöb hármas:** a `[0,1]` tartomány mindkét határa
       **inkluzív**; a mátrixban szerepel a `0.0` és `1.0` (átmegy) ÉS a
       `-1e-9` / `1.0 + 1e-9` (elutasít) cella — `python3 -c` -vel kiszámolt
       értékekkel, nem `0.0001`-es közelítéssel.
-- [ ] **Immutabilitás-teszt:** a konstruktornak átadott lista **utólagos
+- [x] **Immutabilitás-teszt:** a konstruktornak átadott lista **utólagos
       mutálása** nem látszik a dokumentumon (`document.metrics.length`
       változatlan), és `document.metrics.add(...)` dob.
-- [ ] **Metric-value sealed teszt:** `switch` az `AnalysisMetricValue` fölött
+- [x] **Metric-value sealed teszt:** `switch` az `AnalysisMetricValue` fölött
       **exhaustive** default ág nélkül fordul (a fordító bizonyítja).
-- [ ] **Metric-ID őr:** teszt méri, hogy a katalógus minden ID-je egyedi és
+- [x] **Metric-ID őr:** teszt méri, hogy a katalógus minden ID-je egyedi és
       illeszkedik a `^[a-z_]+\.[a-z0-9_]+\.v[0-9]+$` alakra.
-- [ ] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **három** környezetére
+- [x] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **három** környezetére
       (`AppEnvironment.development`/`lab`/`production` — a mai enum teljes,
       tényleges értékkészlete; **nincs `staging`**, §0.0 R1 javítás) mindhárom
       új flag `false`; és a `toString()` tartalmazza őket.
-- [ ] **V1 érintetlen:** `git diff --stat` nem tartalmaz
+- [x] **V1 érintetlen:** `git diff --stat` nem tartalmaz
       `lib/features/analyze/**` vagy `lib/features/library/**` útvonalat, és
       a `test/features/analyze` + `test/features/library` gate zöld.
 
@@ -373,5 +373,9 @@ orchestrátor CI-kapuja. Follow-up nincs; a következő kör E06-R03
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r02-analysis-document-v2-domain-review.md`.
+**APPROVED** (2026-08-11, Claude Sonnet 5) — `docs/reviews/e06-r02-analysis-document-v2-domain-review.md`,
+0 BLOCKER/MAJOR/MINOR, 2 NOTE. Saját izolált `/tmp` klónban a teljes 9-lépéses
+gate függetlenül újrafuttatva (zöld), scope-audit egyezik (22/22 fájl a
+listán), két saját valódi-sértés próba mindkettő a várt cellát fogta.
+Dedikált security-review (risk=high) folyamatban.
 Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
