@@ -1,6 +1,14 @@
 # E06-R07 — Signal quality stage
 
-- **Státusz:** PREPARED → PLANNING (R1 pre-flight, 2026-08-11; main @ `a4178e48`)
+- **Státusz:** PREPARED → PLANNING (R1 pre-flight, 2026-08-11; main @ `a4178e48`;
+  R1 két korábbi önjavítás után egy friss orchestrátor-session ÚJRAHASZNOSÍTOTTA
+  ezt a pre-flight commitot a `codex/e06-r07-signal-quality-stage` elhagyott
+  lokális branch-éről (docs/LESSONS.md L219–L221) — minden mért állítás
+  (`SignalQualityReport` mezők, `AnalysisStage<I,O>`/`AnalysisPipeline<T>`
+  szerződés, `ValidatedPcmAnalysisInput`, RAG-chunk 019 szabad száma,
+  `analysis-eval-matrix.md` létezése, brief-lint leletmentes) újra grep-elve
+  egyezett a friss `main @ 52a1acb0`-n; a `lib/features/audio_analysis/**`
+  a4178e48 óta érintetlen)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 7; §11.2–11.6
 - **Branch:** `codex/e06-r07-signal-quality-stage`
 - **Előfeltétel:** **E06-R04, E06-R05 merge**
