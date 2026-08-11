@@ -329,7 +329,42 @@ parser átírása ebben a körben scope-sértés.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Módosítások
+
+- `analysis_input.dart`: sealed PCM- és file-input boundary, a meglévő
+  `AnalysisInputSource` importjával; a `SourceDisplayName` minden
+  diagnosztikus `toString()`-ben redaktált.
+- `input_limits.dart` és `analysis_input_validator.dart`: a verziózott
+  méret-, sample-rate-, csatorna- és inkluzív hosszkorlátok; mikrofonos
+  non-finite minta nullázása `nonFiniteSample` warninggal, importált minta
+  typed failurerel.
+- `wav_decoder_adapter.dart` és `audio_decoder_gateway.dart`: RIFF/chunk
+  bounds-check az örökölt core dekóder hívása előtt, `null` helyett typed
+  failure, fájlnév-logger nélküli kapu.
+- `app_failure.dart` és `public.dart`: a kilenc additív audio failure-kód és
+  az új public contractok exportja.
+- Új gateway-, validator- és 500-es, `PROPERTY_SEED`-vezérelt fuzz tesztek.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — exit 0; kizárólag a gitignore-olt localizációs
+  generátumkimenetet állította elő a Flutter-tesztek fordításához.
+- `flutter test test/features/audio_analysis/data test/property/analysis_input_fuzz_property_test.dart`
+  — **20 teszt zöld** (formátum-, malformed-, méret-, hossz-, NaN- és fuzz
+  mátrix).
+- `flutter test test/features/analyze/wav_decoder_test.dart` — **5 teszt
+  zöld**, a fagyasztott core codec változatlan.
+- A fájlméret-őr valódi-sértés próbája: a `<=` ideiglenes `<`-re rontásakor a
+  pontosan `maxFileBytes` cella piros lett; visszaállítás után ugyanaz a célzott
+  teszt zöld.
+- `tools/round-gate.sh test/features/audio_analysis test/property test/core test/features/analyze`
+  — **zöld**: format, analyze, a négy külön tesztútvonal és architecture.
+
+### Eltérés és nem futtatott ellenőrzés
+
+- Nincs scope- vagy architekturális eltérés.
+- CI-dispatch és merge nem implementer-feladat; az orchesztrátor az exact-SHA
+  kör-commit után végzi el.
 
 ## 11. Review — a független reviewer tölti ki
 
