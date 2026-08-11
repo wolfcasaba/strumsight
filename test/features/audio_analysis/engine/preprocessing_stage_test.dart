@@ -104,6 +104,53 @@ void main() {
   });
 
   group('preprocessing policy boundaries', () {
+    test(
+      'measures DC-removal canonical PCM onset evidence at the parity boundary',
+      () async {
+        const config = PreprocessingConfig.v1(removeDcOffset: true);
+
+        for (final testCase in _dcOffsetOnsetParityCases) {
+          final samples = _dcOffsetRampFixture(
+            delayedOnsetSamples: testCase.delayedOnsetSamples,
+          );
+          final withoutDcRemoval = await _run(
+            const PreprocessingStage(experimentalEnabled: true),
+            samples: samples,
+            sampleRate: _dcOffsetFixtureSampleRate,
+          );
+          final withDcRemoval = await _run(
+            const PreprocessingStage(
+              experimentalEnabled: true,
+              config: PreprocessingConfig.v1(removeDcOffset: true),
+            ),
+            samples: samples,
+            sampleRate: _dcOffsetFixtureSampleRate,
+          );
+
+          final rawOnset = _risingEdgeOnsetSample(
+            withoutDcRemoval.canonicalSamples,
+          );
+          final canonicalOnset = _risingEdgeOnsetSample(
+            withDcRemoval.canonicalSamples,
+          );
+          final difference =
+              withDcRemoval.sampleIndexToDuration(canonicalOnset) -
+              withoutDcRemoval.sampleIndexToDuration(rawOnset);
+
+          expect(
+            difference,
+            testCase.expectedDifference,
+            reason: '${testCase.label} must be derived from canonical PCM',
+          );
+          expect(
+            config.isOnsetParityWithinTolerance(difference),
+            testCase.isWithinTolerance,
+            reason: '${testCase.label} parity outcome',
+          );
+        }
+      },
+    );
+
     test('uses the inclusive five-millisecond onset parity threshold', () {
       const config = PreprocessingConfig.v1(removeDcOffset: true);
 
@@ -171,12 +218,13 @@ void main() {
 Future<PreprocessedAudio> _run(
   PreprocessingStage stage, {
   required List<double> samples,
+  int sampleRate = 44100,
 }) async {
   final result = await stage.run(
     ValidatedPcmAnalysisInput(
       input: PcmAnalysisInput(
         samples: samples,
-        sampleRate: 44100,
+        sampleRate: sampleRate,
         channelCount: 1,
         source: AnalysisInputSource.microphone,
       ),
@@ -192,4 +240,62 @@ Future<PreprocessedAudio> _run(
     Success<PreprocessedAudio>(:final value) => value,
     Failure<PreprocessedAudio>(:final error) => throw StateError(error.code),
   };
+}
+
+const _dcOffsetFixtureSampleRate = 10000;
+const _dcOffsetFixtureCenterSample = 200;
+const _dcOffsetFixtureStep = 1 / 1024;
+
+const _dcOffsetOnsetParityCases = <_DcOffsetOnsetParityCase>[
+  _DcOffsetOnsetParityCase(
+    label: '4.9 ms',
+    delayedOnsetSamples: 49,
+    expectedDifference: Duration(microseconds: 4900),
+    isWithinTolerance: true,
+  ),
+  _DcOffsetOnsetParityCase(
+    label: '5.0 ms',
+    delayedOnsetSamples: 50,
+    expectedDifference: Duration(microseconds: 5000),
+    isWithinTolerance: true,
+  ),
+  _DcOffsetOnsetParityCase(
+    label: '5.1 ms',
+    delayedOnsetSamples: 51,
+    expectedDifference: Duration(microseconds: 5100),
+    isWithinTolerance: false,
+  ),
+];
+
+/// Produces a deterministic DC-offset ramp whose mean-centred rising edge is
+/// delayed by [delayedOnsetSamples]. At 10 kHz the selected 49/50/51 sample
+/// deltas are exactly the documented 4.9/5.0/5.1 ms boundary cells.
+List<double> _dcOffsetRampFixture({required int delayedOnsetSamples}) {
+  final offset = delayedOnsetSamples * _dcOffsetFixtureStep;
+  return <double>[
+    for (var index = 0; index <= 2 * _dcOffsetFixtureCenterSample; index++)
+      (index - _dcOffsetFixtureCenterSample) * _dcOffsetFixtureStep + offset,
+  ];
+}
+
+/// Returns the rising-edge onset evidence directly derived from canonical PCM.
+int _risingEdgeOnsetSample(List<double> samples) {
+  for (var index = 0; index < samples.length; index++) {
+    if (samples[index] >= 0) return index;
+  }
+  throw StateError('Synthetic onset fixture has no rising edge.');
+}
+
+final class _DcOffsetOnsetParityCase {
+  const _DcOffsetOnsetParityCase({
+    required this.label,
+    required this.delayedOnsetSamples,
+    required this.expectedDifference,
+    required this.isWithinTolerance,
+  });
+
+  final String label;
+  final int delayedOnsetSamples;
+  final Duration expectedDifference;
+  final bool isWithinTolerance;
 }

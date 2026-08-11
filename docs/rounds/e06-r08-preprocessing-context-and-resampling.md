@@ -298,6 +298,25 @@ Külön processzek, nincs `&&`/pipe/`tail`.
   várt compile-failure-rel állt meg.
 - **Célzott GREEN bizonyíték:** ugyanaz a három tesztfájl utána `+10: All
   tests passed!`; `PROPERTY_SEED=42`.
+- **F1 javító bizonyíték (2026-08-11):**
+  - A `preprocessing_stage_test.dart` determinisztikus, 10 kHz-es,
+    binárisan pontos DC-offset ramp fixture-je a stage két tényleges
+    `canonicalSamples` kimenetéből származtatja a rising-edge onset időt.
+    A DC-eltávolítás nélküli és `experimentalEnabled: true` +
+    `removeDcOffset: true` kimenet közötti különbség a 49/50/51 mintás
+    cellákban rendre pontosan 4.9/5.0/5.1 ms; az inkluzív 5 ms gate első
+    kettőt elfogadja, a harmadikat elutasítja.
+  - RED mutation: a `PreprocessingStage` DC-eltávolító ágának ideiglenes
+    no-opra cserélése után
+    `flutter test test/features/audio_analysis/engine/preprocessing_stage_test.dart --plain-name 'measures DC-removal canonical PCM onset evidence at the parity boundary'`
+    várt hibával állt meg: a 4.9 ms cella ténylegesen 0 µs volt.
+  - GREEN visszaállítás után ugyanez a célzott parancs `+1: All tests
+    passed!` eredménnyel zárult. A meglévő comparator-egységteszt megmaradt,
+    de már nem az egyetlen paritásbizonyíték.
+  - A javítás utáni kötelező helyi gate
+    `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
+    teljesen zöld: format, analyze, mind a négy tesztcsoport
+    (`PROPERTY_SEED=42`), architecture, secrets és l10n.
 - **Teljes helyi gate:**
   `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
   → format, analyze, a négy célzott tesztcsoport, architecture, secrets és
