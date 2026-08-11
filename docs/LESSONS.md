@@ -8064,3 +8064,100 @@ minden más, azzal a trigger-úttal metsző PR-t magával ránt. Egy router-tesz
 driver döntése függ, a `driver(..., ENV=...)` explicit kwargs-on vagy a
 `state`-mappán keresztül érkezzen — SOHA az `os.environ`/`$HOME` öröklött
 tartalmán.
+
+## L220 — Egy self-heal által beírt fixture-literál, amely nem tartalmazza a secrets-scan placeholder-szavainak egyikét sem, jelölés nélkül lelettel jön — a KÖVETKEZŐ self-heal körnek kellett felismernie a saját korábbi köre hagyta mintát (E06-R07, H7 self-heal, ADR 0112, 2026-08-11)
+
+**Mit mértem.** A H5 self-heal (L219, PR #219) egy fake MiniMax-kulcsot írt
+`tools/tests/test_orchestrator_rotation.py:229`-be
+(`MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key"`), hogy a router-tesztet
+hermetikussá tegye — helyes, mért javítás volt a saját problémájára. Az E06-R07
+KÖVETKEZŐ implementer-kísérlete viszont a lokális gate `secrets` lépésén
+akadt el (H7): a `tool/ci/check_secrets.dart` `credential assigned a long
+literal` szabálya lelettel jelezte pontosan ezt a sort. Reprodukálva a
+merge-elt `main`-en is, a kör tartalmától teljesen függetlenül: `dart run
+tool/ci/check_secrets.dart` → `Secret scan failed (2191 file(s) scanned, 1
+finding(s)) — tools/tests/test_orchestrator_rotation.py:229`. A `tools/**`
+út az E06-R07 saját engedélyezett-fájllistáján KÍVÜL esett, ezért az ő
+session-je ezt nem javíthatta — a HALTED jelentés ezt explicit ki is mondta.
+
+**Miért nem a scanner hibája.** A `_placeholder` regex tudatosan szűk kör
+(`example|sample|dummy|fake|placeholder|redacted|changeme|your[_-]|
+test[_-]?only|xxx|…`, env-név alak, `****`) — a "fixture" szó NEM szerepel
+rajta, és ez helyes: egy scanner, amely minden "fixture"-t tartalmazó
+literált automatikusan placeholder-nek fogadna el, pontosan azt a
+védelmet gyengítené globálisan, amit a szabály szolgál (egy valódi,
+kiszivárgott kulcs változóneve is simán tartalmazhatna ilyen szót). A hiba
+nem a detekcióban volt, hanem abban, hogy az ELŐZŐ self-heal a saját,
+bizonyítottan fake fixture-jét nem jelölte meg a tool SAJÁT, dokumentált
+eszközével.
+
+**Javítás.** Inline `strumsight:allow-secret` jelölés a sor végén (NEM a
+placeholder-lista bővítése — az précedens szerint is helytelen lenne, lásd
+L118/E04-R15 hasonló esete, ahol a fájl-szintű jelölés volt a helyes válasz,
+nem a szabály lazítása). Regressziós teszt:
+`test/tooling/check_secrets_test.dart` új esete a MÉRT fixture-alakot
+(a `test_orchestrator_rotation.py:229` szó szerinti sora) hermetikusan
+reprodukálja tempdirben — piros jelölés nélkül, zöld jelöléssel. PR
+[#220](https://github.com/wolfcasaba/strumsight/pull/220), squash
+`82cf8954`, Router CI és Build APK (Coverage + build-apk) zöld a pontos
+push-SHA-n ([31537377900](https://github.com/wolfcasaba/strumsight/actions/runs/31537377900),
+[31537406807](https://github.com/wolfcasaba/strumsight/actions/runs/31537406807)).
+
+**Szabály.** Ha egy self-heal (vagy bármely kör) egy fake hitelesítő-alakú
+literált visz be egy tesztbe a hermetikusság kedvéért, a bevitel PILLANATÁBAN
+tegye rá a tool saját allow-jelölését is — ne hagyja a KÖVETKEZŐ gate-futásra
+(akár egy másik körre) a felismerést. Egy "MÉRT hiba" kommentben dokumentált
+fixture attól még nem mentes a secrets-scan alól; a dokumentáló komment és a
+scanner két külön mechanizmus.
+
+## L221 — A kör-munkapéldányt a hub lokális útvonaláról klónozó minta törékeny: ha a hub épp a kör branch-én áll, az implementer push-a `receive.denyCurrentBranch`-sel elutasul, és a kész munka reviewzhatatlan marad (E06-R07, H7 self-heal, ADR 0112, 2026-08-11)
+
+**Mit mértem.** Az E06-R07 második implementer-kísérlete (`ss-terra-e06-r07`)
+egy valódi commitot készített (`2e55359c feat(analysis): add signal quality
+stage`), de a push a konfigurált `origin` miatt elutasult:
+`git -C ss-terra-e06-r07 remote -v` → `origin /home/ubuntu/music-theory` — a
+HUB LOKÁLIS ÚTVONALA, nem a GitHub-URL. A hub (`/home/ubuntu/music-theory`)
+a session pre-flightja (`git switch -c codex/e06-r07-signal-quality-stage` +
+ADR/brief-commit + push GitHub-ra) UTÁN nem váltott vissza `main`-re, így a
+push pillanatában PONT azon a branch-en állt, amit az implementer klón
+frissíteni akart. Git válasza (mérve, saját reprodukcióval): `remote: error:
+refusing to update checked out branch… ! [remote rejected] … (branch is
+currently checked out)`. Empirikusan reprodukálva három egymásba ágyazott
+tempdir-repóval (bare upstream ← nem-bare hub ← workdir), a mért alakot szó
+szerint követve.
+
+**Miért nem egyedi baleset.** `git -C <régi kör-klón> remote -v`
+összehasonlítása mutatta: E06-R01–R04 klónjai (régebbi, MÁR merge-elt
+körök maradványai) MIND a hub lokális útvonalára mutató origin-nel
+készültek, míg a később, sikeresen záruló E06-R05/R06 klónjai már a valódi
+GitHub-URL-re. A konvenció köztük változott, de csak SZÓBAN/ad hoc
+orchesztrátor-gyakorlatban — a `sdd-round-driver` SKILL.md §3 csak azt írja
+elő, hogy `git clone <hub> <cél>`-lal kell dolgozni, az origin utólagos
+GitHub-URL-re állítását nem. Emiatt a helyes gyakorlat egy-egy körre
+visszaeshet, ahogy itt is visszaesett.
+
+**Javítás.** Új `tools/fix-workspace-origin.sh`: a munkapéldány `origin`-jét
+a hub SAJÁT upstream-jére állítja, ha az lokális útvonalra mutat (fail-open
+no-op, ha az origin már URL, vagy a hub upstream-je sem határozható meg
+valódi URL-ként). Bekötve `codex-round.sh` és `mm-round.sh` indulásába, MIELŐTT
+az implementer bármit commitolna — strukturális javítás, nem a hub
+pillanatnyi branch-állapotát követő. Regressziós teszt:
+`tools/tests/test_fix_workspace_origin.py`, mért piros (a push a javítás
+előtt `denyCurrentBranch`-hibával bukik) → zöld (a javítás után a push a
+bare upstream-re megy, ahol a checkoutolt-branch fogalma nem is
+értelmezhető) bizonyítékkal. Ugyanaz a PR
+[#220](https://github.com/wolfcasaba/strumsight/pull/220) (squash `82cf8954`)
+adja mindkét javítást — egy halt, egy kombinált gyökérok-diagnózis. A halt-ot okozó
+implementer-klón (`ss-terra-e06-r07`, a nem pusholt `2e55359c` commit) és a
+kör branch-e (`codex/e06-r07-signal-quality-stage`, PR nélkül) törölve —
+[[L213]]/L219 mintája szerint a self-heal mandátuma nem terjed ki a
+megállt kör tartalmi lezárására, a `pipeline-queue.tsv` E06-R07 sora
+`pending` maradt.
+
+**Szabály.** Egy kör-munkapéldányt SOHA nem elég a hub lokális útvonaláról
+klónozni és ott hagyni — az origin-t VAGY azonnal a hub saját upstream-jére
+kell állítani, VAGY a hub-nak garantáltan a `main`-en kell maradnia a klónozás
+teljes ideje alatt. Az első strukturálisan robusztusabb (nem függ egy
+másik lépés fegyelmétől), ezért ez lett az automatizált védelem — mindkét
+implementer-belépési pont (`codex-round.sh`, `mm-round.sh`) ugyanazt a
+segédscriptet hívja, hogy a védelem motor-függetlenül álljon.

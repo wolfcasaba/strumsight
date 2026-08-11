@@ -531,6 +531,27 @@
   tartalmi lezárására) és a branch törölve; a `pipeline-queue.tsv` E06-R07
   sora `pending` maradt, a lánc friss próbálkozást indít. Részletek:
   `docs/LESSONS.md` **L219**.
+- **E06-R07 önjavítás (2026-08-11, H7, ADR 0112) — nincs teendő, tájékoztató.**
+  Az E06-R07 KÖVETKEZŐ implementer-kísérlete két, egymástól független infra-
+  gyökérokon akadt el: (1) a H5-javítás saját fake fixture-kulcsa
+  (`tools/tests/test_orchestrator_rotation.py:229`) a secrets-scan
+  placeholder-listáján kívül eső szót ("fixture") tartalmazott, ezért
+  jelölés nélkül lelettel jött a lokális gate `secrets` lépésében — a
+  `tools/**` az E06-R07 saját allowed-files listáján kívül esett, a kör
+  session-je ezt nem javíthatta; (2) az implementer munkapéldányát a hub
+  lokális útvonaláról klónozták, miközben a hub épp a kör branch-én állt (a
+  pre-flight commit után), ezért az implementer kész commitjának
+  (`2e55359c`) push-a `receive.denyCurrentBranch`-sel elutasult —
+  reviewzhatatlan maradt. Javítva (PR
+  [#220](https://github.com/wolfcasaba/strumsight/pull/220)): inline
+  `strumsight:allow-secret` jelölés a fixture-soron, és új
+  `tools/fix-workspace-origin.sh` (bekötve `codex-round.sh`/`mm-round.sh`
+  indulásába), amely a munkapéldány origin-jét a hub saját upstream-jére
+  állítja lokális-útvonal esetén. A halt-ot adó implementer-klón
+  (`ss-terra-e06-r07`) és a kör branch-e (`codex/e06-r07-signal-quality-stage`,
+  PR nélkül) törölve; a `pipeline-queue.tsv` E06-R07 sora `pending` maradt,
+  a lánc friss próbálkozást indít. Részletek: `docs/LESSONS.md` **L220** és
+  **L221**.
 - **~~A Claude 5 órás session-kerete rendszeresen kimerül és H-NOSIGNAL-lal
   körökbe kerül~~ — MEGOLDVA (ADR 0222, 2026-08-11, user-döntés).** Mért ok: a
   lánc MINDEN körben a Claude-ot ültette az orchestrátor+reviewer székbe
