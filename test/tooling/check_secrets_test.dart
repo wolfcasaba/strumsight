@@ -220,6 +220,44 @@ def test_prod_misconfig_blocks_boot():
     final marked = checkSecrets(projectRoot: projectRoot);
     expect(marked.isClean, isTrue, reason: marked.format());
   });
+
+  test('the measured E06-R07/H7 orchestrator-rotation fixture needs — and '
+      'gets — an inline marker', () {
+    // Regressziós őr (E06-R07 / H7 self-heal, 2026-08-11). MÉRT gyökérok:
+    // az előző self-heal (H5, docs/LESSONS.md L219) egy fake MiniMax-kulcsot
+    // írt egy driver()-hívás kwargjába
+    // (`MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key"`), hogy a
+    // router-tesztet hermetikussá tegye. Az érték nem szerepel a scanner
+    // placeholder-listáján (nincs benne "example/sample/dummy/fake/…" szó —
+    // a "fixture" nem az), ezért a `credential assigned a long literal`
+    // szabály jelölés NÉLKÜL lelettel jelezte, és a tools/** tiltott zóna
+    // miatt a kör saját session-je ezt nem javíthatta (docs/LESSONS.md L220).
+    // A javítás NEM a placeholder-lista bővítése (az globálisan gyengítené a
+    // szabályt), hanem a tool saját, dokumentált soronkénti jelölése —
+    // pontosan úgy, mint egy bizonyítottan fake, egysoros teszt-fixture-nél
+    // kell.
+    const fixtureLine =
+        '                MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key",\n';
+
+    _track(projectRoot, 'tools/tests/fixture.py', fixtureLine);
+    final flagged = checkSecrets(projectRoot: projectRoot);
+    expect(
+      flagged.isClean,
+      isFalse,
+      reason:
+          'a mért H5-fixture-nek jelölés nélkül lelettel kell jönnie — '
+          'különben a jelölés felesleges volna',
+    );
+    expect(flagged.issues.single.kind, SecretIssueKind.credentialAssignment);
+
+    _track(
+      projectRoot,
+      'tools/tests/fixture.py',
+      fixtureLine.replaceFirst(',\n', ',  # $allowMarker L220 fake fixture\n'),
+    );
+    final marked = checkSecrets(projectRoot: projectRoot);
+    expect(marked.isClean, isTrue, reason: marked.format());
+  });
 }
 
 void _initRepository(Directory root) {

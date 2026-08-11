@@ -226,7 +226,10 @@ class IndependenceTest(unittest.TestCase):
                 "terra",
                 "terra",
                 state=state,
-                MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key",
+                # Bizonyítottan fake fixture (L219), nem valódi hitelesítő — a
+                # "fixture" szó nincs a secrets-scan placeholder-listáján, ezért
+                # H7-ben (2026-08-11) jelölés nélkül lelet lett; docs/LESSONS.md L220.
+                MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key",  # strumsight:allow-secret L220 fake fixture
             )
             self.assertEqual(result.stdout.strip(), "minimax")
 
