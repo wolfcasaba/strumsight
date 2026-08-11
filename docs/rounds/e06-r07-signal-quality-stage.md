@@ -272,7 +272,71 @@ DSP-retune ebben a körben tilos.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer:** `sonnet-impl`, 2026-08-11, baseline `0b3642f2` (main
+`10e2d495` + a pre-flight kör-dokumentum commitja).
+
+### 10.1 Fájlonkénti változás
+
+| Fájl | Állapot | Mit |
+|---|---|---|
+| `docs/rag/chunks/019-signal-quality-metrics.md` | ÚJ | dBFS-konvenció, framing (2048/1024), clipping/csend inkluzív küszöbök, 10. percentilis noise-floor indoklás (OD-02), energia-súlyozott spektrális-flatness tonalness proxy + saját radix-2 FFT indoklás (OD-01), rövid klip warning, `overall` súlyozott formula, tiltott állítások. |
+| `lib/features/audio_analysis/engine/quality/quality_thresholds.dart` | ÚJ | `QualityThresholds` — `version = 1` (megegyezik a stage verziójával), minden küszöb/ablak/súly néven nevezve, a chunkra hivatkozva. |
+| `lib/features/audio_analysis/engine/quality/signal_quality_math.dart` | ÚJ | `SignalQualityMath` tiszta függvények: `linearToDbfs`, `peakDbfs`, `rmsDbfs`/`rmsOf`, `clippedSampleRatio`, `frameMetrics` (saját radix-2 FFT + Hann-ablakos spektrális flatness), `percentile` (R-7 lineáris interpoláció), `silentFrameRatio`, `weightedTonalness`. |
+| `lib/features/audio_analysis/engine/quality/signal_quality_stage.dart` | ÚJ | `SignalQualityStage implements AnalysisStage<PcmAnalysisInput, SignalQualityReport>`; `id = 'signal_quality'`, `version = QualityThresholds.version`; egyetlen `context.reportProgress()` hívás, sosem `publishResult`; a meglévő R02 `SignalQualityReport` contractot tölti ki, aktív-régió arány csak belső primitív. |
+| `lib/features/audio_analysis/public.dart` | MÓDOSÍTVA | 3 export hozzáadva (`quality_thresholds.dart`, `signal_quality_math.dart`, `signal_quality_stage.dart`) — a `SignalQualityReport` export már megvolt. |
+| `test/features/audio_analysis/engine/signal_quality_math_test.dart` | ÚJ | Formula-szintű tesztek: dBFS-konverzió padló/plafon, clipping-küszöb hármas (minta- és arány-szint, `python3 -c` értékekkel), csend-küszöb hármas (`python3 -c "print(10**(db/20))"` amplitúdókkal), percentilis (ismert eloszlás + bimodális csend+hangos eset), `weightedTonalness` (nulla-súly, üres, csak-tonális, dominált-loud eset), spektrális flatness (tone < noise, csendes keret véges, utolsó részleges keret nem esik ki). |
+| `test/features/audio_analysis/engine/signal_quality_stage_test.dart` | ÚJ | A nyolc fixture-cella, mindegyiknél a **teljes** riport ellenőrizve; determinizmus (bitre `==`); a `(?i)(bad\|poor\|wrong\|sloppy\|rossz\|gyenge)_?play` mintát egyetlen warning-kulcs sem üti meg; stage contract (id/version, legfeljebb egy `reportProgress`, sosem `publishResult`). |
+| `test/property/analysis_signal_quality_property_test.dart` | ÚJ | `PROPERTY_SEED`-vezérelt (alap 42) 60 iteráció: csupa 0, csupa ±1, alternáló extrém dinamika, és általános random PCM — minden mező véges, minden arány `[0,1]`, minden dBFS `[-120,+6]`. |
+| `docs/rounds/e06-r07-signal-quality-stage.md` | MÓDOSÍTVA | ez a §10 szakasz. |
+
+### 10.2 Futtatott parancsok — tényleges eredmény
+
+```
+flutter analyze lib/features/audio_analysis/engine/quality test/features/audio_analysis/engine/signal_quality_math_test.dart test/features/audio_analysis/engine/signal_quality_stage_test.dart test/property/analysis_signal_quality_property_test.dart lib/features/audio_analysis/public.dart
+  → No issues found! (ran in 4.2s)
+
+flutter test test/features/audio_analysis/engine/signal_quality_math_test.dart
+  → 26/26 passed
+
+flutter test test/features/audio_analysis/engine/signal_quality_stage_test.dart
+  → 12/12 passed
+
+flutter test test/property/analysis_signal_quality_property_test.dart
+  → 1/1 passed (PROPERTY_SEED=42, 60 belső iteráció)
+
+dart format <7 érintett fájl>
+  → 4 fájl újraformázva (stage.dart, mindhárom új teszt), 0 hiba
+
+tools/round-gate.sh test/features/audio_analysis test/property test/features/analyze
+  → MINDEN GATE ZÖLD (format, analyze, 3× test, architecture, secrets, l10n)
+```
+
+### 10.3 30 másodperces fixture mért futásideje (kockázat §9)
+
+Egyszeri, nem-commitolt `/tmp` próbateszttel mérve (a produkciós stage-en,
+440 Hz, 0.3 amplitúdójú színuszjel, 44100 Hz × 30 s = 1 323 000 minta):
+**`stage.run` elapsed = 769 ms.** A saját radix-2 FFT (2048-pontos, ~1292
+keret 1024-es hoppal) tehát jóval a valós idejű költségvetésen kívül is
+elfogadható — a próbateszt-fájl a mérés után törölve lett, nem a repo része.
+
+### 10.4 „Valódi-sértés" próba (§6.1 utolsó sora)
+
+A `linearToDbfs` padló-clampjét (`floorDbfs`/`ceilingDbfs` ág) ideiglenesen
+kivettem (`amplitude <= 0` → egyenesen `20*log10(amplitude)`, `-Infinity`-t
+adva csendre). Ennek hatására a `test/property/analysis_signal_quality_property_test.dart`
+azonnal **PIROSRA** váltott (`ArgumentError: Signal measurements must be
+finite.` a `SignalQualityReport` konstruktorából, a csupa-0 esetnél). A
+padlót visszaállítottam, a property újra zöld — a mátrix utolsó sora
+igazolva.
+
+### 10.5 Nem futtatott ellenőrzések és indokuk
+
+- **`gh workflow run build-apk.yml`** — nem az implementer feladata (AGENTS.md
+  §12 / a CI-t az orchestrátor indítja a review-kézfogás után).
+- **Valós gitáros felvétel** — a küszöbök szándékosan ideiglenesek
+  (E06-R29-ig, ADR 0223), ez a kör csak szintetikus fixture-ökön mér.
+- **`docs/manual-testing/analysis-eval-matrix.md` frissítése** — a brief R3
+  szerint listán kívüli fájl, E06-R29 scope-ja.
 
 ## 11. Review — a független reviewer tölti ki
 
