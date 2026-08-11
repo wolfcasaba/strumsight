@@ -1,0 +1,17 @@
+{
+  "id": "legacy-lab-001",
+  "createdAt": "2026-08-03T12:00:00.000Z",
+  "title": "Lab comparison",
+  "result": {
+    "duration": 2.0,
+    "bpm": 100.0,
+    "chords": [{"label": "D", "start": 0.0, "end": 2.0}],
+    "strums": [{"dir": "up", "time": 1.0, "conf": 0.75}],
+    "bpb": 3,
+    "diag": {
+      "mlChords": [{"label": "D", "start": 0.0, "end": 2.0}],
+      "agreement": 0.75
+    }
+  },
+  "customTitle": true
+}

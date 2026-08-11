@@ -1,6 +1,9 @@
 /// Public domain contract for cross-feature Audio Analysis consumers.
 library;
 
+export 'data/analysis_document_codec.dart';
+export 'data/legacy_analyze_adapter.dart';
+export 'data/legacy_view_adapter.dart';
 export 'domain/analysis_capability.dart';
 export 'domain/analysis_document.dart';
 export 'domain/analysis_event.dart';

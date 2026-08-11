@@ -1,0 +1,12 @@
+{
+  "id": "legacy-pre-bpb-001",
+  "createdAt": "2026-08-02T12:00:00.000Z",
+  "title": "Old session",
+  "result": {
+    "duration": 1.0,
+    "bpm": 90.0,
+    "chords": [{"label": "Am", "start": 0.0, "end": 1.0}],
+    "strums": [{"dir": "down", "time": 0.5, "conf": 1.0}]
+  },
+  "customTitle": true
+}
