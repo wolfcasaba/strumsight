@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -63,11 +64,18 @@ class FakeAudioCapture implements AudioCapture {
   int stopCalls = 0;
   bool isRunning = false;
   void Function(List<double> chunk)? _onChunk;
+  final List<void Function(List<double> chunk)> _callbackHistory = [];
+
+  /// Every callback handed to a start attempt, including stale ones. Tests can
+  /// deliver a late chunk from a previous recording deterministically.
+  List<void Function(List<double> chunk)> get callbackHistory =>
+      List.unmodifiable(_callbackHistory);
 
   @override
   Future<int> start(void Function(List<double> chunk) onChunk) async {
     startCalls++;
     _onChunk = onChunk;
+    _callbackHistory.add(onChunk);
     if (startGate != null) await startGate;
     if (failWith != null) throw failWith!;
     isRunning = true;
@@ -82,6 +90,37 @@ class FakeAudioCapture implements AudioCapture {
 
   /// Deliver a chunk as if the device had produced it.
   void emit(List<double> chunk) => _onChunk?.call(chunk);
+
+  /// Delivers to the callback captured by a particular start attempt.
+  void emitToStart(int startIndex, List<double> chunk) =>
+      _callbackHistory[startIndex](chunk);
+}
+
+/// A sample buffer which records every indexed read. It proves that preview
+/// calculations remain linear in the incoming PCM rather than doing repeated
+/// passes or invoking an analysis stage.
+class CountingSampleBuffer extends ListBase<double> {
+  CountingSampleBuffer(Iterable<double> values) : _values = List.of(values);
+
+  final List<double> _values;
+  int readCount = 0;
+
+  @override
+  int get length => _values.length;
+
+  @override
+  set length(int value) => _values.length = value;
+
+  @override
+  double operator [](int index) {
+    readCount++;
+    return _values[index];
+  }
+
+  @override
+  void operator []=(int index, double value) {
+    _values[index] = value;
+  }
 }
 
 /// Drivable app lifecycle: `emit(AppLifecycleState.paused)` == "user switched

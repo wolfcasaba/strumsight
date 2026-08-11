@@ -1,6 +1,7 @@
 # E06-R06 — Recorder és AudioSessionCoordinator integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (pre-flight, 2026-08-11, orchesztrátor —
+  kód újraellenőrizve: main @ `98220a01`, előre megírva 2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 6; §11.6, §21, §22.5
 - **Branch:** `codex/e06-r06-recorder-audio-session-integration`
 - **Előfeltétel:** **E06-R05 merge**
@@ -50,8 +51,68 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — a kör az ADR 0056 (exkluzív audio lease) meglévő
-szerződését **használja**, nem tervezi újra.
+**PREPARED → PLANNING (pre-flight, 2026-08-11, orchesztrátor).** Új ADR
+nincs — a kör az ADR 0056 (exkluzív audio lease) meglévő szerződését
+**használja**, nem tervezi újra. `tools/round-slots.py reserve-adr` ezért
+NEM lett meghívva (nincs mit foglalni; a queue ADR-oszlopa is `nincs`).
+
+A pipeline-prompt §1 két kötelező mérése (elérhetetlen cél-státusz +
+erőforrás-tulajdonlás) és a §2 összes mért állítása egyenként újra
+grep-elve `98220a01`-en (a brief 2026-08-07-i `a6e6f3d`-je óta 5 kör —
+E06-R01…R05 — mergelt, de egyik sem érintette az itt hivatkozott
+fájlokat) — **mind egyezett, nulla eltérés, nulla revízió szükséges**:
+
+- `lib/features/analyze/engine/clip_recorder.dart` — 58 sor (egyezik);
+  `MicStart{ok,denied,failed}`, single-flight a `MicCapture.start`-ban,
+  nincs run ID/max hossz/szintjelzés — mind stimmel.
+- `lib/core/audio/lifecycle/audio_session_coordinator.dart` — 123 sor
+  (egyezik); a kritikus szakasz (`current != null && current.isActive`
+  ellenőrzés) ténylegesen az első `await` ELŐTT fut (34–50. sor);
+  `FailureCode.audioSessionBusy` létezik (`app_failure.dart:39`).
+- **Erőforrás-tulajdonlás mérve** (pre-flight szabály 2): `grep -rn
+  "\.acquire(" lib/` → az EGYETLEN audio-acquire hívás a
+  `lib/core/audio/mic_capture.dart:82`-ben fut (`MicCapture._doStart`),
+  NEM közvetlenül a `ClipRecorder`-ben — tehát a mai lease-tulajdonlás
+  ténylegesen a `MicCapture` rétegben él, amit a `ClipRecorder`
+  kompozícióval használ. A §5.1 döntés (a V2 recorder az `AudioOwner`
+  enum bővítése NÉLKÜL a meglévő `analyzeRecorder` értéket használja) így
+  **kompozícióval** (a meglévő `MicCapture`/`AudioSessionCoordinator`
+  köré építve) tartható a `lib/core/audio/**` tilos zóna érintése nélkül —
+  ez tehát megvalósítható a jelölt allowed_paths-on belül.
+- `isBackgroundLifecycleState` — ténylegesen `lib/core/platform/app_lifecycle.dart:20`-ban
+  deklarálva (a brief az `audio_lifecycle_guard.dart`-ot idézte, ami ezt
+  FOGYASZTJA, nem deklarálja — a szemantika, amit a brief idéz, egyezik:
+  `paused|hidden|detached`, az `inactive` kifejezetten kizárva, a 17–19.
+  sor kommentje szó szerint indokolja: „a notification shade / incoming
+  call banner is `inactive`-et tüzel, ott a capture megölése egy
+  shade-lehúzást session-véggé tenne"). **A §6 lifecycle-mátrix
+  feltételes ötödik cellája ELDŐL:** az `AppLifecycleState.hidden` érték
+  LÉTEZIK a mai SDK-ban és a predikátum MÁR ma is kezeli (`app_lifecycle.dart:22`,
+  ténylegesen használt érték, nem feltételezés) — tehát a §6 mátrix a
+  négy alapcella (`resumed/inactive/paused/detached`) MELLÉ **kötelező**
+  ötödik `hidden` cellát kap (leáll, mint `paused`/`detached`), nem
+  opcionális.
+- `AudioOwner.analyzeRecorder` — létezik (`audio_session_lease.dart:8`),
+  ténylegesen használva `analyze_providers.dart:135`-ben (egyezik a
+  brief hivatkozásával).
+- `_screenAttached` hot-mic védelem — `analyze_providers.dart:141–181`
+  (a brief „140–179" közelítése ±1-2 soron belül, tartalmilag egyezik).
+- `InputLimits.maxDuration` — `Duration(minutes: 10)`
+  (`input_limits.dart:12`, E06-R05-ből). Küszöb-hármas újraszámolva
+  (`python3 -c "print(48000*600-1, 48000*600, 48000*600+1)"` →
+  `28799999 28800000 28800001`) — egyezik a brief §6 számaival.
+- Mind a négy hivatkozott őrteszt létezik:
+  `recorder_hardening_test.dart`, `cancel_during_start_test.dart`,
+  `cancel_on_leave_test.dart`, `mic_error_parity_test.dart`
+  (`test/features/analyze/`).
+- `test/support/fake_audio.dart` — 162 sor, mai API (`FakeAudioCapture`,
+  `FakeAppLifecycleEvents`, `fakeMicCapture`, `fakeAudioOverrides`) a
+  brief additív-bővítési tervének megfelelő alap.
+- `lib/features/audio_analysis/data/capture/` könyvtár még NEM létezik,
+  `domain/recording_level.dart` sem — mindkettő valóban ÚJ (egyezik a §4
+  táblával). `public.dart` ma csak `engine/analysis_cancellation.dart`-ot
+  exportálja az engine alól (E06-R04-ből) — a recorder/level export
+  additív bővítés lesz.
 
 ## 1. Cél
 
@@ -164,10 +225,11 @@ open_decisions:
       recorder **nem** kezd felvenni; (c) `stop` után a lease felszabadul
       (`coordinator.activeOwner == null`); (d) **kétszeri** `start` egyetlen
       capture-t nyit (a fake capture `startCount == 1`).
-- [ ] **Lifecycle-mátrix — négy cella:** `resumed` / `inactive` /
-      `paused` / `detached` — a felvétel **csak** a `paused` és `detached`
-      esetén áll le; az `inactive` **nem** állítja le. (A `hidden` értéket a
-      pre-flight ellenőrzi a mai enum ellen, és ha létezik, ötödik cella.)
+- [ ] **Lifecycle-mátrix — ÖT cella** (pre-flight §0.0 igazolta: `hidden` a
+      mai enum ténylegesen használt értéke, nem feltételezés):
+      `resumed` / `inactive` / `paused` / `hidden` / `detached` — a felvétel
+      **csak** a `paused`, `hidden` és `detached` esetén áll le; az `inactive`
+      **nem** állítja le.
 - [ ] **Stale-chunk mátrix:** run#1 indul, `stop`, run#2 indul, majd run#1
       callbackje két chunkot küld → a run#2 puffere **változatlan**, és
       `droppedStaleChunks == 2`.
@@ -203,6 +265,7 @@ open_decisions:
 | A `stop` nem adja vissza a lease-t | a lease-mátrix (c) `activeOwner == null` cellája |
 | Az `inactive` is leállítja a felvételt | a lifecycle-mátrix `inactive` cellája |
 | A `paused` nem állítja le | a lifecycle-mátrix `paused` cellája (hot mic) |
+| A `hidden` nem állítja le (csak `paused`/`detached` van lekötve) | a lifecycle-mátrix `hidden` cellája (hot mic) |
 | Hiányzik a run ID szűrés | a `droppedStaleChunks == 2` cella |
 | A max hossz `>` helyett `>=` (vagy fordítva) | a **pontosan** 28 800 000 mintás cella |
 | A max hossz elérésekor a puffer eldobódik | a „puffer hossza pontosan 28 800 000" cella |
@@ -244,7 +307,65 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Implementáció
+
+- `lib/features/audio_analysis/data/capture/analysis_recorder.dart` — V2 recorder, amely a meglévő `MicCapture`-t komponálja; ez őrzi a shared coordinator lease-t, a permission/busy failure típusát és az `onRevoke` lifecycle-teardownt. Run ID szűri a késői chunkokat, a max-hossz inkluzív, a level preview peak/RMS alapú és 10 Hz-nél nem sűrűbb mintaszám-alapon.
+- `lib/features/audio_analysis/data/capture/recording_run.dart` — immutable, lokális recording-run metaadat és állapot (`recording`, `completed`, `cancelled`, `maxDurationReached`); ez szándékosan nem a későbbi E06-R22 teljes `AudioAnalysisState` gépe.
+- `lib/features/audio_analysis/domain/recording_level.dart` és `public.dart` — a preview típus és a V2 public exportok.
+- `test/support/fake_audio.dart` — additív callback-history/stale-callback és számlálós PCM fake; meglévő API nem változott.
+- `test/features/audio_analysis/data/analysis_recorder_test.dart` — lease, permission-vs-busy, single-flight, stale-chunk, max-hossz, O(N) preview és oda-vissza clipping-hysteresis mátrix.
+- `test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` — az öt lifecycle cella (`resumed`, `inactive`, `paused`, `hidden`, `detached`).
+
+### Acceptance evidence
+
+- Lease-mátrix: `analysis_recorder_test.dart` a szabad lease-t, a controlled busy failuret, a stop utáni `activeOwner == null`-t és a kétszeri start egy capture-ét méri; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Lifecycle-mátrix: `analysis_recorder_lifecycle_test.dart` mind az öt cellájában csak `paused`, `hidden` és `detached` cancel/release, az `inactive` nem; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Stale-chunk: a recorder-teszt run#1 két késői chunkjával run#2 pufferét érintetlenül hagyja és `droppedStaleChunks == 2`; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Maximum hossz: a policy-teszt 48 kHz-en a `28 799 999 / 28 800 000 / 28 800 001` küszöbhármast pontosan számolja; a viselkedési teszt a determinisztikus, kis mintaszámú megfelelőjén igazolja az inkluzív zárást, megőrzött PCM-et és a többlet eldobását; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Hysteresis: a −3.5/−3.0/−2.0/−1.0/−0.5 dBFS oda-vissza sorozat méri, hogy a −2.0 dBFS állapotfüggő marad; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Nincs FFT/pipeline: a `CountingSampleBuffer` a preview lineáris mintaolvasását méri; a recorder csak peak/RMS-t importál/számol, és a teljes gate `test/features/audio_analysis` lépése zöld.
+- V1 regresszió: a teljes gate `test/features/analyze` lépése zöld, és a diff nem tartalmaz `lib/features/analyze/**` útvonalat.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/data/analysis_recorder_test.dart test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` — a még nem létező három production import miatti várt compile failure.
+- GREEN: ugyanez a célzott parancs — **15 teszt zöld**.
+- Valódi-sértés próba: `AnalysisRecorder.stop()` ideiglenesen nem hívta a `MicCapture.stop()`-ot; a lease-release teszt várt módon piros lett (`Actual: AudioOwner.analyzeRecorder`), majd a hívás visszaállt.
+- `tools/round-gate.sh --result-json /tmp/e06-r06-round-gate-result.json test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, `test/features/audio_analysis`, `test/core`, `test/features/analyze`, architecture, secrets és l10n. A gate saját eredményartefaktuma: `outcome=pass`, `exit_code=0`, `failed_step=null`.
+
+### Javító kör — F1 túlméretezett chunk regressziós őr
+
+- `test/features/audio_analysis/data/analysis_recorder_test.dart` — új, izolált eset egy 2 mintás limittel (`sampleRate: 1`, két másodperc) és egyetlen `capture.emit(const [0.1, 0.2, 0.3])` chunkkal. A teszt azt várja, hogy a puffer pontosan `[0.1, 0.2]` maradjon, a run pedig `maxDurationReached` állapotú legyen; így a többlet ugyanabban a chunkban történő csonkolását méri, nem a már lezárt run stale-guardját.
+- Valódi-sértés próba: `analysis_recorder.dart`-ban az `acceptedCount = math.min(remaining, chunk.length)` sor ideiglenesen `acceptedCount = chunk.length` lett. Az új teszt várt módon **piros** lett: várt `[0.1, 0.2]`, tényleges `[0.1, 0.2, 0.3]`. A `math.min` visszaállítása után ugyanaz a teszt **zöld** lett.
+- `tools/round-gate.sh test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, mindhárom célzott tesztlépés, architecture, secrets és l10n.
+
+### Javító kör — S1 warm-up alatti lifecycle revoke (BLOCKER)
+
+- `lib/features/audio_analysis/data/capture/analysis_recorder.dart` — a
+  revocation teardownja most minden esetben meghívja a `MicCapture.stop()`-ot;
+  csak a `RecordingRunStatus.cancelled` állapotmutáció marad a run-ID
+  egyezéshez kötve. Így a lease megszerzése utáni, de a platform-capture
+  warm-upja közbeni háttérbe kerülés beállítja a `MicCapture` stop-kérését,
+  amely a később visszatérő `capture.start()` után is leállítja a capture-t.
+  A S2 MINOR is javítva: `dispose()` `finally` ágban zárja a level-streamet,
+  ha a `stop()` hibával tér vissza.
+- `test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` —
+  új, start-gate-es `paused` lifecycle regresszió: miközben a recorder-start
+  még a `FakeAudioCapture.startGate`-re vár, a revoke után a régi capture
+  leáll, a recorder nem lesz recording, a coordinator szabad, és egy `live`
+  owner külön capture-rel sikeresen indulhat; a régi callback nem növel PCM-et.
+- RED: `flutter test test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart`
+  — a javítás előtti kódon várt piros: `capture.stopCalls` ténylegesen `0`
+  volt a warm-up alatti revoke után.
+- GREEN: ugyanaz a célzott parancs — **6 teszt zöld** a javítással.
+- `tools/round-gate.sh test/features/audio_analysis test/core test/features/analyze`
+  — **zöld**: format, analyze, mindhárom célzott tesztlépés, architecture,
+  secrets és l10n; a gate-összegzés: `MINDEN GATE ZÖLD`.
+
+### Eltérés, kockázat, follow-up
+
+- A SDD korai, tágabb "régi Analyze screen adapteren" vázlata nem része ennek a briefnek; a brief §3/§4 elsőbbségével a V1 Analyze érintetlen maradt.
+- A korábbi localization-előfeltételt az orchesztrátor a gitignore-olt generált kimenet előállításával pótolta; a végső gate zöld. A V1/V2 egyidejű lease-conflict UI-üzenet továbbra is a brief §9 szerinti R22 follow-up.
 
 ## 11. Review — a független reviewer tölti ki
 
