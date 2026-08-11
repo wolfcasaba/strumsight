@@ -1,17 +1,51 @@
 # E06-R06 — Review
 
 Brief: `docs/rounds/e06-r06-recorder-audio-session-integration.md`
-Diff: `git diff origin/main...codex/e06-r06-recorder-audio-session-integration` (8 files, 733 insertions / 8 deletions)
+Diff: `git diff origin/main...codex/e06-r06-recorder-audio-session-integration`
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-11
 Implementer: Terra (Codex, `gpt-5.6-terra`), 1 forduló (`eab4336`) egy köztes,
 scope-on kívüli környezeti akadály (hiányzó generált `lib/l10n/**`, az
-orchesztrátor pótolta a munkapéldányban) utáni folytatással — nincs
-tartalmi javító kör.
-Verdikt: **CHANGES REQUIRED** (1 nyitott MAJOR)
+orchesztrátor pótolta a munkapéldányban) utáni folytatással, **majd 2
+javító kör** (F1 — MAJOR teszthiány, `2747214`; S1 — a dedikált biztonsági
+review BLOCKERje, `eb9a6e7`).
+Verdikt: ~~CHANGES REQUIRED (1 nyitott MAJOR)~~ → **APPROVED (mindkét javító
+kör után, `eb9a6e7`)**
+
+## Javító körök után — orchesztrátor újra-ellenőrzése (2026-08-11)
+
+**F1 zárva (`2747214`):** egyetlen új teszteset
+(`truncates an oversized chunk at the maximum duration`) egyetlen,
+a fennmaradó kapacitásnál nagyobb chunkkal (`[0.1, 0.2, 0.3]` egy 2 mintás
+limitre). Saját, friss izolált klónban megismételt mutáció-próba (a
+`math.min(remaining, chunk.length)` ideiglenes eltávolítása
+`acceptedCount = chunk.length`-re): az ÚJ teszt pirosra vált, a hívás
+visszaállítása után zöld. Production kód nem változott F1-hez (a
+viselkedés már eredetileg helyes volt, csak a lefedettség hiányzott).
+
+**S1 zárva (`eb9a6e7`, a dedikált biztonsági review BLOCKERje — ld.
+`e06-r06-recorder-audio-session-integration-security.md`):**
+`_cancelFromRevocation` mostantól FELTÉTEL NÉLKÜL hívja `_mic.stop()`-ot,
+és csak a run-állapot mutációját (`_complete(...)`) köti a `runId`
+egyezéshez — így egy háttérbe-kerülés a mic-warmup ALATT is ténylegesen
+leállítja a capture-t. Saját, friss izolált klónban megismételt
+mutáció-próba (a guard visszaállítása az eredeti, hibás alakra): az ÚJ
+regressziós teszt (`background revocation during mic warm-up stops the
+capture`, `analysis_recorder_lifecycle_test.dart`) pirosra vált
+(`capture.stopCalls`: várt `>0`, kapott `0`), a javítás visszaállítása után
+zöld. Bónuszként a `dispose()` is `try/finally`-re javítva (S2, MINOR,
+bundle-ölve, nem hizlalta érdemben a diffet).
+
+A TELJES gate (format, analyze, mindhárom célzott tesztfa, architecture,
+secrets, l10n) saját, friss izolált klónban (`/tmp/review-e06-r06`, a
+`main`-től eltérő originból klónozva) újrafuttatva mind a 8 lépésen zöld. A
+scope-audit (`tools/scope-audit.py`) a végleges HEAD-en is tiszta (10
+megváltozott útvonal — a 8 `allowed_paths` fájl + a két, a tool által
+`generated/ignored`-ként kezelt review-dokumentum).
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 3
+BLOCKER: 0 · MAJOR: 0 (F1 FIXED) · MINOR: 0 (F2 nyitva marad follow-upként,
+ld. lent — nem blokkoló) · NOTE: 3
 
 ## Módszertan
 
@@ -88,7 +122,7 @@ fájlja szó szerint egyezik a brief `allowed_paths` 8 bejegyzésével.
   run-befejezés-utáni-eldobástól elkülönítve bizonyítja.
 - **Ellenőrzés:** az új teszt a fenti mutációra (a `math.min` eltávolítására)
   pirosra váltson; jelenlegi állapotban (a `math.min` megtartva) zöld legyen.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`2747214`) — orchesztrátor-mutációval megerősítve
 
 ### F2 — MINOR — a level-preview csak az ÉPPEN kibocsátó chunkot méri, nem a throttle-ablakban felhalmozott összeset
 
@@ -112,7 +146,15 @@ fájlja szó szerint egyezik a brief `allowed_paths` 8 bejegyzésével.
   hizlalja a diffet" küszöbét):** kövesd nyitva follow-upként — natural
   otthona a Kör 7 „Signal quality stage" (SDD 07-epic-06 „Kör 7"), amely
   amúgy is a preview és a végleges minőségmérés közös primitíváit tervezi.
-- **Státusz:** OPEN (follow-up, nem blokkol)
+- **Státusz:** OPEN (follow-up, nem blokkol — átkerül a záró RTM/HANDOFF
+  bejegyzésbe, kötelező R07 pre-flight ellenőrzéssel, ugyanúgy, ahogy az
+  E06-R04 saját MINOR follow-upja is R07-re lett címezve)
+
+*(A dedikált biztonsági review önálló BLOCKER-t [S1] és egy MINOR-t [S2]
+talált — ezek `e06-r06-recorder-audio-session-integration-security.md`-ben
+vannak nyilvántartva, itt csak kereszthivatkozásként: mindkettő zárva
+`eb9a6e7`-ben, a security-dokumentum saját frissítése tartalmazza a
+részleteket.)*
 
 ### N1 — NOTE — SDD „Kör 6" vs. a brief §3 hatókör-eltérése helyesen dokumentálva
 
@@ -175,8 +217,6 @@ visszaállítva a próba után):
 ## Merge-döntés
 
 ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**Itt egy nyitott MAJOR (F1) van** → **merge jelenleg TILOS.** A lánc normál
-útja (user-döntés 2026-07-31): javító kör ugyanazzal a motorral (Terra),
-egyetlen célzott teszt hozzáadásával; a review ezután frissítendő
-APPROVED-ra a javító commit sha-jával, F2 pedig OPEN follow-upként
-átkerül a záró RTM/HANDOFF bejegyzésbe.
+**F1 és S1 is zárva, 0 nyitott BLOCKER/MAJOR marad** (F2 MINOR follow-up,
+nem blokkol) → **merge engedélyezett**, a szokásos CI-dispatch + exact-SHA
+zöld kapu után.

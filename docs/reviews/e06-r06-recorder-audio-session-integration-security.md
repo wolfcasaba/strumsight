@@ -7,9 +7,31 @@ Diff: `main (2b724d3) ... eab4336` (pre-flight `9f77bd6` + implementáció
 munkapéldányt csak olvasásra érintette.
 Reviewer: security-reviewer ágens (független, READ-ONLY) · Dátum: 2026-08-11
 Kockázat (brief): `high` · `native_gate = false`
-Verdikt: **CHANGES REQUIRED** — 1 BLOCKER (reprodukálva)
+Verdikt: ~~CHANGES REQUIRED — 1 BLOCKER (reprodukálva)~~ → **PASS (javító kör
+után, `eb9a6e7`)** — 0 CRITICAL/BLOCKER, 0 MAJOR, S2 FIXED, 2 NOTE
 
-## Összegzés
+## Javító kör után — orchesztrátor újra-ellenőrzése (2026-08-11)
+
+A javító kör `_cancelFromRevocation`-t úgy módosította, hogy `_mic.stop()`
+MOSTANTÓL FELTÉTEL NÉLKÜL fut (a run-ID egyezés csak a `_complete(...
+cancelled)` run-állapot-mutációt gátolja, magát a mic-leállítást nem) —
+pontosan a jelentés „javasolt iránya". A `dispose()` is `try/finally`-re
+javult (S2 zárva).
+
+Az orchesztrátor saját, friss izolált klónban (`/tmp/review-e06-r06`)
+megismételte a security-reviewer reprodukcióját: a guard-ot visszaállítva az
+eredeti, hibás alakra (`if (_activeRunId != runId) return;` a `_mic.stop()`
+ELŐTT), az implementer által hozzáadott regressziós teszt
+(`background revocation during mic warm-up stops the capture`,
+`analysis_recorder_lifecycle_test.dart`) pirosra váltott
+(`capture.stopCalls`: várt `>0`, kapott `0`) — a javítás visszaállítása után
+zöld. A teljes gate (mind a 8 lépés) saját, független futtatásban zöld. A
+scope-audit a végleges HEAD-en (`eb9a6e7`) is tiszta.
+
+S3/S4 (NOTE, előremutató, ugyanaz a gyökérok mint S1 volt) változatlanul
+nyitva maradhat — nem blokkoló.
+
+## Összegzés (eredeti, a javító kör ELŐTT)
 
 CRITICAL: 0 · BLOCKER: 1 · MAJOR: 0 · MINOR: 1 · NOTE: 2
 
