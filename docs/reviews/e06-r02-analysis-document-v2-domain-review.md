@@ -128,6 +128,29 @@ ismételtem meg, mert a leírás konkrét és hihető (pontos hibaüzenetet köz
   külön javító kört.
 - **Státusz:** FIXED a review-commitban (nem production kód, dokumentáció).
 
+## Dedikált security-review (risk=high, AGENTS.md §15.1)
+
+`docs/reviews/e06-r02-analysis-document-v2-domain-security.md` —
+**PASS, 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 4 NOTE.** A security-reviewer
+saját, harmadik izolált klónban (`/tmp/security-review-e06-r02`) dolgozott,
+független az én review-mtól és az implementertől. A MINOR-1 lelet valódi és
+ÉN NEM találtam meg: a `[0,1]`/`[0,100]` confidence/arány-határok
+`< 0 || > 1` alakú őrei `NaN`-ra **nyitva buknak** (Dartban `NaN < 0` és
+`NaN > 1` is `false`), 8 helyen (`analysis_capability.dart:46`,
+`analysis_event.dart:11`, `analysis_segment.dart:14`,
+`analysis_metric.dart:98,18,71`, `analysis_hotspot.dart:22`,
+`signal_quality_report.dart:24`) — mérve mindkét build-módban
+(`--enable-asserts` és `--no-enable-asserts`), tehát valódi release-
+viselkedés, nem assert-műtermék. **Nem blokkoló ebben a körben**, mert a
+funkció teljesen bekötetlen (`grep -rn "import.*audio_analysis" lib/` = 0
+találat) — nincs producer, ami `NaN` confidence-t állítana elő, és a §6
+acceptance-mátrix csak véges küszöbcellákat ír elő, amelyeket a meglévő
+implementáció helyesen teljesít. **Kötelező follow-up: a fix (`!confidence.isFinite ||`
+minden 8 helyen, a diffben már meglévő testvér-mintával azonos) az ELSŐ
+olyan kör előtt kell megtörténjen, amelyik tényleges confidence-producert
+köt be (várhatóan R04 pipeline vagy R07 signal-quality)** — rögzítve a
+HANDOFF-ban és a záró rituálékban.
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény (implementer, §10) | Ellenőrizve (saját `/tmp` klón) |
