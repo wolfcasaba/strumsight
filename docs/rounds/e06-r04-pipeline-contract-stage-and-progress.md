@@ -355,5 +355,14 @@ kijelölt Epic 6 sorrendben.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+**APPROVED** (2026-08-11) — `docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md`.
+0 BLOCKER, 0 MAJOR, 1 MINOR (deferred follow-up — R07 pre-flight kötelező
+ellenőrzés a `publishResult`-ra), 5 NOTE. Dedikált biztonsági review
+(risk=high): **PASS**, 0 CRITICAL/BLOCKER/MAJOR —
+`docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md`.
+Scope-audit (gépi ÉS saját): 11/11 fájl az engedélyezett listán belül. Két
+saját valódi-sértés próba (cancel-checkpoint guard, fatal-stage early-stop
+guard) mindkettő a várt cellát bukta meg, majd visszaállítva. Full Gate
+(`31494921432`) + Router CI (`31494909290`) mindkettő success az exact SHA
+`ea8d95d9`-n. Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN
+BLOCKER/MAJOR után — mindhárom teljesül.
