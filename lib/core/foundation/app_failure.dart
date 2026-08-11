@@ -37,6 +37,21 @@ abstract final class FailureCode {
   static const String audioCaptureFailed = 'audio.capture_failed';
   static const String audioUnavailable = 'audio.unavailable';
   static const String audioSessionBusy = 'audio.session_busy';
+  static const String audioUnsupportedFormat = 'audio.unsupported_format';
+  static const String audioUnsupportedBitDepth = 'audio.unsupported_bit_depth';
+  static const String audioTruncatedChunk = 'audio.truncated_chunk';
+  static const String audioInvalidRiff = 'audio.invalid_riff';
+  static const String audioChunkSizeOutOfBounds =
+      'audio.chunk_size_out_of_bounds';
+  static const String audioFileTooLarge = 'audio.file_too_large';
+  static const String audioNonFiniteSample = 'audio.non_finite_sample';
+  static const String audioMultipleDataChunks = 'audio.multiple_data_chunks';
+  static const String audioEmptyInput = 'audio.empty_input';
+  static const String audioInvalidSampleRate = 'audio.invalid_sample_rate';
+  static const String audioUnsupportedChannelCount =
+      'audio.unsupported_channel_count';
+  static const String audioClipTooShort = 'audio.clip_too_short';
+  static const String audioClipTooLong = 'audio.clip_too_long';
 
   // --- camera --------------------------------------------------------------
   static const String cameraSessionBusy = 'camera.session_busy';

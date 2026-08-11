@@ -1,6 +1,8 @@
 # E06-R05 — Input abstraction és biztonságos import
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `a7507a58`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 5; §6.2, §11.1, §28.2–28.6
 - **Branch:** `codex/e06-r05-input-abstraction-and-safe-import`
 - **Előfeltétel:** **E06-R03, E06-R04 merge**
@@ -26,6 +28,7 @@ gate_tests = [
   "test/features/audio_analysis",
   "test/property",
   "test/core",
+  "test/features/analyze",
 ]
 native_gate = false
 ```
@@ -50,8 +53,97 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az R01 ADR 0202 (raw audio) és a SDD §28.6
-(biztonságos dekódolás) végrehajtása.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör az R01 ADR 0217 (raw audio retention) és a SDD §28.6
+(biztonságos dekódolás) alatt már elfogadott szerződéseket ülteti át konkrét
+Dart kódba; a §5 hat „kötött architekturális döntése" ezeknek a
+szerződéseknek a tétel-szintű lebontása, nem új keresztmetsző elv.
+
+### R1 — ADR-átszámozás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért a §5.4 pont a `0202` placeholder-számot idézte. Az E06-R01 tényleges
+`reserve-adr` futása **0215–0220**-at adta (lásd [ADR
+0215](../adr/0215-analysis-document-versioning.md) fejléce: „a teljes hatos
+blokk 0200–0205-ről 0215–0220-ra tolódott" — ugyanaz a drift, mint az
+E06-R02/R03/R04 brief-jeinél). Leképezés: a hatos blokk 3. tagja
+(`0200→0215` az 1., tehát `0202→0217` a 3.) — ellenőrizve: [ADR
+0217](../adr/0217-analysis-raw-audio-retention.md) címe szó szerint
+„Analysis **raw audio retention**", egyezik a brief zárójeles
+„(raw audio)" hivatkozásával. A §5.4 pont javítva **ADR 0217**-re.
+
+### R2 — `AnalysisInputSource` már létezik, ÚJRAHASZNÁLANDÓ, nem újradefiniálandó (mért, pipeline-prompt §1)
+
+A §3/§4 „Benne" felsorolása és a fájltábla azt sugallja, hogy az
+`AnalysisInputSource` az ÚJ `domain/analysis_input.dart` fájl tartalma —
+ez **elavult**: az enum már létezik, az **E06-R02** vezette be
+(`lib/features/audio_analysis/domain/analysis_mode.dart:5-10`, négy érték:
+`microphone`, `importedFile`, `practiceSession`, `songSession`), és a
+`public.dart` már exportálja (12. sor `analysis_input_summary.dart`, 16. sor
+`analysis_mode.dart`). Ha az új `analysis_input.dart` újra
+`enum AnalysisInputSource {...}`-ot deklarálna, a `public.dart` barrel
+mindkét fájlt exportálná → **ambiguous export** fordítási hiba, mihelyt
+mindkettő a barrelban van.
+
+A SDD Ch7 §9.3 saját `PcmAnalysisInput` literálja (idézve alább) maga is
+csak **használja**, nem deklarálja az `AnalysisInputSource`-ot — ez
+megerősíti, hogy az eredeti terv is a típus külső, megosztott létezésével
+számolt:
+
+```dart
+final class PcmAnalysisInput extends AnalysisInput {
+  const PcmAnalysisInput({
+    required this.samples, required this.sampleRate,
+    required this.channelCount, required this.source, this.sourceName,
+  });
+  final AnalysisInputSource source;  // <- külső típus, nincs itt deklarálva
+  ...
+}
+```
+
+**Javítás (kötelező, a §3/§4 helyébe lép):** az új `domain/analysis_input.dart`
+**importálja** (nem deklarálja újra) az `AnalysisInputSource`-t a meglévő
+`analysis_mode.dart`-ból, és ezt a meglévő négyértékű enumot használja a
+sealed `AnalysisInput`/`PcmAnalysisInput`/`FileAnalysisInput` hierarchia
+`source` mezőjéhez. A meglévő négy érték (`microphone`, `importedFile`,
+`practiceSession`, `songSession`) mind értelmes ehhez a hierarchiához —
+`FileAnalysisInput` tipikusan `importedFile`-lal, `PcmAnalysisInput`
+tipikusan `microphone`/`practiceSession`/`songSession`-nel párosul. **NEM
+elfogadható:** egy második, párhuzamos `AnalysisInputSource`-szerű enum
+más névvel (pl. `AnalysisInputOrigin`) — az egyetlen forrás-taxonómia
+marad, amit az R02 lefektetett. A `domain/analysis_mode.dart` fájl **nem**
+kerül az engedélyezett listára, mert csak **olvasva/importálva** van, nem
+módosítva — ez a §4 tiltott-zóna szabállyal (csak írásra vonatkozik)
+összhangban van.
+
+### R3 — `gate_tests` kiegészítve (mért, pipeline-prompt §1)
+
+A fejléc `gate_tests` tömbje eredetileg nem tartalmazta a
+`test/features/analyze`-t, holott a §6 utolsó acceptance-pontja („A core
+dekóder bitre változatlan") és a §7 kanonikus gate-parancs is kifejezetten
+futtatja (`test/features/analyze/wav_decoder_test.dart` **átírás nélkül
+zöld** — ez a legacy-parser-érintetlenség egyetlen gépi bizonyítéka). A
+`gate_tests` mezőt az `auto`-engine router `run_gate()`-je ténylegesen
+fogyasztja (`tools/ai_router/router.py`) — inkonzisztens tartalom esetén
+egy jövőbeli újra-routolás a legfontosabb acceptance-cella nélkül futtatná
+a gate-et. Javítva: a fejléc `gate_tests` tömbje kiegészítve
+`"test/features/analyze"`-jal, így egyezik a §7 paranccsal.
+
+Egyéb §2 „Jelenlegi állapot" állítás újra grep-elve **egyezik**: a
+`lib/core/audio/codec/wav_decoder.dart` pontosan 104 sor, format 1 (16-bit
+PCM, `bd.getInt16`) és format 3 (32-bit float, `bd.getFloat32`) mono/stereo
+átlagolással, minden más esetben indoklás nélküli `null`; a
+`lib/features/analyze/engine/wav_decoder.dart` 2 soros deprecated
+re-export; az `AnalyzeController.analyzeImported` (`analyze_providers.dart`
+195–200 — sor-pontosan egyezik) `if (pcm.isEmpty || sampleRate <= 0)
+return;` néma no-op; a `ClipRecorder._buffer` korlátlan `List<double>`; a
+`FailureCode` enum jelenleg **nem** tartalmaz semmilyen input/decode-
+specifikus kódot (a felsorolt hét — `unsupportedFormat`,
+`unsupportedBitDepth`, `truncatedChunk`, `invalidRiff`,
+`chunkSizeOutOfBounds`, `fileTooLarge`, `nonFiniteSample` — mind valóban
+ÚJ, additív érték); a `lib/features/audio_analysis/data/input/` könyvtár
+és mind az öt új fájl (domain + 4×data/input) ma nem létezik; nincs
+`test/property/` alatt WAV-fuzz teszt. Nincs további revízió.
 
 ## 1. Cél
 
@@ -81,8 +173,10 @@ hosszkorlát, és a fájlnév **privacy-flagelt** kezelése.
 ## 3. Scope
 
 **Benne:** `AnalysisInput` sealed hierarchia (`PcmAnalysisInput`,
-`FileAnalysisInput`) + `AnalysisInputSource` + privacy-flagelt
-`sourceDisplayName`; `AudioDecoderGateway` (typed failure, **soha nem null**);
+`FileAnalysisInput`) a **meglévő** `AnalysisInputSource`-ra építve (§0.0 R2 —
+`domain/analysis_mode.dart`, E06-R02, ÚJRAHASZNÁLVA, nem újradefiniálva) +
+privacy-flagelt `sourceDisplayName`; `AudioDecoderGateway` (typed failure,
+**soha nem null**);
 `WavDecoderAdapter` a meglévő core dekóder köré, a mai `null`-okat
 **indokolt** failure-kódra fordítva; `AnalysisInputValidator` (üres minta,
 sample rate, csatornaszám, véges értékek, min/max hossz, fájlméret);
@@ -97,7 +191,7 @@ módosítása, új codec (AAC/MP3/FLAC), recorder (R06), preprocessing (R08),
 
 | Útvonal | Állapot | Miért |
 |---|---|---|
-| `.../domain/analysis_input.dart` | ÚJ | sealed input + source + privacy flag |
+| `.../domain/analysis_input.dart` | ÚJ | sealed input (a meglévő `AnalysisInputSource`-t importálja `analysis_mode.dart`-ból, nem deklarálja újra — §0.0 R2) + privacy flag |
 | `.../data/input/audio_decoder_gateway.dart` | ÚJ | typed failure kapu |
 | `.../data/input/wav_decoder_adapter.dart` | ÚJ | adapter a meglévő core dekóderre |
 | `.../data/input/analysis_input_validator.dart` | ÚJ | kötelező ellenőrzések |
@@ -129,7 +223,7 @@ Listán kívül → `stopped`.
    integer overflow ellen az összeadás **előtt** vizsgál
    (`size > bytes.length - body`, nem `body + size > bytes.length`).
    **NEM elfogadható:** a túlcsordulás utáni ellenőrzés.
-4. **A fájlnév privacy-metaadat** (ADR 0202, SDD §28.3): a domain
+4. **A fájlnév privacy-metaadat** (ADR 0217, SDD §28.3): a domain
    `sourceDisplayName`-je `redacted: true` jelzéssel jár, a `toString()` és
    minden logolt alak **redaktált**. **NEM elfogadható:** a fájlnév
    megjelenése egy `AppLogger` hívás `fields`-ében.
@@ -251,7 +345,60 @@ parser átírása ebben a körben scope-sértés.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `domain/analysis_input.dart`: a meglévő `AnalysisInputSource`-t importáló
+  sealed `AnalysisInput` hierarchia (`FileAnalysisInput`,
+  `PcmAnalysisInput`) és immutable, privacy-jelölt `SourceDisplayName`.
+  A fájlnév egyetlen `toString()` alakban sem jelenik meg nyersen.
+- `data/input/`: `InputLimits` v1 (64 MiB, 250 ms–10 perc, 8–192 kHz,
+  legfeljebb két csatorna), `AnalysisInputValidator`, typed
+  `AudioDecoderGateway` és a régi core WAV-dekódert változatlanul hagyó
+  `WavDecoderAdapter`. A gateway `AppResult<DecodedAudio>`-t ad; a
+  metadata-megőrző adapterút `PcmAnalysisInput`-ot készít.
+- Javító kör: a `WavDecoderAdapter` a második `data` chunkot a core-dekóder
+  futása előtt `audio.multiple_data_chunks` failure-rel elutasítja. Így a
+  legacy decoder „utolsó data chunk nyer” viselkedése nem sanitizálhat egy
+  későbbi float32 NaN/Infinity mintát. A FailureCode-kiegészítés additív.
+- `app_failure.dart`: kizárólag additív audio input/decode failure code-ok.
+- `public.dart`: az új domain input contract exportja.
+- Tesztek: formátum-, malformed-, méret-, hossz-, NaN-, redakció- és
+  500-es, `PROPERTY_SEED`-elt fuzz-mátrix. A legacy WAV-teszt változatlan.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/data/audio_decoder_gateway_test.dart`
+  — a hiányzó új contractok miatt várt compile failure.
+- Célzott zöld ellenőrzések:
+  `flutter test test/features/audio_analysis/data/audio_decoder_gateway_test.dart`
+  (javítás után 16 teszt),
+  `flutter test test/features/audio_analysis/data/analysis_input_validator_test.dart`
+  (5 teszt),
+  `flutter test test/property/analysis_input_fuzz_property_test.dart`
+  (1 seedelt property, 500 eset; `PROPERTY_SEED=42`) — mind zöld.
+- Javító RED→GREEN: az új, két-`data`-chunkos float32 WAV-regressziós teszt
+  a régi adapterrel várt `Failure` helyett `Success<PcmAnalysisInput>`-ot
+  adott; a második chunk elő-dekódolási elutasítása után
+  `Failure(audio.multiple_data_chunks)`-szal zöld. A mikrofon-NaN teszt a
+  teljes, egyedi és nem-nulla 12 000 mintás kimenetet hasonlítja; a fuzz
+  fallback a property-suite konvenciójának megfelelően `42`, és kiírja a seedet.
+- Valódi-sértés próba: a `validateFileByteCount` méretellenőrzésének
+  ideiglenes eltávolításával a `maxFileBytes + 1` cella várt módon piros lett
+  (`Expected Failure<void>, Actual Success<void>`); az ellenőrzés visszaállítva.
+- Kötelező gate:
+  `tools/round-gate.sh test/features/audio_analysis test/property test/core test/features/analyze`
+  — exit `0` (format, analyze, a négy célzott tesztcsoport és architecture:
+  zöld).
+
+### Eltérés / nem futtatott ellenőrzések
+
+- Az első gate analyze-lépése a hiányzó, `.gitignore`-olt
+  `lib/l10n/app_localizations.dart` miatt állt meg (932, a kör diffjétől
+  független hiba). `flutter gen-l10n` helyben regenerálta az artefaktumot;
+  az ismételt teljes gate exit `0` lett. Generált lokalizáció nem került a
+  diffbe.
+- Backend- és Android/APK-build nem futott: a kör sem backendet, sem natív
+  scope-ot nem érint (`native_gate = false`).
 
 ## 11. Review — a független reviewer tölti ki
 
