@@ -339,6 +339,29 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 - Valódi-sértés próba: `analysis_recorder.dart`-ban az `acceptedCount = math.min(remaining, chunk.length)` sor ideiglenesen `acceptedCount = chunk.length` lett. Az új teszt várt módon **piros** lett: várt `[0.1, 0.2]`, tényleges `[0.1, 0.2, 0.3]`. A `math.min` visszaállítása után ugyanaz a teszt **zöld** lett.
 - `tools/round-gate.sh test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, mindhárom célzott tesztlépés, architecture, secrets és l10n.
 
+### Javító kör — S1 warm-up alatti lifecycle revoke (BLOCKER)
+
+- `lib/features/audio_analysis/data/capture/analysis_recorder.dart` — a
+  revocation teardownja most minden esetben meghívja a `MicCapture.stop()`-ot;
+  csak a `RecordingRunStatus.cancelled` állapotmutáció marad a run-ID
+  egyezéshez kötve. Így a lease megszerzése utáni, de a platform-capture
+  warm-upja közbeni háttérbe kerülés beállítja a `MicCapture` stop-kérését,
+  amely a később visszatérő `capture.start()` után is leállítja a capture-t.
+  A S2 MINOR is javítva: `dispose()` `finally` ágban zárja a level-streamet,
+  ha a `stop()` hibával tér vissza.
+- `test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` —
+  új, start-gate-es `paused` lifecycle regresszió: miközben a recorder-start
+  még a `FakeAudioCapture.startGate`-re vár, a revoke után a régi capture
+  leáll, a recorder nem lesz recording, a coordinator szabad, és egy `live`
+  owner külön capture-rel sikeresen indulhat; a régi callback nem növel PCM-et.
+- RED: `flutter test test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart`
+  — a javítás előtti kódon várt piros: `capture.stopCalls` ténylegesen `0`
+  volt a warm-up alatti revoke után.
+- GREEN: ugyanaz a célzott parancs — **6 teszt zöld** a javítással.
+- `tools/round-gate.sh test/features/audio_analysis test/core test/features/analyze`
+  — **zöld**: format, analyze, mindhárom célzott tesztlépés, architecture,
+  secrets és l10n; a gate-összegzés: `MINDEN GATE ZÖLD`.
+
 ### Eltérés, kockázat, follow-up
 
 - A SDD korai, tágabb "régi Analyze screen adapteren" vázlata nem része ennek a briefnek; a brief §3/§4 elsőbbségével a V1 Analyze érintetlen maradt.

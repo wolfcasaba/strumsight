@@ -123,8 +123,9 @@ final class AnalysisRecorder {
   }
 
   Future<void> _cancelFromRevocation(String runId) async {
-    if (_activeRunId != runId) return;
-    _complete(runId, RecordingRunStatus.cancelled);
+    if (_activeRunId == runId) {
+      _complete(runId, RecordingRunStatus.cancelled);
+    }
     await _mic.stop();
   }
 
@@ -217,7 +218,10 @@ final class AnalysisRecorder {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    await stop();
-    await _levels.close();
+    try {
+      await stop();
+    } finally {
+      await _levels.close();
+    }
   }
 }
