@@ -8161,3 +8161,45 @@ teljes ideje alatt. Az első strukturálisan robusztusabb (nem függ egy
 másik lépés fegyelmétől), ezért ez lett az automatizált védelem — mindkét
 implementer-belépési pont (`codex-round.sh`, `mm-round.sh`) ugyanazt a
 segédscriptet hívja, hogy a védelem motor-függetlenül álljon.
+
+## L222 — Egy friss `git clone` munkapéldány nem hordozza a gitignore-olt generált `lib/l10n/app_localizations*.dart`-ot, ezért az implementer első fordulója szükségtelenül `blocked`-ot jelzett (E06-R07, harmadik próbálkozás, 2026-08-11)
+
+**Mit mértünk.** Az E06-R07 friss implementer-munkapéldányát (`ss-terra-
+e06-r07`) a hubról klónozva a `lib/l10n/` alatt CSAK a két forrás-ARB
+(`app_en.arb`, `app_hu.arb`) volt jelen — a `flutter gen-l10n` generálta,
+gitignore-olt `app_localizations.dart`/`app_localizations_en.dart`/
+`app_localizations_hu.dart` hiányzott, mert a hub-on korábban futott
+`flutter gen-l10n` outputját a git nem trackeli, és a `git clone` csak a
+trackelt tartalmat viszi át. Az implementer első fordulója emiatt helyesen,
+de szükségtelenül `blocked`-ot jelzett: `tools/round-gate.sh` `analyze`
+lépése 931 hibával elszállt (`Target of URI doesn't exist:
+'package:strumsight/l10n/app_localizations.dart'` + `Undefined name
+'AppLocalizations'`), a hiányzó fájl pedig a kör saját `allowed_paths`
+listáján kívül esett — az implementer helyesen NEM próbálta generálni vagy
+pótolni. Az orchesztrátor a `tools/prepare-flutter-generated.sh`-t
+(`flutter pub get` + `flutter gen-l10n`, KIZÁRÓLAG gitignore-olt outputot
+állít helyre, tracked forrást nem érint) lefuttatva a munkapéldányban a
+gate azonnal, kódváltozás nélkül zöldre vált (8/8 lépés).
+
+**Miért nem egyedi baleset.** A `sdd-round-driver` SKILL.md §3 a munkapéldány
+létrehozását `git clone <hub> <cél>`-ként írja elő, de a
+`tools/prepare-flutter-generated.sh`-t eddig kizárólag a **post-merge**
+gate előfeltételeként dokumentálta (ez a fájl §5.5) — az implementer-oldali
+FRISS klónra sosem volt kimondva, holott a mechanizmus (gitignore-olt
+generált l10n hiánya egy friss checkoutban) azonosan érinti mindkét
+esetet. Az E06-R01–R06 körök feltehetően azért nem futottak bele, mert a
+munkapéldányuk máshonnan (pl. egy már `pub get`-elt korábbi klónból) örökölt
+generált outputot, vagy a `l10n.yaml`/ARB-tartalom bővülése (E06-R05/R06
+körül) tette ezt a hiányt csak mostanra ténylegesen érzékelhető méretűvé
+(931 hiba, nem néhány).
+
+**Hogyan alkalmazd.** Egy friss implementer-munkapéldány létrehozása UTÁN,
+MÉG a kör-dispatch ELŐTT, futtasd le benne a
+`tools/prepare-flutter-generated.sh`-t — ugyanúgy, ahogy a post-merge gate
+előtt is kötelező (§5.5). Ha ez elmarad, az implementer első fordulója
+`blocked`-dal áll meg egy vele semmilyen kapcsolatban nem álló, 931-tételes
+analyze-hibalistával, és egy teljes extra fordulóba kerül a felismerés +
+javítás. A script fail-open (`[ ! -f pubspec.yaml ] && exit 0`) és csak
+gitignore-olt outputot érint, tehát a lépés kockázatmentesen ismételhető
+minden friss klónon — implementer-workspace-en és review-klónon
+(`/tmp/review-*`) egyaránt, nem csak a hub saját post-merge futásán.
