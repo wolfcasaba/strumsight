@@ -7863,3 +7863,133 @@ született, a függetlenség-feltétel az ADR 0138-cal — senki nem nézte meg 
 együtt. (4) A kapacitás-korlátot ne csak elkapni akard, hanem **oszd el**: a
 100%-os kihasználtságú erőforrás előbb-utóbb kifogy, és ilyenkor a legjobb
 detektor is csak a veszteség méretét csökkenti, a veszteséget nem.
+
+## L216 — MINDEN frissen létrehozott munkapéldány (klón VAGY worktree, akármelyik motor-útvonal) hiányzik a generált Flutter-előfeltétele — ezt az orchesztrátor pre-flightjának kell megelőznie, nem az implementernek reaktívan felfedeznie (E06-R06, 2026-08-11)
+
+**Mit mértem.** Az E06-R06 pre-flightja egy friss `git clone`-nal hozta létre
+a `/home/ubuntu/ss-terra-e06-r06` munkapéldányt (a `git worktree add` a
+sanctioned tiltás miatt, ld. `docs/LESSONS.md` L175/L179). Az implementer
+első fordulója `blocked`-ot jelzett: a `tools/round-gate.sh` `analyze`
+lépése 934, a diff-en KÍVÜLI hibával bukott, mert a gitignore-olt
+`lib/l10n/app_localizations*.dart` sosem lett legenerálva ebben a
+munkapéldányban (`flutter pub get` + `flutter gen-l10n` sosem futott le). Az
+implementer ezt HELYESEN ismerte fel scope-on kívüli akadálynak (nem próbálta
+a saját `allowed_paths`-án belül pótolni), de egy TELJES fordulót elvesztett
+rá — az orchesztrátor a `tools/prepare-flutter-generated.sh` lefuttatásával
+(2,3 mp) a munkapéldányban azonnal feloldotta, majd egy második dispatch-csal
+folytatta.
+
+**Miért fontos ez, nem csak hogy „egyszer elfelejtettem".** A `docs/LESSONS.md`
+L48 UGYANEZT a gyökérokot már dokumentálta 2026-08-02-én, de KIZÁRÓLAG az
+`auto`-router `ai-router-round.sh run` útvonalára (ahol a tünet egy
+`BLOCKED` router-állapot, a javítás pedig a router SAJÁT `reset`
+subparancsa). A legacy `codex-round.sh`/`mm-round.sh` közvetlen dispatch-út —
+amit ez a kör, és `terra`/`codex`/`minimax` motor-override esetén A TÖBBSÉG
+használ — nem ismerte ezt a tünetet, mert más burkolón, más jelzés-alakon
+(`blocked`, nem router-state) fut át. **A gyökérok motor-független: BÁRMELY
+friss munkapéldány (klón vagy — ha valaha megint engedélyezett lenne —
+worktree), BÁRMELY dispatch-úton, hiányzik a `flutter pub get`/`gen-l10n`
+kimenete**, mert a `tools/round-gate.sh` ezt sosem futtatja le magától (a
+`analyze`/`test` lépések feltételezik, hogy már megvan) — ezt kizárólag a
+`tools/prepare-flutter-generated.sh` pótolja, és eddig csak a POST-MERGE
+gate-lépés (pipeline-prompt §5.5) hívta kötelezően, a PRE-DISPATCH lépés
+nem volt előírva sehol.
+
+**Hogyan alkalmazd.** Minden munkapéldány-létrehozás (a `sdd-round-driver`
+skill §3 lépése) UTÁN, MÉG a pre-flight brief-revízió commitolása ELŐTT,
+futtasd le `tools/prepare-flutter-generated.sh`-t az új munkapéldányban —
+függetlenül attól, hogy `auto` router vagy örökölt motor viszi a kört. Ez
+olcsó (néhány másodperc, csak gitignore-olt kimenetet ír, tracked forrást
+sosem érint — a script saját docstringje szerint), és egy egész
+implementer-forduló (jellemzően 5-15 perc + a kör-jelzés/wait-loop
+adminisztrációja) megtakarítását jelenti minden egyes kör esetén.
+
+## L217 — Egy `onRevoke`/teardown callback, amit a HÍVÓ SAJÁT, MÉG BE NEM ÁLLÍTOTT azonosítójához köt, a warm-up ablakban elveszíti a teardownt, miközben az ERŐFORRÁS-TULAJDONOST (lease/lock) felszabadító külső `finally` FÜGGETLENÜL, feltétel nélkül lefut (E06-R06, risk=high biztonsági review, 2026-08-11)
+
+**Mit mértem.** Az `AnalysisRecorder._start()` a saját `runId`
+azonosítóját csak az `await _mic.start(...)` VISSZATÉRÉSE UTÁN rendelte a
+`_activeRunId` mezőhöz. A `_mic.start(...)`-nak átadott `onRevoke` callback
+(`_cancelFromRevocation`) viszont a `_activeRunId == runId` egyezést
+feltételként használta a mic leállításához — miközben a `MicCapture`/
+`AudioSessionCoordinator` belsejében a lease-t a platform-capture
+`await capture.start(onChunk)` warm-upja ELŐTT szerzi meg. Ha a revoke
+(app háttérbe kerül) pont ebben a warm-up ablakban ér ide, `_activeRunId`
+MÉG `null`, a guard korán visszatér `_mic.stop()` hívása NÉLKÜL — de a
+coordinator lease `_Lease._revoke()`-jának `finally`-ága EKKOR IS
+feltétel nélkül felszabadítja a lease-t. Az eredmény: hot mic fut tovább a
+háttérben, miközben a coordinator szabad sessiont jelent — egy másik owner
+konkurens capture-t nyithat. A dedikált security-reviewer ágens
+reprodukálta (`startGate`-tel megnyitott indítási ablak +
+`coordinator.revokeActive()` közben), és kontraszt-teszttel igazolta, hogy
+a `MicCapture` ALAPÉRTELMEZETT (nem felülírt) `onRevoke`-ja — ami feltétel
+nélkül a saját `stop()`-ját hívja — NEM szivárog: ez tisztán a V2 recorder
+egyedi, azonosság-alapú override-jának regressziója.
+
+**Miért fontos ez, nem csak hogy „egy edge case a lifecycle-tesztekben".**
+Az öt cellás lifecycle-mátrix (`resumed`/`inactive`/`paused`/`hidden`/
+`detached`) MIND az öt tesztje egy `startGate` NÉLKÜLI fake capture-t
+használt — a `capture.start()` szinte szinkron visszatért, tehát
+`_activeRunId` MINDIG be volt már állítva, mire bármelyik lifecycle-eseményt
+kibocsátották. A mátrix teljes, öt cellája zöld volt, és a REÁLIS
+hiba mégis a mátrixon KÍVÜL, egy időzítési ablakban élt — ez ugyanaz az
+osztály, mint az `L214` (a mátrix betűje nem meríti ki a mögöttes
+szándékot). **Az általánosítható minta:** ha egy erőforrás-birtoklást (lease,
+lock, subscription) egy KÜLSŐ komponens tart nyilván és egy `finally`/
+`defer`-szerű ágon feltétel nélkül elenged, DE a SAJÁT teardown-od egy
+MÉG BE NEM ÁLLÍTOTT belső azonosítóhoz van kötve, a kettő szétcsúszhat: a
+külső fél azt hiszi, szabad; a belső erőforrás (platform-handle, stream,
+capture) valójában még él. Ez a hiba-osztály bármely „lazy-identity"
+mintánál felbukkanhat (az azonosítót csak SIKERES indítás után rendeled
+hozzá), amikor a teardown ugyanarra az azonosítóra hivatkozik.
+
+**Hogyan alkalmazd.** Egy revoke/cancel/teardown callback, amit egy KÜLSŐ
+koordinátor hív (nem a sajátod dönti el, mikor), az ERŐFORRÁS leállítását
+SOSEM kösd a saját, esetleg még be nem állított belső azonosításodhoz — a
+leállítás legyen feltétel nélküli (a mögöttes erőforrás-metódus
+idempotens kell legyen, ahogy itt a `MicCapture.stop()` is az); csak az
+ÁLLAPOT-mutációt (mi történt EZZEL a konkrét run/session-el) kösd az
+azonosság-egyezéshez. Pre-flight/review-oldalon: ha egy lifecycle-mátrixot
+egy fake capture DRIVE-ol, mérd meg, hogy a fake tud-e „még folyamatban lévő
+indítás" állapotot szimulálni (`startGate`-szerű mechanizmus) — ha a
+mátrix minden cellája csak a „már aktív" állapotot fedi, a warm-up ablak
+vak folt marad, akármilyen sok cella van a mátrixban.
+
+## L218 — A `tools/wait-for-round.sh` case-ága nem ismeri fel a `status=blocked`-ot terminálisként, holott a `codex-round.sh` saját `has_terminal_signal()`-ja (és az egész projekt dokumentációja) a `done`/`stopped`/`blocked` hármast kezeli lezáró jelzésként (E06-R06, 2026-08-11, mért tooling-rés — NEM javítottam, önjavító kör dolga)
+
+**Mit mértem.** Az E06-R06 első implementer-fordulója `status=blocked`-ot írt
+a `.codex-round-status` fájlba (helyesen — valódi, scope-on kívüli akadály
+miatt). A `tools/wait-for-round.sh` `case "$status" in done|stopped|
+stalled|timeout|unknown)` ága ezt NEM egyezteti — a `blocked` egyik ágra sem
+illik, ezért a ciklus tovább pörgött a `max_wait` leteltéig, és `exit 5`-öt
+adott („a kör MÉG FUTHAT") — HOLOTT a `.codex-round-status` fájl tartalma
+már ekkor is a valódi, terminális végállapotot mutatta (a `codex-round.sh`
+maga a `status=$(...)` beállítása UTÁN korrektül kilépett — `ps` nulla
+találatot adott a `codex exec` processzre). Az orchesztrátor a jelzésfájlt
+közvetlenül olvasva ismerte fel a terminális állapotot, NEM a
+`wait-for-round.sh` kilépési kódjából.
+
+**Miért fontos ez, nem csak hogy „egy plusz `sleep`".** A `codex-round.sh`
+SAJÁT `has_terminal_signal()` függvénye (`grep -qE
+'^status=(done|stopped|blocked)$'`) és az egész projekt dokumentációja
+(AGENTS.md §15.2: „A `progress` nem zárja le a kört; a `done`/`stopped`/
+`blocked` igen.") a hármat EGYSZERRE kezeli lezáró jelzésként — a
+`wait-for-round.sh` esete tehát belső inkonzisztencia két, egymást
+kiegészítőnek szánt script között, nem tervezett viselkedés. Ha egy jövőbeli
+orchesztrátor VAKON bízna a kilépési kódban (nem olvasná el maga a
+jelzésfájlt „5" esetén is), a `blocked` jelzést könnyen újra-és-újra
+lejárató 540 másodperces ciklusokkal várná ki feleslegesen — nem
+végtelenül rossz (a jelzés VÉGÜL is olvasható a fájlból), de minden ciklus
+egy elvesztegetett várakozási ablak.
+
+**Hogyan alkalmazd.** Amíg a script javítatlan: `wait-for-round.sh` `exit 5`
+esetén MINDIG olvasd el magad a `.codex-round-status` fájlt (ne csak a
+kilépési kódra hagyatkozz) — ha `status=blocked` már ott áll ÉS a `codex
+exec`/`codex-round.sh` processz nem fut (`ps -ef | grep`), a kör valójában
+véget ért, a `wait-for-round.sh` újrahívása feleslegesen égetne egy teljes
+`max_wait`-nyi várakozást. A tényleges javítás (a `blocked` felvétele a
+`case`-ágba, valószínűleg egy önálló kilépési kóddal, mert a `blocked`
+szemantikailag közelebb áll a `stopped`-hoz — döntést kér — mint a
+`stalled`/`timeout`-hoz) a `tools/`-t nem módosíthatja egy sima kör-session
+(AGENTS.md §4 „a mérce nem módosulhat attól, akit mér" — bár a
+`wait-for-round.sh` szigorúan véve nem maga a mérce, a konzervatív döntés
+mégis az önjavító körre hagyni), ezért ez itt csak MÉRVE van, nem javítva.
