@@ -366,7 +366,13 @@ kódmódosítás.
   `analysis-eval-matrix.md` PENDING sorai szerint következik. A kör nem
   módosít alkalmazáskódot, tesztet, DSP-konstanst vagy modell-assetet.
 
-## 11. Review — a független reviewer tölti ki
+## 11. Review — a Claude tölti ki
 
-Tervezett review: `docs/reviews/e06-r01-analyze-v1-baseline-and-adrs-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Link: `docs/reviews/e06-r01-analyze-v1-baseline-and-adrs-review.md`
+
+Verdikt: **APPROVED** (2026-08-11, egy forduló, javító kör nélkül). 0
+BLOCKER/MAJOR/MINOR, 3 NOTE (forward-looking). Dedikált security-review
+(risk=high) **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE. Reviewer
+SAJÁT, izolált `/tmp` klónban HARMADIK, független futtatással bitre egyező
+determinizmus-SHA-256-ot mért, és a teljes 9-lépéses gate-et is
+függetlenül újrafuttatta (mind zöld).
