@@ -279,7 +279,34 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Megvalósítás:**
+  - `PreprocessedAudio` immutable original/canonical PCM reprezentációt,
+    `normalizationGain`-t, preprocessing-verziót és explicit, microsecond
+    floor-roundingos sample↔idő mappinget ad. Default úton a két puffer
+    ugyanaz az immutable referencia.
+  - `PreprocessingConfig.v1` a DC-offset/peak-normalization kapcsolóit és a
+    befagyasztott, inkluzív 5 ms onset-parity küszöböt hordozza;
+    `PreprocessingStage` csak az explicit experimental kapcsoló mellett
+    transzformál, és nem resampol vagy downmix-el újra.
+  - `MonoDownmix.v1` külön, determinisztikus csatornaátlag-policy marad
+    phase-cancellation és clipping evidence-szel; a már mono stage nem hívja.
+  - `FeatureFlags.analysisPreprocessingExperimentalEnabled` minden
+    környezetben `false`; nincs production wiring.
+- **RED bizonyíték:**
+  `flutter test test/features/audio_analysis/domain/preprocessed_audio_test.dart test/features/audio_analysis/engine/preprocessing_stage_test.dart test/property/analysis_preprocessing_property_test.dart`
+  a hiányzó `preprocessed_audio.dart`, preprocessing contractok és flag miatt
+  várt compile-failure-rel állt meg.
+- **Célzott GREEN bizonyíték:** ugyanaz a három tesztfájl utána `+10: All
+  tests passed!`; `PROPERTY_SEED=42`.
+- **Teljes helyi gate:**
+  `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
+  → format, analyze, a négy célzott tesztcsoport, architecture, secrets és
+  l10n mind zöld (`MINDEN GATE ZÖLD`).
+- **Eltérés:** nincs; V1 resampling és production-wiring szándékosan nem
+  készült.
+- **Nem futtatott ellenőrzés:** a teljes `flutter test`, friss random seedes
+  property gate és release APK csak a CI-ban futnak (ADR 0053); dispatch és
+  CI-evidence az orchestrátor feladata.
 
 ## 11. Review — a független reviewer tölti ki
 
