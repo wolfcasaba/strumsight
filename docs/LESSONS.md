@@ -7684,3 +7684,72 @@ nincs cross-feature export), de a mintát érdemes fejben tartani minden
 jövőbeli context/callback-objektum tervezésénél: **a hívottnak adott
 felület sose engedje meg, hogy a hívott a hívó hitelesként kezelt
 kimenetével megkülönböztethetetlen adatot termeljen.**
+
+## L213 — Egy session-limit miatt jelzés nélkül elakadt orchesztrátor-kör nyitva hagyott PR-je önmagában, TARTÓSAN blokkolja a láncot — az önjavításnak a külső ok elmúlása UTÁN is le kell zárnia (E06-R05 / H-NOSIGNAL, ADR 0112, 2026-08-11)
+
+**Mit mértem.** Az E06-R05 orchesztrátor-session (`session-E06-R05-20260811T134634.log`)
+a "CI dispatch (round-ci-plan.py) + merge" lépés közben, pontosan a
+kötelező biztonsági review (risk=high, mert fájl-import/decode munka)
+háttér-agentjének befejezése UTÁN ("Agent 'E06-R05 security review'
+finished · 15m 11s"), de annak eredménye commitolása ELŐTT elérte a Claude
+Code session/usage-limitjét ("You've hit your session limit · resets
+3:40pm (UTC)") — innentől nulla kimenet, a chain-driver 20 perc néma
+tmux után killelte (`HALT: nincs kör-jelzés`, `halted_at=14:58:39Z`). Az
+1. önjavító kísérlet (15:00-kor) UGYANEBBE a limitbe futott, mert a reset
+(15:40 UTC) még nem történt meg — a session "Cooked for 0s" alatt maga is
+elakadt, második H-NOSIGNAL halt. Ez, a 2. kísérlet 15:42 UTC-kor indult
+(a reset UTÁN) és zavartalanul futott — ez saját magában bizonyítja, hogy
+a korlát elmúlt.
+
+A session által nyitva hagyott **PR #215** (`codex/e06-r05-…`) viszont
+ÖNMAGÁBAN, a session-limit elmúlása UTÁN is tartósan blokkolta volna a
+láncot: `tools/round-pipeline.sh:1176`
+(`die "nyitott PR van ($open_prs) — másik kör lehet folyamatban"`) minden
+kör-branch-mintájú (`[eE][0-9]{2}-[rR][0-9]{2}`) nyitott PR-t "idegennek"
+tekint, hacsak nem szerepel egy élő `.pipeline/inflight/<KÖR>` jelzőfájlban
+— ami egy killelt session után NEM létezik (a jelző csak a driver saját,
+egy-futásnyi konkurrencia-kezeléséhez él, nem éli túl a session halálát).
+Mért történeti precedens ugyanerre a mintára (más ok — governance-PR —, de
+azonos mechanizmus): `docs/adr/0175-chain-idle-and-context-diet.md` és
+`chain.log` 2026-08-03/2026-08-05…08-07 szakaszai — **órák-napokig** tartó,
+5 percenkénti néma "HIBA: nyitott PR van" firing-kihagyás, emberi
+észrevétel nélkül. Ez rosszabb kimenet, mint egy tiszta HALT.
+
+**Miért nem merge-eltem a PR #215-öt, holott a review APPROVED, 0
+BLOCKER/MAJOR, és a Full Gate + Router CI zöld volt az implementer
+SHA-n (`44300b21`).** A dedikált biztonsági review eredménye (PASS/FAIL)
+SOSEM lett a repóba commitolva — a session pont az agent befejezése és a
+commit között szakadt meg. [[L212]] szabálya szerint egyébként is új
+exact-SHA CI-dispatch kellett volna a review-commit UTÁN, ami szintén nem
+történt meg. Egy önjavító kör mandátuma kifejezetten NEM a megállt kör
+tartalmi lezárása (`docs/execution/pipeline-selfheal-prompt.md` bevezető
+mondata) — a hiányzó biztonsági bizonyíték pótlása vagy a merge-döntés
+meghozatala a normál orchesztrátor-review feladata marad, nem az
+önjavításé.
+
+**Szabály.** Egy H-NOSIGNAL (vagy bármilyen, killelt-session okozta) halt
+önjavítása NEM ér véget a külső ok (kvóta/limit/kiesés) igazolásával —
+KÖTELEZŐ ellenőrizni, hogy a killelt session nyitva hagyott-e egy
+kör-branch-mintájú PR-t, és ha igen, LE KELL ZÁRNI (`gh pr close --delete-branch`,
++ a hozzá tartozó eldobható munkapéldány-klón törlése), mielőtt
+`outcome=retry`-t jelzünk — különben a `retry` csak egy ÚJABB, néma
+formájú haltot vált ki, amit a driver sosem jelez explicit módon (a
+`die()` exit 4 nem HALT-fájlt ír, csak 5 percenként néma log-sort). A PR
+tartalmi ÉRTÉKÉT (jó-e a diff) az önjavítás NEM bírálja el — a biztonságos
+alapállás mindig a lezárás + friss újrapróbálkozás, még akkor is, ha a
+munka nagy része (itt: ~230k token Terra-implementáció + review) emiatt
+elvész és újra kell futnia. A `docs/execution/pipeline-queue.tsv` sora
+`pending` marad, a lánc a soron lévő E06-R05-öt magától újraindítja — ehhez
+az önjavításnak semmilyen sor- vagy brief-módosítást NEM kellett végeznie
+(a `main`-en a brief változatlanul `PREPARED`).
+
+**Megfontolandó, DE EBBEN a körben NEM implementált továbblépés.** Ha ez a
+mintázat ismétlődik, érdemes megfontolni: (a) a záró CI-dispatchot a PR
+megnyitása UTÁN AZONNAL indítani, a lassú biztonsági review-agent
+háttérbe-küldése ELŐTT, hogy egy killelt session korábban hagyjon
+CI-bizonyítékkal fedett, mergelhető állapotot; (b) a driver
+`inflight_rounds()`-ját kiegészíteni egy, a session HALÁLÁT is túlélő
+jelzővel — de ez a védelem (a "valaki más dolgozik ugyanezen a
+kör-branchen" garancia) gyengítése nélkül nem triviális, ezért ITT
+szándékosan nem nyúltam hozzá ([[shared-tree-coordination]] mintázat:
+ugyanez a fa más session-ökkel is osztott).

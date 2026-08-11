@@ -480,6 +480,14 @@
 
 ## 3. Known blockers / risks
 
+- **E06-R05 önjavítás (2026-08-11, H-NOSIGNAL, ADR 0112) — nincs teendő,
+  tájékoztató.** Az orchesztrátor-session a Claude Code session/usage-limitjét
+  érte el a "CI dispatch + merge" lépés közben (a kötelező biztonsági review
+  háttér-agentje lefutott, de eredménye nem lett commitolva). A nyitva
+  maradt **PR #215 le lett zárva** (NEM merge-elve — a self-heal mandátuma
+  nem terjed ki a megállt kör tartalmi lezárására) és a branch törölve; a
+  `pipeline-queue.tsv` E06-R05 sora `pending` maradt, a lánc friss
+  próbálkozást indít. Részletek: `docs/LESSONS.md` **L213**.
 - ~~**Rendszerszintű rés (E02-R20, mérve): a standalone Practice V2 session nem
   indítható éles buildben.**~~ **JAVÍTVA (E02-R21, PR #55, `6e5cec7`).** A
   `practiceSessionHostProvider`/`practicePrepareSinkProvider` production
