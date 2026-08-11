@@ -90,6 +90,7 @@ final class WavDecoderAdapter implements AudioDecoderGateway {
     }
     final data = ByteData.sublistView(bytes);
     _WavHeader? header;
+    var hasDataChunk = false;
     var offset = 12;
     while (offset < bytes.length) {
       if (bytes.length - offset < 8) {
@@ -160,6 +161,14 @@ final class WavDecoderAdapter implements AudioDecoderGateway {
             ),
           );
         }
+        if (hasDataChunk) {
+          return const Failure<_WavHeader>(
+            AudioFailure(
+              code: FailureCode.audioMultipleDataChunks,
+              retryable: false,
+            ),
+          );
+        }
         if (chunkSize == 0 || chunkSize % header.blockAlign != 0) {
           return const Failure<_WavHeader>(
             AudioFailure(
@@ -184,7 +193,7 @@ final class WavDecoderAdapter implements AudioDecoderGateway {
             }
           }
         }
-        return Success<_WavHeader>(header);
+        hasDataChunk = true;
       }
 
       offset = chunkEnd;
@@ -200,9 +209,12 @@ final class WavDecoderAdapter implements AudioDecoderGateway {
         offset++;
       }
     }
-    return const Failure<_WavHeader>(
-      AudioFailure(code: FailureCode.audioTruncatedChunk, retryable: false),
-    );
+    if (!hasDataChunk || header == null) {
+      return const Failure<_WavHeader>(
+        AudioFailure(code: FailureCode.audioTruncatedChunk, retryable: false),
+      );
+    }
+    return Success<_WavHeader>(header);
   }
 
   AppResult<void> _validateFormat({

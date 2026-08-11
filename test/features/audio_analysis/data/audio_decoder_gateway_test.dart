@@ -169,6 +169,16 @@ void main() {
         FailureCode.audioTruncatedChunk,
       );
     });
+
+    test(
+      'rejects a final data chunk before it can sanitize non-finite samples',
+      () {
+        _expectFailure(
+          decoder.decodeInput(_file(_floatWavWithNonFiniteFinalDataChunk())),
+          FailureCode.audioMultipleDataChunks,
+        );
+      },
+    );
   });
 }
 
@@ -217,6 +227,24 @@ Uint8List _wav({
       ByteData.sublistView(bytes).setInt16(offset, 8192, Endian.little);
     }
   }
+  return bytes;
+}
+
+Uint8List _floatWavWithNonFiniteFinalDataChunk() {
+  const format = _FormatCase('32-bit mono float', format: 3, bitsPerSample: 32);
+  final firstChunk = _wav(format: format);
+  final finalChunkDataLength = 12000 * 4;
+  final bytes = Uint8List(firstChunk.length + 8 + finalChunkDataLength)
+    ..setRange(0, firstChunk.length, firstChunk)
+    ..setRange(firstChunk.length, firstChunk.length + 4, 'data'.codeUnits);
+  _writeUint32(bytes, 4, bytes.length - 8);
+  _writeUint32(bytes, firstChunk.length + 4, finalChunkDataLength);
+
+  final data = ByteData.sublistView(bytes);
+  for (var offset = firstChunk.length + 8; offset < bytes.length; offset += 4) {
+    data.setFloat32(offset, 0.25, Endian.little);
+  }
+  data.setFloat32(firstChunk.length + 8, double.nan, Endian.little);
   return bytes;
 }
 

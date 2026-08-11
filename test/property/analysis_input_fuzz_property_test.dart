@@ -14,7 +14,10 @@ void main() {
     'seeded random WAV-like byte arrays never escape the decoder boundary',
     () {
       final seed =
-          int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 60605;
+          int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
+      // Always visible in logs so any failure is reproducible.
+      // ignore: avoid_print
+      print('PROPERTY_SEED=$seed');
       final random = Random(seed);
       const decoder = WavDecoderAdapter();
 

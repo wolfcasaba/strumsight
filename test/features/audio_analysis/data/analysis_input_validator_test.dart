@@ -115,12 +115,14 @@ void main() {
         double.infinity,
         double.negativeInfinity,
       ]) {
+        final originalSamples = _samplesWith(
+          nonFinite,
+          prefix: <double>[0.25, nonFinite, -0.5],
+        );
+        final expectedSamples = List<double>.from(originalSamples)..[1] = 0.0;
         final result = validator.validate(
           PcmAnalysisInput(
-            samples: _samplesWith(
-              nonFinite,
-              prefix: <double>[0.25, nonFinite, -0.5],
-            ),
+            samples: originalSamples,
             sampleRate: 48000,
             channelCount: 1,
             source: AnalysisInputSource.microphone,
@@ -129,11 +131,7 @@ void main() {
 
         expect(result, isA<Success<ValidatedPcmAnalysisInput>>());
         final validated = (result as Success<ValidatedPcmAnalysisInput>).value;
-        expect(validated.input.samples.take(3), <double>[0.25, 0.0, -0.5]);
-        expect(
-          validated.input.samples.skip(3).every((sample) => sample == 0.0),
-          isTrue,
-        );
+        expect(validated.input.samples, expectedSamples);
         expect(
           validated.warnings.single.messageKey,
           FailureCode.audioNonFiniteSample,
@@ -166,8 +164,9 @@ List<double> _samplesWith(
   double nonFinite, {
   List<double> prefix = const <double>[0, double.nan, 0],
 }) {
-  final samples = List<double>.filled(12000, 0.0)
-    ..setRange(0, prefix.length, prefix)
-    ..[1] = nonFinite;
+  final samples =
+      List<double>.generate(12000, (index) => (index + 1).toDouble())
+        ..setRange(0, prefix.length, prefix)
+        ..[1] = nonFinite;
   return samples;
 }

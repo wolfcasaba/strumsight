@@ -45,6 +45,7 @@ abstract final class FailureCode {
       'audio.chunk_size_out_of_bounds';
   static const String audioFileTooLarge = 'audio.file_too_large';
   static const String audioNonFiniteSample = 'audio.non_finite_sample';
+  static const String audioMultipleDataChunks = 'audio.multiple_data_chunks';
   static const String audioEmptyInput = 'audio.empty_input';
   static const String audioInvalidSampleRate = 'audio.invalid_sample_rate';
   static const String audioUnsupportedChannelCount =

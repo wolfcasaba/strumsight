@@ -356,6 +356,10 @@ parser átírása ebben a körben scope-sértés.
   `AudioDecoderGateway` és a régi core WAV-dekódert változatlanul hagyó
   `WavDecoderAdapter`. A gateway `AppResult<DecodedAudio>`-t ad; a
   metadata-megőrző adapterút `PcmAnalysisInput`-ot készít.
+- Javító kör: a `WavDecoderAdapter` a második `data` chunkot a core-dekóder
+  futása előtt `audio.multiple_data_chunks` failure-rel elutasítja. Így a
+  legacy decoder „utolsó data chunk nyer” viselkedése nem sanitizálhat egy
+  későbbi float32 NaN/Infinity mintát. A FailureCode-kiegészítés additív.
 - `app_failure.dart`: kizárólag additív audio input/decode failure code-ok.
 - `public.dart`: az új domain input contract exportja.
 - Tesztek: formátum-, malformed-, méret-, hossz-, NaN-, redakció- és
@@ -367,11 +371,17 @@ parser átírása ebben a körben scope-sértés.
   — a hiányzó új contractok miatt várt compile failure.
 - Célzott zöld ellenőrzések:
   `flutter test test/features/audio_analysis/data/audio_decoder_gateway_test.dart`
-  (15 teszt),
+  (javítás után 16 teszt),
   `flutter test test/features/audio_analysis/data/analysis_input_validator_test.dart`
   (5 teszt),
   `flutter test test/property/analysis_input_fuzz_property_test.dart`
-  (1 seedelt property, 500 eset) — mind zöld.
+  (1 seedelt property, 500 eset; `PROPERTY_SEED=42`) — mind zöld.
+- Javító RED→GREEN: az új, két-`data`-chunkos float32 WAV-regressziós teszt
+  a régi adapterrel várt `Failure` helyett `Success<PcmAnalysisInput>`-ot
+  adott; a második chunk elő-dekódolási elutasítása után
+  `Failure(audio.multiple_data_chunks)`-szal zöld. A mikrofon-NaN teszt a
+  teljes, egyedi és nem-nulla 12 000 mintás kimenetet hasonlítja; a fuzz
+  fallback a property-suite konvenciójának megfelelően `42`, és kiírja a seedet.
 - Valódi-sértés próba: a `validateFileByteCount` méretellenőrzésének
   ideiglenes eltávolításával a `maxFileBytes + 1` cella várt módon piros lett
   (`Expected Failure<void>, Actual Success<void>`); az ellenőrzés visszaállítva.
