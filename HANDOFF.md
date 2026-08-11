@@ -3,7 +3,88 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
-> (E06-R06 MERGED — Recorder és AudioSessionCoordinator integráció).**
+> (E06-R07 MERGED — Signal quality stage).**
+>
+> ## ✅ E06-R07 KÉSZ — Signal quality stage (2026-08-11)
+>
+> Determinisztikus, verziózott **input-jelminőség riport** (SDD Ch7 Kör 7,
+> §11.2–11.6), amely a felvételi körülményeket méri, **sosem a játékot**:
+> `SignalQualityMath` (tiszta függvények — peak/RMS dBFS, clipping-arány,
+> silent-arány, aktív-régió arány, keretenkénti RMS eloszlás **10.
+> percentilise** mint noise-floor proxy, saját Hann-ablakos radix-2 FFT-n
+> alapuló spectral-flatness/tonalness proxy), `QualityThresholds`
+> (`signal-quality-v1`, verziózott, néven nevezett küszöbök — nincs magic
+> number a formulában) és `SignalQualityStage` — önálló
+> `AnalysisStage<ValidatedPcmAnalysisInput, SignalQualityStageResult>`
+> ([ADR 0224](docs/adr/0224-signal-quality-stage-measurement-boundary.md)),
+> mert a mai `AnalysisPipeline<T>` csak azonos-típusú `T→T` stage-eket
+> komponál. RAG-chunk:
+> [`docs/rag/chunks/019-signal-quality-metrics.md`](docs/rag/chunks/019-signal-quality-metrics.md).
+> `lib/features/live/engine/dsp/dsp_config.dart` **bitre változatlan**; a
+> stage ebben a körben **sehova nincs bekötve** (nincs hívó a saját fájljain
+> és a `public.dart` exporton kívül) — production viselkedés bitre azonos.
+>
+> **Pre-flight:** ez az E06-R07 **harmadik próbálkozása** — az első kettő
+> tisztán infrastruktúra-hibán akadt el és önjavító session zárta (H5
+> nem-hermetikus router-teszt, H7 secret-scan-jelölés + munkapéldány-origin,
+> `docs/LESSONS.md` L219–L221), a kör TARTALMA mindkétszer érintetlen
+> maradt. Ez a session az elhagyott (PR nélküli, törölt branch-ű) korábbi
+> pre-flight-commitot **újrahasznosította** ahelyett, hogy vakon újraírta
+> volna: [ADR 0224](docs/adr/0224-signal-quality-stage-measurement-boundary.md)
+> + a brief §0.0 revíziója egy korábbi orchesztrátor-session lokális
+> branch-éről, minden mért állítás (`SignalQualityReport` hét mezője,
+> `AnalysisStage`/`AnalysisPipeline<T>` szerződés, `ValidatedPcmAnalysisInput`,
+> a RAG-chunk szabad 019-es száma) újra grep-elve egyezett a friss `main`-en.
+>
+> Implementer **Terra (Codex)**, 1 forduló + **1 megerősítő forduló** — ez
+> utóbbi NEM tartalmi javítás: az implementer helyesen `blocked`-ot jelzett,
+> mert a friss `git clone` munkapéldány nem hordozta a gitignore-olt generált
+> `lib/l10n/app_localizations*.dart`-ot (931 ezzel összefüggő analyze-hiba),
+> és ezt a saját scope-ján kívülinek ismerte fel. Az orchesztrátor
+> `tools/prepare-flutter-generated.sh`-sal helyreállította a munkapéldányt,
+> a gate-et függetlenül zöldre mérte, majd az implementer egy rövid
+> fordulóban maga is megerősítette (kódváltozás nélkül). Tanulság:
+> `docs/LESSONS.md` **L222**.
+>
+> Review:
+> [docs/reviews/e06-r07-signal-quality-stage-review.md](docs/reviews/e06-r07-signal-quality-stage-review.md)
+> — **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE. A reviewer (orchesztrátor)
+> HÁROM egymástól független klónban mérte a gate-et zöldre (saját előzetes
+> mérés + review + CI) és **két saját valódi-sértés próbát** végzett: a
+> `silenceFloorDbfs` padló kiszedése a NaN-mentesség propertyt vitte pirosra
+> (`Signal measurements must be finite.`), a clipping-küszöb inkluzív→exkluzív
+> cseréje pontosan a `sample=0.999` cellát — mindkettő a brief §6.1
+> mérce-mátrixa szerint, mindkettő visszaállítva.
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r07-signal-quality-stage-security.md](docs/reviews/e06-r07-signal-quality-stage-security.md)
+> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 2 NOTE. A biztonsági review egy
+> HARMADIK saját próbát is végzett (egy játékot-minősítő `quality.bad_playing`
+> warning-kulcs befecskendezése) — a kulcs-regex teszt elkapta. **NOTE-1:**
+> a `degradedMetrics` egy elhagyható testvér-mezőn (`SignalQualityStageResult`)
+> utazik a `SignalQualityReport` mellett — csak akkor releváns, ha egy
+> jövőbeli kör a stage-eredményt a reportra lapítja. **NOTE-2:** a meglévő
+> (E06-R02, ebben a körben NEM módosított) `SignalQualityReport` konstruktor
+> arány-guardja (`clippedSampleRatio`/`silentRatio`) csak `< 0 || > 1`-et
+> ellenőriz, `isFinite`-et nem — egy `NaN` arány elméletileg megkerülné (mai
+> producerek sosem termelnek ilyet, R07 önmagában nem éri el). Alacsony
+> prioritású follow-up, amikor legközelebb valaki a `domain/
+> signal_quality_report.dart` konstruktorát érinti.
+>
+> **Zöld kapu (exact-SHA `88998b23` — a review-frissítések UTÁNI végleges
+> HEAD, PR [#221](https://github.com/wolfcasaba/strumsight/pull/221), squash
+> `9b3783c1`):** Full Gate
+> [31543628873](https://github.com/wolfcasaba/strumsight/actions/runs/31543628873)
+> + Router CI [31543630197](https://github.com/wolfcasaba/strumsight/actions/runs/31543630197)
+> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+> HEAD-en — a review-doksi-only pusholások Router CI push-triggere nem
+> mindig tüzelt, mert nem minden ilyen commit érintett router-trigger
+> útvonalat). Az `origin/main` a dispatch és a merge között nem mozdult (H8
+> tiszta). Post-merge gate a friss `main`-en (`9b3783c1`) önállóan
+> újrafuttatva: mind a 8 lépés zöld.
+>
+> **Következő kör: E06-R08** (preprocessing context és resampling,
+> előre kiosztott ADR 0206, a queue-ban `pending`).
 >
 > ## ✅ E06-R06 KÉSZ — Recorder és AudioSessionCoordinator integráció (2026-08-11)
 >
@@ -88,81 +169,6 @@
 > (`2b724d36`) és a merge között nem mozdult (H8 tiszta). Post-merge gate a
 > friss `main`-en (`df44fc4e`) önállóan újrafuttatva: mind a 8 lépés zöld.
 >
-> **Következő kör: E06-R07** (signal quality stage,
-> a queue-ban `pending` — a §6 „Elfelejtett" pipeline-publikáció MINOR
-> follow-upjai (F2/S3/S4) itt veendők pre-flight elő).
->
-> ## ✅ E06-R05 KÉSZ — Input abstraction és biztonságos import (2026-08-11)
->
-> A mikrofonos és importált audio **közös, validált boundary** mögé
-> helyezése (SDD Ch7 §6.2, §11.1, §28.2–28.6; [ADR
-> 0217](docs/adr/0217-analysis-raw-audio-retention.md) végrehajtása, új ADR
-> nélkül). Sealed `AnalysisInput` (`PcmAnalysisInput`/`FileAnalysisInput`),
-> a **meglévő** (E06-R02) `AnalysisInputSource`-ra építve; `AudioDecoderGateway`
-> + `WavDecoderAdapter` a **bitre változatlan** `lib/core/audio/codec/wav_decoder.dart`
-> köré — a mai indoklás nélküli `null`-t additív `FailureCode`-ra fordítja
-> (`unsupportedFormat`/`unsupportedBitDepth`/`truncatedChunk`/`invalidRiff`/
-> `chunkSizeOutOfBounds`/`fileTooLarge`/`nonFiniteSample`/`multipleDataChunks`/
-> `emptyInput`/`invalidSampleRate`/`unsupportedChannelCount`/`clipTooShort`/
-> `clipTooLong`), bounds-safety a bájtok átadása ELŐTT (overflow-safe
-> `size > bytes.length - body`, nem `body + size > bytes.length`).
-> `InputLimits` (64 MiB / 250 ms–10 perc / 8–192 kHz / ≤2 csatorna,
-> verziózott, a végleges érték E06-R28 benchmarkból). Fájlnév
-> privacy-redakció (`SourceDisplayName`, `redacted: true`, sosem nyers
-> `toString()`-ben, zéró logger-hívás). NaN/Inf: importált úton elutasítás,
-> mikrofonos úton sanitizálás+warning (szándékos, tesztelt eltérés — a
-> `practiceSession`/`songSession` forrás egyelőre az elutasítás ágán,
-> nyitott spec-kérdésként dokumentálva). 500-esetes `PROPERTY_SEED`-elt fuzz
-> property teszt. `lib/core/audio/codec/**` és `lib/features/analyze/**`
-> bitre érintetlen.
->
-> **Pre-flight §0.0 (R1–R3):** R1 — a brief `ADR 0202 (raw audio)`
-> placeholdere javítva a valós **[ADR
-> 0217](docs/adr/0217-analysis-raw-audio-retention.md)**-re (ugyanaz a
-> hatos-blokk 0200–0205→0215–0220 átszámozás, 0202 a blokk 3. tagja).
-> R2 — az `AnalysisInputSource` MÁR LÉTEZIK (`domain/analysis_mode.dart`,
-> E06-R02); a brief §3/§4 ezt új típusként sugallta — javítva
-> ÚJRAHASZNÁLÁSRA (a duplikáció `public.dart` ambiguous-export fordítási
-> hibát adott volna; a SDD §9.3 saját `PcmAnalysisInput` literálja is csak
-> HASZNÁLJA, nem deklarálja az enumot, megerősítve az eredeti
-> reuse-szándékot). R3 — a fejléc `gate_tests` tömbje kiegészítve
-> `test/features/analyze`-zel, hogy egyezzen a §7 kanonikus gate-paranccsal.
->
-> Implementer **Terra (Codex)**, 1 forduló + **1 javító kör**. PR
-> [#216](https://github.com/wolfcasaba/strumsight/pull/216), squash
-> `8d3e602e`. Review:
-> [docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md](docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md)
-> — **APPROVED a javító kör után**, 0 BLOCKER/MAJOR, 2 MINOR (fuzz-seed
-> konvenció + gyengébb mikrofon-NaN fixture, mindkettő zárva a javító
-> körben), 3 NOTE. Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r05-input-abstraction-and-safe-import-security.md](docs/reviews/e06-r05-input-abstraction-and-safe-import-security.md)
-> — **PASS a javító kör után, 0 CRITICAL/BLOCKER/MAJOR**, 2 NOTE. **A két
-> független review (általános + biztonsági) EGYMÁSTÓL FÜGGETLENÜL,
-> különböző próba-módszerrel ugyanazt a MAJOR-t találta meg:** egy második,
-> a `_inspect()` által soha meg nem vizsgált `data` chunk NaN/±Inf float32
-> mintát tudott csendben átcsempészni az importált útra — a fagyasztott
-> core dekóder az UTOLSÓ `data` chunkot dekódolja (`.clamp(-1.0, 1.0)`
-> NaN→1.0-ra alakítva), miközben az `_inspect()` csak az ELSŐN futtatta a
-> finiteness-ellenőrzést, majd rögtön `Success`-t adott — sem az 500-esetes
-> fuzz (gyakorlatilag sosem épít érvényes két-`data`-chunkos RIFF-et véletlen
-> bájtokból), sem az egységtesztek nem fedték. Javítás (`31d76195`): a
-> MÁSODIK `data` chunk `audio.multiple_data_chunks`-szal elutasítva a
-> core-dekóder hívása ELŐTT — a fagyasztott dekódert nem érinti, tehát nem
-> váltja ki a brief §9 STOP-klauzuláját. Az orchesztrátor saját, friss
-> izolált `/tmp` klónban mutáció-próbával megerősítette a zárást (az őr
-> eltávolítása az új regressziós tesztet pirosra fordította, visszaállítás
-> után zöld).
->
-> **Zöld kapu (exact-SHA `3dcc835b` — a javító kör + review-frissítés UTÁNI
-> végleges HEAD):** Full Gate
-> [31516931160](https://github.com/wolfcasaba/strumsight/actions/runs/31516931160)
-> + Router CI [31517891225](https://github.com/wolfcasaba/strumsight/actions/runs/31517891225)
-> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
-> HEAD-en, a Router CI push-triggere a review-commitokra nem tüzelt, mert
-> azok nem érintettek router-trigger útvonalat). Az `origin/main` a dispatch
-> (`a7507a58`) és a merge között nem mozdult (H8 tiszta). Post-merge gate a
-> friss `main`-en (`8d3e602e`) önállóan újrafuttatva: mind a 9 lépés zöld.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -172,10 +178,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-11 (E06-R06 zárása): E06-R06 teljes bannere felkerült
-> (fent); E06-R05 bannere maradt a második helyen (a stale „Következő kör"
-> mutatója törölve belőle, hiszen E06-R06 időközben elkészült, az új felső
-> banner saját, friss mutatóval zár); E06-R04 bannere törölve a fejlécből,
+> Mért diéta: 2026-08-11 (E06-R07 zárása): E06-R07 teljes bannere felkerült
+> (fent); E06-R06 bannere maradt a második helyen (a stale „Következő kör"
+> mutatója törölve belőle, hiszen E06-R07 időközben elkészült, az új felső
+> banner saját, friss mutatóval zár); E06-R05 bannere törölve a fejlécből,
 > mert immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT az
 > archívumba EBBEN a zárásban.
 
@@ -234,15 +240,22 @@
   `domain/analysis_input.dart` — közös, validált input-boundary a
   mikrofonos és importált audio köré, [ADR
   0217](docs/adr/0217-analysis-raw-audio-retention.md) végrehajtása,
-  bounds-safe `WavDecoderAdapter` a bitre változatlan core dekóder körül)
-  és **E06-R06** (`lib/features/audio_analysis/data/capture/` +
+  bounds-safe `WavDecoderAdapter` a bitre változatlan core dekóder körül),
+  E06-R06 (`lib/features/audio_analysis/data/capture/` +
   `domain/recording_level.dart` — V2 `AnalysisRecorder`, run ID-alapú
   stale-chunk szűrés, inkluzív maximum kliphossz nem-hibás lezárással,
   öt cellás lifecycle-mátrix, olcsó peak/RMS + hysteresises
   clipping-preview, a meglévő `MicCapture`/`AudioSessionCoordinator`
-  (ADR 0056) kompozíciójával, `ClipRecorder` érintése nélkül; 2 nem
-  blokkoló MINOR follow-up (F2/S3/S4) kötelező R07 pre-flight
-  ellenőrzéssel, ld. fenti banner) kész, 24 további kör tervezve
+  (ADR 0056) kompozíciójával, `ClipRecorder` érintése nélkül; a 2 nem
+  blokkoló MINOR follow-up (F2/S3/S4) az R07 pre-flightban ÉRTÉKELVE, de
+  NYITVA marad — a köztes-chunk preview-hiány a valós idejű `RecordingLevel`
+  korlátja, nem az R07 offline stage-jéé, ld. §3) és **E06-R07**
+  (`lib/features/audio_analysis/engine/quality/` — determinisztikus,
+  verziózott jelminőség-riport: `SignalQualityMath`/`QualityThresholds`/
+  `SignalQualityStage`, [ADR
+  0224](docs/adr/0224-signal-quality-stage-measurement-boundary.md), a
+  riport a felvételről szól, sosem a játékról; `dsp_config.dart` bitre
+  változatlan; bekötetlen) kész, 23 további kör tervezve
   (`docs/execution/pipeline-queue.tsv`, `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -517,41 +530,25 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
-- **E06-R07 önjavítás (2026-08-11, H5, ADR 0112) — nincs teendő, tájékoztató.**
-  A Router CI kétszer pirosra váltott ugyanazon a SHA-n egy, a kör tartalmától
-  (Dart signal-quality-stage) teljesen független, meglévő router-teszten
-  (`test_a_blocked_claude_budget_rules_out_the_claude_implementer` — az
-  ambiens `~/.mmx/config.json`-ra hagyatkozott a fixture-injektálás helyett,
-  ezért csak a dev boxon volt zöld, a friss CI-futón sosem). Javítva (PR
-  [#219](https://github.com/wolfcasaba/strumsight/pull/219), squash
-  `32c40f97`): a teszt explicit `MINIMAX_API_KEY` fixture-t kapott, a
-  `resolve_independent_engine()` éles logikája változatlan. A halt-ot adó
-  E06-R05-höz hasonlóan a nyitva maradt **PR #218 le lett zárva** (NEM
-  merge-elve — a self-heal mandátuma itt sem terjed ki a megállt kör
-  tartalmi lezárására) és a branch törölve; a `pipeline-queue.tsv` E06-R07
-  sora `pending` maradt, a lánc friss próbálkozást indít. Részletek:
-  `docs/LESSONS.md` **L219**.
-- **E06-R07 önjavítás (2026-08-11, H7, ADR 0112) — nincs teendő, tájékoztató.**
-  Az E06-R07 KÖVETKEZŐ implementer-kísérlete két, egymástól független infra-
-  gyökérokon akadt el: (1) a H5-javítás saját fake fixture-kulcsa
-  (`tools/tests/test_orchestrator_rotation.py:229`) a secrets-scan
-  placeholder-listáján kívül eső szót ("fixture") tartalmazott, ezért
-  jelölés nélkül lelettel jött a lokális gate `secrets` lépésében — a
-  `tools/**` az E06-R07 saját allowed-files listáján kívül esett, a kör
-  session-je ezt nem javíthatta; (2) az implementer munkapéldányát a hub
-  lokális útvonaláról klónozták, miközben a hub épp a kör branch-én állt (a
-  pre-flight commit után), ezért az implementer kész commitjának
-  (`2e55359c`) push-a `receive.denyCurrentBranch`-sel elutasult —
-  reviewzhatatlan maradt. Javítva (PR
-  [#220](https://github.com/wolfcasaba/strumsight/pull/220)): inline
-  `strumsight:allow-secret` jelölés a fixture-soron, és új
-  `tools/fix-workspace-origin.sh` (bekötve `codex-round.sh`/`mm-round.sh`
-  indulásába), amely a munkapéldány origin-jét a hub saját upstream-jére
-  állítja lokális-útvonal esetén. A halt-ot adó implementer-klón
-  (`ss-terra-e06-r07`) és a kör branch-e (`codex/e06-r07-signal-quality-stage`,
-  PR nélkül) törölve; a `pipeline-queue.tsv` E06-R07 sora `pending` maradt,
-  a lánc friss próbálkozást indít. Részletek: `docs/LESSONS.md` **L220** és
-  **L221**.
+- **E06-R06 F2/S3/S4 follow-up — NYITVA, nincs kijelölt kör.** A live
+  level-preview (`RecordingLevel`, E06-R06) csak az éppen throttle-ablakot
+  lezáró chunkot méri peak/RMS-re, a köztes chunkokét nem — egy rövid,
+  hangos tranziens, ami teljesen egy köztes chunkba esik, nem jelenik meg a
+  preview-n (a végleges, teljes PCM-puffer nem érintett). Az E06-R07
+  pre-flightja értékelte és kimondta, hogy ez NEM az ő scope-ja (az offline,
+  egyszer futó jelminőség-stage más költségszinten dolgozik, mint a valós
+  idejű preview) — a follow-up így nyitva marad, jelenleg nincs hozzá
+  kijelölt kör.
+- **E06-R07 review NOTE-2 — R02 domain-report NaN-vak arány-guard, alacsony
+  prioritás.** A meglévő (E06-R02, E06-R07 által NEM módosított)
+  `SignalQualityReport` konstruktora (`lib/features/audio_analysis/domain/
+  signal_quality_report.dart`) a `clippedSampleRatio`/`silentRatio` mezőkre
+  csak `< 0 || > 1` ellenőrzést fut, `isFinite`-et nem — mivel `NaN < 0` és
+  `NaN > 1` egyaránt hamis, egy `NaN` arány elméletileg megkerülné az őrt (a
+  mai producerek sosem termelnek ilyet). Mérve és dokumentálva:
+  `docs/reviews/e06-r07-signal-quality-stage-security.md` NOTE-2. Javítás
+  amikor legközelebb valaki ezt a konstruktort érinti: vegye fel a két
+  arányt is az `isFinite` ellenőrzésbe.
 - **~~A Claude 5 órás session-kerete rendszeresen kimerül és H-NOSIGNAL-lal
   körökbe kerül~~ — MEGOLDVA (ADR 0222, 2026-08-11, user-döntés).** Mért ok: a
   lánc MINDEN körben a Claude-ot ültette az orchestrátor+reviewer székbe

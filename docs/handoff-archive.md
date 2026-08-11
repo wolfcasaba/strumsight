@@ -6,6 +6,77 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E06-R05 — Input abstraction és biztonságos import, teljes részletes történet (2026-08-11)
+
+A mikrofonos és importált audio **közös, validált boundary** mögé
+helyezése (SDD Ch7 §6.2, §11.1, §28.2–28.6; [ADR
+0217](adr/0217-analysis-raw-audio-retention.md) végrehajtása, új ADR
+nélkül). Sealed `AnalysisInput` (`PcmAnalysisInput`/`FileAnalysisInput`),
+a **meglévő** (E06-R02) `AnalysisInputSource`-ra építve; `AudioDecoderGateway`
++ `WavDecoderAdapter` a **bitre változatlan** `lib/core/audio/codec/wav_decoder.dart`
+köré — a mai indoklás nélküli `null`-t additív `FailureCode`-ra fordítja
+(`unsupportedFormat`/`unsupportedBitDepth`/`truncatedChunk`/`invalidRiff`/
+`chunkSizeOutOfBounds`/`fileTooLarge`/`nonFiniteSample`/`multipleDataChunks`/
+`emptyInput`/`invalidSampleRate`/`unsupportedChannelCount`/`clipTooShort`/
+`clipTooLong`), bounds-safety a bájtok átadása ELŐTT (overflow-safe
+`size > bytes.length - body`, nem `body + size > bytes.length`).
+`InputLimits` (64 MiB / 250 ms–10 perc / 8–192 kHz / ≤2 csatorna,
+verziózott, a végleges érték E06-R28 benchmarkból). Fájlnév
+privacy-redakció (`SourceDisplayName`, `redacted: true`, sosem nyers
+`toString()`-ben, zéró logger-hívás). NaN/Inf: importált úton elutasítás,
+mikrofonos úton sanitizálás+warning (szándékos, tesztelt eltérés — a
+`practiceSession`/`songSession` forrás egyelőre az elutasítás ágán,
+nyitott spec-kérdésként dokumentálva). 500-esetes `PROPERTY_SEED`-elt fuzz
+property teszt. `lib/core/audio/codec/**` és `lib/features/analyze/**`
+bitre érintetlen.
+
+**Pre-flight §0.0 (R1–R3):** R1 — a brief `ADR 0202 (raw audio)`
+placeholdere javítva a valós **[ADR
+0217](adr/0217-analysis-raw-audio-retention.md)**-re (ugyanaz a
+hatos-blokk 0200–0205→0215–0220 átszámozás, 0202 a blokk 3. tagja).
+R2 — az `AnalysisInputSource` MÁR LÉTEZIK (`domain/analysis_mode.dart`,
+E06-R02); a brief §3/§4 ezt új típusként sugallta — javítva
+ÚJRAHASZNÁLÁSRA (a duplikáció `public.dart` ambiguous-export fordítási
+hibát adott volna; a SDD §9.3 saját `PcmAnalysisInput` literálja is csak
+HASZNÁLJA, nem deklarálja az enumot, megerősítve az eredeti
+reuse-szándékot). R3 — a fejléc `gate_tests` tömbje kiegészítve
+`test/features/analyze`-zel, hogy egyezzen a §7 kanonikus gate-paranccsal.
+
+Implementer **Terra (Codex)**, 1 forduló + **1 javító kör**. PR
+[#216](https://github.com/wolfcasaba/strumsight/pull/216), squash
+`8d3e602e`. Review:
+[docs/reviews/e06-r05-input-abstraction-and-safe-import-review.md](reviews/e06-r05-input-abstraction-and-safe-import-review.md)
+— **APPROVED a javító kör után**, 0 BLOCKER/MAJOR, 2 MINOR (fuzz-seed
+konvenció + gyengébb mikrofon-NaN fixture, mindkettő zárva a javító
+körben), 3 NOTE. Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r05-input-abstraction-and-safe-import-security.md](reviews/e06-r05-input-abstraction-and-safe-import-security.md)
+— **PASS a javító kör után, 0 CRITICAL/BLOCKER/MAJOR**, 2 NOTE. **A két
+független review (általános + biztonsági) EGYMÁSTÓL FÜGGETLENÜL,
+különböző próba-módszerrel ugyanazt a MAJOR-t találta meg:** egy második,
+a `_inspect()` által soha meg nem vizsgált `data` chunk NaN/±Inf float32
+mintát tudott csendben átcsempészni az importált útra — a fagyasztott
+core dekóder az UTOLSÓ `data` chunkot dekódolja (`.clamp(-1.0, 1.0)`
+NaN→1.0-ra alakítva), miközben az `_inspect()` csak az ELSŐN futtatta a
+finiteness-ellenőrzést, majd rögtön `Success`-t adott — sem az 500-esetes
+fuzz (gyakorlatilag sosem épít érvényes két-`data`-chunkos RIFF-et véletlen
+bájtokból), sem az egységtesztek nem fedték. Javítás (`31d76195`): a
+MÁSODIK `data` chunk `audio.multiple_data_chunks`-szal elutasítva a
+core-dekóder hívása ELŐTT — a fagyasztott dekódert nem érinti, tehát nem
+váltja ki a brief §9 STOP-klauzuláját. Az orchesztrátor saját, friss
+izolált `/tmp` klónban mutáció-próbával megerősítette a zárást (az őr
+eltávolítása az új regressziós tesztet pirosra fordította, visszaállítás
+után zöld).
+
+**Zöld kapu (exact-SHA `3dcc835b` — a javító kör + review-frissítés UTÁNI
+végleges HEAD):** Full Gate
+[31516931160](https://github.com/wolfcasaba/strumsight/actions/runs/31516931160)
++ Router CI [31517891225](https://github.com/wolfcasaba/strumsight/actions/runs/31517891225)
+mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+HEAD-en, a Router CI push-triggere a review-commitokra nem tüzelt, mert
+azok nem érintettek router-trigger útvonalat). Az `origin/main` a dispatch
+(`a7507a58`) és a merge között nem mozdult (H8 tiszta). Post-merge gate a
+friss `main`-en (`8d3e602e`) önállóan újrafuttatva: mind a 9 lépés zöld.
+
 ## E06-R03 — Codec, schema validation és V1 adapter, teljes részletes történet (2026-08-11)
 
 Determinisztikus, verziózott **`AnalysisDocumentCodec`** (JSON encode/decode,
