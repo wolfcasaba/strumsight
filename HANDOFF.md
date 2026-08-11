@@ -517,6 +517,20 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R07 önjavítás (2026-08-11, H5, ADR 0112) — nincs teendő, tájékoztató.**
+  A Router CI kétszer pirosra váltott ugyanazon a SHA-n egy, a kör tartalmától
+  (Dart signal-quality-stage) teljesen független, meglévő router-teszten
+  (`test_a_blocked_claude_budget_rules_out_the_claude_implementer` — az
+  ambiens `~/.mmx/config.json`-ra hagyatkozott a fixture-injektálás helyett,
+  ezért csak a dev boxon volt zöld, a friss CI-futón sosem). Javítva (PR
+  [#219](https://github.com/wolfcasaba/strumsight/pull/219), squash
+  `32c40f97`): a teszt explicit `MINIMAX_API_KEY` fixture-t kapott, a
+  `resolve_independent_engine()` éles logikája változatlan. A halt-ot adó
+  E06-R05-höz hasonlóan a nyitva maradt **PR #218 le lett zárva** (NEM
+  merge-elve — a self-heal mandátuma itt sem terjed ki a megállt kör
+  tartalmi lezárására) és a branch törölve; a `pipeline-queue.tsv` E06-R07
+  sora `pending` maradt, a lánc friss próbálkozást indít. Részletek:
+  `docs/LESSONS.md` **L219**.
 - **~~A Claude 5 órás session-kerete rendszeresen kimerül és H-NOSIGNAL-lal
   körökbe kerül~~ — MEGOLDVA (ADR 0222, 2026-08-11, user-döntés).** Mért ok: a
   lánc MINDEN körben a Claude-ot ültette az orchestrátor+reviewer székbe

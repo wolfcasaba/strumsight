@@ -7993,3 +7993,74 @@ szemantikailag közelebb áll a `stopped`-hoz — döntést kér — mint a
 (AGENTS.md §4 „a mérce nem módosulhat attól, akit mér" — bár a
 `wait-for-round.sh` szigorúan véve nem maga a mérce, a konzervatív döntés
 mégis az önjavító körre hagyni), ezért ez itt csak MÉRVE van, nem javítva.
+
+## L219 — Egy router-teszt, ami a testvéreitől eltérően NEM injektálja a saját döntési bemenetét, hanem az AMBIENS host-állapotra hagyatkozik, csak a fejlesztő-boxon zöld — a friss CI-futón determinisztikusan piros, MINDEN PR-en (E06-R07, H5 self-heal, ADR 0112, 2026-08-11)
+
+**Mit mértem.** A Router CI kétszer pirosra váltott ugyanazon a
+`9a4d8dc37af81d4057db127c41789766e0949e39` SHA-n (PR #218, CI run
+[31530386796](https://github.com/wolfcasaba/strumsight/actions/runs/31530386796)),
+`tools/tests/test_orchestrator_rotation.py:210`-en:
+`AssertionError: 'HALT_INDEP' != 'minimax'`. A PR (E06-R07, signal-quality-stage)
+a router-t EGYÁLTALÁN NEM érintette — a trigger a `docs/rounds/**` útvonal
+volt (a kör saját brief-fájlja), ami gyakorlatilag MINDEN SDD-kör PR-jét
+becsatornázza a Router CI-ba, akármilyen tartalmú is a kör.
+
+A `tools/round-pipeline.sh` `resolve_independent_engine()` a `minimax`
+választ a `MINIMAX_API_KEY` env VAGY a `$HOME/.mmx/config.json` jelenlétéből
+dönti el — ez a HELYES éles logika, szándékosan az ambiens host-állapotot
+kérdezi le (a kérdés éppen az: „van-e ezen a gépen MiniMax-hitelesítés"). A
+`test_a_blocked_claude_budget_rules_out_the_claude_implementer` teszt viszont
+— egyedüliként a fájlban — nem injektálta ezt az állapotot explicit env-ként
+a `driver()`-be, holott MINDEN testvér-tesztje ezt teszi
+(`PIPELINE_ORCH_ROTATION`, `PIPELINE_FALLBACK_ENGINE`,
+`state / "claude-blocked-until"` mind explicit fixture). Az Oracle
+fejlesztő-boxon LÉTEZIK `~/.mmx/config.json` (valódi hitelesítő fájl), ezért
+ott a teszt évek óta zölden futott; a GitHub Actions `ubuntu-latest` futóján
+sem az env, sem a fájl nincs jelen, így a driver — helyesen — `HALT_INDEP`-et
+adott, a teszt pedig pirosra váltott. A hiba a `2b724d36` commit-tal került
+be (ADR 0222, orchesztrátor-rotáció), és attól a pillanattól minden router-ci
+trigger-útvonalat érintő PR-t blokkolt, a saját tartalmuktól teljesen
+függetlenül.
+
+**Miért nem product-kód hiba.** `resolve_independent_engine()` viselkedése
+ÉLESBEN pontosan azt csinálja, amit kell: ha a Claude-keret zárolva van ÉS a
+csere-motor is a Claude-keretet enné, külső kulcsos motorra (MiniMax) esik,
+ha az elérhető — ha nem, `HALT_INDEP`-re, mert nincs független motor. A hiba
+kizárólag a TESZT hermetikusságában volt: egy determinisztikus egységteszt
+nem hagyatkozhat arra, hogy a futtató gépen ÉPP megvan-e egy adott
+credential-fájl.
+
+**Javítás.** A tesztbe explicit `MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key"`
+env-override került a `driver()`-hívásba — pontosan a testvér-tesztek
+idiómája, csak erre a konkrét változóra. Nem nyúltam a
+`resolve_independent_engine()`-hez (helyes, éles logika). Regresszió
+mért bizonyítékkal: a javítás ELŐTT egy tiszta-szoba env-ben
+(`HOME=/tmp/ci-like-home`, `MINIMAX_API_KEY` nincs beállítva — a CI-futó
+tényleges alakja) `1 failed, 360 passed`; UTÁNA ugyanabban a tiszta-szoba
+env-ben ÉS a boxon is `361 passed`. PR
+[#219](https://github.com/wolfcasaba/strumsight/pull/219), squash
+`32c40f97`, Router CI zöld a pontos push-SHA-n
+([31532029253](https://github.com/wolfcasaba/strumsight/actions/runs/31532029253)).
+
+**Kapcsolódó kötelező lépés, NEM a fenti javítás része.** A H5-nek halt-ot
+adó E06-R07 orchesztrátor-session (Terra, `pipeline-E06-R07-fallback`) egy
+nyitva hagyott PR-t (#218) örökölt tovább — a router-hiba miatt nem tudta
+merge-elni, holott a saját Full Gate-je zöld volt és a review-k (funkcionális
++ dedikált biztonsági) készen álltak. [[L213]] pontosan erre a mintázatra ad
+szabályt: egy önjavító kör mandátuma NEM terjed ki a megállt kör
+tartalmi lezárására (a merge-döntés a normál orchesztrátor-review dolga
+marad) — ezért PR #218 **lezárva, NEM merge-elve**
+(`gh pr close --delete-branch`), a leftover implementer-klón törölve, a
+`pipeline-queue.tsv` E06-R07 sora `pending` maradt. A `tools/round-pipeline.sh`
+indítási előfeltétele (1358. sor: `die "nyitott PR van..."`) egyébként is
+KÖRBEN akadályozta volna a következő firing-eket, ha a PR nyitva marad —
+ez nem csak elvi, hanem gépileg kikényszerített lépés volt.
+
+**Szabály.** Egy router-teszt, ami a `driver()` fixture-idiómán KÍVÜLI,
+ambiens host-állapotot (env var VAGY fájl-jelenlét egy konkrét gépen) mér,
+csak VÉLETLENÜL zöld a fejlesztő-boxon — a CI-n determinisztikusan bukik, és
+minden más, azzal a trigger-úttal metsző PR-t magával ránt. Egy router-teszt
+írásakor/review-jánál kifejezetten keresendő minta: minden bemenet, amitől a
+driver döntése függ, a `driver(..., ENV=...)` explicit kwargs-on vagy a
+`state`-mappán keresztül érkezzen — SOHA az `os.environ`/`$HOME` öröklött
+tartalmán.
