@@ -6,6 +6,22 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E06-R06 — Recorder és AudioSessionCoordinator integráció (2026-08-11)
+
+V2 `AnalysisRecorder` az `AudioCapture` interfész mögött, a meglévő
+`AudioSessionCoordinator` lease-ének kompozíciójával (ADR 0056): run-ID
+alapú stale-chunk szűrés, inkluzív 10 perces maximum-kliphossz, ötcellás
+lifecycle-mátrix, olcsó peak/RMS + hiszterézises clipping preview. A recorder
+bekötetlen maradt, így production viselkedés nem változott. PR
+[#217](https://github.com/wolfcasaba/strumsight/pull/217), squash `df44fc4e`;
+general review APPROVED, security review PASS. A review F1/MAJOR tesztfedési
+hiányt zárt egy túlméretezett chunk-csonkolási regressziós cellával. A security
+review S1 BLOCKER-t talált a mic warm-up/lease-release versenyben; a javítás
+biztosítja a mic leállítását, majd saját mutációs próba igazolta. Exact-SHA
+`9b6f20f`: Full Gate [31524687440](https://github.com/wolfcasaba/strumsight/actions/runs/31524687440)
+és Router CI [31524728380](https://github.com/wolfcasaba/strumsight/actions/runs/31524728380)
+success; post-merge gate zöld.
+
 ## E06-R05 — Input abstraction és biztonságos import, teljes részletes történet (2026-08-11)
 
 A mikrofonos és importált audio **közös, validált boundary** mögé

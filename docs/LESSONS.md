@@ -8203,3 +8203,20 @@ javítás. A script fail-open (`[ ! -f pubspec.yaml ] && exit 0`) és csak
 gitignore-olt outputot érint, tehát a lépés kockázatmentesen ismételhető
 minden friss klónon — implementer-workspace-en és review-klónon
 (`/tmp/review-*`) egyaránt, nem csak a hub saját post-merge futásán.
+
+## L223 — A pontos időtűrés-segéd zöld tesztje önmagában nem bizonyítja, hogy a valódi PCM-előfeldolgozás megőrizte a határeseti onsetet (E06-R08, 2026-08-11)
+
+**Mit mértünk.** Az E06-R08 első implementációja a 4.9/5.0/5.1 ms-os
+paritás-mátrixban csak a `durationWithinTolerance` segédet hívta. A review
+stage-bypass, pontos 5.0 ms-határ és sztereó-downmix mutációi közül az első
+feltárta, hogy a DC-offset eltávolítás utáni **canonical PCM** tényleges
+onsetje nincs mérve: a deklarált küszöb helyes maradhatott volna akkor is,
+ha a transzformáció nem fut. F1 (MAJOR) lett.
+
+**Hogyan alkalmazd.** Ha egy acceptance-állítás egy transzformáció utáni
+időbeli paritásról szól, a teszt a valós stage kimenetén mérjen és abból
+képezze a timestampet; a segéd predikátumot külön, kisebb unit-teszt őrizze.
+Az R08 javítása determinisztikus 10 kHz-es DC-offset fixture-ből a
+`PreprocessingStage.canonicalSamples` első emelkedő élét méri: 49/50/51
+minta pontosan 4.9/5.0/5.1 ms, ezért a 5.0 ms határ explicit true/true/false
+cellákkal ellenőrzött.

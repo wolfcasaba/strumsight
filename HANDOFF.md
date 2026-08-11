@@ -3,7 +3,38 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
-> (E06-R07 MERGED — Signal quality stage).**
+> (E06-R08 MERGED — preprocessing context és resampling policy).**
+>
+> ## ✅ E06-R08 KÉSZ — Preprocessing context és resampling policy (2026-08-11)
+>
+> Az Audio Analysis V2 számára elkészült a **bekötetlen, fail-closed**
+> előfeldolgozási szerződés: immutable `PreprocessedAudio` (native-rate PCM
+> + canonical PCM + timebase/provenance), `PreprocessingConfig`, sztereó
+> `MonoDownmix` és `PreprocessingStage`. A feature flag alapértéke `false`,
+> ezért nincs production útvonal- vagy DSP-paraméter-változás; a meglévő WAV
+> dekóder mono átlagolása, a V1 Analyze és a Live CRNN viselkedése érintetlen.
+> [ADR 0225](docs/adr/0225-analysis-preprocessing-and-resampling-policy.md).
+>
+> **Pre-flight §0.0:** az elavult `0206` helyett a foglaló által kiadott
+> `0225` ADR-szám került a briefbe. A mért hívási lánc igazolta, hogy a V2
+> input már mono PCM; a brief ezért nem tett második downmixet a jelenlegi
+> producerre. A korábbi Live CRNN resampling megmarad, a V2 Analyze út nem
+> resample-öl.
+>
+> Review: [general](docs/reviews/e06-r08-preprocessing-context-and-resampling-review.md)
+> **APPROVED** (egy MAJOR javítva), [security](docs/reviews/e06-r08-preprocessing-context-and-resampling-security.md)
+> **PASS**, nyitott BLOCKER/MAJOR nélkül. A független review három mutációt
+> bizonyítottan pirosra vitt (stage bypass, 5.0 ms-határ, sztereó downmix).
+> Az F1 javítás a tényleges canonical PCM-ből mér 4.9/5.0/5.1 ms DC-onset
+> paritást, nem csak a tolerancia-segédet hívja.
+>
+> **Zöld kapu (exact-SHA `4d086ffa`, PR [#222](https://github.com/wolfcasaba/strumsight/pull/222),
+> squash `d3ce39b2`):** [Full Gate](https://github.com/wolfcasaba/strumsight/actions/runs/31547355705)
+> + [Router CI](https://github.com/wolfcasaba/strumsight/actions/runs/31547357251)
+> success. A CI-tervező `full-gate.yml`-t választott (`native_gate=false`),
+> ezért APK-build nem volt szükséges. A dispatch és merge között a `main`
+> nem mozdult; post-merge gate a friss `main`-en mind a kilenc lépésben zöld.
+>
 >
 > ## ✅ E06-R07 KÉSZ — Signal quality stage (2026-08-11)
 >
@@ -83,91 +114,7 @@
 > tiszta). Post-merge gate a friss `main`-en (`9b3783c1`) önállóan
 > újrafuttatva: mind a 8 lépés zöld.
 >
-> **Következő kör: E06-R08** (preprocessing context és resampling,
-> előre kiosztott ADR 0206, a queue-ban `pending`).
->
-> ## ✅ E06-R06 KÉSZ — Recorder és AudioSessionCoordinator integráció (2026-08-11)
->
-> A V2 felvételi útvonal (SDD Ch7 Kör 6, §11.6, §21.1–21.2, §22.5): run
-> ID-val azonosított `AnalysisRecorder`, `AudioCapture` interfész mögötti
-> forrás, a meglévő `AudioSessionCoordinator` exkluzív lease-e ([ADR
-> 0056](docs/adr/0056-exclusive-microphone-session.md), **kompozícióval, nem
-> újraimplementálva**) — a mai `ClipRecorder` **érintése nélkül**. Új
-> `RecordingRun` (run-azonosság + lokális állapot: `recording`/`completed`/
-> `cancelled`/`maxDurationReached` — szándékosan NEM a jövőbeli, teljes
-> pipeline-szintű `AudioAnalysisState`, az E06-R22 dolga) és `RecordingLevel`
-> (olcsó peak/RMS + hysteresises clipping-jelző, nincs FFT, nincs
-> pipeline-indítás). Run-ID alapú **stale-chunk szűrés**
-> (`droppedStaleChunks`), inkluzív **maximum kliphossz** kikényszerítés
-> (10 perc / 28 800 000 minta 48 kHz-en, `InputLimits.maxDuration`-ből,
-> E06-R05) **nem hibás**, csonkoló lezárással, és **öt cellás**
-> lifecycle-mátrix (`resumed`/`inactive`/`paused`/`hidden`/`detached`).
-> `test/support/fake_audio.dart` és `lib/features/audio_analysis/public.dart`
-> csak additív bővítést kaptak. A recordert ez a kör **sehova nem köti be**
-> (nincs hívó) — production viselkedés bitre változatlan.
->
-> **Pre-flight §0.0:** nincs új ADR (a kör az ADR 0056 meglévő szerződését
-> használja). Minden §2 mért állítás újra grep-elve `main`-en egyezett; a
-> brief feltételes negyedik lifecycle-cellája (`hidden`) **kötelező ötödikre
-> javítva**, mert `AppLifecycleState.hidden` ténylegesen létező, használt
-> érték (`app_lifecycle.dart:22`), nem feltételezés. Mérve, hogy az EGYETLEN
-> `.acquire(` hívás ma a `MicCapture`-ben fut — ez erősítette meg, hogy a V2
-> recorder kompozícióval (nem a `lib/core/audio/**` tilos zóna érintésével)
-> tartható a scope-on belül.
->
-> Implementer **Terra (Codex)**, 1 forduló + **2 javító kör**. PR
-> [#217](https://github.com/wolfcasaba/strumsight/pull/217), squash
-> `df44fc4e`. Review:
-> [docs/reviews/e06-r06-recorder-audio-session-integration-review.md](docs/reviews/e06-r06-recorder-audio-session-integration-review.md)
-> — **APPROVED a javító kör után**, 0 BLOCKER/MAJOR (F1 zárva), 0 nyitott
-> MINOR (F2 follow-up-ra téve), 3 NOTE. A reviewer (orchesztrátor) SAJÁT
-> izolált `/tmp` klónban a teljes gate-et függetlenül újrafuttatta (zöld) és
-> **négy SAJÁT valódi-sértés próbát** végzett a lease-release, a stale-chunk
-> guard és a lifecycle-onRevoke bekötés ellen (mindhárom pirosra váltott,
-> majd zöldre a visszaállítás után) — az ÖTÖDIK próba (a max-hossz
-> csonkolás `math.min` hívásának eltávolítása) viszont **10/10 zöld
-> maradt**: ez lett F1 (MAJOR) — a viselkedés helyes volt, csak a
-> teszt-lefedettség hiányzott egy túlméretezett chunkra. Javítás
-> (`2747214`): egy célzott új teszteset; az orchesztrátor mutáció-próbával
-> megerősítette a zárást.
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r06-recorder-audio-session-integration-security.md](docs/reviews/e06-r06-recorder-audio-session-integration-security.md)
-> — **PASS a javító kör után, 0 CRITICAL/BLOCKER/MAJOR**, S2 zárva, 2 NOTE.
-> **A biztonsági review egy önálló BLOCKER-t talált és reprodukált (S1):**
-> ha a háttérbe kerülés PONT a mic-warmup ablakban (a `capture.start()`
-> még folyamatban, mielőtt `_activeRunId` beállna) éri a recordert,
-> `_cancelFromRevocation` guardja korán visszatért `_mic.stop()` hívása
-> NÉLKÜL, miközben a coordinator lease-e a `finally`-ágon mindenképp
-> felszabadult — **hot mic maradt a háttérben, miközben a coordinator
-> szabad sessiont mutatott**, ami egy MÁSIK owner számára konkurens
-> capture-t tett lehetővé (kontraszt-teszttel igazolva, hogy ez V2-specifikus
-> regresszió, a V1 alapértelmezett revoke-útvonal biztonságos). Nem
-> elérhető a mai, bekötetlen állapotban, de a kör SAJÁT lease/lifecycle
-> céljába esik és `risk=high` — `AGENTS.md` §15.1 szerint ez merge-blokkoló,
-> reachability-kivétel nélkül. Javítás (`eb9a6e7`): a mic-leállítás többé
-> nem a run-ID egyezéshez kötött (csak a run-állapot mutációja az), plusz
-> egy új regressziós teszt a warm-up-ablakos race-re; bónuszként `dispose()`
-> is `try/finally`-re javítva (S2). Az orchesztrátor SAJÁT mutáció-próbával
-> (a guard visszaállítása a hibás alakra) megerősítette, hogy az új teszt
-> ténylegesen ettől a védelemtől függ.
->
-> **Két nem blokkoló follow-up nyitva marad** (F2/S3/S4): a live
-> level-preview csak az éppen throttle-ablakot lezáró chunkot méri
-> peak/RMS-re, a köztes chunkokét nem — egy rövid, hangos tranziens, ami
-> teljesen egy köztes chunkba esik, nem jelenik meg a preview-n (a
-> végleges, teljes PCM-puffer nem érintett). Natural otthona Kör 7 (signal
-> quality stage).
->
-> **Zöld kapu (exact-SHA `9b6f20f` — mindkét javító kör + review-frissítés
-> UTÁNI végleges HEAD):** Full Gate
-> [31524687440](https://github.com/wolfcasaba/strumsight/actions/runs/31524687440)
-> + Router CI [31524728380](https://github.com/wolfcasaba/strumsight/actions/runs/31524728380)
-> mindkettő **success** (a Router CI push-triggere a review-doksi-only
-> commitra nem tüzelt — nem érintett router-trigger útvonalat —, ezért kézzel
-> `workflow_dispatch`-elve az exact HEAD-en). Az `origin/main` a dispatch
-> (`2b724d36`) és a merge között nem mozdult (H8 tiszta). Post-merge gate a
-> friss `main`-en (`df44fc4e`) önállóan újrafuttatva: mind a 8 lépés zöld.
+> **Következő kör: E06-R09** (V1 `ClipAnalyzer` stage-adapter és parity).
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -726,6 +673,12 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-11):** `main` @ `d3ce39b2` — E06-R08, PR
+[#222](https://github.com/wolfcasaba/strumsight/pull/222), squash-merge.
+Az exact merge-előtti SHA `4d086ffa`: Full Gate és Router CI success; a
+post-merge `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
+mind a 9 lépése zöld. Az alábbi régebbi rész történeti kontextus.
+
 `main` @ [PR #211](https://github.com/wolfcasaba/strumsight/pull/211), squash
 `62516a4b` (E06-R01, Epic 6 kickoff — Analyze V1 baseline, mérés és hat
 kötött ADR; lásd a fejléc ✅-blokk a teljes pre-flight/review/security
@@ -913,6 +866,16 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E06-R08 — Preprocessing context és resampling policy** (PR
+[#222](https://github.com/wolfcasaba/strumsight/pull/222), squash `d3ce39b2`,
+új [ADR 0225](docs/adr/0225-analysis-preprocessing-and-resampling-policy.md)).
+Immutable, native-rate/canonical PCM előfeldolgozási contract, explicit
+downmix és fail-closed feature flag; nincs hívó és nincs változás a V1
+Analyze/Live DSP útvonalakon. A review F1/MAJOR-ját a canonical PCM-ből
+mért valós DC-onset határesettel zártuk; general review APPROVED, security
+review PASS, nyitott BLOCKER/MAJOR nélkül. Az alábbi régebbi rész történeti
+kontextus.
 
 **E05-R25 — Practice Engine vision integration** (PR
 [#199](https://github.com/wolfcasaba/strumsight/pull/199), squash `9b608cf`,
@@ -1249,6 +1212,9 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+**Következő kijelölt SDD-kör: E06-R09 — V1 `ClipAnalyzer` stage-adapter és
+parity** (Chapter 7, Kör 9). Új sessionben induljon; E06-R08 lezárult.
 
 > ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
 >
