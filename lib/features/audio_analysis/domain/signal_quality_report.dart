@@ -10,6 +10,7 @@ final class SignalQualityReport {
     required this.clippedSampleRatio,
     required this.silentRatio,
     required this.tonalness,
+    this.measured = true,
     List<AnalysisWarning> warnings = const <AnalysisWarning>[],
   }) : warnings = List<AnalysisWarning>.unmodifiable(warnings) {
     if (![
@@ -35,5 +36,8 @@ final class SignalQualityReport {
   final double clippedSampleRatio;
   final double silentRatio;
   final double tonalness;
+
+  /// Whether the numeric fields originate in an actual signal measurement.
+  final bool measured;
   final List<AnalysisWarning> warnings;
 }
