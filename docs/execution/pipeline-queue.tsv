@@ -168,7 +168,7 @@ E05-R29	docs/rounds/e05-r29-device-tier-performance-thermal.md	codex	nincs	done
 E05-R30	docs/rounds/e05-r30-dataset-evaluation-and-epic-closure.md	codex	nincs	done
 E06-R01	docs/rounds/e06-r01-analyze-v1-baseline-and-adrs.md	codex	0200-0205	done
 E06-R02	docs/rounds/e06-r02-analysis-document-v2-domain.md	codex	nincs	done
-E06-R03	docs/rounds/e06-r03-codec-schema-and-legacy-adapter.md	codex	nincs	pending
+E06-R03	docs/rounds/e06-r03-codec-schema-and-legacy-adapter.md	codex	nincs	done
 E06-R04	docs/rounds/e06-r04-pipeline-contract-stage-and-progress.md	codex	nincs	pending
 E06-R05	docs/rounds/e06-r05-input-abstraction-and-safe-import.md	codex	nincs	pending
 E06-R06	docs/rounds/e06-r06-recorder-audio-session-integration.md	codex	nincs	pending
