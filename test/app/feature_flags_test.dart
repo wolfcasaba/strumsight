@@ -26,6 +26,12 @@ List<bool> _visionFlags(FeatureFlags flags) => <bool>[
   flags.visionLabCaptureEnabled,
 ];
 
+List<bool> _audioAnalysisFlags(FeatureFlags flags) => <bool>[
+  flags.audioAnalysisV2Enabled,
+  flags.analysisBeatGridEnabled,
+  flags.analysisPitchEnabled,
+];
+
 FeatureFlags _withAiTutorFlags({
   required bool aiTutorEnabled,
   required bool aiTutorCloudEnabled,
@@ -239,5 +245,59 @@ void main() {
       expect(enabled.usesNetwork, isFalse);
       expect(enabled.toString(), contains('visionEnabled: true'));
     });
+  });
+
+  group('Audio Analysis V2 rollout boundary', () {
+    test('all three flags remain off in every environment', () {
+      const constructorDefaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(_audioAnalysisFlags(constructorDefaults), everyElement(isFalse));
+
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        expect(
+          _audioAnalysisFlags(flags),
+          everyElement(isFalse),
+          reason: '$environment must not implicitly enable Audio Analysis V2.',
+        );
+        expect(flags.toString(), contains('audioAnalysisV2Enabled: false'));
+        expect(flags.toString(), contains('analysisBeatGridEnabled: false'));
+        expect(flags.toString(), contains('analysisPitchEnabled: false'));
+      }
+    });
+
+    test(
+      'audio analysis flags participate in value semantics and remain offline',
+      () {
+        const defaults = FeatureFlags(
+          accountEnabled: false,
+          diagnosticsEnabled: false,
+          labModeAvailable: false,
+        );
+        const enabled = FeatureFlags(
+          accountEnabled: false,
+          diagnosticsEnabled: false,
+          labModeAvailable: false,
+          audioAnalysisV2Enabled: true,
+        );
+        const enabledCopy = FeatureFlags(
+          accountEnabled: false,
+          diagnosticsEnabled: false,
+          labModeAvailable: false,
+          audioAnalysisV2Enabled: true,
+        );
+        expect(enabled, isNot(defaults));
+        expect(enabledCopy, enabled);
+        expect(enabledCopy.hashCode, enabled.hashCode);
+        expect(enabled.hashCode, isNot(defaults.hashCode));
+        expect(enabled.usesNetwork, isFalse);
+      },
+    );
   });
 }

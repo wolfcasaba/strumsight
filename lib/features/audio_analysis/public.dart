@@ -1,0 +1,17 @@
+/// Public domain contract for cross-feature Audio Analysis consumers.
+library;
+
+export 'domain/analysis_capability.dart';
+export 'domain/analysis_document.dart';
+export 'domain/analysis_event.dart';
+export 'domain/analysis_hotspot.dart';
+export 'domain/analysis_input_summary.dart';
+export 'domain/analysis_insight.dart';
+export 'domain/analysis_metric.dart';
+export 'domain/analysis_metric_catalog.dart';
+export 'domain/analysis_mode.dart';
+export 'domain/analysis_provenance.dart';
+export 'domain/analysis_segment.dart';
+export 'domain/analysis_timeline.dart';
+export 'domain/analysis_warning.dart';
+export 'domain/signal_quality_report.dart';
