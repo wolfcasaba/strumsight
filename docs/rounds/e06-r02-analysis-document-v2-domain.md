@@ -1,6 +1,8 @@
 # E06-R02 — AnalysisDocument V2 domainmodell
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `b762feaf`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 2; §7, §9, §10
 - **Branch:** `codex/e06-r02-analysis-document-v2-domain`
 - **Előfeltétel:** **E06-R01 merge**
@@ -40,12 +42,14 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R01 merge. Olvasd újra
-> a `lib/app/config/feature_flags.dart` **mai** flag-listáját (a batch idején
-> 20 flag, egy sem audio-analysis) és a `test/app/feature_flags_test.dart`
-> tényleges nevét/tartalmát — ha a fájl nem létezik vagy máshogy hívják, a
-> flag-őr tesztje **a meglévő fájlba** kerül, a lista pedig a pre-flightban
-> javul. ADR 0200/0203/0204/0205 az R01-ből. PREPARED→PLANNING, brief commit
+> ⚠ **Pre-flight ELVÉGEZVE (2026-08-11, orchesztrátor):** friss `origin/main`
+> (`b762feaf`, E06-R01 merge `62516a4b` benne). `lib/app/config/feature_flags.dart`
+> újraellenőrizve — **még mindig 20 flag, egy sem audio-analysis** (nincs
+> drift a batch óta); `test/app/feature_flags_test.dart` létezik a várt néven.
+> **ADR-hivatkozás javítva** (§0.0 R1): a helyes számok **0215/0218/0219/0220**
+> (a 2026-08-07-i placeholder 0200/0203/0204/0205 elavult, ugyanaz a mintázat,
+> mint az E06-R01 saját R1 revíziójában). **Környezet-enum javítva** (§0.0 R1):
+> lásd a 6. pont Flag-őr cellájának javítását. PREPARED→PLANNING, brief commit
 > előbb.
 
 ## 0. Kör-jelzés és STOP-protokoll
@@ -59,8 +63,33 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — a kör az R01 ADR 0200 (verziózás), 0203 (metric ID
-és verzió), 0204 (capability-publikáció) és 0205 (flag-határ) végrehajtása.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör az R01 ADR **0215** (verziózás), **0218** (metric ID
+és verzió), **0219** (capability-publikáció) és **0220** (flag-határ)
+végrehajtása (renumbering lásd R1 alább).
+
+### R1 — ADR-átszámozás + környezet-enum javítás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért ez a brief a `0200/0203/0204/0205` placeholder-számokat idézte. Az
+E06-R01 tényleges `reserve-adr` futása **0215–0220**-at adta (lásd
+[ADR 0215](../adr/0215-analysis-document-versioning.md) fejléce és
+`HANDOFF.md` E06-R01 close-out banner). Ez a kör ugyanabból a batch-ből
+származik, tehát ugyanaz a drift öröklődött ide is. Leképezés (megegyezik az
+E06-R01 saját R1 revíziójával): `0200→0215` (dokumentum-verziózás),
+`0203→0218` (metric ID + verzió), `0204→0219` (capability-aware publikáció),
+`0205→0220` (V1/V2 párhuzamos rollout határ) — mind a négy tartalmilag
+egyezik, csak a sorszám változott. A brief minden hivatkozása javítva.
+
+Emellett a §6 „Flag-őr" acceptance cellája **négy** környezetet írt elő
+(`dev/lab/staging/production`) — grep-elve (`lib/app/config/app_environment.dart`)
+az `AppEnvironment` enum ma **három** értéket hordoz: `development`, `lab`,
+`production`. Nincs `staging`. A cella javítva a tényleges három értékre.
+
+Egyéb §2 „Jelenlegi állapot" állítás (flag-szám, `analyze_result.dart`
+sortartalom, `json_validation.dart` primitívnevek, `check_architecture.dart`
+domain-purity/`public.dart`/allowlist-csak-szűkül szabályok) újra grep-elve
+**egyezik** — nincs további revízió.
 
 ## 1. Cél
 
@@ -182,28 +211,29 @@ open_decisions:
 
 ## 6. Acceptance criteria
 
-- [ ] **Domain-purity őr:** `dart run tool/check_architecture.dart` zöld, és
+- [x] **Domain-purity őr:** `dart run tool/check_architecture.dart` zöld, és
       egyetlen új `domain/` fájl sem importál `package:flutter`-t
       (a gate `architecture` lépése méri).
-- [ ] **Validációs mátrix — `AnalysisDocument`:** minden sor saját teszt-cella:
+- [x] **Validációs mátrix — `AnalysisDocument`:** minden sor saját teszt-cella:
       `durationUs` **−1 / 0 / +1**; confidence **−0.0001 / 0.0 / 0.5 / 1.0 /
       1.0001**; duplikált metric ID **0 / 1 / 2** előfordulással; szegmens
       `start > end`, `start == end`, `start < end`.
-- [ ] **Confidence-küszöb hármas:** a `[0,1]` tartomány mindkét határa
+- [x] **Confidence-küszöb hármas:** a `[0,1]` tartomány mindkét határa
       **inkluzív**; a mátrixban szerepel a `0.0` és `1.0` (átmegy) ÉS a
       `-1e-9` / `1.0 + 1e-9` (elutasít) cella — `python3 -c` -vel kiszámolt
       értékekkel, nem `0.0001`-es közelítéssel.
-- [ ] **Immutabilitás-teszt:** a konstruktornak átadott lista **utólagos
+- [x] **Immutabilitás-teszt:** a konstruktornak átadott lista **utólagos
       mutálása** nem látszik a dokumentumon (`document.metrics.length`
       változatlan), és `document.metrics.add(...)` dob.
-- [ ] **Metric-value sealed teszt:** `switch` az `AnalysisMetricValue` fölött
+- [x] **Metric-value sealed teszt:** `switch` az `AnalysisMetricValue` fölött
       **exhaustive** default ág nélkül fordul (a fordító bizonyítja).
-- [ ] **Metric-ID őr:** teszt méri, hogy a katalógus minden ID-je egyedi és
+- [x] **Metric-ID őr:** teszt méri, hogy a katalógus minden ID-je egyedi és
       illeszkedik a `^[a-z_]+\.[a-z0-9_]+\.v[0-9]+$` alakra.
-- [ ] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **négy** környezetére
-      (dev/lab/staging/production — a mai enum tényleges értékeire) mindhárom
+- [x] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **három** környezetére
+      (`AppEnvironment.development`/`lab`/`production` — a mai enum teljes,
+      tényleges értékkészlete; **nincs `staging`**, §0.0 R1 javítás) mindhárom
       új flag `false`; és a `toString()` tartalmazza őket.
-- [ ] **V1 érintetlen:** `git diff --stat` nem tartalmaz
+- [x] **V1 érintetlen:** `git diff --stat` nem tartalmaz
       `lib/features/analyze/**` vagy `lib/features/library/**` útvonalat, és
       a `test/features/analyze` + `test/features/library` gate zöld.
 
@@ -263,9 +293,89 @@ módosítani kell, az **megállás és jelentés**, nem a tilos zóna tágítás
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `lib/features/audio_analysis/domain/analysis_document.dart`: verziózott,
+  immutable V2 gyökéraggregátum, `AnalysisCompletion(Status)` és duplikált
+  metrika-ID fail-closed őr.
+- `analysis_mode.dart`, `analysis_input_summary.dart`,
+  `analysis_provenance.dart`, `signal_quality_report.dart`: a négy SDD-mód,
+  privacy-safe input-összefoglaló, reprodukálhatósági metadata és
+  jelminőségi szerződés.
+- `analysis_capability.dart`, `analysis_event.dart`, `analysis_segment.dart`,
+  `analysis_timeline.dart`, `analysis_warning.dart`, `analysis_hotspot.dart`,
+  `analysis_insight.dart`: capability/status/reason katalogus, `Duration`
+  timebase-os sealed event- és szegmenshierarchia, valamint lokalizációs
+  kulcsot hordozó V2 evidence típusok.
+- `analysis_metric_catalog.dart`, `analysis_metric.dart`: egyetlen forrású,
+  verziózott metric-ID katalógus és a hét-alternatívás sealed metric-value
+  hierarchia; `AnalysisMetricResult` nem enged nem katalogizált ID-t vagy
+  csendes unavailable értéket.
+- `lib/features/audio_analysis/public.dart`: a feature kizárólagos publikus
+  contractja, beleértve az event- és segment-típusokat is.
+- `lib/app/config/feature_flags.dart`: `audioAnalysisV2Enabled`,
+  `analysisBeatGridEnabled`, `analysisPitchEnabled`; mindhárom default OFF a
+  három tényleges environmentben, define nélkül. A hash megőrzi a korábbi
+  false-default hash-kompatibilitást, de bármely additív flag bekapcsolásakor
+  részt vesz az értékben.
+- A négy engedélyezett domain tesztfájl lefedi a validációs mátrixot; a
+  meglévő `test/app/feature_flags_test.dart` a három OFF flaget és az
+  értékszemantikát méri.
+
+### Acceptance evidence
+
+| §6 pont | Tényleges bizonyíték |
+|---|---|
+| Domain-purity | A végleges `tools/round-gate.sh …` `architecture` lépése zöld (`outcome: pass`). |
+| Dokumentum validációs mátrix | `analysis_document_test.dart`: duration −1/0/+1 µs, duplicate metric 0/1/2, szegmens `>`/`==`/`<`; zöld. |
+| Confidence határok | Ugyanez a teszt méri 0.0/0.5/1.0, −1e-9 és 1.000000001; `python3 -c 'print(repr(-1e-9), repr(1.0 + 1e-9))'` kimenete `-1e-09 1.000000001`. |
+| Immutabilitás | `analysis_document_test.dart` a bemenő listát utólag mutálja, a document hossza változatlan és a public lista `UnsupportedError`-t dob; zöld. |
+| Sealed metric value | `analysis_metric_test.dart` default nélküli exhaustive `switch`-e mind a hét altípust fordítja és fut; zöld. |
+| Metric-ID őr | `analysis_metric_test.dart` egyediséget és `^[a-z_]+\\.[a-z0-9_]+\\.v[0-9]+$` alakot mér; zöld. |
+| Flag-őr | `feature_flags_test.dart` végigiterálja a `development`, `lab`, `production` enumértékeket; mindhárom új flag false és megjelenik a `toString()`-ben; zöld. |
+| V1 érintetlen | A végleges gate `test/features/analyze` és `test/features/library` lépéseivel együtt pass; a diff nem érint V1 Analyze/Library útvonalat. |
+
+**Valódi-sértés próba:** a `AnalysisDocument` duplikált metric-ID őre
+ideiglenesen eltávolítva; a célzott teszt az elvárt hibával piros lett
+(`Expected: throws ArgumentError`, `Actual: returned AnalysisDocument`), majd
+az őr visszaállítása után a célzott teszt zöld.
+
+### Futtatott ellenőrzések
+
+```text
+dart format lib/app/config/feature_flags.dart lib/features/audio_analysis \
+  test/features/audio_analysis test/app/feature_flags_test.dart
+# zöld
+
+flutter test test/features/audio_analysis/domain test/app/feature_flags_test.dart
+# 27 teszt zöld
+
+tools/round-gate.sh --result-json /tmp/e06-r02-round-gate.json \
+  test/features/audio_analysis test/app test/features/analyze test/features/library
+# {"command_exit_code": 0, "error_hash": null, "exit_code": 0,
+#  "failed_step": null, "outcome": "pass", "schema_version": 1}
+```
+
+Első gate-futáskor az analyzer 23, majd egy javító futáskor 1
+`curly_braces_in_flow_control_structures` lintet jelzett az új domain fájlokban;
+blokkokra javítva a végleges gate zöld. Egy köztes `test/app` futás a régi
+false-default `hashCode` exact elvárását jelezte; az engedélyezett
+`feature_flags.dart` kompatibilis hash-ágával javítva, a végleges gate zöld.
+
+### Diff és maradék
+
+Tényleges `git diff --cached --stat`: **22 files changed, 1291 insertions(+),
+11 deletions(-)** — 15 új audio-analysis domain/public fájl, 4 új domain
+teszt, 2 flag-fájl és e brief. `git diff --check` zöld. Nincs nem futtatott
+lokális ellenőrzés. A teljes suite, property gate és APK továbbra is az
+orchestrátor CI-kapuja. Follow-up nincs; a következő kör E06-R03
+(AnalysisDocument V2 codec), nem indítva.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r02-analysis-document-v2-domain-review.md`.
+**APPROVED** (2026-08-11, Claude Sonnet 5) — `docs/reviews/e06-r02-analysis-document-v2-domain-review.md`,
+0 BLOCKER/MAJOR/MINOR, 2 NOTE. Saját izolált `/tmp` klónban a teljes 9-lépéses
+gate függetlenül újrafuttatva (zöld), scope-audit egyezik (22/22 fájl a
+listán), két saját valódi-sértés próba mindkettő a várt cellát fogta.
+Dedikált security-review (risk=high) folyamatban.
 Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.

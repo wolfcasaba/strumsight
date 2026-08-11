@@ -29,6 +29,9 @@ final class FeatureFlags {
     this.visionAnalysisIntegrationEnabled = false,
     this.visionExperimentalFineFretEnabled = false,
     this.visionLabCaptureEnabled = false,
+    this.audioAnalysisV2Enabled = false,
+    this.analysisBeatGridEnabled = false,
+    this.analysisPitchEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -71,6 +74,9 @@ final class FeatureFlags {
       visionAnalysisIntegrationEnabled: false,
       visionExperimentalFineFretEnabled: false,
       visionLabCaptureEnabled: false,
+      audioAnalysisV2Enabled: false,
+      analysisBeatGridEnabled: false,
+      analysisPitchEnabled: false,
     );
   }
 
@@ -140,6 +146,16 @@ final class FeatureFlags {
   /// Whether Lab-only camera capture diagnostics are available.
   final bool visionLabCaptureEnabled;
 
+  /// Whether the parallel Audio Analysis V2 route is available. It remains
+  /// OFF in every environment throughout the Epic 6 build phase (ADR 0220).
+  final bool audioAnalysisV2Enabled;
+
+  /// Whether V2 may publish beat-grid evidence. Defaults to OFF (ADR 0220).
+  final bool analysisBeatGridEnabled;
+
+  /// Whether V2 may publish pitch evidence. Defaults to OFF (ADR 0220).
+  final bool analysisPitchEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -168,17 +184,45 @@ final class FeatureFlags {
           visionAnalysisIntegrationEnabled &&
       other.visionExperimentalFineFretEnabled ==
           visionExperimentalFineFretEnabled &&
-      other.visionLabCaptureEnabled == visionLabCaptureEnabled;
+      other.visionLabCaptureEnabled == visionLabCaptureEnabled &&
+      other.audioAnalysisV2Enabled == audioAnalysisV2Enabled &&
+      other.analysisBeatGridEnabled == analysisBeatGridEnabled &&
+      other.analysisPitchEnabled == analysisPitchEnabled;
 
   @override
-  int get hashCode => Object.hash(
-    accountEnabled,
-    diagnosticsEnabled,
-    labModeAvailable,
-    practiceEngineV2Enabled,
-    migratedLearnEnabled,
-    practiceDetailedHistoryEnabled,
-  );
+  int get hashCode {
+    final legacyHash = Object.hash(
+      accountEnabled,
+      diagnosticsEnabled,
+      labModeAvailable,
+      practiceEngineV2Enabled,
+      migratedLearnEnabled,
+      practiceDetailedHistoryEnabled,
+    );
+    final additionalBits = <bool>[
+      songTrainerV2Enabled,
+      aiTutorEnabled,
+      aiTutorCloudEnabled,
+      visionEnabled,
+      visionSetupEnabled,
+      visionHandTrackingEnabled,
+      visionPoseTrackingEnabled,
+      visionGuitarGeometryEnabled,
+      visionPracticeIntegrationEnabled,
+      visionSongIntegrationEnabled,
+      visionTutorIntegrationEnabled,
+      visionAnalysisIntegrationEnabled,
+      visionExperimentalFineFretEnabled,
+      visionLabCaptureEnabled,
+      audioAnalysisV2Enabled,
+      analysisBeatGridEnabled,
+      analysisPitchEnabled,
+    ];
+    if (!additionalBits.contains(true)) {
+      return legacyHash;
+    }
+    return Object.hashAll(<Object?>[legacyHash, ...additionalBits]);
+  }
 
   @override
   String toString() =>
@@ -202,5 +246,8 @@ final class FeatureFlags {
       'visionAnalysisIntegrationEnabled: $visionAnalysisIntegrationEnabled, '
       'visionExperimentalFineFretEnabled: '
       '$visionExperimentalFineFretEnabled, '
-      'visionLabCaptureEnabled: $visionLabCaptureEnabled)';
+      'visionLabCaptureEnabled: $visionLabCaptureEnabled, '
+      'audioAnalysisV2Enabled: $audioAnalysisV2Enabled, '
+      'analysisBeatGridEnabled: $analysisBeatGridEnabled, '
+      'analysisPitchEnabled: $analysisPitchEnabled)';
 }
