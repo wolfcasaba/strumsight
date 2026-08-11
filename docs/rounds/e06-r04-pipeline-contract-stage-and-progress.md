@@ -1,6 +1,8 @@
 # E06-R04 — Pipeline contract, stage context és progress
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `4796d539`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 4; §6.4–6.6, §8.4–8.5, §21.2, §22.4
 - **Branch:** `codex/e06-r04-pipeline-contract-stage-and-progress`
 - **Előfeltétel:** **E06-R02 merge**
@@ -47,7 +49,34 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör kizárólag a Ch7 §6.4–6.6, §8.4–8.5, §21.2, §22.4
+alatt már elfogadott SDD-szerződéseket (progress-fázisok, stage-interfész,
+cancellation token, run ID/késői-esemény szabály) ülteti át konkrét Dart
+kódba; a §5 hét „kötött architekturális döntése" ezeknek a szerződéseknek a
+tétel-szintű lebontása, nem új keresztmetsző elv.
+
+### R1 — ADR-átszámozás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért a §5.7 pont a `0200` placeholder-számot idézte. Az E06-R01 tényleges
+`reserve-adr` futása **0215–0220**-at adta (lásd [ADR
+0215](../adr/0215-analysis-document-versioning.md) fejléce, `HANDOFF.md`
+E06-R01/E06-R02 close-out és az E06-R02 brief saját R1 revíziója —
+ugyanabból a batch-ből származó, ugyanaz a drift). Leképezés (megegyezik az
+E06-R02 R1 revíziójával): `0200→0215` (dokumentum-verziózás). A §5.7 pont
+javítva **ADR 0215**-re.
+
+Egyéb §2 „Jelenlegi állapot" állítás újra grep-elve **egyezik**: a
+`computeClipAnalysis` híváslánc (`analyze_providers.dart:108-121`), a Lab-ági
+`catch (_)` diagnosztika-elnyelés (`analyze_providers.dart:74-77`), a CRNN→
+heurisztika `catch (_)` visszaesés (`clip_analyzer.dart:108-110`), az
+`AnalyzeController`/`AnalyzeState` copyWith-mentessége, és az R02 domain
+(`AnalysisCompletionStatus{complete,degraded,cancelled,failed}`,
+`AnalysisWarning`, `AnalysisProvenance.stageVersions`) mind bitre egyeznek a
+kódban mérttel. A `public.dart` MA nem exportál progress-típust (nincs
+duplikáció-kockázat), és az `engine/` könyvtár még nem létezik (mind az öt
+fájl valóban ÚJ). Nincs további revízió.
 
 ## 1. Cél
 
@@ -131,7 +160,7 @@ Listán kívül → `stopped`.
    hiba**, nem „az utolsó nyer".
 7. **A stage timing provenance-be kerül** (id, version, elapsed), és a
    `stage.version` változása az analyzer-verzió számításának bemenete
-   (ADR 0200).
+   (ADR 0215).
 
 ### 5.1 Nyitott döntések — előre rögzített feloldással
 
