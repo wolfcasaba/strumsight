@@ -353,5 +353,8 @@ DSP-retune ebben a körben tilos.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r07-signal-quality-stage-review.md`.
+Review: [docs/reviews/e06-r07-signal-quality-stage-review.md](../reviews/e06-r07-signal-quality-stage-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE.
+Biztonsági review (risk=high): [docs/reviews/e06-r07-signal-quality-stage-security.md](../reviews/e06-r07-signal-quality-stage-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 2 NOTE.
 Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
