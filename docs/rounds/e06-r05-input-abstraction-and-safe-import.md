@@ -1,6 +1,8 @@
 # E06-R05 — Input abstraction és biztonságos import
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `03cbbf86`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 5; §6.2, §11.1, §28.2–28.6
 - **Branch:** `codex/e06-r05-input-abstraction-and-safe-import`
 - **Előfeltétel:** **E06-R03, E06-R04 merge**
@@ -50,8 +52,78 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az R01 ADR 0202 (raw audio) és a SDD §28.6
-(biztonságos dekódolás) végrehajtása.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör az R01-ben már elfogadott ADR (ld. R1 lent) és a SDD
+§6.2, §11.1, §28.6 szerződéseit ülteti át konkrét Dart kódba.
+
+### R1 — ADR-átszámozás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért a §0.0 (eredeti) a `0202` placeholder-számot idézte. A tényleges
+`reserve-adr` futás **0215–0220**-at adott — a „raw audio" témájú ADR
+[**ADR 0217**](../adr/0217-analysis-raw-audio-retention.md) (fejlécében
+saját maga rögzíti: „a teljes hatos blokk 0200–0205-ről 0215–0220-ra
+tolódott", és a hatóköre pontosan §28.1-28.3 — nyers audio, temp fájl,
+fájlnév —, ami ennek a körnek a §5 pont 4 fájlnév-privacy döntését
+megalapozza). A hivatkozás mindenhol **ADR 0202 → ADR 0217**-re javítva.
+
+### R2 — `AnalysisInputSource` MÁR LÉTEZIK — a brief tévesen sorolja új típusnak
+
+Mérve: `lib/features/audio_analysis/domain/analysis_mode.dart:5-10` egy
+**már merge-elt** (E06-R02), négyértékű enumot definiál —
+`AnalysisInputSource { microphone, importedFile, practiceSession,
+songSession }` —, amit hat helyen már használ élő kód és teszt
+(`analysis_input_summary.dart:24` mezőtípusa, `legacy_analyze_adapter.dart:102`,
+`analysis_document_codec.dart:112` az enum `.values`-ét dekódolja, három
+teszt). A `public.dart` MA is exportálja (`export
+'domain/analysis_mode.dart';`). Az eredeti §3/§4 szövege („`AnalysisInput`
+sealed hierarchia … + `AnalysisInputSource` + …") ezt új típusként sorolta
+fel — ha az implementer szó szerint követi és egy MÁSODIK
+`AnalysisInputSource`-t ír az új `analysis_input.dart`-ba, a `public.dart`
+két azonos nevű exportja **ambiguous export** fordítási hibát ad.
+
+A SDD saját literálja (§9.3, 07-epic-06-audio-analysis-2.md:844-865) is
+**megerősíti az újrahasználatot, nem újradefiniálást**: `PcmAnalysisInput`
+mezője pontosan `final AnalysisInputSource source;` — vagyis a Kör 5
+`AnalysisInput`-jának a MEGLÉVŐ enumot kell importálnia.
+
+**Javítás — §3 és §4 az irányadó, az alábbi pontosítással:** az új
+`domain/analysis_input.dart` a meglévő `AnalysisInputSource`-t **importálja**
+(`analysis_mode.dart`-ból), nem definiálja újra. A két konkrét variáns a
+meglévő négy érték egy-egy részhalmazát hordozza: `PcmAnalysisInput.source`
+∈ {`microphone`, `practiceSession`, `songSession`} (a PCM már dekódolva
+érkezik), `FileAnalysisInput.source` = `importedFile` (nyers bájtok, a
+gateway dekódol). Az enum értékkészlete **változatlan** — nincs additív
+bővítés ezen a ponton.
+
+### R3 — a FailureCode-lista hiányos a §6 acceptance-hez képest
+
+A §5 pont 1 hét additív kódot sorol, de a §6 acceptance criteria egy
+NYOLCADIKAT is névvel követel (`clipTooShort`, a hossz-küszöb hármas
+minimum-ágán), a maximum-ágának (hossz felső korlát túllépése) pedig
+**egyáltalán nincs neve**. `clipTooLong` (a `clipTooShort` mintájára) a
+repóban sehol nem foglalt (`grep -rn "clipTooLong" lib/ docs/` → 0 találat) —
+**nem ütközik** a domain MÁR LÉTEZŐ, más típusú
+`CapabilityUnavailableReason.clipTooShort`-jával
+(`domain/analysis_capability.dart:22`, E06-R02): más enum, más névtér, csak
+a leíró szó közös. **Javítás:** a §5 pont 1 additív kódlistája kilenc elemű:
+`unsupportedFormat`, `unsupportedBitDepth`, `truncatedChunk`, `invalidRiff`,
+`chunkSizeOutOfBounds`, `fileTooLarge`, `nonFiniteSample`, `clipTooShort`,
+`clipTooLong` — az utolsó kettő a `AnalysisInputValidator` hossz-küszöbének
+két ága (alul/felül).
+
+### Egyéb §2 állítás újra mérve — egyezik
+
+`lib/core/audio/codec/wav_decoder.dart` pontosan 104 sor, a leírt fejléc-
+(`bytes.length < 44`) és chunk-ciklus (`off + 8 <= bytes.length`) feltételek
+bitre egyeznek; `analyze_providers.dart:195-200` (`analyzeImported`) néma
+no-op-ja üres PCM-re/`sampleRate <= 0`-ra és felvétel közben egyaránt
+igazolva; `clip_recorder.dart:15` `final List<double> _buffer = []`
+korlátlan puffere igazolva; `app_failure.dart` `FailureCode`/
+`PermissionFailure`/`AudioFailure` megléte igazolva, a fájl saját
+doc-commentje kimondja az additív-only szabályt; a hivatkozott
+`test/features/analyze/wav_decoder_test.dart` létezik (139 sor). Nincs
+további revízió.
 
 ## 1. Cél
 
@@ -81,8 +153,10 @@ hosszkorlát, és a fájlnév **privacy-flagelt** kezelése.
 ## 3. Scope
 
 **Benne:** `AnalysisInput` sealed hierarchia (`PcmAnalysisInput`,
-`FileAnalysisInput`) + `AnalysisInputSource` + privacy-flagelt
-`sourceDisplayName`; `AudioDecoderGateway` (typed failure, **soha nem null**);
+`FileAnalysisInput`) a MEGLÉVŐ `AnalysisInputSource` enumot újrahasználva
+(`domain/analysis_mode.dart`, ld. §0.0 R2 — **importálva, nem
+újradefiniálva**) + privacy-flagelt `sourceDisplayName`;
+`AudioDecoderGateway` (typed failure, **soha nem null**);
 `WavDecoderAdapter` a meglévő core dekóder köré, a mai `null`-okat
 **indokolt** failure-kódra fordítva; `AnalysisInputValidator` (üres minta,
 sample rate, csatornaszám, véges értékek, min/max hossz, fájlméret);
@@ -97,7 +171,7 @@ módosítása, új codec (AAC/MP3/FLAC), recorder (R06), preprocessing (R08),
 
 | Útvonal | Állapot | Miért |
 |---|---|---|
-| `.../domain/analysis_input.dart` | ÚJ | sealed input + source + privacy flag |
+| `.../domain/analysis_input.dart` | ÚJ | sealed input (a meglévő `AnalysisInputSource`-t importálva, §0.0 R2) + privacy flag |
 | `.../data/input/audio_decoder_gateway.dart` | ÚJ | typed failure kapu |
 | `.../data/input/wav_decoder_adapter.dart` | ÚJ | adapter a meglévő core dekóderre |
 | `.../data/input/analysis_input_validator.dart` | ÚJ | kötelező ellenőrzések |
@@ -114,9 +188,11 @@ Listán kívül → `stopped`.
 ## 5. Kötött architekturális döntések
 
 1. **A dekóder soha nem ad `null`-t indoklás nélkül** (SDD Kör 5 §3): a
-   gateway `AppResult<DecodedAudio>`-t ad, a failure-kód megnevezi az okot
-   (`unsupportedFormat`, `unsupportedBitDepth`, `truncatedChunk`,
-   `invalidRiff`, `chunkSizeOutOfBounds`, `fileTooLarge`, `nonFiniteSample`).
+   gateway/validator `AppResult<DecodedAudio>`-t ad, a failure-kód megnevezi
+   az okot — kilenc additív `FailureCode` érték (§0.0 R3):
+   `unsupportedFormat`, `unsupportedBitDepth`, `truncatedChunk`,
+   `invalidRiff`, `chunkSizeOutOfBounds`, `fileTooLarge`, `nonFiniteSample`,
+   `clipTooShort` (hossz **alul**), `clipTooLong` (hossz **fölül**).
    **NEM elfogadható:** a mai `null` továbbadása vagy egyetlen gyűjtőkód
    minden hibára.
 2. **A meglévő core dekóder viselkedése VÁLTOZATLAN.** Az adapter a `null`-t
@@ -129,7 +205,7 @@ Listán kívül → `stopped`.
    integer overflow ellen az összeadás **előtt** vizsgál
    (`size > bytes.length - body`, nem `body + size > bytes.length`).
    **NEM elfogadható:** a túlcsordulás utáni ellenőrzés.
-4. **A fájlnév privacy-metaadat** (ADR 0202, SDD §28.3): a domain
+4. **A fájlnév privacy-metaadat** (ADR 0217, SDD §28.3): a domain
    `sourceDisplayName`-je `redacted: true` jelzéssel jár, a `toString()` és
    minden logolt alak **redaktált**. **NEM elfogadható:** a fájlnév
    megjelenése egy `AppLogger` hívás `fields`-ében.
@@ -184,7 +260,8 @@ open_decisions:
 - [ ] **Hossz-küszöb hármas:** 48 000 Hz-en `minDuration = 250 ms` →
       **11 999 / 12 000 / 12 001** minta (a `12 000` átmegy, a `11 999`
       `clipTooShort`); a maximumnál `maxDuration = 10 perc` →
-      **28 799 999 / 28 800 000 / 28 800 001** minta (a `28 800 000` átmegy).
+      **28 799 999 / 28 800 000 / 28 800 001** minta (a `28 800 000` átmegy,
+      a **határ inkluzív**, a `28 800 001` → `clipTooLong`, §0.0 R3).
 - [ ] **NaN-mátrix:** importált úton NaN/+Inf/−Inf → `nonFiniteSample`
       Failure (3 cella); mikrofonos úton ugyanez → **Success + warning +
       a minta 0.0**, a többi minta bitre változatlan (3 cella).
@@ -212,6 +289,7 @@ open_decisions:
 | A chunk-ellenőrzés `body + size > bytes.length` alakú | a `0xFFFFFFFF` overflow-cella (nem dob, de rossz ágra megy) |
 | A méret-ellenőrzés `>` helyett `>=` | a **pontosan** `maxFileBytes` cella |
 | A minimum hossz `>` helyett `>=` | a **pontosan** 12 000 mintás cella |
+| A maximum hossz `<` helyett `<=` | a **pontosan** 28 800 000 mintás cella |
 | A NaN mindkét úton elutasításra kerül | a mikrofonos NaN→0.0 warning-cella |
 | A NaN mindkét úton nullázódik | az importált NaN `Failure`-cella |
 | A fájlnév a `toString()`-ben marad | a redakciós cella |
