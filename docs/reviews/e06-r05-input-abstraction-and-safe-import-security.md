@@ -6,7 +6,22 @@ worktree-ben ül, origin-ra még nem pusholva — a review ezt a commitot fetche
 egy izolált `/tmp` klónba, minden próbát ott futtatva; a megosztott worktree-t
 csak olvasásra érintette).
 Reviewer: Claude (security-reviewer, READ-ONLY) · Dátum: 2026-08-11
-Verdikt: **CHANGES REQUIRED (FAIL)** — 0 CRITICAL, 0 BLOCKER, **1 MAJOR**, 2 NOTE
+Verdikt: ~~CHANGES REQUIRED (FAIL)~~ → **PASS (javító kör után, `31d76195`)**
+— 0 CRITICAL, 0 BLOCKER, **0 MAJOR** (F1 FIXED), 2 NOTE
+
+## Javító kör után — orchesztrátor újra-ellenőrzése (2026-08-11)
+
+A javító kör a `_inspect()`-et úgy módosította, hogy a MÁSODIK `'data'`
+chunkot `audio.multiple_data_chunks` failure-rel utasítja el, MIELŐTT a
+fagyasztott core dekóder egyáltalán lefutna — tehát a `.clamp()`-alapú
+csendes NaN→véges konverzió sosem érhető el ezen az úton (egy WAV-nak
+pontosan egy `data` chunkja lehet érvényesen; kettő eleve elutasítás). Az
+orchesztrátor saját, friss izolált klónban újrafuttatta a teljes gate-et
+(zöld) és mutáció-próbával megerősítette, hogy az új regressziós teszt
+(`rejects a final data chunk before it can sanitize non-finite samples`)
+ténylegesen a védelemtől függ (az őr eltávolítása pirosra fordította,
+visszaállítás után zöld). F2/F3 (NOTE, hardening/perf javaslat) változatlanul
+nyitva maradhat — nem blokkoló, opcionális jövőbeli finomítás.
 
 A MAJOR **nem termékhatár-sértés** (nincs titok-szivárgás, consent-megkerülés,
 RCE/path-traversal, crash vagy rejtett hálózat). A crash-safety, a fájlnév-
@@ -86,7 +101,8 @@ input-contractot exportálja, a `data/input/**` adapter-belsőt (pl.
 - **Ellenőrzés:** a fenti probe 15 mátrix-cellája (multi-`data` float32 NaN →
   `Failure(audio.non_finite_sample)`) legyen zöld; a single-chunk cella maradjon
   zöld.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`31d76195` — 2. `data` chunk `audio.multiple_data_chunks`-szal
+  elutasítva a decode előtt; orchesztrátor mutáció-próbával megerősítve)
 
 ### F2 — NOTE — `_inspect` teljes fejléc-bejárása a gateway try/catch-en KÍVÜL fut
 
@@ -168,8 +184,6 @@ mutation: :103 guard -> `if(false && …)` => UNCAUGHT IndexError @ _inspect:177
 
 ## Merge-döntés
 
-0 CRITICAL, 0 BLOCKER, **1 MAJOR (OPEN)**. Az ADR 0052 / a review-report §
-szerint a MAJOR merge-blokkoló, és a brief §11 „nulla OPEN BLOCKER/MAJOR" bárja
-is ezt írja elő → **CHANGES REQUIRED**, amíg az F1 (§5.6 megkerülés) meg nem
-oldódik vagy a csapat expliciten nem waiverezi a §5.6-ot a multi-`data`-chunk
-esetre. A crash-safety, privacy, hálózat/FS és additivitás nem igényel változást.
+0 CRITICAL, 0 BLOCKER, 0 MAJOR (F1 FIXED `31d76195`, orchesztrátor-mutációval
+megerősítve). A crash-safety, privacy, hálózat/FS és additivitás mind
+változatlanul tiszta. Biztonsági szempontból **PASS**, nincs merge-akadály.

@@ -1,13 +1,53 @@
 # E06-R05 — Review
 
 Brief: docs/rounds/e06-r05-input-abstraction-and-safe-import.md
-Diff: `git diff a7507a58...7b5a4e1c`
-Reviewer: Claude (independent review subagent) · Dátum: 2026-08-11
-Verdikt: CHANGES REQUIRED
+Diff: `git diff a7507a58...7b5a4e1c` (eredeti forduló) + javító kör:
+`git diff 27378956...31d76195`
+Reviewer: Claude (independent review subagent, majd orchesztrátor a javító
+kör után) · Dátum: 2026-08-11
+Verdikt: ~~CHANGES REQUIRED~~ → **APPROVED (javító kör után)**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 2 · NOTE: 3
+Eredeti forduló: BLOCKER: 0 · MAJOR: 1 · MINOR: 2 · NOTE: 3
+Javító kör után: BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 3 (F4/F5/F6,
+egyik sem blokkoló, F5 orchesztrátor-teendőként lezárva)
+
+## Javító kör után — orchesztrátor újra-ellenőrzése (2026-08-11, `31d76195`)
+
+A javító kör (Terra, ugyanaz a motor, 1 forduló) mindhárom nyitott leletet
+zárta. Az orchesztrátor a fenti diffet **saját maga, friss izolált
+`/tmp` klónban** (`git clone --branch codex/e06-r05-input-abstraction-and-safe-import
+https://github.com/wolfcasaba/strumsight.git`) újra-ellenőrizte:
+
+- **Teljes gate zöld** (`tools/round-gate.sh test/features/audio_analysis
+  test/property test/core test/features/analyze`, `tools/prepare-flutter-generated.sh`
+  után): format/analyze/mind a 4 célzott teszt-útvonal/architecture/secrets/l10n
+  — mind ZÖLD, csonkítatlan kimenettel.
+- **F1 zárás ellenőrizve mutáció-próbával:** a `wav_decoder_adapter.dart`
+  új `hasDataChunk` őrét (a második `data` chunk elutasítása) ideiglenesen
+  eltávolítva a saját, izolált klónban, az ÚJ regressziós teszt
+  (`rejects a final data chunk before it can sanitize non-finite samples`)
+  pirosra fordult (`Expected: audio.multiple_data_chunks, Actual:
+  audio.non_finite_sample` — a védelem egy MÁSODIK rétege, a chunkonkénti
+  finiteness-scan folytatása, ott fogta el a mintát, más kóddal — ez
+  önmagában is megerősíti, hogy a régi „azonnali return az első data
+  chunknál” hiba véglegesen zárva van, mindkét réteg együtt véd), majd
+  `git checkout --` visszaállítás után a teszt (mind a 16) újra zöld.
+- **F2 zárva:** `PROPERTY_SEED` fallback `?? 42`-re javítva +
+  `print('PROPERTY_SEED=$seed')` hozzáadva, egyezik a másik 22
+  property-teszt konvenciójával.
+- **F3 zárva:** a mikrofon-NaN teszt fixture-je egyedi, nem-nulla értékű
+  12 000 elemű tömbre cserélve, az assert a TELJES elvárt tömböt
+  hasonlítja (`expect(validated.input.samples, expectedSamples)`), nem
+  csak egy triviálisan igaz `.skip(3).every(==0.0)`-t.
+- **F4/F6:** változatlanul nyitott NOTE / informatív, nem blokkol,
+  dokumentálva marad.
+- **F5 zárva:** az orchesztrátor push-olta mind az eredeti, mind a javító
+  kör commitját origin-re (`9b1c7ebf..7b5a4e1c..27378956..31d76195`).
+
+Nulla OPEN BLOCKER/MAJOR → **merge engedélyezett** (ADR 0052/AGENTS.md §15
+mércéje szerint), a CI-dispatch/merge-lépések folytatódnak.
 
 Gépi scope-audit: 11/11 changed file ∈ allowed_paths, zero extras. Saját,
 izolált `/tmp` klónban újrafuttatott gate (format/analyze/4 célzott
@@ -68,7 +108,7 @@ tételekből jön.
 - **Hatás:** a brief §6 NaN-mátrix kritériuma explicit ígéretet tesz: „importált úton NaN/+Inf/−Inf → `nonFiniteSample` Failure". Ez a bemenet-alak (2 `data` chunk, valid RIFF/WAVE/fmt) ezt megkerüli: `Success<PcmAnalysisInput>` jön vissza egy csendben 1.0-ra torzított mintával — hibás, de észrevétlen elemzési bemenet. A kör saját 500-esetes véletlen-bájt fuzzja ezt gyakorlatilag sosem konstruálja meg (egy jólformált, két-`data`-chunkos RIFF valószínűsége tiszta véletlen bájtokból elhanyagolható), és egyetlen egységteszt sem fedi (az `analysis_input_validator_test.dart` NaN-tesztjei közvetlenül `validator.validate()`-et hívják, megkerülve a WAV-bájt-réteget).
 - **Kötelező javítás:** `_inspect()`-nek vagy (a) el kell utasítania minden WAV-ot, amiben egynél több `'data'` chunk van, vagy (b) a legacy dekóderrel azonos „utolsó `data` chunk számít" szemantikával kell pásztáznia/NaN-ellenőriznie — MINDKETTŐ a kör saját, engedélyezett `wav_decoder_adapter.dart`-ján belül elvégezhető, az érintetlen core dekódert nem kell módosítani, tehát ez **nem** váltja ki a brief §9 STOP-klauzuláját (az a core dekóder algoritmusának megváltoztatására vonatkozik).
 - **Ellenőrzés:** saját eldobható próba (`test/_probe_double_data_test.dart`, megírva → lefuttatva → törölve, sosem commitolva) egy fmt(format=3, 32-bit float, mono, 48 kHz) + data-chunk-1 (12 000×0.25, tiszta) + data-chunk-2 (12 000 minta, első=`double.nan`) WAV-ot épített. `WavDecoderAdapter().decodeInput(...)` → `Success<PcmAnalysisInput>(sampleCount: 12000, allFinite: true, first: 1.0)`. Külön, izolált `dart run` szkripttel megerősítve a gyökérok: `double.nan.clamp(-1.0, 1.0) = 1.0 isFinite=true`; `double.infinity.clamp(-1.0,1.0)=1.0`; `double.negativeInfinity.clamp(-1.0,1.0)=-1.0`. A hiba kizárólag a float32 (format 3) útra korlátozódik — a 16-bit PCM ág egész aritmetikát használ, nem tud NaN/Inf-et termelni.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`31d76195` — a második `data` chunk `audio.multiple_data_chunks`-szal elutasítva a core-dekóder hívása előtt; orchesztrátor-mutáció a javítást megerősítette, lásd fent)
 
 ### F2 — MINOR — A fuzz-teszt eltér a repó `PROPERTY_SEED` konvenciójától
 
