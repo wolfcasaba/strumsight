@@ -200,13 +200,34 @@ class IndependenceTest(unittest.TestCase):
 
     def test_a_blocked_claude_budget_rules_out_the_claude_implementer(self) -> None:
         """Kimerült kereten a szerepcsere nem megoldás: a csere-motor sem
-        ehet ugyanabból a keretből, ezért külső kulcsos motorra megyünk."""
+        ehet ugyanabból a keretből, ezért külső kulcsos motorra megyünk.
+
+        MÉRT hiba (2026-08-11, E06-R07 H5): a driver a `minimax` választ a
+        `MINIMAX_API_KEY` env VAGY a `~/.mmx/config.json` jelenlétéből dönti
+        el (round-pipeline.sh `resolve_independent_engine`) — ez a helyes,
+        éles viselkedés, ÉLES gépi állapotot mér. A teszt viszont, a
+        testvéreitől eltérően (`PIPELINE_ORCH_ROTATION`,
+        `PIPELINE_FALLBACK_ENGINE` explicit env-ként megy a `driver()`-be),
+        NEM injektálta ezt az állapotot, hanem az AMBIENS host-ra hagyatkozott.
+        A dev boxon van `~/.mmx/config.json`, ezért ott zölden futott; a
+        Router CI friss `ubuntu-latest` futóján viszont sem a fájl, sem az
+        env nincs jelen, így a driver — HELYESEN — `HALT_INDEP`-et adott, a
+        teszt pedig determinisztikusan pirosra váltott MINDEN PR-en, ami
+        érintett egy router-ci trigger-utat (`docs/rounds/**` is az — tehát
+        gyakorlatilag minden SDD-kör). Lásd docs/LESSONS.md L219.
+        """
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             (state / "claude-blocked-until").write_text(
                 str(int(time.time()) + 3600), encoding="utf-8"
             )
-            result = driver("--independent-engine", "terra", "terra", state=state)
+            result = driver(
+                "--independent-engine",
+                "terra",
+                "terra",
+                state=state,
+                MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key",
+            )
             self.assertEqual(result.stdout.strip(), "minimax")
 
 
