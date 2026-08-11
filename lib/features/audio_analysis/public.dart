@@ -9,6 +9,7 @@ export 'domain/analysis_capability.dart';
 export 'domain/analysis_document.dart';
 export 'domain/analysis_event.dart';
 export 'domain/analysis_hotspot.dart';
+export 'domain/analysis_input.dart';
 export 'domain/analysis_input_summary.dart';
 export 'domain/analysis_insight.dart';
 export 'domain/analysis_metric.dart';

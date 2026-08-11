@@ -345,7 +345,50 @@ parser átírása ebben a körben scope-sértés.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `domain/analysis_input.dart`: a meglévő `AnalysisInputSource`-t importáló
+  sealed `AnalysisInput` hierarchia (`FileAnalysisInput`,
+  `PcmAnalysisInput`) és immutable, privacy-jelölt `SourceDisplayName`.
+  A fájlnév egyetlen `toString()` alakban sem jelenik meg nyersen.
+- `data/input/`: `InputLimits` v1 (64 MiB, 250 ms–10 perc, 8–192 kHz,
+  legfeljebb két csatorna), `AnalysisInputValidator`, typed
+  `AudioDecoderGateway` és a régi core WAV-dekódert változatlanul hagyó
+  `WavDecoderAdapter`. A gateway `AppResult<DecodedAudio>`-t ad; a
+  metadata-megőrző adapterút `PcmAnalysisInput`-ot készít.
+- `app_failure.dart`: kizárólag additív audio input/decode failure code-ok.
+- `public.dart`: az új domain input contract exportja.
+- Tesztek: formátum-, malformed-, méret-, hossz-, NaN-, redakció- és
+  500-es, `PROPERTY_SEED`-elt fuzz-mátrix. A legacy WAV-teszt változatlan.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/data/audio_decoder_gateway_test.dart`
+  — a hiányzó új contractok miatt várt compile failure.
+- Célzott zöld ellenőrzések:
+  `flutter test test/features/audio_analysis/data/audio_decoder_gateway_test.dart`
+  (15 teszt),
+  `flutter test test/features/audio_analysis/data/analysis_input_validator_test.dart`
+  (5 teszt),
+  `flutter test test/property/analysis_input_fuzz_property_test.dart`
+  (1 seedelt property, 500 eset) — mind zöld.
+- Valódi-sértés próba: a `validateFileByteCount` méretellenőrzésének
+  ideiglenes eltávolításával a `maxFileBytes + 1` cella várt módon piros lett
+  (`Expected Failure<void>, Actual Success<void>`); az ellenőrzés visszaállítva.
+- Kötelező gate:
+  `tools/round-gate.sh test/features/audio_analysis test/property test/core test/features/analyze`
+  — exit `0` (format, analyze, a négy célzott tesztcsoport és architecture:
+  zöld).
+
+### Eltérés / nem futtatott ellenőrzések
+
+- Az első gate analyze-lépése a hiányzó, `.gitignore`-olt
+  `lib/l10n/app_localizations.dart` miatt állt meg (932, a kör diffjétől
+  független hiba). `flutter gen-l10n` helyben regenerálta az artefaktumot;
+  az ismételt teljes gate exit `0` lett. Generált lokalizáció nem került a
+  diffbe.
+- Backend- és Android/APK-build nem futott: a kör sem backendet, sem natív
+  scope-ot nem érint (`native_gate = false`).
 
 ## 11. Review — a független reviewer tölti ki
 
