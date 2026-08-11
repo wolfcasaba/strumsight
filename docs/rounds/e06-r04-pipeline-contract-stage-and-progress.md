@@ -1,6 +1,8 @@
 # E06-R04 — Pipeline contract, stage context és progress
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `4796d539`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 4; §6.4–6.6, §8.4–8.5, §21.2, §22.4
 - **Branch:** `codex/e06-r04-pipeline-contract-stage-and-progress`
 - **Előfeltétel:** **E06-R02 merge**
@@ -47,7 +49,34 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör kizárólag a Ch7 §6.4–6.6, §8.4–8.5, §21.2, §22.4
+alatt már elfogadott SDD-szerződéseket (progress-fázisok, stage-interfész,
+cancellation token, run ID/késői-esemény szabály) ülteti át konkrét Dart
+kódba; a §5 hét „kötött architekturális döntése" ezeknek a szerződéseknek a
+tétel-szintű lebontása, nem új keresztmetsző elv.
+
+### R1 — ADR-átszámozás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért a §5.7 pont a `0200` placeholder-számot idézte. Az E06-R01 tényleges
+`reserve-adr` futása **0215–0220**-at adta (lásd [ADR
+0215](../adr/0215-analysis-document-versioning.md) fejléce, `HANDOFF.md`
+E06-R01/E06-R02 close-out és az E06-R02 brief saját R1 revíziója —
+ugyanabból a batch-ből származó, ugyanaz a drift). Leképezés (megegyezik az
+E06-R02 R1 revíziójával): `0200→0215` (dokumentum-verziózás). A §5.7 pont
+javítva **ADR 0215**-re.
+
+Egyéb §2 „Jelenlegi állapot" állítás újra grep-elve **egyezik**: a
+`computeClipAnalysis` híváslánc (`analyze_providers.dart:108-121`), a Lab-ági
+`catch (_)` diagnosztika-elnyelés (`analyze_providers.dart:74-77`), a CRNN→
+heurisztika `catch (_)` visszaesés (`clip_analyzer.dart:108-110`), az
+`AnalyzeController`/`AnalyzeState` copyWith-mentessége, és az R02 domain
+(`AnalysisCompletionStatus{complete,degraded,cancelled,failed}`,
+`AnalysisWarning`, `AnalysisProvenance.stageVersions`) mind bitre egyeznek a
+kódban mérttel. A `public.dart` MA nem exportál progress-típust (nincs
+duplikáció-kockázat), és az `engine/` könyvtár még nem létezik (mind az öt
+fájl valóban ÚJ). Nincs további revízió.
 
 ## 1. Cél
 
@@ -131,7 +160,7 @@ Listán kívül → `stopped`.
    hiba**, nem „az utolsó nyer".
 7. **A stage timing provenance-be kerül** (id, version, elapsed), és a
    `stage.version` változása az analyzer-verzió számításának bemenete
-   (ADR 0200).
+   (ADR 0215).
 
 ### 5.1 Nyitott döntések — előre rögzített feloldással
 
@@ -238,9 +267,102 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `lib/features/audio_analysis/engine/analysis_cancellation.dart`: per-run,
+  kooperatív cancellation token/source és kontrollált cancellation exception.
+- `lib/features/audio_analysis/domain/analysis_progress.dart`: a Ch7 §6.4
+  kilenc rendezett fázisa, run ID-s progress- és terminális result-eventek.
+- `lib/features/audio_analysis/engine/analysis_stage.dart` és
+  `analysis_context.dart`: a szó szerinti generikus stage contract, per-stage
+  context, progress sink, valamint immutable stage-verzió/timing provenance.
+  A sealed core `AppFailure` változatlan maradt; a degradálható/fatális döntést
+  a `StageFailure` burkoló és a pipeline composition classifier hordozza.
+- `lib/features/audio_analysis/engine/analysis_pipeline.dart`: stage-sorrend,
+  cancellation előtti/utáni kontrollpont, degradálás/fatális leállás, run-ID
+  alapú késői-event eldobás (`droppedLateEvents`) és dokumentum nélküli
+  `cancelled` eredmény.
+- `lib/features/audio_analysis/public.dart`: a cross-feature progress- és
+  cancellation-contract exportja (engine implementáció nem exportált).
+- `test/support/fake_analysis_stages.dart` és az új engine/property tesztek:
+  determinisztikus számlálós fake, cancel/degradált/fatális/késői-event/
+  duplikált-ID mátrix, illetve 80 determinisztikus véletlen stage-összeállítás
+  monoton progress property-je.
+
+### Acceptance evidence
+
+1. **Stage-sorrend + provenance:** az `AnalysisPipeline runs stages in order
+   and records every stage version and timing` teszt öt fake stage pontos
+   futási-, verzió- és timing-sorrendjét ellenőrzi.
+2. **Progress:** a property teszt 80, 1–9 stage-es összeállítást futtat;
+   minden publikált fázis indexe szigorúan nő, akkor is, ha a stage nem küld
+   saját progress-eventet (pipeline fallback).
+3. **Cancel-mátrix:** a célzott teszt mind a négy cellája zöld: első stage
+   előtt, két stage között, stage checkpoint közben és utolsó stage után;
+   mindegyik `cancelled`, `value == null`, result-event nélküli és lezárt
+   progress streamű. A valódi-sértés próbában a fake ciklusból ideiglenesen
+   kivett `throwIfCancelled()` mellett a stage-közbeni cella elvárt módon
+   piros lett (`completedCheckpoints`: várt 0, tényleges 3); a hívás vissza
+   lett állítva.
+4. **Degradálható/fatális:** ugyanaz a `MlFailure` degradálhatóként egy
+   warningot és unavailable capability-t ad, majd futtatja a következő
+   stage-et; fatal-ként `failed`, és a következő fake hívásszámlálója 0.
+5. **Késői event:** cancel utáni run#2 mellett run#1 késő progress- és
+   result-eventje eldobódik; a célzott teszt `droppedLateEvents == 2`-t mér.
+6. **Duplikált ID:** a konstruktor kontrollált `ArgumentError`-t ad.
+7. **Tiszta Dart:** `dart test test/features/audio_analysis/engine
+   test/property/analysis_pipeline_property_test.dart` zöld; az öt új
+   engine/domain production fájlban a `rg 'package:flutter' ...` ellenőrzés
+   nem adott találatot.
+8. **V1 érintetlen:** a teljes gate `test/features/analyze` lépése zöld, és a
+   diff nem tartalmaz `lib/features/analyze/**` utat.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/engine/analysis_cancellation_test.dart`
+  — a még nem létező cancellation-contract importja miatt elvárt fordítási
+  hibával állt meg.
+- Célzott: `dart test test/features/audio_analysis/engine
+  test/property/analysis_pipeline_property_test.dart` — 12 teszt zöld.
+- Valódi-sértés: a checkpoint-hívás ideiglenes eltávolítása után a stage-közbeni
+  cancel-teszt piros; visszaállítás után a pipeline teszt 9/9 zöld.
+- Kötelező gate: `tools/round-gate.sh test/features/audio_analysis
+  test/property test/features/analyze` — kilépési kód 0; format, analyze,
+  mindhárom test-cél, architecture, secrets és l10n zöld.
+
+### Diff és eltérések
+
+`git diff --cached --stat` a staging után:
+
+```text
+ ...e06-r04-pipeline-contract-stage-and-progress.md |  86 ++++++-
+ .../audio_analysis/domain/analysis_progress.dart   |  55 +++++
+ .../engine/analysis_cancellation.dart              |  28 +++
+ .../audio_analysis/engine/analysis_context.dart    |  91 ++++++
+ .../audio_analysis/engine/analysis_pipeline.dart   | 248 +++++++++++++++++++
+ .../audio_analysis/engine/analysis_stage.dart      |  35 +++
+ lib/features/audio_analysis/public.dart            |   2 +
+ .../engine/analysis_cancellation_test.dart         |  31 +++
+ .../engine/analysis_pipeline_test.dart             | 270 +++++++++++++++++++++
+ test/property/analysis_pipeline_property_test.dart |  47 ++++
+ test/support/fake_analysis_stages.dart             |  62 +++++
+ 11 files changed, 954 insertions(+), 1 deletion(-)
+```
+
+Nincs eltérés a brief scope-jától. Nem futott Android APK build vagy CI-dispatch:
+ezek az orchesztrátor merge-előtti feladatai. Következő kör: **E06-R05** a
+kijelölt Epic 6 sorrendben.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+**APPROVED** (2026-08-11) — `docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md`.
+0 BLOCKER, 0 MAJOR, 1 MINOR (deferred follow-up — R07 pre-flight kötelező
+ellenőrzés a `publishResult`-ra), 5 NOTE. Dedikált biztonsági review
+(risk=high): **PASS**, 0 CRITICAL/BLOCKER/MAJOR —
+`docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md`.
+Scope-audit (gépi ÉS saját): 11/11 fájl az engedélyezett listán belül. Két
+saját valódi-sértés próba (cancel-checkpoint guard, fatal-stage early-stop
+guard) mindkettő a várt cellát bukta meg, majd visszaállítva. Full Gate
+(`31494921432`) + Router CI (`31494909290`) mindkettő success az exact SHA
+`ea8d95d9`-n. Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN
+BLOCKER/MAJOR után — mindhárom teljesül.
