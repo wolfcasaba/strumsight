@@ -59,7 +59,7 @@ echo "codex-round.sh: motor=$round_engine modell=${ENGINE_MODEL:-?} stall=${stal
 rm -f "$signal"
 : > "$log_file"
 
-# Self-heal E06-R07/H7 (docs/LESSONS.md L220): ha a munkapéldányt a hub
+# Self-heal E06-R07/H7 (docs/LESSONS.md L221): ha a munkapéldányt a hub
 # lokális útvonaláról klónozták (SKILL.md §3 `git clone <hub> <cél>`), az
 # `origin` a hub útvonalára mutat — ha a hub épp a kör branch-én áll, egy
 # implementer-push `receive.denyCurrentBranch`-sel elutasul. A javítás a

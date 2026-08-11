@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Egy kör-munkapéldány `origin`-jét a VALÓS upstream-re állítja, ha az egy
 # lokális útvonalra mutat (self-heal E06-R07/H7, ADR 0112, docs/LESSONS.md
-# L220).
+# L221).
 #
 #   tools/fix-workspace-origin.sh <munkapéldány>
 #

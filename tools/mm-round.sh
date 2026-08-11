@@ -107,7 +107,7 @@ fi
 rm -f "$signal" "$pid_file"
 : > "$log_file"
 
-# Self-heal E06-R07/H7 (docs/LESSONS.md L220) — lásd a codex-round.sh azonos
+# Self-heal E06-R07/H7 (docs/LESSONS.md L221) — lásd a codex-round.sh azonos
 # szakaszának indoklását: ha a munkapéldány origin-je a hub lokális útvonalára
 # mutat, itt (az implementer indulása ELŐTT) a hub saját upstream-jére áll.
 bash "$script_dir/fix-workspace-origin.sh" "$workdir" >&2 || true

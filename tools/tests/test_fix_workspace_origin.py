@@ -1,6 +1,6 @@
 """Regressziós teszt: tools/fix-workspace-origin.sh (self-heal E06-R07/H7).
 
-MÉRT gyökérok (2026-08-11, docs/LESSONS.md L220): a kör-munkapéldányt az
+MÉRT gyökérok (2026-08-11, docs/LESSONS.md L221): a kör-munkapéldányt az
 orchesztrátor `git clone <hub> <cél>`-lal hozza létre (sdd-round-driver
 SKILL.md §3), ahol `<hub>` a checkoutolt fő-repó lokális útvonala. Ha a hub
 ÉPP a kör branch-én áll (pl. a pre-flight ADR/brief-commit után, a `main`-re
