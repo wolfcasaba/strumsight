@@ -307,7 +307,36 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Implementáció
+
+- `lib/features/audio_analysis/data/capture/analysis_recorder.dart` — V2 recorder, amely a meglévő `MicCapture`-t komponálja; ez őrzi a shared coordinator lease-t, a permission/busy failure típusát és az `onRevoke` lifecycle-teardownt. Run ID szűri a késői chunkokat, a max-hossz inkluzív, a level preview peak/RMS alapú és 10 Hz-nél nem sűrűbb mintaszám-alapon.
+- `lib/features/audio_analysis/data/capture/recording_run.dart` — immutable, lokális recording-run metaadat és állapot (`recording`, `completed`, `cancelled`, `maxDurationReached`); ez szándékosan nem a későbbi E06-R22 teljes `AudioAnalysisState` gépe.
+- `lib/features/audio_analysis/domain/recording_level.dart` és `public.dart` — a preview típus és a V2 public exportok.
+- `test/support/fake_audio.dart` — additív callback-history/stale-callback és számlálós PCM fake; meglévő API nem változott.
+- `test/features/audio_analysis/data/analysis_recorder_test.dart` — lease, permission-vs-busy, single-flight, stale-chunk, max-hossz, O(N) preview és oda-vissza clipping-hysteresis mátrix.
+- `test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` — az öt lifecycle cella (`resumed`, `inactive`, `paused`, `hidden`, `detached`).
+
+### Acceptance evidence
+
+- Lease-mátrix: `analysis_recorder_test.dart` a szabad lease-t, a controlled busy failuret, a stop utáni `activeOwner == null`-t és a kétszeri start egy capture-ét méri; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Lifecycle-mátrix: `analysis_recorder_lifecycle_test.dart` mind az öt cellájában csak `paused`, `hidden` és `detached` cancel/release, az `inactive` nem; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Stale-chunk: a recorder-teszt run#1 két késői chunkjával run#2 pufferét érintetlenül hagyja és `droppedStaleChunks == 2`; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Maximum hossz: a policy-teszt 48 kHz-en a `28 799 999 / 28 800 000 / 28 800 001` küszöbhármast pontosan számolja; a viselkedési teszt a determinisztikus, kis mintaszámú megfelelőjén igazolja az inkluzív zárást, megőrzött PCM-et és a többlet eldobását; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Hysteresis: a −3.5/−3.0/−2.0/−1.0/−0.5 dBFS oda-vissza sorozat méri, hogy a −2.0 dBFS állapotfüggő marad; a teljes gate `test/features/audio_analysis` lépése zöld.
+- Nincs FFT/pipeline: a `CountingSampleBuffer` a preview lineáris mintaolvasását méri; a recorder csak peak/RMS-t importál/számol, és a teljes gate `test/features/audio_analysis` lépése zöld.
+- V1 regresszió: a teljes gate `test/features/analyze` lépése zöld, és a diff nem tartalmaz `lib/features/analyze/**` útvonalat.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/data/analysis_recorder_test.dart test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart` — a még nem létező három production import miatti várt compile failure.
+- GREEN: ugyanez a célzott parancs — **15 teszt zöld**.
+- Valódi-sértés próba: `AnalysisRecorder.stop()` ideiglenesen nem hívta a `MicCapture.stop()`-ot; a lease-release teszt várt módon piros lett (`Actual: AudioOwner.analyzeRecorder`), majd a hívás visszaállt.
+- `tools/round-gate.sh --result-json /tmp/e06-r06-round-gate-result.json test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, `test/features/audio_analysis`, `test/core`, `test/features/analyze`, architecture, secrets és l10n. A gate saját eredményartefaktuma: `outcome=pass`, `exit_code=0`, `failed_step=null`.
+
+### Eltérés, kockázat, follow-up
+
+- A SDD korai, tágabb "régi Analyze screen adapteren" vázlata nem része ennek a briefnek; a brief §3/§4 elsőbbségével a V1 Analyze érintetlen maradt.
+- A korábbi localization-előfeltételt az orchesztrátor a gitignore-olt generált kimenet előállításával pótolta; a végső gate zöld. A V1/V2 egyidejű lease-conflict UI-üzenet továbbra is a brief §9 szerinti R22 follow-up.
 
 ## 11. Review — a független reviewer tölti ki
 
