@@ -1,6 +1,8 @@
 # E06-R02 — AnalysisDocument V2 domainmodell
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor
+  pre-flight — kód újraellenőrizve: main @ `b762feaf`, előre megírva
+  2026-08-07 @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 2; §7, §9, §10
 - **Branch:** `codex/e06-r02-analysis-document-v2-domain`
 - **Előfeltétel:** **E06-R01 merge**
@@ -40,12 +42,14 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R01 merge. Olvasd újra
-> a `lib/app/config/feature_flags.dart` **mai** flag-listáját (a batch idején
-> 20 flag, egy sem audio-analysis) és a `test/app/feature_flags_test.dart`
-> tényleges nevét/tartalmát — ha a fájl nem létezik vagy máshogy hívják, a
-> flag-őr tesztje **a meglévő fájlba** kerül, a lista pedig a pre-flightban
-> javul. ADR 0200/0203/0204/0205 az R01-ből. PREPARED→PLANNING, brief commit
+> ⚠ **Pre-flight ELVÉGEZVE (2026-08-11, orchesztrátor):** friss `origin/main`
+> (`b762feaf`, E06-R01 merge `62516a4b` benne). `lib/app/config/feature_flags.dart`
+> újraellenőrizve — **még mindig 20 flag, egy sem audio-analysis** (nincs
+> drift a batch óta); `test/app/feature_flags_test.dart` létezik a várt néven.
+> **ADR-hivatkozás javítva** (§0.0 R1): a helyes számok **0215/0218/0219/0220**
+> (a 2026-08-07-i placeholder 0200/0203/0204/0205 elavult, ugyanaz a mintázat,
+> mint az E06-R01 saját R1 revíziójában). **Környezet-enum javítva** (§0.0 R1):
+> lásd a 6. pont Flag-őr cellájának javítását. PREPARED→PLANNING, brief commit
 > előbb.
 
 ## 0. Kör-jelzés és STOP-protokoll
@@ -59,8 +63,33 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — a kör az R01 ADR 0200 (verziózás), 0203 (metric ID
-és verzió), 0204 (capability-publikáció) és 0205 (flag-határ) végrehajtása.
+**PREPARED → PLANNING (R1 revízió, 2026-08-11, orchesztrátor pre-flight).**
+Új ADR nincs — a kör az R01 ADR **0215** (verziózás), **0218** (metric ID
+és verzió), **0219** (capability-publikáció) és **0220** (flag-határ)
+végrehajtása (renumbering lásd R1 alább).
+
+### R1 — ADR-átszámozás + környezet-enum javítás (mért, pipeline-prompt §1)
+
+A brief 2026-08-07-i megírásakor az E06-R01 hat ADR-jét még nem foglalták le,
+ezért ez a brief a `0200/0203/0204/0205` placeholder-számokat idézte. Az
+E06-R01 tényleges `reserve-adr` futása **0215–0220**-at adta (lásd
+[ADR 0215](../adr/0215-analysis-document-versioning.md) fejléce és
+`HANDOFF.md` E06-R01 close-out banner). Ez a kör ugyanabból a batch-ből
+származik, tehát ugyanaz a drift öröklődött ide is. Leképezés (megegyezik az
+E06-R01 saját R1 revíziójával): `0200→0215` (dokumentum-verziózás),
+`0203→0218` (metric ID + verzió), `0204→0219` (capability-aware publikáció),
+`0205→0220` (V1/V2 párhuzamos rollout határ) — mind a négy tartalmilag
+egyezik, csak a sorszám változott. A brief minden hivatkozása javítva.
+
+Emellett a §6 „Flag-őr" acceptance cellája **négy** környezetet írt elő
+(`dev/lab/staging/production`) — grep-elve (`lib/app/config/app_environment.dart`)
+az `AppEnvironment` enum ma **három** értéket hordoz: `development`, `lab`,
+`production`. Nincs `staging`. A cella javítva a tényleges három értékre.
+
+Egyéb §2 „Jelenlegi állapot" állítás (flag-szám, `analyze_result.dart`
+sortartalom, `json_validation.dart` primitívnevek, `check_architecture.dart`
+domain-purity/`public.dart`/allowlist-csak-szűkül szabályok) újra grep-elve
+**egyezik** — nincs további revízió.
 
 ## 1. Cél
 
@@ -200,8 +229,9 @@ open_decisions:
       **exhaustive** default ág nélkül fordul (a fordító bizonyítja).
 - [ ] **Metric-ID őr:** teszt méri, hogy a katalógus minden ID-je egyedi és
       illeszkedik a `^[a-z_]+\.[a-z0-9_]+\.v[0-9]+$` alakra.
-- [ ] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **négy** környezetére
-      (dev/lab/staging/production — a mai enum tényleges értékeire) mindhárom
+- [ ] **Flag-őr:** `FeatureFlags.forEnvironment` mind a **három** környezetére
+      (`AppEnvironment.development`/`lab`/`production` — a mai enum teljes,
+      tényleges értékkészlete; **nincs `staging`**, §0.0 R1 javítás) mindhárom
       új flag `false`; és a `toString()` tartalmazza őket.
 - [ ] **V1 érintetlen:** `git diff --stat` nem tartalmaz
       `lib/features/analyze/**` vagy `lib/features/library/**` útvonalat, és
