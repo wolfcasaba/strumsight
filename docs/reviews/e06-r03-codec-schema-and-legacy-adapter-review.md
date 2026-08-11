@@ -5,17 +5,59 @@ revízió + [ADR 0221](../adr/0221-legacy-analysis-v2-migration-mapping.md) —
 olvasd el mindkettőt a §5/§6 elé, mert az eredeti, 2026-08-07-i brief-szöveg
 több acceptance-cellája elavult a tényleges E06-R02 domainhez képest, és a
 lentiek MÁR a revideált verzió szerint ítélnek).
-Diff: `git diff 172d2621...5ad89073` (12 kódfájl, `main` ág `172d2621`-től)
+Diff: `git diff 172d2621...5ad89073` (első kör, 12 kódfájl) +
+`git diff 493a88cb...317f973b` (javító kör, 4 fájl) — `main` ág `172d2621`-től
 Reviewer: Claude Sonnet 5 (orchesztrátor — ugyanaz a session, amely a
 pre-flightot írta; a független szemet egy dedikált `security-reviewer`
 subagent és egy `flutter-devil-advocate` subagent adja, lásd lent)
 Dátum: 2026-08-11
-Verdikt: **CHANGES REQUESTED — javító kör szükséges (1 MAJOR + 1 MINOR)**
+Verdikt: **APPROVED** (javító kör után, `317f973b`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 (F0, javító körben) · MINOR: 2 (F1 follow-up R21-re,
-F1b javító körben) · NOTE: 4 (F2, F3 + a security review 2 NOTE-ja, ld. lent)
+BLOCKER: 0 · MAJOR: 1 → **FIXED** (F0, `317f973b`) · MINOR: 2 → 1 **FIXED**
+(F1b, `317f973b`) + 1 follow-up R21-re (F1) · NOTE: 4 (F2, F3 + a security
+review 2 NOTE-ja, ld. lent) — egyik sem blokkoló
+
+## Javító kör ellenőrzése (`317f973b`)
+
+1. **A diff pontosan a review két leletét fedi**, semmi mást: `git diff
+   --name-status 493a88cb..317f973b` → `lib/features/audio_analysis/data/
+   {analysis_document_codec.dart, legacy_analyze_adapter.dart}` +
+   `test/features/audio_analysis/data/{analysis_document_codec_test.dart,
+   legacy_analyze_adapter_test.dart}` (4 fájl, mind a §4 eredeti listáján,
+   nincs bővítés).
+2. **F0 javítás:** `legacy_analyze_adapter.dart` — `bpm <= 0` esetén
+   `tempoPoints` üres marad (nincs érvénytelen `TempoPoint`); a
+   chord-szegmens és strum-esemény konstrukciója egyenként `try`/`on
+   ArgumentError`-ral védett (a `JsonCollectionStore` „egy hibás bejegyzést
+   kihagy" mintáját követve — pontosan a review javasolt iránya), a strum
+   `confidence` `.clamp(0,1)`-elve; a kihagyott darabszám egy összesítő
+   `AnalysisWarning`-ban (`droppedChords`/`droppedStrums`) jelenik meg, csak
+   ha `>0`. Az `adapt` maradt non-fallible.
+3. **F1b javítás:** `analysis_document_codec.dart` — egyetlen sor,
+   `_ensureFiniteJson(json)` a `_documentFromJson` elején, a gyökér-objektum
+   sikeres feloldása után, MÉG a domain-építés előtt — szimmetrikussá teszi a
+   decode/encode véges-szám-védelmet (valójában a TELJES fán, nem csak a
+   `details` bag-en — szigorúbb, mint amit kértem, ami rendben van).
+4. **Retroaktív próba (a review saját, független ellenőrzése — NEM az
+   implementer állítása):** a review a `317f973b` két ÚJ tesztjét
+   (`migrates a zero-BPM session without a synthetic tempo point`, `drops
+   invalid V1 chords and reports the migration correction`,
+   `rejects non-finite values nested in capability details`) egy izolált
+   `/tmp/review-e06-r03` klónban a `493a88cb` (JAVÍTÁS ELŐTTI) production-kóddal
+   futtatta le — mindhárom PIROSRA vált, pontosan a várt hibával
+   (`Invalid tempo point.` / `Segment end cannot precede its start.` /
+   `Success` `Failure` helyett), ami bizonyítja, hogy a tesztek TÉNYLEG a
+   javított hibát fogják meg, nem csak vakon zöldek. A production-kód
+   visszaállítva a javított verzióra, `git diff --stat` → üres.
+5. **Teljes gate újra, izolált klónban, a javított kódon:** mind a 9 lépés
+   ZÖLD (`/tmp/review-e06-r03-gate-fix.log`).
+6. **Scope-audit `origin/main`-től mérve a javító kör UTÁN is:** `Legacy
+   scope audit OK (172d26212b2e..317f973bdb87, 15 changed path(s), 1
+   generated/ignored)` — a 15 = a 14 engedélyezett fájl + ez a review-jelentés
+   (a `legacy_scope.py` docstringje szerint kifejezetten mentesített: „the
+   reviewer's report" — ez a szándékos, dokumentált kivétel, nem hiba).
 
 ### F0 — MAJOR — `LegacyAnalyzeAdapter` uncaught `ArgumentError`-t dob VALÓS, mentett V1 sessionökön (a „veszteségmentes" / „minden mentett session" ígéret sérül)
 
@@ -96,8 +138,10 @@ elmentett rekordok, amelyeken a V2 domain-konstruktor eldob.
      `_bpmFromStrums` &lt;2-strums esetét szimulálva) — bizonyítsa, hogy NEM
      dob, és a `LegacyViewAdapter` kör-trip `bpm: 0`-t ad vissza.
 - **Ellenőrzés:** a fenti új teszt + a meglévő teljes suite újra zöld.
-- **Státusz:** OPEN — **javító körben KÖTELEZŐEN javítandó, ez blokkolja a
-  merge-et** (MAJOR, ADR 0052/09-review-report.md szerint).
+- **Státusz:** **FIXED** (`317f973b`) — a review saját, retroaktív próbával
+  igazolta, hogy az új teszt a javítás ELŐTTI kódon ténylegesen elbukott
+  (`Invalid tempo point.`), a javítás UTÁN zöld; ld. „Javító kör
+  ellenőrzése" fent.
 
 ## Acceptance criteria
 
@@ -238,8 +282,10 @@ kimenetet a nyers fixture-tartalommal vetette össze:
   igényel új mezőt vagy tervezési döntést.
 - **Ellenőrzés:** egy teszt, amely `details`-be `1e999`/`NaN`-reprezentáló
   JSON-t tesz és `decode`-ot `Failure`-t vár.
-- **Státusz:** OPEN — **javító körben javítandó** (kicsi, célzott diff, nem
-  hizlalja érdemben a kört; ld. a review-jelentés Merge-döntés szakaszát)
+- **Státusz:** **FIXED** (`317f973b`) — a review saját, retroaktív próbával
+  igazolta, hogy az új teszt a javítás ELŐTTI kódon `Success`-t adott
+  (`Failure` helyett), a javítás UTÁN `Failure`-t ad; ld. „Javító kör
+  ellenőrzése" fent.
 
 ### F2 — NOTE — `AnalysisCompletionStatus.complete` migrált dokumentumon, nem `degraded`
 
@@ -310,14 +356,12 @@ ADR-t írta.
 ## Merge-döntés
 
 ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**Jelen állás: 1 nyitott MAJOR (F0) → merge TILOS, amíg nyitva.** Javító kör
-indítva ugyanazzal a motorral (Terra), a findings-listával (F0 + F1b) a
-promptban — ez a lánc NORMÁL útja (user-döntés 2026-07-31), nem megállási ok.
-F1 (lista/map felső korlát) follow-up-ra téve R21-hez (mindhárom független
-review — ez, a security, a devil's-advocate — egyetért: unwired, a helyes
-korlátok csak a tényleges perzisztencia-bekötéskor dönthetők el felelősen).
-Javítás után: a gate-eket ÚJRA, függetlenül lefuttatom egy friss `/tmp`
-klónban, a két új teszt (bpm=0 kör-trip, decode-side finiteness) tényleg
-piros lett volna-e a fix előtt (retroaktív ellenőrzés a javító commit előtti
-állapoton), majd a CI-t újra-dispatch-elem az új SHA-ra, és ez a jelentés
-APPROVED-ra frissül.
+**Jelen állás: 0 nyitott BLOCKER/MAJOR — F0 és F1b FIXED (`317f973b`),
+függetlenül ellenőrizve (retroaktív próba + friss gate + scope-audit, ld.
+fent).** F1 (lista/map felső korlát) follow-up-ra téve R21-hez (mindhárom
+független review — ez, a security, a devil's-advocate — egyetért: unwired, a
+helyes korlátok csak a tényleges perzisztencia-bekötéskor dönthetők el
+felelősen). **Hátravan:** a CI-t újra kell dispatch-elni az új SHA-ra
+(`317f973b` — a javító kör kódot módosított, a korábbi CI-run a régi SHA-n
+`5ad89073` már nem bizonyíték), és a zöld eredmény UTÁN squash-merge
+exact-SHA ellenőrzéssel.
