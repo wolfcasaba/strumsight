@@ -393,7 +393,41 @@ jelezz, ne told át a scope-ot magadtól.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer: Terra (Codex, `gpt-5.6-terra`), 1 forduló (0 automatikus
+folytatás), javító kör nélkül.** Session `019ff095-a56a-7671-9b05-2f89b86877c3`.
+Két commit: `c3aae562` (codec + migrációs tesztek indítása), `a103724e`
+(V1/V2 adapterek befejezése). A branch HEAD-je a merge előtt: `a103724e`.
+
+- `AnalysisDocumentCodec` — fail-closed `schemaVersion`, rögzített kulcssorrendű
+  `Map`-literál minden JSON-objektumhoz (determinisztikus encode), `_ensureFiniteJson`
+  encode előtt (NaN/Infinity sosem jut kimenetbe).
+- `LegacyAnalyzeAdapter.adapt(AnalyzedSession)` → `LegacyAnalysisMigration
+  {document, title, customTitle, diagnostics?}` — pontosan az ADR 0221 Döntés
+  1-9 szerint: `tempoPoints` a BPM-nek, `chordSegments`/`StrumEvent` a
+  chord/strum adatnak (`ChordSegment.confidence` fixen 1), egyetlen
+  `AnalysisWarning(kind: migration)` a metrének (`messageArgs['beatsPerBar']`)
+  és a migráció tényének, `capabilities` mind a 14 értékre (3 `available`, 11
+  `unavailable`/`modelUnavailable`), `SignalQualityReport(measured: false)`
+  nulla-placeholder mezőkkel, `metrics: []`, `mode: freePlay`, `source:
+  importedFile`, `fingerprint: 'legacy-session:<id>'`.
+- `LegacyViewAdapter.toAnalyzeResult(AnalysisDocument)` — visszaolvassa a
+  `tempoPoints.first.bpm`-et (üres lista → 0), a `chordSegments`/`StrumEvent`-eket,
+  és a `beatsPerBar`-t a migration-warningből (hiányzó/érvénytelen → 4).
+- `signal_quality_report.dart` — kizárólag additív: egy új, opcionális
+  `measured` bool paraméter, default `true`; egyetlen meglévő sor sem
+  törölve/módosítva a mezőkön kívül.
+- Három legacy fixture (`test/fixtures/analysis/*.json`) a mai
+  `AnalyzeResult`/`AnalyzedSession` alak szerint.
+- Futtatott parancsok, TÉNYLEGES kimenettel: `tools/round-gate.sh
+  test/features/audio_analysis test/property test/features/analyze
+  test/features/library` — mind a 9 lépés zöld (`format`, `analyze`, négy
+  `test <útvonal>`, `architecture`, `secrets`, `l10n`).
+- Eltérés a brief-től: nincs.
+- Nem futtatott ellenőrzés: CI (a teljes suite + property + a Router CI) —
+  az orchesztrátor dolga a review-val párhuzamosan.
+- Scope-audit: `ok`, a diff mind a 12 módosított fájl a §4 engedélyezett
+  listáján belül (függetlenül újra mérve: `git diff --name-status
+  59aa9424..a103724e`, nulla eltérés).
 
 ## 11. Review — a független reviewer tölti ki
 
