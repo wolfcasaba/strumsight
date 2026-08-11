@@ -338,6 +338,37 @@ igazolva.
 - **`docs/manual-testing/analysis-eval-matrix.md` frissítése** — a brief R3
   szerint listán kívüli fájl, E06-R29 scope-ja.
 
+### 10.6 Javító kör — security-review MAJOR/MINOR leletek (`/tmp/e06-r07-review-findings.md`)
+
+**Implementer:** `sonnet-impl`, 2026-08-11, baseline `c90c2bbc`.
+
+| Lelet | Fájl | Javítás |
+|---|---|---|
+| F1 (MAJOR) — a cooperative cancellation figyelmen kívül maradt egy előre `cancel()`-ezett token mellett | `signal_quality_stage.dart` | `run()` most `context.cancellationToken.throwIfCancelled()`-t hív munka előtt (belépéskor és a nonfinite-ellenőrzés után is); a `SignalQualityMath.frameMetrics` kapott egy opcionális, mellékhatásmentes `onFrame` hook paramétert (math marad tiszta), amit a stage a token `throwIfCancelled`-jével hív minden keret után — a hosszú FFT-feldolgozás is megszakítható. |
+| F2 (MAJOR) — a stage közvetlen, publikus hívása nonfinite PCM-nél mért, de hiteltelen riportot adott | `signal_quality_stage.dart` | `run()` a számítás és a `reportProgress()` előtt végigfut a mintákon (`indexWhere(!isFinite)`); találat esetén `Failure<SignalQualityReport>`-ot ad `AudioFailure(code: FailureCode.audioNonFiniteSample, retryable: false)`-szal, progressz és riport nélkül. Az upstream `AnalysisInputValidator` policy nem módosult. |
+| F3 (MINOR) — a terminal-event guard teszt nem figyelte a sinket | `signal_quality_stage_test.dart` | a `_context()` helper most elfogadja az `eventSink`/`cancellationToken` paramétereket; a „reports progress at most once…” teszt egy `events` listába gyűjti a sink hívásait, és asserttel zárja, hogy pontosan egy `AnalysisPhaseProgressEvent` és nulla `AnalysisRunResultEvent` keletkezett. |
+
+**Regressziós tesztek (a javítás előtt pirosak lettek volna):**
+- `signal_quality_stage_test.dart` — `cooperative cancellation (F1)`: pre-cancelled token → `throwsA(isA<AnalysisCancelledException>())`; mid-frame-cancellation (egy figyelő `AnalysisCancellationToken` decorator 5 ellenőrzés után cancel-el) → ugyanaz, és igazolja, hogy a hívás valóban a keret-ciklusból (nem csak a belépési ellenőrzésből) jött.
+- `signal_quality_stage_test.dart` — `nonfinite PCM guard (F2)`: NaN/`+Infinity`/`-Infinity` mindhárom cellája `Failure<SignalQualityReport>`-ot vár `AudioFailure`/`FailureCode.audioNonFiniteSample`-lel, és hogy `context.hasReportedProgress == false`, `events.isEmpty`.
+- `test/property/analysis_signal_quality_property_test.dart` — új, `PROPERTY_SEED`-vezérelt (alap 42) 30 iterációs property: minden randomizált PCM-be egy véletlen indexre NaN/+Inf/-Inf injektálva, minden esetben typed failure-t vár (nem sanitizált riportot).
+- `signal_quality_stage_test.dart` — a terminal-event guard teszt frissítve (F3), lásd fent.
+
+**Futtatott parancs — tényleges eredmény:**
+
+```
+dart format lib test tool
+  → 2 fájl újraformázva (signal_quality_stage_test.dart, analysis_signal_quality_property_test.dart)
+
+tools/round-gate.sh test/features/audio_analysis test/property test/features/analyze
+  → MINDEN GATE ZÖLD (format, analyze, 3× test, architecture, secrets, l10n)
+  → test/features/audio_analysis: 108/108 passed (a 3 új F1/F2 stage-teszt + a frissített F3 teszt között)
+  → test/property: 2/2 passed (a meglévő + az új F2-property, mindkettő PROPERTY_SEED=42)
+  → test/features/analyze: 64/64 passed
+```
+
+Nem módosult: `domain/`, `pipeline`, `analysis_input_validator.dart`, `core/`, `tools/`, konfigurációs fájl — a javítás a brief `allowed_paths`-án belül maradt (két production fájl a `quality/` alatt, két engine-teszt, a property-teszt, ez a handoff).
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r07-signal-quality-stage-review.md`.

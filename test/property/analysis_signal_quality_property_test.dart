@@ -8,10 +8,17 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/public.dart';
 
 const _sampleRate = 44100;
+const _nonfiniteValues = <double>[
+  double.nan,
+  double.infinity,
+  double.negativeInfinity,
+];
 
 void main() {
   test(
@@ -117,6 +124,58 @@ void main() {
       }
     },
   );
+
+  test('seeded random PCM with one injected NaN/Infinity sample never yields a '
+      'measured report (F2 regression)', () async {
+    final seed =
+        int.tryParse(Platform.environment['PROPERTY_SEED'] ?? '') ?? 42;
+    // ignore: avoid_print
+    print('PROPERTY_SEED=$seed');
+    final random = Random(seed);
+    const stage = SignalQualityStage();
+
+    for (var index = 0; index < 30; index++) {
+      final length = 200 + random.nextInt(_sampleRate * 2);
+      final samples = _randomSamples(random, length, index);
+      final nonfiniteIndex = random.nextInt(samples.length);
+      final nonfiniteValue = _nonfiniteValues[index % _nonfiniteValues.length];
+      samples[nonfiniteIndex] = nonfiniteValue;
+
+      final context = AnalysisStageContext(
+        runId: 'property-nonfinite-run-$index',
+        phase: AnalysisProgressPhase.preprocessing,
+        cancellationToken: AnalysisCancellationSource(),
+        eventSink: (_) {},
+      );
+      final result = await stage.run(
+        PcmAnalysisInput(
+          samples: samples,
+          sampleRate: _sampleRate,
+          channelCount: 1,
+          source: AnalysisInputSource.microphone,
+        ),
+        context,
+      );
+
+      expect(
+        result,
+        isA<Failure<SignalQualityReport>>(),
+        reason: 'seed=$seed case=$index value=$nonfiniteValue',
+      );
+      final failure = (result as Failure<SignalQualityReport>).error;
+      expect(failure, isA<AudioFailure>(), reason: 'seed=$seed case=$index');
+      expect(
+        failure.code,
+        FailureCode.audioNonFiniteSample,
+        reason: 'seed=$seed case=$index',
+      );
+      expect(
+        context.hasReportedProgress,
+        isFalse,
+        reason: 'seed=$seed case=$index',
+      );
+    }
+  });
 }
 
 List<double> _randomSamples(Random random, int length, int caseIndex) {

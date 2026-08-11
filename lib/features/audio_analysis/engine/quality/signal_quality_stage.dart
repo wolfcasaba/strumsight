@@ -1,8 +1,10 @@
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_warning.dart';
 import 'package:strumsight/features/audio_analysis/domain/signal_quality_report.dart';
 
+import '../analysis_cancellation.dart';
 import '../analysis_context.dart';
 import '../analysis_stage.dart';
 import 'quality_thresholds.dart';
@@ -27,11 +29,26 @@ final class SignalQualityStage
     PcmAnalysisInput input,
     AnalysisStageContext context,
   ) async {
+    context.cancellationToken.throwIfCancelled();
+    final firstNonFinite = input.samples.indexWhere(
+      (sample) => !sample.isFinite,
+    );
+    if (firstNonFinite >= 0) {
+      return const AppResult<SignalQualityReport>.failure(
+        AudioFailure(code: FailureCode.audioNonFiniteSample, retryable: false),
+      );
+    }
+    context.cancellationToken.throwIfCancelled();
     context.reportProgress();
-    return AppResult<SignalQualityReport>.success(_buildReport(input));
+    return AppResult<SignalQualityReport>.success(
+      _buildReport(input, context.cancellationToken),
+    );
   }
 
-  SignalQualityReport _buildReport(PcmAnalysisInput input) {
+  SignalQualityReport _buildReport(
+    PcmAnalysisInput input,
+    AnalysisCancellationToken cancellationToken,
+  ) {
     final samples = input.samples;
     const floor = QualityThresholds.silenceFloorDbfs;
     const ceiling = QualityThresholds.maxDbfs;
@@ -57,6 +74,7 @@ final class SignalQualityStage
       hopSize: QualityThresholds.hopSize,
       floorDbfs: floor,
       ceilingDbfs: ceiling,
+      onFrame: cancellationToken.throwIfCancelled,
     );
     final frameRmsDbfsValues = <double>[
       for (final frame in frames) frame.rmsDbfs,

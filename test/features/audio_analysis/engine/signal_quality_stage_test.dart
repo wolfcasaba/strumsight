@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/public.dart';
 
@@ -8,12 +10,17 @@ import '../../../support/synth.dart';
 
 const _sampleRate = 44100;
 
-AnalysisStageContext _context() => AnalysisStageContext(
+AnalysisStageContext _context({
+  AnalysisProgressEventSink eventSink = _noopSink,
+  AnalysisCancellationToken? cancellationToken,
+}) => AnalysisStageContext(
   runId: 'test-run',
   phase: AnalysisProgressPhase.preprocessing,
-  cancellationToken: AnalysisCancellationSource(),
-  eventSink: (_) {},
+  cancellationToken: cancellationToken ?? AnalysisCancellationSource(),
+  eventSink: eventSink,
 );
+
+void _noopSink(AnalysisProgressEvent event) {}
 
 PcmAnalysisInput _input(List<double> samples, {int sampleRate = _sampleRate}) =>
     PcmAnalysisInput(
@@ -97,13 +104,16 @@ void main() {
     test(
       'reports progress at most once and never publishes a terminal result',
       () async {
-        final context = _context();
+        final events = <AnalysisProgressEvent>[];
+        final context = _context(eventSink: events.add);
         final result = await stage.run(
           _input(_sine(freq: 440, seconds: 1)),
           context,
         );
         expect(result.isSuccess, isTrue);
         expect(context.hasReportedProgress, isTrue);
+        expect(events.whereType<AnalysisPhaseProgressEvent>(), hasLength(1));
+        expect(events.whereType<AnalysisRunResultEvent>(), isEmpty);
       },
     );
   });
@@ -333,4 +343,93 @@ void main() {
       },
     );
   });
+
+  group('cooperative cancellation (F1)', () {
+    test('a pre-cancelled token throws instead of yielding Success', () async {
+      final source = AnalysisCancellationSource()..cancel();
+      await expectLater(
+        stage.run(
+          _input(_sine(freq: 440, seconds: 1)),
+          _context(cancellationToken: source),
+        ),
+        throwsA(isA<AnalysisCancelledException>()),
+      );
+    });
+
+    test(
+      'cancellation mid frame-processing throws before the report is built',
+      () async {
+        final source = AnalysisCancellationSource();
+        var checks = 0;
+        // The stage itself checks the token twice before frame processing
+        // starts (once on entry, once after the nonfinite guard); cancelling
+        // after the 5th check proves the frame loop's own hook — not just the
+        // pre-run checks — is what observed the cancellation.
+        final context = AnalysisStageContext(
+          runId: 'test-run',
+          phase: AnalysisProgressPhase.preprocessing,
+          cancellationToken: _CancelAfterNChecks(
+            source,
+            cancelAfter: 5,
+            onCheck: () => checks++,
+          ),
+          eventSink: _noopSink,
+        );
+        await expectLater(
+          stage.run(_input(_sine(freq: 440, seconds: 5)), context),
+          throwsA(isA<AnalysisCancelledException>()),
+        );
+        expect(checks, greaterThan(2));
+      },
+    );
+  });
+
+  group('nonfinite PCM guard (F2)', () {
+    for (final value in <double>[
+      double.nan,
+      double.infinity,
+      double.negativeInfinity,
+    ]) {
+      test('direct stage.run rejects $value as a typed failure', () async {
+        final events = <AnalysisProgressEvent>[];
+        final context = _context(eventSink: events.add);
+        final result = await stage.run(
+          _input(<double>[0.1, value, -0.2]),
+          context,
+        );
+        expect(result, isA<Failure<SignalQualityReport>>());
+        final failure = (result as Failure<SignalQualityReport>).error;
+        expect(failure, isA<AudioFailure>());
+        expect(failure.code, FailureCode.audioNonFiniteSample);
+        expect(context.hasReportedProgress, isFalse);
+        expect(events, isEmpty);
+      });
+    }
+  });
+}
+
+/// Delegates to [source] but throws once [onCheck] has observed [cancelAfter]
+/// calls to [throwIfCancelled] — used to prove mid-processing cancellation is
+/// honoured, not just the pre-run check.
+final class _CancelAfterNChecks implements AnalysisCancellationToken {
+  _CancelAfterNChecks(
+    this.source, {
+    required this.cancelAfter,
+    required this.onCheck,
+  });
+
+  final AnalysisCancellationSource source;
+  final int cancelAfter;
+  final void Function() onCheck;
+  int _checks = 0;
+
+  @override
+  bool get isCancelled => source.isCancelled || _checks >= cancelAfter;
+
+  @override
+  void throwIfCancelled() {
+    onCheck();
+    _checks++;
+    if (isCancelled) throw const AnalysisCancelledException();
+  }
 }

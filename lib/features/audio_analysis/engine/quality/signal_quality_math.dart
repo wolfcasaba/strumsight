@@ -84,12 +84,17 @@ abstract final class SignalQualityMath {
   /// One [FrameMetrics] per frame of [frameSize] samples, hopping by
   /// [hopSize] (the last, possibly shorter, frame is still measured over its
   /// own length — no zero padding for the RMS/flatness reduction itself).
+  ///
+  /// [onFrame], when given, is invoked after each frame is measured — a
+  /// side-effect-free hook for a caller (e.g. cooperative cancellation) to
+  /// observe progress through this otherwise pure reduction.
   static List<FrameMetrics> frameMetrics(
     List<double> samples, {
     required int frameSize,
     required int hopSize,
     required double floorDbfs,
     required double ceilingDbfs,
+    void Function()? onFrame,
   }) {
     if (samples.isEmpty) return const <FrameMetrics>[];
     final frames = <FrameMetrics>[];
@@ -108,6 +113,7 @@ abstract final class SignalQualityMath {
           spectralFlatness: _spectralFlatness(frame, frameSize),
         ),
       );
+      onFrame?.call();
       if (end == samples.length) break;
     }
     return frames;
