@@ -333,6 +333,12 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 - Valódi-sértés próba: `AnalysisRecorder.stop()` ideiglenesen nem hívta a `MicCapture.stop()`-ot; a lease-release teszt várt módon piros lett (`Actual: AudioOwner.analyzeRecorder`), majd a hívás visszaállt.
 - `tools/round-gate.sh --result-json /tmp/e06-r06-round-gate-result.json test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, `test/features/audio_analysis`, `test/core`, `test/features/analyze`, architecture, secrets és l10n. A gate saját eredményartefaktuma: `outcome=pass`, `exit_code=0`, `failed_step=null`.
 
+### Javító kör — F1 túlméretezett chunk regressziós őr
+
+- `test/features/audio_analysis/data/analysis_recorder_test.dart` — új, izolált eset egy 2 mintás limittel (`sampleRate: 1`, két másodperc) és egyetlen `capture.emit(const [0.1, 0.2, 0.3])` chunkkal. A teszt azt várja, hogy a puffer pontosan `[0.1, 0.2]` maradjon, a run pedig `maxDurationReached` állapotú legyen; így a többlet ugyanabban a chunkban történő csonkolását méri, nem a már lezárt run stale-guardját.
+- Valódi-sértés próba: `analysis_recorder.dart`-ban az `acceptedCount = math.min(remaining, chunk.length)` sor ideiglenesen `acceptedCount = chunk.length` lett. Az új teszt várt módon **piros** lett: várt `[0.1, 0.2]`, tényleges `[0.1, 0.2, 0.3]`. A `math.min` visszaállítása után ugyanaz a teszt **zöld** lett.
+- `tools/round-gate.sh test/features/audio_analysis test/core test/features/analyze` — **zöld**: format, analyze, mindhárom célzott tesztlépés, architecture, secrets és l10n.
+
 ### Eltérés, kockázat, follow-up
 
 - A SDD korai, tágabb "régi Analyze screen adapteren" vázlata nem része ennek a briefnek; a brief §3/§4 elsőbbségével a V1 Analyze érintetlen maradt.

@@ -167,6 +167,26 @@ void main() {
       },
     );
 
+    test('truncates an oversized chunk at the maximum duration', () async {
+      final capture = FakeAudioCapture(sampleRate: 1);
+      final recorder = AnalysisRecorder(
+        mic: fakeMicCapture(
+          owner: AudioOwner.analyzeRecorder,
+          capture: capture,
+        ),
+        maximumDuration: const Duration(seconds: 2),
+      );
+      await _started(recorder);
+
+      capture.emit(const [0.1, 0.2, 0.3]);
+
+      expect(recorder.samples, const [0.1, 0.2]);
+      expect(
+        recorder.currentRun!.status,
+        RecordingRunStatus.maxDurationReached,
+      );
+    });
+
     test(
       'emits linear peak and RMS preview work without pipeline stages',
       () async {
