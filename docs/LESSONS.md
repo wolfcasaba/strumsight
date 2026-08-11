@@ -7637,3 +7637,50 @@ mint a pre-flight, egy FÜGGETLEN adversarial second opinion (pl.
 ez fogta meg itt, amit három egymást követő, de azonos-keretű ellenőrzés nem.
 Rokon: [[user-strings-through-domain-transforms]] (rokon mintázat: user-
 eredetű érték gépi transzformon átfolyva sérti a célformátum feltevését).
+
+## L212 — A review-jelentés kör-branchre commitolása ÉRVÉNYTELENÍTI a korábbi exact-SHA CI-bizonyítékot — a merge előtt újra kell dispatch-elni (E06-R04, 2026-08-11)
+
+**Mit mértem.** Az E06-R04 implementer `done` jelzése után dispatch-elt Full
+Gate + Router CI mindkettő **zöld** volt az implementációs SHA-n
+(`ea8d95d9`). A független review-jelentés és a dedikált biztonsági review
+megírása után ezeket (docs-only, két új fájl a `docs/reviews/` alatt +
+a brief §11 frissítése) a kör-branchre commitoltam (`80070609`) — ez a
+branch HEAD-jét előremozdította. A korábbi zöld CI-futások SHA-ja
+(`ea8d95d9`) innentől **nem egyezik** a branch tényleges HEAD-jével
+(`80070609`); a 3.0 szakasz „exact-SHA" szabálya szó szerint véve **már nem
+teljesült volna**, ha a régi futásokra hivatkozva mergeltem volna. A
+docs-only jelleg nem tekinthető ártalmatlannak eleve: a gate `secrets` és
+`l10n` lépése ÉS a Router CI trigger-útvonalai (`docs/rounds/**`) mindkettő
+ténylegesen beolvassa/futtatja a doksi-tartalmat, tehát a kockázat nem
+elméleti.
+
+**Szabály.** Minden alkalommal, amikor egy review-jelentés (vagy bármilyen
+más orchesztrátor-oldali dokumentáció) a kör-branchre kerül a CI-dispatch
+UTÁN, azt új SHA-nak kell tekinteni, ami saját, friss CI-futást igényel —
+függetlenül attól, hogy a diff csak `docs/`-ot érint. Két gyakorlati
+következmény:
+1. A review-jelentés commitja UTÁN a mergeig NE kövesse semmilyen további
+   commit — ha mégis kell (pl. egy elgépelés javítása), az IS új CI-t
+   igényel, tehát minden ilyen javítás saját maga is egy teljes
+   újra-dispatch/várakozás kört nyit.
+2. Ebből következik: a review-jelentést a VÉGLEGES tartalommal írd meg
+   ELSŐRE (ne „majd frissítem" placeholder a CI run-linkeknél) — a jelentés
+   PRÓZÁJA történeti pillanatfelvétel maradhat a review-folyamatról (pl. a
+   review IDŐKÖZBEN mért, akkor még friss CI-futásokra hivatkozhat), de a
+   TÉNYLEGES merge-döntés mindig a branch VÉGLEGES HEAD-jének CI-jét
+   ellenőrzi újra — ne kergesd a SHA-t a szövegben, csak a merge-kapunál
+   mérd meg utoljára.
+
+**Kapcsolódó, ugyanebben a körben mért tervezési minta.** A dedikált
+biztonsági review (`docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md`
+MINOR-1) egy általánosítható context-objektum tervezési csapdát azonosított:
+egy stage-nek/plugin-nek átadott context (itt: `AnalysisStageContext`)
+óvatosan tervezendő, nehogy a stage az orchestrátor SAJÁT, hiteles
+eseményeivel megkülönböztethetetlen eseményt tudjon injektálni (itt:
+`AnalysisStageContext.publishResult` egy stage-választotta
+`AnalysisCompletionStatus`-t enged a live progress streamre, a pipeline
+tényleges eredményétől függetlenül) — jelen körben ártalmatlan (nincs hívó,
+nincs cross-feature export), de a mintát érdemes fejben tartani minden
+jövőbeli context/callback-objektum tervezésénél: **a hívottnak adott
+felület sose engedje meg, hogy a hívott a hívó hitelesként kezelt
+kimenetével megkülönböztethetetlen adatot termeljen.**

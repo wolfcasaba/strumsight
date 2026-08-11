@@ -3,7 +3,77 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
-> (E06-R03 MERGED — Codec, schema validation és V1 adapter).**
+> (E06-R04 MERGED — Pipeline contract, stage context és progress).**
+>
+> ## ✅ E06-R04 KÉSZ — Pipeline contract, stage context és progress (2026-08-11)
+>
+> A moduláris, **megszakítható**, progresszt publikáló elemzési-pipeline
+> **szerződése** (SDD Ch7 §6.4–6.6, §8.4–8.5, §21.2, §22.4) — konkrét
+> DSP-stage NÉLKÜL, csak fake tesztstage-ekkel. `AnalysisStage<I,O>`
+> (SDD-literál `Future<AppResult<O>> run(...)` szignatúra, a már meglévő
+> sealed `AppResult`/`AppFailure`-re építve, nem új Result-típussal),
+> `AnalysisStageContext` (per-run cancellation token, progress sink,
+> provenance-gyűjtő), `AnalysisCancellationToken`/`AnalysisCancellationSource`
+> (kooperatív, **per-run**, sosem globális — egy run sosem szakíthat meg
+> egy másikat), `AnalysisPipeline<T>` (sorrendben futtat, **szigorúan
+> monoton** progress-fázis, **degradálható vs fatális** hibaosztályozás,
+> **run-ID alapú késői-event szűrés** `droppedLateEvents` számlálóval,
+> **duplikált stage-ID** kontrollált elutasítás), `AnalysisProgressEvent`
+> sealed hierarchia a kilenc SDD-fázison. A `public.dart` csak a progress-
+> és cancellation-contractot exportálja — az engine-implementáció
+> (`AnalysisStage`/`AnalysisStageContext`/`AnalysisPipeline`) szándékosan
+> feature-lokális marad. `lib/features/analyze/**` (V1) ÉS
+> `audio_analysis/{data,presentation}/**` bitre érintetlen — a kör kimenete
+> az a váz, amibe az R07–R20 stage-ei bekötnek.
+>
+> **Pre-flight §0.0 R1:** a 2026-08-07-i batch-brief `ADR 0200` placeholdere
+> javítva a valós **[ADR 0215](docs/adr/0215-analysis-document-versioning.md)**-re
+> (ugyanaz a hatos-blokk átszámozási minta, mint E06-R01/R02-ben — a §5.7
+> pont „stage.version → analyzer-verzió" hivatkozása). Minden más §2 mért
+> állítás (compute-híváslánc, két `catch (_)` elnyelési pont, R02 domain
+> enum/mező-nevek) újra grep-elve egyezett.
+>
+> Implementer **Terra (Codex)**, 1 forduló, javító kör nélkül
+> (`continuations=0`). PR [#214](https://github.com/wolfcasaba/strumsight/pull/214),
+> squash `43fae1d2`. Review:
+> [docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md](docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md)
+> — **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR (deferred follow-up), 5 NOTE — a
+> reviewer SAJÁT izolált `/tmp` klónban a teljes gate-et függetlenül
+> újrafuttatta (zöld) és **két saját valódi-sértés próbát** végzett: a
+> cancel-checkpoint guard eltávolítása a (c) cancel-mátrix cellát pirosra
+> buktatta (várt `completedCheckpoints==0`, kapott `3`), a fatal-stage
+> early-stop ág neutralizálása a fatális-mátrix cellát buktatta pirosra
+> (várt `failed`, kapott `degraded`) — mindkettő visszaállítva. Dedikált
+> biztonsági review (risk=high):
+> [docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md](docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md)
+> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 1 MINOR, 4 NOTE. **A MINOR:** egy
+> stage `AnalysisStageContext.publishResult`-on át tetszőleges,
+> **a pipeline tényleges eredményétől független** terminális
+> `AnalysisRunResultEvent`-et injektálhat a live progress streamre (a
+> result-eventek megkerülik a fázis-monoton kaput) — reprodukált próbával
+> igazolva, de MA hívó nélküli, cross-feature nem exportált felület, nulla
+> hatás. **Kötelező R07 pre-flight ellenőrzés:** vagy távolítsd el a
+> `publishResult`-ot, ha még mindig hívatlan, vagy zárd le a `publish()`-t
+> stage-eredetű terminális eventek ellen, MIELŐTT bármelyik valódi stage
+> hívhatná. 4 forward-looking NOTE (nincs timeout `stage.run()`-on — tudatos
+> körhatár; a szigorú fázis-monoton kapu ütközik a `completedUnits`
+> sub-progress mezőkkel; `UnknownFailure.cause` nyers hiba/stacktrace, ma
+> nem renderelt; homogén `AnalysisPipeline<T>` vs. az SDD §8.4 heterogén
+> stage-lánca — R07 pre-flight döntsön).
+>
+> **Zöld kapu (exact-SHA `80070609` — a review-jelentés kör-branchre
+> commitolása UTÁNI végleges HEAD; az implementációs SHA `ea8d95d9`-en mért
+> korábbi zöld futás emiatt újra-dispatch-elve, lásd [`docs/LESSONS.md`
+> L212](docs/LESSONS.md)):** Full Gate
+> [31496173780](https://github.com/wolfcasaba/strumsight/actions/runs/31496173780)
+> + Router CI [31496170091](https://github.com/wolfcasaba/strumsight/actions/runs/31496170091)
+> mindkettő **success**. Az `origin/main` a dispatch (`4796d539`) és a
+> merge között nem mozdult (H8 tiszta). Post-merge gate a friss `main`-en
+> (`43fae1d2`) önállóan újrafuttatva: mind a 8 lépés zöld.
+>
+> **Következő kör: E06-R05** (input abstraction és biztonságos import,
+> `docs/rounds/e06-r05-input-abstraction-and-safe-import.md`) — a queue már
+> `pending`.
 >
 > ## ✅ E06-R03 KÉSZ — Codec, schema validation és V1 adapter (2026-08-11)
 >
@@ -65,66 +135,6 @@
 > mindkettő **success**. Az `origin/main` a dispatch (`172d2621`) és a merge
 > között nem mozdult (H8 tiszta).
 >
-> **Következő kör: E06-R04** (pipeline contract, stage és progress,
-> `docs/rounds/e06-r04-pipeline-contract-stage-and-progress.md`) — a queue
-> már `pending`.
->
-> ## ✅ E06-R02 KÉSZ — AnalysisDocument V2 domainmodell (2026-08-11)
->
-> Verziózott, immutable **V2 domainmodell** (`lib/features/audio_analysis/domain/`,
-> 14 fájl + `public.dart` barrel) — az E06-R01-ben elfogadott ADR
-> [0215](docs/adr/0215-analysis-document-versioning.md) (verziózás),
-> [0218](docs/adr/0218-analysis-metric-id-and-version-governance.md) (metric
-> ID + verzió), [0219](docs/adr/0219-analysis-capability-aware-publication.md)
-> (capability-aware publikáció) és [0220](docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)
-> (V1/V2 rollout határ) végrehajtása, **új architekturális döntés nélkül** —
-> csak típusok és validáció. `AnalysisDocument` gyökéraggregátum, sealed
-> `AnalysisEvent`/`AnalysisSegment`/`AnalysisMetricValue` hierarchiák,
-> `Duration`-alapú timebase mindenütt, fail-closed konstruktor-validáció,
-> stabil metric-ID katalógus, három additív, minden környezetben OFF flag
-> (`audioAnalysisV2Enabled`, `analysisBeatGridEnabled`,
-> `analysisPitchEnabled`). `lib/features/analyze/**`/`lib/features/library/**`
-> (V1) bitre érintetlen.
->
-> Implementer **Terra (Codex)**, 1 forduló, javító kör nélkül. PR
-> [#212](https://github.com/wolfcasaba/strumsight/pull/212), squash
-> `68a24c25`. Review:
-> [docs/reviews/e06-r02-analysis-document-v2-domain-review.md](docs/reviews/e06-r02-analysis-document-v2-domain-review.md)
-> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 2 NOTE — a reviewer SAJÁT, izolált
-> `/tmp` klónban a teljes 9-lépéses gate-et függetlenül újrafuttatta (zöld) és
-> két SAJÁT valódi-sértés próbát végzett, mindkettő a brief §6.1
-> mérce-mátrixának várt celláját fogta. Dedikált security-review (risk=high):
-> [docs/reviews/e06-r02-analysis-document-v2-domain-security.md](docs/reviews/e06-r02-analysis-document-v2-domain-security.md)
-> — **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 1 MINOR, 4 NOTE. **A MINOR: a
-> `[0,1]`/`[0,100]` confidence/arány-határőrök (8 hely) `NaN`-ra nyitva
-> buknak** (`NaN < 0` és `NaN > 1` is `false` Dartban), mérve mindkét
-> build-módban — **nem blokkoló** (a funkció teljesen bekötetlen, nincs
-> producer, ami `NaN`-t állítana elő), de **kötelező follow-up** a fix
-> elvégzésére az ELSŐ confidence-producer kör előtt (várhatóan E06-R04
-> pipeline vagy E06-R07 signal-quality).
->
-> **Zöld kapu (exact-SHA `6934557c`):** Full Gate
-> [31482838860](https://github.com/wolfcasaba/strumsight/actions/runs/31482838860)
-> + Router CI [31482840940](https://github.com/wolfcasaba/strumsight/actions/runs/31482840940)
-> mindkettő **success**. Az `origin/main` a dispatch (`b4387ac1`) és a merge
-> között nem mozdult (H8 tiszta). Post-merge gate a friss `main`-en
-> (`68a24c25`) önállóan újrafuttatva: mind a 9 lépés zöld.
->
-> **Pre-flight brief-revízió (§0.0 R1):** a batch-brief hat E06-R01 ADR-t még
-> a placeholder `0200/0203/0204/0205` számokkal idézte — javítva a valós
-> `0215/0218/0219/0220`-ra. A „Flag-őr" acceptance-cella **négy** környezetet
-> (`dev/lab/staging/production`) írt elő; az `AppEnvironment` enum ma
-> **három** értéket hordoz (nincs `staging`) — javítva.
->
-> **Üzemeltetési incidens ([`docs/LESSONS.md`](docs/LESSONS.md) L210):** a
-> review-commitok írása közben a megosztott munkafán egy PÁRHUZAMOSAN futó
-> session (Epic 7 batch-brief-előkészítés) commitja tévedésből az E06-R02
-> branchre került (a fa akkor arra volt checkoutolva). Push utáni
-> fájllista-újraszámolás buktatta le; az idegen commit egy dedikált
-> `codex/e07-r01-planner-baseline-and-adrs` branchre mentve megőrizve,
-> az E06-R02 branch force-with-lease-szel a saját, tiszta állapotára
-> visszaállítva — nulla adatvesztés.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -134,14 +144,14 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-11 (E06-R03 zárása): E06-R03 teljes bannere felkerült
-> (fent); E06-R02 bannere maradt a második helyen (tartalma változatlan);
-> E06-R01 bannere törölve a fejlécből, mert immár a harmadik legutóbbi kör —
-> TELJES szövege az archívumban élt már korábban is (az E06-R02 zárókör
-> pótolta ezt a hiányt, ld. korábbi diéta-bejegyzés a git-történetben), ez a
-> kör csak a fejléc-duplikátumot törölte, és a maradék E06-R02 „Következő
-> kör" stale mutatóját is (E06-R03 időközben elkészült, az új felső banner
-> saját, friss mutatóval zár).
+> Mért diéta: 2026-08-11 (E06-R04 zárása): E06-R04 teljes bannere felkerült
+> (fent); E06-R03 bannere maradt a második helyen (a stale „Következő kör"
+> mutatója törölve belőle, hiszen E06-R04 időközben elkészült, az új felső
+> banner saját, friss mutatóval zár); E06-R02 bannere törölve a fejlécből,
+> mert immár a harmadik legutóbbi kör — TELJES szövege az archívumban élt
+> már korábban is (az E06-R02 zárókör saját magát is archiválta a saját
+> zárásakor, ld. `docs/handoff-archive.md` tetején), ez a kör csak a
+> fejléc-duplikátumot törölte.
 
 ## 1. Current release state
 
@@ -186,11 +196,15 @@
   mérés + hat kötött ADR: [0215](docs/adr/0215-analysis-document-versioning.md)–[0220](docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)),
   **E06-R02** (`lib/features/audio_analysis/domain/` — verziózott,
   immutable V2 domainmodell, 14 fájl + `public.dart` barrel; 1 MINOR
-  security follow-up nyitva) és **E06-R03** (`lib/features/audio_analysis/data/`
+  security follow-up nyitva), **E06-R03** (`lib/features/audio_analysis/data/`
   — determinisztikus `AnalysisDocumentCodec` + `LegacyAnalyzeAdapter`/
   `LegacyViewAdapter` veszteségmentes V1↔V2 migráció, [ADR
   0221](docs/adr/0221-legacy-analysis-v2-migration-mapping.md); 1 MINOR
-  follow-up R21-re, ld. fenti banner) kész, 27 további kör tervezve
+  follow-up R21-re) és **E06-R04** (`lib/features/audio_analysis/engine/` +
+  `domain/analysis_progress.dart` — moduláris, megszakítható,
+  progresszt publikáló pipeline-szerződés fake stage-ekkel, konkrét DSP
+  nélkül; 1 MINOR follow-up kötelező R07 pre-flight ellenőrzéssel, ld.
+  fenti banner) kész, 26 további kör tervezve
   (`docs/execution/pipeline-queue.tsv`, `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre

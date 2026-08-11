@@ -6,6 +6,72 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E06-R04 — Pipeline contract, stage context és progress, teljes részletes történet (2026-08-11)
+
+A moduláris, **megszakítható**, progresszt publikáló elemzési-pipeline
+**szerződése** (SDD Ch7 §6.4–6.6, §8.4–8.5, §21.2, §22.4) — konkrét
+DSP-stage NÉLKÜL, csak fake tesztstage-ekkel. `AnalysisStage<I,O>`
+(SDD-literál `Future<AppResult<O>> run(...)` szignatúra, a már meglévő
+sealed `AppResult`/`AppFailure`-re építve, nem új Result-típussal),
+`AnalysisStageContext` (per-run cancellation token, progress sink,
+provenance-gyűjtő), `AnalysisCancellationToken`/`AnalysisCancellationSource`
+(kooperatív, **per-run**, sosem globális — egy run sosem szakíthat meg
+egy másikat), `AnalysisPipeline<T>` (sorrendben futtat, **szigorúan
+monoton** progress-fázis, **degradálható vs fatális** hibaosztályozás,
+**run-ID alapú késői-event szűrés** `droppedLateEvents` számlálóval,
+**duplikált stage-ID** kontrollált elutasítás), `AnalysisProgressEvent`
+sealed hierarchia a kilenc SDD-fázison. A `public.dart` csak a progress-
+és cancellation-contractot exportálja — az engine-implementáció
+(`AnalysisStage`/`AnalysisStageContext`/`AnalysisPipeline`) szándékosan
+feature-lokális marad. `lib/features/analyze/**` (V1) ÉS
+`audio_analysis/{data,presentation}/**` bitre érintetlen — a kör kimenete
+az a váz, amibe az R07–R20 stage-ei bekötnek.
+
+**Pre-flight §0.0 R1:** a 2026-08-07-i batch-brief `ADR 0200` placeholdere
+javítva a valós **[ADR 0215](adr/0215-analysis-document-versioning.md)**-re
+(ugyanaz a hatos-blokk átszámozási minta, mint E06-R01/R02-ben — a §5.7
+pont „stage.version → analyzer-verzió" hivatkozása). Minden más §2 mért
+állítás (compute-híváslánc, két `catch (_)` elnyelési pont, R02 domain
+enum/mező-nevek) újra grep-elve egyezett.
+
+Implementer **Terra (Codex)**, 1 forduló, javító kör nélkül
+(`continuations=0`). PR [#214](https://github.com/wolfcasaba/strumsight/pull/214),
+squash `43fae1d2`. Review:
+[docs/reviews/e06-r04-pipeline-contract-stage-and-progress-review.md](reviews/e06-r04-pipeline-contract-stage-and-progress-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR, 1 MINOR (deferred follow-up), 5 NOTE — a
+reviewer SAJÁT izolált `/tmp` klónban a teljes gate-et függetlenül
+újrafuttatta (zöld) és **két saját valódi-sértés próbát** végzett: a
+cancel-checkpoint guard eltávolítása a (c) cancel-mátrix cellát pirosra
+buktatta (várt `completedCheckpoints==0`, kapott `3`), a fatal-stage
+early-stop ág neutralizálása a fatális-mátrix cellát buktatta pirosra
+(várt `failed`, kapott `degraded`) — mindkettő visszaállítva. Dedikált
+biztonsági review (risk=high):
+[docs/reviews/e06-r04-pipeline-contract-stage-and-progress-security.md](reviews/e06-r04-pipeline-contract-stage-and-progress-security.md)
+— **PASS, 0 CRITICAL/BLOCKER/MAJOR**, 1 MINOR, 4 NOTE. **A MINOR:** egy
+stage `AnalysisStageContext.publishResult`-on át tetszőleges,
+**a pipeline tényleges eredményétől független** terminális
+`AnalysisRunResultEvent`-et injektálhat a live progress streamre (a
+result-eventek megkerülik a fázis-monoton kaput) — reprodukált próbával
+igazolva, de MA hívó nélküli, cross-feature nem exportált felület, nulla
+hatás. **Kötelező R07 pre-flight ellenőrzés:** vagy távolítsd el a
+`publishResult`-ot, ha még mindig hívatlan, vagy zárd le a `publish()`-t
+stage-eredetű terminális eventek ellen, MIELŐTT bármelyik valódi stage
+hívhatná. 4 forward-looking NOTE (nincs timeout `stage.run()`-on — tudatos
+körhatár; a szigorú fázis-monoton kapu ütközik a `completedUnits`
+sub-progress mezőkkel; `UnknownFailure.cause` nyers hiba/stacktrace, ma
+nem renderelt; homogén `AnalysisPipeline<T>` vs. az SDD §8.4 heterogén
+stage-lánca — R07 pre-flight döntsön).
+
+**Zöld kapu (exact-SHA `80070609` — a review-jelentés kör-branchre
+commitolása UTÁNI végleges HEAD; az implementációs SHA `ea8d95d9`-en mért
+korábbi zöld futás emiatt újra-dispatch-elve, lásd [`docs/LESSONS.md`
+L212](LESSONS.md)):** Full Gate
+[31496173780](https://github.com/wolfcasaba/strumsight/actions/runs/31496173780)
++ Router CI [31496170091](https://github.com/wolfcasaba/strumsight/actions/runs/31496170091)
+mindkettő **success**. Az `origin/main` a dispatch (`4796d539`) és a
+merge között nem mozdult (H8 tiszta). Post-merge gate a friss `main`-en
+(`43fae1d2`) önállóan újrafuttatva: mind a 8 lépés zöld.
+
 ## E06-R02 — AnalysisDocument V2 domainmodell, teljes részletes történet (2026-08-11)
 
 Verziózott, immutable **V2 domainmodell** (`lib/features/audio_analysis/domain/`,
