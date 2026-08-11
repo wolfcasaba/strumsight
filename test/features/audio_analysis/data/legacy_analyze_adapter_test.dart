@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/audio_analysis/data/legacy_analyze_adapter.dart';
-import 'package:strumsight/features/audio_analysis/data/legacy_view_adapter.dart';
 import 'package:strumsight/features/audio_analysis/public.dart';
 import 'package:strumsight/features/library/public.dart';
 
@@ -27,13 +25,27 @@ void main() {
       expect(migrated.customTitle, session.customTitle);
       expect(document.metrics, isEmpty);
       expect(document.signalQuality.measured, isFalse);
-      expect(document.warnings, contains(predicate<AnalysisWarning>(
-        (warning) => warning.kind == AnalysisWarningKind.migration,
-      )));
-      expect(document.timeline.chordSegments, hasLength(session.result.chords.length));
-      expect(document.timeline.events.whereType<StrumEvent>(), hasLength(session.result.strums.length));
+      expect(
+        document.warnings,
+        contains(
+          predicate<AnalysisWarning>(
+            (warning) => warning.kind == AnalysisWarningKind.migration,
+          ),
+        ),
+      );
+      expect(
+        document.timeline.chordSegments,
+        hasLength(session.result.chords.length),
+      );
+      expect(
+        document.timeline.events.whereType<StrumEvent>(),
+        hasLength(session.result.strums.length),
+      );
       expect(document.timeline.tempoPoints.single.bpm, session.result.bpm);
-      expect(document.capabilities, hasLength(AnalysisCapability.values.length));
+      expect(
+        document.capabilities,
+        hasLength(AnalysisCapability.values.length),
+      );
 
       for (final capability in document.capabilities) {
         final supplied = <AnalysisCapability>{
@@ -45,7 +57,13 @@ void main() {
           expect(capability.status, CapabilityStatus.available);
         } else {
           expect(capability.status, CapabilityStatus.unavailable);
-          expect(capability.reason, CapabilityUnavailableReason.modelUnavailable);
+          expect(
+            capability.reason,
+            CapabilityUnavailableReason.modelUnavailable,
+          );
+          expect(capability.details, const <String, Object?>{
+            'legacyMigration': 'true',
+          });
         }
       }
 
@@ -53,8 +71,30 @@ void main() {
       expect(legacy.durationSec, closeTo(session.result.durationSec, .000001));
       expect(legacy.bpm, session.result.bpm);
       expect(legacy.beatsPerBar, session.result.beatsPerBar);
-      expect(legacy.chords.map((chord) => chord.label), session.result.chords.map((chord) => chord.label));
-      expect(legacy.strums.map((strum) => strum.direction.name), session.result.strums.map((strum) => strum.direction.name));
+      expect(
+        legacy.chords.map((chord) => chord.label),
+        session.result.chords.map((chord) => chord.label),
+      );
+      expect(
+        legacy.chords.map((chord) => chord.startSec),
+        orderedEquals(session.result.chords.map((chord) => chord.startSec)),
+      );
+      expect(
+        legacy.chords.map((chord) => chord.endSec),
+        orderedEquals(session.result.chords.map((chord) => chord.endSec)),
+      );
+      expect(
+        legacy.strums.map((strum) => strum.direction.name),
+        session.result.strums.map((strum) => strum.direction.name),
+      );
+      expect(
+        legacy.strums.map((strum) => strum.timeSec),
+        orderedEquals(session.result.strums.map((strum) => strum.timeSec)),
+      );
+      expect(
+        legacy.strums.map((strum) => strum.confidence),
+        orderedEquals(session.result.strums.map((strum) => strum.confidence)),
+      );
 
       if (fixture == 'legacy_session_lab_diag.json') {
         expect(migrated.diagnostics, isNotNull);

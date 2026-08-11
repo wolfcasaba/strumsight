@@ -11,8 +11,18 @@ final class AnalysisDocumentCodec {
   static const int schemaVersion = analysisDocumentSchemaVersion;
 
   /// Encodes fields in a fixed insertion order for byte-stable persistence.
-  String encode(AnalysisDocument document) =>
-      jsonEncode(_documentToJson(document));
+  String encode(AnalysisDocument document) {
+    if (document.schemaVersion != schemaVersion) {
+      throw ArgumentError.value(
+        document.schemaVersion,
+        'document.schemaVersion',
+        'must be supported by this codec',
+      );
+    }
+    final json = _documentToJson(document);
+    _ensureFiniteJson(json);
+    return jsonEncode(json);
+  }
 
   /// Decodes untrusted persisted JSON without letting malformed records escape.
   AppResult<AnalysisDocument> decode(String source) {
@@ -28,7 +38,7 @@ final class AnalysisDocumentCodec {
 
   static Map<String, Object?> _documentToJson(AnalysisDocument value) =>
       <String, Object?>{
-        'schemaVersion': schemaVersion,
+        'schemaVersion': value.schemaVersion,
         'id': value.id,
         'createdAt': value.createdAt.toUtc().toIso8601String(),
         'mode': value.mode.name,
@@ -45,8 +55,9 @@ final class AnalysisDocumentCodec {
       };
 
   static AnalysisDocument _documentFromJson(Map<String, Object?> json) {
-    if (_int(json, 'schemaVersion') != schemaVersion)
+    if (_int(json, 'schemaVersion') != schemaVersion) {
       throw const FormatException();
+    }
     return AnalysisDocument(
       id: _string(json, 'id'),
       schemaVersion: schemaVersion,
@@ -661,6 +672,39 @@ final class AnalysisDocumentCodec {
       });
   static Map<String, Object?> _details(Map<String, Object?> json, String key) =>
       _object(json[key]);
+
+  /// Domain constructors guard most measurements, but a capability's detail
+  /// bag is intentionally open-ended. Validate the completed JSON tree here
+  /// so malformed numeric metadata can never enter persisted output.
+  static void _ensureFiniteJson(Object? value) {
+    switch (value) {
+      case num() when !value.isFinite:
+        throw ArgumentError.value(
+          value,
+          'json',
+          'must not contain NaN/Infinity',
+        );
+      case Map<Object?, Object?>():
+        for (final entry in value.entries) {
+          if (entry.key is! String) {
+            throw ArgumentError.value(
+              entry.key,
+              'json key',
+              'must be a string',
+            );
+          }
+          _ensureFiniteJson(entry.value);
+        }
+      case Iterable<Object?>():
+        for (final entry in value) {
+          _ensureFiniteJson(entry);
+        }
+      case null || bool() || String() || num():
+        return;
+      default:
+        throw ArgumentError.value(value, 'json', 'must be JSON-compatible');
+    }
+  }
 }
 
 abstract final class _AnalysisDocumentCodecFailure {
