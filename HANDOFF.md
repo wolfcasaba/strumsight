@@ -2,8 +2,64 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-09
-> (E99-R05 / GOV-06b MERGED — a GOV-06 BPM-metrikájának javítása).**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
+> (E06-R01 MERGED — Epic 6 kickoff: Analyze V1 baseline + hat kötött ADR).**
+>
+> ## ✅ E06-R01 KÉSZ — Epic 6 (Audio Analysis 2.0) kickoff: V1 baseline + hat ADR (2026-08-11)
+>
+> **User-döntés 2026-08-11: „mehet tovább az epic 6"** — a §6 „Kötelező
+> sorrend" 3. és 4. pontja lezárva (GOV-05a/05c/06/06b), tehát az 5. pont
+> feltétele teljesült; mind a 30 Epic 6 sor `hold`→`pending` (queue,
+> `7d5bfd4a`). **E06-R01** az első a 30 tervezett Epic 6 körből: a **mai**
+> Analyze funkció mért, reprodukálható technikai baseline-ja (állapotgép,
+> `AnalyzeResult`/`AnalyzedSession` séma, DSP-passzok, Library persistence,
+> teszt-inventory, cross-feature dependency map) **egyetlen sor
+> alkalmazáskód-változtatás nélkül**, plusz hat kötött architekturális
+> döntés az Epic 6 hátralévő 29 köréhez: **ADR [0215](docs/adr/0215-analysis-document-versioning.md)**
+> (dokumentum-verziózás, mikroszekundum-Duration), **[0216](docs/adr/0216-analysis-confidence-calibration-and-abstention.md)**
+> (confidence/kalibráció/abstention — nyers score sosem publikálható
+> probabilityként), **[0217](docs/adr/0217-analysis-raw-audio-retention.md)**
+> (nyers audio retention, `keepOriginal=false` alapértelmezés),
+> **[0218](docs/adr/0218-analysis-metric-id-and-version-governance.md)**
+> (metrika-ID + verzió-kormányzás), **[0219](docs/adr/0219-analysis-capability-aware-publication.md)**
+> (capability-alapú publikáció — magyarázott `unavailable`, sosem csendes
+> 0/N/A), **[0220](docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)**
+> (V1/V2 párhuzamos rollout határ — `audioAnalysisV2Enabled` default OFF
+> **minden** környezetben, dart-define override nélkül, a V1 marad a
+> shipping út a teljes Epic alatt).
+>
+> A determinisztikus mérő-harness (`tool/audio_analysis_baseline.dart`,
+> `flutter test`-en fut, három szintetikus fixture: 2 s csend, 120 BPM-es
+> strum-sorozat, C–G–Am–F progresszió) és a `docs/manual-testing/analysis-eval-matrix.md`
+> (21 PENDING sor, felelőssel + mérendő számmal a jövőbeli valós-audio
+> kiértékeléshez) implementer **Terra (Codex)**, 1 forduló, javító kör
+> nélkül. PR [#211](https://github.com/wolfcasaba/strumsight/pull/211),
+> squash `62516a4b`. Review:
+> [docs/reviews/e06-r01-analyze-v1-baseline-and-adrs-review.md](docs/reviews/e06-r01-analyze-v1-baseline-and-adrs-review.md)
+> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 3 NOTE — a reviewer SAJÁT, izolált
+> `/tmp` klónban a teljes 7-lépéses gate-et függetlenül újrafuttatta (zöld)
+> ÉS a mérő-harnesst egy HARMADIK, tőle független futtatással bájtra egyező
+> `DETERMINISM_SHA256`-ra futtatta (a Terra két bejelentett futtatásával
+> egyezően). Dedikált security-review (risk=high): **PASS, 0
+> CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE.
+>
+> **Zöld kapu (exact-SHA `d7adf53e`):** Full Gate
+> [31477469515](https://github.com/wolfcasaba/strumsight/actions/runs/31477469515)
+> + Router CI mindkettő **success**. Az `origin/main` a dispatch és a merge
+> között **nem mozdult** (`2334136a` mindvégig, H8 tiszta). Post-merge gate
+> a friss `main`-en (`62516a4b`) önállóan újrafuttatva: mind a 7 lépés zöld.
+>
+> **Pre-flight kétszeres mért drift-javítás (§0.0 R1+R2 brief-revízió):** a
+> brief 2026-08-07-i, `ls`-alapú ADR-extrapolációja (0200–0205) elavult —
+> a `reserve-adr` foglaló a valós **0215–0220**-at adta (a köztes GOV-06b/
+> GOV-05b-1/GOV-05b-2 kör 0212–0214-et foglalt el, `docs/LESSONS.md` L194
+> mintája hatodszor mérve); a `lib/features/analyze/` fájl/sorszáma is
+> driftelt a brief mérése óta (12→14 fájl, E05-R27 eredetű). Mindkettő
+> dokumentált revízióval javítva a dispatch előtt.
+>
+> **Következő kör: E06-R02** (AnalysisDocument V2 domainmodell,
+> `docs/rounds/e06-r02-analysis-document-v2-domain.md`) — a queue már
+> `pending`, a lánc a szokásos módon folytatható.
 >
 > ## ✅ E99-R05 (GOV-06b) KÉSZ — a valós-audio BPM-metrika visszavonása és javítása (2026-08-09)
 >
@@ -47,22 +103,6 @@
 > **Nincs automatikusan indítható következő kör:** az Epic 6 feloldása és a
 > GOV-05b (AI Tutor) sorsa emberi döntés — lásd §6.
 >
-> ## ✅ E99-R04 (GOV-06) KÉSZ — Valós-audio DSP baseline mérés (2026-08-09)
->
-> **E99-R04** MERGED (PR [#207](https://github.com/wolfcasaba/strumsight/pull/207),
-> squash `5ceed22d`; **ÚJ ADR 0199**; implementer **Codex (Terra)**, 1
-> forduló, javító kör nélkül). A szállított, változatlan `const
-> ClipAnalyzer()` mérve 82 valódi telefonos felvételen: akkord-pontosság
-> **67,069%** (18,832%-os baseline fölött), onset F1@50ms **67,391%**. (A
-> harmadik szám, BPM-MAE 45,067, azóta **visszavonva** — lásd fent, GOV-06b.)
-> Teljes részletes történet: [`docs/handoff-archive.md`](docs/handoff-archive.md).
-> Review: [docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md](docs/reviews/e99-r04-gov-06-real-audio-dsp-baseline-review.md)
-> — **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 4 NOTE. Dedikált security-review
-> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**. Zöld kapu exact-SHA `ab4024a6`:
-> Full Gate [31302531695](https://github.com/wolfcasaba/strumsight/actions/runs/31302531695)
-> + Router CI [31302494856](https://github.com/wolfcasaba/strumsight/actions/runs/31302494856)
-> mindkettő **success**.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -72,10 +112,9 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-09 (E99-R05/GOV-06b zárása): E99-R04/GOV-06 teljes
-> fejléc-narratívája archiválva (`docs/handoff-archive.md`), rövid bannere
-> felkerült (fent, a BPM-visszavonásra mutató jegyzettel); E99-R03/GOV-05c
-> rövid bannere törölve — részletes története már az archívumban él, a
+> Mért diéta: 2026-08-11 (E06-R01 zárása): E06-R01 teljes bannere felkerült
+> (fent); E99-R04/GOV-06 rövid bannere törölve — részletes története már az
+> archívumban él (a teljes szöveg korábban átkerült, ld. alább), a
 > fejléc-ablakból kikerült, mert immár a harmadik legutóbbi kör.
 
 ## 1. Current release state
@@ -117,6 +156,13 @@
   végső elfogadási kapu a user valódi-eszközös HORIZON-menete (§6 „Kötelező
   sorrend"), nem a technikai készenlét. Evidencia:
   [`docs/sdd/epic-05-completion-report.md`](docs/sdd/epic-05-completion-report.md).
+- **Epic 6 (Audio Analysis 2.0) elkezdve** — E06-R01 (kickoff: V1 baseline
+  mérés + hat kötött ADR: [0215](docs/adr/0215-analysis-document-versioning.md)–[0220](docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md))
+  kész, 29 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  `pending`). **`audioAnalysisV2Enabled` (+ al-flagek) `false` marad minden
+  környezetben a teljes Epic alatt** (ADR 0220) — a V1 Analyze marad a
+  shipping út. Production kód változatlan (docs-only Kör 1). Evidencia:
+  [`docs/baseline/epic-06-audio-analysis-start.md`](docs/baseline/epic-06-audio-analysis-start.md).
 
 ## 2. What is working
 
@@ -444,8 +490,9 @@
   elfogadott kimenet, nem hiba. Új eszköz: `ml/chords/tempo_reference.py`.
   Az akkord-pontosság és onset F1 (fent) újramérve bitre változatlan.
   **User-döntés (2026-08-07):** az Epic 6 NEM indul, amíg ez nincs meg — a
-  §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult; az Epic 6 feloldása
-  MOST emberi döntésre vár, lásd §6.
+  §6 „Kötelező sorrend" 3. ÉS 4. pontja is lezárult. **Az 5. pont (Epic 6
+  feloldása) is megtörtént** (user-döntés 2026-08-11, „mehet tovább az
+  epic 6") — E06-R01 (Kör 1) kész, lásd a fejléc ✅-blokk és §6.
 - **Az AI Tutor rollout — a drótozási blokkoló ÉS a backend-adapter FELOLDVA,
   a bekötés és az üzemeltetés hiányzik (frissítve 2026-08-09, GOV-05b-2 /
   E99-R07 merge után).**
@@ -549,33 +596,47 @@
 
 ## 4. Current branch
 
-`main` @ [PR #208](https://github.com/wolfcasaba/strumsight/pull/208), squash
-`c4ce2cc0` (E99-R05, GOV-06b — a GOV-06 BPM-metrikájának javítása; lásd a
-fejléc ✅-blokk a teljes pre-flight/review/security történetért). Mérce-javító
-kör, `lib/` diff üres (ADR 0212 Döntés 6) — `ml/chords/tempo_reference.py`
-(ÚJ), `tool/benchmarks/real_audio_dsp_baseline.dart` (BPM-szakasz átírva),
-`test/tooling/real_audio_dsp_baseline_test.dart` (ÚJ BPM-cellák),
-`docs/eval/real-audio-dsp-baseline.md` (BPM-szakasz átírva) és a brief §10
-handoffja → Full Gate
-[31325609456](https://github.com/wolfcasaba/strumsight/actions/runs/31325609456)
-+ Router CI [31325597238](https://github.com/wolfcasaba/strumsight/actions/runs/31325597238)
-mindkettő **success** az exact merge-előtti tip `94fb2f6f`-n (a Router CI
-automatikus push-trigger, mert a diff `docs/rounds/**`-t érint; a Full Gate
-kézzel dispatch-elve, a CI-terv `full-gate.yml`-t írt elő, `native_gate=false`).
-Review **APPROVED, 2 forduló** (1 impl. + 1 javító kör: F1 MAJOR, a §10
-handoff hiányzó nyers mérési kimenete, javítva és tételesen ellenőrizve) — a
-reviewer SAJÁT, izolált `/tmp` klónban NEMCSAK a gate-et futtatta újra
-(7/7 zöld, javítás előtt ÉS után), hanem a TELJES 82 felvételes mérést is
-**kétszer** megismételte: **bájtra egyező** eredmény minden ellenőrzött
-mezőn egy teljesen független futtatásban, ÉS önállóan megismételte a brief
-§6.1 valódi-sértés próbáját (`<=`→`<` mutáció → a 40 ezrelékes cella pirosra
-vált, `predicted=104.0`, visszaállítás után zöld). A dedikált
-security-review (risk=high) **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2
-NOTE. Az `origin/main` a dispatch és a merge között **nem mozdult**
-(`caa7751e` mindvégig), rebase nem kellett (H8 tiszta — a köztes
-`E99-R07 ideiglenes hold` és `GOV-05b-2` pre-flight commitok diszjunktak
-ettől a körtől). Post-merge gate a friss `main`-en (`c4ce2cc0`) is önállóan
-újrafuttatva: mind a 7 lépés zöld.
+`main` @ [PR #211](https://github.com/wolfcasaba/strumsight/pull/211), squash
+`62516a4b` (E06-R01, Epic 6 kickoff — Analyze V1 baseline, mérés és hat
+kötött ADR; lásd a fejléc ✅-blokk a teljes pre-flight/review/security
+történetért). Implementer **Terra (Codex)**, 1 forduló, javító kör nélkül.
+`lib/`/`test/` diff üres — `tool/audio_analysis_baseline.dart` (ÚJ),
+`docs/baseline/epic-06-audio-analysis-start.md` (ÚJ),
+`docs/manual-testing/analysis-eval-matrix.md` (ÚJ), `docs/adr/0215`…`0220`
+(ÚJ, orchesztrátor pre-flight) és a brief §0.0/§10 → Full Gate
+[31477469515](https://github.com/wolfcasaba/strumsight/actions/runs/31477469515)
++ Router CI mindkettő **success** az exact merge-előtti tip `d7adf53e`-n
+(a Router CI automatikus push-trigger, mert a diff `docs/rounds/**`-t
+érint; a Full Gate kézzel dispatch-elve, a CI-terv `full-gate.yml`-t írt
+elő, `native_gate=false`). Review **APPROVED, 0 BLOCKER/MAJOR/MINOR**, 3
+NOTE — a reviewer SAJÁT, izolált `/tmp` klónban a teljes 7-lépéses gate-et
+függetlenül újrafuttatta (mind zöld) ÉS a determinisztikus mérő-harnesst
+egy HARMADIK, tőle független futtatással bájtra egyező
+`DETERMINISM_SHA256`-ra futtatta. Dedikált security-review (risk=high)
+**PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a
+dispatch és a merge között **nem mozdult** (`2334136a` mindvégig), rebase
+nem kellett (H8 tiszta). Post-merge gate a friss `main`-en (`62516a4b`) is
+önállóan újrafuttatva: mind a 7 lépés zöld.
+
+**Pre-flight kétszeres mért drift-javítás (§0.0 R1+R2, a lánc mintázata
+immár hatodszor mérve, `docs/LESSONS.md` L194):** a brief 2026-08-07-i
+fejléce `ls`-alapú extrapolációval 0200–0205 ADR-tartományt írt elő; a
+`reserve-adr` foglaló a valós, 2026-08-11-i állapotot **0215–0220**-ként
+adta (három közbeeső governance-kör foglalta el a köztes számokat anélkül,
+hogy a 0200–0211 sávot ténylegesen lefoglalta volna). A `lib/features/analyze/`
+fájl/sorszáma is driftelt a brief mérése óta (12→14 fájl, 1866→2168 sor,
+E05-R27 eredetű) — mindkettő dokumentált revízióval javítva a dispatch előtt.
+
+> **[Superseded ref — E99-R05 branch]:** `main` @ PR #208, squash
+> `c4ce2cc0` (E99-R05, GOV-06b — a GOV-06 BPM-metrikájának javítása).
+> Mérce-javító kör, `lib/` diff üres (ADR 0212 Döntés 6). Full Gate
+> [31325609456](https://github.com/wolfcasaba/strumsight/actions/runs/31325609456)
+> + Router CI [31325597238](https://github.com/wolfcasaba/strumsight/actions/runs/31325597238)
+> mindkettő **success** az exact merge-előtti tip `94fb2f6f`-n. Review
+> **APPROVED, 2 forduló** (1 impl. + 1 javító kör); dedikált security-review
+> **PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR**, 2 NOTE. Az `origin/main` a
+> dispatch és a merge között **nem mozdult** (`caa7751e` mindvégig), rebase
+> nem kellett (H8 tiszta). Teljes történet: `docs/handoff-archive.md`.
 
 > **[Superseded ref — E99-R04 branch]:** `main` @ PR #207, squash `5ceed22d`
 > (E99-R04, GOV-06 — Valós-audio DSP baseline mérés). Mérési kör, `lib/` diff
@@ -1109,9 +1170,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 >    (`ml/data/klangio/`, 82 felvétel) NEM verziókövetett — a mérés
 >    elkötelezett riport, nem CI-kapu; a verziókövetés nevesített follow-up.
 >    Teljes riport: [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
-> 5. **Csak ezután Epic 6** — a 30 briefje kész (`epic-06-batch-index.md`),
->    a queue-sorai `hold`-on. A 3. ÉS 4. pont is lezárult (2026-08-09) — a
->    feloldás MOST EMBERI döntésre vár.
+> 5. ~~**Csak ezután Epic 6**~~ — ✅ **FELOLDVA, user-döntés 2026-08-11**
+>    („mehet tovább az epic 6"): a 3. ÉS 4. pont lezárult (2026-08-09), az
+>    5. pont feltétele teljesült, mind a 30 Epic 6 sor `hold`→`pending`
+>    (`docs/execution/pipeline-queue.tsv`, `7d5bfd4a`). **E06-R01** (Epic 6
+>    Kör 1: V1 baseline + hat kötött ADR) ✅ **KÉSZ** — lásd a fejléc
+>    ✅-blokk. A lánc a szokásos módon folytatható, `PIPELINE_SLOTS=1`
+>    (user-döntés 2026-08-11: „nem kell dupla kör haladunk sorban").
 >
 > A GOV-05b/GOV-05c/GOV-06 briefje **szándékosan még nincs megírva**: mindegyik
 > pre-flightjának az ELŐZŐ kör utáni állapotot kell mérnie (mind ugyanazt a
@@ -1124,8 +1189,17 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
 > A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
 
-0. **A KÖVETKEZŐ KÖR: a GOV-05b bekötő köre — a backend `main.py` bekötése az
-   OpenAI-adapterre (briefje még nincs megírva).** A backend adapter
+0a. **Az Epic 6 lánc KÖVETKEZŐ KÖRE: E06-R02** (AnalysisDocument V2
+   domainmodell, `docs/rounds/e06-r02-analysis-document-v2-domain.md`) — a
+   queue `pending`, a pipeline a szokásos módon dispatch-eli. Az E06-R01
+   (Kör 1) ✅ **KÉSZ** (lásd a fejléc ✅-blokk); 28 további Epic 6 kör van
+   hátra (`epic-06-batch-index.md`). A queue soronként, EGYESÉVEL halad
+   (`PIPELINE_SLOTS=1`, user-döntés 2026-08-11).
+
+0b. **Ettől FÜGGETLENÜL, még nyitva: a GOV-05b bekötő köre — a backend
+   `main.py` bekötése az OpenAI-adapterre (briefje még nincs megírva).**
+   A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás) — ez a track
+   nem az Epic 6 lánc része, és az Epic 6 dispatch-ok nem érintik. A backend adapter
    (E99-R07) és a Dart-oldali transport+provider-bedrótozás (E99-R06) is
    kész; ami hátravan, a `main.py` registry/gateway-kiválasztásának bekötése
    az `OpenAiProviderGateway`-re (ma kizárólag `FakeProviderGateway`-t épít),
@@ -1150,15 +1224,17 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
    OpenAI-hívás még nem érhető el éles úton. Ez a bekötés a fenti következő
    kör dolga.
 
-   **A §6 sorrend 3. és 4. pontja LEZÁRULT** (GOV-05a ✅, GOV-05c ✅,
-   GOV-06 ✅ + GOV-06b ✅). Az **5. pont (Epic 6) EMBERI döntésre vár** — a 30
-   brief kész (`epic-06-batch-index.md`), a queue-sorai `hold`-on. A GOV-05b
-   lánca ettől FÜGGETLENÜL fut.
+   **A §6 sorrend mind az 5 pontja LEZÁRULT** (GOV-05a ✅, GOV-05c ✅, GOV-06
+   ✅ + GOV-06b ✅, Epic 6 feloldása ✅ 2026-08-11). A GOV-05b lánca ettől
+   FÜGGETLENÜL fut, és változatlanul nyitva (0b pont).
 
-   **A pipeline-lánc TÉTLEN:** `docs/execution/pipeline-queue.tsv` minden
-   E05-sora `done`, minden E06-sora **`hold`** — a cron nem indít semmit
-   magától, és ez így helyes, amíg a §6 sorrend 5. pontjának emberi döntése
-   meg nem születik.
+   **A pipeline-lánc AKTÍV:** `docs/execution/pipeline-queue.tsv` minden
+   E05-sora `done`, E06-R01 `done`, a többi 29 E06-sor **`pending`** — a
+   lánc E06-R02-vel folytatódik, `PIPELINE_SLOTS=1` szerint egyesével.
+
+   **~~E06-R01 — Analyze V1 baseline, mérés és ADR-ek~~ — KÉSZ** (PR #211,
+   `62516a4b`, **ÚJ ADR 0215–0220**; implementer Codex/Terra, 1 forduló,
+   javító kör nélkül; lásd a fejléc ✅-blokk a teljes történetért).
 
    **~~E99-R04 (GOV-06) — Valós-audio DSP baseline mérés~~ — KÉSZ** (PR
    #207, `5ceed22d`, **ÚJ ADR 0199**; implementer Codex/Terra, 1 forduló,
