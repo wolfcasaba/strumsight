@@ -317,7 +317,54 @@ kódmódosítás.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Módosított fájlok:**
+  - `tool/audio_analysis_baseline.dart` — Flutter-test runneren futó, óra és
+    seed nélküli V1-harness; 2 s csendet, 120 BPM-es strum-sorozatot és
+    C–G–Am–F progressziót mér. A modell-overhead közvetlen asset read+parse,
+    nem `rootBundle`; egy futáson belül kétszer ellenőrzi a determinisztikus
+    timeline/BPM/event-count bájtokat.
+  - `docs/baseline/epic-06-audio-analysis-start.md` — forráshelyekkel jelölt
+    V1 állapot, 14/2168 Analyze production inventory, 15 Analyze + 4 Library
+    + 20 property teszt inventory, 12 elemű cross-feature map és két tényleges
+    mérési kimenet.
+  - `docs/manual-testing/analysis-eval-matrix.md` — minden sor PENDING, és
+    mindegyik felelőst, reprodukálható bemenetet és mérendő számot ad.
+- **Acceptance evidence:**
+  1. `git diff --cached --stat` tényleges kimenete: baseline 71, eval-mátrix
+     29, brief 49, tool 253 sor; 4 fájl, 401 insertion, 1 deletion — nincs `lib/**` vagy `test/**` útvonal.
+  2. A baseline minden V1-állítást `fájl:sor` hivatkozással, a 14 production
+     és 19 Analyze/Library tesztfájlt név szerint tartalmazza.
+  3. A determinisztikus kimenet SHA-256-a mindkét külső futásban
+     `071925bcc69f53579dddbeb505375ef897760c84efd1f7255db90f4465f1d7b6`;
+     a harness saját `orderedEquals` ellenőrzése `tool/audio_analysis_baseline.dart:24-42`.
+  4. Mindhárom kötelező fixture futott; a mért idő, event count, chord
+     szegmens, BPM és model byte a baseline táblában szó szerint szerepel.
+  5. ADR 0215–0220 olvasva és változatlanul hagyva; mind a hatban jelen van
+     Döntés, Kontextus, Következmény, Elutasított alternatívák és A
+     visszavonás feltétele.
+  6. ADR 0220 kimondja az `audioAnalysisV2Enabled` default OFF-ot minden
+     környezetben és a dart-define override hiányát.
+  7. Az eval-mátrix minden PENDING sora felelőst és metrikát nevez meg.
+  8. `tools/brief-lint.py --brief docs/rounds/e06-r01-analyze-v1-baseline-and-adrs.md --level strict` → `# Brief-lint (strict) — nincs lelet`.
+- **Két tényleges baseline-futtatás** (`flutter test --reporter expanded tool/audio_analysis_baseline.dart`):
+  - A: model 1456371 byte / 42439 µs; silence 186344 µs, 0 BPM, 0 strum,
+    0 chord; strums 476446 µs, 120.1853197674418 BPM, 5 strum, 1 `Em`
+    chord; progression 295281 µs, 74.89809782608695 BPM, 3 strum, 4
+    chord (`C`, `G`, `Am`, `F`); SHA-256 a fenti.
+  - B: model 1456371 byte / 45812 µs; silence 189598 µs, 0 BPM, 0 strum,
+    0 chord; strums 504544 µs, 120.1853197674418 BPM, 5 strum, 1 `Em`
+    chord; progression 312222 µs, 74.89809782608695 BPM, 3 strum, 4
+    chord (`C`, `G`, `Am`, `F`); SHA-256 a fenti.
+- **Gate:** első futás az új harness két analyze-lintje miatt állt meg
+  (`dangling_library_doc_comments`, `avoid_print`); a `library;` direktíva
+  és `stdout.writeln` javítása után a teljes gate újrafuttatva:
+  `format`, `analyze`, `test test/features/analyze`,
+  `test test/features/library`, `architecture`, `secrets` és `l10n` mind
+  **zöld**; a gate `MINDEN GATE ZÖLD` kilépéssel zárult.
+- **Eltérés / követés:** peak memória NEM MÉRT, mert nincs reprodukálható
+  processz-peak forrás; a valós eszközös memória- és pontosságmérés az
+  `analysis-eval-matrix.md` PENDING sorai szerint következik. A kör nem
+  módosít alkalmazáskódot, tesztet, DSP-konstanst vagy modell-assetet.
 
 ## 11. Review — a független reviewer tölti ki
 
