@@ -297,20 +297,21 @@ bekapcsolása helyett `stopped` + brief-revízió.
   OFF-by-default `analysisExperimentalFusionEnabled`; publikus V2 exportok és
   ADR 0229.
 - **Tesztek:** az új assembler/normalizer/property tesztek zöldek
-  (16 teszt, `PROPERTY_SEED=42`). A záróhatár valódi-sértés próbája a
+  (17 teszt, `PROPERTY_SEED=42`); a bővített flag-őr 14/14 zöld. A záróhatár
+  valódi-sértés próbája a
   `clipDuration` helyett az utolsó frame-ablakra zárással piros lett, majd a
   helyes implementáció visszaállítása után zöldre váltott. A küszöb-hármas
   számítása: `199000 200000 201000` µs.
-- **Célzott analyzer:** a 10 scope-on belüli módosított Dart fájlra `dart analyze` zöld,
+- **Célzott analyzer:** a 11 scope-on belüli módosított Dart fájlra `dart analyze` zöld,
   nulla issue.
 - **Kötelező gate:** `tools/round-gate.sh test/features/audio_analysis
-  test/property test/app test/features/analyze` a format lépésen zöld, de az
-  analyze lépésen piros: a baseline-ból hiányzik a generált
-  `lib/l10n/app_localizations.dart`, ezért 932, e körön kívüli hiba keletkezik.
-  Generálás/fájlírás nem történt a brief allowlistjén kívül. Emiatt a kör
-  `blocked` jelzést adott; utána a scope-audit a `test/app/feature_flags_test.dart`
-  korábbi, saját editjét listán kívülinek jelezte, ezért az edit visszavonva és
-  a kör `stopped` jelzéssel zárult. Teljes gate/CI/merge nincs.
+  test/property test/app test/features/analyze` teljesen zöld (format,
+  analyze, mind a négy célzott test-útvonal, architecture és diff-check).
+  `python3 tools/scope-audit.py --repo /home/ubuntu/ss-terra-e06-r11 --brief
+  docs/rounds/e06-r11-chord-evidence-segmentation-provenance.md --base
+  ff5dfba8d6947b80bb3ccbd40bf3f17882f84080 --kv` → `scope_audit=ok`, 13
+  módosított útvonal. CI-dispatch, független review, PR és merge az
+  orchestrátor feladata; még nem futottak.
 - **Follow-up:** R18/R29 adja majd a tényleges Lab ML top-k evidence-et;
   R21 rögzíti, mely aggregált provenance marad perzisztálható a frame-top-k
   tömeges tárolása nélkül.

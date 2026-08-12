@@ -21,17 +21,35 @@ sealed class AnalysisSegment {
   final double confidence;
 }
 
+/// Reproducible decoder provenance for a chord segment.
+enum DecoderSource { dsp, ml, fused }
+
+/// Explains how a chord segment confidence was derived.
+enum ChordConfidenceSource { heuristic }
+
 final class ChordSegment extends AnalysisSegment {
   ChordSegment({
     required super.start,
     required super.end,
     required super.confidence,
     required this.label,
-  }) {
+    this.source = DecoderSource.dsp,
+    this.confidenceSource = ChordConfidenceSource.heuristic,
+    this.modelManifestId,
+    String? id,
+  }) : id = id ?? _defaultId(label, start, end) {
     if (label.trim().isEmpty) throw ArgumentError.value(label, 'label');
+    if (this.id.trim().isEmpty) throw ArgumentError.value(id, 'id');
   }
 
   final String label;
+  final String id;
+  final DecoderSource source;
+  final ChordConfidenceSource confidenceSource;
+  final String? modelManifestId;
+
+  static String _defaultId(String label, Duration start, Duration end) =>
+      'chord-${start.inMicroseconds}-${end.inMicroseconds}-$label';
 }
 
 final class PitchSegment extends AnalysisSegment {
