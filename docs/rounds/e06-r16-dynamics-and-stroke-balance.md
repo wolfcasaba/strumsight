@@ -441,5 +441,7 @@ Módosított fájlok pontosan a korrekciós brief scope-jával egyeznek:
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Független review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.
+Független security review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-security.md`.
+Mindkettő `b144eff2` SHA-n PASS/APPROVED; a merge még exact-SHA zöld CI-t
+igényel.
