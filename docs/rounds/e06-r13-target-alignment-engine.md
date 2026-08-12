@@ -1,6 +1,6 @@
 # E06-R13 — Target alignment engine
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-12, kód újramérve: main @ `ce4b6b24`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 13; §9.4, §15.1, §15.4
 - **Branch:** `codex/e06-r13-target-alignment-engine`
 - **Előfeltétel:** **E06-R10, E06-R12 merge**
@@ -47,7 +47,29 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**PLANNING.** Pre-flight lezárva 2026-08-12, `main @ ce4b6b24` (E06-R10 és
+E06-R12 mindkettő merge-elve — az előfeltétel teljesül).
+
+Mért, a briefet megerősítő ellenőrzések:
+
+- `AnalysisTarget` nem létezik az `audio_analysis` fán, és a `domain/target/`
+  / `engine/alignment/` alkönyvtárak sem — a kör teljes felülete ÚJ (nincs
+  névütközés, ellentétben az R10/R11 pre-flightban mért résekkel).
+- A Practice Engine illesztője (`CompiledPracticeTarget`/`CompiledTargetEvent`,
+  `test/property/practice_event_matcher_property_test.dart`) létezik és
+  változatlan marad — a brief §2/§3 hivatkozása pontos, a „tilos zóna" valódi.
+
+**ADR 0231** ebben a pre-flightban íródott (a fenti eredeti „Új ADR nincs"
+állítás a brief batch-authoring időpontjára vonatkozott; a tényleges
+ADR-számot a pre-flight foglalja és írja meg) — l. [ADR
+0231](../adr/0231-target-alignment-engine-boundary.md).
+
+**Dokumentált, nem blokkoló eltérés:** a §9 kockázat-szakasz „ADR 0203"
+hivatkozása jelenleg nem létező fájlra mutat (ugyanez a placeholder hét másik
+E06 brief-ben is szerepel — R02, R14, R16, R19, R20, R25 —, az Epic korai
+tervezéséből maradt visszaváltatlan szám). Indoklás: ADR 0231 „Kontextus"
+szakasza. Nem blokkoló: a hivatkozás nem acceptance-cella, és R13
+`allowed_paths`-a nem érinti a metric-katalógust.
 
 ## 1. Cél
 
@@ -234,7 +256,56 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Szállított felület
+
+- `domain/target/analysis_target.dart`: immutable, verziózott
+  `AnalysisTarget` snapshot (`id`, `targetVersion`, `kind`, `timebase`,
+  expected event/chord/note/section listák) és `AnalysisTargetSection`.
+- `domain/target/expected_event.dart`: validált, immutable `ExpectedEvent`
+  és az explicit evidence-type vocabulary.
+- `domain/target/alignment_result.dart`: immutable matched/missed/extra
+  eredmény, előjeles `timingError`, teljes költség, confidence és bounded-DP
+  diagnosztika.
+- `engine/alignment/tolerance_policy.dart`: `target-alignment-tolerance.v1`;
+  `ratio=0.25`, `minMs=40`, `maxMs=150`, és az OD-01 néven nevezett
+  penalty/multiplier konstansai.
+- `engine/alignment/event_aligner.dart`: monoton, determinisztikus,
+  toleranciaablakra sávos prefix-DP. A score-state mindig a rövidebb
+  bemeneti tengelyen áll (`O(min(n,m))`); a result az input indexeit és
+  diagnosztikai sávszélességet publikálja. A Practice feature-t nem importálja
+  és nem módosítja.
+- `public.dart`: a három target-domain contract és a két alignment engine
+  exportja.
+- Új matrix-, clamp- és `PROPERTY_SEED`-vezérelt monotonitás tesztek:
+  `event_aligner_test.dart`, `tolerance_policy_test.dart`,
+  `analysis_alignment_property_test.dart`.
+
+### Mért ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/engine/tolerance_policy_test.dart`
+  az új contract-fájlok hiányával fordításkor elbukott; ezután a
+  `TolerancePolicy`/`EventAligner` implementációval a három clamp-csoport
+  zöld lett.
+- `python3 -c` küszöbértékek: 120 BPM → `125.0 ms`; 40 BPM → `375.0 ms`
+  (felső clamp `150 ms`); 300 BPM → `50.0 ms`; 400 BPM → `37.5 ms`
+  (alsó clamp `40 ms`). A tesztek a határ alatti/pontos/feletti cellákat
+  mérik.
+- `flutter test test/features/audio_analysis/engine/event_aligner_test.dart`:
+  **14 teszt zöld**; a 2 000 × 2 000 sparse fixture mért ideje **29 ms**,
+  maximális candidate-band szélessége legfeljebb 3.
+- `PROPERTY_SEED=42 flutter test test/property/analysis_alignment_property_test.dart`:
+  **zöld**, 200 randomizált monotonitás-trial.
+- `ROUND_GATE_RESULT_FILE=/tmp/e06-r13-round-gate.json tools/round-gate.sh
+  test/features/audio_analysis test/property`: **pass**, exit code **0**;
+  format, analyze, mindkét tesztútvonal, architecture, secrets és l10n gate
+  zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope-eltérés: nincs Practice/Song/Analyze módosítás vagy import;
+  nincs UI-, adapter- vagy metrika-bekötés.
+- CI teljes suite, friss property-seed és release build nem helyben futott;
+  ezek a reviewer/orchestrátor exact-SHA CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
