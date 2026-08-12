@@ -501,6 +501,19 @@ Külön processzek, nincs `&&`/pipe/`tail`.
   test/property test/features/analyze` → format, analyze, mindhárom tesztág,
   architecture, secrets és l10n zöld; `python3 tools/scope-audit.py ...`
   → `scope_audit=ok` (10/10 changed path az allowed scope-ban).
+- **Javító kör 1 (F1/F2, 2026-08-12):**
+  `flutter test test/features/audio_analysis/engine/event_timeline_builder_test.dart`
+  → 9 teszt zöld, köztük a „preserves V1 strum timestamps, counts, and
+  directions for R09 fixtures” (a `ClipAnalyzerStage` kilenc R09-fixture-e,
+  V1 darabszám/idő/irány paritással; zero-rate esetben builder nélkül üres
+  eredmény) és a „measures attack strength and local RMS from original PCM”
+  (0.9-es peak, `localRms = 0.5108624004141064`, 1e-9 tűrés). A teljes,
+  csonkítatlan `tools/round-gate.sh test/features/audio_analysis test/property
+  test/features/analyze` futás sikeres: format (1294 fájl, 0 változás),
+  analyze (No issues found), mindhárom tesztág, architecture, secrets és l10n
+  zöld. `python3 tools/scope-audit.py --repo /home/ubuntu/ss-terra-e06-r10
+  --brief docs/rounds/e06-r10-event-evidence-onset-strum-timeline.md --base
+  8c2e43ae --kv` → `scope_audit=ok`, 12 changed path az allowed scope-ban.
 - **Nem futtatott ellenőrzések:** teljes `flutter test`, friss seedelt property
   gate és release APK — a kör szabálya szerint a CI/orchestrátor futtatja;
   lokális APK-build szándékosan nem futott.

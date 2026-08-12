@@ -1,10 +1,21 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/music/strum.dart' as legacy_core;
+import 'package:strumsight/features/analyze/engine/clip_analyzer.dart';
+import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_event.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
 import 'package:strumsight/features/audio_analysis/domain/preprocessed_audio.dart';
+import 'package:strumsight/features/audio_analysis/engine/analysis_cancellation.dart';
+import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_provenance_builder.dart';
 import 'package:strumsight/features/audio_analysis/engine/events/event_timeline_builder.dart';
+import 'package:strumsight/features/audio_analysis/engine/legacy/clip_analyzer_stage.dart';
 import 'package:strumsight/features/audio_analysis/engine/legacy/legacy_evidence.dart';
+
+import '../../../support/synth.dart';
 
 void main() {
   group('EventTimelineBuilder', () {
@@ -242,7 +253,170 @@ void main() {
         <int?>[0, 47999],
       );
     });
+
+    test(
+      'preserves V1 strum timestamps, counts, and directions for R09 fixtures',
+      () async {
+        for (final fixture in _r09ParityFixtures) {
+          final v1 = fixture.v1(fixture.samples, fixture.sampleRate);
+          final evidence = await _runClipAnalyzerStage(
+            LegacyClipAnalyzerInput(
+              samples: fixture.samples,
+              sampleRate: fixture.sampleRate,
+              strumRefinerWeights: fixture.stageWeights,
+            ),
+          );
+
+          if (fixture.sampleRate <= 0) {
+            expect(v1.strums, isEmpty, reason: fixture.label);
+            expect(evidence.strums, isEmpty, reason: fixture.label);
+            continue;
+          }
+
+          final timeline = EventTimelineBuilder().build(
+            runId: 'r09-${fixture.label}',
+            evidence: evidence,
+            audio: _audioFromSamples(
+              fixture.samples,
+              sampleRate: fixture.sampleRate,
+            ),
+          );
+          final strums = timeline.events.whereType<StrumEvent>().toList();
+
+          expect(timeline.suppressedEvents, isEmpty, reason: fixture.label);
+          expect(strums, hasLength(v1.strums.length), reason: fixture.label);
+          for (var index = 0; index < v1.strums.length; index++) {
+            final expected = v1.strums[index];
+            final actual = strums[index];
+            expect(
+              (actual.time.inMicroseconds -
+                      (expected.timeSec * Duration.microsecondsPerSecond)
+                          .round())
+                  .abs(),
+              lessThanOrEqualTo(1),
+              reason: '${fixture.label} strum=$index time',
+            );
+            expect(
+              actual.direction,
+              expected.direction == legacy_core.StrumDirection.down
+                  ? StrumDirection.down
+                  : StrumDirection.up,
+              reason: '${fixture.label} strum=$index direction',
+            );
+          }
+        }
+      },
+    );
+
+    test('measures attack strength and local RMS from original PCM', () {
+      const sampleRate = 1000;
+      final samples = List<double>.filled(100, .5)..[10] = .9;
+      final result = EventTimelineBuilder().build(
+        runId: 'known-dynamics',
+        evidence: _evidence(
+          sampleRate: sampleRate,
+          strums: const <LegacyStrumEvidence>[
+            LegacyStrumEvidence(
+              direction: legacy_core.StrumDirection.down,
+              time: Duration(milliseconds: 10),
+              confidence: .8,
+            ),
+          ],
+        ),
+        audio: _audioFromSamples(samples, sampleRate: sampleRate),
+      );
+
+      final onset = result.events.whereType<OnsetEvent>().single;
+      expect(onset.attackStrength, closeTo(.9, 1e-9));
+      expect(onset.localRms, closeTo(0.5108624004141064, 1e-9));
+    });
   });
+}
+
+final _r09ParityFixtures = <_ParityFixture>[
+  _ParityFixture('silence', List<double>.filled(44100, 0)),
+  _ParityFixture(
+    'two chords',
+    _join(<List<double>>[
+      chordSignal(cMajorFreqs, seconds: .8),
+      chordSignal(gMajorFreqs, seconds: .8),
+    ]),
+  ),
+  _ParityFixture(
+    'four chords C G Am F',
+    _join(<List<double>>[
+      chordSignal(cMajorFreqs, seconds: .8),
+      chordSignal(gMajorFreqs, seconds: .8),
+      chordSignal(aMinorFreqs, seconds: .8),
+      chordSignal(fMajorFreqs, seconds: .8),
+    ]),
+  ),
+  _ParityFixture(
+    'ring-out overlap',
+    overlappingStrums(
+      lowFirstPerStrum: <bool>[true, false, true, false],
+      gapSeconds: .25,
+    ),
+  ),
+  _ParityFixture('single strum', strumSignal(lowFirst: true)),
+  _ParityFixture(
+    'known BPM strum sequence',
+    strumPattern(
+      lowFirstPerStrum: <bool>[true, false, true, false],
+      gapSeconds: .5,
+    ),
+  ),
+  _ParityFixture(
+    'throwing refiner fallback',
+    strumPattern(lowFirstPerStrum: <bool>[true, false, true]),
+    stageWeights: Uint8List(16),
+    v1: (samples, sampleRate) => ClipAnalyzer(
+      strumRefiner: (pcm, sr, onsets) => throw StateError('fixture refiner'),
+    ).analyze(samples, sampleRate),
+  ),
+  _ParityFixture('empty input', const <double>[]),
+  _ParityFixture('sample rate zero', const <double>[], sampleRate: 0),
+];
+
+final class _ParityFixture {
+  _ParityFixture(
+    this.label,
+    List<double> samples, {
+    this.sampleRate = 44100,
+    this.stageWeights,
+    this.v1 = _defaultV1,
+  }) : samples = List<double>.unmodifiable(samples);
+
+  final String label;
+  final List<double> samples;
+  final int sampleRate;
+  final Uint8List? stageWeights;
+  final AnalyzeResult Function(List<double>, int) v1;
+}
+
+AnalyzeResult _defaultV1(List<double> samples, int sampleRate) =>
+    const ClipAnalyzer().analyze(samples, sampleRate);
+
+List<double> _join(List<List<double>> clips) => <double>[
+  for (final clip in clips) ...clip,
+];
+
+Future<LegacyEvidence> _runClipAnalyzerStage(
+  LegacyClipAnalyzerInput input,
+) async {
+  final result = await const ClipAnalyzerStage().run(
+    input,
+    AnalysisStageContext(
+      runId: 'event-timeline-builder-parity-test',
+      phase: AnalysisProgressPhase.extractingEvents,
+      cancellationToken: AnalysisCancellationSource(),
+      eventSink: (_) {},
+    ),
+  );
+  return switch (result) {
+    Success<LegacyEvidence>(:final value) => value,
+    Failure<LegacyEvidence>(:final error) => throw StateError(error.code),
+  };
 }
 
 LegacyEvidence _evidence({
@@ -266,6 +440,13 @@ LegacyEvidence _evidence({
 
 PreprocessedAudio _audio({int sampleRate = 48000, int sampleCount = 48000}) {
   final samples = List<double>.filled(sampleCount, .25);
+  return _audioFromSamples(samples, sampleRate: sampleRate);
+}
+
+PreprocessedAudio _audioFromSamples(
+  List<double> samples, {
+  required int sampleRate,
+}) {
   return PreprocessedAudio(
     originalSamples: samples,
     canonicalSamples: samples,
