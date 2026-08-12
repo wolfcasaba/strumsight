@@ -27,6 +27,8 @@ allowed_paths = [
   "test/features/audio_analysis/presentation/overview_view_model_test.dart",
   "docs/rounds/e06-r23-analysis-overview-and-metric-cards.md",
   "docs/adr/0241-analysis-overview-presentation-boundary.md",
+  "lib/features/audio_analysis/presentation/widgets/labels_adapter.dart",
+  "tools/tests/test_e06_r23_labels_adapter_scope.py",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -83,6 +85,45 @@ overview input- és confidence-megjelenítési határ. A `CapabilityStatus`
 állapot; a badge a közzétett státuszt és confidence-értéket magyarázza,
 nem saját 0.4/0.7 döntést vezet be.
 
+**2026-08-12, H3 self-heal revízió (ADR 0112 önjavító kör, 1/3. kísérlet).**
+Mért gyökérok: az implementer a `presentation/controllers/overview_view_
+model.dart`-ban deklarált `OverviewLabels` port (§5 „a presentation nem
+számol" elve — a formázás/lokalizáció a view modeltől elválasztott
+felelősség) konkrét, `AppLocalizations`-alapú megvalósítását külön fájlba
+(`presentation/widgets/labels_adapter.dart`, 406 sor) szervezte ki, amit sem
+az eredeti batch-brief, sem a fenti pre-flight revízió nem listázott. A
+scope-audit (`tools/mm-round.sh` → `tools/round-scope-audit.sh` →
+`tools/scope-audit.py`) ezt helyesen `stopped`-ra váltotta (H3,
+`.pipeline/HALTED` 2026-08-12T22:17:52Z) — de az implementer folyamata a
+jelzés UTÁN is tovább futott (külön, a self-heal saját `tools/**` javításával
+zárt hiba: lásd `docs/LESSONS.md` a kapcsolódó lecke alatt), és a kör teljes
+hátralévő részét (overview screen, detail screen, route, öt fájl overflow/
+locale/semantics tesztje) lezárta, mielőtt magától kilépett — a §7 gate
+önjelentése szerint zölden.
+
+A self-heal elolvasta `labels_adapter.dart` teljes tartalmát: az `Overview
+Labels` interfészt implementálja, minden metódusa vagy közvetlen
+`AppLocalizations`-lekérdezés, vagy zárt enumon `switch`, vagy a domain által
+már validált numerikus primitívből determinisztikus formázás — **nem**
+tartalmaz `engine/`-importot, aggregációt vagy confidence-küszöböt (§5.1
+döntés 1/8 érintetlen). Nem duplikálja a `lib/core/i18n/locale_provider.dart`
+funkcióját (az a locale-VÁLASZTÁS, ez a kártyák LABEL-formázása). Ez a fájl a
+kör saját céljának (§1: „minden metrikán **magyarázott** állapot", nyelvi
+paritás a §6 acceptance criteriában) szükséges, nem duplikált segédkódja —
+ugyanaz a mintázat, mint a [[L242]] (E06-R20, PR #236) és [[L225]] (E06-R10,
+PR #224) self-heal precedens ebben az epicben: a batch-brief hiányos
+fájllistáját a implementáció fedte fel, nem a tartalom hibás.
+
+**Feloldás:** `allowed_paths` a fenti tételes listában bővült
+`lib/features/audio_analysis/presentation/widgets/labels_adapter.dart`-tal.
+0 tartalmi/architekturális döntés változott — kizárólag az engedélyezett-
+fájllista hiányát pótolja. Regressziós védelem:
+`tools/tests/test_e06_r23_labels_adapter_scope.py` a valódi mért halt-
+állapotot (az EREDETI, pre-flight utáni de self-heal ELŐTTI `allowed_paths`)
+futtatja `audit_legacy_scope()`-on a tényleges committolt brief ellen —
+bizonyítva, hogy a fájl az eredeti listával kívül esett, a bővített listával
+pedig belül.
+
 ## 1. Cél
 
 A V2 eredmény **capability-tudatos**, nem túlzsúfolt áttekintő képernyője:
@@ -130,6 +171,7 @@ a presentation rétegben.
 | `.../presentation/widgets/signal_quality_card.dart` | ÚJ | felvételminőség |
 | `.../presentation/analysis_metric_detail_screen.dart` | ÚJ | metrika-részletek |
 | `.../presentation/controllers/overview_view_model.dart` | ÚJ | megjelenítési modell |
+| `.../presentation/widgets/labels_adapter.dart` | ÚJ | `OverviewLabels` port `AppLocalizations`-adaptere (H3 self-heal, §0.0) |
 | `.../public.dart` | meglévő | képernyő export |
 | `lib/app/routing/app_router.dart` | meglévő | **additív** route, flag mögött |
 | `lib/app/routing/app_route.dart` | meglévő | a route-katalógus additív V2 útvonala |
@@ -139,6 +181,7 @@ a presentation rétegben.
 | `test/features/audio_analysis/presentation/overview_view_model_test.dart` | ÚJ | dokumentum→megjelenítési modell, maximum-policy cellák |
 | `docs/rounds/e06-r23-analysis-overview-and-metric-cards.md` | meglévő | pre-flight és implementer handoff |
 | `docs/adr/0241-analysis-overview-presentation-boundary.md` | ÚJ | pre-flight architekturális döntés |
+| `tools/tests/test_e06_r23_labels_adapter_scope.py` | ÚJ | H3 self-heal regressziós védelem (§0.0) |
 
 **Tilos zóna:** `lib/features/analyze/**`, `lib/features/audio_analysis/engine/**`,
 `lib/features/audio_analysis/domain/**`, `lib/core/theme/**`.
