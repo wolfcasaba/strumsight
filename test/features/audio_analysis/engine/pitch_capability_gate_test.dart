@@ -9,8 +9,8 @@ void main() {
         var calls = 0;
         final result = PitchCapabilityGate().evaluate<void>(
           analysisPitchEnabled: false,
-          hasMonophonicTarget: false,
-          frames: const <PitchFrame>[],
+          hasMonophonicTarget: true,
+          frames: _frames(total: 20, voiced: 20),
           onAvailable: () => calls += 1,
         );
 
@@ -20,8 +20,21 @@ void main() {
       },
     );
 
+    test('flag OFF precedes unavailable OD-01 evidence checks', () {
+      final result = PitchCapabilityGate().evaluate<void>(
+        analysisPitchEnabled: false,
+        hasMonophonicTarget: true,
+        frames: const <PitchFrame>[],
+      );
+
+      expect(result.report.status, CapabilityStatus.notApplicable);
+      expect(result.report.reason, isNull);
+    });
+
     test('voiced-ratio threshold is inclusive at exactly 0.350', () {
       final gate = PitchCapabilityGate();
+      // 0.349 and 0.351 need fractional voiced frames out of 200; 69/70/71
+      // preserve the below/at/above observation and prove 0.350 is inclusive.
       for (final cell in <({int voiced, CapabilityStatus status})>[
         (voiced: 69, status: CapabilityStatus.unavailable),
         (voiced: 70, status: CapabilityStatus.available),

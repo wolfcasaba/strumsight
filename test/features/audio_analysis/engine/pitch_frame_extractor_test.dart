@@ -33,6 +33,15 @@ void main() {
         frames,
         everyElement(predicate<PitchFrame>((frame) => !frame.isVoiced)),
       );
+      final capability = PitchCapabilityGate()
+          .evaluate<void>(
+            analysisPitchEnabled: true,
+            hasMonophonicTarget: true,
+            frames: frames,
+          )
+          .report;
+      expect(capability.status, CapabilityStatus.unavailable);
+      expect(capability.reason, CapabilityUnavailableReason.insufficientEvents);
     });
 
     test('deterministic white noise is unavailable, never a pitch score', () {
@@ -60,6 +69,36 @@ void main() {
         ),
       );
     });
+
+    test(
+      'four simultaneous sine chord is unavailable before metric calculation',
+      () {
+        final frames = _extract(_fourVoiceChord(seconds: 1));
+        var metricCalls = 0;
+        final capability = PitchCapabilityGate()
+            .evaluate<void>(
+              analysisPitchEnabled: true,
+              hasMonophonicTarget: true,
+              frames: frames,
+              onAvailable: () => metricCalls += 1,
+            )
+            .report;
+
+        expect(capability.status, CapabilityStatus.unavailable);
+        expect(capability.reason, CapabilityUnavailableReason.polyphonicInput);
+        expect(metricCalls, 0);
+
+        final withoutSpreadGate =
+            PitchCapabilityGate(
+              maximumPitchSpreadCents: double.maxFinite,
+            ).evaluate<void>(
+              analysisPitchEnabled: true,
+              hasMonophonicTarget: true,
+              frames: frames,
+            );
+        expect(withoutSpreadGate.report.status, CapabilityStatus.available);
+      },
+    );
 
     test('vibrato-like ±30-cent modulation remains a single segment', () {
       final frames = _extract(_vibrato(seconds: 0.8));
@@ -92,6 +131,23 @@ List<double> _sine(double frequency, {required double seconds}) =>
       (seconds * _sampleRate).round(),
       (index) => 0.4 * math.sin(2 * math.pi * frequency * index / _sampleRate),
     );
+
+List<double> _fourVoiceChord({required double seconds}) {
+  const frequencies = <double>[110, 138.591, 164.814, 220]; // A major
+  return List<double>.generate((seconds * _sampleRate).round(), (index) {
+    final time = index / _sampleRate;
+    // Every sample contains all four fundamentals; rotating only the dominant
+    // voice makes the real YIN evidence exercise the pitch-spread proxy.
+    final dominantVoice = (time / 0.2).floor() % frequencies.length;
+    return frequencies.indexed
+        .map(
+          (entry) =>
+              (entry.$1 == dominantVoice ? 0.35 : 0.02) *
+              math.sin(2 * math.pi * entry.$2 * time),
+        )
+        .reduce((sum, sample) => sum + sample);
+  });
+}
 
 List<double> _vibrato({required double seconds}) {
   var phase = 0.0;
