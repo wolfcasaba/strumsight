@@ -8900,3 +8900,50 @@ számot ad, azt a pre-flight session futtassa le függetlenül, MIELŐTT
 dispatch-el — egy ilyen hiba a dispatch UTÁN egy teljes `stopped`-fordulót
 és egy §0.0-javító brief-commitot költ (itt: 2 dispatch, 0 termelt kód az
 elsőben), ami a pre-flightban ingyenes lett volna.
+
+---
+
+## L242 — Egy brief `allowed_paths`-a több, KÜLÖNBÖZŐ tesztgyökérből (test/features/**, test/property/**) egyaránt fogyasztott, közös determinisztikus dokumentum-builderhez is adjon `test/fixtures/**` helyet, ne csak névre szóló tesztfájlokat (E06-R20, H3 self-heal, 2026-08-12)
+
+**Mit mértem.** Az E06-R20 brief `allowed_paths`-a négy tesztfájlt sorolt
+fel névre szólóan — hármat a `test/features/audio_analysis/engine/` alatt,
+egyet a `test/property/` alatt —, de egyetlen megosztott fixture-helyet sem.
+A brief saját §6 acceptance criteriája viszont mind a négy fájltól
+**ugyanazt** a determinisztikus `AnalysisDocument`/`AnalysisInsightContext`
+felépítést várja el (18 cellás szabály-mátrix, két küszöb mindkét oldali
+hármasa, referenciális integritás property, lokalizációs paritás) — a
+property-tesztnek és a három engine-tesztnek konzisztens dokumentum-
+szemantikát KELL látnia, különben a referenciális integritás mérése hamis
+pozitívat/negatívat adhatna a builder-verziók közötti eltérésből. A MiniMax
+M3 implementer emiatt a listán kívül hozta létre a
+`test/features/audio_analysis/engine/insights/_insight_test_helpers.dart`
+fájlt, és helyesen `stopped`-ot jelzett (`tools/scope-audit.py`, exit 1,
+`.pipeline/HALTED` 2026-08-12T16:53:49+00:00) — 0 termelt teszt a négy
+kötelezőből.
+
+**Miért.** A repóban már élő, elterjedt `test/fixtures/<feature>/
+<alfunkció>/*_fixtures.dart` konvenció (pl. `test/fixtures/vision/posture/
+posture_fixtures.dart`, `test/fixtures/song_trainer/**`) pontosan erre a
+helyzetre való — és az E05-R20 brief saját `allowed_paths`-a explicit elő is
+írja (`test/fixtures/vision/posture` könyvtárként, nem egyenkénti fájlként).
+Az E06-R20 brief (batch-írás, 2026-08-07) ezt a konvenciót kihagyta, jóllehet
+a §6 komplexitása (négy külön tesztfájl, egy közös property-invariánssal)
+egyértelműen jelezte az igényt. Ez a MÁSODIK, ugyanebben az epicben mért H3
+self-heal, amit egy brief `allowed_paths`-ának hiányos/elavult volta okozott
+(az első: [[L225]] / E06-R10, PR #224, ADR 0228 Kontextus — ott a probléma
+egy ROSSZ fájlcél volt, itt egy HIÁNYZÓ megosztott hely).
+
+**Hogyan alkalmazd.** Pre-flightban (vagy batch-íráskor), ha egy brief §6
+acceptance criteriája **kettő vagy több** különálló tesztfájltól (főleg, ha
+azok különböző `test/`-gyökerekben élnek, pl. `test/features/**` ÉS
+`test/property/**`) ugyanazt a nem-triviális dokumentum-/kontextus-felépítést
+várja el, adj hozzá egy `test/fixtures/<feature>/<alfunkció>` könyvtárat az
+`allowed_paths`-hoz — még ha a builder konkrét fájlneve még nem is dönthető
+el előre. Az önjavítás ezt a mintát követte
+(`docs/rounds/e06-r20-deterministic-insights-and-hotspots.md` §0.0,
+[PR #236](https://github.com/wolfcasaba/strumsight/pull/236)) és
+regressziós teszttel is rögzítette
+(`tools/tests/test_e06_r20_insight_fixture_scope.py` — a valódi mért
+halt-útvonalat futtatja `audit_legacy_scope()`-on, bizonyítva, hogy az új
+könyvtár in-scope, a halt-olt futás saját ad hoc útvonala pedig továbbra is
+out-of-scope marad).

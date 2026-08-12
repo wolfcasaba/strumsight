@@ -85,6 +85,31 @@
 > **Következő kör: E06-R20** (Determinisztikus insight engine,
 > `docs/execution/pipeline-queue.tsv` szerint).
 >
+> **E06-R20 H3 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
+> [#236](https://github.com/wolfcasaba/strumsight/pull/236), squash
+> `c1afbc74`:** a MiniMax M3 implementer első futási kísérlete
+> `stopped`-ot jelzett — a brief `allowed_paths`-a négy tesztfájlt sorolt
+> fel névre szólóan (három `test/features/audio_analysis/engine/` alatt,
+> egy `test/property/` alatt), de egyetlen megosztott fixture-helyet sem,
+> miközben a §6 acceptance criteria (18 cellás szabály-mátrix, két küszöb
+> mindkét oldali hármasa, referenciális integritás property, lokalizációs
+> paritás) mind a négy fájltól ugyanazt a determinisztikus
+> `AnalysisDocument`/`AnalysisInsightContext` felépítést várja el. Az
+> implementer emiatt a listán kívül hozta létre a
+> `test/features/audio_analysis/engine/insights/_insight_test_helpers.dart`
+> fájlt, és a `tools/scope-audit.py` (exit 1) helyesen `stopped`-ot
+> jeleztetett vele. Javítás: a brief §0.0 revíziója `allowed_paths`-t egy
+> `test/fixtures/analysis/insights` könyvtárral bővítette — a repóban élő
+> `test/fixtures/<feature>/<alfunkció>/*_fixtures.dart` konvenciót követve
+> (pl. E05-R20 `test/fixtures/vision/posture`), ugyanazzal a feloldási
+> formával, mint a korábbi H3 self-heal precedens ebben az epicben (E06-R10,
+> PR #224, ADR 0228). 0 production fájl módosult. Regressziós védelem:
+> `tools/tests/test_e06_r20_insight_fixture_scope.py` a valódi mért
+> halt-útvonalat futtatja `audit_legacy_scope()`-on — bizonyítva, hogy az
+> új könyvtár in-scope, a halt-olt futás saját ad hoc útvonala pedig
+> továbbra is out-of-scope marad. Router CI zöld exact-SHA `1ddc9830`-on.
+> Tanulság: `docs/LESSONS.md` L242.
+>
 > ## ✅ E06-R18 KÉSZ — Technique proxy experimental module (2026-08-12)
 >
 > Elkészült a bekötetlen, Lab- és feature-flag mögötti technique-proxy modul:
