@@ -69,7 +69,7 @@ void main() {
 
   group('buildTargetTimingMetrics — on-time threshold trio (120 BPM)', () {
     const aligner = EventAligner();
-    const permissiveGate = MetricGate(
+    final permissiveGate = MetricGate(
       minimumMatchedPairs: 1,
       minimumStreakMatchedPairs: 1,
     );
@@ -277,7 +277,7 @@ void main() {
         buildTargetTimingMetrics(
           alignment: alignment,
           tolerance: _tolerance,
-          gate: const MetricGate(minimumMatchedPairs: 7),
+          gate: MetricGate(minimumMatchedPairs: 7),
         ),
       );
       expect(
@@ -345,6 +345,32 @@ void main() {
         }
       },
     );
+
+    test('a non-finite observed confidence is rejected before publication '
+        '(security review R14 §2)', () {
+      final beatGrid = _beatGrid(beatCount: 10, confidence: 0.9);
+      final observed = <AnalysisEvent>[
+        OnsetEvent(id: 'o0', time: Duration.zero, confidence: double.nan),
+      ];
+      expect(
+        () =>
+            buildFreePlayTimingMetrics(observed: observed, beatGrid: beatGrid),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('MetricGate — fails closed at runtime (security review R14 §1)', () {
+    test('a zero minimumMatchedPairs is rejected, not just debug-asserted', () {
+      expect(() => MetricGate(minimumMatchedPairs: 0), throwsArgumentError);
+    });
+
+    test('a negative minimumStreakMatchedPairs is rejected', () {
+      expect(
+        () => MetricGate(minimumStreakMatchedPairs: -1),
+        throwsArgumentError,
+      );
+    });
   });
 }
 

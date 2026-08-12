@@ -349,6 +349,76 @@ free-play free-run bemenet valós `BeatGridEstimator`-ral történő integrálá
 (ez a hívó felelőssége — a metrikafüggvény csak a `BeatGrid` kontraktust
 fogyasztja), rhythm/dinamika/insight metrikák (R15/R16/R20).
 
+### 10.1 Repair — independent security review MAJOR findings (2026-08-12)
+
+The independent high-risk security review found two blocking defects; both
+are fixed within the brief's `allowed_paths`.
+
+1. **`MetricGate` fail-closed at runtime.** The constructor validated
+   `minimumMatchedPairs`/`minimumStreakMatchedPairs` only via `assert`
+   (stripped in release), so `MetricGate(minimumMatchedPairs: 0)` could reach
+   `_buildSuite` in a release build and divide a zero-sample suite (`0 / 0`),
+   producing `NaN`. Fixed: the constructor now throws `ArgumentError` for any
+   non-positive threshold, in a normal (non-`assert`) constructor body — this
+   required dropping `const` from the constructor (a `throw` cannot appear in
+   a `const` constructor). Both call sites in `timing_metrics.dart`
+   (`buildTargetTimingMetrics`/`buildFreePlayTimingMetrics`) changed their
+   `MetricGate gate = const MetricGate()` default parameter to `MetricGate?
+   gate` with `gate ?? MetricGate()` internally, since a non-const
+   constructor can no longer serve as a default-parameter value. The two
+   pre-existing `const MetricGate(...)` test call sites
+   (`test/.../timing_metrics_test.dart`) dropped `const` accordingly; no
+   other production or test file constructed `MetricGate` with `const`.
+2. **Free-play boundary rejects non-finite observed confidence.**
+   `AnalysisEvent`'s own `[0, 1]` confidence range check
+   (`confidence < 0 || confidence > 1`) does not catch `NaN` — all
+   comparisons against `NaN` are `false`, so the check silently passes a NaN
+   confidence, unlike `EventAligner`'s use path. `buildFreePlayTimingMetrics`
+   averaged `event.confidence` across matched observed events into the
+   published free-play confidence, so a NaN event confidence could reach
+   `AnalysisMetricResult` — whose own confidence range check has the same
+   `NaN`-blind-spot — and publish a NaN confidence. Fixed: added an
+   up-front loop in `buildFreePlayTimingMetrics` that throws `ArgumentError`
+   on the first non-finite `observed[i].confidence`, before any matching or
+   averaging. Domain contracts (`AnalysisEvent`, `AnalysisMetricResult`) are
+   unchanged — both are outside `allowed_paths`; the fix is scoped entirely
+   to the free-play boundary function as instructed.
+
+**Regression tests added** (`test/features/audio_analysis/engine/timing_metrics_test.dart`):
+- `MetricGate — fails closed at runtime (security review R14 §1)`: zero
+  `minimumMatchedPairs` and negative `minimumStreakMatchedPairs` both throw
+  `ArgumentError`.
+- `free-play timing — ... a non-finite observed confidence is rejected
+  before publication (security review R14 §2)`: a single `OnsetEvent` with
+  `confidence: double.nan` passed to `buildFreePlayTimingMetrics` throws
+  `ArgumentError`.
+
+**Real-violation proof (both findings):**
+- §1: temporarily replaced the `minimumMatchedPairs <= 0` guard with `if
+  (false)` — the "zero minimumMatchedPairs is rejected" test went **RED**
+  (`MetricGate` was constructed instead of throwing); reverted, test
+  **GREEN** again.
+- §2: temporarily replaced the `!event.confidence.isFinite` guard with `if
+  (false)` — the "non-finite observed confidence is rejected" test went
+  **RED** (the function returned a full metric-result list instead of
+  throwing, i.e. the NaN would have silently propagated); reverted, test
+  **GREEN** again.
+
+**Gate-eredmény (repair, `tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r14-timing-and-rush-drag-metrics-review.md`.

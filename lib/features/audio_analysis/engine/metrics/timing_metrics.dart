@@ -25,7 +25,7 @@ final class _MatchSample {
 List<AnalysisMetricResult> buildTargetTimingMetrics({
   required AlignmentResult alignment,
   required Duration tolerance,
-  MetricGate gate = const MetricGate(),
+  MetricGate? gate,
 }) {
   final samples = <_MatchSample>[
     for (final match in alignment.matches)
@@ -41,7 +41,7 @@ List<AnalysisMetricResult> buildTargetTimingMetrics({
     tolerance: tolerance,
     confidence: alignment.confidence,
     ids: TimingMetricSuiteIds.target,
-    gate: gate,
+    gate: gate ?? MetricGate(),
   );
 }
 
@@ -50,12 +50,29 @@ List<AnalysisMetricResult> buildTargetTimingMetrics({
 /// tempo-derived [tolerancePolicy] window. Never reference-bound: publishes
 /// under the disjoint `timing.freeplay_*` namespace, and its confidence is
 /// always `<=` the matched beats' average confidence (SDD Ch7 §15.5).
+///
+/// Rejects any [observed] event with a non-finite `confidence` up front:
+/// `AnalysisEvent`'s own `[0, 1]` range check does not catch `NaN` (its
+/// comparisons are all false for `NaN`), so a non-finite value could
+/// otherwise survive into the averaged, published free-play confidence
+/// (security review R14 §2).
 List<AnalysisMetricResult> buildFreePlayTimingMetrics({
   required List<AnalysisEvent> observed,
   required BeatGrid beatGrid,
   TolerancePolicy tolerancePolicy = const TolerancePolicy(),
-  MetricGate gate = const MetricGate(),
+  MetricGate? gate,
 }) {
+  for (final event in observed) {
+    if (!event.confidence.isFinite) {
+      throw ArgumentError.value(
+        event.confidence,
+        'observed[${event.id}].confidence',
+        'must be finite; a non-finite observed confidence would otherwise '
+            'propagate into the published free-play confidence',
+      );
+    }
+  }
+
   final beats = beatGrid.beats;
   final tolerance = tolerancePolicy.forBeatDuration(
     _estimatedBeatDuration(beats),
@@ -106,7 +123,7 @@ List<AnalysisMetricResult> buildFreePlayTimingMetrics({
     tolerance: tolerance,
     confidence: freeplayConfidence,
     ids: TimingMetricSuiteIds.freeplay,
-    gate: gate,
+    gate: gate ?? MetricGate(),
   );
 }
 
