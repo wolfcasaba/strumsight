@@ -2,11 +2,11 @@ import 'package:meta/meta.dart';
 
 import '../../domain/analysis_capability.dart';
 import '../../domain/analysis_document.dart';
+import '../../domain/analysis_input_summary.dart';
 import '../../domain/analysis_insight.dart';
 import '../../domain/analysis_metric.dart';
 import '../../domain/analysis_metric_catalog.dart';
 import '../../domain/analysis_warning.dart';
-import '../../domain/insights/insight_rule.dart';
 import '../../domain/signal_quality_report.dart';
 
 /// Five-state presentation view of one metric — bounded to the SDD §25.5
@@ -234,9 +234,9 @@ final class OverviewViewModel {
     OverviewLabels labels,
   ) {
     final state = _stateForMetric(metric);
-    final valueText = switch (metric.status) {
-      CapabilityStatus.notApplicable => labels.notApplicableValuePlaceholder,
-      CapabilityStatus.unavailable => labels.unavailableValuePlaceholder,
+    final String valueText = switch (metric.status) {
+      CapabilityStatus.notApplicable => labels.notApplicableValuePlaceholder(),
+      CapabilityStatus.unavailable => labels.unavailableValuePlaceholder(),
       _ => labels.formatMetricValue(metric),
     };
     final statusLabel = _statusLabel(state, labels);

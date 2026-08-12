@@ -1,3 +1,5 @@
+import 'package:strumsight/l10n/app_localizations.dart';
+
 import '../../domain/analysis_capability.dart';
 import '../../domain/analysis_document.dart';
 import '../../domain/analysis_input_summary.dart';
@@ -7,7 +9,6 @@ import '../../domain/analysis_metric_catalog.dart';
 import '../../domain/analysis_mode.dart';
 import '../../domain/analysis_warning.dart';
 import '../controllers/overview_view_model.dart';
-import '../../../l10n/app_localizations.dart';
 
 /// Localised [OverviewLabels] backed by the generated [AppLocalizations].
 ///

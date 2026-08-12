@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../l10n/app_localizations.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
+
 import '../controllers/overview_view_model.dart';
 
 /// Recording-quality summary. All numeric values are pre-formatted by the
@@ -11,6 +12,11 @@ final class SignalQualityCard extends StatelessWidget {
     required this.card,
     required this.semanticLabel,
     required this.titleLabel,
+    required this.peakValue,
+    required this.rmsValue,
+    required this.noiseFloorValue,
+    required this.clippedValue,
+    required this.silentValue,
     required this.peakTemplate,
     required this.rmsTemplate,
     required this.noiseFloorTemplate,
@@ -21,10 +27,15 @@ final class SignalQualityCard extends StatelessWidget {
 
   final OverviewSignalQualityCard card;
 
-  /// Title and templates are pre-resolved so the widget stays trivially
-  /// testable from fixtures — there is no `AppLocalizations.of` lookup.
+  /// Already-resolved labels and value templates — the widget performs no
+  /// `AppLocalizations.of` lookup so tests can drive it from fixtures.
   final String semanticLabel;
   final String titleLabel;
+  final String peakValue;
+  final String rmsValue;
+  final String noiseFloorValue;
+  final String clippedValue;
+  final String silentValue;
   final String peakTemplate;
   final String rmsTemplate;
   final String noiseFloorTemplate;
@@ -62,20 +73,11 @@ final class SignalQualityCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              _row(peakTemplate.replaceAll('{value}', card.peakDbfsText)),
-              _row(rmsTemplate.replaceAll('{value}', card.rmsDbfsText)),
-              _row(
-                noiseFloorTemplate.replaceAll(
-                  '{value}',
-                  card.noiseFloorDbfsText,
-                ),
-              ),
-              _row(
-                clippedTemplate.replaceAll('{value}', card.clippedRatioText),
-              ),
-              _row(
-                silentTemplate.replaceAll('{value}', card.silentRatioText),
-              ),
+              _row(peakTemplate.replaceAll('{value}', peakValue)),
+              _row(rmsTemplate.replaceAll('{value}', rmsValue)),
+              _row(noiseFloorTemplate.replaceAll('{value}', noiseFloorValue)),
+              _row(clippedTemplate.replaceAll('{value}', clippedValue)),
+              _row(silentTemplate.replaceAll('{value}', silentValue)),
               if (card.warningHeadlines.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 8),
                 for (final headline in card.warningHeadlines)
@@ -126,11 +128,17 @@ class SignalQualityCardFromL10n extends StatelessWidget {
       card: card,
       semanticLabel: l10n.analysisOverviewSignalQualitySemantic,
       titleLabel: l10n.analysisOverviewSignalQualityTitle,
-      peakTemplate: l10n.analysisOverviewSignalQualityPeak,
-      rmsTemplate: l10n.analysisOverviewSignalQualityRms,
-      noiseFloorTemplate: l10n.analysisOverviewSignalQualityNoiseFloor,
-      clippedTemplate: l10n.analysisOverviewSignalQualityClipped,
-      silentTemplate: l10n.analysisOverviewSignalQualitySilent,
+      peakValue: card.peakDbfsText,
+      rmsValue: card.rmsDbfsText,
+      noiseFloorValue: card.noiseFloorDbfsText,
+      clippedValue: card.clippedRatioText,
+      silentValue: card.silentRatioText,
+      peakTemplate: l10n.analysisOverviewSignalQualityPeak('{value}'),
+      rmsTemplate: l10n.analysisOverviewSignalQualityRms('{value}'),
+      noiseFloorTemplate:
+          l10n.analysisOverviewSignalQualityNoiseFloor('{value}'),
+      clippedTemplate: l10n.analysisOverviewSignalQualityClipped('{value}'),
+      silentTemplate: l10n.analysisOverviewSignalQualitySilent('{value}'),
     );
   }
 }
