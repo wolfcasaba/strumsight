@@ -158,6 +158,30 @@ megfelelően pontosított — nem új döntés, a §5 pont 5 EREDETI „legfelje
 event típusonként" szabálya már ezt implikálta, csak a property-bullet
 „szigorúan monoton" szóhasználata mondott neki ellent.
 
+### 0.0.3 Terra második futása — SUPPRESSION-SZÁMLÁLÁSI ütközés (dispatch #2, 2026-08-12 02:29 UTC)
+
+Terra a §0.0.2 javítás után **valódi, scope-on belüli munkát commitolt**
+(`event_id.dart` + teszt, `EventId.onset`/`EventId.strum` — pontosan az ADR
+0228 2. döntése szerint: `<runId>:<type>:<sampleIndex>`, `type` rögzített
+literál, NEM `runtimeType`), majd ismét `stopped`-ot jelzett, mielőtt a
+builderhez ért volna: „OD-04 keeps an onset+strum pair (2 events), but §6
+requires 1 public event after suppression." Helyes észrevétel — a §6
+„Suppression-diagnosztika" és „Minimum separation" bulletek EREDETI „1
+esemény" számozása a H3 self-heal ELŐTTI, párosítás-mentes világképet
+tükrözte (amikor egy „onset" még önálló, strumtól független entitás lett
+volna); az OD-04 pár-szintű szintetizálás mellett egy megtartott/elnyomott
+LOGIKAI egység mindig **2** fizikai eseményt jelent (1 onset + 1 strum).
+
+**Feloldás (ADR 0228 9. döntés):** a §6 „Minimum separation" és
+„Suppression-diagnosztika" bulletek lent PÁR-szinten számolnak: a
+minimum-separation teszt bemenete KÉT `LegacyStrumEvidence` (két PÁR, nem két
+bare onset); a suppression-diagnosztika **pontosan 2** bejegyzést vár a
+diagnosztikai listán (a második pár mindkét eseménye) és **pontosan 2**
+eseményt a publikus listán (az első pár mindkét eseménye) — nem 1. Ez nem
+lazítja a mércét: a §5 pont 1/OD-04 „nincs árva onsetEventId" szabálya
+enélkül is kizárta volna, hogy egy pár szétessen a suppression során — a
+bulletek számozása most már ezt EXPLICITEN, ellenőrizhetően állítja.
+
 ## 1. Cél
 
 Az onset és a strum **külön** eseménnyé választása, sample-index alapú,
@@ -332,18 +356,28 @@ open_decisions:
       R09-fixture-re.
 - [ ] **Minimum separation küszöb hármas** (`Duration`-alapú összehasonlítás,
       ADR 0228 3. döntés — a builder a `.time`-ot hasonlítja, NEM a
-      `sampleIndex`-et): a fixture 48 000 Hz-en épül — két onset **2399**
-      minta (49,98 ms) távolságra → a második **elnyomva**; **2400** minta
-      (50,00 ms) → a második **megmarad** (a határ inkluzív); **2401** minta
-      (50,02 ms) → megmarad. A mintaszámokat `python3 -c`-vel számolva.
-      **Ugyanezt a hármat 44100 Hz-es bemeneten is** (a kilenc R09-fixture
-      rátája, `python3 -c 'print(0.05*44100)'` → 2205,0) meg kell ismételni:
-      **2204** minta (49,98 ms) → elnyomva; **2205** minta (50,00 ms) →
+      `sampleIndex`-et; a bemenet KÉT `LegacyStrumEvidence`, azaz KÉT
+      (onset, strum) PÁR, OD-04 — a separation a két pár közös
+      `sampleIndex`-ét/`time`-ját hasonlítja, a §0.0.2/8. döntés szerint,
+      NEM egy páron belüli onset↔strum távolságot, ami mindig 0):
+      a fixture 48 000 Hz-en épül — a két pár **2399** minta (49,98 ms)
+      távolságra → a **második PÁR** (mindkét eseménye: onset ÉS strum)
+      **elnyomva**; **2400** minta (50,00 ms) → a második pár **megmarad**
+      (a határ inkluzív); **2401** minta (50,02 ms) → megmarad. A
+      mintaszámokat `python3 -c`-vel számolva. **Ugyanezt a hármat 44100
+      Hz-es bemeneten is** (a kilenc R09-fixture rátája, `python3 -c
+      'print(0.05*44100)'` → 2205,0) meg kell ismételni: **2204** minta
+      (49,98 ms) → a második pár elnyomva; **2205** minta (50,00 ms) →
       megmarad; **2206** minta (50,02 ms) → megmarad — igazolva, hogy a
       builder NEM egy 48 kHz-re hardkódolt mintaszám-küszöböt tartalmaz.
-- [ ] **Suppression-diagnosztika:** a fenti 2399-mintás cellában a
-      diagnosztikai lista **pontosan 1** bejegyzést tartalmaz, okkal és
-      időponttal; a publikus lista **1** eseményt.
+- [ ] **Suppression-diagnosztika (ADR 0228 7. döntés — a suppression a
+      (onset, strum) párt ATOMIKUSAN kezeli, §0.0.1):** a fenti 2399-mintás
+      cellában a diagnosztikai lista **pontosan 2** bejegyzést tartalmaz — a
+      második pár `OnsetEvent`-je ÉS `StrumEvent`-je, mindkettő okkal és
+      időponttal —; a publikus lista **pontosan 2** eseményt tartalmaz — az
+      **első** pár `OnsetEvent`-je és `StrumEvent`-je. **NEM elfogadható:**
+      „1 esemény" bármelyik listán — egy PÁR sosem bomlik szét a
+      suppression során (ld. §5 pont 1/OD-04: árva `onsetEventId` tilos).
 - [ ] **`onsetEventId` integritás (OD-04):** minden publikált `StrumEvent`
       `onsetEventId`-je egy, a UGYANABBAN a buildben jelen lévő `OnsetEvent`
       `id`-jére mutat, azonos `time`/`sampleIndex`-szel; ha egy strum
@@ -385,8 +419,9 @@ open_decisions:
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
 | Egyetlen event-típus `isStrum` flaggel | a fordítás (két külön típus a szerződés) + a `onsetEventId` hivatkozás cella |
-| A minimum separation `<` helyett `<=` | a **pontosan 2400 mintás** cella |
-| A suppressed event némán eltűnik | a suppression-diagnosztika „pontosan 1 bejegyzés" cella |
+| A minimum separation `<` helyett `<=` | a **pontosan 2400 mintás** (pár-szintű) cella |
+| A suppressed event némán eltűnik | a suppression-diagnosztika „pontosan 2 bejegyzés" cella |
+| A suppression csak a strumot vagy csak az onsetet nyomja el a párból, nem mindkettőt | a suppression-diagnosztika PONTOS SZÁMLÁLÁSA (2 ≠ 1 a diagnosztikai listán) + az `onsetEventId` integritás cella |
 | Az event ID `hashCode`-ból készül | az ID-determinizmus cella |
 | Az ID globális számlálóból | a „két külön build azonos ID-t ad" cella |
 | Csak `Duration` kerül tárolásra, sample index nem | a 0. és az utolsó mintás határeset-cella (kerekítés miatt elcsúszik) |

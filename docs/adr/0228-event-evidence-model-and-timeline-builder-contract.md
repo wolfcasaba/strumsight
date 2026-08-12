@@ -122,6 +122,16 @@ módon.
    (mindkettő jelen van ugyanazon `sampleIndex`-en): az `OnsetEvent`
    determinisztikusan megelőzi a hozzá `onsetEventId`-vel kapcsolódó
    `StrumEvent`-et a listában.
+9. **A §6 suppression/separation acceptance PÁR-szinten számol, nem
+   esemény-szinten.** Mérve Terra dispatch #2 stopped-jelzéséből (2026-08-12
+   02:29 UTC, §0.0.3, valódi `event_id.dart` commit UTÁN, `d33e3491`): a §6
+   eredeti „diagnosztikai lista pontosan 1 bejegyzés / publikus lista 1
+   esemény" számozása a párosítás-mentes (H3 self-heal előtti) modellt
+   tükrözte. A 7. döntés (atomikus pár-suppression) alatt egy MEGTARTOTT
+   vagy ELNYOMOTT logikai egység mindig két fizikai eseményt jelent (1
+   `OnsetEvent` + 1 `StrumEvent`) — a minimum-separation teszt bemenete ezért
+   KÉT `LegacyStrumEvidence` (két pár), és a diagnosztikai/publikus
+   listaszámok 2/2, nem 1/1.
 
 ## Elutasított alternatívák
 
@@ -170,6 +180,14 @@ módon.
   `isStrum`-boolean-mintához, csak most „rendezettség miatt")**: ez pontosan
   a §5 pont 1 „NEM elfogadható" tétele — a rendezettségi ütközés feloldása
   nem ok az architekturális alapdöntés visszavonására.
+- **A diagnosztikai/publikus szám „1" marad, egy pár egyetlen összevont
+  bejegyzésként számolva (`{onset, strum}` tuple, nem két különálló
+  `AnalysisEvent`)**: ez a builder KIMENETI TÍPUSÁT változtatná meg (két
+  homogén `List<AnalysisEvent>` helyett egy heterogén, tuple-alapú
+  szerkezetet) — sem a §3 scope, sem a `LegacyViewAdapter` meglévő
+  `document.timeline.events.whereType<StrumEvent>()` mintája nem ezt várja;
+  elutasítva, a pár-szintű SZÁMOLÁS (2 fizikai esemény = 1 logikai egység)
+  a kisebb, kompatibilis módosítás.
 
 ## Visszavonási feltétel
 
