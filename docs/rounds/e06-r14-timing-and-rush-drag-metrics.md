@@ -21,7 +21,9 @@ allowed_paths = [
   "test/features/audio_analysis/engine/timing_metrics_test.dart",
   "test/features/audio_analysis/engine/timing_hotspots_test.dart",
   "test/property/analysis_timing_property_test.dart",
+  "docs/adr/0232-timing-metric-identity-and-publication-boundary.md",
   "docs/rounds/e06-r14-timing-and-rush-drag-metrics.md",
+  "docs/reviews/e06-r14-timing-and-rush-drag-metrics-review.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -49,8 +51,28 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az ADR 0203 (metric ID/verzió) és 0204
-(capability-publikáció) végrehajtása.
+**PREPARED → PLANNING (R1 pre-flight, 2026-08-12, orchestrator).**
+`tools/round-slots.py reserve-adr --round E06-R14` a **0232** számot
+foglalta. A batch brief régi `ADR 0203`/`0204` hivatkozásai az E06-R02-ben
+dokumentált számozás-eltolódás miatt a tényleges [ADR 0218](../adr/0218-analysis-metric-id-and-version-governance.md) és
+[ADR 0219](../adr/0219-analysis-capability-aware-publication.md) dokumentumokra
+mutatnak; a 0203/0204 fájlok nem léteznek. Az új [ADR 0232](../adr/0232-timing-metric-identity-and-publication-boundary.md)
+az e körben ténylegesen bővülő katalógus saját identity- és publikációs
+határát rögzíti.
+
+Mérés a friss `main`-en (`76f18991`): az R13
+`AlignmentMatch.timingError` már pontosan `observed.time - expected.time`
+(negatív = early, pozitív = late), `AlignmentResult` mezői `matches`,
+`missedExpected`, `extraObserved`, `confidence`; a `TolerancePolicy` 120
+BPM-en 125 ms-t ad, és 126 ms már nem párosítható. A meglévő
+`timing.mean_absolute_error.v1` csak az R02 által előre felvett, általános
+katalógus-konstans: nem nevezhető át és nem használható az új mode-szétválasztás
+helyett. Ezért R14 kizárólag új, `timing.target_*` és `timing.freeplay_*`
+ID-kat ad hozzá, az eredeti konstans változatlan marad.
+
+A kötelező review-artefaktum és a saját ADR explicit bekerült az
+`allowed_paths` listába, így a review commitolható scope-sértés nélkül
+(LESSONS L88).
 
 ## 1. Cél
 
