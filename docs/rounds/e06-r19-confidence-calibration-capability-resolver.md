@@ -87,7 +87,23 @@ lelet, mindkettő itt feloldva (ADR 0237 rögzíti részletesen):
 
 Minden más brief-állítás (a domainmodell 14/4/13 értéke, az ARB-ek
 tisztán additív állapota, a `confidenceThreshold` Live-only hatóköre) a
-kódban változatlanul igaznak mérve — nincs további revízió.
+kódban változatlanul igaznak mérve — a fenti két ponton kívül nincs további
+revízió az ELSŐ pre-flight-ban.
+
+**Harmadik lelet — az implementer ELSŐ dispatchja találta (2026-08-12,
+`stopped`, ld. lent §10):** a §6 „Nincs átlag" acceptance criterion a
+`[0.9, 0.9, 0.9, 0.9, 0.1]` vektor geometriai átlagát „0.5581…"-ként
+rögzítette. Terra lefuttatta a brief saját szabálya szerinti
+`python3 -c` ellenőrzést, és `0.5799546134795288`-at kapott — a „0.5581…"
+egy számolási hiba volt az eredeti (2026-08-07) brief-írásban, nem egy
+alternatív, dokumentálatlan képlet eredménye (ellenőrizve: sem a súlyozatlan,
+sem több kézenfekvő súlyozott/harmonikus/RMS-változat nem adja ki
+„0.5581…"-et erre a vektorra). **Feloldás:** a §6 kipinnelt értéke javítva
+`0.5799546134795288`-ra (`0.57995…`); a formula (geometriai átlag,
+egyenlő súlyokkal) és a „nem egyenlő 0.74" állítás változatlan — ez tiszta
+aritmetikai javítás, nem architekturális döntés, ezért nem igényel ADR
+0237-módosítást. A kör Terra ugyanazon workpéldányában, a javított
+brieffel folytatható.
 
 ## 1. Cél
 
@@ -214,9 +230,12 @@ open_decisions:
       resolvernek adja őket.
 - [ ] **Nincs átlag:** egy eset, ahol öt metrika confidence-e
       `[0.9, 0.9, 0.9, 0.9, 0.1]` — a számtani átlag **0.74**, a szerződött
-      overall viszont ettől **eltér** (a geometriai átlag `python3 -c`-vel
-      számolva **0.5581…**), és a teszt a **szerződöttre** mér, valamint
-      **explicit** kimondja, hogy a 0.74 **PIROS**.
+      overall viszont ettől **eltér** (a geometriai átlag
+      `python3 -c 'import math; v=[0.9,0.9,0.9,0.9,0.1]; print(math.prod(v) ** (1/len(v)))'`-vel
+      számolva **0.5799546134795288…**, azaz **0.57995…**), és a teszt a
+      **szerződöttre** mér, valamint **explicit** kimondja, hogy a 0.74
+      **PIROS**. (Javított érték — az eredeti „0.5581…" számolási hiba volt,
+      lásd §0.0 3. pont.)
 - [ ] **Kritikus capability hatása:** `signalQuality` `unavailable` esetén az
       overall completion **legfeljebb** `degraded`, akkor is, ha minden más
       metrika 1.0 confidence-ű.
