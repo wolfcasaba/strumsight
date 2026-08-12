@@ -107,6 +107,23 @@ abstract final class AnalysisMetricId {
   static const String pitchUnwantedDropoutRatio =
       'pitch.unwanted_dropout_ratio.v1';
 
+  // Experimental Lab-only technique proxies (E06-R18, ADR 0236). Each name
+  // states only what is measured — never a technique/skill/cleanliness
+  // score, and never a hand, finger or ergonomics claim. These IDs are
+  // additive: no pipeline or `AnalysisDocument` wiring publishes them in
+  // this round, and they may only be computed behind the
+  // `analysisTechniqueProxiesEnabled` flag AND explicit Lab-mode input
+  // (`TechniqueProxyReport`, `technique_proxies.dart`).
+  static const String techniqueChordChangeGap = 'technique.chord_change_gap.v1';
+  static const String techniqueConfidenceCollapseDuration =
+      'technique.confidence_collapse_duration.v1';
+  static const String techniqueUnexpectedExtraOnsets =
+      'technique.unexpected_extra_onsets.v1';
+  static const String techniqueSustainedNoteDropout =
+      'technique.sustained_note_dropout.v1';
+  static const String techniqueAttackInstability =
+      'technique.attack_instability.v1';
+
   static const Set<String> known = <String>{
     timingMeanAbsoluteError,
     rhythmRushDragBias,
@@ -157,9 +174,37 @@ abstract final class AnalysisMetricId {
     pitchNoteTransitionTiming,
     pitchSustainedNoteDuration,
     pitchUnwantedDropoutRatio,
+    techniqueChordChangeGap,
+    techniqueConfidenceCollapseDuration,
+    techniqueUnexpectedExtraOnsets,
+    techniqueSustainedNoteDropout,
+    techniqueAttackInstability,
   };
 
   static bool contains(String id) => known.contains(id);
+}
+
+/// The five experimental, Lab-only technique-proxy metric IDs (E06-R18,
+/// ADR 0236). Never published to `AnalysisDocument.metrics` in this round;
+/// only returned inside a standalone `TechniqueProxyReport`.
+abstract final class TechniqueProxyMetricIds {
+  static const String chordChangeGap = AnalysisMetricId.techniqueChordChangeGap;
+  static const String confidenceCollapseDuration =
+      AnalysisMetricId.techniqueConfidenceCollapseDuration;
+  static const String unexpectedExtraOnsets =
+      AnalysisMetricId.techniqueUnexpectedExtraOnsets;
+  static const String sustainedNoteDropout =
+      AnalysisMetricId.techniqueSustainedNoteDropout;
+  static const String attackInstability =
+      AnalysisMetricId.techniqueAttackInstability;
+
+  static const Set<String> all = <String>{
+    chordChangeGap,
+    confidenceCollapseDuration,
+    unexpectedExtraOnsets,
+    sustainedNoteDropout,
+    attackInstability,
+  };
 }
 
 /// The seven mandatory dynamics and stroke-balance metric IDs (E06-R16,

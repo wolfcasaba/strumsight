@@ -253,7 +253,92 @@ tiltott-minta gyengítése helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció: Claude Sonnet 5 (sonnet-impl), 2026-08-12.**
+
+### 10.1 Új fájlok
+
+- `lib/features/audio_analysis/engine/metrics/transition_analysis.dart` —
+  `ChordTransition`, `TransitionWindow` (`[-150ms, +250ms]` inkluzív mindkét
+  határon), `buildChordTransitions`, `countTransitionRepetitions`,
+  `maxTransitionRepetition`, `onsetsInWindow`.
+- `lib/features/audio_analysis/engine/metrics/technique_proxies.dart` —
+  `TechniqueProxyGate` (4 feltétel, egyik hiánya is teljes blokkolás),
+  `TechniqueProxyReport` (`disabled`/`unavailable`/`available` factory),
+  `TechniqueProxyCalculator` hívásszámlálható seam, `buildTechniqueProxyReport`
+  belépési pont, `computeTechniqueProxyMetrics` + öt privát proxy-számító.
+- `test/features/audio_analysis/domain/technique_metric_catalog_test.dart`,
+  `test/features/audio_analysis/engine/transition_analysis_test.dart`,
+  `test/features/audio_analysis/engine/technique_proxies_test.dart`,
+  `test/tooling/analysis_claim_safety_test.dart`.
+
+### 10.2 Módosított fájlok (additív)
+
+- `lib/app/config/feature_flags.dart` — `analysisTechniqueProxiesEnabled`
+  mező (default `false`, `forEnvironment` mindig `false`, equality/hash/
+  toString frissítve).
+- `lib/features/audio_analysis/domain/analysis_metric_catalog.dart` — öt
+  `technique.*.v1` ID a `known` halmazban + `TechniqueProxyMetricIds`.
+- `lib/features/audio_analysis/public.dart` — a két új engine-fájl exportja.
+- `lib/l10n/app_en.arb` / `app_hu.arb` — hat `analysisTechnique*` kulcs
+  (öt proxy-név + egy disclaimer), óvatos, testrészre nem utaló szöveggel.
+- `docs/manual-testing/analysis-eval-matrix.md` — EVAL-22..26 PENDING sorok.
+
+### 10.3 OD-01 hatása (mért)
+
+A `derived` chord-evidence (nincs top-k, nincs no-chord valószínűség) miatt
+a `confidence_collapse_duration` proxy `unavailable`/`modelUnavailable`,
+amikor a bemenetben nincs `ChordFrameEvidence.complete` bejegyzés a
+váltás-ablakban vagy egyáltalán nincs `complete` evidence — ezt a
+`technique_proxies_test.dart` „OD-01" csoportja két külön esetre (csak
+`derived` evidence; nincs evidence) bizonyítja. A másik négy proxy ilyenkor
+is lefut. Ez a mérés megerősíti a pre-flight §0.0 döntését: a battle jelenlegi
+adatforrásokból (R11 chord evidence) csak négy proxy futtatható megbízhatóan
+minden bemeneten, az ötödik feltételesen.
+
+### 10.4 Állítás-őr valódi-sértés próbája
+
+`test/tooling/analysis_claim_safety_test.dart` első futtatása ZÖLD volt.
+Ezután ideiglenesen felvettem `lib/l10n/app_en.arb`-be egy
+`"analysisTechniqueFingerPlacement": "You used the wrong finger"` kulcsot,
+újrafuttattam a tesztet — **PIROS** lett (`analysis claim safety (ADR 0236)
+no analysis-origin ARB key or metric ID matches a forbidden claim pattern`
+hibázott a `finger` mintán) —, majd eltávolítottam a kulcsot és a teszt ismét
+ZÖLD lett. A minta hatóköre: `analysisArbKeyPrefixes` listája (`analysis`,
+`pitchMetric`, `pitchFeedback`, `timingMetric`, `timingFeedback`,
+`rhythmMetric`, `rhythmFeedback`, `dynamicsMetric`, `dynamicsFeedback`,
+`harmonyMetric`, `technique`) — a `fingerpicking`-szerű álnegatívok elkerülése
+végett a minta csak ezekre az analysis-eredetű ARB-kulcs-prefixekre és a
+`AnalysisMetricId.known` ID-halmazra vonatkozik, nem minden ARB-kulcsra.
+
+### 10.5 Mérce-mátrix lefedettség
+
+Mind a nyolc mérce-mátrix sor (§6.1) lefedve:
+`Lab-gate mátrix` (4 cella, hívásszám-bizonyítással), `confidence-gate mátrix`
+(4 cella, külön okokkal), `ismétlés-küszöb hármas` (3/4/5, 4 inkluzív),
+`váltás-ablak küszöb hármas` (249/250/251ms és −149/−150/−151ms, mindkét
+határ inkluzív), OD-01 (fentebb), állítás-őr valódi-sértés próba (fentebb),
+és a hat cellás proxy-fixture mátrix (tiszta váltás; csend-rés; extra attack;
+átfedő ablakok — "ring-out" robusztussági eset; clippelt bemenet;
+ismétlés a minimum alatt).
+
+### 10.6 Gate eredmény
+
+```
+tools/round-gate.sh test/features/audio_analysis test/tooling test/app
+```
+
+`format` (a négy új/módosított Dart-fájlon `dart format` lefuttatva a
+gate PIROS jelzése után, majd a gate újrafuttatva) → ZÖLD; `analyze` → ZÖLD;
+`test test/features/audio_analysis` → ZÖLD; `test test/tooling` → ZÖLD
+(60 teszt); `test test/app` → ZÖLD (69 teszt); `architecture` → ZÖLD;
+`secrets` → ZÖLD; `l10n` → ZÖLD. Minden gate zöld.
+
+### 10.7 Scope
+
+Nem nyúltam `AnalysisDocument`-hez, a codechez, a pipeline-hoz, a
+presentation/UI-hoz vagy `docs/adr/0236-...md`-hez (a pre-flight már
+elfogadott állapotban tartalmazta a szükséges döntéseket). Minden módosított/
+új fájl a brief `allowed_paths` listáján belül van.
 
 ## 11. Review — a független reviewer tölti ki
 

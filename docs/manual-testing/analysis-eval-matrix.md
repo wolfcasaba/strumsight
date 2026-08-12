@@ -26,4 +26,12 @@ Minden sor **PENDING**: a V1 szintetikus baseline nem helyettesíti a valós esz
 | EVAL-20 | PENDING | Capability owner | Felhasználói cancel lifecycle | `capability.unavailable_reason.cancelled.v1` eseményszám |
 | EVAL-21 | PENDING | Capability owner | Kontrollált pipeline-hiba | `capability.unavailable_reason.internal_failure.v1` eseményszám |
 
+| EVAL-22 | PENDING | Technique-proxy eval owner | Címkézett akkordváltás-klip, ismert váltás-pár ≥4 ismétléssel | `technique.chord_change_gap.v1` korrelációja a felvétel emberi értékelésével (Pearson r, n≥20 klip) |
+| EVAL-23 | PENDING | Technique-proxy eval owner | Címkézett klip `complete` chord-evidence-szel (nem `derived`) | `technique.confidence_collapse_duration.v1` és a modell top-k bizonytalanságának korrelációja |
+| EVAL-24 | PENDING | Technique-proxy eval owner | Címkézett klip szándékos extra pengetéssel váltás után | `technique.unexpected_extra_onsets.v1` precision/recall a címkézett extra eseményekhez képest |
+| EVAL-25 | PENDING | Technique-proxy eval owner | Címkézett klip szándékos kitartás-megszakítással | `technique.sustained_note_dropout.v1` precision/recall a címkézett dropout-eseményekhez képest |
+| EVAL-26 | PENDING | Technique-proxy eval owner | Címkézett klip egyenletes vs. egyenetlen pengetéssel | `technique.attack_instability.v1` szórása a két csoport között (effect size, n≥20 klip) |
+
+ADR 0236 §6: egyik technique-proxy sem léphet ki a Lab módból, amíg a fenti öt sor le nem zárul.
+
 Numerikus publikációs küszöb még nincs rögzítve. Minden későbbi küszöbhöz a jegyzőkönyv külön, számított **alatta / pontosan rajta / fölötte** cellát ad. Forrás: `docs/rounds/e06-r01-analyze-v1-baseline-and-adrs.md:292-294`.

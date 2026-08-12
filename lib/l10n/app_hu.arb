@@ -1330,5 +1330,11 @@
   "dynamicsMetricOutlierRatio": "Kiugró pengetés aránya",
   "dynamicsMetricAccentAccuracy": "Accent-pontosság",
   "dynamicsMetricQuietRegionRatio": "Csendes szakasz aránya",
-  "dynamicsMetricClippedEventRatio": "Clippelt pengetés aránya"
+  "dynamicsMetricClippedEventRatio": "Clippelt pengetés aránya",
+  "analysisTechniqueDisclaimer": "Kísérleti, csak Lab módban elérhető jelzés. Egy időzítési vagy hangzási mintát mér, nem a technikádat.",
+  "analysisTechniqueChordChangeGap": "Akkordváltás folyamatossága",
+  "analysisTechniqueConfidenceCollapseDuration": "Akkordfelismerés bizonytalanságának időtartama",
+  "analysisTechniqueUnexpectedExtraOnsets": "Nem várt extra hangindítások akkordváltás körül",
+  "analysisTechniqueSustainedNoteDropout": "Kitartás stabilitása",
+  "analysisTechniqueAttackInstability": "Hangindítás tisztasága"
 }
