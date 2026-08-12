@@ -18,6 +18,7 @@ allowed_paths = [
   "lib/features/audio_analysis/data/legacy_view_adapter.dart",
   "lib/features/audio_analysis/public.dart",
   "lib/app/config/feature_flags.dart",
+  "test/app/feature_flags_test.dart",
   "test/features/audio_analysis/engine/chord_segment_assembler_test.dart",
   "test/features/audio_analysis/engine/chord_label_normalizer_test.dart",
   "test/property/analysis_chord_segment_property_test.dart",
@@ -68,6 +69,22 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 3. A küszöb-mátrix mért értékei:
    `python3 -c 'print(*(int(ms * 1000) for ms in (199, 200, 201)))'` →
    `199000 200000 201000` mikrosekundum. A 200 ms-es cella inkluzív.
+
+4. **`test/app/feature_flags_test.dart` hiánya az `allowed_paths`-ból — az
+   implementer első dispatch-e fedte fel (2026-08-12 04:45, `stopped`, tiszta
+   önjavítás: a listán kívüli editet maga vonta vissza, végső scope-audit
+   `ok`).** A fájl a már engedélyezett `lib/app/config/feature_flags.dart`
+   flag-enumerációs őrét tartalmazza: az „Audio Analysis V2 rollout boundary"
+   csoport `_audioAnalysisFlags` helpere és az „all N flags remain off in
+   every environment" teszt **tételesen felsorolja** a modul ÖSSZES
+   audio-analysis flagjét. A §6 „Flag-őr + V1 érintetlenség" acceptance pont
+   pontosan ilyen lefedettséget vár az új `analysisExperimentalFusionEnabled`
+   flagre — enélkül a felsorolás csendben hiányos marad (nem bukik pirosra,
+   csak nem méri az új flaget). A fájl **nincs** a §4 „Tilos zóna" listáján
+   (kizárólag `lib/features/live/**`, `lib/features/analyze/**`,
+   `assets/ml/**`, `docs/rag/**`) — omissziós rés, nem tiltott-zóna-feloldás.
+   Az `allowed_paths` a fájllal bővült (E06-R09 pre-flight §6.1
+   „test/tooling" precedense, HANDOFF.md).
 
 Az implementernek `stopped` jelzést kell adnia, ha a meglévő
 `ChordSegment` additív, forráskompatibilis bővítése nélkül nem teljesíthető a
@@ -123,6 +140,7 @@ súlyok/asset, a shipping decoder cseréje, `lib/features/analyze/**`,
 | `.../data/legacy_view_adapter.dart` | meglévő | V2 → mai `TimelineChord` |
 | `.../public.dart` | meglévő | export |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, OFF |
+| `test/app/feature_flags_test.dart` | meglévő | flag-enumerációs őr bővítése az új flaggel (§0.0 pont 4) |
 | `test/**` | ÚJ | assembler/normalizer/property |
 | `docs/adr/0229-…md` | ÚJ | fusion-stratégia |
 
@@ -271,7 +289,31 @@ bekapcsolása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Megvalósítás:** `ChordFrameEvidence` explicit `derived` teljességi
+  jelöléssel és tiltott, kitalált top-k/no-chord értékek nélkül;
+  `ChordSegment` additív ID/confidence-source/decoder-provenance mezőkkel;
+  V1-paritásos `ChordSegmentAssembler`, nem-default no-chord/minimum/transient
+  policyval; idempotens, sharps-kanonikus normalizer; DSP-primary fusion API;
+  OFF-by-default `analysisExperimentalFusionEnabled`; publikus V2 exportok és
+  ADR 0229.
+- **Tesztek:** az új assembler/normalizer/property tesztek zöldek
+  (16 teszt, `PROPERTY_SEED=42`). A záróhatár valódi-sértés próbája a
+  `clipDuration` helyett az utolsó frame-ablakra zárással piros lett, majd a
+  helyes implementáció visszaállítása után zöldre váltott. A küszöb-hármas
+  számítása: `199000 200000 201000` µs.
+- **Célzott analyzer:** a 10 scope-on belüli módosított Dart fájlra `dart analyze` zöld,
+  nulla issue.
+- **Kötelező gate:** `tools/round-gate.sh test/features/audio_analysis
+  test/property test/app test/features/analyze` a format lépésen zöld, de az
+  analyze lépésen piros: a baseline-ból hiányzik a generált
+  `lib/l10n/app_localizations.dart`, ezért 932, e körön kívüli hiba keletkezik.
+  Generálás/fájlírás nem történt a brief allowlistjén kívül. Emiatt a kör
+  `blocked` jelzést adott; utána a scope-audit a `test/app/feature_flags_test.dart`
+  korábbi, saját editjét listán kívülinek jelezte, ezért az edit visszavonva és
+  a kör `stopped` jelzéssel zárult. Teljes gate/CI/merge nincs.
+- **Follow-up:** R18/R29 adja majd a tényleges Lab ML top-k evidence-et;
+  R21 rögzíti, mely aggregált provenance marad perzisztálható a frame-top-k
+  tömeges tárolása nélkül.
 
 ## 11. Review — a független reviewer tölti ki
 
