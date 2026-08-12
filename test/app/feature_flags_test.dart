@@ -30,6 +30,8 @@ List<bool> _audioAnalysisFlags(FeatureFlags flags) => <bool>[
   flags.audioAnalysisV2Enabled,
   flags.analysisBeatGridEnabled,
   flags.analysisPitchEnabled,
+  flags.analysisPreprocessingExperimentalEnabled,
+  flags.analysisExperimentalFusionEnabled,
 ];
 
 FeatureFlags _withAiTutorFlags({
@@ -248,7 +250,7 @@ void main() {
   });
 
   group('Audio Analysis V2 rollout boundary', () {
-    test('all three flags remain off in every environment', () {
+    test('all five flags remain off in every environment', () {
       const constructorDefaults = FeatureFlags(
         accountEnabled: false,
         diagnosticsEnabled: false,
@@ -269,6 +271,14 @@ void main() {
         expect(flags.toString(), contains('audioAnalysisV2Enabled: false'));
         expect(flags.toString(), contains('analysisBeatGridEnabled: false'));
         expect(flags.toString(), contains('analysisPitchEnabled: false'));
+        expect(
+          flags.toString(),
+          contains('analysisPreprocessingExperimentalEnabled: false'),
+        );
+        expect(
+          flags.toString(),
+          contains('analysisExperimentalFusionEnabled: false'),
+        );
       }
     });
 
@@ -285,12 +295,14 @@ void main() {
           diagnosticsEnabled: false,
           labModeAvailable: false,
           audioAnalysisV2Enabled: true,
+          analysisExperimentalFusionEnabled: true,
         );
         const enabledCopy = FeatureFlags(
           accountEnabled: false,
           diagnosticsEnabled: false,
           labModeAvailable: false,
           audioAnalysisV2Enabled: true,
+          analysisExperimentalFusionEnabled: true,
         );
         expect(enabled, isNot(defaults));
         expect(enabledCopy, enabled);

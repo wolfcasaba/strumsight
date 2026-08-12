@@ -1,6 +1,6 @@
 # E06-R11 — Chord evidence, segmentation és decoder provenance
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-12, main @ `1a61fabe`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 11; §13.3–13.6
 - **Branch:** `codex/e06-r11-chord-evidence-segmentation-provenance`
 - **Előfeltétel:** **E06-R09, E06-R10 merge**
@@ -11,17 +11,18 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/audio_analysis/domain/harmony/chord_frame_evidence.dart",
-  "lib/features/audio_analysis/domain/harmony/chord_segment.dart",
+  "lib/features/audio_analysis/domain/analysis_segment.dart",
   "lib/features/audio_analysis/engine/harmony/chord_segment_assembler.dart",
   "lib/features/audio_analysis/engine/harmony/chord_label_normalizer.dart",
   "lib/features/audio_analysis/engine/harmony/decoder_source.dart",
   "lib/features/audio_analysis/data/legacy_view_adapter.dart",
   "lib/features/audio_analysis/public.dart",
   "lib/app/config/feature_flags.dart",
+  "test/app/feature_flags_test.dart",
   "test/features/audio_analysis/engine/chord_segment_assembler_test.dart",
   "test/features/audio_analysis/engine/chord_label_normalizer_test.dart",
   "test/property/analysis_chord_segment_property_test.dart",
-  "docs/adr/0207-analysis-chord-decoder-fusion-strategy.md",
+  "docs/adr/0229-analysis-chord-decoder-fusion-strategy.md",
   "docs/rounds/e06-r11-chord-evidence-segmentation-provenance.md",
 ]
 gate_tests = [
@@ -33,7 +34,7 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R09/R10 merge.
-> **ADR 0207** előre kiosztva. Olvasd újra a `ClipAnalyzer._chordPass`
+> **ADR 0229** a foglaló által kiosztva. Olvasd újra a `ClipAnalyzer._chordPass`
 > **tényleges** szegmensösszefűzését (`clip_analyzer.dart` 199–226): a
 > **no-chord frame FENNTARTJA a nyitott szegmenst**, a záró szegmens a klip
 > végéig tart, és a határ a döntő frame **ablakközepe**. A V2 assembler
@@ -52,7 +53,43 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0207** (chord decoder fusion stratégia).
+**PLANNING — 2026-08-12 pre-flight revízió.**
+
+1. A brief-lint `S5` leletét kódból ellenőriztük: a már exportált
+   `lib/features/audio_analysis/domain/analysis_segment.dart:24` deklarálja a
+   V2 `ChordSegment` típust, és `AnalysisTimeline.chordSegments` ezt a típust
+   tárolja. Ezért a korábbi, új
+   `domain/harmony/chord_segment.dart` és az ugyanilyen nevű új típus
+   kollíziót/ambiguous exportot okozott volna. A kör a **meglévő
+   `ChordSegment` additív bővítését** használja; a hibás új útvonal törölve,
+   az engedélyezett lista a meglévő fájlra módosult. Nincs más scope-bővítés.
+2. Az előre írt `0207` már nem foglalható: a kötelező
+   `tools/round-slots.py reserve-adr --round E06-R11` parancs `0229`-et adott.
+   Az ADR-hivatkozások és a fájlnév ezért **ADR 0229**-re változtak.
+3. A küszöb-mátrix mért értékei:
+   `python3 -c 'print(*(int(ms * 1000) for ms in (199, 200, 201)))'` →
+   `199000 200000 201000` mikrosekundum. A 200 ms-es cella inkluzív.
+
+4. **`test/app/feature_flags_test.dart` hiánya az `allowed_paths`-ból — az
+   implementer első dispatch-e fedte fel (2026-08-12 04:45, `stopped`, tiszta
+   önjavítás: a listán kívüli editet maga vonta vissza, végső scope-audit
+   `ok`).** A fájl a már engedélyezett `lib/app/config/feature_flags.dart`
+   flag-enumerációs őrét tartalmazza: az „Audio Analysis V2 rollout boundary"
+   csoport `_audioAnalysisFlags` helpere és az „all N flags remain off in
+   every environment" teszt **tételesen felsorolja** a modul ÖSSZES
+   audio-analysis flagjét. A §6 „Flag-őr + V1 érintetlenség" acceptance pont
+   pontosan ilyen lefedettséget vár az új `analysisExperimentalFusionEnabled`
+   flagre — enélkül a felsorolás csendben hiányos marad (nem bukik pirosra,
+   csak nem méri az új flaget). A fájl **nincs** a §4 „Tilos zóna" listáján
+   (kizárólag `lib/features/live/**`, `lib/features/analyze/**`,
+   `assets/ml/**`, `docs/rag/**`) — omissziós rés, nem tiltott-zóna-feloldás.
+   Az `allowed_paths` a fájllal bővült (E06-R09 pre-flight §6.1
+   „test/tooling" precedense, HANDOFF.md).
+
+Az implementernek `stopped` jelzést kell adnia, ha a meglévő
+`ChordSegment` additív, forráskompatibilis bővítése nélkül nem teljesíthető a
+kontraktus, vagy a megoldás a tiltott `lib/features/analyze/**` fájlok egyikét
+igényelné.
 
 ## 1. Cél
 
@@ -84,7 +121,7 @@ no-chord valószínűség, tonalness, decoder source); `ChordSegment` (V2, ID-ve
 confidence-szel, forrással); `ChordSegmentAssembler` (verziózott policy:
 minimum szegmenshossz, tranziens-merge, no-chord/silence kezelés, pontos
 záróhatár); `ChordLabelNormalizer` (kanonikus címke; az enharmonikus
-**megjelenítés** UI-policy marad); `DecoderSource` enum; **ADR 0207**;
+**megjelenítés** UI-policy marad); `DecoderSource` enum; **ADR 0229**;
 **egy** új flag: `analysisExperimentalFusionEnabled` (default OFF).
 
 **Kívül — TILOS:** a DSP chord-lánc módosítása, `DspConfig`, a CRNN
@@ -96,22 +133,23 @@ súlyok/asset, a shipping decoder cseréje, `lib/features/analyze/**`,
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `.../domain/harmony/chord_frame_evidence.dart` | ÚJ | frame-szintű evidence |
-| `.../domain/harmony/chord_segment.dart` | ÚJ | V2 szegmens |
+| `lib/features/audio_analysis/domain/analysis_segment.dart` | meglévő | A már exportált V2 `ChordSegment` additív evidence/provenance-bővítése |
 | `.../engine/harmony/chord_segment_assembler.dart` | ÚJ | verziózott összeállítás |
 | `.../engine/harmony/chord_label_normalizer.dart` | ÚJ | kanonikus címke |
 | `.../engine/harmony/decoder_source.dart` | ÚJ | forrás + fusion policy |
 | `.../data/legacy_view_adapter.dart` | meglévő | V2 → mai `TimelineChord` |
 | `.../public.dart` | meglévő | export |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, OFF |
+| `test/app/feature_flags_test.dart` | meglévő | flag-enumerációs őr bővítése az új flaggel (§0.0 pont 4) |
 | `test/**` | ÚJ | assembler/normalizer/property |
-| `docs/adr/0207-…md` | ÚJ | fusion-stratégia |
+| `docs/adr/0229-…md` | ÚJ | fusion-stratégia |
 
 **Tilos zóna:** `lib/features/live/**`, `lib/features/analyze/**`,
 `assets/ml/**`, `docs/rag/**`. Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
-1. **ADR 0207 — a shipping default: DSP primary, ML advisory.** A ML-eredmény
+1. **ADR 0229 — a shipping default: DSP primary, ML advisory.** A ML-eredmény
    kizárólag **diagnosztika** (Lab), a publikus timeline a DSP-é. A fusion
    (`confidence-weighted` vagy `disagreement-aware abstention`) **kizárólag**
    `analysisExperimentalFusionEnabled` mögött. Az ADR rögzíti a **visszavonás
@@ -173,7 +211,7 @@ open_decisions:
       **és** `closeOnNoChord = true` policyval viszont **két** szegmens
       keletkezik — a két cella külön méri, hogy a policy tényleg hat.
 - [ ] **Minimum szegmenshossz küszöb hármas** (`minSegment = 200 ms`):
-      **199 ms**, **200 ms**, **201 ms** hosszú szegmens — a 200 ms
+      **199000 µs**, **200000 µs**, **201000 µs** (199/200/201 ms) hosszú szegmens — a 200 ms
       **megmarad** (a határ inkluzív), a 199 ms **beolvad** a szomszédba.
       Az időpontokat `python3 -c`-vel számolva, mikroszekundumban.
 - [ ] **Záróhatár pontossága:** minden fixture-ön az utolsó szegmens vége
@@ -227,9 +265,10 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0207 (DSP primary, ML advisory, flag + visszavonási feltétel).
+1. ADR 0229 (DSP primary, ML advisory, flag + visszavonási feltétel).
 2. RED: V1-paritás mátrix a hat fixture-re.
-3. `chord_frame_evidence.dart` + `chord_segment.dart` + `decoder_source.dart`.
+3. `chord_frame_evidence.dart` + a meglévő `analysis_segment.dart` `ChordSegment`
+   bővítése + `decoder_source.dart`.
 4. `chord_label_normalizer.dart` (idempotens).
 5. `chord_segment_assembler.dart` (verziózott policy, default = V1).
 6. Fusion-ág flag mögött; `LegacyViewAdapter`; property; gate.
@@ -250,7 +289,32 @@ bekapcsolása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Megvalósítás:** `ChordFrameEvidence` explicit `derived` teljességi
+  jelöléssel és tiltott, kitalált top-k/no-chord értékek nélkül;
+  `ChordSegment` additív ID/confidence-source/decoder-provenance mezőkkel;
+  V1-paritásos `ChordSegmentAssembler`, nem-default no-chord/minimum/transient
+  policyval; idempotens, sharps-kanonikus normalizer; DSP-primary fusion API;
+  OFF-by-default `analysisExperimentalFusionEnabled`; publikus V2 exportok és
+  ADR 0229.
+- **Tesztek:** az új assembler/normalizer/property tesztek zöldek
+  (17 teszt, `PROPERTY_SEED=42`); a bővített flag-őr 14/14 zöld. A záróhatár
+  valódi-sértés próbája a
+  `clipDuration` helyett az utolsó frame-ablakra zárással piros lett, majd a
+  helyes implementáció visszaállítása után zöldre váltott. A küszöb-hármas
+  számítása: `199000 200000 201000` µs.
+- **Célzott analyzer:** a 11 scope-on belüli módosított Dart fájlra `dart analyze` zöld,
+  nulla issue.
+- **Kötelező gate:** `tools/round-gate.sh test/features/audio_analysis
+  test/property test/app test/features/analyze` teljesen zöld (format,
+  analyze, mind a négy célzott test-útvonal, architecture és diff-check).
+  `python3 tools/scope-audit.py --repo /home/ubuntu/ss-terra-e06-r11 --brief
+  docs/rounds/e06-r11-chord-evidence-segmentation-provenance.md --base
+  ff5dfba8d6947b80bb3ccbd40bf3f17882f84080 --kv` → `scope_audit=ok`, 13
+  módosított útvonal. CI-dispatch, független review, PR és merge az
+  orchestrátor feladata; még nem futottak.
+- **Follow-up:** R18/R29 adja majd a tényleges Lab ML top-k evidence-et;
+  R21 rögzíti, mely aggregált provenance marad perzisztálható a frame-top-k
+  tömeges tárolása nélkül.
 
 ## 11. Review — a független reviewer tölti ki
 

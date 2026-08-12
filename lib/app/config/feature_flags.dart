@@ -33,6 +33,7 @@ final class FeatureFlags {
     this.analysisBeatGridEnabled = false,
     this.analysisPitchEnabled = false,
     this.analysisPreprocessingExperimentalEnabled = false,
+    this.analysisExperimentalFusionEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -79,6 +80,7 @@ final class FeatureFlags {
       analysisBeatGridEnabled: false,
       analysisPitchEnabled: false,
       analysisPreprocessingExperimentalEnabled: false,
+      analysisExperimentalFusionEnabled: false,
     );
   }
 
@@ -162,6 +164,10 @@ final class FeatureFlags {
   /// It remains OFF in every environment until a later production-wiring round.
   final bool analysisPreprocessingExperimentalEnabled;
 
+  /// Whether experimental DSP/ML chord fusion may run in a future V2 caller.
+  /// It remains OFF in every environment until E06-R29 evaluation evidence.
+  final bool analysisExperimentalFusionEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -195,7 +201,9 @@ final class FeatureFlags {
       other.analysisBeatGridEnabled == analysisBeatGridEnabled &&
       other.analysisPitchEnabled == analysisPitchEnabled &&
       other.analysisPreprocessingExperimentalEnabled ==
-          analysisPreprocessingExperimentalEnabled;
+          analysisPreprocessingExperimentalEnabled &&
+      other.analysisExperimentalFusionEnabled ==
+          analysisExperimentalFusionEnabled;
 
   @override
   int get hashCode {
@@ -226,6 +234,7 @@ final class FeatureFlags {
       analysisBeatGridEnabled,
       analysisPitchEnabled,
       analysisPreprocessingExperimentalEnabled,
+      analysisExperimentalFusionEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -260,5 +269,7 @@ final class FeatureFlags {
       'analysisBeatGridEnabled: $analysisBeatGridEnabled, '
       'analysisPitchEnabled: $analysisPitchEnabled, '
       'analysisPreprocessingExperimentalEnabled: '
-      '$analysisPreprocessingExperimentalEnabled)';
+      '$analysisPreprocessingExperimentalEnabled, '
+      'analysisExperimentalFusionEnabled: '
+      '$analysisExperimentalFusionEnabled)';
 }
