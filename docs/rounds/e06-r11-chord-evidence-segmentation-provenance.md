@@ -1,6 +1,6 @@
 # E06-R11 — Chord evidence, segmentation és decoder provenance
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-12, main @ `1a61fabe`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 11; §13.3–13.6
 - **Branch:** `codex/e06-r11-chord-evidence-segmentation-provenance`
 - **Előfeltétel:** **E06-R09, E06-R10 merge**
@@ -11,7 +11,7 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/audio_analysis/domain/harmony/chord_frame_evidence.dart",
-  "lib/features/audio_analysis/domain/harmony/chord_segment.dart",
+  "lib/features/audio_analysis/domain/analysis_segment.dart",
   "lib/features/audio_analysis/engine/harmony/chord_segment_assembler.dart",
   "lib/features/audio_analysis/engine/harmony/chord_label_normalizer.dart",
   "lib/features/audio_analysis/engine/harmony/decoder_source.dart",
@@ -21,7 +21,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/chord_segment_assembler_test.dart",
   "test/features/audio_analysis/engine/chord_label_normalizer_test.dart",
   "test/property/analysis_chord_segment_property_test.dart",
-  "docs/adr/0207-analysis-chord-decoder-fusion-strategy.md",
+  "docs/adr/0229-analysis-chord-decoder-fusion-strategy.md",
   "docs/rounds/e06-r11-chord-evidence-segmentation-provenance.md",
 ]
 gate_tests = [
@@ -33,7 +33,7 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R09/R10 merge.
-> **ADR 0207** előre kiosztva. Olvasd újra a `ClipAnalyzer._chordPass`
+> **ADR 0229** a foglaló által kiosztva. Olvasd újra a `ClipAnalyzer._chordPass`
 > **tényleges** szegmensösszefűzését (`clip_analyzer.dart` 199–226): a
 > **no-chord frame FENNTARTJA a nyitott szegmenst**, a záró szegmens a klip
 > végéig tart, és a határ a döntő frame **ablakközepe**. A V2 assembler
@@ -52,7 +52,27 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0207** (chord decoder fusion stratégia).
+**PLANNING — 2026-08-12 pre-flight revízió.**
+
+1. A brief-lint `S5` leletét kódból ellenőriztük: a már exportált
+   `lib/features/audio_analysis/domain/analysis_segment.dart:24` deklarálja a
+   V2 `ChordSegment` típust, és `AnalysisTimeline.chordSegments` ezt a típust
+   tárolja. Ezért a korábbi, új
+   `domain/harmony/chord_segment.dart` és az ugyanilyen nevű új típus
+   kollíziót/ambiguous exportot okozott volna. A kör a **meglévő
+   `ChordSegment` additív bővítését** használja; a hibás új útvonal törölve,
+   az engedélyezett lista a meglévő fájlra módosult. Nincs más scope-bővítés.
+2. Az előre írt `0207` már nem foglalható: a kötelező
+   `tools/round-slots.py reserve-adr --round E06-R11` parancs `0229`-et adott.
+   Az ADR-hivatkozások és a fájlnév ezért **ADR 0229**-re változtak.
+3. A küszöb-mátrix mért értékei:
+   `python3 -c 'print(*(int(ms * 1000) for ms in (199, 200, 201)))'` →
+   `199000 200000 201000` mikrosekundum. A 200 ms-es cella inkluzív.
+
+Az implementernek `stopped` jelzést kell adnia, ha a meglévő
+`ChordSegment` additív, forráskompatibilis bővítése nélkül nem teljesíthető a
+kontraktus, vagy a megoldás a tiltott `lib/features/analyze/**` fájlok egyikét
+igényelné.
 
 ## 1. Cél
 
@@ -84,7 +104,7 @@ no-chord valószínűség, tonalness, decoder source); `ChordSegment` (V2, ID-ve
 confidence-szel, forrással); `ChordSegmentAssembler` (verziózott policy:
 minimum szegmenshossz, tranziens-merge, no-chord/silence kezelés, pontos
 záróhatár); `ChordLabelNormalizer` (kanonikus címke; az enharmonikus
-**megjelenítés** UI-policy marad); `DecoderSource` enum; **ADR 0207**;
+**megjelenítés** UI-policy marad); `DecoderSource` enum; **ADR 0229**;
 **egy** új flag: `analysisExperimentalFusionEnabled` (default OFF).
 
 **Kívül — TILOS:** a DSP chord-lánc módosítása, `DspConfig`, a CRNN
@@ -96,7 +116,7 @@ súlyok/asset, a shipping decoder cseréje, `lib/features/analyze/**`,
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `.../domain/harmony/chord_frame_evidence.dart` | ÚJ | frame-szintű evidence |
-| `.../domain/harmony/chord_segment.dart` | ÚJ | V2 szegmens |
+| `lib/features/audio_analysis/domain/analysis_segment.dart` | meglévő | A már exportált V2 `ChordSegment` additív evidence/provenance-bővítése |
 | `.../engine/harmony/chord_segment_assembler.dart` | ÚJ | verziózott összeállítás |
 | `.../engine/harmony/chord_label_normalizer.dart` | ÚJ | kanonikus címke |
 | `.../engine/harmony/decoder_source.dart` | ÚJ | forrás + fusion policy |
@@ -104,14 +124,14 @@ súlyok/asset, a shipping decoder cseréje, `lib/features/analyze/**`,
 | `.../public.dart` | meglévő | export |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, OFF |
 | `test/**` | ÚJ | assembler/normalizer/property |
-| `docs/adr/0207-…md` | ÚJ | fusion-stratégia |
+| `docs/adr/0229-…md` | ÚJ | fusion-stratégia |
 
 **Tilos zóna:** `lib/features/live/**`, `lib/features/analyze/**`,
 `assets/ml/**`, `docs/rag/**`. Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
-1. **ADR 0207 — a shipping default: DSP primary, ML advisory.** A ML-eredmény
+1. **ADR 0229 — a shipping default: DSP primary, ML advisory.** A ML-eredmény
    kizárólag **diagnosztika** (Lab), a publikus timeline a DSP-é. A fusion
    (`confidence-weighted` vagy `disagreement-aware abstention`) **kizárólag**
    `analysisExperimentalFusionEnabled` mögött. Az ADR rögzíti a **visszavonás
@@ -173,7 +193,7 @@ open_decisions:
       **és** `closeOnNoChord = true` policyval viszont **két** szegmens
       keletkezik — a két cella külön méri, hogy a policy tényleg hat.
 - [ ] **Minimum szegmenshossz küszöb hármas** (`minSegment = 200 ms`):
-      **199 ms**, **200 ms**, **201 ms** hosszú szegmens — a 200 ms
+      **199000 µs**, **200000 µs**, **201000 µs** (199/200/201 ms) hosszú szegmens — a 200 ms
       **megmarad** (a határ inkluzív), a 199 ms **beolvad** a szomszédba.
       Az időpontokat `python3 -c`-vel számolva, mikroszekundumban.
 - [ ] **Záróhatár pontossága:** minden fixture-ön az utolsó szegmens vége
@@ -227,9 +247,10 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0207 (DSP primary, ML advisory, flag + visszavonási feltétel).
+1. ADR 0229 (DSP primary, ML advisory, flag + visszavonási feltétel).
 2. RED: V1-paritás mátrix a hat fixture-re.
-3. `chord_frame_evidence.dart` + `chord_segment.dart` + `decoder_source.dart`.
+3. `chord_frame_evidence.dart` + a meglévő `analysis_segment.dart` `ChordSegment`
+   bővítése + `decoder_source.dart`.
 4. `chord_label_normalizer.dart` (idempotens).
 5. `chord_segment_assembler.dart` (verziózott policy, default = V1).
 6. Fusion-ág flag mögött; `LegacyViewAdapter`; property; gate.
