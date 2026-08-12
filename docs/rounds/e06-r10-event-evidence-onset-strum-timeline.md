@@ -4,6 +4,7 @@
   — a §0.0 rögzíti a mért gyökérokot és a feloldást; eredetileg előre megírva
   2026-08-07, kód olvasva: main @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 10; §9.6, §13.1–13.2
+- **ADR:** [0228](../adr/0228-event-evidence-model-and-timeline-builder-contract.md) (pre-flight, 2026-08-12)
 - **Branch:** `codex/e06-r10-event-evidence-onset-strum-timeline`
 - **Előfeltétel:** **E06-R09 merge**
 - **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
@@ -22,6 +23,7 @@ allowed_paths = [
   "test/features/audio_analysis/domain/event_id_test.dart",
   "test/property/analysis_event_timeline_property_test.dart",
   "docs/rounds/e06-r10-event-evidence-onset-strum-timeline.md",
+  "docs/adr/0228-event-evidence-model-and-timeline-builder-contract.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -102,6 +104,36 @@ a mintával (bővítés a meglévő fájlban, nem új fájl). A lelet `strict` s
 (nem CI-kapu), mert a bevezetéskor NEM minden nyitott brief teljesítette —
 pontosan a brief-lint saját base/strict szabálya szerint.
 
+### 0.0.1 Pre-flight ADR 0228 — a hátralévő nyitott architekturális felület
+
+A H3 self-heal kizárólag a fájl-cél-ütközést zárta; a hat új evidence-mező
+pontos elhelyezése, az `EventId` formátuma és a builder összevonási szabálya
+formálisan nyitva maradt. **[ADR 0228](../adr/0228-event-evidence-model-and-timeline-builder-contract.md)**
+(ez a pre-flight, 2026-08-12) ezt zárja le — az implementer az ADR 7 döntését
+köti magára, a §5/§5.1 alább ezekkel összhangban áll. **Egy mért rést is zár**
+(ADR 0228 3. döntés): a §6 acceptance-mátrix „2399/2400/2401 minta, 48 000
+Hz-en" hármasa a PROPERTY/UNIT teszt saját, 48 kHz-re választott
+fixture-konstrukciója — a builder tényleges minimum-separation
+összehasonlítása **`Duration`-alapú** (a két event `.time` mezője), NEM
+rögzített mintaszám-küszöb. Mérve: a kilenc R09-fixture (`clip_analyzer_
+parity_test.dart`) mind `sampleRate: 44100`-on fut, és 2400 minta 44100 Hz-en
+**54,42 ms**, NEM 50 ms — egy mintaszám-alapú (rátafüggetlen) implementáció
+ezen a rátán néma paritás-regressziót okozna (§6 első acceptance pontja).
+
+**Második mért rés (ADR 0228 7. döntés):** a §5 pont 1 kötelezővé teszi a
+`StrumEvent.onsetEventId` mezőt, és a §6.1 mátrix egy „onsetEventId
+hivatkozás cellát" vár — de ez a mező NEM szerepel sem a §0.0 „ami
+TOVÁBBRA is hiányzik" listáján, sem a §3 scope-felsorolásán, sem az OD-03
+öt-mezős listáján, és nincs hozzá dedikált acceptance-pont. Mérve
+(`lib/features/audio_analysis/engine/legacy/legacy_evidence.dart`, teljes
+fájl olvasva): a `LegacyEvidence` **nem** hordoz független onset-listát —
+kizárólag `strums` (irány/idő/confidence) és `chords`, pontosan azt
+tükrözve, amit a §2 már leír („az onset és a strum azonos fogalom" a mai
+V1-ben). A hiány feloldása: **OD-04** (lásd §5.1) — a builder minden
+`LegacyStrumEvidence`-hez EGY szintetizált `OnsetEvent`-et épít ugyanarra a
+sample indexre/időre, és a hozzá tartozó `StrumEvent.onsetEventId`-je erre
+mutat; a suppression a (onset, strum) PÁRT atomikusan kezeli.
+
 ## 1. Cél
 
 Az onset és a strum **külön** eseménnyé választása, sample-index alapú,
@@ -124,9 +156,10 @@ metrikák később hivatkozhatnak.
   típus (nem `isStrum` boolean). **Ami TOVÁBBRA is hiányzik** a kért
   evidence-ből: determinisztikus (nem hívó-adott) `EventId`-formátum,
   irány-confidence, attack strength, local RMS, `confidenceSource`,
-  fallback flag és suppression-diagnosztika — ezeket adja hozzá ez a kör,
-  additív/opcionális mezőkkel (OD-03), és a `confidence` egyelőre továbbra is
-  a CRNN vagy a heurisztika nyers, kalibrálatlan értéke marad.
+  fallback flag, `StrumEvent.onsetEventId`-hivatkozás és
+  suppression-diagnosztika — ezeket adja hozzá ez a kör, additív/opcionális
+  mezőkkel (OD-03/OD-04), és a `confidence` egyelőre továbbra is a CRNN vagy
+  a heurisztika nyers, kalibrálatlan értéke marad.
 - A `timeline_view.dart` a `TimelineStrum` listát rendereli
   (`isDown` alapján ↓/↑).
 - Az R09 `LegacyEvidence` adja a nyers strum/chord listát + a hívási
@@ -137,7 +170,8 @@ metrikák később hivatkozhatnak.
 **Benne:** a MEGLÉVŐ `OnsetEvent` és `StrumEvent` (`domain/analysis_event.dart`,
 H3 self-heal revízió — §0.0) bővítése a hiányzó evidence-mezőkkel (a bázis
 `confidence` marad az onset confidence; direction confidence, attack
-strength, local RMS, source/`confidenceSource`, fallback flag ÚJ) —
+strength, local RMS, source/`confidenceSource`, fallback flag, és a
+`StrumEvent`-en `onsetEventId`-hivatkozás — mind ÚJ, OD-04) —
 **továbbra is két külön típus**, nem egy `isStrum` boolean; `EventId` stabil,
 **runon belül** determinisztikus generálás (ÚJ fájl); `EventTimelineBuilder`
 (rendezés, duplikátumszűrés, minimum separation, suppression-diagnosztika,
@@ -169,7 +203,9 @@ DSP-konstans, chord (R11), beat (R12), `lib/features/analyze/**`,
 ## 5. Kötött architekturális döntések
 
 1. **Az onset ≠ strum** (SDD §13.1): két külön típus, két külön lista; egy
-   strum **hivatkozik** a saját onsetjére `onsetEventId`-vel.
+   strum **hivatkozik** a saját onsetjére `onsetEventId`-vel (nullable
+   `String?` mező, OD-03-mintájú additív bővítés — a jelenlegi bemenetre
+   vonatkozó szintetizálási szabályt lásd OD-04).
    **NEM elfogadható:** egyetlen event-típus `isStrum` boolean mezővel.
 2. **Minden event hordoz sample indexet ÉS `Duration` időt** (SDD §9.7), és a
    kettő a preprocessing mapping-jén (R08) keresztül konzisztens.
@@ -234,6 +270,25 @@ open_decisions:
       mező TÍPUSA nem változik: az `EventId`-generátor a determinisztikus
       `<runId>:<type>:<sampleIndex>` stringet a meglévő `String id` mezőbe
       írja.
+  - id: OD-04
+    question: >-
+      A LegacyEvidence nem hordoz független onset-listát (csak strums/
+      chords, mérve — §0.0.1) — honnan jön akkor a StrumEvent.onsetEventId
+      által hivatkozott OnsetEvent?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      a builder minden `LegacyStrumEvidence`-bejegyzéshez PONTOSAN egy
+      `OnsetEvent`-et szintetizál, azonos `time`/`sampleIndex`-szel, mint a
+      belőle épített `StrumEvent` (ez tükrözi a mai V1 szemantikát — §2: „az
+      onset és a strum azonos fogalom"), és a `StrumEvent.onsetEventId`-je
+      erre az `OnsetEvent.id`-re mutat. A minimum-separation/suppression a
+      (onset, strum) PÁRT egy egységként kezeli: ha a strum elnyomásra kerül
+      (OD-02), a hozzá tartozó szintetizált onset IS a diagnosztikai ágba
+      kerül, nem marad árva (hivatkozás nélküli) esemény a publikus
+      listában. **NEM elfogadható:** a strum elnyomása anélkül, hogy a
+      párja onsetje is elnyomásra kerülne (ez árva `OnsetEvent`-et hagyna a
+      publikus timeline-ban).
 ```
 
 ## 6. Acceptance criteria
@@ -242,13 +297,26 @@ open_decisions:
       `StrumEvent` lista **darabszámra** és **időre** (|Δ| ≤ 1 µs) egyezik a
       V1 `TimelineStrum` listával, és az irányok azonosak — mind a kilenc
       R09-fixture-re.
-- [ ] **Minimum separation küszöb hármas** (50 ms, 48 000 Hz-en 2400 minta):
-      két onset **2399** minta távolságra → a második **elnyomva**;
-      **2400** minta → a második **megmarad** (a határ inkluzív);
-      **2401** minta → megmarad. A mintaszámokat `python3 -c`-vel számolva.
+- [ ] **Minimum separation küszöb hármas** (`Duration`-alapú összehasonlítás,
+      ADR 0228 3. döntés — a builder a `.time`-ot hasonlítja, NEM a
+      `sampleIndex`-et): a fixture 48 000 Hz-en épül — két onset **2399**
+      minta (49,98 ms) távolságra → a második **elnyomva**; **2400** minta
+      (50,00 ms) → a második **megmarad** (a határ inkluzív); **2401** minta
+      (50,02 ms) → megmarad. A mintaszámokat `python3 -c`-vel számolva.
+      **Ugyanezt a hármat 44100 Hz-es bemeneten is** (a kilenc R09-fixture
+      rátája, `python3 -c 'print(0.05*44100)'` → 2205,0) meg kell ismételni:
+      **2204** minta (49,98 ms) → elnyomva; **2205** minta (50,00 ms) →
+      megmarad; **2206** minta (50,02 ms) → megmarad — igazolva, hogy a
+      builder NEM egy 48 kHz-re hardkódolt mintaszám-küszöböt tartalmaz.
 - [ ] **Suppression-diagnosztika:** a fenti 2399-mintás cellában a
       diagnosztikai lista **pontosan 1** bejegyzést tartalmaz, okkal és
       időponttal; a publikus lista **1** eseményt.
+- [ ] **`onsetEventId` integritás (OD-04):** minden publikált `StrumEvent`
+      `onsetEventId`-je egy, a UGYANABBAN a buildben jelen lévő `OnsetEvent`
+      `id`-jére mutat, azonos `time`/`sampleIndex`-szel; ha egy strum
+      elnyomásra kerül, a párja onset is a diagnosztikai ágba kerül (nincs
+      árva onset a publikus listában, és nincs `null`-ra vagy nem létező
+      ID-re mutató `onsetEventId` egyetlen publikált strumon sem).
 - [ ] **Event ID determinizmus:** ugyanaz a bemenet kétszer építve **azonos**
       ID-listát ad; **eltérő** runId esetén az ID-k eltérnek, de a sorrend és a
       típus/sampleIndex rész azonos.
@@ -285,6 +353,8 @@ open_decisions:
 | Csak `Duration` kerül tárolásra, sample index nem | a 0. és az utolsó mintás határeset-cella (kerekítés miatt elcsúszik) |
 | A V2 más szűrést alkalmaz, mint a V1 | a paritás-cella (darabszám) a kilenc fixture-ön |
 | A nyers CRNN-confidence `calibrated`-ként jelölve | a `confidenceSource` őr |
+| A minimum separation `sampleIndex`-et hasonlít rögzített mintaszám-küszöbhöz (nem `Duration`-t) | a **44100 Hz-es** 2205-mintás hármas cella (a 48 kHz-es cella ekkor is zöld maradna — csak a 44100 Hz-es leplezi le) |
+| A strum elnyomásra kerül, de a párja `OnsetEvent` a publikus listában marad (árva hivatkozás) | az `onsetEventId` integritás cella (OD-04) |
 | **Valódi-sértés próba (§10):** a duplikátumszűrés ideiglenes kiszedése → a rendezettség/dedup property **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
