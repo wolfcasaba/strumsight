@@ -282,7 +282,56 @@ feltételének megváltoztatása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Codex implementation — 2026-08-12
+
+- `application/analysis_state.dart` — sealed, tizenegy állapotos V2 state
+  machine; futáshoz kötött terminális/analyzing állapotok run ID-t hordoznak.
+- `application/analyze_audio_use_case.dart`, `cancel_analysis_use_case.dart`,
+  `save_analysis_use_case.dart` — a runner, cancellation handle és repository
+  save szűk application-határai.
+- `application/analysis_isolate_runner.dart` — futásonként friss isolate,
+  JSON codec-határ, progress stream és kill+port-cleanup cancellation. A
+  `AnalysisRunner` interface-et a controller tesztjei fake-elik.
+- `application/analysis_controller.dart` — controller-saját aktív run ID,
+  késői progress/result elutasítás-számláló, eseményszámláló-alapú inkluzív
+  5-ös throttle, explicit cancel és pontosan egyszeri V1-alakú kredit-döntés.
+- `application/analysis_providers.dart` — use-case és V1-kompatibilis
+  practice/streak adapter; a konkrét V2 runner provider fail-closed,
+  `StateError`-ral jelzi a még hiányzó stage-listát.
+- `presentation/analysis_progress_view.dart` + ARB — lokalizált fázis,
+  magyarázat, szemantikus cancel; egységszám nélkül nincs százalék.
+- `public.dart` — additív V2 application/presentation export.
+
+**Acceptance evidence.** `analysis_controller_test.dart` 10 zöld tesztje fedi
+a teljes/degradált/fatal/cancelled végállapotokat, permission/input hibát,
+cancel utáni új futást, tab-váltást és háttérbe kerülést, a késői progress és
+result `rejectedLateResults == 2` elutasítását, a V1-azonos kreditpredikátum
+eventes/üres/degradált/fatal/late esetét, valamint a 4/5/6 throttle-hármast.
+`analysis_cancellation_test.dart` 2 zöld tesztje méri a fake run dispose,
+stream-close és üres temp-lista cancel-takarítását, illetve a valódi
+`Isolate.spawn` JSON codec smoke-ot. `analysis_progress_view_test.dart` zöld:
+lokalizált fázis, semantic cancel és nincs hamis százalék. A controller
+forrásolvasó tesztje kizárja a közvetlen `engine/` importot és a JSON hívást.
+A V1-érintetlenséget a `test/features/analyze` gate-útvonal és a scope audit
+bizonyítja.
+
+**Futtatott ellenőrzések.** Célzottan zöld:
+`flutter test test/features/audio_analysis/application/analysis_controller_test.dart`
+(10), `flutter test test/features/audio_analysis/application/analysis_cancellation_test.dart`
+(2), `flutter test test/features/audio_analysis/presentation/analysis_progress_view_test.dart`
+(1), `flutter analyze` (No issues found). A kötelező
+`tools/round-gate.sh test/features/audio_analysis test/app test/features/analyze`
+záró, dokumentáció utáni futása zöld volt (format, analyze, mindhárom
+teszt-útvonal és architecture).
+
+**Git diff --stat (staged, záráskor):** 15 fájl, 1261 beszúrás, 3 törlés.
+
+**Nyitott follow-up.** A valódi több-stage DSP pipeline összeszerelése
+(közös work-state és konkrét `AnalysisStage<AnalysisDocument,
+AnalysisDocument>` lista) szándékosan nincs ebben a körben: ADR 0240 Döntés 4
+szerint egy jövőbeli, még nem ütemezett kör adja majd a
+`analysisV2RunnerProvider` felülírását. A V2 flag továbbra is default `false`,
+így ez a nyitott wiring nem user-facing regresszió.
 
 ## 11. Review — a független reviewer tölti ki
 
