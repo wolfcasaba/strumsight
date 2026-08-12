@@ -310,6 +310,25 @@ ZÖLD lett. A minta hatóköre: `analysisArbKeyPrefixes` listája (`analysis`,
 végett a minta csak ezekre az analysis-eredetű ARB-kulcs-prefixekre és a
 `AnalysisMetricId.known` ID-halmazra vonatkozik, nem minden ARB-kulcsra.
 
+### 10.4.1 F1 javítás (review: MAJOR, 2026-08-12)
+
+A review mért reprodukciója megmutatta, hogy az őr csak `entry.value`-ra
+hívta a mintát — egy `analysisTechniqueFingerPlacement` kulcs semleges
+értékkel átcsúszott. Javítás:
+
+- `test/tooling/analysis_claim_safety_test.dart` — új `violatesClaimSafety(key, value)`
+  segédfüggvény, amely a mintát **mind a kulcsra, mind az értékre** futtatja;
+  a fő teszt ciklusa erre lett átállítva (korábban csak `entry.value`-t nézte).
+- Új, dedikált regressziós teszt („a forbidden analysis-origin ARB key name is
+  rejected even with a neutral value") egy **fake, csak in-memory** map-pel
+  (`analysisTechniqueFingerPlacement` → semleges érték) — nem kerül be a
+  valódi ARB fájlokba. Első futtatás a régi (csak érték) `violatesClaimSafety`
+  mellett **PIROS** volt (`Expected: non-empty, Actual: []`); a kulcs-ellenőrzés
+  hozzáadása után **ZÖLD**.
+- A minta nem szűkült, csak a lefedettség bővült (kulcs + érték).
+- `flutter test test/tooling/analysis_claim_safety_test.dart` a javítás után:
+  4 teszt, mind ZÖLD.
+
 ### 10.5 Mérce-mátrix lefedettség
 
 Mind a nyolc mérce-mátrix sor (§6.1) lefedve:

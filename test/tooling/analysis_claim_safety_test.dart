@@ -36,6 +36,13 @@ const List<String> analysisArbKeyPrefixes = <String>[
 
 bool isAnalysisArbKey(String key) => analysisArbKeyPrefixes.any(key.startsWith);
 
+/// A key or value naming a forbidden claim is a violation either way — a
+/// key like `analysisTechniqueFingerPlacement` implies a finger diagnosis
+/// even if its translated value is neutral (review F1).
+bool violatesClaimSafety(String key, String value) =>
+    forbiddenAnalysisClaimPattern.hasMatch(key) ||
+    forbiddenAnalysisClaimPattern.hasMatch(value);
+
 Map<String, String> readFlatArb(String path) {
   final decoded =
       jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
@@ -57,7 +64,7 @@ void main() {
       ]) {
         for (final entry in readFlatArb(path).entries) {
           if (!isAnalysisArbKey(entry.key)) continue;
-          if (forbiddenAnalysisClaimPattern.hasMatch(entry.value)) {
+          if (violatesClaimSafety(entry.key, entry.value)) {
             offences.add('$path: "${entry.key}" -> "${entry.value}"');
           }
         }
@@ -101,6 +108,32 @@ void main() {
           }
         }
       }
+    });
+
+    test('a forbidden analysis-origin ARB key name is rejected even with a '
+        'neutral value (regression for review F1 — key-only mutation)', () {
+      // Fake, in-memory map only — never written to the real ARB assets.
+      // Reproduces the review's mutation: a key naming a forbidden claim
+      // ("finger") with a value that itself contains no forbidden term.
+      const fakeArbEntries = <String, String>{
+        'analysisTechniqueFingerPlacement':
+            'A neutral label without a forbidden value',
+      };
+      final offences = <String>[];
+      for (final entry in fakeArbEntries.entries) {
+        if (!isAnalysisArbKey(entry.key)) continue;
+        if (violatesClaimSafety(entry.key, entry.value)) {
+          offences.add('fake: "${entry.key}" -> "${entry.value}"');
+        }
+      }
+      expect(
+        offences,
+        isNotEmpty,
+        reason:
+            'The claim-safety guard must reject a forbidden analysis-origin '
+            'ARB key name even when its value is neutral (ADR 0236 §2, '
+            'review F1).',
+      );
     });
 
     test('every technique-proxy ARB key exists in en and hu', () {
