@@ -24,6 +24,7 @@ allowed_paths = [
   "docs/adr/0232-timing-metric-identity-and-publication-boundary.md",
   "docs/rounds/e06-r14-timing-and-rush-drag-metrics.md",
   "docs/reviews/e06-r14-timing-and-rush-drag-metrics-review.md",
+  "docs/reviews/e06-r14-timing-and-rush-drag-metrics-security.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -72,7 +73,9 @@ ID-kat ad hozzá, az eredeti konstans változatlan marad.
 
 A kötelező review-artefaktum és a saját ADR explicit bekerült az
 `allowed_paths` listába, így a review commitolható scope-sértés nélkül
-(LESSONS L88).
+(LESSONS L88). Mivel `risk = "high"`, a kötelező dedikált security-review
+artefaktum is explicit scope-ot kapott; a review csak read-only értékelést
+tartalmaz, production kódot nem módosít.
 
 ## 1. Cél
 
