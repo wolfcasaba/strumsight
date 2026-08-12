@@ -1,6 +1,8 @@
 # E06-R20 — Determinisztikus insightok és hotspot ranking
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, 2026-08-12
+  — a §0.0 rögzíti a mért gyökérokot és a feloldást; eredetileg előre megírva
+  2026-08-07, kód olvasva: main @ `a6e6f3d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 20; §20.1–20.7
 - **Branch:** `codex/e06-r20-deterministic-insights-and-hotspots`
 - **Előfeltétel:** **E06-R14, E06-R15, E06-R16, E06-R19 merge**
@@ -23,6 +25,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/insight_ranker_test.dart",
   "test/features/audio_analysis/engine/hotspot_ranker_test.dart",
   "test/property/analysis_insight_property_test.dart",
+  "test/fixtures/analysis/insights",
   "docs/rounds/e06-r20-deterministic-insights-and-hotspots.md",
 ]
 gate_tests = [
@@ -39,6 +42,15 @@ native_gate = false
 > integritás-teszt méri. Ellenőrizd, hogy az R18 technique-proxyk a
 > diagnosztikai ágban vannak: **insight nem épülhet Lab-only proxyra**.
 > PREPARED→PLANNING, brief commit előbb.
+>
+> **H3 self-heal revízió után (§0.0):** a §6 acceptance criteria (18 cellás
+> szabály-mátrix, két küszöb mindkét oldali hármasa, referenciális
+> integritás property, lokalizációs paritás) mind ugyanazt a determinisztikus
+> `AnalysisDocument`/`AnalysisInsightContext` felépítést igényli, NÉGY külön
+> tesztfájlban (három `test/features/audio_analysis/engine/` alatt, egy
+> `test/property/` alatt) — ehhez tedd a megosztott builder(ek)et az
+> `allowed_paths` új `test/fixtures/analysis/insights` bejegyzése alá, az
+> `test/fixtures/vision/posture`-mintát követve (ld. lentebb).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -51,7 +63,54 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**PREPARED → revideálva (ADR 0112 önjavító kör, H3, 2026-08-12).** Új ADR
+nincs — ez a revízió kizárólag `allowed_paths`-ot bővíti, normatív döntést
+nem hoz.
+
+**Mért gyökérok (H3 halt, MiniMax M3 első futási kísérlete,
+2026-08-12T16:53:49+00:00):** az eredeti `allowed_paths` a négy tesztfájlt
+(három `test/features/audio_analysis/engine/*.dart` + egy
+`test/property/analysis_insight_property_test.dart`) egyenként, névre
+szólóan sorolta fel, de **egyetlen megosztott fixture-helyet sem** — miközben
+a §6 acceptance criteria mind a négy fájltól **ugyanazt** a determinisztikus
+`AnalysisDocument`/`AnalysisInsightContext` felépítést várja el (18 cellás
+szabály-mátrix + két küszöb mindkét oldali hármasa + referenciális
+integritás property + lokalizációs paritás — a property-tesztnek és a három
+engine-tesztnek konzisztens dokumentum-szemantikát KELL látnia, különben a
+referenciális integritás mérése hamis pozitívat/negatívat adhat a builder-
+verziók közötti eltérésből). Az implementer emiatt a listán kívül hozta létre
+a `test/features/audio_analysis/engine/insights/_insight_test_helpers.dart`
+fájlt (branch `codex/e06-r20-deterministic-insights-and-hotspots`, commit
+`fa836e87`, munkapéldány `/home/ubuntu/ss-mm-e06-r20`), és a saját STOP-
+protokollja szerint helyesen `stopped`-ot jelzett, amit a scope-audit
+megerősített:
+
+```
+python3 tools/scope-audit.py --repo /home/ubuntu/ss-mm-e06-r20 \
+  --brief docs/rounds/e06-r20-deterministic-insights-and-hotspots.md \
+  --base fa836e87
+# exit 1 — "path outside allowed scope:
+#   test/features/audio_analysis/engine/insights/_insight_test_helpers.dart"
+```
+
+**Feloldás:** `allowed_paths` egy `test/fixtures/analysis/insights`
+könyvtárral bővült — ugyanaz a minta, mint az E05-R20 brief
+`test/fixtures/vision/posture` bejegyzése (a repóban élő, elterjedt
+`test/fixtures/<feature>/<alfunkció>/*_fixtures.dart` konvenció, pl.
+`test/fixtures/vision/posture/posture_fixtures.dart`,
+`test/fixtures/song_trainer/**`), és ugyanaz a feloldási forma, mint a
+korábbi, ugyanebben az epicben mért H3 self-heal precedens (E06-R10, PR #224,
+ld. [ADR 0228](../adr/0228-event-evidence-model-and-timeline-builder-contract.md)
+Kontextus: „allowed_paths retargetelve a meglévő fájlra"). A konkrét
+fájlnevet ez a revízió szándékosan NEM rögzíti — a builder(ek) tényleges
+felosztása (egy fájl vagy több, pl. `insight_fixtures.dart`) az implementáció
+döntése; a `test/fixtures/analysis/insights` könyvtár bármelyik fájlját
+lefedi. A halt-olt futás saját, könyvtáron kívüli
+`_insight_test_helpers.dart` útvonala továbbra is listán kívüli — ezt a
+self-heal saját regressziós tesztje
+(`tools/tests/test_e06_r20_insight_fixture_scope.py`) explicit méri, nehogy
+a scope szélesítése véletlenül vakfoltot nyisson. 0 produkciós fájl módosult
+ennél a self-healnél.
 
 ## 1. Cél
 
@@ -97,6 +156,7 @@ sealed hierarchia; ARB-kulcsok en+hu.
 | `.../public.dart` | meglévő | export |
 | `lib/l10n/*.arb` | meglévő | **additív** üzenetkulcsok |
 | `test/**` | ÚJ | szabály + rangsor + property |
+| `test/fixtures/analysis/insights/**` | ÚJ | megosztott `AnalysisDocument`/`AnalysisInsightContext` builder(ek) a négy tesztfájlhoz (H3 self-heal, §0.0) |
 
 **Tilos zóna:** `lib/features/ai_tutor/**`, `lib/features/audio_analysis/presentation/**`,
 `lib/features/analyze/**`. Listán kívül → `stopped`.
