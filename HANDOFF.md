@@ -3,7 +3,78 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R16 MERGED — Dynamics and stroke balance).**
+> (E06-R17 MERGED — Monophonic pitch capability).**
+>
+> ## ✅ E06-R17 KÉSZ — Monofonikus pitch capability (2026-08-12)
+>
+> Elkészült a bekötetlen, capability-gate mögötti monofonikus pitch-detektálás:
+> `PitchFrame` → `MonophonicPitchSegment` → `PitchCapabilityGate` → hét
+> targethez kötött pitch metrika (note hit ratio, median/p90 cents error,
+> pitch stability, note transition timing, sustained note duration, unwanted
+> pitch dropout ratio), a meglévő `YinPitchDetector`/`SlidingFramer` core
+> primitívekre építve, azok módosítása nélkül. [ADR
+> 0235](docs/adr/0235-monophonic-pitch-capability-boundary.md). Kizárólag
+> `analysisPitchEnabled` flag mögött (default `false` mindenhol); nincs UI-,
+> persistence- vagy pipeline-bekötés; a Tuner és a core DSP érintetlen.
+>
+> **Kétszeres pre-flight revízió, ADR 0235:** (1) a tervezett ÚJ `PitchSegment`
+> típus névütközésben állt egy meglévő, bekötetlen E06-R02 stubbal
+> (`analysis_segment.dart`) — feloldás: `MonophonicPitchSegment`/
+> `MonophonicPitchSegmentBuilder` átnevezés, a meglévő fájlok érintetlenül; (2)
+> az implementer első dispatchja helyesen `stopped`-ot jelzett (0 fájl
+> módosítva), mert a „Flag-kapu" acceptance criterion egy MA sehol nem létező
+> pipeline stage-lista ellen kért bizonyítékot (`grep -rn "AnalysisPipeline("
+> lib/` 0 találat az egész Epic 6-ban) — feloldás: kapu-szintű bizonyíték
+> (a flag ELSŐKÉNT, az OD-01 (a)-(d) előtt, hívásszámláló `== 0`), és a „hét
+> kötelező pitch metrika" neve átemelve SDD §17.3-ból a brief §3-ba.
+>
+> A független review (első kör: CHANGES REQUESTED, 3 MAJOR — mind
+> teszt-lefedettségi rés, NEM produkciós-kód-defekt, mutáció-próbákkal
+> igazolva) egy javító körben **APPROVED**-re zárt: **F1** a flag-kapu
+> dedikált tesztje konfundált fixture-rel nem bizonyította a saját nevében
+> szereplő elsőbbséget; **F2** a NaN-mentesség property teszt sosem hívta a
+> kör valódi számítási függvényeit; **F3** a polifónia-kapu tesztje egy
+> kéthangú szekvenciális proxy volt a brief által név szerint kért
+> négyhangos akkord helyett. Mindhármat a javító kör valódi, a mutáció-próbák
+> által is megerősített regresszióvédelemmel zárta. Review:
+> [docs/reviews/e06-r17-monophonic-pitch-capability-review.md](docs/reviews/e06-r17-monophonic-pitch-capability-review.md)
+> — végső verdikt **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 nem blokkoló NOTE
+> (§10 handoff dokumentáció + ARB-beszúrás helye, kozmetikai).
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r17-monophonic-pitch-capability-security.md](docs/reviews/e06-r17-monophonic-pitch-capability-security.md)
+> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 2 NOTE. A MINOR:
+> `buildPitchMetrics` O(szegmens×célhang) költségű bemeneti hosszkorlát és
+> dokumentáció nélkül (mérve: 8000 célhangra 619 ms, szuperlineáris görbe) —
+> ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
+> untrusted/hosszú audióra köti (ugyanaz a mérce, mint az E06-R11/E06-R15
+> precedens). A két NOTE: `PitchCapabilityGate(minimumVoicedRatio: 0)` +
+> csupa-unvoiced bemenet `RangeError`-t dobna (a default 0.35 biztonságos);
+> az exportált `centsBetween` nem-pozitív Hz-re nem-véges eredményt adna
+> (ma nincs ilyen belső hívó).
+>
+> Implementer **Terra (Codex)**, 2 dispatch (a második a pre-flight
+> revízió után), 1 javító kör.
+>
+> **Zöld kapu (exact-SHA `cce75bbc`, PR [#233](https://github.com/wolfcasaba/strumsight/pull/233),
+> squash `66800209`):** Full Gate
+> [31602648343](https://github.com/wolfcasaba/strumsight/actions/runs/31602648343)
+> **success** (`full-gate` + `Coverage` jobs). Router CI utolsó releváns futása
+> [31598362294](https://github.com/wolfcasaba/strumsight/actions/runs/31598362294)
+> **success** a `6dd76109` ősön (a `docs/reviews/**`/`test/**`-only utókommitok
+> nem érintik a Router CI push-path-szűrőjét — L112 minta, ld. E06-R15
+> precedens az archívumban). A CI-tervező `full-gate.yml`-t választott
+> (`apk_required=false`, tisztán Dart/dokumentum/teszt-diff); az `origin/main`
+> nem mozdult a dispatch és merge között.
+>
+> **Mért folyamat-tanulság:** a #3 lépés (implementer-diff commit
+> ellenőrzése) `git log`-gal a klónban NEM elég — az implementer commitol, de
+> a preambulum nem írja elő a push-ot, tehát a branch a GitHubon üresen
+> maradhat, amíg az orchestrátor nem push-ol expliciten. Ezt a review-ágens
+> mérte ki függetlenül (a security-reviewer helyesen megtagadta a review-t
+> egy nem-létező commitra), lásd `docs/LESSONS.md`.
+>
+> **Következő kör: E06-R18** (`docs/execution/pipeline-queue.tsv` szerint).
 >
 > ## ✅ E06-R16 KÉSZ — Dynamics és stroke balance (2026-08-12)
 >
@@ -34,64 +105,6 @@
 > **Következő kör: E06-R17** (Monofonikus pitch capability,
 > `docs/rounds/e06-r17-monophonic-pitch-capability.md`).
 >
-> ## ✅ E06-R15 KÉSZ — Rhythm consistency és groove proxyk (2026-08-12)
->
-> Elkészült a timing-hibán túli ritmikai egyenletesség réteg: IOI-konzisztencia
-> (1 − CV, medián-alapú), subdivision-illesztés `{1,2,3,4}`-re inkluzív 5%-os
-> ambiguitás-küszöbbel (`degraded`, ha két jelölt szórása 5%-on belül van),
-> beat-relatív fáziseloszlás, leghosszabb stabil IOI-sorozat, accent-pozíció
-> konzisztencia és target-only swing ratio — `RhythmMetrics`/
-> `SubdivisionAnalysis` (`lib/features/audio_analysis/engine/metrics/`). A
-> target-alapú és a becsült-rács alapú ritmus szigorúan diszjunkt
-> `rhythm.target_*`/`rhythm.inferred_*` ID-n publikál; az R14 `MetricGate`
-> újrahasznosítva, nincs saját minimum-kapu. [ADR
-> 0233](docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md). Nincs
-> UI-, persistence- vagy V1 Analyze-bekötés.
->
-> **Pre-flight mérve egy eltérést talált és javított:** a `BeatGrid`-nek nincs
-> skalár `confidence` mezője (csak pontonként, `BeatPoint.confidence`-en él),
-> szemben az eredeti brief §5.3/§6 „confidence ≤ beatGrid.confidence"
-> megfogalmazásával. Feloldás: az R14/ADR 0232 `buildFreePlayTimingMetrics`
-> mintáját követve, a `rhythm.inferred_*` confidence a metrika által
-> ténylegesen felhasznált `BeatPoint`-ok confidence-ének **átlagával**
-> korlátos — dokumentált §0.0 brief-revízió, ADR 0233 Döntés 3.
->
-> Implementer **Terra (Codex)**, 1 dispatch, 0 folytatás — tiszta,
-> egyfordulós lezárás.
->
-> Review: [docs/reviews/e06-r15-rhythm-consistency-and-groove-review.md](docs/reviews/e06-r15-rhythm-consistency-and-groove-review.md)
-> — **APPROVED**, 0 BLOCKER/MAJOR, **2 MINOR** (mindkettő a jövőbeli
-> bekötő körnek, nem blokkoló): **F1** üres `BeatGrid.beats` esetén a
-> `_modeFor` `ArgumentError`-t dob ahelyett, hogy gracefully `unavailable`-ra
-> degradálna — mérve valós, elérhető kimenet az R12 `BeatGridEstimator`
-> free-play útjától rövid/ritka klipre; **F2** az OD-03 10%-os
-> stabil-sorozat-tolerancia bare literál, nem named constant (a szomszédos
-> `SubdivisionCandidates.ambiguityRatio` az). A reviewer izolált `/tmp`
-> klónban saját, az implementerétől független mutációs próbát futtatott a
-> confidence-korláton (a `beatConfidence`-szorzó eltávolítása) — PIROSRA
-> vitte a guard-tesztet, majd visszaállította.
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r15-rhythm-consistency-and-groove-security.md](docs/reviews/e06-r15-rhythm-consistency-and-groove-security.md)
-> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 4 NOTE. A MINOR:
-> `buildRhythmMetrics` O(események×beatek) költségű bemeneti hosszkorlát
-> nélkül (mérve: 16 000 esemény/beat → 3,45 s, tiszta kvadratikus görbe) —
-> ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
-> untrusted/importált sűrű bemenetre köti.
->
-> **Zöld kapu (exact-SHA `fd5f6cda`, PR [#231](https://github.com/wolfcasaba/strumsight/pull/231),
-> squash `24fcd4f7`):** Full Gate
-> [31586268232](https://github.com/wolfcasaba/strumsight/actions/runs/31586268232)
-> (a review+security-doksi commitok utáni tippen újra-dispatch-elve) és
-> Router CI [31584670343](https://github.com/wolfcasaba/strumsight/actions/runs/31584670343)
-> (az implementer-commit tippjén — a `docs/reviews/**` nincs a push-path-
-> szűrőn, L112 minta) **success**. Az `origin/main` nem mozdult a dispatch és
-> a merge között; a post-merge gate friss `main`-en mind a nyolc lépésben
-> zöld.
->
-> **Következő kör: E06-R16** (Dynamics és stroke balance,
-> `docs/rounds/e06-r16-dynamics-and-stroke-balance.md`).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -101,8 +114,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R16 zárása): E06-R16 új bannerként felkerült,
-> E06-R15 maradt a második (legutóbbi kettő) helyen. E06-R14 a harmadik
+> Mért diéta: 2026-08-12 (E06-R17 zárása): E06-R17 új bannerként felkerült,
+> E06-R16 maradt a második (legutóbbi kettő) helyen. E06-R15 a harmadik
 > legutóbbi kör lett, ezért a fejlécből törölve; teljes története átkerült
 > az archívum tetejére.
 
@@ -193,10 +206,16 @@
   **E06-R14** (target/free-play timing- és rush/drag-metrikák, release-safe
   `MetricGate`, [ADR
   0232](docs/adr/0232-timing-metric-identity-and-publication-boundary.md))
-  és **E06-R15** (rhythm consistency + groove-proxyk — IOI-konzisztencia,
+  **E06-R15** (rhythm consistency + groove-proxyk — IOI-konzisztencia,
   subdivision-illesztés, target-only swing, [ADR
-  0233](docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md))
-  kész, 15 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  0233](docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md)),
+  **E06-R16** (dynamics + stroke balance — attack-strength/local-RMS/
+  dinamikai tartomány/accent-balance, release-safe `DynamicsGate`, [ADR
+  0234](docs/adr/0234-dynamics-evidence-and-gating-boundary.md)) és
+  **E06-R17** (monofonikus pitch capability — YIN-alapú frame→szegmens→
+  capability-gate→hét metrika, [ADR
+  0235](docs/adr/0235-monophonic-pitch-capability-boundary.md))
+  kész, 13 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -471,6 +490,24 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R17 security MINOR-1/NOTE-1/NOTE-2 — gate-feltételek egy jövőbeli
+  bekötő körnek, nincs kijelölt kör.** (1) MINOR-1:
+  `buildPitchMetrics` (`lib/features/audio_analysis/engine/metrics/pitch_metrics.dart`)
+  O(szegmens×célhang) — `_targetFor` szegmensenként az összes célhangot
+  vizsgálja, `_dropoutRatio` célhangonként az összes szegmenst; mérve:
+  8000 célhangra 619 ms, szuperlineáris görbe, ~15 s-ra extrapolál 40 000-re
+  (ugyanaz a mérce, mint az E06-R11/E06-R15 precedens). MA elérhetetlen
+  (0 fogyasztó, `analysisPitchEnabled=false` mindenhol) — egy jövőbeli
+  untrusted/hosszú audióra kötő kör **MUST-fix-before** ezt egyetlen
+  bejárásra/indexelésre kell váltania. (2) NOTE-1:
+  `PitchCapabilityGate(minimumVoicedRatio: 0)` (nem a default 0.35) csupa
+  unvoiced bemenettel `RangeError`-t dobna (`_median([])`) — a default
+  biztonságos, csak a konstruktor nem zárja ki a `0` határértéket
+  (`maximumPitchSpreadCents` mintájára `<= 0`-ra kellene szigorítani). (3)
+  NOTE-2: az exportált `centsBetween` (`monophonic_pitch_segment_builder.dart`,
+  `public.dart`-on át cross-feature elérhető) nem-pozitív Hz-re nem-véges
+  eredményt adna — ma nincs ilyen belső hívó. Mérve:
+  `docs/reviews/e06-r17-monophonic-pitch-capability-security.md`.
 - **E06-R11 security NOTE-1/NOTE-2 — gate-feltételek egy jövőbeli bekötő
   körnek, nincs kijelölt kör.** (1) `ChordSegmentAssembler._mergeShortSegments`
   (`lib/features/audio_analysis/engine/harmony/chord_segment_assembler.dart`)

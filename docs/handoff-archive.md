@@ -6,6 +6,61 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R15 — Rhythm consistency és groove proxyk (2026-08-12)
+
+Elkészült a timing-hibán túli ritmikai egyenletesség réteg: IOI-konzisztencia
+(1 − CV, medián-alapú), subdivision-illesztés `{1,2,3,4}`-re inkluzív 5%-os
+ambiguitás-küszöbbel (`degraded`, ha két jelölt szórása 5%-on belül van),
+beat-relatív fáziseloszlás, leghosszabb stabil IOI-sorozat, accent-pozíció
+konzisztencia és target-only swing ratio — `RhythmMetrics`/
+`SubdivisionAnalysis` (`lib/features/audio_analysis/engine/metrics/`). A
+target-alapú és a becsült-rács alapú ritmus szigorúan diszjunkt
+`rhythm.target_*`/`rhythm.inferred_*` ID-n publikál; az R14 `MetricGate`
+újrahasznosítva, nincs saját minimum-kapu. [ADR
+0233](adr/0233-rhythm-consistency-and-groove-proxy-boundary.md). Nincs
+UI-, persistence- vagy V1 Analyze-bekötés.
+
+**Pre-flight mérve egy eltérést talált és javított:** a `BeatGrid`-nek nincs
+skalár `confidence` mezője (csak pontonként, `BeatPoint.confidence`-en él),
+szemben az eredeti brief §5.3/§6 „confidence ≤ beatGrid.confidence"
+megfogalmazásával. Feloldás: az R14/ADR 0232 `buildFreePlayTimingMetrics`
+mintáját követve, a `rhythm.inferred_*` confidence a metrika által
+ténylegesen felhasznált `BeatPoint`-ok confidence-ének **átlagával**
+korlátos — dokumentált §0.0 brief-revízió, ADR 0233 Döntés 3.
+
+Implementer **Terra (Codex)**, 1 dispatch, 0 folytatás — tiszta,
+egyfordulós lezárás.
+
+Review: [docs/reviews/e06-r15-rhythm-consistency-and-groove-review.md](reviews/e06-r15-rhythm-consistency-and-groove-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR, **2 MINOR** (mindkettő a jövőbeli
+bekötő körnek, nem blokkoló): **F1** üres `BeatGrid.beats` esetén a
+`_modeFor` `ArgumentError`-t dob ahelyett, hogy gracefully `unavailable`-ra
+degradálna — mérve valós, elérhető kimenet az R12 `BeatGridEstimator`
+free-play útjától rövid/ritka klipre; **F2** az OD-03 10%-os
+stabil-sorozat-tolerancia bare literál, nem named constant (a szomszédos
+`SubdivisionCandidates.ambiguityRatio` az). A reviewer izolált `/tmp`
+klónban saját, az implementerétől független mutációs próbát futtatott a
+confidence-korláton (a `beatConfidence`-szorzó eltávolítása) — PIROSRA
+vitte a guard-tesztet, majd visszaállította.
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r15-rhythm-consistency-and-groove-security.md](reviews/e06-r15-rhythm-consistency-and-groove-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 4 NOTE. A MINOR:
+`buildRhythmMetrics` O(események×beatek) költségű bemeneti hosszkorlát
+nélkül (mérve: 16 000 esemény/beat → 3,45 s, tiszta kvadratikus görbe) —
+ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
+untrusted/importált sűrű bemenetre köti.
+
+**Zöld kapu (exact-SHA `fd5f6cda`, PR [#231](https://github.com/wolfcasaba/strumsight/pull/231),
+squash `24fcd4f7`):** Full Gate
+[31586268232](https://github.com/wolfcasaba/strumsight/actions/runs/31586268232)
+(a review+security-doksi commitok utáni tippen újra-dispatch-elve) és
+Router CI [31584670343](https://github.com/wolfcasaba/strumsight/actions/runs/31584670343)
+(az implementer-commit tippjén — a `docs/reviews/**` nincs a push-path-
+szűrőn, L112 minta) **success**. Az `origin/main` nem mozdult a dispatch és
+a merge között; a post-merge gate friss `main`-en mind a nyolc lépésben
+zöld.
+
 ## ✅ E06-R14 — Timing és rush/drag metrikák (2026-08-12)
 
 Elkészült a bekötetlen Audio Analysis V2 timing-metrika réteg: külön, stabil
