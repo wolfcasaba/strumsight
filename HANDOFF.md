@@ -3,7 +3,35 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R13 MERGED — Target alignment engine).**
+> (E06-R14 MERGED — Timing and rush/drag metrics).**
+>
+> ## ✅ E06-R14 KÉSZ — Timing és rush/drag metrikák (2026-08-12)
+>
+> Elkészült a bekötetlen Audio Analysis V2 timing-metrika réteg: külön,
+> stabil ID-kat kapott a target és free-play mód (10–10), a korábbi általános
+> `timing.mean_absolute_error.v1` változatlan maradt. A target út signed
+> timing errorból számol early/late bias-t, pontosságot, p90-et, stabil streaket
+> és missed/extra arányt; a free-play út csak beat-gridre támaszkodik. [ADR
+> 0232](docs/adr/0232-timing-metric-identity-and-publication-boundary.md).
+> Nincs UI-, persistence- vagy V1 Analyze-bekötés.
+>
+> A független review **APPROVED**, a dedikált security re-review **PASS**
+> (0 CRITICAL/BLOCKER/MAJOR). Két security javító kör release-safe
+> `MetricGate`-validációt, non-finite free-play confidence elutasítást és a
+> target confidence matched-coverage szerinti csillapítását adta. Nyitott,
+> nem blokkoló MINOR: a free-play nearest-beat keresés `O(observed×beats)`;
+> fogyasztó/UI-bekötés előtt kétmutatós vagy bináris kereséses határolás kell.
+>
+> **Zöld kapu (exact-SHA `8deee81c`, PR [#230](https://github.com/wolfcasaba/strumsight/pull/230),
+> squash `a67d6455`):** Full Gate
+> [31580123374](https://github.com/wolfcasaba/strumsight/actions/runs/31580123374),
+> Router CI [31580125219](https://github.com/wolfcasaba/strumsight/actions/runs/31580125219)
+> és APK [31580127006](https://github.com/wolfcasaba/strumsight/actions/runs/31580127006)
+> **success**. Az `origin/main` nem mozdult a dispatch és merge között; a
+> post-merge gate friss `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
+>
+> **Következő kör: E06-R15** (Rhythm consistency és groove proxyk,
+> `docs/rounds/e06-r15-rhythm-consistency-and-groove.md`).
 >
 > ## ✅ E06-R13 KÉSZ — Target alignment engine (2026-08-12)
 >
@@ -67,40 +95,6 @@
 > dispatch és a merge között nem mozdult (H8 tiszta). Post-merge gate a friss
 > `main`-en mind a hét lépésben zöld.
 >
-> **Következő kör: E06-R14** (Timing and rush/drag metrics,
-> `docs/rounds/e06-r14-timing-and-rush-drag-metrics.md`).
->
-> ## ✅ E06-R12 KÉSZ — Beat grid és tempo curve (2026-08-12)
->
-> Elkészült a bekötetlen, immutable ritmus-domain: `BeatPoint`, `BeatGrid`,
-> `TempoCurvePoint`, `TempoHypothesis`, `BeatGridEstimator` és
-> `TempoCurveBuilder`. A target-first grid felülírja a becslést; target nélkül
-> a becslő csak reprodukálható candidate-ot ad. A tempo összegzés stabil/
-> instabil/unavailable státuszt ad, és a publikus `TempoCurve` minden opcionális
-> numerikus summary értékét release-módban is véges/tartományos guard védi.
-> [ADR 0230](docs/adr/0230-beat-grid-tempo-curve-boundary.md). Nincs UI- vagy
-> perzisztencia-bekötés, a V1 Analyze útvonal változatlan.
->
-> **Pre-flight:** a brief `TempoPoint` típusa már létezett az
-> `analysis_timeline.dart`-ban, ezért a kör saját `TempoCurvePoint` nevét
-> használja. `AnalysisTarget` még R13 kimenet, így az R12 célbemenete lokális
-> `BeatGridTargetInput`; az analysis-metric katalógus változatlan. Strict
-> brief-lint és scope-audit zöld volt.
->
-> **Review:** az első független izolált review 1 MAJOR-t talált: a publikus
-> `TempoCurve` konstruktor NaN/végtelen opcionális summary-kat elfogadott. Az
-> azonos `sonnet-impl` javító kör ezt két fájlra szűkítve zárta; re-review
-> **APPROVED**, nyitott BLOCKER/MAJOR nélkül. A risk=high security review
-> **APPROVED**, 0 CRITICAL/BLOCKER/MAJOR/MINOR. A reviewer target-first és
-> inkluzív stabil-küszöb mutációját is pirosra vitte, majd visszaállította.
->
-> **Zöld kapu (exact-SHA `1e071fe3`, PR [#228](https://github.com/wolfcasaba/strumsight/pull/228),
-> squash `8b0cc6f2`):** Full Gate
-> [31570230164](https://github.com/wolfcasaba/strumsight/actions/runs/31570230164)
-> + Router CI [31570232431](https://github.com/wolfcasaba/strumsight/actions/runs/31570232431)
-> success; `origin/main` nem mozdult dispatch óta. A post-merge gate a friss
-> `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -110,17 +104,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R13 zárása): E06-R13 teljes bannere felkerült
-> (fent, a „Következő kör: E06-R12" mutató törölve az E06-R12 bannerből —
-> illetve immár tárgytalan, mert E06-R12 kész és merge-elve —, mert az
-> E06-R13 új bannerje ugyanazt a tartalmat a tényleges implementáció
-> fényében ismétli); E06-R12 bannere maradt a második helyen (változatlan).
-> E06-R11 ÉS E06-R10 bannere törölve a fejlécből (immár a harmadik és
-> negyedik legutóbbi kör — a korábbi zárás egy köre elmaradt a diétától,
-> ezt ez a zárás pótolta) — mindkettő TELJES szövege ÁTKERÜLT az
-> archívumba EBBEN a zárásban, eredeti sorrendjükben (E06-R11 az
-> archívum tetején, majd E06-R10, az E06-R12 archív-bejegyzése elé
-> beszúrva, hogy az archívum is newest-first maradjon).
+> Mért diéta: 2026-08-12 (E06-R14 zárása): E06-R14 új bannerként felkerült,
+> E06-R13 maradt a második (legutóbbi kettő) helyen. E06-R12 a harmadik
+> legutóbbi kör lett, ezért a fejlécből törölve; teljes története már az
+> archívum tetején található.
 
 ## 1. Current release state
 
@@ -206,7 +193,7 @@
   **E06-R13** (target alignment engine — monoton, sávos DP-illesztő +
   tempófüggő tolerancia-policy, [ADR
   0231](docs/adr/0231-target-alignment-engine-boundary.md))
-  kész, 17 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  kész, 16 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre

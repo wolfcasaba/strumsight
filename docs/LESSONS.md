@@ -8672,3 +8672,28 @@ kör scope-ján kívül eső, bekötetlen, jövőbeli-fogyasztónak szóló kock
 is (mint itt), a MÉRÉS (nem csak a dokumentált O-jelölés) legyen meg, mert
 csak ez különbözteti meg „a korlát dokumentált és helyes" és „a korlát
 dokumentált, de a gyakorlatban sosem füstteszteltük" állítást.
+
+## L235 — A publikációs küszöb release-safe inputhatár, nem debug-only assert (E06-R14, 2026-08-12)
+
+**Mit mértünk.** Az E06-R14 security review első futása kimutatta, hogy a
+`MetricGate` kizárólag konstruktor-asserttal védte a pozitív küszöböket. Ez
+debugban megállította a hibás `minimumMatchedPairs=0` értéket, de release
+buildben az assert eltűnik, így az unavailable/matched arányok NaN-ná vagy
+félrevezetővé válhattak. Ugyanez a review azt is mérte, hogy 8 magas
+confidence-ű match 999 missed/extra esemény mellett match-átlaggal 1.0
+confidence-et publikált volna. A két javító kör runtime `ArgumentError`
+validációt, nem-véges free-play confidence elutasítást és
+`min(matched/expected, matched/observed)` coverage-szorzót adott; a regressziós
+tesztek mindhárom hibás állapotot pirosra viszik.
+
+**Miért.** A konfigurálható küszöb és a publikált confidence egyaránt
+bizalmi határ. Debug-assert csak fejlesztői segédlet; a shipping döntést
+meghatározó paramétereket runtime-ban is validálni kell. A párosított elemek
+minősége pedig nem helyettesíti a teljes bemenet lefedettségét.
+
+**Hogyan alkalmazd.** Új metric-gate vagy confidence-producer review-ján
+próbáld ki a nullát, negatív és nem-véges küszöböt release-safe konstruktoron,
+majd külön sparse-match mátrixszal mérd: kevés kiváló match sok missed/extra
+között nem maradhat magas confidence. A consumer/UI-bekötő kör előtt a
+free-play nearest-beat keresést is korlátozd lineáris vagy logaritmikus
+stratégiára hosszú, nem megbízható bemenetre.
