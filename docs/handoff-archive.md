@@ -6,6 +6,101 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R17 — Monofonikus pitch capability (2026-08-12)
+
+Elkészült a bekötetlen, capability-gate mögötti monofonikus pitch-detektálás:
+`PitchFrame` → `MonophonicPitchSegment` → `PitchCapabilityGate` → hét
+targethez kötött pitch metrika (note hit ratio, median/p90 cents error,
+pitch stability, note transition timing, sustained note duration, unwanted
+pitch dropout ratio), a meglévő `YinPitchDetector`/`SlidingFramer` core
+primitívekre építve, azok módosítása nélkül. [ADR
+0235](adr/0235-monophonic-pitch-capability-boundary.md). Kizárólag
+`analysisPitchEnabled` flag mögött (default `false` mindenhol); nincs UI-,
+persistence- vagy pipeline-bekötés; a Tuner és a core DSP érintetlen.
+
+**Kétszeres pre-flight revízió, ADR 0235:** (1) a tervezett ÚJ `PitchSegment`
+típus névütközésben állt egy meglévő, bekötetlen E06-R02 stubbal
+(`analysis_segment.dart`) — feloldás: `MonophonicPitchSegment`/
+`MonophonicPitchSegmentBuilder` átnevezés, a meglévő fájlok érintetlenül; (2)
+az implementer első dispatchja helyesen `stopped`-ot jelzett (0 fájl
+módosítva), mert a „Flag-kapu" acceptance criterion egy MA sehol nem létező
+pipeline stage-lista ellen kért bizonyítékot (`grep -rn "AnalysisPipeline("
+lib/` 0 találat az egész Epic 6-ban) — feloldás: kapu-szintű bizonyíték
+(a flag ELSŐKÉNT, az OD-01 (a)-(d) előtt, hívásszámláló `== 0`), és a „hét
+kötelező pitch metrika" neve átemelve SDD §17.3-ból a brief §3-ba.
+
+A független review (első kör: CHANGES REQUESTED, 3 MAJOR — mind
+teszt-lefedettségi rés, NEM produkciós-kód-defekt, mutáció-próbákkal
+igazolva) egy javító körben **APPROVED**-re zárt: **F1** a flag-kapu
+dedikált tesztje konfundált fixture-rel nem bizonyította a saját nevében
+szereplő elsőbbséget; **F2** a NaN-mentesség property teszt sosem hívta a
+kör valódi számítási függvényeit; **F3** a polifónia-kapu tesztje egy
+kéthangú szekvenciális proxy volt a brief által név szerint kért
+négyhangos akkord helyett. Mindhármat a javító kör valódi, a mutáció-próbák
+által is megerősített regresszióvédelemmel zárta. Review:
+[docs/reviews/e06-r17-monophonic-pitch-capability-review.md](reviews/e06-r17-monophonic-pitch-capability-review.md)
+— végső verdikt **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 nem blokkoló NOTE
+(§10 handoff dokumentáció + ARB-beszúrás helye, kozmetikai).
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r17-monophonic-pitch-capability-security.md](reviews/e06-r17-monophonic-pitch-capability-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 2 NOTE. A MINOR:
+`buildPitchMetrics` O(szegmens×célhang) költségű bemeneti hosszkorlát és
+dokumentáció nélkül (mérve: 8000 célhangra 619 ms, szuperlineáris görbe) —
+ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
+untrusted/hosszú audióra köti (ugyanaz a mérce, mint az E06-R11/E06-R15
+precedens). A két NOTE: `PitchCapabilityGate(minimumVoicedRatio: 0)` +
+csupa-unvoiced bemenet `RangeError`-t dobna (a default 0.35 biztonságos);
+az exportált `centsBetween` nem-pozitív Hz-re nem-véges eredményt adna
+(ma nincs ilyen belső hívó).
+
+Implementer **Terra (Codex)**, 2 dispatch (a második a pre-flight
+revízió után), 1 javító kör.
+
+**Zöld kapu (exact-SHA `cce75bbc`, PR [#233](https://github.com/wolfcasaba/strumsight/pull/233),
+squash `66800209`):** Full Gate
+[31602648343](https://github.com/wolfcasaba/strumsight/actions/runs/31602648343)
+**success** (`full-gate` + `Coverage` jobs). Router CI utolsó releváns futása
+[31598362294](https://github.com/wolfcasaba/strumsight/actions/runs/31598362294)
+**success** a `6dd76109` ősön (a `docs/reviews/**`/`test/**`-only utókommitok
+nem érintik a Router CI push-path-szűrőjét — L112 minta, ld. E06-R15
+precedens az archívumban). A CI-tervező `full-gate.yml`-t választott
+(`apk_required=false`, tisztán Dart/dokumentum/teszt-diff); az `origin/main`
+nem mozdult a dispatch és merge között.
+
+**Mért folyamat-tanulság:** a #3 lépés (implementer-diff commit
+ellenőrzése) `git log`-gal a klónban NEM elég — az implementer commitol, de
+a preambulum nem írja elő a push-ot, tehát a branch a GitHubon üresen
+maradhat, amíg az orchestrátor nem push-ol expliciten. Ezt a review-ágens
+mérte ki függetlenül (a security-reviewer helyesen megtagadta a review-t
+egy nem-létező commitra), lásd `docs/LESSONS.md`.
+
+## ✅ E06-R16 — Dynamics és stroke balance (2026-08-12)
+
+Elkészült a bekötetlen Audio Analysis V2 dinamikai evidence- és stroke-balance
+réteg: `DynamicsMetrics` az eredeti PCM-ből származtatott attack-strength,
+local-RMS, dinamikai tartomány és accent/stroke balance alapján publikál
+kizárólag mért, stabil metrika-ID-kat. A jelminőség vagy clipping bizonytalan
+állapota `unavailable`/`degraded`, nem biztos állítás; a `DynamicsGate` minden
+publikus numerikus küszöbét release buildben is véges, [0,1]-beli és rendezett
+bemenetre korlátozza. [ADR 0234](adr/0234-dynamics-evidence-and-gating-boundary.md).
+Nincs UI-, persistence- vagy V1 Analyze-bekötés; az offline V1 út változatlan.
+
+A független review **APPROVED**, a dedikált security re-review **PASS**:
+a kezdeti öt MAJOR (nem-véges confidence/quality, duplikált event-ID,
+hiányzó local RMS, time/sample inkonzisztencia) ugyanazon szűk javító körben
+zárult; a második review egy 1.0 fölé engedett clipping-küszöböt talált,
+amelyet a végső korrekció lezárt. Nincs nyitott BLOCKER/MAJOR/MINOR.
+
+**Zöld kapu (exact-SHA `151d9301`, PR [#232](https://github.com/wolfcasaba/strumsight/pull/232),
+squash `ab830ead`):** Full Gate
+[31591578143](https://github.com/wolfcasaba/strumsight/actions/runs/31591578143)
+és Router CI [31591547560](https://github.com/wolfcasaba/strumsight/actions/runs/31591547560)
+**success**. A CI-tervező `full-gate.yml`-t választott (`apk_required=false`,
+tisztán Dart/dokumentum-diff); az `origin/main` nem mozdult a dispatch és
+merge között. A post-merge gate friss `main`-en mind a nyolc lépésben zöld
+(`audio=301`, `property=85`, `app=69`, `PROPERTY_SEED=42`).
+
 ## ✅ E06-R15 — Rhythm consistency és groove proxyk (2026-08-12)
 
 Elkészült a timing-hibán túli ritmikai egyenletesség réteg: IOI-konzisztencia

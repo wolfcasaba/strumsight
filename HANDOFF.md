@@ -3,7 +3,87 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R18 MERGED — Technique proxy experimental module).**
+> (E06-R19 MERGED — Confidence calibration and capability resolver).**
+>
+> ## ✅ E06-R19 KÉSZ — Confidence calibration és capability resolver (2026-08-12)
+>
+> Elkészült az egységes, bekötetlen V2 confidence/capability döntési modul:
+> `CapabilityResolver` (**egyetlen** belépő, minden `AnalysisCapability`
+> státuszát és kalibrált confidence-ét ő dönti el) + `ConfidenceCombiner`
+> (geometriai átlag a független tényezőkön, **nem** átlag — egy gyenge
+> tényező érdemben lehúzza az eredményt) + `CalibrationTable` (verziózott,
+> monoton; V1 = explicit jelölt `identity.v1`, sosem hamis `calibrated`) +
+> `CapabilityThresholds` (0,4/0,7 inkluzív degraded/available határ, egy
+> helyen). `lib/features/audio_analysis/engine/confidence/` alatt, additív
+> domain-bővítéssel (`ConfidenceCalibrationSource`,
+> `CapabilityReport.calibrationVersion`/`calibrationSource`, szigorúbb
+> `isFinite` confidence-guard) és mind a 13 `CapabilityUnavailableReason`
+> két nyelvű ARB-lokalizációjával. [ADR
+> 0237](docs/adr/0237-analysis-confidence-combiner-and-capability-resolver.md)
+> — az E06-R01 ADR 0216 (confidence/kalibráció/abstention) és ADR 0219
+> (capability-aware publikáció) végrehajtása. Teljesen bekötetlen (0
+> fogyasztó); a meglévő R14/R16/R17 kapuk (`MetricGate`/`DynamicsGate`/
+> `PitchCapabilityGate`) retrofitja tudatosan egy jövőbeli körre marad.
+>
+> **Háromszoros pre-flight/implementer-mérés, mind dokumentált §0.0
+> revízióval:** (1) a brief „ADR 0201"/„ADR 0204"/„ADR 0203" hivatkozásai
+> elavultak — az R01 pre-flight a hatos ADR-blokkot 0200–0205-ről
+> 0215–0220-ra tolta (a célzott ADR-ek saját fejléce dokumentálja), javítva
+> 0216/0219/0218-ra; (2) a brief §8 lépéssor 6. pontja (a meglévő kapuk
+> átvezetése) kivéve a scope-ból — `DynamicsGate`/`PitchCapabilityGate` ma
+> is önállóan dönt `CapabilityStatus`-ról, de egyik fájl sincs az
+> `allowed_paths`-on (az egyik explicit tilos zóna), és egyetlen acceptance
+> criterion sem igényli a retrofitot; (3) **az implementer ELSŐ dispatchja
+> helyesen `stopped`-ot jelzett**: a §6 „nincs átlag" acceptance criterion
+> `[0.9,0.9,0.9,0.9,0.1]`-re „0.5581…"-et rögzített geometriai átlagként —
+> Terra lefuttatta a brief saját `python3 -c` szabályát, `0.5799546134795288`-at
+> kapott, és a pre-flight ezt a valódi számot fogadta el (nem az eredeti
+> becslést) — 0 produkciós/teszt fájl módosult ennél a megállásnál.
+>
+> A független review első köre **CHANGES REQUESTED** (1 MAJOR): **F1** a
+> `CapabilityResolver.resolve()` kezeletlen `ArgumentError`-t dobott, ha
+> minden capability `notApplicable`-re oldódott (pl. `supportedCapabilities:
+> {}`) — a testvér-kapuk (`PitchCapabilityGate`) ugyanezt gracefully
+> kezelik. Reprodukálva eldobható próbateszttel, javítva egy fordulós
+> javító körben (explicit üres-lista ág, `notApplicable`/`0` overall
+> verdikt, dedikált teszt), és a javítás UTÁN a reviewer saját, független
+> próbateszttel is megerősítette a zárást (friss `/tmp` klón, második gate-
+> újrafuttatás). Bónuszként javítva egy megosztott mutable teszt-fixture
+> (F3, NOTE). Végső verdikt **APPROVED**, 0 nyitott BLOCKER/MAJOR, **1
+> nyitott MINOR follow-up** (F2: a „kritikus capability → min" brief-prózát
+> ma egy bináris hard-gate valósítja meg, nem egy fokozatos min-szabály —
+> nem sérti egyetlen acceptance criteriont sem, egy jövőbeli bekötő/
+> kalibrációs kör dolga). Review:
+> [docs/reviews/e06-r19-confidence-calibration-capability-resolver-review.md](docs/reviews/e06-r19-confidence-calibration-capability-resolver-review.md).
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md](docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md)
+> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR** (ugyanaz a gyökérok, mint
+> a review F1-je, ott fail-closed jellegűnek minősítve — javítva), 2 NOTE:
+> a codec ma nem perzisztálja az új `calibrationVersion`/`calibrationSource`
+> mezőt (fail-safe irányú, E06-R29-nek jelezve); a `details` diagnosztikai
+> map ma tiszta, de jövőbeli JSON-sink, újra át kell nézni, ha bővül.
+>
+> Implementer **Terra (Codex)**, 2 dispatch (a második a §0.0 aritmetikai
+> javítás után) + 1 javító kör, mindegyik egy fordulóban lezárva
+> (`continuations=0`).
+>
+> **Zöld kapu (exact-SHA `35c6b4e5`, PR [#235](https://github.com/wolfcasaba/strumsight/pull/235),
+> squash `d47d1a55`):** Full Gate
+> [31616610399](https://github.com/wolfcasaba/strumsight/actions/runs/31616610399)
+> success, headSha `35c6b4e5` (egyezik a branch HEAD-jével). Router CI
+> utolsó releváns futása
+> [31616199477](https://github.com/wolfcasaba/strumsight/actions/runs/31616199477)
+> success a javító kör commitján (`ba713d28`) — az utólagos review-approval
+> commit (`35c6b4e5`) csak `docs/reviews/**`-t érintett, ami nincs a Router
+> CI push-path-szűrőjén. A CI-tervező `full-gate.yml`-t adott
+> (`apk_required=false`, tisztán Dart/dokumentum/teszt-diff); az
+> `origin/main` nem mozdult a dispatch és a merge között. A post-merge gate
+> friss `main`-en (`d47d1a55`) mind a nyolc lépésben zöld (`audio=378`,
+> `property=87`, `app=69`).
+>
+> **Következő kör: E06-R20** (Determinisztikus insight engine,
+> `docs/execution/pipeline-queue.tsv` szerint).
 >
 > ## ✅ E06-R18 KÉSZ — Technique proxy experimental module (2026-08-12)
 >
@@ -28,106 +108,6 @@
 >
 > **Következő kör: E06-R19** (Confidence calibration és capability resolver).
 >
-> ## ✅ E06-R17 KÉSZ — Monofonikus pitch capability (2026-08-12)
->
-> Elkészült a bekötetlen, capability-gate mögötti monofonikus pitch-detektálás:
-> `PitchFrame` → `MonophonicPitchSegment` → `PitchCapabilityGate` → hét
-> targethez kötött pitch metrika (note hit ratio, median/p90 cents error,
-> pitch stability, note transition timing, sustained note duration, unwanted
-> pitch dropout ratio), a meglévő `YinPitchDetector`/`SlidingFramer` core
-> primitívekre építve, azok módosítása nélkül. [ADR
-> 0235](docs/adr/0235-monophonic-pitch-capability-boundary.md). Kizárólag
-> `analysisPitchEnabled` flag mögött (default `false` mindenhol); nincs UI-,
-> persistence- vagy pipeline-bekötés; a Tuner és a core DSP érintetlen.
->
-> **Kétszeres pre-flight revízió, ADR 0235:** (1) a tervezett ÚJ `PitchSegment`
-> típus névütközésben állt egy meglévő, bekötetlen E06-R02 stubbal
-> (`analysis_segment.dart`) — feloldás: `MonophonicPitchSegment`/
-> `MonophonicPitchSegmentBuilder` átnevezés, a meglévő fájlok érintetlenül; (2)
-> az implementer első dispatchja helyesen `stopped`-ot jelzett (0 fájl
-> módosítva), mert a „Flag-kapu" acceptance criterion egy MA sehol nem létező
-> pipeline stage-lista ellen kért bizonyítékot (`grep -rn "AnalysisPipeline("
-> lib/` 0 találat az egész Epic 6-ban) — feloldás: kapu-szintű bizonyíték
-> (a flag ELSŐKÉNT, az OD-01 (a)-(d) előtt, hívásszámláló `== 0`), és a „hét
-> kötelező pitch metrika" neve átemelve SDD §17.3-ból a brief §3-ba.
->
-> A független review (első kör: CHANGES REQUESTED, 3 MAJOR — mind
-> teszt-lefedettségi rés, NEM produkciós-kód-defekt, mutáció-próbákkal
-> igazolva) egy javító körben **APPROVED**-re zárt: **F1** a flag-kapu
-> dedikált tesztje konfundált fixture-rel nem bizonyította a saját nevében
-> szereplő elsőbbséget; **F2** a NaN-mentesség property teszt sosem hívta a
-> kör valódi számítási függvényeit; **F3** a polifónia-kapu tesztje egy
-> kéthangú szekvenciális proxy volt a brief által név szerint kért
-> négyhangos akkord helyett. Mindhármat a javító kör valódi, a mutáció-próbák
-> által is megerősített regresszióvédelemmel zárta. Review:
-> [docs/reviews/e06-r17-monophonic-pitch-capability-review.md](docs/reviews/e06-r17-monophonic-pitch-capability-review.md)
-> — végső verdikt **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 nem blokkoló NOTE
-> (§10 handoff dokumentáció + ARB-beszúrás helye, kozmetikai).
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r17-monophonic-pitch-capability-security.md](docs/reviews/e06-r17-monophonic-pitch-capability-security.md)
-> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 2 NOTE. A MINOR:
-> `buildPitchMetrics` O(szegmens×célhang) költségű bemeneti hosszkorlát és
-> dokumentáció nélkül (mérve: 8000 célhangra 619 ms, szuperlineáris görbe) —
-> ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
-> untrusted/hosszú audióra köti (ugyanaz a mérce, mint az E06-R11/E06-R15
-> precedens). A két NOTE: `PitchCapabilityGate(minimumVoicedRatio: 0)` +
-> csupa-unvoiced bemenet `RangeError`-t dobna (a default 0.35 biztonságos);
-> az exportált `centsBetween` nem-pozitív Hz-re nem-véges eredményt adna
-> (ma nincs ilyen belső hívó).
->
-> Implementer **Terra (Codex)**, 2 dispatch (a második a pre-flight
-> revízió után), 1 javító kör.
->
-> **Zöld kapu (exact-SHA `cce75bbc`, PR [#233](https://github.com/wolfcasaba/strumsight/pull/233),
-> squash `66800209`):** Full Gate
-> [31602648343](https://github.com/wolfcasaba/strumsight/actions/runs/31602648343)
-> **success** (`full-gate` + `Coverage` jobs). Router CI utolsó releváns futása
-> [31598362294](https://github.com/wolfcasaba/strumsight/actions/runs/31598362294)
-> **success** a `6dd76109` ősön (a `docs/reviews/**`/`test/**`-only utókommitok
-> nem érintik a Router CI push-path-szűrőjét — L112 minta, ld. E06-R15
-> precedens az archívumban). A CI-tervező `full-gate.yml`-t választott
-> (`apk_required=false`, tisztán Dart/dokumentum/teszt-diff); az `origin/main`
-> nem mozdult a dispatch és merge között.
->
-> **Mért folyamat-tanulság:** a #3 lépés (implementer-diff commit
-> ellenőrzése) `git log`-gal a klónban NEM elég — az implementer commitol, de
-> a preambulum nem írja elő a push-ot, tehát a branch a GitHubon üresen
-> maradhat, amíg az orchestrátor nem push-ol expliciten. Ezt a review-ágens
-> mérte ki függetlenül (a security-reviewer helyesen megtagadta a review-t
-> egy nem-létező commitra), lásd `docs/LESSONS.md`.
->
-> **Következő kör: E06-R18** (`docs/execution/pipeline-queue.tsv` szerint).
->
-> ## ✅ E06-R16 KÉSZ — Dynamics és stroke balance (2026-08-12)
->
-> Elkészült a bekötetlen Audio Analysis V2 dinamikai evidence- és stroke-balance
-> réteg: `DynamicsMetrics` az eredeti PCM-ből származtatott attack-strength,
-> local-RMS, dinamikai tartomány és accent/stroke balance alapján publikál
-> kizárólag mért, stabil metrika-ID-kat. A jelminőség vagy clipping bizonytalan
-> állapota `unavailable`/`degraded`, nem biztos állítás; a `DynamicsGate` minden
-> publikus numerikus küszöbét release buildben is véges, [0,1]-beli és rendezett
-> bemenetre korlátozza. [ADR 0234](docs/adr/0234-dynamics-evidence-and-gating-boundary.md).
-> Nincs UI-, persistence- vagy V1 Analyze-bekötés; az offline V1 út változatlan.
->
-> A független review **APPROVED**, a dedikált security re-review **PASS**:
-> a kezdeti öt MAJOR (nem-véges confidence/quality, duplikált event-ID,
-> hiányzó local RMS, time/sample inkonzisztencia) ugyanazon szűk javító körben
-> zárult; a második review egy 1.0 fölé engedett clipping-küszöböt talált,
-> amelyet a végső korrekció lezárt. Nincs nyitott BLOCKER/MAJOR/MINOR.
->
-> **Zöld kapu (exact-SHA `151d9301`, PR [#232](https://github.com/wolfcasaba/strumsight/pull/232),
-> squash `ab830ead`):** Full Gate
-> [31591578143](https://github.com/wolfcasaba/strumsight/actions/runs/31591578143)
-> és Router CI [31591547560](https://github.com/wolfcasaba/strumsight/actions/runs/31591547560)
-> **success**. A CI-tervező `full-gate.yml`-t választott (`apk_required=false`,
-> tisztán Dart/dokumentum-diff); az `origin/main` nem mozdult a dispatch és
-> merge között. A post-merge gate friss `main`-en mind a nyolc lépésben zöld
-> (`audio=301`, `property=85`, `app=69`, `PROPERTY_SEED=42`).
->
-> **Következő kör: E06-R17** (Monofonikus pitch capability,
-> `docs/rounds/e06-r17-monophonic-pitch-capability.md`).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -137,10 +117,12 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R17 zárása): E06-R17 új bannerként felkerült,
-> E06-R16 maradt a második (legutóbbi kettő) helyen. E06-R15 a harmadik
-> legutóbbi kör lett, ezért a fejlécből törölve; teljes története átkerült
-> az archívum tetejére.
+> Mért diéta: 2026-08-12 (E06-R19 zárása): E06-R19 új bannerként felkerült,
+> E06-R18 maradt a második (legutóbbi kettő) helyen. E06-R17 ÉS E06-R16 is a
+> fejlécben maradt az E06-R18 zárásakor (a kétbanneres szabály akkor nem lett
+> betartva) — ez a kör mindkettőt archiválta, hogy a fejléc visszaálljon a
+> szabályos két-banneres állapotra. E06-R17 teljes története átkerült az
+> archívum tetejére, E06-R16 közvetlenül alá.
 
 ## 1. Current release state
 
@@ -237,8 +219,15 @@
   0234](docs/adr/0234-dynamics-evidence-and-gating-boundary.md)) és
   **E06-R17** (monofonikus pitch capability — YIN-alapú frame→szegmens→
   capability-gate→hét metrika, [ADR
-  0235](docs/adr/0235-monophonic-pitch-capability-boundary.md))
-  kész, 13 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  0235](docs/adr/0235-monophonic-pitch-capability-boundary.md)),
+  **E06-R18** (technique-proxy kísérleti modul — öt Lab-only, mérésre
+  korlátozott proxy név/tartalom-tiltással, [ADR
+  0236](docs/adr/0236-analysis-technique-proxy-safety-and-naming.md)) és
+  **E06-R19** (confidence combiner + capability resolver — egyetlen döntési
+  pont minden capability státuszára/kalibrált confidence-ére, geometriai
+  kombináció, verziózott küszöbök és identity-kalibráció, [ADR
+  0237](docs/adr/0237-analysis-confidence-combiner-and-capability-resolver.md))
+  kész, 11 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -513,6 +502,30 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R19 follow-up (F2 review + security NOTE-1) — gate-feltételek egy
+  jövőbeli bekötő/kalibrációs körnek, nincs kijelölt kör.** (1) F2: a
+  `CapabilityResolver.resolve()` (`lib/features/audio_analysis/engine/confidence/capability_resolver.dart:105-123`)
+  a „kritikus capability → min" brief-elvet (§5.2) ma egy bináris hard-gate
+  helyettesíti — bármelyik kritikus capability (`signalQuality`/
+  `onsetTimeline`) `unavailable` állapota az overall confidence-t nullára
+  kényszeríti (`overallStatus` mindig `unavailable`-re esik, sosem
+  ténylegesen `degraded`-re), egy MERELY-`degraded` kritikus capability
+  pedig csak egyetlen tényezőként hígul a geometriai átlagban a többi
+  (akár 13) capabilityvel egyenlő súllyal. Nem sérti a §6 mérhető
+  acceptance criteriont, de eltér a brief prózájától — egy jövőbeli
+  bekötő/kalibrációs kör (R29 vagy a retrofit-kör) döntse el explicit
+  módon, hogy a bináris kapu szándékos-e (ADR 0237 kiegészítéssel), vagy
+  a fokozatos „min" viselkedés kell. (2) security NOTE-1: az
+  `AnalysisDocument` codec (`lib/features/audio_analysis/data/analysis_document_codec.dart:180-195`,
+  a diffen kívül, nem módosult) ma NEM perzisztálja az új
+  `CapabilityReport.calibrationVersion`/`calibrationSource` mezőt — egy
+  perzisztált-majd-visszatöltött report csendben `identity`-re esik vissza.
+  Fail-safe irány (sosem a veszélyes raw→calibrated), de a source-enum
+  megfigyelhetőségi célját kiüti perzisztált dokumentumoknál — E06-R29-nél
+  a codec round-tripelje mindkét mezőt. Mérve:
+  `docs/reviews/e06-r19-confidence-calibration-capability-resolver-review.md`
+  F2, `docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md`
+  NOTE-1.
 - **E06-R17 security MINOR-1/NOTE-1/NOTE-2 — gate-feltételek egy jövőbeli
   bekötő körnek, nincs kijelölt kör.** (1) MINOR-1:
   `buildPitchMetrics` (`lib/features/audio_analysis/engine/metrics/pitch_metrics.dart`)
