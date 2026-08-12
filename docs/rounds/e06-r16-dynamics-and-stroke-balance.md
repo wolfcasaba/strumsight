@@ -398,6 +398,47 @@ Módosított fájlok pontosan a review-brief scope-jával egyeznek:
 `lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
 `test/features/audio_analysis/engine/dynamics_metrics_test.dart`.
 
+**Security review korrekció #2 (`sonnet-impl`, 2026-08-12, baseline
+`ed3ef035`).** A megismételt review az `ed3ef035` korrekció után egy
+megmaradó MAJOR-t talált egy engedélyezett fájlban:
+
+1. **`clippedEventRatioDegraded`/`clippedEventRatioUnavailable` 1.0 fölötti
+   érték elfogadása** — a `DynamicsGate` konstruktora (`dynamics_gate.dart`)
+   korábban csak a végesség és a `>= 0` alsó korlátot ellenőrizte; egy `2.0`
+   `clippedEventRatioUnavailable`-lel egy 100%-ban clippelt esemény-halmaz
+   (`clippedEventRatio == 1.0`) `available`-ként publikált volna, mert a
+   `clippedEventRatio > clippedEventRatioUnavailable` (`1.0 > 2.0`) hamis —
+   ez kikapcsolta a clipping-kaput. Mindkét küszöb konstruktor-ellenőrzése
+   mostantól `isFinite && value >= 0 && value <= 1` — az
+   `unavailable >= degraded` sorrend-ellenőrzés változatlan.
+
+**Regresszió (`dynamics_metrics_test.dart`, 3 új teszt):** egy 1.0 fölötti
+`clippedEventRatioDegraded` elutasítása, egy 1.0 fölötti
+`clippedEventRatioUnavailable` elutasítása (mindkét küszöb `2.0`-n, hogy a
+korábbi hibás sorrend-ág ne fedje el), és egy teljesen (10/10) clippelt
+esemény-halmaz alapértelmezett küszöbökkel `unavailable(inputClipped)`
+lefedettség — az `ed3ef035` korrekció meglévő fail-closed tesztjei (nem-véges
+küszöb, fordított sorrend) változatlanul megmaradtak.
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12, korrekció #2 futás):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld
+test test/property                                         zöld
+test test/app                                              zöld
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+Módosított fájlok pontosan a korrekciós brief scope-jával egyeznek:
+`lib/features/audio_analysis/engine/metrics/dynamics_gate.dart`,
+`test/features/audio_analysis/engine/dynamics_metrics_test.dart`.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.

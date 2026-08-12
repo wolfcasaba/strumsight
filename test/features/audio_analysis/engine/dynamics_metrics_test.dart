@@ -542,6 +542,45 @@ void main() {
       );
     });
 
+    test('a clippedEventRatioDegraded above 1.0 is rejected (security review '
+        'R16 correction MAJOR-1)', () {
+      expect(
+        () => DynamicsGate(clippedEventRatioDegraded: 2.0),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'a clippedEventRatioUnavailable above 1.0 is rejected — a 100%-clipped '
+      'take must not read as available (security review R16 correction '
+      'MAJOR-1)',
+      () {
+        expect(
+          () => DynamicsGate(
+            clippedEventRatioDegraded: 2.0,
+            clippedEventRatioUnavailable: 2.0,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'a fully-clipped event set is unavailable under default thresholds',
+      () {
+        final events = _events(
+          List<double>.filled(10, 1.0),
+          List<StrumDirection>.filled(10, StrumDirection.down),
+        );
+        final report = _build(
+          events,
+          clippedIndices: {for (var i = 0; i < 10; i++) i},
+        );
+        expect(report.gateStatus, CapabilityStatus.unavailable);
+        expect(report.gateReason, CapabilityUnavailableReason.inputClipped);
+      },
+    );
+
     test('inverted noise-floor thresholds are rejected', () {
       expect(
         () => DynamicsGate(

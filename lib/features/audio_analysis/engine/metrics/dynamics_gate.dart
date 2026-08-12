@@ -35,19 +35,22 @@ final class DynamicsGate {
     this.noiseFloorUnavailableDbfs = -25.0,
     this.silentRatioUnavailable = 0.95,
   }) {
-    if (!clippedEventRatioDegraded.isFinite || clippedEventRatioDegraded < 0) {
+    if (!clippedEventRatioDegraded.isFinite ||
+        clippedEventRatioDegraded < 0 ||
+        clippedEventRatioDegraded > 1) {
       throw ArgumentError.value(
         clippedEventRatioDegraded,
         'clippedEventRatioDegraded',
-        'must be finite and >= 0',
+        'must be finite and in [0, 1]',
       );
     }
     if (!clippedEventRatioUnavailable.isFinite ||
-        clippedEventRatioUnavailable < 0) {
+        clippedEventRatioUnavailable < 0 ||
+        clippedEventRatioUnavailable > 1) {
       throw ArgumentError.value(
         clippedEventRatioUnavailable,
         'clippedEventRatioUnavailable',
-        'must be finite and >= 0',
+        'must be finite and in [0, 1]',
       );
     }
     if (clippedEventRatioUnavailable < clippedEventRatioDegraded) {
