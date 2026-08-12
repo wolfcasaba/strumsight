@@ -5,9 +5,14 @@ enum EvidenceCompleteness { derived, complete }
 
 /// One ranked chord candidate for a decoder frame.
 final class ChordLabelCandidate {
-  const ChordLabelCandidate({required this.label, required this.confidence})
-    : assert(label != ''),
-      assert(confidence >= 0 && confidence <= 1);
+  ChordLabelCandidate({required this.label, required this.confidence}) {
+    if (label.isEmpty) {
+      throw ArgumentError.value(label, 'label', 'must not be empty');
+    }
+    if (!confidence.isFinite || confidence < 0 || confidence > 1) {
+      throw ArgumentError.value(confidence, 'confidence', 'must be in [0, 1]');
+    }
+  }
 
   final String label;
   final double confidence;

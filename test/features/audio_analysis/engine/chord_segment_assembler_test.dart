@@ -248,6 +248,22 @@ void main() {
     expect(evidence.noChordProbability, isNull);
   });
 
+  test('chord label candidates reject invalid values with ArgumentError', () {
+    for (final candidate in <({String label, double confidence})>[
+      (label: '', confidence: 0.5),
+      (label: 'C', confidence: double.nan),
+      (label: 'C', confidence: 1.1),
+    ]) {
+      expect(
+        () => ChordLabelCandidate(
+          label: candidate.label,
+          confidence: candidate.confidence,
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
   test(
     'aggregates frame confidence using each frame duration as its weight',
     () {
