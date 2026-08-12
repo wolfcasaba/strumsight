@@ -1,6 +1,7 @@
 # E06-R16 — Dynamics és stroke balance
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07; pre-flight lezárva
+  2026-08-12, `main` @ `e6770867`, ADR 0234)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 16; §16.1–16.5
 - **Branch:** `codex/e06-r16-dynamics-and-stroke-balance`
 - **Előfeltétel:** **E06-R08, E06-R10 merge**
@@ -22,6 +23,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/accent_analysis_test.dart",
   "test/property/analysis_dynamics_property_test.dart",
   "docs/rag/chunks/022-dynamics-stroke-balance.md",
+  "docs/adr/0234-dynamics-evidence-and-gating-boundary.md",
   "docs/rounds/e06-r16-dynamics-and-stroke-balance.md",
 ]
 gate_tests = [
@@ -52,7 +54,37 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **Új mennyiség ⇒ RAG-chunk** ugyanabban a commitban.
+**Pre-flight mérés (2026-08-12, baseline `main` @ `e6770867`; E06-R08 és
+E06-R10 merge-elve — előfeltétel teljesül). ADR:
+[0234](../adr/0234-dynamics-evidence-and-gating-boundary.md).**
+
+Minden hivatkozott mezőt a tényleges hívási láncon mértem, nem a korábbi
+brief állapot-táblájából:
+
+1. `PreprocessedAudio.originalSamples` valóban a dinamikai bemenet
+   (`domain/preprocessed_audio.dart:3-19`), míg a normalizáció kizárólag a
+   `canonicalSamples` másolatát módosítja
+   (`engine/preprocessing/preprocessing_stage.dart:39-78`).
+2. Az R10 `EventTimelineBuilder` minden megtartott `StrumEvent`-hez ad
+   `sampleIndex`, `attackStrength` és `localRms` értéket eredeti PCM-ből,
+   rendre `[t,t+20 ms]` és `[t-5 ms,t+45 ms]` ablakkal
+   (`engine/events/event_timeline_builder.dart:134-178,190-237`). Nincs
+   viszont `StrumEvent.clipped` mező. **Feloldás:** az R16 saját,
+   `dynamics_metrics.dart`-beli belső event-adatában, a meglévő 20 ms-os
+   attack-ablak `originalSamples` értékein, az R07 inkluzív `|sample| >=
+   0.999` határával vezeti le a clipped jelzőt; az alap domain esemény és az
+   R10 builder nem változik.
+3. A `SignalQualityReport` a `measured` bitet hordozza
+   (`domain/signal_quality_report.dart:4-35`), ezért a gate nem fogadhat el
+   legacy/fabrikált (`measured == false`) számot jelbizonyítékként. **Feloldás:**
+   ilyen reporttal a dinamika fail-closed `unavailable`, `internalFailure`
+   okkal; a zaj-floor sávok csak mért, véges reportból értékelhetők.
+4. A `MetricGate` jelenlegi minimuma 8 esemény (streakhez 3), és runtime-ban
+   validálja a paramétereit (`engine/metrics/metric_gate.dart:10-45`); a
+   dinamika ezt változatlanul használja, nem vezet be párhuzamos minimumot.
+
+A chunk-sorszám mérve **022** (utolsó meglévő: `021-rhythm-consistency-groove-
+proxies.md`). **Új mennyiség ⇒ RAG-chunk** ugyanabban a commitban.
 
 ## 1. Cél
 
