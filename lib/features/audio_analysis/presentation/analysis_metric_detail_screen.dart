@@ -31,11 +31,6 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
             final card = cards[index];
             return MetricCard(
               card: card,
-              confidenceHighLabel: l10n.analysisOverviewConfidenceHigh,
-              confidenceMediumLabel: l10n.analysisOverviewConfidenceMedium,
-              confidenceLowLabel: l10n.analysisOverviewConfidenceLow,
-              notApplicableLabel: l10n.analysisOverviewNotApplicable,
-              unavailableLabel: l10n.analysisOverviewUnavailable,
               metricSemanticLabel: (label, value, status) =>
                   l10n.analysisOverviewMetricSemantic(label, value, status),
               detailLabel: l10n.analysisOverviewSeeDetails,

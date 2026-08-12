@@ -20,27 +20,13 @@ typedef MetricSemanticLabelBuilder = String Function(
 final class MetricCard extends StatelessWidget {
   const MetricCard({
     required this.card,
-    required this.confidenceHighLabel,
-    required this.confidenceMediumLabel,
-    required this.confidenceLowLabel,
-    required this.notApplicableLabel,
-    required this.unavailableLabel,
     required this.metricSemanticLabel,
-    this.onOpenDetail,
     this.detailLabel,
+    this.onOpenDetail,
     super.key,
   });
 
   final OverviewMetricCard card;
-
-  /// Localization strings the parent already resolved. Passing them in keeps
-  /// this widget free of `AppLocalizations.of` lookups, which makes the
-  /// card trivially testable from fixtures.
-  final String confidenceHighLabel;
-  final String confidenceMediumLabel;
-  final String confidenceLowLabel;
-  final String notApplicableLabel;
-  final String unavailableLabel;
 
   /// Resolves the screen-reader label. Called once per build with the
   /// metric label, value and status.
@@ -54,7 +40,7 @@ final class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final statusLabel = _statusLabel();
+    final statusLabel = card.statusLabel;
     final icon = _iconForState();
     final confidenceLevel = _confidenceLevel();
     final semanticLabel = metricSemanticLabel(
@@ -62,14 +48,14 @@ final class MetricCard extends StatelessWidget {
       card.valueText,
       statusLabel,
     );
-    return Card(
-      key: ValueKey('metric-card-${card.metricId}'),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Semantics(
-          container: true,
-          label: semanticLabel,
+    return Semantics(
+      container: true,
+      label: semanticLabel,
+      child: Card(
+        key: ValueKey('metric-card-${card.metricId}'),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -157,14 +143,6 @@ final class MetricCard extends StatelessWidget {
     OverviewMetricCardState.lowConfidence => ConfidenceBadgeLevel.low,
     OverviewMetricCardState.unavailable => ConfidenceBadgeLevel.low,
     OverviewMetricCardState.notApplicable => ConfidenceBadgeLevel.medium,
-  };
-
-  String _statusLabel() => switch (card.state) {
-    OverviewMetricCardState.available => confidenceHighLabel,
-    OverviewMetricCardState.degraded => confidenceMediumLabel,
-    OverviewMetricCardState.lowConfidence => confidenceLowLabel,
-    OverviewMetricCardState.notApplicable => notApplicableLabel,
-    OverviewMetricCardState.unavailable => unavailableLabel,
   };
 
   IconData _iconForState() => switch (card.state) {
