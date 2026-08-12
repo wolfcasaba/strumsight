@@ -94,6 +94,19 @@ abstract final class AnalysisMetricId {
   static const String dynamicsClippedEventRatio =
       'dynamics.clipped_event_ratio.v1';
 
+  // Target-bound monophonic pitch (E06-R17, ADR 0235). The signed median
+  // cents error is descriptive intonation evidence, never a diagnosis.
+  static const String pitchNoteHitRatio = 'pitch.note_hit_ratio.v1';
+  static const String pitchMedianCentsError = 'pitch.median_cents_error.v1';
+  static const String pitchP90CentsError = 'pitch.p90_cents_error.v1';
+  static const String pitchStabilityCents = 'pitch.stability_cents.v1';
+  static const String pitchNoteTransitionTiming =
+      'pitch.note_transition_timing.v1';
+  static const String pitchSustainedNoteDuration =
+      'pitch.sustained_note_duration.v1';
+  static const String pitchUnwantedDropoutRatio =
+      'pitch.unwanted_dropout_ratio.v1';
+
   static const Set<String> known = <String>{
     timingMeanAbsoluteError,
     rhythmRushDragBias,
@@ -137,6 +150,13 @@ abstract final class AnalysisMetricId {
     dynamicsAccentAccuracy,
     dynamicsQuietRegionRatio,
     dynamicsClippedEventRatio,
+    pitchNoteHitRatio,
+    pitchMedianCentsError,
+    pitchP90CentsError,
+    pitchStabilityCents,
+    pitchNoteTransitionTiming,
+    pitchSustainedNoteDuration,
+    pitchUnwantedDropoutRatio,
   };
 
   static bool contains(String id) => known.contains(id);
