@@ -391,6 +391,8 @@ final class FileAnalysisRepository implements AnalysisRepository {
         expectedReplacement: null,
       );
       return AppResult<void>.success(null);
+    } on _UnsupportedSchemaException {
+      return _failure<void>(AnalysisRepositoryErrorCode.unsupportedSchema);
     } on FileSystemException catch (e) {
       return _failure<void>(AnalysisRepositoryErrorCode.io, cause: e);
     }
@@ -416,6 +418,8 @@ final class FileAnalysisRepository implements AnalysisRepository {
         expectedReplacement: existingBytes,
       );
       return AppResult<void>.success(null);
+    } on _UnsupportedSchemaException {
+      return _failure<void>(AnalysisRepositoryErrorCode.unsupportedSchema);
     } on FileSystemException catch (e) {
       return _failure<void>(AnalysisRepositoryErrorCode.io, cause: e);
     }
@@ -435,9 +439,9 @@ final class FileAnalysisRepository implements AnalysisRepository {
       if (!live.file.existsSync()) {
         return _failure<void>(AnalysisRepositoryErrorCode.notFound);
       }
-      final summaries = await _readOrRebuildIndex();
+      var baseline = await _readOrRebuildIndex();
       final existing = <AnalysisSummary>[
-        for (final s in summaries)
+        for (final s in baseline)
           if (s.documentId == id) s,
       ];
       if (existing.isEmpty) {
@@ -453,11 +457,12 @@ final class FileAnalysisRepository implements AnalysisRepository {
         if (rebuiltMatch.isEmpty) {
           return _failure<void>(AnalysisRepositoryErrorCode.notFound);
         }
+        baseline = rebuilt;
         existing.add(rebuiltMatch.first);
       }
       final target = existing.first.copyWith(title: trimmed, customTitle: true);
       final next = <AnalysisSummary>[
-        for (final s in summaries)
+        for (final s in baseline)
           if (s.documentId == id) target else s,
       ]..sort((a, b) => b.createdAt.toUtc().compareTo(a.createdAt.toUtc()));
       indexStore.write(next);

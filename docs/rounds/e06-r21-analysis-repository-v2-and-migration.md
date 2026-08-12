@@ -442,6 +442,41 @@ Módosított fájlok (mindkettő a §4 engedélyezett listán):
 A gate (`tools/round-gate.sh test/features/audio_analysis test/property
 test/core test/features/library`) a javítás után is 9/9 lépésen ZÖLD.
 
+### 10.6a Review-javító kör (F1 + F2)
+
+A `docs/reviews/e06-r21-analysis-repository-v2-and-migration-review.md`
+két nyitott MAJOR leletét ugyanaz a `sonnet-impl` motor javította egy
+külön futásban.
+
+**F1 — nem támogatott schema kivétellel, nem typed failure-rel bukott.**
+`_commitDocument()` `_UnsupportedSchemaException`-t dobott, de `save()`
+és `replace()` csak `FileSystemException`-t kapott el — egy jövőbeli
+`schemaVersion` érvényes `AnalysisDocument`-tel előállítható, ezért a
+hívó egy kezeletlen kivétellel szembesült a dokumentált
+`analysis.repository.unsupported_schema` `AppResult.failure` helyett.
+**Javítás:** `save()` és `replace()` most explicit
+`on _UnsupportedSchemaException` ágat kap, amely
+`AnalysisRepositoryErrorCode.unsupportedSchema` típusú `StorageFailure`-t
+ad vissza. Új regressziós teszt: `unsupported schema: save() and
+replace() return typed failure and never throw`.
+
+**F2 — `rename()` elveszítette az újraépített index-bejegyzést.** Ha a
+dokumentum a lemezen létezett, de az indexből hiányzott, a kód
+`_rebuildFromDisk()` után a frissített summary-t csak a lokális
+`existing` listához adta; a mentéshez használt `next` lista továbbra is
+az eredeti, hiányos `summaries`-ből épült, ezért `rename()` sikert
+jelzett, de a bejegyzés nem került vissza az indexbe. **Javítás:** a
+`next` lista alapja most egy `baseline` változó, amely a rebuild ágon a
+`_rebuildFromDisk()` visszatérési értékére vált — így a mentett index a
+teljes, újraépített listát tartalmazza. Új regressziós teszt: `rename()
+rebuilds a missing index entry and list() reflects the new title`.
+
+Módosított fájlok (mindkettő a §4 engedélyezett listán):
+`lib/features/audio_analysis/data/local/file_analysis_repository.dart`,
+`test/features/audio_analysis/data/file_analysis_repository_test.dart`.
+A gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/core test/features/library`) a javítás után 9/9 lépésen ZÖLD.
+
 ### 10.6 Ismert korlát / follow-up
 
 - **Recovery scanner (`AnalysisRepositoryRecovery`) hiányzik.** A §3

@@ -550,16 +550,116 @@ void main() {
       AnalysisRepositoryErrorCode.checksumMismatch,
     );
   });
+
+  test('unsupported schema: save() and replace() return typed failure and '
+      'never throw', () async {
+    final repository = await FileAnalysisRepository.openAtDirectory(
+      directory: tempRoot,
+      clock: () => DateTime.utc(2026, 8, 1),
+    );
+
+    final futureSchemaDoc = _buildDocument(
+      id: 'future',
+      createdAt: DateTime.utc(2026, 8, 1),
+      label: 'F',
+      schemaVersion: analysisDocumentSchemaVersion + 1,
+    );
+
+    final saveResult = await repository.save(
+      AnalysisSaveRequest(
+        document: futureSchemaDoc,
+        title: 'Future',
+        customTitle: false,
+      ),
+    );
+    expect(saveResult.isSuccess, isFalse);
+    expect(
+      saveResult.failureOrNull!.code,
+      AnalysisRepositoryErrorCode.unsupportedSchema,
+    );
+
+    // Persist a valid document so replace() has an existing target.
+    await repository.save(
+      AnalysisSaveRequest(
+        document: _buildDocument(
+          id: 'valid',
+          createdAt: DateTime.utc(2026, 8, 1),
+          label: 'V',
+        ),
+        title: 'Valid',
+        customTitle: false,
+      ),
+    );
+
+    final replaceResult = await repository.replace(
+      'valid',
+      AnalysisSaveRequest(
+        document: _buildDocument(
+          id: 'valid',
+          createdAt: DateTime.utc(2026, 8, 1),
+          label: 'V',
+          schemaVersion: analysisDocumentSchemaVersion + 1,
+        ),
+        title: 'Valid',
+        customTitle: false,
+      ),
+    );
+    expect(replaceResult.isSuccess, isFalse);
+    expect(
+      replaceResult.failureOrNull!.code,
+      AnalysisRepositoryErrorCode.unsupportedSchema,
+    );
+  });
+
+  test('rename() rebuilds a missing index entry and list() reflects the new '
+      'title', () async {
+    final repository = await FileAnalysisRepository.openAtDirectory(
+      directory: tempRoot,
+      clock: () => DateTime.utc(2026, 8, 1),
+    );
+    await repository.save(
+      AnalysisSaveRequest(
+        document: _buildDocument(
+          id: 'orphan',
+          createdAt: DateTime.utc(2026, 8, 1, 10),
+          label: 'O',
+        ),
+        title: 'Original title',
+        customTitle: false,
+      ),
+    );
+
+    // Wipe the index so the document exists on disk but has no index
+    // entry — the recovery-and-rename path under test.
+    final indexFile = File(
+      '${tempRoot.path}/${AnalysisRepositoryLayout.indexFileName}',
+    );
+    indexFile.deleteSync();
+
+    final renamed = await repository.rename(
+      id: 'orphan',
+      newTitle: 'Recovered title',
+    );
+    expect(renamed.isSuccess, isTrue);
+
+    final list = await repository.list();
+    expect(list.isSuccess, isTrue);
+    expect(list.valueOrNull, hasLength(1));
+    expect(list.valueOrNull!.single.documentId, 'orphan');
+    expect(list.valueOrNull!.single.title, 'Recovered title');
+    expect(list.valueOrNull!.single.customTitle, isTrue);
+  });
 }
 
 AnalysisDocument _buildDocument({
   required String id,
   required DateTime createdAt,
   required String label,
+  int? schemaVersion,
 }) {
   return AnalysisDocument(
     id: id,
-    schemaVersion: analysisDocumentSchemaVersion,
+    schemaVersion: schemaVersion ?? analysisDocumentSchemaVersion,
     createdAt: createdAt,
     mode: AnalysisMode.freePlay,
     input: AnalysisInputSummary(
