@@ -1,9 +1,24 @@
 # Motorváltás: ezt a kört TE viszed (Codex / gpt-5.6-terra)
 
 Ez az előszó azért került az alábbi prompt elé, mert az **elsődleges
-orchestrátor (Claude) kvótája kimerült**, és a user döntése (2026-08-02)
-egyértelmű: *„a lényeg, hogy a pipeline ne szakadjon meg — a Terra vegye át a
-review-munkát."* ([ADR 0115](../adr/0115-orchestrator-engine-fallback.md))
+orchestrátor (Claude) helyett most te vezénylsz** — ennek KÉT, egymástól
+független oka lehet, és a kettő NEM ugyanaz a helyzet:
+
+1. **Kvóta-fallback** ([ADR 0115](../adr/0115-orchestrator-engine-fallback.md),
+   2026-08-02): az elsődleges orchestrátor (Claude) kvótája kimerült. User-döntés:
+   *„a lényeg, hogy a pipeline ne szakadjon meg — a Terra vegye át a
+   review-munkát."*
+2. **Rotáció** ([ADR 0222](../adr/0222-orchestrator-rotation-and-session-budget-gauge.md),
+   2026-08-11): a körök fele szándékosan a tiéd, hogy egyik motor kerete se
+   fogyjon el egyedül — ilyenkor a Claude-kvóta jellemzően **egészséges**, te
+   egyszerűen soron következtél.
+
+Melyik esettel állsz szemben, a lenti §1.1 „Implementer-routing" mondja meg: ha
+a reviewer-függetlenség (ADR 0138/0222) miatt az implementer a nyilvántartás
+`sonnet-impl` sora lett, az PONTOSAN azt jelenti, hogy a driver
+(`resolve_independent_engine`) MÁR megmérte — a promptod összeállítása ELŐTT
+—, hogy a Claude-kvóta nincs zárolva. Ez a 2. eset: lásd lent §2 utolsó
+bullet.
 
 **A szereped az alábbi prompté, változatlan tartalommal.** Ez az előszó csak azt
 fordítja le, ami a Claude-harness sajátja volt.
@@ -29,7 +44,15 @@ Doksi-elsőbbség ütközéskor: `AGENTS.md` → `docs/sdd/00-index.md` →
   előtérben, végig. Ne darabold, ne indítsd háttérbe.
 - **Nincs `run_in_background` / háttér-task fogalmad**, és nem is kell: a
   hosszú hívásokat előtérben futtatod.
-- **A `claude` CLI-t NE hívd** — épp az a kvóta merült ki, ami miatt itt vagy.
+- **Te magad, mint orchestrátor, NE válts vissza Claude-ra.** Kvóta-fallback
+  esetén (fenti 1. eset) épp az a keret merült ki, ami miatt itt vagy — egy
+  saját `claude -p …` újraindítás ugyanabba a zárlatba futna.
+  **Ez NEM tiltja a lenti §1.1 szerinti implementer-dispatch-ot**, még akkor
+  sem, ha a kijelölt motor a nyilvántartásban `harness=claude` (pl. a
+  reviewer-függetlenség miatt becserélt `sonnet-impl`, fenti 2. eset): a
+  `tools/mm-round.sh` egy TŐLED FÜGGETLEN, friss session — a driver csak
+  akkor adja implementernek, ha a Claude-kvóta MÁR bizonyítottan szabad.
+  Indítsd a §1.1 táblázat szerint.
 
 ## 3. Ami VÁLTOZATLAN, és rád ugyanúgy kötelező
 
