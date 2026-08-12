@@ -1,6 +1,7 @@
 # E06-R17 — Monofonikus pitch capability
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07; pre-flight lezárva
+  2026-08-12, `main` @ `2c08dc5b`, ADR 0235)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 17; §17.1–17.6
 - **Branch:** `codex/e06-r17-monophonic-pitch-capability`
 - **Előfeltétel:** **E06-R08, E06-R13 merge**
@@ -11,9 +12,9 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/audio_analysis/domain/pitch/pitch_frame.dart",
-  "lib/features/audio_analysis/domain/pitch/pitch_segment.dart",
+  "lib/features/audio_analysis/domain/pitch/monophonic_pitch_segment.dart",
   "lib/features/audio_analysis/engine/pitch/pitch_frame_extractor.dart",
-  "lib/features/audio_analysis/engine/pitch/pitch_segment_builder.dart",
+  "lib/features/audio_analysis/engine/pitch/monophonic_pitch_segment_builder.dart",
   "lib/features/audio_analysis/engine/pitch/pitch_capability_gate.dart",
   "lib/features/audio_analysis/engine/metrics/pitch_metrics.dart",
   "lib/features/audio_analysis/domain/analysis_metric_catalog.dart",
@@ -55,7 +56,39 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**Pre-flight mérés (2026-08-12, baseline `main` @ `2c08dc5b`; E06-R08 és
+E06-R13 merge-elve — előfeltétel teljesül). ADR:
+[0235](../adr/0235-monophonic-pitch-capability-boundary.md).**
+
+Minden hivatkozott mezőt a tényleges hívási láncon mértem, nem a korábbi
+brief állapot-táblájából:
+
+1. A `lib/core/audio/dsp/yin_pitch_detector.dart` (99 sor),
+   `lib/core/audio/dsp/sliding_framer.dart` (26 sor) és a
+   `lib/core/audio/pitch/pitch_observation*.dart` (23/38/12 sor) mért
+   sorszáma egyezik a brief §2 állapotával; az `analysisPitchEnabled` flag
+   létezik, default `false` (`lib/app/config/feature_flags.dart`). A Tuner
+   tesztfája ténylegesen `test/features/tuner` (4 fájl) — a `gate_tests`
+   egyezik, a §0 pre-flight kérdése lezárva.
+2. **Brief-lint S5 (mért ütközés):** a tervezett ÚJ
+   `lib/features/audio_analysis/domain/pitch/pitch_segment.dart` a
+   `PitchSegment` nevet vezetné be, de ez a típus **már létezik és
+   exportált** (`lib/features/audio_analysis/domain/analysis_segment.dart:55`,
+   E06-R02, PR #212 — `AnalysisTimeline.pitchSegments` üres, 0 producerű
+   stub, `start`/`end`/`confidence`/`midiNote` mezőkkel, `public.dart:23`
+   barrel-exportálva, `analysis_document_codec.dart` (de)szerializálja). A
+   két típus **nem ugyanaz a fogalom** (ld. ADR 0235 Kontextus) — egy
+   második, azonos nevű deklaráció ambiguous-export ütközést adna a
+   `public.dart` barrelen. **Feloldás (ADR 0235 Döntés 1–3):** az új típus
+   neve `MonophonicPitchSegment` (fájl: `monophonic_pitch_segment.dart`), a
+   szegmentáló neve `MonophonicPitchSegmentBuilder` (fájl:
+   `monophonic_pitch_segment_builder.dart`) — mindkét csere a brief eredeti
+   `allowed_paths` listáján belüli fájlnév-csere, nem bővítés. A meglévő
+   `analysis_segment.dart`/`analysis_timeline.dart`/
+   `analysis_document_codec.dart` fájlokat a kör NEM érinti (ADR 0113
+   precedens: az `allowed_paths` bővítése egy már létező, listán kívüli
+   fájlra tilos-zóna kérdés, H3). A §3/§4/§8 alábbi szövege és az
+   `allowed_paths` blokk ennek megfelelően frissítve.
 
 ## 1. Cél
 
@@ -79,13 +112,14 @@ bevezetése az elemzésbe: pitch frame → szegmens → cent-hiba/stabilitás, k
 
 ## 3. Scope
 
-**Benne:** `PitchFrame` (idő, Hz, voiced confidence); `PitchSegment` (range,
-median Hz/MIDI, cents offset, stability cents, confidence);
-`PitchFrameExtractor` (a **meglévő** `YinPitchDetector` + `SlidingFramer`
-felhasználásával); `PitchSegmentBuilder` (voiced/unvoiced szegmentálás,
-minimum hossz); `PitchCapabilityGate` (monofonikus target, elegendő voiced
-frame, polifónia-bizonytalanság, zajkapu); a hét kötelező pitch metrika;
-katalógus + ARB.
+**Benne:** `PitchFrame` (idő, Hz, voiced confidence); `MonophonicPitchSegment`
+(range, median Hz/MIDI, cents offset, stability cents, confidence — ld. ADR
+0235 a névválasztásról és a meglévő, bekötetlen `PitchSegment` stubtól való
+elhatárolásról); `PitchFrameExtractor` (a **meglévő** `YinPitchDetector` +
+`SlidingFramer` felhasználásával); `MonophonicPitchSegmentBuilder`
+(voiced/unvoiced szegmentálás, minimum hossz); `PitchCapabilityGate`
+(monofonikus target, elegendő voiced frame, polifónia-bizonytalanság,
+zajkapu); a hét kötelező pitch metrika; katalógus + ARB.
 
 **Kívül — TILOS:** a `YinPitchDetector` **algoritmusának** módosítása, a Tuner
 bármely fájlja, bend/vibrato elemzés (későbbi flag), polifonikus transzkripció,
@@ -96,9 +130,9 @@ UI.
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `.../domain/pitch/pitch_frame.dart` | ÚJ | frame típus |
-| `.../domain/pitch/pitch_segment.dart` | ÚJ | szegmens típus |
+| `.../domain/pitch/monophonic_pitch_segment.dart` | ÚJ | szegmens típus (ADR 0235: nem `pitch_segment.dart`/`PitchSegment` — az a név foglalt) |
 | `.../engine/pitch/pitch_frame_extractor.dart` | ÚJ | YIN-adapter |
-| `.../engine/pitch/pitch_segment_builder.dart` | ÚJ | szegmentálás |
+| `.../engine/pitch/monophonic_pitch_segment_builder.dart` | ÚJ | szegmentálás |
 | `.../engine/pitch/pitch_capability_gate.dart` | ÚJ | capability-kapu |
 | `.../engine/metrics/pitch_metrics.dart` | ÚJ | a hét metrika |
 | `.../domain/analysis_metric_catalog.dart` | meglévő | **additív** ID-k |
@@ -236,9 +270,9 @@ mért tényleges Tuner-tesztfa.)
 
 1. RED: frekvencia-, cent-, voiced-arány- és kapu-mátrix
    (a fixture-frekvenciák `python3 -c`-vel levezetve).
-2. `pitch_frame.dart` + `pitch_segment.dart`.
+2. `pitch_frame.dart` + `monophonic_pitch_segment.dart`.
 3. `pitch_frame_extractor.dart` (a **meglévő** YIN + framer felhasználásával).
-4. `pitch_segment_builder.dart` (voiced szegmentálás, minimum hossz).
+4. `monophonic_pitch_segment_builder.dart` (voiced szegmentálás, minimum hossz).
 5. `pitch_capability_gate.dart` (hívásszámlálóval tesztelhető seam).
 6. `pitch_metrics.dart` + katalógus + ARB; property; gate.
 
