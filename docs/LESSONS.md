@@ -8697,3 +8697,39 @@ majd külön sparse-match mátrixszal mérd: kevés kiváló match sok missed/ex
 között nem maradhat magas confidence. A consumer/UI-bekötő kör előtt a
 free-play nearest-beat keresést is korlátozd lineáris vagy logaritmikus
 stratégiára hosszú, nem megbízható bemenetre.
+
+## L236 — A `sdd-round-review` skill saját `git clone <hub> /tmp/review-...` mintája a hub lokális útvonalára állítja az origint — a review-jelentés commitja `git push origin` alatt NÉMÁN a hubra megy, nem GitHub-ra (E06-R15, 2026-08-12)
+
+**Mit mértem.** A review-jelentést a skill saját dokumentált parancsával
+klónozott `/tmp/review-e06-r15`-be írtam
+(`git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>`),
+majd `git commit` után `git push origin HEAD:<branch>`-et futtattam. A push
+**sikerrel** lezajlott, de `git -C /tmp/review-e06-r15 remote -v` utólag
+megmutatta: `origin /home/ubuntu/music-theory` — a HUB LOKÁLIS ÚTVONALA. A
+review-commit így a hub saját branch-refjére került, GitHube-re NEM jutott
+el — csak akkor vettem észre, amikor a következő `git fetch origin
+<branch>:<branch>` a hub tényleges GitHub-originjéből VISSZAÁLLÍTOTTA a helyi
+ref-et a review-commit ELŐTTI állapotra (a review-commit ugyan a hub
+object database-jében megmaradt, de a branch onnantól nem mutatott rá).
+Javítás: közvetlen push a GitHub URL-re
+(`git push https://github.com/<org>/<repo>.git HEAD:<branch>`), majd a hub
+lokális ref-jének frissítése `git fetch origin <branch>:<branch>`-tel.
+
+**Miért nem egyedi baleset.** Ez az L221-nél (`ss-terra-*` implementer-klónok)
+mért, azonos gyökér-mechanizmus egy MÁSIK, védtelen felszínen: a
+`tools/fix-workspace-origin.sh` (L221 javítása) kizárólag a
+`codex-round.sh`/`mm-round.sh` implementer-indításba van bekötve, az
+`sdd-round-review` skill saját, kézzel dokumentált klónozó parancsába NEM. A
+két eset kimenete is eltér: L221-nél a push HANGOSAN elutasul
+(`denyCurrentBranch`, mert a hub épp a kör branch-én állt), itt viszont a hub
+`main`-en állt, ezért a push CSENDBEN sikerül — hamis biztonságérzetet adva,
+amíg valaki külön `git ls-remote <github-url> <branch>`-cel nem ellenőrzi.
+
+**Hogyan alkalmazd.** Review-jelentés (vagy bármilyen más orchestrátor-oldali
+commit) írásakor egy, az `sdd-round-review`/pipeline-prompt saját
+`git clone <hub> /tmp/...` mintájával létrehozott klónban: SOSE bízz a
+`git push origin ...`-ban — vagy közvetlenül a valódi GitHub-URL-re pusholj,
+vagy a review-tartalmat írd bele egy már `fix-workspace-origin.sh`-jal
+javított munkapéldányba (pl. az implementer sajátjába). Push után MINDIG
+`git ls-remote <github-url> <branch>`-tel ellenőrizd, hogy a commit tényleg
+odaért, mielőtt a következő CI-dispatchet vagy merge-et elindítanád.
