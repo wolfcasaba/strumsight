@@ -431,4 +431,97 @@ void main() {
       expect(curve.status, CapabilityStatus.available);
     });
   });
+
+  group('TempoCurve constructor rejects non-finite/out-of-range summaries', () {
+    TempoCurve buildWith({
+      double? medianBpm,
+      double? iqrBpm,
+      double? driftSlopeBpmPerMinute,
+      double? stableRegionRatio,
+    }) => TempoCurve(
+      status: CapabilityStatus.available,
+      legacyBpm: 120,
+      medianBpm: medianBpm,
+      iqrBpm: iqrBpm,
+      driftSlopeBpmPerMinute: driftSlopeBpmPerMinute,
+      stableRegionRatio: stableRegionRatio,
+    );
+
+    test('NaN medianBpm throws', () {
+      expect(() => buildWith(medianBpm: double.nan), throwsArgumentError);
+    });
+
+    test('infinite medianBpm throws', () {
+      expect(() => buildWith(medianBpm: double.infinity), throwsArgumentError);
+    });
+
+    test('non-positive medianBpm throws', () {
+      expect(() => buildWith(medianBpm: 0), throwsArgumentError);
+    });
+
+    test('medianBpm above 400 throws', () {
+      expect(() => buildWith(medianBpm: 400.1), throwsArgumentError);
+    });
+
+    test('medianBpm of exactly 400 is accepted', () {
+      expect(() => buildWith(medianBpm: 400), returnsNormally);
+    });
+
+    test('NaN iqrBpm throws', () {
+      expect(() => buildWith(iqrBpm: double.nan), throwsArgumentError);
+    });
+
+    test('infinite iqrBpm throws', () {
+      expect(() => buildWith(iqrBpm: double.infinity), throwsArgumentError);
+    });
+
+    test('negative iqrBpm throws', () {
+      expect(() => buildWith(iqrBpm: -1), throwsArgumentError);
+    });
+
+    test('NaN driftSlopeBpmPerMinute throws', () {
+      expect(
+        () => buildWith(driftSlopeBpmPerMinute: double.nan),
+        throwsArgumentError,
+      );
+    });
+
+    test('infinite driftSlopeBpmPerMinute throws', () {
+      expect(
+        () => buildWith(driftSlopeBpmPerMinute: double.negativeInfinity),
+        throwsArgumentError,
+      );
+    });
+
+    test('negative driftSlopeBpmPerMinute is accepted', () {
+      expect(() => buildWith(driftSlopeBpmPerMinute: -5), returnsNormally);
+    });
+
+    test('NaN stableRegionRatio throws', () {
+      expect(
+        () => buildWith(stableRegionRatio: double.nan),
+        throwsArgumentError,
+      );
+    });
+
+    test('infinite stableRegionRatio throws', () {
+      expect(
+        () => buildWith(stableRegionRatio: double.infinity),
+        throwsArgumentError,
+      );
+    });
+
+    test('stableRegionRatio below 0 throws', () {
+      expect(() => buildWith(stableRegionRatio: -0.01), throwsArgumentError);
+    });
+
+    test('stableRegionRatio above 1 throws', () {
+      expect(() => buildWith(stableRegionRatio: 1.01), throwsArgumentError);
+    });
+
+    test('stableRegionRatio boundary values 0 and 1 are accepted', () {
+      expect(() => buildWith(stableRegionRatio: 0), returnsNormally);
+      expect(() => buildWith(stableRegionRatio: 1), returnsNormally);
+    });
+  });
 }

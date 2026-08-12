@@ -31,6 +31,28 @@ final class TempoCurve {
     if (!legacyBpm.isFinite || legacyBpm < 0) {
       throw ArgumentError.value(legacyBpm, 'legacyBpm');
     }
+    final medianBpmValue = medianBpm;
+    if (medianBpmValue != null &&
+        (!medianBpmValue.isFinite ||
+            medianBpmValue <= 0 ||
+            medianBpmValue > 400)) {
+      throw ArgumentError.value(medianBpmValue, 'medianBpm');
+    }
+    final iqrBpmValue = iqrBpm;
+    if (iqrBpmValue != null && (!iqrBpmValue.isFinite || iqrBpmValue < 0)) {
+      throw ArgumentError.value(iqrBpmValue, 'iqrBpm');
+    }
+    final driftSlopeValue = driftSlopeBpmPerMinute;
+    if (driftSlopeValue != null && !driftSlopeValue.isFinite) {
+      throw ArgumentError.value(driftSlopeValue, 'driftSlopeBpmPerMinute');
+    }
+    final stableRegionRatioValue = stableRegionRatio;
+    if (stableRegionRatioValue != null &&
+        (!stableRegionRatioValue.isFinite ||
+            stableRegionRatioValue < 0 ||
+            stableRegionRatioValue > 1)) {
+      throw ArgumentError.value(stableRegionRatioValue, 'stableRegionRatio');
+    }
     Duration? previous;
     for (final point in this.points) {
       if (previous != null && point.time <= previous) {
