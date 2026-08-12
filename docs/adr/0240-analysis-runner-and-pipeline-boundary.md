@@ -125,8 +125,14 @@ A pre-flight ezt újramérte:
   a körtől.
 - A `T = AnalysisDocument` rögzítés azt jelenti, hogy a jövőbeli valódi-
   pipeline kör csak egy `List<AnalysisStage<AnalysisDocument,
-  AnalysisDocument>>`-et és egy provider-felülírást ad hozzá — a runner/
-  controller/use-case réteget nem kell újraírni.
+  AnalysisDocument>>`-et és egy provider-felülírást ad hozzá — a controller/
+  use-case réteget nem kell újraírni (a `progress`/`result` absztrakción át
+  transzparensen kezel bármennyi eseményt). **Pontosítás (review, 2026-08-12):**
+  a megvalósult `AnalysisIsolateRunner` egy-üzenetes RPC-t használ
+  (`_isolateEntry` egyetlen választ küld vissza) — a valódi lánc szakaszonkénti
+  progress-jelzéséhez a runner isolate-üzenet-topológiáját (nem a controller/
+  use-case réteget) kell bővíteni egy közbenső progress-csatornával; ez EGY
+  fájlra korlátozott, kontrollált bővítés, nem újratervezés.
 
 ## Elutasított alternatívák
 
