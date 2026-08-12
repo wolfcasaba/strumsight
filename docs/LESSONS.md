@@ -9070,3 +9070,101 @@ bizonyíthatóan) vagy legalább egy gyanús-implementer jelzés. Ha a találat
 fel a review-jelentésbe MIÉRT ártalmatlan (a konkrét sor idézésével), és a
 saját független gate-újrafuttatásodra hagyatkozz a végső zöld/piros
 döntéshez — a jelző csak figyelmeztet, nem dönt.
+
+---
+
+## L246 — Egy portra (interfészre) szervezett, konkrét i18n-adapter is scope: a batch-brief `allowed_paths`-a a view modelt listázta, a hozzá tartozó `AppLocalizations`-implementációt nem (E06-R23, H3 self-heal, 2026-08-12)
+
+**Mit mértem.** Az E06-R23 brief `allowed_paths`-a listázta a
+`presentation/controllers/overview_view_model.dart` fájlt (§5 „a
+presentation nem számol" elve szerint ez deklarálja az `OverviewLabels`
+portot), de nem listázta ennek konkrét, `AppLocalizations`-alapú
+megvalósítását. Az implementer (sonnet-impl) emiatt a listán kívül hozta
+létre a `presentation/widgets/labels_adapter.dart` fájlt (406 sor), amit a
+scope-audit (`tools/mm-round.sh` → `tools/round-scope-audit.sh` →
+`tools/scope-audit.py`) helyesen `stopped`-ra váltott (H3,
+`.pipeline/HALTED` 2026-08-12T22:17:52Z). A self-heal elolvasta a fájl
+teljes tartalmát: kizárólag közvetlen `AppLocalizations`-lekérdezés, zárt
+enumon `switch`, vagy a domain által validált numerikus primitívből
+determinisztikus formázás — nincs `engine/`-import, aggregáció vagy
+confidence-küszöb, nem duplikálja a `lib/core/i18n/locale_provider.dart`-ot
+(az a locale-VÁLASZTÁS, ez a kártyák LABEL-formázása). Feloldás:
+`allowed_paths` bővült a konkrét fájllal; 0 tartalmi döntés változott.
+Regressziós védelem: `tools/tests/test_e06_r23_labels_adapter_scope.py`.
+
+**Miért.** Ez a HARMADIK, ugyanebben az epicben mért H3 self-heal, amit egy
+brief `allowed_paths`-ának hiányos volta okozott — mindhárom más-más alakban
+(az első: [[L225]] / E06-R10, ROSSZ fájlcél egy már létező domain típussal
+ütköző név miatt; a második: [[L242]] / E06-R20, HIÁNYZÓ megosztott
+tesztfixture-hely; ez a harmadik: HIÁNYZÓ implementációs fájl egy már
+listázott PORT/interfész mellett). A batch-brief (2026-08-07) a `presentation
+nem számol` architekturális döntést helyesen rögzítette, de a döntésből
+következő „tehát kell egy konkrét, tesztelhető adapter-implementáció is"
+lépést nem vezette le — ez pontosan az a fajta következtetés, amit egy
+pre-flight (vagy maga a batch-írás) grep-pel nem tud előre látni, csak a
+tényleges implementáció fedi fel.
+
+**Hogyan alkalmazd.** Ha egy brief egy portot/interfészt deklaráló fájlt
+(itt: a view model, ami az `OverviewLabels` absztrakciót definiálja) vesz
+fel `allowed_paths`-ba, de az adott réteg (presentation) nem használhatja
+közvetlenül a konkrét backing-mechanizmust (itt: `AppLocalizations`/
+`BuildContext`) a portot IGÉNYLŐ kód belsejében — vagyis a port-minta
+architekturálisan KÖVETELI egy külön adapter-fájl létét —, vedd fel eleve
+azt is, még ha a konkrét fájlnév a pre-flight idején nem is dönthető el
+előre (mint a [[L242]] megosztott fixture-könyvtáránál, itt is elég egy
+tervezett fájlnév vagy egy komment, hogy „a port konkrét adaptere is idetartozik").
+
+---
+
+## L247 — A kör-jelzés (STOP-protokoll) írása nem állítja meg magát a folyamatot: egy implementer percekig tovább futhat és tovább commitolhat a `status=stopped` jelzés UTÁN is, mert a burkolók csak a stall-őrre és az abszolút időkorlátra hallgattak (E06-R23, H3 self-heal, ADR 0112, 2026-08-12)
+
+**Mit mértem.** Az E06-R23 orchesztrátor (Terra) `wait-for-round.sh`-a
+22:17:39Z-kor észlelte a `status=stopped` jelzést (H3 scope-sértés,
+`labels_adapter.dart`), és a lánc korrekt módon `.pipeline/HALTED`-et írt,
+majd önjavító sessiont indított (ez a session). A self-heal saját
+vizsgálata során viszont a `tools/mm-round.sh`-t indító `bash` folyamat
+(PID 3410110, a valódi `claude -p` implementer PID 3410143) **még mindig
+élt** — 22:03-kor indult, és **~15 perccel a jelzés UTÁN**, 22:32:21Z-kor
+lépett csak ki magától, addigra HAT TOVÁBBI commitot hozva létre
+(`b3b6201`…`0db5f46`), köztük a MÁR out-of-scope `labels_adapter.dart`
+egy további szerkesztését, és lefuttatva a teljes kör-gate-et. A folyamat a
+self-heal SAJÁT vizsgálata KÖZBEN futott tovább — a self-heal a mérés
+közben talált rá, nem várta meg tétlenül.
+
+**Miért.** `tools/mm-round.sh` és `tools/codex-round.sh` őr-ciklusa csak két
+feltételt figyelt a `kill -0 $pid` polling-loopban: az abszolút időkorlátot
+(`MM_ROUND_TIMEOUT`/`CODEX_ROUND_TIMEOUT`, alap 3600s) és az elakadás-őrt
+(a log nem nő N percig). A `tools/codex-signal.sh`-sal írt jelzésfájl
+(`.codex-round-status`) csak az ORCHESZTRÁTOR `wait-for-round.sh`-ja
+számára volt terminális jel — magát az implementer FOLYAMATOT semmi nem
+állította meg, amikor a jelzés megjelent. A tervezési feltételezés
+(„a modell a jelzés után úgyis befejezi a fordulóját") hallgatólagos volt,
+és ez a mérés cáfolta: a modell a `stopped` jelzés kiírása UTÁN
+folytatta a munkát ahelyett, hogy a fordulóját lezárta volna. Következmény:
+a lánc HALT-olt állapota és az implementer TÉNYLEGES, felügyelet nélküli
+munkája percekig egyszerre, egymástól függetlenül léteztek — ez pontosan az
+a fajta versenyhelyzet, ami ellen a [[shared-tree-coordination]] mintázat
+véd, csak itt a „másik session" maga a driver által már lezártnak hitt kör
+folyamata volt.
+
+**Hogyan alkalmazd.** Mindkét burkoló (`tools/mm-round.sh`,
+`tools/codex-round.sh`) őr-ciklusa mostantól a jelzésfájlt is figyeli minden
+polling-körben, és `status=done|stopped|blocked` megjelenésekor AZONNAL
+(a stall-őrrel/időkorláttal azonos kilövési szekvenciával, de KÜLÖN
+jelzővel, hogy a valódi jelentés ne íródjon felül) kilövi a folyamatot —
+nem várja meg a stall-őrt vagy az időkorlátot. Regressziós védelem:
+`tools/tests/test_qwen_implementer_hardening.py::
+test_a_process_that_keeps_running_after_signaling_is_killed_promptly` és
+`tools/tests/test_claude_harness_engines.py`-ben ugyanaz a teszt, mindkettő
+RED-ről (30s+ a jelzés UTÁN) GREEN-re (pár másodperc) igazolva. **Kapcsolódó
+mért hiba, ugyanebben a self-healben:** a `docs/execution/pipeline-
+orchestrator-prompt.md` §0.2 „örökség-ellenőrző" glob-ja (`tr -d '-'`) a kör
+saját kötőjelét is törölte a keresőmintából, miközben a valódi
+munkapéldány-könyvtárnév megőrzi (`ss-sonnet-impl-e06-r23`) — egy friss
+orchesztrátor-session emiatt SOHA nem találta volna meg ezt a kész,
+pusholt implementációt, és vakon újraindította volna a kört. Javítva
+(kötőjel megőrzése, epic-2-re bedrótozott maradék minta törölve),
+regressziós védelem: `tools/tests/
+test_orchestrator_legacy_worktree_discovery.py` (a sablonból kinyert
+tényleges parancssort futtatja, nem másolatot). Mindkét javítás: PR
+[#240](https://github.com/wolfcasaba/strumsight/pull/240).

@@ -3,7 +3,50 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R22 MERGED — Analysis runner, progress UI and cancellation).**
+> (E06-R23 H3 self-heal — implementer-process + worktree-discovery fixes,
+> PR #240 merged; E06-R23 itself NOT merged, see below).**
+>
+> ## 🔧 E06-R23 H3 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
+> [#240](https://github.com/wolfcasaba/strumsight/pull/240), squash
+> `6be36efa` (2026-08-12)
+>
+> **E06-R23 (Overview screen és metric cardok) állapota — FONTOS a
+> következő sessionnek:** az implementáció **TELJES és pusholva** a
+> `sonnet-impl/e06-r23-analysis-overview-and-metric-cards` branchen (HEAD
+> `3d4ace8`), az implementer önjelentése szerint a §7 gate zöld. A kör
+> **NEM lett merge-elve** — a következő lépés a **review**, NEM egy friss
+> dispatch. A branch NEM jelenik meg automatikusan a szokásos „örökség-
+> ellenőrzés" glob-jával a §0.2-ből (lásd lent, most már javítva) — ha egy
+> friss orchesztrátor-session nem találja, ellenőrizd kézzel:
+> `git ls-remote origin refs/heads/sonnet-impl/e06-r23-analysis-overview-and-metric-cards`.
+>
+> **A halt gyökéroka és a feloldás:** a scope-audit `stopped`-ra váltotta a
+> kört, mert az implementer egy engedélyezetlen fájlt
+> (`lib/features/audio_analysis/presentation/widgets/labels_adapter.dart` —
+> az `OverviewLabels` port `AppLocalizations`-adaptere, szükséges és nem
+> duplikált i18n-kód) hozott létre. A self-heal beolvasta a fájlt, igazolta,
+> hogy semmilyen tiltott zónát (engine/domain) nem érint, és bővítette az
+> `allowed_paths`-t — ez a brief §0.0-ban, a round SAJÁT branchén van
+> dokumentálva és commitolva (`12bb66d`, `3d4ace8`), NEM ezen a `main`-en
+> (a round pre-flightja is ott él, `86c8181` óta — a scope-audit a round
+> branch saját brief-másolatát olvassa, nem a `main`-ét). Lecke:
+> `docs/LESSONS.md` **L246**.
+>
+> **Mért, ennél fontosabb mellékfelfedezés:** a self-heal vizsgálat KÖZBEN
+> derült ki, hogy az implementer folyamata (`tools/mm-round.sh`) a
+> `status=stopped` jelzés (22:17:39Z) UTÁN **~15 percig tovább futott**,
+> és hat további commitot hozott létre, mielőtt magától kilépett — a
+> burkolók (`mm-round.sh`, `codex-round.sh`) csak a stall-őrre és az
+> abszolút időkorlátra hallgattak, a jelzésfájlra nem. Ez azt jelenti, hogy
+> egy HALT-olt kör implementere ELVILEG akár órákig felügyelet nélkül
+> futhatott/commitolhatott volna. Mindkét burkoló mostantól a jelzésfájlt is
+> figyeli és azonnal kilövi a folyamatot, amint egy terminális státusz
+> megjelenik. **Kapcsolódó, önállóan is mért hiba:** a §0.2 „örökség-
+> ellenőrzés" `ls -d` mintája (`tr -d '-'`) soha nem talált semmit egyetlen
+> `ss-<motor>-eXX-rYY` elnevezésű munkapéldányra sem (élesben mérve az
+> E06-R23 saját, teljes könyvtárára) — javítva. Mindkettő regressziós
+> teszttel védve, Router CI zöld exact-SHA `569ad2fe`-n. Lecke:
+> `docs/LESSONS.md` **L247**.
 >
 > ## ✅ E06-R22 KÉSZ — Analysis runner, progress UI és cancellation (2026-08-12)
 >
@@ -874,7 +917,18 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-12):** `main` @ `6abdd408` — E06-R22, PR
+**Aktuális állapot (2026-08-12):** `main` @ `6be36efa` — E06-R23 H3
+self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix), PR
+[#240](https://github.com/wolfcasaba/strumsight/pull/240), squash-merge.
+Router CI [31649793492→31650104969](https://github.com/wolfcasaba/strumsight/actions/runs/31650104969)
+success az exact-SHA `569ad2fe`-n (első próba pirosra futott egy CI-shallow-
+checkout-specifikus tesztbuggal — ld. lecke L247 —, javítva, a végleges HEAD
+zöld). `main`-t NEM érintette Dart-kód, `build-apk.yml` nem indult. Az
+E06-R23 SDD-kör saját commitjai (`12bb66d`, `3d4ace8`) a **round saját
+branchén** landoltak, nem itt — lásd a fejléc 🔧 blokkját. `origin/main` nem
+mozdult dispatch és merge között.
+
+**Előző állapot (2026-08-12):** `main` @ `6abdd408` — E06-R22, PR
 [#239](https://github.com/wolfcasaba/strumsight/pull/239), squash-merge.
 Exact-SHA `ae22ff50`: Full Gate
 [31642984516](https://github.com/wolfcasaba/strumsight/actions/runs/31642984516)
