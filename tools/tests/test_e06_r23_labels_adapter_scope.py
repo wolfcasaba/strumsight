@@ -18,19 +18,21 @@ this and forced `status=stopped`:
       committed brief allowed_paths list.
 
 This guard drives `tools.ai_router.legacy_scope.audit_legacy_scope` -- the
-exact function `tools/scope-audit.py` calls -- against the REAL brief content
-at two points in its own commit history, so a regression in either direction
-shows up here first:
+exact function `tools/scope-audit.py` calls -- against the REAL, currently
+committed brief, both as it stands now and as it stood at the moment of the
+halt (derived from the current file by removing exactly the two entries this
+self-heal added -- not read via `git show <ancestor-sha>`, because CI's
+default shallow checkout does not fetch ancestor commit objects and would
+make this test flaky in exactly the environment it needs to guard):
 
-  * against the pre-flight (pre-self-heal) `allowed_paths` (commit
-    `86c8181`), `labels_adapter.dart` must be OUT of scope -- this
-    reproduces the measured halt from real history, not a retyped copy;
+  * with the two self-heal-added entries removed, `labels_adapter.dart` must
+    be OUT of scope -- this reproduces the measured halt;
   * against the current, self-heal-revised `allowed_paths`, it must be IN
     scope -- the fix.
 """
 
-import subprocess
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -39,29 +41,18 @@ from tools.ai_router.legacy_scope import audit_legacy_scope
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BRIEF = REPO_ROOT / "docs" / "rounds" / "e06-r23-analysis-overview-and-metric-cards.md"
-BRIEF_RELATIVE = "docs/rounds/e06-r23-analysis-overview-and-metric-cards.md"
-
-# The commit the implementer's worktree was actually dispatched from:
-# pre-flight done (router path fixed, ADR 0241 added), self-heal NOT yet
-# applied. Read from this branch's own history, not retyped by hand.
-PRE_HEAL_BRIEF_SHA = "86c8181adc3923f96a19ee7088e11504aa653065"
 
 # Reproduced verbatim from `.pipeline/HALTED`.
 MEASURED_HALT_PATH = "lib/features/audio_analysis/presentation/widgets/labels_adapter.dart"
 
-# No protected-path fragment of the real `.ai/router.toml` touches this path;
-# an empty tuple keeps this guard focused on `allowed_paths`.
+# The other entry this same self-heal commit added alongside the fix itself
+# (its own regression test) -- excluded from the "pre-heal" reconstruction
+# below so that snapshot reflects only the pre-flight (86c8181) allowed_paths.
+SELF_HEAL_TEST_PATH = "tools/tests/test_e06_r23_labels_adapter_scope.py"
+
+# No protected-path fragment of the real `.ai/router.toml` touches either
+# path; an empty tuple keeps this guard focused on `allowed_paths`.
 PROTECTED = ()
-
-
-def git_show(ref: str, path: str) -> str:
-    return subprocess.run(
-        ["git", "show", f"{ref}:{path}"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
 
 
 class E06R23LabelsAdapterScopeTest(unittest.TestCase):
@@ -90,20 +81,20 @@ class E06R23LabelsAdapterScopeTest(unittest.TestCase):
         path.write_text("// AppLocalizations-backed OverviewLabels adapter\n")
         return audit_legacy_scope(root, base=base, allowed_paths=allowed_paths, protected_paths=PROTECTED)
 
-    def load_historical_allowed_paths(self, ref: str) -> tuple:
-        historical_text = git_show(ref, BRIEF_RELATIVE)
-        # `load_brief` requires an E##-R## task id in the FILENAME, so the
-        # historical text is written under its real name, not a random temp
-        # name -- this parses the exact historical `allowed_paths`, not a
-        # hand-copied list.
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        historical_brief_path = Path(directory.name) / "e06-r23-analysis-overview-and-metric-cards.md"
-        historical_brief_path.write_text(historical_text, encoding="utf-8")
-        return load_brief(historical_brief_path).metadata.allowed_paths
+    def pre_heal_allowed_paths(self) -> tuple:
+        current = load_brief(BRIEF).metadata.allowed_paths
+        pre_heal = tuple(p for p in current if p not in {MEASURED_HALT_PATH, SELF_HEAL_TEST_PATH})
+        # Sanity check the subtraction actually removed both self-heal
+        # additions and nothing else -- otherwise this reconstruction would
+        # silently stop matching the real pre-flight (86c8181) allowed_paths.
+        assert len(pre_heal) == len(current) - 2, (
+            "expected the self-heal to have added exactly two allowed_paths entries "
+            f"(got current={len(current)}, reconstructed pre-heal={len(pre_heal)})"
+        )
+        return pre_heal
 
     def test_pre_heal_brief_correctly_rejected_the_file(self) -> None:
-        pre_heal_allowed = self.load_historical_allowed_paths(PRE_HEAL_BRIEF_SHA)
+        pre_heal_allowed = self.pre_heal_allowed_paths()
         self.assertNotIn(
             MEASURED_HALT_PATH, pre_heal_allowed,
             "sanity check: the pre-flight allowed_paths must not already list labels_adapter.dart",
