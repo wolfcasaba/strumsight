@@ -1,0 +1,1 @@
+round=16 verdict=pass tests=63 lesson=settings-sync-echo-guard-via-value-signature-not-bool-flag(listeners-fire-async);SharedPreferences.setMockInitialValues-needed-in-tests-that-hit-notifier-setters;override-settingsRepo-in-widget-tests-that-restore-a-session-to-avoid-real-network

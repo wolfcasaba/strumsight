@@ -1,0 +1,1 @@
+round=E05-R19 verdict=pass tests=292 lesson=L178-window-truncation-anchor-to-adjacent-window-start engine=minimax
