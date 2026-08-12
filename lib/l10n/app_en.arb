@@ -1506,8 +1506,6 @@
   "@analysisOverviewMetricSemantic": {"placeholders": {"label": {}, "value": {}, "status": {}}},
   "analysisOverviewMetricValuePlaceholder": "—",
   "@analysisOverviewMetricValuePlaceholder": {},
-  "analysisOverviewMetricUnitPlaceholder": "",
-  "@analysisOverviewMetricUnitPlaceholder": {},
 
   "analysisMetricLabelTimingMeanAbsoluteError": "Timing accuracy (mean absolute error)",
   "@analysisMetricLabelTimingMeanAbsoluteError": {},
