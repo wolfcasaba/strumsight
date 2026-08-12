@@ -419,6 +419,52 @@ l10n                        zöld
 MINDEN GATE ZÖLD.
 ```
 
+### 10.2 Repair — independent security review target-confidence coverage MAJOR (2026-08-12)
+
+The independent security review flagged one remaining MAJOR: `buildTargetTimingMetrics`
+published `AlignmentResult.confidence` unattenuated — that field is only the
+average confidence of the *matched* pairs, so e.g. 8 matches at confidence
+1.0 plus 999 missed expected events could publish as `available` at
+confidence 1.0, falsely presenting sparse evidence as certain.
+
+**Fix (`lib/features/audio_analysis/engine/metrics/timing_metrics.dart`,
+`buildTargetTimingMetrics` only — R13 files, UI, Practice, and free-play
+untouched):** added a named, documented `_targetCoverageFactor` —
+`min(matchedCount / expectedCount, matchedCount / observedCount)` (matched
+recall vs. matched precision; the harsher of the two) — and published
+`(alignment.confidence * coverage).clamp(0.0, 1.0)` in place of the raw
+`alignment.confidence`. Since `expectedCount` and `observedCount` are always
+`>= matchedCount`, both ratios and their minimum are always in `[0, 1]`, so
+the published confidence is always finite and never stronger than
+`AlignmentResult.confidence` — only ever equal (complete coverage) or
+weaker (sparse coverage).
+
+**Regression tests added**
+(`test/features/audio_analysis/engine/timing_metrics_test.dart`, group
+`buildTargetTimingMetrics — target coverage factor (security review R14
+MAJOR: target-confidence coverage)`):
+- 8 matches at confidence 1.0 with 999 missed expected events (0 extra):
+  published `meanAbsoluteError.confidence` is `closeTo(8/1007, 1e-9)`
+  (`< 0.01`), materially attenuated vs. the raw `alignment.confidence == 1`.
+- Complete coverage (no misses/extras, the pre-existing `_alignmentOf`
+  helper): published confidence stays `closeTo(alignment.confidence, 1e-9)`
+  — the R13 contract is preserved unchanged for the normal case.
+
+**Gate-eredmény (`tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r14-timing-and-rush-drag-metrics-review.md`.

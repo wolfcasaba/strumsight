@@ -291,6 +291,48 @@ void main() {
     });
   });
 
+  group('buildTargetTimingMetrics — target coverage factor (security review '
+      'R14 MAJOR: target-confidence coverage)', () {
+    test('8 high-confidence matches with overwhelming misses/extras materially '
+        'attenuate published confidence', () {
+      final matches = _matches(signedErrorsMs: List<int>.filled(8, 0));
+      final alignment = AlignmentResult(
+        matches: matches,
+        missedExpected: <ExpectedEvent>[
+          for (var i = 0; i < 999; i++)
+            ExpectedEvent(
+              id: 'missed-$i',
+              time: Duration(milliseconds: 10000 + i),
+              type: ExpectedEventType.onset,
+            ),
+        ],
+        extraObserved: const <AnalysisEvent>[],
+        totalCost: 0,
+        confidence: 1,
+        diagnostics: _diagnostics(),
+      );
+
+      final results = _byId(
+        buildTargetTimingMetrics(alignment: alignment, tolerance: _tolerance),
+      );
+      final mae = results[TimingMetricSuiteIds.target.meanAbsoluteError]!;
+      expect(mae.status, CapabilityStatus.available);
+      // matched=8, expected=1007 -> recall = 8/1007 ~= 0.00794.
+      expect(mae.confidence, closeTo(8 / 1007, 1e-9));
+      expect(mae.confidence, lessThan(0.01));
+      expect(mae.confidence, lessThanOrEqualTo(alignment.confidence));
+    });
+
+    test('complete coverage (no misses/extras) retains the R13 confidence', () {
+      final alignment = _alignmentOf(signedErrorsMs: List<int>.filled(8, 0));
+      final results = _byId(
+        buildTargetTimingMetrics(alignment: alignment, tolerance: _tolerance),
+      );
+      final mae = results[TimingMetricSuiteIds.target.meanAbsoluteError]!;
+      expect(mae.confidence, closeTo(alignment.confidence, 1e-9));
+    });
+  });
+
   group('free-play timing — mode separation and confidence ceiling', () {
     test(
       'freeplay IDs are disjoint from target IDs and never appear together',

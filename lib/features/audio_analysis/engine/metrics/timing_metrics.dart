@@ -34,15 +34,52 @@ List<AnalysisMetricResult> buildTargetTimingMetrics({
         evidenceId: match.observed.id,
       ),
   ];
+  final expectedCount =
+      alignment.matches.length + alignment.missedExpected.length;
+  final observedCount =
+      alignment.matches.length + alignment.extraObserved.length;
+  final coverage = _targetCoverageFactor(
+    matchedCount: alignment.matches.length,
+    expectedCount: expectedCount,
+    observedCount: observedCount,
+  );
   return _buildSuite(
     samples: samples,
-    expectedCount: alignment.matches.length + alignment.missedExpected.length,
-    observedCount: alignment.matches.length + alignment.extraObserved.length,
+    expectedCount: expectedCount,
+    observedCount: observedCount,
     tolerance: tolerance,
-    confidence: alignment.confidence,
+    confidence: (alignment.confidence * coverage).clamp(0.0, 1.0),
     ids: TimingMetricSuiteIds.target,
     gate: gate ?? MetricGate(),
   );
+}
+
+/// Target coverage factor (security review R14 MAJOR: target-confidence
+/// coverage) — attenuates the published target confidence by how much of
+/// the expected/observed evidence was actually matched, so a handful of
+/// high-confidence matches against overwhelming misses or extras cannot
+/// publish as if the whole target run were well-supported.
+/// [AlignmentResult.confidence] only averages the *matched* pairs' own
+/// confidence; it says nothing about how sparse that match set is relative
+/// to what was expected or observed. Defined as the minimum of matched
+/// recall (`matchedCount / expectedCount`) and matched precision
+/// (`matchedCount / observedCount`) — the harsher of "how much of what was
+/// expected did we actually see" and "how much of what we saw was
+/// expected" — so a shortfall in either direction attenuates confidence,
+/// not just one. `expectedCount` and `observedCount` are always
+/// `>= matchedCount` (every match contributes to both), so both ratios and
+/// their minimum are always within `[0, 1]`; the result therefore never
+/// makes the published confidence a *stronger* assertion than
+/// [AlignmentResult.confidence] itself, only ever equal or weaker.
+double _targetCoverageFactor({
+  required int matchedCount,
+  required int expectedCount,
+  required int observedCount,
+}) {
+  if (matchedCount <= 0) return 0.0;
+  final recall = expectedCount <= 0 ? 0.0 : matchedCount / expectedCount;
+  final precision = observedCount <= 0 ? 0.0 : matchedCount / observedCount;
+  return recall < precision ? recall : precision;
 }
 
 /// Builds the ten free-play timing metrics (SDD Ch7 §15.5, ADR 0232 §1) by
