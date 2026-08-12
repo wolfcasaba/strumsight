@@ -1,6 +1,6 @@
 # E06-R12 — Beat grid és tempo curve
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-12, main @ `d43bb689`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 12; §14.1–14.6
 - **Branch:** `codex/e06-r12-beat-grid-and-tempo-curve`
 - **Előfeltétel:** **E06-R10 merge**
@@ -11,7 +11,7 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/audio_analysis/domain/rhythm/beat_point.dart",
-  "lib/features/audio_analysis/domain/rhythm/tempo_point.dart",
+  "lib/features/audio_analysis/domain/rhythm/tempo_curve_point.dart",
   "lib/features/audio_analysis/domain/rhythm/beat_grid.dart",
   "lib/features/audio_analysis/engine/rhythm/beat_grid_estimator.dart",
   "lib/features/audio_analysis/engine/rhythm/tempo_curve_builder.dart",
@@ -21,6 +21,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/tempo_curve_builder_test.dart",
   "test/property/analysis_beat_grid_property_test.dart",
   "docs/rag/chunks/020-beat-grid-tempo-curve.md",
+  "docs/adr/0230-beat-grid-tempo-curve-boundary.md",
   "docs/rounds/e06-r12-beat-grid-and-tempo-curve.md",
 ]
 gate_tests = [
@@ -48,8 +49,39 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **Új DSP-mennyiség ⇒ RAG-chunk ugyanabban a
-commitban** (AGENTS.md §9).
+**PLANNING — 2026-08-12 pre-flight revízió, mért `main` HEAD `d43bb689`.**
+
+1. A brief-lint `S5` leletét kódból ellenőriztük:
+   `lib/features/audio_analysis/domain/analysis_timeline.dart:4` már exportált
+   `TempoPoint`-ot deklarál, amelyet az `AnalysisTimeline.tempoPoints`, a V1
+   migrációs adapter és a codec tesztje is használ. Az eredeti új
+   `domain/rhythm/tempo_point.dart` ezért ambiguous exportot okozott volna. A
+   kör saját görbe-pontja **`TempoCurvePoint`**
+   (`domain/rhythm/tempo_curve_point.dart`); a meglévő timeline-típus,
+   adapter és codec érintetlen. Ez név- és útvonalcsere, nem scope-bővítés.
+2. `AnalysisTarget` ma nem létezik; azt az E06-R13 hozza létre
+   (`docs/rounds/e06-r13-target-alignment-engine.md`). R12 ezért nem
+   deklarálhat vagy importálhat `AnalysisTarget`-et. A target-first ágat az
+   R12-saját, adapter-bemenetként használható **`BeatGridTargetInput`**
+   (rendezett beat-idők + beatsPerBar) méri; az R13 később saját snapshotjából
+   alakítja át. A bemenet a `beat_grid.dart` része, nem cross-feature contract.
+3. `AnalysisMetricId.known` zárt négyelemes halmaz, és nem tartalmazza a
+   `tempo.legacy_bpm.v1` vagy `tempo.median_bpm.v1` azonosítót
+   (`analysis_metric_catalog.dart:5–20`); az `AnalysisMetricResult` ezeket
+   fail-closed elutasítja (`analysis_metric.dart:92`). A két azonosító ebben a
+   körben a `TempoCurve` domain-kimenet **helyi, dokumentált címkéje**, nem
+   `AnalysisMetricResult` és nem `AnalysisDocument`-publikáció. A pipeline/
+   persistence-bekötés későbbi kör feladata.
+4. A kötelező `tools/round-slots.py reserve-adr --round E06-R12` **0230**-at
+   foglalt. [ADR 0230](../adr/0230-beat-grid-tempo-curve-boundary.md) rögzíti
+   a külön görbe-modell, a V1 BPM-adapter és a még nem létező target-határ
+   döntését. **Új DSP-mennyiség ⇒ RAG-chunk ugyanabban a commitban**
+   (AGENTS.md §9).
+
+Az implementernek `stopped` jelzést kell adnia, ha a megoldás a meglévő
+`AnalysisTimeline.TempoPoint`, az `AnalysisMetricId` katalógus, az
+`AnalysisDocument`/codec, az R13 `AnalysisTarget` vagy a tiltott
+`lib/features/analyze/**` módosítását igényelné.
 
 ## 1. Cél
 
@@ -75,8 +107,10 @@ BPM-összefoglaló **megőrzése** mellett.
 ## 3. Scope
 
 **Benne:** `BeatPoint` (index, idő, confidence, **source**), `BarPoint`,
-`TempoPoint`, `BeatGrid` aggregátum; `BeatGridEstimator` (free-play: onset-köz
-alapú inferencia; target esetén a **target timebase elsődleges**);
+`TempoCurvePoint` (nem az `AnalysisTimeline.TempoPoint`), `BeatGrid`
+aggregátum és annak R12-saját `BeatGridTargetInput` adapter-bemenete;
+`BeatGridEstimator` (free-play: onset-köz alapú inferencia; target esetén a
+**target timebase elsődleges**);
 `TempoHypothesis` (half/double-time alternatívák + confidence-csökkentés);
 `TempoCurveBuilder` (medián BPM, IQR, lokális eltérés, drift slope, ugrások,
 stabil-régió arány); RAG-chunk.
@@ -90,28 +124,32 @@ importálása, DSP-konstans, `lib/features/analyze/**`, `lib/features/live/**`.
 | Útvonal | Állapot | Miért |
 |---|---|---|
 | `.../domain/rhythm/beat_point.dart` | ÚJ | beat + forrás |
-| `.../domain/rhythm/tempo_point.dart` | ÚJ | tempógörbe pont |
+| `.../domain/rhythm/tempo_curve_point.dart` | ÚJ | R12-saját tempógörbe pont; nem a már exportált `TempoPoint` |
 | `.../domain/rhythm/beat_grid.dart` | ÚJ | rács + bar aggregátum |
 | `.../engine/rhythm/beat_grid_estimator.dart` | ÚJ | inferencia / target-átvétel |
 | `.../engine/rhythm/tempo_hypothesis.dart` | ÚJ | half/double-time |
 | `.../engine/rhythm/tempo_curve_builder.dart` | ÚJ | görbe + stabilitás |
 | `.../public.dart` | meglévő | export |
-| `test/**` | ÚJ | fixture + property |
+| `test/features/audio_analysis/engine/beat_grid_estimator_test.dart` | ÚJ | fixture + target-first mérce |
+| `test/features/audio_analysis/engine/tempo_curve_builder_test.dart` | ÚJ | legacy/küszöb/ambiguitás mátrix |
+| `test/property/analysis_beat_grid_property_test.dart` | ÚJ | rendezettség és véges értékek |
 | `docs/rag/chunks/020-…md` | ÚJ | formulák + küszöbök |
+| `docs/adr/0230-beat-grid-tempo-curve-boundary.md` | ÚJ, pre-flight | a 0.0 § döntése; az implementer nem módosítja |
 
 **Tilos zóna:** `lib/features/live/**`, `lib/features/analyze/**`,
 `lib/app/config/feature_flags.dart` (a flag már létezik). Listán kívül → `stopped`.
 
 ## 5. Kötött architekturális döntések
 
-1. **A legacy BPM megmarad, paritásosan:** a `tempo.legacy_bpm.v1` metrika
+1. **A legacy BPM megmarad, paritásosan:** a `TempoCurve`
+   `tempo.legacy_bpm.v1` helyi címkéjű értéke
    értéke **pontosan** a `_bpmFromStrums` képlete (medián, 0.05 s szűrő,
    clamp 30–300, <2 esemény → 0) — a V2 saját tempóbecslése **külön** metrika
    (`tempo.median_bpm.v1`). **NEM elfogadható:** a legacy BPM
    „megjavítása" (pl. a clamp elhagyása), és **NEM elfogadható** a két
    metrika összemosása.
 2. **Target esetén a target rács az elsődleges** (SDD §14.5): ha van
-   `AnalysisTarget` timebase, a beat-pontok **onnan** jönnek,
+   `BeatGridTargetInput` timebase, a beat-pontok **onnan** jönnek,
    `BeatSource.target` jelöléssel, és a becslés **nem fut le**.
    **NEM elfogadható:** a target rács „ellenőrzésképpen" újrabecslése.
 3. **Half/double-time = alternatív hipotézis, nem hallgatólagos választás**
@@ -139,7 +177,7 @@ open_decisions:
     blocking: true
     resolution_policy: use_default
     default: >-
-      8 onset/strum esemény ÉS legalább 4 másodperc klip-hossz — mindkettő
+      legalább 8 onset/strum esemény ÉS legalább 4 másodperc klip-hossz — mindkettő
       néven nevezett konstans a RAG-chunkban, ideiglenesként jelölve az
       E06-R29 evaluationig.
   - id: OD-02
