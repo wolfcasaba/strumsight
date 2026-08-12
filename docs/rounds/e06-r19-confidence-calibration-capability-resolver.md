@@ -1,6 +1,6 @@
 # E06-R19 — Confidence calibration és capability resolver
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-12, main @ `cc8faca1`; ADR [0237](../adr/0237-analysis-confidence-combiner-and-capability-resolver.md))
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 19; §7.5, §19.1–19.6
 - **Branch:** `codex/e06-r19-confidence-calibration-capability-resolver`
 - **Előfeltétel:** **E06-R07, E06-R14, E06-R16, E06-R17 merge**
@@ -32,13 +32,14 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R07/R14/R16/R17 merge.
-> Gyűjtsd ki a **tényleges** capability-kapukat, amiket az R12/R14/R15/R16/R17
-> szórtan bevezetett (`MetricGate`, `DynamicsGate`, `PitchCapabilityGate`) —
-> ez a kör **egységesíti** őket, nem duplikálja. Ha egy kapu logikája
-> nem mozgatható át a fájllista tágítása nélkül, az **`stopped`** + brief-revízió.
-> Az R02 `analysis_capability.dart` bővítése kizárólag **additív**.
-> PREPARED→PLANNING, brief commit előbb.
+> ⚠ **Pre-flight ELVÉGEZVE (2026-08-12, lásd §0.0):** a tényleges
+> capability-kapukat (`MetricGate`, `DynamicsGate`, `PitchCapabilityGate`)
+> számba vettük — `DynamicsGate`/`PitchCapabilityGate` mozgatása a fájllista
+> tágítása nélkül NEM megy, ezért a §0.0 **nem** `stopped`-ot választott,
+> hanem szűkítette a scope-ot: ez a kör az ÚJ `engine/confidence/**` modult
+> szállítja, a meglévő kapuk átvezetése egy jövőbeli körre marad. Az R02
+> `analysis_capability.dart` bővítése kizárólag **additív**.
+> PREPARED→PLANNING megtörtént, brief commitolva.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -51,8 +52,42 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az R01 ADR 0201 (confidence/abstention) és 0204
-(capability-publikáció) végrehajtása.
+**PLANNING — pre-flight revízió (2026-08-12, `cc8faca1`, 192 commit
+renonszancia a brief `a6e6f3d` mérési baseline-jéhez képest).** Két mért
+lelet, mindkettő itt feloldva (ADR 0237 rögzíti részletesen):
+
+1. **Stale ADR-hivatkozások.** A brief eredeti szövege „ADR 0201"
+   (confidence/abstention), „ADR 0204" (capability-publikáció) és „ADR
+   0203" (metric-version) számokra hivatkozott. Ezek a számok az R01
+   pre-flight (2026-08-11) óta **elavultak**: a teljes hatos ADR-blokk
+   0200–0205-ről 0215–0220-ra tolódott, amit [ADR 0216](../adr/0216-analysis-confidence-calibration-and-abstention.md)
+   és [ADR 0219](../adr/0219-analysis-capability-aware-publication.md)
+   saját fejléce is dokumentál („Sorszám-jegyzet"). A helyes megfeleltetés
+   — **0201→0216, 0204→0219, 0203→0218** — a brief teljes szövegében
+   javítva (lásd §5 pont 3 és 6 lent).
+2. **`§8` lépéssor 6. pontja („A metrika-modulok kapu-hívásainak
+   átvezetése") KIVÉVE a kör scope-jából.** Mérve: a három szórt kapu
+   közül `DynamicsGate` (`engine/metrics/dynamics_gate.dart`, R16) és
+   `PitchCapabilityGate` (`engine/pitch/pitch_capability_gate.dart`, R17)
+   **ma is önállóan konstruálnak** `CapabilityStatus`/`CapabilityReport`-ot
+   (nem csak bool küszöböt, mint a `MetricGate`) — de egyik fájl sincs a
+   kör `allowed_paths`-án: a `dynamics_gate.dart` a §4 explicit tilos
+   zónájában él, a `pitch_capability_gate.dart` pedig nincs se az
+   engedélyezett listán, se a tilos zóna felsorolásában. A retrofit tehát
+   vagy a tilos zóna feloldását, vagy a fájllista bővítését igényelné —
+   a §9 kockázat pontosan ezt a helyzetet jósolta meg, és a feloldást a
+   §0.0-ra bízta. **Döntés: a lépés kimarad**, mert egyetlen acceptance
+   criterion sem igényli (mindegyik a resolvert közvetlen, szintetikus
+   bemenettel hívja), és a retrofit egy jövőbeli bekötő kör feladata
+   marad (HANDOFF §3 follow-up-ként rögzítve zárás után). A §6 „Egyetlen
+   döntési pont" kritériumát ennek megfelelően **az ÚJ `engine/confidence/**`
+   modulra szűkítve** kell mérni (lásd az adott bullet módosított
+   szövegét lent) — nem repó-szintű, retroaktív állításként a már
+   merge-elt R16/R17 kódra.
+
+Minden más brief-állítás (a domainmodell 14/4/13 értéke, az ARB-ek
+tisztán additív állapota, a `confidenceThreshold` Live-only hatóköre) a
+kódban változatlanul igaznak mérve — nincs további revízió.
 
 ## 1. Cél
 
@@ -116,7 +151,8 @@ módosítása, insight (R20), UI, kalibrációs **dataset** (R29).
    `min` a kritikus capabilityken, súlyozott aggregátum a többin, és
    **kritikus capability `unavailable` → overall legfeljebb `degraded`**.
    **NEM elfogadható:** `metrics.map((m) => m.confidence).average`.
-3. **A nyers score nem probability** (ADR 0201): a resolver a
+3. **A nyers score nem probability** (ADR 0216, javított szám — lásd
+   §0.0): a resolver a
    `CalibrationTable`-ön keresztül képez le, a tábla **verziózott** és a
    provenance-be kerül. A V1 táblája **identitás** (nincs valós kalibráció),
    de **explicit** `calibrationVersion = "identity.v1"` jelöléssel.
@@ -129,7 +165,7 @@ módosítása, insight (R20), UI, kalibrációs **dataset** (R29).
    **NEM elfogadható:** „ismeretlen ok" fallback szöveg.
 6. **A küszöbök verziózottak és egy helyen élnek**; a `thresholdsVersion` a
    provenance-be kerül, és a változtatása **metric version** emelést von maga
-   után (ADR 0203).
+   után (ADR 0218, javított szám — lásd §0.0).
 7. **Determinizmus:** azonos bemenetre azonos kimenet; a resolver
    állapotmentes.
 
@@ -194,10 +230,16 @@ open_decisions:
 - [ ] **Ok-lokalizáció teljesség:** teszt iterál a
       `CapabilityUnavailableReason.values` **összes** értékén, és mindegyikre
       **mindkét** ARB-ben talál kulcsot (a hiányzó → PIROS).
-- [ ] **Egyetlen döntési pont:** teszt (statikus, forrásolvasó a
-      `test/tooling` mintájára **vagy** hívásszámlálós seam) méri, hogy a
-      metrika-modulok **nem** állítanak be capability-státuszt közvetlenül —
-      minden `CapabilityReport` a resolverből származik.
+- [ ] **Egyetlen döntési pont (§0.0 szerint szűkítve az ÚJ modulra):** teszt
+      (statikus, forrásolvasó a `test/tooling` mintájára **vagy**
+      hívásszámlálós seam) méri, hogy az `engine/confidence/**` fájlok között
+      **pontosan egy hely** (`capability_resolver.dart`) állít be
+      `CapabilityStatus`-t — a `confidence_combiner.dart`/`calibration_table.dart`/
+      `capability_thresholds.dart` csak bemenetet/leképezést ad, státuszt nem.
+      **Nem** követeli meg, hogy a már merge-elt `DynamicsGate`/
+      `PitchCapabilityGate` (R16/R17, `allowed_paths`-on kívül) is a
+      resolveren keresztül döntsön — az a retrofit egy jövőbeli bekötő kör
+      scope-ja (§0.0, ADR 0237).
 - [ ] **Determinizmus:** ugyanaz a bemenet 100 futásra bitazonos kimenet.
 
 > **Küszöb-konvenció:** minden numerikus küszöbhöz a mátrix **három** cellát
@@ -235,22 +277,28 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 3. `calibration_table.dart` (identity.v1, monoton szerződés).
 4. `confidence_combiner.dart` (geometriai átlag + kemény kapuk).
 5. `capability_resolver.dart` (egyetlen belépő).
-6. A metrika-modulok kapu-hívásainak átvezetése (a **hívás**, nem a számítás).
+6. ~~A metrika-modulok kapu-hívásainak átvezetése~~ — **KIVÉVE §0.0 szerint**
+   (a `DynamicsGate`/`PitchCapabilityGate` retrofitja `allowed_paths`-on
+   kívül esik; egy jövőbeli bekötő kör feladata).
 7. ARB-teljesség; property; gate.
 
 ## 9. Kockázatok
 
-- **A kapuk átvezetése érintheti az R14–R18 fájljait** — a §4 tilos zóna
-  szerint azok **nem** módosíthatók. Ha az átvezetés enélkül nem megy, az
-  **`stopped`** + brief-revízió a fájllista bővítéséről (ez a legvalószínűbb
-  pre-flight lelet ebben a körben — a §0.0-ban kell eldönteni).
+- ~~A kapuk átvezetése érintheti az R14–R18 fájljait~~ — **feloldva a §0.0
+  pre-flight revízióban (ADR 0237):** a lépés kimarad ebből a körből,
+  nincs `stopped`. A `DynamicsGate`/`PitchCapabilityGate` továbbra is
+  önállóan dönt `CapabilityStatus`-ról — mért, dokumentált, nyitva hagyott
+  gap egy jövőbeli bekötő kör számára (HANDOFF §3).
 - **A geometriai átlag 0-ra érzékeny** — a képlet `max(ε, x)` alsó vágást
   használ, `ε = 1e−6`, dokumentáltan.
 - **A küszöbök kalibrálatlanok** — az eval-mátrix PENDING sort kap, és az
   R29 kalibrálja őket.
 
-**STOP:** párhuzamos kapu meghagyása, számtani átlag vagy a nyers score
-`calibrated` jelölése helyett `stopped` + brief-revízió.
+**STOP:** az ÚJ `engine/confidence/**` modulon belüli párhuzamos
+kapu-döntés, számtani átlag vagy a nyers score `calibrated` jelölése
+helyett `stopped` + brief-revízió. (A `DynamicsGate`/`PitchCapabilityGate`
+meglévő, önálló döntése a §0.0 szerint tudott és elfogadott állapot —
+**nem** STOP-ok.)
 
 ## 10. Implementation handoff — az implementer tölti ki
 
