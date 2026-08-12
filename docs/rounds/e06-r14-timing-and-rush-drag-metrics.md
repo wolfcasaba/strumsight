@@ -21,7 +21,10 @@ allowed_paths = [
   "test/features/audio_analysis/engine/timing_metrics_test.dart",
   "test/features/audio_analysis/engine/timing_hotspots_test.dart",
   "test/property/analysis_timing_property_test.dart",
+  "docs/adr/0232-timing-metric-identity-and-publication-boundary.md",
   "docs/rounds/e06-r14-timing-and-rush-drag-metrics.md",
+  "docs/reviews/e06-r14-timing-and-rush-drag-metrics-review.md",
+  "docs/reviews/e06-r14-timing-and-rush-drag-metrics-security.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -49,8 +52,30 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az ADR 0203 (metric ID/verzió) és 0204
-(capability-publikáció) végrehajtása.
+**PREPARED → PLANNING (R1 pre-flight, 2026-08-12, orchestrator).**
+`tools/round-slots.py reserve-adr --round E06-R14` a **0232** számot
+foglalta. A batch brief régi `ADR 0203`/`0204` hivatkozásai az E06-R02-ben
+dokumentált számozás-eltolódás miatt a tényleges [ADR 0218](../adr/0218-analysis-metric-id-and-version-governance.md) és
+[ADR 0219](../adr/0219-analysis-capability-aware-publication.md) dokumentumokra
+mutatnak; a 0203/0204 fájlok nem léteznek. Az új [ADR 0232](../adr/0232-timing-metric-identity-and-publication-boundary.md)
+az e körben ténylegesen bővülő katalógus saját identity- és publikációs
+határát rögzíti.
+
+Mérés a friss `main`-en (`76f18991`): az R13
+`AlignmentMatch.timingError` már pontosan `observed.time - expected.time`
+(negatív = early, pozitív = late), `AlignmentResult` mezői `matches`,
+`missedExpected`, `extraObserved`, `confidence`; a `TolerancePolicy` 120
+BPM-en 125 ms-t ad, és 126 ms már nem párosítható. A meglévő
+`timing.mean_absolute_error.v1` csak az R02 által előre felvett, általános
+katalógus-konstans: nem nevezhető át és nem használható az új mode-szétválasztás
+helyett. Ezért R14 kizárólag új, `timing.target_*` és `timing.freeplay_*`
+ID-kat ad hozzá, az eredeti konstans változatlan marad.
+
+A kötelező review-artefaktum és a saját ADR explicit bekerült az
+`allowed_paths` listába, így a review commitolható scope-sértés nélkül
+(LESSONS L88). Mivel `risk = "high"`, a kötelező dedikált security-review
+artefaktum is explicit scope-ot kapott; a review csak read-only értékelést
+tartalmaz, production kódot nem módosít.
 
 ## 1. Cél
 
@@ -244,7 +269,201 @@ tolerancia „finomhangolása" helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció:** Claude Sonnet 5 (motor: `sonnet-impl`), 2026-08-12.
+
+**Új fájlok:**
+- `lib/features/audio_analysis/engine/metrics/metric_gate.dart` — `MetricGate`
+  (`minimumMatchedPairs=8`, `minimumStreakMatchedPairs=3`, OD-01 default).
+- `lib/features/audio_analysis/engine/metrics/timing_metrics.dart` —
+  `buildTargetTimingMetrics(alignment, tolerance, {gate})` az `AlignmentResult`-ból,
+  `buildFreePlayTimingMetrics(observed, beatGrid, {tolerancePolicy, gate})` a
+  legközelebbi beat-hez illesztve (nearest-neighbour, egy beat legfeljebb egy
+  observed eventet fogad). Közös `_buildSuite` mag számolja mind a tíz
+  metrikát mindkét módra, csak az ID-készlet (`TimingMetricSuiteIds.target` /
+  `.freeplay`) és a bemeneti minta (`AlignmentMatch` vs. nearest-beat) tér el.
+  A p90 a numpy `"linear"` módszerével egyező interpolációt használ
+  (doc-comment: `index = q * (n-1)`), a medián a szokásos páros/páratlan
+  átlagolás. `early`/`late` a hiba előjeléből (nem a toleranciából) számolt
+  **független** kategorizálás; `onTime` a toleranciából; a három NEM
+  particionálja egymást kölcsönösen kizáróan (ez szándékos — lásd a
+  "minden korán → earlyRatio=1.0" acceptance-cellát, ami toleranciafüggetlen).
+  A `missedRatio` nevezője `expectedCount`, az `extraRatio` nevezője
+  `observedCount` (OD szerint, külön tesztelve).
+- `lib/features/audio_analysis/engine/metrics/timing_hotspots.dart` —
+  `buildTimingHotspots(alignment, tolerance, ids, {minimumSpanMatches=2})`:
+  legalább két egymást követő, toleranciasávon kívüli matched pár esetén
+  hotspotot épít, `evidenceIds` az érintett observed event ID-k,
+  `metricIds` a `[onTimeRatio, meanAbsoluteError]` pár.
+
+**Módosított fájlok (additív):**
+- `analysis_metric_catalog.dart` — 20 új ID (`timing.target_*` × 10,
+  `timing.freeplay_*` × 10) + `TimingMetricSuiteIds` csoportosító típus.
+  A meglévő `timing.mean_absolute_error.v1` és a többi ID változatlan.
+- `public.dart` — export a három új engine-fájlra.
+- `lib/l10n/app_en.arb`, `app_hu.arb` — 12 additív kulcs: 10 metrikanév
+  (`timingMetric*`) + 2 külön sietés/késés kulcs (`timingFeedbackRushing`,
+  `timingFeedbackDragging`). A `messageKey`-vezénylés (melyik kulcsot mikor
+  mutassa a UI) kívül esik ezen a körön (UI-widget tiltott zóna) — ezek ma
+  csak katalogizált, pariáló ARB-bejegyzések, egy jövőbeli round köti be.
+
+**Tesztek (RED→GREEN, mind a brief §8 sorrendjében írva):**
+- `test/features/audio_analysis/domain/timing_metric_catalog_test.dart` —
+  additivitás, diszjunktság, regex, katalógus-tagság.
+- `test/features/audio_analysis/engine/timing_metrics_test.dart` —
+  előjel-mátrix (4 cella), 124/125/126 ms küszöbhármas (a **tényleges**
+  `EventAligner`-en át, nem szintetikus), p90 kézi cella (`162 ms` @
+  index 8.1, mediántól `>50 ms`-re), 7/8/9 minimum-eseményszám hármas,
+  streak-mátrix (4 cella), missed/extra nevező-teszt (10 expected + 8
+  observed, 7 matched → `3/10` és `1/8`), free-play diszjunkt ID + confidence
+  ≤ beat-rács confidence.
+- `test/features/audio_analysis/engine/timing_hotspots_test.dart` —
+  referenciális integritás, üres eredmény tökéletes/izolált esetekre.
+- `test/property/analysis_timing_property_test.dart` — 200×200 randomizált
+  próba (`PROPERTY_SEED`, default 42) `buildTargetTimingMetrics` és
+  `buildFreePlayTimingMetrics`-re: minden érték véges, minden arány `[0,1]`.
+
+**Valódi-sértés próba (§6 utolsó sora):** a `MetricGate.minimumMatchedPairs`
+alapértékét ideiglenesen `8`→`1`-re állítottam, lefuttattam a 7-páros
+`unavailable`-tesztet — **PIROS** lett (`Expected: unavailable, Actual:
+available`), majd visszaállítottam `8`-ra és a teszt újra **ZÖLD**. A kapu
+ténylegesen a teszt által mért viselkedést vezérli.
+
+**Gate-eredmény (`tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld  (69 teszt-fájl összesen, R14 új
+                                             tesztjei köztük mind zöld)
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
+
+**Kivül maradt tudatosan:** a `messageKey`/UI-kötés (jövőbeli round), a
+free-play free-run bemenet valós `BeatGridEstimator`-ral történő integrálása
+(ez a hívó felelőssége — a metrikafüggvény csak a `BeatGrid` kontraktust
+fogyasztja), rhythm/dinamika/insight metrikák (R15/R16/R20).
+
+### 10.1 Repair — independent security review MAJOR findings (2026-08-12)
+
+The independent high-risk security review found two blocking defects; both
+are fixed within the brief's `allowed_paths`.
+
+1. **`MetricGate` fail-closed at runtime.** The constructor validated
+   `minimumMatchedPairs`/`minimumStreakMatchedPairs` only via `assert`
+   (stripped in release), so `MetricGate(minimumMatchedPairs: 0)` could reach
+   `_buildSuite` in a release build and divide a zero-sample suite (`0 / 0`),
+   producing `NaN`. Fixed: the constructor now throws `ArgumentError` for any
+   non-positive threshold, in a normal (non-`assert`) constructor body — this
+   required dropping `const` from the constructor (a `throw` cannot appear in
+   a `const` constructor). Both call sites in `timing_metrics.dart`
+   (`buildTargetTimingMetrics`/`buildFreePlayTimingMetrics`) changed their
+   `MetricGate gate = const MetricGate()` default parameter to `MetricGate?
+   gate` with `gate ?? MetricGate()` internally, since a non-const
+   constructor can no longer serve as a default-parameter value. The two
+   pre-existing `const MetricGate(...)` test call sites
+   (`test/.../timing_metrics_test.dart`) dropped `const` accordingly; no
+   other production or test file constructed `MetricGate` with `const`.
+2. **Free-play boundary rejects non-finite observed confidence.**
+   `AnalysisEvent`'s own `[0, 1]` confidence range check
+   (`confidence < 0 || confidence > 1`) does not catch `NaN` — all
+   comparisons against `NaN` are `false`, so the check silently passes a NaN
+   confidence, unlike `EventAligner`'s use path. `buildFreePlayTimingMetrics`
+   averaged `event.confidence` across matched observed events into the
+   published free-play confidence, so a NaN event confidence could reach
+   `AnalysisMetricResult` — whose own confidence range check has the same
+   `NaN`-blind-spot — and publish a NaN confidence. Fixed: added an
+   up-front loop in `buildFreePlayTimingMetrics` that throws `ArgumentError`
+   on the first non-finite `observed[i].confidence`, before any matching or
+   averaging. Domain contracts (`AnalysisEvent`, `AnalysisMetricResult`) are
+   unchanged — both are outside `allowed_paths`; the fix is scoped entirely
+   to the free-play boundary function as instructed.
+
+**Regression tests added** (`test/features/audio_analysis/engine/timing_metrics_test.dart`):
+- `MetricGate — fails closed at runtime (security review R14 §1)`: zero
+  `minimumMatchedPairs` and negative `minimumStreakMatchedPairs` both throw
+  `ArgumentError`.
+- `free-play timing — ... a non-finite observed confidence is rejected
+  before publication (security review R14 §2)`: a single `OnsetEvent` with
+  `confidence: double.nan` passed to `buildFreePlayTimingMetrics` throws
+  `ArgumentError`.
+
+**Real-violation proof (both findings):**
+- §1: temporarily replaced the `minimumMatchedPairs <= 0` guard with `if
+  (false)` — the "zero minimumMatchedPairs is rejected" test went **RED**
+  (`MetricGate` was constructed instead of throwing); reverted, test
+  **GREEN** again.
+- §2: temporarily replaced the `!event.confidence.isFinite` guard with `if
+  (false)` — the "non-finite observed confidence is rejected" test went
+  **RED** (the function returned a full metric-result list instead of
+  throwing, i.e. the NaN would have silently propagated); reverted, test
+  **GREEN** again.
+
+**Gate-eredmény (repair, `tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
+
+### 10.2 Repair — independent security review target-confidence coverage MAJOR (2026-08-12)
+
+The independent security review flagged one remaining MAJOR: `buildTargetTimingMetrics`
+published `AlignmentResult.confidence` unattenuated — that field is only the
+average confidence of the *matched* pairs, so e.g. 8 matches at confidence
+1.0 plus 999 missed expected events could publish as `available` at
+confidence 1.0, falsely presenting sparse evidence as certain.
+
+**Fix (`lib/features/audio_analysis/engine/metrics/timing_metrics.dart`,
+`buildTargetTimingMetrics` only — R13 files, UI, Practice, and free-play
+untouched):** added a named, documented `_targetCoverageFactor` —
+`min(matchedCount / expectedCount, matchedCount / observedCount)` (matched
+recall vs. matched precision; the harsher of the two) — and published
+`(alignment.confidence * coverage).clamp(0.0, 1.0)` in place of the raw
+`alignment.confidence`. Since `expectedCount` and `observedCount` are always
+`>= matchedCount`, both ratios and their minimum are always in `[0, 1]`, so
+the published confidence is always finite and never stronger than
+`AlignmentResult.confidence` — only ever equal (complete coverage) or
+weaker (sparse coverage).
+
+**Regression tests added**
+(`test/features/audio_analysis/engine/timing_metrics_test.dart`, group
+`buildTargetTimingMetrics — target coverage factor (security review R14
+MAJOR: target-confidence coverage)`):
+- 8 matches at confidence 1.0 with 999 missed expected events (0 extra):
+  published `meanAbsoluteError.confidence` is `closeTo(8/1007, 1e-9)`
+  (`< 0.01`), materially attenuated vs. the raw `alignment.confidence == 1`.
+- Complete coverage (no misses/extras, the pre-existing `_alignmentOf`
+  helper): published confidence stays `closeTo(alignment.confidence, 1e-9)`
+  — the R13 contract is preserved unchanged for the normal case.
+
+**Gate-eredmény (`tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
 
 ## 11. Review — a független reviewer tölti ki
 
