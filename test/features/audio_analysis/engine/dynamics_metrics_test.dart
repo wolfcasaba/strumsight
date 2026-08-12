@@ -383,6 +383,190 @@ void main() {
       }
     });
   });
+
+  group('security review R16 regressions', () {
+    test('a non-finite event confidence is rejected before publication', () {
+      final events = <StrumEvent>[
+        for (var i = 0; i < 10; i++)
+          StrumEvent(
+            id: 'e$i',
+            time: Duration(milliseconds: _spacingMs * i),
+            confidence: i == 3 ? double.nan : 1.0,
+            direction: StrumDirection.down,
+            sampleIndex: _spacingMs * i,
+            attackStrength: 1.0,
+            localRms: 0.5,
+          ),
+      ];
+      expect(
+        () => buildDynamicsMetrics(
+          audio: _audio(events),
+          events: events,
+          signalQuality: _report(),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('duplicate event ids are rejected — the clipping-spoof bypass is '
+        'impossible', () {
+      // 20 events keeps the 0.1 `inputClipped` boundary in reach: with the
+      // old overwrite-by-id bug, two real clips hiding behind a duplicate
+      // id would read as an `available` 0.0 clip ratio instead.
+      final events = <StrumEvent>[
+        for (var i = 0; i < 20; i++)
+          StrumEvent(
+            id: i == 19 ? 'e0' : 'e$i',
+            time: Duration(milliseconds: _spacingMs * i),
+            confidence: 1.0,
+            direction: StrumDirection.down,
+            sampleIndex: _spacingMs * i,
+            attackStrength: 1.0,
+            localRms: 0.5,
+          ),
+      ];
+      expect(
+        () => buildDynamicsMetrics(
+          audio: _audio(events, clippedIndices: const {0, 19}),
+          events: events,
+          signalQuality: _report(),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('a missing localRms publishes quiet-region unavailable, never a '
+        'fabricated zero', () {
+      final events = <StrumEvent>[
+        for (var i = 0; i < 10; i++)
+          StrumEvent(
+            id: 'e$i',
+            time: Duration(milliseconds: _spacingMs * i),
+            confidence: 1.0,
+            direction: StrumDirection.down,
+            sampleIndex: _spacingMs * i,
+            attackStrength: 1.0,
+            localRms: i == 2 ? null : 1.0,
+          ),
+      ];
+      final report = buildDynamicsMetrics(
+        audio: _audio(events),
+        events: events,
+        signalQuality: _report(),
+      );
+      final quietRegion = _result(report, DynamicsMetricIds.quietRegionRatio);
+      expect(quietRegion.status, CapabilityStatus.unavailable);
+      expect(
+        quietRegion.unavailableReason,
+        CapabilityUnavailableReason.internalFailure,
+      );
+    });
+
+    test('a sampleIndex incoherent with the event time is rejected, closing '
+        'the unrelated clipping-scan path', () {
+      final events = _events(
+        List<double>.filled(10, 1.0),
+        List<StrumDirection>.filled(10, StrumDirection.down),
+      );
+      final tampered = <StrumEvent>[
+        for (var i = 0; i < events.length; i++)
+          if (i == 5)
+            StrumEvent(
+              id: events[i].id,
+              time: events[i].time,
+              confidence: events[i].confidence,
+              direction: events[i].direction,
+              sampleIndex: 0,
+              attackStrength: events[i].attackStrength,
+              localRms: events[i].localRms,
+            )
+          else
+            events[i],
+      ];
+      expect(
+        () => buildDynamicsMetrics(
+          audio: _audio(events),
+          events: tampered,
+          signalQuality: _report(),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('a sampleIndex outside the audio bounds is rejected', () {
+      final events = _events(
+        List<double>.filled(5, 1.0),
+        List<StrumDirection>.filled(5, StrumDirection.down),
+      );
+      final audio = PreprocessedAudio(
+        originalSamples: List<double>.filled(10, _quiet),
+        canonicalSamples: List<double>.filled(10, _quiet),
+        sampleRate: _sampleRate,
+        originalChannelCount: 1,
+        normalizationGain: 1.0,
+        preprocessingVersion: 'test',
+      );
+      expect(
+        () => buildDynamicsMetrics(
+          audio: audio,
+          events: events,
+          signalQuality: _report(),
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('DynamicsGate fails closed (security review R16 MAJOR-2)', () {
+    test('a non-finite clippedEventRatioDegraded is rejected', () {
+      expect(
+        () => DynamicsGate(clippedEventRatioDegraded: double.nan),
+        throwsArgumentError,
+      );
+    });
+
+    test('a non-finite silentRatioUnavailable is rejected', () {
+      expect(
+        () => DynamicsGate(silentRatioUnavailable: double.nan),
+        throwsArgumentError,
+      );
+    });
+
+    test('inverted clipped-ratio thresholds are rejected', () {
+      expect(
+        () => DynamicsGate(
+          clippedEventRatioDegraded: 0.5,
+          clippedEventRatioUnavailable: 0.1,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('inverted noise-floor thresholds are rejected', () {
+      expect(
+        () => DynamicsGate(
+          noiseFloorDegradedDbfs: -20.0,
+          noiseFloorUnavailableDbfs: -30.0,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('a non-finite silentRatio in the quality report fails closed to '
+        'unavailable, not a fabricated pass', () {
+      final events = _events(
+        List<double>.filled(10, 1.0),
+        List<StrumDirection>.filled(10, StrumDirection.down),
+      );
+      final report = buildDynamicsMetrics(
+        audio: _audio(events),
+        events: events,
+        signalQuality: _report(silentRatio: double.nan),
+      );
+      expect(report.gateStatus, CapabilityStatus.unavailable);
+      expect(report.gateReason, CapabilityUnavailableReason.internalFailure);
+    });
+  });
 }
 
 double _value(DynamicsMetricReport report, String id) {

@@ -56,9 +56,9 @@ DynamicsMetricReport buildDynamicsMetrics({
   DynamicsGate? qualityGate,
   Set<String>? expectedAccentEventIds,
 }) {
-  _validateEvents(events);
+  _validateEvents(events, audio);
   final metricGate = gate ?? MetricGate();
-  final dynamicsGate = qualityGate ?? const DynamicsGate();
+  final dynamicsGate = qualityGate ?? DynamicsGate();
 
   final clippedById = <String, bool>{
     for (final event in events) event.id: _isClipped(event, audio),
@@ -238,10 +238,20 @@ DynamicsMetricReport buildDynamicsMetrics({
     _outlierRatio(normalizedStrengths),
   );
 
-  final quietRegionRatio = percentage(
-    DynamicsMetricIds.quietRegionRatio,
-    _quietRegionRatio(nonClipped),
-  );
+  // A missing `localRms` must never silently read as "silent" — that would
+  // fabricate quiet-region evidence for events that never measured a local
+  // RMS (security review R16 MAJOR-4).
+  final missingLocalRms = nonClipped.any((event) => event.localRms == null);
+  final quietRegionRatio = missingLocalRms
+      ? unavailable(
+          DynamicsMetricIds.quietRegionRatio,
+          reason: CapabilityUnavailableReason.internalFailure,
+          sampleCount: nonClipped.length,
+        )
+      : percentage(
+          DynamicsMetricIds.quietRegionRatio,
+          _quietRegionRatio(nonClipped),
+        );
 
   final accentAccuracy = _accentAccuracy(
     nonClipped: nonClipped,
@@ -264,18 +274,54 @@ DynamicsMetricReport buildDynamicsMetrics({
   );
 }
 
-void _validateEvents(List<StrumEvent> events) {
+void _validateEvents(List<StrumEvent> events, PreprocessedAudio audio) {
   Duration? previous;
+  final seenIds = <String>{};
   for (final event in events) {
     if (previous != null && event.time <= previous) {
       throw ArgumentError('events must be strictly time ordered.');
     }
     previous = event.time;
+    // A duplicate id lets a later, non-clipped event overwrite an earlier
+    // clipped one in `clippedById` — that can hide real clipping behind an
+    // `available` 0.0 ratio (security review R16 MAJOR-3).
+    if (!seenIds.add(event.id)) {
+      throw ArgumentError('Duplicate StrumEvent id ${event.id}.');
+    }
+    // `AnalysisEvent`'s own `[0, 1]` range check does not catch `NaN` (its
+    // comparisons are all false for `NaN`), so a non-finite confidence could
+    // otherwise reach `_mean` and publish as a fabricated metric confidence
+    // (security review R16 MAJOR-1).
+    if (!event.confidence.isFinite) {
+      throw ArgumentError.value(
+        event.confidence,
+        'StrumEvent ${event.id}.confidence',
+        'must be finite',
+      );
+    }
     if (event.sampleIndex == null) {
       throw ArgumentError('StrumEvent ${event.id} is missing sampleIndex.');
     }
     if (event.attackStrength == null) {
       throw ArgumentError('StrumEvent ${event.id} is missing attackStrength.');
+    }
+    final sampleIndex = event.sampleIndex!;
+    if (sampleIndex >= audio.originalSamples.length) {
+      throw ArgumentError.value(
+        sampleIndex,
+        'StrumEvent ${event.id}.sampleIndex',
+        'must be within the audio bounds',
+      );
+    }
+    // R10 guarantees `sampleIndex` and `time` are derived from the same
+    // instant; a mismatch here would let a fabricated/mistranscribed index
+    // drive an unrelated clipping scan (security review R16 MAJOR-5).
+    final expectedSampleIndex = audio.durationToSampleIndex(event.time);
+    if (sampleIndex != expectedSampleIndex) {
+      throw ArgumentError(
+        'StrumEvent ${event.id} sampleIndex $sampleIndex is incoherent with '
+        'time ${event.time} (expected $expectedSampleIndex).',
+      );
     }
   }
 }
@@ -288,10 +334,11 @@ bool _isClipped(StrumEvent event, PreprocessedAudio audio) {
   if (samples.isEmpty) return false;
   final start = event.sampleIndex!;
   if (start >= samples.length) return false;
-  final end = math.min(
-    audio.durationToSampleIndex(event.time + _attackWindow),
-    samples.length - 1,
-  );
+  final windowSamples =
+      _attackWindow.inMicroseconds *
+      audio.sampleRate ~/
+      Duration.microsecondsPerSecond;
+  final end = math.min(start + windowSamples, samples.length - 1);
   for (var index = start; index <= end; index++) {
     final sample = samples[index];
     if (sample.isFinite && sample.abs() >= _clippedSampleThreshold) {
@@ -367,7 +414,7 @@ double _outlierRatio(List<double> normalizedStrengths) {
 
 double _quietRegionRatio(List<StrumEvent> nonClipped) {
   if (nonClipped.isEmpty) return 0;
-  final rms = <double>[for (final event in nonClipped) event.localRms ?? 0];
+  final rms = <double>[for (final event in nonClipped) event.localRms!];
   final medianRms = _median(rms);
   if (medianRms <= 0) return 0;
   final threshold = medianRms * dynamicsQuietRmsFraction;

@@ -339,6 +339,65 @@ MINDEN GATE ZÖLD.
 tényleges analízis-futtatáshoz — ADR 0234 szerint ez egy későbbi kör
 feladata.
 
+**Security review korrekció (`sonnet-impl`, 2026-08-12, baseline `c6ced96c`).**
+A review 5 MAJOR találatot azonosított; mindegyiket a §4 engedélyezett
+fájljain belül javítottuk:
+
+1. **Véges esemény-confidence** — `_validateEvents` (`dynamics_metrics.dart`)
+   mostantól explicit `isFinite` ellenőrzést végez minden esemény
+   `confidence`-én publikálás előtt (a `timing_metrics.dart` mintáját
+   követve) — a bázis `AnalysisEvent`/`AnalysisMetricResult` `[0,1]`
+   tartomány-ellenőrzése `NaN`-re nem fog, mert minden `NaN`-összehasonlítás
+   hamis.
+2. **Fail-closed minőségi bemenetek/konfiguráció** — `DynamicsGate`
+   konstruktora (`dynamics_gate.dart`) mostantól elutasítja a nem-véges vagy
+   fordított sorrendű küszöböket (`clippedEventRatioDegraded/Unavailable`,
+   `noiseFloorDegraded/UnavailableDbfs`, `silentRatioUnavailable`); az
+   `evaluate()` a `SignalQualityReport.noiseFloorDbfs`/`silentRatio`
+   nem-véges értékeire fail-closed `unavailable(internalFailure)`-t ad
+   vissza publikálás helyett.
+3. **Duplikált event-ID clipping-spoof** — `_validateEvents` elutasítja a
+   duplikált `StrumEvent.id`-t (korábban egy későbbi, nem-clippelt esemény
+   felülírhatta a `clippedById` térképben egy korábbi valódi clip
+   bejegyzését).
+4. **Hiányzó `localRms` fabrikált evidence** — `_quietRegionRatio` bemenete
+   mostantól csak akkor számol, ha minden nem-clippelt eseménynek van
+   `localRms`-e; hiányzó érték esetén a `dynamics.quiet_region_ratio.v1`
+   `unavailable(internalFailure)`, sosem fabrikált nulla.
+5. **Idő/sample-index koherencia és clipping-scan** — `_validateEvents`
+   ellenőrzi, hogy `event.sampleIndex` az audio határain belül van és
+   pontosan egyezik `audio.durationToSampleIndex(event.time)`-mal; az
+   `_isClipped` a 20 ms-os ablak végét mostantól `start + sampleRate`-ből
+   származtatja (nem `event.time`-ból), `samples.length - 1`-re korlátozva.
+
+**Regressziók (`dynamics_metrics_test.dart`, 10 új teszt):** nem-véges
+confidence elutasítása, duplikált ID elutasítása (20 eseményes,
+2-valódi-clip fixture — a 0.1 `inputClipped` bypass bizonyítottan
+lehetetlen), hiányzó `localRms` → `unavailable`, sampleIndex/time
+inkoherencia elutasítása, sampleIndex audio-határon kívül elutasítása, és 5
+`DynamicsGate` teszt (nem-véges/fordított küszöb elutasítás konstrukciónál,
+nem-véges `silentRatio` fail-closed az `evaluate()`-ben).
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12, korrekciós futás):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld
+test test/property                                         zöld
+test test/app                                               zöld
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+Módosított fájlok pontosan a review-brief scope-jával egyeznek:
+`lib/features/audio_analysis/engine/metrics/dynamics_gate.dart`,
+`lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+`test/features/audio_analysis/engine/dynamics_metrics_test.dart`.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.

@@ -28,13 +28,62 @@ final class DynamicsGateResult {
 /// identification (SDD §11.5); the thresholds are named constants pending
 /// R29 calibration.
 final class DynamicsGate {
-  const DynamicsGate({
+  DynamicsGate({
     this.clippedEventRatioDegraded = 0.0,
     this.clippedEventRatioUnavailable = 0.05,
     this.noiseFloorDegradedDbfs = -35.0,
     this.noiseFloorUnavailableDbfs = -25.0,
     this.silentRatioUnavailable = 0.95,
-  });
+  }) {
+    if (!clippedEventRatioDegraded.isFinite || clippedEventRatioDegraded < 0) {
+      throw ArgumentError.value(
+        clippedEventRatioDegraded,
+        'clippedEventRatioDegraded',
+        'must be finite and >= 0',
+      );
+    }
+    if (!clippedEventRatioUnavailable.isFinite ||
+        clippedEventRatioUnavailable < 0) {
+      throw ArgumentError.value(
+        clippedEventRatioUnavailable,
+        'clippedEventRatioUnavailable',
+        'must be finite and >= 0',
+      );
+    }
+    if (clippedEventRatioUnavailable < clippedEventRatioDegraded) {
+      throw ArgumentError(
+        'clippedEventRatioUnavailable must be >= clippedEventRatioDegraded.',
+      );
+    }
+    if (!noiseFloorDegradedDbfs.isFinite) {
+      throw ArgumentError.value(
+        noiseFloorDegradedDbfs,
+        'noiseFloorDegradedDbfs',
+        'must be finite',
+      );
+    }
+    if (!noiseFloorUnavailableDbfs.isFinite) {
+      throw ArgumentError.value(
+        noiseFloorUnavailableDbfs,
+        'noiseFloorUnavailableDbfs',
+        'must be finite',
+      );
+    }
+    if (noiseFloorUnavailableDbfs < noiseFloorDegradedDbfs) {
+      throw ArgumentError(
+        'noiseFloorUnavailableDbfs must be >= noiseFloorDegradedDbfs.',
+      );
+    }
+    if (!silentRatioUnavailable.isFinite ||
+        silentRatioUnavailable < 0 ||
+        silentRatioUnavailable > 1) {
+      throw ArgumentError.value(
+        silentRatioUnavailable,
+        'silentRatioUnavailable',
+        'must be finite and in [0, 1]',
+      );
+    }
+  }
 
   /// Above this ratio (exclusive) the dynamics metrics degrade — clipping is
   /// present but does not yet dominate the take.
@@ -64,6 +113,17 @@ final class DynamicsGate {
       throw ArgumentError.value(clippedEventRatio, 'clippedEventRatio');
     }
     if (!report.measured) {
+      return DynamicsGateResult(
+        status: CapabilityStatus.unavailable,
+        reason: CapabilityUnavailableReason.internalFailure,
+      );
+    }
+    // SignalQualityReport only range-checks silentRatio/noiseFloorDbfs
+    // (`< 0 || > 1`), and every comparison against NaN is false — so a
+    // non-finite value would otherwise slide through every threshold below
+    // as if it were within range and publish as available (security review
+    // R16 MAJOR-2). Fail closed instead.
+    if (!report.noiseFloorDbfs.isFinite || !report.silentRatio.isFinite) {
       return DynamicsGateResult(
         status: CapabilityStatus.unavailable,
         reason: CapabilityUnavailableReason.internalFailure,
