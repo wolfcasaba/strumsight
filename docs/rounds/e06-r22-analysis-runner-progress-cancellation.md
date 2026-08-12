@@ -324,7 +324,7 @@ bizonyítja.
 záró, dokumentáció utáni futása zöld volt (format, analyze, mindhárom
 teszt-útvonal és architecture).
 
-**Git diff --stat (staged, záráskor):** 15 fájl, 1261 beszúrás, 3 törlés.
+**Git diff --stat (staged, záráskor):** 15 fájl, 1262 beszúrás, 3 törlés.
 
 **Nyitott follow-up.** A valódi több-stage DSP pipeline összeszerelése
 (közös work-state és konkrét `AnalysisStage<AnalysisDocument,
