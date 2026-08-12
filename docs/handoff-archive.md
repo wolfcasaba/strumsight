@@ -6,6 +6,68 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R13 — Target alignment engine (2026-08-12)
+
+A megfigyelt (R10 event evidence) és elvárt (target) zenei események első,
+Audio-Analysis-saját illesztése: verziózott, immutable `AnalysisTarget`/
+`ExpectedEvent`/`AlignmentResult` snapshot-contract
+(`lib/features/audio_analysis/domain/target/`) és `EventAligner` — monoton,
+determinisztikus, sávos Fenwick-fa prefix-max DP (`O(n·m)` idő,
+`O(min(n,m))` memória, a sáv a tempófüggő, clampelt `TolerancePolicy`
+(`clamp(beatDuration×0.25, 40ms, 150ms)`) toleranciájából adódik). Kilenc
+cellás illesztés-mátrix, `PROPERTY_SEED`-vezérelt monotonitás property
+(200 trial), tolerancia-küszöb hármas + hat cellás clamp-mátrix (mind
+`python3 -c`-vel számolva), 100-futásos tie-break determinizmus (korábbi
+expected index nyer), bemenet-immutabilitás, 2000×2000 teljesítmény-teszt
+(28–38 ms, band-szélesség ≤3), confidence-hatás cella. [ADR
+0231](adr/0231-target-alignment-engine-boundary.md). A Practice Engine
+saját illesztése (`CompiledPracticeTarget`/`CompiledTargetEvent`)
+változatlan és nem importált (SDD §27.1) — a teljes felület **bekötetlen**
+marad, nincs UI/metrika-bekötés, production viselkedés változatlan.
+
+**Pre-flight** mérve megerősítette a brief állításait: `AnalysisTarget` és
+a `domain/target`/`engine/alignment` alkönyvtárak nem léteztek a mai
+`main`-en (nincs névütközés, ellentétben az R10/R11 pre-flightban mért
+résekkel), a Practice illesztő valóban változatlan. A brief §9 „ADR 0203"
+kockázat-hivatkozása nem létező fájlra mutat — ugyanez a placeholder hét
+másik, batch-ben előre megírt E06 brief-ben is szerepel (R02, R14, R16,
+R19, R20, R25), az Epic korai tervezéséből maradt; dokumentálva, nem
+blokkoló (ADR 0231 „Kontextus").
+
+Implementer **Terra (Codex)**, 1 dispatch, 0 folytatás — tiszta, egyfordulós
+lezárás.
+
+Review: [docs/reviews/e06-r13-target-alignment-engine-review.md](reviews/e06-r13-target-alignment-engine-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR, 1 nem-blokkoló MINOR (a dedikált
+immutabilitás-teszt csak a dobó ágat fedi — a suite más tesztjei ma is
+elkapnák egy valós mutációt, mérve), 2 NOTE. A reviewer izolált `/tmp`
+klónban két saját mutációs próbát futtatott a brief §6.1 mérce-mátrixa
+szerint: a monotonitási korlát eltávolítása a property tesztet PIROSRA
+vitte az 1. trialon (+ 3 matrix-teszt), egy sikeres-ágú bemenet-mutáció a
+suite más tesztjei által lett elkapva — mindkettő visszaállítva.
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r13-target-alignment-engine-security.md](reviews/e06-r13-target-alignment-engine-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **2 MINOR** (mindkettő a jövőbeli
+fogyasztó-bekötő körnek — R14–R16 vagy R26 — szóló, nem blokkoló
+figyelmeztetés): **F1** az időablakból származó sáv klaszterezett/dense
+bemenetnél a dokumentált `O(n·m)` legrosszabb esetre nyílik, nincs bemeneti
+méretkorlát (reprodukálva: n=8000 klaszterezett bemenet → 4819 ms, tiszta
+kvadratikus görbe — a memóriakorlát `O(min(n,m))` viszont tartja magát);
+**F2** `AlignmentResult.confidence` a párosított események átlaga, a
+missed/extra arányt figyelmen kívül hagyva túlállíthat (reprodukálva:
+1/1000 matched esemény → confidence=0.98).
+
+Exact SHA `8467df6c`, PR [#229](https://github.com/wolfcasaba/strumsight/pull/229),
+squash `49842c81`: Full Gate
+[31574845003](https://github.com/wolfcasaba/strumsight/actions/runs/31574845003)
++ Router CI [31574846475](https://github.com/wolfcasaba/strumsight/actions/runs/31574846475)
+mindkettő success (mindkettő kézzel workflow_dispatch-elve — a
+review-doksi-only commitok nem érintik egyik workflow push-path-szűrőjét
+sem, ugyanaz a L112 mintázat, mint E06-R09/R10/R11-nél). Az origin/main a
+dispatch és a merge között nem mozdult (H8 tiszta). Post-merge gate a friss
+main-en mind a hét lépésben zöld.
+
 ## ✅ E06-R12 — Beat grid és tempo curve (2026-08-12)
 
 Bekötetlen, immutable ritmus-domain készült: `BeatPoint`/`BeatGrid`, ütközés

@@ -3,7 +3,65 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R14 MERGED — Timing and rush/drag metrics).**
+> (E06-R15 MERGED — Rhythm consistency and groove proxies).**
+>
+> ## ✅ E06-R15 KÉSZ — Rhythm consistency és groove proxyk (2026-08-12)
+>
+> Elkészült a timing-hibán túli ritmikai egyenletesség réteg: IOI-konzisztencia
+> (1 − CV, medián-alapú), subdivision-illesztés `{1,2,3,4}`-re inkluzív 5%-os
+> ambiguitás-küszöbbel (`degraded`, ha két jelölt szórása 5%-on belül van),
+> beat-relatív fáziseloszlás, leghosszabb stabil IOI-sorozat, accent-pozíció
+> konzisztencia és target-only swing ratio — `RhythmMetrics`/
+> `SubdivisionAnalysis` (`lib/features/audio_analysis/engine/metrics/`). A
+> target-alapú és a becsült-rács alapú ritmus szigorúan diszjunkt
+> `rhythm.target_*`/`rhythm.inferred_*` ID-n publikál; az R14 `MetricGate`
+> újrahasznosítva, nincs saját minimum-kapu. [ADR
+> 0233](docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md). Nincs
+> UI-, persistence- vagy V1 Analyze-bekötés.
+>
+> **Pre-flight mérve egy eltérést talált és javított:** a `BeatGrid`-nek nincs
+> skalár `confidence` mezője (csak pontonként, `BeatPoint.confidence`-en él),
+> szemben az eredeti brief §5.3/§6 „confidence ≤ beatGrid.confidence"
+> megfogalmazásával. Feloldás: az R14/ADR 0232 `buildFreePlayTimingMetrics`
+> mintáját követve, a `rhythm.inferred_*` confidence a metrika által
+> ténylegesen felhasznált `BeatPoint`-ok confidence-ének **átlagával**
+> korlátos — dokumentált §0.0 brief-revízió, ADR 0233 Döntés 3.
+>
+> Implementer **Terra (Codex)**, 1 dispatch, 0 folytatás — tiszta,
+> egyfordulós lezárás.
+>
+> Review: [docs/reviews/e06-r15-rhythm-consistency-and-groove-review.md](docs/reviews/e06-r15-rhythm-consistency-and-groove-review.md)
+> — **APPROVED**, 0 BLOCKER/MAJOR, **2 MINOR** (mindkettő a jövőbeli
+> bekötő körnek, nem blokkoló): **F1** üres `BeatGrid.beats` esetén a
+> `_modeFor` `ArgumentError`-t dob ahelyett, hogy gracefully `unavailable`-ra
+> degradálna — mérve valós, elérhető kimenet az R12 `BeatGridEstimator`
+> free-play útjától rövid/ritka klipre; **F2** az OD-03 10%-os
+> stabil-sorozat-tolerancia bare literál, nem named constant (a szomszédos
+> `SubdivisionCandidates.ambiguityRatio` az). A reviewer izolált `/tmp`
+> klónban saját, az implementerétől független mutációs próbát futtatott a
+> confidence-korláton (a `beatConfidence`-szorzó eltávolítása) — PIROSRA
+> vitte a guard-tesztet, majd visszaállította.
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r15-rhythm-consistency-and-groove-security.md](docs/reviews/e06-r15-rhythm-consistency-and-groove-security.md)
+> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR**, 4 NOTE. A MINOR:
+> `buildRhythmMetrics` O(események×beatek) költségű bemeneti hosszkorlát
+> nélkül (mérve: 16 000 esemény/beat → 3,45 s, tiszta kvadratikus görbe) —
+> ma bekötetlen (0 fogyasztó), de **MUST-fix-before** egy jövőbeli kör
+> untrusted/importált sűrű bemenetre köti.
+>
+> **Zöld kapu (exact-SHA `fd5f6cda`, PR [#231](https://github.com/wolfcasaba/strumsight/pull/231),
+> squash `24fcd4f7`):** Full Gate
+> [31586268232](https://github.com/wolfcasaba/strumsight/actions/runs/31586268232)
+> (a review+security-doksi commitok utáni tippen újra-dispatch-elve) és
+> Router CI [31584670343](https://github.com/wolfcasaba/strumsight/actions/runs/31584670343)
+> (az implementer-commit tippjén — a `docs/reviews/**` nincs a push-path-
+> szűrőn, L112 minta) **success**. Az `origin/main` nem mozdult a dispatch és
+> a merge között; a post-merge gate friss `main`-en mind a nyolc lépésben
+> zöld.
+>
+> **Következő kör: E06-R16** (Dynamics és stroke balance,
+> `docs/rounds/e06-r16-dynamics-and-stroke-balance.md`).
 >
 > ## ✅ E06-R14 KÉSZ — Timing és rush/drag metrikák (2026-08-12)
 >
@@ -30,71 +88,6 @@
 > **success**. Az `origin/main` nem mozdult a dispatch és merge között; a
 > post-merge gate friss `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
 >
-> **Következő kör: E06-R15** (Rhythm consistency és groove proxyk,
-> `docs/rounds/e06-r15-rhythm-consistency-and-groove.md`).
->
-> ## ✅ E06-R13 KÉSZ — Target alignment engine (2026-08-12)
->
-> A megfigyelt (R10 event evidence) és elvárt (target) zenei események első,
-> Audio-Analysis-saját illesztése: verziózott, immutable `AnalysisTarget`/
-> `ExpectedEvent`/`AlignmentResult` snapshot-contract
-> (`lib/features/audio_analysis/domain/target/`) és `EventAligner` — monoton,
-> determinisztikus, sávos Fenwick-fa prefix-max DP (`O(n·m)` idő,
-> `O(min(n,m))` memória, a sáv a tempófüggő, clampelt `TolerancePolicy`
-> (`clamp(beatDuration×0.25, 40ms, 150ms)`) toleranciájából adódik). Kilenc
-> cellás illesztés-mátrix, `PROPERTY_SEED`-vezérelt monotonitás property
-> (200 trial), tolerancia-küszöb hármas + hat cellás clamp-mátrix (mind
-> `python3 -c`-vel számolva), 100-futásos tie-break determinizmus (korábbi
-> expected index nyer), bemenet-immutabilitás, 2000×2000 teljesítmény-teszt
-> (28–38 ms, band-szélesség ≤3), confidence-hatás cella. [ADR
-> 0231](docs/adr/0231-target-alignment-engine-boundary.md). A Practice Engine
-> saját illesztése (`CompiledPracticeTarget`/`CompiledTargetEvent`)
-> változatlan és nem importált (SDD §27.1) — a teljes felület **bekötetlen**
-> marad, nincs UI/metrika-bekötés, production viselkedés változatlan.
->
-> **Pre-flight** mérve megerősítette a brief állításait: `AnalysisTarget` és
-> a `domain/target`/`engine/alignment` alkönyvtárak nem léteztek a mai
-> `main`-en (nincs névütközés, ellentétben az R10/R11 pre-flightban mért
-> résekkel), a Practice illesztő valóban változatlan. A brief §9 „ADR 0203"
-> kockázat-hivatkozása nem létező fájlra mutat — ugyanez a placeholder hét
-> másik, batch-ben előre megírt E06 brief-ben is szerepel (R02, R14, R16,
-> R19, R20, R25), az Epic korai tervezéséből maradt; dokumentálva, nem
-> blokkoló (ADR 0231 „Kontextus").
->
-> Implementer **Terra (Codex)**, 1 dispatch, 0 folytatás — tiszta, egyfordulós
-> lezárás.
->
-> Review: [docs/reviews/e06-r13-target-alignment-engine-review.md](docs/reviews/e06-r13-target-alignment-engine-review.md)
-> — **APPROVED**, 0 BLOCKER/MAJOR, 1 nem-blokkoló MINOR (a dedikált
-> immutabilitás-teszt csak a dobó ágat fedi — a suite más tesztjei ma is
-> elkapnák egy valós mutációt, mérve), 2 NOTE. A reviewer izolált `/tmp`
-> klónban két saját mutációs próbát futtatott a brief §6.1 mérce-mátrixa
-> szerint: a monotonitási korlát eltávolítása a property tesztet PIROSRA
-> vitte az 1. trialon (+ 3 matrix-teszt), egy sikeres-ágú bemenet-mutáció a
-> suite más tesztjei által lett elkapva — mindkettő visszaállítva.
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r13-target-alignment-engine-security.md](docs/reviews/e06-r13-target-alignment-engine-security.md)
-> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **2 MINOR** (mindkettő a jövőbeli
-> fogyasztó-bekötő körnek — R14–R16 vagy R26 — szóló, nem blokkoló
-> figyelmeztetés): **F1** az időablakból származó sáv klaszterezett/dense
-> bemenetnél a dokumentált `O(n·m)` legrosszabb esetre nyílik, nincs bemeneti
-> méretkorlát (reprodukálva: n=8000 klaszterezett bemenet → 4819 ms, tiszta
-> kvadratikus görbe — a memóriakorlát `O(min(n,m))` viszont tartja magát);
-> **F2** `AlignmentResult.confidence` a párosított események átlaga, a
-> missed/extra arányt figyelmen kívül hagyva túlállíthat (reprodukálva:
-> 1/1000 matched esemény → confidence=0.98).
->
-> **Zöld kapu (exact-SHA `8467df6c`, PR [#229](https://github.com/wolfcasaba/strumsight/pull/229),
-> squash `49842c81`):** Full Gate
-> [31574845003](https://github.com/wolfcasaba/strumsight/actions/runs/31574845003)
-> + Router CI [31574846475](https://github.com/wolfcasaba/strumsight/actions/runs/31574846475)
-> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve — a
-> review-doksi-only commitok nem érintik egyik workflow push-path-szűrőjét
-> sem, ugyanaz a L112 mintázat, mint E06-R09/R10/R11-nél). Az `origin/main` a
-> dispatch és a merge között nem mozdult (H8 tiszta). Post-merge gate a friss
-> `main`-en mind a hét lépésben zöld.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -104,10 +97,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R14 zárása): E06-R14 új bannerként felkerült,
-> E06-R13 maradt a második (legutóbbi kettő) helyen. E06-R12 a harmadik
-> legutóbbi kör lett, ezért a fejlécből törölve; teljes története már az
-> archívum tetején található.
+> Mért diéta: 2026-08-12 (E06-R15 zárása): E06-R15 új bannerként felkerült,
+> E06-R14 maradt a második (legutóbbi kettő) helyen. E06-R13 a harmadik
+> legutóbbi kör lett, ezért a fejlécből törölve; teljes története átkerült
+> az archívum tetejére.
 
 ## 1. Current release state
 
@@ -192,8 +185,14 @@
   [ADR 0230](docs/adr/0230-beat-grid-tempo-curve-boundary.md)) és
   **E06-R13** (target alignment engine — monoton, sávos DP-illesztő +
   tempófüggő tolerancia-policy, [ADR
-  0231](docs/adr/0231-target-alignment-engine-boundary.md))
-  kész, 16 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  0231](docs/adr/0231-target-alignment-engine-boundary.md)),
+  **E06-R14** (target/free-play timing- és rush/drag-metrikák, release-safe
+  `MetricGate`, [ADR
+  0232](docs/adr/0232-timing-metric-identity-and-publication-boundary.md))
+  és **E06-R15** (rhythm consistency + groove-proxyk — IOI-konzisztencia,
+  subdivision-illesztés, target-only swing, [ADR
+  0233](docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md))
+  kész, 15 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
