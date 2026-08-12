@@ -1,6 +1,7 @@
 # E06-R15 — Rhythm consistency és groove proxyk
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`;
+  pre-flight lezárva 2026-08-12, `main` @ `be93642d`, ADR 0233)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 15; §15.6
 - **Branch:** `codex/e06-r15-rhythm-consistency-and-groove`
 - **Előfeltétel:** **E06-R12, E06-R14 merge**
@@ -49,8 +50,46 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **Új DSP-mennyiség ⇒ RAG-chunk** ugyanabban a
-commitban (AGENTS.md §9).
+**Pre-flight mérés (2026-08-12, orchestrátor: Claude Sonnet 5, baseline
+`main` @ `be93642d`, E06-R12 és E06-R14 mindkettő merge-elve — előfeltétel
+teljesül). ADR: [0233](../adr/0233-rhythm-consistency-and-groove-proxy-boundary.md).**
+
+A brief minden hivatkozott enumját, mezőjét és sorszámát grep-elve
+újramértem (AGENTS.md §2 pre-flight szabály). Egy mérési eltérés:
+
+1. **MÉRT ELTÉRÉS — `BeatGrid`-nek nincs skalár `confidence` mezője.**
+   `lib/features/audio_analysis/domain/rhythm/beat_grid.dart:34-77` a
+   `BeatGrid` mezői: `beats`, `bars`, `beatsPerBar`, `beatsPerBarSource`,
+   `status`, `meterStatus` — `confidence` nincs köztük. A confidence
+   kizárólag pontonként él: `BeatPoint.confidence`
+   (`beat_point.dart:9,21`, konstruktorban `[0,1]`-re validálva). Az eredeti
+   §5.3 „confidence ≤ beatGrid.confidence" és a §6 „becsült rács
+   `confidence = 0.4`" megfogalmazása egy nem létező mezőt feltételezett.
+   **Feloldás (ADR 0233 Döntés 3):** az R14/ADR 0232 már elfogadott
+   `buildFreePlayTimingMetrics` mintáját követve (`timing_metrics.dart:150-154`,
+   a felhasznált `BeatPoint`-ok confidence-ének átlaga), a `rhythm.inferred_*`
+   metrikák confidence-e felülről korlátos **a metrika által ténylegesen
+   felhasznált `BeatPoint`-ok confidence-ének átlagával**. A §5.3 és a §6
+   „Confidence-korlát" cella szövege lentebb ennek megfelelően javítva; a
+   cella fixture-e minden felhasznált beatre **homogén** `confidence = 0.4`-et
+   ad, hogy a korlát az aggregálás módjától (átlag vs. minimum) függetlenül
+   egyértelmű legyen a mátrixban.
+
+Minden más hivatkozás mérve egyezik: a `docs/rag/chunks/` következő szabad
+sorszáma **021** (utolsó: `020-beat-grid-tempo-curve.md`); az R14
+`MetricGate` (`engine/metrics/metric_gate.dart`) API-ja pontosan a brief §5.5
+szerint újrahasználható (`isAvailable`/`isStreakAvailable`,
+`minimumMatchedPairs: 8`/`minimumStreakMatchedPairs: 3`); a tilos zóna
+`engine/rhythm/**` valóban az R12 saját, létező könyvtára
+(`beat_grid_estimator.dart`, `tempo_curve_builder.dart`,
+`tempo_hypothesis.dart`), diszjunkt az új `engine/metrics/**` fájloktól; a
+`CapabilityStatus.degraded` és a `CapabilityUnavailableReason.
+insufficientEvents` már léteznek (`analysis_capability.dart:19,23`), nincs
+szükség új enum-értékre az „ambiguous → degraded" és „elégtelen adat"
+cellákhoz; a `docs/sdd/07-epic-06-audio-analysis-2.md:3414-3459` Kör 15
+szakasza 1:1 egyezik a brief scope-jával, nincs fejezet-drift.
+
+**Új DSP-mennyiség ⇒ RAG-chunk** ugyanabban a commitban (AGENTS.md §9).
 
 ## 1. Cél
 
@@ -104,9 +143,11 @@ Listán kívül → `stopped`.
 2. **A target-alapú és a becsült-rács alapú ritmus KÜLÖN metric ID**
    (`rhythm.target_*` vs `rhythm.inferred_*`), és a kettő **nem** hasonlítható
    össze. **NEM elfogadható:** azonos ID két különböző referenciával.
-3. **A free-play ritmus confidence-e felülről korlátos:**
-   `confidence ≤ beatGrid.confidence`. **NEM elfogadható:** a rács
-   bizonytalanságának eltüntetése az aggregálásban.
+3. **A free-play (inferred) ritmus confidence-e felülről korlátos:**
+   `confidence ≤ mean(BeatPoint.confidence a metrika által felhasznált
+   beatekre)` — a `BeatGrid`-nek nincs saját `confidence` mezője (ld. §0.0,
+   ADR 0233 Döntés 3). **NEM elfogadható:** a rács bizonytalanságának
+   eltüntetése az aggregálásban.
 4. **A swing ratio kizárólag targettel** publikálható (SDD §15.6); target
    nélkül a capability `notApplicable`. **NEM elfogadható:** swing-becslés
    szabad játékból.
@@ -165,9 +206,10 @@ open_decisions:
 - [ ] **Ambiguitás-küszöb hármas** (5 %): a két jelölt szórásának aránya
       **1.049**, **1.05**, **1.051** — az **1.05** még **ambiguous**
       (inkluzív), az 1.051 már egyértelmű. `python3 -c`-vel számolt fixture.
-- [ ] **Confidence-korlát:** becsült rács `confidence = 0.4` mellett minden
-      `rhythm.inferred_*` metrika confidence-e **≤ 0.4** — teszt méri
-      mindegyikre külön.
+- [ ] **Confidence-korlát:** becsült rács, amelyben minden felhasznált
+      `BeatPoint.confidence` homogén **0.4** (ld. §0.0, ADR 0233 Döntés 3)
+      mellett minden `rhythm.inferred_*` metrika confidence-e **≤ 0.4** —
+      teszt méri mindegyikre külön.
 - [ ] **Swing-kapu:** target **nélkül** a swing capability `notApplicable`
       és a metrika **nincs** a listában; targettel a swing ratio
       egy ismert 2:1 fixture-re **2.0 ± 0.05** (a tolerancia rögzített).
@@ -230,7 +272,55 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (Terra, 2026-08-12):**
+
+- `engine/metrics/subdivision_analysis.dart` — tiszta `{1,2,3,4}`
+  subdivision-illesztő, inkluzív 5%-os ambiguitás-kezeléssel; a
+  többszörös jelöltek nem versenyeznek a szülőfelosztással.
+- `engine/metrics/rhythm_metrics.dart` — target/inferred módot kölcsönösen
+  kizáró ritmus-proxy suite: medián-alapú `1 − CV` IOI-konzisztencia,
+  ±10%-os stabil sorozat, subdivision- és beat-phase konzisztencia,
+  accent-pozíció konzisztencia és target-only long/short swing ratio. Az R14
+  `MetricGate` változatlanul újrahasznált; inferred confidence a ténylegesen
+  használt BeatPointok átlagával korlátos.
+- `analysis_metric_catalog.dart` / `public.dart` — additív, diszjunkt
+  `rhythm.target_*` és `rhythm.inferred_*` ID-k, publikus export.
+- `app_en.arb`, `app_hu.arb` — a mérhető proxyk additív, nem stiláris címkéi.
+- Három célzott unit- és egy property-teszt fedi a fixture-, küszöb-,
+  confidence-, ID-diszjunkció-, swing-gate-, stiláris-címke- és
+  NaN/tartomány-mátrixot. A CV 0.1/0.5 konstrukciók `python3 -c`-vel
+  kiszámolva, kommentben rögzítve.
+- `docs/rag/chunks/021-rhythm-consistency-groove-proxies.md` — formula,
+  küszöb, ambiguity, target-only swing és confidence öröklési szerződés.
+
+**Futtatott ellenőrzések (tényleges eredmény):**
+
+```text
+python3 -c '<CV fixture derivation>'
+  [90,90,110,110] -> CV 0.1; [50,50,150,150] -> CV 0.5
+
+flutter test test/features/audio_analysis/domain/rhythm_metric_catalog_test.dart \
+  test/features/audio_analysis/engine/subdivision_analysis_test.dart \
+  test/features/audio_analysis/engine/rhythm_metrics_test.dart \
+  test/property/analysis_rhythm_property_test.dart
+  21 test passed.
+
+flutter analyze <érintett fájlok>
+  No issues found.
+
+Valódi-sértés próba: inferred confidence-ból a BeatPoint-átlag ideiglenes
+kivétele után `rhythm_metrics_test.dart` PIROS:
+  Actual: <1.0>, expected <= <0.400000001...>.
+  A korlát visszaállítva; a célzott suite újra zöld.
+
+tools/round-gate.sh test/features/audio_analysis test/property test/app
+  exit 0 — format, analyze, mindhárom tesztcsoport, architecture, secrets és
+  l10n mind ZÖLD.
+```
+
+**Eltérés / nem futtatott ellenőrzés:** nincs implementációs eltérés. A teljes
+suite, friss property seed és APK CI-kapu az orchestrátor hatásköre (ADR 0053);
+ezeket az implementer nem indította.
 
 ## 11. Review — a független reviewer tölti ki
 

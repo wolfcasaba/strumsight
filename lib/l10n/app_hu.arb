@@ -1310,5 +1310,11 @@
   "timingMetricExtraRatio": "Extra arány",
   "timingMetricLongestStableStreak": "Leghosszabb stabil sorozat",
   "timingFeedbackRushing": "Sietsz — próbálj kicsit később érkezni az ütemre.",
-  "timingFeedbackDragging": "Késel — próbálj kicsit korábban érkezni az ütemre."
+  "timingFeedbackDragging": "Késel — próbálj kicsit korábban érkezni az ütemre.",
+  "rhythmMetricIoiConsistency": "Ritmusegyenletesség",
+  "rhythmMetricSubdivisionConsistency": "Felbontás-egyenletesség",
+  "rhythmMetricBeatPhaseConsistency": "Ütemfázis-egyenletesség",
+  "rhythmMetricLongestStableIoiStreak": "Leghosszabb stabil ritmussorozat",
+  "rhythmMetricAccentPositionConsistency": "Hangsúlypozíció-egyenletesség",
+  "rhythmMetricSwingRatio": "Hosszú-rövid időarány"
 }

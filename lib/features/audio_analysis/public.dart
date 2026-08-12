@@ -50,3 +50,5 @@ export 'engine/alignment/tolerance_policy.dart';
 export 'engine/metrics/metric_gate.dart';
 export 'engine/metrics/timing_hotspots.dart';
 export 'engine/metrics/timing_metrics.dart';
+export 'engine/metrics/rhythm_metrics.dart';
+export 'engine/metrics/subdivision_analysis.dart';
