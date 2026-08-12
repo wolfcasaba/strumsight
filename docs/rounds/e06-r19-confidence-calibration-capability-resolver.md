@@ -302,7 +302,20 @@ meglévő, önálló döntése a §0.0 szerint tudott és elfogadott állapot �
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Stopped — 2026-08-12
+
+- **Módosított production/test fájlok:** nincs.
+- **Blokkoló:** a §6 „Nincs átlag” acceptance criterion a
+  `[0.9, 0.9, 0.9, 0.9, 0.1]` vektorra geometriai átlagként `0.5581…`-et
+  rögzít. A kötelezően előírt ellenőrzés tényleges kimenete:
+  `python3 -c 'import math; values=[0.9,0.9,0.9,0.9,0.1]; print(math.prod(values) ** (1 / len(values))); print(sum(values) / len(values))'`
+  → `0.5799546134795288` és `0.74`. A `0.5581…` ezért nem lehet ennek a
+  vektornak a geometriai átlaga.
+- **Nem futtatott ellenőrzések:** `tools/round-gate.sh test/features/audio_analysis test/property test/app` nem futott, mert a hibás, kötött acceptance criterion mellett nem írható olyan implementáció/test, amely egyszerre teljesíti a brief OD-02 geometriai-átlag szerződését és a §6 kipinnelt értékét.
+- **Szükséges folytatás:** Claude/brief-szerző javítsa a §6 és szükség esetén
+  a §6.1 mérce-cella elvárt értékét `0.5799546134795288`-ra, vagy dokumentált
+  ADR/brief-revízióban határozzon meg más, nem geometriai aggregációt. Ezután
+  a kör új sessionben indítható újra.
 
 ## 11. Review — a független reviewer tölti ki
 
