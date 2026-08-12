@@ -321,20 +321,34 @@ meglévő, önálló döntése a §0.0 szerint tudott és elfogadott állapot �
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-### Stopped — 2026-08-12
+### Implemented — 2026-08-12
 
-- **Módosított production/test fájlok:** nincs.
-- **Blokkoló:** a §6 „Nincs átlag” acceptance criterion a
-  `[0.9, 0.9, 0.9, 0.9, 0.1]` vektorra geometriai átlagként `0.5581…`-et
-  rögzít. A kötelezően előírt ellenőrzés tényleges kimenete:
-  `python3 -c 'import math; values=[0.9,0.9,0.9,0.9,0.1]; print(math.prod(values) ** (1 / len(values))); print(sum(values) / len(values))'`
-  → `0.5799546134795288` és `0.74`. A `0.5581…` ezért nem lehet ennek a
-  vektornak a geometriai átlaga.
-- **Nem futtatott ellenőrzések:** `tools/round-gate.sh test/features/audio_analysis test/property test/app` nem futott, mert a hibás, kötött acceptance criterion mellett nem írható olyan implementáció/test, amely egyszerre teljesíti a brief OD-02 geometriai-átlag szerződését és a §6 kipinnelt értékét.
-- **Szükséges folytatás:** Claude/brief-szerző javítsa a §6 és szükség esetén
-  a §6.1 mérce-cella elvárt értékét `0.5799546134795288`-ra, vagy dokumentált
-  ADR/brief-revízióban határozzon meg más, nem geometriai aggregációt. Ezután
-  a kör új sessionben indítható újra.
+- **Módosított production:** additív `ConfidenceCalibrationSource`,
+  `CapabilityReport.calibrationVersion`/`calibrationSource` és véges
+  confidence-validáció; új, állapotmentes `engine/confidence/**` modul
+  (`CapabilityThresholds`, identity.v1 `CalibrationTable`, geometriai
+  `ConfidenceCombiner`, egyetlen `CapabilityResolver`); public exportok;
+  a 13 unavailable-ok két nyelvű ARB-szövege.
+- **Módosított tesztek:** kilenc eset teljes capability-mátrixa, a 0.4/0.7
+  inkluzív küszöbhármasok, geometriai átlag (`0.5799546134795288`, 0.74
+  explicit elutasítással), kritikus jelminőség, identity provenance,
+  determinizmus, egyetlen döntési pont, ARB-teljesség és monotonitás property.
+- **RED bizonyíték:** a production szerződések létrehozása előtt a négy új
+  tesztfájl célzott futása a hiányzó `CapabilityResolver`,
+  `CapabilityResolverInput`, `CalibrationTable` és
+  `ConfidenceCalibrationSource` típusokra fordítási hibával piros lett.
+- **Célzott GREEN:** `flutter test test/features/audio_analysis/engine/capability_resolver_test.dart test/features/audio_analysis/engine/confidence_combiner_test.dart test/features/audio_analysis/domain/capability_report_test.dart test/property/analysis_confidence_property_test.dart`
+  → **11/11 passed**.
+- **Kötelező gate:** `tools/round-gate.sh --result-json
+  /tmp/e06-r19-round-gate.json test/features/audio_analysis test/property
+  test/app` → `outcome=pass`, `exit_code=0` (format, analyze, mindhárom
+  tesztsáv, architecture, secrets és l10n zöld).
+- **Scope audit:** `python3 tools/scope-audit.py --repo
+  /home/ubuntu/ss-terra-e06-r19 --brief
+  docs/rounds/e06-r19-confidence-calibration-capability-resolver.md --base
+  81e62469 --kv` → `scope_audit=ok`, 12 changed path, 0 ignored/generated.
+- **Nem futtatott:** teljes Flutter/property regresszió és CI workflow/APK —
+  az orchestrátor merge-előtti CI-kapuja.
 
 ## 11. Review — a független reviewer tölti ki
 
