@@ -58,6 +58,8 @@ export 'engine/metrics/timing_metrics.dart';
 export 'engine/metrics/rhythm_metrics.dart';
 export 'engine/metrics/subdivision_analysis.dart';
 export 'engine/metrics/pitch_metrics.dart';
+export 'engine/metrics/technique_proxies.dart';
+export 'engine/metrics/transition_analysis.dart';
 export 'engine/pitch/monophonic_pitch_segment_builder.dart';
 export 'engine/pitch/pitch_capability_gate.dart';
 export 'engine/pitch/pitch_frame_extractor.dart';

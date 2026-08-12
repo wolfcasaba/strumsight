@@ -1407,5 +1407,11 @@
   "dynamicsMetricOutlierRatio": "Outlier stroke ratio",
   "dynamicsMetricAccentAccuracy": "Accent accuracy",
   "dynamicsMetricQuietRegionRatio": "Quiet-region ratio",
-  "dynamicsMetricClippedEventRatio": "Clipped-stroke ratio"
+  "dynamicsMetricClippedEventRatio": "Clipped-stroke ratio",
+  "analysisTechniqueDisclaimer": "Experimental Lab-only signal. It measures a timing or audio pattern, not your technique.",
+  "analysisTechniqueChordChangeGap": "Chord-change continuity",
+  "analysisTechniqueConfidenceCollapseDuration": "Chord-recognition confidence dip duration",
+  "analysisTechniqueUnexpectedExtraOnsets": "Unexpected extra note starts near a chord change",
+  "analysisTechniqueSustainedNoteDropout": "Sustain stability",
+  "analysisTechniqueAttackInstability": "Note-start clarity"
 }

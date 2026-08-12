@@ -34,6 +34,7 @@ final class FeatureFlags {
     this.analysisPitchEnabled = false,
     this.analysisPreprocessingExperimentalEnabled = false,
     this.analysisExperimentalFusionEnabled = false,
+    this.analysisTechniqueProxiesEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -81,6 +82,7 @@ final class FeatureFlags {
       analysisPitchEnabled: false,
       analysisPreprocessingExperimentalEnabled: false,
       analysisExperimentalFusionEnabled: false,
+      analysisTechniqueProxiesEnabled: false,
     );
   }
 
@@ -168,6 +170,13 @@ final class FeatureFlags {
   /// It remains OFF in every environment until E06-R29 evaluation evidence.
   final bool analysisExperimentalFusionEnabled;
 
+  /// Whether the Lab-only technique-proxy calculators (E06-R18, ADR 0236) may
+  /// run. Even when true, the calculator itself only executes for a caller
+  /// that separately signals explicit Lab mode — the two gates are distinct
+  /// and both required. It remains OFF in every environment until the
+  /// proxies' eval-matrix rows are closed.
+  final bool analysisTechniqueProxiesEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -203,7 +212,8 @@ final class FeatureFlags {
       other.analysisPreprocessingExperimentalEnabled ==
           analysisPreprocessingExperimentalEnabled &&
       other.analysisExperimentalFusionEnabled ==
-          analysisExperimentalFusionEnabled;
+          analysisExperimentalFusionEnabled &&
+      other.analysisTechniqueProxiesEnabled == analysisTechniqueProxiesEnabled;
 
   @override
   int get hashCode {
@@ -235,6 +245,7 @@ final class FeatureFlags {
       analysisPitchEnabled,
       analysisPreprocessingExperimentalEnabled,
       analysisExperimentalFusionEnabled,
+      analysisTechniqueProxiesEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -271,5 +282,6 @@ final class FeatureFlags {
       'analysisPreprocessingExperimentalEnabled: '
       '$analysisPreprocessingExperimentalEnabled, '
       'analysisExperimentalFusionEnabled: '
-      '$analysisExperimentalFusionEnabled)';
+      '$analysisExperimentalFusionEnabled, '
+      'analysisTechniqueProxiesEnabled: $analysisTechniqueProxiesEnabled)';
 }
