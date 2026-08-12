@@ -324,7 +324,23 @@ helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- `domain/pitch/pitch_frame.dart`, `domain/pitch/monophonic_pitch_segment.dart`:
+  immutable voiced/unvoiced frame és ADR 0235 szerinti, önálló monofonikus
+  szegmens-szerződés.
+- `engine/pitch/*`: közös `YinPitchDetector` + `SlidingFramer` adapter,
+  minimum 80 ms szegmentálás, valamint flag-első capability-kapu, amely a
+  metrika callbacket csak támogatott inputon hívja.
+- `engine/metrics/pitch_metrics.dart`, katalogus, barrel és ARB: a hét
+  targethez kötött pitch metrika, stabil v1 ID-kkal; a median cents error
+  signed (pozitív = sharp), a p90 abszolút, egyik sem diagnózis.
+- A célzott `flutter test` (20 teszt) és a célzott `dart analyze` zöld. A
+  teljes §7 round gate is zöld (format, analyze, audio_analysis/property/core/
+  tuner tests, architecture és diff check); a Tuner-paritás ezáltal érintetlen
+  tesztfával bizonyított.
+- Mérés: 30 s A4 kivonat `PitchFrameExtractor`-rel **4513 ms** ezen a boxon.
+  Ez meghaladja a brief 3 s-os követő küszöbét; DSP-konstanst a kör nem
+  hangolt. Követő feladat: E06-R29 evaluationban framer/hop költség és valódi
+  eszközös budget kalibráció, a jelenlegi 2048/512 policy megtartásával.
 
 ## 11. Review — a független reviewer tölti ki
 
