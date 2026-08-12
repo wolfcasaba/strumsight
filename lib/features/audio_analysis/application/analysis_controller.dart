@@ -68,6 +68,10 @@ final class AnalysisController extends Notifier<AnalysisState> {
 
   /// Starts an explicit user-requested analysis. There is no automatic retry.
   Future<void> analyze(AnalysisDocument input) async {
+    final previousRun = _activeRun;
+    if (previousRun != null) {
+      unawaited(cancelAnalysis(previousRun));
+    }
     validating();
     final run = analyzeAudio(input);
     final runId = run.runId;

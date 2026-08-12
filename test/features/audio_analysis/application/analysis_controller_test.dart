@@ -113,6 +113,25 @@ void main() {
       },
     );
 
+    test('starting a new analysis cancels the previously active run', () async {
+      final first = _FakeRun('run-1');
+      final second = _FakeRun('run-2');
+      final controller = _controllerWithRunner(
+        _QueueRunner(<_FakeRun>[first, second]),
+      );
+
+      final firstFuture = controller.analyze(_document());
+      await _flush();
+      final secondFuture = controller.analyze(_document());
+
+      expect(first.disposed, isTrue);
+      first.complete(
+        _result(runId: 'run-1', completion: AnalysisCompletionStatus.cancelled),
+      );
+      second.complete(_result(runId: 'run-2', value: _document()));
+      await Future.wait(<Future<void>>[firstFuture, secondFuture]);
+    });
+
     test(
       'emits progress inclusively at five events and resets the counter',
       () async {

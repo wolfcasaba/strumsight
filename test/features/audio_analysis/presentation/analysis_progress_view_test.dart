@@ -30,4 +30,30 @@ void main() {
       expect(cancelled, isTrue);
     },
   );
+
+  testWidgets('uses indeterminate progress when the total unit count is zero', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(
+          body: AnalysisProgressView(
+            phase: AnalysisProgressPhase.preprocessing,
+            onCancel: _noop,
+            completedUnits: 0,
+            totalUnits: 0,
+          ),
+        ),
+      ),
+    );
+
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(progress.value, isNull);
+  });
 }
+
+void _noop() {}

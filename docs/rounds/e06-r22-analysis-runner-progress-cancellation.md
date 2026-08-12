@@ -326,6 +326,23 @@ teszt-útvonal és architecture).
 
 **Git diff --stat (staged, záráskor):** 15 fájl, 1262 beszúrás, 3 törlés.
 
+### Javító kör #1 — 2026-08-12
+
+- `analysis_isolate_runner.dart`: a cleanup once-guardja már nem akadályozza
+  meg a spawn után hozzárendelt isolate killjét; a cleanup minden híváskor
+  előbb atomikusan átveszi és leállítja az aktuális isolate-ot, majd csak a
+  port/progress erőforrások zárását védi a guarddal.
+- `analysis_cancellation_test.dart`: új, valódi isolate-os spawn-ablak teszt
+  kapuzza az isolate-spawner Future-jét. Cancel a Future feloldása előtt,
+  assignment-felengedés után pedig a késleltetett completion-marker nem íródhat
+  ki; ez közvetlenül a security review MAJOR-1 exit-mátrix celláját méri.
+- `analysis_controller_test.dart`: a második `analyze()` igazolja, hogy az
+  első aktív run explicit `cancel()` hívást kap. `analysis_progress_view_test.dart`:
+  `totalUnits: 0` esetén az indikátor indeterminate (`value == null`).
+- Gate: `tools/round-gate.sh test/features/audio_analysis test/app
+  test/features/analyze` zöld — format (1395 fájl), analyze, mindhárom
+  célzott tesztútvonal, architecture, secrets és l10n paritás.
+
 **Nyitott follow-up.** A valódi több-stage DSP pipeline összeszerelése
 (közös work-state és konkrét `AnalysisStage<AnalysisDocument,
 AnalysisDocument>` lista) szándékosan nincs ebben a körben: ADR 0240 Döntés 4

@@ -24,7 +24,8 @@ final class AnalysisProgressView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final unitsAvailable = completedUnits != null && totalUnits != null;
+    final unitsAvailable =
+        completedUnits != null && totalUnits != null && totalUnits! > 0;
     final progress = unitsAvailable ? completedUnits! / totalUnits! : null;
     return Semantics(
       container: true,

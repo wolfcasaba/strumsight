@@ -41,12 +41,37 @@ abstract interface class AnalysisRunner {
 typedef AnalysisDocumentIsolateOperation =
     FutureOr<String> Function(String documentJson);
 
+/// Spawns the isolate used for one analysis run.
+///
+/// This narrow seam keeps the runner's spawn-to-assignment lifecycle
+/// testable without exposing its private isolate message protocol.
+typedef AnalysisIsolateSpawner =
+    Future<Isolate> Function(
+      SendPort replyTo,
+      String input,
+      AnalysisDocumentIsolateOperation operation,
+    );
+
+/// Default [AnalysisIsolateSpawner] used by production analysis runs.
+Future<Isolate> spawnAnalysisIsolate(
+  SendPort replyTo,
+  String input,
+  AnalysisDocumentIsolateOperation operation,
+) => Isolate.spawn<_IsolateRequest>(
+  _isolateEntry,
+  _IsolateRequest(replyTo: replyTo, input: input, operation: operation),
+);
+
 /// One-shot isolate runner. Each [start] creates a fresh isolate; [cancel]
 /// kills only that isolate and closes its progress channel.
 final class AnalysisIsolateRunner implements AnalysisRunner {
-  AnalysisIsolateRunner({required this.operation});
+  AnalysisIsolateRunner({
+    required this.operation,
+    this.isolateSpawner = spawnAnalysisIsolate,
+  });
 
   final AnalysisDocumentIsolateOperation operation;
+  final AnalysisIsolateSpawner isolateSpawner;
   int _nextRunNumber = 0;
 
   @override
@@ -56,6 +81,7 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
       runId: runId,
       input: input,
       operation: operation,
+      isolateSpawner: isolateSpawner,
     );
   }
 }
@@ -65,6 +91,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
     required this.runId,
     required this.input,
     required this.operation,
+    required this.isolateSpawner,
   }) : _result = Completer<AnalysisRunResult>() {
     unawaited(_start());
   }
@@ -73,6 +100,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
   final String runId;
   final AnalysisDocument input;
   final AnalysisDocumentIsolateOperation operation;
+  final AnalysisIsolateSpawner isolateSpawner;
   final StreamController<AnalysisProgressEvent> _progress =
       StreamController<AnalysisProgressEvent>.broadcast();
   final Completer<AnalysisRunResult> _result;
@@ -92,13 +120,10 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
       final encodedInput = const AnalysisDocumentCodec().encode(input);
       final messages = ReceivePort();
       _messages = messages;
-      _isolate = await Isolate.spawn<_IsolateRequest>(
-        _isolateEntry,
-        _IsolateRequest(
-          replyTo: messages.sendPort,
-          input: encodedInput,
-          operation: operation,
-        ),
+      _isolate = await isolateSpawner(
+        messages.sendPort,
+        encodedInput,
+        operation,
       );
       if (_cancelled) {
         await _dispose();
@@ -169,9 +194,14 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
   }
 
   Future<void> _dispose() async {
+    // An isolate can be assigned after a concurrent cancel has already
+    // closed the ports. Kill it before observing the once-only cleanup guard,
+    // so the spawn-to-assignment window cannot leak a live worker.
+    final isolate = _isolate;
+    _isolate = null;
+    isolate?.kill(priority: Isolate.immediate);
     if (_disposed) return;
     _disposed = true;
-    _isolate?.kill(priority: Isolate.immediate);
     _messages?.close();
     await _progress.close();
   }
