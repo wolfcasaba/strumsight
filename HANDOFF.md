@@ -111,6 +111,35 @@
 > ugyanígy revideálni `allowed_paths`-át a meglévő `domain/
 > analysis_segment.dart`-ra).
 >
+> **E06-R11 H6 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
+> [#226](https://github.com/wolfcasaba/strumsight/pull/226), squash
+> `ead86c25`:** a rotáció szerint (ADR 0222) Terra-vezényelt E06-R11
+> önmagát haltolta, ahelyett hogy elindította volna a driver ÁLTAL MÁR
+> kvóta-ellenőrzött implementerét. A reviewer-függetlenség (ADR 0138/0222)
+> miatt a driver az implementert natív Claude Sonnet 5-re (`sonnet-impl`,
+> `harness=claude`, a saját előfizetésen) cserélte — ez a MÉRT, tesztelt
+> viselkedés (`IndependenceTest`, `tools/tests/test_orchestrator_rotation.py`)
+> —, de a Terra a `docs/execution/pipeline-codex-orchestrator-preamble.md`
+> feltétel nélküli „ne hívd a `claude` CLI-t" mondatát erre a dispatch-ra is
+> ráhúzta. Mért gyökérok: a mondat 2026-08-02-én (ADR 0115) íródott, amikor
+> Terra kizárólag Claude-kvóta kimerülésekor ült az orchestrátor székben; az
+> ADR 0222 (2026-08-11) rotáció egy MÁSODIK, kvótától független kiváltó
+> okot vezetett be, amely alatt a Claude-kvóta jellemzően egészséges — és a
+> `resolve_independent_engine` EPP EKKOR adja implementernek a
+> claude-harness `sonnet-impl`-et. A preambulum szövege sosem lett
+> frissítve az ADR 0222 bevezetésekor, és önellentmondásba került a fő
+> prompt §1.1 named-engine dispatch-táblájával (`claude` harness →
+> `tools/mm-round.sh`). Javítás: a preambulum megnevezi mindkét kiváltó
+> okot, és a tiltást a „ne indítsd újra magad orchestrátorként Claude-on"
+> esetre szűkíti — a §1.1 szerinti implementer-dispatch explicit
+> engedélyezett, még `harness=claude` motorra is. Regressziós teszt:
+> `tools/tests/test_orchestrator_rotation.py::PreambleClaudeCliProhibitionTest`
+> (2 eset, piros a régi szövegen, zöld az újon). Router CI zöld exact-SHA
+> `5fa25528`-on (kizárólag router/doksi-változás, nincs Dart-érintés):
+> [31562994056](https://github.com/wolfcasaba/strumsight/actions/runs/31562994056)
+> + [31562971109](https://github.com/wolfcasaba/strumsight/actions/runs/31562971109)
+> mindkettő **success**. Tanulság: `docs/LESSONS.md` L229.
+>
 > ## ✅ E06-R09 KÉSZ — ClipAnalyzer stage adapter és parity (2026-08-12)
 >
 > A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be

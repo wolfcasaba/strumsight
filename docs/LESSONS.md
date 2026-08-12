@@ -8432,3 +8432,65 @@ lépést közvetlenül minden `git clone`-nal létrehozott implementer- vagy
 review-munkapéldány után, ne a `blocked`-jelzés utáni reaktív diagnózisra
 hagyatkozzon.
 
+## L229 — Egy ADR-bővítés (rotáció) érvénytelenítheti egy KORÁBBI ADR promptjának alapfeltevését, ha a promptot nem frissítik vele együtt (E06-R11 H6 self-heal, 2026-08-12)
+
+**Mit mértünk.** `docs/execution/pipeline-codex-orchestrator-preamble.md`
+2026-08-02-én (ADR 0115) egyetlen kiváltó okot ismert a Terra-orchestrátor
+sessionhöz: a primer Claude-orchestrátor kvótája kimerült. Erre a
+feltevésre építve feltétel nélkül kimondta: „A `claude` CLI-t NE hívd — épp
+az a kvóta merült ki, ami miatt itt vagy." Az ADR 0222 (2026-08-11) egy
+MÁSODIK, a kvótától teljesen független kiváltó okot vezetett be — a
+rotáció (`PIPELINE_ORCH_ROTATION=alternate`) —, amely alatt Terra minden
+második kört vezényel FÜGGETLENÜL attól, hogy Claude kvótája szabad-e. Az
+ADR 0222 §2 emellett kimondja, hogy Terra-vezényelt körön a reviewer-
+függetlenség (ADR 0138) miatt az implementer a natív Claude Sonnet 5-re
+(`sonnet-impl`, `harness=claude`) cserélődik, és a `resolve_independent_engine`
+(`tools/round-pipeline.sh`) ezt a nevet KIZÁRÓLAG akkor adja, ha a
+Claude-kvóta mérten nincs zárolva (`tools/tests/test_orchestrator_rotation.py::IndependenceTest`
+már 2026-08-11 óta tesztelte és zölden tartotta ezt a viselkedést). Az ADR
+0222 szövege saját maga is tévesen feltételezte, hogy „a prompt-preambulum
+(ADR 0115) ezt már kezeli" — valójában a preambulum feltétel nélküli
+tiltása pontosan a saját, driver által MÁR kvóta-ellenőrzött, várt
+dispatch-ot (`tools/mm-round.sh` egy `harness=claude` motorra) tiltotta
+volna meg, közvetlenül szemben állva a fő prompt §1.1 named-engine
+dispatch-táblájával (`claude` harness → `tools/mm-round.sh`). Az
+E06-R11-es kör Terra-orchestrátora ebbe az önellentmondásba futott: a
+driver helyesen `sonnet-impl`-re cserélte az implementert (rotáció,
+`claude_blocked=0`), de a session a preambulum szó szerinti tiltását
+követve inkább magát haltolta (H6) egy nem létező kvóta-ütközésre
+hivatkozva, ahelyett hogy dispatch-elt volna. Az E06-R10 közvetlenül
+megelőző körön (2026-08-12 01:28, ugyanaz a rotáció-eredetű
+terra→sonnet-impl csere) a Terra-session NEM futott ebbe a csapdába — a
+kétértelmű promptszöveg tehát nem determinisztikusan, hanem
+valószínűségi módon manifesztálódott (ugyanaz az ambiguitás, két
+különböző LLM-olvasat).
+
+**Miért.** Egy megosztott prompt-artefaktum (itt: a preambulum) gyakran
+egyetlen, a megírásakor igaz feltevésre épül explicit szöveggel, ahelyett
+hogy a mögöttes GÉPI állapotra hivatkozna. Amikor egy KÉSŐBBI ADR új
+kiváltó okot vezet be ugyanahhoz a code-pathhoz (itt: `run_orchestrator_session`
+mindkét esetben — kvóta ÉS rotáció — ugyanazt a preambult fűzi a Terra
+prompt elé), a régi szöveg emberi szemnek továbbra is „igaznak tűnik",
+mert nyelvtanilag nem változott — csak a mögötte álló valóság bővült egy
+második esettel, amit sosem fedett le. A kódoldali logika (`resolve_independent_engine`,
+`claude_blocked` ellenőrzéssel) már helyesen kezelte mindkét esetet és
+tesztelve is volt — a hiba KIZÁRÓLAG a promptban, egy LLM-nek szánt, de a
+kódtól elszakadt szöveges szabályban élt, ezért semmilyen `pytest` a régi
+preambulumon nem bukott volna piros, amíg valaki nem tesztelte magát a
+promptszöveget explicit tartalom-asserttel.
+
+**Hogyan alkalmazd.** (1) Amikor egy ADR egy MEGLÉVŐ, más ADR
+kiváltotta workflow-hoz (itt: „a Terra vezényel") egy ÚJ, alternatív
+kiváltó okot ad hozzá, keress rá az ÖSSZES promptra/preambulumra, ami az
+EREDETI kiváltó ok egyetlenségét feltételezi („azért vagy itt, mert…", „az
+egyetlen ok…", „mindig ez történt, amikor…") — ezek a leggyakoribb
+törésponti mondatok. (2) Ne bízz abban, hogy „a driver már ellenőrizte" a
+promptban emberi nyelven megismételt szabály felesleges — ehelyett a
+promptban EXPLICIT hivatkozz a driver saját, már lefutott ellenőrzésére
+(„ha a §1.1 ezt a nevet adja, a driver MÁR megmérte a kvótát"), hogy az
+LLM ne kelljen újra-levezetnie egy already-computed tényt bizonytalan
+jelekből. (3) Egy ilyen prompt-tartalmi hibára a regressziós teszt maga a
+fájl SZÖVEGÉN fut (`assertNotIn`/`assertIn` a preambulum `read_text()`-jén,
+lásd `PreambleClaudeCliProhibitionTest`), NEM a driver bash-logikáján — a
+kettő külön hibaosztály, külön tesztelési réteget igényel, még ha
+ugyanabból a `resolve_independent_engine`/rotáció témából is erednek.
