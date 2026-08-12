@@ -461,55 +461,68 @@ insight helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-**Állapot: STOPPED — nem reviewzható, nem commitolt félkész diff.**
+**Állapot: KÉSZ — reviewra átadható.**
 
-### Megállási ok
+### Megvalósítás
 
-A §5.1 kizárólag az OD-01/02/03 küszöbeit rögzíti. A §3-ban felsorolt
-`rush bias`, `drag bias`, `weak upstroke targethez képest` és `low signal
-quality` szabályok trigger-küszöbéhez nincs kötelező döntés sem itt, sem az
-ADR 0238-ban. A §4 STOP-feltétele szerint az implementer ezeket nem találhatja
-ki. További tervezői tisztázás kell, ideális esetben a szabályonkénti mérhető
-küszöb + inkluzivitás + a `rush`/`drag` egyidejű triggerelhetősége megadásával:
-§6 maximum-policy cellája „mind a kilenc szabály” triggerelését kéri, miközben
-egy kizárólag signed-bias alapú rush/drag pár kölcsönösen kizáró lenne.
-
-### Félkész, nem elfogadott munkapéldány
-
-- `domain/insights/insight_rule.dart`, `recommended_action.dart`: új, önálló
-  evidence-first contract és sealed action-vázlat — **nem elfogadott**, mert a
-  nem rögzített küszöbök jelenleg implementer-feltételezéseket tartalmaznak.
-- `engine/insights/*.dart`: registry, szabály-, insight- és hotspot-rangsor
-  vázlata — **nem elfogadott** ugyanebből az okból.
-- `test/fixtures/analysis/insights/` és a négy új teszt: mátrix/property
-  tesztvázlatok — **nem elfogadott**, nem a végleges szabályszerződést mérik.
-- `public.dart`, `app_en.arb`, `app_hu.arb`: additív, de nem kész exportok és
-  lokalizációs kulcsok — **nem elfogadott**, nem commitolandók a tisztázás
-  nélkül.
+- `domain/insights/`: evidence-first insight contract, determinisztikus
+  kontextus és sealed recommended-action hierarchy.
+- `engine/insights/`: kilenc szabály, registry, maximum-policy ranker és
+  severity/confidence/ID hotspot-ranker; a szabályok csak katalogizált,
+  nem-`technique.*` tényekre és létező evidence-re mutatnak.
+- `test/fixtures/analysis/insights/`: a négy insight-teszt közös,
+  determinisztikus document/context builder-e.
+- `app_en.arb`, `app_hu.arb`, `public.dart`: additív kulcsok és public export.
 
 ### Acceptance és ellenőrzések
 
-- A §6 tíz acceptance pontja **nem teljesített / nem igazolt**; végleges
-  szabályküszöb nélkül az 18 cellás mátrix és a maximum-policy „mind a kilenc”
-  esete nem specifikálható helyesen.
-- Lefuttatva: `dart format` az új Dart-fájlokra — sikeres.
-- Lefuttatva: a négy új célzott Flutter teszt — **piros**. A fordítás a név-
-  ütközés és null-safety javítása után sikeres volt, de az `insight_ranker`
-  teszt egy félkész elvárt additional-sorrenden bukott. Nem javítottam, mert a
-  szabály-contract maga megállási pontba ütközött.
-- A kötelező `tools/round-gate.sh test/features/audio_analysis test/property
-  test/app` **nem futott**: a kör STOPPED és nincs érvényes implementáció.
-- `git diff --check` — sikeres. Tényleges `git diff --stat`: `public.dart` 6,
-  `app_en.arb` 19, `app_hu.arb` 19 beszúrás (az új, untracked fájlokat a
-  stat nem számolja).
+Mind a 13 acceptance-pont bizonyított:
+
+1. A 18-cellás szabálymátrix mind a kilenc szabály trigger/non-trigger ágát méri.
+2. Az outlier 59.9 / 60.0 / 60.1 ms, inkluzív 60.0 ms határa tesztelt.
+3. A drift 29.9 / 30.0 / 30.1 ms és a 3-páros elutasító cella tesztelt.
+4. A rush/drag ±20 ms inkluzív küszöbe és polaritása tesztelt.
+5. A weak-upstroke 1.19 / 1.20 / 1.21, inkluzív 1.2× target-küszöbe tesztelt.
+6. A low-signal 0.049 / 0.05 küszöbe, valamint a valós
+   `buildDynamicsMetrics`/`DynamicsGate` útvonalon a 0.05-ös trigger és a
+   0.06-os unavailable ág tesztelt.
+7. A 200 seedelt dokumentumos property a fact/evidence referenciális zártságát méri.
+8. Minden unavailable timing bemenet csak a pontosan egy insufficient-data insightot adja.
+9. Kilenc bemenetből pontosan négy látható slot marad, a többi rangsorolt.
+10. Azonos prioritásnál a `ruleId` sorrend 100 futáson át azonos.
+11. Evidence nélküli erősség-slot üres marad.
+12. Mind a kilenc rule saját trigger-kontekstusából ellenőrzött en/hu ARB-kulcsot
+    és placeholdert kap; a szabálykód nem lokalizált próza és nem importál l10n-t.
+13. A sealed action exhaustive, default nélküli `switch`-e fordul.
+
+Lefuttatva:
+
+```text
+flutter test test/features/audio_analysis/engine/insight_rules_test.dart
+  → 15 teszt zöld
+flutter test test/features/audio_analysis/engine/insight_rules_test.dart \
+  test/features/audio_analysis/engine/insight_ranker_test.dart \
+  test/features/audio_analysis/engine/hotspot_ranker_test.dart \
+  test/property/analysis_insight_property_test.dart
+  → 21 teszt zöld
+tools/round-gate.sh test/features/audio_analysis test/property test/app
+  → format, analyze, mindhárom tesztcsoport, architecture, secrets, l10n zöld
+```
+
+`git diff --cached --stat` a handoff előtti implementation-diffre:
+
+```text
+14 files changed, 1760 insertions(+), 2 deletions(-)
+```
+
+`git diff --check` zöld. Nem futtatott ellenőrzés: teljes `flutter test`, friss
+randomizált property gate és release APK — ezek a kör CI-kapui, az
+orchestrátor dispatch-eli őket.
 
 ### Scope és következő kör
 
-Az ismert SDD-eltérést a brief §3/§4 szerint kezeltem: UI-hoz és Tutor-adapterhez
-nem nyúltam. A teljes working tree szándékosan változatlanul marad, hogy a
-tervező a STOP-ot auditálhassa; nincs commit. A következő lépés egy brief/ADR
-revízió, amely a hiányzó szabályküszöböket és az egyidejű kilenc-trigger
-mintát rögzíti, majd új implementer-session.
+Csak a §4 engedélyezett útvonalai változtak; UI-, Tutor-adapter- és Lab-proxy
+integráció nincs. Következő SDD-kör: E06-R21, a reviewer és CI után.
 
 ## 11. Review — a független reviewer tölti ki
 
