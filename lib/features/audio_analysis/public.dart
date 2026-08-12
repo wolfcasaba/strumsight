@@ -2,6 +2,13 @@
 library;
 
 export 'application/analysis_providers.dart';
+export 'application/analyze_audio_use_case.dart';
+export 'application/analysis_controller.dart';
+export 'application/analysis_isolate_runner.dart';
+export 'application/analysis_state.dart';
+export 'application/cancel_analysis_use_case.dart';
+export 'application/save_analysis_use_case.dart';
+export 'presentation/analysis_progress_view.dart';
 export 'data/analysis_document_codec.dart';
 export 'data/capture/analysis_recorder.dart';
 export 'data/capture/recording_run.dart';

@@ -1,6 +1,6 @@
 # E06-R22 — Analysis runner, progress UI és cancellation
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`; pre-flight revízió 2026-08-12, main @ `e0c6754e`, ADR 0240)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 22; §6.5, §21, §22.1–22.4
 - **Branch:** `codex/e06-r22-analysis-runner-progress-cancellation`
 - **Előfeltétel:** **E06-R04, E06-R06, E06-R21 merge**
@@ -54,7 +54,37 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**Pre-flight revízió (2026-08-12, main @ `e0c6754e`).**
+
+1. A brief `main@a6e6f3d`-n, Epic 6 kezdete ELŐTT íródott — a §2 "Az R04 adja
+   a pipeline-t + cancellation tokent, az R06 a felvevőt, az R21 a
+   repository-t" mondat előrejelzés volt, nem mérés. Újramérve: mindhárom
+   előfeltétel-kör (R04/R06/R21) MERGE-elve van, az `analysis_providers.dart`
+   (R21) már létezik — ez a kör bővíti, nem hozza létre újra, a brief §pre-
+   flight-note szerint helyesen.
+2. **Mért architekturális rés, ADR-rel feloldva:** ma NULLA konkrét,
+   összeszerelt V2 DSP `AnalysisPipeline<T>`-példány létezik a `lib/`-ben
+   (`grep -rln "AnalysisPipeline(" lib/` üres), és a három meglévő konkrét
+   `AnalysisStage` (`SignalQualityStage`, `PreprocessingStage`,
+   `ClipAnalyzerStage`) egymással össze nem fűzhető I/O-jú — egyik sem a lánc
+   végállomása. A brief §6 acceptance criteria ugyanakkor MINDEN cellája
+   fake/minimális pipeline-t ír elő (a §6.1 mérce-mátrix és az OD-01
+   alapértelmezése szó szerint ezt mondja), tehát ez NEM blokkoló hiány,
+   csak egy pontosítandó feltételezés. [ADR
+   0240](../adr/0240-analysis-runner-and-pipeline-boundary.md) rögzíti: a
+   kör pipeline-agnosztikus marad, `T = AnalysisDocument`-re rögzítve, a
+   valódi stage-lánc összeszerelése egy jövőbeli, még nem ütemezett kör
+   feladata (nyíltan dokumentált résként, nem hallgatólagos hiányként a
+   §10/HANDOFF-ban).
+3. Az ADR ugyanezen mérése alapján rögzíti a run-ID hitelesség kérdését is
+   (a pipeline belső `_activeRunId`-ja példányonként/isolate-onként
+   nullázódik, ezért NEM használható a controller késői-eredmény szűrőjeként
+   — a controller saját, a futtatás indításakor kapott run ID-t követő
+   mezője az egyetlen igazságforrás) és az isolate-életciklust (egy-lövetű,
+   futásonkénti spawn+kill, nem újrahasznosított isolate).
+
+**Pre-flight alapján:** ADR: **0240** (analysis runner and pipeline
+boundary).
 
 ## 1. Cél
 
@@ -252,7 +282,73 @@ feltételének megváltoztatása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Codex implementation — 2026-08-12
+
+- `application/analysis_state.dart` — sealed, tizenegy állapotos V2 state
+  machine; futáshoz kötött terminális/analyzing állapotok run ID-t hordoznak.
+- `application/analyze_audio_use_case.dart`, `cancel_analysis_use_case.dart`,
+  `save_analysis_use_case.dart` — a runner, cancellation handle és repository
+  save szűk application-határai.
+- `application/analysis_isolate_runner.dart` — futásonként friss isolate,
+  JSON codec-határ, progress stream és kill+port-cleanup cancellation. A
+  `AnalysisRunner` interface-et a controller tesztjei fake-elik.
+- `application/analysis_controller.dart` — controller-saját aktív run ID,
+  késői progress/result elutasítás-számláló, eseményszámláló-alapú inkluzív
+  5-ös throttle, explicit cancel és pontosan egyszeri V1-alakú kredit-döntés.
+- `application/analysis_providers.dart` — use-case és V1-kompatibilis
+  practice/streak adapter; a konkrét V2 runner provider fail-closed,
+  `StateError`-ral jelzi a még hiányzó stage-listát.
+- `presentation/analysis_progress_view.dart` + ARB — lokalizált fázis,
+  magyarázat, szemantikus cancel; egységszám nélkül nincs százalék.
+- `public.dart` — additív V2 application/presentation export.
+
+**Acceptance evidence.** `analysis_controller_test.dart` 10 zöld tesztje fedi
+a teljes/degradált/fatal/cancelled végállapotokat, permission/input hibát,
+cancel utáni új futást, tab-váltást és háttérbe kerülést, a késői progress és
+result `rejectedLateResults == 2` elutasítását, a V1-azonos kreditpredikátum
+eventes/üres/degradált/fatal/late esetét, valamint a 4/5/6 throttle-hármast.
+`analysis_cancellation_test.dart` 2 zöld tesztje méri a fake run dispose,
+stream-close és üres temp-lista cancel-takarítását, illetve a valódi
+`Isolate.spawn` JSON codec smoke-ot. `analysis_progress_view_test.dart` zöld:
+lokalizált fázis, semantic cancel és nincs hamis százalék. A controller
+forrásolvasó tesztje kizárja a közvetlen `engine/` importot és a JSON hívást.
+A V1-érintetlenséget a `test/features/analyze` gate-útvonal és a scope audit
+bizonyítja.
+
+**Futtatott ellenőrzések.** Célzottan zöld:
+`flutter test test/features/audio_analysis/application/analysis_controller_test.dart`
+(10), `flutter test test/features/audio_analysis/application/analysis_cancellation_test.dart`
+(2), `flutter test test/features/audio_analysis/presentation/analysis_progress_view_test.dart`
+(1), `flutter analyze` (No issues found). A kötelező
+`tools/round-gate.sh test/features/audio_analysis test/app test/features/analyze`
+záró, dokumentáció utáni futása zöld volt (format, analyze, mindhárom
+teszt-útvonal és architecture).
+
+**Git diff --stat (staged, záráskor):** 15 fájl, 1262 beszúrás, 3 törlés.
+
+### Javító kör #1 — 2026-08-12
+
+- `analysis_isolate_runner.dart`: a cleanup once-guardja már nem akadályozza
+  meg a spawn után hozzárendelt isolate killjét; a cleanup minden híváskor
+  előbb atomikusan átveszi és leállítja az aktuális isolate-ot, majd csak a
+  port/progress erőforrások zárását védi a guarddal.
+- `analysis_cancellation_test.dart`: új, valódi isolate-os spawn-ablak teszt
+  kapuzza az isolate-spawner Future-jét. Cancel a Future feloldása előtt,
+  assignment-felengedés után pedig a késleltetett completion-marker nem íródhat
+  ki; ez közvetlenül a security review MAJOR-1 exit-mátrix celláját méri.
+- `analysis_controller_test.dart`: a második `analyze()` igazolja, hogy az
+  első aktív run explicit `cancel()` hívást kap. `analysis_progress_view_test.dart`:
+  `totalUnits: 0` esetén az indikátor indeterminate (`value == null`).
+- Gate: `tools/round-gate.sh test/features/audio_analysis test/app
+  test/features/analyze` zöld — format (1395 fájl), analyze, mindhárom
+  célzott tesztútvonal, architecture, secrets és l10n paritás.
+
+**Nyitott follow-up.** A valódi több-stage DSP pipeline összeszerelése
+(közös work-state és konkrét `AnalysisStage<AnalysisDocument,
+AnalysisDocument>` lista) szándékosan nincs ebben a körben: ADR 0240 Döntés 4
+szerint egy jövőbeli, még nem ütemezett kör adja majd a
+`analysisV2RunnerProvider` felülírását. A V2 flag továbbra is default `false`,
+így ez a nyitott wiring nem user-facing regresszió.
 
 ## 11. Review — a független reviewer tölti ki
 

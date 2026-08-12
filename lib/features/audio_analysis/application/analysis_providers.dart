@@ -23,8 +23,18 @@ import '../data/local/file_analysis_repository.dart';
 import '../data/migration/analysis_migration_version_store.dart';
 import '../data/migration/legacy_library_migrator.dart';
 import '../domain/analysis_repository.dart';
+import '../domain/analysis_document.dart';
+import '../domain/analysis_event.dart';
 import '../../../core/storage/storage_keys.dart';
 import '../../library/public.dart' show AnalyzedSession;
+import '../../progress/public.dart'
+    show PracticeEntry, PracticeSource, practiceLogProvider;
+import '../../streak/public.dart' show StreakLogic, streakProvider;
+import 'analysis_controller.dart';
+import 'analysis_isolate_runner.dart';
+import 'analyze_audio_use_case.dart';
+import 'cancel_analysis_use_case.dart';
+import 'save_analysis_use_case.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// analysis tree. The directory MUST exist before
@@ -151,3 +161,62 @@ final analysisRepositoryClockProvider = Provider<DateTime Function()>(
 /// Re-export the StorageKeys migration constant so callers do not
 /// need to import the storage layer.
 const String analysisMigrationStorageKey = StorageKeys.analysisMigrationState;
+
+/// Composition seam for the first concrete V2 pipeline. It intentionally
+/// fails closed until a future round designs the shared DSP work-state and
+/// supplies a serializable isolate operation (ADR 0240 decision 4).
+final analysisV2RunnerProvider = Provider<AnalysisRunner>((_) {
+  throw StateError(
+    'analysisV2RunnerProvider has no concrete V2 DSP stage list yet. '
+    'A future pipeline-composition round must override it.',
+  );
+});
+
+/// Application entry point for an injected analysis runner.
+final analyzeAudioUseCaseProvider = Provider<AnalyzeAudioUseCase>(
+  (ref) => AnalyzeAudioUseCase(ref.watch(analysisV2RunnerProvider)),
+);
+
+final cancelAnalysisUseCaseProvider = Provider<CancelAnalysisUseCase>(
+  (_) => const CancelAnalysisUseCase(),
+);
+
+final saveAnalysisUseCaseProvider = Provider<SaveAnalysisUseCase>(
+  (ref) => SaveAnalysisUseCase(ref.watch(analysisRepositoryProvider)),
+);
+
+/// The V2 form of the V1 Analyze credit side effect. The controller decides
+/// eligibility and exactly-once semantics; this adapter performs the two
+/// existing public-feature writes only after that decision.
+final analysisPracticeCreditRecorderProvider =
+    Provider<AnalysisPracticeCreditRecorder>(
+      (ref) => _RiverpodAnalysisPracticeCreditRecorder(ref),
+    );
+
+final class _RiverpodAnalysisPracticeCreditRecorder
+    implements AnalysisPracticeCreditRecorder {
+  const _RiverpodAnalysisPracticeCreditRecorder(this._ref);
+
+  final Ref _ref;
+
+  @override
+  void record(AnalysisDocument document) {
+    final timeline = document.timeline;
+    final strums = timeline.events.whereType<StrumEvent>().toList();
+    _ref.read(streakProvider.notifier).recordPracticeToday();
+    _ref
+        .read(practiceLogProvider.notifier)
+        .record(
+          PracticeEntry(
+            day: StreakLogic.epochDayOf(DateTime.now()),
+            source: PracticeSource.analyze,
+            seconds: timeline.duration.inSeconds,
+            strokes: strums.length,
+            chords: timeline.chordSegments
+                .map((segment) => segment.label)
+                .toSet()
+                .length,
+          ),
+        );
+  }
+}
