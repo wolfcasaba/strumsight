@@ -4,7 +4,50 @@ Brief: `docs/rounds/e06-r10-event-evidence-onset-strum-timeline.md`
 ADR: `docs/adr/0228-event-evidence-model-and-timeline-builder-contract.md`
 Diff: `git diff 8c2e43ae..9f92431a` (main → `codex/e06-r10-event-evidence-onset-strum-timeline`)
 Reviewer: Claude (independent reviewer) · Dátum: 2026-08-12
-Verdikt: **CHANGES REQUESTED**
+Első verdikt: CHANGES REQUESTED (lásd lent)
+
+## Javító kör 1 — zárás (2026-08-12, fix commit `ad9317de`)
+
+**Verdikt: APPROVED.** Terra a `.pipeline/fix-prompt-E06-R10-1.md` szerint
+KIZÁRÓLAG tesztet adott hozzá (`test/features/audio_analysis/engine/
+event_timeline_builder_test.dart`, +181 sor), production kódot nem
+módosított — pontosan a javító kör kért scope-ja.
+
+- **F1 zárva:** az új „preserves V1 strum timestamps, counts, and directions
+  for R09 fixtures" teszt a `clip_analyzer_parity_test.dart`-tal AZONOS
+  kilenc fixture-t futtatja a VALÓDI `ClipAnalyzerStage` → `LegacyEvidence` →
+  `EventTimelineBuilder` láncon, és a V1 `ClipAnalyzer().analyze()`
+  referenciával veti össze (darabszám, |Δ|≤1µs idő, irány). Saját, izolált
+  `/tmp/review-e06-r10-fix1` klónban futtatott valódi-sértés próbával
+  igazoltam, hogy a teszt VALÓBAN elkap egy end-to-end regressziót: a
+  `_directionFromLegacy` irány-leképezés felcserélése (down↔up) a „two
+  chords" fixture 0. strumján azonnal PIROSRA vitte pontosan ezt az új
+  tesztet (`Expected: StrumDirection.up, Actual: StrumDirection.down`) —
+  utána `git checkout --` visszaállítva, `git status --short` üres.
+- **F2 zárva:** az új „measures attack strength and local RMS from original
+  PCM" teszt egy ismert (0,9 csúcs / 0,5 háttér) PCM-pufferen a builder
+  TÉNYLEGES kimenetét (`attackStrength=0.9`, `localRms=0.5108624004141064`)
+  méri — ugyanazok a számok, amiket a review saját, független próbája is
+  számolt (kereszt-validálva).
+- **Gate újrafuttatva, saját kézzel, FRISS izolált klónban**
+  (`/tmp/review-e06-r10-fix1`, a `docs/LESSONS.md` L222 szerinti
+  `tools/prepare-flutter-generated.sh` előkészítéssel):
+  `tools/round-gate.sh test/features/audio_analysis test/property
+  test/features/analyze` → **mind a 8 lépés ZÖLD** (format, analyze,
+  audio_analysis 118/118, property 76/76, analyze 64/64, architecture 12
+  allowlisted deviation, secrets 0 finding, l10n 1019 üzenet) —
+  `GATE_EXIT=0`.
+- **Scope-audit:** `scope_audit=ok`, 2 megváltozott fájl (a teszt + a brief
+  §10 handoff-frissítés), mindkettő `allowed_paths`-on belül.
+
+Nyitva maradó MAJOR/BLOCKER: **nulla.** A merge feltétele (CI exact-SHA a
+`ad9317de` fix-commiton, majd Router CI) a driver dolga a review után.
+
+---
+
+## Eredeti review (2026-08-12, HEAD `9f92431a`)
+
+Verdikt akkor: **CHANGES REQUESTED**
 
 ## Összegzés
 
