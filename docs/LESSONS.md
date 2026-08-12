@@ -8834,3 +8834,69 @@ független ellenőrzéssel (folyamat életben van-e, `git status --short` a
 munkapéldányban) igazolható. Csak akkor kezeld tényleg "még fut"-ként, ha a
 jelzésfájl HIÁNYZIK vagy a `signalled_at`/`head` mező nem változott az előző
 hívás óta.
+
+---
+
+## L240 — Előre írt briefek ADR-hivatkozásai egy KÉSŐBBI sorszám-tolódás miatt válhatnak elavulttá, a célzott ADR saját fejléce grep-elhető jelzést ad rá (E06-R19, 2026-08-12)
+
+**Mit mértem.** Az E06-R19 briefje (írva 2026-08-07) „ADR 0201"-re
+(confidence/abstention) és „ADR 0204"-re (capability-publikáció) hivatkozott
+§0.0/§5-ben. `docs/adr/0201-*` és `docs/adr/0204-*` nem létezik. A repóban
+mérve: az R01 pre-flight (2026-08-11) a teljes hatos ADR-blokkot
+0200–0205-ről 0215–0220-ra tolta, és a két célzott ADR (0216, 0219) saját
+fejléce EZT a tolódást explicit dokumentálja egy „Sorszám-jegyzet" sorral
+(„lásd ADR 0215 fejléce — a teljes hatos blokk 0200–0205-ről 0215–0220-ra
+tolódott"). A brief egy HARMADIK, ugyanebbe az osztályba tartozó hivatkozást
+is tartalmazott (§5 pont 6: „ADR 0203" → valójában 0218).
+
+**Miért.** A batch-írt briefek egy korai tervezési menetben (a hivatkozott
+kör tényleges pre-flightja ELŐTT) kaptak ideiglenes ADR-számot a
+hivatkozott (még nem létező) döntésekhez; amikor a hivatkozott kör
+pre-flightja lefutott, a `tools/round-slots.py reserve-adr` a ténylegesen
+szabad számokat foglalta le, amik ELTÉRHETNEK a batch-írás idején
+feltételezettektől — pontosan úgy, ahogy az E06-R18 pre-flightja is mérte
+(brief 0208 → tényleges 0236). A különbség itt: a KORÁBBI kör (R01) már
+lezajlott és a hivatkozott ADR-ek MÁR LÉTEZNEK, csak más számmal — ez nem
+`stopped`-ot igénylő ütközés, hanem egy tisztán dokumentum-szintű, a
+kódban semmit nem érintő §0.0 revízióval javítható elavulás.
+
+**Hogyan alkalmazd.** Pre-flightban minden brief-beli `ADR NNNN` hivatkozást
+`docs/adr/NNNN-*.md`-ként ellenőrizz (`ls`/`find`). Ha a fájl nem létezik,
+NE feltételezd, hogy a döntés soha nem készült el — keresd meg a témát
+kulcsszóval (`grep -rl "<téma>" docs/adr/`), és nézd meg a talált ADR
+fejlécének „Sorszám-jegyzet" sorát: ha van ott egy tolódás-bejegyzés, az
+maga a bizonyíték a helyes megfeleltetésre. A javítás dokumentum-szintű
+§0.0 revízió, nem `stopped`.
+
+---
+
+## L241 — A brief acceptance criteriájába ágyazott, KÉZZEL számolt referenciaérték is tartalmazhat aritmetikai hibát a küszöb-hármasokon TÚL — az implementer saját `python3 -c` ellenőrzése fogta meg, amit a pre-flight nem futtatott újra (E06-R19, 2026-08-12)
+
+**Mit mértem.** Az E06-R19 brief §6 „Nincs átlag" acceptance criterionja a
+`[0.9, 0.9, 0.9, 0.9, 0.1]` vektor geometriai átlagát „0.5581…"-ként
+rögzítette „`python3 -c`-vel számolva" megjegyzéssel. A pre-flight (ez a
+kör) a brief §1 kötelező mérési szabályai szerint ellenőrizte a küszöb-
+HÁRMASokat (0.3999/0.4/0.4001 stb. — S3 szabály) és az ADR-hivatkozásokat
+(L240), de NEM futtatta újra ezt a beágyazott, prózában megadott PÉLDA-
+számítást. Az implementer (Terra) az ELSŐ dispatchkor, a brief saját
+`python3 -c` szabályát követve, lefuttatta: `0.5799546134795288`-at kapott,
+nem `0.5581…`-et — és helyesen `stopped`-ot jelzett 0 fájl módosítással,
+mielőtt bármilyen implementációt vagy tesztet írt volna a téves értékre.
+
+**Miért.** Az S3 pre-flight szabály (`docs/LESSONS.md` L13,
+`AGENTS.md`-fajta briefek §1) kifejezetten a küszöb-HATÁROK (alatta/rajta/
+fölötte hármasok) újraszámolását írja elő, mert azok a leggyakoribb hiba-
+osztály (inkluzív/exkluzív csúszás). Egy PRÓZÁBAN megadott, egyetlen
+worked example (nem határ-hármas, hanem egy konkrét demonstrációs
+számítás) kívül esett ezen a mintán — pedig ugyanolyan könnyen tartalmazhat
+kézi számolási hibát, és a kör egyik KULCS acceptance criteriuma épp erre
+a számra pinnelt.
+
+**Hogyan alkalmazd.** Pre-flightban NE csak a küszöb-hármasokat számold
+újra `python3 -c`-vel — minden brief-ben szereplő, konkrét számjegyre
+kipinnelt PÉLDASZÁMÍTÁST (nem csak "alatta/rajta/fölötte" hármast) is.
+Ha a brief azt állítja, hogy egy adott bemenetre egy adott képlet egy adott
+számot ad, azt a pre-flight session futtassa le függetlenül, MIELŐTT
+dispatch-el — egy ilyen hiba a dispatch UTÁN egy teljes `stopped`-fordulót
+és egy §0.0-javító brief-commitot költ (itt: 2 dispatch, 0 termelt kód az
+elsőben), ami a pre-flightban ingyenes lett volna.
