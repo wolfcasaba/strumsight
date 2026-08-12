@@ -3,11 +3,24 @@
 Brief: `docs/rounds/e06-r22-analysis-runner-progress-cancellation.md`
 Diff: `git diff 4ef44008..6c27935a` (pre-flight commit → implementer HEAD), isolated clone `/tmp/review-e06-r22`
 Reviewer: Claude Sonnet 5 (orchestrator) · Dátum: 2026-08-12
-Verdikt: **APPROVED**
+Verdikt (első kör): **APPROVED** — de lásd az alábbi frissítést: a KÖTELEZŐ
+dedikált biztonsági review (risk=high) ezen a diffen egy független, valódi
+MAJOR leletet talált, amit ez a review nem fogott meg (a saját tesztkészlet
+csak fake runnert használt a cancel-takarítás cellán — lásd F2 alább, ami
+ugyanezt a hiányt más szögből már jelezte).
+
+## Frissítés — Javító kör #1 után (2026-08-12, fix commit `63f39515`)
+
+**Végső verdikt: APPROVED.** A dedikált biztonsági review
+(`e06-r22-analysis-runner-progress-cancellation-security.md`) MAJOR-1
+(cancel-during-spawn isolate leak) leletét a Terra javító kör #1 zárta,
+orchesztrátor-oldali független újramérés (gate + valódi-sértés próba,
+ld. a security-jelentés frissítése) után. Ugyanabban a körben F2 (lent) is
+javítva. F1 nyitva marad follow-up-ként (MINOR, nem blokkol).
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 2 (follow-up) · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 nyitva (1 volt, a dedikált security review-ban, FIXED) · MINOR: 1 nyitva (follow-up) + 1 FIXED · NOTE: 2
 
 ## Acceptance criteria
 
@@ -46,7 +59,10 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 4ef440
 - **Hatás:** ma nincs UI-hívó, ami ezt a sorrendet előidézhetné (a brief ezt a képernyő-drótozást kizárja a scope-ból) — gyakorlati hatás csak egy jövőbeli host-képernyő hibás (dupla-tap elleni védelem nélküli) drótozásával jelentkezne.
 - **Kötelező javítás:** `analyze()` elején: ha `_activeRun != null`, vagy hívja meg `cancel()`-t implicit módon az új futás indítása előtt, vagy (UI-döntésként) egyszerűen `return`-öljön no-opként — a döntés a jövőbeli host-drótozó kör dolga, mert termékszinten kell eldönteni, hogy az „ismételt analyze" auto-cancel-and-restart vagy elutasított legyen.
 - **Ellenőrzés:** a fenti eldobható próba mintája újrafelhasználható a jövőbeli fix teszteként.
-- **Státusz:** OPEN (follow-up — nem blokkolja a merge-et, MINOR, nincs a brief tíz állapot-mátrix cellája között, és nincs mai hívó, ami elérné).
+- **Státusz:** **FIXED** (`63f39515`, javító kör #1) — `analyze()` immár
+  `unawaited(cancelAnalysis(previousRun))`-t hív a korábbi aktív futáson,
+  mielőtt az újat indítaná. Ezt a dedikált security review NOTE-2-je
+  függetlenül ugyanígy azonosította.
 
 ### F3 — NOTE — az isolate runner egy-üzenetes, nincs valódi köztes progress-csatorna
 
@@ -65,20 +81,36 @@ Engedélyezett fájlokon kívüli változás: **nincs.** `git diff --stat 4ef440
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, saját `/tmp/review-e06-r22` klón) |
-|---|---|---|
-| format | zöld | ✅ zöld |
-| analyze | zöld ("No issues found") | ✅ zöld |
-| test test/features/audio_analysis | zöld | ✅ zöld, **435 teszt** |
-| test test/app | zöld | ✅ zöld, **69 teszt** |
-| test test/features/analyze | zöld | ✅ zöld, **64 teszt** |
-| architecture | zöld | ✅ zöld (12 allowlistelt eltérés — változatlan) |
-| secrets | (nem jelentve, a gate mégis futtatta) | ✅ zöld (2370 fájl, 0 lelet) |
-| l10n parity | (nem jelentve, a gate mégis futtatta) | ✅ zöld (en→hu, 1099 üzenet) |
-| CI (teljes suite + property + APK) | — | orchesztrátor a review után dispatch-eli (§3.0 CI-terv) |
+Két kör: az első implementáció (`6c27935a`) ÉS a javító kör #1 (`63f39515`)
+után is, mindkétszer friss `/tmp/review-e06-r22` klónban.
 
-A gate a `.codex-round-status`-ban jelzett `gate_shape=ok`-t is megerősíti — nincs csonkolt/láncolt gate-hívás a logban.
+| Gate | 1. kör (implementer) | 1. kör (reviewer) | 2. kör — javítás után (reviewer) |
+|---|---|---|---|
+| format | zöld | ✅ zöld | ✅ zöld |
+| analyze | zöld | ✅ zöld | ✅ zöld |
+| test test/features/audio_analysis | zöld | ✅ zöld, **435 teszt** | ✅ zöld, **438 teszt** (+3 fix) |
+| test test/app | zöld | ✅ zöld, **69 teszt** | ✅ zöld, **69 teszt** |
+| test test/features/analyze | zöld | ✅ zöld, **64 teszt** | ✅ zöld, **64 teszt** |
+| architecture | zöld | ✅ zöld (12 allowlistelt eltérés) | ✅ zöld |
+| secrets | (a gate futtatta) | ✅ zöld (2370 fájl, 0 lelet) | ✅ zöld |
+| l10n parity | (a gate futtatta) | ✅ zöld (en→hu, 1099 üzenet) | ✅ zöld |
+| CI (teljes suite + property + APK) | — | — | orchesztrátor a fix után dispatch-eli (§3.0 CI-terv), a `63f39515` SHA-n |
+
+Az 1. kör `.codex-round-status`-a `gate_shape=ok`-t adott. A javító kör #1
+jelzése `gate_shape=VIOLATION`-t jelzett — **ellenőrizve, ÁLPOZITÍV**: az
+egyetlen regex-találat egy `sed -n '1,260p' tools/round-gate.sh && git
+status --short && git diff --check` sor volt (a gate SCRIPT FORRÁSÁNAK
+kiolvasása diagnosztikai céllal, nem a gate futtatásának láncolása) — a
+tényleges `tools/round-gate.sh test/features/audio_analysis test/app
+test/features/analyze` hívás mind a négy előfordulásnál csonkítás/láncolás
+nélküli. A reviewer saját, független `/tmp/review-e06-r22` gate-újrafuttatása
+(fenti táblázat 4. oszlopa) ettől függetlenül is megerősíti a zöld eredményt.
 
 ## Merge-döntés
 
-ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge. Ez a feltétel **teljesül** (0 BLOCKER, 0 MAJOR; a 2 MINOR follow-up-ként nyitva marad, nem blokkol). A CI-dispatch (ADR 0171 §3 terv) és a merge az orchesztrátor következő lépése.
+ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge. A
+dedikált security review (risk=high) MAJOR-1 leletét a javító kör #1
+(`63f39515`) zárta, orchesztrátor-oldali független újramérés (gate + valódi-
+sértés próba) után. A feltétel **teljesül**: 0 BLOCKER, 0 nyitott MAJOR; F1
+(MINOR) follow-up-ként nyitva marad, nem blokkol. A CI-dispatch (ADR 0171 §3
+terv) a `63f39515` SHA-n az orchesztrátor következő lépése.
