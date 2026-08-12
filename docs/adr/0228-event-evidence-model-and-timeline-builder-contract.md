@@ -110,6 +110,18 @@ módon.
    atomikusan** kezeli — ha a strum elnyomásra kerül, a szintetizált onsetje
    is a diagnosztikai ágba kerül, hogy a publikus listában sosem maradjon
    `onsetEventId`, ami nem létező vagy elnyomott eseményre mutat.
+8. **A kombinált (onset+strum) kimeneti lista rendezési kulcsa `sampleIndex`
+   monoton NEM CSÖKKENŐ, nem szigorúan növekvő** — mérve Terra dispatch #1
+   stopped-jelzéséből (2026-08-12 02:21 UTC, §0.0.2): a 7. döntés minden
+   szintetizált (onset, strum) párt AZONOS `sampleIndex`-re helyez, ami
+   matematikailag kizárja a „szigorúan monoton" (nulla duplikátum,
+   típustól függetlenül) invariánst minden legalább egy strumot tartalmazó
+   bemeneten. A dedup-kulcs változatlanul `(type, sampleIndex)` (§5 pont 5,
+   nem ez az ADR vezette be) — ugyanazon `sampleIndex`-en legfeljebb egy
+   `OnsetEvent` ÉS legfeljebb egy `StrumEvent` élhet egyszerre. Holtverseny
+   (mindkettő jelen van ugyanazon `sampleIndex`-en): az `OnsetEvent`
+   determinisztikusan megelőzi a hozzá `onsetEventId`-vel kapcsolódó
+   `StrumEvent`-et a listában.
 
 ## Elutasított alternatívák
 
@@ -145,6 +157,19 @@ módon.
   hagyna a publikus timeline-ban — ez sértené a „duplikátummentesség és
   hivatkozási integritás" elvet, és megzavarná a jövőbeli hotspot-
   fogyasztókat (ismeretlen eredetű onset egy elnyomott strum mellett).
+- **A kombinált lista tényleg szigorúan monoton marad, a `StrumEvent`
+  `sampleIndex`-ét mesterségesen +1-gyel eltolva az onsetjéhez képest**:
+  megmentené a szigorú monotonitást, de két új, hamis állítást vezetne be —
+  a strum `sampleIndex`-e többé nem egyezne a saját `time`-jából számolható
+  mintaszámmal (§5 pont 2 sérülne: „a kettő... konzisztens"), és a
+  szintetikus eltolás egy KITALÁLT, semmilyen méréssel alá nem támasztott DSP-
+  mennyiség lenne. Elutasítva — a rendezési kulcs szemantikáját (nem
+  csökkenő, nem szigorúan növekvő) kellett pontosítani, nem az adatot
+  torzítani.
+- **Az onset és a strum egy KÖZÖS listaelemként jelenne meg (visszatérés az
+  `isStrum`-boolean-mintához, csak most „rendezettség miatt")**: ez pontosan
+  a §5 pont 1 „NEM elfogadható" tétele — a rendezettségi ütközés feloldása
+  nem ok az architekturális alapdöntés visszavonására.
 
 ## Visszavonási feltétel
 
@@ -182,3 +207,9 @@ strumra marad, aminek nincs hozzá tartozó, mért onsetje.
   szintetizálási szabály (7. döntés) felülvizsgálandó, mert onnantól a
   `LegacyEvidence`-nél gazdagabb bemenet is elérhető lesz (Visszavonási
   feltétel).
+- A „rendezettség" property-teszt (§6) mostantól két külön állítást mér:
+  monoton-nem-csökkenő + típusonkénti dedup (property, tetszőleges méretű
+  véletlen onset-halmazon) ÉS a holtverseny-sorrend (determinisztikus
+  unit-teszt, egyetlen szintetizált párra) — a kettő EGYÜTT adja vissza azt
+  a garanciát, amit az eredeti, pontatlan „szigorúan monoton" megfogalmazás
+  próbált (de tévesen) kifejezni.

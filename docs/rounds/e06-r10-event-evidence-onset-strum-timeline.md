@@ -134,6 +134,30 @@ V1-ben). A hiány feloldása: **OD-04** (lásd §5.1) — a builder minden
 sample indexre/időre, és a hozzá tartozó `StrumEvent.onsetEventId`-je erre
 mutat; a suppression a (onset, strum) PÁRT atomikusan kezeli.
 
+### 0.0.2 Terra első futása — RENDEZETTSÉG/MONOTONITÁS ütközés (dispatch #1, 2026-08-12 02:21 UTC)
+
+Terra a fenti brief-változatot mérve, **fájl írása előtt** `stopped`-ot
+jelzett: „same-index onset/strum pairs cannot make one combined event list
+strictly monotonic by sample index" — helyesen. Az OD-04 (fent) minden
+szintetizált (onset, strum) párt AZONOS `sampleIndex`-re helyez, a §6
+„Rendezettség + duplikátummentesség property" bullet viszont **szigorúan
+monoton** sample indexet várt a KOMBINÁLT (onset+strum együtt) listától — a
+kettő egyszerre nem teljesíthető egyetlen párra sem, tehát minden legalább
+egy strumot tartalmazó valódi bemeneten szisztematikusan bukna. Terra nulla
+fájlt módosított (`git status --short` üres a stopped jelzés után) — tiszta
+STOP, nincs mit visszaállítani.
+
+**Feloldás (ADR 0228 8. döntés):** a kombinált lista rendezési kulcsa
+**`sampleIndex` monoton NEM CSÖKKENŐ** (nem szigorúan növekvő); AZONOS
+`sampleIndex`-en legfeljebb **egy esemény TÍPUSONKÉNT** él (ez §5 pont 5
+eredeti, változatlan dedup-szabálya); és amikor egy `OnsetEvent` és a hozzá
+`onsetEventId`-vel kapcsolódó `StrumEvent` AZONOS `sampleIndex`-en áll, a
+listában az **`OnsetEvent` mindig megelőzi a StrumEvent-jét** (determinisztikus
+holtverseny-szabály). A §5 pont 5 és a §6 property-bullet szövege lent ennek
+megfelelően pontosított — nem új döntés, a §5 pont 5 EREDETI „legfeljebb egy
+event típusonként" szabálya már ezt implikálta, csak a property-bullet
+„szigorúan monoton" szóhasználata mondott neki ellent.
+
 ## 1. Cél
 
 Az onset és a strum **külön** eseménnyé választása, sample-index alapú,
@@ -217,8 +241,17 @@ DSP-konstans, chord (R11), beat (R12), `lib/features/analyze/**`,
 4. **A suppressed event NEM tűnik el nyomtalanul:** a diagnosztikai ágba kerül
    (ok + időpont), a publikus timeline-ba nem. **NEM elfogadható:** a
    suppression néma eldobása.
-5. **Az esemény-lista időrendben, duplikátummentesen** kerül ki: azonos sample
-   indexen legfeljebb egy event típusonként.
+5. **Az esemény-lista időrendben, duplikátummentesen** kerül ki: a rendezési
+   kulcs `sampleIndex` monoton **nem csökkenő** (NEM szigorúan növekvő — egy
+   OD-04-szintetizált (onset, strum) pár AZONOS `sampleIndex`-en él);
+   ugyanazon `sampleIndex`-en legfeljebb egy event **típusonként** (ez a
+   dedup-szabály, változatlan). Holtverseny (azonos `sampleIndex`, két
+   különböző típus): az **`OnsetEvent` a listában megelőzi a hozzá
+   `onsetEventId`-vel kapcsolódó `StrumEvent`-et** (ADR 0228 8. döntés,
+   §0.0.2 — Terra dispatch #1 stopped-jelzésének feloldása).
+   **NEM elfogadható:** a kombinált lista „szigorúan monoton" (duplikátum
+   sampleIndex SEHOL, típustól függetlenül) — ez matematikailag
+   kizárná minden OD-04-pár létezését.
 6. **A confidence itt még nyers, de JELÖLT:** minden event `confidenceSource`
    mezőt kap (`heuristic`/`crnn`/`calibrated`); a kalibráció az R19 dolga.
    **NEM elfogadható:** kalibrálatlan érték `calibrated` jelöléssel.
@@ -320,10 +353,16 @@ open_decisions:
 - [ ] **Event ID determinizmus:** ugyanaz a bemenet kétszer építve **azonos**
       ID-listát ad; **eltérő** runId esetén az ID-k eltérnek, de a sorrend és a
       típus/sampleIndex rész azonos.
-- [ ] **Rendezettség + duplikátummentesség property:**
-      `PROPERTY_SEED`-ből vezérelt véletlen onset-halmazokra a kimenet
-      **szigorúan monoton** sample index szerint, és nincs két azonos
-      `(type, sampleIndex)` pár.
+- [ ] **Rendezettség + duplikátummentesség property (ADR 0228 8. döntés,
+      §0.0.2):** `PROPERTY_SEED`-ből vezérelt véletlen onset-halmazokra a
+      kimenet `sampleIndex`-e **monoton nem csökkenő**, és nincs két azonos
+      `(type, sampleIndex)` pár. **Külön (nem property-, hanem determinisztikus
+      unit-teszt) eset:** egyetlen `LegacyStrumEvidence`-ből épített
+      (onset, strum) pár a kimenetben **AZONOS `sampleIndex`-en, egymás
+      mellett** jelenik meg, ebben a sorrendben: `OnsetEvent` majd a hozzá
+      `onsetEventId`-vel kapcsolódó `StrumEvent` — ez NEM sérti a monoton
+      nem csökkenő szabályt, és NEM azonos `(type, sampleIndex)` pár (a két
+      esemény típusa különböző).
 - [ ] **Határeset-mátrix:** onset a **0.** mintán; onset az **utolsó** mintán;
       üres bemenet; egyetlen esemény — mind a négy kontrollált kimenetet ad
       (nem dob, nem ad negatív időt).
@@ -355,6 +394,8 @@ open_decisions:
 | A nyers CRNN-confidence `calibrated`-ként jelölve | a `confidenceSource` őr |
 | A minimum separation `sampleIndex`-et hasonlít rögzített mintaszám-küszöbhöz (nem `Duration`-t) | a **44100 Hz-es** 2205-mintás hármas cella (a 48 kHz-es cella ekkor is zöld maradna — csak a 44100 Hz-es leplezi le) |
 | A strum elnyomásra kerül, de a párja `OnsetEvent` a publikus listában marad (árva hivatkozás) | az `onsetEventId` integritás cella (OD-04) |
+| A holtverseny sorrendje `StrumEvent` majd `OnsetEvent` (megfordítva) | a §6 „egyetlen `LegacyStrumEvidence`" unit-teszt (ADR 0228 8. döntés) |
+| A rendezés szigorúan monotonra kényszerül (pl. a StrumEvent sampleIndexét +1-gyel eltolja, hogy „ne ütközzön") | a `onsetEventId` integritás cella (a `time`/`sampleIndex` már nem egyezne az OnsetEvent-tel) + a V1-paritás cella (a strum ideje eltolódna) |
 | **Valódi-sértés próba (§10):** a duplikátumszűrés ideiglenes kiszedése → a rendezettség/dedup property **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
