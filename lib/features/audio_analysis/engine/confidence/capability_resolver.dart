@@ -69,7 +69,8 @@ final class CapabilityResolution {
 ///
 /// Existing R14–R18 gates remain independent until their dedicated retrofit
 /// round. New consumers must use this resolver rather than reconstructing a
-/// status from individual scores.
+/// status from individual scores. If no capability applies, [resolve] returns
+/// a zero-confidence [CapabilityStatus.notApplicable] overall verdict.
 final class CapabilityResolver {
   CapabilityResolver({
     CapabilityThresholds? thresholds,
@@ -110,6 +111,15 @@ final class CapabilityResolver {
       for (final report in reports.values)
         if (report.status != CapabilityStatus.notApplicable) report.confidence,
     ];
+    if (overallFactors.isEmpty) {
+      return CapabilityResolution(
+        reports: reports,
+        overallConfidence: 0,
+        overallStatus: CapabilityStatus.notApplicable,
+        calibrationVersion: _calibrationTable.version,
+        thresholdsVersion: _thresholds.version,
+      );
+    }
     final overallConfidence = _confidenceCombiner
         .combine(overallFactors, hardGateOpen: !criticalUnavailable)
         .confidence;

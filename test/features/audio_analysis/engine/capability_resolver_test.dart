@@ -60,7 +60,7 @@ void main() {
             (
               name: 'pitch supported but dynamics unavailable',
               input: _input(
-                supportedCapabilities: allCapabilities
+                supportedCapabilities: allCapabilities.toSet()
                   ..remove(AnalysisCapability.dynamicConsistency),
               ),
               statuses: <AnalysisCapability, CapabilityStatus>{
@@ -177,6 +177,21 @@ void main() {
           CapabilityStatus.unavailable,
         );
         expect(result.overallStatus, isNot(CapabilityStatus.available));
+      },
+    );
+
+    test(
+      'returns a not-applicable overall when no capabilities are supported',
+      () {
+        final result = resolver.resolve(
+          _input(supportedCapabilities: const <AnalysisCapability>{}),
+        );
+
+        expect(result.overallStatus, CapabilityStatus.notApplicable);
+        expect(result.overallConfidence, 0);
+        for (final report in result.reports.values) {
+          expect(report.status, CapabilityStatus.notApplicable);
+        }
       },
     );
   });

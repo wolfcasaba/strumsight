@@ -350,6 +350,21 @@ meglévő, önálló döntése a §0.0 szerint tudott és elfogadott állapot �
 - **Nem futtatott:** teljes Flutter/property regresszió és CI workflow/APK —
   az orchestrátor merge-előtti CI-kapuja.
 
+### Review correction — 2026-08-12
+
+- **F1 (MAJOR) javítva:** ha `supportedCapabilities` üres, minden report
+  `notApplicable`; a resolver a `ConfidenceCombiner.combine([])` hívása
+  helyett dokumentáltan `overallStatus: notApplicable` és
+  `overallConfidence: 0` verdictet ad. A regression teszt előbb a korábbi
+  `ArgumentError`-ral piros volt, a guard után zöld.
+- **F3 (NOTE) javítva:** a kilenc-eset mátrix eltávolítási esete immár az
+  `allCapabilities.toSet()` másolatát módosítja, így a megosztott fixture
+  érintetlen marad.
+- **Javító gate:** `tools/round-gate.sh test/features/audio_analysis
+  test/property test/app` → `exit_code=0`; format, analyze, mindhárom
+  tesztsáv, architecture, secrets és l10n mind zöld. CI teljes suite/property
+  gate és APK továbbra is az orchestrátor merge-előtti feladata.
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r19-confidence-calibration-capability-resolver-review.md`.
