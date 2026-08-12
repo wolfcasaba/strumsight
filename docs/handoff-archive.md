@@ -6,6 +6,36 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## E06-R08 — Preprocessing context és resampling policy, teljes részletes történet (2026-08-11)
+
+Az Audio Analysis V2 számára elkészült a **bekötetlen, fail-closed**
+előfeldolgozási szerződés: immutable `PreprocessedAudio` (native-rate PCM
++ canonical PCM + timebase/provenance), `PreprocessingConfig`, sztereó
+`MonoDownmix` és `PreprocessingStage`. A feature flag alapértéke `false`,
+ezért nincs production útvonal- vagy DSP-paraméter-változás; a meglévő WAV
+dekóder mono átlagolása, a V1 Analyze és a Live CRNN viselkedése érintetlen.
+[ADR 0225](adr/0225-analysis-preprocessing-and-resampling-policy.md).
+
+**Pre-flight §0.0:** az elavult `0206` helyett a foglaló által kiadott
+`0225` ADR-szám került a briefbe. A mért hívási lánc igazolta, hogy a V2
+input már mono PCM; a brief ezért nem tett második downmixet a jelenlegi
+producerre. A korábbi Live CRNN resampling megmarad, a V2 Analyze út nem
+resample-öl.
+
+Review: [general](reviews/e06-r08-preprocessing-context-and-resampling-review.md)
+**APPROVED** (egy MAJOR javítva), [security](reviews/e06-r08-preprocessing-context-and-resampling-security.md)
+**PASS**, nyitott BLOCKER/MAJOR nélkül. A független review három mutációt
+bizonyítottan pirosra vitt (stage bypass, 5.0 ms-határ, sztereó downmix).
+Az F1 javítás a tényleges canonical PCM-ből mér 4.9/5.0/5.1 ms DC-onset
+paritást, nem csak a tolerancia-segédet hívja.
+
+**Zöld kapu (exact-SHA `4d086ffa`, PR [#222](https://github.com/wolfcasaba/strumsight/pull/222),
+squash `d3ce39b2`):** [Full Gate](https://github.com/wolfcasaba/strumsight/actions/runs/31547355705)
++ [Router CI](https://github.com/wolfcasaba/strumsight/actions/runs/31547357251)
+success. A CI-tervező `full-gate.yml`-t választott (`native_gate=false`),
+ezért APK-build nem volt szükséges. A dispatch és merge között a `main`
+nem mozdult; post-merge gate a friss `main`-en mind a kilenc lépésben zöld.
+
 ## E06-R07 — Signal quality stage, teljes részletes történet (2026-08-11)
 
 Determinisztikus, verziózott **input-jelminőség riport** (SDD Ch7 Kör 7,

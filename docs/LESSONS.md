@@ -8303,3 +8303,132 @@ dispatch előtt — az `S5` lelet ekkor, olcsón, kódírás nélkül javíthat�
 (a mintát ld. az E06-R10 brief §0.0 revíziójában: a kollidáló ÚJ fájl(ok)
 helyett a MÁR létező fájl bővítése az allowed_paths-ban, additív/opcionális
 mezőkkel, hogy a meglévő hívók változatlanul forduljanak).
+
+## L226 — Egy acceptance-mátrix numerikus mintaszám-hármasa (pl. „2400 minta 48 000 Hz-en") csak PÉLDA, ha a rendszerben nincs kanonikus ráta — a mérce mögötti ÖSSZEHASONLÍTÁS mechanizmusát külön kell ellenőrizni (E06-R10, ADR 0228, 2026-08-12)
+
+**Mit mértünk.** Az E06-R10 brief §6 acceptance-mátrixa a minimum-separation
+határesetet „2399/2400/2401 minta, 48 000 Hz-en" alakban írta le. Pre-flight
+méréssel: a rendszerben NINCS kanonikus mintavételi ráta-konstans (`rg -n
+"48000|48_000" lib/features/audio_analysis/` → 0 találat; az E06-R08
+preprocessing stage explicit NEM resamplel), és a kilenc R09 parity-fixture
+(a builder tényleges bemenete) mind 44100 Hz-en fut. `python3 -c` ellenőrzés:
+2400 minta 44100 Hz-en **54,42 ms**, NEM 50 ms. Ha az implementáció egy
+rögzített `2400`-as mintaszám-küszöböt hasonlított volna a `sampleIndex`
+különbséghez (a rátától függetlenül), a valódi bemeneten NÉMÁN törte volna a
+brief §6 ELSŐ, legfontosabb acceptance-pontját (V1-paritás) — miközben a §6
+saját, 48 kHz-re épített hármas cellája továbbra is zölden futott volna.
+
+**Miért.** Egy acceptance-kritérium numerikus PÉLDÁJA (a konkrét mintaszám)
+és a mögöttes DÖNTÉS (az 50 ms, mint időtartam) két különböző dolog — a
+brief-szerző (vagy egy korábbi kör) egyetlen mintavételi rátát választ a
+konkrét cellák felírásához, de ez a választás NEM állítás a rendszer
+tényleges rátájáról. Ha az implementáció a PÉLDÁT (mintaszám) implementálja
+a DÖNTÉS (időtartam) helyett, a teszt zöld marad minden olyan bemeneten,
+ami ÉPPEN azon a rátán fut, amit a példa használt — és néma regressziót
+enged át minden más rátán.
+
+**Hogyan alkalmazd.** Ha egy acceptance-kritérium numerikus küszöböt
+mintaszámban ad meg egyetlen rátára, ELLENŐRIZD: (1) van-e a rendszerben
+kanonikus/kikényszerített mintavételi ráta (`rg` a releváns konstansra); ha
+NINCS, (2) keresd meg, milyen rátán fut a TÉNYLEGES bemenet (a meglévő
+fixture-ök/tesztek `sampleRate` értéke) — ha ez ELTÉR a kritérium
+példa-rátájától, a brief §0.0 dokumentált revíziójával pontosítsd: a helyes
+összehasonlítási alap (itt: `Duration`, nem `sampleIndex`), és add hozzá a
+mátrixhoz a TÉNYLEGES bemeneti ráta saját határeset-hármasát is (nem csak a
+példa-rátáét) — ez a második hármas fogja el azt a hibaosztályt, amit az
+első önmagában nem tud.
+
+## L227 — Egy pre-flight brief-revízió ÚJ szabálya (pl. „X és Y egy kulcson osztozik") visszamenőleg ellentmondásba kerülhet egy KORÁBBAN írt acceptance-kritériummal — a fegyelmezett implementer ezt tiszta `stopped`-dal, nulla fájlírással fogja el, és ez OLCSÓ, nem hiba (E06-R10, Terra 2–3. dispatch, 2026-08-12)
+
+**Mit mértünk.** Az E06-R10 pre-flight első köre (ADR 0228 3/7. döntés)
+egy ÚJ szabályt vezetett be a brief §0.0 revíziójával: minden szintetizált
+(onset, strum) pár AZONOS `sampleIndex`-en él (OD-04, mert a `LegacyEvidence`
+nem hordoz független onset-listát). Ez a szabály — bár helyes és szükséges —
+visszamenőleg ellentmondásba került KÉT, a brief EREDETI, batch-írt
+szövegében már ott lévő acceptance-kritériummal, amiket a pre-flight első
+köre nem vetett össze az új szabállyal: (1) a „Rendezettség" property-bullet
+„szigorúan monoton" sample indexet várt a KOMBINÁLT listától — matematikailag
+kizárva minden párt; (2) a „Suppression-diagnosztika" bullet „pontosan 1"
+bejegyzést várt — miközben egy PÁR mindig 2 fizikai eseményt jelent. Terra
+(Codex) MINDKÉT esetben — két egymást követő dispatch-ben — a hibás
+interpretáció HELYETT tiszta `stopped`-ot jelzett, PONTOS diagnózissal
+(„same-index onset/strum pairs cannot make one combined event list strictly
+monotonic"; „OD-04 keeps an onset+strum pair (2 events), but §6 requires 1
+public event"), és **egyik esetben sem módosított egyetlen fájlt sem** —
+`git status --short` üres volt mindkét stopnál. A 2. dispatch (a
+rendezettségi ütközés után) még VALÓDI, scope-on belüli munkát is
+commitolt (`event_id.dart`), MIELŐTT a 3. ütközésbe futott — a stopped
+jelzés tehát nem „elakadás", hanem pontosan a brief-szerződés szerinti
+működés egy valódi ellentmondásra.
+
+**Miért.** Egy pre-flight revízió, ami egy ÚJ strukturális szabályt vezet
+be (itt: két esemény egy kulcson osztozik), NEM lokális változtatás — a
+brief TÖBBI, már megírt acceptance-kritériuma implicit feltételezéseket
+hordozhat a RÉGI modellről (itt: minden `sampleIndex` egyedi). A pre-flight
+egyetlen köre nem mindig látja előre az ÖSSZES downstream következményt —
+de egy implementer, aki a preambulum szabálya szerint SOHA nem tér el a
+feladattól és MINDIG jelez ütközésnél (nem tippel), pontosan ezeket a
+maradék ellentmondásokat fogja ki, egyenként, olcsón (nulla vagy minimális
+elveszett munkával), mert minden stop UTÁN a folytatás UGYANAZON a branch-en,
+UGYANATTÓL az állapottól indul (rebase a hub friss pre-flight-fix commitjára,
+nem újrakezdés).
+
+**Hogyan alkalmazd.** (1) Amikor a pre-flight egy ÚJ strukturális szabályt
+vezet be brief-revízióval, PRÓBÁLJ átfutni minden olyan MEGLÉVŐ
+acceptance-kritériumon, ami rendezettségről, egyediségről vagy
+számlálásról szól — ezek a leggyakoribb ütközési pontok egy „két dolog
+mostantól osztozik egy kulcson" jellegű döntéssel. (2) Ha egy implementer
+mégis `stopped`-ot jelez egy ilyen maradék ellentmondásra: ez NEM
+kudarc és NEM ok a motorváltásra vagy halt-ra — olvasd el a pontos
+diagnózist, ellenőrizd `git status --short`-tal, hogy tényleg nulla fájl
+módosult (ha igen, a stop tiszta, a branch state konzisztens), majd a
+§0.0 dokumentált revíziójával zárd, és ugyanazzal a motorral, ugyanazon a
+branchen (fetch+rebase a workspace-ben, NEM újraklónozás, ha van már
+commitolt scope-on-belüli munka) dispatch-elj újra. Az E06-R10-ben 3
+egymást követő ilyen stop + revízió + re-dispatch ciklus (plusz egy
+negyedik, L222-osztályú `blocked`) összesen kevesebb, mint 30 perc alatt
+lezajlott, ELVESZETT MUNKA NÉLKÜL — a lánc költsége a REVÍZIÓK ideje, nem
+egy elrontott implementáció visszavonása.
+
+## L228 — Egy DOKUMENTÁLT lecke (L222) önmagában nem előzi meg az ismétlődést — az orchesztrátornak a WORKSPACE-LÉTREHOZÁS UTÁNI kötelező lépésként kell rá emlékeznie, nem a hiba felmerülésekor (E06-R10, 2026-08-12)
+
+**Mit mértünk.** `docs/LESSONS.md` L222 (E06-R07, 2026-08-11) már pontosan
+leírta: egy friss `git clone` implementer-munkapéldány nem hordozza a
+gitignore-olt generált `lib/l10n/app_localizations*.dart`-ot, és a
+„Hogyan alkalmazd" szakasza kifejezetten előírta: „Egy friss implementer-
+munkapéldány létrehozása UTÁN, MÉG a kör-dispatch ELŐTT, futtasd le benne a
+`tools/prepare-flutter-generated.sh`-t". Az E06-R10 orchesztrátora (ez a
+session) ennek ellenére elmulasztotta ezt a lépést az ELSŐ munkapéldány-
+klónozáskor, és Terra 3. dispatch-e (a két brief-ütközés lezárása UTÁN)
+`blocked`-ot jelzett egy 931-hibás `flutter analyze`-vel — SZÓ SZERINT
+ugyanaz a tünet, amit L222 már dokumentált. A H6 szabály szerint (`az
+implementer blocked-ot jelez` = kötelező halt) ez formálisan egy önjavító
+körre tartozó eset lett volna — de mivel a gyökérok és a javítás MÁR
+dokumentált, kockázatmentes (fail-open script, csak gitignore-olt outputot
+érint) volt, az orchesztrátor a dokumentált lépést azonnal alkalmazta és
+újradispatch-elt, halt nélkül — ez helyes volt, de a MULASZTÁS attól még
+egy teljes dispatch-kört (~6 perc + a `blocked` diagnózis ideje) költött.
+
+**Miért.** Egy `docs/LESSONS.md`-be írt lecke PASSZÍV tudás — csak akkor
+segít, ha az orchesztrátor session elején VAGY a releváns lépés előtt
+ténylegesen elolvassa és alkalmazza. Az E06-R10 pre-flightja alaposan
+olvasta a briefet, az ADR-eket és a kódot, de NEM futtatott egy explicit
+„friss munkapéldány → kötelező előkészítő lépések” ellenőrzőlistát — a
+lecke a LESSONS.md mélyén volt, nem a munkapéldány-létrehozás lépésének
+SAJÁT szövegében (`sdd-round-driver` SKILL.md §3 a `git clone`-t írja elő,
+de a `prepare-flutter-generated.sh`-t nem említi ott, csak a post-merge
+gate előfeltételeként, §5.5 — pontosan ezt a hiányt már maga az L222 is
+megnevezte, „a mechanizmus... azonosan érinti mindkét esetet”, de a SKILL
+szövege azóta sem frissült).
+
+**Hogyan alkalmazd.** Passzív dokumentáció (csak LESSONS.md-be írt szabály)
+helyett a MEGBÍZHATÓ védelem a workflow SAJÁT szövegébe ágyazott, kötelező
+lépés — ez a lecke maga jelzi, hogy a `sdd-round-driver` SKILL.md §3
+(implementer-munkapéldány létrehozása) szövegét egy jövőbeli körben ki
+kellene egészíteni: „git clone <hub> <cél>` UTÁN, a dispatch ELŐTT,
+MINDIG: `bash tools/prepare-flutter-generated.sh` a munkapéldányban” —
+addig is, minden orchesztrátor session-nek EXPLICIT ellenőriznie kell ezt a
+lépést közvetlenül minden `git clone`-nal létrehozott implementer- vagy
+review-munkapéldány után, ne a `blocked`-jelzés utáni reaktív diagnózisra
+hagyatkozzon.
+
