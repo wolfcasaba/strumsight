@@ -1,6 +1,6 @@
 # E06-R21 — AnalysisRepository V2 és legacy Library migráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revideálva 2026-08-12, main @ `9703254d`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 21; §24.1–24.6
 - **Branch:** `codex/e06-r21-analysis-repository-v2-and-migration`
 - **Előfeltétel:** **E06-R03, E06-R20 merge**
@@ -24,7 +24,7 @@ allowed_paths = [
   "test/features/audio_analysis/data/legacy_library_migrator_test.dart",
   "test/features/audio_analysis/data/analysis_index_store_test.dart",
   "test/property/analysis_repository_property_test.dart",
-  "docs/adr/0209-analysis-document-storage.md",
+  "docs/adr/0239-analysis-document-storage.md",
   "docs/rounds/e06-r21-analysis-repository-v2-and-migration.md",
 ]
 gate_tests = [
@@ -37,7 +37,7 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R03/R20 merge.
-> **ADR 0209** előre kiosztva. Olvasd újra a **meglévő** file-alapú tárolási
+> **ADR 0239** a pre-flightban atomikusan lefoglalva. Olvasd újra a **meglévő** file-alapú tárolási
 > mintát: `lib/features/song_trainer/data/local/atomic_file_writer.dart`,
 > `file_song_repository.dart`, `song_repository_recovery.dart`, és a
 > `lib/features/song_trainer/application/song_trainer_providers.dart`
@@ -58,7 +58,25 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0209** (analysis document storage).
+**Pre-flight revízió (2026-08-12, main @ `9703254d`).**
+
+1. A batch-briefben szereplő `0209` csak szöveges előfoglalás volt. A
+   kötelező `tools/round-slots.py reserve-adr --round E06-R21` mérés **0239**-et
+   foglalt le (`.pipeline/inflight/adr/0239`); ezért az ADR-fájlnév és minden
+   hivatkozás `0239`. A queue-fájlt ez a kör nem módosítja, mert tiltott
+   pipeline-zóna. Ez a már dokumentált batch-ADR-drift osztálya (LESSONS L209).
+2. A tényleges V2 modellben nincs `title` vagy `customTitle` mező. Az
+   `LegacyAnalyzeAdapter.adapt()` már a `LegacyAnalysisMigration` kísérőben
+   adja vissza a V2 dokumentum mellett ezt a két legacy metadataértéket; az
+   index tárolja őket, a dokumentum- és codec-contract változatlan marad.
+3. Az `AnalysisDocumentCodec` és a `crypto` SHA-256 dependency már létezik.
+   A Song Trainer `AtomicFileWriter`-e feature-internal, ezért nem importálható:
+   az audio-analysis local adapter saját, azonos temp→verify→rename mintát
+   valósít meg. A legacy inputot a `LibraryRepository.load`-t megvalósító,
+   providerből injektált supplier adja; csak a Library publikus contractját
+   használja.
+
+**Pre-flight alapján:** ADR: **0239** (analysis document storage).
 
 ## 1. Cél
 
@@ -95,7 +113,7 @@ meglévő `AtomicFileWriter` mintájára, checksum, schema version);
 `LegacyLibraryMigrator` (a `ss.library.sessions` → V2 dokumentumok,
 **idempotens**, megszakítható, részleges hibát izoláló, backupot hagyó);
 `AnalysisMigrationVersionStore`; provider-réteg a `path_provider`
-injektálásával; **ADR 0209**; `storage_keys.dart` **additív** bővítés.
+injektálásával; **ADR 0239**; `storage_keys.dart` **additív** bővítés.
 
 **Kívül — TILOS:** a régi kulcs **törlése**, a Library UI módosítása, a
 `lib/features/library/**` bármely fájlja, cache (R28), UI.
@@ -115,7 +133,7 @@ injektálásával; **ADR 0209**; `storage_keys.dart` **additív** bővítés.
 | `.../public.dart` | meglévő | export |
 | `lib/core/storage/storage_keys.dart` | meglévő | **additív** `ss.analysis.*` |
 | `test/**` | ÚJ | repo + migráció + property |
-| `docs/adr/0209-…md` | ÚJ | storage-döntés |
+| `docs/adr/0239-…md` | ÚJ | storage-döntés |
 
 **Tilos zóna:** `lib/features/library/**`, `lib/features/analyze/**`,
 `lib/features/song_trainer/**` (a minta **olvasandó**, nem módosítandó),
@@ -123,7 +141,7 @@ injektálásával; **ADR 0209**; `storage_keys.dart` **additív** bővítés.
 
 ## 5. Kötött architekturális döntések
 
-1. **ADR 0209 — fájl-alapú, dokumentumonkénti tárolás**, a song_trainer
+1. **ADR 0239 — fájl-alapú, dokumentumonkénti tárolás**, a song_trainer
    bizonyított `AtomicFileWriter` mintájára; az **index** külön fájl.
    Elutasított alternatívák: egyetlen SharedPreferences JSON (a mai V1 —
    a nagy dokumentum miatt nem skálázik), SQLite/Drift (új függőség, a
@@ -251,7 +269,7 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0209 (storage-döntés, elutasított alternatívák, visszavonás).
+1. ADR 0239 (storage-döntés, elutasított alternatívák, visszavonás).
 2. RED: CRUD-, atomikus-, korrupció-, index-, cap- és migráció-mátrix
    (injektált temp `Directory`, dobó FS fake).
 3. `analysis_repository.dart` + `analysis_summary.dart` +
