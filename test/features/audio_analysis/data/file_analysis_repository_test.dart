@@ -499,8 +499,55 @@ void main() {
     expect(fetched.isSuccess, isFalse);
     expect(
       fetched.failureOrNull!.code,
-      AnalysisRepositoryErrorCode.corruptDocument,
-      reason: 'checksum mismatch surfaces as a typed corruption failure',
+      AnalysisRepositoryErrorCode.checksumMismatch,
+      reason: 'checksum mismatch surfaces as a typed checksum failure',
+    );
+  });
+
+  test('checksum mismatch: semantic tamper that stays valid JSON is detected '
+      'on getById', () async {
+    // Regression guard: an earlier revision compared hash(bytes) to
+    // hash(bytes) on the read path, which is tautologically always
+    // equal and can never detect a mismatch. A single-byte-flip
+    // corruption still failed because the decode step choked on
+    // malformed UTF-8/JSON — but a tamper that stays syntactically
+    // valid JSON (e.g. a changed field value) decoded successfully
+    // and was silently returned as if it were the original document.
+    // The checksum must be verified against the hash captured in the
+    // index at write time (ADR 0239 OD-03), not against itself.
+    final repository = await FileAnalysisRepository.openAtDirectory(
+      directory: tempRoot,
+      clock: () => DateTime.utc(2026, 8, 1),
+    );
+    await repository.save(
+      AnalysisSaveRequest(
+        document: _buildDocument(
+          id: 'probe',
+          createdAt: DateTime.utc(2026, 8, 1),
+          label: 'A',
+        ),
+        title: 'Probe Original',
+        customTitle: true,
+      ),
+    );
+    final docFile = File(
+      '${tempRoot.path}/'
+      '${AnalysisRepositoryLayout.documentsDirectory}/probe.json',
+    );
+    final text = docFile.readAsStringSync();
+    final tampered = text.replaceFirst('"A"', '"Z"');
+    expect(tampered, isNot(equals(text)));
+    docFile.writeAsStringSync(tampered);
+
+    final fetched = await repository.getById('probe');
+    expect(
+      fetched.isSuccess,
+      isFalse,
+      reason: 'a semantically tampered document must not be returned',
+    );
+    expect(
+      fetched.failureOrNull!.code,
+      AnalysisRepositoryErrorCode.checksumMismatch,
     );
   });
 }

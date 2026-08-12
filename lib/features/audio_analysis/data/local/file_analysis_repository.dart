@@ -328,9 +328,19 @@ final class FileAnalysisRepository implements AnalysisRepository {
         return _failure<AnalysisDocument>(AnalysisRepositoryErrorCode.notFound);
       }
       final bytes = live.file.readAsBytesSync();
-      final expectedHash = crypto.sha256.convert(bytes).toString();
-      if (expectedHash != _expectedHashForBytes(bytes)) {
-        _quarantine(live, expectedHash);
+      final actualHash = _hashBytes(bytes);
+      final summaries = await _readOrRebuildIndex();
+      final indexed = <AnalysisSummary>[
+        for (final s in summaries)
+          if (s.documentId == id) s,
+      ];
+      if (indexed.isNotEmpty && indexed.first.documentHash != actualHash) {
+        // The stored on-disk bytes no longer match the hash captured at
+        // write time — the file was tampered with or corrupted, even
+        // though it may still decode as syntactically valid JSON
+        // (ADR 0239 OD-03). Quarantine it rather than silently
+        // returning stale/wrong content.
+        _quarantine(live, actualHash);
         return _failure<AnalysisDocument>(
           AnalysisRepositoryErrorCode.checksumMismatch,
         );
@@ -340,7 +350,7 @@ final class FileAnalysisRepository implements AnalysisRepository {
         case Success<AnalysisDocument>(:final value):
           return AppResult<AnalysisDocument>.success(value);
         case Failure<AnalysisDocument>(:final error):
-          _quarantine(live, expectedHash);
+          _quarantine(live, actualHash);
           return AppResult<AnalysisDocument>.failure(
             error is ValidationFailure
                 ? ValidationFailure(
@@ -710,11 +720,6 @@ final class FileAnalysisRepository implements AnalysisRepository {
 
   static String _hashBytes(List<int> bytes) =>
       crypto.sha256.convert(bytes).toString();
-
-  /// The on-disk bytes are exactly the codec JSON; their SHA-256 is
-  /// trivially the SHA-256 of the byte sequence itself. The helper is
-  /// kept so the read path is symmetric with the write path.
-  static String _expectedHashForBytes(List<int> bytes) => _hashBytes(bytes);
 
   static AppResult<T> _failure<T>(String code, {Object? cause}) {
     return AppResult<T>.failure(

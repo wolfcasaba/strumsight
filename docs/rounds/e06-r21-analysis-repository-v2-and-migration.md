@@ -406,7 +406,43 @@ szerint fut (ADR 0053) — a dispatch az orchesztrátor feladata, e futásból k
    migrátor ténylegesen NEM nyúl a V1 kulcshoz (a migrátor csak a
    publikus `LibraryRepository.load()`-ot hívja a supplier-on át).
 
-### 10.5 Ismert korlát / follow-up
+### 10.5 Sonnet-recovery javítás (2026-08-12, elkülönített worktree)
+
+A megelőző (rosszul routolt) implementáció commitját ellenőrzésre nem
+megbízhatóként kezeltem. A `tools/round-gate.sh` első futása formálisan
+zöld volt, de egy célzott próbateszt ("PROBE") kimutatta, hogy a
+`FileAnalysisRepository.getById()` checksum-ellenőrzése **tautologikus
+volt**: a lemezről beolvasott bájtok SHA-256-ját önmagával hasonlította
+össze (`crypto.sha256.convert(bytes) != crypto.sha256.convert(bytes)`
+sosem lehet igaz), ezért a checksum-ág soha nem tudott elsülni. Egy olyan
+manipulált, de szintaktikailag ÉRVÉNYES JSON dokumentum (pl. egy mező
+értékének módosítása egy még mindig dekódolható stringre), amelynél a
+bájtsorozat eltér az index íráskori hash-étől, **csendben Success-ként
+tért vissza a hamisított tartalommal** — ez sérti az ADR 0239 OD-03
+checksum-kontraktusát és az implicit korrupció-izoláció elvárást.
+
+Az eredeti `checksum mutation on disk triggers typed failure on getById`
+teszt ezt nem fogta meg, mert egyetlen bájt-flip a JSON köztes bájtjain
+szinte mindig UTF-8/JSON dekódolási hibát is okoz — a `corruptDocument`
+ág (decode-alapú) fogta meg a hibát, nem a checksum-ág.
+
+**Javítás:** a `getById()` most az indexből olvassa ki az adott
+dokumentum íráskor rögzített `documentHash` értékét, és ahhoz
+hasonlítja a lemezről frissen számolt hash-t (a `list()` már eddig is
+így tett). A halott `_expectedHashForBytes` helper eltávolítva. Az
+eredeti teszt elvárt hibakódja `corruptDocument`-ről
+`checksumMismatch`-re módosult (a checksum-ág most helyesen ez előtt
+elsül), és egy új regressziós teszt
+(`checksum mismatch: semantic tamper that stays valid JSON is detected
+on getById`) rögzíti a hamisított-de-érvényes-JSON esetet.
+
+Módosított fájlok (mindkettő a §4 engedélyezett listán):
+`lib/features/audio_analysis/data/local/file_analysis_repository.dart`,
+`test/features/audio_analysis/data/file_analysis_repository_test.dart`.
+A gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/core test/features/library`) a javítás után is 9/9 lépésen ZÖLD.
+
+### 10.6 Ismert korlát / follow-up
 
 - **Recovery scanner (`AnalysisRepositoryRecovery`) hiányzik.** A §3
   "Recovery scanner a documents/-ból indul" mintát a `_rebuildFromDisk()`
