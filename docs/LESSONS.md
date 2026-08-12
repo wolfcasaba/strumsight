@@ -8733,3 +8733,26 @@ vagy a review-tartalmat írd bele egy már `fix-workspace-origin.sh`-jal
 javított munkapéldányba (pl. az implementer sajátjába). Push után MINDIG
 `git ls-remote <github-url> <branch>`-tel ellenőrizd, hogy a commit tényleg
 odaért, mielőtt a következő CI-dispatchet vagy merge-et elindítanád.
+
+## L237 — A numerikus küszöb határértékeinek egyszerű összehasonlítása nem védi ki a `NaN`-t; a release-safe kapu bemenetét előbb végességre, utána tartományra és sorrendre kell validálni (E06-R16, 2026-08-12)
+
+**Mit mértem.** Az E06-R16 független security review-ja öt MAJOR leletből
+háromnál ugyanazt a mintát találta: nem-véges event-confidence átjutott a
+range-checken, `SignalQualityReport` `NaN` aránya nem tette bizonytalanná a
+dinamikai kimenetet, illetve a csak `a > b` feltétellel őrzött clipping
+küszöbök `DynamicsGate(2, 2)` alakban 100%-os clippinget is elérhetőnek
+engedtek. Az első javító kör a végesség- és sorrend-őrt pótolta, a megismételt
+review pedig reprodukálta az utóbbi hibát; a második korrekció rögzítette a
+clipping-küszöbök zárt `[0,1]` tartományát. A végső security re-review és a
+property-gate is zöld volt.
+
+**Miért.** IEEE-754 szerint minden `NaN`-nal végzett rendezési összehasonlítás
+hamis. Ezért a „negatív vagy 1 fölötti” illetve „alsó > felső” őr nem egyenlő
+azzal, hogy az input értelmes, és egy tartományon kívüli konfiguráció egy
+egész availability-döntést hatástalaníthat.
+
+**Hogyan alkalmazd.** Minden publikus, döntést befolyásoló numerikus
+konstruktorban a validáció sorrendje legyen: `isFinite`, zárt tartomány,
+majd mezők közötti rendezési kapcsolat. A review-falszifikáció tartalmazzon
+legalább egy `NaN`, egy végtelen, egy pontos határérték és egy tartományon
+kívüli, de nem-invertált konfigurációs cellát.
