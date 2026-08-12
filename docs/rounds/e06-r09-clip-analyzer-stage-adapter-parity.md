@@ -289,7 +289,59 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Implementáció (Codex, 2026-08-12)
+
+- `lib/features/audio_analysis/engine/legacy/legacy_evidence.dart` — immutable
+  adapter-bemenet és köztes chord/strum evidence, V1-másodperc → V2-`Duration`
+  `round()` konverzióval; a normál pipeline-bemenethez `PreprocessedAudio`
+  factory is tartozik, a `sampleRate=0` V1-paritás pedig explicit
+  reprezentálható marad.
+- `lib/features/audio_analysis/engine/legacy/clip_analyzer_stage.dart` — a
+  kizárólag exportált `runClipAnalysis((pcm, sr, weights, false, null))`
+  belépőt hívó `AnalysisStage`; nem-null súlynál candidate + null-baseline
+  kettős hívással az ADR 0226 szerinti `none` / `heuristic` / `crnn` eredetet
+  rögzíti.
+- `lib/features/audio_analysis/engine/analysis_provenance_builder.dart` — a
+  V1 default-hívás öt effektív paraméterének, model-manifest ID-jának és
+  névvel ellátott heuristic fallback-okának immutable provenance-építője.
+- `lib/features/audio_analysis/public.dart` — az új evidence, stage és
+  provenance contractok publikus exportja.
+- `test/features/audio_analysis/engine/clip_analyzer_stage_test.dart` — az
+  immutable contract, 1/2/3 µs kerekítési hármas, öt provenance-paraméter és
+  mindhárom refiner-provenance cella valós V1 belépőn.
+- `test/features/audio_analysis/engine/clip_analyzer_parity_test.dart` — a
+  kilenc fixture V1↔V2 számszerű paritása (köztük közvetlen dobó-refiner
+  V1-referencia és `sampleRate=0`).
+- `test/property/analysis_legacy_parity_property_test.dart` — `PROPERTY_SEED`
+  vezérelt, 60 szintetikus klipes paritás-property.
+- `test/tooling/architecture_allowlist_guard_test.dart` — az allowlist
+  létszámának `<= 12` őre.
+
+### Futtatott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/engine/clip_analyzer_stage_test.dart`
+  — a hiányzó `ClipAnalyzerStage`/`LegacyEvidence` contractokon várt módon
+  fordítási hibával leállt.
+- `flutter test test/features/audio_analysis/engine/clip_analyzer_stage_test.dart`
+  — 3 teszt zöld.
+- `flutter test test/features/audio_analysis/engine/clip_analyzer_parity_test.dart`
+  — 9 fixture zöld.
+- `flutter test test/property/analysis_legacy_parity_property_test.dart` —
+  `PROPERTY_SEED=42`, 60 eset zöld.
+- `flutter test test/tooling/architecture_allowlist_guard_test.dart` — 1 teszt
+  zöld.
+- `tools/round-gate.sh test/features/audio_analysis test/property test/tooling test/features/analyze`
+  — format, analyze, mind a négy tesztútvonal, architecture, secrets és l10n
+  parity: mind zöld; architecture `12 allowlisted deviation(s)`, secret scan
+  `2214 file(s), 0 finding(s)`.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Eltérés nincs; V1 Analyze/Live production fájl nem módosult, az allowlist
+  nem bővült.
+- Teljes `flutter test`, friss seedű CI property gate és CI APK nincs helyben
+  futtatva: ADR 0053 szerint az orchestrátor exact-SHA CI feladata. APK-t a
+  `native_gate = false` brief miatt sem kell helyben építeni.
 
 ## 11. Review — a független reviewer tölti ki
 
