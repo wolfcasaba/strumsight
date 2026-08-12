@@ -1,20 +1,22 @@
 # E06-R18 — Review
 
 Brief: `docs/rounds/e06-r18-technique-proxy-experimental-module.md`  
-Diff: `871ce472...ae11543c`  
+Diff: `871ce472...09c20484`  
 Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-12  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
 Az isolated, GitHubról klónozott exact `8ecf6b34` gate zöld. A tartalmi
 mutációs próba kezdetben megmutatta, hogy a claim-safety guard nem ellenőrzi
 az analysis-eredetű ARB **kulcsokat**, csak az értékeket. Az F1 javítása ezt
 egy shared helperrel és key-only regressziós teszttel lezárta; a friss,
 GitHubról klónozott exact `ae11543c` review-gate is zöld. A kötelező security
-review ezt követően új, Lab-kapu megkerülést talált (F2).
+review ezt követően új, Lab-kapu megkerülést talált (F2). A javítás a nyers
+számítót priváttá tette, és egy új isolated exact `09c20484` review-gate,
+valamint ismételt független security review is zöld.
 
 ## Acceptance criteria
 
@@ -23,7 +25,7 @@ review ezt követően új, Lab-kapu megkerülést talált (F2).
 | Proxy-, Lab-, confidence- és küszöb-mátrix | ✅ | `technique_proxies_test.dart`, `transition_analysis_test.dart`; isolated gate zöld |
 | Lab-only / document-purity / flag default OFF | ✅ | `technique_proxies.dart`, `technique_metric_catalog_test.dart` |
 | Tiltott állítások gépi őre és valódi-sértés bizonyítása | ✅ | F1 key-only fake-map regressziós teszt zöld |
-| Flag/Lab-only számítás minden public fogyasztónak | ❌ | F2 — public, kapuzatlan számító export |
+| Flag/Lab-only számítás minden public fogyasztónak | ✅ | F2 regressziós cellák + security re-review |
 | ADR 0236 és öt PENDING eval sor | ✅ | ADR, eval-mátrix diff |
 
 ## Scope-audit
@@ -85,18 +87,27 @@ zöld.
   semmilyen public API nem ad ki available technique metricát.
 - **Ellenőrzés:** célzott proxy teszt + teljes round-gate + ismételt security
   review.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`09c20484`)
+
+### F2 újraellenőrzése
+
+A számító neve `_computeTechniqueProxyMetrics`; Dart library-private, ezért a
+`public.dart` exporton át nem hívható. A public
+`buildTechniqueProxyReport` maradt az egyetlen elérési pont, amely mindkét
+feature/Lab kaput és a confidence feltételt ellenőrzi. Az isolated exact
+`09c20484` klónban a proxy teszt a három tiltott flag/Lab cellát is méri, az
+ismételt security review pedig PASS verdiktet adott (30 célzott teszt zöld).
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Ellenőrzés |
 |---|---|
-| format / analyze | isolated exact-SHA gate: ✅ |
-| audio-analysis / tooling / app tesztek | isolated exact-SHA gate: ✅ |
-| architecture / secrets / l10n | isolated exact-SHA gate: ✅ |
+| format / analyze | isolated exact `09c20484` gate: ✅ |
+| audio-analysis / tooling / app tesztek | isolated exact `09c20484` gate: ✅ |
+| architecture / secrets / l10n | isolated exact `09c20484` gate: ✅ |
 | CI | a review-változat után exact-SHA dispatch elindult, de F2 miatt már nem merge-bizonyíték |
 
 ## Merge-döntés
 
-Nyitott MAJOR (F2) miatt merge tilos. Ugyanazzal a `sonnet-impl` motorral
-javító dispatch szükséges; utána új security review és final exact-SHA CI.
+Nincs nyitott BLOCKER vagy MAJOR. A teljes CI-t a review-artefaktumokat
+tartalmazó végleges SHA-ra kell dispatch-elni; csak siker esetén merge-elhető.
