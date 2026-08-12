@@ -5,9 +5,16 @@ Diff: `git diff origin/main...codex/e06-r20-deterministic-insights-and-hotspots`
 Reviewer: Claude Sonnet 5 (orchestrátor) · Dátum: 2026-08-12
 Verdikt: **APPROVED**
 
+**Frissítés (ugyanaz a nap, a kötelező biztonsági review után):** a
+dedikált security review (`...-security.md`) egy MINOR leletet talált
+(F1 — `firstEvidenceFor` generikus fallbackje kapcsolat nélküli evidence-t
+adhatott vissza). Egy körön belüli javító kör lezárta: commit `4f97bf5e`,
+ld. F1 lent a „Státusz" mezővel. A gate-eket és a CI-t erre a commitra is
+újra futtattam (ld. „Gate-bizonyíték ellenőrzése" táblázat vége).
+
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (FIXED) · NOTE: 6 (2 ebben a review-ban + 4 a security review-ban)
 
 Egy kör-közbeni STOP is történt és fel lett oldva, mielőtt ez a review
 elindult (ld. „Kör-előzmény" lent) — ez nem review-lelet, hanem a normál lánc
@@ -96,6 +103,34 @@ dekoráció** — a másik nyolc szabály mindegyike is a SAJÁT biztonságos
 a védelem nem csak a mintavett szabályra, hanem szerkezetileg mind a
 kilencre érvényes.
 
+## F1 javító kör (a security review lelete, ebben a körben lezárva)
+
+### F1 — MINOR — `firstEvidenceFor` kapcsolat nélküli evidence-t adhatott vissza
+
+- **Fájl:** `lib/features/audio_analysis/domain/insights/insight_rule.dart:101-120` (javítás előtt)
+- **Probléma (a security review, `...-security.md`, mérve):** ha egy szabály
+  által kért `factId` metrikájának nincs a dokumentum evidence-halmazában
+  szereplő, nem-üres `evidence`-e, a metódus csendben az ELSŐ timeline
+  eseményre/szegmensre/hotspotra esett vissza — a ténnyel való kapcsolat
+  nélkül. Formálisan „létező ID" (a referenciális integritás property ezt
+  nem kapta el), de szemantikailag hamis „evidence".
+- **Hatás:** egy jövőbeli, valódi bekötésnél (Tutor/UI) egy insight
+  teljesen kapcsolattalan eseményre mutathatna „bizonyítékként".
+- **Kötelező javítás:** a generikus fallback opt-in-né tétele
+  (`allowDocumentFallback` named param, alap `false`); csak az
+  `InsufficientDataInsightRule` kapja `true`-val (az ő „ténye" definíció
+  szerint mindig evidence nélküli unavailable metrika — neki a generikus
+  „legalább valamire mutass" horgony helyes).
+- **Ellenőrzés:** új teszt (`insight_rules_test.dart`, „rush bias does not
+  use unrelated document evidence") — **saját mutáció-próbával
+  megerősítve**: a fallback-guard sorának ideiglenes törlésekor ez a teszt
+  PIROSRA váltott, visszaállítás után zöld.
+- **Státusz:** **FIXED** (`4f97bf5e`, `fix(audio-analysis): constrain
+  insight evidence fallback`). Scope-audit erre a commitra is `ok`
+  (`scope_audit_base=bd8026ad`, `scope_audit_changed=4` — mind a négy fájl,
+  `insight_rule.dart`/`insight_rules.dart`/`insight_rules_test.dart`/a
+  brief §10 handoff-frissítése, a §4 listáján belül).
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény | Ellenőrizve |
@@ -108,12 +143,31 @@ kilencre érvényes.
 | architecture | zöld (12 allowlistelt, meglévő eltérés — nem új) | ✅ (saját futás) |
 | secrets | zöld (2343 fájl, 0 lelet) | ✅ (saját futás) |
 | l10n parity | zöld (1079 üzenet) | ✅ (saját futás) |
-| CI — Full Gate (no APK) | zöld | ✅ [run 31625433658](https://github.com/wolfcasaba/strumsight/actions/runs/31625433658), `headSha=4aec6d85` (egyezik a PR HEAD-jével) |
+| CI — Full Gate (no APK) | zöld | ✅ [run 31625433658](https://github.com/wolfcasaba/strumsight/actions/runs/31625433658), `headSha=4aec6d85` (implementáció, F1 előtt) |
 | CI — Coverage | zöld | ✅ ugyanaz a run |
 | CI — Router CI | zöld | ✅ [run 31625428217](https://github.com/wolfcasaba/strumsight/actions/runs/31625428217), a `4aec6d85` push-án |
+| CI — Full Gate (no APK), F1 javítás UTÁN | zöld | ✅ [run 31628788354](https://github.com/wolfcasaba/strumsight/actions/runs/31628788354), `headSha=4f97bf5e` |
+| CI — Coverage, F1 javítás UTÁN | zöld | ✅ ugyanaz a run |
+| CI — Router CI, F1 javítás UTÁN | zöld | ✅ [run 31628779761](https://github.com/wolfcasaba/strumsight/actions/runs/31628779761), a `4f97bf5e` push-án |
+| Gate újrafuttatva (friss GitHub-klón, F1 javítás UTÁN) | zöld (398 teszt `test/features/audio_analysis`-ban, +1 az F1 regresszióteszttel) | ✅ (saját futás, `/tmp/review-e06-r20-2`) |
 
 A `round-ci-plan.py` `full-gate.yml`-t adott (natív/release-útvonal nem
 érintett) — a döntés géppel ellenőrizve, nem saját ítélettel.
+
+**A kör branchje `4f97bf5e`-n áll (nem egy később, helyben eltűnt
+`6997b2b5` amend-en) — mérve:** az implementer (Codex/Terra) a `done`
+jelzést a folyamat teljes leállása ELŐTT küldte el, majd — ugyanabban a
+futásban — még módosított egyet a brief §10 handoffján (egy redundáns
+mondat törlése, nulla nettó hatás a round-brief fájlra `bd8026ad`-hoz
+képest, `git diff --stat bd8026ad 6997b2b5` csak a három kódfájlt
+mutatja). Az orchestrátor `wait-for-round.sh`-a a KORÁBBI jelzésre tért
+vissza, ezért a CI-dispatch és az összes fenti gate-újrafuttatás a
+`4f97bf5e`-n történt — ez `6997b2b5`-höz képest bizonyítottan azonos kód,
+csak egy dokumentum-mondattal több. A branch szándékosan `4f97bf5e`-n
+maradt (a helyi `6997b2b5` amendet a review eldobta,
+`git reset 4f97bf5e` + a round-brief fájl visszaállítása), hogy a
+merge-elt SHA pontosan az legyen, amit a fenti CI-run-ök ténylegesen
+mértek — ne egy soha nem CI-zett, csak helyben létező commit.
 
 ## Architektúra és termékhatárok (AGENTS.md §5/§6)
 
