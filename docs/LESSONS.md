@@ -8790,6 +8790,20 @@ klónból VAGY a hub-ból, majd `git ls-remote origin refs/heads/<branch>`
 nem történt meg (vagy más ág van elöl) — nem hagyatkozhatsz a klón saját
 `git log`-jára.
 
+## L240 — Az izolált review-klón forrása csak a távoli GitHub lehet, különben a helyi hub régi branch-refje pre-flight SHA-t review-z (E06-R18, 2026-08-12)
+
+**Mit mértünk.** Az E06-R18 első local-source review-klónja a hubban még
+`871ce472` pre-flight SHA-ra oldotta fel a kör-branch-et, miközben a GitHubon
+már `8ecf6b34` implementáció volt. A lokális gate zöldje ezért nem a diff
+bizonylata volt. A GitHubról frissen klónozott exact-SHA ellenőrzés ugyanazon
+néven `8ecf6b34`-et, majd a javítás után `09c20484`-et adott.
+
+**Hogyan alkalmazd.** Review előtt `git clone`-old a távoli originről, majd
+ellenőrizd `git rev-parse HEAD`-del a várt GitHub head SHA-t; a helyi hubból
+klónozott branch-ref önmagában nem review-bizonyíték.
+
+---
+
 ## L239 — A `wait-for-round.sh` időkorlát-ága a JELENLEGI jelzésfájlt `cat`-eli anélkül, hogy újra ellenőrizné, friss terminális státusz-e — `exit 5` ("még futhat") mellett is lehet a kiírt tartalom egy teljes, érvényes `done` jelzés (E06-R17, 2026-08-12)
 
 **Mit mértem.** Egy javító kör dispatch-ét vártam (540 s-es hívás); a script

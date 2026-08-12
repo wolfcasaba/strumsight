@@ -3,7 +3,30 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R17 MERGED — Monophonic pitch capability).**
+> (E06-R18 MERGED — Technique proxy experimental module).**
+>
+> ## ✅ E06-R18 KÉSZ — Technique proxy experimental module (2026-08-12)
+>
+> Elkészült a bekötetlen, Lab- és feature-flag mögötti technique-proxy modul:
+> immutable `TechniqueProxyReport`, stabil `technique.*` metrika-katalógus és
+> chord-transition evidence; nincs UI-, pipeline-, persistence- vagy V1
+> Analyze-bekötés. [ADR 0236](docs/adr/0236-analysis-technique-proxy-safety-and-naming.md).
+> A pre-flight a nem létező `AnalysisDocument` diagnostics-út helyett a
+> standalone reportot rögzítette. A review F1 MAJOR-ja az ARB kulcs-only
+> tiltott állítást, F2 MAJOR-ja a public raw-calculator megkerülési útját
+> találta; mindkettő javítva. Review **APPROVED**, security re-review **PASS**.
+>
+> **Zöld kapu (exact-SHA `f8ed50b2`, PR [#234](https://github.com/wolfcasaba/strumsight/pull/234),
+> squash `f2674099`):** Full Gate
+> [31609390475](https://github.com/wolfcasaba/strumsight/actions/runs/31609390475)
+> success (`full-gate` + `Coverage`). Router CI utolsó releváns futása
+> [31607444433](https://github.com/wolfcasaba/strumsight/actions/runs/31607444433)
+> success az `ae11543c` ősön; az utólagos F2 és review/security commitok nem
+> érintették a Router CI push-pathját. A CI-terv `full-gate.yml`-t adott
+> (`apk_required=false`); a post-merge gate friss mainen mind a nyolc lépésben
+> zöld.
+>
+> **Következő kör: E06-R19** (Confidence calibration és capability resolver).
 >
 > ## ✅ E06-R17 KÉSZ — Monofonikus pitch capability (2026-08-12)
 >
@@ -723,16 +746,16 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-12):** `main` @ `8b0cc6f2` — E06-R12, PR
-[#228](https://github.com/wolfcasaba/strumsight/pull/228), squash-merge.
-Az exact merge-előtti SHA `1e071fe3`: Full Gate
-[31570230164](https://github.com/wolfcasaba/strumsight/actions/runs/31570230164)
-és Router CI [31570232431](https://github.com/wolfcasaba/strumsight/actions/runs/31570232431)
-success. A CI-terv `full-gate.yml`-t adott (`apk_required=false`); a diff nem
-érintett natív/release-utat. `origin/main` nem mozdult dispatch és merge között.
-A post-merge `tools/round-gate.sh test/features/audio_analysis test/property
-test/features/analyze` mind a nyolc lépése zöld. Az alábbi régebbi rész
-történeti kontextus.
+**Aktuális állapot (2026-08-12):** `main` @ `f2674099` — E06-R18, PR
+[#234](https://github.com/wolfcasaba/strumsight/pull/234), squash-merge.
+Az exact merge-előtti SHA `f8ed50b2`: Full Gate
+[31609390475](https://github.com/wolfcasaba/strumsight/actions/runs/31609390475)
+success (`full-gate` + `Coverage`). A CI-terv `full-gate.yml`-t adott
+(`apk_required=false`); Router CI [31607444433](https://github.com/wolfcasaba/strumsight/actions/runs/31607444433)
+success az `ae11543c` releváns ősön, mert az utókommitok nem triggerelték.
+`origin/main` nem mozdult dispatch és merge között. A post-merge
+`tools/round-gate.sh test/features/audio_analysis test/tooling test/app`
+mind a nyolc lépése zöld.
 
 **Előző állapot (2026-08-12):** `main` @ `aa41db54` — E06-R09, PR
 [#223](https://github.com/wolfcasaba/strumsight/pull/223), squash-merge.
@@ -931,16 +954,13 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E06-R12 — Beat grid és tempo curve** (PR
-[#228](https://github.com/wolfcasaba/strumsight/pull/228), squash `8b0cc6f2`,
-új [ADR 0230](docs/adr/0230-beat-grid-tempo-curve-boundary.md)). Immutable
-beat-grid/tempo-curve domain és stateless builder/estimator készült, target-first
-override-dal, bizonytalan candidate státuszokkal és NaN-mentes publikus
-összegzéssel. A brief a meglévő `TempoPoint`-kollíziót `TempoCurvePoint`-ra
-revideálta, R13-ig lokális target inputot használ; V1/UI/perzisztencia érintetlen.
-Független review elsőre 1 MAJOR-t talált az opcionális summary mezők guardján;
-szűk javító kör zárta, a végső review APPROVED. Security review APPROVED, 0
-CRITICAL/BLOCKER/MAJOR/MINOR. Exact-SHA CI és a post-merge gate is zöld.
+**E06-R18 — Technique proxy experimental module** (PR
+[#234](https://github.com/wolfcasaba/strumsight/pull/234), squash `f2674099`,
+új [ADR 0236](docs/adr/0236-analysis-technique-proxy-safety-and-naming.md)).
+Lab/flag/confidence-gated proxy report, transition evidence és claim-safe
+metrika-katalógus készült; UI/pipeline/persistence/V1 érintetlen. A végső
+review APPROVED, a független security re-review PASS; exact-SHA CI és
+post-merge gate zöld.
 
 **E06-R10 — Event evidence modell és onset/strum timeline V2** (PR
 [#225](https://github.com/wolfcasaba/strumsight/pull/225), squash `eec0aeab`,
@@ -1325,10 +1345,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R13 — Target alignment engine** (Chapter 7,
-Kör 13, `docs/rounds/e06-r13-*.md`). Új sessionben induljon; E06-R12 lezárult.
-Pre-flightban az R12 publikus `BeatGrid`/`TempoCurve` contractokra épüljön, és
-újra mérje, hogy az addigra szükséges target-forrás ténylegesen elérhető-e.
+**Következő kijelölt SDD-kör: E06-R19 — Confidence calibration és capability
+resolver** (Chapter 7, Kör 19). Új sessionben induljon; E06-R18 lezárult.
+Pre-flightban az új technique-proxy contractot, a flag/Lab kaput és minden
+confidence-producer tényleges elérhetőségét újra mérje.
 
 > ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
 >
