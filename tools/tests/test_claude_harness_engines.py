@@ -10,11 +10,18 @@ ehhez a burkolónak két üzemmódot kell tudnia:
 
 A tesztek hamis `claude` binárissal mérik, mit ad át a burkoló — hálózat és
 modellhívás nélkül.
+
+Negyedik mért hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Claude
+helyesen megírta a `status=stopped` jelzést (H3 scope-sértés), a `claude -p`
+folyamat mégis percekig tovább futott — hat további commitot hozva létre a
+jelzés UTÁN, mielőtt ~15 perccel később magától kilépett. Lásd
+`test_a_process_that_keeps_running_after_signaling_is_killed_promptly`.
 """
 
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -33,6 +40,11 @@ FAKE_CLAUDE = """#!/usr/bin/env bash
 } >> "$FAKE_CLAUDE_OUT"
 [ "${FAKE_NO_WORK:-0}" = "1" ] || printf 'munka\\n' >> "$FAKE_WORKFILE"
 printf 'status=done\\nsummary=kesz\\n' > "$FAKE_SIGNAL"
+if [ "${FAKE_CLAUDE_MODE:-exit}" = "hang-after-signal" ]; then
+  # MÉRT eset (E06-R23 self-heal, 2026-08-12): a jelzés megírása után a
+  # folyamat NEM állt le magától — ezt szimulálja ez a hosszú sleep.
+  sleep 120
+fi
 exit 0
 """
 
@@ -59,7 +71,7 @@ class RegistryTest(unittest.TestCase):
 
 
 class WrapperModeTest(unittest.TestCase):
-    def run_wrapper(self, engine: str, *, extra_env=None):
+    def run_wrapper(self, engine: str, *, extra_env=None, timeout=None):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         base = Path(directory.name)
@@ -101,6 +113,7 @@ class WrapperModeTest(unittest.TestCase):
             text=True,
             env=environment,
             cwd=str(ROOT),
+            timeout=timeout,
         )
         self.signal_text = (workdir / ".codex-round-status").read_text(encoding="utf-8")
         return out.read_text(encoding="utf-8")
@@ -177,6 +190,35 @@ class WrapperModeTest(unittest.TestCase):
     def test_a_done_signal_with_work_survives(self) -> None:
         self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
         self.assertIn("status=done", self.signal_text)
+
+    def test_a_process_that_keeps_running_after_signaling_is_killed_promptly(self) -> None:
+        """MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Claude
+        helyesen írta meg a jelzésfájlt, de a folyamata ennek ellenére
+        percekig tovább futott (hat további commit a jelzés UTÁN, ~15 perccel
+        később lépett csak ki magától). A burkolónak a jelzés megjelenése
+        UTÁN azonnal ki kell lőnie a folyamatot — nem szabad megvárnia az
+        elakadás-őrt vagy az abszolút időkorlátot."""
+        started = time.monotonic()
+        self.run_wrapper(
+            "minimax",
+            extra_env={
+                "MINIMAX_API_KEY": "teszt-kulcs",
+                "FAKE_CLAUDE_MODE": "hang-after-signal",
+                "MM_POLL_SECONDS": "1",
+                "MM_ROUND_TIMEOUT": "600",
+                "MM_STALL_MINUTES": "10",
+            },
+            timeout=30,
+        )
+        elapsed = time.monotonic() - started
+        self.assertIn("status=done", self.signal_text)
+        self.assertNotIn("status=timeout", self.signal_text, "a jelzés a tény, nem az időtúllépés")
+        self.assertNotIn("status=stalled", self.signal_text)
+        self.assertLess(
+            elapsed, 15,
+            "a burkolónak pár másodpercen belül ki kell lőnie a folyamatot a jelzés után, "
+            f"nem a 600s-es időkorlátig várnia (mért: {elapsed:.1f}s)",
+        )
 
     def test_a_codex_harness_engine_is_rejected_by_this_wrapper(self) -> None:
         result = subprocess.run(
