@@ -2,12 +2,55 @@
 
 Brief: `docs/rounds/e06-r17-monophonic-pitch-capability.md`
 Diff: `2c08dc5b..2c02f031` (`codex/e06-r17-monophonic-pitch-capability`); implementer-only commit: `f5d5d613..2c02f031`
-Reviewer: Claude (Opus 5, független review-ág) · Dátum: 2026-08-12
-Verdikt: **CHANGES REQUESTED**
+Javító kör: `b3a38a29..26f38dd6` (`test(analysis): close pitch capability coverage gaps`, 3 fájl, csak `test/**`)
+Reviewer: Claude (Opus 5, független review-ág) · Dátum: 2026-08-12 (első kör) / 2026-08-12 (javító kör)
+Verdikt: ~~CHANGES REQUESTED~~ → **APPROVED** (javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 3 · MINOR: 2 · NOTE: 2
+**Javító kör után: BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2 (nem blokkol)**
+(első körben: BLOCKER: 0 · MAJOR: 3 · MINOR: 2 · NOTE: 2 — ld. alább, változatlanul
+dokumentálva, minden lelet lezárási bizonyítékkal kiegészítve)
+
+Az F1–F5 mind LEZÁRVA a `26f38dd6` javító commitban, a jelentés első verziójában
+kifejezetten előírt "Ellenőrzés" mutáció-próbákkal, egy ÚJ, friss
+`/tmp/review-e06-r17-fix1` klónban, saját kézzel megismételve (nem az
+implementer állítására hagyatkozva):
+
+- **F1 (MAJOR → FIXED):** az eredeti teszt fixture-je immár `hasMonophonicTarget:
+  true` + valós, egyébként mindent teljesítő frame-készlet (nem
+  `hasMonophonicTarget: false` konfundálással); ÚJ, dedikált teszt is került
+  (`'flag OFF precedes unavailable OD-01 evidence checks'`,
+  `hasMonophonicTarget: true, frames: []`), amely KIFEJEZETTEN a sorrendet
+  méri. Mindkét eredeti mutáció (relokáció, teljes törlés) most PIROSRA vált.
+- **F2 (MAJOR → FIXED):** a property teszt immár ténylegesen hívja a
+  `MonophonicPitchSegmentBuilder.build`-et és a `buildGatedPitchMetrics`-et 20
+  frame-es, realisztikus (stabil-görbe + jitter) bemeneten, és minden metrika
+  ÉRTÉKÉT (nem csak a bemeneti value objecteket) ellenőrzi típus-specifikus
+  invariánsokra. A `centsBetween → double.nan` mutáció most azonnal PIROSRA
+  vált, ugyanazzal a kivétellel, mint a fix fixture-tesztek.
+- **F3 (MAJOR → FIXED):** új, valódi 4-hangos, EGYIDEJŰLEG összekevert
+  szinusz-akkord fixture (`_fourVoiceChord`, A-C#-E-A, forgó domináns hanggal),
+  a valódi `PitchFrameExtractor`-en átfuttatva, `unavailable`/`polyphonicInput`
+  + hívásszámláló==0 bizonyítva — PLUSZ egy beépített negatív kontroll (a
+  spread-kapu explicit kikapcsolásával `available`-re vált ugyanazon
+  frame-eken, bizonyítva, hogy az elutasítás oka valóban a spread). A spread-
+  ellenőrzés saját kikapcsolásommal ez a teszt is PIROSRA vált.
+- **F4 (MINOR → FIXED):** a „silence yields only unvoiced frames" teszt immár
+  a `PitchCapabilityGate.evaluate`-et is hívja, és `status=unavailable`,
+  `reason=insufficientEvents`-et vár — pontosan az eredetileg kért kiegészítés.
+- **F5 (MINOR → FIXED):** egysoros komment került a voiced-arány fixture fölé,
+  amely megmagyarázza a 69/70/71 (nem 0.349/0.350/0.351) választás okát.
+- **F6/F7 (NOTE):** a javító kör csak `test/**`-et érintett, a `docs/rounds/`
+  §10 handoff és az ARB-elrendezés (kozmetikai) VÁLTOZATLAN — ezek nem
+  blokkolók, follow-up-ként nyitva maradnak.
+
+Kiegészítés: a `b3a38a29` commit egy PÁRHUZAMOSAN futott, független dedikált
+security review (`docs/reviews/e06-r17-monophonic-pitch-capability-security.md`),
+verdikt **PASS** (0 CRITICAL/BLOCKER/MAJOR, 1 MINOR — `buildPitchMetrics`
+O(szegmens×célhang) skálázás, bekötetlen modulra nem blokkoló, „must-fix-before"
+egy jövőbeli untrusted/hosszú-audio bekötésnél —, 2 NOTE). Nincs átfedés vagy
+ellentmondás az én megállapításaimmal.
 
 A gate FORMAI oldala kifogástalan: 15/15 fájl az `allowed_paths`-on belül, a
 teljes `tools/round-gate.sh test/features/audio_analysis test/property
@@ -51,14 +94,14 @@ commit implementer diff") kész-nek magát push nélkül.
 |---|---|---|---|
 | 1 | Frekvencia-mátrix (7 cella, A4+6 húr, ±2 cent, exact MIDI) | ✅ | `pitch_frame_extractor_test.dart` 7 parametrizált teszt (E2..A4), mind zöld a saját gate-futásban |
 | 2 | Cent-offset küszöb hármas (+9.99/+10.00/+10.01, inkluzív +10.00) | ✅ | `pitch_metrics_test.dart:30-46` „intonation threshold is inclusive at +10.00 cents" — explicit 3-cellás tábla, zöld |
-| 3 | Voiced-arány küszöb hármas (0.349/0.350/0.351, inkluzív 0.350) | ⚠️ RÉSZBEN | `pitch_capability_gate_test.dart:23-37` ténylegesen **69/70/71 / 200** (=0.345/0.350/0.355) frame-konstrukciót használ, nem a brief szó szerinti 0.349/0.350/0.351-jét, és a szubsztitúció OKÁT nem dokumentálja kommentben, holott a brief ezt kifejezetten kéri („a pontos konstrukciót a teszt dokumentálja"). Az inkluzivitás magának a 0.350-nek FUNKCIONÁLISAN helyesen bizonyított — ld. F5 (MINOR) |
-| 4 | Polifónia-kapu: 4-hangos akkord → `unavailable`, hívásszámláló==0, chord/ritmus külön fut | ⚠️ RÉSZBEN | A KAPU LOGIKÁJA bizonyítottan védett (F3 mutáció-próba: a spread-ellenőrzés kikapcsolása 2 tesztet pirosra fog), DE a fixture 2 frekvenciás szekvenciális blokk, nem névvel nevezett 4-hangos akkord a valódi extractoron át — ld. F3 (MAJOR). A „chord/ritmus külön fut" felét a megosztott `test/features/audio_analysis` könyvtár zöld állapota (320 teszt, benne a pre-existing chord/rhythm/dynamics tesztek, EGYIK fájl sem érintett a diffben) közvetetten igazolja |
-| 5 | Csend és zaj: mindkettő `unavailable`, dokumentáltan melyik ok | ⚠️ RÉSZBEN | Zaj: ✅ direkt teszt (`pitch_frame_extractor_test.dart:38-62`, gate-szintű `unavailable` + reason-halmaz). Csend: a kör saját tesztje (`silence yields only unvoiced frames`, 29-36. sor) csak az EXTRACTOR kimenetét nézi, a KAPUT sosem hívja — saját, eldobható próbateszttel megerősítve, hogy a helyes viselkedés (`unavailable`/`insufficientEvents`) valóban fennáll, de a kör SAJÁT suite-ja ezt nem bizonyítja — ld. F4 (MINOR) |
-| 6 | Vibrato ±30 cent, 5 Hz → EGY szegmens, stabilityCents≈30±5 | ✅ | `pitch_frame_extractor_test.dart:64-69`, zöld |
-| 7 | Hangváltás A4→C5 → KÉT szegmens, határ ±40 ms | ✅ | `pitch_frame_extractor_test.dart:71-83`, zöld |
-| 8 | Tuner-paritás: tesztfája átírás nélkül zöld, diff nem érint `lib/core/audio/**`/`lib/features/tuner/**` | ✅ | `git diff --stat` mindkét útvonalra üres (implementer-commit ÉS teljes kör-diff); `test test/features/tuner`: 42/42 zöld, saját gate-futásban |
-| 9 | Flag-kapu: `analysisPitchEnabled=false` ELSŐKÉNT, OD-01 (a)-(d) előtt, `notApplicable`, hívásszámláló==0 | ⚠️ RÉSZBEN | A PRODUKCIÓS KÓD helyesen elsőként ellenőrzi (`pitch_capability_gate.dart:57-65`, kommenttel is jelölve). A DEDIKÁLT teszt (`pitch_capability_gate_test.dart:6-21`) ezt viszont NEM tudja bizonyítani — ld. F1 (MAJOR), 2 önálló mutáció-próbával igazolva |
-| 10 | NaN-mentesség property: véletlen bemenetre minden Hz/cents véges, confidence [0,1] | ❌ | `analysis_pitch_property_test.dart` fut és zöld, DE nem hívja a kör egyetlen számítási függvényét sem (`PitchFrameExtractor`, `MonophonicPitchSegmentBuilder`, `PitchCapabilityGate`, `buildPitchMetrics`) — csak már eleve véges, kézzel írt véletlen értékekkel konstruál value objecteket. Mutáció-próbával igazolva — ld. F2 (MAJOR) |
+| 3 | Voiced-arány küszöb hármas (0.349/0.350/0.351, inkluzív 0.350) | ✅ | `pitch_capability_gate_test.dart:23-39` (javító kör után): 69/70/71/200, MOST kommenttel dokumentálva a szubsztitúció oka. Funkcionálisan változatlanul helyes — F5 FIXED |
+| 4 | Polifónia-kapu: 4-hangos akkord → `unavailable`, hívásszámláló==0, chord/ritmus külön fut | ✅ | ÚJ teszt (`pitch_frame_extractor_test.dart`, „four simultaneous sine chord is unavailable before metric calculation"): valódi 4-szólamú, egyidejű szinusz-akkord a valódi `PitchFrameExtractor`-en át → `unavailable`/`polyphonicInput`, `metricCalls==0`, + beépített negatív kontroll. Saját spread-kikapcsolás mutáció-próbával megerősítve — F3 FIXED. „chord/ritmus külön fut": továbbra is a megosztott könyvtár zöld állapotával (322 teszt) közvetetten igazolt |
+| 5 | Csend és zaj: mindkettő `unavailable`, dokumentáltan melyik ok | ✅ | Zaj: változatlanul ✅. Csend: a „silence yields only unvoiced frames" teszt MOST már hívja a `PitchCapabilityGate.evaluate`-et, `status=unavailable`/`reason=insufficientEvents` explicit ellenőrizve — F4 FIXED |
+| 6 | Vibrato ±30 cent, 5 Hz → EGY szegmens, stabilityCents≈30±5 | ✅ | `pitch_frame_extractor_test.dart`, zöld (változatlan) |
+| 7 | Hangváltás A4→C5 → KÉT szegmens, határ ±40 ms | ✅ | `pitch_frame_extractor_test.dart`, zöld (változatlan) |
+| 8 | Tuner-paritás: tesztfája átírás nélkül zöld, diff nem érint `lib/core/audio/**`/`lib/features/tuner/**` | ✅ | `git diff --stat 2c08dc5b..26f38dd6` mindkét útvonalra továbbra is üres; `test test/features/tuner`: 42/42 zöld, saját gate-futásban (javító kör is test-only, nem érinti) |
+| 9 | Flag-kapu: `analysisPitchEnabled=false` ELSŐKÉNT, OD-01 (a)-(d) előtt, `notApplicable`, hívásszámláló==0 | ✅ | A dedikált teszt fixture-je javítva (`hasMonophonicTarget: true` + valós frame-ek), ÚJ dedikált sorrend-teszt hozzáadva. Mindkét eredeti mutáció (relokáció, teljes törlés) most PIROSRA vált, saját kézzel megismételve — F1 FIXED |
+| 10 | NaN-mentesség property: véletlen bemenetre minden Hz/cents véges, confidence [0,1] | ✅ | A property teszt átírva: MOST ténylegesen hívja a `MonophonicPitchSegmentBuilder.build`-et és `buildGatedPitchMetrics`-et 20 frame-es realisztikus bemeneten, minden metrika-érték típus-specifikus invariánsát ellenőrzi. `centsBetween → double.nan` mutáció-próba azonnal PIROSRA vált — F2 FIXED |
 
 ## Scope-audit
 
@@ -71,6 +114,19 @@ hiány, sem többlet). Tilos zóna (`lib/core/audio/**`, `lib/features/tuner/**`
 `lib/features/analyze/**`, `lib/features/live/**`) — **nulla** érintett fájl,
 mind az implementer-commitra, mind a teljes kör-diffre (`2c08dc5b..2c02f031`)
 ellenőrizve.
+
+**Javító kör (`b3a38a29..26f38dd6`) scope-audit:**
+
+```
+git diff --stat b3a38a29..26f38dd6   →  3 files changed, 137 insertions(+), 25 deletions(-)
+test/features/audio_analysis/engine/pitch_capability_gate_test.dart   | 17 ++-
+test/features/audio_analysis/engine/pitch_frame_extractor_test.dart   | 56 ++++
+test/property/analysis_pitch_property_test.dart                       | 89 +++--
+```
+
+Mind a 3 fájl a brief `allowed_paths` `test/**` bejegyzésén belül; **nulla**
+produkciós-kód fájl érintett. Tilos zóna továbbra is **nulla** érintett fájl a
+TELJES körre (`2c08dc5b..26f38dd6`) nézve is.
 
 ## Megállapítások
 
@@ -112,7 +168,18 @@ ellenőrizve.
   önmagában, konfundálás nélkül bizonyítható legyen.
 - **Ellenőrzés:** az új/módosított teszt a fenti mindkét mutációra (relokáció
   ÉS teljes törlés) pirosra váltson.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`26f38dd6`). Javítás: a `'flag OFF short-circuits…'`
+  fixture-je `hasMonophonicTarget: false → true` + `frames: []` →
+  `_frames(total: 20, voiced: 20)`-re cserélve; ÚJ dedikált teszt
+  (`'flag OFF precedes unavailable OD-01 evidence checks'`,
+  `hasMonophonicTarget: true, frames: []`) kifejezetten a sorrendet méri.
+  **Újra-ellenőrizve** (`/tmp/review-e06-r17-fix1`, saját kézzel, ugyanaz a
+  két mutáció): (1) flag-check relokáció az `available` elé →
+  `'flag OFF precedes…'` PIROS (`notApplicable` várt, `unavailable` kapott),
+  a másik 4 teszt zöld; (2) flag-check teljes törlése (`if (... && false)`) →
+  MOST MINDKÉT releváns teszt PIROS (`'flag OFF short-circuits…'` is:
+  `notApplicable` várt, `available` kapott). Mindkét mutáció visszaállítva,
+  `git diff --stat` üres utána.
 
 ### F2 — MAJOR — A „NaN-mentesség" property teszt nem hívja a kör egyetlen számítási függvényét sem
 
@@ -156,7 +223,17 @@ ellenőrizve.
   validációját tesztelje vissza.
 - **Ellenőrzés:** a fenti `centsBetween → double.nan` mutáció a javított
   property teszt mellett pirosra váltson.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`26f38dd6`). Javítás: a teszt teljesen átírva —
+  trial-onként 20 `PitchFrame`-et generál egy stabil frekvencia-görbe körül
+  (±30 cent jitter), ténylegesen hívja a `MonophonicPitchSegmentBuilder.build`-et
+  ÉS a `buildGatedPitchMetrics`-et, majd minden szegmens-mezőt ÉS minden
+  publikált metrika-értéket (típus-specifikus: Scalar→isFinite,
+  Percentage→[0,1], Duration→nem-negatív) ellenőriz. **Újra-ellenőrizve**
+  (ugyanaz a `centsBetween → double.nan` mutáció): a property teszt MOST
+  azonnal PIROS, ugyanazzal a kivétellel
+  (`Invalid argument(s): Pitch segment cents values must be finite.`,
+  `MonophonicPitchSegmentBuilder._segmentFor`-ból), mint a fix
+  fixture-tesztek. Mutáció visszaállítva, `git diff --stat` üres.
 
 ### F3 — MAJOR — A polifónia-kapu fixture-je nem a brief által név szerint előírt négyhangos akkord
 
@@ -194,7 +271,20 @@ ellenőrizve.
   láncon.
 - **Ellenőrzés:** az új teszt bukjon, ha a spread-küszöb (vagy az azt
   helyettesítő valódi polifónia-jelző) hiányzik/hibás.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`26f38dd6`). Javítás: ÚJ teszt
+  (`'four simultaneous sine chord is unavailable before metric calculation'`)
+  — egy `_fourVoiceChord()` helper 4, EGYIDEJŰLEG összekevert szinusz-hullámot
+  generál (110/138.591/164.814/220 Hz, A-dúr akkord: A-C#-E-A), 0.2 s-onként
+  forgó domináns hanggal (valódi YIN-instabilitást imitálva), a valódi
+  `PitchFrameExtractor`-en átfuttatva. Bizonyítja: `status=unavailable`,
+  `reason=polyphonicInput`, `metricCalls==0`. Beépített negatív kontroll is
+  van a tesztben: ugyanazon frame-eken egy `maximumPitchSpreadCents:
+  double.maxFinite` gate-tel `available`-t kapunk — ez igazolja, hogy az
+  elutasítás oka valóban a spread, nem egy másik feltétel. **Újra-ellenőrizve**
+  (saját, külső mutáció: a spread-ellenőrzés kikapcsolása
+  `if (false && spread > …)`): az új teszt PIROSRA vált (`unavailable` várt,
+  `available` kapott), a többi 10 teszt zöld marad. Mutáció visszaállítva,
+  `git diff --stat` üres.
 
 ### F4 — MINOR — A csend-fixture a kapu-szintű kimenetet nem bizonyítja
 
@@ -220,7 +310,12 @@ ellenőrizve.
   zaj-teszt.
 - **Ellenőrzés:** az új assertion bukjon, ha a `voiced.isEmpty` ág eltávolodik
   az `insufficientEvents`-től.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`26f38dd6`). Javítás pontosan a kért mintában: a
+  meglévő „silence yields only unvoiced frames" teszt kiegészült a
+  `PitchCapabilityGate.evaluate` hívásával, `expect(capability.status,
+  CapabilityStatus.unavailable)` és `expect(capability.reason,
+  CapabilityUnavailableReason.insufficientEvents)` explicit ellenőrzéssel.
+  Diff-fel megerősítve, a gate-futásban zöld.
 
 ### F5 — MINOR — A voiced-arány küszöb-hármas dokumentálatlanul tér el a brief szó szerinti celláitól
 
@@ -240,7 +335,10 @@ ellenőrizve.
   69/70/71 és nem a névleges 0.349/0.350/0.351 (a tört frame-szám okát és a
   választott közelítés indoklását).
 - **Ellenőrzés:** dokumentáció-jellegű, nincs teszt-következménye.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`26f38dd6`). Pontosan a kért egysoros komment
+  került a fixture fölé: „0.349 and 0.351 need fractional voiced frames out
+  of 200; 69/70/71 preserve the below/at/above observation and prove 0.350
+  is inclusive." Diff-fel megerősítve.
 
 ### F6 — NOTE — A §10 handoff nem dokumentálja a mérce-mátrix saját maga kérte valódi-sértés próbát
 
@@ -257,7 +355,12 @@ ellenőrizve.
 - **Kötelező javítás:** nem blokkoló; jövőbeli körökben a §10 kitöltésekor a
   mérce-mátrix saját-próba sorait explicit pipálja/dokumentálja az
   implementer.
-- **Státusz:** OPEN (follow-up jellegű, nem blokkol)
+- **Státusz:** OPEN (follow-up jellegű, nem blokkol). A javító kör (`26f38dd6`)
+  csak `test/**`-et érintett, a `docs/rounds/**` §10 nem változott — ez
+  továbbra is nyitva marad, de a mérce-mátrix által kért próbákat a review
+  (F1/F3 alatt) és a fix commit tesztjei (F1/F3 új tesztjei) is elvégzik, úgy
+  hogy a tényleges regresszióvédelem MOST megvan, csak a §10 dokumentáció
+  hiányzik.
 
 ### F7 — NOTE — ARB-beszúrás egy másik kulcs kulcs/metaadat párja közé ékelődik
 
@@ -268,9 +371,12 @@ ellenőrizve.
   pitch/tuner-blokk mellé). Funkcionális hatása nincs (egyik új kulcsnak sincs
   placeholdere, az l10n parity gate zöld), csak olvashatósági/diff-tisztasági
   nit.
-- **Státusz:** OPEN (kozmetikai, nem blokkol)
+- **Státusz:** OPEN (kozmetikai, nem blokkol). A javító kör nem érintett ARB
+  fájlt (csak `test/**`) — változatlanul nyitva, de nem blokkoló follow-up.
 
 ## Gate-bizonyíték
+
+### Első kör (`2c02f031`, izolált `/tmp/review-e06-r17` klón)
 
 Mind a négy célzott teszt-útvonal + a gate script beépített lépései, saját
 kézzel, **elölről**, izolált `/tmp/review-e06-r17` klónban (a `2c02f031`-gyel
@@ -300,7 +406,28 @@ A 4513 ms-os (30 s-os A4 klip) mért futásidő a brief §9 saját kockázat-
 bejegyzése szerint **előre jóváhagyott, nem-blokkoló** follow-up (E06-R29) —
 nem defekt, a brief kifejezetten ezt írja elő 3 s fölötti mérésre.
 
-## Mutáció-próbák — összefoglaló (mind eldobva, visszaállítva)
+### Javító kör (`26f38dd6`, ÚJ izolált `/tmp/review-e06-r17-fix1` klón)
+
+A gate-et **friss** izolált klónban, elölről, GitHubról közvetlenül fetchelt
+(`26f38dd6`-ra ellenőrzött) forrásfán futtattam újra — a korábbi
+`/tmp/review-e06-r17` klónt NEM használtam fel:
+
+| Gate | Saját, független futtatás (javító kör) |
+|---|---|
+| format | ✅ zöld |
+| analyze | ✅ zöld (0 issue) |
+| test test/features/audio_analysis | ✅ zöld — **322/322** teszt (+2 az F1/F3 új tesztjei miatt) |
+| test test/property | ✅ zöld — **86/86** teszt, `PROPERTY_SEED=42` |
+| test test/core | ✅ zöld — **401/401** teszt (változatlan) |
+| test test/features/tuner | ✅ zöld — **42/42** teszt (változatlan, érintetlen fájlokkal) |
+| architecture | ✅ zöld — 12 allowlisted deviation, ÚJ eltérés nincs |
+| secrets | ✅ zöld — 2310 fájl, 0 találat |
+| l10n parity | ✅ zöld — en→hu, 1051 üzenet |
+
+Strukturált eredmény: `{"command_exit_code": 0, "error_hash": null,
+"exit_code": 0, "failed_step": null, "outcome": "pass", "schema_version": 1}`
+
+## Mutáció-próbák — első kör (mind eldobva, visszaállítva)
 
 | # | Cél | Módszer | Eredmény |
 |---|---|---|---|
@@ -310,24 +437,56 @@ nem defekt, a brief kifejezetten ezt írja elő 3 s fölötti mérésre.
 | 3 | NaN-mentesség property valódisága | `centsBetween()` → feltétel nélkül `double.nan` | Property teszt ZÖLD marad; 9/11 fixture-teszt PIROS (`ArgumentError`) |
 | 4 | Csend → kapu (megerősítés, nem sértés) | ideiglenes teszt hozzáadva, a gate-et hívva | ZÖLD, `unavailable`/`insufficientEvents` — viselkedés helyes, csak lefedetlen |
 
-Minden módosítás visszaállítva mentett eredetiből; a végső `git status
---short` és `git diff --stat` (a terra-implementer `2c02f031` commitjához
-képest is) üres — a review nem hagyott produkciós-kód változást.
+## Mutáció-próbák — javító kör után, MEGISMÉTELVE (mind eldobva, visszaállítva)
+
+Ugyanazok a mutációk, ugyanazokon a produkciós fájlokon, az ÚJ izolált
+`/tmp/review-e06-r17-fix1` klónban, a `26f38dd6`-beli JAVÍTOTT tesztek ellen:
+
+| # | Cél | Módszer | Eredmény (javító kör előtt → után) |
+|---|---|---|---|
+| 1a | Flag-kapu sorrend (relokáció) | ugyanaz | ZÖLD marad → **`'flag OFF precedes…'` (ÚJ teszt) PIROS** |
+| 1b | Flag-kapu (teljes törlés) | ugyanaz | csak metrics-teszt PIROS → **MINDKÉT releváns gate-teszt PIROS** |
+| 2 | Polifónia call-counter (4-hangos akkord) | ugyanaz a spread-kikapcsolás | (nem volt 4-hangos fixture) → **`'four simultaneous sine chord…'` (ÚJ teszt) PIROS** |
+| 3 | NaN-mentesség property valódisága | ugyanaz a `centsBetween → double.nan` | ZÖLD marad → **azonnal PIROS**, ugyanaz az `ArgumentError` mint a fixture-teszteknél |
+
+Minden mutáció visszaállítva mentett eredetiből; a végső `git status --short`
+és `git diff --stat github/codex/e06-r17-monophonic-pitch-capability` (a
+javító commithoz képest) üres mindkét körben — a review egyik körben sem
+hagyott produkciós-kód változást.
 
 ## Merge-döntés
 
-**CHANGES REQUESTED.** A gate teljesen zöld és a scope-audit tiszta, de az
-ADR 0052 zöld-kapu ÖNMAGÁBAN nem elég: 3 nyitott MAJOR áll fenn (F1-F3),
-mindegyik „hiányzó teszt a viselkedésváltozásra/garanciára" kategóriában — a
-kör legkritikusabb, névvel nevezett, részben kétszeres pre-flight-kört is
-kapott garanciáin (flag-kapu sorrend, NaN-mentesség, polifónia-fixture
-hűsége). A produkciós kód ELLENŐRIZVE helyesen viselkedik mindhárom esetben
-(a mutáció-próbák ezt is igazolják ott, ahol releváns) — a hiány kizárólag a
-REGRESSZIÓVÉDELEM oldalán van. Javasolt javító kör: F1+F2+F3 (MAJOR) teszt-
-kiegészítés, F4+F5 (MINOR) opcionálisan ugyanabban a körben, F6+F7 (NOTE)
-nem blokkol.
+### Első kör: CHANGES REQUESTED (lezárva)
 
-Emellett — folyamat-oldalon, nem review-tartalom — a `2c02f031` push-
-hiányosságát ez a review commit oldja fel (ld. Összegzés); érdemes az
-orchestrátor pipeline #3 lépését (push-megerősítés) megerősíteni, hogy ez ne
-ismétlődjön.
+A gate teljesen zöld és a scope-audit tiszta volt, de az ADR 0052 zöld-kapu
+ÖNMAGÁBAN nem volt elég: 3 nyitott MAJOR állt fenn (F1-F3), mindegyik
+„hiányzó teszt a viselkedésváltozásra/garanciára" kategóriában — a kör
+legkritikusabb, névvel nevezett, részben kétszeres pre-flight-kört is kapott
+garanciáin (flag-kapu sorrend, NaN-mentesség, polifónia-fixture hűsége). A
+produkciós kód ELLENŐRIZVE helyesen viselkedett mindhárom esetben — a hiány
+kizárólag a REGRESSZIÓVÉDELEM oldalán volt.
+
+### Javító kör után: **APPROVED**
+
+A `26f38dd6` javító commit mind az 5 nyitott leletet (F1-F5) lezárta, saját
+kézzel, ÚJ izolált klónban, a jelentés által előre rögzített pontos mutáció-
+próbákkal megismételve ellenőrizve — egyik esetben sem az implementer
+állítására hagyatkozva. BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2 (F6/F7,
+nem blokkoló follow-up, a kör kifejezetten nem érintette őket). A gate
+teljesen zöld egy FRISS, GitHubról közvetlenül fetchelt klónban; a scope-
+audit tiszta (3 fájl, mind `test/**`, 0 produkciós-kód sor); a Tuner-paritás
+és a tilos zóna továbbra is érintetlen. A párhuzamos, független security
+review is PASS (0 CRITICAL/BLOCKER/MAJOR).
+
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR →
+merge-elhető. A teljes CI suite + randomizált property gate + APK build
+(ADR 0053) ezen a `26f38dd6` exact SHA-n még szükséges az orchestrátor
+oldalán a tényleges merge előtt — ezt a reviewer nem futtatja (AGENTS.md §12).
+
+### Folyamat-megjegyzés (nem blokkol, informatív)
+
+Az első körben talált push-hiányosságot (a `2c02f031` nem volt fent
+originon) az azóta lezajlott pipeline-lépések (security review push, javító
+kör push) maguktól feloldották — a `26f38dd6` már a valódi GitHub `origin`-on
+van, ahogy ezt a jelen javító-kör review is közvetlenül, a GitHub remote-ból
+fetchelve ellenőrizte.
