@@ -1,10 +1,10 @@
 # E06-R23 — Overview screen és metric cardok
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-12, main @ `0869fd36`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 23; §25.1, §25.4–25.5, §25.8
-- **Branch:** `minimax/e06-r23-analysis-overview-and-metric-cards`
+- **Branch:** `sonnet-impl/e06-r23-analysis-overview-and-metric-cards`
 - **Előfeltétel:** **E06-R20, E06-R22 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** MiniMax M3 (UI-dominált kör, ADR 0069)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** sonnet-impl (a kör routingja szerint)
 
 ```ai-router
 schema_version = 1
@@ -18,13 +18,15 @@ allowed_paths = [
   "lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart",
   "lib/features/audio_analysis/presentation/controllers/overview_view_model.dart",
   "lib/features/audio_analysis/public.dart",
-  "lib/app/router/app_router.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/routing/app_route.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/audio_analysis/presentation/analysis_overview_screen_test.dart",
   "test/features/audio_analysis/presentation/metric_card_test.dart",
   "test/features/audio_analysis/presentation/overview_view_model_test.dart",
   "docs/rounds/e06-r23-analysis-overview-and-metric-cards.md",
+  "docs/adr/0241-analysis-overview-presentation-boundary.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -55,7 +57,31 @@ NEM néma létrehozás.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**2026-08-12 pre-flight, main @ `0869fd36`.** A batch-brief három tényleges
+fájlleltár-eltérést tartalmazott, amelyeket a dispatch előtt ez a revízió old
+fel, a scope pedig nem terjed a tiltott V1/engine/domain zónára:
+
+1. A router tényleges útvonala `lib/app/routing/app_router.dart`, nem a
+   nem létező `lib/app/router/app_router.dart`; az útvonal-katalógus pedig a
+   meglévő `lib/app/routing/app_route.dart`, ezért mindkettő szerepel a
+   tételes listában.
+2. `lib/core/widgets/app_card.dart` nincs. A feature a meglévő Material
+   `Card` primitívet használja; új shared-core kártya nem készül és a
+   `lib/core/theme/**` tiltott marad.
+3. A perzisztált dokumentum `AnalysisInsight.recommendedAction` mezője az
+   `AnalysisRecommendedAction` enum; a részletes
+   `RecommendedAnalysisAction` leíró csak a rule-értékelés belső inputja és
+   nem része az `AnalysisDocument`-nek. Az overview ezért a dokumentált enum
+   alapján jelenít meg letiltott, magyarázott helyfoglaló akciót; nem gyárt
+   paraméteres actiont és nem navigál más feature-be.
+
+**ADR:** [0241](../adr/0241-analysis-overview-presentation-boundary.md) —
+overview input- és confidence-megjelenítési határ. A `CapabilityStatus`
+érték a domain kizárólagos döntése; a presentation nem importál `engine/`-t
+és nem rekonstruál státuszt nyers confidence-ből. Az `unavailable` +
+`confidenceTooLow` már a domain által közzétett, alacsony megbízhatóságú
+állapot; a badge a közzétett státuszt és confidence-értéket magyarázza,
+nem saját 0.4/0.7 döntést vezet be.
 
 ## 1. Cél
 
@@ -105,9 +131,14 @@ a presentation rétegben.
 | `.../presentation/analysis_metric_detail_screen.dart` | ÚJ | metrika-részletek |
 | `.../presentation/controllers/overview_view_model.dart` | ÚJ | megjelenítési modell |
 | `.../public.dart` | meglévő | képernyő export |
-| `lib/app/router/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_route.dart` | meglévő | a route-katalógus additív V2 útvonala |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
-| `test/**` | ÚJ | widget + view model tesztek |
+| `test/features/audio_analysis/presentation/analysis_overview_screen_test.dart` | ÚJ | screen-, overflow-, locale- és route-cellák |
+| `test/features/audio_analysis/presentation/metric_card_test.dart` | ÚJ | öt állapot, semantics és disabled-action cellák |
+| `test/features/audio_analysis/presentation/overview_view_model_test.dart` | ÚJ | dokumentum→megjelenítési modell, maximum-policy cellák |
+| `docs/rounds/e06-r23-analysis-overview-and-metric-cards.md` | meglévő | pre-flight és implementer handoff |
+| `docs/adr/0241-analysis-overview-presentation-boundary.md` | ÚJ | pre-flight architekturális döntés |
 
 **Tilos zóna:** `lib/features/analyze/**`, `lib/features/audio_analysis/engine/**`,
 `lib/features/audio_analysis/domain/**`, `lib/core/theme/**`.
@@ -134,8 +165,14 @@ Listán kívül → `stopped`.
 6. **A route a flag mögött:** `audioAnalysisV2Enabled == false` esetén a route
    **nem létezik** (nem csak üres képernyőt ad).
 7. **Az akciógombok leíróból** (R20 `RecommendedAnalysisAction`) készülnek;
-   a még be nem kötött akciók **letiltott** állapotban, magyarázattal
+   a perzisztált `AnalysisRecommendedAction` enum alapján a még be nem kötött
+   akciók **letiltott** állapotban, magyarázattal
    jelennek meg. **NEM elfogadható:** olyan gomb, ami némán nem csinál semmit.
+8. **Az alacsony confidence nem ötödik UI-számítás.** A `CapabilityStatus`
+   szerinti `unavailable` + `confidenceTooLow` a domain közzétett állapota;
+   azt a kártya „Bizonytalan mérés” címkével jeleníti meg. A 0.4/0.7
+   küszöböket kizárólag az R19 domain resolver használja, ezért a
+   presentationben nincs threshold-konstans vagy confidence-összehasonlítás.
 
 ### 5.1 Nyitott döntések — előre rögzített feloldással
 
