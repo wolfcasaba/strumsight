@@ -8257,3 +8257,49 @@ a technikát a brief §0.0 revíziójában (vagy egy dedikált ADR-ben, mint
 mielőtt dispatch-elsz — ne hagyd az implementerre a felfedezést, mert az egy
 elveszett fordulónyi kör-idő ára (a `stopped` jelzés + brief-revízió a
 STOP-protokoll szerint helyes válasz lenne, de olcsóbb elkerülni).
+
+## L225 — Batch-ben előre megírt briefek típusneve elévülhet egy KÉSŐBBI, ugyanazon batch-ből született testvér-kör domain modelljétől (E06-R10, H3 self-heal, 2026-08-12)
+
+**Mit mértünk.** Az Epic 6 mind a 30 körének briefjét egyetlen batch-ben,
+2026-08-07-én írták meg (`b80884c6`), Epic 6 kickoff ELŐTT — a hivatkozott
+kód-baseline (`main @ a6e6f3d`) commiton `lib/features/audio_analysis/`
+MÉG NEM létezett. Az E06-R10 brief ezért két ÚJ fájlt írt elő
+`OnsetEvent`/`StrumEvent` néven. Az azóta lezajlott E06-R02 kör megalkotta a
+valódi V2 domain modellt, és a BRIEF SAJÁT SDD-hivatkozása (§9.6) már ott
+sorolta fel ugyanezt a két nevet a sealed `AnalysisEvent` család tagjaként —
+a brief pre-flightja ezt sosem vetette össze a saját allowed_paths-ával.
+Terra első implementációs kísérlete (2026-08-12) ezt mérve `stopped`-ot
+jelzett (H3), mert a két új fájl a `public.dart` barrelben ambiguous
+exportot adott volna a már élő nevek mellé. A self-heal (ADR 0112) mérése
+`tools/brief-lint.py --all --level strict`-tel **három további**, ugyancsak
+ebből a batch-ből származó, még nyitott brief azonos hibaosztályát találta:
+R11 (`ChordSegment` ütközik `domain/analysis_segment.dart`-tal), R12
+(`TempoPoint` ütközik `domain/analysis_timeline.dart`-tal), R17
+(`PitchSegment` ütközik `domain/analysis_segment.dart`-tal) — mindhárom
+ugyanúgy egy, a batch-írás UTÁN létrejött domain típussal ütközik.
+
+**Miért.** A batch-előírás (több tucat körbriefet egy ülésben, korai
+kód-állapotra alapozva megírni) valódi értéket ad — a brief-lint
+[ADR 0171](adr/0171-pipeline-throughput-program.md) áteresztő-képesség
+programjának egyik levere —, és a legtöbb ilyen brief sosem szorul
+revízióra. De
+pontosan a domain modellt LÉTREHOZÓ korai körök (itt E06-R02) és a domain
+modellt FOGYASZTÓ, ugyanabban a batch-ben előre megírt későbbi körök
+(R10/R11/R12/R17) között van egy vak folt: a batch-írás pillanatában egyik
+oldal sem létezik még, ezért a brief-szerző nem tudja `rg`-vel leellenőrizni
+a névütközést — csak a KÉSŐBBI pre-flight (vagy, ha az elmarad, az
+implementer első futása) találkozik a ténnyel.
+
+**Hogyan alkalmazd.** `tools/brief-lint.py` mostantól **strict**-szinten
+(`S5`) automatikusan méri ezt minden brief allowed_paths-ára: ha egy ÚJ
+(lemezen még nem létező) `.dart` fájl fájlnévből származtatott típusneve
+MÁR deklarálva van egy, ugyanabban a feature-gyökérben élő, allowed_paths-on
+kívüli fájlban, `S5` lelet. `strict`, nem `base`, mert a bevezetéskor NEM
+minden nyitott brief teljesítette (a fenti három ellenpélda) — a base/strict
+határ pontosan erre a helyzetre való (`tools/brief-lint.py` saját szabálya).
+**Minden batch-ből még nyitott kör SAJÁT pre-flightjának** kötelező lépése
+`tools/brief-lint.py --brief <a kör briefje> --level strict` futtatása
+dispatch előtt — az `S5` lelet ekkor, olcsón, kódírás nélkül javítható
+(a mintát ld. az E06-R10 brief §0.0 revíziójában: a kollidáló ÚJ fájl(ok)
+helyett a MÁR létező fájl bővítése az allowed_paths-ban, additív/opcionális
+mezőkkel, hogy a meglévő hívók változatlanul forduljanak).

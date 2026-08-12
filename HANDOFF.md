@@ -70,6 +70,30 @@
 >
 > **Következő kör: E06-R10** (event evidence — onset/strum timeline).
 >
+> **E06-R10 H3 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
+> [#224](https://github.com/wolfcasaba/strumsight/pull/224), squash
+> `b51d5149`:** Terra első futási kísérlete `stopped`-ot jelzett — a brief
+> két ÚJ fájlt írt elő `OnsetEvent`/`StrumEvent` néven, de mindkét név MÁR
+> élt a nem engedélyezett `domain/analysis_event.dart` sealed
+> `AnalysisEvent` családban (`public.dart` ambiguous export lett volna).
+> Mért gyökérok: a brief 2026-08-07-én, batch-ben, Epic 6 kickoff ELŐTT
+> íródott (`main @ a6e6f3d`, amikor `lib/features/audio_analysis/` még nem
+> is létezett) — az E06-R02 kör azóta megalkotta a valódi V2 domain
+> modellt, amit a brief SAJÁT SDD-hivatkozása (§9.6) már a meglévő
+> `AnalysisEvent` család tagjaként írt le. Javítás: a brief §0.0 revíziója
+> az `allowed_paths`-t a meglévő `domain/analysis_event.dart`-ra
+> retargetelte (bővítés helyben, additív/opcionális mezőkkel, OD-03 — ADR
+> 0215 4. pontja szerint ehhez nem kell séma-verzió-emelés), nem új
+> párhuzamos típusra. Regressziós védelem: `tools/brief-lint.py` új,
+> strict-szintű `S5` leletje ugyanezt a fájlnév→típusnév ütközést méri
+> minden brief allowed_paths-ára — mérve, hogy **három további**, ugyanabból
+> a batch-ből származó, még nyitott Epic 6 brief (R11 `ChordSegment`, R12
+> `TempoPoint`, R17 `PitchSegment`) is ugyanezt a hibaosztályt hordozza;
+> ezeket a self-heal SZÁNDÉKOSAN érintetlenül hagyta (ADR 0112 §2 — a
+> jogosultság kizárólag a HALT-olt körre szól), a saját pre-flightjuk zárja
+> majd `S5` teendőként. Router CI zöld exact-SHA `6faae0a1`-en. Tanulság:
+> `docs/LESSONS.md` L225.
+>
 > ## ✅ E06-R08 KÉSZ — Preprocessing context és resampling policy (2026-08-11)
 >
 > Az Audio Analysis V2 számára elkészült a **bekötetlen, fail-closed**
