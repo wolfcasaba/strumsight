@@ -256,7 +256,56 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Szállított felület
+
+- `domain/target/analysis_target.dart`: immutable, verziózott
+  `AnalysisTarget` snapshot (`id`, `targetVersion`, `kind`, `timebase`,
+  expected event/chord/note/section listák) és `AnalysisTargetSection`.
+- `domain/target/expected_event.dart`: validált, immutable `ExpectedEvent`
+  és az explicit evidence-type vocabulary.
+- `domain/target/alignment_result.dart`: immutable matched/missed/extra
+  eredmény, előjeles `timingError`, teljes költség, confidence és bounded-DP
+  diagnosztika.
+- `engine/alignment/tolerance_policy.dart`: `target-alignment-tolerance.v1`;
+  `ratio=0.25`, `minMs=40`, `maxMs=150`, és az OD-01 néven nevezett
+  penalty/multiplier konstansai.
+- `engine/alignment/event_aligner.dart`: monoton, determinisztikus,
+  toleranciaablakra sávos prefix-DP. A score-state mindig a rövidebb
+  bemeneti tengelyen áll (`O(min(n,m))`); a result az input indexeit és
+  diagnosztikai sávszélességet publikálja. A Practice feature-t nem importálja
+  és nem módosítja.
+- `public.dart`: a három target-domain contract és a két alignment engine
+  exportja.
+- Új matrix-, clamp- és `PROPERTY_SEED`-vezérelt monotonitás tesztek:
+  `event_aligner_test.dart`, `tolerance_policy_test.dart`,
+  `analysis_alignment_property_test.dart`.
+
+### Mért ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/engine/tolerance_policy_test.dart`
+  az új contract-fájlok hiányával fordításkor elbukott; ezután a
+  `TolerancePolicy`/`EventAligner` implementációval a három clamp-csoport
+  zöld lett.
+- `python3 -c` küszöbértékek: 120 BPM → `125.0 ms`; 40 BPM → `375.0 ms`
+  (felső clamp `150 ms`); 300 BPM → `50.0 ms`; 400 BPM → `37.5 ms`
+  (alsó clamp `40 ms`). A tesztek a határ alatti/pontos/feletti cellákat
+  mérik.
+- `flutter test test/features/audio_analysis/engine/event_aligner_test.dart`:
+  **14 teszt zöld**; a 2 000 × 2 000 sparse fixture mért ideje **29 ms**,
+  maximális candidate-band szélessége legfeljebb 3.
+- `PROPERTY_SEED=42 flutter test test/property/analysis_alignment_property_test.dart`:
+  **zöld**, 200 randomizált monotonitás-trial.
+- `ROUND_GATE_RESULT_FILE=/tmp/e06-r13-round-gate.json tools/round-gate.sh
+  test/features/audio_analysis test/property`: **pass**, exit code **0**;
+  format, analyze, mindkét tesztútvonal, architecture, secrets és l10n gate
+  zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope-eltérés: nincs Practice/Song/Analyze módosítás vagy import;
+  nincs UI-, adapter- vagy metrika-bekötés.
+- CI teljes suite, friss property-seed és release build nem helyben futott;
+  ezek a reviewer/orchestrátor exact-SHA CI kapui.
 
 ## 11. Review — a független reviewer tölti ki
 
