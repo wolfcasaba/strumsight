@@ -28,7 +28,28 @@ final class OnsetEvent extends AnalysisEvent {
     required super.time,
     required super.confidence,
     super.sampleIndex,
-  });
+    this.attackStrength,
+    this.localRms,
+    this.confidenceSource = EventConfidenceSources.heuristic,
+    this.fallbackReason,
+  }) {
+    _validateNonNegativeFinite(attackStrength, 'attackStrength');
+    _validateNonNegativeFinite(localRms, 'localRms');
+    _validateConfidenceSource(confidenceSource);
+    _validateFallbackReason(fallbackReason);
+  }
+
+  /// Absolute peak in the builder's `[t, t + 20 ms]` audio window.
+  final double? attackStrength;
+
+  /// RMS in the builder's `[t - 5 ms, t + 45 ms]` audio window.
+  final double? localRms;
+
+  /// Provenance of this event's uncalibrated confidence value.
+  final String confidenceSource;
+
+  /// Why the producing stage used a fallback, when applicable.
+  final String? fallbackReason;
 }
 
 enum StrumDirection { down, up, unknown }
@@ -40,8 +61,78 @@ final class StrumEvent extends AnalysisEvent {
     required super.confidence,
     required this.direction,
     super.sampleIndex,
-  });
+    this.directionConfidence,
+    this.onsetEventId,
+    this.attackStrength,
+    this.localRms,
+    this.confidenceSource = EventConfidenceSources.heuristic,
+    this.fallbackReason,
+  }) {
+    _validateUnitInterval(directionConfidence, 'directionConfidence');
+    _validateNonNegativeFinite(attackStrength, 'attackStrength');
+    _validateNonNegativeFinite(localRms, 'localRms');
+    if (onsetEventId != null && onsetEventId!.trim().isEmpty) {
+      throw ArgumentError.value(onsetEventId, 'onsetEventId');
+    }
+    _validateConfidenceSource(confidenceSource);
+    _validateFallbackReason(fallbackReason);
+  }
+
   final StrumDirection direction;
+
+  /// Confidence in [direction], independent from the onset confidence.
+  final double? directionConfidence;
+
+  /// ID of the onset evidence paired with this strum, when available.
+  final String? onsetEventId;
+
+  /// Absolute peak in the builder's `[t, t + 20 ms]` audio window.
+  final double? attackStrength;
+
+  /// RMS in the builder's `[t - 5 ms, t + 45 ms]` audio window.
+  final double? localRms;
+
+  /// Provenance of this event's uncalibrated confidence value.
+  final String confidenceSource;
+
+  /// Why the producing stage used a fallback, when applicable.
+  final String? fallbackReason;
+}
+
+/// The closed provenance vocabulary for uncalibrated event confidences.
+abstract final class EventConfidenceSources {
+  static const String heuristic = 'heuristic';
+  static const String crnn = 'crnn';
+  static const String calibrated = 'calibrated';
+
+  static bool isKnown(String value) => switch (value) {
+    heuristic || crnn || calibrated => true,
+    _ => false,
+  };
+}
+
+void _validateUnitInterval(double? value, String name) {
+  if (value != null && (!value.isFinite || value < 0 || value > 1)) {
+    throw ArgumentError.value(value, name, 'must be finite and in [0, 1]');
+  }
+}
+
+void _validateNonNegativeFinite(double? value, String name) {
+  if (value != null && (!value.isFinite || value < 0)) {
+    throw ArgumentError.value(value, name, 'must be finite and non-negative');
+  }
+}
+
+void _validateConfidenceSource(String value) {
+  if (!EventConfidenceSources.isKnown(value)) {
+    throw ArgumentError.value(value, 'confidenceSource');
+  }
+}
+
+void _validateFallbackReason(String? value) {
+  if (value != null && value.trim().isEmpty) {
+    throw ArgumentError.value(value, 'fallbackReason');
+  }
 }
 
 final class ChordChangeEvent extends AnalysisEvent {
