@@ -234,5 +234,44 @@ class IndependenceTest(unittest.TestCase):
             self.assertEqual(result.stdout.strip(), "minimax")
 
 
+class PreambleClaudeCliProhibitionTest(unittest.TestCase):
+    """MÉRT halt (2026-08-12, E06-R11 H6): a Terra-vezényelt orchestrátor-
+    session a `pipeline-codex-orchestrator-preamble.md` feltétel nélküli „ne
+    hívd a claude CLI-t” szabályát a fenti `IndependenceTest` által is
+    igazolt, ROTÁCIÓ-eredetű `sonnet-impl` implementer-dispatch-ra is
+    ráhúzta, és inkább önmagát haltolta (H6), ahelyett hogy a §1.1 szerint a
+    `tools/mm-round.sh`-sal elindította volna a MÁR kvóta-ellenőrzött
+    implementert. A preambulum (ADR 0115, 2026-08-02) egyetlen kiváltó okot
+    ismert — a Claude-kvóta kimerülését —, és nem lett frissítve, amikor az
+    ADR 0222 (2026-08-11) egy MÁSODIK, kvótától független kiváltó okot
+    (rotáció) vezetett be, amely alatt a Claude-kvóta tipikusan egészséges —
+    épp ekkor adja a driver implementernek a claude-harness `sonnet-impl`-et.
+    """
+
+    def setUp(self) -> None:
+        self.preamble = (
+            ROOT / "docs" / "execution" / "pipeline-codex-orchestrator-preamble.md"
+        ).read_text(encoding="utf-8")
+
+    def test_the_claude_cli_ban_is_no_longer_the_unconditional_2026_08_02_wording(self) -> None:
+        """Ez a pontos mondat okozta a H6-ot — ha visszatér, a hiba visszatér."""
+        self.assertNotIn(
+            "A `claude` CLI-t NE hívd** — épp az a kvóta merült ki, ami miatt itt vagy.",
+            self.preamble,
+        )
+
+    def test_the_registered_claude_harness_implementer_dispatch_is_explicitly_carved_out(
+        self,
+    ) -> None:
+        """A javításnak névvel ki kell mondania, hogy a §1.1 implementer-
+        dispatch (a nyilvántartás `sonnet-impl` sora, `tools/mm-round.sh`
+        wrapperrel) NEM a tiltott 'saját magad Claude-ra visszaváltása', mert
+        a `resolve_independent_engine` (ADR 0222) már megmérte a
+        Claude-kvótát, mielőtt ezt a nevet a promptba írta."""
+        self.assertIn("sonnet-impl", self.preamble)
+        self.assertIn("tools/mm-round.sh", self.preamble)
+        self.assertIn("0222", self.preamble)
+
+
 if __name__ == "__main__":
     unittest.main()
