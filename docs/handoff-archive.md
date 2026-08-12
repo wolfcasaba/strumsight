@@ -6,6 +6,31 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R14 — Timing és rush/drag metrikák (2026-08-12)
+
+Elkészült a bekötetlen Audio Analysis V2 timing-metrika réteg: külön, stabil
+ID-kat kapott a target és free-play mód (10–10), a korábbi általános
+`timing.mean_absolute_error.v1` változatlan maradt. A target út signed timing
+errorból számol early/late bias-t, pontosságot, p90-et, stabil streaket és
+missed/extra arányt; a free-play út csak beat-gridre támaszkodik. [ADR
+0232](adr/0232-timing-metric-identity-and-publication-boundary.md). Nincs UI-,
+persistence- vagy V1 Analyze-bekötés.
+
+A független review **APPROVED**, a dedikált security re-review **PASS**
+(0 CRITICAL/BLOCKER/MAJOR). Két security javító kör release-safe
+`MetricGate`-validációt, non-finite free-play confidence elutasítást és a
+target confidence matched-coverage szerinti csillapítását adta. Nyitott,
+nem blokkoló MINOR: a free-play nearest-beat keresés `O(observed×beats)`;
+fogyasztó/UI-bekötés előtt kétmutatós vagy bináris kereséses határolás kell.
+
+Exact-SHA `8deee81c`, PR [#230](https://github.com/wolfcasaba/strumsight/pull/230),
+squash `a67d6455`: Full Gate
+[31580123374](https://github.com/wolfcasaba/strumsight/actions/runs/31580123374),
+Router CI [31580125219](https://github.com/wolfcasaba/strumsight/actions/runs/31580125219)
+és APK [31580127006](https://github.com/wolfcasaba/strumsight/actions/runs/31580127006)
+**success**. Az `origin/main` nem mozdult a dispatch és merge között; a
+post-merge gate friss `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
+
 ## ✅ E06-R13 — Target alignment engine (2026-08-12)
 
 A megfigyelt (R10 event evidence) és elvárt (target) zenei események első,

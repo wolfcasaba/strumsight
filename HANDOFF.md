@@ -3,7 +3,36 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R15 MERGED — Rhythm consistency and groove proxies).**
+> (E06-R16 MERGED — Dynamics and stroke balance).**
+>
+> ## ✅ E06-R16 KÉSZ — Dynamics és stroke balance (2026-08-12)
+>
+> Elkészült a bekötetlen Audio Analysis V2 dinamikai evidence- és stroke-balance
+> réteg: `DynamicsMetrics` az eredeti PCM-ből származtatott attack-strength,
+> local-RMS, dinamikai tartomány és accent/stroke balance alapján publikál
+> kizárólag mért, stabil metrika-ID-kat. A jelminőség vagy clipping bizonytalan
+> állapota `unavailable`/`degraded`, nem biztos állítás; a `DynamicsGate` minden
+> publikus numerikus küszöbét release buildben is véges, [0,1]-beli és rendezett
+> bemenetre korlátozza. [ADR 0234](docs/adr/0234-dynamics-evidence-and-gating-boundary.md).
+> Nincs UI-, persistence- vagy V1 Analyze-bekötés; az offline V1 út változatlan.
+>
+> A független review **APPROVED**, a dedikált security re-review **PASS**:
+> a kezdeti öt MAJOR (nem-véges confidence/quality, duplikált event-ID,
+> hiányzó local RMS, time/sample inkonzisztencia) ugyanazon szűk javító körben
+> zárult; a második review egy 1.0 fölé engedett clipping-küszöböt talált,
+> amelyet a végső korrekció lezárt. Nincs nyitott BLOCKER/MAJOR/MINOR.
+>
+> **Zöld kapu (exact-SHA `151d9301`, PR [#232](https://github.com/wolfcasaba/strumsight/pull/232),
+> squash `ab830ead`):** Full Gate
+> [31591578143](https://github.com/wolfcasaba/strumsight/actions/runs/31591578143)
+> és Router CI [31591547560](https://github.com/wolfcasaba/strumsight/actions/runs/31591547560)
+> **success**. A CI-tervező `full-gate.yml`-t választott (`apk_required=false`,
+> tisztán Dart/dokumentum-diff); az `origin/main` nem mozdult a dispatch és
+> merge között. A post-merge gate friss `main`-en mind a nyolc lépésben zöld
+> (`audio=301`, `property=85`, `app=69`, `PROPERTY_SEED=42`).
+>
+> **Következő kör: E06-R17** (Monofonikus pitch capability,
+> `docs/rounds/e06-r17-monophonic-pitch-capability.md`).
 >
 > ## ✅ E06-R15 KÉSZ — Rhythm consistency és groove proxyk (2026-08-12)
 >
@@ -63,31 +92,6 @@
 > **Következő kör: E06-R16** (Dynamics és stroke balance,
 > `docs/rounds/e06-r16-dynamics-and-stroke-balance.md`).
 >
-> ## ✅ E06-R14 KÉSZ — Timing és rush/drag metrikák (2026-08-12)
->
-> Elkészült a bekötetlen Audio Analysis V2 timing-metrika réteg: külön,
-> stabil ID-kat kapott a target és free-play mód (10–10), a korábbi általános
-> `timing.mean_absolute_error.v1` változatlan maradt. A target út signed
-> timing errorból számol early/late bias-t, pontosságot, p90-et, stabil streaket
-> és missed/extra arányt; a free-play út csak beat-gridre támaszkodik. [ADR
-> 0232](docs/adr/0232-timing-metric-identity-and-publication-boundary.md).
-> Nincs UI-, persistence- vagy V1 Analyze-bekötés.
->
-> A független review **APPROVED**, a dedikált security re-review **PASS**
-> (0 CRITICAL/BLOCKER/MAJOR). Két security javító kör release-safe
-> `MetricGate`-validációt, non-finite free-play confidence elutasítást és a
-> target confidence matched-coverage szerinti csillapítását adta. Nyitott,
-> nem blokkoló MINOR: a free-play nearest-beat keresés `O(observed×beats)`;
-> fogyasztó/UI-bekötés előtt kétmutatós vagy bináris kereséses határolás kell.
->
-> **Zöld kapu (exact-SHA `8deee81c`, PR [#230](https://github.com/wolfcasaba/strumsight/pull/230),
-> squash `a67d6455`):** Full Gate
-> [31580123374](https://github.com/wolfcasaba/strumsight/actions/runs/31580123374),
-> Router CI [31580125219](https://github.com/wolfcasaba/strumsight/actions/runs/31580125219)
-> és APK [31580127006](https://github.com/wolfcasaba/strumsight/actions/runs/31580127006)
-> **success**. Az `origin/main` nem mozdult a dispatch és merge között; a
-> post-merge gate friss `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -97,8 +101,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R15 zárása): E06-R15 új bannerként felkerült,
-> E06-R14 maradt a második (legutóbbi kettő) helyen. E06-R13 a harmadik
+> Mért diéta: 2026-08-12 (E06-R16 zárása): E06-R16 új bannerként felkerült,
+> E06-R15 maradt a második (legutóbbi kettő) helyen. E06-R14 a harmadik
 > legutóbbi kör lett, ezért a fejlécből törölve; teljes története átkerült
 > az archívum tetejére.
 
