@@ -34,7 +34,7 @@ import argparse
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -122,6 +122,60 @@ def _gate_test_is_covered(gate_test: str, paths: frozenset[str] | tuple[str, ...
     return False
 
 
+# S5 — MÉRT eset: E06-R10/H3 (docs/LESSONS.md). A brief két ÚJ fájlt írt elő
+# (`domain/events/onset_event.dart`, `.../strum_event.dart`), a fájlnévből
+# származó `OnsetEvent`/`StrumEvent` típusnév viszont MÁR élt a nem
+# engedélyezett `domain/analysis_event.dart` sealed `AnalysisEvent` családban
+# — a brief azért volt stale, mert előre, egy MÉG NEM létező domain modellre
+# írták (`main @ a6e6f3d`, Epic 6 kickoff előtt). A `public.dart` barrel a két
+# azonos nevű típust ambiguous exportként bukta volna, vagy a fájl saját
+# importja ütközött volna — vagyis a hiba a gate-ig el sem jutott volna
+# implementáció nélkül mérve. Ez a lelet ugyanezt a fájlnév→típusnév
+# heurisztikát futtatja MINDEN allowed_paths-beli, MÉG NEM létező .dart
+# fájlra: ha a lemezen ÉRTELMEZETT típusnév egy, ugyanabban a feature-
+# gyökérben MÁR létező, allowed_paths-on KÍVÜLI fájlban deklarálva van,
+# az kollízió-gyanús, és emberi/orchesztrátor-felülvizsgálatot igényel —
+# a fájl EXISTS-e szerinti ág (bővítés) nem lelet, csak az ÚJ fájl ága.
+_DART_TYPE_DECL_KEYWORDS = r"(?:abstract\s+|base\s+|final\s+|interface\s+|sealed\s+)*(?:class|enum|mixin)"
+
+
+def _dart_type_name_guess(filename_stem: str) -> str:
+    """`onset_event` → `OnsetEvent` — a repó saját, kivétel nélküli konvenciója
+    (fájlnév = az elsődleges publikus típus snake_case alakja)."""
+    return "".join(word[:1].upper() + word[1:] for word in filename_stem.split("_") if word)
+
+
+def _feature_root(relative: str) -> PurePosixPath | None:
+    parts = PurePosixPath(relative).parts
+    if len(parts) >= 3 and parts[0] == "lib" and parts[1] == "features":
+        return PurePosixPath(*parts[:3])
+    if len(parts) >= 2 and parts[0] == "lib":
+        return PurePosixPath(*parts[:2])
+    return None
+
+
+def _existing_dart_declaration(
+    repo: Path, root: PurePosixPath, type_name: str, *, exclude: frozenset[str]
+) -> str | None:
+    """Az első allowed_paths-on kívüli fájl a feature-gyökér alatt, ami a
+    `type_name` nevű top-level class/enum/mixin-t deklarálja — vagy None."""
+    root_dir = repo / root
+    if not root_dir.is_dir():
+        return None
+    pattern = re.compile(rf"(?m)^\s*{_DART_TYPE_DECL_KEYWORDS}\s+{re.escape(type_name)}\b")
+    for dart_file in sorted(root_dir.rglob("*.dart")):
+        relative = dart_file.resolve().relative_to(repo.resolve()).as_posix()
+        if relative in exclude:
+            continue
+        try:
+            text = dart_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if pattern.search(text):
+            return relative
+    return None
+
+
 class Finding(dict):
     """Egy lelet: szint + kód + üzenet. dict, hogy a JSON-kimenet triviális legyen."""
 
@@ -185,6 +239,42 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
         findings.append(
             Finding("base", "B6", f"a címsor kör-azonosítója ({heading.group(1)}) ≠ fájlnév ({brief.task_id})")
         )
+
+    # S5 — allowed_paths ÚJ (lemezen még nem létező) .dart fájlja a fájlnévből
+    # származtatott típusnevet MÁR deklarálja egy, ugyanabban a feature-
+    # gyökérben élő, allowed_paths-on KÍVÜLI fájl (E06-R10/H3, docs/LESSONS.md).
+    # Meglévő fájl bővítése (a path LÉTEZIK) sosem lelet — az a normál eset.
+    # STRICT, nem base: mérve (2026-08-12) az Epic 6 előre megírt briefjei
+    # közül HÁROM (R11/R12/R17) is ugyanezt a hibaosztályt hordozza — a
+    # bevezetéskor tehát NEM minden meglévő brief teljesíti, így nem
+    # CI-kapu (a brief-lint saját szabálya a base/strict határra). Az egyes
+    # körök saját pre-flightja zárja, ahogy a fájl alján lévő megjegyzés
+    # is mondja: „a lista-tágítás NEM" az önjavítás hatásköre a HALT-olt
+    # körön kívülre.
+    for allowed in metadata.allowed_paths:
+        if not allowed.startswith("lib/") or not allowed.endswith(".dart"):
+            continue
+        if (repo / allowed).exists():
+            continue
+        root = _feature_root(allowed)
+        if root is None:
+            continue
+        type_name = _dart_type_name_guess(Path(allowed).stem)
+        if not type_name:
+            continue
+        collision = _existing_dart_declaration(
+            repo, root, type_name, exclude=frozenset(metadata.allowed_paths)
+        )
+        if collision is not None:
+            findings.append(
+                Finding(
+                    "strict",
+                    "S5",
+                    f"{allowed} új fájl a(z) {type_name} típust deklarálná, de ez már létezik "
+                    f"itt (nem engedélyezett): {collision} — kollízió-/ambiguous-export kockázat, "
+                    "revideáld az allowed_paths-t vagy a típusnevet",
+                )
+            )
 
     # S1 — STOP-protokoll: scope-ütközéskor a brief-revízió a kimenet, nem a
     # lista-tágítás. Enélkül az implementer csendben tágít.

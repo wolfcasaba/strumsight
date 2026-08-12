@@ -280,6 +280,58 @@ class BriefLintTest(unittest.TestCase):
         )
         self.assertNotIn("B3", self.codes(findings))
 
+    def test_new_allowed_file_colliding_with_an_existing_type_is_a_strict_finding(self) -> None:
+        """MÉRT eset (E06-R10/H3, docs/LESSONS.md): a brief ÚJ fájlt írt elő
+        egy olyan típusnévvel, ami MÁR élt egy nem engedélyezett fájlban —
+        a `public.dart` barrel ambiguous exportot dobott volna. STRICT, mert
+        a bevezetéskor 3 másik előre megírt Epic-6 brief (R11/R12/R17) is
+        ugyanezt hordozta — nem minden meglévő brief teljesíti, ezért nem
+        lehet base-szintű CI-kapu."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        repo = make_repo(Path(directory.name))
+        feature = repo / "lib" / "features" / "example"
+        feature.mkdir(parents=True, exist_ok=True)
+        (feature / "analysis_event.dart").write_text(
+            "final class OnsetEvent {\n  const OnsetEvent();\n}\n", encoding="utf-8"
+        )
+        text = VALID_BRIEF.replace(
+            '  "lib/features/example/example.dart",\n',
+            '  "lib/features/example/example.dart",\n  "lib/features/example/onset_event.dart",\n',
+        )
+        findings, _ = self.lint(text, repo=repo)
+        self.assertIn("S5", self.codes(findings))
+
+    def test_new_allowed_file_with_no_existing_collision_is_clean(self) -> None:
+        """Ugyanabban a feature-gyökérben lévő, de nem ütköző fájlok nem leletek."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        repo = make_repo(Path(directory.name))
+        feature = repo / "lib" / "features" / "example"
+        feature.mkdir(parents=True, exist_ok=True)
+        (feature / "unrelated.dart").write_text(
+            "final class Unrelated {\n  const Unrelated();\n}\n", encoding="utf-8"
+        )
+        text = VALID_BRIEF.replace(
+            '  "lib/features/example/example.dart",\n',
+            '  "lib/features/example/example.dart",\n  "lib/features/example/onset_event.dart",\n',
+        )
+        findings, _ = self.lint(text, repo=repo)
+        self.assertNotIn("S5", self.codes(findings))
+
+    def test_editing_an_existing_file_is_never_a_collision(self) -> None:
+        """A path LÉTEZIK ága sosem lelet — a bővítés a normál eset."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        repo = make_repo(Path(directory.name))
+        feature = repo / "lib" / "features" / "example"
+        feature.mkdir(parents=True, exist_ok=True)
+        (feature / "example.dart").write_text(
+            "final class Example {\n  const Example();\n}\n", encoding="utf-8"
+        )
+        findings, _ = self.lint(VALID_BRIEF, repo=repo)
+        self.assertNotIn("S5", self.codes(findings))
+
     def test_strict_level_asks_for_falsification_and_threshold_matrix(self) -> None:
         text = VALID_BRIEF.replace(
             "- A reducer üres bemenetre `idle` állapotot ad. **Pirosra váltja:** az a\n  hibás implementáció, amely a legutóbbi állapotot tartja meg.",
@@ -295,6 +347,16 @@ class BriefLintTest(unittest.TestCase):
         self.assertTrue(paths, "nincs nyitott kör — a kapu mérhetetlen")
         report, worst = brief_lint.lint_paths(paths, repo=ROOT, level="base")
         self.assertEqual(worst, 0, json.dumps(report, ensure_ascii=False, indent=2))
+
+    def test_e06_r10_brief_is_clean_after_the_h3_self_heal(self) -> None:
+        """MÉRT regresszió (E06-R10/H3, docs/LESSONS.md): a self-heal ELŐTT ez
+        a brief allowed_paths-a két, a nem engedélyezett
+        domain/analysis_event.dart-ban már élő típusnévvel (OnsetEvent,
+        StrumEvent) ütköző ÚJ fájlt írt elő (S5). A revideált brief egyetlen
+        szinten sem adhat leletet — enélkül UGYANAZ a halt térne vissza."""
+        path = ROOT / "docs" / "rounds" / "e06-r10-event-evidence-onset-strum-timeline.md"
+        findings = brief_lint.lint_text(path.read_text(encoding="utf-8"), path=path, repo=ROOT)
+        self.assertEqual(findings, [], findings)
 
 
 class SlotPlanningTest(unittest.TestCase):
