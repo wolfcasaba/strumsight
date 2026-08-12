@@ -3,20 +3,26 @@
 Brief: `docs/rounds/e06-r19-confidence-calibration-capability-resolver.md`
 Diff: `git diff cc8faca1...codex/e06-r19-confidence-calibration-capability-resolver`
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-12
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (javító kör után; első pass CHANGES REQUESTED volt)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1
+Végső: BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1 (nem blokkoló follow-up)
+Első pass: BLOCKER: 0 · MAJOR: 1 (F1) · MINOR: 1 (F2, nyitva marad follow-upként) · NOTE: 1 (F3, javítva)
 
 Az implementáció szerkezetileg tiszta, a §6 mind a kilenc acceptance criterionja
 mérve teljesül (beleértve a pre-flight során javított geometriai-átlag
 referenciaértéket, `0.5799546134795288`, amit a teszt bitre pontosan
-visszaad). Egy valódi, reprodukált crash (F1, MAJOR) blokkolja a merge-et: a
-resolver kivételt dob, ha egyetlen capability sem `notApplicable`-től
-különböző (`supportedCapabilities: {}`), ahelyett hogy a testvér-kapuk
-(`PitchCapabilityGate`, `DynamicsGate`) mintáját követve gracefully
-degradálna.
+visszaad). Az első pass egy valódi, reprodukált crash-t (F1, MAJOR) talált —
+a resolver kivételt dobott, ha egyetlen capability sem `notApplicable`-től
+különböző (`supportedCapabilities: {}`) —, amit a javító kör (commit
+`ba713d28`) lezárt: explicit üres-`overallFactors` ág, `notApplicable`
+overall verdikttel, dedikált teszttel. **Függetlenül újra futtatott gate
+(friss `/tmp` klón) és saját próbateszt** (a korábban crash-elő bemenetet
+megismételve) is megerősíti a javítást — lásd „Javító kör utáni ellenőrzés".
+F3 (teszt-fixture mutáció) szintén javítva, bónuszként, ugyanabban a
+commitban. F2 (a „min a kritikus capabilityken" §5.2-prózahűség) szándékosan
+NYITVA maradt — nem blokkoló, dokumentált follow-up (lásd lent).
 
 ## Acceptance criteria
 
@@ -89,7 +95,13 @@ enum-érték vagy mező nem változott/tűnt el.
 - **Ellenőrzés:** egy új teszteset (`CapabilityResolverInput(...,
   supportedCapabilities: const <AnalysisCapability>{})`) ne dobjon, és az
   `overallStatus`/`overallConfidence` a választott, dokumentált értéket adja.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ba713d28`) — explicit üres-`overallFactors` ág
+  `capability_resolver.dart:114-122`, `overallStatus:
+  CapabilityStatus.notApplicable, overallConfidence: 0`; dedikált teszt
+  (`capability_resolver_test.dart` „returns a not-applicable overall when no
+  capabilities are supported”). Függetlenül újra-reprodukálva a javítás
+  UTÁN (saját próbateszttel, friss `/tmp` klónban) — a korábban dobó hívás
+  most `notApplicable`/`0`-t ad, nem dob. Lásd „Javító kör utáni ellenőrzés".
 
 ### F2 — MINOR — a „kritikus capability” hatás csak bináris kapu, nem a brief §5.2 szerinti „min”
 
@@ -144,7 +156,25 @@ enum-érték vagy mező nem változott/tűnt el.
   tényleges lefedettségi rést, csak redundáns.
 - **Javasolt irány:** `allCapabilities.toSet()..remove(...)` (másolat) a 7.
   esetben, hogy a fixture ne mutálódjon — kozmetikai, nem sürgős.
-- **Státusz:** OPEN (kozmetikai follow-up)
+- **Státusz:** FIXED (`ba713d28`, bónuszként a javító körben, nem volt
+  kötelező) — `allCapabilities.toSet()..remove(...)`.
+
+## Javító kör utáni ellenőrzés
+
+1. **Diff-audit:** `git diff c3d71c76...ba713d28` — 3 fájl
+   (`capability_resolver.dart`, `capability_resolver_test.dart`, a brief §10
+   handoff-frissítése), mind az `allowed_paths`-on belül. `scope_audit=ok`
+   (jelzésfájl, `scope_audit_changed=3`), függetlenül megerősítve.
+2. **Gate újra, MÁSODIK friss `/tmp` klónban** (`/tmp/review-e06-r19-fix1`,
+   nem ugyanaz, mint az első pass klónja) — `tools/round-gate.sh
+   test/features/audio_analysis test/property test/app`: mind a nyolc lépés
+   zöld.
+3. **Saját eldobható próbateszt megismételve** a fix UTÁN (ugyanaz a bemenet,
+   ami az első pass-ban dobott): `resolve()` most `overallStatus ==
+   CapabilityStatus.notApplicable`, `overallConfidence == 0` — NEM dob.
+   Próbafájl futtatva, majd törölve (`git status` tiszta a klónban).
+4. **F3 zárás ellenőrizve:** a 7. teszteset most `.toSet()`-tel másol, az
+   `allCapabilities` változó a ciklus alatt változatlan 14 elemű marad.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -170,13 +200,21 @@ munkapéldány tiszta, csak a review-jelentés az új tartalom.
 ## Biztonsági review
 
 Kötelező (`risk = "high"`) — külön dokumentumban:
-`docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md`
-(a `security-reviewer` ágens folyamatban/mellékelve).
+`docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md`.
+**Verdikt: PASS** (0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 2 NOTE). A
+security-reviewer FÜGGETLENÜL, saját pure-Dart próbával ugyanazt a
+gyökérokot reprodukálta, mint ez a jelentés F1-e (ott MINOR-1, mert
+fail-closed — dob, nem szivárogtat/publikál rossz értéket — de a javító
+kör ezt is lezárta). Két nem blokkoló, előretekintő NOTE (codec nem
+perzisztálja az új `calibrationVersion`/`calibrationSource` mezőket;
+`details` map jövőbeli JSON-sink) — mindkettő R29-re/egy jövőbeli bekötő
+körre jelezve, HANDOFF §3-ban rögzítve.
 
 ## Merge-döntés
 
-**CHANGES REQUESTED.** Az F1 (MAJOR) nyitva van — az ADR 0052 zöld-kapu
-szabálya szerint a gate-ek zöldsége önmagában nem elég, amíg nyitott
-BLOCKER/MAJOR áll fenn. Javító kör szükséges, ugyanazzal a motorral
-(Terra), az F1 leletlistával; F2/F3 nem blokkol, de érdemes egyben javítani,
-ha nem hizlalja érdemben a diffet.
+**APPROVED.** Minden BLOCKER/MAJOR zárva (F1 FIXED, függetlenül
+újra-ellenőrizve gate-tel és próbateszttel is); a security review PASS;
+nulla nyitott BLOCKER/MAJOR marad (F2 dokumentált, nem blokkoló follow-up).
+Az ADR 0052 zöld-kapu szabálya szerint a helyi gate zöldje + a CI-run
+zöldje (dispatch az orchestrátor következő lépése) → squash-merge külön
+jóváhagyás nélkül.
