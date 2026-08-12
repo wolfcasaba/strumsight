@@ -1316,5 +1316,12 @@
   "rhythmMetricBeatPhaseConsistency": "Ütemfázis-egyenletesség",
   "rhythmMetricLongestStableIoiStreak": "Leghosszabb stabil ritmussorozat",
   "rhythmMetricAccentPositionConsistency": "Hangsúlypozíció-egyenletesség",
-  "rhythmMetricSwingRatio": "Hosszú-rövid időarány"
+  "rhythmMetricSwingRatio": "Hosszú-rövid időarány",
+  "dynamicsMetricStrokeStrengthCv": "Pengetéserősség-szórás",
+  "dynamicsMetricDownUpMedianRatio": "Le/fel erősségarány",
+  "dynamicsMetricDrift": "Dinamikai elcsúszás",
+  "dynamicsMetricOutlierRatio": "Kiugró pengetés aránya",
+  "dynamicsMetricAccentAccuracy": "Accent-pontosság",
+  "dynamicsMetricQuietRegionRatio": "Csendes szakasz aránya",
+  "dynamicsMetricClippedEventRatio": "Clippelt pengetés aránya"
 }

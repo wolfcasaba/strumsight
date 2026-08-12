@@ -281,7 +281,63 @@ target nélküli értékelő állítás helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (`sonnet-impl`, 2026-08-12).**
+
+Új fájlok (a §4 listával egyezően):
+- `lib/features/audio_analysis/engine/metrics/dynamics_gate.dart` —
+  `DynamicsGate`/`DynamicsGateResult`, fail-closed sorrend: `measured==false`
+  → `internalFailure`; `noiseFloorDbfs >= -25.0` → `backingTrackDominant`;
+  `clippedEventRatio > 0.05` → `inputClipped`; `silentRatio >= 0.95` →
+  `inputTooNoisy`; egyébként `degraded`, ha `noiseFloorDbfs >= -35.0` vagy
+  `clippedEventRatio > 0.0`, különben `available`.
+- `lib/features/audio_analysis/engine/metrics/accent_analysis.dart` —
+  `detectLocalAccents` (OD-02: ±4 esemény, 9-elemű, szélen csonkolt mozgó
+  medián; accent, ha `attackStrength / localMedian > 1.2`).
+- `lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart` —
+  `buildDynamicsMetrics`: a clipped flag `audio.originalSamples`-ből, az R10
+  20 ms-os attack-ablakában (`event.time .. event.time + 20ms`,
+  `audio.durationToSampleIndex` határral) `abs(sample) >= 0.999` alapon; a hét
+  metrika a nem-clippelt eseményekre normalizált (`attackStrength /
+  median(attackStrength)`) erősségből.
+- `docs/rag/chunks/022-dynamics-stroke-balance.md` — formulák és küszöbök.
+
+Módosított fájlok: `analysis_metric_catalog.dart` (7 új `dynamics.*` ID +
+`DynamicsMetricIds`), `public.dart` (3 új export), `app_en.arb`/`app_hu.arb`
+(7 additív `dynamicsMetric*` kulcs).
+
+**Tesztek:** `dynamics_metric_catalog_test.dart`, `accent_analysis_test.dart`,
+`dynamics_metrics_test.dart` (a teljes §6 mátrix: 7 fixture-cella,
+gain-invariancia ×2/×0.5, normalizáció-immunitás — mutáció-tesztelve: az
+`_isClipped` ideiglenes `canonicalSamples`-re állítása a normalizáció-
+immunitás cellát PIROSRA váltotta, majd vissza lett állítva —, outlier-
+küszöb hármas (python3-derivált 0.9/1.1 bázis + `1+k*0.1` hangolt esemény),
+clipping-kapu hármas, noise-floor kapu hármas, target-kapu, clipped-esemény
+kizárás, insufficient-events fail-closed), `analysis_dynamics_property_test.dart`
+(`PROPERTY_SEED`, 200 véletlen session, NaN-mentesség + tartomány).
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld (288 teszt)
+test test/property                                         zöld (85 teszt)
+test test/app                                               zöld (69 teszt)
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+`git diff --check`: tiszta. A módosított/új fájlok listája pontosan a §4
+`allowed_paths`-szal egyezik (`git status --short` ellenőrizve).
+
+**Nyitott pontok / kockázatok a következő körnek:** a `túl halk jel`
+(`inputTooNoisy`) kapu-ág és a session-szintű pipeline-bekötés (nyers
+`StrumEvent`/`SignalQualityReport` átadása) ebben a körben nincs bekötve
+tényleges analízis-futtatáshoz — ADR 0234 szerint ez egy későbbi kör
+feladata.
 
 ## 11. Review — a független reviewer tölti ki
 
