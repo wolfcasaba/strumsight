@@ -1,6 +1,7 @@
 # E06-R16 — Dynamics és stroke balance
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07; pre-flight lezárva
+  2026-08-12, `main` @ `e6770867`, ADR 0234)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 16; §16.1–16.5
 - **Branch:** `codex/e06-r16-dynamics-and-stroke-balance`
 - **Előfeltétel:** **E06-R08, E06-R10 merge**
@@ -22,6 +23,7 @@ allowed_paths = [
   "test/features/audio_analysis/engine/accent_analysis_test.dart",
   "test/property/analysis_dynamics_property_test.dart",
   "docs/rag/chunks/022-dynamics-stroke-balance.md",
+  "docs/adr/0234-dynamics-evidence-and-gating-boundary.md",
   "docs/rounds/e06-r16-dynamics-and-stroke-balance.md",
 ]
 gate_tests = [
@@ -52,7 +54,37 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. **Új mennyiség ⇒ RAG-chunk** ugyanabban a commitban.
+**Pre-flight mérés (2026-08-12, baseline `main` @ `e6770867`; E06-R08 és
+E06-R10 merge-elve — előfeltétel teljesül). ADR:
+[0234](../adr/0234-dynamics-evidence-and-gating-boundary.md).**
+
+Minden hivatkozott mezőt a tényleges hívási láncon mértem, nem a korábbi
+brief állapot-táblájából:
+
+1. `PreprocessedAudio.originalSamples` valóban a dinamikai bemenet
+   (`domain/preprocessed_audio.dart:3-19`), míg a normalizáció kizárólag a
+   `canonicalSamples` másolatát módosítja
+   (`engine/preprocessing/preprocessing_stage.dart:39-78`).
+2. Az R10 `EventTimelineBuilder` minden megtartott `StrumEvent`-hez ad
+   `sampleIndex`, `attackStrength` és `localRms` értéket eredeti PCM-ből,
+   rendre `[t,t+20 ms]` és `[t-5 ms,t+45 ms]` ablakkal
+   (`engine/events/event_timeline_builder.dart:134-178,190-237`). Nincs
+   viszont `StrumEvent.clipped` mező. **Feloldás:** az R16 saját,
+   `dynamics_metrics.dart`-beli belső event-adatában, a meglévő 20 ms-os
+   attack-ablak `originalSamples` értékein, az R07 inkluzív `|sample| >=
+   0.999` határával vezeti le a clipped jelzőt; az alap domain esemény és az
+   R10 builder nem változik.
+3. A `SignalQualityReport` a `measured` bitet hordozza
+   (`domain/signal_quality_report.dart:4-35`), ezért a gate nem fogadhat el
+   legacy/fabrikált (`measured == false`) számot jelbizonyítékként. **Feloldás:**
+   ilyen reporttal a dinamika fail-closed `unavailable`, `internalFailure`
+   okkal; a zaj-floor sávok csak mért, véges reportból értékelhetők.
+4. A `MetricGate` jelenlegi minimuma 8 esemény (streakhez 3), és runtime-ban
+   validálja a paramétereit (`engine/metrics/metric_gate.dart:10-45`); a
+   dinamika ezt változatlanul használja, nem vezet be párhuzamos minimumot.
+
+A chunk-sorszám mérve **022** (utolsó meglévő: `021-rhythm-consistency-groove-
+proxies.md`). **Új mennyiség ⇒ RAG-chunk** ugyanabban a commitban.
 
 ## 1. Cél
 
@@ -249,9 +281,167 @@ target nélküli értékelő állítás helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (`sonnet-impl`, 2026-08-12).**
+
+Új fájlok (a §4 listával egyezően):
+- `lib/features/audio_analysis/engine/metrics/dynamics_gate.dart` —
+  `DynamicsGate`/`DynamicsGateResult`, fail-closed sorrend: `measured==false`
+  → `internalFailure`; `noiseFloorDbfs >= -25.0` → `backingTrackDominant`;
+  `clippedEventRatio > 0.05` → `inputClipped`; `silentRatio >= 0.95` →
+  `inputTooNoisy`; egyébként `degraded`, ha `noiseFloorDbfs >= -35.0` vagy
+  `clippedEventRatio > 0.0`, különben `available`.
+- `lib/features/audio_analysis/engine/metrics/accent_analysis.dart` —
+  `detectLocalAccents` (OD-02: ±4 esemény, 9-elemű, szélen csonkolt mozgó
+  medián; accent, ha `attackStrength / localMedian > 1.2`).
+- `lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart` —
+  `buildDynamicsMetrics`: a clipped flag `audio.originalSamples`-ből, az R10
+  20 ms-os attack-ablakában (`event.time .. event.time + 20ms`,
+  `audio.durationToSampleIndex` határral) `abs(sample) >= 0.999` alapon; a hét
+  metrika a nem-clippelt eseményekre normalizált (`attackStrength /
+  median(attackStrength)`) erősségből.
+- `docs/rag/chunks/022-dynamics-stroke-balance.md` — formulák és küszöbök.
+
+Módosított fájlok: `analysis_metric_catalog.dart` (7 új `dynamics.*` ID +
+`DynamicsMetricIds`), `public.dart` (3 új export), `app_en.arb`/`app_hu.arb`
+(7 additív `dynamicsMetric*` kulcs).
+
+**Tesztek:** `dynamics_metric_catalog_test.dart`, `accent_analysis_test.dart`,
+`dynamics_metrics_test.dart` (a teljes §6 mátrix: 7 fixture-cella,
+gain-invariancia ×2/×0.5, normalizáció-immunitás — mutáció-tesztelve: az
+`_isClipped` ideiglenes `canonicalSamples`-re állítása a normalizáció-
+immunitás cellát PIROSRA váltotta, majd vissza lett állítva —, outlier-
+küszöb hármas (python3-derivált 0.9/1.1 bázis + `1+k*0.1` hangolt esemény),
+clipping-kapu hármas, noise-floor kapu hármas, target-kapu, clipped-esemény
+kizárás, insufficient-events fail-closed), `analysis_dynamics_property_test.dart`
+(`PROPERTY_SEED`, 200 véletlen session, NaN-mentesség + tartomány).
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld (288 teszt)
+test test/property                                         zöld (85 teszt)
+test test/app                                               zöld (69 teszt)
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+`git diff --check`: tiszta. A módosított/új fájlok listája pontosan a §4
+`allowed_paths`-szal egyezik (`git status --short` ellenőrizve).
+
+**Nyitott pontok / kockázatok a következő körnek:** a `túl halk jel`
+(`inputTooNoisy`) kapu-ág és a session-szintű pipeline-bekötés (nyers
+`StrumEvent`/`SignalQualityReport` átadása) ebben a körben nincs bekötve
+tényleges analízis-futtatáshoz — ADR 0234 szerint ez egy későbbi kör
+feladata.
+
+**Security review korrekció (`sonnet-impl`, 2026-08-12, baseline `c6ced96c`).**
+A review 5 MAJOR találatot azonosított; mindegyiket a §4 engedélyezett
+fájljain belül javítottuk:
+
+1. **Véges esemény-confidence** — `_validateEvents` (`dynamics_metrics.dart`)
+   mostantól explicit `isFinite` ellenőrzést végez minden esemény
+   `confidence`-én publikálás előtt (a `timing_metrics.dart` mintáját
+   követve) — a bázis `AnalysisEvent`/`AnalysisMetricResult` `[0,1]`
+   tartomány-ellenőrzése `NaN`-re nem fog, mert minden `NaN`-összehasonlítás
+   hamis.
+2. **Fail-closed minőségi bemenetek/konfiguráció** — `DynamicsGate`
+   konstruktora (`dynamics_gate.dart`) mostantól elutasítja a nem-véges vagy
+   fordított sorrendű küszöböket (`clippedEventRatioDegraded/Unavailable`,
+   `noiseFloorDegraded/UnavailableDbfs`, `silentRatioUnavailable`); az
+   `evaluate()` a `SignalQualityReport.noiseFloorDbfs`/`silentRatio`
+   nem-véges értékeire fail-closed `unavailable(internalFailure)`-t ad
+   vissza publikálás helyett.
+3. **Duplikált event-ID clipping-spoof** — `_validateEvents` elutasítja a
+   duplikált `StrumEvent.id`-t (korábban egy későbbi, nem-clippelt esemény
+   felülírhatta a `clippedById` térképben egy korábbi valódi clip
+   bejegyzését).
+4. **Hiányzó `localRms` fabrikált evidence** — `_quietRegionRatio` bemenete
+   mostantól csak akkor számol, ha minden nem-clippelt eseménynek van
+   `localRms`-e; hiányzó érték esetén a `dynamics.quiet_region_ratio.v1`
+   `unavailable(internalFailure)`, sosem fabrikált nulla.
+5. **Idő/sample-index koherencia és clipping-scan** — `_validateEvents`
+   ellenőrzi, hogy `event.sampleIndex` az audio határain belül van és
+   pontosan egyezik `audio.durationToSampleIndex(event.time)`-mal; az
+   `_isClipped` a 20 ms-os ablak végét mostantól `start + sampleRate`-ből
+   származtatja (nem `event.time`-ból), `samples.length - 1`-re korlátozva.
+
+**Regressziók (`dynamics_metrics_test.dart`, 10 új teszt):** nem-véges
+confidence elutasítása, duplikált ID elutasítása (20 eseményes,
+2-valódi-clip fixture — a 0.1 `inputClipped` bypass bizonyítottan
+lehetetlen), hiányzó `localRms` → `unavailable`, sampleIndex/time
+inkoherencia elutasítása, sampleIndex audio-határon kívül elutasítása, és 5
+`DynamicsGate` teszt (nem-véges/fordított küszöb elutasítás konstrukciónál,
+nem-véges `silentRatio` fail-closed az `evaluate()`-ben).
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12, korrekciós futás):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld
+test test/property                                         zöld
+test test/app                                               zöld
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+Módosított fájlok pontosan a review-brief scope-jával egyeznek:
+`lib/features/audio_analysis/engine/metrics/dynamics_gate.dart`,
+`lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+`test/features/audio_analysis/engine/dynamics_metrics_test.dart`.
+
+**Security review korrekció #2 (`sonnet-impl`, 2026-08-12, baseline
+`ed3ef035`).** A megismételt review az `ed3ef035` korrekció után egy
+megmaradó MAJOR-t talált egy engedélyezett fájlban:
+
+1. **`clippedEventRatioDegraded`/`clippedEventRatioUnavailable` 1.0 fölötti
+   érték elfogadása** — a `DynamicsGate` konstruktora (`dynamics_gate.dart`)
+   korábban csak a végesség és a `>= 0` alsó korlátot ellenőrizte; egy `2.0`
+   `clippedEventRatioUnavailable`-lel egy 100%-ban clippelt esemény-halmaz
+   (`clippedEventRatio == 1.0`) `available`-ként publikált volna, mert a
+   `clippedEventRatio > clippedEventRatioUnavailable` (`1.0 > 2.0`) hamis —
+   ez kikapcsolta a clipping-kaput. Mindkét küszöb konstruktor-ellenőrzése
+   mostantól `isFinite && value >= 0 && value <= 1` — az
+   `unavailable >= degraded` sorrend-ellenőrzés változatlan.
+
+**Regresszió (`dynamics_metrics_test.dart`, 3 új teszt):** egy 1.0 fölötti
+`clippedEventRatioDegraded` elutasítása, egy 1.0 fölötti
+`clippedEventRatioUnavailable` elutasítása (mindkét küszöb `2.0`-n, hogy a
+korábbi hibás sorrend-ág ne fedje el), és egy teljesen (10/10) clippelt
+esemény-halmaz alapértelmezett küszöbökkel `unavailable(inputClipped)`
+lefedettség — az `ed3ef035` korrekció meglévő fail-closed tesztjei (nem-véges
+küszöb, fordított sorrend) változatlanul megmaradtak.
+
+**Gate (`tools/round-gate.sh test/features/audio_analysis test/property
+test/app`, csonkítatlan, 2026-08-12, korrekció #2 futás):**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/audio_analysis                          zöld
+test test/property                                         zöld
+test test/app                                              zöld
+architecture                                                zöld
+secrets                                                     zöld
+l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+Módosított fájlok pontosan a korrekciós brief scope-jával egyeznek:
+`lib/features/audio_analysis/engine/metrics/dynamics_gate.dart`,
+`test/features/audio_analysis/engine/dynamics_metrics_test.dart`.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Független review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-review.md`.
+Független security review: `docs/reviews/e06-r16-dynamics-and-stroke-balance-security.md`.
+Mindkettő `b144eff2` SHA-n PASS/APPROVED; a merge még exact-SHA zöld CI-t
+igényel.

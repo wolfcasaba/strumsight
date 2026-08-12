@@ -1393,5 +1393,12 @@
   "rhythmMetricBeatPhaseConsistency": "Beat-phase consistency",
   "rhythmMetricLongestStableIoiStreak": "Longest stable rhythm run",
   "rhythmMetricAccentPositionConsistency": "Accent-position consistency",
-  "rhythmMetricSwingRatio": "Long-to-short timing ratio"
+  "rhythmMetricSwingRatio": "Long-to-short timing ratio",
+  "dynamicsMetricStrokeStrengthCv": "Stroke-strength variation",
+  "dynamicsMetricDownUpMedianRatio": "Down/up strength ratio",
+  "dynamicsMetricDrift": "Dynamics drift",
+  "dynamicsMetricOutlierRatio": "Outlier stroke ratio",
+  "dynamicsMetricAccentAccuracy": "Accent accuracy",
+  "dynamicsMetricQuietRegionRatio": "Quiet-region ratio",
+  "dynamicsMetricClippedEventRatio": "Clipped-stroke ratio"
 }

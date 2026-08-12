@@ -76,6 +76,24 @@ abstract final class AnalysisMetricId {
   static const String rhythmInferredAccentPositionConsistency =
       'rhythm.inferred_accent_position_consistency.v1';
 
+  // Dynamics and stroke balance (E06-R16, ADR 0234). Descriptive metrics
+  // (strength CV, down/up ratio, drift, outlier ratio, quiet/clipped ratios)
+  // carry no preferred direction and are never framed as "lower is better".
+  // Only `dynamicsAccentAccuracy` is evaluative, and only with an explicit
+  // target — without one it publishes `notApplicable`, never a fabricated
+  // number.
+  static const String dynamicsStrokeStrengthCv =
+      'dynamics.stroke_strength_cv.v1';
+  static const String dynamicsDownUpMedianRatio =
+      'dynamics.down_up_median_ratio.v1';
+  static const String dynamicsDrift = 'dynamics.drift.v1';
+  static const String dynamicsOutlierRatio = 'dynamics.outlier_ratio.v1';
+  static const String dynamicsAccentAccuracy = 'dynamics.accent_accuracy.v1';
+  static const String dynamicsQuietRegionRatio =
+      'dynamics.quiet_region_ratio.v1';
+  static const String dynamicsClippedEventRatio =
+      'dynamics.clipped_event_ratio.v1';
+
   static const Set<String> known = <String>{
     timingMeanAbsoluteError,
     rhythmRushDragBias,
@@ -112,9 +130,44 @@ abstract final class AnalysisMetricId {
     rhythmInferredBeatPhaseConsistency,
     rhythmInferredLongestStableIoiStreak,
     rhythmInferredAccentPositionConsistency,
+    dynamicsStrokeStrengthCv,
+    dynamicsDownUpMedianRatio,
+    dynamicsDrift,
+    dynamicsOutlierRatio,
+    dynamicsAccentAccuracy,
+    dynamicsQuietRegionRatio,
+    dynamicsClippedEventRatio,
   };
 
   static bool contains(String id) => known.contains(id);
+}
+
+/// The seven mandatory dynamics and stroke-balance metric IDs (E06-R16,
+/// ADR 0234). A single suite — no target/inferred split, since every value
+/// is derived from `PreprocessedAudio.originalSamples` regardless of whether
+/// a target exists; only [accentAccuracy] itself is target-gated.
+abstract final class DynamicsMetricIds {
+  static const String strokeStrengthCv =
+      AnalysisMetricId.dynamicsStrokeStrengthCv;
+  static const String downUpMedianRatio =
+      AnalysisMetricId.dynamicsDownUpMedianRatio;
+  static const String drift = AnalysisMetricId.dynamicsDrift;
+  static const String outlierRatio = AnalysisMetricId.dynamicsOutlierRatio;
+  static const String accentAccuracy = AnalysisMetricId.dynamicsAccentAccuracy;
+  static const String quietRegionRatio =
+      AnalysisMetricId.dynamicsQuietRegionRatio;
+  static const String clippedEventRatio =
+      AnalysisMetricId.dynamicsClippedEventRatio;
+
+  static const Set<String> all = <String>{
+    strokeStrengthCv,
+    downUpMedianRatio,
+    drift,
+    outlierRatio,
+    accentAccuracy,
+    quietRegionRatio,
+    clippedEventRatio,
+  };
 }
 
 /// One mode's rhythm consistency metrics (ADR 0233). The target suite carries
