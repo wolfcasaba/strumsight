@@ -47,3 +47,6 @@ export 'engine/rhythm/tempo_curve_builder.dart';
 export 'engine/rhythm/tempo_hypothesis.dart';
 export 'engine/alignment/event_aligner.dart';
 export 'engine/alignment/tolerance_policy.dart';
+export 'engine/metrics/metric_gate.dart';
+export 'engine/metrics/timing_hotspots.dart';
+export 'engine/metrics/timing_metrics.dart';

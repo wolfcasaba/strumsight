@@ -266,7 +266,85 @@ tolerancia „finomhangolása" helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció:** Claude Sonnet 5 (motor: `sonnet-impl`), 2026-08-12.
+
+**Új fájlok:**
+- `lib/features/audio_analysis/engine/metrics/metric_gate.dart` — `MetricGate`
+  (`minimumMatchedPairs=8`, `minimumStreakMatchedPairs=3`, OD-01 default).
+- `lib/features/audio_analysis/engine/metrics/timing_metrics.dart` —
+  `buildTargetTimingMetrics(alignment, tolerance, {gate})` az `AlignmentResult`-ból,
+  `buildFreePlayTimingMetrics(observed, beatGrid, {tolerancePolicy, gate})` a
+  legközelebbi beat-hez illesztve (nearest-neighbour, egy beat legfeljebb egy
+  observed eventet fogad). Közös `_buildSuite` mag számolja mind a tíz
+  metrikát mindkét módra, csak az ID-készlet (`TimingMetricSuiteIds.target` /
+  `.freeplay`) és a bemeneti minta (`AlignmentMatch` vs. nearest-beat) tér el.
+  A p90 a numpy `"linear"` módszerével egyező interpolációt használ
+  (doc-comment: `index = q * (n-1)`), a medián a szokásos páros/páratlan
+  átlagolás. `early`/`late` a hiba előjeléből (nem a toleranciából) számolt
+  **független** kategorizálás; `onTime` a toleranciából; a három NEM
+  particionálja egymást kölcsönösen kizáróan (ez szándékos — lásd a
+  "minden korán → earlyRatio=1.0" acceptance-cellát, ami toleranciafüggetlen).
+  A `missedRatio` nevezője `expectedCount`, az `extraRatio` nevezője
+  `observedCount` (OD szerint, külön tesztelve).
+- `lib/features/audio_analysis/engine/metrics/timing_hotspots.dart` —
+  `buildTimingHotspots(alignment, tolerance, ids, {minimumSpanMatches=2})`:
+  legalább két egymást követő, toleranciasávon kívüli matched pár esetén
+  hotspotot épít, `evidenceIds` az érintett observed event ID-k,
+  `metricIds` a `[onTimeRatio, meanAbsoluteError]` pár.
+
+**Módosított fájlok (additív):**
+- `analysis_metric_catalog.dart` — 20 új ID (`timing.target_*` × 10,
+  `timing.freeplay_*` × 10) + `TimingMetricSuiteIds` csoportosító típus.
+  A meglévő `timing.mean_absolute_error.v1` és a többi ID változatlan.
+- `public.dart` — export a három új engine-fájlra.
+- `lib/l10n/app_en.arb`, `app_hu.arb` — 12 additív kulcs: 10 metrikanév
+  (`timingMetric*`) + 2 külön sietés/késés kulcs (`timingFeedbackRushing`,
+  `timingFeedbackDragging`). A `messageKey`-vezénylés (melyik kulcsot mikor
+  mutassa a UI) kívül esik ezen a körön (UI-widget tiltott zóna) — ezek ma
+  csak katalogizált, pariáló ARB-bejegyzések, egy jövőbeli round köti be.
+
+**Tesztek (RED→GREEN, mind a brief §8 sorrendjében írva):**
+- `test/features/audio_analysis/domain/timing_metric_catalog_test.dart` —
+  additivitás, diszjunktság, regex, katalógus-tagság.
+- `test/features/audio_analysis/engine/timing_metrics_test.dart` —
+  előjel-mátrix (4 cella), 124/125/126 ms küszöbhármas (a **tényleges**
+  `EventAligner`-en át, nem szintetikus), p90 kézi cella (`162 ms` @
+  index 8.1, mediántól `>50 ms`-re), 7/8/9 minimum-eseményszám hármas,
+  streak-mátrix (4 cella), missed/extra nevező-teszt (10 expected + 8
+  observed, 7 matched → `3/10` és `1/8`), free-play diszjunkt ID + confidence
+  ≤ beat-rács confidence.
+- `test/features/audio_analysis/engine/timing_hotspots_test.dart` —
+  referenciális integritás, üres eredmény tökéletes/izolált esetekre.
+- `test/property/analysis_timing_property_test.dart` — 200×200 randomizált
+  próba (`PROPERTY_SEED`, default 42) `buildTargetTimingMetrics` és
+  `buildFreePlayTimingMetrics`-re: minden érték véges, minden arány `[0,1]`.
+
+**Valódi-sértés próba (§6 utolsó sora):** a `MetricGate.minimumMatchedPairs`
+alapértékét ideiglenesen `8`→`1`-re állítottam, lefuttattam a 7-páros
+`unavailable`-tesztet — **PIROS** lett (`Expected: unavailable, Actual:
+available`), majd visszaállítottam `8`-ra és a teszt újra **ZÖLD**. A kapu
+ténylegesen a teszt által mért viselkedést vezérli.
+
+**Gate-eredmény (`tools/round-gate.sh test/features/audio_analysis
+test/property test/app`, csonkítatlan, külön processzek):**
+
+```
+format                     zöld
+analyze                    zöld
+test test/features/audio_analysis   zöld  (69 teszt-fájl összesen, R14 új
+                                             tesztjei köztük mind zöld)
+test test/property         zöld
+test test/app               zöld
+architecture                zöld
+secrets                     zöld
+l10n                        zöld
+MINDEN GATE ZÖLD.
+```
+
+**Kivül maradt tudatosan:** a `messageKey`/UI-kötés (jövőbeli round), a
+free-play free-run bemenet valós `BeatGridEstimator`-ral történő integrálása
+(ez a hívó felelőssége — a metrikafüggvény csak a `BeatGrid` kontraktust
+fogyasztja), rhythm/dinamika/insight metrikák (R15/R16/R20).
 
 ## 11. Review — a független reviewer tölti ki
 

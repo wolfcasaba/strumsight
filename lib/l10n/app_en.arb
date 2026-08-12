@@ -1375,5 +1375,17 @@
   "practiceVisionDimensionGood": "Visual observation complete.",
   "practiceVisionDimensionDegraded": "Partial visual observation. Adjust the camera setup for complete feedback.",
   "practiceVisionDimensionUnavailable": "Visual observation was unavailable. Audio practice is unchanged.",
-  "songVisionLoopQualityUnavailable": "Visual quality was unavailable for this loop. Audio scoring is unchanged."
+  "songVisionLoopQualityUnavailable": "Visual quality was unavailable for this loop. Audio scoring is unchanged.",
+  "timingMetricMeanAbsoluteError": "Average timing error",
+  "timingMetricMedianAbsoluteError": "Typical timing error",
+  "timingMetricP90AbsoluteError": "Worst-case timing error",
+  "timingMetricSignedBias": "Timing bias",
+  "timingMetricOnTimeRatio": "On-time ratio",
+  "timingMetricEarlyRatio": "Early ratio",
+  "timingMetricLateRatio": "Late ratio",
+  "timingMetricMissedRatio": "Missed ratio",
+  "timingMetricExtraRatio": "Extra ratio",
+  "timingMetricLongestStableStreak": "Longest stable streak",
+  "timingFeedbackRushing": "You're rushing — try landing a little later on the beat.",
+  "timingFeedbackDragging": "You're dragging — try landing a little earlier on the beat."
 }

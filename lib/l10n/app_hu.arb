@@ -1298,5 +1298,17 @@
   "practiceVisionDimensionGood": "A vizuális megfigyelés teljes.",
   "practiceVisionDimensionDegraded": "Részleges vizuális megfigyelés. A teljes visszajelzéshez igazítsd a kamera beállítását.",
   "practiceVisionDimensionUnavailable": "A vizuális megfigyelés nem volt elérhető. A hangalapú gyakorlás változatlan.",
-  "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan."
+  "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan.",
+  "timingMetricMeanAbsoluteError": "Átlagos időzítési hiba",
+  "timingMetricMedianAbsoluteError": "Tipikus időzítési hiba",
+  "timingMetricP90AbsoluteError": "Legrosszabb esetű időzítési hiba",
+  "timingMetricSignedBias": "Időzítési torzítás",
+  "timingMetricOnTimeRatio": "Pontos ütemű arány",
+  "timingMetricEarlyRatio": "Sietés aránya",
+  "timingMetricLateRatio": "Késés aránya",
+  "timingMetricMissedRatio": "Kihagyott arány",
+  "timingMetricExtraRatio": "Extra arány",
+  "timingMetricLongestStableStreak": "Leghosszabb stabil sorozat",
+  "timingFeedbackRushing": "Sietsz — próbálj kicsit később érkezni az ütemre.",
+  "timingFeedbackDragging": "Késel — próbálj kicsit korábban érkezni az ütemre."
 }
