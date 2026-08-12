@@ -6,6 +6,69 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R09 — ClipAnalyzer stage adapter és parity (2026-08-12)
+
+A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be
+`ClipAnalyzerStage`-ként (`AnalysisStage<LegacyClipAnalyzerInput,
+LegacyEvidence>`) — kizárólag a már exportált `runClipAnalysis` belépőt
+hívva a `lib/features/analyze/public.dart` határon át; a `ClipAnalyzer`
+osztály és a `clip_analyzer.dart` közvetlen importja tilos zóna maradt, a
+cross-feature architektúra-allowlist bitre változatlan (12 bejegyzés).
+`LegacyEvidence`/`LegacyAnalyzerProvenance` viszi a V1-másodperc→V2-
+`Duration` mikroszekundum-kerekítést (`round()`, nem floor/banker's) és a
+fallback-provenance jelzést (`none`/`heuristic`+ok/`crnn`). [ADR
+0226](adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md).
+A feature — ezzel az adapterrel együtt — **teljesen bekötetlen** marad:
+nincs `lib/` fogyasztó, production viselkedés bitre azonos.
+
+**Pre-flight (2026-08-12) két mért brief-rést zárt, dokumentáltan (ADR
+0226):** (1) a brief eredeti OD-01 alapértelmezése (`runClipAnalysis`
+hívása) önmagában NEM tette lehetővé a „Fallback-provenance" acceptance
+kritérium (§6) három megkülönböztetett cellájának mérését, mert a
+visszatérési érték nem hordoz oldalcsatornát arra, hogy egy nem-null súly
+ténylegesen felhasználódott-e — a feloldás egy kettős `runClipAnalysis`-
+hívásos összevetési technika, precedenssel a meglévő
+`clip_analyzer_ml_test.dart`-ból; (2) a §6 „Architektúra" kritériuma egy
+`test/tooling` alatti gépi őrt várt, de a brief `allowed_paths`-a nem
+tartalmazott ide eső fájlt — pótolva. Mindkét feloldás a kör saját, még
+nem dispatch-elt brief-jét érintette (ADR 0087 §2, önállóan feloldható).
+
+Implementer **Terra (Codex)**, EGY forduló javító kör nélkül — a
+`ClipAnalyzerStage._refinerOutcome` pontosan az ADR 0226-ban előírt
+kettős-hívásos technikát implementálta, a valódi `assets/ml/strum_crnn.bin`
+asset-tel tesztelve a `crnn` cellát.
+
+Review:
+[reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md](reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE (DSP-konstans drift-őr
+hiánya a hardcode-olt provenance-értékeken; egy hívó/teszt nélküli
+`fromPreprocessedAudio` factory). A reviewer izolált `/tmp` klónban
+független gate-et futtatott, és **három saját mutációs próbát** végzett a
+brief §6.1 mérce-mátrixa szerint: `.round()`→`.floor()` a kerekítési
+hármas középső celláját vitte pirosra; a fallback-detektáló logika mindig-
+`crnn`-re rontása a „distinguishes…” teszt fallback-celláját; a brief §6.1
+által kifejezetten előírt `chunkSize`-rontás a provenance-teljesség
+cellát — mindhárom visszaállítva.
+
+Dedikált biztonsági review (risk=high):
+[reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md](reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 5 NOTE — mind a jövőbeli
+E06-R22 bekötő körre irányuló hardening (a súly-bemenet szinkron hívás
+elveszti az izolátum-konténmentet adversariális súlyra; a kettős-hívásos
+technika 2× DSP-költséget jelent és a cancellation csak a két futás
+KÖZÖTT ellenőrződik, nem közben), mert a teljes feature ma unwired.
+
+**Zöld kapu (exact-SHA `29feb745` — a review-dokumentumok UTÁNI végleges
+HEAD, PR [#223](https://github.com/wolfcasaba/strumsight/pull/223), squash
+`aa41db54`):** Full Gate
+[31552551537](https://github.com/wolfcasaba/strumsight/actions/runs/31552551537)
++ Router CI [31552552707](https://github.com/wolfcasaba/strumsight/actions/runs/31552552707)
+mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+HEAD-en, mert sem a `full-gate.yml` — csak `workflow_dispatch` triggerű —,
+sem a `router-ci.yml` — a `docs/reviews/**` nincs a push-path-szűrőjén —
+nem tüzelt automatikusan a review-doksi-only commitra, L112). Az
+`origin/main` a dispatch és a merge között nem mozdult (H8 tiszta).
+
 ## E06-R08 — Preprocessing context és resampling policy, teljes részletes történet (2026-08-11)
 
 Az Audio Analysis V2 számára elkészült a **bekötetlen, fail-closed**

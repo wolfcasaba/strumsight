@@ -3,7 +3,110 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R10 MERGED — Event evidence modell és onset/strum timeline V2).**
+> (E06-R11 MERGED — Chord evidence, segmentation és decoder provenance).**
+>
+> ## ✅ E06-R11 KÉSZ — Chord evidence, segmentation és decoder provenance (2026-08-12)
+>
+> A chord-idővonal mögötti **evidence** és **decoder-forrás** formalizálva:
+> `ChordFrameEvidence` (frame-szintű, `derived`/`complete` teljességi
+> jelöléssel — ebben a körben MINDIG `derived`, a V1 kész spanekből
+> származtatva, top-k/no-chord valószínűség nélkül, OD-01 szerint); a
+> meglévő V2 `ChordSegment` (E06-R02 óta, `domain/analysis_segment.dart`)
+> additív bővítése determinisztikus `id`/`source`(`dsp`/`ml`/`fused`)/
+> `confidenceSource`(`heuristic`)/`modelManifestId` mezőkkel; verziózott
+> `ChordSegmentAssembler` — a **default policy bitre V1-paritásos** (no-chord
+> frame NYITVA tartja a szegmenst, a záró szegmens a klip végéig tart,
+> minimum-hossz/tranziens-merge/`closeOnNoChord` csak explicit,
+> nem-alapértelmezett policyval); idempotens, sharps-kanonikus
+> `ChordLabelNormalizer` (`Db→C#`, `Cmaj/CM→C`, `Cmin→Cm` — a
+> **megjelenítési** enharmonikus döntés UI-policy marad); DSP-primary/
+> ML-advisory fusion API (`ChordSegmentAssembler.fuse`) kizárólag az ÚJ
+> `analysisExperimentalFusionEnabled` flag mögött (default **OFF minden
+> környezetben**, nincs dart-define override) — flag-off `identical()`
+> szinten adja vissza az eredeti DSP-listát. [ADR
+> 0229](docs/adr/0229-analysis-chord-decoder-fusion-strategy.md). A teljes
+> felület **bekötetlen** marad — nincs `lib/` fogyasztó, `test/features/
+> analyze` (V1 Analyze) zöld, production viselkedés bitre változatlan.
+>
+> **Pre-flight öröklés, elveszett munka nélkül.** Egy korábbi, H6-on
+> önmagát halt-oló Terra-orchesztrátoros session már elvégezte a pre-flightot
+> (`dd732c4f`): ADR-számot foglalt (`0229`, az előre írt `0207` mára már nem
+> foglalható), és zárta a brief-lint `S5` leletjét — a brief eredetileg egy
+> ÚJ `domain/harmony/chord_segment.dart` fájlban ÚJ `ChordSegment` típust
+> tervezett, de ez a típus MÁR LÉTEZIK (`domain/analysis_segment.dart`,
+> E06-R02 óta, `AnalysisTimeline.chordSegments` ezt tárolja) — kollízió,
+> amit a meglévő típus additív bővítése oldott fel. Ez a session nem írta
+> újra a pre-flightot, hanem fetch-elte és rebase-elte a friss `main`-re
+> (2 pipeline-only commit, konfliktus nélkül), majd onnan folytatta.
+>
+> **Egy mért mid-round brief-rés — az implementer első dispatch-e fedte fel,
+> tiszta önjavítással.** Az implementer `stopped`-ot jelzett: a §6 „Flag-őr"
+> acceptance-pont teljesítéséhez a `test/app/feature_flags_test.dart`
+> meglévő flag-enumerációs őrét (`_audioAnalysisFlags` helper, „all N flags
+> remain off" teszt) kellett volna bővítenie az új
+> `analysisExperimentalFusionEnabled` flaggel, de ez a fájl nem szerepelt a
+> brief `allowed_paths`-án — az implementer a saját, listán kívüli editjét
+> MAGA vonta vissza, és tiszta munkafával állt meg (ugyanaz a rés-osztály,
+> mint az E06-R09 pre-flight `test/tooling`-rése: egy már-engedélyezett
+> forrásfájl — `feature_flags.dart` — szomszédos tesztje hiányzott a
+> listáról). Az orchesztrátor dokumentált §0.0 mid-round revízióval bővítette
+> az `allowed_paths`-t, és ugyanazon a branchen folytatta a dispatch-et.
+>
+> **Örökség-lecke ismét mérve (L222/L226 minta):** a munkapéldány-előkészítés
+> saját mulasztása (`tools/prepare-flutter-generated.sh` kihagyása) egy
+> 932-hibás hamis `flutter analyze`-t okozott az implementer ELSŐ dispatch-én
+> — az implementer korrekt `blocked`-ot jelzett, kódváltoztatás nélkül; a
+> script utólagos lefuttatása és újradispatch azonnal feloldotta.
+>
+> Implementer **Terra (Codex)**, 2 dispatch (1 tiszta `stopped` a fenti
+> allowed_paths-résre + 1 `done`, zöld lokális gate) + **1 javító kör** a
+> dedikált security review MINOR leletére.
+>
+> Review:
+> [docs/reviews/e06-r11-chord-evidence-segmentation-provenance-review.md](docs/reviews/e06-r11-chord-evidence-segmentation-provenance-review.md)
+> — **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE (a `_mergeShortSegments`
+> `extendTo`/`extendFrom` nem viszi át az elnyelt szegmens frame-jeit a
+> confidence-súlyozásba — ma elérhetetlen, mert a default policy
+> `minimumSegment=0`; egy E06-R08-eredetű szomszédos flag-enumerációs rés is
+> zárult opportunistán ugyanabban a fájlban). A reviewer izolált `/tmp`
+> klónban **két saját mutációs próbát** futtatott a brief §6.1 mérce-mátrixa
+> szerint: a záróhatár `clipDuration`-ról `open.start`-ra rontása 9/12
+> assembler-tesztet vitt pirosra (a záróhatár-cellát is), a minimum-küszöb
+> `>=`→`>` rontása PONTOSAN az inkluzív-200ms-tesztet buktatta (a másik 10
+> zöld maradt) — mindkettő visszaállítva.
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r11-chord-evidence-segmentation-provenance-security.md](docs/reviews/e06-r11-chord-evidence-segmentation-provenance-security.md)
+> — **PASS with NOTEs**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR** (a
+> `ChordLabelCandidate` const konstruktora kizárólag `assert`-tel validált —
+> release buildben ledobódik, reprodukálva `--no-enable-asserts`-szel: NaN/
+> 9.0/üres label mind átment — a testvér `ChordFrameEvidence` valódi
+> `throw`-t használ). A MINOR-t egy tightly-scoped javító kör zárta
+> (`f3f34b2f`): valódi `ArgumentError` a `const` eltávolításával (a
+> testvér-osztály mintáját követve) + regressziós teszt. 4 további NOTE, mind
+> latens/bekötetlen jövőbeli-fogyasztó-hardening: **O(S²) merge** az opt-in
+> policy-ágban (mérve: 13 mp @ 40k szegmens — a review kimondja: MAJOR-ra
+> átsorolandó, ha egy jövőbeli kör untrusted/hosszú importált audióra köti
+> be pozitív merge-policyval); a determinisztikus `ChordSegment.id`
+> szanitálás nélkül interpolálja a `label`-t (path-traversal/injekció-alakú
+> string ma teszteletlen, hívó nélküli útként folyna át); a bázis
+> `AnalysisSegment` confidence-ellenőrzése pre-existing range-only
+> (`isFinite` nélkül); a codec (változatlan) eldobja az új provenance-mezőket
+> encode-nál.
+>
+> **Zöld kapu (exact-SHA `c6d9d607` — a security javító kör UTÁNI végleges
+> HEAD, PR [#227](https://github.com/wolfcasaba/strumsight/pull/227), squash
+> `cf3eb407`):** Full Gate
+> [31566865170](https://github.com/wolfcasaba/strumsight/actions/runs/31566865170)
+> + Router CI [31566869905](https://github.com/wolfcasaba/strumsight/actions/runs/31566869905)
+> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+> HEAD-en — a `router-ci.yml` nem tüzelt automatikusan a review-doksi-only
+> zárókommitra, ugyanaz a L112 mintázat, mint E06-R09/R10-nél). Az
+> `origin/main` a dispatch és a merge között nem mozdult (H8 tiszta).
+> Post-merge gate a friss `main`-en mind a kilenc lépésben zöld.
+>
+> **Következő kör: E06-R12** (Beat grid and tempo curve,
+> `docs/rounds/e06-r12-beat-grid-and-tempo-curve.md`).
 >
 > ## ✅ E06-R10 KÉSZ — Event evidence modell és onset/strum timeline V2 (2026-08-12)
 >
@@ -105,12 +208,6 @@
 > a dispatch és a merge között nem mozdult (H8 tiszta). Post-merge gate a
 > friss `main`-en mind a nyolc lépésben zöld.
 >
-> **Következő kör: E06-R11** (ChordSegment — a brief-lint `S5` leletje
-> szerint ugyanazt a fájlnév→típusnév ütközés-osztályt hordozza, mint amit
-> az E06-R10 H3 self-healje zárt R10-re — a saját pre-flight köteles
-> ugyanígy revideálni `allowed_paths`-át a meglévő `domain/
-> analysis_segment.dart`-ra).
->
 > **E06-R11 H6 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
 > [#226](https://github.com/wolfcasaba/strumsight/pull/226), squash
 > `ead86c25`:** a rotáció szerint (ADR 0222) Terra-vezényelt E06-R11
@@ -140,69 +237,6 @@
 > + [31562971109](https://github.com/wolfcasaba/strumsight/actions/runs/31562971109)
 > mindkettő **success**. Tanulság: `docs/LESSONS.md` L229.
 >
-> ## ✅ E06-R09 KÉSZ — ClipAnalyzer stage adapter és parity (2026-08-12)
->
-> A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be
-> `ClipAnalyzerStage`-ként (`AnalysisStage<LegacyClipAnalyzerInput,
-> LegacyEvidence>`) — kizárólag a már exportált `runClipAnalysis` belépőt
-> hívva a `lib/features/analyze/public.dart` határon át; a `ClipAnalyzer`
-> osztály és a `clip_analyzer.dart` közvetlen importja tilos zóna maradt, a
-> cross-feature architektúra-allowlist bitre változatlan (12 bejegyzés).
-> `LegacyEvidence`/`LegacyAnalyzerProvenance` viszi a V1-másodperc→V2-
-> `Duration` mikroszekundum-kerekítést (`round()`, nem floor/banker's) és a
-> fallback-provenance jelzést (`none`/`heuristic`+ok/`crnn`). [ADR
-> 0226](docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md).
-> A feature — ezzel az adapterrel együtt — **teljesen bekötetlen** marad:
-> nincs `lib/` fogyasztó, production viselkedés bitre azonos.
->
-> **Pre-flight (2026-08-12) két mért brief-rést zárt, dokumentáltan (ADR
-> 0226):** (1) a brief eredeti OD-01 alapértelmezése (`runClipAnalysis`
-> hívása) önmagában NEM tette lehetővé a „Fallback-provenance" acceptance
-> kritérium (§6) három megkülönböztetett cellájának mérését, mert a
-> visszatérési érték nem hordoz oldalcsatornát arra, hogy egy nem-null súly
-> ténylegesen felhasználódott-e — a feloldás egy kettős `runClipAnalysis`-
-> hívásos összevetési technika, precedenssel a meglévő
-> `clip_analyzer_ml_test.dart`-ból; (2) a §6 „Architektúra" kritériuma egy
-> `test/tooling` alatti gépi őrt várt, de a brief `allowed_paths`-a nem
-> tartalmazott ide eső fájlt — pótolva. Mindkét feloldás a kör saját, még
-> nem dispatch-elt brief-jét érintette (ADR 0087 §2, önállóan feloldható).
->
-> Implementer **Terra (Codex)**, EGY forduló javító kör nélkül — a
-> `ClipAnalyzerStage._refinerOutcome` pontosan az ADR 0226-ban előírt
-> kettős-hívásos technikát implementálta, a valódi `assets/ml/strum_crnn.bin`
-> asset-tel tesztelve a `crnn` cellát.
->
-> Review:
-> [docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md](docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md)
-> — **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE (DSP-konstans drift-őr
-> hiánya a hardcode-olt provenance-értékeken; egy hívó/teszt nélküli
-> `fromPreprocessedAudio` factory). A reviewer izolált `/tmp` klónban
-> független gate-et futtatott, és **három saját mutációs próbát** végzett a
-> brief §6.1 mérce-mátrixa szerint: `.round()`→`.floor()` a kerekítési
-> hármas középső celláját vitte pirosra; a fallback-detektáló logika mindig-
-> `crnn`-re rontása a „distinguishes…” teszt fallback-celláját; a brief §6.1
-> által kifejezetten előírt `chunkSize`-rontás a provenance-teljesség
-> cellát — mindhárom visszaállítva.
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md](docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md)
-> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 5 NOTE — mind a jövőbeli
-> E06-R22 bekötő körre irányuló hardening (a súly-bemenet szinkron hívás
-> elveszti az izolátum-konténmentet adversariális súlyra; a kettős-hívásos
-> technika 2× DSP-költséget jelent és a cancellation csak a két futás
-> KÖZÖTT ellenőrződik, nem közben), mert a teljes feature ma unwired.
->
-> **Zöld kapu (exact-SHA `29feb745` — a review-dokumentumok UTÁNI végleges
-> HEAD, PR [#223](https://github.com/wolfcasaba/strumsight/pull/223), squash
-> `aa41db54`):** Full Gate
-> [31552551537](https://github.com/wolfcasaba/strumsight/actions/runs/31552551537)
-> + Router CI [31552552707](https://github.com/wolfcasaba/strumsight/actions/runs/31552552707)
-> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
-> HEAD-en, mert sem a `full-gate.yml` — csak `workflow_dispatch` triggerű —,
-> sem a `router-ci.yml` — a `docs/reviews/**` nincs a push-path-szűrőjén —
-> nem tüzelt automatikusan a review-doksi-only commitra, L112). Az
-> `origin/main` a dispatch és a merge között nem mozdult (H8 tiszta).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -212,13 +246,15 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R10 zárása): E06-R10 teljes bannere felkerült
-> (fent, a H3 self-heal alfejezet + a „Következő kör" mutató törölve az
-> E06-R09 bannerből, mert az E06-R10 új bannerje ugyanazt a tartalmat
-> teljesebben, a tényleges implementáció fényében ismétli); E06-R09 bannere
-> maradt a második helyen (változatlan); E06-R08 bannere törölve a
-> fejlécből, mert immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT
-> az archívumba EBBEN a zárásban.
+> Mért diéta: 2026-08-12 (E06-R11 zárása): E06-R11 teljes bannere felkerült
+> (fent, a „Következő kör: E06-R11" mutató törölve az E06-R10 bannerből,
+> mert az E06-R11 új bannerje ugyanazt a tartalmat teljesebben, a tényleges
+> implementáció fényében ismétli — az E06-R11 H6 önjavító kör alfejezete
+> változatlanul maradt az E06-R10 bannerben, mert pipeline-infrastruktúra
+> történetről szól, nem a feature-tartalomról); E06-R10 bannere maradt a
+> második helyen (változatlan); E06-R09 bannere törölve a fejlécből, mert
+> immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT az archívumba
+> EBBEN a zárásban.
 
 ## 1. Current release state
 
@@ -294,9 +330,12 @@
   [ADR 0225](docs/adr/0225-analysis-preprocessing-and-resampling-policy.md)),
   **E06-R09** (V1 `ClipAnalyzer` stage-adapter és parity, [ADR
   0226](docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md))
-  és **E06-R10** (event evidence modell + onset/strum timeline builder,
+  **E06-R10** (event evidence modell + onset/strum timeline builder,
   [ADR 0228](docs/adr/0228-event-evidence-model-and-timeline-builder-contract.md))
-  kész, 20 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  és **E06-R11** (chord frame evidence, verziózott V1-paritásos szegmens-
+  összeállítás + DSP-primary/ML-advisory decoder-provenance flag mögött,
+  [ADR 0229](docs/adr/0229-analysis-chord-decoder-fusion-strategy.md))
+  kész, 19 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -571,6 +610,25 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R11 security NOTE-1/NOTE-2 — gate-feltételek egy jövőbeli bekötő
+  körnek, nincs kijelölt kör.** (1) `ChordSegmentAssembler._mergeShortSegments`
+  (`lib/features/audio_analysis/engine/harmony/chord_segment_assembler.dart`)
+  `removeAt`-alapú O(S²) — mérve: 13 mp @ 40 000 szegmens, `minimumSegment`/
+  `mergeTransientSegments` opt-in policy alatt. MA elérhetetlen (a default
+  policy `minimumSegment=0` kihagyja ezt az ágat, és a feature bekötetlen) —
+  de ha egy jövőbeli kör untrusted/hosszú importált audióra köti be pozitív
+  merge-policyval, a security review explicit **MAJOR-ra sorolja át**: a
+  merge-t egyetlen bejáráson épített új listával kell megvalósítani,
+  `removeAt` nélkül, MIELŐTT a bekötés megtörténik. (2) `ChordSegment.id`
+  (`lib/features/audio_analysis/domain/analysis_segment.dart`,
+  `_defaultId`) a `label`-t szanitálás nélkül interpolálja
+  (`'chord-${startUs}-${endUs}-$label'`) — ha egy jövőbeli hívó ezt fájlnévként/
+  DB-kulcsként/log-sorként használja, és egy jövőbeli ML-decoder tetszőleges
+  stringet ad `label`-ként, path-traversal- vagy injekció-alakú kulcs
+  keletkezhet. Javítás a bekötés ELŐTT: a `label`-komponenst szanitálni/
+  hash-elni az ID-ben, vagy dokumentálni, hogy az `id` nem biztonságos útként/
+  kulcsként. Mérve: `docs/reviews/e06-r11-chord-evidence-segmentation-provenance-security.md`
+  NOTE-1/NOTE-2.
 - **E06-R06 F2/S3/S4 follow-up — NYITVA, nincs kijelölt kör.** A live
   level-preview (`RecordingLevel`, E06-R06) csak az éppen throttle-ablakot
   lezáró chunkot méri peak/RMS-re, a köztes chunkokét nem — egy rövid,

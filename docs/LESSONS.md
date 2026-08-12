@@ -8494,3 +8494,49 @@ fájl SZÖVEGÉN fut (`assertNotIn`/`assertIn` a preambulum `read_text()`-jén,
 lásd `PreambleClaudeCliProhibitionTest`), NEM a driver bash-logikáján — a
 kettő külön hibaosztály, külön tesztelési réteget igényel, még ha
 ugyanabból a `resolve_independent_engine`/rotáció témából is erednek.
+
+## L230 — Egy passzív LESSONS.md-bejegyzés ajánlása („építsd be a skillbe") saját magában nem záródik le — a HARMADIK ismétlődésig senki nem hajtotta végre (E06-R07 L222 → E06-R10 L228 → E06-R11, 2026-08-12)
+
+**Mit mértünk.** `docs/LESSONS.md` L222 (E06-R07, 2026-08-11) leírta a hibát
+(friss `git clone` munkapéldány nem hordozza a gitignore-olt generált
+`lib/l10n/app_localizations*.dart`-ot). L228 (E06-R10, 2026-08-12, ugyanezen
+a napon, órákkal korábban) leírta a MÁSODIK előfordulást, és a „Hogyan
+alkalmazd" szakasza EXPLICIT, végrehajtható javítást ajánlott: „a
+`sdd-round-driver` SKILL.md §3 szövegét egy jövőbeli körben ki kellene
+egészíteni: git clone UTÁN, a dispatch ELŐTT, MINDIG:
+`tools/prepare-flutter-generated.sh`". Ez a kör (E06-R11) — ugyanaznap, alig
+néhány óra múlva — a HARMADIK előfordulás lett: az orchesztrátor (ez a
+session) a friss `ss-terra-e06-r11` munkapéldányt létrehozta, de a dispatch
+előtt nem futtatta a scriptet, és az implementer első fordulója pontosan
+ugyanazzal a 932-hibás hamis `flutter analyze`-vel `blocked`-ot jelzett.
+Ellenőrizve: a `sdd-round-driver` SKILL.md §3 szövege ekkor MÉG NEM
+tartalmazta az L228 által ajánlott mondatot — a javaslat írva volt, de soha
+nem lett végrehajtva.
+
+**Miért.** A LESSONS.md egy növekvő, kronologikus napló — az „X-et be kellene
+építeni Y-ba" mondat egy jövőbeli, kijelöletlen feladat, nem egy commitolt
+állapotváltozás. Nincs mechanizmus, ami kikényszerítené, hogy a KÖVETKEZŐ
+session, ami Y-t (itt: a `sdd-round-driver` skill) használja, előbb
+átfésülje a LESSONS.md-t a rá vonatkozó, még-nem-alkalmazott ajánlásokért.
+Az orchesztrátorok (beleértve ezt a sessiont is) a session ELEJÉN a HANDOFF-ot
+és a briefet olvassák, nem a teljes LESSONS.md-t (az 8000+ soros, csak
+keresve praktikus) — így egy ajánlás, ami nem a HASZNÁLT artefaktum (skill/
+tool/gate) SAJÁT szövegében él, gyakorlatilag láthatatlan marad, amíg valaki
+véletlenül bele nem fut a hibába, és VISSZA nem keresi a korábbi lecke-
+számokat.
+
+**Hogyan alkalmazd.** (1) Amikor egy lecke „Hogyan alkalmazd" szakasza egy
+KONKRÉT fájlt/szakaszt nevez meg, amit módosítani kellene, NE csak írd le —
+ha a fájl a jelen session hatáskörében van (itt: `.claude/skills/**`, nem
+`tools/round-gate.sh`/`ADR 0087`/`.github/`-tiltott zóna), VÉGEZD EL a
+szerkesztést UGYANEBBEN a zárásban, mielőtt a lecke-bejegyzést lezárnád — a
+lecke és a javítás egy commitban utazzon. (2) Ha a fájl valóban egy MÁSIK
+session/szerep hatásköre, a lecke szövege nevezze meg EXPLICIT, KI a
+végrehajtó (self-heal kör? user? a következő ugyanolyan típusú kör
+pre-flightja?) — „egy jövőbeli körben" túl homályos, senki nem fogja
+magára venni. (3) Egy HARMADIK, ugyanazon a napon mért ismétlődés erős jel
+arra, hogy a hiba osztálya NEM egyedi baleset, hanem a workflow egy
+strukturális rése — ilyenkor a döntés ne „még egy LESSONS-bejegyzés", hanem
+a mögöttes artefaktum tényleges módosítása legyen (ebben a zárásban: a
+`sdd-round-driver` SKILL.md §3 kapott egy kötelező, végrehajtható sort a
+`git clone` és a dispatch közé).
