@@ -8756,3 +8756,67 @@ konstruktorban a validáció sorrendje legyen: `isFinite`, zárt tartomány,
 majd mezők közötti rendezési kapcsolat. A review-falszifikáció tartalmazzon
 legalább egy `NaN`, egy végtelen, egy pontos határérték és egy tartományon
 kívüli, de nem-invertált konfigurációs cellát.
+
+## L238 — Az implementer-preambulum záró sorrendje `git commit`-tel ér véget, `git push` nélkül — a `.codex-round-status`/`git log` a KLÓNBAN "kész"-nek látszik, miközben a branch a GitHubon üres marad (E06-R17, 2026-08-12)
+
+**Mit mértem.** A #3 lépésben ("Verify scope audit + commit implementer
+diff") a `git log`-ot az implementer SAJÁT klónjában (`/home/ubuntu/ss-terra-
+e06-r17`) ellenőriztem, láttam a commitot, és késznek jelöltem a lépést — de
+sosem futtattam `git push`-t onnan. Két, egymástól függetlenül indított
+review-ágens fedezte fel ugyanazt a rést két különböző módon: az egyik
+(GitHub-authoritative munkamódszerrel) helyesen `stopped`-hoz hasonló
+BLOCKER-t jelentett és MEGTAGADTA egy nem létező commit reviewzását; a másik
+(a helyi klónt is elérve) a saját review-commitját a hiányzó implementer-
+commitra építve pusholta fel, és a jelentésében explicit felhívta a
+figyelmem a hiányra. Az `implementer-preamble.md` §3 záró sorrendje
+(`round-gate → git add -A && git commit → tools/codex-signal.sh done`) SEHOL
+nem ír elő `git push`-t — ez minden Codex-harness kör MINDEN fordulójára
+igaz, nem csak erre.
+
+**Miért nem egyedi baleset.** Az L236 (E06-R15) ugyanezt a tünetcsoportot
+(„a commit a klónban van, a GitHubon nincs") mérte, de MÁSIK gyökérokból: ott
+a review-klón `origin`-ja a hub lokális útvonalára mutatott, és a push oda
+CSENDBEN sikerült. Itt az implementer klónjának `origin`-ja már helyesen a
+valódi GitHub-URL-re volt állítva (`fix-workspace-origin.sh`, L221) — a
+hiányzó lépés maga a push HÍVÁSA volt, nem a célja. A két lelet együtt azt
+mutatja: a "commit a klónban látszik" ellenőrzés MINDIG elégtelen bizonyíték,
+függetlenül attól, hogy a klón kinek a felelőssége.
+
+**Hogyan alkalmazd.** A #3 lépés ("implementer diff ellenőrzése") sosem
+zárható `git log <klón>`-nal. Minden `wait-for-round.sh` `done`/`stopped`
+jelzés után, MIELŐTT a lépést késznek jelölöd: `git push origin <branch>` a
+klónból VAGY a hub-ból, majd `git ls-remote origin refs/heads/<branch>`
+összevetve a `.codex-round-status` `head=` mezőjével. Ha eltér: a push még
+nem történt meg (vagy más ág van elöl) — nem hagyatkozhatsz a klón saját
+`git log`-jára.
+
+## L239 — A `wait-for-round.sh` időkorlát-ága a JELENLEGI jelzésfájlt `cat`-eli anélkül, hogy újra ellenőrizné, friss terminális státusz-e — `exit 5` ("még futhat") mellett is lehet a kiírt tartalom egy teljes, érvényes `done` jelzés (E06-R17, 2026-08-12)
+
+**Mit mértem.** Egy javító kör dispatch-ét vártam (540 s-es hívás); a script
+"letelt a várakozás — a kör MÉG FUTHAT" üzenettel és `exit 5`-tel tért
+vissza, de a VELE EGYÜTT kiírt jelzésfájl-tartalom egy TELJES, minden mezőt
+tartalmazó (`status=done`, `continuations=`, `session_id=`, `gate_shape=`,
+`scope_audit=`) terminális jelzés volt. Egy 60 s-os újra-hívás ugyanazt a
+(változatlan) tartalmat adta, ismét `exit 5`-tel. Közvetlen ellenőrzéssel
+(`pgrep`, `git log`, `git status --short` a munkapéldányban) igazoltam: a
+folyamat valóban véget ért, a jelzés valódi és teljes volt — a kör ténylegesen
+kész volt, csak a WRAPPER `exit 5`-öt jelentett.
+
+**Miért.** A script időkorlát-ága (`tools/wait-for-round.sh` vége) ELŐSZÖR az
+eltelt időt vizsgálja, és csak utána — feltétel nélkül — `cat`-eli a
+JELENLEGI jelzésfájlt, mielőtt `exit 5`-tel visszatérne. Ha a modell a 20
+másodperces poll-intervallum két iterációja KÖZÖTT, épp az időkorlát-
+határon fejezi be a fordulót és írja meg a `done` jelzést, a script az
+UTOLSÓ poll-ciklusban még nem látta a változást (ezért nem futott bele a
+`done`-ágba), de a záró `cat` már a friss, teljes tartalmat nyomtatja ki —
+`exit 5` mellett.
+
+**Hogyan alkalmazd.** `wait-for-round.sh` `exit 5` esetén NE csak a
+kilépési kódra hagyatkozz: olvasd el a ténylegesen kiírt jelzés-tartalmat.
+Ha `status=done`/`stopped`/`blocked` és minden szokásos mező (`continuations`,
+`session_id`, `gate_shape`, `scope_audit`) jelen van, azt VALÓS terminális
+jelzésnek kell tekinteni — függetlenül a burkoló kilépési kódjától —, és
+független ellenőrzéssel (folyamat életben van-e, `git status --short` a
+munkapéldányban) igazolható. Csak akkor kezeld tényleg "még fut"-ként, ha a
+jelzésfájl HIÁNYZIK vagy a `signalled_at`/`head` mező nem változott az előző
+hívás óta.
