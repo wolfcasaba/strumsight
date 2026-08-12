@@ -6,6 +6,205 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+
+## ✅ E06-R20 KÉSZ — Determinisztikus insightok és hotspot ranking (2026-08-12)
+
+Elkészült a determinisztikus, evidence-backed coaching-insight motor:
+kilenc kezdeti szabály (rush/drag bias; kevés nagy timing-outlier;
+második félidei drift; gyenge upstroke; chord-váltás hotspot; alacsony
+jelminőség; kompatibilis javulás; elégtelen adat), `InsightRegistry`,
+`InsightRanker` (maximum-policy: 1 javítandó + 1 erősség + 1 következő
+gyakorlat + 1 minőségi warning, a többi rangsorolt `additionalInsights`),
+`HotspotRanker` (severity → confidence → stabil ID). [ADR
+0238](adr/0238-analysis-insight-evidence-and-ranking-boundary.md).
+Teljesen bekötetlen (0 fogyasztó, nincs UI-, Tutor-adapter- vagy V1
+Analyze-integráció) — a régi, R02-es `AnalysisDocument.insights` payload
+érintetlen.
+
+**Kétrétegű pre-flight, mindkettő mérve, nem feltételezve:** (1) a H3
+self-heal (ld. lent, a korábbi PR #236) már a kör indítása előtt bővítette
+az `allowed_paths`-t egy megosztott `test/fixtures/analysis/insights`
+könyvtárral; (2) egy KORÁBBI, nem merge-elt pre-flight-commit
+(`fa836e87`, egy párhuzamos/előző session munkapéldányában,
+`/home/ubuntu/ss-mm-e06-r20`) már megírta az ADR 0238-at és azonosított
+két stale ADR-hivatkozást (0201→0216, 0203→0218 a hatos ADR-blokk R01-es
+átszámozása után) — ez a kör a driver-skill §0.2 örökség-ellenőrzése
+szerint megtalálta, a kódban ÚJRA-ellenőrizte (nem vakon felhasználta),
+és a H3 self-heal fölé rétegezte, ahelyett hogy divergens második
+ADR-szöveget írt volna ugyanarra a döntésre.
+
+**Kör-közbeni STOP, dokumentált mérés-alapú feloldással:** az implementer
+(Terra) helyesen megállt, mert a brief `§5.1` csak három (outlier, drift,
+javulás) a kilenc szabály küszöbét oldotta fel előre — a rush/drag,
+weak-upstroke és low-signal-quality szabályok küszöbeit nem. Az
+orchestrátor mindhárom hiányzó küszöböt a REPÓBAN MÁR LÉTEZŐ, mért
+precedensre alapozva oldotta fel, nem új szám kitalálásával: OD-04
+(rush/drag, ±20 ms) — a Terra saját, már megírt konstansa HELYES volt;
+OD-05 (weak upstroke, ×1.2) — a meglévő `dynamicsAccentThresholdRatio`
+(E06-R16/ADR 0234) újrahasznosítása a Terra 1.25-je helyett; OD-06 (low
+signal quality, `dynamics.clipped_event_ratio.v1` ≥0.05) — a meglévő
+`DynamicsGate.clippedEventRatioUnavailable` (ADR 0234) újrahasznosítása a
+Terra 0.10-je helyett, **mert a 0.10 mért holt kód lett volna**: a
+`DynamicsGate` 0.05 fölött MINDEN dynamics-metrikát — a `clippedEventRatio`-t
+is — `unavailable`-re állítja, tehát egy 0.10-es szabály-küszöb sosem lett
+volna elérhető éles pipeline-on. Az implementer a folytató körben
+hozzáadott egy VALÓDI `buildDynamicsMetrics`/`DynamicsGate`-en át futó
+integrációs tesztet, ami mindkét ágat (0.05-nél tüzel, 0.05 fölött
+unavailable-en át `null`) bizonyítja — nem csak kézzel épített fixture-t.
+
+A független review **APPROVED**, a kötelező biztonsági review (risk=high)
+**PASS** — de a security review egy valódi, reprodukálható **MINOR**-t
+talált (**F1**: `firstEvidenceFor` generikus fallbackje kapcsolat nélküli
+timeline-eseményt adhatott volna vissza „evidence"-ként, ha egy metrikának
+nincs saját evidence-e — formálisan létező ID, szemantikailag hamis
+kapcsolat; a property-teszt ezt nem kapta el, mert a fixture mindig
+nem-üres evidence-t ad). Egy körön belüli javító kör lezárta: a fallback
+opt-in `allowDocumentFallback` paraméterré vált, alapból KI, kizárólag az
+`InsufficientDataInsightRule` (aminek a „ténye" definíció szerint mindig
+evidence nélküli) kéri explicit be. Mindkét review + a reviewer saját
+mutáció-próbái (a brief §6.1 kötelező „valódi-sértés próbája", valamint egy
+önálló F1-ellenőrző mutáció) megerősítették a javítást. Review:
+[docs/reviews/e06-r20-deterministic-insights-and-hotspots-review.md](reviews/e06-r20-deterministic-insights-and-hotspots-review.md),
+security:
+[docs/reviews/e06-r20-deterministic-insights-and-hotspots-security.md](reviews/e06-r20-deterministic-insights-and-hotspots-security.md)
+(1 MINOR — ugyanaz az F1, FIXED —, 4 NOTE follow-up, ld. §3).
+
+**Mért folyamat-anomália (nem tartalmi hiba):** az F1-javítás Terra-futása
+a `done` jelzés elküldése UTÁN, ugyanabban a futásban, még egyszer
+módosított egyet (a brief §10 handoffjából törölt egy redundáns
+mondatot) — nulla nettó hatással a kódra. Az orchesztrátor `wait-for-round.sh`-a
+a KORÁBBI jelzésre tért vissza és erre a SHA-ra (`4f97bf5e`) dispatch-elte
+a CI-t; a később, helyben keletkezett, sosem CI-zett amendet
+(`6997b2b5`) a review eldobta (`git reset` + a round-brief fájl
+visszaállítása), hogy a merge-elt SHA pontosan azt a kódot tartalmazza,
+amit a CI ténylegesen mért. Tanulság: `LESSONS.md` L243.
+
+Implementer **Terra (Codex)**: pre-flight + 3 dispatch (1. `stopped` a
+hiányzó küszöbökre, 2. `done` a feloldás után, 3. `done` az F1 javítással),
+mindegyik `continuations=0`.
+
+**Zöld kapu (exact-SHA `6d60a075`, PR [#237](https://github.com/wolfcasaba/strumsight/pull/237),
+squash `ae2bad2c`):** Full Gate
+[31630151798](https://github.com/wolfcasaba/strumsight/actions/runs/31630151798)
+success a végső (F1-javítás + review-frissítés utáni) SHA-n. Router CI
+utolsó releváns futása
+[31628779761](https://github.com/wolfcasaba/strumsight/actions/runs/31628779761)
+success az F1-javító commiton (`4f97bf5e`) — az utólagos, csak
+`docs/reviews/**`-t érintő review-frissítő commit nincs a Router CI
+push-path-szűrőjén. A CI-terv `full-gate.yml`-t adott
+(`apk_required=false`); az `origin/main` nem mozdult a dispatch és a
+merge között. A post-merge gate friss `main`-en (`ae2bad2c`) mind a nyolc
+lépésben zöld.
+
+**Következő kör: E06-R21** (AnalysisRepository V2 és legacy Library
+migráció, `docs/execution/pipeline-queue.tsv` szerint).
+
+## ✅ E06-R19 KÉSZ — Confidence calibration és capability resolver (2026-08-12)
+
+Elkészült az egységes, bekötetlen V2 confidence/capability döntési modul:
+`CapabilityResolver` (**egyetlen** belépő, minden `AnalysisCapability`
+státuszát és kalibrált confidence-ét ő dönti el) + `ConfidenceCombiner`
+(geometriai átlag a független tényezőkön, **nem** átlag — egy gyenge
+tényező érdemben lehúzza az eredményt) + `CalibrationTable` (verziózott,
+monoton; V1 = explicit jelölt `identity.v1`, sosem hamis `calibrated`) +
+`CapabilityThresholds` (0,4/0,7 inkluzív degraded/available határ, egy
+helyen). `lib/features/audio_analysis/engine/confidence/` alatt, additív
+domain-bővítéssel (`ConfidenceCalibrationSource`,
+`CapabilityReport.calibrationVersion`/`calibrationSource`, szigorúbb
+`isFinite` confidence-guard) és mind a 13 `CapabilityUnavailableReason`
+két nyelvű ARB-lokalizációjával. [ADR
+0237](adr/0237-analysis-confidence-combiner-and-capability-resolver.md)
+— az E06-R01 ADR 0216 (confidence/kalibráció/abstention) és ADR 0219
+(capability-aware publikáció) végrehajtása. Teljesen bekötetlen (0
+fogyasztó); a meglévő R14/R16/R17 kapuk (`MetricGate`/`DynamicsGate`/
+`PitchCapabilityGate`) retrofitja tudatosan egy jövőbeli körre marad.
+
+**Háromszoros pre-flight/implementer-mérés, mind dokumentált §0.0
+revízióval:** (1) a brief „ADR 0201"/„ADR 0204"/„ADR 0203" hivatkozásai
+elavultak — az R01 pre-flight a hatos ADR-blokkot 0200–0205-ről
+0215–0220-ra tolta (a célzott ADR-ek saját fejléce dokumentálja), javítva
+0216/0219/0218-ra; (2) a brief §8 lépéssor 6. pontja (a meglévő kapuk
+átvezetése) kivéve a scope-ból — `DynamicsGate`/`PitchCapabilityGate` ma
+is önállóan dönt `CapabilityStatus`-ról, de egyik fájl sincs az
+`allowed_paths`-on (az egyik explicit tilos zóna), és egyetlen acceptance
+criterion sem igényli a retrofitot; (3) **az implementer ELSŐ dispatchja
+helyesen `stopped`-ot jelzett**: a §6 „nincs átlag" acceptance criterion
+`[0.9,0.9,0.9,0.9,0.1]`-re „0.5581…"-et rögzített geometriai átlagként —
+Terra lefuttatta a brief saját `python3 -c` szabályát, `0.5799546134795288`-at
+kapott, és a pre-flight ezt a valódi számot fogadta el (nem az eredeti
+becslést) — 0 produkciós/teszt fájl módosult ennél a megállásnál.
+
+A független review első köre **CHANGES REQUESTED** (1 MAJOR): **F1** a
+`CapabilityResolver.resolve()` kezeletlen `ArgumentError`-t dobott, ha
+minden capability `notApplicable`-re oldódott (pl. `supportedCapabilities:
+{}`) — a testvér-kapuk (`PitchCapabilityGate`) ugyanezt gracefully
+kezelik. Reprodukálva eldobható próbateszttel, javítva egy fordulós
+javító körben (explicit üres-lista ág, `notApplicable`/`0` overall
+verdikt, dedikált teszt), és a javítás UTÁN a reviewer saját, független
+próbateszttel is megerősítette a zárást (friss `/tmp` klón, második gate-
+újrafuttatás). Bónuszként javítva egy megosztott mutable teszt-fixture
+(F3, NOTE). Végső verdikt **APPROVED**, 0 nyitott BLOCKER/MAJOR, **1
+nyitott MINOR follow-up** (F2: a „kritikus capability → min" brief-prózát
+ma egy bináris hard-gate valósítja meg, nem egy fokozatos min-szabály —
+nem sérti egyetlen acceptance criteriont sem, egy jövőbeli bekötő/
+kalibrációs kör dolga). Review:
+[docs/reviews/e06-r19-confidence-calibration-capability-resolver-review.md](reviews/e06-r19-confidence-calibration-capability-resolver-review.md).
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r19-confidence-calibration-capability-resolver-security.md](reviews/e06-r19-confidence-calibration-capability-resolver-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR** (ugyanaz a gyökérok, mint
+a review F1-je, ott fail-closed jellegűnek minősítve — javítva), 2 NOTE:
+a codec ma nem perzisztálja az új `calibrationVersion`/`calibrationSource`
+mezőt (fail-safe irányú, E06-R29-nek jelezve); a `details` diagnosztikai
+map ma tiszta, de jövőbeli JSON-sink, újra át kell nézni, ha bővül.
+
+Implementer **Terra (Codex)**, 2 dispatch (a második a §0.0 aritmetikai
+javítás után) + 1 javító kör, mindegyik egy fordulóban lezárva
+(`continuations=0`).
+
+**Zöld kapu (exact-SHA `35c6b4e5`, PR [#235](https://github.com/wolfcasaba/strumsight/pull/235),
+squash `d47d1a55`):** Full Gate
+[31616610399](https://github.com/wolfcasaba/strumsight/actions/runs/31616610399)
+success, headSha `35c6b4e5` (egyezik a branch HEAD-jével). Router CI
+utolsó releváns futása
+[31616199477](https://github.com/wolfcasaba/strumsight/actions/runs/31616199477)
+success a javító kör commitján (`ba713d28`) — az utólagos review-approval
+commit (`35c6b4e5`) csak `docs/reviews/**`-t érintett, ami nincs a Router
+CI push-path-szűrőjén. A CI-tervező `full-gate.yml`-t adott
+(`apk_required=false`, tisztán Dart/dokumentum/teszt-diff); az
+`origin/main` nem mozdult a dispatch és a merge között. A post-merge gate
+friss `main`-en (`d47d1a55`) mind a nyolc lépésben zöld (`audio=378`,
+`property=87`, `app=69`).
+
+**Következő kör: E06-R20** (Determinisztikus insight engine,
+`docs/execution/pipeline-queue.tsv` szerint).
+
+**E06-R20 H3 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
+[#236](https://github.com/wolfcasaba/strumsight/pull/236), squash
+`c1afbc74`:** a MiniMax M3 implementer első futási kísérlete
+`stopped`-ot jelzett — a brief `allowed_paths`-a négy tesztfájlt sorolt
+fel névre szólóan (három `test/features/audio_analysis/engine/` alatt,
+egy `test/property/` alatt), de egyetlen megosztott fixture-helyet sem,
+miközben a §6 acceptance criteria (18 cellás szabály-mátrix, két küszöb
+mindkét oldali hármasa, referenciális integritás property, lokalizációs
+paritás) mind a négy fájltól ugyanazt a determinisztikus
+`AnalysisDocument`/`AnalysisInsightContext` felépítést várja el. Az
+implementer emiatt a listán kívül hozta létre a
+`test/features/audio_analysis/engine/insights/_insight_test_helpers.dart`
+fájlt, és a `tools/scope-audit.py` (exit 1) helyesen `stopped`-ot
+jeleztetett vele. Javítás: a brief §0.0 revíziója `allowed_paths`-t egy
+`test/fixtures/analysis/insights` könyvtárral bővítette — a repóban élő
+`test/fixtures/<feature>/<alfunkció>/*_fixtures.dart` konvenciót követve
+(pl. E05-R20 `test/fixtures/vision/posture`), ugyanazzal a feloldási
+formával, mint a korábbi H3 self-heal precedens ebben az epicben (E06-R10,
+PR #224, ADR 0228). 0 production fájl módosult. Regressziós védelem:
+`tools/tests/test_e06_r20_insight_fixture_scope.py` a valódi mért
+halt-útvonalat futtatja `audit_legacy_scope()`-on — bizonyítva, hogy az
+új könyvtár in-scope, a halt-olt futás saját ad hoc útvonala pedig
+továbbra is out-of-scope marad. Router CI zöld exact-SHA `1ddc9830`-on.
+Tanulság: `LESSONS.md` L242.
+
+
 ## ✅ E06-R18 — Technique proxy experimental module (2026-08-12)
 
 Elkészült a bekötetlen, Lab- és feature-flag mögötti technique-proxy modul:

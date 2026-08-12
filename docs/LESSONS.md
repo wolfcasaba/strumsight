@@ -8991,3 +8991,82 @@ mint itt) pinneld vissza a branchet a MÁR bizonyítottan zöld SHA-ra
 (`git reset <régi-sha>` + célzott `git checkout <régi-sha> -- <fájl>` az
 eltérő fájlokra), hogy a merge-elt SHA pontosan az legyen, amit a CI
 ténylegesen mért — ne egy soha nem CI-zett, csak helyben létező commit.
+
+## L244 — Ha egy kör KIZÁRÓLAG fake runnerrel teszteli a cancel/cleanup útvonalat, egy valódi erőforrás-lifecycle hiba zöld gate mellett is átcsúszhat — a dedikált security review VALÓDI erőforrást (isolate) mozgató próbája fogta meg (E06-R22, 2026-08-12)
+
+**Mit mértem.** Az E06-R22 (`AnalysisIsolateRunner`, futásonkénti
+`Isolate.spawn`+`kill`) implementációja + saját (Claude-oldali) review-ja
+0 BLOCKER/MAJOR-ral zárt, MINDEN acceptance-cella zöld, beleértve a
+„cancel-takarítás: `disposed == true`" cellát is. A KÖTELEZŐ dedikált
+biztonsági review (risk=high) ennek ELLENÉRE egy valódi, reprodukálható
+MAJOR-t talált: ha `cancel()` PONTOSAN a `_isolate = await Isolate.spawn(...)`
+feloldása ELŐTT fut, a `_dispose()` once-guardja (`if (_disposed) return;` a
+kill ELŐTT) elhasználódik egy null `_isolate`-tel, és a KÉSŐBB
+hozzárendelt, élő isolate soha nem kap killt — a teljes `operation()`
+lefut a cancel után is. A kör SAJÁT tesztkészlete ezt nem látta, mert: a
+cancel-takarítás tesztje `_CleanupRun` FAKE-et használt (nem valódi
+isolate-ot), az EGYETLEN valódi-isolate teszt (szerializálhatósági smoke)
+sosem hívott cancel-t, a controller-tesztek végig `_QueueRunner`/`_FakeRun`
+fake-eket használtak. A biztonsági review saját, pure-Dart `dart:isolate`
+reprodukcióval (marker-fájlos liveness-méréssel, A/B/C három forgatókönyv)
+igazolta a hibát 3/3 determinisztikusan; az orchesztrátor a fix ELŐTT és
+UTÁN is függetlenül újra lefuttatta ugyanazt a reprodukciót, majd egy
+valódi-sértés próbával (a `_dispose()` sorrendjét ideiglenesen visszaállítva
+a hibás alakra) igazolta, hogy az ÚJ, VALÓDI isolate-ot indító teszt
+ténylegesen PIROSRA vált a hiba jelenlétében. Forrás:
+[docs/reviews/e06-r22-analysis-runner-progress-cancellation-security.md](reviews/e06-r22-analysis-runner-progress-cancellation-security.md)
+MAJOR-1, javítás: [PR #239](https://github.com/wolfcasaba/strumsight/pull/239)
+commit `63f39515`.
+
+**Miért.** A `cancel_analysis_use_case.dart`/`analysis_controller.dart`
+réteg helyesen absztrahálja az isolate-ot egy `AnalysisRunHandle`
+interfész mögé — de ez pont azt jelenti, hogy a controller-szintű tesztek
+(amik ezt az interfészt fake-elik) SOSEM tudnak erőforrás-lifecycle hibát
+elkapni, ami az interfész MÖGÖTT, a konkrét `_IsolateAnalysisRun`
+implementációban él. A `AnalysisPipeline`-szintű "run ID mindenhol" garancia
+(state-korrektség) és az isolate-lifecycle garancia (erőforrás-korrektség)
+KÉT KÜLÖNBÖZŐ tulajdonság — az egyik teszteltsége nem bizonyítja a másikat.
+
+**Hogyan alkalmazd.** Ha egy kör egy erőforrást (isolate, mic-lease, fájl-
+handle, socket) egy absztrakt interfész mögé zár, és a state-gép/controller
+tesztjei ezt az interfészt fake-elik: KÜLÖN, VALÓDI erőforrást mozgató
+tesztet is írj a KONKRÉT implementációra, ami kifejezetten a cancel/dispose
+ÚTVONALAT méri (nem csak azt, hogy a `result` a várt terminális állapotra
+zár). Ha egy brief `risk = "high"`-at jelöl, a dedikált security review
+ELVÁRÁSA legyen a „a fake-alapú tesztkészlet fedi-e a VALÓDI
+erőforrás-útvonalat" kérdés explicit megválaszolása — ez itt önmagában
+elég lett volna a hiba előzetes gyanújához, függetlenül attól, hogy végül
+reprodukálásra került-e.
+
+## L245 — A `gate_shape=VIOLATION` jelzés hamis pozitív lehet, ha az implementer a gate SZKRIPT FORRÁSÁT olvassa (`sed`/`cat`), nem magát a gate-et futtatja csonkítva — mindig nézd meg a tényleges regex-találatot, ne csak a jelzőt (E06-R22, 2026-08-12)
+
+**Mit mértem.** Az E06-R22 javító kör #1 jelzésfájlja `gate_shape=VIOLATION`-t
+adott — ez alapból H7/gyanús-implementer jelzés lenne. A tényleges regex-
+találatot kigrepelve (`grep -nE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)"`)
+az EGYETLEN találat egy `sed -n '1,260p' tools/round-gate.sh && git status
+--short && git diff --check` sor volt — az implementer a gate SZKRIPT
+FORRÁSÁT olvasta ki diagnosztikai céllal (nem futtatta csonkítva/láncolva),
+a `&&` a `sed`/`git status`/`git diff --check` HÁROM, egymástól független
+diagnosztikai parancsot fűzte össze. A négy TÉNYLEGES gate-hívás a logban
+mind csonkítás/láncolás nélküli volt. A reviewer saját, független
+`/tmp`-klónos gate-újrafuttatása (kétszer, a javítás előtt és után is)
+megerősítette a zöld eredményt.
+
+**Miért.** A `tools/codex-round.sh` `verify_claim()`-jének gate-alak őre egy
+NAIV, sor-szintű regex (`round-gate\.sh[^\n]*(&&|\| *(tail|head))`) — nem
+tudja megkülönböztetni "a gate FUTTATÁSA van csonkítva/láncolva" (valódi
+hiba) és "a gate SZKRIPT FÁJLJÁT olvassuk ki, ami VÉLETLENÜL egy `&&`-fel
+folytatódó sorban van" (ártalmatlan). Ez a mérce SZÁNDÉKOSAN túl-érzékeny
+(fail-open helyett fail-loud) — az L09 (csonkított gate-kimenet elrejti a
+kilépési kódot) mért kockázata miatt inkább hamis pozitívot ad, mint hamis
+negatívot.
+
+**Hogyan alkalmazd.** `gate_shape=VIOLATION` esetén NE fogadd el a jelzést
+se bemondásra, se elutasításra — mindig futtasd újra a fenti grep-et a
+NYERS logon, és nézd meg a TALÁLT sort. Ha a találat egy tényleges
+`round-gate.sh`-hívást csonkít/láncol, az H7 (a gate nem hozható zöldre
+bizonyíthatóan) vagy legalább egy gyanús-implementer jelzés. Ha a találat
+(mint itt) egy ártalmatlan forrás-olvasás vagy dokumentáció-idézet, jegyezd
+fel a review-jelentésbe MIÉRT ártalmatlan (a konkrét sor idézésével), és a
+saját független gate-újrafuttatásodra hagyatkozz a végső zöld/piros
+döntéshez — a jelző csak figyelmeztet, nem dönt.
