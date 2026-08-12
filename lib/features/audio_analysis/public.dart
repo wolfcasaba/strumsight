@@ -1,11 +1,19 @@
 /// Public domain contract for cross-feature Audio Analysis consumers.
 library;
 
+export 'application/analysis_providers.dart';
 export 'data/analysis_document_codec.dart';
 export 'data/capture/analysis_recorder.dart';
 export 'data/capture/recording_run.dart';
 export 'data/legacy_analyze_adapter.dart';
 export 'data/legacy_view_adapter.dart';
+export 'data/local/analysis_index_store.dart';
+export 'data/local/file_analysis_repository.dart';
+export 'data/migration/analysis_migration_version_store.dart';
+export 'data/migration/legacy_library_migrator.dart';
+export 'domain/analysis_repository.dart';
+export 'domain/analysis_summary.dart';
+export 'domain/audio_retention_policy.dart';
 export 'domain/analysis_progress.dart';
 export 'domain/preprocessed_audio.dart';
 export 'domain/analysis_capability.dart';
