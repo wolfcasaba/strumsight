@@ -1,12 +1,15 @@
 # E06-R20 — Determinisztikus insightok és hotspot ranking
 
-- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, 2026-08-12
-  — a §0.0 rögzíti a mért gyökérokot és a feloldást; eredetileg előre megírva
-  2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight lezárva; két réteg — H3 self-heal
+  fixture-scope-fix a `main`-en + ADR 0238 pre-flight-revízió egy korábbi,
+  nem merge-elt munkapéldányból újrahasznosítva és a jelen HEAD-en
+  újra-ellenőrizve, ld. §0.0; eredetileg előre megírva 2026-08-07, ma
+  2026-08-12, kód olvasva: main @ `7dbaa349`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 20; §20.1–20.7
 - **Branch:** `codex/e06-r20-deterministic-insights-and-hotspots`
 - **Előfeltétel:** **E06-R14, E06-R15, E06-R16, E06-R19 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch), pre-flight: Claude Sonnet 5 (orchestrátor) ·
+  **Implementáció:** Terra
 
 ```ai-router
 schema_version = 1
@@ -27,6 +30,7 @@ allowed_paths = [
   "test/property/analysis_insight_property_test.dart",
   "test/fixtures/analysis/insights",
   "docs/rounds/e06-r20-deterministic-insights-and-hotspots.md",
+  "docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -51,6 +55,10 @@ native_gate = false
 > `test/property/` alatt) — ehhez tedd a megosztott builder(ek)et az
 > `allowed_paths` új `test/fixtures/analysis/insights` bejegyzése alá, az
 > `test/fixtures/vision/posture`-mintát követve (ld. lentebb).
+>
+> **Második pre-flight réteg (§0.0 vége):** [ADR 0238](../adr/0238-analysis-insight-evidence-and-ranking-boundary.md)
+> rögzíti az insight-engine architekturális döntéseit; a §5/§5.1 két stale
+> ADR-hivatkozása (0201→0216, 0203→0218) javítva.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -112,6 +120,100 @@ self-heal saját regressziós tesztje
 a scope szélesítése véletlenül vakfoltot nyisson. 0 produkciós fájl módosult
 ennél a self-healnél.
 
+**Második pre-flight réteg (új orchestrátor-session, ugyanaznap, 2026-08-12,
+main @ `7dbaa349` — a H3 self-heal UTÁN):** a kör első dispatchja előtt egy
+korábbi orchestrátor-session (fallback-motorral, munkapéldány
+`/home/ubuntu/ss-mm-e06-r20`) már elvégzett egy rendes pre-flightot —
+kiosztotta és megírta [ADR 0238](../adr/0238-analysis-insight-evidence-and-ranking-boundary.md)-at,
+és a brief két stale ADR-hivatkozását azonosította javításra —, de ez a
+pre-flight-commit (`fa836e87`, branch
+`codex/e06-r20-deterministic-insights-and-hotspots`) SOSEM futott be a
+`main`-be: a H3 self-heal a `main`-en, ennek a pre-flight-commitnak az
+ismerete nélkül revideálta a briefet (a self-heal és a pre-flight-commit
+egymástól függetlenül, ugyanarról a `3f5ac41e` bázisról ágaztak el). A jelen
+session a driver-skill §0.2 örökség-ellenőrzése szerint megtalálta ezt a
+nem-merge-elt pre-flightot, és a felhasználás ELŐTT újra lemérte a kódban:
+
+1. **Stale ADR-hivatkozás.** A §5 1. pontja és a §5.1 OD-03-a „ADR 0201"-et
+   ill. „ADR 0203"-at idézett; a hatos ADR-blokk R01-es 0200–0205→0215–0220
+   átszámozása után a helyes cím **ADR 0216**
+   (`docs/adr/0216-analysis-confidence-calibration-and-abstention.md`, fejléc
+   ellenőrizve: „Analysis confidence, calibration and abstention") és
+   **ADR 0218** (`docs/adr/0218-analysis-metric-id-and-version-governance.md`,
+   fejléc ellenőrizve: „Analysis metric ID and version governance"). Javítva
+   lent.
+2. **ADR 0238 tartalma.** Minden hivatkozott tény újra-grep-elve a mai kódon:
+   `AnalysisHotspot` (`lib/features/audio_analysis/domain/analysis_segment.dart`)
+   ma is `metricIds`/`evidenceIds`-t hordoz `AnalysisMetricId.contains`
+   validációval; `AnalysisMetricId`
+   (`lib/features/audio_analysis/domain/analysis_metric_catalog.dart`) ma is
+   öt `technique.*` katalógus-bejegyzést tartalmaz; a meglévő
+   `domain/analysis_insight.dart` (R02, bekötetlen) `factIds`-t hordoz,
+   `evidenceIds`-t NEM; a technique-proxy modul
+   (`lib/features/audio_analysis/engine/metrics/technique_proxies.dart`)
+   önálló, `TechniqueProxyGate`/`CapabilityStatus`-mögötti fájl,
+   `AnalysisDocument`-bekötés nélkül (HANDOFF E06-R18 banner is megerősíti).
+   Minden állítás stimmelt — az ADR-t emiatt VÁLTOZATLAN tartalommal, csak
+   egy re-verifikációs jegyzettel hasznosítja újra ez a session (két
+   divergens ADR-szöveg ugyanarra a számra rosszabb lenne, mint az
+   újrahasznosítás, driver-skill §0.2).
+3. **Küszöb-hármas független újraszámítás** (`python3 -c`, ismételten
+   ellenőrizve): `20 * 3 = 60.0` → `59.9 / 60.0 / 60.1 ms`; `20 * 1.5 = 30.0`
+   → `29.9 / 30.0 / 30.1 ms` — egyezik a §6-ban már rögzített cellákkal.
+4. `allowed_paths` az ADR fájl útvonalával bővült
+   (`docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md`) — az
+   orchestrátor írja a pre-flight-commitban, a teljes kör-PR diffje viszont
+   tartalmazza.
+
+0 produkciós fájl módosult ennél a második pre-flight-rétegnél sem.
+
+**Harmadik réteg — kör-közbeni STOP felbontás (ugyanaz a session, 2026-08-12,
+Terra első dispatchja UTÁN):** Terra a pre-flight-commit (`2d372dbf`) fölött
+elkészítette mind a kilenc szabály WIP-implementációját (commitolatlanul,
+`dirty_files=11`), majd helyesen `stopped`-ot jelzett: „A rush/drag,
+weak-upstroke és low-signal rule küszöbei nincsenek a briefben vagy ADR
+0238-ban rögzítve; saját értéket nem választhatok." Ez a §5.1 valódi hiánya
+volt — az OD-01/02/03 csak az outlier/drift/improvement szabályokat oldotta
+fel, a rush/drag/weak-upstroke/low-signal négy szabály küszöbét nem. Az
+orchestrátor a Terra WIP-jét (nem törölve, a munkapéldányban hagyva) és a
+kódot újra megmérte, mielőtt feloldotta:
+
+1. **OD-04 (rush/drag, 20 ms)** — a Terra saját, már megírt
+   `_biasThresholdMs = 20.0` konstansa HELYES: egyezik az
+   `AnalysisInsightContext.timingTolerance` alapértelmezésével és az OD-01/02
+   számpéldáinak bázisával. Nincs kódváltozás, csak formalizálás.
+2. **OD-05 (weak upstroke, ×1.2)** — a Terra saját `_upstrokeWeakMultiplier
+   = 1.25` értéke **javítandó 1.2-re**: a repóban MÁR létezik egy azonos
+   szemantikájú named constant ugyanebben a metrika-családban
+   (`dynamicsAccentThresholdRatio = 1.2`,
+   `lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+   E06-R16/ADR 0234 — "attack strength exceeds local-window median by more
+   than this ratio") — két külön szám ugyanarra a "hány %-kal tér el az
+   elvárttól" mintára rosszabb, mint az újrahasznosítás.
+3. **OD-06 (low signal quality, ≥0.05)** — a Terra saját
+   `_lowQualityClippedRatio = 0.10` értéke **hibás, javítandó 0.05-re**: ez
+   nem csak "más szám" kérdése, hanem **mért holt kód** — a
+   `DynamicsGate.clippedEventRatioUnavailable` (ADR 0234) MÁR 0.05-nél az
+   ÖSSZES dynamics-metrikát (a `clippedEventRatio`-t IS)
+   `CapabilityStatus.unavailable`-re állítja
+   (`lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+   a `gateResult.status == CapabilityStatus.unavailable` korai `return`-ág);
+   a Terra 0.10-es küszöbe SOSEM lenne elérhető éles `buildDynamicsMetrics`
+   kimeneten, mert a metrika már 0.05 fölött `null`-t ad
+   (`context.scalar()`). A helyes, egyben a gate-tel elméletileg maximálisan
+   konzisztens érték a gate SAJÁT unavailable-határa, `>=` (inkluzív,
+   ugyanaz a "határon még megfigyelhető" konvenció, mint a
+   `DynamicsGate` doksorában: "inclusive at exactly this value stays
+   degraded").
+4. Egyik javítás sem nyúl az `allowed_paths`-hoz vagy tilos zónához — mind a
+   már engedélyezett `insight_rules.dart`/teszt fájlokon belüli
+   értékjavítás. A §6/§6.1 három új sorral bővült (Rush/drag-küszöb hármas,
+   Upstroke-küszöb hármas, Jelminőség-küszöb hármas + a holt-kód mérce-sor).
+
+0 produkciós fájl módosult ennél a harmadik rétegnél sem (a rétegek maguk
+dokumentum-only változtatások; a tényleges `insight_rules.dart`
+konstans-javítás Terra következő fordulójának feladata).
+
 ## 1. Cél
 
 A mért tényekből **determinisztikus, visszavezethető** coaching-insightok —
@@ -163,7 +265,7 @@ sealed hierarchia; ARB-kulcsok en+hu.
 
 ## 5. Kötött architekturális döntések
 
-1. **Az insight nem talál ki tényt** (SDD §20, ADR 0201): minden insight
+1. **Az insight nem talál ki tényt** (SDD §20, ADR 0216): minden insight
    `factIds` (metric ID-k) és `evidenceIds` (event/szegmens/hotspot ID-k)
    listát hordoz, és **mindegyik létező** elemre mutat.
    **NEM elfogadható:** üres `factIds`, vagy nem létező ID-re mutató insight.
@@ -210,10 +312,53 @@ open_decisions:
     blocking: true
     resolution_policy: use_default
     default: >-
-      csak KOMPATIBILIS metric ID + verzió mellett (ADR 0203), és csak ha a
+      csak KOMPATIBILIS metric ID + verzió mellett (ADR 0218), és csak ha a
       változás meghaladja a metrika `minimumMeaningfulDelta` értékét.
       A trend-számítás az R25-é; itt a szabály CSAK akkor tüzel, ha a
       kontextus ilyen összehasonlítást KAP — különben `null`.
+  - id: OD-04
+    question: Mikor számít a timing signed bias "rush" vagy "drag" torzításnak?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      |signed bias| >= 20 ms (a `timing.target_signed_bias.v1` /
+      `timing.freeplay_signed_bias.v1` metrikán; a katalógus dokumentálja:
+      negatív = korán/rush, pozitív = későn/drag). A 20 ms UGYANAZ az érték,
+      mint az `AnalysisInsightContext.timingTolerance` alapértelmezése és az
+      OD-01/OD-02 fenti számpéldáinak bázisa — nem új szám. Inkluzív a
+      határon (a boundary-n tüzel).
+  - id: OD-05
+    question: Mikor számít az upstroke "gyengének" a target-arányhoz képest?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      mért `dynamics.down_up_median_ratio.v1` >= a kontextus által megadott
+      `StrokeBalanceInsightEvidence.targetDownUpMedianRatio` × **1.2** — UGYANAZ
+      a deviation-multiplier, mint a meglévő `dynamicsAccentThresholdRatio`
+      (`engine/metrics/dynamics_metrics.dart`, E06-R16, ADR 0234: "attack
+      strength exceeds local-window median by more than this ratio"), nem új
+      szám. Inkluzív a határon.
+  - id: OD-06
+    question: >-
+      Mikor jelez az "alacsony jelminőség" szabály figyelmeztetést, és melyik
+      metrikán?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      `dynamics.clipped_event_ratio.v1` >= **0.05** — UGYANAZ az érték, mint a
+      meglévő `DynamicsGate.clippedEventRatioUnavailable` (E06-R16, ADR 0234),
+      nem új szám, és EZ AZ UTOLSÓ ÉRTÉK, amin a metrika még megfigyelhető
+      (`degraded`): a `DynamicsGate.evaluate` a `clippedEventRatio >
+      clippedEventRatioUnavailable` (szigorúan efölött) esetén az ÖSSZES
+      dynamics-metrikát — a `clippedEventRatio`-t IS — `unavailable`-re
+      állítja, tehát egy ennél magasabb szabály-küszöb SOSEM lenne elérhető
+      (a metrika `context.scalar()`-ja `null`-t adna, mielőtt a küszöb
+      egyáltalán számítana). A "jelminőség" itt tudatosan a dynamics-pipeline
+      clipping-arányát jelenti (nincs önálló, katalogizált `quality.*`
+      metric ID — a nyers `AnalysisDocument.signalQuality` report NEM
+      metric-katalogizált, tehát `factId`-ként nem használható, ADR 0238
+      Döntés 2), nem a nyers `SignalQualityReport`-ot; ez dokumentált
+      interpretáció, nem hallgatólagos scope-nyújtás.
 ```
 
 ## 6. Acceptance criteria
@@ -225,6 +370,17 @@ open_decisions:
 - [ ] **Drift-küszöb hármas** (≥ 1.5×): első fél 20 ms mellett második fél
       **29.9 / 30.0 / 30.1 ms** — a **30.0** tüzel; és egy negyedik cella,
       ahol a második félben **3** pár van → **nem** tüzel (minimum-feltétel).
+- [ ] **Rush/drag-küszöb hármas (OD-04):** signed bias = **-19.9 / -20.0 /
+      -20.1 ms** — a **-20.0** rush-ként tüzel (inkluzív), -19.9 nem; szimmetrikusan
+      **19.9 / 20.0 / 20.1 ms** — a **20.0** drag-ként tüzel.
+- [ ] **Upstroke-küszöb hármas (OD-05):** target = 1.0 mellett mért ratio =
+      **1.19 / 1.20 / 1.21** — az **1.20** (= target × 1.2) tüzel (inkluzív).
+- [ ] **Jelminőség-küszöb hármas (OD-06):** `clipped_event_ratio` = **0.049 /
+      0.05 / (0.06 unavailable-en keresztül)** — a **0.05** tüzel (inkluzív,
+      az UTOLSÓ megfigyelhető érték); **integrációs teszt** (nem csak kézzel
+      épített `AnalysisMetricResult`) bizonyítja, hogy a szabály a valódi
+      `buildDynamicsMetrics`/`DynamicsGate` kimenetén is elérhető — ne csak
+      szintetikus fixture-rel.
 - [ ] **Referenciális integritás:** minden generált insight **minden**
       `factId`-je szerepel a dokumentum `metrics` listájában, és **minden**
       `evidenceId`-je létező event/szegmens/hotspot — property-teszt méri
@@ -268,6 +424,9 @@ open_decisions:
 | A rangsor `Map` sorrendtől függ | a 100 futásos determinizmus cella |
 | Az erősség kitalált | az „erősség-slot üres" cella |
 | Az action `VoidCallback` | a sealed `switch` fordítási cella |
+| A rush/drag-küszöb nem ±20 ms, vagy a polaritás felcserélt | a **pontosan -20.0/20.0 ms** tüzel-cellák |
+| Az upstroke-multiplier nem 1.2× a target-hez képest | a **pontosan target×1.2** tüzel-cella |
+| A jelminőség-küszöb a `DynamicsGate.clippedEventRatioUnavailable` (0.05) FÖLÖTT van | a szabály sosem tüzel éles `buildDynamicsMetrics` kimeneten — a metrika `unavailable`-re esik, mielőtt a küszöb elérhető lenne (holt kód); az integrációs teszt kapja el |
 | **Valódi-sértés próba (§10):** egy szabály `factIds` listájának ideiglenes kiürítése → a referenciális integritás property **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
@@ -302,7 +461,72 @@ insight helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Állapot: KÉSZ — reviewra átadható.**
+
+F1 javítás: az evidence-fallback alapértelmezetten a szabály saját metrikájára
+korlátozott; kizárólag az insufficient-data szabály kérhet dokumentum-szintű
+fallbacket, amit a nem kapcsolódó rush-evidence regressziós teszt véd.
+
+### Megvalósítás
+
+- `domain/insights/`: evidence-first insight contract, determinisztikus
+  kontextus és sealed recommended-action hierarchy.
+- `engine/insights/`: kilenc szabály, registry, maximum-policy ranker és
+  severity/confidence/ID hotspot-ranker; a szabályok csak katalogizált,
+  nem-`technique.*` tényekre és létező evidence-re mutatnak.
+- `test/fixtures/analysis/insights/`: a négy insight-teszt közös,
+  determinisztikus document/context builder-e.
+- `app_en.arb`, `app_hu.arb`, `public.dart`: additív kulcsok és public export.
+
+### Acceptance és ellenőrzések
+
+Mind a 13 acceptance-pont bizonyított:
+
+1. A 18-cellás szabálymátrix mind a kilenc szabály trigger/non-trigger ágát méri.
+2. Az outlier 59.9 / 60.0 / 60.1 ms, inkluzív 60.0 ms határa tesztelt.
+3. A drift 29.9 / 30.0 / 30.1 ms és a 3-páros elutasító cella tesztelt.
+4. A rush/drag ±20 ms inkluzív küszöbe és polaritása tesztelt.
+5. A weak-upstroke 1.19 / 1.20 / 1.21, inkluzív 1.2× target-küszöbe tesztelt.
+6. A low-signal 0.049 / 0.05 küszöbe, valamint a valós
+   `buildDynamicsMetrics`/`DynamicsGate` útvonalon a 0.05-ös trigger és a
+   0.06-os unavailable ág tesztelt.
+7. A 200 seedelt dokumentumos property a fact/evidence referenciális zártságát méri.
+8. Minden unavailable timing bemenet csak a pontosan egy insufficient-data insightot adja.
+9. Kilenc bemenetből pontosan négy látható slot marad, a többi rangsorolt.
+10. Azonos prioritásnál a `ruleId` sorrend 100 futáson át azonos.
+11. Evidence nélküli erősség-slot üres marad.
+12. Mind a kilenc rule saját trigger-kontekstusából ellenőrzött en/hu ARB-kulcsot
+    és placeholdert kap; a szabálykód nem lokalizált próza és nem importál l10n-t.
+13. A sealed action exhaustive, default nélküli `switch`-e fordul.
+
+Lefuttatva:
+
+```text
+flutter test test/features/audio_analysis/engine/insight_rules_test.dart
+  → 15 teszt zöld
+flutter test test/features/audio_analysis/engine/insight_rules_test.dart \
+  test/features/audio_analysis/engine/insight_ranker_test.dart \
+  test/features/audio_analysis/engine/hotspot_ranker_test.dart \
+  test/property/analysis_insight_property_test.dart
+  → 21 teszt zöld
+tools/round-gate.sh test/features/audio_analysis test/property test/app
+  → format, analyze, mindhárom tesztcsoport, architecture, secrets, l10n zöld
+```
+
+`git diff --cached --stat` a handoff előtti implementation-diffre:
+
+```text
+14 files changed, 1760 insertions(+), 2 deletions(-)
+```
+
+`git diff --check` zöld. Nem futtatott ellenőrzés: teljes `flutter test`, friss
+randomizált property gate és release APK — ezek a kör CI-kapui, az
+orchestrátor dispatch-eli őket.
+
+### Scope és következő kör
+
+Csak a §4 engedélyezett útvonalai változtak; UI-, Tutor-adapter- és Lab-proxy
+integráció nincs. Következő SDD-kör: E06-R21, a reviewer és CI után.
 
 ## 11. Review — a független reviewer tölti ki
 

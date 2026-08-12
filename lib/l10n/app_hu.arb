@@ -1349,5 +1349,22 @@
   "analysisCapabilityUnavailableUnsupportedSampleRate": "Ez a mintavételi frekvencia nem támogatott ehhez a méréshez.",
   "analysisCapabilityUnavailableNoReferenceTarget": "Ehhez a méréshez referencia cél szükséges.",
   "analysisCapabilityUnavailableCancelled": "Az elemzést a mérés előtt megszakították.",
-  "analysisCapabilityUnavailableInternalFailure": "A mérés nem fejezhető be."
+  "analysisCapabilityUnavailableInternalFailure": "A mérés nem fejezhető be.",
+  "analysisInsightRushBias": "Az időzítés jellemzően {milliseconds} ms-mal korai.",
+  "@analysisInsightRushBias": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightDragBias": "Az időzítés jellemzően {milliseconds} ms-mal késői.",
+  "@analysisInsightDragBias": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightLargeTimingOutliers": "Néhány időzítési hiba sokkal nagyobb a megszokott mintánál ({p90Milliseconds} ms).",
+  "@analysisInsightLargeTimingOutliers": {"placeholders": {"p90Milliseconds": {}}},
+  "analysisInsightSecondHalfDrift": "Az időzítési hiba a második félben nő ({milliseconds} ms).",
+  "@analysisInsightSecondHalfDrift": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightWeakUpstroke": "A felütés erőssége eltér a megadott céltól (arány: {ratio}).",
+  "@analysisInsightWeakUpstroke": {"placeholders": {"ratio": {}}},
+  "analysisInsightChordTransitionHotspot": "Egy akkordváltás célzott gyakorlást igényel ({hotspotId}).",
+  "@analysisInsightChordTransitionHotspot": {"placeholders": {"hotspotId": {}}},
+  "analysisInsightLowSignalQuality": "A bemeneti clipping a mért események {ratio} részét érinti.",
+  "@analysisInsightLowSignalQuality": {"placeholders": {"ratio": {}}},
+  "analysisInsightCompatibleImprovement": "Ez az összehasonlítható mérőszám {delta} értékkel javult ({metricId}).",
+  "@analysisInsightCompatibleImprovement": {"placeholders": {"delta": {}, "metricId": {}}},
+  "analysisInsightInsufficientData": "Nincs elég időzítési bizonyíték megbízható coaching insight készítéséhez."
 }

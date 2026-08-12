@@ -1426,5 +1426,22 @@
   "analysisCapabilityUnavailableUnsupportedSampleRate": "This sample rate is not supported for this measurement.",
   "analysisCapabilityUnavailableNoReferenceTarget": "This measurement needs a reference target.",
   "analysisCapabilityUnavailableCancelled": "The analysis was cancelled before this could be measured.",
-  "analysisCapabilityUnavailableInternalFailure": "This measurement could not be completed."
+  "analysisCapabilityUnavailableInternalFailure": "This measurement could not be completed.",
+  "analysisInsightRushBias": "Timing tends early by {milliseconds} ms.",
+  "@analysisInsightRushBias": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightDragBias": "Timing tends late by {milliseconds} ms.",
+  "@analysisInsightDragBias": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightLargeTimingOutliers": "A few timing errors are much larger than the usual pattern ({p90Milliseconds} ms).",
+  "@analysisInsightLargeTimingOutliers": {"placeholders": {"p90Milliseconds": {}}},
+  "analysisInsightSecondHalfDrift": "Timing error grows in the second half ({milliseconds} ms).",
+  "@analysisInsightSecondHalfDrift": {"placeholders": {"milliseconds": {}}},
+  "analysisInsightWeakUpstroke": "Upstroke strength differs from the supplied target (ratio {ratio}).",
+  "@analysisInsightWeakUpstroke": {"placeholders": {"ratio": {}}},
+  "analysisInsightChordTransitionHotspot": "A chord transition needs focused practice ({hotspotId}).",
+  "@analysisInsightChordTransitionHotspot": {"placeholders": {"hotspotId": {}}},
+  "analysisInsightLowSignalQuality": "Input clipping affects {ratio} of measured events.",
+  "@analysisInsightLowSignalQuality": {"placeholders": {"ratio": {}}},
+  "analysisInsightCompatibleImprovement": "This comparable metric improved by {delta} ({metricId}).",
+  "@analysisInsightCompatibleImprovement": {"placeholders": {"delta": {}, "metricId": {}}},
+  "analysisInsightInsufficientData": "There is not enough timing evidence for a reliable coaching insight."
 }
