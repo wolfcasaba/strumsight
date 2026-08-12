@@ -164,7 +164,7 @@ TechniqueProxyReport buildTechniqueProxyReport({
   }
   final compute =
       calculator ??
-      () => computeTechniqueProxyMetrics(
+      () => _computeTechniqueProxyMetrics(
         chordSegments: chordSegments,
         transitions: transitions,
         onsets: onsets,
@@ -174,10 +174,11 @@ TechniqueProxyReport buildTechniqueProxyReport({
   return TechniqueProxyReport.available(compute());
 }
 
-/// Computes the five technique proxies from already-gated evidence. Public
-/// so the default [TechniqueProxyCalculator] and direct fixture tests share
-/// one implementation.
-List<AnalysisMetricResult> computeTechniqueProxyMetrics({
+/// Computes the five technique proxies from already-gated evidence. Private:
+/// the only production path to this calculation is [buildTechniqueProxyReport],
+/// which enforces the flag/Lab and confidence gates first (F2). Not exported
+/// via `public.dart` — there is no ungated public entry point.
+List<AnalysisMetricResult> _computeTechniqueProxyMetrics({
   required List<ChordSegment> chordSegments,
   required List<ChordTransition> transitions,
   required List<OnsetEvent> onsets,

@@ -101,6 +101,58 @@ TechniqueProxyReport _buildReport({
 );
 
 void main() {
+  group('F2 regression: buildTechniqueProxyReport is the only public entry '
+      'point (raw calculator is a private implementation detail, not '
+      'exported via public.dart — see technique_proxies.dart)', () {
+    final segments = _alternatingSegments(4);
+    final evidence = _happyPathEvidence(segments);
+
+    test('flag OFF, Lab OFF: no available technique.* metric leaks out', () {
+      final report = _buildReport(
+        flag: false,
+        lab: false,
+        chordSegments: segments,
+        onsets: evidence.onsets,
+        chordFrameEvidence: evidence.evidence,
+      );
+      expect(report.status, CapabilityStatus.notApplicable);
+      expect(
+        report.metrics.where((m) => m.status == CapabilityStatus.available),
+        isEmpty,
+      );
+    });
+
+    test('flag ON, Lab OFF: no available technique.* metric leaks out', () {
+      final report = _buildReport(
+        flag: true,
+        lab: false,
+        chordSegments: segments,
+        onsets: evidence.onsets,
+        chordFrameEvidence: evidence.evidence,
+      );
+      expect(report.status, CapabilityStatus.notApplicable);
+      expect(
+        report.metrics.where((m) => m.status == CapabilityStatus.available),
+        isEmpty,
+      );
+    });
+
+    test('flag OFF, Lab ON: no available technique.* metric leaks out', () {
+      final report = _buildReport(
+        flag: false,
+        lab: true,
+        chordSegments: segments,
+        onsets: evidence.onsets,
+        chordFrameEvidence: evidence.evidence,
+      );
+      expect(report.status, CapabilityStatus.notApplicable);
+      expect(
+        report.metrics.where((m) => m.status == CapabilityStatus.available),
+        isEmpty,
+      );
+    });
+  });
+
   group('Lab-gate matrix (four cells; only flag ON + Lab ON computes)', () {
     final segments = _alternatingSegments(4);
     final evidence = _happyPathEvidence(segments);
@@ -118,12 +170,19 @@ void main() {
         chordFrameEvidence: evidence.evidence,
         calculator: () {
           calls += 1;
-          return computeTechniqueProxyMetrics(
-            chordSegments: segments,
-            transitions: buildChordTransitions(segments),
-            onsets: evidence.onsets,
-            chordFrameEvidence: evidence.evidence,
-          );
+          return <AnalysisMetricResult>[
+            for (final id in TechniqueProxyMetricIds.all)
+              AnalysisMetricResult(
+                id: id,
+                version: 1,
+                status: CapabilityStatus.available,
+                confidence: 0.9,
+                unit: 'ms',
+                sampleCount: 1,
+                evidence: const <String>[],
+                value: ScalarMetricValue(0),
+              ),
+          ];
         },
       );
       return (report, calls);
