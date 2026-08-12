@@ -1,6 +1,6 @@
 # E06-R22 — Analysis runner, progress UI és cancellation
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`; pre-flight revízió 2026-08-12, main @ `e0c6754e`, ADR 0240)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 22; §6.5, §21, §22.1–22.4
 - **Branch:** `codex/e06-r22-analysis-runner-progress-cancellation`
 - **Előfeltétel:** **E06-R04, E06-R06, E06-R21 merge**
@@ -54,7 +54,37 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**Pre-flight revízió (2026-08-12, main @ `e0c6754e`).**
+
+1. A brief `main@a6e6f3d`-n, Epic 6 kezdete ELŐTT íródott — a §2 "Az R04 adja
+   a pipeline-t + cancellation tokent, az R06 a felvevőt, az R21 a
+   repository-t" mondat előrejelzés volt, nem mérés. Újramérve: mindhárom
+   előfeltétel-kör (R04/R06/R21) MERGE-elve van, az `analysis_providers.dart`
+   (R21) már létezik — ez a kör bővíti, nem hozza létre újra, a brief §pre-
+   flight-note szerint helyesen.
+2. **Mért architekturális rés, ADR-rel feloldva:** ma NULLA konkrét,
+   összeszerelt V2 DSP `AnalysisPipeline<T>`-példány létezik a `lib/`-ben
+   (`grep -rln "AnalysisPipeline(" lib/` üres), és a három meglévő konkrét
+   `AnalysisStage` (`SignalQualityStage`, `PreprocessingStage`,
+   `ClipAnalyzerStage`) egymással össze nem fűzhető I/O-jú — egyik sem a lánc
+   végállomása. A brief §6 acceptance criteria ugyanakkor MINDEN cellája
+   fake/minimális pipeline-t ír elő (a §6.1 mérce-mátrix és az OD-01
+   alapértelmezése szó szerint ezt mondja), tehát ez NEM blokkoló hiány,
+   csak egy pontosítandó feltételezés. [ADR
+   0240](../adr/0240-analysis-runner-and-pipeline-boundary.md) rögzíti: a
+   kör pipeline-agnosztikus marad, `T = AnalysisDocument`-re rögzítve, a
+   valódi stage-lánc összeszerelése egy jövőbeli, még nem ütemezett kör
+   feladata (nyíltan dokumentált résként, nem hallgatólagos hiányként a
+   §10/HANDOFF-ban).
+3. Az ADR ugyanezen mérése alapján rögzíti a run-ID hitelesség kérdését is
+   (a pipeline belső `_activeRunId`-ja példányonként/isolate-onként
+   nullázódik, ezért NEM használható a controller késői-eredmény szűrőjeként
+   — a controller saját, a futtatás indításakor kapott run ID-t követő
+   mezője az egyetlen igazságforrás) és az isolate-életciklust (egy-lövetű,
+   futásonkénti spawn+kill, nem újrahasznosított isolate).
+
+**Pre-flight alapján:** ADR: **0240** (analysis runner and pipeline
+boundary).
 
 ## 1. Cél
 
