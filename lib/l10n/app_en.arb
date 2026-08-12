@@ -1413,5 +1413,18 @@
   "analysisTechniqueConfidenceCollapseDuration": "Chord-recognition confidence dip duration",
   "analysisTechniqueUnexpectedExtraOnsets": "Unexpected extra note starts near a chord change",
   "analysisTechniqueSustainedNoteDropout": "Sustain stability",
-  "analysisTechniqueAttackInstability": "Note-start clarity"
+  "analysisTechniqueAttackInstability": "Note-start clarity",
+  "analysisCapabilityUnavailableClipTooShort": "The recording is too short to measure this.",
+  "analysisCapabilityUnavailableInsufficientEvents": "There are not enough detected events to measure this.",
+  "analysisCapabilityUnavailableInputTooNoisy": "Background noise makes this measurement unreliable.",
+  "analysisCapabilityUnavailableInputClipped": "Input clipping makes this measurement unreliable.",
+  "analysisCapabilityUnavailablePolyphonicInput": "Multiple simultaneous notes prevent this measurement.",
+  "analysisCapabilityUnavailableBackingTrackDominant": "The backing track is too prominent for this measurement.",
+  "analysisCapabilityUnavailableConfidenceTooLow": "The evidence is too uncertain to measure this reliably.",
+  "analysisCapabilityUnavailableModelUnavailable": "The required analysis model is unavailable.",
+  "analysisCapabilityUnavailableUnsupportedFormat": "This audio format is not supported for this measurement.",
+  "analysisCapabilityUnavailableUnsupportedSampleRate": "This sample rate is not supported for this measurement.",
+  "analysisCapabilityUnavailableNoReferenceTarget": "This measurement needs a reference target.",
+  "analysisCapabilityUnavailableCancelled": "The analysis was cancelled before this could be measured.",
+  "analysisCapabilityUnavailableInternalFailure": "This measurement could not be completed."
 }

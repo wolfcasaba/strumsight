@@ -1336,5 +1336,18 @@
   "analysisTechniqueConfidenceCollapseDuration": "Akkordfelismerés bizonytalanságának időtartama",
   "analysisTechniqueUnexpectedExtraOnsets": "Nem várt extra hangindítások akkordváltás körül",
   "analysisTechniqueSustainedNoteDropout": "Kitartás stabilitása",
-  "analysisTechniqueAttackInstability": "Hangindítás tisztasága"
+  "analysisTechniqueAttackInstability": "Hangindítás tisztasága",
+  "analysisCapabilityUnavailableClipTooShort": "A felvétel túl rövid ennek a méréséhez.",
+  "analysisCapabilityUnavailableInsufficientEvents": "Nincs elég érzékelt esemény ennek a méréséhez.",
+  "analysisCapabilityUnavailableInputTooNoisy": "A háttérzaj miatt ez a mérés nem megbízható.",
+  "analysisCapabilityUnavailableInputClipped": "A bemeneti clipping miatt ez a mérés nem megbízható.",
+  "analysisCapabilityUnavailablePolyphonicInput": "Az egyszerre megszólaló több hang miatt ez a mérés nem végezhető el.",
+  "analysisCapabilityUnavailableBackingTrackDominant": "A kísérősáv túl hangsúlyos ehhez a méréshez.",
+  "analysisCapabilityUnavailableConfidenceTooLow": "A bizonyíték túl bizonytalan a megbízható méréshez.",
+  "analysisCapabilityUnavailableModelUnavailable": "A szükséges elemzőmodell nem érhető el.",
+  "analysisCapabilityUnavailableUnsupportedFormat": "Ez a hangformátum nem támogatott ehhez a méréshez.",
+  "analysisCapabilityUnavailableUnsupportedSampleRate": "Ez a mintavételi frekvencia nem támogatott ehhez a méréshez.",
+  "analysisCapabilityUnavailableNoReferenceTarget": "Ehhez a méréshez referencia cél szükséges.",
+  "analysisCapabilityUnavailableCancelled": "Az elemzést a mérés előtt megszakították.",
+  "analysisCapabilityUnavailableInternalFailure": "A mérés nem fejezhető be."
 }
