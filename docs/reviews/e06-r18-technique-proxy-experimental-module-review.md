@@ -3,17 +3,18 @@
 Brief: `docs/rounds/e06-r18-technique-proxy-experimental-module.md`  
 Diff: `871ce472...ae11543c`  
 Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-12  
-Verdikt: **APPROVED**
+Verdikt: **CHANGES REQUIRED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 
 Az isolated, GitHubról klónozott exact `8ecf6b34` gate zöld. A tartalmi
 mutációs próba kezdetben megmutatta, hogy a claim-safety guard nem ellenőrzi
 az analysis-eredetű ARB **kulcsokat**, csak az értékeket. Az F1 javítása ezt
 egy shared helperrel és key-only regressziós teszttel lezárta; a friss,
-GitHubról klónozott exact `ae11543c` review-gate is zöld.
+GitHubról klónozott exact `ae11543c` review-gate is zöld. A kötelező security
+review ezt követően új, Lab-kapu megkerülést talált (F2).
 
 ## Acceptance criteria
 
@@ -22,6 +23,7 @@ GitHubról klónozott exact `ae11543c` review-gate is zöld.
 | Proxy-, Lab-, confidence- és küszöb-mátrix | ✅ | `technique_proxies_test.dart`, `transition_analysis_test.dart`; isolated gate zöld |
 | Lab-only / document-purity / flag default OFF | ✅ | `technique_proxies.dart`, `technique_metric_catalog_test.dart` |
 | Tiltott állítások gépi őre és valódi-sértés bizonyítása | ✅ | F1 key-only fake-map regressziós teszt zöld |
+| Flag/Lab-only számítás minden public fogyasztónak | ❌ | F2 — public, kapuzatlan számító export |
 | ADR 0236 és öt PENDING eval sor | ✅ | ADR, eval-mátrix diff |
 
 ## Scope-audit
@@ -64,6 +66,27 @@ offence-et ad. A friss exact-SHA-n külön `flutter test
 test/tooling/analysis_claim_safety_test.dart` (4 teszt) és a teljes review-gate
 zöld.
 
+### F2 — MAJOR — a public export megkerüli a Lab- és feature-flag kaput
+
+- **Fájl:** `lib/features/audio_analysis/engine/metrics/technique_proxies.dart:177-196`, exportálva `lib/features/audio_analysis/public.dart:61`
+- **Probléma:** a `computeTechniqueProxyMetrics` public top-level függvény
+  `analysisTechniqueProxiesEnabled` és `labModeActive` bemenet nélkül ad
+  `available` `technique.*` metricákat. A public contracton keresztül minden
+  cross-feature fogyasztó meghívhatja, megkerülve a kizárólag
+  `buildTechniqueProxyReport`-ban lévő kaput.
+- **Bizonyíték:** a függvény közvetlenül elérhető a public exportból; a kör
+  saját tesztje is közvetlenül hívja
+  (`test/features/audio_analysis/engine/technique_proxies_test.dart:121-127`).
+  Ma nincs production hívó, de ez nem zárja a public bypass-t.
+- **Kötelező javítás:** a nyers számító legyen private implementation-detail,
+  vagy a public felület minden útja kényszerítse ki a kétkapus
+  `TechniqueProxyReport`-ot. A teszt seam ne tegye elérhetővé az ungated
+  implementációt; legyen regressziós bizonyíték arra, hogy flag/Lab nélkül
+  semmilyen public API nem ad ki available technique metricát.
+- **Ellenőrzés:** célzott proxy teszt + teljes round-gate + ismételt security
+  review.
+- **Státusz:** OPEN
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Ellenőrzés |
@@ -71,9 +94,9 @@ zöld.
 | format / analyze | isolated exact-SHA gate: ✅ |
 | audio-analysis / tooling / app tesztek | isolated exact-SHA gate: ✅ |
 | architecture / secrets / l10n | isolated exact-SHA gate: ✅ |
-| CI | a review-változat után exact-SHA dispatch szükséges |
+| CI | a review-változat után exact-SHA dispatch elindult, de F2 miatt már nem merge-bizonyíték |
 
 ## Merge-döntés
 
-Nincs nyitott BLOCKER/MAJOR/MINOR. Az ADR 0052 szerinti merge-hez még a review
-jelentést is tartalmazó final SHA exact CI- és Router CI-evidencia szükséges.
+Nyitott MAJOR (F2) miatt merge tilos. Ugyanazzal a `sonnet-impl` motorral
+javító dispatch szükséges; utána új security review és final exact-SHA CI.
