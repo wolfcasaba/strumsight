@@ -5,9 +5,27 @@ Diff: `git diff dd732c4f..0d350f7a` (pre-flight commit → implementer `done` he
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-12
 Verdikt: **APPROVED**
 
+## Frissítés — dedikált security review + javító kör #1
+
+A kötelező dedikált security review (risk=high,
+`docs/reviews/e06-r11-chord-evidence-segmentation-provenance-security.md`)
+**PASS with NOTEs**-t adott: 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR (`ChordLabelCandidate`
+assert-only validáció — release buildben ledobódna), 4 NOTE (mind latens,
+bekötetlen jövőbeli-fogyasztóra vonatkozó follow-up, egyik sem blokkoló). A
+MINOR-1-et egy tightly-scoped javító kör zárta (`f3f34b2f`): valódi
+`ArgumentError` a két assert helyén (a `const` kulcsszó indokoltan
+eltávolítva, Dart nyelvi korlát — a testvér `ChordFrameEvidence._`
+konstruktor mintáját követve) + regressziós teszt. Saját re-verify: a
+teljes `chord_segment_assembler_test.dart` 13/13 zöld izolált klónban
+`f3f34b2f`-en. A 4 NOTE (O(S²) merge opt-in policyban, szanitálatlan
+label→id interpoláció, pre-existing range-only confidence-check, codec
+provenance-veszteség) szándékosan NEM ebben a körben javítandó — mind
+explicit jövőbeli-fogyasztó-előtti hardening, a HANDOFF follow-up
+szakaszába kerül.
+
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 (1 MINOR a security review-ból, FIXED) · NOTE: 2 (+ 4 a security review-ból, nem blokkoló)
 
 Két dispatch: az első (`stopped`, tiszta önjavítás — a `test/app` listán
 kívüli editjét maga vonta vissza, `scope_audit=ok`) egy mért `allowed_paths`
