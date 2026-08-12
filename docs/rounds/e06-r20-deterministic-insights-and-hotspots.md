@@ -463,6 +463,10 @@ insight helyett `stopped` + brief-revízió.
 
 **Állapot: KÉSZ — reviewra átadható.**
 
+F1 javítás: az evidence-fallback alapértelmezetten a szabály saját metrikájára
+korlátozott; kizárólag az insufficient-data szabály kérhet dokumentum-szintű
+fallbacket, amit a nem kapcsolódó rush-evidence regressziós teszt véd.
+
 ### Megvalósítás
 
 - `domain/insights/`: evidence-first insight contract, determinisztikus

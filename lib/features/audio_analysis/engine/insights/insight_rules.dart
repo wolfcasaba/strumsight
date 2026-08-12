@@ -352,7 +352,10 @@ final class InsufficientDataInsightRule implements AnalysisInsightRule {
         .where((id) => !context.isUsable(context.metric(id)))
         .toList();
     if (unavailable.isEmpty) return null;
-    final evidence = context.firstEvidenceFor(unavailable);
+    final evidence = context.firstEvidenceFor(
+      unavailable,
+      allowDocumentFallback: true,
+    );
     if (evidence == null) return null;
     return context.insight(
       ruleId: id,

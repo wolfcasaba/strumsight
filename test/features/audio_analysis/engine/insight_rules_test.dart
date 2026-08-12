@@ -51,6 +51,30 @@ void main() {
       );
     });
 
+    test('rush bias does not use unrelated document evidence', () {
+      expect(
+        evaluate(
+          'timing.rush_bias',
+          buildInsightContext(
+            document: buildInsightDocument(
+              metrics: <AnalysisMetricResult>[
+                ...buildInsightMetrics().where(
+                  (metric) =>
+                      metric.id != AnalysisMetricId.timingTargetSignedBias,
+                ),
+                metric(
+                  AnalysisMetricId.timingTargetSignedBias,
+                  -20,
+                  evidence: const <String>[],
+                ),
+              ],
+            ),
+          ),
+        ),
+        isNull,
+      );
+    });
+
     test('drag bias triggers at 20 ms and not below the boundary', () {
       expect(
         evaluate(

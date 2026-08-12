@@ -98,7 +98,10 @@ final class AnalysisInsightContext {
     };
   }
 
-  String? firstEvidenceFor(Iterable<String> factIds) {
+  String? firstEvidenceFor(
+    Iterable<String> factIds, {
+    bool allowDocumentFallback = false,
+  }) {
     for (final id in factIds) {
       final evidence = metric(id)?.evidence;
       if (evidence != null &&
@@ -107,6 +110,7 @@ final class AnalysisInsightContext {
         return evidence.first;
       }
     }
+    if (!allowDocumentFallback) return null;
     for (final event in document.timeline.events) {
       return event.id;
     }
