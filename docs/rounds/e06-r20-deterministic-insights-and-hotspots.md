@@ -167,6 +167,53 @@ nem-merge-elt pre-flightot, és a felhasználás ELŐTT újra lemérte a kódban
 
 0 produkciós fájl módosult ennél a második pre-flight-rétegnél sem.
 
+**Harmadik réteg — kör-közbeni STOP felbontás (ugyanaz a session, 2026-08-12,
+Terra első dispatchja UTÁN):** Terra a pre-flight-commit (`2d372dbf`) fölött
+elkészítette mind a kilenc szabály WIP-implementációját (commitolatlanul,
+`dirty_files=11`), majd helyesen `stopped`-ot jelzett: „A rush/drag,
+weak-upstroke és low-signal rule küszöbei nincsenek a briefben vagy ADR
+0238-ban rögzítve; saját értéket nem választhatok." Ez a §5.1 valódi hiánya
+volt — az OD-01/02/03 csak az outlier/drift/improvement szabályokat oldotta
+fel, a rush/drag/weak-upstroke/low-signal négy szabály küszöbét nem. Az
+orchestrátor a Terra WIP-jét (nem törölve, a munkapéldányban hagyva) és a
+kódot újra megmérte, mielőtt feloldotta:
+
+1. **OD-04 (rush/drag, 20 ms)** — a Terra saját, már megírt
+   `_biasThresholdMs = 20.0` konstansa HELYES: egyezik az
+   `AnalysisInsightContext.timingTolerance` alapértelmezésével és az OD-01/02
+   számpéldáinak bázisával. Nincs kódváltozás, csak formalizálás.
+2. **OD-05 (weak upstroke, ×1.2)** — a Terra saját `_upstrokeWeakMultiplier
+   = 1.25` értéke **javítandó 1.2-re**: a repóban MÁR létezik egy azonos
+   szemantikájú named constant ugyanebben a metrika-családban
+   (`dynamicsAccentThresholdRatio = 1.2`,
+   `lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+   E06-R16/ADR 0234 — "attack strength exceeds local-window median by more
+   than this ratio") — két külön szám ugyanarra a "hány %-kal tér el az
+   elvárttól" mintára rosszabb, mint az újrahasznosítás.
+3. **OD-06 (low signal quality, ≥0.05)** — a Terra saját
+   `_lowQualityClippedRatio = 0.10` értéke **hibás, javítandó 0.05-re**: ez
+   nem csak "más szám" kérdése, hanem **mért holt kód** — a
+   `DynamicsGate.clippedEventRatioUnavailable` (ADR 0234) MÁR 0.05-nél az
+   ÖSSZES dynamics-metrikát (a `clippedEventRatio`-t IS)
+   `CapabilityStatus.unavailable`-re állítja
+   (`lib/features/audio_analysis/engine/metrics/dynamics_metrics.dart`,
+   a `gateResult.status == CapabilityStatus.unavailable` korai `return`-ág);
+   a Terra 0.10-es küszöbe SOSEM lenne elérhető éles `buildDynamicsMetrics`
+   kimeneten, mert a metrika már 0.05 fölött `null`-t ad
+   (`context.scalar()`). A helyes, egyben a gate-tel elméletileg maximálisan
+   konzisztens érték a gate SAJÁT unavailable-határa, `>=` (inkluzív,
+   ugyanaz a "határon még megfigyelhető" konvenció, mint a
+   `DynamicsGate` doksorában: "inclusive at exactly this value stays
+   degraded").
+4. Egyik javítás sem nyúl az `allowed_paths`-hoz vagy tilos zónához — mind a
+   már engedélyezett `insight_rules.dart`/teszt fájlokon belüli
+   értékjavítás. A §6/§6.1 három új sorral bővült (Rush/drag-küszöb hármas,
+   Upstroke-küszöb hármas, Jelminőség-küszöb hármas + a holt-kód mérce-sor).
+
+0 produkciós fájl módosult ennél a harmadik rétegnél sem (a rétegek maguk
+dokumentum-only változtatások; a tényleges `insight_rules.dart`
+konstans-javítás Terra következő fordulójának feladata).
+
 ## 1. Cél
 
 A mért tényekből **determinisztikus, visszavezethető** coaching-insightok —
@@ -269,6 +316,49 @@ open_decisions:
       változás meghaladja a metrika `minimumMeaningfulDelta` értékét.
       A trend-számítás az R25-é; itt a szabály CSAK akkor tüzel, ha a
       kontextus ilyen összehasonlítást KAP — különben `null`.
+  - id: OD-04
+    question: Mikor számít a timing signed bias "rush" vagy "drag" torzításnak?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      |signed bias| >= 20 ms (a `timing.target_signed_bias.v1` /
+      `timing.freeplay_signed_bias.v1` metrikán; a katalógus dokumentálja:
+      negatív = korán/rush, pozitív = későn/drag). A 20 ms UGYANAZ az érték,
+      mint az `AnalysisInsightContext.timingTolerance` alapértelmezése és az
+      OD-01/OD-02 fenti számpéldáinak bázisa — nem új szám. Inkluzív a
+      határon (a boundary-n tüzel).
+  - id: OD-05
+    question: Mikor számít az upstroke "gyengének" a target-arányhoz képest?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      mért `dynamics.down_up_median_ratio.v1` >= a kontextus által megadott
+      `StrokeBalanceInsightEvidence.targetDownUpMedianRatio` × **1.2** — UGYANAZ
+      a deviation-multiplier, mint a meglévő `dynamicsAccentThresholdRatio`
+      (`engine/metrics/dynamics_metrics.dart`, E06-R16, ADR 0234: "attack
+      strength exceeds local-window median by more than this ratio"), nem új
+      szám. Inkluzív a határon.
+  - id: OD-06
+    question: >-
+      Mikor jelez az "alacsony jelminőség" szabály figyelmeztetést, és melyik
+      metrikán?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      `dynamics.clipped_event_ratio.v1` >= **0.05** — UGYANAZ az érték, mint a
+      meglévő `DynamicsGate.clippedEventRatioUnavailable` (E06-R16, ADR 0234),
+      nem új szám, és EZ AZ UTOLSÓ ÉRTÉK, amin a metrika még megfigyelhető
+      (`degraded`): a `DynamicsGate.evaluate` a `clippedEventRatio >
+      clippedEventRatioUnavailable` (szigorúan efölött) esetén az ÖSSZES
+      dynamics-metrikát — a `clippedEventRatio`-t IS — `unavailable`-re
+      állítja, tehát egy ennél magasabb szabály-küszöb SOSEM lenne elérhető
+      (a metrika `context.scalar()`-ja `null`-t adna, mielőtt a küszöb
+      egyáltalán számítana). A "jelminőség" itt tudatosan a dynamics-pipeline
+      clipping-arányát jelenti (nincs önálló, katalogizált `quality.*`
+      metric ID — a nyers `AnalysisDocument.signalQuality` report NEM
+      metric-katalogizált, tehát `factId`-ként nem használható, ADR 0238
+      Döntés 2), nem a nyers `SignalQualityReport`-ot; ez dokumentált
+      interpretáció, nem hallgatólagos scope-nyújtás.
 ```
 
 ## 6. Acceptance criteria
@@ -280,6 +370,17 @@ open_decisions:
 - [ ] **Drift-küszöb hármas** (≥ 1.5×): első fél 20 ms mellett második fél
       **29.9 / 30.0 / 30.1 ms** — a **30.0** tüzel; és egy negyedik cella,
       ahol a második félben **3** pár van → **nem** tüzel (minimum-feltétel).
+- [ ] **Rush/drag-küszöb hármas (OD-04):** signed bias = **-19.9 / -20.0 /
+      -20.1 ms** — a **-20.0** rush-ként tüzel (inkluzív), -19.9 nem; szimmetrikusan
+      **19.9 / 20.0 / 20.1 ms** — a **20.0** drag-ként tüzel.
+- [ ] **Upstroke-küszöb hármas (OD-05):** target = 1.0 mellett mért ratio =
+      **1.19 / 1.20 / 1.21** — az **1.20** (= target × 1.2) tüzel (inkluzív).
+- [ ] **Jelminőség-küszöb hármas (OD-06):** `clipped_event_ratio` = **0.049 /
+      0.05 / (0.06 unavailable-en keresztül)** — a **0.05** tüzel (inkluzív,
+      az UTOLSÓ megfigyelhető érték); **integrációs teszt** (nem csak kézzel
+      épített `AnalysisMetricResult`) bizonyítja, hogy a szabály a valódi
+      `buildDynamicsMetrics`/`DynamicsGate` kimenetén is elérhető — ne csak
+      szintetikus fixture-rel.
 - [ ] **Referenciális integritás:** minden generált insight **minden**
       `factId`-je szerepel a dokumentum `metrics` listájában, és **minden**
       `evidenceId`-je létező event/szegmens/hotspot — property-teszt méri
@@ -323,6 +424,9 @@ open_decisions:
 | A rangsor `Map` sorrendtől függ | a 100 futásos determinizmus cella |
 | Az erősség kitalált | az „erősség-slot üres" cella |
 | Az action `VoidCallback` | a sealed `switch` fordítási cella |
+| A rush/drag-küszöb nem ±20 ms, vagy a polaritás felcserélt | a **pontosan -20.0/20.0 ms** tüzel-cellák |
+| Az upstroke-multiplier nem 1.2× a target-hez képest | a **pontosan target×1.2** tüzel-cella |
+| A jelminőség-küszöb a `DynamicsGate.clippedEventRatioUnavailable` (0.05) FÖLÖTT van | a szabály sosem tüzel éles `buildDynamicsMetrics` kimeneten — a metrika `unavailable`-re esik, mielőtt a küszöb elérhető lenne (holt kód); az integrációs teszt kapja el |
 | **Valódi-sértés próba (§10):** egy szabály `factIds` listájának ideiglenes kiürítése → a referenciális integritás property **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
@@ -357,7 +461,55 @@ insight helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Állapot: STOPPED — nem reviewzható, nem commitolt félkész diff.**
+
+### Megállási ok
+
+A §5.1 kizárólag az OD-01/02/03 küszöbeit rögzíti. A §3-ban felsorolt
+`rush bias`, `drag bias`, `weak upstroke targethez képest` és `low signal
+quality` szabályok trigger-küszöbéhez nincs kötelező döntés sem itt, sem az
+ADR 0238-ban. A §4 STOP-feltétele szerint az implementer ezeket nem találhatja
+ki. További tervezői tisztázás kell, ideális esetben a szabályonkénti mérhető
+küszöb + inkluzivitás + a `rush`/`drag` egyidejű triggerelhetősége megadásával:
+§6 maximum-policy cellája „mind a kilenc szabály” triggerelését kéri, miközben
+egy kizárólag signed-bias alapú rush/drag pár kölcsönösen kizáró lenne.
+
+### Félkész, nem elfogadott munkapéldány
+
+- `domain/insights/insight_rule.dart`, `recommended_action.dart`: új, önálló
+  evidence-first contract és sealed action-vázlat — **nem elfogadott**, mert a
+  nem rögzített küszöbök jelenleg implementer-feltételezéseket tartalmaznak.
+- `engine/insights/*.dart`: registry, szabály-, insight- és hotspot-rangsor
+  vázlata — **nem elfogadott** ugyanebből az okból.
+- `test/fixtures/analysis/insights/` és a négy új teszt: mátrix/property
+  tesztvázlatok — **nem elfogadott**, nem a végleges szabályszerződést mérik.
+- `public.dart`, `app_en.arb`, `app_hu.arb`: additív, de nem kész exportok és
+  lokalizációs kulcsok — **nem elfogadott**, nem commitolandók a tisztázás
+  nélkül.
+
+### Acceptance és ellenőrzések
+
+- A §6 tíz acceptance pontja **nem teljesített / nem igazolt**; végleges
+  szabályküszöb nélkül az 18 cellás mátrix és a maximum-policy „mind a kilenc”
+  esete nem specifikálható helyesen.
+- Lefuttatva: `dart format` az új Dart-fájlokra — sikeres.
+- Lefuttatva: a négy új célzott Flutter teszt — **piros**. A fordítás a név-
+  ütközés és null-safety javítása után sikeres volt, de az `insight_ranker`
+  teszt egy félkész elvárt additional-sorrenden bukott. Nem javítottam, mert a
+  szabály-contract maga megállási pontba ütközött.
+- A kötelező `tools/round-gate.sh test/features/audio_analysis test/property
+  test/app` **nem futott**: a kör STOPPED és nincs érvényes implementáció.
+- `git diff --check` — sikeres. Tényleges `git diff --stat`: `public.dart` 6,
+  `app_en.arb` 19, `app_hu.arb` 19 beszúrás (az új, untracked fájlokat a
+  stat nem számolja).
+
+### Scope és következő kör
+
+Az ismert SDD-eltérést a brief §3/§4 szerint kezeltem: UI-hoz és Tutor-adapterhez
+nem nyúltam. A teljes working tree szándékosan változatlanul marad, hogy a
+tervező a STOP-ot auditálhassa; nincs commit. A következő lépés egy brief/ADR
+revízió, amely a hiányzó szabályküszöböket és az egyidejű kilenc-trigger
+mintát rögzíti, majd új implementer-session.
 
 ## 11. Review — a független reviewer tölti ki
 
