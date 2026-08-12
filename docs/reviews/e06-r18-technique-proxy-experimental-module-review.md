@@ -1,18 +1,19 @@
 # E06-R18 — Review
 
 Brief: `docs/rounds/e06-r18-technique-proxy-experimental-module.md`  
-Diff: `871ce472...8ecf6b34`  
+Diff: `871ce472...ae11543c`  
 Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-12  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
 Az isolated, GitHubról klónozott exact `8ecf6b34` gate zöld. A tartalmi
-mutációs próba azonban megmutatta, hogy a claim-safety guard nem ellenőrzi az
-analysis-eredetű ARB **kulcsokat**, csak az értékeket. Ez közvetlenül sérti a
-brief §5.2 és §6.1 „Testrészre utaló ARB-név” szerződését.
+mutációs próba kezdetben megmutatta, hogy a claim-safety guard nem ellenőrzi
+az analysis-eredetű ARB **kulcsokat**, csak az értékeket. Az F1 javítása ezt
+egy shared helperrel és key-only regressziós teszttel lezárta; a friss,
+GitHubról klónozott exact `ae11543c` review-gate is zöld.
 
 ## Acceptance criteria
 
@@ -20,7 +21,7 @@ brief §5.2 és §6.1 „Testrészre utaló ARB-név” szerződését.
 |---|---|---|
 | Proxy-, Lab-, confidence- és küszöb-mátrix | ✅ | `technique_proxies_test.dart`, `transition_analysis_test.dart`; isolated gate zöld |
 | Lab-only / document-purity / flag default OFF | ✅ | `technique_proxies.dart`, `technique_metric_catalog_test.dart` |
-| Tiltott állítások gépi őre és valódi-sértés bizonyítása | ❌ | F1 — kulcs-mutatáció zöld maradt |
+| Tiltott állítások gépi őre és valódi-sértés bizonyítása | ✅ | F1 key-only fake-map regressziós teszt zöld |
 | ADR 0236 és öt PENDING eval sor | ✅ | ADR, eval-mátrix diff |
 
 ## Scope-audit
@@ -52,7 +53,16 @@ allowed path. A review-jelentés a review-protokoll kötelező artefaktuma.
   `flutter test test/tooling/analysis_claim_safety_test.dart` és a teljes
   `tools/round-gate.sh test/features/audio_analysis test/tooling test/app`
   legyen zöld.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ae11543c`)
+
+### F1 újraellenőrzése
+
+`violatesClaimSafety(key, value)` már mindkét oldalt vizsgálja. A
+`analysisTechniqueFingerPlacement` + semleges érték fake-map a javítás előtti
+review-klónban zöld őrt produkált, az új tesztben pedig determinisztikusan
+offence-et ad. A friss exact-SHA-n külön `flutter test
+test/tooling/analysis_claim_safety_test.dart` (4 teszt) és a teljes review-gate
+zöld.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -61,9 +71,9 @@ allowed path. A review-jelentés a review-protokoll kötelező artefaktuma.
 | format / analyze | isolated exact-SHA gate: ✅ |
 | audio-analysis / tooling / app tesztek | isolated exact-SHA gate: ✅ |
 | architecture / secrets / l10n | isolated exact-SHA gate: ✅ |
-| CI | Full Gate dispatch elindítva; még nem merge-bizonyíték |
+| CI | a review-változat után exact-SHA dispatch szükséges |
 
 ## Merge-döntés
 
-Nyitott MAJOR (F1) miatt merge tilos. Ugyanazzal a `sonnet-impl` motorral
-javító dispatch szükséges; utána új exact-SHA review és CI-dispatch.
+Nincs nyitott BLOCKER/MAJOR/MINOR. Az ADR 0052 szerinti merge-hez még a review
+jelentést is tartalmazó final SHA exact CI- és Router CI-evidencia szükséges.
