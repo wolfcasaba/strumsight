@@ -34,7 +34,25 @@ timeline-populáló hely (nincs capability-fogalma), az új a kör saját,
 capability-gate mögötti frame→szegmens pipeline kimenete, gazdagabb és más
 invariánsú mezőkészlettel (medianHz/medianMidi/centsOffset/stabilityCents). Egy
 második, azonos nevű `final class` deklaráció a `public.dart` barrelen
-ambiguous-export ütközést adna.
+ambiguous-export ütközést adna. (A `docs/sdd/07-epic-06-audio-analysis-2.md`
+§17.2 tervezési vázlata maga is `PitchSegment` néven, pontosan ezzel a
+mezőkészlettel írja le a típust — az ütközés tehát nem a brief hibája, hanem
+az, hogy az E06-R02 implementációja idő előtt, a §17 részletes terve nélkül
+foglalta le ezt a nevet egy ettől eltérő, minimál sémára. Az 1. döntés emiatt
+egy MÁR MEGTÖRTÉNT névfoglalással szemben véd, nem az SDD ellen dönt.)
+
+Az implementer (Terra) az első dispatch fordulóján, **fájlmódosítás nélkül**,
+`stopped`-ot jelzett két további, mért ellentmondásra (2026-08-12,
+`scope_audit_changed=0`): (a) a §6 „Flag-kapu" acceptance criterion egy
+„stage-lista" ellenőrzést ír elő, de **egyetlen Epic 6-os stage sincs ma
+konkrét `AnalysisPipeline`-példányba szerelve** — `grep -rn
+"AnalysisPipeline(" lib/` nulla találatot ad az `analysis_pipeline.dart`-on
+kívül (ez az osztály maga egy generikus, `stages`-t paraméterként kapó
+futtató, konkrét kompozíció nélkül) —, tehát a kritérium egy MA nem létező
+bekötő-réteget feltételez; (b) a „hét kötelező pitch metrika" névvel nincs
+felsorolva a brief szövegében, csak a fejlécben hivatkozott
+`docs/sdd/07-epic-06-audio-analysis-2.md` §17.3-ban. Mindkettő valódi,
+dokumentált mérés — nem az implementer hibája. Az 5. döntés ezeket oldja fel.
 
 ## Döntés
 
@@ -73,6 +91,26 @@ ambiguous-export ütközést adna.
    nincs hamis note-score polifón bemeneten, az intonáció nem diagnózis,
    flag-kapu) **változatlan** — ez az ADR csak az 1–3. pontban rögzített
    típusnév-ütközést oldja fel, más tervezési döntést nem érint.
+5. **A „Flag-kapu" acceptance criterion kapu-szintű, nem pipeline-szintű
+   bizonyítékot kér.** Mivel ma nincs konkrét `AnalysisPipeline`-kompozíció
+   (0 hívás), a kör **nem** bizonyíthatja, hogy „a stage-lista nem
+   tartalmazza" — ehelyett a `PitchCapabilityGate` a saját, OD-01 (a)–(d)
+   feltételei ELŐTT vizsgálja az `analysisPitchEnabled` flaget: ha hamis,
+   `CapabilityStatus.notApplicable`-lel tér vissza (nincs
+   `CapabilityUnavailableReason` — a `notApplicable` státusz nem igényel
+   ilyet, `analysis_capability.dart`), és a pitch-metrikák számítója
+   **egyszer sem hívódik** (ugyanaz a hívásszámláló-mérce, mint a §5 pont 3
+   capability-gate/polifónia-cellájánál). Ez pontosan azt a mintát követi,
+   amit minden korábbi, még bekötetlen Epic 6-os kör (R07/R09–R16) használt a
+   saját flag-biztonságának bizonyítására — egyikük briefje sem kér
+   pipeline-stage-lista-ellenőrzést, mert a kompozíciós réteg még egyikükre
+   sem épült rá. A „hét kötelező pitch metrika" névvel a
+   `docs/sdd/07-epic-06-audio-analysis-2.md` §17.3-ból a brief §3-ba átemelve
+   (note hit ratio, median cents error, p90 cents error, pitch stability,
+   note transition timing, sustained note duration, unwanted pitch dropout
+   ratio) — az implementer feladata ezekhez pontos `AnalysisMetricId`-t,
+   egységet és számítási szerződést rendelni, ugyanúgy, ahogy az R14/R15/R16
+   is prózai SDD-leírásból vezette le a saját metrika-ID-it.
 
 ## Következmények
 
@@ -88,6 +126,10 @@ ambiguous-export ütközést adna.
 - Egy jövőbeli olvasó, aki a `PitchSegment` és a `MonophonicPitchSegment`
   együttes létét különösnek találja, ezt az ADR-t találja meg elsőként
   (mindkét fájl doc-commentje ide mutat vissza).
+- A flag-kapu bizonyítéka MA a gate saját belépési pontjára korlátozódik; a
+  „stage ténylegesen nincs a futó pipeline-ban" állítás csak azzal a jövőbeli
+  bekötő körrel válik pipeline-szinten is bizonyítottá, amelyik először
+  példányosít egy konkrét `AnalysisPipeline`-t Epic 6 stage-jeivel.
 
 ## Elutasított alternatívák
 
@@ -111,3 +153,15 @@ ambiguous-export ütközést adna.
   réteg-elválasztás (ADR 0215) a `PitchSegment`-et is domain típusként
   kezelte; a réteg megváltoztatása a névütközés miatt rossz indokból hozott
   architekturális döntés lenne.
+- **`analysis_pipeline.dart` (vagy egy új pipeline-factory fájl) felvétele az
+  `allowed_paths`-ra, hogy a Flag-kapu kritérium szó szerint teljesíthető
+  legyen:** elvetve — a fájl nincs a listán, a bővítés tilos zónát nyitna
+  (H3, ADR 0113 precedens), és a valódi hiány nem egy hiányzó
+  engedély, hanem egy MA nem létező, több környi munkát igénylő
+  kompozíciós réteg (egyetlen Epic 6 stage sincs ma pipeline-ba szerelve) —
+  ennek felépítése nem fér el egy „monofonikus pitch capability" méretű
+  körben, és nem is ennek a körnek a scope-ja (§3).
+- **A Flag-kapu kritériumot egyszerűen törölni, bizonyíték nélkül hagyni:**
+  elvetve — a flag-biztonság mérhető állítás marad, csak a bizonyíték
+  szintje változik (kapu, nem pipeline); a törlés gyengítené a §5 pont 6
+  architekturális döntést, nem csak a tesztelhetőségi szintjét igazítaná.

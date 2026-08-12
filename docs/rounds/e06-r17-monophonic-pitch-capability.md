@@ -89,6 +89,22 @@ brief állapot-táblájából:
    precedens: az `allowed_paths` bővítése egy már létező, listán kívüli
    fájlra tilos-zóna kérdés, H3). A §3/§4/§8 alábbi szövege és az
    `allowed_paths` blokk ennek megfelelően frissítve.
+3. **Második pre-flight forduló (2026-08-12, az implementer első, 0 fájlt
+   módosító `stopped` jelzése után) — két további mért ellentmondás, ADR
+   0235 Döntés 5:**
+   - A §6 „Flag-kapu" kritérium eredetileg egy „stage-lista" ellenőrzést írt
+     elő, de **egyetlen Epic 6-os stage sincs ma konkrét
+     `AnalysisPipeline`-példányba szerelve** (`grep -rn "AnalysisPipeline("
+     lib/` → 0 találat az `engine/analysis_pipeline.dart`-on kívül, amely
+     maga is csak egy generikus, `stages`-t paraméterként kapó futtató).
+     **Feloldás:** a kritérium kapu-szintű — a §5/§6 alábbi szövege
+     frissítve.
+   - A „hét kötelező pitch metrika" névvel nem szerepelt a brief szövegében,
+     csak a fejlécben hivatkozott SDD §17.3-ban. **Feloldás:** a hét név
+     (note hit ratio, median cents error, p90 cents error, pitch stability,
+     note transition timing, sustained note duration, unwanted pitch
+     dropout ratio) a §3 Scope-ba átemelve — az implementer feladata marad
+     a pontos `AnalysisMetricId`/egység/számítási szerződés hozzárendelése.
 
 ## 1. Cél
 
@@ -118,8 +134,13 @@ bevezetése az elemzésbe: pitch frame → szegmens → cent-hiba/stabilitás, k
 elhatárolásról); `PitchFrameExtractor` (a **meglévő** `YinPitchDetector` +
 `SlidingFramer` felhasználásával); `MonophonicPitchSegmentBuilder`
 (voiced/unvoiced szegmentálás, minimum hossz); `PitchCapabilityGate`
-(monofonikus target, elegendő voiced frame, polifónia-bizonytalanság,
-zajkapu); a hét kötelező pitch metrika; katalógus + ARB.
+(**elsőként** `analysisPitchEnabled`; utána monofonikus target, elegendő
+voiced frame, polifónia-bizonytalanság, zajkapu — ld. §6 Flag-kapu és ADR
+0235 Döntés 5); a hét kötelező pitch metrika (SDD §17.3, szó szerint: note
+hit ratio, median cents error, p90 cents error, pitch stability, note
+transition timing, sustained note duration, unwanted pitch dropout ratio —
+a pontos `AnalysisMetricId`/egység/számítási szerződés az implementer
+feladata); katalógus + ARB.
 
 **Kívül — TILOS:** a `YinPitchDetector` **algoritmusának** módosítása, a Tuner
 bármely fájlja, bend/vibrato elemzés (későbbi flag), polifonikus transzkripció,
@@ -165,8 +186,14 @@ Listán kívül → `stopped`.
 5. **Az intonáció nem diagnózis** (SDD §17.4): az `intonation` metrika
    kizárólag a targethez viszonyított cent-eltérést közli.
    **NEM elfogadható:** „a gitárod hangolása rossz" jellegű üzenetkulcs.
-6. **A pitch a `analysisPitchEnabled` flag mögött** fut; flag OFF → a stage
-   nem is épül be a pipeline-ba.
+6. **A pitch a `analysisPitchEnabled` flag mögött** fut. Mivel ma egyetlen
+   Epic 6-os stage sincs konkrét `AnalysisPipeline`-példányba szerelve (0
+   hívás, `grep -rn "AnalysisPipeline(" lib/`), a bizonyíték szintje a
+   **kapu**: a `PitchCapabilityGate` az OD-01 (a)–(d) feltételei ELŐTT
+   vizsgálja a flaget — hamis érték esetén azonnal `notApplicable`-lel tér
+   vissza, és a pitch-metrikák számítója egyszer sem hívódik (ADR 0235
+   Döntés 5). A pipeline-szintű „a stage nincs a futó kompozícióban" állítás
+   egy jövőbeli bekötő kör dolga.
 
 ### 5.1 Nyitott döntések — előre rögzített feloldással
 
@@ -231,9 +258,14 @@ open_decisions:
 - [ ] **Tuner-paritás:** a Tuner tesztfája **átírás nélkül** zöld, és a
       `git diff --stat` nem tartalmaz `lib/core/audio/**` vagy
       `lib/features/tuner/**` útvonalat.
-- [ ] **Flag-kapu:** `analysisPitchEnabled = false` esetén a pitch-stage
-      **nem** kerül a pipeline-ba (a stage-lista nem tartalmazza), és a
-      capability `notApplicable`.
+- [ ] **Flag-kapu (kapu-szintű bizonyíték — ADR 0235 Döntés 5):**
+      `analysisPitchEnabled = false` mellett hívva a `PitchCapabilityGate`
+      **elsőként**, minden OD-01 (a)–(d) feltétel kiértékelése ELŐTT a
+      flaget vizsgálja: `CapabilityStatus.notApplicable`-lel tér vissza
+      (nincs `reason` — a `notApplicable` nem igényel
+      `CapabilityUnavailableReason`-t), **és** a pitch-metrikák számítója
+      **egyszer sem hívódott** (hívásszámláló `== 0`, ugyanaz a mérce, mint
+      a polifónia-cellánál).
 - [ ] **NaN-mentesség property:** véletlen bemenetekre minden Hz véges és
       `(0, 5000]`-ben, minden cents érték véges, minden confidence `[0,1]`-ben.
 
@@ -254,7 +286,7 @@ open_decisions:
 | Polifonikus bemenetre a legerősebb részhangot publikálja | a négyhangos akkord `unavailable` cellája |
 | A vibrato 10 szegmensre esik szét | a vibrato **egy szegmens** cellája |
 | Csendre véletlen hangmagasságot ad | a csend/zaj `unavailable` cellák |
-| A flag OFF mellett is fut | a stage-lista cella |
+| A flag OFF mellett is fut | a Flag-kapu cella hívásszámláló `== 0` elvárása |
 | **Valódi-sértés próba (§10):** a polifónia-kapu ideiglenes kiszedése → a négyhangos akkord `unavailable` cella **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
@@ -273,7 +305,8 @@ mért tényleges Tuner-tesztfa.)
 2. `pitch_frame.dart` + `monophonic_pitch_segment.dart`.
 3. `pitch_frame_extractor.dart` (a **meglévő** YIN + framer felhasználásával).
 4. `monophonic_pitch_segment_builder.dart` (voiced szegmentálás, minimum hossz).
-5. `pitch_capability_gate.dart` (hívásszámlálóval tesztelhető seam).
+5. `pitch_capability_gate.dart` (hívásszámlálóval tesztelhető seam;
+   `analysisPitchEnabled` az ELSŐ vizsgált feltétel, az OD-01 (a)–(d) előtt).
 6. `pitch_metrics.dart` + katalógus + ARB; property; gate.
 
 ## 9. Kockázatok
