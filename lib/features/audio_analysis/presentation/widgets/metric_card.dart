@@ -103,16 +103,22 @@ final class MetricCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: <Widget>[
-                  ConfidenceBadge(
-                    level: confidenceLevel,
-                    label: statusLabel,
+                  Flexible(
+                    child: ConfidenceBadge(
+                      level: confidenceLevel,
+                      label: statusLabel,
+                    ),
                   ),
-                  const Spacer(),
-                  if (onOpenDetail != null && detailLabel != null)
+                  if (onOpenDetail != null && detailLabel != null) ...<Widget>[
+                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: onOpenDetail,
-                      child: Text(detailLabel!),
+                      child: Text(
+                        detailLabel!,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                  ],
                 ],
               ),
               if (card.state == OverviewMetricCardState.unavailable ||
