@@ -1,6 +1,6 @@
 # E06-R13 — Target alignment engine
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-12, kód újramérve: main @ `ce4b6b24`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 13; §9.4, §15.1, §15.4
 - **Branch:** `codex/e06-r13-target-alignment-engine`
 - **Előfeltétel:** **E06-R10, E06-R12 merge**
@@ -47,7 +47,29 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**PLANNING.** Pre-flight lezárva 2026-08-12, `main @ ce4b6b24` (E06-R10 és
+E06-R12 mindkettő merge-elve — az előfeltétel teljesül).
+
+Mért, a briefet megerősítő ellenőrzések:
+
+- `AnalysisTarget` nem létezik az `audio_analysis` fán, és a `domain/target/`
+  / `engine/alignment/` alkönyvtárak sem — a kör teljes felülete ÚJ (nincs
+  névütközés, ellentétben az R10/R11 pre-flightban mért résekkel).
+- A Practice Engine illesztője (`CompiledPracticeTarget`/`CompiledTargetEvent`,
+  `test/property/practice_event_matcher_property_test.dart`) létezik és
+  változatlan marad — a brief §2/§3 hivatkozása pontos, a „tilos zóna" valódi.
+
+**ADR 0231** ebben a pre-flightban íródott (a fenti eredeti „Új ADR nincs"
+állítás a brief batch-authoring időpontjára vonatkozott; a tényleges
+ADR-számot a pre-flight foglalja és írja meg) — l. [ADR
+0231](../adr/0231-target-alignment-engine-boundary.md).
+
+**Dokumentált, nem blokkoló eltérés:** a §9 kockázat-szakasz „ADR 0203"
+hivatkozása jelenleg nem létező fájlra mutat (ugyanez a placeholder hét másik
+E06 brief-ben is szerepel — R02, R14, R16, R19, R20, R25 —, az Epic korai
+tervezéséből maradt visszaváltatlan szám). Indoklás: ADR 0231 „Kontextus"
+szakasza. Nem blokkoló: a hivatkozás nem acceptance-cella, és R13
+`allowed_paths`-a nem érinti a metric-katalógust.
 
 ## 1. Cél
 
