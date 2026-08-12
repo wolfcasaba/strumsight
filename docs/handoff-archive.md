@@ -6,6 +6,29 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R18 — Technique proxy experimental module (2026-08-12)
+
+Elkészült a bekötetlen, Lab- és feature-flag mögötti technique-proxy modul:
+immutable `TechniqueProxyReport`, stabil `technique.*` metrika-katalógus és
+chord-transition evidence; nincs UI-, pipeline-, persistence- vagy V1
+Analyze-bekötés. [ADR 0236](adr/0236-analysis-technique-proxy-safety-and-naming.md).
+A pre-flight a nem létező `AnalysisDocument` diagnostics-út helyett a
+standalone reportot rögzítette. A review F1 MAJOR-ja az ARB kulcs-only
+tiltott állítást, F2 MAJOR-ja a public raw-calculator megkerülési útját
+találta; mindkettő javítva. Review **APPROVED**, security re-review **PASS**.
+
+**Zöld kapu (exact-SHA `f8ed50b2`, PR [#234](https://github.com/wolfcasaba/strumsight/pull/234),
+squash `f2674099`):** Full Gate
+[31609390475](https://github.com/wolfcasaba/strumsight/actions/runs/31609390475)
+success (`full-gate` + `Coverage`). Router CI utolsó releváns futása
+[31607444433](https://github.com/wolfcasaba/strumsight/actions/runs/31607444433)
+success az `ae11543c` ősön; az utólagos F2 és review/security commitok nem
+érintették a Router CI push-pathját. A CI-terv `full-gate.yml`-t adott
+(`apk_required=false`); a post-merge gate friss mainen mind a nyolc lépésben
+zöld.
+
+**Következő kör: E06-R19** (Confidence calibration és capability resolver).
+
 ## ✅ E06-R17 — Monofonikus pitch capability (2026-08-12)
 
 Elkészült a bekötetlen, capability-gate mögötti monofonikus pitch-detektálás:

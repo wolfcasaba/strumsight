@@ -8947,3 +8947,47 @@ regressziós teszttel is rögzítette
 halt-útvonalat futtatja `audit_legacy_scope()`-on, bizonyítva, hogy az új
 könyvtár in-scope, a halt-olt futás saját ad hoc útvonala pedig továbbra is
 out-of-scope marad).
+
+## L243 — A `codex-signal.sh done` NEM garantálja, hogy az implementer-process leállt: egy javító kör a jelzés UTÁN, ugyanabban a futásban még módosíthat (E06-R20, 2026-08-12)
+
+**Mit mértem.** Az E06-R20 security review F1-javító körében (`tools/codex-round.sh`
++ `wait-for-round.sh` explicit `terra` motorral) a jelzésfájl `status=done`-ra
+váltott `head=4f97bf5e`-vel `signalled_at=18:39:27`-kor, az orchesztrátor
+`wait-for-round.sh`-a erre visszatért, és az orchesztrátor haladt tovább
+(push, CI-dispatch, gate-újrafuttatás, review-írás). Percekkel később, egy
+FRISS `git status`/`git log` ellenőrzésnél kiderült: a munkapéldány HEAD-je
+időközben `6997b2b5`-re változott — egy `commit --amend`, ami a `.codex-round-status`-t
+UGYANAZZAL a `done` szöveggel, de KÉSŐBBI időbélyeggel (`18:40:34`) és eltérő
+`scope_audit_changed` értékkel írta felül. A `git reflog` a második commitot
+`commit (amend)`-ként mutatta. Az amend tartalma önmagában ártalmatlan volt
+(egy redundáns mondat törlése a brief §10 handoffjából, nulla nettó hatás a
+kódra, `git diff --stat` a bázishoz képest), de az orchesztrátor SOHA nem
+diszpécselt CI-t és SOHA nem futtatott gate-et erre a második SHA-ra — minden
+korábbi zöld bizonyíték a KORÁBBI (`4f97bf5e`) commitra vonatkozott.
+
+**Miért.** A `tools/wait-for-round.sh` a `.codex-round-status` FÁJLT pollozza,
+nem a codex-process életciklusát — helyesen, mert ez védi az E02-R08 mért
+hibája (`docs/LESSONS.md` L12, egy `pgrep -f` ciklus a saját parancssorára
+illeszkedett) ellen. A `tools/codex-round.sh` maga viszont csak AZUTÁN futtatja
+a `round-scope-audit.sh`-t (ami a `scope_audit=` mezőket írja), hogy a
+`codex` process ténylegesen kilépett — de eközben a Codex-agent (Terra) SAJÁT
+turnusán belül bármikor hívhatja a `codex-signal.sh done`-t, és utána —
+technikailag semmi nem tiltja — TOVÁBB dolgozhat, majd akár ÚJRA jelezhet
+(felülírva a korábbi jelzést). Az implementer-preambulum (`docs/execution/implementer-preamble.md`
+§1: „A forduló a JELZÉSSEL ér véget, nem a bejelentéssel") ezt NORMATÍVAN
+tiltja, de a szerződés csak a Codex ÖNFEGYELMére támaszkodik — nincs
+mechanikus kényszer, ami a `codex-signal.sh done` hívás UTÁNI tool-hívásokat
+blokkolná.
+
+**Hogyan alkalmazd.** Amint az orchesztrátor a `wait-for-round.sh`-tól `done`-t
+kap és MÁR elvégzett rá alapuló munkát (push, CI-dispatch, review-írás),
+**a merge/záró rituálék ELŐTT végezz egy friss `git log --oneline -1` +
+`git status --short` ellenőrzést a munkapéldányon**, és hasonlítsd össze a
+korábban látott HEAD SHA-val. Ha eltér: ne a legújabb (helyi) SHA-t fogadd el
+automatikusan — nézd meg a diffet a két SHA között (`git diff --stat <régi>
+<új>`), és ha az új tartalom bármi olyat érint, amit a CI/gate MÉG NEM látott,
+vagy dispatch-elj rá friss CI-t, vagy (ha a diff ártalmatlan/dokumentum-only,
+mint itt) pinneld vissza a branchet a MÁR bizonyítottan zöld SHA-ra
+(`git reset <régi-sha>` + célzott `git checkout <régi-sha> -- <fájl>` az
+eltérő fájlokra), hogy a merge-elt SHA pontosan az legyen, amit a CI
+ténylegesen mért — ne egy soha nem CI-zett, csak helyben létező commit.

@@ -3,7 +3,99 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R19 MERGED — Confidence calibration and capability resolver).**
+> (E06-R20 MERGED — Deterministic insights and hotspot ranking).**
+>
+> ## ✅ E06-R20 KÉSZ — Determinisztikus insightok és hotspot ranking (2026-08-12)
+>
+> Elkészült a determinisztikus, evidence-backed coaching-insight motor:
+> kilenc kezdeti szabály (rush/drag bias; kevés nagy timing-outlier;
+> második félidei drift; gyenge upstroke; chord-váltás hotspot; alacsony
+> jelminőség; kompatibilis javulás; elégtelen adat), `InsightRegistry`,
+> `InsightRanker` (maximum-policy: 1 javítandó + 1 erősség + 1 következő
+> gyakorlat + 1 minőségi warning, a többi rangsorolt `additionalInsights`),
+> `HotspotRanker` (severity → confidence → stabil ID). [ADR
+> 0238](docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md).
+> Teljesen bekötetlen (0 fogyasztó, nincs UI-, Tutor-adapter- vagy V1
+> Analyze-integráció) — a régi, R02-es `AnalysisDocument.insights` payload
+> érintetlen.
+>
+> **Kétrétegű pre-flight, mindkettő mérve, nem feltételezve:** (1) a H3
+> self-heal (ld. lent, a korábbi PR #236) már a kör indítása előtt bővítette
+> az `allowed_paths`-t egy megosztott `test/fixtures/analysis/insights`
+> könyvtárral; (2) egy KORÁBBI, nem merge-elt pre-flight-commit
+> (`fa836e87`, egy párhuzamos/előző session munkapéldányában,
+> `/home/ubuntu/ss-mm-e06-r20`) már megírta az ADR 0238-at és azonosított
+> két stale ADR-hivatkozást (0201→0216, 0203→0218 a hatos ADR-blokk R01-es
+> átszámozása után) — ez a kör a driver-skill §0.2 örökség-ellenőrzése
+> szerint megtalálta, a kódban ÚJRA-ellenőrizte (nem vakon felhasználta),
+> és a H3 self-heal fölé rétegezte, ahelyett hogy divergens második
+> ADR-szöveget írt volna ugyanarra a döntésre.
+>
+> **Kör-közbeni STOP, dokumentált mérés-alapú feloldással:** az implementer
+> (Terra) helyesen megállt, mert a brief `§5.1` csak három (outlier, drift,
+> javulás) a kilenc szabály küszöbét oldotta fel előre — a rush/drag,
+> weak-upstroke és low-signal-quality szabályok küszöbeit nem. Az
+> orchestrátor mindhárom hiányzó küszöböt a REPÓBAN MÁR LÉTEZŐ, mért
+> precedensre alapozva oldotta fel, nem új szám kitalálásával: OD-04
+> (rush/drag, ±20 ms) — a Terra saját, már megírt konstansa HELYES volt;
+> OD-05 (weak upstroke, ×1.2) — a meglévő `dynamicsAccentThresholdRatio`
+> (E06-R16/ADR 0234) újrahasznosítása a Terra 1.25-je helyett; OD-06 (low
+> signal quality, `dynamics.clipped_event_ratio.v1` ≥0.05) — a meglévő
+> `DynamicsGate.clippedEventRatioUnavailable` (ADR 0234) újrahasznosítása a
+> Terra 0.10-je helyett, **mert a 0.10 mért holt kód lett volna**: a
+> `DynamicsGate` 0.05 fölött MINDEN dynamics-metrikát — a `clippedEventRatio`-t
+> is — `unavailable`-re állítja, tehát egy 0.10-es szabály-küszöb sosem lett
+> volna elérhető éles pipeline-on. Az implementer a folytató körben
+> hozzáadott egy VALÓDI `buildDynamicsMetrics`/`DynamicsGate`-en át futó
+> integrációs tesztet, ami mindkét ágat (0.05-nél tüzel, 0.05 fölött
+> unavailable-en át `null`) bizonyítja — nem csak kézzel épített fixture-t.
+>
+> A független review **APPROVED**, a kötelező biztonsági review (risk=high)
+> **PASS** — de a security review egy valódi, reprodukálható **MINOR**-t
+> talált (**F1**: `firstEvidenceFor` generikus fallbackje kapcsolat nélküli
+> timeline-eseményt adhatott volna vissza „evidence"-ként, ha egy metrikának
+> nincs saját evidence-e — formálisan létező ID, szemantikailag hamis
+> kapcsolat; a property-teszt ezt nem kapta el, mert a fixture mindig
+> nem-üres evidence-t ad). Egy körön belüli javító kör lezárta: a fallback
+> opt-in `allowDocumentFallback` paraméterré vált, alapból KI, kizárólag az
+> `InsufficientDataInsightRule` (aminek a „ténye" definíció szerint mindig
+> evidence nélküli) kéri explicit be. Mindkét review + a reviewer saját
+> mutáció-próbái (a brief §6.1 kötelező „valódi-sértés próbája", valamint egy
+> önálló F1-ellenőrző mutáció) megerősítették a javítást. Review:
+> [docs/reviews/e06-r20-deterministic-insights-and-hotspots-review.md](docs/reviews/e06-r20-deterministic-insights-and-hotspots-review.md),
+> security:
+> [docs/reviews/e06-r20-deterministic-insights-and-hotspots-security.md](docs/reviews/e06-r20-deterministic-insights-and-hotspots-security.md)
+> (1 MINOR — ugyanaz az F1, FIXED —, 4 NOTE follow-up, ld. §3).
+>
+> **Mért folyamat-anomália (nem tartalmi hiba):** az F1-javítás Terra-futása
+> a `done` jelzés elküldése UTÁN, ugyanabban a futásban, még egyszer
+> módosított egyet (a brief §10 handoffjából törölt egy redundáns
+> mondatot) — nulla nettó hatással a kódra. Az orchesztrátor `wait-for-round.sh`-a
+> a KORÁBBI jelzésre tért vissza és erre a SHA-ra (`4f97bf5e`) dispatch-elte
+> a CI-t; a később, helyben keletkezett, sosem CI-zett amendet
+> (`6997b2b5`) a review eldobta (`git reset` + a round-brief fájl
+> visszaállítása), hogy a merge-elt SHA pontosan azt a kódot tartalmazza,
+> amit a CI ténylegesen mért. Tanulság: `docs/LESSONS.md` L243.
+>
+> Implementer **Terra (Codex)**: pre-flight + 3 dispatch (1. `stopped` a
+> hiányzó küszöbökre, 2. `done` a feloldás után, 3. `done` az F1 javítással),
+> mindegyik `continuations=0`.
+>
+> **Zöld kapu (exact-SHA `6d60a075`, PR [#237](https://github.com/wolfcasaba/strumsight/pull/237),
+> squash `ae2bad2c`):** Full Gate
+> [31630151798](https://github.com/wolfcasaba/strumsight/actions/runs/31630151798)
+> success a végső (F1-javítás + review-frissítés utáni) SHA-n. Router CI
+> utolsó releváns futása
+> [31628779761](https://github.com/wolfcasaba/strumsight/actions/runs/31628779761)
+> success az F1-javító commiton (`4f97bf5e`) — az utólagos, csak
+> `docs/reviews/**`-t érintő review-frissítő commit nincs a Router CI
+> push-path-szűrőjén. A CI-terv `full-gate.yml`-t adott
+> (`apk_required=false`); az `origin/main` nem mozdult a dispatch és a
+> merge között. A post-merge gate friss `main`-en (`ae2bad2c`) mind a nyolc
+> lépésben zöld.
+>
+> **Következő kör: E06-R21** (AnalysisRepository V2 és legacy Library
+> migráció, `docs/execution/pipeline-queue.tsv` szerint).
 >
 > ## ✅ E06-R19 KÉSZ — Confidence calibration és capability resolver (2026-08-12)
 >
@@ -110,29 +202,6 @@
 > továbbra is out-of-scope marad. Router CI zöld exact-SHA `1ddc9830`-on.
 > Tanulság: `docs/LESSONS.md` L242.
 >
-> ## ✅ E06-R18 KÉSZ — Technique proxy experimental module (2026-08-12)
->
-> Elkészült a bekötetlen, Lab- és feature-flag mögötti technique-proxy modul:
-> immutable `TechniqueProxyReport`, stabil `technique.*` metrika-katalógus és
-> chord-transition evidence; nincs UI-, pipeline-, persistence- vagy V1
-> Analyze-bekötés. [ADR 0236](docs/adr/0236-analysis-technique-proxy-safety-and-naming.md).
-> A pre-flight a nem létező `AnalysisDocument` diagnostics-út helyett a
-> standalone reportot rögzítette. A review F1 MAJOR-ja az ARB kulcs-only
-> tiltott állítást, F2 MAJOR-ja a public raw-calculator megkerülési útját
-> találta; mindkettő javítva. Review **APPROVED**, security re-review **PASS**.
->
-> **Zöld kapu (exact-SHA `f8ed50b2`, PR [#234](https://github.com/wolfcasaba/strumsight/pull/234),
-> squash `f2674099`):** Full Gate
-> [31609390475](https://github.com/wolfcasaba/strumsight/actions/runs/31609390475)
-> success (`full-gate` + `Coverage`). Router CI utolsó releváns futása
-> [31607444433](https://github.com/wolfcasaba/strumsight/actions/runs/31607444433)
-> success az `ae11543c` ősön; az utólagos F2 és review/security commitok nem
-> érintették a Router CI push-pathját. A CI-terv `full-gate.yml`-t adott
-> (`apk_required=false`); a post-merge gate friss mainen mind a nyolc lépésben
-> zöld.
->
-> **Következő kör: E06-R19** (Confidence calibration és capability resolver).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -142,12 +211,9 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-12 (E06-R19 zárása): E06-R19 új bannerként felkerült,
-> E06-R18 maradt a második (legutóbbi kettő) helyen. E06-R17 ÉS E06-R16 is a
-> fejlécben maradt az E06-R18 zárásakor (a kétbanneres szabály akkor nem lett
-> betartva) — ez a kör mindkettőt archiválta, hogy a fejléc visszaálljon a
-> szabályos két-banneres állapotra. E06-R17 teljes története átkerült az
-> archívum tetejére, E06-R16 közvetlenül alá.
+> Mért diéta: 2026-08-12 (E06-R20 zárása): E06-R20 új bannerként felkerült,
+> E06-R19 maradt a második (legutóbbi kettő) helyen, E06-R18 az archívum
+> tetejére került.
 
 ## 1. Current release state
 
@@ -252,7 +318,10 @@
   pont minden capability státuszára/kalibrált confidence-ére, geometriai
   kombináció, verziózott küszöbök és identity-kalibráció, [ADR
   0237](docs/adr/0237-analysis-confidence-combiner-and-capability-resolver.md))
-  kész, 11 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  és **E06-R20** (determinisztikus insight engine — kilenc evidence-backed
+  coaching-szabály, maximum-policy ranker, hotspot ranker, [ADR
+  0238](docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md))
+  kész, 10 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -527,6 +596,34 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R20 follow-up (5 NOTE, review + security) — gate-feltételek egy
+  jövőbeli bekötő körnek, nincs kijelölt kör.** (1) review N1: a
+  `LowSignalQualityInsightRule` (`lib/features/audio_analysis/engine/insights/insight_rules.dart:268-297`)
+  a `dynamics.clipped_event_ratio.v1`-et méri, nem a nyers
+  `AnalysisDocument.signalQuality` (R07) riportot — mert az utóbbi nem
+  katalogizált metrika, tehát nem használható `factId`-ként; ha egy
+  jövőbeli kör a nyers jelminőséget is katalogizálja, érdemes megfontolni,
+  hogy a szabály erre váltson-e. (2) review N2: a caller-supplied
+  evidence-osztályok (`TimingInsightEvidence` stb.,
+  `lib/features/audio_analysis/domain/insights/insight_rule.dart:164-234`)
+  csak érték-tartományt validálnak, nem `CapabilityStatus`-t — a „csak
+  megbízható mérésből" garancia a jövőbeli hívóra hárul, akinek ezt
+  pre-flightban explicit ellenőriznie kell. (3) security NOTE-1 (**a
+  bekötés ELŐTT megoldandó**, nem csak follow-up): a
+  `ChordTransitionHotspotInsightRule` (`insight_rules.dart:259,261-263`)
+  a `hotspot.id`-t verbátim messageArgba és egy action-payload kulcsba
+  teszi; ma nincs élő harmony-kind hotspot-termelő, de egy jövőbeli
+  decoder/import/sync útvonal szanitálatlan stringet hozhatna be. (4)
+  security NOTE-2: a hotspot-alapú `factId`-eknek nincs `isUsable` őre
+  (`insight_rules.dart:249`), a `CompatibleImprovementInsightRule`
+  mintájára (`:313`) érdemes pótolni egy jövőbeli körben. (5) security
+  NOTE-3/NOTE-4: a property-gate nem generál hotspotot (a
+  `chord_transition_hotspot` útvonal kívül esik a randomizált mérésen), és
+  a `HotspotRanker` duplikált ID esetén nem specifikált sorrendet ad (ma
+  nincs élő duplikáció). Mérve:
+  `docs/reviews/e06-r20-deterministic-insights-and-hotspots-review.md`
+  N1/N2, `docs/reviews/e06-r20-deterministic-insights-and-hotspots-security.md`
+  NOTE-1..4.
 - **E06-R19 follow-up (F2 review + security NOTE-1) — gate-feltételek egy
   jövőbeli bekötő/kalibrációs körnek, nincs kijelölt kör.** (1) F2: a
   `CapabilityResolver.resolve()` (`lib/features/audio_analysis/engine/confidence/capability_resolver.dart:105-123`)
