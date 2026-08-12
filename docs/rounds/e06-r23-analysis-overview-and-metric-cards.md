@@ -294,7 +294,71 @@ Külön processzek, nincs `&&`/pipe/`tail`. A gate a `format` → `analyze` →
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**2026-08-12, sonnet-impl, kész a review-ra.** A §4 fájllista
+minden tétele elkészült és commitolva van a `sonnet-impl/e06-r23-analysis-
+overview-and-metric-cards` branch-en (HEAD: `529c263`). A teljes §7
+gate zöld, csonkítatlan kimenettel:
+
+- `format` — zöld (`dart format --output=none --set-exit-if-changed`)
+- `analyze` — zöld (`flutter analyze`, 0 finding)
+- `test test/features/audio_analysis` — zöld (7 unit + 6 widget + 9 screen
+  teszt, mind átment)
+- `test test/app` — zöld (router, bootstrap, shell lifecycle, offline guard
+  maradt a bázison, változatlan)
+- `architecture` — zöld (12 allowlisted eltérés, az én érintett fájljaim
+  nem szennyezik az `engine/` zónát — forrásolvasó teszt is őrzi)
+- `secrets` — zöld (2384 fájl, 0 találat)
+- `l10n` — zöld (1215 üzenet, en↔hu paritás)
+
+**Elkészült komponensek:**
+
+1. `OverviewViewModel` (tartománytisztán formáz; soha nem hasonlít
+   confidence-küszöbre; a 5. állapotot a domain közzétett
+   `unavailable + confidenceTooLow` okára specializálja, nem
+   újraszámolja) — 7 unit-teszt.
+2. `MetricCard` (öt állapot, ikon + szöveg + badge, sosem
+   szín-only; unavailable/lowConfidence esetén ok + tanács) —
+   6 widget-teszt.
+3. `ConfidenceBadge` / `InsightCard` / `SignalQualityCard` —
+   közös widgetek, nincs engine-import.
+4. `AnalysisOverviewScreen` + `AnalysisMetricDetailScreen` —
+   localizált, screenreader-címkézett.
+5. `AppRoutes.analysisOverview` + `AppRoutes.analysisMetricDetail` —
+   kizárólag `audioAnalysisV2Enabled == true` mellett regisztrálva,
+   `redirect` fail-closed a hibás extra-ra.
+6. ARB en+hu (~80 új kulcs: overview fejlécek, 5 confidence-szint,
+   13 unavailable-tip, 4 akció, 1 figyelmeztetés-kategória, ~50 metrika-címke).
+7. ADR 0241 a presentation/input határról (preflight, kiegészítés a §0.0
+   feloldásokkal).
+
+**Mért scope-tisztaság:**
+
+- A `presentation/` könyvtár egyetlen fájlja sem importálja az
+  `engine/`-t vagy a `domain/insights/` szabály-bemenetet (forrásolvasó
+  widget-teszt ellenőrzi).
+- A perzisztált `AnalysisInsight.recommendedAction` enumhoz tartozó
+  akciógomb `enabled == false` és tooltipet kap; a brief §5 döntés 7
+  szerinti letiltott állapot, nem néma gomb.
+- A V1 `lib/features/analyze/**` ÉRINTETLEN — `git diff --stat` nem
+  tartalmazza.
+
+**Ismert korlát / nyitott következő kör:**
+
+- A V1-be belépőpont ebben a körben szándékosan NEM készült (OD-01
+  default feloldás). Az R30 rollout-kör dönt a `/analyze` → overview
+  átmenetről.
+- A R20-as `RecommendedAnalysisAction` részletes leíró perzisztálása
+  (paraméteres akciók engedélyezéséhez) külön domain/codec döntés —
+  ADR 0241 §"Következmények" kimondja.
+
+**Kimenetek:**
+
+- Branch: `sonnet-impl/e06-r23-analysis-overview-and-metric-cards`
+- Commit history: `0c34df6` (view model) → `529c263` (l10n fix),
+  10 lépésben, egyenként committolva a §2 implementer-preambulum
+  per-állomány commit-szabálya szerint.
+- Gate: `tools/round-gate.sh test/features/audio_analysis test/app`
+  zöld, pipe/`tail`/`&&` nélkül.
 
 ## 11. Review — a független reviewer tölti ki
 
