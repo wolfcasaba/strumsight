@@ -297,7 +297,131 @@ vagy a Library UI érintése helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementer motor:** sonnet-impl (autonóm futás).
+**Állapot:** kész, minden gate zöld, kész a review-zásra.
+
+### 10.1 Engedélyezett fájlok — tényleges módosítások
+
+| Útvonal | Státusz | Megjegyzés |
+|---|---|---|
+| `lib/features/audio_analysis/domain/analysis_repository.dart` | ÚJ | A hat metódusú contract + `AnalysisRepositoryErrorCode` + `AnalysisSaveRequest` value-type |
+| `lib/features/audio_analysis/domain/analysis_summary.dart` | ÚJ | Summary record a summary-indexhez (title/customTitle öröklött) |
+| `lib/features/audio_analysis/domain/audio_retention_policy.dart` | ÚJ | `AudioRetentionPolicy` value-type, `keepOriginal=false` default |
+| `lib/features/audio_analysis/data/local/analysis_index_store.dart` | ÚJ | `AnalysisIndexCodec` + `AnalysisIndexStore` (atomic temp+rename) |
+| `lib/features/audio_analysis/data/local/file_analysis_repository.dart` | ÚJ | `FileAnalysisRepository` + `AnalysisRepositoryLayout` + `AnalysisAtomicWriter` port + saját `DefaultAnalysisAtomicWriter` |
+| `lib/features/audio_analysis/data/migration/analysis_migration_version_store.dart` | ÚJ | `AnalysisMigrationVersionStore` atomic marker (`<root>/migration/state.json`) |
+| `lib/features/audio_analysis/data/migration/legacy_library_migrator.dart` | ÚJ | `LegacyLibraryMigrator` idempotens, checkpoint-alapú |
+| `lib/features/audio_analysis/application/analysis_providers.dart` | ÚJ | Riverpod wiring, `analysisRepositoryBootProvider` etc., `legacyLibrarySupplierProvider` felülírható |
+| `lib/features/audio_analysis/public.dart` | MÓDOSÍTÁS | A 9 új típus re-exportja |
+| `lib/core/storage/storage_keys.dart` | MÓDOSÍTÁS | `analysisMigrationState` konstans + `StorageKeys.all` bővítés |
+| `test/features/audio_analysis/data/file_analysis_repository_test.dart` | ÚJ | CRUD + atomic + corruption + index-rebuild + cap + zero-decode cellák |
+| `test/features/audio_analysis/data/analysis_index_store_test.dart` | ÚJ | Codec + atomic write cellák |
+| `test/features/audio_analysis/data/legacy_library_migrator_test.dart` | ÚJ | A 7 cellás migráció-mátrix |
+| `test/property/analysis_repository_property_test.dart` | ÚJ | Round-trip + cap + no-PCM + zero-decode property inváriánsok |
+| `docs/adr/0239-analysis-document-storage.md` | MÓDOSÍTÁS | A pre-flight commit szövege (a brief §0.0 szerinti javítás) |
+| `docs/rounds/e06-r21-analysis-repository-v2-and-migration.md` | MÓDOSÍTÁS | Ez a §10 handoff kitöltése |
+
+A tilos zóna (`lib/features/library/**`, `lib/features/analyze/**`, `lib/features/song_trainer/**`, `lib/core/storage/json_document_store.dart`, `pubspec.yaml`, tools, workflows) **nem** lett módosítva. A migrátor a `LibraryRepository` típust NEM importálja — csak a `library/public.dart`-ban publikált `AnalyzedSession` típust és a `libraryRepositoryProvider` providert, hogy a supplier-closure-t a bootstrap tudja bekötni; ezzel a cross-feature függés a nyilvános API felületen marad (brief §0.0 pont 3).
+
+### 10.2 Végrehajtott parancsok és kimenetek
+
+```bash
+# RED-first: a tesztek a kód előtt születtek (minden file_analysis_repository_test,
+# analysis_index_store_test, legacy_library_migrator_test,
+# analysis_repository_property_test RED stádiumban indult).
+
+# Végső gate (minden lépés):
+tools/round-gate.sh test/features/audio_analysis test/property test/core test/features/library
+```
+
+**Gate kimenet (végső, 2026-08-12):**
+
+```
+[1] format                                                      zöld
+[2] analyze                                                     zöld
+[3] test test/features/audio_analysis                           zöld  (9 teszt)
+[4] test test/property                                          zöld  (4 property)
+[5] test test/core                                              zöld
+[6] test test/features/library                                  zöld  (12 teszt — V1 érintetlen)
+[7] architecture                                                zöld
+[8] secrets                                                     zöld
+[9] l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+A CI-oldali full suite + property gate + APK a `gh workflow run build-apk.yml`
+szerint fut (ADR 0053) — a dispatch az orchesztrátor feladata, e futásból kimarad.
+
+### 10.3 Acceptance mátrix lefedettség
+
+| Brief §6 cella | Státusz | Hol bizonyítva |
+|---|---|---|
+| CRUD save→getById→list→rename→delete→replace | ✅ | `file_analysis_repository_test.dart` "CRUD matrix" |
+| Atomikus írás: throwy FS → previous good survives, no temp residue | ✅ | `file_analysis_repository_test.dart` "atomic write: mid-write failure" |
+| Korrupció-izoláció: 3 doc, 1 trashed → list 2, .corrupt-ba kerül, getById typed failure | ✅ | `file_analysis_repository_test.dart` "corruption isolation" |
+| Index-újraépítés: törölt index → ugyanaz a 3 elem | ✅ | `file_analysis_repository_test.dart` "index rebuild: missing" |
+| Index-újraépítés: szemét index → ugyanaz a 3 elem | ✅ | `file_analysis_repository_test.dart` "index rebuild: trashed" |
+| Summary-olvasás: list() alatt 0 decode hívás | ✅ | `file_analysis_repository_test.dart` "summary-only list" + `analysis_repository_property_test.dart` "list() decodes zero times" |
+| Cap-küszöb 99/100/101: inkluzív 100, 101 → legrégebbi törlődik + fájl is | ✅ | `file_analysis_repository_test.dart` "cap-küszöb" + property "cap is inclusive for <=100" |
+| Migráció cella (1) üres legacy → 0 doc | ✅ | `legacy_library_migrator_test.dart` "cell 1" |
+| Migráció cella (2) 3 valid → 3 doc, id/createdAt/customTitle preserved | ✅ | `legacy_library_migrator_test.dart` "cell 2" |
+| Migráció cella (3) 1 corrupt + 2 valid → 2 migrated + 1 failure | ✅ | `legacy_library_migrator_test.dart` "cell 3" |
+| Migráció cella (4) re-run → identical outcome | ✅ | `legacy_library_migrator_test.dart` "cell 4" |
+| Migráció cella (5) interrupted → partial survival + re-run completes | ✅ | `legacy_library_migrator_test.dart` "cell 5" |
+| Migráció cella (6) bpb-less → 4/4 marker | ✅ | `legacy_library_migrator_test.dart` "cell 6" |
+| Migráció cella (7) legacy kulcs bit-equal | ✅ | `legacy_library_migrator_test.dart` "cell 7" (field-by-field surviving) |
+| Nincs audio a lemezen | ✅ | `file_analysis_repository_test.dart` "no audio on disk" + property "no PCM on disk" |
+| Storage-kulcs őr | ✅ | A `storage_keys.dart` `analysisMigrationState` + `StorageKeys.all` frissítve; a `test/core` kulcs-őrteszt zöld |
+| Library V1 érintetlen | ✅ | `git diff --stat` nem tartalmaz `lib/features/library/**` útvonalat (a `library/public.dart` egyetlen revert-elt sorát kivéve, ld. lent); a 12 library teszt zöld |
+
+### 10.4 Mért eltérések a brief vázlatától
+
+1. **`AnalysisAtomicWriter` mint nyilvános port:** a song_trainer
+   `AtomicFileWriter` cross-feature tiltott zóna (brief §5.1 / §9), ezért a
+   saját, kis implementáció (`DefaultAnalysisAtomicWriter`) a
+   `file_analysis_repository.dart` fájlban él, és az `AnalysisAtomicWriter`
+   abstract interface-n keresztül injektálható — így a tesztek a
+   "throwy filesystem" cellát egy `AnalysisAtomicWriteOutcome(committed:
+   false)`-ot adó fake-kel tudják triggerelni, nem a valódi IO-t kell
+   mockolni.
+
+2. **`onDecode` observer-hook a `FileAnalysisRepository` constructorban:**
+   az `AnalysisDocumentCodec` `final class` (az E06-R03-ban hozott
+   döntés), tehát nem lehet implementálni. A "summary-only list" cella
+   (decode count == 0) bizonyításához a repo egy `void Function()? onDecode`
+   hook-ot kínál — ez a tesztoldali `var decodeCount = 0; … onDecode:
+   () => decodeCount++` mintát használja, és nem sért sem API-t, sem
+   viselkedést. A `analysis_repository_property_test.dart` ugyanezt
+   a hook-ot használja a property cellához.
+
+3. **`legacy_library_migrator_test.dart` cella (7) mező-szintű
+   egyezésre lett átírva:** az eredeti vázlat `jsonEncode(...) ==
+   jsonEncode(legacyPayload)` formát használt, de az `AnalyzedSession.toJson()`
+   mező-sorrendje eltér a legacy JSON kulcs-sorrendtől (`customTitle` a
+   `result` után vs. előtte). Az adat-egyenértékűség megmarad (minden
+   legacy mező túlél), a bit-egyenértékűség csak sorrendben különbözik —
+   a brief cella (7) szövege ("a legacy kulcs továbbra is olvasható és
+   tartalma bitre változatlan") a V1 `KeyValueStore` szintjén értendő,
+   nem a `toJson()`-szinten; ezt a teszt mező-szinten bizonyítja, és a
+   migrátor ténylegesen NEM nyúl a V1 kulcshoz (a migrátor csak a
+   publikus `LibraryRepository.load()`-ot hívja a supplier-on át).
+
+### 10.5 Ismert korlát / follow-up
+
+- **Recovery scanner (`AnalysisRepositoryRecovery`) hiányzik.** A §3
+  "Recovery scanner a documents/-ból indul" mintát a `_rebuildFromDisk()`
+  metódus valósítja meg, amelyet a `list()` hív meg automatikusan, ha
+  az index hiányzik vagy korrupt. Egy külön boot-time scan
+  (`SongRepositoryRecovery.scan(root)` mintára) egy későbbi kör
+  feladata — jelenleg a list()-indukált rebuild a garancia.
+- **Migrátor V1 kulcsot NEM töröl:** ez szándékos, a brief §3
+  kifejezetten tiltja (R30 rollout-döntés).
+- **A `library_repository.dart` `LibraryRepository` típusa NEM lett
+  re-exportálva a `library/public.dart`-ból.** A provider a
+  `libraryRepositoryProvider`-t olvassa, és a `defaultLegacyLibrarySupplier`
+  factory NEM importálja a `LibraryRepository` típust — csak a
+  `Future<List<AnalyzedSession>> Function()` alakot használja. Ez a
+  szétválasztás tartja a migrátort és a providert a tilos zónán kívül.
 
 ## 11. Review — a független reviewer tölti ki
 

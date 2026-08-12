@@ -76,6 +76,14 @@ abstract final class StorageKeys {
     visionCalibration,
   ];
 
+  // --- audio analysis -----------------------------------------------------
+  /// Migration checkpoint for the V1 → V2 analysis migration
+  /// (ADR 0239 §Döntés 9, E06-R21 brief §5.5). The marker lives at
+  /// `<analysisRoot>/migration/state.json`; this constant is the
+  /// preference-key shadow used by support tooling and the
+  /// migration-supplier guard.
+  static const String analysisMigrationState = 'ss.analysis.migration_state';
+
   // --- AI tutor ------------------------------------------------------------
   /// Versioned documents, recovery index, and inspectable memory facts.
   static const String tutorConversationDocuments =
@@ -139,6 +147,7 @@ abstract final class StorageKeys {
     tutorConversationDocuments,
     tutorConversationIndex,
     tutorMemoryFacts,
+    analysisMigrationState,
   ];
 }
 
