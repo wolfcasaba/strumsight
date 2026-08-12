@@ -486,7 +486,27 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- **Commitok:** `aac4d849` (`EventId`) és `38a13809` (evidence model +
+  timeline builder); branch: `codex/e06-r10-event-evidence-onset-strum-timeline`.
+- **Módosítások:** a meglévő `OnsetEvent`/`StrumEvent` additív evidence
+  mezőket kapott; az új, stateless `EventId` `<runId>:<type>:<sampleIndex>`
+  azonosítót készít; az `EventTimelineBuilder` V1 `LegacyEvidence`-ből
+  atomikus onset/strum párokat épít, `Duration`-alapú 50 ms suppressionnel,
+  diagnosztikával és eredeti PCM-ből mért attack/RMS értékekkel. A meglévő
+  `LegacyViewAdapter` változtatás nélkül már a V2 `StrumEvent`-eket vetíti a
+  mai `TimelineStrum` alakra, ezért kódmódosítás nem volt szükséges.
+- **Lefuttatott ellenőrzések:**
+  `flutter test test/features/audio_analysis/domain/analysis_event_test.dart test/features/audio_analysis/domain/event_id_test.dart test/features/audio_analysis/engine/event_timeline_builder_test.dart test/property/analysis_event_timeline_property_test.dart`
+  → 13 teszt zöld; `tools/round-gate.sh test/features/audio_analysis
+  test/property test/features/analyze` → format, analyze, mindhárom tesztág,
+  architecture, secrets és l10n zöld; `python3 tools/scope-audit.py ...`
+  → `scope_audit=ok` (10/10 changed path az allowed scope-ban).
+- **Nem futtatott ellenőrzések:** teljes `flutter test`, friss seedelt property
+  gate és release APK — a kör szabálya szerint a CI/orchestrátor futtatja;
+  lokális APK-build szándékosan nem futott.
+- **Ismert rés/kockázat:** az új evidence mezőket a codec ebben a körben még
+  nem perzisztálja (OD-03, dokumentált scope-határ); a builder még nincs a
+  shipping V1 útvonalra kötve, ezért a meglévő termékviselkedés változatlan.
 
 ## 11. Review — a független reviewer tölti ki
 
