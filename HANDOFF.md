@@ -3,7 +3,38 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
-> (E06-R11 MERGED — Chord evidence, segmentation és decoder provenance).**
+> (E06-R12 MERGED — Beat grid és tempo curve).**
+>
+> ## ✅ E06-R12 KÉSZ — Beat grid és tempo curve (2026-08-12)
+>
+> Elkészült a bekötetlen, immutable ritmus-domain: `BeatPoint`, `BeatGrid`,
+> `TempoCurvePoint`, `TempoHypothesis`, `BeatGridEstimator` és
+> `TempoCurveBuilder`. A target-first grid felülírja a becslést; target nélkül
+> a becslő csak reprodukálható candidate-ot ad. A tempo összegzés stabil/
+> instabil/unavailable státuszt ad, és a publikus `TempoCurve` minden opcionális
+> numerikus summary értékét release-módban is véges/tartományos guard védi.
+> [ADR 0230](docs/adr/0230-beat-grid-tempo-curve-boundary.md). Nincs UI- vagy
+> perzisztencia-bekötés, a V1 Analyze útvonal változatlan.
+>
+> **Pre-flight:** a brief `TempoPoint` típusa már létezett az
+> `analysis_timeline.dart`-ban, ezért a kör saját `TempoCurvePoint` nevét
+> használja. `AnalysisTarget` még R13 kimenet, így az R12 célbemenete lokális
+> `BeatGridTargetInput`; az analysis-metric katalógus változatlan. Strict
+> brief-lint és scope-audit zöld volt.
+>
+> **Review:** az első független izolált review 1 MAJOR-t talált: a publikus
+> `TempoCurve` konstruktor NaN/végtelen opcionális summary-kat elfogadott. Az
+> azonos `sonnet-impl` javító kör ezt két fájlra szűkítve zárta; re-review
+> **APPROVED**, nyitott BLOCKER/MAJOR nélkül. A risk=high security review
+> **APPROVED**, 0 CRITICAL/BLOCKER/MAJOR/MINOR. A reviewer target-first és
+> inkluzív stabil-küszöb mutációját is pirosra vitte, majd visszaállította.
+>
+> **Zöld kapu (exact-SHA `1e071fe3`, PR [#228](https://github.com/wolfcasaba/strumsight/pull/228),
+> squash `8b0cc6f2`):** Full Gate
+> [31570230164](https://github.com/wolfcasaba/strumsight/actions/runs/31570230164)
+> + Router CI [31570232431](https://github.com/wolfcasaba/strumsight/actions/runs/31570232431)
+> success; `origin/main` nem mozdult dispatch óta. A post-merge gate a friss
+> `main`-en mind a nyolc lépésben zöld (`PROPERTY_SEED=42`).
 >
 > ## ✅ E06-R11 KÉSZ — Chord evidence, segmentation és decoder provenance (2026-08-12)
 >
@@ -825,17 +856,16 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-12):** `main` @ `eec0aeab` — E06-R10, PR
-[#225](https://github.com/wolfcasaba/strumsight/pull/225), squash-merge.
-Az exact merge-előtti SHA `8976d178` (a javító kör + review-zárás utáni
-végleges HEAD): Full Gate
-[31560690943](https://github.com/wolfcasaba/strumsight/actions/runs/31560690943)
-és Router CI [31560692023](https://github.com/wolfcasaba/strumsight/actions/runs/31560692023)
-success, mindkettő kézzel `workflow_dispatch`-elve, mert a review-doksi-only
-zárókommit egyik workflow push-path-szűrőjét sem érintette (L112 minta,
-ismételten mérve). A post-merge
-`tools/round-gate.sh test/features/audio_analysis test/property test/features/analyze`
-mind a nyolc lépése zöld. Az alábbi régebbi rész történeti kontextus.
+**Aktuális állapot (2026-08-12):** `main` @ `8b0cc6f2` — E06-R12, PR
+[#228](https://github.com/wolfcasaba/strumsight/pull/228), squash-merge.
+Az exact merge-előtti SHA `1e071fe3`: Full Gate
+[31570230164](https://github.com/wolfcasaba/strumsight/actions/runs/31570230164)
+és Router CI [31570232431](https://github.com/wolfcasaba/strumsight/actions/runs/31570232431)
+success. A CI-terv `full-gate.yml`-t adott (`apk_required=false`); a diff nem
+érintett natív/release-utat. `origin/main` nem mozdult dispatch és merge között.
+A post-merge `tools/round-gate.sh test/features/audio_analysis test/property
+test/features/analyze` mind a nyolc lépése zöld. Az alábbi régebbi rész
+történeti kontextus.
 
 **Előző állapot (2026-08-12):** `main` @ `aa41db54` — E06-R09, PR
 [#223](https://github.com/wolfcasaba/strumsight/pull/223), squash-merge.
@@ -1033,6 +1063,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E06-R12 — Beat grid és tempo curve** (PR
+[#228](https://github.com/wolfcasaba/strumsight/pull/228), squash `8b0cc6f2`,
+új [ADR 0230](docs/adr/0230-beat-grid-tempo-curve-boundary.md)). Immutable
+beat-grid/tempo-curve domain és stateless builder/estimator készült, target-first
+override-dal, bizonytalan candidate státuszokkal és NaN-mentes publikus
+összegzéssel. A brief a meglévő `TempoPoint`-kollíziót `TempoCurvePoint`-ra
+revideálta, R13-ig lokális target inputot használ; V1/UI/perzisztencia érintetlen.
+Független review elsőre 1 MAJOR-t talált az opcionális summary mezők guardján;
+szűk javító kör zárta, a végső review APPROVED. Security review APPROVED, 0
+CRITICAL/BLOCKER/MAJOR/MINOR. Exact-SHA CI és a post-merge gate is zöld.
 
 **E06-R10 — Event evidence modell és onset/strum timeline V2** (PR
 [#225](https://github.com/wolfcasaba/strumsight/pull/225), squash `eec0aeab`,
@@ -1417,16 +1458,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R11 — ChordSegment** (Chapter 7, Kör 11,
-`docs/rounds/e06-r11-*.md`). Új sessionben induljon; E06-R10 lezárult.
-**Ismert pre-flight teendő (mérve E06-R10 zárásakor, `tools/brief-lint.py
---all --level strict` S5 lelet):** a brief `ChordSegment` néven ÚJ fájlt ír
-elő, ami ütközik a meglévő `domain/analysis_segment.dart`-tal — a saját
-pre-flight ugyanazzal a mintával revideálja (bővítés a meglévő fájlban, nem
-új fájl), mint az E06-R10 H3 self-healje (PR #224) tette az
-`OnsetEvent`/`StrumEvent` párra. Ugyanez a hibaosztály él még R12
-(`TempoPoint` ↔ `domain/analysis_timeline.dart`) és R17 (`PitchSegment` ↔
-`domain/analysis_segment.dart`) briefjében is.
+**Következő kijelölt SDD-kör: E06-R13 — Target alignment engine** (Chapter 7,
+Kör 13, `docs/rounds/e06-r13-*.md`). Új sessionben induljon; E06-R12 lezárult.
+Pre-flightban az R12 publikus `BeatGrid`/`TempoCurve` contractokra épüljön, és
+újra mérje, hogy az addigra szükséges target-forrás ténylegesen elérhető-e.
 
 > ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
 >

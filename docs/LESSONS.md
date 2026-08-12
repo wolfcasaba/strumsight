@@ -8540,3 +8540,25 @@ strukturális rése — ilyenkor a döntés ne „még egy LESSONS-bejegyzés", 
 a mögöttes artefaktum tényleges módosítása legyen (ebben a zárásban: a
 `sdd-round-driver` SKILL.md §3 kapott egy kötelező, végrehajtható sort a
 `git clone` és a dispatch közé).
+
+## L231 — A publikus immutable aggregate opcionális numerikus mezői is inputhatárok (E06-R12, 2026-08-12)
+
+**Mit mértünk.** Az E06-R12 első, zöld gate utáni izolált review-ja egy
+eldobható próbával megmutatta, hogy `TempoCurve(status: available,
+legacyBpm: 120, medianBpm: double.nan)` nem dobott `ArgumentError`-t. A
+`TempoCurve` csak a kötelező `legacyBpm` értéket validálta, a négy opcionális
+numerikus summary (`medianBpm`, `iqrBpm`, `driftSlopeBpmPerMinute`,
+`stableRegionRatio`) a publikus konstruktoron át NaN/végtelen vagy hibás
+tartományban is létrehozható volt. A [review](reviews/e06-r12-beat-grid-and-tempo-curve-review.md)
+MAJOR-1-ként rögzítette; a javító körben minden mező release-safe finite/range
+guardot és peremcella-tesztet kapott.
+
+**Miért.** Az immutable objektum konstruktorának minden publikus paramétere
+inputhatár, nem csak az elsődleges érték. A producer ma lehet hibátlan, de a
+jövőbeli adapter, codec vagy teszt közvetlenül hívhatja a konstruktort; a NaN
+összehasonlításai pedig több egyszerű tartomány-őrt megkerülnek.
+
+**Hogyan alkalmazd.** Új publikus value/aggregate típus review-ján a kötelező
+és opcionális `double` mezőkre egyaránt próbáld ki a NaN-t, ±végtelent és a
+tartomány két oldalát. A validáció `isFinite`-tel kezdődjön; a kapott
+invariánst közvetlen konstruktor-teszt rögzítse, ne csak builder-output teszt.

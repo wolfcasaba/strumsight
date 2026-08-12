@@ -6,6 +6,32 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R12 — Beat grid és tempo curve (2026-08-12)
+
+Bekötetlen, immutable ritmus-domain készült: `BeatPoint`/`BeatGrid`, ütközés
+miatt külön `TempoCurvePoint`, `TempoHypothesis`, target-first
+`BeatGridEstimator` és `TempoCurveBuilder`. A pre-flight a meglévő
+`analysis_timeline.dart:TempoPoint` ütközést mérte és a briefben a lokális
+`BeatGridTargetInput` megoldást rögzítette, mert `AnalysisTarget` csak a
+következő kör kimenete; analysis-metric katalógus nem bővült. [ADR
+0230](adr/0230-beat-grid-tempo-curve-boundary.md). Nincs UI-, persistence- vagy
+V1 Analyze-bekötés.
+
+Az első izolált review egy valós MAJOR-t talált: a publikus `TempoCurve`
+konstruktor `medianBpm`/`iqrBpm`/`driftSlopeBpmPerMinute`/`stableRegionRatio`
+mezője NaN vagy végtelen értéket fogadott el. A szűk, azonos `sonnet-impl`
+javító kör release-módban is futó finite/range guardokkal és regressziós
+határesetekkel zárta. Re-review **APPROVED**, security review **APPROVED**
+(0 CRITICAL/BLOCKER/MAJOR/MINOR); a reviewer target-first és inkluzív stabil
+küszöb mutációját önállóan pirosra vitte, majd visszaállította.
+
+Exact SHA `1e071fe3`, PR [#228](https://github.com/wolfcasaba/strumsight/pull/228),
+squash `8b0cc6f2`: Full Gate
+[31570230164](https://github.com/wolfcasaba/strumsight/actions/runs/31570230164)
+és Router CI [31570232431](https://github.com/wolfcasaba/strumsight/actions/runs/31570232431)
+success; `origin/main` nem mozdult. A post-merge round-gate mind a nyolc
+lépése zöld volt, property seed `42`.
+
 ## ✅ E06-R09 — ClipAnalyzer stage adapter és parity (2026-08-12)
 
 A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be
