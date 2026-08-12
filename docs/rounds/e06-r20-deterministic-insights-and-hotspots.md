@@ -1,12 +1,15 @@
 # E06-R20 — Determinisztikus insightok és hotspot ranking
 
-- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, 2026-08-12
-  — a §0.0 rögzíti a mért gyökérokot és a feloldást; eredetileg előre megírva
-  2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight lezárva; két réteg — H3 self-heal
+  fixture-scope-fix a `main`-en + ADR 0238 pre-flight-revízió egy korábbi,
+  nem merge-elt munkapéldányból újrahasznosítva és a jelen HEAD-en
+  újra-ellenőrizve, ld. §0.0; eredetileg előre megírva 2026-08-07, ma
+  2026-08-12, kód olvasva: main @ `7dbaa349`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 20; §20.1–20.7
 - **Branch:** `codex/e06-r20-deterministic-insights-and-hotspots`
 - **Előfeltétel:** **E06-R14, E06-R15, E06-R16, E06-R19 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch), pre-flight: Claude Sonnet 5 (orchestrátor) ·
+  **Implementáció:** Terra
 
 ```ai-router
 schema_version = 1
@@ -27,6 +30,7 @@ allowed_paths = [
   "test/property/analysis_insight_property_test.dart",
   "test/fixtures/analysis/insights",
   "docs/rounds/e06-r20-deterministic-insights-and-hotspots.md",
+  "docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -51,6 +55,10 @@ native_gate = false
 > `test/property/` alatt) — ehhez tedd a megosztott builder(ek)et az
 > `allowed_paths` új `test/fixtures/analysis/insights` bejegyzése alá, az
 > `test/fixtures/vision/posture`-mintát követve (ld. lentebb).
+>
+> **Második pre-flight réteg (§0.0 vége):** [ADR 0238](../adr/0238-analysis-insight-evidence-and-ranking-boundary.md)
+> rögzíti az insight-engine architekturális döntéseit; a §5/§5.1 két stale
+> ADR-hivatkozása (0201→0216, 0203→0218) javítva.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -112,6 +120,53 @@ self-heal saját regressziós tesztje
 a scope szélesítése véletlenül vakfoltot nyisson. 0 produkciós fájl módosult
 ennél a self-healnél.
 
+**Második pre-flight réteg (új orchestrátor-session, ugyanaznap, 2026-08-12,
+main @ `7dbaa349` — a H3 self-heal UTÁN):** a kör első dispatchja előtt egy
+korábbi orchestrátor-session (fallback-motorral, munkapéldány
+`/home/ubuntu/ss-mm-e06-r20`) már elvégzett egy rendes pre-flightot —
+kiosztotta és megírta [ADR 0238](../adr/0238-analysis-insight-evidence-and-ranking-boundary.md)-at,
+és a brief két stale ADR-hivatkozását azonosította javításra —, de ez a
+pre-flight-commit (`fa836e87`, branch
+`codex/e06-r20-deterministic-insights-and-hotspots`) SOSEM futott be a
+`main`-be: a H3 self-heal a `main`-en, ennek a pre-flight-commitnak az
+ismerete nélkül revideálta a briefet (a self-heal és a pre-flight-commit
+egymástól függetlenül, ugyanarról a `3f5ac41e` bázisról ágaztak el). A jelen
+session a driver-skill §0.2 örökség-ellenőrzése szerint megtalálta ezt a
+nem-merge-elt pre-flightot, és a felhasználás ELŐTT újra lemérte a kódban:
+
+1. **Stale ADR-hivatkozás.** A §5 1. pontja és a §5.1 OD-03-a „ADR 0201"-et
+   ill. „ADR 0203"-at idézett; a hatos ADR-blokk R01-es 0200–0205→0215–0220
+   átszámozása után a helyes cím **ADR 0216**
+   (`docs/adr/0216-analysis-confidence-calibration-and-abstention.md`, fejléc
+   ellenőrizve: „Analysis confidence, calibration and abstention") és
+   **ADR 0218** (`docs/adr/0218-analysis-metric-id-and-version-governance.md`,
+   fejléc ellenőrizve: „Analysis metric ID and version governance"). Javítva
+   lent.
+2. **ADR 0238 tartalma.** Minden hivatkozott tény újra-grep-elve a mai kódon:
+   `AnalysisHotspot` (`lib/features/audio_analysis/domain/analysis_segment.dart`)
+   ma is `metricIds`/`evidenceIds`-t hordoz `AnalysisMetricId.contains`
+   validációval; `AnalysisMetricId`
+   (`lib/features/audio_analysis/domain/analysis_metric_catalog.dart`) ma is
+   öt `technique.*` katalógus-bejegyzést tartalmaz; a meglévő
+   `domain/analysis_insight.dart` (R02, bekötetlen) `factIds`-t hordoz,
+   `evidenceIds`-t NEM; a technique-proxy modul
+   (`lib/features/audio_analysis/engine/metrics/technique_proxies.dart`)
+   önálló, `TechniqueProxyGate`/`CapabilityStatus`-mögötti fájl,
+   `AnalysisDocument`-bekötés nélkül (HANDOFF E06-R18 banner is megerősíti).
+   Minden állítás stimmelt — az ADR-t emiatt VÁLTOZATLAN tartalommal, csak
+   egy re-verifikációs jegyzettel hasznosítja újra ez a session (két
+   divergens ADR-szöveg ugyanarra a számra rosszabb lenne, mint az
+   újrahasznosítás, driver-skill §0.2).
+3. **Küszöb-hármas független újraszámítás** (`python3 -c`, ismételten
+   ellenőrizve): `20 * 3 = 60.0` → `59.9 / 60.0 / 60.1 ms`; `20 * 1.5 = 30.0`
+   → `29.9 / 30.0 / 30.1 ms` — egyezik a §6-ban már rögzített cellákkal.
+4. `allowed_paths` az ADR fájl útvonalával bővült
+   (`docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md`) — az
+   orchestrátor írja a pre-flight-commitban, a teljes kör-PR diffje viszont
+   tartalmazza.
+
+0 produkciós fájl módosult ennél a második pre-flight-rétegnél sem.
+
 ## 1. Cél
 
 A mért tényekből **determinisztikus, visszavezethető** coaching-insightok —
@@ -163,7 +218,7 @@ sealed hierarchia; ARB-kulcsok en+hu.
 
 ## 5. Kötött architekturális döntések
 
-1. **Az insight nem talál ki tényt** (SDD §20, ADR 0201): minden insight
+1. **Az insight nem talál ki tényt** (SDD §20, ADR 0216): minden insight
    `factIds` (metric ID-k) és `evidenceIds` (event/szegmens/hotspot ID-k)
    listát hordoz, és **mindegyik létező** elemre mutat.
    **NEM elfogadható:** üres `factIds`, vagy nem létező ID-re mutató insight.
@@ -210,7 +265,7 @@ open_decisions:
     blocking: true
     resolution_policy: use_default
     default: >-
-      csak KOMPATIBILIS metric ID + verzió mellett (ADR 0203), és csak ha a
+      csak KOMPATIBILIS metric ID + verzió mellett (ADR 0218), és csak ha a
       változás meghaladja a metrika `minimumMeaningfulDelta` értékét.
       A trend-számítás az R25-é; itt a szabály CSAK akkor tüzel, ha a
       kontextus ilyen összehasonlítást KAP — különben `null`.
