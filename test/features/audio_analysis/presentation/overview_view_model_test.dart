@@ -81,8 +81,7 @@ class _RecordingLabels implements OverviewLabels {
   String notApplicableValuePlaceholder() => '—';
 
   @override
-  String overviewTitle(AnalysisDocument document) =>
-      'overview ${document.id}';
+  String overviewTitle(AnalysisDocument document) => 'overview ${document.id}';
 
   @override
   String unavailableReason(CapabilityUnavailableReason reason) =>
@@ -134,7 +133,8 @@ AnalysisDocument _baseDocument({
       platform: 'android',
       featureFlagSnapshot: const <String, bool>{},
     ),
-    signalQuality: signal ??
+    signalQuality:
+        signal ??
         SignalQualityReport(
           overall: 0,
           peakDbfs: -3,
@@ -151,7 +151,8 @@ AnalysisDocument _baseDocument({
     hotspots: const [],
     insights: insights,
     warnings: const [],
-    completion: completion ??
+    completion:
+        completion ??
         AnalysisCompletion(status: AnalysisCompletionStatus.complete),
   );
 }
@@ -285,10 +286,7 @@ void main() {
           byId[AnalysisMetricId.harmonyChordCoverage]!.state,
           OverviewMetricCardState.lowConfidence,
         );
-        expect(
-          byId[AnalysisMetricId.harmonyChordCoverage]!.statusLabel,
-          'low',
-        );
+        expect(byId[AnalysisMetricId.harmonyChordCoverage]!.statusLabel, 'low');
         expect(
           byId[AnalysisMetricId.harmonyChordCoverage]!.reasonText,
           'reason confidenceTooLow',

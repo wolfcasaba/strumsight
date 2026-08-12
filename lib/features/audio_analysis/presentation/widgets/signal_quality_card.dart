@@ -65,10 +65,7 @@ final class SignalQualityCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      titleLabel,
-                      style: theme.textTheme.titleSmall,
-                    ),
+                    child: Text(titleLabel, style: theme.textTheme.titleSmall),
                   ),
                 ],
               ),
@@ -135,8 +132,9 @@ class SignalQualityCardFromL10n extends StatelessWidget {
       silentValue: card.silentRatioText,
       peakTemplate: l10n.analysisOverviewSignalQualityPeak('{value}'),
       rmsTemplate: l10n.analysisOverviewSignalQualityRms('{value}'),
-      noiseFloorTemplate:
-          l10n.analysisOverviewSignalQualityNoiseFloor('{value}'),
+      noiseFloorTemplate: l10n.analysisOverviewSignalQualityNoiseFloor(
+        '{value}',
+      ),
       clippedTemplate: l10n.analysisOverviewSignalQualityClipped('{value}'),
       silentTemplate: l10n.analysisOverviewSignalQualitySilent('{value}'),
     );

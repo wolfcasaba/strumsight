@@ -41,10 +41,7 @@ class AnalysisOverviewScreen extends StatelessWidget {
       );
     }
     final labels = AppLocalizationsOverviewLabels(l10n);
-    final viewModel = OverviewViewModel.from(
-      document,
-      labels: labels,
-    );
+    final viewModel = OverviewViewModel.from(document, labels: labels);
     return _AnalysisOverviewBody(viewModel: viewModel);
   }
 }
@@ -58,8 +55,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final semanticLabel = l10n
-        .analysisOverviewSemantic(viewModel.header.title);
+    final semanticLabel = l10n.analysisOverviewSemantic(viewModel.header.title);
     return Scaffold(
       appBar: AppBar(
         title: Text(viewModel.header.title),
@@ -96,11 +92,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
                 MetricCard(
                   card: metric,
                   metricSemanticLabel: (label, value, status) =>
-                      l10n.analysisOverviewMetricSemantic(
-                    label,
-                    value,
-                    status,
-                  ),
+                      l10n.analysisOverviewMetricSemantic(label, value, status),
                   detailLabel: l10n.analysisOverviewSeeDetails,
                   onOpenDetail: () => context.go(
                     AppRoutes.analysisMetricDetail,

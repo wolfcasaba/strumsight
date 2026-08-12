@@ -29,8 +29,7 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
   String actionLabel(AnalysisRecommendedAction action) => switch (action) {
     AnalysisRecommendedAction.repeatSection =>
       _l10n.analysisOverviewActionRepeatSection,
-    AnalysisRecommendedAction.slowDown =>
-      _l10n.analysisOverviewActionSlowDown,
+    AnalysisRecommendedAction.slowDown => _l10n.analysisOverviewActionSlowDown,
     AnalysisRecommendedAction.adjustInput =>
       _l10n.analysisOverviewActionAdjustInput,
     AnalysisRecommendedAction.continuePractice =>
@@ -46,8 +45,9 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
         _l10n.analysisOverviewCompletionDegraded,
       AnalysisCompletionStatus.cancelled =>
         _l10n.analysisOverviewCompletionCancelled,
-      AnalysisCompletionStatus.failed =>
-        _l10n.analysisOverviewCompletionFailed(completion.failureCode ?? ''),
+      AnalysisCompletionStatus.failed => _l10n.analysisOverviewCompletionFailed(
+        completion.failureCode ?? '',
+      ),
     };
   }
 
@@ -113,20 +113,17 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
   }
 
   @override
-  String formatRatio(double ratio) =>
-      '${(ratio * 100).toStringAsFixed(1)}%';
+  String formatRatio(double ratio) => '${(ratio * 100).toStringAsFixed(1)}%';
 
   @override
   String inputSubtitle(AnalysisInputSummary input) {
     final source = switch (input.source) {
-      AnalysisInputSource.microphone =>
-        _l10n.analysisOverviewInputMicrophone,
+      AnalysisInputSource.microphone => _l10n.analysisOverviewInputMicrophone,
       AnalysisInputSource.importedFile =>
         _l10n.analysisOverviewInputImportedFile,
       AnalysisInputSource.practiceSession =>
         _l10n.analysisOverviewInputPracticeSession,
-      AnalysisInputSource.songSession =>
-        _l10n.analysisOverviewInputSongSession,
+      AnalysisInputSource.songSession => _l10n.analysisOverviewInputSongSession,
     };
     return _l10n.analysisOverviewInputSubtitle(
       source,
@@ -160,20 +157,22 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
   @override
   String insightMessage(String messageKey, Map<String, String> args) {
     return switch (messageKey) {
-      'analysisInsightRushBias' =>
-        _l10n.analysisInsightRushBias(_arg(args, 'milliseconds', '0')),
-      'analysisInsightDragBias' =>
-        _l10n.analysisInsightDragBias(_arg(args, 'milliseconds', '0')),
+      'analysisInsightRushBias' => _l10n.analysisInsightRushBias(
+        _arg(args, 'milliseconds', '0'),
+      ),
+      'analysisInsightDragBias' => _l10n.analysisInsightDragBias(
+        _arg(args, 'milliseconds', '0'),
+      ),
       'analysisInsightLargeTimingOutliers' =>
         _l10n.analysisInsightLargeTimingOutliers(
           _arg(args, 'p90Milliseconds', '0'),
         ),
-      'analysisInsightSecondHalfDrift' =>
-        _l10n.analysisInsightSecondHalfDrift(
-          _arg(args, 'milliseconds', '0'),
-        ),
-      'analysisInsightWeakUpstroke' =>
-        _l10n.analysisInsightWeakUpstroke(_arg(args, 'ratio', '0')),
+      'analysisInsightSecondHalfDrift' => _l10n.analysisInsightSecondHalfDrift(
+        _arg(args, 'milliseconds', '0'),
+      ),
+      'analysisInsightWeakUpstroke' => _l10n.analysisInsightWeakUpstroke(
+        _arg(args, 'ratio', '0'),
+      ),
       'analysisInsightChordTransitionHotspot' =>
         _l10n.analysisInsightChordTransitionHotspot(
           _arg(args, 'hotspotId', ''),
@@ -273,8 +272,7 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
         _l10n.analysisMetricLabelDynamicsStrokeStrengthCv,
       AnalysisMetricId.dynamicsDownUpMedianRatio =>
         _l10n.analysisMetricLabelDynamicsDownUpMedianRatio,
-      AnalysisMetricId.dynamicsDrift =>
-        _l10n.analysisMetricLabelDynamicsDrift,
+      AnalysisMetricId.dynamicsDrift => _l10n.analysisMetricLabelDynamicsDrift,
       AnalysisMetricId.dynamicsOutlierRatio =>
         _l10n.analysisMetricLabelDynamicsOutlierRatio,
       AnalysisMetricId.dynamicsAccentAccuracy =>
@@ -395,12 +393,9 @@ final class AppLocalizationsOverviewLabels implements OverviewLabels {
     final kindLabel = switch (warning.kind) {
       AnalysisWarningKind.inputQuality =>
         _l10n.analysisOverviewWarningInputQuality,
-      AnalysisWarningKind.capability =>
-        _l10n.analysisOverviewWarningCapability,
-      AnalysisWarningKind.processing =>
-        _l10n.analysisOverviewWarningProcessing,
-      AnalysisWarningKind.migration =>
-        _l10n.analysisOverviewWarningMigration,
+      AnalysisWarningKind.capability => _l10n.analysisOverviewWarningCapability,
+      AnalysisWarningKind.processing => _l10n.analysisOverviewWarningProcessing,
+      AnalysisWarningKind.migration => _l10n.analysisOverviewWarningMigration,
     };
     return kindLabel;
   }

@@ -7,11 +7,8 @@ import 'confidence_badge.dart';
 /// Three placeholders are substituted in order: `{label}`, `{value}`,
 /// `{status}`. The widget never depends on the concrete localisation call,
 /// so a test fixture can drive it with a plain closure.
-typedef MetricSemanticLabelBuilder = String Function(
-  String label,
-  String value,
-  String status,
-);
+typedef MetricSemanticLabelBuilder =
+    String Function(String label, String value, String status);
 
 /// Reusable, five-state metric card. Each state has a distinct icon and
 /// text label so the status is never conveyed by colour alone (SDD §25.8).
@@ -92,10 +89,7 @@ final class MetricCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        card.unit,
-                        style: theme.textTheme.bodySmall,
-                      ),
+                      child: Text(card.unit, style: theme.textTheme.bodySmall),
                     ),
                   ],
                 ],
@@ -122,12 +116,10 @@ final class MetricCard extends StatelessWidget {
                 ],
               ),
               if (card.state == OverviewMetricCardState.unavailable ||
-                  card.state == OverviewMetricCardState.lowConfidence) ...<Widget>[
+                  card.state ==
+                      OverviewMetricCardState.lowConfidence) ...<Widget>[
                 const SizedBox(height: 8),
-                Text(
-                  card.reasonText,
-                  style: theme.textTheme.bodySmall,
-                ),
+                Text(card.reasonText, style: theme.textTheme.bodySmall),
                 const SizedBox(height: 4),
                 Text(
                   card.tipText,

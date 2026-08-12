@@ -8,10 +8,7 @@ import '../controllers/overview_view_model.dart';
 /// produced, so the overview cannot navigate or perform anything yet
 /// (brief §5 döntés 7). The [actionTooltip] explains the disabled state.
 final class InsightCard extends StatelessWidget {
-  const InsightCard({
-    required this.card,
-    super.key,
-  });
+  const InsightCard({required this.card, super.key});
 
   final OverviewInsightCard card;
 

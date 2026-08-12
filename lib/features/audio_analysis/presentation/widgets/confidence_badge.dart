@@ -9,11 +9,7 @@ enum ConfidenceBadgeLevel { high, medium, low }
 /// [Semantics] container with the exact label as the spoken hint so screen
 /// readers never rely on colour alone.
 final class ConfidenceBadge extends StatelessWidget {
-  const ConfidenceBadge({
-    required this.level,
-    required this.label,
-    super.key,
-  });
+  const ConfidenceBadge({required this.level, required this.label, super.key});
 
   final ConfidenceBadgeLevel level;
   final String label;

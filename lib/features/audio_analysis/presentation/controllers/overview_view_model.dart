@@ -103,7 +103,7 @@ final class OverviewInsightCard {
 
 /// Aggregated signal-quality card content. The values are formatted from
 /// [SignalQualityReport] in pure presentation units; the domain never
-  /// produces a percent or "good/bad" verdict for this card.
+/// produces a percent or "good/bad" verdict for this card.
 @immutable
 final class OverviewSignalQualityCard {
   const OverviewSignalQualityCard({
@@ -297,7 +297,8 @@ final class OverviewViewModel {
       OverviewMetricCardState.available => labels.confidenceHigh(),
       OverviewMetricCardState.degraded => labels.confidenceMedium(),
       OverviewMetricCardState.lowConfidence => labels.confidenceLow(),
-      OverviewMetricCardState.notApplicable => labels.notApplicableStatusLabel(),
+      OverviewMetricCardState.notApplicable =>
+        labels.notApplicableStatusLabel(),
       OverviewMetricCardState.unavailable => labels.unavailableStatusLabel(),
     };
   }
@@ -321,9 +322,18 @@ final class OverviewViewModel {
       }
     }
     final slots = <(AnalysisInsightKind, AnalysisInsight?)>[
-      (AnalysisInsightKind.recommendation, byKind[AnalysisInsightKind.recommendation]),
-      (AnalysisInsightKind.observation, byKind[AnalysisInsightKind.observation]),
-      (AnalysisInsightKind.recommendation, _nextAlternate(byKind[AnalysisInsightKind.recommendation], document)),
+      (
+        AnalysisInsightKind.recommendation,
+        byKind[AnalysisInsightKind.recommendation],
+      ),
+      (
+        AnalysisInsightKind.observation,
+        byKind[AnalysisInsightKind.observation],
+      ),
+      (
+        AnalysisInsightKind.recommendation,
+        _nextAlternate(byKind[AnalysisInsightKind.recommendation], document),
+      ),
       (AnalysisInsightKind.caution, byKind[AnalysisInsightKind.caution]),
     ];
     return <OverviewInsightCard>[

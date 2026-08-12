@@ -21,7 +21,8 @@ OverviewMetricCard _card({
     statusLabel: statusLabel,
     reasonText: reasonText,
     tipText: tipText,
-    isUsable: state == OverviewMetricCardState.available ||
+    isUsable:
+        state == OverviewMetricCardState.available ||
         state == OverviewMetricCardState.degraded,
   );
 }
@@ -55,8 +56,10 @@ void main() {
       expect(find.text('Demo metric'), findsOneWidget);
       expect(find.text('12 ms'), findsOneWidget);
       expect(find.text('High confidence'), findsOneWidget);
-      expect(find.bySemanticsLabel('Demo metric:12 ms:High confidence'),
-          findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Demo metric:12 ms:High confidence'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('renders degraded state with medium-confidence label', (
@@ -76,9 +79,7 @@ void main() {
       expect(find.text('Medium confidence'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (w) => w is Icon &&
-              w.icon == Icons.info_outline &&
-              w.size == 18,
+          (w) => w is Icon && w.icon == Icons.info_outline && w.size == 18,
         ),
         findsOneWidget,
       );
@@ -106,8 +107,7 @@ void main() {
         expect(find.text('Record for longer.'), findsOneWidget);
         expect(
           find.byWidgetPredicate(
-            (w) =>
-                w is Icon && w.icon == Icons.block && w.size == 18,
+            (w) => w is Icon && w.icon == Icons.block && w.size == 18,
           ),
           findsOneWidget,
         );
@@ -135,8 +135,7 @@ void main() {
       expect(find.text('Evidence too uncertain.'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (w) =>
-              w is Icon && w.icon == Icons.help_outline && w.size == 18,
+          (w) => w is Icon && w.icon == Icons.help_outline && w.size == 18,
         ),
         findsOneWidget,
       );
@@ -160,7 +159,8 @@ void main() {
       expect(find.text('Not applicable'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (w) => w is Icon &&
+          (w) =>
+              w is Icon &&
               w.icon == Icons.remove_circle_outline &&
               w.size == 18,
         ),
@@ -187,9 +187,7 @@ void main() {
           ),
         );
         expect(
-          find.bySemanticsLabel(
-            'Demo metric:12 ms:Status-$state',
-          ),
+          find.bySemanticsLabel('Demo metric:12 ms:Status-$state'),
           findsOneWidget,
           reason: 'state=$state must expose a non-empty semantics label',
         );

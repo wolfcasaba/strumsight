@@ -85,7 +85,10 @@ AnalysisMetricResult _metric(
   );
 }
 
-Widget _harness(AnalysisDocument document, {Locale locale = const Locale('en')}) {
+Widget _harness(
+  AnalysisDocument document, {
+  Locale locale = const Locale('en'),
+}) {
   return MaterialApp(
     locale: locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
@@ -117,88 +120,82 @@ Future<void> _pumpAt(
 
 void main() {
   group('AnalysisOverviewScreen', () {
-    testWidgets(
-      'shows empty state when document is missing without crashing',
-      (tester) async {
-        await _pumpAt(
-          tester,
-          const MaterialApp(
-            localizationsDelegates: <LocalizationsDelegate<dynamic>>[
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-            ],
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: AnalysisOverviewScreen(),
+    testWidgets('shows empty state when document is missing without crashing', (
+      tester,
+    ) async {
+      await _pumpAt(
+        tester,
+        const MaterialApp(
+          localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AnalysisOverviewScreen(),
+        ),
+        size: const Size(400, 800),
+      );
+      expect(find.text('Analysis overview'), findsOneWidget);
+      expect(
+        find.text('No analysis document is available yet.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('renders complete document with primary metrics and insights', (
+      tester,
+    ) async {
+      final document = _document(
+        metrics: <AnalysisMetricResult>[
+          _metric(
+            AnalysisMetricId.timingMeanAbsoluteError,
+            CapabilityStatus.available,
+            value: ScalarMetricValue(0.05),
+            unit: 's',
           ),
-          size: const Size(400, 800),
-        );
-        expect(find.text('Analysis overview'), findsOneWidget);
-        expect(
-          find.text('No analysis document is available yet.'),
-          findsOneWidget,
-        );
-      },
-    );
+          _metric(
+            AnalysisMetricId.rhythmRushDragBias,
+            CapabilityStatus.degraded,
+            value: ScalarMetricValue(0.01),
+            unit: 's',
+          ),
+          _metric(
+            AnalysisMetricId.dynamicsStrokeStrengthCv,
+            CapabilityStatus.unavailable,
+            unavailableReason: CapabilityUnavailableReason.clipTooShort,
+          ),
+          _metric(
+            AnalysisMetricId.harmonyChordCoverage,
+            CapabilityStatus.unavailable,
+            unavailableReason: CapabilityUnavailableReason.confidenceTooLow,
+          ),
+        ],
+        insights: <AnalysisInsight>[
+          AnalysisInsight(
+            id: 'i-rec',
+            ruleId: 'r',
+            ruleVersion: '1',
+            priority: AnalysisInsightPriority.high,
+            kind: AnalysisInsightKind.recommendation,
+            factIds: const <String>[],
+            messageKey: 'analysisInsightRushBias',
+            messageArgs: const <String, String>{'milliseconds': '12'},
+            recommendedAction: AnalysisRecommendedAction.slowDown,
+          ),
+        ],
+      );
+
+      await _pumpAt(tester, _harness(document), size: const Size(400, 1200));
+      expect(find.text('Analysis overview'), findsOneWidget);
+      expect(find.text('Main metrics'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets(
-      'renders complete document with primary metrics and insights',
-      (tester) async {
-        final document = _document(
-          metrics: <AnalysisMetricResult>[
-            _metric(
-              AnalysisMetricId.timingMeanAbsoluteError,
-              CapabilityStatus.available,
-              value: ScalarMetricValue(0.05),
-              unit: 's',
-            ),
-            _metric(
-              AnalysisMetricId.rhythmRushDragBias,
-              CapabilityStatus.degraded,
-              value: ScalarMetricValue(0.01),
-              unit: 's',
-            ),
-            _metric(
-              AnalysisMetricId.dynamicsStrokeStrengthCv,
-              CapabilityStatus.unavailable,
-              unavailableReason:
-                  CapabilityUnavailableReason.clipTooShort,
-            ),
-            _metric(
-              AnalysisMetricId.harmonyChordCoverage,
-              CapabilityStatus.unavailable,
-              unavailableReason: CapabilityUnavailableReason.confidenceTooLow,
-            ),
-          ],
-          insights: <AnalysisInsight>[
-            AnalysisInsight(
-              id: 'i-rec',
-              ruleId: 'r',
-              ruleVersion: '1',
-              priority: AnalysisInsightPriority.high,
-              kind: AnalysisInsightKind.recommendation,
-              factIds: const <String>[],
-              messageKey: 'analysisInsightRushBias',
-              messageArgs: const <String, String>{'milliseconds': '12'},
-              recommendedAction: AnalysisRecommendedAction.slowDown,
-            ),
-          ],
-        );
-
-        await _pumpAt(
-          tester,
-          _harness(document),
-          size: const Size(400, 1200),
-        );
-        expect(find.text('Analysis overview'), findsOneWidget);
-        expect(find.text('Main metrics'), findsOneWidget);
-        expect(find.byType(Card), findsWidgets);
-        expect(tester.takeException(), isNull);
-      },
-    );
-
-    testWidgets('locale parity — english and hungarian render translated text',
+      'locale parity — english and hungarian render translated text',
       (tester) async {
         final document = _document(
           metrics: <AnalysisMetricResult>[
@@ -375,8 +372,8 @@ void main() {
               kind: i % 3 == 0
                   ? AnalysisInsightKind.recommendation
                   : (i % 3 == 1
-                      ? AnalysisInsightKind.observation
-                      : AnalysisInsightKind.caution),
+                        ? AnalysisInsightKind.observation
+                        : AnalysisInsightKind.caution),
               factIds: const <String>[],
               messageKey: 'analysisInsightRushBias',
               messageArgs: <String, String>{'milliseconds': '$i'},
@@ -398,56 +395,50 @@ void main() {
     );
   });
 
-  test(
-    'no UI threshold comparison — presentation never compares confidence '
-    'against a numeric threshold',
-    () {
-      // Read the source files and assert no literal threshold comparisons.
-      final files = <String>[
-        'lib/features/audio_analysis/presentation/analysis_overview_screen.dart',
-        'lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart',
-        'lib/features/audio_analysis/presentation/controllers/overview_view_model.dart',
-        'lib/features/audio_analysis/presentation/widgets/metric_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/insight_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
-        'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
-      ];
-      for (final file in files) {
-        final contents = File(file).readAsStringSync();
-        // Confidence-threshold literals (presentation must never introduce
-        // its own 0.4 / 0.7 boundaries; the domain owns them).
-        final thresholdRegex = RegExp(r'confidence\s*[<>]=?\s*0\.\d');
-        expect(
-          thresholdRegex.hasMatch(contents),
-          isFalse,
-          reason: '$file must not contain a confidence threshold literal',
-        );
-      }
-    },
-  );
+  test('no UI threshold comparison — presentation never compares confidence '
+      'against a numeric threshold', () {
+    // Read the source files and assert no literal threshold comparisons.
+    final files = <String>[
+      'lib/features/audio_analysis/presentation/analysis_overview_screen.dart',
+      'lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart',
+      'lib/features/audio_analysis/presentation/controllers/overview_view_model.dart',
+      'lib/features/audio_analysis/presentation/widgets/metric_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/insight_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
+      'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
+    ];
+    for (final file in files) {
+      final contents = File(file).readAsStringSync();
+      // Confidence-threshold literals (presentation must never introduce
+      // its own 0.4 / 0.7 boundaries; the domain owns them).
+      final thresholdRegex = RegExp(r'confidence\s*[<>]=?\s*0\.\d');
+      expect(
+        thresholdRegex.hasMatch(contents),
+        isFalse,
+        reason: '$file must not contain a confidence threshold literal',
+      );
+    }
+  });
 
-  test(
-    'no engine import — presentation never imports the engine layer',
-    () {
-      final files = <String>[
-        'lib/features/audio_analysis/presentation/analysis_overview_screen.dart',
-        'lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart',
-        'lib/features/audio_analysis/presentation/controllers/overview_view_model.dart',
-        'lib/features/audio_analysis/presentation/widgets/metric_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/insight_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
-        'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
-        'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
-      ];
-      for (final file in files) {
-        final contents = File(file).readAsStringSync();
-        expect(
-          contents.contains('/engine/'),
-          isFalse,
-          reason: '$file must not import the engine layer',
-        );
-      }
-    },
-  );
+  test('no engine import — presentation never imports the engine layer', () {
+    final files = <String>[
+      'lib/features/audio_analysis/presentation/analysis_overview_screen.dart',
+      'lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart',
+      'lib/features/audio_analysis/presentation/controllers/overview_view_model.dart',
+      'lib/features/audio_analysis/presentation/widgets/metric_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/insight_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
+      'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
+      'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
+    ];
+    for (final file in files) {
+      final contents = File(file).readAsStringSync();
+      expect(
+        contents.contains('/engine/'),
+        isFalse,
+        reason: '$file must not import the engine layer',
+      );
+    }
+  });
 }
