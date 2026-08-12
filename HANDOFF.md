@@ -2,8 +2,73 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-11
-> (E06-R08 MERGED — preprocessing context és resampling policy).**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-12
+> (E06-R09 MERGED — ClipAnalyzer stage adapter és V1↔V2 parity).**
+>
+> ## ✅ E06-R09 KÉSZ — ClipAnalyzer stage adapter és parity (2026-08-12)
+>
+> A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be
+> `ClipAnalyzerStage`-ként (`AnalysisStage<LegacyClipAnalyzerInput,
+> LegacyEvidence>`) — kizárólag a már exportált `runClipAnalysis` belépőt
+> hívva a `lib/features/analyze/public.dart` határon át; a `ClipAnalyzer`
+> osztály és a `clip_analyzer.dart` közvetlen importja tilos zóna maradt, a
+> cross-feature architektúra-allowlist bitre változatlan (12 bejegyzés).
+> `LegacyEvidence`/`LegacyAnalyzerProvenance` viszi a V1-másodperc→V2-
+> `Duration` mikroszekundum-kerekítést (`round()`, nem floor/banker's) és a
+> fallback-provenance jelzést (`none`/`heuristic`+ok/`crnn`). [ADR
+> 0226](docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md).
+> A feature — ezzel az adapterrel együtt — **teljesen bekötetlen** marad:
+> nincs `lib/` fogyasztó, production viselkedés bitre azonos.
+>
+> **Pre-flight (2026-08-12) két mért brief-rést zárt, dokumentáltan (ADR
+> 0226):** (1) a brief eredeti OD-01 alapértelmezése (`runClipAnalysis`
+> hívása) önmagában NEM tette lehetővé a „Fallback-provenance" acceptance
+> kritérium (§6) három megkülönböztetett cellájának mérését, mert a
+> visszatérési érték nem hordoz oldalcsatornát arra, hogy egy nem-null súly
+> ténylegesen felhasználódott-e — a feloldás egy kettős `runClipAnalysis`-
+> hívásos összevetési technika, precedenssel a meglévő
+> `clip_analyzer_ml_test.dart`-ból; (2) a §6 „Architektúra" kritériuma egy
+> `test/tooling` alatti gépi őrt várt, de a brief `allowed_paths`-a nem
+> tartalmazott ide eső fájlt — pótolva. Mindkét feloldás a kör saját, még
+> nem dispatch-elt brief-jét érintette (ADR 0087 §2, önállóan feloldható).
+>
+> Implementer **Terra (Codex)**, EGY forduló javító kör nélkül — a
+> `ClipAnalyzerStage._refinerOutcome` pontosan az ADR 0226-ban előírt
+> kettős-hívásos technikát implementálta, a valódi `assets/ml/strum_crnn.bin`
+> asset-tel tesztelve a `crnn` cellát.
+>
+> Review:
+> [docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md](docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-review.md)
+> — **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE (DSP-konstans drift-őr
+> hiánya a hardcode-olt provenance-értékeken; egy hívó/teszt nélküli
+> `fromPreprocessedAudio` factory). A reviewer izolált `/tmp` klónban
+> független gate-et futtatott, és **három saját mutációs próbát** végzett a
+> brief §6.1 mérce-mátrixa szerint: `.round()`→`.floor()` a kerekítési
+> hármas középső celláját vitte pirosra; a fallback-detektáló logika mindig-
+> `crnn`-re rontása a „distinguishes…” teszt fallback-celláját; a brief §6.1
+> által kifejezetten előírt `chunkSize`-rontás a provenance-teljesség
+> cellát — mindhárom visszaállítva.
+>
+> Dedikált biztonsági review (risk=high):
+> [docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md](docs/reviews/e06-r09-clip-analyzer-stage-adapter-parity-security.md)
+> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 5 NOTE — mind a jövőbeli
+> E06-R22 bekötő körre irányuló hardening (a súly-bemenet szinkron hívás
+> elveszti az izolátum-konténmentet adversariális súlyra; a kettős-hívásos
+> technika 2× DSP-költséget jelent és a cancellation csak a két futás
+> KÖZÖTT ellenőrződik, nem közben), mert a teljes feature ma unwired.
+>
+> **Zöld kapu (exact-SHA `29feb745` — a review-dokumentumok UTÁNI végleges
+> HEAD, PR [#223](https://github.com/wolfcasaba/strumsight/pull/223), squash
+> `aa41db54`):** Full Gate
+> [31552551537](https://github.com/wolfcasaba/strumsight/actions/runs/31552551537)
+> + Router CI [31552552707](https://github.com/wolfcasaba/strumsight/actions/runs/31552552707)
+> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+> HEAD-en, mert sem a `full-gate.yml` — csak `workflow_dispatch` triggerű —,
+> sem a `router-ci.yml` — a `docs/reviews/**` nincs a push-path-szűrőjén —
+> nem tüzelt automatikusan a review-doksi-only commitra, L112). Az
+> `origin/main` a dispatch és a merge között nem mozdult (H8 tiszta).
+>
+> **Következő kör: E06-R10** (event evidence — onset/strum timeline).
 >
 > ## ✅ E06-R08 KÉSZ — Preprocessing context és resampling policy (2026-08-11)
 >
@@ -35,87 +100,6 @@
 > ezért APK-build nem volt szükséges. A dispatch és merge között a `main`
 > nem mozdult; post-merge gate a friss `main`-en mind a kilenc lépésben zöld.
 >
->
-> ## ✅ E06-R07 KÉSZ — Signal quality stage (2026-08-11)
->
-> Determinisztikus, verziózott **input-jelminőség riport** (SDD Ch7 Kör 7,
-> §11.2–11.6), amely a felvételi körülményeket méri, **sosem a játékot**:
-> `SignalQualityMath` (tiszta függvények — peak/RMS dBFS, clipping-arány,
-> silent-arány, aktív-régió arány, keretenkénti RMS eloszlás **10.
-> percentilise** mint noise-floor proxy, saját Hann-ablakos radix-2 FFT-n
-> alapuló spectral-flatness/tonalness proxy), `QualityThresholds`
-> (`signal-quality-v1`, verziózott, néven nevezett küszöbök — nincs magic
-> number a formulában) és `SignalQualityStage` — önálló
-> `AnalysisStage<ValidatedPcmAnalysisInput, SignalQualityStageResult>`
-> ([ADR 0224](docs/adr/0224-signal-quality-stage-measurement-boundary.md)),
-> mert a mai `AnalysisPipeline<T>` csak azonos-típusú `T→T` stage-eket
-> komponál. RAG-chunk:
-> [`docs/rag/chunks/019-signal-quality-metrics.md`](docs/rag/chunks/019-signal-quality-metrics.md).
-> `lib/features/live/engine/dsp/dsp_config.dart` **bitre változatlan**; a
-> stage ebben a körben **sehova nincs bekötve** (nincs hívó a saját fájljain
-> és a `public.dart` exporton kívül) — production viselkedés bitre azonos.
->
-> **Pre-flight:** ez az E06-R07 **harmadik próbálkozása** — az első kettő
-> tisztán infrastruktúra-hibán akadt el és önjavító session zárta (H5
-> nem-hermetikus router-teszt, H7 secret-scan-jelölés + munkapéldány-origin,
-> `docs/LESSONS.md` L219–L221), a kör TARTALMA mindkétszer érintetlen
-> maradt. Ez a session az elhagyott (PR nélküli, törölt branch-ű) korábbi
-> pre-flight-commitot **újrahasznosította** ahelyett, hogy vakon újraírta
-> volna: [ADR 0224](docs/adr/0224-signal-quality-stage-measurement-boundary.md)
-> + a brief §0.0 revíziója egy korábbi orchesztrátor-session lokális
-> branch-éről, minden mért állítás (`SignalQualityReport` hét mezője,
-> `AnalysisStage`/`AnalysisPipeline<T>` szerződés, `ValidatedPcmAnalysisInput`,
-> a RAG-chunk szabad 019-es száma) újra grep-elve egyezett a friss `main`-en.
->
-> Implementer **Terra (Codex)**, 1 forduló + **1 megerősítő forduló** — ez
-> utóbbi NEM tartalmi javítás: az implementer helyesen `blocked`-ot jelzett,
-> mert a friss `git clone` munkapéldány nem hordozta a gitignore-olt generált
-> `lib/l10n/app_localizations*.dart`-ot (931 ezzel összefüggő analyze-hiba),
-> és ezt a saját scope-ján kívülinek ismerte fel. Az orchesztrátor
-> `tools/prepare-flutter-generated.sh`-sal helyreállította a munkapéldányt,
-> a gate-et függetlenül zöldre mérte, majd az implementer egy rövid
-> fordulóban maga is megerősítette (kódváltozás nélkül). Tanulság:
-> `docs/LESSONS.md` **L222**.
->
-> Review:
-> [docs/reviews/e06-r07-signal-quality-stage-review.md](docs/reviews/e06-r07-signal-quality-stage-review.md)
-> — **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE. A reviewer (orchesztrátor)
-> HÁROM egymástól független klónban mérte a gate-et zöldre (saját előzetes
-> mérés + review + CI) és **két saját valódi-sértés próbát** végzett: a
-> `silenceFloorDbfs` padló kiszedése a NaN-mentesség propertyt vitte pirosra
-> (`Signal measurements must be finite.`), a clipping-küszöb inkluzív→exkluzív
-> cseréje pontosan a `sample=0.999` cellát — mindkettő a brief §6.1
-> mérce-mátrixa szerint, mindkettő visszaállítva.
->
-> Dedikált biztonsági review (risk=high):
-> [docs/reviews/e06-r07-signal-quality-stage-security.md](docs/reviews/e06-r07-signal-quality-stage-security.md)
-> — **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 2 NOTE. A biztonsági review egy
-> HARMADIK saját próbát is végzett (egy játékot-minősítő `quality.bad_playing`
-> warning-kulcs befecskendezése) — a kulcs-regex teszt elkapta. **NOTE-1:**
-> a `degradedMetrics` egy elhagyható testvér-mezőn (`SignalQualityStageResult`)
-> utazik a `SignalQualityReport` mellett — csak akkor releváns, ha egy
-> jövőbeli kör a stage-eredményt a reportra lapítja. **NOTE-2:** a meglévő
-> (E06-R02, ebben a körben NEM módosított) `SignalQualityReport` konstruktor
-> arány-guardja (`clippedSampleRatio`/`silentRatio`) csak `< 0 || > 1`-et
-> ellenőriz, `isFinite`-et nem — egy `NaN` arány elméletileg megkerülné (mai
-> producerek sosem termelnek ilyet, R07 önmagában nem éri el). Alacsony
-> prioritású follow-up, amikor legközelebb valaki a `domain/
-> signal_quality_report.dart` konstruktorát érinti.
->
-> **Zöld kapu (exact-SHA `88998b23` — a review-frissítések UTÁNI végleges
-> HEAD, PR [#221](https://github.com/wolfcasaba/strumsight/pull/221), squash
-> `9b3783c1`):** Full Gate
-> [31543628873](https://github.com/wolfcasaba/strumsight/actions/runs/31543628873)
-> + Router CI [31543630197](https://github.com/wolfcasaba/strumsight/actions/runs/31543630197)
-> mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
-> HEAD-en — a review-doksi-only pusholások Router CI push-triggere nem
-> mindig tüzelt, mert nem minden ilyen commit érintett router-trigger
-> útvonalat). Az `origin/main` a dispatch és a merge között nem mozdult (H8
-> tiszta). Post-merge gate a friss `main`-en (`9b3783c1`) önállóan
-> újrafuttatva: mind a 8 lépés zöld.
->
-> **Következő kör: E06-R09** (V1 `ClipAnalyzer` stage-adapter és parity).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -125,12 +109,11 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-11 (E06-R07 zárása): E06-R07 teljes bannere felkerült
-> (fent); E06-R06 bannere maradt a második helyen (a stale „Következő kör"
-> mutatója törölve belőle, hiszen E06-R07 időközben elkészült, az új felső
-> banner saját, friss mutatóval zár); E06-R05 bannere törölve a fejlécből,
-> mert immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT az
-> archívumba EBBEN a zárásban.
+> Mért diéta: 2026-08-12 (E06-R09 zárása): E06-R09 teljes bannere felkerült
+> (fent); E06-R08 bannere maradt a második helyen (nem tartalmazott stale
+> „Következő kör" mutatót, ezért változatlan); E06-R07 bannere törölve a
+> fejlécből, mert immár a harmadik legutóbbi kör — TELJES szövege ÁTKERÜLT
+> az archívumba EBBEN a zárásban.
 
 ## 1. Current release state
 
@@ -673,11 +656,14 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-11):** `main` @ `d3ce39b2` — E06-R08, PR
-[#222](https://github.com/wolfcasaba/strumsight/pull/222), squash-merge.
-Az exact merge-előtti SHA `4d086ffa`: Full Gate és Router CI success; a
-post-merge `tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/analyze`
-mind a 9 lépése zöld. Az alábbi régebbi rész történeti kontextus.
+**Aktuális állapot (2026-08-12):** `main` @ `aa41db54` — E06-R09, PR
+[#223](https://github.com/wolfcasaba/strumsight/pull/223), squash-merge.
+Az exact merge-előtti SHA `29feb745` (a review-dokumentumok utáni végleges
+HEAD): Full Gate és Router CI success, mindkettő kézzel `workflow_dispatch`-
+elve, mert a review-doksi-only commit egyik workflow push-path-szűrőjét sem
+érintette (L112). A post-merge
+`tools/round-gate.sh test/features/audio_analysis test/property test/tooling test/features/analyze`
+mind a kilenc lépése zöld (lásd lent). Az alábbi régebbi rész történeti kontextus.
 
 `main` @ [PR #211](https://github.com/wolfcasaba/strumsight/pull/211), squash
 `62516a4b` (E06-R01, Epic 6 kickoff — Analyze V1 baseline, mérés és hat
@@ -866,6 +852,21 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E06-R09 — ClipAnalyzer stage adapter és V1↔V2 parity** (PR
+[#223](https://github.com/wolfcasaba/strumsight/pull/223), squash `aa41db54`,
+új [ADR 0226](docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md)).
+A bitre változatlan V1 `ClipAnalyzer` bekötve `ClipAnalyzerStage`-ként,
+kizárólag a `runClipAnalysis` exportált belépőn át; kettős-hívásos
+fallback-provenance technika (`none`/`heuristic`+ok/`crnn`); 9 fixture +
+60-mintás randomizált property paritás ≤1 µs / ≤1e-9 tolerancián belül;
+architektúra-allowlist bitre változatlan (12); nincs hívó, production
+viselkedés bitre azonos. Pre-flight két mért brief-rést zárt dokumentáltan
+(ADR 0226): a fallback-provenance mérési technika hiánya és egy hiányzó
+`test/tooling` allowed_paths bejegyzés. General review APPROVED (0
+BLOCKER/MAJOR/MINOR, 2 NOTE, három saját mutációs próbával igazolva),
+security review PASS (0 CRITICAL/BLOCKER/MAJOR/MINOR, 5 NOTE, mind a
+jövőbeli E06-R22 bekötő körre). Az alábbi régebbi rész történeti kontextus.
 
 **E06-R08 — Preprocessing context és resampling policy** (PR
 [#222](https://github.com/wolfcasaba/strumsight/pull/222), squash `d3ce39b2`,
@@ -1213,8 +1214,9 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R09 — V1 `ClipAnalyzer` stage-adapter és
-parity** (Chapter 7, Kör 9). Új sessionben induljon; E06-R08 lezárult.
+**Következő kijelölt SDD-kör: E06-R10 — Event evidence, onset/strum
+timeline** (Chapter 7, Kör 10, `docs/rounds/e06-r10-event-evidence-onset-strum-timeline.md`).
+Új sessionben induljon; E06-R09 lezárult.
 
 > ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
 >
