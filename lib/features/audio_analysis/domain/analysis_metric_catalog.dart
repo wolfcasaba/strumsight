@@ -50,6 +50,32 @@ abstract final class AnalysisMetricId {
   static const String timingFreeplayLongestStableStreak =
       'timing.freeplay_longest_stable_streak.v1';
 
+  // Rhythm consistency and measured groove proxies (E06-R15, ADR 0233).
+  // Target and inferred grids deliberately use distinct namespaces: they
+  // describe different reference evidence and are never interchangeable.
+  static const String rhythmTargetIoiConsistency =
+      'rhythm.target_ioi_consistency.v1';
+  static const String rhythmTargetSubdivisionConsistency =
+      'rhythm.target_subdivision_consistency.v1';
+  static const String rhythmTargetBeatPhaseConsistency =
+      'rhythm.target_beat_phase_consistency.v1';
+  static const String rhythmTargetLongestStableIoiStreak =
+      'rhythm.target_longest_stable_ioi_streak.v1';
+  static const String rhythmTargetAccentPositionConsistency =
+      'rhythm.target_accent_position_consistency.v1';
+  static const String rhythmTargetSwingRatio = 'rhythm.target_swing_ratio.v1';
+
+  static const String rhythmInferredIoiConsistency =
+      'rhythm.inferred_ioi_consistency.v1';
+  static const String rhythmInferredSubdivisionConsistency =
+      'rhythm.inferred_subdivision_consistency.v1';
+  static const String rhythmInferredBeatPhaseConsistency =
+      'rhythm.inferred_beat_phase_consistency.v1';
+  static const String rhythmInferredLongestStableIoiStreak =
+      'rhythm.inferred_longest_stable_ioi_streak.v1';
+  static const String rhythmInferredAccentPositionConsistency =
+      'rhythm.inferred_accent_position_consistency.v1';
+
   static const Set<String> known = <String>{
     timingMeanAbsoluteError,
     rhythmRushDragBias,
@@ -75,9 +101,70 @@ abstract final class AnalysisMetricId {
     timingFreeplayMissedRatio,
     timingFreeplayExtraRatio,
     timingFreeplayLongestStableStreak,
+    rhythmTargetIoiConsistency,
+    rhythmTargetSubdivisionConsistency,
+    rhythmTargetBeatPhaseConsistency,
+    rhythmTargetLongestStableIoiStreak,
+    rhythmTargetAccentPositionConsistency,
+    rhythmTargetSwingRatio,
+    rhythmInferredIoiConsistency,
+    rhythmInferredSubdivisionConsistency,
+    rhythmInferredBeatPhaseConsistency,
+    rhythmInferredLongestStableIoiStreak,
+    rhythmInferredAccentPositionConsistency,
   };
 
   static bool contains(String id) => known.contains(id);
+}
+
+/// One mode's rhythm consistency metrics (ADR 0233). The target suite carries
+/// the measured long/short swing ratio; inferred mode intentionally does not.
+final class RhythmMetricSuiteIds {
+  const RhythmMetricSuiteIds({
+    required this.ioiConsistency,
+    required this.subdivisionConsistency,
+    required this.beatPhaseConsistency,
+    required this.longestStableIoiStreak,
+    required this.accentPositionConsistency,
+    this.swingRatio,
+  });
+
+  static const RhythmMetricSuiteIds target = RhythmMetricSuiteIds(
+    ioiConsistency: AnalysisMetricId.rhythmTargetIoiConsistency,
+    subdivisionConsistency: AnalysisMetricId.rhythmTargetSubdivisionConsistency,
+    beatPhaseConsistency: AnalysisMetricId.rhythmTargetBeatPhaseConsistency,
+    longestStableIoiStreak: AnalysisMetricId.rhythmTargetLongestStableIoiStreak,
+    accentPositionConsistency:
+        AnalysisMetricId.rhythmTargetAccentPositionConsistency,
+    swingRatio: AnalysisMetricId.rhythmTargetSwingRatio,
+  );
+
+  static const RhythmMetricSuiteIds inferred = RhythmMetricSuiteIds(
+    ioiConsistency: AnalysisMetricId.rhythmInferredIoiConsistency,
+    subdivisionConsistency:
+        AnalysisMetricId.rhythmInferredSubdivisionConsistency,
+    beatPhaseConsistency: AnalysisMetricId.rhythmInferredBeatPhaseConsistency,
+    longestStableIoiStreak:
+        AnalysisMetricId.rhythmInferredLongestStableIoiStreak,
+    accentPositionConsistency:
+        AnalysisMetricId.rhythmInferredAccentPositionConsistency,
+  );
+
+  final String ioiConsistency;
+  final String subdivisionConsistency;
+  final String beatPhaseConsistency;
+  final String longestStableIoiStreak;
+  final String accentPositionConsistency;
+  final String? swingRatio;
+
+  Set<String> get all => <String>{
+    ioiConsistency,
+    subdivisionConsistency,
+    beatPhaseConsistency,
+    longestStableIoiStreak,
+    accentPositionConsistency,
+    ?swingRatio,
+  };
 }
 
 /// Groups one mode's ten timing metric IDs (ADR 0232 §1). [target] is

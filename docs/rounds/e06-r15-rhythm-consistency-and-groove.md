@@ -272,7 +272,55 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (Terra, 2026-08-12):**
+
+- `engine/metrics/subdivision_analysis.dart` — tiszta `{1,2,3,4}`
+  subdivision-illesztő, inkluzív 5%-os ambiguitás-kezeléssel; a
+  többszörös jelöltek nem versenyeznek a szülőfelosztással.
+- `engine/metrics/rhythm_metrics.dart` — target/inferred módot kölcsönösen
+  kizáró ritmus-proxy suite: medián-alapú `1 − CV` IOI-konzisztencia,
+  ±10%-os stabil sorozat, subdivision- és beat-phase konzisztencia,
+  accent-pozíció konzisztencia és target-only long/short swing ratio. Az R14
+  `MetricGate` változatlanul újrahasznált; inferred confidence a ténylegesen
+  használt BeatPointok átlagával korlátos.
+- `analysis_metric_catalog.dart` / `public.dart` — additív, diszjunkt
+  `rhythm.target_*` és `rhythm.inferred_*` ID-k, publikus export.
+- `app_en.arb`, `app_hu.arb` — a mérhető proxyk additív, nem stiláris címkéi.
+- Három célzott unit- és egy property-teszt fedi a fixture-, küszöb-,
+  confidence-, ID-diszjunkció-, swing-gate-, stiláris-címke- és
+  NaN/tartomány-mátrixot. A CV 0.1/0.5 konstrukciók `python3 -c`-vel
+  kiszámolva, kommentben rögzítve.
+- `docs/rag/chunks/021-rhythm-consistency-groove-proxies.md` — formula,
+  küszöb, ambiguity, target-only swing és confidence öröklési szerződés.
+
+**Futtatott ellenőrzések (tényleges eredmény):**
+
+```text
+python3 -c '<CV fixture derivation>'
+  [90,90,110,110] -> CV 0.1; [50,50,150,150] -> CV 0.5
+
+flutter test test/features/audio_analysis/domain/rhythm_metric_catalog_test.dart \
+  test/features/audio_analysis/engine/subdivision_analysis_test.dart \
+  test/features/audio_analysis/engine/rhythm_metrics_test.dart \
+  test/property/analysis_rhythm_property_test.dart
+  21 test passed.
+
+flutter analyze <érintett fájlok>
+  No issues found.
+
+Valódi-sértés próba: inferred confidence-ból a BeatPoint-átlag ideiglenes
+kivétele után `rhythm_metrics_test.dart` PIROS:
+  Actual: <1.0>, expected <= <0.400000001...>.
+  A korlát visszaállítva; a célzott suite újra zöld.
+
+tools/round-gate.sh test/features/audio_analysis test/property test/app
+  exit 0 — format, analyze, mindhárom tesztcsoport, architecture, secrets és
+  l10n mind ZÖLD.
+```
+
+**Eltérés / nem futtatott ellenőrzés:** nincs implementációs eltérés. A teljes
+suite, friss property seed és APK CI-kapu az orchestrátor hatásköre (ADR 0053);
+ezeket az implementer nem indította.
 
 ## 11. Review — a független reviewer tölti ki
 

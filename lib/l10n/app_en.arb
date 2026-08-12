@@ -1387,5 +1387,11 @@
   "timingMetricExtraRatio": "Extra ratio",
   "timingMetricLongestStableStreak": "Longest stable streak",
   "timingFeedbackRushing": "You're rushing — try landing a little later on the beat.",
-  "timingFeedbackDragging": "You're dragging — try landing a little earlier on the beat."
+  "timingFeedbackDragging": "You're dragging — try landing a little earlier on the beat.",
+  "rhythmMetricIoiConsistency": "Rhythm consistency",
+  "rhythmMetricSubdivisionConsistency": "Subdivision consistency",
+  "rhythmMetricBeatPhaseConsistency": "Beat-phase consistency",
+  "rhythmMetricLongestStableIoiStreak": "Longest stable rhythm run",
+  "rhythmMetricAccentPositionConsistency": "Accent-position consistency",
+  "rhythmMetricSwingRatio": "Long-to-short timing ratio"
 }
