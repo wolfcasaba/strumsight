@@ -1,10 +1,11 @@
 # E06-R09 — V1 ClipAnalyzer stage adapter és parity
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió 2026-08-12, kód újramérve: main @ `71b158b`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 9; §8.4, §10.1
 - **Branch:** `codex/e06-r09-clip-analyzer-stage-adapter-parity`
-- **Előfeltétel:** **E06-R04, E06-R08 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Előfeltétel:** **E06-R04, E06-R08 merge** — mindkettő MERGE-ELVE (E06-R08: PR #222, `d3ce39b2`)
+- **ADR:** [0226](../adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md) (pre-flight, 2026-08-12)
+- **Brief szerzője:** Claude (batch) · **Pre-flight revízió:** Claude (orchestrátor) · **Implementáció:** Codex (Terra)
 
 ```ai-router
 schema_version = 1
@@ -18,7 +19,9 @@ allowed_paths = [
   "test/features/audio_analysis/engine/clip_analyzer_stage_test.dart",
   "test/features/audio_analysis/engine/clip_analyzer_parity_test.dart",
   "test/property/analysis_legacy_parity_property_test.dart",
+  "test/tooling/architecture_allowlist_guard_test.dart",
   "docs/rounds/e06-r09-clip-analyzer-stage-adapter-parity.md",
+  "docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -48,8 +51,42 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs. Ez a kör a **legérzékenyebb** paritás-kör: a
+**PLANNING (2026-08-12).** Ez a kör a **legérzékenyebb** paritás-kör: a
 bizonyított V1 DSP-t köti be a V2 pipeline-ba **viselkedésváltozás nélkül**.
+A pre-flight minden brief-hivatkozású sorszámot, exportot és allowlist-
+bejegyzést újramért a friss `main`-en (`71b158b`) és két, dokumentált
+rést talált — mindkettő **[ADR 0226](../adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md)**-ban rögzítve:
+
+1. **OD-01 megerősítve, DE a „Fallback-provenance” kritérium (§6) a puszta
+   `runClipAnalysis`-hívásból nem olvasható ki.** Mérve: a `ClipAnalyzer`
+   osztály valóban nincs exportálva (`analyze/public.dart` csak
+   `AnalyzeResult`-ot, providereket, `timeline_view`-t, `ml_chord_decoder`-t
+   ad), tehát az OD-01 alapértelmezés (`runClipAnalysis` hívása) az EGYETLEN
+   járható út. De a függvény csupasz `AnalyzeResult`-ot ad vissza — nincs
+   oldalcsatorna arra, hogy egy nem-null súly-bájtsorozatot a belső CRNN
+   ténylegesen felhasznált-e. **Feloldás (ADR 0226 Döntés 2):**
+   `strumRefinerSource` KETTŐS híváson alapuló összevetéssel dől el —
+   `weights == null` → egy hívás, `none`; `weights != null` → két hívás
+   (a jelölt súlyokkal és kényszerített `null`-lal ugyanazon a bemeneten),
+   és ha a két `strums` lista MINDEN eleme (irány+confidence) egyezik →
+   `heuristic`+`fallbackReason`, egyébként → `crnn`. Ez MÁR precedens ebben a
+   kódbázisban (`test/features/analyze/clip_analyzer_ml_test.dart:78-98,
+   136-146`), az implementer ezt a mintát kövesse, ne találjon ki újat.
+   **Emellett §5.5 és §6 korábbi szövege ellentmondott egymásnak** (§5.5:
+   „null VAGY dobás → heuristic”; §6: „null → none”) — §6 hármas partíciója
+   az irányadó, §5.5 szövege lentebb javítva.
+2. **Hiányzó allowed_paths bejegyzés a §6 „Architektúra” kritériumhoz.** A
+   kritérium egy `test/tooling` alatti gépi őrt vár az „allowlist ≤ 12
+   bejegyzés” invariánsra (a `gate_tests` már tartalmazta a `test/tooling`-ot),
+   de egyetlen `test/tooling/*` fájl sem szerepelt az allowed_paths-on — a
+   meglévő `test/core/architecture_dependency_test.dart` konzisztenciát mér,
+   létszámot nem. **Feloldás:** `test/tooling/architecture_allowlist_guard_test.dart`
+   felvéve az allowed_paths-ra (lásd fent); ez a fájl méri, hogy
+   `architectureAllowlist.length <= 12`.
+
+Mindkét feloldás a kör saját, még nem dispatch-elt brief-jét érinti (ADR 0087
+§2, önállóan feloldható), egyik sem nyúl a tilos zónához vagy egy már
+merge-elt döntéshez.
 
 ## 1. Cél
 
@@ -121,10 +158,15 @@ konstans, új `analyze → live` allowlist-bejegyzés, a `computeClipAnalysis`
 4. **A stage kimenete evidence, nem UI-modell:** a `LegacyEvidence` a
    timeline-építés **bemenete** (R10/R11), nem a végleges `AnalysisTimeline`.
    **NEM elfogadható:** a stage közvetlenül `AnalysisDocument`-et állít elő.
-5. **A fallback látszik a provenance-ben:** ha a strum refiner null volt vagy
-   kivételt dobott, a provenance `strumRefinerSource = heuristic` +
-   `fallbackReason`. **NEM elfogadható:** a fallback néma elnyelése (a mai
-   `catch (_)` a V1-ben marad, de a V2 provenance **jelöli**).
+5. **A fallback látszik a provenance-ben, HÁROM megkülönböztetett állapotban**
+   (ADR 0226 Döntés 2/3 — javítva, a korábbi szöveg a null-esetet tévesen a
+   `heuristic`-hoz sorolta): nem volt jelölt refiner (`weights == null`) →
+   `strumRefinerSource = none`; volt jelölt refiner, de a kimenet a
+   heurisztika-alapú (null-súlyos) hívással egyezik → `heuristic` +
+   `fallbackReason`; volt jelölt refiner és a kimenet eltér → `crnn`. A mérési
+   technika (kettős `runClipAnalysis`-hívás összevetése) ADR 0226 Döntés 2.
+   **NEM elfogadható:** a fallback néma elnyelése (a mai `catch (_)` a
+   V1-ben marad, de a V2 provenance **jelöli**).
 6. **A paritás számszerű, nem „hasonló":** a toleranciák a briefben
    rögzítettek (lásd §6), tágításuk brief-revízió.
 
@@ -174,10 +216,14 @@ open_decisions:
       számolt várt értékek: **0 µs / 2 µs / 2 µs** banker's rounding esetén,
       **1 µs / 2 µs / 3 µs** `round()` esetén) — a teszt rögzíti, MELYIK
       kerekítés a szerződés, és a másikat pirosra váltja.
-- [ ] **Fallback-provenance:** dobó refinerrel a provenance
-      `strumRefinerSource == heuristic` **és** `fallbackReason` nem null;
-      null refinerrel `strumRefinerSource == none`; működő refinerrel
-      `strumRefinerSource == crnn`. Három cella.
+- [ ] **Fallback-provenance:** dobó/parse-hibás (nem-null, de érvénytelen)
+      súlyokkal a provenance `strumRefinerSource == heuristic` **és**
+      `fallbackReason` nem null; `null` súllyal `strumRefinerSource == none`;
+      valódi, ténylegesen eltérő kimenetet adó súlyokkal
+      `strumRefinerSource == crnn`. Három cella. **Mérési technika (ADR 0226
+      Döntés 2):** kettős `runClipAnalysis`-hívás (jelölt súly vs.
+      kényszerített `null`) `strums`-összevetése — precedens:
+      `test/features/analyze/clip_analyzer_ml_test.dart:78-98,136-146`.
 - [ ] **Provenance-teljesség:** a `chunkSize`, `chromaMedianWindow`,
       `bassWeight` (a tényleges effektív érték, nem `null`), `nnlsWindow`,
       `nnlsHop` mind szerepel a provenance-ben — teszt méri mind az ötöt.
@@ -186,7 +232,8 @@ open_decisions:
       toleranciákon belül egyezik.
 - [ ] **Architektúra:** `dart run tool/check_architecture.dart` zöld, és a
       cross-feature allowlist **nem nőtt** (a bejegyzések száma ≤ 12 —
-      teszt méri a `test/tooling` alatt).
+      `test/tooling/architecture_allowlist_guard_test.dart` méri, ADR 0226
+      Döntés 5).
 - [ ] **V1 érintetlen:** `git diff --stat` nem tartalmaz
       `lib/features/analyze/**` vagy `lib/features/live/**` útvonalat, és
       `test/features/analyze` **átírás nélkül** zöld.
