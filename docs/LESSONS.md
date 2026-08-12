@@ -8220,3 +8220,40 @@ Az R08 javítása determinisztikus 10 kHz-es DC-offset fixture-ből a
 `PreprocessingStage.canonicalSamples` első emelkedő élét méri: 49/50/51
 minta pontosan 4.9/5.0/5.1 ms, ezért a 5.0 ms határ explicit true/true/false
 cellákkal ellenőrzött.
+
+## L224 — Egy brief OD-alapértelmezése, ami csak a HÍVÁS elérhetőségét mérte, nem a VISSZATÉRÉSI ÉRTÉK oldalcsatorna-tartalmát, egy le nem mérhető acceptance-kritériumot hagyott hátra (E06-R09, 2026-08-12)
+
+**Mit mértünk.** Az E06-R09 briefjének OD-01 nyitott döntése helyesen mérte,
+hogy a `ClipAnalyzer` osztály nincs exportálva az `analyze/public.dart`-on,
+és helyesen jelölte ki az egyetlen járható utat (`runClipAnalysis` hívása).
+De a brief §6 „Fallback-provenance” kritériuma három megkülönböztetett
+állapotot várt (`none`/`heuristic`+ok/`crnn`), és a `runClipAnalysis`
+visszatérési típusa (csupasz `AnalyzeResult`) nem hordoz oldalcsatornát
+arra, hogy egy nem-null súly ténylegesen felhasználódott-e — a kijelölt
+hívási út elérhető volt, de ÖNMAGÁBAN nem elég a lejjebb írt acceptance
+kritérium teljesítéséhez. A pre-flight ezt dispatch ELŐTT fogta meg (grep +
+a tényleges függvény-szignatúra elolvasása), nem az implementer fedezte fel
+menet közben.
+
+**Miért.** Egy OD-alapértelmezés, ami azt méri, hogy „a hívás elérhető”, egy
+MÁSIK, hallgatólagos kérdést tesz fel: „a hívás visszatérési értéke elég
+információt hordoz-e ahhoz, amit a lejjebbi acceptance-kritériumok
+elvárnak?” A kettő különválhat — pontosan itt vált el: az elérhetőség igen,
+az információtartalom nem volt elég.
+
+**Hogyan alkalmazd.** Ha egy brief egy szűk, csak-függvény exportált
+határon át köt be meglévő kódot (jellemző minta a „V1-wrap stage-adapter”
+körökre, amilyen az egész E06 sorozat), a pre-flight NE csak azt mérje meg,
+hogy a hívás létezik és lefordul — olvassa el a hívás **visszatérési
+típusát**, és vesse össze azzal, amit az acceptance criteria a kimenetből
+KI AKAR OLVASNI. Ha a kettő nem fedi egymást, a feloldás egy **kettős-hívásos
+összevetés** (a jelölt bemenettel + egy ismert-alapállapotú bemenettel
+lefuttatva, majd a két kimenetet összevetve) gyakran megkerüli a hiányzó
+oldalcsatornát anélkül, hogy a tilos zónát (közvetlen import, belső osztály
+konstruálása) megszegné — ez már bevált, precedens minta ebben a kódbázisban
+(`test/features/analyze/clip_analyzer_ml_test.dart:78-98,136-146`). Írd le
+a technikát a brief §0.0 revíziójában (vagy egy dedikált ADR-ben, mint
+[ADR 0226](adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md)),
+mielőtt dispatch-elsz — ne hagyd az implementerre a felfedezést, mert az egy
+elveszett fordulónyi kör-idő ára (a `stopped` jelzés + brief-revízió a
+STOP-protokoll szerint helyes válasz lenne, de olcsóbb elkerülni).
