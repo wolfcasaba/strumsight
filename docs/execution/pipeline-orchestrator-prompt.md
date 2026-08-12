@@ -69,9 +69,20 @@ A pre-flight ELŐTT nézd meg, hagyott-e egy korábbi (halt-olt/megölt) session
 ehhez a körhöz tartozó munkát:
 
 ```bash
-ls -d /home/ubuntu/ss-*$(echo {{ROUND}} | tr 'A-Z' 'a-z' | tr -d '-')* /home/ubuntu/ss-*e02*r* 2>/dev/null
+ls -d /home/ubuntu/ss-*$(echo {{ROUND}} | tr 'A-Z' 'a-z')* 2>/dev/null
 git -C <talált munkapéldány> log --oneline -3   # van-e kör-commit (ADR, brief-revízió)
 ```
+
+> **Javítva (ADR 0112 önjavító kör, E06-R23/H3, 2026-08-12):** a korábbi
+> minta (`tr -d '-'`) kitörölte a kör-azonosító SAJÁT kötőjelét is
+> (`E06-R23` → `e06r23`), miközben a tényleges munkapéldány-könyvtárnév
+> megőrzi (`ss-sonnet-impl-e06-r23`) — a glob emiatt SOHA nem talált semmit
+> a bevett `ss-<motor>-eXX-rYY` elnevezésen. Mérve: az E06-R23 self-heal
+> futása közben pontosan ez a minta futtatva 0 találatot adott a valóban
+> létező, teljes implementációt tartalmazó könyvtárra. Az `/home/ubuntu/ss-
+> *e02*r*` külön minta egy korábbi epic maradék, körtől független
+> literálja volt — a javított minta minden epicre általánosan működik,
+> ezért törölve.
 
 Ha a kör branchén (lokálisan vagy az originon) már **kész review van nyitott
 leletekkel** (`docs/reviews/eXX-rYY-review.md`), akkor a dolgod NEM a kör

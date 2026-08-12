@@ -171,8 +171,24 @@ echo "$mm_pid" > "$pid_file"
 
 started=$(date +%s)
 killed_reason=""
+terminal_signal_seen=""
+
+has_terminal_signal() { grep -qE '^status=(done|stopped|blocked)$' "$signal" 2>/dev/null; }
 
 poll_seconds=${MM_POLL_SECONDS:-20}
+# MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Claude a saját
+# STOP-protokollja szerint helyesen megírta a jelzésfájlt
+# (`tools/codex-signal.sh stopped ...`, H3 scope-sértés, 22:17:39Z), de a
+# `claude -p` folyamat ETTŐL FÜGGETLENÜL futott tovább — MÉG HAT commitot
+# hozott létre a jelzés UTÁN, a teljes kör hátralévő részét lezárva, mielőtt
+# ~15 perccel később magától kilépett. A jelzésfájl írása eddig csak azt
+# garantálta, hogy az orchestrátor `wait-for-round.sh`-ja észreveszi a
+# terminális állapotot — magát a folyamatot semmi nem állította le, ezért az
+# a pipeline már HALT-olt lánc-állapota mellett, felügyelet nélkül dolgozott
+# tovább. A ciklus ezért a `killed_reason`-nel egyenrangúan figyeli a
+# jelzésfájlt is; a `terminal_signal_seen` KÜLÖN jelző, hogy a lentebbi „a
+# jelzést felülírjuk" ág (csak elakadásnál/időtúllépésnél helyes) ne törölje
+# a Claude SAJÁT, helyes jelentését.
 while kill -0 "$mm_pid" 2>/dev/null; do
   sleep "$poll_seconds"
   now=$(date +%s)
@@ -182,9 +198,11 @@ while kill -0 "$mm_pid" 2>/dev/null; do
     killed_reason="timeout"
   elif [ "$log_age" -ge $(( stall_minutes * 60 )) ]; then
     killed_reason="stalled"
+  elif has_terminal_signal; then
+    terminal_signal_seen=1
   fi
 
-  if [ -n "$killed_reason" ]; then
+  if [ -n "$killed_reason" ] || [ -n "$terminal_signal_seen" ]; then
     kill "$mm_pid" 2>/dev/null || true
     sleep 5
     kill -9 "$mm_pid" 2>/dev/null || true

@@ -115,10 +115,26 @@ exit_code=0
 # suite ne várakozással teljen.
 poll_seconds=${CODEX_POLL_SECONDS:-20}
 
+has_terminal_signal() { grep -qE '^status=(done|stopped|blocked)$' "$signal" 2>/dev/null; }
+
+# MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Codex a saját
+# STOP-protokollja szerint helyesen megírta a jelzésfájlt (`status=stopped`,
+# scope-sértés), de utána a folyamat NEM ért véget — a modell tovább
+# dolgozott, és MÉG HAT további commitot hozott létre percekkel a jelzés
+# UTÁN, mielőtt a forduló magától kilépett. A jelzésfájl írása eddig csak azt
+# garantálta, hogy az orchestrátor `wait-for-round.sh`-ja észreveszi a
+# terminális állapotot — a folyamatot magát semmi nem állította le. A
+# ciklus ezért a `killed_reason`-nel egyenrangúan figyeli a jelzésfájlt is:
+# ha AZ ALATT jelenik meg egy terminális státusz, amíg a Codex még fut, a
+# burkoló ugyanazzal a kilövési szekvenciával zár, mint elakadásnál/
+# időtúllépésnél — de KÜLÖN jelzővel (`terminal_signal_seen`), hogy a
+# `killed_reason`-re épülő, alább következő „a jelzést felülírjuk" ág ne
+# írja felül a Codex SAJÁT, helyes jelentését.
 run_attempt() {   # $@ = a codex parancs argumentumai
-  local codex_pid now log_age
+  local codex_pid now log_age terminal_signal_seen
   "$@" < /dev/null >> "$log_file" 2>&1 &
   codex_pid=$!
+  terminal_signal_seen=""
   while kill -0 "$codex_pid" 2>/dev/null; do
     sleep "$poll_seconds"
     now=$(date +%s)
@@ -128,8 +144,10 @@ run_attempt() {   # $@ = a codex parancs argumentumai
     elif [ "$log_age" -ge $(( stall_minutes * 60 )) ]; then
       # A log percek óta nem nőtt: a Codex vár valamire, ami nem fog megjönni.
       killed_reason="stalled"
+    elif has_terminal_signal; then
+      terminal_signal_seen=1
     fi
-    if [ -n "$killed_reason" ]; then
+    if [ -n "$killed_reason" ] || [ -n "$terminal_signal_seen" ]; then
       kill "$codex_pid" 2>/dev/null || true
       sleep 1
       kill -9 "$codex_pid" 2>/dev/null || true
@@ -139,8 +157,6 @@ run_attempt() {   # $@ = a codex parancs argumentumai
   wait "$codex_pid" 2>/dev/null
   exit_code=$?
 }
-
-has_terminal_signal() { grep -qE '^status=(done|stopped|blocked)$' "$signal" 2>/dev/null; }
 
 # A session-azonosítót a Codex a saját fejlécébe írja („session id: <uuid>"),
 # ezért a folytatáshoz nem kell külön állapotot vezetnünk.

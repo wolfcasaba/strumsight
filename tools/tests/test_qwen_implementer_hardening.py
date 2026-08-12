@@ -1,6 +1,6 @@
 """Az implementer-motor (Qwen) MÉRT gyengeségeinek gépi ellenszerei (ADR 0173).
 
-Három mért hibaminta, három őr:
+Négy mért hibaminta, négy őr:
 
 1. **„Bejelent és kilép"** — a modell a fordulót a következő lépés
    bejelentésével zárja, munka és jelzés nélkül (E04-R13, E04-R14, E04-R16
@@ -11,6 +11,13 @@ Három mért hibaminta, három őr:
    model_reasoning_effort`.
 3. **Backend-mérce csak a CI-ban** — `ruff format --check` piros a merge-kapunál
    (E04-R15 MAJOR-1). Ellenszer: a gate backend sávja, ami MAGÁTÓL bekapcsol.
+4. **Jelzett, majd tovább futott** — a Codex helyesen írta meg a jelzésfájlt
+   (`status=stopped`, scope-sértés), a folyamat mégis tovább dolgozott percekig
+   (E06-R23 self-heal, ADR 0112, 2026-08-12: mért eset — a `claude -p`
+   folyamat a jelzés UTÁN még hat commitot hozott létre, ~15 perccel később
+   lépett csak ki magától). Ellenszer: az őr-ciklus a jelzésfájlt is figyeli,
+   és a jelzés UTÁN azonnal kilövi a folyamatot, nem várja meg az
+   elakadás-őrt vagy az abszolút időkorlátot.
 
 A tesztek hamis `codex`/`python` binárissal futnak: hálózat és modellhívás
 nélkül mérik a burkoló DÖNTÉSEIT (mikor folytat, mit ad át, mit ír a jelzésbe).
@@ -21,6 +28,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -69,6 +77,13 @@ case "${FAKE_CODEX_MODE:-signal-first}" in
   hang)
     sleep 120
     ;;
+  signal-then-hang)
+    # MÉRT eset (E06-R23 self-heal, 2026-08-12): a modell helyesen jelez, de a
+    # folyamata nem áll le magától — ezt szimulálja a jelzés utáni hosszú sleep.
+    printf 'munka\\n' >> "$FAKE_CODEX_WORKFILE"
+    printf 'status=stopped\\nsummary=scope-sertes-a-diff-kilogott\\n' > "$FAKE_CODEX_SIGNAL"
+    sleep 120
+    ;;
 esac
 exit 0
 """
@@ -109,7 +124,7 @@ def make_work_copy(directory: Path) -> Path:
 class WrapperContinuationTest(unittest.TestCase):
     """1. hibaminta: „bejelent és kilép"."""
 
-    def run_wrapper(self, mode: str, *, extra_env=None, engine="qwen38-max"):
+    def run_wrapper(self, mode: str, *, extra_env=None, engine="qwen38-max", timeout=None):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         base = Path(self.directory.name)
@@ -146,6 +161,7 @@ class WrapperContinuationTest(unittest.TestCase):
             text=True,
             env=environment,
             cwd=str(ROOT),
+            timeout=timeout,
         )
         signal = (workdir / ".codex-round-status").read_text(encoding="utf-8")
         return result, signal, argv_log.read_text(encoding="utf-8"), log.read_text(encoding="utf-8")
@@ -184,6 +200,28 @@ class WrapperContinuationTest(unittest.TestCase):
         self.assertIn("status=timeout", signal)
         self.assertIn("continuations=0", signal)
         self.assertNotIn("resume", argv)
+
+    def test_a_process_that_keeps_running_after_signaling_is_killed_promptly(self) -> None:
+        """MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Codex
+        helyesen írta meg a `status=stopped` jelzést, de a folyamata ennek
+        ellenére percekig futott tovább (hat további commit a jelzés UTÁN).
+        A burkolónak a jelzés megjelenése UTÁN azonnal ki kell lőnie a
+        folyamatot — nem szabad megvárnia az elakadás-őrt vagy az abszolút
+        időkorlátot, amelyek órákig is elérhetnek."""
+        started = time.monotonic()
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-then-hang",
+            extra_env={"CODEX_POLL_SECONDS": "1", "CODEX_ROUND_TIMEOUT": "600", "ENGINE_ROUND_TIMEOUT": "600"},
+            timeout=30,
+        )
+        elapsed = time.monotonic() - started
+        self.assertIn("status=stopped", signal)
+        self.assertNotIn("status=timeout", signal, "a jelzés a tény, nem az időtúllépés")
+        self.assertLess(
+            elapsed, 15,
+            "a burkolónak pár másodpercen belül ki kell lőnie a folyamatot a jelzés után, "
+            f"nem a 600s-es időkorlátig várnia (mért: {elapsed:.1f}s)",
+        )
 
     def test_the_preamble_is_prepended_to_every_task(self) -> None:
         _result, _signal, argv, _log = self.run_wrapper("signal-first")
