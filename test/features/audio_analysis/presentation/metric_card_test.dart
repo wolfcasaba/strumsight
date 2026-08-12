@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/audio_analysis/domain/analysis_capability.dart';
 import 'package:strumsight/features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import 'package:strumsight/features/audio_analysis/presentation/widgets/metric_card.dart';
 
