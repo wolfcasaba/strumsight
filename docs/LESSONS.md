@@ -8562,3 +8562,113 @@ jövőbeli adapter, codec vagy teszt közvetlenül hívhatja a konstruktort; a N
 és opcionális `double` mezőkre egyaránt próbáld ki a NaN-t, ±végtelent és a
 tartomány két oldalát. A validáció `isFinite`-tel kezdődjön; a kapott
 invariánst közvetlen konstruktor-teszt rögzítse, ne csak builder-output teszt.
+
+## L232 — `prepare-flutter-generated.sh` nem olvassa a saját argv-ját — a `<munkapéldány>` argumentumos alak némán a HÍVÓ fát készíti elő (E06-R13, 2026-08-12)
+
+**Mit mértünk.** A `sdd-round-driver` SKILL.md §3 (L230 által beillesztett
+mondat) így írta elő a lépést: `bash tools/prepare-flutter-generated.sh
+<munkapéldány>`. Ez a session szó szerint ezt futtatta egy frissen
+klónozott `ss-terra-e06-r13` munkapéldányra — és a `lib/l10n/
+app_localizations*.dart` a MUNKAPÉLDÁNYBAN nem jött létre, miközben a
+FŐ fában (`/home/ubuntu/music-theory`, ahonnan a parancsot hívtam) igen.
+Gyökérok: a script (`tools/prepare-flutter-generated.sh`) `repo_root`-ot
+`$(dirname "${BASH_SOURCE[0]}")/..`-ból számolja, a `$1`-et EGYÁLTALÁN NEM
+olvassa — tehát `bash tools/prepare-flutter-generated.sh <bármi>` mindig a
+HÍVOTT SZKRIPT SAJÁT fáján fut, az argumentum néma no-op. Mivel a művelet
+maga idempotens és gitignore-olt kimenetet ír (nincs hibaüzenet, nincs
+exit-kód-eltérés), a hiba KIZÁRÓLAG utólagos fájl-létezés-ellenőrzéssel derül
+ki — amit ez a session véletlenül elvégzett, mielőtt dispatch-elt volna.
+
+**Miért.** Ez a NEGYEDIK mérés ugyanabban a láncban (L222 E06-R07, L228
+E06-R10, L230 E06-R11, most L232 E06-R13) — de más MECHANIZMUSSAL: az
+első három a lépés KIHAGYÁSÁRÓL szólt, ez a hívási alak FÉLREVEZETŐ
+DOKUMENTÁCIÓJÁRÓL, ami a lépést UGYAN lefuttatja, csak rossz fán. A L230
+zárása pontosan ezt a mondatot illesztette be a SKILL.md-be „hogy a lecke
+ne csak LESSONS.md-ben éljen" — de a beillesztett szöveg maga hordozott egy
+argv-illúziót, amit senki nem futtatott át a script forráskódján. Egy
+`<argumentum>`-ot tartalmazó parancsminta olvasóban azt az elvárást kelti,
+hogy a cél-scriptnek van paramétere — ez csak a script FORRÁSÁNAK
+elolvasásával cáfolható, nem a dokumentáció olvasásával.
+
+**Hogyan alkalmazd.** (1) A javított alak `bash <munkapéldány>/tools/
+prepare-flutter-generated.sh` (a munkapéldány SAJÁT másolatát hívd,
+argumentum nélkül) — a SKILL.md §3-ban ez a session javította.
+(2) Általánosítható szabály: ha egy dokumentált parancsminta
+`<argumentum>`-ot ad egy shell-scriptnek, és a hívó nem a script FORRÁSÁBÓL
+tudja, hogy az argumentumot ténylegesen feldolgozza-e, ELLENŐRIZD a script
+elejét (`grep -n '\$1\|"\$@"' <script>`) — egy `set -euo pipefail` utáni
+`if [ ! -f pubspec.yaml ]` teszt argv-t egyáltalán nem néző scriptre pont
+így fest, mint egy argv-t olvasó. (3) Idempotens, gitignore-olt kimenetű
+scriptek NÉMÁN futnak rossz célon — ha egy lépés eredménye nem
+kikényszerített (nincs utána explicit fájl-lét ellenőrzés), a hiba csak a
+LÁNC KÖVETKEZŐ tagjánál (itt: az implementer első `flutter analyze`-je)
+derül ki, jóval a valódi gyökértől távol.
+
+## L233 — `codex-signal.sh` önhivatkozó `dirty_files` mérési műtermék: a saját ideiglenes fájlja számít bele (E06-R13, 2026-08-12)
+
+**Mit mértünk.** Az implementer `done` jelzése után a `.codex-round-status`
+`dirty_files=1`-et mutatott, miközben a munkapéldány `git status --short`-ja
+(ugyanazon a HEAD-en, néhány másodperccel később) TISZTA volt, és a commit
+(`2ae80542`) tartalma pontosan a scope-audit szerinti 10 fájl. A
+`codex-signal.sh` forráskódja megmagyarázza: a jelzésfájlt egy
+`.codex-round-status.tmp.$$` ideiglenes fájlba írja, és a `dirty_files=$(git
+status --porcelain | wc -l)` SZÁMÍTÁS MAGA a heredoc-blokk BELSEJÉBEN fut,
+miközben a `.tmp.$$` fájl a `{ ... } > "$temporary"` redirect miatt MÁR
+LÉTEZIK a lemezen (bash a célfájlt a blokk VÉGREHAJTÁSA ELŐTT megnyitja) —
+és mivel a `.gitignore` csak a pontos `.codex-round-status` nevet listázza
+(nem a `.tmp.$$` mintát), ez az egy önmaga-generálta átmeneti fájl
+`git status --porcelain`-ban `?? .codex-round-status.tmp.<pid>`-ként
+jelenik meg, PONT a mérés pillanatában — a `mv -f` a mérés UTÁN törli a
+nevét. A `dirty_files` tehát ebben az esetben a script SAJÁT írási
+műveletét méri, nem az implementer munkáját.
+
+**Miért.** A pipeline-prompt kifejezetten előírja: „a `done` jelzés
+feldolgozásakor `dirty_files != 0` → vizsgáld ki, mielőtt bármit elfogadsz"
+— helyes, óvatos szabály, de vak követése (a jelzést halt-okként kezelve,
+vagy feleslegesen újra-dispatchelve az implementert) elpazarolna egy egész
+kör idejét egy nem létező hibán. A helyes vizsgálat (amit ez a session
+elvégzett): `git -C <munkapéldány> status --porcelain --ignored` egy KÉSŐBBI
+pillanatban, és a `scope_audit_changed`/`gate_shape` mezők keresztellenőrzése
+— ha azok tiszták és a `dirty_files` érték kicsi (itt: 1), a gyanú a
+jelzésfájl-írás önhivatkozó mérése felé fordul, nem az implementer felé.
+
+**Hogyan alkalmazd.** `dirty_files=1` (kis, nem növekvő érték) egy `done`
+jelzésen, amikor a KÉSŐBBI `git status --short` (kizárva a `--ignored`
+fájlokat) tiszta ÉS a `scope_audit=ok` ÉS a commit fájllistája megegyezik a
+`scope_audit_changed` számmal: NE tekintsd önmagában H6/halt-oknak — ez a
+`codex-signal.sh` saját `.tmp.$$`-írásának mért mellékhatása. Csak akkor
+vizsgáld tovább (és csak akkor jelentsd valódi bizonyítatlan munkaként), ha
+a KÉSŐBBI `git status` MAGA IS piszkos fát mutat, vagy a szám a fájlszámhoz
+közeli/annál nagyobb.
+
+## L234 — Sávos/ablakozott algoritmus egyetlen SPARSE perf-tesztje elrejti a dokumentált legrosszabb esetet (E06-R13, 2026-08-12)
+
+**Mit mértünk.** Az E06-R13 dedikált biztonsági review-ja (F1,
+[docs/reviews/e06-r13-target-alignment-engine-security.md](reviews/e06-r13-target-alignment-engine-security.md))
+egy önálló Dart-próbával megmutatta, hogy az `EventAligner` időablak-alapú
+sávja (a brief által előírt és a kódban helyesen dokumentált `O(n·m)`
+idő-felső-korlát) klaszterezett (időben egy pontra tömörülő) bemeneten a
+teljes szélességre nyílik: n=2000 SPARSE (100 ms-onként) bemenetre 3-as
+sávszélesség/34 ms, de n=8000 KLASZTEREZETT (mind `time=0`) bemenetre
+sávszélesség=n/candidatePairCount=n²/idő 4819 ms — tiszta kvadratikus görbe.
+A kör EGYETLEN méretskála-tesztje (`large sparse alignment stays within
+the time-derived band`) neve is elárulja: csak a sparse esetet mérte: a
+dense/klaszterezett legrosszabb eset dokumentálva volt (a brief és az ADR
+explicit kimondja az `O(n·m)` korlátot), de SEHOL nem volt lefixture-özve.
+
+**Miért.** Egy sávos/ablakozott DP (Fenwick-fa, csúszóablak, k-d fa, stb.)
+teljesítménye NEM a bemenet MÉRETÉTŐL, hanem a bemenet SŰRŰSÉGÉTŐL/
+ELOSZLÁSÁTÓL függ az ablakon belül. Egy „N×N teszt gyorsan lefut" bizonyíték
+csak arra a KONKRÉT eloszlásra bizonyít valamit — ha az eloszlás egyenletes/
+ritka, a teszt szisztematikusan a LEGJOBB esetet méri, és a névben szereplő
+„sparse" jelző (jelen esetben pontosan, becsületesen) csak akkor véd, ha az
+OLVASÓ észreveszi, hogy hiányzik a párja.
+
+**Hogyan alkalmazd.** Sávos/ablakozott algoritmus review-jánál/tervezésénél
+a méretskála-teszt MELLÉ mindig adj egy MÁSODIK, szándékosan denz/
+klaszterezett fixture-t (minden bemenet egyetlen ablakba esik), ami a
+dokumentált felső korlátot méri, nem csak a tipikus esetet — még ha ez a
+kör scope-ján kívül eső, bekötetlen, jövőbeli-fogyasztónak szóló kockázat
+is (mint itt), a MÉRÉS (nem csak a dokumentált O-jelölés) legyen meg, mert
+csak ez különbözteti meg „a korlát dokumentált és helyes" és „a korlát
+dokumentált, de a gyakorlatban sosem füstteszteltük" állítást.

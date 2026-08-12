@@ -66,13 +66,21 @@ ha ismét megtörténne: `ps -ef | grep claude` NULLA találat + `stat -c '%F'
 `docs/LESSONS.md` L175, L179.
 
 **A `git clone` UTÁN, a dispatch ELŐTT, MINDIG:**
-`bash tools/prepare-flutter-generated.sh <munkapéldány>` (a gitignore-olt
+`bash <munkapéldány>/tools/prepare-flutter-generated.sh` (a gitignore-olt
 generált `lib/l10n/app_localizations*.dart` és a `flutter pub get` outputot
 állítja helyre). Enélkül az implementer első `flutter analyze`-je 900+ hamis
 hibával `blocked`-ot jelez — a gyökérok NEM kód, hanem a friss klón hiányzó
 generált előfeltétele. Ez a HARMADIK mérés ugyanerre (L222 E06-R07, L228
 E06-R10, L230 E06-R11) — a lecke önmagában, LESSONS.md-be írva, NEM
 elegendő védelem, csak a workflow SAJÁT szövegébe ágyazott lépés az.
+
+**A script NEM olvassa a saját argv-ját** — `repo_root`-ot a `BASH_SOURCE`
+saját útvonalából számolja, ezért `bash tools/prepare-flutter-generated.sh
+<munkapéldány>` (a forrásfa SAJÁT másolatát hívva, a munkapéldányt csak
+argumentumként odaírva) NÉMÁN a forrásfát készíti elő, a munkapéldányt
+érintetlenül hagyva (L232, E06-R13) — pontosan a fenti parancsalak a
+hibás, a `<munkapéldány>/tools/...` (a munkapéldány SAJÁT másolatának
+hívása, argumentum nélkül) a helyes.
 
 ```bash
 # Codex:

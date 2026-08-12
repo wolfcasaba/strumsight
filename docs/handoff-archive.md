@@ -32,6 +32,235 @@ squash `8b0cc6f2`: Full Gate
 success; `origin/main` nem mozdult. A post-merge round-gate mind a nyolc
 lépése zöld volt, property seed `42`.
 
+## ✅ E06-R11 — Chord evidence, segmentation és decoder provenance (2026-08-12)
+
+A chord-idővonal mögötti **evidence** és **decoder-forrás** formalizálva:
+`ChordFrameEvidence` (frame-szintű, `derived`/`complete` teljességi
+jelöléssel — ebben a körben MINDIG `derived`, a V1 kész spanekből
+származtatva, top-k/no-chord valószínűség nélkül, OD-01 szerint); a
+meglévő V2 `ChordSegment` (E06-R02 óta, `domain/analysis_segment.dart`)
+additív bővítése determinisztikus `id`/`source`(`dsp`/`ml`/`fused`)/
+`confidenceSource`(`heuristic`)/`modelManifestId` mezőkkel; verziózott
+`ChordSegmentAssembler` — a **default policy bitre V1-paritásos** (no-chord
+frame NYITVA tartja a szegmenst, a záró szegmens a klip végéig tart,
+minimum-hossz/tranziens-merge/`closeOnNoChord` csak explicit,
+nem-alapértelmezett policyval); idempotens, sharps-kanonikus
+`ChordLabelNormalizer` (`Db→C#`, `Cmaj/CM→C`, `Cmin→Cm` — a
+**megjelenítési** enharmonikus döntés UI-policy marad); DSP-primary/
+ML-advisory fusion API (`ChordSegmentAssembler.fuse`) kizárólag az ÚJ
+`analysisExperimentalFusionEnabled` flag mögött (default **OFF minden
+környezetben**, nincs dart-define override) — flag-off `identical()`
+szinten adja vissza az eredeti DSP-listát. [ADR
+0229](adr/0229-analysis-chord-decoder-fusion-strategy.md). A teljes
+felület **bekötetlen** marad — nincs `lib/` fogyasztó, `test/features/
+analyze` (V1 Analyze) zöld, production viselkedés bitre változatlan.
+
+**Pre-flight öröklés, elveszett munka nélkül.** Egy korábbi, H6-on
+önmagát halt-oló Terra-orchesztrátoros session már elvégezte a pre-flightot
+(`dd732c4f`): ADR-számot foglalt (`0229`, az előre írt `0207` mára már nem
+foglalható), és zárta a brief-lint `S5` leletjét — a brief eredetileg egy
+ÚJ `domain/harmony/chord_segment.dart` fájlban ÚJ `ChordSegment` típust
+tervezett, de ez a típus MÁR LÉTEZIK (`domain/analysis_segment.dart`,
+E06-R02 óta, `AnalysisTimeline.chordSegments` ezt tárolja) — kollízió,
+amit a meglévő típus additív bővítése oldott fel. Ez a session nem írta
+újra a pre-flightot, hanem fetch-elte és rebase-elte a friss `main`-re
+(2 pipeline-only commit, konfliktus nélkül), majd onnan folytatta.
+
+**Egy mért mid-round brief-rés — az implementer első dispatch-e fedte fel,
+tiszta önjavítással.** Az implementer `stopped`-ot jelzett: a §6 „Flag-őr"
+acceptance-pont teljesítéséhez a `test/app/feature_flags_test.dart`
+meglévő flag-enumerációs őrét (`_audioAnalysisFlags` helper, „all N flags
+remain off" teszt) kellett volna bővítenie az új
+`analysisExperimentalFusionEnabled` flaggel, de ez a fájl nem szerepelt a
+brief `allowed_paths`-án — az implementer a saját, listán kívüli editjét
+MAGA vonta vissza, és tiszta munkafával állt meg (ugyanaz a rés-osztály,
+mint az E06-R09 pre-flight `test/tooling`-rése: egy már-engedélyezett
+forrásfájl — `feature_flags.dart` — szomszédos tesztje hiányzott a
+listáról). Az orchesztrátor dokumentált §0.0 mid-round revízióval bővítette
+az `allowed_paths`-t, és ugyanazon a branchen folytatta a dispatch-et.
+
+**Örökség-lecke ismét mérve (L222/L226 minta):** a munkapéldány-előkészítés
+saját mulasztása (`tools/prepare-flutter-generated.sh` kihagyása) egy
+932-hibás hamis `flutter analyze`-t okozott az implementer ELSŐ dispatch-én
+— az implementer korrekt `blocked`-ot jelzett, kódváltoztatás nélkül; a
+script utólagos lefuttatása és újradispatch azonnal feloldotta.
+
+Implementer **Terra (Codex)**, 2 dispatch (1 tiszta `stopped` a fenti
+allowed_paths-résre + 1 `done`, zöld lokális gate) + **1 javító kör** a
+dedikált security review MINOR leletére.
+
+Review:
+[docs/reviews/e06-r11-chord-evidence-segmentation-provenance-review.md](reviews/e06-r11-chord-evidence-segmentation-provenance-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 2 NOTE (a `_mergeShortSegments`
+`extendTo`/`extendFrom` nem viszi át az elnyelt szegmens frame-jeit a
+confidence-súlyozásba — ma elérhetetlen, mert a default policy
+`minimumSegment=0`; egy E06-R08-eredetű szomszédos flag-enumerációs rés is
+zárult opportunistán ugyanabban a fájlban). A reviewer izolált `/tmp`
+klónban **két saját mutációs próbát** futtatott a brief §6.1 mérce-mátrixa
+szerint: a záróhatár `clipDuration`-ról `open.start`-ra rontása 9/12
+assembler-tesztet vitt pirosra (a záróhatár-cellát is), a minimum-küszöb
+`>=`→`>` rontása PONTOSAN az inkluzív-200ms-tesztet buktatta (a másik 10
+zöld maradt) — mindkettő visszaállítva.
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r11-chord-evidence-segmentation-provenance-security.md](reviews/e06-r11-chord-evidence-segmentation-provenance-security.md)
+— **PASS with NOTEs**, 0 CRITICAL/BLOCKER/MAJOR, **1 MINOR** (a
+`ChordLabelCandidate` const konstruktora kizárólag `assert`-tel validált —
+release buildben ledobódik, reprodukálva `--no-enable-asserts`-szel: NaN/
+9.0/üres label mind átment — a testvér `ChordFrameEvidence` valódi
+`throw`-t használ). A MINOR-t egy tightly-scoped javító kör zárta
+(`f3f34b2f`): valódi `ArgumentError` a `const` eltávolításával (a
+testvér-osztály mintáját követve) + regressziós teszt. 4 további NOTE, mind
+latens/bekötetlen jövőbeli-fogyasztó-hardening: **O(S²) merge** az opt-in
+policy-ágban (mérve: 13 mp @ 40k szegmens — a review kimondja: MAJOR-ra
+átsorolandó, ha egy jövőbeli kör untrusted/hosszú importált audióra köti
+be pozitív merge-policyval); a determinisztikus `ChordSegment.id`
+szanitálás nélkül interpolálja a `label`-t (path-traversal/injekció-alakú
+string ma teszteletlen, hívó nélküli útként folyna át); a bázis
+`AnalysisSegment` confidence-ellenőrzése pre-existing range-only
+(`isFinite` nélkül); a codec (változatlan) eldobja az új provenance-mezőket
+encode-nál.
+
+**Zöld kapu (exact-SHA `c6d9d607` — a security javító kör UTÁNI végleges
+HEAD, PR [#227](https://github.com/wolfcasaba/strumsight/pull/227), squash
+`cf3eb407`):** Full Gate
+[31566865170](https://github.com/wolfcasaba/strumsight/actions/runs/31566865170)
++ Router CI [31566869905](https://github.com/wolfcasaba/strumsight/actions/runs/31566869905)
+mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+HEAD-en — a `router-ci.yml` nem tüzelt automatikusan a review-doksi-only
+zárókommitra, ugyanaz a L112 mintázat, mint E06-R09/R10-nél). Az
+`origin/main` a dispatch és a merge között nem mozdult (H8 tiszta).
+Post-merge gate a friss `main`-en mind a kilenc lépésben zöld.
+
+## ✅ E06-R10 — Event evidence modell és onset/strum timeline V2 (2026-08-12)
+
+A meglévő V2 `OnsetEvent`/`StrumEvent` (sealed `AnalysisEvent` család,
+E06-R02 óta) additív evidence-mezőkkel bővült: `attackStrength`/`localRms`/
+`confidenceSource`/`fallbackReason` MINDKÉT levéltípuson (duplikálva, a
+bázisosztály és a testvér-típusok bitre változatlanok maradtak);
+`directionConfidence`+`onsetEventId` kizárólag `StrumEvent`-en. Új, stabil
+`EventId` generátor (`<runId>:<type>:<sampleIndex>`, `type` rögzített
+literál, nem `runtimeType`) és `EventTimelineBuilder`
+(`lib/features/audio_analysis/engine/events/`) — a V1 `LegacyEvidence`-ből
+(E06-R09) rendezett, deduplikált, **`Duration`-alapú** 50 ms
+minimum-separation-szűrt V2 event timeline-t épít, suppression-
+diagnosztikával. [ADR 0228](adr/0228-event-evidence-model-and-timeline-builder-contract.md).
+A `LegacyViewAdapter`-nek **zéró kódváltozás** kellett (már generikusan
+`StrumEvent`-et fogyaszt). A teljes feature bekötetlen marad
+(`audioAnalysisV2Enabled=false` mindenhol) — production viselkedés
+változatlan.
+
+**Pre-flight (Claude) egy ADR-t írt és HÁROM, egymást követő, mért
+brief-rést zárt — mindegyiket az implementer (Terra) saját dispatch-e
+fedte fel `stopped`-dal, tiszta munkafával (0 fájl módosítva minden
+stopnál), majd a §0.0 dokumentált revíziója után folytatódott ugyanazon a
+branch-en, ELVESZETT MUNKA NÉLKÜL:**
+
+1. **Duration vs. rögzített mintaszám (ADR 0228 3. döntés).** A §6
+   acceptance „2400 minta 48 000 Hz-en" fogalmazása mintaszám-alapú
+   összehasonlításra csábíthatott volna — de a rendszerben NINCS
+   kanonikus mintavételi ráta (az R08 preprocessing nem resamplel), és a
+   kilenc R09-fixture 44100 Hz-en fut, ahol 2400 minta 54,42 ms, NEM
+   50 ms. Feloldás: a builder `Duration`-t hasonlít, nem `sampleIndex`-et;
+   a §6 mátrix mindkét rátára (48 kHz ÉS 44100 Hz) kapott hármas
+   határeset-cellát.
+2. **`onsetEventId` szintetizálás (ADR 0228 7/9. döntés).** A §5 pont 1
+   kötelezővé tette a mezőt, de a `LegacyEvidence` nem hordoz független
+   onset-listát (csak strums/chords) — a builder ezért minden
+   `LegacyStrumEvidence`-hez EGY szintetizált `OnsetEvent`-et épít azonos
+   sample indexen, és a suppression a (onset, strum) párt atomikusan
+   kezeli (mindkettő egyszerre kerül a publikus vagy a diagnosztikai
+   listára — sosem csak az egyik).
+3. **Rendezettségi ütközés (ADR 0228 8. döntés) — Terra 2. dispatch-e
+   fedte fel.** Az OD-04 párszintetizálás azonos sample indexre helyezi az
+   onsetet és a strumot, de a §6 „szigorúan monoton" property-bullet ezt
+   matematikailag kizárta volna minden legalább egy strumot tartalmazó
+   bemeneten. Feloldás: monoton NEM CSÖKKENŐ rendezés, holtversenynél az
+   onset determinisztikusan megelőzi a hozzá tartozó strumot.
+
+Egy negyedik, ugyanebből az osztályból (Terra 3. dispatch-e fedte fel):
+a §6 „Suppression-diagnosztika" bullet „pontosan 1" számozása a
+párosítás-mentes (H3-előtti) modellt tükrözte — az atomikus pár-suppression
+mellett egy logikai egység mindig 2 fizikai eseményt jelent; a bulletek
+pár-szinten (2/2) lettek pontosítva (ADR 0228 9. döntés).
+
+**Örökség-tanulság (L222 újra mérve):** a 3. dispatch UTÁN egy negyedik
+futási kísérlet `blocked`-ot jelzett egy 931-hibás `flutter analyze`-del —
+a friss `git clone` munkapéldány nem hordozta a gitignore-olt generált
+`lib/l10n/app_localizations*.dart`-ot. Ez a PONTOS mintázat, amit
+`docs/LESSONS.md` L222 (E06-R07) már dokumentált — az orchestrátor
+elmulasztotta a munkapéldány-létrehozás utáni `tools/prepare-flutter-
+generated.sh` lépést. A javítás (a script lefuttatása a munkapéldányban,
+újradispatch) azonnal, kódváltozás nélkül feloldotta — ELSŐ H6-jelzésnek
+tűnt, de a dokumentált, kockázatmentes lecke alapján NEM volt tényleges
+halt-ok.
+
+Implementer **Terra (Codex)**, összesen 4 dispatch-kísérlet (3 tiszta
+`stopped` a fenti brief-résekre, 1 `blocked` az l10n-résre) + **1 javító
+kör** a review után.
+
+Review:
+[docs/reviews/e06-r10-event-evidence-onset-strum-timeline-review.md](reviews/e06-r10-event-evidence-onset-strum-timeline-review.md)
+— első kör **CHANGES REQUESTED** (1 MAJOR: az `EventTimelineBuilder` sosem
+futott a kilenc VALÓDI R09-fixture-ön — a brief §6 ELSŐ acceptance-pontja
+tesztelten kívül volt, bár a reviewer saját próbája szerint a viselkedés
+már akkor is helyes volt; 1 MINOR: attack/RMS számított érték nem mérve).
+A javító kör KIZÁRÓLAG két tesztet adott hozzá (production kód
+változatlan) — a reviewer újra-ellenőrizte **izolált klónban**, és egy
+ÚJ, a javító kört sem lefedő mutációs próbával (irány-leképezés
+felcserélése) igazolta, hogy az új F1-teszt valódi, end-to-end
+regressziót fog el egy valódi fixture-ön. Végső verdikt: **APPROVED**, 0
+nyitott BLOCKER/MAJOR.
+
+Dedikált biztonsági review (risk=high):
+[docs/reviews/e06-r10-event-evidence-onset-strum-timeline-security.md](reviews/e06-r10-event-evidence-onset-strum-timeline-security.md)
+— **PASS**, 0 CRITICAL/BLOCKER/MAJOR, 1 látens MINOR (`confidenceSource`
+konstruktor elfogadja a `'calibrated'`-et bizonyíték nélkül — a jövőbeli
+R19 kalibrációs kör dolga), 5 előre-mutató NOTE. A brief kiemelt aggálya
+(memória/DoS hosszú klipeken, mintaszám-overflow) reprodukálhatóan NEM állt
+fenn — fix méretű attack/RMS ablakok, puffer-újrafelhasználás, klampolt
+indexek, ~6 éves overflow-tartalék 48 kHz-en.
+
+**Zöld kapu (exact-SHA `8976d178` — a javító kör + review-zárás UTÁNI
+végleges HEAD, PR [#225](https://github.com/wolfcasaba/strumsight/pull/225),
+squash `eec0aeab`):** Full Gate
+[31560690943](https://github.com/wolfcasaba/strumsight/actions/runs/31560690943)
++ Router CI [31560692023](https://github.com/wolfcasaba/strumsight/actions/runs/31560692023)
+mindkettő **success** (mindkettő kézzel `workflow_dispatch`-elve az exact
+HEAD-en — a `router-ci.yml` nem tüzelt automatikusan a review-doksi-only
+zárókommitra, ugyanaz a L112 mintázat, mint E06-R09-nél). Az `origin/main`
+a dispatch és a merge között nem mozdult (H8 tiszta). Post-merge gate a
+friss `main`-en mind a nyolc lépésben zöld.
+
+**E06-R11 H6 önjavító kör (2026-08-12) — KÉSZ, `outcome=fixed`, PR
+[#226](https://github.com/wolfcasaba/strumsight/pull/226), squash
+`ead86c25`:** a rotáció szerint (ADR 0222) Terra-vezényelt E06-R11
+önmagát haltolta, ahelyett hogy elindította volna a driver ÁLTAL MÁR
+kvóta-ellenőrzött implementerét. A reviewer-függetlenség (ADR 0138/0222)
+miatt a driver az implementert natív Claude Sonnet 5-re (`sonnet-impl`,
+`harness=claude`, a saját előfizetésen) cserélte — ez a MÉRT, tesztelt
+viselkedés (`IndependenceTest`, `tools/tests/test_orchestrator_rotation.py`)
+—, de a Terra a `docs/execution/pipeline-codex-orchestrator-preamble.md`
+feltétel nélküli „ne hívd a `claude` CLI-t" mondatát erre a dispatch-ra is
+ráhúzta. Mért gyökérok: a mondat 2026-08-02-én (ADR 0115) íródott, amikor
+Terra kizárólag Claude-kvóta kimerülésekor ült az orchestrátor székben; az
+ADR 0222 (2026-08-11) rotáció egy MÁSODIK, kvótától független kiváltó
+okot vezetett be, amely alatt a Claude-kvóta jellemzően egészséges — és a
+`resolve_independent_engine` EPP EKKOR adja implementernek a
+claude-harness `sonnet-impl`-et. A preambulum szövege sosem lett
+frissítve az ADR 0222 bevezetésekor, és önellentmondásba került a fő
+prompt §1.1 named-engine dispatch-táblájával (`claude` harness →
+`tools/mm-round.sh`). Javítás: a preambulum megnevezi mindkét kiváltó
+okot, és a tiltást a „ne indítsd újra magad orchestrátorként Claude-on"
+esetre szűkíti — a §1.1 szerinti implementer-dispatch explicit
+engedélyezett, még `harness=claude` motorra is. Regressziós teszt:
+`tools/tests/test_orchestrator_rotation.py::PreambleClaudeCliProhibitionTest`
+(2 eset, piros a régi szövegen, zöld az újon). Router CI zöld exact-SHA
+`5fa25528`-on (kizárólag router/doksi-változás, nincs Dart-érintés):
+[31562994056](https://github.com/wolfcasaba/strumsight/actions/runs/31562994056)
++ [31562971109](https://github.com/wolfcasaba/strumsight/actions/runs/31562971109)
+mindkettő **success**. Tanulság: `docs/LESSONS.md` L229.
+
 ## ✅ E06-R09 — ClipAnalyzer stage adapter és parity (2026-08-12)
 
 A meglévő, **bitre változatlan** V1 `ClipAnalyzer` bekötve a V2 engine-be
