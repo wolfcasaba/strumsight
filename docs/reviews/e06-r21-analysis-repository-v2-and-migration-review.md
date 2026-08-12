@@ -1,14 +1,14 @@
 # E06-R21 — Review
 
-Brief: `docs/rounds/e06-r21-analysis-repository-v2-and-migration.md`  
-Diff: `20a4a474..33db3aee`  
-Reviewer: Codex / gpt-5.6-terra (isolated `/tmp/e06-r21-review` clone)  
-Dátum: 2026-08-12  
-Verdikt: CHANGES REQUIRED
+Brief: `docs/rounds/e06-r21-analysis-repository-v2-and-migration.md`
+Diff: `20a4a474..bb817775`
+Reviewer: Codex / gpt-5.6-terra (isolated `/tmp/e06-r21-review` clone)
+Dátum: 2026-08-12
+Verdikt: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
 ## Scope-audit
 
@@ -33,7 +33,7 @@ engedélyezett fájlon kívüli implementer-diff nincs.
 - **Kötelező javítás:** `save` és `replace` a schema-elutasítást explicit
   `AppResult.failure(StorageFailure(code: unsupportedSchema))` eredményre
   képezzék, és legyen reprodukáló teszt mindkét metódusra.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bb817775`), közvetlen save/replace regressziós teszttel.
 
 ### F2 — MAJOR — Rename elveszíti az újraépített index-bejegyzést
 
@@ -47,7 +47,8 @@ engedélyezett fájlon kívüli implementer-diff nincs.
   sérül a brief CRUD és index-recovery contractja.
 - **Kötelező javítás:** a `next` listát a rebuildelt indexből képezd, és adj
   tesztet a hiányzó index-entry → rename → list új címmel esetre.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bb817775`), index-törlés → rename → list regressziós
+  teszttel.
 
 ### F3 — NOTE — Implementer gate alakja nem hiteles
 
@@ -63,10 +64,10 @@ nélkül újra kell futtatni.
 | scope audit | ✅ izolált klónban zöld |
 | format | ✅ reviewer-gate `[1]` zöld |
 | analyze | ✅ reviewer-gate `[2]` zöld |
-| célzott tesztek és architecture | újrafuttatandó F1/F2 javítás után |
+| célzott tesztek és architecture | ✅ implementer `round-gate.sh` 9/9 zöld; független gate a végső SHA-n fut |
 | CI | még nem dispatch-elt |
 
 ## Merge-döntés
 
-Az F1 és F2 nyitott MAJOR lelet, ezért merge tilos. Ugyanazon `sonnet-impl`
-motor javító futása szükséges; utána új, izolált review és exact-SHA CI.
+Az F1 és F2 javítása és tesztje a `bb817775` commitban ellenőrizve. Merge csak
+a végső SHA-n zöld független gate és exact-SHA CI után engedett.
