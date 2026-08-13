@@ -3,32 +3,94 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R25 DONE — PR #248 merged; H-NOSIGNAL self-heal PR #249 merged; main
-> healthy, chain unblocked; next up is E06-R26.)**
+> (E06-R26 DONE — PR #250 merged; main healthy, chain unblocked; next up is
+> E06-R27.)**
 >
-> ## ✅ [HEAL E06-R25/H-NOSIGNAL] KÉSZ — védtelen `gh` hívás fagyasztotta le a CI-várakozó orchestrátort (2026-08-13)
+> ## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
 >
-> E06-R25 2. dispatchja (orchesztrátor=Terra) egy kézzel írt `gh run list
-> --workflow full-gate.yml ...` poll-ciklusban fagyott le — a hívás
-> BELSEJÉBEN, timeout védelem nélkül (mérve: 13 hívás ~25,5s alatt tért
-> vissza, a 14. SOHA). A 20 perces log-mtime elakadás-őr csak kívülről, a
-> teljes sessiont ölve vette ezt észre, JÓVAL azután, hogy a ténylegesen várt
-> Full Gate futás már zölden lezárult — miközben a kör tartalmi munkája
-> (PR #248) már 100%-ban kész, review-APPROVED és CI-zöld volt. Új,
-> timeout-védett `tools/wait-for-ci.sh` (regressziós teszt: fake `gh`, ami
-> sosem tér vissza magától — RED a szkript nélkül, GREEN 6/6 ~11s alatt);
-> a három megosztott CI-várakozási recept frissítve (`sdd-round-driver`
-> SKILL.md §5, `pipeline-orchestrator-prompt.md` §0.1,
-> `pipeline-selfheal-prompt.md` §4 lépés 5). PR
-> [#249](https://github.com/wolfcasaba/strumsight/pull/249), Router CI zöld,
-> squash-merge. **PR #248 önállóan újra-ellenőrizve** (review APPROVED,
-> Router CI + Full Gate success a pontos head SHA-n, scope-audit tiszta: 23
-> módosított útvonal = 22 `allowed_paths` + 1 reviewer-exempt review-doksi) és
-> mergeölve a self-heal részeként (`b5ec8a1f`) — a driver saját
-> `pending`→`done` sor-fájl-frissítése (ami az `outcome=merged` jelzés
-> hiányában szintén elmaradt) kézzel replikálva, közvetlen push-sal
-> (`b951726f`), hogy a lánc ne próbálja újradispatch-elni az immár eltűnt
-> branch-ű, ténylegesen kész kört. Tanulság: `docs/LESSONS.md` **L258**.
+> A V2 elemzés bekötése a Practice Engine, a Song Trainer, az AI Tutor és a
+> Progress szerződéseihez — kizárólag publikus barreleken át. Négy ÚJ adapter
+> `lib/features/audio_analysis/application/adapters/` alatt:
+> `PracticeAnalysisAdapter` (Practice → `AnalysisTarget`, evidence facts/
+> hotspots/retry-tempo, a Practice score nem duplikálódik),
+> `SongAnalysisAdapter` (saját `SongReferenceSnapshot`, OD-01 — a Song domain
+> ma nem publikus —, capo/transzpozíció **concert vs display** pitch
+> elkülönítéssel notes ÉS chords-ra), `TutorAnalysisSnapshotAdapter`
+> (redaktált, immutable, ≤50 eseményes tényblob, OD-02), `ProgressEvidenceAdapter`
+> (`documentId`-kulcsos, egyszeri, verziózott skill evidence — NEM
+> `PracticeEntry`). Két új flag (`analysisPracticeIntegrationEnabled`,
+> `analysisTutorIntegrationEnabled`), mindkettő OFF minden környezetben — a
+> kör teljes egészében bekötetlen, production viselkedés bitre változatlan.
+> Új ADR nincs — ADR 0176 (public barrel határ), 0132/0141 (Tutor adatvédelem/
+> evidence-határ) és 0202 (raw audio) végrehajtása.
+>
+> **A pre-flight egy mért §2-korrekciót igényelt (OD-04):** a
+> `CompiledTargetEvent`/`ExpectedChordSegment` a `compiled_practice_target.dart`-ban
+> a `CompiledPracticeTarget`-tel egy fájlban él, de a barrel (`practice/public.dart`)
+> szűkítő `show`-val kizárólag az utóbbit exportálja — a brief eredeti §2
+> tévesen mindhármat „elérhetőnek" mondta. Feloldás: az adapter a
+> `compiled.events`/`expectedChordSegments`-et kizárólag TÍPUS-INFERENCIÁVAL
+> járja be (sosem nevezi meg a nem exportált típusokat) — érvényes Dart, nulla
+> `practice/public.dart`-változtatás.
+>
+> **A független funkcionális review 4 MAJOR-t talált, egy javító körben
+> mind zárva, valódi kód-javítással ÉS regressziós teszttel.** **F1:** a
+> retry-tempo 60%-os alsó korlátja strukturálisan elérhetetlen volt (a
+> severity-lépcső maximuma fixen 15% redukció) — a javítás a clampet egy
+> önálló, nyers redukciót fogadó `PracticeRetryTempoPolicy.clampTempoForReduction`
+> segéden át közvetlenül tesztelhetővé tette. **F2:** a `ProgressEvidenceAdapter`-nek
+> — a másik hárommal ellentétben — nem volt flag-kapuzott providere; pótolva
+> a testvér-adapterek mintájával. **F3:** a `SongAnalysisAdapter` akkord-ága
+> (`displayChord`) teljesen tesztelet­len volt, az OD-01 saját „teljes
+> teszteléssel" kikötése ellenére, és a transzponált display-akkordot
+> eldobta — pótolva `SongChordContext`/`SongAnalysisTarget.chords`-szal +
+> hatcellás mátrix-teszttel. **F4:** a Song flag-kapu hívásszámláló-tesztje
+> hiányzott — pótolva. Tanulság: `docs/LESSONS.md` **L259**.
+>
+> **A kötelező dedikált security review (`risk = "high"`) 1 MAJOR-t talált,
+> élő szondával reprodukálva, egy második javító körben zárva.** A
+> Tutor-redakciós teszt KULCS-szintű volt (`forbiddenKeys` egy fix
+> kulcsnév-listát nézett, miközben a `toJson()` kulcskészlete konstrukció
+> szerint sosem tartalmazza ezeket), a tényleges szivárgási csatorna
+> ÉRTÉK-szintű: a szabad szöveges `event.id`/`insight.id`/`hotspot.id`/
+> `target.id` mezők szó szerint átmentek — a reviewer egy fájlrendszer-útvonalat
+> és egy utasítás-szerű szöveget helyezett egy event-ID-be, ami szó szerint
+> megjelent a Tutor JSON-ban, a meglévő teszt mellett is ZÖLDEN. Ma nem élesen
+> kihasználható (a kör bekötetlen, a mai ID-gyártók gépi-determinisztikusak),
+> de ez a kör EGYETLEN adatvédelmi szerződése. Javítás: `TutorSnapshotRedaction.sanitizeIdentifier`
+> — allow-list minta (`^[A-Za-z0-9._:-]+$`, ≤128 karakter), minden nem
+> megfelelő ID stabil `redacted-id`-re vált, a `Tutor*Fact`/`TutorTargetContext`
+> létrehozása ELŐTT. Egy maradék, NEM blokkoló rés dokumentálva egy jövőbeli
+> Tutor-bekötő körnek: kötőjellel/ponttal összefűzött, ember számára olvasható
+> „szavak" (pl. `ignore-all-previous-instructions`) változatlanul átmennek —
+> a tényleges védelem egy jövőbeli ADR (Tutor-prompt ezeket adatként,
+> escape-elve kapja, ADR 0134 mentén), nem egy tökéletesített karakterkészlet.
+> Tanulság: `docs/LESSONS.md` **L260**.
+>
+> Mindkét review (`docs/reviews/e06-r26-practice-song-tutor-integration-review.md`,
+> `…-security.md`) **APPROVED**, mindhárom gate-futtatás (implementáció,
+> javítás #1, javítás #2 után) saját, FÜGGETLEN izolált `/tmp` klónban
+> ellenőrizve, nem a commit-üzenetre hagyatkozva — a `gate_shape=VIOLATION`
+> jelzés mindhárom implementer-körben hamis pozitívnak bizonyult (a naplóban
+> talált `&&`-os minták vagy a gate-szkript FORRÁSÁNAK olvasását, vagy egy
+> korábbi review-szöveg idézését takarták, sosem tényleges csonkított
+> gate-futást — `docs/LESSONS.md` L245 szerint ellenőrizve, nem bemondásra
+> elfogadva). Implementer **Terra (Codex)**: 1 dispatch `done` + 2 javító kör
+> `done`, mindhárom `continuations=0`.
+>
+> **Zöld kapu (exact-SHA `dca02287` — a végleges, javítás utáni HEAD):** Full
+> Gate [31719946154](https://github.com/wolfcasaba/strumsight/actions/runs/31719946154)
+> + Router CI [31719902109](https://github.com/wolfcasaba/strumsight/actions/runs/31719902109)
+> mindkettő success. A CI-terv `full-gate.yml`-t adott (`apk_required=false`,
+> nem natív diff); az `origin/main` nem mozdult a dispatch és a merge között.
+> Squash-merge PR [#250](https://github.com/wolfcasaba/strumsight/pull/250),
+> `da4bbd05`. Post-merge gate friss `main`-en is zöld: `audio_analysis`,
+> `tooling`, `app` és format/analyze/architecture(12 allowlist)/secrets/l10n
+> mind PASS.
+>
+> **Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
+> E06-R26 mostanra **done** (fent); a pipeline a következő `pending` sort
+> dispatch-eli.
 >
 > ## ✅ E06-R25 KÉSZ — Session comparison és fejlődési trend (2026-08-13)
 >
@@ -49,7 +111,7 @@
 > Router CI + Full Gate success. Négy dispatch/self-heal lépésen át jutott
 > el a mergig — H3 (routing-fájlok hiányoztak az `allowed_paths`-ból, PR
 > #247, `docs/LESSONS.md` L257) → tartalmi implementáció + review-javítás →
-> H-NOSIGNAL (fent) — squash-merge PR
+> H-NOSIGNAL ([archívum](docs/handoff-archive.md#-heal-e06-r25h-nosignal-kész--védtelen-gh-hívás-fagyasztotta-le-a-ci-váró-orchestrátort-2026-08-13)) — squash-merge PR
 > [#248](https://github.com/wolfcasaba/strumsight/pull/248), `b5ec8a1f`.
 >
 > **Előretekintő jegyzet R27-nek (batch-audit, `docs/LESSONS.md` L257):**
@@ -57,131 +119,6 @@
 > hogy az új `analysis_export_screen.dart` igényel-e központi
 > route-regisztrációt, vagy feature-belüli `Navigator.push` — ne ismételje
 > meg ezt a haltot feltételezésből.
->
-> ## ✅ RESOLVED — main Router CI red spell (post-E99-R08-merge, 2026-08-13, `48959b4c`)
->
-> Root cause: E99-R08's own F1 regression test
-> (`tools/tests/test_round_resume_independence.py`, `WorkspaceRestorationHermeticityTest`)
-> invoked the FULL `round-pipeline.sh` via `subprocess.run(cwd=<isolated
-> fixture>, ...)`, but the script computes its own repo root from
-> `${BASH_SOURCE[0]}` and `cd`s there — so `cwd=` was silently ineffective and
-> the driver ran against the SURROUNDING repo (post-merge: `main` itself),
-> hitting the `gh`-dependent pre-dispatch checks (open-PR list, run list,
-> main-health) before ever reaching the code under test. Confirmed
-> deterministic via `gh run rerun 31693001292` (identical failure twice).
-> Fixed by copying the driver + its two required artefacts into a throwaway
-> git repo per-test and launching it from there, so `repo_root` genuinely is
-> the fixture (no `gh` stub, no weakened guard) — PR
-> [#246](https://github.com/wolfcasaba/strumsight/pull/246), `4372b9ed`
-> (router-ci green, full suite 407 passed). Landed by the E06-R25/H3
-> self-heal's 1st attempt as a prerequisite before it could ship its own fix;
-> independently re-verified (not taken on faith) by the 2nd attempt below.
->
-> ## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
->
-> Governance-kör; a `tools/round-pipeline.sh` orchestrátor-rotációját
-> körönként kulcsolja (D1), folytatáskor az implementer-identitást az ág
-> prefixéből méri és csak az orchestrátort billenti ütközéskor, fail-closed
-> `H-INDEP`-re (D2), és `tools/safe-force-push.sh`-sal (ÚJ) futtatható
-> artefaktummá teszi a rebase-utáni biztonságos push protokollt (D3). [ADR
-> 0242](docs/adr/0242-per-round-orchestrator-rotation-and-safe-force-push.md).
-> Zéró Dart sor. A kör saját levezénylése **három önjavító kört** igényelt
-> (H3 — review-jelentés téves H3-halt, PR #243; H8 — rebase-konfliktus két
-> független, azonos javítás között, ág pusholva; H6 — kötelező gate
-> háttérbe küldése két javító-kör-dispatchen át, PR #244) — a teljes,
-> részletes saga (lecke-hivatkozásokkal: L251, L252, L253, L254) a
-> [handoff-archívumban](docs/handoff-archive.md#e99-r08-gov-07-kész--körönként-kulcsolt-orchestrátor-rotáció-és-biztonságos-force-push-2026-08-13).
-> Egy friss Sonnet 5 orchestrátor-session véglegesítette a H6 alatt
-> megírt-de-commitolatlan F3-javítást, `main`-re rebase-elte, mindkét gate-et
-> zöldre futtatta, majd az AGENTS.md §15.7 szerint (ugyanaz a Claude/Sonnet-5
-> kvóta, mint a `sonnet-impl` implementer) NEM saját review-t írt, hanem a
-> már meglévő, genuinely független Terra-review-t certifikálta. Zöld kapu
-> (exact-SHA `f4b3afff` majd `ec226489`, mindkétszer Router CI + Full Gate
-> success) → squash-merge PR
-> [#245](https://github.com/wolfcasaba/strumsight/pull/245), `48959b4c`.
-> **A post-merge ellenőrzés fedezte fel a fenti 🚨 urgens leletet** — pontosan
-> ezért kötelező a záró rituálé §5.5 post-merge gate-lépése.
->
-> **Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
-> E06-R25 mostanra **done** (fent), a pipeline automatikusan E06-R26-ot
-> (Practice song tutor integration) dispatch-eli.
->
-> ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
->
-> Elkészült a V2 timeline képernyő: nyolc capability-vezérelt lane (waveform
-> preview, chord, beat/bar, strum/onset, timing error, dynamics, pitch,
-> hotspot overlay), tiszta és widget-mentes `TimelineViewport` (zoom/pan/
-> range-selection, kilenc cella + inkluzív 399/400/401 ms zoom-küszöb),
-> adaptív `TimelineRuler`, ciklikus `HotspotNavigator`, Canvas-alapú
-> virtualizáció (≤100 feldolgozott elem 5000 eventből), en/hu lokalizáció.
-> A route additív, a meglévő `audioAnalysisV2Enabled` flag mögött (nincs új
-> flag); a V1 `timeline_view.dart`/`session_detail_screen` érintetlen. [ADR
-> 0243](docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)
-> — a nyolc lane konkrét, mért `AnalysisDocument`-mező-térképét és a
-> `CapabilityStatus.degraded` látható-figyelmeztetéses (nem rejtett)
-> kezelését rögzíti; ezt a 2026-08-07-es batch-brief kételemű
-> `available`/rejtve felosztása nem nevezte meg.
->
-> **A pre-flight egy örökölt útvonal-hibát ELSŐRE elmulasztott, majd egy
-> `stopped` jelzés után javított — ugyanaz a hiba, amit az E06-R23 saját
-> pre-flightja már egyszer kimért.** A brief `lib/app/router/app_router.dart`-ot
-> nevezte meg (a tényleges fájl `lib/app/routing/app_router.dart`); az
-> ELSŐ pre-flight ezt tévesen „mérve, létezik"-nek jelölte a fejlécben
-> tényleges `test -e` nélkül. Az implementer (Terra) nulla fájlt módosítva,
-> azonnal helyesen `stopped`-ot jelzett; a 2. pre-flight javította az
-> útvonalat és hozzáadta a hiányzó `app_route.dart` route-konstans fájlt.
-> Tanulság: `docs/LESSONS.md` **L250**.
->
-> **A független review 3 MAJOR-t talált, mind egy javító körben zárva
-> valódi kód-javítással ÉS regressziós teszttel.** **F1**: a hotspot
-> overlay lane tévesen `AnalysisCapability.targetAlignment`-hez volt kötve
-> — ellentmondva a SAJÁT ADR 0243 döntésének, hogy a hotspot lane-nek nincs
-> dedikált capability-je, az adatforrása `document.hotspots`. A javítás
-> adat-vezérelt kapura váltott (`document.hotspots.isEmpty`), pontosan úgy,
-> ahogy a képernyő SAJÁT Prev/Next hotspot-gombjai már eredetileg is
-> helyesen tették. **F2**: a brief névvel nevezett hu/en × 320/600px ×
-> 1.0/2.0 textScale acceptance criterionnak nulla tesztje volt — az új
-> mátrix-teszt ÉLŐ `RenderFlex` overflow-t talált és fogott meg hu×320px×2×
-> alatt, amit a lane-cím és a navigációs gombok `Expanded`-be csomagolása
-> oldott meg. **F3**: a hotspot-lista nem volt screen reader számára
-> listaként felépítve (csak két gomb egy közös `Semantics`-ben) — a javítás
-> minden hotspothoz saját, index/típus/súlyosság-leírású `Semantics`-node-ot
-> adott. Tanulság: `docs/LESSONS.md` **L249**.
->
-> A dedikált security review (`risk = "high"`) **PASS**-t adott egy
-> MINOR-ral (a „nincs nyers PCM" forrásolvasó teszt egy sosem létező
-> `pcmSamples` fantom-tokent tiltott a valódi `PcmAnalysisInput` típus és
-> `domain/analysis_input.dart` import helyett — a határt magát a dokumentum
-> típus-struktúrája tartotta, nem ez a teszt), ugyanabban a javító körben
-> zárva. Review:
-> [docs/reviews/e06-r24-layered-zoomable-timeline-review.md](docs/reviews/e06-r24-layered-zoomable-timeline-review.md)
-> (APPROVED), security:
-> [docs/reviews/e06-r24-layered-zoomable-timeline-security.md](docs/reviews/e06-r24-layered-zoomable-timeline-security.md)
-> (PASS). A reviewer a gate-et HÁROM külön izolált klónban futtatta
-> függetlenül (implementáció után, javítás után, a végleges merge-SHA-n —
-> mindháromszor zöld) és elvégezte a brief kötelező valódi-sértés próbáját
-> (viewport `clamp`-hívás ideiglenes törlése → pan-széllel-ütközés teszt
-> PIROSRA váltott → visszaállítva), amit az implementer §10 handoffja nem
-> dokumentált.
->
-> Implementer **Terra (Codex)**: 2 dispatch `done` (az első a fenti
-> útvonal-hiba miatt `stopped`, egy pre-flight javítás után a második
-> `done`) + 1 javító kör `done`, mindkettő `continuations=0`.
->
-> **Zöld kapu (exact-SHA `8fba04d7`, PR
-> [#242](https://github.com/wolfcasaba/strumsight/pull/242), squash
-> `37aa74c3`):** Full Gate
-> [31674429477](https://github.com/wolfcasaba/strumsight/actions/runs/31674429477)
-> + Router CI
-> [31674423653](https://github.com/wolfcasaba/strumsight/actions/runs/31674423653)
-> mindkettő success a végleges (javítás utáni) HEAD-en. A CI-terv
-> `full-gate.yml`-t adott (`apk_required=false`); az `origin/main` nem
-> mozdult a dispatch és a merge között. A post-merge gate friss `main`-en
-> is zöld: `audio_analysis=483`, `app=69`, format/analyze/architecture/
-> secrets/l10n mind PASS (l10n `1244` üzenet).
->
-> **Következő kör (ekkor):** E06-R25 — Session comparison és fejlődési
-> trend (azóta **done**, ld. fent).
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -197,8 +134,13 @@
 > ismételten megállító hibák miatt, plusz E06-R24 és E06-R23) — ez a zárás a
 > hármat EGYETLEN konszolidált „E99-R08 KÉSZ" bannerré (plusz a fölé emelt 🚨
 > urgens dobozzá) vonta össze, és eltávolította E06-R23-at (már korábban is
-> jelen volt az archívumban, csak a fejlécből nem került ki). A két legutóbbi
-> banner most: E99-R08, E06-R24.
+> jelen volt az archívumban, csak a fejlécből nem került ki).
+> Ismételt diéta: 2026-08-13 (E06-R26 zárása): a fejlécben időközben megint
+> öt banner gyűlt össze (H-NOSIGNAL self-heal + E06-R25 + a Router CI-red-spell
+> jegyzet + E99-R08 + E06-R24) — ez a zárás mind a négy régebbit archiválta
+> (a H-NOSIGNAL banner szó szerint, mert korábban sosem került archívumba),
+> és csak az E06-R25 KÉSZ bannert tartotta meg a fejlécben. A két legutóbbi
+> banner most: E06-R26, E06-R25.
 
 ## 1. Current release state
 
@@ -318,8 +260,14 @@
   **E06-R24** (többrétegű, zoomolható timeline — nyolc capability-vezérelt
   lane, tiszta `TimelineViewport`, adaptív ruler, hotspot-navigátor,
   virtualizáció, [ADR
-  0243](docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md))
-  kész, 6 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  0243](docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)),
+  **E06-R25** (session-összehasonlítás és fejlődési trend,
+  `CompatibilityEvaluator`/`TrendBuilder`, [ADR
+  0246](docs/adr/0246-analysis-session-comparison-and-trend-contract.md)) és
+  **E06-R26** (Practice/Song/Tutor/Progress integrációs adapterek
+  kizárólag publikus barreleken át, redaktált Tutor-snapshot, egyszeri
+  progress-kreditálás — új ADR nincs, ADR 0176/0132/0141/0202 végrehajtása)
+  kész, 4 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre

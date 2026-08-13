@@ -6,6 +6,151 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ [HEAL E06-R25/H-NOSIGNAL] KÉSZ — védtelen `gh` hívás fagyasztotta le a CI-várakozó orchestrátort (2026-08-13)
+
+E06-R25 2. dispatchja (orchesztrátor=Terra) egy kézzel írt `gh run list
+--workflow full-gate.yml ...` poll-ciklusban fagyott le — a hívás
+BELSEJÉBEN, timeout védelem nélkül (mérve: 13 hívás ~25,5s alatt tért
+vissza, a 14. SOHA). A 20 perces log-mtime elakadás-őr csak kívülről, a
+teljes sessiont ölve vette ezt észre, JÓVAL azután, hogy a ténylegesen várt
+Full Gate futás már zölden lezárult — miközben a kör tartalmi munkája
+(PR #248) már 100%-ban kész, review-APPROVED és CI-zöld volt. Új,
+timeout-védett `tools/wait-for-ci.sh` (regressziós teszt: fake `gh`, ami
+sosem tér vissza magától — RED a szkript nélkül, GREEN 6/6 ~11s alatt);
+a három megosztott CI-várakozási recept frissítve (`sdd-round-driver`
+SKILL.md §5, `pipeline-orchestrator-prompt.md` §0.1,
+`pipeline-selfheal-prompt.md` §4 lépés 5). PR
+[#249](https://github.com/wolfcasaba/strumsight/pull/249), Router CI zöld,
+squash-merge. **PR #248 önállóan újra-ellenőrizve** (review APPROVED,
+Router CI + Full Gate success a pontos head SHA-n, scope-audit tiszta: 23
+módosított útvonal = 22 `allowed_paths` + 1 reviewer-exempt review-doksi) és
+mergeölve a self-heal részeként (`b5ec8a1f`) — a driver saját
+`pending`→`done` sor-fájl-frissítése (ami az `outcome=merged` jelzés
+hiányában szintén elmaradt) kézzel replikálva, közvetlen push-sal
+(`b951726f`), hogy a lánc ne próbálja újradispatch-elni az immár eltűnt
+branch-ű, ténylegesen kész kört. Tanulság: `docs/LESSONS.md` **L258**.
+
+## ✅ RESOLVED — main Router CI red spell (post-E99-R08-merge, 2026-08-13, `48959b4c`)
+
+Root cause: E99-R08's own F1 regression test
+(`tools/tests/test_round_resume_independence.py`, `WorkspaceRestorationHermeticityTest`)
+invoked the FULL `round-pipeline.sh` via `subprocess.run(cwd=<isolated
+fixture>, ...)`, but the script computes its own repo root from
+`${BASH_SOURCE[0]}` and `cd`s there — so `cwd=` was silently ineffective and
+the driver ran against the SURROUNDING repo (post-merge: `main` itself),
+hitting the `gh`-dependent pre-dispatch checks (open-PR list, run list,
+main-health) before ever reaching the code under test. Confirmed
+deterministic via `gh run rerun 31693001292` (identical failure twice).
+Fixed by copying the driver + its two required artefacts into a throwaway
+git repo per-test and launching it from there, so `repo_root` genuinely is
+the fixture (no `gh` stub, no weakened guard) — PR
+[#246](https://github.com/wolfcasaba/strumsight/pull/246), `4372b9ed`
+(router-ci green, full suite 407 passed). Landed by the E06-R25/H3
+self-heal's 1st attempt as a prerequisite before it could ship its own fix;
+independently re-verified (not taken on faith) by the 2nd attempt below.
+
+## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
+
+Governance-kör; a `tools/round-pipeline.sh` orchestrátor-rotációját
+körönként kulcsolja (D1), folytatáskor az implementer-identitást az ág
+prefixéből méri és csak az orchestrátort billenti ütközéskor, fail-closed
+`H-INDEP`-re (D2), és `tools/safe-force-push.sh`-sal (ÚJ) futtatható
+artefaktummá teszi a rebase-utáni biztonságos push protokollt (D3). [ADR
+0242](adr/0242-per-round-orchestrator-rotation-and-safe-force-push.md).
+Zéró Dart sor. A kör saját levezénylése **három önjavító kört** igényelt
+(H3 — review-jelentés téves H3-halt, PR #243; H8 — rebase-konfliktus két
+független, azonos javítás között, ág pusholva; H6 — kötelező gate
+háttérbe küldése két javító-kör-dispatchen át, PR #244) — a teljes,
+részletes saga (lecke-hivatkozásokkal: L251, L252, L253, L254) a
+[handoff-archívumban](handoff-archive.md#e99-r08-gov-07-kész--körönként-kulcsolt-orchestrátor-rotáció-és-biztonságos-force-push-2026-08-13).
+Egy friss Sonnet 5 orchestrátor-session véglegesítette a H6 alatt
+megírt-de-commitolatlan F3-javítást, `main`-re rebase-elte, mindkét gate-et
+zöldre futtatta, majd az AGENTS.md §15.7 szerint (ugyanaz a Claude/Sonnet-5
+kvóta, mint a `sonnet-impl` implementer) NEM saját review-t írt, hanem a
+már meglévő, genuinely független Terra-review-t certifikálta. Zöld kapu
+(exact-SHA `f4b3afff` majd `ec226489`, mindkétszer Router CI + Full Gate
+success) → squash-merge PR
+[#245](https://github.com/wolfcasaba/strumsight/pull/245), `48959b4c`.
+**A post-merge ellenőrzés fedezte fel a fenti 🚨 urgens leletet** — pontosan
+ezért kötelező a záró rituálé §5.5 post-merge gate-lépése.
+
+## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
+
+Elkészült a V2 timeline képernyő: nyolc capability-vezérelt lane (waveform
+preview, chord, beat/bar, strum/onset, timing error, dynamics, pitch,
+hotspot overlay), tiszta és widget-mentes `TimelineViewport` (zoom/pan/
+range-selection, kilenc cella + inkluzív 399/400/401 ms zoom-küszöb),
+adaptív `TimelineRuler`, ciklikus `HotspotNavigator`, Canvas-alapú
+virtualizáció (≤100 feldolgozott elem 5000 eventből), en/hu lokalizáció.
+A route additív, a meglévő `audioAnalysisV2Enabled` flag mögött (nincs új
+flag); a V1 `timeline_view.dart`/`session_detail_screen` érintetlen. [ADR
+0243](adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)
+— a nyolc lane konkrét, mért `AnalysisDocument`-mező-térképét és a
+`CapabilityStatus.degraded` látható-figyelmeztetéses (nem rejtett)
+kezelését rögzíti; ezt a 2026-08-07-es batch-brief kételemű
+`available`/rejtve felosztása nem nevezte meg.
+
+**A pre-flight egy örökölt útvonal-hibát ELSŐRE elmulasztott, majd egy
+`stopped` jelzés után javított — ugyanaz a hiba, amit az E06-R23 saját
+pre-flightja már egyszer kimért.** A brief `lib/app/router/app_router.dart`-ot
+nevezte meg (a tényleges fájl `lib/app/routing/app_router.dart`); az
+ELSŐ pre-flight ezt tévesen „mérve, létezik"-nek jelölte a fejlécben
+tényleges `test -e` nélkül. Az implementer (Terra) nulla fájlt módosítva,
+azonnal helyesen `stopped`-ot jelzett; a 2. pre-flight javította az
+útvonalat és hozzáadta a hiányzó `app_route.dart` route-konstans fájlt.
+Tanulság: `docs/LESSONS.md` **L250**.
+
+**A független review 3 MAJOR-t talált, mind egy javító körben zárva
+valódi kód-javítással ÉS regressziós teszttel.** **F1**: a hotspot
+overlay lane tévesen `AnalysisCapability.targetAlignment`-hez volt kötve
+— ellentmondva a SAJÁT ADR 0243 döntésének, hogy a hotspot lane-nek nincs
+dedikált capability-je, az adatforrása `document.hotspots`. A javítás
+adat-vezérelt kapura váltott (`document.hotspots.isEmpty`), pontosan úgy,
+ahogy a képernyő SAJÁT Prev/Next hotspot-gombjai már eredetileg is
+helyesen tették. **F2**: a brief névvel nevezett hu/en × 320/600px ×
+1.0/2.0 textScale acceptance criterionnak nulla tesztje volt — az új
+mátrix-teszt ÉLŐ `RenderFlex` overflow-t talált és fogott meg hu×320px×2×
+alatt, amit a lane-cím és a navigációs gombok `Expanded`-be csomagolása
+oldott meg. **F3**: a hotspot-lista nem volt screen reader számára
+listaként felépítve (csak két gomb egy közös `Semantics`-ben) — a javítás
+minden hotspothoz saját, index/típus/súlyosság-leírású `Semantics`-node-ot
+adott. Tanulság: `docs/LESSONS.md` **L249**.
+
+A dedikált security review (`risk = "high"`) **PASS**-t adott egy
+MINOR-ral (a „nincs nyers PCM" forrásolvasó teszt egy sosem létező
+`pcmSamples` fantom-tokent tiltott a valódi `PcmAnalysisInput` típus és
+`domain/analysis_input.dart` import helyett — a határt magát a dokumentum
+típus-struktúrája tartotta, nem ez a teszt), ugyanabban a javító körben
+zárva. Review:
+[docs/reviews/e06-r24-layered-zoomable-timeline-review.md](docs/reviews/e06-r24-layered-zoomable-timeline-review.md)
+(APPROVED), security:
+[docs/reviews/e06-r24-layered-zoomable-timeline-security.md](docs/reviews/e06-r24-layered-zoomable-timeline-security.md)
+(PASS). A reviewer a gate-et HÁROM külön izolált klónban futtatta
+függetlenül (implementáció után, javítás után, a végleges merge-SHA-n —
+mindháromszor zöld) és elvégezte a brief kötelező valódi-sértés próbáját
+(viewport `clamp`-hívás ideiglenes törlése → pan-széllel-ütközés teszt
+PIROSRA váltott → visszaállítva), amit az implementer §10 handoffja nem
+dokumentált.
+
+Implementer **Terra (Codex)**: 2 dispatch `done` (az első a fenti
+útvonal-hiba miatt `stopped`, egy pre-flight javítás után a második
+`done`) + 1 javító kör `done`, mindkettő `continuations=0`.
+
+**Zöld kapu (exact-SHA `8fba04d7`, PR
+[#242](https://github.com/wolfcasaba/strumsight/pull/242), squash
+`37aa74c3`):** Full Gate
+[31674429477](https://github.com/wolfcasaba/strumsight/actions/runs/31674429477)
++ Router CI
+[31674423653](https://github.com/wolfcasaba/strumsight/actions/runs/31674423653)
+mindkettő success a végleges (javítás utáni) HEAD-en. A CI-terv
+`full-gate.yml`-t adott (`apk_required=false`); az `origin/main` nem
+mozdult a dispatch és a merge között. A post-merge gate friss `main`-en
+is zöld: `audio_analysis=483`, `app=69`, format/analyze/architecture/
+secrets/l10n mind PASS (l10n `1244` üzenet).
+
+**Következő kör (ekkor):** E06-R25 — Session comparison és fejlődési
+trend (azóta **done**, ld. fent).
+
 ## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
 
 Governance-kör (nem termék-viselkedés): a 2026-08-13-i `E06-R23` kétszeri,

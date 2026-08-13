@@ -9682,3 +9682,85 @@ nem csak azt, amelyik hangosan (halt-tal) jelentkezik.
 - A nyitott PR ÉS a sor-fájl állapota EGYÜTT, mindkettő mérve döntendő el —
   nem elég az egyiket javítani és feltételezni, hogy a másik magától
   rendeződik, mert mindkettő UGYANATTÓL a hiányzó `outcome=` írástól függ.
+
+## L259 — Egy severity→policy lépcső belső maximuma megakadályozhatja, hogy egy explicit, a brief által megkövetelt védőháló-cella VALAHA aktiválódjon — a review a FÜGGVÉNY ÉRTÉKKÉSZLETÉT nézze, ne csak az egyes tesztelt pontokat; és négy testvér-entitás közül csak kettő kapta meg a mintát (E06-R26, 2026-08-13)
+
+**Mit mértem — az elérhetetlen clamp.** Az E06-R26 `PracticeAnalysisAdapter.recommendedRetryTempo`-ja
+egy 4-ágú `switch`-csel számolt `reduction`-t (`{0, 0.05, 0.10, 0.15}`), majd
+`(targetTempo * (1 - reduction)).clamp(targetTempo * 0.60, double.infinity)`-t
+adott vissza. A brief §6 explicit negyedik cellát követelt: „ahol a
+számított tempó a target 60%-a alá esne → a javaslat pontosan 60%". A
+`switch` `_`(default) ága is fixen `0.15`-öt adott — tehát
+`targetTempo * (1 - reduction) >= targetTempo * 0.85` **minden** bemenetre,
+és a 0.60-as alsó korlát matematikailag SOSEM aktiválódhatott. Az
+implementer saját teszt-mátrixa (öt cella, a legszélsőségesebb
+`timingErrorSeverity: 1`-gyel) ezt nem vette észre, mert egyetlen tesztelt
+PONTOT sem hasonlított a függvény TELJES értékkészletéhez — a review
+derítette ki grep+kézi levezetéssel, majd erősítette meg azzal, hogy a
+negyedik cella tesztje TÉNYLEG hiányzott.
+
+**Mit mértem — a testvér-entitás inkonzisztencia.** Ugyanabban a körben négy
+strukturálisan analóg adapter készült (Practice/Song/Tutor/Progress),
+mindegyiknek flag-kapuzott Riverpod providert kellett kapnia hívásszámláló
+teszttel. Kettő (Practice, Tutor) helyesen megkapta a factory+provider+teszt
+mintát; a Song megkapta a providert, de NEM a tesztet; a Progress **egyiket
+sem** kapta meg — a fájlja még a `flutter_riverpod`/`app_config` importot
+sem tartalmazta. A négy fájl egymás mellett, ugyanabban a diffben élt, mégis
+csak a kód SOR SZERINTI átfésülése (nem a gate) fedte fel a hiányt.
+
+**Miért.** A zöld gate egyedi tesztpontokat igazol, nem függvény-tartományt
+és nem entitás-készlet-teljességet — mindkettő review-oldali, aktív
+ellenőrzést igényel, amit egy `flutter test` sosem fog magától elvégezni.
+
+**Hogyan alkalmazd.**
+- Egy stepped/clamped numerikus policy review-jánál számítsd ki a függvény
+  ELÉRHETŐ értékkészletét (a lépcső min/max ága alapján), és vesd össze a
+  brief által megkövetelt szélsőértékkel (itt: a 60%-os padló) — ha a padló
+  a lépcső maximuma alatt marad elérhetetlen, az MAJOR, nem csak hiányzó
+  tesztcella.
+- Ha egy kör N strukturálisan analóg entitást vezet be (adapter/provider/
+  repository egy mintára), listázd fel explicit mind az N-et egy
+  ellenőrző-táblában, és minden ismétlődő cross-cutting mintát (flag-kapu,
+  hívásszámláló teszt, immutabilitás-guard) mind az N-re egyenként pipálj
+  ki — ne fogadd el, hogy „a többi ugyanígy van", mert pont ez a feltevés
+  bukott meg itt kettőnél négyből.
+
+## L260 — Egy KULCSNÉV-listára épülő redakciós teszt vakon zöld marad, ha a DTO kulcskészlete fix literál — a tényleges szivárgás az ÉRTÉK-oldalon van, és csak egy célzott kanári-próba fogja meg (E06-R26, dedikált security review, 2026-08-13)
+
+**Mit mértem.** A `TutorAnalysisSnapshot.toJson()` egy fix kulcskészletet ír
+(`insightIds`, `metricFacts`, `hotspots`, `events`, `targetContext` + a
+gyerekek névvel nevezett mezői). A kör redakciós tesztje
+`TutorSnapshotRedaction.forbiddenKeys`-t (`'pcm'`, `'fileName'`, …) nézte
+`json.contains('"$key"')` formában — ez a teszt **konstrukció szerint mindig
+igaz** marad, mert a `toJson()` kulcsai sosem egyeznek a tiltólistával,
+FÜGGETLENÜL attól, mit hordoznak az ÉRTÉKEK. A dedikált security-reviewer
+egy pure-Dart szondával reprodukálta: egy fájlrendszer-útvonalat és egy
+utasítás-szerű szöveget helyezett egy `event.id`/`insight.id`/`hotspot.id`/
+`target.id` (mind szabad szöveges `String`, a domain csak `trim().isEmpty`-t
+tilt) mezőbe — mindkettő szó szerint megjelent a kimenő JSON-ban, a meglévő
+teszt mellett is ZÖLDEN.
+
+**Miért.** Egy kulcs-szintű negatív teszt (`isNot(contains('"forbidden_key"'))`)
+egy STATIKUS DTO-alakot ellenőriz, nem a rajta átfolyó ADATOT. Ha a
+redakció szándéka „ez a mezőnév nem kerülhet ki", a helyes teszt a mezőNÉV
+jelenlétét nézi (ez itt eleve tautologikusan teljesül); ha a szándék „ez a
+TARTALOM nem kerülhet ki" (a tényleges privacy-igény), a tesztnek egy valós,
+a határon átmenő ÉRTÉKET kell kanárinak használnia, és annak a
+MEGJELENÉSÉT kell tiltania a kimeneten, nem egy kulcsnevet.
+
+**Hogyan alkalmazd.**
+- Redakciós/privacy guard review-jánál különböztesd meg a két kérdést: „a
+  DTO tartalmaz-e egy tiltott mezőt" (fordítás-idejű, a típus zárja) vs. „a
+  DTO-n átfolyó ÉRTÉKEK tartalmazhatnak-e tiltott tartalmat" (futásidejű, a
+  teszt fixture-jétől függ). A második kérdéshez a fixture-nek TÉNYLEGESEN
+  a legrosszabb-eset tartalmat (fájlnév, útvonal, hosszú szabad szöveg,
+  utasítás-szerű mondat) kell a HATÁRT ténylegesen átlépő mezőkbe helyeznie
+  — sosem egy olyan mezőbe, amit a snapshot strukturálisan sosem olvas be
+  (itt: az eredeti teszt `secret.wav`-ot egy be-nem-olvasott
+  `AnalysisInputSummary.sourceName`-be tette, ezért zárt ajtót tesztelt).
+- Egy allow-list (nem deny-list) alapú sanitizálás (`^[A-Za-z0-9._:-]+$`
+  minta) még mindig átengedhet szemantikailag olvasható, kötőjellel/ponttal
+  összefűzött „szavakat" — ez NEM ugyanaz, mint a nulla redakció, de a
+  védelem tényleges forrása egy jövőbeli fogyasztó-oldali kör ADR-be
+  rögzített döntése (a mezőt adatként, escape-elve, sosem szabad
+  utasítás-kontextusban kezelni), nem egy tökéletesített karakterkészlet.
