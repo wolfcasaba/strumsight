@@ -1,6 +1,6 @@
 # E06-R25 — Session comparison és fejlődési trend
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight: main @ `1d165342`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 25; §26.1–26.6
 - **Branch:** `codex/e06-r25-session-comparison-and-trend`
 - **Előfeltétel:** **E06-R21, E06-R23 merge**
@@ -29,6 +29,9 @@ allowed_paths = [
   "test/features/audio_analysis/engine/trend_builder_test.dart",
   "test/features/audio_analysis/presentation/analysis_compare_screen_test.dart",
   "test/property/analysis_comparison_property_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "test/app/feature_flags_test.dart",
+  "docs/adr/0246-analysis-session-comparison-and-trend-contract.md",
   "docs/rounds/e06-r25-session-comparison-and-trend.md",
 ]
 gate_tests = [
@@ -58,8 +61,24 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az ADR 0203 (metric verzió-kompatibilitás)
-végrehajtása.
+**2026-08-13 pre-flight (main `1d165342`, ADR 0246 foglalva).
+Mért baseline:** az `AnalysisMetricId.known` a publikált metrikák egyetlen
+katalógusa (`lib/features/audio_analysis/domain/analysis_metric_catalog.dart`),
+az `AnalysisDocument` hordozza a metric-, provenance- és
+`SignalQualityReport`-adatot, a routerben az Audio Analysis V2 route-ok
+egyetlen regisztrációs helye `app_router.dart:259` körül van, és a
+`FeatureFlags` minden környezetben explicit alapértékekből épül. A brief régi
+`ADR 0203` hivatkozása a batchből örökölt hibás sorszám: a metrika-ID és
+verzió szerződése valójában [ADR 0218](../adr/0218-analysis-metric-id-and-version-governance.md)
+(amit ADR 0237 is kimér és rögzít). Ezt nem módosítjuk.
+
+**Feloldás:** az új, lefoglalt [ADR 0246](../adr/0246-analysis-session-comparison-and-trend-contract.md)
+rögzíti az összehasonlítás saját fail-closed kompatibilitási, delta- és trend
+szerződését, ADR 0218-ra építve. A dokumentum és a route/flag tényleges
+tesztjei (`test/app/routing/app_router_test.dart`, `test/app/feature_flags_test.dart`)
+is az engedélyezett listába kerültek; különben a brief Flag-őr acceptance-e
+nem lenne mérhető a scope-on belül. Ez a kör saját, még nem merge-elt
+pre-flight artefaktumainak dokumentált revíziója, nem korábbi ADR átírása.
 
 **2026-08-13, H3 self-heal (ADR 0112 önjavító kör, 2. kísérlet).** Az első
 dispatch (sonnet-impl) a §6 utolsó („Flag-őr") acceptance criteriáját —
@@ -143,11 +162,13 @@ metrika, extrapoláció/predikció.
 | `.../presentation/analysis_compare_screen.dart` | ÚJ | képernyő |
 | `.../presentation/widgets/metric_delta_row.dart` | ÚJ | delta-sor |
 | `.../public.dart` | meglévő | export |
+| `docs/adr/0246-analysis-session-comparison-and-trend-contract.md` | ÚJ | E kör saját comparison/trend szerződése |
 | `lib/app/routing/app_router.dart` | meglévő | **additív** route, `analysisComparisonEnabled` flag mögött |
 | `lib/app/routing/app_route.dart` | meglévő | **additív** route-konstans (`AppRoutes.analysisCompare`) |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, OFF |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
-| `test/**` | ÚJ | kompatibilitás + trend + widget + property |
+| `test/features/audio_analysis/**`, `test/property/analysis_comparison_property_test.dart` | ÚJ | kompatibilitás + trend + widget + property |
+| `test/app/routing/app_router_test.dart`, `test/app/feature_flags_test.dart` | meglévő | route és flag OFF kapu |
 
 **Tilos zóna:** `lib/features/progress/**`, `lib/features/library/**`,
 `lib/features/analyze/**`. Listán kívül → `stopped`.
