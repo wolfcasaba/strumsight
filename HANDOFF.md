@@ -3,8 +3,52 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R27 H3 self-heal closed, PR #251 — main healthy, chain unblocked; next
-> up is E06-R27's own dispatch.)**
+> (E06-R27 H6 self-heal closed, PR #252 — main healthy, chain unblocked;
+> E06-R27's OWN implementer work is already complete and gate-green, see
+> below — next session should verify + move to review, not re-implement.)**
+>
+> ## ✅ [HEAL E06-R27/H6] KÉSZ — a `verify_claim` anti-hallucináció őr egy jogos, diff nélküli megerősítő `done`-t is hallucinációnak nézett (2026-08-13)
+>
+> E06-R27 H6-tal állt meg: egy review-javító forduló (`sonnet-impl`,
+> `tools/mm-round.sh`, session `d96a4889`) valódi munkát commitolt
+> (`524397de` — mindhárom independent-review lelet javítva: a redakciós
+> BLOCKER + 2 MAJOR, zöld `tools/round-gate.sh test/features/audio_analysis
+> test/property test/app test/features/share`), de a fordulót prózai
+> összegzéssel zárta a kötelező `tools/codex-signal.sh` hívás NÉLKÜL (0
+> találat a nyers naplóban) — a burkoló emiatt `status=unknown`-t írt. Az
+> ezt észlelő orchestrátor (Terra) egy MÁSODIK, kizárólag megerősítésre/
+> újra-jelzésre utasított fordulót dispatch-elt, ami helyesen ellenőrizte a
+> meglévő commitot és a gate-naplót, majd hívta a `done` jelzést — ÚJ
+> commit/diff NÉLKÜL, mert a dolga pontosan ez volt. A `verify_claim`
+> (mindkét burkolóban) ezt is `unknown`-ra fokozta le, mert a MÁSODIK
+> invokáció saját `scope_base`-e (az invokáció-kezdő HEAD) már `524397de`
+> volt — a régi logika ezt megkülönböztethetetlennek látta egy valódi,
+> semmit-nem-csináló hallucinációtól. Javítás: mindkét burkoló
+> `verify_claim`-je mostantól tiszteletben tartja a hívó (a DISPATCHER,
+> sosem az implementer önbevallása) explicit `ROUND_VERIFY_NOOP_OK=1`
+> jelzését — a jelzésfájl ilyenkor látható/auditálható `verify_noop_ok=1`
+> sort kap; a flag hiányában (alapértelmezés) a régi szigorú viselkedés
+> változatlan. Regressziós teszt (`ClaimGuardTest` +
+> `WrapperModeTest`, mindkét tesztfájlban, javítás előtt PIROS — egy
+> ideiglenesen visszaállított burkolóval megmérve —, utána ZÖLD) → PR
+> [#252](https://github.com/wolfcasaba/strumsight/pull/252), exact-SHA
+> Router CI zöld mind a dispatch (`082c0e43`), mind a post-merge (`175b582a`)
+> SHA-n, squash-merge `175b582a`. Teljes `python3 -m pytest tools/tests -q`
+> az önjavítás izolált worktree-jében: 421 passed, 392 subtests, 0 failed.
+> Lecke: `docs/LESSONS.md` **L263**.
+>
+> **E06-R27 SAJÁT tartalmi munkája (`524397de`, branch
+> `codex/e06-r27-export-share-and-privacy-controls`,
+> `/home/ubuntu/ss-sonnet-impl-e06-r27`) MÁR KÉSZ és gate-zöld** — ez az
+> önjavítás kizárólag a jelzés-eszközt javította, a round tartalmát nem
+> vitte előre (ADR 0112 §1). A `.codex-round-status` a worktree-ben
+> jelenleg még `status=unknown`-t mutat (a fenti mért állapot, a fix ELŐTTI
+> pillanatból befagyva) — ez NEM azt jelenti, hogy a munka hiányos. A
+> következő orchestrátor-session dolga: nézze meg a worktree-t (HEAD,
+> `git log`, a `/tmp/mm-e06-r27-correction.log` gate-eredménye), és vigye
+> tovább review/CI-re — ne indítson újabb implementer-fordulót a már kész
+> munkára. Ha mégis szükséges egy tiszta megerősítő jelzés, az immár
+> `ROUND_VERIFY_NOOP_OK=1`-gyel biztonságosan újra-dispatch-elhető.
 >
 > ## ✅ [HEAL E06-R27/H3] KÉSZ — brief „Kívül — TILOS" zóna ellentmondott a §5.1 OD-01 saját alapértelmezésének (2026-08-13)
 >
