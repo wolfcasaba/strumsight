@@ -313,7 +313,45 @@ Külön processzek, nincs `&&`/pipe/`tail`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (sonnet-impl, 2026-08-13).** Minden §4 fájl elkészült a
+listán belül, listán kívüli fájl nem módosult.
+
+- `MetricMetadata`/`MetricMetadataCatalog` (domain) az `AnalysisMetricId.known`
+  mind az 54 ID-jéhez explicit irányultságot és `minimumMeaningfulDelta`-t ad;
+  `MetricMetadataCatalog.isComplete`/`missingIds` a gépi teljesség-kapu.
+  `targetRange` irányt jelenleg egyetlen valós katalógus-metrika sem használ
+  (a §9 kockázat szerint indokoltan a `descriptive` a biztonságos default) —
+  az algoritmus (`CompatibilityEvaluator.resolveDirection`) mégis teljesen
+  megvalósítja, ad hoc `MetricMetadata`-val tesztelve.
+- `CompatibilityEvaluator` (engine) fail-closed kilenc cellája: metric-
+  identitás (`compareMetricIdentity` — külön publikus, tiszta függvény, mert
+  `AnalysisMetricResult` konstruktora az `id`-t és a `version`-t mindig
+  1:1-hez köti, így két valós példány sosem térhet el csak verzióban; ez a
+  metódus ettől függetlenül teszteli a mátrix "eltérő verzió" celláját),
+  target (`AnalysisProvenance.targetVersion` egyezés), quality-fokozat
+  (`overall` 0.85/0.65/0.4 sávhatárral), clipping-állapot, noise-floor
+  (10 dB, inkluzív), és dinamika-metrikáknál a `dspConfigHash` egyezés
+  (SDD §16.3 normalizációs/gain-policy helyettesítője).
+- `TrendBuilder` (engine): minimum 3 kompatibilis session (inkluzív),
+  metric-version szerinti csoportosítás, medián+MAD alapú outlier-jelölés
+  (3×MAD, inkluzív bent), a kizárt pont a pontlistában marad. Forrás-teszt
+  garantálja a `predict`/`forecast`/`extrapolat` szimbólumok és a hálózati
+  importok hiányát.
+- `CompareAnalysesUseCase` csak az azonos ID alatt publikált metrika-párokat
+  hasonlítja; csak egyik oldalon jelen lévő metrika nem kerül a listába.
+- UI: `AnalysisCompareScreen` + `MetricDeltaRow` már megépített
+  `AnalysisComparison`-t renderel (a screen nem hoz döntést); üres állapot,
+  before/after/delta/confidence/sampleCount, inconclusive-ok szövege.
+  Route: `AppRoutes.analysisCompare`, saját `analysisComparisonEnabled` flag
+  mögött, a meglévő `audioAnalysisV2Enabled` blokktól függetlenül (ADR 0246
+  §5. pont).
+- A §10 "Valódi-sértés próba" (egy `MetricMetadata` bejegyzés ideiglenes
+  törlése → teljesség-teszt PIROS) manuális review-időpontban ellenőrizendő
+  lépés — nem automatizált teszt, mert célja épp a gépi kapu saját
+  megbízhatóságának bizonyítása egy külön, ideiglenes diffel.
+
+Gate: `tools/round-gate.sh test/features/audio_analysis test/property
+test/app` — lásd a futtatás eredményét ennek a körnek a jelzésében.
 
 ## 11. Review — a független reviewer tölti ki
 
