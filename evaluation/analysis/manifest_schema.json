@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/analysis-evaluation-manifest-1.0.json",
+  "title": "Audio Analysis evaluation manifest",
+  "description": "Ground-truth annotation manifest consumed by EvaluationManifestParser (E06-R29, ADR 0249). Contains no raw audio: only synthetic-generation parameters and hand-authored expected/detected event annotations, so the manifest itself may be committed to the repository.",
+  "type": "object",
+  "required": ["schemaVersion", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Manifest schema contract version. The parser rejects any value other than the one it supports (currently \"1.0\") as a typed InvalidSchemaVersion failure.",
+      "const": "1.0"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/case" }
+    }
+  },
+  "definitions": {
+    "case": {
+      "type": "object",
+      "required": ["id", "tempoBand", "signalQualityTier", "mode", "expected", "detected"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique case identifier within the manifest. Duplicate ids are a typed DuplicateCaseId failure."
+        },
+        "generation": {
+          "type": "object",
+          "description": "Optional documentation of how a real synthesizer would reproduce this case's audio at runtime. Not interpreted by the harness (no audio is decoded from it); free-form beyond the required \"type\" key.",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string" },
+            "params": { "type": "object" }
+          }
+        },
+        "tempoBand": {
+          "type": "string",
+          "enum": ["slow", "medium", "fast", "notApplicable"],
+          "description": "Slice key. slow < 90 BPM, medium 90-140 BPM, fast > 140 BPM, notApplicable for tempo-less cases (silence, monophonic)."
+        },
+        "signalQualityTier": {
+          "type": "string",
+          "enum": ["clean", "noisy", "clipped", "quiet"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["chord", "monophonic", "silence"]
+        },
+        "expected": { "$ref": "#/definitions/annotationSet" },
+        "detected": { "$ref": "#/definitions/annotationSet" },
+        "confidenceObservations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/confidenceObservation" }
+        }
+      }
+    },
+    "annotationSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/event" }
+        },
+        "chordSegments": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/chordSegment" }
+        },
+        "tempoBpm": { "type": ["number", "null"] },
+        "beatsMs": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "pitchPoints": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/pitchPoint" }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["id", "timeMs", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "timeMs": { "type": "integer", "minimum": 0 },
+        "type": {
+          "type": "string",
+          "enum": ["onset", "strum", "chordChange", "beat", "noteOnset"]
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["down", "up"],
+          "description": "Required when type is \"strum\"; a strum event without it is a typed MissingAnnotation failure. Forbidden for any other type."
+        }
+      }
+    },
+    "chordSegment": {
+      "type": "object",
+      "required": ["label", "startMs", "endMs"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "startMs": { "type": "integer", "minimum": 0 },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Must be >= startMs; a segment with endMs < startMs is a typed InvalidChronology failure."
+        }
+      }
+    },
+    "pitchPoint": {
+      "type": "object",
+      "required": ["timeMs", "hz"],
+      "additionalProperties": false,
+      "properties": {
+        "timeMs": { "type": "integer", "minimum": 0 },
+        "hz": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "confidenceObservation": {
+      "type": "object",
+      "required": ["rawScore", "correct"],
+      "additionalProperties": false,
+      "properties": {
+        "rawScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "correct": { "type": "boolean" }
+      }
+    }
+  }
+}
