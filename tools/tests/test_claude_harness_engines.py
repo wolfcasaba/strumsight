@@ -134,6 +134,23 @@ class WrapperModeTest(unittest.TestCase):
         captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": ""})
         self.assertIn("PROMPT=# Implementer-preambulum", captured)
 
+    def test_the_preamble_forbids_backgrounding_the_mandatory_gate(self) -> None:
+        """MÉRT hibaminta (E99-R08 H6 self-heal, 2026-08-13): két egymást követő
+        `sonnet-impl` javító kör (session 3f71b1fb-ee86-4206-b9a6-6f802768f679,
+        majd a „resume" 665d8491-3352-416f-9ac8-f420c4936468) a kötelező
+        `python3 -m pytest tools/tests -q` gate-et a Bash-eszköz saját
+        `run_in_background: true` kapcsolójával küldte háttérbe, majd „Running
+        the full pytest suite ... in the background ... I'll report back once
+        it completes" bejelentéssel zárta a fordulót — jelzés és commit
+        nélkül. A `claude -p` egy fordulós harness: a folyamat a forduló
+        végén kilépett, ezzel a háttér-feladatot IS megölte, mielőtt bármi
+        eredmény visszajutott volna — mindkét kísérlet exit 0-val
+        `status=unknown`-ba halt, ami egy H6 haltot (ADR 0087 §2) okozott.
+        Ugyanez az elv más hívó eszköz kontextusában már bizonyítva:
+        `docs/LESSONS.md` L183."""
+        captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": ""})
+        self.assertIn("run_in_background", captured)
+
     def test_minimax_keeps_its_own_endpoint_and_token(self) -> None:
         """A visszakapcsolás garanciája (user-kérés 2026-08-06): az M3 sajátosságai
         (külső `/anthropic` endpoint + token) a Sonnet-üzemmód bevezetése után is
