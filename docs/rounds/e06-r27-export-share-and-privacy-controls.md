@@ -311,7 +311,75 @@ helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**2026-08-13, sonnet-impl.** Minden §6 acceptance cella zöld a lenti fájlokkal.
+
+### Fájlonkénti összefoglaló
+
+- `domain/export/analysis_export.dart` (ÚJ) — `AnalysisExport` + almodelljei
+  (`AnalysisExportInput/SignalQuality/Capability/Metric/Hotspot/Insight/
+  Warning/Completion`), `analysisExportSchemaVersion = 1`.
+- `domain/export/redaction_policy.dart` (ÚJ) — `RedactionPolicy.apply`:
+  allowlist-mapping mezőnként; sosem olvassa `provenance`-t,
+  `input.sourceName`/`fingerprint`-et, `CapabilityReport.details`-t,
+  `metric.evidence`-t, `hotspot.metricIds/evidenceIds`-t, `insight.factIds`-t.
+- `data/export/analysis_export_codec.dart` (ÚJ) — determinisztikus JSON
+  encode/decode, `exportSchemaVersion` mezővel; a `analysis_document_codec.dart`
+  mintáját követi (fix kulcs-sorrend, `_ensureFiniteJson` őr).
+- `data/export/share_card_builder.dart` (ÚJ) — `ShareCardBuilder.build`:
+  csak `available`/`degraded` metrikát tesz kártyára (`isDegraded` jelöléssel),
+  `unavailable` sosem érték; a legmagasabb prioritású nem-`caution` insightot
+  választja, vagy nincs insight (sosem negatív).
+- `application/export_analysis_use_case.dart` (ÚJ) — `preview()` (tiszta,
+  I/O nélkül) + `share()`: redaktált JSON → app-privát temp fájl (injektált
+  `Directory`, random fájlnév) → `ShareService.shareExportFile` hívás.
+- `application/delete_analysis_use_case.dart` (ÚJ) — `DeleteAnalysisUseCase`:
+  `repository.delete` (R21, változatlan) + `AnalysisCachePort`/
+  `AnalysisAudioPort` (alapértelmezett no-op portok — R28/audio-retention
+  follow-up köti be a valódi implementációt); hiba esetén a portok nem futnak.
+- `presentation/analysis_export_screen.dart` + `presentation/widgets/
+  export_preview.dart` (ÚJ) — előnézet-kapu: `ExportPreview` kategóriákat
+  listáz (nem nyers JSON-t), a megosztás csak az explicit "Share export"
+  gombra fut.
+- `lib/features/share/share_service.dart` (additív, H3 self-heal §5.8) —
+  EGY új publikus metódus, `shareExportFile(file, caption, ...)`,
+  `try/finally`-ban törli a fájlt sikeres/hibás megosztás után is; a
+  meglévő `shareCard`/`shareImage`/`shareText` változatlan.
+- `lib/l10n/app_en.arb` / `app_hu.arb` — additív `analysisExport*` kulcsok
+  (cím, kategórianevek, "Share export" gomb, felirat).
+- `lib/features/audio_analysis/public.dart` — additív exportok az új
+  domain/data/application/presentation fájlokhoz.
+- Tesztek (mind ÚJ): `analysis_export_codec_test.dart` (round-trip +
+  `exportSchemaVersion` + "nincs hálózat" forrás-scan + `ShareCardBuilder`
+  confidence-jelölés — ennek nincs önálló allowed_paths bejegyzése, ezért a
+  codec teszttel egy fájlban él, mivel mindkettő a `data/export/` alá
+  tartozik), `analysis_export_redaction_property_test.dart` (allowlist
+  kulcshalmaz-diff property + új-mező szivárgás-próba + öt tiltott-tartalom
+  cella), `export_analysis_use_case_test.dart`, `delete_analysis_use_case_test.dart`
+  (öt cella + hiba-rövidzár), `analysis_export_screen_test.dart`
+  (előnézet-kapu 0→1, hu/en paritás, 320px/2.0 overflow), `share_service_test.dart`
+  (a VALÓDI `shareExportFile` siker/hiba utáni takarítása, a
+  `dev.fluttercommunity.plus/share` platform-csatorna mockolásával — nem
+  fake-kel — így a tényleges implementáció ellen bizonyít).
+
+### Mért buktató (jegyzetnek follow-up körökhöz)
+
+Widget-tesztben a valódi `dart:io` fájlírás (`ExportAnalysisUseCase.share`)
+a sima `testWidgets` zóna alatt sosem fut le — a `pumpAndSettle` nem várja
+meg a widget-újraépítéshez nem kötött, valódi async I/O-t. A megoldás:
+`tester.runAsync(...)` a tap + a `ShareService` hívás megvárása körül
+(`analysis_export_screen_test.dart` "preview gate" teszt).
+
+### Gate
+
+```
+tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/share
+```
+
+Eredmény: **MINDEN GATE ZÖLD** — format, analyze, `test
+test/features/audio_analysis`, `test test/property`, `test test/app`,
+`test test/features/share`, architecture (12 allowlisted deviation,
+változatlan), secrets (2454 fájl, 0 találat), l10n parity (en→hu, 1276
+üzenet). A backend sáv nem futott (a kör nem érinti a `backend/`-et).
 
 ## 11. Review — a független reviewer tölti ki
 
