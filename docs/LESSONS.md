@@ -9185,3 +9185,79 @@ előkészítés és a gate ismét zölden futott (`audio_analysis=465`, `app=69`
 akkor fogadd el a post-merge gate-et, ha az megegyezik a PR squash commitjával.
 Ha eltér, fast-forwardold a fő klónt, futtasd újra a
 `tools/prepare-flutter-generated.sh`-t, és csak azután a gate-artefaktumot.
+
+---
+
+## L249 — Egy capability-vezérelt sáv/widget-mátrixban minden EGYES kapunak saját, mért igazolása kell — a "capability szerint jelenik meg" elv nem jelenti, hogy BÁRMELYIK capability jó kapu (E06-R24, 2026-08-13)
+
+**Mit mértem.** Az E06-R24 brief (§5 bullet 3) általános szabályként írta elő,
+hogy minden lane "capability szerint jelenik meg" — de nem nevezte meg,
+MELYIK `AnalysisCapability` enum-tag gate-eli melyik lane-t (ezt a saját
+pre-flight ADR 0243-am is csak a lane→adatforrás térképig vitte, a
+lane→capability térképig nem). Az implementer a hét adat-hordozó lane-hez jó
+kaput talált (chord→`chordTimeline`, beat/bar→`beatGrid`, stb.), de a
+NYOLCADIKHOZ (hotspot overlay) egy szintaktikailag helyes, de szemantikailag
+ÜRES kaput vett fel: `AnalysisCapability.targetAlignment`. Ez a capability
+KIZÁRÓLAG arról szól, van-e referencia-cél az időzítés-igazításhoz — semmi
+köze ahhoz, hogy VAN-e hotspot. A review saját tesztje leplezte le: a
+„minden lane megjelenik" próbateszt kifejezetten `targetAlignment: available`-t
+állított be ahhoz, hogy a hotspot lane egyáltalán látszódjon, miközben
+`hotspots: []` volt beállítva — a teszt tehát saját magát bizonyította
+hibásnak, csak nem vették észre. Élesben: egy `freePlay` (cél nélküli)
+session, aminek VAN hotspotja (rhythm/dynamics/harmony/pitch kind, egyik sem
+függ target-alignmenttől), a `targetAlignment`-je `notApplicable` lenne —
+a hotspot lane hamisan „unavailable"-t mutatna, MIKÖZBEN a UGYANAZON
+képernyő Prev/Next hotspot-gombjai (helyesen, `hotspots.isNotEmpty`
+adat-vezérelt kapuval) aktívak és működnek.
+
+**Miért.** Egy N-elemű, egységesen megfogalmazott szabály ("minden X
+capability szerint jelenik meg") nem garantálja, hogy MINDEN elemhez van
+természetes, dedikált kapu — ha a séma (itt: 14 `AnalysisCapability` tag)
+nem 1:1 fedi le a lane-halmazt (itt: 8 lane), a hiányzó kapuhoz az
+implementer plauzibilisnek TŰNŐ, de tartalmilag rossz tagot választ, és
+sem a szintaxis (fordul), sem a mechanikus gate (zöld) nem fogja meg — csak
+a lane MÖGÖTTES ADATÁVAL szembeni próbateszt (üres capabilities lista +
+valódi payload, vagy fordítva).
+
+**Hogyan alkalmazd.** Egy capability-gate-elt UI-mátrix pre-flightjában
+ne csak azt mérd, LÉTEZIK-e a hivatkozott capability-tag — mérd ki
+KONKRÉTAN, mit fejez ki szemantikailag, és rendeld hozzá NÉVSZERINT minden
+egyes elemhez, a briefbe/ADR-be írva (ne bízd az implementerre a
+lane→capability leképezést, ha a séma nem kerek). Ha egy elemnek (itt:
+hotspot overlay) NINCS természetes capability-párja, mondd ki explicit,
+hogy a kapu ADAT-vezérelt (`collection.isNotEmpty`), ne capability-vezérelt
+— és a review-ban írj olyan próbatesztet, ami a gyanús kaput KIHAGYOTT vagy
+`notApplicable` állapotban teszteli VALÓDI adat MELLETT, nem csak
+`available` állapotban üres adat mellett.
+
+---
+
+## L250 — A "mérve, létezik" pre-flight állítás egy `test -e`/`ls` nélkül csak feltételezés — a brief batch-eredetű path-hibái pontról pontra ismétlődnek testvérkörök között (E06-R24, 2026-08-13)
+
+**Mit mértem.** Az E06-R23 saját pre-flightja (§0.0 1. pont) MÁR kimérte és
+javította ugyanazt a hibát: a batch-brief `lib/app/router/app_router.dart`-ot
+nevezte meg, miközben a tényleges fájl `lib/app/routing/app_router.dart`. Az
+E06-R24 brief (ugyanabból a batch-ből, egy nappal korábbról) ugyanezt a
+hibát örökölte — és a jelen kör ELSŐ pre-flightja, annak ellenére, hogy
+MÁR OLVASTA az R23 §0.0-ját (a brief pre-flight jegyzete kifejezetten
+hivatkozott rá), a fejlécben tévesen „mérve, létezik"-nek jelölte a
+`lib/app/router/`-t — anélkül, hogy ténylegesen futtatott volna egy
+`test -e`/`ls`-t. Az implementer (Terra) az ELSŐ dispatch-kor azonnal,
+helyesen `stopped`-ot jelzett, nulla fájlt módosítva — egy teljes
+dispatch-ciklus (kb. 5 perc) ára lett a hiányzó tényleges ellenőrzésnek.
+
+**Miért.** A „már láttam ezt a hibát egy testvérkörben, tehát tudom, mi a
+helyes válasz" rövidre zárás NEM helyettesíti a tényleges mérést — a
+memóriából felidézett tény íráskor könnyen a RÉGI (helytelen) állítás felé
+csúszik vissza, különösen ha a szöveg maga ("mérve, létezik") a
+megerősítést sugallja anélkül, hogy a mérés ténylegesen megtörtént volna.
+
+**Hogyan alkalmazd.** Minden pre-flight fájlnév-állítás mellé (ÚJ VAGY
+KORÁBBI KÖRBŐL ISMERT egyaránt) írd oda a ténylegesen futtatott ellenőrző
+parancsot (`test -e <path> && echo exists`, `ls <dir>`) és annak
+kimenetét — ne a „tudom, hogy ez X" emlékezetre hagyatkozz, még akkor sem,
+ha egy MÁSIK kör pre-flightja ugyanarra a következtetésre jutott. Ha egy
+testvérkör brief-je (ugyanabból a batch-ből) MÁR dokumentált egy útvonal-
+javítást, az egy ERŐS jel, hogy a TÖBBI, még nem futtatott testvér-brief
+ugyanazt a hibát hordozza — pre-flightban grep-eld át a batch összes még
+függőben lévő brief-jét ugyanarra a mintára, ne csak a sajátodat javítsd.
