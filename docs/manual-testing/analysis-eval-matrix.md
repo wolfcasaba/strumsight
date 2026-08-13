@@ -11,6 +11,7 @@ Minden sor **PENDING**: a V1 szintetikus baseline nem helyettesíti a valós esz
 | EVAL-05 | PENDING | ML evaluation owner | Strum direction ground truth | `strum_direction.accuracy.v1`, kalibrációs ECE |
 | EVAL-06 | PENDING | ML evaluation owner | Modell- és metrika-verziónkénti holdout corpus | `confidence.expected_calibration_error.v1`, reliability-bin count |
 | EVAL-07 | PENDING | Performance owner | Középkategóriás Android eszköz, 30 s WAV | `analysis.wall_clock_ms.v1`, peak RSS byte |
+| EVAL-27 | PENDING | Performance owner | Középkategóriás Android eszköz, 30 s WAV, hideg és meleg V2 cache | cache-miss/cache-hit `analysis.wall_clock_ms.v1`, peak RSS byte, modell read+parse számláló és cancel-latencia |
 | EVAL-08 | PENDING | Privacy owner | Lab és normál Analyze futás, export/crash/diagnostics audit | `privacy.raw_audio_egress_count.v1` (elvárt 0 alapértelmezésben) |
 | EVAL-09 | PENDING | Capability owner | `clipTooShort` fixture | `capability.unavailable_reason.clip_too_short.v1` eseményszám |
 | EVAL-10 | PENDING | Capability owner | `insufficientEvents` fixture | `capability.unavailable_reason.insufficient_events.v1` eseményszám |
