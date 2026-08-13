@@ -1,0 +1,489 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "id": "silence_2s",
+      "generation": { "type": "silence", "params": { "durationMs": 2000 } },
+      "tempoBand": "notApplicable",
+      "signalQualityTier": "clean",
+      "mode": "silence",
+      "expected": { "events": [], "chordSegments": [], "tempoBpm": null, "beatsMs": [], "pitchPoints": [] },
+      "detected": { "events": [], "chordSegments": [], "tempoBpm": null, "beatsMs": [], "pitchPoints": [] },
+      "confidenceObservations": [
+        { "rawScore": 0.05, "correct": true },
+        { "rawScore": 0.1, "correct": true }
+      ]
+    },
+    {
+      "id": "bpm_60_waltz",
+      "generation": { "type": "strumPattern", "params": { "bpm": 60, "beatsPerBar": 3, "bars": 2 } },
+      "tempoBand": "slow",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 1000, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 2000, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 3000, "type": "strum", "direction": "up" },
+          { "id": "s5", "timeMs": 4000, "type": "strum", "direction": "down" },
+          { "id": "s6", "timeMs": 5000, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "C", "startMs": 0, "endMs": 6000 } ],
+        "tempoBpm": 60,
+        "beatsMs": [0, 1000, 2000, 3000, 4000, 5000],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 10, "type": "strum", "direction": "down" },
+          { "id": "d2", "timeMs": 1005, "type": "strum", "direction": "up" },
+          { "id": "d3", "timeMs": 2020, "type": "strum", "direction": "down" },
+          { "id": "d4", "timeMs": 3010, "type": "strum", "direction": "up" },
+          { "id": "d5", "timeMs": 4990, "type": "strum", "direction": "down" }
+        ],
+        "chordSegments": [ { "label": "C", "startMs": 0, "endMs": 5900 } ],
+        "tempoBpm": 61,
+        "beatsMs": [0, 1000, 2000, 3000, 5000],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.4, "correct": false },
+        { "rawScore": 0.55, "correct": true },
+        { "rawScore": 0.6, "correct": true }
+      ]
+    },
+    {
+      "id": "bpm_120_common",
+      "generation": { "type": "strumPattern", "params": { "bpm": 120, "beatsPerBar": 4, "bars": 2 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 1000, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 1500, "type": "strum", "direction": "up" },
+          { "id": "s5", "timeMs": 2000, "type": "strum", "direction": "down" },
+          { "id": "s6", "timeMs": 2500, "type": "strum", "direction": "up" },
+          { "id": "s7", "timeMs": 3000, "type": "strum", "direction": "down" },
+          { "id": "s8", "timeMs": 3500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "G", "startMs": 0, "endMs": 4000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500, 2000, 2500, 3000, 3500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "d2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "d3", "timeMs": 1000, "type": "strum", "direction": "down" },
+          { "id": "d4", "timeMs": 1500, "type": "strum", "direction": "up" },
+          { "id": "d5", "timeMs": 2000, "type": "strum", "direction": "down" },
+          { "id": "d6", "timeMs": 2500, "type": "strum", "direction": "up" },
+          { "id": "d7", "timeMs": 3000, "type": "strum", "direction": "down" },
+          { "id": "d8", "timeMs": 3500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "G", "startMs": 0, "endMs": 4000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500, 2000, 2500, 3000, 3500],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.92, "correct": true },
+        { "rawScore": 0.95, "correct": true },
+        { "rawScore": 0.9, "correct": true }
+      ]
+    },
+    {
+      "id": "two_chord_progression",
+      "generation": { "type": "chordProgression", "params": { "chords": ["C", "G"], "barMs": 2000 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "c1", "timeMs": 0, "type": "chordChange" },
+          { "id": "c2", "timeMs": 2000, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "C", "startMs": 0, "endMs": 2000 },
+          { "label": "G", "startMs": 2000, "endMs": 4000 }
+        ],
+        "tempoBpm": 100,
+        "beatsMs": [0, 1000, 2000, 3000],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "chordChange" },
+          { "id": "d2", "timeMs": 2000, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "C", "startMs": 0, "endMs": 2000 },
+          { "label": "G", "startMs": 2000, "endMs": 4000 }
+        ],
+        "tempoBpm": 100,
+        "beatsMs": [0, 1000, 2000, 3000],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.85, "correct": true },
+        { "rawScore": 0.8, "correct": true }
+      ]
+    },
+    {
+      "id": "four_chord_progression",
+      "generation": { "type": "chordProgression", "params": { "chords": ["C", "G", "Am", "F"], "barMs": 1000 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "c1", "timeMs": 0, "type": "chordChange" },
+          { "id": "c2", "timeMs": 1000, "type": "chordChange" },
+          { "id": "c3", "timeMs": 2000, "type": "chordChange" },
+          { "id": "c4", "timeMs": 3000, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "C", "startMs": 0, "endMs": 1000 },
+          { "label": "G", "startMs": 1000, "endMs": 2000 },
+          { "label": "Am", "startMs": 2000, "endMs": 3000 },
+          { "label": "F", "startMs": 3000, "endMs": 4000 }
+        ],
+        "tempoBpm": 110,
+        "beatsMs": [0, 500, 1000, 1500, 2000, 2500, 3000, 3500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "chordChange" },
+          { "id": "d2", "timeMs": 1000, "type": "chordChange" },
+          { "id": "d3", "timeMs": 2000, "type": "chordChange" },
+          { "id": "d4", "timeMs": 3000, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "C", "startMs": 0, "endMs": 1000 },
+          { "label": "G", "startMs": 1000, "endMs": 2000 },
+          { "label": "Am", "startMs": 2000, "endMs": 3000 },
+          { "label": "C", "startMs": 3000, "endMs": 4000 }
+        ],
+        "tempoBpm": 112,
+        "beatsMs": [0, 500, 1000, 1500, 2000, 2500, 3000, 3500],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.7, "correct": true },
+        { "rawScore": 0.3, "correct": false }
+      ]
+    },
+    {
+      "id": "ring_out",
+      "generation": { "type": "sustainedChord", "params": { "chord": "Em", "durationMs": 3000 } },
+      "tempoBand": "slow",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [ { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" } ],
+        "chordSegments": [ { "label": "Em", "startMs": 0, "endMs": 3000 } ],
+        "tempoBpm": null,
+        "beatsMs": [],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [ { "id": "d1", "timeMs": 40, "type": "strum", "direction": "down" } ],
+        "chordSegments": [ { "label": "Em", "startMs": 0, "endMs": 3050 } ],
+        "tempoBpm": null,
+        "beatsMs": [],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [ { "rawScore": 0.65, "correct": true } ]
+    },
+    {
+      "id": "clipped_input",
+      "generation": { "type": "strumPattern", "params": { "bpm": 120, "beatsPerBar": 4, "bars": 1, "clipGainDb": 12 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clipped",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 1000, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 1500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "A", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 250, "type": "strum", "direction": "up" },
+          { "id": "d2", "timeMs": 990, "type": "strum", "direction": "down" }
+        ],
+        "chordSegments": [ { "label": "A", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 118,
+        "beatsMs": [0, 1000],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.35, "correct": false },
+        { "rawScore": 0.4, "correct": false }
+      ]
+    },
+    {
+      "id": "quiet_input",
+      "generation": { "type": "strumPattern", "params": { "bpm": 120, "beatsPerBar": 4, "bars": 1, "gainDb": -30 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "quiet",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 1000, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 1500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "D", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 5, "type": "strum", "direction": "down" },
+          { "id": "d2", "timeMs": 505, "type": "strum", "direction": "up" },
+          { "id": "d3", "timeMs": 1500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "D", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 121,
+        "beatsMs": [0, 500, 1500],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.5, "correct": true },
+        { "rawScore": 0.45, "correct": false }
+      ]
+    },
+    {
+      "id": "noisy_input",
+      "generation": { "type": "strumPattern", "params": { "bpm": 160, "beatsPerBar": 4, "bars": 1, "noiseFloorDb": -18 } },
+      "tempoBand": "fast",
+      "signalQualityTier": "noisy",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 375, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 750, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 1125, "type": "strum", "direction": "up" },
+          { "id": "s5", "timeMs": 1500, "type": "strum", "direction": "down" },
+          { "id": "s6", "timeMs": 1875, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "E", "startMs": 0, "endMs": 2250 } ],
+        "tempoBpm": 160,
+        "beatsMs": [0, 375, 750, 1125, 1500, 1875],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "d2", "timeMs": 188, "type": "strum", "direction": "up" },
+          { "id": "d3", "timeMs": 375, "type": "strum", "direction": "up" },
+          { "id": "d4", "timeMs": 563, "type": "strum", "direction": "down" },
+          { "id": "d5", "timeMs": 750, "type": "strum", "direction": "down" },
+          { "id": "d6", "timeMs": 1125, "type": "strum", "direction": "up" },
+          { "id": "d7", "timeMs": 1500, "type": "strum", "direction": "down" },
+          { "id": "d8", "timeMs": 1875, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "E", "startMs": 0, "endMs": 2250 } ],
+        "tempoBpm": 160,
+        "beatsMs": [0, 375, 750, 1125, 1500, 1875],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.2, "correct": false },
+        { "rawScore": 0.25, "correct": false },
+        { "rawScore": 0.3, "correct": true }
+      ]
+    },
+    {
+      "id": "monophonic_scale",
+      "generation": { "type": "monophonicScale", "params": { "root": "C4", "noteMs": 300, "noteCount": 8 } },
+      "tempoBand": "notApplicable",
+      "signalQualityTier": "clean",
+      "mode": "monophonic",
+      "expected": {
+        "events": [
+          { "id": "n1", "timeMs": 0, "type": "noteOnset" },
+          { "id": "n2", "timeMs": 300, "type": "noteOnset" },
+          { "id": "n3", "timeMs": 600, "type": "noteOnset" },
+          { "id": "n4", "timeMs": 900, "type": "noteOnset" },
+          { "id": "n5", "timeMs": 1200, "type": "noteOnset" },
+          { "id": "n6", "timeMs": 1500, "type": "noteOnset" },
+          { "id": "n7", "timeMs": 1800, "type": "noteOnset" },
+          { "id": "n8", "timeMs": 2100, "type": "noteOnset" }
+        ],
+        "chordSegments": [],
+        "tempoBpm": null,
+        "beatsMs": [],
+        "pitchPoints": [
+          { "timeMs": 0, "hz": 261.63 },
+          { "timeMs": 300, "hz": 293.66 },
+          { "timeMs": 600, "hz": 329.63 },
+          { "timeMs": 900, "hz": 349.23 },
+          { "timeMs": 1200, "hz": 392.0 },
+          { "timeMs": 1500, "hz": 440.0 },
+          { "timeMs": 1800, "hz": 493.88 },
+          { "timeMs": 2100, "hz": 523.25 }
+        ]
+      },
+      "detected": {
+        "events": [
+          { "id": "m1", "timeMs": 0, "type": "noteOnset" },
+          { "id": "m2", "timeMs": 300, "type": "noteOnset" },
+          { "id": "m3", "timeMs": 600, "type": "noteOnset" },
+          { "id": "m4", "timeMs": 900, "type": "noteOnset" },
+          { "id": "m5", "timeMs": 1200, "type": "noteOnset" },
+          { "id": "m6", "timeMs": 1500, "type": "noteOnset" },
+          { "id": "m7", "timeMs": 1800, "type": "noteOnset" },
+          { "id": "m8", "timeMs": 2100, "type": "noteOnset" }
+        ],
+        "chordSegments": [],
+        "tempoBpm": null,
+        "beatsMs": [],
+        "pitchPoints": [
+          { "timeMs": 0, "hz": 262.4 },
+          { "timeMs": 300, "hz": 294.5 },
+          { "timeMs": 600, "hz": 330.5 },
+          { "timeMs": 900, "hz": 350.1 },
+          { "timeMs": 1200, "hz": 393.0 },
+          { "timeMs": 1500, "hz": 441.2 },
+          { "timeMs": 1800, "hz": 495.0 },
+          { "timeMs": 2100, "hz": 524.5 }
+        ]
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.75, "correct": true },
+        { "rawScore": 0.78, "correct": true }
+      ]
+    },
+    {
+      "id": "chord_change_case",
+      "generation": { "type": "chordProgression", "params": { "chords": ["Dm", "Bb"], "barMs": 1500 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "c1", "timeMs": 0, "type": "chordChange" },
+          { "id": "c2", "timeMs": 1500, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "Dm", "startMs": 0, "endMs": 1500 },
+          { "label": "Bb", "startMs": 1500, "endMs": 3000 }
+        ],
+        "tempoBpm": 100,
+        "beatsMs": [0, 750, 1500, 2250],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "chordChange" },
+          { "id": "d2", "timeMs": 1550, "type": "chordChange" }
+        ],
+        "chordSegments": [
+          { "label": "Dm", "startMs": 0, "endMs": 1550 },
+          { "label": "Bb", "startMs": 1550, "endMs": 3000 }
+        ],
+        "tempoBpm": 100,
+        "beatsMs": [0, 750, 1500, 2250],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.82, "correct": true },
+        { "rawScore": 0.6, "correct": true }
+      ]
+    },
+    {
+      "id": "strum_direction_case",
+      "generation": { "type": "strumPattern", "params": { "bpm": 120, "beatsPerBar": 4, "bars": 1 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "s1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "s2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "s3", "timeMs": 1000, "type": "strum", "direction": "down" },
+          { "id": "s4", "timeMs": 1500, "type": "strum", "direction": "up" }
+        ],
+        "chordSegments": [ { "label": "Am", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "d1", "timeMs": 0, "type": "strum", "direction": "down" },
+          { "id": "d2", "timeMs": 500, "type": "strum", "direction": "up" },
+          { "id": "d3", "timeMs": 1010, "type": "strum", "direction": "down" },
+          { "id": "d4", "timeMs": 1500, "type": "strum", "direction": "down" }
+        ],
+        "chordSegments": [ { "label": "Am", "startMs": 0, "endMs": 2000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.68, "correct": true },
+        { "rawScore": 0.52, "correct": false }
+      ]
+    },
+    {
+      "id": "beat_grid_case",
+      "generation": { "type": "strumPattern", "params": { "bpm": 120, "beatsPerBar": 4, "bars": 2 } },
+      "tempoBand": "medium",
+      "signalQualityTier": "clean",
+      "mode": "chord",
+      "expected": {
+        "events": [
+          { "id": "b1", "timeMs": 0, "type": "beat" },
+          { "id": "b2", "timeMs": 500, "type": "beat" },
+          { "id": "b3", "timeMs": 1000, "type": "beat" },
+          { "id": "b4", "timeMs": 1500, "type": "beat" },
+          { "id": "b5", "timeMs": 2000, "type": "beat" },
+          { "id": "b6", "timeMs": 2500, "type": "beat" },
+          { "id": "b7", "timeMs": 3000, "type": "beat" },
+          { "id": "b8", "timeMs": 3500, "type": "beat" }
+        ],
+        "chordSegments": [ { "label": "Cmaj", "startMs": 0, "endMs": 4000 } ],
+        "tempoBpm": 120,
+        "beatsMs": [0, 500, 1000, 1500, 2000, 2500, 3000, 3500],
+        "pitchPoints": []
+      },
+      "detected": {
+        "events": [
+          { "id": "e1", "timeMs": 0, "type": "beat" },
+          { "id": "e2", "timeMs": 500, "type": "beat" },
+          { "id": "e3", "timeMs": 1010, "type": "beat" },
+          { "id": "e4", "timeMs": 1500, "type": "beat" },
+          { "id": "e5", "timeMs": 2600, "type": "beat" },
+          { "id": "e6", "timeMs": 3000, "type": "beat" },
+          { "id": "e7", "timeMs": 3500, "type": "beat" }
+        ],
+        "chordSegments": [ { "label": "Cmaj", "startMs": 0, "endMs": 4000 } ],
+        "tempoBpm": 118,
+        "beatsMs": [0, 500, 1010, 1500, 2600, 3000, 3500],
+        "pitchPoints": []
+      },
+      "confidenceObservations": [
+        { "rawScore": 0.58, "correct": true },
+        { "rawScore": 0.62, "correct": true }
+      ]
+    }
+  ]
+}
