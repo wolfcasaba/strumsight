@@ -320,7 +320,52 @@ kevés adatból illesztett „kalibráció" helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció: sonnet-impl, 2026-08-13.**
+
+- Leszállítva a §4 teljes listája: `evaluation/analysis/{manifest_schema.json,README.md,fixtures/ci_manifest.json}`
+  (13 szintetikus eset: silence, 60/120 BPM, 3/4 és 4/4, két- és négyakkordos
+  progresszió, ring-out, clipped/quiet/noisy, monofonikus skála, chord-change,
+  strum-direction, beat-grid); `domain/evaluation/{ground_truth.dart,evaluation_report.dart}`;
+  `data/evaluation/{evaluation_manifest_parser.dart,evaluation_runner.dart,calibration_fitter.dart}`;
+  `engine/confidence/calibration_table.dart` (**csak bővítve** — új
+  `CalibrationTable.measured` konstruktor; `identityV1` szerződése és az R19
+  tesztjei változatlanok); `public.dart` export; `tool/audio_analysis_evaluate.dart`;
+  a négy teszt (`evaluation_manifest_parser_test.dart`,
+  `evaluation_runner_test.dart`, `evaluation_report_test.dart`,
+  `analysis_evaluation_regression_test.dart`); ADR 0249; `docs/baseline/epic-06-analysis-evaluation.md`;
+  `docs/manual-testing/analysis-eval-matrix.md` frissítés.
+- **`ChordSegment` névütközés:** a `domain/analysis_segment.dart` már
+  definiált egy `ChordSegment`-et; a `public.dart` egyetlen namespace-be
+  exportál mindent, így az evaluation-típus `EvalChordSegment` néven készült
+  (mért fordítási hiba a `test/tooling/analysis_claim_safety_test.dart`
+  betöltésekor, javítva ugyanabban a körben, minden allowed-path fájlban).
+- **Kalibráció-döntés a mért futásból:** `dart run tool/audio_analysis_evaluate.dart`
+  a `ci_manifest.json`-ra `identity.v1`-et és `insufficientData: true`-t ad
+  (28 `confidenceObservations`, a 30/bin és 300/összes minimum alatt) — ez a
+  §0.0/3 pontban előre jelzett, helyes kimenet, nem hiba.
+- **Determinizmus bizonyítva:** két egymást követő `dart run` futás
+  bájtazonos stdout-ot adott (`diff` üres); a `docs/baseline/…md` a második
+  futás kimenete.
+- **Valódi-sértés próba (§6.1 utolsó sora, §10):** a
+  `test/tooling/analysis_evaluation_regression_test.dart`
+  `_baselineOnsetF1`-jét ideiglenesen a mért `0.9166666666666666` helyett
+  `0.9466666666666667`-re (mért +3pp) állítottam, `flutter test`-tel
+  megerősítettem, hogy a "the current ci_manifest.json run passes its own
+  regression gate" teszt **PIROS**ra vált (`onset F1 regressed by more than
+  2pp`), majd a fájlt az eredeti tartalomra visszaállítottam (`git status`
+  a próba után tisztán jelezte: nincs eltérés a commitolt állapottól).
+- **H-GATEGUARD (§5.1):** ez a kör **nem** nyúlt a `.github/workflows/**`
+  vagy `tool/ci/**` útvonalhoz. A CI-oldali regressziós lépés bekötése egy
+  külön, ember által engedélyezett `GOV-xx` kör feladata — a teszt-oldali
+  megfelelője (`test/tooling/analysis_evaluation_regression_test.dart`)
+  jelenleg csak `tools/round-gate.sh`/`flutter test`-tel fut.
+- **`docs/manual-testing/analysis-eval-matrix.md`:** egyetlen EVAL-sor sem
+  zárható le a szintetikus `ci_manifest.json`-ból (ADR 0249 §Döntés 3 —
+  mindegyik valós eszközös/audio vagy címkézett valós corpust igényel); a
+  mátrix egy státusz-bekezdést kapott, ami ezt és a kör tényleges leszállítását
+  rögzíti, minden sor PENDING marad felelőssel.
+- **Gate:** `tools/round-gate.sh test/features/audio_analysis test/tooling`
+  — lásd a kör-jelzés utáni commit üzenetét a pontos eredményért.
 
 ## 11. Review — a független reviewer tölti ki
 

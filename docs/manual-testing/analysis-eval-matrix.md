@@ -2,6 +2,8 @@
 
 Minden sor **PENDING**: a V1 szintetikus baseline nem helyettesíti a valós eszközös, címkézett audio kiértékelést. A capability-nevek és unavailable-okok forrása: `docs/sdd/07-epic-06-audio-analysis-2.md:562-660`. A metrika-ID szerződését [ADR 0218](../adr/0218-analysis-metric-id-and-version-governance.md), az abstention és publikáció szerződését [ADR 0216](../adr/0216-analysis-confidence-calibration-and-abstention.md) és [ADR 0219](../adr/0219-analysis-capability-aware-publication.md) rögzíti.
 
+**E06-R29 státusz ([ADR 0249](../adr/0249-analysis-evaluation-dataset-governance.md)):** a kör leszállította a futtatható evaluation harness-t (`evaluation/analysis/`, `tool/audio_analysis_evaluate.dart`), a kilenc SDD-metrikát és a szelet-lebontást, valamint a teszt-oldali regressziós kaput (`test/tooling/analysis_evaluation_regression_test.dart`, baseline: `docs/baseline/epic-06-analysis-evaluation.md`). A `ci_manifest.json` **kizárólag szintetikus** — az ADR 0249 §Döntés 3 szerint a harness/parser/regresszió szerződését méri, nem valódi modellpontosságot, ezért **egyetlen alábbi sort sem zár le**: mindegyik valós eszközös/audio bemenetet vagy címkézett valós corpust igényel, amit ez a box nem tud előállítani. A `confidenceObservations` (28 megfigyelés, a 30/bin és 300/összes minimum alatt) miatt a `CalibrationTable` a mai napig `identity.v1` — ez a helyes, őszinte állapot (lásd EVAL-06). A CI-oldali workflow-lépés bekötése (H-GATEGUARD) egy külön, ember által engedélyezett `GOV-xx` kör feladata marad.
+
 | ID | Állapot | Felelős | Reprodukálható bemenet | Mérendő szám |
 |---|---|---|---|---|
 | EVAL-01 | PENDING | Device-lab owner | Csend, telefonmikrofon, 10 s | `signal.noise_floor_dbfs.v1` és hamis strum/event count |
