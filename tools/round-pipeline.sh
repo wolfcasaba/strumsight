@@ -1302,6 +1302,17 @@ if [ "$current_branch" != "main" ]; then
   # MÉRVE 2026-08-05: egy másik session a KÖZÖS munkafát a `gov/03-...` ágon
   # hagyta, és a lánc emiatt esett ki egy firingre. Tiszta fánál ez maradék,
   # nem folyamatban lévő munka: a körök külön munkapéldányban dolgoznak.
+  #
+  # MÉRVE 2026-08-13 (E99-R08 review F1, portolva E99-R08/H3 self-heal alatt):
+  # ez a VALÓDI `git checkout` a `PIPELINE_STATE_DIR`-t injektáló
+  # tesztfutásokban a MEGOSZTOTT munkafa ágát mozgatja el a vizsgált
+  # kör-ágról — a `tools/tests` legtöbb esete izolált állapotot kap, de a
+  # jelen munkafa VALÓDI git ága nem izolált. Teszt-módban (PIPELINE_STATE_DIR
+  # beállítva; a production cron soha nem állítja, l. a fenti alapértelmezést)
+  # fail-closed: nem nyúl a munkafa ágához.
+  if [ -n "${PIPELINE_STATE_DIR:-}" ]; then
+    die "a munkafa nem a main-en van ($current_branch) — teszt-módban (PIPELINE_STATE_DIR) a driver nem mozdítja a megosztott munkafa ágát"
+  fi
   if [ -z "$(git status --porcelain)" ] && git checkout -q main 2>/dev/null; then
     log "munkafa-helyreállítás: $current_branch → main (tiszta fa, maradék ág)"
     current_branch=main

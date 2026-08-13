@@ -86,6 +86,21 @@ kötött `tools/round-scope-audit.sh`.
   némán**; a `skipped` nem bizonyíték, és a `docs/execution/pipeline-orchestrator-prompt.md`
   kötelezővé teszi az átadást.
 
+> **Módosítás (ADR 0112 önjavító kör, 2026-08-13, E99-R08/H3):** a fenti
+> `_is_generated_ignored` mentesség — beleértve a `docs/reviews` előtagot —
+> FELTÉTEL NÉLKÜLI: attól függetlenül érvényes, hogy a kör briefjének
+> `allowed_paths` listája felsorolja-e az adott útvonalat. A reviewer saját,
+> kötelező jelentése (`docs/reviews/eXX-rYY-review.md`, kockázatos körnél
+> `-security.md`) emiatt SOHA nem H3-alap, még akkor sem, ha a brief — a
+> bevett gyakorlat szerint, mérve 145/149 kör-briefen — nem sorolja fel;
+> négy 2026-08-01 előtti brief még explicit felsorolta, ami azóta felesleges,
+> nem tiltott. Mérve: az E99-R08 rotált (Terra, ADR 0222/0242) orchestrátora
+> ezt tévesen H3-nak jelezte, kizárólag a brief szövegét olvasva, az eszköz
+> tényleges futtatása nélkül — `tools/scope-audit.py` a review-fájllal (akár
+> commitolva, akár nem) a kör tényleges bázisán (`ba9b65ea`) is `OK`-t ad,
+> `1 generated/ignored` számlálóval. Ld. `.claude/skills/sdd-round-review/SKILL.md`
+> §3 (Scope-audit lépés, javítva) és `docs/LESSONS.md` L251.
+
 ### 2. `PreToolUse` mérce-őr minden Claude-oldali sessionre
 
 `.claude/hooks/protect_factory_files.py` + a repóba commitolt
