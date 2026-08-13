@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_initializing_formals
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_repository.dart';
 

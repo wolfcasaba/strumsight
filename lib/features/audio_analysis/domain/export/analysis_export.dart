@@ -164,9 +164,7 @@ final class AnalysisExport {
     required List<AnalysisExportInsight> insights,
     required List<AnalysisExportWarning> warnings,
     required this.completion,
-  }) : capabilities = List<AnalysisExportCapability>.unmodifiable(
-         capabilities,
-       ),
+  }) : capabilities = List<AnalysisExportCapability>.unmodifiable(capabilities),
        metrics = List<AnalysisExportMetric>.unmodifiable(metrics),
        hotspots = List<AnalysisExportHotspot>.unmodifiable(hotspots),
        insights = List<AnalysisExportInsight>.unmodifiable(insights),

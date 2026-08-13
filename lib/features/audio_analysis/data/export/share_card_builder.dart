@@ -1,3 +1,4 @@
+import '../../domain/analysis_capability.dart';
 import '../../domain/analysis_document.dart';
 import '../../domain/analysis_insight.dart';
 import '../../domain/analysis_metric.dart';
@@ -41,10 +42,8 @@ final class ShareCardInsight {
 /// Structured share-card content (OD-02: structured data + localised text,
 /// not a rendered image, in this round).
 final class ShareCardContent {
-  ShareCardContent({
-    required List<ShareCardMetric> metrics,
-    this.insight,
-  }) : metrics = List<ShareCardMetric>.unmodifiable(metrics);
+  ShareCardContent({required List<ShareCardMetric> metrics, this.insight})
+    : metrics = List<ShareCardMetric>.unmodifiable(metrics);
 
   final List<ShareCardMetric> metrics;
   final ShareCardInsight? insight;
@@ -68,10 +67,11 @@ final class ShareCardBuilder {
           ),
     ];
 
-    final candidates = document.insights
-        .where((insight) => insight.kind != AnalysisInsightKind.caution)
-        .toList()
-      ..sort((a, b) => _rank(b.priority).compareTo(_rank(a.priority)));
+    final candidates =
+        document.insights
+            .where((insight) => insight.kind != AnalysisInsightKind.caution)
+            .toList()
+          ..sort((a, b) => _rank(b.priority).compareTo(_rank(a.priority)));
 
     return ShareCardContent(
       metrics: metrics,
