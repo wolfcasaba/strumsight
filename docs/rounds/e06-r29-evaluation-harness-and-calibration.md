@@ -1,10 +1,10 @@
 # E06-R29 — Evaluation harness és confidence calibration
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-13, `origin/main` @ `6ce59b5e`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 29; §19.3, §29.6–29.8
 - **Branch:** `codex/e06-r29-evaluation-harness-and-calibration`
 - **Előfeltétel:** **E06-R19, E06-R28 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** sonnet-impl
 
 ```ai-router
 schema_version = 1
@@ -25,7 +25,7 @@ allowed_paths = [
   "test/features/audio_analysis/data/evaluation_runner_test.dart",
   "test/features/audio_analysis/domain/evaluation_report_test.dart",
   "test/tooling/analysis_evaluation_regression_test.dart",
-  "docs/adr/0211-analysis-evaluation-dataset-governance.md",
+  "docs/adr/0249-analysis-evaluation-dataset-governance.md",
   "docs/baseline/epic-06-analysis-evaluation.md",
   "docs/manual-testing/analysis-eval-matrix.md",
   "docs/rounds/e06-r29-evaluation-harness-and-calibration.md",
@@ -38,7 +38,7 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R19/R28 merge.
-> **ADR 0211** előre kiosztva. Nézd meg az `evaluation/` könyvtár **mai**
+> **ADR 0249** pre-flightban foglalva. Nézd meg az `evaluation/` könyvtár **mai**
 > tartalmát és konvencióit (a repo gyökerében létezik) — az `analysis/`
 > alkönyvtár **abba illeszkedik**, nem új mintát vezet be. **H-GATEGUARD:**
 > a `.github/workflows/**` és a `tool/ci/**` a **mérce**, amit egy önmagát
@@ -59,13 +59,40 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0211** (evaluation dataset governance).
+**PLANNING — 2026-08-13, `origin/main` @ `6ce59b5e`.**
+
+1. A batchben kiosztott **0211** nem volt foglalt ADR-szám. A kötelező,
+   ütközésmentes `tools/round-slots.py reserve-adr --round E06-R29` a
+   **0249** számot adta; a kör kizárólag ezt a számot és a
+   `0249-analysis-evaluation-dataset-governance.md` fájlt használja.
+2. `find evaluation -maxdepth 3 -type f` ma csak az `evaluation/tutor/`
+   struktúrát mutatja; `evaluation/analysis/` még nincs. Ezért az új
+   analysis-manifest a meglévő gyökérszintű `evaluation/` konvencióhoz
+   illeszkedik, nem feltételez létező analysis-adatot.
+3. A tényleges confidence-hívási lánc mért: `CapabilityResolver` alapértelmezett
+   `const CalibrationTable.identityV1()` példányt birtokol, és
+   `_resolveCapability()` a `CalibrationTable.calibrate()` metódusát hívja.
+   A jelenlegi tábla kizárólag `identity.v1`; nincs V2 pipeline-wiring vagy
+   repo-beli, címkézett valós-audio dataset. Következmény: a szintetikus
+   fixture **nem** igazolhat valódi modellkalibrációt, így nem emelhet
+   kalibráció-verziót és nem cserélheti le az identity-táblát önkényes görbére.
+   A 300/30 minimum alatt az őszinte, kötelező kimenet `identity.v1` és
+   `insufficient calibration data`.
+4. A `docs/manual-testing/analysis-eval-matrix.md` létezik és minden valós
+   eszközös/audio-evidencia sora ma `PENDING`. A szintetikus esetek által
+   ténylegesen mért sorok csak akkor zárhatók le; a valós felvételt igénylő
+   sorok PENDING-ek maradnak felelőssel.
+
+Ez a revízió a pre-flight mérését rögzíti; nem bővíti a listát és nem módosít
+korábban merge-elt ADR-t.
 
 ## 1. Cél
 
-A metrikák valós pontosságának **mérhető, reprodukálható** evaluation-rendszere:
-ground-truth séma, futtatható harness, riportformátum, regressziós küszöbök —
-és a confidence **valódi** kalibrációja az identity-tábla helyett.
+A metrikák pontosságának **mérhető, reprodukálható** evaluation-rendszere:
+ground-truth séma, futtatható harness, riportformátum és regressziós küszöbök,
+valamint a confidence-kalibráció adatküszöbös, őszinte döntése. A jelen kör
+szintetikus fixture-e nem helyettesít címkézett valós felvételt: elégtelen adat
+esetén kifejezetten az `identity.v1` marad a kimenet.
 
 ## 2. Jelenlegi állapot (mért, `a6e6f3d`)
 
@@ -90,9 +117,11 @@ adatvédelmi szabályokkal, **kis** CI-fixture-manifest); `GroundTruth` és
 frame/segment accuracy, strum direction accuracy, BPM error, beat alignment,
 pitch cents error, confidence-kalibráció, szelet-lebontás);
 `CalibrationFitter` (megbízhatósági diagram + ECE + küszöbválasztás);
-a `CalibrationTable` **valódi** táblára cseréje (verziózva);
+a `CalibrationTable` csak elegendő, címkézett adat esetén cserélhető
+verziózott, monoton táblára — a CI-fixture esetén kötelezően `identity.v1`
+marad;
 `tool/audio_analysis_evaluate.dart`; **teszt-oldali** regressziós kapu;
-**ADR 0211**; baseline dokumentum a **futtatott** eredménnyel.
+**ADR 0249**; baseline dokumentum a **futtatott** eredménnyel.
 
 **Kívül — TILOS:** `.github/workflows/**` és `tool/ci/**` bármely
 módosítása (H-GATEGUARD); valós felvételek repóba töltése; DSP-paraméter
@@ -114,7 +143,7 @@ retune (az eval **javasol**, a retune külön kör); modell-tanítás.
 | `.../public.dart` | meglévő | export |
 | `tool/audio_analysis_evaluate.dart` | ÚJ | futtatható harness |
 | `test/tooling/analysis_evaluation_regression_test.dart` | ÚJ | teszt-oldali kapu |
-| `docs/adr/0211-…md`, `docs/baseline/epic-06-analysis-evaluation.md` | ÚJ | döntés + mért eredmény |
+| `docs/adr/0249-…md`, `docs/baseline/epic-06-analysis-evaluation.md` | ÚJ | döntés + mért eredmény |
 | `docs/manual-testing/analysis-eval-matrix.md` | meglévő | PENDING sorok lezárása/frissítése |
 
 **Tilos zóna:** `.github/**`, `tool/ci/**`, `tools/round-gate.sh`,
@@ -180,7 +209,7 @@ open_decisions:
     default: >-
       onset F1 és chord accuracy: a baseline-tól legfeljebb 2 százalékpont
       ROMLÁS; timestamp MAE és BPM error: legfeljebb 10 % ROMLÁS.
-      A javulás sosem bukik. A számok az ADR 0211-ben.
+      A javulás sosem bukik. A számok az ADR 0249-ben.
 ```
 
 ## 6. Acceptance criteria
@@ -223,7 +252,7 @@ open_decisions:
 - [ ] **Baseline dokumentum:** a `docs/baseline/epic-06-analysis-evaluation.md`
       a **futtatott** `tool/audio_analysis_evaluate.dart` kimenetét
       tartalmazza, nem kézzel írt számokat.
-- [ ] **ADR 0211** rögzíti: a dataset licenc- és adatvédelmi szabályát, a
+- [ ] **ADR 0249** rögzíti: a dataset licenc- és adatvédelmi szabályát, a
       CI vs manuális eval szétválasztását, a regressziós küszöböket, a
       kalibrációs minimumokat, és hogy a küszöb **gyengítése** emberi döntés.
 - [ ] **Eval-mátrix frissítés:** a korábbi körök PENDING sorai közül azok,
@@ -264,7 +293,7 @@ az eredménye a device/eval-mátrix PENDING sorait zárja, **nem** merge-kapu.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0211 + `evaluation/analysis/README.md` (licenc, adatvédelem, futtatás).
+1. ADR 0249 + `evaluation/analysis/README.md` (licenc, adatvédelem, futtatás).
 2. `manifest_schema.json` + `ci_manifest.json` (szintetikus generálási
    paraméterekkel).
 3. RED: parser-mátrix + a négy ismert-válaszú metrika-cella.
@@ -276,7 +305,7 @@ az eredménye a device/eval-mátrix PENDING sorait zárja, **nem** merge-kapu.
 
 ## 9. Kockázatok
 
-- **A szintetikus készlet nem helyettesíti a valós audiot** — az ADR 0211
+- **A szintetikus készlet nem helyettesíti a valós audiot** — az ADR 0249
   ezt kimondja, és a valós eval a mátrix PENDING sora marad; a kalibráció
   várhatóan `identity.v1` marad, és ez a **helyes**, őszinte kimenet.
 - **A CI-oldali kapu hiánya** tudatos H-GATEGUARD-határ; a completion
