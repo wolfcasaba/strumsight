@@ -1,10 +1,10 @@
 # E99-R08 (GOV-07) — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-13, `main @ 88ad4ec2`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight rev. 1 lezárva 2026-08-13, `main @ ac75f91a`)
 - **Típus:** **governance-kör** — a lánc SAJÁT infrastruktúrájának javítása, nem terméki viselkedés
 - **Kör-azonosító:** `E99-R08`. Az `E99` a governance-körök fenntartott
   pszeudo-epic kódja (nem valódi epic). Emberi neve **GOV-07**.
-- **Branch:** `codex/e99-r08-gov-07-per-round-orchestrator-rotation`
+- **Branch:** `sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`
 - **Előfeltétel:** `E06-R23` merge-elve (PR #241, `d5a95e44`)
 - **Brief szerzője:** Claude (Opus 5) · **Implementáció:** Codex (Terra)
 - **Előre kiosztott ADR:** [`0242`](../adr/0242-per-round-orchestrator-rotation-and-safe-force-push.md)
@@ -32,6 +32,26 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight rev. 1 — 2026-08-13
+
+- **Mért bázis:** `origin/main` és a munkapéldány `HEAD` egyaránt
+  `ac75f91a4744ef8d6a824e98f1e290aa8cb6eb57`; a fő munkafa tiszta, nincs
+  korábbi E99-R08 munkapéldány vagy nyitott E99-R08 PR.
+- **ADR-feloldás:** az előre kiosztott ADR 0242 már a `4d2ff973` commitban
+  létrejött; a `tools/round-slots.py reserve-adr --round E99-R08` már 0244-et
+  ad vissza. Az ADR 0242 ezért változatlan, a tiltott `docs/adr/**` zónához
+  nem nyúlunk.
+- **Ág-identitás feloldása:** a korábbi `codex/…` ág-név ellentmondott a §5.2
+  szerződésének: folytatáskor az ág-prefix a commitolt implementer, miközben
+  e kör implementere `sonnet-impl`. A branch ezért `sonnet-impl/…`; ez teszi
+  lehetővé a D2 mérését és nem adja ki a Terra-orchestrátornak a saját
+  identitását implementerként.
+- **Kódmérés:** `tools/round-pipeline.sh` ma egyetlen
+  `$state_dir/orchestrator-last` fájlból dönt (`next_orchestrator`, 469–485),
+  és minden dispatch végén felülírja (1516); a `resolve_independent_engine`
+  (1071–1101) nem olvas kör-ágról. A `--next-orchestrator` argumentum nélküli
+  teszthorga megvan (1138–1139). A `safe-force-push.sh` még nem létezik.
 
 > A `gate_tests` **csak `test/` alatti Dart útvonalat fogad**
 > (`tools/ai_router/brief.py:39`), a kör diffjében viszont **nulla Dart sor**
