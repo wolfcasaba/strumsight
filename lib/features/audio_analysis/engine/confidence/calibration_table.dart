@@ -118,7 +118,9 @@ final class CalibrationTable {
       );
     }
     final points = _points;
-    final confidence = points == null ? rawScore : _interpolate(points, rawScore);
+    final confidence = points == null
+        ? rawScore
+        : _interpolate(points, rawScore);
     return CalibrationResult(
       confidence: confidence,
       version: version,

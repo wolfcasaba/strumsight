@@ -144,9 +144,7 @@ final class EvaluationRunner {
       final expectedBpm = ground.expected.tempoBpm;
       final detectedBpm = ground.detected.tempoBpm;
       if (expectedBpm != null && detectedBpm != null && expectedBpm != 0) {
-        bpmErrors.add(
-          (detectedBpm - expectedBpm).abs() / expectedBpm * 100,
-        );
+        bpmErrors.add((detectedBpm - expectedBpm).abs() / expectedBpm * 100);
       }
 
       final beatMatch = matchTimes(
@@ -158,7 +156,10 @@ final class EvaluationRunner {
       beatTotal += ground.expected.beatsMs.length;
 
       pitchCentsErrors.addAll(
-        _pitchCentsErrors(ground.expected.pitchPoints, ground.detected.pitchPoints),
+        _pitchCentsErrors(
+          ground.expected.pitchPoints,
+          ground.detected.pitchPoints,
+        ),
       );
 
       confidenceObservations.addAll(ground.confidenceObservations);
@@ -196,7 +197,9 @@ final class EvaluationRunner {
       chordSegmentAccuracy: chordSegmentTotal == 0
           ? null
           : chordSegmentMatched / chordSegmentTotal,
-      strumDirectionAccuracy: strumTotal == 0 ? null : strumCorrect / strumTotal,
+      strumDirectionAccuracy: strumTotal == 0
+          ? null
+          : strumCorrect / strumTotal,
       bpmErrorPercent: bpmErrors.isEmpty
           ? null
           : bpmErrors.reduce((a, b) => a + b) / bpmErrors.length,
@@ -241,14 +244,18 @@ final class EvaluationRunner {
       }
       if (bestIndex != -1) {
         claimed[bestIndex] = true;
-        matchedPairs.add(MatchedEventPair(expectedEvent, sortedDetected[bestIndex]));
+        matchedPairs.add(
+          MatchedEventPair(expectedEvent, sortedDetected[bestIndex]),
+        );
       }
     }
 
     final tp = matchedPairs.length;
     final fp = sortedDetected.length - tp;
     final fn = sortedExpected.length - tp;
-    final precision = sortedDetected.isEmpty ? null : tp / sortedDetected.length;
+    final precision = sortedDetected.isEmpty
+        ? null
+        : tp / sortedDetected.length;
     final recall = sortedExpected.isEmpty ? null : tp / sortedExpected.length;
 
     return EventMatchResult(
@@ -266,7 +273,11 @@ final class EvaluationRunner {
 
   /// Same greedy nearest-neighbour matching as [matchEvents], for plain
   /// timestamp lists (beat grids). Returns `(matchedCount, unmatchedDetected)`.
-  (int, int) matchTimes(List<int> expected, List<int> detected, int toleranceMs) {
+  (int, int) matchTimes(
+    List<int> expected,
+    List<int> detected,
+    int toleranceMs,
+  ) {
     final sortedExpected = [...expected]..sort();
     final sortedDetected = [...detected]..sort();
     final claimed = List<bool>.filled(sortedDetected.length, false);
@@ -345,7 +356,10 @@ final class EvaluationRunner {
           expectedSegment.startMs,
           detectedSegment.startMs,
         );
-        final overlapEnd = math.min(expectedSegment.endMs, detectedSegment.endMs);
+        final overlapEnd = math.min(
+          expectedSegment.endMs,
+          detectedSegment.endMs,
+        );
         final overlap = overlapEnd - overlapStart;
         if (overlap <= 0) return false;
         return overlap / expectedDuration >= chordSegmentMinOverlapRatio;

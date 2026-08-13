@@ -147,9 +147,27 @@ void main() {
     });
   });
 
+  test('the current ci_manifest.json run passes its own regression gate '
+      '(the baseline document was produced from this exact fixture)', () async {
+    const parser = EvaluationManifestParser();
+    const runner = EvaluationRunner();
+    final manifest = parser.parseJsonString(
+      await File(
+        'evaluation/analysis/fixtures/ci_manifest.json',
+      ).readAsString(),
+    );
+    final report = runner.run(manifest);
+    final verdict = evaluateRegression(
+      onsetF1: report.overall.onset.f1!,
+      chordSegmentAccuracy: report.overall.chordSegmentAccuracy!,
+      timestampMaeMs: report.overall.timestampMaeMs!,
+      bpmErrorPercent: report.overall.bpmErrorPercent!,
+    );
+    expect(verdict.passed, isTrue, reason: verdict.failures.join('; '));
+  });
+
   test(
-    'the current ci_manifest.json run passes its own regression gate '
-    '(the baseline document was produced from this exact fixture)',
+    'the evaluation report JSON contains no absolute filesystem path',
     () async {
       const parser = EvaluationManifestParser();
       const runner = EvaluationRunner();
@@ -158,29 +176,13 @@ void main() {
           'evaluation/analysis/fixtures/ci_manifest.json',
         ).readAsString(),
       );
-      final report = runner.run(manifest);
-      final verdict = evaluateRegression(
-        onsetF1: report.overall.onset.f1!,
-        chordSegmentAccuracy: report.overall.chordSegmentAccuracy!,
-        timestampMaeMs: report.overall.timestampMaeMs!,
-        bpmErrorPercent: report.overall.bpmErrorPercent!,
-      );
-      expect(verdict.passed, isTrue, reason: verdict.failures.join('; '));
+      final json = runner.run(manifest).toDeterministicJson();
+      expect(json, isNot(contains('/home/')));
+      expect(json, isNot(contains(RegExp(r'[A-Za-z]:\\'))));
+      // Sanity: it is real, well-formed JSON, not an accidental empty string.
+      expect(jsonDecode(json), isA<Map<String, Object?>>());
     },
   );
-
-  test('the evaluation report JSON contains no absolute filesystem path', () async {
-    const parser = EvaluationManifestParser();
-    const runner = EvaluationRunner();
-    final manifest = parser.parseJsonString(
-      await File('evaluation/analysis/fixtures/ci_manifest.json').readAsString(),
-    );
-    final json = runner.run(manifest).toDeterministicJson();
-    expect(json, isNot(contains('/home/')));
-    expect(json, isNot(contains(RegExp(r'[A-Za-z]:\\'))));
-    // Sanity: it is real, well-formed JSON, not an accidental empty string.
-    expect(jsonDecode(json), isA<Map<String, Object?>>());
-  });
 
   test('no binary audio file is part of this round\'s change', () async {
     final result = await Process.run('git', ['diff', '--stat', 'HEAD']);
@@ -191,7 +193,10 @@ void main() {
       'HEAD',
     ]);
     const audioExtensions = ['.wav', '.mp3', '.m4a'];
-    for (final output in [result.stdout as String, stagedResult.stdout as String]) {
+    for (final output in [
+      result.stdout as String,
+      stagedResult.stdout as String,
+    ]) {
       for (final line in const LineSplitter().convert(output)) {
         for (final extension in audioExtensions) {
           expect(

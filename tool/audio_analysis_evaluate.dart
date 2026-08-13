@@ -2,7 +2,7 @@
 ///
 /// Usage:
 ///   dart run tool/audio_analysis_evaluate.dart
-///   dart run tool/audio_analysis_evaluate.dart --manifest <path>
+///   dart run tool/audio_analysis_evaluate.dart --manifest PATH
 ///
 /// Defaults to the small, synthetic CI fixture
 /// (`evaluation/analysis/fixtures/ci_manifest.json`). Pass `--manifest` to
@@ -44,9 +44,7 @@ void main(List<String> arguments) async {
   const parser = EvaluationManifestParser();
   const runner = EvaluationRunner();
   try {
-    final manifest = parser.parseJsonString(
-      await manifestFile.readAsString(),
-    );
+    final manifest = parser.parseJsonString(await manifestFile.readAsString());
     final report = runner.run(manifest);
     stdout.write(report.toDeterministicJson());
     stdout.writeln();

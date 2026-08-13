@@ -100,34 +100,28 @@ void main() {
       );
     });
 
-    test(
-      'invalid time order (annotation end before start) is a typed '
-      'InvalidChronology failure',
-      () {
-        final broken = _validCase();
-        (broken['expected']! as Map<String, Object?>)['chordSegments'] = [
-          {'label': 'C', 'startMs': 1000, 'endMs': 500},
-        ];
-        expect(
-          () => parser.parse(_manifest([broken])),
-          throwsA(
-            isA<ManifestParseException>().having(
-              (e) => e.kind,
-              'kind',
-              ManifestParseErrorKind.invalidChronology,
-            ),
+    test('invalid time order (annotation end before start) is a typed '
+        'InvalidChronology failure', () {
+      final broken = _validCase();
+      (broken['expected']! as Map<String, Object?>)['chordSegments'] = [
+        {'label': 'C', 'startMs': 1000, 'endMs': 500},
+      ];
+      expect(
+        () => parser.parse(_manifest([broken])),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (e) => e.kind,
+            'kind',
+            ManifestParseErrorKind.invalidChronology,
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
 
     test('duplicated case id is a typed DuplicateCaseId failure', () {
       expect(
         () => parser.parse(
-          _manifest([
-            _validCase(id: 'same'),
-            _validCase(id: 'same'),
-          ]),
+          _manifest([_validCase(id: 'same'), _validCase(id: 'same')]),
         ),
         throwsA(
           isA<ManifestParseException>().having(
@@ -139,20 +133,23 @@ void main() {
       );
     });
 
-    test('unsupported schema version is a typed InvalidSchemaVersion failure', () {
-      final manifest = _manifest([_validCase()]);
-      manifest['schemaVersion'] = '2.0';
-      expect(
-        () => parser.parse(manifest),
-        throwsA(
-          isA<ManifestParseException>().having(
-            (e) => e.kind,
-            'kind',
-            ManifestParseErrorKind.invalidSchemaVersion,
+    test(
+      'unsupported schema version is a typed InvalidSchemaVersion failure',
+      () {
+        final manifest = _manifest([_validCase()]);
+        manifest['schemaVersion'] = '2.0';
+        expect(
+          () => parser.parse(manifest),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (e) => e.kind,
+              'kind',
+              ManifestParseErrorKind.invalidSchemaVersion,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   });
 
   test('parseJsonString rejects malformed JSON without crashing', () {

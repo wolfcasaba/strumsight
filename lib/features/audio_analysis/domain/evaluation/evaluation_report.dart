@@ -166,7 +166,9 @@ final class EvaluationReport {
     'manifestSchemaVersion': manifestSchemaVersion,
     'caseCount': caseCount,
     'overall': overall.toJson(),
-    'slices': <Map<String, Object?>>[for (final slice in slices) slice.toJson()],
+    'slices': <Map<String, Object?>>[
+      for (final slice in slices) slice.toJson(),
+    ],
   };
 
   /// A stable, timestamp-free JSON rendering: the same report always

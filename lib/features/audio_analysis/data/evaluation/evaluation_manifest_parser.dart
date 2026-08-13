@@ -130,9 +130,13 @@ final class EvaluationManifestParser {
       SignalQualityTier.values,
       (value) => value.name,
     );
-    final mode = _requireEnum(json, 'mode', path, EvalMode.values, (
-      value,
-    ) => value.name);
+    final mode = _requireEnum(
+      json,
+      'mode',
+      path,
+      EvalMode.values,
+      (value) => value.name,
+    );
     _requireKey(json, 'expected', path);
     _requireKey(json, 'detected', path);
     final expected = _parseAnnotationSet(
@@ -233,9 +237,13 @@ final class EvaluationManifestParser {
     _checkKeys(json, _eventKeys, path);
     final id = _requireString(json, 'id', path);
     final timeMs = _requireInt(json, 'timeMs', path);
-    final type = _requireEnum(json, 'type', path, EvalEventType.values, (
-      value,
-    ) => value.name);
+    final type = _requireEnum(
+      json,
+      'type',
+      path,
+      EvalEventType.values,
+      (value) => value.name,
+    );
     StrumDirectionLabel? direction;
     final rawDirection = json['direction'];
     if (rawDirection != null) {
