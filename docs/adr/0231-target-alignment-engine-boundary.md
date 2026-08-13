@@ -104,6 +104,8 @@ katalógust ténylegesen módosító jövőbeli kör oldja fel.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; a feature flag OFF.
+
 - Az illesztő motor teljesen **bekötetlen** száll: nincs UI-, Practice- vagy
   Song-adapter, nincs metrika-számítás — ezek R14+ (timing), R26 (Practice
   adapter) feladatai. Production viselkedés (V1 Analyze, Practice scoring)

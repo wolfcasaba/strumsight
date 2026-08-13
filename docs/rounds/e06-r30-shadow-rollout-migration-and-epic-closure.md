@@ -533,7 +533,28 @@ bizonyítatlan „kész" állítás helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció (2026-08-13):**
+
+- `AnalysisRolloutStage` + `FeatureFlags.analysisRolloutStage`: minden tényleges
+  környezetben V1 default; mind a kilenc Epic 6 flag OFF, dart-define override nincs.
+- `ShadowAnalysisRunner`: konstruktor-injektált `AnalysisRunner`, V1 eredmény
+  változatlan; a V2 csak `labModeActive && audioAnalysisV2Enabled` esetén indul,
+  dobás/cancel `v2Failed` diffet ad, de nem hibáztatja V1-et. Production hívó
+  és provider-wiring szándékosan nincs.
+- `ShadowDiffReport`: event/chord/BPM/duration/runtime V1/V2 párjai + hiba-jelzés,
+  timestamp és nyers audio nélkül.
+- 50-session, mezőnkénti legacy-megőrzés + második futás 50 skip; OFF→migrál→OFF
+  rollback teszt. A legacy migrátor és V1 Library kód változatlan.
+- `epic-06-completion-report.md`: 69/74 §33 tétel kipipálva, öt őszinte nyitott
+  real-device/governance tétel; EVAL-28…41 mind PENDING, felelőssel.
+
+**RED→GREEN bizonyíték:** a hiányzó shadow/rollout contractokra írt tesztek
+először fordítási hibával PIROSak voltak; a kód után célzottan zöldek
+(`flutter test` 19/19). A round gate első futása három analyzer-info miatt
+megállt; a mechanikus javítás után format és analyze zöld, a teljes gate
+teszt-szakaszait a harness elindította, de a harness a végső összegző
+kilépési kódot nem adta vissza az implementernek. Emiatt a gate végső zöld
+állítása és CI dispatch az orchestrátor független ellenőrzése marad.
 
 ## 11. Review — a független reviewer tölti ki
 

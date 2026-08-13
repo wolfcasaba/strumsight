@@ -83,6 +83,8 @@ divergens ADR-szöveg ugyanarra a számra rosszabb lenne, mint az
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; integration flag-ek OFF.
+
 - A kilenc kezdeti szabály mind dokumentált mérést, nem generatív szöveget
   használ; az R25 trendje hiányában a comparison szabály `null` marad.
 - A meglévő `AnalysisDocument.insights` és codec változatlan. Egy későbbi

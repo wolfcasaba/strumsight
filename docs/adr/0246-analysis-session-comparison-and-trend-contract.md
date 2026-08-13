@@ -37,6 +37,8 @@ helyben számolt, bizonytalanságtudatos múltbeli összegzés.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; comparison device validation EVAL-37 PENDING.
+
 - A feature csak helyi, származtatott adatokat olvas; nyers audio nem hagyja el
   az eszközt.
 - A catalog bővítése vagy egy metrika jelentésének változtatása nem e kör

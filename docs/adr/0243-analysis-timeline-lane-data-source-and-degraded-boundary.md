@@ -99,6 +99,8 @@ meg. A pre-flight (célzott kód-olvasás + grep) a következőket mérte:
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; hosszú-session timeline eszközös ellenőrzés EVAL-35 PENDING.
+
 - A review egy konkrét, mért adatforrás-térkép ellen ellenőrizhet ahelyett,
   hogy az implementer saját feltételezésére hagyatkozna — kisebb az esély
   eltérő lane-forrás választására vagy engine-belüli típus téves importjára.

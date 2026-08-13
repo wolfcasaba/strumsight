@@ -3,9 +3,16 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R29 done — evaluation harness and truthful confidence-calibration
-> contract, PR #256 merged; independent review closed three MAJOR matching
-> defects; main healthy, next pending round is E06-R30.)**
+> (E06-R30 implementation complete locally — shadow/migration/closure evidence;
+> independent review and exact-SHA CI remain before merge.)**
+>
+> ## 🟡 E06-R30 — Shadow rollout, migráció és Epic 6 lezárás
+>
+> A V1 shipping út változatlan. A kilenc Epic 6 flag minden környezetben OFF;
+> a konstruktor-injektált `ShadowAnalysisRunner` csak Lab+flag kapun indít V2
+> diagnosztikát és V2 hiba/cancel esetén is V1 eredményt ad. Az 50-session
+> migráció idempotens, a legacy mezők megmaradnak. Epic 6 implementation
+> evidence: [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md).
 >
 > ## ✅ E06-R29 KÉSZ — Evaluation harness és confidence calibration (2026-08-13)
 >
@@ -1511,12 +1518,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R30 — Shadow rollout, migráció és Epic 6
-lezárás.** Új sessionben induljon; E06-R29 lezárult (lásd fejléc ✅-blokk).
-Pre-flightban a `tools/round-slots.py reserve-adr --round E06-R30` kimenete
-az egyetlen hiteles ADR-szám; a valós audio-evidence hiányát ne pótolja
-szintetikus evaluation adattal. Az R28 cache security review §6 szerinti
-bekötés-előtti tételeit is ellenőrizze, ha a shadow wiring érinti őket.
+**Következő kör:** E07-R01 csak az E06-R30 független review-ja, exact-SHA CI-je
+és merge-e után indulhat. Az Epic 6 nyitott termék/gov tételei: EVAL-28–41
+valós eszköz, kalibráció, CI evaluation wiring, V2 pipeline wiring és bármely
+flag-flip — ezek nem E07-R01 scope-ja.
 
 > (A lenti, E06-R19-cel kezdődő szakasz a 2026-08-12 előtti GOV-05/06
 > governance-sagát rögzíti — történeti kontextusként hagyva.)

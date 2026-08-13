@@ -16,7 +16,9 @@ chord-detection app leaves out.
 > (read at runtime via `package_info_plus` and shown in Settings). Do not restate a version number
 > anywhere else in the docs.
 >
-> **Status:** Epic 1 is complete. Epic 3 has an evidence ledger, but its release
+> **Status:** Epic 1 is complete. Epic 6 has an implementation-evidence ledger;
+> its V2 rollout remains at shadow and real-device/release blockers stay open.
+> Epic 3 has an evidence ledger, but its release
 > blockers are still open; see
 > [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
 > Live state snapshot: [`HANDOFF.md`](HANDOFF.md).
@@ -30,6 +32,7 @@ chord-detection app leaves out.
 | 🎤 **Live** — current chord, ↓/↑ arrow, confidence pill, beat counter; DSP + CRNN ML on-device | ✅ real detection |
 | 🎛️ **Tuner** — note + cents gauge (YIN pitch) | ✅ real detection |
 | 🎬 **Analyze** — record a clip, get a chord/strum timeline | ✅ |
+| 🧪 **Audio Analysis V2** — versioned evidence, cache, export and Lab-only shadow contract | ⚠️ implementation evidence; all nine flags OFF, no production caller |
 | 📚 **Library** — saved sessions (rename, review) | ✅ |
 | 🎓 **Learn** — lessons with chord audio + metronome · **Songs** · **Progress** · **Streak** | ✅ |
 | 🎯 **Practice (V2)** — Strum Pattern / Chord Changes / Chord Progression / Rhythm Only / Free Practice / Speed Builder · migrated Learn path is live (`migratedLearnEnabled` flag), self-practice Hub→Session path is feature-flagged (see known limitations) | ⚠️ domain tested; rollout flag-gated |
@@ -57,6 +60,11 @@ chord-detection app leaves out.
   raw strum count (R18 n1 follow-up, opened).
 - **DSP and ML asset parity** is locked at the Epic-1 baseline — no DSP
   parameter change in Epic-2 (AGENTS.md §9).
+- **Audio Analysis V2 is not release-enabled.** The V1 Analyze/Library path is
+  still shipping; the V2 runner provider intentionally fails closed and the
+  shadow runner is only a tested Lab contract. Real-device checks, calibration,
+  CI evaluation wiring and any flag flip require separate approved rounds; see
+  [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md).
 - **Song Trainer V2 and Setlist V2 are not release-enabled.** Guitar Pro uses
   external conversion to MusicXML/MXL/MIDI; the Setlist UI components have no
   registered app route yet, and the device checklist/CI review evidence remains

@@ -89,6 +89,8 @@ flag, ami elfedi, hogy MELYIK capability miért nem elérhető; a `degraded`
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; a rollout továbbra is flag-off/shadow.
+
 - A `CapabilityAwarePublicationPolicy`/`AnalysisCapabilityResolver`
   (E06-R19, SDD Kör 19) ennek az ADR-nek a szerződését implementálja a
   `SongCapabilityResolver` szerkezeti mintáján — ez a kör csak a döntést

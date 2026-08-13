@@ -45,6 +45,8 @@ a korábbi brief másik, nem létező útvonalat nevezett meg.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; valós eszközös overview ellenőrzés EVAL-34 PENDING.
+
 - A UI nem állíthat gyenge vagy nem elérhető mérésről biztos eredményt.
 - A route közvetlen widget- és router-teszttel nyitható flag-on állapotban,
   de a V1-be ebben a körben nem kerül belépőpont.

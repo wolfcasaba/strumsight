@@ -81,6 +81,8 @@ más jelentéssel egy jövőbeli körben.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; az Epic 6 implementation evidence rögzítve.
+
 - A V2 `AnalysisMetricResult` modell (E06-R02, SDD §9.8) a metrika-ID-t és
   -verziót kötelező mezőként hordozza.
 - A `docs/manual-testing/analysis-eval-matrix.md` (ez a kör hozza létre)

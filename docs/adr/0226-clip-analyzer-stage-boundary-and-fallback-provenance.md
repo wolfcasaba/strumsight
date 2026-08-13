@@ -112,6 +112,8 @@ közvetlen, bizonyított jelzésre — ADR-frissítéssel, nem néma cserével.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; V1 regressziós út érintetlen.
+
 - Az E06-R09 stage-je 100%-ban az exportált felületen marad; a `ClipAnalyzer`/
   CRNN belső kódjának egyetlen sora sem módosul vagy másolódik.
 - A `strumRefinerSource = heuristic` cella egy INFERÁLT (nem közvetlenül

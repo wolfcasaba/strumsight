@@ -208,6 +208,8 @@ strumra marad, aminek nincs hozzá tartozó, mért onsetje.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; timeline evidence contract tesztelt marad.
+
 - Az `OnsetEvent`/`StrumEvent` konstruktor bővül, de a típusuk, a bázisosztály
   és a testvér-típusok bitre változatlanok — az öt allowed_paths-on kívüli
   fogyasztó git diff-je üres kell legyen ezekben a fájlokban.

@@ -84,6 +84,8 @@ csak azért, hogy az UI-ban ne legyen üres mező.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** E06-R19 megvalósította a resolver szerződését, de valódi kalibrációs dataset nélkül a mérés `identity.v1` marad; EVAL-06 továbbra is PENDING.
+
 - A V2 `AnalysisMetricResult`/`AnalysisEvent` modellek (E06-R02, E06-R19)
   `confidence` mezője a kalibrált értéket hordozza; a nyers score külön,
   Lab-only diagnosztikai mezőbe kerül, ha egyáltalán szükséges.

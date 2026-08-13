@@ -85,6 +85,8 @@ logban, crash reportban vagy Tutor-promptban; `keepOriginal` alapértelmezett
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; a shadow diff-riport nem tartalmaz nyers audioadatot.
+
 - A V2 storage-réteg (E06-R21) az `AudioRetentionPolicy`-t a `FileSongRepository`
   (E03-R07) atomikus-írás mintájára építi: a nyers audio soha nem kerül a
   tartós document mellé alapértelmezésben.

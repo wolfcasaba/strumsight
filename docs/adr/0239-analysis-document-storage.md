@@ -50,6 +50,8 @@ mintát használja, de a feature belső fájlját az Audio Analysis nem importá
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** az 50-session migrációs teszt további bizonyíték: a V1 mezők megmaradnak, a migráció második futása 50 rekordot skipel, a legacy forrás érintetlen.
+
 - Az átmeneti V1 és V2 másolat szándékosan együtt él; a V1 törlése csak egy
   későbbi rollout-döntés része lehet.
 - A migráció részleges hiba után folytatható: a már sikeres documentek és a

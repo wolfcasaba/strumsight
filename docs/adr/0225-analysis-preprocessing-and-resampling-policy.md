@@ -69,6 +69,8 @@ Resampler csak egy későbbi, külön scoped körben vezethető be, ha mind telj
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; az experimentális flag OFF.
+
 - Az E06-R08 explicit provenance- és mapping-contractot ad anélkül, hogy
   megváltoztatná a V1 Analyze vagy Live hangfeldolgozását.
 - Különböző eszközök natív sample rate-je továbbra is eltérő lehet; ez ismert,

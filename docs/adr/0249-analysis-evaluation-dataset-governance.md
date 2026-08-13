@@ -40,6 +40,8 @@ kerülhet commitba sem.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** megerősítve: a szintetikus harness nem zár le valós evaluation sort; a CI workflow-bekötés külön GOV-30b kör marad.
+
 - A V2 publication út és a `CalibrationTable` szerződése változatlanul
   monoton, `[0,1]`-beli és offline marad.
 - Az evaluation artefaktumok a későbbi manuális, licencelt dataset-evaluation

@@ -39,6 +39,8 @@ előre bővítené.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; raw audio retention továbbra is OFF.
+
 - A clipping-kizárás és a clipping-arány ugyanabból az eredeti, lokális
   evidence-ből vezethető le, miközben a statisztikai suite nem torzul a
   clippingtől.

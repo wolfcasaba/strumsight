@@ -57,6 +57,8 @@ javítva.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; real-audio validation PENDING.
+
 - A `rhythm.inferred_*` metrikák sosem állíthatnak magasabb bizonyosságot,
   mint amit a mögöttes becsült beat-pontok ténylegesen hordoznak — a rács
   bizonytalansága az aggregáción át öröklődik, nem tűnik el.

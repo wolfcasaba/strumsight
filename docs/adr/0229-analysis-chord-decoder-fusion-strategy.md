@@ -62,6 +62,8 @@ alapértelmezetten kikapcsolt marad.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** E06-R29 csak szintetikus evaluation harness-t szállított, nullával lezárt valódi evaluation sorral; a visszavonási feltétel nem teljesült, ezért a fusion flag helyesen OFF marad.
+
 - A V1 UI és DSP lánc érintetlen marad.
 - A V2-ben frame- és segment-provenance explicit, de a V1-ből származó
   evidence teljességi korlátja is explicit.
