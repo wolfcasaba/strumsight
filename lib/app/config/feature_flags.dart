@@ -36,6 +36,8 @@ final class FeatureFlags {
     this.analysisExperimentalFusionEnabled = false,
     this.analysisTechniqueProxiesEnabled = false,
     this.analysisComparisonEnabled = false,
+    this.analysisPracticeIntegrationEnabled = false,
+    this.analysisTutorIntegrationEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -85,6 +87,8 @@ final class FeatureFlags {
       analysisExperimentalFusionEnabled: false,
       analysisTechniqueProxiesEnabled: false,
       analysisComparisonEnabled: false,
+      analysisPracticeIntegrationEnabled: false,
+      analysisTutorIntegrationEnabled: false,
     );
   }
 
@@ -184,6 +188,14 @@ final class FeatureFlags {
   /// are closed with real device data (brief §9).
   final bool analysisComparisonEnabled;
 
+  /// Whether Analysis evidence adapters for Practice and Song may instantiate.
+  /// This remains OFF in every environment until consumer wiring ships.
+  final bool analysisPracticeIntegrationEnabled;
+
+  /// Whether the redacted Analysis-to-Tutor adapter may instantiate.
+  /// This remains OFF in every environment until Tutor wiring ships.
+  final bool analysisTutorIntegrationEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -222,7 +234,10 @@ final class FeatureFlags {
           analysisExperimentalFusionEnabled &&
       other.analysisTechniqueProxiesEnabled ==
           analysisTechniqueProxiesEnabled &&
-      other.analysisComparisonEnabled == analysisComparisonEnabled;
+      other.analysisComparisonEnabled == analysisComparisonEnabled &&
+      other.analysisPracticeIntegrationEnabled ==
+          analysisPracticeIntegrationEnabled &&
+      other.analysisTutorIntegrationEnabled == analysisTutorIntegrationEnabled;
 
   @override
   int get hashCode {
@@ -256,6 +271,8 @@ final class FeatureFlags {
       analysisExperimentalFusionEnabled,
       analysisTechniqueProxiesEnabled,
       analysisComparisonEnabled,
+      analysisPracticeIntegrationEnabled,
+      analysisTutorIntegrationEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -294,5 +311,8 @@ final class FeatureFlags {
       'analysisExperimentalFusionEnabled: '
       '$analysisExperimentalFusionEnabled, '
       'analysisTechniqueProxiesEnabled: $analysisTechniqueProxiesEnabled, '
-      'analysisComparisonEnabled: $analysisComparisonEnabled)';
+      'analysisComparisonEnabled: $analysisComparisonEnabled, '
+      'analysisPracticeIntegrationEnabled: '
+      '$analysisPracticeIntegrationEnabled, '
+      'analysisTutorIntegrationEnabled: $analysisTutorIntegrationEnabled)';
 }
