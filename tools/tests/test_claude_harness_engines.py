@@ -208,6 +208,24 @@ class WrapperModeTest(unittest.TestCase):
         self.run_wrapper("minimax", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
         self.assertIn("status=done", self.signal_text)
 
+    def test_a_noop_done_signal_is_kept_when_the_dispatcher_explicitly_allows_it(self) -> None:
+        """MÉRT eset (E06-R27 H6 self-heal, 2026-08-13, mm-round.sh —
+        codex-round.sh azonos logikája `test_qwen_implementer_hardening.py`
+        `ClaimGuardTest`-jében fedve). Egy javító `sonnet-impl` forduló
+        commitolt (`524397de`), de jelzés nélkül lépett ki; a dispatch-elt
+        signal-recovery forduló jogosan `done`-t jelzett ÚJ commit/diff
+        nélkül, mert a dolga a MÁR meglévő munka megerősítése volt — a régi
+        `verify_claim` ezt tévesen `unknown`-ra fokozta le, mert a
+        `scope_base` (az invokáció-kezdő HEAD) már az előző forduló
+        commitját tartalmazta. `ROUND_VERIFY_NOOP_OK=1` teszi ezt a
+        dispatcher szándéka szerint legitimmé."""
+        self.run_wrapper(
+            "minimax",
+            extra_env={"MINIMAX_API_KEY": "teszt-kulcs", "FAKE_NO_WORK": "1", "ROUND_VERIFY_NOOP_OK": "1"},
+        )
+        self.assertIn("status=done", self.signal_text)
+        self.assertIn("verify_noop_ok=1", self.signal_text)
+
     def test_a_process_that_keeps_running_after_signaling_is_killed_promptly(self) -> None:
         """MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Claude
         helyesen írta meg a jelzésfájlt, de a folyamata ennek ellenére
