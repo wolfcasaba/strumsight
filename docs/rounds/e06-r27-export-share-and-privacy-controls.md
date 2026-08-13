@@ -1,6 +1,6 @@
 # E06-R27 — Export, share és privacy controls
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight frissítve 2026-08-13, main @ `6e13e635`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 27; §27.5, §28.1–28.5
 - **Branch:** `codex/e06-r27-export-share-and-privacy-controls`
 - **Előfeltétel:** **E06-R21, E06-R26 merge**
@@ -28,6 +28,7 @@ allowed_paths = [
   "test/features/audio_analysis/presentation/analysis_export_screen_test.dart",
   "test/features/share/share_service_test.dart",
   "test/property/analysis_export_redaction_property_test.dart",
+  "docs/adr/0247-analysis-export-share-and-delete-contract.md",
   "docs/rounds/e06-r27-export-share-and-privacy-controls.md",
 ]
 gate_tests = [
@@ -62,8 +63,18 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — az ADR 0202 (raw audio retention) és 0201
-(alacsony confidence nem tény) végrehajtása.
+**2026-08-13 pre-flight, main @ `6e13e635`.** A `ShareService` tényleges
+publikus felülete továbbra is kizárólag `shareCard` / `shareImage` /
+`shareText`; a három metódus közül egyik sem fogad export-fájlt és a meglévő
+`_writeTemp` út sem garantál hívás utáni takarítást. Emiatt a §5.8 szerinti
+egyetlen additív metódus szükséges. A `FileAnalysisRepository.delete` a
+dokumentumot és az indexet ténylegesen törli (`file_analysis_repository.dart`
+476–496); az R21 `AudioRetentionPolicy` dokumentáltan nem perzisztál
+audio-byte-okat, R28 cache pedig még nincs. Ezért a `DeleteAnalysisUseCase`
+csak az adott cache/audio portokon keresztül kaphat takarítási felelősséget;
+nem módosíthatja az R21 repository-szerződést. A pre-flightban foglalt
+**ADR 0247** rögzíti ezt a kiterjesztési és ownership-határt. A brief
+`allowed_paths` listája az ADR-rel szűken bővült; más scope-változás nincs.
 
 **2026-08-13, H3 self-heal (ADR 0112 önjavító kör, 1. kísérlet).** Az első
 dispatch (Terra orchestráció, sonnet-impl implementer) a §5.1 OD-01
@@ -141,6 +152,7 @@ diagnosztikai upload (a meglévő `diagnostics` út marad), CSV export
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | codec + use case + widget + property |
 | `test/features/share/share_service_test.dart` | ÚJ | takarítás (siker/hiba) unit teszt (H3 self-heal) |
+| `docs/adr/0247-analysis-export-share-and-delete-contract.md` | ÚJ | pre-flight döntés: export share + törlési ownership |
 
 **Tilos zóna:** `lib/features/share/**` (KIVÉVE a `share_service.dart` §5.8
 szerinti additív bővítése), `lib/features/diagnostics/**`,
