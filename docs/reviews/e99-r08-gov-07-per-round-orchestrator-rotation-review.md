@@ -50,7 +50,26 @@ Eredmény: `Legacy scope audit OK (37d5024a..8d44ae8da136, 7 changed path(s), 0 
   Ne kerüljön valódi CLI vagy hálózat a tesztbe.
 - **Ellenőrzés:** `python3 -m pytest tools/tests -q`, majd Router CI exact
   `headSha` zöld a javító commiton.
-- **Státusz:** OPEN
+- **Státusz:** FIXED — commit `9391108b` (rebase onto `origin/main@6228764f`
+  után). A javítás pontosan a kért alakot követi: `_fake_claude_bin()` egy
+  determinisztikus, `chmod 755` végrehajtható stub fájlt ír ki (`#!/bin/sh\nexit
+  0\n`), és a fixture ezt adja át `CLAUDE_BIN` env-ként — a driver
+  `claude_bin=${CLAUDE_BIN:-claude}` (`round-pipeline.sh:96`) miatt ezt olvassa
+  a `command -v "$claude_bin"` előfeltételnél (`:1444`), a fake bináris
+  utólag SOHA nem fut (a teszt elvárt kimenete a `die()` a `PIPELINE_STATE_DIR`
+  ágon, ami a claude-hívás ELŐTT történik). Nincs valódi CLI, nincs hálózat.
+  Mechanikus újra-ellenőrzés (AGENTS.md §15.7 — a Sonnet-5
+  orchestrátor-session a Terra-review MÁR meglévő, független ítéletét
+  certifikálja, nem ismétli meg saját véleményezéssel):
+  - `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
+    a rebase-elt `9391108b`-n: mind a hat lépés (format/analyze/test/
+    architecture/secrets/l10n) ZÖLD.
+  - `python3 -m pytest tools/tests -q` (`/tmp/rvenv`) ugyanazon a commiton:
+    **407 passed, 394 subtests passed, 0 failed** — a korábbi egyetlen,
+    e körön kívüli piros (`test_claude_harness_engines.py::WrapperModeTest::
+    test_the_legacy_call_without_round_engine_stays_minimax`) a rebase által
+    behozott H6 self-heal miatt szintén zöld.
+  - Router CI exact `9391108b`-n: lásd a §Merge-döntés frissítését.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -66,3 +85,14 @@ Eredmény: `Legacy scope audit OK (37d5024a..8d44ae8da136, 7 changed path(s), 0 
 Az ADR 0052 szerint a nyitott MAJOR és a piros exact-SHA Router CI miatt merge
 tilos. A javítást ugyanazzal a `sonnet-impl` motorral kell végrehajtani, majd
 friss izolált review és új CI-dispatch következik.
+
+### Frissítés (2026-08-13, orchestrátor-session — mechanikus zárás)
+
+F3 javítva `9391108b`-n (lásd fent), a branch `origin/main@6228764f`-re
+rebase-elve (0 fájl-átfedés a H3/H6/H8 self-heal commitokkal — mérve
+`git merge-base --is-ancestor origin/main HEAD`), pusholva
+`tools/safe-force-push.sh`-sal (a kör SAJÁT D3-deliverable-je — remote-only
+commit nem volt, tiszta lease-push). Mindkét helyi gate ZÖLD a pontos
+`9391108b` SHA-n (lásd F3 §Státusz). CI-dispatch és exact-SHA Router CI
+eredmény: lásd a round-brief §11-et — az a végső, hiteles bizonyíték, ezt a
+fájlt a végleges verdikttel a merge előtt frissítem.
