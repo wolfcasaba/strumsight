@@ -3,11 +3,86 @@
 Brief: `docs/rounds/e06-r26-practice-song-tutor-integration.md`
 Diff: `git diff e510695a..e8faa8fd` (pre-flight commit → implementer commit)
 Reviewer: Claude (Sonnet 5, pipeline orchestrator) · Dátum: 2026-08-13
-Verdikt: **CHANGES REQUIRED**
+Verdikt (eredeti, `e8faa8fd`-n): CHANGES REQUIRED
+Verdikt (1. javítás után, `b1fc0a9d`-n): **CHANGES REQUIRED — dedikált security review MAJOR-1 nyitva**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 4 · MINOR: 1 · NOTE: 1
+`e8faa8fd`: BLOCKER: 0 · MAJOR: 4 · MINOR: 1 · NOTE: 1 (lásd lent, F1-F6)
+
+## R1 — F1-F4 javítás ellenőrizve (`b1fc0a9d`, 2026-08-13)
+
+A javító kör mind a négy MAJOR-t érdemben zárta — saját, FÜGGETLEN,
+friss `/tmp/review-e06-r26-v2` klónban ellenőrizve (nem a commit-üzenetre
+hagyatkozva):
+
+- **F1 FIXED:** `PracticeRetryTempoPolicy.clampTempoForReduction` közvetlenül
+  tesztelhető nyers-redukció paraméterrel; `clampTempoForReduction(targetTempo:
+  100, reduction: .5) == 60` — magam is leellenőriztem a képletet
+  (`min=100*0.6=60`, `reduced=100*0.5=50`, `50<60 → 60`). A severity-lépcső
+  szándékosan változatlan (max 15%) — ezt a brief §0.0-ba írt R26-R1 revízió
+  dokumentálja, helyesen "jövőbeli védelemként", nem hamis "elért" állításként.
+- **F2 FIXED:** `ProgressEvidenceAdapter` megkapta a testvér-adapterek
+  factory+flag-provider mintáját (`analysisPracticeIntegrationEnabled`
+  alatt); az OFF-flag teszt mind a négy adapterre (Practice/Song/Tutor/
+  Progress) `calls==0`-t mér.
+- **F3 FIXED:** `SongChordContext`/`SongAnalysisTarget.chords` megőrzi a
+  display-akkordot; hatcellás akkord-mátrix teszt (kereszt- és bemol-gyökű
+  bemenettel is) — mind a hat cellát kézzel újraszámoltam a
+  `Chord.transposeLabel` tábla alapján, egyezik.
+- **F4 FIXED:** `_CountingSongFactory` a megosztott OFF-flag tesztben.
+- **F5 (MINOR, opcionális):** nem alkalmazva, dokumentált indokkal (a
+  publikus `compilePracticeTarget()`-re váltás érdemben növelte volna a
+  javító-diffet) — elfogadható.
+- **F6 (NOTE, opcionális):** nem alkalmazva — és itt **az én eredeti
+  megjegyzésem téves volt**: a célzott fordítás bizonyította, hogy a Practice
+  `core/music/strum.dart` és az Analysis `domain/analysis_event.dart`
+  **két külön, azonos nevű** `StrumDirection` enumot definiál, tehát a
+  név-alapú (`.name`/`.byName`) explicit konverzió **szükséges**, nem
+  felesleges kerülőút. Köszönet az implementernek az empirikus cáfolatért.
+
+Gate a `b1fc0a9d`-n saját, izolált `/tmp/review-e06-r26-v2` klónban:
+format/analyze/test(`audio_analysis` 533, `tooling` 64, `app` 73)/
+architecture(12 allowlist)/secrets/l10n mind ZÖLD. `gate_shape=VIOLATION`
+(mindkét javító-kör jelzésén) **ismételten hamis pozitívnak** bizonyult —
+mindkét esetben a naplóban talált egyetlen regex-találat a gate-SZKRIPT
+FORRÁSÁNAK olvasása volt (`sed -n '...' tools/round-gate.sh && ps …` az 1.
+javító körben; a LESSONS.md L245 saját szövege az eredeti körben), nem
+tényleges csonkított/láncolt gate-futás — mindkettőt kézzel, a nyers naplón
+ellenőriztem, `docs/LESSONS.md` L245 saját utasítása szerint.
+
+## R2 — Dedikált security review lelete (kötelező, `risk = "high"`)
+
+`docs/reviews/e06-r26-practice-song-tutor-integration-security.md` (külön
+security-reviewer agent, READ-ONLY, függetlenül futtatott szondákkal).
+**Verdikt: FAIL (1 MAJOR)** — 0 CRITICAL · 0 BLOCKER · 1 MAJOR · 4 MINOR · 3 NOTE.
+
+**MAJOR-1 (nyitva, blokkolja a merge-et):** a Tutor-redakciós teszt
+KULCS-szintű, a tényleges szivárgási csatorna ÉRTÉK-szintű — az
+`insightIds`/event-/hotspot-/target-ID-k szabad szöveges stringek, amiket a
+`fromDocument()` szó szerint másol át. A reviewer élő szondával
+reprodukálta: egy fájlrendszer-útvonal és egy utasítás-szerű szöveg egy
+event-ID-be helyezve szó szerint megjelenik a Tutor JSON-ban, a meglévő
+teszt mellett is ZÖLDEN. Ma nem élesen kihasználható (a kör bekötetlen,
+mindkét flag OFF, a mai ID-gyártók gépi-determinisztikusak), de EZ a kör
+egyetlen adatvédelmi szerződése, és egy jövőbeli kör ezt a tesztet fogadná
+el bizonyítéknak — az importált MusicXML/MIDI → SongId → …→
+`TutorTargetContext.id` lánc már MA létezik (erősen degradált, de nem
+nulla befolyással). A négy MINOR és három NOTE közül a **MINOR-3
+relevánsabbá vált**: a javító kör bevezetett egy nem-`autoDispose`
+providert a `ProgressEvidenceAdapter`-hez, ami a korlátlan
+`_creditedDocumentIds` Set-et bizonyítottan app-élettartamúvá teszi.
+
+A dedikált biztonsági review saját szondával (nem csak kód-olvasással)
+igazolta a negatívokat is: nincs PCM/waveform-szivárgás, az 50-es event-cap
+minden konstrukciós úton valódi `throw`-val érvényes, nincs
+`AnalysisDocument`-referencia-szivárgás, a flag-kapu helyes mindkét
+irányban. Ez erősíti (nem gyengíti) az összképet: a kód szerkezete jó, a
+mérce hiányos pontosan egy helyen.
+
+**Második javító kör dispatch-elve** (`PROMPT-E06-R26-fix2.md`): MAJOR-1
+kötelező (sanitizálás + érték-szintű negatív teszt), MINOR-3 ajánlott
+(autoDispose), a többi dokumentált follow-up-ként a brief §9-be.
 
 A gate a saját, izolált `/tmp/review-e06-r26` klónomban függetlenül zöld
 (format/analyze/`test/features/audio_analysis` 533/`test/tooling` 64/
