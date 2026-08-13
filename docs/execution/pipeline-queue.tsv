@@ -198,7 +198,7 @@ E06-R24	docs/rounds/e06-r24-layered-zoomable-timeline.md	minimax	nincs	done
 # kódhibából. A sor végére tolva csak az Epic 6 UTÁN futna, azaz hét további
 # kör maradna kitéve ugyanannak. A driver felülről az első `pending`-et viszi,
 # ezért a pozíció maga a prioritás.
-E99-R08	docs/rounds/e99-r08-gov-07-per-round-orchestrator-rotation.md	codex	0242	pending
+E99-R08	docs/rounds/e99-r08-gov-07-per-round-orchestrator-rotation.md	codex	0242	done
 #
 E06-R25	docs/rounds/e06-r25-session-comparison-and-trend.md	codex	nincs	pending
 E06-R26	docs/rounds/e06-r26-practice-song-tutor-integration.md	codex	nincs	pending
