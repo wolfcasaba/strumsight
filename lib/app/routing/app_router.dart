@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
+import '../../features/audio_analysis/presentation/analysis_compare_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_overview_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart';
@@ -84,6 +86,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .audioAnalysisV2Enabled;
+  final analysisComparisonEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .analysisComparisonEnabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -303,6 +309,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               state.extra is AnalysisDocument ? null : AppRoutes.live,
           builder: (_, state) => AnalysisTimelineScreen(
             document: state.extra! as AnalysisDocument,
+          ),
+        ),
+      ],
+      if (analysisComparisonEnabled) ...[
+        GoRoute(
+          path: AppRoutes.analysisCompare,
+          redirect: (_, state) =>
+              state.extra is AnalysisComparison ? null : AppRoutes.live,
+          builder: (_, state) => AnalysisCompareScreen(
+            comparison: state.extra! as AnalysisComparison,
           ),
         ),
       ],

@@ -44,6 +44,11 @@ abstract final class AppRoutes {
   static const String analysisMetricDetail = '/analysis/metric-detail';
   static const String analysisTimeline = '/analysis/timeline';
 
+  // Session comparison and trend (E06-R25, ADR 0246) — flag-gated behind
+  // its own `analysisComparisonEnabled` flag, independent of
+  // `audioAnalysisV2Enabled`.
+  static const String analysisCompare = '/analysis/compare';
+
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
     live,
