@@ -442,6 +442,149 @@ A `round-gate.sh` a `format` / `analyze` / `test` / `architecture` / `secrets` /
   L156): a worktree-ből írt állapot sikert jelez, de az éles lánc nem áll át.
   A tesztek ezért `PIPELINE_STATE_DIR`-t injektálnak, éles állapotot nem írnak.
 
-## 10. Implementation handoff — a Codex tölti ki
+## 10. Implementation handoff — Claude Sonnet 5 (sonnet-impl)
+
+### 10.1 Fájlonkénti változás
+
+- **`tools/round-pipeline.sh`**
+  - Új állapot: `orch_round_dir="$state_dir/orchestrator-round"` és
+    `round_remote=${PIPELINE_ROUND_REMOTE:-origin}` (a §5.1/§5.2 hordozói).
+  - `next_orchestrator()` (D1): opcionális `$1=kör` paramétert kapott. Ha adott
+    és `$orch_round_dir/$1` már létezik, a fájl tartalmát adja vissza
+    LÉPTETÉS NÉLKÜL. Ha nem létezik, a régi (ADR 0222) logikával számol egy
+    értéket, és — CSAK ha kör-argumentum volt — beírja mind a kör-fájlba, mind
+    a globális `orch_last_file`-ba. Argumentum NÉLKÜL a függvény kimenete
+    bitre azonos a D1 előttivel (a `--next-orchestrator` teszthorog és a belső
+    hívások — `resolve_independent_engine`, `--orchestrator-engine` —
+    változatlanul ezt az alakot használják, A6 teljesül).
+  - `--next-orchestrator` hook: `next_orchestrator "${2:-}"` — opcionális
+    kör-argumentummal bővült, argumentum nélkül változatlan.
+  - Új hookok: `--branch-implementer <kör>` és
+    `--resume-orchestrator <kör> <implementer>`.
+  - Új függvények (D2): `orchestrator_conflicts_with_implementer()` (a
+    meglévő `engine_uses_claude_quota()`/terra-modell mérésre épít, nem írja
+    újra), `resolve_branch_implementer()` (`git ls-remote --heads
+    "$round_remote"`, a kör-slug UTÁN kötelező `-` határolóval — az `ops/*`
+    ágak sosem illeszkednek), `resolve_resume_orchestrator()` (a §5.2 kötött
+    feloldási sorrend: rögzített orchestrátor → másik orchestrátor → HALT_INDEP;
+    ismeretlen registry-motor azonnal HALT_INDEP, §5.3).
+  - A `# --- 4.5` dispatch-blokk kettéágazik: ha `resolve_branch_implementer
+    "$round"` nem üres (a körnek MÁR van távoli ága), a D2 út fut (implementer
+    fix, orchestrátor a mozgatható szereplő, HALT_INDEP → `halt=H-INDEP` a
+    korábbi mintával); egyébként a régi (D0/ADR 0222) `resolve_independent_
+    engine` út fut változatlanul.
+  - A korábbi, minden dispatchnél FELTÉTEL NÉLKÜL globális írás
+    (`printf '%s\n' "$orchestrator" > "$orch_last_file"`, a session indítása
+    előtt) törölve — a perzisztencia immár a fenti függvényeken belül,
+    kör-kulcsoltan történik.
+- **`tools/safe-force-push.sh`** (ÚJ) — a §5.5 négy lépése: pontos fetch
+  (`+refs/heads/<b>:refs/remotes/<remote>/<b>`) → remote-only commitok
+  patch-id alapon (`git log --cherry-mark --left-right --pretty='format:%m
+  %H %s'`, csak a `<` jelöltek) → ha van ilyen: a lista kiírása stderr-re és
+  `exit 3`, push nélkül → ha nincs: `git push --force-with-lease="$branch:
+  $remote_sha"` a FRISSEN mért SHA-ra. `exit 2` hibás híváskor vagy sikertelen
+  fetchkor.
+- **`docs/execution/pipeline-orchestrator-prompt.md`** — a H8-sor pontosítva
+  (§293 körül): „…ÉS a rebase **konfliktust ad** — a remote-only commitok
+  beépítése ütközik”. A H4/H5 tábla utáni bekezdésbe egy új „H8 pontosítása”
+  szakasz került, ami kimondja, hogy a puszta `--force-with-lease`-elutasítás
+  NEM H8, a `tools/safe-force-push.sh` négy lépését írja le, és az ADR
+  0242-re hivatkozik.
+- **`tools/tests/test_orchestrator_rotation.py`** — egy ÚJ cella
+  (`test_a_new_round_still_steps_even_when_another_round_is_pinned`, A2); a
+  meglévő tesztek nem módosultak.
+- **`tools/tests/test_round_resume_independence.py`** (ÚJ) — D1 (A1, plusz egy
+  kiegészítő "új kör lép" eset) és D2 (A3/A4/A5, plusz egy `ops/*`
+  nem-illeszkedés próba és egy Terra↔Terra ütközés próba) hermetikus
+  tesztjei, `PIPELINE_STATE_DIR` + lokális bare repo (`PIPELINE_ROUND_REMOTE`)
+  mintára.
+- **`tools/tests/test_safe_force_push.py`** (ÚJ) — A7–A10 hermetikus tesztjei,
+  lokális bare "origin" + két klón (`work`, `other`) mintára.
+- **`docs/rounds/e99-r08-gov-07-per-round-orchestrator-rotation.md`** — ez a
+  §10 szakasz.
+
+### 10.2 Tesztfuttatások (RED → GREEN, csonkítatlan)
+
+RED (a próbateszt-fájlok megírása UTÁN, a D1/D2 kód megírása UTÁN, de a
+két, alább dokumentált valódi-sértés próbával mérve — lásd 10.3, mert az
+implementáció íráskor lépésenként haladt, nem külön RED-checkpointtal):
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q
+..........
+10 passed in 0.35s
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_safe_force_push.py -q
+.....
+5 passed in 0.54s
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_orchestrator_rotation.py -q
+(a teljes suite futtatásában, lásd lent — mind zöld, a meglévő cellák is)
+```
+
+### 10.3 Valódi-sértés próbák (§6.1, KÖTELEZŐ)
+
+**A1 (per-round pinning kikapcsolva):** a `next_orchestrator()`-ban a kör-fájl
+visszaolvasását ideiglenesen `if false && [ -n "$round" ]; then …` alakra
+cseréltem (a globális, körfüggetlen viselkedésre esve vissza). Eredmény:
+
+```
+FAILED tools/tests/test_round_resume_independence.py::PerRoundRotationTest::test_a_second_dispatch_of_the_same_round_keeps_its_orchestrator
+FAILED tools/tests/test_round_resume_independence.py::ResumeOrchestratorConflictTest::test_no_conflict_keeps_the_pinned_orchestrator
+2 failed, 8 passed in 0.36s
+```
+
+A mutáció a mátrix szerinti cellát (A1) — és egy másodikat, ami a D2 útra is
+rá van építve a rögzítésre — pirosra váltotta, a többi 8 teszt zöld maradt.
+Visszaállítva (`cp /tmp/round-pipeline.sh.bak tools/round-pipeline.sh`),
+utána `bash -n` + a teszt újra zöld (10/10).
+
+**A7 (a safe-force-push megtagadás kikapcsolva):** a 3. lépés
+(`if [ -n "$remote_only" ]; then … exit 3; fi`) `if false && …`-ra cserélve.
+Eredmény:
+
+```
+FAILED tools/tests/test_safe_force_push.py::RefusalTest::test_it_refuses_when_the_remote_has_commits_we_lack
+FAILED tools/tests/test_safe_force_push.py::RefusalTest::test_the_refusal_names_the_remote_only_commits
+2 failed, 3 passed in 0.61s
+```
+
+A megtagadás kiiktatása mindkét A7/A8-mérő cellát pirosra váltotta (a script
+csendben force-pusholt, eldobva a remote-only commitot). Visszaállítva,
+utána `bash -n` + a teszt újra zöld (5/5).
+
+### 10.4 Kötelező ellenőrzések (§7, csonkítatlan)
+
+```
+$ tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+```
+Mind a hat lépés (`format`, `analyze`, `test`, `architecture`, `secrets`,
+`l10n`) ZÖLD, „MINDEN GATE ZÖLD” összegzéssel.
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests -q
+...
+397 passed, 394 subtests passed in 233.34s (0:03:53)
+1 failed: tools/tests/test_claude_harness_engines.py::WrapperModeTest::test_the_legacy_call_without_round_engine_stays_minimax
+```
+
+Ez az EGY piros **NEM ehhez a körhöz tartozik** — `tools/mm-round.sh`
+wrapper-viselkedést mér, amit ez a kör nem érint (nincs az engedélyezett-
+fájllistán, és a diffben sincs benne). Ellenőrizve: ugyanez a teszt
+UGYANAZZAL a hibaüzenettel piros a `git stash`-elt, tiszta `ba9b65ea` bázison
+is — tehát pre-existing, nem regresszió. (A pytest futtatásához a repóban
+nincs telepített `pytest`; a már meglévő, korábbi körökből visszamaradt
+`/tmp/rvenv` venv-et használtam — ugyanazt a mintát, amit a
+`docs/execution/pipeline-selfheal-prompt.md:79` is dokumentál, nem a
+tiltott ad-hoc `pip install`-t a repóban.)
+
+Nem futtatott ellenőrzés: `.github/workflows/router-ci.yml` (Router CI) —
+azt a §0.0 szerint az orchestrátor futtatja a kör-ágon dispatch/merge előtt.
+
+### 10.5 Nem érintett / szándékosan kihagyott
+
+- `docs/adr/**`, `tools/round-gate.sh`, `.github/**`, `lib/**`, `test/**`,
+  `docs/execution/pipeline-queue.tsv`, `HANDOFF.md`, `docs/LESSONS.md` —
+  egyik sem módosult (A12: `git diff --stat origin/main...HEAD` nulla
+  `.dart`/`lib/`/`test/` útvonalat mutat).
+- `H-INDEP` önjavíthatóvá tétele — nem történt meg (ADR 0138 S4 marad).
 
 ## 11. Review — a Claude tölti ki

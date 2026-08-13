@@ -187,6 +187,14 @@ claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json
 # védőhálónak.
 orch_rotation=${PIPELINE_ORCH_ROTATION:-alternate}   # alternate | claude | terra
 orch_last_file="$state_dir/orchestrator-last"
+# ADR 0242 D1: a rotáció KÖRÖNKÉNT kulcsolt, nem globális — egy kör MINDEN
+# dispatchje (elhalt + újraindított is) ugyanazt az orchestrátort kapja
+# vissza. Az orch_last_file marad az `alternate` léptetés hordozója, de
+# kizárólag ÚJ kör ELSŐ dispatchjekor frissül (lásd next_orchestrator()).
+orch_round_dir="$state_dir/orchestrator-round"
+# ADR 0242 D2: melyik remote-ról olvassuk a kör-ágakat a folytatáskori
+# implementer-méréshez. Tesztekben lokális bare repóra állítható.
+round_remote=${PIPELINE_ROUND_REMOTE:-origin}
 # Terra-vezényelt körön a Terra NEM implementálhat (ADR 0138: nem review-zheti
 # a saját diffjét), ezért ilyenkor szerepet cserélnek — a Claude implementál.
 # user-döntés 2026-08-11: `sonnet-impl`, mert így a két legjobb motor marad a
@@ -463,25 +471,54 @@ claude_usage_block_until() {
   printf '%s\n' "$reset"
 }
 
-# --- Orchestrátor-rotáció (ADR 0222) --------------------------------------
+# --- Orchestrátor-rotáció (ADR 0222 + 0242 D1) ----------------------------
 # Kiírja, MELYIK motor vezényelje a következő kört: `claude` vagy `terra`.
 # A zárlatok felülírják a rotációt (kimerült keretre nem osztunk munkát).
-next_orchestrator() {
-  local last
-  [ "$fallback_engine" != "none" ] || { printf 'claude\n'; return 0; }
-  if claude_unavailable_until >/dev/null || claude_usage_block_until >/dev/null; then
-    printf 'terra\n'
-    return 0
+#
+# ADR 0242 D1: opcionális $1=kör-azonosítóval az állapot KÖRÖNKÉNT kulcsolt
+# (<state_dir>/orchestrator-round/<ROUND>). Az adott kör ELSŐ hívása rögzíti
+# a döntést (és — csak ekkor — lépteti a globális orch_last_file-t is); MINDEN
+# további hívás UGYANAZT a rögzített értéket adja vissza, léptetés nélkül. Ez
+# védi a mid-round halt + újraindítás mintát (mért eset: E06-R23 H-INDEP,
+# 4 óra 35 perc állásidő egy kész, gate-zöld kör fölött).
+#
+# $1 NÉLKÜL a viselkedés BIT-RE AZONOS a D1 előttivel (5.4): a `--next-
+# orchestrator` argumentum nélküli teszthorga és a `resolve_independent_
+# engine`/`--orchestrator-engine` belső hívásai ezt az alakot használják, és
+# nem kaphatnak kör-kulcsolt állapotot.
+next_orchestrator() {   # [$1=kör-azonosító] → claude | terra
+  local round="${1:-}" round_file="" last value
+  if [ -n "$round" ]; then
+    round_file="$orch_round_dir/$round"
+    if [ -r "$round_file" ]; then
+      head -1 "$round_file" | tr -d '[:space:]'
+      printf '\n'
+      return 0
+    fi
   fi
-  case "$orch_rotation" in
-    claude) printf 'claude\n' ;;
-    terra)  printf 'terra\n' ;;
-    *)
-      last=''
-      [ -r "$orch_last_file" ] && last=$(head -1 "$orch_last_file" | tr -d '[:space:]')
-      if [ "$last" = "claude" ]; then printf 'terra\n'; else printf 'claude\n'; fi
-      ;;
-  esac
+
+  if [ "$fallback_engine" = "none" ]; then
+    value=claude
+  elif claude_unavailable_until >/dev/null || claude_usage_block_until >/dev/null; then
+    value=terra
+  else
+    case "$orch_rotation" in
+      claude) value=claude ;;
+      terra)  value=terra ;;
+      *)
+        last=''
+        [ -r "$orch_last_file" ] && last=$(head -1 "$orch_last_file" | tr -d '[:space:]')
+        if [ "$last" = "claude" ]; then value=terra; else value=claude; fi
+        ;;
+    esac
+  fi
+
+  if [ -n "$round_file" ]; then
+    mkdir -p "$orch_round_dir"
+    printf '%s\n' "$value" > "$round_file"
+    printf '%s\n' "$value" > "$orch_last_file"
+  fi
+  printf '%s\n' "$value"
 }
 
 # A tmux-session felügyelete a jelzésfájlig. Egyetlen paraméterben kapja a
@@ -1100,6 +1137,90 @@ resolve_independent_engine() {   # $1=queue-motor [$2=orchestrátor]
   fi
 }
 
+# --- Folytatáskori függetlenség-revalidáció (ADR 0242 D2) ------------------
+# MÉRT ok: `resolve_independent_engine` csak FRISS dispatchre old fel
+# implementert — nem tud a körhöz már COMMITOLT implementerről. Ha a kör
+# elhalt és újraindul, a régi (globális) rotáció a MÁSIK orchestrátort adta,
+# miközben az ágon már egy adott motor commitolt — nincs független reviewer
+# (E06-R23 H-INDEP, 4 óra 35 perc állásidő).
+#
+# Folytatáskor az implementer az ágról MÉRT tény (fix); a mozgatható szereplő
+# az ORCHESTRÁTOR — ez a fordítottja a fenti resolve_independent_engine
+# irányának (ami az implementert billenti).
+
+# Kiírja, hogy egy adott kör-ágon commitolt implementer ÜTKÖZIK-e a megadott
+# orchestrátorral (ugyanazt az identitást/kvótát fogyasztaná).
+orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra) $2=implementer motor
+  case "$1" in
+    claude) engine_uses_claude_quota "$2" ;;
+    # Csak a Terra-MODELLT (gpt-5.6-terra) futtató implementer ütközik a
+    # Terra orchestrátorral/reviewerrel — ugyanaz a mérés, mint
+    # resolve_independent_engine-ben (2026-08-11 mért rés: a `codex` név is
+    # ide tartozik, nem csak a `terra`).
+    terra) case "$2" in codex|terra) return 0 ;; *) return 1 ;; esac ;;
+    *) return 1 ;;
+  esac
+}
+
+# A kör-ág prefixéből méri a MÁR COMMITOLT implementert, a
+# docs/execution/engine-registry.tsv `name` oszlopával azonos kulcson
+# (`sonnet-impl/e06-r23-…` → `sonnet-impl`). Üres kimenet, ha a körhöz még
+# nincs távoli ág (friss dispatch — a D2 nem alkalmazható).
+#
+# A slug-illesztés szándékosan szűk (kötelező `-` a slug UTÁN): egy `ops/*`
+# vagy elgépelt ág soha nem illeszkedhet egy kör-azonosítóra (ADR 0242 §9
+# kockázat), és pl. `E06-R2` sosem illeszkedik `e06-r23-…`-ra.
+resolve_branch_implementer() {   # $1=kör-azonosító → motor neve, vagy üres
+  local round="${1:-}" slug branch
+  [ -n "$round" ] || return 0
+  slug=$(printf '%s' "$round" | tr '[:upper:]' '[:lower:]')
+  branch=$(git ls-remote --heads "$round_remote" 2>/dev/null \
+    | grep -oE "refs/heads/[^/[:space:]]+/${slug}-[^[:space:]]*" \
+    | head -1) || true
+  [ -n "$branch" ] || return 0
+  branch=${branch#refs/heads/}
+  printf '%s\n' "${branch%%/*}"
+}
+
+# A dispatch ELŐTTI újravalidálás: adott kör + ágról mért implementer mellett
+# melyik orchestrátor független. Feloldási sorrend (ADR 0242 §5.2, kötött):
+#   1. a körhöz (D1 szerint) rögzített orchestrátor, ha független;
+#   2. ha nem: a másik orchestrátor (claude|terra), ha elérhető és független;
+#   3. ha egyik sem: HALT_INDEP — fail-closed.
+# Ismeretlen (registryből fel nem oldható) motor-prefix is HALT_INDEP: a
+# függetlenség BIZONYÍTANDÓ, nem vélelmezendő (ADR 0242 §5.3).
+resolve_resume_orchestrator() {   # $1=kör $2=ág-mért implementer → orchestrátor | HALT_INDEP
+  local round="${1:-}" implementer="${2:-}" pinned candidate
+
+  if [ -z "$round" ] || [ -z "$implementer" ]; then
+    printf 'HALT_INDEP\n'
+    return 0
+  fi
+
+  engine_registry_row "$implementer" >/dev/null 2>&1 || { printf 'HALT_INDEP\n'; return 0; }
+
+  pinned=$(next_orchestrator "$round")
+  if ! orchestrator_conflicts_with_implementer "$pinned" "$implementer"; then
+    printf '%s\n' "$pinned"
+    return 0
+  fi
+
+  for candidate in claude terra; do
+    [ "$candidate" != "$pinned" ] || continue
+    if [ "$candidate" = "terra" ] && [ "$fallback_engine" = "none" ]; then
+      continue
+    fi
+    if ! orchestrator_conflicts_with_implementer "$candidate" "$implementer"; then
+      mkdir -p "$orch_round_dir"
+      printf '%s\n' "$candidate" > "$orch_round_dir/$round"
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  printf 'HALT_INDEP\n'
+}
+
 # --- Teszthorgok ----------------------------------------------------------
 # A mérce futtatható artefaktum legyen, ne prompt-szöveg (docs/LESSONS.md):
 # az önjavítás két gépi döntése kívülről is lekérdezhető, ezért tesztelhető.
@@ -1135,8 +1256,16 @@ case "${1:-}" in
     fi
     exit 0
     ;;
-  --next-orchestrator)     # a rotáció döntése: claude | terra (ADR 0222)
-    next_orchestrator
+  --next-orchestrator)     # [$2=kör] → a rotáció döntése: claude | terra (ADR 0222); kör-argumentummal körönként rögzített (ADR 0242 D1)
+    next_orchestrator "${2:-}"
+    exit 0
+    ;;
+  --branch-implementer)   # $2=kör → az ágról MÉRT implementer motor, vagy üres ha nincs kör-ág (ADR 0242 D2)
+    resolve_branch_implementer "${2:-}"
+    exit 0
+    ;;
+  --resume-orchestrator)   # $2=kör $3=ág-mért implementer → orchestrátor | HALT_INDEP (ADR 0242 D2)
+    resolve_resume_orchestrator "${2:-}" "${3:-}"
     exit 0
     ;;
   --claude-session-pct)    # $2=session-napló → az utolsó mért keret-százalék
@@ -1491,28 +1620,51 @@ if [ "$engine" = "auto" ]; then
   [ -f "$repo_root/.ai/router.toml" ] || die "hiányzik a router konfiguráció"
 fi
 
-# --- 4.5 Orchestrátor-rotáció (ADR 0222) + reviewer-függetlenség (0138) ---
-orchestrator=$(next_orchestrator)
-independent_engine=$(resolve_independent_engine "$engine" "$orchestrator")
-case "$independent_engine" in
-  HALT_INDEP)
+# --- 4.5 Orchestrátor-rotáció (ADR 0222/0242 D1) + reviewer-függetlenség (0138/0242 D2) ---
+resume_implementer=$(resolve_branch_implementer "$round")
+if [ -n "$resume_implementer" ]; then
+  # ADR 0242 D2: a körhöz már tartozik távoli ág — a commitolt implementer
+  # FIX (a queue `engine` oszlopát figyelmen kívül hagyjuk), a mozgatható
+  # szereplő az orchestrátor.
+  orchestrator=$(resolve_resume_orchestrator "$round" "$resume_implementer")
+  if [ "$orchestrator" = "HALT_INDEP" ]; then
     {
       echo "round=$round"
       echo "halt=H-INDEP"
-      echo "summary=A kört a Terra vezényelné (rotáció vagy Claude-kvótazárlat), így a saját diffjét review-zná, és nincs elérhető, független implementer motor (a csere-motor $orch_swap_engine nem használható, MiniMax kulcs hiányzik)"
+      echo "summary=A(z) $round ágán már $resume_implementer commitolt, és nincs elérhető, független orchestrátor hozzá (ADR 0242 §5.2)"
       echo "halted_at=$(date -Is)"
     } > "$halt_file"
-    log "HALT (H-INDEP): nincs független reviewer a(z) $round körhöz"
-    notify "⛔ H-INDEP: $round" "nincs független reviewer — emberi döntés kell" high
+    log "HALT (H-INDEP): folytatáskor nincs független orchestrátor a(z) $round körhöz (implementer: $resume_implementer)"
+    notify "⛔ H-INDEP: $round" "folytatás — nincs független orchestrátor — emberi döntés kell" high
     exit 3
-    ;;
-  "$engine") : ;;
-  *)
-    log "REVIEWER-FÜGGETLENSÉG: a kört a Terra vezényli (review), ezért a(z) $round implementere $engine→$independent_engine"
-    notify "🔀 $round: szerepcsere" "a Terra review-z, az implementer $independent_engine lett"
-    engine=$independent_engine
-    ;;
-esac
+  fi
+  if [ "$resume_implementer" != "$engine" ]; then
+    log "FOLYTATÁS: a(z) $round ágán már $resume_implementer commitolt — az implementer fix marad (queue: $engine → $resume_implementer)"
+  fi
+  engine=$resume_implementer
+else
+  orchestrator=$(next_orchestrator "$round")
+  independent_engine=$(resolve_independent_engine "$engine" "$orchestrator")
+  case "$independent_engine" in
+    HALT_INDEP)
+      {
+        echo "round=$round"
+        echo "halt=H-INDEP"
+        echo "summary=A kört a Terra vezényelné (rotáció vagy Claude-kvótazárlat), így a saját diffjét review-zná, és nincs elérhető, független implementer motor (a csere-motor $orch_swap_engine nem használható, MiniMax kulcs hiányzik)"
+        echo "halted_at=$(date -Is)"
+      } > "$halt_file"
+      log "HALT (H-INDEP): nincs független reviewer a(z) $round körhöz"
+      notify "⛔ H-INDEP: $round" "nincs független reviewer — emberi döntés kell" high
+      exit 3
+      ;;
+    "$engine") : ;;
+    *)
+      log "REVIEWER-FÜGGETLENSÉG: a kört a Terra vezényli (review), ezért a(z) $round implementere $engine→$independent_engine"
+      notify "🔀 $round: szerepcsere" "a Terra review-z, az implementer $independent_engine lett"
+      engine=$independent_engine
+      ;;
+  esac
+fi
 [ "$orchestrator" = "terra" ] && orchestrator_preference=terra
 
 log "következő kör: $round · orchestrátor=$orchestrator · implementer=$engine · brief=$brief · ADR=$adr"
@@ -1522,9 +1674,11 @@ if [ "$dry_run" = "1" ]; then
   exit 0
 fi
 
-# A rotáció állapota. Az indítás ELŐTT írjuk: ha a kör elhasal és újraindul,
-# a másik motor kapja meg — a bukott motorra nem osztunk újra ugyanannyit.
-printf '%s\n' "$orchestrator" > "$orch_last_file"
+# A rotáció állapota KÖRÖNKÉNT kulcsolt (ADR 0242 D1): a fenti
+# next_orchestrator()/resolve_resume_orchestrator() már a kör ELSŐ dispatchje
+# ELŐTT rögzítette az orchestrátort (orch_round_dir/$round), és a globális
+# orch_last_file-t is CSAK akkor léptette. Egy elhalt kör újraindítása így
+# ugyanazt a motort kapja vissza — nincs itt már mit írni.
 
 # A kör bejegyzése a futók közé. A takarítás EXIT-trapre megy, mert a driver
 # sok ágon lép ki (halt, hiba, merge) — a maradék bejegyzés különben örökre
