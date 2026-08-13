@@ -100,7 +100,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 
 - **Fájl:** `test/features/audio_analysis/presentation/timeline_viewport_test.dart`.
 - **Probléma:** a 6 teszt mindegyike vagy zoom-BE-t (`scale > 1`), vagy pan/edge/mapping esetet fed — `zoomBy(scale < 1, ...)` (a klip SZÉLESÍTÉSE) sehol nincs közvetlenül tesztelve, pedig a brief §6 „zoom be/**ki** a középpont körül" mindkét irányt névvel nevezi.
-- **Hatás:** kézzel átszámolva (`zoomBy(scale: 0.5, focalTime: 5s)` egy `[4s,6s]` ablakból `[3s,7s]`-re szélesedik, szimmetrikusan a focal-pont körül) a kód **helyesnek bizonyul** — ez tehát jelenleg teszt-lefedettségi hiány, nem bizonyított hiba.
+- **Hatás:** próbateszttel empirikusan igazolva (`/tmp/review-e06-r24/test/_scratch/zoom_out_probe_test.dart`, eldobható, nem commitolva): `zoomBy(scale: 0.5, focalTime: 5s)` egy `[4s,6s]` ablakból pontosan `[3s,7s]`-re szélesedik (szimmetrikusan a focal-pont körül), és egy szél-közeli `scale: 0.1` zoom-ki sem lép ki a `[0,10s]` tartományból (`isWithinDuration` igaz marad) — mindkét próba PASS. A kód tehát **helyesnek bizonyul**; ez jelenleg teszt-lefedettségi hiány, nem bizonyított hiba.
 - **Kötelező javítás:** egy `test()` explicit `scale < 1` esettel (középpont körüli szélesedés + a `[0,duration]`-on belül maradás).
 - **Ellenőrzés:** az új teszt fusson zölden.
 - **Státusz:** OPEN
