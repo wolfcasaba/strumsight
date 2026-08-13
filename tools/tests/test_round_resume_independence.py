@@ -162,14 +162,43 @@ class WorkspaceRestorationHermeticityTest(unittest.TestCase):
     """
 
     def _fixture_repo(self, root: Path) -> Path:
+        """Egy fixture, amelyen a driver TÉNYLEGESEN dolgozik.
+
+        MÉRT ok (2026-08-13, a GOV-07 merge UTÁNI determinisztikusan piros
+        main, Router CI 31693001292 + 31694862535): a `round-pipeline.sh` a
+        repo gyökerét a SAJÁT scriptje helyéből számolja és odalép
+        (`:58-59`), ezért a `subprocess.run(..., cwd=…)` HATÁSTALAN — a
+        korábbi, kézzel épített mini-repót a driver soha nem is látta, és a
+        teszt valójában a KÖRNYEZŐ repó ágát mérte:
+
+          * a fejlesztő boxon a munkapéldány kör-ágon áll → a
+            `PIPELINE_STATE_DIR` guard lefut → a teszt zöld;
+          * a CI checkoutja `main`-en áll → a guard KIMARAD, a futás a
+            `gh`-függő előfeltételekig megy (`:1514`), és ott hal meg
+            („a nyitott PR-ek nem kérdezhetők le”) → a teszt piros.
+
+        Ezért a fixture a driver és a hozzá KÖTELEZŐ két artefaktum másolata
+        egy önálló git-repóban, és a drivert a fixture SAJÁT példányából
+        indítjuk — így `repo_root` maga a fixture, és a guard tényleg azt
+        méri, amit az assertion állít. `gh` hálózati hívás nem történik: a
+        guard a három `gh`-előfeltétel ELŐTT áll meg.
+        """
         bare = root / "origin.git"
         work = root / "work"
         subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
         subprocess.run(["git", "init", "-q", "-b", "main", str(work)], check=True)
         subprocess.run(["git", "-C", str(work), "config", "user.email", "a@x.test"], check=True)
         subprocess.run(["git", "-C", str(work), "config", "user.name", "A"], check=True)
-        (work / "f.txt").write_text("x\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(work), "add", "f.txt"], check=True)
+        for relative in (
+            "tools/round-pipeline.sh",
+            "docs/execution/pipeline-queue.tsv",
+            "docs/execution/pipeline-orchestrator-prompt.md",
+        ):
+            target = work / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / relative).read_bytes())
+            target.chmod((ROOT / relative).stat().st_mode & 0o777)
+        subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
         subprocess.run(["git", "-C", str(work), "commit", "-q", "-m", "init"], check=True)
         subprocess.run(["git", "-C", str(work), "remote", "add", "origin", str(bare)], check=True)
         subprocess.run(["git", "-C", str(work), "push", "-q", "origin", "main"], check=True)
@@ -207,7 +236,7 @@ class WorkspaceRestorationHermeticityTest(unittest.TestCase):
             )
 
             result = subprocess.run(
-                ["bash", str(DRIVER)],
+                ["bash", str(work / "tools" / "round-pipeline.sh")],
                 capture_output=True,
                 text=True,
                 env=environment,
