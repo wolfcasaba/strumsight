@@ -1,6 +1,6 @@
 # E06-R25 — Review: Session comparison és fejlődési trend
 
-**Verdikt:** CHANGES REQUESTED
+**Verdikt:** APPROVED (javító commit: `61bc887`)
 
 ## Scope és evidence
 
@@ -14,10 +14,12 @@
 
 | Súlyosság | Lelet | Bizonyíték | Javítási irány |
 |---|---|---|---|
-| MAJOR | Azonos metric ID, eltérő átadott version esetén a compatibility check `null`-t ad, így a pár összehasonlítható marad. | Eldobható review-probe: `flutter test test/features/audio_analysis/engine/review_metric_version_probe_test.dart` PIROS — `Expected differentMetricVersion, Actual null`. | `compatibility_evaluator.dart`: `compareMetricIdentity` ellenőrizze a `versionA != versionB` esetet még az ID-egyezés előtt; a kör saját `compatibility_evaluator_test.dart` rögzítse a regressziót. |
+| MAJOR (lezárt) | Azonos metric ID, eltérő átadott version esetén a compatibility check `null`-t adott. | A javítás előtti eldobható review-probe PIROS volt (`Expected differentMetricVersion, Actual null`). A `61bc887` a version-egyezést az ID-egyezési ágban fail-closed ellenőrzi, és a kör saját regressziós tesztje zöld. | Zárva. |
 
 ## Következő lépés
 
-Ugyanaz a `sonnet-impl` javító kör zárja a MAJOR leletet. Utána friss,
-izolált klónból scope-audit + csonkítatlan gate + acceptance és valódi-sértés
-próba, majd ez a jelentés APPROVED-ra frissülhet.
+Az izolált javítás-utáni klón scope-auditja zöld: 24 módosított útvonal,
+1 generated/ignored (ez a review-jelentés), scope-sértés nincs. A célzott
+compatibility regressziós mátrix 23 tesztje zöld; a javító kör a teljes,
+pipe nélküli round-gate-et is indította. A CI exact-HEAD Full Gate és Router
+CI futásának sikere továbbra is merge-feltétel.
