@@ -1182,13 +1182,34 @@ resolve_branch_implementer() {   # $1=kör-azonosító → motor neve, vagy üre
   printf '%s\n' "${branch%%/*}"
 }
 
+# Kiírja, hogy a megadott orchestrátor MOST elérhető-e (F2, review finding):
+# a `claude` a kvóta-/session-zárlat alatt NEM elérhető, még akkor sem, ha az
+# identitása független az implementertől; a `terra` a `fallback_engine=none`
+# alatt nem elérhető. Az elérhetőség és a függetlenség két különböző kérdés —
+# egyik sem helyettesítheti a másikat (ADR 0242 §5.2).
+orchestrator_available() {   # $1=orchestrátor(claude|terra)
+  case "$1" in
+    claude)
+      claude_unavailable_until >/dev/null && return 1
+      claude_usage_block_until >/dev/null && return 1
+      return 0
+      ;;
+    terra) [ "$fallback_engine" != "none" ] ;;
+    *) return 1 ;;
+  esac
+}
+
 # A dispatch ELŐTTI újravalidálás: adott kör + ágról mért implementer mellett
-# melyik orchestrátor független. Feloldási sorrend (ADR 0242 §5.2, kötött):
-#   1. a körhöz (D1 szerint) rögzített orchestrátor, ha független;
-#   2. ha nem: a másik orchestrátor (claude|terra), ha elérhető és független;
+# melyik orchestrátor független ÉS elérhető. Feloldási sorrend (ADR 0242 §5.2,
+# kötött):
+#   1. a körhöz (D1 szerint) rögzített orchestrátor, ha független ÉS elérhető;
+#   2. ha nem: a másik orchestrátor (claude|terra), ha független ÉS elérhető;
 #   3. ha egyik sem: HALT_INDEP — fail-closed.
 # Ismeretlen (registryből fel nem oldható) motor-prefix is HALT_INDEP: a
-# függetlenség BIZONYÍTANDÓ, nem vélelmezendő (ADR 0242 §5.3).
+# függetlenség BIZONYÍTANDÓ, nem vélelmezendő (ADR 0242 §5.3). A rögzített
+# orchestrátor függetlensége önmagában NEM elég ok a megtartására — ha
+# elérhetetlen, a mozgatható szereplő (az orchestrátor) billen tovább, az
+# implementer marad fix (ADR 0242 §5.2 "NEM elfogadható gyengítés").
 resolve_resume_orchestrator() {   # $1=kör $2=ág-mért implementer → orchestrátor | HALT_INDEP
   local round="${1:-}" implementer="${2:-}" pinned candidate
 
@@ -1200,17 +1221,16 @@ resolve_resume_orchestrator() {   # $1=kör $2=ág-mért implementer → orchest
   engine_registry_row "$implementer" >/dev/null 2>&1 || { printf 'HALT_INDEP\n'; return 0; }
 
   pinned=$(next_orchestrator "$round")
-  if ! orchestrator_conflicts_with_implementer "$pinned" "$implementer"; then
+  if ! orchestrator_conflicts_with_implementer "$pinned" "$implementer" \
+     && orchestrator_available "$pinned"; then
     printf '%s\n' "$pinned"
     return 0
   fi
 
   for candidate in claude terra; do
     [ "$candidate" != "$pinned" ] || continue
-    if [ "$candidate" = "terra" ] && [ "$fallback_engine" = "none" ]; then
-      continue
-    fi
-    if ! orchestrator_conflicts_with_implementer "$candidate" "$implementer"; then
+    if ! orchestrator_conflicts_with_implementer "$candidate" "$implementer" \
+       && orchestrator_available "$candidate"; then
       mkdir -p "$orch_round_dir"
       printf '%s\n' "$candidate" > "$orch_round_dir/$round"
       printf '%s\n' "$candidate"

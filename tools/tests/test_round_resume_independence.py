@@ -25,6 +25,7 @@ A D2 tesztek egy lokális bare repót használnak "origin" gyanánt
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -259,6 +260,51 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
                 "--resume-orchestrator", "E06-R23", "some-unregistered-engine", state=state
             )
             self.assertEqual(result.stdout.strip(), "HALT_INDEP", result.stderr)
+
+    def test_a_conflicting_pin_with_no_available_alternate_fails_closed(self) -> None:
+        """Independent-review F2: a pinned orchestrator conflicts with the
+        branch-measured implementer AND the only alternate (claude) is under
+        an active quota block -- the resolver must fail closed to HALT_INDEP,
+        not silently select the unavailable alternate."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E06-R23").write_text("terra\n", encoding="utf-8")
+            (state / "claude-blocked-until").write_text(
+                f"{int(time.time()) + 3600}\n", encoding="utf-8"
+            )
+            result = driver("--resume-orchestrator", "E06-R23", "terra", state=state)
+            self.assertEqual(
+                result.stdout.strip(),
+                "HALT_INDEP",
+                "pinned orchestrator conflicts, and the only independent alternate is "
+                "unavailable -- must fail closed, not select it anyway",
+            )
+
+    def test_an_independent_but_unavailable_pin_is_not_retained(self) -> None:
+        """Opposite direction of F2: the pinned orchestrator is independent
+        of the branch-measured implementer, but it is under an active quota
+        block -- the resolver must move to the available alternate, not keep
+        the unavailable pin merely because its identity is independent."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E06-R23").write_text("claude\n", encoding="utf-8")
+            (state / "claude-blocked-until").write_text(
+                f"{int(time.time()) + 3600}\n", encoding="utf-8"
+            )
+            result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
+            self.assertEqual(
+                result.stdout.strip(),
+                "terra",
+                "the pinned claude is independent of minimax but unavailable -- "
+                "the resolver must flip to the available alternate",
+            )
+            self.assertEqual(
+                (state / "orchestrator-round" / "E06-R23").read_text(encoding="utf-8").strip(),
+                "terra",
+                "the round-pin must be updated to the new orchestrator, not left stale",
+            )
 
     def test_the_full_measure_and_resolve_pipeline_fails_closed_on_unknown_prefix(self) -> None:
         """Végponttól végpontig: egy ismeretlen ág-prefixű kör-ág mérése

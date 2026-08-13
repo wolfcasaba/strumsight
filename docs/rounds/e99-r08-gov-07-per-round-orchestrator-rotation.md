@@ -673,4 +673,103 @@ teljes futása alatt és után is. A klón NEM váltott `main`-re — F1 zárva.
 `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` a
 jelen munkafán újra lefuttatva: mind a hat lépés ZÖLD ("MINDEN GATE ZÖLD").
 
+### 10.7 Javító kör — F2 (független review, 2026-08-13)
+
+A független review mérve:
+
+```
+$ state_dir=$(mktemp -d)
+$ mkdir -p "$state_dir/orchestrator-round"
+$ printf 'terra\n' > "$state_dir/orchestrator-round/E06-R23"
+$ printf '%s\n' $(( $(date +%s) + 3600 )) > "$state_dir/claude-blocked-until"
+$ PIPELINE_STATE_DIR="$state_dir" bash tools/round-pipeline.sh \
+    --resume-orchestrator E06-R23 terra
+claude
+```
+
+A pinelt `terra` ütközik a `terra`-modell implementerrel (helyes), de a
+`resolve_resume_orchestrator()` (`:1192-1222`) a candidate-hurokban
+(`:1208-1219`) **csak a `orchestrator_conflicts_with_implementer()` függést**
+nézte — a `claude_unavailable_until`/`claude_usage_block_until` aktív zárlatát
+soha. Az `E06-R23`-hoz `claude-blocked-until` egy órával a jövőben állt, a
+resolver mégis `claude`-ot adott vissza: ADR 0242 §5.2 sérülve (az alternatívának
+független ÉS elérhető kell lennie, különben `HALT_INDEP`).
+
+**Gyökérok:** a régi `resolve_independent_engine()` (friss dispatch útja) MÉRI
+a `claude_unavailable_until`/`claude_usage_block_until`-t (`:1124-1125`), de a
+D2 folytatás-útja (`resolve_resume_orchestrator`) ezt a mérést sosem hívta —
+csak a függetlenséget (kvóta-azonosság), az elérhetőséget nem.
+
+**Javítás** (`tools/round-pipeline.sh`): új `orchestrator_available()`
+függvény (`:1190-1201`, a `resolve_resume_orchestrator` elé), ami
+`claude`-ra a két meglévő zárlat-mérőt (`claude_unavailable_until`,
+`claude_usage_block_until`), `terra`-ra a `fallback_engine != none` feltételt
+nézi. A `resolve_resume_orchestrator()` mindkét ága (a pinned megtartása és a
+candidate-hurok) mostantól `orchestrator_conflicts_with_implementer(...) &&
+orchestrator_available(...)`-t követel — a korábbi, a hurokban duplikált
+`fallback_engine = none` ellenőrzést az új függvény váltja ki.
+
+Az ellenkező irány is fedve (a brief kérése szerint): ha a pinelt
+orchestrátor független, de ELÉRHETETLEN, a régi kód azt is vakon megtartotta
+volna (`if ! orchestrator_conflicts_with_implementer "$pinned" ...; then
+printf pinned; return; fi` — elérhetőség-ellenőrzés nélkül). Az új kód a
+pinned ágra is megköveteli az elérhetőséget, így a mozgatható szereplő (az
+orchestrátor) a másik elérhető, független motorra billen, az implementer
+(fix, ág-mért) nem mozdul.
+
+**Regressziós próbák** (`tools/tests/test_round_resume_independence.py`,
+`ResumeOrchestratorConflictTest`):
+
+- `test_a_conflicting_pin_with_no_available_alternate_fails_closed` — a
+  jelentés pontos reprodukciója (`--resume-orchestrator E06-R23 terra`,
+  pinned=`terra`, `claude-blocked-until` a jövőben) → `HALT_INDEP` várt.
+- `test_an_independent_but_unavailable_pin_is_not_retained` — az ellenkező
+  irány: pinned=`claude` (független a `minimax` implementertől), de
+  `claude-blocked-until` a jövőben → várt `terra`, és a kör-pin fájl
+  ténylegesen frissül `terra`-ra (nem marad `claude` a lemezen).
+
+**Valódi-sértés próba** (mindkét cellára): a `orchestrator_available "$pinned"`
+és `orchestrator_available "$candidate"` feltételeket ideiglenesen
+`&& true`-ra cseréltem (visszaállítva a review által talált, elérhetőséget
+figyelmen kívül hagyó viselkedésre). Eredmény:
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q
+......F.F....
+2 failed, 11 passed in 0.87s
+FAILED ...::test_a_conflicting_pin_with_no_available_alternate_fails_closed  ('claude' != 'HALT_INDEP')
+FAILED ...::test_an_independent_but_unavailable_pin_is_not_retained          ('claude' != 'terra')
+```
+
+A mutáció pontosan a két új cellát pirosította, a többi 11 zöld maradt.
+Visszaállítva (`cp /tmp/round-pipeline.sh.bak tools/round-pipeline.sh`),
+`bash -n` + a teszt újra zöld (13/13).
+
+**Ellenőrzések a javítás után** (csonkítatlan, külön processz):
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q
+.............
+13 passed in 0.89s
+```
+
+```
+$ tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+```
+Mind a hat lépés (`format`, `analyze`, `test`, `architecture`, `secrets`,
+`l10n`) ZÖLD, „MINDEN GATE ZÖLD” összegzéssel.
+
+Teljes suite:
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests -q
+1 failed, 400 passed, 394 subtests passed in 193.09s (0:03:13)
+FAILED tools/tests/test_claude_harness_engines.py::WrapperModeTest::test_the_legacy_call_without_round_engine_stays_minimax
+```
+
+Ugyanaz az egy, e kör diffjén KÍVÜL eső, pre-existing piros, mint a §10.4/§10.6
+alatt (`tools/mm-round.sh` wrapper-viselkedés, nem érintett a listán, nincs a
+diffben) — a review talált F2-lelet zölddé vált, a 400 zöld a korábbi 398-hoz
+képest a két új regressziós cellával nő.
+
 ## 11. Review — a Claude tölti ki
