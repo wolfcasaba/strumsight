@@ -3,9 +3,68 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R27 done — export/share/delete + privacy controls, PR #254 merged;
-> both the content review and the mandatory security review are APPROVED;
-> main healthy, chain unblocked, next pending round is E06-R28.)**
+> (E06-R28 done — cache, performance and model-lifecycle infrastructure,
+> PR #255 merged; both the content review and the mandatory security review
+> are APPROVED; main healthy, chain unblocked, next pending round is
+> E06-R29.)**
+>
+> ## ✅ E06-R28 KÉSZ — Cache, performance és model lifecycle (2026-08-13)
+>
+> Determinisztikus V2 elemzési cache-infrastruktúra, teljes egészében
+> bekötetlen (`audioAnalysisV2Enabled` és minden al-flag `false` marad).
+> `AnalysisCacheKey` (hatkomponensű reprodukálhatósági kulcs — input
+> fingerprint, analyzer version, model manifest ID-k, DSP config hash, target
+> hash, feature flag snapshot; bármelyik változása miss), `AudioFingerprint`
+> (adatvédelmi SHA-256 a 16-bitre kvantált PCM-en + formátum-fejlécen,
+> fájlnév/path/eszköz-ID nélkül), `AnalysisCache` (lemez-LRU, 20 bejegyzés
+> VAGY 50 MiB — inkluzív cap, sérült bejegyzés miss nem hiba, single-flight
+> coalescing, a mentett R21-session-től fájlrendszerileg elkülönítve),
+> `ModelByteCache` (modellbájtok futásonkénti egyszeri betöltése, parse-olt
+> modell újrahasználata). [ADR 0248](docs/adr/0248-analysis-cache-key-and-performance-budget.md)
+> (a pre-flight írta; a batch-tervezéskori „0210" placeholder elavultnak
+> bizonyult — a `reserve-adr` foglaló 0248-at adott, mert a köztes ~35 ADR
+> már elhasználta a tartományt — brief §0.0).
+>
+> **A benchmark (`tool/audio_analysis_benchmark.dart`) az R01 három
+> fixture-ét futtatja újra a MEGLÉVŐ V1 harnesszel** — a kapott
+> `DETERMINISM_SHA256` bitre egyezik az R01
+> (`docs/baseline/epic-06-audio-analysis-start.md`) saját hash-ével, ami
+> független, közvetlen bizonyíték arra, hogy a V1 út 2026-08-11 óta (R21…R27
+> alatt) bitre változatlan maradt.
+>
+> **A független tartalmi review** (`docs/reviews/e06-r28-…-review.md`)
+> **APPROVED, 0 BLOCKER/MAJOR, 2 MINOR** — saját, izolált `/tmp` klónban
+> újrafuttatott 8-lépéses gate (mind zöld), `tools/scope-audit.py` OK (15
+> fájl, mind engedélyezett), és egy saját valódi-sértés próba (az
+> `analyzerVersion` komponens ideiglenes kivétele a kulcsból → pontosan a
+> megfelelő miss-cella PIROS → visszaállítva).
+>
+> **A kötelező dedikált security review** (`risk = "high"`) **APPROVED, 0
+> BLOCKER/MAJOR, 5 MINOR + 5 NOTE** — öt önálló, futtatott Dart próbaszkript
+> (path-traversal fuzzing 1000 ellenséges kulccsal, symlink-támadás,
+> `chmod 500`-alapú hibainjektálás, memória/költség-profilozás az ADR saját
+> 50 MiB cap-jén). Minden lelet **latens**: a cache-nek ma nulla hívója van a
+> teljes fában (mérve). Élesen legfontosabb: a „50 MiB cap" ténylegesen 66,7
+> MiB lemezt jelent (base64 1,33×-os overhead, a mért baseline-számok 4
+> bájtos payloadról származnak — a cap közelében ~20×-esen optimistábbak a
+> valóságnál); a tartományon kívüli ([-1,1]-en kívüli) PCM-minta némán
+> clamp-elődik, ami két KÜLÖNBÖZŐ bemenetet azonos fingerprintre képezhet; a
+> cache minden `*.json` fájlt sajátjának tekint a könyvtárában (mérve: egy
+> idegen `index.json`-t is törölt) — az elkülönülést ma KIZÁRÓLAG a wiring
+> garantálja. A jelentés §6 pontja tételesen felsorolja, mit KELL lezárni a
+> **bekötő** (wiring) kör előtt — ez a kör explicit NEM az.
+>
+> Exact-SHA `59810b4`: Full Gate
+> [31744318906](https://github.com/wolfcasaba/strumsight/actions/runs/31744318906)
+> + Router CI [31744374712](https://github.com/wolfcasaba/strumsight/actions/runs/31744374712)
+> mindkettő success. `origin/main` nem mozdult a dispatch és a merge között.
+> Squash-merge PR [#255](https://github.com/wolfcasaba/strumsight/pull/255),
+> `d325d601`. Implementer **Terra (Codex)**: 1 dispatch `done`, javító kör
+> nélkül (0 BLOCKER/MAJOR).
+>
+> Lecke: `docs/LESSONS.md` **L267** (batch-pre-authored briefek ADR-száma
+> elavulhat, ha sosem ment át a `reserve-adr` foglalón — mindig a foglaló
+> friss kimenetét használd, ne a brief fejlécét).
 >
 > ## ✅ E06-R27 KÉSZ — Export, share és privacy controls (2026-08-13)
 >
@@ -78,92 +137,6 @@
 > de az ELSŐ CI-dispatch ELŐTT commitold a branch-re — egy utólagos
 > review-commit minden alkalommal érvényteleníti az exact-SHA gate-et).
 >
-> ## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
->
-> A V2 elemzés bekötése a Practice Engine, a Song Trainer, az AI Tutor és a
-> Progress szerződéseihez — kizárólag publikus barreleken át. Négy ÚJ adapter
-> `lib/features/audio_analysis/application/adapters/` alatt:
-> `PracticeAnalysisAdapter` (Practice → `AnalysisTarget`, evidence facts/
-> hotspots/retry-tempo, a Practice score nem duplikálódik),
-> `SongAnalysisAdapter` (saját `SongReferenceSnapshot`, OD-01 — a Song domain
-> ma nem publikus —, capo/transzpozíció **concert vs display** pitch
-> elkülönítéssel notes ÉS chords-ra), `TutorAnalysisSnapshotAdapter`
-> (redaktált, immutable, ≤50 eseményes tényblob, OD-02), `ProgressEvidenceAdapter`
-> (`documentId`-kulcsos, egyszeri, verziózott skill evidence — NEM
-> `PracticeEntry`). Két új flag (`analysisPracticeIntegrationEnabled`,
-> `analysisTutorIntegrationEnabled`), mindkettő OFF minden környezetben — a
-> kör teljes egészében bekötetlen, production viselkedés bitre változatlan.
-> Új ADR nincs — ADR 0176 (public barrel határ), 0132/0141 (Tutor adatvédelem/
-> evidence-határ) és 0202 (raw audio) végrehajtása.
->
-> **A pre-flight egy mért §2-korrekciót igényelt (OD-04):** a
-> `CompiledTargetEvent`/`ExpectedChordSegment` a `compiled_practice_target.dart`-ban
-> a `CompiledPracticeTarget`-tel egy fájlban él, de a barrel (`practice/public.dart`)
-> szűkítő `show`-val kizárólag az utóbbit exportálja — a brief eredeti §2
-> tévesen mindhármat „elérhetőnek" mondta. Feloldás: az adapter a
-> `compiled.events`/`expectedChordSegments`-et kizárólag TÍPUS-INFERENCIÁVAL
-> járja be (sosem nevezi meg a nem exportált típusokat) — érvényes Dart, nulla
-> `practice/public.dart`-változtatás.
->
-> **A független funkcionális review 4 MAJOR-t talált, egy javító körben
-> mind zárva, valódi kód-javítással ÉS regressziós teszttel.** **F1:** a
-> retry-tempo 60%-os alsó korlátja strukturálisan elérhetetlen volt (a
-> severity-lépcső maximuma fixen 15% redukció) — a javítás a clampet egy
-> önálló, nyers redukciót fogadó `PracticeRetryTempoPolicy.clampTempoForReduction`
-> segéden át közvetlenül tesztelhetővé tette. **F2:** a `ProgressEvidenceAdapter`-nek
-> — a másik hárommal ellentétben — nem volt flag-kapuzott providere; pótolva
-> a testvér-adapterek mintájával. **F3:** a `SongAnalysisAdapter` akkord-ága
-> (`displayChord`) teljesen tesztelet­len volt, az OD-01 saját „teljes
-> teszteléssel" kikötése ellenére, és a transzponált display-akkordot
-> eldobta — pótolva `SongChordContext`/`SongAnalysisTarget.chords`-szal +
-> hatcellás mátrix-teszttel. **F4:** a Song flag-kapu hívásszámláló-tesztje
-> hiányzott — pótolva. Tanulság: `docs/LESSONS.md` **L259**.
->
-> **A kötelező dedikált security review (`risk = "high"`) 1 MAJOR-t talált,
-> élő szondával reprodukálva, egy második javító körben zárva.** A
-> Tutor-redakciós teszt KULCS-szintű volt (`forbiddenKeys` egy fix
-> kulcsnév-listát nézett, miközben a `toJson()` kulcskészlete konstrukció
-> szerint sosem tartalmazza ezeket), a tényleges szivárgási csatorna
-> ÉRTÉK-szintű: a szabad szöveges `event.id`/`insight.id`/`hotspot.id`/
-> `target.id` mezők szó szerint átmentek — a reviewer egy fájlrendszer-útvonalat
-> és egy utasítás-szerű szöveget helyezett egy event-ID-be, ami szó szerint
-> megjelent a Tutor JSON-ban, a meglévő teszt mellett is ZÖLDEN. Ma nem élesen
-> kihasználható (a kör bekötetlen, a mai ID-gyártók gépi-determinisztikusak),
-> de ez a kör EGYETLEN adatvédelmi szerződése. Javítás: `TutorSnapshotRedaction.sanitizeIdentifier`
-> — allow-list minta (`^[A-Za-z0-9._:-]+$`, ≤128 karakter), minden nem
-> megfelelő ID stabil `redacted-id`-re vált, a `Tutor*Fact`/`TutorTargetContext`
-> létrehozása ELŐTT. Egy maradék, NEM blokkoló rés dokumentálva egy jövőbeli
-> Tutor-bekötő körnek: kötőjellel/ponttal összefűzött, ember számára olvasható
-> „szavak" (pl. `ignore-all-previous-instructions`) változatlanul átmennek —
-> a tényleges védelem egy jövőbeli ADR (Tutor-prompt ezeket adatként,
-> escape-elve kapja, ADR 0134 mentén), nem egy tökéletesített karakterkészlet.
-> Tanulság: `docs/LESSONS.md` **L260**.
->
-> Mindkét review (`docs/reviews/e06-r26-practice-song-tutor-integration-review.md`,
-> `…-security.md`) **APPROVED**, mindhárom gate-futtatás (implementáció,
-> javítás #1, javítás #2 után) saját, FÜGGETLEN izolált `/tmp` klónban
-> ellenőrizve, nem a commit-üzenetre hagyatkozva — a `gate_shape=VIOLATION`
-> jelzés mindhárom implementer-körben hamis pozitívnak bizonyult (a naplóban
-> talált `&&`-os minták vagy a gate-szkript FORRÁSÁNAK olvasását, vagy egy
-> korábbi review-szöveg idézését takarták, sosem tényleges csonkított
-> gate-futást — `docs/LESSONS.md` L245 szerint ellenőrizve, nem bemondásra
-> elfogadva). Implementer **Terra (Codex)**: 1 dispatch `done` + 2 javító kör
-> `done`, mindhárom `continuations=0`.
->
-> **Zöld kapu (exact-SHA `dca02287` — a végleges, javítás utáni HEAD):** Full
-> Gate [31719946154](https://github.com/wolfcasaba/strumsight/actions/runs/31719946154)
-> + Router CI [31719902109](https://github.com/wolfcasaba/strumsight/actions/runs/31719902109)
-> mindkettő success. A CI-terv `full-gate.yml`-t adott (`apk_required=false`,
-> nem natív diff); az `origin/main` nem mozdult a dispatch és a merge között.
-> Squash-merge PR [#250](https://github.com/wolfcasaba/strumsight/pull/250),
-> `da4bbd05`. Post-merge gate friss `main`-en is zöld: `audio_analysis`,
-> `tooling`, `app` és format/analyze/architecture(12 allowlist)/secrets/l10n
-> mind PASS.
->
-> **Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
-> E06-R26 mostanra **done** (fent); a pipeline a következő `pending` sort
-> dispatch-eli.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -173,23 +146,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-13 (E99-R08 zárása): a fejlécben ez idáig ÖT banner élt
-> egyszerre (a H6/H3/H8 self-heal bannerek egymásra halmozódtak a láncot
-> ismételten megállító hibák miatt, plusz E06-R24 és E06-R23) — ez a zárás a
-> hármat EGYETLEN konszolidált „E99-R08 KÉSZ" bannerré (plusz a fölé emelt 🚨
-> urgens dobozzá) vonta össze, és eltávolította E06-R23-at (már korábban is
-> jelen volt az archívumban, csak a fejlécből nem került ki).
-> Ismételt diéta: 2026-08-13 (E06-R26 zárása): a fejlécben időközben megint
-> öt banner gyűlt össze (H-NOSIGNAL self-heal + E06-R25 + a Router CI-red-spell
-> jegyzet + E99-R08 + E06-R24) — ez a zárás mind a négy régebbit archiválta
-> (a H-NOSIGNAL banner szó szerint, mert korábban sosem került archívumba),
-> és csak az E06-R25 KÉSZ bannert tartotta meg a fejlécben. A két legutóbbi
-> banner most: E06-R26, E06-R25.
-> Ismételt diéta: 2026-08-13 (E06-R27 zárása): a két E06-R27 self-heal banner
-> (H6, H3) EGYETLEN konszolidált „E06-R27 KÉSZ" bannerré vonódott össze (a
-> kör a self-healek után ténylegesen le is zárult, nem csak a scope-ját
-> javították), és az E06-R25 KÉSZ banner archiválásra került. A két legutóbbi
-> banner most: E06-R27, E06-R26.
+> Ismételt diéta: 2026-08-13 (E06-R28 zárása): az E06-R26 KÉSZ banner
+> archiválásra került, a fejlécben most az E06-R28 és az E06-R27 banner él.
+> A korábbi diéta-bejegyzések (E99-R08, E06-R26, E06-R27 zárása) teljes
+> szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
 
@@ -315,8 +275,14 @@
   0246](docs/adr/0246-analysis-session-comparison-and-trend-contract.md)) és
   **E06-R26** (Practice/Song/Tutor/Progress integrációs adapterek
   kizárólag publikus barreleken át, redaktált Tutor-snapshot, egyszeri
-  progress-kreditálás — új ADR nincs, ADR 0176/0132/0141/0202 végrehajtása)
-  kész, 4 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
+  progress-kreditálás — új ADR nincs, ADR 0176/0132/0141/0202 végrehajtása),
+  **E06-R27** (export/share/privacy: allowlist-alapú `RedactionPolicy`,
+  `AnalysisExportCodec`, `ShareCardBuilder`, `ExportAnalysisUseCase`,
+  `DeleteAnalysisUseCase`, [ADR 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md))
+  és **E06-R28** (cache, performance és model-lifecycle infrastruktúra —
+  `AnalysisCacheKey`/`AudioFingerprint`/`AnalysisCache`/`ModelByteCache`,
+  bekötetlen, [ADR 0248](docs/adr/0248-analysis-cache-key-and-performance-budget.md))
+  kész, 2 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
   `pending`). **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
@@ -591,6 +557,30 @@
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **E06-R28 cache — 6 lezárandó előfeltétel a jövőbeli BEKÖTŐ körnek, nincs
+  kijelölt kör (mérve, `docs/reviews/e06-r28-…-security.md` §6).** A cache-nek
+  ma nulla production hívója van (`audioAnalysisV2Enabled` false), úgyhogy
+  ezek NEM aktív hibák, csak a wiring-kör előtti kötelező hardening-lista:
+  (1) explicit payload-tartalmi szerződés (nyers PCM sosem cache-elhető) +
+  a cache-hely újraértékelése Android Auto Backup-jogosultság szempontjából
+  (`getTemporaryDirectory()`/backup-kizárás `getApplicationSupportDirectory()`
+  helyett); (2) `put()`/`getOrCompute()` ma kivételt propagál a hívóra
+  filesystem-hibán (mérve `chmod 500`-zal) — az ADR Döntés 5 szellemével
+  ellentétes; (3) a cache minden `*.json` fájlt sajátjának tekint a
+  könyvtárában, mérve egy idegen `index.json` törlésével — fájlnév-mintaszűrő
+  kell (`^[0-9a-f]{64}\.json$`); (4) `AudioFingerprint` némán clamp-el a
+  `[-1,1]` tartományon kívül, ami két KÜLÖNBÖZŐ bemenetet azonos kulcsra
+  képezhet — tartományon kívüli mintát el kell utasítani; (5) a mért
+  baseline-számok (`docs/baseline/epic-06-analysis-performance.md`) 4 bájtos
+  payloadról származnak, a cap közelében (50 MiB) a valós költség ~20×
+  nagyobb (mérve: 609 ms + ~90 MiB tranziens allokáció egy `put()`-ra) —
+  újramérés kell cap-közeli payloaddal, mielőtt bárki erre budget-döntést
+  épít; (6) a `purge()` bekötése a törlési útvonalba (az R27
+  `AnalysisCachePort`, `delete_analysis_use_case.dart:10-12`), hogy a
+  `ss.analysis.cache` katalógus-bejegyzés valódi törölhetőséget takarjon.
+  Content review 2 további MINOR-t is dokumentál (tautologikus
+  fingerprint-névfüggetlenségi teszt; a handoff-próza tesztszám-elszámolási
+  pontatlansága) — mindkettő dokumentációs, nem kódhiba.
 - **E06-R20 follow-up (5 NOTE, review + security) — gate-feltételek egy
   jövőbeli bekötő körnek, nincs kijelölt kör.** (1) review N1: a
   `LowSignalQualityInsightRule` (`lib/features/audio_analysis/engine/insights/insight_rules.dart:268-297`)
@@ -897,7 +887,24 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-13):** `main` @ `7a594db6` — E99-R08 H3
+**Aktuális állapot (2026-08-13):** `main` @ `d325d601` — E06-R28 (cache,
+performance és model lifecycle), PR
+[#255](https://github.com/wolfcasaba/strumsight/pull/255), squash-merge.
+Exact-SHA `59810b4`: Full Gate
+[31744318906](https://github.com/wolfcasaba/strumsight/actions/runs/31744318906)
++ Router CI [31744374712](https://github.com/wolfcasaba/strumsight/actions/runs/31744374712)
+mindkettő success. `origin/main` nem mozdult dispatch és merge között. Post-merge
+`tools/round-gate.sh test/features/audio_analysis test/property test/core`
+egy REMOTE-ról klónozott, friss munkapéldányon (L264) — lásd a fejléc
+✅-blokk a teljes pre-flight/review/security történetért.
+
+> Ez a §4 log ITT nem lett folyamatosan karbantartva E06-R19…R27 között — a
+> fejléc ✅-blokkja (mindig a két legutóbbi kör) és `docs/handoff-archive.md`
+> a hiteles, folyamatos forrás azokra a körökre. Az alábbi, E99-R08-cal kezdődő
+> szakasz a korábbi (2026-08-12-i) állapotot rögzíti — történeti kontextusként
+> hagyva, nem frissítve visszamenőleg.
+
+**Korábbi állapot (2026-08-12):** `main` @ `7a594db6` — E99-R08 H3
 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix), PR
 [#243](https://github.com/wolfcasaba/strumsight/pull/243), squash-merge.
 Router CI [31682955616](https://github.com/wolfcasaba/strumsight/actions/runs/31682955616)
@@ -1145,6 +1152,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E06-R28 — Cache, performance és model lifecycle** (PR
+[#255](https://github.com/wolfcasaba/strumsight/pull/255), squash `d325d601`,
+új [ADR 0248](docs/adr/0248-analysis-cache-key-and-performance-budget.md)).
+Determinisztikus, bekötetlen V2 cache-infrastruktúra (`AnalysisCacheKey`,
+`AudioFingerprint`, `AnalysisCache`, `ModelByteCache`); a benchmark
+DETERMINISM_SHA256-ja bitre egyezik az R01 baseline-éval. Content review
+APPROVED (0 BLOCKER/MAJOR, 2 MINOR), dedikált security review APPROVED (0
+BLOCKER/MAJOR, 5 MINOR + 5 NOTE, mind latens — lásd fejléc ✅-blokk és §3).
+Exact-SHA CI és post-merge gate zöld. Implementer Terra, 1 dispatch `done`,
+javító kör nélkül.
+
+> (§5 folytonossági rés E06-R19…R27 között — lásd a §4 megjegyzését fent.)
 
 **E06-R18 — Technique proxy experimental module** (PR
 [#234](https://github.com/wolfcasaba/strumsight/pull/234), squash `f2674099`,
@@ -1537,8 +1557,22 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R19 — Confidence calibration és capability
-resolver** (Chapter 7, Kör 19). Új sessionben induljon; E06-R18 lezárult.
+**Következő kijelölt SDD-kör: E06-R29 — Evaluation harness és confidence
+calibration** (`docs/rounds/e06-r29-evaluation-harness-and-calibration.md`,
+queue: `pending`, ADR pre-assigned `0211` — **valószínűleg elavult, a
+pre-flightban kötelező `tools/round-slots.py reserve-adr --round E06-R29`-cel
+frissíteni, ld. `docs/LESSONS.md` L267**). Új sessionben induljon; E06-R28
+lezárult (lásd fejléc ✅-blokk). Utána **E06-R30 — Shadow rollout, migration
+és Epic 6 lezárás** az utolsó tervezett E06-sor. Pre-flightban olvassa újra
+az E06-R28 cache-kontraktust és a security review §6 „bekötő körnek"
+listáját, ha az evaluation harness bármelyik előfeltételt érinti.
+
+> (A lenti, E06-R19-cel kezdődő szakasz a 2026-08-12 előtti GOV-05/06
+> governance-sagát rögzíti — történeti kontextusként hagyva.)
+
+**Korábbi kijelölt SDD-kör (2026-08-12, azóta lezárult): E06-R19 —
+Confidence calibration és capability resolver** (Chapter 7, Kör 19). Új
+sessionben induljon; E06-R18 lezárult.
 Pre-flightban az új technique-proxy contractot, a flag/Lab kaput és minden
 confidence-producer tényleges elérhetőségét újra mérje.
 

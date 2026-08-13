@@ -6,6 +6,92 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
+
+A V2 elemzés bekötése a Practice Engine, a Song Trainer, az AI Tutor és a
+Progress szerződéseihez — kizárólag publikus barreleken át. Négy ÚJ adapter
+`lib/features/audio_analysis/application/adapters/` alatt:
+`PracticeAnalysisAdapter` (Practice → `AnalysisTarget`, evidence facts/
+hotspots/retry-tempo, a Practice score nem duplikálódik),
+`SongAnalysisAdapter` (saját `SongReferenceSnapshot`, OD-01 — a Song domain
+ma nem publikus —, capo/transzpozíció **concert vs display** pitch
+elkülönítéssel notes ÉS chords-ra), `TutorAnalysisSnapshotAdapter`
+(redaktált, immutable, ≤50 eseményes tényblob, OD-02), `ProgressEvidenceAdapter`
+(`documentId`-kulcsos, egyszeri, verziózott skill evidence — NEM
+`PracticeEntry`). Két új flag (`analysisPracticeIntegrationEnabled`,
+`analysisTutorIntegrationEnabled`), mindkettő OFF minden környezetben — a
+kör teljes egészében bekötetlen, production viselkedés bitre változatlan.
+Új ADR nincs — ADR 0176 (public barrel határ), 0132/0141 (Tutor adatvédelem/
+evidence-határ) és 0202 (raw audio) végrehajtása.
+
+**A pre-flight egy mért §2-korrekciót igényelt (OD-04):** a
+`CompiledTargetEvent`/`ExpectedChordSegment` a `compiled_practice_target.dart`-ban
+a `CompiledPracticeTarget`-tel egy fájlban él, de a barrel (`practice/public.dart`)
+szűkítő `show`-val kizárólag az utóbbit exportálja — a brief eredeti §2
+tévesen mindhármat „elérhetőnek" mondta. Feloldás: az adapter a
+`compiled.events`/`expectedChordSegments`-et kizárólag TÍPUS-INFERENCIÁVAL
+járja be (sosem nevezi meg a nem exportált típusokat) — érvényes Dart, nulla
+`practice/public.dart`-változtatás.
+
+**A független funkcionális review 4 MAJOR-t talált, egy javító körben
+mind zárva, valódi kód-javítással ÉS regressziós teszttel.** **F1:** a
+retry-tempo 60%-os alsó korlátja strukturálisan elérhetetlen volt (a
+severity-lépcső maximuma fixen 15% redukció) — a javítás a clampet egy
+önálló, nyers redukciót fogadó `PracticeRetryTempoPolicy.clampTempoForReduction`
+segéden át közvetlenül tesztelhetővé tette. **F2:** a `ProgressEvidenceAdapter`-nek
+— a másik hárommal ellentétben — nem volt flag-kapuzott providere; pótolva
+a testvér-adapterek mintájával. **F3:** a `SongAnalysisAdapter` akkord-ága
+(`displayChord`) teljesen tesztelet­len volt, az OD-01 saját „teljes
+teszteléssel" kikötése ellenére, és a transzponált display-akkordot
+eldobta — pótolva `SongChordContext`/`SongAnalysisTarget.chords`-szal +
+hatcellás mátrix-teszttel. **F4:** a Song flag-kapu hívásszámláló-tesztje
+hiányzott — pótolva. Tanulság: `docs/LESSONS.md` **L259**.
+
+**A kötelező dedikált security review (`risk = "high"`) 1 MAJOR-t talált,
+élő szondával reprodukálva, egy második javító körben zárva.** A
+Tutor-redakciós teszt KULCS-szintű volt (`forbiddenKeys` egy fix
+kulcsnév-listát nézett, miközben a `toJson()` kulcskészlete konstrukció
+szerint sosem tartalmazza ezeket), a tényleges szivárgási csatorna
+ÉRTÉK-szintű: a szabad szöveges `event.id`/`insight.id`/`hotspot.id`/
+`target.id` mezők szó szerint átmentek — a reviewer egy fájlrendszer-útvonalat
+és egy utasítás-szerű szöveget helyezett egy event-ID-be, ami szó szerint
+megjelent a Tutor JSON-ban, a meglévő teszt mellett is ZÖLDEN. Ma nem élesen
+kihasználható (a kör bekötetlen, a mai ID-gyártók gépi-determinisztikusak),
+de ez a kör EGYETLEN adatvédelmi szerződése. Javítás: `TutorSnapshotRedaction.sanitizeIdentifier`
+— allow-list minta (`^[A-Za-z0-9._:-]+$`, ≤128 karakter), minden nem
+megfelelő ID stabil `redacted-id`-re vált, a `Tutor*Fact`/`TutorTargetContext`
+létrehozása ELŐTT. Egy maradék, NEM blokkoló rés dokumentálva egy jövőbeli
+Tutor-bekötő körnek: kötőjellel/ponttal összefűzött, ember számára olvasható
+„szavak" (pl. `ignore-all-previous-instructions`) változatlanul átmennek —
+a tényleges védelem egy jövőbeli ADR (Tutor-prompt ezeket adatként,
+escape-elve kapja, ADR 0134 mentén), nem egy tökéletesített karakterkészlet.
+Tanulság: `docs/LESSONS.md` **L260**.
+
+Mindkét review (`docs/reviews/e06-r26-practice-song-tutor-integration-review.md`,
+`…-security.md`) **APPROVED**, mindhárom gate-futtatás (implementáció,
+javítás #1, javítás #2 után) saját, FÜGGETLEN izolált `/tmp` klónban
+ellenőrizve, nem a commit-üzenetre hagyatkozva — a `gate_shape=VIOLATION`
+jelzés mindhárom implementer-körben hamis pozitívnak bizonyult (a naplóban
+talált `&&`-os minták vagy a gate-szkript FORRÁSÁNAK olvasását, vagy egy
+korábbi review-szöveg idézését takarták, sosem tényleges csonkított
+gate-futást — `docs/LESSONS.md` L245 szerint ellenőrizve, nem bemondásra
+elfogadva). Implementer **Terra (Codex)**: 1 dispatch `done` + 2 javító kör
+`done`, mindhárom `continuations=0`.
+
+**Zöld kapu (exact-SHA `dca02287` — a végleges, javítás utáni HEAD):** Full
+Gate [31719946154](https://github.com/wolfcasaba/strumsight/actions/runs/31719946154)
++ Router CI [31719902109](https://github.com/wolfcasaba/strumsight/actions/runs/31719902109)
+mindkettő success. A CI-terv `full-gate.yml`-t adott (`apk_required=false`,
+nem natív diff); az `origin/main` nem mozdult a dispatch és a merge között.
+Squash-merge PR [#250](https://github.com/wolfcasaba/strumsight/pull/250),
+`da4bbd05`. Post-merge gate friss `main`-en is zöld: `audio_analysis`,
+`tooling`, `app` és format/analyze/architecture(12 allowlist)/secrets/l10n
+mind PASS.
+
+**Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
+E06-R26 mostanra **done** (fent); a pipeline a következő `pending` sort
+dispatch-eli.
+
 ## ✅ [HEAL E06-R27/H6] KÉSZ — a `verify_claim` anti-hallucináció őr egy jogos, diff nélküli megerősítő `done`-t is hallucinációnak nézett (2026-08-13)
 
 E06-R27 H6-tal állt meg: egy review-javító forduló (`sonnet-impl`,

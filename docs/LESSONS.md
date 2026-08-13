@@ -10005,3 +10005,77 @@ kell megvárni a review-t") arra a helyzetre vonatkozik, amikor a review a
 KÓDOT nem módosítja vissza a branch-re; ha a review-jelentés MAGA is
 branch-re kerülő tartalom, ez a szabály nem ment fel a „commit előbb,
 dispatch utána" sorrend alól.
+
+## L267 — Egy batch-tervezéskor pre-asszignált ADR-szám napok alatt elavulhat, ha sosem ment át a `reserve-adr` foglalón (E06-R28, 2026-08-13)
+
+**Mit mértünk.** Az E06-R28 briefje 2026-08-07-i batch-tervezéskor „ADR
+0210"-et kapott (a `docs/rounds/e06-r28-…md` fejlécében és nyolc további
+helyen a törzsében). A kör pre-flightjában a KÖTELEZŐ
+`tools/round-slots.py reserve-adr --round E06-R28` hívás **0248**-at adott
+vissza — 38-cal többet. Kiderült: sem `docs/adr/0210-*.md`, sem
+`.pipeline/inflight/adr/0210` marker sosem létezett — a batch-tervező
+Claude a „0210" számot **kézzel, `ls`-alapú extrapolációval** választotta,
+sosem hívta meg a foglalót magára a számra. A köztes hat nap alatt kb. 35
+másik ADR (más epicek, self-healek, governance-körök) ténylegesen
+lefoglalta a 0212–0247 tartományt, és a 0210/0211 (az E06-R29 briefje is
+„0211"-et hordoz) örökre lyukként maradt — érvénytelen, de ártalmatlan.
+
+**Miért.** A batch-brief-előkészítés (`round-brief-prep` skill) egy
+sorozatnyi jövőbeli briefet ír meg EGY session alatt, mielőtt a köröket
+ténylegesen dispatch-elnék — ilyenkor a `reserve-adr` meghívása minden
+egyes briefre ELőre lefoglalná a számokat, de ezt a mostani gyakorlat nem
+teszi meg (feltehetően azért, mert a foglaló `round_id` paramétere azt
+sugallja, a hívás a KÖR INDÍTÁSAKOR történik, nem a brief megírásakor). A
+pipeline prompt §1.0.1 szabálya változatlanul helyes és elégséges védelem
+(„foglalj, ne `ls`-elj") — ez a lecke nem arról szól, hogy a szabályt meg
+kellene kerülni, hanem hogy a brief fejlécében/törzsében szereplő szám
+**sosem tekinthető véglegesnek**, még akkor sem, ha egy korábbi Claude
+session írta oda.
+
+**Hogyan alkalmazd.** Minden PREPARED-brief pre-flightjában **mindig**
+hívd meg a `reserve-adr`-t, és ha az eredmény eltér a brief fejlécétől,
+**a teljes fájlban** (nem csak a fejlécben) grep-eld ki és cseréld le a
+régi számot — az E06-R28 pre-flightban ez 8 külön előfordulás volt
+(fejléc, `allowed_paths` fájlnév, §0.0, §3, §4 táblázat, §5.6, §6 AC,
+§8 implementációs sorrend). Egy §0.0 dokumentált revízió rögzítse a
+MÉRT tényt (mikor foglalta a batch-tervező, mikor és mire foglalta a
+tényleges pre-flight), hogy a jövőbeli olvasó ne higgye tévesen, hogy a
+két szám ütközés (verseny) eredménye — itt egyszerű, hat napos avulás
+volt, nem race condition.
+
+## L268 — Egy security-reviewer subagent valódi adversarial munkát végezhet, mégsem jut el a jelentés megírásáig — a fájl létét mindig ellenőrizd, a resume-üzenetben KIFEJEZETTEN kérd a szintézis-lépést (E06-R28, 2026-08-13)
+
+**Mit mértünk.** Az E06-R28 kötelező (risk=high) security-review első
+dispatchja 50 tool-hívást és 11 percet töltött öt valódi, futtatott Dart
+próbaszkript (`/tmp/r28probe/p1_paths.dart`…`p5_contract.dart`) megírásával
+és futtatásával — path-traversal fuzzing, symlink-támadás, chmod-alapú
+hibainjektálás, memória-profilozás. A `status=completed` jelzés ellenére a
+kért `docs/reviews/e06-r28-…-security.md` fájl **nem jött létre** (`ls`
+`No such file or directory`) — az ágens a mérésben elakadt, sosem jutott el
+a szintézis/írás lépésig. Egy `SendMessage`-lel való resume, explicit
+„további felderítés NÉLKÜL, ÍRD MEG a fájlt MOST" utasítással, 5 percen
+belül előállította a teljes, 361 soros, jó minőségű jelentést a MEGLÉVŐ
+próbaszkriptek eredményeiből.
+
+**Miért.** Ez a `docs/LESSONS.md` L265 (a subagent Write-listája nem
+garancia a tényleges írásra) egy ÚJ, korábban nem dokumentált
+kiváltó-mintája: nem az ágens HAZUDOTT arról, hogy megírta a fájlt (a
+`result` mező csak az ágens legelső mondatát tartalmazta, nem egy hamis
+„megírtam" állítást) — hanem egy nyitott végű, adversarial-mérési feladatra
+kapott NAGY tool-budget mellett egyszerűen elfogyott az ideje/kerete a
+tényleges szintézis előtt. A `task-notification` `status=completed` mezője
+csak azt jelzi, hogy az ágens futása véget ért — NEM azt, hogy a kért
+deliverable elkészült.
+
+**Hogyan alkalmazd.** Egy nyílt végű, mély vizsgálatot kérő subagent
+(biztonsági review, adversarial próba, nagy felderítés) dispatch-elésekor
+MINDIG ellenőrizd a kért fájl LÉTÉT a `task-notification` után, mielőtt a
+tartalmát felhasználnád (L265 kiterjesztése). Ha a fájl hiányzik, de a
+tool-használat/időtartam azt mutatja, hogy VALÓDI munka történt (nem egy
+üres/gyanúsan gyors lefutás — az utóbbi a L114-es „subagent results are
+data" prompt-injection-gyanú mintája, más kezelést igényel): **ne indíts
+friss ágenst nulláról** — a már elvégzett mérés/próba értékes. Ehelyett
+`SendMessage`-lel folytasd UGYANAZT az ágenst, és a resume-üzenetben
+KIFEJEZETTEN mondd ki, hogy a további felderítés helyett a MEGLÉVŐ
+eredmények szintézise és a fájl megírása a következő lépés — ez tipikusan
+percek alatt lezárja a feladatot a már elvégzett munka elvesztése nélkül.
