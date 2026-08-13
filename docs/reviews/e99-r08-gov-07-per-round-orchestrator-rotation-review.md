@@ -1,9 +1,9 @@
 # E99-R08 — Review
 
 Brief: `docs/rounds/e99-r08-gov-07-per-round-orchestrator-rotation.md`  
-Diff: `origin/main...8d44ae8d`  
+Diff: `origin/main...8d44ae8d` (Terra, F1–F3 azonosítva) → `origin/main...f4b3afff` (F3 mechanikusan zárva, lásd lent)  
 Reviewer: Codex / gpt-5.6-terra (a Sonnet implementertől független) · Dátum: 2026-08-13  
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (frissítve 2026-08-13, orchestrátor-session — F3 zárva, lásd §Merge-döntés)
 
 ## Összegzés
 
@@ -75,10 +75,11 @@ Eredmény: `Legacy scope audit OK (37d5024a..8d44ae8da136, 7 changed path(s), 0 
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| scope-audit | zöld | ✅ izolált klónban |
-| format/analyze/célzott Dart gate | indítva az izolált klónban | ⏳ a futás befejező kimenete nem állt rendelkezésre ebben a review-iterációban |
-| `python3 -m pytest tools/tests -q` | zöldként állítva | ❌ Router CI: 1 failed, 405 passed |
-| Router CI | exact `8d44ae8d` | ❌ [run 31685750107](https://github.com/wolfcasaba/strumsight/actions/runs/31685750107) |
+| scope-audit | zöld | ✅ izolált klónban (`8d44ae8d`), majd újra `f4b3afff`-n: `Legacy scope audit OK (origin/main..f4b3afff4d85, 8 changed path(s), 1 generated/ignored)` |
+| format/analyze/célzott Dart gate | indítva az izolált klónban | ✅ `9391108b`-n mind a hat lépés ZÖLD (`round-gate.sh`) |
+| `python3 -m pytest tools/tests -q` | zöldként állítva | ✅ `9391108b`-n: 407 passed, 394 subtests, 0 failed |
+| Router CI | exact `f4b3afff` | ✅ [run 31690984653](https://github.com/wolfcasaba/strumsight/actions/runs/31690984653) |
+| Full Gate (no APK) | exact `f4b3afff` | ✅ [run 31690998877](https://github.com/wolfcasaba/strumsight/actions/runs/31690998877) |
 
 ## Merge-döntés
 
@@ -93,6 +94,17 @@ rebase-elve (0 fájl-átfedés a H3/H6/H8 self-heal commitokkal — mérve
 `git merge-base --is-ancestor origin/main HEAD`), pusholva
 `tools/safe-force-push.sh`-sal (a kör SAJÁT D3-deliverable-je — remote-only
 commit nem volt, tiszta lease-push). Mindkét helyi gate ZÖLD a pontos
-`9391108b` SHA-n (lásd F3 §Státusz). CI-dispatch és exact-SHA Router CI
-eredmény: lásd a round-brief §11-et — az a végső, hiteles bizonyíték, ezt a
-fájlt a végleges verdikttel a merge előtt frissítem.
+`9391108b` SHA-n (lásd F3 §Státusz).
+
+**Végső CI-bizonyíték a merge-jelölt exact SHA-n (`f4b3afff`):**
+
+| Workflow | Run | Konklúzió |
+|---|---|---|
+| Router CI | [31690984653](https://github.com/wolfcasaba/strumsight/actions/runs/31690984653) | ✅ success |
+| Full Gate (no APK) | [31690998877](https://github.com/wolfcasaba/strumsight/actions/runs/31690998877) | ✅ success (Coverage 11m35s + full-gate 8m21s) |
+
+`origin/main` a dispatch (`6228764f`) és e két run befejezése között nem
+mozdult (`git rev-parse origin/main` egyezik). A `tools/round-ci-plan.py`
+`full-gate.yml`-t adott (`apk_required=false`, 0 natív útvonal) —
+`router_ci_expected=true`, mindkettő lefutott és zöld. **Merge engedélyezve
+(ADR 0052).**

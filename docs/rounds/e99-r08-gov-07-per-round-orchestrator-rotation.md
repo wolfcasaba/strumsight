@@ -828,6 +828,20 @@ csak `command -v`-vel próbált stub bináris, `CLAUDE_BIN` env-en át —
 
 ### 11.3 CI-dispatch és végső verdikt
 
-<!-- Az orchestrátor a CI-dispatch UTÁN, a merge ELŐTT tölti ki: a dispatch-elt
-     workflow linkje, a Router CI exact-SHA futása, és a végső verdikt
-     (APPROVED, ha mindkettő zöld a végleges HEAD-en). -->
+`tools/round-ci-plan.py --brief docs/rounds/e99-r08-gov-07-per-round-orchestrator-rotation.md --base origin/main --head <branch>` →
+`dispatch=full-gate.yml` (`apk_required=false`, 0 natív útvonal),
+`router_ci_expected=true`. Mindkettő lefutott a merge-jelölt exact SHA-n
+(`f4b3afff`):
+
+| Workflow | Run | Konklúzió |
+|---|---|---|
+| Router CI | [31690984653](https://github.com/wolfcasaba/strumsight/actions/runs/31690984653) | ✅ success |
+| Full Gate (no APK) | [31690998877](https://github.com/wolfcasaba/strumsight/actions/runs/31690998877) | ✅ success |
+
+`origin/main` a dispatch pillanatában mért `6228764f` SHA-n maradt a két run
+befejezéséig (`git rev-parse origin/main` egyezik) — a zöld kapu a friss
+`main`-hez képest is érvényes (ADR 0086 §2).
+
+**Végső verdikt: APPROVED.** Mind a 12 acceptance criterion (§6) teljesült,
+BLOCKER/MAJOR/MINOR nyitva nincs, a review §Gate-bizonyíték ellenőrzése
+táblája minden sorban zöld. Merge engedélyezett (ADR 0052).
