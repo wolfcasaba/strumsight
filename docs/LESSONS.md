@@ -9620,3 +9620,65 @@ nincs gép, ami elbukna, ha az audit elmarad, ezért el is maradt, kétszer.
   feature-belüli `Navigator.push`, nem központi `GoRoute`) — ezt R27 SAJÁT
   pre-flightja mérje meg explicit `test -e`/grep-pel, mielőtt dispatch-elné,
   ne ismételje meg ezt a haltot feltételezésből.
+
+## L258 — Egy védtelen `gh` hívás a CI-várakozó ciklusban a TELJES sessiont lefagyaszthatja, és a H-NOSIGNAL halt két, egymástól független záró-rituálét hagy csonkán: a nyitott PR-t ÉS a sor-fájl `pending` állapotát (E06-R25, H-NOSIGNAL önjavítás, 2026-08-13)
+
+**Mit mértem — a hang.** Az E06-R25 2. dispatchja (orchestrátor=Terra) a
+session-naplója szerint (`.pipeline/session-E06-R25-20260813T123506-fallback.log`)
+a `sdd-round-driver` SKILL.md §5 akkori ajánlott mintáját követte: `gh run
+watch <id>` VAGY kézzel írt `gh run list --workflow=...` poll-ciklus, EGYIK
+sincs timeout-tal védve. 13 egymást követő `gh run list --workflow
+full-gate.yml ...` hívás ~25,5s alatt tért vissza (`succeeded in 25478ms` ..
+`25643ms`, feltűnően egyenletes mintázat), a 14. SOHA — a session a hívás
+BELSEJÉBEN fagyott le, új sort többé nem írt a naplóba kb. 13:30Z körül. A
+ténylegesen várt Full Gate futás (`31704364552`) 13:33:34Z-kor zölden
+lezárult — a hang tehát MAGÁBAN a `gh` hívásban történt, nem a workflow-ban.
+A pipeline 20 perces log-mtime elakadás-őre (`round-pipeline.sh`
+ELAKADÁS-ŐR) csak KÍVÜLRŐL, a TELJES sessiont ölve tudta ezt észlelni, jóval
+a tényleges befejezés UTÁN — két önjavító kör és több mint egy óra ment el
+egyetlen védtelen hálózati hívás miatt, miközben a kör tartalmi munkája
+(PR #248: review APPROVED, mindkét CI zöld a pontos head SHA-n, scope-audit
+tiszta) már 100%-ban kész volt.
+
+**Mit mértem — a két csonkán maradt záró-rituálé.** A `round-pipeline.sh`
+`outcome=merged` ágának KÉT hatása van (1803–1829. sor): (a) `open_pr_branches`
+ellenőrzés a KÖVETKEZŐ preflightban — ha nyitva marad egy kör-mintás PR, a
+lánc `die "nyitott PR van"`-nal áll meg (ezt L158/L174/L213 már dokumentálta);
+és (b) a `docs/execution/pipeline-queue.tsv` `pending`→`done` sed-je EGY
+KÜLÖN, driver-írt commitban, KÖZVETLEN push-sal main-re. Mivel a killelt
+Terra-session SOHA nem írt `outcome=` semmit (ez maga a H-NOSIGNAL
+definíciója), (b) ág SEM futott le — a sor-fájl E06-R25 sora `pending`
+maradt annak ellenére, hogy a tartalom kész és mergeölhető volt. Ha ezt a
+self-heal nem javítja explicit módon, a KÖVETKEZŐ firing az első `pending`
+sorként ÚJRA E06-R25-öt választaná (1408. sor: `grep -P '\tpending$' | head
+-1`) — de a branch/worktree eltűnt (a self-heal takarítása törölte), ezért a
+driver egy VADONATÚJ orchesztrátor-sessiont indítana ugyanarra a névre,
+csendben MEGISMÉTELVE a már leszállított munkát. Ez rosszabb, mint a
+nyitott-PR halt: nem áll meg, csak feleslegesen újramunkál.
+
+**Miért.** A `gh run watch`/`gh run list` poll-minta évek óta ismert
+kockázati osztálya (L183: „mindig-előtérben") csak a Bash-eszköz saját
+`run_in_background`-jára figyelmeztetett — arra nem, hogy MAGA a hálózati
+hívás timeout nélkül fagyhat le a foreground-ban is. A driver
+`outcome=merged`-re épülő két záró-lépése (nyitott-PR takarítás, sor-fájl
+frissítés) implicit előfeltételezi, hogy a session KAP esélyt a saját
+záró rituáléira — H-NOSIGNAL pontosan azt jelenti, hogy ez az előfeltétel
+sérült, tehát MINDKÉT következményt külön, explicit méréssel kell pótolni,
+nem csak azt, amelyik hangosan (halt-tal) jelentkezik.
+
+**Hogyan alkalmazd.**
+- CI-várakozásnál (akár `gh run watch`, akár kézzel írt poll) MINDIG
+  `tools/wait-for-ci.sh <run-id>`-t használj — minden `gh` hívást
+  `timeout`-tal véd, és a "gh maga akadt el" (exit 6) esetet a "workflow még
+  fut" (exit 4) esettől élesen elválasztja. A három megosztott CI-várakozási
+  recept (`sdd-round-driver` SKILL.md §5, `pipeline-orchestrator-prompt.md`
+  §0.1, `pipeline-selfheal-prompt.md` §4 lépés 5) mind erre mutat.
+- H-NOSIGNAL diagnózisnál a `gh pr list --head <branch>` ellenőrzés
+  (L174 §"másodlagos lecke") MELLÉ vedd fel: `grep "^$ROUND\t" docs/execution/pipeline-queue.tsv`
+  — ha a kör tartalma ténylegesen kész/mergeölt, de a sor `pending` maradt,
+  a self-heal replikálja a driver saját sed-jét (`s|^\($round\t.*\t\)pending$|\1done|`)
+  egy önálló, indoklással ellátott commitban, KÖZVETLEN push-sal (nem PR-rel
+  — ugyanaz a driver-konvenció, amit ez helyettesít).
+- A nyitott PR ÉS a sor-fájl állapota EGYÜTT, mindkettő mérve döntendő el —
+  nem elég az egyiket javítani és feltételezni, hogy a másik magától
+  rendeződik, mert mindkettő UGYANATTÓL a hiányzó `outcome=` írástól függ.

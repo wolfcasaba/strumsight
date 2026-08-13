@@ -3,8 +3,60 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R25 H3 self-heal closed, PR #247 — main healthy, chain unblocked; next
-> up is E06-R25's own dispatch.)**
+> (E06-R25 DONE — PR #248 merged; H-NOSIGNAL self-heal PR #249 merged; main
+> healthy, chain unblocked; next up is E06-R26.)**
+>
+> ## ✅ [HEAL E06-R25/H-NOSIGNAL] KÉSZ — védtelen `gh` hívás fagyasztotta le a CI-várakozó orchestrátort (2026-08-13)
+>
+> E06-R25 2. dispatchja (orchesztrátor=Terra) egy kézzel írt `gh run list
+> --workflow full-gate.yml ...` poll-ciklusban fagyott le — a hívás
+> BELSEJÉBEN, timeout védelem nélkül (mérve: 13 hívás ~25,5s alatt tért
+> vissza, a 14. SOHA). A 20 perces log-mtime elakadás-őr csak kívülről, a
+> teljes sessiont ölve vette ezt észre, JÓVAL azután, hogy a ténylegesen várt
+> Full Gate futás már zölden lezárult — miközben a kör tartalmi munkája
+> (PR #248) már 100%-ban kész, review-APPROVED és CI-zöld volt. Új,
+> timeout-védett `tools/wait-for-ci.sh` (regressziós teszt: fake `gh`, ami
+> sosem tér vissza magától — RED a szkript nélkül, GREEN 6/6 ~11s alatt);
+> a három megosztott CI-várakozási recept frissítve (`sdd-round-driver`
+> SKILL.md §5, `pipeline-orchestrator-prompt.md` §0.1,
+> `pipeline-selfheal-prompt.md` §4 lépés 5). PR
+> [#249](https://github.com/wolfcasaba/strumsight/pull/249), Router CI zöld,
+> squash-merge. **PR #248 önállóan újra-ellenőrizve** (review APPROVED,
+> Router CI + Full Gate success a pontos head SHA-n, scope-audit tiszta: 23
+> módosított útvonal = 22 `allowed_paths` + 1 reviewer-exempt review-doksi) és
+> mergeölve a self-heal részeként (`b5ec8a1f`) — a driver saját
+> `pending`→`done` sor-fájl-frissítése (ami az `outcome=merged` jelzés
+> hiányában szintén elmaradt) kézzel replikálva, közvetlen push-sal
+> (`b951726f`), hogy a lánc ne próbálja újradispatch-elni az immár eltűnt
+> branch-ű, ténylegesen kész kört. Tanulság: `docs/LESSONS.md` **L258**.
+>
+> ## ✅ E06-R25 KÉSZ — Session comparison és fejlődési trend (2026-08-13)
+>
+> Két mentett analízis-session összehasonlítása és lokális fejlődési trend:
+> `CompatibilityEvaluator` (fail-closed metric-azonosság + verzió-egyezés),
+> `TrendBuilder`, `CompareAnalysesUseCase`, `analysis_compare_screen.dart` +
+> `metric_delta_row.dart`, additív route (`AppRoutes.analysisCompare`) az
+> `analysisComparisonEnabled` flag mögött (OFF), en/hu ARB kulcsok. [ADR
+> 0246](docs/adr/0246-analysis-session-comparison-and-trend-contract.md) —
+> ADR 0218-ra építve rögzíti az összehasonlítás saját fail-closed
+> kompatibilitási/delta/trend szerződését (a brief örökölt `ADR 0203`
+> hivatkozása batchből örökölt hibás sorszám volt, §0.0-ban javítva).
+> **A független review 1 MAJOR-t talált, javító körben zárva:** azonos
+> metric ID, eltérő version esetén a compatibility check tévesen `null`-t
+> (összehasonlítható) adott ahelyett, hogy `differentMetricVersion`-t jelezne
+> — eldobható review-probe reprodukálta, a javítás (`61bc887`) fail-closeddá
+> tette + saját regressziós tesztet kapott. Zöld kapu (exact-SHA `d4a73b9d`):
+> Router CI + Full Gate success. Négy dispatch/self-heal lépésen át jutott
+> el a mergig — H3 (routing-fájlok hiányoztak az `allowed_paths`-ból, PR
+> #247, `docs/LESSONS.md` L257) → tartalmi implementáció + review-javítás →
+> H-NOSIGNAL (fent) — squash-merge PR
+> [#248](https://github.com/wolfcasaba/strumsight/pull/248), `b5ec8a1f`.
+>
+> **Előretekintő jegyzet R27-nek (batch-audit, `docs/LESSONS.md` L257):**
+> amikor R27 (export/share) pre-flightja lefut, mérje meg explicit módon,
+> hogy az új `analysis_export_screen.dart` igényel-e központi
+> route-regisztrációt, vagy feature-belüli `Navigator.push` — ne ismételje
+> meg ezt a haltot feltételezésből.
 >
 > ## ✅ RESOLVED — main Router CI red spell (post-E99-R08-merge, 2026-08-13, `48959b4c`)
 >
@@ -24,35 +76,6 @@
 > (router-ci green, full suite 407 passed). Landed by the E06-R25/H3
 > self-heal's 1st attempt as a prerequisite before it could ship its own fix;
 > independently re-verified (not taken on faith) by the 2nd attempt below.
->
-> ## ✅ [HEAL E06-R25/H3] KÉSZ — brief `allowed_paths` hiányzott a shared routing-fájlokból (2026-08-13)
->
-> E06-R25 (session comparison + trend) H3-mal állt meg: a brief saját §6
-> „Flag-őr" kritériuma egy tényleges, flag mögötti route-ot ír elő, de az
-> `allowed_paths` sem `lib/app/routing/app_router.dart`-ot (az EGYETLEN Audio
-> Analysis V2 `GoRoute`-regisztrációs pont), sem `lib/app/routing/
-> app_route.dart`-ot (a route-konstans katalógus) nem nevezte meg — az
-> implementer (sonnet-impl) helyesen `stopped`-ot jelzett, 0 fájlt módosítva.
-> Harmadik előfordulása ugyanennek a batch-authoring hibának (E06-R23 §0.0 1.
-> pont, halt nélkül; E06-R24 `docs/LESSONS.md` **L250**, halt-vezérelt). A
-> javítás additív `allowed_paths`-bővítés + a mért gyökérok dokumentálása
-> §0.0-ban, regressziós teszttel
-> (`tools/tests/test_e06_r25_router_scope.py`, javítás előtt PIROS, utána
-> ZÖLD) → PR [#247](https://github.com/wolfcasaba/strumsight/pull/247),
-> exact-SHA Router CI zöld, squash-merge. Az önjavítás 1. kísérlete a fenti
-> Router CI red spellt is ugyanitt fedezte fel és javította (PR #246), majd
-> egy szinkron PR-várakozási hurokban elakadt — lecke a leltározásról és
-> egy korábbi (commitolatlan) vázlat téves lecke-hivatkozásáról:
-> `docs/LESSONS.md` **L257**. E06-R25 saját tartalmi munkája (a comparison
-> feature implementációja) még **nem** történt meg — ez az önjavítás
-> kizárólag a brief scope-ját javította; a pipeline a HALTED feloldása után
-> automatikusan újra dispatch-eli a kört.
->
-> **Előretekintő jegyzet R27-nek (batch-audit, L257):** amikor R27
-> (export/share) pre-flightja lefut, mérje meg explicit módon, hogy az új
-> `analysis_export_screen.dart` igényel-e központi route-regisztrációt, vagy
-> feature-belüli `Navigator.push` — ne ismételje meg ezt a haltot
-> feltételezésből.
 >
 > ## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
 >
@@ -80,8 +103,8 @@
 > ezért kötelező a záró rituálé §5.5 post-merge gate-lépése.
 >
 > **Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
-> E06-R25 — a brief H3 scope-hibája fent javítva (PR #247), a pipeline
-> automatikusan újra dispatch-eli.
+> E06-R25 mostanra **done** (fent), a pipeline automatikusan E06-R26-ot
+> (Practice song tutor integration) dispatch-eli.
 >
 > ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
 >
@@ -157,7 +180,8 @@
 > is zöld: `audio_analysis=483`, `app=69`, format/analyze/architecture/
 > secrets/l10n mind PASS (l10n `1244` üzenet).
 >
-> **Következő kör:** E06-R25 — Session comparison és fejlődési trend.
+> **Következő kör (ekkor):** E06-R25 — Session comparison és fejlődési
+> trend (azóta **done**, ld. fent).
 >
 > ## 📦 Korábbi kör-narratívák → archívum
 >
