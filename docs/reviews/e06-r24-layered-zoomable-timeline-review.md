@@ -3,11 +3,62 @@
 Brief: `docs/rounds/e06-r24-layered-zoomable-timeline.md`
 Diff: `git diff 2a24cacc..7081b7bc` (pre-flight commit → implementer HEAD, 16 files, +1292/-3)
 Reviewer: Claude (Sonnet 5, orchestrator) · Dátum: 2026-08-13
-Verdikt: CHANGES REQUIRED
+Verdikt: ~~CHANGES REQUIRED~~ → **APPROVED (javító kör #1 után, `4b895474`)**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 3 · MINOR: 4 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 (3 FIXED) · MINOR: 0 (4 FIXED) · NOTE: 2
+
+> **Javítás után (orchesztrátor, 2026-08-13, javító kör #1, commit
+> `4b895474`, ugyanaz a motor — Terra):** mind a hét lelet (F1–F7) zárva,
+> valódi kód-javítással ÉS regressziós teszttel — a security review
+> MINOR-1-je is zárva ugyanebben a fordulóban. Leletenkénti ellenőrzés:
+>
+> - **F1 FIXED** — `timeline_lanes.dart`: a hotspot lane most
+>   `_hotspotLane()` néven, kizárólag `document.hotspots.isEmpty` alapján dönt
+>   (nem `targetAlignment` capability). Új regressziós teszt: „shows the
+>   hotspot lane from hotspot data without target alignment" — ÜRES
+>   `capabilities` lista + 1 valódi hotspot → a lane megjelenik. Bónuszként a
+>   generikus `_lane()` kapu is szigorúbb lett: `if (!isAvailable &&
+>   !isDegraded) hide` (explicit allowlist `unavailable`/`notApplicable`
+>   feltételezés helyett) — ez a security review NOTE-1 opcionális
+>   javaslata, amit az implementer ingyen megoldott.
+> - **F2 FIXED** — új `testWidgets('has no localized overflow or raw
+>   localization keys', ...)`: en/hu × 320/600px × 1.0/2.0 textScale, mind a
+>   8 kombináció, `tester.takeException()` null + nyers-kulcs keresés
+>   `findsNothing`. **Az implementer §10 handoffja szerint ez a teszt
+>   ténylegesen élő `RenderFlex` overflow-t talált** hu × 320px × 2× alatt —
+>   ez utólag igazolja, hogy F2 nem elméleti hiány volt. A javítás:
+>   `timeline_lane.dart` lane-cím `Expanded`-be csomagolva,
+>   `analysis_timeline_screen.dart` Prev/Next gombok teljes szélességű
+>   `Row`+`Expanded`-re cserélve az `OutlinedButton.icon` helyett.
+> - **F3 FIXED** — minden hotspothoz saját `Semantics(container: true,
+>   label: "Hotspot N of M: kind, severity")` node, a szülőn
+>   `explicitChildNodes: true`. Új teszt: `tester.getSemantics(find.
+>   bySemanticsLabel(...))` mind a 3 hotspotra egyedileg ellenőrizve.
+> - **F4 FIXED** — a 4-4 duplikált ARB-sor eltűnt mindkét fájlból (`grep -c`
+>   most 1/1).
+> - **F5 FIXED** — `TimelineViewState` ténylegesen bekötve a screen
+>   state-jébe (`_viewState` mező, `_stateFor()` helper); a security review
+>   NOTE-3 nullable-copyWith-bugja is zárva egy explicit `clearSelection()`
+>   metódussal + saját teszttel.
+> - **F6 FIXED** — új `'zooms out around the focal time and clamps near
+>   either clip edge'` teszt — pontosan a reviewer eldobható próbatesztjének
+>   (`/tmp/review-e06-r24/test/_scratch/zoom_out_probe_test.dart`) logikáját
+>   és számait ismétli, immár a valódi test-fába commitolva.
+> - **F7 FIXED** — új `HotspotNavigator.previous()` tükör-teszt, ugyanaz a
+>   3-hotspot/4-lépés minta, mint a `next()`-é.
+> - **Security MINOR-1 FIXED** — a PCM-őr teszt most a valódi
+>   `PcmAnalysisInput` típusnevet és a `domain/analysis_input.dart` importot
+>   tiltja a korábbi fantom `pcmSamples` string helyett.
+>
+> **Gate független újrafuttatása egy HARMADIK, friss klónban**
+> (`/tmp/review-e06-r24-fix1`, a javító kör commitjára): **MINDEN GATE
+> ZÖLD** (format, analyze, `test test/features/audio_analysis` — most 483
+> teszt —, `test test/app` — 69 teszt —, architecture, secrets, l10n — 1244
+> üzenet, a +10 új hotspot-szemantika kulcs miatt nőtt 1234-ről).
+> `gate_shape=ok` a jelzésfájlban (a korábbi javító kör előtti hamis
+> pozitív nem ismétlődött).
 
 Mechanikailag a kör erős: a gate-et **kétszer, függetlenül**, két külön
 klónban futtattam (`/home/ubuntu/ss-terra-e06-r24` és a hivatalos, kizárólag
@@ -26,17 +77,17 @@ brief szó szerinti előírásától; ezek a MAJOR leletek.
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | Viewport-mátrix — kilenc cella | ⚠️ 8/9 | `timeline_viewport_test.dart` 6 teszt: zoom-be(center)✅, pan-bal/jobb+mindkét-szél-ütközés✅, minZoom/maxZoom(399/400/401ms)✅, near-edge-zoom✅, timeForPixel/pixelForTime✅, revealRange mindkét széllel✅. **Zoom-KI (scale<1, szélesítés) nincs unit-tesztelve** — ld. F6 (kézzel átszámolva helyesnek bizonyult, de a briefben névvel nevezett cella hiányzik). |
+| 1 | Viewport-mátrix — kilenc cella | ✅ (javítva) | 7 teszt (a fentiek + zoom-ki: középpont-körüli + szél-közeli, mindkettő `[0,duration]`-on belül). |
 | 2 | Zoom-küszöb hármas | ✅ | `timeline_viewport_test.dart:43-67`, pontosan 399/400/401 ms, gate-ben PASS. |
 | 3 | Virtualizáció | ✅ | `TimelineLane.visibleItemsFor` statikus, unit-tesztelhető; `analysis_timeline_screen_test.dart:50-79`: 5000 item / 50 látható → `visible.length <= 100`, PASS a gate-ben. |
-| 4 | Sáv-mátrix — nyolc cella | ❌ | 7/8 lane helyesen `available`-re jelenik meg (`analysis_timeline_screen_test.dart:81-135`) — de a **hotspot lane cellája hibás alapon zöld**: a teszt kifejezetten `targetAlignment: available`-t állít be ahhoz, hogy a hotspot lane megjelenjen, miközben `hotspots: []` (a `_document()` helperben, 214. sor) — azaz a lane egy **capability-státusztól** függ, nem attól, hogy VAN-e hotspot. Ld. **F1 (MAJOR)**. |
+| 4 | Sáv-mátrix — nyolc cella | ✅ (javítva) | a hotspot lane immár `document.hotspots.isEmpty` alapján dönt; dedikált regressziós teszt üres `capabilities` listával + valódi hotspottal. |
 | 5 | Degraded-cella (kilencedik) | ✅ | `analysis_timeline_screen_test.dart:22-48` — `chordTimeline: degraded` → lane látható marad + "Limited confidence" szöveg; `monophonicPitch: unavailable` → lane rejtve. Kód-olvasással igazolva, hogy egy `degraded→hidden` regresszió erre a cellára pirosra váltana. |
-| 6 | Hotspot-navigáció | ⚠️ | `hotspot_navigator_test.dart` — **csak `next()`**: 3 hotspot, négyszeri lépés (0→1→2→0, körbeér), minden lépésnél `revealRange` ellenőrizve. **`previous()` nulla tesztelve** — ld. F7 (MINOR; a brief §3 explicit „előző/következő"-t ír elő). |
+| 6 | Hotspot-navigáció | ✅ (javítva) | `next()` (eredeti) + `previous()` (új) tükör-teszt, mindkettő körbeéréssel + `revealRange`-dzsel minden lépésen. |
 | 7 | Adaptív címkék | ✅ | `analysis_timeline_screen_test.dart:137-152` — 5s vs 300s klip eltérő `interval`-t ad, a pozíciók rendezettek/duplikátum-mentesek. |
-| 8 | Accessibility | ⚠️ | Lane-Semantics (név+összegzés) tesztelve (1. teszt, `find.bySemanticsLabel`). **A „hotspot-lista screen reader számára listaként elérhető" nincs tesztelve, és az implementáció sem épít explicit lista-szemantikát** — két gombot csomagol egyetlen `Semantics(label: "N hotspots")`-ba. Ld. F3 (MAJOR). |
-| 9 | Nyelvi paritás + overflow | ❌ | **Nulla teszt** hu/en válzásra, 320/600 px szélességre vagy `textScaleFactor` 1.0/2.0-ra bárhol a diffben. Ld. F2 (MAJOR). |
+| 8 | Accessibility | ✅ (javítva) | minden hotspot saját `Semantics`-node-ot kap (index/típus/súlyosság), `explicitChildNodes: true` a szülőn; teszttel igazolva mind a 3 elemre egyedileg. |
+| 9 | Nyelvi paritás + overflow | ✅ (javítva) | 8-cellás mátrix-teszt (en/hu × 320/600px × 1.0/2.0), amely ÉLŐ `RenderFlex` overflow-t talált és fogott meg (implementer §10 handoff) — a javítás (`Expanded` a lane-címen és a nav-gombokon) után PASS. |
 | 10 | Flag-kapu + V1 érintetlenség | ✅ | `git diff --stat` nulla `lib/features/analyze/**` (16/16 fájl az engedélyezett listán); **saját kézzel futtatva**: `flutter test test/features/analyze/timeline_view_test.dart` → 2/2 PASS, változatlan fájlon. |
-| 11 | Nyers PCM nincs a UI-ban | ✅ | `analysis_timeline_screen_test.dart:154-164` forrásolvasó teszt (`data/input/`, `pcmSamples` string-keresés a teljes `presentation/`-en) — PASS; kézi grep-pel megerősítve, hogy a diff egyetlen fájlja sem importál `data/input/`-ot. |
+| 11 | Nyers PCM nincs a UI-ban | ✅ (szigorítva) | a forrásolvasó teszt a valódi `PcmAnalysisInput` típusnevet és `domain/analysis_input.dart` importot tiltja (a korábbi fantom `pcmSamples`-string helyett, ld. security MINOR-1). |
 
 ## Scope-audit
 
@@ -58,7 +109,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Bizonyíték:** a saját teszt (`analysis_timeline_screen_test.dart:81-135`) kifejezetten `targetAlignment: available`-t állít be (miközben `hotspots: []`), hogy a hotspot lane egyáltalán megjelenjen — ez saját maga bizonyítja a kapu-függőséget.
 - **Kötelező javítás:** a hotspot lane jelenjen meg, ha `document.hotspots.isNotEmpty` (ugyanaz a feltétel, mint a Prev/Next gomboké), NEM egy `AnalysisCapability`-lookup alapján. Ha üres a hotspot-lista, a §5.3 szerinti „magyarázattal rejtve" ág fusson (pl. „nincs hotspot" ok, nem „mérés nem elérhető").
 - **Ellenőrzés:** regressziós teszt, ami `targetAlignment`-et KIHAGYJA a `capabilities` listából (vagy `notApplicable`-re állítja) ÉS `hotspots`-ot egy valódi elemmel tölti fel — a hotspot lane-nek MEG KELL jelennie.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F2 — MAJOR — „Nyelvi paritás + overflow" acceptance criterion nulla teszttel
 
@@ -67,7 +118,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** semmi nem fogná meg, ha egy magyar fordítás (pl. a hosszabb `analysisTimelineHotspotList`/`analysisTimelineSelection` sztringek) 320 px-en vagy 2×-es szövegméretnél `RenderFlex overflowed` hibát dobna, vagy ha egy hiányzó ARB-kulcs nyersen (`analysisTimelineXyz`) jelenne meg a UI-n.
 - **Kötelező javítás:** legalább egy `testWidgets` mátrix-teszt: {hu, en} × {320, 600} logikai px szélesség × {1.0, 2.0} `textScaleFactor` — `tester.takeException()` nulla, és `find.textContaining('analysisTimeline')` (nyers kulcs minta) `findsNothing`.
 - **Ellenőrzés:** az új teszt fusson és legyen zöld a gate-ben; ideiglenesen egy ARB-kulcs eltávolításával/hosszú placeholder-sztringgel próbaként pirosra vihető.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F3 — MAJOR — A hotspot-lista nincs screen reader számára navigálható LISTAKÉNT felépítve
 
@@ -76,7 +127,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** egy screen reader felhasználó a jelenlegi implementációval csak azt hallja, hogy „3 hotspot van" + két gombot ("előző"/"következő") — nem tudja megelőzőleg átfutni, mik a hotspotok (típus, súlyosság, időpont), csak szekvenciálisan, egyesével a viewportot mozgatva fedezheti fel őket. Ez lényegesen szegényebb, mint amit a §25.8 „hotspot lista" elve előír.
 - **Kötelező javítás:** vagy explicit lista-szemantika (minden hotspothoz saját `Semantics` node index/típus/súlyosság leírással, `SemanticsSortKey`-vel rendezve), vagy — ha a brief szerzőjének szándéka a Prev/Next-only navigáció volt — a §0.0-ban dokumentált revízió, ami PONTOSAN meghatározza, mit jelent itt a „lista", és teszttel bizonyítja.
 - **Ellenőrzés:** widget-teszt, ami `tester.getSemantics(find.byType(...))`-tal bejárja a hotspot-szemantika fát és igazolja, hogy mind a 3 hotspot egyedileg elérhető.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F4 — MINOR — Duplikált ARB-kulcsok mindkét nyelvi fájlban
 
@@ -85,7 +136,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** ártalmatlan futásidőben (a `l10n` gate-lépés is zöld volt), de rossz kódhigiénia, és egy jövőbeli szigorúbb JSON-lint pirosra vihetné.
 - **Kötelező javítás:** a 4-4 duplikált sor törlése mindkét ARB-fájlból.
 - **Ellenőrzés:** `grep -c` mindkét kulcsra mindkét fájlban → 1.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F5 — MINOR — `TimelineViewState` létrehozva, de sosem használva
 
@@ -94,7 +145,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** halott kód — nincs hívója, nincs rá teszt, karbantartási zavart okoz (a jövőbeli olvasó feltételezné, hogy ez az állapotmodell).
 - **Kötelező javítás:** vagy törölni a fájlt (és kivenni az `allowed_paths`-ból/§4-ből egy brief-revízióval), vagy ténylegesen bekötni a screen state-jébe.
 - **Ellenőrzés:** `grep -rn "TimelineViewState" lib/ test/` a fájl saját definícióján kívül nulla találatot ad, VAGY a screen ténylegesen ezt használja.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F6 — MINOR — Zoom-KI irány nincs unit-tesztelve (a „kilenc cella" egyike hiányzik)
 
@@ -103,7 +154,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** próbateszttel empirikusan igazolva (`/tmp/review-e06-r24/test/_scratch/zoom_out_probe_test.dart`, eldobható, nem commitolva): `zoomBy(scale: 0.5, focalTime: 5s)` egy `[4s,6s]` ablakból pontosan `[3s,7s]`-re szélesedik (szimmetrikusan a focal-pont körül), és egy szél-közeli `scale: 0.1` zoom-ki sem lép ki a `[0,10s]` tartományból (`isWithinDuration` igaz marad) — mindkét próba PASS. A kód tehát **helyesnek bizonyul**; ez jelenleg teszt-lefedettségi hiány, nem bizonyított hiba.
 - **Kötelező javítás:** egy `test()` explicit `scale < 1` esettel (középpont körüli szélesedés + a `[0,duration]`-on belül maradás).
 - **Ellenőrzés:** az új teszt fusson zölden.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F7 — MINOR — `HotspotNavigator.previous()` nulla tesztelve
 
@@ -112,7 +163,7 @@ kör-brief saját magát). Tilos zóna (`lib/features/analyze/**`,
 - **Hatás:** a `previous()` implementáció (`hotspot_navigator.dart:34-49`) szinte tükörképe a `next()`-nek — kód-olvasással NEM találtam benne hibát —, de módosításnál (pl. a jövőbeli R25 összehasonlítás-kör hozzáér) egy regresszió észrevétlen maradna.
 - **Kötelező javítás:** egy tükör-teszt a `next()`-éhez hasonlóan (3 hotspot, 4× `previous()`, körbeérés + `revealRange` minden lépésnél).
 - **Ellenőrzés:** az új teszt fusson zölden.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`4b895474`)
 
 ### F8 — NOTE — A brief által kötelezővé tett valódi-sértés próba nincs dokumentálva a §10-ben; a reviewer pótolta
 
@@ -146,6 +197,9 @@ szövegére illeszkedett, nem egy tényleges csonkított/láncolt gate-hívásra
 
 ## Merge-döntés
 
-**Merge TILOS.** 3 nyitott MAJOR (F1, F2, F3). Javító kör szükséges —
-ugyanaz a motor (Terra), a fenti F1–F7 leletlistával a promptban; a
-NOTE-tételek (F8, F9) tájékoztató jellegűek, nem kötelező javítani.
+**Merge engedélyezett.** 0 nyitott BLOCKER/MAJOR/MINOR (mind a 7 lelet +
+security MINOR-1 zárva `4b895474`-ben, a gate egy harmadik, friss klónban is
+függetlenül zöld). A 2 NOTE (F8, F9) tájékoztató, nem blokkol. Az ADR 0052
+szerinti záró feltétel (teljes suite + property + a kör-branchre
+dispatch-elt CI zöld) az orchesztrátor CI-dispatch lépésének a dolga —
+ez a review az azt megelőző kapu.
