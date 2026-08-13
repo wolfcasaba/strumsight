@@ -269,7 +269,8 @@ fi
 # tényt.
 #
 # 1. `done` munka NÉLKÜL: ha a fa nem mozdult az indulás óta (nincs új commit
-#    ÉS nincs diff), a „kész" jelentés hamis állítás — `unknown`-ra váltjuk.
+#    ÉS nincs diff), a „kész" jelentés hamis állítás — `unknown`-ra váltjuk,
+#    kivéve ha a hívó explicit `ROUND_VERIFY_NOOP_OK=1`-gyel vállalja (lásd lent).
 # 2. Gate-alak: a naplóban keressük a csonkoló/láncoló gate-hívást.
 verify_claim() {
   local head_now dirty gate_shape
@@ -280,15 +281,30 @@ verify_claim() {
     ':(exclude).codex-round-status' ':(exclude).mm-round-pid' | wc -l | tr -d " ")
   if grep -qE '^status=done$' "$signal" 2>/dev/null \
     && [ "$head_now" = "$scope_base" ] && [ "$dirty" = "0" ]; then
-    {
-      echo "status=unknown"
-      echo "summary=a jelzés done volt, de a munkapéldány NEM mozdult (nincs commit, nincs diff) — a kész jelentés bizonyítatlan"
-      echo "branch=$(git -C "$workdir" branch --show-current)"
-      echo "head=$head_now"
-      echo "dirty_files=0"
-      echo "signalled_at=$(date -Iseconds)"
-    } > "$signal"
-    exit_code=1
+    if [ "${ROUND_VERIFY_NOOP_OK:-0}" = "1" ]; then
+      # Self-heal E06-R27/H6 (docs/LESSONS.md L263, 2026-08-13): egy javító
+      # forduló valódi munkát commitolt (524397de), de jelzés nélkül lépett ki
+      # (lásd az elif ágat feljebb — `status=unknown`, "lezáró jelzés
+      # nélkül"). Az emiatt dispatch-elt, KIZÁRÓLAG megerősítésre/újra-
+      # jelzésre kért következő forduló jogosan állított `done`-t új
+      # commit/diff NÉLKÜL — az ő invokáció-kezdő `scope_base`-e MÁR a
+      # korábbi forduló valódi munkáját tartalmazta, csak az ÉPP FUTÓ
+      # invokáción belül nem mozdult tovább (ez a feladat lényege, nem
+      # hallucináció). A dispatchernek ezt EXPLICITEN kell vállalnia — az
+      # implementer önbevallása önmagában nem bizonyíték, csak a hívó saját,
+      # ellenőrzött döntése.
+      printf 'verify_noop_ok=1\n' >> "$signal"
+    else
+      {
+        echo "status=unknown"
+        echo "summary=a jelzés done volt, de a munkapéldány NEM mozdult (nincs commit, nincs diff) — a kész jelentés bizonyítatlan"
+        echo "branch=$(git -C "$workdir" branch --show-current)"
+        echo "head=$head_now"
+        echo "dirty_files=0"
+        echo "signalled_at=$(date -Iseconds)"
+      } > "$signal"
+      exit_code=1
+    fi
   fi
   gate_shape=ok
   if grep -qE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)" "$log_file" 2>/dev/null; then

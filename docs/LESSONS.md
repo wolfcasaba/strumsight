@@ -9853,3 +9853,58 @@ legutóbbi futásával ugyanazon a HEAD SHA-n, mielőtt bármit „javítanál"
 rajta — az ADR 0112 §3 mércéje szempontjából egy ilyen leletet vizsgálat
 NÉLKÜL elfogadni ugyanolyan hiba, mint figyelmen kívül hagyni egy valódi
 regressziót.
+
+## L263 — Egy KIZÁRÓLAG megerősítésre dispatch-elt forduló jogos, diff nélküli `done`-ját a `verify_claim` „nem mozdult a fa" őre ugyanúgy hallucinációnak nézte, mint egy valódi semmit-nem-csináló fordulót (E06-R27, H6 self-heal, 2026-08-13)
+
+**Mit mértem.** E06-R27-en egy review-javító forduló (session `d96a4889`,
+`tools/mm-round.sh`, motor `sonnet-impl`) valódi munkát végzett és
+commitolt (`524397de` — a redakciós BLOCKER + 2 MAJOR review-lelet
+javítása, zöld `tools/round-gate.sh test/features/audio_analysis
+test/property test/app test/features/share`), de a fordulót prózai
+összegzéssel zárta a kötelező `tools/codex-signal.sh done ...` hívás
+NÉLKÜL (0 találat a nyers naplóban) — a burkoló emiatt `status=unknown`-t
+írt ("a MiniMax implementer lezáró jelzés nélkül lépett ki"). Az ezt
+észlelő orchestrátor (Terra) egy MÁSODIK, kizárólag megerősítésre/
+újra-jelzésre utasított fordulót dispatch-elt ugyanarra a
+munkapéldányra (`/tmp/e06-r27-sonnet-signal-recovery.md`: „Do not broaden
+scope … If the branch is clean … call tools/codex-signal.sh done"). Ez a
+forduló helyesen ellenőrizte a meglévő commitot és a gate-naplót, majd
+hívta a `done` jelzést — ÚJ commit vagy diff NÉLKÜL, mert a dolga
+pontosan ez volt (`/tmp/mm-e06-r27-signal-recovery.report.md`: „Signaled
+`done`"). A `verify_claim` (mindkét burkolóban, `tools/mm-round.sh` ÉS
+`tools/codex-round.sh`, bájtra azonos logikával) ezt is lefokozta
+`unknown`-ra, mert a MÁSODIK invokáció saját `scope_base`-e (az
+invokáció-KEZDŐ HEAD) már `524397de` volt, tehát `head_now == scope_base`
+és `dirty == 0` — a régi logika ezt megkülönböztethetetlennek látta egy
+valódi, semmit-nem-csináló hallucinációtól. Két egymást követő `unknown`
+a láncot H6 haltba vitte, holott a tényleges implementer-munka kész és a
+gate zöld volt.
+
+**Miért.** A `verify_claim` „ha a fa nem mozdult, a `done` állítás
+bizonyítatlan" ökölszabálya (L157, 2026-08-06) hallgatólagosan azt
+feltételezte, hogy MINDEN invokáció dolga új munka végzése — ezért a
+„bizonyíték" kizárólag AZ ADOTT invokáción belüli mozgás (új commit VAGY
+piszkos fa) lehetett. Ez a feltevés hamis egy olyan másodlagos
+invokációra, aminek KIFEJEZETTEN a dolga egy korábbi, jelzés nélkül
+maradt, de valódi munkát végzett forduló megerősítése — itt a helyes
+„bizonyíték" nem az invokáción belüli mozgás, hanem az, hogy a
+`scope_base` MÁR a round tényleges munkáját hordozza. A két kérdés (·volt-e
+valaha munka a round-on? ·csinált-e EZ a forduló valamit?) összemosva egy
+csendben hibás verdikthez vezetett.
+
+**Hogyan alkalmazd.** `tools/mm-round.sh` és `tools/codex-round.sh`
+`verify_claim`-je mostantól tiszteletben tartja a hívó explicit
+`ROUND_VERIFY_NOOP_OK=1` környezeti változóját: ha jelen van, egy
+diff/commit nélküli `done` NEM fokozódik le, és a jelzésfájl kap egy
+`verify_noop_ok=1` sort (látható, auditálható, nem csendes
+felülbírálás — ADR 0112 §2 szelleme). Csak a DISPATCHER (az
+orchestrátor-session saját, tudatos shell-hívása) állíthatja be — az
+implementer önbevallása önmagában továbbra sem elég, ezért ez NEM
+gyengíti az eredeti anti-hallucináció őrt (`ROUND_VERIFY_NOOP_OK`
+hiányában, az alapértelmezett úton, a régi szigorú viselkedés
+változatlan — lásd a regressziós tesztek negatív ágát). Egy jövőbeli
+orchestrátornak, amikor `status=unknown`-t lát VALÓDI commit-bizonyítékkal
+(nem üres fa: `git log`/`head`/`dirty_files` a jelzésfájlban) a
+munkapéldányon, ez a támogatott újra-dispatch út egy tisztán
+megerősítő fordulóhoz — nem egy kézzel írt, ellenőrizetlen
+`codex-signal.sh done` hívás a munkapéldányban, és nem is azonnali halt.

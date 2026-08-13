@@ -255,6 +255,38 @@ class ClaimGuardTest(WrapperContinuationTest):
         _result, signal, _argv, _log = self.run_wrapper("signal-first")
         self.assertIn("status=done", signal)
 
+    def test_a_noop_done_signal_is_still_downgraded_without_the_explicit_opt_in(self) -> None:
+        """`ROUND_VERIFY_NOOP_OK` hiánya a régi, szigorú viselkedést adja —
+        maga a KÖRNYEZETI VÁLTOZÓ MEGLÉTE dönt, nem valamiféle örökölt
+        munkapéldány-állapot."""
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-first", extra_env={"FAKE_CODEX_NO_WORK": "1", "ROUND_VERIFY_NOOP_OK": "0"}
+        )
+        self.assertIn("status=unknown", signal)
+        self.assertIn("NEM mozdult", signal)
+        self.assertNotIn("verify_noop_ok=1", signal)
+
+    def test_a_noop_done_signal_is_kept_when_the_dispatcher_explicitly_allows_it(self) -> None:
+        """MÉRT eset (E06-R27 H6 self-heal, 2026-08-13): a javító forduló
+        (session d96a4889) commitolta `524397de`-t (review-korrekciók, zöld
+        gate), de a fordulót bejelentéssel zárta jelzés nélkül — a burkoló
+        emiatt `status=unknown`-t írt (nincs lezáró jelzés). Az emiatt
+        dispatch-elt, KIZÁRÓLAG megerősítésre kért következő forduló
+        (session-recovery prompt) helyesen `codex-signal.sh done`-t hívott,
+        de ÚJ commit/diff nélkül — pontosan mert a dolga a MÁR meglévő munka
+        megerősítése volt, nem új munka. A régi `verify_claim` ezt is
+        `unknown`-ra fokozta le (`head_now == scope_base`, `dirty == 0`),
+        holott a `scope_base` MÁR az előző forduló valódi commitját
+        tartalmazta — a lánc emiatt H6 haltba futott, noha a munka kész és a
+        gate zöld volt. A dispatcher explicit `ROUND_VERIFY_NOOP_OK=1`-je ezt
+        a legitim no-diff megerősítést jelzi a burkoló felé."""
+        _result, signal, _argv, _log = self.run_wrapper(
+            "signal-first", extra_env={"FAKE_CODEX_NO_WORK": "1", "ROUND_VERIFY_NOOP_OK": "1"}
+        )
+        self.assertIn("status=done", signal)
+        self.assertIn("verify_noop_ok=1", signal)
+        self.assertNotIn("NEM mozdult", signal)
+
     def test_a_truncated_gate_call_is_reported_in_the_signal(self) -> None:
         """MÉRT M3-hibaminta: a gate `| tail` mögé futtatása (E02-R07, háromszor)."""
         _result, signal, _argv, _log = self.run_wrapper(
