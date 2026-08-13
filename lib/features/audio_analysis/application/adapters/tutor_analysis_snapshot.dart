@@ -18,6 +18,27 @@ abstract final class TutorSnapshotRedaction {
     'analysisDocument',
   };
   static const int maxEvents = 50;
+
+  /// Maximum length permitted for an identifier crossing into Tutor context.
+  static const int maxIdentifierLength = 128;
+
+  /// Stable replacement for an identifier that is unsafe to expose to Tutor.
+  static const String redactedIdentifier = 'redacted-id';
+
+  static final RegExp _safeIdentifierPattern = RegExp(r'^[A-Za-z0-9._:-]+$');
+
+  /// Retains only short ASCII machine identifiers, never free-form text.
+  ///
+  /// Slashes, whitespace, control characters, and non-ASCII characters are
+  /// redacted rather than transformed so fragments of a path or instruction
+  /// cannot survive the privacy boundary.
+  static String sanitizeIdentifier(String value) {
+    if (value.length > maxIdentifierLength ||
+        !_safeIdentifierPattern.hasMatch(value)) {
+      return redactedIdentifier;
+    }
+    return value;
+  }
 }
 
 final class TutorMetricFact {
@@ -89,13 +110,15 @@ final class TutorTargetContext {
   final String kind;
   final int expectedEventCount;
 
-  factory TutorTargetContext.fromTarget(AnalysisTarget target) =>
-      TutorTargetContext(
-        id: target.id,
-        version: target.targetVersion,
-        kind: target.kind.name,
-        expectedEventCount: target.expectedEvents.length,
-      );
+  factory TutorTargetContext.fromTarget(
+    AnalysisTarget target, {
+    required String redactedId,
+  }) => TutorTargetContext(
+    id: redactedId,
+    version: target.targetVersion,
+    kind: target.kind.name,
+    expectedEventCount: target.expectedEvents.length,
+  );
 
   Map<String, Object> toJson() => <String, Object>{
     'id': id,
@@ -144,7 +167,9 @@ final class TutorAnalysisSnapshotAdapter {
     AnalysisDocument document, {
     AnalysisTarget? target,
   }) => TutorAnalysisSnapshot(
-    insightIds: document.insights.map((insight) => insight.id).toList(),
+    insightIds: document.insights
+        .map((insight) => TutorSnapshotRedaction.sanitizeIdentifier(insight.id))
+        .toList(),
     metricFacts: document.metrics
         .map(
           (metric) => TutorMetricFact(
@@ -157,7 +182,7 @@ final class TutorAnalysisSnapshotAdapter {
     hotspots: document.hotspots
         .map(
           (hotspot) => TutorHotspotRange(
-            id: hotspot.id,
+            id: TutorSnapshotRedaction.sanitizeIdentifier(hotspot.id),
             startMicroseconds: hotspot.start.inMicroseconds,
             endMicroseconds: hotspot.end.inMicroseconds,
             confidence: hotspot.confidence,
@@ -168,7 +193,7 @@ final class TutorAnalysisSnapshotAdapter {
         .take(TutorSnapshotRedaction.maxEvents)
         .map(
           (event) => TutorEventFact(
-            id: event.id,
+            id: TutorSnapshotRedaction.sanitizeIdentifier(event.id),
             timeMicroseconds: event.time.inMicroseconds,
             confidence: event.confidence,
             kind: _eventKind(event),
@@ -177,7 +202,10 @@ final class TutorAnalysisSnapshotAdapter {
         .toList(),
     targetContext: target == null
         ? null
-        : TutorTargetContext.fromTarget(target),
+        : TutorTargetContext.fromTarget(
+            target,
+            redactedId: TutorSnapshotRedaction.sanitizeIdentifier(target.id),
+          ),
   );
 }
 

@@ -73,11 +73,13 @@ final progressEvidenceAdapterFactoryProvider =
     );
 
 /// Progress evidence is dormant with the Practice integration flag OFF.
-final progressEvidenceAdapterProvider = Provider<ProgressEvidenceAdapter?>((
-  ref,
-) {
-  if (!ref.watch(appConfigProvider).flags.analysisPracticeIntegrationEnabled) {
-    return null;
-  }
-  return ref.watch(progressEvidenceAdapterFactoryProvider).create();
-});
+final progressEvidenceAdapterProvider =
+    Provider.autoDispose<ProgressEvidenceAdapter?>((ref) {
+      if (!ref
+          .watch(appConfigProvider)
+          .flags
+          .analysisPracticeIntegrationEnabled) {
+        return null;
+      }
+      return ref.watch(progressEvidenceAdapterFactoryProvider).create();
+    });
