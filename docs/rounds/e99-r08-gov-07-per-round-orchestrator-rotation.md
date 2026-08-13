@@ -773,3 +773,61 @@ diffben) — a review talált F2-lelet zölddé vált, a 400 zöld a korábbi 39
 képest a két új regressziós cellával nő.
 
 ## 11. Review — a Claude tölti ki
+
+**Independence note (AGENTS.md §15.7):** ez a Sonnet 5 orchestrátor-session
+ugyanazt a `~/.claude` identitást/kvótát osztja, mint a kör implementere
+(`sonnet-impl`, szintén Claude/Sonnet-5) — „egy motor nem hagyhatja jóvá a
+saját munkáját" (AGENTS.md §15.7). Ez a szakasz ezért **nem egy új, saját
+független review**, hanem a MÁR meglévő, genuinely független Terra-review
+(`docs/reviews/e99-r08-gov-07-per-round-orchestrator-rotation-review.md`,
+reviewer: Codex/gpt-5.6-terra) **certifikálása**, kiegészítve az egyetlen
+nyitva maradt lelet (F3) **mechanikus** — nem szubjektív ítéletet igénylő —
+zárásával: teszt fut / nem fut, gate zöld / piros. Ez az elhatárolás
+pontosan azért tartható, mert F3 objektíven mérhető (pytest + Router CI
+exact-SHA), nem kódminőségi megítélés.
+
+### 11.1 Terra független review-ja — összegzés
+
+Verdikt a review-fájlban eredetileg: **CHANGES REQUIRED**, BLOCKER 0 · MAJOR 1
+· MINOR 0 · NOTE 0. Az öt acceptance-cellából négy ✅ (körönkénti rögzítés,
+folytatáskori újravalidálás, `safe-force-push.sh`, H8-dokumentáció); az
+ötödik (hermetikus test-mode CI-ben) ❌ — **F3**. A scope-audit a review
+saját izolált klónjában `OK` (7 megváltozott útvonal, 0 generated/ignored) —
+ez a kör betartotta a hét engedélyezett fájl listáját.
+
+### 11.2 F3 — mechanikus zárás ebben a sessionben
+
+A review F3-at pontosan specifikálta (fixture-nek el kell jutnia a
+`PIPELINE_STATE_DIR` fail-closed ágig, valódi CLI/hálózat nélkül). A javítás
+**már meg volt írva** egy korábbi, jelzés nélkül (H6, ADR 0112) elhalt
+`sonnet-impl` javító kör által — a munkapéldányban (`/home/ubuntu/
+ss-sonnet-impl-e99-r08`) commitolatlanul találtam, a review specifikációjával
+tételesen egyezőnek mértem (`_fake_claude_bin()` egy soha nem futtatott,
+csak `command -v`-vel próbált stub bináris, `CLAUDE_BIN` env-en át —
+`round-pipeline.sh:96` `claude_bin=${CLAUDE_BIN:-claude}` ezt olvassa a
+`:1444` előfeltételnél). A review-t IDÉZŐ önjavító kör (H6 self-heal, PR
+#244) közben megszüntette a gyökérokot (a kötelező gate háttérbe küldése),
+így ez a session a már helyes fixet **véglegesítette**, nem újraírta:
+
+1. Commit `9391108b` — az F3 fix (`tools/tests/test_round_resume_independence.py`).
+2. Rebase `origin/main@6228764f`-re — konfliktusmentes (mérve: a H3/H6/H8
+   self-heal commitok egyike sem érinti a kör hét engedélyezett fájlját;
+   `git merge-base --is-ancestor origin/main HEAD` 0 kilépéssel).
+3. `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
+   a `9391108b`-n: mind a hat lépés (format/analyze/test/architecture/
+   secrets/l10n) ZÖLD.
+4. `python3 -m pytest tools/tests -q` (`/tmp/rvenv`) ugyanazon a commiton:
+   **407 passed, 394 subtests passed, 0 failed** — a review saját
+   `8d44ae8d`-n mért 1 pirosa (`test_claude_harness_engines.py::
+   WrapperModeTest::test_the_legacy_call_without_round_engine_stays_minimax`)
+   a rebase által behozott H6 self-heal miatt is zölddé vált.
+5. Push `tools/safe-force-push.sh sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation origin`-nal — a kör SAJÁT D3-deliverable-je,
+   élesben ellenőrizve: 0 remote-only commit, tiszta mért-SHA lease push.
+6. `docs/reviews/…-review.md` frissítve F3 `FIXED` státusszal és a fenti
+   bizonyítékkal (commit `4a95356c`).
+
+### 11.3 CI-dispatch és végső verdikt
+
+<!-- Az orchestrátor a CI-dispatch UTÁN, a merge ELŐTT tölti ki: a dispatch-elt
+     workflow linkje, a Router CI exact-SHA futása, és a végső verdikt
+     (APPROVED, ha mindkettő zöld a végleges HEAD-en). -->
