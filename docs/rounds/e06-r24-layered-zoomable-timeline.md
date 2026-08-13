@@ -18,7 +18,8 @@ allowed_paths = [
   "lib/features/audio_analysis/presentation/controllers/timeline_view_state.dart",
   "lib/features/audio_analysis/presentation/controllers/timeline_viewport.dart",
   "lib/features/audio_analysis/public.dart",
-  "lib/app/router/app_router.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/routing/app_route.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/audio_analysis/presentation/analysis_timeline_screen_test.dart",
@@ -38,7 +39,10 @@ native_gate = false
 > Olvasd újra a `lib/features/analyze/widgets/timeline_view.dart`-ot (170 sor)
 > — az a **kompatibilitási** nézet, ami **változatlan** marad, és a
 > `test/features/analyze/timeline_view_test.dart` az őre. **A tényleges router
-> fájl `lib/app/router/app_router.dart`** (mérve, létezik — a lista helyes).
+> fájl `lib/app/routing/app_router.dart` és a route-katalógus
+> `lib/app/routing/app_route.dart`** — a `lib/app/router/` **NEM létezik**
+> (ld. §0.0 2. javító pre-flight, ez a header-korrekció ELŐZŐ verziója
+> tévesen „mérve, létezik"-nek jelölte).
 > Az R23 `OverviewViewModel` (`presentation/controllers/overview_view_model.dart`)
 > a formázást az `OverviewLabels` portra delegálja; a konkrét megvalósítás
 > `AppLocalizationsOverviewLabels`
@@ -79,6 +83,29 @@ eltérést tartalmazott, amelyeket ez a revízió a dispatch előtt felold:
    (`terra`, ld. fejléc) — a batch-brief a korábbi `minimax` queue-értéket
    örökölte, a tényleges implementer a `.pipeline/engine-override` szerint
    Terra.
+
+**2026-08-13, 2. javító pre-flight (implementer STOP, 0 munka végezve).** Az
+első dispatch (Terra) a brief `lib/app/router/app_router.dart`
+`allowed_paths`-bejegyzését ellenőrizve azonnal, helyesen `stopped`-ot
+jelzett: ez az útvonal **nem létezik** — a tényleges, flag-gate-elt router
+`lib/app/routing/app_router.dart` (ugyanaz a hiba, amit az R23 testvérkör
+saját pre-flightja már egyszer kimért és javított — ld. R23 §0.0 1. pont —,
+de ez a brief batch-authoring idején örökölte, és a jelen kör ELSŐ
+pre-flightja tévesen „mérve, létezik"-nek jelölte a fejlécben ahelyett, hogy
+ténylegesen futtatott volna egy `test -e` ellenőrzést). Az implementer NULLA
+fájlt módosított, csak jelzett — a branch a pre-flight commit óta
+változatlan (`1348c3f6`).
+
+**Feloldás:** `allowed_paths` és §4 javítva
+`lib/app/routing/app_router.dart`-ra; hozzáadva
+`lib/app/routing/app_route.dart` (a route-katalógus — a timeline útvonalnak
+**új konstansra** van szüksége, ugyanúgy, ahogy az R23 `analysisOverview`/
+`analysisMetricDetail` konstansai is ebben a fájlban élnek, nem a
+router-fájlban). **Flag-döntés (nincs új flag):** a `lib/app/config/
+feature_flags.dart` NINCS az engedélyezett listán, tehát a timeline route a
+MEGLÉVŐ `audioAnalysisV2Enabled` flaget használja — ugyanazt, mint az R23
+`analysisOverview`/`analysisMetricDetail` route párja —, nem vezet be külön
+`analysisTimelineEnabled` sub-flaget.
 
 **ADR:** [0243](../adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)
 — nyolc lane → konkrét, mért `AnalysisDocument`-mező leképezés (chord=
@@ -142,7 +169,8 @@ accessibility-összefoglaló minden sávhoz; ARB.
 | `.../presentation/controllers/timeline_view_state.dart` | ÚJ | nézetállapot |
 | `.../presentation/controllers/timeline_viewport.dart` | ÚJ | zoom/pan matek (tiszta) |
 | `.../public.dart` | meglévő | export |
-| `lib/app/router/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_route.dart` | meglévő | **additív** route-konstans (`AppRoutes.analysisTimeline`) |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | viewport + widget + navigátor teszt |
 | `docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md` | ÚJ (pre-flight) | lane-adatforrás + degraded döntés |
