@@ -1,7 +1,7 @@
 # E06-R29 — Review
 
 Brief: `docs/rounds/e06-r29-evaluation-harness-and-calibration.md`  
-Diff: `git diff 6ce59b5e..925f8ff1`  
+Diff: `git diff 6ce59b5e..925f8ff1`
 Reviewer: Codex / gpt-5.6-terra  
 Dátum: 2026-08-13  
 Verdikt: APPROVED
