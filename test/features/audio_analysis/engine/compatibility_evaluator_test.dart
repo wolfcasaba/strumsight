@@ -52,6 +52,19 @@ void main() {
         ComparisonInconclusiveReason.differentMetricVersion,
       );
     });
+
+    test('same id, mismatched version numbers -> differentMetricVersion '
+        '(fail-closed, ADR 0218/0246)', () {
+      expect(
+        CompatibilityEvaluator.compareMetricIdentity(
+          idA: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          versionA: 1,
+          idB: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          versionB: 2,
+        ),
+        ComparisonInconclusiveReason.differentMetricVersion,
+      );
+    });
   });
 
   group('evaluateCompatibility — nine-cell matrix', () {

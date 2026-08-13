@@ -70,7 +70,11 @@ abstract final class CompatibilityEvaluator {
     required String idB,
     required int versionB,
   }) {
-    if (idA == idB) return null;
+    if (idA == idB) {
+      return versionA == versionB
+          ? null
+          : ComparisonInconclusiveReason.differentMetricVersion;
+    }
     if (_baseId(idA) == _baseId(idB)) {
       return ComparisonInconclusiveReason.differentMetricVersion;
     }
