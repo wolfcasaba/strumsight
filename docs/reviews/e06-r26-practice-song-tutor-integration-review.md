@@ -4,7 +4,8 @@ Brief: `docs/rounds/e06-r26-practice-song-tutor-integration.md`
 Diff: `git diff e510695a..e8faa8fd` (pre-flight commit → implementer commit)
 Reviewer: Claude (Sonnet 5, pipeline orchestrator) · Dátum: 2026-08-13
 Verdikt (eredeti, `e8faa8fd`-n): CHANGES REQUIRED
-Verdikt (1. javítás után, `b1fc0a9d`-n): **CHANGES REQUIRED — dedikált security review MAJOR-1 nyitva**
+Verdikt (1. javítás után, `b1fc0a9d`-n): CHANGES REQUIRED — dedikált security review MAJOR-1 nyitva
+Verdikt (2. javítás után, `7b640d85`-n): **APPROVED** (1 nyitott NOTE-follow-up, nem blokkoló)
 
 ## Összegzés
 
@@ -200,11 +201,61 @@ nem csak formálisat.
 | `gate_shape=VIOLATION` jelzés | — | ❌ **hamis pozitív** — az egyetlen regex-találat `docs/LESSONS.md` L245 saját szövege volt (a naplóban az implementer a kötelező lecke-előolvasás során olvasta be a fájlt), nem egy csonkított `round-gate.sh`-hívás. Négy tényleges gate-futás a naplóban mind csonkítás/láncolás nélküli. |
 | CI (teljes suite + property + APK) | — | Még nem futott — a merge előtti kötelező lépés, a javító kör után |
 
+## R3 — MAJOR-1 (security) javítás ellenőrizve (`7b640d85`, 2026-08-13)
+
+Saját, FÜGGETLEN, harmadik izolált klónban (`/tmp/review-e06-r26-v3`)
+ellenőrizve:
+
+- **MAJOR-1 FIXED:** `TutorSnapshotRedaction.sanitizeIdentifier` egy
+  allow-list (nem deny-list) mintával (`^[A-Za-z0-9._:-]+$`, ≤128 karakter)
+  minden Tutor-határt átlépő szabad szöveges ID-t (`insightIds`, event-,
+  hotspot-, target-ID) `redacted-id`-re cserél, ha nem felel meg — a
+  `fromDocument()`-ben, a `Tutor*Fact`/`TutorTargetContext` objektumok
+  létrehozása ELŐTT (tehát maga a snapshot, nem csak a JSON, redaktált). Az
+  új teszt (`redacts unsafe free-text identifiers…`) a security review PONTOS
+  reprodukciós inputjait (egy hosszú utasítás-szöveg + egy `/storage/…`
+  útvonal) használja mind a négy csatornán, és igazolja, hogy egyik sem jut
+  át — magam is lefuttattam külön (`flutter test
+  tutor_analysis_snapshot_test.dart` → 2/2 zöld az izolált klónban).
+- **MINOR-3 FIXED:** `progressEvidenceAdapterProvider` most
+  `Provider.autoDispose` — a `_creditedDocumentIds` az utolsó figyelő
+  eltűnésekor felszabadul.
+- **Scope-audit:** `Legacy scope audit OK (a346f064..7b640d85, 4 changed
+  path(s), 0 generated/ignored)` — mind a 4 fájl (`tutor_analysis_snapshot.dart`,
+  `progress_evidence_adapter.dart`, a hozzá tartozó teszt, a brief §9/§10
+  frissítése) az `allowed_paths`-on belül.
+- **`gate_shape=VIOLATION` ismét hamis pozitívnak bizonyult** (harmadik
+  egymást követő eset) — a naplóban talált `&&`-os minták mind (a) egy
+  háttérben futó gate-folyamat élő-e ellenőrzése `ps`/`rg`-vel, vagy (b) a
+  korábbi review-jelentésem SAJÁT szövegének idézése (ami a `docs/LESSONS.md`
+  L245 mintáját írja le) — egyik sem tényleges csonkított/láncolt
+  `round-gate.sh`-futás. A NÉGY tényleges gate-hívás
+  (`--result-json` artefaktummal, ADR 0052 szellemében) mind tiszta.
+
+### N1 — NOTE (nem blokkoló, follow-up egy jövőbeli Tutor-bekötő körnek) — a `sanitizeIdentifier` allow-listje kötőjellel/ponttal összefűzött "szavakat" átenged
+
+A `^[A-Za-z0-9._:-]+$` minta helyesen zárja ki a security review KONKRÉT
+reprodukcióját (szóköz és `/` a mintán kívül esik), de saját próbával
+igazoltam, hogy egy kötőjellel/ponttal/kettősponttal összefűzött, ember
+számára továbbra is olvasható "utasítás" változatlanul átmegy:
+`"ignore-all-previous-instructions"` és `"system.override:disclose-all"`
+mindkettő **VÁLTOZATLANUL** átmegy a szűrőn (`python3 -c` igazolva). Ma ez
+nem élesen kihasználható (a kör bekötetlen, az egyetlen külső csatorna — a
+MusicXML/MIDI import slug-ja — MÁR MA is `[a-z0-9-]`-re szűkít, tehát a
+felszín nem nőtt EHHEZ a körhöz képest), és egy szigorúbb szűrő (pl.
+szóköz-helyettesítő karakterek tiltása) hamis pozitívokat adna legitim,
+kötőjeles gépi ID-kra. **Javasolt irány egy jövőbeli, a Tutor-oldalt ténylegesen
+bekötő körnek:** rögzítsd ADR-ben (a security review saját javaslata, ADR
+0134 mentén), hogy a Tutor-prompt ezeket a mezőket STRUKTURÁLT, escape-elt
+adatként kapja, sosem szabad szöveges utasítás-kontextusban — ez a
+tényleges védelem, nem egy karakterkészlet-tiltólista tökéletesítése.
+
 ## Merge-döntés
 
-**Merge TILOS amíg nyitva van BLOCKER/MAJOR** (ADR 0052) — jelenleg 4 nyitott
-MAJOR (F1-F4). Javasolt út: **javító kör ugyanazzal a motorral (Terra)**,
-findings-lista F1-F4 (F5/F6 opcionális). A javító kör után a gate-et és a
-négy célzott próbát (retry-tempo 4. cella, Progress hívásszámláló, Song
-hívásszámláló, Song akkord-mátrix) újra saját, izolált klónban futtatom,
-majd a jelentést frissítem.
+**MINDEN nyitott BLOCKER/MAJOR zárva** (F1-F4 a funkcionális, MAJOR-1 a
+security review-ból, mindegyik saját, független izolált klónban
+újra-ellenőrizve, nem a commit-üzenetre hagyatkozva). Az egyetlen nyitott
+tétel N1 (NOTE, nem blokkoló) + a security review MINOR-1/2/4 és NOTE-1/2/3
+(mind a brief §9-ébe dokumentálva follow-up-ként). **Verdikt: APPROVED.**
+Következő lépés: CI-dispatch a kör-branchre, majd exact-SHA zöld kapu után
+squash-merge.
