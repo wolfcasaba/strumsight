@@ -179,13 +179,32 @@ class WorkspaceRestorationHermeticityTest(unittest.TestCase):
         )
         return work
 
+    def _fake_claude_bin(self, root: Path) -> Path:
+        """A deterministic `command -v` stand-in for the `claude` CLI.
+
+        CI runners lack the real `claude` binary, so the driver's early
+        `command -v "$claude_bin"` precondition (round-pipeline.sh:1444) dies
+        before ever reaching the PIPELINE_STATE_DIR fail-closed branch under
+        test. It is only ever probed for existence here, never executed, so
+        an empty executable satisfies the precondition without a real CLI or
+        network.
+        """
+        fake = root / "fake-claude"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        return fake
+
     def test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
             work = self._fixture_repo(root)
             state = root / "state"
             state.mkdir()
-            environment = dict(os.environ, PIPELINE_STATE_DIR=str(state))
+            environment = dict(
+                os.environ,
+                PIPELINE_STATE_DIR=str(state),
+                CLAUDE_BIN=str(self._fake_claude_bin(root)),
+            )
 
             result = subprocess.run(
                 ["bash", str(DRIVER)],
