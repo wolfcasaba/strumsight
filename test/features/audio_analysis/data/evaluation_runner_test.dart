@@ -66,6 +66,23 @@ void main() {
       );
       expect(result.precisionRecallF1.f1, 0.625);
     });
+
+    // Review F1 counterexample (docs/reviews/
+    // e06-r29-evaluation-harness-and-calibration-review.md): a greedy
+    // nearest-neighbour matcher lets expected=90 steal detected=55 away
+    // from expected=50, leaving expected=50 unmatched -> TP=1. The correct
+    // maximum-cardinality one-to-one pairing is 50<->0 and 90<->55 -> TP=2.
+    test('(e) greedy-nearest-neighbour counterexample -> maximum-cardinality '
+        'matching finds both pairs (TP == 2, not 1)', () {
+      final expected = _onsetsAt('e', [50, 90]);
+      final detected = _onsetsAt('d', [0, 55]);
+      final result = runner.matchEvents(expected, detected, 50);
+      expect(result.precisionRecallF1.truePositives, 2);
+      expect(
+        result.matchedPairs.map((p) => (p.expected.timeMs, p.detected.timeMs)),
+        containsAll(<(int, int)>[(50, 0), (90, 55)]),
+      );
+    });
   });
 
   group('CalibrationFitter — 30-per-bin / 300-total minimums (inclusive)', () {
@@ -234,5 +251,46 @@ void main() {
         );
       },
     );
+
+    // Review F2 counterexample (docs/reviews/
+    // e06-r29-evaluation-harness-and-calibration-review.md): a single wide
+    // detected segment fully overlaps two separate expected segments, so a
+    // per-expected `.any(...)` search double-counts it as validating both
+    // -> accuracy 1.0. One-to-one matching lets that detected segment
+    // validate at most one expected segment -> accuracy 0.5.
+    test('a detected segment can validate at most one expected segment '
+        '-> chordSegmentAccuracy 0.5, not 1.0', () {
+      final ground = GroundTruthCase(
+        id: 'case-2',
+        tempoBand: TempoBand.medium,
+        signalQualityTier: SignalQualityTier.clean,
+        mode: EvalMode.chord,
+        expected: AnnotationSet(
+          events: const [],
+          chordSegments: [
+            EvalChordSegment(label: 'C', startMs: 0, endMs: 100),
+            EvalChordSegment(label: 'C', startMs: 100, endMs: 200),
+          ],
+          tempoBpm: null,
+          beatsMs: const [],
+          pitchPoints: const [],
+        ),
+        detected: AnnotationSet(
+          events: const [],
+          chordSegments: [EvalChordSegment(label: 'C', startMs: 0, endMs: 200)],
+          tempoBpm: null,
+          beatsMs: const [],
+          pitchPoints: const [],
+        ),
+      );
+      final manifest = GroundTruthManifest(
+        schemaVersion: '1.0',
+        cases: [ground],
+      );
+
+      final report = runner.run(manifest);
+
+      expect(report.overall.chordSegmentAccuracy, 0.5);
+    });
   });
 }

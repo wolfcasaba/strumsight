@@ -212,9 +212,14 @@ final class EvaluationRunner {
     );
   }
 
-  /// Greedy nearest-neighbour matching of [expected] against [detected]
-  /// within [toleranceMs]: each expected event claims the closest
-  /// still-unclaimed detected event inside the tolerance window.
+  /// Deterministic maximum-cardinality one-to-one matching of [expected]
+  /// against [detected] within [toleranceMs], via Kuhn's augmenting-path
+  /// algorithm: an expected event may only claim a still-unclaimed detected
+  /// event inside the tolerance window, and a detected event is reassigned
+  /// to a different expected event (freeing its previous one to seek
+  /// another candidate) whenever that grows the total number of matches.
+  /// Candidate edges are tried closest-gap-first (index as tie-breaker) so
+  /// the result is reproducible across runs.
   ///
   /// `precision` is `null` when [detected] is empty (there is nothing to
   /// compute a precision over); `recall` is `null` only when [expected] is
@@ -228,27 +233,44 @@ final class EvaluationRunner {
       ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
     final sortedDetected = [...detected]
       ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
-    final claimed = List<bool>.filled(sortedDetected.length, false);
-    final matchedPairs = <MatchedEventPair>[];
 
-    for (final expectedEvent in sortedExpected) {
-      var bestIndex = -1;
-      var bestGap = toleranceMs + 1;
-      for (var i = 0; i < sortedDetected.length; i++) {
-        if (claimed[i]) continue;
-        final gap = (sortedDetected[i].timeMs - expectedEvent.timeMs).abs();
-        if (gap <= toleranceMs && gap < bestGap) {
-          bestGap = gap;
-          bestIndex = i;
-        }
-      }
-      if (bestIndex != -1) {
-        claimed[bestIndex] = true;
+    final candidatesByExpected = List<List<int>>.generate(
+      sortedExpected.length,
+      (i) {
+        final expectedEvent = sortedExpected[i];
+        final withGap =
+            <MapEntry<int, int>>[
+              for (var j = 0; j < sortedDetected.length; j++)
+                if ((sortedDetected[j].timeMs - expectedEvent.timeMs).abs() <=
+                    toleranceMs)
+                  MapEntry(
+                    j,
+                    (sortedDetected[j].timeMs - expectedEvent.timeMs).abs(),
+                  ),
+            ]..sort((a, b) {
+              final byGap = a.value.compareTo(b.value);
+              return byGap != 0 ? byGap : a.key.compareTo(b.key);
+            });
+        return [for (final entry in withGap) entry.key];
+      },
+    );
+
+    final matchOfDetected = _maxBipartiteMatching(
+      leftCount: sortedExpected.length,
+      candidatesByLeft: candidatesByExpected,
+      rightCount: sortedDetected.length,
+    );
+
+    final matchedPairs = <MatchedEventPair>[];
+    for (var j = 0; j < sortedDetected.length; j++) {
+      final i = matchOfDetected[j];
+      if (i != -1) {
         matchedPairs.add(
-          MatchedEventPair(expectedEvent, sortedDetected[bestIndex]),
+          MatchedEventPair(sortedExpected[i], sortedDetected[j]),
         );
       }
     }
+    matchedPairs.sort((a, b) => a.expected.timeMs.compareTo(b.expected.timeMs));
 
     final tp = matchedPairs.length;
     final fp = sortedDetected.length - tp;
@@ -269,6 +291,37 @@ final class EvaluationRunner {
       ),
       matchedPairs: matchedPairs,
     );
+  }
+
+  /// Kuhn's algorithm: finds a maximum-cardinality one-to-one matching
+  /// between `leftCount` left nodes and `rightCount` right nodes, given
+  /// each left node's admissible right-node candidates (ordered — ties are
+  /// broken by that order). Returns `matchOfRight`, where
+  /// `matchOfRight[j]` is the matched left index, or `-1` if unmatched.
+  List<int> _maxBipartiteMatching({
+    required int leftCount,
+    required List<List<int>> candidatesByLeft,
+    required int rightCount,
+  }) {
+    final matchOfRight = List<int>.filled(rightCount, -1);
+
+    bool tryAugment(int leftIndex, List<bool> visited) {
+      for (final rightIndex in candidatesByLeft[leftIndex]) {
+        if (visited[rightIndex]) continue;
+        visited[rightIndex] = true;
+        if (matchOfRight[rightIndex] == -1 ||
+            tryAugment(matchOfRight[rightIndex], visited)) {
+          matchOfRight[rightIndex] = leftIndex;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (var i = 0; i < leftCount; i++) {
+      tryAugment(i, List<bool>.filled(rightCount, false));
+    }
+    return matchOfRight;
   }
 
   /// Same greedy nearest-neighbour matching as [matchEvents], for plain
@@ -341,31 +394,60 @@ final class EvaluationRunner {
 
   /// `(matchedSegments, totalExpectedSegments)`: an expected segment matches
   /// a detected one when they share a label and their overlap covers at
-  /// least [chordSegmentMinOverlapRatio] of the expected segment's duration.
+  /// least [chordSegmentMinOverlapRatio] of the expected segment's
+  /// duration. Matching is one-to-one — a detected segment can validate at
+  /// most one expected segment — via the same maximum-cardinality
+  /// bipartite matching as [matchEvents], so a single wide detected
+  /// segment can no longer double-count.
   (int, int) _chordSegmentCounts(
     List<EvalChordSegment> expected,
     List<EvalChordSegment> detected,
   ) {
-    var matched = 0;
-    for (final expectedSegment in expected) {
-      final expectedDuration = expectedSegment.endMs - expectedSegment.startMs;
-      if (expectedDuration <= 0) continue;
-      final matches = detected.any((detectedSegment) {
-        if (detectedSegment.label != expectedSegment.label) return false;
-        final overlapStart = math.max(
-          expectedSegment.startMs,
-          detectedSegment.startMs,
-        );
-        final overlapEnd = math.min(
-          expectedSegment.endMs,
-          detectedSegment.endMs,
-        );
-        final overlap = overlapEnd - overlapStart;
-        if (overlap <= 0) return false;
-        return overlap / expectedDuration >= chordSegmentMinOverlapRatio;
-      });
-      if (matches) matched++;
-    }
+    final eligibleExpected = [
+      for (final s in expected)
+        if (s.endMs - s.startMs > 0) s,
+    ];
+    if (eligibleExpected.isEmpty) return (0, expected.length);
+
+    final candidatesByExpected = List<List<int>>.generate(
+      eligibleExpected.length,
+      (i) {
+        final expectedSegment = eligibleExpected[i];
+        final expectedDuration =
+            expectedSegment.endMs - expectedSegment.startMs;
+        final withOverlap = <MapEntry<int, int>>[];
+        for (var j = 0; j < detected.length; j++) {
+          final detectedSegment = detected[j];
+          if (detectedSegment.label != expectedSegment.label) continue;
+          final overlapStart = math.max(
+            expectedSegment.startMs,
+            detectedSegment.startMs,
+          );
+          final overlapEnd = math.min(
+            expectedSegment.endMs,
+            detectedSegment.endMs,
+          );
+          final overlap = overlapEnd - overlapStart;
+          if (overlap <= 0) continue;
+          if (overlap / expectedDuration < chordSegmentMinOverlapRatio) {
+            continue;
+          }
+          withOverlap.add(MapEntry(j, overlap));
+        }
+        withOverlap.sort((a, b) {
+          final byOverlap = b.value.compareTo(a.value);
+          return byOverlap != 0 ? byOverlap : a.key.compareTo(b.key);
+        });
+        return [for (final entry in withOverlap) entry.key];
+      },
+    );
+
+    final matchOfDetected = _maxBipartiteMatching(
+      leftCount: eligibleExpected.length,
+      candidatesByLeft: candidatesByExpected,
+      rightCount: detected.length,
+    );
+    final matched = matchOfDetected.where((i) => i != -1).length;
     return (matched, expected.length);
   }
 
