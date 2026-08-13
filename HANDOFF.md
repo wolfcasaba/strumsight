@@ -3,65 +3,56 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E99-R08 MERGED, PR #245 — but the merge exposed a live main breakage,
-> see the 🚨 box immediately below. Read it FIRST.)**
+> (E06-R25 H3 self-heal closed, PR #247 — main healthy, chain unblocked; next
+> up is E06-R25's own dispatch.)**
 >
-> ## 🚨 URGENT — main Router CI is RED as of `48959b4c` (post-E99-R08-merge, 2026-08-13 ~11:06 UTC) — self-heal needed before ANY new round dispatches
+> ## ✅ RESOLVED — main Router CI red spell (post-E99-R08-merge, 2026-08-13, `48959b4c`)
 >
-> **This is NOT a GitHub Actions outage** (`github_actions_degraded()` was
-> not a factor) and NOT flaky — confirmed **deterministic**, reproduced
-> IDENTICALLY twice via `gh run rerun 31693001292` on the exact same merge
-> SHA. It blocks every future round: `tools/round-pipeline.sh`'s own
-> pre-dispatch main-health guard (`:1584`, pre-existing, unrelated to
-> E99-R08's own D1/D2/D3 changes) refuses to start new work over a red main
-> — and since `crontab -l` fires `round-pipeline.sh` every 5 minutes, it will
-> keep `die()`-ing (exit 4) and `notify()`-ing "⛔ piros main" (high
-> priority, if an ntfy topic is configured) until this is fixed.
+> Root cause: E99-R08's own F1 regression test
+> (`tools/tests/test_round_resume_independence.py`, `WorkspaceRestorationHermeticityTest`)
+> invoked the FULL `round-pipeline.sh` via `subprocess.run(cwd=<isolated
+> fixture>, ...)`, but the script computes its own repo root from
+> `${BASH_SOURCE[0]}` and `cd`s there — so `cwd=` was silently ineffective and
+> the driver ran against the SURROUNDING repo (post-merge: `main` itself),
+> hitting the `gh`-dependent pre-dispatch checks (open-PR list, run list,
+> main-health) before ever reaching the code under test. Confirmed
+> deterministic via `gh run rerun 31693001292` (identical failure twice).
+> Fixed by copying the driver + its two required artefacts into a throwaway
+> git repo per-test and launching it from there, so `repo_root` genuinely is
+> the fixture (no `gh` stub, no weakened guard) — PR
+> [#246](https://github.com/wolfcasaba/strumsight/pull/246), `4372b9ed`
+> (router-ci green, full suite 407 passed). Landed by the E06-R25/H3
+> self-heal's 1st attempt as a prerequisite before it could ship its own fix;
+> independently re-verified (not taken on faith) by the 2nd attempt below.
 >
-> **Root cause (fully diagnosed, NOT applied — this orchestrator session's
-> own §4 boundary forbids touching `tools/round-pipeline.sh`/`tools/tests`,
-> that's self-heal (ADR 0112) territory):** E99-R08's own F1 regression test,
-> `WorkspaceRestorationHermeticityTest::test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch`
-> (`tools/tests/test_round_resume_independence.py`), invokes the FULL
-> `round-pipeline.sh` from the top via `subprocess.run(["bash", DRIVER], cwd=<isolated fixture>, ...)`.
-> But the script's pre-existing "3. Előfeltételek" section
-> (`:1514`–`:1588`, NOT touched by E99-R08) runs **three `gh`-dependent
-> checks BEFORE reaching the `PIPELINE_STATE_DIR`-gated code the test
-> targets**: open-PR list (`:1514`), running-workflow list (`:1532`), and
-> main's own router-ci.yml/full-gate.yml health (`:1566`) — none of them
-> mocked by the test's fixture. In the Router CI runner (no `gh auth`
-> configured for this invocation context) the FIRST of these fails outright:
-> `gh pr list --state open ...` errors, `open_pr_branches="?"`, and the
-> script dies with `"a nyitott PR-ek nem kérdezhetők le (gh) — a lánc nem
-> indul vakon"` — never reaching the `PIPELINE_STATE_DIR` message the test
-> asserts on. (On this dev box locally, a DIFFERENT die message fires instead
-> — `"a main $main_workflow futása(i) [...] pirosak"` — meaning `gh` resolves
-> *some* ambient real-repo fallback here that CI's runner doesn't have; the
-> exact mechanism wasn't fully pinned down, but it explains why this test
-> passed on the feature branch tip `ec226489` — where PR #245 was still open
-> — and only started failing deterministically once the SHA became `main`
-> itself post-merge.)
+> ## ✅ [HEAL E06-R25/H3] KÉSZ — brief `allowed_paths` hiányzott a shared routing-fájlokból (2026-08-13)
 >
-> **The fix is already precedented in this exact file** — no new design
-> needed. `tools/tests/test_pipeline_integration.py:958` (`make_fake_gh()`)
-> solves the IDENTICAL problem for a different test
-> (`test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list`)
-> by pushing a fake `gh` executable onto `PATH` that answers `pr list`/`pr
-> view` deterministically instead of hitting the network. The
-> `WorkspaceRestorationHermeticityTest` fixture needs the same treatment,
-> extended to also answer `run list --limit 20 ...` and `run list --workflow
-> ... --branch main ...` (both empty/success is sufficient — an empty
-> `main_runs` hits the script's own `""` no-op case, not a `die()`). Verified
-> safe: the existing `MainHealthTest`/`RoundBranchGuardTest` tests
-> (`tools/tests/test_pipeline_plumbing.py`) are static-text/`assertIn`-on-source
-> checks, not live executions — they will not be affected by adding a `gh`
-> stub to this one fixture.
+> E06-R25 (session comparison + trend) H3-mal állt meg: a brief saját §6
+> „Flag-őr" kritériuma egy tényleges, flag mögötti route-ot ír elő, de az
+> `allowed_paths` sem `lib/app/routing/app_router.dart`-ot (az EGYETLEN Audio
+> Analysis V2 `GoRoute`-regisztrációs pont), sem `lib/app/routing/
+> app_route.dart`-ot (a route-konstans katalógus) nem nevezte meg — az
+> implementer (sonnet-impl) helyesen `stopped`-ot jelzett, 0 fájlt módosítva.
+> Harmadik előfordulása ugyanennek a batch-authoring hibának (E06-R23 §0.0 1.
+> pont, halt nélkül; E06-R24 `docs/LESSONS.md` **L250**, halt-vezérelt). A
+> javítás additív `allowed_paths`-bővítés + a mért gyökérok dokumentálása
+> §0.0-ban, regressziós teszttel
+> (`tools/tests/test_e06_r25_router_scope.py`, javítás előtt PIROS, utána
+> ZÖLD) → PR [#247](https://github.com/wolfcasaba/strumsight/pull/247),
+> exact-SHA Router CI zöld, squash-merge. Az önjavítás 1. kísérlete a fenti
+> Router CI red spellt is ugyanitt fedezte fel és javította (PR #246), majd
+> egy szinkron PR-várakozási hurokban elakadt — lecke a leltározásról és
+> egy korábbi (commitolatlan) vázlat téves lecke-hivatkozásáról:
+> `docs/LESSONS.md` **L257**. E06-R25 saját tartalmi munkája (a comparison
+> feature implementációja) még **nem** történt meg — ez az önjavítás
+> kizárólag a brief scope-ját javította; a pipeline a HALTED feloldása után
+> automatikusan újra dispatch-eli a kört.
 >
-> **Verification for whoever picks this up:** `gh run rerun 31693001292`
-> (or dispatch `router-ci.yml` fresh) after the fix — same-SHA `main` rerun
-> is the fastest confirmation loop. Local repro:
-> `/tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q`
-> on a fresh `main` checkout.
+> **Előretekintő jegyzet R27-nek (batch-audit, L257):** amikor R27
+> (export/share) pre-flightja lefut, mérje meg explicit módon, hogy az új
+> `analysis_export_screen.dart` igényel-e központi route-regisztrációt, vagy
+> feature-belüli `Navigator.push` — ne ismételje meg ezt a haltot
+> feltételezésből.
 >
 > ## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
 >
@@ -88,7 +79,9 @@
 > **A post-merge ellenőrzés fedezte fel a fenti 🚨 urgens leletet** — pontosan
 > ezért kötelező a záró rituálé §5.5 post-merge gate-lépése.
 >
-> **Következő kör:** a fenti 🚨 self-heal, azután a queue (`docs/execution/pipeline-queue.tsv`) szerint E06-R25.
+> **Következő kör:** a queue (`docs/execution/pipeline-queue.tsv`) szerint
+> E06-R25 — a brief H3 scope-hibája fent javítva (PR #247), a pipeline
+> automatikusan újra dispatch-eli.
 >
 > ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
 >

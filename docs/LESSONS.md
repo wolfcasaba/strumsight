@@ -9554,3 +9554,69 @@ megosztott, a hívó WRAPPER saját (nem a repo gyökerének) elérési útjáb�
 olvasott konfigurációs/prompt-fájl esetén ugyanez a csapda fennáll —
 grep-eld ki a friss javítás szövegét a munkapéldány saját másolatában,
 ne csak `main`-en.
+
+## L257 — Egy kilőtt önjavító kísérlet mergeölt előmunkáját a következő kísérlet leltározza és önállóan újra méri, nem bemondásra fogadja el — egy korábbi kísérlet commitolatlan vázlata is hordozhat téves lecke-hivatkozást (E06-R25, H3 self-heal, 2. kísérlet, 2026-08-13)
+
+**Mit mértem.** E06-R25 (session comparison + trend) H3-mal állt meg — a §6
+„Flag-őr" acceptance criteria egy tényleges, flag mögötti route-ot ír elő,
+de az `allowed_paths` egyik routing-fájlt (`lib/app/routing/app_router.dart`,
+`lib/app/routing/app_route.dart`) sem nevezte meg; az implementer helyesen
+`stopped`-ot jelzett, 0 fájlt módosítva. Ez a batch (2026-08-07) HARMADIK
+ugyanilyen brief-authoring hibája — E06-R23 saját, dispatch előtti
+pre-flightja elkapta (§0.0 1. pont, halt nélkül), E06-R24 halt-vezérelt
+2. pre-flightja javította (L250). L250 kifejezetten javasolta a batch
+többi, még függő briefjének átvizsgálását ugyanerre a mintára — ez elmaradt,
+és a minta harmadszor jelentkezett, ezúttal élő dispatch-halt formájában.
+
+Az önjavítás 1. kísérlete (`heal-E06-R25-1`) a naplója szerint már ELVÉGEZTE
+a munka nagy részét, mielőtt a driver 20 perc néma napló után leállította:
+felismerte, hogy egy MÁSIK, sürgősebb probléma (a main Router CI
+determinisztikusan piros volt az E99-R08 merge óta, HANDOFF.md 🚨-box)
+blokkolja bármely PR zöld kapuját, ezt megjavította és mergeölte
+(PR #246, `4372b9ed`), majd VÁRAKOZÁS közben, egy szinkron `gh pr checks 246`
+poll-hurokban ragadt — a tényleges H3-javítás egy commitolatlan vázlatként
+maradt a worktree-jében. A 2. kísérlet (ez a session) indulásakor
+`git worktree list` és `gh pr view 246` MÉRVE (nem a napló bemondásából
+elfogadva) igazolta, hogy a PR #246 valóban zöld CI-vel mergeölt — ezután a
+H3-javítás egyetlen, egyszerű PR-ként (#247) volt elvégezhető, a PR-várakozási
+lépés (ami az 1. kísérletet elakasztotta) nélkül.
+
+A commitolatlan vázlat emellett egy TÉVES lecke-hivatkozást is tartalmazott:
+„R23 saját self-healje (L246)" — L246 valójában egy MÁSIK E06-R23 self-heal
+(i18n-adapter scope), nem a routing-fájl hiány. A helyes hivatkozás E06-R23
+§0.0 1. pontja (dispatch előtti pre-flight, nincs önálló lecke-száma) és
+L250 (E06-R24). A végleges brief-javítás (PR #247) a helyes hivatkozást
+használja.
+
+**Miért.** Egy megállt/kilőtt önjavító session nem feltétlenül ért el
+semmit — de nem is feltétlenül hibázott mindenben: valódi, mergeölt munkát
+hagyhat maga után (itt: PR #246), és emellett hibás, de sosem commitolt
+vázlatot is (a téves L246-hivatkozás). A KÖVETKEZŐ kísérletnek mindkettőt
+kezelnie kell — a mergeölt munkát elfogadni (mérve, nem bemondásra), a
+commitolatlan vázlatot forrásanyagként felhasználni, DE minden benne
+szereplő állítást (fájlnév, sorszám, lecke-hivatkozás) önállóan újra
+ellenőrizve, mielőtt bármit belőle commitolna. Az ADR 0112 mögötti elv —
+„bemondásra semmit nem fogadsz el, a saját korábbi jelentéseidet sem" — ide
+is vonatkozik: egy korábbi KÍSÉRLET termékére is, nem csak a megállt KÖRére.
+
+Másodsorban: egy lecke prózában megfogalmazott „auditáld a többi függő
+briefet" ajánlása (L250) fogak nélkül marad, ha semmi nem kényszeríti ki —
+nincs gép, ami elbukna, ha az audit elmarad, ezért el is maradt, kétszer.
+
+**Hogyan alkalmazd.**
+- Egy önjavító kísérlet indulásakor MINDIG nézd át az előző (kilőtt/megállt)
+  kísérlet worktree-jét (`git status`, `git diff`, `git log
+  origin/main..HEAD`) ÉS a nyitott/nemrég mergeölt PR-listát (`gh pr list
+  --state all --limit 10`), mielőtt nulláról kezdenél — de a benne talált
+  tényállítást (fájlnév, mért sorszám, lecke-hivatkozás) önállóan mérd újra,
+  ne másold át.
+- Amikor egy lecke egy MÁSIK, még nem dispatch-elt brief átvizsgálását
+  javasolja, és van rá olcsó, read-only mód (grep a mintára), végezd el
+  AZONNAL, amikor a mintával legközelebb találkozol — ne hagyatkozz arra,
+  hogy valaki majd külön elvégzi. Ennek a self-healnek a gyors auditja
+  (`docs/rounds/e06-r2[6-9]*.md`, `e06-r30*.md`): R26/R28/R29/R30 nem vezet
+  be új, routolandó képernyőt; **R27 `analysis_export_screen.dart`-ja
+  bizonytalan** (a brief nem nevez route-ot vagy flaget hozzá — lehet, hogy
+  feature-belüli `Navigator.push`, nem központi `GoRoute`) — ezt R27 SAJÁT
+  pre-flightja mérje meg explicit `test -e`/grep-pel, mielőtt dispatch-elné,
+  ne ismételje meg ezt a haltot feltételezésből.
