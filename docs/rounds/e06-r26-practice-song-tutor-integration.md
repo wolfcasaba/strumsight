@@ -110,6 +110,13 @@ lefelé G-n"), ezért NEM képezhető le egyetlen `chordChange`-típusú
 strum`-ba megy, a `chord` pedig az `expectedChords`/`sections` felé — az
 `ExpectedEvent`-nek nincs is `chord` mezője.
 
+**R26-R1 review revízió (2026-08-13):** az OD-03 valódi severity-lépcsője
+változatlanul konzervatív, legfeljebb 15%-os redukció (`{0, 0.05, 0.10,
+0.15}`). A 60%-os padló ettől független, jövőbeli védelem marad: a
+`PracticeRetryTempoPolicy.clampTempoForReduction` a nyers redukciót fogadja,
+és a `recommendedRetryTempo` ezt használja, így a 60% alá eső számítás
+közvetlenül és determinisztikusan tesztelhető.
+
 PREPARED → PLANNING.
 
 ## 1. Cél
@@ -372,6 +379,32 @@ Tutorhoz küldése helyett `stopped` + brief-revízió.
 - Az új adaptertesztek és boundary-őr a barrel-only importot és a változatlan
   12 elemű architecture allowlistet mérik.
 
+### R26-R1 review-javítások (2026-08-13)
+
+- **F1:** a változatlan, legfeljebb 15%-os severity-lépcső a publikus,
+  nyers redukciót fogadó `clampTempoForReduction` segéden át éri el a
+  60%-os padlót. A negyedik cella 100 BPM és 50% redukció mellett a clamp
+  előtt 50 BPM-et, utána pontosan 60 BPM-et bizonyít.
+- **F2/F4:** a Progress adapter is factory-provider + flag-provider mintát
+  kapott az `analysisPracticeIntegrationEnabled` alatt. Az OFF-flag teszt
+  mind a négy adapter factory-jára (Practice, Song, Tutor, Progress) nulla
+  `create()` hívást mér.
+- **F3:** a `SongAnalysisTarget.chords` immutable `SongChordContext` listája
+  megtartja a transzponált display és capo utáni concert akkordot. A hatcellás
+  akkordmátrix kereszt- és bemol-gyököt is mér; a kézi levezetés a
+  `Chord.transposed` 12 hangos, sharp-kimenetű tábláját követi. Nulla
+  transzpozíciónál a bemeneti `Bb` label megmarad, mert a `Chord` erre
+  változtatás nélkül visszaadja az eredeti címkét.
+- **F5:** nem módosítva, mert a publikus compileres fixture-építés a javító
+  kör kötelező leleteihez képest érdemben növelte volna a diffet.
+- **F6:** nem alkalmazva: a célzott fordítás bizonyította, hogy a Practice
+  `core/music/strum.dart` és az Analysis `domain/analysis_event.dart`
+  azonos nevű, de külön `StrumDirection` enumot definiál; a név-alapú explicit
+  átalakítás ezért szükséges.
+
+`python3 -c "print(100 * (1 - 0.5), 100 * 0.6)"` tényleges eredménye:
+`50.0 60.0`.
+
 ### Mért numerikus értékek
 
 `python3 -c` eredmény: retry lépcsők 100 BPM-nél `100/95/90/85`, alsó korlát
@@ -394,6 +427,8 @@ azonnal eltávolítottam, majd a célzott adaptertesztek 11/11 zöldek lettek.
   kezdeti RED (hiányzó adapter-export), később zöld, 3/3.
 - `flutter test test/features/audio_analysis/application/practice_analysis_adapter_test.dart test/features/audio_analysis/application/song_analysis_adapter_test.dart test/features/audio_analysis/application/tutor_analysis_snapshot_test.dart test/features/audio_analysis/application/progress_evidence_adapter_test.dart test/tooling/analysis_cross_feature_boundary_test.dart`:
   zöld, 12/12.
+- `flutter test test/features/audio_analysis/application/practice_analysis_adapter_test.dart test/features/audio_analysis/application/song_analysis_adapter_test.dart test/features/audio_analysis/application/progress_evidence_adapter_test.dart`:
+  R26-R1 zöld, 9/9.
 - A kötelező `tools/round-gate.sh test/features/audio_analysis test/tooling test/app`
   handoff után zöld: format, analyze, `audio_analysis` (533), tooling (64),
   app (73), architecture, secrets és l10n minden lépése sikeres. A teljes

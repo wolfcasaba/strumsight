@@ -17,6 +17,25 @@ abstract final class PracticeRetryTempoPolicy {
   static const double moderateReduction = 0.10;
   static const double strongReduction = 0.15;
   static const double minimumTargetFraction = 0.60;
+
+  /// Applies the future-proof lower bound after a raw policy reduction.
+  ///
+  /// The current severity ladder peaks at [strongReduction], but callers that
+  /// introduce a stronger, evidence-based reduction retain this guardrail.
+  static double clampTempoForReduction({
+    required double targetTempo,
+    required double reduction,
+  }) {
+    if (!targetTempo.isFinite || targetTempo <= 0) {
+      throw ArgumentError.value(targetTempo, 'targetTempo');
+    }
+    if (!reduction.isFinite || reduction < 0) {
+      throw ArgumentError.value(reduction, 'reduction');
+    }
+    final minimum = targetTempo * minimumTargetFraction;
+    final reduced = targetTempo * (1 - reduction);
+    return reduced < minimum ? minimum : reduced;
+  }
 }
 
 /// A stable fact for Practice UI or policy consumers, never a session score.
@@ -157,9 +176,9 @@ final class PracticeAnalysisAdapter {
         PracticeRetryTempoPolicy.moderateReduction,
       _ => PracticeRetryTempoPolicy.strongReduction,
     };
-    return (targetTempo * (1 - reduction)).clamp(
-      targetTempo * PracticeRetryTempoPolicy.minimumTargetFraction,
-      double.infinity,
+    return PracticeRetryTempoPolicy.clampTempoForReduction(
+      targetTempo: targetTempo,
+      reduction: reduction,
     );
   }
 }

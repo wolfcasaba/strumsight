@@ -40,6 +40,41 @@ void main() {
     expect(noteTime(offset), const Duration(milliseconds: 1250));
     expect(noteTime(slowed), const Duration(microseconds: 1583333));
   });
+
+  test(
+    'preserves display and concert chords through transposition and capo',
+    () {
+      for (final cell
+          in <
+            ({
+              String input,
+              int capo,
+              int transpose,
+              String display,
+              String concert,
+            })
+          >[
+            (input: 'C', capo: 0, transpose: 0, display: 'C', concert: 'C'),
+            (input: 'F#', capo: 0, transpose: -2, display: 'E', concert: 'E'),
+            (input: 'F#', capo: 2, transpose: 0, display: 'F#', concert: 'G#'),
+            (input: 'Bb', capo: 2, transpose: -2, display: 'G#', concert: 'A#'),
+            (input: 'Bb', capo: 5, transpose: 0, display: 'Bb', concert: 'D#'),
+            (input: 'C', capo: 5, transpose: -2, display: 'A#', concert: 'D#'),
+          ]) {
+        final result = adapter.toAnalysisTarget(
+          _chordSnapshot(
+            chord: cell.input,
+            capo: cell.capo,
+            transposition: cell.transpose,
+          ),
+        );
+
+        expect(result.chords.single.displayChord, cell.display);
+        expect(result.chords.single.concertChord, cell.concert);
+        expect(result.target.expectedChords, <String>[cell.concert]);
+      }
+    },
+  );
 }
 
 SongReferenceSnapshot _snapshot({
@@ -63,4 +98,24 @@ SongReferenceSnapshot _snapshot({
   transposition: transposition,
   backingOffset: offset,
   playbackSpeed: speed,
+);
+
+SongReferenceSnapshot _chordSnapshot({
+  required String chord,
+  required int capo,
+  required int transposition,
+}) => SongReferenceSnapshot(
+  documentId: 'song',
+  documentVersion: 2,
+  sectionId: 'verse',
+  beatGrid: const <Duration>[],
+  events: <SongReferenceEvent>[
+    SongReferenceEvent(
+      id: 'chord',
+      time: const Duration(seconds: 1),
+      displayChord: chord,
+    ),
+  ],
+  capo: capo,
+  transposition: transposition,
 );

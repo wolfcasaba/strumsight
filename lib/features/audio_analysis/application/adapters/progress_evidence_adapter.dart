@@ -1,3 +1,6 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:strumsight/app/config/app_config.dart';
+
 import '../../domain/analysis_document.dart';
 import '../../domain/analysis_capability.dart';
 import '../../domain/analysis_metric.dart';
@@ -51,3 +54,30 @@ AnalysisMetricResult _fallbackMetric(AnalysisDocument document) {
   }
   return document.metrics.first;
 }
+
+abstract interface class ProgressEvidenceAdapterFactory {
+  ProgressEvidenceAdapter create();
+}
+
+final class _DefaultProgressEvidenceAdapterFactory
+    implements ProgressEvidenceAdapterFactory {
+  const _DefaultProgressEvidenceAdapterFactory();
+
+  @override
+  ProgressEvidenceAdapter create() => ProgressEvidenceAdapter();
+}
+
+final progressEvidenceAdapterFactoryProvider =
+    Provider<ProgressEvidenceAdapterFactory>(
+      (_) => const _DefaultProgressEvidenceAdapterFactory(),
+    );
+
+/// Progress evidence is dormant with the Practice integration flag OFF.
+final progressEvidenceAdapterProvider = Provider<ProgressEvidenceAdapter?>((
+  ref,
+) {
+  if (!ref.watch(appConfigProvider).flags.analysisPracticeIntegrationEnabled) {
+    return null;
+  }
+  return ref.watch(progressEvidenceAdapterFactoryProvider).create();
+});

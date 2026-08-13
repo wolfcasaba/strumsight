@@ -78,14 +78,28 @@ final class SongPitchContext {
   final int concertMidi;
 }
 
+/// Preserves the display chord while Analysis receives its concert value.
+final class SongChordContext {
+  const SongChordContext({
+    required this.displayChord,
+    required this.concertChord,
+  });
+
+  final String displayChord;
+  final String concertChord;
+}
+
 final class SongAnalysisTarget {
   SongAnalysisTarget({
     required this.target,
     required List<SongPitchContext> pitches,
-  }) : pitches = List<SongPitchContext>.unmodifiable(pitches);
+    required List<SongChordContext> chords,
+  }) : pitches = List<SongPitchContext>.unmodifiable(pitches),
+       chords = List<SongChordContext>.unmodifiable(chords);
 
   final AnalysisTarget target;
   final List<SongPitchContext> pitches;
+  final List<SongChordContext> chords;
 }
 
 /// Converts an OD-01 reference snapshot into a media-time Analysis target.
@@ -94,6 +108,7 @@ final class SongAnalysisAdapter {
 
   SongAnalysisTarget toAnalysisTarget(SongReferenceSnapshot snapshot) {
     final pitches = <SongPitchContext>[];
+    final chords = <SongChordContext>[];
     final expectedEvents = <ExpectedEvent>[];
     final expectedNotes = <int>[];
     final expectedChords = <String>[];
@@ -127,6 +142,9 @@ final class SongAnalysisAdapter {
           displayChord,
         ).transposed(snapshot.transposition).label;
         final concert = Chord(display).transposed(snapshot.capo).label;
+        chords.add(
+          SongChordContext(displayChord: display, concertChord: concert),
+        );
         expectedChords.add(concert);
         expectedEvents.add(
           ExpectedEvent(
@@ -166,6 +184,7 @@ final class SongAnalysisAdapter {
         ],
       ),
       pitches: pitches,
+      chords: chords,
     );
   }
 

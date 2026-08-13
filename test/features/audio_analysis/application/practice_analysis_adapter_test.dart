@@ -95,29 +95,46 @@ void main() {
         adapter.recommendedRetryTempo(targetTempo: 50, timingErrorSeverity: 1),
         42.5,
       );
+      expect(
+        PracticeRetryTempoPolicy.clampTempoForReduction(
+          targetTempo: tempo,
+          reduction: .5,
+        ),
+        60,
+      );
     },
   );
 
-  test('OFF integration flags do not instantiate either adapter provider', () {
+  test('OFF integration flags do not instantiate any adapter provider', () {
     final practiceFactory = _CountingPracticeFactory();
+    final songFactory = _CountingSongFactory();
     final tutorFactory = _CountingTutorFactory();
+    final progressFactory = _CountingProgressFactory();
     final container = ProviderContainer(
       overrides: [
         appConfigProvider.overrideWithValue(_flagsOffConfig()),
         practiceAnalysisAdapterFactoryProvider.overrideWithValue(
           practiceFactory,
         ),
+        songAnalysisAdapterFactoryProvider.overrideWithValue(songFactory),
         tutorAnalysisSnapshotAdapterFactoryProvider.overrideWithValue(
           tutorFactory,
+        ),
+        progressEvidenceAdapterFactoryProvider.overrideWithValue(
+          progressFactory,
         ),
       ],
     );
     addTearDown(container.dispose);
 
     expect(container.read(practiceAnalysisAdapterProvider), isNull);
+    expect(container.read(songAnalysisAdapterProvider), isNull);
     expect(container.read(tutorAnalysisSnapshotAdapterProvider), isNull);
+    expect(container.read(progressEvidenceAdapterProvider), isNull);
     expect(practiceFactory.calls, 0);
+    expect(songFactory.calls, 0);
     expect(tutorFactory.calls, 0);
+    expect(progressFactory.calls, 0);
   });
 
   test('integration flags remain OFF in every environment', () {
@@ -163,6 +180,26 @@ final class _CountingTutorFactory
   TutorAnalysisSnapshotAdapter create() {
     calls++;
     return const TutorAnalysisSnapshotAdapter();
+  }
+}
+
+final class _CountingSongFactory implements SongAnalysisAdapterFactory {
+  int calls = 0;
+
+  @override
+  SongAnalysisAdapter create() {
+    calls++;
+    return const SongAnalysisAdapter();
+  }
+}
+
+final class _CountingProgressFactory implements ProgressEvidenceAdapterFactory {
+  int calls = 0;
+
+  @override
+  ProgressEvidenceAdapter create() {
+    calls++;
+    return ProgressEvidenceAdapter();
   }
 }
 
