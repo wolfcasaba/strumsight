@@ -19,17 +19,20 @@ allowed_paths = [
   "lib/features/audio_analysis/presentation/analysis_export_screen.dart",
   "lib/features/audio_analysis/presentation/widgets/export_preview.dart",
   "lib/features/audio_analysis/public.dart",
+  "lib/features/share/share_service.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/audio_analysis/data/analysis_export_codec_test.dart",
   "test/features/audio_analysis/application/export_analysis_use_case_test.dart",
   "test/features/audio_analysis/application/delete_analysis_use_case_test.dart",
   "test/features/audio_analysis/presentation/analysis_export_screen_test.dart",
+  "test/features/share/share_service_test.dart",
   "test/property/analysis_export_redaction_property_test.dart",
   "docs/rounds/e06-r27-export-share-and-privacy-controls.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
+  "test/features/share",
   "test/property",
   "test/app",
 ]
@@ -39,10 +42,14 @@ native_gate = false
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R21/R26 merge.
 > Olvasd újra `lib/features/share/share_service.dart`-ot (a mai megosztási út,
 > `dart:io`-val) és a `share/public.dart` exportjait — a megosztás **a meglévő
-> szolgáltatáson** át megy, azt **nem** módosítjuk. Olvasd újra az R21
-> `AudioRetentionPolicy`-ját és a `delete` szerződését — a törlésnek a
-> dokumentumot, az indexet, a cache-t és az (opcionális) audiot **egyaránt**
-> el kell takarítania. PREPARED→PLANNING, brief commit előbb.
+> szolgáltatáson** át megy; az OD-01 kötelező, mindkét úton kitakarított
+> JSON-megosztásához a szolgáltatás **pontosan egy additív** publikus
+> metódussal bővül (H3 self-heal, 2026-08-13 — ld. §0.0/§5.8), a meglévő
+> `shareCard`/`shareImage`/`shareText` szignatúrája és viselkedése **nem**
+> változik. Olvasd újra az R21 `AudioRetentionPolicy`-ját és a `delete`
+> szerződését — a törlésnek a dokumentumot, az indexet, a cache-t és az
+> (opcionális) audiot **egyaránt** el kell takarítania. PREPARED→PLANNING,
+> brief commit előbb.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -57,6 +64,32 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 **PREPARED.** Új ADR nincs — az ADR 0202 (raw audio retention) és 0201
 (alacsony confidence nem tény) végrehajtása.
+
+**2026-08-13, H3 self-heal (ADR 0112 önjavító kör, 1. kísérlet).** Az első
+dispatch (Terra orchestráció, sonnet-impl implementer) a §5.1 OD-01
+alapértelmezett feloldását — „...majd a MEGLÉVŐ share szolgáltatáson át
+megosztási intentbe; a temp fájl a megosztás után (vagy hiba esetén)
+TÖRLŐDIK, és ezt teszt méri" — a §3/§4 „Kívül — TILOS: a share feature
+módosítása" tiltással összevetve helyesen `stopped`-ot (H3) jelzett,
+dispatch és kódmódosítás nélkül. Mérve
+(`lib/features/share/share_service.dart`, 103 sor): kizárólag
+`shareCard`/`shareImage`/`shareText` publikus, mindhárom a képernyőről
+készített PNG (vagy szöveg) megosztására épül; a privát `_writeTemp`
+`Directory.systemTemp`-be ír, és EGYIK metódus sem takarít a hívás után —
+nincs olyan publikus felület, amely egy tetszőleges (JSON) fájlt fogadna, és
+annak takarítását sikeres/hibás kimenetel esetén EGYARÁNT garantálná. A
+kötelező, mindkét úton kitakarított export-megosztás emiatt strukturálisan
+megvalósíthatatlan volt a deklarált `allowed_paths`-on belül.
+
+**Feloldás:** `allowed_paths` és §4 bővítve `lib/features/share/share_service.dart`
+(meglévő, additív metódus) és `test/features/share/share_service_test.dart`
+(ÚJ) fájlokkal; `gate_tests` bővítve `test/features/share`-vel, hogy a kör
+saját §7 gate-je is lefedje az új tesztet. §3 „Kívül — TILOS" és a §4 „Tilos
+zóna" pontosítva: a `lib/features/share/**` továbbra is tiltott zóna, KIVÉVE
+a `share_service.dart`-ba illesztett, kizárólag additív bővítést (a
+szerződést §5 8. pontja rögzíti kötelezően). Regressziós teszt:
+`tools/tests/test_e06_r27_share_service_scope.py` (a javítás előtt PIROS: az
+`allowed_paths`/`gate_tests` nem tartalmazta a fenti bejegyzéseket).
 
 ## 1. Cél
 
@@ -82,9 +115,12 @@ audio).
 összefoglaló + share-kártya adat); `RedactionPolicy` (allowlist-alapú
 mezőválogatás); `AnalysisExportCodec`; `ShareCardBuilder`;
 `ExportAnalysisUseCase`; `DeleteAnalysisUseCase` (dokumentum + index + cache +
-opcionális audio); export-előnézet képernyő; ARB.
+opcionális audio); export-előnézet képernyő; ARB; a `ShareService` EGY
+additív, tetszőleges fájlt megosztó és azt garantáltan takarító publikus
+metódusa (H3 self-heal, §0.0 — kötött szerződés §5.8).
 
-**Kívül — TILOS:** a `share` feature módosítása, felhő-feltöltés, Lab
+**Kívül — TILOS:** a `share` feature módosítása — KIVÉVE a fent nevezett
+egyetlen additív `ShareService`-metódus (§5.8) —, felhő-feltöltés, Lab
 diagnosztikai upload (a meglévő `diagnostics` út marad), CSV export
 (későbbi), a Library UI.
 
@@ -101,10 +137,13 @@ diagnosztikai upload (a meglévő `diagnostics` út marad), CSV export
 | `.../presentation/analysis_export_screen.dart` | ÚJ | előnézet + megerősítés |
 | `.../presentation/widgets/export_preview.dart` | ÚJ | „mi kerül ki" nézet |
 | `.../public.dart` | meglévő | export |
+| `lib/features/share/share_service.dart` | meglévő | **additív** metódus — kötött szerződés §5.8 (H3 self-heal) |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | codec + use case + widget + property |
+| `test/features/share/share_service_test.dart` | ÚJ | takarítás (siker/hiba) unit teszt (H3 self-heal) |
 
-**Tilos zóna:** `lib/features/share/**`, `lib/features/diagnostics/**`,
+**Tilos zóna:** `lib/features/share/**` (KIVÉVE a `share_service.dart` §5.8
+szerinti additív bővítése), `lib/features/diagnostics/**`,
 `lib/features/library/**`, `lib/features/analyze/**`, `lib/core/network/**`.
 Listán kívül → `stopped`.
 
@@ -132,6 +171,17 @@ Listán kívül → `stopped`.
 7. **A Lab export külön és figyelmeztetett:** ha egyáltalán készül, kizárólag
    Lab módban, **explicit** figyelmeztetéssel, és a redakciós policy
    **külön** allowlistjével.
+8. **ShareService additív kiterjesztés (H3 self-heal, 2026-08-13 — ld. §0.0):**
+   a §5.1 OD-01 kötelező, mindkét úton kitakarított export-megosztásához a
+   meglévő `ShareService` PONTOSAN EGY új publikus metódussal bővül, amely
+   egy tetszőleges, a hívó (`ExportAnalysisUseCase`) által előállított
+   fájl + felirat megosztására szolgál, és a megosztás sikeres VAGY hibás
+   kimenetelétől függetlenül (`try`/`finally`) törli az átadott fájlt. A
+   meglévő `shareCard`/`shareImage`/`shareText` szignatúrája és viselkedése
+   **változatlan**, és a `lib/features/share/**` egyetlen más fájlja sem
+   módosul. **NEM elfogadható:** a takarítási felelősség áthárítása a
+   hívóra, vagy a meglévő három metódus valamelyikének nem-kép/nem-szöveg
+   tartalomra való újrahasznosítása workaroundként.
 
 ### 5.1 Nyitott döntések — előre rögzített feloldással
 
@@ -220,7 +270,7 @@ open_decisions:
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/audio_analysis test/property test/app
+tools/round-gate.sh test/features/audio_analysis test/property test/app test/features/share
 ```
 
 Külön processzek, nincs `&&`/pipe/`tail`.
