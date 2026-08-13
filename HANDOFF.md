@@ -3,8 +3,37 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R26 DONE — PR #250 merged; main healthy, chain unblocked; next up is
-> E06-R27.)**
+> (E06-R27 H3 self-heal closed, PR #251 — main healthy, chain unblocked; next
+> up is E06-R27's own dispatch.)**
+>
+> ## ✅ [HEAL E06-R27/H3] KÉSZ — brief „Kívül — TILOS" zóna ellentmondott a §5.1 OD-01 saját alapértelmezésének (2026-08-13)
+>
+> E06-R27 (export/share/privacy) H3-mal állt meg: a brief saját §5.1 OD-01
+> alapértelmezése kötelezővé teszi, hogy a redaktált JSON export a MEGLÉVŐ
+> `ShareService`-en át menjen, mindkét úton (siker/hiba) kitakarítva — de a
+> §3/§4 „Kívül — TILOS" sora a TELJES `lib/features/share/**`-ot tiltott
+> zónának jelölte, `allowed_paths` egyetlen fájlját sem sorolva fel. Mérve
+> (`share_service.dart`, 103 sor): csak `shareCard`/`shareImage`/`shareText`
+> publikus, mind képernyő-PNG/szöveg megosztására épül, takarítás nélkül —
+> az implementer (Terra, sonnet-impl) helyesen `stopped`-ot jelzett, 0 fájlt
+> módosítva. Eltérően az E06-R25/H3 puszta lista-hiányától (**L257**), itt a
+> hiányzó fájl EXPLICITEN tiltott zónában volt, ezért a javítás nem csupán
+> `allowed_paths`-bővítés: új, BOUND §5.8 architekturális döntés pontosan
+> körülhatárolja az additív felületet (PONTOSAN EGY új `ShareService`
+> metódus, tetszőleges fájl + felirat, `try`/`finally` takarítás, a három
+> meglévő metódus változatlan), és a „Kívül — TILOS"/„Tilos zóna" szövege a
+> kivétel pontos hivatkozásával pontosult, nem törléssel. Regressziós teszt
+> (`tools/tests/test_e06_r27_share_service_scope.py`, javítás előtt PIROS,
+> utána ZÖLD) → PR [#251](https://github.com/wolfcasaba/strumsight/pull/251),
+> exact-SHA Router CI zöld (dispatch + post-merge is), squash-merge
+> `4a7e1fa0`. Lecke: `docs/LESSONS.md` **L261** (a self-heal mintája tiltott
+> zónás gyökérokra) és **L262** (egy pipeline-integrációs teszt hamis pirosa
+> a megosztott main fában egy éles self-heal alatt — friss klónnal és a
+> router-ci-vel igazolva, hogy nem regresszió; validálj a self-heal saját
+> izolált worktree-jében). E06-R27 saját tartalmi munkája (az export/share
+> feature implementációja) még **nem** történt meg — ez az önjavítás
+> kizárólag a brief scope-ját javította; a pipeline a HALTED feloldása után
+> automatikusan újra dispatch-eli a kört.
 >
 > ## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
 >

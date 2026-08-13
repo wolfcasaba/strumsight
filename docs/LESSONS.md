@@ -9764,3 +9764,92 @@ MEGJELENÉSÉT kell tiltania a kimeneten, nem egy kulcsnevet.
   védelem tényleges forrása egy jövőbeli fogyasztó-oldali kör ADR-be
   rögzített döntése (a mezőt adatként, escape-elve, sosem szabad
   utasítás-kontextusban kezelni), nem egy tökéletesített karakterkészlet.
+
+## L261 — Egy brief „Kívül — TILOS" zóna-tiltása és a SAJÁT §5.1 nyitott-döntési alapértelmezése ellentmondhat egymásnak ugyanabban a dokumentumban — a feloldás egy BOUND kivétel legyen, ne a teljes zóna felszabadítása (E06-R27, H3 self-heal, 2026-08-13)
+
+**Mit mértem.** Az E06-R27 brief (export/share/privacy) §5.1 OD-01
+alapértelmezése kötelezővé tette, hogy a redaktált JSON export a MEGLÉVŐ
+`ShareService`-en át menjen megosztásra, és hogy a temp-fájl takarítását
+(siker ÉS hiba esetén is) teszt mérje. Ugyanennek a briefnek a §3/§4 „Kívül
+— TILOS" sora ugyanakkor a TELJES `lib/features/share/**`-ot tiltott
+zónának jelölte, `allowed_paths`-ban egyetlen fájlját sem sorolva fel.
+Mérve (`lib/features/share/share_service.dart`, 103 sor): a meglévő
+publikus API (`shareCard`/`shareImage`/`shareText`) kizárólag képernyő-PNG
+vagy statikus szöveg megosztására épül, a privát `_writeTemp` nem takarít
+— nincs olyan metódus, amely egy tetszőleges, hívó által előállított fájlt
+fogadna és annak takarítását garantálná. Az implementer (Terra
+orchestráció, sonnet-impl) az ELSŐ dispatch-kor helyesen `stopped`-ot (H3)
+jelzett, nulla fájlt módosítva.
+
+**Miért.** A batch-authoring folyamat (Claude, 2026-08-07, kötegelt
+brief-írás) a „Kívül — TILOS" zónát a kör TÉMÁJA (export/share/privacy)
+alapján jelölte ki, anélkül hogy visszaellenőrizte volna a SAJÁT §5.1
+nyitott-döntési alapértelmezése ellen — a két szakasz egymástól
+függetlenül íródott, és sosem futott össze egy explicit kereszt-ellenőrzés.
+Ez strukturálisan megkülönböztetendő az E06-R25/H3 esettől (**L257**, PR
+#247 — ahol `allowed_paths` egyszerűen hiányzott egy szükséges, de NEM
+tiltott-zónás fájlt): ott a puszta lista-bővítés volt a teljes javítás. Itt
+a hiányzó fájl EXPLICITEN tiltott zónában volt — egy bare `allowed_paths`-
+bővítés önmagában íratlanul felszabadította volna a teljes megosztási
+felületet egy `risk = "high"` körben, ami saját maga is scope-kockázat
+lett volna.
+
+**Hogyan alkalmazd.** Ha egy self-heal H3-nál a gyökérok egy TILTOTT
+zónában lévő fájl, ne csak `allowed_paths`-t bővítsd: vegyél fel egy ÚJ,
+számozott pontot a §5 „Kötött architekturális döntések" közé, amely
+PONTOSAN körülhatárolja, mi az additív (itt: egyetlen új publikus metódus,
+kötött try/finally-takarítási szerződéssel, a meglévő metódusok
+változatlanul hagyásával), és explicit „NEM elfogadható" záradékkal zárja
+ki a meglévő felület újrahasznosítását vagy a takarítási felelősség
+áthárítását a hívóra. A „Kívül — TILOS" és „Tilos zóna" szövegét a kivétel
+pontos hivatkozásával pontosítsd, ne a teljes zóna törlésével. A
+regressziós teszt mérje az `allowed_paths`/`gate_tests` bővítést, és
+rögzítsen legalább egy „measured fact" asszerciót a jelenlegi, bővítés
+előtti felületről — de **L250** mintájára SOHA ne állítson valamely, a kör
+SAJÁT jövőbeli munkája által bevezetendő
+elem HIÁNYÁRÓL, mert az a kör sikeres implementációjával magától elavulna
+(itt: a guard csak a HÁROM MEGLÉVŐ metódusnevet és a `Directory.systemTemp`
+használatot ellenőrzi, sosem az új metódus hiányát).
+
+## L262 — Egy pipeline-integrációs teszt tévedhet a MEGOSZTOTT main munkafában egy éles self-heal alatt, miközben friss klónon és CI-n zöld — a Python gate-et a self-heal saját izolált worktree-jében validáld, ne a megosztott fában (E06-R27, H3 self-heal, 2026-08-13)
+
+**Mit mértem.** A H3 javítás előtti, kötelező pytest-alapmérésnél
+(`/home/ubuntu/music-theory`, a MEGOSZTOTT main munkafa, ahol épp ez az
+önjavítás fut) a teljes `tools/tests` suite 1 tesztet pirosra festett:
+`test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall`
+(`AssertionError: True is not false`, a saját izolált
+`tempfile.TemporaryDirectory()`-jén belüli `HALTED` fájl létezésén). A
+router-ci (GitHub Actions, friss checkout) UGYANAZON a HEAD SHA-n
+(`e2c391e4`, 2026-08-13 16:43:19Z) SIKERREL futott le kb. 10 perccel
+korábban. Egy friss `git clone` UGYANARRÓL a SHA-ról, ugyanarra a tesztre
+szűkítve ZÖLD volt (`1 passed in 0.12s`) — a megosztott main fában
+determinisztikusan (nem flaky-módon, 4.78s alatt megismételve is) PIROS
+maradt. A self-heal saját izolált worktree-jében (`git worktree add`, friss
+checkout `origin/main`-ről) a teljes suite ZÖLD (418 passed, a 3 új teszttel
+együtt).
+
+**Miért.** A teszt saját `PIPELINE_STATE_DIR`-t injektál egy izolált
+tempdirbe, és a `lock_file`/`HALTED`/`selfheal.count` mind ebből az
+env-változóból származtatott útvonalon élnek `tools/round-pipeline.sh`-ban
+— ELMÉLETBEN teljesen izolált. A gyakorlatban a teszt (a saját kommentje
+szerint is) a stale-halt archiválása UTÁN a VALÓDI (repo-beli, nem
+izolált) `docs/execution/pipeline-queue.tsv`-t olvassa a „következő kör
+indítása" ághoz, és onnantól legalább egy, a `PIPELINE_STATE_DIR`-t nem
+öröklő al-hívás valószínűleg a MEGOSZTOTT, ténylegesen futó pipeline VALÓDI
+`.pipeline/`-ját (HALTED, selfheal.count, lock) látja meg — a pontos
+mechanizmus NINCS tovább mérve, ez NEM ennek az önjavításnak a hatóköre.
+CI-n ez sosem fordulhat elő, mert a `.pipeline/` gitignore-olt, és egy
+friss runner-checkoutján SOSEM létezik.
+
+**Hogyan alkalmazd.** Egy `tools/**`-ot érintő kör (self-heal vagy normál)
+saját `python3 -m pytest tools/tests -q` gate-lépését a kör IZOLÁLT
+worktree-jében futtasd — ezt a self-heal §4.1 lépése amúgy is előírja az
+izolált munkapéldányhoz, de ez a mérés kifejezett indoklást ad rá: SOHA ne
+a megosztott main fában, még alapméréshez sem, amíg ez a teszt-izolációs
+rés dokumentálva marad, javítatlanul. Ha a megosztott fában mégis pirosra
+fut KONKRÉTAN ez a teszt, az önmagában NEM jelent kódregressziót: vesd
+össze egy friss `/tmp` klónnal ugyanarról a SHA-ról és/vagy a router-ci
+legutóbbi futásával ugyanazon a HEAD SHA-n, mielőtt bármit „javítanál"
+rajta — az ADR 0112 §3 mércéje szempontjából egy ilyen leletet vizsgálat
+NÉLKÜL elfogadni ugyanolyan hiba, mint figyelmen kívül hagyni egy valódi
+regressziót.
