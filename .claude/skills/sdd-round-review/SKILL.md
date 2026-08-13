@@ -33,8 +33,20 @@ kimenetet a legacy referenciával / a brief szó szerinti előírásával veti �
    cd /tmp/review-<kör>
    tools/round-gate.sh test/<a kör érintett területe> [további teszt-útvonal ...]
    ```
-3. **Scope-audit:** `git diff --stat main...<branch>` a brief engedélyezett
-   listája ellen. Bármi a listán kívül automatikusan legalább MAJOR.
+3. **Scope-audit:** a hiteles eszköz `tools/scope-audit.py --repo <klón>
+   --brief <brief> --base <a kör induló HEAD-je>` (ADR 0138 §1) — ne
+   `git diff --stat` kézi átfutására hagyatkozz, a szemantikájuk nem azonos.
+   Amit az eszköz `VIOLATION`-nak jelöl, az automatikusan legalább MAJOR.
+   **A saját review-jelentésed (`docs/reviews/eXX-rYY-review.md`, kockázatos
+   körnél `-security.md`) SOHA nem sértés, még akkor sem, ha a brief
+   `allowed_paths`-a nem sorolja fel** — ez egy állandó, kód szintű mentesség
+   (`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`, mérve:
+   `tools/tests/test_legacy_scope.py`), amit az eszköz `OK` sora mellett
+   `N generated/ignored` számlálóként mutat. Ha bizonytalan vagy egy
+   útvonalról, MÉRD MEG az eszközzel — ne a brief szövegéből következtess, és
+   ne jelezz H3-at a saját kötelező review-artefaktumod miatt (mérve:
+   E99-R08/H3, 2026-08-13 — a rotált orchestrátor pontosan ezt tévesztette el,
+   az eszköz tényleges futtatása nélkül).
 4. **Acceptance criteria tételesen** — kritériumonként bizonyíték (teszt,
    parancs-kimenet, futás-link). „Jól működik" nem bizonyíték.
 5. **Próbatesztek** (eldobhatók, a jelentésben dokumentálva, merge előtt
