@@ -9522,3 +9522,35 @@ Rokon: [[L252]] (ugyanennek a körnek egy korábbi self-healje, ugyanaz a
 `PIPELINE_STATE_DIR`-hermetikusság hibaosztály, más kódútvonalon), [[L254]]
 (a harmadik, ugyanerre a körre eső self-heal, jelzés nélküli halál
 háttérbe küldött gate miatt).
+
+## L256 — Egy régi munkapéldány `implementer-preamble.md`-je NEM frissül automatikusan egy main-re landolt preambulum-fixtől — dispatch előtt rebase kell, különben a self-heal saját javítása csendben nem érvényesül (E99-R08, 2026-08-13)
+
+**Mit mértünk.** A H6 self-heal (PR #244) javította a megosztott
+`docs/execution/implementer-preamble.md`-t (tiltva a kötelező gate
+háttérbe küldését). A H6-ot okozó megállt kör saját, korábban létrehozott
+munkapéldánya (`/home/ubuntu/ss-sonnet-impl-e99-r08`) viszont a self-heal
+UTÁN is a RÉGI, javítatlan preambulum-szöveget tartalmazta — mert
+`tools/mm-round.sh` a preambulum-fájlt a HÍVÓ WRAPPER SAJÁT elérési útjából
+számolt relatív úton olvassa (`$script_dir/../docs/execution/
+implementer-preamble.md`, ahol `$script_dir` a `<munkapéldány>/tools/
+mm-round.sh` saját könyvtára — a bevett „SOSE hívd a forrásfa saját
+másolatát" szabály miatt MINDIG a munkapéldány saját másolatát kell
+hívni). Ha egy self-heal a KÖZPONTI `main`-en javít egy ilyen fájlt, egy
+MÁR LÉTEZŐ, rebase-eletlen munkapéldány ezt NEM örökli automatikusan —
+csak akkor, ha explicit rebase-elik `origin/main`-re a KÖVETKEZŐ dispatch
+ELŐTT. Mérve: `grep -n "run_in_background" <munkapéldány>/docs/execution/
+implementer-preamble.md` üres találatot adott A H6-MERGE UTÁN is, amíg a
+munkapéldányt kézzel nem rebase-elték.
+
+**Hogyan alkalmazd.** Egy self-healt IGÉNYLŐ, korábban megállt kör
+munkapéldányának ÚJRA-dispatch-elése (javító kör) ELŐTT MINDIG ellenőrizd
+(vagy biztosítsd rebase-szel), hogy a munkapéldány `docs/execution/
+implementer-preamble*.md` fájljai tartalmazzák a legfrissebb `main`
+tartalmát — különben egy self-heal, ami PONT azért futott, hogy egy
+implementer-viselkedési hibát kijavítson, csendben HATÁSTALAN marad a
+FOLYTATÓ dispatchen, és ugyanaz a hibaosztály megismétlődhet úgy, hogy a
+javítás „már megtörtént"-nek látszik. Általánosabban: bármely
+megosztott, a hívó WRAPPER saját (nem a repo gyökerének) elérési útjából
+olvasott konfigurációs/prompt-fájl esetén ugyanez a csapda fennáll —
+grep-eld ki a friss javítás szövegét a munkapéldány saját másolatában,
+ne csak `main`-en.
