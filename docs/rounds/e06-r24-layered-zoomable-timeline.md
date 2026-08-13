@@ -375,5 +375,11 @@ elhagyása helyett `stopped` + brief-revízió.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r24-layered-zoomable-timeline-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Review: [`docs/reviews/e06-r24-layered-zoomable-timeline-review.md`](../reviews/e06-r24-layered-zoomable-timeline-review.md)
+— **APPROVED** javító kör #1 után (`4b895474`): 0 nyitott BLOCKER/MAJOR/MINOR
+(3 MAJOR + 4 MINOR zárva, 2 NOTE tájékoztató). Security review (`risk =
+"high"` kötelező): [`docs/reviews/e06-r24-layered-zoomable-timeline-security.md`](../reviews/e06-r24-layered-zoomable-timeline-security.md)
+— **PASS** (0 CRITICAL/BLOCKER/MAJOR/MINOR, 1 MINOR javítva ugyanabban a
+fordulóban, 4 NOTE). Merge csak exact-SHA zöld CI (`full-gate.yml` +
+`router-ci.yml`), §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után —
+mindkét feltétel teljesült.
