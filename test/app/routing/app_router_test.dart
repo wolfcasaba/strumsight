@@ -12,6 +12,9 @@ import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/analyze/public.dart';
+import 'package:strumsight/features/audio_analysis/domain/comparison/analysis_comparison.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_metric_catalog.dart';
+import 'package:strumsight/features/audio_analysis/presentation/analysis_compare_screen.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/auth/screens/login_screen.dart';
@@ -75,6 +78,7 @@ Future<_RouterHarness> _pumpRouter(
   required bool seen,
   bool accountEnabled = false,
   bool songTrainerEnabled = false,
+  bool analysisComparisonEnabled = false,
 }) async {
   final engine = FakeStrumEngine();
   final songRepository = InMemorySongRepository();
@@ -100,6 +104,7 @@ Future<_RouterHarness> _pumpRouter(
             diagnosticsEnabled: true,
             labModeAvailable: true,
             songTrainerV2Enabled: songTrainerEnabled,
+            analysisComparisonEnabled: analysisComparisonEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
           buildMode: 'test',
@@ -196,6 +201,82 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(harness.router.state.uri.path, AppRoutes.live);
     expect(find.byType(LiveScreen), findsOneWidget);
+  });
+
+  testWidgets(
+    'analysisComparisonEnabled OFF: the compare route is not reachable',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        analysisComparisonEnabled: false,
+      );
+
+      harness.router.go(
+        AppRoutes.analysisCompare,
+        extra: AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: const <MetricComparison>[],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.live);
+      expect(find.byType(AnalysisCompareScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'analysisComparisonEnabled ON: a valid comparison opens the compare screen',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        analysisComparisonEnabled: true,
+      );
+
+      harness.router.go(
+        AppRoutes.analysisCompare,
+        extra: AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: <MetricComparison>[
+            MetricComparison(
+              metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
+              direction: MetricComparisonDirection.improved,
+              confidence: 0.8,
+              sampleCount: 10,
+              beforeValue: 40,
+              afterValue: 30,
+              absoluteDelta: -10,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.analysisCompare);
+      expect(find.byType(AnalysisCompareScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('analysisComparisonEnabled ON: missing extra redirects to live', (
+    tester,
+  ) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      analysisComparisonEnabled: true,
+    );
+
+    harness.router.go(AppRoutes.analysisCompare);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(harness.router.state.uri.path, AppRoutes.live);
   });
 
   testWidgets('flagged Song Trainer library route is registered', (

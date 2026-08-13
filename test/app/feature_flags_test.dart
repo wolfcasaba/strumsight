@@ -32,6 +32,7 @@ List<bool> _audioAnalysisFlags(FeatureFlags flags) => <bool>[
   flags.analysisPitchEnabled,
   flags.analysisPreprocessingExperimentalEnabled,
   flags.analysisExperimentalFusionEnabled,
+  flags.analysisComparisonEnabled,
 ];
 
 FeatureFlags _withAiTutorFlags({
@@ -250,7 +251,7 @@ void main() {
   });
 
   group('Audio Analysis V2 rollout boundary', () {
-    test('all five flags remain off in every environment', () {
+    test('all audio analysis flags remain off in every environment', () {
       const constructorDefaults = FeatureFlags(
         accountEnabled: false,
         diagnosticsEnabled: false,
@@ -278,6 +279,29 @@ void main() {
         expect(
           flags.toString(),
           contains('analysisExperimentalFusionEnabled: false'),
+        );
+        expect(flags.toString(), contains('analysisComparisonEnabled: false'));
+      }
+    });
+
+    test('analysisComparisonEnabled defaults to false and remains off for '
+        'every environment', () {
+      const constructorDefaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(constructorDefaults.analysisComparisonEnabled, isFalse);
+
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        expect(
+          flags.analysisComparisonEnabled,
+          isFalse,
+          reason: '$environment must not implicitly enable comparison.',
         );
       }
     });

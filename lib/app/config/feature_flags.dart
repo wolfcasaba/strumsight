@@ -35,6 +35,7 @@ final class FeatureFlags {
     this.analysisPreprocessingExperimentalEnabled = false,
     this.analysisExperimentalFusionEnabled = false,
     this.analysisTechniqueProxiesEnabled = false,
+    this.analysisComparisonEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -83,6 +84,7 @@ final class FeatureFlags {
       analysisPreprocessingExperimentalEnabled: false,
       analysisExperimentalFusionEnabled: false,
       analysisTechniqueProxiesEnabled: false,
+      analysisComparisonEnabled: false,
     );
   }
 
@@ -177,6 +179,11 @@ final class FeatureFlags {
   /// proxies' eval-matrix rows are closed.
   final bool analysisTechniqueProxiesEnabled;
 
+  /// Whether the session comparison and trend route (E06-R25, ADR 0246) is
+  /// reachable. Remains OFF in every environment until the eval-matrix rows
+  /// are closed with real device data (brief §9).
+  final bool analysisComparisonEnabled;
+
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;
 
@@ -213,7 +220,9 @@ final class FeatureFlags {
           analysisPreprocessingExperimentalEnabled &&
       other.analysisExperimentalFusionEnabled ==
           analysisExperimentalFusionEnabled &&
-      other.analysisTechniqueProxiesEnabled == analysisTechniqueProxiesEnabled;
+      other.analysisTechniqueProxiesEnabled ==
+          analysisTechniqueProxiesEnabled &&
+      other.analysisComparisonEnabled == analysisComparisonEnabled;
 
   @override
   int get hashCode {
@@ -246,6 +255,7 @@ final class FeatureFlags {
       analysisPreprocessingExperimentalEnabled,
       analysisExperimentalFusionEnabled,
       analysisTechniqueProxiesEnabled,
+      analysisComparisonEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -283,5 +293,6 @@ final class FeatureFlags {
       '$analysisPreprocessingExperimentalEnabled, '
       'analysisExperimentalFusionEnabled: '
       '$analysisExperimentalFusionEnabled, '
-      'analysisTechniqueProxiesEnabled: $analysisTechniqueProxiesEnabled)';
+      'analysisTechniqueProxiesEnabled: $analysisTechniqueProxiesEnabled, '
+      'analysisComparisonEnabled: $analysisComparisonEnabled)';
 }
