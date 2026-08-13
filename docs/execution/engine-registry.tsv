@@ -16,6 +16,18 @@
 #          tools/engine-profile.sh clear        → vissza a queue soronkénti értékére
 #          tools/engine-profile.sh list         → állapot + elérhetőség
 name	harness	config_dir	model	auth_env	auth_file	stall_min	timeout_s	ctx	max_out	price_in	price_out	reasoning	megjegyzés
+# A `codex` az ÖRÖKÖLT alapértelmezett Codex-motor: `tools/codex-round.sh` a
+# DEFAULT CODEX_HOME-ban (`~/.codex`) ugyanazt a gpt-5.6-terra modellt futtatja,
+# mint a `terra` sor. A queue `engine` oszlopa és a kör-ágak prefixe egyaránt
+# ezt a nevet használja (`codex/e06-r27-…`), ezért a sornak LÉTEZNIE kell.
+# MÉRT hiányzás (2026-08-13, E06-R27 H-INDEP): az ADR 0242 §5.2 az ág-prefixet
+# a `name` oszlopból oldja fel, §5.3 pedig az ismeretlen prefixet fail-closed
+# H-INDEP-nek veszi. A `codex` sor hiánya miatt MINDEN `codex/*` ág folytatása
+# H-INDEP-be dőlt volna — a hátralévő E06-R27..R30 mind ilyen. A függetlenség
+# valódi: más harness és más előfizetés, mint a Claude-é; a Terrával viszont
+# ütközik (azonos modell), amit az `orchestrator_conflicts_with_implementer`
+# `codex|terra` ága már eddig is helyesen kezelt.
+codex	codex	~/.codex	gpt-5.6-terra	-	-	12	3600	400000	64000	-	-	-	örökölt alapértelmezett Codex-motor; a `terra` sorral AZONOS modell → a Terra orchestrátorral ütközik
 terra	codex	~/.codex-terra	gpt-5.6-terra	-	-	12	3600	400000	64000	-	-	-	ChatGPT Pro előfizetés; ítéletigényes körökre
 minimax	claude	~/.claude-minimax	MiniMax-M3	MINIMAX_API_KEY	~/.mmx/config.json	20	3600	1000000	32768	0.30	1.20	-	9/10; mért gyengéje: invariánst lazít (LESSONS)
 qwen-plus	codex	~/.codex-kilo	qwen/qwen3.7-plus	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	32768	0.32	1.28	-	5/5 — a legjobb pontosság/ár; LASSÚ (~95 s/válasz)

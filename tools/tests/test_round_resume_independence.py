@@ -31,6 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DRIVER = ROOT / "tools" / "round-pipeline.sh"
+REGISTRY_PATH = ROOT / "docs" / "execution" / "engine-registry.tsv"
 
 
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
@@ -298,6 +299,41 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             (state / "orchestrator-round" / "E06-R23").write_text("terra\n", encoding="utf-8")
             result = driver("--resume-orchestrator", "E06-R23", "terra", state=state)
             self.assertEqual(result.stdout.strip(), "claude", result.stderr)
+
+    def test_the_legacy_codex_engine_resolves_and_does_not_conflict_with_claude(self) -> None:
+        """MÉRT hiba (2026-08-13, E06-R27 H-INDEP): a `codex` — az ÖRÖKÖLT
+        alapértelmezett Codex-motor, amit a queue `engine` oszlopa és a
+        kör-ágak prefixe egyaránt használ (`codex/e06-r27-…`) — hiányzott a
+        `docs/execution/engine-registry.tsv`-ből. Az ADR 0242 §5.2 az
+        ág-prefixet a `name` oszlopból oldja fel, §5.3 pedig az ismeretlen
+        prefixet fail-closed H-INDEP-nek veszi, ezért MINDEN `codex/*` ág
+        folytatása H-INDEP-be dőlt — a hátralévő E06-R27..R30 mind ilyen.
+
+        A függetlenség valódi: a `codex` más harness és más előfizetés, mint
+        a Claude-é. A Terrával viszont ütközik (azonos gpt-5.6-terra modell),
+        ezért a Terra-pinnek `claude`-ra kell billennie.
+        """
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E06-R27").write_text("terra\n", encoding="utf-8")
+            result = driver("--resume-orchestrator", "E06-R27", "codex", state=state)
+            self.assertEqual(
+                result.stdout.strip(),
+                "claude",
+                "a codex implementer mellett a claude a független orchestrátor, nem HALT_INDEP",
+            )
+
+    def test_the_legacy_codex_engine_has_a_registry_row(self) -> None:
+        """A fenti feloldás ADATVEZÉRELT: ha a `codex` sor eltűnik a
+        registryből, a §5.3 fail-closed ág némán visszahozza a H-INDEP-et
+        minden `codex/*` körre. Ez a cella pinneli a sor létezését."""
+        rows = [
+            line.split("\t")[0]
+            for line in REGISTRY_PATH.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ]
+        self.assertIn("codex", rows, "a `codex` motornak sora kell legyen az engine-registry.tsv-ben")
 
     def test_unknown_branch_prefix_fails_closed(self) -> None:
         """ADR 0242 §5.3: a registryből fel nem oldható ág-prefix H-INDEP,
