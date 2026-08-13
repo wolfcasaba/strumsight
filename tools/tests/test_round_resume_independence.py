@@ -146,6 +146,70 @@ class ResumeImplementerFromBranchTest(unittest.TestCase):
             self.assertEqual(result.stdout.strip(), "", result.stderr)
 
 
+class WorkspaceRestorationHermeticityTest(unittest.TestCase):
+    """Independent-review F1 regression (2026-08-13).
+
+    A bare, no-argument dispatch used to run a REAL `git checkout -q main`
+    on the process's cwd whenever that cwd's branch differed from `main`
+    and the tree was clean -- harmless for the real production cron working
+    directory (`PIPELINE_STATE_DIR` unset there), but hazardous for a
+    `PIPELINE_STATE_DIR`-injected test/review clone: it silently switched
+    the reviewed branch away from under later, alphabetically-ordered
+    `tools/tests` files, which then measured `main` instead of the
+    reviewed commit. Test-mode (`PIPELINE_STATE_DIR` set) must fail closed
+    instead of touching the shared working tree's branch.
+    """
+
+    def _fixture_repo(self, root: Path) -> Path:
+        bare = root / "origin.git"
+        work = root / "work"
+        subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(work)], check=True)
+        subprocess.run(["git", "-C", str(work), "config", "user.email", "a@x.test"], check=True)
+        subprocess.run(["git", "-C", str(work), "config", "user.name", "A"], check=True)
+        (work / "f.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(work), "add", "f.txt"], check=True)
+        subprocess.run(["git", "-C", str(work), "commit", "-q", "-m", "init"], check=True)
+        subprocess.run(["git", "-C", str(work), "remote", "add", "origin", str(bare)], check=True)
+        subprocess.run(["git", "-C", str(work), "push", "-q", "origin", "main"], check=True)
+        subprocess.run(
+            ["git", "-C", str(work), "checkout", "-q", "-b", "sonnet-impl/e00-r00-fixture"],
+            check=True,
+        )
+        return work
+
+    def test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            work = self._fixture_repo(root)
+            state = root / "state"
+            state.mkdir()
+            environment = dict(os.environ, PIPELINE_STATE_DIR=str(state))
+
+            result = subprocess.run(
+                ["bash", str(DRIVER)],
+                capture_output=True,
+                text=True,
+                env=environment,
+                cwd=work,
+                timeout=60,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("PIPELINE_STATE_DIR", result.stderr)
+            branch = subprocess.run(
+                ["git", "-C", str(work), "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(
+                branch,
+                "sonnet-impl/e00-r00-fixture",
+                "teszt-módban a driver nem mozdíthatja el a megosztott munkafa ágát",
+            )
+
+
 class ResumeOrchestratorConflictTest(unittest.TestCase):
     """D2 (ADR 0242 §5.2): ütközésnél az ORCHESTRÁTOR billen, nem az implementer."""
 
