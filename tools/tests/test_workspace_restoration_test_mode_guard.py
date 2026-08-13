@@ -91,9 +91,26 @@ class WorkspaceRestorationTestModeGuardTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as state_name:
             state = Path(state_name)
+            # CI runners (and any box without an interactive `claude` login)
+            # have no `claude` CLI on PATH -- round-pipeline.sh's own
+            # `command -v "$claude_bin"` / `command -v gh` preconditions,
+            # checked before the workspace-restoration block, would die
+            # first and never reach the code under test. Neither is ever
+            # actually invoked on this path (the guard fires before any
+            # dispatch), so unused stubs satisfy the existence checks the
+            # same way test_pipeline_integration.py's full-firing tests
+            # already stub `python3` for an analogous reason.
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            for name in ("claude", "gh"):
+                stub = stub_bin / name
+                stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                stub.chmod(0o755)
+
             env = dict(os.environ)
             env["PIPELINE_STATE_DIR"] = str(state)
             env["PIPELINE_NO_LAUNCH"] = "1"
+            env["PATH"] = f"{stub_bin}:{env['PATH']}"
 
             result = subprocess.run(
                 ["bash", str(repo / "tools" / "round-pipeline.sh")],
