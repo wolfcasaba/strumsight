@@ -22,7 +22,7 @@ allowed_paths = [
   "test/features/audio_analysis/data/audio_fingerprint_test.dart",
   "test/features/audio_analysis/domain/analysis_cache_key_test.dart",
   "test/property/analysis_cache_property_test.dart",
-  "docs/adr/0210-analysis-cache-key-and-performance-budget.md",
+  "docs/adr/0248-analysis-cache-key-and-performance-budget.md",
   "docs/baseline/epic-06-analysis-performance.md",
   "docs/manual-testing/analysis-eval-matrix.md",
   "docs/rounds/e06-r28-cache-performance-and-model-lifecycle.md",
@@ -36,8 +36,8 @@ native_gate = false
 ```
 
 > ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R21/R22 merge.
-> **ADR 0210** előre kiosztva. Olvasd újra az R01
-> `tool/audio_analysis_baseline.dart` mérőszkriptjét és a
+> **ADR 0248** (lásd §0.0 — a batch-tervezéskori 0210 elavult). Olvasd újra
+> az R01 `tool/audio_analysis_baseline.dart` mérőszkriptjét és a
 > `docs/baseline/epic-06-audio-analysis-start.md` **mért** V1 számait — az
 > R28 benchmarkja ezzel **összevethető** kell legyen (azonos fixture-ök).
 > Olvasd újra az R21 repository- és az R27 törlés-szerződését (a cache
@@ -54,7 +54,59 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Előre kiosztott ADR: **0210** (cache-kulcs + performance budget).
+**PREPARED.** Eredetileg előre kiosztott ADR: 0210 (cache-kulcs + performance
+budget) — **elavult, lásd alább.**
+
+**Pre-flight revízió (Claude, 2026-08-13, E06-R28 pre-flight):**
+
+1. **ADR-szám: 0210 → 0248.** A brief 2026-08-07-i batch-tervezéskor kapta a
+   „0210" placeholdert, de a `tools/round-slots.py reserve-adr --round
+   E06-R28` (a KÖTELEZŐ, ütközésmentes foglaló, §1.0.1) most **0248**-at adott
+   vissza. Mérve: `docs/adr/0210-*.md` nem létezik, és a
+   `.pipeline/inflight/adr/` foglalási naplóban SINCS `0210` vagy `0211`
+   marker — a highest ténylegesen foglalt/committolt szám 2026-08-13 20:06-kor
+   **0247** (`docs/adr/0247-analysis-export-share-and-delete-contract.md`,
+   E06-R27). A 0210/0211 placeholderek a batch-tervezés idején (mielőtt a
+   köztes E06-R08…R27 + más epicek kb. 35 ADR-t elhasználtak) sosem mentek át
+   a foglalón — árva, sosem-foglalt számok. Ez a kör **0248**-cal megy; minden
+   korábbi „ADR 0210" hivatkozás e fájlban lecserélve. (E06-R29 brief-je is
+   „0211"-et hordoz — az az ő pre-flightjának dolga, ezt a fájlt nem érinti.)
+2. **§2 pontosítás — a modell-újratöltés idézete a V1 fájl, NEM módosítandó.**
+   A „`analyze_providers.dart` 83–101" hivatkozás a `_crnnWeights`/
+   `_chordWeights`/`computeClipAnalysis`-ra ténylegesen a **V1**
+   `lib/features/analyze/providers/analyze_providers.dart` fájlra mutat (mérve:
+   `_crnnWeights` 83. sor, `_chordWeights` 94. sor, `computeClipAnalysis` 108.
+   sor a jelen HEAD-en) — ez a fájl a jelen kör §3 **TILOS zónájában** van
+   (`lib/features/analyze/**`) és NINCS az `allowed_paths`-on. A hivatkozás
+   kizárólag **motiváló bizonyíték** (ugyanez a minta — modellbájtok
+   stage/futásonkénti újratöltése — várható a V2 oldalon is, ha egy jövőbeli
+   kör konkrét stage-eket köt be), NEM egy módosítandó hely: ezt a köröt a V1
+   fájl érintése nélkül kell elvégezni. A §6 „Modell-betöltés" AC
+   („bundle-olvasás hívásszáma 1… akkor is, ha három stage kéri") a
+   **ÚJ, önálló `ModelByteCache`** saját tesztjével bizonyítandó (szimulált
+   stage-hívók), NEM éles V1- vagy V2-runner-bekötéssel — a V2 runner ma sincs
+   konkrét stage-listával összeállítva (`analysisV2RunnerProvider` továbbra is
+   `throw StateError(...)`, `analysis_providers.dart:168-173`), ennek a
+   körnek nem feladata ezt megváltoztatni.
+3. **§9 kockázat pontosítása — a mért `AnalysisCachePort` szerződés.** Az R27
+   már otthagyott egy explicit, stabil portot pontosan erre a célra:
+   `lib/features/audio_analysis/application/delete_analysis_use_case.dart:10-12`
+   — `abstract interface class AnalysisCachePort { Future<void>
+   invalidate(String documentId); }`, alapértelmezett `NoCachePort` no-op-pal
+   (ugyanott, 32–38. sor), és a fájl saját doc-commentje szó szerint: „No
+   production implementation exists yet — the E06-R28 cache round wires a
+   real port here without touching this use case's contract (ADR 0247
+   §Döntés 4)." A `delete_analysis_use_case.dart` fájl **NINCS** ezen kör
+   `allowed_paths`-án — az interfészt tilos módosítani (a brief §9 eredeti
+   figyelmeztetése ezt helyesen tiltja). Egy valódi portadapter megírása
+   (pl. az `AnalysisCache`-t becsomagolva) a `application/analysis_providers.dart`
+   wiring fájlban **elvégezhető és természetes**, mert az allowed_paths-on
+   van és „wiring" a szerepe — de ez **NEM önálló, külön gate-elt AC**: a §6
+   lista és a §6.1 falszifikációs mátrix változatlan, kimerítő és nem bővül
+   vele. (`DeleteAnalysisUseCase` maga sincs Riverpod-providerbe kötve ma —
+   mérve: nulla `DeleteAnalysisUseCase(`/`deleteAnalysisUseCaseProvider`
+   találat a wiring fájlokban a saját osztálydefinícióján kívül — így egy
+   teljes éles bekötés ennek a körnek amúgy sem lenne elvégezhető feladat.)
 
 ## 1. Cél
 
@@ -83,7 +135,7 @@ model manifest ID-k + DSP config hash + target hash + feature flag snapshot);
 `AnalysisCache` (hit/miss diagnosztika, LRU cap, invalidáció, korrupció-
 kezelés); `ModelByteCache` (a modellbájtok **egyszeri** betöltése és a
 parse-olt modell újrahasználata futásonként); `tool/audio_analysis_benchmark.dart`;
-`docs/baseline/epic-06-analysis-performance.md`; **ADR 0210**.
+`docs/baseline/epic-06-analysis-performance.md`; **ADR 0248**.
 
 **Kívül — TILOS:** `TransferableTypedData`/`Float32List` **átállás**
 (mérés nélkül tilos, SDD §22.2 — ez a kör csak **megméri** és ADR-ben
@@ -102,7 +154,7 @@ javasol), chunked analysis, DSP-paraméter, `lib/features/analyze/**`.
 | `lib/core/storage/storage_keys.dart` | meglévő | **additív** cache-kulcs |
 | `tool/audio_analysis_benchmark.dart` | ÚJ | mérőszkript |
 | `docs/baseline/epic-06-analysis-performance.md` | ÚJ | mért baseline |
-| `docs/adr/0210-…md` | ÚJ | cache + budget döntés |
+| `docs/adr/0248-…md` | ÚJ | cache + budget döntés |
 | `docs/manual-testing/analysis-eval-matrix.md` | meglévő | PENDING sorok |
 | `test/**` | ÚJ | cache + fingerprint + property |
 
@@ -128,7 +180,7 @@ javasol), chunked analysis, DSP-paraméter, `lib/features/analyze/**`.
    dokumentumokat **nem** érinti (SDD §23.5).
 6. **Optimalizálás csak benchmarkkal** (SDD §22.7 / Kör 28 §8): bármely
    típusváltás vagy másolat-csökkentés **előtt** és **után** mérés kell.
-   Ez a kör **nem** végez ilyen átállást — az ADR 0210 rögzíti a
+   Ez a kör **nem** végez ilyen átállást — az ADR 0248 rögzíti a
    **javaslatot** és a **feltételt**.
 7. **A teljesítmény-küszöb NEM merge-kapu ezen a boxon:** a benchmark
    számai a baseline dokumentumba és az eval-mátrix PENDING soraiba kerülnek;
@@ -215,7 +267,7 @@ open_decisions:
 - [ ] **Eval-mátrix:** a valós eszközös teljesítmény (30 s-os klip
       középkategóriás Androidon, peak memória, thermal) **PENDING** sorként,
       felelőssel és mérendő számmal.
-- [ ] **ADR 0210** rögzíti: a kulcs hat komponensét, a cap-értékeket, a
+- [ ] **ADR 0248** rögzíti: a kulcs hat komponensét, a cap-értékeket, a
       **javasolt** (de itt el nem végzett) `Float32List`/`TransferableTypedData`
       átállás **feltételét** (paritás + mért nyereség), és a visszavonás
       feltételét.
@@ -254,7 +306,9 @@ külön futtatott artefaktum, aminek a kimenete a baseline dokumentumba kerül.
 
 ## 8. Implementációs sorrend
 
-1. ADR 0210 (kulcs, cap, budget, átállási feltétel).
+1. ADR 0248 (kulcs, cap, budget, átállási feltétel — a pre-flight már megírta,
+   §0.0; az implementer csak akkor módosítja, ha implementáció közben mért
+   eltérés indokolja, dokumentált módon).
 2. RED: kulcs-, fingerprint-, cap- és single-flight mátrix.
 3. `audio_fingerprint.dart` + `analysis_cache_key.dart`.
 4. `analysis_cache.dart` (LRU, korrupció, invalidáció).
