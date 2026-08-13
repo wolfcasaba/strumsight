@@ -6,6 +6,65 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
+
+Governance-kör (nem termék-viselkedés): a 2026-08-13-i `E06-R23` kétszeri,
+összesen 4:45 órás megállását okozó három lánc-infrastruktúra defekt javítva.
+**D1** — a rotációs állapot mostantól körönként kulcsolt
+(`orchestrator-round/<ROUND>`), egy elhalt-és-újraindult kör a MÁSODIK
+dispatchen ugyanazt az orchestrátort kapja, nem az `alternate` léptetést.
+**D2** — folytatáskor `tools/round-pipeline.sh` az implementer-identitást az
+ág prefixéből MÉRI (nem a queue-motorból), és csak a mozgatható orchestrátort
+billenti ütközéskor, fail-closed `H-INDEP`-re ismeretlen prefixnél. **D3** —
+`tools/safe-force-push.sh` (ÚJ) futtatható artefaktumként teszi meg a
+rebase-utáni push fetch → remote-only-ellenőrzés (patch-id alapú) →
+megtagadás-vagy-push lépéssorát; sima `--force`/argumentum nélküli
+`--force-with-lease` tiltva. [ADR 0242](adr/0242-per-round-orchestrator-rotation-and-safe-force-push.md).
+Zéró Dart/lib/test sor a diffben.
+
+A kör MAGA három önjavító kört (ADR 0112) igényelt, mielőtt zöld kapun
+átjuthatott — a saját tárgya (orchestrátor-rotáció) a saját levezénylésén is
+kifogott:
+- **H3** — a rotált Terra-orchestrátor tévesen tilos zónának (H3) minősítette
+  a kötelező review-jelentés commitolását, mert a brief `allowed_paths`-a nem
+  sorolta fel — holott `docs/reviews/**` feltétel nélkül mentes
+  (`tools/scope-audit.py`). Javítva: `sdd-round-review` skill + ADR 0138
+  pontosítás. PR #243, `docs/LESSONS.md` L251/L252.
+- **H8** — a H3-fix ÉS a kör saját F1-javítása egymástól függetlenül,
+  ugyanazon a soron javította ugyanazt a hibát a `tools/round-pipeline.sh`-ban
+  — a rebase csak a magyarázó komment szövegén ütközött. Kézzel feloldva,
+  branch pusholva. `docs/LESSONS.md` L253.
+- **H6** — a nyitva maradt F3 review-lelet (teszt-hermetikusság CI-ban)
+  javítására két egymást követő `sonnet-impl` javító kör is a kötelező gate-et
+  a Bash-eszköz `run_in_background: true` paraméterével indította, majd
+  jelzés/commit nélkül állt le — a `claude -p` egyfordulós folyamat a forduló
+  végén megöli a saját háttér-gyerekfolyamatait is. Javítva: a megosztott
+  `docs/execution/implementer-preamble.md` explicit tiltja a kötelező gate
+  háttérbe küldését. PR #244, `docs/LESSONS.md` L254.
+
+A H6 self-heal UTÁN egy friss Sonnet 5 orchestrátor-session vette át: a
+munkapéldányban talált, korábban elkészült de commitolatlan F3-javítást
+(egy determinisztikus, soha nem futtatott `CLAUDE_BIN` fake-bináris a
+`command -v` előfeltételhez) véglegesítette, `origin/main`-re rebase-elte,
+mindkét gate-et zöldre futtatta, `tools/safe-force-push.sh`-sal (a kör SAJÁT
+D3-deliverable-je) pusholta, majd az AGENTS.md §15.7 szerint — mivel ez az
+orchestrátor ugyanazt a Claude/Sonnet-5 kvótát osztja, mint a `sonnet-impl`
+implementer — NEM saját független review-t írt, hanem a MÁR meglévő,
+genuinely független Terra-review-t certifikálta a mechanikus gate-bizonyíték
+alapján. Zöld kapu (exact-SHA `f4b3afff`, majd egy doksi-only követő
+commiton `ec226489`): Router CI + Full Gate (no APK) mindkétszer success. PR
+[#245](https://github.com/wolfcasaba/strumsight/pull/245), squash
+`48959b4c`.
+
+**KRITIKUS post-merge felfedezés — lásd a HANDOFF.md tetején a 🚨 dobozt.**
+A squash-merge UTÁN, a merge-commit SAJÁT (push-triggerelt) Router CI-futása
+PIROSRA váltott — ugyanaz a kör-hozta F1 regressziós teszt
+(`WorkspaceRestorationHermeticityTest` a `tools/tests/test_round_resume_independence.py`-ban),
+ami a merge ELŐTT (a feature-branch tetején, kétszer is) zöld volt,
+determinisztikusan bukik a merge-commit SHA-n. Gyökérok és javítási recept a
+HANDOFF.md aktuális dobozában — ez a session szándékosan NEM nyúlt a
+`tools/round-pipeline.sh`-hoz (§4 tiltás), a következő önjavító kör dolga.
+
 ## ✅ E06-R23 KÉSZ — Overview screen és metric cardok (2026-08-13)
 
 Flag-gated V2 overview és metric-detail route, ötállapotú metric card,

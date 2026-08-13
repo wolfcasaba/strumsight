@@ -9459,3 +9459,66 @@ preambulum-szöveg a gyökérokot szünteti meg (a modell nem tudta, hogy a
 minta tilos); a mechanikus auto-folytatás portolása `tools/mm-round.sh`-ba
 külön, nagyobb változtatás — jövőbeli körnek hagyva, NEM ennek a self-healnek
 a scope-ja.
+
+## L255 — Exact-SHA CI zöld a feature-branch tetején nem bizonyítja, hogy a merge-commit is zöld lesz, ha egy teszt a valós `gh`-állapottól függ (E99-R08, 2026-08-13)
+
+**Mit mértünk.** E99-R08 (PR #245) mindkét kötelező CI-t (Router CI, Full
+Gate) kétszer is zöldre futtatta a merge-jelölt exact SHA-n (`f4b3afff`,
+majd egy doksi-only követő commit után `ec226489`) — pontosan az ADR 0086
+§2 protokoll szerint. A squash-merge UTÁN, a merge-commit (`48959b4c`)
+SAJÁT, push-triggerelt Router CI-futása mégis PIROSRA váltott — byte-azonos
+fájlfával. Gyökérok: a kör saját F1-regressziós tesztje
+(`WorkspaceRestorationHermeticityTest`,
+`tools/tests/test_round_resume_independence.py`) a TELJES
+`round-pipeline.sh`-t futtatja egy izolált fixture-repón, de a script
+pre-existing "3. Előfeltételek" szakasza (nem ennek a körnek a diffje)
+három `gh`-hívást tesz (nyitott PR-lista `:1514`, futó workflow-lista
+`:1532`, main CI-egészség `:1566`) MIELŐTT elérné a teszt által célzott
+`PIPELINE_STATE_DIR`-kapuolt kódot — egyik `gh`-hívás sincs stubolva a
+fixture-ben. A Router CI futtatókörnyezetében (nincs `gh auth` erre a
+hívási kontextusra) az ELSŐ ilyen hívás determinisztikusan hibázik → a
+script korábban `die()`-ol, mint a teszt által elvárt üzenet — a teszt így
+NEM a célzott logikát méri, hanem a `gh`-hívás sikerét/bukását, ami a
+fixture izolációján KÍVÜLI állapottól függ. Kétszer reprodukálva (`gh run
+rerun`) UGYANAZON a SHA-n, azonos hibával — nem flakiness, hanem
+determinisztikus. Részletek és a javasolt (még nem alkalmazott) javítás:
+`HANDOFF.md` 🚨 doboz.
+
+**Miért.** A pre-merge exact-SHA verifikáció (ADR 0086 §2) a FÁJLTARTALOM
+azonosságát garantálja a feature-branch tetején és a merge-jelölt SHA-n —
+de nem garantálja, hogy egy AMBIENS, a fixture izolációján kívül eső
+állapot (nyitott PR-ek száma, futó workflow-k, `gh` hitelesítettsége az
+adott hívási kontextusban) ugyanaz marad a merge UTÁN is. A saját PR
+nyitva-léte a legkézenfekvőbb ilyen állapot: a feature-branch CI-futásakor
+a PR MÉG nyitva volt, a merge-commit CI-futásakor már bezárva/mergelve —
+ha egy teszt a VALÓS `gh`-állapotot méri ahelyett, hogy stubolná, ez a
+különbség elég a flip-eléshez.
+
+**Hogyan alkalmazd.** (1) Minden teszt, ami a TELJES `round-pipeline.sh`-t
+(vagy más, `gh`-t hívó orchestrátor-scriptet) egy izolált fixture-ön
+futtatja, KÖTELEZŐEN stuboljon MINDEN `gh`-alparancsot, amit a script a
+fixture által elért kódúton meghívhat — nem csak azt az EGYET, amit a
+teszt célja szerint mérni akar. A `tools/tests/test_pipeline_integration.py:958`
+`make_fake_gh()` már megoldja ezt EGY konkrét hívásra (`pr list`/`pr view`
+a `--heal-pr-number` úton); a mintát minden hasonló fixture-nek követnie
+kell, kiterjesztve a ténylegesen elért alparancsokra. (2) A post-merge
+gate-lépés (a záró rituálé §5.5-je, `tools/prepare-flutter-generated.sh` +
+`round-gate.sh` a FRISS `main`-en) pontosan az ilyen osztályú hibák ellen
+véd — ez a lecke MAGA a post-merge ellenőrzés által lett felfedezve, ami
+igazolja a lépés súlyát: enélkül E99-R08 „zöld kapuval merge-elve"
+jelentés mellett hagyta volna a `main`-t pirosan, észrevétlenül. (3)
+Statikus szöveg-alapú tesztek (`assertIn(..., szkript_forrás)`, pl.
+`MainHealthTest`/`RoundBranchGuardTest` a `test_pipeline_plumbing.py`-ban)
+NEM helyettesítik az élő-futtatásos hermetikus tesztet, de fordítva sem
+igaz: egy élő-futtatásos teszt `gh`-stub NÉLKÜL rosszabb, mint a statikus —
+hamis biztonságot ad, ami csak akkor bukik le, amikor MÁR a `main`-en van.
+(4) Egy orchestrátor-session, aki ezt a hibaosztályt éles merge után
+fedezi fel, NE nyúljon `tools/round-pipeline.sh`-hoz vagy `tools/tests`-hez
+saját kezűleg (a szerepkör §4 határa) — a teljes diagnózist (fájl:sor,
+reprodukció, javasolt fix) írja meg a HANDOFF-ba, és hagyja a self-heal
+körre (ADR 0112).
+
+Rokon: [[L252]] (ugyanennek a körnek egy korábbi self-healje, ugyanaz a
+`PIPELINE_STATE_DIR`-hermetikusság hibaosztály, más kódútvonalon), [[L254]]
+(a harmadik, ugyanerre a körre eső self-heal, jelzés nélküli halál
+háttérbe küldött gate miatt).

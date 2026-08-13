@@ -3,147 +3,92 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E99-R08 H6 self-heal — implementer preamble now forbids backgrounding the
-> mandatory gate; E99-R08 itself still NOT merged, see below).**
+> (E99-R08 MERGED, PR #245 — but the merge exposed a live main breakage,
+> see the 🚨 box immediately below. Read it FIRST.)**
 >
-> ## 🔧 E99-R08 H6 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
-> [#244](https://github.com/wolfcasaba/strumsight/pull/244), squash
-> `f14196ca` (2026-08-13)
+> ## 🚨 URGENT — main Router CI is RED as of `48959b4c` (post-E99-R08-merge, 2026-08-13 ~11:06 UTC) — self-heal needed before ANY new round dispatches
 >
-> **A H8 self-heal lezárása UTÁN a lánc ugyanezen a körön H6-tal állt meg
-> harmadszor:** a Terra-orchestrátor a nyitva maradt F3 review-leletet
-> (`tools/tests/test_round_resume_independence.py` nem hermetikus a CI-ban)
-> `sonnet-impl` javító körrel próbálta zárni — de két EGYMÁST KÖVETŐ futás
-> (session `3f71b1fb-…`, majd `665d8491-…`) is a kötelező `python3 -m pytest
-> tools/tests -q` gate-et a Bash-eszköz saját `run_in_background: true`
-> paraméterével indította, majd „I'll report back once it completes" jellegű
-> BEJELENTÉSSEL zárta a fordulót — jelzés és commit nélkül. Nyers bizonyíték
-> (`/tmp/mm-e99-r08-f3*.log`, stream-json): az `end_turn` `result` esemény
-> UTÁN közvetlenül `task_notification status:"killed"` a háttér-taskra — a
-> `claude -p` EGY-fordulós folyamat a forduló végén megöli a saját háttérbe
-> küldött gyerekfolyamatait is, így SOSEM érkezik meg az a `task_notification`,
-> amit egy normál, interaktív munkamenetben kapna. Mindkét futás exit 0-val
-> `status=unknown`-ba halt (`tools/mm-round.sh` ezt helyesen jelezte), ami a
-> harmadik H6 haltot okozta (ADR 0087 §2). A megállt kör saját munkapéldánya
-> (`/home/ubuntu/ss-sonnet-impl-e99-r08`) a már megírt, de nem commitolt F3
-> javítást (`test_round_resume_independence.py`) ÉRINTETLENÜL tartalmazza —
-> ezt a self-heal SZÁNDÉKOSAN nem vitte tovább.
+> **This is NOT a GitHub Actions outage** (`github_actions_degraded()` was
+> not a factor) and NOT flaky — confirmed **deterministic**, reproduced
+> IDENTICALLY twice via `gh run rerun 31693001292` on the exact same merge
+> SHA. It blocks every future round: `tools/round-pipeline.sh`'s own
+> pre-dispatch main-health guard (`:1584`, pre-existing, unrelated to
+> E99-R08's own D1/D2/D3 changes) refuses to start new work over a red main
+> — and since `crontab -l` fires `round-pipeline.sh` every 5 minutes, it will
+> keep `die()`-ing (exit 4) and `notify()`-ing "⛔ piros main" (high
+> priority, if an ntfy topic is configured) until this is fixed.
 >
-> **A javítás:** a megosztott `docs/execution/implementer-preamble.md` §1 már
-> ELVILEG tiltotta a „bejelent és kilép" mintát (E04-R13/14/16 alapján), de
-> csak szöveges bejelentésre koncentrált, sosem nevezte meg a Bash-eszköz
-> konkrét `run_in_background` paraméterét mint UGYANANNAK a mintának egy
-> eszköz-szintű változatát — ugyanez az elv máshol (egy orchestrátor saját
-> `gh run watch` hívása) már bizonyítva: `docs/LESSONS.md` L183. A preambulum
-> most explicit módon kimondja: kötelező gate-et TILOS háttérbe küldeni, mert
-> nincs „majd" — és idézi a mért E99-R08 bizonyítékot. Ez a megosztott
-> preambulum MINDEN claude-harness motort érint (`sonnet-impl` ÉS `minimax`,
-> `tools/mm-round.sh`-on keresztül). Regressziós teszt:
-> `test_the_preamble_forbids_backgrounding_the_mandatory_gate`
-> (`tools/tests/test_claude_harness_engines.py`) — piros a javítás előtt
-> (mérve), zöld utána. Teljes `python3 -m pytest tools/tests -q`: **388
-> passed, 394 subtests, 0 failed** — ez fogott meg egy VALÓS mellékhatást is:
-> az idézett szöveg első fogalmazásában szerepelt a „resume" szó, ami 4
-> független `test_qwen_implementer_hardening.py`-tesztet piros-ra váltott (a
-> Codex/Qwen-ág saját auto-folytatás-felismerése egy load-bearing substring
-> keresést futtat a TELJES prompt-szövegen) — átfogalmazva zöld. Router CI
-> zöld exact-SHA `85461031`-en. Nulla Dart sor a diffben —  `build-apk.yml`
-> nem indult. Lecke: `docs/LESSONS.md` **L254**.
+> **Root cause (fully diagnosed, NOT applied — this orchestrator session's
+> own §4 boundary forbids touching `tools/round-pipeline.sh`/`tools/tests`,
+> that's self-heal (ADR 0112) territory):** E99-R08's own F1 regression test,
+> `WorkspaceRestorationHermeticityTest::test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch`
+> (`tools/tests/test_round_resume_independence.py`), invokes the FULL
+> `round-pipeline.sh` from the top via `subprocess.run(["bash", DRIVER], cwd=<isolated fixture>, ...)`.
+> But the script's pre-existing "3. Előfeltételek" section
+> (`:1514`–`:1588`, NOT touched by E99-R08) runs **three `gh`-dependent
+> checks BEFORE reaching the `PIPELINE_STATE_DIR`-gated code the test
+> targets**: open-PR list (`:1514`), running-workflow list (`:1532`), and
+> main's own router-ci.yml/full-gate.yml health (`:1566`) — none of them
+> mocked by the test's fixture. In the Router CI runner (no `gh auth`
+> configured for this invocation context) the FIRST of these fails outright:
+> `gh pr list --state open ...` errors, `open_pr_branches="?"`, and the
+> script dies with `"a nyitott PR-ek nem kérdezhetők le (gh) — a lánc nem
+> indul vakon"` — never reaching the `PIPELINE_STATE_DIR` message the test
+> asserts on. (On this dev box locally, a DIFFERENT die message fires instead
+> — `"a main $main_workflow futása(i) [...] pirosak"` — meaning `gh` resolves
+> *some* ambient real-repo fallback here that CI's runner doesn't have; the
+> exact mechanism wasn't fully pinned down, but it explains why this test
+> passed on the feature branch tip `ec226489` — where PR #245 was still open
+> — and only started failing deterministically once the SHA became `main`
+> itself post-merge.)
 >
-> **Nem-javított, feljegyzett megfigyelés:** `tools/codex-round.sh`-nak MÁR
-> VAN gépi auto-folytatás védelme pontosan erre a hibaosztályra (ugyanabban a
-> session-ben újraindítja a fordulót, ha jelzés nélkül ért véget, korlátos
-> számban) — `tools/mm-round.sh`-nak (a `sonnet-impl`/`minimax` út) NINCS
-> ilyen mechanikus védelme, csak utólagos `status=unknown` észlelése. A
-> preambulum-javítás a gyökérokot (a modell nem tudta, hogy a minta tilos)
-> szünteti meg; a mechanikus auto-folytatás portolása `tools/mm-round.sh`-ba
-> egy külön, nagyobb változtatás lenne — jövőbeli körnek hagyva.
+> **The fix is already precedented in this exact file** — no new design
+> needed. `tools/tests/test_pipeline_integration.py:958` (`make_fake_gh()`)
+> solves the IDENTICAL problem for a different test
+> (`test_heal_pr_number_resolves_the_deterministic_heal_branch_via_gh_pr_list`)
+> by pushing a fake `gh` executable onto `PATH` that answers `pr list`/`pr
+> view` deterministically instead of hitting the network. The
+> `WorkspaceRestorationHermeticityTest` fixture needs the same treatment,
+> extended to also answer `run list --limit 20 ...` and `run list --workflow
+> ... --branch main ...` (both empty/success is sufficient — an empty
+> `main_runs` hits the script's own `""` no-op case, not a `die()`). Verified
+> safe: the existing `MainHealthTest`/`RoundBranchGuardTest` tests
+> (`tools/tests/test_pipeline_plumbing.py`) are static-text/`assertIn`-on-source
+> checks, not live executions — they will not be affected by adding a `gh`
+> stub to this one fixture.
 >
-> ## 🔧 E99-R08 H3 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
-> [#243](https://github.com/wolfcasaba/strumsight/pull/243), squash
-> `7a594db6` (2026-08-13)
+> **Verification for whoever picks this up:** `gh run rerun 31693001292`
+> (or dispatch `router-ci.yml` fresh) after the fix — same-SHA `main` rerun
+> is the fastest confirmation loop. Local repro:
+> `/tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q`
+> on a fresh `main` checkout.
 >
-> **E99-R08 (GOV-07, körönként kulcsolt orchestrátor-rotáció) állapota —
-> FONTOS a következő sessionnek:** az implementáció **TELJES és pusholva** a
-> `sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation` branchen (HEAD
-> `bf413355`); a rotált Terra-orchestrátor saját független review-ja már
-> mindkét MAJOR leletet (F1, F2) zárta 18 célzott teszttel. A kör **NEM lett
-> merge-elve** — a következő lépés a **committolt review-jelentés írása és a
-> CI-dispatch**, NEM egy friss dispatch.
+> ## ✅ E99-R08 (GOV-07) KÉSZ — Körönként kulcsolt orchestrátor-rotáció és biztonságos force-push (2026-08-13)
 >
-> **A halt gyökéroka:** Terra a mandatory `docs/reviews/e99-r08-*-review.md`
-> jelentés commitolását H3-nak (tilos zóna) minősítette, mert a brief
-> `allowed_paths`-a — a bevett gyakorlat szerint, 145/149 kör-briefen — nem
-> sorolja fel. A halt **téves** volt: `tools/scope-audit.py` a review-fájllal
-> (a halt saját mért koordinátáin, `ba9b65ea` bázison) is `OK`-t ad —
-> `docs/reviews` feltétel nélküli mentesség
-> (`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), amit
-> `tools/tests/test_legacy_scope.py` már bizonyít. Terra a brief szövegéből
-> következtetett, az eszközt nem futtatta le a leletre. Javítva:
-> `.claude/skills/sdd-round-review/SKILL.md` §3 immár a hiteles eszközre
-> mutat és nevesíti a mentességet; `docs/adr/0138-*.md` normatív
-> „Módosítás"-blokkot kapott. Lecke: `docs/LESSONS.md` **L251**.
+> Governance-kör; a `tools/round-pipeline.sh` orchestrátor-rotációját
+> körönként kulcsolja (D1), folytatáskor az implementer-identitást az ág
+> prefixéből méri és csak az orchestrátort billenti ütközéskor, fail-closed
+> `H-INDEP`-re (D2), és `tools/safe-force-push.sh`-sal (ÚJ) futtatható
+> artefaktummá teszi a rebase-utáni biztonságos push protokollt (D3). [ADR
+> 0242](docs/adr/0242-per-round-orchestrator-rotation-and-safe-force-push.md).
+> Zéró Dart sor. A kör saját levezénylése **három önjavító kört** igényelt
+> (H3 — review-jelentés téves H3-halt, PR #243; H8 — rebase-konfliktus két
+> független, azonos javítás között, ág pusholva; H6 — kötelező gate
+> háttérbe küldése két javító-kör-dispatchen át, PR #244) — a teljes,
+> részletes saga (lecke-hivatkozásokkal: L251, L252, L253, L254) a
+> [handoff-archívumban](docs/handoff-archive.md#e99-r08-gov-07-kész--körönként-kulcsolt-orchestrátor-rotáció-és-biztonságos-force-push-2026-08-13).
+> Egy friss Sonnet 5 orchestrátor-session véglegesítette a H6 alatt
+> megírt-de-commitolatlan F3-javítást, `main`-re rebase-elte, mindkét gate-et
+> zöldre futtatta, majd az AGENTS.md §15.7 szerint (ugyanaz a Claude/Sonnet-5
+> kvóta, mint a `sonnet-impl` implementer) NEM saját review-t írt, hanem a
+> már meglévő, genuinely független Terra-review-t certifikálta. Zöld kapu
+> (exact-SHA `f4b3afff` majd `ec226489`, mindkétszer Router CI + Full Gate
+> success) → squash-merge PR
+> [#245](https://github.com/wolfcasaba/strumsight/pull/245), `48959b4c`.
+> **A post-merge ellenőrzés fedezte fel a fenti 🚨 urgens leletet** — pontosan
+> ezért kötelező a záró rituálé §5.5 post-merge gate-lépése.
 >
-> **Mért, ennél fontosabb mellékfelfedezés (ugyanaz a hibaosztály, a javítás
-> ELLENŐRZÉSE közben):** a friss, izolált klónos `pytest tools/tests -q` futás
-> — pontosan az, amit a review-protokoll ÉS ez a gate is előír — a suite
-> végére csendben `main`-re váltotta a klónt: `tools/round-pipeline.sh`
-> 3. lépése (munkafa-helyreállítás) egy VALÓDI `git checkout -q main`-t futtat
-> a process cwd-je ellen, valahányszor az ág nem `main` és a fa tiszta —
-> feltétel nélkül, teszt- és éles módban egyaránt. Ugyanaz az alak, mint az
-> E99-R08 saját F1 review-lelete. Javítva: a mutáció `PIPELINE_STATE_DIR`
-> hiányára kötve (az éles cron sosem állítja, minden teszt/review-futás
-> igen), így teszt-módban fail-closed. Regressziós teszt: önálló, hálózat
-> nélküli, CI sekély checkoutjára is hordozható throwaway-repóban, piros a
-> javítás előtt (a saját `munkafa-helyreállítás: ... -> main` log-sorát
-> mérve), zöld utána. Lecke: `docs/LESSONS.md` **L252**.
->
-> Mindkettő regressziós teszttel védve, Router CI zöld exact-SHA
-> `86c4719f`-en (PR-ág) és a merge-elt `7a594db6`-on (post-merge `main`).
-> Nulla Dart sor a diffben — `build-apk.yml` nem indult.
->
-> ## 🔧 E99-R08 H8 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed` (2026-08-13, ág pusholva, PR NINCS)
->
-> **A H3 self-heal lezárása UTÁN a lánc ugyanezen a körön H8-cal állt meg
-> ismét:** a kör saját, addig sosem pusholt implementer-ága
-> (`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`, akkor HEAD
-> `bf413355`) `origin/main`-re rebase-elve valódi `CONFLICT (content)`-et
-> adott a `tools/round-pipeline.sh`-ban. Gyökérok: a H3 self-heal (PR #243)
-> ÉS a kör saját review-fixje (F1 lelet, commit `b9e72ec6`) egymástól
-> függetlenül, egymásról nem tudva ugyanazt a hibát javította ugyanazon a
-> soron, bájtra azonos guard-logikával — csak a megelőző magyarázó komment
-> szövege ütközött szóról szóra. Részletek: `docs/LESSONS.md` **L253**,
-> normatív általánosítás: [ADR 0112](docs/adr/0112-self-healing-pipeline.md)
-> „H8 megosztott eszközfájl-konfliktus" módosítás.
->
-> **A javítás:** a `main` oldal kommentjét/hunkját megtartva, a kör branch
-> nem redundáns tartalmát (egy új regressziós tesztfájl,
-> `tools/tests/test_round_resume_independence.py`) megőrizve a rebase
-> `git rebase --continue`-val tisztán befejeződött — a korábban „nem
-> érintett, ellenőrizetlen" 2 commit (`92433313`, `bf413355`) is konfliktus
-> nélkül alkalmazódott. Frissesség-bizonyíték: `git merge-base
-> --is-ancestor origin/main HEAD` 0-s kilépéssel. Teljes `python3 -m pytest
-> tools/tests -q`: **406 passed, 394 subtests, 0 failed** (a korábban
-> dokumentált, független `test_claude_harness_engines.py` piros azóta egy
-> másik körtől zölddé vált). `tools/round-gate.sh
-> test/tooling/architecture_allowlist_guard_test.dart`: mind a hat lépés
-> zöld. A branch NORMÁL (nem force) push-sal publikálva, mert
-> `git ls-remote --heads origin <branch>` a fix előtt bizonyítottan üres
-> volt — nem volt mit force-push-al felülírni.
->
-> **E99-R08 állapota — FONTOS a következő sessionnek:** az implementáció
-> teljes, review-zárt (F1/F2) ÉS most már a friss `main`-re (`37d5024a`)
-> rebase-elve, teljes suite-tal és Dart-gate-tel újra-ellenőrizve, pusholva
-> — de **NINCS nyitva PR**, **nincs CI-dispatch**, és a brief **§11
-> Review szakasza még mindig üres sablon-fejléc** (§10.6/10.7 dokumentálja a
-> rotált Terra orchestrátor már elvégzett független review-ját, F1/F2
-> zárva). A következő lépés: PR nyitása a friss branchről, a §11
-> transzkribálása/tanúsítása (Terra már meglévő review-ja + saját mechanikus
-> gate-újrafuttatás alapján — AGENTS.md §15.7 szerint egy friss Claude/
-> Sonnet-5 session ne végezzen SAJÁT független review-t ugyanerre a
-> munkára), majd CI-dispatch és zöld kapus merge. Ez a self-heal
-> SZÁNDÉKOSAN nem végezte el ezt — a self-heal dolga az akadály (a
-> rebase-konfliktus) megszüntetése, nem a kör levezénylése.
+> **Következő kör:** a fenti 🚨 self-heal, azután a queue (`docs/execution/pipeline-queue.tsv`) szerint E06-R25.
 >
 > ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
 >
@@ -221,30 +166,6 @@
 >
 > **Következő kör:** E06-R25 — Session comparison és fejlődési trend.
 >
-> ## ✅ E06-R23 KÉSZ — Overview screen és metric cardok (2026-08-13)
->
-> Elkészült a V2 eredmény megjelenítője: flag-gated overview és metric-detail
-> route, ötállapotú metric card, insight- és signal-quality card, explicit
-> confidence/semantics jelzés, angol–magyar lokalizáció és overflow/route
-> regressziós tesztek. A presentation nem importál engine-t és nem dönt
-> confidence-küszöbökről; a V1 Analyze érintetlen. [ADR
-> 0241](docs/adr/0241-analysis-overview-presentation-boundary.md).
->
-> A normál review első köre két MAJOR-t talált (négy insight-slot +
-> Részletek-viselkedés, valamint hiányzó route/overflow cellák); a javító kör
-> mindkettőt regressziós teszttel lezárta. A végső normál és a kötelező
-> `risk=high` security review **APPROVED**, 0 nyitott BLOCKER/MAJOR.
->
-> **Zöld kapuk:** Full Gate [31668356756](https://github.com/wolfcasaba/strumsight/actions/runs/31668356756)
-> + Router CI [31667973664](https://github.com/wolfcasaba/strumsight/actions/runs/31667973664)
-> success a végleges branch SHA `3903391`-en; PR
-> [#241](https://github.com/wolfcasaba/strumsight/pull/241), squash
-> `d5a95e44`. A post-merge gate a friss `main`-en is zöld:
-> `audio_analysis=465`, `app=69`, format/analyze/architecture/secrets/l10n
-> is PASS.
->
-> **Következő kör:** E06-R24 — Többrétegű, zoomolható timeline.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -254,14 +175,13 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Mért diéta: 2026-08-13 (E06-R24 zárása, EGYBEN E06-R22-vel és E06-R21-gyel
-> — az E06-R23 saját zárása 2026-08-12→13 között elmulasztotta a diétát:
-> csak a saját bannerét tette fel, az akkor kikerülő E06-R21-et a fejlécben
-> hagyta, így egy körön át HÁROM banner élt egyszerre; az E06-R24 zárása ezt
-> pótolta): E06-R24 új bannerként felkerült, E06-R23 maradt a második
-> (legutóbbi kettő) helyen, E06-R22 ÉS E06-R21 együtt az archívumba
-> kerültek (a `docs/handoff-archive.md`-ban az E06-R23 archív-bejegyzése és
-> az E06-R20 közé beszúrva, időrendben).
+> Mért diéta: 2026-08-13 (E99-R08 zárása): a fejlécben ez idáig ÖT banner élt
+> egyszerre (a H6/H3/H8 self-heal bannerek egymásra halmozódtak a láncot
+> ismételten megállító hibák miatt, plusz E06-R24 és E06-R23) — ez a zárás a
+> hármat EGYETLEN konszolidált „E99-R08 KÉSZ" bannerré (plusz a fölé emelt 🚨
+> urgens dobozzá) vonta össze, és eltávolította E06-R23-at (már korábban is
+> jelen volt az archívumban, csak a fejlécből nem került ki). A két legutóbbi
+> banner most: E99-R08, E06-R24.
 
 ## 1. Current release state
 
