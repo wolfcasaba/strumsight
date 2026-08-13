@@ -3,14 +3,14 @@
 Brief: `docs/rounds/e06-r23-analysis-overview-and-metric-cards.md`
 Diff: `origin/main...sonnet-impl/e06-r23-analysis-overview-and-metric-cards`
 Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-13
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (a kötelező security review eredményére váró merge-döntéssel)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-Az izolált review-gate zöld, és a scope-audit is zöld, de két kötelező, mért
-acceptance-criterion nincs teljesítve. Emiatt merge tilos a javító körig.
+Az F1/F2 javító kör után a friss izolált review-gate és scope-audit zöld. A
+kötelező külön security review még a merge előtt fut.
 
 ## Acceptance criteria
 
@@ -18,12 +18,12 @@ acceptance-criterion nincs teljesítve. Emiatt merge tilos a javító körig.
 |---|---|---|---|
 | 1 | Öt metric-card állapot, unavailable okkal és tanáccsal | ✅ | `metric_card_test.dart`; mind az öt state lefutott a review-gate-ben. |
 | 2 | Négy dokumentum-mátrix overflow nélkül | ✅ | `analysis_overview_screen_test.dart` négy dokumentum-cellája. |
-| 3 | 320/600 px × 1.0/2.0 overflow-mátrix | ❌ | Csak 320/2.0 és 600/1.0 van tesztelve; 320/1.0 és 600/2.0 hiányzik. |
+| 3 | 320/600 px × 1.0/2.0 overflow-mátrix | ✅ | Mind a négy cella tesztelt; a 320/1.0 valódi overflow-t talált és a `MetricCard` `Wrap` javítása után zöld. |
 | 4 | En+hu paritás, nyers kulcs nélkül | ⚠️ | Mindkét locale főcíme tesztelt, de nincs teljes megjelenített-kulcs ellenőrzés. |
 | 5 | Nem color-only semantics | ✅ | Valódi-sértés próba: a `MetricCard` külső `Semantics.label` törlésére `flutter test test/features/audio_analysis/presentation/metric_card_test.dart` piros (2 elvárt semantics finder hibával), majd visszaállítva. |
 | 6 | Nincs engine-import / UI confidence-küszöb | ✅ | `analysis_overview_screen_test.dart` forrásőrei; review-gate zöld. |
-| 7 | Maximum-policy: pontosan 4, maradék a Részletek mögött | ❌ | F1. |
-| 8 | Flag-gate route nélkül nem oldható fel | ❌ | F2. |
+| 7 | Maximum-policy: pontosan 4, maradék a Részletek mögött | ✅ | A 9 insightos teszt 4 overview és 5 detail insightot mér. |
+| 8 | Flag-gate route nélkül nem oldható fel | ✅ | Valódi `routerProvider`/`findMatch` teszt: flag-off nem old, flag-on+extra old, V1 `/analyze` változatlan. |
 | 9 | Letiltott akció magyarázattal | ✅ | `InsightCard` disabled `Tooltip`-pel; widget- és forrásvizsgálat. |
 | 10 | Metric semantics név+érték+megbízhatóság | ✅ | `MetricCard` külső semantics label, valódi-sértés próba. |
 | 11 | V1 érintetlen | ✅ | Scope diffben nincs `lib/features/analyze/**`. |
@@ -41,7 +41,7 @@ acceptance-criterion nincs teljesítve. Emiatt merge tilos a javító körig.
 - **Hatás:** Egy 9 insightos dokumentum 2-4 kártyát mutathat, a többi coaching információ elveszik; egyes insightok rossz kategóriacímkét kapnak.
 - **Kötelező javítás:** A dokumentum sorrendjét/az R20 maximum-policyt hűen fogyasztó, determinisztikus négy slotot hozz létre; minden slot a saját `kind`-ját használja. Adj külön, read-only insight-details megjelenítést vagy a meglévő Részletek útvonalon egy olyan payloadot/képernyőt, amely a fennmaradó insightokat ténylegesen megjeleníti. A 9 insightos teszt `hasLength(4)`-et és a Részletek után a fennmaradó 5 insight láthatóságát mérje.
 - **Ellenőrzés:** bővített `analysis_overview_screen_test.dart` és/vagy `overview_view_model_test.dart`, továbbá `tools/round-gate.sh test/features/audio_analysis test/app`.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`45a13c0`), friss izolált gate-en ellenőrizve (`94e6758`).
 
 ### F2 — MAJOR — A kötelező route- és overflow-őrcellák hiányoznak
 
@@ -50,17 +50,18 @@ acceptance-criterion nincs teljesítve. Emiatt merge tilos a javító körig.
 - **Hatás:** A jelenlegi zöld suite nem fogja meg a kiszélesített betűméret miatti overflow-t a két hiányzó cellában, illetve egy jövőbeli route-regisztrációs regressziót.
 - **Kötelező javítás:** Egészítsd ki a 320/1.0 és 600/2.0 overflow-cellákkal. A meglévő, engedélyezett presentation tesztből vagy egy már meglévő router-tesztben mérd, hogy flag-off mellett nincs V2 route, flag-on + érvényes `AnalysisDocument` extrával megnyílik, és a V1 `/analyze` route változatlan marad.
 - **Ellenőrzés:** célzott widget/router teszt, majd a kötelező gate.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`45a13c0`), friss izolált gate-en ellenőrizve (`94e6758`).
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Ellenőrizve |
 |---|---|
-| `tools/round-gate.sh test/features/audio_analysis test/app` | ✅ izolált `/tmp/review-e06-r23` klónban: format, analyze, mindkét célzott teszt, architecture, secrets és l10n zöld. |
+| `tools/round-gate.sh test/features/audio_analysis test/app` | ✅ friss izolált `/tmp/review-e06-r23-fix` klónban a `94e6758` HEAD-en: format, analyze, 465 audio-analysis + 69 app teszt, architecture, secrets és l10n zöld. |
 | Scope audit | ✅ kézi Python audit zöld. |
 | Valódi-sértés próba | ✅ a MetricCard semantics label ideiglenes törlésére célzott teszt piros, majd a változás visszaállítva. |
-| CI (teljes suite + property + APK) | ⏳ még nincs final exact-SHA dispatch; javítás után kötelező. |
+| CI (teljes suite + property + APK) | ⏳ még nincs final exact-SHA dispatch; merge előtt kötelező. |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos, amíg F1 és F2 OPEN MAJOR. A javító kör után új, izolált review és exact-SHA CI szükséges.
+F1 és F2 lezárt; a normál review APPROVED. Az ADR 0052 szerinti merge-hez az
+exact-SHA teljes CI/property/APK és a kötelező security review zöld eredménye szükséges.
