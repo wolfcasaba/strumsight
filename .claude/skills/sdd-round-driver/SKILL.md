@@ -126,8 +126,15 @@ findings-listával a promptban. A javító kör után a review-t frissítsd
 ```bash
 git fetch origin main && git rev-parse origin/main   # JEGYEZD FEL ezt a SHA-t
 gh workflow run build-apk.yml --ref <kör-branch>
-gh run watch <run-id>        # vagy gh run list --workflow=build-apk.yml
+run_id=$(gh run list --workflow=build-apk.yml --branch <kör-branch> --limit 1 --json databaseId --jq '.[0].databaseId')
+tools/wait-for-ci.sh "$run_id"   # 0=success 1=failure 4=lejárt(még futhat) 6=gh maga akadt el
 ```
+
+**SOSE csupasz `gh run watch`/`gh run list`-ciklus** — egyik hívást sem védi
+timeout. Mérve (E06-R25, H-NOSIGNAL önjavítás, 2026-08-13): egy ilyen védtelen
+`gh run list` hívás a session BELSEJÉBEN fagyott le, miközben a várt futás már
+zölden lezárult — a driver csak a 20 perces elakadás-őrrel, a teljes sessiont
+ölve vette észre. A `tools/wait-for-ci.sh` minden hívást `timeout`-tal véd.
 
 **A dispatch mehet, amint az implementer „kész"-t jelez — nem kell megvárni a
 review-t.** A ~10 perces futás így a review alatt telik. Ha a javító kör KÓDOT
