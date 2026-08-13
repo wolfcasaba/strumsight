@@ -8,12 +8,13 @@ Verdikt: CHANGES REQUIRED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 3 · MINOR: 0 · NOTE: 0
 
 Az izolált review-klónban a teljes helyi round gate zöld, és a gépi
 scope-audit a 19 módosított útvonalat mind engedélyezettnek találta. Két
 eldobható, valódi-sértés próbateszt mégis pontatlan evaluation-metrikát
-bizonyított; a javítás előtt merge tilos.
+bizonyított; a javítás után egy harmadik, azonos matching-hibacsalád maradt a
+beat- és pitch-metrikában. Merge tilos.
 
 ## Acceptance criteria
 
@@ -21,7 +22,7 @@ bizonyított; a javítás előtt merge tilos.
 |---|---|---|---|
 | 1 | Typed parser-mátrix | ✅ | `evaluation_manifest_parser_test.dart`, review gate |
 | 2 | Determinisztikus, útvonalmentes report | ✅ | `evaluation_report_test.dart`, review gate |
-| 3 | Kilenc metrika és szeletek | ❌ | F1 / F2 torzítja az onset- és chord-segment metrikát |
+| 3 | Kilenc metrika és szeletek | ❌ | F1 / F2 / F3 torzítja az onset-, chord-segment-, beat- és pitch-metrikát |
 | 4 | Ismert-válaszú cellák | ❌ | F1 egy érvényes optimális párosításnál rossz TP/F1 alapot ad |
 | 5–6 | Kalibrációs küszöb és ECE | ✅ | `calibration_fitter.dart` célzott tesztjei, review gate |
 | 7 | Regressziós kapu | ❌ | F1/F2 javítása után a futtatott baseline és a regression constants felülmérendők |
@@ -73,6 +74,29 @@ Nincs workflow-, `tool/ci`- vagy bináris-audio módosítás.
 - **Ellenőrzés:** a fenti eset pont `0.5`, a normál egyezések továbbra is
   zöldek; futtasd újra a toolt, majd a baseline- és regression-számokat csak
   a tényleges új stdout alapján frissítsd.
+- **Státusz:** OPEN
+
+### F3 — MAJOR — A beat- és pitch-matching még a hibás greedy algoritmust használja
+
+- **Fájl:** `lib/features/audio_analysis/data/evaluation/evaluation_runner.dart:335-361, 455-480`
+- **Probléma:** F1 után a `matchEvents` már maximum-cardinality bipartite
+  matchinget használ, de `matchTimes` (beat alignment) és
+  `_pitchCentsErrors` továbbra is a korábbi, lokálisan legközelebbi greedy
+  választást tartja meg. Így azonos érvényes időablakban eldobnak optimálisan
+  párosítható eseményt/pitch-pointot.
+- **Bizonyíték:** az eldobható review-tesztben `expected=[50,90]`,
+  `detected=[0,55]`, `tolerance=50`: a beat matcher `Expected: 2; Actual: 1`.
+  Ugyanez pitch-pointokkal (`50ms/220Hz`, `90ms/440Hz`; `0ms/220Hz`,
+  `55ms/440Hz`) két párosítás mellett 0 és 1200 cents, tehát 600 átlagot adna;
+  a mai kód az első pontot elveszítve `Expected: 600; Actual: 1200.0`-t ad.
+- **Hatás:** beat alignment accuracy és pitch cents error nem a valós
+  one-to-one maximális illesztést méri; az evaluation report pontatlan.
+- **Kötelező javítás:** mindkét út ugyanazt a maximum-cardinality,
+  determinisztikus time matcher-t használja; permanens counterexample tesztek
+  az engedélyezett `evaluation_runner_test.dart` fájlban.
+- **Ellenőrzés:** beat matched count=2 és pitch cents mean=600 a fentivel;
+  futtasd újra a toolt és a tényleges output alapján igazíts baseline-t, ha
+  szükséges.
 - **Státusz:** OPEN
 
 ## Gate-bizonyíték
