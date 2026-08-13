@@ -403,6 +403,74 @@ gate zöld, csonkítatlan kimenettel:
 - Gate: `tools/round-gate.sh test/features/audio_analysis test/app`
   zöld, pipe/`tail`/`&&` nélkül.
 
+### 10.1 Javító kör — F1 + F2 (2026-08-13, sonnet-impl)
+
+**F1 (insight maximum-policy) javítása:**
+
+- `overview_view_model.dart`: a negyedik slot ("next practice") mostantól
+  a `firstRecommendation`-nal **azonos kind**-ú (`AnalysisInsightKind.
+  recommendation`) második insightot választja (`_nextOfKind`), nem a
+  dokumentum-sorrendben következő tetszőleges kind-et — a slot címkéje
+  ezért mindig a ténylegesen renderelt insight kind-jével egyezik.
+- `OverviewViewModel` új mezője: `remainingInsights` — minden insight,
+  amit a négy slot nem mutatott meg, formázva.
+- Új `OverviewDetailsPayload` (metrics + remainingInsights) a "Részletek"
+  navigációhoz; `analysis_overview_screen.dart` mindkét "Részletek"
+  belépőpontja (`AppBar` action és az `overview-see-details` gomb) ezt
+  küldi. `analysis_metric_detail_screen.dart` opcionális
+  `remainingInsights` paramétert kapott, és — ha nem üres — egy "További
+  insightok" szekciót renderel `InsightCard`-okkal. `app_router.dart`
+  `analysisMetricDetail` route-ja elfogadja az új payload-típust.
+- Új ARB kulcs: `analysisOverviewRemainingInsights` (en: "More insights",
+  hu: "További insightok").
+- Teszt: `analysis_overview_screen_test.dart` maximum-policy cellája
+  `hasLength`-szerű pontos `4`-et mér a 9 insightos dokumentumon, majd a
+  "Részletek" megnyitása után pontosan `5` `InsightCard`-ot vár.
+
+**F2 (route- és overflow-mátrix) javítása:**
+
+- `analysis_overview_screen_test.dart`: két hiányzó overflow-cella
+  pótolva (320px/1.0, 600px/2.0) — a 320px/1.0 cella egy valódi
+  `RenderFlex overflow`-t fogott meg a `MetricCard` "confidence badge +
+  Részletek gomb" sorában (`metric_card.dart`: `Row` → `Wrap`, a badge és
+  a gomb keskeny szélességen külön sorra kerül ahelyett, hogy
+  túlcsordulna).
+- Új `group('flag-gated route (F2)')`: a valódi `routerProvider`-t építi
+  fel egy `ProviderContainer`-rel (`appConfigProvider` override, csak a
+  flag változik), és a GoRouter `configuration.findMatch(...)`
+  metódusával — képernyő-építés nélkül, determinisztikusan — méri, hogy
+  `audioAnalysisV2Enabled == false` esetén `/analysis/overview` nem
+  regisztrált route (`isError == true`), `== true` és érvényes
+  `AnalysisDocument` extra esetén feloldódik (`isError == false`), és a
+  V1 `/analyze` route mindkét flag-állásban változatlanul feloldódik.
+
+**Gate — 2026-08-13, izolálatlan, ebben a munkapéldányban futtatva,
+csonkítatlan kimenettel:**
+
+```
+tools/round-gate.sh test/features/audio_analysis test/app
+```
+
+- `[1] format` — ZÖLD (1406 fájl, 0 változott)
+- `[2] analyze` — ZÖLD (`flutter analyze lib/ test/ tool/`, 0 finding)
+- `[3] test test/features/audio_analysis` — ZÖLD (465 teszt, mind átment)
+- `[4] test test/app` — ZÖLD (69 teszt, mind átment)
+- `[5] architecture` — ZÖLD
+- `[6] secrets` — ZÖLD
+- `[7] l10n` — ZÖLD
+- `MINDEN GATE ZÖLD.`
+
+Scope-audit: `python3 tools/scope-audit.py --repo . --brief docs/rounds/
+e06-r23-analysis-overview-and-metric-cards.md --base main` →
+`Legacy scope audit OK`. A javító kör csak a §4 listán belüli fájlokat
+érintette: `overview_view_model.dart`, `analysis_overview_screen.dart`,
+`analysis_metric_detail_screen.dart`, `metric_card.dart`,
+`app_router.dart`, `app_en.arb`, `app_hu.arb`,
+`analysis_overview_screen_test.dart`.
+
+Commit: `45a13c0` — "e06-r23: fix F1 insight maximum-policy + F2
+route/overflow gaps (review fix)".
+
 ## 11. Review — a független reviewer tölti ki
 
 Tervezett review: `docs/reviews/e06-r23-analysis-overview-and-metric-cards-review.md`.
