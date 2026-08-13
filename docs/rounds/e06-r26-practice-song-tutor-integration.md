@@ -1,6 +1,6 @@
 # E06-R26 — Practice, Song és Tutor integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`; pre-flight újramérve 2026-08-13, `76c127bb`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 26; §27.1–27.4
 - **Branch:** `codex/e06-r26-practice-song-tutor-integration`
 - **Előfeltétel:** **E06-R13, E06-R20, E06-R22 merge**
@@ -57,18 +57,76 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 **PREPARED.** Új ADR nincs — az ADR 0176 (public barrel határ), 0132/0141
 (Tutor adatvédelem és evidence-határ) és 0202 (raw audio) végrehajtása.
 
+**Pre-flight újramérve `76c127bb`-n (2026-08-13) — a batch `a6e6f3d`-je óta 12
+kör landolt (R14–R25).** Minden §2-beli export-szám és előfeltétel frissen
+grep-elve:
+
+- `practice/public.dart`: **45** export ma (a brief 43-at mért; a +2 az
+  E03-R21 Speed Builder-exportjaival jött). Minden brief által NEVESÍTETT
+  export (`CompiledPracticeTarget`, `Meter`, `BeatPosition`, `PracticeEvent`,
+  `PracticeDefinition`, `practice_progress_providers.dart`) ma is él.
+- `song_trainer/public.dart` (2 export), `ai_tutor/public.dart` (0 export),
+  `progress/public.dart` (4 export, pontosan a nevesített 4 szimbólum) és a
+  `tool/check_architecture.dart` 12-soros `analyze → live` allowlist —
+  MIND változatlan, a brief pontosan írja le. OD-01/OD-02 alapja ma is áll.
+- Előfeltétel (E06-R13/R20/R22) mind merge-elve (`git log --oneline --all`) —
+  `AnalysisTarget` (`domain/target/analysis_target.dart`), az insight-modul
+  (`engine/insights/{hotspot_ranker,insight_ranker,insight_registry,
+  insight_rules}.dart`) és a runner (`application/analysis_controller.dart`,
+  `analysis_isolate_runner.dart`) mind léteznek.
+
+**Egy MÉRT korrekció a §2 táblához → új OD-04 (§5.1):** a
+`compiled_practice_target.dart` a `CompiledTargetEvent`-et és az
+`ExpectedChordSegment`-et **ugyanabban a fájlban** definiálja, mint a
+`CompiledPracticeTarget`-et, de a barrel (`practice/public.dart:51`) egy
+szűkítő `show` klózzal **kizárólag** a `CompiledPracticeTarget`-et
+exportálja — a másik két típus neve NEM importálható az adapterből. A §2
+eredeti „elérhető többek közt … CompiledTargetEvent, ExpectedChordSegment"
+mondata téves — ez a két típus ma NEM exportált külön. Feloldás: OD-04,
+zéró változás a `practice/public.dart`-on (tilos zóna érintetlen).
+
+**Mért erőforrás-tulajdonlás (az 5. §Döntés 5-höz):** az egyszeri
+progress/streak-kreditálás MA is az R22 `AnalysisController._creditOnce`-ban
+él (`application/analysis_controller.dart:162-163`, `_creditedRunIds`
+halmazzal `runId`-ra kulcsolva véd az ismétlés ellen), és ez ír egy
+`PracticeEntry`-t (`application/analysis_providers.dart:210`). A
+`ProgressEvidenceAdapter` ettől **strukturálisan különböző** típusú
+evidence-t ad (skill evidence, NEM `PracticeEntry`), és a SAJÁT
+idempotenciáját `documentId`-ra kulcsolja — a két mechanizmus egymás mellett
+él, amíg az adapter nem hív `PracticeEntry`-konstruktort és nem nyúl az
+`_creditedRunIds`-hoz.
+
+**Grounding, nem blokkoló (implementációs segédlet):** `StrumDirection`
+(`core/music/strum.dart`) és `Chord`/`ChordEvent` (`core/music/chord*.dart`)
+**core**-megosztott típusok, nem feature-belsők — az adapter közvetlenül
+importálhatja őket, van rá élő precedens ugyanebben a feature-ben
+(`data/legacy_view_adapter.dart`, `engine/events/event_timeline_builder.dart`,
+`engine/legacy/legacy_evidence.dart`). Az `ExpectedEvent`
+(`domain/target/expected_event.dart`) konstruktora **dob**, ha `direction`
+nem `null`, de a `type` nem `strum` — egy `CompiledTargetEvent`, aminek
+**egyszerre** kitöltött a `chord` ÉS a `direction` mezője (pl. "üsd le
+lefelé G-n"), ezért NEM képezhető le egyetlen `chordChange`-típusú
+`ExpectedEvent`-re a direction megtartásával; a `direction` a `type:
+strum`-ba megy, a `chord` pedig az `expectedChords`/`sections` felé — az
+`ExpectedEvent`-nek nincs is `chord` mezője.
+
+PREPARED → PLANNING.
+
 ## 1. Cél
 
 A V2 elemzés bekötése a Practice Engine, a Song Trainer, az AI Tutor és a
 Progress szerződéseihez — **kizárólag** publikus barreleken át, **redaktált**
 Tutor-snapshottal, és **pontosan egyszeri** progress-kreditálással.
 
-## 2. Jelenlegi állapot (mért, `a6e6f3d`)
+## 2. Jelenlegi állapot (mért, `a6e6f3d`; újramérve `76c127bb`-n, ld. §0.0)
 
-- `lib/features/practice/public.dart`: **43** export; a batch idején elérhető
-  többek közt `CompiledPracticeTarget`, `CompiledTargetEvent`,
-  `ExpectedChordSegment`, `Meter`, `BeatPosition`, `PracticeEvent`,
-  `PracticeDefinition`, `practice_progress_providers.dart`.
+- `lib/features/practice/public.dart`: **45** export ma (a batch idején 43
+  volt); elérhető többek közt `CompiledPracticeTarget`, `Meter`,
+  `BeatPosition`, `PracticeEvent`, `PracticeDefinition`,
+  `practice_progress_providers.dart`. **`CompiledTargetEvent` és
+  `ExpectedChordSegment` NINCS külön exportálva** (csak a
+  `CompiledPracticeTarget` egy szűkítő `show`-val) — ld. OD-04 (§5.1) a
+  feloldásért.
 - `lib/features/song_trainer/public.dart`: **2** export — kizárólag
   `song_import_screen.dart` és `song_library_screen.dart`. A Song **domain**
   (`domain/models`, `services`) ma **nem** publikus.
@@ -172,6 +230,26 @@ open_decisions:
       dokumentált lépcső {0, 0.05, 0.10, 0.15}; a lépcsőhatárok néven
       nevezett konstansok, és a javaslat SOHA nem megy 60 %-a alá a
       target tempónak.
+  - id: OD-04
+    question: >-
+      A CompiledTargetEvent/ExpectedChordSegment nincs nevesítve exportálva a
+      practice/public.dart-ból (csak a CompiledPracticeTarget, egy szűkítő
+      show-klózzal, mérve a pre-flightban, §0.0) — hogyan olvassa őket az
+      adapter az 5. §Döntés 1 (csak public.dart, nincs új allowlist-sor)
+      megsértése nélkül?
+    blocking: true
+    resolution_policy: use_default
+    default: >-
+      Az adapter a `compiled.events` / `compiled.expectedChordSegments`
+      listákat KIZÁRÓLAG típus-inferenciával járja be (`for (final e in
+      compiled.events)`, `.map((e) => …)`) — a `CompiledTargetEvent`,
+      `ExpectedChordSegment`, `PracticeLoopRange` típusneveket SEHOL nem írja
+      ki explicit módon (nincs saját deklarált paraméter- vagy változótípus
+      rájuk). Ez érvényes Dart — egy nem exportált típus publikus tagjai
+      inferált statikus típuson át elérhetők —, és **nulla** változást
+      igényel a `practice/public.dart`-on. Új `show`-bejegyzés hozzáadása
+      vagy közvetlen fájl-import (`domain/model/compiled_practice_target.dart`)
+      TILOS (5. §Döntés 1 + tilos zóna).
 ```
 
 ## 6. Acceptance criteria
