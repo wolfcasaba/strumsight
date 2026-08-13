@@ -1,10 +1,10 @@
 # E06-R24 — Többrétegű, zoomolható timeline
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-13, main @ `4d2ff97`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 24; §25.6–25.8
-- **Branch:** `minimax/e06-r24-layered-zoomable-timeline`
-- **Előfeltétel:** **E06-R23 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** MiniMax M3 (UI-dominált kör, ADR 0069)
+- **Branch:** `terra/e06-r24-layered-zoomable-timeline`
+- **Előfeltétel:** **E06-R23 merge** — teljesítve (PR #241, squash `d5a95e44`)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** Terra (`.pipeline/engine-override`, 2026-08-08 motor-felállás — AGENTS.md §15.6.1)
 
 ```ai-router
 schema_version = 1
@@ -25,6 +25,7 @@ allowed_paths = [
   "test/features/audio_analysis/presentation/timeline_viewport_test.dart",
   "test/features/audio_analysis/presentation/hotspot_navigator_test.dart",
   "docs/rounds/e06-r24-layered-zoomable-timeline.md",
+  "docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -33,12 +34,19 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R23 merge. Olvasd újra
-> a `lib/features/analyze/widgets/timeline_view.dart`-ot (170 sor) — az a
-> **kompatibilitási** nézet, ami **változatlan** marad, és a
-> `test/features/analyze/timeline_view_test.dart` az őre. Ellenőrizd az R23
-> `OverviewViewModel` formázási helpereit: a timeline **ugyanazokat**
-> használja, nem duplikál. PREPARED→PLANNING, brief commit előbb.
+> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R23 merge — teljesítve.
+> Olvasd újra a `lib/features/analyze/widgets/timeline_view.dart`-ot (170 sor)
+> — az a **kompatibilitási** nézet, ami **változatlan** marad, és a
+> `test/features/analyze/timeline_view_test.dart` az őre. **A tényleges router
+> fájl `lib/app/router/app_router.dart`** (mérve, létezik — a lista helyes).
+> Az R23 `OverviewViewModel` (`presentation/controllers/overview_view_model.dart`)
+> a formázást az `OverviewLabels` portra delegálja; a konkrét megvalósítás
+> `AppLocalizationsOverviewLabels`
+> (`presentation/widgets/labels_adapter.dart`) — a timeline
+> `formatDuration`/`formatDbfs`/`formatRatio`/`formatMetricValue` hívásokhoz
+> **ezt** használja újra (import, nem duplikálás); egyik fájl sincs a kör
+> engedélyezett listáján, csak OLVASva/importálva. PREPARED→PLANNING kész,
+> lásd §0.0 a mért eltérésekért és a döntésekért.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -52,7 +60,39 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**2026-08-13 pre-flight, main @ `4d2ff97`.** A batch-brief nem nevezett meg
+konkrét `AnalysisDocument`-mezőt egyik lane-hez sem, és három tényleges
+eltérést tartalmazott, amelyeket ez a revízió a dispatch előtt felold:
+
+1. **`fl_chart` NEM függősége a projektnek** (mérve: nulla találat a
+   `pubspec.yaml`-ben és a `lib/`-ben) — a §2 „A `fl_chart` a projekt
+   függősége" állítás téves. A `pubspec.yaml` amúgy sincs az engedélyezett
+   fájllistán, tehát hozzáadása scope-sértés lenne. Minden lane natív Flutter
+   widget/`CustomPainter` rajzolással készül, harmadik féltől függő
+   chart-csomag nélkül.
+2. **OD-01 „ADR 0202" hivatkozása elavult sorszám** — a 0200–0205 blokk
+   0215–0220-ra tolódott (ld. [ADR 0217](../adr/0217-analysis-raw-audio-retention.md)
+   fejléce, „Sorszám-jegyzet"). A helyes hivatkozás **ADR 0217**
+   (raw audio retention); az OD-01 döntése (nyers PCM UI-ba töltése tilos)
+   változatlan, csak a sorszám javult.
+3. **Branch- és implementer-mező frissítve** a 2026-08-08 motor-felállásra
+   (`terra`, ld. fejléc) — a batch-brief a korábbi `minimax` queue-értéket
+   örökölte, a tényleges implementer a `.pipeline/engine-override` szerint
+   Terra.
+
+**ADR:** [0243](../adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)
+— nyolc lane → konkrét, mért `AnalysisDocument`-mező leképezés (chord=
+`timeline.chordSegments`, beat/bar=`timeline.beats`+`.bars`+`.tempoPoints`,
+strum/onset=`timeline.events` szűrve `OnsetEvent`/`StrumEvent`-re,
+dynamics=`timeline.dynamicPoints`, pitch=`timeline.pitchSegments`,
+hotspot overlay=`document.hotspots`, timing error=`document.hotspots.where(kind
+== timing)`, waveform=mindig `unavailable`); a gazdagabb, csak
+engine-belüli R12/R17 típusok (`BeatGrid`, `TempoCurvePoint`,
+`MonophonicPitchSegment`) NEM lane-bemenetek; a `CapabilityStatus.degraded`
+**látható marad** figyelmeztető jelzéssel (nem esik egy kategóriába a
+rejtett `unavailable`/`notApplicable`-lel — ld. a kilencedik mátrix-cellát
+§6-ban); hiányzó `CapabilityReport`-bejegyzés fail-closed `unavailable`. A
+kód-ellenőrzés részletei és a citációk az ADR-ben.
 
 ## 1. Cél
 
@@ -71,7 +111,11 @@ alternatívával.
   sessionre.
 - Az R10/R11/R12/R14/R16/R17 adják az event-, szegmens-, beat-, timing-,
   dinamika- és pitch-adatokat; az R20 a hotspotokat.
-- A `fl_chart` a projekt függősége, de a timeline-hoz **nem** kötelező.
+- A `fl_chart` **NEM** függősége a projektnek (mérve, 2026-08-13 — §0.0/ADR
+  0243): nulla találat a `pubspec.yaml`-ben és a `lib/`-ben. A `pubspec.yaml`
+  nincs a kör engedélyezett fájllistáján, tehát hozzáadása scope-sértés
+  lenne — minden lane natív Flutter widget/`CustomPainter` rajzolással
+  készül.
 
 ## 3. Scope
 
@@ -101,6 +145,7 @@ accessibility-összefoglaló minden sávhoz; ARB.
 | `lib/app/router/app_router.dart` | meglévő | **additív** route, flag mögött |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | viewport + widget + navigátor teszt |
+| `docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md` | ÚJ (pre-flight) | lane-adatforrás + degraded döntés |
 
 **Tilos zóna:** `lib/features/analyze/**`, `lib/features/audio_analysis/engine/**`,
 `lib/features/audio_analysis/domain/**`. Listán kívül → `stopped`.
@@ -116,7 +161,10 @@ accessibility-összefoglaló minden sávhoz; ARB.
    **eszköze**. **NEM elfogadható:** 5 000 event → 5 000 widget.
 3. **A sáv capability szerint jelenik meg:** `unavailable`/`notApplicable`
    capability esetén a sáv **magyarázattal** rejtve van, nem üresen kirajzolva.
-   **NEM elfogadható:** üres pitch-sáv indoklás nélkül.
+   **NEM elfogadható:** üres pitch-sáv indoklás nélkül. **`degraded`
+   (ADR 0243):** a sáv **látható marad**, explicit figyelmeztető jelzéssel
+   (pl. `ConfidenceBadge`-mintájú ikon+szöveg) — **NEM** esik egy kategóriába
+   a rejtett `unavailable`/`notApplicable` ágakkal.
 4. **Minden sávhoz szöveges összefoglaló** (SDD §25.8): a grafikon
    információja `Semantics`-en keresztül **szövegként** is elérhető.
    **NEM elfogadható:** kizárólag vizuális információ.
@@ -141,7 +189,8 @@ open_decisions:
       legfeljebb 2000 pont) — ha az R21 dokumentuma NEM tartalmaz ilyet, a
       waveform sáv `unavailable` (`modelUnavailable` helyett a
       dokumentált "nincs preview adat" ok), és a többi sáv fut. NYERS PCM
-      betöltése a UI-ba TILOS (ADR 0202).
+      betöltése a UI-ba TILOS (ADR 0217 — a brief eredeti "ADR 0202"
+      hivatkozása elavult sorszám volt, ld. §0.0).
   - id: OD-02
     question: Mekkora a maxZoom?
     blocking: true
@@ -181,6 +230,11 @@ open_decisions:
       capability `available`; és **rejtve, magyarázattal**, ha `unavailable`
       vagy `notApplicable`. A pitch- és a timing-sávra külön cella
       (ezek a leggyakrabban hiányzók).
+- [ ] **Degraded-cella (kilencedik, ADR 0243):** `CapabilityStatus.degraded`
+      esetén a sáv **látható marad**, explicit figyelmeztető jelzéssel — ez a
+      cella külön a nyolc fő cellától, mert egy `available`-re és
+      `unavailable`-re helyesen reagáló implementáció is hibásan kezelheti a
+      `degraded`-et (pl. az `unavailable` ághoz sorolva elrejtheti).
 - [ ] **Hotspot-navigáció:** 3 hotspot esetén a „következő" háromszor lépve
       körbeér vagy megáll (a szerződés szerint, dokumentáltan), és a viewport
       **tartalmazza** a hotspot tartományát minden lépés után.
@@ -218,6 +272,8 @@ open_decisions:
 | Hiányzó `Semantics` a sávon | az accessibility cella |
 | Nyers PCM-et tölt be a waveformhoz | a „nincs PCM a UI-ban" forrásolvasó cella |
 | A hotspot ugrás nem hozza be a tartományt | a hotspot-navigáció viewport-cellája |
+| A `degraded` capability-t úgy kezeli, mint az `unavailable`-t (elrejti a sávot) | a degraded-cella (kilencedik, ADR 0243) |
+| Timing-error lane szkalár `timing.*` metrikából "számol" idősort a UI-ban | az 5.7 „nincs számítás a UI-ban" elv + forrásolvasó cella (a lane csak `document.hotspots.where(kind==timing)`-ot rajzol, ADR 0243) |
 | **Valódi-sértés próba (§10):** a viewport `clamp` hívásának ideiglenes törlése → a pan-széllel-ütközés cella **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
